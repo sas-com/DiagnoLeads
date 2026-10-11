@@ -66,10 +66,13 @@ function getSecurityHeaders(request: NextRequest) {
     frame-ancestors 'none';
   `
     : // Production: 厳格な CSP
+      // style-src-attr: style attributes rendered on the server (progress bars, layout parts)
+      // cannot run scripts, so they are allowed; <style> elements still need the nonce
       `
     default-src 'self';
     script-src 'self' 'nonce-${nonce}' 'strict-dynamic';
     style-src 'self' 'nonce-${nonce}';
+    style-src-attr 'unsafe-inline';
     img-src 'self' blob: data: https:;
     font-src 'self' data:;
     object-src 'none';
