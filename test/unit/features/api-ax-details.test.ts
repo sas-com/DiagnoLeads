@@ -46,14 +46,15 @@ describe('POST /api/diagnostics/ax-migration/details', () => {
       const response = await POST(
         request(
           { submissionId: SUBMISSION_ID, answers: { gaiji: 'many' } },
-          { 'x-real-ip': '203.0.113.9' }
+          { 'x-real-ip': '2001:db8:aa:bb::9' }
         )
       );
       expect(response.status).toBe(429);
       expect(limitMock).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({ name: 'ax-details-ip' }),
-        '203.0.113.9'
+        // Per /64 for IPv6
+        '2001:0db8:00aa:00bb::/64'
       );
       expect(addDetailsMock).not.toHaveBeenCalled();
     } finally {

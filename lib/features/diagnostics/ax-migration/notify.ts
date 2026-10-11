@@ -207,34 +207,68 @@ export async function notifyAxMigrationSubmission(n: AxMigrationNotification): P
   }
 }
 
-const LIMIT_NOTICES = {
+type OrganizationLimit =
+  | typeof AX_RATE_LIMITS.notificationsPerOrganization
+  | typeof AX_RATE_LIMITS.salesEmailPerOrganizationHourly
+  | typeof AX_RATE_LIMITS.salesEmailPerOrganization;
+
+const CHECK_THE_LIST =
+  'この間に届いた相談申込は、リード一覧（コンバージョンポイント：相談申込）で確認してください。';
+
+const LIMIT_NOTICES: Record<OrganizationLimit['name'], { title: string; message: string }> = {
   [AX_RATE_LIMITS.notificationsPerOrganization.name]: {
     title: '【AX診断】通知を一時停止しました',
-    message: `AX診断の通知が1時間に${AX_RATE_LIMITS.notificationsPerOrganization.limit}件を超えたため、この1時間の残りの送信と相談申込は通知しません（リードとしては保存しています）。いたずらによる大量の送信の可能性があります。`,
+    message: `AX診断の通知が1時間に${AX_RATE_LIMITS.notificationsPerOrganization.limit}件を超えたため、この1時間の残りの送信と相談申込は通知しません（リードとしては保存しています）。${CHECK_THE_LIST}いたずらによる大量の送信の可能性があります。`,
+  },
+  [AX_RATE_LIMITS.salesEmailPerOrganizationHourly.name]: {
+    title: '【AX診断】営業宛てメールを一時停止しました',
+    message: `相談申込のメールが1時間に${AX_RATE_LIMITS.salesEmailPerOrganizationHourly.limit}通を超えたため、この1時間の残りの相談申込はアプリ内通知だけでお知らせします。${CHECK_THE_LIST}`,
   },
   [AX_RATE_LIMITS.salesEmailPerOrganization.name]: {
     title: '【AX診断】営業宛てメールを一時停止しました',
-    message: `相談申込のメールが1日${AX_RATE_LIMITS.salesEmailPerOrganization.limit}通を超えたため、今日のこれ以降の相談申込はアプリ内通知だけでお知らせします。`,
+    message: `相談申込のメールが1日${AX_RATE_LIMITS.salesEmailPerOrganization.limit}通を超えたため、今日のこれ以降の相談申込はアプリ内通知だけでお知らせします。${CHECK_THE_LIST}`,
   },
-} as const;
+};
 
-/** Count one against a limit of the organization; the first time it is over, tell the members */
+/**
+ * Tell the members (in-app) and sales (one email, outside the email caps: it is sent once per
+ * limit and window) that a limit has stopped some notifications
+ */
+async function noticeLimitReached(organizationId: string, rule: OrganizationLimit): Promise<void> {
+  const notice = LIMIT_NOTICES[rule.name];
+  const salesEmail = env.AX_DIAGNOSIS_SALES_EMAIL;
+  const results = await Promise.allSettled([
+    notifyOrganizationMembers(organizationId, 'system', notice.title, notice.message, {
+      diagnosticKey: 'ax-migration',
+      limit: rule.name,
+    }),
+    ...(salesEmail && isEmailConfigured()
+      ? [
+          sendEmail({
+            to: salesEmail.split(',').map((address) => address.trim()),
+            subject: notice.title,
+            text: notice.message,
+            html: `<p>${escapeHtml(notice.message)}</p>`,
+          }),
+        ]
+      : []),
+  ]);
+  for (const result of results) {
+    if (result.status === 'rejected') {
+      console.error('AX diagnosis: limit notice failed:', result.reason);
+    }
+  }
+}
+
+/** Count one against a limit of the organization; the first time it is over, say so */
 async function withinOrganizationLimit(
-  rule:
-    | typeof AX_RATE_LIMITS.notificationsPerOrganization
-    | typeof AX_RATE_LIMITS.salesEmailPerOrganization,
+  rule: OrganizationLimit,
   organizationId: string
 ): Promise<boolean> {
   const quota = await consumeRateLimit(db, rule, organizationId);
   if (quota.allowed) return true;
   console.warn(`AX diagnosis: limit ${rule.name} reached`);
-  if (quota.count === rule.limit + 1) {
-    const notice = LIMIT_NOTICES[rule.name];
-    await notifyOrganizationMembers(organizationId, 'system', notice.title, notice.message, {
-      diagnosticKey: 'ax-migration',
-      limit: rule.name,
-    }).catch((error) => console.error('AX diagnosis: limit notice failed:', error));
-  }
+  if (quota.count === rule.limit + 1) await noticeLimitReached(organizationId, rule);
   return false;
 }
 
@@ -252,12 +286,19 @@ async function withinNotificationLimit(organizationId: string): Promise<boolean>
 }
 
 /**
- * Daily cap on sales emails; when it cannot be checked, no email (the sending quota is shared
- * with the password reset emails)
+ * Hourly and daily caps on sales emails (the daily one is not used up by emails the hourly one
+ * refused); when they cannot be checked, no email (the sending quota is shared with the password
+ * reset emails)
  */
 async function withinSalesEmailQuota(organizationId: string): Promise<boolean> {
   try {
-    return await withinOrganizationLimit(AX_RATE_LIMITS.salesEmailPerOrganization, organizationId);
+    return (
+      (await withinOrganizationLimit(
+        AX_RATE_LIMITS.salesEmailPerOrganizationHourly,
+        organizationId
+      )) &&
+      (await withinOrganizationLimit(AX_RATE_LIMITS.salesEmailPerOrganization, organizationId))
+    );
   } catch (error) {
     console.error('AX diagnosis: sales email limit check failed:', error);
     return false;

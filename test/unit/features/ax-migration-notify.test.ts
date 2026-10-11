@@ -193,7 +193,7 @@ describe('notifyAxMigrationSubmission', () => {
     warnSpy.mockRestore();
   });
 
-  it('tells the members once when the daily email limit is reached', async () => {
+  it('tells the members and sales once when the daily email limit is reached', async () => {
     overLimit('ax-sales-email-org', 31);
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     await notifyAxMigrationSubmission({ ...base, consultationRequested: true });
@@ -203,6 +203,37 @@ describe('notifyAxMigrationSubmission', () => {
       '【AX診断】営業宛てメールを一時停止しました',
       expect.stringContaining('1日30通'),
       expect.objectContaining({ limit: 'ax-sales-email-org' })
+    );
+    // One email that says so (sales who read only email learn it too); not the request itself
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    expect(sendEmailMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: '【AX診断】営業宛てメールを一時停止しました',
+        text: expect.stringContaining('コンバージョンポイント：相談申込'),
+      })
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('keeps a burst from using up the day: an hourly email cap, checked first', async () => {
+    overLimit('ax-sales-email-org-hour', 11);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await notifyAxMigrationSubmission({ ...base, consultationRequested: true });
+    // The request itself is in-app only, and the daily cap is not used up by it
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    expect(sendEmailMock.mock.calls[0][0].subject).toBe('【AX診断】営業宛てメールを一時停止しました');
+    expect(sendEmailMock.mock.calls[0][0].text).toContain('1時間に10通');
+    expect(quotaMock).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ name: 'ax-sales-email-org' }),
+      expect.anything()
+    );
+    expect(inAppMock).toHaveBeenCalledWith(
+      'org-1',
+      'consultation_requested',
+      expect.any(String),
+      expect.any(String),
+      expect.any(Object)
     );
     warnSpy.mockRestore();
   });
@@ -219,7 +250,7 @@ describe('notifyAxMigrationSubmission', () => {
     errorSpy.mockRestore();
   });
 
-  it('notifies no one past the hourly limit of the organization', async () => {
+  it('notifies no one past the hourly limit of the organization (the notice went out before)', async () => {
     overLimit('ax-notify-org', 150);
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     await notifyAxMigrationSubmission({ ...base, consultationRequested: true });
@@ -229,7 +260,7 @@ describe('notifyAxMigrationSubmission', () => {
     warnSpy.mockRestore();
   });
 
-  it('tells the members once when the hourly limit is reached', async () => {
+  it('tells the members and sales once when the hourly limit is reached', async () => {
     overLimit('ax-notify-org', 101);
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     await notifyAxMigrationSubmission(base);
@@ -238,9 +269,11 @@ describe('notifyAxMigrationSubmission', () => {
       'org-1',
       'system',
       '【AX診断】通知を一時停止しました',
-      expect.stringContaining('1時間に100件'),
+      expect.stringContaining('リード一覧（コンバージョンポイント：相談申込）で確認'),
       expect.objectContaining({ limit: 'ax-notify-org' })
     );
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    expect(sendEmailMock.mock.calls[0][0].subject).toBe('【AX診断】通知を一時停止しました');
     expect(webhookMock).not.toHaveBeenCalled();
     warnSpy.mockRestore();
   });

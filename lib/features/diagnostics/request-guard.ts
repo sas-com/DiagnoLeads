@@ -95,8 +95,18 @@ export async function readJsonBody(
  * both headers (a client cannot choose them); anywhere else they are only as trustworthy as the
  * proxy in front, so they are not used and the per-address limits do not apply.
  */
+let reportedUntrusted = false;
+
 export function clientIp(req: NextRequest): string | undefined {
-  if (!process.env.VERCEL) return undefined;
+  if (!process.env.VERCEL) {
+    if (process.env.NODE_ENV === 'production' && !reportedUntrusted) {
+      reportedUntrusted = true;
+      console.warn(
+        'Per-address rate limits are off: not on Vercel, or its system environment variables are not exposed'
+      );
+    }
+    return undefined;
+  }
   const realIp = req.headers.get('x-real-ip')?.trim();
   if (realIp) return realIp;
   return req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || undefined;

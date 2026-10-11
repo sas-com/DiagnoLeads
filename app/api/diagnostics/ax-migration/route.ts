@@ -95,7 +95,12 @@ export async function POST(req: NextRequest) {
     // Per address and per email; the organization-wide limit applies to the notifications only
     // (notify.ts), so a flood cannot shut the form for everyone
     const limit = await consumeRateLimits(db, [
-      ...(ip ? [{ rule: AX_RATE_LIMITS.submitPerIp, identifier: ipBlock(ip) }] : []),
+      ...(ip
+        ? [
+            { rule: AX_RATE_LIMITS.submitPerIp, identifier: ipBlock(ip) },
+            { rule: AX_RATE_LIMITS.submitPerIpDaily, identifier: ipBlock(ip) },
+          ]
+        : []),
       { rule: AX_RATE_LIMITS.submitPerEmail, identifier: parsed.data.contact.email.toLowerCase() },
     ]);
     after(() =>

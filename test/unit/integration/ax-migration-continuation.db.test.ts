@@ -262,6 +262,44 @@ describe.skipIf(!url)('AX diagnosis: another system and rate limits (PostgreSQL)
     });
   });
 
+  it('keeps a consultation recorded while follow-up answers refine another system (row lock)', async () => {
+    const first = await submit(input());
+    const email = (await leadById(first.leadId))?.email ?? '';
+    const second = await submit(
+      input({
+        answers: as400Answers,
+        contact: { company: '三田製作所', name: '山田 太郎', email },
+        continuedFrom: first.submissionId,
+      })
+    );
+    const other = postgres(url as string, { max: 1 });
+    let pending: Promise<unknown> = Promise.resolve();
+    try {
+      await other.begin(async (tx) => {
+        await tx`select id from leads where id = ${first.leadId} for no key update`;
+        pending = addAxMigrationDetails(db, second.submissionId, { gaiji: 'many' }, later(60 * 1000));
+        // Long enough for the follow-up to reach the lead row and wait for it
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        await tx`
+          update leads
+          set responses = jsonb_set(responses, '{axMigration,consultationRequested}', 'true'::jsonb, true)
+          where id = ${first.leadId}`;
+      });
+      await pending;
+    } finally {
+      await other.end();
+    }
+    const lead = await leadById(first.leadId);
+    expect(lead?.responses).toMatchObject({
+      axMigration: {
+        consultationRequested: true,
+        otherSystems: [
+          { submissionId: second.submissionId, detailsAnsweredAt: later(60 * 1000).toISOString() },
+        ],
+      },
+    });
+  });
+
   describe('is not trusted', () => {
     it('when the first submission only matched a lead that was already there', async () => {
       const email = `known-${unique()}@example.co.jp`;

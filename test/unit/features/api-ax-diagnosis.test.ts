@@ -296,8 +296,9 @@ describe('POST /api/diagnostics/ax-migration', () => {
     });
     await POST(request(validBody, { 'x-real-ip': '2001:db8:1:2::7' }));
     expect(limitsMock).toHaveBeenCalledWith({}, [
-      // IPv6 addresses count per /64
+      // IPv6 addresses count per /64, per hour and per day
       { rule: expect.objectContaining({ name: 'ax-submit-ip' }), identifier: '2001:0db8:0001:0002::/64' },
+      { rule: expect.objectContaining({ name: 'ax-submit-ip-day' }), identifier: '2001:0db8:0001:0002::/64' },
       { rule: expect.objectContaining({ name: 'ax-submit-email' }), identifier: 'yamada@example.jp' },
     ]);
     // Old windows are cleaned up after the response
