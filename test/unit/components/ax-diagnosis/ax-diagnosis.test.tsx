@@ -368,7 +368,8 @@ describe('AxDiagnosisFlow: another system and the bot check', () => {
     const sent = fetchMock.mock.calls.map(([, init]) => JSON.parse(init.body).continuedFrom);
     // Always the first submission (the one that may have created the lead)
     expect(sent).toEqual([undefined, 'sub-1', 'sub-1']);
-  });
+    // Three whole diagnoses: slower than the default limit on the CI machines
+  }, 30_000);
 
   it('shows the Turnstile check on the contact step and sends its token', async () => {
     fetchMock.mockResolvedValue(
