@@ -377,6 +377,8 @@ export const diagnosticSubmissions = pgTable(
       table.createdAt
     ),
     index('diagnostic_submissions_lead_idx').on(table.leadId),
+    // For the ON DELETE SET NULL of the continuation reference
+    index('diagnostic_submissions_continued_from_idx').on(table.continuedFromSubmissionId),
     // Named explicitly: the generated name is longer than PostgreSQL's 63-character limit
     foreignKey({
       name: 'diagnostic_submissions_continued_from_fk',

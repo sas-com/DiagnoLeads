@@ -227,6 +227,41 @@ describe.skipIf(!url)('AX diagnosis: another system and rate limits (PostgreSQL)
     });
   });
 
+  it('keeps a consultation recorded while another system is added (the lead row is locked)', async () => {
+    const first = await submit(input());
+    const email = (await leadById(first.leadId))?.email ?? '';
+    // Another connection takes the lead row first, as the consultation request's UPDATE does
+    const other = postgres(url as string, { max: 1 });
+    let pending: Promise<unknown> = Promise.resolve();
+    try {
+      await other.begin(async (tx) => {
+        await tx`select id from leads where id = ${first.leadId} for no key update`;
+        pending = submit(
+          input({
+            answers: accessAnswers,
+            contact: { company: '三田製作所', name: '山田 太郎', email },
+            continuedFrom: first.submissionId,
+          })
+        );
+        // Long enough for the submission to reach the lead row and wait for it
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        await tx`
+          update leads
+          set conversion_point = 'consultation',
+              responses = jsonb_set(responses, '{axMigration,consultationRequested}', 'true'::jsonb, true)
+          where id = ${first.leadId}`;
+      });
+      await pending;
+    } finally {
+      await other.end();
+    }
+    const lead = await leadById(first.leadId);
+    expect(lead?.conversionPoint).toBe('consultation');
+    expect(lead?.responses).toMatchObject({
+      axMigration: { consultationRequested: true, otherSystems: [{ platform: 'access' }] },
+    });
+  });
+
   describe('is not trusted', () => {
     it('when the first submission only matched a lead that was already there', async () => {
       const email = `known-${unique()}@example.co.jp`;
@@ -274,7 +309,7 @@ describe.skipIf(!url)('AX diagnosis: another system and rate limits (PostgreSQL)
       expect(second.continued).toBe(false);
     });
 
-    it('in another organization', async () => {
+    it('with the first submission of a lead in another organization', async () => {
       const first = await submit(input());
       const email = (await leadById(first.leadId))?.email ?? '';
       await submit(input({ contact: { company: 'B社', name: 'B', email } }), now, otherOrganizationId);
@@ -317,11 +352,24 @@ describe.skipIf(!url)('AX diagnosis: another system and rate limits (PostgreSQL)
       expect((await consumeRateLimit(db, limit, id, now)).allowed).toBe(true);
       expect((await consumeRateLimit(db, limit, id, later(1000))).allowed).toBe(true);
       const refused = await consumeRateLimit(db, limit, id, later(2000));
-      expect(refused).toEqual({ allowed: false, retryAfterSeconds: 58 });
-      // A new window starts once the old one has ended
-      expect((await consumeRateLimit(db, limit, id, later(60_000))).allowed).toBe(true);
+      expect(refused).toEqual({ allowed: false, count: 3, retryAfterSeconds: 58 });
       // Other identifiers count separately
       expect((await consumeRateLimit(db, limit, `ip-${unique()}`, later(2000))).allowed).toBe(true);
+    });
+
+    it('starts a full new window once the old one has ended', async () => {
+      const limit = rule(2);
+      const id = `window-${unique()}`;
+      for (const at of [0, 1000, 2000]) await consumeRateLimit(db, limit, id, later(at));
+      // The next window counts from one and ends a full window later
+      const first = await consumeRateLimit(db, limit, id, later(60_000));
+      expect(first).toEqual({ allowed: true, count: 1, retryAfterSeconds: 60 });
+      expect((await consumeRateLimit(db, limit, id, later(61_000))).allowed).toBe(true);
+      expect(await consumeRateLimit(db, limit, id, later(62_000))).toEqual({
+        allowed: false,
+        count: 3,
+        retryAfterSeconds: 58,
+      });
     });
 
     it('counts every concurrent request', async () => {
@@ -351,25 +399,33 @@ describe.skipIf(!url)('AX diagnosis: another system and rate limits (PostgreSQL)
       expect(rows[0].key).not.toContain('example');
     });
 
-    it('refuses when any rule is over, counting the request in all of them', async () => {
-      const loose = rule(10);
+    it('stops at the first rule that refuses: later rules are not used up', async () => {
       const strict = rule(1);
+      const wide = rule(10);
       const id = `multi-${unique()}`;
       await consumeRateLimits(db, [{ rule: strict, identifier: id }], now);
       const result = await consumeRateLimits(
         db,
         [
-          { rule: loose, identifier: id },
           { rule: strict, identifier: id },
+          { rule: wide, identifier: id },
         ],
         later(1000)
       );
-      expect(result).toMatchObject({ allowed: false, rule: strict.name, retryAfterSeconds: 59 });
-      const [looseRow] = await pg
+      expect(result).toEqual({ allowed: false, rule: strict.name, retryAfterSeconds: 59 });
+      const wideRows = await pg
         .select()
         .from(publicRateLimits)
-        .where(eq(publicRateLimits.key, rateLimitKey(loose, id)));
-      expect(looseRow.count).toBe(1);
+        .where(eq(publicRateLimits.key, rateLimitKey(wide, id)));
+      expect(wideRows).toHaveLength(0);
+      // Allowed requests count in every rule
+      const other = `multi-${unique()}`;
+      expect(
+        await consumeRateLimits(db, [
+          { rule: strict, identifier: other },
+          { rule: wide, identifier: other },
+        ])
+      ).toEqual({ allowed: true });
     });
 
     it('deletes windows that ended more than a day ago', async () => {

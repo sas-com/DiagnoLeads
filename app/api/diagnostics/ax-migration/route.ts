@@ -16,6 +16,7 @@ import { consumeRateLimits, pruneRateLimits } from '@/lib/features/diagnostics/r
 import {
   checkPublicJsonRequest,
   clientIp,
+  ipBlock,
   readJsonBody,
   tooManyRequests,
 } from '@/lib/features/diagnostics/request-guard';
@@ -50,12 +51,17 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Checked before anything is counted or saved: invalid answers use up no limit
+  const validation = validateAnswers(axMigrationDefinition, parsed.data.answers);
+  if (!validation.success) {
+    return NextResponse.json(
+      { error: 'Invalid answers', issues: validation.issues.slice(0, MAX_ISSUES) },
+      { status: 400 }
+    );
+  }
+
   // Honeypot filled: answer like a normal success so bots learn nothing, but store nothing
   if (parsed.data.website) {
-    const validation = validateAnswers(axMigrationDefinition, parsed.data.answers);
-    if (!validation.success) {
-      return NextResponse.json({ error: 'Invalid answers' }, { status: 400 });
-    }
     return NextResponse.json({
       submissionId: crypto.randomUUID(),
       consultationRequested: parsed.data.consultationRequested,
@@ -72,19 +78,29 @@ export async function POST(req: NextRequest) {
   }
 
   const ip = clientIp(req);
-  const verification = await verifyTurnstile(parsed.data.turnstileToken, ip);
+  const verification = await verifyTurnstile(parsed.data.turnstileToken, ip, req.nextUrl.hostname);
   if (!verification.ok) {
     return verification.reason === 'unavailable'
-      ? NextResponse.json({ error: 'Verification unavailable' }, { status: 503 })
-      : NextResponse.json({ error: 'Verification failed' }, { status: 403 });
+      ? NextResponse.json(
+          { error: 'Verification unavailable', code: 'verification_unavailable' },
+          { status: 503 }
+        )
+      : NextResponse.json(
+          { error: 'Verification failed', code: 'verification_failed' },
+          { status: 403 }
+        );
   }
 
   try {
+    // Per address and per email; the organization-wide limit applies to the notifications only
+    // (notify.ts), so a flood cannot shut the form for everyone
     const limit = await consumeRateLimits(db, [
-      { rule: AX_RATE_LIMITS.submitPerIp, identifier: ip ?? 'unknown' },
+      ...(ip ? [{ rule: AX_RATE_LIMITS.submitPerIp, identifier: ipBlock(ip) }] : []),
       { rule: AX_RATE_LIMITS.submitPerEmail, identifier: parsed.data.contact.email.toLowerCase() },
-      { rule: AX_RATE_LIMITS.submitPerOrganization, identifier: organizationId },
     ]);
+    after(() =>
+      pruneRateLimits(db).catch((error) => console.error('Rate limit cleanup error:', error))
+    );
     if (!limit.allowed) {
       console.warn(`AX diagnosis: rate limit reached (${limit.rule})`);
       return tooManyRequests(limit.retryAfterSeconds);
@@ -125,9 +141,6 @@ export async function POST(req: NextRequest) {
         additionalSystem: outcome.continued,
         requestedAt,
       }).catch((error) => console.error('AX diagnosis notification error:', error))
-    );
-    after(() =>
-      pruneRateLimits(db).catch((error) => console.error('Rate limit cleanup error:', error))
     );
 
     return NextResponse.json({

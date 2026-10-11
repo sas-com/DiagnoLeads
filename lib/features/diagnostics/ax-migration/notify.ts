@@ -38,13 +38,15 @@ export interface AxMigrationNotification {
   consultationRequested: boolean;
   leadCreated: boolean;
   /**
-   * The email matched an existing lead. The public form cannot prove who answered, so
-   * sales must confirm before acting; company / name come from the DB, not the request.
+   * The email matched an existing lead, and the submission is not another system diagnosed
+   * from the result screen of the submission that created it. The public form cannot prove who
+   * answered, so sales must confirm before acting; company / name come from the DB.
    */
   identityUnverified: boolean;
   /**
-   * The respondent who created the lead diagnosed another system in the same visit (checked on
-   * the server); the system is recorded on the lead
+   * Another system diagnosed from the result screen of the submission that created the lead
+   * (the same browser, checked on the server; not a check of who owns the address). The system
+   * is recorded on the lead.
    */
   additionalSystem?: boolean;
   requestedAt: Date;
@@ -91,7 +93,7 @@ export function buildSalesMessage(n: AxMigrationNotification): { title: string; 
     ? '既存リードと同じメールアドレスからの回答です。本人確認のうえ対応してください（リードの内容は変更していません）。'
     : '';
   const additional = n.additionalSystem
-    ? '同じ方が、結果画面から別のシステムも続けて診断しました（リードの診断結果に追記しています）。'
+    ? '最初の診断と同じ画面から、別のシステムも続けて診断されました（リードの診断結果に追記しています）。'
     : '';
 
   if (n.consultationRequested) {
@@ -121,9 +123,11 @@ export function buildSalesMessage(n: AxMigrationNotification): { title: string; 
 
 /**
  * Notify sales after a diagnosis or a consultation request.
- * Failures are logged and never break the respondent's flow.
+ * Failures are logged and never break the respondent's flow. Past the hourly limit of the
+ * organization nothing is sent (the submission is saved all the same).
  */
 export async function notifyAxMigrationSubmission(n: AxMigrationNotification): Promise<void> {
+  if (!(await withinNotificationLimit(n.organizationId))) return;
   const { title, message } = buildSalesMessage(n);
   const data = {
     leadId: n.leadId,
@@ -203,18 +207,57 @@ export async function notifyAxMigrationSubmission(n: AxMigrationNotification): P
   }
 }
 
-/** Daily cap on sales emails (see AX_RATE_LIMITS); when it cannot be checked, no email */
-async function withinSalesEmailQuota(organizationId: string): Promise<boolean> {
+const LIMIT_NOTICES = {
+  [AX_RATE_LIMITS.notificationsPerOrganization.name]: {
+    title: '【AX診断】通知を一時停止しました',
+    message: `AX診断の通知が1時間に${AX_RATE_LIMITS.notificationsPerOrganization.limit}件を超えたため、この1時間の残りの送信と相談申込は通知しません（リードとしては保存しています）。いたずらによる大量の送信の可能性があります。`,
+  },
+  [AX_RATE_LIMITS.salesEmailPerOrganization.name]: {
+    title: '【AX診断】営業宛てメールを一時停止しました',
+    message: `相談申込のメールが1日${AX_RATE_LIMITS.salesEmailPerOrganization.limit}通を超えたため、今日のこれ以降の相談申込はアプリ内通知だけでお知らせします。`,
+  },
+} as const;
+
+/** Count one against a limit of the organization; the first time it is over, tell the members */
+async function withinOrganizationLimit(
+  rule:
+    | typeof AX_RATE_LIMITS.notificationsPerOrganization
+    | typeof AX_RATE_LIMITS.salesEmailPerOrganization,
+  organizationId: string
+): Promise<boolean> {
+  const quota = await consumeRateLimit(db, rule, organizationId);
+  if (quota.allowed) return true;
+  console.warn(`AX diagnosis: limit ${rule.name} reached`);
+  if (quota.count === rule.limit + 1) {
+    const notice = LIMIT_NOTICES[rule.name];
+    await notifyOrganizationMembers(organizationId, 'system', notice.title, notice.message, {
+      diagnosticKey: 'ax-migration',
+      limit: rule.name,
+    }).catch((error) => console.error('AX diagnosis: limit notice failed:', error));
+  }
+  return false;
+}
+
+/** Hourly limit on notifications; when it cannot be checked, sales are notified as usual */
+async function withinNotificationLimit(organizationId: string): Promise<boolean> {
   try {
-    const quota = await consumeRateLimit(
-      db,
-      AX_RATE_LIMITS.salesEmailPerOrganization,
+    return await withinOrganizationLimit(
+      AX_RATE_LIMITS.notificationsPerOrganization,
       organizationId
     );
-    if (!quota.allowed) {
-      console.warn('AX diagnosis: daily sales email limit reached, in-app notification only');
-    }
-    return quota.allowed;
+  } catch (error) {
+    console.error('AX diagnosis: notification limit check failed:', error);
+    return true;
+  }
+}
+
+/**
+ * Daily cap on sales emails; when it cannot be checked, no email (the sending quota is shared
+ * with the password reset emails)
+ */
+async function withinSalesEmailQuota(organizationId: string): Promise<boolean> {
+  try {
+    return await withinOrganizationLimit(AX_RATE_LIMITS.salesEmailPerOrganization, organizationId);
   } catch (error) {
     console.error('AX diagnosis: sales email limit check failed:', error);
     return false;

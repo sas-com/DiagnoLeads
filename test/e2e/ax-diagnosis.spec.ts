@@ -103,7 +103,7 @@ test.describe('AX migration diagnosis', () => {
     await expect(page.getByText(/結果を更新しました/)).toBeVisible();
     await expect(page.getByTestId('ax-result-checkpoints')).toContainText('クラウドのフォルダ');
   });
-  test('diagnoses another system as the same respondent and prints only the result', async ({
+  test('diagnoses another system as the same respondent and prints only the result @smoke', async ({
     page,
   }) => {
     test.skip(!canSubmit, 'AX_DIAGNOSIS_ORGANIZATION_ID is not set');
@@ -115,13 +115,19 @@ test.describe('AX migration diagnosis', () => {
 
     // The printout keeps the result and drops the page around it and the buttons
     const print = page.getByRole('button', { name: '印刷・PDFで保存' });
-    await expect(print).toBeVisible();
+    await expect(print).toHaveCount(2);
+    await expect(page.getByTestId('ax-result-answers')).toBeHidden();
     await page.emulateMedia({ media: 'print' });
     await expect(page.getByRole('heading', { name: '診断結果' })).toBeVisible();
     await expect(page.getByText(/^診断日：/)).toBeVisible();
+    // On paper: the answers it is based on, who made it and where it came from
+    const result = page.locator('[data-ax-result]');
+    await expect(result.getByTestId('ax-result-answers')).toContainText('仕様書は手元');
+    await expect(result.getByText('提供：エス・エー・エス株式会社 DXサービス部')).toBeVisible();
+    await expect(result.getByText(/^診断のページ：https?:\/\/.+\/ja\/ax-diagnosis$/)).toBeVisible();
     await expect(page.locator('.ax-site > header')).toBeHidden();
     await expect(page.locator('.ax-site > footer')).toBeHidden();
-    await expect(print).toBeHidden();
+    await expect(print).toHaveCount(0);
     await expect(page.getByTestId('ax-result-cta')).toBeHidden();
     await page.emulateMedia({ media: 'screen' });
     await expect(page.getByText(/^診断日：/)).toBeHidden();

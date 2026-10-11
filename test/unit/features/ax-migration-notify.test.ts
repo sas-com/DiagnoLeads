@@ -53,7 +53,7 @@ describe('notifyAxMigrationSubmission', () => {
     inAppMock.mockResolvedValue(undefined);
     sendEmailMock.mockResolvedValue({ id: 'mail-1' });
     isEmailConfiguredMock.mockReturnValue(true);
-    quotaMock.mockResolvedValue({ allowed: true, retryAfterSeconds: 0 });
+    quotaMock.mockResolvedValue({ allowed: true, count: 1, retryAfterSeconds: 0 });
     env.AX_DIAGNOSIS_SALES_EMAIL = 'sales1@example.jp, sales2@example.jp';
   });
 
@@ -145,7 +145,7 @@ describe('notifyAxMigrationSubmission', () => {
       'org-1',
       'lead_scored',
       expect.stringContaining('【AX診断・別システム】'),
-      expect.stringContaining('別のシステムも続けて診断しました'),
+      expect.stringContaining('最初の診断と同じ画面から、別のシステムも続けて診断されました'),
       expect.objectContaining({ additionalSystem: true, identityUnverified: false })
     );
     expect(inAppMock.mock.calls[0][2]).not.toContain('本人未確認');
@@ -166,12 +166,20 @@ describe('notifyAxMigrationSubmission', () => {
     const [, type, title, message] = inAppMock.mock.calls[0];
     expect(type).toBe('consultation_requested');
     expect(title).toMatch(/^【相談申込】/);
-    expect(message).toContain('別のシステムも続けて診断しました');
+    expect(message).toContain('別のシステムも続けて診断されました');
     expect(sendEmailMock).toHaveBeenCalled();
   });
 
+  /** The quota answer for one rule; every other rule is within its limit */
+  const overLimit = (ruleName: string, count: number) =>
+    quotaMock.mockImplementation(async (_db: unknown, rule: { name: string; limit: number }) =>
+      rule.name === ruleName
+        ? { allowed: false, count, retryAfterSeconds: 3600 }
+        : { allowed: true, count: 1, retryAfterSeconds: 0 }
+    );
+
   it('sends no sales email past the daily limit, but still notifies in-app', async () => {
-    quotaMock.mockResolvedValue({ allowed: false, retryAfterSeconds: 3600 });
+    overLimit('ax-sales-email-org', 40);
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     await notifyAxMigrationSubmission({ ...base, consultationRequested: true });
     expect(quotaMock).toHaveBeenCalledWith(
@@ -180,15 +188,71 @@ describe('notifyAxMigrationSubmission', () => {
       'org-1'
     );
     expect(sendEmailMock).not.toHaveBeenCalled();
-    expect(inAppMock).toHaveBeenCalled();
+    expect(inAppMock).toHaveBeenCalledTimes(1);
+    expect(inAppMock.mock.calls[0][1]).toBe('consultation_requested');
+    warnSpy.mockRestore();
+  });
+
+  it('tells the members once when the daily email limit is reached', async () => {
+    overLimit('ax-sales-email-org', 31);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await notifyAxMigrationSubmission({ ...base, consultationRequested: true });
+    expect(inAppMock).toHaveBeenCalledWith(
+      'org-1',
+      'system',
+      '【AX診断】営業宛てメールを一時停止しました',
+      expect.stringContaining('1日30通'),
+      expect.objectContaining({ limit: 'ax-sales-email-org' })
+    );
     warnSpy.mockRestore();
   });
 
   it('sends no sales email when the daily limit cannot be checked', async () => {
-    quotaMock.mockRejectedValue(new Error('db down'));
+    quotaMock.mockImplementation(async (_db: unknown, rule: { name: string }) => {
+      if (rule.name === 'ax-sales-email-org') throw new Error('db down');
+      return { allowed: true, count: 1, retryAfterSeconds: 0 };
+    });
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     await notifyAxMigrationSubmission({ ...base, consultationRequested: true });
     expect(sendEmailMock).not.toHaveBeenCalled();
+    expect(inAppMock).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it('notifies no one past the hourly limit of the organization', async () => {
+    overLimit('ax-notify-org', 150);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await notifyAxMigrationSubmission({ ...base, consultationRequested: true });
+    expect(webhookMock).not.toHaveBeenCalled();
+    expect(inAppMock).not.toHaveBeenCalled();
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('tells the members once when the hourly limit is reached', async () => {
+    overLimit('ax-notify-org', 101);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await notifyAxMigrationSubmission(base);
+    expect(inAppMock).toHaveBeenCalledTimes(1);
+    expect(inAppMock).toHaveBeenCalledWith(
+      'org-1',
+      'system',
+      '【AX診断】通知を一時停止しました',
+      expect.stringContaining('1時間に100件'),
+      expect.objectContaining({ limit: 'ax-notify-org' })
+    );
+    expect(webhookMock).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('still notifies when the hourly limit cannot be checked', async () => {
+    quotaMock.mockImplementation(async (_db: unknown, rule: { name: string }) => {
+      if (rule.name === 'ax-notify-org') throw new Error('db down');
+      return { allowed: true, count: 1, retryAfterSeconds: 0 };
+    });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await notifyAxMigrationSubmission(base);
+    expect(webhookMock).toHaveBeenCalled();
     expect(inAppMock).toHaveBeenCalled();
     errorSpy.mockRestore();
   });

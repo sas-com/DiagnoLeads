@@ -62,6 +62,7 @@ export function AxDiagnosisResult({
   onDiagnoseAnother,
 }: AxDiagnosisResultProps) {
   const t = useTranslations('axDiagnosis.result');
+  const tDiagnosis = useTranslations('axDiagnosis');
   const tPlatform = useTranslations('axDiagnosis.platforms');
   const [result, setResult] = useState(initialResult);
   const [requested, setRequested] = useState(consultationRequested);
@@ -74,6 +75,8 @@ export function AxDiagnosisResult({
       new Date()
     )
   );
+  /** The page the printout points back to (the result is rendered in the browser only) */
+  const [pageUrl] = useState(() => `${window.location.origin}${window.location.pathname}`);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const acceptedRef = useRef<HTMLOutputElement>(null);
   const titleTag = embedded ? 'h3' : 'h1';
@@ -123,11 +126,45 @@ export function AxDiagnosisResult({
     }
   };
 
+  // A saved PDF is named after the page title: name it after this result while printing
+  useEffect(() => {
+    let previous: string | null = null;
+    const onBeforePrint = () => {
+      previous = document.title;
+      document.title = t('printTitle', {
+        platform: platformLabel || tDiagnosis('meta.title'),
+        date: new Date().toISOString().slice(0, 10),
+      });
+    };
+    const onAfterPrint = () => {
+      if (previous !== null) document.title = previous;
+      previous = null;
+    };
+    window.addEventListener('beforeprint', onBeforePrint);
+    window.addEventListener('afterprint', onAfterPrint);
+    return () => {
+      window.removeEventListener('beforeprint', onBeforePrint);
+      window.removeEventListener('afterprint', onAfterPrint);
+    };
+  }, [t, tDiagnosis, platformLabel]);
+
   /** The browser's print dialog, which also saves a PDF; the print styles keep only the result */
-  const printResult = () => {
-    trackAxEvent('ax_result_print', { platform });
+  const printResult = (location: 'top' | 'bottom') => {
+    trackAxEvent('ax_result_print', { platform, location });
     window.print();
   };
+
+  const printButton = (location: 'top' | 'bottom') => (
+    <button
+      type="button"
+      onClick={() => printResult(location)}
+      aria-describedby="ax-print-hint"
+      className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-bold text-ax-ink hover:bg-ax-mist focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ax-teal-dark print:hidden"
+    >
+      <Printer className="h-4 w-4" aria-hidden="true" />
+      {t('print')}
+    </button>
+  );
 
   const failedMessage = (location: 'top' | 'bottom') =>
     failedAt === location && (
@@ -176,9 +213,13 @@ export function AxDiagnosisResult({
       <header className="space-y-2">
         <p
           aria-hidden="true"
-          className="font-ax-latin text-sm font-bold tracking-[0.2em] text-ax-teal-dark"
+          className="font-ax-latin text-sm font-bold tracking-[0.2em] text-ax-teal-dark print:hidden"
         >
           {t('eyebrow')}
+        </p>
+        {/* On paper, say what the document is */}
+        <p className="hidden text-sm font-bold text-ax-teal-dark print:block">
+          {tDiagnosis('meta.title')}
         </p>
         {createElement(
           titleTag,
@@ -201,14 +242,12 @@ export function AxDiagnosisResult({
         <p className="hidden text-sm text-gray-700 print:block">
           {t('diagnosedOn', { date: diagnosedOn })}
         </p>
-        <button
-          type="button"
-          onClick={printResult}
-          className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-bold text-ax-ink hover:bg-ax-mist focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ax-teal-dark print:hidden"
-        >
-          <Printer className="h-4 w-4" aria-hidden="true" />
-          {t('print')}
-        </button>
+        <div className="space-y-1 print:hidden">
+          {printButton('top')}
+          <p id="ax-print-hint" className="text-xs leading-relaxed text-gray-600">
+            {t('printHint')}
+          </p>
+        </div>
       </header>
 
       {result.needsHearing && (
@@ -412,17 +451,69 @@ export function AxDiagnosisResult({
         )}
       </div>
 
+      <AnswersForPrint locale={locale} answers={answers} />
+
       <p className="text-xs leading-relaxed text-gray-600">{t('disclaimer')}</p>
 
-      <button
-        type="button"
-        onClick={onDiagnoseAnother}
-        className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold text-ax-teal-dark hover:bg-ax-mist focus-visible:outline focus-visible:outline-2 focus-visible:outline-ax-teal-dark print:hidden"
-      >
-        <RefreshCw className="h-4 w-4" aria-hidden="true" />
-        {t('diagnoseAnother')}
-      </button>
+      {/* On paper: who made it and where to go next */}
+      <div className="hidden space-y-1 border-t border-gray-300 pt-3 text-xs leading-relaxed print:block">
+        <p>{tDiagnosis('operator')}</p>
+        <p>{t('printPage', { url: pageUrl })}</p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 print:hidden">
+        {printButton('bottom')}
+        <button
+          type="button"
+          onClick={onDiagnoseAnother}
+          className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold text-ax-teal-dark hover:bg-ax-mist focus-visible:outline focus-visible:outline-2 focus-visible:outline-ax-teal-dark"
+        >
+          <RefreshCw className="h-4 w-4" aria-hidden="true" />
+          {t('diagnoseAnother')}
+        </button>
+      </div>
     </section>
+  );
+}
+
+/**
+ * The answers the result is based on, on paper only: whoever the printout is passed to can
+ * check the premises (follow-up answers given later are not included)
+ */
+function AnswersForPrint({
+  locale,
+  answers,
+}: {
+  locale: DiagnosticLocale;
+  answers: DiagnosticAnswers;
+}) {
+  const t = useTranslations('axDiagnosis.result');
+  const rows = applicableQuestions(axMigrationDefinition, answers)
+    .filter((question) => !question.detail && answers[question.id] !== undefined)
+    .map((question) => {
+      const values = ([] as string[]).concat(answers[question.id] ?? []);
+      const labels = values.map(
+        (value) => question.options.find((option) => option.value === value)?.label[locale] ?? value
+      );
+      return {
+        id: question.id,
+        label: question.label[locale],
+        answer: labels.join(t('answersJoiner')),
+      };
+    });
+  if (rows.length === 0) return null;
+  return (
+    <div className="hidden space-y-2 print:block" data-testid="ax-result-answers">
+      <p className="text-sm font-bold">{t('answersTitle')}</p>
+      <dl className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-x-4 gap-y-1 text-xs leading-relaxed">
+        {rows.map((row) => (
+          <div key={row.id} className="contents">
+            <dt className="text-gray-600">{row.label}</dt>
+            <dd className="font-medium">{row.answer}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }
 

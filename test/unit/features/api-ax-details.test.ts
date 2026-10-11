@@ -36,16 +36,29 @@ const request = (body: unknown, headers: Record<string, string> = {}) =>
 describe('POST /api/diagnostics/ax-migration/details', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    limitMock.mockResolvedValue({ allowed: true, retryAfterSeconds: 0 });
+    limitMock.mockResolvedValue({ allowed: true, count: 1, retryAfterSeconds: 0 });
   });
 
   it('answers 429 over the per-address limit', async () => {
-    limitMock.mockResolvedValue({ allowed: false, retryAfterSeconds: 30 });
-    const response = await POST(
-      request({ submissionId: SUBMISSION_ID, answers: { gaiji: 'many' } })
-    );
-    expect(response.status).toBe(429);
-    expect(addDetailsMock).not.toHaveBeenCalled();
+    vi.stubEnv('VERCEL', '1');
+    try {
+      limitMock.mockResolvedValue({ allowed: false, count: 21, retryAfterSeconds: 30 });
+      const response = await POST(
+        request(
+          { submissionId: SUBMISSION_ID, answers: { gaiji: 'many' } },
+          { 'x-real-ip': '203.0.113.9' }
+        )
+      );
+      expect(response.status).toBe(429);
+      expect(limitMock).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ name: 'ax-details-ip' }),
+        '203.0.113.9'
+      );
+      expect(addDetailsMock).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it('returns the refined public result', async () => {

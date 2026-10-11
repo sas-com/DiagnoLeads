@@ -2,7 +2,7 @@ import { createHmac } from 'node:crypto';
 import type { db as defaultDb } from '@/lib/db/client';
 import { publicRateLimits } from '@/lib/db/schema';
 import { env } from '@/lib/env';
-import { lt, sql } from 'drizzle-orm';
+import { inArray, lt, sql } from 'drizzle-orm';
 
 type Database = typeof defaultDb;
 
@@ -16,12 +16,16 @@ export interface RateLimitRule {
 
 export interface RateLimitResult {
   allowed: boolean;
+  /** Requests counted in the current window, this one included */
+  count: number;
   /** Seconds until the current window ends (for Retry-After) */
   retryAfterSeconds: number;
 }
 
 /** Windows that ended this long ago are deleted */
 const PRUNE_AFTER_MS = 24 * 60 * 60 * 1000;
+/** Rows deleted per cleanup, so one cleanup stays short however many have piled up */
+const PRUNE_BATCH = 500;
 
 /**
  * Key of a rule and identifier (IP address, email, organization).
@@ -62,37 +66,35 @@ export async function consumeRateLimit(
 
   return {
     allowed: row.count <= rule.limit,
+    count: row.count,
     retryAfterSeconds: Math.max(1, Math.ceil((row.resetAt.getTime() - now.getTime()) / 1000)),
   };
 }
 
 /**
- * Count the request against every rule (each one counts it, also when another refuses);
- * refused when any rule is over its limit.
+ * Count the request against the rules in order and stop at the first that refuses it: the
+ * later (wider) rules are not used up by requests that were refused anyway.
  */
 export async function consumeRateLimits(
   database: Database,
   checks: { rule: RateLimitRule; identifier: string }[],
   now: Date = new Date()
-): Promise<RateLimitResult & { rule?: string }> {
-  const results = await Promise.all(
-    checks.map(async ({ rule, identifier }) => ({
-      rule: rule.name,
-      ...(await consumeRateLimit(database, rule, identifier, now)),
-    }))
-  );
-  const refused = results.filter((result) => !result.allowed);
-  if (refused.length === 0) return { allowed: true, retryAfterSeconds: 0 };
-  return {
-    allowed: false,
-    rule: refused[0].rule,
-    retryAfterSeconds: Math.max(...refused.map((result) => result.retryAfterSeconds)),
-  };
+): Promise<{ allowed: true } | { allowed: false; rule: string; retryAfterSeconds: number }> {
+  for (const { rule, identifier } of checks) {
+    const result = await consumeRateLimit(database, rule, identifier, now);
+    if (!result.allowed) {
+      return { allowed: false, rule: rule.name, retryAfterSeconds: result.retryAfterSeconds };
+    }
+  }
+  return { allowed: true };
 }
 
-/** Delete windows that ended a day ago or earlier */
+/** Delete windows that ended a day ago or earlier, a batch at a time */
 export async function pruneRateLimits(database: Database, now: Date = new Date()): Promise<void> {
-  await database
-    .delete(publicRateLimits)
-    .where(lt(publicRateLimits.resetAt, new Date(now.getTime() - PRUNE_AFTER_MS)));
+  const expired = database
+    .select({ key: publicRateLimits.key })
+    .from(publicRateLimits)
+    .where(lt(publicRateLimits.resetAt, new Date(now.getTime() - PRUNE_AFTER_MS)))
+    .limit(PRUNE_BATCH);
+  await database.delete(publicRateLimits).where(inArray(publicRateLimits.key, expired));
 }

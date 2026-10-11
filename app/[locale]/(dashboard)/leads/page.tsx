@@ -160,8 +160,13 @@ export default function LeadsPage() {
   ) => {
     if (!selectedLead) return;
 
-    // Cast to UpdateLeadInput for update operation
-    const updateData = data as Omit<UpdateLeadInput, 'organizationId' | 'id'>;
+    // Cast to UpdateLeadInput for update operation. The form does not edit the diagnosis
+    // responses: sending back the copy loaded with the list would undo answers recorded since
+    // (another system diagnosed, a consultation request, follow-up answers)
+    const { responses: _loaded, ...updateData } = data as Omit<
+      UpdateLeadInput,
+      'organizationId' | 'id'
+    >;
     await updateLead.mutateAsync({
       ...updateData,
       id: selectedLead.id,

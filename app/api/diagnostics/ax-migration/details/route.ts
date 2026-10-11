@@ -9,6 +9,7 @@ import { consumeRateLimit } from '@/lib/features/diagnostics/rate-limit';
 import {
   checkPublicJsonRequest,
   clientIp,
+  ipBlock,
   readJsonBody,
   tooManyRequests,
 } from '@/lib/features/diagnostics/request-guard';
@@ -36,12 +37,12 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const limit = await consumeRateLimit(
-      db,
-      AX_RATE_LIMITS.detailsPerIp,
-      clientIp(req) ?? 'unknown'
-    );
-    if (!limit.allowed) return tooManyRequests(limit.retryAfterSeconds);
+    // Per address, where the address can be trusted (see clientIp)
+    const ip = clientIp(req);
+    if (ip) {
+      const limit = await consumeRateLimit(db, AX_RATE_LIMITS.detailsPerIp, ipBlock(ip));
+      if (!limit.allowed) return tooManyRequests(limit.retryAfterSeconds);
+    }
 
     const outcome = await addAxMigrationDetails(db, parsed.data.submissionId, parsed.data.answers);
     if (!outcome.ok) {

@@ -54,8 +54,9 @@ describe('contentSecurityPolicy (production)', () => {
 });
 
 describe('contentSecurityPolicy (development)', () => {
-  it('allows the Turnstile frame there too, so the check can be tried locally', () => {
+  it('allows the Turnstile script and frame there too, so the check can be tried locally', () => {
     const policy = directives(contentSecurityPolicy('abc123', true));
+    expect(policy.get('script-src')).toContain('https://challenges.cloudflare.com');
     expect(policy.get('frame-src')).toEqual(['https://challenges.cloudflare.com']);
   });
 });

@@ -1,3 +1,4 @@
+import { isIP } from 'node:net';
 import { type NextRequest, NextResponse } from 'next/server';
 
 /**
@@ -90,19 +91,45 @@ export async function readJsonBody(
 }
 
 /**
- * The client's IP address, for rate limits. On Vercel both headers are set by the platform
- * (a client cannot choose them); elsewhere they are only as trustworthy as the proxy in front.
+ * The client's IP address, or undefined when it cannot be trusted. On Vercel the platform sets
+ * both headers (a client cannot choose them); anywhere else they are only as trustworthy as the
+ * proxy in front, so they are not used and the per-address limits do not apply.
  */
 export function clientIp(req: NextRequest): string | undefined {
+  if (!process.env.VERCEL) return undefined;
   const realIp = req.headers.get('x-real-ip')?.trim();
   if (realIp) return realIp;
   return req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || undefined;
 }
 
+/**
+ * What an address is counted as for rate limits: an IPv4 address as it is, an IPv6 address by
+ * its /64 (one customer usually gets a whole /64, so single addresses are free to rotate).
+ */
+export function ipBlock(ip: string): string {
+  const address = ip.split('%')[0];
+  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(address);
+  if (mapped) return mapped[1];
+  if (isIP(address) !== 6) return address;
+  const [head, tail] = address.split('::');
+  const headGroups = head ? head.split(':') : [];
+  const tailGroups = tail ? tail.split(':') : [];
+  const groups =
+    tail === undefined
+      ? headGroups
+      : [
+          ...headGroups,
+          ...Array<string>(Math.max(0, 8 - headGroups.length - tailGroups.length)).fill('0'),
+          ...tailGroups,
+        ];
+  const prefix = groups.slice(0, 4).map((group) => group.toLowerCase().padStart(4, '0'));
+  return `${prefix.join(':')}::/64`;
+}
+
 /** 429 with Retry-After */
 export function tooManyRequests(retryAfterSeconds: number): NextResponse {
   return NextResponse.json(
-    { error: 'Too many requests' },
+    { error: 'Too many requests', code: 'rate_limited' },
     { status: 429, headers: { 'Retry-After': String(retryAfterSeconds) } }
   );
 }

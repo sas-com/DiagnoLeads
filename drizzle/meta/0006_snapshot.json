@@ -1,5 +1,5 @@
 {
-  "id": "adcfe704-f38d-4506-a5dd-006913f358fa",
+  "id": "e34cfe6a-5eac-4c30-b265-069857db63c0",
   "prevId": "fbcada0f-fce9-43d7-870d-b919156e50e3",
   "version": "7",
   "dialect": "postgresql",
@@ -697,6 +697,21 @@
           "columns": [
             {
               "expression": "lead_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "diagnostic_submissions_continued_from_idx": {
+          "name": "diagnostic_submissions_continued_from_idx",
+          "columns": [
+            {
+              "expression": "continued_from_submission_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

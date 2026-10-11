@@ -56,15 +56,33 @@ describe('POST /api/diagnostics/ax-migration/consultation', () => {
     notifyMock.mockResolvedValue(undefined);
     findLead.mockResolvedValue({ id: 'lead-1', company: 'DB商事', name: 'DB 太郎', email: 'db@example.jp' });
     findSubmission.mockResolvedValue({ id: SUBMISSION_ID, result: { difficulty: { level: 'medium' } } });
-    limitMock.mockResolvedValue({ allowed: true, retryAfterSeconds: 0 });
+    limitMock.mockResolvedValue({ allowed: true, count: 1, retryAfterSeconds: 0 });
   });
 
   it('answers 429 over the per-address limit', async () => {
-    limitMock.mockResolvedValue({ allowed: false, retryAfterSeconds: 60 });
-    const response = await POST(request({ submissionId: SUBMISSION_ID }));
-    expect(response.status).toBe(429);
-    expect(response.headers.get('Retry-After')).toBe('60');
-    expect(requestMock).not.toHaveBeenCalled();
+    vi.stubEnv('VERCEL', '1');
+    try {
+      limitMock.mockResolvedValue({ allowed: false, count: 11, retryAfterSeconds: 60 });
+      const response = await POST(
+        request({ submissionId: SUBMISSION_ID }, { 'x-real-ip': '203.0.113.9' })
+      );
+      expect(response.status).toBe(429);
+      expect(response.headers.get('Retry-After')).toBe('60');
+      expect(limitMock).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ name: 'ax-consultation-ip' }),
+        '203.0.113.9'
+      );
+      expect(requestMock).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('does not count per address where the address cannot be trusted', async () => {
+    requestMock.mockResolvedValue({ ok: false, reason: 'not_found' });
+    await POST(request({ submissionId: SUBMISSION_ID }, { 'x-real-ip': '203.0.113.9' }));
+    expect(limitMock).not.toHaveBeenCalled();
   });
 
   it('treats another system of the respondent who created the lead as verified', async () => {

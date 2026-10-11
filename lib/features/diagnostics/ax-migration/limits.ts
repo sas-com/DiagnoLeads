@@ -8,14 +8,18 @@ const DAY = 24 * HOUR;
  * instances. The in-memory limit in the middleware stays in front of them.
  */
 export const AX_RATE_LIMITS = {
-  /** Diagnosing a few systems in one visit is normal; dozens from one address are not */
-  submitPerIp: { name: 'ax-submit-ip', limit: 10, windowMs: HOUR },
+  /**
+   * Diagnosing a few systems in one visit is normal; dozens from one address are not. Loose
+   * enough for a company network or an event venue sharing one address (IPv6 counts per /64)
+   */
+  submitPerIp: { name: 'ax-submit-ip', limit: 30, windowMs: HOUR },
   submitPerEmail: { name: 'ax-submit-email', limit: 6, windowMs: HOUR },
   /**
-   * Circuit breaker for the receiving organization: caps the leads and sales notifications a
-   * flood of addresses could create in an hour
+   * Sales notifications per organization and hour. Past it, submissions are still accepted and
+   * saved, but no one is notified about them (members get one notice), so a flood can neither
+   * bury the sales inbox nor shut the form for real respondents
    */
-  submitPerOrganization: { name: 'ax-submit-org', limit: 100, windowMs: HOUR },
+  notificationsPerOrganization: { name: 'ax-notify-org', limit: 100, windowMs: HOUR },
   consultationPerIp: { name: 'ax-consultation-ip', limit: 10, windowMs: HOUR },
   detailsPerIp: { name: 'ax-details-ip', limit: 20, windowMs: HOUR },
   /**

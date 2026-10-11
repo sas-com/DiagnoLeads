@@ -88,8 +88,19 @@ interface AxDiagnosisFlowProps {
   turnstileSiteKey?: string;
 }
 
-/** Error codes of the submit endpoint that mean the bot check did not pass */
-const VERIFICATION_ERRORS = new Set(['Verification failed', 'Verification unavailable']);
+/** Shown under the form; a verification message goes away once a new check has passed */
+interface SubmitError {
+  message: string;
+  kind: 'verification' | 'other';
+  /** Changes with every message, so the same text is announced again */
+  run: number;
+}
+
+/** Minutes until a rate limit ends, from Retry-After (undefined when it is not given) */
+function retryAfterMinutes(res: Response): number | undefined {
+  const seconds = Number(res.headers?.get?.('Retry-After'));
+  return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds / 60) : undefined;
+}
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -239,10 +250,14 @@ export function AxDiagnosisFlow({
   const [honeypot, setHoneypot] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitError, setSubmitErrorState] = useState<SubmitError | null>(null);
   const [response, setResponse] = useState<SubmissionResponse | null>(null);
   const [announcement, setAnnouncement] = useState('');
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const submitErrorRef = useRef(submitError);
+  submitErrorRef.current = submitError;
+  const tRef = useRef(t);
+  tRef.current = t;
   /** Changed to show a fresh Turnstile check (a token works once, also for a failed send) */
   const [turnstileRun, setTurnstileRun] = useState(0);
   /**
@@ -251,6 +266,25 @@ export function AxDiagnosisFlow({
    * Kept in memory only.
    */
   const firstSubmissionRef = useRef<string | null>(null);
+
+  const setSubmitError = useCallback(
+    (message: string | null, kind: SubmitError['kind'] = 'other') =>
+      setSubmitErrorState((prev) =>
+        message === null ? null : { message, kind, run: (prev?.run ?? 0) + 1 }
+      ),
+    []
+  );
+
+  /** Stable, so the widget is not rendered again on every change of the form */
+  const onTurnstileToken = useCallback((token: string | null) => {
+    setTurnstileToken(token);
+    // A finished check clears the message that asked for it, and says so to screen readers
+    if (token && submitErrorRef.current?.kind === 'verification') {
+      setSubmitErrorState(null);
+      const message = tRef.current('verification.done');
+      setAnnouncement((prev) => (prev === message ? `${message}\u00a0` : message));
+    }
+  }, []);
   const tracking = useRef<Record<string, string>>({});
   const topRef = useRef<HTMLDivElement>(null);
   const stepHeadingRef = useRef<HTMLHeadingElement>(null);
@@ -290,17 +324,20 @@ export function AxDiagnosisFlow({
     };
   }, []);
 
-  const showStep = useCallback((next: number, push: boolean) => {
-    hasInteracted.current = true;
-    setErrors({});
-    setSubmitError(null);
-    setStep(next);
-    if (push) pushEntry(runRef.current, next);
-    topRef.current?.scrollIntoView({
-      behavior: prefersReducedMotion() ? 'auto' : 'smooth',
-      block: 'start',
-    });
-  }, []);
+  const showStep = useCallback(
+    (next: number, push: boolean) => {
+      hasInteracted.current = true;
+      setErrors({});
+      setSubmitError(null);
+      setStep(next);
+      if (push) pushEntry(runRef.current, next);
+      topRef.current?.scrollIntoView({
+        behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+        block: 'start',
+      });
+    },
+    [setSubmitError]
+  );
 
   useEffect(() => {
     const onPopState = (event: PopStateEvent) => {
@@ -480,7 +517,7 @@ export function AxDiagnosisFlow({
   const submit = async () => {
     if (!validateContact()) return;
     if (turnstileSiteKey && !turnstileToken) {
-      setSubmitError(t('errors.verification'));
+      setSubmitError(t('errors.verificationPending', { button: t('submit') }), 'verification');
       return;
     }
     setSubmitting(true);
@@ -515,13 +552,23 @@ export function AxDiagnosisFlow({
 
       if (res.status === 429) {
         renewCheck();
-        setSubmitError(t('errors.rateLimited'));
+        const minutes = retryAfterMinutes(res);
+        setSubmitError(
+          minutes === undefined
+            ? t('errors.rateLimited', { button: t('submit') })
+            : t('errors.rateLimitedMinutes', { minutes, button: t('submit') })
+        );
         return;
       }
       const json = await res.json().catch(() => null);
-      if (!res.ok && VERIFICATION_ERRORS.has(json?.error)) {
+      if (!res.ok && json?.code === 'verification_failed') {
         renewCheck();
-        setSubmitError(t('errors.verification'));
+        setSubmitError(t('errors.verificationRetry', { button: t('submit') }), 'verification');
+        return;
+      }
+      if (!res.ok && json?.code === 'verification_unavailable') {
+        renewCheck();
+        setSubmitError(t('errors.verificationUnavailable', { button: t('submit') }));
         return;
       }
       if (!res.ok || !json) {
@@ -701,14 +748,22 @@ export function AxDiagnosisFlow({
               setErrors((prev) => ({ ...prev, consent: '' }));
             }}
             onHoneypot={setHoneypot}
+            continuing={firstSubmissionRef.current !== null}
             verification={
               turnstileSiteKey && (
-                <TurnstileWidget
-                  key={turnstileRun}
-                  siteKey={turnstileSiteKey}
-                  locale={locale}
-                  onToken={setTurnstileToken}
-                />
+                <fieldset aria-describedby="ax-verification-help" className="space-y-2">
+                  <legend className="text-sm font-bold">{t('verification.label')}</legend>
+                  <p id="ax-verification-help" className="text-sm leading-relaxed text-gray-700">
+                    {t('verification.help')}
+                  </p>
+                  <TurnstileWidget
+                    key={turnstileRun}
+                    siteKey={turnstileSiteKey}
+                    locale={locale}
+                    onToken={onTurnstileToken}
+                    onRetry={() => setTurnstileRun((run) => run + 1)}
+                  />
+                </fieldset>
               )
             }
           />
@@ -736,11 +791,12 @@ export function AxDiagnosisFlow({
 
         {submitError && (
           <p
+            key={submitError.run}
             role="alert"
             className="flex items-start gap-2 rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700"
           >
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            {submitError}
+            {submitError.message}
           </p>
         )}
 
@@ -941,6 +997,8 @@ interface ContactFieldsProps {
   onHoneypot: (value: string) => void;
   /** Bot check shown under the consent (Cloudflare Turnstile), when configured */
   verification?: ReactNode;
+  /** Another system after the first diagnosis: the contact details are kept, the consent is not */
+  continuing?: boolean;
 }
 
 function ContactFields({
@@ -955,6 +1013,7 @@ function ContactFields({
   onConsent,
   onHoneypot,
   verification,
+  continuing = false,
 }: ContactFieldsProps) {
   const t = useTranslations('axDiagnosis');
   const fields: { key: keyof ContactState; type: string; autoComplete: string }[] = [
@@ -1054,6 +1113,11 @@ function ContactFields({
       </div>
 
       <div className="space-y-2">
+        {continuing && (
+          <p className="rounded-xl bg-ax-mist p-3 text-sm leading-relaxed">
+            {t('contact.consentAgain')}
+          </p>
+        )}
         <p className="text-sm leading-relaxed text-gray-700">
           {t('contact.consentNotice')}
           {privacyPolicyUrl && (

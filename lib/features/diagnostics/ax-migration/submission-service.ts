@@ -85,16 +85,25 @@ export interface OtherSystemEntry {
   detailsAnsweredAt?: string;
 }
 
-/** "Diagnose another system" is offered on the result screen, which is used for a day */
-export const CONTINUATION_WINDOW_MS = 24 * 60 * 60 * 1000;
+/** The result screen (follow-up answers, "diagnose another system") is used for a day */
+export const RESULT_SCREEN_WINDOW_MS = 24 * 60 * 60 * 1000;
+/** "Diagnose another system" is offered on the result screen */
+export const CONTINUATION_WINDOW_MS = RESULT_SCREEN_WINDOW_MS;
 
-type LeadResponses = Record<string, unknown> | null | undefined;
+type LeadResponses = unknown;
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** The lead's responses as an object (anything else, e.g. hand-edited data, counts as empty) */
+function responsesOf(responses: LeadResponses): Record<string, unknown> {
+  return isPlainObject(responses) ? responses : {};
+}
 
 function axSummaryOf(responses: LeadResponses): Record<string, unknown> {
-  const summary = responses?.axMigration;
-  return summary && typeof summary === 'object' && !Array.isArray(summary)
-    ? (summary as Record<string, unknown>)
-    : {};
+  const summary = responsesOf(responses).axMigration;
+  return isPlainObject(summary) ? summary : {};
 }
 
 function otherSystemsOf(summary: Record<string, unknown>): OtherSystemEntry[] {
@@ -109,7 +118,7 @@ export function withOtherSystem(
 ): Record<string, unknown> {
   const summary = axSummaryOf(responses);
   return {
-    ...(responses ?? {}),
+    ...responsesOf(responses),
     axMigration: {
       ...summary,
       ...(consultationRequested ? { consultationRequested: true } : {}),
@@ -128,7 +137,7 @@ export function withOtherSystemUpdate(
   const systems = otherSystemsOf(summary);
   if (!systems.some((system) => system?.submissionId === submissionId)) return null;
   return {
-    ...(responses ?? {}),
+    ...responsesOf(responses),
     axMigration: {
       ...summary,
       otherSystems: systems.map((system) =>
@@ -165,9 +174,11 @@ function buildLeadSummary(
  * Save an AX migration diagnosis and link it to a lead.
  *
  * - Scores are computed here on the server; nothing from the client is trusted.
- * - The endpoint is unauthenticated, so a matching existing lead is never modified:
- *   the submission is only linked to it and sales is told the identity is unverified.
- *   Only a lead created by this submission gets the diagnosis values.
+ * - The endpoint is unauthenticated, so the identity and the diagnosis values of a matching
+ *   existing lead are never changed: the submission is only linked to it and sales is told the
+ *   identity is unverified. Only a lead created by this submission gets the diagnosis values.
+ *   The one exception: another system diagnosed from the result screen of the submission that
+ *   created the lead is added to its list of other systems (see findContinuationOrigin).
  * - A transaction-scoped advisory lock on (organization, email) serializes concurrent
  *   submissions for the same address, so a double submit cannot create two leads.
  */
@@ -305,7 +316,8 @@ async function findContinuationOrigin(
 
 /**
  * Record another system on the lead the respondent created. The name, company and score stay
- * as they are; the row is locked so a concurrent update of the responses is not lost.
+ * as they are; the row is locked so a concurrent update of the responses in the database is not
+ * lost (the lead edit form does not send the responses back, so it cannot undo this either).
  */
 async function recordOtherSystem(
   tx: Transaction,
@@ -319,7 +331,7 @@ async function recordOtherSystem(
     .select({ responses: leads.responses, mqlQualifiedAt: leads.mqlQualifiedAt })
     .from(leads)
     .where(eq(leads.id, leadId))
-    .for('update');
+    .for('no key update');
   if (!lead) return;
 
   const entry: OtherSystemEntry = {
@@ -434,7 +446,7 @@ const DETAIL_QUESTION_IDS = new Set(
   axMigrationDefinition.questions.filter((q) => q.detail).map((q) => q.id)
 );
 /** Follow-ups are answered on the result screen, so they are accepted for a day */
-export const DETAILS_WINDOW_MS = 24 * 60 * 60 * 1000;
+export const DETAILS_WINDOW_MS = RESULT_SCREEN_WINDOW_MS;
 
 export const axMigrationDetailsSchema = z.object({
   submissionId: z.string().uuid(),
@@ -481,7 +493,7 @@ export async function addAxMigrationDetails(
           eq(diagnosticSubmissions.diagnosticKey, AX_MIGRATION_DIAGNOSTIC_KEY)
         )
       )
-      .for('update');
+      .for('no key update');
     if (!submission) return { ok: false as const, reason: 'not_found' as const };
     if (submission.diagnosticVersion !== axMigrationDefinition.version) {
       return { ok: false as const, reason: 'outdated' as const };
@@ -537,7 +549,7 @@ export async function addAxMigrationDetails(
         .select({ responses: leads.responses })
         .from(leads)
         .where(eq(leads.id, submission.leadId))
-        .for('update');
+        .for('no key update');
       const responses =
         lead &&
         withOtherSystemUpdate(lead.responses, submissionId, {

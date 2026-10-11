@@ -10,21 +10,38 @@ export type TurnstileOutcome =
   /** missing / invalid: the respondent's check failed; unavailable: Cloudflare could not answer */
   | { ok: false; reason: 'missing' | 'invalid' | 'unavailable' };
 
+interface SiteverifyResponse {
+  success?: boolean;
+  action?: string;
+  hostname?: string;
+  metadata?: { result_with_testing_key?: boolean };
+}
+
+let reportedHalfConfigured = false;
+
 /**
  * Site key for the widget, or undefined when Turnstile is off.
  * On only when both keys are set, so the form and the server always agree.
  */
 export function turnstileSiteKey(): string | undefined {
-  return env.TURNSTILE_SITE_KEY && env.TURNSTILE_SECRET_KEY ? env.TURNSTILE_SITE_KEY : undefined;
+  const { TURNSTILE_SITE_KEY: siteKey, TURNSTILE_SECRET_KEY: secret } = env;
+  if (siteKey && secret) return siteKey;
+  if ((siteKey || secret) && !reportedHalfConfigured) {
+    reportedHalfConfigured = true;
+    console.error('Turnstile is off: set both TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY');
+  }
+  return undefined;
 }
 
 /**
  * Check a Turnstile token with Cloudflare (siteverify). Tokens are single-use and expire after
- * five minutes, which siteverify enforces. Passes without a check when Turnstile is off.
+ * five minutes, which siteverify enforces; the token must also come from this form's widget
+ * (action) on the site that was asked (hostname). Passes without a check when Turnstile is off.
  */
 export async function verifyTurnstile(
   token: string | undefined,
-  remoteIp: string | undefined
+  remoteIp: string | undefined,
+  hostname: string | undefined
 ): Promise<TurnstileOutcome> {
   const secret = env.TURNSTILE_SECRET_KEY;
   if (!turnstileSiteKey() || !secret) return { ok: true };
@@ -32,6 +49,7 @@ export async function verifyTurnstile(
 
   const body = new URLSearchParams({ secret, response: token });
   if (remoteIp) body.set('remoteip', remoteIp);
+  let data: SiteverifyResponse;
   try {
     const res = await fetch(SITEVERIFY_URL, {
       method: 'POST',
@@ -39,13 +57,20 @@ export async function verifyTurnstile(
       signal: AbortSignal.timeout(SITEVERIFY_TIMEOUT_MS),
     });
     if (!res.ok) return { ok: false, reason: 'unavailable' };
-    const data = (await res.json()) as { success?: boolean; action?: string };
-    if (data.success !== true) return { ok: false, reason: 'invalid' };
-    // A token from another widget of the same site key is not for this form
-    if (data.action && data.action !== TURNSTILE_ACTION) return { ok: false, reason: 'invalid' };
-    return { ok: true };
+    data = (await res.json()) as SiteverifyResponse;
   } catch (error) {
     console.error('Turnstile siteverify failed:', error);
     return { ok: false, reason: 'unavailable' };
   }
+
+  if (data.success !== true) return { ok: false, reason: 'invalid' };
+  // Cloudflare's test keys pass any token: fine for local and preview runs, never in production
+  if (data.metadata?.result_with_testing_key === true) {
+    return process.env.VERCEL_ENV === 'production'
+      ? { ok: false, reason: 'invalid' }
+      : { ok: true };
+  }
+  if (data.action !== TURNSTILE_ACTION) return { ok: false, reason: 'invalid' };
+  if (hostname && data.hostname !== hostname) return { ok: false, reason: 'invalid' };
+  return { ok: true };
 }
