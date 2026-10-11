@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { intlMiddleware, shouldSkipI18nMiddleware, stripLocalePrefix } from './lib/i18n/middleware';
+import { contentSecurityPolicy } from './lib/middleware/csp';
 // import { auth } from './lib/auth/config'; // TODO: Edge Runtimeで動作しないため一時的にコメントアウト
 import {
   checkRateLimit,
@@ -50,41 +51,9 @@ function getSecurityHeaders(request: NextRequest) {
 
   const isDevelopment = process.env.NODE_ENV === 'development';
 
-  // Content Security Policy
-  const cspHeader = isDevelopment
-    ? // Development: より緩い CSP（Hot Reload 対応）
-      `
-    default-src 'self';
-    script-src 'self' 'unsafe-eval' 'unsafe-inline';
-    style-src 'self' 'unsafe-inline';
-    img-src 'self' blob: data:;
-    font-src 'self' data:;
-    connect-src 'self' ws: wss:;
-    object-src 'none';
-    base-uri 'self';
-    form-action 'self';
-    frame-ancestors 'none';
-  `
-    : // Production: 厳格な CSP
-      // style-src-attr: style attributes rendered on the server (progress bars, layout parts)
-      // cannot run scripts, so they are allowed; <style> elements still need the nonce
-      `
-    default-src 'self';
-    script-src 'self' 'nonce-${nonce}' 'strict-dynamic';
-    style-src 'self' 'nonce-${nonce}';
-    style-src-attr 'unsafe-inline';
-    img-src 'self' blob: data: https:;
-    font-src 'self' data:;
-    object-src 'none';
-    base-uri 'self';
-    form-action 'self';
-    frame-ancestors 'none';
-    upgrade-insecure-requests;
-  `;
-
   return {
     // Content Security Policy
-    'Content-Security-Policy': cspHeader.replace(/\s{2,}/g, ' ').trim(),
+    'Content-Security-Policy': contentSecurityPolicy(nonce, isDevelopment),
 
     // セキュリティヘッダー
     'X-DNS-Prefetch-Control': 'on',

@@ -7,7 +7,7 @@ import { axMigrationDefinition } from '@/lib/features/diagnostics/ax-migration/d
 import { evaluateAxMigration, toPublicResult } from '@/lib/features/diagnostics/ax-migration/evaluate';
 import messages from '@/locales/ja/common.json';
 import { as400Answers } from '@/test/fixtures/ax-migration';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import type { ReactNode } from 'react';
@@ -49,8 +49,13 @@ afterEach(() => {
   window.history.replaceState(null, '', '/');
 });
 
-const jsonResponse = (status: number, body: unknown) =>
-  ({ ok: status >= 200 && status < 300, status, json: async () => body }) as Response;
+const jsonResponse = (status: number, body: unknown, headers: Record<string, string> = {}) =>
+  ({
+    ok: status >= 200 && status < 300,
+    status,
+    headers: new Headers(headers),
+    json: async () => body,
+  }) as Response;
 
 type User = ReturnType<typeof userEvent.setup>;
 
@@ -302,12 +307,232 @@ describe('AxDiagnosisFlow', () => {
       name: '山田 太郎',
       email: 'yamada@example.jp',
     });
+    // No bot check configured, and nothing to continue yet
+    expect(body).not.toHaveProperty('turnstileToken');
+    expect(body).not.toHaveProperty('continuedFrom');
+    expect(screen.queryByTestId('ax-turnstile')).not.toBeInTheDocument();
 
     expect(await screen.findByRole('heading', { name: '診断結果' })).toHaveFocus();
     expect(screen.getByText('移行元：AS/400（IBM i）')).toBeInTheDocument();
     expect(screen.getByTestId('ax-result-checkpoints')).toHaveTextContent('見つからないソース');
     // Saved answers are removed once the diagnosis is sent
     expect(window.localStorage.getItem('diagnoleads:ax-diagnosis')).toBeNull();
+  });
+});
+
+describe('AxDiagnosisFlow: another system and the bot check', () => {
+  type RenderOptions = { callback: (token: string) => void };
+  const installTurnstile = (onRender: (options: RenderOptions) => void = () => {}) => {
+    let count = 0;
+    const turnstile = {
+      render: vi.fn((_container: HTMLElement, options: RenderOptions) => {
+        count += 1;
+        onRender(options);
+        return `widget-${count}`;
+      }),
+      remove: vi.fn(),
+    };
+    window.turnstile = turnstile;
+    return turnstile;
+  };
+
+  afterEach(() => {
+    window.turnstile = undefined;
+  });
+
+  it('sends the first submission of the visit with the diagnosis of other systems', async () => {
+    for (const id of ['sub-1', 'sub-2', 'sub-3']) {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(200, { submissionId: id, consultationRequested: false, result: publicResult })
+      );
+    }
+    const consentAgain = /ご連絡先は前回の入力を使います/;
+    const user = userEvent.setup();
+    render(withIntl(<AxDiagnosisFlow locale="ja" />));
+    await answerAs400(user);
+    expect(screen.queryByText(consentAgain)).not.toBeInTheDocument();
+    await fillContact(user);
+    await user.click(screen.getByRole('button', { name: /診断結果を見る/ }));
+
+    for (let round = 0; round < 2; round++) {
+      await user.click(await screen.findByRole('button', { name: '別のシステムも診断する' }));
+      // The contact details are kept; the consent is asked again, and the page says why
+      await answerAs400(user);
+      expect(screen.getByLabelText(/会社名/)).toHaveValue('三田製作所');
+      expect(screen.getByText(consentAgain)).toBeInTheDocument();
+      await user.click(screen.getByLabelText('個人情報の取り扱いに同意する'));
+      await user.click(screen.getByRole('button', { name: /診断結果を見る/ }));
+      await screen.findByRole('heading', { name: '診断結果' });
+    }
+
+    const sent = fetchMock.mock.calls.map(([, init]) => JSON.parse(init.body).continuedFrom);
+    // Always the first submission (the one that may have created the lead)
+    expect(sent).toEqual([undefined, 'sub-1', 'sub-1']);
+    // Three whole diagnoses: slower than the default limit on the CI machines
+  }, 30_000);
+
+  it('shows the Turnstile check on the contact step and sends its token', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(200, { submissionId: 'sub-1', consultationRequested: false, result: publicResult })
+    );
+    const turnstile = installTurnstile((options) => options.callback('token-1'));
+    const user = userEvent.setup();
+    render(withIntl(<AxDiagnosisFlow locale="ja" turnstileSiteKey="site-key" />));
+    expect(turnstile.render).not.toHaveBeenCalled();
+
+    await answerAs400(user);
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalledTimes(1));
+    expect(turnstile.render.mock.calls[0][1]).toMatchObject({
+      sitekey: 'site-key',
+      action: 'ax-diagnosis',
+      language: 'ja',
+      theme: 'light',
+      // jsdom has no layout: a container narrower than the normal widget gets the compact one
+      size: 'compact',
+    });
+    // Named and explained, so the box is not a mystery
+    const group = screen.getByRole('group', { name: '送信前の確認' });
+    expect(group).toHaveAccessibleDescription(/機械による自動送信を防ぐための確認です/);
+    expect(within(group).getByTestId('ax-turnstile')).toBeInTheDocument();
+    await fillContact(user);
+    await user.click(screen.getByRole('button', { name: /診断結果を見る/ }));
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).turnstileToken).toBe('token-1');
+    await screen.findByRole('heading', { name: '診断結果' });
+    // The widget goes with the contact step
+    expect(turnstile.remove).toHaveBeenCalledWith('widget-1');
+  });
+
+  it('uses the normal widget where it fits', async () => {
+    const turnstile = installTurnstile();
+    const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(520);
+    try {
+      const user = userEvent.setup();
+      render(withIntl(<AxDiagnosisFlow locale="ja" turnstileSiteKey="site-key" />));
+      await answerAs400(user);
+      await waitFor(() => expect(turnstile.render).toHaveBeenCalled());
+      expect(turnstile.render.mock.calls[0][1]).toMatchObject({ size: 'normal' });
+    } finally {
+      width.mockRestore();
+    }
+  });
+
+  it('waits for the check before sending, and says when it has finished', async () => {
+    const renders: RenderOptions[] = [];
+    installTurnstile((options) => renders.push(options));
+    const user = userEvent.setup();
+    const { container } = render(withIntl(<AxDiagnosisFlow locale="ja" turnstileSiteKey="site-key" />));
+    await answerAs400(user);
+    await fillContact(user);
+    const submit = screen.getByRole('button', { name: /診断結果を見る/ });
+    await user.click(submit);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '送信前の確認が終わっていません。確認欄にチェックマーク（✓）が表示されたら、もう一度「診断結果を見る」を押してください。'
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+    // Pressed again before the check: the message is put out again, so it is read out again
+    const first = screen.getByRole('alert');
+    await user.click(submit);
+    expect(screen.getByRole('alert')).not.toBe(first);
+
+    await act(async () => renders[0].callback('token-1'));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(container.querySelector('[aria-live="polite"]')).toHaveTextContent(
+      '送信前の確認が完了しました'
+    );
+  });
+
+  it('asks for a new check after the server refused the token', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(403, { error: 'Verification failed', code: 'verification_failed' })
+    );
+    const renders: RenderOptions[] = [];
+    const turnstile = installTurnstile((options) => {
+      renders.push(options);
+      // Only the first check passes by itself; the new one is finished by the test
+      if (renders.length === 1) options.callback('token-1');
+    });
+    const user = userEvent.setup();
+    render(withIntl(<AxDiagnosisFlow locale="ja" turnstileSiteKey="site-key" />));
+    await answerAs400(user);
+    await fillContact(user);
+    await user.click(screen.getByRole('button', { name: /診断結果を見る/ }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('送信前の確認をやり直しています');
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalledTimes(2));
+    expect(turnstile.remove).toHaveBeenCalledWith('widget-1');
+
+    // The new check clears the message, and the next send uses its token
+    await act(async () => renders[1].callback('token-2'));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /診断結果を見る/ }));
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).turnstileToken).toBe('token-2');
+  });
+
+  it('says when the checking service could not be reached, until the respondent sends again', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(503, { error: 'Verification unavailable', code: 'verification_unavailable' })
+    );
+    const renders: RenderOptions[] = [];
+    installTurnstile((options) => {
+      renders.push(options);
+      if (renders.length === 1) options.callback('token-1');
+    });
+    const user = userEvent.setup();
+    render(withIntl(<AxDiagnosisFlow locale="ja" turnstileSiteKey="site-key" />));
+    await answerAs400(user);
+    await fillContact(user);
+    await user.click(screen.getByRole('button', { name: /診断結果を見る/ }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '確認サービスに一時的につながりませんでした'
+    );
+    // Not a check the respondent has to redo: the message stays when the new check passes
+    await waitFor(() => expect(renders).toHaveLength(2));
+    await act(async () => renders[1].callback('token-2'));
+    expect(screen.getByRole('alert')).toHaveTextContent('確認サービスに一時的につながりませんでした');
+  });
+
+  it('offers to try again when the check cannot be loaded', async () => {
+    window.turnstile = undefined;
+    const user = userEvent.setup();
+    render(withIntl(<AxDiagnosisFlow locale="ja" turnstileSiteKey="site-key" />));
+    await answerAs400(user);
+    const scripts = () =>
+      document.head.querySelectorAll('script[src^="https://challenges.cloudflare.com/"]');
+    await waitFor(() => expect(scripts()).toHaveLength(1));
+    // Blocked by the network
+    await act(async () => scripts()[0].dispatchEvent(new Event('error')));
+
+    expect(screen.getByText('送信前の確認を表示できませんでした。')).toBeInTheDocument();
+    // The contact details stay: trying again does not reload the page
+    expect(screen.getByLabelText(/会社名/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '確認をやり直す' }));
+    await waitFor(() => expect(scripts()).toHaveLength(1));
+    expect(screen.queryByText('送信前の確認を表示できませんでした。')).not.toBeInTheDocument();
+    for (const script of scripts()) script.remove();
+  });
+
+  it('says how long to wait when there were too many submissions', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse(429, { error: 'Too many requests', code: 'rate_limited' }, { 'Retry-After': '1150' })
+      )
+      .mockResolvedValueOnce(jsonResponse(429, { error: 'Too many requests' }));
+    const user = userEvent.setup();
+    render(withIntl(<AxDiagnosisFlow locale="ja" />));
+    await answerAs400(user);
+    await fillContact(user);
+    await user.click(screen.getByRole('button', { name: /診断結果を見る/ }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '送信が一時的に制限されています。約20分後に、もう一度「診断結果を見る」を押してください。入力内容はこのまま残ります。'
+    );
+    // Without Retry-After, without a number
+    await user.click(screen.getByRole('button', { name: /診断結果を見る/ }));
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('しばらく時間をおいて、もう一度')
+    );
   });
 });
 
@@ -403,6 +628,46 @@ describe('AxDiagnosisResult', () => {
     const done = await screen.findByText(/結果を更新しました/);
     // The confirmation takes the focus, so it is read out
     expect(done.closest('output')).toHaveFocus();
+  });
+
+  it('prints the result (or saves it as a PDF) with the browser, from the top or the end', async () => {
+    const print = vi.fn();
+    vi.stubGlobal('print', print);
+    const user = userEvent.setup();
+    const { container } = renderResult();
+    // The print styles keep only this element
+    expect(container.querySelector('[data-ax-result]')).toBeInTheDocument();
+    // A date line for the printout (hidden on the screen)
+    expect(screen.getByText(/^診断日：\d{4}年\d{1,2}月\d{1,2}日$/)).toBeInTheDocument();
+
+    const buttons = screen.getAllByRole('button', { name: '印刷・PDFで保存' });
+    expect(buttons).toHaveLength(2);
+    expect(buttons[0]).toHaveAccessibleDescription(/「PDFに保存」にすると/);
+    await user.click(buttons[1]);
+    expect(print).toHaveBeenCalledTimes(1);
+  });
+
+  it('puts the answers, the provider and the page on the printout', () => {
+    renderResult();
+    const answers = screen.getByTestId('ax-result-answers');
+    expect(within(answers).getByText('回答の内容')).toBeInTheDocument();
+    expect(within(answers).getByText('業種は？')).toBeInTheDocument();
+    expect(within(answers).getByText('製造業')).toBeInTheDocument();
+    // Multiple choices are listed together
+    expect(within(answers).getByText(/扱える人が減って.*、/)).toBeInTheDocument();
+    expect(screen.getByText('提供：エス・エー・エス株式会社 DXサービス部')).toBeInTheDocument();
+    expect(screen.getByText(`診断のページ：${window.location.origin}${window.location.pathname}`)).toBeInTheDocument();
+    // What the document is, instead of the English eyebrow
+    expect(screen.getByText('AXマイグレーション 移行診断')).toBeInTheDocument();
+  });
+
+  it('names the saved PDF after the result while printing', () => {
+    document.title = 'AXマイグレーション 移行診断';
+    renderResult();
+    window.dispatchEvent(new Event('beforeprint'));
+    expect(document.title).toMatch(/^AX移行診断結果_AS\/400（IBM i）_\d{4}-\d{2}-\d{2}$/);
+    window.dispatchEvent(new Event('afterprint'));
+    expect(document.title).toBe('AXマイグレーション 移行診断');
   });
 
   it('lets the respondent check another system', async () => {

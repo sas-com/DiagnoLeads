@@ -1,10 +1,18 @@
 import { db } from '@/lib/db/client';
 import { toPublicResult } from '@/lib/features/diagnostics/ax-migration/evaluate';
+import { AX_RATE_LIMITS } from '@/lib/features/diagnostics/ax-migration/limits';
 import {
   addAxMigrationDetails,
   axMigrationDetailsSchema,
 } from '@/lib/features/diagnostics/ax-migration/submission-service';
-import { checkPublicJsonRequest, readJsonBody } from '@/lib/features/diagnostics/request-guard';
+import { consumeRateLimit } from '@/lib/features/diagnostics/rate-limit';
+import {
+  checkPublicJsonRequest,
+  clientIp,
+  ipBlock,
+  readJsonBody,
+  tooManyRequests,
+} from '@/lib/features/diagnostics/request-guard';
 import { type NextRequest, NextResponse } from 'next/server';
 
 /**
@@ -29,6 +37,13 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // Per address, where the address can be trusted (see clientIp)
+    const ip = clientIp(req);
+    if (ip) {
+      const limit = await consumeRateLimit(db, AX_RATE_LIMITS.detailsPerIp, ipBlock(ip));
+      if (!limit.allowed) return tooManyRequests(limit.retryAfterSeconds);
+    }
+
     const outcome = await addAxMigrationDetails(db, parsed.data.submissionId, parsed.data.answers);
     if (!outcome.ok) {
       if (outcome.reason === 'not_found') {

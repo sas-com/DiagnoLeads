@@ -9,6 +9,7 @@ const requestMock = vi.fn();
 const notifyMock = vi.fn();
 const findLead = vi.fn();
 const findSubmission = vi.fn();
+const limitMock = vi.fn();
 
 // Tasks given to after(): run by the test once the response is there
 const { afterTasks } = vi.hoisted(() => ({ afterTasks: [] as Array<() => unknown> }));
@@ -34,6 +35,9 @@ vi.mock('@/lib/features/diagnostics/ax-migration/notify', () => ({
 vi.mock('@/lib/features/diagnostics/ax-migration/submission-service', () => ({
   requestAxMigrationConsultation: (...args: unknown[]) => requestMock(...args),
 }));
+vi.mock('@/lib/features/diagnostics/rate-limit', () => ({
+  consumeRateLimit: (...args: unknown[]) => limitMock(...args),
+}));
 
 const { POST } = await import('@/app/api/diagnostics/ax-migration/consultation/route');
 
@@ -52,6 +56,49 @@ describe('POST /api/diagnostics/ax-migration/consultation', () => {
     notifyMock.mockResolvedValue(undefined);
     findLead.mockResolvedValue({ id: 'lead-1', company: 'DB商事', name: 'DB 太郎', email: 'db@example.jp' });
     findSubmission.mockResolvedValue({ id: SUBMISSION_ID, result: { difficulty: { level: 'medium' } } });
+    limitMock.mockResolvedValue({ allowed: true, count: 1, retryAfterSeconds: 0 });
+  });
+
+  it('answers 429 over the per-address limit', async () => {
+    vi.stubEnv('VERCEL', '1');
+    try {
+      limitMock.mockResolvedValue({ allowed: false, count: 11, retryAfterSeconds: 60 });
+      const response = await POST(
+        request({ submissionId: SUBMISSION_ID }, { 'x-real-ip': '203.0.113.9' })
+      );
+      expect(response.status).toBe(429);
+      expect(response.headers.get('Retry-After')).toBe('60');
+      expect(limitMock).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ name: 'ax-consultation-ip' }),
+        '203.0.113.9'
+      );
+      expect(requestMock).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('does not count per address where the address cannot be trusted', async () => {
+    requestMock.mockResolvedValue({ ok: false, reason: 'not_found' });
+    await POST(request({ submissionId: SUBMISSION_ID }, { 'x-real-ip': '203.0.113.9' }));
+    expect(limitMock).not.toHaveBeenCalled();
+  });
+
+  it('treats another system of the respondent who created the lead as verified', async () => {
+    requestMock.mockResolvedValue({
+      ok: true,
+      alreadyRequested: false,
+      organizationId: 'org-1',
+      leadId: 'lead-1',
+      leadCreated: false,
+      continued: true,
+    });
+    await POST(request({ submissionId: SUBMISSION_ID }));
+    await runAfterTasks();
+    expect(notifyMock).toHaveBeenCalledWith(
+      expect.objectContaining({ identityUnverified: false, additionalSystem: true })
+    );
   });
 
   it('notifies sales on the first request with the stored lead identity', async () => {
@@ -87,6 +134,7 @@ describe('POST /api/diagnostics/ax-migration/consultation', () => {
       organizationId: 'org-1',
       leadId: 'lead-1',
       leadCreated: false,
+      continued: false,
     });
     await POST(request({ submissionId: SUBMISSION_ID }));
     await runAfterTasks();

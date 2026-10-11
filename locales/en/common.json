@@ -348,7 +348,19 @@
       "phone": "Enter the phone number with digits and hyphens",
       "consent": "Please agree to the handling of personal information",
       "submit": "Could not submit. Please try again later.",
-      "rateLimited": "Too many submissions. Please wait a minute and try again."
+      "rateLimited": "Sending is limited for now. Wait a while, then press “{button}” again. Your answers stay as they are.",
+      "rateLimitedMinutes": "Sending is limited for now. Press “{button}” again in about {minutes} minutes. Your answers stay as they are.",
+      "verificationPending": "The check before sending has not finished. When a check mark (✓) appears in the check box, press “{button}” again.",
+      "verificationRetry": "The check before sending is being done again. When a check mark (✓) appears in the check box, press “{button}” again.",
+      "verificationUnavailable": "The checking service could not be reached for a moment. Wait a little, then press “{button}” again. Your answers stay as they are."
+    },
+    "verification": {
+      "label": "Check before sending",
+      "help": "A check against automated submissions (provided by Cloudflare). It usually finishes by itself in a few seconds. If a check box appears, click it.",
+      "done": "The check before sending is complete",
+      "unavailable": "The check before sending could not be shown.",
+      "retry": "Try the check again",
+      "alternative": "Some company networks block it. In that case, please contact us through the <link>consultation booking page</link>."
     },
     "contact": {
       "description": "The result is shown on this page. We use your contact details to explain the result and offer a consultation.",
@@ -359,6 +371,7 @@
       "consultation": "I would like a free consultation about the result",
       "consultationHint": "We will contact you. Enter your phone number if you prefer a call.",
       "consent": "I agree to the handling of personal information",
+      "consentAgain": "Your contact details from the previous diagnosis are used. Please check the consent to the handling of personal information again.",
       "consentNotice": "Your information is used only to follow up on your result and to contact you about AX Migration.",
       "privacyPolicy": "Privacy policy",
       "sendNote": "It takes about a minute. No pushy sales."
@@ -540,12 +553,19 @@
       "stepLabel": "STEP {number}",
       "title": "Your result",
       "subtitle": "An estimate based on the answers from {company}",
+      "diagnosedOn": "Diagnosed on {date}",
+      "print": "Print or save as PDF",
+      "printHint": "In the print dialog, choose “Save as PDF” as the destination to save a PDF file.",
+      "printTitle": "AX migration diagnosis result_{platform}_{date}",
+      "printPage": "Diagnosis page: {url}",
       "difficulty": "Migration difficulty (estimate)",
       "urgency": "Urgency to modernize",
       "primaryChallenge": "The challenge to tackle first",
       "selectedChallenges": "Challenges you selected",
       "stepsTitle": "Start small, then go beyond migration to AX",
       "disclaimer": "This result is an estimate based on your answers. The exact approach, schedule and cost are determined in the current-system survey.",
+      "answersTitle": "Your answers",
+      "answersJoiner": ", ",
       "needsHearing": "Many answers were \"I don't know\", so this estimate is rough. A consultation lets us give you a more accurate outlook.",
       "unknownsTitle": "Checking these in-house will sharpen the result",
       "unknownsHint": "Notices from the maintenance company, asset lists and contracts often have the answers. We can also show you how to find them in a consultation."

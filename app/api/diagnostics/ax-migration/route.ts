@@ -4,6 +4,7 @@ import {
   evaluateAxMigration,
   toPublicResult,
 } from '@/lib/features/diagnostics/ax-migration/evaluate';
+import { AX_RATE_LIMITS } from '@/lib/features/diagnostics/ax-migration/limits';
 import { notifyAxMigrationSubmission } from '@/lib/features/diagnostics/ax-migration/notify';
 import {
   axMigrationSubmissionSchema,
@@ -11,7 +12,15 @@ import {
 } from '@/lib/features/diagnostics/ax-migration/submission-service';
 import { validateAnswers } from '@/lib/features/diagnostics/engine';
 import { resolveDiagnosisOrganizationId } from '@/lib/features/diagnostics/organization';
-import { checkPublicJsonRequest, readJsonBody } from '@/lib/features/diagnostics/request-guard';
+import { consumeRateLimits, pruneRateLimits } from '@/lib/features/diagnostics/rate-limit';
+import {
+  checkPublicJsonRequest,
+  clientIp,
+  ipBlock,
+  readJsonBody,
+  tooManyRequests,
+} from '@/lib/features/diagnostics/request-guard';
+import { verifyTurnstile } from '@/lib/features/diagnostics/turnstile';
 import { type NextRequest, NextResponse, after } from 'next/server';
 
 /** Upper bound for the request body (answers + contact + tracking are a few KB) */
@@ -42,12 +51,17 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Checked before anything is counted or saved: invalid answers use up no limit
+  const validation = validateAnswers(axMigrationDefinition, parsed.data.answers);
+  if (!validation.success) {
+    return NextResponse.json(
+      { error: 'Invalid answers', issues: validation.issues.slice(0, MAX_ISSUES) },
+      { status: 400 }
+    );
+  }
+
   // Honeypot filled: answer like a normal success so bots learn nothing, but store nothing
   if (parsed.data.website) {
-    const validation = validateAnswers(axMigrationDefinition, parsed.data.answers);
-    if (!validation.success) {
-      return NextResponse.json({ error: 'Invalid answers' }, { status: 400 });
-    }
     return NextResponse.json({
       submissionId: crypto.randomUUID(),
       consultationRequested: parsed.data.consultationRequested,
@@ -63,7 +77,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Diagnosis is not available' }, { status: 503 });
   }
 
+  const ip = clientIp(req);
+  const verification = await verifyTurnstile(parsed.data.turnstileToken, ip, req.nextUrl.hostname);
+  if (!verification.ok) {
+    return verification.reason === 'unavailable'
+      ? NextResponse.json(
+          { error: 'Verification unavailable', code: 'verification_unavailable' },
+          { status: 503 }
+        )
+      : NextResponse.json(
+          { error: 'Verification failed', code: 'verification_failed' },
+          { status: 403 }
+        );
+  }
+
   try {
+    // Per address and per email; the organization-wide limit applies to the notifications only
+    // (notify.ts), so a flood cannot shut the form for everyone
+    const limit = await consumeRateLimits(db, [
+      ...(ip ? [{ rule: AX_RATE_LIMITS.submitPerIp, identifier: ipBlock(ip) }] : []),
+      { rule: AX_RATE_LIMITS.submitPerEmail, identifier: parsed.data.contact.email.toLowerCase() },
+    ]);
+    after(() =>
+      pruneRateLimits(db).catch((error) => console.error('Rate limit cleanup error:', error))
+    );
+    if (!limit.allowed) {
+      console.warn(`AX diagnosis: rate limit reached (${limit.rule})`);
+      return tooManyRequests(limit.retryAfterSeconds);
+    }
+
     const outcome = await submitAxMigrationDiagnosis(db, organizationId, parsed.data);
     if (!outcome.ok) {
       return NextResponse.json(
@@ -95,7 +137,8 @@ export async function POST(req: NextRequest) {
         result: outcome.result,
         consultationRequested: parsed.data.consultationRequested,
         leadCreated: outcome.leadCreated,
-        identityUnverified: outcome.existingLead !== null,
+        identityUnverified: outcome.existingLead !== null && !outcome.continued,
+        additionalSystem: outcome.continued,
         requestedAt,
       }).catch((error) => console.error('AX diagnosis notification error:', error))
     );

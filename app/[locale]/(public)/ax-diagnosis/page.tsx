@@ -1,6 +1,7 @@
 import { AxDiagnosisFlow } from '@/components/features/ax-diagnosis/ax-diagnosis-flow';
 import { AxSiteShell } from '@/components/features/ax-site/ax-site-shell';
 import { axPrivacyPolicyUrl } from '@/components/features/ax-site/site-config';
+import { turnstileSiteKey } from '@/lib/features/diagnostics/turnstile';
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 
@@ -47,7 +48,11 @@ export default async function AxDiagnosisPage({ params }: AxDiagnosisPageProps) 
       <div className="bg-gradient-to-b from-white to-ax-mist">
         <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:py-14">
           <div className="rounded-3xl bg-white p-5 shadow-[0_10px_40px_rgba(0,0,0,0.08)] ring-1 ring-black/5 sm:p-10">
-            <AxDiagnosisFlow locale={locale} privacyPolicyUrl={axPrivacyPolicyUrl()} />
+            <AxDiagnosisFlow
+              locale={locale}
+              privacyPolicyUrl={axPrivacyPolicyUrl()}
+              turnstileSiteKey={turnstileSiteKey()}
+            />
           </div>
         </div>
       </div>
