@@ -50,7 +50,9 @@ describe('verifyTurnstile', () => {
 
   it.each([
     ['not successful', { success: false, 'error-codes': ['invalid-input-response'] }],
-    ['without success', { action: 'ax-diagnosis' }],
+    // Right action and site, but Cloudflare did not accept the token
+    ['refused by Cloudflare', { ...passed, success: false }],
+    ['without success', { action: 'ax-diagnosis', hostname: 'diagnoleads-v2.vercel.app' }],
     ['from another widget', { ...passed, action: 'login' }],
     ['without an action', { success: true, hostname: 'diagnoleads-v2.vercel.app' }],
     ['solved on another site', { ...passed, hostname: 'evil.example' }],

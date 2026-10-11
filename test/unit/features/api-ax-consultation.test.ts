@@ -64,14 +64,15 @@ describe('POST /api/diagnostics/ax-migration/consultation', () => {
     try {
       limitMock.mockResolvedValue({ allowed: false, count: 11, retryAfterSeconds: 60 });
       const response = await POST(
-        request({ submissionId: SUBMISSION_ID }, { 'x-real-ip': '203.0.113.9' })
+        request({ submissionId: SUBMISSION_ID }, { 'x-real-ip': '2001:db8:aa:bb::9' })
       );
       expect(response.status).toBe(429);
       expect(response.headers.get('Retry-After')).toBe('60');
       expect(limitMock).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({ name: 'ax-consultation-ip' }),
-        '203.0.113.9'
+        // Per /64 for IPv6
+        '2001:0db8:00aa:00bb::/64'
       );
       expect(requestMock).not.toHaveBeenCalled();
     } finally {
@@ -81,7 +82,7 @@ describe('POST /api/diagnostics/ax-migration/consultation', () => {
 
   it('does not count per address where the address cannot be trusted', async () => {
     requestMock.mockResolvedValue({ ok: false, reason: 'not_found' });
-    await POST(request({ submissionId: SUBMISSION_ID }, { 'x-real-ip': '203.0.113.9' }));
+    await POST(request({ submissionId: SUBMISSION_ID }, { 'x-real-ip': '2001:db8:aa:bb::9' }));
     expect(limitMock).not.toHaveBeenCalled();
   });
 

@@ -58,7 +58,8 @@ const PIPELINE_SELECTS: { name: PipelineSelectField; options: readonly string[] 
 
 interface LeadFormProps {
   lead?: Lead;
-  onSubmit: (data: FormValues) => void | Promise<void>;
+  /** All values for a new lead; only the changed ones when editing */
+  onSubmit: (data: Partial<FormValues>) => void | Promise<void>;
   isLoading?: boolean;
 }
 
@@ -94,9 +95,22 @@ export function LeadForm({ lead, onSubmit, isLoading }: LeadFormProps) {
     },
   });
 
+  // Editing sends only the changed fields: values written while the form was open (a
+  // consultation request, an MQL from another diagnosis, follow-up answers, a new score) are not
+  // set back to what the form was opened with
+  const submit = form.handleSubmit((values) => {
+    if (!lead) return onSubmit(values);
+    const dirty = form.formState.dirtyFields as Partial<Record<keyof FormValues, unknown>>;
+    return onSubmit(
+      Object.fromEntries(
+        Object.entries(values).filter(([key]) => Boolean(dirty[key as keyof FormValues]))
+      ) as Partial<FormValues>
+    );
+  });
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={submit} className="space-y-6">
         <FormField
           control={form.control}
           name="email"
