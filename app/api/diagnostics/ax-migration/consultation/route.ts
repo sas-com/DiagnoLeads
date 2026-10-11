@@ -38,17 +38,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    if (!outcome.alreadyRequested && outcome.leadId) {
-      const [lead, submission] = await Promise.all([
-        db.query.leads.findFirst({ where: eq(leads.id, outcome.leadId) }),
-        db.query.diagnosticSubmissions.findFirst({
-          where: eq(diagnosticSubmissions.id, parsed.data.submissionId),
-        }),
-      ]);
-      if (lead && submission) {
-        // After the response, keeping the function alive until sales are notified
-        after(() =>
-          notifyAxMigrationSubmission({
+    const { leadId } = outcome;
+    if (!outcome.alreadyRequested && leadId) {
+      // After the response, keeping the function alive until sales are notified. The request is
+      // already recorded, so the lookups for the message must not fail the respondent's request
+      // (a retry would find it recorded and notify no one).
+      after(async () => {
+        try {
+          const [lead, submission] = await Promise.all([
+            db.query.leads.findFirst({ where: eq(leads.id, leadId) }),
+            db.query.diagnosticSubmissions.findFirst({
+              where: eq(diagnosticSubmissions.id, parsed.data.submissionId),
+            }),
+          ]);
+          if (!lead || !submission) return;
+          await notifyAxMigrationSubmission({
             organizationId: outcome.organizationId,
             leadId: lead.id,
             submissionId: submission.id,
@@ -60,9 +64,11 @@ export async function POST(req: NextRequest) {
             leadCreated: false,
             identityUnverified: !outcome.leadCreated,
             requestedAt,
-          }).catch((error) => console.error('AX consultation notification error:', error))
-        );
-      }
+          });
+        } catch (error) {
+          console.error('AX consultation notification error:', error);
+        }
+      });
     }
 
     return NextResponse.json({ ok: true, alreadyRequested: outcome.alreadyRequested });

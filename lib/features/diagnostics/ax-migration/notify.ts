@@ -148,6 +148,12 @@ export async function notifyAxMigrationSubmission(n: AxMigrationNotification): P
   }
 
   const salesEmail = env.AX_DIAGNOSIS_SALES_EMAIL;
+  if (n.consultationRequested && !(salesEmail && isEmailConfigured())) {
+    // Visible in the runtime logs: a missing setting, not a failed send
+    console.warn(
+      'AX consultation: no sales email sent (AX_DIAGNOSIS_SALES_EMAIL or RESEND_API_KEY is not set)'
+    );
+  }
   if (n.consultationRequested && salesEmail && isEmailConfigured()) {
     const leadUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/ja/leads?leadId=${n.leadId}`;
     tasks.push(

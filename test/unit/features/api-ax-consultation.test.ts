@@ -10,11 +10,14 @@ const notifyMock = vi.fn();
 const findLead = vi.fn();
 const findSubmission = vi.fn();
 
-// after() needs a request scope; here the task runs right away
+// Tasks given to after(): run by the test once the response is there
+const { afterTasks } = vi.hoisted(() => ({ afterTasks: [] as Array<() => unknown> }));
+const runAfterTasks = () => Promise.all(afterTasks.map((task) => task()));
+
 vi.mock('next/server', async (importOriginal) => ({
   ...(await importOriginal<typeof import('next/server')>()),
   after: (task: () => unknown) => {
-    void task();
+    afterTasks.push(task);
   },
 }));
 vi.mock('@/lib/db/client', () => ({
@@ -45,6 +48,7 @@ const request = (body: unknown, headers: Record<string, string> = {}) =>
 describe('POST /api/diagnostics/ax-migration/consultation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    afterTasks.length = 0;
     notifyMock.mockResolvedValue(undefined);
     findLead.mockResolvedValue({ id: 'lead-1', company: 'DB商事', name: 'DB 太郎', email: 'db@example.jp' });
     findSubmission.mockResolvedValue({ id: SUBMISSION_ID, result: { difficulty: { level: 'medium' } } });
@@ -61,6 +65,10 @@ describe('POST /api/diagnostics/ax-migration/consultation', () => {
     const response = await POST(request({ submissionId: SUBMISSION_ID }));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ ok: true, alreadyRequested: false });
+    // The lead is read and sales are notified after the response
+    expect(findLead).not.toHaveBeenCalled();
+    expect(notifyMock).not.toHaveBeenCalled();
+    await runAfterTasks();
     expect(notifyMock).toHaveBeenCalledWith(
       expect.objectContaining({
         organizationId: 'org-1',
@@ -81,6 +89,7 @@ describe('POST /api/diagnostics/ax-migration/consultation', () => {
       leadCreated: false,
     });
     await POST(request({ submissionId: SUBMISSION_ID }));
+    await runAfterTasks();
     expect(notifyMock).toHaveBeenCalledWith(expect.objectContaining({ identityUnverified: true }));
   });
 
@@ -94,7 +103,7 @@ describe('POST /api/diagnostics/ax-migration/consultation', () => {
     });
     const response = await POST(request({ submissionId: SUBMISSION_ID }));
     expect(await response.json()).toEqual({ ok: true, alreadyRequested: true });
-    expect(notifyMock).not.toHaveBeenCalled();
+    expect(afterTasks).toHaveLength(0);
   });
 
   it('skips the notification when the lead was deleted', async () => {
@@ -107,6 +116,38 @@ describe('POST /api/diagnostics/ax-migration/consultation', () => {
     });
     const response = await POST(request({ submissionId: SUBMISSION_ID }));
     expect(response.status).toBe(200);
+    expect(afterTasks).toHaveLength(0);
+  });
+
+  it('answers the respondent even when the lookups for the message fail', async () => {
+    requestMock.mockResolvedValue({
+      ok: true,
+      alreadyRequested: false,
+      organizationId: 'org-1',
+      leadId: 'lead-1',
+      leadCreated: true,
+    });
+    findLead.mockRejectedValue(new Error('db blip'));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const response = await POST(request({ submissionId: SUBMISSION_ID }));
+    expect(response.status).toBe(200);
+    await expect(runAfterTasks()).resolves.toEqual([undefined]);
+    expect(notifyMock).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith('AX consultation notification error:', expect.any(Error));
+    errorSpy.mockRestore();
+  });
+
+  it('skips the notification when the lead is gone by the time it is sent', async () => {
+    requestMock.mockResolvedValue({
+      ok: true,
+      alreadyRequested: false,
+      organizationId: 'org-1',
+      leadId: 'lead-1',
+      leadCreated: true,
+    });
+    findLead.mockResolvedValue(undefined);
+    await POST(request({ submissionId: SUBMISSION_ID }));
+    await runAfterTasks();
     expect(notifyMock).not.toHaveBeenCalled();
   });
 

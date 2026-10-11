@@ -79,6 +79,8 @@ export async function POST(req: NextRequest) {
       email: parsed.data.contact.email,
     };
 
+    // Taken now: the consultation deadline counts from when the request came in
+    const requestedAt = new Date();
     // After the response: notifications never delay or fail the respondent's flow, and the
     // serverless function stays alive until they are sent (a promise left running is cut off
     // on Vercel once the response has been returned)
@@ -94,7 +96,7 @@ export async function POST(req: NextRequest) {
         consultationRequested: parsed.data.consultationRequested,
         leadCreated: outcome.leadCreated,
         identityUnverified: outcome.existingLead !== null,
-        requestedAt: new Date(),
+        requestedAt,
       }).catch((error) => console.error('AX diagnosis notification error:', error))
     );
 
