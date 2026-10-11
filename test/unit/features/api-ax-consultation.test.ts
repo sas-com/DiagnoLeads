@@ -10,6 +10,13 @@ const notifyMock = vi.fn();
 const findLead = vi.fn();
 const findSubmission = vi.fn();
 
+// after() needs a request scope; here the task runs right away
+vi.mock('next/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/server')>()),
+  after: (task: () => unknown) => {
+    void task();
+  },
+}));
 vi.mock('@/lib/db/client', () => ({
   db: {
     query: {

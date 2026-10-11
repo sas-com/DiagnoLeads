@@ -5,7 +5,7 @@ import { notifyAxMigrationSubmission } from '@/lib/features/diagnostics/ax-migra
 import { requestAxMigrationConsultation } from '@/lib/features/diagnostics/ax-migration/submission-service';
 import { checkPublicJsonRequest, readJsonBody } from '@/lib/features/diagnostics/request-guard';
 import { eq } from 'drizzle-orm';
-import { type NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse, after } from 'next/server';
 import { z } from 'zod';
 
 const consultationSchema = z.object({
@@ -46,19 +46,22 @@ export async function POST(req: NextRequest) {
         }),
       ]);
       if (lead && submission) {
-        notifyAxMigrationSubmission({
-          organizationId: outcome.organizationId,
-          leadId: lead.id,
-          submissionId: submission.id,
-          company: lead.company ?? '',
-          name: lead.name ?? '',
-          email: lead.email,
-          result: submission.result as unknown as AxMigrationResult,
-          consultationRequested: true,
-          leadCreated: false,
-          identityUnverified: !outcome.leadCreated,
-          requestedAt,
-        }).catch((error) => console.error('AX consultation notification error:', error));
+        // After the response, keeping the function alive until sales are notified
+        after(() =>
+          notifyAxMigrationSubmission({
+            organizationId: outcome.organizationId,
+            leadId: lead.id,
+            submissionId: submission.id,
+            company: lead.company ?? '',
+            name: lead.name ?? '',
+            email: lead.email,
+            result: submission.result as unknown as AxMigrationResult,
+            consultationRequested: true,
+            leadCreated: false,
+            identityUnverified: !outcome.leadCreated,
+            requestedAt,
+          }).catch((error) => console.error('AX consultation notification error:', error))
+        );
       }
     }
 

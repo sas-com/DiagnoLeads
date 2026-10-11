@@ -10,6 +10,13 @@ const submitMock = vi.fn();
 const notifyMock = vi.fn();
 const resolveOrgMock = vi.fn();
 
+// after() needs a request scope; here the task runs right away
+vi.mock('next/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/server')>()),
+  after: (task: () => unknown) => {
+    void task();
+  },
+}));
 vi.mock('@/lib/db/client', () => ({ db: {} }));
 vi.mock('@/lib/features/diagnostics/ax-migration/notify', () => ({
   notifyAxMigrationSubmission: (...args: unknown[]) => notifyMock(...args),
