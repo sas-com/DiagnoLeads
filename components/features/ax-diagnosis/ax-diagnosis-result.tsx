@@ -16,6 +16,7 @@ import {
   ClipboardCheck,
   Loader2,
   MapPin,
+  Printer,
   RefreshCw,
   Sparkles,
 } from 'lucide-react';
@@ -67,6 +68,12 @@ export function AxDiagnosisResult({
   const [sending, setSending] = useState(false);
   /** Which button the failed request came from: the message is shown next to it */
   const [failedAt, setFailedAt] = useState<'top' | 'bottom' | null>(null);
+  /** Printed under the title; the result is shown only in the browser, so no server mismatch */
+  const [diagnosedOn] = useState(() =>
+    new Intl.DateTimeFormat(locale === 'ja' ? 'ja-JP' : 'en-US', { dateStyle: 'long' }).format(
+      new Date()
+    )
+  );
   const headingRef = useRef<HTMLHeadingElement>(null);
   const acceptedRef = useRef<HTMLOutputElement>(null);
   const titleTag = embedded ? 'h3' : 'h1';
@@ -116,6 +123,12 @@ export function AxDiagnosisResult({
     }
   };
 
+  /** The browser's print dialog, which also saves a PDF; the print styles keep only the result */
+  const printResult = () => {
+    trackAxEvent('ax_result_print', { platform });
+    window.print();
+  };
+
   const failedMessage = (location: 'top' | 'bottom') =>
     failedAt === location && (
       <p
@@ -159,7 +172,7 @@ export function AxDiagnosisResult({
   );
 
   return (
-    <section className="space-y-8" aria-labelledby="ax-result-heading">
+    <section className="space-y-8" aria-labelledby="ax-result-heading" data-ax-result="">
       <header className="space-y-2">
         <p
           aria-hidden="true"
@@ -185,6 +198,17 @@ export function AxDiagnosisResult({
             </span>
           )}
         </p>
+        <p className="hidden text-sm text-gray-700 print:block">
+          {t('diagnosedOn', { date: diagnosedOn })}
+        </p>
+        <button
+          type="button"
+          onClick={printResult}
+          className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-bold text-ax-ink hover:bg-ax-mist focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ax-teal-dark print:hidden"
+        >
+          <Printer className="h-4 w-4" aria-hidden="true" />
+          {t('print')}
+        </button>
       </header>
 
       {result.needsHearing && (
@@ -230,7 +254,7 @@ export function AxDiagnosisResult({
       )}
 
       {!requested && (
-        <div className="space-y-2 rounded-2xl border-2 border-ax-teal/30 p-4">
+        <div className="space-y-2 rounded-2xl border-2 border-ax-teal/30 p-4 print:hidden">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm font-bold">{t(`cta.${ctaKey}.lead`)}</p>
             {consultationButton('top', 'shrink-0 px-5 text-sm')}
@@ -363,7 +387,7 @@ export function AxDiagnosisResult({
       </div>
 
       <div
-        className="space-y-4 rounded-2xl bg-ax-deep p-6 text-white sm:p-8"
+        className="space-y-4 rounded-2xl bg-ax-deep p-6 text-white sm:p-8 print:hidden"
         data-testid="ax-result-cta"
       >
         {requested ? (
@@ -393,7 +417,7 @@ export function AxDiagnosisResult({
       <button
         type="button"
         onClick={onDiagnoseAnother}
-        className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold text-ax-teal-dark hover:bg-ax-mist focus-visible:outline focus-visible:outline-2 focus-visible:outline-ax-teal-dark"
+        className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold text-ax-teal-dark hover:bg-ax-mist focus-visible:outline focus-visible:outline-2 focus-visible:outline-ax-teal-dark print:hidden"
       >
         <RefreshCw className="h-4 w-4" aria-hidden="true" />
         {t('diagnoseAnother')}
@@ -506,7 +530,7 @@ function FollowUpQuestions({ locale, answers, submissionId, onUpdated }: FollowU
 
   return (
     <div
-      className="rounded-2xl border-2 border-dashed border-ax-teal/40 p-5"
+      className="rounded-2xl border-2 border-dashed border-ax-teal/40 p-5 print:hidden"
       data-testid="ax-follow-up"
     >
       {state === 'done' ? (

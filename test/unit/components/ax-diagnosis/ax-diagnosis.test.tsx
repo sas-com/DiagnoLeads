@@ -302,12 +302,148 @@ describe('AxDiagnosisFlow', () => {
       name: '山田 太郎',
       email: 'yamada@example.jp',
     });
+    // No bot check configured, and nothing to continue yet
+    expect(body).not.toHaveProperty('turnstileToken');
+    expect(body).not.toHaveProperty('continuedFrom');
+    expect(screen.queryByTestId('ax-turnstile')).not.toBeInTheDocument();
 
     expect(await screen.findByRole('heading', { name: '診断結果' })).toHaveFocus();
     expect(screen.getByText('移行元：AS/400（IBM i）')).toBeInTheDocument();
     expect(screen.getByTestId('ax-result-checkpoints')).toHaveTextContent('見つからないソース');
     // Saved answers are removed once the diagnosis is sent
     expect(window.localStorage.getItem('diagnoleads:ax-diagnosis')).toBeNull();
+  });
+});
+
+describe('AxDiagnosisFlow: another system and the bot check', () => {
+  type RenderOptions = { callback: (token: string) => void };
+  const installTurnstile = (onRender: (options: RenderOptions) => void = () => {}) => {
+    let count = 0;
+    const turnstile = {
+      render: vi.fn((_container: HTMLElement, options: RenderOptions) => {
+        count += 1;
+        onRender(options);
+        return `widget-${count}`;
+      }),
+      remove: vi.fn(),
+    };
+    window.turnstile = turnstile;
+    return turnstile;
+  };
+
+  afterEach(() => {
+    window.turnstile = undefined;
+  });
+
+  it('sends the first submission of the visit with the diagnosis of another system', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse(200, { submissionId: 'sub-1', consultationRequested: false, result: publicResult })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(200, { submissionId: 'sub-2', consultationRequested: false, result: publicResult })
+      );
+    const user = userEvent.setup();
+    render(withIntl(<AxDiagnosisFlow locale="ja" />));
+    await answerAs400(user);
+    await fillContact(user);
+    await user.click(screen.getByRole('button', { name: /診断結果を見る/ }));
+    await user.click(await screen.findByRole('button', { name: '別のシステムも診断する' }));
+
+    // The contact details are kept; the consent is asked again
+    await answerAs400(user);
+    expect(screen.getByLabelText(/会社名/)).toHaveValue('三田製作所');
+    await user.click(screen.getByLabelText('個人情報の取り扱いに同意する'));
+    await user.click(screen.getByRole('button', { name: /診断結果を見る/ }));
+    await screen.findByRole('heading', { name: '診断結果' });
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).not.toHaveProperty('continuedFrom');
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).continuedFrom).toBe('sub-1');
+  });
+
+  it('shows the Turnstile check on the contact step and sends its token', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(200, { submissionId: 'sub-1', consultationRequested: false, result: publicResult })
+    );
+    const turnstile = installTurnstile((options) => options.callback('token-1'));
+    const user = userEvent.setup();
+    render(withIntl(<AxDiagnosisFlow locale="ja" turnstileSiteKey="site-key" />));
+    expect(turnstile.render).not.toHaveBeenCalled();
+
+    await answerAs400(user);
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalledTimes(1));
+    expect(turnstile.render.mock.calls[0][1]).toMatchObject({
+      sitekey: 'site-key',
+      action: 'ax-diagnosis',
+      language: 'ja',
+      // jsdom has no layout: a container narrower than the normal widget gets the compact one
+      size: 'compact',
+    });
+    await fillContact(user);
+    await user.click(screen.getByRole('button', { name: /診断結果を見る/ }));
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).turnstileToken).toBe('token-1');
+    await screen.findByRole('heading', { name: '診断結果' });
+    // The widget goes with the contact step
+    expect(turnstile.remove).toHaveBeenCalledWith('widget-1');
+  });
+
+  it('uses the normal widget where it fits', async () => {
+    const turnstile = installTurnstile();
+    const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(520);
+    try {
+      const user = userEvent.setup();
+      render(withIntl(<AxDiagnosisFlow locale="ja" turnstileSiteKey="site-key" />));
+      await answerAs400(user);
+      await waitFor(() => expect(turnstile.render).toHaveBeenCalled());
+      expect(turnstile.render.mock.calls[0][1]).toMatchObject({ size: 'normal' });
+    } finally {
+      width.mockRestore();
+    }
+  });
+
+  it('waits for the check before sending', async () => {
+    installTurnstile();
+    const user = userEvent.setup();
+    render(withIntl(<AxDiagnosisFlow locale="ja" turnstileSiteKey="site-key" />));
+    await answerAs400(user);
+    await fillContact(user);
+    await user.click(screen.getByRole('button', { name: /診断結果を見る/ }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('送信前の確認が終わっていません');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('asks for a new check after the server refused the token', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(403, { error: 'Verification failed' }));
+    let token = 0;
+    const turnstile = installTurnstile((options) => {
+      token += 1;
+      options.callback(`token-${token}`);
+    });
+    const user = userEvent.setup();
+    render(withIntl(<AxDiagnosisFlow locale="ja" turnstileSiteKey="site-key" />));
+    await answerAs400(user);
+    await fillContact(user);
+    await user.click(screen.getByRole('button', { name: /診断結果を見る/ }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('送信前の確認が終わっていません');
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalledTimes(2));
+    expect(turnstile.remove).toHaveBeenCalledWith('widget-1');
+
+    // The next send uses the new token
+    await user.click(screen.getByRole('button', { name: /診断結果を見る/ }));
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).turnstileToken).toBe('token-2');
+  });
+
+  it('says when there were too many submissions', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(429, { error: 'Too many requests' }));
+    const user = userEvent.setup();
+    render(withIntl(<AxDiagnosisFlow locale="ja" />));
+    await answerAs400(user);
+    await fillContact(user);
+    await user.click(screen.getByRole('button', { name: /診断結果を見る/ }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('しばらく時間をおいてから');
   });
 });
 
@@ -403,6 +539,20 @@ describe('AxDiagnosisResult', () => {
     const done = await screen.findByText(/結果を更新しました/);
     // The confirmation takes the focus, so it is read out
     expect(done.closest('output')).toHaveFocus();
+  });
+
+  it('prints the result (or saves it as a PDF) with the browser', async () => {
+    const print = vi.fn();
+    vi.stubGlobal('print', print);
+    const user = userEvent.setup();
+    const { container } = renderResult();
+    // The print styles keep only this element
+    expect(container.querySelector('[data-ax-result]')).toBeInTheDocument();
+    // A date line for the printout (hidden on the screen)
+    expect(screen.getByText(/^診断日：\d{4}年\d{1,2}月\d{1,2}日$/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '印刷・PDFで保存' }));
+    expect(print).toHaveBeenCalled();
   });
 
   it('lets the respondent check another system', async () => {

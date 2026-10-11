@@ -9,6 +9,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const submitMock = vi.fn();
 const notifyMock = vi.fn();
 const resolveOrgMock = vi.fn();
+const limitsMock = vi.fn();
+const pruneMock = vi.fn();
+const turnstileMock = vi.fn();
 // Tasks given to after(): run by the test once the response is there
 const { afterTasks } = vi.hoisted(() => ({ afterTasks: [] as Array<() => unknown> }));
 const runAfterTasks = () => Promise.all(afterTasks.map((task) => task()));
@@ -25,6 +28,13 @@ vi.mock('@/lib/features/diagnostics/ax-migration/notify', () => ({
 }));
 vi.mock('@/lib/features/diagnostics/organization', () => ({
   resolveDiagnosisOrganizationId: () => resolveOrgMock(),
+}));
+vi.mock('@/lib/features/diagnostics/rate-limit', () => ({
+  consumeRateLimits: (...args: unknown[]) => limitsMock(...args),
+  pruneRateLimits: (...args: unknown[]) => pruneMock(...args),
+}));
+vi.mock('@/lib/features/diagnostics/turnstile', () => ({
+  verifyTurnstile: (...args: unknown[]) => turnstileMock(...args),
 }));
 vi.mock('@/lib/features/diagnostics/ax-migration/submission-service', async (importOriginal) => {
   const original =
@@ -66,6 +76,9 @@ describe('POST /api/diagnostics/ax-migration', () => {
     afterTasks.length = 0;
     resolveOrgMock.mockReturnValue(ORG_ID);
     notifyMock.mockResolvedValue(undefined);
+    limitsMock.mockResolvedValue({ allowed: true, retryAfterSeconds: 0 });
+    pruneMock.mockResolvedValue(undefined);
+    turnstileMock.mockResolvedValue({ ok: true });
   });
 
   it('returns the public result and notifies sales', async () => {
@@ -239,7 +252,7 @@ describe('POST /api/diagnostics/ax-migration', () => {
     const response = await POST(request(validBody));
     expect(response.status).toBe(200);
     // The failure is caught inside the task, so nothing is left unhandled
-    await expect(runAfterTasks()).resolves.toEqual([undefined]);
+    await expect(runAfterTasks()).resolves.toBeDefined();
     expect(errorSpy).toHaveBeenCalledWith('AX diagnosis notification error:', expect.any(Error));
     errorSpy.mockRestore();
   });
@@ -266,5 +279,83 @@ describe('POST /api/diagnostics/ax-migration', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+  it('counts the request per IP address, email and organization', async () => {
+    submitMock.mockResolvedValue({
+      ok: true,
+      submissionId: 'sub-6',
+      leadId: 'lead-6',
+      leadCreated: true,
+      existingLead: null,
+      continued: false,
+      result,
+      answers: {},
+    });
+    await POST(request(validBody, { 'x-real-ip': '203.0.113.7' }));
+    expect(limitsMock).toHaveBeenCalledWith({}, [
+      expect.objectContaining({ identifier: '203.0.113.7' }),
+      expect.objectContaining({ identifier: 'yamada@example.jp' }),
+      expect.objectContaining({ identifier: ORG_ID }),
+    ]);
+    // Old windows are cleaned up after the response
+    expect(pruneMock).not.toHaveBeenCalled();
+    await runAfterTasks();
+    expect(pruneMock).toHaveBeenCalled();
+  });
+
+  it('answers 429 with Retry-After over a limit and saves nothing', async () => {
+    limitsMock.mockResolvedValue({ allowed: false, retryAfterSeconds: 1200, rule: 'ax-submit-ip' });
+    const response = await POST(request(validBody));
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('1200');
+    expect(submitMock).not.toHaveBeenCalled();
+    expect(afterTasks).toHaveLength(0);
+  });
+
+  it('refuses a failed bot check before counting or saving anything', async () => {
+    turnstileMock.mockResolvedValue({ ok: false, reason: 'invalid' });
+    const response = await POST(
+      request({ ...validBody, turnstileToken: 'bad' }, { 'x-forwarded-for': '198.51.100.2, 10.0.0.1' })
+    );
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: 'Verification failed' });
+    expect(turnstileMock).toHaveBeenCalledWith('bad', '198.51.100.2');
+    expect(limitsMock).not.toHaveBeenCalled();
+    expect(submitMock).not.toHaveBeenCalled();
+  });
+
+  it('answers 503 when the bot check cannot be done', async () => {
+    turnstileMock.mockResolvedValue({ ok: false, reason: 'unavailable' });
+    const response = await POST(request(validBody));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: 'Verification unavailable' });
+    expect(submitMock).not.toHaveBeenCalled();
+  });
+
+  it('passes the first submission of the visit on to the service', async () => {
+    submitMock.mockResolvedValue({
+      ok: true,
+      submissionId: 'sub-7',
+      leadId: 'lead-7',
+      leadCreated: false,
+      existingLead: { name: '山田', company: '三田製作所', email: 'yamada@example.jp' },
+      continued: true,
+      result,
+      answers: {},
+    });
+    const first = '44444444-4444-4444-8444-444444444444';
+    await POST(request({ ...validBody, continuedFrom: first }));
+    expect(submitMock).toHaveBeenCalledWith({}, ORG_ID, expect.objectContaining({ continuedFrom: first }));
+    await runAfterTasks();
+    // The same respondent: not an unverified identity, and the system is recorded on the lead
+    expect(notifyMock).toHaveBeenCalledWith(
+      expect.objectContaining({ identityUnverified: false, additionalSystem: true })
+    );
+  });
+
+  it('rejects a malformed first-submission id', async () => {
+    const response = await POST(request({ ...validBody, continuedFrom: 'not-a-uuid' }));
+    expect(response.status).toBe(400);
+    expect(submitMock).not.toHaveBeenCalled();
   });
 });

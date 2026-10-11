@@ -1,4 +1,5 @@
 import { AxDiagnosisFlow } from '@/components/features/ax-diagnosis/ax-diagnosis-flow';
+import { turnstileSiteKey } from '@/lib/features/diagnostics/turnstile';
 import type { DiagnosticLocale } from '@/lib/features/diagnostics/types';
 import { cn } from '@/lib/utils';
 import {
@@ -291,7 +292,12 @@ export async function AxDiagnosisSection({ locale }: SectionProps) {
         </h2>
         <p className="mx-auto mt-5 max-w-2xl text-center leading-relaxed">{t('lead')}</p>
         <div className="mt-10 rounded-3xl bg-white p-5 shadow-[0_10px_40px_rgba(0,0,0,0.08)] ring-1 ring-black/5 sm:p-10">
-          <AxDiagnosisFlow locale={locale} privacyPolicyUrl={axPrivacyPolicyUrl()} embedded />
+          <AxDiagnosisFlow
+            locale={locale}
+            privacyPolicyUrl={axPrivacyPolicyUrl()}
+            turnstileSiteKey={turnstileSiteKey()}
+            embedded
+          />
         </div>
       </div>
     </section>

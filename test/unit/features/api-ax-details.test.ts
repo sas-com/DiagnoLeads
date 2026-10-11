@@ -8,8 +8,12 @@ import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const addDetailsMock = vi.fn();
+const limitMock = vi.fn();
 
 vi.mock('@/lib/db/client', () => ({ db: {} }));
+vi.mock('@/lib/features/diagnostics/rate-limit', () => ({
+  consumeRateLimit: (...args: unknown[]) => limitMock(...args),
+}));
 vi.mock('@/lib/features/diagnostics/ax-migration/submission-service', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@/lib/features/diagnostics/ax-migration/submission-service')>();
@@ -32,6 +36,16 @@ const request = (body: unknown, headers: Record<string, string> = {}) =>
 describe('POST /api/diagnostics/ax-migration/details', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    limitMock.mockResolvedValue({ allowed: true, retryAfterSeconds: 0 });
+  });
+
+  it('answers 429 over the per-address limit', async () => {
+    limitMock.mockResolvedValue({ allowed: false, retryAfterSeconds: 30 });
+    const response = await POST(
+      request({ submissionId: SUBMISSION_ID, answers: { gaiji: 'many' } })
+    );
+    expect(response.status).toBe(429);
+    expect(addDetailsMock).not.toHaveBeenCalled();
   });
 
   it('returns the refined public result', async () => {

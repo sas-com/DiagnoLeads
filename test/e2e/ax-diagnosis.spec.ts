@@ -6,6 +6,7 @@ import {
   canSubmit,
   fillContact,
   submit,
+  submitWithRequest,
 } from './helpers/ax-diagnosis';
 
 /**
@@ -101,5 +102,36 @@ test.describe('AX migration diagnosis', () => {
     expect((await detailsResponse).status()).toBe(200);
     await expect(page.getByText(/結果を更新しました/)).toBeVisible();
     await expect(page.getByTestId('ax-result-checkpoints')).toContainText('クラウドのフォルダ');
+  });
+  test('diagnoses another system as the same respondent and prints only the result', async ({
+    page,
+  }) => {
+    test.skip(!canSubmit, 'AX_DIAGNOSIS_ORGANIZATION_ID is not set');
+    await page.goto('/ja/ax-diagnosis');
+    await answerAs400(page);
+    await fillContact(page, `e2e-ax-another-${Date.now()}@example.com`);
+    const first = await submitWithRequest(page);
+    expect(first.sent).not.toHaveProperty('continuedFrom');
+
+    // The printout keeps the result and drops the page around it and the buttons
+    const print = page.getByRole('button', { name: '印刷・PDFで保存' });
+    await expect(print).toBeVisible();
+    await page.emulateMedia({ media: 'print' });
+    await expect(page.getByRole('heading', { name: '診断結果' })).toBeVisible();
+    await expect(page.getByText(/^診断日：/)).toBeVisible();
+    await expect(page.locator('.ax-site > header')).toBeHidden();
+    await expect(page.locator('.ax-site > footer')).toBeHidden();
+    await expect(print).toBeHidden();
+    await expect(page.getByTestId('ax-result-cta')).toBeHidden();
+    await page.emulateMedia({ media: 'screen' });
+    await expect(page.getByText(/^診断日：/)).toBeHidden();
+
+    await page.getByRole('button', { name: '別のシステムも診断する' }).click();
+    await answerAcos(page);
+    await expect(page.getByLabel(/会社のメールアドレス/)).toHaveValue(/e2e-ax-another-/);
+    await page.getByLabel('個人情報の取り扱いに同意する').check();
+    const second = await submitWithRequest(page);
+    expect(second.sent.continuedFrom).toBe(first.body.submissionId);
+    await expect(page.getByText('移行元：NEC ACOS')).toBeVisible();
   });
 });

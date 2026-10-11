@@ -33,6 +33,7 @@ import { type ReactNode, createElement, useCallback, useEffect, useRef, useState
 import { AxDiagnosisResult } from './ax-diagnosis-result';
 import { CHECKBOX_CLASS, QuestionField } from './question-field';
 import { trackAxEvent } from './tracking';
+import { TurnstileWidget } from './turnstile-widget';
 
 const definition = axMigrationDefinition;
 /** The first question chooses the migration path; the following sections depend on it */
@@ -83,7 +84,12 @@ interface AxDiagnosisFlowProps {
   privacyPolicyUrl?: string;
   /** Inside the landing page: the page provides the title, headings start one level lower */
   embedded?: boolean;
+  /** Cloudflare Turnstile site key; the check is shown on the contact step only when set */
+  turnstileSiteKey?: string;
 }
+
+/** Error codes of the submit endpoint that mean the bot check did not pass */
+const VERIFICATION_ERRORS = new Set(['Verification failed', 'Verification unavailable']);
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -215,6 +221,7 @@ export function AxDiagnosisFlow({
   locale,
   privacyPolicyUrl,
   embedded = false,
+  turnstileSiteKey,
 }: AxDiagnosisFlowProps) {
   const t = useTranslations('axDiagnosis');
   const [stage, setStage] = useState<'questions' | 'result'>('questions');
@@ -235,6 +242,15 @@ export function AxDiagnosisFlow({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [response, setResponse] = useState<SubmissionResponse | null>(null);
   const [announcement, setAnnouncement] = useState('');
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  /** Changed to show a fresh Turnstile check (a token works once, also for a failed send) */
+  const [turnstileRun, setTurnstileRun] = useState(0);
+  /**
+   * The first submission of this visit. Sent with the next ones ("diagnose another system"), so
+   * the server can tell the same respondent from someone typing a known email address.
+   * Kept in memory only.
+   */
+  const firstSubmissionRef = useRef<string | null>(null);
   const tracking = useRef<Record<string, string>>({});
   const topRef = useRef<HTMLDivElement>(null);
   const stepHeadingRef = useRef<HTMLHeadingElement>(null);
@@ -463,8 +479,18 @@ export function AxDiagnosisFlow({
 
   const submit = async () => {
     if (!validateContact()) return;
+    if (turnstileSiteKey && !turnstileToken) {
+      setSubmitError(t('errors.verification'));
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
+    // The check is used up by this send; a failed send needs a new one
+    const renewCheck = () => {
+      if (!turnstileSiteKey) return;
+      setTurnstileToken(null);
+      setTurnstileRun((run) => run + 1);
+    };
     try {
       const res = await fetch('/api/diagnostics/ax-migration', {
         method: 'POST',
@@ -482,15 +508,24 @@ export function AxDiagnosisFlow({
           tracking: tracking.current,
           locale,
           website: honeypot || undefined,
+          turnstileToken: turnstileToken ?? undefined,
+          continuedFrom: firstSubmissionRef.current ?? undefined,
         }),
       });
 
       if (res.status === 429) {
+        renewCheck();
         setSubmitError(t('errors.rateLimited'));
         return;
       }
       const json = await res.json().catch(() => null);
+      if (!res.ok && VERIFICATION_ERRORS.has(json?.error)) {
+        renewCheck();
+        setSubmitError(t('errors.verification'));
+        return;
+      }
       if (!res.ok || !json) {
+        renewCheck();
         // Jump back to the first step with an invalid answer, if any
         const issues: { questionId: string }[] = json?.issues ?? [];
         const sectionIndex = sections.findIndex((section) =>
@@ -512,6 +547,7 @@ export function AxDiagnosisFlow({
       }
 
       saveProgress(null);
+      firstSubmissionRef.current ??= (json as SubmissionResponse).submissionId;
       setResponse(json as SubmissionResponse);
       setStage('result');
       // Rewind this diagnosis' step entries: the browser's back button then leaves the result
@@ -533,6 +569,7 @@ export function AxDiagnosisFlow({
         block: 'start',
       });
     } catch {
+      renewCheck();
       setSubmitError(t('errors.submit'));
     } finally {
       setSubmitting(false);
@@ -547,6 +584,7 @@ export function AxDiagnosisFlow({
     setResponse(null);
     setConsultation(false);
     setConsent(false);
+    setTurnstileToken(null);
     setStage('questions');
     showStep(0, false);
     stampEntry(runRef.current, 0);
@@ -663,6 +701,16 @@ export function AxDiagnosisFlow({
               setErrors((prev) => ({ ...prev, consent: '' }));
             }}
             onHoneypot={setHoneypot}
+            verification={
+              turnstileSiteKey && (
+                <TurnstileWidget
+                  key={turnstileRun}
+                  siteKey={turnstileSiteKey}
+                  locale={locale}
+                  onToken={setTurnstileToken}
+                />
+              )
+            }
           />
         ) : (
           currentSection && (
@@ -891,6 +939,8 @@ interface ContactFieldsProps {
   onConsultation: (value: boolean) => void;
   onConsent: (value: boolean) => void;
   onHoneypot: (value: string) => void;
+  /** Bot check shown under the consent (Cloudflare Turnstile), when configured */
+  verification?: ReactNode;
 }
 
 function ContactFields({
@@ -904,6 +954,7 @@ function ContactFields({
   onConsultation,
   onConsent,
   onHoneypot,
+  verification,
 }: ContactFieldsProps) {
   const t = useTranslations('axDiagnosis');
   const fields: { key: keyof ContactState; type: string; autoComplete: string }[] = [
@@ -1043,6 +1094,8 @@ function ContactFields({
           </p>
         )}
       </div>
+
+      {verification}
     </div>
   );
 }

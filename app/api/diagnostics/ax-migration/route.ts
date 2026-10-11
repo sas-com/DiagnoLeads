@@ -4,6 +4,7 @@ import {
   evaluateAxMigration,
   toPublicResult,
 } from '@/lib/features/diagnostics/ax-migration/evaluate';
+import { AX_RATE_LIMITS } from '@/lib/features/diagnostics/ax-migration/limits';
 import { notifyAxMigrationSubmission } from '@/lib/features/diagnostics/ax-migration/notify';
 import {
   axMigrationSubmissionSchema,
@@ -11,7 +12,14 @@ import {
 } from '@/lib/features/diagnostics/ax-migration/submission-service';
 import { validateAnswers } from '@/lib/features/diagnostics/engine';
 import { resolveDiagnosisOrganizationId } from '@/lib/features/diagnostics/organization';
-import { checkPublicJsonRequest, readJsonBody } from '@/lib/features/diagnostics/request-guard';
+import { consumeRateLimits, pruneRateLimits } from '@/lib/features/diagnostics/rate-limit';
+import {
+  checkPublicJsonRequest,
+  clientIp,
+  readJsonBody,
+  tooManyRequests,
+} from '@/lib/features/diagnostics/request-guard';
+import { verifyTurnstile } from '@/lib/features/diagnostics/turnstile';
 import { type NextRequest, NextResponse, after } from 'next/server';
 
 /** Upper bound for the request body (answers + contact + tracking are a few KB) */
@@ -63,7 +71,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Diagnosis is not available' }, { status: 503 });
   }
 
+  const ip = clientIp(req);
+  const verification = await verifyTurnstile(parsed.data.turnstileToken, ip);
+  if (!verification.ok) {
+    return verification.reason === 'unavailable'
+      ? NextResponse.json({ error: 'Verification unavailable' }, { status: 503 })
+      : NextResponse.json({ error: 'Verification failed' }, { status: 403 });
+  }
+
   try {
+    const limit = await consumeRateLimits(db, [
+      { rule: AX_RATE_LIMITS.submitPerIp, identifier: ip ?? 'unknown' },
+      { rule: AX_RATE_LIMITS.submitPerEmail, identifier: parsed.data.contact.email.toLowerCase() },
+      { rule: AX_RATE_LIMITS.submitPerOrganization, identifier: organizationId },
+    ]);
+    if (!limit.allowed) {
+      console.warn(`AX diagnosis: rate limit reached (${limit.rule})`);
+      return tooManyRequests(limit.retryAfterSeconds);
+    }
+
     const outcome = await submitAxMigrationDiagnosis(db, organizationId, parsed.data);
     if (!outcome.ok) {
       return NextResponse.json(
@@ -95,9 +121,13 @@ export async function POST(req: NextRequest) {
         result: outcome.result,
         consultationRequested: parsed.data.consultationRequested,
         leadCreated: outcome.leadCreated,
-        identityUnverified: outcome.existingLead !== null,
+        identityUnverified: outcome.existingLead !== null && !outcome.continued,
+        additionalSystem: outcome.continued,
         requestedAt,
       }).catch((error) => console.error('AX diagnosis notification error:', error))
+    );
+    after(() =>
+      pruneRateLimits(db).catch((error) => console.error('Rate limit cleanup error:', error))
     );
 
     return NextResponse.json({

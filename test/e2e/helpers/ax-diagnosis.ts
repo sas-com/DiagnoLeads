@@ -72,8 +72,18 @@ export async function fillContact(page: Page, email: string) {
   await page.getByLabel('個人情報の取り扱いに同意する').check();
 }
 
-/** Submit and return the JSON the API answered */
-export async function submit(page: Page) {
+/** With the Turnstile check on (TURNSTILE_* set), wait until it has given a token */
+export async function waitForBotCheck(page: Page) {
+  const widget = page.getByTestId('ax-turnstile');
+  if ((await widget.count()) === 0) return;
+  await expect(widget.locator('input[name="cf-turnstile-response"]')).not.toHaveValue('', {
+    timeout: 30_000,
+  });
+}
+
+/** Submit and return the request body sent and the JSON the API answered */
+export async function submitWithRequest(page: Page) {
+  await waitForBotCheck(page);
   const responsePromise = page.waitForResponse(
     (response) =>
       response.url().endsWith('/api/diagnostics/ax-migration') &&
@@ -82,5 +92,10 @@ export async function submit(page: Page) {
   await page.getByRole('button', { name: /診断結果を見る/ }).click();
   const response = await responsePromise;
   expect(response.status()).toBe(200);
-  return response.json();
+  return { sent: response.request().postDataJSON(), body: await response.json() };
+}
+
+/** Submit and return the JSON the API answered */
+export async function submit(page: Page) {
+  return (await submitWithRequest(page)).body;
 }

@@ -88,3 +88,21 @@ export async function readJsonBody(
     return invalid();
   }
 }
+
+/**
+ * The client's IP address, for rate limits. On Vercel both headers are set by the platform
+ * (a client cannot choose them); elsewhere they are only as trustworthy as the proxy in front.
+ */
+export function clientIp(req: NextRequest): string | undefined {
+  const realIp = req.headers.get('x-real-ip')?.trim();
+  if (realIp) return realIp;
+  return req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || undefined;
+}
+
+/** 429 with Retry-After */
+export function tooManyRequests(retryAfterSeconds: number): NextResponse {
+  return NextResponse.json(
+    { error: 'Too many requests' },
+    { status: 429, headers: { 'Retry-After': String(retryAfterSeconds) } }
+  );
+}

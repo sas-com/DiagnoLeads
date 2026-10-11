@@ -348,7 +348,8 @@
       "phone": "Enter the phone number with digits and hyphens",
       "consent": "Please agree to the handling of personal information",
       "submit": "Could not submit. Please try again later.",
-      "rateLimited": "Too many submissions. Please wait a minute and try again."
+      "rateLimited": "Too many submissions in a short time. Please wait a while and try again.",
+      "verification": "The check before sending has not finished. Wait until it completes, then send again. If it does not appear, reload the page."
     },
     "contact": {
       "description": "The result is shown on this page. We use your contact details to explain the result and offer a consultation.",
@@ -540,6 +541,8 @@
       "stepLabel": "STEP {number}",
       "title": "Your result",
       "subtitle": "An estimate based on the answers from {company}",
+      "diagnosedOn": "Diagnosed on {date}",
+      "print": "Print or save as PDF",
       "difficulty": "Migration difficulty (estimate)",
       "urgency": "Urgency to modernize",
       "primaryChallenge": "The challenge to tackle first",

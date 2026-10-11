@@ -33,6 +33,10 @@ export const env = createEnv({
     AX_DIAGNOSIS_ORGANIZATION_ID: z.string().uuid().optional(),
     // Comma-separated sales addresses notified on consultation requests
     AX_DIAGNOSIS_SALES_EMAIL: z.string().optional(),
+
+    // Cloudflare Turnstile on the public diagnosis: checked only when both keys are set
+    TURNSTILE_SITE_KEY: z.string().optional(),
+    TURNSTILE_SECRET_KEY: z.string().optional(),
   },
 
   /**
@@ -60,6 +64,8 @@ export const env = createEnv({
     DEFAULT_ORGANIZATION_ID: process.env.DEFAULT_ORGANIZATION_ID,
     AX_DIAGNOSIS_ORGANIZATION_ID: process.env.AX_DIAGNOSIS_ORGANIZATION_ID,
     AX_DIAGNOSIS_SALES_EMAIL: process.env.AX_DIAGNOSIS_SALES_EMAIL,
+    TURNSTILE_SITE_KEY: process.env.TURNSTILE_SITE_KEY,
+    TURNSTILE_SECRET_KEY: process.env.TURNSTILE_SECRET_KEY,
 
     // Client
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,

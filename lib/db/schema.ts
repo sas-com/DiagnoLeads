@@ -2,6 +2,7 @@ import { relations } from 'drizzle-orm';
 import {
   boolean,
   customType,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -362,6 +363,11 @@ export const diagnosticSubmissions = pgTable(
     tracking: jsonb('tracking').$type<Record<string, string>>().default({}).notNull(),
     locale: text('locale'),
     consultationRequestedAt: timestamp('consultation_requested_at'),
+    /**
+     * Set when the respondent who created the lead diagnosed another system from the same
+     * result screen (checked on the server). Such a submission may update that lead.
+     */
+    continuedFromSubmissionId: uuid('continued_from_submission_id'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (table) => [
@@ -371,11 +377,32 @@ export const diagnosticSubmissions = pgTable(
       table.createdAt
     ),
     index('diagnostic_submissions_lead_idx').on(table.leadId),
+    // Named explicitly: the generated name is longer than PostgreSQL's 63-character limit
+    foreignKey({
+      name: 'diagnostic_submissions_continued_from_fk',
+      columns: [table.continuedFromSubmissionId],
+      foreignColumns: [table.id],
+    }).onDelete('set null'),
   ]
 );
 
 export type DiagnosticSubmission = typeof diagnosticSubmissions.$inferSelect;
 export type NewDiagnosticSubmission = typeof diagnosticSubmissions.$inferInsert;
+
+/**
+ * Public Rate Limits
+ * Fixed-window request counters for the public (unauthenticated) forms, shared by every
+ * server instance. Keys are keyed hashes, so no IP address or email is stored.
+ */
+export const publicRateLimits = pgTable(
+  'public_rate_limits',
+  {
+    key: text('key').primaryKey(),
+    count: integer('count').notNull(),
+    resetAt: timestamp('reset_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [index('public_rate_limits_reset_at_idx').on(table.resetAt)]
+);
 
 // Note: OrganizationType and DataSharingPolicy are already exported above at definition
 

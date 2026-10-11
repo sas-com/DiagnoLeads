@@ -8,9 +8,14 @@ const webhookMock = vi.fn();
 const inAppMock = vi.fn();
 const sendEmailMock = vi.fn();
 const isEmailConfiguredMock = vi.fn();
+const quotaMock = vi.fn();
 const env: { AX_DIAGNOSIS_SALES_EMAIL?: string } = {};
 
 vi.mock('@/lib/env', () => ({ env }));
+vi.mock('@/lib/db/client', () => ({ db: {} }));
+vi.mock('@/lib/features/diagnostics/rate-limit', () => ({
+  consumeRateLimit: (...args: unknown[]) => quotaMock(...args),
+}));
 vi.mock('@/lib/features/webhooks/services/webhook-service', () => ({
   triggerWebhooks: (...args: unknown[]) => webhookMock(...args),
 }));
@@ -48,6 +53,7 @@ describe('notifyAxMigrationSubmission', () => {
     inAppMock.mockResolvedValue(undefined);
     sendEmailMock.mockResolvedValue({ id: 'mail-1' });
     isEmailConfiguredMock.mockReturnValue(true);
+    quotaMock.mockResolvedValue({ allowed: true, retryAfterSeconds: 0 });
     env.AX_DIAGNOSIS_SALES_EMAIL = 'sales1@example.jp, sales2@example.jp';
   });
 
@@ -131,6 +137,59 @@ describe('notifyAxMigrationSubmission', () => {
       notifyAxMigrationSubmission({ ...base, consultationRequested: true })
     ).resolves.toBeUndefined();
     expect(sendEmailMock).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+  it('tells sales about another system of the same respondent, without the unverified mark', async () => {
+    await notifyAxMigrationSubmission({ ...base, leadCreated: false, additionalSystem: true });
+    expect(inAppMock).toHaveBeenCalledWith(
+      'org-1',
+      'lead_scored',
+      expect.stringContaining('【AX診断・別システム】'),
+      expect.stringContaining('別のシステムも続けて診断しました'),
+      expect.objectContaining({ additionalSystem: true, identityUnverified: false })
+    );
+    expect(inAppMock.mock.calls[0][2]).not.toContain('本人未確認');
+    expect(webhookMock).toHaveBeenCalledWith(
+      'org-1',
+      'diagnostic.submitted',
+      expect.objectContaining({ additionalSystem: true })
+    );
+  });
+
+  it('keeps a consultation request from another system a plain consultation request', async () => {
+    await notifyAxMigrationSubmission({
+      ...base,
+      leadCreated: false,
+      additionalSystem: true,
+      consultationRequested: true,
+    });
+    const [, type, title, message] = inAppMock.mock.calls[0];
+    expect(type).toBe('consultation_requested');
+    expect(title).toMatch(/^【相談申込】/);
+    expect(message).toContain('別のシステムも続けて診断しました');
+    expect(sendEmailMock).toHaveBeenCalled();
+  });
+
+  it('sends no sales email past the daily limit, but still notifies in-app', async () => {
+    quotaMock.mockResolvedValue({ allowed: false, retryAfterSeconds: 3600 });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await notifyAxMigrationSubmission({ ...base, consultationRequested: true });
+    expect(quotaMock).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({ name: 'ax-sales-email-org' }),
+      'org-1'
+    );
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    expect(inAppMock).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('sends no sales email when the daily limit cannot be checked', async () => {
+    quotaMock.mockRejectedValue(new Error('db down'));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await notifyAxMigrationSubmission({ ...base, consultationRequested: true });
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    expect(inAppMock).toHaveBeenCalled();
     errorSpy.mockRestore();
   });
 });

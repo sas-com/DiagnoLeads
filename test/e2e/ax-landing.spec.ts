@@ -42,6 +42,13 @@ test.describe('AX migration landing page', () => {
     // Still the result (no reload) once the step entries have been rewound
     await page.waitForTimeout(500);
     await expect(page.locator('#diagnosis').getByRole('heading', { name: '診断結果' })).toBeVisible();
+
+    // Printed, the landing page around the result is left out
+    await page.emulateMedia({ media: 'print' });
+    await expect(page.locator('#diagnosis').getByRole('heading', { name: '診断結果' })).toBeVisible();
+    await expect(page.locator('#ax-hero-heading')).toBeHidden();
+    await expect(page.locator('#ax-diagnosis-heading')).toBeHidden();
+    await expect(page.getByTestId('ax-floating-cta')).toBeHidden();
   });
 
   test('keeps the diagnosis one tap away on phones', async ({ browser }) => {

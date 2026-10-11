@@ -1,9 +1,16 @@
 import { db } from '@/lib/db/client';
 import { diagnosticSubmissions, leads } from '@/lib/db/schema';
 import type { AxMigrationResult } from '@/lib/features/diagnostics/ax-migration/evaluate';
+import { AX_RATE_LIMITS } from '@/lib/features/diagnostics/ax-migration/limits';
 import { notifyAxMigrationSubmission } from '@/lib/features/diagnostics/ax-migration/notify';
 import { requestAxMigrationConsultation } from '@/lib/features/diagnostics/ax-migration/submission-service';
-import { checkPublicJsonRequest, readJsonBody } from '@/lib/features/diagnostics/request-guard';
+import { consumeRateLimit } from '@/lib/features/diagnostics/rate-limit';
+import {
+  checkPublicJsonRequest,
+  clientIp,
+  readJsonBody,
+  tooManyRequests,
+} from '@/lib/features/diagnostics/request-guard';
 import { eq } from 'drizzle-orm';
 import { type NextRequest, NextResponse, after } from 'next/server';
 import { z } from 'zod';
@@ -32,6 +39,13 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const limit = await consumeRateLimit(
+      db,
+      AX_RATE_LIMITS.consultationPerIp,
+      clientIp(req) ?? 'unknown'
+    );
+    if (!limit.allowed) return tooManyRequests(limit.retryAfterSeconds);
+
     const requestedAt = new Date();
     const outcome = await requestAxMigrationConsultation(db, parsed.data.submissionId, requestedAt);
     if (!outcome.ok) {
@@ -62,7 +76,8 @@ export async function POST(req: NextRequest) {
             result: submission.result as unknown as AxMigrationResult,
             consultationRequested: true,
             leadCreated: false,
-            identityUnverified: !outcome.leadCreated,
+            identityUnverified: !outcome.leadCreated && !outcome.continued,
+            additionalSystem: outcome.continued,
             requestedAt,
           });
         } catch (error) {

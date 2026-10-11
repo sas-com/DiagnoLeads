@@ -637,3 +637,34 @@ html:has(.ax-site) {
     scroll-padding-bottom: 6rem;
   }
 }
+
+/* Printing the AX diagnosis result (印刷・PDFで保存): only the result, without the page around
+   it. Elements that neither contain the result nor sit inside it are hidden, and the blocks
+   that contain it lose their spacing and frames. */
+@media print {
+  @page {
+    margin: 14mm 12mm;
+  }
+  .ax-site:has([data-ax-result]) {
+    min-height: 0;
+  }
+  .ax-site:has([data-ax-result])
+    :not(:has([data-ax-result])):not([data-ax-result], [data-ax-result] *) {
+    display: none !important;
+  }
+  .ax-site:has([data-ax-result]) :has([data-ax-result]) {
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: none !important;
+    max-width: none !important;
+  }
+  /* Keep the level colors and boxes, and do not split a box across pages */
+  [data-ax-result] {
+    print-color-adjust: exact;
+  }
+  [data-ax-result] > * {
+    break-inside: avoid;
+  }
+}
