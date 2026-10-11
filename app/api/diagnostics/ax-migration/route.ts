@@ -12,7 +12,7 @@ import {
 import { validateAnswers } from '@/lib/features/diagnostics/engine';
 import { resolveDiagnosisOrganizationId } from '@/lib/features/diagnostics/organization';
 import { checkPublicJsonRequest, readJsonBody } from '@/lib/features/diagnostics/request-guard';
-import { type NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse, after } from 'next/server';
 
 /** Upper bound for the request body (answers + contact + tracking are a few KB) */
 const MAX_BODY_BYTES = 32 * 1024;
@@ -79,20 +79,26 @@ export async function POST(req: NextRequest) {
       email: parsed.data.contact.email,
     };
 
-    // Fire-and-forget: notifications must not delay or fail the respondent's flow
-    notifyAxMigrationSubmission({
-      organizationId,
-      leadId: outcome.leadId,
-      submissionId: outcome.submissionId,
-      company: identity.company ?? '',
-      name: identity.name ?? '',
-      email: identity.email,
-      result: outcome.result,
-      consultationRequested: parsed.data.consultationRequested,
-      leadCreated: outcome.leadCreated,
-      identityUnverified: outcome.existingLead !== null,
-      requestedAt: new Date(),
-    }).catch((error) => console.error('AX diagnosis notification error:', error));
+    // Taken now: the consultation deadline counts from when the request came in
+    const requestedAt = new Date();
+    // After the response: notifications never delay or fail the respondent's flow, and the
+    // serverless function stays alive until they are sent (a promise left running is cut off
+    // on Vercel once the response has been returned)
+    after(() =>
+      notifyAxMigrationSubmission({
+        organizationId,
+        leadId: outcome.leadId,
+        submissionId: outcome.submissionId,
+        company: identity.company ?? '',
+        name: identity.name ?? '',
+        email: identity.email,
+        result: outcome.result,
+        consultationRequested: parsed.data.consultationRequested,
+        leadCreated: outcome.leadCreated,
+        identityUnverified: outcome.existingLead !== null,
+        requestedAt,
+      }).catch((error) => console.error('AX diagnosis notification error:', error))
+    );
 
     return NextResponse.json({
       submissionId: outcome.submissionId,

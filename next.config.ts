@@ -42,9 +42,11 @@ const nextConfig: NextConfig = {
       };
     }
 
-    // SVG handling with @svgr/webpack
+    // SVG handling with @svgr/webpack, except the icon files of the app directory
+    // (app/**/icon.svg), which Next.js serves as images
     config.module.rules.push({
       test: /\.svg$/,
+      resourceQuery: { not: [/__next_metadata__/] },
       use: ['@svgr/webpack'],
     });
 

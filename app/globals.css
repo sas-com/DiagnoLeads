@@ -1,4 +1,7 @@
 @import "tailwindcss";
+/* Toast styles as a stylesheet: sonner adds them in a <style> tag at runtime, which the
+   production CSP (style-src with a nonce) blocks. The package does not export the file. */
+@import "../node_modules/sonner/dist/styles.css";
 @config "../tailwind.config.ts";
 @plugin "@tailwindcss/forms";
 

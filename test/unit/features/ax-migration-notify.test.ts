@@ -92,13 +92,25 @@ describe('notifyAxMigrationSubmission', () => {
     );
   });
 
-  it('skips the email when no sales address or mail provider is configured', async () => {
+  it('skips the email when no sales address or mail provider is configured, and says so', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     env.AX_DIAGNOSIS_SALES_EMAIL = undefined;
     await notifyAxMigrationSubmission({ ...base, consultationRequested: true });
     isEmailConfiguredMock.mockReturnValue(false);
     env.AX_DIAGNOSIS_SALES_EMAIL = 'sales@example.jp';
     await notifyAxMigrationSubmission({ ...base, consultationRequested: true });
     expect(sendEmailMock).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledTimes(2);
+    expect(warnSpy.mock.calls[0][0]).toContain('no sales email sent');
+    warnSpy.mockRestore();
+  });
+
+  it('does not warn about the email for a diagnosis without a consultation request', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    env.AX_DIAGNOSIS_SALES_EMAIL = undefined;
+    await notifyAxMigrationSubmission(base);
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 
   it('escapes HTML in names put into the email body', async () => {

@@ -9,7 +9,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const submitMock = vi.fn();
 const notifyMock = vi.fn();
 const resolveOrgMock = vi.fn();
+// Tasks given to after(): run by the test once the response is there
+const { afterTasks } = vi.hoisted(() => ({ afterTasks: [] as Array<() => unknown> }));
+const runAfterTasks = () => Promise.all(afterTasks.map((task) => task()));
 
+vi.mock('next/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/server')>()),
+  after: (task: () => unknown) => {
+    afterTasks.push(task);
+  },
+}));
 vi.mock('@/lib/db/client', () => ({ db: {} }));
 vi.mock('@/lib/features/diagnostics/ax-migration/notify', () => ({
   notifyAxMigrationSubmission: (...args: unknown[]) => notifyMock(...args),
@@ -54,6 +63,7 @@ const result = evaluateAxMigration(as400Answers);
 describe('POST /api/diagnostics/ax-migration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    afterTasks.length = 0;
     resolveOrgMock.mockReturnValue(ORG_ID);
     notifyMock.mockResolvedValue(undefined);
   });
@@ -80,6 +90,9 @@ describe('POST /api/diagnostics/ax-migration', () => {
     expect(json).not.toHaveProperty('leadId');
 
     expect(submitMock).toHaveBeenCalledWith({}, ORG_ID, expect.objectContaining({ consultationRequested: true }));
+    // Sales are notified after the response, not before it
+    expect(notifyMock).not.toHaveBeenCalled();
+    await runAfterTasks();
     expect(notifyMock).toHaveBeenCalledWith(
       expect.objectContaining({
         organizationId: ORG_ID,
@@ -104,7 +117,7 @@ describe('POST /api/diagnostics/ax-migration', () => {
     expect(response.status).toBe(200);
     expect((await response.json()).result.difficulty).toBeDefined();
     expect(submitMock).not.toHaveBeenCalled();
-    expect(notifyMock).not.toHaveBeenCalled();
+    expect(afterTasks).toHaveLength(0);
   });
 
   it('accepts an empty honeypot', async () => {
@@ -165,6 +178,7 @@ describe('POST /api/diagnostics/ax-migration', () => {
     });
     const response = await POST(request(validBody));
     expect(response.status).toBe(200);
+    await runAfterTasks();
     expect(notifyMock).toHaveBeenCalledWith(
       expect.objectContaining({
         company: '登録済み商事',
@@ -200,7 +214,7 @@ describe('POST /api/diagnostics/ax-migration', () => {
     const response = await POST(request(validBody));
     expect(response.status).toBe(400);
     expect((await response.json()).issues).toEqual([{ questionId: 'system', code: 'required' }]);
-    expect(notifyMock).not.toHaveBeenCalled();
+    expect(afterTasks).toHaveLength(0);
   });
 
   it('returns 503 when no receiving organization is configured', async () => {
@@ -221,7 +235,36 @@ describe('POST /api/diagnostics/ax-migration', () => {
       answers: {},
     });
     notifyMock.mockRejectedValue(new Error('smtp down'));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const response = await POST(request(validBody));
     expect(response.status).toBe(200);
+    // The failure is caught inside the task, so nothing is left unhandled
+    await expect(runAfterTasks()).resolves.toEqual([undefined]);
+    expect(errorSpy).toHaveBeenCalledWith('AX diagnosis notification error:', expect.any(Error));
+    errorSpy.mockRestore();
+  });
+
+  it('takes the request time before the response, for the consultation deadline', async () => {
+    vi.useFakeTimers({ now: new Date('2026-10-09T14:59:59Z'), toFake: ['Date'] });
+    try {
+      submitMock.mockResolvedValue({
+        ok: true,
+        submissionId: 'sub-8',
+        leadId: 'lead-8',
+        leadCreated: true,
+        existingLead: null,
+        result,
+        answers: {},
+      });
+      await POST(request(validBody));
+      // The response is out; the tasks run later (here: after midnight in Japan)
+      vi.setSystemTime(new Date('2026-10-09T15:00:05Z'));
+      await runAfterTasks();
+      expect(notifyMock).toHaveBeenCalledWith(
+        expect.objectContaining({ requestedAt: new Date('2026-10-09T14:59:59Z') })
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
