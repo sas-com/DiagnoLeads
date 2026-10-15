@@ -6,6 +6,7 @@
  */
 
 import { getAIContentGenerator } from '@/lib/cms/ai/content-generator';
+import { requireCmsUser } from '@/lib/cms/require-cms-user';
 import { type NextRequest, NextResponse } from 'next/server';
 
 interface GenerateRequest {
@@ -22,6 +23,9 @@ interface GenerateRequest {
 }
 
 export async function POST(request: NextRequest) {
+  const unauthorized = await requireCmsUser(request);
+  if (unauthorized) return unauthorized;
+
   try {
     const body: GenerateRequest = await request.json();
     const { type, targetLocale = 'ja', sourceContent, context } = body;

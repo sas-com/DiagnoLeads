@@ -183,11 +183,12 @@ const blogRouter = router({
         offset: z.number().int().min(0).default(0),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const blogRepo = new BlogRepository();
 
       const result = await blogRepo.findAll({
-        status: input.status === 'all' ? 'all' : input.status,
+        // Drafts only for signed-in users; anonymous callers always get published posts (#80)
+        status: ctx.user ? input.status : 'published',
         category: input.category,
         limit: input.limit,
         offset: input.offset,

@@ -11,12 +11,16 @@ import {
   getAllComponentMappings,
   getAllDesignTokens,
 } from '@/lib/cms/integrations/figma';
+import { requireCmsUser } from '@/lib/cms/require-cms-user';
 import { type NextRequest, NextResponse } from 'next/server';
 
 /**
  * GET: Get Figma integration status and configuration
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const unauthorized = await requireCmsUser(request);
+  if (unauthorized) return unauthorized;
+
   const isConfigured = figmaClient.isConfigured();
 
   return NextResponse.json({
@@ -39,6 +43,9 @@ interface SyncRequest {
  * POST: Perform Figma sync operations
  */
 export async function POST(request: NextRequest) {
+  const unauthorized = await requireCmsUser(request);
+  if (unauthorized) return unauthorized;
+
   try {
     const body: SyncRequest = await request.json();
     const { action, fileId, nodeId, nodeIds, format = 'png' } = body;
