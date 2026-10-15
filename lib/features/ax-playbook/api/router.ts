@@ -1,9 +1,10 @@
 /**
  * AX Sales Playbook tRPC Router
  *
- * Anyone who can read leads may read the playbook; only those who can update settings may
- * change it (see .factory/memory/decisions.md for the roles). Every query is scoped by
- * organizationId (Refs #74).
+ * Anyone who can read leads may read the playbook, except viewers from a parent organization
+ * (sales know-how is need-to-know); only those who can update settings may change it (see
+ * .factory/memory/decisions.md for the roles). Every query is scoped by organizationId
+ * (Refs #74).
  */
 
 import { axSalesPlaybooks } from '@/lib/db/schema';
@@ -16,6 +17,9 @@ import {
   updateAxPlaybookSchema,
 } from '../types/schemas';
 
+/** Roles that may not read the playbook even though they can read leads */
+const PLAYBOOK_READ_EXCLUDED_ROLES: readonly string[] = ['parent_viewer'];
+
 export const axPlaybookRouter = router({
   /**
    * Get the organization's playbook (null when nothing is registered yet).
@@ -23,7 +27,10 @@ export const axPlaybookRouter = router({
    * so the screen can still open and the next save replaces it.
    */
   get: organizationProcedure.input(getAxPlaybookSchema).query(async ({ ctx }) => {
-    if (!ctx.ability.can('read', 'Lead')) {
+    if (
+      !ctx.ability.can('read', 'Lead') ||
+      PLAYBOOK_READ_EXCLUDED_ROLES.includes(ctx.membership.role)
+    ) {
       throw new TRPCError({
         code: 'FORBIDDEN',
         message: 'You do not have permission to read the sales playbook',

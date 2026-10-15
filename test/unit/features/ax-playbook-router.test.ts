@@ -135,10 +135,16 @@ describe('axPlaybook.get', () => {
     ['group_owner', true],
     ['group_admin', true],
     ['member', false],
-    ['parent_viewer', false],
   ])('%s can read; canEdit=%s', async (role, canEdit) => {
     const result = await callerAs(role).axPlaybook.get({ organizationId: ORG_ID });
     expect(result.canEdit).toBe(canEdit);
+  });
+
+  it('forbids a viewer from a parent organization from reading', async () => {
+    await expect(
+      callerAs('parent_viewer').axPlaybook.get({ organizationId: ORG_ID })
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(dbState.whereArgs).toHaveLength(0);
   });
 
   it('rejects a user who is not a member of the organization', async () => {
