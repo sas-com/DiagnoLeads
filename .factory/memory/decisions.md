@@ -283,7 +283,7 @@
 - **理由**: このリポジトリは公開で、手引きは社内・協力会社向けの営業ノウハウ。コミットすると履歴に残り取り消せない（オーナー判断）
 - **ルール**:
   - リポジトリ・Issue・PR・テストのデータに手引きの本文を書かない（テストは架空の文字列を使う）
-  - 読めるのはリードを閲覧できる人（`read Lead`）、変更できるのは設定を更新できる人（`update Settings`＝owner / admin）。読み書きとも `organizationId` で絞る
+  - 読めるのはリードを閲覧できる人（`read Lead`）、変更できるのは設定を更新できる人（`update Settings`）。読み書きとも `organizationId` で絞る。role でいうと、読める：owner / admin / member / parent_viewer / group_owner / group_admin、変更できる：owner / admin / group_owner / group_admin
   - 通知・Webhook には手引きの本文を載せない（#75）
   - パンフレットに載っている内容（4つの課題と効果など）は公開ページで使ってよい（#76）
 - **既知の限界**: 2人が同時に編集すると、後から保存した内容で上書きされる（版の照合はしていない）

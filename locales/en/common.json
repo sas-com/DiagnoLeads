@@ -1045,6 +1045,11 @@
       "saveError": "Could not save. Please try again later",
       "invalid": "Some content cannot be saved. Each field allows up to {textMax} characters and each list up to {itemsMax} items. Fill in the required fields of each table row.",
       "lastUpdated": "Last updated: {date}",
+      "loadErrorTitle": "Could not load the playbook",
+      "loadErrorBody": "You may not have permission, or the connection failed. Please try again later.",
+      "retry": "Reload",
+      "storedInvalidTitle": "Could not read the saved playbook",
+      "storedInvalidBody": "The saved content no longer matches this screen, so it is shown empty. Saving replaces it with what is shown.",
       "challenges": {
         "title": "Guide by challenge",
         "description": "Shown on the lead screen according to the primary challenge in the diagnosis result.",

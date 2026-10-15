@@ -3,7 +3,6 @@
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
@@ -20,8 +19,8 @@ import {
   emptyAxPlaybookContent,
 } from '@/lib/features/ax-playbook/types/schemas';
 import { trpc } from '@/lib/trpc/client';
-import { Loader2, Lock, Plus, Save, Trash2 } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { AlertTriangle, Loader2, Lock, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
+import { useFormatter, useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -41,13 +40,14 @@ const EMPTY_ROWS = {
 
 export function AxPlaybookEditor() {
   const t = useTranslations('settings.axPlaybook');
+  const format = useFormatter();
   const { organization } = useOrganization();
   const organizationId = organization?.id ?? '';
   const [form, setForm] = useState<AxPlaybookForm | null>(null);
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
 
   const utils = trpc.useUtils();
-  const { data, isLoading } = trpc.axPlaybook.get.useQuery(
+  const { data, isLoading, isError, refetch } = trpc.axPlaybook.get.useQuery(
     { organizationId },
     { enabled: !!organizationId }
   );
@@ -61,7 +61,9 @@ export function AxPlaybookEditor() {
   }, [data, organizationId, loadedFor]);
 
   const save = trpc.axPlaybook.update.useMutation({
-    onSuccess: () => {
+    onSuccess: (_result, variables) => {
+      // Show what was stored (trimmed text, blank rows dropped)
+      setForm(toAxPlaybookForm(variables.content));
       utils.axPlaybook.get.invalidate();
       toast.success(t('saved'));
     },
@@ -70,7 +72,20 @@ export function AxPlaybookEditor() {
     },
   });
 
-  if (isLoading || !form || !data) {
+  if (isError) {
+    return (
+      <Callout title={t('loadErrorTitle')} icon={AlertTriangle} color="red">
+        <p>{t('loadErrorBody')}</p>
+        <Button variant="outline" size="sm" className="mt-3" onClick={() => refetch()}>
+          <RefreshCw className="mr-1 h-4 w-4" />
+          {t('retry')}
+        </Button>
+      </Callout>
+    );
+  }
+
+  // Until the form holds this organization's playbook, never render (or save) another one's
+  if (isLoading || !form || !data || loadedFor !== organizationId) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -161,6 +176,11 @@ export function AxPlaybookEditor() {
       <Callout title={t('confidentialTitle')} icon={Lock} color="yellow">
         {t('confidentialBody')}
       </Callout>
+      {data.storedInvalid && (
+        <Callout title={t('storedInvalidTitle')} icon={AlertTriangle} color="red">
+          {t('storedInvalidBody')}
+        </Callout>
+      )}
       {readOnly && (
         <Callout title={t('readOnlyTitle')} color="blue">
           {t('readOnlyBody')}
@@ -191,6 +211,7 @@ export function AxPlaybookEditor() {
                       <Textarea
                         id={id}
                         rows={field === 'effect' ? 3 : 5}
+                        maxLength={field === 'effect' ? AX_PLAYBOOK_LIMITS.textMax : undefined}
                         value={form.challenges[key][field]}
                         readOnly={readOnly}
                         onChange={(e) =>
@@ -240,7 +261,12 @@ export function AxPlaybookEditor() {
         <div className="flex items-center justify-end gap-3">
           {data.updatedAt && (
             <span className="text-sm text-muted-foreground">
-              {t('lastUpdated', { date: new Date(data.updatedAt).toLocaleString() })}
+              {t('lastUpdated', {
+                date: format.dateTime(new Date(data.updatedAt), {
+                  dateStyle: 'medium',
+                  timeStyle: 'short',
+                }),
+              })}
             </span>
           )}
           <Button onClick={handleSave} disabled={save.isPending}>

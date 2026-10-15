@@ -18,29 +18,30 @@ const { dbState } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@/lib/db/client', () => ({
-  db: {
-    select: () => ({
-      from: () => ({
-        where: (arg: unknown) => {
-          dbState.whereArgs.push(arg);
-          return { limit: async () => dbState.selectRows };
-        },
-      }),
-    }),
-    insert: () => ({
-      values: (values: unknown) => {
-        dbState.insertValues.push(values);
-        return {
-          onConflictDoUpdate: (arg: unknown) => {
-            dbState.conflictArgs.push(arg);
-            return { returning: async () => [{ updatedAt: new Date('2026-10-15T00:00:00Z') }] };
-          },
-        };
+const playbookDb = {
+  select: () => ({
+    from: () => ({
+      where: (arg: unknown) => {
+        dbState.whereArgs.push(arg);
+        return { limit: async () => dbState.selectRows };
       },
     }),
-  },
-}));
+  }),
+  insert: () => ({
+    values: (values: unknown) => {
+      dbState.insertValues.push(values);
+      return {
+        onConflictDoUpdate: (arg: unknown) => {
+          dbState.conflictArgs.push(arg);
+          return { returning: async () => [{ updatedAt: new Date('2026-10-15T00:00:00Z') }] };
+        },
+      };
+    },
+  }),
+};
+
+// The router must use ctx.db; the global client is left empty so a stray use fails
+vi.mock('@/lib/db/client', () => ({ db: {} }));
 
 const { appRouter } = await import('@/server/routers/_app');
 
@@ -70,7 +71,10 @@ function callerAs(role: string | null) {
           organization: { id: ORG_ID, name: 'Org', slug: 'org', settings: {} },
         };
   const ctx = {
-    db: { query: { organizationMembers: { findFirst: vi.fn().mockResolvedValue(membership) } } },
+    db: {
+      ...playbookDb,
+      query: { organizationMembers: { findFirst: vi.fn().mockResolvedValue(membership) } },
+    },
     session: { session: { id: 's', userId: USER_ID }, user },
     user,
   };
@@ -97,7 +101,7 @@ beforeEach(() => {
 describe('axPlaybook.get', () => {
   it('returns null content when nothing is registered', async () => {
     const result = await callerAs('member').axPlaybook.get({ organizationId: ORG_ID });
-    expect(result).toEqual({ content: null, updatedAt: null, canEdit: false });
+    expect(result).toEqual({ content: null, storedInvalid: false, updatedAt: null, canEdit: false });
   });
 
   it('returns the stored content, scoped to the organization', async () => {
@@ -113,10 +117,25 @@ describe('axPlaybook.get', () => {
     expect(where.params).toEqual([ORG_ID]);
   });
 
+  it('returns null with storedInvalid when the stored row no longer matches the schema', async () => {
+    dbState.selectRows = [{ content: { challenges: {} }, updatedAt: new Date() }];
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await callerAs('admin').axPlaybook.get({ organizationId: ORG_ID });
+
+    expect(result.content).toBeNull();
+    expect(result.storedInvalid).toBe(true);
+    warn.mockRestore();
+  });
+
+  // Roles as recorded in .factory/memory/decisions.md
   it.each([
     ['owner', true],
     ['admin', true],
+    ['group_owner', true],
+    ['group_admin', true],
     ['member', false],
+    ['parent_viewer', false],
   ])('%s can read; canEdit=%s', async (role, canEdit) => {
     const result = await callerAs(role).axPlaybook.get({ organizationId: ORG_ID });
     expect(result.canEdit).toBe(canEdit);
@@ -131,7 +150,9 @@ describe('axPlaybook.get', () => {
 });
 
 describe('axPlaybook.update', () => {
-  it.each(['owner', 'admin'])('%s can save; the row belongs to the caller organization', async (role) => {
+  it.each(['owner', 'admin', 'group_owner', 'group_admin'])(
+    '%s can save; the row belongs to the caller organization',
+    async (role) => {
     const content = sampleContent();
 
     const result = await callerAs(role).axPlaybook.update({ organizationId: ORG_ID, content });
@@ -139,11 +160,12 @@ describe('axPlaybook.update', () => {
     expect(result.updatedAt).toBeInstanceOf(Date);
     expect(dbState.insertValues[0]).toEqual({ organizationId: ORG_ID, content, updatedBy: USER_ID });
     expect(dbState.conflictArgs[0]).toMatchObject({ set: { content, updatedBy: USER_ID } });
-  });
+    }
+  );
 
-  it('forbids a member from saving', async () => {
+  it.each(['member', 'parent_viewer'])('forbids %s from saving', async (role) => {
     await expect(
-      callerAs('member').axPlaybook.update({ organizationId: ORG_ID, content: sampleContent() })
+      callerAs(role).axPlaybook.update({ organizationId: ORG_ID, content: sampleContent() })
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     expect(dbState.insertValues).toHaveLength(0);
   });

@@ -4,7 +4,7 @@
 import { AxPlaybookEditor } from '@/components/features/ax-playbook/ax-playbook-editor';
 import { emptyAxPlaybookContent } from '@/lib/features/ax-playbook/types/schemas';
 import messages from '@/locales/ja/common.json';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -15,31 +15,49 @@ const mocks = vi.hoisted(() => ({
   mutate: vi.fn(),
   toastError: vi.fn(),
   data: undefined as unknown,
+  isError: false,
+  organizationId: '660e8400-e29b-41d4-a716-446655440000',
+  onSuccess: undefined as undefined | ((result: unknown, variables: unknown) => void),
 }));
 
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
     useUtils: () => ({ axPlaybook: { get: { invalidate: vi.fn() } } }),
     axPlaybook: {
-      get: { useQuery: () => ({ data: mocks.data, isLoading: false }) },
-      update: { useMutation: () => ({ mutate: mocks.mutate, isPending: false }) },
+      get: {
+        useQuery: () => ({
+          data: mocks.isError ? undefined : mocks.data,
+          isLoading: false,
+          isError: mocks.isError,
+          refetch: vi.fn(),
+        }),
+      },
+      update: {
+        useMutation: (options: { onSuccess: (result: unknown, variables: unknown) => void }) => {
+          mocks.onSuccess = options.onSuccess;
+          return { mutate: mocks.mutate, isPending: false };
+        },
+      },
     },
   },
 }));
 vi.mock('@/hooks/use-organization', () => ({
-  useOrganization: () => ({ organization: { id: ORG_ID } }),
+  useOrganization: () => ({ organization: { id: mocks.organizationId } }),
 }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: mocks.toastError } }));
 
-const renderEditor = () =>
-  render(
-    <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
-      <AxPlaybookEditor />
-    </NextIntlClientProvider>
-  );
+// A new element each time, so rerender() really renders again
+const editor = () => (
+  <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
+    <AxPlaybookEditor />
+  </NextIntlClientProvider>
+);
+const renderEditor = () => render(editor());
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.isError = false;
+  mocks.organizationId = ORG_ID;
 });
 
 describe('AxPlaybookEditor', () => {
@@ -82,13 +100,54 @@ describe('AxPlaybookEditor', () => {
     const refetched = emptyAxPlaybookContent();
     refetched.challenges.people.questions = ['saved elsewhere'];
     mocks.data = { content: refetched, updatedAt: '2026-10-15T01:00:00Z', canEdit: true };
-    rerender(
-      <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
-        <AxPlaybookEditor />
-      </NextIntlClientProvider>
-    );
+    rerender(editor());
 
     expect(screen.getByLabelText('深掘りの質問')).toHaveValue('draft');
+  });
+
+  it('shows what was stored after saving (blank rows dropped)', async () => {
+    mocks.data = { content: null, updatedAt: null, canEdit: true };
+    const user = userEvent.setup();
+    renderEditor();
+
+    await user.click(screen.getAllByRole('button', { name: '行を追加' })[0]);
+    expect(screen.getByLabelText('お客様の声')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '保存' }));
+    const variables = mocks.mutate.mock.calls[0][0];
+    act(() => mocks.onSuccess?.({}, variables));
+
+    expect(screen.queryByLabelText('お客様の声')).not.toBeInTheDocument();
+  });
+
+  // Checks the end state only: the one render before the effect runs is guarded in the
+  // component (loadedFor), which a test cannot observe because effects flush inside act()
+  it('shows the new organization playbook after switching', async () => {
+    const first = emptyAxPlaybookContent();
+    first.challenges.people.questions = ['org A secret'];
+    mocks.data = { content: first, updatedAt: null, canEdit: true };
+    const { rerender } = renderEditor();
+    expect(screen.getByLabelText('深掘りの質問')).toHaveValue('org A secret');
+
+    mocks.organizationId = '990e8400-e29b-41d4-a716-446655440000';
+    mocks.data = { content: emptyAxPlaybookContent(), updatedAt: null, canEdit: true };
+    rerender(editor());
+
+    expect(screen.getByLabelText('深掘りの質問')).toHaveValue('');
+  });
+
+  it('shows an error with a retry when loading fails', () => {
+    mocks.isError = true;
+    renderEditor();
+
+    expect(screen.getByText('手引きを読み込めませんでした')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '再読み込み' })).toBeInTheDocument();
+  });
+
+  it('warns when the stored playbook could not be read', () => {
+    mocks.data = { content: null, storedInvalid: true, updatedAt: null, canEdit: true };
+    renderEditor();
+
+    expect(screen.getByText('保存済みの手引きを読み込めませんでした')).toBeInTheDocument();
   });
 
   it('shows the playbook read-only to those who cannot edit', () => {

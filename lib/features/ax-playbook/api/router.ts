@@ -1,20 +1,26 @@
 /**
  * AX Sales Playbook tRPC Router
  *
- * Anyone who can read leads may read the playbook; only those who can update settings
- * (owner / admin) may change it. Every query is scoped by organizationId (Refs #74).
+ * Anyone who can read leads may read the playbook; only those who can update settings may
+ * change it (see .factory/memory/decisions.md for the roles). Every query is scoped by
+ * organizationId (Refs #74).
  */
 
-import { db } from '@/lib/db/client';
 import { axSalesPlaybooks } from '@/lib/db/schema';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { eq } from 'drizzle-orm';
-import { getAxPlaybookSchema, updateAxPlaybookSchema } from '../types/schemas';
+import {
+  axPlaybookContentSchema,
+  getAxPlaybookSchema,
+  updateAxPlaybookSchema,
+} from '../types/schemas';
 
 export const axPlaybookRouter = router({
   /**
-   * Get the organization's playbook (null when nothing is registered yet)
+   * Get the organization's playbook (null when nothing is registered yet).
+   * A stored row that no longer matches the schema is returned as null with storedInvalid,
+   * so the screen can still open and the next save replaces it.
    */
   get: organizationProcedure.input(getAxPlaybookSchema).query(async ({ ctx }) => {
     if (!ctx.ability.can('read', 'Lead')) {
@@ -24,7 +30,7 @@ export const axPlaybookRouter = router({
       });
     }
 
-    const [playbook] = await db
+    const [playbook] = await ctx.db
       .select({
         content: axSalesPlaybooks.content,
         updatedAt: axSalesPlaybooks.updatedAt,
@@ -33,8 +39,16 @@ export const axPlaybookRouter = router({
       .where(eq(axSalesPlaybooks.organizationId, ctx.organization.id))
       .limit(1);
 
+    const parsed = playbook ? axPlaybookContentSchema.safeParse(playbook.content) : null;
+    if (parsed && !parsed.success) {
+      console.warn('[axPlaybook] stored content does not match the schema', {
+        organizationId: ctx.organization.id,
+      });
+    }
+
     return {
-      content: playbook?.content ?? null,
+      content: parsed?.success ? parsed.data : null,
+      storedInvalid: parsed ? !parsed.success : false,
       updatedAt: playbook?.updatedAt ?? null,
       canEdit: ctx.ability.can('update', 'Settings'),
     };
@@ -52,7 +66,7 @@ export const axPlaybookRouter = router({
     }
 
     const now = new Date();
-    const [playbook] = await db
+    const [playbook] = await ctx.db
       .insert(axSalesPlaybooks)
       .values({
         organizationId: ctx.organization.id,
