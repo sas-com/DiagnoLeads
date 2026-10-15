@@ -1,6 +1,7 @@
 import { abTestsRouter } from '@/lib/features/ab-tests/api/router';
 import { aiRouter } from '@/lib/features/ai/api/router';
 import { analyticsRouter } from '@/lib/features/analytics/api/router';
+import { axPlaybookRouter } from '@/lib/features/ax-playbook/api/router';
 import { commentsRouter } from '@/lib/features/comments/api/router';
 import { contentRouter } from '@/lib/features/content/api/router';
 import { customFieldsRouter } from '@/lib/features/custom-fields/api/router';
@@ -49,6 +50,7 @@ export const appRouter = router({
   scoringRules: scoringRulesRouter, // Phase 9 P3: リードスコアリングルール
   embed: embedRouter, // Embed widget configuration management
   distribution: distributionRouter, // QR code and offline distribution
+  axPlaybook: axPlaybookRouter, // AX sales playbook (Refs #74)
 });
 
 export type AppRouter = typeof appRouter;

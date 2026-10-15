@@ -82,6 +82,11 @@ const AppSidebar: React.FC = () => {
             nameKey: 'qrCampaigns',
             path: `/${locale}/settings/qr-campaigns`,
           },
+          {
+            name: t('axPlaybook'),
+            nameKey: 'axPlaybook',
+            path: `/${locale}/settings/ax-playbook`,
+          },
         ],
       },
       {

@@ -247,6 +247,7 @@
     "webhooks": "Webhook",
     "embed": "埋め込みウィジェット",
     "qrCampaigns": "QRコードキャンペーン",
+    "axPlaybook": "営業の手引き（AX）",
     "profile": "プロフィール",
     "logout": "ログアウト"
   },
@@ -1027,6 +1028,57 @@
       "confirmDelete": "このQRキャンペーンを削除してもよろしいですか？",
       "noCampaigns": "QRキャンペーンがありません",
       "noCampaignsDescription": "オフライン配布用のQRコードキャンペーンを作成してください。"
+    },
+    "axPlaybook": {
+      "title": "営業の手引き（AXマイグレーション）",
+      "description": "商談で使う課題別の質問・切り返し・持ち帰る事項を登録します。リード画面から参照します。",
+      "confidentialTitle": "社外秘の情報です",
+      "confidentialBody": "ここに登録した内容は、この組織のデータベースにだけ保存されます。スクリーンショットなどで社外に共有しないでください。",
+      "readOnlyTitle": "閲覧のみ",
+      "readOnlyBody": "手引きを変更できるのはオーナーと管理者です。",
+      "onePerLine": "1行に1項目ずつ入力します。",
+      "noRows": "まだ登録されていません。",
+      "addRow": "行を追加",
+      "removeRow": "削除",
+      "save": "保存",
+      "saved": "手引きを保存しました",
+      "saveError": "保存できませんでした。時間をおいて再度お試しください",
+      "invalid": "保存できない内容があります。各欄は{textMax}文字まで、各一覧は{itemsMax}件までです。表の行は必須の欄を埋めてください。",
+      "lastUpdated": "最終更新: {date}",
+      "challenges": {
+        "title": "課題別の手引き",
+        "description": "診断結果の「主な課題」に合わせて、リード画面に表示します。",
+        "people": "ヒト（属人化）",
+        "cost": "カネ（延命コスト）",
+        "agility": "モノ（市場変化）",
+        "data": "情報（データ活用）",
+        "effect": "効果の伝え方",
+        "questions": "深掘りの質問",
+        "signals": "こんな答えが出たらチャンス"
+      },
+      "basicChecks": {
+        "title": "まず確認する基本情報",
+        "description": "基幹システムの種類・導入年数・対象業務・保守体制など。"
+      },
+      "objections": {
+        "title": "切り返し",
+        "description": "お客様の声と、その返し方。",
+        "customer": "お客様の声",
+        "response": "切り返し例",
+        "note": "備考"
+      },
+      "ngPhrases": {
+        "title": "言ってはいけない表現",
+        "description": "NG表現と言い換え例。",
+        "ng": "NG表現",
+        "alternative": "言い換え例"
+      },
+      "escalations": {
+        "title": "その場で答えず持ち帰る事項",
+        "description": "内容と確認先。",
+        "topic": "内容",
+        "contact": "確認先"
+      }
     },
     "members": {
       "title": "メンバー管理",

@@ -50,6 +50,13 @@
       "when": 1791686009011,
       "tag": "0006_ax_public_form_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792028311819,
+      "tag": "0007_ax_sales_playbooks",
+      "breakpoints": true
     }
   ]
 }
