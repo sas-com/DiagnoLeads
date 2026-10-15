@@ -14,6 +14,7 @@
 import crypto from 'node:crypto';
 import { cmsEventEmitter, createCMSEvent } from '@/lib/cms/core/realtime';
 import { figmaClient, figmaSitesManager } from '@/lib/cms/integrations/figma';
+import { requireCmsUser } from '@/lib/cms/require-cms-user';
 import { type NextRequest, NextResponse } from 'next/server';
 
 // Figma webhook event types
@@ -40,11 +41,9 @@ function verifyWebhookSignature(payload: string, signature: string | null): bool
   const secret = process.env.FIGMA_WEBHOOK_SECRET;
 
   if (!secret) {
-    // If no secret is configured, skip verification
-    console.warn(
-      '[Figma Webhook] No FIGMA_WEBHOOK_SECRET configured, skipping signature verification'
-    );
-    return true;
+    // Fail closed: without a secret anyone could post fake events
+    console.warn('[Figma Webhook] FIGMA_WEBHOOK_SECRET is not set; rejecting the request');
+    return false;
   }
 
   if (!signature) {
@@ -159,8 +158,11 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET endpoint to verify webhook is configured
-export async function GET() {
+// GET endpoint to verify webhook is configured (CMS users only)
+export async function GET(request: NextRequest) {
+  const unauthorized = await requireCmsUser(request);
+  if (unauthorized) return unauthorized;
+
   return NextResponse.json({
     configured: figmaClient.isConfigured(),
     autoSync: process.env.FIGMA_AUTO_SYNC === 'true',

@@ -16,12 +16,16 @@
  */
 
 import { sseConnectionManager } from '@/lib/cms/core/realtime';
+import { requireCmsUser } from '@/lib/cms/require-cms-user';
 import type { NextRequest } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
+  const unauthorized = await requireCmsUser(request);
+  if (unauthorized) return unauthorized;
+
   const { searchParams } = new URL(request.url);
   const collectionsParam = searchParams.get('collections');
   const clientId =

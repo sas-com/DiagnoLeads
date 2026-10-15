@@ -16,7 +16,8 @@ export const Users: CollectionConfig = {
     group: { ja: '管理', en: 'Admin' },
   },
   access: {
-    read: () => true,
+    // Signed-in CMS users only: the list holds admin emails and roles
+    read: ({ req }) => Boolean(req.user),
   },
   fields: [
     {
