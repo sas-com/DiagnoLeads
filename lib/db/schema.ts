@@ -1,3 +1,4 @@
+import type { AxPlaybookContent } from '@/lib/features/ax-playbook/types/schemas';
 import { relations } from 'drizzle-orm';
 import {
   boolean,
@@ -405,6 +406,25 @@ export const publicRateLimits = pgTable(
   },
   (table) => [index('public_rate_limits_reset_at_idx').on(table.resetAt)]
 );
+
+/**
+ * AX Sales Playbooks
+ * The talk script sales use in AX migration meetings, one row per organization. The text is
+ * confidential, so it is entered from the settings screen and never kept in this repository.
+ */
+export const axSalesPlaybooks = pgTable('ax_sales_playbooks', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  organizationId: uuid('organization_id')
+    .notNull()
+    .unique('ax_sales_playbooks_organization_id_unique')
+    .references(() => organizations.id, { onDelete: 'cascade' }),
+  content: jsonb('content').$type<AxPlaybookContent>().notNull(),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export type AxSalesPlaybook = typeof axSalesPlaybooks.$inferSelect;
 
 // Note: OrganizationType and DataSharingPolicy are already exported above at definition
 

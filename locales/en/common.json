@@ -247,6 +247,7 @@
     "webhooks": "Webhooks",
     "embed": "Embed Widget",
     "qrCampaigns": "QR Campaigns",
+    "axPlaybook": "Sales playbook (AX)",
     "profile": "Profile",
     "logout": "Logout"
   },
@@ -1027,6 +1028,62 @@
       "confirmDelete": "Are you sure you want to delete this QR campaign?",
       "noCampaigns": "No QR campaigns",
       "noCampaignsDescription": "Create a QR code campaign for offline distribution."
+    },
+    "axPlaybook": {
+      "title": "Sales playbook (AX Migration)",
+      "description": "Register the questions, responses to objections and escalation topics used in meetings. Shown from the lead screen.",
+      "confidentialTitle": "Confidential",
+      "confidentialBody": "This content is stored only in this organization's database. Do not share it outside the company, including by screenshots.",
+      "readOnlyTitle": "View only",
+      "readOnlyBody": "Only owners and admins can change the playbook.",
+      "onePerLine": "One item per line.",
+      "noRows": "Nothing registered yet.",
+      "addRow": "Add row",
+      "removeRow": "Remove",
+      "save": "Save",
+      "saved": "Playbook saved",
+      "saveError": "Could not save. Please try again later",
+      "invalid": "Some content cannot be saved. Each field allows up to {textMax} characters and each list up to {itemsMax} items. Fill in the required fields of each table row.",
+      "lastUpdated": "Last updated: {date}",
+      "loadErrorTitle": "Could not load the playbook",
+      "loadErrorBody": "You may not have permission, or the connection failed. Please try again later.",
+      "retry": "Reload",
+      "storedInvalidTitle": "Could not read the saved playbook",
+      "storedInvalidBody": "The saved content no longer matches this screen, so it is shown empty. Saving replaces it with what is shown.",
+      "challenges": {
+        "title": "Guide by challenge",
+        "description": "Shown on the lead screen according to the primary challenge in the diagnosis result.",
+        "people": "People (key-person dependency)",
+        "cost": "Cost (life-extension cost)",
+        "agility": "Agility (market change)",
+        "data": "Data (data use)",
+        "effect": "How to explain the effect",
+        "questions": "Questions to dig deeper",
+        "signals": "Answers that signal an opportunity"
+      },
+      "basicChecks": {
+        "title": "Basic facts to confirm first",
+        "description": "System type, years in use, business scope, upkeep, etc."
+      },
+      "objections": {
+        "title": "Objections",
+        "description": "What the customer says and how to respond.",
+        "customer": "Customer says",
+        "response": "Response",
+        "note": "Note"
+      },
+      "ngPhrases": {
+        "title": "Phrases to avoid",
+        "description": "Phrases to avoid and what to say instead.",
+        "ng": "Avoid",
+        "alternative": "Say instead"
+      },
+      "escalations": {
+        "title": "Topics to take back",
+        "description": "Topics not to answer on the spot, and who to ask.",
+        "topic": "Topic",
+        "contact": "Ask"
+      }
     },
     "members": {
       "title": "Member Management",
