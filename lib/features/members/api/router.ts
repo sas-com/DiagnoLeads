@@ -3,9 +3,12 @@ import { organizationMembers } from '@/lib/db/schema';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { and, eq } from 'drizzle-orm';
+import { consumeRateLimit } from '../../diagnostics/rate-limit';
 import { invitationUrl, sendInvitationEmail } from '../invitation-email';
 import {
+  INVITATIONS_PER_ORGANIZATION,
   createInvitation,
+  isDuplicatePendingInvitation,
   listPendingInvitations,
   normalizeEmail,
   revokeInvitation,
@@ -108,12 +111,34 @@ export const membersRouter = router({
       }
     }
 
-    const { invitation, token } = await createInvitation(ctx.db, {
-      organizationId: input.organizationId,
-      email: input.email,
-      role: input.role,
-      invitedBy: ctx.user.id,
-    });
+    const quota = await consumeRateLimit(
+      ctx.db,
+      INVITATIONS_PER_ORGANIZATION,
+      input.organizationId
+    );
+    if (!quota.allowed) {
+      throw new TRPCError({
+        code: 'TOO_MANY_REQUESTS',
+        message: `招待の上限（1時間に${INVITATIONS_PER_ORGANIZATION.limit}件）に達しました。約${Math.ceil(quota.retryAfterSeconds / 60)}分後にもう一度お試しください`,
+      });
+    }
+
+    let created: Awaited<ReturnType<typeof createInvitation>>;
+    try {
+      created = await createInvitation(ctx.db, {
+        organizationId: input.organizationId,
+        email: input.email,
+        role: input.role,
+        invitedBy: ctx.user.id,
+      });
+    } catch (error) {
+      if (!isDuplicatePendingInvitation(error)) throw error;
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: '同じアドレスへの招待が同時に作られました。招待中の一覧を確認してください',
+      });
+    }
+    const { invitation, token } = created;
     const url = invitationUrl(token);
     const email = await sendInvitationEmail({
       to: invitation.email,

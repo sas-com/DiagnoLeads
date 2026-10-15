@@ -1141,7 +1141,7 @@
       "inviteNotSentTitle": "The invitation email could not be sent",
       "inviteNotSentDescription": "The invitation was created. Copy the link below and share it with {email} directly.",
       "inviteLinkLabel": "Invitation link",
-      "inviteLinkHelp": "The link is valid for 7 days and works only for an account with the invited email address.",
+      "inviteLinkHelp": "The link is valid for 7 days. Anyone with the link can sign up with the invited address and join, so share it only with that person.",
       "copyLink": "Copy",
       "linkCopied": "Invitation link copied",
       "copyFailed": "Could not copy. Select the link and copy it",

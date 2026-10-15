@@ -16,6 +16,11 @@ const { invitationsMock, emailMock } = vi.hoisted(() => ({
   },
   emailMock: { sendInvitationEmail: vi.fn() },
 }));
+const rateLimitMock = vi.hoisted(() => ({ consumeRateLimit: vi.fn() }));
+vi.mock('@/lib/features/diagnostics/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/features/diagnostics/rate-limit')>()),
+  ...rateLimitMock,
+}));
 vi.mock('@/lib/features/members/invitations', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/features/members/invitations')>()),
   ...invitationsMock,
@@ -233,6 +238,42 @@ describe('Members Router', () => {
         token: 'token-value',
       }));
       emailMock.sendInvitationEmail.mockResolvedValue({ sent: true });
+      rateLimitMock.consumeRateLimit.mockResolvedValue({
+        allowed: true,
+        count: 1,
+        retryAfterSeconds: 3600,
+      });
+    });
+
+    it('stops at the hourly invitation limit of the organization', async () => {
+      rateLimitMock.consumeRateLimit.mockResolvedValue({
+        allowed: false,
+        count: 21,
+        retryAfterSeconds: 600,
+      });
+      const caller = appRouter.createCaller(mockContext);
+
+      await expect(
+        caller.members.invite({ organizationId: TEST_ORG_ID, email: 'a@example.com', role: 'member' })
+      ).rejects.toMatchObject({ code: 'TOO_MANY_REQUESTS' });
+      expect(rateLimitMock.consumeRateLimit.mock.calls[0][1]).toMatchObject({
+        name: 'member-invite-org',
+        limit: 20,
+      });
+      expect(rateLimitMock.consumeRateLimit.mock.calls[0][2]).toBe(TEST_ORG_ID);
+      expect(invitationsMock.createInvitation).not.toHaveBeenCalled();
+      expect(emailMock.sendInvitationEmail).not.toHaveBeenCalled();
+    });
+
+    it('reports a concurrent invitation to the same address as a conflict', async () => {
+      invitationsMock.createInvitation.mockRejectedValue(
+        Object.assign(new Error('failed query'), { cause: { code: '23505' } })
+      );
+      const caller = appRouter.createCaller(mockContext);
+
+      await expect(
+        caller.members.invite({ organizationId: TEST_ORG_ID, email: 'a@example.com', role: 'member' })
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
     });
 
     it('stores the invitation, emails the link and returns it to the inviter', async () => {

@@ -13,6 +13,7 @@ import {
   createInvitation,
   getInvitationPreview,
   hashInvitationToken,
+  isDuplicatePendingInvitation,
   listPendingInvitations,
   revokeInvitation,
 } from '@/lib/features/members/invitations';
@@ -96,7 +97,10 @@ describe.skipIf(!url)('member invitations (PostgreSQL)', () => {
       role: 'admin',
     });
     expect(await getInvitationPreview(db, 'unknown-token-value-unknown-token-value', now)).toBeNull();
-    expect((await getInvitationPreview(db, token, later(INVITATION_TTL_MS)))?.state).toBe('expired');
+    // An invitation that can no longer be used reveals nothing but its state
+    expect(await getInvitationPreview(db, token, later(INVITATION_TTL_MS))).toEqual({
+      state: 'expired',
+    });
   });
 
   it('adds the invited user with the invited role and marks the invitation accepted', async () => {
@@ -233,5 +237,19 @@ describe.skipIf(!url)('member invitations (PostgreSQL)', () => {
       .from(organizationMembers)
       .where(and(eq(organizationMembers.userId, user.id), eq(organizationMembers.organizationId, organizationId)));
     expect(rows).toHaveLength(1);
+  });
+
+  it('two invitations to the same address at once: one wins, the other is a recognizable conflict', async () => {
+    const email = `dup-${unique()}@example.com`;
+    const results = await Promise.allSettled([invite(email), invite(email), invite(email)]);
+
+    const failures = results.filter((r) => r.status === 'rejected');
+    for (const failure of failures) {
+      expect(isDuplicatePendingInvitation((failure as PromiseRejectedResult).reason)).toBe(true);
+    }
+    const pending = (await listPendingInvitations(db, organizationId, now)).filter(
+      (row) => row.email === email
+    );
+    expect(pending).toHaveLength(1);
   });
 });

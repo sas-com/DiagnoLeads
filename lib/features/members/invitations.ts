@@ -9,8 +9,24 @@ import {
   users,
 } from '@/lib/db/schema';
 import { and, desc, eq } from 'drizzle-orm';
+import type { RateLimitRule } from '../diagnostics/rate-limit';
 
 type Database = typeof defaultDb;
+
+/** Invitation emails an organization can send per hour, so the form cannot be used to spam */
+export const INVITATIONS_PER_ORGANIZATION: RateLimitRule = {
+  name: 'member-invite-org',
+  limit: 20,
+  windowMs: 60 * 60 * 1000,
+};
+
+/** True when a concurrent invitation to the same address won the pending slot */
+export function isDuplicatePendingInvitation(error: unknown): boolean {
+  const codeOf = (e: unknown) => (e as { code?: unknown } | null)?.code;
+  return (
+    codeOf(error) === '23505' || codeOf((error as { cause?: unknown } | null)?.cause) === '23505'
+  );
+}
 
 /** An invitation can be accepted for 7 days */
 export const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -67,14 +83,20 @@ export async function createInvitation(
 
 export type InvitationState = 'valid' | 'expired' | 'accepted' | 'revoked';
 
-export type InvitationPreview = {
-  state: InvitationState;
-  organizationName: string;
-  inviterName: string | null;
-  email: string;
-  role: InvitationRole;
-  expiresAt: Date;
-};
+/**
+ * What the invite page shows. Details are given only while the invitation can still be used, so
+ * an old link does not keep revealing who invited whom.
+ */
+export type InvitationPreview =
+  | {
+      state: 'valid';
+      organizationName: string;
+      inviterName: string | null;
+      email: string;
+      role: InvitationRole;
+      expiresAt: Date;
+    }
+  | { state: Exclude<InvitationState, 'valid'> };
 
 function stateOf(invitation: OrganizationInvitation, now: Date): InvitationState {
   if (invitation.status === 'accepted') return 'accepted';
@@ -93,7 +115,6 @@ export async function getInvitationPreview(
       invitation: organizationInvitations,
       organizationName: organizations.name,
       inviterName: users.name,
-      inviterEmail: users.email,
     })
     .from(organizationInvitations)
     .innerJoin(organizations, eq(organizations.id, organizationInvitations.organizationId))
@@ -102,10 +123,12 @@ export async function getInvitationPreview(
     .limit(1);
   if (!row) return null;
 
+  const state = stateOf(row.invitation, now);
+  if (state !== 'valid') return { state };
   return {
-    state: stateOf(row.invitation, now),
+    state,
     organizationName: row.organizationName,
-    inviterName: row.inviterName || row.inviterEmail || null,
+    inviterName: row.inviterName || null,
     email: row.invitation.email,
     role: row.invitation.role,
     expiresAt: row.invitation.expiresAt,
