@@ -57,6 +57,13 @@
       "when": 1792028311819,
       "tag": "0007_ax_sales_playbooks",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792084499035,
+      "tag": "0008_member_invitations",
+      "breakpoints": true
     }
   ]
 }

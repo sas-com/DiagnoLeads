@@ -39,8 +39,13 @@ export function useInviteMember() {
       toast.loading('招待を送信中...', { id: 'invite-member' });
     },
     onSuccess: (data) => {
-      utils.members.list.invalidate();
-      toast.success(data.message || '招待を送信しました', { id: 'invite-member' });
+      utils.members.listInvitations.invalidate();
+      toast.success(
+        data.emailSent
+          ? '招待メールを送信しました'
+          : '招待を作成しました（メールは送れませんでした）',
+        { id: 'invite-member' }
+      );
     },
     onError: (error) => {
       toast.error(`エラー: ${error.message}`, { id: 'invite-member' });

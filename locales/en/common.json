@@ -1122,7 +1122,7 @@
       "newRoleLabel": "New Role",
       "saveChanges": "Save Changes",
       "hintsTitle": "Tips",
-      "hintEmailNotification": "Invited users will receive email notifications",
+      "hintEmailNotification": "Invited people receive an invitation email. If it does not arrive, share the invitation link directly",
       "hintAdminPermissions": "Admins can invite and remove members",
       "hintOwnerRole": "Owner role cannot be changed or removed",
       "hintCannotRemoveSelf": "You cannot remove yourself from the organization",
@@ -1134,7 +1134,26 @@
       "removeError": "Failed to remove member: {message}",
       "updatingRole": "Updating role...",
       "roleUpdateSuccess": "Role updated successfully",
-      "roleUpdateError": "Failed to update role: {message}"
+      "roleUpdateError": "Failed to update role: {message}",
+      "close": "Close",
+      "inviteSentTitle": "Invitation email sent",
+      "inviteSentDescription": "We sent an invitation email to {email}. If it does not arrive, copy the link below and share it directly.",
+      "inviteNotSentTitle": "The invitation email could not be sent",
+      "inviteNotSentDescription": "The invitation was created. Copy the link below and share it with {email} directly.",
+      "inviteLinkLabel": "Invitation link",
+      "inviteLinkHelp": "The link is valid for 7 days and works only for an account with the invited email address.",
+      "copyLink": "Copy",
+      "linkCopied": "Invitation link copied",
+      "copyFailed": "Could not copy. Select the link and copy it",
+      "pendingTitle": "Pending invitations",
+      "pendingDescription": "Invitations that have not been accepted yet. \"Send again\" sends a new link (the previous link stops working).",
+      "pendingHeaderEmail": "Email",
+      "pendingHeaderExpires": "Expires",
+      "expired": "Expired",
+      "resendInvite": "Send again",
+      "revokeInvite": "Revoke",
+      "revokeSuccess": "Invitation revoked",
+      "revokeError": "Could not revoke the invitation: {message}"
     },
     "auth": {
       "metadata": {
@@ -1213,6 +1232,26 @@
         "passwordComplexity": "Password must contain uppercase, lowercase, and numbers",
         "passwordMismatch": "Passwords do not match",
         "nameRequired": "Please enter your name"
+      },
+      "invite": {
+        "loading": "Checking the invitation…",
+        "title": "Invitation",
+        "invitedBy": "{inviter} invited you to join \"{organization}\" as {role}.",
+        "someone": "An organization admin",
+        "invitedAddress": "Invited email address: {email}",
+        "roleMember": "a member",
+        "roleAdmin": "an admin",
+        "signUpToJoin": "Sign up and join",
+        "signInToJoin": "Sign in and join (if you have an account)",
+        "join": "Join",
+        "wrongAccount": "You are signed in as {current}, but this invitation is for {email}. Sign out and sign in with the invited email address.",
+        "signOut": "Sign out",
+        "invalidTitle": "This invitation link cannot be used",
+        "invalidDescription": "The link is not valid or has been replaced by a newer invitation. Ask the person who invited you to send it again.",
+        "expiredDescription": "This invitation has expired. Ask the person who invited you to send it again.",
+        "revokedDescription": "This invitation was revoked or replaced by a newer one. Open the link in the latest invitation email.",
+        "acceptedDescription": "This invitation has already been used. If you have joined, open the dashboard.",
+        "openDashboard": "Open the dashboard"
       }
     },
     "ai": {

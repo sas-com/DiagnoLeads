@@ -1,5 +1,5 @@
 import type { AxPlaybookContent } from '@/lib/features/ax-playbook/types/schemas';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import {
   boolean,
   customType,
@@ -10,6 +10,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 
@@ -165,6 +166,44 @@ export const organizationMembers = pgTable('organization_members', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
+
+/** Roles an invitation can grant (owners are never invited) */
+export type InvitationRole = 'member' | 'admin';
+export type InvitationStatus = 'pending' | 'accepted' | 'revoked';
+
+/**
+ * Organization Invitations
+ * An invitation to join an organization, accepted through a link sent by email. Only a SHA-256
+ * hash of the token is stored; the token itself exists only in the link. A newer invitation to
+ * the same address replaces the pending one, so each address has at most one pending invitation.
+ */
+export const organizationInvitations = pgTable(
+  'organization_invitations',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    /** Lower-cased email address the invitation was sent to */
+    email: text('email').notNull(),
+    role: text('role').$type<InvitationRole>().notNull().default('member'),
+    tokenHash: text('token_hash').notNull().unique(),
+    status: text('status').$type<InvitationStatus>().notNull().default('pending'),
+    invitedBy: uuid('invited_by').references(() => users.id, { onDelete: 'set null' }),
+    acceptedBy: uuid('accepted_by').references(() => users.id, { onDelete: 'set null' }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('organization_invitations_org_status_idx').on(table.organizationId, table.status),
+    uniqueIndex('organization_invitations_pending_email_uq')
+      .on(table.organizationId, table.email)
+      .where(sql`${table.status} = 'pending'`),
+  ]
+);
 
 /**
  * Accounts
@@ -329,6 +368,8 @@ export type NewUser = typeof users.$inferInsert;
 
 export type OrganizationMember = typeof organizationMembers.$inferSelect;
 export type NewOrganizationMember = typeof organizationMembers.$inferInsert;
+
+export type OrganizationInvitation = typeof organizationInvitations.$inferSelect;
 
 export type Session = typeof sessions.$inferSelect;
 export type NewSession = typeof sessions.$inferInsert;

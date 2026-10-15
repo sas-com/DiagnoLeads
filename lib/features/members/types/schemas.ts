@@ -45,9 +45,18 @@ export const removeMemberSchema = z.object({
 export type RemoveMemberInput = z.infer<typeof removeMemberSchema>;
 
 /**
- * Accept invite schema
+ * Revoke invitation schema
+ */
+export const revokeInvitationSchema = z.object({
+  organizationId: z.string().uuid(),
+  invitationId: z.string().uuid(),
+});
+export type RevokeInvitationInput = z.infer<typeof revokeInvitationSchema>;
+
+/**
+ * Invitation token schema (preview and accept)
  */
 export const acceptInviteSchema = z.object({
-  token: z.string().min(32),
+  token: z.string().min(32).max(128),
 });
 export type AcceptInviteInput = z.infer<typeof acceptInviteSchema>;

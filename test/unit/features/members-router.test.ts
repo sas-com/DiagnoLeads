@@ -8,6 +8,23 @@ vi.mock('@/lib/db/rls', () => ({
   setCurrentUser: vi.fn().mockResolvedValue(undefined),
 }));
 
+const { invitationsMock, emailMock } = vi.hoisted(() => ({
+  invitationsMock: {
+    createInvitation: vi.fn(),
+    listPendingInvitations: vi.fn(),
+    revokeInvitation: vi.fn(),
+  },
+  emailMock: { sendInvitationEmail: vi.fn() },
+}));
+vi.mock('@/lib/features/members/invitations', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/features/members/invitations')>()),
+  ...invitationsMock,
+}));
+vi.mock('@/lib/features/members/invitation-email', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/features/members/invitation-email')>()),
+  ...emailMock,
+}));
+
 describe('Members Router', () => {
   // Use valid UUIDs for testing
   const TEST_USER_ID = '550e8400-e29b-41d4-a716-446655440000';
@@ -201,9 +218,55 @@ describe('Members Router', () => {
   });
 
   describe('invite', () => {
-    it('should allow owner to invite a new member', async () => {
-      // Mock: no existing user with this email
+    const INVITATION_ID = '770e8400-e29b-41d4-a716-446655440000';
+    const expiresAt = new Date('2026-10-22T01:00:00Z');
+
+    beforeEach(() => {
       mockDb.query.users.findFirst.mockResolvedValue(null);
+      invitationsMock.createInvitation.mockImplementation(async (_db, input) => ({
+        invitation: {
+          id: INVITATION_ID,
+          email: input.email.toLowerCase(),
+          role: input.role,
+          expiresAt,
+        },
+        token: 'token-value',
+      }));
+      emailMock.sendInvitationEmail.mockResolvedValue({ sent: true });
+    });
+
+    it('stores the invitation, emails the link and returns it to the inviter', async () => {
+      const caller = appRouter.createCaller(mockContext);
+      const result = await caller.members.invite({
+        organizationId: TEST_ORG_ID,
+        email: 'NewUser@example.com',
+        role: 'member',
+      });
+
+      expect(invitationsMock.createInvitation).toHaveBeenCalledWith(mockDb, {
+        organizationId: TEST_ORG_ID,
+        email: 'NewUser@example.com',
+        role: 'member',
+        invitedBy: TEST_USER_ID,
+      });
+      expect(emailMock.sendInvitationEmail).toHaveBeenCalledWith({
+        to: 'newuser@example.com',
+        inviterName: 'Owner User',
+        organizationName: 'Test Organization',
+        role: 'member',
+        url: expect.stringMatching(/\/ja\/invite\/token-value$/),
+        expiresAt,
+      });
+      expect(result).toEqual({
+        success: true,
+        invitationId: INVITATION_ID,
+        inviteUrl: expect.stringMatching(/\/ja\/invite\/token-value$/),
+        emailSent: true,
+      });
+    });
+
+    it('still returns the link when the email could not be sent', async () => {
+      emailMock.sendInvitationEmail.mockResolvedValue({ sent: false, reason: 'failed' });
 
       const caller = appRouter.createCaller(mockContext);
       const result = await caller.members.invite({
@@ -212,25 +275,14 @@ describe('Members Router', () => {
         role: 'member',
       });
 
-      expect(result.success).toBe(true);
-      expect(result.message).toContain('招待');
-      expect(result.invitationId).toBeDefined();
+      expect(result.emailSent).toBe(false);
+      expect(result.inviteUrl).toContain('/ja/invite/token-value');
     });
 
     it('should allow admin to invite a new member', async () => {
-      // Mock: admin membership verification for middleware
       mockDb.query.organizationMembers.findFirst.mockResolvedValueOnce(mockAdminMembership);
 
-      // Mock: no existing user with this email
-      mockDb.query.users.findFirst.mockResolvedValue(null);
-
-      // Context as admin
-      const adminContext = {
-        ...mockContext,
-        user: mockUser2,
-      };
-
-      const caller = appRouter.createCaller(adminContext);
+      const caller = appRouter.createCaller({ ...mockContext, user: mockUser2 });
       const result = await caller.members.invite({
         organizationId: TEST_ORG_ID,
         email: 'newuser@example.com',
@@ -238,20 +290,16 @@ describe('Members Router', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.invitationId).toBeDefined();
+      expect(invitationsMock.createInvitation.mock.calls[0][1]).toMatchObject({
+        role: 'admin',
+        invitedBy: TEST_USER_ID_2,
+      });
     });
 
     it('should not allow regular member to invite', async () => {
-      // Mock: member membership verification for middleware
       mockDb.query.organizationMembers.findFirst.mockResolvedValueOnce(mockMemberMembership);
 
-      // Context as regular member
-      const memberContext = {
-        ...mockContext,
-        user: mockUser3,
-      };
-
-      const caller = appRouter.createCaller(memberContext);
+      const caller = appRouter.createCaller({ ...mockContext, user: mockUser3 });
 
       await expect(
         caller.members.invite({
@@ -260,13 +308,11 @@ describe('Members Router', () => {
           role: 'member',
         })
       ).rejects.toThrow(TRPCError);
+      expect(invitationsMock.createInvitation).not.toHaveBeenCalled();
     });
 
     it('should not allow inviting an existing member', async () => {
-      // Mock: user exists with this email
       mockDb.query.users.findFirst.mockResolvedValue(mockUser2);
-
-      // Mock: user is already a member (called after middleware verification)
       mockDb.query.organizationMembers.findFirst
         .mockResolvedValueOnce(mockOwnerMembership) // Middleware verification
         .mockResolvedValueOnce(mockAdminMembership); // Existing membership check
@@ -280,22 +326,61 @@ describe('Members Router', () => {
           role: 'member',
         })
       ).rejects.toThrow('このメールアドレスは既にメンバーです');
+      expect(invitationsMock.createInvitation).not.toHaveBeenCalled();
+      expect(emailMock.sendInvitationEmail).not.toHaveBeenCalled();
     });
+  });
 
-    it('should return invitation with message for non-existing user', async () => {
-      // Mock: no existing user
-      mockDb.query.users.findFirst.mockResolvedValue(null);
+  describe('listInvitations / revokeInvitation', () => {
+    const INVITATION_ID = '770e8400-e29b-41d4-a716-446655440000';
+
+    it('lists pending invitations for admins and owners', async () => {
+      const rows = [{ id: INVITATION_ID, email: 'a@example.com', role: 'member', expired: false }];
+      invitationsMock.listPendingInvitations.mockResolvedValue(rows);
 
       const caller = appRouter.createCaller(mockContext);
 
-      const result = await caller.members.invite({
-        organizationId: TEST_ORG_ID,
-        email: 'newuser@example.com',
-        role: 'member',
-      });
+      expect(await caller.members.listInvitations({ organizationId: TEST_ORG_ID })).toEqual(rows);
+      expect(invitationsMock.listPendingInvitations).toHaveBeenCalledWith(mockDb, TEST_ORG_ID);
+    });
 
-      expect(result.success).toBe(true);
-      expect(result.message).toBe('招待メールを送信しました（Phase 5で実装予定）');
+    it('does not show or revoke invitations for regular members', async () => {
+      mockDb.query.organizationMembers.findFirst.mockResolvedValue(mockMemberMembership);
+      const caller = appRouter.createCaller({ ...mockContext, user: mockUser3 });
+
+      await expect(caller.members.listInvitations({ organizationId: TEST_ORG_ID })).rejects.toThrow(
+        '招待の管理は管理者またはオーナーのみ可能です'
+      );
+      await expect(
+        caller.members.revokeInvitation({ organizationId: TEST_ORG_ID, invitationId: INVITATION_ID })
+      ).rejects.toThrow('招待の管理は管理者またはオーナーのみ可能です');
+      expect(invitationsMock.revokeInvitation).not.toHaveBeenCalled();
+    });
+
+    it('revokes a pending invitation of the organization', async () => {
+      invitationsMock.revokeInvitation.mockResolvedValue(true);
+      const caller = appRouter.createCaller(mockContext);
+
+      expect(
+        await caller.members.revokeInvitation({
+          organizationId: TEST_ORG_ID,
+          invitationId: INVITATION_ID,
+        })
+      ).toEqual({ success: true });
+      expect(invitationsMock.revokeInvitation).toHaveBeenCalledWith(
+        mockDb,
+        TEST_ORG_ID,
+        INVITATION_ID
+      );
+    });
+
+    it('reports NOT_FOUND when there was nothing to revoke', async () => {
+      invitationsMock.revokeInvitation.mockResolvedValue(false);
+      const caller = appRouter.createCaller(mockContext);
+
+      await expect(
+        caller.members.revokeInvitation({ organizationId: TEST_ORG_ID, invitationId: INVITATION_ID })
+      ).rejects.toThrow('取り消せる招待が見つかりません');
     });
   });
 

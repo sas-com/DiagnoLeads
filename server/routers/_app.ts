@@ -12,6 +12,7 @@ import { embedRouter } from '@/lib/features/embed/router';
 import { filtersRouter } from '@/lib/features/filters/api/router';
 import { hierarchyRouter } from '@/lib/features/hierarchy/api/router';
 import { leadsRouter } from '@/lib/features/leads/api/router';
+import { invitationsRouter } from '@/lib/features/members/api/invitations-router';
 import { membersRouter } from '@/lib/features/members/api/router';
 import { notificationsRouter } from '@/lib/features/notifications/api/router';
 import { organizationsRouter } from '@/lib/features/organizations/api/router';
@@ -33,6 +34,7 @@ export const appRouter = router({
   organizations: organizationsRouter,
   analytics: analyticsRouter,
   members: membersRouter,
+  invitations: invitationsRouter,
   ai: aiRouter,
   hierarchy: hierarchyRouter, // Phase 2.7: ホールディングス・グループ企業対応
   content: contentRouter, // Phase 4.4: コンテンツ管理UI
