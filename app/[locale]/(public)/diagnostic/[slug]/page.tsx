@@ -1,7 +1,8 @@
 import { DynamicDiagnosticForm } from '@/components/features/diagnostic/dynamic-diagnostic-form';
 import { type DiagnosticForm, DiagnosticFormRepository } from '@/lib/cms';
+import { isLegacyDiagnosticFormEnabled } from '@/lib/features/diagnostics/legacy-form';
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 
 interface DiagnosticPageProps {
   params: Promise<{ locale: string; slug: string }>;
@@ -69,6 +70,8 @@ export async function generateStaticParams() {
  */
 export default async function DiagnosticSlugPage({ params }: DiagnosticPageProps) {
   const { locale, slug } = await params;
+  // Off in production (#71): send visitors to the AX diagnosis instead
+  if (!isLegacyDiagnosticFormEnabled()) redirect(`/${locale}/ax-diagnosis`);
   const repository = new DiagnosticFormRepository();
 
   let form: DiagnosticForm | null = null;

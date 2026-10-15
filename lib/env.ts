@@ -37,6 +37,9 @@ export const env = createEnv({
     // Cloudflare Turnstile on the public diagnosis: checked only when both keys are set
     TURNSTILE_SITE_KEY: z.string().optional(),
     TURNSTILE_SECRET_KEY: z.string().optional(),
+
+    // Legacy generic diagnosis form: off in production unless 'true' (#71)
+    LEGACY_DIAGNOSTIC_FORM_ENABLED: z.string().optional(),
   },
 
   /**
@@ -66,6 +69,7 @@ export const env = createEnv({
     AX_DIAGNOSIS_SALES_EMAIL: process.env.AX_DIAGNOSIS_SALES_EMAIL,
     TURNSTILE_SITE_KEY: process.env.TURNSTILE_SITE_KEY,
     TURNSTILE_SECRET_KEY: process.env.TURNSTILE_SECRET_KEY,
+    LEGACY_DIAGNOSTIC_FORM_ENABLED: process.env.LEGACY_DIAGNOSTIC_FORM_ENABLED,
 
     // Client
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,

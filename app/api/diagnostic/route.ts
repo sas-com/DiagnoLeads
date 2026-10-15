@@ -1,6 +1,7 @@
 import { db } from '@/lib/db/client';
 import { leads, organizations } from '@/lib/db/schema';
 import { env } from '@/lib/env';
+import { isLegacyDiagnosticFormEnabled } from '@/lib/features/diagnostics/legacy-form';
 import { generateDiagnosticResultEmail, isEmailConfigured, sendEmail } from '@/lib/features/email';
 import { triggerWebhooks } from '@/lib/features/webhooks/services/webhook-service';
 import { eq } from 'drizzle-orm';
@@ -135,6 +136,13 @@ async function getDefaultOrganization(): Promise<string> {
 }
 
 export async function POST(req: NextRequest) {
+  if (!isLegacyDiagnosticFormEnabled()) {
+    return NextResponse.json(
+      { error: 'This form is no longer accepting answers' },
+      { status: 410 }
+    );
+  }
+
   try {
     const body = await req.json();
 
