@@ -40,7 +40,7 @@ export function PageHeader({
         <Link
           href={back.href}
           onClick={back.onClick}
-          className="inline-flex min-h-9 items-center gap-1 rounded-md text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex min-h-11 items-center sm:min-h-9 gap-1 rounded-md text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ChevronLeft className="h-4 w-4" aria-hidden="true" />
           {back.label}

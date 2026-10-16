@@ -384,6 +384,7 @@ function LeadsPageContent() {
         isLoading={isLoading}
         organizationId={organizationId}
         onLeadClick={handleLeadClick}
+        getLeadHref={(lead) => leadHref(lead.id)}
         onEdit={access.canEdit ? handleRowEdit : undefined}
         onDelete={access.canDelete ? setLeadToDelete : undefined}
         onRefresh={() => refetch()}

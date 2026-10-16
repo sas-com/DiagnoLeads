@@ -3,4 +3,4 @@
  */
 export * from './lead-card';
 export * from './lead-form';
-export * from './lead-list';
+export * from './list/lead-card-list';

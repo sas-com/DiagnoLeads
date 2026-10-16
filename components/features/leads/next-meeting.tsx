@@ -33,7 +33,7 @@ export function NextMeetingOverdueBadge({
       title={t('overdueTitle', { date: slashDay(date) })}
       data-testid="next-meeting-overdue"
       className={cn(
-        'gap-1 border-transparent bg-rose-100 text-rose-800 dark:bg-rose-500/15 dark:text-rose-300',
+        'gap-1 whitespace-nowrap border-transparent bg-rose-100 text-rose-800 dark:bg-rose-500/15 dark:text-rose-300',
         className
       )}
     >
@@ -48,15 +48,17 @@ export function NextMeetingCell({
   date,
   status,
   now,
+  className,
 }: {
   date: string | null | undefined;
   status?: string | null;
   now?: Date;
+  className?: string;
 }) {
   if (!date) return <span className="text-gray-400">-</span>;
   const overdue = isNextMeetingOverdue({ nextMeetingDate: date, status }, now);
   return (
-    <span className="inline-flex items-center gap-2">
+    <span className={cn('inline-flex items-center gap-2', className)}>
       <span
         className={cn(
           'text-sm tabular-nums',

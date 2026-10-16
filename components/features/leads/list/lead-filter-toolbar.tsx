@@ -81,7 +81,10 @@ export function LeadFilterToolbar({
           total={total}
           className="md:hidden"
         />
-        {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
+        {/* Below md the actions (sort, export) get a row of their own (#110) */}
+        {actions && (
+          <div className="flex w-full items-center gap-2 md:ml-auto md:w-auto">{actions}</div>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">

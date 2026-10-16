@@ -57,6 +57,9 @@ import { LeadFieldsCard } from './lead-fields-card';
 import { LeadHearingOverview } from './lead-hearing-overview';
 import { LeadRecentActivity } from './lead-recent-activity';
 
+// The status and phase in the header are 44px pills on phones, badges from sm up (#110)
+const HEADER_TAP = 'h-11 px-3 text-sm sm:h-auto sm:px-2.5 sm:pr-1.5 sm:text-xs';
+
 /** The lead as returned by leads.get, with its assignee (#135) */
 type LeadWithAssignee = Lead &
   Pick<AssigneeLead, 'assignee'> & {
@@ -278,12 +281,14 @@ function LeadDetailContent({
               organizationId={organizationId}
               canEdit={access.canEdit}
               onLost={handleLost}
+              className={access.canEdit ? HEADER_TAP : undefined}
             />
             <LeadQuickSelect
               field="dealPhase"
               lead={lead}
               organizationId={organizationId}
               canEdit={access.canEdit}
+              className={access.canEdit ? HEADER_TAP : undefined}
             />
             <Badge color="gray" data-testid="lead-score">
               {typeof lead.score === 'number'
@@ -304,13 +309,14 @@ function LeadDetailContent({
               lead={lead}
               organizationId={organizationId}
               canEdit={access.canEdit}
+              className={access.canEdit ? 'h-11 sm:h-7' : undefined}
             />
           </>
         }
         actions={
           <>
             {access.canEdit && (
-              <Button onClick={recordHearing}>
+              <Button onClick={recordHearing} className="h-11 sm:h-10">
                 <ClipboardList className="h-4 w-4" aria-hidden="true" />
                 {t('recordHearing')}
               </Button>
@@ -318,7 +324,12 @@ function LeadDetailContent({
             {(access.canEdit || access.canDelete) && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="icon" aria-label={tLeads('moreActions')}>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-11 w-11 sm:h-10 sm:w-10"
+                    aria-label={tLeads('moreActions')}
+                  >
                     <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -370,9 +381,10 @@ function LeadDetailContent({
           className="min-w-0"
         >
           <div className="-mx-1 overflow-x-auto px-1 pb-1">
-            <TabsList>
+            {/* 44px tabs on phones; the bar scrolls sideways when the tabs do not fit */}
+            <TabsList className="h-auto sm:h-10">
               {LEAD_TABS.map((key) => (
-                <TabsTrigger key={key} value={key}>
+                <TabsTrigger key={key} value={key} className="min-h-11 sm:min-h-0">
                   {t(`tabs.${key}`)}
                 </TabsTrigger>
               ))}

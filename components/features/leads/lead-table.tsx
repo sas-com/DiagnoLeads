@@ -29,7 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import type { Lead, Tag } from '@/lib/db/schema';
+import type { Lead } from '@/lib/db/schema';
 import { LEAD_EXPORT_MAX_ROWS } from '@/lib/features/leads/export';
 import { LEAD_PAGE_SIZES, type LeadListSort } from '@/lib/features/leads/list-query';
 import {
@@ -42,6 +42,7 @@ import {
   exportLeadsToPDF,
   generatePDFFilename,
 } from '@/lib/features/reports/pdf-export-service';
+import { cn } from '@/lib/utils';
 import {
   type ColumnDef,
   type RowSelectionState,
@@ -69,28 +70,25 @@ import {
   Pencil,
   Settings2,
   Trash2,
-  UserPlus,
-  Users,
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { TagBadgeList } from '../tags/tag-badge';
 import { BulkActions } from './bulk-actions';
 import { LeadAssigneeSelect } from './lead-assignee-select';
+import type { LeadListRow } from './lead-card';
 import { LeadQuickSelect } from './lead-quick-select';
+import { LeadCardList } from './list/lead-card-list';
+import { LeadListEmpty } from './list/lead-list-empty';
+import { LeadSortControl } from './list/lead-sort-control';
 import { SortableHeader, ariaSortFor } from './list/sortable-header';
 import { DealRatingBadge, NextMeetingCell } from './next-meeting';
 
 // Extended lead type with tags and the last activity from leads.list (#131)
-type LeadWithTags = Lead & {
-  tags?: Tag[];
-  lastActivityAt?: Date | string | null;
-  /** The assignee (#135) */
-  assignee?: { id: string; name: string | null; email: string } | null;
-  /** From the latest hearing (#137) */
-  nextMeetingDate?: string | null;
-  dealRating?: string | null;
-};
+type LeadWithTags = LeadListRow;
+
+/** Below this width (Tailwind md) the list shows cards instead of the table (#110) */
+export const LEAD_CARDS_MAX_WIDTH = 768;
 
 /** 'YYYY/MM/DD' in Japan time */
 const jstDayFormat = new Intl.DateTimeFormat('ja-JP', {
@@ -154,6 +152,11 @@ interface LeadTableProps {
   isLoading?: boolean;
   organizationId?: string;
   onLeadClick?: (lead: LeadWithTags) => void;
+  /**
+   * The lead page of a lead. On a phone a tapped card opens it (#110); without it the card
+   * calls onLeadClick like a table row.
+   */
+  getLeadHref?: (lead: LeadWithTags) => string;
   onEdit?: (lead: LeadWithTags) => void;
   onDelete?: (lead: LeadWithTags) => void;
   onRefresh?: () => void;
@@ -197,6 +200,7 @@ export function LeadTable({
   isLoading,
   organizationId,
   onLeadClick,
+  getLeadHref,
   onEdit,
   onDelete,
   onRefresh,
@@ -227,7 +231,13 @@ export function LeadTable({
   const dateLocale = locale === 'ja' ? ja : enUS;
 
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
-  const [width, setWidth] = useState<number | null>(null);
+  // Read at once (the list is rendered on the client only), so a phone never sees the table
+  const [width, setWidth] = useState<number | null>(() =>
+    typeof window === 'undefined' ? null : window.innerWidth
+  );
+  // Cards on phones (#110). No row selection there: checkboxes next to the tap-to-open card and
+  // the in-place selects would be easy to hit by mistake, and the bulk bar does not fit
+  const cards = width !== null && width < LEAD_CARDS_MAX_WIDTH;
   const columnVisibility = useMemo(
     () => ({ ...defaultColumnVisibility(width ?? 1440), ...columnPreferences }),
     [width, columnPreferences]
@@ -247,7 +257,7 @@ export function LeadTable({
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset when the rows change
   useEffect(() => {
     setRowSelection({});
-  }, [leads]);
+  }, [leads, cards]);
 
   const sortableHeader = (column: LeadSortKey, label: string) => () => (
     <SortableHeader label={label} column={column} sort={sort} onSort={onSort} />
@@ -684,46 +694,64 @@ export function LeadTable({
     );
   }
 
+  // 44px page buttons under the cards (#110)
+  const pagerButton = cards ? 'h-11 min-w-11' : undefined;
+
   const actions = (
     <>
+      {/* The cards have no headers: a compact sort control instead of the columns menu (#110) */}
+      {cards && <LeadSortControl sort={sort} onSort={onSort} className="flex-1" />}
+
       {/* Column visibility toggle */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" className="h-9">
-            <Settings2 className="mr-2 h-4 w-4" />
-            {tCommon('columns')}
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-[180px]">
-          {table
-            .getAllColumns()
-            .filter((column) => typeof column.accessorFn !== 'undefined' && column.getCanHide())
-            .map((column) => {
-              return (
-                <DropdownMenuCheckboxItem
-                  key={column.id}
-                  className="capitalize"
-                  checked={column.getIsVisible()}
-                  onCheckedChange={(value) => column.toggleVisibility(!!value)}
-                >
-                  {columnLabels[column.id] || column.id}
-                </DropdownMenuCheckboxItem>
-              );
-            })}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {!cards && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="h-9">
+              <Settings2 className="mr-2 h-4 w-4" />
+              {tCommon('columns')}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-[180px]">
+            {table
+              .getAllColumns()
+              .filter((column) => typeof column.accessorFn !== 'undefined' && column.getCanHide())
+              .map((column) => {
+                return (
+                  <DropdownMenuCheckboxItem
+                    key={column.id}
+                    className="capitalize"
+                    checked={column.getIsVisible()}
+                    onCheckedChange={(value) => column.toggleVisibility(!!value)}
+                  >
+                    {columnLabels[column.id] || column.id}
+                  </DropdownMenuCheckboxItem>
+                );
+              })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
 
       {/* Export: every matching lead in the current order, made on the server (#173) */}
       {onExport && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="h-9" disabled={exporting}>
+            {/* An icon on phones, so the sort control fits on the same row */}
+            <Button
+              variant="outline"
+              size="sm"
+              className={cn('h-9', cards && 'h-11 w-11 px-0')}
+              disabled={exporting}
+              aria-label={cards ? tCommon('export') : undefined}
+            >
               {exporting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                <Loader2
+                  className={cn('h-4 w-4 animate-spin', !cards && 'mr-2')}
+                  aria-hidden="true"
+                />
               ) : (
-                <Download className="mr-2 h-4 w-4" aria-hidden="true" />
+                <Download className={cn('h-4 w-4', !cards && 'mr-2')} aria-hidden="true" />
               )}
-              {exporting ? tList('export.exporting') : tCommon('export')}
+              {!cards && (exporting ? tList('export.exporting') : tCommon('export'))}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-64">
@@ -755,7 +783,7 @@ export function LeadTable({
   return (
     <Card className="overflow-hidden">
       {/* Bulk Actions */}
-      {organizationId && selectedLeads.length > 0 && (
+      {organizationId && !cards && selectedLeads.length > 0 && (
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
           <BulkActions
             selectedLeads={selectedLeads}
@@ -774,82 +802,69 @@ export function LeadTable({
         {toolbar ? toolbar(actions) : <div className="flex justify-end gap-3">{actions}</div>}
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead
-                    key={header.id}
-                    className="whitespace-nowrap bg-gray-50 dark:bg-gray-800"
-                    aria-sort={
-                      isSortKey(header.column.id) ? ariaSortFor(sort, header.column.id) : undefined
-                    }
-                  >
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  onClick={() => onLeadClick?.(row.original)}
-                  className="cursor-pointer hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors"
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    // One line per row: the table scrolls sideways in its card instead (Refs #108)
-                    <TableCell key={cell.id} className="whitespace-nowrap">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
+      {cards ? (
+        <LeadCardList
+          leads={leads}
+          getLeadHref={getLeadHref}
+          onLeadClick={onLeadClick}
+          organizationId={organizationId}
+          canEdit={canEdit}
+          onLost={onLost}
+          hasFilters={hasFilters}
+          onClearFilters={onClearFilters}
+        />
+      ) : (
+        /* Table */
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => (
+                    <TableHead
+                      key={header.id}
+                      className="whitespace-nowrap bg-gray-50 dark:bg-gray-800"
+                      aria-sort={
+                        isSortKey(header.column.id)
+                          ? ariaSortFor(sort, header.column.id)
+                          : undefined
+                      }
+                    >
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(header.column.columnDef.header, header.getContext())}
+                    </TableHead>
                   ))}
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="h-64 text-center">
-                  {hasFilters ? (
-                    <div className="flex flex-col items-center justify-center gap-3 py-8 text-gray-500 dark:text-gray-400">
-                      <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                        {tList('noMatches')}
-                      </p>
-                      <p className="text-sm">{tList('noMatchesDescription')}</p>
-                      {onClearFilters && (
-                        <Button variant="outline" onClick={onClearFilters}>
-                          {tList('chips.clearAll')}
-                        </Button>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 py-8">
-                      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-50 to-violet-50 dark:from-blue-900/30 dark:to-violet-900/30 flex items-center justify-center mb-4">
-                        <Users className="h-10 w-10 text-blue-400 dark:text-blue-300" />
-                      </div>
-                      <p className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                        {t('noLeads')}
-                      </p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm mb-6">
-                        {t('noLeadsDescription')}
-                      </p>
-                      <Button size="lg">
-                        <UserPlus className="h-5 w-5 mr-2" />
-                        {t('addFirstLead')}
-                      </Button>
-                    </div>
-                  )}
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {table.getRowModel().rows?.length ? (
+                table.getRowModel().rows.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    onClick={() => onLeadClick?.(row.original)}
+                    className="cursor-pointer hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      // One line per row: the table scrolls sideways in its card instead (Refs #108)
+                      <TableCell key={cell.id} className="whitespace-nowrap">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={columns.length} className="h-64 text-center">
+                    <LeadListEmpty hasFilters={hasFilters} onClearFilters={onClearFilters} />
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      )}
 
       {/* Pagination (server side: total is every matching lead) */}
       <div className="p-4 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
@@ -861,7 +876,10 @@ export function LeadTable({
                 value={pageSize.toString()}
                 onValueChange={(value) => onPageSizeChange(Number(value))}
               >
-                <SelectTrigger className="w-20" aria-label={tList('pageSize')}>
+                <SelectTrigger
+                  className={cn('w-20', cards && 'h-11')}
+                  aria-label={tList('pageSize')}
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -900,7 +918,7 @@ export function LeadTable({
               size="sm"
               onClick={() => onPageChange(1)}
               disabled={page <= 1}
-              className="hidden sm:flex"
+              className={cn('hidden sm:flex', pagerButton)}
               aria-label={tList('firstPage')}
             >
               <ChevronsLeft className="h-4 w-4" />
@@ -910,6 +928,8 @@ export function LeadTable({
               size="sm"
               onClick={() => onPageChange(page - 1)}
               disabled={page <= 1}
+              className={pagerButton}
+              aria-label={t('previous')}
             >
               <ChevronLeft className="h-4 w-4" />
               <span className="hidden sm:inline ml-1">{t('previous')}</span>
@@ -924,6 +944,8 @@ export function LeadTable({
               size="sm"
               onClick={() => onPageChange(page + 1)}
               disabled={page >= pageCount}
+              className={pagerButton}
+              aria-label={t('next')}
             >
               <span className="hidden sm:inline mr-1">{t('next')}</span>
               <ChevronRight className="h-4 w-4" />
@@ -933,7 +955,7 @@ export function LeadTable({
               size="sm"
               onClick={() => onPageChange(pageCount)}
               disabled={page >= pageCount}
-              className="hidden sm:flex"
+              className={cn('hidden sm:flex', pagerButton)}
               aria-label={tList('lastPage')}
             >
               <ChevronsRight className="h-4 w-4" />
