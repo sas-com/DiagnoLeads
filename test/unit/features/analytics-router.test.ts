@@ -78,15 +78,11 @@ describe('Analytics Router', () => {
   });
 
   describe('getConversionFunnel', () => {
-    const mockCounts = (counts: Record<string, number>, avgDays = 12) => {
+    const mockCounts = (counts: Record<string, number>) => {
       // Aggregate counts
       mockDb.select.mockReturnValueOnce(mockDb);
       mockDb.from.mockReturnValueOnce(mockDb);
       mockDb.where.mockResolvedValueOnce([counts]);
-      // Average conversion days
-      mockDb.select.mockReturnValueOnce(mockDb);
-      mockDb.from.mockReturnValueOnce(mockDb);
-      mockDb.where.mockResolvedValueOnce([{ avgDays }]);
     };
 
     it('uses nested "reached" counts so stage rates stay within 100%', async () => {
@@ -117,7 +113,9 @@ describe('Analytics Router', () => {
       expect(result.stages[2].conversionRate).toBeCloseTo(45.45, 1); // 25 / 55
       expect(result.stages[3].conversionRate).toBe(40); // 10 / 25
       expect(result.overallConversionRate).toBe(10);
-      expect(result.averageConversionDays).toBe(12);
+      // Not computed from updatedAt - createdAt any more (grew with every edit)
+      expect(result.averageConversionDays).toBe(0);
+      expect(mockDb.select).toHaveBeenCalledTimes(1);
       for (const stage of result.stages) {
         expect(stage.conversionRate).toBeLessThanOrEqual(100);
       }
@@ -125,7 +123,7 @@ describe('Analytics Router', () => {
 
     it('returns zero rates without NaN when there are no leads', async () => {
       mockDb.query.organizationMembers.findFirst.mockResolvedValue(mockMembership);
-      mockCounts({ total: 0, new: 0, nurturing: 0, negotiating: 0, won: 0, reachedNurturing: 0, reachedNegotiation: 0 }, 0);
+      mockCounts({ total: 0, new: 0, nurturing: 0, negotiating: 0, won: 0, reachedNurturing: 0, reachedNegotiation: 0 });
 
       const caller = appRouter.createCaller(mockContext);
       const result = await caller.analytics.getConversionFunnel({
@@ -341,26 +339,20 @@ describe('Analytics Router', () => {
   });
 
   describe('getSourceBreakdown', () => {
-    it('should return source distribution with percentages', async () => {
-      mockDb.query.organizationMembers.findFirst.mockResolvedValue(mockMembership);
-
-      // Mock total count
-      mockDb.select.mockReturnValueOnce(mockDb);
-      mockDb.from.mockReturnValueOnce(mockDb);
-      mockDb.where.mockResolvedValueOnce([{ count: 100 }]);
-
-      // Mock source breakdown
-      const mockSourceData = [
-        { source: 'website', count: 60 },
-        { source: 'embed', count: 30 },
-        { source: 'api', count: 10 },
-      ];
-
+    const mockGroups = (rows: { source: string; count: number }[]) => {
       mockDb.select.mockReturnValueOnce(mockDb);
       mockDb.from.mockReturnValueOnce(mockDb);
       mockDb.where.mockReturnValueOnce(mockDb);
-      mockDb.groupBy.mockReturnValueOnce(mockDb);
-      mockDb.orderBy.mockResolvedValueOnce(mockSourceData);
+      mockDb.groupBy.mockResolvedValueOnce(rows);
+    };
+
+    it('groups by 流入元 with percentages, 未設定 last', async () => {
+      mockDb.query.organizationMembers.findFirst.mockResolvedValue(mockMembership);
+      mockGroups([
+        { source: 'unset', count: 50 },
+        { source: 'lp_organic', count: 30 },
+        { source: 'telemarketing_agency', count: 20 },
+      ]);
 
       const caller = appRouter.createCaller(mockContext);
       const result = await caller.analytics.getSourceBreakdown({
@@ -368,53 +360,16 @@ describe('Analytics Router', () => {
         dateRange: '30d',
       });
 
-      expect(result).toHaveLength(3);
-      expect(result[0]).toMatchObject({
-        source: 'website',
-        count: 60,
-        percentage: 60,
-      });
-      expect(result[1].percentage).toBe(30);
-      expect(result[2].percentage).toBe(10);
-    });
-
-    it('should handle unknown sources', async () => {
-      mockDb.query.organizationMembers.findFirst.mockResolvedValue(mockMembership);
-
-      mockDb.select.mockReturnValueOnce(mockDb);
-      mockDb.from.mockReturnValueOnce(mockDb);
-      mockDb.where.mockResolvedValueOnce([{ count: 50 }]);
-
-      const mockSourceData = [{ source: 'unknown', count: 50 }];
-
-      mockDb.select.mockReturnValueOnce(mockDb);
-      mockDb.from.mockReturnValueOnce(mockDb);
-      mockDb.where.mockReturnValueOnce(mockDb);
-      mockDb.groupBy.mockReturnValueOnce(mockDb);
-      mockDb.orderBy.mockResolvedValueOnce(mockSourceData);
-
-      const caller = appRouter.createCaller(mockContext);
-      const result = await caller.analytics.getSourceBreakdown({
-        organizationId: TEST_ORG_ID,
-        dateRange: '30d',
-      });
-
-      expect(result).toHaveLength(1);
-      expect(result[0].source).toBe('unknown');
+      expect(result).toEqual([
+        { source: 'lp_organic', count: 30, percentage: 30 },
+        { source: 'telemarketing_agency', count: 20, percentage: 20 },
+        { source: 'unset', count: 50, percentage: 50 },
+      ]);
     });
 
     it('should handle empty source data', async () => {
       mockDb.query.organizationMembers.findFirst.mockResolvedValue(mockMembership);
-
-      mockDb.select.mockReturnValueOnce(mockDb);
-      mockDb.from.mockReturnValueOnce(mockDb);
-      mockDb.where.mockResolvedValueOnce([{ count: 0 }]);
-
-      mockDb.select.mockReturnValueOnce(mockDb);
-      mockDb.from.mockReturnValueOnce(mockDb);
-      mockDb.where.mockReturnValueOnce(mockDb);
-      mockDb.groupBy.mockReturnValueOnce(mockDb);
-      mockDb.orderBy.mockResolvedValueOnce([]);
+      mockGroups([]);
 
       const caller = appRouter.createCaller(mockContext);
       const result = await caller.analytics.getSourceBreakdown({
@@ -423,6 +378,60 @@ describe('Analytics Router', () => {
       });
 
       expect(result).toHaveLength(0);
+    });
+  });
+
+  describe('getResponseTime', () => {
+    it('is pending until the first contact is recorded (#136) and reads nothing', async () => {
+      mockDb.query.organizationMembers.findFirst.mockResolvedValue(mockMembership);
+
+      const caller = appRouter.createCaller(mockContext);
+      const result = await caller.analytics.getResponseTime({
+        organizationId: TEST_ORG_ID,
+        dateRange: '30d',
+      });
+
+      expect(result).toEqual({ status: 'pending', reason: 'first_contact_not_recorded' });
+      expect(mockDb.select).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getAgencyPerformance', () => {
+    it('returns SQL rate and cost per SQL per agency', async () => {
+      mockDb.query.organizationMembers.findFirst.mockResolvedValue(mockMembership);
+      mockDb.select.mockReturnValueOnce(mockDb);
+      mockDb.from.mockReturnValueOnce(mockDb);
+      mockDb.where.mockReturnValueOnce(mockDb);
+      mockDb.groupBy.mockResolvedValueOnce([
+        { agencyName: 'A社', leadCount: 4, sqlCount: '1', wonCount: '0', costedLeadCount: 4, totalCost: '100000' },
+      ]);
+
+      const caller = appRouter.createCaller(mockContext);
+      const result = await caller.analytics.getAgencyPerformance({
+        organizationId: TEST_ORG_ID,
+        dateRange: '30d',
+      });
+
+      expect(result).toEqual([
+        {
+          agencyName: 'A社',
+          leadCount: 4,
+          sqlCount: 1,
+          sqlRate: 25,
+          wonCount: 0,
+          costedLeadCount: 4,
+          totalCost: 100000,
+          costPerSql: 100000,
+        },
+      ]);
+    });
+
+    it('rejects a non-member', async () => {
+      mockDb.query.organizationMembers.findFirst.mockResolvedValue(null);
+      const caller = appRouter.createCaller(mockContext);
+      await expect(
+        caller.analytics.getAgencyPerformance({ organizationId: TEST_ORG_ID, dateRange: '30d' })
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     });
   });
 

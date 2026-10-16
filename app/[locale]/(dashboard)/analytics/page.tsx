@@ -1,6 +1,8 @@
 'use client';
 
 import {
+  useAcquisitionCost,
+  useAgencyPerformance,
   useConversionFunnel,
   useLeadTrend,
   useOverview,
@@ -25,6 +27,7 @@ import { CategoryBar, ProgressBar } from '@/components/ui/progress-bar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { LeadStatus } from '@/lib/features/leads/types';
 import { LEAD_STATUSES } from '@/lib/features/leads/types/pipeline';
+import { AcquisitionCostCard, AgencyPerformanceCard } from './_components/source-cost-cards';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -92,6 +95,9 @@ const ResponseTimeChart = dynamic(
   }
 );
 
+/** Leads without a recorded 流入元 */
+const UNSET_INFLOW_SOURCE = 'unset';
+
 function ChartSkeleton() {
   return (
     <Card className="animate-pulse p-6">
@@ -117,7 +123,8 @@ export default function AnalyticsPage() {
   const t = useTranslations('settings.analytics');
   const tStatus = useTranslations('status');
   const tCommon = useTranslations('common');
-  const tLeadSource = useTranslations('leadSource');
+  const tInflowSource = useTranslations('pipeline.inflowSource');
+  const tLeads = useTranslations('leads');
   const locale = useLocale();
   const { organizationId: contextOrgId, isLoading: contextLoading } = useOrganization();
 
@@ -154,6 +161,24 @@ export default function AnalyticsPage() {
     organizationId,
     dateRange
   );
+  const { data: acquisitionCost, isLoading: acquisitionCostLoading } = useAcquisitionCost(
+    organizationId,
+    dateRange
+  );
+  const { data: agencyPerformance, isLoading: agencyLoading } = useAgencyPerformance(
+    organizationId,
+    dateRange
+  );
+
+  // 流入元 values ('lp_organic', ...) shown with their labels; 'unset' as 未設定
+  const sourceLabel = (source: string) => {
+    if (source === UNSET_INFLOW_SOURCE) return tLeads('notSet');
+    return tInflowSource.has(source) ? tInflowSource(source) : source;
+  };
+  const labeledSources = sourceBreakdown?.map((item) => ({
+    ...item,
+    source: sourceLabel(item.source),
+  }));
 
   // Export functionality
   const { exportAnalyticsReport, exportAnalyticsJSON, exportAnalyticsPDF, isExporting } = useExport(
@@ -164,11 +189,11 @@ export default function AnalyticsPage() {
   );
 
   const handleExportCSV = () => {
-    if (overview && leadTrend && sourceBreakdown && statusBreakdown && funnelData) {
+    if (overview && leadTrend && labeledSources && statusBreakdown && funnelData) {
       exportAnalyticsReport({
         overview,
         trend: leadTrend,
-        sourceBreakdown,
+        sourceBreakdown: labeledSources,
         statusBreakdown,
         funnel: funnelData,
         dateRange,
@@ -177,11 +202,11 @@ export default function AnalyticsPage() {
   };
 
   const handleExportJSON = () => {
-    if (overview && leadTrend && sourceBreakdown && statusBreakdown && funnelData) {
+    if (overview && leadTrend && labeledSources && statusBreakdown && funnelData) {
       exportAnalyticsJSON({
         overview,
         trend: leadTrend,
-        sourceBreakdown,
+        sourceBreakdown: labeledSources,
         statusBreakdown,
         funnel: funnelData,
         dateRange,
@@ -194,7 +219,7 @@ export default function AnalyticsPage() {
       exportAnalyticsPDF({
         overview,
         trend: leadTrend,
-        sourceBreakdown,
+        sourceBreakdown: labeledSources,
         statusBreakdown,
         funnel: funnelData,
         dateRange,
@@ -245,12 +270,6 @@ export default function AnalyticsPage() {
     (item) => LEAD_STATUS_COLORS[item.status as LeadStatus] ?? 'gray'
   );
   const dateRangeLabel = dateRangeOptions.find((option) => option.value === dateRange)?.label ?? '';
-
-  // Stored source values ('website', 'api', ...) shown with their labels
-  const sourceLabel = (source: string) => {
-    const key = source.toLowerCase();
-    return tLeadSource.has(key) ? tLeadSource(key) : source;
-  };
 
   // Transform source data for bar list
   const sourceBarData = (sourceBreakdown || []).map((item) => ({
@@ -531,6 +550,7 @@ export default function AnalyticsPage() {
             {/* Source Donut Chart */}
             <Card className="p-6">
               <Title>{t('charts.sourceBreakdown')}</Title>
+              <Text>{t('charts.sourceBreakdownPeriod', { period: dateRangeLabel })}</Text>
               {sourceLoading ? (
                 <div className="h-64 flex items-center justify-center">
                   <div className="w-48 h-48 rounded-full bg-gray-200 animate-pulse" />
@@ -598,6 +618,16 @@ export default function AnalyticsPage() {
               )}
             </Card>
           </div>
+
+          {/* Cost and agencies, from the cost and agency recorded on each lead */}
+          <div className="grid grid-cols-1 gap-6 mt-6">
+            <AcquisitionCostCard
+              data={acquisitionCost}
+              isLoading={acquisitionCostLoading}
+              sourceLabel={sourceLabel}
+            />
+            <AgencyPerformanceCard data={agencyPerformance} isLoading={agencyLoading} />
+          </div>
         </TabsContent>
 
         {/* Funnel Tab */}
@@ -648,7 +678,16 @@ export default function AnalyticsPage() {
             {/* Response Time */}
             <Card className="p-6">
               <Title>{t('charts.responseTime')}</Title>
-              <ResponseTimeChart data={responseTime || []} isLoading={responseTimeLoading} />
+              {responseTime?.status === 'ready' ? (
+                <ResponseTimeChart data={responseTime.distribution} isLoading={false} />
+              ) : responseTimeLoading ? (
+                <div className="h-64 bg-gray-100 animate-pulse rounded-lg mt-4" />
+              ) : (
+                // Not measured until the first contact is recorded on leads (#136)
+                <div className="h-64 flex items-center justify-center">
+                  <Text>{t('charts.responseTimePending')}</Text>
+                </div>
+              )}
             </Card>
           </div>
 

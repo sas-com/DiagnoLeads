@@ -2,27 +2,36 @@ import { leads } from '@/lib/db/schema';
 import { LEAD_STATUSES, type LeadStatus } from '@/lib/features/leads/types/pipeline';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
-import { and, avg, count, desc, eq, gte, lte, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { getDashboardSummary } from '../dashboard';
 import {
+  getAcquisitionCost,
+  getAgencyPerformance,
+  getInflowSourceBreakdown,
+} from '../lead-sources';
+import { analyticsPeriodStart, jstMonthStart } from '../period';
+import { getResponseTimeDistribution } from '../response-time';
+import {
+  type AcquisitionCostSummary,
+  type AgencyPerformanceRow,
   type ComparisonResult,
   type ConversionFunnelData,
+  type DateRange,
   type FunnelStage,
   type OverviewStats,
   type PeriodMetrics,
-  type ROISummary,
-  type ResponseTimeData,
+  type ResponseTimeResult,
   type ScoreDistributionData,
   type SourceBreakdown,
-  type SourceROIData,
   type StatusBreakdown,
   type TrendDataPoint,
+  getAcquisitionCostSchema,
+  getAgencyPerformanceSchema,
   getComparisonSchema,
   getConversionFunnelSchema,
   getLeadTrendSchema,
   getOverviewSchema,
-  getROISchema,
   getResponseTimeSchema,
   getScoreDistributionSchema,
   getSourceBreakdownSchema,
@@ -60,11 +69,7 @@ export const analyticsRouter = router({
   getOverview: organizationProcedure
     .input(getOverviewSchema)
     .query(async ({ ctx, input }): Promise<OverviewStats> => {
-      const { organizationId, dateRange } = input;
-
-      // Calculate date threshold based on range
-      const now = new Date();
-      const dateThreshold = getDateThreshold(dateRange);
+      const { organizationId } = input;
 
       // Get total leads for organization
       const totalLeadsResult = await ctx.db
@@ -74,8 +79,8 @@ export const analyticsRouter = router({
 
       const totalLeads = totalLeadsResult[0]?.count || 0;
 
-      // Get new leads this month
-      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      // Get new leads this month (Japanese calendar month)
+      const firstDayOfMonth = jstMonthStart();
       const newLeadsThisMonthResult = await ctx.db
         .select({ count: count() })
         .from(leads)
@@ -143,13 +148,14 @@ export const analyticsRouter = router({
     .query(async ({ ctx, input }): Promise<TrendDataPoint[]> => {
       const { organizationId, dateRange, granularity } = input;
 
-      const dateThreshold = getDateThreshold(dateRange);
+      const period = inPeriod(organizationId, dateRange);
 
-      // SQL format for date truncation
+      // Day or month in Japan (created_at holds UTC without a time zone), like the dashboard
+      const jstCreatedAt = sql`((${leads.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Tokyo')`;
       const dateFormat =
         granularity === 'daily'
-          ? sql`DATE(${leads.createdAt})`
-          : sql`DATE_TRUNC('month', ${leads.createdAt})`;
+          ? sql`to_char(${jstCreatedAt}, 'YYYY-MM-DD')`
+          : sql`to_char(${jstCreatedAt}, 'YYYY-MM-01')`;
 
       // Get lead counts by date
       const trendData = await ctx.db
@@ -161,7 +167,7 @@ export const analyticsRouter = router({
           ),
         })
         .from(leads)
-        .where(and(eq(leads.organizationId, organizationId), gte(leads.createdAt, dateThreshold)))
+        .where(period)
         .groupBy(dateFormat)
         .orderBy(desc(dateFormat));
 
@@ -174,39 +180,14 @@ export const analyticsRouter = router({
 
   /**
    * Get Source Breakdown
-   * Returns distribution of leads by source channel
+   * Leads of the period by 流入元 (inflow_source; the legacy `source` column is not used),
+   * the 'unset' bucket last
    */
   getSourceBreakdown: organizationProcedure
     .input(getSourceBreakdownSchema)
-    .query(async ({ ctx, input }): Promise<SourceBreakdown[]> => {
+    .query(({ ctx, input }): Promise<SourceBreakdown[]> => {
       const { organizationId, dateRange } = input;
-
-      const dateThreshold = getDateThreshold(dateRange);
-
-      // Get total count for percentage calculation
-      const totalResult = await ctx.db
-        .select({ count: count() })
-        .from(leads)
-        .where(and(eq(leads.organizationId, organizationId), gte(leads.createdAt, dateThreshold)));
-
-      const total = totalResult[0]?.count || 0;
-
-      // Get counts by source
-      const sourceData = await ctx.db
-        .select({
-          source: sql<string>`COALESCE(${leads.source}, 'unknown')`.as('source'),
-          count: count().as('count'),
-        })
-        .from(leads)
-        .where(and(eq(leads.organizationId, organizationId), gte(leads.createdAt, dateThreshold)))
-        .groupBy(sql`COALESCE(${leads.source}, 'unknown')`)
-        .orderBy(desc(count()));
-
-      return sourceData.map((row) => ({
-        source: row.source,
-        count: row.count,
-        percentage: total > 0 ? Math.round((row.count / total) * 10000) / 100 : 0,
-      }));
+      return getInflowSourceBreakdown(ctx.db, organizationId, analyticsPeriodStart(dateRange));
     }),
 
   /**
@@ -218,13 +199,10 @@ export const analyticsRouter = router({
     .query(async ({ ctx, input }): Promise<StatusBreakdown[]> => {
       const { organizationId, dateRange } = input;
 
-      const dateThreshold = getDateThreshold(dateRange);
+      const period = inPeriod(organizationId, dateRange);
 
       // Get total count for percentage calculation
-      const totalResult = await ctx.db
-        .select({ count: count() })
-        .from(leads)
-        .where(and(eq(leads.organizationId, organizationId), gte(leads.createdAt, dateThreshold)));
+      const totalResult = await ctx.db.select({ count: count() }).from(leads).where(period);
 
       const total = totalResult[0]?.count || 0;
 
@@ -235,7 +213,7 @@ export const analyticsRouter = router({
           count: count().as('count'),
         })
         .from(leads)
-        .where(and(eq(leads.organizationId, organizationId), gte(leads.createdAt, dateThreshold)))
+        .where(period)
         .groupBy(leads.status)
         .orderBy(desc(count()));
 
@@ -255,7 +233,7 @@ export const analyticsRouter = router({
     .query(async ({ ctx, input }): Promise<ConversionFunnelData> => {
       const { organizationId, dateRange } = input;
 
-      const dateThreshold = getDateThreshold(dateRange);
+      const period = inPeriod(organizationId, dateRange);
 
       // One aggregate query. "Reached" counts are nested by construction
       // (won ⊆ negotiation ⊆ nurturing ⊆ total), so stage rates never exceed 100%.
@@ -273,7 +251,7 @@ export const analyticsRouter = router({
           reachedNegotiation: sql<number>`count(*) FILTER (WHERE ${leads.status} IN ('negotiating', 'won') OR ${leads.hasNegotiated})`,
         })
         .from(leads)
-        .where(and(eq(leads.organizationId, organizationId), gte(leads.createdAt, dateThreshold)));
+        .where(period);
 
       const totalLeads = Number(counts?.total) || 0;
       const newCount = Number(counts?.new) || 0;
@@ -321,24 +299,9 @@ export const analyticsRouter = router({
         },
       ];
 
-      // Calculate average conversion time (for leads that have been converted)
-      const avgTimeResult = await ctx.db
-        .select({
-          avgDays: sql<number>`COALESCE(
-            AVG(EXTRACT(EPOCH FROM (${leads.updatedAt} - ${leads.createdAt})) / 86400),
-            0
-          )`.as('avgDays'),
-        })
-        .from(leads)
-        .where(
-          and(
-            eq(leads.organizationId, organizationId),
-            eq(leads.status, 'won'),
-            gte(leads.createdAt, dateThreshold)
-          )
-        );
-
-      const averageConversionDays = Math.round(Number(avgTimeResult[0]?.avgDays) * 10) / 10 || 0;
+      // No average conversion time: it was `updatedAt - createdAt`, which grows with every later
+      // edit. Leads do not record when they were won; 0 hides the figure on the page.
+      const averageConversionDays = 0;
 
       return {
         stages,
@@ -357,19 +320,13 @@ export const analyticsRouter = router({
     .query(async ({ ctx, input }): Promise<ScoreDistributionData[]> => {
       const { organizationId, dateRange } = input;
 
-      const dateThreshold = getDateThreshold(dateRange);
+      const period = inPeriod(organizationId, dateRange);
 
       // Get total count of leads with scores
       const totalResult = await ctx.db
         .select({ count: count() })
         .from(leads)
-        .where(
-          and(
-            eq(leads.organizationId, organizationId),
-            gte(leads.createdAt, dateThreshold),
-            sql`${leads.score} IS NOT NULL`
-          )
-        );
+        .where(and(period, sql`${leads.score} IS NOT NULL`));
 
       const total = totalResult[0]?.count || 0;
 
@@ -387,14 +344,7 @@ export const analyticsRouter = router({
         const countResult = await ctx.db
           .select({ count: count() })
           .from(leads)
-          .where(
-            and(
-              eq(leads.organizationId, organizationId),
-              gte(leads.createdAt, dateThreshold),
-              gte(leads.score, range.min),
-              lte(leads.score, range.max)
-            )
-          );
+          .where(and(period, gte(leads.score, range.min), lte(leads.score, range.max)));
 
         const rangeCount = countResult[0]?.count || 0;
 
@@ -410,163 +360,35 @@ export const analyticsRouter = router({
 
   /**
    * Get Response Time Distribution
-   * Returns distribution of leads by response time categories
+   * Pending until the first contact is recorded on leads (#136)
    */
   getResponseTime: organizationProcedure
     .input(getResponseTimeSchema)
-    .query(async ({ ctx, input }): Promise<ResponseTimeData[]> => {
+    .query(({ ctx, input }): Promise<ResponseTimeResult> => {
       const { organizationId, dateRange } = input;
-
-      const dateThreshold = getDateThreshold(dateRange);
-
-      // Get leads with both createdAt and updatedAt for response time calculation
-      // Response time is calculated as time between creation and first status change (updatedAt)
-      const leadsData = await ctx.db
-        .select({
-          id: leads.id,
-          createdAt: leads.createdAt,
-          updatedAt: leads.updatedAt,
-          status: leads.status,
-        })
-        .from(leads)
-        .where(
-          and(
-            eq(leads.organizationId, organizationId),
-            gte(leads.createdAt, dateThreshold),
-            // Only count leads that have been updated (status changed)
-            sql`${leads.status} != 'new'`
-          )
-        );
-
-      // Calculate response times in hours
-      const responseTimes = leadsData.map((lead) => {
-        const created = new Date(lead.createdAt);
-        const updated = new Date(lead.updatedAt);
-        return (updated.getTime() - created.getTime()) / (1000 * 60 * 60); // hours
-      });
-
-      const total = responseTimes.length;
-
-      // Categorize by time periods
-      const periods = [
-        { min: 0, max: 1, label: '< 1 hour' },
-        { min: 1, max: 24, label: '1-24 hours' },
-        { min: 24, max: 72, label: '1-3 days' },
-        { min: 72, max: Number.POSITIVE_INFINITY, label: '3+ days' },
-      ];
-
-      const distribution: ResponseTimeData[] = [];
-
-      for (const period of periods) {
-        const periodTimes = responseTimes.filter((time) => time >= period.min && time < period.max);
-        const periodCount = periodTimes.length;
-        const avgHours =
-          periodTimes.length > 0 ? periodTimes.reduce((a, b) => a + b, 0) / periodTimes.length : 0;
-
-        distribution.push({
-          period: period.label,
-          count: periodCount,
-          percentage: total > 0 ? Math.round((periodCount / total) * 10000) / 100 : 0,
-          averageHours: Math.round(avgHours * 10) / 10,
-        });
-      }
-
-      return distribution;
+      return getResponseTimeDistribution(ctx.db, organizationId, analyticsPeriodStart(dateRange));
     }),
 
   /**
-   * Get ROI Analysis by Lead Source
-   * Calculates return on investment for each lead source
+   * Get Acquisition Cost by 流入元
+   * From `acquisition_cost` recorded on each lead (replaces the ROI with hand-typed unit prices)
    */
-  getROI: organizationProcedure
-    .input(getROISchema)
-    .query(async ({ ctx, input }): Promise<ROISummary> => {
-      const { organizationId, dateRange, costPerLead, averageDealValue } = input;
+  getAcquisitionCost: organizationProcedure
+    .input(getAcquisitionCostSchema)
+    .query(({ ctx, input }): Promise<AcquisitionCostSummary> => {
+      const { organizationId, dateRange } = input;
+      return getAcquisitionCost(ctx.db, organizationId, analyticsPeriodStart(dateRange));
+    }),
 
-      const dateThreshold = getDateThreshold(dateRange);
-
-      // Default costs per lead by source (in currency units)
-      const defaultCosts: Record<string, number> = {
-        website: costPerLead?.website ?? 50,
-        embed: costPerLead?.embed ?? 30,
-        api: costPerLead?.api ?? 20,
-        unknown: costPerLead?.unknown ?? 40,
-      };
-
-      // Default average deal value
-      const dealValue = averageDealValue ?? 5000;
-
-      // Get leads grouped by source with conversion counts
-      const sourceData = await ctx.db
-        .select({
-          source: sql<string>`COALESCE(${leads.source}, 'unknown')`.as('source'),
-          total: count().as('total'),
-          converted: sql<number>`SUM(CASE WHEN ${leads.status} = 'won' THEN 1 ELSE 0 END)`.as(
-            'converted'
-          ),
-        })
-        .from(leads)
-        .where(and(eq(leads.organizationId, organizationId), gte(leads.createdAt, dateThreshold)))
-        .groupBy(sql`COALESCE(${leads.source}, 'unknown')`);
-
-      // Calculate ROI for each source
-      const bySource: SourceROIData[] = sourceData.map((row) => {
-        const source = row.source;
-        const leadCount = row.total;
-        const convertedCount = Number(row.converted) || 0;
-        const costPerLeadForSource = defaultCosts[source] ?? defaultCosts.unknown;
-
-        const totalCost = leadCount * costPerLeadForSource;
-        const totalRevenue = convertedCount * dealValue;
-        const roi = totalCost > 0 ? ((totalRevenue - totalCost) / totalCost) * 100 : 0;
-        const conversionRate = leadCount > 0 ? (convertedCount / leadCount) * 100 : 0;
-        const costPerAcquisition = convertedCount > 0 ? totalCost / convertedCount : 0;
-        const revenuePerLead = leadCount > 0 ? totalRevenue / leadCount : 0;
-
-        return {
-          source,
-          leadCount,
-          convertedCount,
-          conversionRate: Math.round(conversionRate * 100) / 100,
-          totalCost: Math.round(totalCost * 100) / 100,
-          totalRevenue: Math.round(totalRevenue * 100) / 100,
-          roi: Math.round(roi * 100) / 100,
-          costPerAcquisition: Math.round(costPerAcquisition * 100) / 100,
-          revenuePerLead: Math.round(revenuePerLead * 100) / 100,
-        };
-      });
-
-      // Calculate totals
-      const totalLeads = bySource.reduce((sum, s) => sum + s.leadCount, 0);
-      const totalConverted = bySource.reduce((sum, s) => sum + s.convertedCount, 0);
-      const totalCost = bySource.reduce((sum, s) => sum + s.totalCost, 0);
-      const totalRevenue = bySource.reduce((sum, s) => sum + s.totalRevenue, 0);
-      const overallROI = totalCost > 0 ? ((totalRevenue - totalCost) / totalCost) * 100 : 0;
-      const overallConversionRate = totalLeads > 0 ? (totalConverted / totalLeads) * 100 : 0;
-      const averageCostPerLead = totalLeads > 0 ? totalCost / totalLeads : 0;
-      const averageCostPerAcquisition = totalConverted > 0 ? totalCost / totalConverted : 0;
-      const averageRevenuePerLead = totalLeads > 0 ? totalRevenue / totalLeads : 0;
-
-      // Find best and worst performing sources
-      const sourcesWithROI = bySource.filter((s) => s.leadCount > 0);
-      const sortedByROI = [...sourcesWithROI].sort((a, b) => b.roi - a.roi);
-      const bestPerformingSource = sortedByROI[0]?.source ?? null;
-      const worstPerformingSource = sortedByROI[sortedByROI.length - 1]?.source ?? null;
-
-      return {
-        totalLeads,
-        totalConverted,
-        totalCost: Math.round(totalCost * 100) / 100,
-        totalRevenue: Math.round(totalRevenue * 100) / 100,
-        overallROI: Math.round(overallROI * 100) / 100,
-        overallConversionRate: Math.round(overallConversionRate * 100) / 100,
-        averageCostPerLead: Math.round(averageCostPerLead * 100) / 100,
-        averageCostPerAcquisition: Math.round(averageCostPerAcquisition * 100) / 100,
-        averageRevenuePerLead: Math.round(averageRevenuePerLead * 100) / 100,
-        bySource,
-        bestPerformingSource,
-        worstPerformingSource,
-      };
+  /**
+   * Get Agency Performance
+   * Leads, SQL, wins and cost per sales agency (agency_name)
+   */
+  getAgencyPerformance: organizationProcedure
+    .input(getAgencyPerformanceSchema)
+    .query(({ ctx, input }): Promise<AgencyPerformanceRow[]> => {
+      const { organizationId, dateRange } = input;
+      return getAgencyPerformance(ctx.db, organizationId, analyticsPeriodStart(dateRange));
     }),
 
   /**
@@ -719,21 +541,10 @@ export const analyticsRouter = router({
 });
 
 /**
- * Helper function to calculate date threshold based on range
+ * Leads of the organization created in the period (Japanese calendar days, like the dashboard)
  */
-function getDateThreshold(dateRange: '7d' | '30d' | '90d' | 'all'): Date {
-  const now = new Date();
-
-  switch (dateRange) {
-    case '7d':
-      return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    case '30d':
-      return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    case '90d':
-      return new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-    case 'all':
-      return new Date(0); // Beginning of time
-    default:
-      return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); // Default to 30 days
-  }
+function inPeriod(organizationId: string, dateRange: DateRange) {
+  const from = analyticsPeriodStart(dateRange);
+  const inOrg = eq(leads.organizationId, organizationId);
+  return from ? and(inOrg, gte(leads.createdAt, from)) : inOrg;
 }

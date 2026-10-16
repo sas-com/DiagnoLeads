@@ -101,6 +101,7 @@ export interface TrendDataPoint {
 }
 
 export interface SourceBreakdown {
+  /** 流入元 (inflow_source value), or 'unset' when not recorded */
   source: string;
   count: number;
   percentage: number;
@@ -133,6 +134,13 @@ export interface ScoreDistributionData {
   percentage: number;
 }
 
+/**
+ * Response time: shown only once the first contact is recorded on leads (#136)
+ */
+export type ResponseTimeResult =
+  | { status: 'pending'; reason: 'first_contact_not_recorded' }
+  | { status: 'ready'; distribution: ResponseTimeData[] };
+
 export interface ResponseTimeData {
   period: string; // e.g., "< 1 hour", "1-24 hours", "1-3 days", "3+ days"
   count: number;
@@ -141,56 +149,58 @@ export interface ResponseTimeData {
 }
 
 /**
- * ROI Calculator Schema
+ * Acquisition cost schema (replaces the ROI calculator, which multiplied lead counts by unit
+ * prices typed in by hand; costs now come from `acquisition_cost` recorded on each lead)
  */
-export const getROISchema = z.object({
+export const getAcquisitionCostSchema = z.object({
   organizationId: z.string().uuid(),
   dateRange: dateRangeSchema.default('30d'),
-  /** Cost per lead by source (optional, uses defaults if not provided) */
-  costPerLead: z
-    .object({
-      website: z.number().min(0).optional(),
-      embed: z.number().min(0).optional(),
-      api: z.number().min(0).optional(),
-      unknown: z.number().min(0).optional(),
-    })
-    .optional(),
-  /** Average deal value for converted leads */
-  averageDealValue: z.number().min(0).optional(),
 });
-export type GetROIInput = z.infer<typeof getROISchema>;
+export type GetAcquisitionCostInput = z.infer<typeof getAcquisitionCostSchema>;
 
-/**
- * ROI by Source Data
- */
-export interface SourceROIData {
+/** Acquisition cost of the leads of one 流入元 (inflow source, or 'unset') */
+export interface AcquisitionCostRow {
   source: string;
   leadCount: number;
-  convertedCount: number;
-  conversionRate: number;
+  /** Leads with an acquisition cost recorded (the others add no cost) */
+  costedLeadCount: number;
+  /** Leads judged SQL by sales (sql_decision = 'qualified') */
+  sqlCount: number;
+  /** Leads won (status = 'won') */
+  wonCount: number;
+  /** Sum of acquisition_cost, yen excluding tax */
   totalCost: number;
-  totalRevenue: number;
-  roi: number; // ROI percentage
-  costPerAcquisition: number;
-  revenuePerLead: number;
+  /** totalCost / sqlCount, null without SQL */
+  costPerSql: number | null;
+  /** totalCost / wonCount, null without a win */
+  costPerWon: number | null;
+}
+
+export interface AcquisitionCostSummary extends Omit<AcquisitionCostRow, 'source'> {
+  bySource: AcquisitionCostRow[];
 }
 
 /**
- * Overall ROI Summary
+ * Agency performance schema
  */
-export interface ROISummary {
-  totalLeads: number;
-  totalConverted: number;
+export const getAgencyPerformanceSchema = z.object({
+  organizationId: z.string().uuid(),
+  dateRange: dateRangeSchema.default('30d'),
+});
+
+/** Leads set up by one sales agency (agency_name) */
+export interface AgencyPerformanceRow {
+  agencyName: string;
+  leadCount: number;
+  sqlCount: number;
+  /** sqlCount / leadCount, percent */
+  sqlRate: number;
+  wonCount: number;
+  costedLeadCount: number;
+  /** Sum of acquisition_cost, yen excluding tax */
   totalCost: number;
-  totalRevenue: number;
-  overallROI: number;
-  overallConversionRate: number;
-  averageCostPerLead: number;
-  averageCostPerAcquisition: number;
-  averageRevenuePerLead: number;
-  bySource: SourceROIData[];
-  bestPerformingSource: string | null;
-  worstPerformingSource: string | null;
+  /** totalCost / sqlCount, null without SQL */
+  costPerSql: number | null;
 }
 
 /**
