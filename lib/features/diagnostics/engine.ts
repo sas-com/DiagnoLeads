@@ -1,21 +1,46 @@
 import type {
   AnswerValidationIssue,
   AnswerValidationResult,
+  ConditionalSection,
   DiagnosticAnswers,
   DiagnosticDefinition,
-  DiagnosticQuestion,
-  DiagnosticSection,
 } from './types';
+
+/**
+ * The parts of a definition the engine needs. Code-defined diagnostics (DiagnosticDefinition)
+ * and builder definitions (lib/features/diagnosis-builder) both satisfy it.
+ */
+export interface EngineDefinition<Q extends EngineQuestion = EngineQuestion> {
+  sections: readonly ConditionalSection[];
+  questions: readonly Q[];
+}
+
+export interface EngineQuestion {
+  id: string;
+  required: boolean;
+}
+
+/** A choice question as far as answer checks are concerned */
+export interface ChoiceQuestion {
+  type: 'single' | 'multiple';
+  options: readonly { value: string }[];
+  exclusiveOptions?: readonly string[];
+}
+
+/** Result of checking one non-empty answer against its question */
+export type AnswerCheck<V> =
+  | { ok: true; value: V }
+  | { ok: false; code: AnswerValidationIssue['code'] };
 
 /**
  * Sections shown for the given answers, in order.
  * A condition may only refer to a question in an earlier section, so one pass is enough.
  */
-export function shownSections(
-  definition: DiagnosticDefinition,
+export function shownSections<S extends ConditionalSection>(
+  definition: { sections: readonly S[] },
   answers: Record<string, unknown>
-): DiagnosticSection[] {
-  const shown: DiagnosticSection[] = [];
+): S[] {
+  const shown: S[] = [];
   const applicable = new Set<string>();
   for (const section of definition.sections) {
     const condition = section.showWhen;
@@ -34,36 +59,65 @@ export function shownSections(
 }
 
 /** Questions that apply to the given answers (each once, in the order they are shown) */
-export function applicableQuestions(
-  definition: DiagnosticDefinition,
+export function applicableQuestions<Q extends EngineQuestion>(
+  definition: EngineDefinition<Q>,
   answers: Record<string, unknown>
-): DiagnosticQuestion[] {
+): Q[] {
   const byId = new Map(definition.questions.map((q) => [q.id, q]));
   const ids = new Set(shownSections(definition, answers).flatMap((s) => s.questionIds));
   return [...ids].flatMap((id) => byId.get(id) ?? []);
 }
 
 /** Drop answers to questions that no longer apply (e.g. after switching the migration path) */
-export function pruneAnswers(
-  definition: DiagnosticDefinition,
-  answers: DiagnosticAnswers
-): DiagnosticAnswers {
+export function pruneAnswers<V>(
+  definition: EngineDefinition,
+  answers: Record<string, V>
+): Record<string, V> {
   const ids = new Set(applicableQuestions(definition, answers).map((q) => q.id));
   return Object.fromEntries(Object.entries(answers).filter(([id]) => ids.has(id)));
 }
 
 /**
- * Validate raw answers against a definition.
- * Unknown questions and options are rejected so that stored answers always match the definition.
- * Only questions in shown sections apply: they are required as defined, and answers to the
- * others are rejected (the client drops them when the respondent switches paths).
+ * Check a non-empty answer to a choice question: single → one known option,
+ * multiple → known options without duplicates, an exclusive option only on its own.
  */
-export function validateAnswers(
-  definition: DiagnosticDefinition,
-  raw: Record<string, unknown>
-): AnswerValidationResult {
+export function checkChoiceAnswer(
+  question: ChoiceQuestion,
+  value: unknown
+): AnswerCheck<string | string[]> {
+  const allowed = new Set(question.options.map((o) => o.value));
+  if (question.type === 'single') {
+    if (typeof value !== 'string') return { ok: false, code: 'invalid_type' };
+    if (!allowed.has(value)) return { ok: false, code: 'invalid_option' };
+    return { ok: true, value };
+  }
+
+  if (!Array.isArray(value) || value.some((v) => typeof v !== 'string')) {
+    return { ok: false, code: 'invalid_type' };
+  }
+  const selected = [...new Set(value as string[])];
+  if (selected.some((v) => !allowed.has(v))) return { ok: false, code: 'invalid_option' };
+  const exclusive = question.exclusiveOptions ?? [];
+  if (selected.length > 1 && selected.some((v) => exclusive.includes(v))) {
+    return { ok: false, code: 'exclusive_conflict' };
+  }
+  return { ok: true, value: selected };
+}
+
+/**
+ * Validate raw answers against any engine definition, checking each non-empty answer with
+ * `checkValue`. Unknown questions are rejected; only questions in shown sections apply: they are
+ * required as defined, and answers to the others are rejected.
+ */
+export function validateAnswersWith<Q extends EngineQuestion, V>(
+  definition: EngineDefinition<Q>,
+  raw: Record<string, unknown>,
+  checkValue: (question: Q, value: unknown) => AnswerCheck<V>
+):
+  | { success: true; answers: Record<string, V> }
+  | { success: false; issues: AnswerValidationIssue[] } {
   const issues: AnswerValidationIssue[] = [];
-  const candidates: DiagnosticAnswers = {};
+  const candidates: Record<string, V> = {};
   const known = new Set(definition.questions.map((q) => q.id));
 
   for (const questionId of Object.keys(raw)) {
@@ -73,7 +127,6 @@ export function validateAnswers(
   const empty = new Set<string>();
   for (const question of definition.questions) {
     const value = raw[question.id];
-    const allowed = new Set(question.options.map((o) => o.value));
     const isEmpty =
       value === undefined ||
       value === null ||
@@ -85,37 +138,14 @@ export function validateAnswers(
       continue;
     }
 
-    if (question.type === 'single') {
-      if (typeof value !== 'string') {
-        issues.push({ questionId: question.id, code: 'invalid_type' });
-      } else if (!allowed.has(value)) {
-        issues.push({ questionId: question.id, code: 'invalid_option' });
-      } else {
-        candidates[question.id] = value;
-      }
-      continue;
-    }
-
-    if (!Array.isArray(value) || value.some((v) => typeof v !== 'string')) {
-      issues.push({ questionId: question.id, code: 'invalid_type' });
-      continue;
-    }
-    const selected = [...new Set(value as string[])];
-    if (selected.some((v) => !allowed.has(v))) {
-      issues.push({ questionId: question.id, code: 'invalid_option' });
-      continue;
-    }
-    const exclusive = question.exclusiveOptions ?? [];
-    if (selected.length > 1 && selected.some((v) => exclusive.includes(v))) {
-      issues.push({ questionId: question.id, code: 'exclusive_conflict' });
-      continue;
-    }
-    candidates[question.id] = selected;
+    const checked = checkValue(question, value);
+    if (checked.ok) candidates[question.id] = checked.value;
+    else issues.push({ questionId: question.id, code: checked.code });
   }
 
   // Applicability depends on the (valid) answers to the questions that select a path
   const applicable = new Set(applicableQuestions(definition, candidates).map((q) => q.id));
-  const answers: DiagnosticAnswers = {};
+  const answers: Record<string, V> = {};
   for (const question of definition.questions) {
     if (!applicable.has(question.id)) {
       if (question.id in candidates)
@@ -130,6 +160,19 @@ export function validateAnswers(
   }
 
   return issues.length > 0 ? { success: false, issues } : { success: true, answers };
+}
+
+/**
+ * Validate raw answers against a code-defined diagnostic.
+ * Unknown questions and options are rejected so that stored answers always match the definition.
+ * Only questions in shown sections apply: they are required as defined, and answers to the
+ * others are rejected (the client drops them when the respondent switches paths).
+ */
+export function validateAnswers(
+  definition: DiagnosticDefinition,
+  raw: Record<string, unknown>
+): AnswerValidationResult {
+  return validateAnswersWith(definition, raw, checkChoiceAnswer);
 }
 
 /** Read a single-choice answer */
