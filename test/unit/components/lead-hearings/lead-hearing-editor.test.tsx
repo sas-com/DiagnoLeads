@@ -24,12 +24,18 @@ const mocks = vi.hoisted(() => ({
   data: undefined as unknown,
   error: null as unknown,
   update: undefined as undefined | MutationOptions,
+  setData: vi.fn(),
+  invalidateGet: vi.fn(),
+  invalidateList: vi.fn(),
 }));
 
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
     useUtils: () => ({
-      leadHearings: { get: { invalidate: vi.fn() }, listByLead: { invalidate: vi.fn() } },
+      leadHearings: {
+        get: { invalidate: mocks.invalidateGet, setData: mocks.setData },
+        listByLead: { invalidate: mocks.invalidateList },
+      },
     }),
     leadHearings: {
       get: {
@@ -197,6 +203,33 @@ describe('LeadHearingEditor', () => {
     expect(screen.getByText('ほかの人が先に保存しました')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '最新の内容を読み込む' })).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: '業務部門の担当者' })).toBeChecked();
+  });
+
+  it('fills the form from the saved row and caches it instead of fetching again', async () => {
+    const user = userEvent.setup();
+    render(editor());
+
+    await user.click(screen.getByRole('button', { name: '保存' }));
+    const saved = hearing({
+      fields: { attendeeRoles: { value: ['it_manager'], status: 'done', source: 'corrected' } },
+      updatedAt: new Date('2026-10-15T03:00:00Z'),
+    });
+    act(() => mocks.update?.onSuccess(saved));
+
+    expect(screen.getByRole('checkbox', { name: '情報システム部門の責任者' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: '経営層・決裁者' })).not.toBeChecked();
+    expect(mocks.setData).toHaveBeenCalledWith(
+      { organizationId: ORG_ID, id: HEARING_ID },
+      expect.any(Function)
+    );
+    expect(mocks.invalidateGet).not.toHaveBeenCalled();
+    expect(mocks.invalidateList).toHaveBeenCalledWith({ organizationId: ORG_ID, leadId: LEAD_ID });
+
+    // The next save guards against the saved row
+    await user.click(screen.getByRole('button', { name: '保存' }));
+    expect(mocks.mutate.mock.calls[1][0].expectedUpdatedAt).toEqual(
+      new Date('2026-10-15T03:00:00Z')
+    );
   });
 
   it('shows the hearing read-only to those who cannot edit', () => {

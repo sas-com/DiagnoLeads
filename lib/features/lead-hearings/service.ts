@@ -10,7 +10,7 @@ import type { db as defaultDb } from '@/lib/db/client';
 import { diagnosticSubmissions, leadHearings, leads } from '@/lib/db/schema';
 import { AX_MIGRATION_DIAGNOSTIC_KEY } from '@/lib/features/diagnostics/ax-migration/definition';
 import { TRPCError } from '@trpc/server';
-import { and, count, desc, eq } from 'drizzle-orm';
+import { and, count, desc, eq, sql } from 'drizzle-orm';
 import { HEARING_CATALOG_VERSION, LEAD_HEARINGS_MAX_PER_LEAD } from './catalog';
 import { computeMissingItems } from './missing';
 import { buildHearingPrefill, isVerifiedSubmission } from './prefill';
@@ -75,22 +75,32 @@ export async function listLeadHearings(
   input: { organizationId: string; leadId: string }
 ) {
   await assertLeadInOrganization(db, input.organizationId, input.leadId);
+  // Only the columns the list shows; the diagnosis snapshot is reduced to whether there is one
   const rows = await db
-    .select()
+    .select({
+      id: leadHearings.id,
+      heldOn: leadHearings.heldOn,
+      fields: leadHearings.fields,
+      fromDiagnosis: sql<boolean>`${leadHearings.prefill} is not null`,
+      createdBy: leadHearings.createdBy,
+      createdAt: leadHearings.createdAt,
+      updatedAt: leadHearings.updatedAt,
+    })
     .from(leadHearings)
     .where(leadScope(input.organizationId, input.leadId))
     .orderBy(desc(leadHearings.heldOn), desc(leadHearings.createdAt));
-  return rows.map((row) => {
-    const { missing, droppedKeys, ...view } = toHearingView(row);
-    const dealRating = view.fields.dealRating?.value;
+  return rows.map(({ fields: stored, ...row }) => {
+    const { fields } = parseStoredHearingFields(stored);
+    const missing = computeMissingItems(fields);
+    const dealRating = fields.dealRating?.value;
     return {
       dealRating: typeof dealRating === 'string' ? dealRating : null,
-      id: view.id,
-      heldOn: view.heldOn,
-      createdBy: view.createdBy,
-      createdAt: view.createdAt,
-      updatedAt: view.updatedAt,
-      fromDiagnosis: view.prefill !== null,
+      id: row.id,
+      heldOn: row.heldOn,
+      createdBy: row.createdBy,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      fromDiagnosis: row.fromDiagnosis,
       missingCount: missing.missing.length,
       unconfirmedCount: missing.unconfirmed.length,
     };
@@ -148,7 +158,16 @@ async function findPrefillSubmission(
   submissionId: string | undefined
 ) {
   const [submission] = await db
-    .select()
+    .select({
+      id: diagnosticSubmissions.id,
+      diagnosticKey: diagnosticSubmissions.diagnosticKey,
+      diagnosticVersion: diagnosticSubmissions.diagnosticVersion,
+      answers: diagnosticSubmissions.answers,
+      result: diagnosticSubmissions.result,
+      leadCreated: diagnosticSubmissions.leadCreated,
+      continuedFromSubmissionId: diagnosticSubmissions.continuedFromSubmissionId,
+      createdAt: diagnosticSubmissions.createdAt,
+    })
     .from(diagnosticSubmissions)
     .where(
       and(
@@ -200,7 +219,7 @@ export async function createLeadHearing(
     const [latest] =
       total > 0
         ? await tx
-            .select()
+            .select({ fields: leadHearings.fields, prefill: leadHearings.prefill })
             .from(leadHearings)
             .where(leadScope(organizationId, leadId))
             .orderBy(desc(leadHearings.heldOn), desc(leadHearings.createdAt))

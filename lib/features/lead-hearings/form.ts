@@ -2,25 +2,37 @@
  * Hearing editor form helpers (Refs #84)
  *
  * Pure functions behind the editor screen: how a value change moves the status and the source,
- * how half-entered values (a year without a month) are left out when saving, and the
- * "Web diagnosis: ..." line shown next to a field.
+ * how each input builds its value, how half-entered values (a year without a month) are left
+ * out when saving and when counting missing items, and the "Web diagnosis: ..." line shown next
+ * to a field.
  */
 
 import { axMigrationDefinition } from '@/lib/features/diagnostics/ax-migration/definition';
 import type { DiagnosticLocale } from '@/lib/features/diagnostics/types';
 import {
+  DEFAULT_HEARING_CATALOG,
   HEARING_FIELDS,
+  type HearingCatalogView,
   type HearingFieldDefinition,
   type HearingFieldKey,
+  type HearingItemStatus,
+  type HearingOption,
+  type HearingRequiredItem,
   type HearingSectionId,
   getHearingField,
 } from './catalog';
-import type {
-  HearingFieldEntry,
-  HearingFieldValue,
-  HearingFields,
-  HearingPrefillSnapshot,
+import { type HearingMissingItems, computeMissingItems } from './missing';
+import {
+  type HearingFieldEntry,
+  type HearingFieldValue,
+  type HearingFields,
+  type HearingPrefillSnapshot,
+  YEAR_MONTH_PATTERN,
 } from './types/schemas';
+
+/** The Web diagnosis has Japanese and English labels; other UI locales fall back to Japanese */
+export const toDiagnosticLocale = (locale: string): DiagnosticLocale =>
+  locale === 'en' ? 'en' : 'ja';
 
 /** A field nobody has touched yet */
 export const EMPTY_HEARING_ENTRY: HearingFieldEntry = { status: 'not_yet', source: null };
@@ -28,8 +40,6 @@ export const EMPTY_HEARING_ENTRY: HearingFieldEntry = { status: 'not_yet', sourc
 export function entryOf(fields: HearingFields, key: HearingFieldKey): HearingFieldEntry {
   return fields[key] ?? EMPTY_HEARING_ENTRY;
 }
-
-const YEAR_MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 /**
  * The value to store, or undefined when there is nothing (complete) to store: blank text, no
@@ -49,7 +59,7 @@ export function normalizeHearingValue(
       return text === '' ? undefined : text;
     }
     case 'yearMonth':
-      return typeof value === 'string' && YEAR_MONTH.test(value) ? value : undefined;
+      return typeof value === 'string' && YEAR_MONTH_PATTERN.test(value) ? value : undefined;
     case 'number':
       return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
     case 'multiple':
@@ -102,6 +112,85 @@ export function confirmHearingEntry(entry: HearingFieldEntry): HearingFieldEntry
   return { ...entry, source: 'confirmed', status: 'done' };
 }
 
+/** A status picked on screen; the value and its source stay */
+export function setHearingStatus(
+  entry: HearingFieldEntry,
+  status: HearingItemStatus
+): HearingFieldEntry {
+  return { ...entry, status };
+}
+
+// ── Input values ────────────────────────────────────────────────────────────────
+
+type ScaleValue = { basis?: string; bucket?: string };
+type LevelsValue = Partial<Record<string, string>>;
+
+const isRecord = (value: HearingFieldValue | undefined): value is LevelsValue =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+export const asChoices = (value: HearingFieldValue | undefined): string[] =>
+  Array.isArray(value) ? value : [];
+
+export const asLevels = (value: HearingFieldValue | undefined): LevelsValue =>
+  isRecord(value) ? value : {};
+
+export const asScale = (value: HearingFieldValue | undefined): ScaleValue =>
+  isRecord(value) ? (value as ScaleValue) : {};
+
+/** Check or uncheck one option; the result keeps the catalog order (undefined when empty) */
+export function toggleHearingOption(
+  options: readonly HearingOption[],
+  chosen: readonly string[],
+  value: string,
+  checked: boolean
+): string[] | undefined {
+  const next = checked
+    ? options.map((o) => o.value).filter((v) => v === value || chosen.includes(v))
+    : chosen.filter((v) => v !== value);
+  return next.length > 0 ? next : undefined;
+}
+
+/** Set or clear the level of one item (undefined when no item has a level) */
+export function setHearingLevel(
+  levels: LevelsValue,
+  item: string,
+  level: string | undefined
+): LevelsValue | undefined {
+  const updated = { ...levels };
+  if (level) updated[item] = level;
+  else delete updated[item];
+  return Object.keys(updated).length > 0 ? updated : undefined;
+}
+
+/** 'YYYY-MM' split for the two selects; either part may be missing while being entered */
+export function splitYearMonth(value: HearingFieldValue | undefined): {
+  year: string;
+  month: string;
+} {
+  const [year = '', month = ''] = typeof value === 'string' ? value.split('-') : [];
+  return { year, month };
+}
+
+/** The two selects → 'YYYY-MM', a half-entered 'YYYY-' / '-MM', or undefined when both empty */
+export function joinYearMonth(
+  year: string | undefined,
+  month: string | undefined
+): string | undefined {
+  return year || month ? `${year ?? ''}-${month ?? ''}` : undefined;
+}
+
+/** Years offered around this year, plus a stored year outside that range */
+export function hearingYearOptions(
+  thisYear: number,
+  selected: string,
+  range: { back: number; ahead: number } = { back: 15, ahead: 15 }
+): number[] {
+  const years = new Set<number>();
+  for (let y = thisYear - range.back; y <= thisYear + range.ahead; y++) years.add(y);
+  if (selected) years.add(Number(selected));
+  return [...years].sort((a, b) => a - b);
+}
+
 /** Form state → fields to save: complete values only, untouched fields left out */
 export function toSavedHearingFields(form: HearingFields): HearingFields {
   const saved: HearingFields = {};
@@ -119,11 +208,34 @@ export function toSavedHearingFields(form: HearingFields): HearingFields {
   return saved;
 }
 
+/**
+ * Missing / unconfirmed required items of the form as it would be saved (same result as
+ * computeMissingItems(toSavedHearingFields(form))), normalizing only the required keys.
+ */
+export function computeFormMissingItems(
+  form: HearingFields,
+  requiredItems: readonly HearingRequiredItem[] = DEFAULT_HEARING_CATALOG.requiredItems
+): HearingMissingItems {
+  const fields: HearingFields = {};
+  for (const item of requiredItems) {
+    for (const key of item.keys) {
+      const entry = form[key];
+      const field = getHearingField(key);
+      if (!entry || !field || key in fields) continue;
+      fields[key] = { ...entry, value: normalizeHearingValue(field, entry.value) };
+    }
+  }
+  return computeMissingItems(fields, requiredItems);
+}
+
 /** Section of each missing key, counted per section (distinct keys) */
-export function countBySection(keys: readonly HearingFieldKey[]): Map<HearingSectionId, number> {
+export function countBySection(
+  keys: readonly HearingFieldKey[],
+  catalog: Pick<HearingCatalogView, 'sectionOf'> = DEFAULT_HEARING_CATALOG
+): Map<HearingSectionId, number> {
   const counts = new Map<HearingSectionId, number>();
   for (const key of new Set(keys)) {
-    const section = getHearingField(key)?.section;
+    const section = catalog.sectionOf.get(key);
     if (section) counts.set(section, (counts.get(section) ?? 0) + 1);
   }
   return counts;

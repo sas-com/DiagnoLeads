@@ -6,7 +6,7 @@
  * - unconfirmed: still holding the Web diagnosis value that nobody confirmed in the meeting.
  */
 
-import { HEARING_REQUIRED_ITEMS, type HearingFieldKey, type HearingRequiredItem } from './catalog';
+import { DEFAULT_HEARING_CATALOG, type HearingFieldKey, type HearingRequiredItem } from './catalog';
 import type { HearingFieldEntry, HearingFields } from './types/schemas';
 
 export interface HearingMissingItems {
@@ -36,7 +36,7 @@ export function isHearingEntryFilled(entry: HearingFieldEntry | undefined): bool
 
 export function computeMissingItems(
   fields: HearingFields,
-  requiredItems: readonly HearingRequiredItem[] = HEARING_REQUIRED_ITEMS
+  requiredItems: readonly HearingRequiredItem[] = DEFAULT_HEARING_CATALOG.requiredItems
 ): HearingMissingItems {
   const result: HearingMissingItems = {
     missing: [],

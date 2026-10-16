@@ -4,11 +4,24 @@
 import { getHearingField } from '@/lib/features/lead-hearings/catalog';
 import {
   changeHearingValue,
+  computeFormMissingItems,
   confirmHearingEntry,
+  countBySection,
   hearingHintText,
+  hearingYearOptions,
+  joinYearMonth,
+  setHearingLevel,
+  setHearingStatus,
+  splitYearMonth,
+  toDiagnosticLocale,
   toSavedHearingFields,
+  toggleHearingOption,
 } from '@/lib/features/lead-hearings/form';
-import type { HearingPrefillSnapshot } from '@/lib/features/lead-hearings/types/schemas';
+import { computeMissingItems } from '@/lib/features/lead-hearings/missing';
+import type {
+  HearingFields,
+  HearingPrefillSnapshot,
+} from '@/lib/features/lead-hearings/types/schemas';
 import { describe, expect, it } from 'vitest';
 
 const field = (key: string) => {
@@ -94,5 +107,92 @@ describe('hearingHintText', () => {
     expect(hearingHintText(prefill, 'businessAreas', 'ja')).toBe('unknown-value');
     expect(hearingHintText(prefill, 'industry', 'ja')).toBeNull();
     expect(hearingHintText(null, 'targetSystem', 'ja')).toBeNull();
+  });
+});
+
+describe('setHearingStatus', () => {
+  it('changes only the status', () => {
+    expect(
+      setHearingStatus({ value: 'x', status: 'not_yet', source: 'prefilled' }, 'next')
+    ).toEqual({ value: 'x', status: 'next', source: 'prefilled' });
+  });
+});
+
+describe('input values', () => {
+  const options = [{ value: 'a' }, { value: 'b' }, { value: 'c' }];
+
+  it('toggles an option keeping the catalog order, empty as undefined', () => {
+    expect(toggleHearingOption(options, ['c'], 'a', true)).toEqual(['a', 'c']);
+    expect(toggleHearingOption(options, ['a', 'c'], 'a', false)).toEqual(['c']);
+    expect(toggleHearingOption(options, ['a'], 'a', false)).toBeUndefined();
+  });
+
+  it('sets and clears a level, empty as undefined', () => {
+    expect(setHearingLevel({ people: 'high' }, 'cost', 'low')).toEqual({
+      people: 'high',
+      cost: 'low',
+    });
+    expect(setHearingLevel({ people: 'high', cost: 'low' }, 'cost', undefined)).toEqual({
+      people: 'high',
+    });
+    expect(setHearingLevel({ people: 'high' }, 'people', undefined)).toBeUndefined();
+  });
+
+  it('splits and joins a year-month, keeping half-entered values', () => {
+    expect(splitYearMonth('2028-04')).toEqual({ year: '2028', month: '04' });
+    expect(splitYearMonth('2028-')).toEqual({ year: '2028', month: '' });
+    expect(splitYearMonth(undefined)).toEqual({ year: '', month: '' });
+    expect(joinYearMonth('2028', '04')).toBe('2028-04');
+    expect(joinYearMonth('2028', '')).toBe('2028-');
+    expect(joinYearMonth(undefined, '04')).toBe('-04');
+    expect(joinYearMonth('', undefined)).toBeUndefined();
+  });
+
+  it('offers years around this year plus a stored year outside the range', () => {
+    const years = hearingYearOptions(2026, '');
+    expect(years[0]).toBe(2011);
+    expect(years.at(-1)).toBe(2041);
+    expect(hearingYearOptions(2026, '1990')[0]).toBe(1990);
+  });
+
+  it('falls back to Japanese for diagnosis labels', () => {
+    expect(toDiagnosticLocale('en')).toBe('en');
+    expect(toDiagnosticLocale('ja')).toBe('ja');
+    expect(toDiagnosticLocale('fr')).toBe('ja');
+  });
+});
+
+describe('computeFormMissingItems', () => {
+  it.each<[string, HearingFields]>([
+    ['an empty form', {}],
+    [
+      'half-entered and blank values',
+      {
+        hardwareSupportEnd: { value: '2028-', status: 'done', source: null },
+        machineModel: { value: '   ', status: 'done', source: 'prefilled' },
+        targetSystem: { value: 'as400', status: 'done', source: 'prefilled' },
+        scale: { value: { basis: 'as400_programs', bucket: '' }, status: 'done', source: null },
+      },
+    ],
+    [
+      'statuses without values',
+      {
+        topChallenge: { status: 'not_applicable', source: null },
+        impactIfUnaddressed: { status: 'next', source: null },
+        competitorTypes: { value: ['none'], status: 'not_yet', source: 'prefilled' },
+        nextMeetingDate: { value: '2026-11-01', status: 'partial', source: 'corrected' },
+      },
+    ],
+  ])('matches the missing items of the saved fields for %s', (_, form) => {
+    expect(computeFormMissingItems(form)).toEqual(computeMissingItems(toSavedHearingFields(form)));
+  });
+});
+
+describe('countBySection', () => {
+  it('counts distinct keys per section', () => {
+    const counts = countBySection(['targetSystem', 'machineModel', 'targetSystem', 'dealRating']);
+    expect(counts.get('currentSystem')).toBe(2);
+    expect(counts.get('outcome')).toBe(1);
+    expect(counts.has('meeting')).toBe(false);
   });
 });

@@ -8,27 +8,30 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useOrganization } from '@/hooks/use-organization';
-import type { DiagnosticLocale } from '@/lib/features/diagnostics/types';
 import {
-  HEARING_FIELDS,
-  HEARING_REQUIRED_ITEMS,
-  HEARING_SECTIONS,
+  DEFAULT_HEARING_CATALOG,
+  type HearingFieldDefinition,
   type HearingFieldKey,
+  type HearingItemStatus,
   type HearingSectionId,
-  getHearingField,
 } from '@/lib/features/lead-hearings/catalog';
 import {
   changeHearingValue,
+  computeFormMissingItems,
   confirmHearingEntry,
   countBySection,
   entryOf,
   hearingHintText,
+  setHearingStatus,
+  toDiagnosticLocale,
   toSavedHearingFields,
 } from '@/lib/features/lead-hearings/form';
-import { computeMissingItems } from '@/lib/features/lead-hearings/missing';
 import {
+  type HearingFieldEntry,
+  type HearingFieldValue,
   type HearingFields,
   type HearingPrefillSnapshot,
+  ISO_DATE_PATTERN,
   hearingFieldsSchema,
 } from '@/lib/features/lead-hearings/types/schemas';
 import { trpc } from '@/lib/trpc/client';
@@ -43,13 +46,12 @@ import {
 } from 'lucide-react';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { HearingFieldRow } from './hearing-field-row';
 
-const REQUIRED_KEYS = new Set<string>(HEARING_REQUIRED_ITEMS.flatMap((item) => item.keys));
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+/** Organization overrides (#98) will resolve their own catalog view */
+const catalog = DEFAULT_HEARING_CATALOG;
 
 interface LoadedHearing {
   id: string;
@@ -69,7 +71,7 @@ export function LeadHearingEditor({ leadId, hearingId }: LeadHearingEditorProps)
   const tRoot = useTranslations();
   const format = useFormatter();
   const locale = useLocale();
-  const diagnosisLocale: DiagnosticLocale = locale === 'en' ? 'en' : 'ja';
+  const diagnosisLocale = toDiagnosticLocale(locale);
   const { organizationId } = useOrganization();
   const orgId = organizationId ?? '';
   const formKey = `${orgId}:${hearingId}`;
@@ -78,9 +80,10 @@ export function LeadHearingEditor({ leadId, hearingId }: LeadHearingEditorProps)
   const [heldOn, setHeldOn] = useState('');
   const [baseUpdatedAt, setBaseUpdatedAt] = useState<Date | null>(null);
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
-  // Fields whose status the user picked on this screen (a typed value then keeps that status)
-  const [statusPicked, setStatusPicked] = useState<ReadonlySet<string>>(new Set());
-  const [tab, setTab] = useState<HearingSectionId>(HEARING_SECTIONS[0]);
+  // Fields whose status the user picked on this screen (a typed value then keeps that status).
+  // Only read by the handlers, so a ref: picking a status does not need another render.
+  const statusPicked = useRef(new Set<string>());
+  const [tab, setTab] = useState<HearingSectionId>(catalog.sections[0].id);
   const [conflict, setConflict] = useState(false);
 
   const utils = trpc.useUtils();
@@ -97,7 +100,7 @@ export function LeadHearingEditor({ leadId, hearingId }: LeadHearingEditorProps)
     setForm(data.fields);
     setHeldOn(data.heldOn);
     setBaseUpdatedAt(new Date(data.updatedAt));
-    setStatusPicked(new Set());
+    statusPicked.current = new Set();
     setConflict(false);
     setLoadedFor(formKey);
   };
@@ -113,7 +116,10 @@ export function LeadHearingEditor({ leadId, hearingId }: LeadHearingEditorProps)
   const save = trpc.leadHearings.update.useMutation({
     onSuccess: (saved) => {
       fill(saved);
-      utils.leadHearings.get.invalidate({ organizationId: orgId, id: hearingId });
+      // The saved row is the latest; put it in the cache instead of fetching it again
+      utils.leadHearings.get.setData({ organizationId: orgId, id: hearingId }, (current) =>
+        current ? { ...current, ...saved } : current
+      );
       utils.leadHearings.listByLead.invalidate({ organizationId: orgId, leadId });
       toast.success(t('editor.saved'));
     },
@@ -126,9 +132,53 @@ export function LeadHearingEditor({ leadId, hearingId }: LeadHearingEditorProps)
     },
   });
 
-  const savedFields = useMemo(() => (form ? toSavedHearingFields(form) : {}), [form]);
-  const missing = useMemo(() => computeMissingItems(savedFields), [savedFields]);
-  const missingBySection = useMemo(() => countBySection(missing.missingKeys), [missing]);
+  const missing = useMemo(() => computeFormMissingItems(form ?? {}, catalog.requiredItems), [form]);
+  const missingBySection = useMemo(() => countBySection(missing.missingKeys, catalog), [missing]);
+
+  const prefill = (hearing.data?.prefill ?? null) as HearingPrefillSnapshot | null;
+  const hints = useMemo(() => {
+    const byKey = new Map<string, string | null>();
+    for (const section of catalog.sections) {
+      for (const { field } of section.fields) {
+        byKey.set(
+          field.key,
+          hearingHintText(prefill, field.key as HearingFieldKey, diagnosisLocale)
+        );
+      }
+    }
+    return byKey;
+  }, [prefill, diagnosisLocale]);
+
+  // Stable handlers, so a change re-renders only the row that changed
+  const updateEntry = useCallback(
+    (key: HearingFieldKey, update: (entry: HearingFieldEntry) => HearingFieldEntry) => {
+      setForm((current) =>
+        current ? { ...current, [key]: update(entryOf(current, key)) } : current
+      );
+    },
+    []
+  );
+  const handleValueChange = useCallback(
+    (field: HearingFieldDefinition, value: HearingFieldValue | undefined) => {
+      const key = field.key as HearingFieldKey;
+      updateEntry(key, (entry) =>
+        changeHearingValue(field, entry, value, statusPicked.current.has(key))
+      );
+    },
+    [updateEntry]
+  );
+  const handleStatusChange = useCallback(
+    (field: HearingFieldDefinition, status: HearingItemStatus) => {
+      statusPicked.current.add(field.key);
+      updateEntry(field.key as HearingFieldKey, (entry) => setHearingStatus(entry, status));
+    },
+    [updateEntry]
+  );
+  const handleConfirm = useCallback(
+    (field: HearingFieldDefinition) =>
+      updateEntry(field.key as HearingFieldKey, confirmHearingEntry),
+    [updateEntry]
+  );
 
   const errorCode = hearing.error?.data?.code;
   // BAD_REQUEST: the id in the URL is not a valid id
@@ -175,15 +225,10 @@ export function LeadHearingEditor({ leadId, hearingId }: LeadHearingEditorProps)
 
   const data = hearing.data;
   const readOnly = !data.canEdit;
-  const prefill = (data.prefill ?? null) as HearingPrefillSnapshot | null;
-
-  const updateEntry = (key: HearingFieldKey, next: HearingFields[HearingFieldKey]) => {
-    setForm((current) => (current ? { ...current, [key]: next } : current));
-  };
 
   const handleSave = () => {
-    const parsed = hearingFieldsSchema.safeParse(savedFields);
-    if (!parsed.success || !ISO_DATE.test(heldOn)) {
+    const parsed = hearingFieldsSchema.safeParse(toSavedHearingFields(form));
+    if (!parsed.success || !ISO_DATE_PATTERN.test(heldOn)) {
       toast.error(t('editor.invalid'));
       return;
     }
@@ -204,7 +249,7 @@ export function LeadHearingEditor({ leadId, hearingId }: LeadHearingEditorProps)
 
   const sectionOfFirstMissing = (keys: readonly HearingFieldKey[]) => {
     const key = keys.find((k) => missing.missingKeys.includes(k)) ?? keys[0];
-    return getHearingField(key)?.section ?? HEARING_SECTIONS[0];
+    return catalog.sectionOf.get(key) ?? catalog.sections[0].id;
   };
 
   const requiredItemsCallout = (
@@ -213,8 +258,9 @@ export function LeadHearingEditor({ leadId, hearingId }: LeadHearingEditorProps)
         <Callout title={t('editor.missingTitle')} icon={AlertTriangle} color="yellow">
           <p>{t('editor.missingBody')}</p>
           <ul className="mt-2 flex flex-wrap gap-2">
-            {HEARING_REQUIRED_ITEMS.filter((item) => missing.missing.includes(item.id)).map(
-              (item) => (
+            {catalog.requiredItems
+              .filter((item) => missing.missing.includes(item.id))
+              .map((item) => (
                 <li key={item.id}>
                   <Button
                     type="button"
@@ -226,8 +272,7 @@ export function LeadHearingEditor({ leadId, hearingId }: LeadHearingEditorProps)
                     {tRoot(item.labelKey)}
                   </Button>
                 </li>
-              )
-            )}
+              ))}
           </ul>
         </Callout>
       ) : (
@@ -236,11 +281,11 @@ export function LeadHearingEditor({ leadId, hearingId }: LeadHearingEditorProps)
       {missing.unconfirmed.length > 0 && (
         <Callout title={t('editor.unconfirmedTitle')} color="blue">
           <ul className="mt-1 list-disc pl-5">
-            {HEARING_REQUIRED_ITEMS.filter((item) => missing.unconfirmed.includes(item.id)).map(
-              (item) => (
+            {catalog.requiredItems
+              .filter((item) => missing.unconfirmed.includes(item.id))
+              .map((item) => (
                 <li key={item.id}>{tRoot(item.labelKey)}</li>
-              )
-            )}
+              ))}
           </ul>
         </Callout>
       )}
@@ -329,7 +374,7 @@ export function LeadHearingEditor({ leadId, hearingId }: LeadHearingEditorProps)
       <Tabs value={tab} onValueChange={(value) => setTab(value as HearingSectionId)}>
         <div className="overflow-x-auto">
           <TabsList className="w-max justify-start">
-            {HEARING_SECTIONS.map((section) => {
+            {catalog.sections.map(({ id: section }) => {
               const count = missingBySection.get(section) ?? 0;
               return (
                 <TabsTrigger key={section} value={section} className="gap-1">
@@ -345,35 +390,24 @@ export function LeadHearingEditor({ leadId, hearingId }: LeadHearingEditorProps)
           </TabsList>
         </div>
 
-        {HEARING_SECTIONS.map((section) => (
-          <TabsContent key={section} value={section}>
+        {catalog.sections.map((section) => (
+          <TabsContent key={section.id} value={section.id}>
             <Card>
               <CardContent className="pt-2">
-                {section === 'outcome' && <div className="pt-4">{requiredItemsCallout}</div>}
-                {HEARING_FIELDS.filter((field) => field.section === section).map((field) => {
-                  const entry = entryOf(form, field.key);
-                  return (
-                    <HearingFieldRow
-                      key={field.key}
-                      field={field}
-                      entry={entry}
-                      required={REQUIRED_KEYS.has(field.key)}
-                      hint={hearingHintText(prefill, field.key, diagnosisLocale)}
-                      readOnly={readOnly}
-                      onValueChange={(value) =>
-                        updateEntry(
-                          field.key,
-                          changeHearingValue(field, entry, value, statusPicked.has(field.key))
-                        )
-                      }
-                      onStatusChange={(status) => {
-                        setStatusPicked((current) => new Set(current).add(field.key));
-                        updateEntry(field.key, { ...entry, status });
-                      }}
-                      onConfirm={() => updateEntry(field.key, confirmHearingEntry(entry))}
-                    />
-                  );
-                })}
+                {section.id === 'outcome' && <div className="pt-4">{requiredItemsCallout}</div>}
+                {section.fields.map(({ field, required }) => (
+                  <HearingFieldRow
+                    key={field.key}
+                    field={field}
+                    entry={entryOf(form, field.key as HearingFieldKey)}
+                    required={required}
+                    hint={hints.get(field.key) ?? null}
+                    readOnly={readOnly}
+                    onValueChange={handleValueChange}
+                    onStatusChange={handleStatusChange}
+                    onConfirm={handleConfirm}
+                  />
+                ))}
               </CardContent>
             </Card>
           </TabsContent>

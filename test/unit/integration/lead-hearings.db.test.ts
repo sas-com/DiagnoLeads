@@ -331,6 +331,12 @@ describe.skipIf(!url)('lead hearings (PostgreSQL)', () => {
       '2026-10-15',
       '2026-10-01',
     ]);
+    // All three started from (or carried over) the diagnosis snapshot
+    expect(list.items.map((i: { fromDiagnosis: boolean }) => i.fromDiagnosis)).toEqual([
+      true,
+      true,
+      true,
+    ]);
   });
 
   it('stops at the limit of hearings per lead', async () => {

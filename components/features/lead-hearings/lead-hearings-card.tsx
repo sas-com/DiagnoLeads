@@ -22,8 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useOrganization } from '@/hooks/use-organization';
-import type { DiagnosticLocale } from '@/lib/features/diagnostics/types';
-import { diagnosisOptionLabel } from '@/lib/features/lead-hearings/form';
+import { diagnosisOptionLabel, toDiagnosticLocale } from '@/lib/features/lead-hearings/form';
 import { trpc } from '@/lib/trpc/client';
 import { ChevronRight, ClipboardList, Loader2, Plus, RefreshCw } from 'lucide-react';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
@@ -42,7 +41,7 @@ function today(): string {
 }
 
 /** 'YYYY-MM-DD' as a Date at UTC midnight (format it with timeZone UTC) */
-export const dateOnly = (value: string) => new Date(`${value}T00:00:00Z`);
+const dateOnly = (value: string) => new Date(`${value}T00:00:00Z`);
 
 interface LeadHearingsCardProps {
   leadId: string;
@@ -137,7 +136,6 @@ export function LeadHearingsCard({ leadId }: LeadHearingsCardProps) {
       {/* Mounted only while open, so each opening starts from today's date and the defaults */}
       {data?.canEdit && organizationId && createOpen && (
         <CreateHearingDialog
-          open={createOpen}
           onOpenChange={setCreateOpen}
           organizationId={organizationId}
           leadId={leadId}
@@ -149,7 +147,6 @@ export function LeadHearingsCard({ leadId }: LeadHearingsCardProps) {
 }
 
 interface CreateHearingDialogProps {
-  open: boolean;
   onOpenChange: (open: boolean) => void;
   organizationId: string;
   leadId: string;
@@ -157,7 +154,6 @@ interface CreateHearingDialogProps {
 }
 
 function CreateHearingDialog({
-  open,
   onOpenChange,
   organizationId,
   leadId,
@@ -166,7 +162,7 @@ function CreateHearingDialog({
   const t = useTranslations('leadHearings');
   const format = useFormatter();
   const locale = useLocale();
-  const diagnosisLocale: DiagnosticLocale = locale === 'en' ? 'en' : 'ja';
+  const diagnosisLocale = toDiagnosticLocale(locale);
   const router = useRouter();
   const utils = trpc.useUtils();
 
@@ -174,10 +170,7 @@ function CreateHearingDialog({
   const [carryOver, setCarryOver] = useState(true);
   const [submissionId, setSubmissionId] = useState<string | null>(null);
 
-  const sources = trpc.leadHearings.prefillSources.useQuery(
-    { organizationId, leadId },
-    { enabled: open }
-  );
+  const sources = trpc.leadHearings.prefillSources.useQuery({ organizationId, leadId });
   const sourceList = sources.data ?? [];
   const useCarryOver = hasPrevious && carryOver;
   // The newest submission unless the user chose another
@@ -218,7 +211,7 @@ function CreateHearingDialog({
     });
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t('create.title')}</DialogTitle>

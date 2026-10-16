@@ -34,13 +34,15 @@ export interface HearingFieldEntry {
 
 export type HearingFields = Partial<Record<HearingFieldKey, HearingFieldEntry>>;
 
-const YEAR_MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
+/** 'YYYY-MM' */
+export const YEAR_MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
+/** 'YYYY-MM-DD' (shape only; isoDateSchema also checks the calendar) */
+export const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 /** 'YYYY-MM-DD' that is a real calendar date */
 export const isoDateSchema = z
   .string()
-  .regex(DATE)
+  .regex(ISO_DATE_PATTERN)
   .refine((value) => {
     const date = new Date(`${value}T00:00:00Z`);
     return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
@@ -67,7 +69,7 @@ function valueSchemaFor(field: HearingFieldDefinition): z.ZodType<HearingFieldVa
     case 'number':
       return z.number().int().min(field.min).max(field.max);
     case 'yearMonth':
-      return z.string().regex(YEAR_MONTH);
+      return z.string().regex(YEAR_MONTH_PATTERN);
     case 'date':
       return isoDateSchema;
     case 'levels': {

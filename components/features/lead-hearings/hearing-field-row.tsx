@@ -2,8 +2,6 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -12,13 +10,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import type { DiagnosticLocale } from '@/lib/features/diagnostics/types';
 import {
   HEARING_ITEM_STATUSES,
   type HearingFieldDefinition,
   type HearingItemStatus,
-  type HearingOption,
 } from '@/lib/features/lead-hearings/catalog';
 import { normalizeHearingValue } from '@/lib/features/lead-hearings/form';
 import type {
@@ -27,18 +22,11 @@ import type {
 } from '@/lib/features/lead-hearings/types/schemas';
 import { cn } from '@/lib/utils';
 import { CheckCircle2 } from 'lucide-react';
-import { useLocale, useTranslations } from 'next-intl';
-
-/** Radix Select items cannot have an empty value */
-const NONE = '__none__';
-
-/** Text fields at most this long are a single line */
-const SINGLE_LINE_MAX = 200;
+import { useTranslations } from 'next-intl';
+import { memo } from 'react';
+import { HearingFieldInput, type HearingFieldVariant } from './hearing-field-inputs';
 
 const SOURCE_COLORS = { prefilled: 'blue', confirmed: 'emerald', corrected: 'violet' } as const;
-
-const YEARS_BACK = 15;
-const YEARS_AHEAD = 15;
 
 interface HearingFieldRowProps {
   field: HearingFieldDefinition;
@@ -47,255 +35,33 @@ interface HearingFieldRowProps {
   /** "AS/400 / ..." when the Web diagnosis said something about this field */
   hint: string | null;
   readOnly: boolean;
-  onValueChange: (value: HearingFieldValue | undefined) => void;
-  onStatusChange: (status: HearingItemStatus) => void;
-  onConfirm: () => void;
+  variant?: HearingFieldVariant;
+  /** Callbacks take the field so the editor can pass the same function to every row */
+  onValueChange: (field: HearingFieldDefinition, value: HearingFieldValue | undefined) => void;
+  onStatusChange: (field: HearingFieldDefinition, status: HearingItemStatus) => void;
+  onConfirm: (field: HearingFieldDefinition) => void;
 }
 
-export function HearingFieldRow({
+/** One field: name, status, the diagnosis hint and the input (re-renders only when it changes) */
+export const HearingFieldRow = memo(function HearingFieldRow({
   field,
   entry,
   required,
   hint,
   readOnly,
+  variant = 'default',
   onValueChange,
   onStatusChange,
   onConfirm,
 }: HearingFieldRowProps) {
   const t = useTranslations('leadHearings');
   const tRoot = useTranslations();
-  const locale = useLocale();
-  const diagnosisLocale: DiagnosticLocale = locale === 'en' ? 'en' : 'ja';
   const label = tRoot(field.labelKey);
   const id = `hearing-${field.key}`;
-  const optionLabel = (option: HearingOption) =>
-    option.labelKey ? tRoot(option.labelKey) : (option.label?.[diagnosisLocale] ?? option.value);
   const canConfirm =
     !readOnly &&
     entry.source === 'prefilled' &&
     normalizeHearingValue(field, entry.value) !== undefined;
-
-  const selectOf = (
-    selectId: string,
-    ariaLabel: string | undefined,
-    value: string | undefined,
-    options: { value: string; label: string }[],
-    onChange: (value: string | undefined) => void,
-    className?: string
-  ) => (
-    <Select
-      value={value || NONE}
-      disabled={readOnly}
-      onValueChange={(next) => onChange(next === NONE ? undefined : next)}
-    >
-      <SelectTrigger id={selectId} aria-label={ariaLabel} className={className}>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={NONE}>{t('editor.notSelected')}</SelectItem>
-        {options.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
-            {option.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-
-  const renderInput = () => {
-    const value = entry.value;
-    switch (field.type) {
-      case 'single':
-        return selectOf(
-          id,
-          undefined,
-          typeof value === 'string' ? value : undefined,
-          field.options.map((o) => ({ value: o.value, label: optionLabel(o) })),
-          onValueChange
-        );
-      case 'multiple': {
-        const chosen = Array.isArray(value) ? value : [];
-        return (
-          <div className="grid gap-2 sm:grid-cols-2">
-            {field.options.map((option) => {
-              const optionId = `${id}-${option.value}`;
-              return (
-                <div key={option.value} className="flex items-center gap-2">
-                  <Checkbox
-                    id={optionId}
-                    checked={chosen.includes(option.value)}
-                    disabled={readOnly}
-                    onCheckedChange={(checked) => {
-                      const next =
-                        checked === true
-                          ? field.options
-                              .map((o) => o.value)
-                              .filter((v) => v === option.value || chosen.includes(v))
-                          : chosen.filter((v) => v !== option.value);
-                      onValueChange(next.length > 0 ? next : undefined);
-                    }}
-                  />
-                  <Label htmlFor={optionId} className="font-normal">
-                    {optionLabel(option)}
-                  </Label>
-                </div>
-              );
-            })}
-          </div>
-        );
-      }
-      case 'text': {
-        const text = typeof value === 'string' ? value : '';
-        const onChange = (next: string) => onValueChange(next === '' ? undefined : next);
-        return field.maxLength <= SINGLE_LINE_MAX ? (
-          <Input
-            id={id}
-            value={text}
-            maxLength={field.maxLength}
-            readOnly={readOnly}
-            onChange={(e) => onChange(e.target.value)}
-          />
-        ) : (
-          <Textarea
-            id={id}
-            rows={3}
-            value={text}
-            maxLength={field.maxLength}
-            readOnly={readOnly}
-            onChange={(e) => onChange(e.target.value)}
-          />
-        );
-      }
-      case 'number': {
-        const options = [];
-        for (let n = field.min; n <= field.max; n++) {
-          options.push({ value: String(n), label: String(n) });
-        }
-        return selectOf(
-          id,
-          undefined,
-          typeof value === 'number' ? String(value) : undefined,
-          options,
-          (next) => onValueChange(next === undefined ? undefined : Number(next)),
-          'sm:w-40'
-        );
-      }
-      case 'date':
-        return (
-          <Input
-            id={id}
-            type="date"
-            className="sm:w-48"
-            value={typeof value === 'string' ? value : ''}
-            readOnly={readOnly}
-            onChange={(e) => onValueChange(e.target.value === '' ? undefined : e.target.value)}
-          />
-        );
-      case 'yearMonth': {
-        const [year = '', month = ''] = typeof value === 'string' ? value.split('-') : [];
-        const thisYear = new Date().getFullYear();
-        const years = new Set<number>();
-        for (let y = thisYear - YEARS_BACK; y <= thisYear + YEARS_AHEAD; y++) years.add(y);
-        if (year) years.add(Number(year));
-        const set = (nextYear: string | undefined, nextMonth: string | undefined) =>
-          onValueChange(nextYear || nextMonth ? `${nextYear ?? ''}-${nextMonth ?? ''}` : undefined);
-        return (
-          <div className="space-y-1">
-            <div className="flex gap-2">
-              {selectOf(
-                id,
-                t('editor.yearOf', { field: label }),
-                year,
-                [...years]
-                  .sort((a, b) => a - b)
-                  .map((y) => ({ value: String(y), label: t('editor.yearOption', { year: y }) })),
-                (next) => set(next, month),
-                'w-32'
-              )}
-              {selectOf(
-                `${id}-month`,
-                t('editor.monthOf', { field: label }),
-                month,
-                Array.from({ length: 12 }, (_, i) => ({
-                  value: String(i + 1).padStart(2, '0'),
-                  label: t('editor.monthOption', { month: i + 1 }),
-                })),
-                (next) => set(year, next),
-                'w-28'
-              )}
-            </div>
-            {Boolean(year) !== Boolean(month) && (
-              <p className="text-xs text-amber-700">{t('editor.yearMonthIncomplete')}</p>
-            )}
-          </div>
-        );
-      }
-      case 'levels': {
-        const levels =
-          value && typeof value === 'object' && !Array.isArray(value)
-            ? (value as Partial<Record<string, string>>)
-            : {};
-        return (
-          <div className="grid gap-2 sm:grid-cols-2">
-            {field.items.map((item) => {
-              const itemLabel = optionLabel(item);
-              return (
-                <div key={item.value} className="space-y-1">
-                  <span className="text-xs text-muted-foreground">{itemLabel}</span>
-                  {selectOf(
-                    `${id}-${item.value}`,
-                    t('editor.levelOf', { item: itemLabel }),
-                    levels[item.value],
-                    field.levels.map((l) => ({ value: l.value, label: optionLabel(l) })),
-                    (next) => {
-                      const updated = { ...levels };
-                      if (next) updated[item.value] = next;
-                      else delete updated[item.value];
-                      onValueChange(Object.keys(updated).length > 0 ? updated : undefined);
-                    }
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        );
-      }
-      case 'scale': {
-        const scale =
-          value && typeof value === 'object' && !Array.isArray(value)
-            ? (value as { basis?: string; bucket?: string })
-            : {};
-        const basis = field.bases.find((b) => b.questionId === scale.basis);
-        return (
-          <div className="space-y-1">
-            <div className="grid gap-2 sm:grid-cols-2">
-              {selectOf(
-                id,
-                t('editor.scaleBasis', { field: label }),
-                scale.basis,
-                field.bases.map((b) => ({ value: b.questionId, label: b.label[diagnosisLocale] })),
-                (next) => onValueChange(next ? { basis: next, bucket: '' } : undefined)
-              )}
-              {basis &&
-                selectOf(
-                  `${id}-bucket`,
-                  t('editor.scaleBucket', { field: label }),
-                  scale.bucket,
-                  basis.buckets.map((b) => ({ value: b.value, label: optionLabel(b) })),
-                  (next) => onValueChange({ basis: basis.questionId, bucket: next ?? '' })
-                )}
-            </div>
-            {basis && !scale.bucket && (
-              <p className="text-xs text-amber-700">{t('editor.scaleIncomplete')}</p>
-            )}
-          </div>
-        );
-      }
-    }
-  };
-
-  // Multi-part inputs label their parts themselves; the others are labelled by the field name
-  const labelledByName = field.type !== 'multiple';
 
   return (
     <div
@@ -303,7 +69,8 @@ export function HearingFieldRow({
       data-testid={`hearing-field-${field.key}`}
     >
       <div className="flex flex-wrap items-center gap-2">
-        {labelledByName ? (
+        {/* Multi-part inputs label their parts themselves; the others are labelled by the name */}
+        {field.type !== 'multiple' ? (
           <Label htmlFor={id} className="font-medium">
             {label}
           </Label>
@@ -322,7 +89,7 @@ export function HearingFieldRow({
           <Select
             value={entry.status}
             disabled={readOnly}
-            onValueChange={(next) => onStatusChange(next as HearingItemStatus)}
+            onValueChange={(next) => onStatusChange(field, next as HearingItemStatus)}
           >
             <SelectTrigger
               aria-label={t('editor.statusOf', { field: label })}
@@ -351,7 +118,7 @@ export function HearingFieldRow({
               variant="outline"
               className="h-7"
               aria-label={t('editor.confirmOf', { field: label })}
-              onClick={onConfirm}
+              onClick={() => onConfirm(field)}
             >
               <CheckCircle2 className="h-4 w-4" />
               {t('editor.confirm')}
@@ -360,11 +127,15 @@ export function HearingFieldRow({
         </div>
       )}
 
-      {field.type === 'multiple' ? (
-        <fieldset aria-label={label}>{renderInput()}</fieldset>
-      ) : (
-        renderInput()
-      )}
+      <HearingFieldInput
+        field={field}
+        value={entry.value}
+        id={id}
+        label={label}
+        readOnly={readOnly}
+        variant={variant}
+        onChange={(value) => onValueChange(field, value)}
+      />
     </div>
   );
-}
+});
