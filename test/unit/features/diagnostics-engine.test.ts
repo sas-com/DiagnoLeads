@@ -113,6 +113,38 @@ describe('inferInflowSource（流入元の推定）', () => {
     expect(inferInflowSource({ ref: ' partner-a ', utmMedium: 'cpc' })).toEqual({
       inflowSource: 'referral_partner',
       referrerName: 'partner-a',
+      agencyName: null,
+    });
+  });
+
+  // #147: a referral code used to turn agency campaigns into 紹介・パートナー, and the agency
+  // media had no mapping at all (未判定)
+  it('treats a sales agency medium as that agency, keeping the code as the agency name', () => {
+    expect(inferInflowSource({ ref: ' agency-a ', utmMedium: 'Telemarketing' })).toEqual({
+      inflowSource: 'telemarketing_agency',
+      referrerName: null,
+      agencyName: 'agency-a',
+    });
+    expect(inferInflowSource({ utmMedium: 'teleapo' })).toEqual({
+      inflowSource: 'telemarketing_agency',
+      referrerName: null,
+      agencyName: null,
+    });
+    expect(inferInflowSource({ utmMedium: 'outbound_call' }).inflowSource).toBe(
+      'telemarketing_agency'
+    );
+    expect(inferInflowSource({ ref: 'b', utmMedium: 'referral_agency' })).toEqual({
+      inflowSource: 'referral_agency',
+      referrerName: null,
+      agencyName: 'b',
+    });
+  });
+
+  it('keeps a referral code with a non-agency medium as 紹介・パートナー', () => {
+    expect(inferInflowSource({ ref: 'p', utmMedium: 'email' })).toEqual({
+      inflowSource: 'referral_partner',
+      referrerName: 'p',
+      agencyName: null,
     });
   });
 
@@ -137,6 +169,7 @@ describe('inferInflowSource（流入元の推定）', () => {
     const parsed = trackingSchema.parse({ utmSource: 'x'.repeat(300), ref: 'r'.repeat(150) });
     expect(parsed.utmSource).toHaveLength(200);
     expect(parsed.ref).toHaveLength(100);
+    expect(trackingSchema.parse({ agency: 'a'.repeat(60) }).agency).toHaveLength(40);
   });
 
   it('drops empty tracking values', () => {

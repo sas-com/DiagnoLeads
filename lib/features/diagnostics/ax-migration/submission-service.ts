@@ -1,5 +1,6 @@
 import type { db as defaultDb } from '@/lib/db/client';
 import { diagnosticSubmissions, leads } from '@/lib/db/schema';
+import { findActiveAgencyLink } from '@/lib/features/agency-links/service';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateAnswers } from '../engine';
@@ -230,10 +231,16 @@ export async function submitAxMigrationDiagnosis(
     consultationRequested: input.consultationRequested,
   });
   const tracking: Tracking = input.tracking ?? {};
-  const inflow = inferInflowSource(tracking);
   const email = input.contact.email.toLowerCase();
 
   return database.transaction(async (tx) => {
+    // An issued agency link decides the inflow source over the UTM parameters (#147). Like every
+    // value of newLead, it is used only when the submission creates the lead
+    const agencyLink = await findActiveAgencyLink(tx, organizationId, tracking.agency);
+    const inflow = agencyLink
+      ? { inflowSource: agencyLink.kind, referrerName: null, agencyName: agencyLink.agencyName }
+      : inferInflowSource(tracking);
+
     const { leadId, existing } = await upsertLeadFromSubmission(tx, {
       organizationId,
       email,
@@ -246,6 +253,8 @@ export async function submitAxMigrationDiagnosis(
         source: 'website',
         inflowSource: inflow.inflowSource,
         referrerName: inflow.referrerName,
+        agencyName: inflow.agencyName,
+        agencyLinkId: agencyLink?.id ?? null,
         conversionPoint: input.consultationRequested ? 'consultation' : 'web_diagnosis',
         targetSystem: result.targetSystem,
         // MQL date: only 関心あり (#139). 適合 alone leaves it empty

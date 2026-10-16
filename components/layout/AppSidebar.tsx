@@ -88,6 +88,11 @@ const AppSidebar: React.FC = () => {
             path: `/${locale}/settings/ax-playbook`,
           },
           {
+            name: t('agencyLinks'),
+            nameKey: 'agencyLinks',
+            path: `/${locale}/settings/agency-links`,
+          },
+          {
             name: t('contentEditors'),
             nameKey: 'contentEditors',
             path: `/${locale}/settings/content-editors`,
