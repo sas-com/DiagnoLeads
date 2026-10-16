@@ -5,6 +5,7 @@
  * Uses Resend for transactional email delivery
  */
 
+import { filterAllowedRecipients } from '@/lib/email/allowed-recipients';
 import { Resend } from 'resend';
 
 // Initialize Resend client
@@ -351,7 +352,13 @@ View Full Report: ${d.dashboardUrl || '#'}
  * Send an email using Resend
  */
 export async function sendEmail(options: SendEmailOptions): Promise<SendEmailResult> {
-  const { to, subject, template, data, from, replyTo, cc, bcc, attachments } = options;
+  const { subject, template, data, from, replyTo, attachments } = options;
+  const to = filterAllowedRecipients(options.to);
+  const cc = filterAllowedRecipients(options.cc);
+  const bcc = filterAllowedRecipients(options.bcc);
+  if (to.length === 0) {
+    return { success: false, error: 'No recipient is in the allowed email domains' };
+  }
 
   // Check if API key is configured
   if (!process.env.RESEND_API_KEY) {
@@ -365,13 +372,13 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
 
     const result = await resend.emails.send({
       from: from || DEFAULT_FROM,
-      to: Array.isArray(to) ? to : [to],
+      to,
       subject,
       html,
       text,
       replyTo,
-      cc,
-      bcc,
+      cc: cc.length > 0 ? cc : undefined,
+      bcc: bcc.length > 0 ? bcc : undefined,
       attachments: attachments?.map((a) => ({
         filename: a.filename,
         content: typeof a.content === 'string' ? Buffer.from(a.content) : a.content,

@@ -1,5 +1,6 @@
 import { db } from '@/lib/db/client';
 import * as schema from '@/lib/db/schema';
+import { isAllowedEmail, testModeEmailMessage } from '@/lib/email/allowed-recipients';
 import { env } from '@/lib/env';
 import { isSignupInvited } from '@/lib/features/members/invitations';
 import { betterAuth } from 'better-auth';
@@ -90,6 +91,12 @@ export const auth = betterAuth({
       if (ctx.path !== '/sign-up/email') return;
       const body = (ctx.body ?? {}) as { email?: unknown; invitationToken?: unknown };
       const email = typeof body.email === 'string' ? body.email : '';
+      if (!isAllowedEmail(email)) {
+        throw new APIError('BAD_REQUEST', {
+          message: testModeEmailMessage(),
+          code: 'EMAIL_DOMAIN_NOT_ALLOWED',
+        });
+      }
       if (!(await isSignupInvited(db, body.invitationToken, email))) throw invitationRequired();
     }),
   },

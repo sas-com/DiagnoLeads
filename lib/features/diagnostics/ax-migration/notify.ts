@@ -1,4 +1,5 @@
 import { db } from '@/lib/db/client';
+import { filterAllowedRecipients } from '@/lib/email/allowed-recipients';
 import { env } from '@/lib/env';
 import { isEmailConfigured, sendEmail } from '@/lib/features/email';
 import { notifyOrganizationMembers } from '@/lib/features/notifications/notification-service';
@@ -182,16 +183,23 @@ export async function notifyAxMigrationSubmission(n: AxMigrationNotification): P
       'AX consultation: no sales email sent (AX_DIAGNOSIS_SALES_EMAIL or RESEND_API_KEY is not set)'
     );
   }
+  // In test mode only company addresses are mailed; decide that before using the quota
+  const salesRecipients = filterAllowedRecipients(
+    salesEmail ? salesEmail.split(',').map((address) => address.trim()) : []
+  );
+  if (n.consultationRequested && salesEmail && salesRecipients.length === 0) {
+    console.warn('AX consultation: no sales email sent (no sales address is allowed in test mode)');
+  }
   if (
     n.consultationRequested &&
-    salesEmail &&
+    salesRecipients.length > 0 &&
     isEmailConfigured() &&
     (await withinSalesEmailQuota(n.organizationId))
   ) {
     const leadUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/ja/leads?leadId=${n.leadId}`;
     tasks.push(
       sendEmail({
-        to: salesEmail.split(',').map((address) => address.trim()),
+        to: salesRecipients,
         subject: title,
         text: `${message}\n\n会社名: ${n.company}\n氏名: ${n.name}\nメール: ${n.email}\nリード: ${leadUrl}`,
         html: `<p>${message}</p><ul><li>会社名: ${escapeHtml(n.company)}</li><li>氏名: ${escapeHtml(n.name)}</li><li>メール: ${escapeHtml(n.email)}</li></ul><p><a href="${leadUrl}">リードを開く</a></p>`,

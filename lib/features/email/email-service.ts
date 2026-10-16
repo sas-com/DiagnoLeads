@@ -3,6 +3,10 @@
  *
  * Handles email sending via Resend
  */
+import {
+  EmailRecipientNotAllowedError,
+  filterAllowedRecipients,
+} from '@/lib/email/allowed-recipients';
 import { Resend } from 'resend';
 
 // Initialize Resend client (lazy to handle missing API key)
@@ -35,12 +39,14 @@ export interface SendEmailOptions {
  * Send an email
  */
 export async function sendEmail(options: SendEmailOptions): Promise<{ id: string }> {
+  const to = filterAllowedRecipients(options.to);
+  if (to.length === 0) throw new EmailRecipientNotAllowedError();
   const client = getResendClient();
   const from = options.from || process.env.EMAIL_FROM || 'DiagnoLeads <noreply@diagnoleads.com>';
 
   const result = await client.emails.send({
     from,
-    to: options.to,
+    to,
     subject: options.subject,
     html: options.html,
     text: options.text,

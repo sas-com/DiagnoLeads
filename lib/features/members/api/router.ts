@@ -1,5 +1,6 @@
 import { auth } from '@/lib/auth/config';
 import { organizationMembers } from '@/lib/db/schema';
+import { isAllowedEmail, testModeEmailMessage } from '@/lib/email/allowed-recipients';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { and, eq } from 'drizzle-orm';
@@ -87,6 +88,10 @@ export const membersRouter = router({
         code: 'FORBIDDEN',
         message: 'メンバーの招待は管理者またはオーナーのみ可能です',
       });
+    }
+
+    if (!isAllowedEmail(input.email)) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: testModeEmailMessage() });
     }
 
     // Check if email is already a member by first finding the user

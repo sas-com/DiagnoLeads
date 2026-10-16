@@ -264,4 +264,19 @@ describe.skipIf(!url)('member invitations (PostgreSQL)', () => {
     expect(rows).toHaveLength(1);
   });
 
+
+  it('in test mode, an invitation made earlier cannot bring in an outside address', async () => {
+    const outsider = await newUser(`outside-${unique()}@example.com`);
+    const { token } = await invite(outsider.email);
+    process.env.APP_TEST_MODE = 'true';
+    try {
+      expect(await acceptInvitation(db, token, outsider, now)).toEqual({
+        ok: false,
+        reason: 'email_not_allowed',
+      });
+      expect(await membershipOf(outsider.id)).toBeUndefined();
+    } finally {
+      delete process.env.APP_TEST_MODE;
+    }
+  });
 });
