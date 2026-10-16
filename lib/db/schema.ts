@@ -1,8 +1,11 @@
 import type { AxPlaybookContent } from '@/lib/features/ax-playbook/types/schemas';
+import type { DiagnosisDefinition } from '@/lib/features/diagnosis-builder/definition';
 import type { HearingPrefillSnapshot } from '@/lib/features/lead-hearings/types/schemas';
 import { relations, sql } from 'drizzle-orm';
 import {
+  type AnyPgColumn,
   boolean,
+  check,
   customType,
   date,
   foreignKey,
@@ -394,6 +397,96 @@ export type Lead = typeof leads.$inferSelect;
 export type NewLead = typeof leads.$inferInsert;
 
 /**
+ * Diagnoses (diagnosis builder, Refs #114)
+ * A diagnosis made in the builder: the draft being edited and its state. What respondents answer
+ * is the published copy in diagnosis_versions (current_version_id). Once a diagnosis has a
+ * version it is archived, never deleted (a database trigger enforces this).
+ */
+export const DIAGNOSIS_STATUSES = ['draft', 'published', 'paused', 'archived'] as const;
+export type DiagnosisStatus = (typeof DIAGNOSIS_STATUSES)[number];
+
+export const diagnoses = pgTable(
+  'diagnoses',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    /** Public URL key, unique within the organization */
+    slug: text('slug').notNull(),
+    /** Internal name shown in the list (respondents see the definition title) */
+    name: text('name').notNull(),
+    status: text('status').$type<DiagnosisStatus>().default('draft').notNull(),
+    draftDefinition: jsonb('draft_definition').$type<DiagnosisDefinition>().notNull(),
+    currentVersionId: uuid('current_version_id').references(
+      (): AnyPgColumn => diagnosisVersions.id,
+      { onDelete: 'set null' }
+    ),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    /** Also the token for detecting concurrent edits (expectedUpdatedAt) */
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('diagnoses_org_slug_unique').on(table.organizationId, table.slug),
+    index('diagnoses_current_version_idx').on(table.currentVersionId),
+    check(
+      'diagnoses_status_check',
+      sql`${table.status} IN ('draft', 'published', 'paused', 'archived')`
+    ),
+  ]
+);
+
+export type Diagnosis = typeof diagnoses.$inferSelect;
+export type NewDiagnosis = typeof diagnoses.$inferInsert;
+
+/** What changed from the previous version, recorded when publishing */
+export interface DiagnosisChangeSummary {
+  previousVersion: number | null;
+  questionsAdded: string[];
+  questionsRemoved: string[];
+  questionsChanged: string[];
+  /** Other top-level parts of the definition that changed (e.g. 'axes', 'consent') */
+  partsChanged: string[];
+  /** Optional note from the person publishing */
+  note?: string;
+}
+
+/**
+ * Diagnosis Versions (Refs #114)
+ * Immutable copies of a definition, one per publish. A trigger rejects UPDATE, and DELETE unless
+ * the diagnosis or the organization itself is being deleted (see drizzle/0012_diagnoses.sql).
+ */
+export const diagnosisVersions = pgTable(
+  'diagnosis_versions',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    diagnosisId: uuid('diagnosis_id')
+      .notNull()
+      .references(() => diagnoses.id, { onDelete: 'cascade' }),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    /** 1, 2, 3 ... per diagnosis */
+    version: integer('version').notNull(),
+    definition: jsonb('definition').$type<DiagnosisDefinition>().notNull(),
+    /** sha256 of the definition as canonical JSON (sorted keys) */
+    definitionHash: text('definition_hash').notNull(),
+    changeSummary: jsonb('change_summary').$type<DiagnosisChangeSummary>().notNull(),
+    publishedBy: uuid('published_by').references(() => users.id, { onDelete: 'set null' }),
+    publishedAt: timestamp('published_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('diagnosis_versions_diagnosis_version_unique').on(table.diagnosisId, table.version),
+    index('diagnosis_versions_org_idx').on(table.organizationId),
+  ]
+);
+
+export type DiagnosisVersion = typeof diagnosisVersions.$inferSelect;
+export type NewDiagnosisVersion = typeof diagnosisVersions.$inferInsert;
+
+/**
  * Diagnostic Submissions Table
  * Stores answers and server-side evaluation of code-defined diagnostics
  * (lib/features/diagnostics). One row per submission; linked to the lead it created or updated.
@@ -420,6 +513,12 @@ export const diagnosticSubmissions = pgTable(
      * result screen (checked on the server). Such a submission may update that lead.
      */
     continuedFromSubmissionId: uuid('continued_from_submission_id'),
+    /** Published builder version answered (null for code-defined diagnostics) (#114) */
+    diagnosisVersionId: uuid('diagnosis_version_id'),
+    /** Test answers from staff: no lead, no notification, left out of analytics (#114) */
+    isTest: boolean('is_test').default(false).notNull(),
+    /** Consent the respondent gave: text version and time (#114) */
+    consent: jsonb('consent').$type<DiagnosticSubmissionConsent>(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (table) => [
@@ -431,6 +530,14 @@ export const diagnosticSubmissions = pgTable(
     index('diagnostic_submissions_lead_idx').on(table.leadId),
     // For the ON DELETE SET NULL of the continuation reference
     index('diagnostic_submissions_continued_from_idx').on(table.continuedFromSubmissionId),
+    // For the ON DELETE SET NULL of the builder version reference
+    index('diagnostic_submissions_diagnosis_version_idx').on(table.diagnosisVersionId),
+    // Named explicitly: the generated name is longer than PostgreSQL's 63-character limit
+    foreignKey({
+      name: 'diagnostic_submissions_diagnosis_version_fk',
+      columns: [table.diagnosisVersionId],
+      foreignColumns: [diagnosisVersions.id],
+    }).onDelete('set null'),
     // Named explicitly: the generated name is longer than PostgreSQL's 63-character limit
     foreignKey({
       name: 'diagnostic_submissions_continued_from_fk',
@@ -439,6 +546,13 @@ export const diagnosticSubmissions = pgTable(
     }).onDelete('set null'),
   ]
 );
+
+export interface DiagnosticSubmissionConsent {
+  /** consent.version of the definition the respondent saw */
+  version: string;
+  /** ISO 8601 */
+  agreedAt: string;
+}
 
 export type DiagnosticSubmission = typeof diagnosticSubmissions.$inferSelect;
 export type NewDiagnosticSubmission = typeof diagnosticSubmissions.$inferInsert;
@@ -1930,6 +2044,8 @@ export const embedConfigs = pgTable('embed_configs', {
   diagnosticTemplateId: uuid('diagnostic_template_id').references(() => diagnosticTemplates.id, {
     onDelete: 'set null',
   }),
+  /** Builder diagnosis to embed (#114); replaces diagnosticTemplateId */
+  diagnosisId: uuid('diagnosis_id').references(() => diagnoses.id, { onDelete: 'set null' }),
   /** Theme overrides for the widget */
   themeOverrides: jsonb('theme_overrides').$type<{
     primaryColor?: string;
@@ -2042,6 +2158,8 @@ export const qrCampaigns = pgTable('qr_campaigns', {
   diagnosticTemplateId: uuid('diagnostic_template_id')
     .notNull()
     .references(() => diagnosticTemplates.id, { onDelete: 'cascade' }),
+  /** Builder diagnosis the QR code leads to (#114) */
+  diagnosisId: uuid('diagnosis_id').references(() => diagnoses.id, { onDelete: 'set null' }),
   /** Campaign name for identification */
   name: text('name').notNull(),
   /** Description */
