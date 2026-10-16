@@ -9,10 +9,12 @@
 
 import { CMSConfigurationError } from '../core/errors';
 import type { CMSAdapter } from '../core/interfaces';
+import { isCmsEnabled } from '../enabled';
+import { DisabledCMSAdapter } from './disabled/adapter';
 import { MockCMSAdapter } from './mock/adapter';
 import { PayloadCMSAdapter } from './payload/adapter';
 
-type CMSProvider = 'payload' | 'mock' | 'sanity';
+type CMSProvider = 'payload' | 'mock' | 'sanity' | 'disabled';
 
 let adapterInstance: CMSAdapter | null = null;
 let currentProvider: CMSProvider | null = null;
@@ -42,7 +44,8 @@ function getCMSProvider(): CMSProvider {
  * ```
  */
 export function getCMSAdapter(): CMSAdapter {
-  const provider = getCMSProvider();
+  // While the CMS is off, pages get no content instead of failing (lib/cms/enabled.ts)
+  const provider = isCmsEnabled() ? getCMSProvider() : 'disabled';
 
   // プロバイダーが変更された場合、インスタンスをリセット
   if (currentProvider !== provider) {
@@ -55,6 +58,10 @@ export function getCMSAdapter(): CMSAdapter {
   }
 
   switch (provider) {
+    case 'disabled':
+      adapterInstance = new DisabledCMSAdapter();
+      break;
+
     case 'payload':
       // PayloadCMS 3.66アダプターを使用
       adapterInstance = new PayloadCMSAdapter();

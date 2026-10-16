@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { isCmsApiPath, isCmsEnabled } from './lib/cms/enabled';
 import { intlMiddleware, shouldSkipI18nMiddleware, stripLocalePrefix } from './lib/i18n/middleware';
 import { signInRedirect } from './lib/middleware/auth-redirect';
 import { SIGN_IN_REDIRECT_CACHE_HEADERS, getCacheHeaders } from './lib/middleware/cache-headers';
@@ -42,6 +43,11 @@ function getSecurityHeaders(request: NextRequest) {
  */
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // 0. The CMS API answers nothing while the CMS is off (lib/cms/enabled.ts, #141)
+  if (!isCmsEnabled() && isCmsApiPath(pathname)) {
+    return NextResponse.json({ error: 'Not Found' }, { status: 404 });
+  }
 
   // 1. Handle i18n (locale routing)
   // Skip i18n for API routes, static files, etc.
