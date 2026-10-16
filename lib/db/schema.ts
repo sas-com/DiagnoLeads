@@ -294,6 +294,10 @@ export const leads = pgTable('leads', {
   referrerName: text('referrer_name'),
   lostReason: text('lost_reason'),
   agencyName: text('agency_name'),
+  /** Agency link the diagnosis was answered through (#147); null when entered by hand */
+  agencyLinkId: uuid('agency_link_id').references((): AnyPgColumn => agencyLinks.id, {
+    onDelete: 'set null',
+  }),
   acquisitionCost: integer('acquisition_cost'), // yen, excluding tax
   /** Date each deal phase was first reached ({ phase: 'YYYY-MM-DD' }) */
   dealPhaseReachedAt: jsonb('deal_phase_reached_at')
@@ -590,6 +594,41 @@ export const axSalesPlaybooks = pgTable('ax_sales_playbooks', {
 });
 
 export type AxSalesPlaybook = typeof axSalesPlaybooks.$inferSelect;
+
+/**
+ * Agency Links
+ * Diagnosis links issued to each sales agency (and campaign). A diagnosis answered through an
+ * active link records the agency on the new lead (Refs #147). Agency names stay in the DB, not
+ * in the code: the repository is public.
+ */
+export const agencyLinks = pgTable(
+  'agency_links',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    /** Random code put in the link (?agency=...); hard to guess so attribution cannot be faked */
+    code: text('code').notNull().unique('agency_links_code_unique'),
+    agencyName: text('agency_name').notNull(),
+    /** Inflow source given to the lead: 'telemarketing_agency' | 'referral_agency' */
+    kind: text('kind').notNull(),
+    campaign: text('campaign'),
+    /** Set when the link is disabled; a disabled link no longer attributes answers */
+    disabledAt: timestamp('disabled_at', { withTimezone: true }),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('agency_links_organization_idx').on(table.organizationId, table.createdAt),
+    check(
+      'agency_links_kind_check',
+      sql`${table.kind} IN ('telemarketing_agency', 'referral_agency')`
+    ),
+  ]
+);
+
+export type AgencyLink = typeof agencyLinks.$inferSelect;
 
 /**
  * Lead Hearings

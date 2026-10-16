@@ -1,4 +1,4 @@
-/** UTM / referral parameters of the landing page, read once when the diagnosis starts */
+/** UTM / referral / agency link parameters of the landing page, read once when the diagnosis starts */
 export function readTrackingParams(): Record<string, string> {
   if (typeof window === 'undefined') return {};
   const params = new URLSearchParams(window.location.search);
@@ -10,6 +10,7 @@ export function readTrackingParams(): Record<string, string> {
     utmContent: pick('utm_content'),
     utmTerm: pick('utm_term'),
     ref: params.get('ref')?.slice(0, 100) || undefined,
+    agency: params.get('agency')?.slice(0, 40) || undefined,
     referrer: document.referrer ? document.referrer.slice(0, 500) : undefined,
     landingPath: window.location.pathname.slice(0, 500),
   };
