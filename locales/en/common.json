@@ -1334,7 +1334,7 @@
       "title": "Agency links",
       "description": "Issue an AX diagnosis link per sales agency (and campaign). A new lead created by an answer through the link gets the inflow source and the agency name automatically.",
       "notReceivingTitle": "This organization does not receive diagnoses",
-      "notReceivingBody": "Answers to the public AX diagnosis are saved only in the operating organization (AX_DIAGNOSIS_ORGANIZATION_ID). Answers through links issued here are not attributed to the agency.",
+      "notReceivingBody": "Answers to the public AX diagnosis are saved only in the operating organization. Answers through links issued here are not attributed to the agency.",
       "forbiddenTitle": "You cannot view the links",
       "forbiddenBody": "Agency links are visible to members who can view leads (except viewers from a parent organization).",
       "createTitle": "Issue a link",
