@@ -1,6 +1,7 @@
 import type { db as defaultDb } from '@/lib/db/client';
-import { diagnosticSubmissions, leads } from '@/lib/db/schema';
+import { diagnosticSubmissions, leadContactLogs, leads } from '@/lib/db/schema';
 import { consultationDeadline } from '@/lib/features/diagnostics/ax-migration/notify';
+import { REACHED_CONTACT_KINDS } from '@/lib/features/lead-follow-up/types/schemas';
 import { LEAD_STATUSES, type LeadStatus } from '@/lib/features/leads/types/pipeline';
 import { addDays, differenceInBusinessDays } from 'date-fns';
 import { and, count, desc, eq, gte, lt, min, sql } from 'drizzle-orm';
@@ -124,6 +125,8 @@ export type DashboardPendingConsultation = {
   company: string | null;
   platform: string | null;
   requestedAt: Date;
+  /** Calls that did not get through so far (#136) */
+  noAnswerCount: number;
   /** Contact deadline (YYYY/MM/DD, Japan), the same rule as the sales email */
   deadline: string;
   overdue: boolean;
@@ -165,7 +168,31 @@ export type DashboardSummary = {
 };
 
 const platformOf = sql<string | null>`${leads.responses}->'axMigration'->>'platform'`;
-const isConsultation = eq(leads.conversionPoint, 'consultation');
+
+/** Statuses that need no first contact any more (closed deals) */
+const CLOSED_STATUSES = ['won', 'lost'] as const;
+
+const sqlList = (kinds: readonly string[]) =>
+  sql.join(
+    kinds.map((kind) => sql`${kind}`),
+    sql`, `
+  );
+
+/**
+ * A consultation request still waiting for its first contact (#136): nobody has recorded a call
+ * or an email on the lead (lead_contact_logs), whatever its status, unless the deal is closed.
+ * "No answer" records do not end the wait (owner decision); the row shows how many there are.
+ */
+const waitingForFirstContact = (organizationId: string) =>
+  sql`${leads.conversionPoint} = 'consultation' and ${leads.status} not in (${sqlList(
+    CLOSED_STATUSES
+  )}) and not exists (select 1 from ${leadContactLogs} where ${leadContactLogs.leadId} = ${leads.id} and ${leadContactLogs.organizationId} = ${organizationId} and ${leadContactLogs.kind} in (${sqlList(
+    REACHED_CONTACT_KINDS
+  )}))`;
+
+/** "No answer" records of the lead in the organization */
+const noAnswerCountOf = (organizationId: string) =>
+  sql<number>`(select count(*) from ${leadContactLogs} where ${leadContactLogs.leadId} = ${leads.id} and ${leadContactLogs.organizationId} = ${organizationId} and ${leadContactLogs.kind} = 'no_answer')`;
 
 /**
  * Figures for the dashboard of one organization. Counts are real and compared with the
@@ -213,7 +240,7 @@ export async function getDashboardSummary(
           previousAverageScore: sql<
             string | null
           >`avg(${leads.score}) filter (where ${createdIn(previousFromIso, fromIso)})`,
-          pendingTotal: sql<number>`count(*) filter (where ${consultation} and ${leads.status} = 'new')`,
+          pendingTotal: sql<number>`count(*) filter (where ${waitingForFirstContact(organizationId)})`,
         })
         .from(leads)
         .where(inOrg),
@@ -236,7 +263,7 @@ export async function getDashboardSummary(
         .from(leads)
         .where(current)
         .groupBy(sql`1`),
-      // Consultation requests nobody has acted on yet (still "new"), oldest request first
+      // Consultation requests nobody has contacted yet, oldest request first
       db
         .select({
           id: leads.id,
@@ -245,6 +272,7 @@ export async function getDashboardSummary(
           platform: platformOf,
           createdAt: leads.createdAt,
           requestedAt: min(diagnosticSubmissions.consultationRequestedAt),
+          noAnswerCount: noAnswerCountOf(organizationId),
         })
         .from(leads)
         .leftJoin(
@@ -254,7 +282,7 @@ export async function getDashboardSummary(
             eq(diagnosticSubmissions.organizationId, organizationId)
           )
         )
-        .where(and(inOrg, isConsultation, eq(leads.status, 'new')))
+        .where(and(inOrg, waitingForFirstContact(organizationId)))
         .groupBy(leads.id)
         .orderBy(
           sql`coalesce(min(${diagnosticSubmissions.consultationRequestedAt}), ${leads.createdAt})`
@@ -299,6 +327,7 @@ export async function getDashboardSummary(
         company: row.company,
         platform: row.platform,
         requestedAt,
+        noAnswerCount: Number(row.noAnswerCount ?? 0),
         deadline,
         overdue: deadline < today,
         ...deadlineStatus(deadline, today),

@@ -2,6 +2,8 @@
 
 import { PageHeader } from '@/components/common/page-header';
 import { LeadActivityCard } from '@/components/features/lead-activity/lead-activity-card';
+import { LeadContactBar } from '@/components/features/lead-follow-up/lead-contact-bar';
+import { LeadNextActionsCard } from '@/components/features/lead-follow-up/lead-next-actions-card';
 import { LeadHearingsCard } from '@/components/features/lead-hearings/lead-hearings-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -331,6 +333,12 @@ function LeadDetailContent({
         }
       />
 
+      <LeadContactBar
+        organizationId={organizationId}
+        leadId={lead.id}
+        leadLabel={lead.company || lead.name || tLeads('nameNotSet')}
+      />
+
       <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_18rem] lg:grid-cols-[minmax(0,1fr)_22rem]">
         <Tabs
           value={tab}
@@ -348,6 +356,7 @@ function LeadDetailContent({
           </div>
 
           <TabsContent value="overview" className="mt-4 space-y-4">
+            <LeadNextActionsCard organizationId={organizationId} leadId={lead.id} />
             <LeadHearingOverview organizationId={organizationId} leadId={lead.id} />
             <LeadDiagnosisCard
               responses={lead.responses}

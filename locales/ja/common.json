@@ -844,7 +844,9 @@
       "recent": "最近のリード",
       "recentDesc": "最新のリード一覧",
       "moveUp": "「{name}」を上へ",
-      "moveDown": "「{name}」を下へ"
+      "moveDown": "「{name}」を下へ",
+      "today": "今日やること",
+      "todayDesc": "期限が今日まで・期限切れの次の行動"
     },
     "ax": {
       "description": "AX移行診断から届いたリードと、対応が必要な相談申込を確認します",
@@ -880,7 +882,9 @@
         "overdueBy": "{count}営業日超過",
         "dueTomorrow": "明日まで",
         "dueIn": "あと{count}営業日",
-        "deadline": "期限 {date}"
+        "deadline": "期限 {date}",
+        "contactHint": "「電話した」「メールした」を記録すると一覧から外れます（「つながらなかった」は残ります）。",
+        "noAnswer": "不通 {count}回"
       },
       "trend": {
         "title": "新規リードの推移",
@@ -2831,7 +2835,12 @@
       "lead_updated": "リードを更新",
       "mql_qualified": "MQLとして判定",
       "sql_decided": "SQL判定: {decision}",
-      "phase_reached": "商談フェーズ「{phase}」に到達"
+      "phase_reached": "商談フェーズ「{phase}」に到達",
+      "contact_recorded": {
+        "call": "電話で連絡",
+        "email": "メールで連絡",
+        "no_answer": "電話したがつながらなかった"
+      }
     },
     "unverified": "本人未確認",
     "unverifiedHelp": "同じメールアドレスからの回答。リードの項目は変更していません",
@@ -2874,7 +2883,8 @@
       "notMql": "未判定",
       "sqlUndecided": "未判定"
     },
-    "changeArrow": "{before} → {after}"
+    "changeArrow": "{before} → {after}",
+    "firstContact": "初回連絡"
   },
   "sidebarWidget": {
     "label": "公開中の診断",
@@ -3085,5 +3095,71 @@
     "lastPage": "最後のページ",
     "pageSize": "表示件数",
     "pageSizeOption": "{count}件ずつ"
+  },
+  "leadFollowUp": {
+    "contact": {
+      "label": "連絡の記録",
+      "kinds": {
+        "call": "電話した",
+        "email": "メールした",
+        "no_answer": "つながらなかった"
+      },
+      "recordFor": "{lead}への連絡を記録",
+      "withNote": "メモを付けて記録",
+      "withNoteShort": "メモ付き",
+      "kind": "連絡の内容",
+      "note": "メモ（任意）",
+      "notePlaceholder": "例：担当の方は不在。明日の午前にかけ直す",
+      "save": "記録する",
+      "cancel": "キャンセル",
+      "recorded": "「{kind}」を記録しました",
+      "undo": "取り消す",
+      "undone": "記録を取り消しました",
+      "error": "記録できませんでした。もう一度お試しください",
+      "loading": "連絡の記録を読み込み中…",
+      "loadError": "連絡の記録を読み込めませんでした",
+      "firstContact": "初回連絡 {date}",
+      "notContacted": "まだ連絡の記録がありません",
+      "latest": "最新：{kind}（{date}）・全{count}件",
+      "noAnswerCount": "不通 {count}回"
+    },
+    "tasks": {
+      "title": "次の行動",
+      "empty": "次の行動はまだありません",
+      "loadError": "次の行動を読み込めませんでした",
+      "saveError": "保存できませんでした。もう一度お試しください",
+      "addLabel": "次の行動を追加",
+      "add": "追加",
+      "titleLabel": "やること",
+      "titlePlaceholder": "例：資料を送る",
+      "dueLabel": "期限",
+      "noteLabel": "メモ（任意）",
+      "titleRequired": "やることを入力してください",
+      "dueRequired": "期限を入力してください",
+      "nextMeetingTitle": "次回の打ち合わせ",
+      "fromHearing": "ヒアリングの次回日程から",
+      "markDone": "「{title}」を完了にする",
+      "reopen": "「{title}」を未完了に戻す",
+      "changeDue": "「{title}」の期限を変更",
+      "delete": "「{title}」を削除",
+      "today": "今日",
+      "showDone": "完了した{count}件を表示",
+      "hideDone": "完了したものを隠す",
+      "due": {
+        "overdue": "期限切れ {date}",
+        "today": "今日まで",
+        "upcoming": "{date}まで",
+        "done": "{date}期限"
+      }
+    },
+    "today": {
+      "title": "今日やること",
+      "description": "期限が今日まで、または期限を過ぎた次の行動です。チェックすると完了になります。",
+      "empty": "今日までの次の行動はありません",
+      "loadError": "読み込めませんでした",
+      "retry": "再読み込み",
+      "more": "ほか{count}件",
+      "noLeadName": "名前未設定のリード"
+    }
   }
 }

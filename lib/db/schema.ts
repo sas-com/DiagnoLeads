@@ -643,6 +643,94 @@ export type LeadHearing = typeof leadHearings.$inferSelect;
 export type NewLeadHearing = typeof leadHearings.$inferInsert;
 
 /**
+ * Lead Contact Logs (Refs #136)
+ * One row per contact a staff member recorded on a lead ("called", "emailed", "could not reach").
+ * The earliest row of a lead is its first contact; the dashboard's waiting consultation
+ * requests are the ones without any row here (not the lead status).
+ */
+export const leadContactLogs = pgTable(
+  'lead_contact_logs',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    leadId: uuid('lead_id')
+      .notNull()
+      .references(() => leads.id, { onDelete: 'cascade' }),
+    /** 'call' | 'email' | 'no_answer' (lib/features/lead-follow-up/types/schemas.ts) */
+    kind: text('kind').notNull(),
+    note: text('note'),
+    contactedAt: timestamp('contacted_at', { withTimezone: true }).defaultNow().notNull(),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('lead_contact_logs_org_lead_contacted_idx').on(
+      table.organizationId,
+      table.leadId,
+      table.contactedAt
+    ),
+    // For the ON DELETE CASCADE of the lead
+    index('lead_contact_logs_lead_idx').on(table.leadId),
+    check('lead_contact_logs_kind_check', sql`${table.kind} in ('call', 'email', 'no_answer')`),
+  ]
+);
+
+export type LeadContactLog = typeof leadContactLogs.$inferSelect;
+
+/**
+ * Lead Tasks (Refs #85)
+ * Next actions of a lead with a due date. A hearing that records the next meeting date creates
+ * one (source 'hearing', at most one per hearing). assignee_id is filled in by #135.
+ */
+export const leadTasks = pgTable(
+  'lead_tasks',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    leadId: uuid('lead_id')
+      .notNull()
+      .references(() => leads.id, { onDelete: 'cascade' }),
+    /** Null only for tasks created from a hearing that kept the default title */
+    title: text('title'),
+    note: text('note'),
+    /** Due date (Japan calendar day) */
+    dueOn: date('due_on', { mode: 'string' }).notNull(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    completedBy: uuid('completed_by').references(() => users.id, { onDelete: 'set null' }),
+    /** Person in charge (#135); null until assignees exist */
+    assigneeId: uuid('assignee_id').references(() => users.id, { onDelete: 'set null' }),
+    /** 'manual' | 'hearing' */
+    source: text('source').default('manual').notNull(),
+    sourceHearingId: uuid('source_hearing_id').references(() => leadHearings.id, {
+      onDelete: 'set null',
+    }),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('lead_tasks_org_lead_idx').on(table.organizationId, table.leadId),
+    // Open tasks of the organization by due date (the dashboard's "today")
+    index('lead_tasks_org_open_due_idx')
+      .on(table.organizationId, table.dueOn)
+      .where(sql`${table.completedAt} is null`),
+    // For the ON DELETE CASCADE of the lead
+    index('lead_tasks_lead_idx').on(table.leadId),
+    uniqueIndex('lead_tasks_source_hearing_idx')
+      .on(table.sourceHearingId)
+      .where(sql`${table.sourceHearingId} is not null`),
+    check('lead_tasks_source_check', sql`${table.source} in ('manual', 'hearing')`),
+  ]
+);
+
+export type LeadTask = typeof leadTasks.$inferSelect;
+
+/**
  * Content Editors
  * Users who may edit FAQs and blog posts, granted from the settings screen by an owner / admin
  * of the operating organization. A grant only counts while the user is still a member of that

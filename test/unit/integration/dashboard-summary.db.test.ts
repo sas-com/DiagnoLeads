@@ -6,7 +6,7 @@
  *     bunx vitest --run test/unit/integration/dashboard-summary.db.test.ts
  */
 import * as schema from '@/lib/db/schema';
-import { diagnosticSubmissions, leads, organizations } from '@/lib/db/schema';
+import { diagnosticSubmissions, leadContactLogs, leads, organizations } from '@/lib/db/schema';
 import { dashboardPeriod, getDashboardSummary, jstDay } from '@/lib/features/analytics/dashboard';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
@@ -98,8 +98,40 @@ describe.skipIf(!url)('dashboard summary (PostgreSQL)', () => {
         consultationRequestedAt: at('2026-09-01T03:00:00Z'),
       },
     ] as (typeof diagnosticSubmissions.$inferInsert)[]);
-    // Already contacted: not waiting any more
-    await lead({ createdAt: at('2026-10-12T02:00:00Z'), conversionPoint: 'consultation', status: 'nurturing' });
+    // Already contacted (a contact record): not waiting any more
+    const contacted = await lead({
+      createdAt: at('2026-10-12T02:00:00Z'),
+      conversionPoint: 'consultation',
+      status: 'nurturing',
+    });
+    // Contacted while the status stayed "new": not waiting either (#136)
+    const contactedStillNew = await lead({
+      createdAt: at('2026-09-01T02:00:00Z'),
+      conversionPoint: 'consultation',
+      status: 'new',
+    });
+    // Closed without any contact record: nothing to wait for
+    await lead({ createdAt: at('2026-09-01T03:00:00Z'), conversionPoint: 'consultation', status: 'lost' });
+    // Only calls that did not get through: still waiting, with the count (owner decision, #136)
+    const unreachable = await lead({
+      createdAt: at('2026-07-01T02:00:00Z'), // Wed 7/1 JST → due Fri 7/3
+      conversionPoint: 'consultation',
+      name: '不通のみ',
+    });
+    // A call that got through after one that did not: no longer waiting
+    const reachedLater = await lead({ createdAt: at('2026-07-01T03:00:00Z'), conversionPoint: 'consultation' });
+    await pg.insert(leadContactLogs).values([
+      { organizationId, leadId: unreachable.id, kind: 'no_answer', contactedAt: at('2026-07-01T05:00:00Z') },
+      { organizationId, leadId: unreachable.id, kind: 'no_answer', contactedAt: at('2026-07-02T05:00:00Z') },
+      { organizationId, leadId: reachedLater.id, kind: 'no_answer', contactedAt: at('2026-07-01T05:00:00Z') },
+      { organizationId, leadId: reachedLater.id, kind: 'call', contactedAt: at('2026-07-02T05:00:00Z') },
+    ]);
+    await pg.insert(leadContactLogs).values([
+      { organizationId, leadId: contacted.id, kind: 'call', contactedAt: at('2026-10-12T05:00:00Z') },
+      { organizationId, leadId: contactedStillNew.id, kind: 'email', contactedAt: at('2026-09-01T05:00:00Z') },
+      // A record of another organization never counts as contacting this organization's lead
+      { organizationId: otherOrganizationId, leadId: consult.id, kind: 'email' },
+    ]);
     // Previous period (2026-10-03 .. 10-09 JST)
     await lead({ createdAt: at('2026-10-05T02:00:00Z'), conversionPoint: 'consultation' });
     await lead({ createdAt: at('2026-10-09T14:59:00Z'), mqlQualifiedAt: at('2026-10-09T14:59:00Z') }); // 10/9 23:59 JST
@@ -195,14 +227,17 @@ describe.skipIf(!url)('dashboard summary (PostgreSQL)', () => {
     const s = await getDashboardSummary(db, organizationId, 7, now);
 
     // Waiting requests are listed whenever they came in, not only within the period
-    expect(s.pendingConsultationTotal).toBe(3);
+    expect(s.pendingConsultationTotal).toBe(4);
     expect(s.pendingConsultations.map((p) => [p.name, p.deadline, p.overdue])).toEqual([
+      ['不通のみ', '2026/07/03', true], // only "no answer" records: still waiting
       [null, '2026/10/07', true], // asked Mon 10/5 (previous period) → due Wed 10/7
       ['期限切れ', '2026/10/15', true], // asked Tue 10/13 → due Thu 10/15
       ['後から相談', '2026/10/19', false], // asked Thu 10/15 → due Mon 10/19
     ]);
     // Seen on Friday 10/16: business days late, or left
+    expect(s.pendingConsultations.map((p) => p.noAnswerCount)).toEqual([2, 0, 0, 0]);
     expect(s.pendingConsultations.map((p) => [p.due, p.businessDays])).toEqual([
+      ['overdue', 75],
       ['overdue', 7],
       ['overdue', 1],
       ['later', 1],
@@ -220,7 +255,7 @@ describe.skipIf(!url)('dashboard summary (PostgreSQL)', () => {
       ])
     );
     expect(s.platforms[0]).toEqual({ platform: 'as400', count: 2 });
-    expect(s.statuses.find((x) => x.status === 'new')?.count).toBe(6);
+    expect(s.statuses.find((x) => x.status === 'new')?.count).toBe(9);
     expect(s.statuses.find((x) => x.status === 'nurturing')?.count).toBe(1);
     expect(s.recentLeads[0].createdAt.getTime()).toBe(at('2026-10-16T01:00:00Z').getTime());
     expect(s.recentLeads).toHaveLength(6);
@@ -233,6 +268,6 @@ describe.skipIf(!url)('dashboard summary (PostgreSQL)', () => {
     const s = await getDashboardSummary(db, organizationId, 7, new Date('2026-12-01T00:00:00Z'));
     expect(s.newLeads).toBe(0);
     expect(s.averageScore).toBeNull();
-    expect(s.pendingConsultationTotal).toBe(3);
+    expect(s.pendingConsultationTotal).toBe(4);
   });
 });

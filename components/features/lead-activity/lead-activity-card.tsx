@@ -22,6 +22,7 @@ import {
   Loader2,
   MessageSquare,
   Pencil,
+  Phone,
   PhoneCall,
   RefreshCw,
   Target,
@@ -47,6 +48,7 @@ const KIND_ICONS: Record<LeadActivityEvent['kind'], ComponentType<{ className?: 
   mql_qualified: BadgeCheck,
   sql_decided: Target,
   phase_reached: Flag,
+  contact_recorded: Phone,
 };
 
 /** Pipeline fields whose values are labelled under the `pipeline` namespace */
@@ -172,6 +174,9 @@ function ActivityItem({
           {'continuation' in event && event.continuation && (
             <Badge color="blue">{t('continuation')}</Badge>
           )}
+          {event.kind === 'contact_recorded' && event.first && (
+            <Badge color="emerald">{t('firstContact')}</Badge>
+          )}
         </div>
         <p className="text-xs text-gray-500">
           {dateOnly ? (
@@ -201,6 +206,11 @@ function ActivityItem({
             {event.withSubmission
               ? t('kinds.consultationWithSubmission')
               : t('kinds.consultationLater')}
+          </p>
+        )}
+        {event.kind === 'contact_recorded' && event.note && (
+          <p className="line-clamp-3 whitespace-pre-wrap break-words text-sm text-gray-700">
+            {event.note}
           </p>
         )}
         {event.kind === 'comment' && (
@@ -255,6 +265,8 @@ export function EventTitle({ event }: { event: LeadActivityEvent }) {
       });
     case 'phase_reached':
       return t('kinds.phase_reached', { phase: tPipeline(`dealPhase.${event.phase}`) });
+    case 'contact_recorded':
+      return t(`kinds.contact_recorded.${event.contactKind}`);
     default:
       return t(`kinds.${event.kind}`);
   }
