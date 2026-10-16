@@ -4,6 +4,7 @@ import {
 } from '@/lib/multi-tenant/middleware/organization';
 import { TRPCError, initTRPC } from '@trpc/server';
 import superjson from 'superjson';
+import { ZodError } from 'zod';
 import type { Context } from './context';
 
 export const INTERNAL_ERROR_MESSAGE =
@@ -26,8 +27,12 @@ const t = initTRPC.context<Context>().create({
         ...shape.data,
         // Never send stack traces from production, whatever tRPC decided at start-up
         stack: process.env.NODE_ENV === 'production' ? undefined : shape.data.stack,
+        // Only for invalid input: which field of the caller's own input is wrong. A validation
+        // failing inside a procedure (database rows, other services) is an internal error.
         zodError:
-          error.cause instanceof Error && error.cause.name === 'ZodError' ? error.cause : null,
+          error.code === 'BAD_REQUEST' && error.cause instanceof ZodError
+            ? error.cause.flatten()
+            : null,
       },
     };
   },

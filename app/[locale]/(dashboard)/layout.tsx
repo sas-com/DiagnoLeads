@@ -1,5 +1,6 @@
 'use client';
 
+import { AdminSessionGuard } from '@/components/auth/AdminSessionGuard';
 import AppHeader from '@/components/layout/AppHeader';
 import AppSidebar from '@/components/layout/AppSidebar';
 import Backdrop from '@/components/layout/Backdrop';
@@ -30,7 +31,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <ThemeProvider>
       <SidebarProvider>
-        <DashboardLayoutContent>{children}</DashboardLayoutContent>
+        <AdminSessionGuard>
+          <DashboardLayoutContent>{children}</DashboardLayoutContent>
+        </AdminSessionGuard>
       </SidebarProvider>
     </ThemeProvider>
   );

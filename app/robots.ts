@@ -1,3 +1,4 @@
+import { ADMIN_PAGE_PREFIXES } from '@/lib/routes/admin-pages';
 import { INDEXABLE_PATHS, isIndexable } from '@/lib/seo/indexing';
 import type { MetadataRoute } from 'next';
 
@@ -17,11 +18,7 @@ export default function robots(): MetadataRoute.Robots {
         allow: '/',
         disallow: [
           '/api/',
-          '/*/dashboard',
-          '/*/settings',
-          '/*/leads',
-          '/*/analytics',
-          '/*/organizations',
+          ...ADMIN_PAGE_PREFIXES.map((prefix) => `/*${prefix}`),
           '/*/login',
           '/*/signup',
           '/*/reset-password',

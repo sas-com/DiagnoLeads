@@ -2,36 +2,13 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { intlMiddleware, shouldSkipI18nMiddleware, stripLocalePrefix } from './lib/i18n/middleware';
 import { signInRedirect } from './lib/middleware/auth-redirect';
+import { SIGN_IN_REDIRECT_CACHE_HEADERS, getCacheHeaders } from './lib/middleware/cache-headers';
 import { contentSecurityPolicy } from './lib/middleware/csp';
 import {
   checkRateLimit,
   getRateLimitConfig,
   setRateLimitHeaders,
 } from './lib/middleware/rate-limit';
-
-/**
- * Cache control headers for static assets
- */
-function getCacheHeaders(pathname: string): Record<string, string> {
-  // Static assets - cache for 1 year
-  if (pathname.match(/\.(js|css|woff|woff2|ttf|eot|ico|png|jpg|jpeg|gif|svg|webp|avif)$/)) {
-    return {
-      'Cache-Control': 'public, max-age=31536000, immutable',
-    };
-  }
-
-  // API routes - no cache
-  if (pathname.startsWith('/api/')) {
-    return {
-      'Cache-Control': 'no-store, no-cache, must-revalidate',
-    };
-  }
-
-  // HTML pages - short cache with revalidation
-  return {
-    'Cache-Control': 'public, max-age=0, must-revalidate',
-  };
-}
 
 /**
  * Security headers including CSP
@@ -104,7 +81,7 @@ export async function middleware(request: NextRequest) {
 
   // 4. Signed-out visitors of admin pages go to sign-in. Each API checks the session itself;
   // this only avoids showing an empty admin shell (lib/middleware/auth-redirect.ts).
-  const signIn = signInRedirect(request, pathname, pathnameWithoutLocale, request.nextUrl.search);
+  const signIn = signInRedirect(request);
   // Build on the next-intl response: it carries the locale header that server components
   // read through getTranslations() / getRequestConfig(). Replacing it with a plain
   // NextResponse.next() made every server-rendered string fall back to Japanese on /en.
@@ -114,15 +91,15 @@ export async function middleware(request: NextRequest) {
   setRateLimitHeaders(response.headers, rateLimitResult);
 
   // 6. Add security headers to response
-  Object.entries(securityHeaders).forEach(([key, value]) => {
+  for (const [key, value] of Object.entries(securityHeaders)) {
     response.headers.set(key, value);
-  });
+  }
 
   // 7. Add cache control headers
-  const cacheHeaders = getCacheHeaders(pathname);
-  Object.entries(cacheHeaders).forEach(([key, value]) => {
+  const cacheHeaders = signIn ? SIGN_IN_REDIRECT_CACHE_HEADERS : getCacheHeaders(pathname);
+  for (const [key, value] of Object.entries(cacheHeaders)) {
     response.headers.set(key, value);
-  });
+  }
 
   return response;
 }
@@ -141,5 +118,8 @@ export const config = {
      * - admin (PayloadCMS admin panel)
      */
     '/((?!_next/static|_next/image|favicon.ico|admin|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    // Pages of each language, even when the last segment looks like an image ("y.png" can be
+    // a page id): they need the sign-in redirect and the security headers
+    '/(ja|en)/:path*',
   ],
 };
