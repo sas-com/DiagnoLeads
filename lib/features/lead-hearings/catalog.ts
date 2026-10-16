@@ -77,6 +77,8 @@ export interface HearingNumberField<K extends string = string> extends FieldBase
   type: 'number';
   min: number;
   max: number;
+  /** How the number is shown: 'month' labels 3 as "3月" / "March"; plain numbers get separators */
+  unit?: 'month';
 }
 
 /** 'YYYY-MM' */
@@ -270,6 +272,7 @@ export const HEARING_FIELDS = [
     type: 'number',
     min: 1,
     max: 12,
+    unit: 'month',
   } satisfies HearingNumberField<'fiscalYearEndMonth'>,
   multiple(
     'competitorTypes',
@@ -318,6 +321,33 @@ export function getHearingField(key: string): HearingFieldDefinition | undefined
 
 export function isHearingFieldKey(key: string): key is HearingFieldKey {
   return fieldsByKey.has(key);
+}
+
+// ── "Other" options ─────────────────────────────────────────────────────────────
+
+/**
+ * An option that stands for "something not in the list" ('other', or a narrower 'other_*' such
+ * as 'other_integrator'). Choosing one opens a short free-text note, stored on the entry as
+ * `otherNote` (see schemas.ts).
+ */
+export const isOtherOption = (value: string): boolean =>
+  value === 'other' || value.startsWith('other_');
+
+/** Max length of the note written for an "other" option */
+export const HEARING_OTHER_NOTE_MAX_LENGTH = 200;
+
+/** Whether the field is a choice field with at least one "other" option */
+export function hasOtherOption(field: HearingFieldDefinition): field is HearingChoiceField {
+  return (
+    (field.type === 'single' || field.type === 'multiple') &&
+    field.options.some((option) => isOtherOption(option.value))
+  );
+}
+
+/** Whether a choice value (one option or a list) includes an "other" option */
+export function choosesOtherOption(value: unknown): boolean {
+  if (typeof value === 'string') return isOtherOption(value);
+  return Array.isArray(value) && value.some((v) => typeof v === 'string' && isOtherOption(v));
 }
 
 // ── Required items ──────────────────────────────────────────────────────────────

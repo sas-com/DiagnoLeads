@@ -2556,7 +2556,21 @@
         "conflictStopped": "衝突を解消するまで自動保存を止めています"
       },
       "viewRecord": "記録",
-      "viewSummary": "まとめ"
+      "viewSummary": "まとめ",
+      "otherNoteOf": "{field}の「その他」の内容",
+      "otherNotePlaceholder": "「その他」の内容を入力（{max}文字まで）",
+      "datePlaceholder": "YYYY/MM/DD",
+      "dateInvalid": "日付は 2026/10/20 のように 年/月/日 で入力してください。",
+      "openCalendar": "{field}をカレンダーから選ぶ",
+      "today": "今日",
+      "clear": "クリア",
+      "pickMonth": "年月を選ぶ",
+      "prevYear": "前の年",
+      "nextYear": "次の年",
+      "thisMonth": "今月",
+      "textCount": "{count} / {max} 文字",
+      "missingField": "未入力",
+      "jumpToMissing": "最初の未記入の必須項目へ移動"
     },
     "meeting": {
       "toggle": "商談モード",
@@ -2610,7 +2624,8 @@
         "change": "{name}: {before} → {after}"
       },
       "changed": "前回から変更",
-      "item": "項目"
+      "item": "項目",
+      "otherNote": "{label}（{note}）"
     }
   },
   "leadActivity": {

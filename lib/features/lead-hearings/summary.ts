@@ -20,9 +20,10 @@ import type {
   HearingSectionId,
   HearingValueSource,
 } from './catalog';
-import { normalizeHearingValue } from './form';
+import { isOtherOption } from './catalog';
+import { effectiveOtherNote, normalizeHearingValue } from './form';
 import { computeMissingItems } from './missing';
-import type { HearingFieldValue, HearingFields } from './types/schemas';
+import type { HearingFieldEntry, HearingFieldValue, HearingFields } from './types/schemas';
 
 /** Looks up a locale message by its full key, e.g. 'leadHearings.fields.scale' */
 export type HearingSummaryTranslate = (
@@ -144,26 +145,37 @@ function optionLabel(
   return option.label?.[labels.locale] ?? value;
 }
 
-/** A stored value as the text shown in the summary (null when there is no complete value) */
+/**
+ * A stored value as the text shown in the summary (null when there is no complete value). The
+ * note of an "other" option follows its label: "Other (note)".
+ */
 export function hearingValueText(
   field: HearingFieldDefinition,
   raw: HearingFieldValue | undefined,
-  labels: HearingSummaryLabels
+  labels: HearingSummaryLabels,
+  otherNote?: string
 ): string | null {
   const value = normalizeHearingValue(field, raw);
   if (value === undefined) return null;
   const { t, locale } = labels;
+  const note = effectiveOtherNote(field, value, otherNote);
+  const choiceLabel = (options: readonly HearingOption[], v: string) => {
+    const text = optionLabel(options, v, labels);
+    return note !== undefined && isOtherOption(v)
+      ? t('leadHearings.summary.otherNote', { label: text, note })
+      : text;
+  };
   switch (field.type) {
     case 'single':
-      return optionLabel(field.options, value as string, labels);
+      return choiceLabel(field.options, value as string);
     case 'multiple':
-      return (value as string[])
-        .map((v) => optionLabel(field.options, v, labels))
-        .join(separator(locale));
+      return (value as string[]).map((v) => choiceLabel(field.options, v)).join(separator(locale));
     case 'text':
       return value as string;
     case 'number':
-      return String(value);
+      return field.unit === 'month'
+        ? t('leadHearings.editor.monthOption', { month: value as number })
+        : new Intl.NumberFormat(locale).format(value as number);
     case 'yearMonth': {
       const [year, month] = (value as string).split('-');
       return t('leadHearings.summary.yearMonth', { year, month: Number(month), mm: month });
@@ -194,8 +206,9 @@ export function hearingValueText(
   }
 }
 
-/** Order-independent form of a value, for comparing two hearings */
-function canonical(value: HearingFieldValue | undefined): string {
+/** Order-independent form of a value (and its "other" note), for comparing two hearings */
+function canonical(value: HearingFieldValue | undefined, otherNote?: string): string {
+  if (otherNote !== undefined) return `${canonical(value)}|${JSON.stringify(otherNote)}`;
   if (value === undefined) return 'null';
   if (typeof value === 'object' && !Array.isArray(value)) {
     const sorted = Object.keys(value)
@@ -255,15 +268,19 @@ export function buildHearingSummary(
 
   const changes: HearingSummaryChange[] = [];
   if (previous) {
+    const noteOf = (field: HearingFieldDefinition, entry: HearingFieldEntry | undefined) =>
+      effectiveOtherNote(field, normalizeHearingValue(field, entry?.value), entry?.otherNote);
     for (const [key, { field }] of catalogFields) {
       const before = normalizeHearingValue(field, previous.fields[key]?.value);
       const after = normalizeHearingValue(field, fields[key]?.value);
-      if (canonical(before) === canonical(after)) continue;
+      const noteBefore = noteOf(field, previous.fields[key]);
+      const noteAfter = noteOf(field, fields[key]);
+      if (canonical(before, noteBefore) === canonical(after, noteAfter)) continue;
       changes.push({
         key,
         label: t(field.labelKey),
-        before: hearingValueText(field, before, labels),
-        after: hearingValueText(field, after, labels),
+        before: hearingValueText(field, before, labels, noteBefore),
+        after: hearingValueText(field, after, labels, noteAfter),
       });
     }
   }
@@ -280,7 +297,7 @@ export function buildHearingSummary(
         {
           key,
           label: t(entry.field.labelKey),
-          value: hearingValueText(entry.field, stored?.value, labels),
+          value: hearingValueText(entry.field, stored?.value, labels, stored?.otherNote),
           status: stored?.status ?? 'not_yet',
           source: stored?.source ?? null,
           required: entry.required,

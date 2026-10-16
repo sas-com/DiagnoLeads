@@ -10,12 +10,15 @@ import { z } from 'zod';
 import {
   HEARING_FIELDS,
   HEARING_ITEM_STATUSES,
+  HEARING_OTHER_NOTE_MAX_LENGTH,
   HEARING_VALUE_SOURCES,
   type HearingFieldDefinition,
   type HearingFieldKey,
   type HearingItemStatus,
   type HearingValueSource,
+  choosesOtherOption,
   getHearingField,
+  hasOtherOption,
 } from '../catalog';
 
 /** Value of one field; the shape depends on the field type (see catalog.ts) */
@@ -30,6 +33,13 @@ export interface HearingFieldEntry {
   value?: HearingFieldValue;
   status: HearingItemStatus;
   source: HearingValueSource | null;
+  /**
+   * What "other" means, written when an "other" option (see isOtherOption in catalog.ts) is
+   * chosen. Only choice fields that have such an option accept it; one note per field. Saved
+   * only while an "other" option is chosen (toSavedHearingFields drops it otherwise). Hearings
+   * stored before #130 have no note and read as before.
+   */
+  otherNote?: string;
 }
 
 export type HearingFields = Partial<Record<HearingFieldKey, HearingFieldEntry>>;
@@ -91,16 +101,34 @@ function valueSchemaFor(field: HearingFieldDefinition): z.ZodType<HearingFieldVa
 const statusSchema = z.enum(HEARING_ITEM_STATUSES);
 const sourceSchema = z.enum(HEARING_VALUE_SOURCES).nullable();
 
+const otherNoteSchema = z.string().trim().min(1).max(HEARING_OTHER_NOTE_MAX_LENGTH);
+
+function entryObjectFor(field: HearingFieldDefinition) {
+  return z
+    .object({
+      value: valueSchemaFor(field).optional(),
+      status: statusSchema,
+      source: sourceSchema,
+      // Only fields with an "other" option know the key; strict() rejects it elsewhere
+      ...(hasOtherOption(field) ? { otherNote: otherNoteSchema.optional() } : {}),
+    })
+    .strict();
+}
+
+/** Entry as stored (read path): a note left without its "other" option is tolerated */
 const entrySchemas = new Map<string, z.ZodType<HearingFieldEntry>>(
+  HEARING_FIELDS.map((field) => [field.key, entryObjectFor(field) as z.ZodType<HearingFieldEntry>])
+);
+
+/** Entry to save: a note is only accepted next to a chosen "other" option */
+const saveEntrySchemas = new Map<string, z.ZodType<HearingFieldEntry>>(
   HEARING_FIELDS.map((field) => [
     field.key,
-    z
-      .object({
-        value: valueSchemaFor(field).optional(),
-        status: statusSchema,
-        source: sourceSchema,
-      })
-      .strict() as z.ZodType<HearingFieldEntry>,
+    entryObjectFor(field).refine(
+      (entry) =>
+        (entry as HearingFieldEntry).otherNote === undefined || choosesOtherOption(entry.value),
+      { message: 'A note needs an "other" option', path: ['otherNote'] }
+    ) as unknown as z.ZodType<HearingFieldEntry>,
   ])
 );
 
@@ -110,7 +138,7 @@ export const hearingFieldsSchema = z
     Object.fromEntries(
       HEARING_FIELDS.map((field) => [
         field.key,
-        (entrySchemas.get(field.key) as z.ZodType<HearingFieldEntry>).optional(),
+        (saveEntrySchemas.get(field.key) as z.ZodType<HearingFieldEntry>).optional(),
       ])
     )
   )

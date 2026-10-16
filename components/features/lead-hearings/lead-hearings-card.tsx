@@ -12,7 +12,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -30,6 +29,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { HearingDateInput } from './hearing-date-inputs';
 
 const DEAL_RATING_COLORS = { a: 'emerald', b: 'blue', c: 'gray' } as const;
 
@@ -229,12 +229,13 @@ function CreateHearingDialog({
         <div className="space-y-4">
           <div className="space-y-1">
             <Label htmlFor="hearing-held-on">{t('create.heldOn')}</Label>
-            <Input
+            <HearingDateInput
               id="hearing-held-on"
-              type="date"
-              value={heldOn}
-              required
-              onChange={(e) => setHeldOn(e.target.value)}
+              label={t('create.heldOn')}
+              value={heldOn || undefined}
+              readOnly={false}
+              clearable={false}
+              onChange={(next) => setHeldOn(next ?? '')}
             />
           </div>
 

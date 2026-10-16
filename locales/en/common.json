@@ -2556,7 +2556,21 @@
         "conflictStopped": "Autosave is paused until the conflict is resolved"
       },
       "viewRecord": "Record",
-      "viewSummary": "Summary"
+      "viewSummary": "Summary",
+      "otherNoteOf": "\"Other\" details for {field}",
+      "otherNotePlaceholder": "Describe \"other\" (up to {max} characters)",
+      "datePlaceholder": "YYYY-MM-DD",
+      "dateInvalid": "Enter the date as year-month-day, e.g. 2026-10-20.",
+      "openCalendar": "Pick {field} from a calendar",
+      "today": "Today",
+      "clear": "Clear",
+      "pickMonth": "Pick a month",
+      "prevYear": "Previous year",
+      "nextYear": "Next year",
+      "thisMonth": "This month",
+      "textCount": "{count} / {max} characters",
+      "missingField": "Not filled",
+      "jumpToMissing": "Go to the first required item not filled"
     },
     "meeting": {
       "toggle": "Meeting mode",
@@ -2610,7 +2624,8 @@
         "change": "{name}: {before} -> {after}"
       },
       "changed": "Changed",
-      "item": "Item"
+      "item": "Item",
+      "otherNote": "{label} ({note})"
     }
   },
   "leadActivity": {

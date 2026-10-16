@@ -4,7 +4,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useOrganization } from '@/hooks/use-organization';
@@ -19,6 +18,7 @@ import {
   type HearingSectionId,
 } from '@/lib/features/lead-hearings/catalog';
 import {
+  changeHearingOtherNote,
   changeHearingValue,
   computeFormMissingItems,
   confirmHearingEntry,
@@ -66,6 +66,7 @@ import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { HearingDateInput } from './hearing-date-inputs';
 import { HearingFieldRow } from './hearing-field-row';
 import { HearingSummaryPanel } from './hearing-summary-panel';
 import { useHearingAutosave } from './use-hearing-autosave';
@@ -269,6 +270,7 @@ export function LeadHearingEditor({
 
   const missing = useMemo(() => computeFormMissingItems(form ?? {}, catalog.requiredItems), [form]);
   const missingBySection = useMemo(() => countBySection(missing.missingKeys, catalog), [missing]);
+  const missingKeySet = useMemo(() => new Set<string>(missing.missingKeys), [missing]);
 
   const prefill = (hearing.data?.prefill ?? null) as HearingPrefillSnapshot | null;
   const hints = useMemo(() => {
@@ -308,6 +310,11 @@ export function LeadHearingEditor({
       statusPicked.current.add(field.key);
       updateEntry(field.key as HearingFieldKey, (entry) => setHearingStatus(entry, status));
     },
+    [updateEntry]
+  );
+  const handleOtherNoteChange = useCallback(
+    (field: HearingFieldDefinition, note: string | undefined) =>
+      updateEntry(field.key as HearingFieldKey, (entry) => changeHearingOtherNote(entry, note)),
     [updateEntry]
   );
   const handleConfirm = useCallback(
@@ -398,15 +405,17 @@ export function LeadHearingEditor({
     if (next === 'summary' && autosave.snapshot.dirty && !readOnly) autosave.flush();
     setView(next);
   };
-  const handleJump = (todo: HearingSummaryTodo) => {
+  /** Show a field (its tab, or the folded fields of the meeting mode) and focus its input */
+  const goToField = (key: HearingFieldKey) => {
     if (mode === 'meeting') {
-      if (!meetingItemKeys.has(todo.key)) setOthersOpen(true);
+      if (!meetingItemKeys.has(key)) setOthersOpen(true);
     } else {
-      setTab(todo.section);
+      setTab(catalog.sectionOf.get(key) ?? catalog.sections[0].id);
     }
     setView('record');
-    setJumpTo(todo.key);
+    setJumpTo(key);
   };
+  const handleJump = (todo: HearingSummaryTodo) => goToField(todo.key);
   const meetingMode = mode === 'meeting';
   const progress = meetingProgress(missing, catalog.requiredItems);
   const saveStatus = autosaveStatus(autosave.snapshot, autosave.lastSavedAt);
@@ -429,10 +438,10 @@ export function LeadHearingEditor({
     if (result.data) fill(result.data);
   };
 
-  const sectionOfFirstMissing = (keys: readonly HearingFieldKey[]) => {
-    const key = keys.find((k) => missing.missingKeys.includes(k)) ?? keys[0];
-    return catalog.sectionOf.get(key) ?? catalog.sections[0].id;
-  };
+  /** The first field of these keys that is not filled (the first key when all are) */
+  const firstMissingOf = (keys: readonly HearingFieldKey[]) =>
+    keys.find((k) => missingKeySet.has(k)) ?? keys[0];
+  const firstMissingItem = catalog.requiredItems.find((item) => missing.missing.includes(item.id));
 
   const requiredItemsCallout = (
     <div className="space-y-3">
@@ -448,8 +457,8 @@ export function LeadHearingEditor({
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="h-7"
-                    onClick={() => setTab(sectionOfFirstMissing(item.keys))}
+                    className="h-11 sm:h-9"
+                    onClick={() => goToField(firstMissingOf(item.keys))}
                   >
                     {tRoot(item.labelKey)}
                   </Button>
@@ -502,14 +511,14 @@ export function LeadHearingEditor({
           </div>
           <div className="space-y-1">
             <Label htmlFor="hearing-held-on">{t('editor.heldOn')}</Label>
-            <Input
+            <HearingDateInput
               id="hearing-held-on"
-              type="date"
-              className="sm:w-48"
-              value={heldOn}
+              label={t('editor.heldOn')}
+              value={heldOn || undefined}
               readOnly={readOnly}
-              onChange={(e) => {
-                setHeldOn(e.target.value);
+              clearable={false}
+              onChange={(next) => {
+                setHeldOn(next ?? '');
                 notifyEdit();
               }}
             />
@@ -645,12 +654,14 @@ export function LeadHearingEditor({
                           field={field}
                           entry={entryOf(form, field.key as HearingFieldKey)}
                           required
+                          missing={missingKeySet.has(field.key)}
                           hint={hints.get(field.key) ?? null}
                           readOnly={readOnly}
                           variant="chip"
                           onValueChange={handleValueChange}
                           onStatusChange={handleStatusChange}
                           onConfirm={handleConfirm}
+                          onOtherNoteChange={handleOtherNoteChange}
                         />
                       ))}
                     </CardContent>
@@ -697,6 +708,7 @@ export function LeadHearingEditor({
                               onValueChange={handleValueChange}
                               onStatusChange={handleStatusChange}
                               onConfirm={handleConfirm}
+                              onOtherNoteChange={handleOtherNoteChange}
                             />
                           ))}
                         </section>
@@ -743,11 +755,13 @@ export function LeadHearingEditor({
                           field={field}
                           entry={entryOf(form, field.key as HearingFieldKey)}
                           required={required}
+                          missing={missingKeySet.has(field.key)}
                           hint={hints.get(field.key) ?? null}
                           readOnly={readOnly}
                           onValueChange={handleValueChange}
                           onStatusChange={handleStatusChange}
                           onConfirm={handleConfirm}
+                          onOtherNoteChange={handleOtherNoteChange}
                         />
                       ))}
                     </CardContent>
@@ -768,10 +782,17 @@ export function LeadHearingEditor({
                 {t('meeting.progress', progress)}
               </Badge>
             )}
-            {missing.missing.length > 0 ? (
-              <Badge color="amber">
-                {t('editor.missingCount', { count: missing.missing.length })}
-              </Badge>
+            {firstMissingItem ? (
+              <button
+                type="button"
+                title={t('editor.jumpToMissing')}
+                onClick={() => goToField(firstMissingOf(firstMissingItem.keys))}
+                className="inline-flex min-h-11 items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:min-h-0"
+              >
+                <Badge color="amber">
+                  {t('editor.missingCount', { count: missing.missing.length })}
+                </Badge>
+              </button>
             ) : (
               <Badge color="emerald">{t('editor.allFilled')}</Badge>
             )}

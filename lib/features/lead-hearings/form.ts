@@ -19,7 +19,9 @@ import {
   type HearingOption,
   type HearingRequiredItem,
   type HearingSectionId,
+  choosesOtherOption,
   getHearingField,
+  hasOtherOption,
 } from './catalog';
 import { type HearingMissingItems, computeMissingItems } from './missing';
 import {
@@ -28,6 +30,7 @@ import {
   type HearingFields,
   type HearingPrefillSnapshot,
   YEAR_MONTH_PATTERN,
+  isoDateSchema,
 } from './types/schemas';
 
 /** The Web diagnosis has Japanese and English labels; other UI locales fall back to Japanese */
@@ -104,7 +107,33 @@ export function changeHearingValue(
       : entry.status;
   const next: HearingFieldEntry = { status, source };
   if (value !== undefined) next.value = value;
+  // The "other" note stays while editing, even when "other" is unchosen for a moment; it is
+  // left out when saving unless "other" is chosen again (toSavedHearingFields)
+  if (entry.otherNote !== undefined) next.otherNote = entry.otherNote;
   return next;
+}
+
+/** The note typed for an "other" option; status and source stay (the note is not a correction) */
+export function changeHearingOtherNote(
+  entry: HearingFieldEntry,
+  note: string | undefined
+): HearingFieldEntry {
+  const { otherNote: _previous, ...rest } = entry;
+  return note === undefined || note === '' ? rest : { ...rest, otherNote: note };
+}
+
+/**
+ * The "other" note to keep for a value: trimmed, and only when the field has an "other" option
+ * and the value chooses one (undefined otherwise)
+ */
+export function effectiveOtherNote(
+  field: HearingFieldDefinition,
+  value: HearingFieldValue | undefined,
+  note: string | undefined
+): string | undefined {
+  if (!hasOtherOption(field) || !choosesOtherOption(value)) return undefined;
+  const text = note?.trim() ?? '';
+  return text === '' ? undefined : text;
 }
 
 /** The "confirmed" button: the diagnosis value was checked in the meeting */
@@ -191,7 +220,51 @@ export function hearingYearOptions(
   return [...years].sort((a, b) => a - b);
 }
 
-/** Form state → fields to save: complete values only, untouched fields left out */
+// ── Typed dates ─────────────────────────────────────────────────────────────────
+
+const TYPED_DATE = /^(\d{4})\s*[-/.年]\s*(\d{1,2})\s*[-/.月]\s*(\d{1,2})\s*日?$/;
+const TYPED_DATE_DIGITS = /^(\d{4})(\d{2})(\d{2})$/;
+const FULL_WIDTH_SEPARATORS: Record<string, string> = { '／': '/', '－': '-', '．': '.' };
+
+/**
+ * A date typed by hand → 'YYYY-MM-DD'. Accepts 2026-10-20, 2026/10/20, 2026.10.20,
+ * 2026年10月20日 and 20261020 (full-width digits too). undefined when blank, null when it is
+ * not a real date.
+ */
+export function parseTypedDate(text: string): string | null | undefined {
+  const trimmed = text
+    .replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0))
+    .replace(/[／－．]/g, (c) => FULL_WIDTH_SEPARATORS[c] ?? c)
+    .trim();
+  if (trimmed === '') return undefined;
+  const match = TYPED_DATE.exec(trimmed) ?? TYPED_DATE_DIGITS.exec(trimmed);
+  if (!match) return null;
+  const [, year, month, day] = match;
+  const iso = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  return isoDateSchema.safeParse(iso).success ? iso : null;
+}
+
+/** 'YYYY-MM-DD' as shown in the text box: 2026/10/20 in Japanese, as stored otherwise */
+export const formatTypedDate = (iso: string, locale: string): string =>
+  locale === 'ja' ? iso.replaceAll('-', '/') : iso;
+
+/** A calendar date (local time) → 'YYYY-MM-DD' */
+export function toIsoDate(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/** 'YYYY-MM-DD' → the local calendar date, or undefined when it is not one */
+export function fromIsoDate(iso: string | undefined): Date | undefined {
+  if (!iso || !isoDateSchema.safeParse(iso).success) return undefined;
+  const [year, month, day] = iso.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+/**
+ * Form state → fields to save: complete values only, untouched fields left out. An "other" note
+ * is saved (trimmed) only while an "other" option is chosen, so no stale note outlives its option.
+ */
 export function toSavedHearingFields(form: HearingFields): HearingFields {
   const saved: HearingFields = {};
   for (const field of HEARING_FIELDS) {
@@ -199,10 +272,12 @@ export function toSavedHearingFields(form: HearingFields): HearingFields {
     if (!entry) continue;
     const value = normalizeHearingValue(field, entry.value);
     if (value === undefined && entry.status === 'not_yet' && entry.source === null) continue;
+    const otherNote = effectiveOtherNote(field, value, entry.otherNote);
     saved[field.key] = {
       ...(value !== undefined ? { value } : {}),
       status: entry.status,
       source: entry.source,
+      ...(otherNote !== undefined ? { otherNote } : {}),
     };
   }
   return saved;
