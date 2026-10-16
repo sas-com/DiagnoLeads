@@ -88,12 +88,13 @@ describe.skipIf(!url)('AX migration submission (PostgreSQL)', () => {
       targetSystem: 'as400',
       score: outcome.result.leadScore,
     });
-    // The Web diagnosis counts as the MQL action (2026-10-09 decision)
+    // An IT department head: a decision-making role makes it 関心あり（MQL） (#139)
     expect(lead?.mqlQualifiedAt).toEqual(now);
     expect(lead?.responses).toMatchObject({
       axMigration: {
         submissionId: outcome.submissionId,
         mqlCandidate: true,
+        mql: { level: 'interest', signals: ['decision_role'], unmet: [] },
         primaryChallenge: 'people',
         platform: 'as400',
       },
@@ -109,6 +110,81 @@ describe.skipIf(!url)('AX migration submission (PostgreSQL)', () => {
       diagnosticVersion: 2,
       tracking: { utmSource: 'google', utmMedium: 'cpc', utmCampaign: 'ax-hito' },
       consultationRequestedAt: null,
+    });
+  });
+
+  describe('適合 and 関心あり（MQL） (#139)', () => {
+    /** Target industry and system, nothing that shows interest */
+    const fitOnly = { ...as400Answers, role: 'it_staff' };
+
+    it('leaves the MQL date empty for a lead that only fits', async () => {
+      const outcome = await submitAxMigrationDiagnosis(db, organizationId, input({ answers: fitOnly }), now);
+      if (!outcome.ok) throw new Error('submission failed');
+      const lead = await pg.query.leads.findFirst({ where: eq(leads.id, outcome.leadId) });
+      expect(lead?.mqlQualifiedAt).toBeNull();
+      expect(lead?.responses).toMatchObject({
+        axMigration: { mqlCandidate: true, mql: { level: 'fit', signals: [], unmet: [] } },
+      });
+    });
+
+    it('makes a consultation request on the form 関心あり', async () => {
+      const outcome = await submitAxMigrationDiagnosis(
+        db,
+        organizationId,
+        input({ answers: fitOnly, consultationRequested: true }),
+        now
+      );
+      if (!outcome.ok) throw new Error('submission failed');
+      const lead = await pg.query.leads.findFirst({ where: eq(leads.id, outcome.leadId) });
+      expect(lead?.mqlQualifiedAt).toEqual(now);
+      expect(lead?.responses).toMatchObject({
+        axMigration: { mql: { level: 'interest', signals: ['consultation'] } },
+      });
+    });
+
+    it('turns a fitting lead into 関心あり on a later consultation request, and records it on the submission', async () => {
+      const outcome = await submitAxMigrationDiagnosis(db, organizationId, input({ answers: fitOnly }), now);
+      if (!outcome.ok) throw new Error('submission failed');
+      const later = new Date(now.getTime() + 60_000);
+      const request = await requestAxMigrationConsultation(db, outcome.submissionId, later);
+      expect(request).toMatchObject({ ok: true, alreadyRequested: false });
+
+      const lead = await pg.query.leads.findFirst({ where: eq(leads.id, outcome.leadId) });
+      expect(lead).toMatchObject({ conversionPoint: 'consultation', mqlQualifiedAt: later });
+      expect(lead?.responses).toMatchObject({
+        axMigration: { consultationRequested: true, mql: { level: 'interest', signals: ['consultation'] } },
+      });
+      const submission = await pg.query.diagnosticSubmissions.findFirst({
+        where: eq(diagnosticSubmissions.id, outcome.submissionId),
+      });
+      expect(submission?.result).toMatchObject({ mql: { level: 'interest', qualified: true } });
+    });
+
+    it('keeps an MQL date already set when a consultation is requested later', async () => {
+      const outcome = await submitAxMigrationDiagnosis(db, organizationId, input(), now);
+      if (!outcome.ok) throw new Error('submission failed');
+      await requestAxMigrationConsultation(db, outcome.submissionId, new Date(now.getTime() + 60_000));
+      const lead = await pg.query.leads.findFirst({ where: eq(leads.id, outcome.leadId) });
+      expect(lead?.mqlQualifiedAt).toEqual(now);
+      expect(lead?.responses).toMatchObject({
+        axMigration: { mql: { level: 'interest', signals: ['consultation', 'decision_role'] } },
+      });
+    });
+
+    it('does not make a lead outside the target an MQL on a consultation request', async () => {
+      const outcome = await submitAxMigrationDiagnosis(
+        db,
+        organizationId,
+        input({ answers: { ...fitOnly, industry: 'other' } }),
+        now
+      );
+      if (!outcome.ok) throw new Error('submission failed');
+      await requestAxMigrationConsultation(db, outcome.submissionId, now);
+      const lead = await pg.query.leads.findFirst({ where: eq(leads.id, outcome.leadId) });
+      expect(lead).toMatchObject({ conversionPoint: 'consultation', mqlQualifiedAt: null });
+      expect(lead?.responses).toMatchObject({
+        axMigration: { consultationRequested: true, mql: { level: 'none', unmet: ['industry'] } },
+      });
     });
   });
 

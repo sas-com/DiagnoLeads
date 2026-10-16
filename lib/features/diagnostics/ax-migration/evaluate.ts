@@ -3,6 +3,7 @@ import { multiple, single, toPercent } from '../engine';
 import type { DiagnosticAnswers } from '../types';
 import { AX_MIGRATION_CONFIG, type AxMigrationConfig } from './config';
 import { AX_PLATFORMS, type AxPlatform, axMigrationDefinition } from './definition';
+import { type AxMqlJudgement, judgeAxMql } from './mql';
 import { technicalQuestions, unknownTechnicalQuestions } from './technical';
 
 export type Level = 'low' | 'medium' | 'high';
@@ -113,15 +114,10 @@ export interface AxMigrationResult {
   leadScore: number;
   targetSystem: TargetSystem | null;
   /**
-   * MQL: all three criteria must be met. While the Web diagnosis does not count as an
-   * action (config), `qualified` stays false and `candidate` (industry × system) is handed
-   * to marketing, who confirm the MQL.
+   * MQL (#139): `candidate` = 適合 (industry × system), `qualified` = 関心あり（MQL）
+   * (fit + a strong signal or the minimum score). See mql.ts; rules in config.ts.
    */
-  mql: {
-    qualified: boolean;
-    candidate: boolean;
-    criteria: { industry: boolean; system: boolean; action: boolean };
-  };
+  mql: AxMqlJudgement;
   /** Hints for sales. SQL is decided by sales after the hearing: ①② required + ③ or ④ */
   sqlSignals: {
     candidate: boolean;
@@ -455,7 +451,9 @@ function deriveTargetSystem(
 export function evaluateAxMigration(
   answers: DiagnosticAnswers,
   config: AxMigrationConfig = AX_MIGRATION_CONFIG,
-  now: Date = new Date()
+  now: Date = new Date(),
+  /** What the respondent did besides answering (the consultation request is not an answer) */
+  actions: { consultationRequested?: boolean } = {}
 ): AxMigrationResult {
   const platform = platformOf(answers);
   const challenges = multiple(answers, 'challenges');
@@ -819,7 +817,7 @@ export function evaluateAxMigration(
   // "No particular challenges" with nothing else pointing at one: no primary challenge
   const primary = challengeScores[best] > 0 ? best : null;
 
-  // MQL（3条件すべて）
+  // MQL の必須条件（業種 × システム）。シグナルとの判定はリードスコアの後で行う
   const mqlCriteria = {
     industry: industry !== undefined && config.targetIndustries.includes(industry),
     system:
@@ -827,10 +825,8 @@ export function evaluateAxMigration(
       (platform === 'other' &&
         otherSystem !== undefined &&
         config.legacyOtherSystems.includes(otherSystem)),
-    action: config.countWebDiagnosisAsMqlAction,
   };
   const mqlCandidate = mqlCriteria.industry && mqlCriteria.system;
-  const mqlQualified = mqlCandidate && mqlCriteria.action;
 
   // SQL の手がかり（①②必須＋③④のいずれか）: ① machine, language and rough size are known
   const known = (value: string | undefined) => value !== undefined && value !== 'unknown';
@@ -874,6 +870,21 @@ export function evaluateAxMigration(
       points(LEAD_SCORE_POINTS.role, role)
   );
 
+  // 適合 / 関心あり（MQL）
+  const mql = judgeAxMql(
+    {
+      ...mqlCriteria,
+      consultationRequested: actions.consultationRequested === true,
+      supportEnd,
+      accessSupport: support,
+      role,
+      timeline,
+      leadScore,
+    },
+    config.mql,
+    config.countWebDiagnosisAsMqlAction
+  );
+
   // "I don't know" on the technical required questions of the chosen path
   const technical = technicalQuestions(answers);
   const unknowns = unknownTechnicalQuestions(answers).length;
@@ -893,7 +904,7 @@ export function evaluateAxMigration(
     checkpoints: [...new Set(checkpoints)].slice(0, MAX_CHECKPOINTS),
     leadScore,
     targetSystem: deriveTargetSystem(platform, otherSystem),
-    mql: { qualified: mqlQualified, candidate: mqlCandidate, criteria: mqlCriteria },
+    mql,
     sqlSignals: {
       candidate: systemKnown && problemAware && (timelineVisible || decisionAccess),
       systemKnown,

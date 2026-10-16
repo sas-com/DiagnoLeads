@@ -9,6 +9,7 @@ import { AX_MIGRATION_CONFIG } from './config';
 import { PHONE_PATTERN, normalizePhone } from './contact';
 import { AX_MIGRATION_DIAGNOSTIC_KEY, axMigrationDefinition } from './definition';
 import { type AxMigrationResult, evaluateAxMigration } from './evaluate';
+import { type AxLeadMql, mergeLeadMql, toLeadMql, withConsultationSignal } from './mql';
 
 type Database = typeof defaultDb;
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
@@ -110,11 +111,15 @@ function otherSystemsOf(summary: Record<string, unknown>): OtherSystemEntry[] {
   return Array.isArray(summary.otherSystems) ? (summary.otherSystems as OtherSystemEntry[]) : [];
 }
 
-/** Lead responses with another system added (and the consultation flag, when requested) */
+/**
+ * Lead responses with another system added (and the consultation flag, when requested).
+ * `mql` is that system's judgement; the lead keeps the higher of it and its own (mergeLeadMql).
+ */
 export function withOtherSystem(
   responses: LeadResponses,
   entry: OtherSystemEntry,
-  consultationRequested: boolean
+  consultationRequested: boolean,
+  mql?: AxLeadMql
 ): Record<string, unknown> {
   const summary = axSummaryOf(responses);
   return {
@@ -122,8 +127,32 @@ export function withOtherSystem(
     axMigration: {
       ...summary,
       ...(consultationRequested ? { consultationRequested: true } : {}),
+      ...withLeadMql(summary, mql),
       otherSystems: [...otherSystemsOf(summary), entry],
     },
+  };
+}
+
+/**
+ * The lead's MQL judgement after another one (nothing to change without one). A lead created
+ * before #139 has no judgement stored; it then takes this one, and its MQL date stays as it was.
+ */
+function withLeadMql(
+  summary: Record<string, unknown>,
+  mql: AxLeadMql | undefined
+): { mql?: AxLeadMql } {
+  return mql ? { mql: mergeLeadMql(summary.mql, mql) } : {};
+}
+
+/** Lead responses after a consultation request (the flag, and the MQL judgement with it) */
+export function withConsultation(
+  responses: LeadResponses,
+  mql: AxLeadMql
+): Record<string, unknown> {
+  const summary = axSummaryOf(responses);
+  return {
+    ...responsesOf(responses),
+    axMigration: { ...summary, consultationRequested: true, ...withLeadMql(summary, mql) },
   };
 }
 
@@ -161,7 +190,10 @@ function buildLeadSummary(
     urgency: result.urgency.level,
     primaryChallenge: result.challenges.primary,
     challenges: result.challenges.selected,
+    /** 適合 (kept under its first name for older readers) */
     mqlCandidate: result.mql.candidate,
+    /** 適合 / 関心あり（MQL） and why (#139) */
+    mql: toLeadMql(result.mql),
     sqlSignals: result.sqlSignals.candidate,
     needsHearing: result.needsHearing,
     consultationRequested: input.consultationRequested,
@@ -193,7 +225,9 @@ export async function submitAxMigrationDiagnosis(
     return { ok: false, issues: validation.issues };
   }
   const answers = validation.answers;
-  const result = evaluateAxMigration(answers, AX_MIGRATION_CONFIG, now);
+  const result = evaluateAxMigration(answers, AX_MIGRATION_CONFIG, now, {
+    consultationRequested: input.consultationRequested,
+  });
   const tracking: Tracking = input.tracking ?? {};
   const inflow = inferInflowSource(tracking);
   const email = input.contact.email.toLowerCase();
@@ -237,6 +271,7 @@ export async function submitAxMigrationDiagnosis(
           referrerName: inflow.referrerName,
           conversionPoint: input.consultationRequested ? 'consultation' : 'web_diagnosis',
           targetSystem: result.targetSystem,
+          // MQL date: only 関心あり (#139). 適合 alone leaves it empty
           mqlQualifiedAt: result.mql.qualified ? now : null,
           createdAt: now,
           updatedAt: now,
@@ -347,9 +382,14 @@ async function recordOtherSystem(
   await tx
     .update(leads)
     .set({
-      responses: withOtherSystem(lead.responses, entry, consultationRequested),
+      responses: withOtherSystem(
+        lead.responses,
+        entry,
+        consultationRequested,
+        toLeadMql(result.mql)
+      ),
       ...(consultationRequested ? { conversionPoint: 'consultation' } : {}),
-      // MQL belongs to the lead: a qualifying system makes it one, an earlier date stays
+      // MQL belongs to the lead: a system of interest makes it one, an earlier date stays
       ...(result.mql.qualified && !lead.mqlQualifiedAt ? { mqlQualifiedAt: now } : {}),
       updatedAt: now,
     })
@@ -393,6 +433,7 @@ export async function requestAxMigrationConsultation(
         leadId: diagnosticSubmissions.leadId,
         leadCreated: diagnosticSubmissions.leadCreated,
         continuedFrom: diagnosticSubmissions.continuedFromSubmissionId,
+        result: diagnosticSubmissions.result,
       });
 
     if (!claimed) {
@@ -413,21 +454,38 @@ export async function requestAxMigrationConsultation(
       };
     }
 
+    // The request is a strong signal: the submission's judgement is redone with it (#139), so the
+    // notification read from the stored result shows it
+    const mql = withConsultationSignal(
+      isPlainObject(claimed.result) ? claimed.result.mql : undefined,
+      AX_MIGRATION_CONFIG.mql
+    );
+    if (isPlainObject(claimed.result)) {
+      await tx
+        .update(diagnosticSubmissions)
+        .set({ result: { ...claimed.result, mql } })
+        .where(eq(diagnosticSubmissions.id, submissionId));
+    }
+
     const continued = claimed.continuedFrom !== null;
     if (claimed.leadId && (claimed.leadCreated || continued)) {
-      await tx
-        .update(leads)
-        .set({
-          conversionPoint: 'consultation',
-          responses: sql`jsonb_set(
-            coalesce(${leads.responses}, '{}'::jsonb),
-            '{axMigration}',
-            coalesce(${leads.responses} -> 'axMigration', '{}'::jsonb) || '{"consultationRequested": true}'::jsonb,
-            true
-          )`,
-          updatedAt: now,
-        })
-        .where(eq(leads.id, claimed.leadId));
+      const [lead] = await tx
+        .select({ responses: leads.responses, mqlQualifiedAt: leads.mqlQualifiedAt })
+        .from(leads)
+        .where(eq(leads.id, claimed.leadId))
+        .for('no key update');
+      if (lead) {
+        await tx
+          .update(leads)
+          .set({
+            conversionPoint: 'consultation',
+            responses: withConsultation(lead.responses, toLeadMql(mql)),
+            // MQL date only when there is none yet (a date set by marketing stays)
+            ...(mql.qualified && !lead.mqlQualifiedAt ? { mqlQualifiedAt: now } : {}),
+            updatedAt: now,
+          })
+          .where(eq(leads.id, claimed.leadId));
+      }
     }
 
     return {
@@ -509,7 +567,9 @@ export async function addAxMigrationDetails(
     if (!validation.success) {
       return { ok: false as const, reason: 'invalid' as const, issues: validation.issues };
     }
-    const result = evaluateAxMigration(validation.answers, AX_MIGRATION_CONFIG, now);
+    const result = evaluateAxMigration(validation.answers, AX_MIGRATION_CONFIG, now, {
+      consultationRequested: submission.consultationRequestedAt !== null,
+    });
     const previousScore = (submission.result as Partial<AxMigrationResult> | null)?.leadScore;
 
     await tx

@@ -134,6 +134,31 @@ describe.skipIf(!url)('dashboard summary (PostgreSQL)', () => {
     expect(s.previousAverageScore).toBeNull(); // no scored lead in the previous period
   });
 
+  it('counts MQL as 関心あり only and 適合 only apart (#139)', async () => {
+    const [own] = await pg
+      .insert(organizations)
+      .values({ name: '適合', slug: `dash-fit-${Date.now()}` })
+      .returning();
+    try {
+      const mql = (level: string) => ({ axMigration: { platform: 'as400', mql: { level, signals: [], unmet: [] } } });
+      const createdAt = at('2026-10-14T01:00:00Z');
+      await lead({ createdAt, responses: mql('interest'), mqlQualifiedAt: createdAt }, own.id);
+      await lead({ createdAt, responses: mql('fit') }, own.id);
+      await lead({ createdAt, responses: mql('fit') }, own.id);
+      // Marketing confirmed it as an MQL by hand: no longer 適合 only
+      await lead({ createdAt, responses: mql('fit'), mqlQualifiedAt: createdAt }, own.id);
+      await lead({ createdAt, responses: mql('none') }, own.id);
+      // Before the period
+      await lead({ createdAt: at('2026-10-01T01:00:00Z'), responses: mql('fit') }, own.id);
+
+      const s = await getDashboardSummary(db, own.id, 7, now);
+      expect(s.mql).toBe(2);
+      expect(s.fitOnly).toBe(2);
+    } finally {
+      await pg.delete(organizations).where(eq(organizations.id, own.id));
+    }
+  });
+
   it('lists every day of the period, with zero for days without leads', async () => {
     const s = await getDashboardSummary(db, organizationId, 7, now);
 

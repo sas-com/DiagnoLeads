@@ -77,6 +77,7 @@ const summary = {
   previousConsultations: 1,
   mql: 4,
   previousMql: 5,
+  fitOnly: 2,
   averageScore: 77,
   previousAverageScore: 70,
   daily: [
@@ -206,6 +207,9 @@ describe('DashboardPage', () => {
     expect(screen.getByText('前の30日間 1件 → +200%')).toBeInTheDocument();
     expect(screen.getByText('−1件')).toBeInTheDocument();
     expect(screen.getByText('前の30日間 5件 → −20%')).toBeInTheDocument();
+    // MQL counts 関心あり only; 適合 only is a separate line (#139)
+    expect(screen.getByText('MQL（関心あり）')).toBeInTheDocument();
+    expect(screen.getByText('ほかに適合のみ 2件')).toBeInTheDocument();
     // Average score: points, no percent
     expect(screen.getByText('+7')).toBeInTheDocument();
     expect(screen.getByText('前の30日間 70')).toBeInTheDocument();

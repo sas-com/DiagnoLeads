@@ -135,8 +135,11 @@ export type DashboardSummary = {
   previousNewLeads: number;
   consultations: number;
   previousConsultations: number;
+  /** MQL = 関心あり only (#139): leads whose MQL date falls in the period */
   mql: number;
   previousMql: number;
+  /** 適合のみ (#139): leads created in the period that fit but show no interest yet */
+  fitOnly: number;
   /** Average score of the leads created in the period; null when there are none */
   averageScore: number | null;
   previousAverageScore: number | null;
@@ -190,6 +193,7 @@ export async function getDashboardSummary(
   const mqlIn = (start: string, end: string) =>
     sql`${leads.mqlQualifiedAt} >= (${start}::timestamptz AT TIME ZONE 'UTC') and ${leads.mqlQualifiedAt} < (${end}::timestamptz AT TIME ZONE 'UTC')`;
   const consultation = sql`${leads.conversionPoint} = 'consultation'`;
+  const fitOnly = sql`${leads.responses}->'axMigration'->'mql'->>'level' = 'fit' and ${leads.mqlQualifiedAt} is null`;
 
   const [figures, dailyRows, statusRows, platformRows, pendingRows, recentRows] = await Promise.all(
     [
@@ -202,6 +206,7 @@ export async function getDashboardSummary(
           previousConsultations: sql<number>`count(*) filter (where ${createdIn(previousFromIso, fromIso)} and ${consultation})`,
           mql: sql<number>`count(*) filter (where ${mqlIn(fromIso, endIso)})`,
           previousMql: sql<number>`count(*) filter (where ${mqlIn(previousFromIso, fromIso)})`,
+          fitOnly: sql<number>`count(*) filter (where ${createdIn(fromIso, endIso)} and ${fitOnly})`,
           averageScore: sql<
             string | null
           >`avg(${leads.score}) filter (where ${createdIn(fromIso, endIso)})`,
@@ -311,6 +316,7 @@ export async function getDashboardSummary(
     previousConsultations: Number(totals?.previousConsultations ?? 0),
     mql: Number(totals?.mql ?? 0),
     previousMql: Number(totals?.previousMql ?? 0),
+    fitOnly: Number(totals?.fitOnly ?? 0),
     averageScore: roundedAverage(totals?.averageScore),
     previousAverageScore: roundedAverage(totals?.previousAverageScore),
     daily,

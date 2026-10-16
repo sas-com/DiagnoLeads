@@ -177,17 +177,69 @@ describe('sales notification', () => {
     };
 
     const consultation = buildSalesMessage({ ...base, consultationRequested: true });
-    expect(consultation.title).toContain('【相談申込】テスト製作所 山田 様');
+    expect(consultation.title).toContain('【相談申込・関心あり（MQL）】テスト製作所 山田 様');
     expect(consultation.title).toContain('2026/10/13 までに連絡');
     expect(consultation.message).toContain('MQL判定を経ずに営業へ引き渡します');
 
     const diagnosis = buildSalesMessage({ ...base, consultationRequested: false });
-    expect(diagnosis.title).toContain('【AX診断】');
-    expect(diagnosis.message).toContain('MQL: 該当');
+    // as400Answers: an IT department head, a decision-making role
+    expect(diagnosis.title).toContain('【AX診断・関心あり（MQL）】');
+    expect(diagnosis.message).toContain('MQL: 関心あり（決裁に関わる立場）');
     expect(diagnosis.message).toContain('SQLの手がかり: あり');
 
     const unverified = buildSalesMessage({ ...base, consultationRequested: true, identityUnverified: true });
-    expect(unverified.title).toContain('【相談申込・本人未確認】');
+    expect(unverified.title).toContain('【相談申込・関心あり（MQL）・本人未確認】');
     expect(unverified.message).toContain('リードの内容は変更していません');
+  });
+
+  it('tells 関心あり, 適合 and 対象外 apart in the title and the message (#139)', () => {
+    const message = (answers: typeof as400Answers) =>
+      buildSalesMessage({
+        organizationId: 'org',
+        leadId: 'lead',
+        submissionId: 'sub',
+        company: 'テスト製作所',
+        name: '山田',
+        email: 'yamada@example.com',
+        result: evaluateAxMigration(answers),
+        consultationRequested: false,
+        leadCreated: true,
+        identityUnverified: false,
+        requestedAt: new Date('2026-10-09T01:00:00Z'),
+      });
+
+    const fit = message({ ...as400Answers, role: 'it_staff' });
+    expect(fit.title).toMatch(/^【AX診断・適合】/);
+    expect(fit.message).toContain('MQL: 適合のみ');
+
+    const interest = message({ ...as400Answers, role: 'it_staff', support_end: 'within_1y' });
+    expect(interest.title).toMatch(/^【AX診断・関心あり（MQL）】/);
+    expect(interest.message).toContain('MQL: 関心あり（保守期限・サポート終了が近い）');
+
+    const outside = message({ ...as400Answers, industry: 'other' });
+    expect(outside.title).toMatch(/^【AX診断】/);
+    expect(outside.message).toContain('MQL: 対象外（業種が対象外）');
+  });
+
+  it('reads a result stored before #139 (no level) as 適合, not as an MQL', () => {
+    const stored = {
+      ...evaluateAxMigration(as400Answers),
+      mql: { qualified: true, candidate: true, criteria: { industry: true, system: true, action: true } },
+    } as unknown as ReturnType<typeof evaluateAxMigration>;
+    const { title, message } = buildSalesMessage({
+      organizationId: 'org',
+      leadId: 'lead',
+      submissionId: 'sub',
+      company: 'テスト製作所',
+      name: '山田',
+      email: 'yamada@example.com',
+      result: stored,
+      consultationRequested: false,
+      leadCreated: true,
+      identityUnverified: false,
+      requestedAt: new Date('2026-10-09T01:00:00Z'),
+    });
+    expect(title).toMatch(/^【AX診断・適合】/);
+    expect(message).toContain('MQL: 適合のみ');
   });
 });

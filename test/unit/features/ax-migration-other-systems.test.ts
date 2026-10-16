@@ -56,6 +56,16 @@ describe('withOtherSystem', () => {
       withOtherSystem({ axMigration: { otherSystems: 'broken' } }, entry('second'), false)
     ).toEqual({ axMigration: { otherSystems: [entry('second')] } });
   });
+  it('keeps the higher MQL level of the lead and the other system (#139)', () => {
+    const fit = { level: 'fit' as const, signals: [], unmet: [] };
+    const interest = { level: 'interest' as const, signals: ['support_deadline' as const], unmet: [] };
+    const upgraded = withOtherSystem({ axMigration: { mql: fit } }, entry('second'), false, interest);
+    expect(upgraded.axMigration).toMatchObject({ mql: interest });
+    const kept = withOtherSystem({ axMigration: { mql: interest } }, entry('second'), false, fit);
+    expect(kept.axMigration).toMatchObject({ mql: interest });
+    // Without a judgement nothing about the MQL changes
+    expect(withOtherSystem({ axMigration: {} }, entry('second'), false).axMigration).not.toHaveProperty('mql');
+  });
 });
 
 describe('withOtherSystemUpdate', () => {

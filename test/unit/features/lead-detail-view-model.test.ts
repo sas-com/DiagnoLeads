@@ -46,12 +46,35 @@ describe('readLeadDiagnosis', () => {
       challenges: ['people', 'cost'],
       department: null,
       mqlCandidate: true,
+      // Written before #139: only the required conditions were judged
+      mql: { level: 'fit', signals: [], unmet: [], legacy: true },
       sqlSignals: true,
       consultationRequested: true,
       otherSystems: [],
     });
     // Nothing left over: no raw data to fall back to
     expect(extra).toEqual([]);
+  });
+
+  it('reads 適合 / 関心あり（MQL） and why (#139)', () => {
+    const { ax, extra } = readLeadDiagnosis({
+      axMigration: {
+        ...axSummary,
+        mql: { level: 'interest', signals: ['consultation', 'unknown', 'decision_role'], unmet: [] },
+      },
+    });
+    expect(ax?.mql).toEqual({
+      level: 'interest',
+      signals: ['consultation', 'decision_role'],
+      unmet: [],
+      legacy: false,
+    });
+    expect(extra).toEqual([]);
+
+    const outside = readLeadDiagnosis({
+      axMigration: { ...axSummary, mqlCandidate: false, mql: { level: 'none', signals: [], unmet: ['industry'] } },
+    });
+    expect(outside.ax?.mql).toEqual({ level: 'none', signals: [], unmet: ['industry'], legacy: false });
   });
 
   it('reads the other systems diagnosed from the result screen', () => {

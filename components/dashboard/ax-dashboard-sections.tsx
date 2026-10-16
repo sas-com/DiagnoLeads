@@ -135,9 +135,11 @@ type KpiProps = {
   previous?: number | null;
   /** Counts (件) or a score; scores show no percent change */
   kind: 'count' | 'score';
+  /** One more line under the comparison (e.g. the 適合のみ count next to MQL) */
+  detail?: string;
 };
 
-function KpiCard({ label, days, value, previous, kind }: KpiProps) {
+function KpiCard({ label, days, value, previous, kind, detail }: KpiProps) {
   const { tw, numberFormat } = useDashboardText();
   const count = (n: number) =>
     kind === 'count' ? tw('kpi.count', { value: numberFormat(n) }) : numberFormat(n);
@@ -181,6 +183,9 @@ function KpiCard({ label, days, value, previous, kind }: KpiProps) {
       </div>
       {note && (
         <p className="mt-1.5 text-xs text-gray-500 tabular-nums dark:text-gray-400">{note}</p>
+      )}
+      {detail && (
+        <p className="mt-0.5 text-xs text-gray-500 tabular-nums dark:text-gray-400">{detail}</p>
       )}
     </Card>
   );
@@ -231,11 +236,12 @@ export function KpiSection({
         kind="count"
       />
       <KpiCard
-        label={tw('kpi.mql')}
+        label={tw('kpi.mqlInterest')}
         days={data.days}
         value={data.mql}
         previous={data.previousMql}
         kind="count"
+        detail={data.fitOnly > 0 ? tw('kpi.fitOnly', { value: data.fitOnly }) : undefined}
       />
       <KpiCard
         label={tw('kpi.averageScore')}
