@@ -26,7 +26,9 @@ import {
   exportLeadsToPDF,
   generatePDFFilename,
 } from '@/lib/features/reports/pdf-export-service';
+import { loadPdfFontInBrowser } from '@/lib/features/reports/pdf-font.client';
 import { useCallback, useState } from 'react';
+import { usePdfReportLabels } from './use-pdf-report-labels';
 
 interface UseExportOptions {
   organizationName?: string;
@@ -39,6 +41,7 @@ interface UseExportOptions {
 export function useExport(options: UseExportOptions = {}) {
   const [isExporting, setIsExporting] = useState(false);
   const { organizationName = 'Unknown Organization', locale = 'en' } = options;
+  const pdfLabels = usePdfReportLabels();
 
   /**
    * Export leads to CSV
@@ -133,7 +136,7 @@ export function useExport(options: UseExportOptions = {}) {
    * Export leads to PDF
    */
   const exportLeadsPDF = useCallback(
-    (leads: ExportLead[], dateRange?: string) => {
+    async (leads: ExportLead[], dateRange?: string) => {
       setIsExporting(true);
       try {
         const doc = exportLeadsToPDF(leads, {
@@ -141,6 +144,8 @@ export function useExport(options: UseExportOptions = {}) {
           dateRange,
           generatedAt: new Date(),
           locale,
+          font: await loadPdfFontInBrowser(),
+          labels: pdfLabels,
         });
         const filename = generatePDFFilename('leads', dateRange);
         downloadPDF(doc, filename);
@@ -148,14 +153,14 @@ export function useExport(options: UseExportOptions = {}) {
         setIsExporting(false);
       }
     },
-    [organizationName, locale]
+    [organizationName, locale, pdfLabels]
   );
 
   /**
    * Export analytics report to PDF
    */
   const exportAnalyticsPDF = useCallback(
-    (data: {
+    async (data: {
       overview: OverviewStats;
       trend?: TrendDataPoint[];
       sourceBreakdown?: SourceBreakdown[];
@@ -165,6 +170,7 @@ export function useExport(options: UseExportOptions = {}) {
     }) => {
       setIsExporting(true);
       try {
+        const font = await loadPdfFontInBrowser();
         const doc = exportAnalyticsToPDF(
           {
             overview: data.overview,
@@ -174,11 +180,12 @@ export function useExport(options: UseExportOptions = {}) {
             funnel: data.funnel,
           },
           {
-            title: 'Analytics Report',
             organizationName,
             dateRange: data.dateRange,
             generatedAt: new Date(),
             locale,
+            font,
+            labels: pdfLabels,
           }
         );
         const filename = generatePDFFilename('analytics', data.dateRange);
@@ -187,7 +194,7 @@ export function useExport(options: UseExportOptions = {}) {
         setIsExporting(false);
       }
     },
-    [organizationName, locale]
+    [organizationName, locale, pdfLabels]
   );
 
   return {

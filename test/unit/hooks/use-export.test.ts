@@ -17,6 +17,18 @@ vi.mock('@/lib/features/reports/pdf-export-service', () => ({
   downloadPDF: vi.fn(),
 }));
 
+// The Japanese font the PDF exports fetch first (#189)
+const pdfFont = { binary: '\x00\x01\x00\x00' };
+vi.mock('@/lib/features/reports/pdf-font.client', () => ({
+  loadPdfFontInBrowser: vi.fn(async () => pdfFont),
+}));
+
+// The PDF texts in the screen's language (#189)
+const pdfLabels = { text: vi.fn(), status: vi.fn(), source: vi.fn() };
+vi.mock('@/hooks/use-pdf-report-labels', () => ({
+  usePdfReportLabels: () => pdfLabels,
+}));
+
 // Import after mocks
 import { useExport } from '@/hooks/use-export';
 import {
@@ -115,23 +127,26 @@ describe('useExport', () => {
   });
 
   describe('exportLeadsPDF', () => {
-    it('should export leads to PDF', () => {
+    it('should export leads to PDF', async () => {
       const { result } = renderHook(() => useExport({ organizationName: 'Test Org' }));
 
-      act(() => {
-        result.current.exportLeadsPDF(mockLeads);
+      await act(async () => {
+        await result.current.exportLeadsPDF(mockLeads);
       });
 
-      expect(exportLeadsToPDF).toHaveBeenCalled();
+      expect(exportLeadsToPDF).toHaveBeenCalledWith(
+        mockLeads,
+        expect.objectContaining({ font: pdfFont, labels: pdfLabels })
+      );
       expect(generatePDFFilename).toHaveBeenCalledWith('leads', undefined);
       expect(downloadPDF).toHaveBeenCalled();
     });
 
-    it('should include date range in PDF filename', () => {
+    it('should include date range in PDF filename', async () => {
       const { result } = renderHook(() => useExport());
 
-      act(() => {
-        result.current.exportLeadsPDF(mockLeads, '30d');
+      await act(async () => {
+        await result.current.exportLeadsPDF(mockLeads, '30d');
       });
 
       expect(generatePDFFilename).toHaveBeenCalledWith('leads', '30d');
@@ -167,14 +182,17 @@ describe('useExport', () => {
   });
 
   describe('exportAnalyticsPDF', () => {
-    it('should export analytics to PDF', () => {
+    it('should export analytics to PDF', async () => {
       const { result } = renderHook(() => useExport({ organizationName: 'Test Org', locale: 'ja' }));
 
-      act(() => {
-        result.current.exportAnalyticsPDF(mockAnalyticsData);
+      await act(async () => {
+        await result.current.exportAnalyticsPDF(mockAnalyticsData);
       });
 
-      expect(exportAnalyticsToPDF).toHaveBeenCalled();
+      expect(exportAnalyticsToPDF).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ font: pdfFont, labels: pdfLabels, locale: 'ja' })
+      );
       expect(generatePDFFilename).toHaveBeenCalledWith('analytics', '30d');
       expect(downloadPDF).toHaveBeenCalled();
     });

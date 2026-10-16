@@ -14,6 +14,12 @@ const nextConfig: NextConfig = {
   // External packages for server components (moved from experimental in Next.js 15)
   serverExternalPackages: ['postgres'],
 
+  // The PDF exports read their Japanese font from disk (lib/features/reports/pdf-font.server.ts,
+  // #189); bundle it with the tRPC function so it exists on Vercel too
+  outputFileTracingIncludes: {
+    '/api/trpc/*': ['./public/fonts/NotoSansJP-Regular-subset.ttf'],
+  },
+
   // Performance optimizations
   compiler: {
     // Remove console.log in production

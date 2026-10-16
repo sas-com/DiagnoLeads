@@ -29,6 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { usePdfReportLabels } from '@/hooks/use-pdf-report-labels';
 import type { Lead } from '@/lib/db/schema';
 import { LEAD_EXPORT_MAX_ROWS } from '@/lib/features/leads/export';
 import { LEAD_PAGE_SIZES, type LeadListSort } from '@/lib/features/leads/list-query';
@@ -42,6 +43,7 @@ import {
   exportLeadsToPDF,
   generatePDFFilename,
 } from '@/lib/features/reports/pdf-export-service';
+import { loadPdfFontInBrowser } from '@/lib/features/reports/pdf-font.client';
 import { cn } from '@/lib/utils';
 import {
   type ColumnDef,
@@ -223,6 +225,7 @@ export function LeadTable({
 }: LeadTableProps) {
   const t = useTranslations('leads');
   const tList = useTranslations('leadList');
+  const pdfLabels = usePdfReportLabels();
   const tSource = useTranslations('leadSource');
   const tPipeline = useTranslations('pipeline');
   const tCommon = useTranslations('common');
@@ -636,7 +639,7 @@ export function LeadTable({
   }, []);
 
   const exportSelectedToPDF = useCallback(
-    (leadsToExport: Lead[]) => {
+    async (leadsToExport: Lead[]) => {
       const data = leadsToExport.map((lead) => ({
         id: lead.id,
         email: lead.email,
@@ -655,11 +658,13 @@ export function LeadTable({
       const doc = exportLeadsToPDF(data, {
         generatedAt: new Date(),
         locale: locale as 'en' | 'ja',
+        font: await loadPdfFontInBrowser(),
+        labels: pdfLabels,
       });
       const filename = generatePDFFilename('leads');
       downloadPDF(doc, filename);
     },
-    [locale]
+    [locale, pdfLabels]
   );
 
   const columnLabels: Record<string, string> = {
