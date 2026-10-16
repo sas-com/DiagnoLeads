@@ -78,6 +78,13 @@
       "when": 1792124856559,
       "tag": "0010_lead_hearings",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792125981956,
+      "tag": "0011_content_editors",
+      "breakpoints": true
     }
   ]
 }
