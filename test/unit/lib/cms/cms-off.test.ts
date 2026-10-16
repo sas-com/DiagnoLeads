@@ -25,7 +25,7 @@ describe('CMS on or off', () => {
   });
 
   it("treats every /api path that is not the app's own as the CMS's, and the CMS tools too", () => {
-    for (const path of ['/api/cms/ai-generate', '/api/cms/figma/webhook', '/api/cms-users', '/api/cms-users/me', '/api/blog-posts', '/api/graphql', '/api/anything', '/api/TRPC/x', '/api/']) {
+    for (const path of ['/api/cms/ai-generate', '/api/cms/figma/webhook', '/api/cms-users', '/api/cms-users/me', '/api/blog-posts', '/api/graphql', '/api/anything', '/api/TRPC/x', '/api/', '/api/health%2Fx', '/api/tr%70c%2fx']) {
       expect(isCmsApiPath(path), path).toBe(true);
     }
     for (const path of ['/api/trpc/content.blog.list', '/api/tr%70c/x', '/api/auth/sign-in/email', '/api/health', '/api/cron/cleanup-webhook-deliveries', '/api/embed/v1/x', '/ja/blog', '/apix']) {
@@ -56,7 +56,19 @@ describe('CMS database connection', () => {
     expect(config.connectionString).toContain('pooler.supabase.com:5432/postgres');
   });
 
+  it('drops every TLS setting of the URL, which node-postgres would let override ours', () => {
+    const { connectionString } = cmsPoolConfig(
+      'postgres://u:p%40x@db.example.com:5432/postgres?ssl=true&sslrootcert=/ca.crt&uselibpqcompat=true&pgbouncer=true'
+    );
+    expect(connectionString).toBe('postgres://u:p%40x@db.example.com:5432/postgres?pgbouncer=true');
+  });
+
+  it('leaves a connection string that is not a URL to node-postgres', () => {
+    expect(cmsPoolConfig('postgres://u:p@/db?host=/var/run/postgresql x')).toMatchObject({ ssl: false });
+  });
+
   it('uses a local database without TLS', () => {
+    expect(cmsPoolConfig('postgres://postgres:postgres@LOCALHOST:5432/dl_test').ssl).toBe(false);
     expect(cmsPoolConfig('postgres://postgres:postgres@127.0.0.1:55433/dl_test').ssl).toBe(false);
     expect(cmsPoolConfig('').ssl).toBe(false);
   });

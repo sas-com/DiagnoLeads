@@ -44,6 +44,8 @@ export function isCmsApiPath(pathname: string): boolean {
     // Judge a malformed escape as it is
   }
   if (!path.startsWith('/api/')) return false;
+  // An encoded slash is not a separator for the router: "/api/health%2Fx" reaches Payload
+  if (/%2f/i.test(pathname)) return true;
   const segment = path.slice('/api/'.length).split('/')[0];
   // Routes match case-sensitively: "/api/TRPC" is not the app's and falls through to Payload
   return !APP_API.has(segment);

@@ -127,5 +127,7 @@ export const config = {
     // Pages of each language, even when the last segment looks like an image ("y.png" can be
     // a page id): they need the sign-in redirect and the security headers
     '/(ja|en)/:path*',
+    // Every API path, even when it ends like an image: the CMS API is off in production (#141)
+    '/api/:path*',
   ],
 };

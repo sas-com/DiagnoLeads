@@ -1,4 +1,6 @@
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+/** URL parameters node-postgres turns into TLS settings, which would override ours */
+const TLS_PARAMS = ['sslmode', 'ssl', 'sslcert', 'sslkey', 'sslrootcert', 'uselibpqcompat'];
 
 /**
  * Connection pool settings of the CMS database (node-postgres). node-postgres verifies the
@@ -12,10 +14,16 @@ export function cmsPoolConfig(connectionString: string): {
   ssl: false | { rejectUnauthorized: false };
 } {
   if (!connectionString) return { connectionString, ssl: false };
-  const url = new URL(connectionString);
-  url.searchParams.delete('sslmode');
+  let url: URL;
+  try {
+    url = new URL(connectionString);
+  } catch {
+    // Not a URL (a socket path, for example): leave it to node-postgres as it is
+    return { connectionString, ssl: false };
+  }
+  for (const param of TLS_PARAMS) url.searchParams.delete(param);
   return {
     connectionString: url.toString(),
-    ssl: LOCAL_HOSTS.has(url.hostname) ? false : { rejectUnauthorized: false },
+    ssl: LOCAL_HOSTS.has(url.hostname.toLowerCase()) ? false : { rejectUnauthorized: false },
   };
 }
