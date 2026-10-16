@@ -403,7 +403,7 @@ describe('LeadDetailView overview', () => {
     const diagnosis = screen.getByTestId('lead-diagnosis-card');
     expect(within(diagnosis).getByText('AS/400（IBM i）')).toBeInTheDocument();
     expect(within(diagnosis).getByText('相談の申込みあり')).toBeInTheDocument();
-    expect(within(diagnosis).getByText('MQL候補')).toBeInTheDocument();
+    expect(within(diagnosis).getByText('適合', { selector: '[title]' })).toBeInTheDocument();
     expect(within(diagnosis).getByText('ヒト：人に依存した基幹システム')).toBeInTheDocument();
     expect(diagnosis).not.toHaveTextContent(SUBMISSION_ID);
 

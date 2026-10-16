@@ -7,6 +7,15 @@
  * keys, older data, custom fields) as flat key / value text so raw JSON is never shown.
  */
 
+import {
+  AX_MQL_LEVELS,
+  AX_MQL_REQUIRED,
+  AX_MQL_SIGNALS,
+  type AxMqlLevel,
+  type AxMqlRequired,
+  type AxMqlSignal,
+} from '@/lib/features/diagnostics/ax-migration/mql';
+
 export const AX_LEVELS = ['low', 'medium', 'high'] as const;
 export type AxLevel = (typeof AX_LEVELS)[number];
 
@@ -25,10 +34,24 @@ export interface AxSystemView {
   detailsAnsweredAt: string | null;
 }
 
+/** 適合 / 関心あり（MQL） and why (#139) */
+export interface AxMqlView {
+  level: AxMqlLevel;
+  signals: AxMqlSignal[];
+  unmet: AxMqlRequired[];
+  /**
+   * Judged before #139 (no level stored): only the required conditions were checked, so the
+   * level reads as 適合 / 対象外 and the lead's MQL date may come from the old rule
+   */
+  legacy: boolean;
+}
+
 export interface AxDiagnosisView extends AxSystemView {
   challenges: string[];
   department: string | null;
+  /** 適合 (the required conditions are met) */
   mqlCandidate: boolean;
+  mql: AxMqlView;
   sqlSignals: boolean;
   consultationRequested: boolean;
   otherSystems: AxSystemView[];
@@ -65,6 +88,7 @@ const AX_MAIN_KEYS = new Set<string>([
   'challenges',
   'department',
   'mqlCandidate',
+  'mql',
   'sqlSignals',
   'consultationRequested',
   'otherSystems',
@@ -116,6 +140,23 @@ export function flattenExtraData(value: unknown, key: string, depth = 0): ExtraD
   return [];
 }
 
+function readMql(stored: unknown, mqlCandidate: boolean): AxMqlView {
+  if (
+    isPlainObject(stored) &&
+    typeof stored.level === 'string' &&
+    (AX_MQL_LEVELS as readonly string[]).includes(stored.level)
+  ) {
+    const listed = (value: unknown) => (Array.isArray(value) ? value : []);
+    return {
+      level: stored.level as AxMqlLevel,
+      signals: AX_MQL_SIGNALS.filter((signal) => listed(stored.signals).includes(signal)),
+      unmet: AX_MQL_REQUIRED.filter((key) => listed(stored.unmet).includes(key)),
+      legacy: false,
+    };
+  }
+  return { level: mqlCandidate ? 'fit' : 'none', signals: [], unmet: [], legacy: true };
+}
+
 function readSystem(source: Record<string, unknown>): AxSystemView {
   return {
     submissionId: stringOrNull(source.submissionId),
@@ -164,11 +205,13 @@ export function readLeadDiagnosis(responses: unknown, customFields?: unknown): L
       const otherSystems = Array.isArray(summary.otherSystems)
         ? summary.otherSystems.filter(isPlainObject)
         : [];
+      const mqlCandidate = summary.mqlCandidate === true;
       ax = {
         ...main,
         challenges,
         department: stringOrNull(summary.department),
-        mqlCandidate: summary.mqlCandidate === true,
+        mqlCandidate,
+        mql: readMql(summary.mql, mqlCandidate),
         sqlSignals: summary.sqlSignals === true,
         consultationRequested: summary.consultationRequested === true,
         otherSystems: otherSystems.map(readSystem),

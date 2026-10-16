@@ -124,13 +124,19 @@ describe('axMigrationDefinition (v2)', () => {
 });
 
 describe('evaluateAxMigration', () => {
-  describe('MQL (業種 × システム × 行動)', () => {
-    const candidateOnly = { ...AX_MIGRATION_CONFIG, countWebDiagnosisAsMqlAction: false };
+  describe('MQL (適合 = 業種 × システム, 関心あり = 適合 + 強いシグナル)', () => {
+    /** Fit, without any strong signal */
+    const fitOnly: DiagnosticAnswers = {
+      ...as400Answers,
+      role: 'it_staff',
+      timeline: '1_2y',
+      support_end: '1_3y',
+    };
 
     it.each(['as400', 'acos', 'access'] as const)('counts %s as a legacy system', (platform) => {
       const result = evaluate(answersByPlatform[platform]);
       expect(result.mql.criteria.system).toBe(true);
-      expect(result.mql.qualified).toBe(true);
+      expect(result.mql.candidate).toBe(true);
     });
 
     it('counts VB, WebPerformer and other hosts on the other path, but not packages', () => {
@@ -148,9 +154,61 @@ describe('evaluateAxMigration', () => {
       expect(result.mql).toMatchObject({ qualified: false, candidate: false });
     });
 
-    it('hands a candidate to marketing when the diagnosis does not count as an action', () => {
-      const result = evaluateAxMigration(as400Answers, candidateOnly);
-      expect(result.mql).toMatchObject({ qualified: false, candidate: true });
+    it('is only fit when the respondent shows no interest (completing it is not enough)', () => {
+      expect(evaluate(fitOnly).mql).toMatchObject({
+        level: 'fit',
+        qualified: false,
+        candidate: true,
+        signals: [],
+      });
+    });
+
+    it.each([
+      ['a support end within a year', { support_end: 'within_1y' }, 'support_deadline'],
+      ['a support end already passed', { support_end: 'passed' }, 'support_deadline'],
+      ['a decision-making role', { role: 'executive' }, 'decision_role'],
+      ['a switch within a year', { timeline: 'within_1y' }, 'timeline_soon'],
+    ] as const)('is interested (MQL) with %s', (_, change, signal) => {
+      expect(evaluate({ ...fitOnly, ...change }).mql).toMatchObject({
+        level: 'interest',
+        qualified: true,
+        signals: [signal],
+      });
+    });
+
+    it('is interested (MQL) with a consultation request', () => {
+      const result = evaluateAxMigration(fitOnly, AX_MIGRATION_CONFIG, NOW, {
+        consultationRequested: true,
+      });
+      expect(result.mql).toMatchObject({ level: 'interest', signals: ['consultation'] });
+    });
+
+    it('counts an Access version whose support is ending as a near deadline', () => {
+      const result = evaluate({ ...accessAnswers, role: 'business_staff', timeline: '1_2y' });
+      expect(result.mql).toMatchObject({ level: 'interest', signals: ['support_deadline'] });
+    });
+
+    it('is not an MQL outside the target, whatever the signals', () => {
+      const result = evaluateAxMigration(
+        { ...as400Answers, industry: 'other', role: 'executive' },
+        AX_MIGRATION_CONFIG,
+        NOW,
+        { consultationRequested: true }
+      );
+      expect(result.mql).toMatchObject({
+        level: 'none',
+        qualified: false,
+        unmet: ['industry'],
+        signals: ['consultation', 'decision_role'],
+      });
+    });
+
+    it('can switch back to the old rule (completing the diagnosis is the action)', () => {
+      const old = { ...AX_MIGRATION_CONFIG, countWebDiagnosisAsMqlAction: true };
+      expect(evaluateAxMigration(fitOnly, old, NOW).mql).toMatchObject({
+        level: 'interest',
+        signals: ['web_diagnosis'],
+      });
     });
   });
 

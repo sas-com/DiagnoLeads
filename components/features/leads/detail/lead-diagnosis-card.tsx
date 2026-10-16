@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import {
+  type AxMqlView,
   type AxSystemView,
   type ExtraDataEntry,
   readLeadDiagnosis,
@@ -44,8 +45,23 @@ function useAxLabels() {
     level: (value: string) => label(tAx, `result.levels.${value}`, value),
     challenge: (value: string | null) =>
       value ? label(tAx, `result.challenges.${value}.title`, value) : t('noPrimaryChallenge'),
+    /** 適合 / 関心あり（MQL） and why, in one line (#139) */
+    mqlReason: (mql: AxMqlView) => {
+      if (mql.legacy) return t('mqlLegacy');
+      if (mql.level === 'interest') {
+        return mql.signals.map((signal) => t(`mqlSignals.${signal}`)).join('・');
+      }
+      if (mql.level === 'fit') return t('mqlNoSignal');
+      return mql.unmet.length > 0
+        ? t('mqlUnmet', {
+            conditions: mql.unmet.map((key) => t(`mqlRequired.${key}`)).join('・'),
+          })
+        : '';
+    },
   };
 }
+
+const MQL_LEVEL_KEYS = { interest: 'mqlInterest', fit: 'mqlFit', none: 'mqlNone' } as const;
 
 /**
  * The diagnosis stored on the lead, readable (Refs #107): the AX summary with the result
@@ -117,9 +133,14 @@ export function LeadDiagnosisCard({
   const flags = ax && (
     <div className="flex flex-wrap gap-2">
       {ax.consultationRequested && <Badge color="violet">{t('consultation')}</Badge>}
-      {ax.mqlCandidate && (
-        <Badge color="emerald" title={t('mqlHelp')}>
-          {t('mql')}
+      {ax.mql.level === 'interest' && (
+        <Badge color="emerald" title={`${t('mqlInterestHelp')}（${labels.mqlReason(ax.mql)}）`}>
+          {t('mqlInterest')}
+        </Badge>
+      )}
+      {ax.mql.level === 'fit' && (
+        <Badge color="gray" title={t('mqlFitHelp')}>
+          {t('mqlFit')}
         </Badge>
       )}
       {ax.sqlSignals && (
@@ -184,6 +205,19 @@ export function LeadDiagnosisCard({
         ),
       });
     }
+    const mqlReason = labels.mqlReason(ax.mql);
+    rows.push({
+      key: 'mql',
+      label: t('mqlJudgement'),
+      value: (
+        <span data-testid="lead-diagnosis-mql">
+          {t(MQL_LEVEL_KEYS[ax.mql.level])}
+          {mqlReason && (
+            <span className="block text-xs font-normal text-muted-foreground">{mqlReason}</span>
+          )}
+        </span>
+      ),
+    });
     if (ax.department)
       rows.push({ key: 'department', label: t('department'), value: ax.department });
     if (ax.diagnosedAt)

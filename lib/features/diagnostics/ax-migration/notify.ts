@@ -9,6 +9,14 @@ import { consumeRateLimit } from '../rate-limit';
 import { AX_MIGRATION_CONFIG } from './config';
 import type { AxMigrationResult } from './evaluate';
 import { AX_RATE_LIMITS } from './limits';
+import {
+  type AxMqlJudgement,
+  type AxMqlLevel,
+  type AxMqlRequired,
+  type AxMqlSignal,
+  readAxMql,
+  withConsultationSignal,
+} from './mql';
 
 const LEVEL_LABELS = { low: '低', medium: '中', high: '高' } as const;
 const PLATFORM_LABELS: Record<string, string> = {
@@ -23,6 +31,49 @@ const CHALLENGE_LABELS = {
   agility: 'モノ（市場変化への対応）',
   data: '情報（データ活用）',
 } as const;
+
+/** 強いシグナル (#139), the wording of the lead page */
+const MQL_SIGNAL_LABELS: Record<AxMqlSignal, string> = {
+  consultation: '相談申込',
+  support_deadline: '保守期限・サポート終了が近い',
+  decision_role: '決裁に関わる立場',
+  timeline_soon: '切り替え時期が1年以内',
+  min_score: 'リードスコアが基準以上',
+  web_diagnosis: 'Web診断の完了（旧ルール）',
+};
+const MQL_REQUIRED_LABELS: Record<AxMqlRequired, string> = {
+  industry: '業種',
+  system: 'システム',
+};
+/** Tag in the subject: sales see the order 相談申込 > 関心あり（MQL） > 適合 at a glance */
+const MQL_SUBJECT_TAGS: Record<AxMqlLevel, string> = {
+  interest: '・関心あり（MQL）',
+  fit: '・適合',
+  none: '',
+};
+
+/**
+ * The judgement shown to sales. Results stored before #139 have no level (read as 適合 /
+ * 対象外); a consultation request always counts, even when the stored result predates it.
+ */
+function salesMql(n: AxMigrationNotification): AxMqlJudgement {
+  return n.consultationRequested
+    ? withConsultationSignal(n.result.mql, AX_MIGRATION_CONFIG.mql)
+    : readAxMql(n.result.mql);
+}
+
+/** One line on the MQL judgement and why */
+export function mqlSummary(mql: AxMqlJudgement): string {
+  const signals = mql.signals.map((signal) => MQL_SIGNAL_LABELS[signal]).join('・');
+  switch (mql.level) {
+    case 'interest':
+      return `MQL: 関心あり（${signals}）`;
+    case 'fit':
+      return 'MQL: 適合のみ（業種・システムは対象。関心を示す行動・回答はまだありません）';
+    default:
+      return `MQL: 対象外（${mql.unmet.map((key) => MQL_REQUIRED_LABELS[key]).join('・')}が対象外）`;
+  }
+}
 
 export interface AxMigrationNotification {
   organizationId: string;
@@ -78,15 +129,15 @@ export function consultationDeadline(
 
 export function buildSalesMessage(n: AxMigrationNotification): { title: string; message: string } {
   const primary = n.result.challenges.primary;
+  const mql = salesMql(n);
+  const tag = MQL_SUBJECT_TAGS[mql.level];
   const platform = n.result.platform ? PLATFORM_LABELS[n.result.platform] : undefined;
   const summary = [
     ...(platform ? [`移行元: ${platform}`] : []),
     `移行難易度: ${LEVEL_LABELS[n.result.difficulty.level]}`,
     `緊急度: ${LEVEL_LABELS[n.result.urgency.level]}`,
     `主な課題: ${primary ? CHALLENGE_LABELS[primary] : '特になし'}`,
-    n.result.mql.qualified
-      ? 'MQL: 該当'
-      : `MQL候補: ${n.result.mql.candidate ? '該当（マーケで確定してください）' : '非該当'}`,
+    mqlSummary(mql),
     `SQLの手がかり: ${n.result.sqlSignals.candidate ? 'あり' : 'なし'}`,
     ...(n.result.needsHearing ? ['「わからない」の回答が多く要ヒアリング'] : []),
   ].join(' / ');
@@ -100,7 +151,7 @@ export function buildSalesMessage(n: AxMigrationNotification): { title: string; 
   if (n.consultationRequested) {
     const deadline = consultationDeadline(n.requestedAt);
     return {
-      title: `【相談申込${n.identityUnverified ? '・本人未確認' : ''}】${n.company} ${n.name} 様（${deadline} までに連絡）`,
+      title: `【相談申込${tag}${n.identityUnverified ? '・本人未確認' : ''}】${n.company} ${n.name} 様（${deadline} までに連絡）`,
       message: `AXマイグレーション診断から相談申込がありました。MQL判定を経ずに営業へ引き渡します。${unverified}${additional}${summary}`,
     };
   }
@@ -112,12 +163,12 @@ export function buildSalesMessage(n: AxMigrationNotification): { title: string; 
   }
   if (n.additionalSystem) {
     return {
-      title: `【AX診断・別システム】${n.company} ${n.name} 様が別のシステムも診断しました`,
+      title: `【AX診断・別システム${tag}】${n.company} ${n.name} 様が別のシステムも診断しました`,
       message: `${additional}${summary}`,
     };
   }
   return {
-    title: `【AX診断】${n.company} ${n.name} 様が診断を完了しました`,
+    title: `【AX診断${tag}】${n.company} ${n.name} 様が診断を完了しました`,
     message: summary,
   };
 }
@@ -130,6 +181,7 @@ export function buildSalesMessage(n: AxMigrationNotification): { title: string; 
 export async function notifyAxMigrationSubmission(n: AxMigrationNotification): Promise<void> {
   if (!(await withinNotificationLimit(n.organizationId))) return;
   const { title, message } = buildSalesMessage(n);
+  const mql = salesMql(n);
   const data = {
     leadId: n.leadId,
     submissionId: n.submissionId,
@@ -146,8 +198,11 @@ export async function notifyAxMigrationSubmission(n: AxMigrationNotification): P
       company: n.company,
       name: n.name,
       score: n.result.leadScore,
-      mql: n.result.mql.qualified,
-      mqlCandidate: n.result.mql.candidate,
+      // mql = 関心あり（MQL）, mqlCandidate = 適合 (#139)
+      mql: mql.qualified,
+      mqlCandidate: mql.candidate,
+      mqlLevel: mql.level,
+      mqlSignals: mql.signals,
       sqlSignals: n.result.sqlSignals.candidate,
       difficulty: n.result.difficulty.level,
       urgency: n.result.urgency.level,

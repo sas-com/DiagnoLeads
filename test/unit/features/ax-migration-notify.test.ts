@@ -30,7 +30,8 @@ vi.mock('@/lib/features/email', () => ({
 const { notifyAxMigrationSubmission } = await import('@/lib/features/diagnostics/ax-migration/notify');
 const { evaluateAxMigration } = await import('@/lib/features/diagnostics/ax-migration/evaluate');
 
-const result = evaluateAxMigration(as400Answers);
+/** Target industry and system, nothing that shows interest: 適合 only */
+const result = evaluateAxMigration({ ...as400Answers, role: 'it_staff' });
 
 const base = {
   organizationId: 'org-1',
@@ -62,7 +63,13 @@ describe('notifyAxMigrationSubmission', () => {
     expect(webhookMock).toHaveBeenCalledWith(
       'org-1',
       'diagnostic.submitted',
-      expect.objectContaining({ leadId: 'lead-1', mqlCandidate: true })
+      expect.objectContaining({
+        leadId: 'lead-1',
+        mql: false,
+        mqlCandidate: true,
+        mqlLevel: 'fit',
+        mqlSignals: [],
+      })
     );
   });
 
@@ -71,8 +78,8 @@ describe('notifyAxMigrationSubmission', () => {
     expect(inAppMock).toHaveBeenCalledWith(
       'org-1',
       'lead_created',
-      expect.stringContaining('【AX診断】'),
-      expect.any(String),
+      expect.stringContaining('【AX診断・適合】'),
+      expect.stringContaining('MQL: 適合のみ'),
       expect.objectContaining({ submissionId: 'sub-1' })
     );
     expect(sendEmailMock).not.toHaveBeenCalled();
@@ -89,12 +96,23 @@ describe('notifyAxMigrationSubmission', () => {
     expect(inAppMock).toHaveBeenCalledWith(
       'org-1',
       'consultation_requested',
-      expect.stringContaining('【相談申込】'),
+      expect.stringContaining('【相談申込・関心あり（MQL）】'),
       expect.any(String),
       expect.any(Object)
     );
     expect(sendEmailMock).toHaveBeenCalledWith(
-      expect.objectContaining({ to: ['sales1@example.jp', 'sales2@example.jp'] })
+      expect.objectContaining({
+        to: ['sales1@example.jp', 'sales2@example.jp'],
+        // The request itself is the strong signal, also when the stored result predates it
+        subject: expect.stringMatching(/^【相談申込・関心あり（MQL）】/),
+        text: expect.stringContaining('MQL: 関心あり（相談申込）'),
+        html: expect.stringContaining('MQL: 関心あり（相談申込）'),
+      })
+    );
+    expect(webhookMock).toHaveBeenCalledWith(
+      'org-1',
+      'diagnostic.submitted',
+      expect.objectContaining({ mql: true, mqlLevel: 'interest', mqlSignals: ['consultation'] })
     );
   });
 
@@ -169,7 +187,7 @@ describe('notifyAxMigrationSubmission', () => {
     expect(inAppMock).toHaveBeenCalledWith(
       'org-1',
       'lead_scored',
-      expect.stringContaining('【AX診断・別システム】'),
+      expect.stringContaining('【AX診断・別システム・適合】'),
       expect.stringContaining('最初の診断と同じ画面から、別のシステムも続けて診断されました'),
       expect.objectContaining({ additionalSystem: true, identityUnverified: false })
     );
@@ -190,7 +208,7 @@ describe('notifyAxMigrationSubmission', () => {
     });
     const [, type, title, message] = inAppMock.mock.calls[0];
     expect(type).toBe('consultation_requested');
-    expect(title).toMatch(/^【相談申込】/);
+    expect(title).toMatch(/^【相談申込・関心あり（MQL）】/);
     expect(message).toContain('別のシステムも続けて診断されました');
     expect(sendEmailMock).toHaveBeenCalled();
   });

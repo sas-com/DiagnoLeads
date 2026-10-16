@@ -35,6 +35,8 @@ const renderCard = (props: ComponentProps<typeof LeadDiagnosisCard>) =>
     </NextIntlClientProvider>
   );
 
+/** A flag badge (the MQL row repeats the level as text) */
+const badge = (text: string) => screen.getByText(text, { selector: '[title]' });
 const value = (label: string) => screen.getByText(label, { selector: 'dt' }).nextElementSibling;
 
 describe('LeadDiagnosisCard', () => {
@@ -50,10 +52,54 @@ describe('LeadDiagnosisCard', () => {
     // In Japan time
     expect(value('診断日時')).toHaveTextContent('2026/10/16 10:30');
     expect(value('追加の質問への回答')).toHaveTextContent('2026/10/16 11:00');
-    for (const flag of ['相談の申込みあり', 'MQL候補', '商談化の兆しあり', 'ヒアリングで確認が必要']) {
+    for (const flag of ['相談の申込みあり', '商談化の兆しあり', 'ヒアリングで確認が必要']) {
       expect(screen.getByText(flag)).toBeInTheDocument();
     }
-    expect(screen.getByText('MQL候補')).toHaveAttribute('title', expect.stringContaining('見込み'));
+    // Stored before #139: only the required conditions were judged, and the card says so
+    expect(badge('適合')).toHaveAttribute('title', expect.stringContaining('対象の業種'));
+    expect(value('MQL判定')).toHaveTextContent('適合2026年10月16日より前の判定');
+  });
+
+  describe('適合 / 関心あり（MQL） (#139)', () => {
+    const withMql = (mql: Record<string, unknown>, mqlCandidate = true) => ({
+      responses: { axMigration: { ...axMigration, mqlCandidate, mql } },
+    });
+
+    it('shows 関心あり with the signals that made it', () => {
+      renderCard(withMql({ level: 'interest', signals: ['consultation', 'decision_role'], unmet: [] }));
+      expect(badge('関心あり（MQL）')).toHaveAttribute(
+        'title',
+        expect.stringContaining('相談申込・決裁に関わる立場')
+      );
+      expect(screen.getByTestId('lead-diagnosis-mql')).toHaveTextContent(
+        '関心あり（MQL）相談申込・決裁に関わる立場'
+      );
+      expect(screen.queryByText('適合', { selector: '[title]' })).not.toBeInTheDocument();
+    });
+
+    it('shows 適合 when no action or answer shows interest yet', () => {
+      renderCard(withMql({ level: 'fit', signals: [], unmet: [] }));
+      expect(badge('適合')).toBeInTheDocument();
+      expect(screen.getByTestId('lead-diagnosis-mql')).toHaveTextContent(
+        '適合業種・システムは対象。関心を示す行動・回答はまだありません'
+      );
+      expect(screen.queryByText('関心あり（MQL）', { selector: '[title]' })).not.toBeInTheDocument();
+    });
+
+    it('shows which condition is not a target, without a badge', () => {
+      renderCard(withMql({ level: 'none', signals: ['consultation'], unmet: ['industry'] }, false));
+      expect(screen.getByTestId('lead-diagnosis-mql')).toHaveTextContent('対象外業種が対象外');
+      expect(screen.queryByText('適合', { selector: '[title]' })).not.toBeInTheDocument();
+      expect(screen.queryByText('関心あり（MQL）', { selector: '[title]' })).not.toBeInTheDocument();
+    });
+
+    it('shows the level in the compact card too', () => {
+      renderCard({ ...withMql({ level: 'interest', signals: ['timeline_soon'], unmet: [] }), compact: true });
+      expect(screen.getByText('関心あり（MQL）')).toHaveAttribute(
+        'title',
+        expect.stringContaining('切り替え時期が1年以内')
+      );
+    });
   });
 
   it('hides the internal id behind a link to the answers', async () => {
@@ -90,7 +136,7 @@ describe('LeadDiagnosisCard', () => {
     for (const label of ['移行難易度の目安', '刷新の緊急度', '部署', '診断日時']) {
       expect(screen.queryByText(label)).not.toBeInTheDocument();
     }
-    for (const flag of ['相談の申込みあり', 'MQL候補', '商談化の兆しあり', 'ヒアリングで確認が必要']) {
+    for (const flag of ['相談の申込みあり', '適合', '関心あり（MQL）', '商談化の兆しあり', 'ヒアリングで確認が必要']) {
       expect(screen.queryByText(flag)).not.toBeInTheDocument();
     }
     expect(screen.queryByRole('button', { name: /回答を見る/ })).not.toBeInTheDocument();
