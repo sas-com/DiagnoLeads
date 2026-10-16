@@ -91,7 +91,7 @@ export function NotificationSettings({ organizationId: propOrgId }: Notification
       help: t('work.consultationRequestedHelp'),
     },
     { key: 'inAppLeadCreated', label: t('work.leadCreated'), help: t('work.leadCreatedHelp') },
-    { key: 'inAppAssignedToMe', label: t('work.assignedToMe'), upcoming: true },
+    { key: 'inAppAssignedToMe', label: t('work.assignedToMe'), help: t('work.assignedToMeHelp') },
     { key: 'inAppNextActionDue', label: t('work.nextActionDue'), upcoming: true },
     { key: 'inAppHearingNextMeeting', label: t('work.hearingNextMeeting'), upcoming: true },
   ];

@@ -87,6 +87,9 @@ vi.mock('next/dynamic', async () => {
   };
 });
 
+// The assignee controls (#135) are tested in lead-assignee-select.test.tsx
+vi.mock('@/hooks/use-lead-assignee', () => import('@/test/mocks/lead-assignee'));
+
 vi.mock('@/hooks/use-organization', () => ({
   useOrganization: () => ({ organizationId: ORG_ID, isLoading: false }),
 }));

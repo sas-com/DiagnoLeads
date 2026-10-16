@@ -69,11 +69,17 @@ import { useLocale, useTranslations } from 'next-intl';
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { TagBadgeList } from '../tags/tag-badge';
 import { BulkActions } from './bulk-actions';
+import { LeadAssigneeSelect } from './lead-assignee-select';
 import { LeadQuickSelect } from './lead-quick-select';
 import { SortableHeader, ariaSortFor } from './list/sortable-header';
 
 // Extended lead type with tags and the last activity from leads.list (#131)
-type LeadWithTags = Lead & { tags?: Tag[]; lastActivityAt?: Date | string | null };
+type LeadWithTags = Lead & {
+  tags?: Tag[];
+  lastActivityAt?: Date | string | null;
+  /** The assignee (#135) */
+  assignee?: { id: string; name: string | null; email: string } | null;
+};
 
 /** 'YYYY/MM/DD' in Japan time */
 const jstDayFormat = new Intl.DateTimeFormat('ja-JP', {
@@ -106,6 +112,7 @@ export function defaultColumnVisibility(width: number): VisibilityState {
       inflowSource: false,
       createdAt: false,
       tags: false,
+      assignee: false,
     };
   }
   if (width < 1024) {
@@ -188,6 +195,7 @@ export function LeadTable({
   const tSource = useTranslations('leadSource');
   const tPipeline = useTranslations('pipeline');
   const tCommon = useTranslations('common');
+  const tAssignee = useTranslations('leadAssignee');
   const locale = useLocale();
   const dateLocale = locale === 'ja' ? ja : enUS;
 
@@ -398,6 +406,19 @@ export function LeadTable({
           />
         );
       },
+    },
+    {
+      // Assignee, changed in place; read-only roles see the name (#135)
+      id: 'assignee',
+      accessorFn: (row) => row.assigneeUserId,
+      header: sortableHeader('assignee', tAssignee('label')),
+      cell: ({ row }) => (
+        <LeadAssigneeSelect
+          lead={row.original}
+          organizationId={organizationId ?? ''}
+          canEdit={canEdit && !!organizationId}
+        />
+      ),
     },
     {
       accessorKey: 'inflowSource',
@@ -678,6 +699,7 @@ export function LeadTable({
     phone: t('phone'),
     status: t('status'),
     dealPhase: t('dealPhase'),
+    assignee: tAssignee('label'),
     inflowSource: t('inflowSource'),
     tags: locale === 'ja' ? 'タグ' : 'Tags',
     score: t('score'),

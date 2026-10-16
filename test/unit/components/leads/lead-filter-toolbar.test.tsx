@@ -38,6 +38,9 @@ const nav = vi.hoisted(() => {
   };
 });
 
+// The assignee controls (#135) are tested in lead-assignee-select.test.tsx
+vi.mock('@/hooks/use-lead-assignee', () => import('@/test/mocks/lead-assignee'));
+
 vi.mock('next/navigation', async () => {
   const { useSyncExternalStore } = await import('react');
   return {

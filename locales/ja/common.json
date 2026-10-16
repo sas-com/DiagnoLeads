@@ -885,7 +885,9 @@
         "dueIn": "あと{count}営業日",
         "deadline": "期限 {date}",
         "contactHint": "「電話した」「メールした」を記録すると一覧から外れます（「つながらなかった」は残ります）。",
-        "noAnswer": "不通 {count}回"
+        "noAnswer": "不通 {count}回",
+        "assignee": "担当：{name}",
+        "unassigned": "担当未定"
       },
       "trend": {
         "title": "新規リードの推移",
@@ -2104,7 +2106,8 @@
         "upcoming": "準備中",
         "upcomingHelp": "この通知は機能の公開後に届きます。設定は今のうちに変えておけます",
         "emailNote": "相談申込のメールは、営業窓口のアドレスに届きます（個人ごとの設定はありません）",
-        "currentOrganization": "この組織"
+        "currentOrganization": "この組織",
+        "assignedToMeHelp": "リードの担当者に割り当てられたとき（オフにするとメールも届きません）"
       },
       "description": "通知の受信方法を設定します",
       "inApp": {
@@ -2973,7 +2976,8 @@
       "name": "名前",
       "company": "会社名",
       "email": "メールアドレス",
-      "phone": "電話番号"
+      "phone": "電話番号",
+      "assignee": "担当者"
     },
     "values": {
       "notSet": "未設定",
@@ -3154,13 +3158,17 @@
       "needsAction": "要対応",
       "consultation": "相談申込あり",
       "newThisWeek": "今週の新規",
-      "negotiating": "商談中"
+      "negotiating": "商談中",
+      "mine": "自分の担当",
+      "unassigned": "担当未定"
     },
     "presetHints": {
       "needsAction": "状態が「新規」で、まだ誰も着手していないリード",
       "consultation": "相談申込のあったリード",
       "newThisWeek": "今週（月曜から）作成されたリード",
-      "negotiating": "状態が「商談中」のリード"
+      "negotiating": "状態が「商談中」のリード",
+      "mine": "自分が担当者のリード",
+      "unassigned": "まだ担当者が決まっていないリード"
     },
     "chips": {
       "label": "かけている条件",
@@ -3259,6 +3267,27 @@
       "retry": "再読み込み",
       "more": "ほか{count}件",
       "noLeadName": "名前未設定のリード"
+    }
+  },
+  "leadAssignee": {
+    "label": "担当者",
+    "unassigned": "担当未定",
+    "me": "自分",
+    "someone": "選択したメンバー",
+    "filterAll": "すべて",
+    "chip": "担当：{name}",
+    "change": "担当者を変更（現在：{value}）",
+    "updated": "担当者を変更しました",
+    "updateError": "担当者を変更できませんでした：{message}",
+    "intake": {
+      "title": "相談申込の窓口",
+      "description": "相談申込の通知（アプリ内とメール）は窓口のメンバーに届きます。窓口がリードの担当者を割り当ててください。窓口が未設定のときは、これまでどおり全員（メールは営業の宛先）に届きます。",
+      "none": "窓口は未設定です（これまでどおりの宛先に届きます）",
+      "limit": "窓口は {max} 人まで選べます",
+      "save": "窓口を保存",
+      "saved": "窓口を保存しました",
+      "saveError": "窓口を保存できませんでした：{message}",
+      "readOnly": "窓口はオーナーまたは管理者が変更できます。"
     }
   }
 }

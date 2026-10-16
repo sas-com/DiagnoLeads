@@ -45,6 +45,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type MouseEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { type AssigneeLead, LeadAssigneeSelect } from '../lead-assignee-select';
 import { LeadDeleteDialog } from '../lead-delete-dialog';
 import { LeadQuickSelect } from '../lead-quick-select';
 import { EditSessionProvider, useEditSession } from './edit-session';
@@ -53,6 +54,9 @@ import { LeadDiagnosisCard } from './lead-diagnosis-card';
 import { LeadFieldsCard } from './lead-fields-card';
 import { LeadHearingOverview } from './lead-hearing-overview';
 import { LeadRecentActivity } from './lead-recent-activity';
+
+/** The lead as returned by leads.get, with its assignee (#135) */
+type LeadWithAssignee = Lead & Pick<AssigneeLead, 'assignee'>;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TIME_ZONE = 'Asia/Tokyo';
@@ -127,7 +131,7 @@ export function LeadDetailView({
   return (
     <EditSessionProvider initialCard={initialEdit} initialField={initialField}>
       <LeadDetailContent
-        lead={query.data as Lead}
+        lead={query.data as LeadWithAssignee}
         organizationId={organizationId}
         initialTab={initialTab}
         initialSubmissionId={initialSubmissionId}
@@ -144,7 +148,7 @@ function LeadDetailContent({
   initialSubmissionId,
   initialRecord,
 }: {
-  lead: Lead;
+  lead: LeadWithAssignee;
   organizationId: string;
   initialTab: LeadTab;
   initialSubmissionId: string | null;
@@ -281,6 +285,11 @@ function LeadDetailContent({
                 : t('noScore')}
             </Badge>
             {lead.hasNegotiated && <Badge color="emerald">{tLeads('hasNegotiated')}</Badge>}
+            <LeadAssigneeSelect
+              lead={lead}
+              organizationId={organizationId}
+              canEdit={access.canEdit}
+            />
           </>
         }
         actions={

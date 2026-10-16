@@ -124,6 +124,8 @@ export type DashboardPendingConsultation = {
   name: string | null;
   company: string | null;
   platform: string | null;
+  /** Name (or email) of the member in charge; null while nobody is (#135) */
+  assigneeName: string | null;
   requestedAt: Date;
   /** Calls that did not get through so far (#136) */
   noAnswerCount: number;
@@ -270,6 +272,9 @@ export async function getDashboardSummary(
           name: leads.name,
           company: leads.company,
           platform: platformOf,
+          assigneeName: sql<
+            string | null
+          >`(select coalesce(nullif(trim(u.name), ''), u.email) from users u where u.id = ${leads.assigneeUserId})`,
           createdAt: leads.createdAt,
           requestedAt: min(diagnosticSubmissions.consultationRequestedAt),
           noAnswerCount: noAnswerCountOf(organizationId),
@@ -326,6 +331,7 @@ export async function getDashboardSummary(
         name: row.name,
         company: row.company,
         platform: row.platform,
+        assigneeName: row.assigneeName ?? null,
         requestedAt,
         noAnswerCount: Number(row.noAnswerCount ?? 0),
         deadline,

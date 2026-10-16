@@ -157,7 +157,8 @@ describe('notification preferences', () => {
     ]) {
       expect(screen.getByRole('switch', { name: label })).toBeInTheDocument();
     }
-    expect(screen.getAllByText(work.upcoming)).toHaveLength(3);
+    // 自分が担当に割り当てられたとき works since #135
+    expect(screen.getAllByText(work.upcoming)).toHaveLength(2);
     // The old switches that matched no current work are gone
     expect(screen.queryByText('AIによるスコアリング時')).not.toBeInTheDocument();
     expect(screen.queryByText('週次レポート')).not.toBeInTheDocument();

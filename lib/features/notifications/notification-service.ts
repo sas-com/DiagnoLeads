@@ -246,6 +246,8 @@ export function shouldSendInAppNotification(
       return prefs.inAppMemberChanges;
     case 'consultation_requested':
       return prefs.inAppConsultationRequested;
+    case 'lead_assigned':
+      return prefs.inAppAssignedToMe;
     case 'system':
       return true;
     default:

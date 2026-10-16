@@ -243,6 +243,7 @@ describe('leads.list (sorting and filtering)', () => {
       dealPhase: '(case "leads"."deal_phase" when $1 then 0',
       lastActivityAt: 'greatest("leads"."updated_at", (select max(h.updated_at)',
       mqlQualifiedAt: '"leads"."mql_qualified_at"',
+      assignee: '(select coalesce(nullif(trim(u.name), \'\'), u.email) from users u',
     };
 
     it.each(LEAD_SORT_KEYS.flatMap((key) => [[key, 'asc'] as const, [key, 'desc'] as const]))(

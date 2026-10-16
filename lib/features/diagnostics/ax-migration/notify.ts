@@ -2,6 +2,8 @@ import { db } from '@/lib/db/client';
 import { filterAllowedRecipients } from '@/lib/email/allowed-recipients';
 import { env } from '@/lib/env';
 import { isEmailConfigured, sendEmail } from '@/lib/features/email';
+import { consultationRecipients } from '@/lib/features/leads/assignment';
+import { notifyUsersInApp } from '@/lib/features/leads/assignment-notify';
 import { notifyOrganizationMembers } from '@/lib/features/notifications/notification-service';
 import { triggerWebhooks } from '@/lib/features/webhooks/services/webhook-service';
 import { addBusinessDays } from 'date-fns';
@@ -211,10 +213,28 @@ export async function notifyAxMigrationSubmission(n: AxMigrationNotification): P
     }),
   ];
 
+  const salesEmail = env.AX_DIAGNOSIS_SALES_EMAIL;
+  // Consultation requests go to the organization's intake members (窓口) when set, in-app and
+  // by email; otherwise to every member in-app and to the sales addresses by email (#135)
+  const consultation = n.consultationRequested
+    ? await consultationRecipients(db, n.organizationId, salesEmail)
+    : null;
+
   // In-app: consultation requests, new leads and another system recorded on a lead. A repeat
   // answer without a consultation request changes nothing on the lead, so it does not ping
   // every member again.
-  if (n.consultationRequested || n.leadCreated || n.additionalSystem) {
+  if (consultation && consultation.intakeUserIds.length > 0) {
+    tasks.push(
+      notifyUsersInApp(
+        consultation.intakeUserIds,
+        n.organizationId,
+        'consultation_requested',
+        title,
+        message,
+        data
+      )
+    );
+  } else if (n.consultationRequested || n.leadCreated || n.additionalSystem) {
     tasks.push(
       notifyOrganizationMembers(
         n.organizationId,
@@ -231,18 +251,16 @@ export async function notifyAxMigrationSubmission(n: AxMigrationNotification): P
     );
   }
 
-  const salesEmail = env.AX_DIAGNOSIS_SALES_EMAIL;
-  if (n.consultationRequested && !(salesEmail && isEmailConfigured())) {
+  const salesAddresses = consultation?.emails ?? [];
+  if (n.consultationRequested && !(salesAddresses.length > 0 && isEmailConfigured())) {
     // Visible in the runtime logs: a missing setting, not a failed send
     console.warn(
       'AX consultation: no sales email sent (AX_DIAGNOSIS_SALES_EMAIL or RESEND_API_KEY is not set)'
     );
   }
   // In test mode only company addresses are mailed; decide that before using the quota
-  const salesRecipients = filterAllowedRecipients(
-    salesEmail ? salesEmail.split(',').map((address) => address.trim()) : []
-  );
-  if (n.consultationRequested && salesEmail && salesRecipients.length === 0) {
+  const salesRecipients = filterAllowedRecipients(salesAddresses);
+  if (n.consultationRequested && salesAddresses.length > 0 && salesRecipients.length === 0) {
     console.warn('AX consultation: no sales email sent (no sales address is allowed in test mode)');
   }
   if (

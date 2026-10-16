@@ -357,6 +357,12 @@ export function PendingSection({
                       {tw('pending.noAnswer', { count: item.noAnswerCount })}
                     </span>
                   )}
+                  {/* Assignee (#135) */}
+                  <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                    {item.assigneeName
+                      ? tw('pending.assignee', { name: item.assigneeName })
+                      : tw('pending.unassigned')}
+                  </span>
                 </span>
                 <span className="hidden whitespace-nowrap text-sm text-gray-500 md:inline dark:text-gray-400">
                   {platformName(item.platform)}
