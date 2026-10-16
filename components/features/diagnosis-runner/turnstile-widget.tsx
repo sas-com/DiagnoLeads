@@ -1,11 +1,9 @@
 'use client';
 
-import { axConsultationUrl } from '@/components/features/ax-site/site-config';
-import { TURNSTILE_ACTION } from '@/lib/features/diagnostics/turnstile-action';
 import { cn } from '@/lib/utils';
 import { RefreshCw } from 'lucide-react';
-import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
+import { useRunnerConfig, useRunnerTranslations } from './runner-context';
 
 const SCRIPT_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
 /** Width of the normal widget; narrower containers (small phones) get the compact one */
@@ -49,16 +47,28 @@ function loadTurnstile(): Promise<TurnstileApi> {
 
 interface TurnstileWidgetProps {
   siteKey: string;
+  /** Turnstile action the server checks the token against */
+  action: string;
   locale: string;
   /** A new token, or null while there is none (not yet checked, expired, failed) */
   onToken: (token: string | null) => void;
   /** Show a fresh widget (after Cloudflare's script could not be loaded) */
   onRetry: () => void;
+  /** Another way to reach the operator, offered when the check cannot be shown */
+  alternativeUrl?: string;
 }
 
-/** Cloudflare Turnstile check before the diagnosis is sent (rendered only when configured) */
-export function TurnstileWidget({ siteKey, locale, onToken, onRetry }: TurnstileWidgetProps) {
-  const t = useTranslations('axDiagnosis.verification');
+/** Cloudflare Turnstile check before the answers are sent (rendered only when configured) */
+export function TurnstileWidget({
+  siteKey,
+  action,
+  locale,
+  onToken,
+  onRetry,
+  alternativeUrl,
+}: TurnstileWidgetProps) {
+  const t = useRunnerTranslations('verification');
+  const { idPrefix } = useRunnerConfig();
   const containerRef = useRef<HTMLDivElement>(null);
   const [compact, setCompact] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
@@ -75,7 +85,7 @@ export function TurnstileWidget({ siteKey, locale, onToken, onRetry }: Turnstile
         setCompact(narrow);
         widgetId = turnstile.render(container, {
           sitekey: siteKey,
-          action: TURNSTILE_ACTION,
+          action,
           language: locale,
           size: narrow ? 'compact' : 'normal',
           // The site has no dark theme
@@ -96,14 +106,13 @@ export function TurnstileWidget({ siteKey, locale, onToken, onRetry }: Turnstile
       cancelled = true;
       if (widgetId) window.turnstile?.remove(widgetId);
     };
-  }, [siteKey, locale, onToken]);
+  }, [siteKey, action, locale, onToken]);
 
   if (unavailable) {
-    const consultationUrl = axConsultationUrl();
     return (
       <div
         className="space-y-2 rounded-xl border border-ax-yellow-dark bg-ax-yellow/10 p-3 text-sm leading-relaxed"
-        data-testid="ax-turnstile-unavailable"
+        data-testid={`${idPrefix}-turnstile-unavailable`}
       >
         <p className="font-bold">{t('unavailable')}</p>
         <button
@@ -114,12 +123,12 @@ export function TurnstileWidget({ siteKey, locale, onToken, onRetry }: Turnstile
           <RefreshCw className="h-4 w-4" aria-hidden="true" />
           {t('retry')}
         </button>
-        {consultationUrl && (
+        {alternativeUrl && (
           <p>
             {t.rich('alternative', {
               link: (chunks) => (
                 <a
-                  href={consultationUrl}
+                  href={alternativeUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="font-bold text-ax-teal-dark underline"
@@ -139,7 +148,25 @@ export function TurnstileWidget({ siteKey, locale, onToken, onRetry }: Turnstile
     <div
       ref={containerRef}
       className={cn('w-full', compact ? 'min-h-[140px]' : 'min-h-[65px]')}
-      data-testid="ax-turnstile"
+      data-testid={`${idPrefix}-turnstile`}
     />
+  );
+}
+
+/** The check as a named, explained group on the contact step */
+export function VerificationFieldset(props: TurnstileWidgetProps & { runKey: number }) {
+  const t = useRunnerTranslations('verification');
+  const { idPrefix } = useRunnerConfig();
+  const { runKey, ...widget } = props;
+  const helpId = `${idPrefix}-verification-help`;
+  return (
+    <fieldset aria-describedby={helpId} className="space-y-2">
+      <legend className="text-sm font-bold">{t('label')}</legend>
+      <p id={helpId} className="text-sm leading-relaxed text-gray-700">
+        {t('help')}
+      </p>
+      {/* A new key shows a fresh check (a token works once, also for a failed send) */}
+      <TurnstileWidget key={runKey} {...widget} />
+    </fieldset>
   );
 }
