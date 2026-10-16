@@ -87,6 +87,11 @@ const AppSidebar: React.FC = () => {
             nameKey: 'axPlaybook',
             path: `/${locale}/settings/ax-playbook`,
           },
+          {
+            name: t('contentEditors'),
+            nameKey: 'contentEditors',
+            path: `/${locale}/settings/content-editors`,
+          },
         ],
       },
       {

@@ -189,7 +189,7 @@ const blogRouter = router({
 
       const result = await blogRepo.findAll({
         // Drafts only for content editors; everyone else always gets published posts (#80, #87)
-        status: isContentEditor(ctx.user?.email) ? input.status : 'published',
+        status: (await isContentEditor(ctx.db, ctx.user)) ? input.status : 'published',
         category: input.category,
         limit: input.limit,
         offset: input.offset,
@@ -324,8 +324,8 @@ const blogRouter = router({
 export const contentRouter = router({
   faqs: faqsRouter,
   blog: blogRouter,
-  /** Whether the signed-in user may edit FAQs and blog posts (#87) */
-  canEdit: protectedProcedure.query(({ ctx }) => isContentEditor(ctx.user.email)),
+  /** Whether the signed-in user may edit FAQs and blog posts (#87, #91) */
+  canEdit: protectedProcedure.query(({ ctx }) => isContentEditor(ctx.db, ctx.user)),
 });
 
 export type ContentRouter = typeof contentRouter;
