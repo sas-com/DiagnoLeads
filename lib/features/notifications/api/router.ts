@@ -1,9 +1,11 @@
 /**
  * Notifications tRPC Router
  */
-import { protectedProcedure, router } from '@/lib/trpc/init';
+import { organizationProcedure, protectedProcedure, router } from '@/lib/trpc/init';
 import { z } from 'zod';
 import {
+  NOTIFICATION_PREFERENCE_KEYS,
+  type NotificationPreferenceKey,
   deleteNotification,
   getOrCreatePreferences,
   getUnreadCount,
@@ -12,6 +14,10 @@ import {
   markAsRead,
   updatePreferences,
 } from '../notification-service';
+
+const preferenceSwitches = Object.fromEntries(
+  NOTIFICATION_PREFERENCE_KEYS.map((key) => [key, z.boolean().optional()])
+) as Record<NotificationPreferenceKey, z.ZodOptional<z.ZodBoolean>>;
 
 export const notificationsRouter = router({
   /**
@@ -91,41 +97,26 @@ export const notificationsRouter = router({
     }),
 
   /**
-   * Get notification preferences
+   * Get notification preferences (per user and organization; members only)
    */
-  getPreferences: protectedProcedure
-    .input(
-      z.object({
-        organizationId: z.string().uuid(),
-      })
-    )
-    .query(async ({ ctx, input }) => {
-      const prefs = await getOrCreatePreferences(ctx.session.user.id, input.organizationId);
-      return prefs;
-    }),
+  getPreferences: organizationProcedure.query(async ({ ctx, input }) => {
+    const prefs = await getOrCreatePreferences(ctx.session.user.id, input.organizationId, ctx.db);
+    return prefs;
+  }),
 
   /**
-   * Update notification preferences
+   * Update notification preferences (members only)
    */
-  updatePreferences: protectedProcedure
+  updatePreferences: organizationProcedure
     .input(
       z.object({
         organizationId: z.string().uuid(),
-        inAppLeadCreated: z.boolean().optional(),
-        inAppLeadStatusChanged: z.boolean().optional(),
-        inAppLeadScored: z.boolean().optional(),
-        inAppImportExport: z.boolean().optional(),
-        inAppMemberChanges: z.boolean().optional(),
-        emailLeadCreated: z.boolean().optional(),
-        emailLeadStatusChanged: z.boolean().optional(),
-        emailLeadScored: z.boolean().optional(),
-        emailDailyDigest: z.boolean().optional(),
-        emailWeeklyReport: z.boolean().optional(),
+        ...preferenceSwitches,
       })
     )
     .mutation(async ({ ctx, input }) => {
       const { organizationId, ...updates } = input;
-      const prefs = await updatePreferences(ctx.session.user.id, organizationId, updates);
+      const prefs = await updatePreferences(ctx.session.user.id, organizationId, updates, ctx.db);
       return prefs;
     }),
 });

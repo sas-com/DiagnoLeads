@@ -99,6 +99,13 @@
       "when": 1792157632728,
       "tag": "0013_lead_follow_up",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792160139342,
+      "tag": "0014_settings_account",
+      "breakpoints": true
     }
   ]
 }

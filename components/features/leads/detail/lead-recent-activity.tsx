@@ -76,7 +76,7 @@ export function LeadRecentActivity({
                 </p>
                 <p className="text-xs text-muted-foreground">
                   <time dateTime={at.toISOString()}>{format.relativeTime(at, now)}</time>
-                  {event.actor && ` · ${event.actor.name}`}
+                  {event.actor && ` · ${event.actor.deleted ? t('deletedUser') : event.actor.name}`}
                 </p>
               </li>
             );

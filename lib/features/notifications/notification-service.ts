@@ -3,7 +3,7 @@
  *
  * Handles creating and managing notifications
  */
-import { db } from '@/lib/db/client';
+import { type Database, db } from '@/lib/db/client';
 import {
   type NewNotification,
   type NotificationType,
@@ -147,8 +147,12 @@ export async function deleteNotification(notificationId: string, userId: string)
 /**
  * Get or create notification preferences
  */
-export async function getOrCreatePreferences(userId: string, organizationId: string) {
-  const existing = await db.query.notificationPreferences.findFirst({
+export async function getOrCreatePreferences(
+  userId: string,
+  organizationId: string,
+  database: Database = db
+) {
+  const existing = await database.query.notificationPreferences.findFirst({
     where: and(
       eq(notificationPreferences.userId, userId),
       eq(notificationPreferences.organizationId, organizationId)
@@ -160,7 +164,7 @@ export async function getOrCreatePreferences(userId: string, organizationId: str
   }
 
   // Create default preferences
-  const [created] = await db
+  const [created] = await database
     .insert(notificationPreferences)
     .values({
       userId,
@@ -171,28 +175,39 @@ export async function getOrCreatePreferences(userId: string, organizationId: str
   return created;
 }
 
+/** The preference switches a user can change */
+export const NOTIFICATION_PREFERENCE_KEYS = [
+  'inAppLeadCreated',
+  'inAppLeadStatusChanged',
+  'inAppLeadScored',
+  'inAppImportExport',
+  'inAppMemberChanges',
+  'emailLeadCreated',
+  'emailLeadStatusChanged',
+  'emailLeadScored',
+  'emailDailyDigest',
+  'emailWeeklyReport',
+  'inAppConsultationRequested',
+  'inAppAssignedToMe',
+  'inAppNextActionDue',
+  'inAppHearingNextMeeting',
+] as const;
+
+export type NotificationPreferenceKey = (typeof NOTIFICATION_PREFERENCE_KEYS)[number];
+export type NotificationPreferenceUpdates = Partial<Record<NotificationPreferenceKey, boolean>>;
+
 /**
  * Update notification preferences
  */
 export async function updatePreferences(
   userId: string,
   organizationId: string,
-  updates: Partial<{
-    inAppLeadCreated: boolean;
-    inAppLeadStatusChanged: boolean;
-    inAppLeadScored: boolean;
-    inAppImportExport: boolean;
-    inAppMemberChanges: boolean;
-    emailLeadCreated: boolean;
-    emailLeadStatusChanged: boolean;
-    emailLeadScored: boolean;
-    emailDailyDigest: boolean;
-    emailWeeklyReport: boolean;
-  }>
+  updates: NotificationPreferenceUpdates,
+  database: Database = db
 ) {
-  await getOrCreatePreferences(userId, organizationId);
+  await getOrCreatePreferences(userId, organizationId, database);
 
-  const [updated] = await db
+  const [updated] = await database
     .update(notificationPreferences)
     .set({
       ...updates,
@@ -212,7 +227,7 @@ export async function updatePreferences(
 /**
  * Check if user should receive in-app notification
  */
-function shouldSendInAppNotification(
+export function shouldSendInAppNotification(
   type: NotificationType,
   prefs: typeof notificationPreferences.$inferSelect
 ): boolean {
@@ -229,6 +244,8 @@ function shouldSendInAppNotification(
     case 'member_invited':
     case 'member_removed':
       return prefs.inAppMemberChanges;
+    case 'consultation_requested':
+      return prefs.inAppConsultationRequested;
     case 'system':
       return true;
     default:

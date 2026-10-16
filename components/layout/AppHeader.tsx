@@ -4,19 +4,18 @@ import { Logo, LogoMark } from '@/components/common/Logo';
 import { TestModeBadge } from '@/components/common/TestModeBadge';
 import { ThemeToggleButton } from '@/components/common/ThemeToggleButton';
 import { OrganizationSwitcher } from '@/components/dashboard/organization-switcher';
+import { HeaderLeadSearch } from '@/components/header/HeaderLeadSearch';
 import NotificationDropdown from '@/components/header/NotificationDropdown';
 import UserDropdown from '@/components/header/UserDropdown';
 import { useSidebar } from '@/context/SidebarContext';
-import { RiCloseLine, RiMenuLine, RiMore2Fill, RiSearchLine } from '@remixicon/react';
+import { RiCloseLine, RiMenuLine, RiMore2Fill } from '@remixicon/react';
 import { useTranslations } from 'next-intl';
 import type React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 
 const AppHeader: React.FC = () => {
   const [isApplicationMenuOpen, setApplicationMenuOpen] = useState(false);
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const { isMobileOpen, toggleSidebar, toggleMobileSidebar } = useSidebar();
-  const inputRef = useRef<HTMLInputElement>(null);
   const t = useTranslations('header.a11y');
 
   const handleToggle = () => {
@@ -73,21 +72,7 @@ const AppHeader: React.FC = () => {
 
           {/* デスクトップ検索バー */}
           <div className="hidden lg:block">
-            <div className="relative">
-              <span className="absolute -translate-y-1/2 left-4 top-1/2 pointer-events-none">
-                <RiSearchLine
-                  className={`w-5 h-5 transition-colors ${isSearchFocused ? 'text-brand-500' : 'text-gray-400 dark:text-gray-500'}`}
-                />
-              </span>
-              <input
-                ref={inputRef}
-                type="text"
-                placeholder="リードを検索..."
-                onFocus={() => setIsSearchFocused(true)}
-                onBlur={() => setIsSearchFocused(false)}
-                className="h-11 w-full rounded-lg border border-gray-200 bg-gray-50 py-2.5 pl-12 pr-4 text-sm text-gray-800 placeholder:text-gray-400 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white dark:border-gray-700 dark:bg-gray-800 dark:text-white/90 dark:placeholder:text-gray-500 dark:focus:border-brand-600 dark:focus:bg-gray-800 xl:w-[320px] transition-all"
-              />
-            </div>
+            <HeaderLeadSearch />
           </div>
 
           <TestModeBadge className="lg:ml-1" />

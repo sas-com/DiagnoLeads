@@ -1,33 +1,22 @@
 'use client';
 
+import { DeleteAccountCard } from '@/components/features/account/delete-account-card';
 import { NotificationSettings } from '@/components/features/notifications/notification-settings';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Callout } from '@/components/ui/callout';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Divider, Text, Title } from '@/components/ui/metric';
 import { authClient } from '@/lib/auth/client';
-import {
-  AlertTriangle,
-  Calendar,
-  CheckCircle,
-  Key,
-  Lock,
-  Mail,
-  RefreshCw,
-  Save,
-  Shield,
-  Trash2,
-  User,
-} from 'lucide-react';
+import { Calendar, CheckCircle, Key, Lock, Mail, Save, Shield, User } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 /**
- * 個人設定ページ - TailAdmin Style
+ * Personal settings: profile, password, notifications of the current organization and account
+ * deletion (#164)
  */
 export default function SettingsPage() {
   const t = useTranslations('settings.profile');
@@ -54,13 +43,6 @@ export default function SettingsPage() {
   const handleNameChange = (value: string) => {
     setName(value);
     setHasChanges(value !== user?.name);
-  };
-
-  const handleReset = () => {
-    if (user?.name) {
-      setName(user.name);
-      setHasChanges(false);
-    }
   };
 
   const handleSaveProfile = async () => {
@@ -171,9 +153,7 @@ export default function SettingsPage() {
         {/* Header */}
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
-          <Text className="mt-1">
-            {t('description') || 'Manage your personal account settings'}
-          </Text>
+          <Text className="mt-1">{t('pageDescription')}</Text>
         </div>
 
         {/* Profile Card */}
@@ -222,7 +202,11 @@ export default function SettingsPage() {
                   onChange={(e) => handleNameChange(e.target.value)}
                   placeholder={t('namePlaceholder')}
                   disabled={isSaving}
+                  aria-describedby="name-help"
                 />
+                <Text id="name-help" className="text-xs">
+                  {t('nameHelp')}
+                </Text>
               </div>
 
               {/* Email Field (Read-only) */}
@@ -285,15 +269,6 @@ export default function SettingsPage() {
                 >
                   <Save className="h-4 w-4 mr-2" />
                   {isSaving ? t('saving') : t('save')}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleReset}
-                  disabled={!hasChanges || isSaving}
-                  size="lg"
-                >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  {t('reset') || 'Reset'}
                 </Button>
               </div>
             </div>
@@ -369,29 +344,7 @@ export default function SettingsPage() {
         {/* Notification Settings */}
         <NotificationSettings />
 
-        {/* Danger Zone */}
-        <Card className="border-red-200 dark:border-red-900/50">
-          <div className="p-6 space-y-4">
-            <h2 className="text-lg font-semibold text-red-600 dark:text-red-400 flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5" />
-              {t('deleteAccountSection')}
-            </h2>
-            <Text>{t('deleteAccountWarning')}</Text>
-            <Button variant="destructive" size="lg">
-              <Trash2 className="h-4 w-4 mr-2" />
-              {t('deleteAccount')}
-            </Button>
-          </div>
-        </Card>
-
-        {/* Info Callout */}
-        <Callout title={t('hintsTitle') || 'Tips'} icon={CheckCircle} color="blue">
-          <ul className="space-y-1 list-disc list-inside mt-2">
-            <li>{t('hintProfile') || 'Your name will be displayed to other members'}</li>
-            <li>{t('hintPassword') || 'Use a strong password with at least 8 characters'}</li>
-            <li>{t('hintDelete') || 'Deleting your account is permanent and cannot be undone'}</li>
-          </ul>
-        </Callout>
+        {user?.email && <DeleteAccountCard email={user.email} />}
       </div>
     </div>
   );

@@ -1086,6 +1086,35 @@
     },
     "profile": {
       "title": "Profile Settings",
+      "pageDescription": "Your name, password, notifications and account",
+      "nameHelp": "The other members see you under this name",
+      "deletion": {
+        "title": "Delete account",
+        "description": "After deleting your account you can no longer sign in. This cannot be undone.",
+        "removedTitle": "What is deleted",
+        "removedSignIn": "Your sign-in details (password) and signed-in sessions",
+        "removedProfile": "Your name and email address",
+        "removedMemberships": "Your organization memberships, your notifications and notification settings",
+        "keptTitle": "What stays with the organization",
+        "keptRecords": "Leads, hearings, comments and audit logs you created stay as organization records; their author is shown as \"Deleted user\"",
+        "soleOwnerTitle": "You are the last owner, so the account cannot be deleted yet",
+        "soleOwnerBody": "You are the only owner of the organizations below. Make another member an owner in member management first.",
+        "toMembers": "Open member management",
+        "open": "Delete account...",
+        "dialogTitle": "Delete your account?",
+        "dialogDescription": "To confirm, enter your email address ({email}) and your current password.",
+        "confirmLabel": "Email address",
+        "passwordLabel": "Current password",
+        "cancel": "Cancel",
+        "confirm": "Delete",
+        "deleting": "Deleting...",
+        "success": "Your account has been deleted",
+        "errorConfirmation": "The email address does not match",
+        "errorPasswordRequired": "Enter your password",
+        "errorPassword": "The password is incorrect",
+        "errorSoleOwner": "You are the only owner of an organization, so the account cannot be deleted",
+        "errorFailed": "The account could not be deleted. Please try again later"
+      },
       "profileSection": "Profile",
       "nameLabel": "Name",
       "namePlaceholder": "John Doe",
@@ -1851,6 +1880,15 @@
       "logout": "Logout",
       "logoutError": "Failed to log out."
     },
+    "search": {
+      "label": "Search leads",
+      "placeholder": "Search leads (name, email, company)",
+      "searching": "Searching...",
+      "empty": "No matching leads",
+      "suggestions": "Leads",
+      "showAll": "Search the lead list for \"{query}\"",
+      "noName": "(no name)"
+    },
     "a11y": {
       "toggleSidebar": "Toggle the side menu",
       "moreMenu": "More menu",
@@ -1885,6 +1923,7 @@
   },
   "comments": {
     "title": "Comments & Notes",
+    "deletedUser": "Deleted user",
     "typeComment": "Comment",
     "typeNote": "Note",
     "typeActivity": "Activity",
@@ -2009,6 +2048,20 @@
     },
     "settings": {
       "title": "Notification Settings",
+      "work": {
+        "description": "Choose the notifications you receive under the bell in {organization}",
+        "consultationRequested": "A consultation is requested",
+        "consultationRequestedHelp": "Someone asks for a consultation in the web diagnosis",
+        "leadCreated": "A new lead arrives",
+        "leadCreatedHelp": "A web diagnosis answer creates a new lead",
+        "assignedToMe": "I am assigned to a lead",
+        "nextActionDue": "A next action is due",
+        "hearingNextMeeting": "The next hearing meeting is coming up",
+        "upcoming": "Coming soon",
+        "upcomingHelp": "This notification is sent once the feature is released. You can set it now",
+        "emailNote": "Consultation request emails go to the sales contact address (there is no personal setting)",
+        "currentOrganization": "this organization"
+      },
       "description": "Configure how you receive notifications",
       "inApp": {
         "title": "In-App Notifications",
@@ -2801,6 +2854,7 @@
   },
   "leadActivity": {
     "title": "Activity",
+    "deletedUser": "Deleted user",
     "filters": {
       "all": "All",
       "diagnosis": "Diagnoses & consultations",
@@ -2964,6 +3018,7 @@
     },
     "activity": {
       "recent": "Recent activity",
+      "deletedUser": "Deleted user",
       "showAll": "View all activity",
       "empty": "No activity yet.",
       "loadError": "Could not load the activity."
