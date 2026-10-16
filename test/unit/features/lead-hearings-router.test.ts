@@ -372,3 +372,78 @@ describe('leadHearings.delete', () => {
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 });
+
+describe('leadHearings.summary', () => {
+  const PREVIOUS_ID = '990e8400-e29b-41d4-a716-446655440001';
+  const summaryInput = { organizationId: ORG_ID, id: HEARING_ID };
+  const current = {
+    id: HEARING_ID,
+    leadId: LEAD_ID,
+    heldOn: '2026-10-16',
+    fields: { budgetStatus: { value: 'secured', status: 'done', source: null } },
+    createdAt: UPDATED_AT,
+  };
+
+  it('lets a parent viewer read the summary, compared with the previous hearing', async () => {
+    dbState.results = [
+      [current],
+      [
+        {
+          id: PREVIOUS_ID,
+          heldOn: '2026-10-01',
+          fields: { budgetStatus: { value: 'planning', status: 'done', source: null } },
+        },
+      ],
+      [{ name: 'Lead A', company: 'Company A' }],
+    ];
+
+    const result = await callerAs('parent_viewer').leadHearings.summary({
+      ...summaryInput,
+      locale: 'en',
+    });
+
+    expect(result).toMatchObject({ id: HEARING_ID, leadId: LEAD_ID, previousId: PREVIOUS_ID });
+    expect(result.summary.lead).toEqual({ name: 'Lead A', company: 'Company A' });
+    expect(result.summary.previousHeldOn).toBe('2026-10-01');
+    expect(result.summary.changedSincePrevious).toEqual([
+      { key: 'budgetStatus', label: 'Budget status', before: 'Being planned', after: 'Secured' },
+    ]);
+    // The hearing, the previous hearing and the lead are all scoped to the organization
+    expect(dbState.wheres).toHaveLength(3);
+    for (const where of dbState.wheres) {
+      const { sql, params } = toQuery(where);
+      expect(sql).toContain('"organization_id"');
+      expect(params).toContain(ORG_ID);
+    }
+    expect(toQuery(dbState.wheres[0]).params).toEqual([ORG_ID, HEARING_ID]);
+    // The previous one: same lead, held earlier (or the same day and created earlier)
+    const previous = toQuery(dbState.wheres[1]);
+    expect(previous.sql).toContain('"held_on" <');
+    expect(previous.sql).toContain('"created_at" <');
+    expect(previous.params).toContain(LEAD_ID);
+  });
+
+  it('has no changes without a previous hearing and labels in Japanese by default', async () => {
+    dbState.results = [[current], [], [{ name: null, company: null }]];
+    const result = await callerAs('member').leadHearings.summary(summaryInput);
+    expect(result.previousId).toBeNull();
+    expect(result.summary.previousHeldOn).toBeNull();
+    expect(result.summary.changedSincePrevious).toEqual([]);
+    expect(result.summary.sections[0].title).toBe('現状');
+  });
+
+  it('reports a hearing of another organization as not found', async () => {
+    dbState.results = [[]];
+    await expect(callerAs('admin').leadHearings.summary(summaryInput)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(dbState.queries).toBe(1);
+  });
+
+  it('rejects a user who is not a member of the organization', async () => {
+    await expect(callerAs(null).leadHearings.summary(summaryInput)).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    expect(dbState.queries).toBe(0);
+  });
+});

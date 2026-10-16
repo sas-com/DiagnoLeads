@@ -113,6 +113,15 @@ describe('LeadHearingsCard', () => {
     expect(screen.queryByRole('button', { name: '記録する' })).not.toBeInTheDocument();
   });
 
+  it('links each hearing to its summary', () => {
+    mocks.list = { items: [item()], canEdit: false };
+    renderCard();
+
+    const link = screen.getByRole('link', { name: /のまとめを見る$/ });
+    expect(link).toHaveAttribute('href', `/ja/leads/${LEAD_ID}/hearings/${item().id}?view=summary`);
+    expect(link).toHaveTextContent('まとめを見る');
+  });
+
   it('shows an empty state', () => {
     mocks.list = { items: [], canEdit: true };
     renderCard();

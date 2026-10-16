@@ -374,4 +374,73 @@ describe.skipIf(!url)('lead hearings (PostgreSQL)', () => {
       0
     );
   });
+
+  it('builds the summary against the hearing held just before it (#97)', async () => {
+    const leadId = await createLead(orgA);
+    await pg.update(leads).set({ company: 'まとめテスト株式会社' }).where(eq(leads.id, leadId));
+    const otherLead = await createLead(orgA);
+    const create = (lead: string, heldOn: string, now: string) =>
+      createLeadHearing(
+        pg,
+        { organizationId: orgA, leadId: lead, heldOn, userId: userA, carryOver: false },
+        { now: new Date(now) }
+      );
+    const setFields = (id: string, fields: Record<string, unknown>) =>
+      pg.update(leadHearings).set({ fields }).where(eq(leadHearings.id, id));
+    const budget = (value: string) => ({ budgetStatus: { value, status: 'done', source: null } });
+
+    const first = await create(leadId, '2026-10-01', '2026-10-01T09:00:00Z');
+    // Same day as `third` but created earlier; recorded after `third` was created
+    const second = await create(leadId, '2026-10-10', '2026-10-10T09:00:00Z');
+    const third = await create(leadId, '2026-10-10', '2026-10-10T10:00:00Z');
+    // Later meeting and another lead's hearing: never the previous one
+    const later = await create(leadId, '2026-10-20', '2026-10-05T09:00:00Z');
+    const elsewhere = await create(otherLead, '2026-10-09', '2026-10-09T09:00:00Z');
+    await setFields(first.id, budget('not_started'));
+    await setFields(second.id, budget('planning'));
+    await setFields(third.id, {
+      ...budget('secured'),
+      targetSystem: { value: 'as400', status: 'not_yet', source: 'prefilled' },
+      hardwareSupportEnd: { status: 'next', source: null },
+    });
+    await setFields(later.id, budget('unknown'));
+    await setFields(elsewhere.id, budget('unknown'));
+
+    const summaryOf = (caller: typeof adminA, id: string) =>
+      caller.leadHearings.summary({ organizationId: orgA, id });
+
+    const ofThird = await summaryOf(adminA, third.id);
+    expect(ofThird.previousId).toBe(second.id);
+    expect(ofThird.summary.lead).toEqual({ name: '山田 花子', company: 'まとめテスト株式会社' });
+    expect(ofThird.summary.previousHeldOn).toBe('2026-10-10');
+    expect(ofThird.summary.changedSincePrevious).toEqual([
+      { key: 'targetSystem', label: '対象システム', before: null, after: 'AS/400' },
+      { key: 'budgetStatus', label: '予算の状態', before: '計画中', after: '確保済み' },
+    ]);
+    expect(ofThird.summary.unconfirmed.map((u: { key: string }) => u.key)).toEqual([
+      'targetSystem',
+    ]);
+    expect(ofThird.summary.next.map((n: { key: string }) => n.key)).toEqual([
+      'hardwareSupportEnd',
+    ]);
+
+    expect((await summaryOf(adminA, second.id)).previousId).toBe(first.id);
+    expect((await summaryOf(adminA, later.id)).previousId).toBe(third.id);
+    const ofFirst = await summaryOf(viewerA, first.id);
+    expect(ofFirst.previousId).toBeNull();
+    expect(ofFirst.summary.changedSincePrevious).toEqual([]);
+    expect((await summaryOf(adminA, elsewhere.id)).previousId).toBeNull();
+
+    // Same date and the same creation time: the id breaks the tie, so exactly one is previous
+    const tiedLead = await createLead(orgA);
+    const tiedA = await create(tiedLead, '2026-10-25', '2026-10-25T09:00:00Z');
+    const tiedB = await create(tiedLead, '2026-10-25', '2026-10-25T09:00:00Z');
+    const [low, high] = [tiedA.id, tiedB.id].sort();
+    expect((await summaryOf(adminA, high)).previousId).toBe(low);
+    expect((await summaryOf(adminA, low)).previousId).toBeNull();
+
+    await expect(
+      adminB.leadHearings.summary({ organizationId: orgB, id: third.id })
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
 });
