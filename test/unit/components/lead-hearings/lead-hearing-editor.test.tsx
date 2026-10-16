@@ -199,9 +199,9 @@ describe('LeadHearingEditor', () => {
     render(editor());
 
     await user.click(screen.getByRole('tab', { name: /結果/ }));
-    expect(screen.getByText('未記入の必須項目')).toBeInTheDocument();
+    expect(screen.getByText('未入力の必須項目')).toBeInTheDocument();
     // The callout comes before the next-meeting fields
-    const callout = screen.getByText('未記入の必須項目');
+    const callout = screen.getByText('未入力の必須項目');
     const nextMeeting = screen.getByLabelText('次回の日程');
     expect(
       callout.compareDocumentPosition(nextMeeting) & Node.DOCUMENT_POSITION_FOLLOWING
@@ -665,6 +665,26 @@ describe('LeadHearingEditor summary view', () => {
     expect(screen.getByText('保存されていない変更は、まとめに入っていません。')).toBeVisible();
     act(() => mocks.update?.onSuccess({ ...hearing(), updatedAt: new Date() }));
     expect(mocks.invalidateSummary).toHaveBeenCalledWith({ organizationId: ORG_ID, id: HEARING_ID });
+  });
+
+  it('hides the meeting mode switch and the save bar while the summary is shown (Refs #163)', async () => {
+    window.localStorage.setItem(MODE_KEY, 'detail');
+    const user = userEvent.setup();
+    render(editor());
+
+    expect(screen.getByRole('switch', { name: '商談モード' })).toBeInTheDocument();
+    expect(screen.getByTestId('hearing-save-bar')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '保存' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: 'まとめ' }));
+    expect(screen.getByTestId('hearing-summary')).toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: '商談モード' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('hearing-save-bar')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '保存' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: '記録' }));
+    expect(screen.getByRole('switch', { name: '商談モード' })).toBeInTheDocument();
+    expect(screen.getByTestId('hearing-save-bar')).toBeInTheDocument();
   });
 
   it('shows the summary in read-only mode', async () => {

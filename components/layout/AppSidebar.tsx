@@ -113,13 +113,19 @@ const AppSidebar: React.FC = () => {
   );
 
   const ChevronDownIcon = () => (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <svg
+      className="w-4 h-4"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      aria-hidden="true"
+    >
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
     </svg>
   );
 
   const HorizontalDots = () => (
-    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
       <circle cx="6" cy="12" r="2" />
       <circle cx="12" cy="12" r="2" />
       <circle cx="18" cy="12" r="2" />
@@ -132,6 +138,8 @@ const AppSidebar: React.FC = () => {
         <li key={nav.name}>
           {nav.subItems ? (
             <button
+              type="button"
+              aria-expanded={openSubmenu?.type === menuType && openSubmenu?.index === index}
               onClick={() => handleSubmenuToggle(index, menuType)}
               className={`menu-item group ${
                 openSubmenu?.type === menuType && openSubmenu?.index === index
@@ -167,6 +175,7 @@ const AppSidebar: React.FC = () => {
             nav.path && (
               <Link
                 href={nav.path}
+                aria-current={isActive(nav.path) ? 'page' : undefined}
                 className={`menu-item group ${isActive(nav.path) ? 'menu-item-active' : 'menu-item-inactive'}`}
               >
                 <span
@@ -198,6 +207,7 @@ const AppSidebar: React.FC = () => {
                   <li key={subItem.name}>
                     <Link
                       href={subItem.path}
+                      aria-current={isActive(subItem.path) ? 'page' : undefined}
                       className={`menu-dropdown-item ${
                         isActive(subItem.path)
                           ? 'menu-dropdown-item-active'
@@ -270,12 +280,13 @@ const AppSidebar: React.FC = () => {
       onMouseEnter={() => !isExpanded && setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
+      {/* On phones the header already shows the logo above the open menu */}
       <div
-        className={`py-6 flex ${!isExpanded && !isHovered ? 'lg:justify-center' : 'justify-start'}`}
+        className={`py-6 hidden lg:flex ${!isExpanded && !isHovered ? 'lg:justify-center' : 'justify-start'}`}
       >
         {isExpanded || isHovered || isMobileOpen ? <Logo size="md" /> : <LogoMark size="md" />}
       </div>
-      <div className="flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar">
+      <div className="flex flex-col overflow-y-auto pt-6 lg:pt-0 duration-300 ease-linear no-scrollbar">
         <nav className="mb-6">
           <div className="flex flex-col gap-4">
             <div>

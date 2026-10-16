@@ -6,9 +6,11 @@ import Link from 'next/link';
  */
 export default function ResetPasswordPage() {
   return (
-    <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
-      <h2 className="text-2xl font-bold text-center text-gray-900 mb-2">パスワードリセット</h2>
-      <p className="text-center text-sm text-gray-600 mb-6">
+    <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10 dark:bg-gray-800">
+      <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-gray-100 mb-2">
+        パスワードリセット
+      </h2>
+      <p className="text-center text-sm text-gray-600 dark:text-gray-400 mb-6">
         登録されているメールアドレスを入力してください。
         <br />
         パスワードリセット用のリンクをお送りします。

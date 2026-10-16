@@ -73,7 +73,7 @@ describe('DialogContent', () => {
       </Dialog>
     );
 
-    expect(screen.getByText('Close')).toBeInTheDocument();
+    expect(screen.getByText('閉じる')).toBeInTheDocument();
   });
 
   it('should apply custom className', () => {
@@ -314,7 +314,7 @@ describe('Dialog accessibility', () => {
     );
 
     // sr-only text for screen readers
-    expect(screen.getByText('Close')).toBeInTheDocument();
+    expect(screen.getByText('閉じる')).toBeInTheDocument();
   });
 });
 

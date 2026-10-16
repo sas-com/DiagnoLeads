@@ -1,18 +1,27 @@
 'use client';
 
 import { useTheme } from '@/context/ThemeContext';
+import { useTranslations } from 'next-intl';
 
 export function ThemeToggleButton() {
   const { theme, toggleTheme } = useTheme();
+  const t = useTranslations('header.a11y');
 
   return (
     <button
       onClick={toggleTheme}
       className="flex items-center justify-center w-10 h-10 text-gray-500 rounded-lg hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
-      aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+      type="button"
+      aria-label={theme === 'dark' ? t('themeToLight') : t('themeToDark')}
     >
       {theme === 'dark' ? (
-        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg
+          className="w-5 h-5"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          aria-hidden="true"
+        >
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -21,7 +30,13 @@ export function ThemeToggleButton() {
           />
         </svg>
       ) : (
-        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg
+          className="w-5 h-5"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          aria-hidden="true"
+        >
           <path
             strokeLinecap="round"
             strokeLinejoin="round"

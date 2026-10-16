@@ -108,7 +108,7 @@ export function SignupForm() {
 
   if (!invitationToken) {
     return (
-      <div role="status" className="space-y-2 text-center text-sm text-gray-700">
+      <div role="status" className="space-y-2 text-center text-sm text-gray-700 dark:text-gray-300">
         <p className="font-semibold">{t('inviteOnlyTitle')}</p>
         <p>{t('inviteOnlyDescription')}</p>
       </div>

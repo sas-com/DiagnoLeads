@@ -399,6 +399,25 @@ export function hearingSummaryItemText(
   return t('leadHearings.summary.empty');
 }
 
+/**
+ * Split the items of a section for the screen: the ones with something to show (a value, or
+ * "not applicable" / "next time") and the ones with nothing recorded. The screen folds the
+ * empty ones into one line; the required ones among them are listed again under
+ * 次回に確認すること, so listing each of them as its own row only repeats that list.
+ */
+export function splitHearingSummaryItems<T extends Pick<HearingSummaryItem, 'value' | 'status'>>(
+  items: readonly T[]
+): { filled: T[]; empty: T[] } {
+  const filled: T[] = [];
+  const empty: T[] = [];
+  for (const item of items) {
+    const recorded =
+      item.value !== null || item.status === 'not_applicable' || item.status === 'next';
+    (recorded ? filled : empty).push(item);
+  }
+  return { filled, empty };
+}
+
 const reasonText = (reasons: readonly HearingTodoReason[], t: HearingSummaryTranslate) =>
   reasons.map((reason) => t(`leadHearings.summary.reasons.${reason}`)).join(' / ');
 

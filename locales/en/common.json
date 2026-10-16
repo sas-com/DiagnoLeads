@@ -651,7 +651,10 @@
     "phone": "Phone",
     "event": "Event",
     "advertisement": "Advertisement",
-    "other": "Other"
+    "other": "Other",
+    "api": "API",
+    "embed": "Embedded form",
+    "diagnostic": "Web diagnosis"
   },
   "validation": {
     "required": "This field is required",
@@ -882,7 +885,7 @@
     "phone": "Phone",
     "company": "Company",
     "position": "Position",
-    "source": "Source",
+    "source": "Source (channel)",
     "status": "Status",
     "score": "Score",
     "notes": "Notes",
@@ -902,8 +905,8 @@
     "contactInfo": "Contact Information",
     "leadScore": "Lead Score",
     "scoreMax": " / 100",
-    "sourceInfo": "Source Information",
-    "sourceChannel": "Source Channel",
+    "sourceInfo": "Source",
+    "sourceChannel": "Source (channel)",
     "diagnosticResults": "Diagnostic Results",
     "timestamps": "Timestamps",
     "deleteConfirmTitle": "Delete this lead?",
@@ -973,6 +976,7 @@
       "viewMode": "View Mode",
       "viewModeDescription": "Only organization owners can modify organization information. Your current role is \"{role}\".",
       "roleAdmin": "Admin",
+      "roleOwner": "Owner",
       "roleMember": "Member",
       "nameLabel": "Organization Name",
       "namePlaceholder": "e.g., Acme Corporation",
@@ -1026,7 +1030,13 @@
       "passwordChangeError": "Failed to change password",
       "deleteAccountSection": "Delete Account",
       "deleteAccountWarning": "Deleting your account will remove all your data. This action cannot be undone.",
-      "deleteAccount": "Delete Account"
+      "deleteAccount": "Delete Account",
+      "description": "Change your name and password",
+      "reset": "Reset",
+      "hintsTitle": "Tips",
+      "hintProfile": "Your name is shown to the other members",
+      "hintPassword": "Use at least 8 characters and do not reuse a password from another service",
+      "hintDelete": "Deleting your account cannot be undone"
     },
     "webhooks": {
       "title": "Webhooks",
@@ -1207,11 +1217,11 @@
       "title": "Content editors",
       "description": "Choose who can create, update and delete FAQs and blog posts. Candidates are members of the operating organization.",
       "notConfiguredTitle": "The operating organization is not set",
-      "notConfiguredBody": "Editors cannot be chosen here because the operating organization (AX_DIAGNOSIS_ORGANIZATION_ID or DEFAULT_ORGANIZATION_ID) is not set. Until it is, only the people listed in the CONTENT_EDITOR_EMAILS environment variable can edit.",
+      "notConfiguredBody": "Editors cannot be chosen here because the operating organization is not set yet. Until it is, only the people a system administrator chose separately can edit.",
       "forbiddenTitle": "You cannot manage editors",
       "forbiddenBody": "Only owners and admins of the operating organization can add or remove content editors.",
       "envFallbackTitle": "About the fallback list",
-      "envFallbackBody": "Besides the editors chosen here, people listed in the CONTENT_EDITOR_EMAILS environment variable can also edit. Owners and admins cannot edit unless they are chosen here.",
+      "envFallbackBody": "Besides the editors chosen here, people a system administrator chose separately can also edit. Owners and admins cannot edit unless they are chosen here.",
       "addTitle": "Add an editor",
       "addDescription": "Choose from the members of the operating organization.",
       "selectLabel": "Member to add",
@@ -1284,6 +1294,10 @@
       "inviting": "Sending invitation...",
       "inviteSuccess": "Member invited successfully",
       "inviteError": "Failed to invite member: {message}",
+      "totalMembers": "Members",
+      "testModeHint": "While testing, only {domains} addresses can be invited",
+      "editRoleOf": "Change the role of {name}",
+      "removeOf": "Remove {name} from the members",
       "removing": "Removing member...",
       "removeSuccess": "Member removed successfully",
       "removeError": "Failed to remove member: {message}",
@@ -1477,7 +1491,8 @@
       "notFound": {
         "title": "Page not found",
         "message": "The page you're looking for doesn't exist or may have been moved.",
-        "backHome": "Back to Home"
+        "backHome": "Back to Home",
+        "toLeads": "Go to leads"
       }
     },
     "content": {
@@ -1600,6 +1615,7 @@
         "totalLeads": "Total Leads",
         "convertedLeads": "Converted",
         "statusBreakdown": "Status Breakdown",
+        "statusBreakdownPeriod": "Leads registered: {period}",
         "sourceBreakdown": "Source Breakdown",
         "sourceTable": "Source Details",
         "conversionFunnel": "Conversion Funnel",
@@ -1613,7 +1629,11 @@
         "fromInitial": "From initial lead to conversion"
       },
       "noData": "No data available",
-      "comingSoon": "Coming soon"
+      "comingSoon": "Coming soon",
+      "performanceSummary": {
+        "title": "Performance summary",
+        "quality": "Lead quality (average score)"
+      }
     }
   },
   "content": {
@@ -1645,7 +1665,8 @@
         "pricing": "Pricing",
         "account": "Account",
         "security": "Security",
-        "technical": "Technical"
+        "technical": "Technical",
+        "features": "Features"
       },
       "saving": "Saving...",
       "saveSuccess": "FAQ saved successfully",
@@ -1710,10 +1731,16 @@
   },
   "header": {
     "userDropdown": {
-      "profile": "Profile",
-      "settings": "Settings",
+      "profile": "Personal settings",
+      "settings": "Organization settings",
       "logout": "Logout",
       "logoutError": "Failed to log out."
+    },
+    "a11y": {
+      "toggleSidebar": "Toggle the side menu",
+      "moreMenu": "More menu",
+      "themeToDark": "Switch to dark mode",
+      "themeToLight": "Switch to light mode"
     }
   },
   "tags": {
@@ -2476,11 +2503,11 @@
       }
     },
     "statuses": {
-      "done": "Done",
-      "partial": "Partly",
-      "not_yet": "Not yet",
+      "done": "Confirmed",
+      "partial": "Partly confirmed",
+      "not_yet": "Not confirmed",
       "not_applicable": "N/A",
-      "next": "Next time"
+      "next": "Confirm next time"
     },
     "sources": {
       "prefilled": "Web diagnosis",
@@ -2595,6 +2622,8 @@
       "thisMonth": "This month",
       "textCount": "{count} / {max} characters",
       "missingField": "Not filled",
+      "unconfirmedField": "Not confirmed",
+      "unconfirmedFieldHelp": "Still the Web diagnosis answer; not confirmed yet",
       "jumpToMissing": "Go to the first required item not filled"
     },
     "meeting": {
@@ -2620,6 +2649,8 @@
       "date": "{year}-{mm}-{dd}",
       "pair": "{name}: {value}",
       "empty": "Not entered",
+      "emptyItems": "{count} items not entered: {items}",
+      "listSeparator": ", ",
       "none": "None",
       "todoTitle": "To confirm next time",
       "todoHint": "Select an item to go to it in the record.",

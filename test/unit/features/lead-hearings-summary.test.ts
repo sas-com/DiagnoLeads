@@ -13,6 +13,7 @@ import {
   type HearingSummary,
   buildHearingSummary,
   formatHearingSummaryText,
+  splitHearingSummaryItems,
   hearingSummaryTodos,
 } from '@/lib/features/lead-hearings/summary';
 import { hearingSummaryLabels } from '@/lib/features/lead-hearings/summary-messages';
@@ -273,6 +274,21 @@ describe('buildHearingSummary: changes since the previous hearing', () => {
   });
 });
 
+describe('splitHearingSummaryItems', () => {
+  it('keeps values, "not applicable" and "next time" and sets aside the empty ones', () => {
+    const items = [
+      { key: 'a', value: 'AS/400', status: 'done' },
+      { key: 'b', value: null, status: 'not_applicable' },
+      { key: 'c', value: null, status: 'next' },
+      { key: 'd', value: null, status: 'not_yet' },
+      { key: 'e', value: null, status: 'partial' },
+    ] as const;
+    const { filled, empty } = splitHearingSummaryItems(items);
+    expect(filled.map((item) => item.key)).toEqual(['a', 'b', 'c']);
+    expect(empty.map((item) => item.key)).toEqual(['d', 'e']);
+  });
+});
+
 describe('formatHearingSummaryText', () => {
   const t = ja.t;
 
@@ -284,7 +300,7 @@ describe('formatHearingSummaryText', () => {
       expect(lines).toContain(heading);
     }
     expect(lines).toContain('・対象システム: AS/400');
-    expect(lines).toContain('・商談評価: 未記入');
+    expect(lines).toContain('・商談評価: 未入力');
     // Nothing open: the list says so
     const todoAt = lines.indexOf('■ 次回に確認すること');
     expect(lines[todoAt + 1]).toBe('・なし');
@@ -311,8 +327,8 @@ describe('formatHearingSummaryText', () => {
       t
     );
     expect(text).toContain('・対象システム: AS/400（Web診断のまま未確認）');
-    expect(text).toContain('・機種・バージョン: Power 9（一部）');
-    expect(text).toContain('・予算の状態: 次回');
+    expect(text).toContain('・機種・バージョン: Power 9（一部確認）');
+    expect(text).toContain('・予算の状態: 次回確認');
     expect(text).toContain('・進まなかった理由: 対象外');
   });
 
@@ -326,7 +342,7 @@ describe('formatHearingSummaryText', () => {
       t
     );
     const todo = text.split('■ 次回に確認すること\n')[1].split('\n');
-    expect(todo).toEqual(['・対象システム（Web診断のまま未確認 / 次回）', '・機種・バージョン（未記入）']);
+    expect(todo).toEqual(['・対象システム（Web診断のまま未確認 / 次回）', '・機種・バージョン（未入力）']);
     expect(text.match(/・対象システム（/g)).toHaveLength(1);
   });
 
@@ -336,7 +352,7 @@ describe('formatHearingSummaryText', () => {
       build(COMPLETE, { heldOn: '2026-10-01', fields: previous as HearingFields }),
       t
     );
-    expect(withChange).toContain('■ 前回（2026年10月1日）からの変化\n・予算の状態: 計画中 → 未記入');
+    expect(withChange).toContain('■ 前回（2026年10月1日）からの変化\n・予算の状態: 計画中 → 未入力');
 
     const unchanged = formatHearingSummaryText(
       build(COMPLETE, { heldOn: '2026-10-01', fields: COMPLETE }),
