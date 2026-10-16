@@ -3369,6 +3369,12 @@
       "capped": "Exported the first {max} rows (limit). {total} leads match: narrow the filters and export again.",
       "empty": "No lead matches the filters, so the file has the headers only.",
       "failed": "Could not export. Please try again."
+    },
+    "cards": {
+      "label": "Leads",
+      "sortBy": "Sort (now by {column})",
+      "flipOrder": "Reverse the order (now {order})",
+      "mqlSince": "MQL since {date}"
     }
   },
   "leadFollowUp": {
