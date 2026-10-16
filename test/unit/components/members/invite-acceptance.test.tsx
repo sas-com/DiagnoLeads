@@ -79,7 +79,7 @@ describe('InviteAcceptance', () => {
     const back = encodeURIComponent(`/ja/invite/${TOKEN}`);
     expect(screen.getByRole('link', { name: '新規登録して参加する' })).toHaveAttribute(
       'href',
-      `/ja/signup?callbackUrl=${back}&email=new%40example.com`
+      `/ja/signup?callbackUrl=${back}&email=new%40example.com&invitation=${TOKEN}`
     );
     expect(
       screen.getByRole('link', { name: 'ログインして参加する（アカウントをお持ちの方）' })

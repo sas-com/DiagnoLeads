@@ -50,8 +50,8 @@ describe('Rate Limit Configuration', () => {
 
   describe('ENDPOINT_RATE_LIMITS', () => {
     it('should have strict limits for auth endpoints', () => {
-      expect(ENDPOINT_RATE_LIMITS['/api/auth/login']).toEqual({ max: 5, windowMs: 60000 });
-      expect(ENDPOINT_RATE_LIMITS['/api/auth/signup']).toEqual({ max: 3, windowMs: 60000 });
+      expect(ENDPOINT_RATE_LIMITS['/api/auth/sign-in']).toEqual({ max: 5, windowMs: 60000 });
+      expect(ENDPOINT_RATE_LIMITS['/api/auth/sign-up']).toEqual({ max: 3, windowMs: 60000 });
     });
 
     it('should have limits for AI endpoints', () => {
@@ -79,7 +79,7 @@ describe('Rate Limit Configuration', () => {
 describe('getRateLimitConfig', () => {
   describe('endpoint matching', () => {
     it('should match exact endpoints', () => {
-      const config = getRateLimitConfig('/api/auth/login');
+      const config = getRateLimitConfig('/api/auth/sign-in');
       expect(config.max).toBe(5);
     });
 

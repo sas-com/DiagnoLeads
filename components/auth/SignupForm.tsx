@@ -30,8 +30,10 @@ type SignupFormValues = {
 export function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  // An invitation link sends people here with the invited address and the way back to it
+  // Sign-up is invitation-only: the invite page sends people here with its token, the invited
+  // address and the way back to it
   const callbackUrl = safeCallbackPath(searchParams.get('callbackUrl'));
+  const invitationToken = searchParams.get('invitation');
   const t = useTranslations('settings.auth.signup');
   const tv = useTranslations('settings.auth.validation');
   const [isLoading, setIsLoading] = useState(false);
@@ -69,14 +71,21 @@ export function SignupForm() {
         password: data.password,
         name: data.name,
         callbackURL: callbackUrl,
-      });
+        // Extra body field read by the server-side invitation check (lib/auth/config.ts)
+        invitationToken,
+      } as Parameters<typeof authClient.signUp.email>[0]);
 
       if (result.error) {
         // Handle specific error codes/messages from BetterAuth
         const errorCode = result.error.code;
         const errorMessage = result.error.message?.toLowerCase() || '';
 
-        if (errorCode === 'USER_ALREADY_EXISTS' || errorMessage.includes('user already exists')) {
+        if (errorCode === 'INVITATION_REQUIRED') {
+          toast.error(t('invitationRequired'));
+        } else if (
+          errorCode === 'USER_ALREADY_EXISTS' ||
+          errorMessage.includes('user already exists')
+        ) {
           toast.error(t('emailAlreadyExists'));
         } else {
           toast.error(t('errorToast'));
@@ -92,6 +101,15 @@ export function SignupForm() {
     } finally {
       setIsLoading(false);
     }
+  }
+
+  if (!invitationToken) {
+    return (
+      <div role="status" className="space-y-2 text-center text-sm text-gray-700">
+        <p className="font-semibold">{t('inviteOnlyTitle')}</p>
+        <p>{t('inviteOnlyDescription')}</p>
+      </div>
+    );
   }
 
   return (

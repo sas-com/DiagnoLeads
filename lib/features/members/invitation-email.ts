@@ -37,7 +37,14 @@ export async function sendInvitationEmail(input: {
 }): Promise<InvitationEmailResult> {
   if (!isEmailConfigured()) return { sent: false, reason: 'not_configured' };
 
-  const expires = input.expiresAt.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' });
+  const expires = input.expiresAt.toLocaleString('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
   const role = ROLE_LABELS[input.role];
   const subject = `【DiagnoLeads】${input.organizationName} への招待`;
   const text = [

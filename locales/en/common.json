@@ -1191,7 +1191,7 @@
       "inviteNotSentTitle": "The invitation email could not be sent",
       "inviteNotSentDescription": "The invitation was created. Copy the link below and share it with {email} directly.",
       "inviteLinkLabel": "Invitation link",
-      "inviteLinkHelp": "The link is valid for 7 days. Anyone with the link can sign up with the invited address and join, so share it only with that person.",
+      "inviteLinkHelp": "The link is valid for 48 hours. Anyone with the link can sign up with the invited address and join, so share it only with that person.",
       "copyLink": "Copy",
       "linkCopied": "Invitation link copied",
       "copyFailed": "Could not copy. Select the link and copy it",
@@ -1228,7 +1228,8 @@
         "successToast": "Successfully logged in",
         "errorToast": "Login failed.",
         "invalidCredentials": "Invalid email or password.",
-        "userNotFound": "No account found with this email."
+        "userNotFound": "No account found with this email.",
+        "inviteOnlyNote": "Sign-up is by invitation only. If you were invited, use the link in your invitation."
       },
       "signup": {
         "title": "Create Account",
@@ -1243,7 +1244,10 @@
         "submittingButton": "Creating account...",
         "successToast": "Account created successfully",
         "errorToast": "Failed to create account.",
-        "emailAlreadyExists": "This email is already registered. Please log in instead."
+        "emailAlreadyExists": "This email is already registered. Please log in instead.",
+        "invitationRequired": "Only invited email addresses can sign up. Open the invitation link again or ask the person who invited you to send it again.",
+        "inviteOnlyTitle": "Sign-up is by invitation only",
+        "inviteOnlyDescription": "Only invited people can sign up for DiagnoLeads. Use the invitation link you received. If you already have an account, sign in."
       },
       "resetPassword": {
         "emailLabel": "Email Address",

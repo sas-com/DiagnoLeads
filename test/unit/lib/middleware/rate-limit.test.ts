@@ -75,8 +75,8 @@ describe('DEFAULT_RATE_LIMITS', () => {
 
 describe('ENDPOINT_RATE_LIMITS', () => {
   it('should have auth endpoints with strict limits', () => {
-    expect(ENDPOINT_RATE_LIMITS['/api/auth/login'].max).toBe(5);
-    expect(ENDPOINT_RATE_LIMITS['/api/auth/signup'].max).toBe(3);
+    expect(ENDPOINT_RATE_LIMITS['/api/auth/sign-in'].max).toBe(5);
+    expect(ENDPOINT_RATE_LIMITS['/api/auth/sign-up'].max).toBe(3);
     expect(ENDPOINT_RATE_LIMITS['/api/auth/forgot-password'].max).toBe(3);
   });
 
@@ -201,7 +201,7 @@ describe('setRateLimitHeaders', () => {
 
 describe('getRateLimitConfig', () => {
   it('should return exact match config', () => {
-    const config = getRateLimitConfig('/api/auth/login');
+    const config = getRateLimitConfig('/api/auth/sign-in');
     expect(config.max).toBe(5);
   });
 
@@ -328,5 +328,12 @@ describe('RateLimitConfig type', () => {
     };
     const request = createMockRequest('/test');
     expect(config.keyGenerator?.(request)).toBe('custom:/test');
+  });
+});
+
+describe('auth endpoint limits match the better-auth paths', () => {
+  it('applies the sign-up and sign-in limits to the real endpoint paths', () => {
+    expect(getRateLimitConfig('/api/auth/sign-up/email').max).toBe(3);
+    expect(getRateLimitConfig('/api/auth/sign-in/email').max).toBe(5);
   });
 });

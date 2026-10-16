@@ -47,8 +47,9 @@ export const DEFAULT_RATE_LIMITS = {
  */
 export const ENDPOINT_RATE_LIMITS: Record<string, RateLimitConfig> = {
   // 認証
-  '/api/auth/login': { max: 5, windowMs: 60 * 1000 },
-  '/api/auth/signup': { max: 3, windowMs: 60 * 1000 },
+  // better-auth endpoint paths (/api/auth/sign-in/email, /api/auth/sign-up/email)
+  '/api/auth/sign-in': { max: 5, windowMs: 60 * 1000 },
+  '/api/auth/sign-up': { max: 3, windowMs: 60 * 1000 },
   '/api/auth/forgot-password': { max: 3, windowMs: 60 * 1000 },
   '/api/auth/reset-password': { max: 3, windowMs: 60 * 1000 },
 

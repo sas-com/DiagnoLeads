@@ -107,12 +107,6 @@ export default async function LandingPage({
             >
               {t('nav.login')}
             </Link>
-            <Link
-              href={`/${locale}/signup`}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              {t('nav.signup')}
-            </Link>
           </div>
         </div>
       </header>
@@ -137,12 +131,6 @@ export default async function LandingPage({
               >
                 {t('hero.cta.primary')}
                 <ArrowRight className="h-5 w-5" />
-              </Link>
-              <Link
-                href={`/${locale}/signup`}
-                className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-white text-gray-800 rounded-xl hover:bg-gray-50 transition-colors font-medium text-lg border border-gray-200"
-              >
-                {t('hero.cta.secondary')}
               </Link>
             </div>
           </div>

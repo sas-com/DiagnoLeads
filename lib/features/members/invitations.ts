@@ -37,8 +37,8 @@ export function isDuplicatePendingInvitation(error: unknown): boolean {
   );
 }
 
-/** An invitation can be accepted for 7 days */
-export const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+/** An invitation can be accepted for 48 hours, so a leaked link is usable only briefly */
+export const INVITATION_TTL_MS = 48 * 60 * 60 * 1000;
 
 export function hashInvitationToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
@@ -142,6 +142,30 @@ export async function getInvitationPreview(
     role: row.invitation.role,
     expiresAt: row.invitation.expiresAt,
   };
+}
+
+/**
+ * Sign-up is open only to invited people: the invite link's token must belong to a pending,
+ * unexpired invitation for the address being registered. Requiring the token, not just the
+ * address, stops someone who guesses an invited address from registering it first.
+ */
+export async function isSignupInvited(
+  db: Database,
+  token: unknown,
+  email: string,
+  now: Date = new Date()
+): Promise<boolean> {
+  if (typeof token !== 'string' || token.length < 32 || token.length > 128) return false;
+  const [invitation] = await db
+    .select()
+    .from(organizationInvitations)
+    .where(eq(organizationInvitations.tokenHash, hashInvitationToken(token)))
+    .limit(1);
+  return (
+    invitation !== undefined &&
+    stateOf(invitation, now) === 'valid' &&
+    invitation.email === normalizeEmail(email)
+  );
 }
 
 export type AcceptInvitationResult =

@@ -32,7 +32,7 @@ describe('invitation email', () => {
     expect(sent.subject).toBe('【DiagnoLeads】A&B 商事 への招待');
     expect(sent.text).toContain('管理者として招待されました');
     expect(sent.text).toContain('https://app.example/ja/invite/tok');
-    expect(sent.text).toContain('2026/10/22');
+    expect(sent.text).toContain('2026/10/22 10:00');
     expect(sent.html).toContain('山田 &lt;太郎&gt;');
     expect(sent.html).toContain('A&amp;B 商事');
     expect(sent.html).not.toContain('<太郎>');
