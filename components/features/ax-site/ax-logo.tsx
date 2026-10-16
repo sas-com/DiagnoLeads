@@ -2,7 +2,8 @@ import { cn } from '@/lib/utils';
 
 interface AxLogoProps {
   name: string;
-  operator: string;
+  /** Company line under the name; omitted where the company is named nearby */
+  operator?: string;
   /** White on the dark footer, like the footer logo of maru2-dx.com */
   tone?: 'light' | 'dark';
   className?: string;
@@ -26,11 +27,13 @@ export function AxLogo({ name, operator, tone = 'light', className }: AxLogoProp
           {name}
         </span>
       </span>
-      <span
-        className={cn('mt-1 text-[11px] font-medium', onDark ? 'text-white/90' : 'text-gray-600')}
-      >
-        {operator}
-      </span>
+      {operator && (
+        <span
+          className={cn('mt-1 text-[11px] font-medium', onDark ? 'text-white/90' : 'text-gray-600')}
+        >
+          {operator}
+        </span>
+      )}
     </span>
   );
 }

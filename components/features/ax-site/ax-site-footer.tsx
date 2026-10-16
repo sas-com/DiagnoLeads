@@ -20,7 +20,8 @@ export async function AxSiteFooter({ locale }: { locale: string }) {
       <div className="mx-auto max-w-6xl px-4 pb-8 pt-12 sm:px-6">
         <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
           <div className="space-y-3">
-            <AxLogo name={tb('name')} operator={tb('operator')} tone="dark" />
+            {/* The operator line below names the company already */}
+            <AxLogo name={tb('name')} tone="dark" />
             <p className="text-sm font-bold">{t('operator')}</p>
           </div>
           <ul className="flex flex-wrap gap-x-6 gap-y-3 text-sm font-bold">
@@ -41,8 +42,9 @@ export async function AxSiteFooter({ locale }: { locale: string }) {
           </ul>
         </div>
         <hr className="mt-10 border-white/60" />
-        <p className="mt-6 text-right font-ax-latin text-xs">
-          <small>{t('copyright', { year: new Date().getFullYear() })}</small>
+        {/* Rendered per request (the page is dynamic); recheck the year if it becomes static */}
+        <p className="mt-6 text-right font-ax-latin">
+          <small className="text-xs">{t('copyright', { year: new Date().getFullYear() })}</small>
         </p>
       </div>
     </footer>
