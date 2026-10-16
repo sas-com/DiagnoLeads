@@ -31,8 +31,9 @@ vi.mock('@/lib/db/client', async () => {
 
 describe.skipIf(!url)('invitation-only sign-up (better-auth + PostgreSQL)', () => {
   const client = url ? postgres(url, { max: 2 }) : null;
+  const database = client ? drizzle(client, { schema }) : null;
   // biome-ignore lint/style/noNonNullAssertion: guarded by skipIf
-  const pg = drizzle(client!, { schema });
+  const pg = database!;
   const db = pg as unknown as Parameters<typeof createInvitation>[0];
   const unique = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   let organizationId: string;
