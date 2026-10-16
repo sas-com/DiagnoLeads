@@ -2,6 +2,7 @@
 
 import { OrganizationProvider } from '@/lib/context/organization-context';
 import { trpc } from '@/lib/trpc/client';
+import { retryUnlessDenied } from '@/lib/trpc/retry';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { httpBatchLink } from '@trpc/client';
 import { useState } from 'react';
@@ -31,7 +32,7 @@ function makeQueryClient() {
         refetchOnReconnect: true, // Refetch on network reconnect
 
         // Retry Strategy
-        retry: 2, // Retry failed requests twice
+        retry: retryUnlessDenied(2), // Retry failed requests twice, but not auth errors
         retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
 
         // Performance
@@ -39,7 +40,7 @@ function makeQueryClient() {
       },
       mutations: {
         // Retry mutations once on failure
-        retry: 1,
+        retry: retryUnlessDenied(1),
         retryDelay: 1000,
       },
     },

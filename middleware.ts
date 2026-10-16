@@ -104,7 +104,7 @@ export async function middleware(request: NextRequest) {
 
   // 4. Signed-out visitors of admin pages go to sign-in. Each API checks the session itself;
   // this only avoids showing an empty admin shell (lib/middleware/auth-redirect.ts).
-  const signIn = signInRedirect(request, pathname, pathnameWithoutLocale, request.nextUrl.search);
+  const signIn = signInRedirect(request);
   // Build on the next-intl response: it carries the locale header that server components
   // read through getTranslations() / getRequestConfig(). Replacing it with a plain
   // NextResponse.next() made every server-rendered string fall back to Japanese on /en.
@@ -114,15 +114,15 @@ export async function middleware(request: NextRequest) {
   setRateLimitHeaders(response.headers, rateLimitResult);
 
   // 6. Add security headers to response
-  Object.entries(securityHeaders).forEach(([key, value]) => {
+  for (const [key, value] of Object.entries(securityHeaders)) {
     response.headers.set(key, value);
-  });
+  }
 
   // 7. Add cache control headers
   const cacheHeaders = getCacheHeaders(pathname);
-  Object.entries(cacheHeaders).forEach(([key, value]) => {
+  for (const [key, value] of Object.entries(cacheHeaders)) {
     response.headers.set(key, value);
-  });
+  }
 
   return response;
 }
@@ -141,5 +141,8 @@ export const config = {
      * - admin (PayloadCMS admin panel)
      */
     '/((?!_next/static|_next/image|favicon.ico|admin|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    // Pages of each language, even when the last segment looks like an image ("y.png" can be
+    // a page id): they need the sign-in redirect and the security headers
+    '/(ja|en)/:path*',
   ],
 };

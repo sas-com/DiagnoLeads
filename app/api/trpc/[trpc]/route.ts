@@ -16,11 +16,12 @@ const handler = (req: Request) =>
     // are kept here in the server logs
     onError: ({ path, error }) => {
       if (process.env.NODE_ENV === 'development' || error.code === 'INTERNAL_SERVER_ERROR') {
-        const cause = error.cause as { name?: string; code?: string } | undefined;
-        console.error(`tRPC failed on ${path ?? '<no-path>'}:`, error.message, {
-          cause: cause?.name,
-          code: cause?.code,
-        });
+        // The cause with its stack (and database detail / constraint); never the input
+        console.error(
+          `tRPC failed on ${path ?? '<no-path>'}:`,
+          error.message,
+          error.cause ?? error
+        );
       }
     },
   });
