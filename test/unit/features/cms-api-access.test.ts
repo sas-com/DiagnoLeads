@@ -127,14 +127,17 @@ describe('content.blog.list', () => {
     expect(mocks.findAll).toHaveBeenCalledWith(expect.objectContaining({ status: 'published' }));
   });
 
-  it('keeps the requested status for signed-in users', async () => {
+  it('also gives signed-in users who are not content editors only published posts (#87)', async () => {
     mocks.findAll.mockResolvedValue({ posts: [], total: 0, hasNextPage: false });
     const { contentRouter } = await import('@/lib/features/content/api/router');
-    // biome-ignore lint/suspicious/noExplicitAny: signed-in tRPC context
-    const caller = contentRouter.createCaller({ session: {}, user: { id: 'u1' } } as any);
+    const caller = contentRouter.createCaller({
+      session: {},
+      user: { id: 'u1', email: 'someone@example.com' },
+      // biome-ignore lint/suspicious/noExplicitAny: signed-in tRPC context
+    } as any);
 
     await caller.blog.list({ status: 'all' });
 
-    expect(mocks.findAll).toHaveBeenCalledWith(expect.objectContaining({ status: 'all' }));
+    expect(mocks.findAll).toHaveBeenCalledWith(expect.objectContaining({ status: 'published' }));
   });
 });

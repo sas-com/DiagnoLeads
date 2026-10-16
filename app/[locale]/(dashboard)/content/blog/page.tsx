@@ -7,6 +7,7 @@
 
 import { BlogDialog } from '@/components/content/blog-dialog';
 import { BlogList } from '@/components/content/blog-list';
+import { ContentEditorNotice } from '@/components/content/content-editor-notice';
 import { FileText } from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
 
@@ -30,6 +31,7 @@ export default async function BlogPage({ params }: BlogPageProps) {
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-8">
+      <ContentEditorNotice />
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-start gap-4">

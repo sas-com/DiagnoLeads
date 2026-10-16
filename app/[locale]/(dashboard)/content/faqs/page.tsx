@@ -5,6 +5,7 @@
  * Phase 8.3: TailAdmin Style Update
  */
 
+import { ContentEditorNotice } from '@/components/content/content-editor-notice';
 import { FAQDialog } from '@/components/content/faq-dialog';
 import { FAQList } from '@/components/content/faq-list';
 import { HelpCircle } from 'lucide-react';
@@ -30,6 +31,7 @@ export default async function FAQsPage({ params }: FAQsPageProps) {
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-8">
+      <ContentEditorNotice />
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-start gap-4">
