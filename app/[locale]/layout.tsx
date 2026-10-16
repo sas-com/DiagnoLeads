@@ -1,4 +1,5 @@
 import { locales } from '@/lib/i18n/config';
+import { NOINDEX } from '@/lib/seo/indexing';
 import type { Metadata, Viewport } from 'next';
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages, getTranslations } from 'next-intl/server';
@@ -44,17 +45,8 @@ export async function generateMetadata({
         en: '/en',
       },
     },
-    robots: {
-      index: true,
-      follow: true,
-      googleBot: {
-        index: true,
-        follow: true,
-        'max-video-preview': -1,
-        'max-image-preview': 'large',
-        'max-snippet': -1,
-      },
-    },
+    // Only the AX pages are ever indexed (lib/seo/indexing.ts)
+    robots: NOINDEX,
     openGraph: {
       type: 'website',
       locale: locale === 'ja' ? 'ja_JP' : 'en_US',

@@ -1,3 +1,4 @@
+import { NOINDEX } from '@/lib/seo/indexing';
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 
@@ -48,17 +49,8 @@ export async function generateMetadata({
       description: t('ogDescription'),
       images: ['/og-image.png'],
     },
-    robots: {
-      index: true,
-      follow: true,
-      googleBot: {
-        index: true,
-        follow: true,
-        'max-video-preview': -1,
-        'max-image-preview': 'large',
-        'max-snippet': -1,
-      },
-    },
+    // Only the AX pages are ever indexed (lib/seo/indexing.ts)
+    robots: NOINDEX,
   };
 }
 

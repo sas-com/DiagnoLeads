@@ -3,6 +3,7 @@ import { AxSiteShell } from '@/components/features/ax-site/ax-site-shell';
 import { axPrivacyPolicyUrl } from '@/components/features/ax-site/site-config';
 import { allowedEmailDomains } from '@/lib/email/allowed-recipients';
 import { turnstileSiteKey } from '@/lib/features/diagnostics/turnstile';
+import { robotsFor } from '@/lib/seo/indexing';
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 
@@ -32,8 +33,8 @@ export async function generateMetadata({ params }: AxDiagnosisPageProps): Promis
       siteName: site('siteName'),
     },
     twitter: { card: 'summary', title: t('title'), description: t('description') },
-    // Keep out of search engines until external publication is approved (広報部門の確認)
-    robots: { index: false, follow: false },
+    // Indexed only after public launch (test mode off, which needs the publication approval)
+    robots: robotsFor('/ax-diagnosis'),
   };
 }
 
