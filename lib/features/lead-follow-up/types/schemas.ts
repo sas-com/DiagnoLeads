@@ -28,6 +28,19 @@ export const DUE_TASKS_SHOWN = 20;
 export const TASK_SOURCES = ['manual', 'hearing'] as const;
 export type TaskSource = (typeof TASK_SOURCES)[number];
 
+/**
+ * next_action: something to do by a date. takeaway (持ち帰り事項): something the rep promised to
+ * check and bring back (a question to answer, a document to send), optionally with whom to
+ * check with.
+ */
+export const TASK_KINDS = ['next_action', 'takeaway'] as const;
+export type TaskKind = (typeof TASK_KINDS)[number];
+export const CHECK_WITH_MAX = 200;
+
+/** Whose tasks the dashboard lists: the user's own (default) or everyone's */
+export const DUE_TASK_SCOPES = ['mine', 'all'] as const;
+export type DueTaskScope = (typeof DUE_TASK_SCOPES)[number];
+
 const organizationId = z.string().uuid();
 const leadId = z.string().uuid();
 const id = z.string().uuid();
@@ -53,6 +66,32 @@ export const leadScopeSchema = z.object({ organizationId, leadId }).strict();
 
 export const deleteContactSchema = z.object({ organizationId, id }).strict();
 
+/** Whom to check with is given as free text or as a member, never both */
+const checkWithFields = {
+  checkWith: optionalNote(CHECK_WITH_MAX),
+  checkWithUserId: z.string().uuid().nullish(),
+};
+
+function refineCheckWith(
+  value: { kind?: TaskKind; checkWith?: string | null; checkWithUserId?: string | null },
+  ctx: z.RefinementCtx
+) {
+  if (value.checkWith && value.checkWithUserId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['checkWith'],
+      message: 'Give whom to check with as text or as a member, not both',
+    });
+  }
+  if (value.kind === 'next_action' && (value.checkWith || value.checkWithUserId)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['checkWith'],
+      message: 'Only a takeaway has whom to check with',
+    });
+  }
+}
+
 export const createTaskSchema = z
   .object({
     organizationId,
@@ -60,8 +99,11 @@ export const createTaskSchema = z
     title: z.string().trim().min(1).max(TASK_TITLE_MAX),
     dueOn: isoDateSchema,
     note: optionalNote(TASK_NOTE_MAX),
+    kind: z.enum(TASK_KINDS).default('next_action'),
+    ...checkWithFields,
   })
-  .strict();
+  .strict()
+  .superRefine(refineCheckWith);
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 
 /** Only the given fields change; done = true completes the task, false reopens it */
@@ -73,13 +115,19 @@ export const updateTaskSchema = z
     dueOn: isoDateSchema.optional(),
     note: optionalNote(TASK_NOTE_MAX),
     done: z.boolean().optional(),
+    /** Turning a takeaway into a next action clears whom to check with */
+    kind: z.enum(TASK_KINDS).optional(),
+    ...checkWithFields,
   })
-  .strict();
+  .strict()
+  .superRefine(refineCheckWith);
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
 
 export const deleteTaskSchema = z.object({ organizationId, id }).strict();
 
-export const dueTasksSchema = z.object({ organizationId }).strict();
+export const dueTasksSchema = z
+  .object({ organizationId, scope: z.enum(DUE_TASK_SCOPES).default('mine') })
+  .strict();
 
 export interface ContactActor {
   id: string;
@@ -116,6 +164,10 @@ export interface LeadTaskView {
   completedAt: Date | null;
   source: TaskSource;
   sourceHearingId: string | null;
+  kind: TaskKind;
+  /** Whom to check with (takeaways): free text, or a member (checkWithUser) */
+  checkWith: string | null;
+  checkWithUser: ContactActor | null;
   assigneeId: string | null;
   createdBy: string | null;
   createdAt: Date;
@@ -124,4 +176,6 @@ export interface LeadTaskView {
 
 export interface DueTaskView extends LeadTaskView {
   lead: { name: string | null; company: string | null };
+  /** The user is the one responsible for it (see responsibleUserSql in ../service.ts) */
+  mine: boolean;
 }

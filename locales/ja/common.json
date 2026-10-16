@@ -2138,7 +2138,8 @@
         "upcomingHelp": "この通知は機能の公開後に届きます。設定は今のうちに変えておけます",
         "emailNote": "相談申込のメールは、営業窓口のアドレスに届きます（個人ごとの設定はありません）",
         "currentOrganization": "この組織",
-        "assignedToMeHelp": "リードの担当者に割り当てられたとき（オフにするとメールも届きません）"
+        "assignedToMeHelp": "リードの担当者に割り当てられたとき（オフにするとメールも届きません）",
+        "nextActionDueHelp": "担当している次の行動・持ち帰り事項の期限の前日と、期限を過ぎたときに知らせます（オフにするとメールも届きません）"
       },
       "description": "通知の受信方法を設定します",
       "inApp": {
@@ -3294,7 +3295,21 @@
         "today": "今日まで",
         "upcoming": "{date}まで",
         "done": "{date}期限"
-      }
+      },
+      "cardTitle": "次の行動・持ち帰り事項",
+      "kindLabel": "種類",
+      "kinds": {
+        "next_action": "次の行動",
+        "takeaway": "持ち帰り事項"
+      },
+      "takeawayBadge": "持ち帰り",
+      "takeawayPlaceholder": "例：保守費用の内訳を確認して回答する",
+      "checkWithLabel": "確認先（任意）",
+      "checkWithNone": "指定しない",
+      "checkWithOther": "メンバー以外（自由記入）",
+      "checkWithOtherLabel": "確認先の名前",
+      "checkWithOtherPlaceholder": "例：取引先の情報システム部",
+      "checkWith": "確認先：{name}"
     },
     "today": {
       "title": "今日やること",
@@ -3303,7 +3318,14 @@
       "loadError": "読み込めませんでした",
       "retry": "再読み込み",
       "more": "ほか{count}件",
-      "noLeadName": "名前未設定のリード"
+      "noLeadName": "名前未設定のリード",
+      "descriptionAll": "期限が今日まで、または期限を過ぎた次の行動と持ち帰り事項です。チェックすると完了になります。",
+      "scopeLabel": "表示する範囲",
+      "scopeMine": "自分の分だけ",
+      "scopeAll": "全員",
+      "scopeCount": "{label}（{count}）",
+      "emptyMine": "あなたの担当で今日までのものはありません",
+      "mineBadge": "自分"
     }
   },
   "leadAssignee": {

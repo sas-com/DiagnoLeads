@@ -248,6 +248,8 @@ export function shouldSendInAppNotification(
       return prefs.inAppConsultationRequested;
     case 'lead_assigned':
       return prefs.inAppAssignedToMe;
+    case 'next_action_due':
+      return prefs.inAppNextActionDue;
     case 'system':
       return true;
     default:

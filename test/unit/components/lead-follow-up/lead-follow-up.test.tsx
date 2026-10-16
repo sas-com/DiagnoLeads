@@ -21,6 +21,9 @@ const mocks = vi.hoisted(() => ({
   contacts: undefined as unknown,
   tasks: undefined as unknown,
   due: undefined as unknown,
+  /** Inputs the dashboard card queried with */
+  dueInputs: [] as unknown[],
+  members: [] as unknown[],
   calls: {} as Record<string, unknown[]>,
   /** What each mutation resolves with (onSuccess is called with it) */
   results: {} as Record<string, unknown>,
@@ -48,12 +51,20 @@ vi.mock('@/lib/trpc/client', () => {
       leadFollowUp: {
         contacts: { useQuery: () => ({ data: mocks.contacts, isError: false }) },
         tasks: { useQuery: () => ({ data: mocks.tasks, isError: false }) },
-        dueTasks: { useQuery: () => ({ data: mocks.due, isError: false, refetch: vi.fn() }) },
+        dueTasks: {
+          useQuery: (input: unknown) => {
+            mocks.dueInputs.push(input);
+            return { data: mocks.due, isError: false, refetch: vi.fn() };
+          },
+        },
         recordContact: mutation('recordContact'),
         deleteContact: mutation('deleteContact'),
         createTask: mutation('createTask'),
         updateTask: mutation('updateTask'),
         deleteTask: mutation('deleteTask'),
+      },
+      leads: {
+        assignees: { useQuery: () => ({ data: mocks.members }) },
       },
     },
   };
@@ -74,6 +85,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.calls = {};
   mocks.results = {};
+  mocks.dueInputs = [];
+  mocks.members = [];
 });
 
 const wrap = (ui: ReactNode) =>
@@ -93,6 +106,9 @@ const task = (overrides: Record<string, unknown> = {}) => ({
   completedAt: null,
   source: 'manual',
   sourceHearingId: null,
+  kind: 'next_action',
+  checkWith: null,
+  checkWithUser: null,
   assigneeId: null,
   createdBy: null,
   createdAt: new Date('2026-10-10T00:00:00Z'),
@@ -216,7 +232,88 @@ describe('LeadNextActionsCard', () => {
     await user.type(screen.getByLabelText('期限'), '2026/10/23');
     await user.click(screen.getByRole('button', { name: '追加' }));
     expect(mocks.calls.createTask).toEqual([
-      { organizationId: ORG_ID, leadId: LEAD_ID, title: '資料を送る', dueOn: '2026-10-23', note: null },
+      {
+        organizationId: ORG_ID,
+        leadId: LEAD_ID,
+        kind: 'next_action',
+        title: '資料を送る',
+        dueOn: '2026-10-23',
+        note: null,
+      },
+    ]);
+    // A next action asks nothing about whom to check with
+    expect(screen.queryByLabelText('確認先（任意）')).not.toBeInTheDocument();
+  });
+
+  it('marks takeaways apart from next actions and shows whom to check with', () => {
+    mocks.tasks = {
+      today: '2026-10-16',
+      canEdit: true,
+      items: [
+        task({ id: 'next', title: '見積もりを送る' }),
+        task({
+          id: 'member',
+          title: '保守費用の内訳を回答する',
+          kind: 'takeaway',
+          checkWithUser: { id: 'u2', name: '技術 次郎' },
+        }),
+        task({ id: 'text', title: '導入事例を送る', kind: 'takeaway', checkWith: '広報部' }),
+      ],
+    };
+    renderCard();
+
+    expect(screen.getByRole('heading', { name: '次の行動・持ち帰り事項' })).toBeInTheDocument();
+    const rows = screen.getAllByRole('listitem');
+    expect(within(rows[0]).queryByText('持ち帰り')).not.toBeInTheDocument();
+    expect(within(rows[1]).getByText('持ち帰り')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('確認先：技術 次郎')).toBeInTheDocument();
+    expect(within(rows[2]).getByText('持ち帰り')).toBeInTheDocument();
+    expect(within(rows[2]).getByText('確認先：広報部')).toBeInTheDocument();
+  });
+
+  it('adds a takeaway with a member or a free-text name to check with', async () => {
+    mocks.tasks = { today: '2026-10-16', canEdit: true, items: [] };
+    mocks.members = [
+      { userId: '880e8400-e29b-41d4-a716-446655440002', name: '技術 次郎', email: 'jiro@example.com', displayName: '技術 次郎' },
+    ];
+    const user = userEvent.setup();
+    renderCard();
+
+    await user.click(screen.getByRole('radio', { name: '持ち帰り事項' }));
+    expect(screen.getByLabelText('やること')).toHaveAttribute(
+      'placeholder',
+      '例：保守費用の内訳を確認して回答する'
+    );
+    await user.type(screen.getByLabelText('やること'), '保守費用の内訳を回答する');
+    await user.click(screen.getByRole('combobox', { name: '確認先（任意）' }));
+    await user.click(screen.getByRole('option', { name: '技術 次郎' }));
+    await user.click(screen.getByRole('button', { name: '追加' }));
+
+    await user.type(screen.getByLabelText('やること'), '導入事例を送る');
+    await user.click(screen.getByRole('combobox', { name: '確認先（任意）' }));
+    await user.click(screen.getByRole('option', { name: 'メンバー以外（自由記入）' }));
+    await user.type(screen.getByLabelText('確認先の名前'), '広報部');
+    await user.click(screen.getByRole('button', { name: '追加' }));
+
+    expect(mocks.calls.createTask).toEqual([
+      {
+        organizationId: ORG_ID,
+        leadId: LEAD_ID,
+        kind: 'takeaway',
+        title: '保守費用の内訳を回答する',
+        dueOn: '2026-10-16',
+        note: null,
+        checkWithUserId: '880e8400-e29b-41d4-a716-446655440002',
+      },
+      {
+        organizationId: ORG_ID,
+        leadId: LEAD_ID,
+        kind: 'takeaway',
+        title: '導入事例を送る',
+        dueOn: '2026-10-16',
+        note: null,
+        checkWith: '広報部',
+      },
     ]);
   });
 
@@ -248,7 +345,9 @@ describe('DueTasksSection', () => {
     mocks.due = {
       today: '2026-10-16',
       canEdit: true,
+      scope: 'mine',
       total: 3,
+      counts: { mine: 3, all: 5 },
       items: [
         { ...task({ id: 'a', title: '見積もりを送る', dueOn: '2026-10-15' }), lead: { name: '山田 花子', company: '架空商事' } },
         { ...task({ id: 'b', title: null, source: 'hearing' }), lead: { name: '佐藤 一郎', company: null } },
@@ -267,8 +366,57 @@ describe('DueTasksSection', () => {
   });
 
   it('says so when nothing is due', () => {
-    mocks.due = { today: '2026-10-16', canEdit: true, total: 0, items: [] };
+    mocks.due = { today: '2026-10-16', canEdit: true, scope: 'all', total: 0, counts: { mine: 0, all: 0 }, items: [] };
     wrap(<DueTasksSection organizationId={ORG_ID} />);
     expect(screen.getByText('今日までの次の行動はありません')).toBeInTheDocument();
+  });
+
+  it('shows the user\'s own first and switches to everyone', async () => {
+    mocks.due = {
+      today: '2026-10-16',
+      canEdit: true,
+      scope: 'mine',
+      total: 0,
+      counts: { mine: 0, all: 2 },
+      items: [],
+    };
+    const user = userEvent.setup();
+    const view = wrap(<DueTasksSection organizationId={ORG_ID} />);
+
+    // Mine only by default
+    expect(mocks.dueInputs.at(-1)).toEqual({ organizationId: ORG_ID, scope: 'mine' });
+    const mine = screen.getByRole('radio', { name: '自分の分だけ（0）' });
+    expect(mine).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText('あなたの担当で今日までのものはありません')).toBeInTheDocument();
+
+    mocks.due = {
+      today: '2026-10-16',
+      canEdit: true,
+      scope: 'all',
+      total: 2,
+      counts: { mine: 1, all: 2 },
+      items: [
+        {
+          ...task({ id: 'mine', title: '保守費用の内訳を回答する', kind: 'takeaway', checkWith: '広報部' }),
+          lead: { name: '山田 花子', company: '架空商事' },
+          mine: true,
+        },
+        { ...task({ id: 'other', title: '見積もりを送る' }), lead: { name: '佐藤 一郎', company: null }, mine: false },
+      ],
+    };
+    await user.click(screen.getByRole('radio', { name: '全員（2）' }));
+    view.rerender(
+      <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
+        <DueTasksSection organizationId={ORG_ID} />
+      </NextIntlClientProvider>
+    );
+
+    expect(mocks.dueInputs.at(-1)).toEqual({ organizationId: ORG_ID, scope: 'all' });
+    const rows = screen.getAllByRole('listitem');
+    expect(within(rows[0]).getByText('自分')).toBeInTheDocument();
+    expect(within(rows[0]).getByText('持ち帰り')).toBeInTheDocument();
+    expect(within(rows[0]).getByText('確認先：広報部')).toBeInTheDocument();
+    expect(within(rows[1]).queryByText('自分')).not.toBeInTheDocument();
+    expect(within(rows[1]).queryByText('持ち帰り')).not.toBeInTheDocument();
   });
 });
