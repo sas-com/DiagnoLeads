@@ -1,10 +1,12 @@
 import { DiagnosticForm } from '@/components/features/diagnostic/diagnostic-form';
 import { DynamicDiagnosticForm } from '@/components/features/diagnostic/dynamic-diagnostic-form';
 import { DiagnosticFormRepository, type DiagnosticForm as DiagnosticFormType } from '@/lib/cms';
+import { isLegacyDiagnosticFormEnabled } from '@/lib/features/diagnostics/legacy-form';
 import { ArrowRight, FileText } from 'lucide-react';
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 
 /**
  * Diagnostic Page Metadata
@@ -37,6 +39,8 @@ export default async function DiagnosticPage({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
+  // Off in production (#71): send visitors to the AX diagnosis instead
+  if (!isLegacyDiagnosticFormEnabled()) redirect(`/${locale}/ax-diagnosis`);
   const t = await getTranslations('public.diagnostic');
 
   const repository = new DiagnosticFormRepository();
