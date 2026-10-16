@@ -15,6 +15,9 @@ const NON_TECHNICAL = new Set([
   'timeline',
   'industry',
   'role',
+  'annual_revenue',
+  'employees',
+  'sites',
 ]);
 
 /** Required questions about the system itself on the chosen path */

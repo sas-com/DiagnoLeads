@@ -60,6 +60,7 @@ export const PREFILL_QUESTION_IDS = [
   'timeline',
   'industry',
   'role',
+  'employees',
 ] as const;
 
 /** Diagnosis "other" path answers mapped onto the lead's target system */
@@ -120,6 +121,11 @@ export function buildHearingPrefill(submission: PrefillSubmission): {
   const industry = one('industry');
   if (industry) values.industry = industry;
   hint('industry', 'industry');
+
+  // 従業員数: the diagnosis uses the same ranges as the hearing (#150)
+  const employees = one('employees');
+  if (employees && employees !== 'unknown') values.employeeCount = employees;
+  hint('employeeCount', 'employees');
 
   // 移行元 (+ other_system) → 対象システム
   const platform = one('platform');

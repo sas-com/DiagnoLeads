@@ -77,6 +77,8 @@ async function answerAs400(user: User) {
   await user.click(inGroup(/業種/).getByLabelText('製造業'));
   await user.click(inGroup(/あなたの立場/).getByLabelText('情報システム部門の責任者'));
   await next(user);
+  // Company size (#150): optional, so the respondent may go on without answering
+  await next(user);
 }
 
 async function fillContact(user: User) {
@@ -92,13 +94,13 @@ describe('AxDiagnosisFlow', () => {
     render(withIntl(<AxDiagnosisFlow locale="ja" />));
 
     expect(screen.getByText('当てはまるものを選ぶと、次の質問に進みます。')).toBeInTheDocument();
-    expect(screen.getByText('STEP 1 / 5')).toBeInTheDocument();
+    expect(screen.getByText('STEP 1 / 6')).toBeInTheDocument();
     for (const id of ['as400', 'acos', 'access', 'other']) {
       expect(screen.getByTestId(`platform-${id}`)).toBeInTheDocument();
     }
 
     await user.click(screen.getByTestId('platform-acos'));
-    const heading = screen.getByRole('heading', { name: /STEP 2 \/ 5\s*機種と運用/ });
+    const heading = screen.getByRole('heading', { name: /STEP 2 \/ 6\s*機種と運用/ });
     expect(heading).toHaveFocus();
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -118,7 +120,7 @@ describe('AxDiagnosisFlow', () => {
     expect(group).toHaveAccessibleName(/いずれか1つを選んでください/);
     expect(group.getAttribute('aria-describedby') ?? '').not.toContain('error');
     expect(document.querySelectorAll('p[id^="q-"][id$="-error"]')).toHaveLength(3);
-    expect(screen.getByRole('heading', { name: /STEP 2 \/ 5/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /STEP 2 \/ 6/ })).toBeInTheDocument();
   });
 
   it('asks the Access questions in the words of the department', async () => {
@@ -180,7 +182,7 @@ describe('AxDiagnosisFlow', () => {
     render(withIntl(<AxDiagnosisFlow locale="ja" />));
 
     await user.click(await screen.findByRole('button', { name: '続きから' }));
-    expect(screen.getByRole('heading', { name: /STEP 3 \/ 5\s*規模と作り/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /STEP 3 \/ 6\s*規模と作り/ })).toBeInTheDocument();
   });
 
   it('ignores saved answers older than a week', async () => {
@@ -290,13 +292,15 @@ describe('AxDiagnosisFlow', () => {
     const user = userEvent.setup();
     render(withIntl(<AxDiagnosisFlow locale="ja" />));
     await answerAs400(user);
-    expect(window.history.state.ax.step).toBe(4);
+    expect(window.history.state.ax.step).toBe(5);
 
     window.history.back();
-    expect(await screen.findByRole('heading', { name: /STEP 4 \/ 5/ })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: /STEP 5 \/ 6\s*会社の規模（任意）/ })
+    ).toBeInTheDocument();
     // The in-page back button walks the same entries
     await user.click(screen.getByRole('button', { name: /戻る/ }));
-    expect(await screen.findByRole('heading', { name: /STEP 3 \/ 5/ })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /STEP 4 \/ 6/ })).toBeInTheDocument();
     window.history.go(2);
     expect(await screen.findByRole('heading', { name: /最後に、ご連絡先/ })).toBeInTheDocument();
 
@@ -308,10 +312,10 @@ describe('AxDiagnosisFlow', () => {
 
     // Another system is a new diagnosis: the finished one's entries no longer show steps
     await user.click(screen.getByRole('button', { name: '別のシステムも診断する' }));
-    expect(screen.getByText('STEP 1 / 5')).toBeInTheDocument();
+    expect(screen.getByText('STEP 1 / 6')).toBeInTheDocument();
     window.history.forward();
     await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(screen.getByText('STEP 1 / 5')).toBeInTheDocument();
+    expect(screen.getByText('STEP 1 / 6')).toBeInTheDocument();
     expect(screen.getByTestId('platform-as400')).toBeInTheDocument();
   });
 

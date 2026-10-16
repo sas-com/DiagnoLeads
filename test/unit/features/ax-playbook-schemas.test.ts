@@ -9,6 +9,30 @@ import {
 } from '@/lib/features/ax-playbook/types/schemas';
 
 describe('axPlaybookContentSchema', () => {
+  it('reads a playbook saved before #150 as having no target company size', () => {
+    const { targetCompany: _omit, ...saved } = emptyAxPlaybookContent();
+    expect(axPlaybookContentSchema.parse(saved).targetCompany).toEqual({
+      annual_revenue: [],
+      employees: [],
+      sites: [],
+    });
+  });
+
+  it('keeps the target ranges in the order of the question, once each', () => {
+    const content = emptyAxPlaybookContent();
+    content.targetCompany.annual_revenue = ['3b_10b', '1b_3b', '3b_10b'];
+    expect(axPlaybookContentSchema.parse(content).targetCompany.annual_revenue).toEqual([
+      '1b_3b',
+      '3b_10b',
+    ]);
+  });
+
+  it('rejects a target range the question does not offer', () => {
+    const content = emptyAxPlaybookContent();
+    content.targetCompany.sites = ['unknown'];
+    expect(axPlaybookContentSchema.safeParse(content).success).toBe(false);
+  });
+
   it('accepts the empty playbook', () => {
     expect(axPlaybookContentSchema.safeParse(emptyAxPlaybookContent()).success).toBe(true);
   });

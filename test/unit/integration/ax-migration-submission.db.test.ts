@@ -6,7 +6,8 @@
  *     bunx vitest --run test/unit/integration/ax-migration-submission.db.test.ts
  */
 import * as schema from '@/lib/db/schema';
-import { diagnosticSubmissions, leads, organizations } from '@/lib/db/schema';
+import { axSalesPlaybooks, diagnosticSubmissions, leads, organizations } from '@/lib/db/schema';
+import { emptyAxPlaybookContent } from '@/lib/features/ax-playbook/types/schemas';
 import {
   type AxMigrationSubmissionInput,
   addAxMigrationDetails,
@@ -107,7 +108,7 @@ describe.skipIf(!url)('AX migration submission (PostgreSQL)', () => {
       leadId: outcome.leadId,
       leadCreated: true,
       diagnosticKey: 'ax-migration',
-      diagnosticVersion: 2,
+      diagnosticVersion: 3,
       tracking: { utmSource: 'google', utmMedium: 'cpc', utmCampaign: 'ax-hito' },
       consultationRequestedAt: null,
     });
@@ -185,6 +186,62 @@ describe.skipIf(!url)('AX migration submission (PostgreSQL)', () => {
       expect(lead?.responses).toMatchObject({
         axMigration: { consultationRequested: true, mql: { level: 'none', unmet: ['industry'] } },
       });
+    });
+  });
+
+  it('checks the company size against the target ranges of the sales playbook (#150)', async () => {
+    const content = emptyAxPlaybookContent();
+    content.targetCompany.annual_revenue = ['1b_3b', '3b_10b'];
+    await pg.insert(axSalesPlaybooks).values({ organizationId: otherOrganizationId, content });
+
+    const outside = await submitAxMigrationDiagnosis(
+      db,
+      otherOrganizationId,
+      input({ answers: { ...as400Answers, annual_revenue: 'over_30b', employees: '50_299' } }),
+      now
+    );
+    const skipped = await submitAxMigrationDiagnosis(db, otherOrganizationId, input(), now);
+    // Another organization without a playbook: no condition
+    const elsewhere = await submitAxMigrationDiagnosis(
+      db,
+      organizationId,
+      input({ answers: { ...as400Answers, annual_revenue: 'over_30b' } }),
+      now
+    );
+    if (!outside.ok || !skipped.ok || !elsewhere.ok) throw new Error('submission failed');
+
+    expect(outside.result.mql).toMatchObject({
+      level: 'none',
+      candidate: false,
+      unmet: ['company_size'],
+    });
+    const lead = await pg.query.leads.findFirst({ where: eq(leads.id, outside.leadId) });
+    expect(lead?.responses).toMatchObject({
+      axMigration: {
+        mqlCandidate: false,
+        companySizeFit: 'not_fit',
+        mql: { level: 'none', unmet: ['company_size'] },
+      },
+    });
+    // A later consultation request does not make a company outside the ranges 関心あり
+    const request = await requestAxMigrationConsultation(
+      db,
+      outside.submissionId,
+      new Date(now.getTime() + 60_000)
+    );
+    expect(request).toMatchObject({ ok: true });
+    const requested = await pg.query.leads.findFirst({ where: eq(leads.id, outside.leadId) });
+    expect(requested?.mqlQualifiedAt).toBeNull();
+    expect(requested?.responses).toMatchObject({
+      axMigration: { mql: { level: 'none', unmet: ['company_size'] } },
+    });
+    expect(skipped.result.mql).toMatchObject({
+      candidate: true,
+      criteria: { companySize: 'unknown' },
+    });
+    expect(elsewhere.result.mql).toMatchObject({
+      candidate: true,
+      criteria: { companySize: 'not_configured' },
     });
   });
 

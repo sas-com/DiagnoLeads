@@ -23,6 +23,7 @@ import { AlertTriangle, Loader2, Lock, Plus, RefreshCw, Save, Trash2 } from 'luc
 import { useFormatter, useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { TargetCompanyCard } from './target-company-card';
 
 type RowListKey = 'objections' | 'ngPhrases' | 'escalations';
 
@@ -63,7 +64,7 @@ export function AxPlaybookEditor() {
   const save = trpc.axPlaybook.update.useMutation({
     onSuccess: (_result, variables) => {
       // Show what was stored (trimmed text, blank rows dropped)
-      setForm(toAxPlaybookForm(variables.content));
+      setForm(toAxPlaybookForm(axPlaybookContentSchema.parse(variables.content)));
       utils.axPlaybook.get.invalidate();
       toast.success(t('saved'));
     },
@@ -252,6 +253,13 @@ export function AxPlaybookEditor() {
           <p className="text-xs text-muted-foreground">{t('onePerLine')}</p>
         </CardContent>
       </Card>
+
+      <TargetCompanyCard
+        key={organizationId}
+        organizationId={organizationId}
+        initial={(data.content ?? emptyAxPlaybookContent()).targetCompany}
+        canEdit={data.canEditTargetCompany}
+      />
 
       {renderRows('objections')}
       {renderRows('ngPhrases')}

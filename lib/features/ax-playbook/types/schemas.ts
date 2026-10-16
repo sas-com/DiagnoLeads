@@ -6,6 +6,11 @@
  * organization enters the content from the settings screen (Refs #74).
  */
 
+import {
+  AX_COMPANY_SIZE_OPTIONS,
+  type AxTargetCompany,
+  emptyAxTargetCompany,
+} from '@/lib/features/diagnostics/ax-migration/company-size';
 import { z } from 'zod';
 
 /** Same keys as ChallengeType in lib/features/diagnostics/ax-migration/evaluate.ts */
@@ -48,6 +53,24 @@ export const axPlaybookEscalationSchema = z.object({
   contact: requiredText,
 });
 
+const sizeRanges = (values: readonly [string, ...string[]]) =>
+  z
+    .array(z.enum(values))
+    .transform((list) => values.filter((value) => list.includes(value)))
+    .default([]);
+
+/**
+ * Company sizes the sales team targets (#150): the ranges of each diagnosis question that fit.
+ * Empty means no condition. Kept here, not in code, because the ranges are confidential.
+ */
+export const axTargetCompanySchema = z
+  .object({
+    annual_revenue: sizeRanges(AX_COMPANY_SIZE_OPTIONS.annual_revenue),
+    employees: sizeRanges(AX_COMPANY_SIZE_OPTIONS.employees),
+    sites: sizeRanges(AX_COMPANY_SIZE_OPTIONS.sites),
+  })
+  .default(emptyAxTargetCompany()) satisfies z.ZodType<AxTargetCompany, z.ZodTypeDef, unknown>;
+
 export const axPlaybookContentSchema = z.object({
   challenges: z.object({
     people: axPlaybookChallengeGuideSchema,
@@ -61,6 +84,8 @@ export const axPlaybookContentSchema = z.object({
   ngPhrases: z.array(axPlaybookNgPhraseSchema).max(AX_PLAYBOOK_LIMITS.itemsMax),
   /** Topics not to answer on the spot, and who to pass them to */
   escalations: z.array(axPlaybookEscalationSchema).max(AX_PLAYBOOK_LIMITS.itemsMax),
+  /** Rows saved before #150 have no target and read as "no condition" */
+  targetCompany: axTargetCompanySchema,
 });
 
 export type AxPlaybookChallengeGuide = z.infer<typeof axPlaybookChallengeGuideSchema>;
@@ -75,6 +100,11 @@ export const updateAxPlaybookSchema = z.object({
   content: axPlaybookContentSchema,
 });
 
+export const updateAxTargetCompanySchema = z.object({
+  organizationId: z.string().uuid(),
+  targetCompany: axTargetCompanySchema,
+});
+
 export function emptyAxPlaybookContent(): AxPlaybookContent {
   const guide = (): AxPlaybookChallengeGuide => ({ effect: '', questions: [], signals: [] });
   return {
@@ -83,5 +113,6 @@ export function emptyAxPlaybookContent(): AxPlaybookContent {
     objections: [],
     ngPhrases: [],
     escalations: [],
+    targetCompany: emptyAxTargetCompany(),
   };
 }

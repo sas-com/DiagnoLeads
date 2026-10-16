@@ -1,6 +1,11 @@
 import type { TargetSystem } from '@/lib/features/leads/types/pipeline';
 import { multiple, single, toPercent } from '../engine';
 import type { DiagnosticAnswers } from '../types';
+import {
+  type AxCompanySizeResult,
+  type AxTargetCompany,
+  evaluateCompanySize,
+} from './company-size';
 import { AX_MIGRATION_CONFIG, type AxMigrationConfig } from './config';
 import { AX_PLATFORMS, type AxPlatform, axMigrationDefinition } from './definition';
 import { type AxMqlJudgement, judgeAxMql } from './mql';
@@ -114,10 +119,13 @@ export interface AxMigrationResult {
   leadScore: number;
   targetSystem: TargetSystem | null;
   /**
-   * MQL (#139): `candidate` = 適合 (industry × system), `qualified` = 関心あり（MQL）
+   * MQL (#139): `candidate` = 適合 (industry × system, and a company size not outside the
+   * organization's target ranges, #150), `qualified` = 関心あり（MQL）
    * (fit + a strong signal or the minimum score). See mql.ts; rules in config.ts.
    */
   mql: AxMqlJudgement;
+  /** Company size against the organization's target ranges (internal, never shown to the respondent) */
+  companySize: AxCompanySizeResult;
   /** Hints for sales. SQL is decided by sales after the hearing: ①② required + ③ or ④ */
   sqlSignals: {
     candidate: boolean;
@@ -453,7 +461,9 @@ export function evaluateAxMigration(
   config: AxMigrationConfig = AX_MIGRATION_CONFIG,
   now: Date = new Date(),
   /** What the respondent did besides answering (the consultation request is not an answer) */
-  actions: { consultationRequested?: boolean } = {}
+  actions: { consultationRequested?: boolean } = {},
+  /** Target company size ranges of the organization (sales playbook); null when not set */
+  targetCompany: AxTargetCompany | null = null
 ): AxMigrationResult {
   const platform = platformOf(answers);
   const challenges = multiple(answers, 'challenges');
@@ -817,7 +827,8 @@ export function evaluateAxMigration(
   // "No particular challenges" with nothing else pointing at one: no primary challenge
   const primary = challengeScores[best] > 0 ? best : null;
 
-  // MQL の必須条件（業種 × システム）。シグナルとの判定はリードスコアの後で行う
+  // MQL の必須条件（業種 × システム × 企業規模）。シグナルとの判定はリードスコアの後で行う
+  const companySize = evaluateCompanySize(answers, targetCompany);
   const mqlCriteria = {
     industry: industry !== undefined && config.targetIndustries.includes(industry),
     system:
@@ -826,6 +837,7 @@ export function evaluateAxMigration(
         otherSystem !== undefined &&
         config.legacyOtherSystems.includes(otherSystem)),
   };
+  // The respondent's next step uses industry × system only, never the confidential size ranges
   const mqlCandidate = mqlCriteria.industry && mqlCriteria.system;
 
   // SQL の手がかり（①②必須＋③④のいずれか）: ① machine, language and rough size are known
@@ -874,6 +886,7 @@ export function evaluateAxMigration(
   const mql = judgeAxMql(
     {
       ...mqlCriteria,
+      companySize: companySize.fit,
       consultationRequested: actions.consultationRequested === true,
       supportEnd,
       accessSupport: support,
@@ -905,6 +918,7 @@ export function evaluateAxMigration(
     leadScore,
     targetSystem: deriveTargetSystem(platform, otherSystem),
     mql,
+    companySize,
     sqlSignals: {
       candidate: systemKnown && problemAware && (timelineVisible || decisionAccess),
       systemKnown,

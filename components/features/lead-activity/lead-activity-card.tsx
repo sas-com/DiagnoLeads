@@ -274,6 +274,12 @@ export function EventTitle({ event }: { event: LeadActivityEvent }) {
   }
 }
 
+const COMPANY_SIZE_BADGE_COLORS = {
+  fit: 'emerald',
+  not_fit: 'gray',
+  unknown: 'blue',
+} as const;
+
 function DiagnosisDetails({
   event,
   leadId,
@@ -306,6 +312,11 @@ function DiagnosisDetails({
       <p className="text-sm text-gray-700">{parts.join(' / ')}</p>
       <div className="flex flex-wrap gap-2">
         {summary.needsHearing && <Badge color="yellow">{t('summary.needsHearing')}</Badge>}
+        {summary.companySizeFit && summary.companySizeFit !== 'not_configured' && (
+          <Badge color={COMPANY_SIZE_BADGE_COLORS[summary.companySizeFit]}>
+            {t(`summary.companySize.${summary.companySizeFit}`)}
+          </Badge>
+        )}
         {summary.detailsAnswered && <Badge color="gray">{t('summary.detailsAnswered')}</Badge>}
       </div>
       <Button

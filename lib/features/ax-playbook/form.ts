@@ -3,6 +3,7 @@
  * Lists are edited as one item per line; table rows that are left entirely blank are dropped.
  */
 
+import { emptyAxTargetCompany } from '@/lib/features/diagnostics/ax-migration/company-size';
 import {
   AX_PLAYBOOK_CHALLENGES,
   type AxPlaybookChallenge,
@@ -70,5 +71,7 @@ export function fromAxPlaybookForm(form: AxPlaybookForm): AxPlaybookContent {
     objections: form.objections.filter(hasAnyText),
     ngPhrases: form.ngPhrases.filter(hasAnyText),
     escalations: form.escalations.filter(hasAnyText),
+    // Saved on its own (updateTargetCompany); the server keeps the stored ranges
+    targetCompany: emptyAxTargetCompany(),
   };
 }
