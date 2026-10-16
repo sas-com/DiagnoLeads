@@ -190,6 +190,12 @@ export interface HearingPrefillSnapshot {
   challenges: { primary: string | null; selected: string[] } | null;
   /** Diagnosis questions behind each field (also for fields that got no value) */
   hints: Partial<Record<HearingFieldKey, string[]>>;
+  /**
+   * Builder diagnoses only (#121): the title of the answered version, and the labels of the
+   * answers by question id then value, copied from that version (the AX labels come from code)
+   */
+  diagnosisTitle?: string;
+  answerLabels?: Record<string, Record<string, string>>;
 }
 
 // ── API inputs ──────────────────────────────────────────────────────────────────

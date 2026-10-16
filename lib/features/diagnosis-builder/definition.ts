@@ -61,11 +61,28 @@ const option = z.object({
   scores: scores.optional(),
 });
 
+/**
+ * The hearing sheet field a question fills in advance (Refs #121). When a lead's hearing starts
+ * from a submission of this diagnosis, the answer becomes that field's value (to be confirmed in
+ * the meeting, like the AX diagnosis). `key` is a HearingFieldKey of
+ * lib/features/lead-hearings/catalog.ts; it is checked by validateDefinition, not here, so the
+ * schema does not depend on the catalog.
+ * `values` maps option values to the field's option values: null = never copied; an option not
+ * listed is copied as is when the field has an option with the same value.
+ */
+export const HEARING_FIELD_KEY_PATTERN = /^[a-zA-Z][a-zA-Z0-9]{0,39}$/;
+const hearingFieldMapping = z.object({
+  key: z.string().regex(HEARING_FIELD_KEY_PATTERN),
+  values: z.record(id, z.string().max(40).nullable()).optional(),
+});
+
 const questionBase = {
   id,
   label: shortText,
   description: longText.optional(),
   required: z.boolean(),
+  /** Never sent to the respondent (toPublicDefinition copies field by field) */
+  hearingField: hearingFieldMapping.optional(),
 };
 
 const singleQuestion = z.object({
@@ -288,6 +305,7 @@ export type DiagnosisCondition = z.infer<typeof conditionSchema>;
 export type DiagnosisConditionGroup = z.infer<typeof conditionGroup>;
 export type DiagnosisTierSet = DiagnosisDefinition['tierSets'][number];
 export type DiagnosisResultBlock = z.infer<typeof resultBlockSchema>;
+export type DiagnosisHearingFieldMapping = z.infer<typeof hearingFieldMapping>;
 export type ChoiceDiagnosisQuestion = Extract<DiagnosisQuestion, { type: 'single' | 'multiple' }>;
 
 /** Normalized answers: single/text → string, multiple → string[], scale/number_range → number */

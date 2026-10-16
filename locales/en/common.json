@@ -2990,6 +2990,16 @@
         "fit": "Company size: in target",
         "not_fit": "Company size: outside target",
         "unknown": "Company size: not answered"
+      },
+      "resultType": "Result",
+      "leadScore": "Lead score",
+      "leadScoreValue": "{score} / 100",
+      "version": "v{version}",
+      "untitled": "Untitled diagnosis",
+      "mqlLevels": {
+        "interest": "Interested (MQL)",
+        "fit": "Fit",
+        "none": "Not a target"
       }
     },
     "showAnswers": "Show answers",
@@ -3153,7 +3163,16 @@
       "showAnswers": "View answers",
       "extraTitle": "Other data ({count})",
       "yes": "Yes",
-      "no": "No"
+      "no": "No",
+      "builderUntitled": "Untitled diagnosis",
+      "builderVersion": "v{version}",
+      "builderResultType": "Result type",
+      "builderLeadScore": "Lead score",
+      "builderLeadScoreValue": "{score} / 100",
+      "builderMqlInterestHelp": "Meets the required conditions of the diagnosis and shows interest by an answer or action",
+      "builderMqlFitHelp": "Meets the required conditions of the diagnosis, but no answer or action shows interest yet",
+      "builderMqlNoSignal": "Meets the required conditions. No answer or action shows interest yet",
+      "builderMqlNone": "Does not meet the required conditions of the diagnosis"
     },
     "answers": {
       "empty": "No diagnosis answers.",

@@ -30,6 +30,7 @@ function query() {
     promise,
     {
       from: () => builder,
+      leftJoin: () => builder,
       orderBy: () => builder,
       limit: () => builder,
       for: () => builder,

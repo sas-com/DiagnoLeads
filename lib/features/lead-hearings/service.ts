@@ -7,14 +7,15 @@
  */
 
 import type { db as defaultDb } from '@/lib/db/client';
-import { diagnosticSubmissions, leadHearings, leads } from '@/lib/db/schema';
+import { diagnosisVersions, diagnosticSubmissions, leadHearings, leads } from '@/lib/db/schema';
+import { DIAGNOSIS_SUBMISSION_KEY_PREFIX } from '@/lib/features/diagnosis-builder/public-diagnosis';
 import { AX_MIGRATION_DIAGNOSTIC_KEY } from '@/lib/features/diagnostics/ax-migration/definition';
 import { syncHearingNextAction } from '@/lib/features/lead-follow-up/service';
 import { TRPCError } from '@trpc/server';
-import { and, count, desc, eq, lt, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, like, lt, or, sql } from 'drizzle-orm';
 import { HEARING_CATALOG_VERSION, LEAD_HEARINGS_MAX_PER_LEAD } from './catalog';
 import { computeMissingItems } from './missing';
-import { buildHearingPrefill, isVerifiedSubmission } from './prefill';
+import { buildBuilderHearingPrefill, buildHearingPrefill, isVerifiedSubmission } from './prefill';
 import {
   type CreateLeadHearingInput,
   type HearingFields,
@@ -185,7 +186,25 @@ export async function getLeadHearingSummarySource(
   };
 }
 
-/** The lead's AX diagnosis submissions, newest first */
+/** The version a builder submission answered (same organization only) */
+const submissionVersion = and(
+  eq(diagnosisVersions.id, diagnosticSubmissions.diagnosisVersionId),
+  eq(diagnosisVersions.organizationId, diagnosticSubmissions.organizationId)
+);
+
+/**
+ * Submissions a hearing can start from: the AX diagnosis, and builder diagnoses whose answered
+ * version maps at least one question to the hearing sheet (#121)
+ */
+const prefillSourceFilter = or(
+  eq(diagnosticSubmissions.diagnosticKey, AX_MIGRATION_DIAGNOSTIC_KEY),
+  and(
+    like(diagnosticSubmissions.diagnosticKey, `${DIAGNOSIS_SUBMISSION_KEY_PREFIX}%`),
+    sql`exists (select 1 from jsonb_array_elements(${diagnosisVersions.definition}->'questions') as q where q->'hearingField' is not null)`
+  )
+);
+
+/** The lead's diagnosis submissions a hearing can start from, newest first */
 export async function listPrefillSources(
   db: Executor,
   input: { organizationId: string; leadId: string }
@@ -194,29 +213,37 @@ export async function listPrefillSources(
   const rows = await db
     .select({
       id: diagnosticSubmissions.id,
+      diagnosticKey: diagnosticSubmissions.diagnosticKey,
       diagnosticVersion: diagnosticSubmissions.diagnosticVersion,
       answers: diagnosticSubmissions.answers,
       leadCreated: diagnosticSubmissions.leadCreated,
       continuedFromSubmissionId: diagnosticSubmissions.continuedFromSubmissionId,
       createdAt: diagnosticSubmissions.createdAt,
+      diagnosisTitle: sql<string | null>`${diagnosisVersions.definition}->>'title'`,
     })
     .from(diagnosticSubmissions)
+    .leftJoin(diagnosisVersions, submissionVersion)
     .where(
       and(
         eq(diagnosticSubmissions.organizationId, input.organizationId),
         eq(diagnosticSubmissions.leadId, input.leadId),
-        eq(diagnosticSubmissions.diagnosticKey, AX_MIGRATION_DIAGNOSTIC_KEY)
+        prefillSourceFilter
       )
     )
     .orderBy(desc(diagnosticSubmissions.createdAt))
     .limit(PREFILL_SOURCES_LIMIT);
-  return rows.map((row) => ({
-    id: row.id,
-    submittedAt: row.createdAt,
-    diagnosticVersion: row.diagnosticVersion,
-    platform: typeof row.answers.platform === 'string' ? row.answers.platform : null,
-    verified: isVerifiedSubmission(row),
-  }));
+  return rows.map((row) => {
+    const isAx = row.diagnosticKey === AX_MIGRATION_DIAGNOSTIC_KEY;
+    return {
+      id: row.id,
+      submittedAt: row.createdAt,
+      diagnosticVersion: row.diagnosticVersion,
+      platform: isAx && typeof row.answers.platform === 'string' ? row.answers.platform : null,
+      /** Builder diagnoses: the title of the answered version */
+      diagnosisTitle: isAx ? null : row.diagnosisTitle,
+      verified: isVerifiedSubmission(row),
+    };
+  });
 }
 
 async function findPrefillSubmission(
@@ -235,13 +262,15 @@ async function findPrefillSubmission(
       leadCreated: diagnosticSubmissions.leadCreated,
       continuedFromSubmissionId: diagnosticSubmissions.continuedFromSubmissionId,
       createdAt: diagnosticSubmissions.createdAt,
+      definition: diagnosisVersions.definition,
     })
     .from(diagnosticSubmissions)
+    .leftJoin(diagnosisVersions, submissionVersion)
     .where(
       and(
         eq(diagnosticSubmissions.organizationId, organizationId),
         eq(diagnosticSubmissions.leadId, leadId),
-        eq(diagnosticSubmissions.diagnosticKey, AX_MIGRATION_DIAGNOSTIC_KEY),
+        prefillSourceFilter,
         submissionId ? eq(diagnosticSubmissions.id, submissionId) : undefined
       )
     )
@@ -249,6 +278,16 @@ async function findPrefillSubmission(
     .limit(1);
   if (submissionId && !submission) throw notFound('submission');
   return submission;
+}
+
+/** The hearing values (and snapshot) a submission gives */
+function prefillFrom(submission: NonNullable<Awaited<ReturnType<typeof findPrefillSubmission>>>) {
+  if (submission.diagnosticKey === AX_MIGRATION_DIAGNOSTIC_KEY) {
+    return buildHearingPrefill(submission);
+  }
+  // The filter only lets builder submissions with their version through
+  if (!submission.definition) return null;
+  return buildBuilderHearingPrefill({ ...submission, definition: submission.definition });
 }
 
 /**
@@ -313,8 +352,8 @@ export async function createLeadHearing(
         leadId,
         input.submissionId
       );
-      if (submission) {
-        const built = buildHearingPrefill(submission);
+      const built = submission ? prefillFrom(submission) : null;
+      if (built) {
         fields = built.fields;
         prefill = built.snapshot;
       }

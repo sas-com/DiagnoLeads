@@ -25,6 +25,7 @@ function query() {
     promise,
     {
       from: () => builder,
+      leftJoin: () => builder,
       orderBy: () => builder,
       limit: () => builder,
       where: (arg: unknown) => {

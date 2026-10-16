@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import {
   type AxMqlView,
   type AxSystemView,
+  type BuilderDiagnosisView,
   type ExtraDataEntry,
   readLeadDiagnosis,
 } from '@/lib/features/leads/diagnosis-view';
@@ -79,9 +80,9 @@ export function LeadDiagnosisCard({
   const format = useFormatter();
   const labels = useAxLabels();
   const view = useMemo(() => readLeadDiagnosis(responses, customFields), [responses, customFields]);
-  const { ax, extra } = view;
+  const { ax, builder, extra } = view;
 
-  if (!ax && (compact || extra.length === 0)) return null;
+  if (!ax && !builder && (compact || extra.length === 0)) return null;
 
   const dateTime = (iso: string) =>
     format.dateTime(new Date(iso), {
@@ -156,18 +157,32 @@ export function LeadDiagnosisCard({
     </div>
   );
 
-  if (compact && ax) {
+  const builderBlock = builder && (
+    <BuilderDiagnosis
+      view={builder}
+      compact={compact}
+      dateTime={dateTime}
+      answersLink={answersLink}
+    />
+  );
+
+  if (compact) {
     return (
-      <section aria-labelledby="lead-diagnosis-compact" className="space-y-2">
-        <h3 id="lead-diagnosis-compact" className="text-sm font-semibold text-foreground">
-          {t('title')}
-        </h3>
-        {flags}
-        <p className="text-sm text-foreground">{systemLine(ax)}</p>
-        <p className="text-sm text-muted-foreground">
-          {t('primaryChallenge')}：{labels.challenge(ax.primaryChallenge)}
-        </p>
-      </section>
+      <>
+        {ax && (
+          <section aria-labelledby="lead-diagnosis-compact" className="space-y-2">
+            <h3 id="lead-diagnosis-compact" className="text-sm font-semibold text-foreground">
+              {t('title')}
+            </h3>
+            {flags}
+            <p className="text-sm text-foreground">{systemLine(ax)}</p>
+            <p className="text-sm text-muted-foreground">
+              {t('primaryChallenge')}：{labels.challenge(ax.primaryChallenge)}
+            </p>
+          </section>
+        )}
+        {builderBlock}
+      </>
     );
   }
 
@@ -284,8 +299,148 @@ export function LeadDiagnosisCard({
         </div>
       )}
 
+      {builderBlock && (
+        <div className={ax ? 'mt-4 border-t pt-3 dark:border-gray-700' : 'mt-1'}>
+          {builderBlock}
+        </div>
+      )}
+
       {extra.length > 0 && <ExtraData entries={extra} />}
     </Card>
+  );
+}
+
+/**
+ * A diagnosis made in the builder (#121): the diagnosis and version answered, the result type,
+ * the lead score out of 100 with its reasons, and 関心あり（MQL） / 適合 / 対象外 with the
+ * reasons the marketer wrote in the definition. Same badges as the AX diagnosis.
+ */
+function BuilderDiagnosis({
+  view,
+  compact,
+  dateTime,
+  answersLink,
+}: {
+  view: BuilderDiagnosisView;
+  compact: boolean;
+  dateTime: (iso: string) => string;
+  answersLink: (submissionId: string | null, label: string) => ReactNode;
+}) {
+  const t = useTranslations('leadDetail.diagnosis');
+  const name = [
+    view.title ?? t('builderUntitled'),
+    view.version !== null ? t('builderVersion', { version: view.version }) : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const mqlReason =
+    view.mqlLevel === 'interest'
+      ? view.mqlReasons.join('・')
+      : view.mqlLevel === 'fit'
+        ? t('builderMqlNoSignal')
+        : t('builderMqlNone');
+  const score =
+    view.leadScore !== null ? t('builderLeadScoreValue', { score: view.leadScore }) : null;
+
+  const flags = (
+    <div className="flex flex-wrap gap-2">
+      {view.consultationRequested && <Badge color="violet">{t('consultation')}</Badge>}
+      {view.mqlLevel === 'interest' && (
+        <Badge
+          color="emerald"
+          title={
+            mqlReason
+              ? `${t('builderMqlInterestHelp')}（${mqlReason}）`
+              : t('builderMqlInterestHelp')
+          }
+        >
+          {t('mqlInterest')}
+        </Badge>
+      )}
+      {view.mqlLevel === 'fit' && (
+        <Badge color="gray" title={t('builderMqlFitHelp')}>
+          {t('mqlFit')}
+        </Badge>
+      )}
+    </div>
+  );
+  const link = answersLink(view.submissionId, `${name}：${t('showAnswers')}`);
+
+  if (compact) {
+    return (
+      <section
+        aria-labelledby="lead-builder-diagnosis-compact"
+        className="space-y-2"
+        data-testid="lead-builder-diagnosis"
+      >
+        <h3 id="lead-builder-diagnosis-compact" className="text-sm font-semibold text-foreground">
+          {name}
+        </h3>
+        {flags}
+        <p className="text-sm text-foreground">
+          {[view.resultTypeName, score && `${t('builderLeadScore')} ${score}`]
+            .filter(Boolean)
+            .join(' · ')}
+        </p>
+        {link}
+      </section>
+    );
+  }
+
+  const rows: { key: string; label: string; value: ReactNode }[] = [];
+  if (view.resultTypeName) {
+    rows.push({ key: 'resultType', label: t('builderResultType'), value: view.resultTypeName });
+  }
+  if (score) {
+    rows.push({
+      key: 'leadScore',
+      label: t('builderLeadScore'),
+      value: (
+        <span data-testid="lead-builder-score">
+          {score}
+          {view.leadScoreReasons.length > 0 && (
+            <ul className="mt-0.5 space-y-0.5 text-xs font-normal text-muted-foreground">
+              {view.leadScoreReasons.map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          )}
+        </span>
+      ),
+    });
+  }
+  rows.push({
+    key: 'mql',
+    label: t('mqlJudgement'),
+    value: (
+      <span data-testid="lead-builder-mql">
+        {t(MQL_LEVEL_KEYS[view.mqlLevel])}
+        {mqlReason && (
+          <span className="block text-xs font-normal text-muted-foreground">{mqlReason}</span>
+        )}
+      </span>
+    ),
+  });
+  if (view.diagnosedAt) {
+    rows.push({ key: 'diagnosedAt', label: t('diagnosedAt'), value: dateTime(view.diagnosedAt) });
+  }
+
+  return (
+    <section aria-label={name} className="space-y-3" data-testid="lead-builder-diagnosis">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-foreground">{name}</h3>
+        {link}
+      </div>
+      {flags}
+      <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+        {rows.map((row) => (
+          <div key={row.key} className="min-w-0">
+            <dt className="text-xs text-muted-foreground">{row.label}</dt>
+            <dd className="mt-0.5 break-words text-sm font-medium text-foreground">{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
   );
 }
 

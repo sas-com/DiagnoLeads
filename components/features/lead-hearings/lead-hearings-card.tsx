@@ -228,9 +228,12 @@ export function CreateHearingDialog({
   const sourceLabel = (source: (typeof sourceList)[number]) =>
     t('create.sourceOption', {
       date: format.dateTime(new Date(source.submittedAt), { dateStyle: 'medium' }),
-      platform: source.platform
-        ? diagnosisOptionLabel('platform', source.platform, diagnosisLocale)
-        : t('create.unknownPlatform'),
+      // A builder diagnosis is named by its title (#121)
+      platform: source.diagnosisTitle
+        ? source.diagnosisTitle
+        : source.platform
+          ? diagnosisOptionLabel('platform', source.platform, diagnosisLocale)
+          : t('create.unknownPlatform'),
     });
 
   return (

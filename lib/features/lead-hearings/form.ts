@@ -336,8 +336,12 @@ export function hearingHintText(
     if (answer === undefined) continue;
     const options = questionById.get(questionId)?.options ?? [];
     const values = Array.isArray(answer) ? answer : [answer];
-    const labels = values.map(
-      (value) => options.find((o) => o.value === value)?.label[locale] ?? value
+    // A builder diagnosis keeps its own labels (its ids may match AX question ids)
+    const builderLabels = prefill.answerLabels;
+    const labels = values.map((value) =>
+      builderLabels
+        ? (builderLabels[questionId]?.[value] ?? value)
+        : (options.find((o) => o.value === value)?.label[locale] ?? value)
     );
     if (labels.length > 0) parts.push(labels.join(locale === 'ja' ? '、' : ', '));
   }
