@@ -295,7 +295,7 @@ export async function listLeadActivities(
     if (row.createdBy) userIds.add(row.createdBy);
     if (row.updatedBy) userIds.add(row.updatedBy);
   }
-  for (const row of comments) userIds.add(row.userId);
+  for (const row of comments) if (row.userId) userIds.add(row.userId);
   for (const row of audits) if (row.userId) userIds.add(row.userId);
   for (const row of contacts) if (row.createdBy) userIds.add(row.createdBy);
   const people =
@@ -308,6 +308,10 @@ export async function listLeadActivities(
   const names = new Map(people.map((p) => [p.id, p.name?.trim() || p.email]));
   const actor = (id: string | null): LeadActivityActor | null =>
     id && names.has(id) ? { id, name: names.get(id) as string } : null;
+  // Comments, hearings and lead audit rows are only written with the signed-in user's id, so a
+  // null author there means the account was deleted (#164)
+  const staffActor = (id: string | null): LeadActivityActor | null =>
+    id === null ? { id: null, name: null, deleted: true } : actor(id);
 
   const events: LeadActivityEvent[] = [];
 
@@ -318,7 +322,7 @@ export async function listLeadActivities(
     id: `lead:${lead.id}:created`,
     kind: 'lead_created',
     at: lead.createdAt,
-    actor: createAudit ? actor(createAudit.userId) : null,
+    actor: createAudit ? staffActor(createAudit.userId) : null,
     source: createdByDiagnosis
       ? 'web_diagnosis'
       : createAudit
@@ -369,7 +373,7 @@ export async function listLeadActivities(
       id: `hearing:${row.id}:created`,
       kind: 'hearing_recorded',
       at: row.createdAt,
-      actor: actor(row.createdBy),
+      actor: staffActor(row.createdBy),
       hearingId: row.id,
       heldOn: row.heldOn,
     });
@@ -378,7 +382,7 @@ export async function listLeadActivities(
         id: `hearing:${row.id}:updated`,
         kind: 'hearing_updated',
         at: row.updatedAt,
-        actor: actor(row.updatedBy),
+        actor: staffActor(row.updatedBy),
         hearingId: row.id,
         heldOn: row.heldOn,
       });
@@ -391,7 +395,7 @@ export async function listLeadActivities(
       id: `comment:${row.id}`,
       kind: 'comment',
       at: row.createdAt,
-      actor: actor(row.userId),
+      actor: staffActor(row.userId),
       commentId: row.id,
       commentType: row.type,
       excerpt: row.excerpt,
@@ -408,7 +412,7 @@ export async function listLeadActivities(
       id: `audit:${row.id}`,
       kind: 'lead_updated',
       at: row.createdAt,
-      actor: actor(row.userId),
+      actor: staffActor(row.userId),
       changes,
     });
   }

@@ -28,7 +28,8 @@ import { CommentForm } from './comment-form';
 
 // Extended comment type with user info and replies
 export type CommentWithUser = LeadComment & {
-  user: Pick<User, 'id' | 'name' | 'email' | 'image'>;
+  /** null once the author deleted their account */
+  user: Pick<User, 'id' | 'name' | 'email' | 'image'> | null;
   replies?: CommentWithUser[];
 };
 
@@ -77,7 +78,7 @@ export function CommentItem({
   const [isReplying, setIsReplying] = useState(false);
   const [editContent, setEditContent] = useState(comment.content);
 
-  const isOwner = comment.userId === currentUserId;
+  const isOwner = comment.userId !== null && comment.userId === currentUserId;
   const canModify = isOwner || isAdmin;
 
   const handleSaveEdit = () => {
@@ -94,8 +95,9 @@ export function CommentItem({
     }
   };
 
-  const userInitial =
-    comment.user.name?.charAt(0).toUpperCase() || comment.user.email.charAt(0).toUpperCase();
+  const author = comment.user;
+  const authorName = author ? author.name || author.email : t('deletedUser');
+  const userInitial = author ? authorName.charAt(0).toUpperCase() : '?';
 
   return (
     <div className={cn('space-y-2', isNested && 'ml-8 mt-2')}>
@@ -110,12 +112,8 @@ export function CommentItem({
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-3">
             {/* Avatar */}
-            {comment.user.image ? (
-              <img
-                src={comment.user.image}
-                alt={comment.user.name || ''}
-                className="h-8 w-8 rounded-full"
-              />
+            {author?.image ? (
+              <img src={author.image} alt={author.name || ''} className="h-8 w-8 rounded-full" />
             ) : (
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-200 dark:bg-gray-700 text-sm font-medium">
                 {userInitial}
@@ -124,9 +122,7 @@ export function CommentItem({
 
             <div className="flex flex-col">
               <div className="flex items-center gap-2">
-                <span className="font-medium text-gray-900 dark:text-gray-100">
-                  {comment.user.name || comment.user.email}
-                </span>
+                <span className="font-medium text-gray-900 dark:text-gray-100">{authorName}</span>
                 <span className="text-gray-400">{typeIcons[comment.type]}</span>
                 {comment.isPinned && <Pin className="h-3 w-3 text-amber-500 fill-amber-500" />}
               </div>

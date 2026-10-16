@@ -1086,6 +1086,35 @@
     },
     "profile": {
       "title": "個人設定",
+      "pageDescription": "自分の名前・パスワード・通知・アカウントを設定します",
+      "nameHelp": "他のメンバーにも、この名前で表示されます",
+      "deletion": {
+        "title": "アカウントの削除",
+        "description": "アカウントを削除すると、ログインできなくなります。この操作は取り消せません。",
+        "removedTitle": "削除されるもの",
+        "removedSignIn": "ログイン情報（パスワード）とログイン中の状態",
+        "removedProfile": "氏名とメールアドレス",
+        "removedMemberships": "組織への所属、自分宛ての通知と通知の設定",
+        "keptTitle": "組織に残るもの",
+        "keptRecords": "あなたが作成したリード・ヒアリング・コメント・操作の記録（監査ログ）は組織の記録として残り、作成者は「削除されたユーザー」と表示されます",
+        "soleOwnerTitle": "最後のオーナーのため、まだ削除できません",
+        "soleOwnerBody": "次の組織のオーナーはあなただけです。メンバー管理で別のメンバーをオーナーにしてから削除してください。",
+        "toMembers": "メンバー管理を開く",
+        "open": "アカウントを削除...",
+        "dialogTitle": "アカウントを削除しますか？",
+        "dialogDescription": "確認のため、あなたのメールアドレス（{email}）と現在のパスワードを入力してください。",
+        "confirmLabel": "メールアドレス",
+        "passwordLabel": "現在のパスワード",
+        "cancel": "キャンセル",
+        "confirm": "削除する",
+        "deleting": "削除中...",
+        "success": "アカウントを削除しました",
+        "errorConfirmation": "メールアドレスが一致しません",
+        "errorPasswordRequired": "パスワードを入力してください",
+        "errorPassword": "パスワードが正しくありません",
+        "errorSoleOwner": "オーナーがあなただけの組織があるため、削除できません",
+        "errorFailed": "アカウントを削除できませんでした。時間をおいてもう一度お試しください"
+      },
       "profileSection": "プロフィール",
       "nameLabel": "氏名",
       "namePlaceholder": "山田 太郎",
@@ -1851,6 +1880,15 @@
       "logout": "ログアウト",
       "logoutError": "ログアウトに失敗しました。"
     },
+    "search": {
+      "label": "リードを検索",
+      "placeholder": "リードを検索（名前・メール・会社）",
+      "searching": "検索中...",
+      "empty": "該当するリードはありません",
+      "suggestions": "リード",
+      "showAll": "「{query}」でリード一覧を検索",
+      "noName": "（名前なし）"
+    },
     "a11y": {
       "toggleSidebar": "サイドメニューを開閉",
       "moreMenu": "その他のメニュー",
@@ -1885,6 +1923,7 @@
   },
   "comments": {
     "title": "コメント・メモ",
+    "deletedUser": "削除されたユーザー",
     "typeComment": "コメント",
     "typeNote": "メモ",
     "typeActivity": "アクティビティ",
@@ -2009,6 +2048,20 @@
     },
     "settings": {
       "title": "通知設定",
+      "work": {
+        "description": "{organization} で、ベルのアイコンに届く通知を選びます",
+        "consultationRequested": "相談申込が届いたとき",
+        "consultationRequestedHelp": "Web診断で相談の申し込みがあったとき",
+        "leadCreated": "新しいリードが届いたとき",
+        "leadCreatedHelp": "Web診断の回答から新しいリードが登録されたとき",
+        "assignedToMe": "自分が担当に割り当てられたとき",
+        "nextActionDue": "次の行動の期限が来たとき",
+        "hearingNextMeeting": "ヒアリングの次回打ち合わせが近づいたとき",
+        "upcoming": "準備中",
+        "upcomingHelp": "この通知は機能の公開後に届きます。設定は今のうちに変えておけます",
+        "emailNote": "相談申込のメールは、営業窓口のアドレスに届きます（個人ごとの設定はありません）",
+        "currentOrganization": "この組織"
+      },
       "description": "通知の受信方法を設定します",
       "inApp": {
         "title": "アプリ内通知",
@@ -2801,6 +2854,7 @@
   },
   "leadActivity": {
     "title": "活動履歴",
+    "deletedUser": "削除されたユーザー",
     "filters": {
       "all": "すべて",
       "diagnosis": "診断・相談",
@@ -2964,6 +3018,7 @@
     },
     "activity": {
       "recent": "最近の活動",
+      "deletedUser": "削除されたユーザー",
       "showAll": "すべての活動を見る",
       "empty": "まだ活動はありません。",
       "loadError": "活動を読み込めませんでした。"

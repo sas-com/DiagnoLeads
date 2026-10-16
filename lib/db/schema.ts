@@ -929,6 +929,12 @@ export const notificationPreferences = pgTable('notification_preferences', {
   emailLeadScored: boolean('email_lead_scored').default(false).notNull(),
   emailDailyDigest: boolean('email_daily_digest').default(false).notNull(),
   emailWeeklyReport: boolean('email_weekly_report').default(true).notNull(),
+  // In-app notifications for the current sales work (#164). Only the consultation request is
+  // sent today; the others are stored now and used when their notifications are built (#135).
+  inAppConsultationRequested: boolean('in_app_consultation_requested').default(true).notNull(),
+  inAppAssignedToMe: boolean('in_app_assigned_to_me').default(true).notNull(),
+  inAppNextActionDue: boolean('in_app_next_action_due').default(true).notNull(),
+  inAppHearingNextMeeting: boolean('in_app_hearing_next_meeting').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
@@ -1043,9 +1049,8 @@ export const leadComments = pgTable('lead_comments', {
   leadId: uuid('lead_id')
     .notNull()
     .references(() => leads.id, { onDelete: 'cascade' }),
-  userId: uuid('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
+  /** Author; null once the author deleted their account (the comment stays with the lead) */
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
   organizationId: uuid('organization_id')
     .notNull()
     .references(() => organizations.id, { onDelete: 'cascade' }),
@@ -1160,9 +1165,8 @@ export const scheduledReports = pgTable('scheduled_reports', {
   organizationId: uuid('organization_id')
     .notNull()
     .references(() => organizations.id, { onDelete: 'cascade' }),
-  createdById: uuid('created_by_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
+  /** Creator; null once the creator deleted their account (the record stays with the organization) */
+  createdById: uuid('created_by_id').references(() => users.id, { onDelete: 'set null' }),
   name: text('name').notNull(),
   description: text('description'),
   reportType: text('report_type').$type<ReportType>().default('lead_summary').notNull(),
@@ -1336,9 +1340,8 @@ export const workflows = pgTable('workflows', {
   organizationId: uuid('organization_id')
     .notNull()
     .references(() => organizations.id, { onDelete: 'cascade' }),
-  createdById: uuid('created_by_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
+  /** Creator; null once the creator deleted their account (the record stays with the organization) */
+  createdById: uuid('created_by_id').references(() => users.id, { onDelete: 'set null' }),
   name: text('name').notNull(),
   description: text('description'),
   /** Trigger that activates this workflow */

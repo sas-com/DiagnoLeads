@@ -1,249 +1,162 @@
 'use client';
 
+import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Divider, Text } from '@/components/ui/metric';
+import { Text } from '@/components/ui/metric';
 import { Switch } from '@/components/ui/switch';
 import {
   useNotificationPreferences,
   useUpdateNotificationPreferences,
 } from '@/hooks/use-notifications';
 import { useOrganization } from '@/hooks/use-organization';
-import { Bell, Mail } from 'lucide-react';
+import type { NotificationPreferenceKey } from '@/lib/features/notifications/notification-service';
+import { Bell } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 interface NotificationSettingsProps {
   organizationId?: string;
 }
 
+type WorkPreferenceKey = Extract<
+  NotificationPreferenceKey,
+  | 'inAppConsultationRequested'
+  | 'inAppLeadCreated'
+  | 'inAppAssignedToMe'
+  | 'inAppNextActionDue'
+  | 'inAppHearingNextMeeting'
+>;
+
+interface PreferenceRow {
+  key: WorkPreferenceKey;
+  label: string;
+  help?: string;
+  /** Stored now, sent once the feature exists (#135 and later) */
+  upcoming?: boolean;
+}
+
+const DEFAULTS: Record<WorkPreferenceKey, boolean> = {
+  inAppConsultationRequested: true,
+  inAppLeadCreated: true,
+  inAppAssignedToMe: true,
+  inAppNextActionDue: true,
+  inAppHearingNextMeeting: true,
+};
+
+/**
+ * Notification settings of the current organization: the in-app notifications that match the
+ * sales work today (consultation requests, new leads) and the ones being built (assignment, next
+ * action, next hearing meeting). Each switch is saved when it changes.
+ */
 export function NotificationSettings({ organizationId: propOrgId }: NotificationSettingsProps) {
   const t = useTranslations('notifications.settings');
-  const { organizationId: contextOrgId } = useOrganization();
+  const { organizationId: contextOrgId, organization } = useOrganization();
   const organizationId = propOrgId || contextOrgId;
 
   const { data: preferences, isLoading } = useNotificationPreferences(organizationId || '');
   const updatePreferences = useUpdateNotificationPreferences();
+  const [values, setValues] = useState<Record<WorkPreferenceKey, boolean>>(DEFAULTS);
 
-  // Local state for preferences
-  const [localPrefs, setLocalPrefs] = useState({
-    inAppLeadCreated: true,
-    inAppLeadStatusChanged: true,
-    inAppLeadScored: true,
-    inAppImportExport: true,
-    inAppMemberChanges: true,
-    emailLeadCreated: false,
-    emailLeadStatusChanged: false,
-    emailLeadScored: false,
-    emailDailyDigest: false,
-    emailWeeklyReport: true,
-  });
-
-  // Sync with server preferences
   useEffect(() => {
-    if (preferences) {
-      setLocalPrefs({
-        inAppLeadCreated: preferences.inAppLeadCreated,
-        inAppLeadStatusChanged: preferences.inAppLeadStatusChanged,
-        inAppLeadScored: preferences.inAppLeadScored,
-        inAppImportExport: preferences.inAppImportExport,
-        inAppMemberChanges: preferences.inAppMemberChanges,
-        emailLeadCreated: preferences.emailLeadCreated,
-        emailLeadStatusChanged: preferences.emailLeadStatusChanged,
-        emailLeadScored: preferences.emailLeadScored,
-        emailDailyDigest: preferences.emailDailyDigest,
-        emailWeeklyReport: preferences.emailWeeklyReport,
-      });
-    }
+    if (!preferences) return;
+    setValues({
+      inAppConsultationRequested: preferences.inAppConsultationRequested,
+      inAppLeadCreated: preferences.inAppLeadCreated,
+      inAppAssignedToMe: preferences.inAppAssignedToMe,
+      inAppNextActionDue: preferences.inAppNextActionDue,
+      inAppHearingNextMeeting: preferences.inAppHearingNextMeeting,
+    });
   }, [preferences]);
 
-  const handleToggle = useCallback(
-    async (key: keyof typeof localPrefs, value: boolean) => {
-      if (!organizationId) return;
+  const handleToggle = async (key: WorkPreferenceKey, value: boolean) => {
+    if (!organizationId) return;
+    setValues((prev) => ({ ...prev, [key]: value }));
+    try {
+      await updatePreferences.mutateAsync({ organizationId, [key]: value });
+      toast.success(t('saved'));
+    } catch {
+      setValues((prev) => ({ ...prev, [key]: !value }));
+      toast.error(t('saveError'));
+    }
+  };
 
-      // Optimistic update
-      setLocalPrefs((prev) => ({ ...prev, [key]: value }));
+  if (!organizationId) return null;
 
-      try {
-        await updatePreferences.mutateAsync({
-          organizationId,
-          [key]: value,
-        });
-        toast.success(t('saved'));
-      } catch {
-        // Revert on error
-        setLocalPrefs((prev) => ({ ...prev, [key]: !value }));
-        toast.error(t('saveError'));
-      }
+  const rows: PreferenceRow[] = [
+    {
+      key: 'inAppConsultationRequested',
+      label: t('work.consultationRequested'),
+      help: t('work.consultationRequestedHelp'),
     },
-    [organizationId, updatePreferences, t]
-  );
-
-  if (!organizationId) {
-    return null;
-  }
-
-  if (isLoading) {
-    return (
-      <Card decoration="top" decorationColor="amber">
-        <div className="p-6 space-y-6">
-          <div className="h-6 w-48 bg-gray-200 dark:bg-gray-700 animate-pulse rounded" />
-          <div className="space-y-4">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="flex items-center justify-between">
-                <div className="h-4 w-32 bg-gray-200 dark:bg-gray-700 animate-pulse rounded" />
-                <div className="h-6 w-10 bg-gray-200 dark:bg-gray-700 animate-pulse rounded-full" />
-              </div>
-            ))}
-          </div>
-        </div>
-      </Card>
-    );
-  }
+    { key: 'inAppLeadCreated', label: t('work.leadCreated'), help: t('work.leadCreatedHelp') },
+    { key: 'inAppAssignedToMe', label: t('work.assignedToMe'), upcoming: true },
+    { key: 'inAppNextActionDue', label: t('work.nextActionDue'), upcoming: true },
+    { key: 'inAppHearingNextMeeting', label: t('work.hearingNextMeeting'), upcoming: true },
+  ];
 
   return (
     <Card id="notifications" decoration="top" decorationColor="amber">
-      <div className="p-6 space-y-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-          <Bell className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-          {t('title')}
-        </h2>
-        <Text>{t('description')}</Text>
-
-        {/* In-App Notifications */}
-        <div className="space-y-4">
-          <h3 className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
-            <Bell className="h-4 w-4 text-gray-500" />
-            {t('inApp.title')}
-          </h3>
-          <Text className="text-sm">{t('inApp.description')}</Text>
-
-          <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-              <Label htmlFor="inAppLeadCreated" className="cursor-pointer">
-                {t('inApp.leadCreated')}
-              </Label>
-              <Switch
-                id="inAppLeadCreated"
-                checked={localPrefs.inAppLeadCreated}
-                onCheckedChange={(checked) => handleToggle('inAppLeadCreated', checked)}
-              />
-            </div>
-
-            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-              <Label htmlFor="inAppLeadStatusChanged" className="cursor-pointer">
-                {t('inApp.leadStatusChanged')}
-              </Label>
-              <Switch
-                id="inAppLeadStatusChanged"
-                checked={localPrefs.inAppLeadStatusChanged}
-                onCheckedChange={(checked) => handleToggle('inAppLeadStatusChanged', checked)}
-              />
-            </div>
-
-            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-              <Label htmlFor="inAppLeadScored" className="cursor-pointer">
-                {t('inApp.leadScored')}
-              </Label>
-              <Switch
-                id="inAppLeadScored"
-                checked={localPrefs.inAppLeadScored}
-                onCheckedChange={(checked) => handleToggle('inAppLeadScored', checked)}
-              />
-            </div>
-
-            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-              <Label htmlFor="inAppImportExport" className="cursor-pointer">
-                {t('inApp.importExport')}
-              </Label>
-              <Switch
-                id="inAppImportExport"
-                checked={localPrefs.inAppImportExport}
-                onCheckedChange={(checked) => handleToggle('inAppImportExport', checked)}
-              />
-            </div>
-
-            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-              <Label htmlFor="inAppMemberChanges" className="cursor-pointer">
-                {t('inApp.memberChanges')}
-              </Label>
-              <Switch
-                id="inAppMemberChanges"
-                checked={localPrefs.inAppMemberChanges}
-                onCheckedChange={(checked) => handleToggle('inAppMemberChanges', checked)}
-              />
-            </div>
-          </div>
+      <div className="p-6 space-y-5">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+            <Bell className="h-5 w-5 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+            {t('title')}
+          </h2>
+          <Text>
+            {t('work.description', {
+              organization: organization?.name || t('work.currentOrganization'),
+            })}
+          </Text>
         </div>
 
-        <Divider />
-
-        {/* Email Notifications */}
-        <div className="space-y-4">
-          <h3 className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
-            <Mail className="h-4 w-4 text-gray-500" />
-            {t('email.title')}
-          </h3>
-          <Text className="text-sm">{t('email.description')}</Text>
-
-          <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-              <Label htmlFor="emailLeadCreated" className="cursor-pointer">
-                {t('email.leadCreated')}
-              </Label>
-              <Switch
-                id="emailLeadCreated"
-                checked={localPrefs.emailLeadCreated}
-                onCheckedChange={(checked) => handleToggle('emailLeadCreated', checked)}
+        {isLoading ? (
+          <div className="space-y-3" data-testid="notification-settings-loading">
+            {rows.map((row) => (
+              <div
+                key={row.key}
+                className="h-12 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg"
               />
-            </div>
-
-            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-              <Label htmlFor="emailLeadStatusChanged" className="cursor-pointer">
-                {t('email.leadStatusChanged')}
-              </Label>
-              <Switch
-                id="emailLeadStatusChanged"
-                checked={localPrefs.emailLeadStatusChanged}
-                onCheckedChange={(checked) => handleToggle('emailLeadStatusChanged', checked)}
-              />
-            </div>
-
-            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-              <Label htmlFor="emailLeadScored" className="cursor-pointer">
-                {t('email.leadScored')}
-              </Label>
-              <Switch
-                id="emailLeadScored"
-                checked={localPrefs.emailLeadScored}
-                onCheckedChange={(checked) => handleToggle('emailLeadScored', checked)}
-              />
-            </div>
-
-            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-              <Label htmlFor="emailDailyDigest" className="cursor-pointer">
-                {t('email.dailyDigest')}
-              </Label>
-              <Switch
-                id="emailDailyDigest"
-                checked={localPrefs.emailDailyDigest}
-                onCheckedChange={(checked) => handleToggle('emailDailyDigest', checked)}
-              />
-            </div>
-
-            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-              <Label htmlFor="emailWeeklyReport" className="cursor-pointer">
-                {t('email.weeklyReport')}
-              </Label>
-              <Switch
-                id="emailWeeklyReport"
-                checked={localPrefs.emailWeeklyReport}
-                onCheckedChange={(checked) => handleToggle('emailWeeklyReport', checked)}
-              />
-            </div>
+            ))}
           </div>
-        </div>
+        ) : (
+          <ul className="space-y-3">
+            {rows.map((row) => {
+              const id = `notification-${row.key}`;
+              const helpId = `${id}-help`;
+              const help = row.upcoming ? t('work.upcomingHelp') : row.help;
+              return (
+                <li
+                  key={row.key}
+                  className="flex items-center justify-between gap-4 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg"
+                >
+                  <div className="min-w-0 space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor={id} className="cursor-pointer">
+                        {row.label}
+                      </Label>
+                      {row.upcoming && <Badge color="gray">{t('work.upcoming')}</Badge>}
+                    </div>
+                    {help && (
+                      <p id={helpId} className="text-xs text-gray-500 dark:text-gray-400">
+                        {help}
+                      </p>
+                    )}
+                  </div>
+                  <Switch
+                    id={id}
+                    checked={values[row.key]}
+                    aria-describedby={help ? helpId : undefined}
+                    onCheckedChange={(checked) => handleToggle(row.key, checked)}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        <Text className="text-xs">{t('work.emailNote')}</Text>
       </div>
     </Card>
   );

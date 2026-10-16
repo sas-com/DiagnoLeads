@@ -68,11 +68,19 @@ export const getSubmissionAnswersSchema = z
   .object({ organizationId, leadId: z.string().uuid(), submissionId: z.string().uuid() })
   .strict();
 
-export interface LeadActivityActor {
-  id: string;
-  /** users.name, or the email address when there is no name */
-  name: string;
-}
+export type LeadActivityActor =
+  | {
+      id: string;
+      /** users.name, or the email address when there is no name */
+      name: string;
+      deleted?: false;
+    }
+  | {
+      /** The author deleted their account (#164): the row is kept with a null author */
+      id: null;
+      name: null;
+      deleted: true;
+    };
 
 /** Whether a diagnosis is known to come from the person who created the lead */
 export interface DiagnosisIdentity {

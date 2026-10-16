@@ -194,7 +194,9 @@ function ActivityItem({
               })}
             </time>
           )}
-          {event.actor && <span> · {event.actor.name}</span>}
+          {event.actor && (
+            <span> · {event.actor.deleted ? t('deletedUser') : event.actor.name}</span>
+          )}
         </p>
         {'verified' in event && !event.verified && (
           <p className="text-xs text-amber-700 dark:text-amber-400">{t('unverifiedHelp')}</p>

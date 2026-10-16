@@ -1,4 +1,5 @@
 import { abTestsRouter } from '@/lib/features/ab-tests/api/router';
+import { accountRouter } from '@/lib/features/account/api/router';
 import { aiRouter } from '@/lib/features/ai/api/router';
 import { analyticsRouter } from '@/lib/features/analytics/api/router';
 import { axPlaybookRouter } from '@/lib/features/ax-playbook/api/router';
@@ -16,6 +17,7 @@ import { hierarchyRouter } from '@/lib/features/hierarchy/api/router';
 import { leadActivityRouter } from '@/lib/features/lead-activity/api/router';
 import { leadFollowUpRouter } from '@/lib/features/lead-follow-up/api/router';
 import { leadHearingsRouter } from '@/lib/features/lead-hearings/api/router';
+import { leadSearchRouter } from '@/lib/features/lead-search/api/router';
 import { leadsRouter } from '@/lib/features/leads/api/router';
 import { invitationsRouter } from '@/lib/features/members/api/invitations-router';
 import { membersRouter } from '@/lib/features/members/api/router';
@@ -63,6 +65,8 @@ export const appRouter = router({
   leadActivity: leadActivityRouter, // Activity timeline per lead (Refs #101)
   diagnoses: diagnosesRouter, // Diagnosis builder: drafts and published versions (Refs #114)
   leadFollowUp: leadFollowUpRouter, // Contact records and next actions per lead (Refs #136, #85)
+  account: accountRouter, // The signed-in person's own account: deletion (#164)
+  leadSearch: leadSearchRouter, // Header search suggestions (#164)
 });
 
 export type AppRouter = typeof appRouter;
