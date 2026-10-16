@@ -14,10 +14,11 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import type { Lead } from '@/lib/db/schema';
 import type { LeadStatus } from '@/lib/features/leads/types';
+import { DEAL_PHASES } from '@/lib/features/leads/types/pipeline';
 import { format, formatDistance } from 'date-fns';
 import { enUS, ja } from 'date-fns/locale';
 import { Building2, Calendar, Mail, Pencil, Phone, Trash2 } from 'lucide-react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { LEAD_STATUS_BADGE_CLASSES } from './lead-status-styles';
 
@@ -44,6 +45,7 @@ export function LeadDetails({ lead, onEdit, onDelete, isDeleting }: LeadDetailsP
   const t = useTranslations('leads');
   const tStatus = useTranslations('status');
   const tPipeline = useTranslations('pipeline');
+  const formatter = useFormatter();
   const tCommon = useTranslations('common');
   const locale = useLocale();
   const dateLocale = locale === 'ja' ? ja : enUS;
@@ -157,6 +159,36 @@ export function LeadDetails({ lead, onEdit, onDelete, isDeleting }: LeadDetailsP
             <div>
               <dt className="text-sm text-gray-500">{t('referrerName')}</dt>
               <dd className="font-medium mt-1">{lead.referrerName || t('notSet')}</dd>
+            </div>
+            <div>
+              <dt className="text-sm text-gray-500">{t('agencyName')}</dt>
+              <dd className="font-medium mt-1">{lead.agencyName || t('notSet')}</dd>
+            </div>
+            <div>
+              <dt className="text-sm text-gray-500">{t('acquisitionCost')}</dt>
+              <dd className="font-medium mt-1">
+                {lead.acquisitionCost === null || lead.acquisitionCost === undefined
+                  ? t('notSet')
+                  : formatter.number(lead.acquisitionCost, { style: 'currency', currency: 'JPY' })}
+              </dd>
+            </div>
+            <div className="sm:col-span-2">
+              <dt className="text-sm text-gray-500">{t('dealPhaseReachedAt')}</dt>
+              <dd className="font-medium mt-1">
+                {DEAL_PHASES.some((phase) => lead.dealPhaseReachedAt?.[phase]) ? (
+                  <ul className="space-y-1">
+                    {DEAL_PHASES.filter((phase) => lead.dealPhaseReachedAt?.[phase]).map(
+                      (phase) => (
+                        <li key={phase}>
+                          {tPipeline(`dealPhase.${phase}`)}: {lead.dealPhaseReachedAt?.[phase]}
+                        </li>
+                      )
+                    )}
+                  </ul>
+                ) : (
+                  t('notSet')
+                )}
+              </dd>
             </div>
             <div>
               <dt className="text-sm text-gray-500">{t('mqlQualifiedAt')}</dt>

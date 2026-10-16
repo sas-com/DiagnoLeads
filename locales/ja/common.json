@@ -582,7 +582,9 @@
       "executive_network": "経営層ネットワーク",
       "lp_organic": "LP（自然検索）",
       "seminar": "勉強会・セミナー",
-      "advertising": "広告"
+      "advertising": "広告",
+      "telemarketing_agency": "営業代行（テレアポ）",
+      "referral_agency": "営業代行（紹介型）"
     },
     "conversionPoint": {
       "consultation": "相談申込",
@@ -607,6 +609,9 @@
       "vb": "VB（クライアントサーバー型）",
       "access": "Access（部署単位のツールを含む）",
       "webperformer": "WebPerformer",
+      "custom_open": "自社開発（オープン系）",
+      "package": "パッケージ",
+      "unknown": "不明",
       "other": "その他"
     },
     "sqlDecision": {
@@ -618,6 +623,10 @@
       "timing": "時期",
       "competitor": "他社選定",
       "internal_structure": "社内体制",
+      "system_out_of_scope": "機種が対象外",
+      "no_decision_maker": "決裁者不在",
+      "no_need": "ニーズなし",
+      "on_hold": "保留",
       "other": "その他"
     }
   },
@@ -843,7 +852,10 @@
       "noData": "ファイルにデータが見つかりません",
       "emailRequired": "メールカラムは必須です",
       "duplicateEmails": "{count}件の重複メールアドレスが見つかりました"
-    }
+    },
+    "agencyName": "代行会社名",
+    "acquisitionCost": "獲得費用（税別）",
+    "dealPhaseReachedAt": "商談フェーズの到達日"
   },
   "settings": {
     "organization": {

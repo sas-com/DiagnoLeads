@@ -24,6 +24,7 @@ import {
 } from 'drizzle-orm';
 import {
   type LeadPipelineFields,
+  jstDate,
   qualificationUpdateFields,
   statusUpdateFields,
 } from '../types/pipeline';
@@ -51,6 +52,8 @@ function pickPipelineFields(input: LeadPipelineFields): LeadPipelineFields {
     'targetSystem',
     'referrerName',
     'lostReason',
+    'agencyName',
+    'acquisitionCost',
   ] as const;
   const picked: Record<string, unknown> = {};
   for (const key of keys) {
@@ -80,6 +83,8 @@ function buildCondition(condition: FilterCondition): SQL | undefined {
     targetSystem: leads.targetSystem,
     lostReason: leads.lostReason,
     referrerName: leads.referrerName,
+    agencyName: leads.agencyName,
+    acquisitionCost: leads.acquisitionCost,
     score: leads.score,
     createdAt: leads.createdAt,
     updatedAt: leads.updatedAt,
@@ -189,6 +194,7 @@ export const leadsRouter = router({
         responses: input.responses,
         ...pickPipelineFields(input),
         ...qualificationUpdateFields(input, null),
+        ...(input.dealPhase ? { dealPhaseReachedAt: { [input.dealPhase]: jstDate() } } : {}),
       })
       .returning();
 
@@ -418,6 +424,11 @@ export const leadsRouter = router({
     if (input.responses !== undefined) updateData.responses = input.responses;
     Object.assign(updateData, pickPipelineFields(input));
     Object.assign(updateData, qualificationUpdateFields(input, existing));
+    if (input.dealPhase) {
+      // First date each phase was reached; the existing date wins (right side of ||), and
+      // merging in SQL keeps concurrent updates from dropping each other's dates (#83)
+      updateData.dealPhaseReachedAt = sql`jsonb_build_object(${input.dealPhase}::text, ${jstDate()}::text) || coalesce(${leads.dealPhaseReachedAt}, '{}'::jsonb)`;
+    }
     updateData.updatedAt = new Date();
 
     // Update lead

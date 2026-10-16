@@ -90,6 +90,8 @@ export function LeadForm({ lead, onSubmit, isLoading }: LeadFormProps) {
       targetSystem: (lead?.targetSystem as FormValues['targetSystem']) ?? null,
       lostReason: (lead?.lostReason as FormValues['lostReason']) ?? null,
       referrerName: lead?.referrerName ?? null,
+      agencyName: lead?.agencyName ?? null,
+      acquisitionCost: lead?.acquisitionCost ?? null,
       mqlQualified: Boolean(lead?.mqlQualifiedAt),
       sqlDecision: (lead?.sqlDecision as FormValues['sqlDecision']) ?? null,
     },
@@ -261,6 +263,46 @@ export function LeadForm({ lead, onSubmit, isLoading }: LeadFormProps) {
                       {...field}
                       value={field.value ?? ''}
                       onChange={(e) => field.onChange(e.target.value || null)}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="agencyName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('agencyName')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      value={field.value ?? ''}
+                      onChange={(e) => field.onChange(e.target.value || null)}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="acquisitionCost"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('acquisitionCost')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      step={1}
+                      {...field}
+                      value={field.value ?? ''}
+                      onChange={(e) =>
+                        field.onChange(e.target.value === '' ? null : Number(e.target.value))
+                      }
                     />
                   </FormControl>
                   <FormMessage />
