@@ -1,14 +1,6 @@
 'use client';
 
-import { useLeadTrend, useOverview, useStatusBreakdown } from '@/hooks/use-analytics';
-import { useListLeads } from '@/hooks/use-leads';
-import { useOrganization } from '@/hooks/use-organization';
-import { useLocale, useTranslations } from 'next-intl';
-import { useState } from 'react';
-
-import { ChartLegend, DonutChart, InteractiveAreaChart, RadialChart } from '@/components/charts';
-import { KPICard, KPICardGroup } from '@/components/dashboard/kpi-card';
-import { RecentActivity } from '@/components/dashboard/recent-activity';
+import { BarChart } from '@/components/charts';
 import {
   DashboardWidget,
   type WidgetDefinition,
@@ -18,429 +10,520 @@ import {
 import { LEAD_STATUS_COLORS } from '@/components/features/leads/lead-status-styles';
 import { Card } from '@/components/ui/card';
 import { ProgressBar } from '@/components/ui/progress-bar';
-import { LEAD_STATUSES } from '@/lib/features/leads/types/pipeline';
-
-import type { DateRange } from '@/lib/features/analytics/types/schemas';
+import { useOrganization } from '@/hooks/use-organization';
+import { AX_MIGRATION_CONFIG } from '@/lib/features/diagnostics/ax-migration/config';
+import { trpc } from '@/lib/trpc/client';
 import {
   Activity,
+  AlertCircle,
   ArrowUpRight,
-  Award,
   BarChart3,
-  ChevronRight,
-  Gauge,
-  PieChart,
+  Clock,
+  Layers,
+  MessageSquare,
+  Star,
   Target,
-  TrendingUp,
   Users,
 } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
+import { type ReactNode, useEffect, useState } from 'react';
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const PERIODS = [7, 30, 90] as const;
+type Period = (typeof PERIODS)[number];
+
+const WIDGET_IDS = ['kpis', 'pending', 'trend', 'breakdown', 'recent'] as const;
+
+const KNOWN_PLATFORMS = ['as400', 'acos', 'access', 'other', 'unknown'] as const;
 
 /**
- * Check if a string is a valid UUID
+ * Dashboard for the AX migration sales team: real figures for the chosen period, the
+ * consultation requests waiting for a reply (by contact deadline), the daily trend, the
+ * breakdown by status and migration source, and the latest leads.
  */
-function isValidUUID(str: string): boolean {
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  return uuidRegex.test(str);
-}
-
-/**
- * ダッシュボードメインページ
- * Tailwind v4互換のモダンなUI
- */
-// Widget definitions
-const WIDGET_IDS = [
-  'kpiCards',
-  'statusBreakdown',
-  'leadTrend',
-  'statusDonut',
-  'conversionRadial',
-  'recentActivity',
-] as const;
-
-const STATUS_DOT_HEX: Record<(typeof LEAD_STATUS_COLORS)[keyof typeof LEAD_STATUS_COLORS], string> =
-  {
-    blue: '#3b82f6',
-    yellow: '#eab308',
-    emerald: '#10b981',
-    violet: '#8b5cf6',
-    gray: '#9ca3af',
-  };
 export default function DashboardPage() {
   const t = useTranslations('dashboard');
+  const tw = useTranslations('dashboard.ax');
   const tStatus = useTranslations('status');
   const locale = useLocale();
-
-  const { organizationId: contextOrgId, isLoading: contextLoading } = useOrganization();
-
-  // Only use organization ID if it's a valid UUID
-  const hasValidOrgId = Boolean(contextOrgId && isValidUUID(contextOrgId));
-  const organizationId = hasValidOrgId && contextOrgId ? contextOrgId : '';
-  const [dateRange] = useState<DateRange>('30d');
-
-  // Widget configuration
+  const { organizationId: contextOrgId } = useOrganization();
+  const organizationId = contextOrgId && UUID.test(contextOrgId) ? contextOrgId : '';
+  const [days, setDays] = useState<Period>(30);
   const [widgetConfig, setWidgetConfig] = useWidgetConfig([...WIDGET_IDS]);
+  const narrow = useNarrowScreen();
+
+  const { data, isLoading, isError } = trpc.analytics.getDashboard.useQuery(
+    { organizationId, days },
+    { enabled: Boolean(organizationId), staleTime: 60 * 1000 }
+  );
 
   const widgetDefinitions: WidgetDefinition[] = [
     {
-      id: 'kpiCards',
-      titleKey: 'kpiCards',
-      descriptionKey: 'kpiCardsDesc',
+      id: 'kpis',
+      titleKey: 'kpis',
+      descriptionKey: 'kpisDesc',
       icon: <BarChart3 className="h-4 w-4 text-blue-600" />,
     },
     {
-      id: 'statusBreakdown',
-      titleKey: 'statusBreakdown',
-      descriptionKey: 'statusBreakdownDesc',
-      icon: <Gauge className="h-4 w-4 text-emerald-600" />,
+      id: 'pending',
+      titleKey: 'pending',
+      descriptionKey: 'pendingDesc',
+      icon: <Clock className="h-4 w-4 text-rose-600" />,
     },
     {
-      id: 'leadTrend',
-      titleKey: 'leadTrend',
-      descriptionKey: 'leadTrendDesc',
-      icon: <TrendingUp className="h-4 w-4 text-violet-600" />,
+      id: 'trend',
+      titleKey: 'trend',
+      descriptionKey: 'trendDesc',
+      icon: <Activity className="h-4 w-4 text-violet-600" />,
     },
     {
-      id: 'statusDonut',
-      titleKey: 'statusDonut',
-      descriptionKey: 'statusDonutDesc',
-      icon: <PieChart className="h-4 w-4 text-amber-600" />,
+      id: 'breakdown',
+      titleKey: 'breakdown',
+      descriptionKey: 'breakdownDesc',
+      icon: <Layers className="h-4 w-4 text-emerald-600" />,
     },
     {
-      id: 'conversionRadial',
-      titleKey: 'conversionRadial',
-      descriptionKey: 'conversionRadialDesc',
-      icon: <Target className="h-4 w-4 text-rose-600" />,
-    },
-    {
-      id: 'recentActivity',
-      titleKey: 'recentActivity',
-      descriptionKey: 'recentActivityDesc',
-      icon: <Activity className="h-4 w-4 text-cyan-600" />,
+      id: 'recent',
+      titleKey: 'recent',
+      descriptionKey: 'recentDesc',
+      icon: <Users className="h-4 w-4 text-cyan-600" />,
     },
   ];
 
-  // Fetch analytics data
-  const { data: overview, isLoading: overviewLoading } = useOverview(organizationId, dateRange);
-  const { data: leadTrend, isLoading: trendLoading } = useLeadTrend(
-    organizationId,
-    dateRange,
-    'daily'
-  );
-  const { data: statusBreakdown, isLoading: statusLoading } = useStatusBreakdown(
-    organizationId,
-    dateRange
-  );
-
-  // Fetch recent leads for activity feed
-  const { data: leadsData, isLoading: leadsLoading } = useListLeads({
-    organizationId,
-    limit: 10,
-    offset: 0,
+  const leadHref = (id: string) => `/${locale}/leads?leadId=${id}`;
+  const dateFormat = new Intl.DateTimeFormat(locale === 'ja' ? 'ja-JP' : 'en-US', {
+    timeZone: 'Asia/Tokyo',
+    month: 'numeric',
+    day: 'numeric',
   });
-
-  const recentLeads = leadsData?.items || [];
-
-  // Mock change data
-  const totalLeadsChange = 15.3;
-  const conversionChange = 8.2;
-  const scoreChange = 5.1;
-  const newLeadsChange = 23.1;
-
-  // Value formatter for charts
-  const valueFormatter = (value: number) => {
-    if (locale === 'ja') {
-      return `${value.toLocaleString('ja-JP')}件`;
-    }
-    return value.toLocaleString('en-US');
+  const platformName = (platform: string | null) => {
+    const key = platform ?? 'unknown';
+    return (KNOWN_PLATFORMS as readonly string[]).includes(key)
+      ? tw(`platforms.${key as (typeof KNOWN_PLATFORMS)[number]}`)
+      : key;
   };
+  const number = (value: number) => value.toLocaleString(locale === 'ja' ? 'ja-JP' : 'en-US');
+  const previousText = (value: number) => tw('kpi.vsPrevious', { days, value: number(value) });
 
-  // Transform lead trend data for chart
-  const chartData = (leadTrend || [])
-    .map((item) => ({
-      date: new Date(item.date).toLocaleDateString(locale === 'ja' ? 'ja-JP' : 'en-US', {
-        month: 'short',
-        day: 'numeric',
-      }),
-      [t('totalLeads')]: item.count,
-      [t('convertedLeads')]: item.converted,
-    }))
-    .reverse();
-
-  // Transform status data for donut chart
-  const statusData = (statusBreakdown || []).map((item) => ({
-    name: tStatus(item.status),
-    value: item.count,
+  const chartData = (data?.daily ?? []).map((day) => ({
+    date: dateFormat.format(new Date(`${day.date}T12:00:00+09:00`)),
+    [tw('trend.leads')]: day.leads,
+    [tw('trend.consultations')]: day.consultations,
   }));
-
-  const statusColors: ('blue' | 'yellow' | 'emerald' | 'violet')[] = [
-    'blue',
-    'yellow',
-    'emerald',
-    'violet',
-  ];
-
-  // Spark chart data (last 7 items from trend)
-  const sparkData = chartData.slice(-7).map((item) => ({
-    value: item[t('totalLeads')] as number,
-  }));
+  const hasTrend = (data?.daily ?? []).some((day) => day.leads > 0);
+  const totalStatus = (data?.statuses ?? []).reduce((sum, s) => sum + s.count, 0);
+  const totalPlatform = (data?.platforms ?? []).reduce((sum, p) => sum + p.count, 0);
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo' })
+    .format(new Date())
+    .replaceAll('-', '/');
 
   return (
-    <div className="container mx-auto py-8 px-4 space-y-8">
+    <div className="container mx-auto space-y-6 px-4 py-8">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-50">{t('title')}</h1>
-          <p className="text-gray-500 mt-1">{t('description')}</p>
+          <p className="mt-1 text-gray-500 dark:text-gray-400">{tw('description')}</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <fieldset className="inline-flex rounded-lg border border-gray-200 bg-white p-1 dark:border-gray-700 dark:bg-gray-900">
+            <legend className="sr-only">{tw('periodLabel')}</legend>
+            {PERIODS.map((value) => (
+              <label
+                key={value}
+                className={`cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand-500 ${
+                  days === value
+                    ? 'bg-brand-500 text-white'
+                    : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="dashboard-period"
+                  value={value}
+                  checked={days === value}
+                  onChange={() => setDays(value)}
+                  className="sr-only"
+                />
+                {tw(`period.${value}`)}
+              </label>
+            ))}
+          </fieldset>
           <WidgetSettings
             widgets={widgetDefinitions}
             config={widgetConfig}
             onConfigChange={setWidgetConfig}
           />
           <Link
-            href={`/${locale}/analytics`}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+            href={`/${locale}/leads`}
+            className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-brand-600 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-brand-500/10"
           >
-            {t('viewAll')}
-            <ArrowUpRight className="h-4 w-4" />
+            {tw('toLeads')}
+            <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
           </Link>
         </div>
       </div>
 
-      {/* KPI Cards Grid - Enhanced with animations */}
-      <DashboardWidget id="kpiCards" config={widgetConfig}>
-        <KPICardGroup>
-          <KPICard
-            title={t('totalLeads')}
-            value={overview?.totalLeads || 0}
-            icon={Users}
-            valueType="number"
-            locale={locale === 'ja' ? 'ja-JP' : 'en-US'}
-            change={totalLeadsChange}
-            changeLabel={t('vsLastPeriod')}
-            sparkData={sparkData}
-            sparkColor="blue"
-            color="blue"
-            variant="elevated"
-            isLoading={overviewLoading}
+      {!organizationId && (
+        <p
+          role="status"
+          className="rounded-lg bg-gray-50 px-4 py-6 text-center text-sm text-gray-600 dark:bg-gray-800/50 dark:text-gray-300"
+        >
+          {tw('noOrganization')}
+        </p>
+      )}
+      {isError && (
+        <p
+          role="alert"
+          className="rounded-lg bg-rose-50 px-4 py-4 text-sm text-rose-700 dark:bg-rose-500/10 dark:text-rose-300"
+        >
+          {tw('loadError')}
+        </p>
+      )}
+
+      {/* Key figures */}
+      <DashboardWidget id="kpis" config={widgetConfig}>
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+          <Kpi
+            label={tw('kpi.newLeads')}
+            icon={<Users className="h-5 w-5 text-blue-600" />}
+            value={data?.newLeads}
+            note={data ? previousText(data.previousNewLeads) : undefined}
+            loading={isLoading}
           />
-
-          <KPICard
-            title={t('newLeadsThisMonth')}
-            value={overview?.newLeadsThisMonth || 0}
-            icon={TrendingUp}
-            valueType="number"
-            locale={locale === 'ja' ? 'ja-JP' : 'en-US'}
-            change={newLeadsChange}
-            changeLabel={t('vsLastPeriod')}
-            color="emerald"
-            variant="elevated"
-            isLoading={overviewLoading}
+          <Kpi
+            label={tw('kpi.consultations')}
+            icon={<MessageSquare className="h-5 w-5 text-rose-600" />}
+            value={data?.consultations}
+            note={data ? previousText(data.previousConsultations) : undefined}
+            loading={isLoading}
           />
-
-          <KPICard
-            title={t('conversionRate')}
-            value={overview?.conversionRate || 0}
-            icon={Target}
-            valueType="percentage"
-            decimals={1}
-            change={conversionChange}
-            changeLabel={t('vsLastPeriod')}
-            color="violet"
-            variant="elevated"
-            isLoading={overviewLoading}
-          >
-            <ProgressBar value={overview?.conversionRate || 0} color="violet" className="mt-3" />
-          </KPICard>
-
-          <KPICard
-            title={t('averageScore')}
-            value={overview?.averageScore || 0}
-            icon={Award}
-            valueType="score"
-            maxValue={100}
-            change={scoreChange}
-            changeLabel={t('vsLastPeriod')}
-            color="amber"
-            variant="elevated"
-            isLoading={overviewLoading}
-          >
-            <ProgressBar value={overview?.averageScore || 0} color="amber" className="mt-3" />
-          </KPICard>
-        </KPICardGroup>
+          <Kpi
+            label={tw('kpi.mql')}
+            icon={<Target className="h-5 w-5 text-violet-600" />}
+            value={data?.mql}
+            note={data ? previousText(data.previousMql) : undefined}
+            loading={isLoading}
+          />
+          <Kpi
+            label={tw('kpi.averageScore')}
+            icon={<Star className="h-5 w-5 text-amber-600" />}
+            value={data?.averageScore ?? undefined}
+            emptyValue={data && data.averageScore === null ? tw('kpi.noScore') : undefined}
+            suffix={tw('kpi.scoreSuffix')}
+            note={tw('kpi.periodNote', { days })}
+            loading={isLoading}
+          />
+        </div>
       </DashboardWidget>
 
-      {/* Lead Status Breakdown */}
-      <DashboardWidget id="statusBreakdown" config={widgetConfig}>
-        {overview && !overviewLoading && (
-          <Card className="p-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-6">
-              {t('leadStatusBreakdown')}
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-              {LEAD_STATUSES.map((key) => ({
-                key,
-                color: LEAD_STATUS_COLORS[key],
-                value: overview.leadsByStatus[key],
-              })).map((status) => {
-                const percentage =
-                  overview.totalLeads > 0 ? (status.value / overview.totalLeads) * 100 : 0;
+      {/* Consultation requests waiting for contact */}
+      <DashboardWidget id="pending" config={widgetConfig}>
+        <Card className="p-6">
+          <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-50">
+                {tw('pending.title')}
+                {data && data.pendingConsultationTotal > 0 && (
+                  <span className="ml-2 rounded-full bg-rose-100 px-2 py-0.5 text-sm font-bold text-rose-700 dark:bg-rose-500/15 dark:text-rose-300">
+                    {data.pendingConsultationTotal}
+                  </span>
+                )}
+              </h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {tw('pending.description', {
+                  days: AX_MIGRATION_CONFIG.consultationResponseBusinessDays,
+                })}
+              </p>
+            </div>
+          </div>
+          {data && data.pendingConsultations.length === 0 ? (
+            <p className="rounded-lg bg-gray-50 px-4 py-6 text-center text-sm text-gray-500 dark:bg-gray-800/50 dark:text-gray-400">
+              {tw('pending.empty')}
+            </p>
+          ) : (
+            <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+              {(data?.pendingConsultations ?? []).map((item) => {
+                const dueToday = !item.overdue && item.deadline === today;
                 return (
-                  <div key={status.key} className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: STATUS_DOT_HEX[status.color] }}
-                        />
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          {tStatus(status.key)}
-                        </span>
-                      </div>
-                      <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                        {status.value}
-                        {locale === 'ja' ? '件' : ''}
+                  <li key={item.id}>
+                    <Link
+                      href={leadHref(item.id)}
+                      className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg px-2 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/60"
+                    >
+                      <span
+                        className={`inline-flex min-w-[7rem] items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${
+                          item.overdue
+                            ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300'
+                            : dueToday
+                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300'
+                              : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                        }`}
+                      >
+                        {item.overdue && <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />}
+                        {item.overdue
+                          ? tw('pending.overdueOn', { date: item.deadline.slice(5) })
+                          : dueToday
+                            ? tw('pending.dueToday')
+                            : tw('pending.due', { date: item.deadline.slice(5) })}
                       </span>
-                    </div>
-                    <ProgressBar value={percentage} color={status.color} className="h-2" />
-                    <p className="text-xs text-gray-500 text-right">{percentage.toFixed(1)}%</p>
-                  </div>
+                      <span className="min-w-0 flex-1 basis-full sm:basis-auto">
+                        <span className="font-medium text-gray-900 dark:text-gray-50">
+                          {item.company ?? tw('recent.unnamed')}
+                        </span>
+                        <span className="ml-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                          {item.name}
+                        </span>
+                      </span>
+                      <span className="whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                        {platformName(item.platform)}
+                        <span className="mx-2 text-gray-300" aria-hidden="true">
+                          ·
+                        </span>
+                        {tw('pending.requestedAt', {
+                          date: dateFormat.format(new Date(item.requestedAt)),
+                        })}
+                      </span>
+                    </Link>
+                  </li>
                 );
               })}
-            </div>
-          </Card>
-        )}
+            </ul>
+          )}
+          {data && data.pendingConsultationTotal > data.pendingConsultations.length && (
+            <p className="mt-3 text-right text-sm text-gray-500">
+              {tw('pending.more', {
+                count: data.pendingConsultationTotal - data.pendingConsultations.length,
+              })}
+            </p>
+          )}
+        </Card>
       </DashboardWidget>
 
-      {/* Charts and Activity Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Lead Trend Chart - Interactive with zoom/download */}
-        <DashboardWidget id="leadTrend" config={widgetConfig}>
-          <Card className="lg:col-span-2 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                  {t('leadTrend')}
-                </h3>
-                <p className="text-sm text-gray-500">{t('description')}</p>
-              </div>
-              <Link
-                href={`/${locale}/analytics`}
-                className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
-              >
-                {t('viewAll')}
-                <ChevronRight className="h-4 w-4" />
-              </Link>
-            </div>
-            {trendLoading ? (
-              <div className="h-80 bg-gray-100 dark:bg-gray-700 animate-pulse rounded-lg" />
-            ) : (
-              <InteractiveAreaChart
-                data={chartData}
-                index="date"
-                categories={[t('totalLeads'), t('convertedLeads')]}
-                colors={['blue', 'violet']}
-                valueFormatter={valueFormatter}
-                showLegend={true}
-                showGridLines={true}
-                showAnimation={true}
-                showToolbar={true}
-                enableZoom={true}
-                enableDownload={true}
-                curveType="smooth"
-                height={320}
-              />
-            )}
-          </Card>
-        </DashboardWidget>
-
-        {/* Status Donut Chart with Radial Progress */}
-        <DashboardWidget id="statusDonut" config={widgetConfig}>
-          <Card className="p-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-              {t('leadStatusBreakdown')}
-            </h3>
-            {statusLoading ? (
-              <div className="h-64 bg-gray-100 dark:bg-gray-700 animate-pulse rounded-full mx-auto w-48" />
-            ) : (
-              <div className="space-y-4">
-                <DonutChart
-                  className="mx-auto"
-                  data={statusData}
-                  colors={statusColors}
-                  valueFormatter={valueFormatter}
-                  showLabel={true}
-                  showAnimation={true}
-                  height={220}
-                />
-                <ChartLegend
-                  className="mt-4"
-                  categories={statusData.map((d) => d.name)}
-                  colors={statusColors}
-                />
-              </div>
-            )}
-          </Card>
-        </DashboardWidget>
-      </div>
-
-      {/* Conversion & Score Radial Charts */}
-      <DashboardWidget id="conversionRadial" config={widgetConfig}>
-        {overview && !overviewLoading && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-                {t('conversionRate')}
-              </h3>
-              <div className="flex items-center justify-center">
-                <RadialChart
-                  value={overview.conversionRate}
-                  maxValue={100}
-                  label={t('converted')}
-                  color="violet"
-                  size="md"
-                  valueFormatter={(v) => `${v.toFixed(1)}%`}
-                />
-              </div>
-            </Card>
-            <Card className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-                {t('averageScore')}
-              </h3>
-              <div className="flex items-center justify-center">
-                <RadialChart
-                  value={overview.averageScore}
-                  maxValue={100}
-                  label={locale === 'ja' ? 'スコア' : 'Score'}
-                  color="amber"
-                  size="md"
-                  valueFormatter={(v) => `${Math.round(v)}`}
-                />
-              </div>
-            </Card>
-          </div>
-        )}
-      </DashboardWidget>
-
-      {/* Recent Activity */}
-      <DashboardWidget id="recentActivity" config={widgetConfig}>
+      {/* Daily trend */}
+      <DashboardWidget id="trend" config={widgetConfig}>
         <Card className="p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              {t('recentActivity')}
-            </h3>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-50">
+            {tw('trend.title')}
+          </h2>
+          <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">{tw('trend.description')}</p>
+          {data && !hasTrend ? (
+            <p className="rounded-lg bg-gray-50 px-4 py-10 text-center text-sm text-gray-500 dark:bg-gray-800/50 dark:text-gray-400">
+              {tw('trend.empty')}
+            </p>
+          ) : (
+            <BarChart
+              data={chartData}
+              index="date"
+              categories={[tw('trend.leads'), tw('trend.consultations')]}
+              colors={['blue', 'red']}
+              valueFormatter={(value) => (locale === 'ja' ? `${value}件` : String(value))}
+              showLegend
+              integerValues
+              maxCategoryLabels={narrow ? 4 : 10}
+              columnWidth={days === 7 ? '45%' : '85%'}
+              height={260}
+            />
+          )}
+        </Card>
+      </DashboardWidget>
+
+      {/* Breakdown */}
+      <DashboardWidget id="breakdown" config={widgetConfig}>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Card className="p-6">
+            <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-50">
+              {tw('statuses.title')}
+            </h2>
+            <ul className="space-y-3">
+              {(data?.statuses ?? []).map((item) => (
+                <BreakdownRow
+                  key={item.status}
+                  label={tStatus(item.status)}
+                  count={item.count}
+                  total={totalStatus}
+                  color={LEAD_STATUS_COLORS[item.status]}
+                />
+              ))}
+            </ul>
+          </Card>
+          <Card className="p-6">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-50">
+              {tw('platforms.title')}
+            </h2>
+            <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+              {tw('platforms.description', { days })}
+            </p>
+            {data && data.platforms.length === 0 ? (
+              <p className="text-sm text-gray-500">{tw('platforms.empty')}</p>
+            ) : (
+              <ul className="space-y-3">
+                {(data?.platforms ?? []).map((item) => (
+                  <BreakdownRow
+                    key={item.platform}
+                    label={platformName(item.platform)}
+                    count={item.count}
+                    total={totalPlatform}
+                    color="blue"
+                  />
+                ))}
+              </ul>
+            )}
+          </Card>
+        </div>
+      </DashboardWidget>
+
+      {/* Recent leads */}
+      <DashboardWidget id="recent" config={widgetConfig}>
+        <Card className="overflow-hidden">
+          <div className="flex items-center justify-between px-6 pt-6 pb-3">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-50">
+              {tw('recent.title')}
+            </h2>
             <Link
               href={`/${locale}/leads`}
-              className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+              className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400"
             >
               {t('viewAll')}
-              <ChevronRight className="h-4 w-4" />
             </Link>
           </div>
-          <RecentActivity leads={recentLeads} isLoading={leadsLoading} maxItems={5} />
+          {data && data.recentLeads.length === 0 ? (
+            <p className="px-6 pb-6 text-sm text-gray-500">{tw('recent.empty')}</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-y border-gray-100 bg-gray-50 text-left text-xs text-gray-500 dark:border-gray-800 dark:bg-gray-800/50 dark:text-gray-400">
+                    <th scope="col" className="px-6 py-2 font-medium">
+                      {tw('recent.name')}
+                    </th>
+                    <th scope="col" className="px-3 py-2 font-medium">
+                      {tw('recent.platform')}
+                    </th>
+                    <th scope="col" className="px-3 py-2 text-right font-medium">
+                      {tw('recent.score')}
+                    </th>
+                    <th scope="col" className="px-6 py-2 text-right font-medium">
+                      {tw('recent.received')}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                  {(data?.recentLeads ?? []).map((lead) => (
+                    <tr key={lead.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/60">
+                      <td className="px-6 py-3">
+                        <Link href={leadHref(lead.id)} className="block">
+                          <span className="font-medium text-gray-900 hover:underline dark:text-gray-50">
+                            {lead.name ?? tw('recent.unnamed')}
+                          </span>
+                          {lead.consultation && (
+                            <span className="ml-2 rounded bg-rose-50 px-1.5 py-0.5 text-xs font-semibold text-rose-700 dark:bg-rose-500/15 dark:text-rose-300">
+                              {tw('recent.consultation')}
+                            </span>
+                          )}
+                          <span className="block text-xs text-gray-500 dark:text-gray-400">
+                            {lead.company}
+                          </span>
+                        </Link>
+                      </td>
+                      <td className="px-3 py-3 text-gray-600 dark:text-gray-300">
+                        {platformName(lead.platform)}
+                      </td>
+                      <td className="px-3 py-3 text-right font-semibold tabular-nums text-gray-900 dark:text-gray-50">
+                        {lead.score ?? '—'}
+                      </td>
+                      <td className="px-6 py-3 text-right text-gray-500 tabular-nums dark:text-gray-400">
+                        {dateFormat.format(new Date(lead.createdAt))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Card>
       </DashboardWidget>
     </div>
+  );
+}
+
+/** Phone-width screens get fewer date labels; follows window resizes */
+function useNarrowScreen() {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const query = window.matchMedia('(max-width: 639px)');
+    const update = () => setNarrow(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+  return narrow;
+}
+
+function Kpi({
+  label,
+  icon,
+  value,
+  emptyValue,
+  suffix,
+  note,
+  loading,
+}: {
+  label: string;
+  icon: ReactNode;
+  value?: number;
+  emptyValue?: string;
+  suffix?: string;
+  note?: string;
+  loading: boolean;
+}) {
+  return (
+    <Card className="p-4 sm:p-5">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{label}</p>
+        <span className="rounded-lg bg-gray-50 p-2 dark:bg-gray-800" aria-hidden="true">
+          {icon}
+        </span>
+      </div>
+      {loading ? (
+        <span className="mt-2 inline-block h-9 w-16 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+      ) : (
+        <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900 sm:text-3xl dark:text-gray-50">
+          {value === undefined ? (emptyValue ?? '—') : value.toLocaleString()}
+          {value !== undefined && suffix && (
+            <span className="ml-1 text-base font-normal text-gray-400">{suffix}</span>
+          )}
+        </p>
+      )}
+      {note && <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">{note}</p>}
+    </Card>
+  );
+}
+
+function BreakdownRow({
+  label,
+  count,
+  total,
+  color,
+}: {
+  label: string;
+  count: number;
+  total: number;
+  color: Parameters<typeof ProgressBar>[0]['color'];
+}) {
+  const percent = total > 0 ? Math.round((count / total) * 100) : 0;
+  return (
+    <li>
+      <div className="mb-1 flex items-baseline justify-between gap-2 text-sm">
+        <span className="text-gray-700 dark:text-gray-200">{label}</span>
+        <span className="tabular-nums text-gray-900 dark:text-gray-50">
+          <span className="font-semibold">{count}</span>
+          <span className="ml-2 text-xs text-gray-500">{percent}%</span>
+        </span>
+      </div>
+      <ProgressBar value={percent} color={color} />
+    </li>
   );
 }

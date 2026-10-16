@@ -18,9 +18,9 @@ export function TestModeBadge({ className = '' }: { className?: string }) {
     <span
       role="status"
       title={t('description', { domains })}
-      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-300 ${className}`}
+      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] sm:px-3 sm:text-xs font-semibold text-amber-800 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-300 ${className}`}
     >
-      <RiFlaskLine className="h-4 w-4" aria-hidden="true" />
+      <RiFlaskLine className="hidden h-4 w-4 sm:block" aria-hidden="true" />
       {t('label')}
       <span className="sr-only">{t('description', { domains })}</span>
     </span>

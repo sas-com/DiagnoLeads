@@ -246,7 +246,8 @@ describe('LeadsPage details', () => {
     await user.click(await screen.findByText('山田 太郎'));
     const sheet = await screen.findByRole('dialog', { name: '山田 太郎' });
 
-    await user.click(within(sheet).getByRole('button', { name: '編集' }));
+    // The details load lazily: wait for the button (slow under coverage instrumentation)
+    await user.click(await within(sheet).findByRole('button', { name: '編集' }));
     const dialog = await screen.findByRole('dialog', { name: 'リードを編集' });
     const company = within(dialog).getByRole('textbox', { name: /^会社名/ });
     await user.clear(company);
