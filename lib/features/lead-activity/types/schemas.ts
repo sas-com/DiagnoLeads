@@ -50,6 +50,8 @@ export const listLeadActivitiesSchema = z
     types: z.array(z.enum(LEAD_ACTIVITY_KINDS)).min(1).max(LEAD_ACTIVITY_KINDS.length).optional(),
     limit: z.number().int().min(1).max(LEAD_ACTIVITY_MAX_LIMIT).default(20),
     cursor: leadActivityCursorSchema.nullish(),
+    // Added by tRPC's useInfiniteQuery; pages only go forward, so it is accepted and ignored
+    direction: z.enum(['forward', 'backward']).optional(),
   })
   .strict();
 export type ListLeadActivitiesInput = z.infer<typeof listLeadActivitiesSchema>;
