@@ -5,10 +5,13 @@
 import LeadsPage from '@/app/[locale]/(dashboard)/leads/page';
 import type { Lead } from '@/lib/db/schema';
 import messages from '@/locales/ja/common.json';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { configure, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// The lazily loaded page parts take longer than the 1s default on a cold, instrumented run (CI coverage)
+configure({ asyncUtilTimeout: 5000 });
 
 const ORG_ID = '11111111-1111-4111-8111-111111111111';
 const YAMADA_ID = '22222222-2222-4222-8222-222222222222';
