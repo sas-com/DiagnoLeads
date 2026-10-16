@@ -4,6 +4,12 @@
   "devCommand": "bun run dev",
   "installCommand": "bun install",
   "framework": "nextjs",
+  "git": {
+    "deploymentEnabled": {
+      "**": false,
+      "main": true
+    }
+  },
   "regions": ["hnd1"],
   "functions": {
     "app/api/**/*": {
