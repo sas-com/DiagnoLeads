@@ -277,7 +277,7 @@ describe('LeadsPage details', () => {
 
     // Edit is the only visible action button; delete is not a button of its own
     expect(within(sheet).queryByRole('button', { name: '削除' })).not.toBeInTheDocument();
-    await user.click(within(sheet).getByRole('button', { name: 'その他の操作' }));
+    await user.click(await within(sheet).findByRole('button', { name: 'その他の操作' }));
     const menu = await screen.findByRole('menu');
     await user.click(within(menu).getByRole('menuitem', { name: '削除' }));
 
