@@ -16,6 +16,7 @@ import Link from 'next/link';
 import { LeadDiagnosisCard } from './detail/lead-diagnosis-card';
 import { LeadHearingOverview } from './detail/lead-hearing-overview';
 import { LeadRecentActivity } from './detail/lead-recent-activity';
+import { LeadAssigneeSelect } from './lead-assignee-select';
 import { LeadQuickSelect } from './lead-quick-select';
 
 /** Facts shown in the panel when they have a value */
@@ -96,6 +97,7 @@ export function LeadSummarySheet({
                   organizationId={organizationId}
                   canEdit={canEdit}
                 />
+                <LeadAssigneeSelect lead={lead} organizationId={organizationId} canEdit={canEdit} />
                 <Badge color="gray">
                   {typeof lead.score === 'number'
                     ? t('scoreValue', { score: lead.score })

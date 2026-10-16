@@ -269,59 +269,69 @@ export const sessions = pgTable('sessions', {
  * Leads
  * Core business entity - diagnostic form submissions
  */
-export const leads = pgTable('leads', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  organizationId: uuid('organization_id')
-    .notNull()
-    .references(() => organizations.id, { onDelete: 'cascade' }),
+export const leads = pgTable(
+  'leads',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
 
-  // Contact information
-  email: text('email').notNull(),
-  name: text('name'),
-  company: text('company'),
-  phone: text('phone'),
+    // Contact information
+    email: text('email').notNull(),
+    name: text('name'),
+    company: text('company'),
+    phone: text('phone'),
 
-  // Lead metadata
-  status: text('status').notNull().default('new'), // 'new', 'nurturing', 'negotiating', 'won', 'lost'
-  score: integer('score'),
-  source: text('source'), // 'website', 'embed', 'api'
+    // Lead metadata
+    status: text('status').notNull().default('new'), // 'new', 'nurturing', 'negotiating', 'won', 'lost'
+    score: integer('score'),
+    source: text('source'), // 'website', 'embed', 'api'
 
-  // Sales pipeline (values are defined in lib/features/leads/types/pipeline.ts)
-  inflowSource: text('inflow_source'),
-  conversionPoint: text('conversion_point'),
-  dealPhase: text('deal_phase'),
-  targetSystem: text('target_system'),
-  referrerName: text('referrer_name'),
-  lostReason: text('lost_reason'),
-  agencyName: text('agency_name'),
-  /** Agency link the diagnosis was answered through (#147); null when entered by hand */
-  agencyLinkId: uuid('agency_link_id').references((): AnyPgColumn => agencyLinks.id, {
-    onDelete: 'set null',
-  }),
-  acquisitionCost: integer('acquisition_cost'), // yen, excluding tax
-  /** Date each deal phase was first reached ({ phase: 'YYYY-MM-DD' }) */
-  dealPhaseReachedAt: jsonb('deal_phase_reached_at')
-    .$type<Record<string, string>>()
-    .default({})
-    .notNull(),
-  hasNegotiated: boolean('has_negotiated').default(false).notNull(),
-  mqlQualifiedAt: timestamp('mql_qualified_at'),
-  sqlDecision: text('sql_decision'), // 'qualified' | 'not_qualified' | null（未判定）
-  sqlDecidedAt: timestamp('sql_decided_at'),
+    // Sales pipeline (values are defined in lib/features/leads/types/pipeline.ts)
+    inflowSource: text('inflow_source'),
+    conversionPoint: text('conversion_point'),
+    dealPhase: text('deal_phase'),
+    targetSystem: text('target_system'),
+    referrerName: text('referrer_name'),
+    lostReason: text('lost_reason'),
+    agencyName: text('agency_name'),
+    /** Agency link the diagnosis was answered through (#147); null when entered by hand */
+    agencyLinkId: uuid('agency_link_id').references((): AnyPgColumn => agencyLinks.id, {
+      onDelete: 'set null',
+    }),
+    acquisitionCost: integer('acquisition_cost'), // yen, excluding tax
+    /** Date each deal phase was first reached ({ phase: 'YYYY-MM-DD' }) */
+    dealPhaseReachedAt: jsonb('deal_phase_reached_at')
+      .$type<Record<string, string>>()
+      .default({})
+      .notNull(),
+    hasNegotiated: boolean('has_negotiated').default(false).notNull(),
+    mqlQualifiedAt: timestamp('mql_qualified_at'),
+    sqlDecision: text('sql_decision'), // 'qualified' | 'not_qualified' | null（未判定）
+    sqlDecidedAt: timestamp('sql_decided_at'),
+    /**
+     * Member in charge of the lead (#135). Set by hand, usually by the intake person who receives
+     * the consultation requests; only members of the lead's organization can be assigned. Null
+     * means nobody yet (担当未定), also after the user was deleted.
+     */
+    assigneeUserId: uuid('assignee_user_id').references(() => users.id, { onDelete: 'set null' }),
 
-  // Assessment data
-  responses: jsonb('responses').$type<Record<string, unknown>>().default({}),
+    // Assessment data
+    responses: jsonb('responses').$type<Record<string, unknown>>().default({}),
 
-  // Custom fields data (Phase 9 P1)
-  customFields: jsonb('custom_fields').$type<Record<string, unknown>>().default({}),
+    // Custom fields data (Phase 9 P1)
+    customFields: jsonb('custom_fields').$type<Record<string, unknown>>().default({}),
 
-  // AI features (Phase 3)
-  embedding: vector('embedding'), // OpenAI text-embedding-3-small (1536 dimensions)
-  searchVector: tsvector('search_vector'), // Full-text search vector (generated)
+    // AI features (Phase 3)
+    embedding: vector('embedding'), // OpenAI text-embedding-3-small (1536 dimensions)
+    searchVector: tsvector('search_vector'), // Full-text search vector (generated)
 
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [index('leads_assignee_user_id_idx').on(table.assigneeUserId)]
+);
 
 /**
  * Relations
@@ -368,6 +378,11 @@ export const leadsRelations = relations(leads, ({ one, many }) => ({
   organization: one(organizations, {
     fields: [leads.organizationId],
     references: [organizations.id],
+  }),
+  /** Member in charge (#135) */
+  assignee: one(users, {
+    fields: [leads.assigneeUserId],
+    references: [users.id],
   }),
   leadTags: many(leadTags),
   comments: many(leadComments),
@@ -921,6 +936,7 @@ export type NotificationType =
   | 'member_invited'
   | 'member_removed'
   | 'consultation_requested'
+  | 'lead_assigned'
   | 'system';
 
 /**

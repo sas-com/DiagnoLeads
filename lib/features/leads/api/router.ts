@@ -1,4 +1,4 @@
-import { leadTags, leads, tags } from '@/lib/db/schema';
+import { auditLogs, leadTags, leads, tags } from '@/lib/db/schema';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import {
@@ -22,6 +22,16 @@ import {
   sql,
 } from 'drizzle-orm';
 import {
+  findAssignableMember,
+  findUserName,
+  getIntakeUserIds,
+  listAssignableMembers,
+  listIntakeMembers,
+  memberDisplayName,
+  setIntakeUserIds,
+} from '../assignment';
+import { notifyLeadAssigned } from '../assignment-notify';
+import {
   creationAuditValues,
   diffLeadAudit,
   leadAuditSnapshot,
@@ -38,6 +48,7 @@ import {
 import {
   type FilterCondition,
   type FilterGroup,
+  assignLeadSchema,
   bulkCreateSchema,
   bulkDeleteSchema,
   bulkUpdateStatusSchema,
@@ -45,6 +56,7 @@ import {
   deleteLeadSchema,
   getLeadSchema,
   listLeadsSchema,
+  setLeadIntakeSchema,
   updateLeadSchema,
 } from '../types/schemas';
 import {
@@ -175,6 +187,12 @@ function buildFilterGroup(group: FilterGroup): SQL | undefined {
   return group.logic === 'and' ? and(...validConditions) : or(...validConditions);
 }
 
+/** What the lead views show of the assignee (#135) */
+const ASSIGNEE_COLUMNS = { id: true, name: true, email: true } as const;
+
+/** Intake members (窓口) are chosen by the organization's owners and admins (#135) */
+const INTAKE_EDITOR_ROLES: readonly string[] = ['owner', 'admin', 'group_owner'];
+
 /**
  * Leads tRPC router
  * Handles CRUD operations for leads with multi-tenant isolation
@@ -249,6 +267,7 @@ export const leadsRouter = router({
     const lead = await ctx.db.query.leads.findFirst({
       where: and(eq(leads.id, input.id), eq(leads.organizationId, input.organizationId)),
       with: {
+        assignee: { columns: ASSIGNEE_COLUMNS },
         leadTags: {
           with: {
             tag: true,
@@ -286,7 +305,7 @@ export const leadsRouter = router({
     // Build where conditions: always scoped to the organization (#131)
     const conditions: SQL[] = [
       eq(leads.organizationId, input.organizationId),
-      ...leadListConditions(input),
+      ...leadListConditions(input, ctx.user.id),
     ];
 
     // Tag filter - get lead IDs that have the specified tags
@@ -337,6 +356,7 @@ export const leadsRouter = router({
           lastActivityAt: sql<string>`${leadLastActivityAt}`.as('last_activity_at'),
         },
         with: {
+          assignee: { columns: ASSIGNEE_COLUMNS },
           leadTags: {
             with: {
               tag: true,
@@ -477,6 +497,154 @@ export const leadsRouter = router({
 
       return updated;
     });
+  }),
+
+  /**
+   * Members a lead can be assigned to (#135). Read-only roles can read the list too: they see
+   * the names, not the controls.
+   */
+  assignees: organizationProcedure.query(async ({ ctx, input }) => {
+    if (!ctx.ability.can('read', 'Lead')) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: 'リードを閲覧する権限がありません',
+      });
+    }
+    const members = await listAssignableMembers(ctx.db, input.organizationId);
+    return members.map((member) => ({
+      userId: member.userId,
+      name: member.name,
+      email: member.email,
+      displayName: memberDisplayName(member),
+    }));
+  }),
+
+  /**
+   * Assign a lead to a member of its organization, or to nobody (#135). The change is written
+   * to the audit log with the lead update; the new assignee is told in-app and by email
+   * (not when assigning oneself).
+   */
+  assign: organizationProcedure.input(assignLeadSchema).mutation(async ({ ctx, input }) => {
+    if (!ctx.ability.can('update', 'Lead')) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: 'リードを更新する権限がありません',
+      });
+    }
+
+    const now = new Date();
+    const leadScope = and(eq(leads.id, input.id), eq(leads.organizationId, input.organizationId));
+
+    const result = await ctx.db.transaction(async (tx) => {
+      await tx.execute(sql`select 1 from ${leads} where ${leadScope} for no key update`);
+      const existing = await tx.query.leads.findFirst({ where: leadScope });
+      if (!existing) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'リードが見つかりません',
+        });
+      }
+
+      // Only members of the lead's own organization (never another organization's users)
+      const assignee = input.assigneeUserId
+        ? await findAssignableMember(tx, input.organizationId, input.assigneeUserId)
+        : null;
+      if (input.assigneeUserId && !assignee) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'この組織で担当にできるメンバーではありません',
+        });
+      }
+
+      const beforeId = existing.assigneeUserId ?? null;
+      const afterId = assignee?.userId ?? null;
+      if (beforeId === afterId) return { lead: existing, assignee, changed: false };
+
+      const [updated] = await tx
+        .update(leads)
+        .set({ assigneeUserId: afterId, updatedAt: now })
+        .where(leadScope)
+        .returning();
+
+      await writeLeadAuditLogs(
+        tx,
+        { organizationId: input.organizationId, userId: ctx.user.id, at: now },
+        [
+          {
+            action: 'update',
+            leadId: input.id,
+            changes: {
+              before: { assignee: beforeId ? await findUserName(tx, beforeId) : null },
+              after: { assignee: assignee ? memberDisplayName(assignee) : null },
+            },
+            metadata: { assigneeUserId: { before: beforeId, after: afterId } },
+          },
+        ]
+      );
+      return { lead: updated ?? existing, assignee, changed: true };
+    });
+
+    if (result.changed && result.assignee && result.assignee.userId !== ctx.user.id) {
+      // After the commit; a failed notification never undoes the assignment
+      await notifyLeadAssigned({
+        organizationId: input.organizationId,
+        leadId: input.id,
+        leadName: result.lead.name ?? null,
+        company: result.lead.company ?? null,
+        assignee: result.assignee,
+        assignedByName: ctx.user.name ?? ctx.user.email ?? null,
+      }).catch((error) => console.error('Lead assignment notification failed:', error));
+    }
+
+    return result.lead;
+  }),
+
+  /**
+   * Intake members (窓口) of the organization: consultation requests are mailed to them (#135).
+   * `canEdit` tells the settings screen whether to show the controls.
+   */
+  intake: organizationProcedure.query(async ({ ctx, input }) => {
+    if (!ctx.ability.can('read', 'Lead')) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: 'リードを閲覧する権限がありません',
+      });
+    }
+    const members = await listIntakeMembers(ctx.db, input.organizationId);
+    return {
+      userIds: members.map((member) => member.userId),
+      canEdit: INTAKE_EDITOR_ROLES.includes(ctx.membership.role),
+    };
+  }),
+
+  /** Choose the intake members; owners and admins only, members of this organization only */
+  setIntake: organizationProcedure.input(setLeadIntakeSchema).mutation(async ({ ctx, input }) => {
+    if (!INTAKE_EDITOR_ROLES.includes(ctx.membership.role)) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: '窓口の設定は管理者またはオーナーのみ可能です',
+      });
+    }
+    const userIds = [...new Set(input.userIds)];
+    const members = await listAssignableMembers(ctx.db, input.organizationId);
+    const memberIds = new Set(members.map((member) => member.userId));
+    if (userIds.some((id) => !memberIds.has(id))) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'この組織で窓口にできるメンバーではありません',
+      });
+    }
+    const before = await getIntakeUserIds(ctx.db, input.organizationId);
+    await setIntakeUserIds(ctx.db, input.organizationId, userIds);
+    await ctx.db.insert(auditLogs).values({
+      organizationId: input.organizationId,
+      userId: ctx.user.id,
+      action: 'update',
+      resource: 'organization',
+      resourceId: input.organizationId,
+      changes: { before: { leadIntakeUserIds: before }, after: { leadIntakeUserIds: userIds } },
+    });
+    return { userIds };
   }),
 
   /**

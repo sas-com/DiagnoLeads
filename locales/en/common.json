@@ -885,7 +885,9 @@
         "dueIn": "{count, plural, one {# business day left} other {# business days left}}",
         "deadline": "Due {date}",
         "contactHint": "Recording \"Called\" or \"Emailed\" takes it off the list (\"No answer\" keeps it here).",
-        "noAnswer": "No answer ×{count}"
+        "noAnswer": "No answer ×{count}",
+        "assignee": "Owner: {name}",
+        "unassigned": "Unassigned"
       },
       "trend": {
         "title": "New leads",
@@ -2135,7 +2137,8 @@
         "upcoming": "Coming soon",
         "upcomingHelp": "This notification is sent once the feature is released. You can set it now",
         "emailNote": "Consultation request emails go to the sales contact address (there is no personal setting)",
-        "currentOrganization": "this organization"
+        "currentOrganization": "this organization",
+        "assignedToMeHelp": "When a lead is assigned to you (turning this off also stops the email)"
       },
       "description": "Configure how you receive notifications",
       "inApp": {
@@ -3009,7 +3012,8 @@
       "name": "Name",
       "company": "Company",
       "email": "Email",
-      "phone": "Phone"
+      "phone": "Phone",
+      "assignee": "Assignee"
     },
     "values": {
       "notSet": "Not set",
@@ -3191,13 +3195,17 @@
       "needsAction": "Needs action",
       "consultation": "Consultation requested",
       "newThisWeek": "New this week",
-      "negotiating": "Negotiating"
+      "negotiating": "Negotiating",
+      "mine": "My leads",
+      "unassigned": "Unassigned"
     },
     "presetHints": {
       "needsAction": "Status is New: nobody has started on these leads yet",
       "consultation": "Leads that requested a consultation",
       "newThisWeek": "Leads created this week (from Monday)",
-      "negotiating": "Leads with the status Negotiating"
+      "negotiating": "Leads with the status Negotiating",
+      "mine": "Leads assigned to you",
+      "unassigned": "Leads nobody is assigned to yet"
     },
     "chips": {
       "label": "Active filters",
@@ -3296,6 +3304,27 @@
       "retry": "Reload",
       "more": "{count} more",
       "noLeadName": "Lead without a name"
+    }
+  },
+  "leadAssignee": {
+    "label": "Assignee",
+    "unassigned": "Unassigned",
+    "me": "Me",
+    "someone": "Selected member",
+    "filterAll": "Everyone",
+    "chip": "Assignee: {name}",
+    "change": "Change assignee (now: {value})",
+    "updated": "Assignee updated",
+    "updateError": "Could not change the assignee: {message}",
+    "intake": {
+      "title": "Consultation request intake",
+      "description": "Consultation request notifications (in-app and email) go to the intake members, who assign each lead to an owner. Without intake members, they go to everyone as before (email to the usual sales address).",
+      "none": "No intake members (notifications go to the usual recipients)",
+      "limit": "Up to {max} intake members",
+      "save": "Save intake",
+      "saved": "Intake saved",
+      "saveError": "Could not save the intake: {message}",
+      "readOnly": "Owners and admins can change the intake members."
     }
   }
 }

@@ -125,6 +125,7 @@ export const LEAD_SORT_KEYS = [
   'dealPhase',
   'lastActivityAt',
   'mqlQualifiedAt',
+  'assignee',
 ] as const;
 export const leadSortKeyEnum = z.enum(LEAD_SORT_KEYS);
 export type LeadSortKey = z.infer<typeof leadSortKeyEnum>;
@@ -133,6 +134,14 @@ export type LeadSortKey = z.infer<typeof leadSortKeyEnum>;
 export const SQL_DECISION_FILTERS = ['qualified', 'not_qualified', 'undecided'] as const;
 export const sqlDecisionFilterEnum = z.enum(SQL_DECISION_FILTERS);
 export type SqlDecisionFilter = z.infer<typeof sqlDecisionFilterEnum>;
+
+/**
+ * Assignee filter (#135): the current member ('me'), leads nobody holds ('unassigned'), or one
+ * member's user id
+ */
+export const ASSIGNEE_FILTER_KEYWORDS = ['me', 'unassigned'] as const;
+export const assigneeFilterSchema = z.union([z.enum(ASSIGNEE_FILTER_KEYWORDS), z.string().uuid()]);
+export type AssigneeFilter = z.infer<typeof assigneeFilterSchema>;
 
 /** A calendar day in Japan time, 'YYYY-MM-DD' */
 export const jstDaySchema = z
@@ -177,10 +186,27 @@ export const listLeadsSchema = z.object({
   mql: z.boolean().optional(),
   // SQL judgement
   sqlDecision: sqlDecisionFilterEnum.optional(),
+  // Assignee (#135)
+  assignee: assigneeFilterSchema.optional(),
   // Tag filter
   tagIds: z.array(z.string().uuid()).optional(),
 });
 export type ListLeadsInput = z.infer<typeof listLeadsSchema>;
+
+/** Assign a lead to a member of its organization, or nobody (null) (#135) */
+export const assignLeadSchema = z.object({
+  organizationId: z.string().uuid(),
+  id: z.string().uuid(),
+  assigneeUserId: z.string().uuid().nullable(),
+});
+export type AssignLeadInput = z.infer<typeof assignLeadSchema>;
+
+/** Intake members (窓口) of the organization; an empty list turns intake off (#135) */
+export const setLeadIntakeSchema = z.object({
+  organizationId: z.string().uuid(),
+  userIds: z.array(z.string().uuid()).max(10),
+});
+export type SetLeadIntakeInput = z.infer<typeof setLeadIntakeSchema>;
 
 /**
  * Delete lead schema

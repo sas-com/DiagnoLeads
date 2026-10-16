@@ -84,6 +84,9 @@ const SORT_EXPRESSIONS: Record<LeadSortKey, AnyColumn | SQL> = {
   dealPhase: pipelineOrder(leads.dealPhase, DEAL_PHASES),
   lastActivityAt: leadLastActivityAt,
   mqlQualifiedAt: leads.mqlQualifiedAt,
+  // Assignee name (the email when no name); unassigned leads go last. Plain SQL with its own
+  // alias for the same reason as leadLastActivityAt (#135)
+  assignee: sql`(select coalesce(nullif(trim(u.name), ''), u.email) from users u where u.id = ${leads.assigneeUserId})`,
 };
 
 /**
@@ -107,7 +110,11 @@ export function leadListOrderBy(
  * WHERE conditions of the list filters (without the organization condition, tags and the
  * advanced filter, which the procedure adds). Multi-value filters match any of the values.
  */
-export function leadListConditions(input: ListLeadsInput): SQL[] {
+export function leadListConditions(
+  input: ListLeadsInput,
+  /** The member asking, for the assignee filter 'me' */
+  currentUserId?: string
+): SQL[] {
   const conditions: (SQL | undefined)[] = [];
 
   const statuses = oneOrMany(input.status);
@@ -152,6 +159,12 @@ export function leadListConditions(input: ListLeadsInput): SQL[] {
 
   if (input.sqlDecision === 'undecided') conditions.push(isNull(leads.sqlDecision));
   else if (input.sqlDecision) conditions.push(eq(leads.sqlDecision, input.sqlDecision));
+
+  // Assignee (#135); 'me' without a member matches nothing rather than everything
+  if (input.assignee === 'unassigned') conditions.push(isNull(leads.assigneeUserId));
+  else if (input.assignee === 'me') {
+    conditions.push(currentUserId ? eq(leads.assigneeUserId, currentUserId) : sql`false`);
+  } else if (input.assignee) conditions.push(eq(leads.assigneeUserId, input.assignee));
 
   return conditions.filter((c): c is SQL => c !== undefined);
 }

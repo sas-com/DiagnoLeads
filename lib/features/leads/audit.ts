@@ -6,6 +6,7 @@
  *   when nothing changed
  * - create: `changes.after` holds the pipeline fields set at creation (no contact details)
  * - delete: `changes.before` holds only the name and company
+ * - assignment (#135): an update row with `assignee` (names) and the ids in the metadata
  *
  * Rows are inserted with the executor of the change itself (a transaction), so a failed change
  * leaves no log. `createdAt` is the time the change used for its own dates, so the timeline can
@@ -93,9 +94,17 @@ export function leadAuditSnapshot(lead: AuditableLead): LeadAuditSnapshot {
   };
 }
 
+/**
+ * The assignee (#135) is recorded by name, so the timeline reads without a lookup; the user ids
+ * are in the row's metadata (`assigneeUserId: { before, after }`)
+ */
+export interface AssigneeAuditValues {
+  assignee?: string | null;
+}
+
 export interface LeadAuditChanges {
-  before: Partial<LeadAuditSnapshot>;
-  after: Partial<LeadAuditSnapshot>;
+  before: Partial<LeadAuditSnapshot> & AssigneeAuditValues;
+  after: Partial<LeadAuditSnapshot> & AssigneeAuditValues;
 }
 
 /** Only the fields whose value changed, or null when nothing changed */
@@ -134,7 +143,12 @@ interface LeadAuditContext {
 }
 
 export type LeadAuditEntry =
-  | { action: 'update'; leadId: string; changes: LeadAuditChanges }
+  | {
+      action: 'update';
+      leadId: string;
+      changes: LeadAuditChanges;
+      metadata?: Record<string, unknown>;
+    }
   | {
       action: 'create';
       leadId: string;
@@ -163,7 +177,7 @@ export async function writeLeadAuditLogs(
           : entry.action === 'create'
             ? { after: entry.after }
             : { before: entry.before },
-      metadata: entry.action === 'create' ? (entry.metadata ?? null) : null,
+      metadata: entry.action === 'delete' ? null : (entry.metadata ?? null),
       createdAt: context.at,
     }))
   );

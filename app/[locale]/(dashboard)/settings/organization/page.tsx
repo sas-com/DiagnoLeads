@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
+import { LeadIntakeSettings } from '@/components/features/leads/lead-intake-settings';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
@@ -293,6 +294,9 @@ export default function OrganizationSettingsPage() {
             </div>
           </form>
         </Card>
+
+        {/* Intake members for consultation requests (#135) */}
+        {contextOrgId && <LeadIntakeSettings organizationId={contextOrgId} />}
 
         {/* Info Callout */}
         <Callout title={t('hintsTitle')} icon={CheckCircle} color="blue">

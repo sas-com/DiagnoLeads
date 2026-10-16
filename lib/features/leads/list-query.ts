@@ -22,11 +22,13 @@ import {
   jstDate,
 } from './types/pipeline';
 import {
+  type AssigneeFilter,
   LEAD_SORT_KEYS,
   type LeadSortKey,
   type ListLeadsInput,
   SQL_DECISION_FILTERS,
   type SqlDecisionFilter,
+  assigneeFilterSchema,
   jstDaySchema,
 } from './types/schemas';
 
@@ -48,6 +50,8 @@ export interface LeadListFilters {
   /** true: MQL only; false: not MQL */
   mql?: boolean;
   sql?: SqlDecisionFilter;
+  /** Assignee: 'me', 'unassigned' or a member's user id (#135) */
+  assignee?: AssigneeFilter;
   /** Name, email or company */
   search?: string;
 }
@@ -98,6 +102,7 @@ export const FIRST_SORT_ORDER: Record<LeadSortKey, SortOrder> = {
   dealPhase: 'asc',
   lastActivityAt: 'desc',
   mqlQualifiedAt: 'desc',
+  assignee: 'asc',
 };
 
 /** Search param names. Short, readable, stable: links to the list depend on them. */
@@ -113,6 +118,7 @@ export const LEAD_LIST_PARAMS = {
   consultation: 'consult',
   mql: 'mql',
   sql: 'sql',
+  assignee: 'assignee',
   search: 'q',
   sortBy: 'sort',
   sortOrder: 'order',
@@ -159,6 +165,7 @@ export const leadListUrlSchema = z.object({
   [LEAD_LIST_PARAMS.consultation]: flagParam,
   [LEAD_LIST_PARAMS.mql]: flagParam,
   [LEAD_LIST_PARAMS.sql]: z.enum(SQL_DECISION_FILTERS).optional().catch(undefined),
+  [LEAD_LIST_PARAMS.assignee]: assigneeFilterSchema.optional().catch(undefined),
   [LEAD_LIST_PARAMS.search]: z
     .string()
     .optional()
@@ -208,6 +215,7 @@ export function parseLeadListQuery(params: SearchParamsLike): LeadListQuery {
       consultation: p[LEAD_LIST_PARAMS.consultation],
       mql: p[LEAD_LIST_PARAMS.mql],
       sql: p[LEAD_LIST_PARAMS.sql],
+      assignee: p[LEAD_LIST_PARAMS.assignee],
       search: p[LEAD_LIST_PARAMS.search],
     }),
     sort: {
@@ -243,6 +251,7 @@ export function serializeLeadListQuery(query: LeadListQuery): URLSearchParams {
   }
   if (f.mql !== undefined) params.set(LEAD_LIST_PARAMS.mql, f.mql ? '1' : '0');
   if (f.sql) params.set(LEAD_LIST_PARAMS.sql, f.sql);
+  if (f.assignee) params.set(LEAD_LIST_PARAMS.assignee, f.assignee);
   if (f.search) params.set(LEAD_LIST_PARAMS.search, f.search);
   if (query.sort.by !== DEFAULT_LEAD_SORT.by || query.sort.order !== DEFAULT_LEAD_SORT.order) {
     params.set(LEAD_LIST_PARAMS.sortBy, query.sort.by);
@@ -286,6 +295,7 @@ export function normalizeFilters(filters: Partial<LeadListFilters>): LeadListFil
   if (filters.consultation !== undefined) result.consultation = filters.consultation;
   if (filters.mql !== undefined) result.mql = filters.mql;
   if (filters.sql) result.sql = filters.sql;
+  if (filters.assignee) result.assignee = filters.assignee;
   if (search) result.search = search;
   return result;
 }
@@ -326,6 +336,7 @@ export function toListLeadsInput(
   if (f.consultation !== undefined) input.consultationRequested = f.consultation;
   if (f.mql !== undefined) input.mql = f.mql;
   if (f.sql) input.sqlDecision = f.sql;
+  if (f.assignee) input.assignee = f.assignee;
   if (f.search) input.search = f.search;
   return input;
 }
@@ -358,6 +369,8 @@ export const LEAD_LIST_PRESETS = [
   'consultation',
   'newThisWeek',
   'negotiating',
+  'mine',
+  'unassigned',
 ] as const;
 export type LeadListPreset = (typeof LEAD_LIST_PRESETS)[number];
 
@@ -373,6 +386,12 @@ export function presetFilters(preset: LeadListPreset, now: Date = new Date()): L
       return { ...EMPTY_LEAD_FILTERS, createdFrom: jstWeekStart(now) };
     case 'negotiating':
       return { ...EMPTY_LEAD_FILTERS, status: ['negotiating'] };
+    case 'mine':
+      // 自分の担当 (#135)
+      return { ...EMPTY_LEAD_FILTERS, assignee: 'me' };
+    case 'unassigned':
+      // 担当未定 (#135)
+      return { ...EMPTY_LEAD_FILTERS, assignee: 'unassigned' };
   }
 }
 
@@ -431,6 +450,7 @@ export type LeadFilterChip =
   | { kind: 'consultation'; value: boolean }
   | { kind: 'mql'; value: boolean }
   | { kind: 'sql'; value: SqlDecisionFilter }
+  | { kind: 'assignee'; value: AssigneeFilter }
   | { kind: 'search'; value: string };
 
 /** One chip per condition (one per selected value for the multi-selects) */
@@ -452,6 +472,7 @@ export function filterChips(filters: LeadListFilters): LeadFilterChip[] {
   }
   if (filters.mql !== undefined) chips.push({ kind: 'mql', value: filters.mql });
   if (filters.sql) chips.push({ kind: 'sql', value: filters.sql });
+  if (filters.assignee) chips.push({ kind: 'assignee', value: filters.assignee });
   return chips;
 }
 
@@ -498,6 +519,9 @@ export function removeChip(filters: LeadListFilters, chip: LeadFilterChip): Lead
       break;
     case 'sql':
       next.sql = undefined;
+      break;
+    case 'assignee':
+      next.assignee = undefined;
       break;
     case 'search':
       next.search = undefined;

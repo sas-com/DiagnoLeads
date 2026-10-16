@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback } from 'react';
+import { useAssigneeChipLabel } from './assignee-filter';
 
 /** 'YYYY-MM-DD' -> 'YYYY/MM/DD' */
 export const formatDay = (day: string) => day.replaceAll('-', '/');
@@ -19,6 +20,7 @@ export function useFilterChipLabel(): (chip: LeadFilterChip) => string {
   const t = useTranslations('leadList');
   const tStatus = useTranslations('status');
   const tPipeline = useTranslations('pipeline');
+  const assigneeLabel = useAssigneeChipLabel();
 
   return useCallback(
     (chip: LeadFilterChip) => {
@@ -68,9 +70,11 @@ export function useFilterChipLabel(): (chip: LeadFilterChip) => string {
           return chip.value === 'not_qualified'
             ? t('chips.sqlNotQualified')
             : t('chips.sqlUndecided');
+        case 'assignee':
+          return assigneeLabel(chip);
       }
     },
-    [t, tStatus, tPipeline]
+    [t, tStatus, tPipeline, assigneeLabel]
   );
 }
 

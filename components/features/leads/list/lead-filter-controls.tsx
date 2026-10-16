@@ -36,6 +36,7 @@ import { CalendarDays, ChevronDown } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useId, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
+import { AssigneeFilterControl } from './assignee-filter';
 import { formatDay } from './lead-filter-chips';
 
 export type FilterLayout = 'inline' | 'stacked';
@@ -499,6 +500,11 @@ export function LeadFilterControls({
         from={filters.createdFrom}
         to={filters.createdTo}
         onChange={onChange}
+        layout={layout}
+      />
+      <AssigneeFilterControl
+        value={filters.assignee}
+        onChange={(assignee) => onChange({ assignee })}
         layout={layout}
       />
       <MoreConditionsFilter filters={filters} onChange={onChange} layout={layout} />
