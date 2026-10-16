@@ -1,5 +1,12 @@
 'use client';
 
+import { PrintButton, usePrintTitle } from '@/components/features/diagnosis-runner/print';
+import { QuestionField } from '@/components/features/diagnosis-runner/question-field';
+import {
+  localizeQuestion,
+  toggleChoice,
+} from '@/components/features/diagnosis-runner/question-view';
+import { DiagnosisRunnerProvider } from '@/components/features/diagnosis-runner/runner-context';
 import { axMigrationDefinition } from '@/lib/features/diagnostics/ax-migration/definition';
 import type {
   AxMigrationPublicResult,
@@ -16,13 +23,12 @@ import {
   ClipboardCheck,
   Loader2,
   MapPin,
-  Printer,
   RefreshCw,
   Sparkles,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { createElement, useEffect, useRef, useState } from 'react';
-import { QuestionField } from './question-field';
+import { AX_RUNNER_CONFIG } from './runner-config';
 import { trackAxEvent } from './tracking';
 
 /** Teal / yellow / coral of the site; white text only on the dark shades */
@@ -127,43 +133,20 @@ export function AxDiagnosisResult({
   };
 
   // A saved PDF is named after the page title: name it after this result while printing
-  useEffect(() => {
-    let previous: string | null = null;
-    const onBeforePrint = () => {
-      previous = document.title;
-      document.title = t('printTitle', {
-        platform: platformLabel || tDiagnosis('meta.title'),
-        date: new Date().toISOString().slice(0, 10),
-      });
-    };
-    const onAfterPrint = () => {
-      if (previous !== null) document.title = previous;
-      previous = null;
-    };
-    window.addEventListener('beforeprint', onBeforePrint);
-    window.addEventListener('afterprint', onAfterPrint);
-    return () => {
-      window.removeEventListener('beforeprint', onBeforePrint);
-      window.removeEventListener('afterprint', onAfterPrint);
-    };
-  }, [t, tDiagnosis, platformLabel]);
+  usePrintTitle(() =>
+    t('printTitle', {
+      platform: platformLabel || tDiagnosis('meta.title'),
+      date: new Date().toISOString().slice(0, 10),
+    })
+  );
 
   /** The browser's print dialog, which also saves a PDF; the print styles keep only the result */
-  const printResult = (location: 'top' | 'bottom') => {
-    trackAxEvent('ax_result_print', { platform, location });
-    window.print();
-  };
-
   const printButton = (location: 'top' | 'bottom') => (
-    <button
-      type="button"
-      onClick={() => printResult(location)}
-      aria-describedby="ax-print-hint"
-      className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-bold text-ax-ink hover:bg-ax-mist focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ax-teal-dark print:hidden"
-    >
-      <Printer className="h-4 w-4" aria-hidden="true" />
-      {t('print')}
-    </button>
+    <PrintButton
+      label={t('print')}
+      hintId="ax-print-hint"
+      onPrint={() => trackAxEvent('ax_result_print', { platform, location })}
+    />
   );
 
   const failedMessage = (location: 'top' | 'bottom') =>
@@ -611,11 +594,7 @@ function FollowUpQuestions({ locale, answers, submissionId, onUpdated }: FollowU
   const toggle = (questionId: string, value: string, checked: boolean, exclusive: string[]) => {
     setValues((prev) => {
       const current = Array.isArray(prev[questionId]) ? (prev[questionId] as string[]) : [];
-      let next: string[];
-      if (!checked) next = current.filter((v) => v !== value);
-      else if (exclusive.includes(value)) next = [value];
-      else next = [...current.filter((v) => !exclusive.includes(v)), value];
-      return { ...prev, [questionId]: next };
+      return { ...prev, [questionId]: toggleChoice(current, value, checked, exclusive).next };
     });
   };
 
@@ -655,18 +634,19 @@ function FollowUpQuestions({ locale, answers, submissionId, onUpdated }: FollowU
           </button>
           {open && (
             <div id="ax-follow-up-questions" className="mt-6 space-y-8">
-              {questions.map((question) => (
-                <QuestionField
-                  key={question.id}
-                  question={question}
-                  locale={locale}
-                  value={values[question.id]}
-                  onSingle={(value) => setValues((prev) => ({ ...prev, [question.id]: value }))}
-                  onToggle={(value, checked) =>
-                    toggle(question.id, value, checked, question.exclusiveOptions ?? [])
-                  }
-                />
-              ))}
+              <DiagnosisRunnerProvider config={AX_RUNNER_CONFIG}>
+                {questions.map((question) => (
+                  <QuestionField
+                    key={question.id}
+                    question={localizeQuestion(question, locale)}
+                    value={values[question.id]}
+                    onSingle={(value) => setValues((prev) => ({ ...prev, [question.id]: value }))}
+                    onToggle={(value, checked) =>
+                      toggle(question.id, value, checked, question.exclusiveOptions ?? [])
+                    }
+                  />
+                ))}
+              </DiagnosisRunnerProvider>
               {state === 'failed' && (
                 <p role="alert" className="text-sm font-bold text-red-700">
                   {t('failed')}

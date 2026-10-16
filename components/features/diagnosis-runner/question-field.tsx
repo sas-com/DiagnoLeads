@@ -3,32 +3,26 @@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import type { DiagnosticLocale, DiagnosticQuestion } from '@/lib/features/diagnostics/types';
 import { cn } from '@/lib/utils';
 import { AlertCircle } from 'lucide-react';
-import { useTranslations } from 'next-intl';
-
-export const CHECKBOX_CLASS =
-  'border-gray-500 focus-visible:ring-ax-teal-dark data-[state=checked]:border-ax-teal-dark data-[state=checked]:bg-ax-teal-dark';
+import type { ChoiceOptionView, QuestionView } from './question-view';
+import { useRunnerTranslations } from './runner-context';
+import { CHECKBOX_CLASS } from './styles';
 
 interface QuestionFieldProps {
-  question: DiagnosticQuestion;
-  locale: DiagnosticLocale;
+  question: QuestionView;
   value: string | string[] | undefined;
   error?: string;
   onSingle: (value: string) => void;
   onToggle: (value: string, checked: boolean) => void;
 }
 
-export function QuestionField({
-  question,
-  locale,
-  value,
-  error,
-  onSingle,
-  onToggle,
-}: QuestionFieldProps) {
-  const t = useTranslations('axDiagnosis');
+/**
+ * One question as a fieldset: the legend names it (and carries the error once), the options are
+ * cards. Its legend id is `q-{id}`, which is what focusFirstError expects.
+ */
+export function QuestionField({ question, value, error, onSingle, onToggle }: QuestionFieldProps) {
+  const t = useRunnerTranslations();
   const legendId = `q-${question.id}`;
   const exclusive = question.exclusiveOptions ?? [];
   const optionClass = (selected: boolean) =>
@@ -39,26 +33,26 @@ export function QuestionField({
         : 'border-gray-200 bg-white text-gray-800 hover:border-gray-300'
     );
   // The hint is a description of the option, not part of its name
-  const optionText = (option: DiagnosticQuestion['options'][number], id: string) => (
+  const optionText = (option: ChoiceOptionView, id: string) => (
     <span>
-      <span className="block font-medium">{option.label[locale]}</span>
-      {option.hint && (
+      <span className="block font-medium">{option.label}</span>
+      {option.hint !== undefined && (
         <span
           id={`${id}-hint`}
           aria-hidden="true"
           className="mt-0.5 block text-xs leading-relaxed text-gray-600"
         >
-          {option.hint[locale]}
+          {option.hint}
         </span>
       )}
     </span>
   );
-  const hintId = (option: DiagnosticQuestion['options'][number], id: string) =>
-    option.hint ? `${id}-hint` : undefined;
+  const hintId = (option: ChoiceOptionView, id: string) =>
+    option.hint !== undefined ? `${id}-hint` : undefined;
   // Name the options that clear the others, as they are written on screen
   const exclusiveLabels = question.options
     .filter((option) => exclusive.includes(option.value))
-    .map((option) => t('quoted', { label: option.label[locale] }))
+    .map((option) => t('quoted', { label: option.label }))
     .join(t('listJoiner'));
 
   return (
@@ -67,7 +61,7 @@ export function QuestionField({
       // The error is part of the group name (legend) only, so it is read once
       aria-describedby={
         [
-          question.description ? `${legendId}-description` : '',
+          question.description !== undefined ? `${legendId}-description` : '',
           question.type === 'multiple' ? `${legendId}-hint` : '',
         ]
           .filter(Boolean)
@@ -75,7 +69,7 @@ export function QuestionField({
       }
     >
       <legend id={legendId} className="mb-1 font-bold leading-relaxed">
-        {question.label[locale]}
+        {question.label}
         {!question.required && (
           <span className="ml-2 inline-block rounded bg-gray-100 px-1.5 py-0.5 align-middle text-xs font-bold text-gray-600">
             {t('optional')}
@@ -83,9 +77,9 @@ export function QuestionField({
         )}
         {error && <span className="sr-only">{error}</span>}
       </legend>
-      {question.description && (
+      {question.description !== undefined && (
         <p id={`${legendId}-description`} className="text-sm leading-relaxed text-gray-600">
-          {question.description[locale]}
+          {question.description}
         </p>
       )}
       {question.type === 'multiple' && (
