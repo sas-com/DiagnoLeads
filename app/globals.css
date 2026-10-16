@@ -320,6 +320,26 @@
   --animate-shimmer: shimmer 1.5s infinite;
 }
 
+/* shadcn/ui text tokens (text-foreground, text-muted-foreground, ring-ring), switched for dark
+   mode below. Components already used them, but they were not defined (Refs #107) */
+@theme inline {
+  --color-foreground: var(--app-foreground);
+  --color-muted-foreground: var(--app-muted-foreground);
+  --color-ring: var(--app-ring);
+}
+
+:root {
+  --app-foreground: #101828; /* gray-900 */
+  --app-muted-foreground: #667085; /* gray-500 */
+  --app-ring: #14b8a6; /* teal-500 */
+}
+
+.dark {
+  --app-foreground: #f2f4f7; /* gray-100 */
+  --app-muted-foreground: #98a2b3; /* gray-400 */
+  --app-ring: #2dd4bf; /* teal-400 */
+}
+
 /* Border color compatibility for Tailwind v4 */
 @layer base {
   *,

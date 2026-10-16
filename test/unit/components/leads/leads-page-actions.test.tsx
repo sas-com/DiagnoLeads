@@ -1,11 +1,12 @@
 /**
- * Leads page: the row menu's edit/delete, the details after saving, the details header (Refs #106)
- * Real next-intl messages and UI components; the lead hooks and tRPC are mocked over a small store
+ * Leads page: the row menu, the side panel, status / deal phase changed from a row
+ * (Refs #106, #108, #109). Real next-intl messages and UI components; the lead hooks and tRPC
+ * are mocked over a small store
  */
 import LeadsPage from '@/app/[locale]/(dashboard)/leads/page';
 import type { Lead } from '@/lib/db/schema';
 import messages from '@/locales/ja/common.json';
-import { configure, render, screen, waitFor, within } from '@testing-library/react';
+import { act, configure, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -58,10 +59,19 @@ const store = vi.hoisted(() => {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
+    access: { canCreate: true, canEdit: true, canDelete: true },
     updateMutate: vi.fn(),
     deleteMutate: vi.fn(),
+    push: vi.fn(),
+    replace: vi.fn(),
   };
 });
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: store.push, replace: store.replace, prefetch: vi.fn(), back: vi.fn() }),
+  usePathname: () => '/ja/leads',
+  useSearchParams: () => new URLSearchParams(),
+}));
 
 // Like next/dynamic, each component loads behind its own boundary
 vi.mock('next/dynamic', async () => {
@@ -89,6 +99,7 @@ vi.mock('@/hooks/use-leads', async () => {
     },
     useCreateLead: () => ({ mutateAsync: vi.fn(), isPending: false }),
     useUpdateLead: () => ({ mutateAsync: store.updateMutate, isPending: false }),
+    useLeadAccess: () => store.access,
     useDeleteLead: () => ({ mutateAsync: store.deleteMutate, isPending: false }),
   };
 });
@@ -112,17 +123,26 @@ vi.mock('@/lib/trpc/client', async () => {
         bulkDelete: { useMutation: mutation },
         bulkCreate: { useMutation: mutation },
       },
+      // The side panel's hearing and activity summaries
+      leadHearings: {
+        listByLead: {
+          useQuery: () => ({ data: { items: [], canEdit: true }, isLoading: false, isError: false }),
+        },
+        summary: { useQuery: () => ({ data: undefined, isLoading: false }) },
+      },
+      leadActivity: {
+        list: {
+          useQuery: () => ({
+            data: { items: [], nextCursor: null },
+            isLoading: false,
+            isError: false,
+          }),
+        },
+      },
     },
   };
 });
 
-// Cards with their own queries, not under test here
-vi.mock('@/components/features/lead-hearings/lead-hearings-card', () => ({
-  LeadHearingsCard: () => null,
-}));
-vi.mock('@/components/features/lead-activity/lead-activity-card', () => ({
-  LeadActivityCard: () => null,
-}));
 vi.mock('@/lib/features/reports/pdf-export-service', () => ({
   downloadPDF: vi.fn(),
   exportLeadsToPDF: vi.fn(),
@@ -141,6 +161,10 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  window.history.replaceState(null, '', '/ja/leads');
+  store.access = { canCreate: true, canEdit: true, canDelete: true };
+  store.push.mockReset();
+  store.replace.mockReset();
   store.set([
     makeLead({ id: YAMADA_ID, name: '山田 太郎', email: 'yamada@example.jp', company: '三田製作所' }),
     makeLead({ id: SATO_ID, name: '佐藤 花子', email: 'sato@example.jp', company: null }),
@@ -183,15 +207,18 @@ const openRowMenu = async (user: ReturnType<typeof userEvent.setup>, name: strin
   return screen.findByRole('menu');
 };
 
+const statusOf = async (name: string) =>
+  within(await rowOf(name)).getByRole('combobox', { name: /ステータスを変更/ });
+
 describe('LeadsPage row menu', () => {
-  it('opens the edit dialog for the lead the menu belongs to', async () => {
+  it('edits on the lead page, with the pipeline card open (no edit dialog)', async () => {
     const user = userEvent.setup();
     renderPage();
     const menu = await openRowMenu(user, '佐藤 花子');
     await user.click(within(menu).getByRole('menuitem', { name: '編集' }));
 
-    const dialog = await screen.findByRole('dialog', { name: 'リードを編集' });
-    expect(within(dialog).getByRole('textbox', { name: /メール/ })).toHaveValue('sato@example.jp');
+    expect(store.push).toHaveBeenCalledWith(`/ja/leads/${SATO_ID}?edit=pipeline`);
+    expect(screen.queryByRole('dialog', { name: 'リードを編集' })).not.toBeInTheDocument();
   });
 
   it('asks for confirmation and deletes only after confirming', async () => {
@@ -218,8 +245,87 @@ describe('LeadsPage row menu', () => {
   });
 });
 
-describe('LeadsPage details', () => {
-  it('titles the details with the lead name and its company and email', async () => {
+describe('LeadsPage status and deal phase in the rows', () => {
+  it('changes the status from a row without opening the side panel', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await statusOf('佐藤 花子'));
+    await user.click(await screen.findByRole('option', { name: 'ナーチャリング' }));
+
+    await waitFor(() =>
+      expect(store.updateMutate).toHaveBeenCalledWith({
+        id: SATO_ID,
+        organizationId: ORG_ID,
+        status: 'nurturing',
+      })
+    );
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await waitFor(async () =>
+      expect(await statusOf('佐藤 花子')).toHaveAccessibleName(/現在：ナーチャリング/)
+    );
+  });
+
+  it('changes the deal phase from a row and goes back when saving fails', async () => {
+    let fail: (error: Error) => void = () => {};
+    store.updateMutate.mockImplementation(
+      () =>
+        new Promise((_, reject) => {
+          fail = reject;
+        })
+    );
+    const user = userEvent.setup();
+    renderPage();
+    const row = await rowOf('山田 太郎');
+    await user.click(within(row).getByRole('combobox', { name: /商談フェーズを変更/ }));
+    await user.click(await screen.findByRole('option', { name: '初回ヒアリング' }));
+
+    expect(store.updateMutate).toHaveBeenCalledWith({
+      id: YAMADA_ID,
+      organizationId: ORG_ID,
+      dealPhase: 'initial_hearing',
+    });
+    expect(
+      within(await rowOf('山田 太郎')).getByRole('combobox', { name: /現在：初回ヒアリング/ })
+    ).toBeInTheDocument();
+    await act(async () => fail(new Error('boom')));
+    await waitFor(async () =>
+      expect(
+        within(await rowOf('山田 太郎')).getByRole('combobox', { name: /商談フェーズを変更/ })
+      ).toHaveAccessibleName(/現在：フェーズ未設定/)
+    );
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('shows the change in the side panel', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await statusOf('山田 太郎'));
+    await user.click(await screen.findByRole('option', { name: '商談中' }));
+    await waitFor(() => expect(store.updateMutate).toHaveBeenCalled());
+
+    await user.click(await screen.findByText('山田 太郎'));
+    const sheet = await screen.findByRole('dialog', { name: '山田 太郎' });
+    expect(
+      await within(sheet).findByRole('combobox', { name: /ステータスを変更（現在：商談中）/ })
+    ).toBeInTheDocument();
+  });
+
+  it('gives read-only roles plain badges and no edit or delete', async () => {
+    store.access = { canCreate: false, canEdit: false, canDelete: false };
+    const user = userEvent.setup();
+    renderPage();
+    const row = await rowOf('山田 太郎');
+    expect(within(row).queryByRole('combobox')).not.toBeInTheDocument();
+    expect(within(row).getByText('新規')).toBeInTheDocument();
+
+    const menu = await openRowMenu(user, '山田 太郎');
+    expect(within(menu).queryByRole('menuitem', { name: '編集' })).not.toBeInTheDocument();
+    expect(within(menu).queryByRole('menuitem', { name: '削除' })).not.toBeInTheDocument();
+  });
+});
+
+describe('LeadsPage side panel', () => {
+  it('titles the panel with the lead name and its company and email', async () => {
     const user = userEvent.setup();
     renderPage();
     await user.click(await screen.findByText('山田 太郎'));
@@ -240,56 +346,41 @@ describe('LeadsPage details', () => {
     expect(sheet).toHaveAccessibleDescription('sato@example.jp');
   });
 
-  it('keeps the details open after saving and shows the saved values', async () => {
+  it('is a light summary that leads to the lead page', async () => {
     const user = userEvent.setup();
     renderPage();
     await user.click(await screen.findByText('山田 太郎'));
     const sheet = await screen.findByRole('dialog', { name: '山田 太郎' });
 
-    // The details load lazily: wait for the button (slow under coverage instrumentation)
-    await user.click(await within(sheet).findByRole('button', { name: '編集' }));
-    const dialog = await screen.findByRole('dialog', { name: 'リードを編集' });
-    const company = within(dialog).getByRole('textbox', { name: /^会社名/ });
-    await user.clear(company);
-    await user.type(company, '三田製作所 東京支店');
-    await user.click(within(dialog).getByRole('button', { name: '更新' }));
-
-    await waitFor(() =>
-      expect(store.updateMutate).toHaveBeenCalledWith({
-        company: '三田製作所 東京支店',
-        id: YAMADA_ID,
-        organizationId: ORG_ID,
-      })
+    expect(await within(sheet).findByRole('link', { name: '詳細ページを開く' })).toHaveAttribute(
+      'href',
+      `/ja/leads/${YAMADA_ID}`
     );
-    await waitFor(() =>
-      expect(screen.queryByRole('dialog', { name: 'リードを編集' })).not.toBeInTheDocument()
+    expect(within(sheet).getByRole('link', { name: 'ヒアリングを記録' })).toHaveAttribute(
+      'href',
+      `/ja/leads/${YAMADA_ID}?tab=hearings&record=1`
     );
-    const reopened = screen.getByRole('dialog', { name: '山田 太郎' });
-    expect(reopened).toHaveAccessibleDescription('三田製作所 東京支店 · yamada@example.jp');
-    expect(within(reopened).getByText('三田製作所 東京支店')).toBeInTheDocument();
+    // Editing and deleting are on the page and in the row menu
+    expect(within(sheet).queryByRole('button', { name: '編集' })).not.toBeInTheDocument();
+    expect(within(sheet).queryByRole('button', { name: 'その他の操作' })).not.toBeInTheDocument();
+    expect(within(sheet).queryByText('未設定')).not.toBeInTheDocument();
   });
 
-  it('puts delete in the more-actions menu, confirms it, then closes the details', async () => {
+  it('has no record button for read-only roles', async () => {
+    store.access = { canCreate: false, canEdit: false, canDelete: false };
     const user = userEvent.setup();
     renderPage();
     await user.click(await screen.findByText('山田 太郎'));
     const sheet = await screen.findByRole('dialog', { name: '山田 太郎' });
+    expect(await within(sheet).findByRole('link', { name: '詳細ページを開く' })).toBeInTheDocument();
+    expect(within(sheet).queryByRole('link', { name: 'ヒアリングを記録' })).not.toBeInTheDocument();
+  });
+});
 
-    // Edit is the only visible action button; delete is not a button of its own
-    expect(within(sheet).queryByRole('button', { name: '削除' })).not.toBeInTheDocument();
-    await user.click(await within(sheet).findByRole('button', { name: 'その他の操作' }));
-    const menu = await screen.findByRole('menu');
-    await user.click(within(menu).getByRole('menuitem', { name: '削除' }));
-
-    const confirm = await screen.findByRole('alertdialog');
-    expect(store.deleteMutate).not.toHaveBeenCalled();
-    await user.click(within(confirm).getByRole('button', { name: '削除' }));
-
-    await waitFor(() =>
-      expect(store.deleteMutate).toHaveBeenCalledWith({ id: YAMADA_ID, organizationId: ORG_ID })
-    );
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    // The page is usable again after the menu and the two dialogs
-    expect(document.body.style.pointerEvents).not.toBe('none');
+describe('LeadsPage old deep links', () => {
+  it('sends /leads?leadId= to the lead page', async () => {
+    window.history.replaceState(null, '', `/ja/leads?leadId=${SATO_ID}`);
+    renderPage();
+    await waitFor(() => expect(store.replace).toHaveBeenCalledWith(`/ja/leads/${SATO_ID}`));
   });
 });

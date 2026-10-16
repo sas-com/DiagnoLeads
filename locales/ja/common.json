@@ -955,7 +955,13 @@
     },
     "agencyName": "代行会社名",
     "acquisitionCost": "獲得費用（税別）",
-    "dealPhaseReachedAt": "商談フェーズの到達日"
+    "dealPhaseReachedAt": "商談フェーズの到達日",
+    "placeholders": {
+      "email": "taro@example.com",
+      "name": "山田 太郎",
+      "company": "株式会社サンプル",
+      "phone": "03-1234-5678"
+    }
   },
   "settings": {
     "organization": {
@@ -2734,5 +2740,116 @@
     "description": "お客様に案内する診断ページです。回答はリードとしてこの画面に届きます。",
     "open": "診断ページを開く",
     "newTab": "（新しいタブで開きます）"
+  },
+  "leadDetail": {
+    "backToList": "リード一覧",
+    "notFound": {
+      "title": "リードが見つかりません",
+      "description": "削除されたか、この組織のリードではありません。",
+      "back": "リード一覧へ戻る"
+    },
+    "loadError": "リードを読み込めませんでした。",
+    "retry": "再読み込み",
+    "recordHearing": "ヒアリングを記録",
+    "openPage": "詳細ページを開く",
+    "tabs": {
+      "overview": "概要",
+      "hearings": "ヒアリング",
+      "activity": "活動履歴",
+      "diagnosis": "診断回答"
+    },
+    "score": "スコア",
+    "scoreValue": "スコア {score}",
+    "noScore": "スコアなし",
+    "noDealPhase": "フェーズ未設定",
+    "cards": {
+      "contact": "連絡先",
+      "inflow": "流入の情報",
+      "pipeline": "営業パイプライン",
+      "record": "記録"
+    },
+    "empty": {
+      "count": "未設定 {count} 件",
+      "fill": "入力する",
+      "list": "未設定の項目"
+    },
+    "fields": {
+      "mql": "MQL判定",
+      "mqlYes": "MQL（{date}）",
+      "reachedAt": "{phase}：{date}"
+    },
+    "edit": {
+      "edit": "編集",
+      "editCard": "{card}を編集",
+      "save": "保存",
+      "saving": "保存中...",
+      "cancel": "キャンセル",
+      "noChanges": "変更はありません",
+      "invalidNumber": "数値を入力してください",
+      "integer": "整数で入力してください",
+      "discardTitle": "保存していない変更があります",
+      "discardDescription": "入力中の変更は保存されていません。破棄しますか？",
+      "discard": "変更を破棄",
+      "keepEditing": "編集を続ける",
+      "readOnly": "閲覧のみの権限です"
+    },
+    "quick": {
+      "status": "ステータスを変更（現在：{value}）",
+      "dealPhase": "商談フェーズを変更（現在：{value}）",
+      "lostReasonPrompt": "失注・保留理由を入力しておきましょう",
+      "lostReasonAction": "理由を入力"
+    },
+    "hearing": {
+      "title": "商談のまとめ",
+      "latest": "最新のヒアリング：{date}",
+      "none": "まだヒアリングの記録はありません。",
+      "nextSteps": "次に確認すること",
+      "noNextSteps": "次に確認することはありません。",
+      "more": "ほか {count} 件",
+      "openSummary": "まとめを見る",
+      "openHearing": "ヒアリングを開く",
+      "loadError": "ヒアリングを読み込めませんでした。"
+    },
+    "activity": {
+      "recent": "最近の活動",
+      "showAll": "すべての活動を見る",
+      "empty": "まだ活動はありません。",
+      "loadError": "活動を読み込めませんでした。"
+    },
+    "diagnosis": {
+      "title": "診断結果",
+      "platform": "移行元のシステム",
+      "targetSystem": "対象システム",
+      "difficulty": "移行難易度の目安",
+      "urgency": "刷新の緊急度",
+      "primaryChallenge": "優先して取り組むべき課題",
+      "challenges": "選択された課題",
+      "department": "部署",
+      "diagnosedAt": "診断日時",
+      "detailsAnsweredAt": "追加の質問への回答",
+      "noPrimaryChallenge": "特になし",
+      "consultation": "相談の申込みあり",
+      "mql": "MQL候補",
+      "mqlHelp": "診断の回答が、マーケティングで見込みありとする条件を満たしています",
+      "sql": "商談化の兆しあり",
+      "sqlHelp": "時期や予算など、商談につながりやすい回答があります",
+      "needsHearing": "ヒアリングで確認が必要",
+      "needsHearingHelp": "「わからない」の回答が多く、結果の精度が高くありません",
+      "otherSystems": "ほかに診断したシステム",
+      "showAnswers": "回答を見る",
+      "extraTitle": "その他のデータ（{count} 件）",
+      "yes": "はい",
+      "no": "いいえ"
+    },
+    "answers": {
+      "empty": "診断の回答はありません。",
+      "submittedAt": "{date} の診断",
+      "loadError": "診断の回答を読み込めませんでした。",
+      "show": "回答を見る",
+      "hide": "回答を閉じる"
+    },
+    "sheet": {
+      "keyFacts": "要点"
+    }
   }
 }

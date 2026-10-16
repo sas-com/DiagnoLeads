@@ -196,7 +196,7 @@ export async function notifyAxMigrationSubmission(n: AxMigrationNotification): P
     isEmailConfigured() &&
     (await withinSalesEmailQuota(n.organizationId))
   ) {
-    const leadUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/ja/leads?leadId=${n.leadId}`;
+    const leadUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/ja/leads/${n.leadId}`;
     tasks.push(
       sendEmail({
         to: salesRecipients,

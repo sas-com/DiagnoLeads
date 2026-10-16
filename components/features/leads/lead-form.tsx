@@ -120,7 +120,7 @@ export function LeadForm({ lead, onSubmit, isLoading }: LeadFormProps) {
             <FormItem>
               <FormLabel>{t('email')} *</FormLabel>
               <FormControl>
-                <Input type="email" placeholder="example@example.com" {...field} />
+                <Input type="email" placeholder={t('placeholders.email')} {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -134,7 +134,7 @@ export function LeadForm({ lead, onSubmit, isLoading }: LeadFormProps) {
             <FormItem>
               <FormLabel>{t('name')}</FormLabel>
               <FormControl>
-                <Input placeholder="John Doe" {...field} />
+                <Input placeholder={t('placeholders.name')} {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -148,7 +148,7 @@ export function LeadForm({ lead, onSubmit, isLoading }: LeadFormProps) {
             <FormItem>
               <FormLabel>{t('company')}</FormLabel>
               <FormControl>
-                <Input placeholder="Acme Corp" {...field} />
+                <Input placeholder={t('placeholders.company')} {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -162,7 +162,7 @@ export function LeadForm({ lead, onSubmit, isLoading }: LeadFormProps) {
             <FormItem>
               <FormLabel>{t('phone')}</FormLabel>
               <FormControl>
-                <Input placeholder="+1 (555) 123-4567" {...field} />
+                <Input placeholder={t('placeholders.phone')} {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -205,7 +205,6 @@ export function LeadForm({ lead, onSubmit, isLoading }: LeadFormProps) {
                   type="number"
                   min={0}
                   max={100}
-                  placeholder="0"
                   {...field}
                   value={field.value ?? ''}
                   onChange={(e) =>

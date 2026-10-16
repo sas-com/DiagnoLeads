@@ -1,10 +1,12 @@
 'use client';
 
-import { useCreateLead, useDeleteLead, useListLeads, useUpdateLead } from '@/hooks/use-leads';
+import { useCreateLead, useDeleteLead, useLeadAccess, useListLeads } from '@/hooks/use-leads';
 import { useOrganization } from '@/hooks/use-organization';
 import { useLocale, useTranslations } from 'next-intl';
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,15 +14,8 @@ import { Card } from '@/components/ui/card';
 import { Metric, Text, Title } from '@/components/ui/metric';
 import { ProgressBar } from '@/components/ui/progress-bar';
 
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
 import type { Lead } from '@/lib/db/schema';
-import type { CreateLeadInput, UpdateLeadInput } from '@/lib/features/leads/types';
+import type { CreateLeadInput } from '@/lib/features/leads/types';
 import { trpc } from '@/lib/trpc/client';
 import { Plus, Target, TrendingUp, Upload, UserCheck, Users } from 'lucide-react';
 
@@ -49,10 +44,10 @@ const LeadDialog = dynamic(
   { ssr: false }
 );
 
-const LeadDetails = dynamic(
+const LeadSummarySheet = dynamic(
   () =>
-    import('@/components/features/leads/lead-details').then((mod) => ({
-      default: mod.LeadDetails,
+    import('@/components/features/leads/lead-summary-sheet').then((mod) => ({
+      default: mod.LeadSummarySheet,
     })),
   { ssr: false }
 );
@@ -88,9 +83,11 @@ function isValidUUID(str: string): boolean {
 
 export default function LeadsPage() {
   const t = useTranslations('leads');
+  const tDetail = useTranslations('leadDetail');
   const tStatus = useTranslations('status');
   const tCommon = useTranslations('common');
   const locale = useLocale();
+  const router = useRouter();
   const { organizationId: contextOrgId, isLoading: contextLoading } = useOrganization();
 
   // Only use organization ID if it's a valid UUID
@@ -98,26 +95,23 @@ export default function LeadsPage() {
   const organizationId = hasValidOrgId && contextOrgId ? contextOrgId : '';
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [detailsSheetOpen, setDetailsSheetOpen] = useState(false);
-  // The lead shown in the details / edited is tracked by id and read from the queries, so the
-  // details show the saved values after an edit instead of the copy taken from the list
+  // The lead shown in the side panel is tracked by id and read from the queries, so the panel
+  // shows the saved values after a change instead of the copy taken from the list
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   // Lead whose deletion is being confirmed from the list's row menu
   const [leadToDelete, setLeadToDelete] = useState<Lead | null>(null);
+  const access = useLeadAccess(organizationId);
+  const leadHref = (id: string) => `/${locale}/leads/${id}`;
 
-  // Deep link (/leads?leadId=...): notifications and the hearing editor's back link open the
-  // lead's details. Read from the URL after mount (useSearchParams would need a Suspense
-  // boundary for this client page). The details open once the lead has loaded.
-  const [openWhenLoaded, setOpenWhenLoaded] = useState(false);
+  // Old deep links (/leads?leadId=...) from notifications and the hearing editor's back link go
+  // to the lead page, which is where a lead's details live now (Refs #108). Read from the URL
+  // after mount (useSearchParams would need a Suspense boundary for this client page).
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get('leadId');
-    if (id && isValidUUID(id)) {
-      setSelectedLeadId(id);
-      setOpenWhenLoaded(true);
-    }
-  }, []);
+    if (id && isValidUUID(id)) router.replace(`/${locale}/leads/${id}`);
+  }, [router, locale]);
   // Refetched when the lead is updated (useUpdateLead invalidates leads.get)
   const selectedLeadQuery = trpc.leads.get.useQuery(
     { organizationId, id: selectedLeadId ?? '' },
@@ -127,12 +121,6 @@ export default function LeadsPage() {
     selectedLeadQuery.data && selectedLeadQuery.data.id === selectedLeadId
       ? (selectedLeadQuery.data as Lead)
       : null;
-  useEffect(() => {
-    if (openWhenLoaded && loadedLead) {
-      setDetailsSheetOpen(true);
-      setOpenWhenLoaded(false);
-    }
-  }, [openWhenLoaded, loadedLead]);
 
   // Fetch leads list
   const {
@@ -147,7 +135,6 @@ export default function LeadsPage() {
 
   // Mutations
   const createLead = useCreateLead();
-  const updateLead = useUpdateLead();
   const deleteLead = useDeleteLead();
 
   const leads = leadsData?.items || [];
@@ -185,38 +172,9 @@ export default function LeadsPage() {
     averageScore,
   } = stats;
 
-  const handleCreateLead = async (
-    data: Omit<CreateLeadInput | UpdateLeadInput, 'organizationId'>
-  ) => {
-    // Cast to CreateLeadInput for create operation (status is required)
-    const createData = data as Omit<CreateLeadInput, 'organizationId'>;
-    await createLead.mutateAsync({
-      ...createData,
-      organizationId,
-    });
+  const handleCreateLead = async (data: Omit<CreateLeadInput, 'organizationId'>) => {
+    await createLead.mutateAsync({ ...data, organizationId });
     setCreateDialogOpen(false);
-  };
-
-  const handleUpdateLead = async (
-    data: Omit<CreateLeadInput | UpdateLeadInput, 'organizationId'>
-  ) => {
-    if (!selectedLead) return;
-
-    // Cast to UpdateLeadInput for update operation. The form does not edit the diagnosis
-    // responses: sending back the copy loaded with the list would undo answers recorded since
-    // (another system diagnosed, a consultation request, follow-up answers)
-    const { responses: _loaded, ...updateData } = data as Omit<
-      UpdateLeadInput,
-      'organizationId' | 'id'
-    >;
-    await updateLead.mutateAsync({
-      ...updateData,
-      id: selectedLead.id,
-      organizationId,
-    });
-    // Only the dialog closes: when editing from the details they stay open and show the
-    // refetched lead
-    setEditDialogOpen(false);
   };
 
   const deleteLeadById = async (id: string) => {
@@ -232,11 +190,6 @@ export default function LeadsPage() {
     }
   };
 
-  const handleDeleteLead = async () => {
-    if (!selectedLead) return;
-    await deleteLeadById(selectedLead.id);
-  };
-
   const handleConfirmRowDelete = async () => {
     if (!leadToDelete) return;
     await deleteLeadById(leadToDelete.id);
@@ -248,20 +201,22 @@ export default function LeadsPage() {
     setDetailsSheetOpen(true);
   };
 
-  // From the details: the dialog opens over them and they stay open
-  const handleEditClick = () => {
-    setEditDialogOpen(true);
-  };
-
-  // From the list's row menu
+  // Editing happens in place on the lead page: the row menu opens it with the pipeline card in
+  // edit mode (Refs #109)
   const handleRowEdit = (lead: Lead) => {
-    setSelectedLeadId(lead.id);
-    setEditDialogOpen(true);
+    router.push(`${leadHref(lead.id)}?edit=pipeline`);
   };
 
-  const sheetDescription = selectedLead
-    ? [selectedLead.company, selectedLead.email].filter(Boolean).join(' · ')
-    : '';
+  // A lost lead should say why: offer to add it on the lead page, without blocking the list
+  const handleLost = (lead: Lead) => {
+    if (lead.lostReason) return;
+    toast(tDetail('quick.lostReasonPrompt'), {
+      action: {
+        label: tDetail('quick.lostReasonAction'),
+        onClick: () => router.push(`${leadHref(lead.id)}?edit=pipeline&field=lostReason`),
+      },
+    });
+  };
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-8">
@@ -382,9 +337,11 @@ export default function LeadsPage() {
         isLoading={isLoading}
         organizationId={organizationId}
         onLeadClick={handleLeadClick}
-        onEdit={handleRowEdit}
-        onDelete={setLeadToDelete}
+        onEdit={access.canEdit ? handleRowEdit : undefined}
+        onDelete={access.canDelete ? setLeadToDelete : undefined}
         onRefresh={() => refetch()}
+        canEdit={access.canEdit}
+        onLost={handleLost}
       />
 
       {/* Create Lead Dialog */}
@@ -396,42 +353,15 @@ export default function LeadsPage() {
         isLoading={createLead.isPending}
       />
 
-      {/* Edit Lead Dialog */}
-      <LeadDialog
-        open={editDialogOpen}
-        onOpenChange={setEditDialogOpen}
+      {/* Side panel with the lead's key facts; the details are on the lead page */}
+      <LeadSummarySheet
         lead={selectedLead}
+        open={detailsSheetOpen}
+        onOpenChange={setDetailsSheetOpen}
         organizationId={organizationId}
-        onSubmit={handleUpdateLead}
-        isLoading={updateLead.isPending}
+        canEdit={access.canEdit}
+        onLost={handleLost}
       />
-
-      {/* Lead Details Sheet */}
-      <Sheet open={detailsSheetOpen} onOpenChange={setDetailsSheetOpen}>
-        <SheetContent
-          className="w-full sm:max-w-2xl overflow-y-auto"
-          // No description when the lead has neither a company nor an email shown
-          {...(sheetDescription ? {} : { 'aria-describedby': undefined })}
-        >
-          <SheetHeader className="pr-8">
-            <SheetTitle className="text-2xl font-bold">
-              {selectedLead ? selectedLead.name || t('nameNotSet') : t('leadDetails')}
-            </SheetTitle>
-            {sheetDescription && <SheetDescription>{sheetDescription}</SheetDescription>}
-          </SheetHeader>
-
-          {selectedLead && (
-            <div className="mt-6">
-              <LeadDetails
-                lead={selectedLead}
-                onEdit={handleEditClick}
-                onDelete={handleDeleteLead}
-                isDeleting={deleteLead.isPending}
-              />
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
 
       {/* Delete confirmation from the row menu */}
       <LeadDeleteDialog

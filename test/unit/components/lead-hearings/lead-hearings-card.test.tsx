@@ -3,7 +3,7 @@
  */
 import { LeadHearingsCard } from '@/components/features/lead-hearings/lead-hearings-card';
 import messages from '@/locales/ja/common.json';
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -184,5 +184,30 @@ describe('LeadHearingsCard', () => {
       carryOver: false,
       submissionId: NEWEST_SUBMISSION,
     });
+  });
+});
+
+describe('LeadHearingsCard opened from the lead page (Refs #108)', () => {
+  it('opens and closes "record a hearing" as the page says', async () => {
+    mocks.list = { items: [item()], canEdit: true };
+    const onRecordOpenChange = vi.fn();
+    const user = userEvent.setup();
+    const ui = (open: boolean) => (
+      <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
+        <LeadHearingsCard
+          leadId={LEAD_ID}
+          recordOpen={open}
+          onRecordOpenChange={onRecordOpenChange}
+        />
+      </NextIntlClientProvider>
+    );
+    const { rerender } = render(ui(true));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('checkbox', { name: '前回の内容を引き継ぐ' })).toBeChecked();
+
+    await user.click(within(dialog).getByRole('button', { name: 'キャンセル' }));
+    expect(onRecordOpenChange).toHaveBeenCalledWith(false);
+    rerender(ui(false));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });

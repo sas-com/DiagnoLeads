@@ -45,15 +45,30 @@ const dateOnly = (value: string) => new Date(`${value}T00:00:00Z`);
 
 interface LeadHearingsCardProps {
   leadId: string;
+  /**
+   * Whether "record a hearing" is open, when the page controls it (e.g. the lead page header's
+   * "ヒアリングを記録", Refs #108). Without it the card keeps its own state.
+   */
+  recordOpen?: boolean;
+  onRecordOpenChange?: (open: boolean) => void;
 }
 
 /** First meeting hearings of a lead (Refs #84) */
-export function LeadHearingsCard({ leadId }: LeadHearingsCardProps) {
+export function LeadHearingsCard({
+  leadId,
+  recordOpen,
+  onRecordOpenChange,
+}: LeadHearingsCardProps) {
   const t = useTranslations('leadHearings');
   const format = useFormatter();
   const locale = useLocale();
   const { organizationId } = useOrganization();
-  const [createOpen, setCreateOpen] = useState(false);
+  const [ownCreateOpen, setOwnCreateOpen] = useState(false);
+  const createOpen = recordOpen ?? ownCreateOpen;
+  const setCreateOpen = (open: boolean) => {
+    if (recordOpen === undefined) setOwnCreateOpen(open);
+    onRecordOpenChange?.(open);
+  };
 
   const { data, isLoading, isError, refetch } = trpc.leadHearings.listByLead.useQuery(
     { organizationId: organizationId ?? '', leadId },
@@ -154,14 +169,14 @@ export function LeadHearingsCard({ leadId }: LeadHearingsCardProps) {
   );
 }
 
-interface CreateHearingDialogProps {
+export interface CreateHearingDialogProps {
   onOpenChange: (open: boolean) => void;
   organizationId: string;
   leadId: string;
   hasPrevious: boolean;
 }
 
-function CreateHearingDialog({
+export function CreateHearingDialog({
   onOpenChange,
   organizationId,
   leadId,

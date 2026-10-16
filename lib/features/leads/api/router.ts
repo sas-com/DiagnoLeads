@@ -174,6 +174,16 @@ function buildFilterGroup(group: FilterGroup): SQL | undefined {
  */
 export const leadsRouter = router({
   /**
+   * What the current member may do with leads, so read-only roles (parent_viewer etc.) get no
+   * edit controls. The mutations check the same abilities (Refs #109)
+   */
+  access: organizationProcedure.query(({ ctx }) => ({
+    canCreate: ctx.ability.can('create', 'Lead'),
+    canEdit: ctx.ability.can('update', 'Lead'),
+    canDelete: ctx.ability.can('delete', 'Lead'),
+  })),
+
+  /**
    * Create a new lead
    */
   create: organizationProcedure.input(createLeadSchema).mutation(async ({ ctx, input }) => {
