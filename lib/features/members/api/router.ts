@@ -3,12 +3,32 @@ import { organizationMembers } from '@/lib/db/schema';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { and, eq } from 'drizzle-orm';
+import { consumeRateLimit } from '../../diagnostics/rate-limit';
+import { invitationUrl, sendInvitationEmail } from '../invitation-email';
+import {
+  INVITATIONS_PER_ORGANIZATION,
+  createInvitation,
+  isDuplicatePendingInvitation,
+  listPendingInvitations,
+  normalizeEmail,
+  revokeInvitation,
+} from '../invitations';
 import {
   inviteMemberSchema,
   listMembersSchema,
   removeMemberSchema,
+  revokeInvitationSchema,
   updateRoleSchema,
 } from '../types/schemas';
+
+function assertCanManageInvitations(role: string) {
+  if (role !== 'admin' && role !== 'owner') {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: '招待の管理は管理者またはオーナーのみ可能です',
+    });
+  }
+}
 
 /**
  * Members tRPC router
@@ -55,7 +75,7 @@ export const membersRouter = router({
 
   /**
    * Invite a new member to the organization
-   * Sends invitation email (mocked for now, Phase 5 will implement real emails)
+   * Stores the invitation and sends the invitation email
    *
    * Only admin and owner can invite members
    */
@@ -70,7 +90,7 @@ export const membersRouter = router({
 
     // Check if email is already a member by first finding the user
     const existingUser = await ctx.db.query.users.findFirst({
-      where: (user, { eq }) => eq(user.email, input.email),
+      where: (user, { eq }) => eq(user.email, normalizeEmail(input.email)),
     });
 
     if (existingUser) {
@@ -91,35 +111,74 @@ export const membersRouter = router({
       }
     }
 
-    // Use BetterAuth's organization plugin to create invitation
-    // For now, we'll create a simple invitation record
-    // Phase 5 will implement full email sending with Resend
-
-    try {
-      // Generate a unique invitation ID
-      const invitationId = crypto.randomUUID();
-
-      // TODO: Phase 5 - Store invitation in database and send email via Resend
-      // For now, just return a placeholder response
-      // await sendInvitationEmail({
-      //   email: input.email,
-      //   organizationName: ctx.organization.name,
-      //   invitedBy: ctx.user.name || ctx.user.email,
-      //   inviteUrl: `${process.env.NEXT_PUBLIC_APP_URL}/accept-invite?token=${invitationId}`,
-      // });
-
-      return {
-        success: true,
-        invitationId: invitationId,
-        message: '招待メールを送信しました（Phase 5で実装予定）',
-      };
-    } catch (error: any) {
+    const quota = await consumeRateLimit(
+      ctx.db,
+      INVITATIONS_PER_ORGANIZATION,
+      input.organizationId
+    );
+    if (!quota.allowed) {
       throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: error.message || '招待の作成に失敗しました',
+        code: 'TOO_MANY_REQUESTS',
+        message: `招待の上限（1時間に${INVITATIONS_PER_ORGANIZATION.limit}件）に達しました。約${Math.ceil(quota.retryAfterSeconds / 60)}分後にもう一度お試しください`,
       });
     }
+
+    let created: Awaited<ReturnType<typeof createInvitation>>;
+    try {
+      created = await createInvitation(ctx.db, {
+        organizationId: input.organizationId,
+        email: input.email,
+        role: input.role,
+        invitedBy: ctx.user.id,
+      });
+    } catch (error) {
+      if (!isDuplicatePendingInvitation(error)) throw error;
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: '同じアドレスへの招待が同時に作られました。招待中の一覧を確認してください',
+      });
+    }
+    const { invitation, token } = created;
+    const url = invitationUrl(token);
+    const email = await sendInvitationEmail({
+      to: invitation.email,
+      inviterName: ctx.user.name || ctx.user.email,
+      organizationName: ctx.organization.name,
+      role: invitation.role,
+      url,
+      expiresAt: invitation.expiresAt,
+    });
+
+    // The link is returned to the inviter so it can be passed on when the email does not arrive
+    return {
+      success: true,
+      invitationId: invitation.id,
+      inviteUrl: url,
+      emailSent: email.sent,
+    };
   }),
+
+  /**
+   * Pending invitations of the organization (admin and owner only)
+   */
+  listInvitations: organizationProcedure.query(async ({ ctx, input }) => {
+    assertCanManageInvitations(ctx.membership.role);
+    return listPendingInvitations(ctx.db, input.organizationId);
+  }),
+
+  /**
+   * Revoke a pending invitation (admin and owner only)
+   */
+  revokeInvitation: organizationProcedure
+    .input(revokeInvitationSchema)
+    .mutation(async ({ ctx, input }) => {
+      assertCanManageInvitations(ctx.membership.role);
+      const revoked = await revokeInvitation(ctx.db, input.organizationId, input.invitationId);
+      if (!revoked) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: '取り消せる招待が見つかりません' });
+      }
+      return { success: true };
+    }),
 
   /**
    * Update member role

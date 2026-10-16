@@ -9,6 +9,12 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 
 import {
+  InviteLinkResult,
+  type InviteResult,
+} from '@/components/features/members/invite-link-result';
+import { PendingInvitations } from '@/components/features/members/pending-invitations';
+
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -111,9 +117,11 @@ export default function MembersPage() {
     onMutate: () => {
       toast.loading(t('inviting'), { id: 'invite-member' });
     },
-    onSuccess: () => {
-      utils.members.list.invalidate();
-      toast.success(t('inviteSuccess'), { id: 'invite-member' });
+    onSuccess: (data, variables) => {
+      utils.members.listInvitations.invalidate();
+      toast.dismiss('invite-member');
+      setInviteResult({ email: variables.email, url: data.inviteUrl, emailSent: data.emailSent });
+      setInviteDialogOpen(true);
     },
     onError: (error) => {
       toast.error(t('inviteError', { message: error.message }), { id: 'invite-member' });
@@ -152,6 +160,7 @@ export default function MembersPage() {
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'member' | 'admin'>('member');
+  const [inviteResult, setInviteResult] = useState<InviteResult | null>(null);
   const [memberToRemove, setMemberToRemove] = useState<MemberToRemove>(null);
   const [memberToChangeRole, setMemberToChangeRole] = useState<MemberToChangeRole>(null);
   const [newRole, setNewRole] = useState<'member' | 'admin' | 'owner'>('member');
@@ -176,7 +185,11 @@ export default function MembersPage() {
 
     setInviteEmail('');
     setInviteRole('member');
-    setInviteDialogOpen(false);
+  };
+
+  const handleInviteDialogChange = (open: boolean) => {
+    setInviteDialogOpen(open);
+    if (!open) setInviteResult(null);
   };
 
   const handleRemoveMember = async () => {
@@ -335,7 +348,7 @@ export default function MembersPage() {
               </div>
 
               {canManageMembers && (
-                <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
+                <Dialog open={inviteDialogOpen} onOpenChange={handleInviteDialogChange}>
                   <DialogTrigger asChild>
                     <Button size="lg">
                       <UserPlus className="h-5 w-5 mr-2" />
@@ -347,47 +360,58 @@ export default function MembersPage() {
                       <DialogTitle>{t('inviteDialogTitle')}</DialogTitle>
                       <DialogDescription>{t('inviteDialogDescription')}</DialogDescription>
                     </DialogHeader>
-                    <form onSubmit={handleInviteMember}>
-                      <div className="space-y-4 py-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="email">{t('emailLabel')}</Label>
-                          <Input
-                            id="email"
-                            type="email"
-                            placeholder={t('emailPlaceholder')}
-                            value={inviteEmail}
-                            onChange={(e) => setInviteEmail(e.target.value)}
-                            required
-                          />
+                    {inviteResult ? (
+                      <>
+                        <InviteLinkResult result={inviteResult} />
+                        <DialogFooter>
+                          <Button type="button" onClick={() => handleInviteDialogChange(false)}>
+                            {t('close')}
+                          </Button>
+                        </DialogFooter>
+                      </>
+                    ) : (
+                      <form onSubmit={handleInviteMember}>
+                        <div className="space-y-4 py-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="email">{t('emailLabel')}</Label>
+                            <Input
+                              id="email"
+                              type="email"
+                              placeholder={t('emailPlaceholder')}
+                              value={inviteEmail}
+                              onChange={(e) => setInviteEmail(e.target.value)}
+                              required
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="role">{t('roleLabel')}</Label>
+                            <select
+                              id="role"
+                              value={inviteRole}
+                              onChange={(e) => setInviteRole(e.target.value as 'member' | 'admin')}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                            >
+                              <option value="member">{t('roleMember')}</option>
+                              <option value="admin">{t('roleAdmin')}</option>
+                            </select>
+                            <p className="text-xs text-gray-500">{t('roleHelp')}</p>
+                          </div>
                         </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="role">{t('roleLabel')}</Label>
-                          <select
-                            id="role"
-                            value={inviteRole}
-                            onChange={(e) => setInviteRole(e.target.value as 'member' | 'admin')}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        <DialogFooter>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => handleInviteDialogChange(false)}
                           >
-                            <option value="member">{t('roleMember')}</option>
-                            <option value="admin">{t('roleAdmin')}</option>
-                          </select>
-                          <p className="text-xs text-gray-500">{t('roleHelp')}</p>
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => setInviteDialogOpen(false)}
-                        >
-                          {t('cancel')}
-                        </Button>
-                        <Button type="submit" disabled={invite.isPending}>
-                          <Mail className="mr-2 h-4 w-4" />
-                          {t('sendInvite')}
-                        </Button>
-                      </DialogFooter>
-                    </form>
+                            {t('cancel')}
+                          </Button>
+                          <Button type="submit" disabled={invite.isPending}>
+                            <Mail className="mr-2 h-4 w-4" />
+                            {t('sendInvite')}
+                          </Button>
+                        </DialogFooter>
+                      </form>
+                    )}
                   </DialogContent>
                 </Dialog>
               )}
@@ -527,6 +551,14 @@ export default function MembersPage() {
             )}
           </div>
         </Card>
+
+        {canManageMembers && (
+          <PendingInvitations
+            organizationId={organizationId}
+            resending={invite.isPending}
+            onResend={({ email, role }) => invite.mutate({ organizationId, email, role })}
+          />
+        )}
 
         {/* Info Callout */}
         <Callout title={t('hintsTitle')} icon={CheckCircle} color="blue">

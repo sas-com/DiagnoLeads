@@ -1,5 +1,6 @@
 import { SignupForm } from '@/components/auth/SignupForm';
 import Link from 'next/link';
+import { Suspense } from 'react';
 
 /**
  * サインアップページ
@@ -9,7 +10,9 @@ export default function SignupPage() {
     <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
       <h2 className="text-2xl font-bold text-center text-gray-900 mb-6">新規登録</h2>
 
-      <SignupForm />
+      <Suspense fallback={<div className="text-center py-4">Loading...</div>}>
+        <SignupForm />
+      </Suspense>
 
       <div className="mt-6">
         <div className="relative">

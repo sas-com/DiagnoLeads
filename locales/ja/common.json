@@ -1122,7 +1122,7 @@
       "newRoleLabel": "新しいロール",
       "saveChanges": "変更を保存",
       "hintsTitle": "ヒント",
-      "hintEmailNotification": "招待されたユーザーにはメールで通知が送信されます",
+      "hintEmailNotification": "招待した人には招待メールが届きます。届かないときは、招待リンクを直接渡してください",
       "hintAdminPermissions": "管理者はメンバーの招待と削除ができます",
       "hintOwnerRole": "オーナーロールの変更や削除はできません",
       "hintCannotRemoveSelf": "自分自身を組織から削除することはできません",
@@ -1134,7 +1134,26 @@
       "removeError": "削除に失敗しました: {message}",
       "updatingRole": "ロールを変更中...",
       "roleUpdateSuccess": "ロールを変更しました",
-      "roleUpdateError": "ロールの変更に失敗しました: {message}"
+      "roleUpdateError": "ロールの変更に失敗しました: {message}",
+      "close": "閉じる",
+      "inviteSentTitle": "招待メールを送信しました",
+      "inviteSentDescription": "{email} に招待メールを送りました。届かない場合は、下のリンクをコピーして直接渡してください。",
+      "inviteNotSentTitle": "招待メールを送れませんでした",
+      "inviteNotSentDescription": "招待は作成しました。下のリンクをコピーして、{email} の方に直接渡してください。",
+      "inviteLinkLabel": "招待リンク",
+      "inviteLinkHelp": "リンクの有効期限は7日間です。リンクを知っている人は、招待したメールアドレスで登録して参加できてしまうため、本人にだけ渡してください。",
+      "copyLink": "コピー",
+      "linkCopied": "招待リンクをコピーしました",
+      "copyFailed": "コピーできませんでした。リンクを選択してコピーしてください",
+      "pendingTitle": "招待中",
+      "pendingDescription": "まだ参加していない招待です。「もう一度送る」で新しいリンクを送り直せます（前のリンクは使えなくなります）。",
+      "pendingHeaderEmail": "メールアドレス",
+      "pendingHeaderExpires": "有効期限",
+      "expired": "期限切れ",
+      "resendInvite": "もう一度送る",
+      "revokeInvite": "取り消す",
+      "revokeSuccess": "招待を取り消しました",
+      "revokeError": "招待を取り消せませんでした: {message}"
     },
     "auth": {
       "metadata": {
@@ -1213,6 +1232,26 @@
         "passwordComplexity": "パスワードには大文字、小文字、数字を含める必要があります",
         "passwordMismatch": "パスワードが一致しません",
         "nameRequired": "名前を入力してください"
+      },
+      "invite": {
+        "loading": "招待を確認しています…",
+        "title": "組織への招待",
+        "invitedBy": "{inviter} さんから、「{organization}」に{role}として招待されています。",
+        "someone": "組織の管理者",
+        "invitedAddress": "招待されたメールアドレス: {email}",
+        "roleMember": "メンバー",
+        "roleAdmin": "管理者",
+        "signUpToJoin": "新規登録して参加する",
+        "signInToJoin": "ログインして参加する（アカウントをお持ちの方）",
+        "join": "参加する",
+        "wrongAccount": "いまは {current} でログインしています。この招待は {email} 宛てです。ログアウトして、招待されたメールアドレスのアカウントでログインしてください。",
+        "signOut": "ログアウトする",
+        "invalidTitle": "この招待リンクは使えません",
+        "invalidDescription": "リンクが正しくないか、新しい招待で置き換えられています。招待した方に、もう一度送ってもらってください。",
+        "expiredDescription": "この招待の有効期限が切れています。招待した方に、もう一度送ってもらってください。",
+        "revokedDescription": "この招待は取り消されたか、新しい招待で置き換えられています。最新の招待メールのリンクを開いてください。",
+        "acceptedDescription": "この招待はすでに使われています。参加済みの場合は、ダッシュボードを開いてください。",
+        "openDashboard": "ダッシュボードを開く"
       }
     },
     "ai": {

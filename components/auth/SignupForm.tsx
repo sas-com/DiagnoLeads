@@ -11,9 +11,10 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { authClient } from '@/lib/auth/client';
+import { safeCallbackPath } from '@/lib/auth/safe-callback';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -28,6 +29,9 @@ type SignupFormValues = {
 
 export function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // An invitation link sends people here with the invited address and the way back to it
+  const callbackUrl = safeCallbackPath(searchParams.get('callbackUrl'));
   const t = useTranslations('settings.auth.signup');
   const tv = useTranslations('settings.auth.validation');
   const [isLoading, setIsLoading] = useState(false);
@@ -51,7 +55,7 @@ export function SignupForm() {
     resolver: zodResolver(signupSchema),
     defaultValues: {
       name: '',
-      email: '',
+      email: searchParams.get('email') ?? '',
       password: '',
       confirmPassword: '',
     },
@@ -64,7 +68,7 @@ export function SignupForm() {
         email: data.email,
         password: data.password,
         name: data.name,
-        callbackURL: '/dashboard',
+        callbackURL: callbackUrl,
       });
 
       if (result.error) {
@@ -81,7 +85,7 @@ export function SignupForm() {
       }
 
       toast.success(t('successToast'));
-      router.push('/dashboard');
+      router.push(callbackUrl);
     } catch (error) {
       console.error('Signup error:', error);
       toast.error(t('errorToast'));

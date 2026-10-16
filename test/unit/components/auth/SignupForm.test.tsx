@@ -13,8 +13,10 @@ vi.mock('next-intl', () => ({
 
 // Mock next/navigation
 const mockPush = vi.fn();
+let mockSearchParams = new URLSearchParams();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
+  useSearchParams: () => mockSearchParams,
 }));
 
 // Mock sonner toast
@@ -41,6 +43,7 @@ import { toast } from 'sonner';
 describe('SignupForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSearchParams = new URLSearchParams();
   });
 
   afterEach(() => {
@@ -152,6 +155,44 @@ describe('SignupForm', () => {
       expect(toast.success).toHaveBeenCalled();
       expect(mockPush).toHaveBeenCalledWith('/dashboard');
     });
+  });
+
+  it('comes from an invitation: fills in the invited address and returns to the invite page', async () => {
+    mockSearchParams = new URLSearchParams({
+      email: 'invited@example.com',
+      callbackUrl: '/ja/invite/abc',
+    });
+    mockSignUp.mockResolvedValueOnce({ data: { user: { id: '1' } } });
+    const user = userEvent.setup();
+    render(<SignupForm />);
+
+    expect(screen.getByLabelText(/emailLabel/i)).toHaveValue('invited@example.com');
+    await user.type(screen.getByLabelText(/nameLabel/i), 'John Doe');
+    await user.type(screen.getByLabelText(/^settings\.auth\.signup\.passwordLabel$/i), 'Password123');
+    await user.type(screen.getByLabelText(/confirmPasswordLabel/i), 'Password123');
+    await user.click(screen.getByRole('button', { name: /submitButton/i }));
+
+    await waitFor(() => {
+      expect(mockSignUp).toHaveBeenCalledWith(
+        expect.objectContaining({ email: 'invited@example.com', callbackURL: '/ja/invite/abc' })
+      );
+      expect(mockPush).toHaveBeenCalledWith('/ja/invite/abc');
+    });
+  });
+
+  it('ignores a callback to another site', async () => {
+    mockSearchParams = new URLSearchParams({ callbackUrl: 'https://evil.example' });
+    mockSignUp.mockResolvedValueOnce({ data: { user: { id: '1' } } });
+    const user = userEvent.setup();
+    render(<SignupForm />);
+
+    await user.type(screen.getByLabelText(/nameLabel/i), 'John Doe');
+    await user.type(screen.getByLabelText(/emailLabel/i), 'test@example.com');
+    await user.type(screen.getByLabelText(/^settings\.auth\.signup\.passwordLabel$/i), 'Password123');
+    await user.type(screen.getByLabelText(/confirmPasswordLabel/i), 'Password123');
+    await user.click(screen.getByRole('button', { name: /submitButton/i }));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/dashboard'));
   });
 
   it('should show error toast for existing user', async () => {

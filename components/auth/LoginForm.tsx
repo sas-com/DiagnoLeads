@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { authClient } from '@/lib/auth/client';
+import { safeCallbackPath } from '@/lib/auth/safe-callback';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -32,8 +33,9 @@ export function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
 
   // Get callback URL from query params, default to /dashboard
-  const callbackUrl =
-    searchParams.get('callbackUrl') || searchParams.get('redirect') || '/dashboard';
+  const callbackUrl = safeCallbackPath(
+    searchParams.get('callbackUrl') || searchParams.get('redirect')
+  );
 
   const loginSchema = z.object({
     email: z.string().email(tv('emailInvalid')),
