@@ -1,6 +1,9 @@
 'use client';
 
-import { SubmissionAnswers } from '@/components/features/lead-activity/lead-activity-card';
+import {
+  DiagnosisMqlBadge,
+  SubmissionAnswers,
+} from '@/components/features/lead-activity/lead-activity-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -74,6 +77,7 @@ export function LeadDiagnosisAnswers({
       {submissions.map((event) => {
         const isOpen = open.has(event.submissionId);
         const platform = event.summary.platform;
+        const builder = event.summary.builder;
         const date = format.dateTime(new Date(event.at), {
           dateStyle: 'medium',
           timeStyle: 'short',
@@ -90,6 +94,16 @@ export function LeadDiagnosisAnswers({
                   <h3 className="text-sm font-semibold text-foreground">
                     {t('submittedAt', { date })}
                   </h3>
+                  {builder && (
+                    <Badge color="gray" data-testid="lead-answers-builder">
+                      {builder.title ?? tActivity('summary.untitled')}{' '}
+                      {tActivity('summary.version', { version: builder.version })}
+                    </Badge>
+                  )}
+                  {builder?.resultTypeName && (
+                    <span className="text-sm text-muted-foreground">{builder.resultTypeName}</span>
+                  )}
+                  <DiagnosisMqlBadge level={event.summary.mqlLevel} />
                   {platform && (
                     <Badge color="gray">
                       {tAx.has(`platforms.${platform}`) ? tAx(`platforms.${platform}`) : platform}

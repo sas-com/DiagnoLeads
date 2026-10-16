@@ -34,6 +34,7 @@
 import type { db as defaultDb } from '@/lib/db/client';
 import {
   auditLogs,
+  diagnosisVersions,
   diagnosticSubmissions,
   leadComments,
   leadContactLogs,
@@ -41,6 +42,8 @@ import {
   leads,
   users,
 } from '@/lib/db/schema';
+import type { DiagnosisDefinition } from '@/lib/features/diagnosis-builder/definition';
+import { DIAGNOSIS_SUBMISSION_KEY_PREFIX } from '@/lib/features/diagnosis-builder/public-diagnosis';
 import {
   AX_MIGRATION_DIAGNOSTIC_KEY,
   axMigrationDefinition,
@@ -55,7 +58,9 @@ import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { TRPCError } from '@trpc/server';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type {
+  BuilderDiagnosisSummary,
   DiagnosisIdentity,
+  DiagnosisMqlLevelView,
   DiagnosisSummary,
   LeadActivityActor,
   LeadActivityCursor,
@@ -102,6 +107,12 @@ async function findLead(db: Executor, organizationId: string, leadId: string) {
   return lead;
 }
 
+/** The version a builder submission answered (same organization only) */
+const submissionVersion = and(
+  eq(diagnosisVersions.id, diagnosticSubmissions.diagnosisVersionId),
+  eq(diagnosisVersions.organizationId, diagnosticSubmissions.organizationId)
+);
+
 /** Follow-up questions asked after the AX result */
 const AX_DETAIL_QUESTION_IDS = new Set(
   axMigrationDefinition.questions.filter((q) => q.detail).map((q) => q.id)
@@ -124,15 +135,49 @@ function companySizeFitOf(mql: unknown): DiagnosisSummary['companySizeFit'] {
   return COMPANY_SIZE_FITS.find((value) => value === fit) ?? null;
 }
 
-function summaryOf(row: {
-  diagnosticKey: string;
-  answers: Record<string, unknown>;
-  result: Record<string, unknown>;
-}): DiagnosisSummary {
+const MQL_LEVELS: readonly string[] = ['interest', 'fit', 'none'];
+
+export const isBuilderDiagnosisKey = (key: string) =>
+  key.startsWith(DIAGNOSIS_SUBMISSION_KEY_PREFIX);
+
+/** The answered version of a builder submission, as far as the timeline needs it */
+export interface BuilderVersionInfo {
+  title: string | null;
+  /** definition.resultTypes as stored (read defensively) */
+  resultTypes: unknown;
+}
+
+function builderSummaryOf(
+  version: number,
+  result: Record<string, unknown>,
+  info: BuilderVersionInfo | null
+): BuilderDiagnosisSummary {
+  const resultTypeId = stringOrNull(result.resultTypeId);
+  const types = Array.isArray(info?.resultTypes) ? info.resultTypes.filter(isPlainObject) : [];
+  const resultType = resultTypeId ? types.find((t) => t.id === resultTypeId) : undefined;
+  const leadScore = isPlainObject(result.leadScore) ? result.leadScore.points : null;
+  return {
+    title: info?.title ?? null,
+    version,
+    resultTypeName: resultType ? stringOrNull(resultType.name) : null,
+    leadScore: typeof leadScore === 'number' ? leadScore : null,
+  };
+}
+
+function summaryOf(
+  row: {
+    diagnosticKey: string;
+    diagnosticVersion?: number;
+    answers: Record<string, unknown>;
+    result: Record<string, unknown>;
+  },
+  builderVersion: BuilderVersionInfo | null = null
+): DiagnosisSummary {
   const result = isPlainObject(row.result) ? row.result : {};
   const answers = isPlainObject(row.answers) ? row.answers : {};
   const level = (value: unknown) => (isPlainObject(value) ? stringOrNull(value.level) : null);
   const challenges = isPlainObject(result.challenges) ? result.challenges : {};
+  const mqlLevel = level(result.mql);
   return {
     diagnosticKey: row.diagnosticKey,
     platform: stringOrNull(result.platform) ?? stringOrNull(answers.platform),
@@ -144,6 +189,12 @@ function summaryOf(row: {
     detailsAnswered:
       row.diagnosticKey === AX_MIGRATION_DIAGNOSTIC_KEY &&
       Object.keys(answers).some((id) => AX_DETAIL_QUESTION_IDS.has(id)),
+    ...(mqlLevel && MQL_LEVELS.includes(mqlLevel)
+      ? { mqlLevel: mqlLevel as DiagnosisMqlLevelView }
+      : {}),
+    ...(isBuilderDiagnosisKey(row.diagnosticKey)
+      ? { builder: builderSummaryOf(row.diagnosticVersion ?? 0, result, builderVersion) }
+      : {}),
   };
 }
 
@@ -220,14 +271,19 @@ export async function listLeadActivities(
       .select({
         id: diagnosticSubmissions.id,
         diagnosticKey: diagnosticSubmissions.diagnosticKey,
+        diagnosticVersion: diagnosticSubmissions.diagnosticVersion,
         leadCreated: diagnosticSubmissions.leadCreated,
         continuedFromSubmissionId: diagnosticSubmissions.continuedFromSubmissionId,
         consultationRequestedAt: diagnosticSubmissions.consultationRequestedAt,
         answers: diagnosticSubmissions.answers,
         result: diagnosticSubmissions.result,
         createdAt: diagnosticSubmissions.createdAt,
+        // Builder diagnoses: only the parts of the answered version the timeline shows
+        versionTitle: sql<string | null>`${diagnosisVersions.definition}->>'title'`,
+        versionResultTypes: sql<unknown>`${diagnosisVersions.definition}->'resultTypes'`,
       })
       .from(diagnosticSubmissions)
+      .leftJoin(diagnosisVersions, submissionVersion)
       .where(
         and(
           eq(diagnosticSubmissions.organizationId, organizationId),
@@ -352,7 +408,12 @@ export async function listLeadActivities(
       at: row.createdAt,
       actor: null,
       ...identity,
-      summary: summaryOf(row),
+      summary: summaryOf(
+        row,
+        isBuilderDiagnosisKey(row.diagnosticKey)
+          ? { title: row.versionTitle, resultTypes: row.versionResultTypes }
+          : null
+      ),
     });
     if (row.consultationRequestedAt) {
       events.push({
@@ -513,8 +574,11 @@ export async function getSubmissionAnswers(
       answers: diagnosticSubmissions.answers,
       result: diagnosticSubmissions.result,
       createdAt: diagnosticSubmissions.createdAt,
+      // Builder diagnoses are labelled from the version answered, never the current draft
+      builderDefinition: diagnosisVersions.definition,
     })
     .from(diagnosticSubmissions)
+    .leftJoin(diagnosisVersions, submissionVersion)
     .where(
       and(
         eq(diagnosticSubmissions.id, input.submissionId),
@@ -526,15 +590,48 @@ export async function getSubmissionAnswers(
   if (!row) throw notFound('submission');
 
   const answers = isPlainObject(row.answers) ? row.answers : {};
-  const definition =
-    row.diagnosticKey === AX_MIGRATION_DIAGNOSTIC_KEY ? axMigrationDefinition : null;
-  const questions = definition?.questions ?? [];
-  // Questions in the order of the definition, then anything it no longer knows
-  const ids = [
-    ...questions.map((q) => q.id).filter((id) => id in answers),
-    ...Object.keys(answers).filter((id) => !questions.some((q) => q.id === id)),
+  const builder = isBuilderDiagnosisKey(row.diagnosticKey);
+  const view = builder
+    ? builderAnswerView(answers, row.builderDefinition)
+    : axAnswerView(row.diagnosticKey, answers);
+
+  return {
+    ...identityOf(row),
+    diagnosticKey: row.diagnosticKey,
+    diagnosticVersion: row.diagnosticVersion,
+    submittedAt: row.createdAt,
+    consultationRequestedAt: row.consultationRequestedAt,
+    summary: summaryOf(
+      row,
+      builder
+        ? {
+            title: row.builderDefinition?.title ?? null,
+            resultTypes: row.builderDefinition?.resultTypes ?? null,
+          }
+        : null
+    ),
+    answers: view,
+  };
+}
+
+/** Questions in the order of the definition, then anything it no longer knows */
+function orderedIds(questionIds: string[], answers: Record<string, unknown>): string[] {
+  return [
+    ...questionIds.filter((id) => id in answers),
+    ...Object.keys(answers).filter((id) => !questionIds.includes(id)),
   ];
-  const view: SubmissionAnswerView[] = ids.map((id) => {
+}
+
+function axAnswerView(
+  diagnosticKey: string,
+  answers: Record<string, unknown>
+): SubmissionAnswerView[] {
+  const definition = diagnosticKey === AX_MIGRATION_DIAGNOSTIC_KEY ? axMigrationDefinition : null;
+  const questions = definition?.questions ?? [];
+  return orderedIds(
+    questions.map((q) => q.id),
+    answers
+  ).map((id) => {
     const question = questions.find((q) => q.id === id);
     const raw = answers[id];
     const values = (Array.isArray(raw) ? raw : [raw]).filter(
@@ -550,14 +647,47 @@ export async function getSubmissionAnswers(
       })),
     };
   });
+}
 
-  return {
-    ...identityOf(row),
-    diagnosticKey: row.diagnosticKey,
-    diagnosticVersion: row.diagnosticVersion,
-    submittedAt: row.createdAt,
-    consultationRequestedAt: row.consultationRequestedAt,
-    summary: summaryOf(row),
-    answers: view,
-  };
+/**
+ * Answers of a builder diagnosis labelled with the definition of the version answered (the
+ * labels are plain text in the definition, the same in every locale). Numbers keep their unit.
+ */
+export function builderAnswerView(
+  answers: Record<string, unknown>,
+  definition: DiagnosisDefinition | null
+): SubmissionAnswerView[] {
+  const questions = definition?.questions ?? [];
+  return orderedIds(
+    questions.map((q) => q.id),
+    answers
+  ).map((id) => {
+    const question = questions.find((q) => q.id === id);
+    const raw = answers[id];
+    const values = (Array.isArray(raw) ? raw : [raw]).flatMap((value) =>
+      typeof value === 'string' || (typeof value === 'number' && Number.isFinite(value))
+        ? [String(value)]
+        : []
+    );
+    const label = (value: string): string => {
+      if (!question) return value;
+      switch (question.type) {
+        case 'single':
+        case 'multiple':
+          return question.options.find((o) => o.value === value)?.label ?? value;
+        case 'number_range':
+          return `${value}${question.unit ?? ''}`;
+        case 'scale':
+          return `${value}（${question.min}〜${question.max}）`;
+        case 'text':
+          return value;
+      }
+    };
+    return {
+      questionId: id,
+      question: rawText(question?.label ?? id),
+      detail: false,
+      values: values.map((value) => ({ value, label: rawText(label(value)) })),
+    };
+  });
 }

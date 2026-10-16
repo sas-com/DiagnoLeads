@@ -102,6 +102,21 @@ export interface DiagnosisSummary {
   companySizeFit: 'fit' | 'not_fit' | 'unknown' | 'not_configured' | null;
   /** The optional follow-up questions were answered (the time is known only when verified) */
   detailsAnswered: boolean;
+  /** 関心あり（MQL） / 適合 / 対象外 judged for this submission; absent when none is stored */
+  mqlLevel?: DiagnosisMqlLevelView;
+  /** Diagnoses made in the builder (#121): the answered version and its result */
+  builder?: BuilderDiagnosisSummary;
+}
+
+export type DiagnosisMqlLevelView = 'interest' | 'fit' | 'none';
+
+export interface BuilderDiagnosisSummary {
+  /** Title of the answered version (null when the version is gone) */
+  title: string | null;
+  version: number;
+  resultTypeName: string | null;
+  /** 0–100 */
+  leadScore: number | null;
 }
 
 export interface LeadFieldChange {

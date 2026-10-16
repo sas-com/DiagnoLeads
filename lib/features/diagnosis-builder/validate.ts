@@ -1,3 +1,4 @@
+import { getHearingField } from '@/lib/features/lead-hearings/catalog';
 /**
  * Checks a diagnosis definition before it can be published.
  *
@@ -14,6 +15,7 @@ import {
   diagnosisDefinitionSchema,
   isChoiceQuestion,
 } from './definition';
+import { HEARING_FIELD_TYPES_BY_QUESTION, hearingOptionValue } from './hearing-mapping';
 
 export type DefinitionErrorCode =
   /** The JSON does not match the schema (detail: the zod issue code) */
@@ -48,7 +50,13 @@ export type DefinitionErrorCode =
   | 'tier_overlap'
   | 'consent_missing'
   /** CTA (or privacy policy) URL that is not https */
-  | 'url_not_https';
+  | 'url_not_https'
+  /** hearingField.key is not a field of the hearing sheet (detail: the key) */
+  | 'unknown_hearing_field'
+  /** The question type cannot fill that kind of hearing field (detail: the key) */
+  | 'hearing_field_type'
+  /** hearingField.values maps an option to a value the hearing field does not have */
+  | 'unknown_hearing_value';
 
 export type DefinitionWarningCode =
   | 'many_questions'
@@ -57,7 +65,14 @@ export type DefinitionWarningCode =
   /** A non-text question that gives no points on any axis */
   | 'question_without_score'
   /** No minimum score and no strong signal: no respondent can become an MQL */
-  | 'mql_never_qualifies';
+  | 'mql_never_qualifies'
+  /**
+   * An option of a question mapped to a hearing field gives no hearing value: it is neither
+   * mapped (or mapped to null on purpose) nor an option of the field (detail: the option value)
+   */
+  | 'hearing_option_unmapped'
+  /** Several questions fill the same hearing field; the first answered one is used */
+  | 'duplicate_hearing_field';
 
 export type DefinitionPath = (string | number)[];
 
@@ -280,6 +295,46 @@ export function validateDefinition(input: unknown): DefinitionValidationResult {
       }
       case 'text':
         break;
+    }
+  });
+
+  // Hearing sheet fields filled in advance (#121)
+  const hearingKeys = new Set<string>();
+  def.questions.forEach((question, q) => {
+    const mapping = question.hearingField;
+    if (!mapping) return;
+    const path = ['questions', q, 'hearingField'];
+    const field = getHearingField(mapping.key);
+    if (!field) return error([...path, 'key'], 'unknown_hearing_field', mapping.key);
+    if (!HEARING_FIELD_TYPES_BY_QUESTION[question.type].includes(field.type)) {
+      return error([...path, 'key'], 'hearing_field_type', mapping.key);
+    }
+    if (hearingKeys.has(field.key)) {
+      warnings.push({ path: [...path, 'key'], code: 'duplicate_hearing_field', detail: field.key });
+    }
+    hearingKeys.add(field.key);
+
+    const options = isChoiceQuestion(question) ? question.options : [];
+    const optionValues = new Set(options.map((o) => o.value));
+    for (const [value, target] of Object.entries(mapping.values ?? {})) {
+      if (!optionValues.has(value)) {
+        error([...path, 'values', value], 'unknown_option', value);
+      } else if (
+        target !== null &&
+        (field.type === 'single' || field.type === 'multiple') &&
+        !field.options.some((o) => o.value === target)
+      ) {
+        error([...path, 'values', value], 'unknown_hearing_value', target);
+      }
+    }
+    if (field.type === 'single' || field.type === 'multiple') {
+      for (const option of options) {
+        const target = mapping.values?.[option.value];
+        if (target !== undefined) continue;
+        if (hearingOptionValue(question, field, option.value) === null) {
+          warnings.push({ path, code: 'hearing_option_unmapped', detail: option.value });
+        }
+      }
     }
   });
 

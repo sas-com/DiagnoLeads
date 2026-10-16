@@ -1,5 +1,6 @@
 /**
- * Prefill a hearing from the lead's AX Web diagnosis (Refs #84)
+ * Prefill a hearing from the lead's Web diagnosis: the AX diagnosis (Refs #84) or a diagnosis
+ * made in the builder (Refs #121)
  *
  * Pure function: maps the stored answers / result of one diagnostic submission onto hearing
  * fields. A field gets a value only when the answer says it unambiguously; otherwise the
@@ -8,6 +9,15 @@
  * "prefilled".
  */
 
+import type {
+  DiagnosisAnswerValue,
+  DiagnosisDefinition,
+  DiagnosisQuestion,
+} from '@/lib/features/diagnosis-builder/definition';
+import {
+  hearingValueFromAnswer,
+  mappedHearingField,
+} from '@/lib/features/diagnosis-builder/hearing-mapping';
 import { HEARING_CHALLENGES, type HearingFieldKey } from './catalog';
 import {
   type HearingFieldEntry,
@@ -213,6 +223,97 @@ export function buildHearingPrefill(submission: PrefillSubmission): {
       answers,
       challenges,
       hints,
+    },
+    fields,
+  };
+}
+
+// ── Builder diagnoses (#121) ────────────────────────────────────────────────────
+
+/** A builder submission with the definition of the version it answered */
+export interface BuilderPrefillSubmission extends Omit<PrefillSubmission, 'answers'> {
+  /** Builder answers may also be numbers (scale, number_range) */
+  answers: Record<string, unknown>;
+  definition: DiagnosisDefinition;
+}
+
+const toAnswerValue = (raw: unknown): DiagnosisAnswerValue | undefined => {
+  if (typeof raw === 'string' || (typeof raw === 'number' && Number.isFinite(raw))) return raw;
+  if (Array.isArray(raw)) {
+    const list = raw.filter((v): v is string => typeof v === 'string');
+    return list.length > 0 ? list : undefined;
+  }
+  return undefined;
+};
+
+/** Labels of an answer by value, from the answered version (text answers need none) */
+function answerLabels(
+  question: DiagnosisQuestion,
+  answer: DiagnosisAnswerValue
+): Record<string, string> {
+  switch (question.type) {
+    case 'single':
+    case 'multiple': {
+      const chosen = new Set(Array.isArray(answer) ? answer : [String(answer)]);
+      return Object.fromEntries(
+        question.options.filter((o) => chosen.has(o.value)).map((o) => [o.value, o.label])
+      );
+    }
+    case 'number_range':
+      return { [String(answer)]: `${answer}${question.unit ?? ''}` };
+    case 'scale':
+      return { [String(answer)]: String(answer) };
+    case 'text':
+      return {};
+  }
+}
+
+/**
+ * Prefill from a builder diagnosis: each question mapped to a hearing field (hearingField in the
+ * definition) gives that field its answer; when several questions fill one field, the first
+ * answered one in definition order wins. Only mapped questions are copied into the snapshot.
+ * Verification follows the same rule as the AX diagnosis (isVerifiedSubmission).
+ */
+export function buildBuilderHearingPrefill(submission: BuilderPrefillSubmission): {
+  snapshot: HearingPrefillSnapshot;
+  fields: HearingFields;
+} {
+  const values: Partial<Record<HearingFieldKey, HearingFieldValue>> = {};
+  const hints: Partial<Record<HearingFieldKey, string[]>> = {};
+  const answers: Record<string, string | string[]> = {};
+  const labels: Record<string, Record<string, string>> = {};
+
+  for (const question of submission.definition.questions) {
+    const field = mappedHearingField(question);
+    if (!field) continue;
+    const answer = toAnswerValue(submission.answers[question.id]);
+    if (answer === undefined) continue;
+    const key = field.key as HearingFieldKey;
+    answers[question.id] = typeof answer === 'number' ? String(answer) : answer;
+    labels[question.id] = answerLabels(question, answer);
+    hints[key] = [...(hints[key] ?? []), question.id];
+    const mapped = hearingValueFromAnswer(question, answer);
+    if (mapped && values[mapped.key] === undefined) values[mapped.key] = mapped.value;
+  }
+
+  const entries: Record<string, HearingFieldEntry> = {};
+  for (const [key, value] of Object.entries(values)) {
+    entries[key] = { value, status: 'not_yet', source: 'prefilled' };
+  }
+  const { fields } = parseStoredHearingFields(entries);
+
+  return {
+    snapshot: {
+      submissionId: submission.id,
+      diagnosticKey: submission.diagnosticKey,
+      diagnosticVersion: submission.diagnosticVersion,
+      submittedAt: submission.createdAt.toISOString(),
+      verified: isVerifiedSubmission(submission),
+      answers,
+      challenges: null,
+      hints,
+      diagnosisTitle: submission.definition.title,
+      answerLabels: labels,
     },
     fields,
   };

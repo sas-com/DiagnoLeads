@@ -63,13 +63,56 @@ export interface ExtraDataEntry {
   value: string | number | boolean;
 }
 
+/**
+ * A diagnosis made in the builder (#121): `leads.responses.diagnosis`, the summary the builder
+ * diagnosis writes on the lead it created (lib/features/diagnosis-builder/submission-service.ts).
+ * The reasons are the marketer's own texts from the answered version.
+ */
+export interface BuilderDiagnosisView {
+  submissionId: string | null;
+  title: string | null;
+  version: number | null;
+  resultTypeName: string | null;
+  /** 0–100, the same scale as the AX diagnosis */
+  leadScore: number | null;
+  leadScoreReasons: string[];
+  mqlLevel: AxMqlLevel;
+  mqlReasons: string[];
+  consultationRequested: boolean;
+  diagnosedAt: string | null;
+}
+
 export interface LeadDiagnosisView {
   ax: AxDiagnosisView | null;
+  /** Only present when the lead has a builder diagnosis summary */
+  builder?: BuilderDiagnosisView;
   /** Unknown keys of responses (incl. unknown keys of the AX summary) and custom fields */
   extra: ExtraDataEntry[];
 }
 
 const AX_KEY = 'axMigration';
+/** Same as DIAGNOSIS_LEAD_RESPONSES_KEY in diagnosis-builder/submission-service.ts */
+export const BUILDER_KEY = 'diagnosis';
+
+/** Keys of the builder summary read into the view (or not shown: internal ids) */
+const BUILDER_KEYS = new Set<string>([
+  'diagnosisId',
+  'slug',
+  'title',
+  'version',
+  'versionId',
+  'submissionId',
+  'diagnosedAt',
+  'resultTypeId',
+  'resultTypeName',
+  'overall',
+  'leadScore',
+  'leadScoreReasons',
+  'mqlLevel',
+  'mqlQualified',
+  'mqlReasons',
+  'consultationRequested',
+]);
 
 /** Keys of the AX summary read into the view */
 const AX_SYSTEM_KEYS = [
@@ -185,15 +228,54 @@ function unreadSystemValues(
   });
 }
 
+const textList = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && item.trim() !== '')
+    : [];
+
+const numberOrNull = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isFinite(value) ? value : null;
+
+function readBuilder(summary: Record<string, unknown>): BuilderDiagnosisView {
+  const level =
+    typeof summary.mqlLevel === 'string' &&
+    (AX_MQL_LEVELS as readonly string[]).includes(summary.mqlLevel)
+      ? (summary.mqlLevel as AxMqlLevel)
+      : summary.mqlQualified === true
+        ? 'interest'
+        : 'none';
+  return {
+    submissionId: stringOrNull(summary.submissionId),
+    title: stringOrNull(summary.title),
+    version: numberOrNull(summary.version),
+    resultTypeName: stringOrNull(summary.resultTypeName),
+    leadScore: numberOrNull(summary.leadScore),
+    leadScoreReasons: textList(summary.leadScoreReasons),
+    mqlLevel: level,
+    mqlReasons: textList(summary.mqlReasons),
+    consultationRequested: summary.consultationRequested === true,
+    diagnosedAt: isoOrNull(summary.diagnosedAt),
+  };
+}
+
 /** Read the diagnosis data of a lead (`responses` and `customFields` as stored) */
 export function readLeadDiagnosis(responses: unknown, customFields?: unknown): LeadDiagnosisView {
   const extra: ExtraDataEntry[] = [];
   let ax: AxDiagnosisView | null = null;
+  let builder: BuilderDiagnosisView | undefined;
 
   if (isPlainObject(responses)) {
     for (const [key, value] of Object.entries(responses)) {
-      if (key === AX_KEY && isPlainObject(value)) continue;
+      if ((key === AX_KEY || key === BUILDER_KEY) && isPlainObject(value)) continue;
       extra.push(...flattenExtraData(value, key));
+    }
+
+    const builderSummary = responses[BUILDER_KEY];
+    if (isPlainObject(builderSummary)) {
+      builder = readBuilder(builderSummary);
+      for (const [key, value] of Object.entries(builderSummary)) {
+        if (!BUILDER_KEYS.has(key)) extra.push(...flattenExtraData(value, `${BUILDER_KEY}.${key}`));
+      }
     }
 
     const summary = responses[AX_KEY];
@@ -241,5 +323,5 @@ export function readLeadDiagnosis(responses: unknown, customFields?: unknown): L
     }
   }
 
-  return { ax, extra };
+  return builder ? { ax, builder, extra } : { ax, extra };
 }

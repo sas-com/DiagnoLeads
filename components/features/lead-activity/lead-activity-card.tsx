@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useOrganization } from '@/hooks/use-organization';
 import {
+  type DiagnosisSummary,
   LEAD_ACTIVITY_FILTERS,
   type LeadActivityEvent,
   type LeadActivityFilter,
@@ -293,24 +294,15 @@ function DiagnosisDetails({
   const { summary } = event;
   const label = (key: string, fallback: string) => (tAx.has(key) ? tAx(key) : fallback);
 
-  const parts = [
-    summary.platform &&
-      `${t('summary.platform')}: ${label(`platforms.${summary.platform}`, summary.platform)}`,
-    summary.difficulty &&
-      `${t('summary.difficulty')}: ${label(`result.levels.${summary.difficulty}`, summary.difficulty)}`,
-    summary.urgency &&
-      `${t('summary.urgency')}: ${label(`result.levels.${summary.urgency}`, summary.urgency)}`,
-    `${t('summary.primaryChallenge')}: ${
-      summary.primaryChallenge
-        ? label(`result.challenges.${summary.primaryChallenge}.title`, summary.primaryChallenge)
-        : t('summary.noChallenge')
-    }`,
-  ].filter(Boolean);
+  const parts = summary.builder
+    ? builderSummaryParts(summary.builder, t)
+    : axSummaryParts(summary, t, label);
 
   return (
     <div className="space-y-1">
       <p className="text-sm text-gray-700">{parts.join(' / ')}</p>
       <div className="flex flex-wrap gap-2">
+        <DiagnosisMqlBadge level={summary.mqlLevel} />
         {summary.needsHearing && <Badge color="yellow">{t('summary.needsHearing')}</Badge>}
         {summary.companySizeFit && summary.companySizeFit !== 'not_configured' && (
           <Badge color={COMPANY_SIZE_BADGE_COLORS[summary.companySizeFit]}>
@@ -331,6 +323,49 @@ function DiagnosisDetails({
       {open && <SubmissionAnswers submissionId={event.submissionId} leadId={leadId} />}
     </div>
   );
+}
+
+type SummaryTranslate = ReturnType<typeof useTranslations<'leadActivity'>>;
+
+/** 関心あり（MQL） / 適合 of a submission, the same badges as the lead page (#121) */
+export function DiagnosisMqlBadge({ level }: { level: DiagnosisSummary['mqlLevel'] }) {
+  const t = useTranslations('leadActivity');
+  if (level === 'interest') return <Badge color="emerald">{t('summary.mqlLevels.interest')}</Badge>;
+  if (level === 'fit') return <Badge color="gray">{t('summary.mqlLevels.fit')}</Badge>;
+  return null;
+}
+
+/** "診断名 第2版 / 結果: … / リードスコア: 72 / 100" of a builder diagnosis (#121) */
+export function builderSummaryParts(
+  builder: NonNullable<DiagnosisSummary['builder']>,
+  t: SummaryTranslate
+): string[] {
+  return [
+    `${builder.title ?? t('summary.untitled')} ${t('summary.version', { version: builder.version })}`,
+    builder.resultTypeName && `${t('summary.resultType')}: ${builder.resultTypeName}`,
+    builder.leadScore !== null &&
+      `${t('summary.leadScore')}: ${t('summary.leadScoreValue', { score: builder.leadScore })}`,
+  ].filter((part): part is string => typeof part === 'string');
+}
+
+function axSummaryParts(
+  summary: DiagnosisSummary,
+  t: SummaryTranslate,
+  label: (key: string, fallback: string) => string
+): string[] {
+  return [
+    summary.platform &&
+      `${t('summary.platform')}: ${label(`platforms.${summary.platform}`, summary.platform)}`,
+    summary.difficulty &&
+      `${t('summary.difficulty')}: ${label(`result.levels.${summary.difficulty}`, summary.difficulty)}`,
+    summary.urgency &&
+      `${t('summary.urgency')}: ${label(`result.levels.${summary.urgency}`, summary.urgency)}`,
+    `${t('summary.primaryChallenge')}: ${
+      summary.primaryChallenge
+        ? label(`result.challenges.${summary.primaryChallenge}.title`, summary.primaryChallenge)
+        : t('summary.noChallenge')
+    }`,
+  ].filter((part): part is string => typeof part === 'string');
 }
 
 export function SubmissionAnswers({

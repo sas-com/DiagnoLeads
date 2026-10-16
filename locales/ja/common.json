@@ -2990,6 +2990,16 @@
         "fit": "企業規模: 対象の範囲内",
         "not_fit": "企業規模: 対象外",
         "unknown": "企業規模: 未回答あり"
+      },
+      "resultType": "結果",
+      "leadScore": "リードスコア",
+      "leadScoreValue": "{score} / 100",
+      "version": "第{version}版",
+      "untitled": "名前のない診断",
+      "mqlLevels": {
+        "interest": "関心あり（MQL）",
+        "fit": "適合",
+        "none": "対象外"
       }
     },
     "showAnswers": "回答を見る",
@@ -3153,7 +3163,16 @@
       "showAnswers": "回答を見る",
       "extraTitle": "その他のデータ（{count} 件）",
       "yes": "はい",
-      "no": "いいえ"
+      "no": "いいえ",
+      "builderUntitled": "名前のない診断",
+      "builderVersion": "第{version}版",
+      "builderResultType": "結果タイプ",
+      "builderLeadScore": "リードスコア",
+      "builderLeadScoreValue": "{score} / 100",
+      "builderMqlInterestHelp": "診断の必須条件を満たし、関心を示す回答・行動があります",
+      "builderMqlFitHelp": "診断の必須条件は満たしていますが、関心を示す回答・行動はまだありません",
+      "builderMqlNoSignal": "必須条件は満たしています。関心を示す回答・行動はまだありません",
+      "builderMqlNone": "診断の必須条件を満たしていません"
     },
     "answers": {
       "empty": "診断の回答はありません。",
