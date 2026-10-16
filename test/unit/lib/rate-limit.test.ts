@@ -59,11 +59,11 @@ describe('DEFAULT_RATE_LIMITS', () => {
 describe('ENDPOINT_RATE_LIMITS', () => {
   describe('auth endpoints', () => {
     it('should have strict login rate limit', () => {
-      expect(ENDPOINT_RATE_LIMITS['/api/auth/login']).toEqual({ max: 5, windowMs: 60 * 1000 });
+      expect(ENDPOINT_RATE_LIMITS['/api/auth/sign-in']).toEqual({ max: 5, windowMs: 60 * 1000 });
     });
 
     it('should have strict signup rate limit', () => {
-      expect(ENDPOINT_RATE_LIMITS['/api/auth/signup']).toEqual({ max: 3, windowMs: 60 * 1000 });
+      expect(ENDPOINT_RATE_LIMITS['/api/auth/sign-up']).toEqual({ max: 3, windowMs: 60 * 1000 });
     });
 
     it('should have strict password reset rate limits', () => {
@@ -130,7 +130,7 @@ describe('ENDPOINT_RATE_LIMITS', () => {
 describe('getRateLimitConfig', () => {
   describe('exact match endpoints', () => {
     it('should return exact match config for login', () => {
-      const config = getRateLimitConfig('/api/auth/login');
+      const config = getRateLimitConfig('/api/auth/sign-in');
       expect(config).toEqual({ max: 5, windowMs: 60 * 1000 });
     });
 
@@ -282,8 +282,8 @@ describe('RateLimitConfig type', () => {
 describe('Rate limit security considerations', () => {
   it('should have stricter limits for sensitive operations', () => {
     // Auth operations should be most restricted
-    expect(ENDPOINT_RATE_LIMITS['/api/auth/login'].max).toBeLessThanOrEqual(5);
-    expect(ENDPOINT_RATE_LIMITS['/api/auth/signup'].max).toBeLessThanOrEqual(5);
+    expect(ENDPOINT_RATE_LIMITS['/api/auth/sign-in'].max).toBeLessThanOrEqual(5);
+    expect(ENDPOINT_RATE_LIMITS['/api/auth/sign-up'].max).toBeLessThanOrEqual(5);
 
     // Bulk delete should be restricted
     expect(ENDPOINT_RATE_LIMITS['/api/trpc/leads.bulkDelete'].max).toBeLessThanOrEqual(10);

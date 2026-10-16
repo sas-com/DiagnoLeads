@@ -1191,7 +1191,7 @@
       "inviteNotSentTitle": "招待メールを送れませんでした",
       "inviteNotSentDescription": "招待は作成しました。下のリンクをコピーして、{email} の方に直接渡してください。",
       "inviteLinkLabel": "招待リンク",
-      "inviteLinkHelp": "リンクの有効期限は7日間です。リンクを知っている人は、招待したメールアドレスで登録して参加できてしまうため、本人にだけ渡してください。",
+      "inviteLinkHelp": "リンクの有効期限は48時間です。リンクを知っている人は、招待したメールアドレスで登録して参加できてしまうため、本人にだけ渡してください。",
       "copyLink": "コピー",
       "linkCopied": "招待リンクをコピーしました",
       "copyFailed": "コピーできませんでした。リンクを選択してコピーしてください",
@@ -1228,7 +1228,8 @@
         "successToast": "ログインに成功しました",
         "errorToast": "ログインに失敗しました。",
         "invalidCredentials": "メールアドレスまたはパスワードが正しくありません。",
-        "userNotFound": "このメールアドレスは登録されていません。"
+        "userNotFound": "このメールアドレスは登録されていません。",
+        "inviteOnlyNote": "新規登録は招待制です。招待された方は、届いた招待リンクから登録してください。"
       },
       "signup": {
         "title": "アカウントを作成",
@@ -1243,7 +1244,10 @@
         "submittingButton": "アカウント作成中...",
         "successToast": "アカウントを作成しました",
         "errorToast": "アカウント作成に失敗しました。",
-        "emailAlreadyExists": "このメールアドレスは既に登録されています。ログインページからログインしてください。"
+        "emailAlreadyExists": "このメールアドレスは既に登録されています。ログインページからログインしてください。",
+        "invitationRequired": "新規登録は招待されたメールアドレスのみ可能です。招待リンクを開き直すか、招待した方にもう一度送ってもらってください。",
+        "inviteOnlyTitle": "新規登録は招待制です",
+        "inviteOnlyDescription": "DiagnoLeads は招待された方のみ登録できます。届いた招待リンクから登録してください。アカウントをお持ちの方はログインしてください。"
       },
       "resetPassword": {
         "emailLabel": "メールアドレス",

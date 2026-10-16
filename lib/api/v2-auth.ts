@@ -19,7 +19,10 @@ export interface AuthenticatedOrganization {
  */
 export async function getAuthenticatedOrganization(): Promise<AuthenticatedOrganization | null> {
   const session = await auth.api.getSession({ headers: await headers() });
-  const organizationId = session?.session?.activeOrganizationId;
+  // Sessions carry no active organization (the sessions table has no such column and the
+  // better-auth organization plugin is not used), so API v2 refuses until API keys exist
+  const organizationId = (session?.session as { activeOrganizationId?: string } | undefined)
+    ?.activeOrganizationId;
   const userId = session?.user?.id;
   if (!organizationId || !userId) {
     return null;

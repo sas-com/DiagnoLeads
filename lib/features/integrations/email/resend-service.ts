@@ -186,7 +186,7 @@ function generateEmailHtml(template: EmailTemplateType, data: Record<string, unk
 
     <a href="${d.inviteUrl || '#'}" style="display: inline-block; background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: 500;">Accept Invitation</a>
 
-    <p style="color: #9ca3af; font-size: 12px; margin-top: 32px;">This invitation will expire in 7 days.</p>
+    <p style="color: #9ca3af; font-size: 12px; margin-top: 32px;">This invitation will expire in 48 hours.</p>
   </div>
 </body>
 </html>
@@ -316,7 +316,7 @@ Your role: ${d.role || 'Member'}
 
 Accept Invitation: ${d.inviteUrl || '#'}
 
-This invitation will expire in 7 days.
+This invitation will expire in 48 hours.
 `,
     password_reset: (d) => `
 Reset Your Password

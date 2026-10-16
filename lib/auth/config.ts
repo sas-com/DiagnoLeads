@@ -1,20 +1,27 @@
 import { db } from '@/lib/db/client';
 import * as schema from '@/lib/db/schema';
 import { env } from '@/lib/env';
+import { isSignupInvited } from '@/lib/features/members/invitations';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { organization } from 'better-auth/plugins';
+import { APIError, createAuthMiddleware } from 'better-auth/api';
 import {
   detectLocaleFromHeaders,
-  generateInvitationEmail,
   generatePasswordResetEmail,
   generateVerificationEmail,
   sendAuthEmail,
 } from './email-helpers';
 
+function invitationRequired() {
+  return new APIError('FORBIDDEN', {
+    message: '新規登録は招待されたメールアドレスのみ可能です。招待リンクから登録してください',
+    code: 'INVITATION_REQUIRED',
+  });
+}
+
 /**
  * BetterAuth Configuration
- * Provides authentication with organization/team management support
+ * Email and password authentication; organizations and invitations are handled by the app
  */
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -72,21 +79,37 @@ export const auth = betterAuth({
     },
   },
 
-  plugins: [
-    organization({
-      async sendInvitationEmail(data) {
-        const { email, organization, inviter, role } = data;
-        const inviterName = inviter.user.name || inviter.user.email;
-        const { subject, text } = generateInvitationEmail(
-          inviterName,
-          organization.name,
-          role,
-          data.id
-        );
-        void sendAuthEmail({ to: email, subject, text });
-      },
+  /**
+   * Sign-up is invitation-only (the admin app is internal for now): the request must carry the
+   * token of a pending invitation for the address. Checked before better-auth looks the address
+   * up, so uninvited callers cannot probe which addresses are registered, and again when the user
+   * row is created, so no other path can add users. Existing users sign in as before.
+   */
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      if (ctx.path !== '/sign-up/email') return;
+      const body = (ctx.body ?? {}) as { email?: unknown; invitationToken?: unknown };
+      const email = typeof body.email === 'string' ? body.email : '';
+      if (!(await isSignupInvited(db, body.invitationToken, email))) throw invitationRequired();
     }),
-  ],
+  },
+
+  databaseHooks: {
+    user: {
+      create: {
+        before: async (user, ctx) => {
+          const body = (ctx?.body ?? {}) as { invitationToken?: unknown };
+          if (
+            ctx?.path !== '/sign-up/email' ||
+            !(await isSignupInvited(db, body.invitationToken, user.email))
+          ) {
+            throw invitationRequired();
+          }
+          return { data: user };
+        },
+      },
+    },
+  },
 
   advanced: {
     useSecureCookies: env.NODE_ENV === 'production',

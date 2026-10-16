@@ -76,7 +76,11 @@ export function InviteAcceptance({ token }: { token: string }) {
   const user = session.data?.user;
   if (!user) {
     const query = new URLSearchParams({ callbackUrl: back });
-    const signupQuery = new URLSearchParams({ callbackUrl: back, email: invitation.email });
+    const signupQuery = new URLSearchParams({
+      callbackUrl: back,
+      email: invitation.email,
+      invitation: token,
+    });
     return (
       <Panel title={t('title')}>
         {summary}

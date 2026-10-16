@@ -18,7 +18,6 @@ vi.mock('@/lib/env', () => ({
 
 import {
   detectLocaleFromHeaders,
-  generateInvitationEmail,
   generatePasswordResetEmail,
   generateVerificationEmail,
   sendAuthEmail,
@@ -160,46 +159,6 @@ describe('generateVerificationEmail', () => {
 
       expect(text).toContain('Hi User');
     });
-  });
-});
-
-describe('generateInvitationEmail', () => {
-  it('should generate invitation email with correct content', () => {
-    const { subject, text } = generateInvitationEmail(
-      'John Doe',
-      'Acme Inc',
-      'admin',
-      'invite-123'
-    );
-
-    expect(subject).toBe('Acme Incへの招待 - DiagnoLeads');
-    expect(text).toContain('John Doeさんから');
-    expect(text).toContain('Acme Incへの招待');
-    expect(text).toContain('ロール: admin');
-    expect(text).toContain('https://app.diagnoleads.com/invite/invite-123');
-    expect(text).toContain('7日間で期限切れ');
-  });
-
-  it('should work with different roles', () => {
-    const { text: adminText } = generateInvitationEmail('Alice', 'Corp', 'admin', 'inv-1');
-    const { text: memberText } = generateInvitationEmail('Bob', 'Corp', 'member', 'inv-2');
-    const { text: ownerText } = generateInvitationEmail('Carol', 'Corp', 'owner', 'inv-3');
-
-    expect(adminText).toContain('ロール: admin');
-    expect(memberText).toContain('ロール: member');
-    expect(ownerText).toContain('ロール: owner');
-  });
-
-  it('should handle special characters in organization name', () => {
-    const { subject, text } = generateInvitationEmail(
-      'Test User',
-      'Org & Co.',
-      'member',
-      'inv-special'
-    );
-
-    expect(subject).toContain('Org & Co.');
-    expect(text).toContain('Org & Co.');
   });
 });
 

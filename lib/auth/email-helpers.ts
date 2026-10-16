@@ -68,24 +68,6 @@ export function generateVerificationEmail(
 }
 
 /**
- * Generate organization invitation email content
- */
-export function generateInvitationEmail(
-  inviterName: string,
-  organizationName: string,
-  role: string,
-  inviteId: string
-): { subject: string; text: string } {
-  const inviteUrl = `${env.NEXT_PUBLIC_APP_URL}/invite/${inviteId}`;
-
-  const subject = `${organizationName}への招待 - DiagnoLeads`;
-
-  const text = `${inviterName}さんから${organizationName}への招待が届いています。\n\nロール: ${role}\n\n以下のリンクから招待を承認してください：\n${inviteUrl}\n\nこの招待は7日間で期限切れとなります。\n\n- DiagnoLeads`;
-
-  return { subject, text };
-}
-
-/**
  * Detect locale from request headers
  */
 export function detectLocaleFromHeaders(headers: Headers | null | undefined): 'ja' | 'en' {

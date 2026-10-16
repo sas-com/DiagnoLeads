@@ -43,7 +43,7 @@ import { toast } from 'sonner';
 describe('SignupForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockSearchParams = new URLSearchParams();
+    mockSearchParams = new URLSearchParams({ invitation: 'invite-token' });
   });
 
   afterEach(() => {
@@ -136,6 +136,7 @@ describe('SignupForm', () => {
         email: 'test@example.com',
         password: 'Password123',
         callbackURL: '/dashboard',
+        invitationToken: 'invite-token',
       });
     });
   });
@@ -161,6 +162,7 @@ describe('SignupForm', () => {
     mockSearchParams = new URLSearchParams({
       email: 'invited@example.com',
       callbackUrl: '/ja/invite/abc',
+      invitation: 'invite-token',
     });
     mockSignUp.mockResolvedValueOnce({ data: { user: { id: '1' } } });
     const user = userEvent.setup();
@@ -174,14 +176,21 @@ describe('SignupForm', () => {
 
     await waitFor(() => {
       expect(mockSignUp).toHaveBeenCalledWith(
-        expect.objectContaining({ email: 'invited@example.com', callbackURL: '/ja/invite/abc' })
+        expect.objectContaining({
+          email: 'invited@example.com',
+          callbackURL: '/ja/invite/abc',
+          invitationToken: 'invite-token',
+        })
       );
       expect(mockPush).toHaveBeenCalledWith('/ja/invite/abc');
     });
   });
 
   it('ignores a callback to another site', async () => {
-    mockSearchParams = new URLSearchParams({ callbackUrl: 'https://evil.example' });
+    mockSearchParams = new URLSearchParams({
+      callbackUrl: 'https://evil.example',
+      invitation: 'invite-token',
+    });
     mockSignUp.mockResolvedValueOnce({ data: { user: { id: '1' } } });
     const user = userEvent.setup();
     render(<SignupForm />);
@@ -193,6 +202,33 @@ describe('SignupForm', () => {
     await user.click(screen.getByRole('button', { name: /submitButton/i }));
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/dashboard'));
+  });
+
+  it('explains that sign-up is by invitation when opened without an invitation', () => {
+    mockSearchParams = new URLSearchParams();
+    render(<SignupForm />);
+
+    expect(screen.getByRole('status')).toHaveTextContent(/inviteOnlyTitle/);
+    expect(screen.queryByRole('button', { name: /submitButton/i })).not.toBeInTheDocument();
+  });
+
+  it('shows why the server refused an uninvited sign-up', async () => {
+    mockSignUp.mockResolvedValueOnce({
+      error: { code: 'INVITATION_REQUIRED', message: 'invitation required' },
+    });
+    const user = userEvent.setup();
+    render(<SignupForm />);
+
+    await user.type(screen.getByLabelText(/nameLabel/i), 'John Doe');
+    await user.type(screen.getByLabelText(/emailLabel/i), 'test@example.com');
+    await user.type(screen.getByLabelText(/^settings\.auth\.signup\.passwordLabel$/i), 'Password123');
+    await user.type(screen.getByLabelText(/confirmPasswordLabel/i), 'Password123');
+    await user.click(screen.getByRole('button', { name: /submitButton/i }));
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/invitationRequired/))
+    );
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it('should show error toast for existing user', async () => {

@@ -80,12 +80,6 @@ export default async function HomePage({
               >
                 {t('nav.login')}
               </Link>
-              <Link
-                href={`/${locale}/signup`}
-                className="px-4 py-2 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white rounded-lg transition-all text-sm font-medium shadow-lg shadow-teal-500/25 hover:shadow-teal-500/40"
-              >
-                {t('nav.signup')}
-              </Link>
             </div>
           </div>
         </div>
@@ -131,12 +125,6 @@ export default async function HomePage({
               >
                 {t('hero.cta.primary')}
                 <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </Link>
-              <Link
-                href={`/${locale}/signup`}
-                className="w-full sm:w-auto px-8 py-4 bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-2 border-gray-200 dark:border-gray-700 hover:border-teal-300 dark:hover:border-teal-600 rounded-xl transition-all text-base font-semibold flex items-center justify-center gap-2"
-              >
-                {t('hero.cta.secondary')}
               </Link>
             </div>
 
@@ -337,7 +325,7 @@ export default async function HomePage({
             <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">{t('cta.title')}</h2>
             <p className="text-lg text-teal-100 mb-8 max-w-2xl mx-auto">{t('cta.subtitle')}</p>
             <Link
-              href={`/${locale}/signup`}
+              href={`/${locale}/diagnostic`}
               className="inline-flex items-center gap-2 px-8 py-4 bg-white text-teal-600 rounded-xl font-semibold hover:bg-gray-50 transition-colors shadow-lg"
             >
               {t('cta.button')}
