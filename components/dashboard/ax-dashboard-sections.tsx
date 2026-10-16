@@ -20,6 +20,10 @@ import {
   signed,
 } from '@/lib/features/analytics/dashboard-format';
 import { AX_MIGRATION_CONFIG } from '@/lib/features/diagnostics/ax-migration/config';
+import {
+  type LeadListFilters,
+  leadListHref as buildLeadListHref,
+} from '@/lib/features/leads/list-query';
 import type { RouterOutputs } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
 import { AlertCircle, ArrowRight, RotateCw } from 'lucide-react';
@@ -54,8 +58,9 @@ function useDashboardText() {
   return { tw, locale, numberFormat, platformName };
 }
 
-/** Lead list. TODO(#131): link to the list filtered by status / waiting consultations */
-export const leadListHref = (locale: string) => `/${locale}/leads`;
+/** Lead list, optionally filtered (the filters are kept in the list's URL, #131) */
+export const leadListHref = (locale: string, filters?: Partial<LeadListFilters>) =>
+  buildLeadListHref(filters, undefined, `/${locale}/leads`);
 export const leadHref = (locale: string, id: string) => `/${locale}/leads/${id}`;
 
 /**
@@ -342,8 +347,9 @@ export function PendingSection({
       )}
       {state === 'ready' && rest > 0 && (
         <div className="mt-2 text-right">
+          {/* Waiting = asked for a consultation and still new, as counted above */}
           <Link
-            href={leadListHref(locale)}
+            href={leadListHref(locale, { consultation: true, status: ['new'] })}
             className="inline-flex items-center gap-1 text-sm font-medium text-brand-600 hover:underline dark:text-brand-400"
           >
             {tw('pending.more', { count: rest })}
@@ -543,7 +549,7 @@ export function BreakdownSection({
                 count={item.count}
                 total={totalStatus}
                 color={LEAD_STATUS_COLORS[item.status]}
-                href={leadListHref(locale)}
+                href={leadListHref(locale, { status: [item.status] })}
               />
             ))}
           </ul>

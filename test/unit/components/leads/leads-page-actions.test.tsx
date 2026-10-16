@@ -13,6 +13,8 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // The lazily loaded page parts take longer than the 1s default on a cold, instrumented run (CI coverage)
 configure({ asyncUtilTimeout: 5000 });
+// The lazily loaded page parts can take several seconds on a cold CI coverage run
+vi.setConfig({ testTimeout: 20000 });
 
 const ORG_ID = '11111111-1111-4111-8111-111111111111';
 const YAMADA_ID = '22222222-2222-4222-8222-222222222222';
@@ -100,6 +102,8 @@ vi.mock('@/hooks/use-leads', async () => {
     useCreateLead: () => ({ mutateAsync: vi.fn(), isPending: false }),
     useUpdateLead: () => ({ mutateAsync: store.updateMutate, isPending: false }),
     useLeadAccess: () => store.access,
+    // The cards count the whole organization (#131)
+    useLeadStatusCounts: () => ({ data: undefined, refetch: vi.fn() }),
     useDeleteLead: () => ({ mutateAsync: store.deleteMutate, isPending: false }),
   };
 });
@@ -203,7 +207,7 @@ const rowOf = (name: string) =>
 
 const openRowMenu = async (user: ReturnType<typeof userEvent.setup>, name: string) => {
   const row = await rowOf(name);
-  await user.click(within(row).getByRole('button', { name: 'メニューを開く' }));
+  await user.click(await within(row).findByRole('button', { name: 'メニューを開く' }));
   return screen.findByRole('menu');
 };
 
@@ -215,7 +219,7 @@ describe('LeadsPage row menu', () => {
     const user = userEvent.setup();
     renderPage();
     const menu = await openRowMenu(user, '佐藤 花子');
-    await user.click(within(menu).getByRole('menuitem', { name: '編集' }));
+    await user.click(await within(menu).findByRole('menuitem', { name: '編集' }));
 
     expect(store.push).toHaveBeenCalledWith(`/ja/leads/${SATO_ID}?edit=pipeline`);
     expect(screen.queryByRole('dialog', { name: 'リードを編集' })).not.toBeInTheDocument();
@@ -225,18 +229,18 @@ describe('LeadsPage row menu', () => {
     const user = userEvent.setup();
     renderPage();
     let menu = await openRowMenu(user, '山田 太郎');
-    await user.click(within(menu).getByRole('menuitem', { name: '削除' }));
+    await user.click(await within(menu).findByRole('menuitem', { name: '削除' }));
 
     let confirm = await screen.findByRole('alertdialog');
     expect(store.deleteMutate).not.toHaveBeenCalled();
-    await user.click(within(confirm).getByRole('button', { name: 'キャンセル' }));
+    await user.click(await within(confirm).findByRole('button', { name: 'キャンセル' }));
     await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
     expect(store.deleteMutate).not.toHaveBeenCalled();
 
     menu = await openRowMenu(user, '山田 太郎');
-    await user.click(within(menu).getByRole('menuitem', { name: '削除' }));
+    await user.click(await within(menu).findByRole('menuitem', { name: '削除' }));
     confirm = await screen.findByRole('alertdialog');
-    await user.click(within(confirm).getByRole('button', { name: '削除' }));
+    await user.click(await within(confirm).findByRole('button', { name: '削除' }));
 
     await waitFor(() =>
       expect(store.deleteMutate).toHaveBeenCalledWith({ id: YAMADA_ID, organizationId: ORG_ID })

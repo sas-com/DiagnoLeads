@@ -2882,5 +2882,76 @@
     "sheet": {
       "keyFacts": "要点"
     }
+  },
+  "leadList": {
+    "searchLabel": "リードを検索",
+    "searchPlaceholder": "名前・メール・会社で検索",
+    "filters": "絞り込み",
+    "filtersDescription": "条件を選ぶと一覧がすぐに絞り込まれます。",
+    "showResults": "{count}件を表示",
+    "resultCount": "{count}件",
+    "resultCountLoading": "件数を数えています",
+    "status": "状態",
+    "dealPhase": "商談フェーズ",
+    "inflowSource": "流入元",
+    "targetSystem": "対象システム",
+    "score": "スコア",
+    "scoreMin": "最小",
+    "scoreMax": "最大",
+    "scoreHint": "0〜100 の範囲で入れてください。片方だけでも絞り込めます。",
+    "createdAt": "作成日",
+    "createdHint": "日本時間の日付で、始めの日と終わりの日を含みます。",
+    "more": "その他の条件",
+    "consultation": "相談申込あり",
+    "mql": "MQL",
+    "sqlQualified": "SQL（商談対象）",
+    "selectedCount": "{count}件選択",
+    "apply": "適用",
+    "clear": "クリア",
+    "presetsLabel": "よく使う絞り込み",
+    "presets": {
+      "needsAction": "要対応",
+      "consultation": "相談申込あり",
+      "newThisWeek": "今週の新規",
+      "negotiating": "商談中"
+    },
+    "presetHints": {
+      "needsAction": "状態が「新規」で、まだ誰も着手していないリード",
+      "consultation": "相談申込のあったリード",
+      "newThisWeek": "今週（月曜から）作成されたリード",
+      "negotiating": "状態が「商談中」のリード"
+    },
+    "chips": {
+      "label": "かけている条件",
+      "search": "検索：{text}",
+      "value": "{field}：{value}",
+      "scoreBetween": "スコア {min}〜{max}",
+      "scoreAtLeast": "スコア {min} 以上",
+      "scoreAtMost": "スコア {max} 以下",
+      "createdBetween": "作成日 {from}〜{to}",
+      "createdFrom": "作成日 {from} 以降",
+      "createdTo": "作成日 {to} まで",
+      "noConsultation": "相談申込なし",
+      "notMql": "MQL ではない",
+      "sqlNotQualified": "SQL外",
+      "sqlUndecided": "SQL 未判定",
+      "remove": "条件「{label}」を外す",
+      "clearAll": "すべて解除"
+    },
+    "sort": {
+      "sortBy": "{column}で並び替え",
+      "ascending": "昇順",
+      "descending": "降順",
+      "current": "{column}：{order}で並んでいます",
+      "lastActivityAt": "最後の活動日",
+      "mqlQualifiedAt": "MQL判定日"
+    },
+    "noMatches": "条件に合うリードがありません",
+    "noMatchesDescription": "条件を減らすか、すべて解除してください。",
+    "pagination": "ページ送り",
+    "firstPage": "最初のページ",
+    "lastPage": "最後のページ",
+    "pageSize": "表示件数",
+    "pageSizeOption": "{count}件ずつ"
   }
 }

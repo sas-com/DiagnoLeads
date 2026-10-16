@@ -2882,5 +2882,76 @@
     "sheet": {
       "keyFacts": "Key facts"
     }
+  },
+  "leadList": {
+    "searchLabel": "Search leads",
+    "searchPlaceholder": "Search by name, email or company",
+    "filters": "Filters",
+    "filtersDescription": "The list updates as soon as you pick a condition.",
+    "showResults": "Show {count} leads",
+    "resultCount": "{count} leads",
+    "resultCountLoading": "Counting leads",
+    "status": "Status",
+    "dealPhase": "Deal phase",
+    "inflowSource": "Inflow source",
+    "targetSystem": "Target system",
+    "score": "Score",
+    "scoreMin": "Min",
+    "scoreMax": "Max",
+    "scoreHint": "Enter 0 to 100. One end is enough.",
+    "createdAt": "Created",
+    "createdHint": "Dates in Japan time; both the first and the last day are included.",
+    "more": "More conditions",
+    "consultation": "Consultation requested",
+    "mql": "MQL",
+    "sqlQualified": "SQL (qualified)",
+    "selectedCount": "{count} selected",
+    "apply": "Apply",
+    "clear": "Clear",
+    "presetsLabel": "Quick filters",
+    "presets": {
+      "needsAction": "Needs action",
+      "consultation": "Consultation requested",
+      "newThisWeek": "New this week",
+      "negotiating": "Negotiating"
+    },
+    "presetHints": {
+      "needsAction": "Status is New: nobody has started on these leads yet",
+      "consultation": "Leads that requested a consultation",
+      "newThisWeek": "Leads created this week (from Monday)",
+      "negotiating": "Leads with the status Negotiating"
+    },
+    "chips": {
+      "label": "Active filters",
+      "search": "Search: {text}",
+      "value": "{field}: {value}",
+      "scoreBetween": "Score {min}–{max}",
+      "scoreAtLeast": "Score {min} or more",
+      "scoreAtMost": "Score {max} or less",
+      "createdBetween": "Created {from}–{to}",
+      "createdFrom": "Created from {from}",
+      "createdTo": "Created until {to}",
+      "noConsultation": "No consultation",
+      "notMql": "Not MQL",
+      "sqlNotQualified": "Not SQL",
+      "sqlUndecided": "SQL undecided",
+      "remove": "Remove the filter \"{label}\"",
+      "clearAll": "Clear all"
+    },
+    "sort": {
+      "sortBy": "Sort by {column}",
+      "ascending": "ascending",
+      "descending": "descending",
+      "current": "Sorted by {column}, {order}",
+      "lastActivityAt": "Last activity",
+      "mqlQualifiedAt": "MQL date"
+    },
+    "noMatches": "No leads match these filters",
+    "noMatchesDescription": "Remove some filters or clear them all.",
+    "pagination": "Pagination",
+    "firstPage": "First page",
+    "lastPage": "Last page",
+    "pageSize": "Rows per page",
+    "pageSizeOption": "{count} per page"
   }
 }

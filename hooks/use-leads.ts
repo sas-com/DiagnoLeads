@@ -6,6 +6,7 @@ import type {
   UpdateLeadInput,
 } from '@/lib/features/leads/types';
 import { trpc } from '@/lib/trpc/client';
+import { keepPreviousData } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 /**
@@ -21,6 +22,8 @@ export function useCreateLead() {
     onSuccess: () => {
       // Invalidate leads list to refresh data
       utils.leads.list.invalidate();
+      // The list page's cards count the whole organization
+      utils.leads.statusCounts.invalidate();
       toast.success('リードを作成しました', { id: 'create-lead' });
     },
     onError: (error) => {
@@ -48,12 +51,25 @@ function isValidUUID(str: string): boolean {
  * Hook to list leads with pagination and filtering
  * Automatically disabled for invalid organization IDs (demo mode)
  */
-export function useListLeads(input: ListLeadsInput) {
+export function useListLeads(input: ListLeadsInput, options: { keepPrevious?: boolean } = {}) {
   const isValidOrg = isValidUUID(input.organizationId);
 
   return trpc.leads.list.useQuery(input, {
     enabled: isValidOrg,
+    // Paging, sorting and filtering keep showing the current rows until the next ones arrive
+    placeholderData: options.keepPrevious ? keepPreviousData : undefined,
   });
+}
+
+/**
+ * Leads per status and the average score of the whole organization (the list page's cards,
+ * not affected by the list filters) (#131)
+ */
+export function useLeadStatusCounts(organizationId: string) {
+  return trpc.leads.statusCounts.useQuery(
+    { organizationId },
+    { enabled: isValidUUID(organizationId) }
+  );
 }
 
 /** Lead permissions of the current member, as returned by the server */
@@ -94,6 +110,8 @@ export function useUpdateLead() {
         organizationId: variables.organizationId,
       });
       utils.leads.list.invalidate();
+      // The list page's cards count the whole organization
+      utils.leads.statusCounts.invalidate();
       toast.success('リードを更新しました', { id: 'update-lead' });
     },
     onError: (error) => {
@@ -115,6 +133,8 @@ export function useDeleteLead() {
     onSuccess: () => {
       // Invalidate leads list to refresh data
       utils.leads.list.invalidate();
+      // The list page's cards count the whole organization
+      utils.leads.statusCounts.invalidate();
       toast.success('リードを削除しました', { id: 'delete-lead' });
     },
     onError: (error) => {

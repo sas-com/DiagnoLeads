@@ -1,11 +1,21 @@
 'use client';
 
-import { useCreateLead, useDeleteLead, useLeadAccess, useListLeads } from '@/hooks/use-leads';
+import { LeadFilterToolbar } from '@/components/features/leads/list/lead-filter-toolbar';
+import { useLeadListPreferences, useLeadListQuery } from '@/hooks/use-lead-list-query';
+import {
+  useCreateLead,
+  useDeleteLead,
+  useLeadAccess,
+  useLeadStatusCounts,
+  useListLeads,
+} from '@/hooks/use-leads';
 import { useOrganization } from '@/hooks/use-organization';
+import { leadListHref } from '@/lib/features/leads/list-query';
 import { useLocale, useTranslations } from 'next-intl';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { type ReactNode, Suspense, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
@@ -19,23 +29,24 @@ import type { CreateLeadInput } from '@/lib/features/leads/types';
 import { trpc } from '@/lib/trpc/client';
 import { Plus, Target, TrendingUp, Upload, UserCheck, Users } from 'lucide-react';
 
+function TableSkeleton() {
+  return (
+    <Card className="animate-pulse p-4">
+      <div className="space-y-4">
+        <div className="h-12 bg-gray-200 rounded" />
+        <div className="h-12 bg-gray-100 rounded" />
+        <div className="h-12 bg-gray-100 rounded" />
+        <div className="h-12 bg-gray-100 rounded" />
+      </div>
+    </Card>
+  );
+}
+
 // Dynamic imports for heavy components (performance optimization)
 const LeadTable = dynamic(
   () =>
     import('@/components/features/leads/lead-table').then((mod) => ({ default: mod.LeadTable })),
-  {
-    loading: () => (
-      <Card className="animate-pulse p-4">
-        <div className="space-y-4">
-          <div className="h-12 bg-gray-200 rounded" />
-          <div className="h-12 bg-gray-100 rounded" />
-          <div className="h-12 bg-gray-100 rounded" />
-          <div className="h-12 bg-gray-100 rounded" />
-        </div>
-      </Card>
-    ),
-    ssr: false,
-  }
+  { loading: TableSkeleton, ssr: false }
 );
 
 const LeadDialog = dynamic(
@@ -76,12 +87,32 @@ function isValidUUID(str: string): boolean {
   return uuidRegex.test(str);
 }
 
+/** A stat card that opens the list with the matching filters */
+function StatCardLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="block rounded-xl transition-shadow hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+    >
+      {children}
+    </Link>
+  );
+}
+
 /**
  * リード管理ページ
- * Tailwind v4互換のモダンなリード一覧表示
+ * The list state (filters, sort, page) lives in the URL; the list reads from the server (#131).
+ * useSearchParams needs a Suspense boundary in the App Router.
  */
-
 export default function LeadsPage() {
+  return (
+    <Suspense fallback={<TableSkeleton />}>
+      <LeadsPageContent />
+    </Suspense>
+  );
+}
+
+function LeadsPageContent() {
   const t = useTranslations('leads');
   const tDetail = useTranslations('leadDetail');
   const tStatus = useTranslations('status');
@@ -122,16 +153,33 @@ export default function LeadsPage() {
       ? (selectedLeadQuery.data as Lead)
       : null;
 
-  // Fetch leads list
+  // Filters, sort and page from the URL; page size and columns from this browser
+  const listQuery = useLeadListQuery();
+  const preferences = useLeadListPreferences();
   const {
     data: leadsData,
     isLoading,
-    refetch,
-  } = useListLeads({
-    organizationId,
-    limit: 100,
-    offset: 0,
+    refetch: refetchList,
+  } = useListLeads(listQuery.listInput(organizationId, preferences.pageSize), {
+    keepPrevious: true,
   });
+  // The cards count the whole organization, whatever the list shows
+  const statusCounts = useLeadStatusCounts(organizationId);
+  const refetch = () => {
+    refetchList();
+    statusCounts.refetch();
+  };
+  const total = leadsData?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / preferences.pageSize));
+
+  // A page past the end (old link, or rows removed): go to the last page
+  const { page, setPage } = listQuery;
+  useEffect(() => {
+    if (leadsData && page > pageCount) setPage(pageCount);
+  }, [leadsData, page, pageCount, setPage]);
+
+  const listHref = (...args: Parameters<typeof leadListHref>) =>
+    leadListHref(args[0], args[1], `/${locale}/leads`);
 
   // Mutations
   const createLead = useCreateLead();
@@ -141,36 +189,14 @@ export default function LeadsPage() {
   const selectedLead: Lead | null =
     loadedLead ?? leads.find((lead) => lead.id === selectedLeadId) ?? null;
 
-  // Calculate stats with useMemo for performance
-  const stats = useMemo(() => {
-    const total = leads.length;
-    const newCount = leads.filter((l) => l.status === 'new').length;
-    const nurturing = leads.filter((l) => l.status === 'nurturing').length;
-    const negotiating = leads.filter((l) => l.status === 'negotiating').length;
-    const won = leads.filter((l) => l.status === 'won').length;
-    const conversionRate = total > 0 ? (won / total) * 100 : 0;
-    const avgScore = total > 0 ? leads.reduce((acc, l) => acc + (l.score || 0), 0) / total : 0;
-
-    return {
-      totalLeads: total,
-      newLeads: newCount,
-      nurturingLeads: nurturing,
-      negotiatingLeads: negotiating,
-      wonLeads: won,
-      conversionRate,
-      averageScore: avgScore,
-    };
-  }, [leads]);
-
-  const {
-    totalLeads,
-    newLeads,
-    nurturingLeads,
-    negotiatingLeads,
-    wonLeads,
-    conversionRate,
-    averageScore,
-  } = stats;
+  const counts = statusCounts.data;
+  const totalLeads = counts?.total ?? 0;
+  const newLeads = counts?.byStatus.new ?? 0;
+  const nurturingLeads = counts?.byStatus.nurturing ?? 0;
+  const negotiatingLeads = counts?.byStatus.negotiating ?? 0;
+  const wonLeads = counts?.byStatus.won ?? 0;
+  const conversionRate = totalLeads > 0 ? (wonLeads / totalLeads) * 100 : 0;
+  const averageScore = counts?.averageScore ?? 0;
 
   const handleCreateLead = async (data: Omit<CreateLeadInput, 'organizationId'>) => {
     await createLead.mutateAsync({ ...data, organizationId });
@@ -223,112 +249,130 @@ export default function LeadsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-start gap-4">
-          <div className="h-14 w-14 bg-gradient-to-br from-blue-100 to-emerald-100 dark:from-blue-900/30 dark:to-emerald-900/30 rounded-xl flex items-center justify-center">
+          <div className="hidden h-14 w-14 sm:flex bg-gradient-to-br from-blue-100 to-emerald-100 dark:from-blue-900/30 dark:to-emerald-900/30 rounded-xl items-center justify-center">
             <Users className="h-7 w-7 text-blue-600 dark:text-blue-400" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
+            <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl dark:text-gray-100">
+              {t('title')}
+            </h1>
             <Text className="mt-1">{t('description')}</Text>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" size="lg" onClick={() => setImportDialogOpen(true)}>
-            <Upload className="h-5 w-5 mr-2" />
+        {/* Below sm the two buttons share the width, so neither runs off the screen (#163) */}
+        <div className="flex w-full items-center gap-2 sm:w-auto sm:gap-3">
+          <Button
+            variant="outline"
+            className="h-11 flex-1 sm:h-12 sm:flex-none sm:px-8"
+            onClick={() => setImportDialogOpen(true)}
+          >
+            <Upload className="mr-2 h-5 w-5 shrink-0" />
             {tCommon('import')}
           </Button>
-          <Button size="lg" onClick={() => setCreateDialogOpen(true)}>
-            <Plus className="h-5 w-5 mr-2" />
+          <Button
+            className="h-11 flex-1 sm:h-12 sm:flex-none sm:px-8"
+            onClick={() => setCreateDialogOpen(true)}
+          >
+            <Plus className="mr-2 h-5 w-5 shrink-0" />
             {t('createLead')}
           </Button>
         </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* Total Leads */}
-        <Card className="p-6" decoration="top" decorationColor="blue">
-          <div className="flex items-start justify-between">
-            <div>
-              <Text>{t('totalLeads')}</Text>
-              <Metric className="mt-2">
-                {totalLeads.toLocaleString(locale === 'ja' ? 'ja-JP' : 'en-US')}
-              </Metric>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
+        {/* Total Leads: the whole list */}
+        <StatCardLink href={listHref()}>
+          <Card className="p-6 h-full" decoration="top" decorationColor="blue">
+            <div className="flex items-start justify-between">
+              <div>
+                <Text>{t('totalLeads')}</Text>
+                <Metric className="mt-2">
+                  {totalLeads.toLocaleString(locale === 'ja' ? 'ja-JP' : 'en-US')}
+                </Metric>
+              </div>
+              <div className="p-3 bg-blue-50 rounded-xl">
+                <Users className="h-6 w-6 text-blue-600" />
+              </div>
             </div>
-            <div className="p-3 bg-blue-50 rounded-xl">
-              <Users className="h-6 w-6 text-blue-600" />
+            <div className="mt-4 flex items-center justify-between">
+              <Badge color="blue">{tStatus('new')}</Badge>
+              <Text>{newLeads}</Text>
             </div>
-          </div>
-          <div className="mt-4 flex items-center justify-between">
-            <Badge color="blue">{tStatus('new')}</Badge>
-            <Text>{newLeads}</Text>
-          </div>
-        </Card>
+          </Card>
+        </StatCardLink>
 
-        {/* Active Leads */}
-        <Card className="p-6" decoration="top" decorationColor="yellow">
-          <div className="flex items-start justify-between">
-            <div>
-              <Text>{t('activeLeads') || 'Active Leads'}</Text>
-              <Metric className="mt-2">
-                {(nurturingLeads + negotiatingLeads).toLocaleString(
-                  locale === 'ja' ? 'ja-JP' : 'en-US'
-                )}
-              </Metric>
+        {/* Active Leads: nurturing and negotiating */}
+        <StatCardLink href={listHref({ status: ['nurturing', 'negotiating'] })}>
+          <Card className="p-6 h-full" decoration="top" decorationColor="yellow">
+            <div className="flex items-start justify-between">
+              <div>
+                <Text>{t('activeLeads') || 'Active Leads'}</Text>
+                <Metric className="mt-2">
+                  {(nurturingLeads + negotiatingLeads).toLocaleString(
+                    locale === 'ja' ? 'ja-JP' : 'en-US'
+                  )}
+                </Metric>
+              </div>
+              <div className="p-3 bg-yellow-50 rounded-xl">
+                <Target className="h-6 w-6 text-yellow-600" />
+              </div>
             </div>
-            <div className="p-3 bg-yellow-50 rounded-xl">
-              <Target className="h-6 w-6 text-yellow-600" />
+            <div className="mt-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <Badge color="yellow">{tStatus('nurturing')}</Badge>
+                <Text>{nurturingLeads}</Text>
+              </div>
+              <div className="flex items-center justify-between">
+                <Badge color="emerald">{tStatus('negotiating')}</Badge>
+                <Text>{negotiatingLeads}</Text>
+              </div>
             </div>
-          </div>
-          <div className="mt-4 space-y-2">
-            <div className="flex items-center justify-between">
-              <Badge color="yellow">{tStatus('nurturing')}</Badge>
-              <Text>{nurturingLeads}</Text>
-            </div>
-            <div className="flex items-center justify-between">
-              <Badge color="emerald">{tStatus('negotiating')}</Badge>
-              <Text>{negotiatingLeads}</Text>
-            </div>
-          </div>
-        </Card>
+          </Card>
+        </StatCardLink>
 
-        {/* Conversion Rate */}
-        <Card className="p-6" decoration="top" decorationColor="violet">
-          <div className="flex items-start justify-between">
-            <div>
-              <Text>{t('conversionRate') || 'Conversion Rate'}</Text>
-              <Metric className="mt-2">{conversionRate.toFixed(1)}%</Metric>
+        {/* Conversion Rate: the won leads */}
+        <StatCardLink href={listHref({ status: ['won'] })}>
+          <Card className="p-6 h-full" decoration="top" decorationColor="violet">
+            <div className="flex items-start justify-between">
+              <div>
+                <Text>{t('conversionRate') || 'Conversion Rate'}</Text>
+                <Metric className="mt-2">{conversionRate.toFixed(1)}%</Metric>
+              </div>
+              <div className="p-3 bg-violet-50 rounded-xl">
+                <UserCheck className="h-6 w-6 text-violet-600" />
+              </div>
             </div>
-            <div className="p-3 bg-violet-50 rounded-xl">
-              <UserCheck className="h-6 w-6 text-violet-600" />
+            <div className="mt-4">
+              <ProgressBar value={conversionRate} color="violet" />
+              <div className="mt-2 flex items-center justify-between">
+                <Badge color="violet">{tStatus('won')}</Badge>
+                <Text>{wonLeads}</Text>
+              </div>
             </div>
-          </div>
-          <div className="mt-4">
-            <ProgressBar value={conversionRate} color="violet" />
-            <div className="mt-2 flex items-center justify-between">
-              <Badge color="violet">{tStatus('won')}</Badge>
-              <Text>{wonLeads}</Text>
-            </div>
-          </div>
-        </Card>
+          </Card>
+        </StatCardLink>
 
-        {/* Average Score */}
-        <Card className="p-6" decoration="top" decorationColor="emerald">
-          <div className="flex items-start justify-between">
-            <div>
-              <Text>{t('averageScore') || 'Average Score'}</Text>
-              <Metric className="mt-2">
-                {averageScore.toFixed(0)}
-                <span className="text-lg font-normal text-gray-500">/100</span>
-              </Metric>
+        {/* Average Score: highest scores first */}
+        <StatCardLink href={listHref({}, { by: 'score', order: 'desc' })}>
+          <Card className="p-6 h-full" decoration="top" decorationColor="emerald">
+            <div className="flex items-start justify-between">
+              <div>
+                <Text>{t('averageScore') || 'Average Score'}</Text>
+                <Metric className="mt-2">
+                  {averageScore.toFixed(0)}
+                  <span className="text-lg font-normal text-gray-500">/100</span>
+                </Metric>
+              </div>
+              <div className="p-3 bg-emerald-50 rounded-xl">
+                <TrendingUp className="h-6 w-6 text-emerald-600" />
+              </div>
             </div>
-            <div className="p-3 bg-emerald-50 rounded-xl">
-              <TrendingUp className="h-6 w-6 text-emerald-600" />
+            <div className="mt-4">
+              <ProgressBar value={averageScore} color="emerald" />
             </div>
-          </div>
-          <div className="mt-4">
-            <ProgressBar value={averageScore} color="emerald" />
-          </div>
-        </Card>
+          </Card>
+        </StatCardLink>
       </div>
 
       {/* Lead Table */}
@@ -342,6 +386,25 @@ export default function LeadsPage() {
         onRefresh={() => refetch()}
         canEdit={access.canEdit}
         onLost={handleLost}
+        sort={listQuery.sort}
+        onSort={listQuery.toggleSort}
+        page={listQuery.page}
+        pageSize={preferences.pageSize}
+        total={total}
+        onPageChange={listQuery.setPage}
+        onPageSizeChange={(size) => {
+          preferences.setPageSize(size);
+          listQuery.setPage(1);
+        }}
+        columnPreferences={preferences.columnVisibility}
+        onColumnPreferencesChange={(patch) =>
+          preferences.setColumnVisibility((previous) => ({ ...previous, ...patch }))
+        }
+        hasFilters={listQuery.hasFilters}
+        onClearFilters={listQuery.clearFilters}
+        toolbar={(actions) => (
+          <LeadFilterToolbar controller={listQuery} total={leadsData?.total} actions={actions} />
+        )}
       />
 
       {/* Create Lead Dialog */}

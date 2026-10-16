@@ -1,5 +1,12 @@
 import { z } from 'zod';
-import { type LeadStatus, leadPipelineFieldsSchema, leadStatusEnum } from './pipeline';
+import {
+  type LeadStatus,
+  dealPhaseEnum,
+  inflowSourceEnum,
+  leadPipelineFieldsSchema,
+  leadStatusEnum,
+  targetSystemEnum,
+} from './pipeline';
 
 export { leadStatusEnum };
 export type { LeadStatus };
@@ -106,29 +113,70 @@ export const getLeadSchema = z.object({
 });
 export type GetLeadInput = z.infer<typeof getLeadSchema>;
 
+/** Columns the lead list can be sorted by (#131) */
+export const LEAD_SORT_KEYS = [
+  'createdAt',
+  'updatedAt',
+  'name',
+  'email',
+  'company',
+  'score',
+  'status',
+  'dealPhase',
+  'lastActivityAt',
+  'mqlQualifiedAt',
+] as const;
+export const leadSortKeyEnum = z.enum(LEAD_SORT_KEYS);
+export type LeadSortKey = z.infer<typeof leadSortKeyEnum>;
+
+/** SQL judgement filter: the two decisions, or not decided yet */
+export const SQL_DECISION_FILTERS = ['qualified', 'not_qualified', 'undecided'] as const;
+export const sqlDecisionFilterEnum = z.enum(SQL_DECISION_FILTERS);
+export type SqlDecisionFilter = z.infer<typeof sqlDecisionFilterEnum>;
+
+/** A calendar day in Japan time, 'YYYY-MM-DD' */
+export const jstDaySchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine((day) => !Number.isNaN(Date.parse(`${day}T00:00:00+09:00`)), 'Invalid date');
+
+/** One value or several (any of them matches); the single form is kept for older callers */
+const oneOrMany = <T extends z.ZodTypeAny>(item: T) =>
+  z.union([item, z.array(item).max(50)]).optional();
+
 /**
- * List leads schema with pagination and filtering
+ * List leads schema (#131: sorting and filtering run on the server)
  */
 export const listLeadsSchema = z.object({
   organizationId: z.string().uuid(),
   limit: z.number().int().min(1).max(100).default(20),
   offset: z.number().int().min(0).default(0),
-  status: leadStatusEnum.optional(),
+  status: oneOrMany(leadStatusEnum),
   source: leadSourceEnum.optional(),
-  inflowSource: leadPipelineFieldsSchema.shape.inflowSource,
-  dealPhase: leadPipelineFieldsSchema.shape.dealPhase,
-  search: z.string().optional(), // Search in name, email, company
+  inflowSource: oneOrMany(inflowSourceEnum),
+  dealPhase: oneOrMany(dealPhaseEnum),
+  targetSystem: oneOrMany(targetSystemEnum),
+  search: z.string().trim().max(200).optional(), // Search in name, email, company
   // Advanced filtering
   advancedFilter: filterGroupSchema.optional(),
   // Sort options
-  sortBy: z.enum(['createdAt', 'updatedAt', 'name', 'email', 'score', 'status']).optional(),
+  sortBy: leadSortKeyEnum.optional(),
   sortOrder: z.enum(['asc', 'desc']).optional(),
-  // Date range filter
+  // Date range filter (instants)
   createdFrom: z.string().datetime().optional(),
   createdTo: z.string().datetime().optional(),
+  // Date range filter in Japan days, both ends included
+  createdFromDay: jstDaySchema.optional(),
+  createdToDay: jstDaySchema.optional(),
   // Score range filter
   scoreMin: z.number().int().min(0).max(100).optional(),
   scoreMax: z.number().int().min(0).max(100).optional(),
+  // Asked for a consultation (conversion point 'consultation')
+  consultationRequested: z.boolean().optional(),
+  // MQL judged (true) / not judged (false)
+  mql: z.boolean().optional(),
+  // SQL judgement
+  sqlDecision: sqlDecisionFilterEnum.optional(),
   // Tag filter
   tagIds: z.array(z.string().uuid()).optional(),
 });
