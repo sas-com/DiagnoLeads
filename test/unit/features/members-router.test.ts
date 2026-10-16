@@ -252,6 +252,32 @@ describe('Members Router', () => {
       ]);
     });
 
+    it('refuses an address outside the company domain in test mode', async () => {
+      const saved = process.env.APP_TEST_MODE;
+      process.env.APP_TEST_MODE = 'true';
+      try {
+        const caller = appRouter.createCaller(mockContext);
+
+        await expect(
+          caller.members.invite({ organizationId: TEST_ORG_ID, email: 'someone@gmail.com', role: 'member' })
+        ).rejects.toMatchObject({
+          code: 'BAD_REQUEST',
+          message: 'テスト中のため、@sas-com.com のメールアドレスのみ登録できます',
+        });
+        expect(invitationsMock.createInvitation).not.toHaveBeenCalled();
+
+        await caller.members.invite({
+          organizationId: TEST_ORG_ID,
+          email: 'tokumoto@sas-com.com',
+          role: 'member',
+        });
+        expect(invitationsMock.createInvitation).toHaveBeenCalledTimes(1);
+      } finally {
+        if (saved === undefined) delete process.env.APP_TEST_MODE;
+        else process.env.APP_TEST_MODE = saved;
+      }
+    });
+
     it('stops at the hourly invitation limit', async () => {
       rateLimitMock.consumeRateLimits.mockResolvedValue({
         allowed: false,

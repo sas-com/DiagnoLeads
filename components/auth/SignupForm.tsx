@@ -82,6 +82,9 @@ export function SignupForm() {
 
         if (errorCode === 'INVITATION_REQUIRED') {
           toast.error(t('invitationRequired'));
+        } else if (errorCode === 'EMAIL_DOMAIN_NOT_ALLOWED') {
+          // Test mode: the server's message names the allowed domains
+          toast.error(result.error.message || t('errorToast'));
         } else if (
           errorCode === 'USER_ALREADY_EXISTS' ||
           errorMessage.includes('user already exists')

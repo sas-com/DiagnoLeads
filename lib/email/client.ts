@@ -1,9 +1,11 @@
 import { env } from '@/lib/env';
 import { Resend } from 'resend';
+import { EmailRecipientNotAllowedError, filterAllowedRecipients } from './allowed-recipients';
 
 export const resend = new Resend(env.RESEND_API_KEY);
 
-export const FROM_EMAIL = 'DiagnoLeads <noreply@diagnoleads.com>';
+/** Same sender as the other mail (EMAIL_FROM); the fallback domain is not verified in Resend */
+export const FROM_EMAIL = process.env.EMAIL_FROM || 'DiagnoLeads <noreply@diagnoleads.com>';
 
 type SendEmailOptions =
   | {
@@ -25,7 +27,9 @@ type SendEmailOptions =
  * メール送信のヘルパー関数
  */
 export async function sendEmail(options: SendEmailOptions) {
-  const { to, subject, react, text } = options;
+  const { subject, react, text } = options;
+  const to = filterAllowedRecipients(options.to);
+  if (to.length === 0) throw new EmailRecipientNotAllowedError();
 
   try {
     const emailOptions = react

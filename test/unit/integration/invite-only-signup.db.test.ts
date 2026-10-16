@@ -158,4 +158,22 @@ describe.skipIf(!url)('invitation-only sign-up (better-auth + PostgreSQL)', () =
     ).rejects.toMatchObject({ body: { code: 'INVITATION_REQUIRED' } });
     expect(await userCount(email)).toBe(0);
   });
+
+  it('in test mode, refuses an address outside the company domain even with a valid invitation', async () => {
+    const saved = process.env.APP_TEST_MODE;
+    process.env.APP_TEST_MODE = 'true';
+    try {
+      const email = `outsider-${unique()}@example.com`;
+      const { token } = await createInvitation(db, { organizationId, email, role: 'member', invitedBy: inviterId });
+
+      const res = await signUp({ email, invitationToken: token });
+
+      expect(res.status).toBe(400);
+      expect(await res.json()).toMatchObject({ code: 'EMAIL_DOMAIN_NOT_ALLOWED' });
+      expect(await userCount(email)).toBe(0);
+    } finally {
+      if (saved === undefined) delete process.env.APP_TEST_MODE;
+        else process.env.APP_TEST_MODE = saved;
+    }
+  });
 });
