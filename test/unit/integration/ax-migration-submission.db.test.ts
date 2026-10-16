@@ -186,6 +186,8 @@ describe.skipIf(!url)('AX migration submission (PostgreSQL)', () => {
       expect(lead?.responses).toMatchObject({
         axMigration: { consultationRequested: true, mql: { level: 'none', unmet: ['industry'] } },
       });
+    });
+  });
 
   it('checks the company size against the target ranges of the sales playbook (#150)', async () => {
     const content = emptyAxPlaybookContent();

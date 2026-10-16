@@ -32,12 +32,32 @@ const fit: AxMqlFacts = {
 };
 
 describe('judgeAxMql', () => {
+  // #150: only a size outside the target ranges fails the required condition
+  it.each([
+    ['not_fit', 'none', ['company_size']],
+    ['unknown', 'fit', []],
+    ['fit', 'fit', []],
+    ['not_configured', 'fit', []],
+  ] as const)('with a company size %s the lead is %s', (companySize, level, unmet) => {
+    const mql = judgeAxMql({ ...fit, companySize }, rules);
+    expect(mql.level).toBe(level);
+    expect(mql.unmet).toEqual(unmet);
+    expect(mql.criteria.companySize).toBe(companySize);
+  });
+
+  it('keeps a company outside the size ranges out even after a consultation request', () => {
+    const stored = judgeAxMql({ ...fit, companySize: 'not_fit' }, rules);
+    const requested = withConsultationSignal(stored, rules);
+    expect(requested).toMatchObject({ level: 'none', qualified: false, unmet: ['company_size'] });
+    expect(readAxMql(stored).unmet).toEqual(['company_size']);
+  });
+
   it('is fit only with the required conditions and no strong signal', () => {
     expect(judgeAxMql(fit, rules)).toEqual({
       level: 'fit',
       qualified: false,
       candidate: true,
-      criteria: { industry: true, system: true, action: false },
+      criteria: { industry: true, system: true, action: false, companySize: 'not_configured' },
       signals: [],
       unmet: [],
     });

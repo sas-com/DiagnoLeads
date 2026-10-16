@@ -75,21 +75,26 @@ describe('evaluateCompanySize', () => {
 });
 
 describe('evaluateAxMigration with a target company size', () => {
-  it('keeps a company outside the target out of the MQL candidates', () => {
+  it('does not count a company outside the target as a fit (#139 level none)', () => {
     const outside = evaluateAxMigration(
       { ...as400Answers, annual_revenue: 'over_30b' },
       undefined,
       undefined,
+      {},
       MID_SIZED
     );
-    expect(outside.mql.candidate).toBe(false);
-    expect(outside.mql.qualified).toBe(false);
+    expect(outside.mql).toMatchObject({
+      level: 'none',
+      candidate: false,
+      qualified: false,
+      unmet: ['company_size'],
+    });
     expect(outside.mql.criteria.companySize).toBe('not_fit');
     expect(outside.companySize.outside).toEqual(['annual_revenue']);
   });
 
   it('never excludes a company that did not answer', () => {
-    const skipped = evaluateAxMigration(as400Answers, undefined, undefined, MID_SIZED);
+    const skipped = evaluateAxMigration(as400Answers, undefined, undefined, {}, MID_SIZED);
     expect(skipped.mql.candidate).toBe(true);
     expect(skipped.mql.criteria.companySize).toBe('unknown');
   });
@@ -102,7 +107,7 @@ describe('evaluateAxMigration with a target company size', () => {
 
   it('does not change what the respondent is offered', () => {
     const answers = { ...as400Answers, annual_revenue: 'over_30b' };
-    expect(evaluateAxMigration(answers, undefined, undefined, MID_SIZED).recommendation).toBe(
+    expect(evaluateAxMigration(answers, undefined, undefined, {}, MID_SIZED).recommendation).toBe(
       evaluateAxMigration(answers).recommendation
     );
   });
@@ -124,11 +129,12 @@ describe('evaluateAxMigration with a target company size', () => {
       { ...as400Answers, annual_revenue: 'over_30b' },
       undefined,
       undefined,
+      {},
       MID_SIZED
     );
-    expect(buildSalesMessage({ ...base, result: outside }).message).toContain(
-      '企業規模: 対象外（MQL候補から除外）'
-    );
+    const message = buildSalesMessage({ ...base, result: outside }).message;
+    expect(message).toContain('MQL: 対象外（企業規模が対象外）');
+    expect(message).toContain('企業規模: 対象の範囲外');
     const plain = evaluateAxMigration(as400Answers);
     expect(buildSalesMessage({ ...base, result: plain }).message).not.toContain('企業規模');
   });
