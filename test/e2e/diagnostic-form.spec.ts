@@ -19,7 +19,8 @@ test.describe('Diagnostic Form', () => {
   };
 
   test.describe('Form Display', () => {
-    test('should display diagnostic form page @smoke', async ({ page }) => {
+    // Not a smoke test: the generic diagnostic form is stopped in production and CI seeds no form
+    test('should display diagnostic form page', async ({ page }) => {
       await page.goto('/diagnostic/sample');
 
       // Check form is visible

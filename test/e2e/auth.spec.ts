@@ -22,18 +22,16 @@ test.describe('Authentication', () => {
 
   test.describe('Sign Up', () => {
     test('should display signup page correctly @smoke', async ({ page }) => {
-      await page.goto('/sign-up');
+      await page.goto('/signup');
 
-      // Check page elements
-      await expect(page.getByRole('heading', { name: /サインアップ|Sign Up|アカウント作成/i })).toBeVisible();
-      await expect(page.locator('input[name="name"]')).toBeVisible();
-      await expect(page.locator('input[name="email"]')).toBeVisible();
-      await expect(page.locator('input[name="password"]')).toBeVisible();
-      await expect(page.getByRole('button', { name: /登録|Sign Up|作成/i })).toBeVisible();
+      // Sign-up is invite-only: without an invitation token the page explains that and links to sign-in
+      await expect(page.getByRole('heading', { name: /新規登録|Sign Up/i })).toBeVisible();
+      await expect(page.getByText(/新規登録は招待制です|invitation only/i).first()).toBeVisible();
+      await expect(page.getByRole('link', { name: /ログイン|Sign In|Log In/i })).toBeVisible();
     });
 
     test('should show validation errors for invalid input', async ({ page }) => {
-      await page.goto('/sign-up');
+      await page.goto('/signup');
 
       // Submit empty form
       await page.click('button[type="submit"]');
@@ -43,7 +41,7 @@ test.describe('Authentication', () => {
     });
 
     test('should show error for invalid email format', async ({ page }) => {
-      await page.goto('/sign-up');
+      await page.goto('/signup');
 
       await page.fill('input[name="name"]', 'Test User');
       await page.fill('input[name="email"]', 'invalid-email');
@@ -56,7 +54,7 @@ test.describe('Authentication', () => {
     });
 
     test('should show error for weak password', async ({ page }) => {
-      await page.goto('/sign-up');
+      await page.goto('/signup');
 
       await page.fill('input[name="name"]', 'Test User');
       await page.fill('input[name="email"]', 'test@example.com');
@@ -69,7 +67,7 @@ test.describe('Authentication', () => {
     });
 
     test('should successfully register a new user', async ({ page }) => {
-      await page.goto('/sign-up');
+      await page.goto('/signup');
 
       await page.fill('input[name="name"]', testUser.name);
       await page.fill('input[name="email"]', testUser.email);
@@ -78,11 +76,11 @@ test.describe('Authentication', () => {
       await page.click('button[type="submit"]');
 
       // Should redirect to dashboard or onboarding
-      await page.waitForURL(/\/(dashboard|onboarding|sign-in)/);
+      await page.waitForURL(/\/(dashboard|onboarding|login)/);
     });
 
     test('should show error for duplicate email', async ({ page }) => {
-      await page.goto('/sign-up');
+      await page.goto('/signup');
 
       // Try to register with same email again
       await page.fill('input[name="name"]', 'Another User');
@@ -98,7 +96,7 @@ test.describe('Authentication', () => {
 
   test.describe('Sign In', () => {
     test('should display login page correctly @smoke', async ({ page }) => {
-      await page.goto('/sign-in');
+      await page.goto('/login');
 
       // Check page elements
       await expect(page.getByRole('heading', { name: /ログイン|Sign In|サインイン/i })).toBeVisible();
@@ -108,7 +106,7 @@ test.describe('Authentication', () => {
     });
 
     test('should show error for invalid credentials', async ({ page }) => {
-      await page.goto('/sign-in');
+      await page.goto('/login');
 
       await page.fill('input[name="email"]', 'nonexistent@example.com');
       await page.fill('input[name="password"]', 'WrongP@ss999');
@@ -120,7 +118,7 @@ test.describe('Authentication', () => {
     });
 
     test('should successfully login with valid credentials', async ({ page }) => {
-      await page.goto('/sign-in');
+      await page.goto('/login');
 
       await page.fill('input[name="email"]', testUser.email);
       await page.fill('input[name="password"]', testUser.password);
@@ -132,17 +130,17 @@ test.describe('Authentication', () => {
     });
 
     test('should have link to signup page', async ({ page }) => {
-      await page.goto('/sign-in');
+      await page.goto('/login');
 
       const signupLink = page.getByRole('link', { name: /新規登録|Sign Up|アカウント作成/i });
       await expect(signupLink).toBeVisible();
 
       await signupLink.click();
-      await page.waitForURL(/\/sign-up/);
+      await page.waitForURL(/\/signup/);
     });
 
     test('should have link to password reset', async ({ page }) => {
-      await page.goto('/sign-in');
+      await page.goto('/login');
 
       const resetLink = page.getByRole('link', { name: /パスワード|忘れ|reset|forgot/i });
       if (await resetLink.isVisible()) {
@@ -155,7 +153,7 @@ test.describe('Authentication', () => {
   test.describe('Session & Logout', () => {
     test.beforeEach(async ({ page }) => {
       // Login first
-      await page.goto('/sign-in');
+      await page.goto('/login');
       await page.fill('input[name="email"]', testUser.email);
       await page.fill('input[name="password"]', testUser.password);
       await page.click('button[type="submit"]');
@@ -293,7 +291,7 @@ test.describe('Authentication', () => {
 
   test.describe('Security', () => {
     test('should not expose user existence via login error messages', async ({ page }) => {
-      await page.goto('/sign-in');
+      await page.goto('/login');
 
       // Try with non-existent email
       await page.fill('input[name="email"]', 'nonexistent-user-xyz@example.com');
@@ -309,7 +307,7 @@ test.describe('Authentication', () => {
     });
 
     test('should rate limit login attempts', async ({ page }) => {
-      await page.goto('/sign-in');
+      await page.goto('/login');
 
       // Try multiple failed logins
       for (let i = 0; i < 5; i++) {
@@ -327,7 +325,7 @@ test.describe('Authentication', () => {
 
     test('should clear sensitive data on logout', async ({ page }) => {
       // Login first
-      await page.goto('/sign-in');
+      await page.goto('/login');
       await page.fill('input[name="email"]', testUser.email);
       await page.fill('input[name="password"]', testUser.password);
       await page.click('button[type="submit"]');
@@ -360,7 +358,7 @@ test.describe('Authentication', () => {
       const baseUrl = process.env.PLAYWRIGHT_TEST_BASE_URL || 'http://localhost:3000';
       
       if (baseUrl.startsWith('https://')) {
-        await page.goto('/sign-in');
+        await page.goto('/login');
         expect(page.url()).toMatch(/^https:/);
       }
     });
@@ -368,7 +366,7 @@ test.describe('Authentication', () => {
 
   test.describe('Accessibility', () => {
     test('should have proper form labels on login page', async ({ page }) => {
-      await page.goto('/sign-in');
+      await page.goto('/login');
 
       // Check email input has label
       const emailInput = page.locator('input[name="email"]');
@@ -384,7 +382,7 @@ test.describe('Authentication', () => {
     });
 
     test('should be keyboard navigable', async ({ page }) => {
-      await page.goto('/sign-in');
+      await page.goto('/login');
 
       // Tab to email input
       await page.keyboard.press('Tab');
@@ -403,7 +401,7 @@ test.describe('Authentication', () => {
     });
 
     test('should announce errors to screen readers', async ({ page }) => {
-      await page.goto('/sign-in');
+      await page.goto('/login');
 
       // Submit empty form
       await page.click('button[type="submit"]');
@@ -420,7 +418,7 @@ test.describe('Authentication', () => {
     test.use({ viewport: { width: 375, height: 667 } });
 
     test('should display login form properly on mobile', async ({ page }) => {
-      await page.goto('/sign-in');
+      await page.goto('/login');
 
       // Form should be visible
       await expect(page.locator('input[name="email"]')).toBeVisible();
@@ -436,7 +434,7 @@ test.describe('Authentication', () => {
     });
 
     test('should have touch-friendly input sizes on mobile', async ({ page }) => {
-      await page.goto('/sign-in');
+      await page.goto('/login');
 
       const inputs = page.locator('input:visible');
       const inputCount = await inputs.count();
@@ -508,7 +506,7 @@ test.describe('Authentication', () => {
 
   test.describe('Sign In - Error Recovery', () => {
     test('should clear error when user starts typing after failed login', async ({ page }) => {
-      await page.goto('/sign-in');
+      await page.goto('/login');
 
       // First, trigger an error
       await page.fill('input[name="email"]', 'wrong@example.com');
@@ -526,7 +524,7 @@ test.describe('Authentication', () => {
     });
 
     test('should allow retry after failed login', async ({ page }) => {
-      await page.goto('/sign-in');
+      await page.goto('/login');
 
       // First failed attempt
       await page.fill('input[name="email"]', 'wrong@example.com');
@@ -546,7 +544,7 @@ test.describe('Authentication', () => {
       // Simulate offline mode
       await page.context().setOffline(true);
       
-      await page.goto('/sign-in');
+      await page.goto('/login');
       await page.fill('input[name="email"]', 'test@example.com');
       await page.fill('input[name="password"]', 'TestPassword123');
       
@@ -622,7 +620,7 @@ test.describe('Authentication', () => {
 
     test('should redirect authenticated user away from login page', async ({ page }) => {
       // First login
-      await page.goto('/sign-in');
+      await page.goto('/login');
       await page.fill('input[name="email"]', testUser.email);
       await page.fill('input[name="password"]', testUser.password);
       await page.click('button[type="submit"]');
@@ -639,7 +637,7 @@ test.describe('Authentication', () => {
 
   test.describe('Loading States & UX', () => {
     test('should show loading indicator during login', async ({ page }) => {
-      await page.goto('/sign-in');
+      await page.goto('/login');
 
       await page.fill('input[name="email"]', testUser.email);
       await page.fill('input[name="password"]', testUser.password);
@@ -662,7 +660,7 @@ test.describe('Authentication', () => {
     });
 
     test('should prevent double submission', async ({ page }) => {
-      await page.goto('/sign-in');
+      await page.goto('/login');
 
       await page.fill('input[name="email"]', testUser.email);
       await page.fill('input[name="password"]', testUser.password);
@@ -681,7 +679,7 @@ test.describe('Authentication', () => {
     });
 
     test('should disable form inputs during submission', async ({ page }) => {
-      await page.goto('/sign-in');
+      await page.goto('/login');
 
       await page.fill('input[name="email"]', testUser.email);
       await page.fill('input[name="password"]', testUser.password);
@@ -703,7 +701,7 @@ test.describe('Authentication', () => {
 
   test.describe('Error Messages - UX Quality', () => {
     test('should display user-friendly error for invalid email format', async ({ page }) => {
-      await page.goto('/sign-in');
+      await page.goto('/login');
 
       await page.fill('input[name="email"]', 'not-an-email');
       await page.fill('input[name="password"]', 'TestPassword123');
@@ -752,7 +750,7 @@ test.describe('Authentication', () => {
   test.describe('Session Expiry', () => {
     test('should handle expired session gracefully', async ({ page }) => {
       // Login first
-      await page.goto('/sign-in');
+      await page.goto('/login');
       await page.fill('input[name="email"]', testUser.email);
       await page.fill('input[name="password"]', testUser.password);
       await page.click('button[type="submit"]');

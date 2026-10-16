@@ -17,7 +17,8 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   workers: process.env.CI ? 2 : undefined,
   reporter: process.env.CI ? [['html'], ['github']] : 'html',
-  timeout: 30 * 1000,
+  // The dev server compiles each page on first visit, which is slow on a cold CI runner
+  timeout: (process.env.CI ? 60 : 30) * 1000,
   expect: {
     timeout: 10 * 1000,
   },
