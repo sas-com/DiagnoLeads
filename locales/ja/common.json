@@ -2485,5 +2485,86 @@
       "others": "その他の項目",
       "othersCount": "{count}項目"
     }
+  },
+  "leadActivity": {
+    "title": "活動履歴",
+    "filters": {
+      "all": "すべて",
+      "diagnosis": "診断・相談",
+      "hearing": "ヒアリング",
+      "comment": "コメント",
+      "sales": "営業の操作"
+    },
+    "empty": "まだ履歴はありません。",
+    "loadError": "活動履歴を読み込めませんでした。",
+    "retry": "再読み込み",
+    "loadMore": "もっと見る",
+    "kinds": {
+      "lead_created": {
+        "web_diagnosis": "Web診断でリードが作成されました",
+        "staff": "リードが登録されました",
+        "import": "リードがインポートされました",
+        "other": "リードが作成されました"
+      },
+      "diagnosis_submitted": "Web診断の回答",
+      "consultation_requested": "個別相談の申込み",
+      "consultationWithSubmission": "診断と同時に申込み",
+      "consultationLater": "結果画面から申込み",
+      "details_answered": "追加の質問への回答",
+      "hearing_recorded": "ヒアリングを記録（{date}の商談）",
+      "hearing_updated": "ヒアリングを更新（{date}の商談）",
+      "comment": {
+        "comment": "コメント",
+        "note": "メモ",
+        "activity": "活動記録",
+        "reply": "返信"
+      },
+      "lead_updated": "リードを更新",
+      "mql_qualified": "MQLとして判定",
+      "sql_decided": "SQL判定: {decision}",
+      "phase_reached": "商談フェーズ「{phase}」に到達"
+    },
+    "unverified": "本人未確認",
+    "unverifiedHelp": "同じメールアドレスからの回答。リードの項目は変更していません",
+    "continuation": "同じ画面から続けて診断",
+    "summary": {
+      "platform": "移行元",
+      "difficulty": "難易度",
+      "urgency": "緊急度",
+      "primaryChallenge": "主な課題",
+      "noChallenge": "特になし",
+      "needsHearing": "ヒアリングで確認が必要",
+      "detailsAnswered": "追加の質問に回答済み"
+    },
+    "showAnswers": "回答を見る",
+    "hideAnswers": "回答を閉じる",
+    "answersLoadError": "回答を読み込めませんでした。",
+    "detailQuestion": "追加の質問",
+    "openHearing": "ヒアリングを開く",
+    "fields": {
+      "status": "ステータス",
+      "dealPhase": "フェーズ",
+      "mqlQualified": "MQL判定",
+      "sqlDecision": "SQL判定",
+      "lostReason": "失注・保留理由",
+      "inflowSource": "流入元",
+      "conversionPoint": "コンバージョンポイント",
+      "targetSystem": "対象システム",
+      "referrerName": "紹介元",
+      "agencyName": "代行会社名",
+      "acquisitionCost": "獲得費用",
+      "score": "スコア",
+      "name": "名前",
+      "company": "会社名",
+      "email": "メールアドレス",
+      "phone": "電話番号"
+    },
+    "values": {
+      "notSet": "未設定",
+      "mql": "MQL",
+      "notMql": "未判定",
+      "sqlUndecided": "未判定"
+    },
+    "changeArrow": "{before} → {after}"
   }
 }
