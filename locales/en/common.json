@@ -1406,6 +1406,44 @@
       "loadErrorBody": "The agency links could not be loaded.",
       "retry": "Reload"
     },
+    "agencyContracts": {
+      "title": "Contracts",
+      "description": "Register the term, fees and plan of each agency contract. Used by \"Funnel and cost per agency contract\" in Analytics. Only owners and admins can see and change them.",
+      "add": "Add contract",
+      "addTitle": "Add contract",
+      "editTitle": "Edit contract",
+      "formDescription": "Amounts in yen excluding tax. Blank counts as 0.",
+      "agencyNameHint": "Use the same name as the lead's agency name (names of issued links are suggested).",
+      "costRule": "Cost = initial fee + monthly fee × months so far + the larger of the prepayment and (fee per appointment × appointments). The prepayment is a deposit used up by the fees per appointment.",
+      "fields": {
+        "agencyName": "Agency name",
+        "startsOn": "Start",
+        "endsOn": "End (blank = ongoing)",
+        "initialFee": "Initial fee",
+        "monthlyFee": "Monthly fee",
+        "prepayment": "Prepayment",
+        "feePerAppointment": "Fee per appointment",
+        "planAppointments": "Planned appointments (term)",
+        "planCostPerAppointment": "Target cost per appointment",
+        "note": "Note"
+      },
+      "termHeader": "Term",
+      "ongoing": "ongoing",
+      "actions": "Actions",
+      "edit": "Edit",
+      "remove": "Delete",
+      "save": "Save",
+      "cancel": "Cancel",
+      "empty": "No contracts yet.",
+      "saved": "Contract saved",
+      "saveError": "Could not save the contract. Please try again.",
+      "invalid": "Please check the form (start is required, end on or after the start, amounts are whole numbers from 0).",
+      "overlap": "Another contract of this agency covers part of the same term. Please change the term.",
+      "removed": "Contract deleted",
+      "removeError": "Could not delete the contract. Please try again.",
+      "removeConfirmTitle": "Delete this contract?",
+      "removeConfirmBody": "The contract of {agency} will be deleted. Leads of its term will show as \"cost not registered\"."
+    },
     "contentEditors": {
       "title": "Content editors",
       "description": "Choose who can create, update and delete FAQs and blog posts. Candidates are members of the operating organization.",
@@ -1854,6 +1892,32 @@
         "totalCost": "Acquisition cost",
         "costPerSql": "Per SQL",
         "empty": "No lead of this period has an agency name recorded."
+      },
+      "agencyContracts": {
+        "title": "Funnel and cost per agency contract",
+        "description": "For each sales agency contract: how the leads created during its term progressed, and the cost including fixed fees. Cost = initial fee + monthly fee × months so far + the larger of the prepayment and (fee per appointment × appointments).",
+        "empty": "No leads from sales agencies yet.",
+        "emptyManager": "No leads from sales agencies yet. Register contracts in Settings > Agency links.",
+        "contract": "Agency and term",
+        "term": "{start} - {end}",
+        "ongoing": "ongoing",
+        "stages": {
+          "appointments": "Appointments",
+          "meetings": "Meetings",
+          "sqls": "SQL",
+          "phase1Won": "Survey won",
+          "migrationWon": "Migration won"
+        },
+        "totalCost": "Cost so far",
+        "costBreakdown": "fixed {fixed} / per appointment {appointments}",
+        "costPerAppointment": "Per appointment",
+        "costPerSql": "Per SQL",
+        "costPerPhase1Won": "Per survey won",
+        "plan": "Against plan",
+        "planAppointments": "{actual} / {plan} appointments ({rate}%)",
+        "planCost": "Target per appointment {plan}",
+        "noContract": "No contract",
+        "costNotRegistered": "Cost not registered (no contract for this period)"
       }
     }
   },

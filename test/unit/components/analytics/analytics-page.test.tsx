@@ -109,6 +109,10 @@ vi.mock('@/hooks/use-organization', () => ({
   useOrganization: () => ({ organizationId: ORG_ID, isLoading: false }),
 }));
 vi.mock('next/dynamic', () => ({ default: () => () => null }));
+// Covered by agency-contract-report-card.test.tsx; it reads tRPC directly
+vi.mock('@/app/[locale]/(dashboard)/analytics/_components/agency-contract-report-card', () => ({
+  AgencyContractReportCard: () => null,
+}));
 vi.mock('@/components/charts', () => ({
   AreaChart: () => <div data-testid="area-chart" />,
   ChartLegend: ({ categories }: { categories: string[] }) => (
