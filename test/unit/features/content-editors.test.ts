@@ -14,6 +14,8 @@ const OTHER_ID = '550e8400-e29b-41d4-a716-446655440002';
 const env: { CONTENT_EDITOR_EMAILS?: string } = {};
 const mocks = vi.hoisted(() => ({
   findAll: vi.fn(),
+  findFaqs: vi.fn(),
+  findBySlug: vi.fn(),
   create: vi.fn(),
   del: vi.fn(),
   orgId: { value: null as string | null },
@@ -26,10 +28,12 @@ vi.mock('@/lib/features/diagnostics/organization', () => ({
 vi.mock('@/lib/cms', () => ({
   BlogRepository: class {
     findAll = mocks.findAll;
+    findBySlug = mocks.findBySlug;
     findById = async (id: string) => ({ id });
     delete = mocks.del;
   },
   FAQRepository: class {
+    findAll = mocks.findFaqs;
     create = mocks.create;
     findById = async (id: string) => ({ id });
     delete = mocks.del;
@@ -175,6 +179,25 @@ describe('blog.list drafts', () => {
   ])('returns only published posts to %s', async (_label, makeCaller) => {
     await makeCaller().blog.list({ status: 'all' });
     expect(mocks.findAll).toHaveBeenCalledWith(expect.objectContaining({ status: 'published' }));
+  });
+});
+
+describe('unpublished content stays with editors (#140)', () => {
+  it('lists published FAQs only, except for an editor', async () => {
+    mocks.findFaqs.mockResolvedValue({ faqs: [], total: 0 });
+    await callerAs(null).faqs.list({});
+    expect(mocks.findFaqs).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'published' }));
+    await callerAs('other@example.com').faqs.list({});
+    expect(mocks.findFaqs).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'published' }));
+    await callerAs('editor@example.com').faqs.list({});
+    expect(mocks.findFaqs).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'all' }));
+  });
+
+  it('finds a post by slug in the asked language, published only', async () => {
+    mocks.findBySlug.mockResolvedValue({ id: 'p1' });
+    await callerAs(null).blog.getBySlug({ slug: 'hello', locale: 'en' });
+    // The language is not an organization, and nothing asks for unpublished posts
+    expect(mocks.findBySlug).toHaveBeenCalledWith('hello', { locale: 'en' });
   });
 });
 

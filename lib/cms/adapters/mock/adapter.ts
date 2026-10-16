@@ -24,6 +24,7 @@ import type {
   SearchParams,
   UpdateParams,
 } from '../../core/interfaces';
+import { PUBLISHABLE_COLLECTIONS } from '../../publishing';
 
 interface MockDocument {
   id: string;
@@ -66,9 +67,11 @@ export class MockCMSAdapter implements CMSAdapter {
       items = items.filter((item) => item.organizationId === params.organizationId);
     }
 
-    // statusフィルタリング
-    if (params.status && params.status !== 'all') {
-      items = items.filter((item) => item.status === params.status);
+    // Published only unless asked otherwise, like the Payload adapter (#140)
+    const status =
+      params.status ?? (PUBLISHABLE_COLLECTIONS[params.collection] ? 'published' : 'all');
+    if (status !== 'all') {
+      items = items.filter((item) => item.status === status);
     }
 
     // Where条件適用
@@ -130,7 +133,13 @@ export class MockCMSAdapter implements CMSAdapter {
     }
 
     const items = Array.from(collection.values());
-    const item = items.find((i) => i.slug === params.slug);
+    const item = items.find(
+      (i) =>
+        i.slug === params.slug &&
+        (params.status === 'all' ||
+          !PUBLISHABLE_COLLECTIONS[params.collection] ||
+          i.status === 'published')
+    );
 
     if (!item) {
       return { data: null };
@@ -147,11 +156,11 @@ export class MockCMSAdapter implements CMSAdapter {
   async create<T>(params: CreateParams): Promise<CMSResponse<T>> {
     await this.ensureInitialized();
 
-    if (!this.data.has(params.collection)) {
-      this.data.set(params.collection, new Map());
+    let collection = this.data.get(params.collection);
+    if (!collection) {
+      collection = new Map();
+      this.data.set(params.collection, collection);
     }
-
-    const collection = this.data.get(params.collection)!;
     const id = `mock-${this.idCounter++}`;
     const now = new Date();
 

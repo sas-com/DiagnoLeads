@@ -17,6 +17,7 @@ export interface FindParams {
   sort?: SortParams[];
   locale?: string;
   organizationId?: string;
+  /** Published documents only unless asked otherwise ('all' for editors) */
   status?: 'draft' | 'published' | 'all';
 }
 
@@ -32,6 +33,8 @@ export interface FindBySlugParams {
   slug: string;
   locale?: string;
   organizationId?: string;
+  /** Published documents only unless 'all' is asked for (editors) */
+  status?: 'published' | 'all';
 }
 
 export interface CreateParams<T = Record<string, unknown>> {
@@ -59,6 +62,8 @@ export interface SearchParams {
   fields?: string[];
   limit?: number;
   organizationId?: string;
+  /** Published documents only unless 'all' is asked for (editors) */
+  status?: 'published' | 'all';
 }
 
 export interface BulkCreateParams<T = Record<string, unknown>> {

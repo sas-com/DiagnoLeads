@@ -1,4 +1,5 @@
 import type { CollectionConfig } from 'payload';
+import { readPublishedUnlessSignedIn } from '../../lib/cms/publishing';
 
 /**
  * Diagnostic Forms Collection
@@ -30,7 +31,8 @@ export const DiagnosticForms: CollectionConfig = {
     listSearchableFields: ['title', 'slug', 'description'],
   },
   access: {
-    read: () => true,
+    // Drafts stay with CMS users; everyone else reads published documents only (#140)
+    read: readPublishedUnlessSignedIn('diagnostic-forms'),
   },
   versions: {
     drafts: true,

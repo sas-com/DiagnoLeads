@@ -20,6 +20,8 @@ import type { FAQ } from '../core/types';
 
 export interface FindFAQsOptions {
   organizationId?: string;
+  /** Published FAQs only unless 'all' is asked for (editors) */
+  status?: 'published' | 'all';
   category?: string;
   limit?: number;
   offset?: number;
@@ -49,7 +51,7 @@ export class FAQRepository {
    * FAQ一覧を取得（キャッシュなし - 管理画面用）
    */
   async findAll(options: FindFAQsOptions = {}): Promise<FAQsResult> {
-    const { organizationId, category, limit = 100, offset = 0 } = options;
+    const { organizationId, category, limit = 100, offset = 0, status = 'published' } = options;
 
     const where: WhereCondition = {};
 
@@ -64,6 +66,7 @@ export class FAQRepository {
       offset,
       sort: [{ field: 'order', order: 'asc' }],
       organizationId,
+      status,
     });
 
     return {
@@ -155,11 +158,9 @@ export class FAQRepository {
     const result: FAQsByCategory[] = [];
 
     for (const category of categoryOrder) {
-      if (grouped.has(category)) {
-        result.push({
-          category,
-          faqs: grouped.get(category)!,
-        });
+      const faqs = grouped.get(category);
+      if (faqs) {
+        result.push({ category, faqs });
       }
     }
 
