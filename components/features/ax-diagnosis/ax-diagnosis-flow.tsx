@@ -2,12 +2,12 @@
 
 import { axConsultationUrl } from '@/components/features/ax-site/site-config';
 import { LiveRegion, useAnnouncer } from '@/components/features/diagnosis-runner/announcer';
+import { ConsultationRequest } from '@/components/features/diagnosis-runner/consultation-request';
 import {
   CONTACT_ERROR_ORDER,
   ContactFields,
   type ContactKey,
   type ContactState,
-  ContactTextField,
   EMAIL_PATTERN,
   EMPTY_CONTACT,
   contactFieldId,
@@ -35,18 +35,12 @@ import {
   SubmitErrorAlert,
 } from '@/components/features/diagnosis-runner/step-layout';
 import { StepProgress } from '@/components/features/diagnosis-runner/step-progress';
-import {
-  CHECKBOX_CLASS,
-  FOCUS_RING,
-  LABEL_FOCUS,
-} from '@/components/features/diagnosis-runner/styles';
+import { FOCUS_RING } from '@/components/features/diagnosis-runner/styles';
 import { retryAfterMinutes, useSubmitError } from '@/components/features/diagnosis-runner/submit';
 import { readTrackingParams } from '@/components/features/diagnosis-runner/tracking-params';
 import { VerificationFieldset } from '@/components/features/diagnosis-runner/turnstile-widget';
 import { useProgressAutosave } from '@/components/features/diagnosis-runner/use-progress-autosave';
 import { useStepHistory } from '@/components/features/diagnosis-runner/use-step-history';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
 import { isAllowedEmail } from '@/lib/email/allowed-recipients';
 import { PHONE_PATTERN, normalizePhone } from '@/lib/features/diagnostics/ax-migration/contact';
 import { axMigrationDefinition } from '@/lib/features/diagnostics/ax-migration/definition';
@@ -714,55 +708,6 @@ function PlatformChoice({ locale, selected, onChoose }: PlatformChoiceProps) {
           );
         })}
       </ul>
-    </div>
-  );
-}
-
-interface ConsultationRequestProps {
-  checked: boolean;
-  phone: string;
-  phoneError?: string;
-  onChange: (value: boolean) => void;
-  onPhone: (value: string) => void;
-}
-
-/** "I would like a consultation", with an optional phone number once it is ticked */
-function ConsultationRequest({
-  checked,
-  phone,
-  phoneError,
-  onChange,
-  onPhone,
-}: ConsultationRequestProps) {
-  const t = useRunnerTranslations('contact');
-  return (
-    <div className="space-y-4 rounded-2xl border border-gray-200 p-4">
-      <Label
-        htmlFor="consultation"
-        className={cn('flex cursor-pointer items-start gap-3', LABEL_FOCUS)}
-      >
-        <Checkbox
-          id="consultation"
-          checked={checked}
-          onCheckedChange={(state) => onChange(state === true)}
-          className={cn('mt-0.5', CHECKBOX_CLASS)}
-        />
-        <span>
-          <span className="block text-sm font-bold">{t('consultation')}</span>
-          <span className="block text-sm text-gray-600">{t('consultationHint')}</span>
-        </span>
-      </Label>
-      {checked && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <ContactTextField
-            field="phone"
-            value={phone}
-            error={phoneError}
-            required={false}
-            onChange={onPhone}
-          />
-        </div>
-      )}
     </div>
   );
 }

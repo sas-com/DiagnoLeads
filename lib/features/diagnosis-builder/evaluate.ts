@@ -7,14 +7,15 @@
  */
 import { applicableQuestions, toPercent } from '../diagnostics/engine';
 import type { ValidatedAnswers } from './answers';
-import type {
-  DiagnosisAnswerValue,
-  DiagnosisCondition,
-  DiagnosisConditionGroup,
-  DiagnosisDefinition,
-  DiagnosisQuestion,
-  DiagnosisResultBlock,
-  DiagnosisTierSet,
+import {
+  DEFINITION_LIMITS,
+  type DiagnosisAnswerValue,
+  type DiagnosisCondition,
+  type DiagnosisConditionGroup,
+  type DiagnosisDefinition,
+  type DiagnosisQuestion,
+  type DiagnosisResultBlock,
+  type DiagnosisTierSet,
 } from './definition';
 
 export interface AxisScore {
@@ -33,7 +34,26 @@ export type MqlReason =
   | { code: 'below_min_score' }
   /** minScore is null and no strong signal matched */
   | { code: 'no_strong_signal' }
-  | { code: 'strong_signal'; reasonKey: string };
+  /** reason: the signal's text from the definition (shown to sales) */
+  | { code: 'strong_signal'; signalId: string; reason: string }
+  /** A consultation request (相談申込) is always a strong signal, as in the AX diagnosis (#139) */
+  | { code: 'consultation' };
+
+/**
+ * The same two levels as the AX diagnosis (#139, lib/features/diagnostics/ax-migration/mql.ts):
+ * - `fit` (適合): every required condition is met
+ * - `interest` (関心あり（MQL）): fit, plus a strong signal or the minimum score. Only this sets
+ *   the lead's MQL date
+ * - `none` (対象外): a required condition is not met
+ */
+export type DiagnosisMqlLevel = 'interest' | 'fit' | 'none';
+
+export interface DiagnosisMql {
+  level: DiagnosisMqlLevel;
+  /** level === 'interest' */
+  qualified: boolean;
+  reasons: MqlReason[];
+}
 
 export interface DiagnosisEvaluation {
   axes: Record<string, AxisScore>;
@@ -42,8 +62,12 @@ export interface DiagnosisEvaluation {
   /** Tier reached per tier set (null when no tier covers the percentage) */
   tiers: Record<string, string | null>;
   resultTypeId: string | null;
+  /**
+   * points: sum of the matched rules kept within 0..100 (the AX scale); reasons: the texts of
+   * the matched rules, in definition order
+   */
   leadScore: { points: number; reasons: string[] };
-  mql: { qualified: boolean; reasons: MqlReason[] };
+  mql: DiagnosisMql;
 }
 
 export interface PublicDiagnosisResult {
@@ -148,6 +172,10 @@ function questionScore(
   }
 }
 
+/** Lead scores use the same 0–100 scale as the AX diagnosis */
+export const clampLeadScore = (points: number): number =>
+  Math.max(DEFINITION_LIMITS.leadScoreMin, Math.min(DEFINITION_LIMITS.leadScoreMax, points));
+
 /** The tier containing pct: minPct ≤ pct < maxPct, and a tier ending at 100 includes 100 */
 export function findTier(tierSet: DiagnosisTierSet, pct: number): string | null {
   const found = tierSet.tiers.find(
@@ -244,8 +272,8 @@ export function evaluate(
 
   const matchedRules = definition.leadScore.rules.filter((rule) => groupMet(rule.when, ctx));
   const leadScore = {
-    points: matchedRules.reduce((sum, rule) => sum + rule.points, 0),
-    reasons: matchedRules.map((rule) => rule.reasonKey),
+    points: clampLeadScore(matchedRules.reduce((sum, rule) => sum + rule.points, 0)),
+    reasons: matchedRules.map((rule) => rule.reason),
   };
 
   return {
@@ -262,19 +290,19 @@ function evaluateMql(
   definition: DiagnosisDefinition,
   ctx: ConditionContext,
   points: number
-): DiagnosisEvaluation['mql'] {
+): DiagnosisMql {
   const reasons: MqlReason[] = [];
   definition.mql.required.forEach((condition, index) => {
     if (!conditionMet(condition, ctx)) reasons.push({ code: 'required_not_met', index });
   });
-  if (reasons.length > 0) return { qualified: false, reasons };
+  if (reasons.length > 0) return { level: 'none', qualified: false, reasons };
 
   const { minScore } = definition.mql;
   const scoreMet = minScore !== null && points >= minScore;
   if (scoreMet) reasons.push({ code: 'min_score_reached' });
   for (const signal of definition.mql.strongSignals) {
     if (groupMet(signal.when, ctx)) {
-      reasons.push({ code: 'strong_signal', reasonKey: signal.reasonKey });
+      reasons.push({ code: 'strong_signal', signalId: signal.id, reason: signal.reason });
     }
   }
   const qualified = reasons.length > 0;
@@ -283,7 +311,23 @@ function evaluateMql(
   } else if (!scoreMet) {
     reasons.push({ code: 'below_min_score' });
   }
-  return { qualified, reasons };
+  return { level: qualified ? 'interest' : 'fit', qualified, reasons };
+}
+
+/**
+ * The judgement with a consultation request added: a fit respondent becomes `interest`
+ * (関心あり), as in the AX diagnosis. A respondent outside the required conditions stays `none`.
+ */
+export function withConsultationSignal(mql: DiagnosisMql): DiagnosisMql {
+  if (mql.level === 'none' || mql.reasons.some((r) => r.code === 'consultation')) return mql;
+  return {
+    level: 'interest',
+    qualified: true,
+    reasons: [
+      { code: 'consultation' },
+      ...mql.reasons.filter((r) => r.code !== 'no_strong_signal' && r.code !== 'below_min_score'),
+    ],
+  };
 }
 
 /** What the respondent may see: percentages, tiers and the result type only */

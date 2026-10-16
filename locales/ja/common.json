@@ -581,6 +581,87 @@
     "quoted": "「{label}」",
     "listJoiner": "や"
   },
+  "publicDiagnosis": {
+    "progress": "STEP {current} / {total}",
+    "allRequiredNote": "「任意」と書かれていない質問は、すべてお答えください。",
+    "restore": {
+      "prompt": "前回の回答が残っています。続きから再開しますか？",
+      "continue": "続きから",
+      "startOver": "最初から"
+    },
+    "deselectedOthers": "ほかの選択を外しました",
+    "contactStep": "最後に、ご連絡先",
+    "required": "必須",
+    "optional": "任意",
+    "quoted": "「{label}」",
+    "listJoiner": "・",
+    "multipleHint": "複数選択できます",
+    "multipleHintExclusive": "複数選択できます（{options}を選ぶと、ほかの選択は外れます）",
+    "scaleHint": "{min}〜{max}から1つ選んでください",
+    "numberHint": "{min}〜{max}{unit}の数字で入力してください",
+    "textCount": "{count} / {max}文字",
+    "back": "戻る",
+    "next": "次へ",
+    "submit": "診断結果を見る",
+    "submitting": "診断しています…",
+    "startOver": "最初からやり直す",
+    "unavailable": "この診断は現在受け付けを停止しています。お手数ですが、時間をおいてもう一度お試しください。",
+    "errors": {
+      "requiredSingle": "いずれか1つを選んでください",
+      "requiredMultiple": "1つ以上選んでください",
+      "requiredInput": "入力してください",
+      "numberRange": "{min}〜{max}の数字で入力してください",
+      "contactRequiredNamed": "{field}を入力してください",
+      "email": "メールアドレスの形式が正しくありません（例：taro@example.co.jp）",
+      "phone": "電話番号は数字とハイフンで入力してください",
+      "consent": "個人情報の取り扱いへの同意が必要です",
+      "submit": "送信できませんでした。時間をおいてもう一度お試しください。",
+      "rateLimited": "送信が一時的に制限されています。しばらく時間をおいて、もう一度「{button}」を押してください。入力内容はこのまま残ります。",
+      "rateLimitedMinutes": "送信が一時的に制限されています。約{minutes}分後に、もう一度「{button}」を押してください。入力内容はこのまま残ります。",
+      "verificationPending": "送信前の確認が終わっていません。確認欄にチェックマーク（✓）が表示されたら、もう一度「{button}」を押してください。",
+      "verificationRetry": "送信前の確認をやり直しています。確認欄にチェックマーク（✓）が表示されたら、もう一度「{button}」を押してください。",
+      "verificationUnavailable": "確認サービスに一時的につながりませんでした。少し時間をおいて、もう一度「{button}」を押してください。入力内容はこのまま残ります。",
+      "testModeEmail": "テスト中のため、{domains} のメールアドレスのみ受け付けています",
+      "outdated": "回答の途中で診断の内容が更新されました。お手数ですが、最初からやり直してください。",
+      "notAvailable": "この診断は現在受け付けを停止しています。"
+    },
+    "verification": {
+      "label": "送信前の確認",
+      "help": "機械による自動送信を防ぐための確認です（Cloudflare社の仕組みを使います）。通常は数秒で自動的に終わります。チェック欄が表示された場合は、クリックしてください。",
+      "done": "送信前の確認が完了しました",
+      "unavailable": "送信前の確認を表示できませんでした。",
+      "retry": "確認をやり直す",
+      "alternative": "社内のネットワークの設定によっては表示されないことがあります。その場合は、<link>お問い合わせページ</link>からご連絡ください。"
+    },
+    "contact": {
+      "description": "診断結果はこの画面に表示します。ご連絡先は、結果のご説明やご相談のご案内に使います。",
+      "company": "会社名",
+      "name": "お名前",
+      "email": "会社のメールアドレス",
+      "phone": "電話番号",
+      "consultation": "結果をもとに、無料の個別相談を希望する",
+      "consultationHint": "担当者からご連絡します。電話でのご連絡を希望される場合は、電話番号もご入力ください。",
+      "consent": "個人情報の取り扱いに同意する",
+      "consentAgain": "ご連絡先は前回の入力を使います。お手数ですが、個人情報の取り扱いへの同意に、もう一度チェックを入れてください。",
+      "consentNotice": "ご入力いただいた情報は、診断結果のご案内と、関連するご連絡以外には使いません。",
+      "privacyPolicy": "個人情報保護方針",
+      "sendNote": "入力は1分ほどです。"
+    },
+    "result": {
+      "eyebrow": "RESULT",
+      "for": "{company} 様の診断結果",
+      "overall": "総合",
+      "axes": "項目別のスコア",
+      "percent": "{pct}%",
+      "consultation": {
+        "title": "無料の個別相談",
+        "body": "結果をもとに、担当者が課題の整理や進め方をご説明します。お申し込みいただくと、担当者からご連絡します。",
+        "button": "個別相談を申し込む",
+        "done": "個別相談のお申し込みを受け付けました。担当者からご連絡します。",
+        "failed": "お申し込みを送信できませんでした。時間をおいてもう一度お試しください。"
+      }
+    }
+  },
   "pipeline": {
     "inflowSource": {
       "existing_customer": "既存顧客",

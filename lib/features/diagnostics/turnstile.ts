@@ -41,7 +41,8 @@ export function turnstileSiteKey(): string | undefined {
 export async function verifyTurnstile(
   token: string | undefined,
   remoteIp: string | undefined,
-  hostname: string | undefined
+  hostname: string | undefined,
+  action: string = TURNSTILE_ACTION
 ): Promise<TurnstileOutcome> {
   const secret = env.TURNSTILE_SECRET_KEY;
   if (!turnstileSiteKey() || !secret) return { ok: true };
@@ -70,7 +71,7 @@ export async function verifyTurnstile(
       ? { ok: false, reason: 'invalid' }
       : { ok: true };
   }
-  if (data.action !== TURNSTILE_ACTION) return { ok: false, reason: 'invalid' };
+  if (data.action !== action) return { ok: false, reason: 'invalid' };
   if (hostname && data.hostname !== hostname) return { ok: false, reason: 'invalid' };
   return { ok: true };
 }

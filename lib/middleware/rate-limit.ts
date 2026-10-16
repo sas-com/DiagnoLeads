@@ -81,6 +81,8 @@ export const ENDPOINT_RATE_LIMITS: Record<string, RateLimitConfig> = {
   '/api/diagnostics/ax-migration': { max: 10, windowMs: 60 * 1000 },
   '/api/diagnostics/ax-migration/consultation': { max: 5, windowMs: 60 * 1000 },
   '/api/diagnostics/ax-migration/details': { max: 5, windowMs: 60 * 1000 },
+  // Diagnoses made in the builder: /api/diagnoses/[slug]/submit and /consultation (prefix)
+  '/api/diagnoses/': { max: 10, windowMs: 60 * 1000 },
   '/api/diagnostic': { max: 30, windowMs: 60 * 1000 },
   '/api/embed/v1/diagnostic': { max: 60, windowMs: 60 * 1000 },
   '/api/embed/v1/lead': { max: 60, windowMs: 60 * 1000 },

@@ -1,8 +1,9 @@
 import type { db as defaultDb } from '@/lib/db/client';
-import { type Lead, diagnosticSubmissions, leads } from '@/lib/db/schema';
-import { and, asc, eq, isNull, sql } from 'drizzle-orm';
+import { diagnosticSubmissions, leads } from '@/lib/db/schema';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateAnswers } from '../engine';
+import { upsertLeadFromSubmission } from '../lead-upsert';
 import { type Tracking, compactTracking, inferInflowSource, trackingSchema } from '../tracking';
 import type { AnswerValidationIssue, DiagnosticAnswers } from '../types';
 import { AX_MIGRATION_CONFIG } from './config';
@@ -211,8 +212,8 @@ function buildLeadSummary(
  *   identity is unverified. Only a lead created by this submission gets the diagnosis values.
  *   The one exception: another system diagnosed from the result screen of the submission that
  *   created the lead is added to its list of other systems (see findContinuationOrigin).
- * - A transaction-scoped advisory lock on (organization, email) serializes concurrent
- *   submissions for the same address, so a double submit cannot create two leads.
+ * - Leads are matched and created by upsertLeadFromSubmission (shared with the builder's
+ *   diagnoses), which serializes concurrent submissions for the same address.
  */
 export async function submitAxMigrationDiagnosis(
   database: Database,
@@ -233,51 +234,35 @@ export async function submitAxMigrationDiagnosis(
   const email = input.contact.email.toLowerCase();
 
   return database.transaction(async (tx) => {
-    await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtextextended(${`${organizationId}:${email}`}, 0))`
-    );
-
-    const existing: Lead | undefined = await tx.query.leads.findFirst({
-      where: and(eq(leads.organizationId, organizationId), sql`lower(${leads.email}) = ${email}`),
-      orderBy: [asc(leads.createdAt)],
+    const { leadId, existing } = await upsertLeadFromSubmission(tx, {
+      organizationId,
+      email,
+      newLead: {
+        name: input.contact.name,
+        company: input.contact.company,
+        phone: input.contact.phone || null,
+        status: 'new',
+        score: result.leadScore,
+        source: 'website',
+        inflowSource: inflow.inflowSource,
+        referrerName: inflow.referrerName,
+        conversionPoint: input.consultationRequested ? 'consultation' : 'web_diagnosis',
+        targetSystem: result.targetSystem,
+        // MQL date: only 関心あり (#139). 適合 alone leaves it empty
+        mqlQualifiedAt: result.mql.qualified ? now : null,
+      },
+      now,
     });
 
-    let leadId: string;
     let continuedFrom: string | null = null;
-    if (existing) {
-      leadId = existing.id;
-      if (input.continuedFrom) {
-        continuedFrom = await findContinuationOrigin(
-          tx,
-          organizationId,
-          existing.id,
-          input.continuedFrom,
-          now
-        );
-      }
-    } else {
-      const [created] = await tx
-        .insert(leads)
-        .values({
-          organizationId,
-          email,
-          name: input.contact.name,
-          company: input.contact.company,
-          phone: input.contact.phone || null,
-          status: 'new',
-          score: result.leadScore,
-          source: 'website',
-          inflowSource: inflow.inflowSource,
-          referrerName: inflow.referrerName,
-          conversionPoint: input.consultationRequested ? 'consultation' : 'web_diagnosis',
-          targetSystem: result.targetSystem,
-          // MQL date: only 関心あり (#139). 適合 alone leaves it empty
-          mqlQualifiedAt: result.mql.qualified ? now : null,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .returning({ id: leads.id });
-      leadId = created.id;
+    if (existing && input.continuedFrom) {
+      continuedFrom = await findContinuationOrigin(
+        tx,
+        organizationId,
+        existing.id,
+        input.continuedFrom,
+        now
+      );
     }
 
     const [submission] = await tx

@@ -71,7 +71,7 @@ export function createProgressStore<Answers>({
     }
   };
 
-  return { load, save, clear: () => save(null) };
+  return { load, save, clear: () => save(null), isEmpty };
 }
 
 export type ProgressStore<Answers> = ReturnType<typeof createProgressStore<Answers>>;
