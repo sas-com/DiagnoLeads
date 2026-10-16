@@ -1,6 +1,7 @@
 import { leads } from '@/lib/db/schema';
 import { LEAD_STATUSES, type LeadStatus } from '@/lib/features/leads/types/pipeline';
 import { organizationProcedure, router } from '@/lib/trpc/init';
+import { TRPCError } from '@trpc/server';
 import { and, avg, count, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { getDashboardSummary } from '../dashboard';
@@ -44,7 +45,13 @@ export const analyticsRouter = router({
         days: z.union([z.literal(7), z.literal(30), z.literal(90)]),
       })
     )
-    .query(({ ctx, input }) => getDashboardSummary(ctx.db, input.organizationId, input.days)),
+    .query(({ ctx, input }) => {
+      // Names and companies of leads are shown: same rule as the leads list
+      if (!ctx.ability.can('read', 'Lead')) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'リードを閲覧する権限がありません' });
+      }
+      return getDashboardSummary(ctx.db, input.organizationId, input.days);
+    }),
 
   /**
    * Get Overview Statistics

@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PERIODS = [7, 30, 90] as const;
@@ -51,10 +51,9 @@ export default function DashboardPage() {
   const organizationId = contextOrgId && UUID.test(contextOrgId) ? contextOrgId : '';
   const [days, setDays] = useState<Period>(30);
   const [widgetConfig, setWidgetConfig] = useWidgetConfig([...WIDGET_IDS]);
-  // Fewer date labels on a phone; the chart renders on the client only
-  const narrow = typeof window !== 'undefined' && window.innerWidth < 640;
+  const narrow = useNarrowScreen();
 
-  const { data, isLoading } = trpc.analytics.getDashboard.useQuery(
+  const { data, isLoading, isError } = trpc.analytics.getDashboard.useQuery(
     { organizationId, days },
     { enabled: Boolean(organizationId), staleTime: 60 * 1000 }
   );
@@ -104,8 +103,8 @@ export default function DashboardPage() {
       ? tw(`platforms.${key as (typeof KNOWN_PLATFORMS)[number]}`)
       : key;
   };
-  const previousText = (value: number) =>
-    value === 0 ? tw('kpi.noPrevious', { days }) : tw('kpi.vsPrevious', { days, value });
+  const number = (value: number) => value.toLocaleString(locale === 'ja' ? 'ja-JP' : 'en-US');
+  const previousText = (value: number) => tw('kpi.vsPrevious', { days, value: number(value) });
 
   const chartData = (data?.daily ?? []).map((day) => ({
     date: dateFormat.format(new Date(`${day.date}T12:00:00+09:00`)),
@@ -165,6 +164,23 @@ export default function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {!organizationId && (
+        <p
+          role="status"
+          className="rounded-lg bg-gray-50 px-4 py-6 text-center text-sm text-gray-600 dark:bg-gray-800/50 dark:text-gray-300"
+        >
+          {tw('noOrganization')}
+        </p>
+      )}
+      {isError && (
+        <p
+          role="alert"
+          className="rounded-lg bg-rose-50 px-4 py-4 text-sm text-rose-700 dark:bg-rose-500/10 dark:text-rose-300"
+        >
+          {tw('loadError')}
+        </p>
+      )}
 
       {/* Key figures */}
       <DashboardWidget id="kpis" config={widgetConfig}>
@@ -247,7 +263,7 @@ export default function DashboardPage() {
                       >
                         {item.overdue && <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />}
                         {item.overdue
-                          ? `${tw('pending.overdue')}（${item.deadline.slice(5)}）`
+                          ? tw('pending.overdueOn', { date: item.deadline.slice(5) })
                           : dueToday
                             ? tw('pending.dueToday')
                             : tw('pending.due', { date: item.deadline.slice(5) })}
@@ -432,6 +448,20 @@ export default function DashboardPage() {
   );
 }
 
+/** Phone-width screens get fewer date labels; follows window resizes */
+function useNarrowScreen() {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const query = window.matchMedia('(max-width: 639px)');
+    const update = () => setNarrow(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+  return narrow;
+}
+
 function Kpi({
   label,
   icon,
@@ -461,7 +491,7 @@ function Kpi({
         <span className="mt-2 inline-block h-9 w-16 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
       ) : (
         <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900 sm:text-3xl dark:text-gray-50">
-          {value ?? emptyValue ?? '—'}
+          {value === undefined ? (emptyValue ?? '—') : value.toLocaleString()}
           {value !== undefined && suffix && (
             <span className="ml-1 text-base font-normal text-gray-400">{suffix}</span>
           )}

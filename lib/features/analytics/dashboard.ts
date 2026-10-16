@@ -7,6 +7,9 @@ import { and, asc, count, desc, eq, gte, lt, min, sql } from 'drizzle-orm';
 type Database = typeof defaultDb;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** Waiting requests read (oldest first) and shown on the dashboard */
+const PENDING_LIMIT = 50;
+const PENDING_SHOWN = 8;
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 /** Calendar day in Japan (YYYY-MM-DD) of an instant */
@@ -80,82 +83,96 @@ export async function getDashboardSummary(
   const between = (start: Date, end: Date) =>
     and(inOrg, gte(leads.createdAt, start), lt(leads.createdAt, end));
   const current = between(from, new Date(now.getTime() + 1));
-  const previous = between(previousFrom, from);
 
-  const countWhere = async (where: ReturnType<typeof and>) =>
-    Number((await db.select({ value: count() }).from(leads).where(where))[0]?.value ?? 0);
-  const mqlBetween = (start: Date, end: Date) =>
-    and(inOrg, gte(leads.mqlQualifiedAt, start), lt(leads.mqlQualifiedAt, end));
+  const nowEnd = new Date(now.getTime() + 1);
+  const fromIso = from.toISOString();
+  const previousFromIso = previousFrom.toISOString();
+  const endIso = nowEnd.toISOString();
+  // created_at and mql_qualified_at hold UTC without a time zone
+  const createdIn = (start: string, end: string) =>
+    sql`${leads.createdAt} >= (${start}::timestamptz AT TIME ZONE 'UTC') and ${leads.createdAt} < (${end}::timestamptz AT TIME ZONE 'UTC')`;
+  const mqlIn = (start: string, end: string) =>
+    sql`${leads.mqlQualifiedAt} >= (${start}::timestamptz AT TIME ZONE 'UTC') and ${leads.mqlQualifiedAt} < (${end}::timestamptz AT TIME ZONE 'UTC')`;
+  const consultation = sql`${leads.conversionPoint} = 'consultation'`;
 
-  const [
-    newLeads,
-    previousNewLeads,
-    consultations,
-    previousConsultations,
-    mql,
-    previousMql,
-    scoreRow,
-    dailyRows,
-    statusRows,
-    platformRows,
-    pendingRows,
-    recentRows,
-  ] = await Promise.all([
-    countWhere(current),
-    countWhere(previous),
-    countWhere(and(current, isConsultation)),
-    countWhere(and(previous, isConsultation)),
-    countWhere(mqlBetween(from, new Date(now.getTime() + 1))),
-    countWhere(mqlBetween(previousFrom, from)),
-    db
-      .select({ value: sql<string | null>`avg(${leads.score})` })
-      .from(leads)
-      .where(current),
-    db
-      .select({
-        day: sql<string>`to_char((${leads.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD')`,
-        leads: count(),
-        consultations: sql<number>`count(*) filter (where ${leads.conversionPoint} = 'consultation')`,
-      })
-      .from(leads)
-      .where(current)
-      .groupBy(sql`1`),
-    db
-      .select({ status: leads.status, value: count() })
-      .from(leads)
-      .where(inOrg)
-      .groupBy(leads.status),
-    db.select({ platform: platformOf, value: count() }).from(leads).where(current).groupBy(sql`1`),
-    // Consultation requests nobody has acted on yet (still "new"), oldest first
-    db
-      .select({
-        id: leads.id,
-        name: leads.name,
-        company: leads.company,
-        platform: platformOf,
-        createdAt: leads.createdAt,
-        requestedAt: min(diagnosticSubmissions.consultationRequestedAt),
-      })
-      .from(leads)
-      .leftJoin(diagnosticSubmissions, eq(diagnosticSubmissions.leadId, leads.id))
-      .where(and(inOrg, isConsultation, eq(leads.status, 'new')))
-      .groupBy(leads.id)
-      .orderBy(asc(leads.createdAt)),
-    db
-      .select({
-        id: leads.id,
-        name: leads.name,
-        company: leads.company,
-        platform: platformOf,
-        score: leads.score,
-        conversionPoint: leads.conversionPoint,
-        createdAt: leads.createdAt,
-      })
-      .from(leads)
-      .where(and(inOrg))
-      .orderBy(desc(leads.createdAt))
-      .limit(6),
-  ]);
+  const [figures, dailyRows, statusRows, platformRows, pendingRows, recentRows] = await Promise.all(
+    [
+      // Every count of both periods in one pass over the organization's leads
+      db
+        .select({
+          newLeads: sql<number>`count(*) filter (where ${createdIn(fromIso, endIso)})`,
+          previousNewLeads: sql<number>`count(*) filter (where ${createdIn(previousFromIso, fromIso)})`,
+          consultations: sql<number>`count(*) filter (where ${createdIn(fromIso, endIso)} and ${consultation})`,
+          previousConsultations: sql<number>`count(*) filter (where ${createdIn(previousFromIso, fromIso)} and ${consultation})`,
+          mql: sql<number>`count(*) filter (where ${mqlIn(fromIso, endIso)})`,
+          previousMql: sql<number>`count(*) filter (where ${mqlIn(previousFromIso, fromIso)})`,
+          averageScore: sql<
+            string | null
+          >`avg(${leads.score}) filter (where ${createdIn(fromIso, endIso)})`,
+          pendingTotal: sql<number>`count(*) filter (where ${consultation} and ${leads.status} = 'new')`,
+        })
+        .from(leads)
+        .where(inOrg),
+      db
+        .select({
+          day: sql<string>`to_char((${leads.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD')`,
+          leads: count(),
+          consultations: sql<number>`count(*) filter (where ${leads.conversionPoint} = 'consultation')`,
+        })
+        .from(leads)
+        .where(current)
+        .groupBy(sql`1`),
+      db
+        .select({ status: leads.status, value: count() })
+        .from(leads)
+        .where(inOrg)
+        .groupBy(leads.status),
+      db
+        .select({ platform: platformOf, value: count() })
+        .from(leads)
+        .where(current)
+        .groupBy(sql`1`),
+      // Consultation requests nobody has acted on yet (still "new"), oldest request first
+      db
+        .select({
+          id: leads.id,
+          name: leads.name,
+          company: leads.company,
+          platform: platformOf,
+          createdAt: leads.createdAt,
+          requestedAt: min(diagnosticSubmissions.consultationRequestedAt),
+        })
+        .from(leads)
+        .leftJoin(
+          diagnosticSubmissions,
+          and(
+            eq(diagnosticSubmissions.leadId, leads.id),
+            eq(diagnosticSubmissions.organizationId, organizationId)
+          )
+        )
+        .where(and(inOrg, isConsultation, eq(leads.status, 'new')))
+        .groupBy(leads.id)
+        .orderBy(
+          sql`coalesce(min(${diagnosticSubmissions.consultationRequestedAt}), ${leads.createdAt})`
+        )
+        .limit(PENDING_LIMIT),
+      db
+        .select({
+          id: leads.id,
+          name: leads.name,
+          company: leads.company,
+          platform: platformOf,
+          score: leads.score,
+          conversionPoint: leads.conversionPoint,
+          createdAt: leads.createdAt,
+        })
+        .from(leads)
+        .where(inOrg)
+        .orderBy(desc(leads.createdAt))
+        .limit(6),
+    ]
+  );
+  const totals = figures[0];
 
   const byDay = new Map(dailyRows.map((row) => [row.day, row]));
   const daily = Array.from({ length: days }, (_, i) => {
@@ -181,24 +198,24 @@ export async function getDashboardSummary(
       };
     })
     .sort((a, b) => a.deadline.localeCompare(b.deadline));
-  const average = scoreRow[0]?.value;
+  const average = totals?.averageScore;
 
   return {
     days,
-    newLeads,
-    previousNewLeads,
-    consultations,
-    previousConsultations,
-    mql,
-    previousMql,
+    newLeads: Number(totals?.newLeads ?? 0),
+    previousNewLeads: Number(totals?.previousNewLeads ?? 0),
+    consultations: Number(totals?.consultations ?? 0),
+    previousConsultations: Number(totals?.previousConsultations ?? 0),
+    mql: Number(totals?.mql ?? 0),
+    previousMql: Number(totals?.previousMql ?? 0),
     averageScore: average === null || average === undefined ? null : Math.round(Number(average)),
     daily,
     statuses: LEAD_STATUSES.map((status) => ({ status, count: statusCounts.get(status) ?? 0 })),
     platforms: platformRows
       .map((row) => ({ platform: row.platform ?? 'unknown', count: Number(row.value) }))
       .sort((a, b) => b.count - a.count),
-    pendingConsultations: pending.slice(0, 8),
-    pendingConsultationTotal: pending.length,
+    pendingConsultations: pending.slice(0, PENDING_SHOWN),
+    pendingConsultationTotal: Number(totals?.pendingTotal ?? 0),
     recentLeads: recentRows.map((row) => ({
       id: row.id,
       name: row.name,

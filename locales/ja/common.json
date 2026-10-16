@@ -775,7 +775,6 @@
         "mql": "MQL",
         "averageScore": "平均スコア",
         "vsPrevious": "前の{days}日間：{value}",
-        "noPrevious": "前の{days}日間はなし",
         "noScore": "—",
         "scoreSuffix": "/100",
         "periodNote": "直近{days}日間"
@@ -789,7 +788,8 @@
         "due": "{date}まで",
         "more": "ほか{count}件",
         "open": "開く",
-        "requestedAt": "申込 {date}"
+        "requestedAt": "申込 {date}",
+        "overdueOn": "期限切れ（{date}）"
       },
       "trend": {
         "title": "新規リードと相談申込の推移",
@@ -820,7 +820,9 @@
         "consultation": "相談申込",
         "empty": "まだリードがありません",
         "unnamed": "（名前なし）"
-      }
+      },
+      "noOrganization": "組織を選ぶと、ここにリードの状況が表示されます",
+      "loadError": "ダッシュボードの数字を読み込めませんでした。時間をおいて開き直してください"
     }
   },
   "leads": {

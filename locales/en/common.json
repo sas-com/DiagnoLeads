@@ -775,7 +775,6 @@
         "mql": "MQL",
         "averageScore": "Average score",
         "vsPrevious": "Previous {days} days: {value}",
-        "noPrevious": "None in the previous {days} days",
         "noScore": "—",
         "scoreSuffix": "/100",
         "periodNote": "Last {days} days"
@@ -789,7 +788,8 @@
         "due": "Due {date}",
         "more": "{count} more",
         "open": "Open",
-        "requestedAt": "Requested {date}"
+        "requestedAt": "Requested {date}",
+        "overdueOn": "Overdue ({date})"
       },
       "trend": {
         "title": "New leads and consultation requests",
@@ -820,7 +820,9 @@
         "consultation": "Consultation",
         "empty": "No leads yet",
         "unnamed": "(no name)"
-      }
+      },
+      "noOrganization": "Choose an organization to see its leads here",
+      "loadError": "The dashboard figures could not be loaded. Please reopen the page later"
     }
   },
   "leads": {

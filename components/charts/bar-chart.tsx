@@ -131,8 +131,8 @@ export function BarChart({
         show: false,
       },
       labels: {
-        rotate: 0,
-        hideOverlappingLabels: true,
+        // Only for thinned date axes; other charts keep the library's label behaviour
+        ...(maxCategoryLabels ? { rotate: 0, hideOverlappingLabels: true } : {}),
         style: {
           fontSize: '12px',
           colors: '#6b7280',

@@ -13,6 +13,8 @@ const ORG_ID = '660e8400-e29b-41d4-a716-446655440000';
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   data: undefined as unknown,
+  isError: false,
+  organizationId: '660e8400-e29b-41d4-a716-446655440000' as string | null,
 }));
 
 vi.mock('@/lib/trpc/client', () => ({
@@ -21,14 +23,14 @@ vi.mock('@/lib/trpc/client', () => ({
       getDashboard: {
         useQuery: (input: unknown) => {
           mocks.query(input);
-          return { data: mocks.data, isLoading: false };
+          return { data: mocks.data, isLoading: false, isError: mocks.isError };
         },
       },
     },
   },
 }));
 vi.mock('@/hooks/use-organization', () => ({
-  useOrganization: () => ({ organizationId: ORG_ID, isLoading: false }),
+  useOrganization: () => ({ organizationId: mocks.organizationId, isLoading: false }),
 }));
 vi.mock('@/components/charts', () => ({
   BarChart: ({ categories }: { categories: string[] }) => <div data-testid="bar-chart">{categories.join(',')}</div>,
@@ -113,13 +115,15 @@ describe('DashboardPage', () => {
     vi.clearAllMocks();
     localStorage.clear();
     mocks.data = summary;
+    mocks.isError = false;
+    mocks.organizationId = ORG_ID;
   });
 
   it('shows real figures with the previous period, never made-up changes', () => {
     renderPage();
 
     expect(mocks.query).toHaveBeenCalledWith({ organizationId: ORG_ID, days: 30 });
-    expect(screen.getByText('前の30日間はなし')).toBeInTheDocument();
+    expect(screen.getByText('前の30日間：0')).toBeInTheDocument();
     expect(screen.getByText('前の30日間：1')).toBeInTheDocument();
     expect(screen.getByText('前の30日間：2')).toBeInTheDocument();
     expect(screen.queryByText(/前月比/)).not.toBeInTheDocument();
@@ -162,6 +166,22 @@ describe('DashboardPage', () => {
     expect(screen.getAllByText('この期間のリードはありません')).toHaveLength(2);
     expect(screen.getByText('まだリードがありません')).toBeInTheDocument();
     expect(screen.queryByTestId('bar-chart')).not.toBeInTheDocument();
+  });
+
+  it('asks to choose an organization when none is selected', () => {
+    mocks.organizationId = null;
+    mocks.data = undefined;
+    renderPage();
+
+    expect(screen.getByRole('status')).toHaveTextContent('組織を選ぶと、ここにリードの状況が表示されます');
+  });
+
+  it('says when the figures could not be loaded', () => {
+    mocks.isError = true;
+    mocks.data = undefined;
+    renderPage();
+
+    expect(screen.getByRole('alert')).toHaveTextContent('ダッシュボードの数字を読み込めませんでした');
   });
 
   it('switches the period', async () => {

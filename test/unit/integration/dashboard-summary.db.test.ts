@@ -87,6 +87,16 @@ describe.skipIf(!url)('dashboard summary (PostgreSQL)', () => {
         leadId: later.id,
         consultationRequestedAt: at('2026-10-15T03:00:00Z'), // Thu 10/15 JST → due Mon 10/19
       },
+      // A submission of another organization pointing at the same lead never moves its deadline
+      {
+        organizationId: otherOrganizationId,
+        diagnosticKey: 'ax-migration',
+        diagnosticVersion: 1,
+        answers: {},
+        result: {},
+        leadId: later.id,
+        consultationRequestedAt: at('2026-09-01T03:00:00Z'),
+      },
     ] as (typeof diagnosticSubmissions.$inferInsert)[]);
     // Already contacted: not waiting any more
     await lead({ createdAt: at('2026-10-12T02:00:00Z'), conversionPoint: 'consultation', status: 'nurturing' });
