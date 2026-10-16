@@ -2485,5 +2485,86 @@
       "others": "Other items",
       "othersCount": "{count} items"
     }
+  },
+  "leadActivity": {
+    "title": "Activity",
+    "filters": {
+      "all": "All",
+      "diagnosis": "Diagnoses & consultations",
+      "hearing": "Hearings",
+      "comment": "Comments",
+      "sales": "Sales actions"
+    },
+    "empty": "No activity yet.",
+    "loadError": "Could not load the activity.",
+    "retry": "Retry",
+    "loadMore": "Show more",
+    "kinds": {
+      "lead_created": {
+        "web_diagnosis": "Lead created by the Web diagnosis",
+        "staff": "Lead registered",
+        "import": "Lead imported",
+        "other": "Lead created"
+      },
+      "diagnosis_submitted": "Web diagnosis answered",
+      "consultation_requested": "Consultation requested",
+      "consultationWithSubmission": "Requested with the diagnosis",
+      "consultationLater": "Requested from the result screen",
+      "details_answered": "Follow-up questions answered",
+      "hearing_recorded": "Hearing recorded (meeting on {date})",
+      "hearing_updated": "Hearing updated (meeting on {date})",
+      "comment": {
+        "comment": "Comment",
+        "note": "Note",
+        "activity": "Activity",
+        "reply": "Reply"
+      },
+      "lead_updated": "Lead updated",
+      "mql_qualified": "Qualified as MQL",
+      "sql_decided": "SQL decision: {decision}",
+      "phase_reached": "Reached the deal phase \"{phase}\""
+    },
+    "unverified": "Identity unverified",
+    "unverifiedHelp": "Answered with the same email address. The lead's fields were not changed",
+    "continuation": "Continued from the same screen",
+    "summary": {
+      "platform": "System",
+      "difficulty": "Difficulty",
+      "urgency": "Urgency",
+      "primaryChallenge": "Main challenge",
+      "noChallenge": "None in particular",
+      "needsHearing": "Needs a hearing",
+      "detailsAnswered": "Follow-up questions answered"
+    },
+    "showAnswers": "Show answers",
+    "hideAnswers": "Hide answers",
+    "answersLoadError": "Could not load the answers.",
+    "detailQuestion": "Follow-up",
+    "openHearing": "Open the hearing",
+    "fields": {
+      "status": "Status",
+      "dealPhase": "Phase",
+      "mqlQualified": "MQL",
+      "sqlDecision": "SQL decision",
+      "lostReason": "Lost / on-hold reason",
+      "inflowSource": "Inflow source",
+      "conversionPoint": "Conversion point",
+      "targetSystem": "Target system",
+      "referrerName": "Referrer",
+      "agencyName": "Agency",
+      "acquisitionCost": "Acquisition cost",
+      "score": "Score",
+      "name": "Name",
+      "company": "Company",
+      "email": "Email",
+      "phone": "Phone"
+    },
+    "values": {
+      "notSet": "Not set",
+      "mql": "MQL",
+      "notMql": "Not judged",
+      "sqlUndecided": "Undecided"
+    },
+    "changeArrow": "{before} → {after}"
   }
 }

@@ -23,6 +23,12 @@ import {
   sql,
 } from 'drizzle-orm';
 import {
+  creationAuditValues,
+  diffLeadAudit,
+  leadAuditSnapshot,
+  writeLeadAuditLogs,
+} from '../audit';
+import {
   type LeadPipelineFields,
   jstDate,
   qualificationUpdateFields,
@@ -179,26 +185,36 @@ export const leadsRouter = router({
       });
     }
 
-    // Create lead
-    const [lead] = await ctx.db
-      .insert(leads)
-      .values({
-        organizationId: input.organizationId,
-        email: input.email,
-        name: input.name,
-        company: input.company,
-        phone: input.phone,
-        ...statusUpdateFields(input.status),
-        score: input.score,
-        source: input.source,
-        responses: input.responses,
-        ...pickPipelineFields(input),
-        ...qualificationUpdateFields(input, null),
-        ...(input.dealPhase ? { dealPhaseReachedAt: { [input.dealPhase]: jstDate() } } : {}),
-      })
-      .returning();
+    const now = new Date();
+    // Create the lead and its audit row together (Refs #101)
+    return ctx.db.transaction(async (tx) => {
+      const [lead] = await tx
+        .insert(leads)
+        .values({
+          organizationId: input.organizationId,
+          email: input.email,
+          name: input.name,
+          company: input.company,
+          phone: input.phone,
+          ...statusUpdateFields(input.status),
+          score: input.score,
+          source: input.source,
+          responses: input.responses,
+          ...pickPipelineFields(input),
+          ...qualificationUpdateFields(input, null, now),
+          ...(input.dealPhase ? { dealPhaseReachedAt: { [input.dealPhase]: jstDate(now) } } : {}),
+        })
+        .returning();
 
-    return lead;
+      if (lead) {
+        await writeLeadAuditLogs(
+          tx,
+          { organizationId: input.organizationId, userId: ctx.user.id, at: now },
+          [{ action: 'create', leadId: lead.id, after: creationAuditValues(lead) }]
+        );
+      }
+      return lead;
+    });
   }),
 
   /**
@@ -398,47 +414,62 @@ export const leadsRouter = router({
       });
     }
 
-    // Verify lead exists and belongs to organization
-    const existing = await ctx.db.query.leads.findFirst({
-      where: and(eq(leads.id, input.id), eq(leads.organizationId, input.organizationId)),
+    const now = new Date();
+    const leadScope = and(eq(leads.id, input.id), eq(leads.organizationId, input.organizationId));
+
+    // The update and its audit row are written together; the row lock keeps the audited
+    // "before" equal to the values this update replaces (Refs #101)
+    return ctx.db.transaction(async (tx) => {
+      await tx.execute(sql`select 1 from ${leads} where ${leadScope} for no key update`);
+
+      // Verify lead exists and belongs to organization
+      const existing = await tx.query.leads.findFirst({ where: leadScope });
+
+      if (!existing) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'リードが見つかりません',
+        });
+      }
+
+      // Build update object (only include defined fields)
+      const updateData: any = {};
+      if (input.email !== undefined) updateData.email = input.email;
+      if (input.name !== undefined) updateData.name = input.name;
+      if (input.company !== undefined) updateData.company = input.company;
+      if (input.phone !== undefined) updateData.phone = input.phone;
+      if (input.status !== undefined) {
+        Object.assign(updateData, statusUpdateFields(input.status));
+      }
+      if (input.score !== undefined) updateData.score = input.score;
+      if (input.source !== undefined) updateData.source = input.source;
+      if (input.responses !== undefined) updateData.responses = input.responses;
+      Object.assign(updateData, pickPipelineFields(input));
+      Object.assign(updateData, qualificationUpdateFields(input, existing, now));
+      if (input.dealPhase) {
+        // First date each phase was reached; the existing date wins (right side of ||), and
+        // merging in SQL keeps concurrent updates from dropping each other's dates (#83)
+        updateData.dealPhaseReachedAt = sql`jsonb_build_object(${input.dealPhase}::text, ${jstDate(now)}::text) || coalesce(${leads.dealPhaseReachedAt}, '{}'::jsonb)`;
+      }
+      updateData.updatedAt = now;
+
+      // Update lead
+      const [updated] = await tx.update(leads).set(updateData).where(leadScope).returning();
+
+      // Only the fields whose value actually changed; no row when nothing changed
+      const changes = updated
+        ? diffLeadAudit(leadAuditSnapshot(existing), leadAuditSnapshot(updated))
+        : null;
+      if (changes) {
+        await writeLeadAuditLogs(
+          tx,
+          { organizationId: input.organizationId, userId: ctx.user.id, at: now },
+          [{ action: 'update', leadId: input.id, changes }]
+        );
+      }
+
+      return updated;
     });
-
-    if (!existing) {
-      throw new TRPCError({
-        code: 'NOT_FOUND',
-        message: 'リードが見つかりません',
-      });
-    }
-
-    // Build update object (only include defined fields)
-    const updateData: any = {};
-    if (input.email !== undefined) updateData.email = input.email;
-    if (input.name !== undefined) updateData.name = input.name;
-    if (input.company !== undefined) updateData.company = input.company;
-    if (input.phone !== undefined) updateData.phone = input.phone;
-    if (input.status !== undefined) {
-      Object.assign(updateData, statusUpdateFields(input.status));
-    }
-    if (input.score !== undefined) updateData.score = input.score;
-    if (input.source !== undefined) updateData.source = input.source;
-    if (input.responses !== undefined) updateData.responses = input.responses;
-    Object.assign(updateData, pickPipelineFields(input));
-    Object.assign(updateData, qualificationUpdateFields(input, existing));
-    if (input.dealPhase) {
-      // First date each phase was reached; the existing date wins (right side of ||), and
-      // merging in SQL keeps concurrent updates from dropping each other's dates (#83)
-      updateData.dealPhaseReachedAt = sql`jsonb_build_object(${input.dealPhase}::text, ${jstDate()}::text) || coalesce(${leads.dealPhaseReachedAt}, '{}'::jsonb)`;
-    }
-    updateData.updatedAt = new Date();
-
-    // Update lead
-    const [updated] = await ctx.db
-      .update(leads)
-      .set(updateData)
-      .where(and(eq(leads.id, input.id), eq(leads.organizationId, input.organizationId)))
-      .returning();
-
-    return updated;
   }),
 
   /**
@@ -453,24 +484,35 @@ export const leadsRouter = router({
       });
     }
 
-    // Verify lead exists and belongs to organization
-    const existing = await ctx.db.query.leads.findFirst({
-      where: and(eq(leads.id, input.id), eq(leads.organizationId, input.organizationId)),
+    const leadScope = and(eq(leads.id, input.id), eq(leads.organizationId, input.organizationId));
+
+    return ctx.db.transaction(async (tx) => {
+      // Verify lead exists and belongs to organization
+      const existing = await tx.query.leads.findFirst({ where: leadScope });
+
+      if (!existing) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'リードが見つかりません',
+        });
+      }
+
+      // Delete lead (the audit row keeps only the name and company)
+      await tx.delete(leads).where(leadScope);
+      await writeLeadAuditLogs(
+        tx,
+        { organizationId: input.organizationId, userId: ctx.user.id, at: new Date() },
+        [
+          {
+            action: 'delete',
+            leadId: existing.id,
+            before: { name: existing.name ?? null, company: existing.company ?? null },
+          },
+        ]
+      );
+
+      return { success: true };
     });
-
-    if (!existing) {
-      throw new TRPCError({
-        code: 'NOT_FOUND',
-        message: 'リードが見つかりません',
-      });
-    }
-
-    // Delete lead
-    await ctx.db
-      .delete(leads)
-      .where(and(eq(leads.id, input.id), eq(leads.organizationId, input.organizationId)));
-
-    return { success: true };
   }),
 
   /**
@@ -487,20 +529,49 @@ export const leadsRouter = router({
         });
       }
 
-      // Update all leads matching the IDs and organization
-      const result = await ctx.db
-        .update(leads)
-        .set({
-          ...statusUpdateFields(input.status),
-          updatedAt: new Date(),
-        })
-        .where(and(inArray(leads.id, input.ids), eq(leads.organizationId, input.organizationId)))
-        .returning({ id: leads.id });
+      const now = new Date();
+      const scope = and(
+        inArray(leads.id, input.ids),
+        eq(leads.organizationId, input.organizationId)
+      );
 
-      return {
-        success: true,
-        updatedCount: result.length,
-      };
+      return ctx.db.transaction(async (tx) => {
+        // Lock the rows so the audited "before" is the status this update replaces
+        await tx.execute(sql`select 1 from ${leads} where ${scope} for no key update`);
+        const before = await tx.query.leads.findMany({
+          columns: { id: true, status: true },
+          where: scope,
+        });
+
+        // Update all leads matching the IDs and organization
+        const result = await tx
+          .update(leads)
+          .set({
+            ...statusUpdateFields(input.status),
+            updatedAt: now,
+          })
+          .where(scope)
+          .returning({ id: leads.id });
+
+        // One audit row per lead whose status actually changed (Refs #101)
+        const updatedIds = new Set(result.map((row) => row.id));
+        await writeLeadAuditLogs(
+          tx,
+          { organizationId: input.organizationId, userId: ctx.user.id, at: now },
+          before
+            .filter((row) => updatedIds.has(row.id) && row.status !== input.status)
+            .map((row) => ({
+              action: 'update' as const,
+              leadId: row.id,
+              changes: { before: { status: row.status }, after: { status: input.status } },
+            }))
+        );
+
+        return {
+          success: true,
+          updatedCount: result.length,
+        };
+      });
     }),
 
   /**
@@ -515,16 +586,28 @@ export const leadsRouter = router({
       });
     }
 
-    // Delete all leads matching the IDs and organization
-    const result = await ctx.db
-      .delete(leads)
-      .where(and(inArray(leads.id, input.ids), eq(leads.organizationId, input.organizationId)))
-      .returning({ id: leads.id });
+    return ctx.db.transaction(async (tx) => {
+      // Delete all leads matching the IDs and organization
+      const result = await tx
+        .delete(leads)
+        .where(and(inArray(leads.id, input.ids), eq(leads.organizationId, input.organizationId)))
+        .returning({ id: leads.id, name: leads.name, company: leads.company });
 
-    return {
-      success: true,
-      deletedCount: result.length,
-    };
+      await writeLeadAuditLogs(
+        tx,
+        { organizationId: input.organizationId, userId: ctx.user.id, at: new Date() },
+        result.map((row) => ({
+          action: 'delete' as const,
+          leadId: row.id,
+          before: { name: row.name ?? null, company: row.company ?? null },
+        }))
+      );
+
+      return {
+        success: true,
+        deletedCount: result.length,
+      };
+    });
   }),
 
   /**
@@ -551,11 +634,24 @@ export const leadsRouter = router({
       score: lead.score,
     }));
 
-    const result = await ctx.db.insert(leads).values(leadsToInsert).returning({ id: leads.id });
+    return ctx.db.transaction(async (tx) => {
+      const result = await tx.insert(leads).values(leadsToInsert).returning();
 
-    return {
-      success: true,
-      createdCount: result.length,
-    };
+      await writeLeadAuditLogs(
+        tx,
+        { organizationId: input.organizationId, userId: ctx.user.id, at: new Date() },
+        result.map((lead) => ({
+          action: 'create' as const,
+          leadId: lead.id,
+          after: creationAuditValues(lead),
+          metadata: { via: 'import' },
+        }))
+      );
+
+      return {
+        success: true,
+        createdCount: result.length,
+      };
+    });
   }),
 });

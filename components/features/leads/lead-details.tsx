@@ -1,5 +1,6 @@
 'use client';
 
+import { LeadActivityCard } from '@/components/features/lead-activity/lead-activity-card';
 import { LeadHearingsCard } from '@/components/features/lead-hearings/lead-hearings-card';
 import {
   AlertDialog,
@@ -213,6 +214,9 @@ export function LeadDetails({ lead, onEdit, onDelete, isDeleting }: LeadDetailsP
 
         {/* First meeting hearings (Refs #84) */}
         <LeadHearingsCard leadId={lead.id} />
+
+        {/* Everything that happened on the lead (Refs #101) */}
+        <LeadActivityCard leadId={lead.id} />
 
         {/* Lead score */}
         {lead.score !== null && lead.score !== undefined && (

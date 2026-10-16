@@ -121,7 +121,10 @@ describe('Leads Router', () => {
       update: vi.fn().mockReturnThis(),
       set: vi.fn().mockReturnThis(),
       delete: vi.fn().mockReturnThis(),
+      execute: vi.fn().mockResolvedValue([]),
     };
+    // Writes run in a transaction; the fake runs it on the same mock
+    mockDb.transaction = vi.fn((fn: (tx: unknown) => unknown) => fn(mockDb));
 
     // Mock context
     mockContext = {
@@ -745,6 +748,119 @@ describe('Leads Router', () => {
       });
 
       expect(mockDb.select).toHaveBeenCalled();
+    });
+  });
+  describe('audit log (Refs #101)', () => {
+    const auditInserts = () =>
+      mockDb.values.mock.calls
+        .map((call: unknown[]) => call[0])
+        .filter((arg: unknown) => Array.isArray(arg) && arg[0]?.resource === 'lead');
+
+    it('logs only the fields that changed, in the transaction of the update', async () => {
+      mockDb.query.leads.findFirst.mockResolvedValue(mockLead);
+      mockDb.returning.mockResolvedValue([{ ...mockLead, name: 'Renamed', status: 'nurturing' }]);
+
+      await appRouter.createCaller(mockContext).leads.update({
+        organizationId: TEST_ORG_ID,
+        id: TEST_LEAD_ID,
+        name: 'Renamed',
+        status: 'nurturing',
+        company: mockLead.company,
+      });
+
+      expect(mockDb.transaction).toHaveBeenCalledTimes(1);
+      expect(auditInserts()).toEqual([
+        [
+          expect.objectContaining({
+            organizationId: TEST_ORG_ID,
+            userId: TEST_USER_ID,
+            action: 'update',
+            resource: 'lead',
+            resourceId: TEST_LEAD_ID,
+            changes: {
+              before: { status: 'new', name: 'Test Lead' },
+              after: { status: 'nurturing', name: 'Renamed' },
+            },
+          }),
+        ],
+      ]);
+    });
+
+    it('writes nothing when no value changed', async () => {
+      mockDb.query.leads.findFirst.mockResolvedValue(mockLead);
+      mockDb.returning.mockResolvedValue([mockLead]);
+
+      await appRouter.createCaller(mockContext).leads.update({
+        organizationId: TEST_ORG_ID,
+        id: TEST_LEAD_ID,
+        name: mockLead.name,
+        status: 'new',
+      });
+
+      expect(auditInserts()).toEqual([]);
+    });
+
+    it('records the MQL judgement as a change at the time of the update', async () => {
+      mockDb.query.leads.findFirst.mockResolvedValue(mockLead);
+      mockDb.returning.mockImplementation(async () => [
+        { ...mockLead, mqlQualifiedAt: mockDb.set.mock.calls[0][0].mqlQualifiedAt },
+      ]);
+
+      await appRouter.createCaller(mockContext).leads.update({
+        organizationId: TEST_ORG_ID,
+        id: TEST_LEAD_ID,
+        mqlQualified: true,
+      });
+
+      const [[row]] = auditInserts();
+      expect(row.changes).toEqual({ before: { mqlQualified: false }, after: { mqlQualified: true } });
+      expect(row.createdAt).toEqual(mockDb.set.mock.calls[0][0].mqlQualifiedAt);
+    });
+
+    it('logs creation without contact details, and deletion with the name and company only', async () => {
+      mockDb.returning.mockResolvedValue([{ ...mockLead, inflowSource: 'seminar' }]);
+      const caller = appRouter.createCaller(mockContext);
+      await caller.leads.create({
+        organizationId: TEST_ORG_ID,
+        email: 'lead@example.com',
+        inflowSource: 'seminar',
+      });
+      mockDb.query.leads.findFirst.mockResolvedValue(mockLead);
+      await caller.leads.delete({ organizationId: TEST_ORG_ID, id: TEST_LEAD_ID });
+
+      const [[created], [deleted]] = auditInserts();
+      expect(created).toMatchObject({
+        action: 'create',
+        changes: { after: { status: 'new', inflowSource: 'seminar', score: 75 } },
+      });
+      expect(created.changes.after).not.toHaveProperty('email');
+      expect(deleted).toMatchObject({
+        action: 'delete',
+        changes: { before: { name: 'Test Lead', company: 'Test Company' } },
+      });
+    });
+
+    it('logs a bulk status change only for leads whose status changed', async () => {
+      mockDb.query.leads.findMany.mockResolvedValue([
+        { id: TEST_LEAD_ID, status: 'new' },
+        { id: TEST_LEAD_ID_2, status: 'won' },
+      ]);
+      mockDb.returning.mockResolvedValue([{ id: TEST_LEAD_ID }, { id: TEST_LEAD_ID_2 }]);
+
+      await appRouter.createCaller(mockContext).leads.bulkUpdateStatus({
+        organizationId: TEST_ORG_ID,
+        ids: [TEST_LEAD_ID, TEST_LEAD_ID_2],
+        status: 'won',
+      });
+
+      expect(auditInserts()).toEqual([
+        [
+          expect.objectContaining({
+            resourceId: TEST_LEAD_ID,
+            changes: { before: { status: 'new' }, after: { status: 'won' } },
+          }),
+        ],
+      ]);
     });
   });
 });
