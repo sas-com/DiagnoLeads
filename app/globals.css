@@ -16,10 +16,6 @@
   --font-*: initial;
   --font-outfit: Outfit, sans-serif;
 
-  /* AX migration site, styled after maru2-dx.com (fonts come from next/font in ax-site/fonts.ts) */
-  --font-ax: var(--font-noto-sans-jp), 'Noto Sans JP', sans-serif;
-  --font-ax-latin: var(--font-lato), 'Lato', var(--font-noto-sans-jp), sans-serif;
-
   /* TailAdmin Breakpoints */
   --breakpoint-*: initial;
   --breakpoint-2xsm: 375px;
@@ -318,6 +314,17 @@
   --animate-fade-in-up: fadeInUp 0.3s ease-out;
   --animate-bounce-in: bounceIn 0.5s ease-out;
   --animate-shimmer: shimmer 1.5s infinite;
+}
+
+/*
+ * AX migration site, styled after maru2-dx.com (fonts come from next/font in ax-site/fonts.ts).
+ * Inline: next/font defines --font-noto-sans-jp / --font-lato on the site's root element, not on
+ * :root, so the utilities must reference them directly. A theme variable would be computed on
+ * :root, where they are undefined, and make the whole font-family invalid.
+ */
+@theme inline {
+  --font-ax: var(--font-noto-sans-jp), 'Noto Sans JP', sans-serif;
+  --font-ax-latin: var(--font-lato), 'Lato', var(--font-noto-sans-jp), sans-serif;
 }
 
 /* shadcn/ui text tokens (text-foreground, text-muted-foreground, ring-ring), switched for dark

@@ -2588,7 +2588,8 @@
       "company": "運営会社",
       "related": "DX代行サービス『まるマルDX』",
       "privacy": "個人情報保護方針",
-      "newTab": "（新しいタブで開きます）"
+      "newTab": "（新しいタブで開きます）",
+      "copyright": "Copyright © {year} Software Agency System Co., Ltd. All rights reserved."
     }
   },
   "organizations": {

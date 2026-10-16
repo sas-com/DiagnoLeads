@@ -66,7 +66,7 @@ export async function AxHero({ locale }: SectionProps) {
             {t('title')}
           </h1>
           <p className="text-lg font-bold">{t('tagline')}</p>
-          <p className="leading-relaxed text-gray-700">{t('lead')}</p>
+          <p className="font-bold leading-relaxed">{t('lead')}</p>
           <div className="space-y-3 pt-2">
             <CtaCaption locale={locale}>{t('ctaCaption')}</CtaCaption>
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -212,13 +212,13 @@ export async function AxSteps({ locale }: SectionProps) {
         <h2 id="ax-steps-heading" className={SECTION_HEADING}>
           {t('title')}
         </h2>
-        <p className="mx-auto mt-5 max-w-2xl text-center leading-relaxed">{t('lead')}</p>
+        <p className="mx-auto mt-5 max-w-2xl text-center font-bold leading-relaxed">{t('lead')}</p>
         <ol className="mt-14 grid gap-10 md:grid-cols-4 md:gap-5">
           {STEP_KEYS.map((key, index) => (
             <li key={key} className="relative rounded-2xl bg-white p-6 pt-10 shadow-sm">
               <span
                 aria-hidden="true"
-                className="absolute -top-6 left-6 flex h-12 w-12 items-center justify-center rounded-full bg-ax-teal-dark font-ax-latin text-lg font-black text-white"
+                className="absolute -top-6 left-6 flex h-12 w-12 items-center justify-center rounded-full border-4 border-white bg-ax-deep font-ax-latin text-lg font-black text-white"
               >
                 {String(index + 1).padStart(2, '0')}
               </span>
@@ -255,7 +255,7 @@ export async function AxTargets({ locale }: SectionProps) {
         <h2 id="ax-targets-heading" className={SECTION_HEADING}>
           {t('title')}
         </h2>
-        <p className="mx-auto mt-5 max-w-2xl text-center leading-relaxed">{t('lead')}</p>
+        <p className="mx-auto mt-5 max-w-2xl text-center font-bold leading-relaxed">{t('lead')}</p>
         <ul className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {TARGETS.map(({ key, icon: Icon }) => (
             <li
@@ -291,7 +291,7 @@ export async function AxDiagnosisSection({ locale }: SectionProps) {
         <h2 id="ax-diagnosis-heading" className={`mt-2 ${SECTION_HEADING}`}>
           {t('title')}
         </h2>
-        <p className="mx-auto mt-5 max-w-2xl text-center leading-relaxed">{t('lead')}</p>
+        <p className="mx-auto mt-5 max-w-2xl text-center font-bold leading-relaxed">{t('lead')}</p>
         <div className="mt-10 rounded-3xl bg-white p-5 shadow-[0_10px_40px_rgba(0,0,0,0.08)] ring-1 ring-black/5 sm:p-10">
           <AxDiagnosisFlow
             locale={locale}
