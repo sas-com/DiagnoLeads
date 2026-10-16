@@ -2465,7 +2465,25 @@
       "readOnlyTitle": "閲覧のみ",
       "readOnlyBody": "このヒアリングを変更する権限がありません。",
       "droppedKeys": "今の項目にない保存済みの値が {count} 件あります。次に保存すると削除されます。",
-      "lastUpdated": "最終更新: {date}"
+      "lastUpdated": "最終更新: {date}",
+      "autosave": {
+        "saving": "保存中…",
+        "saved": "保存済み {time}",
+        "unsaved": "未保存の変更あり",
+        "failed": "自動保存できませんでした。未保存の変更があります",
+        "conflictStopped": "衝突を解消するまで自動保存を止めています"
+      }
+    },
+    "meeting": {
+      "toggle": "商談モード",
+      "toggleHint": "必須項目を商談の流れの順に1画面で入力します",
+      "progress": "必須 {filled}/{total}",
+      "next": "次回",
+      "notApplicable": "対象外",
+      "nextOf": "{item}を次回にする",
+      "notApplicableOf": "{item}を対象外にする",
+      "others": "その他の項目",
+      "othersCount": "{count}項目"
     }
   }
 }

@@ -2465,7 +2465,25 @@
       "readOnlyTitle": "Read only",
       "readOnlyBody": "You do not have permission to change this hearing.",
       "droppedKeys": "{count} stored values are no longer in the form. They will be removed on the next save.",
-      "lastUpdated": "Last updated: {date}"
+      "lastUpdated": "Last updated: {date}",
+      "autosave": {
+        "saving": "Saving…",
+        "saved": "Saved {time}",
+        "unsaved": "Unsaved changes",
+        "failed": "Could not save automatically. You have unsaved changes",
+        "conflictStopped": "Autosave is paused until the conflict is resolved"
+      }
+    },
+    "meeting": {
+      "toggle": "Meeting mode",
+      "toggleHint": "Fill in the required items in meeting order on one screen",
+      "progress": "Required {filled}/{total}",
+      "next": "Next time",
+      "notApplicable": "N/A",
+      "nextOf": "Mark {item} for next time",
+      "notApplicableOf": "Mark {item} not applicable",
+      "others": "Other items",
+      "othersCount": "{count} items"
     }
   }
 }
