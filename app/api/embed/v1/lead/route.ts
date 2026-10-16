@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { embedAccessLogs, embedConfigs, leads } from '@/lib/db/schema';
+import { isAllowedEmail, testModeEmailMessage } from '@/lib/email/allowed-recipients';
 import {
   checkRateLimit,
   getRateLimitHeaders,
@@ -202,6 +203,21 @@ export async function POST(request: NextRequest) {
     }
 
     const data = validationResult.data;
+
+    // Test mode: only company addresses are accepted
+    if (!isAllowedEmail(data.email)) {
+      logEntry.statusCode = 400;
+      logEntry.errorCode = 'EMAIL_DOMAIN_NOT_ALLOWED';
+      await logAccess(logEntry, startTime);
+      return NextResponse.json(
+        {
+          error: 'Bad Request',
+          code: 'EMAIL_DOMAIN_NOT_ALLOWED',
+          message: testModeEmailMessage(),
+        },
+        { status: 400, headers: getSecurityHeaders(origin) }
+      );
+    }
 
     // 9. Sanitize input data
     const sanitizedData = {

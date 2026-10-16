@@ -1,3 +1,4 @@
+import { allowedEmailDomains, isTestMode } from '@/lib/email/allowed-recipients';
 import { publicProcedure, router } from '@/lib/trpc/init';
 import { z } from 'zod';
 
@@ -6,6 +7,14 @@ import { z } from 'zod';
  * Provides basic health check and status endpoints
  */
 export const healthRouter = router({
+  /**
+   * Whether the app runs in test mode, and which email domains it accepts (shown in the header)
+   */
+  testMode: publicProcedure.query(() => ({
+    testMode: isTestMode(),
+    domains: allowedEmailDomains(),
+  })),
+
   /**
    * Simple health check
    * @openapi /health/check

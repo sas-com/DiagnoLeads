@@ -306,6 +306,10 @@
       "thursday": "木曜日",
       "friday": "金曜日",
       "saturday": "土曜日"
+    },
+    "testMode": {
+      "label": "テストモード",
+      "description": "テスト中です。{domains} 以外のメールアドレスは登録・送信できません"
     }
   },
   "axDiagnosis": {
@@ -354,7 +358,8 @@
       "rateLimitedMinutes": "送信が一時的に制限されています。約{minutes}分後に、もう一度「{button}」を押してください。入力内容はこのまま残ります。",
       "verificationPending": "送信前の確認が終わっていません。確認欄にチェックマーク（✓）が表示されたら、もう一度「{button}」を押してください。",
       "verificationRetry": "送信前の確認をやり直しています。確認欄にチェックマーク（✓）が表示されたら、もう一度「{button}」を押してください。",
-      "verificationUnavailable": "確認サービスに一時的につながりませんでした。少し時間をおいて、もう一度「{button}」を押してください。入力内容はこのまま残ります。"
+      "verificationUnavailable": "確認サービスに一時的につながりませんでした。少し時間をおいて、もう一度「{button}」を押してください。入力内容はこのまま残ります。",
+      "testModeEmail": "テスト中のため、{domains} のメールアドレスのみ受け付けています"
     },
     "verification": {
       "label": "送信前の確認",

@@ -5,7 +5,7 @@
  *
  * In test mode every sender passes its recipients through filterAllowedRecipients before calling
  * Resend, and inviting or signing up an address outside the domains is a validation error.
- * Addresses typed by respondents of the public diagnosis (leads) are not restricted.
+ * The public AX diagnosis and the embedded lead form accept only these domains as well.
  */
 export const DEFAULT_TEST_MODE_EMAIL_DOMAINS = 'sas-com.com';
 

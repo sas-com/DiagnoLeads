@@ -1,4 +1,5 @@
 import { db } from '@/lib/db/client';
+import { allowedEmailDomains, isAllowedEmail } from '@/lib/email/allowed-recipients';
 import { axMigrationDefinition } from '@/lib/features/diagnostics/ax-migration/definition';
 import {
   evaluateAxMigration,
@@ -47,6 +48,18 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json(
       { error: 'Validation failed', details: parsed.error.flatten() },
+      { status: 400 }
+    );
+  }
+
+  // Test mode: only company addresses are accepted (checked before anything is counted)
+  if (!isAllowedEmail(parsed.data.contact.email)) {
+    return NextResponse.json(
+      {
+        error: 'Email address not accepted in test mode',
+        code: 'email_domain_not_allowed',
+        domains: allowedEmailDomains(),
+      },
       { status: 400 }
     );
   }
