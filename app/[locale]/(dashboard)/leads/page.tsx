@@ -57,6 +57,14 @@ const LeadDetails = dynamic(
   { ssr: false }
 );
 
+const LeadDeleteDialog = dynamic(
+  () =>
+    import('@/components/features/leads/lead-delete-dialog').then((mod) => ({
+      default: mod.LeadDeleteDialog,
+    })),
+  { ssr: false }
+);
+
 const ImportDialog = dynamic(
   () =>
     import('@/components/features/leads/import-dialog').then((mod) => ({
@@ -93,27 +101,38 @@ export default function LeadsPage() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [detailsSheetOpen, setDetailsSheetOpen] = useState(false);
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  // The lead shown in the details / edited is tracked by id and read from the queries, so the
+  // details show the saved values after an edit instead of the copy taken from the list
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  // Lead whose deletion is being confirmed from the list's row menu
+  const [leadToDelete, setLeadToDelete] = useState<Lead | null>(null);
 
   // Deep link (/leads?leadId=...): notifications and the hearing editor's back link open the
   // lead's details. Read from the URL after mount (useSearchParams would need a Suspense
-  // boundary for this client page).
-  const [linkedLeadId, setLinkedLeadId] = useState<string | null>(null);
+  // boundary for this client page). The details open once the lead has loaded.
+  const [openWhenLoaded, setOpenWhenLoaded] = useState(false);
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get('leadId');
-    if (id && isValidUUID(id)) setLinkedLeadId(id);
-  }, []);
-  const linkedLead = trpc.leads.get.useQuery(
-    { organizationId, id: linkedLeadId ?? '' },
-    { enabled: hasValidOrgId && !!linkedLeadId, retry: false }
-  );
-  useEffect(() => {
-    if (linkedLead.data && linkedLead.data.id === linkedLeadId) {
-      setSelectedLead(linkedLead.data as Lead);
-      setDetailsSheetOpen(true);
-      setLinkedLeadId(null);
+    if (id && isValidUUID(id)) {
+      setSelectedLeadId(id);
+      setOpenWhenLoaded(true);
     }
-  }, [linkedLead.data, linkedLeadId]);
+  }, []);
+  // Refetched when the lead is updated (useUpdateLead invalidates leads.get)
+  const selectedLeadQuery = trpc.leads.get.useQuery(
+    { organizationId, id: selectedLeadId ?? '' },
+    { enabled: hasValidOrgId && !!selectedLeadId, retry: false }
+  );
+  const loadedLead =
+    selectedLeadQuery.data && selectedLeadQuery.data.id === selectedLeadId
+      ? (selectedLeadQuery.data as Lead)
+      : null;
+  useEffect(() => {
+    if (openWhenLoaded && loadedLead) {
+      setDetailsSheetOpen(true);
+      setOpenWhenLoaded(false);
+    }
+  }, [openWhenLoaded, loadedLead]);
 
   // Fetch leads list
   const {
@@ -132,6 +151,8 @@ export default function LeadsPage() {
   const deleteLead = useDeleteLead();
 
   const leads = leadsData?.items || [];
+  const selectedLead: Lead | null =
+    loadedLead ?? leads.find((lead) => lead.id === selectedLeadId) ?? null;
 
   // Calculate stats with useMemo for performance
   const stats = useMemo(() => {
@@ -193,30 +214,54 @@ export default function LeadsPage() {
       id: selectedLead.id,
       organizationId,
     });
+    // Only the dialog closes: when editing from the details they stay open and show the
+    // refetched lead
     setEditDialogOpen(false);
-    setDetailsSheetOpen(false);
+  };
+
+  const deleteLeadById = async (id: string) => {
+    try {
+      await deleteLead.mutateAsync({ id, organizationId });
+    } catch {
+      // useDeleteLead shows the error
+      return;
+    }
+    if (id === selectedLeadId) {
+      setDetailsSheetOpen(false);
+      setSelectedLeadId(null);
+    }
   };
 
   const handleDeleteLead = async () => {
     if (!selectedLead) return;
+    await deleteLeadById(selectedLead.id);
+  };
 
-    await deleteLead.mutateAsync({
-      id: selectedLead.id,
-      organizationId,
-    });
-    setDetailsSheetOpen(false);
-    setSelectedLead(null);
+  const handleConfirmRowDelete = async () => {
+    if (!leadToDelete) return;
+    await deleteLeadById(leadToDelete.id);
+    setLeadToDelete(null);
   };
 
   const handleLeadClick = (lead: Lead) => {
-    setSelectedLead(lead);
+    setSelectedLeadId(lead.id);
     setDetailsSheetOpen(true);
   };
 
+  // From the details: the dialog opens over them and they stay open
   const handleEditClick = () => {
-    setDetailsSheetOpen(false);
     setEditDialogOpen(true);
   };
+
+  // From the list's row menu
+  const handleRowEdit = (lead: Lead) => {
+    setSelectedLeadId(lead.id);
+    setEditDialogOpen(true);
+  };
+
+  const sheetDescription = selectedLead
+    ? [selectedLead.company, selectedLead.email].filter(Boolean).join(' · ')
+    : '';
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-8">
@@ -337,6 +382,8 @@ export default function LeadsPage() {
         isLoading={isLoading}
         organizationId={organizationId}
         onLeadClick={handleLeadClick}
+        onEdit={handleRowEdit}
+        onDelete={setLeadToDelete}
         onRefresh={() => refetch()}
       />
 
@@ -361,10 +408,16 @@ export default function LeadsPage() {
 
       {/* Lead Details Sheet */}
       <Sheet open={detailsSheetOpen} onOpenChange={setDetailsSheetOpen}>
-        <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>{t('leadDetails')}</SheetTitle>
-            <SheetDescription>{t('leadDetailsDescription')}</SheetDescription>
+        <SheetContent
+          className="w-full sm:max-w-2xl overflow-y-auto"
+          // No description when the lead has neither a company nor an email shown
+          {...(sheetDescription ? {} : { 'aria-describedby': undefined })}
+        >
+          <SheetHeader className="pr-8">
+            <SheetTitle className="text-2xl font-bold">
+              {selectedLead ? selectedLead.name || t('nameNotSet') : t('leadDetails')}
+            </SheetTitle>
+            {sheetDescription && <SheetDescription>{sheetDescription}</SheetDescription>}
           </SheetHeader>
 
           {selectedLead && (
@@ -379,6 +432,17 @@ export default function LeadsPage() {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Delete confirmation from the row menu */}
+      <LeadDeleteDialog
+        lead={leadToDelete}
+        open={leadToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setLeadToDelete(null);
+        }}
+        onConfirm={handleConfirmRowDelete}
+        isDeleting={deleteLead.isPending}
+      />
 
       {/* Import Dialog */}
       <ImportDialog

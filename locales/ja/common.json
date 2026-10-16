@@ -782,6 +782,7 @@
     "deleteLead": "リードを削除",
     "leadDetails": "リード詳細",
     "leadDetailsDescription": "リードの詳細情報を確認し、編集や削除ができます",
+    "moreActions": "その他の操作",
     "name": "名前",
     "nameNotSet": "名前未設定",
     "email": "メールアドレス",

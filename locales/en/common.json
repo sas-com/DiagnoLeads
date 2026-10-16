@@ -782,6 +782,7 @@
     "deleteLead": "Delete Lead",
     "leadDetails": "Lead Details",
     "leadDetailsDescription": "View lead details and edit or delete as needed",
+    "moreActions": "More actions",
     "name": "Name",
     "nameNotSet": "Name not set",
     "email": "Email",
