@@ -11,6 +11,7 @@ import type { BlogPost, FAQ } from '@/lib/cms/core/types';
 import { protectedProcedure, publicProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
+import { contentEditorProcedure, isContentEditor } from '../editors';
 
 // =============================================================================
 // Input Schemas
@@ -105,7 +106,7 @@ const faqsRouter = router({
   /**
    * FAQ作成
    */
-  create: protectedProcedure.input(faqCreateSchema).mutation(async ({ input, ctx }) => {
+  create: contentEditorProcedure.input(faqCreateSchema).mutation(async ({ input, ctx }) => {
     const faqRepo = new FAQRepository();
 
     const faq = await faqRepo.create({
@@ -122,7 +123,7 @@ const faqsRouter = router({
   /**
    * FAQ更新
    */
-  update: protectedProcedure.input(faqUpdateSchema).mutation(async ({ input, ctx }) => {
+  update: contentEditorProcedure.input(faqUpdateSchema).mutation(async ({ input, ctx }) => {
     const faqRepo = new FAQRepository();
 
     const existing = await faqRepo.findById(input.id);
@@ -146,7 +147,7 @@ const faqsRouter = router({
   /**
    * FAQ削除
    */
-  delete: protectedProcedure
+  delete: contentEditorProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const faqRepo = new FAQRepository();
@@ -187,8 +188,8 @@ const blogRouter = router({
       const blogRepo = new BlogRepository();
 
       const result = await blogRepo.findAll({
-        // Drafts only for signed-in users; anonymous callers always get published posts (#80)
-        status: ctx.user ? input.status : 'published',
+        // Drafts only for content editors; everyone else always gets published posts (#80, #87)
+        status: isContentEditor(ctx.user?.email) ? input.status : 'published',
         category: input.category,
         limit: input.limit,
         offset: input.offset,
@@ -228,7 +229,7 @@ const blogRouter = router({
   /**
    * ブログ記事作成
    */
-  create: protectedProcedure.input(blogCreateSchema).mutation(async ({ input, ctx }) => {
+  create: contentEditorProcedure.input(blogCreateSchema).mutation(async ({ input, ctx }) => {
     const blogRepo = new BlogRepository();
 
     // スラッグの重複チェック
@@ -260,7 +261,7 @@ const blogRouter = router({
   /**
    * ブログ記事更新
    */
-  update: protectedProcedure.input(blogUpdateSchema).mutation(async ({ input, ctx }) => {
+  update: contentEditorProcedure.input(blogUpdateSchema).mutation(async ({ input, ctx }) => {
     const blogRepo = new BlogRepository();
 
     const existing = await blogRepo.findById(input.id);
@@ -297,7 +298,7 @@ const blogRouter = router({
   /**
    * ブログ記事削除
    */
-  delete: protectedProcedure
+  delete: contentEditorProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const blogRepo = new BlogRepository();
@@ -323,6 +324,8 @@ const blogRouter = router({
 export const contentRouter = router({
   faqs: faqsRouter,
   blog: blogRouter,
+  /** Whether the signed-in user may edit FAQs and blog posts (#87) */
+  canEdit: protectedProcedure.query(({ ctx }) => isContentEditor(ctx.user.email)),
 });
 
 export type ContentRouter = typeof contentRouter;

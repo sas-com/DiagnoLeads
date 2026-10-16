@@ -1543,6 +1543,10 @@
       "deleting": "Deleting...",
       "deleteSuccess": "Post deleted successfully",
       "deleteError": "Failed to delete post"
+    },
+    "editorOnly": {
+      "title": "Only designated editors can make changes",
+      "body": "Only the editors set by an administrator can create, update or delete FAQs and blog posts. Ask an editor if you need a change."
     }
   },
   "header": {
