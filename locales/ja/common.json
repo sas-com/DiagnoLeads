@@ -748,7 +748,79 @@
       "conversionRadial": "コンバージョン＆スコア",
       "conversionRadialDesc": "ラジアル進捗チャート",
       "recentActivity": "最近のアクティビティ",
-      "recentActivityDesc": "最新のリードアクティビティ"
+      "recentActivityDesc": "最新のリードアクティビティ",
+      "kpis": "主要な数字",
+      "kpisDesc": "新規リード・相談申込・MQL・平均スコア",
+      "pending": "連絡待ちの相談申込",
+      "pendingDesc": "連絡期限の近い順",
+      "trend": "推移",
+      "trendDesc": "日ごとの新規リードと相談申込",
+      "breakdown": "内訳",
+      "breakdownDesc": "ステータス別・移行元システム別",
+      "recent": "最近のリード",
+      "recentDesc": "最新のリード一覧"
+    },
+    "ax": {
+      "description": "AX移行診断から届いたリードと、対応が必要な相談申込を確認します",
+      "periodLabel": "集計期間",
+      "period": {
+        "7": "7日",
+        "30": "30日",
+        "90": "90日"
+      },
+      "toLeads": "リード一覧へ",
+      "kpi": {
+        "newLeads": "新規リード",
+        "consultations": "相談申込",
+        "mql": "MQL",
+        "averageScore": "平均スコア",
+        "vsPrevious": "前の{days}日間：{value}",
+        "noPrevious": "前の{days}日間はなし",
+        "noScore": "—",
+        "scoreSuffix": "/100",
+        "periodNote": "直近{days}日間"
+      },
+      "pending": {
+        "title": "連絡待ちの相談申込",
+        "description": "相談申込から{days}営業日以内に連絡します。期限の近い順です。",
+        "empty": "連絡待ちの相談申込はありません",
+        "overdue": "期限切れ",
+        "dueToday": "今日まで",
+        "due": "{date}まで",
+        "more": "ほか{count}件",
+        "open": "開く",
+        "requestedAt": "申込 {date}"
+      },
+      "trend": {
+        "title": "新規リードと相談申込の推移",
+        "description": "日ごと（日本時間）",
+        "leads": "新規リード",
+        "consultations": "相談申込",
+        "empty": "この期間のリードはありません"
+      },
+      "statuses": {
+        "title": "ステータス別（全期間）"
+      },
+      "platforms": {
+        "title": "移行元システム別",
+        "description": "直近{days}日間の新規リード",
+        "empty": "この期間のリードはありません",
+        "unknown": "不明（AX診断以外）",
+        "as400": "AS/400（IBM i）",
+        "acos": "NEC ACOS",
+        "access": "Microsoft Access",
+        "other": "その他・わからない"
+      },
+      "recent": {
+        "title": "最近のリード",
+        "name": "名前・会社",
+        "platform": "移行元",
+        "score": "スコア",
+        "received": "受付",
+        "consultation": "相談申込",
+        "empty": "まだリードがありません",
+        "unnamed": "（名前なし）"
+      }
     }
   },
   "leads": {
@@ -2619,5 +2691,12 @@
       "sqlUndecided": "未判定"
     },
     "changeArrow": "{before} → {after}"
+  },
+  "sidebarWidget": {
+    "label": "公開中の診断",
+    "title": "AX移行診断",
+    "description": "お客様に案内する診断ページです。回答はリードとしてこの画面に届きます。",
+    "open": "診断ページを開く",
+    "newTab": "（新しいタブで開きます）"
   }
 }

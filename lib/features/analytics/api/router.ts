@@ -2,6 +2,8 @@ import { leads } from '@/lib/db/schema';
 import { LEAD_STATUSES, type LeadStatus } from '@/lib/features/leads/types/pipeline';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { and, avg, count, desc, eq, gte, lte, sql } from 'drizzle-orm';
+import { z } from 'zod';
+import { getDashboardSummary } from '../dashboard';
 import {
   type ComparisonResult,
   type ConversionFunnelData,
@@ -31,6 +33,19 @@ import {
  * Provides statistics and analytics for dashboard
  */
 export const analyticsRouter = router({
+  /**
+   * Dashboard figures: real counts for the period with the previous period, daily series,
+   * pipeline, migration source, consultation requests waiting for contact, recent leads
+   */
+  getDashboard: organizationProcedure
+    .input(
+      z.object({
+        organizationId: z.string().uuid(),
+        days: z.union([z.literal(7), z.literal(30), z.literal(90)]),
+      })
+    )
+    .query(({ ctx, input }) => getDashboardSummary(ctx.db, input.organizationId, input.days)),
+
   /**
    * Get Overview Statistics
    * Returns total leads, conversion rate, new leads this month, and average score

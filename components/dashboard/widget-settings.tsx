@@ -37,6 +37,18 @@ interface WidgetSettingsProps {
 
 const STORAGE_KEY = 'dashboard-widget-config';
 
+/**
+ * Saved settings meet the current widget list: widgets that no longer exist are dropped and new
+ * ones are shown, so a redesign never hides a widget behind an old saved setting.
+ */
+export function reconcileWidgetConfig(stored: unknown, defaultWidgets: string[]): WidgetConfig[] {
+  const saved = Array.isArray(stored) ? (stored as WidgetConfig[]) : [];
+  return defaultWidgets.map((id, index) => {
+    const entry = saved.find((item) => item?.id === id);
+    return { id, enabled: entry ? entry.enabled !== false : true, order: index };
+  });
+}
+
 export function useWidgetConfig(
   defaultWidgets: string[]
 ): [WidgetConfig[], (config: WidgetConfig[]) => void] {
@@ -48,7 +60,7 @@ export function useWidgetConfig(
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       try {
-        return JSON.parse(stored);
+        return reconcileWidgetConfig(JSON.parse(stored), defaultWidgets);
       } catch {
         // Fall back to default
       }

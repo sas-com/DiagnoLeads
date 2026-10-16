@@ -35,6 +35,12 @@ interface BarChartProps {
   layout?: 'horizontal' | 'vertical';
   className?: string;
   height?: number;
+  /** Counts: whole-number ticks from zero */
+  integerValues?: boolean;
+  /** Bar width relative to its slot, e.g. '80%' */
+  columnWidth?: string;
+  /** Show at most this many category labels (long date ranges); the tooltip still names each bar */
+  maxCategoryLabels?: number;
 }
 
 export function BarChart({
@@ -47,6 +53,9 @@ export function BarChart({
   showGridLines = true,
   showAnimation = true,
   layout = 'horizontal',
+  integerValues = false,
+  columnWidth = '50%',
+  maxCategoryLabels,
   className,
   height = 350,
 }: BarChartProps) {
@@ -83,7 +92,7 @@ export function BarChart({
     plotOptions: {
       bar: {
         horizontal: isVertical,
-        columnWidth: '50%',
+        columnWidth,
         borderRadius: 4,
         borderRadiusApplication: 'end',
       },
@@ -93,7 +102,7 @@ export function BarChart({
     },
     stroke: {
       show: true,
-      width: 2,
+      width: integerValues ? 1 : 2,
       colors: ['transparent'],
     },
     grid: {
@@ -112,6 +121,9 @@ export function BarChart({
     },
     xaxis: {
       categories: xAxisCategories,
+      ...(maxCategoryLabels && xAxisCategories.length > maxCategoryLabels
+        ? { tickAmount: maxCategoryLabels, tickPlacement: 'on' as const }
+        : {}),
       axisBorder: {
         show: false,
       },
@@ -119,6 +131,8 @@ export function BarChart({
         show: false,
       },
       labels: {
+        rotate: 0,
+        hideOverlappingLabels: true,
         style: {
           fontSize: '12px',
           colors: '#6b7280',
@@ -126,12 +140,13 @@ export function BarChart({
       },
     },
     yaxis: {
+      ...(integerValues ? integerAxis(data, categories) : {}),
       labels: {
         style: {
           fontSize: '12px',
           colors: ['#6b7280'],
         },
-        formatter: (val: number) => valueFormatter(val),
+        formatter: (val: number) => valueFormatter(integerValues ? Math.round(val) : val),
       },
     },
     legend: {
@@ -155,4 +170,10 @@ export function BarChart({
       <ReactApexChart options={options} series={series} type="bar" height={height} />
     </div>
   );
+}
+
+/** Whole-number y-axis for counts: from zero, at most five ticks, never fractions */
+function integerAxis(data: Record<string, unknown>[], categories: string[]) {
+  const max = Math.max(1, ...data.flatMap((row) => categories.map((key) => Number(row[key]) || 0)));
+  return { min: 0, max, tickAmount: Math.min(max, 5), forceNiceScale: max > 5, decimalsInFloat: 0 };
 }
