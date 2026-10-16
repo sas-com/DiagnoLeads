@@ -74,7 +74,7 @@ describe.skipIf(!url)('member invitations (PostgreSQL)', () => {
     await client?.end();
   });
 
-  it('stores only a hash of the token, lower-cases the address and expires in 7 days', async () => {
+  it('stores only a hash of the token, lower-cases the address and expires in 48 hours', async () => {
     const { invitation, token } = await invite('  New.Person@Example.COM ');
 
     expect(token.length).toBeGreaterThanOrEqual(43);

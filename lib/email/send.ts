@@ -37,7 +37,7 @@ export async function sendOrganizationInviteEmail({
   organizationName,
   inviteLink,
   role = 'メンバー',
-  expiresIn = '7日間',
+  expiresIn = '48時間',
 }: {
   to: string;
   inviterName: string;

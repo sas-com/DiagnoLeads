@@ -146,4 +146,15 @@ describe.skipIf(!url)('invitation-only sign-up (better-auth + PostgreSQL)', () =
     );
     expect(signIn.status).toBe(200);
   });
+
+  it('refuses to create a user outside the sign-up endpoint (the database hook)', async () => {
+    const { auth } = await import('@/lib/auth/config');
+    const context = await auth.$context;
+    const email = `internal-${unique()}@example.com`;
+
+    await expect(
+      context.internalAdapter.createUser({ email, name: '経路外', emailVerified: false })
+    ).rejects.toMatchObject({ body: { code: 'INVITATION_REQUIRED' } });
+    expect(await userCount(email)).toBe(0);
+  });
 });

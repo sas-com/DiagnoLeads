@@ -97,8 +97,8 @@ describe('sendOrganizationInviteEmail', () => {
   });
 
   it('should have default expiresIn value', () => {
-    const defaultExpiresIn = '7日間';
-    expect(defaultExpiresIn).toBe('7日間');
+    const defaultExpiresIn = '48時間';
+    expect(defaultExpiresIn).toBe('48時間');
   });
 
   it('should format subject with organization name', () => {
@@ -372,7 +372,7 @@ describe('Integration: sendOrganizationInviteEmail (actual)', () => {
     });
 
     expect(mockSendEmail).toHaveBeenCalledWith(expect.objectContaining({
-      text: expect.stringContaining('7日間'),
+      text: expect.stringContaining('48時間'),
     }));
   });
 
