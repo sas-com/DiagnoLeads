@@ -224,6 +224,8 @@ export async function submitBuilderDiagnosis(
         source: 'website',
         inflowSource: inflow.inflowSource,
         referrerName: inflow.referrerName,
+        // A ref code with an agency medium is the agency's name (#147)
+        agencyName: inflow.agencyName,
         conversionPoint: input.consultationRequested ? 'consultation' : 'web_diagnosis',
         // MQL date: only 関心あり (#139); 適合 alone leaves it empty
         mqlQualifiedAt: evaluation.mql.qualified ? now : null,
