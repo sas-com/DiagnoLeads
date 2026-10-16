@@ -1,23 +1,13 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { intlMiddleware, shouldSkipI18nMiddleware, stripLocalePrefix } from './lib/i18n/middleware';
+import { signInRedirect } from './lib/middleware/auth-redirect';
 import { contentSecurityPolicy } from './lib/middleware/csp';
-// import { auth } from './lib/auth/config'; // TODO: Edge Runtimeで動作しないため一時的にコメントアウト
 import {
   checkRateLimit,
   getRateLimitConfig,
   setRateLimitHeaders,
 } from './lib/middleware/rate-limit';
-
-/**
- * Public routes that don't require authentication
- */
-const publicRoutes = ['/', '/api/auth', '/ax-diagnosis', '/ax-migration'];
-
-/**
- * API routes that should always be accessible
- */
-const publicApiRoutes = ['/api/auth', '/api/trpc', '/api/diagnostics'];
 
 /**
  * Cache control headers for static assets
@@ -70,20 +60,6 @@ function getSecurityHeaders(request: NextRequest) {
 }
 
 /**
- * Check if a route is public
- */
-function isPublicRoute(pathname: string): boolean {
-  return publicRoutes.some((route) => pathname === route || pathname.startsWith(route));
-}
-
-/**
- * Check if an API route is public
- */
-function isPublicApiRoute(pathname: string): boolean {
-  return publicApiRoutes.some((route) => pathname.startsWith(route));
-}
-
-/**
  * Next.js Middleware
  * Runs before every request to check i18n, rate limit, authentication, and add security headers
  */
@@ -126,43 +102,13 @@ export async function middleware(request: NextRequest) {
   // 3. Get security headers
   const securityHeaders = getSecurityHeaders(request);
 
-  // 4. Create response (authentication temporarily disabled for i18n testing)
-  // TODO: Re-enable authentication after migrating to Node.js Runtime or API Route-based auth
+  // 4. Signed-out visitors of admin pages go to sign-in. Each API checks the session itself;
+  // this only avoids showing an empty admin shell (lib/middleware/auth-redirect.ts).
+  const signIn = signInRedirect(request, pathname, pathnameWithoutLocale, request.nextUrl.search);
   // Build on the next-intl response: it carries the locale header that server components
   // read through getTranslations() / getRequestConfig(). Replacing it with a plain
   // NextResponse.next() made every server-rendered string fall back to Japanese on /en.
-  const response = intlResponse ?? NextResponse.next();
-
-  // // Allow public routes
-  // if (isPublicRoute(pathnameWithoutLocale)) {
-  //   response = NextResponse.next();
-  // }
-  // // Allow public API routes
-  // else if (isPublicApiRoute(pathnameWithoutLocale)) {
-  //   response = NextResponse.next();
-  // }
-  // // Check authentication for protected routes
-  // else {
-  //   try {
-  //     const session = await auth.api.getSession({
-  //       headers: request.headers,
-  //     });
-
-  //     if (!session) {
-  //       // Redirect to login page with locale prefix
-  //       const loginUrl = new URL(pathname.replace(pathnameWithoutLocale, '/login'), request.url);
-  //       loginUrl.searchParams.set('callbackUrl', pathname);
-  //       response = NextResponse.redirect(loginUrl);
-  //     } else {
-  //       response = NextResponse.next();
-  //     }
-  //   } catch (error) {
-  //     console.error('Middleware auth error:', error);
-  //     // Redirect to home with locale prefix
-  //     const homeUrl = new URL(pathname.replace(pathnameWithoutLocale, '/'), request.url);
-  //     response = NextResponse.redirect(homeUrl);
-  //   }
-  // }
+  const response = signIn ? NextResponse.redirect(signIn) : (intlResponse ?? NextResponse.next());
 
   // 5. Add rate limit headers to response
   setRateLimitHeaders(response.headers, rateLimitResult);

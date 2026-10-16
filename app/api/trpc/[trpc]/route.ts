@@ -12,12 +12,17 @@ const handler = (req: Request) =>
     req,
     router: appRouter,
     createContext,
-    onError:
-      process.env.NODE_ENV === 'development'
-        ? ({ path, error }) => {
-            console.error(`❌ tRPC failed on ${path ?? '<no-path>'}:`, error.message);
-          }
-        : undefined,
+    // Clients get a generic message for unexpected errors (lib/trpc/init.ts), so the details
+    // are kept here in the server logs
+    onError: ({ path, error }) => {
+      if (process.env.NODE_ENV === 'development' || error.code === 'INTERNAL_SERVER_ERROR') {
+        const cause = error.cause as { name?: string; code?: string } | undefined;
+        console.error(`tRPC failed on ${path ?? '<no-path>'}:`, error.message, {
+          cause: cause?.name,
+          code: cause?.code,
+        });
+      }
+    },
   });
 
 export { handler as GET, handler as POST };
