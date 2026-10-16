@@ -255,6 +255,8 @@ describe('Integration: shouldSkipI18nMiddleware', () => {
   it('should skip files with extensions', () => {
     expect(shouldSkipI18nMiddleware('/images/logo.png')).toBe(true);
     expect(shouldSkipI18nMiddleware('/fonts/roboto.woff2')).toBe(false); // woff2 not in list
+    // The PDF font the browser fetches (#189)
+    expect(shouldSkipI18nMiddleware('/fonts/NotoSansJP-Regular-subset.ttf')).toBe(true);
     expect(shouldSkipI18nMiddleware('/styles/main.css')).toBe(true);
     expect(shouldSkipI18nMiddleware('/scripts/app.js')).toBe(true);
   });

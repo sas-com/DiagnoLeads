@@ -3484,5 +3484,67 @@
       "saveError": "窓口を保存できませんでした：{message}",
       "readOnly": "窓口はオーナーまたは管理者が変更できます。"
     }
+  },
+  "pdfReport": {
+    "title": {
+      "leads": "リード一覧",
+      "analytics": "分析レポート",
+      "diagnostic": "診断結果"
+    },
+    "period": "期間: {range}",
+    "generatedAt": "作成日時: {date}",
+    "footerBrand": "DiagnoLeads で作成",
+    "page": "{page} / {total} ページ",
+    "leads": {
+      "summary": "概要",
+      "details": "リードの一覧",
+      "total": "リード数",
+      "new": "新規",
+      "won": "成約",
+      "averageScore": "平均スコア"
+    },
+    "columns": {
+      "email": "メールアドレス",
+      "name": "氏名",
+      "company": "会社名",
+      "status": "ステータス",
+      "score": "スコア",
+      "source": "流入元（登録経路）",
+      "createdAt": "登録日"
+    },
+    "analytics": {
+      "overview": "概要",
+      "totalLeads": "リード数",
+      "newThisMonth": "今月の新規",
+      "conversionRate": "成約率",
+      "averageScore": "平均スコア",
+      "statusDistribution": "ステータス別の件数",
+      "sourceDistribution": "流入元別の件数",
+      "funnel": "コンバージョンファネル",
+      "status": "ステータス",
+      "source": "流入元",
+      "count": "件数",
+      "percentage": "割合",
+      "stage": "段階",
+      "cumulative": "累計",
+      "stageConversionRate": "移行率",
+      "overallConversionRate": "全体の成約率: {rate}%",
+      "averageConversionDays": "成約までの平均日数: {days}日"
+    },
+    "diagnostic": {
+      "leadScore": "リードスコア",
+      "contact": "連絡先",
+      "name": "氏名",
+      "email": "メールアドレス",
+      "company": "会社名",
+      "business": "事業の概要",
+      "industry": "業種",
+      "companySize": "従業員数",
+      "timeline": "導入時期",
+      "budget": "予算",
+      "challenge": "いまの課題",
+      "goal": "目指すこと",
+      "submittedAt": "回答日時: {date}"
+    }
   }
 }

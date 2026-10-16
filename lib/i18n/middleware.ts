@@ -41,7 +41,7 @@ export function shouldSkipI18nMiddleware(pathname: string): boolean {
   ];
 
   // ファイル拡張子を持つパスをスキップ
-  const fileExtensions = /\.(svg|png|jpg|jpeg|gif|webp|ico|css|js|json|xml|txt)$/;
+  const fileExtensions = /\.(svg|png|jpg|jpeg|gif|webp|ico|css|js|json|xml|txt|ttf)$/;
 
   return skipPaths.some((path) => pathname.startsWith(path)) || fileExtensions.test(pathname);
 }

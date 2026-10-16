@@ -3,6 +3,10 @@
  *
  * Phase 9: PDF export functionality for analytics and leads
  * Uses jsPDF and jspdf-autotable for professional PDF generation
+ *
+ * Japanese text needs options.font (./pdf-font.ts, #189): loadPdfFontOnServer() on the server,
+ * await loadPdfFontInBrowser() in the browser. Without it jsPDF's built-in font is used.
+ * Texts come from options.labels (./pdf-labels.ts); Japanese when not given.
  */
 
 import jsPDF from 'jspdf';
@@ -15,6 +19,8 @@ import type {
   TrendDataPoint,
 } from '../analytics/types/schemas';
 import type { ExportLead } from './export-service';
+import { PDF_FONT_FAMILY, type PdfFont, registerPdfFont } from './pdf-font';
+import { DEFAULT_PDF_REPORT_LABELS, type PdfReportLabels } from './pdf-labels';
 
 /**
  * PDF export options
@@ -25,6 +31,44 @@ export interface PDFExportOptions {
   dateRange?: string;
   generatedAt?: Date;
   locale?: 'en' | 'ja';
+  /** Embedded font for Japanese text (#189) */
+  font?: PdfFont | null;
+  /** Report texts in the user's language (#189); Japanese when not given */
+  labels?: PdfReportLabels;
+}
+
+function labelsOf(options: PDFExportOptions): PdfReportLabels {
+  return options.labels ?? DEFAULT_PDF_REPORT_LABELS;
+}
+
+/** Dates in the reports are shown in Japan time */
+const REPORT_TIME_ZONE = 'Asia/Tokyo';
+
+function intlLocale(options: PDFExportOptions): string {
+  return options.locale === 'en' ? 'en-US' : 'ja-JP';
+}
+
+/**
+ * New document: compressed streams, and the Japanese font as the current font when given.
+ * autoTable takes the document's current font as its default.
+ */
+function createDocument(orientation: 'portrait' | 'landscape', options: PDFExportOptions): jsPDF {
+  const doc = new jsPDF({ orientation, compress: true });
+  if (options.font) registerPdfFont(doc, options.font);
+  return doc;
+}
+
+/**
+ * Font and style for table headings. The embedded font has one weight, so headings stay
+ * 'normal' with it (asking jsPDF for a bold style it does not have would drop the font).
+ */
+function headingStyles(options: PDFExportOptions): { font?: string; fontStyle: 'normal' | 'bold' } {
+  return options.font ? { font: PDF_FONT_FAMILY, fontStyle: 'normal' } : { fontStyle: 'bold' };
+}
+
+/** Font for table cells (the embedded one when given) */
+function bodyFont(options: PDFExportOptions): { font?: string } {
+  return options.font ? { font: PDF_FONT_FAMILY } : {};
 }
 
 /**
@@ -44,13 +88,14 @@ const colors = {
  * Add header to PDF
  */
 function addHeader(doc: jsPDF, options: PDFExportOptions): number {
+  const labels = labelsOf(options);
   const pageWidth = doc.internal.pageSize.getWidth();
   let yPos = 20;
 
   // Title
   doc.setFontSize(24);
   doc.setTextColor(...colors.primary);
-  doc.text(options.title || 'DiagnoLeads Report', pageWidth / 2, yPos, { align: 'center' });
+  doc.text(options.title || 'DiagnoLeads', pageWidth / 2, yPos, { align: 'center' });
   yPos += 12;
 
   // Organization name
@@ -65,8 +110,12 @@ function addHeader(doc: jsPDF, options: PDFExportOptions): number {
   doc.setFontSize(10);
   doc.setTextColor(...colors.secondary);
   const dateInfo = [
-    options.dateRange ? `Period: ${options.dateRange}` : '',
-    `Generated: ${(options.generatedAt || new Date()).toLocaleString(options.locale === 'ja' ? 'ja-JP' : 'en-US')}`,
+    options.dateRange ? labels.text('period', { range: options.dateRange }) : '',
+    labels.text('generatedAt', {
+      date: (options.generatedAt || new Date()).toLocaleString(intlLocale(options), {
+        timeZone: REPORT_TIME_ZONE,
+      }),
+    }),
   ]
     .filter(Boolean)
     .join(' | ');
@@ -128,8 +177,9 @@ function addKPICards(
  * Export leads to PDF
  */
 export function exportLeadsToPDF(leads: ExportLead[], options: PDFExportOptions = {}): jsPDF {
-  const doc = new jsPDF('landscape');
-  let yPos = addHeader(doc, { title: 'Leads Report', ...options });
+  const doc = createDocument('landscape', options);
+  const labels = labelsOf(options);
+  let yPos = addHeader(doc, { title: labels.text('title.leads'), ...options });
 
   // Summary KPIs
   const totalLeads = leads.length;
@@ -137,59 +187,85 @@ export function exportLeadsToPDF(leads: ExportLead[], options: PDFExportOptions 
   const convertedLeads = leads.filter((l) => l.status === 'won').length;
   const avgScore = leads.reduce((sum, l) => sum + (l.score || 0), 0) / totalLeads || 0;
 
-  yPos = addSectionTitle(doc, 'Summary', yPos);
+  yPos = addSectionTitle(doc, labels.text('leads.summary'), yPos);
   yPos = addKPICards(
     doc,
     [
-      { label: 'Total Leads', value: totalLeads, color: colors.primary },
-      { label: 'New', value: newLeads, color: colors.success },
-      { label: 'Converted', value: convertedLeads, color: colors.primary },
-      { label: 'Avg Score', value: avgScore.toFixed(1), color: colors.warning },
+      { label: labels.text('leads.total'), value: totalLeads, color: colors.primary },
+      { label: labels.text('leads.new'), value: newLeads, color: colors.success },
+      { label: labels.text('leads.won'), value: convertedLeads, color: colors.primary },
+      {
+        label: labels.text('leads.averageScore'),
+        value: avgScore.toFixed(1),
+        color: colors.warning,
+      },
     ],
     yPos
   );
 
   // Leads table
-  yPos = addSectionTitle(doc, 'Lead Details', yPos);
+  yPos = addSectionTitle(doc, labels.text('leads.details'), yPos);
 
+  // One formatter for every row (creating one per row is slow for thousands of leads)
+  const dateFormat = new Intl.DateTimeFormat(intlLocale(options), {
+    timeZone: REPORT_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
   const tableData = leads.map((lead) => [
     lead.email,
     lead.name || '-',
     lead.company || '-',
-    lead.status,
+    labels.status(lead.status),
     lead.score?.toString() || '-',
-    lead.source || '-',
-    new Date(lead.createdAt).toLocaleDateString(),
+    lead.source ? labels.source(lead.source) : '-',
+    dateFormat.format(new Date(lead.createdAt)),
   ]);
 
   autoTable(doc, {
     startY: yPos,
-    head: [['Email', 'Name', 'Company', 'Status', 'Score', 'Source', 'Created']],
+    head: [
+      (['email', 'name', 'company', 'status', 'score', 'source', 'createdAt'] as const).map(
+        (column) => labels.text(`columns.${column}`)
+      ),
+    ],
     body: tableData,
     theme: 'striped',
+    // The column headings repeat on every page; rows are not split across pages
+    showHead: 'everyPage',
+    rowPageBreak: 'avoid',
+    // Lined up with the header rule; room for the page footer
+    margin: { left: 20, right: 20, bottom: 18 },
     headStyles: {
       fillColor: colors.primary,
       textColor: [255, 255, 255],
-      fontStyle: 'bold',
+      ...headingStyles(options),
     },
     alternateRowStyles: {
       fillColor: colors.lightGray,
     },
     styles: {
+      ...bodyFont(options),
       fontSize: 9,
-      cellPadding: 3,
+      cellPadding: { top: 1.6, bottom: 1.6, left: 2, right: 2 },
+      // Long names and companies wrap inside the cell (character by character for Japanese)
+      overflow: 'linebreak',
+      valign: 'middle',
     },
+    // Company takes the remaining width (about 74 mm on landscape A4); Status fits ナーチャリング
     columnStyles: {
-      0: { cellWidth: 60 },
-      3: { cellWidth: 25 },
-      4: { cellWidth: 20, halign: 'center' },
-      5: { cellWidth: 25 },
-      6: { cellWidth: 30 },
+      0: { cellWidth: 52 },
+      1: { cellWidth: 38 },
+      3: { cellWidth: 26 },
+      4: { cellWidth: 14, halign: 'center' },
+      5: { cellWidth: 30 },
+      6: { cellWidth: 24, halign: 'center' },
     },
   });
 
   // Footer
-  addFooter(doc);
+  addFooter(doc, options);
 
   return doc;
 }
@@ -207,35 +283,54 @@ export function exportAnalyticsToPDF(
   },
   options: PDFExportOptions = {}
 ): jsPDF {
-  const doc = new jsPDF();
-  let yPos = addHeader(doc, { title: 'Analytics Report', ...options });
+  const doc = createDocument('portrait', options);
+  const labels = labelsOf(options);
+  let yPos = addHeader(doc, { title: labels.text('title.analytics'), ...options });
 
   // Overview KPIs
-  yPos = addSectionTitle(doc, 'Overview', yPos);
+  yPos = addSectionTitle(doc, labels.text('analytics.overview'), yPos);
   yPos = addKPICards(
     doc,
     [
-      { label: 'Total Leads', value: data.overview.totalLeads, color: colors.primary },
-      { label: 'New This Month', value: data.overview.newLeadsThisMonth, color: colors.success },
       {
-        label: 'Conversion Rate',
+        label: labels.text('analytics.totalLeads'),
+        value: data.overview.totalLeads,
+        color: colors.primary,
+      },
+      {
+        label: labels.text('analytics.newThisMonth'),
+        value: data.overview.newLeadsThisMonth,
+        color: colors.success,
+      },
+      {
+        label: labels.text('analytics.conversionRate'),
         value: `${data.overview.conversionRate.toFixed(1)}%`,
         color: colors.primary,
       },
-      { label: 'Avg Score', value: data.overview.averageScore.toFixed(1), color: colors.warning },
+      {
+        label: labels.text('analytics.averageScore'),
+        value: data.overview.averageScore.toFixed(1),
+        color: colors.warning,
+      },
     ],
     yPos
   );
 
   // Status breakdown table
   if (data.statusBreakdown && data.statusBreakdown.length > 0) {
-    yPos = addSectionTitle(doc, 'Status Distribution', yPos);
+    yPos = addSectionTitle(doc, labels.text('analytics.statusDistribution'), yPos);
 
     autoTable(doc, {
       startY: yPos,
-      head: [['Status', 'Count', 'Percentage']],
+      head: [
+        [
+          labels.text('analytics.status'),
+          labels.text('analytics.count'),
+          labels.text('analytics.percentage'),
+        ],
+      ],
       body: data.statusBreakdown.map((s) => [
-        s.status.charAt(0).toUpperCase() + s.status.slice(1),
+        labels.status(s.status),
         s.count,
         `${s.percentage.toFixed(1)}%`,
       ]),
@@ -243,8 +338,9 @@ export function exportAnalyticsToPDF(
       headStyles: {
         fillColor: colors.primary,
         textColor: [255, 255, 255],
+        ...headingStyles(options),
       },
-      styles: { fontSize: 10 },
+      styles: { ...bodyFont(options), fontSize: 10 },
       columnStyles: {
         1: { halign: 'right' },
         2: { halign: 'right' },
@@ -258,13 +354,19 @@ export function exportAnalyticsToPDF(
 
   // Source breakdown table
   if (data.sourceBreakdown && data.sourceBreakdown.length > 0) {
-    yPos = addSectionTitle(doc, 'Source Distribution', yPos);
+    yPos = addSectionTitle(doc, labels.text('analytics.sourceDistribution'), yPos);
 
     autoTable(doc, {
       startY: yPos,
-      head: [['Source', 'Count', 'Percentage']],
+      head: [
+        [
+          labels.text('analytics.source'),
+          labels.text('analytics.count'),
+          labels.text('analytics.percentage'),
+        ],
+      ],
       body: data.sourceBreakdown.map((s) => [
-        s.source.charAt(0).toUpperCase() + s.source.slice(1),
+        labels.source(s.source),
         s.count,
         `${s.percentage.toFixed(1)}%`,
       ]),
@@ -272,8 +374,9 @@ export function exportAnalyticsToPDF(
       headStyles: {
         fillColor: colors.primary,
         textColor: [255, 255, 255],
+        ...headingStyles(options),
       },
-      styles: { fontSize: 10 },
+      styles: { ...bodyFont(options), fontSize: 10 },
       columnStyles: {
         1: { halign: 'right' },
         2: { halign: 'right' },
@@ -293,13 +396,17 @@ export function exportAnalyticsToPDF(
       yPos = 20;
     }
 
-    yPos = addSectionTitle(doc, 'Conversion Funnel', yPos);
+    yPos = addSectionTitle(doc, labels.text('analytics.funnel'), yPos);
 
     autoTable(doc, {
       startY: yPos,
-      head: [['Stage', 'Count', 'Cumulative', 'Percentage', 'Conversion Rate']],
+      head: [
+        (['stage', 'count', 'cumulative', 'percentage', 'stageConversionRate'] as const).map(
+          (column) => labels.text(`analytics.${column}`)
+        ),
+      ],
       body: data.funnel.stages.map((s) => [
-        s.name.charAt(0).toUpperCase() + s.name.slice(1),
+        labels.status(s.name),
         s.count,
         s.cumulativeCount,
         `${s.percentage.toFixed(1)}%`,
@@ -309,8 +416,9 @@ export function exportAnalyticsToPDF(
       headStyles: {
         fillColor: colors.primary,
         textColor: [255, 255, 255],
+        ...headingStyles(options),
       },
-      styles: { fontSize: 10 },
+      styles: { ...bodyFont(options), fontSize: 10 },
       columnStyles: {
         1: { halign: 'right' },
         2: { halign: 'right' },
@@ -326,17 +434,25 @@ export function exportAnalyticsToPDF(
     // Funnel summary
     doc.setFontSize(11);
     doc.setTextColor(...colors.text);
-    doc.text(`Overall Conversion Rate: ${data.funnel.overallConversionRate.toFixed(1)}%`, 20, yPos);
+    doc.text(
+      labels.text('analytics.overallConversionRate', {
+        rate: data.funnel.overallConversionRate.toFixed(1),
+      }),
+      20,
+      yPos
+    );
     yPos += 6;
     doc.text(
-      `Average Conversion Time: ${data.funnel.averageConversionDays.toFixed(1)} days`,
+      labels.text('analytics.averageConversionDays', {
+        days: data.funnel.averageConversionDays.toFixed(1),
+      }),
       20,
       yPos
     );
   }
 
   // Footer
-  addFooter(doc);
+  addFooter(doc, options);
 
   return doc;
 }
@@ -360,8 +476,9 @@ export function exportDiagnosticResultToPDF(
   },
   options: PDFExportOptions = {}
 ): jsPDF {
-  const doc = new jsPDF();
-  let yPos = addHeader(doc, { title: 'Diagnostic Result', ...options });
+  const doc = createDocument('portrait', options);
+  const labels = labelsOf(options);
+  let yPos = addHeader(doc, { title: labels.text('title.diagnostic'), ...options });
 
   // Score display
   const scoreColor =
@@ -376,26 +493,26 @@ export function exportDiagnosticResultToPDF(
 
   doc.setFontSize(12);
   doc.setTextColor(...colors.secondary);
-  doc.text('Lead Score', 105, yPos + 45, { align: 'center' });
+  doc.text(labels.text('diagnostic.leadScore'), 105, yPos + 45, { align: 'center' });
 
   yPos += 65;
 
   // Contact information
-  yPos = addSectionTitle(doc, 'Contact Information', yPos);
+  yPos = addSectionTitle(doc, labels.text('diagnostic.contact'), yPos);
 
   const contactInfo = [
-    ['Name', result.name],
-    ['Email', result.email],
-    ['Company', result.company],
+    [labels.text('diagnostic.name'), result.name],
+    [labels.text('diagnostic.email'), result.email],
+    [labels.text('diagnostic.company'), result.company],
   ];
 
   autoTable(doc, {
     startY: yPos,
     body: contactInfo,
     theme: 'plain',
-    styles: { fontSize: 11 },
+    styles: { ...bodyFont(options), fontSize: 11 },
     columnStyles: {
-      0: { fontStyle: 'bold', cellWidth: 50 },
+      0: { ...headingStyles(options), cellWidth: 50 },
     },
   });
 
@@ -403,24 +520,24 @@ export function exportDiagnosticResultToPDF(
   yPos += 10;
 
   // Business profile
-  yPos = addSectionTitle(doc, 'Business Profile', yPos);
+  yPos = addSectionTitle(doc, labels.text('diagnostic.business'), yPos);
 
   const businessInfo = [
-    ['Industry', result.industry],
-    ['Company Size', result.employeeCount],
-    ['Timeline', result.timeline],
-    ['Budget', result.budget],
-    ['Current Challenge', result.challenge],
-    ['Primary Goal', result.goal],
+    [labels.text('diagnostic.industry'), result.industry],
+    [labels.text('diagnostic.companySize'), result.employeeCount],
+    [labels.text('diagnostic.timeline'), result.timeline],
+    [labels.text('diagnostic.budget'), result.budget],
+    [labels.text('diagnostic.challenge'), result.challenge],
+    [labels.text('diagnostic.goal'), result.goal],
   ];
 
   autoTable(doc, {
     startY: yPos,
     body: businessInfo,
     theme: 'plain',
-    styles: { fontSize: 11 },
+    styles: { ...bodyFont(options), fontSize: 11 },
     columnStyles: {
-      0: { fontStyle: 'bold', cellWidth: 50 },
+      0: { ...headingStyles(options), cellWidth: 50 },
     },
   });
 
@@ -430,10 +547,16 @@ export function exportDiagnosticResultToPDF(
   // Submission info
   doc.setFontSize(10);
   doc.setTextColor(...colors.secondary);
-  doc.text(`Submitted: ${result.submittedAt.toLocaleString()}`, 20, yPos);
+  doc.text(
+    labels.text('diagnostic.submittedAt', {
+      date: result.submittedAt.toLocaleString(intlLocale(options), { timeZone: REPORT_TIME_ZONE }),
+    }),
+    20,
+    yPos
+  );
 
   // Footer
-  addFooter(doc);
+  addFooter(doc, options);
 
   return doc;
 }
@@ -441,8 +564,13 @@ export function exportDiagnosticResultToPDF(
 /**
  * Add footer to PDF
  */
-function addFooter(doc: jsPDF): void {
+function addFooter(doc: jsPDF, options: PDFExportOptions): void {
+  const labels = labelsOf(options);
   const pageCount = doc.getNumberOfPages();
+  // Japan date (YYYY-MM-DD) of the generation time
+  const generatedOn = new Intl.DateTimeFormat('sv-SE', { timeZone: REPORT_TIME_ZONE }).format(
+    options.generatedAt ?? new Date()
+  );
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
 
@@ -452,13 +580,15 @@ function addFooter(doc: jsPDF): void {
     doc.setTextColor(...colors.secondary);
 
     // Page number
-    doc.text(`Page ${i} of ${pageCount}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
+    doc.text(labels.text('page', { page: i, total: pageCount }), pageWidth / 2, pageHeight - 10, {
+      align: 'center',
+    });
 
     // Branding
-    doc.text('Generated by DiagnoLeads', 20, pageHeight - 10);
+    doc.text(labels.text('footerBrand'), 20, pageHeight - 10);
 
     // Timestamp
-    doc.text(new Date().toISOString().split('T')[0], pageWidth - 20, pageHeight - 10, {
+    doc.text(generatedOn, pageWidth - 20, pageHeight - 10, {
       align: 'right',
     });
   }
