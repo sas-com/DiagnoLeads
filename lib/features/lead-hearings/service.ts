@@ -82,7 +82,9 @@ export async function listLeadHearings(
     .orderBy(desc(leadHearings.heldOn), desc(leadHearings.createdAt));
   return rows.map((row) => {
     const { missing, droppedKeys, ...view } = toHearingView(row);
+    const dealRating = view.fields.dealRating?.value;
     return {
+      dealRating: typeof dealRating === 'string' ? dealRating : null,
       id: view.id,
       heldOn: view.heldOn,
       createdBy: view.createdBy,

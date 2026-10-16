@@ -4,7 +4,7 @@ import { useCreateLead, useDeleteLead, useListLeads, useUpdateLead } from '@/hoo
 import { useOrganization } from '@/hooks/use-organization';
 import { useLocale, useTranslations } from 'next-intl';
 import dynamic from 'next/dynamic';
-import { useCallback, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/sheet';
 import type { Lead } from '@/lib/db/schema';
 import type { CreateLeadInput, UpdateLeadInput } from '@/lib/features/leads/types';
+import { trpc } from '@/lib/trpc/client';
 import { Plus, Target, TrendingUp, Upload, UserCheck, Users } from 'lucide-react';
 
 // Dynamic imports for heavy components (performance optimization)
@@ -93,6 +94,26 @@ export default function LeadsPage() {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [detailsSheetOpen, setDetailsSheetOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+
+  // Deep link (/leads?leadId=...): notifications and the hearing editor's back link open the
+  // lead's details. Read from the URL after mount (useSearchParams would need a Suspense
+  // boundary for this client page).
+  const [linkedLeadId, setLinkedLeadId] = useState<string | null>(null);
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('leadId');
+    if (id && isValidUUID(id)) setLinkedLeadId(id);
+  }, []);
+  const linkedLead = trpc.leads.get.useQuery(
+    { organizationId, id: linkedLeadId ?? '' },
+    { enabled: hasValidOrgId && !!linkedLeadId, retry: false }
+  );
+  useEffect(() => {
+    if (linkedLead.data && linkedLead.data.id === linkedLeadId) {
+      setSelectedLead(linkedLead.data as Lead);
+      setDetailsSheetOpen(true);
+      setLinkedLeadId(null);
+    }
+  }, [linkedLead.data, linkedLeadId]);
 
   // Fetch leads list
   const {

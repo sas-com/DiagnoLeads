@@ -2237,5 +2237,231 @@
       "submitting": "作成しています…",
       "success": "「{name}」を作成しました"
     }
+  },
+  "leadHearings": {
+    "title": "初回商談ヒアリング",
+    "sections": {
+      "meeting": "実施情報",
+      "customer": "顧客情報",
+      "currentSystem": "現行システム",
+      "challenges": "課題",
+      "requirements": "要件",
+      "outcome": "結果"
+    },
+    "fields": {
+      "meetingFormat": "商談の形式",
+      "attendeeRoles": "先方の出席者の立場",
+      "decisionMakerPresent": "決裁者の同席",
+      "industry": "業種",
+      "employeeCount": "従業員数",
+      "businessAreas": "対象業務",
+      "targetSystem": "対象システム",
+      "machineModel": "機種・バージョン",
+      "yearsInUse": "導入からの年数",
+      "scale": "規模",
+      "inHouseExperts": "中身が分かる社内の人数",
+      "vendorSupport": "保守会社の支援",
+      "earliestRetirement": "最も早い退職予定",
+      "hardwareSupportEnd": "保守期限",
+      "challengeLevels": "課題の該当度",
+      "topChallenge": "最優先の課題",
+      "challengeNotes": "課題の補足",
+      "impactIfUnaddressed": "対応しない場合の影響",
+      "pastConsideration": "過去の検討",
+      "pastBlockers": "進まなかった理由",
+      "directionTiming": "方向性を決める時期",
+      "budgetStatus": "予算の状態",
+      "fiscalYearEndMonth": "決算月",
+      "competitorTypes": "競合の種類",
+      "requirementNotes": "要件の補足",
+      "dealRating": "商談評価",
+      "nextMeetingDate": "次回の日程",
+      "nextMeetingAttendees": "次回の出席者",
+      "outcomeNotes": "結果の補足"
+    },
+    "options": {
+      "meetingFormat": {
+        "onsite": "訪問",
+        "online": "オンライン",
+        "phone": "電話"
+      },
+      "yesNo": {
+        "yes": "はい",
+        "no": "いいえ",
+        "unknown": "不明"
+      },
+      "employeeCount": {
+        "lt50": "50人未満",
+        "50_299": "50〜299人",
+        "300_999": "300〜999人",
+        "gte1000": "1,000人以上",
+        "unknown": "不明"
+      },
+      "yearsInUse": {
+        "lt10": "10年未満",
+        "10_19": "10〜19年",
+        "20_29": "20〜29年",
+        "gte30": "30年以上",
+        "unknown": "不明"
+      },
+      "headcount": {
+        "none": "いない",
+        "one": "1人",
+        "two": "2人",
+        "three_or_more": "3人以上",
+        "unknown": "不明"
+      },
+      "challenge": {
+        "people": "ヒト（属人化）",
+        "cost": "カネ（延命コスト）",
+        "agility": "モノ（市場変化）",
+        "data": "情報（データ活用）"
+      },
+      "level": {
+        "high": "高い",
+        "medium": "中くらい",
+        "low": "低い",
+        "none": "該当しない"
+      },
+      "pastConsideration": {
+        "never": "検討したことはない",
+        "dropped": "検討したが見送った",
+        "ongoing": "検討中",
+        "unknown": "不明"
+      },
+      "pastBlocker": {
+        "budget": "予算",
+        "staffing": "人手",
+        "risk": "移行のリスク",
+        "priority": "優先度",
+        "vendor": "依頼先",
+        "other": "その他"
+      },
+      "budgetStatus": {
+        "secured": "確保済み",
+        "planning": "計画中",
+        "not_started": "未着手",
+        "unknown": "不明"
+      },
+      "competitorType": {
+        "none": "なし",
+        "current_vendor": "現在の保守会社",
+        "other_integrator": "他のシステム会社",
+        "low_code_vendor": "ローコード製品の会社",
+        "package_vendor": "パッケージの会社",
+        "in_house": "自社開発",
+        "unknown": "不明"
+      },
+      "dealRating": {
+        "a": "A",
+        "b": "B",
+        "c": "C"
+      },
+      "nextAttendee": {
+        "customer_executive": "先方の経営層",
+        "customer_it": "先方の情報システム担当",
+        "customer_business": "先方の業務部門",
+        "our_sales": "当社の営業",
+        "our_engineer": "当社の技術者",
+        "partner": "協力会社"
+      }
+    },
+    "statuses": {
+      "done": "済",
+      "partial": "一部",
+      "not_yet": "未",
+      "not_applicable": "対象外",
+      "next": "次回"
+    },
+    "sources": {
+      "prefilled": "Web診断",
+      "confirmed": "確認済み",
+      "corrected": "修正あり"
+    },
+    "required": {
+      "attendeeRoles": "出席者の立場",
+      "system": "対象システムと機種",
+      "businessAreas": "対象業務",
+      "upkeep": "保守体制（社内の人数・退職予定）",
+      "supportEnd": "保守期限",
+      "topChallenge": "最優先の課題",
+      "impact": "対応しない場合の影響",
+      "pastConsideration": "過去の検討と進まなかった理由",
+      "decisionMaker": "決裁者の同席",
+      "timing": "方向性を決める時期",
+      "competitors": "競合",
+      "nextMeeting": "次回の日程と出席者"
+    },
+    "card": {
+      "empty": "まだ記録はありません。",
+      "record": "記録する",
+      "heldOn": "{date} の商談",
+      "missing": "未記入 {count}",
+      "unconfirmed": "未確認 {count}",
+      "dealRating": "評価 {rating}",
+      "loadError": "ヒアリングを読み込めませんでした。",
+      "retry": "再読み込み"
+    },
+    "create": {
+      "title": "ヒアリングを記録する",
+      "description": "商談の日付と、最初に表示する内容を選びます。",
+      "heldOn": "商談日",
+      "source": "最初に表示する Web 診断の回答",
+      "sourceOption": "{date}・{platform}",
+      "unknownPlatform": "移行元の回答なし",
+      "noSources": "このリードの Web 診断の回答はありません。空の状態から始めます。",
+      "unverified": "本人未確認",
+      "unverifiedHelp": "メールアドレスが一致しただけの回答です。商談で本人に確認してください。",
+      "carryOver": "前回の内容を引き継ぐ",
+      "carryOverHelp": "外すと Web 診断の回答から始めます。",
+      "submit": "作成",
+      "cancel": "キャンセル",
+      "error": "ヒアリングを作成できませんでした。"
+    },
+    "editor": {
+      "back": "リード詳細に戻る",
+      "playbook": "営業の手引き（トークスクリプト）",
+      "heldOn": "商談日",
+      "required": "必須",
+      "statusOf": "{field}の状態",
+      "hint": "Web診断: {value}",
+      "confirm": "確認済み",
+      "confirmOf": "{field}を確認済みにする",
+      "unverified": "本人未確認",
+      "unverifiedBody": "この Web 診断の回答はメールアドレスが一致しただけのものです。商談で本人に確認してください。",
+      "diagnosisFrom": "Web 診断（{date}）の回答を表示しています。",
+      "notSelected": "未選択",
+      "yearOf": "{field}の年",
+      "monthOf": "{field}の月",
+      "yearOption": "{year}年",
+      "monthOption": "{month}月",
+      "yearMonthIncomplete": "年と月の両方を選んでください。",
+      "scaleBasis": "{field}の数え方",
+      "scaleBucket": "{field}の範囲",
+      "scaleIncomplete": "数え方と範囲の両方を選んでください。",
+      "levelOf": "{item}の該当度",
+      "missingTabs": "未記入 {count}",
+      "missingTitle": "未記入の必須項目",
+      "missingBody": "次回の合意の前に確認してください。このままでも保存できます。",
+      "unconfirmedTitle": "Web診断の値のまま未確認の項目",
+      "allFilled": "必須項目はすべて記入済みです。",
+      "missingCount": "未記入の必須項目 {count}",
+      "save": "保存",
+      "saved": "保存しました",
+      "saveError": "保存できませんでした",
+      "invalid": "入力内容を確認してください",
+      "conflictTitle": "ほかの人が先に保存しました",
+      "conflictBody": "入力中の内容はこの画面に残っています。最新の内容を読み込むと、入力中の内容は破棄されます。",
+      "reload": "最新の内容を読み込む",
+      "loadErrorTitle": "ヒアリングを読み込めませんでした",
+      "loadErrorBody": "通信状況を確認して、もう一度お試しください。",
+      "retry": "再読み込み",
+      "notFoundTitle": "ヒアリングが見つかりません",
+      "notFoundBody": "削除されたか、このリードのヒアリングではありません。",
+      "readOnlyTitle": "閲覧のみ",
+      "readOnlyBody": "このヒアリングを変更する権限がありません。",
+      "droppedKeys": "今の項目にない保存済みの値が {count} 件あります。次に保存すると削除されます。",
+      "lastUpdated": "最終更新: {date}"
+    }
   }
 }
