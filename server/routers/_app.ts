@@ -7,6 +7,7 @@ import { contentEditorsRouter } from '@/lib/features/content/api/editors-router'
 import { contentRouter } from '@/lib/features/content/api/router';
 import { customFieldsRouter } from '@/lib/features/custom-fields/api/router';
 import { customReportsRouter } from '@/lib/features/custom-reports/api/router';
+import { diagnosesRouter } from '@/lib/features/diagnosis-builder/api/router';
 import { diagnosticTemplatesRouter } from '@/lib/features/diagnostic-templates/api/router';
 import { distributionRouter } from '@/lib/features/distribution/router';
 import { embedRouter } from '@/lib/features/embed/router';
@@ -59,6 +60,7 @@ export const appRouter = router({
   leadHearings: leadHearingsRouter, // Initial meeting hearings per lead (Refs #84)
   contentEditors: contentEditorsRouter, // FAQ / blog editors granted from settings (#91)
   leadActivity: leadActivityRouter, // Activity timeline per lead (Refs #101)
+  diagnoses: diagnosesRouter, // Diagnosis builder: drafts and published versions (Refs #114)
 });
 
 export type AppRouter = typeof appRouter;

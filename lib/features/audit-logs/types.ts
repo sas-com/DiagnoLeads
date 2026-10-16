@@ -26,6 +26,7 @@ export type AuditResource =
   | 'settings'
   | 'api_key'
   | 'diagnostic_template'
+  | 'diagnosis'
   | 'tag'
   | 'filter'
   | 'custom_field';
