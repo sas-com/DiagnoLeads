@@ -68,10 +68,11 @@ export const HearingFieldRow = memo(function HearingFieldRow({
   const tRoot = useTranslations();
   const label = tRoot(field.labelKey);
   const id = `hearing-${field.key}`;
-  const canConfirm =
-    !readOnly &&
-    entry.source === 'prefilled' &&
-    normalizeHearingValue(field, entry.value) !== undefined;
+  const hasDiagnosisValue =
+    entry.source === 'prefilled' && normalizeHearingValue(field, entry.value) !== undefined;
+  const canConfirm = !readOnly && hasDiagnosisValue;
+  // A required field holding the Web diagnosis answer is not empty: it is waiting to be confirmed
+  const marker = missing ? (hasDiagnosisValue ? 'unconfirmed' : 'missing') : null;
   // The "other" note shows only while an "other" option is chosen; its text stays in the form
   // when the option is unchosen and comes back if it is chosen again before saving
   const showOtherNote = hasOtherOption(field) && choosesOtherOption(entry.value);
@@ -94,9 +95,19 @@ export const HearingFieldRow = memo(function HearingFieldRow({
         {required && (
           <span className="text-xs font-semibold text-red-600">{t('editor.required')}</span>
         )}
-        {missing && (
-          <Badge color="amber" size="sm">
+        {marker === 'missing' && (
+          <Badge color="amber" size="sm" data-testid={`hearing-marker-${field.key}`}>
             {t('editor.missingField')}
+          </Badge>
+        )}
+        {marker === 'unconfirmed' && (
+          <Badge
+            color="blue"
+            size="sm"
+            title={t('editor.unconfirmedFieldHelp')}
+            data-testid={`hearing-marker-${field.key}`}
+          >
+            {t('editor.unconfirmedField')}
           </Badge>
         )}
         {entry.source && (
@@ -113,7 +124,7 @@ export const HearingFieldRow = memo(function HearingFieldRow({
             <SelectTrigger
               aria-label={t('editor.statusOf', { field: label })}
               className={cn(
-                'w-24 text-xs',
+                'w-28 text-xs',
                 variant === 'chip' ? 'h-11' : 'h-11 sm:h-8',
                 entry.status === 'done' && 'border-emerald-400'
               )}

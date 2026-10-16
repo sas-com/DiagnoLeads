@@ -651,7 +651,10 @@
     "phone": "電話",
     "event": "イベント",
     "advertisement": "広告",
-    "other": "その他"
+    "other": "その他",
+    "api": "API",
+    "embed": "埋め込みフォーム",
+    "diagnostic": "Web診断"
   },
   "validation": {
     "required": "この項目は必須です",
@@ -882,7 +885,7 @@
     "phone": "電話番号",
     "company": "会社名",
     "position": "役職",
-    "source": "獲得元",
+    "source": "流入元（登録経路）",
     "status": "ステータス",
     "score": "スコア",
     "notes": "メモ",
@@ -902,8 +905,8 @@
     "contactInfo": "連絡先情報",
     "leadScore": "リードスコア",
     "scoreMax": "/ 100",
-    "sourceInfo": "ソース情報",
-    "sourceChannel": "流入経路",
+    "sourceInfo": "流入元",
+    "sourceChannel": "流入元（登録経路）",
     "diagnosticResults": "診断結果",
     "timestamps": "タイムスタンプ",
     "deleteConfirmTitle": "リードを削除しますか？",
@@ -973,6 +976,7 @@
       "viewMode": "閲覧モード",
       "viewModeDescription": "組織情報の変更はオーナーのみ可能です。あなたの現在のロールは「{role}」です。",
       "roleAdmin": "管理者",
+      "roleOwner": "オーナー",
       "roleMember": "メンバー",
       "nameLabel": "組織名",
       "namePlaceholder": "例: 株式会社サンプル",
@@ -1026,7 +1030,13 @@
       "passwordChangeError": "パスワードの変更に失敗しました",
       "deleteAccountSection": "アカウント削除",
       "deleteAccountWarning": "アカウントを削除すると、すべてのデータが削除されます。この操作は取り消せません。",
-      "deleteAccount": "アカウントを削除"
+      "deleteAccount": "アカウントを削除",
+      "description": "氏名とパスワードを変更します",
+      "reset": "元に戻す",
+      "hintsTitle": "ヒント",
+      "hintProfile": "氏名はほかのメンバーにも表示されます",
+      "hintPassword": "パスワードは8文字以上にし、ほかのサービスと同じものは避けてください",
+      "hintDelete": "アカウントを削除すると元に戻せません"
     },
     "webhooks": {
       "title": "Webhook設定",
@@ -1207,11 +1217,11 @@
       "title": "コンテンツ編集者",
       "description": "FAQ・ブログを作成・更新・削除できる担当者を指定します。候補は運営組織のメンバーです。",
       "notConfiguredTitle": "運営組織が設定されていません",
-      "notConfiguredBody": "運営組織（AX_DIAGNOSIS_ORGANIZATION_ID または DEFAULT_ORGANIZATION_ID）が設定されていないため、画面から編集者を指定できません。それまでは環境変数 CONTENT_EDITOR_EMAILS に載った担当者だけが編集できます。",
+      "notConfiguredBody": "運営組織がまだ設定されていないため、画面から編集者を指定できません。それまでは、システム管理者が別途指定した担当者だけが編集できます。",
       "forbiddenTitle": "編集者を指定する権限がありません",
       "forbiddenBody": "コンテンツ編集者を指定・解除できるのは、運営組織のオーナーと管理者だけです。",
       "envFallbackTitle": "予備の指定について",
-      "envFallbackBody": "ここで指定した担当者のほか、環境変数 CONTENT_EDITOR_EMAILS に載った担当者も編集できます。オーナーや管理者も、ここで指定されなければ編集できません。",
+      "envFallbackBody": "ここで指定した担当者のほか、システム管理者が別途指定した担当者も編集できます。オーナーや管理者も、ここで指定されなければ編集できません。",
       "addTitle": "編集者を追加",
       "addDescription": "運営組織のメンバーから選びます。",
       "selectLabel": "追加するメンバー",
@@ -1284,6 +1294,10 @@
       "inviting": "招待を送信中...",
       "inviteSuccess": "メンバーを招待しました",
       "inviteError": "招待に失敗しました: {message}",
+      "totalMembers": "メンバー数",
+      "testModeHint": "テスト中は {domains} のメールアドレスだけ招待できます",
+      "editRoleOf": "{name} のロールを変更",
+      "removeOf": "{name} をメンバーから外す",
       "removing": "メンバーを削除中...",
       "removeSuccess": "メンバーを削除しました",
       "removeError": "削除に失敗しました: {message}",
@@ -1477,7 +1491,8 @@
       "notFound": {
         "title": "ページが見つかりません",
         "message": "お探しのページは存在しないか、移動した可能性があります。",
-        "backHome": "ホームに戻る"
+        "backHome": "ホームに戻る",
+        "toLeads": "リード一覧へ"
       }
     },
     "content": {
@@ -1591,7 +1606,7 @@
       },
       "tabs": {
         "overview": "概要",
-        "sources": "ソース分析",
+        "sources": "流入元",
         "funnel": "ファネル",
         "performance": "パフォーマンス"
       },
@@ -1600,8 +1615,9 @@
         "totalLeads": "総リード数",
         "convertedLeads": "成約数",
         "statusBreakdown": "ステータス分布",
-        "sourceBreakdown": "ソース分布",
-        "sourceTable": "ソース別詳細",
+        "statusBreakdownPeriod": "{period}に登録されたリード",
+        "sourceBreakdown": "流入元の内訳",
+        "sourceTable": "流入元別の詳細",
         "conversionFunnel": "コンバージョンファネル",
         "scoreDistribution": "スコア分布",
         "responseTime": "応答時間"
@@ -1613,7 +1629,11 @@
         "fromInitial": "初回リードからの変換率"
       },
       "noData": "データがありません",
-      "comingSoon": "近日公開予定"
+      "comingSoon": "近日公開予定",
+      "performanceSummary": {
+        "title": "パフォーマンスの概要",
+        "quality": "リードの質（平均スコア）"
+      }
     }
   },
   "content": {
@@ -1645,7 +1665,8 @@
         "pricing": "料金・プラン",
         "account": "アカウント",
         "security": "セキュリティ",
-        "technical": "テクニカル"
+        "technical": "テクニカル",
+        "features": "機能"
       },
       "saving": "保存中...",
       "saveSuccess": "FAQを保存しました",
@@ -1710,10 +1731,16 @@
   },
   "header": {
     "userDropdown": {
-      "profile": "プロフィール",
-      "settings": "設定",
+      "profile": "個人設定",
+      "settings": "組織設定",
       "logout": "ログアウト",
       "logoutError": "ログアウトに失敗しました。"
+    },
+    "a11y": {
+      "toggleSidebar": "サイドメニューを開閉",
+      "moreMenu": "その他のメニュー",
+      "themeToDark": "ダークモードに切り替え",
+      "themeToLight": "ライトモードに切り替え"
     }
   },
   "tags": {
@@ -2476,11 +2503,11 @@
       }
     },
     "statuses": {
-      "done": "済",
-      "partial": "一部",
-      "not_yet": "未",
+      "done": "確認済み",
+      "partial": "一部確認",
+      "not_yet": "未確認",
       "not_applicable": "対象外",
-      "next": "次回"
+      "next": "次回確認"
     },
     "sources": {
       "prefilled": "Web診断",
@@ -2505,7 +2532,7 @@
       "empty": "まだ記録はありません。",
       "record": "記録する",
       "heldOn": "{date} の商談",
-      "missing": "未記入 {count}",
+      "missing": "未入力 {count}",
       "unconfirmed": "未確認 {count}",
       "dealRating": "評価 {rating}",
       "loadError": "ヒアリングを読み込めませんでした。",
@@ -2517,14 +2544,14 @@
       "title": "ヒアリングを記録する",
       "description": "商談の日付と、最初に表示する内容を選びます。",
       "heldOn": "商談日",
-      "source": "最初に表示する Web 診断の回答",
+      "source": "最初に表示する Web診断の回答",
       "sourceOption": "{date}・{platform}",
       "unknownPlatform": "移行元の回答なし",
-      "noSources": "このリードの Web 診断の回答はありません。空の状態から始めます。",
+      "noSources": "このリードの Web診断の回答はありません。空の状態から始めます。",
       "unverified": "本人未確認",
       "unverifiedHelp": "メールアドレスが一致しただけの回答です。商談で本人に確認してください。",
       "carryOver": "前回の内容を引き継ぐ",
-      "carryOverHelp": "外すと Web 診断の回答から始めます。",
+      "carryOverHelp": "外すと Web診断の回答から始めます。",
       "submit": "作成",
       "cancel": "キャンセル",
       "error": "ヒアリングを作成できませんでした。"
@@ -2539,8 +2566,8 @@
       "confirm": "確認済み",
       "confirmOf": "{field}を確認済みにする",
       "unverified": "本人未確認",
-      "unverifiedBody": "この Web 診断の回答はメールアドレスが一致しただけのものです。商談で本人に確認してください。",
-      "diagnosisFrom": "Web 診断（{date}）の回答を表示しています。",
+      "unverifiedBody": "この Web診断の回答はメールアドレスが一致しただけのものです。商談で本人に確認してください。",
+      "diagnosisFrom": "Web診断（{date}）の回答を表示しています。",
       "notSelected": "未選択",
       "yearOf": "{field}の年",
       "monthOf": "{field}の月",
@@ -2551,12 +2578,12 @@
       "scaleBucket": "{field}の範囲",
       "scaleIncomplete": "数え方と範囲の両方を選んでください。",
       "levelOf": "{item}の該当度",
-      "missingTabs": "未記入 {count}",
-      "missingTitle": "未記入の必須項目",
+      "missingTabs": "未入力 {count}",
+      "missingTitle": "未入力の必須項目",
       "missingBody": "次回の合意の前に確認してください。このままでも保存できます。",
       "unconfirmedTitle": "Web診断の値のまま未確認の項目",
-      "allFilled": "必須項目はすべて記入済みです。",
-      "missingCount": "未記入の必須項目 {count}",
+      "allFilled": "必須項目はすべて入力済みです。",
+      "missingCount": "未入力の必須項目 {count}",
       "save": "保存",
       "saved": "保存しました",
       "saveError": "保存できませんでした",
@@ -2595,7 +2622,9 @@
       "thisMonth": "今月",
       "textCount": "{count} / {max} 文字",
       "missingField": "未入力",
-      "jumpToMissing": "最初の未記入の必須項目へ移動"
+      "unconfirmedField": "未確認",
+      "unconfirmedFieldHelp": "Web診断の回答のまま、まだ確認していません",
+      "jumpToMissing": "最初の未入力の必須項目へ移動"
     },
     "meeting": {
       "toggle": "商談モード",
@@ -2619,7 +2648,9 @@
       "yearMonth": "{year}年{month}月",
       "date": "{year}年{month}月{day}日",
       "pair": "{name}: {value}",
-      "empty": "未記入",
+      "empty": "未入力",
+      "emptyItems": "未入力 {count}項目：{items}",
+      "listSeparator": "、",
       "none": "なし",
       "todoTitle": "次回に確認すること",
       "todoHint": "項目を押すと、記録のその項目に移動します。",
@@ -2629,7 +2660,7 @@
       "reasons": {
         "unconfirmed": "Web診断のまま未確認",
         "next": "次回",
-        "missing": "未記入"
+        "missing": "未入力"
       },
       "copy": "コピー",
       "copied": "まとめをコピーしました",

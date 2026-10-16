@@ -123,9 +123,14 @@ export default function MembersPage() {
       setInviteResult({ email: variables.email, url: data.inviteUrl, emailSent: data.emailSent });
       setInviteDialogOpen(true);
     },
-    onError: (error) => {
-      toast.error(t('inviteError', { message: error.message }), { id: 'invite-member' });
+    // Each caller shows the error where it belongs (the dialog under the email field, a resend
+    // from the pending list as a toast)
+    onError: () => {
+      toast.dismiss('invite-member');
     },
+  });
+  const { data: testMode } = trpc.health.testMode.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
   });
 
   const updateRole = trpc.members.updateRole.useMutation({
@@ -161,6 +166,7 @@ export default function MembersPage() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'member' | 'admin'>('member');
   const [inviteResult, setInviteResult] = useState<InviteResult | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
   const [memberToRemove, setMemberToRemove] = useState<MemberToRemove>(null);
   const [memberToChangeRole, setMemberToChangeRole] = useState<MemberToChangeRole>(null);
   const [newRole, setNewRole] = useState<'member' | 'admin' | 'owner'>('member');
@@ -173,24 +179,46 @@ export default function MembersPage() {
   const adminCount = members.filter((m) => m.role === 'admin').length;
   const memberCount = members.filter((m) => m.role === 'member').length;
 
-  const handleInviteMember = async (e: React.FormEvent) => {
+  const handleInviteMember = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteEmail.trim()) return;
 
-    await invite.mutateAsync({
-      organizationId,
-      email: inviteEmail.trim(),
-      role: inviteRole,
-    });
+    setInviteError(null);
+    invite.mutate(
+      { organizationId, email: inviteEmail.trim(), role: inviteRole },
+      {
+        onSuccess: () => {
+          setInviteEmail('');
+          setInviteRole('member');
+        },
+        // Shown under the email field, next to what has to change
+        onError: (error) => setInviteError(t('inviteError', { message: error.message })),
+      }
+    );
+  };
 
-    setInviteEmail('');
-    setInviteRole('member');
+  const handleResendInvite = ({ email, role }: { email: string; role: 'member' | 'admin' }) => {
+    invite.mutate(
+      { organizationId, email, role },
+      {
+        onError: (error) => {
+          toast.error(t('inviteError', { message: error.message }));
+        },
+      }
+    );
   };
 
   const handleInviteDialogChange = (open: boolean) => {
     setInviteDialogOpen(open);
-    if (!open) setInviteResult(null);
+    if (!open) {
+      setInviteResult(null);
+      setInviteError(null);
+    }
   };
+
+  const testModeDomains = testMode?.testMode
+    ? testMode.domains.map((domain) => `@${domain}`).join('、')
+    : null;
 
   const handleRemoveMember = async () => {
     if (!memberToRemove) return;
@@ -250,6 +278,12 @@ export default function MembersPage() {
     }
   };
 
+  /** Name (or email) of a member, for the labels of the icon-only buttons */
+  const memberLabel = (member: (typeof members)[number]) => {
+    const user = Array.isArray(member.user) ? member.user[0] : member.user;
+    return user?.name || user?.email || '';
+  };
+
   const isLoading = contextLoading || (hasValidOrgId && (list.isLoading || orgLoading));
 
   if (isLoading) {
@@ -274,7 +308,7 @@ export default function MembersPage() {
       <div className="max-w-5xl mx-auto space-y-8">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">{t('title')}</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
           <Text className="mt-1">{t('description')}</Text>
         </div>
 
@@ -290,7 +324,7 @@ export default function MembersPage() {
           <Card decoration="top" decorationColor="blue" className="p-6">
             <div className="flex items-start justify-between">
               <div>
-                <Text>Total Members</Text>
+                <Text>{t('totalMembers')}</Text>
                 <Metric className="mt-2">{total}</Metric>
               </div>
               <div className="p-3 bg-blue-50 rounded-xl">
@@ -379,9 +413,35 @@ export default function MembersPage() {
                               type="email"
                               placeholder={t('emailPlaceholder')}
                               value={inviteEmail}
-                              onChange={(e) => setInviteEmail(e.target.value)}
+                              onChange={(e) => {
+                                setInviteEmail(e.target.value);
+                                setInviteError(null);
+                              }}
+                              aria-invalid={inviteError ? true : undefined}
+                              aria-describedby={
+                                [
+                                  testModeDomains ? 'invite-email-hint' : null,
+                                  inviteError ? 'invite-email-error' : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' ') || undefined
+                              }
                               required
                             />
+                            {testModeDomains && (
+                              <p id="invite-email-hint" className="text-xs text-gray-500">
+                                {t('testModeHint', { domains: testModeDomains })}
+                              </p>
+                            )}
+                            {inviteError && (
+                              <p
+                                id="invite-email-error"
+                                role="alert"
+                                className="text-sm text-red-600 dark:text-red-400"
+                              >
+                                {inviteError}
+                              </p>
+                            )}
                           </div>
                           <div className="space-y-2">
                             <Label htmlFor="role">{t('roleLabel')}</Label>
@@ -493,6 +553,7 @@ export default function MembersPage() {
                                 <Button
                                   variant="outline"
                                   size="sm"
+                                  aria-label={t('editRoleOf', { name: memberLabel(member) })}
                                   onClick={() => {
                                     // Only standard roles (member/admin/owner) can be changed via UI
                                     const standardRole = (
@@ -520,6 +581,7 @@ export default function MembersPage() {
                                 <Button
                                   variant="outline"
                                   size="sm"
+                                  aria-label={t('removeOf', { name: memberLabel(member) })}
                                   onClick={() =>
                                     setMemberToRemove({
                                       id: member.id,
@@ -556,7 +618,7 @@ export default function MembersPage() {
           <PendingInvitations
             organizationId={organizationId}
             resending={invite.isPending}
-            onResend={({ email, role }) => invite.mutate({ organizationId, email, role })}
+            onResend={handleResendInvite}
           />
         )}
 

@@ -105,7 +105,7 @@ describe('LeadHearingsCard', () => {
     renderCard();
 
     expect(screen.getByText('評価 A')).toBeInTheDocument();
-    expect(screen.getByText('未記入 3')).toBeInTheDocument();
+    expect(screen.getByText('未入力 3')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /の商談/ })).toHaveAttribute(
       'href',
       `/ja/leads/${LEAD_ID}/hearings/${item().id}`
@@ -137,7 +137,7 @@ describe('LeadHearingsCard', () => {
 
     await user.click(screen.getByRole('button', { name: '記録する' }));
     expect(screen.queryByLabelText('前回の内容を引き継ぐ')).not.toBeInTheDocument();
-    const source = screen.getByRole('combobox', { name: '最初に表示する Web 診断の回答' });
+    const source = screen.getByRole('combobox', { name: '最初に表示する Web診断の回答' });
     expect(source).toHaveTextContent('AS/400（IBM i）');
     expect(source).toHaveTextContent('本人未確認');
     expect(screen.getByText(/メールアドレスが一致しただけ/)).toBeInTheDocument();
@@ -177,7 +177,7 @@ describe('LeadHearingsCard', () => {
 
     await user.click(screen.getByRole('button', { name: '記録する' }));
     await user.click(screen.getByRole('checkbox', { name: '前回の内容を引き継ぐ' }));
-    expect(screen.getByRole('combobox', { name: '最初に表示する Web 診断の回答' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: '最初に表示する Web診断の回答' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '作成' }));
 
     expect(mocks.mutate.mock.calls[0][0]).toMatchObject({

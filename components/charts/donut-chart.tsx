@@ -50,6 +50,8 @@ interface DonutChartProps {
   colors?: (keyof typeof COLORS)[];
   valueFormatter?: (value: number) => string;
   showLabel?: boolean;
+  /** The chart's own legend; turn it off when the page shows a ChartLegend instead */
+  showLegend?: boolean;
   showAnimation?: boolean;
   className?: string;
   height?: number;
@@ -60,6 +62,7 @@ export function DonutChart({
   colors = ['blue', 'yellow', 'emerald', 'violet', 'amber', 'rose', 'cyan', 'pink'],
   valueFormatter = (v) => v.toLocaleString(),
   showLabel = true,
+  showLegend = true,
   showAnimation = true,
   className,
   height = 350,
@@ -97,7 +100,7 @@ export function DonutChart({
     },
     labels: labels,
     legend: {
-      show: true,
+      show: showLegend,
       position: 'bottom',
       horizontalAlign: 'center',
       fontFamily: 'Outfit',

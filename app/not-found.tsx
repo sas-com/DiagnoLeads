@@ -1,21 +1,30 @@
-'use client';
-
 import Link from 'next/link';
+import './globals.css';
 
+/**
+ * Last-resort not found page (outside [locale], e.g. an unsupported locale). The root layout
+ * returns its children only, so this page brings its own <html> and <body>.
+ */
 export default function NotFound() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="text-center">
-        <h1 className="text-6xl font-bold text-gray-900">404</h1>
-        <p className="mt-4 text-xl text-gray-600">Page not found</p>
-        <p className="mt-2 text-gray-500">The page you are looking for does not exist.</p>
-        <Link
-          href="/"
-          className="mt-6 inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          Go back home
-        </Link>
-      </div>
-    </div>
+    <html lang="ja">
+      <body>
+        <main className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+          <div className="text-center">
+            <p className="text-sm font-semibold text-gray-500">404</p>
+            <h1 className="mt-1 text-2xl font-bold text-gray-900">ページが見つかりません</h1>
+            <p className="mt-3 text-gray-600">
+              お探しのページは存在しないか、移動した可能性があります。
+            </p>
+            <Link
+              href="/"
+              className="mt-6 inline-block rounded-lg bg-teal-600 px-6 py-3 text-white transition-colors hover:bg-teal-700"
+            >
+              ホームに戻る
+            </Link>
+          </div>
+        </main>
+      </body>
+    </html>
   );
 }

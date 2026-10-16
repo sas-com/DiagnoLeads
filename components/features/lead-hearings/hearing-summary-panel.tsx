@@ -14,6 +14,7 @@ import {
   hearingSummaryItemText,
   hearingSummaryLeadName,
   hearingSummaryTodos,
+  splitHearingSummaryItems,
 } from '@/lib/features/lead-hearings/summary';
 import { trpc } from '@/lib/trpc/client';
 import { AlertTriangle, ArrowRight, Copy, Loader2, Printer, RefreshCw } from 'lucide-react';
@@ -154,13 +155,15 @@ export function HearingSummaryPanel({
         <p className="text-sm text-amber-700 print:hidden">{t('summary.unsavedNote')}</p>
       )}
 
-      {summary.sections.map((section) =>
-        section.items.length === 0 ? null : (
+      {summary.sections.map((section) => {
+        if (section.items.length === 0) return null;
+        const { filled, empty } = splitHearingSummaryItems(section.items);
+        return (
           <Card key={section.id} className="break-inside-avoid">
             <CardContent className="pt-4">
               <h3 className="mb-2 border-b pb-2 font-semibold">{section.title}</h3>
               <dl className="divide-y">
-                {section.items.map((item) => (
+                {filled.map((item) => (
                   <div
                     key={item.key}
                     className="grid gap-1 py-2 sm:grid-cols-[14rem_1fr]"
@@ -180,10 +183,21 @@ export function HearingSummaryPanel({
                   </div>
                 ))}
               </dl>
+              {empty.length > 0 && (
+                <p
+                  className="border-t pt-2 text-sm text-muted-foreground"
+                  data-testid={`hearing-summary-empty-${section.id}`}
+                >
+                  {t('summary.emptyItems', {
+                    count: empty.length,
+                    items: empty.map((item) => item.label).join(t('summary.listSeparator')),
+                  })}
+                </p>
+              )}
             </CardContent>
           </Card>
-        )
-      )}
+        );
+      })}
 
       <Card className="break-inside-avoid">
         <CardContent className="pt-4">

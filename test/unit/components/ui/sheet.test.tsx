@@ -75,7 +75,7 @@ describe('SheetContent', () => {
         <SheetContent>Content</SheetContent>
       </Sheet>
     );
-    expect(screen.getByText('Close')).toBeInTheDocument();
+    expect(screen.getByText('閉じる')).toBeInTheDocument();
   });
 });
 
@@ -282,7 +282,7 @@ describe('Sheet accessibility', () => {
         <SheetContent>Content</SheetContent>
       </Sheet>
     );
-    expect(screen.getByText('Close')).toBeInTheDocument();
+    expect(screen.getByText('閉じる')).toBeInTheDocument();
   });
 });
 

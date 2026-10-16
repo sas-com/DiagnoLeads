@@ -8,6 +8,7 @@ import NotificationDropdown from '@/components/header/NotificationDropdown';
 import UserDropdown from '@/components/header/UserDropdown';
 import { useSidebar } from '@/context/SidebarContext';
 import { RiCloseLine, RiMenuLine, RiMore2Fill, RiSearchLine } from '@remixicon/react';
+import { useTranslations } from 'next-intl';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -16,6 +17,7 @@ const AppHeader: React.FC = () => {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const { isMobileOpen, toggleSidebar, toggleMobileSidebar } = useSidebar();
   const inputRef = useRef<HTMLInputElement>(null);
+  const t = useTranslations('header.a11y');
 
   const handleToggle = () => {
     if (window.innerWidth >= 1024) {
@@ -36,9 +38,11 @@ const AppHeader: React.FC = () => {
       <div className="flex flex-col items-center justify-between grow lg:flex-row lg:px-6">
         <div className="flex items-center justify-between w-full gap-2 px-3 py-3 border-b border-gray-200 dark:border-gray-800 sm:gap-4 lg:justify-normal lg:border-b-0 lg:px-0 lg:py-4">
           <button
+            type="button"
             className="items-center justify-center w-10 h-10 text-gray-500 border-gray-200 rounded-lg dark:border-gray-800 lg:flex dark:text-gray-400 lg:h-11 lg:w-11 lg:border hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
             onClick={handleToggle}
-            aria-label="Toggle Sidebar"
+            aria-label={t('toggleSidebar')}
+            aria-expanded={isMobileOpen}
           >
             {isMobileOpen ? (
               <RiCloseLine className="w-6 h-6" />
@@ -47,12 +51,20 @@ const AppHeader: React.FC = () => {
             )}
           </button>
 
-          {/* モバイル用ロゴ */}
+          {/* モバイル用ロゴ: the mark alone on phones, so the test mode badge still fits */}
           <div className="lg:hidden">
-            <Logo size="sm" />
+            <span className="sm:hidden">
+              <LogoMark size="sm" />
+            </span>
+            <span className="hidden sm:block">
+              <Logo size="sm" />
+            </span>
           </div>
 
           <button
+            type="button"
+            aria-label={t('moreMenu')}
+            aria-expanded={isApplicationMenuOpen}
             onClick={toggleApplicationMenu}
             className="flex items-center justify-center w-10 h-10 text-gray-700 rounded-lg hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 lg:hidden"
           >

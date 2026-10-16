@@ -91,9 +91,22 @@ describe('HearingSummaryPanel', () => {
     expect(within(target).getByText('AS/400')).toBeInTheDocument();
     expect(within(target).getByText('Web診断')).toBeInTheDocument();
     expect(
-      within(screen.getByTestId('hearing-summary-item-budgetStatus')).getAllByText('次回')
+      within(screen.getByTestId('hearing-summary-item-budgetStatus')).getAllByText('次回確認')
     ).not.toHaveLength(0);
     expect(screen.getByText('このリードの以前のヒアリングはありません。')).toBeInTheDocument();
+  });
+
+  it('folds the fields with nothing recorded into one line per section (Refs #163)', () => {
+    render(panel());
+    // Recorded values, "next time" and the diagnosis value keep their own rows
+    expect(screen.getByTestId('hearing-summary-item-machineModel')).toBeInTheDocument();
+    expect(screen.getByTestId('hearing-summary-item-budgetStatus')).toBeInTheDocument();
+    // Empty fields are not repeated row by row (次回に確認すること lists the required ones)
+    expect(screen.queryByTestId('hearing-summary-item-scale')).not.toBeInTheDocument();
+    const empty = screen.getByTestId('hearing-summary-empty-currentSystem');
+    expect(empty.textContent).toMatch(/^未入力 \d+項目：/);
+    expect(empty).toHaveTextContent('規模');
+    expect(screen.queryByText('未記入')).not.toBeInTheDocument();
   });
 
   it('copies the plain text with the Clipboard API', async () => {

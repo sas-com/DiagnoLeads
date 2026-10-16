@@ -18,12 +18,12 @@ import { useState } from 'react';
 import { AreaChart, ChartLegend, DonutChart } from '@/components/charts';
 import { LEAD_STATUS_COLORS } from '@/components/features/leads/lead-status-styles';
 import { Badge } from '@/components/ui/badge';
-import { BadgeDelta } from '@/components/ui/badge-delta';
 import { BarList } from '@/components/ui/bar-list';
 import { Card } from '@/components/ui/card';
 import { Divider, Metric, Text, Title } from '@/components/ui/metric';
-import { CategoryBar, DeltaBar, ProgressBar } from '@/components/ui/progress-bar';
+import { CategoryBar, ProgressBar } from '@/components/ui/progress-bar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import type { LeadStatus } from '@/lib/features/leads/types';
 import { LEAD_STATUSES } from '@/lib/features/leads/types/pipeline';
 
 import { Button } from '@/components/ui/button';
@@ -117,6 +117,7 @@ export default function AnalyticsPage() {
   const t = useTranslations('settings.analytics');
   const tStatus = useTranslations('status');
   const tCommon = useTranslations('common');
+  const tLeadSource = useTranslations('leadSource');
   const locale = useLocale();
   const { organizationId: contextOrgId, isLoading: contextLoading } = useOrganization();
 
@@ -213,11 +214,7 @@ export default function AnalyticsPage() {
     { value: 'monthly', label: t('granularity.monthly') },
   ];
 
-  // Mock change data
-  const totalLeadsChange = 15.3;
-  const conversionChange = 8.2;
-  const scoreChange = 5.1;
-  const newLeadsChange = 23.1;
+  // No period-over-period change is shown until it is computed from real data (#138)
 
   // Value formatter for charts
   const valueFormatter = (value: number) => {
@@ -239,24 +236,27 @@ export default function AnalyticsPage() {
     }))
     .reverse();
 
-  // Transform status data for donut chart
+  // Transform status data for donut chart (each status keeps its own color)
   const statusData = (statusBreakdown || []).map((item) => ({
     name: tStatus(item.status),
     value: item.count,
   }));
+  const statusColors = (statusBreakdown || []).map(
+    (item) => LEAD_STATUS_COLORS[item.status as LeadStatus] ?? 'gray'
+  );
+  const dateRangeLabel = dateRangeOptions.find((option) => option.value === dateRange)?.label ?? '';
+
+  // Stored source values ('website', 'api', ...) shown with their labels
+  const sourceLabel = (source: string) => {
+    const key = source.toLowerCase();
+    return tLeadSource.has(key) ? tLeadSource(key) : source;
+  };
 
   // Transform source data for bar list
   const sourceBarData = (sourceBreakdown || []).map((item) => ({
-    name: item.source,
+    name: sourceLabel(item.source),
     value: item.count,
   }));
-
-  const statusColors: ('blue' | 'yellow' | 'emerald' | 'violet')[] = [
-    'blue',
-    'yellow',
-    'emerald',
-    'violet',
-  ];
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-8">
@@ -347,13 +347,6 @@ export default function AnalyticsPage() {
               <Users className="h-6 w-6 text-blue-600" />
             </div>
           </div>
-          <div className="mt-4 flex items-center justify-between">
-            <BadgeDelta deltaType={totalLeadsChange >= 0 ? 'increase' : 'decrease'} size="sm">
-              {totalLeadsChange >= 0 ? '+' : ''}
-              {totalLeadsChange}%
-            </BadgeDelta>
-            <Text>{t('stats.vsLastPeriod')}</Text>
-          </div>
         </Card>
 
         {/* New Leads */}
@@ -375,13 +368,6 @@ export default function AnalyticsPage() {
               <TrendingUp className="h-6 w-6 text-emerald-600" />
             </div>
           </div>
-          <div className="mt-4 flex items-center justify-between">
-            <BadgeDelta deltaType={newLeadsChange >= 0 ? 'increase' : 'decrease'} size="sm">
-              {newLeadsChange >= 0 ? '+' : ''}
-              {newLeadsChange}%
-            </BadgeDelta>
-            <Text>{t('stats.vsLastPeriod')}</Text>
-          </div>
         </Card>
 
         {/* Conversion Rate */}
@@ -401,13 +387,6 @@ export default function AnalyticsPage() {
           </div>
           <div className="mt-4">
             <ProgressBar value={overview?.conversionRate || 0} color="violet" />
-            <div className="mt-2 flex items-center justify-between">
-              <BadgeDelta deltaType={conversionChange >= 0 ? 'increase' : 'decrease'} size="sm">
-                {conversionChange >= 0 ? '+' : ''}
-                {conversionChange}%
-              </BadgeDelta>
-              <Text>{t('stats.vsLastPeriod')}</Text>
-            </div>
           </div>
         </Card>
 
@@ -431,13 +410,6 @@ export default function AnalyticsPage() {
           </div>
           <div className="mt-4">
             <ProgressBar value={overview?.averageScore || 0} color="amber" />
-            <div className="mt-2 flex items-center justify-between">
-              <BadgeDelta deltaType={scoreChange >= 0 ? 'increase' : 'decrease'} size="sm">
-                {scoreChange >= 0 ? '+' : ''}
-                {scoreChange}%
-              </BadgeDelta>
-              <Text>{t('stats.vsLastPeriod')}</Text>
-            </div>
           </div>
         </Card>
       </div>
@@ -494,16 +466,20 @@ export default function AnalyticsPage() {
             {/* Status Donut Chart */}
             <Card className="p-6">
               <Title>{t('charts.statusBreakdown')}</Title>
+              <Text>{t('charts.statusBreakdownPeriod', { period: dateRangeLabel })}</Text>
               {statusLoading ? (
                 <div className="h-48 w-48 mx-auto bg-gray-100 animate-pulse rounded-full mt-4" />
               ) : (
                 <>
+                  {/* The legend below the card replaces the chart's own (it overlapped the ring) */}
                   <DonutChart
-                    className="h-48 mt-4"
+                    className="mt-4"
+                    height={240}
                     data={statusData}
                     colors={statusColors}
                     valueFormatter={valueFormatter}
                     showLabel={true}
+                    showLegend={false}
                     showAnimation={true}
                   />
                   <ChartLegend
@@ -562,19 +538,18 @@ export default function AnalyticsPage() {
               ) : sourceBreakdown && sourceBreakdown.length > 0 ? (
                 <>
                   <DonutChart
-                    className="h-64 mt-4"
-                    data={sourceBreakdown.map((item) => ({
-                      name: item.source,
-                      value: item.count,
-                    }))}
+                    className="mt-4"
+                    height={256}
+                    data={sourceBarData}
                     colors={['blue', 'emerald', 'violet', 'amber', 'rose', 'cyan', 'pink']}
                     valueFormatter={valueFormatter}
                     showLabel={true}
+                    showLegend={false}
                     showAnimation={true}
                   />
                   <ChartLegend
                     className="mt-4 flex-wrap"
-                    categories={sourceBreakdown.map((d) => d.source)}
+                    categories={sourceBarData.map((d) => d.name)}
                     colors={['blue', 'emerald', 'violet', 'amber', 'rose', 'cyan', 'pink']}
                   />
                 </>
@@ -609,7 +584,7 @@ export default function AnalyticsPage() {
                           <Badge variant="gray" size="sm">
                             #{index + 1}
                           </Badge>
-                          <Text>{source.source}</Text>
+                          <Text>{sourceLabel(source.source)}</Text>
                         </div>
                         <Text className="font-semibold">{source.percentage.toFixed(1)}%</Text>
                       </div>
@@ -680,14 +655,11 @@ export default function AnalyticsPage() {
           {/* Performance Summary */}
           {overview && !overviewLoading && (
             <Card className="mt-6 p-6">
-              <Title>Performance Summary</Title>
+              <Title>{t('performanceSummary.title')}</Title>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-4">
                 <div>
-                  <Text>Lead Quality Score</Text>
-                  <div className="mt-2 flex items-center justify-between">
-                    <Metric>{overview.averageScore}</Metric>
-                    <BadgeDelta deltaType="increase">+{scoreChange}%</BadgeDelta>
-                  </div>
+                  <Text>{t('performanceSummary.quality')}</Text>
+                  <Metric className="mt-2">{overview.averageScore}</Metric>
                   <CategoryBar
                     values={[25, 25, 25, 25]}
                     colors={['red', 'yellow', 'emerald', 'blue']}
@@ -696,20 +668,13 @@ export default function AnalyticsPage() {
                   />
                 </div>
                 <div>
-                  <Text>Conversion Rate</Text>
-                  <div className="mt-2 flex items-center justify-between">
-                    <Metric>{overview.conversionRate.toFixed(1)}%</Metric>
-                    <BadgeDelta deltaType="increase">+{conversionChange}%</BadgeDelta>
-                  </div>
+                  <Text>{t('stats.conversionRate')}</Text>
+                  <Metric className="mt-2">{overview.conversionRate.toFixed(1)}%</Metric>
                   <ProgressBar value={overview.conversionRate} color="violet" className="mt-3" />
                 </div>
                 <div>
-                  <Text>Lead Growth</Text>
-                  <div className="mt-2 flex items-center justify-between">
-                    <Metric>{overview.newLeadsThisMonth}</Metric>
-                    <BadgeDelta deltaType="increase">+{newLeadsChange}%</BadgeDelta>
-                  </div>
-                  <DeltaBar value={newLeadsChange} className="mt-3" />
+                  <Text>{t('stats.newLeadsThisMonth')}</Text>
+                  <Metric className="mt-2">{overview.newLeadsThisMonth}</Metric>
                 </div>
               </div>
             </Card>

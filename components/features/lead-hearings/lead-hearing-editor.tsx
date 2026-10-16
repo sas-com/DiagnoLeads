@@ -525,32 +525,35 @@ export function LeadHearingEditor({
             />
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            role="switch"
-            aria-checked={meetingMode}
-            onClick={() => changeMode(meetingMode ? 'detail' : 'meeting')}
-            className="inline-flex min-h-11 items-center gap-3 rounded-md px-1 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-          >
-            <span
-              aria-hidden="true"
-              className={cn(
-                'inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors',
-                meetingMode ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
-              )}
+        {/* The meeting mode and the save bar belong to the record; the summary is read-only */}
+        {view === 'record' && (
+          <div className="flex flex-wrap items-center gap-3" data-testid="hearing-meeting-toggle">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={meetingMode}
+              onClick={() => changeMode(meetingMode ? 'detail' : 'meeting')}
+              className="inline-flex min-h-11 items-center gap-3 rounded-md px-1 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               <span
+                aria-hidden="true"
                 className={cn(
-                  'block h-5 w-5 rounded-full bg-white shadow transition-transform',
-                  meetingMode ? 'translate-x-5' : 'translate-x-0.5'
+                  'inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors',
+                  meetingMode ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
                 )}
-              />
-            </span>
-            {t('meeting.toggle')}
-          </button>
-          <span className="text-xs text-muted-foreground">{t('meeting.toggleHint')}</span>
-        </div>
+              >
+                <span
+                  className={cn(
+                    'block h-5 w-5 rounded-full bg-white shadow transition-transform',
+                    meetingMode ? 'translate-x-5' : 'translate-x-0.5'
+                  )}
+                />
+              </span>
+              {t('meeting.toggle')}
+            </button>
+            <span className="text-xs text-muted-foreground">{t('meeting.toggleHint')}</span>
+          </div>
+        )}
       </div>
 
       {readOnly && (
@@ -774,62 +777,67 @@ export function LeadHearingEditor({
         </TabsContent>
       </Tabs>
 
-      {/* Sticky save bar */}
-      <div className="sticky bottom-0 z-10 -mx-4 border-t bg-white/95 px-4 py-3 backdrop-blur dark:bg-gray-900/95">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            {meetingMode && (
-              <Badge color={progress.filled === progress.total ? 'emerald' : 'blue'}>
-                {t('meeting.progress', progress)}
-              </Badge>
-            )}
-            {firstMissingItem ? (
-              <button
-                type="button"
-                title={t('editor.jumpToMissing')}
-                onClick={() => goToField(firstMissingOf(firstMissingItem.keys))}
-                className="inline-flex min-h-11 items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:min-h-0"
-              >
-                <Badge color="amber">
-                  {t('editor.missingCount', { count: missing.missing.length })}
+      {/* Sticky save bar (record view only) */}
+      {view === 'record' && (
+        <div
+          data-testid="hearing-save-bar"
+          className="sticky bottom-0 z-10 -mx-4 border-t bg-white/95 px-4 py-3 backdrop-blur dark:bg-gray-900/95"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              {meetingMode && (
+                <Badge color={progress.filled === progress.total ? 'emerald' : 'blue'}>
+                  {t('meeting.progress', progress)}
                 </Badge>
-              </button>
-            ) : (
-              <Badge color="emerald">{t('editor.allFilled')}</Badge>
-            )}
-            {!readOnly && saveStatusText && (
-              <span
-                className={cn(
-                  'font-medium',
-                  saveStatus === 'saved' ? 'text-emerald-700' : 'text-amber-700'
-                )}
-                data-testid="hearing-autosave-status"
-                aria-live="polite"
-              >
-                {saveStatusText}
-              </span>
-            )}
-            <span className="text-muted-foreground">
-              {t('editor.lastUpdated', {
-                date: format.dateTime(baseUpdatedAt, {
-                  dateStyle: 'medium',
-                  timeStyle: 'short',
-                }),
-              })}
-            </span>
-          </div>
-          {!readOnly && (
-            <Button onClick={handleSave} disabled={save.isPending}>
-              {save.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4" />
               )}
-              {t('editor.save')}
-            </Button>
-          )}
+              {firstMissingItem ? (
+                <button
+                  type="button"
+                  title={t('editor.jumpToMissing')}
+                  onClick={() => goToField(firstMissingOf(firstMissingItem.keys))}
+                  className="inline-flex min-h-11 items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:min-h-0"
+                >
+                  <Badge color="amber">
+                    {t('editor.missingCount', { count: missing.missing.length })}
+                  </Badge>
+                </button>
+              ) : (
+                <Badge color="emerald">{t('editor.allFilled')}</Badge>
+              )}
+              {!readOnly && saveStatusText && (
+                <span
+                  className={cn(
+                    'font-medium',
+                    saveStatus === 'saved' ? 'text-emerald-700' : 'text-amber-700'
+                  )}
+                  data-testid="hearing-autosave-status"
+                  aria-live="polite"
+                >
+                  {saveStatusText}
+                </span>
+              )}
+              <span className="text-muted-foreground">
+                {t('editor.lastUpdated', {
+                  date: format.dateTime(baseUpdatedAt, {
+                    dateStyle: 'medium',
+                    timeStyle: 'short',
+                  }),
+                })}
+              </span>
+            </div>
+            {!readOnly && (
+              <Button onClick={handleSave} disabled={save.isPending}>
+                {save.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                {t('editor.save')}
+              </Button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

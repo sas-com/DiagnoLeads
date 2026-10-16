@@ -3,8 +3,19 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render as renderRaw, screen, fireEvent } from '@testing-library/react';
+import { NextIntlClientProvider } from 'next-intl';
+import type { ReactElement } from 'react';
+import messages from '@/locales/ja/common.json';
 import { ThemeToggleButton } from '@/components/common/ThemeToggleButton';
+
+// The button reads its label from the real Japanese messages
+const render = (ui: ReactElement) =>
+  renderRaw(
+    <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
+      {ui}
+    </NextIntlClientProvider>
+  );
 
 // Mock the ThemeContext
 vi.mock('@/context/ThemeContext', () => ({
@@ -35,7 +46,7 @@ describe('ThemeToggleButton', () => {
     });
     
     render(<ThemeToggleButton />);
-    expect(screen.getByRole('button')).toHaveAttribute('aria-label', 'Switch to dark mode');
+    expect(screen.getByRole('button')).toHaveAttribute('aria-label', 'ダークモードに切り替え');
   });
 
   it('should have correct aria-label for dark mode', () => {
@@ -45,7 +56,7 @@ describe('ThemeToggleButton', () => {
     });
     
     render(<ThemeToggleButton />);
-    expect(screen.getByRole('button')).toHaveAttribute('aria-label', 'Switch to light mode');
+    expect(screen.getByRole('button')).toHaveAttribute('aria-label', 'ライトモードに切り替え');
   });
 
   it('should call toggleTheme on click', () => {

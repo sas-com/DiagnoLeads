@@ -67,7 +67,7 @@ export function InviteAcceptance({ token }: { token: string }) {
           role,
         })}
       </p>
-      <p className="mt-2 text-sm text-gray-500">
+      <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
         {t('invitedAddress', { email: invitation.email })}
       </p>
     </>
@@ -141,9 +141,13 @@ export function InviteAcceptance({ token }: { token: string }) {
 
 function Panel({ title, children }: { title?: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
-      {title && <h2 className="text-2xl font-bold text-center text-gray-900 mb-6">{title}</h2>}
-      <div className="text-gray-700">{children}</div>
+    <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10 dark:bg-gray-800">
+      {title && (
+        <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-gray-100 mb-6">
+          {title}
+        </h2>
+      )}
+      <div className="text-gray-700 dark:text-gray-300">{children}</div>
     </div>
   );
 }

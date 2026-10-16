@@ -71,8 +71,8 @@ export function ResetPasswordForm() {
     return (
       <div className="text-center space-y-4">
         <div className="text-green-600 text-lg font-semibold">{t('successTitle')}</div>
-        <p className="text-sm text-gray-600">{t('successMessage')}</p>
-        <p className="text-xs text-gray-500">{t('successNote')}</p>
+        <p className="text-sm text-gray-600 dark:text-gray-400">{t('successMessage')}</p>
+        <p className="text-xs text-gray-500 dark:text-gray-400">{t('successNote')}</p>
       </div>
     );
   }
