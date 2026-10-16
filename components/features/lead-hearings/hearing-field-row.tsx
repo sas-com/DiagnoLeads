@@ -2,6 +2,7 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -12,8 +13,11 @@ import {
 } from '@/components/ui/select';
 import {
   HEARING_ITEM_STATUSES,
+  HEARING_OTHER_NOTE_MAX_LENGTH,
   type HearingFieldDefinition,
   type HearingItemStatus,
+  choosesOtherOption,
+  hasOtherOption,
 } from '@/lib/features/lead-hearings/catalog';
 import { normalizeHearingValue } from '@/lib/features/lead-hearings/form';
 import type {
@@ -32,6 +36,8 @@ interface HearingFieldRowProps {
   field: HearingFieldDefinition;
   entry: HearingFieldEntry;
   required: boolean;
+  /** Required and not filled yet (shows a "not filled" marker) */
+  missing?: boolean;
   /** "AS/400 / ..." when the Web diagnosis said something about this field */
   hint: string | null;
   readOnly: boolean;
@@ -40,6 +46,8 @@ interface HearingFieldRowProps {
   onValueChange: (field: HearingFieldDefinition, value: HearingFieldValue | undefined) => void;
   onStatusChange: (field: HearingFieldDefinition, status: HearingItemStatus) => void;
   onConfirm: (field: HearingFieldDefinition) => void;
+  /** The note of an "other" option (only fields that have one call it) */
+  onOtherNoteChange?: (field: HearingFieldDefinition, note: string | undefined) => void;
 }
 
 /** One field: name, status, the diagnosis hint and the input (re-renders only when it changes) */
@@ -47,12 +55,14 @@ export const HearingFieldRow = memo(function HearingFieldRow({
   field,
   entry,
   required,
+  missing = false,
   hint,
   readOnly,
   variant = 'default',
   onValueChange,
   onStatusChange,
   onConfirm,
+  onOtherNoteChange,
 }: HearingFieldRowProps) {
   const t = useTranslations('leadHearings');
   const tRoot = useTranslations();
@@ -62,6 +72,9 @@ export const HearingFieldRow = memo(function HearingFieldRow({
     !readOnly &&
     entry.source === 'prefilled' &&
     normalizeHearingValue(field, entry.value) !== undefined;
+  // The "other" note shows only while an "other" option is chosen; its text stays in the form
+  // when the option is unchosen and comes back if it is chosen again before saving
+  const showOtherNote = hasOtherOption(field) && choosesOtherOption(entry.value);
 
   return (
     <div
@@ -81,6 +94,11 @@ export const HearingFieldRow = memo(function HearingFieldRow({
         {required && (
           <span className="text-xs font-semibold text-red-600">{t('editor.required')}</span>
         )}
+        {missing && (
+          <Badge color="amber" size="sm">
+            {t('editor.missingField')}
+          </Badge>
+        )}
         {entry.source && (
           <Badge color={SOURCE_COLORS[entry.source]} size="sm">
             {t(`sources.${entry.source}`)}
@@ -96,7 +114,7 @@ export const HearingFieldRow = memo(function HearingFieldRow({
               aria-label={t('editor.statusOf', { field: label })}
               className={cn(
                 'w-24 text-xs',
-                variant === 'chip' ? 'h-11' : 'h-8',
+                variant === 'chip' ? 'h-11' : 'h-11 sm:h-8',
                 entry.status === 'done' && 'border-emerald-400'
               )}
             >
@@ -121,7 +139,7 @@ export const HearingFieldRow = memo(function HearingFieldRow({
               type="button"
               size="sm"
               variant="outline"
-              className="h-7"
+              className="h-11 sm:h-8"
               aria-label={t('editor.confirmOf', { field: label })}
               onClick={() => onConfirm(field)}
             >
@@ -142,6 +160,20 @@ export const HearingFieldRow = memo(function HearingFieldRow({
           variant={variant}
           onChange={(value) => onValueChange(field, value)}
         />
+        {showOtherNote && (
+          <Input
+            id={`${id}-other-note`}
+            aria-label={t('editor.otherNoteOf', { field: label })}
+            placeholder={t('editor.otherNotePlaceholder', { max: HEARING_OTHER_NOTE_MAX_LENGTH })}
+            value={entry.otherNote ?? ''}
+            maxLength={HEARING_OTHER_NOTE_MAX_LENGTH}
+            readOnly={readOnly}
+            className={cn('mt-2', variant === 'chip' ? 'h-11' : 'h-11 sm:h-10')}
+            onChange={(e) =>
+              onOtherNoteChange?.(field, e.target.value === '' ? undefined : e.target.value)
+            }
+          />
+        )}
       </div>
     </div>
   );

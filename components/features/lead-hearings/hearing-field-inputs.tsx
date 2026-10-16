@@ -16,10 +16,7 @@ import {
   asChoices,
   asLevels,
   asScale,
-  hearingYearOptions,
-  joinYearMonth,
   setHearingLevel,
-  splitYearMonth,
   toDiagnosticLocale,
   toggleHearingOption,
 } from '@/lib/features/lead-hearings/form';
@@ -27,6 +24,7 @@ import type { HearingFieldValue } from '@/lib/features/lead-hearings/types/schem
 import { cn } from '@/lib/utils';
 import { useLocale, useTranslations } from 'next-intl';
 import type { ComponentType, ReactNode } from 'react';
+import { HearingDateInput, HearingMonthInput } from './hearing-date-inputs';
 
 /** Radix Select items cannot have an empty value */
 const NONE = '__none__';
@@ -52,6 +50,21 @@ export interface HearingFieldInputProps<F extends HearingFieldDefinition = Heari
   readOnly: boolean;
   variant: HearingFieldVariant;
   onChange: (value: HearingFieldValue | undefined) => void;
+}
+
+/** Options of a number field: "3月" for a month, digits with separators otherwise */
+function useNumberOptions(field: FieldOfType<'number'>) {
+  const t = useTranslations('leadHearings');
+  const locale = useLocale();
+  const number = new Intl.NumberFormat(locale);
+  const options: { value: string; label: string }[] = [];
+  for (let n = field.min; n <= field.max; n++) {
+    options.push({
+      value: String(n),
+      label: field.unit === 'month' ? t('editor.monthOption', { month: n }) : number.format(n),
+    });
+  }
+  return options;
 }
 
 /** Label of a catalog option: from locales, or the Web diagnosis label */
@@ -134,11 +147,12 @@ function MultipleInput({
   const chosen = asChoices(value);
   return (
     <fieldset aria-label={label}>
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid gap-x-4 sm:grid-cols-2">
         {field.options.map((option) => {
           const optionId = `${id}-${option.value}`;
           return (
-            <div key={option.value} className="flex items-center gap-2">
+            // The label fills the row, so the whole row (at least 44px high) can be tapped
+            <div key={option.value} className="flex min-h-11 items-center gap-3">
               <Checkbox
                 id={optionId}
                 checked={chosen.includes(option.value)}
@@ -149,7 +163,10 @@ function MultipleInput({
                   )
                 }
               />
-              <Label htmlFor={optionId} className="font-normal">
+              <Label
+                htmlFor={optionId}
+                className="flex-1 cursor-pointer py-2 font-normal leading-snug"
+              >
                 {optionLabel(option)}
               </Label>
             </div>
@@ -160,6 +177,9 @@ function MultipleInput({
   );
 }
 
+/** Show the character count once this share of the limit is used */
+const COUNT_FROM = 0.8;
+
 function TextInput({
   field,
   value,
@@ -167,18 +187,35 @@ function TextInput({
   readOnly,
   onChange,
 }: HearingFieldInputProps<FieldOfType<'text'>>) {
+  const t = useTranslations('leadHearings');
+  const text = typeof value === 'string' ? value : '';
+  const showCount = !readOnly && text.length >= field.maxLength * COUNT_FROM;
   const props = {
     id,
-    value: typeof value === 'string' ? value : '',
+    value: text,
     maxLength: field.maxLength,
     readOnly,
     onChange: (e: { target: { value: string } }) =>
       onChange(e.target.value === '' ? undefined : e.target.value),
   };
-  return field.maxLength <= SINGLE_LINE_MAX ? (
-    <Input {...props} />
-  ) : (
-    <Textarea rows={3} {...props} />
+  return (
+    <div className="space-y-1">
+      {field.maxLength <= SINGLE_LINE_MAX ? (
+        <Input {...props} />
+      ) : (
+        <Textarea rows={3} className="min-h-20" {...props} />
+      )}
+      {showCount && (
+        <p
+          className={cn(
+            'text-right text-xs',
+            text.length >= field.maxLength ? 'text-amber-700' : 'text-muted-foreground'
+          )}
+        >
+          {t('editor.textCount', { count: text.length, max: field.maxLength })}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -189,8 +226,7 @@ function NumberInput({
   readOnly,
   onChange,
 }: HearingFieldInputProps<FieldOfType<'number'>>) {
-  const options = [];
-  for (let n = field.min; n <= field.max; n++) options.push({ value: String(n), label: String(n) });
+  const options = useNumberOptions(field);
   return (
     <OptionSelect
       id={id}
@@ -203,15 +239,22 @@ function NumberInput({
   );
 }
 
-function DateInput({ value, id, readOnly, onChange }: HearingFieldInputProps<FieldOfType<'date'>>) {
+function DateInput({
+  value,
+  id,
+  label,
+  readOnly,
+  variant,
+  onChange,
+}: HearingFieldInputProps<FieldOfType<'date'>>) {
   return (
-    <Input
+    <HearingDateInput
       id={id}
-      type="date"
-      className="sm:w-48"
-      value={typeof value === 'string' ? value : ''}
+      label={label}
+      value={typeof value === 'string' ? value : undefined}
       readOnly={readOnly}
-      onChange={(e) => onChange(e.target.value === '' ? undefined : e.target.value)}
+      large={variant === 'chip'}
+      onChange={onChange}
     />
   );
 }
@@ -221,42 +264,18 @@ function YearMonthInput({
   id,
   label,
   readOnly,
+  variant,
   onChange,
 }: HearingFieldInputProps<FieldOfType<'yearMonth'>>) {
-  const t = useTranslations('leadHearings');
-  const { year, month } = splitYearMonth(value);
   return (
-    <div className="space-y-1">
-      <div className="flex gap-2">
-        <OptionSelect
-          id={id}
-          ariaLabel={t('editor.yearOf', { field: label })}
-          value={year}
-          options={hearingYearOptions(new Date().getFullYear(), year).map((y) => ({
-            value: String(y),
-            label: t('editor.yearOption', { year: y }),
-          }))}
-          readOnly={readOnly}
-          onChange={(next) => onChange(joinYearMonth(next, month))}
-          className="w-32"
-        />
-        <OptionSelect
-          id={`${id}-month`}
-          ariaLabel={t('editor.monthOf', { field: label })}
-          value={month}
-          options={Array.from({ length: 12 }, (_, i) => ({
-            value: String(i + 1).padStart(2, '0'),
-            label: t('editor.monthOption', { month: i + 1 }),
-          }))}
-          readOnly={readOnly}
-          onChange={(next) => onChange(joinYearMonth(year, next))}
-          className="w-28"
-        />
-      </div>
-      {Boolean(year) !== Boolean(month) && (
-        <p className="text-xs text-amber-700">{t('editor.yearMonthIncomplete')}</p>
-      )}
-    </div>
+    <HearingMonthInput
+      id={id}
+      label={label}
+      value={typeof value === 'string' ? value : undefined}
+      readOnly={readOnly}
+      large={variant === 'chip'}
+      onChange={onChange}
+    />
   );
 }
 
@@ -358,7 +377,7 @@ function Chip({ selected, readOnly, onClick, ariaLabel, children }: ChipProps) {
       disabled={readOnly}
       onClick={onClick}
       className={cn(
-        'inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border px-4 py-2 text-sm transition-colors',
+        'inline-flex min-h-11 min-w-11 max-w-full items-center justify-center rounded-full border px-4 py-2 text-left text-sm leading-snug transition-colors',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2',
         'disabled:cursor-not-allowed disabled:opacity-60',
         selected
@@ -456,8 +475,7 @@ function NumberChips({
   onChange,
 }: HearingFieldInputProps<FieldOfType<'number'>>) {
   const current = typeof value === 'number' ? String(value) : undefined;
-  const options = [];
-  for (let n = field.min; n <= field.max; n++) options.push({ value: String(n), label: String(n) });
+  const options = useNumberOptions(field);
   return (
     <ChipGroup
       id={id}
