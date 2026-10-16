@@ -202,6 +202,15 @@ describe('unpublished content stays with editors (#140)', () => {
 });
 
 describe('content.canEdit', () => {
+  it('is false for everyone while the CMS is off (#141)', async () => {
+    vi.stubEnv('CMS_ENABLED', 'false');
+    try {
+      await expect(callerAs('editor@example.com').canEdit()).resolves.toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('is true only for an editor', async () => {
     await expect(callerAs('editor@example.com').canEdit()).resolves.toBe(true);
     await expect(callerAs('granted@example.com', EDITOR_ID).canEdit()).resolves.toBe(true);

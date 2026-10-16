@@ -59,6 +59,11 @@
       "source": "/admin",
       "destination": "/ja/dashboard",
       "permanent": false
+    },
+    {
+      "source": "/admin/:path*",
+      "destination": "/ja/dashboard",
+      "permanent": false
     }
   ]
 }

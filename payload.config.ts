@@ -6,6 +6,7 @@ import { buildConfig } from 'payload';
 import sharp from 'sharp';
 
 import { BlogPosts, DiagnosticForms, FAQs, LandingPages, Media, Users } from './cms/collections';
+import { cmsPoolConfig } from './lib/cms/db-pool';
 
 /**
  * Payload CMS Configuration
@@ -56,9 +57,8 @@ export default buildConfig({
   // push: true enables automatic schema synchronization during development
   // For production, consider using migrations instead
   db: postgresAdapter({
-    pool: {
-      connectionString: process.env.DATABASE_URL || '',
-    },
+    // TLS settings matching the production database (lib/cms/db-pool.ts, #141)
+    pool: cmsPoolConfig(process.env.DATABASE_URL || ''),
     schemaName: 'cms',
     push: true,
   }),

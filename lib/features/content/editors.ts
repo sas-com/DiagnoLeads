@@ -1,3 +1,4 @@
+import { isCmsEnabled } from '@/lib/cms/enabled';
 import type { Database } from '@/lib/db/client';
 import { contentEditors, organizationMembers } from '@/lib/db/schema';
 import { env } from '@/lib/env';
@@ -30,7 +31,8 @@ export async function isContentEditor(
   db: Database,
   user: { id: string; email?: string | null } | null | undefined
 ): Promise<boolean> {
-  if (!user) return false;
+  // Nobody edits while the CMS is off (lib/cms/enabled.ts): the edit buttons stay hidden
+  if (!user || !isCmsEnabled()) return false;
   if (isListedContentEditor(user.email)) return true;
 
   const organizationId = resolveDiagnosisOrganizationId();
