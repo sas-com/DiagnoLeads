@@ -1,8 +1,10 @@
 import type { AxPlaybookContent } from '@/lib/features/ax-playbook/types/schemas';
+import type { HearingPrefillSnapshot } from '@/lib/features/lead-hearings/types/schemas';
 import { relations, sql } from 'drizzle-orm';
 import {
   boolean,
   customType,
+  date,
   foreignKey,
   index,
   integer,
@@ -362,6 +364,7 @@ export const leadsRelations = relations(leads, ({ one, many }) => ({
   }),
   leadTags: many(leadTags),
   comments: many(leadComments),
+  hearings: many(leadHearings),
 }));
 
 /**
@@ -473,6 +476,57 @@ export const axSalesPlaybooks = pgTable('ax_sales_playbooks', {
 });
 
 export type AxSalesPlaybook = typeof axSalesPlaybooks.$inferSelect;
+
+/**
+ * Lead Hearings
+ * What sales heard in the initial AX migration meetings, several per lead (Refs #84). Field
+ * keys are defined in lib/features/lead-hearings/catalog.ts; only values are stored here.
+ */
+export const leadHearings = pgTable(
+  'lead_hearings',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    leadId: uuid('lead_id')
+      .notNull()
+      .references(() => leads.id, { onDelete: 'cascade' }),
+    heldOn: date('held_on', { mode: 'string' }).notNull(),
+    catalogVersion: integer('catalog_version').notNull(),
+    /** { fieldKey: { value?, status, source } } */
+    fields: jsonb('fields').$type<Record<string, unknown>>().default({}).notNull(),
+    /** Web diagnosis answers the hearing started from (null when none) */
+    prefill: jsonb('prefill').$type<HearingPrefillSnapshot>(),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('lead_hearings_org_lead_held_on_idx').on(
+      table.organizationId,
+      table.leadId,
+      table.heldOn
+    ),
+    // For the ON DELETE CASCADE of the lead
+    index('lead_hearings_lead_idx').on(table.leadId),
+  ]
+);
+
+export const leadHearingsRelations = relations(leadHearings, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [leadHearings.organizationId],
+    references: [organizations.id],
+  }),
+  lead: one(leads, {
+    fields: [leadHearings.leadId],
+    references: [leads.id],
+  }),
+}));
+
+export type LeadHearing = typeof leadHearings.$inferSelect;
+export type NewLeadHearing = typeof leadHearings.$inferInsert;
 
 // Note: OrganizationType and DataSharingPolicy are already exported above at definition
 
