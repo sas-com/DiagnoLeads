@@ -119,6 +119,8 @@ export function HoneypotField({
 
 interface ConsentFieldProps {
   checked: boolean;
+  /** The diagnosis' own notice (builder definitions); default: contact.consentNotice */
+  notice?: string;
   error?: string;
   privacyPolicyUrl?: string;
   /** Another diagnosis after the first: the contact details are kept, the consent is not */
@@ -129,6 +131,7 @@ interface ConsentFieldProps {
 /** The privacy notice and the consent checkbox */
 export function ConsentField({
   checked,
+  notice,
   error,
   privacyPolicyUrl,
   continuing,
@@ -140,8 +143,8 @@ export function ConsentField({
       {continuing && (
         <p className="rounded-xl bg-ax-mist p-3 text-sm leading-relaxed">{t('consentAgain')}</p>
       )}
-      <p className="text-sm leading-relaxed text-gray-700">
-        {t('consentNotice')}
+      <p className="whitespace-pre-line text-sm leading-relaxed text-gray-700">
+        {notice ?? t('consentNotice')}
         {privacyPolicyUrl && (
           <>
             {' '}
@@ -186,6 +189,8 @@ interface ContactFieldsProps {
   consent: boolean;
   honeypot: string;
   privacyPolicyUrl?: string;
+  /** The diagnosis' own consent text, shown as plain text instead of contact.consentNotice */
+  consentNotice?: string;
   onContact: (field: ContactKey, value: string) => void;
   onConsent: (value: boolean) => void;
   onHoneypot: (value: string) => void;
@@ -204,6 +209,7 @@ export function ContactFields({
   consent,
   honeypot,
   privacyPolicyUrl,
+  consentNotice,
   onContact,
   onConsent,
   onHoneypot,
@@ -237,6 +243,7 @@ export function ContactFields({
 
       <ConsentField
         checked={consent}
+        notice={consentNotice}
         error={errors.consent}
         privacyPolicyUrl={privacyPolicyUrl}
         continuing={continuing}

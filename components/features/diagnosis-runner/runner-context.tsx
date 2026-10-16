@@ -10,12 +10,17 @@ import { type ReactNode, createContext, useContext } from 'react';
  * multipleHint, multipleHintExclusive, progress, back, next, submit, submitting,
  * restore.{prompt,continue,startOver}, contact.{company,name,email,phone,description,sendNote,
  * consentAgain,consentNotice,privacyPolicy,consent},
- * verification.{label,help,unavailable,retry,alternative}.
+ * verification.{label,help,unavailable,retry,alternative}; and, for diagnoses with those
+ * question types, scaleHint, numberHint and textCount.
  */
 export interface DiagnosisRunnerConfig {
   /** next-intl namespace holding the keys above (e.g. 'axDiagnosis') */
   namespace: string;
-  /** Prefix of the element ids and test ids the parts set (e.g. 'ax' → 'ax-step-heading') */
+  /**
+   * Prefix of the ids of the page-level parts only: the step heading, the Turnstile check and
+   * its help text (e.g. 'ax' → 'ax-step-heading'). Question, option, contact and consent ids are
+   * not prefixed (`q-{id}`, `contact-email`, `consent`, ...), so one runner per page.
+   */
   idPrefix: string;
 }
 

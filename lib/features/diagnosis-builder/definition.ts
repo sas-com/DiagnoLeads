@@ -29,6 +29,9 @@ export const DEFINITION_LIMITS = {
   url: 2000,
   /** Points one option, band or rule can give or take */
   maxPoints: 100,
+  /** Lead scores (and the MQL minimum score) are kept within 0..100, like the AX diagnosis */
+  leadScoreMin: 0,
+  leadScoreMax: 100,
   maxSerializedBytes: 200 * 1024,
 } as const;
 
@@ -223,15 +226,24 @@ export const resultBlockSchema = z.discriminatedUnion('type', [
   z.object({ ...blockBase, type: z.literal('cta'), label: shortText, url }),
 ]);
 
+/**
+ * Text shown to sales as the reason (notification, lead page). Written by the marketer and kept
+ * in the definition, so it is fixed with the published version (no locales key per reason).
+ */
+const reasonText = shortText;
+
+/**
+ * The lead score is the sum of the matched rules' points, kept within LEAD_SCORE_RANGE: the same
+ * 0–100 scale as the AX diagnosis, so lead.score can be compared across diagnoses.
+ */
 const leadScoreRule = z.object({
   id,
   when: conditionGroup,
   points,
-  /** Shown to members as the reason for the points (looked up in locales) */
-  reasonKey: id,
+  reason: reasonText,
 });
 
-const strongSignal = z.object({ id, when: conditionGroup, reasonKey: id });
+const strongSignal = z.object({ id, when: conditionGroup, reason: reasonText });
 
 /**
  * Qualified when every required condition is met and either the lead score reaches minScore or
@@ -241,7 +253,7 @@ const strongSignal = z.object({ id, when: conditionGroup, reasonKey: id });
 const mql = z.object({
   required: z.array(conditionSchema).max(L.maxConditions),
   strongSignals: z.array(strongSignal).max(L.maxRules),
-  minScore: z.number().int().min(-10000).max(10000).nullable(),
+  minScore: z.number().int().min(0).max(100).nullable(),
 });
 
 const consent = z.object({

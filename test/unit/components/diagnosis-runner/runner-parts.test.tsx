@@ -177,8 +177,17 @@ describe('announcer and focus helpers', () => {
       cb(0);
       return 0;
     });
-    const scrollIntoView = vi.fn();
-    Element.prototype.scrollIntoView = scrollIntoView;
+    // jsdom has no scrollIntoView: add a stub that restoreAllMocks puts back after the test
+    if (!('scrollIntoView' in Element.prototype)) {
+      Object.defineProperty(Element.prototype, 'scrollIntoView', {
+        configurable: true,
+        writable: true,
+        value: () => undefined,
+      });
+    }
+    const scrollIntoView = vi
+      .spyOn(Element.prototype, 'scrollIntoView')
+      .mockImplementation(() => undefined);
     render(
       <>
         <fieldset>

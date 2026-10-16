@@ -581,6 +581,87 @@
     "quoted": "\"{label}\"",
     "listJoiner": " or "
   },
+  "publicDiagnosis": {
+    "progress": "STEP {current} / {total}",
+    "allRequiredNote": "Please answer every question not marked \"Optional\".",
+    "restore": {
+      "prompt": "Your previous answers were saved. Continue where you left off?",
+      "continue": "Continue",
+      "startOver": "Start over"
+    },
+    "deselectedOthers": "The other choices were cleared",
+    "contactStep": "Finally, your contact details",
+    "required": "Required",
+    "optional": "Optional",
+    "quoted": "\"{label}\"",
+    "listJoiner": " or ",
+    "multipleHint": "Choose all that apply",
+    "multipleHintExclusive": "Choose all that apply (choosing {options} clears the others)",
+    "scaleHint": "Choose one from {min} to {max}",
+    "numberHint": "Enter a number from {min} to {max}{unit}",
+    "textCount": "{count} / {max} characters",
+    "back": "Back",
+    "next": "Next",
+    "submit": "See the result",
+    "submitting": "Diagnosing…",
+    "startOver": "Start over",
+    "unavailable": "This diagnosis is not accepting answers at the moment. Please try again later.",
+    "errors": {
+      "requiredSingle": "Please choose one",
+      "requiredMultiple": "Please choose at least one",
+      "requiredInput": "Please enter an answer",
+      "numberRange": "Please enter a number from {min} to {max}",
+      "contactRequiredNamed": "Please enter your {field}",
+      "email": "The email address is not valid (e.g. taro@example.com)",
+      "phone": "Please enter the phone number with digits and hyphens",
+      "consent": "Your consent to the handling of personal information is required",
+      "submit": "Could not send. Please try again later.",
+      "rateLimited": "Sending is temporarily limited. Please wait a while and press \"{button}\" again. Your input is kept.",
+      "rateLimitedMinutes": "Sending is temporarily limited. Please press \"{button}\" again in about {minutes} minutes. Your input is kept.",
+      "verificationPending": "The check before sending has not finished. When a check mark (✓) appears, press \"{button}\" again.",
+      "verificationRetry": "The check before sending is being repeated. When a check mark (✓) appears, press \"{button}\" again.",
+      "verificationUnavailable": "The verification service could not be reached. Please wait a moment and press \"{button}\" again. Your input is kept.",
+      "testModeEmail": "During testing, only addresses at {domains} are accepted",
+      "outdated": "The diagnosis was updated while you were answering. Please start over.",
+      "notAvailable": "This diagnosis is not accepting answers at the moment."
+    },
+    "verification": {
+      "label": "Check before sending",
+      "help": "This check prevents automated submissions (it uses Cloudflare). It usually finishes by itself in a few seconds. If a checkbox appears, click it.",
+      "done": "The check before sending is complete",
+      "unavailable": "The check before sending could not be shown.",
+      "retry": "Try the check again",
+      "alternative": "Some company networks block it. In that case, please contact us through <link>the contact page</link>."
+    },
+    "contact": {
+      "description": "Your result is shown on this page. We use your contact details to explain the result and to offer a consultation.",
+      "company": "Company",
+      "name": "Name",
+      "email": "Work email address",
+      "phone": "Phone number",
+      "consultation": "I would like a free consultation based on the result",
+      "consultationHint": "We will contact you. If you prefer a call, please also enter your phone number.",
+      "consent": "I agree to the handling of personal information",
+      "consentAgain": "Your contact details from before are used. Please tick the consent to the handling of personal information again.",
+      "consentNotice": "We use the information you enter only to send you the result and related information.",
+      "privacyPolicy": "Privacy policy",
+      "sendNote": "It takes about a minute."
+    },
+    "result": {
+      "eyebrow": "RESULT",
+      "for": "Result for {company}",
+      "overall": "Overall",
+      "axes": "Scores by area",
+      "percent": "{pct}%",
+      "consultation": {
+        "title": "Free consultation",
+        "body": "Based on your result, we explain the issues and how to proceed. After you apply, we will contact you.",
+        "button": "Apply for a consultation",
+        "done": "Your consultation request was received. We will contact you.",
+        "failed": "Your request could not be sent. Please try again later."
+      }
+    }
+  },
   "pipeline": {
     "inflowSource": {
       "existing_customer": "Existing Customer",

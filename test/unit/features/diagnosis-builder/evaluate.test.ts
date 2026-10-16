@@ -14,6 +14,7 @@ import {
   findTier,
   toPublicDefinition,
   toPublicResult,
+  withConsultationSignal,
 } from '@/lib/features/diagnosis-builder/evaluate';
 import { validateDefinition } from '@/lib/features/diagnosis-builder/validate';
 import { describe, expect, it } from 'vitest';
@@ -136,8 +137,8 @@ describe('evaluate', () => {
     expect(result.overall).toBe(94);
     expect(result.tiers).toEqual({ overall: 'high', infra_tiers: 'strong' });
     expect(result.resultTypeId).toBe('leader');
-    expect(result.leadScore).toEqual({ points: 30, reasons: ['reason_large_team'] });
-    expect(result.mql).toEqual({ qualified: false, reasons: [{ code: 'below_min_score' }] });
+    expect(result.leadScore).toEqual({ points: 30, reasons: ['担当者が100人以上'] });
+    expect(result.mql).toEqual({ level: 'fit', qualified: false, reasons: [{ code: 'below_min_score' }] });
   });
 
   it('on-premises path: hidden "practices" is neither scored nor counted in the range', () => {
@@ -149,8 +150,9 @@ describe('evaluate', () => {
     expect(result.overall).toBe(29);
     expect(result.tiers.overall).toBe('low');
     expect(result.resultTypeId).toBe('planner');
-    expect(result.leadScore).toEqual({ points: 40, reasons: ['reason_near_term'] });
+    expect(result.leadScore).toEqual({ points: 40, reasons: ['今年中に移行の予定がある'] });
     expect(result.mql).toEqual({
+      level: 'none',
       qualified: false,
       reasons: [{ code: 'required_not_met', index: 0 }],
     });
@@ -171,9 +173,10 @@ describe('evaluate', () => {
     expect(result.overall).toBe(64);
     expect(result.tiers.overall).toBe('mid');
     expect(result.mql).toEqual({
+      level: 'interest',
       qualified: true,
       reasons: [
-        { code: 'strong_signal', reasonKey: 'signal_near_term' },
+        { code: 'strong_signal', signalId: 'near_term_signal', reason: '今年中に移行する予定（強いシグナル）' },
         { code: 'below_min_score' },
       ],
     });
@@ -183,13 +186,13 @@ describe('evaluate', () => {
     const def = cloudReadiness();
     def.mql.minScore = 30;
     const result = score(def, cloudAnswers);
-    expect(result.mql).toEqual({ qualified: true, reasons: [{ code: 'min_score_reached' }] });
+    expect(result.mql).toEqual({ level: 'interest', qualified: true, reasons: [{ code: 'min_score_reached' }] });
   });
 
   it('the empty draft default qualifies no one', () => {
     const result = score(emptyDiagnosisDefinition('新しい診断'), {});
     expect(result.leadScore).toEqual({ points: 0, reasons: [] });
-    expect(result.mql).toEqual({ qualified: false, reasons: [{ code: 'no_strong_signal' }] });
+    expect(result.mql).toEqual({ level: 'fit', qualified: false, reasons: [{ code: 'no_strong_signal' }] });
   });
 
   it('minScore null: a high lead score alone does not qualify', () => {
@@ -199,19 +202,55 @@ describe('evaluate', () => {
     def.leadScore.rules[0].points = 100;
     const result = score(def, cloudAnswers);
     expect(result.leadScore.points).toBe(100);
-    expect(result.mql).toEqual({ qualified: false, reasons: [{ code: 'no_strong_signal' }] });
+    expect(result.mql).toEqual({ level: 'fit', qualified: false, reasons: [{ code: 'no_strong_signal' }] });
+  });
+
+  it('keeps the lead score within 0..100 (the AX scale) and gives the rules\' reason texts', () => {
+    const def = cloudReadiness();
+    def.leadScore.rules[0].points = 100;
+    def.leadScore.rules.push({
+      id: 'always',
+      when: { match: 'all', conditions: [] },
+      points: 50,
+      reason: '常に加点',
+    });
+    expect(score(def, cloudAnswers).leadScore).toEqual({
+      points: 100,
+      reasons: ['担当者が100人以上', '常に加点'],
+    });
+    def.leadScore.rules = [
+      { id: 'minus', when: { match: 'all', conditions: [] }, points: -40, reason: '減点' },
+    ];
+    expect(score(def, cloudAnswers).leadScore).toEqual({ points: 0, reasons: ['減点'] });
+  });
+
+  it('a consultation request makes a fit respondent 関心あり, but not one outside the required conditions (#139)', () => {
+    const fit = score(cloudReadiness(), cloudAnswers).mql;
+    expect(fit.level).toBe('fit');
+    expect(withConsultationSignal(fit)).toEqual({
+      level: 'interest',
+      qualified: true,
+      reasons: [{ code: 'consultation' }],
+    });
+    const none = score(cloudReadiness(), onpremAnswers).mql;
+    expect(none.level).toBe('none');
+    expect(withConsultationSignal(none)).toBe(none);
+    const interest = withConsultationSignal(fit);
+    expect(withConsultationSignal(interest)).toBe(interest);
   });
 
   it('minScore null: qualifies only when a strong signal matches', () => {
     const def = cloudReadiness();
     def.mql.minScore = null;
     expect(score(def, cloudAnswers).mql).toEqual({
+      level: 'fit',
       qualified: false,
       reasons: [{ code: 'no_strong_signal' }],
     });
     expect(score(def, hybridAnswers).mql).toEqual({
+      level: 'interest',
       qualified: true,
-      reasons: [{ code: 'strong_signal', reasonKey: 'signal_near_term' }],
+      reasons: [{ code: 'strong_signal', signalId: 'near_term_signal', reason: '今年中に移行する予定（強いシグナル）' }],
     });
   });
 

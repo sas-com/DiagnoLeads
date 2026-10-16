@@ -486,6 +486,26 @@ describe('validateDefinition', () => {
   });
 });
 
+describe('lead score scale and reason texts (#122 re-plan)', () => {
+  it('the MQL minimum score is on the 0–100 lead score scale', () => {
+    for (const minScore of [-1, 101]) {
+      const def = cloudReadiness();
+      def.mql.minScore = minScore;
+      expect(find(def, 'schema_invalid').map((e) => e.path)).toEqual([['mql', 'minScore']]);
+    }
+  });
+
+  it('lead score rules and strong signals carry a reason text, not a locales key', () => {
+    const def = cloudReadiness() as unknown as {
+      leadScore: { rules: Record<string, unknown>[] };
+    };
+    def.leadScore.rules[0].reason = '';
+    expect(find(def, 'schema_invalid').map((e) => e.path)).toEqual([
+      ['leadScore', 'rules', 0, 'reason'],
+    ]);
+  });
+});
+
 describe('emptyDiagnosisDefinition', () => {
   it('parses, is not publishable yet, and warns that no one can qualify', () => {
     const result = validateDefinition(emptyDiagnosisDefinition('新しい診断'));
