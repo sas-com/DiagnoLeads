@@ -3,7 +3,6 @@
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
@@ -19,16 +18,12 @@ import {
   axPlaybookContentSchema,
   emptyAxPlaybookContent,
 } from '@/lib/features/ax-playbook/types/schemas';
-import {
-  AX_COMPANY_SIZE_OPTIONS,
-  AX_COMPANY_SIZE_QUESTIONS,
-  type AxCompanySizeQuestion,
-} from '@/lib/features/diagnostics/ax-migration/company-size';
 import { trpc } from '@/lib/trpc/client';
 import { AlertTriangle, Loader2, Lock, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { TargetCompanyCard } from './target-company-card';
 
 type RowListKey = 'objections' | 'ngPhrases' | 'escalations';
 
@@ -121,17 +116,6 @@ export function AxPlaybookEditor() {
 
   const addRow = (list: RowListKey) => {
     setForm({ ...form, [list]: [...form[list], EMPTY_ROWS[list]()] });
-  };
-
-  const toggleTargetRange = (question: AxCompanySizeQuestion, value: string, on: boolean) => {
-    const current = form.targetCompany[question];
-    setForm({
-      ...form,
-      targetCompany: {
-        ...form.targetCompany,
-        [question]: on ? [...current, value] : current.filter((item) => item !== value),
-      },
-    });
   };
 
   const removeRow = (list: RowListKey, index: number) => {
@@ -270,40 +254,12 @@ export function AxPlaybookEditor() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('targetCompany.title')}</CardTitle>
-          <CardDescription>{t('targetCompany.description')}</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-6 md:grid-cols-3">
-          {AX_COMPANY_SIZE_QUESTIONS.map((question) => (
-            <fieldset key={question} className="space-y-2">
-              <legend className="text-sm font-medium">{t(`targetCompany.${question}`)}</legend>
-              {AX_COMPANY_SIZE_OPTIONS[question].map((value) => {
-                const id = `target-${question}-${value}`;
-                return (
-                  <div key={value} className="flex items-center gap-2">
-                    <Checkbox
-                      id={id}
-                      checked={form.targetCompany[question].includes(value)}
-                      disabled={readOnly}
-                      onCheckedChange={(checked) =>
-                        toggleTargetRange(question, value, checked === true)
-                      }
-                    />
-                    <Label htmlFor={id} className="font-normal">
-                      {t(`targetCompany.ranges.${question}.${value}`)}
-                    </Label>
-                  </div>
-                );
-              })}
-              {form.targetCompany[question].length === 0 && (
-                <p className="text-xs text-muted-foreground">{t('targetCompany.noCondition')}</p>
-              )}
-            </fieldset>
-          ))}
-        </CardContent>
-      </Card>
+      <TargetCompanyCard
+        key={organizationId}
+        organizationId={organizationId}
+        initial={(data.content ?? emptyAxPlaybookContent()).targetCompany}
+        canEdit={data.canEditTargetCompany}
+      />
 
       {renderRows('objections')}
       {renderRows('ngPhrases')}

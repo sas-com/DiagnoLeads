@@ -13,6 +13,7 @@ const ORG_ID = '660e8400-e29b-41d4-a716-446655440000';
 
 const mocks = vi.hoisted(() => ({
   mutate: vi.fn(),
+  targetMutate: vi.fn(),
   toastError: vi.fn(),
   data: undefined as unknown,
   isError: false,
@@ -37,6 +38,9 @@ vi.mock('@/lib/trpc/client', () => ({
           mocks.onSuccess = options.onSuccess;
           return { mutate: mocks.mutate, isPending: false };
         },
+      },
+      updateTargetCompany: {
+        useMutation: () => ({ mutate: mocks.targetMutate, isPending: false }),
       },
     },
   },
@@ -78,10 +82,10 @@ describe('AxPlaybookEditor', () => {
     expect(mocks.mutate).toHaveBeenCalledWith({ organizationId: ORG_ID, content: expected });
   });
 
-  it('saves the target company size ranges that are checked (#150)', async () => {
+  it('saves the target company size ranges on their own (#150)', async () => {
     const content = emptyAxPlaybookContent();
     content.targetCompany.employees = ['300_999'];
-    mocks.data = { content, updatedAt: null, canEdit: true };
+    mocks.data = { content, updatedAt: null, canEdit: true, canEditTargetCompany: true };
     const user = userEvent.setup();
     renderEditor();
 
@@ -89,11 +93,37 @@ describe('AxPlaybookEditor', () => {
     await user.click(screen.getByRole('checkbox', { name: '30億〜100億円未満' }));
     await user.click(screen.getByRole('checkbox', { name: '10億〜30億円未満' }));
     await user.click(screen.getByRole('checkbox', { name: '300〜999名' }));
-    await user.click(screen.getByRole('button', { name: '保存' }));
+    await user.click(screen.getByRole('button', { name: '範囲を保存' }));
 
-    const expected = emptyAxPlaybookContent();
-    expected.targetCompany.annual_revenue = ['1b_3b', '3b_10b'];
-    expect(mocks.mutate).toHaveBeenCalledWith({ organizationId: ORG_ID, content: expected });
+    expect(mocks.targetMutate).toHaveBeenCalledWith({
+      organizationId: ORG_ID,
+      targetCompany: { annual_revenue: ['3b_10b', '1b_3b'], employees: [], sites: [] },
+    });
+    // Saving the playbook does not send the ranges (the server keeps the stored ones)
+    await user.click(screen.getByRole('button', { name: '保存' }));
+    expect(mocks.mutate).toHaveBeenCalledWith({
+      organizationId: ORG_ID,
+      content: emptyAxPlaybookContent(),
+    });
+  });
+
+  it('lets a member who cannot edit the playbook change the target ranges', async () => {
+    mocks.data = {
+      content: emptyAxPlaybookContent(),
+      updatedAt: null,
+      canEdit: false,
+      canEditTargetCompany: true,
+    };
+    const user = userEvent.setup();
+    renderEditor();
+
+    expect(screen.queryByRole('button', { name: '保存' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('checkbox', { name: '5〜9か所' }));
+    await user.click(screen.getByRole('button', { name: '範囲を保存' }));
+    expect(mocks.targetMutate).toHaveBeenCalledWith({
+      organizationId: ORG_ID,
+      targetCompany: { annual_revenue: [], employees: [], sites: ['5_9'] },
+    });
   });
 
   it('does not save a table row with a required field left blank', async () => {
@@ -179,6 +209,5 @@ describe('AxPlaybookEditor', () => {
     expect(screen.getByLabelText('深掘りの質問')).toHaveValue('Q1');
     expect(screen.queryByRole('button', { name: '保存' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '行を追加' })).not.toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: '50名未満' })).toBeDisabled();
   });
 });

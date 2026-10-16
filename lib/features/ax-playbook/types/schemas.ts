@@ -100,6 +100,11 @@ export const updateAxPlaybookSchema = z.object({
   content: axPlaybookContentSchema,
 });
 
+export const updateAxTargetCompanySchema = z.object({
+  organizationId: z.string().uuid(),
+  targetCompany: axTargetCompanySchema,
+});
+
 export function emptyAxPlaybookContent(): AxPlaybookContent {
   const guide = (): AxPlaybookChallengeGuide => ({ effect: '', questions: [], signals: [] });
   return {

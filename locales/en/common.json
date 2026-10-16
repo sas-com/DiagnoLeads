@@ -1331,7 +1331,7 @@
       },
       "targetCompany": {
         "title": "Target company size",
-        "description": "Checks whether the company size answered in the AX diagnosis is within the ranges chosen here. Companies that answer outside the ranges are removed from the MQL candidates (unanswered or \"I don't know\" answers are not). Items with nothing chosen are not a condition. Respondents never see this check.",
+        "description": "Checks whether the company size answered in the AX diagnosis is within the ranges chosen here. Companies that answer outside the ranges are removed from the MQL candidates (unanswered or \"I don't know\" answers are not). Items with nothing chosen are not a condition. Respondents never see this check. Every member of the organization can change this section; save it with \"Save ranges\", separately from the playbook.",
         "annual_revenue": "Annual revenue",
         "employees": "Employees",
         "sites": "Sites",
@@ -1356,7 +1356,9 @@
             "5_9": "5-9",
             "gte10": "10 or more"
           }
-        }
+        },
+        "save": "Save ranges",
+        "saved": "Target company size saved"
       }
     },
     "agencyLinks": {
@@ -3136,7 +3138,7 @@
       "mqlRequired": {
         "industry": "Industry",
         "system": "System",
-        "company_size": "company size"
+        "company_size": "Company size"
       },
       "sql": "Sales signals",
       "sqlHelp": "Answers such as timing or budget suggest a deal",
