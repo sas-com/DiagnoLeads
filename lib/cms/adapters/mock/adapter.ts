@@ -245,6 +245,11 @@ export class MockCMSAdapter implements CMSAdapter {
       items = items.filter((item) => item.organizationId === params.organizationId);
     }
 
+    // Published only unless asked otherwise, like the Payload adapter (#140)
+    if (params.status !== 'all' && PUBLISHABLE_COLLECTIONS[params.collection]) {
+      items = items.filter((item) => item.status === 'published');
+    }
+
     // 検索フィールドで検索
     const searchFields = params.fields || ['title', 'content', 'name'];
     const query = params.query.toLowerCase();

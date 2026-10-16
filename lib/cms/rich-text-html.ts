@@ -15,7 +15,11 @@ export function richTextToHtml(content: unknown): string {
 
   return nodes
     .map((node) => {
-      const text = escapeHtml(node.content?.map((child) => child.text || '').join('') || '');
+      if (!node || typeof node !== 'object') return '';
+      const children = Array.isArray(node.content) ? node.content : [];
+      const text = escapeHtml(
+        children.map((child) => (typeof child?.text === 'string' ? child.text : '')).join('')
+      );
       if (node.type === 'paragraph') return `<p>${text}</p>`;
       if (node.type === 'heading') {
         const level = [2, 3, 4].includes(node.attrs?.level as number) ? node.attrs?.level : 2;

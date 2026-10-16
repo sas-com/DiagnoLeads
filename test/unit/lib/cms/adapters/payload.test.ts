@@ -51,6 +51,21 @@ describe('Payload adapter: published content only unless asked otherwise (#140)'
   it('lists everything for editors who ask for it', async () => {
     await adapter().find({ collection: 'blog-posts', status: 'all' });
     expect(lastWhere()).toEqual({});
+    expect(payload.find.mock.calls.at(-1)?.[0].overrideAccess).toBeUndefined();
+  });
+
+  it('reads public content as a signed-out visitor, so populated related posts are checked too', async () => {
+    await adapter().find({ collection: 'blog-posts' });
+    expect(payload.find.mock.calls.at(-1)?.[0]).toMatchObject({ overrideAccess: false });
+    await adapter().findBySlug({ collection: 'blog-posts', slug: 'a' });
+    expect(payload.find.mock.calls.at(-1)?.[0]).toMatchObject({ overrideAccess: false });
+    await adapter().search({ collection: 'blog-posts', query: 'a' });
+    expect(payload.find.mock.calls.at(-1)?.[0]).toMatchObject({ overrideAccess: false });
+  });
+
+  it('filters FAQ drafts by their status (FAQs have no CMS drafts)', async () => {
+    await adapter().find({ collection: 'faqs', status: 'draft' });
+    expect(lastWhere()).toEqual({ status: { equals: 'draft' } });
   });
 
   it('finds a document by slug only when it is published, unless asked for all', async () => {

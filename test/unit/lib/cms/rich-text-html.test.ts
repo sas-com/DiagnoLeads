@@ -26,6 +26,14 @@ describe('blog post rich text as HTML', () => {
     expect(richTextToHtml('<script>alert(1)</script>')).toBe('<p>&lt;script&gt;alert(1)&lt;/script&gt;</p>');
   });
 
+  it('skips broken nodes instead of failing the page', () => {
+    expect(
+      richTextToHtml({
+        content: [null, { type: 'paragraph', content: 'x' }, { type: 'paragraph', content: [null, { text: 1 }] }],
+      })
+    ).toBe('\n<p></p>\n<p></p>');
+  });
+
   it('renders nothing for empty content', () => {
     expect(richTextToHtml(null)).toBe('');
     expect(richTextToHtml({})).toBe('');

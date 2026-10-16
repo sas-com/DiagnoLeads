@@ -38,6 +38,15 @@ import type {
 } from '../../core/interfaces';
 import { PUBLISHABLE_COLLECTIONS, draftStatusFor, publishedWhere } from '../../publishing';
 
+/**
+ * Payload's Local API skips access control by default, also for the documents it populates
+ * (related posts, links). Public reads go through the collections' read access as a signed-out
+ * visitor, so nothing unpublished comes along; editors ('all', 'draft') read everything.
+ */
+function publicReadOptions(status: 'draft' | 'published' | 'all'): { overrideAccess?: false } {
+  return status === 'published' ? { overrideAccess: false } : {};
+}
+
 export class PayloadCMSAdapter implements CMSAdapter {
   readonly name = 'PayloadCMS';
   readonly version = '3.66';
@@ -108,6 +117,7 @@ export class PayloadCMSAdapter implements CMSAdapter {
       sort: params.sort ? this.buildSortString(params.sort) : undefined,
       locale: params.locale as 'ja' | 'en' | undefined,
       draft: params.status === 'draft',
+      ...publicReadOptions(params.status ?? 'published'),
     });
 
     if (!result) {
@@ -180,6 +190,7 @@ export class PayloadCMSAdapter implements CMSAdapter {
       where,
       limit: 1,
       locale: params.locale as 'ja' | 'en' | undefined,
+      ...publicReadOptions(params.status ?? 'published'),
     });
 
     if (!result || result.docs.length === 0) {
@@ -289,6 +300,7 @@ export class PayloadCMSAdapter implements CMSAdapter {
       collection: params.collection,
       where,
       limit: params.limit || 10,
+      ...publicReadOptions(params.status ?? 'published'),
     });
 
     if (!result) {
@@ -494,8 +506,9 @@ export class PayloadCMSAdapter implements CMSAdapter {
     // Status last, so that no other condition can widen it: published by both markers (#140)
     if (status === 'published') {
       Object.assign(query, publishedWhere(collection));
-    } else if (status === 'draft' && PUBLISHABLE_COLLECTIONS[collection]?.drafts) {
-      query._status = { equals: 'draft' };
+    } else if (status === 'draft' && PUBLISHABLE_COLLECTIONS[collection]) {
+      if (PUBLISHABLE_COLLECTIONS[collection].drafts) query._status = { equals: 'draft' };
+      else query.status = { equals: 'draft' };
     }
 
     return query;
