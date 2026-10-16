@@ -8,11 +8,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useOrganization } from '@/hooks/use-organization';
+import { useSession } from '@/lib/auth/client';
+import { autosaveStatus } from '@/lib/features/lead-hearings/autosave';
 import {
   DEFAULT_HEARING_CATALOG,
   type HearingFieldDefinition,
   type HearingFieldKey,
   type HearingItemStatus,
+  type HearingRequiredItem,
   type HearingSectionId,
 } from '@/lib/features/lead-hearings/catalog';
 import {
@@ -27,6 +30,17 @@ import {
   toSavedHearingFields,
 } from '@/lib/features/lead-hearings/form';
 import {
+  type HearingEditorMode,
+  defaultHearingEditorMode,
+  hearingModeStorageKey,
+  itemHasStatus,
+  meetingProgress,
+  otherFieldsBySection,
+  parseHearingEditorMode,
+  requiredItemFields,
+  toggleHearingItemStatus,
+} from '@/lib/features/lead-hearings/meeting-mode';
+import {
   type HearingFieldEntry,
   type HearingFieldValue,
   type HearingFields,
@@ -35,10 +49,13 @@ import {
   hearingFieldsSchema,
 } from '@/lib/features/lead-hearings/types/schemas';
 import { trpc } from '@/lib/trpc/client';
+import { cn } from '@/lib/utils';
 import {
   AlertTriangle,
   ArrowLeft,
   BookOpen,
+  CheckCircle2,
+  ChevronDown,
   Loader2,
   RefreshCw,
   Save,
@@ -49,9 +66,35 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { HearingFieldRow } from './hearing-field-row';
+import { useHearingAutosave } from './use-hearing-autosave';
 
 /** Organization overrides (#98) will resolve their own catalog view */
 const catalog = DEFAULT_HEARING_CATALOG;
+
+/** Meeting mode: each required item with its fields, then the other fields per section */
+const meetingItems = catalog.requiredItems.map((item) => ({
+  item,
+  fields: requiredItemFields(catalog, item),
+}));
+const otherSections = otherFieldsBySection(catalog);
+const otherFieldCount = otherSections.reduce((sum, section) => sum + section.fields.length, 0);
+
+/** The mode a user chose last time; storage may be unavailable (private mode, blocked) */
+function readStoredMode(key: string): HearingEditorMode | null {
+  try {
+    return parseHearingEditorMode(window.localStorage.getItem(key));
+  } catch {
+    return null;
+  }
+}
+
+function storeMode(key: string, mode: HearingEditorMode) {
+  try {
+    window.localStorage.setItem(key, mode);
+  } catch {
+    // Remembering the choice is a convenience only
+  }
+}
 
 interface LoadedHearing {
   id: string;
@@ -85,6 +128,27 @@ export function LeadHearingEditor({ leadId, hearingId }: LeadHearingEditorProps)
   const statusPicked = useRef(new Set<string>());
   const [tab, setTab] = useState<HearingSectionId>(catalog.sections[0].id);
   const [conflict, setConflict] = useState(false);
+  const [othersOpen, setOthersOpen] = useState(false);
+
+  // Meeting mode / detail mode: the user's last choice, else by whether the hearing is new
+  const session = useSession();
+  const modeKey = hearingModeStorageKey(session.data?.user?.id);
+  const storedMode = useMemo(() => readStoredMode(modeKey), [modeKey]);
+  const [chosenMode, setChosenMode] = useState<HearingEditorMode | null>(null);
+  const [defaultMode, setDefaultMode] = useState<HearingEditorMode>('detail');
+  const mode = chosenMode ?? storedMode ?? defaultMode;
+  const changeMode = (next: HearingEditorMode) => {
+    setChosenMode(next);
+    storeMode(modeKey, next);
+  };
+
+  // What autosave reads when its timer fires (always the latest render)
+  const formRef = useRef(form);
+  formRef.current = form;
+  const heldOnRef = useRef(heldOn);
+  heldOnRef.current = heldOn;
+  const baseUpdatedAtRef = useRef(baseUpdatedAt);
+  baseUpdatedAtRef.current = baseUpdatedAt;
 
   const utils = trpc.useUtils();
   const hearing = trpc.leadHearings.get.useQuery(
@@ -97,12 +161,15 @@ export function LeadHearingEditor({ leadId, hearingId }: LeadHearingEditorProps)
   );
 
   const fill = (data: LoadedHearing) => {
+    if (loadedFor !== formKey) setDefaultMode(defaultHearingEditorMode(data.fields));
     setForm(data.fields);
     setHeldOn(data.heldOn);
     setBaseUpdatedAt(new Date(data.updatedAt));
+    baseUpdatedAtRef.current = new Date(data.updatedAt);
     statusPicked.current = new Set();
     setConflict(false);
     setLoadedFor(formKey);
+    autosave.reset();
   };
 
   // Fill the form once per hearing; a later refetch must not wipe unsaved edits
@@ -115,22 +182,66 @@ export function LeadHearingEditor({ leadId, hearingId }: LeadHearingEditorProps)
 
   const save = trpc.leadHearings.update.useMutation({
     onSuccess: (saved) => {
-      fill(saved);
+      // The next save (maybe queued right now) guards against this row
+      const updatedAt = new Date(saved.updatedAt);
+      baseUpdatedAtRef.current = updatedAt;
+      setBaseUpdatedAt(updatedAt);
       // The saved row is the latest; put it in the cache instead of fetching it again
       utils.leadHearings.get.setData({ organizationId: orgId, id: hearingId }, (current) =>
         current ? { ...current, ...saved } : current
       );
       utils.leadHearings.listByLead.invalidate({ organizationId: orgId, leadId });
-      toast.success(t('editor.saved'));
+      const settled = autosave.saved();
+      if (settled.manual) {
+        toast.success(t('editor.saved'));
+        // Show what was stored, unless that would drop what was typed meanwhile. Autosave
+        // never replaces the form: it would trim text while it is being typed.
+        if (!settled.editedDuring) {
+          setForm(saved.fields);
+          setHeldOn(saved.heldOn);
+          statusPicked.current = new Set();
+        }
+      }
     },
     onError: (error) => {
-      if (error.data?.code === 'CONFLICT') {
+      const isConflict = error.data?.code === 'CONFLICT';
+      // A conflict stops autosave; the edits stay on screen until the user reloads
+      const { manual } = autosave.failed(isConflict);
+      if (isConflict) {
         setConflict(true);
-      } else {
+      } else if (manual) {
         toast.error(t('editor.saveError'));
       }
     },
   });
+
+  const loaded = !!hearing.data && !!form && loadedFor === formKey;
+  const readOnly = !hearing.data?.canEdit;
+
+  /** Send the current form (the save button, or autosave); false when nothing was sent */
+  const startSave = (manual: boolean): boolean => {
+    const current = formRef.current;
+    const expectedUpdatedAt = baseUpdatedAtRef.current;
+    const date = heldOnRef.current;
+    if (!current || !expectedUpdatedAt) return false;
+    const parsed = hearingFieldsSchema.safeParse(toSavedHearingFields(current));
+    if (!parsed.success || !ISO_DATE_PATTERN.test(date)) {
+      if (manual) toast.error(t('editor.invalid'));
+      return false;
+    }
+    if (manual) setConflict(false);
+    save.mutate({
+      organizationId: orgId,
+      id: hearingId,
+      heldOn: date,
+      fields: parsed.data,
+      expectedUpdatedAt,
+    });
+    return true;
+  };
+
+  const autosave = useHearingAutosave({ enabled: loaded && !readOnly, start: startSave });
+  const { notifyEdit } = autosave;
 
   const missing = useMemo(() => computeFormMissingItems(form ?? {}, catalog.requiredItems), [form]);
   const missingBySection = useMemo(() => countBySection(missing.missingKeys, catalog), [missing]);
@@ -155,8 +266,9 @@ export function LeadHearingEditor({ leadId, hearingId }: LeadHearingEditorProps)
       setForm((current) =>
         current ? { ...current, [key]: update(entryOf(current, key)) } : current
       );
+      notifyEdit();
     },
-    []
+    [notifyEdit]
   );
   const handleValueChange = useCallback(
     (field: HearingFieldDefinition, value: HearingFieldValue | undefined) => {
@@ -178,6 +290,14 @@ export function LeadHearingEditor({ leadId, hearingId }: LeadHearingEditorProps)
     (field: HearingFieldDefinition) =>
       updateEntry(field.key as HearingFieldKey, confirmHearingEntry),
     [updateEntry]
+  );
+  const handleItemStatus = useCallback(
+    (item: HearingRequiredItem, status: HearingItemStatus) => {
+      for (const key of item.keys) statusPicked.current.add(key);
+      setForm((current) => (current ? toggleHearingItemStatus(current, item, status) : current));
+      notifyEdit();
+    },
+    [notifyEdit]
   );
 
   const errorCode = hearing.error?.data?.code;
@@ -215,7 +335,7 @@ export function LeadHearingEditor({ leadId, hearingId }: LeadHearingEditorProps)
   }
 
   // Until the form holds this hearing, never render (or save) another one
-  if (!hearing.data || !form || !baseUpdatedAt || loadedFor !== formKey) {
+  if (!hearing.data || !form || !baseUpdatedAt || !loaded) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -224,23 +344,24 @@ export function LeadHearingEditor({ leadId, hearingId }: LeadHearingEditorProps)
   }
 
   const data = hearing.data;
-  const readOnly = !data.canEdit;
 
-  const handleSave = () => {
-    const parsed = hearingFieldsSchema.safeParse(toSavedHearingFields(form));
-    if (!parsed.success || !ISO_DATE_PATTERN.test(heldOn)) {
-      toast.error(t('editor.invalid'));
-      return;
-    }
-    setConflict(false);
-    save.mutate({
-      organizationId: orgId,
-      id: hearingId,
-      heldOn,
-      fields: parsed.data,
-      expectedUpdatedAt: baseUpdatedAt,
-    });
-  };
+  const handleSave = () => autosave.flush(true);
+  const meetingMode = mode === 'meeting';
+  const progress = meetingProgress(missing, catalog.requiredItems);
+  const saveStatus = autosaveStatus(autosave.snapshot, autosave.lastSavedAt);
+  const saveStatusText = conflict
+    ? t('editor.autosave.conflictStopped')
+    : saveStatus === 'saving'
+      ? t('editor.autosave.saving')
+      : saveStatus === 'saved' && autosave.lastSavedAt
+        ? t('editor.autosave.saved', {
+            time: format.dateTime(autosave.lastSavedAt, { timeStyle: 'short' }),
+          })
+        : saveStatus === 'unsaved'
+          ? t('editor.autosave.unsaved')
+          : saveStatus === 'failed'
+            ? t('editor.autosave.failed')
+            : null;
 
   const handleReload = async () => {
     const result = await hearing.refetch();
@@ -326,9 +447,38 @@ export function LeadHearingEditor({ leadId, hearingId }: LeadHearingEditorProps)
               className="sm:w-48"
               value={heldOn}
               readOnly={readOnly}
-              onChange={(e) => setHeldOn(e.target.value)}
+              onChange={(e) => {
+                setHeldOn(e.target.value);
+                notifyEdit();
+              }}
             />
           </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={meetingMode}
+            onClick={() => changeMode(meetingMode ? 'detail' : 'meeting')}
+            className="inline-flex min-h-11 items-center gap-3 rounded-md px-1 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            <span
+              aria-hidden="true"
+              className={cn(
+                'inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors',
+                meetingMode ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
+              )}
+            >
+              <span
+                className={cn(
+                  'block h-5 w-5 rounded-full bg-white shadow transition-transform',
+                  meetingMode ? 'translate-x-5' : 'translate-x-0.5'
+                )}
+              />
+            </span>
+            {t('meeting.toggle')}
+          </button>
+          <span className="text-xs text-muted-foreground">{t('meeting.toggleHint')}</span>
         </div>
       </div>
 
@@ -371,59 +521,192 @@ export function LeadHearingEditor({ leadId, hearingId }: LeadHearingEditorProps)
         </Callout>
       )}
 
-      <Tabs value={tab} onValueChange={(value) => setTab(value as HearingSectionId)}>
-        <div className="overflow-x-auto">
-          <TabsList className="w-max justify-start">
-            {catalog.sections.map(({ id: section }) => {
-              const count = missingBySection.get(section) ?? 0;
-              return (
-                <TabsTrigger key={section} value={section} className="gap-1">
-                  {t(`sections.${section}`)}
-                  {count > 0 && (
-                    <Badge color="amber" size="sm" aria-label={t('editor.missingTabs', { count })}>
-                      {count}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
-        </div>
+      {meetingMode ? (
+        <div className="space-y-4" data-testid="hearing-meeting-mode">
+          {meetingItems.map(({ item, fields }) => {
+            const itemLabel = tRoot(item.labelKey);
+            const filled = !missing.missing.includes(item.id);
+            const quickStatuses = [
+              ['next', t('meeting.next'), t('meeting.nextOf', { item: itemLabel })],
+              [
+                'not_applicable',
+                t('meeting.notApplicable'),
+                t('meeting.notApplicableOf', { item: itemLabel }),
+              ],
+            ] as const;
+            return (
+              <Card key={item.id} data-testid={`hearing-item-${item.id}`}>
+                <CardContent className="pt-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="flex items-center gap-2 text-base font-semibold">
+                      {filled && (
+                        <CheckCircle2 className="h-5 w-5 text-emerald-600" aria-hidden="true" />
+                      )}
+                      {itemLabel}
+                    </h2>
+                    <div className="ml-auto flex gap-2">
+                      {quickStatuses.map(([status, text, label]) => {
+                        const active = itemHasStatus(form, item, status);
+                        return (
+                          <Button
+                            key={status}
+                            type="button"
+                            variant={active ? 'default' : 'outline'}
+                            className="min-h-11"
+                            aria-pressed={active}
+                            aria-label={label}
+                            disabled={readOnly}
+                            onClick={() => handleItemStatus(item, status)}
+                          >
+                            {text}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  {fields.map(({ field }) => (
+                    <HearingFieldRow
+                      key={field.key}
+                      field={field}
+                      entry={entryOf(form, field.key as HearingFieldKey)}
+                      required
+                      hint={hints.get(field.key) ?? null}
+                      readOnly={readOnly}
+                      variant="chip"
+                      onValueChange={handleValueChange}
+                      onStatusChange={handleStatusChange}
+                      onConfirm={handleConfirm}
+                    />
+                  ))}
+                </CardContent>
+              </Card>
+            );
+          })}
 
-        {catalog.sections.map((section) => (
-          <TabsContent key={section.id} value={section.id}>
-            <Card>
-              <CardContent className="pt-2">
-                {section.id === 'outcome' && <div className="pt-4">{requiredItemsCallout}</div>}
-                {section.fields.map(({ field, required }) => (
-                  <HearingFieldRow
-                    key={field.key}
-                    field={field}
-                    entry={entryOf(form, field.key as HearingFieldKey)}
-                    required={required}
-                    hint={hints.get(field.key) ?? null}
-                    readOnly={readOnly}
-                    onValueChange={handleValueChange}
-                    onStatusChange={handleStatusChange}
-                    onConfirm={handleConfirm}
-                  />
-                ))}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        ))}
-      </Tabs>
+          <Card>
+            <CardContent className="pt-2">
+              <button
+                type="button"
+                aria-expanded={othersOpen}
+                aria-controls="hearing-other-fields"
+                onClick={() => setOthersOpen((open) => !open)}
+                className="flex min-h-11 w-full items-center justify-between gap-2 py-2 text-left font-semibold"
+              >
+                <span>
+                  {t('meeting.others')}
+                  <span className="ml-2 text-sm font-normal text-muted-foreground">
+                    {t('meeting.othersCount', { count: otherFieldCount })}
+                  </span>
+                </span>
+                <ChevronDown
+                  aria-hidden="true"
+                  className={cn('h-5 w-5 transition-transform', othersOpen && 'rotate-180')}
+                />
+              </button>
+              {othersOpen && (
+                <div id="hearing-other-fields">
+                  {otherSections.map((section) => (
+                    <section key={section.id} className="pt-2">
+                      <h3 className="border-b pb-2 text-sm font-semibold text-muted-foreground">
+                        {t(`sections.${section.id}`)}
+                      </h3>
+                      {section.fields.map(({ field }) => (
+                        <HearingFieldRow
+                          key={field.key}
+                          field={field}
+                          entry={entryOf(form, field.key as HearingFieldKey)}
+                          required={false}
+                          hint={hints.get(field.key) ?? null}
+                          readOnly={readOnly}
+                          variant="chip"
+                          onValueChange={handleValueChange}
+                          onStatusChange={handleStatusChange}
+                          onConfirm={handleConfirm}
+                        />
+                      ))}
+                    </section>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+        <Tabs value={tab} onValueChange={(value) => setTab(value as HearingSectionId)}>
+          <div className="overflow-x-auto">
+            <TabsList className="w-max justify-start">
+              {catalog.sections.map(({ id: section }) => {
+                const count = missingBySection.get(section) ?? 0;
+                return (
+                  <TabsTrigger key={section} value={section} className="gap-1">
+                    {t(`sections.${section}`)}
+                    {count > 0 && (
+                      <Badge
+                        color="amber"
+                        size="sm"
+                        aria-label={t('editor.missingTabs', { count })}
+                      >
+                        {count}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                );
+              })}
+            </TabsList>
+          </div>
+
+          {catalog.sections.map((section) => (
+            <TabsContent key={section.id} value={section.id}>
+              <Card>
+                <CardContent className="pt-2">
+                  {section.id === 'outcome' && <div className="pt-4">{requiredItemsCallout}</div>}
+                  {section.fields.map(({ field, required }) => (
+                    <HearingFieldRow
+                      key={field.key}
+                      field={field}
+                      entry={entryOf(form, field.key as HearingFieldKey)}
+                      required={required}
+                      hint={hints.get(field.key) ?? null}
+                      readOnly={readOnly}
+                      onValueChange={handleValueChange}
+                      onStatusChange={handleStatusChange}
+                      onConfirm={handleConfirm}
+                    />
+                  ))}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          ))}
+        </Tabs>
+      )}
 
       {/* Sticky save bar */}
       <div className="sticky bottom-0 z-10 -mx-4 border-t bg-white/95 px-4 py-3 backdrop-blur dark:bg-gray-900/95">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2 text-sm">
+            {meetingMode && (
+              <Badge color={progress.filled === progress.total ? 'emerald' : 'blue'}>
+                {t('meeting.progress', progress)}
+              </Badge>
+            )}
             {missing.missing.length > 0 ? (
               <Badge color="amber">
                 {t('editor.missingCount', { count: missing.missing.length })}
               </Badge>
             ) : (
               <Badge color="emerald">{t('editor.allFilled')}</Badge>
+            )}
+            {!readOnly && saveStatusText && (
+              <span
+                className={cn(
+                  'font-medium',
+                  saveStatus === 'saved' ? 'text-emerald-700' : 'text-amber-700'
+                )}
+                data-testid="hearing-autosave-status"
+                aria-live="polite"
+              >
+                {saveStatusText}
+              </span>
             )}
             <span className="text-muted-foreground">
               {t('editor.lastUpdated', {

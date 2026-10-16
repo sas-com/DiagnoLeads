@@ -24,7 +24,7 @@ import { cn } from '@/lib/utils';
 import { CheckCircle2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { memo } from 'react';
-import { HearingFieldInput, type HearingFieldVariant } from './hearing-field-inputs';
+import { HearingFieldInput, type HearingFieldVariant, usesChipInput } from './hearing-field-inputs';
 
 const SOURCE_COLORS = { prefilled: 'blue', confirmed: 'emerald', corrected: 'violet' } as const;
 
@@ -70,7 +70,7 @@ export const HearingFieldRow = memo(function HearingFieldRow({
     >
       <div className="flex flex-wrap items-center gap-2">
         {/* Multi-part inputs label their parts themselves; the others are labelled by the name */}
-        {field.type !== 'multiple' ? (
+        {field.type !== 'multiple' && !usesChipInput(field, variant) ? (
           <Label htmlFor={id} className="font-medium">
             {label}
           </Label>
@@ -93,7 +93,11 @@ export const HearingFieldRow = memo(function HearingFieldRow({
           >
             <SelectTrigger
               aria-label={t('editor.statusOf', { field: label })}
-              className={cn('h-8 w-24 text-xs', entry.status === 'done' && 'border-emerald-400')}
+              className={cn(
+                'w-24 text-xs',
+                variant === 'chip' ? 'h-11' : 'h-8',
+                entry.status === 'done' && 'border-emerald-400'
+              )}
             >
               <SelectValue />
             </SelectTrigger>

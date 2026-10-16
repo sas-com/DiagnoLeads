@@ -24,8 +24,9 @@ import {
   toggleHearingOption,
 } from '@/lib/features/lead-hearings/form';
 import type { HearingFieldValue } from '@/lib/features/lead-hearings/types/schemas';
+import { cn } from '@/lib/utils';
 import { useLocale, useTranslations } from 'next-intl';
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 
 /** Radix Select items cannot have an empty value */
 const NONE = '__none__';
@@ -33,8 +34,11 @@ const NONE = '__none__';
 /** Text fields at most this long are a single line */
 const SINGLE_LINE_MAX = 200;
 
-/** How an input is drawn; a compact variant for the meeting mode (#96) goes here */
-export type HearingFieldVariant = 'default';
+/**
+ * How an input is drawn: 'default' (selects and checkboxes) or 'chip' (large tappable buttons
+ * for the meeting mode, #96; only choice-like types have one, the others fall back to default)
+ */
+export type HearingFieldVariant = 'default' | 'chip';
 
 type FieldOfType<T extends HearingFieldDefinition['type']> = HearingFieldDefinition & { type: T };
 
@@ -334,6 +338,233 @@ function ScaleInput({
   );
 }
 
+// ── Chips (meeting mode) ────────────────────────────────────────────────────────
+
+interface ChipProps {
+  selected: boolean;
+  readOnly: boolean;
+  onClick: () => void;
+  ariaLabel?: string;
+  children: ReactNode;
+}
+
+/** A large toggle button: at least 44px both ways so it can be tapped with a thumb */
+function Chip({ selected, readOnly, onClick, ariaLabel, children }: ChipProps) {
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      aria-label={ariaLabel}
+      disabled={readOnly}
+      onClick={onClick}
+      className={cn(
+        'inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border px-4 py-2 text-sm transition-colors',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2',
+        'disabled:cursor-not-allowed disabled:opacity-60',
+        selected
+          ? 'border-blue-600 bg-blue-600 font-medium text-white'
+          : 'border-gray-300 bg-white text-gray-800 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:hover:bg-gray-800'
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+interface ChipGroupProps {
+  id: string;
+  label: string;
+  options: { value: string; label: string }[];
+  isSelected: (value: string) => boolean;
+  readOnly: boolean;
+  onPick: (value: string) => void;
+}
+
+function ChipGroup({ id, label, options, isSelected, readOnly, onPick }: ChipGroupProps) {
+  return (
+    <fieldset id={id} aria-label={label} className="m-0 flex min-w-0 flex-wrap gap-2 border-0 p-0">
+      {options.map((option) => (
+        <Chip
+          key={option.value}
+          selected={isSelected(option.value)}
+          readOnly={readOnly}
+          onClick={() => onPick(option.value)}
+        >
+          {option.label}
+        </Chip>
+      ))}
+    </fieldset>
+  );
+}
+
+/** Tapping the chosen chip again clears the choice */
+const pickSingle = (current: string | undefined, picked: string) =>
+  current === picked ? undefined : picked;
+
+function SingleChips({
+  field,
+  value,
+  id,
+  label,
+  readOnly,
+  onChange,
+}: HearingFieldInputProps<FieldOfType<'single'>>) {
+  const optionLabel = useOptionLabel();
+  const current = typeof value === 'string' ? value : undefined;
+  return (
+    <ChipGroup
+      id={id}
+      label={label}
+      options={field.options.map((o) => ({ value: o.value, label: optionLabel(o) }))}
+      isSelected={(v) => v === current}
+      readOnly={readOnly}
+      onPick={(picked) => onChange(pickSingle(current, picked))}
+    />
+  );
+}
+
+function MultipleChips({
+  field,
+  value,
+  id,
+  label,
+  readOnly,
+  onChange,
+}: HearingFieldInputProps<FieldOfType<'multiple'>>) {
+  const optionLabel = useOptionLabel();
+  const chosen = asChoices(value);
+  return (
+    <ChipGroup
+      id={id}
+      label={label}
+      options={field.options.map((o) => ({ value: o.value, label: optionLabel(o) }))}
+      isSelected={(v) => chosen.includes(v)}
+      readOnly={readOnly}
+      onPick={(picked) =>
+        onChange(toggleHearingOption(field.options, chosen, picked, !chosen.includes(picked)))
+      }
+    />
+  );
+}
+
+function NumberChips({
+  field,
+  value,
+  id,
+  label,
+  readOnly,
+  onChange,
+}: HearingFieldInputProps<FieldOfType<'number'>>) {
+  const current = typeof value === 'number' ? String(value) : undefined;
+  const options = [];
+  for (let n = field.min; n <= field.max; n++) options.push({ value: String(n), label: String(n) });
+  return (
+    <ChipGroup
+      id={id}
+      label={label}
+      options={options}
+      isSelected={(v) => v === current}
+      readOnly={readOnly}
+      onPick={(picked) => {
+        const next = pickSingle(current, picked);
+        onChange(next === undefined ? undefined : Number(next));
+      }}
+    />
+  );
+}
+
+function LevelsChips({
+  field,
+  value,
+  id,
+  readOnly,
+  onChange,
+}: HearingFieldInputProps<FieldOfType<'levels'>>) {
+  const t = useTranslations('leadHearings');
+  const optionLabel = useOptionLabel();
+  const levels = asLevels(value);
+  const levelOptions = field.levels.map((l) => ({ value: l.value, label: optionLabel(l) }));
+  return (
+    <div className="space-y-3">
+      {field.items.map((item, index) => {
+        const itemLabel = optionLabel(item);
+        return (
+          <div key={item.value} className="space-y-1">
+            <span className="text-xs text-muted-foreground">{itemLabel}</span>
+            <ChipGroup
+              id={index === 0 ? id : `${id}-${item.value}`}
+              label={t('editor.levelOf', { item: itemLabel })}
+              options={levelOptions}
+              isSelected={(v) => levels[item.value] === v}
+              readOnly={readOnly}
+              onPick={(picked) =>
+                onChange(
+                  setHearingLevel(levels, item.value, pickSingle(levels[item.value], picked))
+                )
+              }
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ScaleChips({
+  field,
+  value,
+  id,
+  label,
+  readOnly,
+  onChange,
+}: HearingFieldInputProps<FieldOfType<'scale'>>) {
+  const t = useTranslations('leadHearings');
+  const optionLabel = useOptionLabel();
+  const diagnosisLocale = toDiagnosticLocale(useLocale());
+  const scale = asScale(value);
+  const basis = field.bases.find((b) => b.questionId === scale.basis);
+  return (
+    <div className="space-y-2">
+      <ChipGroup
+        id={id}
+        label={t('editor.scaleBasis', { field: label })}
+        options={field.bases.map((b) => ({ value: b.questionId, label: b.label[diagnosisLocale] }))}
+        isSelected={(v) => v === scale.basis}
+        readOnly={readOnly}
+        onPick={(picked) => {
+          const next = pickSingle(scale.basis, picked);
+          onChange(next ? { basis: next, bucket: '' } : undefined);
+        }}
+      />
+      {basis && (
+        <ChipGroup
+          id={`${id}-bucket`}
+          label={t('editor.scaleBucket', { field: label })}
+          options={basis.buckets.map((b) => ({ value: b.value, label: optionLabel(b) }))}
+          isSelected={(v) => v === scale.bucket}
+          readOnly={readOnly}
+          onPick={(picked) =>
+            onChange({ basis: basis.questionId, bucket: pickSingle(scale.bucket, picked) ?? '' })
+          }
+        />
+      )}
+      {basis && !scale.bucket && (
+        <p className="text-xs text-amber-700">{t('editor.scaleIncomplete')}</p>
+      )}
+    </div>
+  );
+}
+
+const CHIP_INPUTS: {
+  [T in HearingFieldDefinition['type']]?: ComponentType<HearingFieldInputProps<FieldOfType<T>>>;
+} = {
+  single: SingleChips,
+  multiple: MultipleChips,
+  number: NumberChips,
+  levels: LevelsChips,
+  scale: ScaleChips,
+};
+
 const FIELD_INPUTS: {
   [T in HearingFieldDefinition['type']]: ComponentType<HearingFieldInputProps<FieldOfType<T>>>;
 } = {
@@ -347,8 +578,17 @@ const FIELD_INPUTS: {
   scale: ScaleInput,
 };
 
-/** The input of a field, chosen by its type */
+/**
+ * The chips are a group named by the field (aria-label), so the row shows the field name as
+ * plain text instead of a <label> pointing at a control.
+ */
+export const usesChipInput = (field: HearingFieldDefinition, variant: HearingFieldVariant) =>
+  variant === 'chip' && CHIP_INPUTS[field.type] !== undefined;
+
+/** The input of a field, chosen by its type and the variant */
 export function HearingFieldInput(props: HearingFieldInputProps) {
-  const FieldInput = FIELD_INPUTS[props.field.type] as ComponentType<HearingFieldInputProps>;
+  const chip = props.variant === 'chip' ? CHIP_INPUTS[props.field.type] : undefined;
+  const FieldInput = (chip ??
+    FIELD_INPUTS[props.field.type]) as ComponentType<HearingFieldInputProps>;
   return <FieldInput {...props} />;
 }
