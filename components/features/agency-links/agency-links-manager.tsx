@@ -1,5 +1,6 @@
 'use client';
 
+import { AgencyContractsManager } from '@/components/features/agency-contracts/agency-contracts-manager';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -98,6 +99,12 @@ export function AgencyLinksManager() {
         links={list.data.links}
         canManage={list.data.canManage}
       />
+      {list.data.canManage && (
+        <AgencyContractsManager
+          organizationId={organizationId}
+          agencyNames={[...new Set(list.data.links.map((link) => link.agencyName))]}
+        />
+      )}
     </div>
   );
 }

@@ -1426,6 +1426,44 @@
       "loadErrorBody": "営業代行リンクを読み込めませんでした。",
       "retry": "再読み込み"
     },
+    "agencyContracts": {
+      "title": "契約",
+      "description": "代行会社ごとの契約期間と費用、計画を登録します。分析画面の「契約別のファネルと獲得単価」に使います。登録・閲覧できるのはオーナーと管理者だけです。",
+      "add": "契約を追加",
+      "addTitle": "契約を追加",
+      "editTitle": "契約を編集",
+      "formDescription": "金額は税抜きの円です。空欄は 0 として扱います。",
+      "agencyNameHint": "リードの「代行会社名」と同じ名前にしてください（リンクで発行した名前を候補に出しています）。",
+      "costRule": "費用は「初期費 ＋ 月額 × 経過した月数 ＋ 前払い金と（1件単価 × アポ数）の大きいほう」で計算します。前払い金は、1件単価の支払いに充てるデポジットとして扱います。",
+      "fields": {
+        "agencyName": "代行会社名",
+        "startsOn": "開始日",
+        "endsOn": "終了日（空欄は継続中）",
+        "initialFee": "初期費",
+        "monthlyFee": "月額",
+        "prepayment": "前払い金",
+        "feePerAppointment": "1件単価（アポ）",
+        "planAppointments": "計画アポ数（期間中）",
+        "planCostPerAppointment": "目標アポ単価（費用込み）",
+        "note": "メモ"
+      },
+      "termHeader": "期間",
+      "ongoing": "継続中",
+      "actions": "操作",
+      "edit": "編集",
+      "remove": "削除",
+      "save": "保存",
+      "cancel": "キャンセル",
+      "empty": "まだ契約がありません。",
+      "saved": "契約を保存しました",
+      "saveError": "契約を保存できませんでした。もう一度お試しください。",
+      "invalid": "入力内容を確認してください（開始日は必須、終了日は開始日以降、金額は 0 以上の整数）。",
+      "overlap": "同じ代行会社の別の契約と期間が重なっています。期間を見直してください。",
+      "removed": "契約を削除しました",
+      "removeError": "契約を削除できませんでした。もう一度お試しください。",
+      "removeConfirmTitle": "この契約を削除しますか？",
+      "removeConfirmBody": "{agency} の契約を削除します。この期間のリードは「費用未登録」として表示されます。"
+    },
     "contentEditors": {
       "title": "コンテンツ編集者",
       "description": "FAQ・ブログを作成・更新・削除できる担当者を指定します。候補は運営組織のメンバーです。",
@@ -1874,6 +1912,32 @@
         "totalCost": "獲得費用",
         "costPerSql": "1 SQL あたり",
         "empty": "この期間に代行会社名を記録したリードはありません。"
+      },
+      "agencyContracts": {
+        "title": "契約別のファネルと獲得単価",
+        "description": "営業代行の契約ごとに、契約期間中に作られたリードの進み具合と、固定費を含めた費用を出します。費用は「初期費 ＋ 月額 × 経過した月数 ＋ 前払い金と（1件単価 × アポ数）の大きいほう」です。",
+        "empty": "まだ営業代行のリードがありません。",
+        "emptyManager": "まだ営業代行のリードがありません。契約は「設定 → 営業代行リンク」で登録します。",
+        "contract": "代行会社・契約期間",
+        "term": "{start} 〜 {end}",
+        "ongoing": "継続中",
+        "stages": {
+          "appointments": "アポ",
+          "meetings": "商談",
+          "sqls": "SQL",
+          "phase1Won": "調査受注",
+          "migrationWon": "移行受注"
+        },
+        "totalCost": "費用（累計）",
+        "costBreakdown": "固定 {fixed}／件数分 {appointments}",
+        "costPerAppointment": "アポ単価",
+        "costPerSql": "SQL 単価",
+        "costPerPhase1Won": "調査受注 単価",
+        "plan": "計画との比較",
+        "planAppointments": "アポ {actual}／{plan}件（{rate}%）",
+        "planCost": "目標アポ単価 {plan}",
+        "noContract": "契約なし",
+        "costNotRegistered": "費用未登録（この期間の契約がありません）"
       }
     }
   },

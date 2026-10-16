@@ -646,6 +646,54 @@ export const agencyLinks = pgTable(
 export type AgencyLink = typeof agencyLinks.$inferSelect;
 
 /**
+ * Agency Contracts
+ * A contract with a sales agency for one period (Refs #148): fixed fees, the fee per
+ * appointment and the plan. Leads are matched by agency_name and the date they were created.
+ * Names and fees stay in the DB, not in the code: the repository is public.
+ */
+export const agencyContracts = pgTable(
+  'agency_contracts',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    /** Same text as leads.agency_name (compared after trimming) */
+    agencyName: text('agency_name').notNull(),
+    startsOn: date('starts_on').notNull(),
+    /** Last day of the contract; null while it runs */
+    endsOn: date('ends_on'),
+    /** Yen excluding tax */
+    initialFee: integer('initial_fee').default(0).notNull(),
+    monthlyFee: integer('monthly_fee').default(0).notNull(),
+    /** Deposit paid in advance and used up by the fees per appointment */
+    prepayment: integer('prepayment').default(0).notNull(),
+    feePerAppointment: integer('fee_per_appointment').default(0).notNull(),
+    /** Plan: appointments in the term, and the total cost per appointment aimed at */
+    planAppointments: integer('plan_appointments'),
+    planCostPerAppointment: integer('plan_cost_per_appointment'),
+    note: text('note'),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('agency_contracts_organization_idx').on(table.organizationId, table.agencyName),
+    check(
+      'agency_contracts_term_check',
+      sql`${table.endsOn} IS NULL OR ${table.endsOn} >= ${table.startsOn}`
+    ),
+    check(
+      'agency_contracts_fees_check',
+      sql`${table.initialFee} >= 0 AND ${table.monthlyFee} >= 0 AND ${table.prepayment} >= 0 AND ${table.feePerAppointment} >= 0`
+    ),
+  ]
+);
+
+export type AgencyContract = typeof agencyContracts.$inferSelect;
+
+/**
  * Lead Hearings
  * What sales heard in the initial AX migration meetings, several per lead (Refs #84). Field
  * keys are defined in lib/features/lead-hearings/catalog.ts; only values are stored here.

@@ -1,5 +1,6 @@
 import { abTestsRouter } from '@/lib/features/ab-tests/api/router';
 import { accountRouter } from '@/lib/features/account/api/router';
+import { agencyContractsRouter } from '@/lib/features/agency-contracts/api/router';
 import { agencyLinksRouter } from '@/lib/features/agency-links/api/router';
 import { aiRouter } from '@/lib/features/ai/api/router';
 import { analyticsRouter } from '@/lib/features/analytics/api/router';
@@ -62,6 +63,7 @@ export const appRouter = router({
   distribution: distributionRouter, // QR code and offline distribution
   axPlaybook: axPlaybookRouter, // AX sales playbook (Refs #74)
   agencyLinks: agencyLinksRouter, // Diagnosis links per sales agency (Refs #147)
+  agencyContracts: agencyContractsRouter, // Contracts, funnel and cost per sales agency (Refs #148)
   leadHearings: leadHearingsRouter, // Initial meeting hearings per lead (Refs #84)
   contentEditors: contentEditorsRouter, // FAQ / blog editors granted from settings (#91)
   leadActivity: leadActivityRouter, // Activity timeline per lead (Refs #101)
