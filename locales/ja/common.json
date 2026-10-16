@@ -1622,7 +1622,9 @@
         "sourceTable": "流入元別の詳細",
         "conversionFunnel": "コンバージョンファネル",
         "scoreDistribution": "スコア分布",
-        "responseTime": "応答時間"
+        "responseTime": "応答時間",
+        "sourceBreakdownPeriod": "{period}に登録されたリードの流入元",
+        "responseTimePending": "準備中（初回連絡の記録の追加後に表示）"
       },
       "funnel": {
         "total": "総計",
@@ -1635,6 +1637,32 @@
       "performanceSummary": {
         "title": "パフォーマンスの概要",
         "quality": "リードの質（平均スコア）"
+      },
+      "acquisitionCost": {
+        "title": "流入元別の獲得費用",
+        "description": "リードに記録した獲得費用（税抜）の合計です。費用が未記録のリードは件数にだけ含めています。",
+        "source": "流入元",
+        "leads": "リード",
+        "sql": "SQL",
+        "won": "成約",
+        "totalCost": "獲得費用",
+        "costPerSql": "1 SQL あたり",
+        "costPerWon": "1 成約あたり",
+        "total": "合計",
+        "uncosted": "費用未記録 {count} 件",
+        "noCost": "この期間のリードには獲得費用が記録されていません。"
+      },
+      "agency": {
+        "title": "代行会社別の成績",
+        "description": "代行会社名を記録したリードを、代行会社ごとに集計しています。SQL はヒアリング後に営業が SQL と判定したリードです。",
+        "agencyName": "代行会社",
+        "leads": "リード",
+        "sql": "SQL",
+        "sqlRate": "SQL 率",
+        "won": "成約",
+        "totalCost": "獲得費用",
+        "costPerSql": "1 SQL あたり",
+        "empty": "この期間に代行会社名を記録したリードはありません。"
       }
     }
   },

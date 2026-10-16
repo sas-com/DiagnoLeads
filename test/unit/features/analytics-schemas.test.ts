@@ -15,7 +15,7 @@ import {
   getConversionFunnelSchema,
   getScoreDistributionSchema,
   getResponseTimeSchema,
-  getROISchema,
+  getAcquisitionCostSchema,
   getComparisonSchema,
   type DateRange,
   type TrendGranularity,
@@ -27,8 +27,7 @@ import {
   type ConversionFunnelData,
   type ScoreDistributionData,
   type ResponseTimeData,
-  type SourceROIData,
-  type ROISummary,
+  type AcquisitionCostSummary,
   type PeriodMetrics,
   type ComparisonResult,
 } from '@/lib/features/analytics/types/schemas';
@@ -168,51 +167,22 @@ describe('getResponseTimeSchema', () => {
   });
 });
 
-describe('getROISchema', () => {
+describe('getAcquisitionCostSchema', () => {
   it('should accept minimal input', () => {
-    const input = {
+    const result = getAcquisitionCostSchema.parse({
       organizationId: '123e4567-e89b-12d3-a456-426614174000',
-    };
-
-    const result = getROISchema.parse(input);
+    });
     expect(result.dateRange).toBe('30d');
-    expect(result.costPerLead).toBeUndefined();
   });
 
-  it('should accept full input with costs', () => {
-    const input = {
+  it('takes no hand-typed unit prices: costs come from the leads', () => {
+    const result = getAcquisitionCostSchema.parse({
       organizationId: '123e4567-e89b-12d3-a456-426614174000',
-      dateRange: '90d' as const,
-      costPerLead: {
-        website: 50,
-        embed: 30,
-        api: 10,
-        unknown: 5,
-      },
+      costPerLead: { website: 50 },
       averageDealValue: 10000,
-    };
-
-    const result = getROISchema.parse(input);
-    expect(result.costPerLead?.website).toBe(50);
-    expect(result.averageDealValue).toBe(10000);
-  });
-
-  it('should reject negative costs', () => {
-    expect(() =>
-      getROISchema.parse({
-        organizationId: '123e4567-e89b-12d3-a456-426614174000',
-        costPerLead: { website: -10 },
-      })
-    ).toThrow();
-  });
-
-  it('should reject negative deal value', () => {
-    expect(() =>
-      getROISchema.parse({
-        organizationId: '123e4567-e89b-12d3-a456-426614174000',
-        averageDealValue: -100,
-      })
-    ).toThrow();
+    });
+    expect(result).not.toHaveProperty('costPerLead');
+    expect(result).not.toHaveProperty('averageDealValue');
   });
 });
 
@@ -366,25 +336,20 @@ describe('Analytics response types', () => {
     });
   });
 
-  describe('ROISummary', () => {
-    it('should create valid ROI summary', () => {
-      const summary: ROISummary = {
-        totalLeads: 1000,
-        totalConverted: 150,
-        totalCost: 50000,
-        totalRevenue: 1500000,
-        overallROI: 2900,
-        overallConversionRate: 15,
-        averageCostPerLead: 50,
-        averageCostPerAcquisition: 333.33,
-        averageRevenuePerLead: 1500,
+  describe('AcquisitionCostSummary', () => {
+    it('should create a valid acquisition cost summary', () => {
+      const summary: AcquisitionCostSummary = {
+        leadCount: 10,
+        costedLeadCount: 8,
+        sqlCount: 2,
+        wonCount: 1,
+        totalCost: 200000,
+        costPerSql: 100000,
+        costPerWon: 200000,
         bySource: [],
-        bestPerformingSource: 'website',
-        worstPerformingSource: 'api',
       };
 
-      expect(summary.overallROI).toBe(2900);
-      expect(summary.bestPerformingSource).toBe('website');
+      expect(summary.costPerSql).toBe(100000);
     });
   });
 

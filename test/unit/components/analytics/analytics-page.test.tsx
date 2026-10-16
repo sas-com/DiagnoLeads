@@ -2,20 +2,73 @@
  * Analytics page (real ja messages; data hooks and charts mocked) — Refs #163
  *
  * The period-over-period changes were fixed numbers in the code, so none is shown until they
- * are computed from real data (#138).
+ * are computed from real data (#138). 流入元 comes from inflow_source, cost and agencies from
+ * the cost / agency recorded on leads, and the response time waits for first contacts (#136).
  */
 import AnalyticsPage from '@/app/[locale]/(dashboard)/analytics/page';
 import messages from '@/locales/ja/common.json';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const ORG_ID = '660e8400-e29b-41d4-a716-446655440000';
-const mocks = vi.hoisted(() => ({ donuts: [] as Record<string, unknown>[] }));
-const { query } = vi.hoisted(() => ({
-  query: (data: unknown) => () => ({ data, isLoading: false }),
+const mocks = vi.hoisted(() => ({
+  donuts: [] as Record<string, unknown>[],
+  data: {} as Record<string, unknown>,
 }));
+const { query, live } = vi.hoisted(() => ({
+  query: (data: unknown) => () => ({ data, isLoading: false }),
+  // Data a test can replace through mocks.data
+  live: (key: string, fallback: () => unknown) => () => ({
+    data: key in mocks.data ? mocks.data[key] : fallback(),
+    isLoading: false,
+  }),
+}));
+
+const COST = {
+  leadCount: 14,
+  costedLeadCount: 4,
+  sqlCount: 2,
+  wonCount: 1,
+  totalCost: 120000,
+  costPerSql: 60000,
+  costPerWon: 120000,
+  bySource: [
+    {
+      source: 'telemarketing_agency',
+      leadCount: 4,
+      costedLeadCount: 4,
+      sqlCount: 2,
+      wonCount: 1,
+      totalCost: 120000,
+      costPerSql: 60000,
+      costPerWon: 120000,
+    },
+    {
+      source: 'unset',
+      leadCount: 10,
+      costedLeadCount: 0,
+      sqlCount: 0,
+      wonCount: 0,
+      totalCost: 0,
+      costPerSql: null,
+      costPerWon: null,
+    },
+  ],
+};
+const AGENCIES = [
+  {
+    agencyName: 'テレアポ株式会社',
+    leadCount: 4,
+    sqlCount: 1,
+    sqlRate: 25,
+    wonCount: 1,
+    costedLeadCount: 4,
+    totalCost: 120000,
+    costPerSql: 120000,
+  },
+];
 
 vi.mock('@/hooks/use-analytics', () => ({
   useOverview: query({
@@ -27,8 +80,8 @@ vi.mock('@/hooks/use-analytics', () => ({
   }),
   useLeadTrend: query([]),
   useSourceBreakdown: query([
-    { source: 'website', count: 8, percentage: 57.1 },
-    { source: 'api', count: 6, percentage: 42.9 },
+    { source: 'lp_organic', count: 8, percentage: 57.1 },
+    { source: 'unset', count: 6, percentage: 42.9 },
   ]),
   useStatusBreakdown: query([
     { status: 'new', count: 5, percentage: 50 },
@@ -37,7 +90,12 @@ vi.mock('@/hooks/use-analytics', () => ({
   ]),
   useConversionFunnel: query(undefined),
   useScoreDistribution: query([]),
-  useResponseTime: query([]),
+  useResponseTime: live('responseTime', () => ({
+    status: 'pending',
+    reason: 'first_contact_not_recorded',
+  })),
+  useAcquisitionCost: live('cost', () => COST),
+  useAgencyPerformance: live('agencies', () => AGENCIES),
 }));
 vi.mock('@/hooks/use-export', () => ({
   useExport: () => ({
@@ -71,6 +129,7 @@ const renderPage = () =>
 
 beforeEach(() => {
   mocks.donuts = [];
+  mocks.data = {};
 });
 
 describe('AnalyticsPage', () => {
@@ -100,7 +159,7 @@ describe('AnalyticsPage', () => {
     expect(screen.getByText('過去30日に登録されたリード')).toBeInTheDocument();
   });
 
-  it('labels the sources in Japanese under the 流入元 tab', async () => {
+  it('labels the 流入元 in Japanese, 未設定 last', async () => {
     renderPage();
     await userEvent.click(screen.getByRole('tab', { name: '流入元' }));
     const sourceDonut = mocks.donuts.find((donut) => donut.height === 256) as Record<
@@ -109,10 +168,62 @@ describe('AnalyticsPage', () => {
     >;
     expect(sourceDonut.showLegend).toBe(false);
     expect(sourceDonut.data).toEqual([
-      { name: 'ウェブサイト', value: 8 },
-      { name: 'API', value: 6 },
+      { name: 'LP（自然検索）', value: 8 },
+      { name: '未設定', value: 6 },
     ]);
-    expect(screen.getAllByText('ウェブサイト').length).toBeGreaterThan(0);
-    expect(screen.queryByText('website')).not.toBeInTheDocument();
+    expect(screen.getByText('過去30日に登録されたリードの流入元')).toBeInTheDocument();
+    expect(screen.queryByText('lp_organic')).not.toBeInTheDocument();
+    expect(screen.queryByText('ウェブサイト')).not.toBeInTheDocument();
+  });
+
+  it('shows the acquisition cost recorded on leads, without any unit-price input', async () => {
+    renderPage();
+    await userEvent.click(screen.getByRole('tab', { name: '流入元' }));
+    const table = screen.getByText('流入元別の獲得費用').closest('div')?.parentElement as HTMLElement;
+    const rows = within(table).getAllByRole('row');
+    const cells = (row: HTMLElement) =>
+      within(row)
+        .getAllByRole('cell')
+        .map((cell) => cell.textContent);
+    expect(cells(rows[1])).toEqual([
+      '営業代行（テレアポ）',
+      '4',
+      '2',
+      '1',
+      '￥120,000',
+      '￥60,000',
+      '￥120,000',
+    ]);
+    // No SQL / no win: a dash, not a made-up figure; leads without a cost are flagged
+    expect(cells(rows[2])).toEqual(['未設定費用未記録 10 件', '10', '0', '0', '￥0', '—', '—']);
+    expect(cells(rows[3])[0]).toBe('合計');
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+    expect(screen.queryByText(/ROI/)).not.toBeInTheDocument();
+  });
+
+  it('shows agency SQL rate and cost per SQL, or says there is no agency data', async () => {
+    const { unmount } = renderPage();
+    await userEvent.click(screen.getByRole('tab', { name: '流入元' }));
+    const row = screen.getByText('テレアポ株式会社').closest('tr') as HTMLElement;
+    expect(
+      within(row)
+        .getAllByRole('cell')
+        .map((cell) => cell.textContent)
+    ).toEqual(['テレアポ株式会社', '4', '1', '25.0%', '1', '￥120,000', '￥120,000']);
+    unmount();
+
+    mocks.data = { agencies: [], cost: { ...COST, leadCount: 0, bySource: [] } };
+    renderPage();
+    await userEvent.click(screen.getByRole('tab', { name: '流入元' }));
+    expect(
+      screen.getByText('この期間に代行会社名を記録したリードはありません。')
+    ).toBeInTheDocument();
+    expect(screen.queryByText('テレアポ株式会社')).not.toBeInTheDocument();
+  });
+
+  it('shows the response time as 準備中 instead of a number until first contacts are recorded', async () => {
+    renderPage();
+    await userEvent.click(screen.getByRole('tab', { name: 'パフォーマンス' }));
+    expect(screen.getByText('準備中（初回連絡の記録の追加後に表示）')).toBeInTheDocument();
   });
 });

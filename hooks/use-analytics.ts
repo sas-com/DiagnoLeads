@@ -141,6 +141,26 @@ export function useResponseTime(organizationId: string, dateRange: DateRange = '
 }
 
 /**
+ * Hook to get acquisition cost by 流入元 (from acquisition_cost recorded on leads)
+ */
+export function useAcquisitionCost(organizationId: string, dateRange: DateRange = '30d') {
+  return trpc.analytics.getAcquisitionCost.useQuery(
+    { organizationId, dateRange },
+    { enabled: isValidUUID(organizationId) }
+  );
+}
+
+/**
+ * Hook to get leads, SQL and cost per sales agency
+ */
+export function useAgencyPerformance(organizationId: string, dateRange: DateRange = '30d') {
+  return trpc.analytics.getAgencyPerformance.useQuery(
+    { organizationId, dateRange },
+    { enabled: isValidUUID(organizationId) }
+  );
+}
+
+/**
  * Composite hook for all analytics data
  * Useful when you need multiple analytics queries in a component
  */

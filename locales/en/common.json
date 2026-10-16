@@ -1622,7 +1622,9 @@
         "sourceTable": "Source Details",
         "conversionFunnel": "Conversion Funnel",
         "scoreDistribution": "Score Distribution",
-        "responseTime": "Response Time"
+        "responseTime": "Response Time",
+        "sourceBreakdownPeriod": "Inflow source of leads registered: {period}",
+        "responseTimePending": "Coming soon (shown once first contacts are recorded)"
       },
       "funnel": {
         "total": "Total",
@@ -1635,6 +1637,32 @@
       "performanceSummary": {
         "title": "Performance summary",
         "quality": "Lead quality (average score)"
+      },
+      "acquisitionCost": {
+        "title": "Acquisition cost by inflow source",
+        "description": "Sum of the acquisition cost (excl. tax) recorded on leads. Leads without a recorded cost count as leads only.",
+        "source": "Inflow source",
+        "leads": "Leads",
+        "sql": "SQL",
+        "won": "Won",
+        "totalCost": "Acquisition cost",
+        "costPerSql": "Per SQL",
+        "costPerWon": "Per win",
+        "total": "Total",
+        "uncosted": "{count} without cost",
+        "noCost": "No acquisition cost is recorded on the leads of this period."
+      },
+      "agency": {
+        "title": "Performance by sales agency",
+        "description": "Leads with an agency name recorded, per agency. SQL is a lead that sales judged SQL after the hearing.",
+        "agencyName": "Agency",
+        "leads": "Leads",
+        "sql": "SQL",
+        "sqlRate": "SQL rate",
+        "won": "Won",
+        "totalCost": "Acquisition cost",
+        "costPerSql": "Per SQL",
+        "empty": "No lead of this period has an agency name recorded."
       }
     }
   },
