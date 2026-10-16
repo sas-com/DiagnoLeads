@@ -1,4 +1,5 @@
 import type { CollectionConfig } from 'payload';
+import { readPublishedUnlessSignedIn } from '../../lib/cms/publishing';
 
 /**
  * FAQs Collection
@@ -21,7 +22,8 @@ export const FAQs: CollectionConfig = {
     },
   },
   access: {
-    read: () => true,
+    // Drafts stay with CMS users; everyone else reads published documents only (#140)
+    read: readPublishedUnlessSignedIn('faqs'),
   },
   fields: [
     // AI Generation Helper UI

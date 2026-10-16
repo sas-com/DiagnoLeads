@@ -6,6 +6,7 @@
  */
 
 import { getCMSAdapter } from '@/lib/cms/adapters/factory';
+import { richTextToHtml } from '@/lib/cms/rich-text-html';
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
@@ -20,7 +21,7 @@ export async function generateMetadata({ params }: BlogPostPageProps): Promise<M
   const adapter = getCMSAdapter();
 
   try {
-    const result = await adapter.findBySlug({ collection: 'blog', slug, locale });
+    const result = await adapter.findBySlug({ collection: 'blog-posts', slug, locale });
     const post = result?.data;
 
     if (!post) {
@@ -74,7 +75,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
 
   let post;
   try {
-    const result = await adapter.findBySlug({ collection: 'blog', slug, locale });
+    const result = await adapter.findBySlug({ collection: 'blog-posts', slug, locale });
     post = result?.data;
   } catch (error) {
     notFound();
@@ -87,27 +88,6 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
   const postData = post as any;
   const title = postData.title?.[locale] || postData.title?.ja || '';
   const content = postData.content?.[locale] || postData.content?.ja || '';
-
-  // Convert rich text content to HTML (simplified)
-  const renderContent = (content: any): string => {
-    if (typeof content === 'string') return content;
-    if (!content || !content.content) return '';
-
-    return content.content
-      .map((node: any) => {
-        if (node.type === 'paragraph') {
-          const text = node.content?.map((child: any) => child.text || '').join('') || '';
-          return `<p>${text}</p>`;
-        }
-        if (node.type === 'heading') {
-          const level = node.attrs?.level || 2;
-          const text = node.content?.map((child: any) => child.text || '').join('') || '';
-          return `<h${level}>${text}</h${level}>`;
-        }
-        return '';
-      })
-      .join('\n');
-  };
 
   return (
     <div className="min-h-screen">
@@ -233,7 +213,8 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
           {/* Content */}
           <div
             className="prose prose-lg max-w-none prose-headings:font-bold prose-a:text-blue-600 prose-img:rounded-lg"
-            dangerouslySetInnerHTML={{ __html: renderContent(content) }}
+            // biome-ignore lint/security/noDangerouslySetInnerHtml: richTextToHtml escapes every text
+            dangerouslySetInnerHTML={{ __html: richTextToHtml(content) }}
           />
 
           {/* Tags */}

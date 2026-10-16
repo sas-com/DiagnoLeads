@@ -41,7 +41,7 @@ export default async function BlogPage({ params, searchParams }: BlogPageProps) 
   // Get blog posts from CMS
   const adapter = getCMSAdapter();
   const result = await adapter.find({
-    collection: 'blog',
+    collection: 'blog-posts',
     where: {
       status: 'published',
       ...(category && { category }),

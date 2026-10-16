@@ -88,10 +88,12 @@ const faqsRouter = router({
         offset: z.number().int().min(0).default(0),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const faqRepo = new FAQRepository();
 
       const result = await faqRepo.findAll({
+        // Unpublished FAQs only for content editors (#140)
+        status: (await isContentEditor(ctx.db, ctx.user)) ? 'all' : 'published',
         category: input.category,
         limit: input.limit,
         offset: input.offset,
@@ -215,7 +217,8 @@ const blogRouter = router({
     .query(async ({ input }) => {
       const blogRepo = new BlogRepository();
 
-      const post = await blogRepo.findBySlug(input.slug, input.locale);
+      // Published posts only; the locale is the language of the post (#140)
+      const post = await blogRepo.findBySlug(input.slug, { locale: input.locale });
       if (!post) {
         throw new TRPCError({
           code: 'NOT_FOUND',
@@ -233,7 +236,7 @@ const blogRouter = router({
     const blogRepo = new BlogRepository();
 
     // スラッグの重複チェック
-    const existing = await blogRepo.findBySlug(input.slug);
+    const existing = await blogRepo.findBySlug(input.slug, { status: 'all' });
     if (existing) {
       throw new TRPCError({
         code: 'CONFLICT',
@@ -274,7 +277,7 @@ const blogRouter = router({
 
     // スラッグの重複チェック（変更がある場合）
     if (input.slug && input.slug !== existing.slug) {
-      const slugExists = await blogRepo.findBySlug(input.slug);
+      const slugExists = await blogRepo.findBySlug(input.slug, { status: 'all' });
       if (slugExists) {
         throw new TRPCError({
           code: 'CONFLICT',

@@ -30,6 +30,13 @@ export interface FindBlogPostsOptions {
   sort?: SortParams[];
 }
 
+export interface FindBlogPostBySlugOptions {
+  organizationId?: string;
+  locale?: string;
+  /** Published posts only unless 'all' is asked for (editors) */
+  status?: 'published' | 'all';
+}
+
 export interface BlogPostsResult {
   posts: BlogPost[];
   total: number;
@@ -108,11 +115,14 @@ export class BlogRepository {
   /**
    * スラッグでブログ記事を取得（キャッシュなし）
    */
-  async findBySlug(slug: string, organizationId?: string): Promise<BlogPost | null> {
+  async findBySlug(
+    slug: string,
+    options: FindBlogPostBySlugOptions = {}
+  ): Promise<BlogPost | null> {
     const { data } = await this.adapter.findBySlug<BlogPost>({
       collection: COLLECTION,
       slug,
-      organizationId,
+      ...options,
     });
 
     return data;
@@ -123,7 +133,7 @@ export class BlogRepository {
    */
   async findBySlugCached(slug: string, organizationId?: string): Promise<BlogPost | null> {
     const cached = unstable_cache(
-      async () => this.findBySlug(slug, organizationId),
+      async () => this.findBySlug(slug, { organizationId }),
       [`cms:${COLLECTION}:slug:${slug}:${organizationId || 'default'}`],
       {
         revalidate: REVALIDATE,

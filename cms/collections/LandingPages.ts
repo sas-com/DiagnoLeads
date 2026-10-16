@@ -1,4 +1,5 @@
 import type { CollectionConfig } from 'payload';
+import { readPublishedUnlessSignedIn } from '../../lib/cms/publishing';
 
 /**
  * Landing Pages Collection
@@ -16,7 +17,8 @@ export const LandingPages: CollectionConfig = {
     defaultColumns: ['title', 'slug', 'status', 'updatedAt'],
   },
   access: {
-    read: () => true,
+    // Drafts stay with CMS users; everyone else reads published documents only (#140)
+    read: readPublishedUnlessSignedIn('landing-pages'),
   },
   versions: {
     drafts: true,

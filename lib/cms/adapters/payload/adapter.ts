@@ -36,6 +36,16 @@ import type {
   UpdateParams,
   WhereCondition,
 } from '../../core/interfaces';
+import { PUBLISHABLE_COLLECTIONS, draftStatusFor, publishedWhere } from '../../publishing';
+
+/**
+ * Payload's Local API skips access control by default, also for the documents it populates
+ * (related posts, links). Public reads go through the collections' read access as a signed-out
+ * visitor, so nothing unpublished comes along; editors ('all', 'draft') read everything.
+ */
+function publicReadOptions(status: 'draft' | 'published' | 'all'): { overrideAccess?: false } {
+  return status === 'published' ? { overrideAccess: false } : {};
+}
 
 export class PayloadCMSAdapter implements CMSAdapter {
   readonly name = 'PayloadCMS';
@@ -92,7 +102,12 @@ export class PayloadCMSAdapter implements CMSAdapter {
   async find<T>(params: FindParams): Promise<CMSResponse<T[]>> {
     await this.ensureInitialized();
 
-    const where = this.buildWhereQuery(params.where, params.organizationId, params.status);
+    const where = this.buildWhereQuery(
+      params.collection,
+      params.where,
+      params.organizationId,
+      params.status ?? 'published'
+    );
 
     const result = await this.payload?.find({
       collection: params.collection,
@@ -102,6 +117,7 @@ export class PayloadCMSAdapter implements CMSAdapter {
       sort: params.sort ? this.buildSortString(params.sort) : undefined,
       locale: params.locale as 'ja' | 'en' | undefined,
       draft: params.status === 'draft',
+      ...publicReadOptions(params.status ?? 'published'),
     });
 
     if (!result) {
@@ -167,12 +183,14 @@ export class PayloadCMSAdapter implements CMSAdapter {
         equals: params.organizationId,
       };
     }
+    if (params.status !== 'all') Object.assign(where, publishedWhere(params.collection));
 
     const result = await this.payload?.find({
       collection: params.collection,
       where,
       limit: 1,
       locale: params.locale as 'ja' | 'en' | undefined,
+      ...publicReadOptions(params.status ?? 'published'),
     });
 
     if (!result || result.docs.length === 0) {
@@ -185,10 +203,10 @@ export class PayloadCMSAdapter implements CMSAdapter {
   async create<T>(params: CreateParams): Promise<CMSResponse<T>> {
     await this.ensureInitialized();
 
-    const data = {
+    const data = draftStatusFor(params.collection, {
       ...params.data,
       organizationId: params.organizationId,
-    };
+    });
 
     const result = await this.payload?.create({
       collection: params.collection,
@@ -217,7 +235,7 @@ export class PayloadCMSAdapter implements CMSAdapter {
     const result = await this.payload?.update({
       collection: params.collection,
       id: params.id,
-      data: params.data,
+      data: draftStatusFor(params.collection, params.data),
     });
 
     return { data: result as T };
@@ -276,11 +294,13 @@ export class PayloadCMSAdapter implements CMSAdapter {
         equals: params.organizationId,
       };
     }
+    if (params.status !== 'all') Object.assign(where, publishedWhere(params.collection));
 
     const result = await this.payload?.find({
       collection: params.collection,
       where,
       limit: params.limit || 10,
+      ...publicReadOptions(params.status ?? 'published'),
     });
 
     if (!result) {
@@ -444,6 +464,7 @@ export class PayloadCMSAdapter implements CMSAdapter {
   }
 
   private buildWhereQuery(
+    collection: string,
     where?: WhereCondition,
     organizationId?: string,
     status?: 'draft' | 'published' | 'all'
@@ -454,13 +475,6 @@ export class PayloadCMSAdapter implements CMSAdapter {
     if (organizationId) {
       query.organizationId = {
         equals: organizationId,
-      };
-    }
-
-    // ステータスフィルター
-    if (status && status !== 'all') {
-      query._status = {
-        equals: status,
       };
     }
 
@@ -487,6 +501,14 @@ export class PayloadCMSAdapter implements CMSAdapter {
           query[key] = { equals: value };
         }
       }
+    }
+
+    // Status last, so that no other condition can widen it: published by both markers (#140)
+    if (status === 'published') {
+      Object.assign(query, publishedWhere(collection));
+    } else if (status === 'draft' && PUBLISHABLE_COLLECTIONS[collection]) {
+      if (PUBLISHABLE_COLLECTIONS[collection].drafts) query._status = { equals: 'draft' };
+      else query.status = { equals: 'draft' };
     }
 
     return query;
