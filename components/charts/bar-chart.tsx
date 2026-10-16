@@ -3,6 +3,7 @@
 import { cn } from '@/lib/utils';
 import type { ApexOptions } from 'apexcharts';
 import dynamic from 'next/dynamic';
+import { useEffect, useState } from 'react';
 
 const ReactApexChart = dynamic(() => import('react-apexcharts'), {
   ssr: false,
@@ -21,6 +22,15 @@ const COLORS = {
   pink: '#ec4899',
   rose: '#f43f5e',
   brand: '#465fff',
+  /** Project brand (teal, --color-brand-500) */
+  teal: '#14b8a6',
+  /** Quiet series ("the rest"); a darker shade is used in dark mode */
+  lightGray: '#d1d5db',
+};
+
+/** Colors that need another shade on a dark background */
+const DARK_COLORS: Partial<Record<keyof typeof COLORS, string>> = {
+  lightGray: '#4b5563',
 };
 
 interface BarChartProps {
@@ -41,6 +51,22 @@ interface BarChartProps {
   columnWidth?: string;
   /** Show at most this many category labels (long date ranges); the tooltip still names each bar */
   maxCategoryLabels?: number;
+  /** Stack the categories on one bar (first category at the bottom) */
+  stacked?: boolean;
+}
+
+/** Follows the `dark` class on <html> (ThemeContext toggles it) */
+function useDocumentDark() {
+  const [dark, setDark] = useState(false);
+  useEffect(() => {
+    const root = document.documentElement;
+    const update = () => setDark(root.classList.contains('dark'));
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+  return dark;
 }
 
 export function BarChart({
@@ -56,9 +82,12 @@ export function BarChart({
   integerValues = false,
   columnWidth = '50%',
   maxCategoryLabels,
+  stacked = false,
   className,
   height = 350,
 }: BarChartProps) {
+  const dark = useDocumentDark();
+  const labelColor = dark ? '#9ca3af' : '#6b7280';
   const isVertical = layout === 'vertical';
   const xAxisCategories = data.map((item) => String(item[index]));
   const series = categories.map((category) => ({
@@ -67,8 +96,9 @@ export function BarChart({
   }));
 
   const options: ApexOptions = {
-    colors: colors.map((c) => COLORS[c] || COLORS.blue),
+    colors: colors.map((c) => (dark && DARK_COLORS[c]) || COLORS[c] || COLORS.blue),
     chart: {
+      stacked,
       fontFamily: 'Outfit, sans-serif',
       type: 'bar',
       height: height,
@@ -95,6 +125,7 @@ export function BarChart({
         columnWidth,
         borderRadius: 4,
         borderRadiusApplication: 'end',
+        ...(stacked ? { borderRadiusWhenStacked: 'last' as const } : {}),
       },
     },
     dataLabels: {
@@ -107,7 +138,7 @@ export function BarChart({
     },
     grid: {
       show: showGridLines,
-      borderColor: '#e5e7eb',
+      borderColor: dark ? '#374151' : '#e5e7eb',
       xaxis: {
         lines: {
           show: isVertical,
@@ -135,16 +166,16 @@ export function BarChart({
         ...(maxCategoryLabels ? { rotate: 0, hideOverlappingLabels: true } : {}),
         style: {
           fontSize: '12px',
-          colors: '#6b7280',
+          colors: labelColor,
         },
       },
     },
     yaxis: {
-      ...(integerValues ? integerAxis(data, categories) : {}),
+      ...(integerValues ? integerAxis(data, categories, stacked) : {}),
       labels: {
         style: {
           fontSize: '12px',
-          colors: ['#6b7280'],
+          colors: [labelColor],
         },
         formatter: (val: number) => valueFormatter(integerValues ? Math.round(val) : val),
       },
@@ -154,11 +185,13 @@ export function BarChart({
       position: 'top',
       horizontalAlign: 'left',
       fontFamily: 'Outfit',
+      labels: { colors: labelColor },
     },
     fill: {
       opacity: 1,
     },
     tooltip: {
+      theme: dark ? 'dark' : 'light',
       y: {
         formatter: (val: number) => valueFormatter(val),
       },
@@ -172,8 +205,19 @@ export function BarChart({
   );
 }
 
-/** Whole-number y-axis for counts: from zero, at most five ticks, never fractions */
-function integerAxis(data: Record<string, unknown>[], categories: string[]) {
-  const max = Math.max(1, ...data.flatMap((row) => categories.map((key) => Number(row[key]) || 0)));
-  return { min: 0, max, tickAmount: Math.min(max, 5), forceNiceScale: max > 5, decimalsInFloat: 0 };
+/** Whole-number y-axis for counts: from zero, at most five even ticks, never fractions */
+function integerAxis(data: Record<string, unknown>[], categories: string[], stacked: boolean) {
+  const value = (row: Record<string, unknown>, key: string) => Number(row[key]) || 0;
+  const max = Math.max(
+    1,
+    ...data.flatMap((row) =>
+      stacked
+        ? [categories.reduce((sum, key) => sum + value(row, key), 0)]
+        : categories.map((key) => value(row, key))
+    )
+  );
+  // Whole-number step so every tick is an integer the same distance apart (e.g. 0, 3, 6, 9, 12)
+  const step = Math.ceil(max / 5);
+  const ticks = Math.ceil(max / step);
+  return { min: 0, max: step * ticks, tickAmount: ticks, decimalsInFloat: 0 };
 }

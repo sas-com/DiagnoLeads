@@ -2,7 +2,8 @@ import type { db as defaultDb } from '@/lib/db/client';
 import { diagnosticSubmissions, leads } from '@/lib/db/schema';
 import { consultationDeadline } from '@/lib/features/diagnostics/ax-migration/notify';
 import { LEAD_STATUSES, type LeadStatus } from '@/lib/features/leads/types/pipeline';
-import { and, asc, count, desc, eq, gte, lt, min, sql } from 'drizzle-orm';
+import { addDays, differenceInBusinessDays } from 'date-fns';
+import { and, count, desc, eq, gte, lt, min, sql } from 'drizzle-orm';
 
 type Database = typeof defaultDb;
 
@@ -28,6 +29,95 @@ export function dashboardPeriod(days: number, now: Date = new Date()) {
   return { from, to: now, previousFrom };
 }
 
+/** How close a contact deadline is, in business days (weekends skipped, like the deadline rule) */
+export type DeadlineStatus =
+  | { due: 'overdue'; businessDays: number }
+  | { due: 'today'; businessDays: 0 }
+  | { due: 'tomorrow'; businessDays: number }
+  | { due: 'later'; businessDays: number };
+
+/** Noon UTC of a calendar day (YYYY-MM-DD or YYYY/MM/DD), so weekday math ignores time zones */
+function calendarDay(day: string): Date {
+  const [year, month, date] = day.split(/[-/]/).map(Number);
+  return new Date(Date.UTC(year, month - 1, date, 12));
+}
+
+/**
+ * Lateness of a deadline seen from today (both Japan calendar days). An overdue request is at
+ * least one business day late, even when today is a weekend.
+ */
+export function deadlineStatus(deadline: string, today: string): DeadlineStatus {
+  const due = calendarDay(deadline);
+  const now = calendarDay(today);
+  if (due.getTime() < now.getTime()) {
+    return { due: 'overdue', businessDays: Math.max(1, differenceInBusinessDays(now, due)) };
+  }
+  if (due.getTime() === now.getTime()) return { due: 'today', businessDays: 0 };
+  const businessDays = Math.max(1, differenceInBusinessDays(due, now));
+  if (due.getTime() === addDays(now, 1).getTime()) return { due: 'tomorrow', businessDays };
+  return { due: 'later', businessDays };
+}
+
+export type DashboardTrendPoint = {
+  /** First and last Japan calendar day (YYYY-MM-DD) of the bar */
+  start: string;
+  end: string;
+  leads: number;
+  consultations: number;
+};
+
+/** Periods longer than this are shown per week instead of per day */
+const DAILY_TREND_MAX_DAYS = 30;
+
+/**
+ * Bars of the trend chart: one per day up to 30 days, otherwise one per week (Monday to Sunday,
+ * the first and last week cut at the period edges).
+ */
+export function bucketTrend(daily: { date: string; leads: number; consultations: number }[]): {
+  unit: 'day' | 'week';
+  points: DashboardTrendPoint[];
+} {
+  if (daily.length <= DAILY_TREND_MAX_DAYS) {
+    return {
+      unit: 'day',
+      points: daily.map((d) => ({
+        start: d.date,
+        end: d.date,
+        leads: d.leads,
+        consultations: d.consultations,
+      })),
+    };
+  }
+  const points: DashboardTrendPoint[] = [];
+  for (const day of daily) {
+    const monday = calendarDay(day.date).getUTCDay() === 1;
+    const last = points.at(-1);
+    if (!last || monday) {
+      points.push({
+        start: day.date,
+        end: day.date,
+        leads: day.leads,
+        consultations: day.consultations,
+      });
+    } else {
+      last.end = day.date;
+      last.leads += day.leads;
+      last.consultations += day.consultations;
+    }
+  }
+  return { unit: 'week', points };
+}
+
+/** Most leads first; "unknown" (not from the AX diagnosis) always last */
+export function sortPlatforms(platforms: { platform: string; count: number }[]) {
+  return [...platforms].sort((a, b) => {
+    if ((a.platform === 'unknown') !== (b.platform === 'unknown')) {
+      return a.platform === 'unknown' ? 1 : -1;
+    }
+    return b.count - a.count;
+  });
+}
+
 export type DashboardPendingConsultation = {
   id: string;
   name: string | null;
@@ -37,7 +127,7 @@ export type DashboardPendingConsultation = {
   /** Contact deadline (YYYY/MM/DD, Japan), the same rule as the sales email */
   deadline: string;
   overdue: boolean;
-};
+} & DeadlineStatus;
 
 export type DashboardSummary = {
   days: number;
@@ -49,7 +139,10 @@ export type DashboardSummary = {
   previousMql: number;
   /** Average score of the leads created in the period; null when there are none */
   averageScore: number | null;
+  previousAverageScore: number | null;
   daily: { date: string; leads: number; consultations: number }[];
+  /** Bars of the trend chart: per day up to 30 days, per week beyond */
+  trend: { unit: 'day' | 'week'; points: DashboardTrendPoint[] };
   statuses: { status: LeadStatus; count: number }[];
   platforms: { platform: string; count: number }[];
   pendingConsultations: DashboardPendingConsultation[];
@@ -60,6 +153,9 @@ export type DashboardSummary = {
     company: string | null;
     platform: string | null;
     score: number | null;
+    status: LeadStatus;
+    /** Qualified as MQL (at any time) */
+    mql: boolean;
     consultation: boolean;
     createdAt: Date;
   }[];
@@ -109,6 +205,9 @@ export async function getDashboardSummary(
           averageScore: sql<
             string | null
           >`avg(${leads.score}) filter (where ${createdIn(fromIso, endIso)})`,
+          previousAverageScore: sql<
+            string | null
+          >`avg(${leads.score}) filter (where ${createdIn(previousFromIso, fromIso)})`,
           pendingTotal: sql<number>`count(*) filter (where ${consultation} and ${leads.status} = 'new')`,
         })
         .from(leads)
@@ -163,6 +262,8 @@ export async function getDashboardSummary(
           company: leads.company,
           platform: platformOf,
           score: leads.score,
+          status: leads.status,
+          mqlQualifiedAt: leads.mqlQualifiedAt,
           conversionPoint: leads.conversionPoint,
           createdAt: leads.createdAt,
         })
@@ -195,10 +296,12 @@ export async function getDashboardSummary(
         requestedAt,
         deadline,
         overdue: deadline < today,
+        ...deadlineStatus(deadline, today),
       };
     })
     .sort((a, b) => a.deadline.localeCompare(b.deadline));
-  const average = totals?.averageScore;
+  const roundedAverage = (value: string | null | undefined) =>
+    value === null || value === undefined ? null : Math.round(Number(value));
 
   return {
     days,
@@ -208,12 +311,14 @@ export async function getDashboardSummary(
     previousConsultations: Number(totals?.previousConsultations ?? 0),
     mql: Number(totals?.mql ?? 0),
     previousMql: Number(totals?.previousMql ?? 0),
-    averageScore: average === null || average === undefined ? null : Math.round(Number(average)),
+    averageScore: roundedAverage(totals?.averageScore),
+    previousAverageScore: roundedAverage(totals?.previousAverageScore),
     daily,
+    trend: bucketTrend(daily),
     statuses: LEAD_STATUSES.map((status) => ({ status, count: statusCounts.get(status) ?? 0 })),
-    platforms: platformRows
-      .map((row) => ({ platform: row.platform ?? 'unknown', count: Number(row.value) }))
-      .sort((a, b) => b.count - a.count),
+    platforms: sortPlatforms(
+      platformRows.map((row) => ({ platform: row.platform ?? 'unknown', count: Number(row.value) }))
+    ),
     pendingConsultations: pending.slice(0, PENDING_SHOWN),
     pendingConsultationTotal: Number(totals?.pendingTotal ?? 0),
     recentLeads: recentRows.map((row) => ({
@@ -222,6 +327,8 @@ export async function getDashboardSummary(
       company: row.company,
       platform: row.platform,
       score: row.score,
+      status: row.status as LeadStatus,
+      mql: row.mqlQualifiedAt !== null,
       consultation: row.conversionPoint === 'consultation',
       createdAt: row.createdAt,
     })),

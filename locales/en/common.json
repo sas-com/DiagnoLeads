@@ -754,11 +754,13 @@
       "pending": "Consultations waiting",
       "pendingDesc": "Nearest deadline first",
       "trend": "Trend",
-      "trendDesc": "New leads and consultations per day",
+      "trendDesc": "New leads (consultation requests and others)",
       "breakdown": "Breakdown",
       "breakdownDesc": "By status and migration source",
       "recent": "Recent leads",
-      "recentDesc": "Latest leads"
+      "recentDesc": "Latest leads",
+      "moveUp": "Move \"{name}\" up",
+      "moveDown": "Move \"{name}\" down"
     },
     "ax": {
       "description": "Leads from the AX migration diagnosis and consultation requests that need a reply",
@@ -774,36 +776,43 @@
         "consultations": "Consultation requests",
         "mql": "MQL",
         "averageScore": "Average score",
-        "vsPrevious": "Previous {days} days: {value}",
         "noScore": "—",
         "scoreSuffix": "/100",
-        "periodNote": "Last {days} days"
+        "count": "{value}",
+        "previous": "Previous {days} days: {value}",
+        "previousWithRate": "Previous {days} days: {value} → {rate}",
+        "noPreviousScore": "Previous {days} days: no score",
+        "deltaLabel": "Change from the previous {days} days"
       },
       "pending": {
         "title": "Consultation requests waiting for contact",
         "description": "Contact within {days} business days of the request. Nearest deadline first.",
         "empty": "No consultation request is waiting",
-        "overdue": "Overdue",
         "dueToday": "Due today",
-        "due": "Due {date}",
-        "more": "{count} more",
-        "open": "Open",
+        "more": "See {count} more in the lead list",
         "requestedAt": "Requested {date}",
-        "overdueOn": "Overdue ({date})"
+        "overdueBy": "{count, plural, one {# business day late} other {# business days late}}",
+        "dueTomorrow": "Due tomorrow",
+        "dueIn": "{count, plural, one {# business day left} other {# business days left}}",
+        "deadline": "Due {date}"
       },
       "trend": {
-        "title": "New leads and consultation requests",
+        "title": "New leads",
         "description": "Per day (Japan time)",
-        "leads": "New leads",
         "consultations": "Consultation requests",
-        "empty": "No leads in this period"
+        "empty": "No leads in this period",
+        "descriptionWeekly": "Per week, from Monday (Japan time)",
+        "others": "Others",
+        "weekLabel": "{date}–",
+        "summary": "{total} new leads in the last {days} days, {consultations} of them consultation requests. Most: {max} on {peak}"
       },
       "statuses": {
-        "title": "By status (all time)"
+        "title": "Current pipeline",
+        "description": "All leads by status"
       },
       "platforms": {
         "title": "By migration source",
-        "description": "New leads in the last {days} days",
+        "description": "Where new leads migrate from",
         "empty": "No leads in this period",
         "unknown": "Unknown (not from the AX diagnosis)",
         "as400": "AS/400 (IBM i)",
@@ -813,16 +822,26 @@
       },
       "recent": {
         "title": "Recent leads",
-        "name": "Name / company",
         "platform": "Source",
         "score": "Score",
         "received": "Received",
         "consultation": "Consultation",
         "empty": "No leads yet",
-        "unnamed": "(no name)"
+        "unnamed": "(no name)",
+        "company": "Company / contact",
+        "status": "Status",
+        "mql": "MQL",
+        "today": "Today {time}",
+        "yesterday": "Yesterday",
+        "noCompany": "(no company)",
+        "highlight": "Worth a look (score 70+ or MQL)"
       },
       "noOrganization": "Choose an organization to see its leads here",
-      "loadError": "The dashboard figures could not be loaded. Please reopen the page later"
+      "periodTag": "Last {days} days",
+      "periodRange": "{from} – {to} (Japan time)",
+      "allTimeTag": "All time",
+      "cardError": "Could not be loaded",
+      "retry": "Reload"
     }
   },
   "leads": {

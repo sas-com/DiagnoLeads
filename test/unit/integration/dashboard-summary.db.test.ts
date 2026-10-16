@@ -131,6 +131,7 @@ describe.skipIf(!url)('dashboard summary (PostgreSQL)', () => {
     expect(s.mql).toBe(1);
     expect(s.previousMql).toBe(1);
     expect(s.averageScore).toBe(77); // (80 + 60 + 90) / 3
+    expect(s.previousAverageScore).toBeNull(); // no scored lead in the previous period
   });
 
   it('lists every day of the period, with zero for days without leads', async () => {
@@ -148,6 +149,21 @@ describe.skipIf(!url)('dashboard summary (PostgreSQL)', () => {
     expect(s.daily.find((d) => d.date === '2026-10-16')).toEqual({ date: '2026-10-16', leads: 2, consultations: 0 });
     expect(s.daily.find((d) => d.date === '2026-10-13')).toEqual({ date: '2026-10-13', leads: 1, consultations: 1 });
     expect(s.daily.find((d) => d.date === '2026-10-14')?.leads).toBe(0);
+    expect(s.trend.unit).toBe('day');
+    expect(s.trend.points).toHaveLength(7);
+  });
+
+  it('adds up weeks for 90 days', async () => {
+    const s = await getDashboardSummary(db, organizationId, 90, now);
+
+    expect(s.trend.unit).toBe('week');
+    expect(s.trend.points.at(-1)).toEqual({
+      start: '2026-10-12',
+      end: '2026-10-16',
+      leads: 4,
+      consultations: 2, // 10/13 and the one already contacted on 10/12
+    });
+    expect(s.trend.points.reduce((sum, p) => sum + p.leads, 0)).toBe(s.newLeads);
   });
 
   it('lists consultation requests waiting for contact by deadline, flagging overdue ones', async () => {
@@ -159,6 +175,12 @@ describe.skipIf(!url)('dashboard summary (PostgreSQL)', () => {
       [null, '2026/10/07', true], // asked Mon 10/5 (previous period) → due Wed 10/7
       ['期限切れ', '2026/10/15', true], // asked Tue 10/13 → due Thu 10/15
       ['後から相談', '2026/10/19', false], // asked Thu 10/15 → due Mon 10/19
+    ]);
+    // Seen on Friday 10/16: business days late, or left
+    expect(s.pendingConsultations.map((p) => [p.due, p.businessDays])).toEqual([
+      ['overdue', 7],
+      ['overdue', 1],
+      ['later', 1],
     ]);
   });
 
@@ -177,6 +199,9 @@ describe.skipIf(!url)('dashboard summary (PostgreSQL)', () => {
     expect(s.statuses.find((x) => x.status === 'nurturing')?.count).toBe(1);
     expect(s.recentLeads[0].createdAt.getTime()).toBe(at('2026-10-16T01:00:00Z').getTime());
     expect(s.recentLeads).toHaveLength(6);
+    expect(s.recentLeads[0]).toMatchObject({ status: 'new', mql: false });
+    expect(s.recentLeads.find((l) => l.name === '期限切れ')).toMatchObject({ mql: true, consultation: true });
+    expect(s.platforms.at(-1)?.platform).toBe('unknown');
   });
 
   it('reports no average score when the period has no leads', async () => {

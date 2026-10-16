@@ -754,11 +754,13 @@
       "pending": "連絡待ちの相談申込",
       "pendingDesc": "連絡期限の近い順",
       "trend": "推移",
-      "trendDesc": "日ごとの新規リードと相談申込",
+      "trendDesc": "新規リード（相談申込とその他）",
       "breakdown": "内訳",
       "breakdownDesc": "ステータス別・移行元システム別",
       "recent": "最近のリード",
-      "recentDesc": "最新のリード一覧"
+      "recentDesc": "最新のリード一覧",
+      "moveUp": "「{name}」を上へ",
+      "moveDown": "「{name}」を下へ"
     },
     "ax": {
       "description": "AX移行診断から届いたリードと、対応が必要な相談申込を確認します",
@@ -774,36 +776,43 @@
         "consultations": "相談申込",
         "mql": "MQL",
         "averageScore": "平均スコア",
-        "vsPrevious": "前の{days}日間：{value}",
         "noScore": "—",
         "scoreSuffix": "/100",
-        "periodNote": "直近{days}日間"
+        "count": "{value}件",
+        "previous": "前の{days}日間 {value}",
+        "previousWithRate": "前の{days}日間 {value} → {rate}",
+        "noPreviousScore": "前の{days}日間 スコアなし",
+        "deltaLabel": "前の{days}日間との差"
       },
       "pending": {
         "title": "連絡待ちの相談申込",
         "description": "相談申込から{days}営業日以内に連絡します。期限の近い順です。",
         "empty": "連絡待ちの相談申込はありません",
-        "overdue": "期限切れ",
         "dueToday": "今日まで",
-        "due": "{date}まで",
-        "more": "ほか{count}件",
-        "open": "開く",
+        "more": "ほか{count}件をリード一覧で見る",
         "requestedAt": "申込 {date}",
-        "overdueOn": "期限切れ（{date}）"
+        "overdueBy": "{count}営業日超過",
+        "dueTomorrow": "明日まで",
+        "dueIn": "あと{count}営業日",
+        "deadline": "期限 {date}"
       },
       "trend": {
-        "title": "新規リードと相談申込の推移",
+        "title": "新規リードの推移",
         "description": "日ごと（日本時間）",
-        "leads": "新規リード",
         "consultations": "相談申込",
-        "empty": "この期間のリードはありません"
+        "empty": "この期間のリードはありません",
+        "descriptionWeekly": "週ごと（月曜はじまり・日本時間）",
+        "others": "その他",
+        "weekLabel": "{date}〜",
+        "summary": "直近{days}日の新規リードは{total}件（うち相談申込{consultations}件）。最も多かったのは{peak}の{max}件です"
       },
       "statuses": {
-        "title": "ステータス別（全期間）"
+        "title": "いまのパイプライン",
+        "description": "すべてのリードのステータス別件数"
       },
       "platforms": {
         "title": "移行元システム別",
-        "description": "直近{days}日間の新規リード",
+        "description": "新規リードの移行元",
         "empty": "この期間のリードはありません",
         "unknown": "不明（AX診断以外）",
         "as400": "AS/400（IBM i）",
@@ -813,16 +822,26 @@
       },
       "recent": {
         "title": "最近のリード",
-        "name": "名前・会社",
         "platform": "移行元",
         "score": "スコア",
         "received": "受付",
         "consultation": "相談申込",
         "empty": "まだリードがありません",
-        "unnamed": "（名前なし）"
+        "unnamed": "（名前なし）",
+        "company": "会社・担当者",
+        "status": "ステータス",
+        "mql": "MQL",
+        "today": "今日 {time}",
+        "yesterday": "昨日",
+        "noCompany": "（会社名なし）",
+        "highlight": "注目（スコア70以上またはMQL）"
       },
       "noOrganization": "組織を選ぶと、ここにリードの状況が表示されます",
-      "loadError": "ダッシュボードの数字を読み込めませんでした。時間をおいて開き直してください"
+      "periodTag": "直近{days}日",
+      "periodRange": "{from}〜{to}（日本時間）",
+      "allTimeTag": "全期間",
+      "cardError": "読み込めませんでした",
+      "retry": "再読み込み"
     }
   },
   "leads": {
