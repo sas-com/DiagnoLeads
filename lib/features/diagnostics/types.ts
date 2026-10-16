@@ -38,7 +38,17 @@ export interface DiagnosticCondition {
   anyOf: string[];
 }
 
-export interface DiagnosticSection {
+/**
+ * The parts of a section the engine needs. Code-defined diagnostics and builder definitions
+ * (lib/features/diagnosis-builder) both have this shape, so they share one engine.
+ */
+export interface ConditionalSection {
+  id: string;
+  questionIds: string[];
+  showWhen?: DiagnosticCondition;
+}
+
+export interface DiagnosticSection extends ConditionalSection {
   id: string;
   title: LocalizedText;
   /**
@@ -72,7 +82,11 @@ export interface AnswerValidationIssue {
     | 'exclusive_conflict'
     | 'unknown_question'
     /** Answered a question that does not apply to the chosen path */
-    | 'not_applicable';
+    | 'not_applicable'
+    /** A number outside the question's range or step (builder definitions only) */
+    | 'out_of_range'
+    /** A text answer longer than the question allows (builder definitions only) */
+    | 'too_long';
 }
 
 export type AnswerValidationResult =
