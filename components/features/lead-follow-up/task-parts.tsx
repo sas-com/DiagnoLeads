@@ -127,3 +127,35 @@ export function useUpdateTask(organizationId: string) {
     onError: () => toast.error(t('saveError')),
   });
 }
+
+/** Marks a takeaway (持ち帰り事項) so it stands apart from next actions; nothing for those */
+export function TaskKindBadge({ task }: { task: Pick<LeadTaskView, 'kind'> }) {
+  const t = useTranslations('leadFollowUp.tasks');
+  if (task.kind !== 'takeaway') return null;
+  return (
+    <span
+      className="inline-flex shrink-0 items-center rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-800 dark:bg-violet-900/30 dark:text-violet-300"
+      data-kind={task.kind}
+    >
+      {t('takeawayBadge')}
+    </span>
+  );
+}
+
+/** Whom to check with for a takeaway (a member's name or free text); nothing when not set */
+export function CheckWithText({
+  task,
+  className,
+}: {
+  task: Pick<LeadTaskView, 'kind' | 'checkWith' | 'checkWithUser'>;
+  className?: string;
+}) {
+  const t = useTranslations('leadFollowUp.tasks');
+  const name = task.checkWithUser?.name ?? task.checkWith;
+  if (task.kind !== 'takeaway' || !name) return null;
+  return (
+    <p className={cn('break-words text-xs text-muted-foreground', className)}>
+      {t('checkWith', { name })}
+    </p>
+  );
+}

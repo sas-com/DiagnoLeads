@@ -34,3 +34,40 @@ export function nextMeetingDateOf(fields: unknown): string | null {
   const value = (entry as Record<string, unknown>).value;
   return typeof value === 'string' && ISO_DATE_PATTERN.test(value) ? value : null;
 }
+
+/** A Japan calendar day moved by some days ('YYYY-MM-DD' in and out) */
+export function addDays(isoDate: string, days: number): string {
+  const date = new Date(`${isoDate}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+/** Overdue tasks older than this many days get no notice (no flood of old ones at first run) */
+export const OVERDUE_NOTICE_LOOKBACK_DAYS = 7;
+
+export type DueNotice = 'due_soon' | 'overdue';
+
+/**
+ * Due dates each notice covers on a Japan calendar day (inclusive):
+ * - due_soon: today and tomorrow (the day before the due date; today catches a task added after
+ *   the day's run)
+ * - overdue: from OVERDUE_NOTICE_LOOKBACK_DAYS days ago to yesterday
+ */
+export function dueNoticeWindows(today: string): Record<DueNotice, { from: string; to: string }> {
+  return {
+    due_soon: { from: today, to: addDays(today, 1) },
+    overdue: { from: addDays(today, -OVERDUE_NOTICE_LOOKBACK_DAYS), to: addDays(today, -1) },
+  };
+}
+
+/**
+ * Who gets a task's notices: its assignee, else the lead's assignee (#135), else whoever created
+ * it. Mirrors responsibleUserSql in ./service.ts.
+ */
+export function responsibleUserOf(task: {
+  assigneeId: string | null;
+  leadAssigneeId: string | null;
+  createdBy: string | null;
+}): string | null {
+  return task.assigneeId ?? task.leadAssigneeId ?? task.createdBy;
+}

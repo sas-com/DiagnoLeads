@@ -2138,7 +2138,8 @@
         "upcomingHelp": "This notification is sent once the feature is released. You can set it now",
         "emailNote": "Consultation request emails go to the sales contact address (there is no personal setting)",
         "currentOrganization": "this organization",
-        "assignedToMeHelp": "When a lead is assigned to you (turning this off also stops the email)"
+        "assignedToMeHelp": "When a lead is assigned to you (turning this off also stops the email)",
+        "nextActionDueHelp": "The day before a next action or takeaway you are responsible for is due, and when it is overdue (turning this off also stops the email)"
       },
       "description": "Configure how you receive notifications",
       "inApp": {
@@ -3294,7 +3295,21 @@
         "today": "Due today",
         "upcoming": "Due {date}",
         "done": "Was due {date}"
-      }
+      },
+      "cardTitle": "Next actions and takeaways",
+      "kindLabel": "Kind",
+      "kinds": {
+        "next_action": "Next action",
+        "takeaway": "Takeaway"
+      },
+      "takeawayBadge": "Takeaway",
+      "takeawayPlaceholder": "e.g. Check the maintenance cost breakdown and answer",
+      "checkWithLabel": "Check with (optional)",
+      "checkWithNone": "Nobody in particular",
+      "checkWithOther": "Someone else (type a name)",
+      "checkWithOtherLabel": "Whom to check with",
+      "checkWithOtherPlaceholder": "e.g. The customer's IT department",
+      "checkWith": "Check with: {name}"
     },
     "today": {
       "title": "Today",
@@ -3303,7 +3318,14 @@
       "loadError": "Could not load",
       "retry": "Reload",
       "more": "{count} more",
-      "noLeadName": "Lead without a name"
+      "noLeadName": "Lead without a name",
+      "descriptionAll": "Next actions and takeaways due today or overdue. Tick one to mark it done.",
+      "scopeLabel": "Show",
+      "scopeMine": "Mine only",
+      "scopeAll": "Everyone",
+      "scopeCount": "{label} ({count})",
+      "emptyMine": "Nothing of yours is due today",
+      "mineBadge": "Mine"
     }
   },
   "leadAssignee": {

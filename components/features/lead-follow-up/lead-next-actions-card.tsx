@@ -8,9 +8,20 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import {
+  CHECK_WITH_MAX,
   type LeadTaskView,
+  TASK_KINDS,
   TASK_NOTE_MAX,
   TASK_TITLE_MAX,
+  type TaskKind,
 } from '@/lib/features/lead-follow-up/types/schemas';
 import { trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
@@ -18,7 +29,18 @@ import { ListTodo, Loader2, Plus, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { type FormEvent, useId, useState } from 'react';
 import { toast } from 'sonner';
-import { DueDatePicker, DueLabel, useTaskTitle, useUpdateTask } from './task-parts';
+import {
+  CheckWithText,
+  DueDatePicker,
+  DueLabel,
+  TaskKindBadge,
+  useTaskTitle,
+  useUpdateTask,
+} from './task-parts';
+
+/** Select values for "nobody" and "someone outside the members" (Radix needs non-empty values) */
+const CHECK_WITH_NONE = '__none__';
+const CHECK_WITH_OTHER = '__other__';
 
 interface LeadNextActionsCardProps {
   organizationId: string;
@@ -26,8 +48,9 @@ interface LeadNextActionsCardProps {
 }
 
 /**
- * Next actions of a lead with due dates (Refs #85): add one, tick it done, move its due date.
- * A hearing that records the next meeting date adds one by itself.
+ * Next actions and takeaways (持ち帰り事項) of a lead with due dates (Refs #85): add one, tick it
+ * done, move its due date. A takeaway is marked and can say whom to check with. A hearing that
+ * records the next meeting date adds a next action by itself.
  */
 export function LeadNextActionsCard({ organizationId, leadId }: LeadNextActionsCardProps) {
   const t = useTranslations('leadFollowUp.tasks');
@@ -44,7 +67,7 @@ export function LeadNextActionsCard({ organizationId, leadId }: LeadNextActionsC
     <Card className="p-5">
       <div className="mb-3 flex items-center gap-2">
         <ListTodo className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-        <h2 className="text-sm font-semibold text-foreground">{t('title')}</h2>
+        <h2 className="text-sm font-semibold text-foreground">{t('cardTitle')}</h2>
         {open.length > 0 && <Badge color="gray">{open.length}</Badge>}
       </div>
 
@@ -144,14 +167,18 @@ function TaskRow({
         }
       />
       <div className="min-w-0 flex-1">
-        <p
-          className={cn(
-            'break-words text-sm text-foreground',
-            task.done && 'text-muted-foreground line-through'
-          )}
-        >
-          {title}
-        </p>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <TaskKindBadge task={task} />
+          <p
+            className={cn(
+              'min-w-0 break-words text-sm text-foreground',
+              task.done && 'text-muted-foreground line-through'
+            )}
+          >
+            {title}
+          </p>
+        </div>
+        <CheckWithText task={task} />
         {task.note && <p className="break-words text-xs text-muted-foreground">{task.note}</p>}
         {task.source === 'hearing' && (
           <p className="text-xs text-muted-foreground">{t('fromHearing')}</p>
@@ -199,15 +226,29 @@ function AddTaskForm({
   const titleId = useId();
   const dueId = useId();
   const noteId = useId();
+  const checkWithId = useId();
+  const checkWithOtherId = useId();
+  const [kind, setKind] = useState<TaskKind>('next_action');
   const [title, setTitle] = useState('');
   const [dueOn, setDueOn] = useState<string | undefined>(today);
   const [note, setNote] = useState('');
+  // A member's id, CHECK_WITH_NONE or CHECK_WITH_OTHER (then checkWithText is used)
+  const [checkWithChoice, setCheckWithChoice] = useState(CHECK_WITH_NONE);
+  const [checkWithText, setCheckWithText] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const isTakeaway = kind === 'takeaway';
+  // Same query as the assignee controls (#135), fetched once a takeaway is being written
+  const members = trpc.leads.assignees.useQuery(
+    { organizationId },
+    { enabled: isTakeaway && !!organizationId, staleTime: 5 * 60 * 1000 }
+  );
   const create = trpc.leadFollowUp.createTask.useMutation({
     onSuccess: () => {
       setTitle('');
       setNote('');
       setDueOn(today);
+      setCheckWithChoice(CHECK_WITH_NONE);
+      setCheckWithText('');
       void utils.leadFollowUp.tasks.invalidate({ organizationId, leadId });
       void utils.leadFollowUp.dueTasks.invalidate({ organizationId });
     },
@@ -219,11 +260,42 @@ function AddTaskForm({
     if (!title.trim()) return setError(t('titleRequired'));
     if (!dueOn) return setError(t('dueRequired'));
     setError(null);
-    create.mutate({ organizationId, leadId, title: title.trim(), dueOn, note: note || null });
+    const checkWith =
+      !isTakeaway || checkWithChoice === CHECK_WITH_NONE
+        ? {}
+        : checkWithChoice === CHECK_WITH_OTHER
+          ? { checkWith: checkWithText.trim() || null }
+          : { checkWithUserId: checkWithChoice };
+    create.mutate({
+      organizationId,
+      leadId,
+      kind,
+      title: title.trim(),
+      dueOn,
+      note: note || null,
+      ...checkWith,
+    });
   };
 
   return (
     <form onSubmit={submit} className="space-y-2 border-t pt-3" aria-label={t('addLabel')}>
+      <ToggleGroup
+        type="single"
+        size="sm"
+        variant="outline"
+        value={kind}
+        onValueChange={(value) => {
+          if (value) setKind(value as TaskKind);
+        }}
+        aria-label={t('kindLabel')}
+        className="flex-wrap justify-start"
+      >
+        {TASK_KINDS.map((value) => (
+          <ToggleGroupItem key={value} value={value}>
+            {t(`kinds.${value}`)}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
       <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
         <div className="space-y-1">
           <Label htmlFor={titleId} className="text-xs">
@@ -233,7 +305,7 @@ function AddTaskForm({
             id={titleId}
             value={title}
             maxLength={TASK_TITLE_MAX}
-            placeholder={t('titlePlaceholder')}
+            placeholder={isTakeaway ? t('takeawayPlaceholder') : t('titlePlaceholder')}
             onChange={(event) => setTitle(event.target.value)}
           />
         </div>
@@ -251,6 +323,43 @@ function AddTaskForm({
           />
         </div>
       </div>
+      {isTakeaway && (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div className="space-y-1">
+            <Label htmlFor={checkWithId} className="text-xs">
+              {t('checkWithLabel')}
+            </Label>
+            <Select value={checkWithChoice} onValueChange={setCheckWithChoice}>
+              <SelectTrigger id={checkWithId}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={CHECK_WITH_NONE}>{t('checkWithNone')}</SelectItem>
+                {members.data?.map((member) => (
+                  <SelectItem key={member.userId} value={member.userId}>
+                    {member.displayName}
+                  </SelectItem>
+                ))}
+                <SelectItem value={CHECK_WITH_OTHER}>{t('checkWithOther')}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {checkWithChoice === CHECK_WITH_OTHER && (
+            <div className="space-y-1">
+              <Label htmlFor={checkWithOtherId} className="text-xs">
+                {t('checkWithOtherLabel')}
+              </Label>
+              <Input
+                id={checkWithOtherId}
+                value={checkWithText}
+                maxLength={CHECK_WITH_MAX}
+                placeholder={t('checkWithOtherPlaceholder')}
+                onChange={(event) => setCheckWithText(event.target.value)}
+              />
+            </div>
+          )}
+        </div>
+      )}
       <div className="space-y-1">
         <Label htmlFor={noteId} className="text-xs">
           {t('noteLabel')}

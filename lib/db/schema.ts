@@ -762,6 +762,21 @@ export const leadTasks = pgTable(
     sourceHearingId: uuid('source_hearing_id').references(() => leadHearings.id, {
       onDelete: 'set null',
     }),
+    /**
+     * 'next_action' | 'takeaway' (持ち帰り事項: something the rep promised to check and bring
+     * back, #85)
+     */
+    kind: text('kind').default('next_action').notNull(),
+    /** Whom to check with for a takeaway, as free text (e.g. an outside partner) */
+    checkWith: text('check_with'),
+    /** Whom to check with for a takeaway, as a member of the organization */
+    checkWithUserId: uuid('check_with_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    /** When the "due soon" notice went out (once per due date; cleared when the date moves) */
+    notifiedDueAt: timestamp('notified_due_at', { withTimezone: true }),
+    /** When the "overdue" notice went out (once per due date; cleared when the date moves) */
+    notifiedOverdueAt: timestamp('notified_overdue_at', { withTimezone: true }),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -779,6 +794,7 @@ export const leadTasks = pgTable(
       .on(table.sourceHearingId)
       .where(sql`${table.sourceHearingId} is not null`),
     check('lead_tasks_source_check', sql`${table.source} in ('manual', 'hearing')`),
+    check('lead_tasks_kind_check', sql`${table.kind} in ('next_action', 'takeaway')`),
   ]
 );
 
@@ -937,6 +953,7 @@ export type NotificationType =
   | 'member_removed'
   | 'consultation_requested'
   | 'lead_assigned'
+  | 'next_action_due'
   | 'system';
 
 /**

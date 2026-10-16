@@ -120,6 +120,13 @@
       "when": 1792161218931,
       "tag": "0016_lead_assignee",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792161846526,
+      "tag": "0017_follow_up_takeaways",
+      "breakpoints": true
     }
   ]
 }

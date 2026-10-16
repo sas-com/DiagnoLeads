@@ -92,12 +92,20 @@ export const leadFollowUpRouter = router({
     return { items, today: jstDate(), canEdit: ctx.ability.can('update', 'Lead') };
   }),
 
-  /** Open next actions due today or earlier, for the dashboard */
-  dueTasks: organizationProcedure.input(dueTasksSchema).query(async ({ ctx }) => {
+  /**
+   * Open next actions and takeaways due today or earlier, for the dashboard: the user's own
+   * (scope 'mine', the default) or everyone's with the user's own first ('all')
+   */
+  dueTasks: organizationProcedure.input(dueTasksSchema).query(async ({ ctx, input }) => {
     assertCanRead(ctx.ability);
     const today = jstDate();
-    const due = await listDueTasks(ctx.db, { organizationId: ctx.organization.id, today });
-    return { ...due, today, canEdit: ctx.ability.can('update', 'Lead') };
+    const due = await listDueTasks(ctx.db, {
+      organizationId: ctx.organization.id,
+      today,
+      userId: ctx.user.id,
+      scope: input.scope,
+    });
+    return { ...due, scope: input.scope, today, canEdit: ctx.ability.can('update', 'Lead') };
   }),
 
   createTask: organizationProcedure.input(createTaskSchema).mutation(async ({ ctx, input }) => {

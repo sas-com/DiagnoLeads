@@ -20,6 +20,10 @@
     {
       "path": "/api/cron/cleanup-webhook-deliveries",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/notify-due-tasks",
+      "schedule": "0 23 * * *"
     }
   ],
   "headers": [
