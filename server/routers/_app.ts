@@ -11,6 +11,7 @@ import { distributionRouter } from '@/lib/features/distribution/router';
 import { embedRouter } from '@/lib/features/embed/router';
 import { filtersRouter } from '@/lib/features/filters/api/router';
 import { hierarchyRouter } from '@/lib/features/hierarchy/api/router';
+import { leadHearingsRouter } from '@/lib/features/lead-hearings/api/router';
 import { leadsRouter } from '@/lib/features/leads/api/router';
 import { invitationsRouter } from '@/lib/features/members/api/invitations-router';
 import { membersRouter } from '@/lib/features/members/api/router';
@@ -53,6 +54,7 @@ export const appRouter = router({
   embed: embedRouter, // Embed widget configuration management
   distribution: distributionRouter, // QR code and offline distribution
   axPlaybook: axPlaybookRouter, // AX sales playbook (Refs #74)
+  leadHearings: leadHearingsRouter, // Initial meeting hearings per lead (Refs #84)
 });
 
 export type AppRouter = typeof appRouter;
