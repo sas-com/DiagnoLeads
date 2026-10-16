@@ -127,6 +127,7 @@ vi.mock('@/lib/trpc/client', async () => {
           },
         },
         bulkUpdateStatus: { useMutation: mutation },
+        export: { useMutation: mutation },
         bulkDelete: { useMutation: mutation },
         bulkCreate: { useMutation: mutation },
       },

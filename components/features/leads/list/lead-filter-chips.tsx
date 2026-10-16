@@ -72,6 +72,13 @@ export function useFilterChipLabel(): (chip: LeadFilterChip) => string {
             : t('chips.sqlUndecided');
         case 'assignee':
           return assigneeLabel(chip);
+        case 'nextMeeting':
+          return t(`nextMeetingOptions.${chip.value}`);
+        case 'dealRating':
+          return t('chips.value', {
+            field: t('dealRating'),
+            value: chip.value.toUpperCase(),
+          });
       }
     },
     [t, tStatus, tPipeline, assigneeLabel]

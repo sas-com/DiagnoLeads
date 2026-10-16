@@ -26,6 +26,7 @@ import {
   type LeadTab,
   isLeadTab,
 } from '@/lib/features/leads/detail-fields';
+import { isNextMeetingOverdue } from '@/lib/features/leads/list-query';
 import { DEAL_PHASES } from '@/lib/features/leads/types';
 import { trpc } from '@/lib/trpc/client';
 import {
@@ -48,6 +49,7 @@ import { toast } from 'sonner';
 import { type AssigneeLead, LeadAssigneeSelect } from '../lead-assignee-select';
 import { LeadDeleteDialog } from '../lead-delete-dialog';
 import { LeadQuickSelect } from '../lead-quick-select';
+import { NextMeetingOverdueBadge } from '../next-meeting';
 import { EditSessionProvider, useEditSession } from './edit-session';
 import { LeadDiagnosisAnswers } from './lead-diagnosis-answers';
 import { LeadDiagnosisCard } from './lead-diagnosis-card';
@@ -56,7 +58,11 @@ import { LeadHearingOverview } from './lead-hearing-overview';
 import { LeadRecentActivity } from './lead-recent-activity';
 
 /** The lead as returned by leads.get, with its assignee (#135) */
-type LeadWithAssignee = Lead & Pick<AssigneeLead, 'assignee'>;
+type LeadWithAssignee = Lead &
+  Pick<AssigneeLead, 'assignee'> & {
+    /** From the latest hearing (#137) */
+    nextMeetingDate?: string | null;
+  };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TIME_ZONE = 'Asia/Tokyo';
@@ -285,6 +291,15 @@ function LeadDetailContent({
                 : t('noScore')}
             </Badge>
             {lead.hasNegotiated && <Badge color="emerald">{tLeads('hasNegotiated')}</Badge>}
+            {/* The latest hearing's next meeting has passed with no newer hearing (#137) */}
+            {lead.nextMeetingDate && isNextMeetingOverdue(lead) && (
+              <NextMeetingOverdueBadge
+                date={lead.nextMeetingDate}
+                label={t('nextMeetingOverdue', {
+                  date: lead.nextMeetingDate.replaceAll('-', '/'),
+                })}
+              />
+            )}
             <LeadAssigneeSelect
               lead={lead}
               organizationId={organizationId}

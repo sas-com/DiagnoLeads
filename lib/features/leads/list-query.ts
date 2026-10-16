@@ -23,9 +23,13 @@ import {
 } from './types/pipeline';
 import {
   type AssigneeFilter,
+  DEAL_RATINGS,
+  type DealRating,
   LEAD_SORT_KEYS,
   type LeadSortKey,
   type ListLeadsInput,
+  NEXT_MEETING_FILTERS,
+  type NextMeetingFilter,
   SQL_DECISION_FILTERS,
   type SqlDecisionFilter,
   assigneeFilterSchema,
@@ -52,6 +56,10 @@ export interface LeadListFilters {
   sql?: SqlDecisionFilter;
   /** Assignee: 'me', 'unassigned' or a member's user id (#135) */
   assignee?: AssigneeFilter;
+  /** Next meeting date of the latest hearing (#137) */
+  nextMeeting?: NextMeetingFilter;
+  /** Deal rating of the latest hearing, any of them (#137); left out when none is chosen */
+  dealRating?: DealRating[];
   /** Name, email or company */
   search?: string;
 }
@@ -103,6 +111,9 @@ export const FIRST_SORT_ORDER: Record<LeadSortKey, SortOrder> = {
   lastActivityAt: 'desc',
   mqlQualifiedAt: 'desc',
   assignee: 'asc',
+  // Soonest meeting first, A before B and C (#137)
+  nextMeetingDate: 'asc',
+  dealRating: 'asc',
 };
 
 /** Search param names. Short, readable, stable: links to the list depend on them. */
@@ -119,6 +130,8 @@ export const LEAD_LIST_PARAMS = {
   mql: 'mql',
   sql: 'sql',
   assignee: 'assignee',
+  nextMeeting: 'next',
+  dealRating: 'rating',
   search: 'q',
   sortBy: 'sort',
   sortOrder: 'order',
@@ -166,6 +179,8 @@ export const leadListUrlSchema = z.object({
   [LEAD_LIST_PARAMS.mql]: flagParam,
   [LEAD_LIST_PARAMS.sql]: z.enum(SQL_DECISION_FILTERS).optional().catch(undefined),
   [LEAD_LIST_PARAMS.assignee]: assigneeFilterSchema.optional().catch(undefined),
+  [LEAD_LIST_PARAMS.nextMeeting]: z.enum(NEXT_MEETING_FILTERS).optional().catch(undefined),
+  [LEAD_LIST_PARAMS.dealRating]: csvOf(DEAL_RATINGS),
   [LEAD_LIST_PARAMS.search]: z
     .string()
     .optional()
@@ -216,6 +231,8 @@ export function parseLeadListQuery(params: SearchParamsLike): LeadListQuery {
       mql: p[LEAD_LIST_PARAMS.mql],
       sql: p[LEAD_LIST_PARAMS.sql],
       assignee: p[LEAD_LIST_PARAMS.assignee],
+      nextMeeting: p[LEAD_LIST_PARAMS.nextMeeting],
+      dealRating: p[LEAD_LIST_PARAMS.dealRating],
       search: p[LEAD_LIST_PARAMS.search],
     }),
     sort: {
@@ -252,6 +269,8 @@ export function serializeLeadListQuery(query: LeadListQuery): URLSearchParams {
   if (f.mql !== undefined) params.set(LEAD_LIST_PARAMS.mql, f.mql ? '1' : '0');
   if (f.sql) params.set(LEAD_LIST_PARAMS.sql, f.sql);
   if (f.assignee) params.set(LEAD_LIST_PARAMS.assignee, f.assignee);
+  if (f.nextMeeting) params.set(LEAD_LIST_PARAMS.nextMeeting, f.nextMeeting);
+  list(LEAD_LIST_PARAMS.dealRating, f.dealRating ?? []);
   if (f.search) params.set(LEAD_LIST_PARAMS.search, f.search);
   if (query.sort.by !== DEFAULT_LEAD_SORT.by || query.sort.order !== DEFAULT_LEAD_SORT.order) {
     params.set(LEAD_LIST_PARAMS.sortBy, query.sort.by);
@@ -296,6 +315,9 @@ export function normalizeFilters(filters: Partial<LeadListFilters>): LeadListFil
   if (filters.mql !== undefined) result.mql = filters.mql;
   if (filters.sql) result.sql = filters.sql;
   if (filters.assignee) result.assignee = filters.assignee;
+  if (filters.nextMeeting) result.nextMeeting = filters.nextMeeting;
+  const dealRating = pick(DEAL_RATINGS, filters.dealRating);
+  if (dealRating.length > 0) result.dealRating = dealRating;
   if (search) result.search = search;
   return result;
 }
@@ -311,17 +333,17 @@ export function hasActiveFilters(filters: LeadListFilters): boolean {
   return !sameFilters(filters, EMPTY_LEAD_FILTERS);
 }
 
-/** Input of `leads.list` for the query (page size is kept per browser, not in the URL) */
-export function toListLeadsInput(
-  query: LeadListQuery,
-  organizationId: string,
-  pageSize: number = DEFAULT_LEAD_PAGE_SIZE
-): ListLeadsInput {
+/** Filters and sort of `leads.list` / `leads.export` for the query, without the page */
+export type LeadListFilterInput = Omit<ListLeadsInput, 'limit' | 'offset'>;
+
+/** Filters and sort of the query as server input (the export uses it as is, #173) */
+export function toLeadFilterInput(
+  query: Pick<LeadListQuery, 'filters' | 'sort'>,
+  organizationId: string
+): LeadListFilterInput {
   const f = query.filters;
-  const input: ListLeadsInput = {
+  const input: LeadListFilterInput = {
     organizationId,
-    limit: pageSize,
-    offset: (query.page - 1) * pageSize,
     sortBy: query.sort.by,
     sortOrder: query.sort.order,
   };
@@ -337,8 +359,23 @@ export function toListLeadsInput(
   if (f.mql !== undefined) input.mql = f.mql;
   if (f.sql) input.sqlDecision = f.sql;
   if (f.assignee) input.assignee = f.assignee;
+  if (f.nextMeeting) input.nextMeeting = f.nextMeeting;
+  if (f.dealRating && f.dealRating.length > 0) input.dealRating = f.dealRating;
   if (f.search) input.search = f.search;
   return input;
+}
+
+/** Input of `leads.list` for the query (page size is kept per browser, not in the URL) */
+export function toListLeadsInput(
+  query: LeadListQuery,
+  organizationId: string,
+  pageSize: number = DEFAULT_LEAD_PAGE_SIZE
+): ListLeadsInput {
+  return {
+    ...toLeadFilterInput(query, organizationId),
+    limit: pageSize,
+    offset: (query.page - 1) * pageSize,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -371,6 +408,8 @@ export const LEAD_LIST_PRESETS = [
   'negotiating',
   'mine',
   'unassigned',
+  'meetingsThisWeek',
+  'nextMeetingOverdue',
 ] as const;
 export type LeadListPreset = (typeof LEAD_LIST_PRESETS)[number];
 
@@ -392,16 +431,36 @@ export function presetFilters(preset: LeadListPreset, now: Date = new Date()): L
     case 'unassigned':
       // 担当未定 (#135)
       return { ...EMPTY_LEAD_FILTERS, assignee: 'unassigned' };
+    case 'meetingsThisWeek':
+      // 今週の商談 (#137): next meeting date of the latest hearing in this Japan week
+      return { ...EMPTY_LEAD_FILTERS, nextMeeting: 'thisWeek' };
+    case 'nextMeetingOverdue':
+      // 次回日程の過ぎたリード (#137): the date passed and no newer hearing was recorded
+      return { ...EMPTY_LEAD_FILTERS, nextMeeting: 'overdue' };
   }
 }
 
-/** Replace the filters with a preset's; the sort is kept and the page goes back to 1 */
+/** Presets that also set the order: meetings are read soonest (or longest overdue) first */
+const PRESET_SORTS: Partial<Record<LeadListPreset, LeadListSort>> = {
+  meetingsThisWeek: { by: 'nextMeetingDate', order: 'asc' },
+  nextMeetingOverdue: { by: 'nextMeetingDate', order: 'asc' },
+};
+
+/**
+ * Replace the filters with a preset's; the page goes back to 1. The sort is kept, except for
+ * the presets that come with their own order.
+ */
 export function applyPreset(
   query: LeadListQuery,
   preset: LeadListPreset,
   now: Date = new Date()
 ): LeadListQuery {
-  return { ...query, filters: presetFilters(preset, now), page: 1 };
+  return {
+    ...query,
+    filters: presetFilters(preset, now),
+    sort: PRESET_SORTS[preset] ?? query.sort,
+    page: 1,
+  };
 }
 
 /** The preset the filters are exactly equal to, if any */
@@ -433,7 +492,11 @@ export function leadListHref(
 }
 
 export function presetHref(preset: LeadListPreset, now: Date = new Date(), basePath = '/leads') {
-  return leadListHref(presetFilters(preset, now), DEFAULT_LEAD_SORT, basePath);
+  return leadListHref(
+    presetFilters(preset, now),
+    PRESET_SORTS[preset] ?? DEFAULT_LEAD_SORT,
+    basePath
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -451,6 +514,8 @@ export type LeadFilterChip =
   | { kind: 'mql'; value: boolean }
   | { kind: 'sql'; value: SqlDecisionFilter }
   | { kind: 'assignee'; value: AssigneeFilter }
+  | { kind: 'nextMeeting'; value: NextMeetingFilter }
+  | { kind: 'dealRating'; value: DealRating }
   | { kind: 'search'; value: string };
 
 /** One chip per condition (one per selected value for the multi-selects) */
@@ -473,6 +538,8 @@ export function filterChips(filters: LeadListFilters): LeadFilterChip[] {
   if (filters.mql !== undefined) chips.push({ kind: 'mql', value: filters.mql });
   if (filters.sql) chips.push({ kind: 'sql', value: filters.sql });
   if (filters.assignee) chips.push({ kind: 'assignee', value: filters.assignee });
+  if (filters.nextMeeting) chips.push({ kind: 'nextMeeting', value: filters.nextMeeting });
+  for (const value of filters.dealRating ?? []) chips.push({ kind: 'dealRating', value });
   return chips;
 }
 
@@ -523,6 +590,12 @@ export function removeChip(filters: LeadListFilters, chip: LeadFilterChip): Lead
     case 'assignee':
       next.assignee = undefined;
       break;
+    case 'nextMeeting':
+      next.nextMeeting = undefined;
+      break;
+    case 'dealRating':
+      next.dealRating = (filters.dealRating ?? []).filter((v) => v !== chip.value);
+      break;
     case 'search':
       next.search = undefined;
       break;
@@ -536,4 +609,26 @@ export function nextSort(current: LeadListSort, column: LeadSortKey): LeadListSo
     return { by: column, order: current.order === 'asc' ? 'desc' : 'asc' };
   }
   return { by: column, order: FIRST_SORT_ORDER[column] };
+}
+
+// ---------------------------------------------------------------------------
+// Next meeting (#137)
+// ---------------------------------------------------------------------------
+
+/** Closed leads (won / lost) are never "next meeting overdue" (#137) */
+export const NEXT_MEETING_CLOSED_STATUSES = ['won', 'lost'] as const;
+
+/**
+ * The latest hearing's next meeting date has passed (before today in Japan) on a lead that is
+ * still open (not won or lost). Since the latest hearing is the one read, a passed date means
+ * no hearing was recorded after it. Same rule as the list filter 'overdue'
+ * (lib/features/leads/api/list-sql.ts).
+ */
+export function isNextMeetingOverdue(
+  lead: { nextMeetingDate?: string | null; status?: string | null },
+  now: Date = new Date()
+): boolean {
+  if (!lead.nextMeetingDate) return false;
+  if ((NEXT_MEETING_CLOSED_STATUSES as readonly string[]).includes(lead.status ?? '')) return false;
+  return lead.nextMeetingDate < jstDate(now);
 }

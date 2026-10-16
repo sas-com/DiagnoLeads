@@ -353,6 +353,28 @@ describe('LeadDetailView header', () => {
     expect(store.push).toHaveBeenCalledWith('/ja/leads');
   });
 
+  it('marks a next meeting date that passed with no newer hearing (#137)', () => {
+    const { unmount } = renderPage();
+    expect(screen.queryByTestId('next-meeting-overdue')).not.toBeInTheDocument();
+    unmount();
+
+    store.set([makeLead({ nextMeetingDate: '2099-01-05' } as Partial<Lead>)]);
+    const future = renderPage();
+    expect(screen.queryByTestId('next-meeting-overdue')).not.toBeInTheDocument();
+    future.unmount();
+
+    store.set([makeLead({ status: 'lost', nextMeetingDate: '2020-01-06' } as Partial<Lead>)]);
+    const lost = renderPage();
+    expect(screen.queryByTestId('next-meeting-overdue')).not.toBeInTheDocument();
+    lost.unmount();
+
+    store.set([makeLead({ nextMeetingDate: '2020-01-06' } as Partial<Lead>)]);
+    renderPage();
+    expect(screen.getByTestId('next-meeting-overdue')).toHaveTextContent(
+      '次回日程 2020/01/06 が過ぎています'
+    );
+  });
+
   it('records a hearing with the hearing card’s own dialog', async () => {
     const user = userEvent.setup();
     renderPage();

@@ -7,6 +7,7 @@
  * - score range: Popover with two number boxes
  * - created date range: Popover with the shadcn Calendar in range mode (Japan days)
  * - more conditions: consultation requested, MQL, SQL (qualified)
+ * - next meeting (single choice) and deal rating (multi-select) of the latest hearing (#137)
  */
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -16,6 +17,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -29,6 +32,11 @@ import {
   LEAD_STATUSES,
   TARGET_SYSTEMS,
 } from '@/lib/features/leads/types/pipeline';
+import {
+  DEAL_RATINGS,
+  NEXT_MEETING_FILTERS,
+  type NextMeetingFilter,
+} from '@/lib/features/leads/types/schemas';
 import { cn } from '@/lib/utils';
 import { format as formatDate } from 'date-fns';
 import { enUS, ja } from 'date-fns/locale';
@@ -429,6 +437,73 @@ export function MoreConditionsFilter({
 }
 
 // ---------------------------------------------------------------------------
+// Next meeting (#137)
+// ---------------------------------------------------------------------------
+
+export interface NextMeetingFilterProps {
+  value?: NextMeetingFilter;
+  onChange: (value: NextMeetingFilter | undefined) => void;
+  layout?: FilterLayout;
+}
+
+export function NextMeetingFilterControl({
+  value,
+  onChange,
+  layout = 'inline',
+}: NextMeetingFilterProps) {
+  const t = useTranslations('leadList');
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className={triggerClass(layout, value !== undefined)}
+        >
+          <span>{t('nextMeeting')}</span>
+          <span className="flex items-center gap-1">
+            {value && (
+              <span className="text-xs text-gray-600 dark:text-gray-300">
+                {t(`nextMeetingOptions.${value}`)}
+              </span>
+            )}
+            <ChevronDown className="h-4 w-4 opacity-60" aria-hidden="true" />
+          </span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-64">
+        <DropdownMenuLabel>{t('nextMeeting')}</DropdownMenuLabel>
+        <p className="px-2 pb-1 text-xs text-gray-500 dark:text-gray-400">{t('nextMeetingHint')}</p>
+        <DropdownMenuSeparator />
+        <DropdownMenuRadioGroup
+          value={value ?? ''}
+          onValueChange={(next) =>
+            onChange(
+              (NEXT_MEETING_FILTERS as readonly string[]).includes(next)
+                ? (next as NextMeetingFilter)
+                : undefined
+            )
+          }
+        >
+          {NEXT_MEETING_FILTERS.map((option) => (
+            <DropdownMenuRadioItem key={option} value={option}>
+              {t(`nextMeetingOptions.${option}`)}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+        {value && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => onChange(undefined)}>{t('clear')}</DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // All controls
 // ---------------------------------------------------------------------------
 
@@ -505,6 +580,19 @@ export function LeadFilterControls({
       <AssigneeFilterControl
         value={filters.assignee}
         onChange={(assignee) => onChange({ assignee })}
+        layout={layout}
+      />
+      <NextMeetingFilterControl
+        value={filters.nextMeeting}
+        onChange={(nextMeeting) => onChange({ nextMeeting })}
+        layout={layout}
+      />
+      <MultiSelectFilter
+        label={t('dealRating')}
+        options={DEAL_RATINGS}
+        optionLabel={(v) => t('ratingOption', { rating: v.toUpperCase() })}
+        selected={filters.dealRating ?? []}
+        onChange={(dealRating) => onChange({ dealRating })}
         layout={layout}
       />
       <MoreConditionsFilter filters={filters} onChange={onChange} layout={layout} />

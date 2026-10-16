@@ -10,6 +10,10 @@ import {
   leadListHref,
 } from '@/components/dashboard/ax-dashboard-sections';
 import {
+  NextMeetingRateSection,
+  WeekMeetingsSection,
+} from '@/components/dashboard/meeting-sections';
+import {
   DashboardWidget,
   type WidgetDefinition,
   WidgetSettings,
@@ -23,7 +27,17 @@ import { useLeadAccess } from '@/hooks/use-leads';
 import { useOrganization } from '@/hooks/use-organization';
 import { trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
-import { Activity, ArrowUpRight, BarChart3, Clock, Layers, ListTodo, Users } from 'lucide-react';
+import {
+  Activity,
+  ArrowUpRight,
+  BarChart3,
+  CalendarCheck,
+  CalendarClock,
+  Clock,
+  Layers,
+  ListTodo,
+  Users,
+} from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { Fragment, type ReactNode, useEffect, useState } from 'react';
@@ -33,9 +47,18 @@ const PERIODS = [7, 30, 90] as const;
 type Period = (typeof PERIODS)[number];
 
 /** Default order: what needs a reply first, the next actions due, then the figures of the period */
-const WIDGET_IDS = ['pending', 'today', 'kpis', 'trend', 'breakdown', 'recent'] as const;
+const WIDGET_IDS = [
+  'pending',
+  'today',
+  'meetings',
+  'kpis',
+  'meetingRate',
+  'trend',
+  'breakdown',
+  'recent',
+] as const;
 /** Widgets whose figures follow the chosen period; the period switch sits above the first one */
-const PERIOD_WIDGETS: readonly string[] = ['kpis', 'trend', 'breakdown'];
+const PERIOD_WIDGETS: readonly string[] = ['kpis', 'meetingRate', 'trend', 'breakdown'];
 
 const iconClass = 'h-4 w-4 text-gray-500 dark:text-gray-400';
 const WIDGET_DEFINITIONS: WidgetDefinition[] = [
@@ -52,10 +75,24 @@ const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     icon: <ListTodo className={iconClass} />,
   },
   {
+    // This week's meetings from the hearings (#137)
+    id: 'meetings',
+    titleKey: 'meetings',
+    descriptionKey: 'meetingsDesc',
+    icon: <CalendarClock className={iconClass} />,
+  },
+  {
     id: 'kpis',
     titleKey: 'kpis',
     descriptionKey: 'kpisDesc',
     icon: <BarChart3 className={iconClass} />,
+  },
+  {
+    // KPI: next meeting fixed at the first meeting (#137)
+    id: 'meetingRate',
+    titleKey: 'meetingRate',
+    descriptionKey: 'meetingRateDesc',
+    icon: <CalendarCheck className={iconClass} />,
   },
   {
     id: 'trend',
@@ -152,7 +189,9 @@ export default function DashboardPage() {
       />
     ),
     today: <DueTasksSection organizationId={organizationId} />,
+    meetings: <WeekMeetingsSection organizationId={organizationId} />,
     kpis: <KpiSection state={state} data={data} onRetry={retry} />,
+    meetingRate: <NextMeetingRateSection organizationId={organizationId} days={days} />,
     trend: <TrendSection state={state} data={data} onRetry={retry} narrow={narrow} days={days} />,
     breakdown: <BreakdownSection state={state} data={data} onRetry={retry} days={days} />,
     recent: <RecentSection state={state} data={data} onRetry={retry} />,

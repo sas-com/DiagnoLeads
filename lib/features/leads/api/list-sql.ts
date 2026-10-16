@@ -19,11 +19,13 @@ import {
   lt,
   lte,
   ne,
+  notInArray,
   or,
   sql,
 } from 'drizzle-orm';
-import { DEAL_PHASES, LEAD_STATUSES } from '../types/pipeline';
-import type { LeadSortKey, ListLeadsInput } from '../types/schemas';
+import { NEXT_MEETING_CLOSED_STATUSES, addDays, jstWeekStart } from '../list-query';
+import { DEAL_PHASES, LEAD_STATUSES, jstDate } from '../types/pipeline';
+import { DEAL_RATINGS, type LeadSortKey, type ListLeadsInput } from '../types/schemas';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -64,6 +66,35 @@ function oneOrMany<T>(value: T | T[] | null | undefined): T[] {
 export const leadLastActivityAt = sql<string>`greatest(${leads.updatedAt}, (select max(h.updated_at) at time zone 'UTC' from lead_hearings h where h.lead_id = ${leads.id} and h.organization_id = ${leads.organizationId}))`;
 
 /**
+ * A value of the lead's latest hearing (#137). "Latest" is the hearing with the latest held_on,
+ * then the latest created_at, then the highest id: the same order as the lead page's hearing
+ * list. Read with the (organization_id, lead_id, held_on) index, one row per lead.
+ *
+ * `valid` is a condition on the value (`v`) that keeps broken or unknown values out (NULL).
+ * Plain SQL with its own alias, for the same reason as leadLastActivityAt.
+ */
+function latestHearingValue(fieldKey: string, valid: SQL): SQL<string | null> {
+  const value = sql.raw(`(h.fields -> '${fieldKey}' ->> 'value')`);
+  return sql<
+    string | null
+  >`(select case when ${valid} then ${value} end from lead_hearings h where h.lead_id = ${leads.id} and h.organization_id = ${leads.organizationId} order by h.held_on desc, h.created_at desc, h.id desc limit 1)`;
+}
+
+/** Next meeting date of the latest hearing, 'YYYY-MM-DD' (NULL when it records none) */
+export const leadNextMeetingDate = latestHearingValue(
+  'nextMeetingDate',
+  sql.raw(`(h.fields -> 'nextMeetingDate' ->> 'value') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'`)
+);
+
+/** Deal rating (a / b / c) of the latest hearing (NULL when it records none) */
+export const leadDealRating = latestHearingValue(
+  'dealRating',
+  sql.raw(
+    `(h.fields -> 'dealRating' ->> 'value') in (${DEAL_RATINGS.map((r) => `'${r}'`).join(', ')})`
+  )
+);
+
+/**
  * Position in a fixed order (pipeline order instead of alphabetical). Empty and unknown values
  * give NULL, so they go last with the "nulls last" of the ORDER BY.
  */
@@ -87,6 +118,9 @@ const SORT_EXPRESSIONS: Record<LeadSortKey, AnyColumn | SQL> = {
   // Assignee name (the email when no name); unassigned leads go last. Plain SQL with its own
   // alias for the same reason as leadLastActivityAt (#135)
   assignee: sql`(select coalesce(nullif(trim(u.name), ''), u.email) from users u where u.id = ${leads.assigneeUserId})`,
+  // Latest hearing (#137): soonest date first / A first when ascending; none last
+  nextMeetingDate: leadNextMeetingDate,
+  dealRating: leadDealRating,
 };
 
 /**
@@ -111,9 +145,11 @@ export function leadListOrderBy(
  * advanced filter, which the procedure adds). Multi-value filters match any of the values.
  */
 export function leadListConditions(
-  input: ListLeadsInput,
+  input: Omit<ListLeadsInput, 'limit' | 'offset'>,
   /** The member asking, for the assignee filter 'me' */
-  currentUserId?: string
+  currentUserId?: string,
+  /** Clock for "today" and "this week" of the next meeting filter (Japan days) */
+  now: Date = new Date()
 ): SQL[] {
   const conditions: (SQL | undefined)[] = [];
 
@@ -166,7 +202,47 @@ export function leadListConditions(
     conditions.push(currentUserId ? eq(leads.assigneeUserId, currentUserId) : sql`false`);
   } else if (input.assignee) conditions.push(eq(leads.assigneeUserId, input.assignee));
 
+  // Latest hearing (#137). Dates are 'YYYY-MM-DD' text, so text order is date order
+  const nextMeeting = nextMeetingCondition(input.nextMeeting, now);
+  if (nextMeeting) conditions.push(nextMeeting);
+  const ratings = oneOrMany(input.dealRating);
+  if (ratings.length > 0) {
+    conditions.push(
+      sql`${leadDealRating} in (${sql.join(
+        ratings.map((rating) => sql`${rating}`),
+        sql`, `
+      )})`
+    );
+  }
+
   return conditions.filter((c): c is SQL => c !== undefined);
+}
+
+/**
+ * Condition of the next meeting filter (#137). "overdue": the latest hearing's next meeting
+ * date is before today (Japan) — a newer hearing would be the latest one and replace the date,
+ * so a passed date means no hearing was recorded for that meeting — and the lead is still open
+ * (won and lost leads are left out). "thisWeek": Monday to Sunday
+ * of the current Japan week, past days included.
+ */
+export function nextMeetingCondition(
+  filter: ListLeadsInput['nextMeeting'],
+  now: Date = new Date()
+): SQL | undefined {
+  switch (filter) {
+    case 'has':
+      return sql`${leadNextMeetingDate} is not null`;
+    case 'none':
+      return sql`${leadNextMeetingDate} is null`;
+    case 'overdue':
+      return sql`(${leadNextMeetingDate} < ${jstDate(now)} and ${notInArray(leads.status, [...NEXT_MEETING_CLOSED_STATUSES])})`;
+    case 'thisWeek': {
+      const monday = jstWeekStart(now);
+      return sql`${leadNextMeetingDate} between ${monday} and ${addDays(monday, 6)}`;
+    }
+    default:
+      return undefined;
+  }
 }
 
 /**

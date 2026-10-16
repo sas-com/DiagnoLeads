@@ -9,6 +9,7 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -29,8 +30,13 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import type { Lead, Tag } from '@/lib/db/schema';
+import { LEAD_EXPORT_MAX_ROWS } from '@/lib/features/leads/export';
 import { LEAD_PAGE_SIZES, type LeadListSort } from '@/lib/features/leads/list-query';
-import { LEAD_SORT_KEYS, type LeadSortKey } from '@/lib/features/leads/types/schemas';
+import {
+  LEAD_SORT_KEYS,
+  type LeadExportFormat,
+  type LeadSortKey,
+} from '@/lib/features/leads/types/schemas';
 import {
   downloadPDF,
   exportLeadsToPDF,
@@ -58,6 +64,7 @@ import {
   FileJson,
   FileSpreadsheet,
   FileText,
+  Loader2,
   MoreHorizontal,
   Pencil,
   Settings2,
@@ -72,6 +79,7 @@ import { BulkActions } from './bulk-actions';
 import { LeadAssigneeSelect } from './lead-assignee-select';
 import { LeadQuickSelect } from './lead-quick-select';
 import { SortableHeader, ariaSortFor } from './list/sortable-header';
+import { DealRatingBadge, NextMeetingCell } from './next-meeting';
 
 // Extended lead type with tags and the last activity from leads.list (#131)
 type LeadWithTags = Lead & {
@@ -79,6 +87,9 @@ type LeadWithTags = Lead & {
   lastActivityAt?: Date | string | null;
   /** The assignee (#135) */
   assignee?: { id: string; name: string | null; email: string } | null;
+  /** From the latest hearing (#137) */
+  nextMeetingDate?: string | null;
+  dealRating?: string | null;
 };
 
 /** 'YYYY/MM/DD' in Japan time */
@@ -97,9 +108,16 @@ const isSortKey = (id: string): id is LeadSortKey =>
  * Columns shown by default for a window width. The member's own choices (kept per browser)
  * are applied on top. Below xl the email is hidden so the status stays in view
  * without scrolling sideways (#131); it can be shown again from the columns menu.
+ * The latest hearing's deal rating is optional, and its next meeting date is shown from 1280px
+ * (#137).
  */
 export function defaultColumnVisibility(width: number): VisibilityState {
-  const optional = { lastActivityAt: false, mqlQualifiedAt: false };
+  const optional = {
+    lastActivityAt: false,
+    mqlQualifiedAt: false,
+    nextMeetingDate: false,
+    dealRating: false,
+  };
   if (width < 640) {
     return {
       ...optional,
@@ -128,7 +146,7 @@ export function defaultColumnVisibility(width: number): VisibilityState {
   if (width < 1280) {
     return { ...optional, email: false, phone: false, inflowSource: false, tags: true };
   }
-  return { ...optional, phone: false, inflowSource: false, tags: true };
+  return { ...optional, nextMeetingDate: true, phone: false, inflowSource: false, tags: true };
 }
 
 interface LeadTableProps {
@@ -161,6 +179,13 @@ interface LeadTableProps {
   onClearFilters?: () => void;
   /** Renders the toolbar above the table; gets the columns and export menus to place */
   toolbar?: (actions: ReactNode) => ReactNode;
+  /**
+   * Export every lead matching the filters and sort, made on the server (#173). Without it the
+   * export menu is not shown; the selected rows can still be exported from the bulk actions.
+   */
+  onExport?: (format: LeadExportFormat) => void;
+  /** An export is running */
+  exporting?: boolean;
 }
 
 /**
@@ -189,6 +214,8 @@ export function LeadTable({
   hasFilters = false,
   onClearFilters,
   toolbar,
+  onExport,
+  exporting = false,
 }: LeadTableProps) {
   const t = useTranslations('leads');
   const tList = useTranslations('leadList');
@@ -207,88 +234,6 @@ export function LeadTable({
   );
   const sorting: SortingState = [{ id: sort.by, desc: sort.order === 'desc' }];
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
-
-  // Export functions
-  const exportToCSV = useCallback(() => {
-    const filteredData = table.getRowModel().rows.map((row) => row.original);
-    const headers = [
-      'Name',
-      'Email',
-      'Company',
-      'Phone',
-      'Status',
-      'Score',
-      'Source',
-      'Created At',
-    ];
-    const csvContent = [
-      headers.join(','),
-      ...filteredData.map((lead) =>
-        [
-          `"${lead.name || ''}"`,
-          `"${lead.email}"`,
-          `"${lead.company || ''}"`,
-          `"${lead.phone || ''}"`,
-          `"${lead.status}"`,
-          lead.score ?? '',
-          `"${lead.source || ''}"`,
-          `"${lead.createdAt ? new Date(lead.createdAt).toISOString() : ''}"`,
-        ].join(',')
-      ),
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `leads_${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
-  }, []);
-
-  const exportToJSON = useCallback(() => {
-    const filteredData = table.getRowModel().rows.map((row) => ({
-      id: row.original.id,
-      name: row.original.name,
-      email: row.original.email,
-      company: row.original.company,
-      phone: row.original.phone,
-      status: row.original.status,
-      score: row.original.score,
-      source: row.original.source,
-      createdAt: row.original.createdAt,
-    }));
-
-    const blob = new Blob([JSON.stringify(filteredData, null, 2)], {
-      type: 'application/json',
-    });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `leads_${new Date().toISOString().split('T')[0]}.json`;
-    link.click();
-  }, []);
-
-  const exportToPDF = useCallback(() => {
-    const filteredData = table.getRowModel().rows.map((row) => ({
-      id: row.original.id,
-      email: row.original.email,
-      name: row.original.name,
-      company: row.original.company,
-      phone: row.original.phone,
-      position: null,
-      source: row.original.source,
-      status: row.original.status,
-      score: row.original.score,
-      notes: null,
-      createdAt: row.original.createdAt ?? new Date(),
-      updatedAt: row.original.updatedAt ?? new Date(),
-    }));
-
-    const doc = exportLeadsToPDF(filteredData, {
-      generatedAt: new Date(),
-      locale: locale as 'en' | 'ja',
-    });
-    const filename = generatePDFFilename('leads');
-    downloadPDF(doc, filename);
-  }, [locale]);
 
   // Default columns follow the window width
   useEffect(() => {
@@ -519,6 +464,21 @@ export function LeadTable({
       },
     },
     {
+      // Latest hearing (#137)
+      id: 'nextMeetingDate',
+      accessorFn: (row) => row.nextMeetingDate ?? null,
+      header: sortableHeader('nextMeetingDate', tList('nextMeeting')),
+      cell: ({ row }) => (
+        <NextMeetingCell date={row.original.nextMeetingDate} status={row.original.status} />
+      ),
+    },
+    {
+      id: 'dealRating',
+      accessorFn: (row) => row.dealRating ?? null,
+      header: sortableHeader('dealRating', tList('dealRating')),
+      cell: ({ row }) => <DealRatingBadge rating={row.original.dealRating} />,
+    },
+    {
       id: 'actions',
       header: () => <span className="sr-only">{tCommon('actions')}</span>,
       cell: ({ row }) => {
@@ -707,6 +667,8 @@ export function LeadTable({
     createdAt: t('createdAt'),
     lastActivityAt: tList('sort.lastActivityAt'),
     mqlQualifiedAt: t('mqlQualifiedAt'),
+    nextMeetingDate: tList('nextMeeting'),
+    dealRating: tList('dealRating'),
   };
 
   if (isLoading) {
@@ -751,29 +713,42 @@ export function LeadTable({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* Export dropdown */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" className="h-9">
-            <Download className="mr-2 h-4 w-4" />
-            {tCommon('export')}
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={exportToCSV}>
-            <FileSpreadsheet className="mr-2 h-4 w-4" />
-            CSV
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={exportToJSON}>
-            <FileJson className="mr-2 h-4 w-4" />
-            JSON
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={exportToPDF}>
-            <FileText className="mr-2 h-4 w-4" />
-            PDF
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {/* Export: every matching lead in the current order, made on the server (#173) */}
+      {onExport && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="h-9" disabled={exporting}>
+              {exporting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Download className="mr-2 h-4 w-4" aria-hidden="true" />
+              )}
+              {exporting ? tList('export.exporting') : tCommon('export')}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuLabel>
+              {tList('export.all')}
+              <span className="block text-xs font-normal text-gray-500 dark:text-gray-400">
+                {tList('export.allHint', { max: LEAD_EXPORT_MAX_ROWS.toLocaleString() })}
+              </span>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => onExport('csv')}>
+              <FileSpreadsheet className="mr-2 h-4 w-4" />
+              CSV
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onExport('json')}>
+              <FileJson className="mr-2 h-4 w-4" />
+              JSON
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onExport('pdf')}>
+              <FileText className="mr-2 h-4 w-4" />
+              PDF
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </>
   );
 
