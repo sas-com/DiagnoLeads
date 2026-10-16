@@ -14,6 +14,13 @@ describe('sign-in redirect for admin pages', () => {
     }
   });
 
+  it('is not fooled by percent-encoded or upper-case paths', () => {
+    for (const path of ['/dash%62oard', '/%64ashboard', '/leads%2Fabc', '/Settings/members']) {
+      expect(isProtectedPage(path)).toBe(true);
+    }
+    expect(isProtectedPage('/%E0%A4%A')).toBe(false); // malformed escape
+  });
+
   it('sends a signed-out visitor to sign-in in the same language, coming back afterwards', () => {
     const url = signInRedirect(request('/en/leads?leadId=1'), '/en/leads', '/leads', '?leadId=1');
     expect(url?.pathname).toBe('/en/login');

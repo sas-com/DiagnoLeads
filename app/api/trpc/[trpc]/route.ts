@@ -16,7 +16,11 @@ const handler = (req: Request) =>
     // are kept here in the server logs
     onError: ({ path, error }) => {
       if (process.env.NODE_ENV === 'development' || error.code === 'INTERNAL_SERVER_ERROR') {
-        console.error(`tRPC failed on ${path ?? '<no-path>'}:`, error.message);
+        const cause = error.cause as { name?: string; code?: string } | undefined;
+        console.error(`tRPC failed on ${path ?? '<no-path>'}:`, error.message, {
+          cause: cause?.name,
+          code: cause?.code,
+        });
       }
     },
   });
