@@ -12,7 +12,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import {
   Select,
@@ -30,7 +29,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import type { Lead, Tag } from '@/lib/db/schema';
-import { LEAD_STATUSES, type LeadStatus } from '@/lib/features/leads/types';
+import { LEAD_PAGE_SIZES, type LeadListSort } from '@/lib/features/leads/list-query';
+import { LEAD_SORT_KEYS, type LeadSortKey } from '@/lib/features/leads/types/schemas';
 import {
   downloadPDF,
   exportLeadsToPDF,
@@ -38,21 +38,17 @@ import {
 } from '@/lib/features/reports/pdf-export-service';
 import {
   type ColumnDef,
-  type ColumnFiltersState,
   type RowSelectionState,
   type SortingState,
+  type Updater,
   type VisibilityState,
   flexRender,
   getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table';
 import { formatDistance } from 'date-fns';
 import { enUS, ja } from 'date-fns/locale';
 import {
-  ArrowUpDown,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
@@ -64,20 +60,69 @@ import {
   FileText,
   MoreHorizontal,
   Pencil,
-  Search,
   Settings2,
   Trash2,
   UserPlus,
   Users,
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
-import { useCallback, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { TagBadgeList } from '../tags/tag-badge';
 import { BulkActions } from './bulk-actions';
 import { LeadQuickSelect } from './lead-quick-select';
+import { SortableHeader, ariaSortFor } from './list/sortable-header';
 
-// Extended lead type with tags
-type LeadWithTags = Lead & { tags?: Tag[] };
+// Extended lead type with tags and the last activity from leads.list (#131)
+type LeadWithTags = Lead & { tags?: Tag[]; lastActivityAt?: Date | string | null };
+
+/** 'YYYY/MM/DD' in Japan time */
+const jstDayFormat = new Intl.DateTimeFormat('ja-JP', {
+  timeZone: 'Asia/Tokyo',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+const jstDay = (value: Date | string) => jstDayFormat.format(new Date(value));
+
+const isSortKey = (id: string): id is LeadSortKey =>
+  (LEAD_SORT_KEYS as readonly string[]).includes(id);
+
+/**
+ * Columns shown by default for a window width. The member's own choices (kept per browser)
+ * are applied on top. Below xl the email is hidden so the status stays in view
+ * without scrolling sideways (#131); it can be shown again from the columns menu.
+ */
+export function defaultColumnVisibility(width: number): VisibilityState {
+  const optional = { lastActivityAt: false, mqlQualifiedAt: false };
+  if (width < 640) {
+    return {
+      ...optional,
+      // Name and status first on phones; the email is in the side panel
+      email: false,
+      company: false,
+      phone: false,
+      source: false,
+      dealPhase: false,
+      inflowSource: false,
+      createdAt: false,
+      tags: false,
+    };
+  }
+  if (width < 1024) {
+    return {
+      ...optional,
+      email: false,
+      phone: false,
+      source: false,
+      inflowSource: false,
+      tags: true,
+    };
+  }
+  if (width < 1280) {
+    return { ...optional, email: false, phone: false, inflowSource: false, tags: true };
+  }
+  return { ...optional, phone: false, inflowSource: false, tags: true };
+}
 
 interface LeadTableProps {
   leads: LeadWithTags[];
@@ -91,16 +136,25 @@ interface LeadTableProps {
   canEdit?: boolean;
   /** Called after a row's status was changed to lost */
   onLost?: (lead: LeadWithTags) => void;
+  // Server-driven list state (#131): the rows are one page of leads.list
+  sort: LeadListSort;
+  onSort: (column: LeadSortKey) => void;
+  /** 1-based */
+  page: number;
+  pageSize: number;
+  /** All matching leads */
+  total: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+  /** Columns the member showed or hid (on top of the defaults for the width) */
+  columnPreferences?: VisibilityState;
+  onColumnPreferencesChange?: (patch: VisibilityState) => void;
+  /** Filters are applied: an empty page means "no match", not "no leads yet" */
+  hasFilters?: boolean;
+  onClearFilters?: () => void;
+  /** Renders the toolbar above the table; gets the columns and export menus to place */
+  toolbar?: (actions: ReactNode) => ReactNode;
 }
-
-/** Dot colors for the status filter */
-const STATUS_DOT_CLASSES: Record<LeadStatus, string> = {
-  new: 'bg-blue-500',
-  nurturing: 'bg-yellow-500',
-  negotiating: 'bg-emerald-500',
-  won: 'bg-violet-500',
-  lost: 'bg-gray-400',
-};
 
 /**
  * Lead table component with TanStack Table + modern UI
@@ -116,30 +170,39 @@ export function LeadTable({
   onRefresh,
   canEdit = false,
   onLost,
+  sort,
+  onSort,
+  page,
+  pageSize,
+  total,
+  onPageChange,
+  onPageSizeChange,
+  columnPreferences = {},
+  onColumnPreferencesChange,
+  hasFilters = false,
+  onClearFilters,
+  toolbar,
 }: LeadTableProps) {
   const t = useTranslations('leads');
-  const tStatus = useTranslations('status');
+  const tList = useTranslations('leadList');
+  const tSource = useTranslations('leadSource');
   const tPipeline = useTranslations('pipeline');
   const tCommon = useTranslations('common');
   const locale = useLocale();
   const dateLocale = locale === 'ja' ? ja : enUS;
 
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({
-    phone: false,
-    source: false,
-    inflowSource: false,
-    tags: true,
-  });
-  const [globalFilter, setGlobalFilter] = useState('');
-  const [pageSize, setPageSize] = useState(10);
-  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [width, setWidth] = useState<number | null>(null);
+  const columnVisibility = useMemo(
+    () => ({ ...defaultColumnVisibility(width ?? 1440), ...columnPreferences }),
+    [width, columnPreferences]
+  );
+  const sorting: SortingState = [{ id: sort.by, desc: sort.order === 'desc' }];
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
   // Export functions
   const exportToCSV = useCallback(() => {
-    const filteredData = table.getFilteredRowModel().rows.map((row) => row.original);
+    const filteredData = table.getRowModel().rows.map((row) => row.original);
     const headers = [
       'Name',
       'Email',
@@ -174,7 +237,7 @@ export function LeadTable({
   }, []);
 
   const exportToJSON = useCallback(() => {
-    const filteredData = table.getFilteredRowModel().rows.map((row) => ({
+    const filteredData = table.getRowModel().rows.map((row) => ({
       id: row.original.id,
       name: row.original.name,
       email: row.original.email,
@@ -196,7 +259,7 @@ export function LeadTable({
   }, []);
 
   const exportToPDF = useCallback(() => {
-    const filteredData = table.getFilteredRowModel().rows.map((row) => ({
+    const filteredData = table.getRowModel().rows.map((row) => ({
       id: row.original.id,
       email: row.original.email,
       name: row.original.name,
@@ -219,49 +282,23 @@ export function LeadTable({
     downloadPDF(doc, filename);
   }, [locale]);
 
-  // Responsive column visibility based on screen size
+  // Default columns follow the window width
   useEffect(() => {
-    const handleResize = () => {
-      const width = window.innerWidth;
-      if (width < 640) {
-        setColumnVisibility({
-          company: false,
-          phone: false,
-          source: false,
-          dealPhase: false,
-          inflowSource: false,
-          createdAt: false,
-          tags: false,
-        });
-      } else if (width < 1024) {
-        setColumnVisibility({
-          phone: false,
-          source: false,
-          inflowSource: false,
-          tags: true,
-        });
-      } else {
-        setColumnVisibility({
-          phone: false,
-          inflowSource: false,
-          tags: true,
-        });
-      }
-    };
-
+    const handleResize = () => setWidth(window.innerWidth);
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Apply status filter
+  // A selection belongs to the rows on screen: drop it when another page or order is shown
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset when the rows change
   useEffect(() => {
-    if (statusFilter === 'all') {
-      table.getColumn('status')?.setFilterValue(undefined);
-    } else {
-      table.getColumn('status')?.setFilterValue([statusFilter]);
-    }
-  }, [statusFilter]);
+    setRowSelection({});
+  }, [leads]);
+
+  const sortableHeader = (column: LeadSortKey, label: string) => () => (
+    <SortableHeader label={label} column={column} sort={sort} onSort={onSort} />
+  );
 
   const columns: ColumnDef<LeadWithTags>[] = [
     {
@@ -291,15 +328,7 @@ export function LeadTable({
     },
     {
       accessorKey: 'name',
-      header: ({ column }) => (
-        <button
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          className="flex items-center gap-1 hover:text-gray-900 font-semibold"
-        >
-          {t('name')}
-          <ArrowUpDown className="h-4 w-4" />
-        </button>
-      ),
+      header: sortableHeader('name', t('name')),
       cell: ({ row }) => (
         <div className="min-w-[7rem] font-semibold text-gray-900 dark:text-gray-100">
           {row.getValue('name') || t('nameNotSet')}
@@ -308,15 +337,7 @@ export function LeadTable({
     },
     {
       accessorKey: 'email',
-      header: ({ column }) => (
-        <button
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          className="flex items-center gap-1 hover:text-gray-900 font-semibold"
-        >
-          {t('email')}
-          <ArrowUpDown className="h-4 w-4" />
-        </button>
-      ),
+      header: sortableHeader('email', t('email')),
       cell: ({ row }) => (
         // Long addresses are cut with an ellipsis; the full one is in the title
         <span
@@ -329,7 +350,7 @@ export function LeadTable({
     },
     {
       accessorKey: 'company',
-      header: t('company'),
+      header: sortableHeader('company', t('company')),
       cell: ({ row }) => {
         const company = row.getValue('company') as string | null;
         return (
@@ -351,15 +372,7 @@ export function LeadTable({
     },
     {
       accessorKey: 'status',
-      header: ({ column }) => (
-        <button
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          className="flex items-center gap-1 hover:text-gray-900 font-semibold"
-        >
-          {t('status')}
-          <ArrowUpDown className="h-4 w-4" />
-        </button>
-      ),
+      header: sortableHeader('status', t('status')),
       cell: ({ row }) => (
         <LeadQuickSelect
           field="status"
@@ -369,13 +382,10 @@ export function LeadTable({
           onLost={() => onLost?.(row.original)}
         />
       ),
-      filterFn: (row, id, value) => {
-        return value.includes(row.getValue(id));
-      },
     },
     {
       accessorKey: 'dealPhase',
-      header: t('dealPhase'),
+      header: sortableHeader('dealPhase', t('dealPhase')),
       cell: ({ row }) => {
         const phase = row.getValue('dealPhase') as string | null;
         if (!phase && !canEdit) return <span className="text-gray-400">-</span>;
@@ -415,15 +425,7 @@ export function LeadTable({
     },
     {
       accessorKey: 'score',
-      header: ({ column }) => (
-        <button
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          className="flex items-center gap-1 hover:text-gray-900 font-semibold"
-        >
-          {t('score')}
-          <ArrowUpDown className="h-4 w-4" />
-        </button>
-      ),
+      header: sortableHeader('score', t('score')),
       cell: ({ row }) => {
         const score = row.getValue('score') as number | null;
         if (score === null || score === undefined) {
@@ -452,20 +454,14 @@ export function LeadTable({
       header: t('source'),
       cell: ({ row }) => {
         const source = row.getValue('source') as string | null;
-        return <Badge color="gray">{source || '-'}</Badge>;
+        if (!source) return <span className="text-gray-400">-</span>;
+        // Stored values (api, website, embed, diagnostic) are shown translated (#163)
+        return <Badge color="gray">{tSource.has(source) ? tSource(source) : source}</Badge>;
       },
     },
     {
       accessorKey: 'createdAt',
-      header: ({ column }) => (
-        <button
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          className="flex items-center gap-1 hover:text-gray-900 font-semibold"
-        >
-          {t('createdAt')}
-          <ArrowUpDown className="h-4 w-4" />
-        </button>
-      ),
+      header: sortableHeader('createdAt', t('createdAt')),
       cell: ({ row }) => {
         const date = row.getValue('createdAt') as Date;
         return (
@@ -476,6 +472,29 @@ export function LeadTable({
             })}
           </span>
         );
+      },
+    },
+    {
+      id: 'lastActivityAt',
+      accessorFn: (row) => row.lastActivityAt ?? null,
+      header: sortableHeader('lastActivityAt', tList('sort.lastActivityAt')),
+      cell: ({ row }) => {
+        const value = row.original.lastActivityAt;
+        if (!value) return <span className="text-gray-400">-</span>;
+        return (
+          <span className="text-sm text-gray-500">
+            {formatDistance(new Date(value), new Date(), { addSuffix: true, locale: dateLocale })}
+          </span>
+        );
+      },
+    },
+    {
+      accessorKey: 'mqlQualifiedAt',
+      header: sortableHeader('mqlQualifiedAt', t('mqlQualifiedAt')),
+      cell: ({ row }) => {
+        const value = row.original.mqlQualifiedAt;
+        if (!value) return <span className="text-gray-400">-</span>;
+        return <span className="text-sm text-gray-600 dark:text-gray-300">{jstDay(value)}</span>;
       },
     },
     {
@@ -536,35 +555,39 @@ export function LeadTable({
     },
   ];
 
+  // Only the changed columns are kept, so the defaults for other widths still apply
+  const handleColumnVisibilityChange = (updater: Updater<VisibilityState>) => {
+    const next = typeof updater === 'function' ? updater(columnVisibility) : updater;
+    const patch: VisibilityState = {};
+    for (const [id, visible] of Object.entries(next)) {
+      if ((columnVisibility[id] ?? true) !== visible) patch[id] = visible;
+    }
+    if (Object.keys(patch).length > 0) onColumnPreferencesChange?.(patch);
+  };
+
+  // Sorting, filtering and paging happen on the server (leads.list); the table shows one page
   const table = useReactTable({
     data: leads,
     columns,
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
+    getRowId: (row) => row.id,
     getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    onColumnVisibilityChange: setColumnVisibility,
-    onGlobalFilterChange: setGlobalFilter,
+    manualSorting: true,
+    manualFiltering: true,
+    manualPagination: true,
+    pageCount,
+    onColumnVisibilityChange: handleColumnVisibilityChange,
     onRowSelectionChange: setRowSelection,
-    globalFilterFn: 'includesString',
     enableRowSelection: true,
     state: {
       sorting,
-      columnFilters,
       columnVisibility,
-      globalFilter,
       rowSelection,
-      pagination: {
-        pageIndex: 0,
-        pageSize,
-      },
+      pagination: { pageIndex: page - 1, pageSize },
     },
   });
 
   // Get selected leads for bulk actions
-  const selectedLeads = table.getFilteredSelectedRowModel().rows.map((row) => row.original);
+  const selectedLeads = table.getSelectedRowModel().rows.map((row) => row.original);
 
   // Helper functions for bulk export
   const exportSelectedToCSV = useCallback((leadsToExport: Lead[]) => {
@@ -660,6 +683,8 @@ export function LeadTable({
     score: t('score'),
     source: t('source'),
     createdAt: t('createdAt'),
+    lastActivityAt: tList('sort.lastActivityAt'),
+    mqlQualifiedAt: t('mqlQualifiedAt'),
   };
 
   if (isLoading) {
@@ -674,6 +699,61 @@ export function LeadTable({
       </Card>
     );
   }
+
+  const actions = (
+    <>
+      {/* Column visibility toggle */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="sm" className="h-9">
+            <Settings2 className="mr-2 h-4 w-4" />
+            {tCommon('columns')}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-[180px]">
+          {table
+            .getAllColumns()
+            .filter((column) => typeof column.accessorFn !== 'undefined' && column.getCanHide())
+            .map((column) => {
+              return (
+                <DropdownMenuCheckboxItem
+                  key={column.id}
+                  className="capitalize"
+                  checked={column.getIsVisible()}
+                  onCheckedChange={(value) => column.toggleVisibility(!!value)}
+                >
+                  {columnLabels[column.id] || column.id}
+                </DropdownMenuCheckboxItem>
+              );
+            })}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* Export dropdown */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="sm" className="h-9">
+            <Download className="mr-2 h-4 w-4" />
+            {tCommon('export')}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={exportToCSV}>
+            <FileSpreadsheet className="mr-2 h-4 w-4" />
+            CSV
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={exportToJSON}>
+            <FileJson className="mr-2 h-4 w-4" />
+            JSON
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={exportToPDF}>
+            <FileText className="mr-2 h-4 w-4" />
+            PDF
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
+  );
 
   return (
     <Card className="overflow-hidden">
@@ -692,93 +772,9 @@ export function LeadTable({
         </div>
       )}
 
-      {/* Search and filters */}
+      {/* Filters, search and the columns / export menus */}
       <div className="p-4 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-        <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-4">
-          {/* Search Input */}
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder={t('searchPlaceholder')}
-              value={globalFilter ?? ''}
-              onChange={(e) => setGlobalFilter(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-
-          <div className="flex items-center gap-3 flex-wrap">
-            {/* Status filter */}
-            <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value)}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder={t('allStatuses')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t('allStatuses')}</SelectItem>
-                {LEAD_STATUSES.map((status) => (
-                  <SelectItem key={status} value={status}>
-                    <span className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full ${STATUS_DOT_CLASSES[status]}`} />
-                      {tStatus(status)}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Column visibility toggle */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-10">
-                  <Settings2 className="mr-2 h-4 w-4" />
-                  {tCommon('columns')}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[180px]">
-                {table
-                  .getAllColumns()
-                  .filter(
-                    (column) => typeof column.accessorFn !== 'undefined' && column.getCanHide()
-                  )
-                  .map((column) => {
-                    return (
-                      <DropdownMenuCheckboxItem
-                        key={column.id}
-                        className="capitalize"
-                        checked={column.getIsVisible()}
-                        onCheckedChange={(value) => column.toggleVisibility(!!value)}
-                      >
-                        {columnLabels[column.id] || column.id}
-                      </DropdownMenuCheckboxItem>
-                    );
-                  })}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* Export dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-10">
-                  <Download className="mr-2 h-4 w-4" />
-                  {tCommon('export')}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={exportToCSV}>
-                  <FileSpreadsheet className="mr-2 h-4 w-4" />
-                  CSV
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={exportToJSON}>
-                  <FileJson className="mr-2 h-4 w-4" />
-                  JSON
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={exportToPDF}>
-                  <FileText className="mr-2 h-4 w-4" />
-                  PDF
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
+        {toolbar ? toolbar(actions) : <div className="flex justify-end gap-3">{actions}</div>}
       </div>
 
       {/* Table */}
@@ -791,6 +787,9 @@ export function LeadTable({
                   <TableHead
                     key={header.id}
                     className="whitespace-nowrap bg-gray-50 dark:bg-gray-800"
+                    aria-sort={
+                      isSortKey(header.column.id) ? ariaSortFor(sort, header.column.id) : undefined
+                    }
                   >
                     {header.isPlaceholder
                       ? null
@@ -819,21 +818,35 @@ export function LeadTable({
             ) : (
               <TableRow>
                 <TableCell colSpan={columns.length} className="h-64 text-center">
-                  <div className="flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 py-8">
-                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-50 to-violet-50 dark:from-blue-900/30 dark:to-violet-900/30 flex items-center justify-center mb-4">
-                      <Users className="h-10 w-10 text-blue-400 dark:text-blue-300" />
+                  {hasFilters ? (
+                    <div className="flex flex-col items-center justify-center gap-3 py-8 text-gray-500 dark:text-gray-400">
+                      <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                        {tList('noMatches')}
+                      </p>
+                      <p className="text-sm">{tList('noMatchesDescription')}</p>
+                      {onClearFilters && (
+                        <Button variant="outline" onClick={onClearFilters}>
+                          {tList('chips.clearAll')}
+                        </Button>
+                      )}
                     </div>
-                    <p className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                      {t('noLeads')}
-                    </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm mb-6">
-                      {t('noLeadsDescription')}
-                    </p>
-                    <Button size="lg">
-                      <UserPlus className="h-5 w-5 mr-2" />
-                      {t('addFirstLead')}
-                    </Button>
-                  </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 py-8">
+                      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-50 to-violet-50 dark:from-blue-900/30 dark:to-violet-900/30 flex items-center justify-center mb-4">
+                        <Users className="h-10 w-10 text-blue-400 dark:text-blue-300" />
+                      </div>
+                      <p className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                        {t('noLeads')}
+                      </p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm mb-6">
+                        {t('noLeadsDescription')}
+                      </p>
+                      <Button size="lg">
+                        <UserPlus className="h-5 w-5 mr-2" />
+                        {t('addFirstLead')}
+                      </Button>
+                    </div>
+                  )}
                 </TableCell>
               </TableRow>
             )}
@@ -841,7 +854,7 @@ export function LeadTable({
         </Table>
       </div>
 
-      {/* Pagination */}
+      {/* Pagination (server side: total is every matching lead) */}
       <div className="p-4 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-300">
@@ -849,16 +862,13 @@ export function LeadTable({
               <span className="font-medium">{t('rowsPerPage')}</span>
               <Select
                 value={pageSize.toString()}
-                onValueChange={(value) => {
-                  setPageSize(Number(value));
-                  table.setPageSize(Number(value));
-                }}
+                onValueChange={(value) => onPageSizeChange(Number(value))}
               >
-                <SelectTrigger className="w-20">
+                <SelectTrigger className="w-20" aria-label={tList('pageSize')}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {[10, 25, 50, 100].map((size) => (
+                  {LEAD_PAGE_SIZES.map((size) => (
                     <SelectItem key={size} value={size.toString()}>
                       {size}
                     </SelectItem>
@@ -868,22 +878,17 @@ export function LeadTable({
             </div>
 
             <div className="hidden sm:flex items-center gap-1">
-              {table.getFilteredRowModel().rows.length > 0 ? (
+              {total > 0 ? (
                 <>
                   <span className="font-semibold text-gray-900 dark:text-gray-100">
-                    {table.getState().pagination.pageIndex * pageSize + 1}
+                    {Math.min((page - 1) * pageSize + 1, total)}
                   </span>
                   <span>-</span>
                   <span className="font-semibold text-gray-900 dark:text-gray-100">
-                    {Math.min(
-                      (table.getState().pagination.pageIndex + 1) * pageSize,
-                      table.getFilteredRowModel().rows.length
-                    )}
+                    {Math.min(page * pageSize, total)}
                   </span>
                   <span>{t('of')}</span>
-                  <span className="font-semibold text-gray-900 dark:text-gray-100">
-                    {table.getFilteredRowModel().rows.length}
-                  </span>
+                  <span className="font-semibold text-gray-900 dark:text-gray-100">{total}</span>
                   <span>{t('count')}</span>
                 </>
               ) : (
@@ -892,35 +897,36 @@ export function LeadTable({
             </div>
           </div>
 
-          <div className="flex items-center gap-1">
+          <nav className="flex items-center gap-1" aria-label={tList('pagination')}>
             <Button
               variant="outline"
               size="sm"
-              onClick={() => table.firstPage()}
-              disabled={!table.getCanPreviousPage()}
+              onClick={() => onPageChange(1)}
+              disabled={page <= 1}
               className="hidden sm:flex"
+              aria-label={tList('firstPage')}
             >
               <ChevronsLeft className="h-4 w-4" />
             </Button>
             <Button
               variant="outline"
               size="sm"
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
+              onClick={() => onPageChange(page - 1)}
+              disabled={page <= 1}
             >
               <ChevronLeft className="h-4 w-4" />
               <span className="hidden sm:inline ml-1">{t('previous')}</span>
             </Button>
 
             <div className="px-3 py-1 rounded-md bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm font-medium text-gray-900 dark:text-gray-100">
-              {table.getState().pagination.pageIndex + 1} / {table.getPageCount() || 1}
+              {page} / {pageCount}
             </div>
 
             <Button
               variant="outline"
               size="sm"
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
+              onClick={() => onPageChange(page + 1)}
+              disabled={page >= pageCount}
             >
               <span className="hidden sm:inline mr-1">{t('next')}</span>
               <ChevronRight className="h-4 w-4" />
@@ -928,13 +934,14 @@ export function LeadTable({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => table.lastPage()}
-              disabled={!table.getCanNextPage()}
+              onClick={() => onPageChange(pageCount)}
+              disabled={page >= pageCount}
               className="hidden sm:flex"
+              aria-label={tList('lastPage')}
             >
               <ChevronsRight className="h-4 w-4" />
             </Button>
-          </div>
+          </nav>
         </div>
       </div>
     </Card>

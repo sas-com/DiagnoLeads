@@ -256,7 +256,7 @@ describe('Leads Router', () => {
       });
 
       // Result includes the leads with tags extracted from leadTags
-      expect(result.items).toEqual([{ ...mockLead, tags: [] }]);
+      expect(result.items).toEqual([{ ...mockLead, lastActivityAt: null, tags: [] }]);
       expect(result.limit).toBe(20);
       expect(result.offset).toBe(0);
     });

@@ -4,9 +4,8 @@ import { TRPCError } from '@trpc/server';
 import {
   type SQL,
   and,
-  asc,
   between,
-  desc,
+  count,
   eq,
   gt,
   gte,
@@ -29,7 +28,9 @@ import {
   writeLeadAuditLogs,
 } from '../audit';
 import {
+  LEAD_STATUSES,
   type LeadPipelineFields,
+  type LeadStatus,
   jstDate,
   qualificationUpdateFields,
   statusUpdateFields,
@@ -46,6 +47,12 @@ import {
   listLeadsSchema,
   updateLeadSchema,
 } from '../types/schemas';
+import {
+  leadLastActivityAt,
+  leadListConditions,
+  leadListOrderBy,
+  parseUtcTimestamp,
+} from './list-sql';
 
 /**
  * Pick only the pipeline fields that were explicitly provided
@@ -276,52 +283,11 @@ export const leadsRouter = router({
       });
     }
 
-    // Build where conditions
-    const conditions: (SQL | undefined)[] = [eq(leads.organizationId, input.organizationId)];
-
-    // Basic filters
-    if (input.inflowSource) {
-      conditions.push(eq(leads.inflowSource, input.inflowSource));
-    }
-    if (input.dealPhase) {
-      conditions.push(eq(leads.dealPhase, input.dealPhase));
-    }
-    if (input.status) {
-      conditions.push(eq(leads.status, input.status));
-    }
-
-    if (input.source) {
-      conditions.push(eq(leads.source, input.source));
-    }
-
-    if (input.search) {
-      const searchTerm = `%${input.search}%`;
-      conditions.push(
-        or(
-          ilike(leads.name, searchTerm),
-          ilike(leads.email, searchTerm),
-          ilike(leads.company, searchTerm)
-        )!
-      );
-    }
-
-    // Date range filter
-    if (input.createdFrom) {
-      conditions.push(gte(leads.createdAt, new Date(input.createdFrom)));
-    }
-
-    if (input.createdTo) {
-      conditions.push(lte(leads.createdAt, new Date(input.createdTo)));
-    }
-
-    // Score range filter
-    if (input.scoreMin !== undefined) {
-      conditions.push(gte(leads.score, input.scoreMin));
-    }
-
-    if (input.scoreMax !== undefined) {
-      conditions.push(lte(leads.score, input.scoreMax));
-    }
+    // Build where conditions: always scoped to the organization (#131)
+    const conditions: SQL[] = [
+      eq(leads.organizationId, input.organizationId),
+      ...leadListConditions(input),
+    ];
 
     // Tag filter - get lead IDs that have the specified tags
     if (input.tagIds && input.tagIds.length > 0) {
@@ -357,58 +323,89 @@ export const leadsRouter = router({
       }
     }
 
-    // Build order by
-    const sortColumn = input.sortBy || 'createdAt';
-    const sortOrder = input.sortOrder || 'desc';
+    const where = and(...conditions);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const orderByMap: Record<string, any> = {
-      createdAt: leads.createdAt,
-      updatedAt: leads.updatedAt,
-      name: leads.name,
-      email: leads.email,
-      score: leads.score,
-      status: leads.status,
-    };
-
-    const orderColumn = orderByMap[sortColumn] || leads.createdAt;
-    const orderDirection = sortOrder === 'asc' ? asc(orderColumn) : desc(orderColumn);
-
-    // Filter out undefined conditions
-    const validConditions = conditions.filter((c): c is SQL => c !== undefined);
-
-    // Get total count
-    const totalCount = await ctx.db
-      .select({ count: leads.id })
-      .from(leads)
-      .where(and(...validConditions));
-
-    // Get paginated results with tags
-    const results = await ctx.db.query.leads.findMany({
-      where: and(...validConditions),
-      orderBy: [orderDirection],
-      limit: input.limit,
-      offset: input.offset,
-      with: {
-        leadTags: {
-          with: {
-            tag: true,
+    // Total of all matching leads (for the page count), and the requested page
+    const [countRows, results] = await Promise.all([
+      ctx.db.select({ total: count() }).from(leads).where(where),
+      ctx.db.query.leads.findMany({
+        where,
+        orderBy: leadListOrderBy(input.sortBy, input.sortOrder),
+        limit: input.limit,
+        offset: input.offset,
+        extras: {
+          lastActivityAt: sql<string>`${leadLastActivityAt}`.as('last_activity_at'),
+        },
+        with: {
+          leadTags: {
+            with: {
+              tag: true,
+            },
           },
         },
-      },
-    });
+      }),
+    ]);
 
     // Transform results to include tags array
     const itemsWithTags = results.map((lead) => ({
       ...lead,
+      lastActivityAt: parseUtcTimestamp(lead.lastActivityAt),
       tags: lead.leadTags.map((lt) => lt.tag),
     }));
 
     return {
       items: itemsWithTags,
-      total: totalCount.length,
+      total: Number(countRows[0]?.total ?? 0),
       limit: input.limit,
       offset: input.offset,
+    };
+  }),
+
+  /**
+   * Figures of the list page's cards for the whole organization (#131): leads per status and
+   * the average score of the leads that have one. Not affected by the list filters.
+   */
+  statusCounts: organizationProcedure.query(async ({ ctx, input }) => {
+    if (!ctx.ability.can('read', 'Lead')) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: 'リードを閲覧する権限がありません',
+      });
+    }
+
+    const rows = await ctx.db
+      .select({
+        status: leads.status,
+        count: count(),
+        scoreSum: sql<string | null>`sum(${leads.score})`,
+        scored: count(leads.score),
+      })
+      .from(leads)
+      .where(eq(leads.organizationId, input.organizationId))
+      .groupBy(leads.status);
+
+    const byStatus = Object.fromEntries(LEAD_STATUSES.map((status) => [status, 0])) as Record<
+      LeadStatus,
+      number
+    >;
+    let total = 0;
+    let scoreSum = 0;
+    let scored = 0;
+    for (const row of rows) {
+      const n = Number(row.count);
+      total += n;
+      // Values outside the pipeline (old data) count in the total only
+      if ((LEAD_STATUSES as readonly string[]).includes(row.status)) {
+        byStatus[row.status as LeadStatus] += n;
+      }
+      scoreSum += Number(row.scoreSum ?? 0);
+      scored += Number(row.scored);
+    }
+
+    return {
+      total,
+      byStatus,
+      averageScore: scored > 0 ? scoreSum / scored : null,
     };
   }),
 

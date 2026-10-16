@@ -228,16 +228,22 @@ describe('DashboardPage', () => {
   it('links the rest of the waiting requests and the pipeline rows to the lead list', () => {
     renderPage();
 
-    // TODO(#131): these become filtered links
+    // Filtered lists (#131): the waiting requests, and one status per pipeline row
     expect(screen.getByRole('link', { name: 'ほか8件をリード一覧で見る' })).toHaveAttribute(
       'href',
-      '/ja/leads'
+      '/ja/leads?status=new&consult=1'
     );
     const pipeline = screen.getByRole('heading', { name: 'いまのパイプライン' }).closest('div.rounded-lg');
     expect(pipeline).not.toBeNull();
     const rows = within(pipeline as HTMLElement).getAllByRole('link');
     expect(rows).toHaveLength(5);
-    for (const row of rows) expect(row).toHaveAttribute('href', '/ja/leads');
+    expect(rows.map((row) => row.getAttribute('href'))).toEqual([
+      '/ja/leads?status=new',
+      '/ja/leads?status=nurturing',
+      '/ja/leads?status=negotiating',
+      '/ja/leads?status=won',
+      '/ja/leads?status=lost',
+    ]);
   });
 
   it('puts the waiting requests first and the period switch right above the figures', () => {
