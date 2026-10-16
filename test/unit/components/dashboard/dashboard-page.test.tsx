@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   data: undefined as unknown,
   isError: false,
   organizationId: '660e8400-e29b-41d4-a716-446655440000' as string | null,
+  canEdit: false,
 }));
 
 vi.mock('@/lib/trpc/client', () => ({
@@ -39,6 +40,20 @@ vi.mock('@/lib/trpc/client', () => ({
       },
     },
   },
+}));
+vi.mock('@/hooks/use-leads', () => ({
+  useLeadAccess: () => ({ canEdit: mocks.canEdit, canDelete: false }),
+}));
+// The follow-up parts have their own tests (test/unit/components/lead-follow-up)
+vi.mock('@/components/features/lead-follow-up/due-tasks-section', () => ({
+  DueTasksSection: () => <div data-testid="due-tasks" />,
+}));
+vi.mock('@/components/features/lead-follow-up/contact-quick-actions', () => ({
+  ContactQuickActions: ({ leadId, leadLabel }: { leadId: string; leadLabel: string }) => (
+    <div data-testid="contact-actions" data-lead={leadId}>
+      {leadLabel}
+    </div>
+  ),
 }));
 vi.mock('@/hooks/use-organization', () => ({
   useOrganization: () => ({ organizationId: mocks.organizationId, isLoading: false }),
@@ -110,6 +125,7 @@ const summary = {
       platform: 'as400',
       requestedAt: new Date('2026-09-25T02:00:00Z'),
       deadline: '2026/09/29',
+      noAnswerCount: 2,
       overdue: true,
       due: 'overdue',
       businessDays: 5,
@@ -193,6 +209,7 @@ describe('DashboardPage', () => {
     mocks.data = summary;
     mocks.isError = false;
     mocks.organizationId = ORG_ID;
+    mocks.canEdit = false;
   });
 
   it('shows each figure with its change from the previous period, never made-up changes', () => {
@@ -398,6 +415,35 @@ describe('DashboardPage', () => {
     expect(mocks.query).toHaveBeenLastCalledWith({ organizationId: ORG_ID, days: 7 });
   });
 
+  it('puts the next actions due today right after the waiting requests', () => {
+    renderPage();
+
+    const pending = screen.getByRole('heading', { name: /連絡待ちの相談申込/ });
+    const today = screen.getByTestId('due-tasks');
+    const firstKpi = screen.getByRole('heading', { name: '新規リード' });
+    expect(Boolean(pending.compareDocumentPosition(today) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect(Boolean(today.compareDocumentPosition(firstKpi) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+  });
+
+  it('offers the one-tap contact buttons on each waiting request only to staff who can edit leads', () => {
+    const { unmount } = renderPage();
+    expect(screen.queryByTestId('contact-actions')).not.toBeInTheDocument();
+    unmount();
+
+    mocks.canEdit = true;
+    renderPage();
+    const actions = screen.getAllByTestId('contact-actions');
+    expect(actions.map((a) => a.getAttribute('data-lead'))).toEqual(
+      (summary.pendingConsultations as { id: string }[]).map((p) => p.id)
+    );
+    expect(actions[0]).toHaveTextContent('三田製作所');
+    // The buttons sit beside the link to the lead, not inside it
+    expect(actions[0].closest('a')).toBeNull();
+    expect(screen.getByText(/「電話した」「メールした」を記録すると一覧から外れます（「つながらなかった」は残ります）/)).toBeInTheDocument();
+    // Calls that did not get through keep the request waiting, with the count
+    expect(screen.getAllByText(/^不通 \d+回$/).map((e) => e.textContent)).toEqual(['不通 2回']);
+  });
+
   it('reorders widgets from the customize dialog with buttons', async () => {
     const user = userEvent.setup();
     renderPage();
@@ -411,10 +457,11 @@ describe('DashboardPage', () => {
     expect(Boolean(recent.compareDocumentPosition(pipeline) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
     expect(JSON.parse(localStorage.getItem('dashboard-widget-config-v2') ?? '[]')).toEqual([
       { id: 'pending', enabled: true, order: 0 },
-      { id: 'kpis', enabled: true, order: 1 },
-      { id: 'trend', enabled: true, order: 2 },
-      { id: 'recent', enabled: true, order: 3 },
-      { id: 'breakdown', enabled: true, order: 4 },
+      { id: 'today', enabled: true, order: 1 },
+      { id: 'kpis', enabled: true, order: 2 },
+      { id: 'trend', enabled: true, order: 3 },
+      { id: 'recent', enabled: true, order: 4 },
+      { id: 'breakdown', enabled: true, order: 5 },
     ]);
   });
 

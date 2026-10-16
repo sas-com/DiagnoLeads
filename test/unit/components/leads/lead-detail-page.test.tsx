@@ -228,6 +228,13 @@ vi.mock('@/components/features/lead-hearings/lead-hearings-card', () => ({
     <p>{recordOpen ? 'record dialog open' : 'hearing list'}</p>
   ),
 }));
+// Follow-up parts (#136, #85) have their own tests (test/unit/components/lead-follow-up)
+vi.mock('@/components/features/lead-follow-up/lead-contact-bar', () => ({
+  LeadContactBar: ({ leadLabel }: { leadLabel: string }) => <p>contact bar: {leadLabel}</p>,
+}));
+vi.mock('@/components/features/lead-follow-up/lead-next-actions-card', () => ({
+  LeadNextActionsCard: () => <p>next actions</p>,
+}));
 vi.mock('@/components/features/lead-activity/lead-activity-card', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/components/features/lead-activity/lead-activity-card')>()),
   LeadActivityCard: () => <p>activity timeline</p>,
@@ -277,6 +284,9 @@ describe('LeadDetailView header', () => {
     expect(screen.getByRole('combobox', { name: /商談フェーズを変更（現在：フェーズ未設定）/ })).toBeInTheDocument();
     expect(screen.getByTestId('lead-score')).toHaveTextContent('スコア 70');
     expect(screen.getByRole('link', { name: 'リード一覧' })).toHaveAttribute('href', '/ja/leads');
+    // First contact and the one-tap buttons under the header, next actions in the overview
+    expect(screen.getByText('contact bar: Example Works')).toBeInTheDocument();
+    expect(screen.getByText('next actions')).toBeInTheDocument();
   });
 
   it('changes the status from the header, sending only the status', async () => {

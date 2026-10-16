@@ -16,12 +16,14 @@ import {
   useWidgetConfig,
   visibleWidgetIds,
 } from '@/components/dashboard/widget-settings';
+import { DueTasksSection } from '@/components/features/lead-follow-up/due-tasks-section';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { useLeadAccess } from '@/hooks/use-leads';
 import { useOrganization } from '@/hooks/use-organization';
 import { trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
-import { Activity, ArrowUpRight, BarChart3, Clock, Layers, Users } from 'lucide-react';
+import { Activity, ArrowUpRight, BarChart3, Clock, Layers, ListTodo, Users } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { Fragment, type ReactNode, useEffect, useState } from 'react';
@@ -30,8 +32,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PERIODS = [7, 30, 90] as const;
 type Period = (typeof PERIODS)[number];
 
-/** Default order: what needs a reply first, then the figures of the period */
-const WIDGET_IDS = ['pending', 'kpis', 'trend', 'breakdown', 'recent'] as const;
+/** Default order: what needs a reply first, the next actions due, then the figures of the period */
+const WIDGET_IDS = ['pending', 'today', 'kpis', 'trend', 'breakdown', 'recent'] as const;
 /** Widgets whose figures follow the chosen period; the period switch sits above the first one */
 const PERIOD_WIDGETS: readonly string[] = ['kpis', 'trend', 'breakdown'];
 
@@ -42,6 +44,12 @@ const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     titleKey: 'pending',
     descriptionKey: 'pendingDesc',
     icon: <Clock className={iconClass} />,
+  },
+  {
+    id: 'today',
+    titleKey: 'today',
+    descriptionKey: 'todayDesc',
+    icon: <ListTodo className={iconClass} />,
   },
   {
     id: 'kpis',
@@ -83,6 +91,7 @@ export default function DashboardPage() {
   const [days, setDays] = useState<Period>(30);
   const [widgetConfig, setWidgetConfig] = useWidgetConfig([...WIDGET_IDS]);
   const narrow = useNarrowScreen();
+  const access = useLeadAccess(organizationId);
 
   const { data, isError, isPlaceholderData, refetch } = trpc.analytics.getDashboard.useQuery(
     { organizationId, days },
@@ -133,7 +142,16 @@ export default function DashboardPage() {
   );
 
   const sections: Record<string, ReactNode> = {
-    pending: <PendingSection state={state} data={data} onRetry={retry} />,
+    pending: (
+      <PendingSection
+        state={state}
+        data={data}
+        onRetry={retry}
+        organizationId={organizationId}
+        canRecordContact={access.canEdit}
+      />
+    ),
+    today: <DueTasksSection organizationId={organizationId} />,
     kpis: <KpiSection state={state} data={data} onRetry={retry} />,
     trend: <TrendSection state={state} data={data} onRetry={retry} narrow={narrow} days={days} />,
     breakdown: <BreakdownSection state={state} data={data} onRetry={retry} days={days} />,

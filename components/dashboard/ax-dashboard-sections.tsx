@@ -1,6 +1,7 @@
 'use client';
 
 import { BarChart } from '@/components/charts';
+import { ContactQuickActions } from '@/components/features/lead-follow-up/contact-quick-actions';
 import {
   LEAD_STATUS_BADGE_CLASSES,
   LEAD_STATUS_COLORS,
@@ -282,7 +283,16 @@ export function PendingSection({
   state,
   data,
   onRetry,
-}: { state: CardState; data?: DashboardData; onRetry: () => void }) {
+  organizationId,
+  canRecordContact = false,
+}: {
+  state: CardState;
+  data?: DashboardData;
+  onRetry: () => void;
+  /** With permission to edit leads, each request gets the one-tap contact buttons (#136) */
+  organizationId?: string;
+  canRecordContact?: boolean;
+}) {
   const { tw, locale, platformName } = useDashboardText();
   const total = data?.pendingConsultationTotal ?? 0;
   const rest = data ? total - data.pendingConsultations.length : 0;
@@ -302,6 +312,7 @@ export function PendingSection({
           {tw('pending.description', {
             days: AX_MIGRATION_CONFIG.consultationResponseBusinessDays,
           })}
+          {canRecordContact && ` ${tw('pending.contactHint')}`}
         </p>
       </div>
       {state === 'error' ? (
@@ -313,10 +324,13 @@ export function PendingSection({
       ) : (
         <ul className="divide-y divide-gray-100 dark:divide-gray-800">
           {data.pendingConsultations.map((item) => (
-            <li key={item.id}>
+            <li
+              key={item.id}
+              className="flex flex-wrap items-center gap-x-2 gap-y-1 pb-2 lg:flex-nowrap lg:pb-0"
+            >
               <Link
                 href={leadHref(locale, item.id)}
-                className="-mx-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-2 py-2.5 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 sm:flex-nowrap dark:hover:bg-gray-800/60"
+                className="-mx-2 flex min-w-0 flex-1 basis-full flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-2 py-2.5 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 sm:flex-nowrap lg:basis-auto dark:hover:bg-gray-800/60"
               >
                 <span
                   className={cn(
@@ -338,6 +352,11 @@ export function PendingSection({
                     {item.company ?? tw('recent.noCompany')}
                   </span>
                   <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">{item.name}</span>
+                  {item.noAnswerCount > 0 && (
+                    <span className="ml-2 whitespace-nowrap rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                      {tw('pending.noAnswer', { count: item.noAnswerCount })}
+                    </span>
+                  )}
                 </span>
                 <span className="hidden whitespace-nowrap text-sm text-gray-500 md:inline dark:text-gray-400">
                   {platformName(item.platform)}
@@ -347,6 +366,15 @@ export function PendingSection({
                   {tw('pending.requestedAt', { date: jstShortDay(new Date(item.requestedAt)) })}
                 </span>
               </Link>
+              {canRecordContact && organizationId && (
+                <ContactQuickActions
+                  organizationId={organizationId}
+                  leadId={item.id}
+                  leadLabel={item.company ?? item.name ?? tw('recent.noCompany')}
+                  compact
+                  className="shrink-0"
+                />
+              )}
             </li>
           ))}
         </ul>

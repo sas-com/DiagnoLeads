@@ -146,7 +146,7 @@ const auditRow = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-/** Queue: lead, submissions, hearings, comments, audit rows, staff names */
+/** Queue: lead, submissions, hearings, comments, audit rows, contact records, staff names */
 function queue(
   options: {
     lead?: Record<string, unknown>;
@@ -154,6 +154,7 @@ function queue(
     hearings?: unknown[];
     comments?: unknown[];
     audits?: unknown[];
+    contacts?: unknown[];
     users?: unknown[];
   } = {}
 ) {
@@ -163,6 +164,7 @@ function queue(
     options.hearings ?? [],
     options.comments ?? [],
     options.audits ?? [],
+    options.contacts ?? [],
     options.users ?? [{ id: STAFF_ID, name: null, email: 'staff@example.com' }],
   ];
 }
@@ -246,13 +248,46 @@ describe('leadActivity.list', () => {
 
     const [leadWhere, ...sourceWheres] = dbState.wheres;
     expect(toQuery(leadWhere).params).toEqual([LEAD_ID, ORG_ID]);
-    // submissions, hearings, comments, audit rows (the staff names are looked up by id)
-    for (const where of sourceWheres.slice(0, 4)) {
+    // submissions, hearings, comments, audit rows, contact records (staff names are by id)
+    for (const where of sourceWheres.slice(0, 5)) {
       const { sql, params } = toQuery(where);
       expect(sql).toContain('"organization_id"');
       expect(params).toContain(ORG_ID);
       expect(params).toContain(LEAD_ID);
     }
+  });
+
+  it('lists contact records with the note and actor, marking the earliest as the first contact', async () => {
+    queue({
+      contacts: [
+        {
+          id: 'c2',
+          kind: 'call',
+          note: 'Talked about the schedule',
+          createdBy: STAFF_ID,
+          contactedAt: at('2026-10-08T00:00:00.000Z'),
+        },
+        {
+          id: 'c1',
+          kind: 'no_answer',
+          note: null,
+          createdBy: STAFF_ID,
+          contactedAt: at('2026-10-07T00:00:00.000Z'),
+        },
+      ],
+    });
+    const page = await list({ limit: 50, types: ['contact_recorded'] });
+
+    expect(page.items).toEqual([
+      expect.objectContaining({
+        id: 'contact:c2',
+        contactKind: 'call',
+        note: 'Talked about the schedule',
+        first: false,
+        actor: { id: STAFF_ID, name: 'staff@example.com' },
+      }),
+      expect.objectContaining({ id: 'contact:c1', contactKind: 'no_answer', first: true }),
+    ]);
   });
 
   it('pages by time and id without overlap', async () => {

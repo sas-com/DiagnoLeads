@@ -20,6 +20,8 @@
  *   update is known)
  * - comment: lead_comments of every type
  * - lead_updated: audit_logs 'update' rows of the lead (changed fields only, with the actor)
+ * - contact_recorded: lead_contact_logs ("called", "emailed", "could not reach", #136); the
+ *   earliest one is marked as the first contact
  * - mql_qualified / sql_decided / phase_reached: from the lead's own date columns, unless an
  *   audit row records the same change (MQL / SQL: an audit row with that value at exactly that
  *   time; phase: an audit row setting that phase on that day in Japan). Those are shown as
@@ -34,6 +36,7 @@ import {
   auditLogs,
   diagnosticSubmissions,
   leadComments,
+  leadContactLogs,
   leadHearings,
   leads,
   users,
@@ -203,7 +206,7 @@ export async function listLeadActivities(
   const { organizationId, leadId } = input;
   const lead = await findLead(db, organizationId, leadId);
 
-  const [submissions, hearings, comments, audits] = await Promise.all([
+  const [submissions, hearings, comments, audits, contacts] = await Promise.all([
     db
       .select({
         id: diagnosticSubmissions.id,
@@ -270,6 +273,20 @@ export async function listLeadActivities(
       )
       .orderBy(desc(auditLogs.createdAt))
       .limit(PER_SOURCE_LIMIT),
+    db
+      .select({
+        id: leadContactLogs.id,
+        kind: leadContactLogs.kind,
+        note: leadContactLogs.note,
+        createdBy: leadContactLogs.createdBy,
+        contactedAt: leadContactLogs.contactedAt,
+      })
+      .from(leadContactLogs)
+      .where(
+        and(eq(leadContactLogs.organizationId, organizationId), eq(leadContactLogs.leadId, leadId))
+      )
+      .orderBy(desc(leadContactLogs.contactedAt), desc(leadContactLogs.id))
+      .limit(PER_SOURCE_LIMIT),
   ]);
 
   // Staff names, only for the people who did something on this lead
@@ -280,6 +297,7 @@ export async function listLeadActivities(
   }
   for (const row of comments) userIds.add(row.userId);
   for (const row of audits) if (row.userId) userIds.add(row.userId);
+  for (const row of contacts) if (row.createdBy) userIds.add(row.createdBy);
   const people =
     userIds.size === 0
       ? []
@@ -394,6 +412,20 @@ export async function listLeadActivities(
       changes,
     });
   }
+
+  // Contact records (newest first, so the last one read is the first contact)
+  contacts.forEach((row, index) => {
+    events.push({
+      id: `contact:${row.id}`,
+      kind: 'contact_recorded',
+      at: row.contactedAt,
+      actor: actor(row.createdBy),
+      contactId: row.id,
+      contactKind: row.kind as 'call' | 'email' | 'no_answer',
+      note: row.note,
+      first: index === contacts.length - 1 && contacts.length < PER_SOURCE_LIMIT,
+    });
+  });
 
   // Dates on the lead, unless an audit row already shows the same change
   const recorded = (match: (after: Record<string, unknown>, at: Date) => boolean) =>

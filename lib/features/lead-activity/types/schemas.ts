@@ -21,6 +21,7 @@ export const LEAD_ACTIVITY_KINDS = [
   'mql_qualified',
   'sql_decided',
   'phase_reached',
+  'contact_recorded',
 ] as const;
 export type LeadActivityKind = (typeof LEAD_ACTIVITY_KINDS)[number];
 
@@ -29,7 +30,14 @@ export const LEAD_ACTIVITY_FILTERS = {
   diagnosis: ['diagnosis_submitted', 'consultation_requested', 'details_answered'],
   hearing: ['hearing_recorded', 'hearing_updated'],
   comment: ['comment'],
-  sales: ['lead_created', 'lead_updated', 'mql_qualified', 'sql_decided', 'phase_reached'],
+  sales: [
+    'lead_created',
+    'lead_updated',
+    'mql_qualified',
+    'sql_decided',
+    'phase_reached',
+    'contact_recorded',
+  ],
 } as const satisfies Record<string, readonly LeadActivityKind[]>;
 export type LeadActivityFilter = keyof typeof LEAD_ACTIVITY_FILTERS;
 
@@ -123,6 +131,14 @@ export type LeadActivityEvent = EventBase &
     | { kind: 'mql_qualified' }
     | { kind: 'sql_decided'; decision: string | null }
     | { kind: 'phase_reached'; phase: string; dateOnly: true }
+    | {
+        kind: 'contact_recorded';
+        contactId: string;
+        contactKind: 'call' | 'email' | 'no_answer';
+        note: string | null;
+        /** The earliest contact record of the lead (its first contact) */
+        first: boolean;
+      }
   );
 
 export interface LeadActivityPage {

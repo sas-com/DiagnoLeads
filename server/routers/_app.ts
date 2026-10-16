@@ -14,6 +14,7 @@ import { embedRouter } from '@/lib/features/embed/router';
 import { filtersRouter } from '@/lib/features/filters/api/router';
 import { hierarchyRouter } from '@/lib/features/hierarchy/api/router';
 import { leadActivityRouter } from '@/lib/features/lead-activity/api/router';
+import { leadFollowUpRouter } from '@/lib/features/lead-follow-up/api/router';
 import { leadHearingsRouter } from '@/lib/features/lead-hearings/api/router';
 import { leadsRouter } from '@/lib/features/leads/api/router';
 import { invitationsRouter } from '@/lib/features/members/api/invitations-router';
@@ -61,6 +62,7 @@ export const appRouter = router({
   contentEditors: contentEditorsRouter, // FAQ / blog editors granted from settings (#91)
   leadActivity: leadActivityRouter, // Activity timeline per lead (Refs #101)
   diagnoses: diagnosesRouter, // Diagnosis builder: drafts and published versions (Refs #114)
+  leadFollowUp: leadFollowUpRouter, // Contact records and next actions per lead (Refs #136, #85)
 });
 
 export type AppRouter = typeof appRouter;

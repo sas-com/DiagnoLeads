@@ -844,7 +844,9 @@
       "recent": "Recent leads",
       "recentDesc": "Latest leads",
       "moveUp": "Move \"{name}\" up",
-      "moveDown": "Move \"{name}\" down"
+      "moveDown": "Move \"{name}\" down",
+      "today": "Today",
+      "todayDesc": "Next actions due today or overdue"
     },
     "ax": {
       "description": "Leads from the AX migration diagnosis and consultation requests that need a reply",
@@ -880,7 +882,9 @@
         "overdueBy": "{count, plural, one {# business day late} other {# business days late}}",
         "dueTomorrow": "Due tomorrow",
         "dueIn": "{count, plural, one {# business day left} other {# business days left}}",
-        "deadline": "Due {date}"
+        "deadline": "Due {date}",
+        "contactHint": "Recording \"Called\" or \"Emailed\" takes it off the list (\"No answer\" keeps it here).",
+        "noAnswer": "No answer ×{count}"
       },
       "trend": {
         "title": "New leads",
@@ -2831,7 +2835,12 @@
       "lead_updated": "Lead updated",
       "mql_qualified": "Qualified as MQL",
       "sql_decided": "SQL decision: {decision}",
-      "phase_reached": "Reached the deal phase \"{phase}\""
+      "phase_reached": "Reached the deal phase \"{phase}\"",
+      "contact_recorded": {
+        "call": "Contacted by phone",
+        "email": "Contacted by email",
+        "no_answer": "Called, no answer"
+      }
     },
     "unverified": "Identity unverified",
     "unverifiedHelp": "Answered with the same email address. The lead's fields were not changed",
@@ -2874,7 +2883,8 @@
       "notMql": "Not judged",
       "sqlUndecided": "Undecided"
     },
-    "changeArrow": "{before} → {after}"
+    "changeArrow": "{before} → {after}",
+    "firstContact": "First contact"
   },
   "sidebarWidget": {
     "label": "Public diagnosis",
@@ -3085,5 +3095,71 @@
     "lastPage": "Last page",
     "pageSize": "Rows per page",
     "pageSizeOption": "{count} per page"
+  },
+  "leadFollowUp": {
+    "contact": {
+      "label": "Contact log",
+      "kinds": {
+        "call": "Called",
+        "email": "Emailed",
+        "no_answer": "No answer"
+      },
+      "recordFor": "Record a contact with {lead}",
+      "withNote": "Record with a note",
+      "withNoteShort": "With note",
+      "kind": "What happened",
+      "note": "Note (optional)",
+      "notePlaceholder": "e.g. Not available; call again tomorrow morning",
+      "save": "Record",
+      "cancel": "Cancel",
+      "recorded": "Recorded \"{kind}\"",
+      "undo": "Undo",
+      "undone": "The record was removed",
+      "error": "Could not record it. Please try again",
+      "loading": "Loading the contact log…",
+      "loadError": "Could not load the contact log",
+      "firstContact": "First contact {date}",
+      "notContacted": "No contact recorded yet",
+      "latest": "Latest: {kind} ({date}) · {count} in total",
+      "noAnswerCount": "No answer ×{count}"
+    },
+    "tasks": {
+      "title": "Next actions",
+      "empty": "No next actions yet",
+      "loadError": "Could not load the next actions",
+      "saveError": "Could not save. Please try again",
+      "addLabel": "Add a next action",
+      "add": "Add",
+      "titleLabel": "To do",
+      "titlePlaceholder": "e.g. Send the materials",
+      "dueLabel": "Due",
+      "noteLabel": "Note (optional)",
+      "titleRequired": "Enter what to do",
+      "dueRequired": "Enter the due date",
+      "nextMeetingTitle": "Next meeting",
+      "fromHearing": "From the next meeting date of a hearing",
+      "markDone": "Mark \"{title}\" as done",
+      "reopen": "Mark \"{title}\" as not done",
+      "changeDue": "Change the due date of \"{title}\"",
+      "delete": "Delete \"{title}\"",
+      "today": "Today",
+      "showDone": "Show {count} done",
+      "hideDone": "Hide done ones",
+      "due": {
+        "overdue": "Overdue {date}",
+        "today": "Due today",
+        "upcoming": "Due {date}",
+        "done": "Was due {date}"
+      }
+    },
+    "today": {
+      "title": "Today",
+      "description": "Next actions due today or overdue. Tick one to mark it done.",
+      "empty": "Nothing due today",
+      "loadError": "Could not load",
+      "retry": "Reload",
+      "more": "{count} more",
+      "noLeadName": "Lead without a name"
+    }
   }
 }

@@ -9,6 +9,7 @@
 import type { db as defaultDb } from '@/lib/db/client';
 import { diagnosticSubmissions, leadHearings, leads } from '@/lib/db/schema';
 import { AX_MIGRATION_DIAGNOSTIC_KEY } from '@/lib/features/diagnostics/ax-migration/definition';
+import { syncHearingNextAction } from '@/lib/features/lead-follow-up/service';
 import { TRPCError } from '@trpc/server';
 import { and, count, desc, eq, lt, or, sql } from 'drizzle-orm';
 import { HEARING_CATALOG_VERSION, LEAD_HEARINGS_MAX_PER_LEAD } from './catalog';
@@ -334,6 +335,15 @@ export async function createLeadHearing(
         updatedAt: now,
       })
       .returning();
+    // A next meeting date copied from the previous hearing makes no second next action (#85)
+    await syncHearingNextAction(tx, {
+      organizationId,
+      leadId,
+      hearingId: row.id,
+      fields,
+      userId: input.userId,
+      now,
+    });
     return toHearingView(row);
   });
 }
@@ -349,22 +359,36 @@ export async function updateLeadHearing(
 ): Promise<LeadHearingView> {
   // Always move updatedAt forward, even within the same millisecond
   const updatedAt = new Date(Math.max(now.getTime(), input.expectedUpdatedAt.getTime() + 1));
-  const [row] = await db
-    .update(leadHearings)
-    .set({
-      heldOn: input.heldOn,
-      catalogVersion: HEARING_CATALOG_VERSION,
-      fields: input.fields,
-      updatedBy: input.userId,
-      updatedAt,
-    })
-    .where(
-      and(
-        hearingScope(input.organizationId, input.id),
-        eq(leadHearings.updatedAt, input.expectedUpdatedAt)
+  const row = await db.transaction(async (tx) => {
+    const [saved] = await tx
+      .update(leadHearings)
+      .set({
+        heldOn: input.heldOn,
+        catalogVersion: HEARING_CATALOG_VERSION,
+        fields: input.fields,
+        updatedBy: input.userId,
+        updatedAt,
+      })
+      .where(
+        and(
+          hearingScope(input.organizationId, input.id),
+          eq(leadHearings.updatedAt, input.expectedUpdatedAt)
+        )
       )
-    )
-    .returning();
+      .returning();
+    // Saving a next meeting date keeps one next action at that date (#85)
+    if (saved) {
+      await syncHearingNextAction(tx, {
+        organizationId: input.organizationId,
+        leadId: saved.leadId,
+        hearingId: saved.id,
+        fields: input.fields,
+        userId: input.userId,
+        now: updatedAt,
+      });
+    }
+    return saved;
+  });
   if (row) return toHearingView(row);
 
   const [existing] = await db
