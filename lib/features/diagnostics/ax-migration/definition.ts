@@ -4,6 +4,7 @@ import type {
   DiagnosticQuestion,
   LocalizedText,
 } from '../types';
+import { AX_COMPANY_SIZE_OPTIONS } from './company-size';
 
 /**
  * AX migration self-diagnosis (Webセルフ診断)
@@ -47,6 +48,49 @@ const multiple = (
 
 /** Optional follow-up asked after the result */
 const detail = { required: false, detail: true } as const;
+
+/** Optional question asked before the result (company size, #150) */
+const optional = { required: false } as const;
+const sizeUnknown = option(
+  'unknown',
+  'わからない・答えたくない',
+  "I don't know / prefer not to say"
+);
+const sizeNote = text(
+  'ご提案の規模を考えるために使います。わからない場合や答えたくない場合は、空欄のままでも構いません。',
+  'Used to size our proposal. You may leave it blank.'
+);
+
+/** Labels of the company size ranges, in the order of AX_COMPANY_SIZE_OPTIONS */
+const COMPANY_SIZE_LABELS: Record<keyof typeof AX_COMPANY_SIZE_OPTIONS, [string, string][]> = {
+  annual_revenue: [
+    ['10億円未満', 'Under 1 billion yen'],
+    ['10億〜30億円未満', '1-3 billion yen'],
+    ['30億〜100億円未満', '3-10 billion yen'],
+    ['100億〜300億円未満', '10-30 billion yen'],
+    ['300億円以上', '30 billion yen or more'],
+  ],
+  employees: [
+    ['50名未満', 'Under 50'],
+    ['50〜299名', '50-299'],
+    ['300〜999名', '300-999'],
+    ['1,000名以上', '1,000 or more'],
+  ],
+  sites: [
+    ['1か所', 'One'],
+    ['2〜4か所', '2-4'],
+    ['5〜9か所', '5-9'],
+    ['10か所以上', '10 or more'],
+  ],
+};
+
+const sizeOptions = (question: keyof typeof AX_COMPANY_SIZE_OPTIONS): DiagnosticOption[] => [
+  ...AX_COMPANY_SIZE_OPTIONS[question].map((value, index) => {
+    const [ja, en] = COMPANY_SIZE_LABELS[question][index];
+    return option(value, ja, en);
+  }),
+  sizeUnknown,
+];
 
 export const AX_PLATFORMS = ['as400', 'acos', 'access', 'other'] as const;
 export type AxPlatform = (typeof AX_PLATFORMS)[number];
@@ -1007,13 +1051,37 @@ const questions: DiagnosticQuestion[] = [
     option('business_staff', '業務部門の担当者', 'Business department staff'),
     option('other', 'その他', 'Other'),
   ]),
+
+  // ── Company size (optional, #150) ─────────────────────────────────────────────
+  single(
+    'annual_revenue',
+    text('年間の売上高（グループ全体ではなく自社）は？', 'Annual revenue of your company?'),
+    sizeOptions('annual_revenue'),
+    { ...optional, description: sizeNote }
+  ),
+  single(
+    'employees',
+    text('従業員数（正社員・契約社員）は？', 'Number of employees?'),
+    sizeOptions('employees'),
+    optional
+  ),
+  single(
+    'sites',
+    text(
+      '拠点（本社・工場・営業所・倉庫など）の数は？',
+      'Number of sites (head office, plants, sales offices, warehouses)?'
+    ),
+    sizeOptions('sites'),
+    optional
+  ),
 ];
 
 const onPath = (...platforms: AxPlatform[]) => ({ questionId: 'platform', anyOf: platforms });
 
 export const axMigrationDefinition: DiagnosticDefinition = {
   key: AX_MIGRATION_DIAGNOSTIC_KEY,
-  version: 2,
+  // 3: company size questions (#150)
+  version: 3,
   title: text('AXマイグレーション 移行診断', 'AX Migration check'),
   description: text(
     '移行を検討しているシステムを選んで、選択式の質問に答えると、移行難易度と刷新の緊急度の目安、優先して取り組むべき課題がわかります。',
@@ -1126,6 +1194,12 @@ export const axMigrationDefinition: DiagnosticDefinition = {
       title: text('課題と検討状況', 'Challenges and plans'),
       questionIds: ['access_challenges', 'timeline', 'industry', 'role'],
       showWhen: onPath('access'),
+    },
+    {
+      // Last before the contact details, all optional, so it never blocks the result
+      id: 'company',
+      title: text('会社の規模（任意）', 'Company size (optional)'),
+      questionIds: ['annual_revenue', 'employees', 'sites'],
     },
   ],
   questions,

@@ -25,6 +25,13 @@ function submission(
 const prefilled = (value: unknown) => ({ value, status: 'not_yet', source: 'prefilled' });
 
 describe('buildHearingPrefill', () => {
+  it('fills the employee count from the company size question (#150)', () => {
+    const { fields } = buildHearingPrefill(submission({ platform: 'as400', employees: '50_299' }));
+    expect(fields.employeeCount).toEqual(prefilled('50_299'));
+    const unknown = buildHearingPrefill(submission({ platform: 'as400', employees: 'unknown' }));
+    expect(unknown.fields.employeeCount).toBeUndefined();
+  });
+
   it('keeps a snapshot of the submission with only the questions the hearing reads', () => {
     const { snapshot } = buildHearingPrefill(
       submission({ platform: 'as400', gaiji: 'many', role: 'it_manager' })

@@ -11,13 +11,18 @@
  * `required` + `strongSignals` + `minScore`): every required condition must hold, then a strong
  * signal or the minimum score qualifies. Only `interest` sets the lead's MQL date.
  * The rules themselves live in config.ts (AX_MIGRATION_CONFIG.mql).
+ *
+ * Company size (#150) is a required condition too, but only an answer outside the
+ * organization's target ranges fails it: an unanswered size, or no ranges set, never does.
  */
+
+import type { AxCompanySizeFit } from './company-size';
 
 export const AX_MQL_LEVELS = ['interest', 'fit', 'none'] as const;
 export type AxMqlLevel = (typeof AX_MQL_LEVELS)[number];
 
 /** Required conditions (必須条件) */
-export const AX_MQL_REQUIRED = ['industry', 'system'] as const;
+export const AX_MQL_REQUIRED = ['industry', 'system', 'company_size'] as const;
 export type AxMqlRequired = (typeof AX_MQL_REQUIRED)[number];
 
 /** Strong signals (強いシグナル), in the order they are shown */
@@ -57,6 +62,8 @@ export interface AxMqlRules {
 export interface AxMqlFacts {
   industry: boolean;
   system: boolean;
+  /** Company size against the target ranges (#150); omitted = no ranges set */
+  companySize?: AxCompanySizeFit;
   consultationRequested: boolean;
   supportEnd?: string;
   /** Worst support status of the Access / Office versions (ended / ending / ...) */
@@ -72,7 +79,13 @@ export interface AxMqlJudgement {
   qualified: boolean;
   /** 適合: the required conditions are met (kept as `candidate` for older readers) */
   candidate: boolean;
-  criteria: { industry: boolean; system: boolean; action: boolean };
+  criteria: {
+    industry: boolean;
+    system: boolean;
+    action: boolean;
+    /** Company size against the target ranges (#150) */
+    companySize: AxCompanySizeFit;
+  };
   /** Strong signals found (also when the required conditions are not met) */
   signals: AxMqlSignal[];
   /** Required conditions that are not met */
@@ -92,7 +105,13 @@ export function judgeAxMql(
   rules: AxMqlRules,
   countWebDiagnosisAsMqlAction = false
 ): AxMqlJudgement {
-  const unmet = AX_MQL_REQUIRED.filter((key) => !facts[key]);
+  const companySize = facts.companySize ?? 'not_configured';
+  const met: Record<AxMqlRequired, boolean> = {
+    industry: facts.industry,
+    system: facts.system,
+    company_size: companySize !== 'not_fit',
+  };
+  const unmet = AX_MQL_REQUIRED.filter((key) => !met[key]);
   const fit = unmet.length === 0;
   const s = rules.strongSignals;
   const found: Record<AxMqlSignal, boolean> = {
@@ -111,11 +130,13 @@ export function judgeAxMql(
     level: qualified ? 'interest' : fit ? 'fit' : 'none',
     qualified,
     candidate: fit,
-    criteria: { industry: facts.industry, system: facts.system, action },
+    criteria: { industry: facts.industry, system: facts.system, action, companySize },
     signals,
     unmet,
   };
 }
+
+const COMPANY_SIZE_FITS: readonly AxCompanySizeFit[] = ['fit', 'not_fit', 'unknown', 'not_configured'];
 
 const LEVEL_RANK: Record<AxMqlLevel, number> = { none: 0, fit: 1, interest: 2 };
 
@@ -135,7 +156,11 @@ export function readAxMql(stored: unknown): AxMqlJudgement {
   const criteria = isRecord(mql.criteria) ? mql.criteria : {};
   const industry = criteria.industry === true;
   const system = criteria.system === true;
-  const fit = mql.candidate === true || (industry && system);
+  // Results saved before #150 have no company size: no ranges were set
+  const companySize =
+    COMPANY_SIZE_FITS.find((value) => value === criteria.companySize) ?? 'not_configured';
+  const sizeMet = companySize !== 'not_fit';
+  const fit = sizeMet && (mql.candidate === true || (industry && system));
   const signals = signalsOf(mql.signals);
   const level: AxMqlLevel =
     typeof mql.level === 'string' && (AX_MQL_LEVELS as readonly string[]).includes(mql.level)
@@ -147,9 +172,11 @@ export function readAxMql(stored: unknown): AxMqlJudgement {
     level,
     qualified: level === 'interest',
     candidate: fit,
-    criteria: { industry, system, action: signals.length > 0 },
+    criteria: { industry, system, action: signals.length > 0, companySize },
     signals,
-    unmet: AX_MQL_REQUIRED.filter((key) => !(fit || criteria[key] === true)),
+    unmet: AX_MQL_REQUIRED.filter((key) =>
+      key === 'company_size' ? !sizeMet : !(fit || criteria[key] === true)
+    ),
   };
 }
 

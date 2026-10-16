@@ -50,13 +50,14 @@ describe('axMigrationDefinition (v2)', () => {
     }
   });
 
-  it.each(AX_PLATFORMS)('gives the %s path the same five steps', (platform) => {
-    // platform, operation, assets, business (+ contact on screen)
+  it.each(AX_PLATFORMS)('gives the %s path the same six steps', (platform) => {
+    // platform, operation, assets, business, company size (optional, #150) (+ contact on screen)
     expect(shownSections(axMigrationDefinition, { platform }).map((s) => s.id)).toEqual([
       'platform',
       `${platform}-operation`,
       `${platform}-assets`,
       platform === 'access' ? 'business-access' : 'business',
+      'company',
     ]);
   });
 
@@ -90,6 +91,10 @@ describe('axMigrationDefinition (v2)', () => {
       'acos_vendor',
       'access_version',
       'access_users',
+      // Company size (#150): checked against the organization's target ranges, not scored
+      'annual_revenue',
+      'employees',
+      'sites',
     ];
     const ids = axMigrationDefinition.questions.map((q) => q.id);
     expect([...Object.keys(AX_POINT_TABLES), ...unscored].sort()).toEqual([...ids].sort());

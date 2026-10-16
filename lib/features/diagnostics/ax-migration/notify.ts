@@ -25,6 +25,13 @@ const PLATFORM_LABELS: Record<string, string> = {
   access: 'Microsoft Access',
   other: 'その他・わからない',
 };
+/** Company size against the target ranges (#150); nothing is said when no range is set */
+const COMPANY_SIZE_LABELS = {
+  fit: '対象の範囲内',
+  not_fit: '対象の範囲外',
+  unknown: '未回答あり（要確認）',
+} as const;
+
 const CHALLENGE_LABELS = {
   people: 'ヒト（担い手不足・属人化）',
   cost: 'カネ（保守・延命コスト）',
@@ -44,6 +51,7 @@ const MQL_SIGNAL_LABELS: Record<AxMqlSignal, string> = {
 const MQL_REQUIRED_LABELS: Record<AxMqlRequired, string> = {
   industry: '業種',
   system: 'システム',
+  company_size: '企業規模',
 };
 /** Tag in the subject: sales see the order 相談申込 > 関心あり（MQL） > 適合 at a glance */
 const MQL_SUBJECT_TAGS: Record<AxMqlLevel, string> = {
@@ -138,6 +146,9 @@ export function buildSalesMessage(n: AxMigrationNotification): { title: string; 
     `緊急度: ${LEVEL_LABELS[n.result.urgency.level]}`,
     `主な課題: ${primary ? CHALLENGE_LABELS[primary] : '特になし'}`,
     mqlSummary(mql),
+    ...(mql.criteria.companySize !== 'not_configured'
+      ? [`企業規模: ${COMPANY_SIZE_LABELS[mql.criteria.companySize]}`]
+      : []),
     `SQLの手がかり: ${n.result.sqlSignals.candidate ? 'あり' : 'なし'}`,
     ...(n.result.needsHearing ? ['「わからない」の回答が多く要ヒアリング'] : []),
   ].join(' / ');
@@ -203,6 +214,7 @@ export async function notifyAxMigrationSubmission(n: AxMigrationNotification): P
       mqlCandidate: mql.candidate,
       mqlLevel: mql.level,
       mqlSignals: mql.signals,
+      companySizeFit: mql.criteria.companySize,
       sqlSignals: n.result.sqlSignals.candidate,
       difficulty: n.result.difficulty.level,
       urgency: n.result.urgency.level,

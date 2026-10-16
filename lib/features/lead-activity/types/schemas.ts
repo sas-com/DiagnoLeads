@@ -98,6 +98,8 @@ export interface DiagnosisSummary {
   urgency: string | null;
   primaryChallenge: string | null;
   needsHearing: boolean;
+  /** Company size against the organization's target ranges (#150); null before version 3 */
+  companySizeFit: 'fit' | 'not_fit' | 'unknown' | 'not_configured' | null;
   /** The optional follow-up questions were answered (the time is known only when verified) */
   detailsAnswered: boolean;
 }

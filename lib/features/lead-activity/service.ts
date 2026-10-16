@@ -116,6 +116,14 @@ function identityOf(row: {
   return { submissionId: row.id, verified: row.leadCreated || continuation, continuation };
 }
 
+const COMPANY_SIZE_FITS = ['fit', 'not_fit', 'unknown', 'not_configured'] as const;
+
+function companySizeFitOf(mql: unknown): DiagnosisSummary['companySizeFit'] {
+  const criteria = isPlainObject(mql) && isPlainObject(mql.criteria) ? mql.criteria : {};
+  const fit = criteria.companySize;
+  return COMPANY_SIZE_FITS.find((value) => value === fit) ?? null;
+}
+
 function summaryOf(row: {
   diagnosticKey: string;
   answers: Record<string, unknown>;
@@ -132,6 +140,7 @@ function summaryOf(row: {
     urgency: level(result.urgency),
     primaryChallenge: stringOrNull(challenges.primary),
     needsHearing: result.needsHearing === true,
+    companySizeFit: companySizeFitOf(result.mql),
     detailsAnswered:
       row.diagnosticKey === AX_MIGRATION_DIAGNOSTIC_KEY &&
       Object.keys(answers).some((id) => AX_DETAIL_QUESTION_IDS.has(id)),

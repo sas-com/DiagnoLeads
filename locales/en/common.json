@@ -1328,6 +1328,35 @@
         "description": "Topics not to answer on the spot, and who to ask.",
         "topic": "Topic",
         "contact": "Ask"
+      },
+      "targetCompany": {
+        "title": "Target company size",
+        "description": "Checks whether the company size answered in the AX diagnosis is within the ranges chosen here. Companies that answer outside the ranges are removed from the MQL candidates (unanswered or \"I don't know\" answers are not). Items with nothing chosen are not a condition. Respondents never see this check.",
+        "annual_revenue": "Annual revenue",
+        "employees": "Employees",
+        "sites": "Sites",
+        "noCondition": "No condition",
+        "ranges": {
+          "annual_revenue": {
+            "under_1b": "Under 1 billion yen",
+            "1b_3b": "1-3 billion yen",
+            "3b_10b": "3-10 billion yen",
+            "10b_30b": "10-30 billion yen",
+            "over_30b": "30 billion yen or more"
+          },
+          "employees": {
+            "lt50": "Under 50",
+            "50_299": "50-299",
+            "300_999": "300-999",
+            "gte1000": "1,000 or more"
+          },
+          "sites": {
+            "single": "One",
+            "2_4": "2-4",
+            "5_9": "5-9",
+            "gte10": "10 or more"
+          }
+        }
       }
     },
     "agencyLinks": {
@@ -2950,7 +2979,12 @@
       "primaryChallenge": "Main challenge",
       "noChallenge": "None in particular",
       "needsHearing": "Needs a hearing",
-      "detailsAnswered": "Follow-up questions answered"
+      "detailsAnswered": "Follow-up questions answered",
+      "companySize": {
+        "fit": "Company size: in target",
+        "not_fit": "Company size: outside target",
+        "unknown": "Company size: not answered"
+      }
     },
     "showAnswers": "Show answers",
     "hideAnswers": "Hide answers",
@@ -3101,7 +3135,8 @@
       },
       "mqlRequired": {
         "industry": "Industry",
-        "system": "System"
+        "system": "System",
+        "company_size": "company size"
       },
       "sql": "Sales signals",
       "sqlHelp": "Answers such as timing or budget suggest a deal",

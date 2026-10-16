@@ -21,6 +21,7 @@ export interface AxPlaybookForm {
   objections: AxPlaybookContent['objections'];
   ngPhrases: AxPlaybookContent['ngPhrases'];
   escalations: AxPlaybookContent['escalations'];
+  targetCompany: AxPlaybookContent['targetCompany'];
 }
 
 const toLines = (items: string[]) => items.join('\n');
@@ -50,6 +51,11 @@ export function toAxPlaybookForm(content: AxPlaybookContent): AxPlaybookForm {
     objections: content.objections.map((row) => ({ ...row })),
     ngPhrases: content.ngPhrases.map((row) => ({ ...row })),
     escalations: content.escalations.map((row) => ({ ...row })),
+    targetCompany: {
+      annual_revenue: [...content.targetCompany.annual_revenue],
+      employees: [...content.targetCompany.employees],
+      sites: [...content.targetCompany.sites],
+    },
   };
 }
 
@@ -70,5 +76,6 @@ export function fromAxPlaybookForm(form: AxPlaybookForm): AxPlaybookContent {
     objections: form.objections.filter(hasAnyText),
     ngPhrases: form.ngPhrases.filter(hasAnyText),
     escalations: form.escalations.filter(hasAnyText),
+    targetCompany: form.targetCompany,
   };
 }

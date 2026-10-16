@@ -1,12 +1,14 @@
 import type { db as defaultDb } from '@/lib/db/client';
-import { diagnosticSubmissions, leads } from '@/lib/db/schema';
+import { axSalesPlaybooks, diagnosticSubmissions, leads } from '@/lib/db/schema';
 import { findActiveAgencyLink } from '@/lib/features/agency-links/service';
+import { axTargetCompanySchema } from '@/lib/features/ax-playbook/types/schemas';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateAnswers } from '../engine';
 import { upsertLeadFromSubmission } from '../lead-upsert';
 import { type Tracking, compactTracking, inferInflowSource, trackingSchema } from '../tracking';
 import type { AnswerValidationIssue, DiagnosticAnswers } from '../types';
+import type { AxTargetCompany } from './company-size';
 import { AX_MIGRATION_CONFIG } from './config';
 import { PHONE_PATTERN, normalizePhone } from './contact';
 import { AX_MIGRATION_DIAGNOSTIC_KEY, axMigrationDefinition } from './definition';
@@ -178,6 +180,25 @@ export function withOtherSystemUpdate(
   };
 }
 
+/**
+ * Target company size ranges of the organization, from its sales playbook (#150).
+ * A missing playbook or a stored value that no longer parses means "no condition".
+ */
+async function loadTargetCompany(
+  database: Database | Transaction,
+  organizationId: string
+): Promise<AxTargetCompany | null> {
+  const [playbook] = await database
+    .select({ content: axSalesPlaybooks.content })
+    .from(axSalesPlaybooks)
+    .where(eq(axSalesPlaybooks.organizationId, organizationId))
+    .limit(1);
+  const parsed = axTargetCompanySchema.safeParse(
+    (playbook?.content as { targetCompany?: unknown } | undefined)?.targetCompany
+  );
+  return parsed.success ? parsed.data : null;
+}
+
 /** Summary stored on a lead created by the diagnosis */
 function buildLeadSummary(
   submissionId: string,
@@ -196,6 +217,7 @@ function buildLeadSummary(
     mqlCandidate: result.mql.candidate,
     /** 適合 / 関心あり（MQL） and why (#139) */
     mql: toLeadMql(result.mql),
+    companySizeFit: result.companySize.fit,
     sqlSignals: result.sqlSignals.candidate,
     needsHearing: result.needsHearing,
     consultationRequested: input.consultationRequested,
@@ -227,9 +249,14 @@ export async function submitAxMigrationDiagnosis(
     return { ok: false, issues: validation.issues };
   }
   const answers = validation.answers;
-  const result = evaluateAxMigration(answers, AX_MIGRATION_CONFIG, now, {
-    consultationRequested: input.consultationRequested,
-  });
+  const targetCompany = await loadTargetCompany(database, organizationId);
+  const result = evaluateAxMigration(
+    answers,
+    AX_MIGRATION_CONFIG,
+    now,
+    { consultationRequested: input.consultationRequested },
+    targetCompany
+  );
   const tracking: Tracking = input.tracking ?? {};
   const email = input.contact.email.toLowerCase();
 
@@ -561,9 +588,14 @@ export async function addAxMigrationDetails(
     if (!validation.success) {
       return { ok: false as const, reason: 'invalid' as const, issues: validation.issues };
     }
-    const result = evaluateAxMigration(validation.answers, AX_MIGRATION_CONFIG, now, {
-      consultationRequested: submission.consultationRequestedAt !== null,
-    });
+    const targetCompany = await loadTargetCompany(tx, submission.organizationId);
+    const result = evaluateAxMigration(
+      validation.answers,
+      AX_MIGRATION_CONFIG,
+      now,
+      { consultationRequested: submission.consultationRequestedAt !== null },
+      targetCompany
+    );
     const previousScore = (submission.result as Partial<AxMigrationResult> | null)?.leadScore;
 
     await tx

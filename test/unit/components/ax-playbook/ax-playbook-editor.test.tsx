@@ -78,6 +78,24 @@ describe('AxPlaybookEditor', () => {
     expect(mocks.mutate).toHaveBeenCalledWith({ organizationId: ORG_ID, content: expected });
   });
 
+  it('saves the target company size ranges that are checked (#150)', async () => {
+    const content = emptyAxPlaybookContent();
+    content.targetCompany.employees = ['300_999'];
+    mocks.data = { content, updatedAt: null, canEdit: true };
+    const user = userEvent.setup();
+    renderEditor();
+
+    expect(screen.getAllByText('条件なし')).toHaveLength(2);
+    await user.click(screen.getByRole('checkbox', { name: '30億〜100億円未満' }));
+    await user.click(screen.getByRole('checkbox', { name: '10億〜30億円未満' }));
+    await user.click(screen.getByRole('checkbox', { name: '300〜999名' }));
+    await user.click(screen.getByRole('button', { name: '保存' }));
+
+    const expected = emptyAxPlaybookContent();
+    expected.targetCompany.annual_revenue = ['1b_3b', '3b_10b'];
+    expect(mocks.mutate).toHaveBeenCalledWith({ organizationId: ORG_ID, content: expected });
+  });
+
   it('does not save a table row with a required field left blank', async () => {
     mocks.data = { content: null, updatedAt: null, canEdit: true };
     const user = userEvent.setup();
@@ -161,5 +179,6 @@ describe('AxPlaybookEditor', () => {
     expect(screen.getByLabelText('深掘りの質問')).toHaveValue('Q1');
     expect(screen.queryByRole('button', { name: '保存' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '行を追加' })).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: '50名未満' })).toBeDisabled();
   });
 });
