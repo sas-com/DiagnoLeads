@@ -2672,7 +2672,8 @@
       "company": "Company",
       "related": "DX service \"Maru Maru DX\"",
       "privacy": "Privacy policy",
-      "newTab": "(opens in a new tab)"
+      "newTab": "(opens in a new tab)",
+      "copyright": "Copyright © {year} Software Agency System Co., Ltd. All rights reserved."
     }
   },
   "organizations": {

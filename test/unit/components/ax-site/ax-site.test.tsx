@@ -130,6 +130,15 @@ describe('AxSiteFooter', () => {
     expect(screen.queryByRole('link', { name: /個人情報保護方針/ })).not.toBeInTheDocument();
   });
 
+  it('shows the logo and the copyright of the current year', async () => {
+    render(withIntl(await AxSiteFooter({ locale: 'ja' })));
+    const footer = screen.getByRole('contentinfo');
+    expect(within(footer).getByText('マイグレーション')).toBeInTheDocument();
+    expect(
+      within(footer).getByText(`Copyright © ${new Date().getFullYear()}`, { exact: false })
+    ).toBeInTheDocument();
+  });
+
   it('shows the privacy policy once its URL is set', async () => {
     vi.stubEnv('NEXT_PUBLIC_AX_PRIVACY_POLICY_URL', 'https://sas-com.com/privacy/');
     render(withIntl(await AxSiteFooter({ locale: 'ja' })));
