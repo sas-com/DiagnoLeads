@@ -1,4 +1,5 @@
 import { AxDiagnosisFlow } from '@/components/features/ax-diagnosis/ax-diagnosis-flow';
+import { allowedEmailDomains } from '@/lib/email/allowed-recipients';
 import { turnstileSiteKey } from '@/lib/features/diagnostics/turnstile';
 import type { DiagnosticLocale } from '@/lib/features/diagnostics/types';
 import { cn } from '@/lib/utils';
@@ -296,6 +297,7 @@ export async function AxDiagnosisSection({ locale }: SectionProps) {
             locale={locale}
             privacyPolicyUrl={axPrivacyPolicyUrl()}
             turnstileSiteKey={turnstileSiteKey()}
+            allowedEmailDomains={allowedEmailDomains()}
             embedded
           />
         </div>

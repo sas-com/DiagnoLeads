@@ -232,6 +232,28 @@ describe('AxDiagnosisFlow', () => {
     expect(JSON.parse(fetchMock.mock.calls[0][1].body).contact.phone).toBe('０３ー１２３４ー５６７８');
   });
 
+  it('in test mode, asks for a company address on the contact step', { timeout: 30000 }, async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(201, { submissionId: 'sub-1', consultationRequested: false, result: publicResult })
+    );
+    const user = userEvent.setup();
+    render(withIntl(<AxDiagnosisFlow locale="ja" allowedEmailDomains={['sas-com.com']} />));
+    await answerAs400(user);
+    await fillContact(user);
+    const email = screen.getByRole('textbox', { name: /メールアドレス/ });
+    await user.clear(email);
+    await user.type(email, 'pkuroq@gmail.com{Enter}');
+
+    expect(document.getElementById('contact-email-error')).toHaveTextContent(
+      'テスト中のため、@sas-com.com のメールアドレスのみ受け付けています'
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await user.clear(email);
+    await user.type(email, 'kurosawa@sas-com.com{Enter}');
+    expect(await screen.findByRole('heading', { name: '診断結果' })).toBeInTheDocument();
+  });
+
   it('names the options that clear the others in the multiple-choice note', async () => {
     const user = userEvent.setup();
     render(withIntl(<AxDiagnosisFlow locale="ja" />));

@@ -354,7 +354,8 @@
       "rateLimitedMinutes": "Sending is limited for now. Press “{button}” again in about {minutes} minutes. Your answers stay as they are.",
       "verificationPending": "The check before sending has not finished. When a check mark (✓) appears in the check box, press “{button}” again.",
       "verificationRetry": "The check before sending is being done again. When a check mark (✓) appears in the check box, press “{button}” again.",
-      "verificationUnavailable": "The checking service could not be reached for a moment. Wait a little, then press “{button}” again. Your answers stay as they are."
+      "verificationUnavailable": "The checking service could not be reached for a moment. Wait a little, then press “{button}” again. Your answers stay as they are.",
+      "testModeEmail": "While testing, only {domains} email addresses are accepted"
     },
     "verification": {
       "label": "Check before sending",

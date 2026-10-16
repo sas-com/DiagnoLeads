@@ -118,6 +118,26 @@ describe('POST /api/diagnostics/ax-migration', () => {
     );
   });
 
+  it('in test mode, refuses an address outside the company domain before counting or saving', async () => {
+    process.env.APP_TEST_MODE = 'true';
+    try {
+      const response = await POST(
+        request({ ...validBody, contact: { ...validBody.contact, email: 'pkuroq@gmail.com' } })
+      );
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({ code: 'email_domain_not_allowed' });
+      expect(limitsMock).not.toHaveBeenCalled();
+      expect(submitMock).not.toHaveBeenCalled();
+
+      const company = await POST(
+        request({ ...validBody, contact: { ...validBody.contact, email: 'kurosawa@sas-com.com' } })
+      );
+      expect(company.status).toBe(200);
+    } finally {
+      delete process.env.APP_TEST_MODE;
+    }
+  });
+
   it('rejects requests without privacy consent', async () => {
     const response = await POST(request({ ...validBody, privacyConsent: false }));
     expect(response.status).toBe(400);

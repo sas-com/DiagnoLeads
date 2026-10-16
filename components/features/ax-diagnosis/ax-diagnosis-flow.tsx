@@ -3,6 +3,7 @@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { isAllowedEmail } from '@/lib/email/allowed-recipients';
 import { PHONE_PATTERN, normalizePhone } from '@/lib/features/diagnostics/ax-migration/contact';
 import { axMigrationDefinition } from '@/lib/features/diagnostics/ax-migration/definition';
 import type { AxMigrationPublicResult } from '@/lib/features/diagnostics/ax-migration/evaluate';
@@ -86,6 +87,8 @@ interface AxDiagnosisFlowProps {
   embedded?: boolean;
   /** Cloudflare Turnstile site key; the check is shown on the contact step only when set */
   turnstileSiteKey?: string;
+  /** Test mode: email domains accepted on the contact step (empty when test mode is off) */
+  allowedEmailDomains?: string[];
 }
 
 /** Shown under the form; a verification message goes away once a new check has passed */
@@ -233,8 +236,12 @@ export function AxDiagnosisFlow({
   privacyPolicyUrl,
   embedded = false,
   turnstileSiteKey,
+  allowedEmailDomains = [],
 }: AxDiagnosisFlowProps) {
   const t = useTranslations('axDiagnosis');
+  const testModeEmailError = t('errors.testModeEmail', {
+    domains: allowedEmailDomains.map((domain) => `@${domain}`).join('、'),
+  });
   const [stage, setStage] = useState<'questions' | 'result'>('questions');
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<DiagnosticAnswers>({});
@@ -493,6 +500,8 @@ export function AxDiagnosisFlow({
     if (!contact.name.trim()) nextErrors.name = named('name');
     if (!contact.email.trim()) nextErrors.email = named('email');
     else if (!EMAIL_PATTERN.test(contact.email.trim())) nextErrors.email = t('errors.email');
+    else if (!isAllowedEmail(contact.email, allowedEmailDomains))
+      nextErrors.email = testModeEmailError;
     if (
       consultation &&
       contact.phone.trim() &&
@@ -564,6 +573,12 @@ export function AxDiagnosisFlow({
       if (!res.ok && json?.code === 'verification_failed') {
         renewCheck();
         setSubmitError(t('errors.verificationRetry', { button: t('submit') }), 'verification');
+        return;
+      }
+      if (!res.ok && json?.code === 'email_domain_not_allowed') {
+        renewCheck();
+        setErrors((current) => ({ ...current, email: testModeEmailError }));
+        setSubmitError(testModeEmailError);
         return;
       }
       if (!res.ok && json?.code === 'verification_unavailable') {

@@ -1,6 +1,7 @@
 import { AxDiagnosisFlow } from '@/components/features/ax-diagnosis/ax-diagnosis-flow';
 import { AxSiteShell } from '@/components/features/ax-site/ax-site-shell';
 import { axPrivacyPolicyUrl } from '@/components/features/ax-site/site-config';
+import { allowedEmailDomains } from '@/lib/email/allowed-recipients';
 import { turnstileSiteKey } from '@/lib/features/diagnostics/turnstile';
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
@@ -52,6 +53,7 @@ export default async function AxDiagnosisPage({ params }: AxDiagnosisPageProps) 
               locale={locale}
               privacyPolicyUrl={axPrivacyPolicyUrl()}
               turnstileSiteKey={turnstileSiteKey()}
+              allowedEmailDomains={allowedEmailDomains()}
             />
           </div>
         </div>
