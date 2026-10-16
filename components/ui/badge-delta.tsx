@@ -28,9 +28,9 @@ export function BadgeDelta({ deltaType, size = 'md', children, className }: Badg
     deltaType === 'increase' ? TrendingUp : deltaType === 'decrease' ? TrendingDown : Minus;
 
   const colorClasses = {
-    increase: 'bg-emerald-100 text-emerald-800',
-    decrease: 'bg-red-100 text-red-800',
-    unchanged: 'bg-gray-100 text-gray-800',
+    increase: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300',
+    decrease: 'bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-300',
+    unchanged: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
   };
 
   return (
@@ -42,7 +42,7 @@ export function BadgeDelta({ deltaType, size = 'md', children, className }: Badg
         className
       )}
     >
-      <Icon className={iconSizes[size]} />
+      <Icon className={iconSizes[size]} aria-hidden="true" />
       {children}
     </span>
   );
