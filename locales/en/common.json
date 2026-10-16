@@ -2404,7 +2404,9 @@
       "unconfirmed": "{count} unconfirmed",
       "dealRating": "Rating {rating}",
       "loadError": "Could not load the hearings.",
-      "retry": "Retry"
+      "retry": "Retry",
+      "summary": "View summary",
+      "summaryOf": "View the summary of {date}"
     },
     "create": {
       "title": "Record a hearing",
@@ -2472,7 +2474,9 @@
         "unsaved": "Unsaved changes",
         "failed": "Could not save automatically. You have unsaved changes",
         "conflictStopped": "Autosave is paused until the conflict is resolved"
-      }
+      },
+      "viewRecord": "Record",
+      "viewSummary": "Summary"
     },
     "meeting": {
       "toggle": "Meeting mode",
@@ -2484,6 +2488,49 @@
       "notApplicableOf": "Mark {item} not applicable",
       "others": "Other items",
       "othersCount": "{count} items"
+    },
+    "summary": {
+      "title": "Meeting summary",
+      "sections": {
+        "currentSystem": "Current state",
+        "challenges": "Challenges",
+        "requirements": "Requirements",
+        "result": "Rating and next meeting"
+      },
+      "yearMonth": "{year}-{mm}",
+      "date": "{year}-{mm}-{dd}",
+      "pair": "{name}: {value}",
+      "empty": "Not entered",
+      "none": "None",
+      "todoTitle": "To confirm next time",
+      "todoHint": "Select an item to go to it in the record.",
+      "changedTitle": "Changes since the previous hearing ({date})",
+      "noChanges": "Nothing changed.",
+      "noPrevious": "This lead has no earlier hearing.",
+      "reasons": {
+        "unconfirmed": "Web diagnosis value, not confirmed",
+        "next": "Next time",
+        "missing": "Not entered"
+      },
+      "copy": "Copy",
+      "copied": "Summary copied",
+      "copyError": "Could not copy the summary",
+      "print": "Print",
+      "loadError": "Could not load the summary.",
+      "retry": "Retry",
+      "unsavedNote": "Changes that are not saved yet are not in the summary.",
+      "before": "Before",
+      "after": "Now",
+      "text": {
+        "title": "[Meeting summary] {lead} ({date})",
+        "titleNoLead": "[Meeting summary] {date}",
+        "heading": "■ {title}",
+        "bullet": "- {text}",
+        "note": "{text} ({note})",
+        "change": "{name}: {before} -> {after}"
+      },
+      "changed": "Changed",
+      "item": "Item"
     }
   }
 }

@@ -2,10 +2,16 @@
  * First meeting hearing editor (real next-intl messages, tRPC mocked) — Refs #84, #96
  */
 import { LeadHearingEditor } from '@/components/features/lead-hearings/lead-hearing-editor';
-import { HEARING_REQUIRED_ITEMS } from '@/lib/features/lead-hearings/catalog';
+import {
+  DEFAULT_HEARING_CATALOG,
+  HEARING_REQUIRED_ITEMS,
+} from '@/lib/features/lead-hearings/catalog';
 import { hearingModeStorageKey } from '@/lib/features/lead-hearings/meeting-mode';
+import { buildHearingSummary } from '@/lib/features/lead-hearings/summary';
+import { hearingSummaryLabels } from '@/lib/features/lead-hearings/summary-messages';
+import type { HearingFields } from '@/lib/features/lead-hearings/types/schemas';
 import messages from '@/locales/ja/common.json';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -31,6 +37,8 @@ const mocks = vi.hoisted(() => ({
   setData: vi.fn(),
   invalidateGet: vi.fn(),
   invalidateList: vi.fn(),
+  invalidateSummary: vi.fn(),
+  summary: undefined as unknown,
 }));
 
 vi.mock('@/lib/trpc/client', () => ({
@@ -39,6 +47,7 @@ vi.mock('@/lib/trpc/client', () => ({
       leadHearings: {
         get: { invalidate: mocks.invalidateGet, setData: mocks.setData },
         listByLead: { invalidate: mocks.invalidateList },
+        summary: { invalidate: mocks.invalidateSummary },
       },
     }),
     leadHearings: {
@@ -48,6 +57,12 @@ vi.mock('@/lib/trpc/client', () => ({
           isError: Boolean(mocks.error),
           error: mocks.error,
           refetch: mocks.refetch,
+        }),
+      },
+      summary: {
+        useQuery: () => ({
+          data: mocks.summary ? { summary: mocks.summary } : undefined,
+          isError: false,
         }),
       },
       update: {
@@ -111,11 +126,18 @@ function hearing(overrides: Record<string, unknown> = {}) {
 }
 
 // A new element each time, so rerender() really renders again
-const editor = () => (
+const editor = (initialView?: 'record' | 'summary') => (
   <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
-    <LeadHearingEditor leadId={LEAD_ID} hearingId={HEARING_ID} />
+    <LeadHearingEditor leadId={LEAD_ID} hearingId={HEARING_ID} initialView={initialView} />
   </NextIntlClientProvider>
 );
+
+const summaryOf = (fields: HearingFields) =>
+  buildHearingSummary(
+    { heldOn: '2026-10-15', fields, lead: { name: 'Lead A', company: 'Company A' } },
+    DEFAULT_HEARING_CATALOG,
+    hearingSummaryLabels('ja')
+  );
 
 const savedFields = () => mocks.mutate.mock.calls[0][0].fields;
 
@@ -123,6 +145,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.data = hearing();
   mocks.error = null;
+  mocks.summary = undefined;
   window.localStorage.clear();
 });
 
@@ -310,8 +333,8 @@ describe('LeadHearingEditor meeting mode', () => {
     // Each item holds all of its fields
     expect(within(screen.getByTestId('hearing-item-system')).getByTestId('hearing-field-targetSystem')).toBeInTheDocument();
     expect(within(screen.getByTestId('hearing-item-system')).getByTestId('hearing-field-machineModel')).toBeInTheDocument();
-    // No tabs; a field outside the required items is folded away
-    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+    // No section tabs (only record / summary); a field outside the required items is folded away
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['記録', 'まとめ']);
     expect(screen.queryByTestId('hearing-field-meetingFormat')).not.toBeInTheDocument();
     expect(screen.getByText('必須 0/12')).toBeInTheDocument();
 
@@ -582,4 +605,77 @@ describe('LeadHearingEditor autosave', () => {
 
 afterEach(() => {
   Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+});
+
+describe('LeadHearingEditor summary view', () => {
+  beforeEach(() => {
+    mocks.summary = summaryOf({
+      ...(hearing().fields as HearingFields),
+      budgetStatus: { status: 'next', source: null },
+    });
+  });
+
+  it('opens on the summary from the card link and goes back to a field from the to-do list', async () => {
+    window.localStorage.setItem(MODE_KEY, 'detail');
+    const user = userEvent.setup();
+    render(editor('summary'));
+
+    expect(screen.getByRole('tab', { name: 'まとめ' })).toHaveAttribute('aria-selected', 'true');
+    const todos = screen.getByTestId('hearing-summary-todos');
+    await user.click(within(todos).getByRole('button', { name: /機種・バージョン/ }));
+
+    expect(screen.queryByTestId('hearing-summary')).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /現行システム/ })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    await waitFor(() => expect(screen.getByLabelText('機種・バージョン')).toHaveFocus());
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+  });
+
+  it('opens the other fields of the meeting mode for a field outside the required items', async () => {
+    window.localStorage.setItem(MODE_KEY, 'meeting');
+    const user = userEvent.setup();
+    render(editor());
+
+    await user.click(screen.getByRole('tab', { name: 'まとめ' }));
+    await user.click(
+      within(screen.getByTestId('hearing-summary-todos')).getByRole('button', {
+        name: /予算の状態/,
+      })
+    );
+
+    expect(screen.getByTestId('hearing-meeting-mode')).toBeInTheDocument();
+    expect(screen.getByTestId('hearing-field-budgetStatus')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /その他の項目/ })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+  });
+
+  it('saves pending edits before showing the summary', async () => {
+    window.localStorage.setItem(MODE_KEY, 'detail');
+    const user = userEvent.setup();
+    render(editor());
+
+    await user.click(screen.getByRole('checkbox', { name: '業務部門の担当者' }));
+    await user.click(screen.getByRole('tab', { name: 'まとめ' }));
+
+    expect(mocks.mutate).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('保存されていない変更は、まとめに入っていません。')).toBeVisible();
+    act(() => mocks.update?.onSuccess({ ...hearing(), updatedAt: new Date() }));
+    expect(mocks.invalidateSummary).toHaveBeenCalledWith({ organizationId: ORG_ID, id: HEARING_ID });
+  });
+
+  it('shows the summary in read-only mode', async () => {
+    window.localStorage.setItem(MODE_KEY, 'detail');
+    mocks.data = hearing({ canEdit: false });
+    const user = userEvent.setup();
+    render(editor());
+
+    await user.click(screen.getByRole('tab', { name: 'まとめ' }));
+    expect(screen.getByTestId('hearing-summary')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'コピー' })).toBeEnabled();
+    expect(mocks.mutate).not.toHaveBeenCalled();
+  });
 });

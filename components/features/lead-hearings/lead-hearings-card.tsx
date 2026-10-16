@@ -24,7 +24,7 @@ import {
 import { useOrganization } from '@/hooks/use-organization';
 import { diagnosisOptionLabel, toDiagnosticLocale } from '@/lib/features/lead-hearings/form';
 import { trpc } from '@/lib/trpc/client';
-import { ChevronRight, ClipboardList, Loader2, Plus, RefreshCw } from 'lucide-react';
+import { ChevronRight, ClipboardList, FileText, Loader2, Plus, RefreshCw } from 'lucide-react';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -90,46 +90,54 @@ export function LeadHearingsCard({ leadId }: LeadHearingsCardProps) {
         <p className="text-sm text-gray-500">{t('card.empty')}</p>
       ) : (
         <ul className="divide-y">
-          {items.map((item) => (
-            <li key={item.id}>
-              <Link
-                href={`/${locale}/leads/${leadId}/hearings/${item.id}`}
-                className="flex items-center justify-between gap-2 py-3 hover:bg-gray-50 dark:hover:bg-gray-800"
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">
-                    {t('card.heldOn', {
-                      date: format.dateTime(dateOnly(item.heldOn), {
-                        dateStyle: 'medium',
-                        timeZone: 'UTC',
-                      }),
-                    })}
-                  </span>
-                  {item.dealRating && (
-                    <Badge
-                      color={
-                        DEAL_RATING_COLORS[item.dealRating as keyof typeof DEAL_RATING_COLORS] ??
-                        'gray'
-                      }
-                    >
-                      {t('card.dealRating', {
-                        rating: t(`options.dealRating.${item.dealRating}`),
-                      })}
-                    </Badge>
-                  )}
-                  {item.missingCount > 0 && (
-                    <Badge color="amber">{t('card.missing', { count: item.missingCount })}</Badge>
-                  )}
-                  {item.unconfirmedCount > 0 && (
-                    <Badge color="yellow">
-                      {t('card.unconfirmed', { count: item.unconfirmedCount })}
-                    </Badge>
-                  )}
-                </div>
-                <ChevronRight className="h-4 w-4 shrink-0 text-gray-400" />
-              </Link>
-            </li>
-          ))}
+          {items.map((item) => {
+            const heldOn = format.dateTime(dateOnly(item.heldOn), {
+              dateStyle: 'medium',
+              timeZone: 'UTC',
+            });
+            const href = `/${locale}/leads/${leadId}/hearings/${item.id}`;
+            return (
+              <li key={item.id} className="flex items-center gap-2">
+                <Link
+                  href={href}
+                  className="flex min-w-0 flex-1 items-center justify-between gap-2 py-3 hover:bg-gray-50 dark:hover:bg-gray-800"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{t('card.heldOn', { date: heldOn })}</span>
+                    {item.dealRating && (
+                      <Badge
+                        color={
+                          DEAL_RATING_COLORS[item.dealRating as keyof typeof DEAL_RATING_COLORS] ??
+                          'gray'
+                        }
+                      >
+                        {t('card.dealRating', {
+                          rating: t(`options.dealRating.${item.dealRating}`),
+                        })}
+                      </Badge>
+                    )}
+                    {item.missingCount > 0 && (
+                      <Badge color="amber">{t('card.missing', { count: item.missingCount })}</Badge>
+                    )}
+                    {item.unconfirmedCount > 0 && (
+                      <Badge color="yellow">
+                        {t('card.unconfirmed', { count: item.unconfirmedCount })}
+                      </Badge>
+                    )}
+                  </div>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-gray-400" />
+                </Link>
+                <Link
+                  href={`${href}?view=summary`}
+                  aria-label={t('card.summaryOf', { date: heldOn })}
+                  className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-md px-2 text-sm text-blue-600 hover:underline"
+                >
+                  <FileText className="h-4 w-4" aria-hidden="true" />
+                  {t('card.summary')}
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       )}
 

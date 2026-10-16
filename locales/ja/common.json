@@ -2404,7 +2404,9 @@
       "unconfirmed": "未確認 {count}",
       "dealRating": "評価 {rating}",
       "loadError": "ヒアリングを読み込めませんでした。",
-      "retry": "再読み込み"
+      "retry": "再読み込み",
+      "summary": "まとめを見る",
+      "summaryOf": "{date} のまとめを見る"
     },
     "create": {
       "title": "ヒアリングを記録する",
@@ -2472,7 +2474,9 @@
         "unsaved": "未保存の変更あり",
         "failed": "自動保存できませんでした。未保存の変更があります",
         "conflictStopped": "衝突を解消するまで自動保存を止めています"
-      }
+      },
+      "viewRecord": "記録",
+      "viewSummary": "まとめ"
     },
     "meeting": {
       "toggle": "商談モード",
@@ -2484,6 +2488,49 @@
       "notApplicableOf": "{item}を対象外にする",
       "others": "その他の項目",
       "othersCount": "{count}項目"
+    },
+    "summary": {
+      "title": "商談のまとめ",
+      "sections": {
+        "currentSystem": "現状",
+        "challenges": "課題",
+        "requirements": "要件",
+        "result": "評価と次回"
+      },
+      "yearMonth": "{year}年{month}月",
+      "date": "{year}年{month}月{day}日",
+      "pair": "{name}: {value}",
+      "empty": "未記入",
+      "none": "なし",
+      "todoTitle": "次回に確認すること",
+      "todoHint": "項目を押すと、記録のその項目に移動します。",
+      "changedTitle": "前回（{date}）からの変化",
+      "noChanges": "変わった項目はありません。",
+      "noPrevious": "このリードの以前のヒアリングはありません。",
+      "reasons": {
+        "unconfirmed": "Web診断のまま未確認",
+        "next": "次回",
+        "missing": "未記入"
+      },
+      "copy": "コピー",
+      "copied": "まとめをコピーしました",
+      "copyError": "コピーできませんでした",
+      "print": "印刷",
+      "loadError": "まとめを読み込めませんでした。",
+      "retry": "再読み込み",
+      "unsavedNote": "保存されていない変更は、まとめに入っていません。",
+      "before": "前回",
+      "after": "今回",
+      "text": {
+        "title": "【商談のまとめ】{lead}（{date}）",
+        "titleNoLead": "【商談のまとめ】{date}",
+        "heading": "■ {title}",
+        "bullet": "・{text}",
+        "note": "{text}（{note}）",
+        "change": "{name}: {before} → {after}"
+      },
+      "changed": "前回から変更",
+      "item": "項目"
     }
   }
 }

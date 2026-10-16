@@ -205,5 +205,10 @@ export const updateLeadHearingSchema = z
 
 export const deleteLeadHearingSchema = getLeadHearingSchema;
 
+/** The meeting summary of a hearing, labelled in this language */
+export const leadHearingSummarySchema = z
+  .object({ organizationId, id: z.string().uuid(), locale: z.enum(['ja', 'en']).optional() })
+  .strict();
+
 export type CreateLeadHearingInput = z.infer<typeof createLeadHearingSchema>;
 export type UpdateLeadHearingInput = z.infer<typeof updateLeadHearingSchema>;

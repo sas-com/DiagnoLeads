@@ -668,3 +668,25 @@ html:has(.ax-site) {
     break-inside: avoid;
   }
 }
+
+/* Printing the meeting summary of a hearing (Refs #97): same approach as the AX result above.
+   The summary is only on the page while its view is open, so the rest prints as usual. */
+@media print {
+  body:has([data-hearing-summary])
+    :not(:has([data-hearing-summary])):not([data-hearing-summary], [data-hearing-summary] *) {
+    display: none !important;
+  }
+  body:has([data-hearing-summary]) :has([data-hearing-summary]) {
+    position: static !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: none !important;
+    max-width: none !important;
+  }
+  [data-hearing-summary] {
+    print-color-adjust: exact;
+  }
+}

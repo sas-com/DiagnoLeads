@@ -9,19 +9,24 @@
 import type { AppAbility } from '@/lib/auth/permissions';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
+import { DEFAULT_HEARING_CATALOG } from '../catalog';
 import {
   createLeadHearing,
   deleteLeadHearing,
   getLeadHearing,
+  getLeadHearingSummarySource,
   listLeadHearings,
   listPrefillSources,
   updateLeadHearing,
 } from '../service';
+import { buildHearingSummary } from '../summary';
+import { hearingSummaryLabels } from '../summary-messages';
 import {
   createLeadHearingSchema,
   deleteLeadHearingSchema,
   getLeadHearingSchema,
   leadHearingPrefillSourcesSchema,
+  leadHearingSummarySchema,
   listLeadHearingsSchema,
   updateLeadHearingSchema,
 } from '../types/schemas';
@@ -62,6 +67,31 @@ export const leadHearingsRouter = router({
       id: input.id,
     });
     return { ...hearing, canEdit: ctx.ability.can('update', 'Lead') };
+  }),
+
+  /**
+   * The meeting summary of a hearing (#97), compared with the previous hearing of the lead.
+   * Read like get: same permission, same organization scope.
+   */
+  summary: organizationProcedure.input(leadHearingSummarySchema).query(async ({ ctx, input }) => {
+    assertCanRead(ctx.ability);
+    const source = await getLeadHearingSummarySource(ctx.db, {
+      organizationId: ctx.organization.id,
+      id: input.id,
+    });
+    // Organization overrides (#98) will resolve their own catalog here
+    const summary = buildHearingSummary(
+      { heldOn: source.heldOn, fields: source.fields, lead: source.lead },
+      DEFAULT_HEARING_CATALOG,
+      hearingSummaryLabels(input.locale ?? 'ja'),
+      source.previous
+    );
+    return {
+      id: source.id,
+      leadId: source.leadId,
+      previousId: source.previous?.id ?? null,
+      summary,
+    };
   }),
 
   /** The lead's Web diagnosis submissions a new hearing can start from */

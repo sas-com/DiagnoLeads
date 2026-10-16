@@ -40,6 +40,7 @@ import {
   requiredItemFields,
   toggleHearingItemStatus,
 } from '@/lib/features/lead-hearings/meeting-mode';
+import type { HearingSummaryTodo } from '@/lib/features/lead-hearings/summary';
 import {
   type HearingFieldEntry,
   type HearingFieldValue,
@@ -66,6 +67,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { HearingFieldRow } from './hearing-field-row';
+import { HearingSummaryPanel } from './hearing-summary-panel';
 import { useHearingAutosave } from './use-hearing-autosave';
 
 /** Organization overrides (#98) will resolve their own catalog view */
@@ -78,6 +80,18 @@ const meetingItems = catalog.requiredItems.map((item) => ({
 }));
 const otherSections = otherFieldsBySection(catalog);
 const otherFieldCount = otherSections.reduce((sum, section) => sum + section.fields.length, 0);
+const meetingItemKeys = new Set<string>(
+  meetingItems.flatMap(({ fields }) => fields.map(({ field }) => field.key))
+);
+
+/** Frames to wait for a field to appear after a jump from the summary */
+const JUMP_MAX_FRAMES = 10;
+const JUMP_FOCUS_SELECTOR = ['input:not([type="hidden"])', 'textarea', 'button', 'select']
+  .map((control) => `[data-hearing-input] ${control}`)
+  .join(', ');
+
+/** The record (the inputs) or the meeting summary (#97) */
+export type HearingEditorView = 'record' | 'summary';
 
 /** The mode a user chose last time; storage may be unavailable (private mode, blocked) */
 function readStoredMode(key: string): HearingEditorMode | null {
@@ -106,10 +120,16 @@ interface LoadedHearing {
 interface LeadHearingEditorProps {
   leadId: string;
   hearingId: string;
+  /** View to open with (the hearings card links straight to the summary) */
+  initialView?: HearingEditorView;
 }
 
 /** Editor of one first-meeting hearing (Refs #84) */
-export function LeadHearingEditor({ leadId, hearingId }: LeadHearingEditorProps) {
+export function LeadHearingEditor({
+  leadId,
+  hearingId,
+  initialView = 'record',
+}: LeadHearingEditorProps) {
   const t = useTranslations('leadHearings');
   const tRoot = useTranslations();
   const format = useFormatter();
@@ -129,6 +149,9 @@ export function LeadHearingEditor({ leadId, hearingId }: LeadHearingEditorProps)
   const [tab, setTab] = useState<HearingSectionId>(catalog.sections[0].id);
   const [conflict, setConflict] = useState(false);
   const [othersOpen, setOthersOpen] = useState(false);
+  const [view, setView] = useState<HearingEditorView>(initialView);
+  // A field to scroll to once the record is shown again (from the summary's to-do list)
+  const [jumpTo, setJumpTo] = useState<HearingFieldKey | null>(null);
 
   // Meeting mode / detail mode: the user's last choice, else by whether the hearing is new
   const session = useSession();
@@ -191,6 +214,7 @@ export function LeadHearingEditor({ leadId, hearingId }: LeadHearingEditorProps)
         current ? { ...current, ...saved } : current
       );
       utils.leadHearings.listByLead.invalidate({ organizationId: orgId, leadId });
+      utils.leadHearings.summary.invalidate({ organizationId: orgId, id: hearingId });
       const settled = autosave.saved();
       if (settled.manual) {
         toast.success(t('editor.saved'));
@@ -300,6 +324,29 @@ export function LeadHearingEditor({ leadId, hearingId }: LeadHearingEditorProps)
     [notifyEdit]
   );
 
+  // After a jump from the summary: show the field and put the focus on its input. The record
+  // panel mounts a frame after the view changes, so look for the field for a few frames.
+  useEffect(() => {
+    if (!jumpTo || view !== 'record') return;
+    let frame = 0;
+    let tries = 0;
+    const focusField = () => {
+      const row = document.getElementById(`hearing-row-${jumpTo}`);
+      if (!row && tries++ < JUMP_MAX_FRAMES) {
+        frame = requestAnimationFrame(focusField);
+        return;
+      }
+      if (row) {
+        row.scrollIntoView({ block: 'center' });
+        // The first control of the input (not the status select above it)
+        row.querySelector<HTMLElement>(JUMP_FOCUS_SELECTOR)?.focus({ preventScroll: true });
+      }
+      setJumpTo(null);
+    };
+    focusField();
+    return () => cancelAnimationFrame(frame);
+  }, [jumpTo, view]);
+
   const errorCode = hearing.error?.data?.code;
   // BAD_REQUEST: the id in the URL is not a valid id
   const notFound =
@@ -346,6 +393,20 @@ export function LeadHearingEditor({ leadId, hearingId }: LeadHearingEditorProps)
   const data = hearing.data;
 
   const handleSave = () => autosave.flush(true);
+  const changeView = (next: HearingEditorView) => {
+    // The summary is built from what is saved: save pending edits first
+    if (next === 'summary' && autosave.snapshot.dirty && !readOnly) autosave.flush();
+    setView(next);
+  };
+  const handleJump = (todo: HearingSummaryTodo) => {
+    if (mode === 'meeting') {
+      if (!meetingItemKeys.has(todo.key)) setOthersOpen(true);
+    } else {
+      setTab(todo.section);
+    }
+    setView('record');
+    setJumpTo(todo.key);
+  };
   const meetingMode = mode === 'meeting';
   const progress = meetingProgress(missing, catalog.requiredItems);
   const saveStatus = autosaveStatus(autosave.snapshot, autosave.lastSavedAt);
@@ -521,101 +582,69 @@ export function LeadHearingEditor({ leadId, hearingId }: LeadHearingEditorProps)
         </Callout>
       )}
 
-      {meetingMode ? (
-        <div className="space-y-4" data-testid="hearing-meeting-mode">
-          {meetingItems.map(({ item, fields }) => {
-            const itemLabel = tRoot(item.labelKey);
-            const filled = !missing.missing.includes(item.id);
-            const quickStatuses = [
-              ['next', t('meeting.next'), t('meeting.nextOf', { item: itemLabel })],
-              [
-                'not_applicable',
-                t('meeting.notApplicable'),
-                t('meeting.notApplicableOf', { item: itemLabel }),
-              ],
-            ] as const;
-            return (
-              <Card key={item.id} data-testid={`hearing-item-${item.id}`}>
-                <CardContent className="pt-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="flex items-center gap-2 text-base font-semibold">
-                      {filled && (
-                        <CheckCircle2 className="h-5 w-5 text-emerald-600" aria-hidden="true" />
-                      )}
-                      {itemLabel}
-                    </h2>
-                    <div className="ml-auto flex gap-2">
-                      {quickStatuses.map(([status, text, label]) => {
-                        const active = itemHasStatus(form, item, status);
-                        return (
-                          <Button
-                            key={status}
-                            type="button"
-                            variant={active ? 'default' : 'outline'}
-                            className="min-h-11"
-                            aria-pressed={active}
-                            aria-label={label}
-                            disabled={readOnly}
-                            onClick={() => handleItemStatus(item, status)}
-                          >
-                            {text}
-                          </Button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  {fields.map(({ field }) => (
-                    <HearingFieldRow
-                      key={field.key}
-                      field={field}
-                      entry={entryOf(form, field.key as HearingFieldKey)}
-                      required
-                      hint={hints.get(field.key) ?? null}
-                      readOnly={readOnly}
-                      variant="chip"
-                      onValueChange={handleValueChange}
-                      onStatusChange={handleStatusChange}
-                      onConfirm={handleConfirm}
-                    />
-                  ))}
-                </CardContent>
-              </Card>
-            );
-          })}
-
-          <Card>
-            <CardContent className="pt-2">
-              <button
-                type="button"
-                aria-expanded={othersOpen}
-                aria-controls="hearing-other-fields"
-                onClick={() => setOthersOpen((open) => !open)}
-                className="flex min-h-11 w-full items-center justify-between gap-2 py-2 text-left font-semibold"
-              >
-                <span>
-                  {t('meeting.others')}
-                  <span className="ml-2 text-sm font-normal text-muted-foreground">
-                    {t('meeting.othersCount', { count: otherFieldCount })}
-                  </span>
-                </span>
-                <ChevronDown
-                  aria-hidden="true"
-                  className={cn('h-5 w-5 transition-transform', othersOpen && 'rotate-180')}
-                />
-              </button>
-              {othersOpen && (
-                <div id="hearing-other-fields">
-                  {otherSections.map((section) => (
-                    <section key={section.id} className="pt-2">
-                      <h3 className="border-b pb-2 text-sm font-semibold text-muted-foreground">
-                        {t(`sections.${section.id}`)}
-                      </h3>
-                      {section.fields.map(({ field }) => (
+      <Tabs value={view} onValueChange={(value) => changeView(value as HearingEditorView)}>
+        <TabsList className="print:hidden">
+          <TabsTrigger value="record">{t('editor.viewRecord')}</TabsTrigger>
+          <TabsTrigger value="summary">{t('editor.viewSummary')}</TabsTrigger>
+        </TabsList>
+        <TabsContent value="summary">
+          <HearingSummaryPanel
+            organizationId={orgId}
+            hearingId={hearingId}
+            onJump={handleJump}
+            pendingChanges={autosave.snapshot.dirty || autosave.snapshot.saving}
+          />
+        </TabsContent>
+        <TabsContent value="record">
+          {meetingMode ? (
+            <div className="space-y-4" data-testid="hearing-meeting-mode">
+              {meetingItems.map(({ item, fields }) => {
+                const itemLabel = tRoot(item.labelKey);
+                const filled = !missing.missing.includes(item.id);
+                const quickStatuses = [
+                  ['next', t('meeting.next'), t('meeting.nextOf', { item: itemLabel })],
+                  [
+                    'not_applicable',
+                    t('meeting.notApplicable'),
+                    t('meeting.notApplicableOf', { item: itemLabel }),
+                  ],
+                ] as const;
+                return (
+                  <Card key={item.id} data-testid={`hearing-item-${item.id}`}>
+                    <CardContent className="pt-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="flex items-center gap-2 text-base font-semibold">
+                          {filled && (
+                            <CheckCircle2 className="h-5 w-5 text-emerald-600" aria-hidden="true" />
+                          )}
+                          {itemLabel}
+                        </h2>
+                        <div className="ml-auto flex gap-2">
+                          {quickStatuses.map(([status, text, label]) => {
+                            const active = itemHasStatus(form, item, status);
+                            return (
+                              <Button
+                                key={status}
+                                type="button"
+                                variant={active ? 'default' : 'outline'}
+                                className="min-h-11"
+                                aria-pressed={active}
+                                aria-label={label}
+                                disabled={readOnly}
+                                onClick={() => handleItemStatus(item, status)}
+                              >
+                                {text}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      {fields.map(({ field }) => (
                         <HearingFieldRow
                           key={field.key}
                           field={field}
                           entry={entryOf(form, field.key as HearingFieldKey)}
-                          required={false}
+                          required
                           hint={hints.get(field.key) ?? null}
                           readOnly={readOnly}
                           variant="chip"
@@ -624,61 +653,111 @@ export function LeadHearingEditor({ leadId, hearingId }: LeadHearingEditorProps)
                           onConfirm={handleConfirm}
                         />
                       ))}
-                    </section>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      ) : (
-        <Tabs value={tab} onValueChange={(value) => setTab(value as HearingSectionId)}>
-          <div className="overflow-x-auto">
-            <TabsList className="w-max justify-start">
-              {catalog.sections.map(({ id: section }) => {
-                const count = missingBySection.get(section) ?? 0;
-                return (
-                  <TabsTrigger key={section} value={section} className="gap-1">
-                    {t(`sections.${section}`)}
-                    {count > 0 && (
-                      <Badge
-                        color="amber"
-                        size="sm"
-                        aria-label={t('editor.missingTabs', { count })}
-                      >
-                        {count}
-                      </Badge>
-                    )}
-                  </TabsTrigger>
+                    </CardContent>
+                  </Card>
                 );
               })}
-            </TabsList>
-          </div>
 
-          {catalog.sections.map((section) => (
-            <TabsContent key={section.id} value={section.id}>
               <Card>
                 <CardContent className="pt-2">
-                  {section.id === 'outcome' && <div className="pt-4">{requiredItemsCallout}</div>}
-                  {section.fields.map(({ field, required }) => (
-                    <HearingFieldRow
-                      key={field.key}
-                      field={field}
-                      entry={entryOf(form, field.key as HearingFieldKey)}
-                      required={required}
-                      hint={hints.get(field.key) ?? null}
-                      readOnly={readOnly}
-                      onValueChange={handleValueChange}
-                      onStatusChange={handleStatusChange}
-                      onConfirm={handleConfirm}
+                  <button
+                    type="button"
+                    aria-expanded={othersOpen}
+                    aria-controls="hearing-other-fields"
+                    onClick={() => setOthersOpen((open) => !open)}
+                    className="flex min-h-11 w-full items-center justify-between gap-2 py-2 text-left font-semibold"
+                  >
+                    <span>
+                      {t('meeting.others')}
+                      <span className="ml-2 text-sm font-normal text-muted-foreground">
+                        {t('meeting.othersCount', { count: otherFieldCount })}
+                      </span>
+                    </span>
+                    <ChevronDown
+                      aria-hidden="true"
+                      className={cn('h-5 w-5 transition-transform', othersOpen && 'rotate-180')}
                     />
-                  ))}
+                  </button>
+                  {othersOpen && (
+                    <div id="hearing-other-fields">
+                      {otherSections.map((section) => (
+                        <section key={section.id} className="pt-2">
+                          <h3 className="border-b pb-2 text-sm font-semibold text-muted-foreground">
+                            {t(`sections.${section.id}`)}
+                          </h3>
+                          {section.fields.map(({ field }) => (
+                            <HearingFieldRow
+                              key={field.key}
+                              field={field}
+                              entry={entryOf(form, field.key as HearingFieldKey)}
+                              required={false}
+                              hint={hints.get(field.key) ?? null}
+                              readOnly={readOnly}
+                              variant="chip"
+                              onValueChange={handleValueChange}
+                              onStatusChange={handleStatusChange}
+                              onConfirm={handleConfirm}
+                            />
+                          ))}
+                        </section>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
-            </TabsContent>
-          ))}
-        </Tabs>
-      )}
+            </div>
+          ) : (
+            <Tabs value={tab} onValueChange={(value) => setTab(value as HearingSectionId)}>
+              <div className="overflow-x-auto">
+                <TabsList className="w-max justify-start">
+                  {catalog.sections.map(({ id: section }) => {
+                    const count = missingBySection.get(section) ?? 0;
+                    return (
+                      <TabsTrigger key={section} value={section} className="gap-1">
+                        {t(`sections.${section}`)}
+                        {count > 0 && (
+                          <Badge
+                            color="amber"
+                            size="sm"
+                            aria-label={t('editor.missingTabs', { count })}
+                          >
+                            {count}
+                          </Badge>
+                        )}
+                      </TabsTrigger>
+                    );
+                  })}
+                </TabsList>
+              </div>
+
+              {catalog.sections.map((section) => (
+                <TabsContent key={section.id} value={section.id}>
+                  <Card>
+                    <CardContent className="pt-2">
+                      {section.id === 'outcome' && (
+                        <div className="pt-4">{requiredItemsCallout}</div>
+                      )}
+                      {section.fields.map(({ field, required }) => (
+                        <HearingFieldRow
+                          key={field.key}
+                          field={field}
+                          entry={entryOf(form, field.key as HearingFieldKey)}
+                          required={required}
+                          hint={hints.get(field.key) ?? null}
+                          readOnly={readOnly}
+                          onValueChange={handleValueChange}
+                          onStatusChange={handleStatusChange}
+                          onConfirm={handleConfirm}
+                        />
+                      ))}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              ))}
+            </Tabs>
+          )}
+        </TabsContent>
+      </Tabs>
 
       {/* Sticky save bar */}
       <div className="sticky bottom-0 z-10 -mx-4 border-t bg-white/95 px-4 py-3 backdrop-blur dark:bg-gray-900/95">

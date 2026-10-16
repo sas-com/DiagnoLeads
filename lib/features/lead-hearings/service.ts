@@ -10,7 +10,7 @@ import type { db as defaultDb } from '@/lib/db/client';
 import { diagnosticSubmissions, leadHearings, leads } from '@/lib/db/schema';
 import { AX_MIGRATION_DIAGNOSTIC_KEY } from '@/lib/features/diagnostics/ax-migration/definition';
 import { TRPCError } from '@trpc/server';
-import { and, count, desc, eq, sql } from 'drizzle-orm';
+import { and, count, desc, eq, lt, or, sql } from 'drizzle-orm';
 import { HEARING_CATALOG_VERSION, LEAD_HEARINGS_MAX_PER_LEAD } from './catalog';
 import { computeMissingItems } from './missing';
 import { buildHearingPrefill, isVerifiedSubmission } from './prefill';
@@ -115,6 +115,73 @@ export async function getLeadHearing(db: Executor, input: { organizationId: stri
     .limit(1);
   if (!row) throw notFound('hearing');
   return toHearingView(row);
+}
+
+/**
+ * What the meeting summary (#97) reads: the hearing, the hearing of the same lead held just
+ * before it (by heldOn, then createdAt) and the lead's name. Only the needed columns.
+ */
+export async function getLeadHearingSummarySource(
+  db: Executor,
+  input: { organizationId: string; id: string }
+) {
+  const [current] = await db
+    .select({
+      id: leadHearings.id,
+      leadId: leadHearings.leadId,
+      heldOn: leadHearings.heldOn,
+      fields: leadHearings.fields,
+      createdAt: leadHearings.createdAt,
+    })
+    .from(leadHearings)
+    .where(hearingScope(input.organizationId, input.id))
+    .limit(1);
+  if (!current) throw notFound('hearing');
+
+  const [previous] = await db
+    .select({ id: leadHearings.id, heldOn: leadHearings.heldOn, fields: leadHearings.fields })
+    .from(leadHearings)
+    .where(
+      and(
+        leadScope(input.organizationId, current.leadId),
+        or(
+          lt(leadHearings.heldOn, current.heldOn),
+          and(
+            eq(leadHearings.heldOn, current.heldOn),
+            lt(leadHearings.createdAt, current.createdAt)
+          ),
+          // Same date and creation time: the id decides, so exactly one is "previous"
+          and(
+            eq(leadHearings.heldOn, current.heldOn),
+            eq(leadHearings.createdAt, current.createdAt),
+            lt(leadHearings.id, current.id)
+          )
+        )
+      )
+    )
+    .orderBy(desc(leadHearings.heldOn), desc(leadHearings.createdAt), desc(leadHearings.id))
+    .limit(1);
+
+  const [lead] = await db
+    .select({ name: leads.name, company: leads.company })
+    .from(leads)
+    .where(and(eq(leads.id, current.leadId), eq(leads.organizationId, input.organizationId)))
+    .limit(1);
+
+  return {
+    id: current.id,
+    leadId: current.leadId,
+    heldOn: current.heldOn,
+    fields: parseStoredHearingFields(current.fields).fields,
+    lead: lead ?? null,
+    previous: previous
+      ? {
+          id: previous.id,
+          heldOn: previous.heldOn,
+          fields: parseStoredHearingFields(previous.fields).fields,
+        }
+      : null,
+  };
 }
 
 /** The lead's AX diagnosis submissions, newest first */

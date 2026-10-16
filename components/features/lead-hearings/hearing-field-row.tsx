@@ -65,7 +65,8 @@ export const HearingFieldRow = memo(function HearingFieldRow({
 
   return (
     <div
-      className="space-y-2 border-b py-4 last:border-b-0"
+      id={`hearing-row-${field.key}`}
+      className="scroll-mt-24 space-y-2 border-b py-4 last:border-b-0"
       data-testid={`hearing-field-${field.key}`}
     >
       <div className="flex flex-wrap items-center gap-2">
@@ -131,15 +132,17 @@ export const HearingFieldRow = memo(function HearingFieldRow({
         </div>
       )}
 
-      <HearingFieldInput
-        field={field}
-        value={entry.value}
-        id={id}
-        label={label}
-        readOnly={readOnly}
-        variant={variant}
-        onChange={(value) => onValueChange(field, value)}
-      />
+      <div data-hearing-input>
+        <HearingFieldInput
+          field={field}
+          value={entry.value}
+          id={id}
+          label={label}
+          readOnly={readOnly}
+          variant={variant}
+          onChange={(value) => onValueChange(field, value)}
+        />
+      </div>
     </div>
   );
 });
