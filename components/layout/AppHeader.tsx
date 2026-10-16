@@ -1,6 +1,7 @@
 'use client';
 
 import { Logo, LogoMark } from '@/components/common/Logo';
+import { TestModeBadge } from '@/components/common/TestModeBadge';
 import { ThemeToggleButton } from '@/components/common/ThemeToggleButton';
 import { OrganizationSwitcher } from '@/components/dashboard/organization-switcher';
 import NotificationDropdown from '@/components/header/NotificationDropdown';
@@ -76,6 +77,8 @@ const AppHeader: React.FC = () => {
               />
             </div>
           </div>
+
+          <TestModeBadge className="lg:ml-1" />
         </div>
         <div
           className={`${

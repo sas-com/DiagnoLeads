@@ -306,6 +306,10 @@
       "thursday": "木曜日",
       "friday": "金曜日",
       "saturday": "土曜日"
+    },
+    "testMode": {
+      "label": "テストモード",
+      "description": "テスト中です。{domains} 以外のメールアドレスは登録・送信できません"
     }
   },
   "axDiagnosis": {

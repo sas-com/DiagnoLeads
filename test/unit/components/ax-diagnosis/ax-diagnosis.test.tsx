@@ -254,6 +254,23 @@ describe('AxDiagnosisFlow', () => {
     expect(await screen.findByRole('heading', { name: '診断結果' })).toBeInTheDocument();
   });
 
+  it('shows the server refusal of an outside address on the email field', { timeout: 30000 }, async () => {
+    // The page was built before test mode was turned on: only the server knows the domains
+    fetchMock.mockResolvedValue(
+      jsonResponse(400, { code: 'email_domain_not_allowed', domains: ['sas-com.com'] })
+    );
+    const user = userEvent.setup();
+    render(withIntl(<AxDiagnosisFlow locale="ja" />));
+    await answerAs400(user);
+    await fillContact(user);
+    await user.click(screen.getByRole('button', { name: /診断結果を見る/ }));
+
+    const email = screen.getByRole('textbox', { name: /メールアドレス/ });
+    expect(await screen.findByText('テスト中のため、@sas-com.com のメールアドレスのみ受け付けています')).toBeInTheDocument();
+    expect(email).toHaveFocus();
+    expect(email).toHaveAttribute('aria-invalid', 'true');
+  });
+
   it('names the options that clear the others in the multiple-choice note', async () => {
     const user = userEvent.setup();
     render(withIntl(<AxDiagnosisFlow locale="ja" />));

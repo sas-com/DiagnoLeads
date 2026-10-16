@@ -306,6 +306,10 @@
       "thursday": "Thursday",
       "friday": "Friday",
       "saturday": "Saturday"
+    },
+    "testMode": {
+      "label": "Test mode",
+      "description": "Testing: email addresses outside {domains} cannot be registered or mailed"
     }
   },
   "axDiagnosis": {

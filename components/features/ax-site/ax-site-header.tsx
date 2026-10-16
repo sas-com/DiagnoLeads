@@ -1,3 +1,4 @@
+import { allowedEmailDomains, isTestMode } from '@/lib/email/allowed-recipients';
 import { getTranslations } from 'next-intl/server';
 import { AxCtaLink } from './ax-cta-link';
 import { AxLogo } from './ax-logo';
@@ -17,9 +18,21 @@ export async function AxSiteHeader({ locale, variant }: AxSiteHeaderProps) {
   const t = await getTranslations({ locale, namespace: 'axSite' });
   const landingPath = `/${locale}/ax-migration`;
   const sectionHref = (id: string) => (variant === 'landing' ? `#${id}` : `${landingPath}#${id}`);
+  const tc = await getTranslations({ locale, namespace: 'common.testMode' });
+  const testModeDomains = allowedEmailDomains()
+    .map((domain) => `@${domain}`)
+    .join('、');
 
   return (
     <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/95 backdrop-blur">
+      {isTestMode() && (
+        <p
+          role="status"
+          className="bg-amber-100 px-4 py-1.5 text-center text-xs font-bold text-amber-900"
+        >
+          {tc('label')}：{tc('description', { domains: testModeDomains })}
+        </p>
+      )}
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3 sm:gap-4 sm:px-6">
         <a
           href={variant === 'landing' ? '#top' : landingPath}

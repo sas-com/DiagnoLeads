@@ -239,9 +239,9 @@ export function AxDiagnosisFlow({
   allowedEmailDomains = [],
 }: AxDiagnosisFlowProps) {
   const t = useTranslations('axDiagnosis');
-  const testModeEmailError = t('errors.testModeEmail', {
-    domains: allowedEmailDomains.map((domain) => `@${domain}`).join('、'),
-  });
+  const testModeError = (domains: string[]) =>
+    t('errors.testModeEmail', { domains: domains.map((domain) => `@${domain}`).join('、') });
+  const testModeEmailError = testModeError(allowedEmailDomains);
   const [stage, setStage] = useState<'questions' | 'result'>('questions');
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<DiagnosticAnswers>({});
@@ -576,9 +576,10 @@ export function AxDiagnosisFlow({
         return;
       }
       if (!res.ok && json?.code === 'email_domain_not_allowed') {
-        renewCheck();
-        setErrors((current) => ({ ...current, email: testModeEmailError }));
-        setSubmitError(testModeEmailError);
+        // The server's list wins: the page may have been built before test mode changed
+        const domains: string[] = Array.isArray(json.domains) ? json.domains : allowedEmailDomains;
+        setErrors((current) => ({ ...current, email: testModeError(domains) }));
+        focusFirstError('contact-email');
         return;
       }
       if (!res.ok && json?.code === 'verification_unavailable') {

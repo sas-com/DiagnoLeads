@@ -127,6 +127,7 @@ describe('POST /api/diagnostics/ax-migration', () => {
       expect(response.status).toBe(400);
       expect(await response.json()).toMatchObject({ code: 'email_domain_not_allowed' });
       expect(limitsMock).not.toHaveBeenCalled();
+      expect(turnstileMock).not.toHaveBeenCalled();
       expect(submitMock).not.toHaveBeenCalled();
 
       const company = await POST(
