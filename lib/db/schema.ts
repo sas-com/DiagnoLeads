@@ -288,6 +288,13 @@ export const leads = pgTable('leads', {
   targetSystem: text('target_system'),
   referrerName: text('referrer_name'),
   lostReason: text('lost_reason'),
+  agencyName: text('agency_name'),
+  acquisitionCost: integer('acquisition_cost'), // yen, excluding tax
+  /** Date each deal phase was first reached ({ phase: 'YYYY-MM-DD' }) */
+  dealPhaseReachedAt: jsonb('deal_phase_reached_at')
+    .$type<Record<string, string>>()
+    .default({})
+    .notNull(),
   hasNegotiated: boolean('has_negotiated').default(false).notNull(),
   mqlQualifiedAt: timestamp('mql_qualified_at'),
   sqlDecision: text('sql_decision'), // 'qualified' | 'not_qualified' | null（未判定）

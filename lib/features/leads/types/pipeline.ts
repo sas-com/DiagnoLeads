@@ -23,6 +23,9 @@ export const INFLOW_SOURCES = [
   'lp_organic',
   'seminar',
   'advertising',
+  // Outsourced sales (#83): the agency name and cost are recorded on the lead
+  'telemarketing_agency',
+  'referral_agency',
 ] as const;
 export const inflowSourceEnum = z.enum(INFLOW_SOURCES);
 export type InflowSource = z.infer<typeof inflowSourceEnum>;
@@ -53,7 +56,8 @@ export type DealPhase = z.infer<typeof dealPhaseEnum>;
 
 /** 対象システム */
 // AS/400 / NEC ACOS / other office computers & mainframes / VB client-server / Microsoft Access
-// (incl. department-level tools) / WebPerformer (the first low-code target) / other
+// (incl. department-level tools) / WebPerformer (the first low-code target) / other.
+// Added for the sales hearing sheet (#83): in-house open systems / packages / unknown.
 export const TARGET_SYSTEMS = [
   'as400',
   'acos',
@@ -61,6 +65,9 @@ export const TARGET_SYSTEMS = [
   'vb',
   'access',
   'webperformer',
+  'custom_open',
+  'package',
+  'unknown',
   'other',
 ] as const;
 export const targetSystemEnum = z.enum(TARGET_SYSTEMS);
@@ -72,6 +79,11 @@ export const LOST_REASONS = [
   'timing',
   'competitor',
   'internal_structure',
+  // Added for the sales hearing sheet (#83)
+  'system_out_of_scope',
+  'no_decision_maker',
+  'no_need',
+  'on_hold',
   'other',
 ] as const;
 export const lostReasonEnum = z.enum(LOST_REASONS);
@@ -85,6 +97,10 @@ export type SqlDecision = z.infer<typeof sqlDecisionEnum>;
 /** Pipeline fields accepted on lead create / update */
 export const leadPipelineFieldsSchema = z.object({
   inflowSource: inflowSourceEnum.nullable().optional(),
+  /** Sales agency that set up the meeting (inflowSource = *_agency) */
+  agencyName: z.string().trim().max(200).nullable().optional(),
+  /** What this lead cost to acquire, in yen excluding tax */
+  acquisitionCost: z.number().int().min(0).max(1_000_000_000).nullable().optional(),
   conversionPoint: conversionPointEnum.nullable().optional(),
   dealPhase: dealPhaseEnum.nullable().optional(),
   targetSystem: targetSystemEnum.nullable().optional(),
@@ -142,6 +158,14 @@ export function qualificationUpdateFields(
     }
   }
   return fields;
+}
+
+/** Date (YYYY-MM-DD) each deal phase was first reached, keyed by phase */
+export type DealPhaseReachedAt = Partial<Record<DealPhase, string>>;
+
+/** Calendar date in Japan, for the deal phase dates */
+export function jstDate(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo' }).format(now);
 }
 
 /** Legacy status values (before #54) mapped to the 5-stage pipeline */

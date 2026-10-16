@@ -53,7 +53,7 @@ describe('LeadForm', () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
     render(withIntl(<LeadForm lead={lead} onSubmit={onSubmit} />));
-    const company = screen.getByRole('textbox', { name: /会社/ });
+    const company = screen.getByRole('textbox', { name: /^会社名/ });
     await user.clear(company);
     await user.type(company, '三田製作所 東京支店');
     await user.click(screen.getByRole('button', { name: '更新' }));

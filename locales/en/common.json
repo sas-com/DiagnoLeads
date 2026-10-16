@@ -582,7 +582,9 @@
       "executive_network": "Executive Network",
       "lp_organic": "LP (Organic)",
       "seminar": "Seminar",
-      "advertising": "Advertising"
+      "advertising": "Advertising",
+      "telemarketing_agency": "Sales agency (telemarketing)",
+      "referral_agency": "Sales agency (referrals)"
     },
     "conversionPoint": {
       "consultation": "Consultation Request",
@@ -607,6 +609,9 @@
       "vb": "VB (client-server)",
       "access": "Access (incl. department tools)",
       "webperformer": "WebPerformer",
+      "custom_open": "In-house (open systems)",
+      "package": "Package software",
+      "unknown": "Unknown",
       "other": "Other"
     },
     "sqlDecision": {
@@ -618,6 +623,10 @@
       "timing": "Timing",
       "competitor": "Competitor Chosen",
       "internal_structure": "Internal Structure",
+      "system_out_of_scope": "System out of scope",
+      "no_decision_maker": "No decision maker",
+      "no_need": "No need",
+      "on_hold": "On hold",
       "other": "Other"
     }
   },
@@ -843,7 +852,10 @@
       "noData": "No data found in file",
       "emailRequired": "Email column is required",
       "duplicateEmails": "{count} duplicate emails found"
-    }
+    },
+    "agencyName": "Sales agency",
+    "acquisitionCost": "Acquisition cost (excl. tax)",
+    "dealPhaseReachedAt": "Date each deal phase was reached"
   },
   "settings": {
     "organization": {
