@@ -161,7 +161,7 @@ describe('LeadHearingEditor', () => {
     expect(screen.getByText('Web診断: 経営層・決裁者')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'リード詳細に戻る' })).toHaveAttribute(
       'href',
-      `/ja/leads?leadId=${LEAD_ID}`
+      `/ja/leads/${LEAD_ID}?tab=hearings`
     );
   });
 

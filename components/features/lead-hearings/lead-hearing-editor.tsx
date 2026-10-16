@@ -360,7 +360,8 @@ export function LeadHearingEditor({
     errorCode === 'NOT_FOUND' ||
     errorCode === 'BAD_REQUEST' ||
     (hearing.data !== undefined && hearing.data.leadId !== leadId);
-  const backHref = `/${locale}/leads?leadId=${leadId}`;
+  // The lead page's hearings tab (Refs #108)
+  const backHref = `/${locale}/leads/${leadId}?tab=hearings`;
 
   if (notFound) {
     return (

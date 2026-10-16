@@ -56,6 +56,27 @@ export function useListLeads(input: ListLeadsInput) {
   });
 }
 
+/** Lead permissions of the current member, as returned by the server */
+export interface LeadAccess {
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+}
+
+const NO_ACCESS: LeadAccess = { canCreate: false, canEdit: false, canDelete: false };
+
+/**
+ * What the current member may do with leads. Nothing until the server answered, so read-only
+ * roles never see edit controls flash in (Refs #109)
+ */
+export function useLeadAccess(organizationId: string): LeadAccess {
+  const { data } = trpc.leads.access.useQuery(
+    { organizationId },
+    { enabled: isValidUUID(organizationId), staleTime: 5 * 60 * 1000 }
+  );
+  return data ?? NO_ACCESS;
+}
+
 /**
  * Hook to update a lead with optimistic updates
  */

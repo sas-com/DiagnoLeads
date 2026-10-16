@@ -955,7 +955,13 @@
     },
     "agencyName": "Sales agency",
     "acquisitionCost": "Acquisition cost (excl. tax)",
-    "dealPhaseReachedAt": "Date each deal phase was reached"
+    "dealPhaseReachedAt": "Date each deal phase was reached",
+    "placeholders": {
+      "email": "jane@example.com",
+      "name": "Jane Smith",
+      "company": "Example Inc.",
+      "phone": "+1 555 123 4567"
+    }
   },
   "settings": {
     "organization": {
@@ -2734,5 +2740,116 @@
     "description": "The page you send to prospects. Answers arrive here as leads.",
     "open": "Open the diagnosis",
     "newTab": "(opens in a new tab)"
+  },
+  "leadDetail": {
+    "backToList": "Leads",
+    "notFound": {
+      "title": "Lead not found",
+      "description": "It was deleted or does not belong to this organization.",
+      "back": "Back to leads"
+    },
+    "loadError": "Could not load the lead.",
+    "retry": "Retry",
+    "recordHearing": "Record hearing",
+    "openPage": "Open details page",
+    "tabs": {
+      "overview": "Overview",
+      "hearings": "Hearings",
+      "activity": "Activity",
+      "diagnosis": "Diagnosis answers"
+    },
+    "score": "Score",
+    "scoreValue": "Score {score}",
+    "noScore": "No score",
+    "noDealPhase": "No phase",
+    "cards": {
+      "contact": "Contact",
+      "inflow": "Inflow",
+      "pipeline": "Sales pipeline",
+      "record": "Record"
+    },
+    "empty": {
+      "count": "{count} not set",
+      "fill": "Fill in",
+      "list": "Fields not set"
+    },
+    "fields": {
+      "mql": "MQL",
+      "mqlYes": "MQL ({date})",
+      "reachedAt": "{phase}: {date}"
+    },
+    "edit": {
+      "edit": "Edit",
+      "editCard": "Edit {card}",
+      "save": "Save",
+      "saving": "Saving...",
+      "cancel": "Cancel",
+      "noChanges": "No changes",
+      "invalidNumber": "Enter a number",
+      "integer": "Enter a whole number",
+      "discardTitle": "You have unsaved changes",
+      "discardDescription": "Your changes have not been saved. Discard them?",
+      "discard": "Discard changes",
+      "keepEditing": "Keep editing",
+      "readOnly": "You have read-only access"
+    },
+    "quick": {
+      "status": "Change status (now: {value})",
+      "dealPhase": "Change deal phase (now: {value})",
+      "lostReasonPrompt": "Record why the lead was lost",
+      "lostReasonAction": "Add reason"
+    },
+    "hearing": {
+      "title": "Meeting summary",
+      "latest": "Latest hearing: {date}",
+      "none": "No hearings recorded yet.",
+      "nextSteps": "To confirm next",
+      "noNextSteps": "Nothing to confirm next.",
+      "more": "{count} more",
+      "openSummary": "View summary",
+      "openHearing": "Open hearing",
+      "loadError": "Could not load the hearings."
+    },
+    "activity": {
+      "recent": "Recent activity",
+      "showAll": "View all activity",
+      "empty": "No activity yet.",
+      "loadError": "Could not load the activity."
+    },
+    "diagnosis": {
+      "title": "Diagnosis result",
+      "platform": "Current system",
+      "targetSystem": "Target system",
+      "difficulty": "Migration difficulty",
+      "urgency": "Urgency",
+      "primaryChallenge": "Main challenge",
+      "challenges": "Selected challenges",
+      "department": "Department",
+      "diagnosedAt": "Diagnosed at",
+      "detailsAnsweredAt": "Follow-up answered",
+      "noPrimaryChallenge": "None",
+      "consultation": "Consultation requested",
+      "mql": "MQL candidate",
+      "mqlHelp": "The answers meet the marketing conditions for a promising lead",
+      "sql": "Sales signals",
+      "sqlHelp": "Answers such as timing or budget suggest a deal",
+      "needsHearing": "Needs a hearing",
+      "needsHearingHelp": "Many answers were \"don't know\", so the result is rough",
+      "otherSystems": "Other systems diagnosed",
+      "showAnswers": "View answers",
+      "extraTitle": "Other data ({count})",
+      "yes": "Yes",
+      "no": "No"
+    },
+    "answers": {
+      "empty": "No diagnosis answers.",
+      "submittedAt": "Diagnosis on {date}",
+      "loadError": "Could not load the diagnosis answers.",
+      "show": "View answers",
+      "hide": "Hide answers"
+    },
+    "sheet": {
+      "keyFacts": "Key facts"
+    }
   }
 }

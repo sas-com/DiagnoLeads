@@ -74,7 +74,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useState } from 'react';
 import { TagBadgeList } from '../tags/tag-badge';
 import { BulkActions } from './bulk-actions';
-import { LEAD_STATUS_COLORS } from './lead-status-styles';
+import { LeadQuickSelect } from './lead-quick-select';
 
 // Extended lead type with tags
 type LeadWithTags = Lead & { tags?: Tag[] };
@@ -87,6 +87,10 @@ interface LeadTableProps {
   onEdit?: (lead: LeadWithTags) => void;
   onDelete?: (lead: LeadWithTags) => void;
   onRefresh?: () => void;
+  /** Status and deal phase change in place; read-only roles get plain badges (Refs #109) */
+  canEdit?: boolean;
+  /** Called after a row's status was changed to lost */
+  onLost?: (lead: LeadWithTags) => void;
 }
 
 /** Dot colors for the status filter */
@@ -110,6 +114,8 @@ export function LeadTable({
   onEdit,
   onDelete,
   onRefresh,
+  canEdit = false,
+  onLost,
 }: LeadTableProps) {
   const t = useTranslations('leads');
   const tStatus = useTranslations('status');
@@ -295,7 +301,7 @@ export function LeadTable({
         </button>
       ),
       cell: ({ row }) => (
-        <div className="font-semibold text-gray-900 dark:text-gray-100">
+        <div className="min-w-[7rem] font-semibold text-gray-900 dark:text-gray-100">
           {row.getValue('name') || t('nameNotSet')}
         </div>
       ),
@@ -312,15 +318,29 @@ export function LeadTable({
         </button>
       ),
       cell: ({ row }) => (
-        <span className="text-gray-600 dark:text-gray-300">{row.getValue('email')}</span>
+        // Long addresses are cut with an ellipsis; the full one is in the title
+        <span
+          className="block max-w-[16rem] truncate text-gray-600 dark:text-gray-300"
+          title={row.getValue('email')}
+        >
+          {row.getValue('email')}
+        </span>
       ),
     },
     {
       accessorKey: 'company',
       header: t('company'),
-      cell: ({ row }) => (
-        <span className="text-gray-600 dark:text-gray-300">{row.getValue('company') || '-'}</span>
-      ),
+      cell: ({ row }) => {
+        const company = row.getValue('company') as string | null;
+        return (
+          <span
+            className="block min-w-[8rem] max-w-[14rem] truncate text-gray-600 dark:text-gray-300"
+            title={company ?? undefined}
+          >
+            {company || '-'}
+          </span>
+        );
+      },
     },
     {
       accessorKey: 'phone',
@@ -340,10 +360,15 @@ export function LeadTable({
           <ArrowUpDown className="h-4 w-4" />
         </button>
       ),
-      cell: ({ row }) => {
-        const status = row.getValue('status') as LeadStatus;
-        return <Badge color={LEAD_STATUS_COLORS[status] ?? 'gray'}>{tStatus(status)}</Badge>;
-      },
+      cell: ({ row }) => (
+        <LeadQuickSelect
+          field="status"
+          lead={row.original}
+          organizationId={organizationId ?? ''}
+          canEdit={canEdit && !!organizationId}
+          onLost={() => onLost?.(row.original)}
+        />
+      ),
       filterFn: (row, id, value) => {
         return value.includes(row.getValue(id));
       },
@@ -353,8 +378,15 @@ export function LeadTable({
       header: t('dealPhase'),
       cell: ({ row }) => {
         const phase = row.getValue('dealPhase') as string | null;
-        if (!phase) return <span className="text-gray-400">-</span>;
-        return <Badge color="amber">{tPipeline(`dealPhase.${phase}`)}</Badge>;
+        if (!phase && !canEdit) return <span className="text-gray-400">-</span>;
+        return (
+          <LeadQuickSelect
+            field="dealPhase"
+            lead={row.original}
+            organizationId={organizationId ?? ''}
+            canEdit={canEdit && !!organizationId}
+          />
+        );
       },
     },
     {
@@ -469,26 +501,32 @@ export function LeadTable({
                 <Eye className="mr-2 h-4 w-4" />
                 {tCommon('view')}
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEdit?.(lead);
-                }}
-              >
-                <Pencil className="mr-2 h-4 w-4" />
-                {tCommon('edit')}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete?.(lead);
-                }}
-                className="text-red-600 focus:text-red-600 focus:bg-red-50"
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                {tCommon('delete')}
-              </DropdownMenuItem>
+              {onEdit && (
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit(lead);
+                  }}
+                >
+                  <Pencil className="mr-2 h-4 w-4" />
+                  {tCommon('edit')}
+                </DropdownMenuItem>
+              )}
+              {onDelete && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(lead);
+                    }}
+                    className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    {tCommon('delete')}
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         );
@@ -750,7 +788,10 @@ export function LeadTable({
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id} className="bg-gray-50 dark:bg-gray-800">
+                  <TableHead
+                    key={header.id}
+                    className="whitespace-nowrap bg-gray-50 dark:bg-gray-800"
+                  >
                     {header.isPlaceholder
                       ? null
                       : flexRender(header.column.columnDef.header, header.getContext())}
@@ -768,7 +809,8 @@ export function LeadTable({
                   className="cursor-pointer hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors"
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    // One line per row: the table scrolls sideways in its card instead (Refs #108)
+                    <TableCell key={cell.id} className="whitespace-nowrap">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}

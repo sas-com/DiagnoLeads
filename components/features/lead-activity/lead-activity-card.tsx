@@ -230,7 +230,7 @@ function ActivityItem({
   );
 }
 
-function EventTitle({ event }: { event: LeadActivityEvent }) {
+export function EventTitle({ event }: { event: LeadActivityEvent }) {
   const t = useTranslations('leadActivity');
   const tPipeline = useTranslations('pipeline');
   const format = useFormatter();
@@ -308,7 +308,10 @@ function DiagnosisDetails({
   );
 }
 
-function SubmissionAnswers({ submissionId, leadId }: { submissionId: string; leadId: string }) {
+export function SubmissionAnswers({
+  submissionId,
+  leadId,
+}: { submissionId: string; leadId: string }) {
   const t = useTranslations('leadActivity');
   const locale = toDiagnosticLocale(useLocale());
   const { organizationId } = useOrganization();

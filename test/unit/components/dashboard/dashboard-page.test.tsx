@@ -217,7 +217,7 @@ describe('DashboardPage', () => {
     renderPage();
 
     const overdue = screen.getByRole('link', { name: /5営業日超過.*期限 9\/29.*三田製作所/ });
-    expect(overdue).toHaveAttribute('href', '/ja/leads?leadId=lead-1');
+    expect(overdue).toHaveAttribute('href', '/ja/leads/lead-1');
     expect(screen.getByRole('link', { name: /今日まで.*期限 10\/16.*北辰工業/ })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /明日まで.*期限 10\/17.*南星電機/ })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /あと3営業日.*期限 10\/21.*東邦精工/ })).toBeInTheDocument();
@@ -309,7 +309,7 @@ describe('DashboardPage', () => {
     const list = screen.getByTestId('recent-list');
     expect(list).toHaveClass('sm:hidden');
     const items = within(list).getAllByRole('link');
-    expect(items[0]).toHaveAttribute('href', '/ja/leads?leadId=lead-3');
+    expect(items[0]).toHaveAttribute('href', '/ja/leads/lead-3');
     expect(within(items[0]).getByText('大成化学')).toBeInTheDocument();
     expect(within(items[0]).getByText('ナーチャリング')).toBeInTheDocument();
     expect(within(items[1]).getByText('相談申込')).toBeInTheDocument();

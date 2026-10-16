@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useSemanticSearch } from '@/hooks/use-ai';
 import { ExternalLink, Loader2, Search, Sparkles } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useState } from 'react';
 
@@ -21,6 +21,7 @@ interface SemanticSearchProps {
 export function SemanticSearch({ organizationId }: SemanticSearchProps) {
   const t = useTranslations('ai');
   const tCommon = useTranslations('common');
+  const locale = useLocale();
   const [query, setQuery] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -103,7 +104,7 @@ export function SemanticSearch({ organizationId }: SemanticSearchProps) {
               {results.map((lead) => (
                 <Link
                   key={lead.id}
-                  href={`/${organizationId}/leads/${lead.id}`}
+                  href={`/${locale}/leads/${lead.id}`}
                   className="block p-4 rounded-lg border border-gray-200 hover:border-purple-300 hover:bg-purple-50 transition-colors"
                 >
                   <div className="flex items-start justify-between gap-3">

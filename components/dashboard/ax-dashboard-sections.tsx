@@ -56,7 +56,7 @@ function useDashboardText() {
 
 /** Lead list. TODO(#131): link to the list filtered by status / waiting consultations */
 export const leadListHref = (locale: string) => `/${locale}/leads`;
-export const leadHref = (locale: string, id: string) => `/${locale}/leads?leadId=${id}`;
+export const leadHref = (locale: string, id: string) => `/${locale}/leads/${id}`;
 
 /**
  * Small tag naming the period a card follows (the tooltip gives the exact days), or "all time"

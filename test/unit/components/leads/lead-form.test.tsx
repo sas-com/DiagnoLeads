@@ -73,4 +73,28 @@ describe('LeadForm', () => {
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     expect(onSubmit.mock.calls[0][0]).toMatchObject({ email: 'new@example.jp', status: 'new' });
   });
+
+  it('starts a new lead with an empty score and Japanese examples, and sends no score (Refs #163)', async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(withIntl(<LeadForm onSubmit={onSubmit} />));
+
+    expect(screen.getByRole('textbox', { name: /メール/ })).toHaveAttribute(
+      'placeholder',
+      'taro@example.com'
+    );
+    expect(screen.getByRole('textbox', { name: '名前' })).toHaveAttribute('placeholder', '山田 太郎');
+    expect(screen.getByRole('textbox', { name: '会社名' })).toHaveAttribute(
+      'placeholder',
+      '株式会社サンプル'
+    );
+    const score = screen.getByRole('spinbutton', { name: /スコア/ });
+    expect(score).toHaveValue(null);
+    expect(score).not.toHaveAttribute('placeholder');
+
+    await user.type(screen.getByRole('textbox', { name: /メール/ }), 'new@example.com');
+    await user.click(screen.getByRole('button', { name: '作成' }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0].score).toBeUndefined();
+  });
 });
