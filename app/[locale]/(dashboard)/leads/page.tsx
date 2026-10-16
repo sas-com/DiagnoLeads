@@ -1,6 +1,7 @@
 'use client';
 
 import { LeadFilterToolbar } from '@/components/features/leads/list/lead-filter-toolbar';
+import { useLeadExport } from '@/hooks/use-lead-export';
 import { useLeadListPreferences, useLeadListQuery } from '@/hooks/use-lead-list-query';
 import {
   useCreateLead,
@@ -10,7 +11,7 @@ import {
   useListLeads,
 } from '@/hooks/use-leads';
 import { useOrganization } from '@/hooks/use-organization';
-import { leadListHref } from '@/lib/features/leads/list-query';
+import { leadListHref, toLeadFilterInput } from '@/lib/features/leads/list-query';
 import { useLocale, useTranslations } from 'next-intl';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
@@ -163,6 +164,8 @@ function LeadsPageContent() {
   } = useListLeads(listQuery.listInput(organizationId, preferences.pageSize), {
     keepPrevious: true,
   });
+  // Export: every lead matching the filters and sort, made on the server (#173)
+  const leadExport = useLeadExport(toLeadFilterInput(listQuery.query, organizationId));
   // The cards count the whole organization, whatever the list shows
   const statusCounts = useLeadStatusCounts(organizationId);
   const refetch = () => {
@@ -402,6 +405,8 @@ function LeadsPageContent() {
         }
         hasFilters={listQuery.hasFilters}
         onClearFilters={listQuery.clearFilters}
+        onExport={organizationId ? leadExport.exportLeads : undefined}
+        exporting={leadExport.isExporting}
         toolbar={(actions) => (
           <LeadFilterToolbar controller={listQuery} total={leadsData?.total} actions={actions} />
         )}

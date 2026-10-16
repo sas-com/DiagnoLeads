@@ -126,6 +126,9 @@ export const LEAD_SORT_KEYS = [
   'lastActivityAt',
   'mqlQualifiedAt',
   'assignee',
+  // From the latest hearing of the lead (#137)
+  'nextMeetingDate',
+  'dealRating',
 ] as const;
 export const leadSortKeyEnum = z.enum(LEAD_SORT_KEYS);
 export type LeadSortKey = z.infer<typeof leadSortKeyEnum>;
@@ -142,6 +145,19 @@ export type SqlDecisionFilter = z.infer<typeof sqlDecisionFilterEnum>;
 export const ASSIGNEE_FILTER_KEYWORDS = ['me', 'unassigned'] as const;
 export const assigneeFilterSchema = z.union([z.enum(ASSIGNEE_FILTER_KEYWORDS), z.string().uuid()]);
 export type AssigneeFilter = z.infer<typeof assigneeFilterSchema>;
+
+/**
+ * Next meeting date of the lead's latest hearing (#137): set, not set, already past (and no
+ * newer hearing, since the latest hearing is the one read), or in the current Japan week
+ */
+export const NEXT_MEETING_FILTERS = ['has', 'none', 'overdue', 'thisWeek'] as const;
+export const nextMeetingFilterEnum = z.enum(NEXT_MEETING_FILTERS);
+export type NextMeetingFilter = z.infer<typeof nextMeetingFilterEnum>;
+
+/** Deal rating of the lead's latest hearing (#137); same values as the hearing sheet */
+export const DEAL_RATINGS = ['a', 'b', 'c'] as const;
+export const dealRatingEnum = z.enum(DEAL_RATINGS);
+export type DealRating = z.infer<typeof dealRatingEnum>;
 
 /** A calendar day in Japan time, 'YYYY-MM-DD' */
 export const jstDaySchema = z
@@ -188,10 +204,27 @@ export const listLeadsSchema = z.object({
   sqlDecision: sqlDecisionFilterEnum.optional(),
   // Assignee (#135)
   assignee: assigneeFilterSchema.optional(),
+  // Latest hearing (#137)
+  nextMeeting: nextMeetingFilterEnum.optional(),
+  dealRating: oneOrMany(dealRatingEnum),
   // Tag filter
   tagIds: z.array(z.string().uuid()).optional(),
 });
 export type ListLeadsInput = z.infer<typeof listLeadsSchema>;
+
+/** File formats of the lead export (#173) */
+export const LEAD_EXPORT_FORMATS = ['csv', 'json', 'pdf'] as const;
+export type LeadExportFormat = (typeof LEAD_EXPORT_FORMATS)[number];
+
+/**
+ * Export every lead matching the list's filters and sort (#173): the list input without the
+ * page, plus the file format
+ */
+export const exportLeadsSchema = listLeadsSchema.omit({ limit: true, offset: true }).extend({
+  format: z.enum(LEAD_EXPORT_FORMATS),
+  locale: z.enum(['ja', 'en']).default('ja'),
+});
+export type ExportLeadsInput = z.infer<typeof exportLeadsSchema>;
 
 /** Assign a lead to a member of its organization, or nobody (null) (#135) */
 export const assignLeadSchema = z.object({

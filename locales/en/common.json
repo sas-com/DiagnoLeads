@@ -847,7 +847,11 @@
       "moveUp": "Move \"{name}\" up",
       "moveDown": "Move \"{name}\" down",
       "today": "Today",
-      "todayDesc": "Next actions due today or overdue"
+      "todayDesc": "Next actions due today or overdue",
+      "meetings": "Meetings this week",
+      "meetingsDesc": "Leads with a next meeting this week (soonest first)",
+      "meetingRate": "Next meeting rate",
+      "meetingRateDesc": "Share of first meetings that fixed a next meeting"
     },
     "ax": {
       "description": "Leads from the AX migration diagnosis and consultation requests that need a reply",
@@ -935,6 +939,22 @@
       "allTimeTag": "All time",
       "cardError": "Could not be loaded",
       "retry": "Reload"
+    },
+    "meetings": {
+      "title": "Meetings this week",
+      "description": "Leads whose latest hearing sets a next meeting this week (Monday to Sunday), soonest first",
+      "empty": "No meetings this week.",
+      "more": "See {count} more in the list",
+      "viewAll": "View in the list",
+      "unassigned": "Unassigned",
+      "noCompany": "No company",
+      "rating": "Rating {rating}",
+      "today": "Today",
+      "rateTitle": "Next meeting fixed at the first meeting",
+      "rateDescription": "Of the leads whose first hearing was in the period, the share whose first hearing fixed a next meeting date",
+      "rateCounts": "{withNext} of {total} first meetings",
+      "rateEmpty": "No first meetings in the period",
+      "rateOverdueLink": "See leads whose next meeting passed"
     }
   },
   "leads": {
@@ -3183,7 +3203,8 @@
     },
     "sheet": {
       "keyFacts": "Key facts"
-    }
+    },
+    "nextMeetingOverdue": "Next meeting {date} has passed"
   },
   "leadList": {
     "searchLabel": "Search leads",
@@ -3217,7 +3238,9 @@
       "newThisWeek": "New this week",
       "negotiating": "Negotiating",
       "mine": "My leads",
-      "unassigned": "Unassigned"
+      "unassigned": "Unassigned",
+      "meetingsThisWeek": "Meetings this week",
+      "nextMeetingOverdue": "Next meeting passed"
     },
     "presetHints": {
       "needsAction": "Status is New: nobody has started on these leads yet",
@@ -3225,7 +3248,9 @@
       "newThisWeek": "Leads created this week (from Monday)",
       "negotiating": "Leads with the status Negotiating",
       "mine": "Leads assigned to you",
-      "unassigned": "Leads nobody is assigned to yet"
+      "unassigned": "Leads nobody is assigned to yet",
+      "meetingsThisWeek": "Leads whose latest hearing sets a next meeting this week (Monday to Sunday), soonest first",
+      "nextMeetingOverdue": "Leads whose next meeting date has passed with no later hearing recorded, oldest first"
     },
     "chips": {
       "label": "Active filters",
@@ -3258,7 +3283,28 @@
     "firstPage": "First page",
     "lastPage": "Last page",
     "pageSize": "Rows per page",
-    "pageSizeOption": "{count} per page"
+    "pageSizeOption": "{count} per page",
+    "nextMeeting": "Next meeting",
+    "dealRating": "Deal rating",
+    "nextMeetingHint": "Filters by the next meeting date recorded in the latest hearing.",
+    "nextMeetingOptions": {
+      "has": "Next meeting set",
+      "none": "No next meeting",
+      "overdue": "Next meeting passed",
+      "thisWeek": "Next meeting this week"
+    },
+    "ratingOption": "Rating {rating}",
+    "overdue": "Overdue",
+    "overdueTitle": "The next meeting ({date}) has passed and no later hearing has been recorded.",
+    "export": {
+      "all": "All matching leads",
+      "allHint": "With the current filters and order, up to {max} rows",
+      "exporting": "Exporting…",
+      "done": "Exported {count} leads",
+      "capped": "Exported the first {max} rows (limit). {total} leads match: narrow the filters and export again.",
+      "empty": "No lead matches the filters, so the file has the headers only.",
+      "failed": "Could not export. Please try again."
+    }
   },
   "leadFollowUp": {
     "contact": {

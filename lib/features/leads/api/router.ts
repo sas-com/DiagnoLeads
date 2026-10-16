@@ -1,4 +1,5 @@
-import { auditLogs, leadTags, leads, tags } from '@/lib/db/schema';
+import type { db as defaultDb } from '@/lib/db/client';
+import { auditLogs, leadTags, leads, tags, users } from '@/lib/db/schema';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import {
@@ -21,6 +22,7 @@ import {
   or,
   sql,
 } from 'drizzle-orm';
+import { z } from 'zod';
 import {
   findAssignableMember,
   findUserName,
@@ -38,6 +40,17 @@ import {
   writeLeadAuditLogs,
 } from '../audit';
 import {
+  LEAD_EXPORT_MAX_ROWS,
+  LEAD_EXPORT_MIME_TYPES,
+  type LeadExportRow,
+  exportAuditFilters,
+  leadExportCsv,
+  leadExportFilename,
+  leadExportJson,
+} from '../export';
+import { leadExportPdfBase64 } from '../export-pdf';
+import { getNextMeetingRate, getWeekMeetings } from '../meetings';
+import {
   LEAD_STATUSES,
   type LeadPipelineFields,
   type LeadStatus,
@@ -54,15 +67,18 @@ import {
   bulkUpdateStatusSchema,
   createLeadSchema,
   deleteLeadSchema,
+  exportLeadsSchema,
   getLeadSchema,
   listLeadsSchema,
   setLeadIntakeSchema,
   updateLeadSchema,
 } from '../types/schemas';
 import {
+  leadDealRating,
   leadLastActivityAt,
   leadListConditions,
   leadListOrderBy,
+  leadNextMeetingDate,
   parseUtcTimestamp,
 } from './list-sql';
 
@@ -187,6 +203,52 @@ function buildFilterGroup(group: FilterGroup): SQL | undefined {
   return group.logic === 'and' ? and(...validConditions) : or(...validConditions);
 }
 
+type ListFilterInput = Omit<z.infer<typeof listLeadsSchema>, 'limit' | 'offset'>;
+
+/**
+ * WHERE of the list and the export: always scoped to the organization (#131), with the list
+ * filters, the tag filter and the advanced filter. null when the tag filter matches no lead.
+ */
+async function listWhere(
+  ctx: { db: typeof defaultDb; user: { id: string } },
+  input: ListFilterInput
+): Promise<SQL | null> {
+  const conditions: SQL[] = [
+    eq(leads.organizationId, input.organizationId),
+    ...leadListConditions(input, ctx.user.id),
+  ];
+
+  // Tag filter - get lead IDs that have the specified tags
+  if (input.tagIds && input.tagIds.length > 0) {
+    const leadsWithTags = await ctx.db
+      .select({ leadId: leadTags.leadId })
+      .from(leadTags)
+      .where(inArray(leadTags.tagId, input.tagIds))
+      .groupBy(leadTags.leadId);
+    if (leadsWithTags.length === 0) return null;
+    conditions.push(
+      inArray(
+        leads.id,
+        leadsWithTags.map((lt) => lt.leadId)
+      )
+    );
+  }
+
+  // Advanced filter
+  if (input.advancedFilter) {
+    const advancedCondition = buildFilterGroup(input.advancedFilter);
+    if (advancedCondition) conditions.push(advancedCondition);
+  }
+
+  return and(...conditions) ?? null;
+}
+
+/** Values of the lead's latest hearing shown with the lead (#137) */
+const LATEST_HEARING_EXTRAS = {
+  nextMeetingDate: sql<string | null>`${leadNextMeetingDate}`.as('next_meeting_date'),
+  dealRating: sql<string | null>`${leadDealRating}`.as('deal_rating'),
+};
+
 /** What the lead views show of the assignee (#135) */
 const ASSIGNEE_COLUMNS = { id: true, name: true, email: true } as const;
 
@@ -266,6 +328,7 @@ export const leadsRouter = router({
 
     const lead = await ctx.db.query.leads.findFirst({
       where: and(eq(leads.id, input.id), eq(leads.organizationId, input.organizationId)),
+      extras: LATEST_HEARING_EXTRAS,
       with: {
         assignee: { columns: ASSIGNEE_COLUMNS },
         leadTags: {
@@ -302,47 +365,11 @@ export const leadsRouter = router({
       });
     }
 
-    // Build where conditions: always scoped to the organization (#131)
-    const conditions: SQL[] = [
-      eq(leads.organizationId, input.organizationId),
-      ...leadListConditions(input, ctx.user.id),
-    ];
-
-    // Tag filter - get lead IDs that have the specified tags
-    if (input.tagIds && input.tagIds.length > 0) {
-      const leadsWithTags = await ctx.db
-        .select({ leadId: leadTags.leadId })
-        .from(leadTags)
-        .where(inArray(leadTags.tagId, input.tagIds))
-        .groupBy(leadTags.leadId);
-
-      if (leadsWithTags.length > 0) {
-        conditions.push(
-          inArray(
-            leads.id,
-            leadsWithTags.map((lt) => lt.leadId)
-          )
-        );
-      } else {
-        // No leads match the tag filter
-        return {
-          items: [],
-          total: 0,
-          limit: input.limit,
-          offset: input.offset,
-        };
-      }
+    const where = await listWhere(ctx, input);
+    if (!where) {
+      // No leads match the tag filter
+      return { items: [], total: 0, limit: input.limit, offset: input.offset };
     }
-
-    // Advanced filter
-    if (input.advancedFilter) {
-      const advancedCondition = buildFilterGroup(input.advancedFilter);
-      if (advancedCondition) {
-        conditions.push(advancedCondition);
-      }
-    }
-
-    const where = and(...conditions);
 
     // Total of all matching leads (for the page count), and the requested page
     const [countRows, results] = await Promise.all([
@@ -354,6 +381,7 @@ export const leadsRouter = router({
         offset: input.offset,
         extras: {
           lastActivityAt: sql<string>`${leadLastActivityAt}`.as('last_activity_at'),
+          ...LATEST_HEARING_EXTRAS,
         },
         with: {
           assignee: { columns: ASSIGNEE_COLUMNS },
@@ -380,6 +408,125 @@ export const leadsRouter = router({
       offset: input.offset,
     };
   }),
+
+  /**
+   * Export every lead matching the list's filters and sort (#173), up to LEAD_EXPORT_MAX_ROWS.
+   * Same permission as reading the list. The file is made here and one audit row records who
+   * exported what (format, row count, filters without personal data).
+   */
+  export: organizationProcedure.input(exportLeadsSchema).mutation(async ({ ctx, input }) => {
+    if (!ctx.ability.can('read', 'Lead')) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: 'リードを閲覧する権限がありません',
+      });
+    }
+    const { format, locale, ...filterInput } = input;
+    const now = new Date();
+    const where = await listWhere(ctx, filterInput);
+
+    let total = 0;
+    let rows: LeadExportRow[] = [];
+    if (where) {
+      const [countRows, selected] = await Promise.all([
+        ctx.db.select({ total: count() }).from(leads).where(where),
+        ctx.db
+          .select({
+            id: leads.id,
+            name: leads.name,
+            email: leads.email,
+            company: leads.company,
+            phone: leads.phone,
+            status: leads.status,
+            dealPhase: leads.dealPhase,
+            score: leads.score,
+            source: leads.source,
+            inflowSource: leads.inflowSource,
+            assignee: sql<string | null>`coalesce(nullif(trim(${users.name}), ''), ${users.email})`,
+            nextMeetingDate: leadNextMeetingDate,
+            dealRating: leadDealRating,
+            createdAt: leads.createdAt,
+          })
+          .from(leads)
+          .leftJoin(users, eq(users.id, leads.assigneeUserId))
+          .where(where)
+          .orderBy(...leadListOrderBy(input.sortBy, input.sortOrder))
+          .limit(LEAD_EXPORT_MAX_ROWS),
+      ]);
+      total = Number(countRows[0]?.total ?? 0);
+      rows = selected;
+    }
+    const capped = total > rows.length;
+
+    const content =
+      format === 'csv'
+        ? leadExportCsv(rows)
+        : format === 'json'
+          ? leadExportJson(rows)
+          : leadExportPdfBase64(rows, { generatedAt: now, locale });
+
+    await ctx.db.insert(auditLogs).values({
+      organizationId: input.organizationId,
+      userId: ctx.user.id,
+      action: 'export',
+      resource: 'lead',
+      resourceId: null,
+      createdAt: now,
+      metadata: {
+        format,
+        rowCount: rows.length,
+        total,
+        capped,
+        sortBy: input.sortBy ?? 'createdAt',
+        sortOrder: input.sortOrder ?? 'desc',
+        filters: exportAuditFilters(filterInput),
+      },
+    });
+
+    return {
+      format,
+      filename: leadExportFilename(format, jstDate(now)),
+      mimeType: LEAD_EXPORT_MIME_TYPES[format],
+      encoding: format === 'pdf' ? ('base64' as const) : ('utf8' as const),
+      content,
+      rowCount: rows.length,
+      total,
+      capped,
+      maxRows: LEAD_EXPORT_MAX_ROWS,
+    };
+  }),
+
+  /**
+   * Dashboard card 今週の商談予定 (#137): leads whose latest hearing's next meeting date is in
+   * the current Japan week, earliest first, with the assignee and the deal rating
+   */
+  weekMeetings: organizationProcedure.query(async ({ ctx, input }) => {
+    if (!ctx.ability.can('read', 'Lead')) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: 'リードを閲覧する権限がありません',
+      });
+    }
+    return getWeekMeetings(ctx.db, input.organizationId);
+  }),
+
+  /** Dashboard KPI 初回商談から次回日程が決まった率 for the period (#137, see meetings.ts) */
+  nextMeetingRate: organizationProcedure
+    .input(
+      z.object({
+        organizationId: z.string().uuid(),
+        days: z.union([z.literal(7), z.literal(30), z.literal(90)]),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      if (!ctx.ability.can('read', 'Lead')) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'リードを閲覧する権限がありません',
+        });
+      }
+      return getNextMeetingRate(ctx.db, input.organizationId, input.days);
+    }),
 
   /**
    * Figures of the list page's cards for the whole organization (#131): leads per status and

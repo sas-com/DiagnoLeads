@@ -2,6 +2,7 @@
  * Leads page with the server-driven list (#131): URL <-> filters <-> leads.list input, sort
  * headers, paging, page size, quick filters, chips, the organization-wide cards and the columns.
  * The router's URL really changes; the list hook records what it was asked for.
+ * Also the latest hearing's columns, filters and presets (#137) and the server export (#173).
  */
 import LeadsPage from '@/app/[locale]/(dashboard)/leads/page';
 import { LEAD_LIST_PREFERENCES_KEY } from '@/hooks/use-lead-list-query';
@@ -52,6 +53,13 @@ const server = vi.hoisted(() => ({
   items: [] as unknown[],
   total: 0,
 }));
+
+const exporter = vi.hoisted(() => ({
+  mutateAsync: vi.fn(),
+  toast: { success: vi.fn(), warning: vi.fn(), info: vi.fn(), error: vi.fn() },
+}));
+
+vi.mock('sonner', () => ({ toast: exporter.toast }));
 
 const nav = vi.hoisted(() => {
   let search = '';
@@ -134,6 +142,9 @@ vi.mock('@/lib/trpc/client', () => {
         bulkUpdateStatus: { useMutation: mutation },
         bulkDelete: { useMutation: mutation },
         bulkCreate: { useMutation: mutation },
+        export: {
+          useMutation: () => ({ mutateAsync: exporter.mutateAsync, isPending: false }),
+        },
       },
     },
   };
@@ -171,6 +182,8 @@ beforeEach(() => {
   server.inputs.length = 0;
   server.items = [makeLead('a1'), makeLead('a2', { name: '佐藤 花子', source: 'api' })];
   server.total = 45;
+  exporter.mutateAsync.mockReset();
+  for (const fn of Object.values(exporter.toast)) fn.mockClear();
 });
 
 afterEach(() => setWidth(1024));
@@ -334,5 +347,137 @@ describe('LeadsPage list (server-driven)', () => {
     await table();
     expect(screen.getByRole('button', { name: messages.leads.createLead })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: messages.common.import })).toBeInTheDocument();
+  });
+
+  it('shows the next meeting from 1280px with the overdue badge; the rating is optional (#137)', async () => {
+    const user = userEvent.setup();
+    server.items = [
+      makeLead('a1', { nextMeetingDate: '2020-01-06', dealRating: 'a' } as Partial<Lead>),
+      makeLead('a2', { nextMeetingDate: '2099-12-31', dealRating: null } as Partial<Lead>),
+      // Won: a passed date is not marked
+      makeLead('a3', { status: 'won', nextMeetingDate: '2020-01-07' } as Partial<Lead>),
+    ];
+    renderPage();
+    await table();
+    // 1024px: both hidden
+    expect(await headerOf(t.nextMeeting)).toBeUndefined();
+    expect(await headerOf(t.dealRating)).toBeUndefined();
+
+    act(() => setWidth(1280));
+    await waitFor(async () => expect(await headerOf(t.nextMeeting)).toBeDefined());
+    expect(await headerOf(t.dealRating)).toBeUndefined();
+    expect(screen.getByText('2020/01/06')).toBeInTheDocument();
+    expect(screen.getByText('2099/12/31')).toBeInTheDocument();
+    expect(screen.getByText('2020/01/07')).toBeInTheDocument();
+    // Only the passed date of the open lead is marked
+    const badges = screen.getAllByTestId('next-meeting-overdue');
+    expect(badges).toHaveLength(1);
+    expect(badges[0]).toHaveTextContent(t.overdue);
+
+    await user.click(screen.getByRole('button', { name: messages.common.columns }));
+    await user.click(await screen.findByRole('menuitemcheckbox', { name: t.dealRating }));
+    expect(await headerOf(t.dealRating)).toBeDefined();
+    expect(screen.getByText('評価 A')).toBeInTheDocument();
+
+    // Sorted on the server, soonest first
+    await user.click(within((await headerOf(t.nextMeeting)) as HTMLElement).getByRole('button'));
+    expect(nav.push).toHaveBeenLastCalledWith('/ja/leads?sort=nextMeetingDate&order=asc', {
+      scroll: false,
+    });
+    await waitFor(() =>
+      expect(lastInput()).toMatchObject({ sortBy: 'nextMeetingDate', sortOrder: 'asc' })
+    );
+  });
+
+  it('filters by next meeting and rating from the URL, with chips (#137)', async () => {
+    const user = userEvent.setup();
+    renderPage('next=overdue&rating=a,b');
+    await table();
+    expect(lastInput()).toMatchObject({ nextMeeting: 'overdue', dealRating: ['a', 'b'] });
+    const chips = within(screen.getByRole('group', { name: t.chips.label }));
+    expect(chips.getByText(t.nextMeetingOptions.overdue)).toBeInTheDocument();
+    expect(chips.getByText('案件評価：A')).toBeInTheDocument();
+    expect(chips.getByText('案件評価：B')).toBeInTheDocument();
+
+    await user.click(chips.getByRole('button', { name: '条件「案件評価：A」を外す' }));
+    expect(nav.push).toHaveBeenLastCalledWith('/ja/leads?next=overdue&rating=b', {
+      scroll: false,
+    });
+  });
+
+  it('has the presets 今週の商談 and 次回日程の過ぎたリード, sorted by the date (#137)', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await table();
+    const presets = within(screen.getByRole('group', { name: t.presetsLabel }));
+    await user.click(presets.getByRole('button', { name: t.presets.meetingsThisWeek }));
+    expect(nav.push).toHaveBeenLastCalledWith(
+      '/ja/leads?next=thisWeek&sort=nextMeetingDate&order=asc',
+      { scroll: false }
+    );
+    await waitFor(() =>
+      expect(presets.getByRole('button', { name: t.presets.meetingsThisWeek })).toHaveAttribute(
+        'aria-pressed',
+        'true'
+      )
+    );
+    await user.click(presets.getByRole('button', { name: t.presets.nextMeetingOverdue }));
+    expect(nav.push).toHaveBeenLastCalledWith(
+      '/ja/leads?next=overdue&sort=nextMeetingDate&order=asc',
+      { scroll: false }
+    );
+  });
+
+  it('exports every matching lead from the server with the filters and sort (#173)', async () => {
+    const user = userEvent.setup();
+    const createObjectURL = vi.fn(() => 'blob:x');
+    Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    exporter.mutateAsync.mockResolvedValue({
+      format: 'csv',
+      filename: 'leads_2026-10-16.csv',
+      mimeType: 'text/csv;charset=utf-8',
+      encoding: 'utf8',
+      content: 'ID\r\n',
+      rowCount: 5000,
+      total: 6200,
+      capped: true,
+      maxRows: 5000,
+    });
+    renderPage('status=new&next=thisWeek&sort=score&order=asc&page=2');
+    await table();
+
+    await user.click(screen.getByRole('button', { name: messages.common.export }));
+    expect(await screen.findByText(t.export.all)).toBeInTheDocument();
+    await user.click(await screen.findByRole('menuitem', { name: 'CSV' }));
+
+    await waitFor(() => expect(exporter.mutateAsync).toHaveBeenCalledTimes(1));
+    // The whole list: filters and sort, no page
+    expect(exporter.mutateAsync).toHaveBeenCalledWith({
+      organizationId: ORG_ID,
+      status: ['new'],
+      nextMeeting: 'thisWeek',
+      sortBy: 'score',
+      sortOrder: 'asc',
+      format: 'csv',
+      locale: 'ja',
+    });
+    await waitFor(() => expect(click).toHaveBeenCalled());
+    expect(createObjectURL).toHaveBeenCalled();
+    // Cut at the limit: said clearly
+    expect(exporter.toast.warning).toHaveBeenCalledWith(
+      '上限の5,000件までを書き出しました（条件に合うのは6,200件）。条件を絞ってから、もう一度書き出してください。'
+    );
+    click.mockRestore();
+  });
+
+  it('says when the export failed (#173)', async () => {
+    const user = userEvent.setup();
+    exporter.mutateAsync.mockRejectedValue(new Error('boom'));
+    renderPage();
+    await table();
+    await user.click(screen.getByRole('button', { name: messages.common.export }));
+    await user.click(await screen.findByRole('menuitem', { name: 'JSON' }));
+    await waitFor(() => expect(exporter.toast.error).toHaveBeenCalledWith(t.export.failed));
   });
 });

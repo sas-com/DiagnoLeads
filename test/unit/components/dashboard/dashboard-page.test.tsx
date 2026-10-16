@@ -48,6 +48,13 @@ vi.mock('@/hooks/use-leads', () => ({
 vi.mock('@/components/features/lead-follow-up/due-tasks-section', () => ({
   DueTasksSection: () => <div data-testid="due-tasks" />,
 }));
+// The meeting cards (#137) have their own tests (meeting-sections.test.tsx)
+vi.mock('@/components/dashboard/meeting-sections', () => ({
+  WeekMeetingsSection: () => <div data-testid="week-meetings" />,
+  NextMeetingRateSection: ({ days }: { days: number }) => (
+    <div data-testid="next-meeting-rate" data-days={days} />
+  ),
+}));
 vi.mock('@/components/features/lead-follow-up/contact-quick-actions', () => ({
   ContactQuickActions: ({ leadId, leadLabel }: { leadId: string; leadLabel: string }) => (
     <div data-testid="contact-actions" data-lead={leadId}>
@@ -458,11 +465,30 @@ describe('DashboardPage', () => {
     expect(JSON.parse(localStorage.getItem('dashboard-widget-config-v2') ?? '[]')).toEqual([
       { id: 'pending', enabled: true, order: 0 },
       { id: 'today', enabled: true, order: 1 },
-      { id: 'kpis', enabled: true, order: 2 },
-      { id: 'trend', enabled: true, order: 3 },
-      { id: 'recent', enabled: true, order: 4 },
-      { id: 'breakdown', enabled: true, order: 5 },
+      { id: 'meetings', enabled: true, order: 2 },
+      { id: 'kpis', enabled: true, order: 3 },
+      { id: 'meetingRate', enabled: true, order: 4 },
+      { id: 'trend', enabled: true, order: 5 },
+      { id: 'recent', enabled: true, order: 6 },
+      { id: 'breakdown', enabled: true, order: 7 },
     ]);
+  });
+
+  it('shows this week’s meetings after the next actions and the meeting rate after the figures, with the period (#137)', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const follows = (a: Element, b: Element) =>
+      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    const today = screen.getByTestId('due-tasks');
+    const meetings = screen.getByTestId('week-meetings');
+    const firstKpi = screen.getByRole('heading', { name: '新規リード' });
+    const rate = screen.getByTestId('next-meeting-rate');
+    expect(follows(today, meetings)).toBe(true);
+    expect(follows(meetings, firstKpi)).toBe(true);
+    expect(follows(firstKpi, rate)).toBe(true);
+    expect(rate).toHaveAttribute('data-days', '30');
+    await user.click(screen.getByRole('radio', { name: '7日' }));
+    expect(screen.getByTestId('next-meeting-rate')).toHaveAttribute('data-days', '7');
   });
 
   it('keeps hidden widgets from older settings but uses the new order', () => {

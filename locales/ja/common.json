@@ -847,7 +847,11 @@
       "moveUp": "「{name}」を上へ",
       "moveDown": "「{name}」を下へ",
       "today": "今日やること",
-      "todayDesc": "期限が今日まで・期限切れの次の行動"
+      "todayDesc": "期限が今日まで・期限切れの次の行動",
+      "meetings": "今週の商談予定",
+      "meetingsDesc": "次回日程が今週のリード（早い順）",
+      "meetingRate": "次回日程の決定率",
+      "meetingRateDesc": "初回商談から次回日程が決まった率"
     },
     "ax": {
       "description": "AX移行診断から届いたリードと、対応が必要な相談申込を確認します",
@@ -935,6 +939,22 @@
       "allTimeTag": "全期間",
       "cardError": "読み込めませんでした",
       "retry": "再読み込み"
+    },
+    "meetings": {
+      "title": "今週の商談予定",
+      "description": "最新のヒアリングの次回日程が今週（月曜〜日曜）のリード。早い順",
+      "empty": "今週の商談予定はありません。",
+      "more": "ほか {count} 件を一覧で見る",
+      "viewAll": "一覧で見る",
+      "unassigned": "担当未定",
+      "noCompany": "会社名なし",
+      "rating": "評価 {rating}",
+      "today": "今日",
+      "rateTitle": "初回商談から次回日程が決まった率",
+      "rateDescription": "期間中に初回のヒアリングをしたリードのうち、その初回のヒアリングで次回日程が決まったリードの割合",
+      "rateCounts": "{withNext}件 / 初回商談 {total}件",
+      "rateEmpty": "期間中の初回商談はありません",
+      "rateOverdueLink": "次回日程の過ぎたリードを見る"
     }
   },
   "leads": {
@@ -3183,7 +3203,8 @@
     },
     "sheet": {
       "keyFacts": "要点"
-    }
+    },
+    "nextMeetingOverdue": "次回日程 {date} が過ぎています"
   },
   "leadList": {
     "searchLabel": "リードを検索",
@@ -3217,7 +3238,9 @@
       "newThisWeek": "今週の新規",
       "negotiating": "商談中",
       "mine": "自分の担当",
-      "unassigned": "担当未定"
+      "unassigned": "担当未定",
+      "meetingsThisWeek": "今週の商談",
+      "nextMeetingOverdue": "次回日程の過ぎたリード"
     },
     "presetHints": {
       "needsAction": "状態が「新規」で、まだ誰も着手していないリード",
@@ -3225,7 +3248,9 @@
       "newThisWeek": "今週（月曜から）作成されたリード",
       "negotiating": "状態が「商談中」のリード",
       "mine": "自分が担当者のリード",
-      "unassigned": "まだ担当者が決まっていないリード"
+      "unassigned": "まだ担当者が決まっていないリード",
+      "meetingsThisWeek": "最新のヒアリングの次回日程が今週（月曜〜日曜）のリード。日程の早い順",
+      "nextMeetingOverdue": "次回日程が過ぎたのに、その後のヒアリングが記録されていないリード。日程の古い順"
     },
     "chips": {
       "label": "かけている条件",
@@ -3258,7 +3283,28 @@
     "firstPage": "最初のページ",
     "lastPage": "最後のページ",
     "pageSize": "表示件数",
-    "pageSizeOption": "{count}件ずつ"
+    "pageSizeOption": "{count}件ずつ",
+    "nextMeeting": "次回日程",
+    "dealRating": "案件評価",
+    "nextMeetingHint": "最新のヒアリングに記録された次回日程で絞り込みます。",
+    "nextMeetingOptions": {
+      "has": "次回日程あり",
+      "none": "次回日程なし",
+      "overdue": "次回日程が過ぎている",
+      "thisWeek": "次回日程が今週"
+    },
+    "ratingOption": "評価 {rating}",
+    "overdue": "日程超過",
+    "overdueTitle": "次回日程（{date}）が過ぎています。その後のヒアリングがまだ記録されていません。",
+    "export": {
+      "all": "条件に合う全件",
+      "allHint": "今の絞り込みと並び順で、最大{max}件まで書き出します",
+      "exporting": "書き出しています…",
+      "done": "{count}件を書き出しました",
+      "capped": "上限の{max}件までを書き出しました（条件に合うのは{total}件）。条件を絞ってから、もう一度書き出してください。",
+      "empty": "条件に合うリードがないため、見出しだけのファイルになりました。",
+      "failed": "書き出せませんでした。もう一度お試しください。"
+    }
   },
   "leadFollowUp": {
     "contact": {
