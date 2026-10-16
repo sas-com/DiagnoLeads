@@ -34,15 +34,15 @@ test.describe('AX migration diagnosis', () => {
     await page.getByTestId('platform-acos').click();
     await page.getByRole('button', { name: /次へ/ }).click();
     await expect(page.locator('#q-maintenance-error')).toHaveText('いずれか1つを選んでください');
-    await expect(page.getByRole('heading', { name: /STEP 2 \/ 5/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /STEP 2 \/ 6/ })).toBeVisible();
   });
 
   test('goes back a step with the browser back button', async ({ page }) => {
     await page.goto('/ja/ax-diagnosis');
     await page.getByTestId('platform-as400').click();
-    await expect(page.getByRole('heading', { name: /STEP 2 \/ 5/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /STEP 2 \/ 6/ })).toBeVisible();
     await page.goBack();
-    await expect(page.getByRole('heading', { name: /STEP 1 \/ 5/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /STEP 1 \/ 6/ })).toBeVisible();
     await expect(page.getByTestId('platform-as400')).toHaveAttribute('aria-pressed', 'true');
   });
 

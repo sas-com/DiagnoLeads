@@ -11,12 +11,19 @@ export const canSubmit = Boolean(
 const group = (scope: Page | Locator, name: RegExp) => scope.getByRole('group', { name });
 const next = (page: Page) => page.getByRole('button', { name: /次へ/ }).click();
 
+/** The company size step (#150) is optional, so go on without answering it */
+async function skipCompanySize(page: Page) {
+  await expect(page.getByRole('heading', { name: /会社の規模（任意）/ })).toBeVisible();
+  await next(page);
+}
+
 async function answerBusiness(page: Page, challenge: RegExp, role = '情報システム部門の責任者') {
   await group(page, /いま感じている課題/).getByLabel(challenge).check();
   await group(page, /切り替えを目指す時期/).getByLabel('1〜2年以内').check();
   await group(page, /業種/).getByLabel('製造業').check();
   await group(page, /あなたの立場/).getByLabel(role).check();
   await next(page);
+  await skipCompanySize(page);
 }
 
 /** AS/400 maintained by one or two people, with some source missing */
@@ -62,6 +69,7 @@ export async function answerAccess(page: Page) {
   await group(page, /業種/).getByLabel('製造業').check();
   await group(page, /あなたの立場/).getByLabel(/業務部門の責任者/).check();
   await next(page);
+  await skipCompanySize(page);
 }
 
 export async function fillContact(page: Page, email: string) {
