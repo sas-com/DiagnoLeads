@@ -2,26 +2,23 @@
 
 import { LeadActivityCard } from '@/components/features/lead-activity/lead-activity-card';
 import { LeadHearingsCard } from '@/components/features/lead-hearings/lead-hearings-card';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import type { Lead } from '@/lib/db/schema';
 import type { LeadStatus } from '@/lib/features/leads/types';
 import { DEAL_PHASES } from '@/lib/features/leads/types/pipeline';
 import { format, formatDistance } from 'date-fns';
 import { enUS, ja } from 'date-fns/locale';
-import { Building2, Calendar, Mail, Pencil, Phone, Trash2 } from 'lucide-react';
+import { Building2, Calendar, Mail, MoreHorizontal, Pencil, Phone, Trash2 } from 'lucide-react';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import { useState } from 'react';
+import { LeadDeleteDialog } from './lead-delete-dialog';
 import { LEAD_STATUS_BADGE_CLASSES } from './lead-status-styles';
 
 interface LeadDetailsProps {
@@ -41,7 +38,8 @@ const PIPELINE_ENUM_FIELDS = [
 
 /**
  * Lead details component
- * Displays detailed lead information with edit/delete actions
+ * Displays detailed lead information with edit/delete actions. The lead's name and contact are
+ * the title of the surrounding Sheet, so this starts with the status and the actions
  */
 export function LeadDetails({ lead, onEdit, onDelete, isDeleting }: LeadDetailsProps) {
   const t = useTranslations('leads');
@@ -67,27 +65,24 @@ export function LeadDetails({ lead, onEdit, onDelete, isDeleting }: LeadDetailsP
   return (
     <>
       <div className="space-y-6">
-        {/* Header with actions */}
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <h2 className="text-2xl font-bold text-gray-900">{lead.name || t('nameNotSet')}</h2>
-            <div className="mt-2">
-              <span
-                className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  LEAD_STATUS_BADGE_CLASSES[status] ?? ''
-                }`}
-              >
-                {tStatus(status)}
+        {/* Status and actions */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`px-3 py-1 rounded-full text-sm font-medium ${
+                LEAD_STATUS_BADGE_CLASSES[status] ?? ''
+              }`}
+            >
+              {tStatus(status)}
+            </span>
+            {lead.hasNegotiated && (
+              <span className="px-3 py-1 rounded-full text-sm font-medium bg-green-50 text-green-700">
+                {t('hasNegotiated')}
               </span>
-              {lead.hasNegotiated && (
-                <span className="ml-2 px-3 py-1 rounded-full text-sm font-medium bg-green-50 text-green-700">
-                  {t('hasNegotiated')}
-                </span>
-              )}
-            </div>
+            )}
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             {onEdit && (
               <Button onClick={onEdit} variant="outline" size="sm">
                 <Pencil className="h-4 w-4 mr-2" />
@@ -95,15 +90,27 @@ export function LeadDetails({ lead, onEdit, onDelete, isDeleting }: LeadDetailsP
               </Button>
             )}
             {onDelete && (
-              <Button
-                onClick={() => setShowDeleteDialog(true)}
-                variant="outline"
-                size="sm"
-                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                {tCommon('delete')}
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0"
+                    aria-label={t('moreActions')}
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    onSelect={() => setShowDeleteDialog(true)}
+                    className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    {tCommon('delete')}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </div>
         </div>
@@ -313,26 +320,13 @@ export function LeadDetails({ lead, onEdit, onDelete, isDeleting }: LeadDetailsP
       </div>
 
       {/* Delete confirmation dialog */}
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('deleteConfirmTitle')}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('deleteConfirmMessage', { name: lead.name || lead.email })}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>{tCommon('cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              disabled={isDeleting}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              {isDeleting ? t('deleting') : tCommon('delete')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <LeadDeleteDialog
+        lead={lead}
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        onConfirm={handleDelete}
+        isDeleting={isDeleting}
+      />
     </>
   );
 }
