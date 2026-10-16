@@ -3,12 +3,8 @@ import type { Page } from '@playwright/test';
 /**
  * E2E test authentication helper
  *
- * Note: In a real-world scenario, you would:
- * 1. Use a dedicated test database
- * 2. Seed test users and organizations
- * 3. Use Playwright's storageState to persist authentication
- *
- * For now, this is a placeholder that demonstrates the flow.
+ * The users and organization below are created by scripts/e2e-seed.ts (bun run test:e2e:seed).
+ * Each user belongs to that one organization, so the app selects it after sign-in.
  */
 
 export interface TestUser {
@@ -20,24 +16,30 @@ export interface TestUser {
 
 const TEST_PASSWORD = process.env.E2E_TEST_PASSWORD || 'e2e-test-pw';
 
+export const E2E_ORGANIZATION = {
+  id: '00000000-0000-4000-8000-0000000000e2',
+  name: 'E2E Organization',
+  slug: 'e2e-org',
+} as const;
+
 export const TEST_USERS = {
   owner: {
     email: 'test-owner@example.com',
     password: TEST_PASSWORD,
     name: 'Test Owner',
-    organizationId: 'test-org-1',
+    organizationId: E2E_ORGANIZATION.id,
   },
   admin: {
     email: 'test-admin@example.com',
     password: TEST_PASSWORD,
     name: 'Test Admin',
-    organizationId: 'test-org-1',
+    organizationId: E2E_ORGANIZATION.id,
   },
   member: {
     email: 'test-member@example.com',
     password: TEST_PASSWORD,
     name: 'Test Member',
-    organizationId: 'test-org-1',
+    organizationId: E2E_ORGANIZATION.id,
   },
 } as const;
 
@@ -45,7 +47,7 @@ export const TEST_USERS = {
  * Navigate to login page and authenticate
  */
 export async function login(page: Page, user: TestUser): Promise<void> {
-  await page.goto('/sign-in');
+  await page.goto('/login');
 
   // Fill in login form
   await page.fill('input[name="email"]', user.email);
@@ -69,7 +71,7 @@ export async function logout(page: Page): Promise<void> {
   await page.click('[data-testid="logout-button"]');
 
   // Wait for navigation to sign-in page
-  await page.waitForURL('/sign-in');
+  await page.waitForURL(/\/login/);
 }
 
 /**
@@ -94,11 +96,6 @@ export async function setupAuthenticatedTest(
   page: Page,
   user: TestUser = TEST_USERS.owner
 ): Promise<void> {
+  // login() already waits for the dashboard of the user's only organization
   await login(page, user);
-
-  // Navigate to the organization dashboard if specified
-  if (user.organizationId) {
-    await page.goto(`/dashboard/${user.organizationId}`);
-    await page.waitForLoadState('networkidle');
-  }
 }

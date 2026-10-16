@@ -284,6 +284,12 @@ jobs:
         run: |
           PGPASSWORD=postgres psql -h localhost -U postgres -d diagnoleads_test -c "INSERT INTO organizations (id, name, slug) VALUES ('00000000-0000-4000-8000-0000000000a1', 'AX E2E', 'ax-e2e') ON CONFLICT DO NOTHING;"
 
+      - name: Create the users the E2E tests sign in with
+        run: bun run test:e2e:seed
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/diagnoleads_test
+          SKIP_ENV_VALIDATION: true
+
       - name: Run E2E tests
         continue-on-error: true  # E2E tests are optional until CI environment is stabilized
         run: bun run test:e2e
@@ -293,6 +299,9 @@ jobs:
           BETTER_AUTH_URL: http://localhost:3000
           NEXT_PUBLIC_APP_URL: http://localhost:3000
           AX_DIAGNOSIS_ORGANIZATION_ID: 00000000-0000-4000-8000-0000000000a1
+          # Same as production until the public launch: noindex everywhere, mail only to allowed domains
+          APP_TEST_MODE: 'true'
+          APP_TEST_MODE_EMAIL_DOMAINS: example.com
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4

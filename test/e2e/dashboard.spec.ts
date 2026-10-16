@@ -18,14 +18,14 @@ test.describe('Dashboard', () => {
 
   test.describe('Dashboard Display', () => {
     test('should display dashboard page @smoke', async ({ page }) => {
-      await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}`);
+      await page.goto('/dashboard');
 
       // Check page loaded
       await expect(page).toHaveURL(/\/dashboard/);
     });
 
     test('should display welcome message or heading', async ({ page }) => {
-      await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}`);
+      await page.goto('/dashboard');
 
       // Look for heading
       const heading = page.locator('h1, h2').first();
@@ -33,7 +33,7 @@ test.describe('Dashboard', () => {
     });
 
     test('should display stats cards', async ({ page }) => {
-      await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}`);
+      await page.goto('/dashboard');
 
       // Look for stat cards
       const statCards = page.locator('[data-testid="stat-card"], .stat-card, [class*="card"]');
@@ -44,7 +44,7 @@ test.describe('Dashboard', () => {
 
   test.describe('Navigation', () => {
     test('should navigate to leads page', async ({ page }) => {
-      await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}`);
+      await page.goto('/dashboard');
 
       // Click leads link
       const leadsLink = page.locator('a[href*="/leads"], [data-testid="leads-link"]').first();
@@ -55,7 +55,7 @@ test.describe('Dashboard', () => {
     });
 
     test('should navigate to analytics page', async ({ page }) => {
-      await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}`);
+      await page.goto('/dashboard');
 
       // Click analytics link
       const analyticsLink = page.locator('a[href*="/analytics"], [data-testid="analytics-link"]').first();
@@ -66,7 +66,7 @@ test.describe('Dashboard', () => {
     });
 
     test('should navigate to settings page', async ({ page }) => {
-      await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}`);
+      await page.goto('/dashboard');
 
       // Click settings link
       const settingsLink = page.locator('a[href*="/settings"], [data-testid="settings-link"]').first();
@@ -79,7 +79,7 @@ test.describe('Dashboard', () => {
 
   test.describe('Sidebar', () => {
     test('should display sidebar navigation', async ({ page }) => {
-      await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}`);
+      await page.goto('/dashboard');
 
       // Check sidebar exists
       const sidebar = page.locator('[data-testid="sidebar"], nav, aside').first();
@@ -89,7 +89,7 @@ test.describe('Dashboard', () => {
     test('should toggle sidebar on mobile', async ({ page }) => {
       // Set mobile viewport
       await page.setViewportSize({ width: 375, height: 667 });
-      await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}`);
+      await page.goto('/dashboard');
 
       // Look for hamburger menu
       const menuButton = page.locator('[data-testid="menu-toggle"], button[aria-label*="menu"]').first();
@@ -106,7 +106,7 @@ test.describe('Dashboard', () => {
 
   test.describe('Quick Actions', () => {
     test('should have quick action to create lead', async ({ page }) => {
-      await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}`);
+      await page.goto('/dashboard');
 
       // Look for quick action button
       const quickAction = page.locator('[data-testid="quick-add-lead"], button:has-text("新規リード"), button:has-text("Add Lead")').first();

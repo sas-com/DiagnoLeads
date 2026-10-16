@@ -18,6 +18,7 @@
     "test:features": "vitest --run --dir test/unit/features",
     "test:lib": "vitest --run --dir test/unit/lib",
     "test:e2e": "playwright test",
+    "test:e2e:seed": "tsx scripts/e2e-seed.ts",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
     "test:coverage:fast": "vitest --coverage --exclude 'test/unit/components/**'",

@@ -25,23 +25,23 @@ test.describe('Lead Management', () => {
 
   test('should display leads list page @smoke', async ({ page }) => {
     // Navigate to leads page
-    await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}/leads`);
+    await page.goto('/leads');
 
     // Check page title
-    await expect(page.getByRole('heading', { name: /リード一覧|Leads/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /リード管理|Leads/i })).toBeVisible();
 
     // Check if table is visible
     const table = page.getByRole('table');
     await expect(table).toBeVisible();
 
-    // Check table headers
-    await expect(page.getByRole('columnheader', { name: /名前|Name/i })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: /メール|Email/i })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: /ステータス|Status/i })).toBeVisible();
+    // Check table headers (matched by text: Playwright does not report these <th> as columnheader)
+    for (const name of [/名前|Name/i, /メール|Email/i, /ステータス|Status/i]) {
+      await expect(table.locator('thead th', { hasText: name }).first()).toBeVisible();
+    }
   });
 
   test('should create a new lead', async ({ page }) => {
-    await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}/leads`);
+    await page.goto('/leads');
 
     // Click "New Lead" button
     await page.click('[data-testid="new-lead-button"]');
@@ -73,7 +73,7 @@ test.describe('Lead Management', () => {
   });
 
   test('should view lead details', async ({ page }) => {
-    await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}/leads`);
+    await page.goto('/leads');
 
     // Wait for table to load
     await page.waitForSelector('table tbody tr');
@@ -94,7 +94,7 @@ test.describe('Lead Management', () => {
   });
 
   test('should update lead information', async ({ page }) => {
-    await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}/leads`);
+    await page.goto('/leads');
 
     // Wait for table to load
     await page.waitForSelector('table tbody tr');
@@ -127,7 +127,7 @@ test.describe('Lead Management', () => {
   });
 
   test('should update lead status', async ({ page }) => {
-    await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}/leads`);
+    await page.goto('/leads');
 
     // Wait for table to load
     await page.waitForSelector('table tbody tr');
@@ -160,7 +160,7 @@ test.describe('Lead Management', () => {
   });
 
   test('should delete a lead', async ({ page }) => {
-    await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}/leads`);
+    await page.goto('/leads');
 
     // First, create a lead to delete
     await page.click('[data-testid="new-lead-button"]');
@@ -199,7 +199,7 @@ test.describe('Lead Management', () => {
   });
 
   test('should filter leads by status', async ({ page }) => {
-    await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}/leads`);
+    await page.goto('/leads');
 
     // Wait for table to load
     await page.waitForSelector('table tbody tr');
@@ -221,7 +221,7 @@ test.describe('Lead Management', () => {
   });
 
   test('should search leads by email', async ({ page }) => {
-    await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}/leads`);
+    await page.goto('/leads');
 
     // Wait for table to load
     await page.waitForSelector('table tbody tr');
@@ -246,7 +246,7 @@ test.describe('Lead Management', () => {
   });
 
   test('should paginate through leads', async ({ page }) => {
-    await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}/leads`);
+    await page.goto('/leads');
 
     // Wait for table to load
     await page.waitForSelector('table tbody tr');
@@ -292,7 +292,7 @@ test.describe('Lead Management', () => {
   });
 
   test('should sort leads by column', async ({ page }) => {
-    await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}/leads`);
+    await page.goto('/leads');
 
     // Wait for table to load
     await page.waitForSelector('table tbody tr');
@@ -327,7 +327,7 @@ test.describe('Lead Management', () => {
   });
 
   test('should bulk select leads', async ({ page }) => {
-    await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}/leads`);
+    await page.goto('/leads');
 
     // Wait for table to load
     await page.waitForSelector('table tbody tr');
@@ -353,7 +353,7 @@ test.describe('Lead Management', () => {
   });
 
   test('should bulk update lead status', async ({ page }) => {
-    await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}/leads`);
+    await page.goto('/leads');
 
     // Wait for table to load
     await page.waitForSelector('table tbody tr');
@@ -382,7 +382,7 @@ test.describe('Lead Management', () => {
   });
 
   test('should export leads', async ({ page }) => {
-    await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}/leads`);
+    await page.goto('/leads');
 
     // Wait for table to load
     await page.waitForSelector('table tbody tr');
@@ -412,7 +412,7 @@ test.describe('Lead Management', () => {
 
   test('should show empty state when no leads', async ({ page }) => {
     // Navigate with a filter that likely returns no results
-    await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}/leads?search=nonexistent-lead-xyz-123`);
+    await page.goto(`/leads?search=nonexistent-lead-xyz-123`);
 
     // Wait for the page to load
     await page.waitForTimeout(1000);
@@ -431,7 +431,7 @@ test.describe('Lead Management', () => {
   });
 
   test('should filter leads by date range', async ({ page }) => {
-    await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}/leads`);
+    await page.goto('/leads');
 
     // Wait for table to load
     await page.waitForSelector('table tbody tr');
@@ -452,7 +452,7 @@ test.describe('Lead Management', () => {
   });
 
   test('should filter leads by score range', async ({ page }) => {
-    await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}/leads`);
+    await page.goto('/leads');
 
     // Wait for table to load
     await page.waitForSelector('table tbody tr');
@@ -473,7 +473,7 @@ test.describe('Lead Management', () => {
   });
 
   test('should show lead activity timeline', async ({ page }) => {
-    await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}/leads`);
+    await page.goto('/leads');
 
     // Wait for table to load
     await page.waitForSelector('table tbody tr');
@@ -500,7 +500,7 @@ test.describe('Lead Management', () => {
   });
 
   test('should add tags to lead', async ({ page }) => {
-    await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}/leads`);
+    await page.goto('/leads');
 
     // Wait for table to load
     await page.waitForSelector('table tbody tr');
@@ -529,7 +529,7 @@ test.describe('Lead Management', () => {
   });
 
   test('should add comment to lead', async ({ page }) => {
-    await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}/leads`);
+    await page.goto('/leads');
 
     // Wait for table to load
     await page.waitForSelector('table tbody tr');
@@ -572,7 +572,7 @@ test.describe('Lead Management - Mobile', () => {
   });
 
   test('should display leads list on mobile', async ({ page }) => {
-    await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}/leads`);
+    await page.goto('/leads');
 
     // Check that leads are visible (may be cards instead of table)
     const leadsContent = page.locator('table, [data-testid="leads-list"], [data-testid="lead-card"]').first();
@@ -580,7 +580,7 @@ test.describe('Lead Management - Mobile', () => {
   });
 
   test('should have responsive actions menu on mobile', async ({ page }) => {
-    await page.goto(`/dashboard/${TEST_USERS.owner.organizationId}/leads`);
+    await page.goto('/leads');
 
     // Wait for content to load
     await page.waitForTimeout(1000);
@@ -601,7 +601,7 @@ test.describe('Lead Management - Permissions', () => {
     // Login as member (limited permissions)
     await setupAuthenticatedTest(page, TEST_USERS.member);
 
-    await page.goto(`/dashboard/${TEST_USERS.member.organizationId}/leads`);
+    await page.goto('/leads');
 
     // Wait for table to load
     await page.waitForSelector('table tbody tr', { timeout: 10000 }).catch(() => null);
