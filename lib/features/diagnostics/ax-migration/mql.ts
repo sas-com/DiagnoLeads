@@ -136,7 +136,12 @@ export function judgeAxMql(
   };
 }
 
-const COMPANY_SIZE_FITS: readonly AxCompanySizeFit[] = ['fit', 'not_fit', 'unknown', 'not_configured'];
+const COMPANY_SIZE_FITS: readonly AxCompanySizeFit[] = [
+  'fit',
+  'not_fit',
+  'unknown',
+  'not_configured',
+];
 
 const LEVEL_RANK: Record<AxMqlLevel, number> = { none: 0, fit: 1, interest: 2 };
 
