@@ -329,16 +329,16 @@ export interface HearingRequiredItem {
   keys: readonly HearingFieldKey[];
 }
 
-/**
- * Items to fill before agreeing on the next meeting. PROVISIONAL: replace this list once the
- * sales department has settled it; nothing else depends on its contents.
- */
 const required = (id: string, keys: HearingFieldKey[]): HearingRequiredItem => ({
   id,
   labelKey: `leadHearings.required.${id}`,
   keys,
 });
 
+/**
+ * Items to fill before agreeing on the next meeting. PROVISIONAL: replace this list once the
+ * sales department has settled it; nothing else depends on its contents.
+ */
 export const HEARING_REQUIRED_ITEMS: readonly HearingRequiredItem[] = [
   required('attendeeRoles', ['attendeeRoles']),
   required('system', ['targetSystem', 'machineModel']),
@@ -353,6 +353,69 @@ export const HEARING_REQUIRED_ITEMS: readonly HearingRequiredItem[] = [
   required('competitors', ['competitorTypes']),
   required('nextMeeting', ['nextMeetingDate', 'nextMeetingAttendees']),
 ];
+
+// ── Resolved catalog ────────────────────────────────────────────────────────────
+
+/** The catalog as defined in code */
+export interface HearingBaseCatalog {
+  sections: readonly HearingSectionId[];
+  fields: readonly HearingFieldDefinition[];
+  requiredItems: readonly HearingRequiredItem[];
+}
+
+export const HEARING_BASE_CATALOG: HearingBaseCatalog = {
+  sections: HEARING_SECTIONS,
+  fields: HEARING_FIELDS,
+  requiredItems: HEARING_REQUIRED_ITEMS,
+};
+
+/**
+ * Changes an organization makes to the base catalog. Only the required items for now; the
+ * organization settings (#98) add visibility, order and custom fields here.
+ */
+export interface HearingCatalogOverrides {
+  requiredItems?: readonly HearingRequiredItem[];
+}
+
+export interface HearingCatalogField {
+  field: HearingFieldDefinition;
+  /** Part of a required item */
+  required: boolean;
+}
+
+export interface HearingCatalogSection {
+  id: HearingSectionId;
+  fields: readonly HearingCatalogField[];
+}
+
+/** What the screens and the missing-item check read: sections → ordered fields */
+export interface HearingCatalogView {
+  sections: readonly HearingCatalogSection[];
+  requiredItems: readonly HearingRequiredItem[];
+  sectionOf: ReadonlyMap<HearingFieldKey, HearingSectionId>;
+}
+
+export function resolveHearingCatalog(
+  base: HearingBaseCatalog,
+  overrides: HearingCatalogOverrides = {}
+): HearingCatalogView {
+  const requiredItems = overrides.requiredItems ?? base.requiredItems;
+  const requiredKeys = new Set<string>(requiredItems.flatMap((item) => item.keys));
+  const sectionOf = new Map<HearingFieldKey, HearingSectionId>();
+  const sections = base.sections.map((id) => ({
+    id,
+    fields: base.fields
+      .filter((field) => field.section === id)
+      .map((field) => {
+        sectionOf.set(field.key as HearingFieldKey, id);
+        return { field, required: requiredKeys.has(field.key) };
+      }),
+  }));
+  return { sections, requiredItems, sectionOf };
+}
+
+/** The catalog without organization overrides */
+export const DEFAULT_HEARING_CATALOG = resolveHearingCatalog(HEARING_BASE_CATALOG);
 
 /** Hearings per lead (a lead has a few meetings; this only stops runaway creation) */
 export const LEAD_HEARINGS_MAX_PER_LEAD = 50;

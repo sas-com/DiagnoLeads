@@ -5,6 +5,8 @@
 import { AX_PLAYBOOK_CHALLENGES } from '@/lib/features/ax-playbook/types/schemas';
 import { axMigrationDefinition } from '@/lib/features/diagnostics/ax-migration/definition';
 import {
+  DEFAULT_HEARING_CATALOG,
+  HEARING_BASE_CATALOG,
   HEARING_CHALLENGES,
   HEARING_FIELDS,
   HEARING_FIELD_KEYS,
@@ -12,6 +14,7 @@ import {
   HEARING_SECTIONS,
   type HearingOption,
   getHearingField,
+  resolveHearingCatalog,
 } from '@/lib/features/lead-hearings/catalog';
 import { PREFILL_QUESTION_IDS } from '@/lib/features/lead-hearings/prefill';
 import { TARGET_SYSTEMS } from '@/lib/features/leads/types/pipeline';
@@ -106,5 +109,41 @@ describe('hearing catalog', () => {
       expect(item.keys.length).toBeGreaterThan(0);
       for (const key of item.keys) expect(getHearingField(key), key).toBeDefined();
     }
+  });
+});
+
+describe('resolveHearingCatalog', () => {
+  it('without overrides lists every section and field in catalog order', () => {
+    const view = resolveHearingCatalog(HEARING_BASE_CATALOG);
+    expect(view.sections.map((s) => s.id)).toEqual([...HEARING_SECTIONS]);
+    expect(view.sections.flatMap((s) => s.fields.map(({ field }) => field))).toEqual(
+      HEARING_SECTIONS.flatMap((id) => HEARING_FIELDS.filter((f) => f.section === id))
+    );
+    expect(view.requiredItems).toBe(HEARING_REQUIRED_ITEMS);
+    for (const section of view.sections) {
+      for (const { field } of section.fields) {
+        expect(view.sectionOf.get(field.key as never)).toBe(field.section);
+      }
+    }
+    expect(view).toEqual(DEFAULT_HEARING_CATALOG);
+  });
+
+  it('marks exactly the keys of the required items as required', () => {
+    const requiredKeys = new Set<string>(HEARING_REQUIRED_ITEMS.flatMap((i) => i.keys));
+    const flagged = DEFAULT_HEARING_CATALOG.sections.flatMap((s) =>
+      s.fields.filter((f) => f.required).map((f) => f.field.key)
+    );
+    expect(new Set(flagged)).toEqual(requiredKeys);
+  });
+
+  it('takes replacement required items', () => {
+    const view = resolveHearingCatalog(HEARING_BASE_CATALOG, {
+      requiredItems: [{ id: 'only', labelKey: 'x', keys: ['dealRating'] }],
+    });
+    const flagged = view.sections.flatMap((s) =>
+      s.fields.filter((f) => f.required).map((f) => f.field.key)
+    );
+    expect(flagged).toEqual(['dealRating']);
+    expect(view.requiredItems.map((i) => i.id)).toEqual(['only']);
   });
 });

@@ -2241,5 +2241,231 @@
       "submitting": "Creating…",
       "success": "Created \"{name}\""
     }
+  },
+  "leadHearings": {
+    "title": "First meeting hearings",
+    "sections": {
+      "meeting": "Meeting",
+      "customer": "Customer",
+      "currentSystem": "Current system",
+      "challenges": "Challenges",
+      "requirements": "Requirements",
+      "outcome": "Outcome"
+    },
+    "fields": {
+      "meetingFormat": "Meeting format",
+      "attendeeRoles": "Customer attendees' roles",
+      "decisionMakerPresent": "Decision maker present",
+      "industry": "Industry",
+      "employeeCount": "Number of employees",
+      "businessAreas": "Business areas",
+      "targetSystem": "Target system",
+      "machineModel": "Machine model / version",
+      "yearsInUse": "Years in use",
+      "scale": "Scale",
+      "inHouseExperts": "In-house staff who know the system",
+      "vendorSupport": "Vendor support",
+      "earliestRetirement": "Earliest planned retirement",
+      "hardwareSupportEnd": "End of hardware support",
+      "challengeLevels": "How much each challenge applies",
+      "topChallenge": "Top-priority challenge",
+      "challengeNotes": "Notes on challenges",
+      "impactIfUnaddressed": "Impact if not addressed",
+      "pastConsideration": "Past consideration",
+      "pastBlockers": "What held it back",
+      "directionTiming": "When the direction will be decided",
+      "budgetStatus": "Budget status",
+      "fiscalYearEndMonth": "Fiscal year-end month",
+      "competitorTypes": "Competitor types",
+      "requirementNotes": "Notes on requirements",
+      "dealRating": "Deal rating",
+      "nextMeetingDate": "Next meeting date",
+      "nextMeetingAttendees": "Next meeting attendees",
+      "outcomeNotes": "Notes on the outcome"
+    },
+    "options": {
+      "meetingFormat": {
+        "onsite": "On site",
+        "online": "Online",
+        "phone": "Phone"
+      },
+      "yesNo": {
+        "yes": "Yes",
+        "no": "No",
+        "unknown": "Unknown"
+      },
+      "employeeCount": {
+        "lt50": "Under 50",
+        "50_299": "50-299",
+        "300_999": "300-999",
+        "gte1000": "1,000 or more",
+        "unknown": "Unknown"
+      },
+      "yearsInUse": {
+        "lt10": "Under 10 years",
+        "10_19": "10-19 years",
+        "20_29": "20-29 years",
+        "gte30": "30 years or more",
+        "unknown": "Unknown"
+      },
+      "headcount": {
+        "none": "None",
+        "one": "One",
+        "two": "Two",
+        "three_or_more": "Three or more",
+        "unknown": "Unknown"
+      },
+      "challenge": {
+        "people": "People (key-person dependency)",
+        "cost": "Cost (life-extension cost)",
+        "agility": "Agility (market change)",
+        "data": "Data (data use)"
+      },
+      "level": {
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low",
+        "none": "Not applicable"
+      },
+      "pastConsideration": {
+        "never": "Never considered",
+        "dropped": "Considered and dropped",
+        "ongoing": "Under consideration",
+        "unknown": "Unknown"
+      },
+      "pastBlocker": {
+        "budget": "Budget",
+        "staffing": "Staffing",
+        "risk": "Migration risk",
+        "priority": "Priority",
+        "vendor": "Vendor",
+        "other": "Other"
+      },
+      "budgetStatus": {
+        "secured": "Secured",
+        "planning": "Being planned",
+        "not_started": "Not started",
+        "unknown": "Unknown"
+      },
+      "competitorType": {
+        "none": "None",
+        "current_vendor": "Current maintenance vendor",
+        "other_integrator": "Another system integrator",
+        "low_code_vendor": "Low-code vendor",
+        "package_vendor": "Package vendor",
+        "in_house": "In-house development",
+        "unknown": "Unknown"
+      },
+      "dealRating": {
+        "a": "A",
+        "b": "B",
+        "c": "C"
+      },
+      "nextAttendee": {
+        "customer_executive": "Customer executives",
+        "customer_it": "Customer IT staff",
+        "customer_business": "Customer business staff",
+        "our_sales": "Our sales",
+        "our_engineer": "Our engineers",
+        "partner": "Partner company"
+      }
+    },
+    "statuses": {
+      "done": "Done",
+      "partial": "Partly",
+      "not_yet": "Not yet",
+      "not_applicable": "N/A",
+      "next": "Next time"
+    },
+    "sources": {
+      "prefilled": "Web diagnosis",
+      "confirmed": "Confirmed",
+      "corrected": "Corrected"
+    },
+    "required": {
+      "attendeeRoles": "Attendees' roles",
+      "system": "Target system and model",
+      "businessAreas": "Business areas",
+      "upkeep": "Upkeep (in-house staff, retirement)",
+      "supportEnd": "End of hardware support",
+      "topChallenge": "Top-priority challenge",
+      "impact": "Impact if not addressed",
+      "pastConsideration": "Past consideration and what held it back",
+      "decisionMaker": "Decision maker present",
+      "timing": "When the direction will be decided",
+      "competitors": "Competitors",
+      "nextMeeting": "Next meeting date and attendees"
+    },
+    "card": {
+      "empty": "No hearings recorded yet.",
+      "record": "Record",
+      "heldOn": "Meeting on {date}",
+      "missing": "{count} missing",
+      "unconfirmed": "{count} unconfirmed",
+      "dealRating": "Rating {rating}",
+      "loadError": "Could not load the hearings.",
+      "retry": "Retry"
+    },
+    "create": {
+      "title": "Record a hearing",
+      "description": "Choose the meeting date and what to start from.",
+      "heldOn": "Meeting date",
+      "source": "Web diagnosis answers to start from",
+      "sourceOption": "{date} - {platform}",
+      "unknownPlatform": "No platform answered",
+      "noSources": "This lead has no Web diagnosis answers. The hearing starts empty.",
+      "unverified": "Unverified",
+      "unverifiedHelp": "These answers only matched the lead's email address. Confirm them with the customer.",
+      "carryOver": "Carry over the previous hearing",
+      "carryOverHelp": "Uncheck to start from the Web diagnosis answers.",
+      "submit": "Create",
+      "cancel": "Cancel",
+      "error": "Could not create the hearing."
+    },
+    "editor": {
+      "back": "Back to the lead",
+      "playbook": "Sales playbook (talk script)",
+      "heldOn": "Meeting date",
+      "required": "Required",
+      "statusOf": "Status of {field}",
+      "hint": "Web diagnosis: {value}",
+      "confirm": "Confirmed",
+      "confirmOf": "Mark {field} as confirmed",
+      "unverified": "Unverified",
+      "unverifiedBody": "These Web diagnosis answers only matched the lead's email address. Confirm them with the customer.",
+      "diagnosisFrom": "Showing the Web diagnosis answers of {date}.",
+      "notSelected": "Not selected",
+      "yearOf": "Year of {field}",
+      "monthOf": "Month of {field}",
+      "yearOption": "{year}",
+      "monthOption": "{month}",
+      "yearMonthIncomplete": "Choose both the year and the month.",
+      "scaleBasis": "How {field} is counted",
+      "scaleBucket": "Range of {field}",
+      "scaleIncomplete": "Choose both how it is counted and the range.",
+      "levelOf": "How much {item} applies",
+      "missingTabs": "{count} missing",
+      "missingTitle": "Required items not filled",
+      "missingBody": "Check them before agreeing on the next meeting. You can still save.",
+      "unconfirmedTitle": "Items still holding unconfirmed Web diagnosis values",
+      "allFilled": "All required items are filled.",
+      "missingCount": "{count} required items not filled",
+      "save": "Save",
+      "saved": "Saved",
+      "saveError": "Could not save",
+      "invalid": "Check the values you entered",
+      "conflictTitle": "Someone else saved this hearing",
+      "conflictBody": "Your edits are still on this screen. Loading the latest version discards them.",
+      "reload": "Load the latest version",
+      "loadErrorTitle": "Could not load the hearing",
+      "loadErrorBody": "Check your connection and try again.",
+      "retry": "Retry",
+      "notFoundTitle": "Hearing not found",
+      "notFoundBody": "It was deleted or does not belong to this lead.",
+      "readOnlyTitle": "Read only",
+      "readOnlyBody": "You do not have permission to change this hearing.",
+      "droppedKeys": "{count} stored values are no longer in the form. They will be removed on the next save.",
+      "lastUpdated": "Last updated: {date}"
+    }
   }
 }
