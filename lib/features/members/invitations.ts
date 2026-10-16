@@ -8,6 +8,7 @@ import {
   organizations,
   users,
 } from '@/lib/db/schema';
+import { isAllowedEmail } from '@/lib/email/allowed-recipients';
 import { and, desc, eq } from 'drizzle-orm';
 import type { RateLimitRule } from '../diagnostics/rate-limit';
 
@@ -170,7 +171,16 @@ export async function isSignupInvited(
 
 export type AcceptInvitationResult =
   | { ok: true; organizationId: string }
-  | { ok: false; reason: 'not_found' | 'expired' | 'revoked' | 'already_used' | 'email_mismatch' };
+  | {
+      ok: false;
+      reason:
+        | 'not_found'
+        | 'expired'
+        | 'revoked'
+        | 'already_used'
+        | 'email_mismatch'
+        | 'email_not_allowed';
+    };
 
 /**
  * Add the signed-in user to the organization of the invitation. The user's email must match the
@@ -202,6 +212,8 @@ export async function acceptInvitation(
     if (normalizeEmail(user.email) !== invitation.email) {
       return { ok: false, reason: 'email_mismatch' };
     }
+    // Test mode: an invitation made before it was turned on cannot bring in an outside address
+    if (!isAllowedEmail(invitation.email)) return { ok: false, reason: 'email_not_allowed' };
 
     const [membership] = await tx
       .select({ id: organizationMembers.id })

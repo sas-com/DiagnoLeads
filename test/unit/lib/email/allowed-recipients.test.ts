@@ -30,6 +30,9 @@ describe('test mode email restriction', () => {
     expect(isAllowedEmail('someone@gmail.com', domains)).toBe(false);
     expect(isAllowedEmail('x@evil-sas-com.com', domains)).toBe(false);
     expect(isAllowedEmail('x@sas-com.com.evil.example', domains)).toBe(false);
+    // The last <...> is where the mail goes, whatever the display name says
+    expect(isAllowedEmail('"x <a@sas-com.com>" <b@gmail.com>', domains)).toBe(false);
+    expect(isAllowedEmail('"x <b@gmail.com>" <a@sas-com.com>', domains)).toBe(true);
     expect(isAllowedEmail('anyone@gmail.com', [])).toBe(true);
   });
 

@@ -8,6 +8,10 @@ const ACCEPT_ERRORS = {
   expired: { code: 'BAD_REQUEST', message: '招待の有効期限が切れています' },
   revoked: { code: 'BAD_REQUEST', message: 'この招待は取り消されています' },
   already_used: { code: 'CONFLICT', message: 'この招待はすでに使われています' },
+  email_not_allowed: {
+    code: 'BAD_REQUEST',
+    message: 'テスト中のため、社内のメールアドレスのみ参加できます',
+  },
   email_mismatch: {
     code: 'FORBIDDEN',
     message: '招待されたメールアドレスのアカウントでログインしてください',

@@ -34,8 +34,9 @@ export function allowedEmailDomains(
 }
 
 function domainOf(address: string): string {
-  // "Name <user@example.com>" or "user@example.com"
-  const email = address.match(/<([^>]+)>/)?.[1] ?? address;
+  // "Name <user@example.com>" or "user@example.com"; the last <...> is where the mail goes
+  const bracketed = [...address.matchAll(/<([^<>]+)>/g)].pop()?.[1];
+  const email = bracketed ?? address;
   return email.trim().toLowerCase().split('@').pop() ?? '';
 }
 

@@ -98,6 +98,31 @@ describe('notifyAxMigrationSubmission', () => {
     );
   });
 
+  it('in test mode mails only company sales addresses, and skips without using the quota when none', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    process.env.APP_TEST_MODE = 'true';
+    try {
+      env.AX_DIAGNOSIS_SALES_EMAIL = 'sales@sas-com.com, partner@example.jp';
+      await notifyAxMigrationSubmission({ ...base, consultationRequested: true });
+      expect(sendEmailMock).toHaveBeenCalledWith(
+        expect.objectContaining({ to: ['sales@sas-com.com'] })
+      );
+
+      sendEmailMock.mockClear();
+      quotaMock.mockClear();
+      env.AX_DIAGNOSIS_SALES_EMAIL = 'partner@example.jp';
+      await notifyAxMigrationSubmission({ ...base, consultationRequested: true });
+      expect(sendEmailMock).not.toHaveBeenCalled();
+      expect(
+        quotaMock.mock.calls.some(([rule]) => String((rule as { name: string }).name).startsWith('ax-sales-email'))
+      ).toBe(false);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('allowed in test mode'));
+      expect(inAppMock).toHaveBeenCalled();
+    } finally {
+      delete process.env.APP_TEST_MODE;
+    }
+  });
+
   it('skips the email when no sales address or mail provider is configured, and says so', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     env.AX_DIAGNOSIS_SALES_EMAIL = undefined;
