@@ -1,4 +1,5 @@
 import { createContext } from '@/lib/trpc/context';
+import { logDetails } from '@/lib/trpc/log-details';
 import { appRouter } from '@/server/routers/_app';
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 
@@ -16,11 +17,10 @@ const handler = (req: Request) =>
     // are kept here in the server logs
     onError: ({ path, error }) => {
       if (process.env.NODE_ENV === 'development' || error.code === 'INTERNAL_SERVER_ERROR') {
-        // The cause with its stack (and database detail / constraint); never the input
         console.error(
           `tRPC failed on ${path ?? '<no-path>'}:`,
           error.message,
-          error.cause ?? error
+          logDetails(error.cause ?? error)
         );
       }
     },

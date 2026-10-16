@@ -2,36 +2,13 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { intlMiddleware, shouldSkipI18nMiddleware, stripLocalePrefix } from './lib/i18n/middleware';
 import { signInRedirect } from './lib/middleware/auth-redirect';
+import { SIGN_IN_REDIRECT_CACHE_HEADERS, getCacheHeaders } from './lib/middleware/cache-headers';
 import { contentSecurityPolicy } from './lib/middleware/csp';
 import {
   checkRateLimit,
   getRateLimitConfig,
   setRateLimitHeaders,
 } from './lib/middleware/rate-limit';
-
-/**
- * Cache control headers for static assets
- */
-function getCacheHeaders(pathname: string): Record<string, string> {
-  // Static assets - cache for 1 year
-  if (pathname.match(/\.(js|css|woff|woff2|ttf|eot|ico|png|jpg|jpeg|gif|svg|webp|avif)$/)) {
-    return {
-      'Cache-Control': 'public, max-age=31536000, immutable',
-    };
-  }
-
-  // API routes - no cache
-  if (pathname.startsWith('/api/')) {
-    return {
-      'Cache-Control': 'no-store, no-cache, must-revalidate',
-    };
-  }
-
-  // HTML pages - short cache with revalidation
-  return {
-    'Cache-Control': 'public, max-age=0, must-revalidate',
-  };
-}
 
 /**
  * Security headers including CSP
@@ -119,7 +96,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // 7. Add cache control headers
-  const cacheHeaders = getCacheHeaders(pathname);
+  const cacheHeaders = signIn ? SIGN_IN_REDIRECT_CACHE_HEADERS : getCacheHeaders(pathname);
   for (const [key, value] of Object.entries(cacheHeaders)) {
     response.headers.set(key, value);
   }

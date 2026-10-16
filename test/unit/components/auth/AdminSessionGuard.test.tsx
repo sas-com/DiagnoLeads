@@ -47,9 +47,13 @@ describe('AdminSessionGuard', () => {
     expect(mocks.replace).not.toHaveBeenCalled();
   });
 
-  it('waits while the session is being checked, and does not sign out on a network error', () => {
+  it('waits while the session is being checked', () => {
     mocks.session = { data: null, isPending: true, error: null };
     renderGuard();
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  it('does not send anyone to sign-in on a network error', () => {
     mocks.session = { data: null, isPending: false, error: new Error('offline') };
     renderGuard();
     expect(mocks.replace).not.toHaveBeenCalled();
