@@ -6,16 +6,26 @@ import { TRPCError, initTRPC } from '@trpc/server';
 import superjson from 'superjson';
 import type { Context } from './context';
 
+export const INTERNAL_ERROR_MESSAGE =
+  'サーバーでエラーが発生しました。時間をおいてもう一度お試しください';
+
 /**
  * Initialize tRPC with context
  */
 const t = initTRPC.context<Context>().create({
   transformer: superjson,
   errorFormatter({ shape, error }) {
+    // Unexpected errors carry internal details (database messages, hosts): keep them in the
+    // server logs and give the client a generic message in production
+    const hideInternal =
+      error.code === 'INTERNAL_SERVER_ERROR' && process.env.NODE_ENV === 'production';
     return {
       ...shape,
+      message: hideInternal ? INTERNAL_ERROR_MESSAGE : shape.message,
       data: {
         ...shape.data,
+        // Never send stack traces from production, whatever tRPC decided at start-up
+        stack: process.env.NODE_ENV === 'production' ? undefined : shape.data.stack,
         zodError:
           error.cause instanceof Error && error.cause.name === 'ZodError' ? error.cause : null,
       },
