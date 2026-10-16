@@ -13,7 +13,16 @@ import type { RateLimitRule } from '../diagnostics/rate-limit';
 
 type Database = typeof defaultDb;
 
-/** Invitation emails an organization can send per hour, so the form cannot be used to spam */
+/**
+ * Invitation emails per hour. Counted per inviter first and then per organization, so creating
+ * more organizations does not raise how many invitations one person can send.
+ */
+export const INVITATIONS_PER_USER: RateLimitRule = {
+  name: 'member-invite-user',
+  limit: 20,
+  windowMs: 60 * 60 * 1000,
+};
+
 export const INVITATIONS_PER_ORGANIZATION: RateLimitRule = {
   name: 'member-invite-org',
   limit: 20,

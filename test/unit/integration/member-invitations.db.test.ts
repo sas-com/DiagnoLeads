@@ -239,17 +239,29 @@ describe.skipIf(!url)('member invitations (PostgreSQL)', () => {
     expect(rows).toHaveLength(1);
   });
 
-  it('two invitations to the same address at once: one wins, the other is a recognizable conflict', async () => {
+  it('two invitations to the same address at once: the later one is a recognizable conflict', async () => {
     const email = `dup-${unique()}@example.com`;
-    const results = await Promise.allSettled([invite(email), invite(email), invite(email)]);
+    let pending: Promise<unknown> | undefined;
 
-    const failures = results.filter((r) => r.status === 'rejected');
-    for (const failure of failures) {
-      expect(isDuplicatePendingInvitation((failure as PromiseRejectedResult).reason)).toBe(true);
-    }
-    const pending = (await listPendingInvitations(db, organizationId, now)).filter(
+    // Another request has inserted a pending invitation but not committed yet; ours runs meanwhile
+    await client?.begin(async (sql) => {
+      await sql`insert into organization_invitations
+        (organization_id, email, role, token_hash, invited_by, expires_at)
+        values (${organizationId}, ${email}, 'member', ${`held-${unique()}`}, ${inviterId}, now() + interval '7 days')`;
+      pending = invite(email).then(
+        () => null,
+        (error: unknown) => error
+      );
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+
+    const error = await pending;
+    expect(error).not.toBeNull();
+    expect(isDuplicatePendingInvitation(error)).toBe(true);
+    const rows = (await listPendingInvitations(db, organizationId, now)).filter(
       (row) => row.email === email
     );
-    expect(pending).toHaveLength(1);
+    expect(rows).toHaveLength(1);
   });
+
 });

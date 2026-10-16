@@ -3,10 +3,11 @@ import { organizationMembers } from '@/lib/db/schema';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { and, eq } from 'drizzle-orm';
-import { consumeRateLimit } from '../../diagnostics/rate-limit';
+import { consumeRateLimits } from '../../diagnostics/rate-limit';
 import { invitationUrl, sendInvitationEmail } from '../invitation-email';
 import {
   INVITATIONS_PER_ORGANIZATION,
+  INVITATIONS_PER_USER,
   createInvitation,
   isDuplicatePendingInvitation,
   listPendingInvitations,
@@ -111,11 +112,10 @@ export const membersRouter = router({
       }
     }
 
-    const quota = await consumeRateLimit(
-      ctx.db,
-      INVITATIONS_PER_ORGANIZATION,
-      input.organizationId
-    );
+    const quota = await consumeRateLimits(ctx.db, [
+      { rule: INVITATIONS_PER_USER, identifier: ctx.user.id },
+      { rule: INVITATIONS_PER_ORGANIZATION, identifier: input.organizationId },
+    ]);
     if (!quota.allowed) {
       throw new TRPCError({
         code: 'TOO_MANY_REQUESTS',
