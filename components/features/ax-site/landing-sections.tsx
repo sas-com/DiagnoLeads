@@ -24,7 +24,13 @@ import {
 import { getTranslations } from 'next-intl/server';
 import type { ReactNode } from 'react';
 import { AxCtaLink } from './ax-cta-link';
-import { AX_CONTACT, AX_SECTIONS, axConsultationUrl, axPrivacyPolicyUrl } from './site-config';
+import {
+  AX_CONTACT,
+  AX_FINAL_SECTION_ID,
+  AX_SECTIONS,
+  axConsultationUrl,
+  axPrivacyPolicyUrl,
+} from './site-config';
 
 interface SectionProps {
   locale: DiagnosticLocale;
@@ -167,7 +173,7 @@ export async function AxProblems({ locale }: SectionProps) {
     <section
       id={AX_SECTIONS.problems}
       aria-labelledby="ax-problems-heading"
-      className="relative scroll-mt-20 overflow-hidden bg-gradient-to-br from-ax-lime via-[#8cc386] to-ax-teal py-16 sm:py-24"
+      className="relative overflow-hidden bg-gradient-to-br from-ax-lime via-[#8cc386] to-ax-teal py-16 sm:py-24"
     >
       {/* Faint rings like the lightbulb motif of maru2-dx.com */}
       <div
@@ -281,7 +287,7 @@ export async function AxSteps({ locale }: SectionProps) {
     <section
       id={AX_SECTIONS.steps}
       aria-labelledby="ax-steps-heading"
-      className="scroll-mt-20 bg-ax-mist py-16 sm:py-24"
+      className="bg-ax-mist py-16 sm:py-24"
     >
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <h2 id="ax-steps-heading" className={SECTION_HEADING}>
@@ -351,7 +357,7 @@ export async function AxTargets({ locale }: SectionProps) {
     <section
       id={AX_SECTIONS.targets}
       aria-labelledby="ax-targets-heading"
-      className="scroll-mt-20 bg-white py-16 sm:py-24"
+      className="bg-white py-16 sm:py-24"
     >
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <h2 id="ax-targets-heading" className={SECTION_HEADING}>
@@ -384,7 +390,7 @@ export async function AxDiagnosisSection({ locale }: SectionProps) {
     <section
       id={AX_SECTIONS.diagnosis}
       aria-labelledby="ax-diagnosis-heading"
-      className="scroll-mt-16 bg-gradient-to-b from-white to-ax-mist py-16 sm:py-24"
+      className="bg-gradient-to-b from-white to-ax-mist py-16 sm:py-24"
     >
       <div className="mx-auto max-w-4xl px-4 sm:px-6">
         <p aria-hidden="true" className={EYEBROW}>
@@ -462,7 +468,7 @@ export async function AxFaq({ locale }: SectionProps) {
     <section
       id={AX_SECTIONS.faq}
       aria-labelledby="ax-faq-heading"
-      className="scroll-mt-20 bg-ax-mist py-16 sm:py-24"
+      className="bg-ax-mist py-16 sm:py-24"
     >
       <div className="mx-auto max-w-3xl px-4 sm:px-6">
         <h2 id="ax-faq-heading" className={SECTION_HEADING}>
@@ -502,6 +508,7 @@ export async function AxFinalCta({ locale }: SectionProps) {
   const consultationUrl = axConsultationUrl();
   return (
     <section
+      id={AX_FINAL_SECTION_ID}
       aria-labelledby="ax-final-heading"
       className="bg-gradient-to-br from-ax-teal-dark to-ax-deep py-16 text-center text-white sm:py-20"
     >

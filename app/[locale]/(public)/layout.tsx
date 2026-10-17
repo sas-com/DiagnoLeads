@@ -1,5 +1,7 @@
+import { AppToaster } from '@/components/common/AppToaster';
 import { NOINDEX } from '@/lib/seo/indexing';
 import type { Metadata } from 'next';
+import { NextIntlClientProvider } from 'next-intl';
 import { getTranslations } from 'next-intl/server';
 
 /**
@@ -59,5 +61,11 @@ export default function PublicLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">{children}</div>;
+  // The whole catalog for the client components (the locale layout passes only a small part)
+  return (
+    <NextIntlClientProvider>
+      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">{children}</div>
+      <AppToaster />
+    </NextIntlClientProvider>
+  );
 }

@@ -29,7 +29,7 @@ export function AxLogo({ name, operator, tone = 'light', className }: AxLogoProp
       </span>
       {operator && (
         <span
-          className={cn('mt-1 text-[11px] font-medium', onDark ? 'text-white/90' : 'text-gray-600')}
+          className={cn('mt-1 text-xs font-medium', onDark ? 'text-white/90' : 'text-gray-600')}
         >
           {operator}
         </span>

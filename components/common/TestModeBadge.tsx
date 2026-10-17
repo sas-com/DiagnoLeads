@@ -2,7 +2,8 @@
 
 import { trpc } from '@/lib/trpc/client';
 import { RiFlaskLine } from '@remixicon/react';
-import { useTranslations } from 'next-intl';
+import { formatEmailDomains } from '@/lib/i18n/format-domains';
+import { useLocale, useTranslations } from 'next-intl';
 
 /**
  * Shown in the header while test mode is on (APP_TEST_MODE), so nobody mistakes the app for
@@ -10,10 +11,11 @@ import { useTranslations } from 'next-intl';
  */
 export function TestModeBadge({ className = '' }: { className?: string }) {
   const t = useTranslations('common.testMode');
+  const locale = useLocale();
   const { data } = trpc.health.testMode.useQuery(undefined, { staleTime: 5 * 60 * 1000 });
   if (!data?.testMode) return null;
 
-  const domains = data.domains.map((domain) => `@${domain}`).join('、');
+  const domains = formatEmailDomains(data.domains, locale);
   return (
     <span
       role="status"

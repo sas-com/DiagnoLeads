@@ -20,11 +20,13 @@ export function focusFirstError(elementId: string): void {
   requestAnimationFrame(() => {
     const element = document.getElementById(elementId);
     if (!element) return;
-    element.scrollIntoView({ behavior: scrollBehavior(), block: 'center' });
-    const target =
-      element instanceof HTMLInputElement || element instanceof HTMLButtonElement
-        ? element
-        : element.closest('fieldset')?.querySelector<HTMLElement>('button, input');
+    const isControl = element instanceof HTMLInputElement || element instanceof HTMLButtonElement;
+    // A question (legend) goes to the top so that its error and options follow on screen; an
+    // input stays centred so that its label above remains visible
+    element.scrollIntoView({ behavior: scrollBehavior(), block: isControl ? 'center' : 'start' });
+    const target = isControl
+      ? element
+      : element.closest('fieldset')?.querySelector<HTMLElement>('button, input');
     target?.focus({ preventScroll: true });
   });
 }

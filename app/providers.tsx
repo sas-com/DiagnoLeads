@@ -6,7 +6,6 @@ import { retryUnlessDenied } from '@/lib/trpc/retry';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { httpBatchLink } from '@trpc/client';
 import { useState } from 'react';
-import { Toaster } from 'sonner';
 import superjson from 'superjson';
 
 /**
@@ -80,10 +79,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
-        <OrganizationProvider>
-          {children}
-          <Toaster position="top-right" richColors closeButton />
-        </OrganizationProvider>
+        <OrganizationProvider>{children}</OrganizationProvider>
       </QueryClientProvider>
     </trpc.Provider>
   );

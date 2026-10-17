@@ -76,6 +76,16 @@ export function QuestionField(props: QuestionFieldProps) {
         )}
         {error && <span className="sr-only">{error}</span>}
       </legend>
+      {/* Right below the question so that it stays in view next to the scrolled-to legend */}
+      {error && (
+        <p
+          id={`${legendId}-error`}
+          className="flex items-center gap-1.5 text-sm font-bold text-red-700"
+        >
+          <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+          {error}
+        </p>
+      )}
       {question.description !== undefined && (
         <p id={`${legendId}-description`} className="text-sm leading-relaxed text-gray-600">
           {question.description}
@@ -88,16 +98,6 @@ export function QuestionField(props: QuestionFieldProps) {
       )}
 
       {renderControls(props, onValue)}
-
-      {error && (
-        <p
-          id={`${legendId}-error`}
-          className="flex items-center gap-1.5 text-sm font-bold text-red-700"
-        >
-          <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
-          {error}
-        </p>
-      )}
     </fieldset>
   );
 }

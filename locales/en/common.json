@@ -310,7 +310,8 @@
     },
     "testMode": {
       "label": "Test mode",
-      "description": "Testing: email addresses outside {domains} cannot be registered or mailed"
+      "description": "Testing: email addresses outside {domains} cannot be registered or mailed",
+      "banner": "{label}: {description}"
     }
   },
   "axDiagnosis": {
@@ -2676,7 +2677,7 @@
     "diagnosis": {
       "eyebrow": "FREE CHECK",
       "title": "Start with a free migration check",
-      "lead": "Choose the system you want to migrate and answer multiple-choice questions. You will see the migration difficulty, the urgency and the challenge to tackle first right away."
+      "lead": "Choose the system you want to migrate and answer multiple-choice questions. You will see the migration difficulty, the urgency and the challenge to tackle first. At the end, enter your company and contact details to see the result right away (you can also print it or save it as a PDF). No pushy sales."
     },
     "reasons": {
       "title": "Why customers choose us",
