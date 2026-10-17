@@ -35,6 +35,8 @@ describe('contentSecurityPolicy with GA4', () => {
       'https://*.google-analytics.com',
       'https://*.analytics.google.com',
       'https://*.googletagmanager.com',
+      'https://*.g.doubleclick.net',
+      'https://*.google.com',
     ]);
   });
 
