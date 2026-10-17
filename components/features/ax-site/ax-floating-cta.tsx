@@ -6,8 +6,8 @@ import { AxCtaLink } from './ax-cta-link';
 import { AX_FINAL_SECTION_ID, AX_FOOTER_ID, AX_PROBLEMS_CTA_ID, AX_SECTIONS } from './site-config';
 
 /**
- * Hidden while another diagnosis button (hero, final call to action) or the diagnosis is on
- * screen, and over the footer so that it never covers the last lines of the page
+ * Hidden while another diagnosis button (hero, below the concerns, final call to action) or the
+ * diagnosis is on screen, and over the footer so that it never covers the last lines of the page
  */
 const DEFAULT_HIDE_WHEN_VISIBLE = [
   'ax-hero-heading',

@@ -316,7 +316,7 @@
   },
   "axDiagnosis": {
     "meta": {
-      "title": "AX Migration free web check",
+      "title": "AX Migration Free Web Check",
       "description": "Choose your system (AS/400, NEC ACOS, Access and others) and answer multiple-choice questions to see the migration difficulty, the urgency and the challenge to tackle first. A free web check."
     },
     "intro": {
@@ -2515,7 +2515,7 @@
   "axSite": {
     "meta": {
       "title": "AX Migration | From AS/400, NEC ACOS and Access to web systems | Software Agency System Co., Ltd.",
-      "description": "Can you make management decisions for the AI era with your current core system? We migrate core systems and business tools on AS/400, NEC ACOS, Microsoft Access and more to modern web systems while keeping their current specifications, from visualizing the specifications with AI to AX after the migration. Start with the free migration check.",
+      "description": "Can you make management decisions for the AI era with your current core system? We migrate core systems and business tools on AS/400, NEC ACOS, Microsoft Access and more to modern web systems while keeping their current specifications, from visualizing the specifications with AI to AX after the migration. Start with the free web check.",
       "siteName": "Software Agency System Co., Ltd."
     },
     "brand": {
@@ -2538,7 +2538,7 @@
     "hero": {
       "eyebrow": "For mid-sized manufacturers and distributors",
       "title": "Can you make management decisions for the AI era with your current core system?",
-      "tagline": "From a core system on AS/400, NEC ACOS or Access to a flexible, extensible IT platform.",
+      "tagline": "From a legacy core system to a flexible, extensible IT platform.",
       "lead": "We move core systems and business tools running on AS/400, NEC ACOS or Microsoft Access to a modern web system while keeping today's specifications, and support you on to AI agents and data use (AX).",
       "ctaCaption": "Multiple choice, about 3 minutes",
       "cta": "Start the free web check",
@@ -2566,7 +2566,7 @@
         "access": "Department Access tools keep multiplying and only their authors can fix them",
         "start": "We want to modernize but do not know where to start"
       },
-      "bridge": "If even one of these applies, see how urgent a renewal is with the free web check (about 3 minutes).",
+      "bridge": "If any of these apply, start by checking how urgent a renewal is with the free web check (about 3 minutes).",
       "bridgeCta": "Start the free web check"
     },
     "challenges": {
@@ -2656,7 +2656,7 @@
           }
         }
       },
-      "note": "At the end of each step, you decide whether to go on."
+      "note": "At the end of Phase 1, we agree on the migration method and schedule with you before moving on."
     },
     "targets": {
       "title": "Systems we migrate",
@@ -2721,8 +2721,8 @@
       "title": "FAQ",
       "items": {
         "cost": {
-          "q": "Is the check free?",
-          "a": "Yes. The free web check costs nothing, and so does a consultation about the result."
+          "q": "Does the free web check cost anything?",
+          "a": "No. A consultation about the result is free as well."
         },
         "who": {
           "q": "Can I answer if I am not in IT?",
