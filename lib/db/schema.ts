@@ -13,6 +13,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -672,6 +673,16 @@ export const agencyContracts = pgTable(
     /** Plan: appointments in the term, and the total cost per appointment aimed at */
     planAppointments: integer('plan_appointments'),
     planCostPerAppointment: integer('plan_cost_per_appointment'),
+    /**
+     * Conditions an appointment must meet (#149), as labels shown to sales (e.g. "the decision
+     * maker attended"). Empty: the defaults of the review card are used.
+     */
+    appointmentCriteria: jsonb('appointment_criteria').$type<string[]>().default([]).notNull(),
+    /**
+     * Business days after the first meeting within which a failed appointment can be reported
+     * for a refund or a new appointment (#149; 1 = by the next business day). Null: no such rule.
+     */
+    returnDeadlineBusinessDays: integer('return_deadline_business_days'),
     note: text('note'),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
@@ -688,10 +699,83 @@ export const agencyContracts = pgTable(
       'agency_contracts_fees_check',
       sql`${table.initialFee} >= 0 AND ${table.monthlyFee} >= 0 AND ${table.prepayment} >= 0 AND ${table.feePerAppointment} >= 0`
     ),
+    check(
+      'agency_contracts_return_deadline_check',
+      sql`${table.returnDeadlineBusinessDays} IS NULL OR ${table.returnDeadlineBusinessDays} BETWEEN 0 AND 30`
+    ),
   ]
 );
 
 export type AgencyContract = typeof agencyContracts.$inferSelect;
+
+/**
+ * Appointment Reviews (Refs #149)
+ * Whether an appointment from a sales agency met the agreed conditions, recorded after the first
+ * meeting, at most one per lead. The checks keep the labels as they were when recorded, so
+ * changing a contract later does not rewrite past reviews.
+ */
+export const appointmentReviews = pgTable(
+  'appointment_reviews',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    leadId: uuid('lead_id')
+      .notNull()
+      .references(() => leads.id, { onDelete: 'cascade' }),
+    /** First meeting (Japan calendar day) the deadline counts from */
+    meetingOn: date('meeting_on', { mode: 'string' }).notNull(),
+    /** Last day to report a failed appointment; null when the contract has no such rule */
+    deadlineOn: date('deadline_on', { mode: 'string' }),
+    /** [{ label, met }] */
+    checks: jsonb('checks').$type<{ label: string; met: boolean }[]>().default([]).notNull(),
+    /** Every check met */
+    conditionsMet: boolean('conditions_met').notNull(),
+    defectReason: text('defect_reason'),
+    /** 'return' | 'retake' when a refund or a new appointment was asked for; null otherwise */
+    claim: text('claim'),
+    /** First recorded after the deadline (kept when the review is edited later) */
+    recordedLate: boolean('recorded_late').default(false).notNull(),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('appointment_reviews_lead_unique').on(table.leadId),
+    index('appointment_reviews_organization_idx').on(table.organizationId),
+    check(
+      'appointment_reviews_claim_check',
+      sql`${table.claim} IS NULL OR ${table.claim} IN ('return', 'retake')`
+    ),
+  ]
+);
+
+export type AppointmentReview = typeof appointmentReviews.$inferSelect;
+
+/**
+ * Appointment Review Notices (Refs #149)
+ * One row per lead and deadline once the "review due" notice went out; inserting the row is how
+ * a run claims the notice, so it is sent once even when the cron runs twice.
+ */
+export const appointmentReviewNotices = pgTable(
+  'appointment_review_notices',
+  {
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    leadId: uuid('lead_id')
+      .notNull()
+      .references(() => leads.id, { onDelete: 'cascade' }),
+    deadlineOn: date('deadline_on', { mode: 'string' }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.leadId, table.deadlineOn] }),
+    index('appointment_review_notices_organization_idx').on(table.organizationId),
+  ]
+);
 
 /**
  * Lead Hearings
@@ -1002,6 +1086,7 @@ export type NotificationType =
   | 'consultation_requested'
   | 'lead_assigned'
   | 'next_action_due'
+  | 'appointment_review_due'
   | 'system';
 
 /**

@@ -249,6 +249,8 @@ export function shouldSendInAppNotification(
     case 'lead_assigned':
       return prefs.inAppAssignedToMe;
     case 'next_action_due':
+    // The deadline to report a failed appointment (#149) is a due date of the same setting
+    case 'appointment_review_due':
       return prefs.inAppNextActionDue;
     case 'system':
       return true;

@@ -12,6 +12,8 @@
  *   touched up to today, a started month as a whole one.
  * - Funnel stages: appointment (the lead) → meeting held → SQL → phase 1 won (survey) →
  *   migration won. A later phase reached counts for the earlier ones too.
+ * - Appointment quality (#149): of the leads reviewed against the agreed conditions, how many
+ *   met them. Leads not reviewed yet are left out of the rate.
  */
 
 export const FUNNEL_STAGES = [
@@ -46,6 +48,8 @@ export interface FunnelLead {
   sqlDecision: string | null;
   /** Phases reached ({ phase: 'YYYY-MM-DD' }) */
   dealPhaseReachedAt: Record<string, string>;
+  /** Whether the appointment met the agreed conditions (#149); null or absent: not reviewed */
+  conditionsMet?: boolean | null;
 }
 
 export type CostPer = Record<FunnelStage, number | null>;
@@ -59,6 +63,8 @@ export interface ContractReportRow {
   appointmentCost: number;
   totalCost: number;
   costPer: CostPer;
+  /** Appointments reviewed against the agreed conditions (#149) and how many met them */
+  reviews: AppointmentReviewCount;
   /** Actual against the plan (null when no plan is set) */
   plan: {
     appointments: number | null;
@@ -66,6 +72,13 @@ export interface ContractReportRow {
     costPerAppointment: number | null;
     costPerAppointmentDiff: number | null;
   };
+}
+
+export interface AppointmentReviewCount {
+  reviewed: number;
+  met: number;
+  /** Share of the reviewed appointments that met the conditions, in % (null: none reviewed) */
+  metRate: number | null;
 }
 
 export interface UncontractedRow {
@@ -111,8 +124,23 @@ export function addToFunnel(funnel: Funnel, lead: FunnelLead): void {
 
 const normalizeName = (name: string) => name.trim();
 
-const inTerm = (contract: ContractTerms, day: string, today: string) =>
+const inTerm = (contract: Pick<ContractTerms, 'startsOn' | 'endsOn'>, day: string, today: string) =>
   day >= contract.startsOn && day <= (contract.endsOn ?? today);
+
+/**
+ * The contract a lead of an agency belongs to: same agency name (trimmed) and a term containing
+ * the Japan day the lead was created. The earliest-starting one wins when terms overlap (the
+ * router refuses overlaps). Also used by the appointment reviews of #149.
+ */
+export function contractForLead<
+  C extends Pick<ContractTerms, 'agencyName' | 'startsOn' | 'endsOn'>,
+>(contracts: C[], lead: { agencyName: string; createdOn: string }, today: string): C | undefined {
+  const name = normalizeName(lead.agencyName);
+  if (!name) return undefined;
+  return contracts
+    .filter((c) => normalizeName(c.agencyName) === name && inTerm(c, lead.createdOn, today))
+    .sort((a, b) => a.startsOn.localeCompare(b.startsOn))[0];
+}
 
 /** Calendar months from the start up to min(end, today), both counted; 0 before the start */
 export function monthsBilled(startsOn: string, endsOn: string | null, today: string): number {
@@ -131,17 +159,20 @@ export function buildContractReport(
   today: string
 ): AgencyContractReport {
   const funnels = new Map(contracts.map((contract) => [contract.id, emptyFunnel()]));
+  const reviews = new Map(contracts.map((contract) => [contract.id, { reviewed: 0, met: 0 }]));
   const uncontracted = new Map<string, Funnel>();
 
   for (const lead of leads) {
     const name = normalizeName(lead.agencyName);
     if (!name) continue;
-    // The earliest-starting contract wins when terms overlap (the router refuses overlaps)
-    const contract = contracts
-      .filter((c) => normalizeName(c.agencyName) === name && inTerm(c, lead.createdOn, today))
-      .sort((a, b) => a.startsOn.localeCompare(b.startsOn))[0];
+    const contract = contractForLead(contracts, lead, today);
     if (contract) {
       addToFunnel(funnels.get(contract.id) as Funnel, lead);
+      const review = reviews.get(contract.id) as { reviewed: number; met: number };
+      if (typeof lead.conditionsMet === 'boolean') {
+        review.reviewed++;
+        if (lead.conditionsMet) review.met++;
+      }
     } else {
       const funnel = uncontracted.get(name) ?? emptyFunnel();
       addToFunnel(funnel, lead);
@@ -164,6 +195,7 @@ export function buildContractReport(
     ) as CostPer;
     const planAppointments = contract.planAppointments;
     const planCost = contract.planCostPerAppointment;
+    const review = reviews.get(contract.id) as { reviewed: number; met: number };
     return {
       contract,
       funnel,
@@ -172,6 +204,11 @@ export function buildContractReport(
       appointmentCost,
       totalCost,
       costPer,
+      reviews: {
+        ...review,
+        metRate:
+          review.reviewed > 0 ? Math.round((review.met / review.reviewed) * 1000) / 10 : null,
+      },
       plan: {
         appointments: planAppointments,
         appointmentsRate:

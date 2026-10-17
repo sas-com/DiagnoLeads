@@ -39,8 +39,8 @@ const report = buildContractReport(
     },
   ],
   [
-    { agencyName: '代行A', createdOn: '2026-10-02', hasNegotiated: true, sqlDecision: 'qualified', dealPhaseReachedAt: {} },
-    { agencyName: '代行A', createdOn: '2026-10-03', hasNegotiated: false, sqlDecision: null, dealPhaseReachedAt: {} },
+    { agencyName: '代行A', createdOn: '2026-10-02', hasNegotiated: true, sqlDecision: 'qualified', dealPhaseReachedAt: {}, conditionsMet: true },
+    { agencyName: '代行A', createdOn: '2026-10-03', hasNegotiated: false, sqlDecision: null, dealPhaseReachedAt: {}, conditionsMet: false },
     { agencyName: '代行Z', createdOn: '2026-10-03', hasNegotiated: false, sqlDecision: null, dealPhaseReachedAt: {} },
   ],
   '2026-10-16'
@@ -60,6 +60,13 @@ describe('AgencyContractReportCard', () => {
     expect(within(row).getByText('￥70,000')).toBeInTheDocument();
     expect(within(row).getByText('アポ 2／10件（20%）')).toBeInTheDocument();
     expect(within(row).getByText('目標アポ単価 ￥30,000')).toBeInTheDocument();
+  });
+
+  it('shows how many reviewed appointments met the conditions (#149)', () => {
+    renderCard();
+    expect(screen.getByRole('columnheader', { name: '条件を満たしたアポ' })).toBeInTheDocument();
+    const row = screen.getByText('代行A').closest('tr') as HTMLElement;
+    expect(within(row).getByText('1／2件（50%）')).toBeInTheDocument();
   });
 
   it('marks agencies without a contract instead of making up a cost', () => {
