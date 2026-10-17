@@ -67,7 +67,7 @@ export function QuestionField(props: QuestionFieldProps) {
           .join(' ') || undefined
       }
     >
-      <legend id={legendId} className="mb-1 font-bold leading-relaxed">
+      <legend id={legendId} className="mb-1 scroll-mt-4 font-bold leading-relaxed">
         {question.label}
         {!question.required && (
           <span className="ml-2 inline-block rounded bg-gray-100 px-1.5 py-0.5 align-middle text-xs font-bold text-gray-600">

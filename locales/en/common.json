@@ -310,7 +310,7 @@
     },
     "testMode": {
       "label": "Test mode",
-      "description": "Testing: email addresses outside {domains} cannot be registered or mailed",
+      "description": "Only {domains} email addresses can be registered or mailed during testing",
       "banner": "{label}: {description}"
     }
   },

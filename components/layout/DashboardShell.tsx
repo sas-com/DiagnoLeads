@@ -1,7 +1,6 @@
 'use client';
 
 import { AdminSessionGuard } from '@/components/auth/AdminSessionGuard';
-import { AppToaster } from '@/components/common/AppToaster';
 import AppHeader from '@/components/layout/AppHeader';
 import AppSidebar from '@/components/layout/AppSidebar';
 import Backdrop from '@/components/layout/Backdrop';
@@ -35,7 +34,6 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         <AdminSessionGuard>
           <DashboardLayoutContent>{children}</DashboardLayoutContent>
         </AdminSessionGuard>
-        <AppToaster />
       </SidebarProvider>
     </ThemeProvider>
   );

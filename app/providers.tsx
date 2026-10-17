@@ -1,12 +1,18 @@
 'use client';
 
+import { AppToaster } from '@/components/common/AppToaster';
 import { OrganizationProvider } from '@/lib/context/organization-context';
 import { trpc } from '@/lib/trpc/client';
 import { retryUnlessDenied } from '@/lib/trpc/retry';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { httpBatchLink } from '@trpc/client';
+import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import superjson from 'superjson';
+
+/** The AX migration site (landing page and diagnosis), in either language */
+const isAxSitePath = (pathname: string | null) =>
+  pathname !== null && /^\/(ja|en)\/ax-(migration|diagnosis)(\/|$)/.test(pathname);
 
 /**
  * Create Query Client with optimized cache strategy
@@ -63,6 +69,7 @@ function getQueryClient() {
  * Wraps the application with tRPC and React Query providers
  */
 export function Providers({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const queryClient = getQueryClient();
 
   const [trpcClient] = useState(() =>
@@ -79,7 +86,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
-        <OrganizationProvider>{children}</OrganizationProvider>
+        <OrganizationProvider>
+          {children}
+          {/* One toaster at the root so that a toast survives moving between route groups
+              (signed in → dashboard); none on the AX site, which shows no toasts */}
+          {!isAxSitePath(pathname) && <AppToaster />}
+        </OrganizationProvider>
       </QueryClientProvider>
     </trpc.Provider>
   );

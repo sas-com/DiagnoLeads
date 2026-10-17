@@ -1,4 +1,3 @@
-import { AppToaster } from '@/components/common/AppToaster';
 import { ThemeProvider } from '@/context/ThemeContext';
 import type { Metadata } from 'next';
 import { NextIntlClientProvider } from 'next-intl';
@@ -45,7 +44,6 @@ export default async function AuthLayout({
           </div>
         </div>
       </ThemeProvider>
-      <AppToaster />
     </NextIntlClientProvider>
   );
 }

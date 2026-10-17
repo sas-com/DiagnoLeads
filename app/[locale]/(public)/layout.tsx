@@ -1,4 +1,3 @@
-import { AppToaster } from '@/components/common/AppToaster';
 import { NOINDEX } from '@/lib/seo/indexing';
 import type { Metadata } from 'next';
 import { NextIntlClientProvider } from 'next-intl';
@@ -65,7 +64,6 @@ export default function PublicLayout({
   return (
     <NextIntlClientProvider>
       <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">{children}</div>
-      <AppToaster />
     </NextIntlClientProvider>
   );
 }

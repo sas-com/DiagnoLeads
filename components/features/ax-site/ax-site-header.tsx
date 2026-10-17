@@ -23,7 +23,9 @@ export async function AxSiteHeader({ locale, variant }: AxSiteHeaderProps) {
   const testModeDomains = formatEmailDomains(allowedEmailDomains(), locale);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/95 backdrop-blur">
+    <>
+      {/* Above the sticky header and scrolling away with the page: the header itself stays
+          lower than html scroll-padding-top (5rem), so headings scrolled to are never under it */}
       {isTestMode() && (
         <p
           role="status"
@@ -35,37 +37,39 @@ export async function AxSiteHeader({ locale, variant }: AxSiteHeaderProps) {
           })}
         </p>
       )}
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3 sm:gap-4 sm:px-6">
-        <a
-          href={variant === 'landing' ? '#top' : landingPath}
-          aria-label={t('header.home')}
-          className="rounded focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-ax-teal-dark"
-        >
-          <AxLogo name={t('brand.name')} operator={t('brand.operator')} />
-        </a>
-        <nav
-          aria-label={t('header.navLabel')}
-          className="hidden items-center gap-7 text-sm font-bold lg:flex"
-        >
-          {NAV_ITEMS.map((id) => (
-            <a
-              key={id}
-              href={sectionHref(AX_SECTIONS[id])}
-              className="text-ax-ink transition-colors hover:text-ax-teal-dark"
-            >
-              {t(`header.nav.${id}`)}
-            </a>
-          ))}
-        </nav>
-        <AxCtaLink
-          href={sectionHref(AX_SECTIONS.diagnosis)}
-          location="header"
-          // Fits next to the logo down to 320px wide
-          className="px-4 py-2.5 text-sm max-[359px]:gap-1 max-[359px]:px-3 max-[359px]:text-xs max-[359px]:[&>svg]:hidden sm:px-5"
-        >
-          {t('header.cta')}
-        </AxCtaLink>
-      </div>
-    </header>
+      <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/95 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3 sm:gap-4 sm:px-6">
+          <a
+            href={variant === 'landing' ? '#top' : landingPath}
+            aria-label={t('header.home')}
+            className="rounded focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-ax-teal-dark"
+          >
+            <AxLogo name={t('brand.name')} operator={t('brand.operator')} />
+          </a>
+          <nav
+            aria-label={t('header.navLabel')}
+            className="hidden items-center gap-7 text-sm font-bold lg:flex"
+          >
+            {NAV_ITEMS.map((id) => (
+              <a
+                key={id}
+                href={sectionHref(AX_SECTIONS[id])}
+                className="text-ax-ink transition-colors hover:text-ax-teal-dark"
+              >
+                {t(`header.nav.${id}`)}
+              </a>
+            ))}
+          </nav>
+          <AxCtaLink
+            href={sectionHref(AX_SECTIONS.diagnosis)}
+            location="header"
+            // Fits next to the logo down to 320px wide
+            className="px-4 py-2.5 text-sm max-[359px]:gap-1 max-[359px]:px-3 max-[359px]:text-xs max-[359px]:[&>svg]:hidden sm:px-5"
+          >
+            {t('header.cta')}
+          </AxCtaLink>
+        </div>
+      </header>
+    </>
   );
 }
