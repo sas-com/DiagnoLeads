@@ -5,7 +5,8 @@ import { Lato, Noto_Sans_JP } from 'next/font/google';
  * next/font serves them from this app, which the production CSP (font-src 'self') requires.
  */
 const notoSansJp = Noto_Sans_JP({
-  weight: ['400', '500', '700', '800'],
+  // Only the weights in use: every weight adds a set of unicode-range files to the CSS
+  weight: ['400', '500', '700'],
   subsets: ['latin'],
   display: 'swap',
   // Japanese glyphs come in many unicode-range files; let the browser fetch what it needs
@@ -14,7 +15,8 @@ const notoSansJp = Noto_Sans_JP({
 });
 
 const lato = Lato({
-  weight: ['400', '700', '900'],
+  // Latin accents (labels, numbers) are bold or black only
+  weight: ['700', '900'],
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-lato',

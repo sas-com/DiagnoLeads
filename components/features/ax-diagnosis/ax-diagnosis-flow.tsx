@@ -53,6 +53,7 @@ import type {
   DiagnosticQuestion,
   DiagnosticSection,
 } from '@/lib/features/diagnostics/types';
+import { formatEmailDomains } from '@/lib/i18n/format-domains';
 import { cn } from '@/lib/utils';
 import {
   ChevronRight,
@@ -139,7 +140,7 @@ function AxDiagnosisSteps({
 }: AxDiagnosisFlowProps) {
   const t = useTranslations('axDiagnosis');
   const testModeError = (domains: string[]) =>
-    t('errors.testModeEmail', { domains: domains.map((domain) => `@${domain}`).join('、') });
+    t('errors.testModeEmail', { domains: formatEmailDomains(domains, locale) });
   const testModeEmailError = testModeError(allowedEmailDomains);
   const [stage, setStage] = useState<'questions' | 'result'>('questions');
   const [step, setStep] = useState(0);
@@ -480,7 +481,7 @@ function AxDiagnosisSteps({
 
   if (stage === 'result' && response) {
     return (
-      <div ref={topRef} className="scroll-mt-24">
+      <div ref={topRef}>
         <AxDiagnosisResult
           company={contact.company.trim()}
           platform={platform ?? ''}
@@ -503,7 +504,7 @@ function AxDiagnosisSteps({
       : (currentSection?.title[locale] ?? '');
 
   return (
-    <div ref={topRef} className="scroll-mt-24 space-y-8">
+    <div ref={topRef} className="space-y-8">
       <LiveRegion message={announcement} />
 
       {step === 0 && !embedded && (
@@ -624,17 +625,20 @@ function AxDiagnosisSteps({
 function IntroPoints() {
   const t = useTranslations('axDiagnosis.intro.points');
   return (
-    <ul className="grid gap-3 sm:grid-cols-3">
+    <ul className="flex flex-wrap gap-2 sm:grid sm:grid-cols-3 sm:gap-3">
       {[
         { icon: Clock, text: t('time') },
         { icon: Gauge, text: t('difficulty') },
         { icon: Target, text: t('challenge') },
       ].map(({ icon: Icon, text }) => (
-        <li key={text} className="flex items-center gap-3 rounded-xl bg-ax-mist p-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-ax-teal text-white">
-            <Icon className="h-5 w-5" aria-hidden="true" />
+        <li
+          key={text}
+          className="flex items-center gap-2 rounded-full bg-ax-mist py-1.5 pl-1.5 pr-3 sm:gap-3 sm:rounded-xl sm:p-3"
+        >
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ax-teal text-white sm:h-9 sm:w-9 sm:rounded-lg">
+            <Icon className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden="true" />
           </span>
-          <span className="text-sm font-bold">{text}</span>
+          <span className="text-xs font-bold sm:text-sm">{text}</span>
         </li>
       ))}
     </ul>

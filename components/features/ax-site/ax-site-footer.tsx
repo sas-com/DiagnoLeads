@@ -1,7 +1,7 @@
 import { ExternalLink } from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
 import { AxLogo } from './ax-logo';
-import { AX_SITE_LINKS, axPrivacyPolicyUrl } from './site-config';
+import { AX_FOOTER_ID, AX_SITE_LINKS, axPrivacyPolicyUrl } from './site-config';
 
 /** Footer in the maru2-dx.com layout: logo and links, a rule, then the copyright */
 export async function AxSiteFooter({ locale }: { locale: string }) {
@@ -16,7 +16,7 @@ export async function AxSiteFooter({ locale }: { locale: string }) {
 
   return (
     // ax-teal-dark rather than the lighter teal of maru2-dx.com: white small text needs 4.5:1
-    <footer className="bg-ax-teal-dark text-white">
+    <footer id={AX_FOOTER_ID} className="bg-ax-teal-dark text-white">
       <div className="mx-auto max-w-6xl px-4 pb-8 pt-12 sm:px-6">
         <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
           <div className="space-y-3">
@@ -44,7 +44,7 @@ export async function AxSiteFooter({ locale }: { locale: string }) {
         </div>
         <hr className="mt-10 border-white/60" />
         {/* Rendered per request (the page is dynamic); recheck the year if it becomes static */}
-        <p className="mt-6 text-right font-ax-latin">
+        <p className="mt-6 text-right">
           <small className="text-xs">{t('copyright', { year: new Date().getFullYear() })}</small>
         </p>
       </div>

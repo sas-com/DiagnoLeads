@@ -658,7 +658,8 @@ span.flatpickr-weekday,
 
 /* AX migration site: keep focused elements clear of the sticky header and the phone CTA bar */
 html:has(.ax-site) {
-  scroll-padding-top: 5rem;
+  /* The sticky header is about 4.5rem tall (the test-mode banner sits above it and scrolls away) */
+  scroll-padding-top: 6rem;
 }
 @media (max-width: 639px) {
   html:has(.ax-site) {
