@@ -829,6 +829,56 @@ export type LeadHearing = typeof leadHearings.$inferSelect;
 export type NewLeadHearing = typeof leadHearings.$inferInsert;
 
 /**
+ * Meeting Requests (Refs #155)
+ * What a respondent asked for the first meeting after a consultation request (up to three
+ * preferred dates and times, who will attend, onsite or online), and the one sales confirmed.
+ * One per lead: a later request replaces the preferences until one is confirmed.
+ */
+export const meetingRequests = pgTable(
+  'meeting_requests',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    leadId: uuid('lead_id')
+      .notNull()
+      .references(() => leads.id, { onDelete: 'cascade' }),
+    /** The diagnosis answer the request came with */
+    submissionId: uuid('submission_id').references(() => diagnosticSubmissions.id, {
+      onDelete: 'set null',
+    }),
+    /** [{ date: 'YYYY-MM-DD', time: 'HH:MM' }] in Japan time, 1 to 3 */
+    candidates: jsonb('candidates').$type<{ date: string; time: string }[]>().notNull(),
+    /** Values of the diagnosis question 'role' */
+    attendeeRoles: jsonb('attendee_roles').$type<string[]>().default([]).notNull(),
+    /** 'onsite' | 'online'; null when the respondent did not say */
+    meetingFormat: text('meeting_format'),
+    /** The confirmed meeting (Japan time); null until sales confirm one */
+    confirmedOn: date('confirmed_on', { mode: 'string' }),
+    confirmedTime: text('confirmed_time'),
+    confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+    confirmedBy: uuid('confirmed_by').references(() => users.id, { onDelete: 'set null' }),
+    /** When the confirmation email went to the respondent */
+    confirmationEmailedAt: timestamp('confirmation_emailed_at', { withTimezone: true }),
+    /** The next action created for the confirmed meeting */
+    taskId: uuid('task_id').references((): AnyPgColumn => leadTasks.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('meeting_requests_lead_unique').on(table.leadId),
+    index('meeting_requests_organization_idx').on(table.organizationId),
+    check(
+      'meeting_requests_format_check',
+      sql`${table.meetingFormat} IS NULL OR ${table.meetingFormat} IN ('onsite', 'online')`
+    ),
+  ]
+);
+
+export type MeetingRequest = typeof meetingRequests.$inferSelect;
+
+/**
  * Lead Contact Logs (Refs #136)
  * One row per contact a staff member recorded on a lead ("called", "emailed", "could not reach").
  * The earliest row of a lead is its first contact; the dashboard's waiting consultation
@@ -889,7 +939,7 @@ export const leadTasks = pgTable(
     completedBy: uuid('completed_by').references(() => users.id, { onDelete: 'set null' }),
     /** Person in charge (#135); null until assignees exist */
     assigneeId: uuid('assignee_id').references(() => users.id, { onDelete: 'set null' }),
-    /** 'manual' | 'hearing' */
+    /** 'manual' | 'hearing' | 'meeting_request' (the confirmed first meeting, #155) */
     source: text('source').default('manual').notNull(),
     sourceHearingId: uuid('source_hearing_id').references(() => leadHearings.id, {
       onDelete: 'set null',
@@ -925,7 +975,10 @@ export const leadTasks = pgTable(
     uniqueIndex('lead_tasks_source_hearing_idx')
       .on(table.sourceHearingId)
       .where(sql`${table.sourceHearingId} is not null`),
-    check('lead_tasks_source_check', sql`${table.source} in ('manual', 'hearing')`),
+    check(
+      'lead_tasks_source_check',
+      sql`${table.source} in ('manual', 'hearing', 'meeting_request')`
+    ),
     check('lead_tasks_kind_check', sql`${table.kind} in ('next_action', 'takeaway')`),
   ]
 );

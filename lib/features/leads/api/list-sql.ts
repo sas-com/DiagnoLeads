@@ -80,11 +80,14 @@ function latestHearingValue(fieldKey: string, valid: SQL): SQL<string | null> {
   >`(select case when ${valid} then ${value} end from lead_hearings h where h.lead_id = ${leads.id} and h.organization_id = ${leads.organizationId} order by h.held_on desc, h.created_at desc, h.id desc limit 1)`;
 }
 
-/** Next meeting date of the latest hearing, 'YYYY-MM-DD' (NULL when it records none) */
-export const leadNextMeetingDate = latestHearingValue(
+/**
+ * Next meeting date, 'YYYY-MM-DD': the one the latest hearing records, else the first meeting
+ * sales confirmed from the respondent's preferred dates (#155). NULL when neither exists.
+ */
+export const leadNextMeetingDate = sql<string | null>`coalesce(${latestHearingValue(
   'nextMeetingDate',
   sql.raw(`(h.fields -> 'nextMeetingDate' ->> 'value') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'`)
-);
+)}, (select to_char(mr.confirmed_on, 'YYYY-MM-DD') from meeting_requests mr where mr.lead_id = ${leads.id} and mr.organization_id = ${leads.organizationId}))`;
 
 /** Deal rating (a / b / c) of the latest hearing (NULL when it records none) */
 export const leadDealRating = latestHearingValue(

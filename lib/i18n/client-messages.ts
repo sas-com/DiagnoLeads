@@ -11,8 +11,8 @@ import type { AbstractIntlMessages } from 'next-intl';
 /** error.tsx and not-found.tsx render outside the route group layouts */
 export const ROOT_CLIENT_MESSAGES = ['settings.errorPages'] as const;
 
-/** The AX migration site: only the diagnosis runs on the client */
-export const AX_CLIENT_MESSAGES = ['axDiagnosis'] as const;
+/** The AX migration site: only the diagnosis (and its meeting preferences, #155) run on the client */
+export const AX_CLIENT_MESSAGES = ['axDiagnosis', 'meetingPreferences'] as const;
 
 /**
  * Subset of messages by dot paths ("settings.errorPages" keeps settings → errorPages only).
