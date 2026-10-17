@@ -16,12 +16,22 @@ import { GA_CONNECT_SOURCES, GA_IMG_SOURCES, GA_SCRIPT_HOST } from '@/lib/analyt
 export interface CspOptions {
   /** GA4 is on (lib/analytics/ga.ts): allow its script host (development) and hit endpoints */
   analytics?: boolean;
+  /**
+   * upgrade-insecure-requests (default on). Off only for http://localhost (the E2E run against
+   * `next start`), where it would turn the app's own requests into failing https ones.
+   */
+  upgradeInsecureRequests?: boolean;
+}
+
+/** Hosts that serve the app over plain http on the machine itself (E2E, local checks) */
+export function isLocalHost(hostname: string): boolean {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
 }
 
 export function contentSecurityPolicy(
   nonce: string,
   isDevelopment: boolean,
-  { analytics = false }: CspOptions = {}
+  { analytics = false, upgradeInsecureRequests = true }: CspOptions = {}
 ): string {
   const gaConnect = analytics ? ` ${GA_CONNECT_SOURCES.join(' ')}` : '';
   const policy = isDevelopment
@@ -53,7 +63,7 @@ export function contentSecurityPolicy(
     base-uri 'self';
     form-action 'self';
     frame-ancestors 'none';
-    upgrade-insecure-requests;
+    ${upgradeInsecureRequests ? 'upgrade-insecure-requests;' : ''}
   `;
   return policy.replace(/\s{2,}/g, ' ').trim();
 }

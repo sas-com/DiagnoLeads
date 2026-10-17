@@ -2,7 +2,7 @@
  * Content Security Policy: the guarantees the production policy must keep.
  * A change that weakens one of them has to change this test too.
  */
-import { contentSecurityPolicy } from '@/lib/middleware/csp';
+import { contentSecurityPolicy, isLocalHost } from '@/lib/middleware/csp';
 import { describe, expect, it } from 'vitest';
 
 /** Directive name -> its sources */
@@ -58,5 +58,23 @@ describe('contentSecurityPolicy (development)', () => {
     const policy = directives(contentSecurityPolicy('abc123', true));
     expect(policy.get('script-src')).toContain('https://challenges.cloudflare.com');
     expect(policy.get('frame-src')).toEqual(['https://challenges.cloudflare.com']);
+  });
+});
+
+describe('upgrade-insecure-requests', () => {
+  it('is on by default and off only when asked (http://localhost)', () => {
+    expect(directives(contentSecurityPolicy('n', false)).has('upgrade-insecure-requests')).toBe(true);
+    expect(
+      directives(contentSecurityPolicy('n', false, { upgradeInsecureRequests: false })).has(
+        'upgrade-insecure-requests'
+      )
+    ).toBe(false);
+  });
+
+  it('treats only the machine itself as local', () => {
+    for (const host of ['localhost', '127.0.0.1', '[::1]']) expect(isLocalHost(host)).toBe(true);
+    for (const host of ['diagnoleads-v2.vercel.app', 'localhost.example.com', '10.0.0.1']) {
+      expect(isLocalHost(host)).toBe(false);
+    }
   });
 });

@@ -12,6 +12,7 @@ import {
   generateVerificationEmail,
   sendAuthEmail,
 } from './email-helpers';
+import { isLocalHttpUrl } from './local-url';
 
 function invitationRequired() {
   return new APIError('FORBIDDEN', {
@@ -119,7 +120,9 @@ export const auth = betterAuth({
   },
 
   advanced: {
-    useSecureCookies: env.NODE_ENV === 'production',
+    // Secure (__Secure-) cookies in production, except a production build served over
+    // http://localhost (the E2E run with `next start`), where the browser never sends them back
+    useSecureCookies: env.NODE_ENV === 'production' && !isLocalHttpUrl(env.BETTER_AUTH_URL),
     cookieDomain: env.NODE_ENV === 'production' ? env.BETTER_AUTH_URL : undefined,
     database: {
       generateId: 'uuid',

@@ -5,7 +5,7 @@ import { isCmsApiPath, isCmsEnabled } from './lib/cms/enabled';
 import { intlMiddleware, shouldSkipI18nMiddleware, stripLocalePrefix } from './lib/i18n/middleware';
 import { signInRedirect } from './lib/middleware/auth-redirect';
 import { SIGN_IN_REDIRECT_CACHE_HEADERS, getCacheHeaders } from './lib/middleware/cache-headers';
-import { contentSecurityPolicy } from './lib/middleware/csp';
+import { contentSecurityPolicy, isLocalHost } from './lib/middleware/csp';
 import {
   checkRateLimit,
   getRateLimitConfig,
@@ -24,6 +24,10 @@ function getSecurityHeaders(request: NextRequest) {
     // Content Security Policy
     'Content-Security-Policy': contentSecurityPolicy(nonce, isDevelopment, {
       analytics: gaMeasurementId() !== undefined,
+      // Off only for plain http to the machine itself (E2E with `next start`); Vercel is https
+      upgradeInsecureRequests: !(
+        request.nextUrl.protocol === 'http:' && isLocalHost(request.nextUrl.hostname)
+      ),
     }),
 
     // セキュリティヘッダー
