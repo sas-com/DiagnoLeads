@@ -2966,6 +2966,7 @@
       "impact": "Impact if not addressed",
       "pastConsideration": "Past consideration and what held it back",
       "decisionMaker": "Decision maker present",
+      "aiSourceAnalysis": "Whether AI may analyse the source code",
       "timing": "When the direction will be decided",
       "competitors": "Competitors",
       "nextMeeting": "Next meeting date and attendees"
