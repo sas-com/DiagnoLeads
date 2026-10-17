@@ -2827,6 +2827,8 @@
       "budgetStatus": "Budget status",
       "fiscalYearEndMonth": "Fiscal year-end month",
       "competitorTypes": "Competitor types",
+      "aiSourceAnalysis": "Source code analysis by an outside AI service",
+      "aiSourceAnalysisConditions": "Conditions or limits on AI analysis",
       "requirementNotes": "Notes on requirements",
       "dealRating": "Deal rating",
       "nextMeetingDate": "Next meeting date",
@@ -2918,6 +2920,12 @@
         "our_sales": "Our sales",
         "our_engineer": "Our engineers",
         "partner": "Partner company"
+      },
+      "aiSourceAnalysis": {
+        "allowed": "Allowed",
+        "conditional": "Only on conditions",
+        "not_allowed": "Not allowed",
+        "unknown": "Unknown"
       }
     },
     "statuses": {
@@ -3280,7 +3288,10 @@
       "more": "{count} more",
       "openSummary": "View summary",
       "openHearing": "Open hearing",
-      "loadError": "Could not load the hearings."
+      "loadError": "Could not load the hearings.",
+      "aiRestricted": "Source code analysis by AI: {value}",
+      "aiRestrictedHelp": "Review the plan that relies on AI analysis.",
+      "aiConditions": "Conditions: {conditions}"
     },
     "activity": {
       "recent": "Recent activity",

@@ -2827,6 +2827,8 @@
       "budgetStatus": "予算の状態",
       "fiscalYearEndMonth": "決算月",
       "competitorTypes": "競合の種類",
+      "aiSourceAnalysis": "外部の AI サービスでのソースコード解析",
+      "aiSourceAnalysisConditions": "AI 解析の条件・制限の内容",
       "requirementNotes": "要件の補足",
       "dealRating": "商談評価",
       "nextMeetingDate": "次回の日程",
@@ -2918,6 +2920,12 @@
         "our_sales": "当社の営業",
         "our_engineer": "当社の技術者",
         "partner": "協力会社"
+      },
+      "aiSourceAnalysis": {
+        "allowed": "可",
+        "conditional": "条件付き",
+        "not_allowed": "不可",
+        "unknown": "不明"
       }
     },
     "statuses": {
@@ -3280,7 +3288,10 @@
       "more": "ほか {count} 件",
       "openSummary": "まとめを見る",
       "openHearing": "ヒアリングを開く",
-      "loadError": "ヒアリングを読み込めませんでした。"
+      "loadError": "ヒアリングを読み込めませんでした。",
+      "aiRestricted": "AI でのソースコード解析：{value}",
+      "aiRestrictedHelp": "AI 解析を前提にした進め方を見直してください。",
+      "aiConditions": "条件：{conditions}"
     },
     "activity": {
       "recent": "最近の活動",

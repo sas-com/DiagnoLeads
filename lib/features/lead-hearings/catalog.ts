@@ -287,6 +287,14 @@ export const HEARING_FIELDS = [
       'unknown',
     ])
   ),
+  // Whether the customer allows an outside AI service to analyse their source code (#160); the
+  // migration plan relies on it, so a restriction is shown on the lead and told to its assignee
+  single(
+    'aiSourceAnalysis',
+    'requirements',
+    localOptions('aiSourceAnalysis', ['allowed', 'conditional', 'not_allowed', 'unknown'])
+  ),
+  textField('aiSourceAnalysisConditions', 'requirements', 500),
   textField('requirementNotes', 'requirements'),
 
   // 結果

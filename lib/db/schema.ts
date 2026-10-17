@@ -1087,6 +1087,7 @@ export type NotificationType =
   | 'lead_assigned'
   | 'next_action_due'
   | 'appointment_review_due'
+  | 'hearing_ai_restricted'
   | 'system';
 
 /**
