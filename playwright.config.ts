@@ -61,13 +61,13 @@ export default defineConfig({
         ]),
   ],
 
+  // E2E_USE_BUILD (CI): the production build with `next start`, so the production CSP, fonts and
+  // bundles are what the tests see; otherwise the dev server
   webServer: {
-    command: 'bun run dev',
+    command: process.env.E2E_USE_BUILD ? 'bun run start' : 'bun run dev',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 180 * 1000, // 3 minutes for CI cold start
-    env: {
-      NODE_ENV: 'test',
-    },
+    env: process.env.E2E_USE_BUILD ? {} : { NODE_ENV: 'test' },
   },
 });
