@@ -8,13 +8,15 @@ test.describe('AX migration landing page', () => {
   test('shows the sections and is hidden from search engines @smoke', async ({ page }) => {
     await page.goto('/ja/ax-migration');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(
-      '長年使ってきた基幹システムを、AIを活かせるWebシステムへ'
+      '今の基幹システムのまま、AI時代の経営判断はできますか？'
     );
     for (const name of [
       'こんなお悩みありませんか？',
-      'そのお悩み、段階的な移行で解決します',
+      'ヒト・モノ・カネ・情報。すべてが、レガシーな基幹システムに縛られています',
+      'システム移行はゴールではなく、AX化の出発点',
       '対象となるシステム',
       'まずは「移行診断」を無料で',
+      '選ばれる理由',
       'よくある質問',
     ]) {
       await expect(page.getByRole('heading', { level: 2, name })).toBeVisible();
@@ -57,7 +59,7 @@ test.describe('AX migration landing page', () => {
     await page.goto('/ja/ax-migration');
     const bar = page.getByTestId('ax-floating-cta');
     await expect(bar).toHaveAttribute('aria-hidden', 'true');
-    await page.getByRole('heading', { name: 'そのお悩み、段階的な移行で解決します' }).scrollIntoViewIfNeeded();
+    await page.getByRole('heading', { name: 'システム移行はゴールではなく、AX化の出発点' }).scrollIntoViewIfNeeded();
     await expect(bar).toHaveAttribute('aria-hidden', 'false');
     await page.locator('#diagnosis').scrollIntoViewIfNeeded();
     await expect(bar).toHaveAttribute('aria-hidden', 'true');

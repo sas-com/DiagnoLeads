@@ -2573,7 +2573,7 @@
           }
         },
         "agility": {
-          "label": "Things",
+          "label": "Agility",
           "title": "A system that cannot keep up with the market",
           "body": "Every time you try to respond to new customers or market changes, the limits of the existing system get in the way of new products.",
           "solutions": {
@@ -2582,7 +2582,7 @@
           }
         },
         "cost": {
-          "label": "Money",
+          "label": "Cost",
           "title": "\"Life-extension costs\" that limit growth",
           "body": "The more maintenance and additions to the current system cost, the less budget is left for new challenges that drive the business forward.",
           "solutions": {
@@ -2591,7 +2591,7 @@
           }
         },
         "data": {
-          "label": "Information",
+          "label": "Data",
           "title": "Data you cannot use for decisions",
           "body": "Data locked in proprietary formats keeps the figures behind management decisions from being available in real time.",
           "solutions": {
@@ -2610,12 +2610,12 @@
       "items": {
         "simple": {
           "label": "First",
-          "title": "Quick assessment",
+          "title": "Simple assessment",
           "body": "An inventory of your assets (number of programs, languages, integrations) gives an estimate of the migration difficulty."
         },
         "survey": {
           "label": "Phase 1",
-          "title": "Current specification survey",
+          "title": "Current-system survey",
           "points": {
             "first": "Analyze the current source code, forms and data structures to visualize the specifications",
             "second": "Sort out integrations with other systems, unused features and duplicate processing",
@@ -2678,7 +2678,7 @@
           "title": "Short delivery",
           "points": {
             "first": "AI analysis* of the current system visualizes the specifications quickly and accurately",
-            "second": "AI-assisted development greatly shortens the migration to a modern web system"
+            "second": "AI-assisted development greatly shortens the migration period and delivers a modern web system"
           }
         },
         "quality": {
@@ -2719,7 +2719,7 @@
         },
         "result": {
           "q": "How can I use the result?",
-          "a": "You see the migration difficulty, the urgency and the priority challenge right away. Use them in your internal discussion. The exact approach, schedule and cost are set in the specification analysis."
+          "a": "You see the migration difficulty, the urgency and the priority challenge right away. Use them in your internal discussion. The exact approach, schedule and cost are set in the current-system survey."
         },
         "data": {
           "q": "Are the specifications and source code we provide used to train AI?",
@@ -2747,7 +2747,7 @@
     },
     "footer": {
       "operator": "Provided by Software Agency System Co., Ltd., DX Services Division",
-      "address": "4F Leela Hijirizaka Building, 3-4-10 Mita, Minato-ku, Tokyo 108-0073, Japan",
+      "address": "4F, 3-4-10 Mita, Minato-ku, Tokyo 108-0073, Japan",
       "company": "Company",
       "related": "DX service \"Maru Maru DX\"",
       "privacy": "Privacy policy",

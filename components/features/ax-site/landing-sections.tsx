@@ -567,6 +567,8 @@ export async function AxFinalCta({ locale }: SectionProps) {
           <p className="mt-4 text-sm text-white/90">
             {t('contact.department')}
             <span aria-hidden="true"> ／ </span>
+            {/* Read as a pause instead of running the two items together */}
+            <span className="sr-only">, </span>
             <br className="sm:hidden" />
             {t('contact.hours')}
           </p>
