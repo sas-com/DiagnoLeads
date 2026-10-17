@@ -69,11 +69,13 @@ describe('AX migration landing page', () => {
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     for (const name of [
       'こんなお悩みありませんか？',
-      'そのお悩み、段階的な移行で解決します',
+      'ヒト・モノ・カネ・情報。すべてが、レガシーな基幹システムに縛られています',
+      'システム移行はゴールではなく、AX化の出発点',
       '対象となるシステム',
       'まずは「移行診断」を無料で',
-      'AXマイグレーションの特長',
+      '選ばれる理由',
       'よくある質問',
+      '次の一歩を、AXへの一歩に。',
     ]) {
       expect(screen.getByRole('heading', { level: 2, name })).toBeInTheDocument();
     }
@@ -82,6 +84,43 @@ describe('AX migration landing page', () => {
     for (const name of ['AS/400（IBM i）', 'NEC ACOS', 'Microsoft Access']) {
       expect(screen.getByRole('heading', { level: 3, name })).toBeInTheDocument();
     }
+  });
+
+  it('follows the brochure: the four challenges, the phases and the reasons', async () => {
+    await renderPage();
+    expect(
+      screen.getByRole('heading', { level: 1, name: '今の基幹システムのまま、AI時代の経営判断はできますか？' })
+    ).toBeInTheDocument();
+    for (const name of [
+      '人に依存した基幹システム',
+      '市場の変化に対応できないシステム',
+      '成長の余地を狭める“延命コスト”',
+      '経営判断に使えないデータ',
+      '現行仕様調査',
+      'マイグレーション',
+      'AX化',
+      '短納期',
+      '高品質',
+    ]) {
+      expect(screen.getAllByRole('heading', { level: 3, name }).length).toBeGreaterThanOrEqual(1);
+    }
+    expect(screen.getByText('高成長の経営判断').tagName).toBe('EM');
+    const reasons = screen.getByRole('heading', { level: 2, name: '選ばれる理由' }).closest('section');
+    expect(
+      within(reasons as HTMLElement).getByText(/^※お預かりした仕様書・ソースコードなどは/)
+    ).toBeInTheDocument();
+  });
+
+  it('links the phone and email of the DX Services Division', async () => {
+    await renderPage();
+    expect(screen.getByRole('link', { name: 'dx-agency@sas-com.com' })).toHaveAttribute(
+      'href',
+      'mailto:dx-agency@sas-com.com'
+    );
+    expect(screen.getByRole('link', { name: '03-5427-3663' })).toHaveAttribute(
+      'href',
+      'tel:+81354273663'
+    );
   });
 
   it('points every diagnosis button at the embedded diagnosis', async () => {

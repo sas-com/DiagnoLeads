@@ -4,20 +4,27 @@ import { turnstileSiteKey } from '@/lib/features/diagnostics/turnstile';
 import type { DiagnosticLocale } from '@/lib/features/diagnostics/types';
 import { cn } from '@/lib/utils';
 import {
+  ArrowDown,
   Bot,
+  ChartNoAxesCombined,
+  Check,
   ChevronDown,
+  ClipboardList,
   Cpu,
   Database,
+  Gauge,
   Layers,
-  ScanSearch,
+  Mail,
+  MonitorUp,
+  Phone,
   Server,
   ShieldCheck,
-  Sprout,
+  Timer,
 } from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
 import type { ReactNode } from 'react';
 import { AxCtaLink } from './ax-cta-link';
-import { AX_SECTIONS, axConsultationUrl, axPrivacyPolicyUrl } from './site-config';
+import { AX_CONTACT, AX_SECTIONS, axConsultationUrl, axPrivacyPolicyUrl } from './site-config';
 
 interface SectionProps {
   locale: DiagnosticLocale;
@@ -198,8 +205,76 @@ export async function AxProblems({ locale }: SectionProps) {
   );
 }
 
-const STEP_KEYS = ['simple', 'survey', 'migration', 'ax'] as const;
+const CHALLENGE_KEYS = ['people', 'agility', 'cost', 'data'] as const;
+const SOLUTION_KEYS = ['first', 'second'] as const;
 
+/** Brochure: the four challenges (people, things, money, information) and what AX migration brings */
+export async function AxChallenges({ locale }: SectionProps) {
+  const t = await getTranslations({ locale, namespace: 'axSite.challenges' });
+  return (
+    <section aria-labelledby="ax-challenges-heading" className="bg-white py-16 sm:py-24">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <h2 id="ax-challenges-heading" className={SECTION_HEADING}>
+          {t('title')}
+        </h2>
+        <p className="mx-auto mt-5 max-w-3xl text-center font-bold leading-relaxed">{t('lead')}</p>
+        {/* Subgrid rows line up the headers, problems and solutions across the four columns */}
+        <ul className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4 lg:gap-y-0">
+          {CHALLENGE_KEYS.map((key) => (
+            <li
+              key={key}
+              className="flex flex-col overflow-hidden rounded-2xl bg-ax-mist lg:row-span-3 lg:grid lg:grid-rows-subgrid"
+            >
+              <div className="bg-ax-deep px-5 py-4 text-white">
+                <p className="text-xs font-bold tracking-widest text-white/90">
+                  {t(`items.${key}.label`)}
+                </p>
+                <h3 className="mt-1 text-lg font-bold leading-snug">{t(`items.${key}.title`)}</h3>
+              </div>
+              <p className="flex-1 px-5 py-4 text-sm leading-relaxed text-gray-700">
+                {t(`items.${key}.body`)}
+              </p>
+              <div className="px-5 pb-5">
+                <p className="flex items-center justify-center gap-1 text-xs font-bold text-ax-teal-dark">
+                  <ArrowDown className="h-4 w-4" aria-hidden="true" />
+                  {t('solutionsLabel')}
+                </p>
+                <ul className="mt-2 space-y-2">
+                  {SOLUTION_KEYS.map((solution) => (
+                    <li
+                      key={solution}
+                      className="rounded-lg bg-white px-4 py-3 text-sm font-bold leading-snug text-ax-teal-dark"
+                    >
+                      {t(`items.${key}.solutions.${solution}`)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </li>
+          ))}
+        </ul>
+        <div className="mt-10 rounded-2xl bg-ax-deep px-6 py-6 text-center text-white">
+          <p className="text-xl font-bold sm:text-2xl">{t('band')}</p>
+          <p className="mt-2 font-bold leading-relaxed">
+            {t.rich('closing', {
+              em: (chunks) => <em className="not-italic text-ax-yellow">{chunks}</em>,
+            })}
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const STEPS = [
+  { key: 'simple', icon: Gauge },
+  { key: 'survey', icon: ClipboardList },
+  { key: 'migration', icon: MonitorUp },
+  { key: 'ax', icon: ChartNoAxesCombined },
+] as const;
+const STEP_POINT_KEYS = ['first', 'second', 'third'] as const;
+
+/** Quick assessment first, then the three phases of the brochure */
 export async function AxSteps({ locale }: SectionProps) {
   const t = await getTranslations({ locale, namespace: 'axSite.steps' });
   return (
@@ -212,21 +287,48 @@ export async function AxSteps({ locale }: SectionProps) {
         <h2 id="ax-steps-heading" className={SECTION_HEADING}>
           {t('title')}
         </h2>
-        <p className="mx-auto mt-5 max-w-2xl text-center font-bold leading-relaxed">{t('lead')}</p>
-        <ol className="mt-14 grid gap-10 md:grid-cols-4 md:gap-5">
-          {STEP_KEYS.map((key, index) => (
-            <li key={key} className="relative rounded-2xl bg-white p-6 pt-10 shadow-sm">
+        <p className="mx-auto mt-5 max-w-3xl text-center font-bold leading-relaxed">{t('lead')}</p>
+        <ol className="mx-auto mt-14 max-w-4xl space-y-5">
+          {STEPS.map(({ key, icon: Icon }, index) => (
+            <li key={key} className="relative flex gap-4 sm:gap-6">
+              {index < STEPS.length - 1 && (
+                // Line joining the step circles, like the brochure's phase chart
+                <span
+                  aria-hidden="true"
+                  className="absolute -bottom-5 left-[1.625rem] top-14 w-1 bg-ax-teal/40 sm:left-[1.875rem] sm:top-16"
+                />
+              )}
               <span
                 aria-hidden="true"
-                className="absolute -top-6 left-6 flex h-12 w-12 items-center justify-center rounded-full border-4 border-white bg-ax-deep font-ax-latin text-lg font-black text-white"
+                className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-4 border-white bg-ax-deep text-white sm:h-16 sm:w-16"
               >
-                {String(index + 1).padStart(2, '0')}
+                <Icon className="h-6 w-6 sm:h-7 sm:w-7" />
               </span>
-              <p className="font-ax-latin text-xs font-bold tracking-widest text-ax-teal-dark">
-                {t('stepLabel', { number: index + 1 })}
-              </p>
-              <h3 className="mt-1 text-lg font-bold">{t(`items.${key}.title`)}</h3>
-              <p className="mt-3 text-sm leading-relaxed text-gray-700">{t(`items.${key}.body`)}</p>
+              <div className="flex-1 rounded-2xl bg-white p-5 shadow-sm sm:p-6 md:grid md:grid-cols-[11rem_1fr] md:gap-6">
+                <div>
+                  <p className="inline-block rounded bg-ax-teal-dark px-3 py-1 font-ax-latin text-xs font-bold tracking-wider text-white">
+                    {t(`items.${key}.label`)}
+                  </p>
+                  <h3 className="mt-2 text-lg font-bold">{t(`items.${key}.title`)}</h3>
+                </div>
+                {key === 'simple' ? (
+                  <p className="mt-3 text-sm leading-relaxed text-gray-700 md:mt-0">
+                    {t(`items.${key}.body`)}
+                  </p>
+                ) : (
+                  <ul className="mt-3 space-y-2 text-sm leading-relaxed text-gray-700 md:mt-0">
+                    {STEP_POINT_KEYS.map((point) => (
+                      <li key={point} className="flex gap-2">
+                        <span
+                          aria-hidden="true"
+                          className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-ax-teal-dark"
+                        />
+                        <span>{t(`items.${key}.points.${point}`)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </li>
           ))}
         </ol>
@@ -307,11 +409,11 @@ export async function AxDiagnosisSection({ locale }: SectionProps) {
 }
 
 const REASONS = [
-  { key: 'visualize', icon: ScanSearch },
-  { key: 'keep', icon: ShieldCheck },
-  { key: 'small', icon: Sprout },
+  { key: 'speed', icon: Timer },
+  { key: 'quality', icon: ShieldCheck },
   { key: 'ax', icon: Bot },
 ] as const;
+const REASON_POINT_KEYS = ['first', 'second'] as const;
 
 export async function AxReasons({ locale }: SectionProps) {
   const t = await getTranslations({ locale, namespace: 'axSite.reasons' });
@@ -321,21 +423,28 @@ export async function AxReasons({ locale }: SectionProps) {
         <h2 id="ax-reasons-heading" className={SECTION_HEADING}>
           {t('title')}
         </h2>
-        <ul className="mt-12 grid gap-5 md:grid-cols-2">
+        <ul className="mt-12 grid gap-5 md:grid-cols-3">
           {REASONS.map(({ key, icon: Icon }) => (
-            <li key={key} className="flex gap-4 rounded-2xl bg-white p-6 text-ax-ink">
-              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-ax-teal text-white">
-                <Icon className="h-7 w-7" aria-hidden="true" />
-              </span>
-              <div>
-                <h3 className="text-lg font-bold">{t(`items.${key}.title`)}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-gray-700">
-                  {t(`items.${key}.body`)}
-                </p>
+            <li key={key} className="overflow-hidden rounded-2xl bg-white text-ax-ink">
+              <div className="flex items-center justify-center gap-3 bg-ax-teal-dark px-6 py-4 text-white">
+                <Icon className="h-6 w-6" aria-hidden="true" />
+                <h3 className="text-xl font-bold">{t(`items.${key}.title`)}</h3>
               </div>
+              <ul className="space-y-3 p-6 text-sm leading-relaxed">
+                {REASON_POINT_KEYS.map((point) => (
+                  <li key={point} className="flex gap-2">
+                    <Check
+                      className="mt-0.5 h-4 w-4 shrink-0 text-ax-teal-dark"
+                      aria-hidden="true"
+                    />
+                    <span>{t(`items.${key}.points.${point}`)}</span>
+                  </li>
+                ))}
+              </ul>
             </li>
           ))}
         </ul>
+        <p className="mt-4 text-xs leading-relaxed text-white/90">{t('note')}</p>
         <div className="mt-10 rounded-2xl border border-white/30 p-6 text-center">
           <p className="font-bold">{t('certified.title')}</p>
           <p className="mt-2 text-sm leading-relaxed text-white/90">{t('certified.body')}</p>
@@ -345,7 +454,7 @@ export async function AxReasons({ locale }: SectionProps) {
   );
 }
 
-const FAQ_KEYS = ['cost', 'who', 'targets', 'result', 'privacy'] as const;
+const FAQ_KEYS = ['cost', 'who', 'targets', 'result', 'data', 'privacy'] as const;
 
 export async function AxFaq({ locale }: SectionProps) {
   const t = await getTranslations({ locale, namespace: 'axSite.faq' });
@@ -400,6 +509,9 @@ export async function AxFinalCta({ locale }: SectionProps) {
         <h2 id="ax-final-heading" className="text-2xl font-bold leading-snug sm:text-3xl">
           {t('title')}
         </h2>
+        <p className="mx-auto mt-4 max-w-2xl font-bold leading-relaxed text-white/90">
+          {t('lead')}
+        </p>
         <CtaCaption locale={locale} className="mt-8">
           {t('caption')}
         </CtaCaption>
@@ -419,6 +531,47 @@ export async function AxFinalCta({ locale }: SectionProps) {
               {t('consult')}
             </AxCtaLink>
           )}
+        </div>
+        <div className="mx-auto mt-10 max-w-2xl rounded-2xl p-6 ring-1 ring-white/40">
+          <h3 className="font-bold">{t('contact.title')}</h3>
+          <dl className="mt-4 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-8">
+            <div className="flex items-center gap-2">
+              <dt>
+                <Mail className="h-5 w-5" aria-hidden="true" />
+                <span className="sr-only">{t('contact.email')}</span>
+              </dt>
+              <dd>
+                <a
+                  href={`mailto:${AX_CONTACT.email}`}
+                  className="font-ax-latin text-lg font-bold underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                >
+                  {AX_CONTACT.email}
+                </a>
+              </dd>
+            </div>
+            <div className="flex items-center gap-2">
+              <dt>
+                <Phone className="h-5 w-5" aria-hidden="true" />
+                <span className="sr-only">{t('contact.phone')}</span>
+              </dt>
+              <dd>
+                <a
+                  href={`tel:${AX_CONTACT.phoneE164}`}
+                  className="font-ax-latin text-lg font-bold underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                >
+                  {AX_CONTACT.phone}
+                </a>
+              </dd>
+            </div>
+          </dl>
+          <p className="mt-4 text-sm text-white/90">
+            {t('contact.department')}
+            <span aria-hidden="true"> ／ </span>
+            {/* Read as a pause instead of running the two items together */}
+            <span className="sr-only">, </span>
+            <br className="sm:hidden" />
+            {t('contact.hours')}
+          </p>
         </div>
       </div>
     </section>

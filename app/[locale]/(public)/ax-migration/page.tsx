@@ -1,6 +1,7 @@
 import { AxFloatingCta } from '@/components/features/ax-site/ax-floating-cta';
 import { AxSiteShell } from '@/components/features/ax-site/ax-site-shell';
 import {
+  AxChallenges,
   AxDiagnosisSection,
   AxFaq,
   AxFinalCta,
@@ -57,6 +58,7 @@ export default async function AxMigrationPage({ params }: AxMigrationPageProps) 
     <AxSiteShell locale={locale} variant="landing">
       <AxHero locale={locale} />
       <AxProblems locale={locale} />
+      <AxChallenges locale={locale} />
       <AxSteps locale={locale} />
       <AxTargets locale={locale} />
       <AxDiagnosisSection locale={locale} />
