@@ -72,7 +72,7 @@ describe('AX migration landing page', () => {
       'ヒト・モノ・カネ・情報。すべてが、レガシーな基幹システムに縛られています',
       'システム移行はゴールではなく、AX化の出発点',
       '対象となるシステム',
-      'まずは「移行診断」を無料で',
+      'まずは「無料Web診断」から',
       '選ばれる理由',
       'よくある質問',
       '次の一歩を、AXへの一歩に。',
@@ -111,6 +111,27 @@ describe('AX migration landing page', () => {
     ).toBeInTheDocument();
   });
 
+  it('names the audience, leads from the concerns to the check and orders the steps', async () => {
+    await renderPage();
+    expect(screen.getByText('製造業・流通業の中堅企業さまへ')).toBeInTheDocument();
+    const problems = document.getElementById('problems') as HTMLElement;
+    expect(within(problems).getByRole('link', { name: /無料Web診断をはじめる/ })).toHaveAttribute(
+      'href',
+      '#diagnosis'
+    );
+    const steps = within(document.getElementById('steps') as HTMLElement)
+      .getAllByRole('heading', { level: 3 })
+      .map((heading) => heading.textContent);
+    expect(steps.slice(0, 2)).toEqual(['無料Web診断（約3分）', '簡易診断（担当者による資産の棚卸し）']);
+    // Reasons come before the diagnosis, which asks for contact details
+    const reasons = screen.getByRole('heading', { level: 2, name: '選ばれる理由' });
+    const diagnosis = screen.getByRole('heading', { level: 2, name: 'まずは「無料Web診断」から' });
+    expect(reasons.compareDocumentPosition(diagnosis) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    for (const question of ['「AX化」とは何ですか？', '今の保守会社がソースコードを持っています。相談できますか？']) {
+      expect(screen.getByText(question)).toBeInTheDocument();
+    }
+  });
+
   it('links the phone and email of the DX Services Division', async () => {
     await renderPage();
     expect(screen.getByRole('link', { name: 'dx-agency@sas-com.com' })).toHaveAttribute(
@@ -141,7 +162,7 @@ describe('AX migration landing page', () => {
 
   it('points every diagnosis button at the embedded diagnosis', async () => {
     await renderPage();
-    const buttons = screen.getAllByRole('link', { name: /かんたん無料診断をはじめる|無料で診断する/ });
+    const buttons = screen.getAllByRole('link', { name: /無料Web診断/ });
     expect(buttons.length).toBeGreaterThanOrEqual(3);
     for (const button of buttons) expect(button).toHaveAttribute('href', '#diagnosis');
   });
@@ -171,7 +192,7 @@ describe('AxSiteHeader', () => {
       'href',
       '/ja/ax-migration#steps'
     );
-    expect(screen.getByRole('link', { name: /無料で診断する/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /^無料Web診断$/ })).toHaveAttribute(
       'href',
       '/ja/ax-migration#diagnosis'
     );

@@ -16,6 +16,7 @@ import {
   Layers,
   Mail,
   MonitorUp,
+  MousePointerClick,
   Phone,
   Server,
   ShieldCheck,
@@ -27,6 +28,7 @@ import { AxCtaLink } from './ax-cta-link';
 import {
   AX_CONTACT,
   AX_FINAL_SECTION_ID,
+  AX_PROBLEMS_CTA_ID,
   AX_SECTIONS,
   axConsultationUrl,
   axPrivacyPolicyUrl,
@@ -66,12 +68,8 @@ export async function AxHero({ locale }: SectionProps) {
     <section aria-labelledby="ax-hero-heading" className="relative overflow-hidden bg-white">
       <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-14 sm:px-6 md:py-20 lg:grid-cols-[1.15fr_0.85fr]">
         <div className="space-y-6">
-          <p
-            aria-hidden="true"
-            className="font-ax-latin text-sm font-bold tracking-[0.2em] text-ax-teal-dark"
-          >
-            {t('eyebrow')}
-          </p>
+          {/* Who it is for, ahead of the question in the heading */}
+          <p className="text-sm font-bold tracking-wider text-ax-teal-dark">{t('eyebrow')}</p>
           <h1
             id="ax-hero-heading"
             className="text-[1.75rem] font-bold leading-snug sm:text-4xl lg:text-[2.6rem] lg:leading-[1.35]"
@@ -206,6 +204,15 @@ export async function AxProblems({ locale }: SectionProps) {
             </li>
           ))}
         </ul>
+        <div
+          id={AX_PROBLEMS_CTA_ID}
+          className="mx-auto mt-10 max-w-2xl rounded-2xl bg-white px-6 py-6 shadow-sm"
+        >
+          <p className="font-bold leading-relaxed">{t('bridge')}</p>
+          <AxCtaLink href={`#${AX_SECTIONS.diagnosis}`} location="problems" className="mt-4">
+            {t('bridgeCta')}
+          </AxCtaLink>
+        </div>
       </div>
     </section>
   );
@@ -273,6 +280,7 @@ export async function AxChallenges({ locale }: SectionProps) {
 }
 
 const STEPS = [
+  { key: 'web', icon: MousePointerClick },
   { key: 'simple', icon: Gauge },
   { key: 'survey', icon: ClipboardList },
   { key: 'migration', icon: MonitorUp },
@@ -280,7 +288,7 @@ const STEPS = [
 ] as const;
 const STEP_POINT_KEYS = ['first', 'second', 'third'] as const;
 
-/** Quick assessment first, then the three phases of the brochure */
+/** The free web check and the quick assessment first, then the three phases of the brochure */
 export async function AxSteps({ locale }: SectionProps) {
   const t = await getTranslations({ locale, namespace: 'axSite.steps' });
   return (
@@ -317,7 +325,7 @@ export async function AxSteps({ locale }: SectionProps) {
                   </p>
                   <h3 className="mt-2 text-lg font-bold">{t(`items.${key}.title`)}</h3>
                 </div>
-                {key === 'simple' ? (
+                {key === 'web' || key === 'simple' ? (
                   <p className="mt-3 text-sm leading-relaxed text-gray-700 md:mt-0">
                     {t(`items.${key}.body`)}
                   </p>
@@ -460,7 +468,16 @@ export async function AxReasons({ locale }: SectionProps) {
   );
 }
 
-const FAQ_KEYS = ['cost', 'who', 'targets', 'result', 'data', 'privacy'] as const;
+const FAQ_KEYS = [
+  'cost',
+  'who',
+  'targets',
+  'vendorSource',
+  'result',
+  'ax',
+  'data',
+  'privacy',
+] as const;
 
 export async function AxFaq({ locale }: SectionProps) {
   const t = await getTranslations({ locale, namespace: 'axSite.faq' });

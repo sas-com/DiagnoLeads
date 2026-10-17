@@ -701,16 +701,16 @@ describe('AxDiagnosisResult', () => {
     expect(screen.getByText('提供：エス・エー・エス株式会社 DXサービス部')).toBeInTheDocument();
     expect(screen.getByText(`診断のページ：${window.location.origin}${window.location.pathname}`)).toBeInTheDocument();
     // What the document is, instead of the English eyebrow
-    expect(screen.getByText('AXマイグレーション 移行診断')).toBeInTheDocument();
+    expect(screen.getByText('AXマイグレーション 無料Web診断')).toBeInTheDocument();
   });
 
   it('names the saved PDF after the result while printing', () => {
-    document.title = 'AXマイグレーション 移行診断';
+    document.title = 'AXマイグレーション 無料Web診断';
     renderResult();
     window.dispatchEvent(new Event('beforeprint'));
-    expect(document.title).toMatch(/^AX移行診断結果_AS\/400（IBM i）_\d{4}-\d{2}-\d{2}$/);
+    expect(document.title).toMatch(/^AXマイグレーション無料Web診断結果_AS\/400（IBM i）_\d{4}-\d{2}-\d{2}$/);
     window.dispatchEvent(new Event('afterprint'));
-    expect(document.title).toBe('AXマイグレーション 移行診断');
+    expect(document.title).toBe('AXマイグレーション 無料Web診断');
   });
 
   it('lets the respondent check another system', async () => {

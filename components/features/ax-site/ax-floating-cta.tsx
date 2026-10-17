@@ -3,7 +3,7 @@
 import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
 import { AxCtaLink } from './ax-cta-link';
-import { AX_FINAL_SECTION_ID, AX_FOOTER_ID, AX_SECTIONS } from './site-config';
+import { AX_FINAL_SECTION_ID, AX_FOOTER_ID, AX_PROBLEMS_CTA_ID, AX_SECTIONS } from './site-config';
 
 /**
  * Hidden while another diagnosis button (hero, final call to action) or the diagnosis is on
@@ -11,6 +11,7 @@ import { AX_FINAL_SECTION_ID, AX_FOOTER_ID, AX_SECTIONS } from './site-config';
  */
 const DEFAULT_HIDE_WHEN_VISIBLE = [
   'ax-hero-heading',
+  AX_PROBLEMS_CTA_ID,
   AX_SECTIONS.diagnosis,
   AX_FINAL_SECTION_ID,
   AX_FOOTER_ID,

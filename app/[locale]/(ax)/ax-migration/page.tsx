@@ -61,8 +61,9 @@ export default async function AxMigrationPage({ params }: AxMigrationPageProps) 
       <AxChallenges locale={locale} />
       <AxSteps locale={locale} />
       <AxTargets locale={locale} />
-      <AxDiagnosisSection locale={locale} />
+      {/* Reasons first: reassurance before the diagnosis asks for contact details */}
       <AxReasons locale={locale} />
+      <AxDiagnosisSection locale={locale} />
       <AxFaq locale={locale} />
       <AxFinalCta locale={locale} />
       <AxFloatingCta label={t('floatingCta')} />
