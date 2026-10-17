@@ -241,6 +241,11 @@ describe('Integration: shouldSkipI18nMiddleware', () => {
     expect(shouldSkipI18nMiddleware('/_next/image')).toBe(true);
   });
 
+  it('should skip the Vercel Web Analytics script and endpoint (#222)', () => {
+    expect(shouldSkipI18nMiddleware('/_vercel/insights/script.js')).toBe(true);
+    expect(shouldSkipI18nMiddleware('/_vercel/insights/view')).toBe(true);
+  });
+
   it('should skip static files', () => {
     expect(shouldSkipI18nMiddleware('/favicon.ico')).toBe(true);
     expect(shouldSkipI18nMiddleware('/robots.txt')).toBe(true);

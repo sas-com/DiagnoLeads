@@ -129,8 +129,9 @@ export const config = {
      * - favicon.ico (favicon file)
      * - public files
      * - admin (PayloadCMS admin panel)
+     * - _vercel (Vercel Web Analytics script and endpoint, #222)
      */
-    '/((?!_next/static|_next/image|favicon.ico|admin|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|_vercel|favicon.ico|admin|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
     // Pages of each language, even when the last segment looks like an image ("y.png" can be
     // a page id): they need the sign-in redirect and the security headers
     '/(ja|en)/:path*',

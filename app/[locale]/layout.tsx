@@ -1,6 +1,7 @@
 import { ROOT_CLIENT_MESSAGES, pickMessages } from '@/lib/i18n/client-messages';
 import { locales } from '@/lib/i18n/config';
 import { NOINDEX } from '@/lib/seo/indexing';
+import { Analytics } from '@vercel/analytics/next';
 import type { Metadata, Viewport } from 'next';
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages, getTranslations } from 'next-intl/server';
@@ -99,6 +100,9 @@ export default async function LocaleLayout({
         >
           <Providers>{children}</Providers>
         </NextIntlClientProvider>
+        {/* Vercel Web Analytics (#222): page views, no cookies. Its script is same-origin
+            (/_vercel/insights) and added by a nonced script, so the CSP allows it */}
+        <Analytics />
       </body>
     </html>
   );
