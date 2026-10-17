@@ -336,7 +336,7 @@ describe('LeadHearingEditor meeting mode', () => {
     // No section tabs (only record / summary); a field outside the required items is folded away
     expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['記録', 'まとめ']);
     expect(screen.queryByTestId('hearing-field-meetingFormat')).not.toBeInTheDocument();
-    expect(screen.getByText('必須 0/12')).toBeInTheDocument();
+    expect(screen.getByText('必須 0/13')).toBeInTheDocument();
 
     const others = screen.getByRole('button', { name: /その他の項目/ });
     expect(others).toHaveAttribute('aria-expanded', 'false');
@@ -383,7 +383,7 @@ describe('LeadHearingEditor meeting mode', () => {
       status: 'done',
       source: null,
     });
-    expect(screen.getByText('必須 2/12')).toBeInTheDocument();
+    expect(screen.getByText('必須 2/13')).toBeInTheDocument();
   });
 
   it('marks an item "next time" or "not applicable" with one tap, and takes it back', async () => {
@@ -398,7 +398,7 @@ describe('LeadHearingEditor meeting mode', () => {
 
     const notApplicable = screen.getByRole('button', { name: '競合を対象外にする' });
     await user.click(notApplicable);
-    expect(screen.getByText('必須 1/12')).toBeInTheDocument();
+    expect(screen.getByText('必須 1/13')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '保存' }));
     expect(savedFields().nextMeetingDate).toEqual({ status: 'next', source: null });
@@ -412,7 +412,7 @@ describe('LeadHearingEditor meeting mode', () => {
     // Tapping again takes the status back
     await user.click(notApplicable);
     expect(notApplicable).toHaveAttribute('aria-pressed', 'false');
-    expect(screen.getByText('必須 0/12')).toBeInTheDocument();
+    expect(screen.getByText('必須 0/13')).toBeInTheDocument();
   });
 
   it('remembers the chosen mode for the user', async () => {

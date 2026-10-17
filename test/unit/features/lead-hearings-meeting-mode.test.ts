@@ -116,7 +116,7 @@ describe('meetingProgress', () => {
     form = toggleHearingItemStatus(form, item('timing'), 'next');
     expect(meetingProgress(computeFormMissingItems(form), HEARING_REQUIRED_ITEMS)).toEqual({
       filled: 1,
-      total: 12,
+      total: 13,
     });
   });
 });

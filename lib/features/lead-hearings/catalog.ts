@@ -387,6 +387,8 @@ export const HEARING_REQUIRED_ITEMS: readonly HearingRequiredItem[] = [
   required('impact', ['impactIfUnaddressed']),
   required('pastConsideration', ['pastConsideration', 'pastBlockers']),
   required('decisionMaker', ['decisionMakerPresent']),
+  // Asked at the first meeting: the migration plan relies on AI analysis (#160)
+  required('aiSourceAnalysis', ['aiSourceAnalysis']),
   required('timing', ['directionTiming']),
   required('competitors', ['competitorTypes']),
   required('nextMeeting', ['nextMeetingDate', 'nextMeetingAttendees']),

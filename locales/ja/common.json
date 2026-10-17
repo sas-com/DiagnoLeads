@@ -2966,6 +2966,7 @@
       "impact": "対応しない場合の影響",
       "pastConsideration": "過去の検討と進まなかった理由",
       "decisionMaker": "決裁者の同席",
+      "aiSourceAnalysis": "AI でのソースコード解析の可否",
       "timing": "方向性を決める時期",
       "competitors": "競合",
       "nextMeeting": "次回の日程と出席者"

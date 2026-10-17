@@ -102,9 +102,9 @@ describe('hearing catalog', () => {
     expect([...HEARING_CHALLENGES]).toEqual([...AX_PLAYBOOK_CHALLENGES]);
   });
 
-  it('defines 12 provisional required items that reference real keys', () => {
-    expect(HEARING_REQUIRED_ITEMS).toHaveLength(12);
-    expect(new Set(HEARING_REQUIRED_ITEMS.map((i) => i.id)).size).toBe(12);
+  it('defines 13 provisional required items that reference real keys', () => {
+    expect(HEARING_REQUIRED_ITEMS).toHaveLength(13);
+    expect(new Set(HEARING_REQUIRED_ITEMS.map((i) => i.id)).size).toBe(13);
     for (const item of HEARING_REQUIRED_ITEMS) {
       expect(item.keys.length).toBeGreaterThan(0);
       for (const key of item.keys) expect(getHearingField(key), key).toBeDefined();

@@ -207,7 +207,7 @@ describe('hearingValueFromAnswer', () => {
 describe('hearingCoverage', () => {
   it('counts the required items every field of which the diagnosis fills', () => {
     const coverage = hearingCoverage(mapped());
-    expect(coverage.total).toBe(12);
+    expect(coverage.total).toBe(13);
     expect(coverage.covered).toBe(1);
     expect(coverage.partial).toBe(0);
     expect(coverage.items.find((i) => i.id === 'timing')).toMatchObject({
@@ -229,7 +229,7 @@ describe('hearingCoverage', () => {
 
   it('does not count unusable mappings, and is empty without any', () => {
     const def = cloudReadiness();
-    expect(hearingCoverage(def)).toMatchObject({ total: 12, covered: 0, partial: 0 });
+    expect(hearingCoverage(def)).toMatchObject({ total: 13, covered: 0, partial: 0 });
     question(def, 'notes').hearingField = { key: 'directionTiming' };
     expect(hearingCoverage(def).covered).toBe(0);
   });

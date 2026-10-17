@@ -155,7 +155,7 @@ describe('leadHearings read', () => {
 
     expect(result.canEdit).toBe(canEdit);
     expect(result.items).toHaveLength(1);
-    expect(result.items[0]).toMatchObject({ id: HEARING_ID, missingCount: 12 });
+    expect(result.items[0]).toMatchObject({ id: HEARING_ID, missingCount: 13 });
     for (const where of dbState.wheres) {
       const { sql, params } = toQuery(where);
       expect(sql).toContain('"organization_id"');

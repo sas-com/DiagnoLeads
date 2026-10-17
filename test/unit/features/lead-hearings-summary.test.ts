@@ -55,6 +55,7 @@ const COMPLETE: HearingFields = {
   pastConsideration: { value: 'dropped', status: 'done', source: null },
   pastBlockers: { value: ['budget', 'risk'], status: 'done', source: null },
   decisionMakerPresent: { value: 'no', status: 'done', source: null },
+  aiSourceAnalysis: { value: 'allowed', status: 'done', source: null },
   directionTiming: { value: 'within_1y', status: 'done', source: 'corrected' },
   competitorTypes: { value: ['current_vendor'], status: 'done', source: null },
   nextMeetingDate: { value: '2026-11-05', status: 'done', source: null },
