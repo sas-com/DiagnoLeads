@@ -3622,7 +3622,7 @@
       "company": "会社名",
       "status": "ステータス",
       "score": "スコア",
-      "source": "流入元（登録経路）",
+      "source": "流入元",
       "createdAt": "登録日"
     },
     "analytics": {
