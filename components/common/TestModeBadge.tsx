@@ -1,8 +1,8 @@
 'use client';
 
+import { formatEmailDomains } from '@/lib/i18n/format-domains';
 import { trpc } from '@/lib/trpc/client';
 import { RiFlaskLine } from '@remixicon/react';
-import { formatEmailDomains } from '@/lib/i18n/format-domains';
 import { useLocale, useTranslations } from 'next-intl';
 
 /**
