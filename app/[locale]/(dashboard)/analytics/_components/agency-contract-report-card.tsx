@@ -64,6 +64,7 @@ export function AgencyContractReportCard({ organizationId }: { organizationId: s
                 <TableHead className="text-right">{t('costPerSql')}</TableHead>
                 <TableHead className="text-right">{t('costPerPhase1Won')}</TableHead>
                 <TableHead className="text-right">{t('plan')}</TableHead>
+                <TableHead className="text-right">{t('appointmentQuality')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -118,6 +119,15 @@ export function AgencyContractReportCard({ organizationId }: { organizationId: s
                     )}
                     {row.plan.appointments === null && row.plan.costPerAppointment === null && '—'}
                   </TableCell>
+                  <TableCell className={`${num} whitespace-nowrap`}>
+                    {row.reviews.reviewed > 0
+                      ? t('appointmentQualityValue', {
+                          met: row.reviews.met,
+                          reviewed: row.reviews.reviewed,
+                          rate: row.reviews.metRate ?? 0,
+                        })
+                      : '—'}
+                  </TableCell>
                 </TableRow>
               ))}
               {report.data.uncontracted.map((row) => (
@@ -131,7 +141,7 @@ export function AgencyContractReportCard({ organizationId }: { organizationId: s
                       {row.funnel[stage]}
                     </TableCell>
                   ))}
-                  <TableCell className={`${num} text-gray-500`} colSpan={5}>
+                  <TableCell className={`${num} text-gray-500`} colSpan={6}>
                     {t('costNotRegistered')}
                   </TableCell>
                 </TableRow>

@@ -149,6 +149,19 @@ describe('buildContractReport (2 agencies × 2 periods)', () => {
     expect(row('b2').costPer.sqls).toBeNull();
   });
 
+  it('counts the reviewed appointments and the ones meeting the conditions (#149)', () => {
+    const reviewed = LEADS.map((lead, index) =>
+      lead.agencyName.trim() === '代行A' && lead.createdOn < '2026-12-01'
+        ? // A1: 3 met, 2 not met, 3 not reviewed
+          { ...lead, conditionsMet: index < 3 ? true : index < 5 ? false : null }
+        : lead
+    );
+    const rows = buildContractReport([A1, A2], reviewed, TODAY).contracts;
+    expect(rows[0].reviews).toEqual({ reviewed: 5, met: 3, metRate: 60 });
+    // Nothing reviewed: no rate rather than 0%
+    expect(rows[1].reviews).toEqual({ reviewed: 0, met: 0, metRate: null });
+  });
+
   it('compares the actual with the plan', () => {
     expect(row('a1').plan).toEqual({
       appointments: 10,

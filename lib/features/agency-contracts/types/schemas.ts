@@ -1,3 +1,4 @@
+import { appointmentCriteriaSchema } from '@/lib/features/appointment-reviews/types/schemas';
 import { z } from 'zod';
 
 /** Contracts with sales agencies (Refs #148). Amounts are yen excluding tax. */
@@ -23,6 +24,10 @@ export const agencyContractFieldsSchema = z
     feePerAppointment: yen.default(0),
     planAppointments: z.number().int().min(1).max(100_000).nullable().default(null),
     planCostPerAppointment: yen.nullable().default(null),
+    /** Conditions an appointment must meet (#149); empty uses the defaults */
+    appointmentCriteria: appointmentCriteriaSchema.default([]),
+    /** Business days after the first meeting to report a failed appointment (#149) */
+    returnDeadlineBusinessDays: z.number().int().min(0).max(30).nullable().default(null),
     note: z
       .string()
       .trim()

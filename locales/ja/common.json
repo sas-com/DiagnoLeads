@@ -1445,7 +1445,9 @@
         "feePerAppointment": "1件単価（アポ）",
         "planAppointments": "計画アポ数（期間中）",
         "planCostPerAppointment": "目標アポ単価（費用込み）",
-        "note": "メモ"
+        "note": "メモ",
+        "appointmentCriteria": "アポの条件（1行に1項目）",
+        "returnDeadlineBusinessDays": "返品・取り直しの連絡期限（初回商談から何営業日後まで）"
       },
       "termHeader": "期間",
       "ongoing": "継続中",
@@ -1457,12 +1459,15 @@
       "empty": "まだ契約がありません。",
       "saved": "契約を保存しました",
       "saveError": "契約を保存できませんでした。もう一度お試しください。",
-      "invalid": "入力内容を確認してください（開始日は必須、終了日は開始日以降、金額は 0 以上の整数）。",
+      "invalid": "入力内容を確認してください（開始日は必須、終了日は開始日以降、金額は 0 以上の整数、条件は10項目・各100文字まで、連絡期限は 0〜30）。",
       "overlap": "同じ代行会社の別の契約と期間が重なっています。期間を見直してください。",
       "removed": "契約を削除しました",
       "removeError": "契約を削除できませんでした。もう一度お試しください。",
       "removeConfirmTitle": "この契約を削除しますか？",
-      "removeConfirmBody": "{agency} の契約を削除します。この期間のリードは「費用未登録」として表示されます。"
+      "removeConfirmBody": "{agency} の契約を削除します。この期間のリードは「費用未登録」として表示されます。",
+      "appointmentCriteriaHint": "初回商談の後に、アポがこの条件を満たしたかを記録します。空欄のときは「決裁者が同席した」「対象の機種を確認できた」「所定の時間話せた」を使います。",
+      "returnDeadlineHint": "例：「訪問の翌営業日中」なら 1。土日は数えません（祝日は考慮しません）。空欄は期限なし。",
+      "defaultCriteria": "決裁者が同席した\n対象の機種を確認できた\n所定の時間話せた"
     },
     "contentEditors": {
       "title": "コンテンツ編集者",
@@ -1937,7 +1942,9 @@
         "planAppointments": "アポ {actual}／{plan}件（{rate}%）",
         "planCost": "目標アポ単価 {plan}",
         "noContract": "契約なし",
-        "costNotRegistered": "費用未登録（この期間の契約がありません）"
+        "costNotRegistered": "費用未登録（この期間の契約がありません）",
+        "appointmentQuality": "条件を満たしたアポ",
+        "appointmentQualityValue": "{met}／{reviewed}件（{rate}%）"
       }
     }
   },
@@ -2223,7 +2230,7 @@
         "emailNote": "相談申込のメールは、営業窓口のアドレスに届きます（個人ごとの設定はありません）",
         "currentOrganization": "この組織",
         "assignedToMeHelp": "リードの担当者に割り当てられたとき（オフにするとメールも届きません）",
-        "nextActionDueHelp": "担当している次の行動・持ち帰り事項の期限の前日と、期限を過ぎたときに知らせます（オフにするとメールも届きません）"
+        "nextActionDueHelp": "担当している次の行動・持ち帰り事項の期限の前日と、期限を過ぎたときに知らせます。代行会社からのアポの条件の記録期限も知らせます（オフにするとメールも届きません）"
       },
       "description": "通知の受信方法を設定します",
       "inApp": {
@@ -3625,5 +3632,40 @@
       "goal": "目指すこと",
       "submittedAt": "回答日時: {date}"
     }
+  },
+  "appointmentReview": {
+    "title": "アポの条件の確認",
+    "description": "代行会社（{agency}）からのアポが、契約の条件を満たしたかを初回商談の後に記録します。",
+    "noContract": "この時期の契約が登録されていないため、標準の条件で記録します。返品・取り直しの期限はありません。",
+    "defaultCriteria": "決裁者が同席した\n対象の機種を確認できた\n所定の時間話せた",
+    "meetingOn": "初回商談の日",
+    "meetingOnHint": "最初のヒアリングの日を初期値にしています。",
+    "deadline": "返品・取り直しの連絡期限",
+    "deadlineNone": "期限の決まりなし",
+    "deadlineOpen": "{date}まで（あと{count}営業日）",
+    "deadlineToday": "{date}まで（今日が期限）",
+    "deadlinePassed": "{date}まで（期限を過ぎています）",
+    "checks": "条件",
+    "met": "満たした",
+    "notMet": "満たさなかった",
+    "defectReason": "不備の理由",
+    "defectReasonPlaceholder": "例：決裁者が欠席し、担当者のみだった",
+    "claim": "代行会社への連絡",
+    "claims": {
+      "none": "連絡しない",
+      "return": "返品（支払い対象外）を依頼した",
+      "retake": "取り直しを依頼した"
+    },
+    "save": "記録する",
+    "update": "記録を更新",
+    "saved": "アポの条件を記録しました",
+    "saveError": "記録できませんでした。もう一度お試しください。",
+    "needMeetingOn": "初回商談の日を入れてください。",
+    "resultMet": "条件を満たしたアポ",
+    "resultNotMet": "条件を満たさなかったアポ",
+    "recordedLate": "期限後に記録",
+    "recordedBy": "{date} {name} が記録",
+    "notRecorded": "まだ記録されていません。",
+    "readOnly": "記録する権限がありません。"
   }
 }

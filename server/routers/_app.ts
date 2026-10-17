@@ -4,6 +4,7 @@ import { agencyContractsRouter } from '@/lib/features/agency-contracts/api/route
 import { agencyLinksRouter } from '@/lib/features/agency-links/api/router';
 import { aiRouter } from '@/lib/features/ai/api/router';
 import { analyticsRouter } from '@/lib/features/analytics/api/router';
+import { appointmentReviewsRouter } from '@/lib/features/appointment-reviews/api/router';
 import { axPlaybookRouter } from '@/lib/features/ax-playbook/api/router';
 import { commentsRouter } from '@/lib/features/comments/api/router';
 import { contentEditorsRouter } from '@/lib/features/content/api/editors-router';
@@ -64,6 +65,7 @@ export const appRouter = router({
   axPlaybook: axPlaybookRouter, // AX sales playbook (Refs #74)
   agencyLinks: agencyLinksRouter, // Diagnosis links per sales agency (Refs #147)
   agencyContracts: agencyContractsRouter, // Contracts, funnel and cost per sales agency (Refs #148)
+  appointmentReviews: appointmentReviewsRouter, // Whether agency appointments met the conditions (Refs #149)
   leadHearings: leadHearingsRouter, // Initial meeting hearings per lead (Refs #84)
   contentEditors: contentEditorsRouter, // FAQ / blog editors granted from settings (#91)
   leadActivity: leadActivityRouter, // Activity timeline per lead (Refs #101)

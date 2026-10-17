@@ -1445,7 +1445,9 @@
         "feePerAppointment": "Fee per appointment",
         "planAppointments": "Planned appointments (term)",
         "planCostPerAppointment": "Target cost per appointment",
-        "note": "Note"
+        "note": "Note",
+        "appointmentCriteria": "Appointment conditions (one per line)",
+        "returnDeadlineBusinessDays": "Deadline to report a failed appointment (business days after the first meeting)"
       },
       "termHeader": "Term",
       "ongoing": "ongoing",
@@ -1457,12 +1459,15 @@
       "empty": "No contracts yet.",
       "saved": "Contract saved",
       "saveError": "Could not save the contract. Please try again.",
-      "invalid": "Please check the form (start is required, end on or after the start, amounts are whole numbers from 0).",
+      "invalid": "Please check the form (start is required, end on or after the start, amounts are whole numbers from 0, up to 10 conditions of 100 characters, a deadline of 0 to 30).",
       "overlap": "Another contract of this agency covers part of the same term. Please change the term.",
       "removed": "Contract deleted",
       "removeError": "Could not delete the contract. Please try again.",
       "removeConfirmTitle": "Delete this contract?",
-      "removeConfirmBody": "The contract of {agency} will be deleted. Leads of its term will show as \"cost not registered\"."
+      "removeConfirmBody": "The contract of {agency} will be deleted. Leads of its term will show as \"cost not registered\".",
+      "appointmentCriteriaHint": "After the first meeting, sales record whether the appointment met these conditions. When empty, \"The decision maker attended\", \"The target system was confirmed\" and \"We talked for the agreed time\" are used.",
+      "returnDeadlineHint": "E.g. 1 for \"by the next business day after the visit\". Weekends are skipped (public holidays are not). Empty: no deadline.",
+      "defaultCriteria": "The decision maker attended\nThe target system was confirmed\nWe talked for the agreed time"
     },
     "contentEditors": {
       "title": "Content editors",
@@ -1937,7 +1942,9 @@
         "planAppointments": "{actual} / {plan} appointments ({rate}%)",
         "planCost": "Target per appointment {plan}",
         "noContract": "No contract",
-        "costNotRegistered": "Cost not registered (no contract for this period)"
+        "costNotRegistered": "Cost not registered (no contract for this period)",
+        "appointmentQuality": "Appointments meeting the conditions",
+        "appointmentQualityValue": "{met} / {reviewed} ({rate}%)"
       }
     }
   },
@@ -2223,7 +2230,7 @@
         "emailNote": "Consultation request emails go to the sales contact address (there is no personal setting)",
         "currentOrganization": "this organization",
         "assignedToMeHelp": "When a lead is assigned to you (turning this off also stops the email)",
-        "nextActionDueHelp": "The day before a next action or takeaway you are responsible for is due, and when it is overdue (turning this off also stops the email)"
+        "nextActionDueHelp": "The day before a next action or takeaway you are responsible for is due, when it is overdue, and before the deadline to record whether an agency appointment met the conditions (turning this off also stops the email)"
       },
       "description": "Configure how you receive notifications",
       "inApp": {
@@ -3625,5 +3632,40 @@
       "goal": "Primary Goal",
       "submittedAt": "Submitted: {date}"
     }
+  },
+  "appointmentReview": {
+    "title": "Appointment conditions",
+    "description": "After the first meeting, record whether the appointment from the agency ({agency}) met the conditions of the contract.",
+    "noContract": "No contract is registered for this period, so the standard conditions are used and there is no deadline to report.",
+    "defaultCriteria": "The decision maker attended\nThe target system was confirmed\nWe talked for the agreed time",
+    "meetingOn": "First meeting",
+    "meetingOnHint": "Defaults to the day of the first hearing.",
+    "deadline": "Deadline to ask for a refund or a new appointment",
+    "deadlineNone": "No deadline",
+    "deadlineOpen": "By {date} ({count, plural, one {# business day} other {# business days}} left)",
+    "deadlineToday": "By {date} (today)",
+    "deadlinePassed": "By {date} (passed)",
+    "checks": "Conditions",
+    "met": "Met",
+    "notMet": "Not met",
+    "defectReason": "What was missing",
+    "defectReasonPlaceholder": "E.g. the decision maker did not attend",
+    "claim": "Reported to the agency",
+    "claims": {
+      "none": "Not reported",
+      "return": "Asked for a refund",
+      "retake": "Asked for a new appointment"
+    },
+    "save": "Record",
+    "update": "Update",
+    "saved": "Appointment review recorded",
+    "saveError": "Could not record it. Please try again.",
+    "needMeetingOn": "Enter the day of the first meeting.",
+    "resultMet": "Met the conditions",
+    "resultNotMet": "Did not meet the conditions",
+    "recordedLate": "Recorded after the deadline",
+    "recordedBy": "Recorded by {name} on {date}",
+    "notRecorded": "Not recorded yet.",
+    "readOnly": "You do not have permission to record it."
   }
 }

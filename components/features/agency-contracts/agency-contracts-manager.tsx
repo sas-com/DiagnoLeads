@@ -54,6 +54,8 @@ type FormValues = Record<
   | 'feePerAppointment'
   | 'planAppointments'
   | 'planCostPerAppointment'
+  | 'appointmentCriteria'
+  | 'returnDeadlineBusinessDays'
   | 'note',
   string
 >;
@@ -72,12 +74,20 @@ const toForm = (contract?: Contract): FormValues => ({
   planAppointments: contract?.planAppointments == null ? '' : String(contract.planAppointments),
   planCostPerAppointment:
     contract?.planCostPerAppointment == null ? '' : String(contract.planCostPerAppointment),
+  appointmentCriteria: (contract?.appointmentCriteria ?? []).join('\n'),
+  returnDeadlineBusinessDays:
+    contract?.returnDeadlineBusinessDays == null ? '' : String(contract.returnDeadlineBusinessDays),
   note: contract?.note ?? '',
 });
 
 const amount = (value: string) => (value.trim() === '' ? 0 : Number(value.replace(/,/g, '')));
 const optionalAmount = (value: string) =>
   value.trim() === '' ? null : Number(value.replace(/,/g, ''));
+const lines = (value: string) =>
+  value
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
 
 /** Contracts with sales agencies: fees and plan per term (#148). Owners and admins only. */
 export function AgencyContractsManager({
@@ -142,7 +152,10 @@ export function AgencyContractsManager({
     format.dateTime(new Date(`${value}T00:00:00`), { dateStyle: 'medium' });
 
   const open = (contract?: Contract) => {
-    setForm(toForm(contract));
+    // A new contract starts from the usual conditions, so they can be edited instead of typed
+    setForm(
+      contract ? toForm(contract) : { ...toForm(), appointmentCriteria: t('defaultCriteria') }
+    );
     setEditing(contract ?? 'new');
   };
 
@@ -153,6 +166,8 @@ export function AgencyContractsManager({
       endsOn: form.endsOn || null,
       ...Object.fromEntries(AMOUNT_FIELDS.map((key) => [key, amount(form[key])])),
       ...Object.fromEntries(PLAN_FIELDS.map((key) => [key, optionalAmount(form[key])])),
+      appointmentCriteria: [...new Set(lines(form.appointmentCriteria))],
+      returnDeadlineBusinessDays: optionalAmount(form.returnDeadlineBusinessDays),
       note: form.note,
     });
     if (!parsed.success) {
@@ -283,6 +298,28 @@ export function AgencyContractsManager({
             <p className="text-xs text-muted-foreground sm:col-span-2">{t('costRule')}</p>
             {field('planAppointments', { inputMode: 'numeric', type: 'number', min: 1, step: 1 })}
             {yenField('planCostPerAppointment')}
+            <div className="space-y-1 sm:col-span-2">
+              <Label htmlFor="contract-appointmentCriteria">
+                {t('fields.appointmentCriteria')}
+              </Label>
+              <Textarea
+                id="contract-appointmentCriteria"
+                rows={3}
+                value={form.appointmentCriteria}
+                onChange={(event) => setForm({ ...form, appointmentCriteria: event.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">{t('appointmentCriteriaHint')}</p>
+            </div>
+            <div className="sm:col-span-2">
+              {field('returnDeadlineBusinessDays', {
+                inputMode: 'numeric',
+                type: 'number',
+                min: 0,
+                max: 30,
+                step: 1,
+              })}
+              <p className="mt-1 text-xs text-muted-foreground">{t('returnDeadlineHint')}</p>
+            </div>
             <div className="space-y-1 sm:col-span-2">
               <Label htmlFor="contract-note">{t('fields.note')}</Label>
               <Textarea
