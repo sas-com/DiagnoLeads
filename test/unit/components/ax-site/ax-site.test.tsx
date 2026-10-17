@@ -123,6 +123,22 @@ describe('AX migration landing page', () => {
     );
   });
 
+  it('loads GA4 only with a valid measurement ID', async () => {
+    const gtagScripts = () => document.head.querySelectorAll('script[src*="googletagmanager.com"]');
+    await renderPage();
+    expect(gtagScripts()).toHaveLength(0);
+
+    vi.stubEnv('NEXT_PUBLIC_GA_MEASUREMENT_ID', 'not-an-id');
+    await renderPage();
+    expect(gtagScripts()).toHaveLength(0);
+
+    vi.stubEnv('NEXT_PUBLIC_GA_MEASUREMENT_ID', 'G-TEST1234');
+    await renderPage();
+    expect(gtagScripts()).toHaveLength(1);
+    for (const script of gtagScripts()) script.remove();
+    (window as Window & { gtag?: unknown }).gtag = undefined;
+  });
+
   it('points every diagnosis button at the embedded diagnosis', async () => {
     await renderPage();
     const buttons = screen.getAllByRole('link', { name: /かんたん無料診断をはじめる|無料で診断する/ });
