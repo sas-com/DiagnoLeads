@@ -316,11 +316,11 @@
   },
   "axDiagnosis": {
     "meta": {
-      "title": "AX Migration check",
-      "description": "Choose your system (AS/400, NEC ACOS, Access and others) and answer multiple-choice questions to see the migration difficulty, the urgency and the challenge to tackle first. Free self-check."
+      "title": "AX Migration Free Web Check",
+      "description": "Choose your system (AS/400, NEC ACOS, Access and others) and answer multiple-choice questions to see the migration difficulty, the urgency and the challenge to tackle first. A free web check."
     },
     "intro": {
-      "eyebrow": "Free self-check",
+      "eyebrow": "Free web check",
       "headline": "Can your current core system support management decisions in the AI era?",
       "lead": "See the risks of keeping core systems and business tools on AS/400, NEC ACOS or Access, and the migration outlook, in about 3 minutes. We ask for your contact details at the end and show the result right away.",
       "points": {
@@ -473,7 +473,7 @@
         "access_external": "Replace the links to data outside Access (core system, SQL Server) with web system interfaces",
         "access_devices": "Check how barcodes, label printers and other devices are used and decide their web replacements"
       },
-      "nowHere": "You are here: the online self-check is complete. Next is a quick assessment by our staff.",
+      "nowHere": "You are here: the free web check is complete. Next is a quick assessment (asset inventory) by our staff.",
       "nextStepLabel": "NEXT STEP",
       "cta": {
         "hearing": {
@@ -543,7 +543,7 @@
       },
       "steps": {
         "simple": {
-          "title": "Simple assessment",
+          "title": "Quick assessment",
           "body": "An inventory of your assets gives a detailed estimate of migration difficulty."
         },
         "survey": {
@@ -565,7 +565,7 @@
       "diagnosedOn": "Diagnosed on {date}",
       "print": "Print or save as PDF",
       "printHint": "In the print dialog, choose “Save as PDF” as the destination to save a PDF file.",
-      "printTitle": "AX migration diagnosis result_{platform}_{date}",
+      "printTitle": "AX migration free web check result_{platform}_{date}",
       "printPage": "Diagnosis page: {url}",
       "difficulty": "Migration difficulty (estimate)",
       "urgency": "Urgency to modernize",
@@ -2515,7 +2515,7 @@
   "axSite": {
     "meta": {
       "title": "AX Migration | From AS/400, NEC ACOS and Access to web systems | Software Agency System Co., Ltd.",
-      "description": "Can you make management decisions for the AI era with your current core system? We migrate core systems and business tools on AS/400, NEC ACOS, Microsoft Access and more to modern web systems while keeping their current specifications, from visualizing the specifications with AI to AX after the migration. Start with the free migration check.",
+      "description": "Can you make management decisions for the AI era with your current core system? We migrate core systems and business tools on AS/400, NEC ACOS, Microsoft Access and more to modern web systems while keeping their current specifications, from visualizing the specifications with AI to AX after the migration. Start with the free web check.",
       "siteName": "Software Agency System Co., Ltd."
     },
     "brand": {
@@ -2523,7 +2523,7 @@
       "operator": "Software Agency System Co., Ltd."
     },
     "skipToContent": "Skip to content",
-    "floatingCta": "Start the free check",
+    "floatingCta": "Start the free web check",
     "header": {
       "home": "AX Migration home",
       "navLabel": "On this page",
@@ -2533,15 +2533,15 @@
         "targets": "Systems",
         "faq": "FAQ"
       },
-      "cta": "Free check"
+      "cta": "Free web check"
     },
     "hero": {
-      "eyebrow": "AX MIGRATION",
+      "eyebrow": "For mid-sized manufacturers and distributors",
       "title": "Can you make management decisions for the AI era with your current core system?",
       "tagline": "From a legacy core system to a flexible, extensible IT platform.",
       "lead": "We move core systems and business tools running on AS/400, NEC ACOS or Microsoft Access to a modern web system while keeping today's specifications, and support you on to AI agents and data use (AX).",
       "ctaCaption": "Multiple choice, about 3 minutes",
-      "cta": "Start the free check",
+      "cta": "Start the free web check",
       "consult": "Book a free consultation",
       "preview": {
         "title": "Sample result",
@@ -2565,11 +2565,13 @@
         "eos": "Hardware or software support is about to end",
         "access": "Department Access tools keep multiplying and only their authors can fix them",
         "start": "We want to modernize but do not know where to start"
-      }
+      },
+      "bridge": "If any of these apply, start by checking how urgent a renewal is with the free web check (about 3 minutes).",
+      "bridgeCta": "Start the free web check"
     },
     "challenges": {
       "title": "People, things, money and information: all of them are tied to the legacy core system",
-      "lead": "Core data stored on AS/400 and similar systems often has neither the timeliness nor the standard formats that AI needs.",
+      "lead": "Behind these concerns lie four challenges: people, things, money and information.",
       "items": {
         "people": {
           "label": "People",
@@ -2583,7 +2585,7 @@
         "agility": {
           "label": "Agility",
           "title": "A system that cannot keep up with the market",
-          "body": "Every time you try to respond to new customers or market changes, the limits of the existing system get in the way of new products.",
+          "body": "Every time you try to respond to new customers or market changes, the limits of the existing system hold back new products and services.",
           "solutions": {
             "first": "Add features in short cycles",
             "second": "Respond quickly to market changes"
@@ -2601,7 +2603,7 @@
         "data": {
           "label": "Data",
           "title": "Data you cannot use for decisions",
-          "body": "Data locked in proprietary formats keeps the figures behind management decisions from being available in real time.",
+          "body": "Core data stored on AS/400 and similar systems is often locked in proprietary formats, so the figures behind management decisions are not available in real time.",
           "solutions": {
             "first": "Real-time data preparation with AI agents",
             "second": "Get the information needed for proactive decisions"
@@ -2616,9 +2618,14 @@
       "title": "Migration is not the goal but the starting point of AX",
       "lead": "A phased approach (survey, migration, extension) keeps risk and investment low. After the migration, AI agents analyze the system and its data to streamline operations, and further features build a foundation that adapts quickly to change and drives growth.",
       "items": {
-        "simple": {
+        "web": {
           "label": "First",
-          "title": "Simple assessment",
+          "title": "Free web check (about 3 minutes)",
+          "body": "Answer multiple-choice questions to see the migration difficulty, the urgency of a renewal and the challenge to tackle first right away."
+        },
+        "simple": {
+          "label": "Next",
+          "title": "Quick assessment (asset inventory by our staff)",
           "body": "An inventory of your assets (number of programs, languages, integrations) gives an estimate of the migration difficulty."
         },
         "survey": {
@@ -2649,7 +2656,7 @@
           }
         }
       },
-      "note": "The results of each step are the basis of our next proposal."
+      "note": "At the end of Phase 1, we agree on the migration method and schedule with you before moving on."
     },
     "targets": {
       "title": "Systems we migrate",
@@ -2676,7 +2683,7 @@
     },
     "diagnosis": {
       "eyebrow": "FREE CHECK",
-      "title": "Start with a free migration check",
+      "title": "Start with the free web check",
       "lead": "Choose the system you want to migrate and answer multiple-choice questions. You will see the migration difficulty, the urgency and the challenge to tackle first. At the end, enter your company and contact details to see the result right away (you can also print it or save it as a PDF). No pushy sales."
     },
     "reasons": {
@@ -2714,8 +2721,8 @@
       "title": "FAQ",
       "items": {
         "cost": {
-          "q": "Is the check free?",
-          "a": "Yes. The online self-check is free, and so is a consultation about the result."
+          "q": "Does the free web check cost anything?",
+          "a": "No. A consultation about the result is free as well."
         },
         "who": {
           "q": "Can I answer if I am not in IT?",
@@ -2723,11 +2730,19 @@
         },
         "targets": {
           "q": "Which systems are covered?",
-          "a": "AS/400 (IBM i), NEC ACOS and Microsoft Access, as well as Visual Basic systems, low-code products such as WebPerformer, and other office computers and mainframes."
+          "a": "AS/400 (IBM i), NEC ACOS and Microsoft Access. Please also ask about Visual Basic systems, low-code products such as WebPerformer, and other office computers and mainframes."
+        },
+        "vendorSource": {
+          "q": "Our maintenance vendor holds the source code. Can we still consult you?",
+          "a": "Yes. First, we check with you whether the source code held by your maintenance vendor or supplier can be provided for the survey (contract and cost)."
         },
         "result": {
           "q": "How can I use the result?",
           "a": "You see the migration difficulty, the urgency and the priority challenge right away. Use them in your internal discussion. The exact approach, schedule and cost are set in the current-system survey."
+        },
+        "ax": {
+          "q": "What does \"AX\" mean?",
+          "a": "AI transformation: business transformation that makes use of AI. After the migration, AI agents are added to the new web system to analyze the system and its data, streamline operations and extend features step by step."
         },
         "data": {
           "q": "Are the specifications and source code we provide used to train AI?",
@@ -2743,7 +2758,7 @@
       "title": "Make your next step a step toward AX.",
       "lead": "Start by telling us about your current systems and challenges. Together, we will propose a renewal that leads to smiles.",
       "caption": "Multiple choice, about 3 minutes",
-      "cta": "Start the free check",
+      "cta": "Start the free web check",
       "consult": "Book a free consultation",
       "contact": {
         "title": "Contact us by phone or email",

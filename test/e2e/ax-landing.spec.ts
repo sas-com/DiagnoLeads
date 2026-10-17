@@ -15,7 +15,7 @@ test.describe('AX migration landing page', () => {
       'ヒト・モノ・カネ・情報。すべてが、レガシーな基幹システムに縛られています',
       'システム移行はゴールではなく、AX化の出発点',
       '対象となるシステム',
-      'まずは「移行診断」を無料で',
+      'まずは「無料Web診断」から',
       '選ばれる理由',
       'よくある質問',
     ]) {
@@ -27,7 +27,7 @@ test.describe('AX migration landing page', () => {
 
   test('takes the hero button to the embedded diagnosis', async ({ page }) => {
     await page.goto('/ja/ax-migration');
-    await page.getByRole('link', { name: /かんたん無料診断をはじめる/ }).first().click();
+    await page.getByRole('link', { name: /無料Web診断をはじめる/ }).first().click();
     await expect(page).toHaveURL(/#diagnosis$/);
     await expect(page.locator('#diagnosis').getByTestId('platform-as400')).toBeInViewport();
   });
@@ -36,7 +36,7 @@ test.describe('AX migration landing page', () => {
     test.skip(!canSubmit, 'AX_DIAGNOSIS_ORGANIZATION_ID is not set');
     await page.goto('/ja/ax-migration?utm_source=lp&utm_medium=email');
     // Through the hero button: the browser adds a #diagnosis entry the router does not know
-    await page.getByRole('link', { name: /かんたん無料診断をはじめる/ }).first().click();
+    await page.getByRole('link', { name: /無料Web診断をはじめる/ }).first().click();
     await answerAs400(page);
     await fillContact(page, `e2e-ax-lp-${Date.now()}@example.com`);
     await submit(page);

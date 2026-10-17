@@ -27,6 +27,8 @@ export function axConsultationUrl(): string | undefined {
 
 /** Last call to action and footer: the phone CTA bar stays hidden while they are on screen */
 export const AX_FINAL_SECTION_ID = 'ax-final';
+/** Diagnosis button below the concerns: the phone CTA bar stays hidden next to it as well */
+export const AX_PROBLEMS_CTA_ID = 'ax-problems-cta';
 export const AX_FOOTER_ID = 'ax-footer';
 
 /** Section anchors on the landing page */
