@@ -1,14 +1,23 @@
 'use client';
 
-import { AppToaster } from '@/components/common/AppToaster';
 import { OrganizationProvider } from '@/lib/context/organization-context';
 import { trpc } from '@/lib/trpc/client';
 import { retryUnlessDenied } from '@/lib/trpc/retry';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { httpBatchLink } from '@trpc/client';
+import dynamic from 'next/dynamic';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import superjson from 'superjson';
+
+/**
+ * Loaded only where it is rendered: sonner adds a <style> tag (blocked by the production CSP)
+ * as soon as its module runs, so the AX migration site must not load it at all (#207)
+ */
+const AppToaster = dynamic(
+  () => import('@/components/common/AppToaster').then((module) => module.AppToaster),
+  { ssr: false }
+);
 
 /** The AX migration site (landing page and diagnosis), in either language */
 const isAxSitePath = (pathname: string | null) =>
