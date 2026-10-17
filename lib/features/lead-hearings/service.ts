@@ -13,6 +13,8 @@ import { AX_MIGRATION_DIAGNOSTIC_KEY } from '@/lib/features/diagnostics/ax-migra
 import { syncHearingNextAction } from '@/lib/features/lead-follow-up/service';
 import { TRPCError } from '@trpc/server';
 import { and, count, desc, eq, like, lt, or, sql } from 'drizzle-orm';
+import { aiSourceAnalysisOf, shouldNotifyRestriction } from './ai-policy';
+import { notifyAiRestriction } from './ai-policy-notify';
 import { HEARING_CATALOG_VERSION, LEAD_HEARINGS_MAX_PER_LEAD } from './catalog';
 import { computeMissingItems } from './missing';
 import { buildBuilderHearingPrefill, buildHearingPrefill, isVerifiedSubmission } from './prefill';
@@ -105,6 +107,8 @@ export async function listLeadHearings(
       fromDiagnosis: row.fromDiagnosis,
       missingCount: missing.missing.length,
       unconfirmedCount: missing.unconfirmed.length,
+      /** Whether AI may analyse the source code (#160), null when not recorded */
+      aiSourceAnalysis: aiSourceAnalysisOf(fields),
     };
   });
 }
@@ -398,7 +402,14 @@ export async function updateLeadHearing(
 ): Promise<LeadHearingView> {
   // Always move updatedAt forward, even within the same millisecond
   const updatedAt = new Date(Math.max(now.getTime(), input.expectedUpdatedAt.getTime() + 1));
+  let before: HearingFields = {};
   const row = await db.transaction(async (tx) => {
+    // The answer on AI analysis before this save, to tell the assignee only of a change (#160)
+    const [previous] = await tx
+      .select({ fields: leadHearings.fields })
+      .from(leadHearings)
+      .where(hearingScope(input.organizationId, input.id));
+    before = previous ? parseStoredHearingFields(previous.fields).fields : {};
     const [saved] = await tx
       .update(leadHearings)
       .set({
@@ -428,7 +439,20 @@ export async function updateLeadHearing(
     }
     return saved;
   });
-  if (row) return toHearingView(row);
+  if (row) {
+    const view = toHearingView(row);
+    const after = aiSourceAnalysisOf(view.fields);
+    if (after && shouldNotifyRestriction(aiSourceAnalysisOf(before), after)) {
+      await notifyAiRestriction(db, {
+        organizationId: input.organizationId,
+        leadId: row.leadId,
+        hearingId: row.id,
+        userId: input.userId,
+        policy: after,
+      });
+    }
+    return view;
+  }
 
   const [existing] = await db
     .select({ id: leadHearings.id })

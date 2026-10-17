@@ -1,12 +1,14 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
+import { Callout } from '@/components/ui/callout';
 import { Card } from '@/components/ui/card';
+import { isRestricted } from '@/lib/features/lead-hearings/ai-policy';
 import { toDiagnosticLocale } from '@/lib/features/lead-hearings/form';
 import { hearingSummaryTodos } from '@/lib/features/lead-hearings/summary';
 import { trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
-import { ArrowRight, ClipboardList, FileText, Loader2 } from 'lucide-react';
+import { AlertTriangle, ArrowRight, ClipboardList, FileText, Loader2 } from 'lucide-react';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useMemo } from 'react';
@@ -82,6 +84,23 @@ export function LeadHearingOverview({
           <Badge color="amber">{tHearings('card.missing', { count: latest.missingCount })}</Badge>
         )}
       </div>
+
+      {latest.aiSourceAnalysis && isRestricted(latest.aiSourceAnalysis) && (
+        <Callout
+          title={t('aiRestricted', {
+            value: tHearings(`options.aiSourceAnalysis.${latest.aiSourceAnalysis.value}`),
+          })}
+          icon={AlertTriangle}
+          color="yellow"
+        >
+          <p>{t('aiRestrictedHelp')}</p>
+          {latest.aiSourceAnalysis.conditions && (
+            <p className="mt-1 break-words">
+              {t('aiConditions', { conditions: latest.aiSourceAnalysis.conditions })}
+            </p>
+          )}
+        </Callout>
+      )}
 
       <div>
         <h3 className="mb-1 text-xs text-muted-foreground">{t('nextSteps')}</h3>

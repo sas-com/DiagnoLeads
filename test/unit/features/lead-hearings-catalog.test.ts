@@ -39,7 +39,7 @@ function optionSetsOf(field: (typeof HEARING_FIELDS)[number]): (readonly Hearing
 describe('hearing catalog', () => {
   it('has unique keys, each in a known section, covering every section', () => {
     expect(new Set(HEARING_FIELD_KEYS).size).toBe(HEARING_FIELDS.length);
-    expect(HEARING_FIELDS).toHaveLength(29);
+    expect(HEARING_FIELDS).toHaveLength(31);
     for (const field of HEARING_FIELDS) {
       expect(HEARING_SECTIONS).toContain(field.section);
       expect(field.labelKey).toBe(`leadHearings.fields.${field.key}`);

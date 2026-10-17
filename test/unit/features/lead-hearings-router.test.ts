@@ -321,20 +321,21 @@ describe('leadHearings.create', () => {
 
 describe('leadHearings.update', () => {
   it('saves when the row has not changed since it was read', async () => {
-    dbState.results = [[hearingRow({ updatedAt: new Date() })]];
+    // The fields before the save (#160), then the saved row
+    dbState.results = [[{ fields: {} }], [hearingRow({ updatedAt: new Date() })]];
     const fields = { dealRating: { value: 'a', status: 'done', source: null } };
 
     await callerAs('member').leadHearings.update(updateInput(fields));
 
     expect(dbState.updated[0]).toMatchObject({ fields, updatedBy: USER_ID });
-    const { sql, params } = toQuery(dbState.wheres[0]);
+    const { sql, params } = toQuery(dbState.wheres[1]);
     expect(sql).toContain('"organization_id"');
     expect(sql).toContain('"updated_at"');
     expect(params).toContain(ORG_ID);
   });
 
   it('fails with CONFLICT when someone saved after the client read it', async () => {
-    dbState.results = [[], [{ id: HEARING_ID }]];
+    dbState.results = [[{ fields: {} }], [], [{ id: HEARING_ID }]];
     await expect(callerAs('admin').leadHearings.update(updateInput())).rejects.toMatchObject({
       code: 'CONFLICT',
     });

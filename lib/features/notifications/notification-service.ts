@@ -252,6 +252,8 @@ export function shouldSendInAppNotification(
     // The deadline to report a failed appointment (#149) is a due date of the same setting
     case 'appointment_review_due':
       return prefs.inAppNextActionDue;
+    // A restriction on AI source code analysis (#160) changes the plan: always told, like system
+    case 'hearing_ai_restricted':
     case 'system':
       return true;
     default:

@@ -65,7 +65,14 @@ export const HEARING_SUMMARY_LAYOUT: Record<HearingSummarySectionId, readonly He
     'pastConsideration',
     'pastBlockers',
   ],
-  requirements: ['decisionMakerPresent', 'directionTiming', 'budgetStatus', 'competitorTypes'],
+  requirements: [
+    'decisionMakerPresent',
+    'directionTiming',
+    'budgetStatus',
+    'competitorTypes',
+    'aiSourceAnalysis',
+    'aiSourceAnalysisConditions',
+  ],
   result: ['dealRating', 'nextMeetingDate', 'nextMeetingAttendees'],
 };
 
