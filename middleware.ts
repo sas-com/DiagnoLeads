@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { gaMeasurementId } from './lib/analytics/ga';
 import { isCmsApiPath, isCmsEnabled } from './lib/cms/enabled';
 import { intlMiddleware, shouldSkipI18nMiddleware, stripLocalePrefix } from './lib/i18n/middleware';
 import { signInRedirect } from './lib/middleware/auth-redirect';
@@ -21,7 +22,9 @@ function getSecurityHeaders(request: NextRequest) {
 
   return {
     // Content Security Policy
-    'Content-Security-Policy': contentSecurityPolicy(nonce, isDevelopment),
+    'Content-Security-Policy': contentSecurityPolicy(nonce, isDevelopment, {
+      analytics: gaMeasurementId() !== undefined,
+    }),
 
     // セキュリティヘッダー
     'X-DNS-Prefetch-Control': 'on',
