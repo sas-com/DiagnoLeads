@@ -23,6 +23,7 @@ export async function AxSiteFooter({ locale }: { locale: string }) {
             {/* The operator line below names the company already */}
             <AxLogo name={tb('name')} tone="dark" />
             <p className="text-sm font-bold">{t('operator')}</p>
+            <address className="text-xs not-italic text-white/90">{t('address')}</address>
           </div>
           <ul className="flex flex-wrap gap-x-6 gap-y-3 text-sm font-bold">
             {links.map(({ href, label }) => (

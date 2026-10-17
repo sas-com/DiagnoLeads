@@ -2507,7 +2507,7 @@
   "axSite": {
     "meta": {
       "title": "AX Migration | From AS/400, NEC ACOS and Access to web systems | Software Agency System Co., Ltd.",
-      "description": "Move core systems and business tools running on AS/400, NEC ACOS or Microsoft Access to a modern web system while keeping today's specifications, from AI-assisted specification analysis to AI transformation after the migration. Start with a free migration check.",
+      "description": "Can you make management decisions for the AI era with your current core system? We migrate core systems and business tools on AS/400, NEC ACOS, Microsoft Access and more to modern web systems while keeping their current specifications, from visualizing the specifications with AI to AX after the migration. Start with the free migration check.",
       "siteName": "Software Agency System Co., Ltd."
     },
     "brand": {
@@ -2529,8 +2529,8 @@
     },
     "hero": {
       "eyebrow": "AX MIGRATION",
-      "title": "Turn the core system you have relied on for years into a web system ready for AI",
-      "tagline": "\"Start small, and go beyond the migration to AI transformation\"",
+      "title": "Can you make management decisions for the AI era with your current core system?",
+      "tagline": "From a legacy core system to a flexible, extensible IT platform.",
       "lead": "We move core systems and business tools running on AS/400, NEC ACOS or Microsoft Access to a modern web system while keeping today's specifications, and support you on to AI agents and data use (AX).",
       "ctaCaption": "Multiple choice, about 3 minutes",
       "cta": "Start the free check",
@@ -2559,29 +2559,89 @@
         "start": "We want to modernize but do not know where to start"
       }
     },
-    "steps": {
-      "title": "Solve it with a step-by-step migration",
-      "lead": "No big-bang replacement. We start with a quick assessment and confirm the results at every step.",
-      "stepLabel": "STEP {number}",
+    "challenges": {
+      "title": "People, things, money and information: all of them are tied to the legacy core system",
+      "lead": "Core data stored on AS/400 and similar systems often has neither the timeliness nor the standard formats that AI needs.",
       "items": {
-        "simple": {
-          "title": "Quick assessment",
-          "body": "An inventory of your assets (programs, languages, interfaces) gives an estimate of the migration difficulty."
+        "people": {
+          "label": "People",
+          "title": "A core system that depends on a few people",
+          "body": "Years of person-dependent changes have turned the specifications into a black box, and fewer engineers can work on it every year, raising the risk to business continuity.",
+          "solutions": {
+            "first": "A user-friendly web system the next generation can work with",
+            "second": "Remove the risk to business continuity"
+          }
         },
-        "survey": {
-          "title": "Specification analysis",
-          "body": "AI analyzes the current source code, forms and data structures and makes the specifications visible."
+        "agility": {
+          "label": "Things",
+          "title": "A system that cannot keep up with the market",
+          "body": "Every time you try to respond to new customers or market changes, the limits of the existing system get in the way of new products.",
+          "solutions": {
+            "first": "Add features in short cycles",
+            "second": "Respond quickly to market changes"
+          }
         },
-        "migration": {
-          "title": "Migration",
-          "body": "We move to a modern web system while keeping the current specifications."
+        "cost": {
+          "label": "Money",
+          "title": "\"Life-extension costs\" that limit growth",
+          "body": "The more maintenance and additions to the current system cost, the less budget is left for new challenges that drive the business forward.",
+          "solutions": {
+            "first": "Keep the initial investment low with a phased approach",
+            "second": "Turn the maintenance budget into growth investment"
+          }
         },
-        "ax": {
-          "title": "AI transformation",
-          "body": "AI agents extend the system and put your data to work."
+        "data": {
+          "label": "Information",
+          "title": "Data you cannot use for decisions",
+          "body": "Data locked in proprietary formats keeps the figures behind management decisions from being available in real time.",
+          "solutions": {
+            "first": "Real-time data preparation with AI agents",
+            "second": "Get the information needed for proactive decisions"
+          }
         }
       },
-      "note": "The results of each step are the basis of the next proposal."
+      "solutionsLabel": "What AX migration delivers",
+      "band": "High growth with AX migration",
+      "closing": "From a system that just runs operations to one that streamlines <em>decisions for high growth</em>"
+    },
+    "steps": {
+      "title": "Migration is not the goal but the starting point of AX",
+      "lead": "A phased approach (survey, migration, extension) keeps risk and investment low. After the migration, AI agents analyze the system and its data to streamline operations, and further features build a foundation that adapts quickly to change and drives growth.",
+      "items": {
+        "simple": {
+          "label": "First",
+          "title": "Quick assessment",
+          "body": "An inventory of your assets (number of programs, languages, integrations) gives an estimate of the migration difficulty."
+        },
+        "survey": {
+          "label": "Phase 1",
+          "title": "Current specification survey",
+          "points": {
+            "first": "Analyze the current source code, forms and data structures to visualize the specifications",
+            "second": "Sort out integrations with other systems, unused features and duplicate processing",
+            "third": "Agree on the migration method and schedule with you, then move to Phase 2"
+          }
+        },
+        "migration": {
+          "label": "Phase 2",
+          "title": "Migration",
+          "points": {
+            "first": "Convert existing assets to the new platform while keeping the current specifications",
+            "second": "Run the same data before and after the migration and compare screens, forms and results",
+            "third": "Move safely and quickly to a modern web system that fits your needs"
+          }
+        },
+        "ax": {
+          "label": "Phase 3",
+          "title": "AX",
+          "points": {
+            "first": "Analyze current issues and data, and prioritize the features to extend with AI agents",
+            "second": "Develop the highest-priority features first and release them step by step",
+            "third": "Realize the next-generation business transformation you aim for"
+          }
+        }
+      },
+      "note": "The results of each step are the basis of our next proposal."
     },
     "targets": {
       "title": "Systems we migrate",
@@ -2612,25 +2672,31 @@
       "lead": "Choose the system you want to migrate and answer multiple-choice questions. You will see the migration difficulty, the urgency and the challenge to tackle first right away."
     },
     "reasons": {
-      "title": "What makes AX Migration different",
+      "title": "Why customers choose us",
       "items": {
-        "visualize": {
-          "title": "AI makes the specifications visible",
-          "body": "AI analyzes source code, forms and data structures and uncovers specifications nobody fully understands any more."
+        "speed": {
+          "title": "Short delivery",
+          "points": {
+            "first": "AI analysis* of the current system visualizes the specifications quickly and accurately",
+            "second": "AI-assisted development greatly shortens the migration to a modern web system"
+          }
         },
-        "keep": {
-          "title": "Migration that keeps the specifications",
-          "body": "We move to a modern web system while keeping today's specifications so that your business keeps running."
-        },
-        "small": {
-          "title": "Start small",
-          "body": "Begin with the quick assessment and the specification analysis, and proceed step by step."
+        "quality": {
+          "title": "High quality",
+          "points": {
+            "first": "A safe migration that keeps the current specifications and makes use of existing assets",
+            "second": "Prevents misreading the business logic and avoids confusion on site"
+          }
         },
         "ax": {
-          "title": "Beyond the migration",
-          "body": "We continue on to AI agents and the use of your data."
+          "title": "AX",
+          "points": {
+            "first": "Realize the next-generation business transformation you aim for",
+            "second": "AI agents make a wide range of management data usable"
+          }
         }
       },
+      "note": "* Specifications, source code and other materials you entrust to us are processed in a secure environment where they are not used as training data.",
       "certified": {
         "title": "A DX-certified company",
         "body": "Software Agency System Co., Ltd. is certified under the DX Certification program of the Ministry of Economy, Trade and Industry."
@@ -2655,6 +2721,10 @@
           "q": "How can I use the result?",
           "a": "You see the migration difficulty, the urgency and the priority challenge right away. Use them in your internal discussion. The exact approach, schedule and cost are set in the specification analysis."
         },
+        "data": {
+          "q": "Are the specifications and source code we provide used to train AI?",
+          "a": "No. Specifications, source code and other materials you entrust to us are processed in a secure environment where they are not used as training data."
+        },
         "privacy": {
           "q": "How is my information used?",
           "a": "Only to follow up on your result and to contact you about AX Migration."
@@ -2662,13 +2732,22 @@
       }
     },
     "finalCta": {
-      "title": "Start by finding out how easy your system is to migrate",
+      "title": "Make your next step a step toward AX.",
+      "lead": "Start by telling us about your current systems and challenges. Together, we will propose a renewal that leads to smiles.",
       "caption": "Multiple choice, about 3 minutes",
       "cta": "Start the free check",
-      "consult": "Book a free consultation"
+      "consult": "Book a free consultation",
+      "contact": {
+        "title": "Contact us by phone or email",
+        "department": "Department: DX Services Division",
+        "email": "Email",
+        "phone": "Phone",
+        "hours": "Hours: weekdays 9:30-18:00 (JST)"
+      }
     },
     "footer": {
       "operator": "Provided by Software Agency System Co., Ltd., DX Services Division",
+      "address": "4F Leela Hijirizaka Building, 3-4-10 Mita, Minato-ku, Tokyo 108-0073, Japan",
       "company": "Company",
       "related": "DX service \"Maru Maru DX\"",
       "privacy": "Privacy policy",
