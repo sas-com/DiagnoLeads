@@ -2230,7 +2230,7 @@
         "emailNote": "Consultation request emails go to the sales contact address (there is no personal setting)",
         "currentOrganization": "this organization",
         "assignedToMeHelp": "When a lead is assigned to you (turning this off also stops the email)",
-        "nextActionDueHelp": "The day before a next action or takeaway you are responsible for is due, and when it is overdue (turning this off also stops the email)"
+        "nextActionDueHelp": "The day before a next action or takeaway you are responsible for is due, when it is overdue, and before the deadline to record whether an agency appointment met the conditions (turning this off also stops the email)"
       },
       "description": "Configure how you receive notifications",
       "inApp": {
