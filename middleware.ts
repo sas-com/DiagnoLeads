@@ -24,7 +24,10 @@ function getSecurityHeaders(request: NextRequest) {
     // Content Security Policy
     'Content-Security-Policy': contentSecurityPolicy(nonce, isDevelopment, {
       analytics: gaMeasurementId() !== undefined,
-      upgradeInsecureRequests: !isLocalHost(request.nextUrl.hostname),
+      // Off only for plain http to the machine itself (E2E with `next start`); Vercel is https
+      upgradeInsecureRequests: !(
+        request.nextUrl.protocol === 'http:' && isLocalHost(request.nextUrl.hostname)
+      ),
     }),
 
     // セキュリティヘッダー
