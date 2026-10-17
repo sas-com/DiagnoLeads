@@ -1,3 +1,4 @@
+import { ROOT_CLIENT_MESSAGES, pickMessages } from '@/lib/i18n/client-messages';
 import { locales } from '@/lib/i18n/config';
 import { NOINDEX } from '@/lib/seo/indexing';
 import type { Metadata, Viewport } from 'next';
@@ -90,7 +91,12 @@ export default async function LocaleLayout({
   return (
     <html lang={locale} suppressHydrationWarning>
       <body>
-        <NextIntlClientProvider locale={locale} messages={messages} timeZone="Asia/Tokyo">
+        {/* Only the messages of the error pages here; route group layouts provide the rest */}
+        <NextIntlClientProvider
+          locale={locale}
+          messages={pickMessages(messages, ROOT_CLIENT_MESSAGES)}
+          timeZone="Asia/Tokyo"
+        >
           <Providers>{children}</Providers>
         </NextIntlClientProvider>
       </body>

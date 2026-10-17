@@ -16,7 +16,7 @@ vi.mock('next/font/google', () => ({
   Lato: () => ({ variable: 'font-lato' }),
 }));
 
-const { default: AxMigrationPage } = await import('@/app/[locale]/(public)/ax-migration/page');
+const { default: AxMigrationPage } = await import('@/app/[locale]/(ax)/ax-migration/page');
 const { AxSiteHeader } = await import('@/components/features/ax-site/ax-site-header');
 const { AxSiteFooter } = await import('@/components/features/ax-site/ax-site-footer');
 const { AxHero } = await import('@/components/features/ax-site/landing-sections');

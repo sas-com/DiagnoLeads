@@ -1,40 +1,16 @@
-'use client';
+import DashboardShell from '@/components/layout/DashboardShell';
+import { NextIntlClientProvider } from 'next-intl';
 
-import { AdminSessionGuard } from '@/components/auth/AdminSessionGuard';
-import AppHeader from '@/components/layout/AppHeader';
-import AppSidebar from '@/components/layout/AppSidebar';
-import Backdrop from '@/components/layout/Backdrop';
-import { SidebarProvider } from '@/context/SidebarContext';
-import { useSidebar } from '@/context/SidebarContext';
-import { ThemeProvider } from '@/context/ThemeContext';
-
-function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
-  const { isExpanded, isHovered, isMobileOpen } = useSidebar();
-
-  return (
-    <div className="min-h-screen xl:flex bg-gray-50 dark:bg-gray-900">
-      <AppSidebar />
-      <Backdrop />
-      <div
-        className={`min-w-0 flex-1 transition-all duration-300 ease-in-out ${
-          isExpanded || isHovered ? 'lg:ml-[290px]' : 'lg:ml-[90px]'
-        }`}
-      >
-        <AppHeader />
-        <main className="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">{children}</main>
-      </div>
-    </div>
-  );
-}
-
+/**
+ * Dashboard Layout
+ *
+ * The admin screens' client components use messages from every namespace, so they get the whole
+ * catalog (inherited from i18n/request); the locale layout passes only a small part.
+ */
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <ThemeProvider>
-      <SidebarProvider>
-        <AdminSessionGuard>
-          <DashboardLayoutContent>{children}</DashboardLayoutContent>
-        </AdminSessionGuard>
-      </SidebarProvider>
-    </ThemeProvider>
+    <NextIntlClientProvider>
+      <DashboardShell>{children}</DashboardShell>
+    </NextIntlClientProvider>
   );
 }

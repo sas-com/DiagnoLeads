@@ -25,6 +25,10 @@ export function axConsultationUrl(): string | undefined {
   return process.env.NEXT_PUBLIC_AX_CONSULTATION_URL || undefined;
 }
 
+/** Last call to action and footer: the phone CTA bar stays hidden while they are on screen */
+export const AX_FINAL_SECTION_ID = 'ax-final';
+export const AX_FOOTER_ID = 'ax-footer';
+
 /** Section anchors on the landing page */
 export const AX_SECTIONS = {
   problems: 'problems',
