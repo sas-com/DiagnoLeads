@@ -879,6 +879,43 @@ export const meetingRequests = pgTable(
 export type MeetingRequest = typeof meetingRequests.$inferSelect;
 
 /**
+ * Lead Prep Cards (Refs #156)
+ * What sales prepare before the first meeting, one per lead: the core system they guess and why,
+ * recent news of the company, a hypothesis for each challenge and the first three questions.
+ * Works for leads without a diagnosis too (e.g. from a sales agency).
+ */
+export const leadPrepCards = pgTable(
+  'lead_prep_cards',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    leadId: uuid('lead_id')
+      .notNull()
+      .references(() => leads.id, { onDelete: 'cascade' }),
+    estimatedSystem: text('estimated_system'),
+    /** Why: e.g. the language in their job ads, the diagnosis answer */
+    estimatedSystemBasis: text('estimated_system_basis'),
+    recentNews: text('recent_news'),
+    /** { people?, cost?, agility?, data? }: a hypothesis per challenge */
+    hypotheses: jsonb('hypotheses').$type<Partial<Record<string, string>>>().default({}).notNull(),
+    /** Up to three questions to ask first */
+    firstQuestions: jsonb('first_questions').$type<string[]>().default([]).notNull(),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('lead_prep_cards_lead_unique').on(table.leadId),
+    index('lead_prep_cards_organization_idx').on(table.organizationId),
+  ]
+);
+
+export type LeadPrepCard = typeof leadPrepCards.$inferSelect;
+
+/**
  * Lead Contact Logs (Refs #136)
  * One row per contact a staff member recorded on a lead ("called", "emailed", "could not reach").
  * The earliest row of a lead is its first contact; the dashboard's waiting consultation

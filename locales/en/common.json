@@ -3767,5 +3767,39 @@
     "readOnly": "You do not have permission to confirm it.",
     "nextMeetingNote": "The confirmed date becomes the lead's next meeting and a next action.",
     "cancel": "Cancel"
+  },
+  "leadPrep": {
+    "title": "Prep card",
+    "ready": "Ready",
+    "start": "Start preparing",
+    "edit": "Edit",
+    "save": "Save",
+    "cancel": "Cancel",
+    "empty": "Not prepared yet. Before the meeting, write down the likely system, hypotheses and the first three questions.",
+    "noQuestions": "Not written",
+    "fields": {
+      "estimatedSystem": "Likely core system",
+      "estimatedSystemBasis": "Why we think so",
+      "recentNews": "Recent news",
+      "hypotheses": "Hypothesis per challenge",
+      "firstQuestions": "First questions (three)"
+    },
+    "basisPlaceholder": "E.g. the language in their job ads, a trade show booth",
+    "newsPlaceholder": "E.g. a new plant, hiring for the core system, the mid-term plan",
+    "questionLabel": "Question {number}",
+    "basisInline": " (why: {basis})",
+    "draft": "Draft it",
+    "draftHint": "Fills only the empty fields from the Web diagnosis and the sales playbook. Nothing is saved until you save.",
+    "drafted": "Drafted into the empty fields. Check and save.",
+    "saved": "Prep card saved",
+    "saveError": "Could not save it. Please try again.",
+    "updatedBy": "Updated by {name} on {date}",
+    "drafts": {
+      "basisDiagnosis": "The Web diagnosis answer (migration source)",
+      "basisLead": "The lead's migration source field",
+      "primary": "The main challenge. Find out where it hurts most (work, people, cost)",
+      "primaryWithReasons": "The main challenge. Reasons from the diagnosis: {reasons}",
+      "selected": "Chosen in the diagnosis. Check how it relates to the main challenge"
+    }
   }
 }

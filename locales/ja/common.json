@@ -3767,5 +3767,39 @@
     "readOnly": "確定する権限がありません。",
     "nextMeetingNote": "確定した日時は、リードの次回日程と「次の行動」に入ります。",
     "cancel": "やめる"
+  },
+  "leadPrep": {
+    "title": "事前調査カード",
+    "ready": "準備済み",
+    "start": "準備を始める",
+    "edit": "編集",
+    "save": "保存",
+    "cancel": "キャンセル",
+    "empty": "まだ準備していません。商談の前に、推定システム・仮説・最初に聞く質問3つを書いておきましょう。",
+    "noQuestions": "未入力",
+    "fields": {
+      "estimatedSystem": "推定した基幹システム",
+      "estimatedSystemBasis": "推定の根拠",
+      "recentNews": "最近の動き",
+      "hypotheses": "課題ごとの仮説",
+      "firstQuestions": "最初に聞く質問（3つ）"
+    },
+    "basisPlaceholder": "例：求人に出ている言語、展示会の出展内容",
+    "newsPlaceholder": "例：新工場の稼働、基幹システム担当の募集、中期経営計画",
+    "questionLabel": "質問 {number}",
+    "basisInline": "（根拠：{basis}）",
+    "draft": "下書きを作る",
+    "draftHint": "Web診断の回答と営業の手引きから、空欄だけを埋めます。保存するまで記録されません。",
+    "drafted": "空欄に下書きを入れました。確認して保存してください。",
+    "saved": "事前調査カードを保存しました",
+    "saveError": "保存できませんでした。もう一度お試しください。",
+    "updatedBy": "{date} {name} が更新",
+    "drafts": {
+      "basisDiagnosis": "Web診断の回答（移行元）",
+      "basisLead": "リードの「移行元」の項目",
+      "primary": "主な課題。どこで一番困っているか（業務・人・費用）を具体的に確かめる",
+      "primaryWithReasons": "主な課題。診断の理由：{reasons}",
+      "selected": "診断で選ばれた課題。主な課題との関係を確かめる"
+    }
   }
 }
