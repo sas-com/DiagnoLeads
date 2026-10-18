@@ -251,11 +251,50 @@ describe('POST /api/diagnostics/ax-migration/consultation', () => {
       expect(await response.json()).toEqual({ ok: true, alreadyRequested: true, preferences: 'saved' });
       expect(acceptMock).toHaveBeenCalledWith(
         expect.anything(),
-        { organizationId: 'org-1', leadId: 'lead-1', submissionId: SUBMISSION_ID, preferences },
+        {
+          organizationId: 'org-1',
+          leadId: 'lead-1',
+          submissionId: SUBMISSION_ID,
+          identityVerified: true,
+          preferences,
+        },
         expect.any(Function)
       );
       // Already requested: sales were told then, not again
       expect(notifyMock).not.toHaveBeenCalled();
+    });
+
+    it('marks an answer tied to an existing lead by email only as unverified', async () => {
+      requestMock.mockResolvedValue({
+        ok: true,
+        alreadyRequested: true,
+        organizationId: 'org-1',
+        leadId: 'lead-1',
+        leadCreated: false,
+        continued: false,
+      });
+      acceptMock.mockResolvedValue('unavailable');
+      const response = await POST(request({ submissionId: SUBMISSION_ID, preferences }));
+      expect(await response.json()).toEqual({
+        ok: true,
+        alreadyRequested: true,
+        preferences: 'unavailable',
+      });
+      expect(acceptMock.mock.calls[0][1]).toMatchObject({ identityVerified: false });
+    });
+
+    it('treats a continued answer as verified', async () => {
+      requestMock.mockResolvedValue({
+        ok: true,
+        alreadyRequested: true,
+        organizationId: 'org-1',
+        leadId: 'lead-1',
+        leadCreated: false,
+        continued: true,
+      });
+      acceptMock.mockResolvedValue('saved');
+      await POST(request({ submissionId: SUBMISSION_ID, preferences }));
+      expect(acceptMock.mock.calls[0][1]).toMatchObject({ identityVerified: true });
     });
 
     it('refuses preferences that do not fit the form', async () => {

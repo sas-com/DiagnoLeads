@@ -100,6 +100,8 @@ export async function POST(req: NextRequest) {
             organizationId: outcome.organizationId,
             leadId,
             submissionId: parsed.data.submissionId,
+            // An answer tied to an existing lead only by email must not change its meeting
+            identityVerified: outcome.leadCreated || outcome.continued,
             preferences: parsed.data.preferences,
           },
           (task) => after(task)

@@ -396,7 +396,9 @@ export type AcceptPreferencesStatus = 'saved' | 'confirmed' | 'out_of_range' | '
 /**
  * The preferences sent with a consultation request from a result page. `later` runs work after
  * the response (the route passes next/server's after): sales are told about the first ones only.
- * 'unavailable' when the request has no lead (the answer could not be tied to one).
+ * 'unavailable' when the request has no lead (the answer could not be tied to one), or when the
+ * answer was tied to an existing lead by its email address only: it then does not change that
+ * lead, the same rule as the lead update of the consultation request itself (identityUnverified).
  */
 export async function acceptMeetingPreferences(
   db: Database,
@@ -404,16 +406,23 @@ export async function acceptMeetingPreferences(
     organizationId: string;
     leadId: string | null;
     submissionId: string;
+    /** The answer created the lead, or continues an answer that did (not just the same email) */
+    identityVerified: boolean;
     preferences: MeetingPreferences;
   },
   later: (task: () => Promise<void>) => void,
   now: Date = new Date()
 ): Promise<AcceptPreferencesStatus> {
   const { leadId } = input;
-  if (!leadId) return 'unavailable';
+  if (!leadId || !input.identityVerified) return 'unavailable';
   const outcome = await saveMeetingPreferences(
     db,
-    { ...input, leadId, submissionId: input.submissionId },
+    {
+      organizationId: input.organizationId,
+      leadId,
+      submissionId: input.submissionId,
+      preferences: input.preferences,
+    },
     now
   );
   if (outcome.status === 'saved' && outcome.first) {
