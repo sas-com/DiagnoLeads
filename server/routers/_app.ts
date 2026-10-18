@@ -22,6 +22,7 @@ import { leadFollowUpRouter } from '@/lib/features/lead-follow-up/api/router';
 import { leadHearingsRouter } from '@/lib/features/lead-hearings/api/router';
 import { leadSearchRouter } from '@/lib/features/lead-search/api/router';
 import { leadsRouter } from '@/lib/features/leads/api/router';
+import { meetingRequestsRouter } from '@/lib/features/meeting-requests/api/router';
 import { invitationsRouter } from '@/lib/features/members/api/invitations-router';
 import { membersRouter } from '@/lib/features/members/api/router';
 import { notificationsRouter } from '@/lib/features/notifications/api/router';
@@ -66,6 +67,7 @@ export const appRouter = router({
   agencyLinks: agencyLinksRouter, // Diagnosis links per sales agency (Refs #147)
   agencyContracts: agencyContractsRouter, // Contracts, funnel and cost per sales agency (Refs #148)
   appointmentReviews: appointmentReviewsRouter, // Whether agency appointments met the conditions (Refs #149)
+  meetingRequests: meetingRequestsRouter, // First meeting preferences and confirmation (Refs #155)
   leadHearings: leadHearingsRouter, // Initial meeting hearings per lead (Refs #84)
   contentEditors: contentEditorsRouter, // FAQ / blog editors granted from settings (#91)
   leadActivity: leadActivityRouter, // Activity timeline per lead (Refs #101)

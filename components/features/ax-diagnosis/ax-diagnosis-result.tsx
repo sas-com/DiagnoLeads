@@ -1,5 +1,6 @@
 'use client';
 
+import { MeetingPreferencesForm } from '@/components/features/diagnosis-runner/meeting-preferences-form';
 import { PrintButton, usePrintTitle } from '@/components/features/diagnosis-runner/print';
 import { QuestionField } from '@/components/features/diagnosis-runner/question-field';
 import {
@@ -413,13 +414,20 @@ export function AxDiagnosisResult({
         data-testid="ax-result-cta"
       >
         {requested ? (
-          <output ref={acceptedRef} tabIndex={-1} className="flex items-start gap-3 outline-none">
-            <CheckCircle2 className="mt-0.5 h-6 w-6 shrink-0 text-ax-yellow" aria-hidden="true" />
-            <span className="block">
-              <span className="block text-lg font-bold">{t('cta.accepted')}</span>
-              <span className="block text-sm text-white/90">{t('cta.acceptedBody')}</span>
-            </span>
-          </output>
+          <>
+            <output ref={acceptedRef} tabIndex={-1} className="flex items-start gap-3 outline-none">
+              <CheckCircle2 className="mt-0.5 h-6 w-6 shrink-0 text-ax-yellow" aria-hidden="true" />
+              <span className="block">
+                <span className="block text-lg font-bold">{t('cta.accepted')}</span>
+                <span className="block text-sm text-white/90">{t('cta.acceptedBody')}</span>
+              </span>
+            </output>
+            <MeetingPreferencesForm
+              endpoint="/api/diagnostics/ax-migration/consultation"
+              submissionId={submissionId}
+              onSaved={() => trackAxEvent('ax_meeting_preferences', { platform })}
+            />
+          </>
         ) : (
           <>
             {createElement(

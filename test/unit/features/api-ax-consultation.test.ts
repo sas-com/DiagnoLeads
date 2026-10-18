@@ -35,6 +35,10 @@ vi.mock('@/lib/features/diagnostics/ax-migration/notify', () => ({
 vi.mock('@/lib/features/diagnostics/ax-migration/submission-service', () => ({
   requestAxMigrationConsultation: (...args: unknown[]) => requestMock(...args),
 }));
+const acceptMock = vi.fn();
+vi.mock('@/lib/features/meeting-requests/service', () => ({
+  acceptMeetingPreferences: (...args: unknown[]) => acceptMock(...args),
+}));
 vi.mock('@/lib/features/diagnostics/rate-limit', () => ({
   consumeRateLimit: (...args: unknown[]) => limitMock(...args),
 }));
@@ -224,5 +228,59 @@ describe('POST /api/diagnostics/ax-migration/consultation', () => {
     requestMock.mockRejectedValue(new Error('db down'));
     const response = await POST(request({ submissionId: SUBMISSION_ID }));
     expect(response.status).toBe(500);
+  });
+  describe('with first meeting preferences (#155)', () => {
+    const preferences = {
+      candidates: [{ date: '2030-01-08', time: '10:00' }],
+      attendeeRoles: ['executive'],
+      meetingFormat: 'online',
+    };
+
+    it('records them on the lead after the request, and says what happened', async () => {
+      requestMock.mockResolvedValue({
+        ok: true,
+        alreadyRequested: true,
+        organizationId: 'org-1',
+        leadId: 'lead-1',
+        leadCreated: true,
+        continued: false,
+      });
+      acceptMock.mockResolvedValue('saved');
+      const response = await POST(request({ submissionId: SUBMISSION_ID, preferences }));
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ ok: true, alreadyRequested: true, preferences: 'saved' });
+      expect(acceptMock).toHaveBeenCalledWith(
+        expect.anything(),
+        { organizationId: 'org-1', leadId: 'lead-1', submissionId: SUBMISSION_ID, preferences },
+        expect.any(Function)
+      );
+      // Already requested: sales were told then, not again
+      expect(notifyMock).not.toHaveBeenCalled();
+    });
+
+    it('refuses preferences that do not fit the form', async () => {
+      const response = await POST(
+        request({
+          submissionId: SUBMISSION_ID,
+          preferences: { ...preferences, candidates: [{ date: '2030-01-08', time: '07:00' }] },
+        })
+      );
+      expect(response.status).toBe(400);
+      expect(requestMock).not.toHaveBeenCalled();
+    });
+
+    it('leaves the preferences out of the answer when none were sent', async () => {
+      requestMock.mockResolvedValue({
+        ok: true,
+        alreadyRequested: true,
+        organizationId: 'org-1',
+        leadId: 'lead-1',
+        leadCreated: true,
+        continued: false,
+      });
+      const response = await POST(request({ submissionId: SUBMISSION_ID }));
+      expect(await response.json()).toEqual({ ok: true, alreadyRequested: true });
+      expect(acceptMock).not.toHaveBeenCalled();
+    });
   });
 });

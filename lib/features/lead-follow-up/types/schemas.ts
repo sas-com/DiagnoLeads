@@ -25,7 +25,8 @@ export const RECENT_CONTACTS_LIMIT = 5;
 /** Due next actions listed on the dashboard */
 export const DUE_TASKS_SHOWN = 20;
 
-export const TASK_SOURCES = ['manual', 'hearing'] as const;
+/** 'meeting_request': the first meeting confirmed from the respondent's preferred dates (#155) */
+export const TASK_SOURCES = ['manual', 'hearing', 'meeting_request'] as const;
 export type TaskSource = (typeof TASK_SOURCES)[number];
 
 /**
