@@ -143,6 +143,8 @@ describe('POST /api/diagnostics/ax-migration', () => {
 
   it('closes the form when the site is public without Turnstile keys (#232)', async () => {
     siteKeyMock.mockReturnValue(undefined);
+    // Public site regardless of the local environment
+    vi.stubEnv('APP_TEST_MODE', '');
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
       const response = await POST(request(validBody));
@@ -151,13 +153,13 @@ describe('POST /api/diagnostics/ax-migration', () => {
       expect(submitMock).not.toHaveBeenCalled();
 
       // In test mode the bot check stays optional
-      process.env.APP_TEST_MODE = 'true';
+      vi.stubEnv('APP_TEST_MODE', 'true');
       const testMode = await POST(
         request({ ...validBody, contact: { ...validBody.contact, email: 'kurosawa@sas-com.com' } })
       );
       expect(testMode.status).toBe(200);
     } finally {
-      delete process.env.APP_TEST_MODE;
+      vi.unstubAllEnvs();
       siteKeyMock.mockReturnValue('site-key');
       errorSpy.mockRestore();
     }

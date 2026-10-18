@@ -315,6 +315,35 @@ describe('notifyAxMigrationSubmission', () => {
       expect.any(String),
       expect.objectContaining({ consultationRequested: true })
     );
+    // and by email, within the email quota
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    expect(sendEmailMock.mock.calls[0][0].to).toEqual(['sales1@example.jp', 'sales2@example.jp']);
+    warnSpy.mockRestore();
+  });
+
+  it('notifies no one about a consultation request past both hourly limits (#232)', async () => {
+    quotaMock.mockImplementation(async (_db: unknown, rule: { name: string }) =>
+      rule.name === 'ax-notify-org' || rule.name === 'ax-notify-consultation-org'
+        ? { allowed: false, count: 400, retryAfterSeconds: 3600 }
+        : { allowed: true, count: 1, retryAfterSeconds: 0 }
+    );
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await notifyAxMigrationSubmission({ ...base, consultationRequested: true });
+    expect(webhookMock).not.toHaveBeenCalled();
+    expect(inAppMock).not.toHaveBeenCalled();
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('does not count plain submissions against the consultation cap (#232)', async () => {
+    overLimit('ax-notify-org', 150);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await notifyAxMigrationSubmission(base);
+    expect(quotaMock).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ name: 'ax-notify-consultation-org' }),
+      expect.anything()
+    );
     warnSpy.mockRestore();
   });
 
@@ -327,7 +356,7 @@ describe('notifyAxMigrationSubmission', () => {
       'org-1',
       'system',
       '【AX診断】通知を一時停止しました',
-      expect.stringContaining('リード一覧（コンバージョンポイント：相談申込）で確認'),
+      expect.stringContaining('相談申込は引き続き通知します'),
       expect.objectContaining({ limit: 'ax-notify-org' })
     );
     expect(sendEmailMock).toHaveBeenCalledTimes(1);

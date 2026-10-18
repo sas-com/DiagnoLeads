@@ -431,6 +431,15 @@ describe.skipIf(!url)('AX migration submission (PostgreSQL)', () => {
     expect(row?.consultationRequestedAt).toBeNull();
   });
 
+  it('accepts a consultation request at the very end of the window (#232)', async () => {
+    const outcome = await submitAxMigrationDiagnosis(db, organizationId, input(), now);
+    if (!outcome.ok) throw new Error('submission failed');
+
+    const edge = new Date(now.getTime() + RESULT_SCREEN_WINDOW_MS);
+    const result = await requestAxMigrationConsultation(db, outcome.submissionId, edge);
+    expect(result).toMatchObject({ ok: true, alreadyRequested: false });
+  });
+
   it('still answers alreadyRequested after the window for a request made in time (#232)', async () => {
     const outcome = await submitAxMigrationDiagnosis(db, organizationId, input(), now);
     if (!outcome.ok) throw new Error('submission failed');
