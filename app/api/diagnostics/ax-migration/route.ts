@@ -22,6 +22,7 @@ import {
   tooManyRequests,
 } from '@/lib/features/diagnostics/request-guard';
 import { verifyTurnstile } from '@/lib/features/diagnostics/turnstile';
+import { reportServerError } from '@/lib/ops/alert';
 import { type NextRequest, NextResponse, after } from 'next/server';
 
 /** Upper bound for the request body (answers + contact + tracking are a few KB) */
@@ -158,7 +159,10 @@ export async function POST(req: NextRequest) {
         identityUnverified: outcome.existingLead !== null && !outcome.continued,
         additionalSystem: outcome.continued,
         requestedAt,
-      }).catch((error) => console.error('AX diagnosis notification error:', error))
+      }).catch((error) => {
+        console.error('AX diagnosis notification error:', error);
+        return reportServerError('ax-diagnosis/notify', error);
+      })
     );
 
     return NextResponse.json({
@@ -168,6 +172,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error('AX diagnosis submission error:', error);
+    after(() => reportServerError('ax-diagnosis/submit', error));
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

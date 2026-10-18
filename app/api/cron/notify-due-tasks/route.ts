@@ -2,6 +2,7 @@ import { isCronRequest } from '@/lib/cron/authorize';
 import { db } from '@/lib/db/client';
 import { runAppointmentReviewNotices } from '@/lib/features/appointment-reviews/service';
 import { runDueTaskNotifications } from '@/lib/features/lead-follow-up/due-notifications';
+import { reportServerError } from '@/lib/ops/alert';
 import { NextResponse } from 'next/server';
 
 /**
@@ -13,10 +14,14 @@ export async function GET(request: Request) {
   if (!isCronRequest(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const result = await runDueTaskNotifications(db);
+  const result = await runDueTaskNotifications(db).catch(async (error: unknown) => {
+    await reportServerError('cron/notify-due-tasks', error);
+    throw error;
+  });
   // A failure of one kind of notice must not stop the other
-  const appointmentReviews = await runAppointmentReviewNotices(db).catch((error: unknown) => {
+  const appointmentReviews = await runAppointmentReviewNotices(db).catch(async (error: unknown) => {
     console.error('Appointment review notices failed:', error);
+    await reportServerError('cron/appointment-review-notices', error);
     return { error: 'failed' };
   });
   return NextResponse.json({ ...result, appointmentReviews });

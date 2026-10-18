@@ -1,5 +1,6 @@
 import { isCronRequest } from '@/lib/cron/authorize';
 import { cleanupOldDeliveries } from '@/lib/features/webhooks/services/webhook-service';
+import { reportServerError } from '@/lib/ops/alert';
 import { NextResponse } from 'next/server';
 
 /** Webhook deliveries kept for this many days (vercel.json runs this daily) */
@@ -9,6 +10,9 @@ export async function GET(request: Request) {
   if (!isCronRequest(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const deleted = await cleanupOldDeliveries(DAYS_TO_KEEP);
+  const deleted = await cleanupOldDeliveries(DAYS_TO_KEEP).catch(async (error: unknown) => {
+    await reportServerError('cron/cleanup-webhook-deliveries', error);
+    throw error;
+  });
   return NextResponse.json({ deleted });
 }
