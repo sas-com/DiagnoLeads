@@ -22,6 +22,15 @@ export const AX_RATE_LIMITS = {
    * bury the sales inbox nor shut the form for real respondents
    */
   notificationsPerOrganization: { name: 'ax-notify-org', limit: 100, windowMs: HOUR },
+  /**
+   * Past the limit above, consultation requests are still notified (a flood must not hide a real
+   * one, #232), up to this separate cap, since each new submission can carry a request
+   */
+  consultationNotificationsPerOrganization: {
+    name: 'ax-notify-consultation-org',
+    limit: 300,
+    windowMs: HOUR,
+  },
   consultationPerIp: { name: 'ax-consultation-ip', limit: 10, windowMs: HOUR },
   detailsPerIp: { name: 'ax-details-ip', limit: 20, windowMs: HOUR },
   /**

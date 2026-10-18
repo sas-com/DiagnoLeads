@@ -204,6 +204,13 @@ describe('POST /api/diagnostics/ax-migration/consultation', () => {
     expect(notifyMock).not.toHaveBeenCalled();
   });
 
+  it('returns 409 once the result screen window has closed (#232)', async () => {
+    requestMock.mockResolvedValue({ ok: false, reason: 'closed' });
+    const response = await POST(request({ submissionId: SUBMISSION_ID }));
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: 'closed' });
+  });
+
   it('returns 404 for an unknown submission', async () => {
     requestMock.mockResolvedValue({ ok: false, reason: 'not_found' });
     const response = await POST(request({ submissionId: SUBMISSION_ID }));

@@ -1,5 +1,5 @@
 import { db } from '@/lib/db/client';
-import { allowedEmailDomains, isAllowedEmail } from '@/lib/email/allowed-recipients';
+import { allowedEmailDomains, isAllowedEmail, isTestMode } from '@/lib/email/allowed-recipients';
 import { axMigrationDefinition } from '@/lib/features/diagnostics/ax-migration/definition';
 import {
   evaluateAxMigration,
@@ -21,7 +21,7 @@ import {
   readJsonBody,
   tooManyRequests,
 } from '@/lib/features/diagnostics/request-guard';
-import { verifyTurnstile } from '@/lib/features/diagnostics/turnstile';
+import { turnstileSiteKey, verifyTurnstile } from '@/lib/features/diagnostics/turnstile';
 import { reportServerError } from '@/lib/ops/alert';
 import { type NextRequest, NextResponse, after } from 'next/server';
 
@@ -92,6 +92,15 @@ export async function POST(req: NextRequest) {
   }
 
   const ip = clientIp(req);
+  // Once the site is public (test mode off) the bot check is required: missing keys close the
+  // form instead of opening it unprotected (#232). In test mode it stays optional.
+  if (!isTestMode() && !turnstileSiteKey()) {
+    console.error('AX diagnosis: Turnstile is not configured while test mode is off');
+    return NextResponse.json(
+      { error: 'Verification unavailable', code: 'verification_unavailable' },
+      { status: 503 }
+    );
+  }
   const verification = await verifyTurnstile(parsed.data.turnstileToken, ip, req.nextUrl.hostname);
   if (!verification.ok) {
     return verification.reason === 'unavailable'

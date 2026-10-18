@@ -645,6 +645,16 @@ describe('AxDiagnosisResult', () => {
     expect(top).toHaveFocus();
   });
 
+  it('tells that the request period has passed when the request is closed (#232)', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(409, { error: 'Closed', code: 'closed' }));
+    const user = userEvent.setup();
+    renderResult();
+    await user.click(screen.getAllByRole('button', { name: /無料の個別相談を申し込む/ })[0]);
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('受付期間（診断から24時間）を過ぎた');
+    expect(alert).not.toHaveTextContent('時間をおいて');
+  });
+
   it('refines the result with the optional follow-up questions', async () => {
     const refined = toPublicResult(
       evaluateAxMigration({ ...as400Answers, source_docs: 'source_missing', gaiji: 'many' })

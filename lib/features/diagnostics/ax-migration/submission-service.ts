@@ -2,7 +2,7 @@ import type { db as defaultDb } from '@/lib/db/client';
 import { axSalesPlaybooks, diagnosticSubmissions, leads } from '@/lib/db/schema';
 import { findActiveAgencyLink } from '@/lib/features/agency-links/service';
 import { axTargetCompanySchema } from '@/lib/features/ax-playbook/types/schemas';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, gte, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateAnswers } from '../engine';
 import { upsertLeadFromSubmission } from '../lead-upsert';
@@ -436,8 +436,11 @@ export async function requestAxMigrationConsultation(
       /** A "diagnose another system" submission of the respondent who created the lead */
       continued: boolean;
     }
-  | { ok: false; reason: 'not_found' }
+  | { ok: false; reason: 'not_found' | 'closed' }
 > {
+  // Only while the result screen can still be open, like the follow-up answers: a submission id
+  // seen later (or leaked) cannot place a request (#232)
+  const openedAfter = new Date(now.getTime() - RESULT_SCREEN_WINDOW_MS);
   return database.transaction(async (tx) => {
     const [claimed] = await tx
       .update(diagnosticSubmissions)
@@ -446,7 +449,8 @@ export async function requestAxMigrationConsultation(
         and(
           eq(diagnosticSubmissions.id, submissionId),
           eq(diagnosticSubmissions.diagnosticKey, AX_MIGRATION_DIAGNOSTIC_KEY),
-          isNull(diagnosticSubmissions.consultationRequestedAt)
+          isNull(diagnosticSubmissions.consultationRequestedAt),
+          gte(diagnosticSubmissions.createdAt, openedAfter)
         )
       )
       .returning({
@@ -465,6 +469,10 @@ export async function requestAxMigrationConsultation(
         ),
       });
       if (!submission) return { ok: false as const, reason: 'not_found' as const };
+      // Not claimed and not requested yet: the window has closed
+      if (submission.consultationRequestedAt === null) {
+        return { ok: false as const, reason: 'closed' as const };
+      }
       return {
         ok: true as const,
         alreadyRequested: true,
