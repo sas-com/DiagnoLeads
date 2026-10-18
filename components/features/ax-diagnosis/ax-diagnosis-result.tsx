@@ -76,6 +76,8 @@ export function AxDiagnosisResult({
   const [sending, setSending] = useState(false);
   /** Which button the failed request came from: the message is shown next to it */
   const [failedAt, setFailedAt] = useState<'top' | 'bottom' | null>(null);
+  // The request window of this result has passed (409), so a retry will not help
+  const [closed, setClosed] = useState(false);
   /** Printed under the title; the result is shown only in the browser, so no server mismatch */
   const [diagnosedOn] = useState(() =>
     new Intl.DateTimeFormat(locale === 'ja' ? 'ja-JP' : 'en-US', { dateStyle: 'long' }).format(
@@ -122,7 +124,10 @@ export function AxDiagnosisResult({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ submissionId }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        setClosed(res.status === 409);
+        throw new Error(`HTTP ${res.status}`);
+      }
       setRequested(true);
       requestAnimationFrame(() => acceptedRef.current?.focus());
       trackAxEvent('ax_consultation_request', { source: 'result', location, platform });
@@ -159,7 +164,7 @@ export function AxDiagnosisResult({
           location === 'bottom' ? 'text-ax-yellow' : 'text-red-700'
         )}
       >
-        {t('cta.failed')}
+        {closed ? t('cta.closed') : t('cta.failed')}
       </p>
     );
 

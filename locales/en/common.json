@@ -497,7 +497,8 @@
         "sending": "Sending…",
         "accepted": "Your consultation request has been received",
         "acceptedBody": "We will contact you.",
-        "failed": "Could not send the request. Please try again later."
+        "failed": "Could not send the request. Please try again later.",
+        "closed": "Requests from this page close 24 hours after the diagnosis. Please run the diagnosis again to request a consultation."
       },
       "diagnoseAnother": "Check another system",
       "levels": {
