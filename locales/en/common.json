@@ -519,22 +519,22 @@
         "people": {
           "title": "People: a system that depends on a few individuals",
           "problem": "Years of changes have turned the specification into a black box, and fewer engineers can maintain it.",
-          "solution": "Move to a web system the next generation can work with and remove the continuity risk."
+          "solution": "Move to a web system the next generation can work with and reduce the continuity risk."
         },
         "cost": {
           "title": "Cost: maintenance that limits growth",
           "problem": "Rising maintenance costs leave little budget for growth initiatives.",
-          "solution": "Keep the initial investment low with a staged approach and shift budget to growth."
+          "solution": "Keep the initial investment low with a staged approach and aim to shift budget to growth."
         },
         "agility": {
           "title": "Agility: a system that cannot keep up with the market",
           "problem": "Every time you try to keep up with partners, markets or new ways of working, the limits of the current system or its support deadline hold you back.",
-          "solution": "Move to a supported Web platform that can take new features and use from outside the office right away."
+          "solution": "Move to a supported web platform that makes it easier to add features and use the system from outside the office."
         },
         "data": {
           "title": "Data: data that cannot support decisions",
           "problem": "Data is locked in proprietary formats, so management metrics are not available in real time.",
-          "solution": "Use AI agents to organize data and get the information needed for proactive decisions."
+          "solution": "Use AI agents to organize data and make it easier to get the information needed for proactive decisions."
         }
       },
       "noPrimaryChallenge": {
@@ -2579,7 +2579,7 @@
           "body": "Years of person-dependent changes have turned the specifications into a black box, and fewer engineers can work on it every year, raising the risk to business continuity.",
           "solutions": {
             "first": "A user-friendly web system the next generation can work with",
-            "second": "Remove the risk to business continuity"
+            "second": "Reduce the risk to business continuity"
           }
         },
         "agility": {
@@ -2587,8 +2587,8 @@
           "title": "A system that cannot keep up with the market",
           "body": "Every time you try to respond to new customers or market changes, the limits of the existing system hold back new products and services.",
           "solutions": {
-            "first": "Add features in short cycles",
-            "second": "Respond quickly to market changes"
+            "first": "Make it easier to add features in short cycles",
+            "second": "A system that adapts more easily to market changes"
           }
         },
         "cost": {
@@ -2605,18 +2605,18 @@
           "title": "Data you cannot use for decisions",
           "body": "Core data stored on AS/400 and similar systems is often locked in proprietary formats, so the figures behind management decisions are not available in real time.",
           "solutions": {
-            "first": "Real-time data preparation with AI agents",
+            "first": "Aim to prepare data in real time with AI agents",
             "second": "Get the information needed for proactive decisions"
           }
         }
       },
-      "solutionsLabel": "What AX migration delivers",
-      "band": "High growth with AX migration",
-      "closing": "From a system that just runs operations to one that streamlines <em>decisions for high growth</em>"
+      "solutionsLabel": "What AX migration aims for",
+      "band": "Build a foundation for growth with AX migration",
+      "closing": "From a system that just runs operations to one that supports <em>management decisions</em>"
     },
     "steps": {
       "title": "Migration is not the goal but the starting point of AX",
-      "lead": "A phased approach (survey, migration, extension) keeps risk and investment low. After the migration, AI agents analyze the system and its data to streamline operations, and further features build a foundation that adapts quickly to change and drives growth.",
+      "lead": "A phased approach (survey, migration, extension) keeps risk and investment low. After the migration, AI agents analyze the system and its data to help streamline operations, and further features build a foundation that adapts more easily to change and supports growth.",
       "items": {
         "web": {
           "label": "First",
@@ -2643,7 +2643,7 @@
           "points": {
             "first": "Convert existing assets to the new platform while keeping the current specifications",
             "second": "Run the same data before and after the migration and compare screens, forms and results",
-            "third": "Move safely and quickly to a modern web system that fits your needs"
+            "third": "Move step by step to a modern web system that fits your needs"
           }
         },
         "ax": {
@@ -2652,7 +2652,7 @@
           "points": {
             "first": "Analyze current issues and data, and prioritize the features to extend with AI agents",
             "second": "Develop the highest-priority features first and release them step by step",
-            "third": "Realize the next-generation business transformation you aim for"
+            "third": "Work toward the next-generation business transformation you aim for"
           }
         }
       },
@@ -2690,23 +2690,23 @@
       "title": "Why customers choose us",
       "items": {
         "speed": {
-          "title": "Short delivery",
+          "title": "Speed",
           "points": {
-            "first": "AI analysis* of the current system visualizes the specifications quickly and accurately",
-            "second": "AI-assisted development greatly shortens the migration period and delivers a modern web system"
+            "first": "AI analysis* of the current system makes visualizing the specifications more efficient",
+            "second": "AI-assisted development aims to shorten the time it takes to move to a modern web system"
           }
         },
         "quality": {
           "title": "High quality",
           "points": {
-            "first": "A safe migration that keeps the current specifications and makes use of existing assets",
-            "second": "Prevents misreading the business logic and avoids confusion on site"
+            "first": "A migration that keeps the current specifications and makes use of existing assets",
+            "second": "The same data runs before and after the migration and the results are compared, to check that the business logic is carried over correctly"
           }
         },
         "ax": {
           "title": "AX",
           "points": {
-            "first": "Realize the next-generation business transformation you aim for",
+            "first": "Work toward the next-generation business transformation you aim for",
             "second": "AI agents make a wide range of management data usable"
           }
         }
