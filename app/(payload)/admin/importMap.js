@@ -1,3 +1,8 @@
+import { AIDiagnosticToolbar as AIDiagnosticToolbar_81ee7c5036cc2ebf2a4eb64fe21ffe3e } from '../../../cms/components/AIDiagnosticToolbar';
+import { AIToolbar as AIToolbar_f770839684754e9fa6cd2d3a96013fd7 } from '../../../cms/components/AIToolbar';
+import { RscEntryLexicalCell as RscEntryLexicalCell_44fe37237e0ebf4470c9990d8cb7b07e } from '@payloadcms/richtext-lexical/rsc';
+import { RscEntryLexicalField as RscEntryLexicalField_44fe37237e0ebf4470c9990d8cb7b07e } from '@payloadcms/richtext-lexical/rsc';
+import { LexicalDiffComponent as LexicalDiffComponent_44fe37237e0ebf4470c9990d8cb7b07e } from '@payloadcms/richtext-lexical/rsc';
 import { InlineToolbarFeatureClient as InlineToolbarFeatureClient_e70f5e05f09f93e00b997edb1ef0c864 } from '@payloadcms/richtext-lexical/client';
 import { HorizontalRuleFeatureClient as HorizontalRuleFeatureClient_e70f5e05f09f93e00b997edb1ef0c864 } from '@payloadcms/richtext-lexical/client';
 import { UploadFeatureClient as UploadFeatureClient_e70f5e05f09f93e00b997edb1ef0c864 } from '@payloadcms/richtext-lexical/client';
@@ -18,23 +23,17 @@ import { StrikethroughFeatureClient as StrikethroughFeatureClient_e70f5e05f09f93
 import { UnderlineFeatureClient as UnderlineFeatureClient_e70f5e05f09f93e00b997edb1ef0c864 } from '@payloadcms/richtext-lexical/client';
 import { BoldFeatureClient as BoldFeatureClient_e70f5e05f09f93e00b997edb1ef0c864 } from '@payloadcms/richtext-lexical/client';
 import { ItalicFeatureClient as ItalicFeatureClient_e70f5e05f09f93e00b997edb1ef0c864 } from '@payloadcms/richtext-lexical/client';
-import { RscEntryLexicalCell as RscEntryLexicalCell_44fe37237e0ebf4470c9990d8cb7b07e } from '@payloadcms/richtext-lexical/rsc';
-import { RscEntryLexicalField as RscEntryLexicalField_44fe37237e0ebf4470c9990d8cb7b07e } from '@payloadcms/richtext-lexical/rsc';
-import { LexicalDiffComponent as LexicalDiffComponent_44fe37237e0ebf4470c9990d8cb7b07e } from '@payloadcms/richtext-lexical/rsc';
-import { AIDiagnosticToolbar as AIDiagnosticToolbar_81ee7c5036cc2ebf2a4eb64fe21ffe3e } from '../../../cms/components/AIDiagnosticToolbar';
 import { AIFAQToolbar as AIFAQToolbar_ee38123b9a6427e45afda329c62a5841 } from '../../../cms/components/AIFAQToolbar';
-import { AIToolbar as AIToolbar_f770839684754e9fa6cd2d3a96013fd7 } from '../../../cms/components/AIToolbar';
-import { Icon as Icon_cms } from '../../../cms/components/Icon';
-import { Logo as Logo_cms } from '../../../cms/components/Logo';
-import { StyleProvider as StyleProvider_cms } from '../../../cms/components/StyleProvider';
+import { Icon as Icon_0a600d9af3dc55b21579d9d4738c4649 } from '../../../cms/components/Icon';
+import { Logo as Logo_eff45f4666ccfb98ed72245053f5e77e } from '../../../cms/components/Logo';
+import { StyleProvider as StyleProvider_4ec9853338a93a1441b541a7c5450817 } from '../../../cms/components/StyleProvider';
+import { CollectionCards as CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1 } from '@payloadcms/next/rsc';
 
+/** @type import('payload').ImportMap */
 export const importMap = {
   '/cms/components/AIDiagnosticToolbar#AIDiagnosticToolbar':
     AIDiagnosticToolbar_81ee7c5036cc2ebf2a4eb64fe21ffe3e,
   '/cms/components/AIToolbar#AIToolbar': AIToolbar_f770839684754e9fa6cd2d3a96013fd7,
-  '/cms/components/Logo#Logo': Logo_cms,
-  '/cms/components/Icon#Icon': Icon_cms,
-  '/cms/components/StyleProvider#StyleProvider': StyleProvider_cms,
   '@payloadcms/richtext-lexical/rsc#RscEntryLexicalCell':
     RscEntryLexicalCell_44fe37237e0ebf4470c9990d8cb7b07e,
   '@payloadcms/richtext-lexical/rsc#RscEntryLexicalField':
@@ -82,4 +81,8 @@ export const importMap = {
   '@payloadcms/richtext-lexical/client#ItalicFeatureClient':
     ItalicFeatureClient_e70f5e05f09f93e00b997edb1ef0c864,
   '/cms/components/AIFAQToolbar#AIFAQToolbar': AIFAQToolbar_ee38123b9a6427e45afda329c62a5841,
+  '/cms/components/Icon#Icon': Icon_0a600d9af3dc55b21579d9d4738c4649,
+  '/cms/components/Logo#Logo': Logo_eff45f4666ccfb98ed72245053f5e77e,
+  '/cms/components/StyleProvider#StyleProvider': StyleProvider_4ec9853338a93a1441b541a7c5450817,
+  '@payloadcms/next/rsc#CollectionCards': CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1,
 };
