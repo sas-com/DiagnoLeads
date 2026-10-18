@@ -2,11 +2,13 @@
 
 import { Badge } from '@/components/ui/badge';
 import type { Lead, Tag } from '@/lib/db/schema';
+import type { AxMqlLevel } from '@/lib/features/diagnostics/ax-migration/mql';
 import { cn } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useId } from 'react';
 import { LeadAssigneeSelect } from './lead-assignee-select';
+import { LeadMqlBadges } from './lead-mql-badge';
 import { LeadQuickSelect } from './lead-quick-select';
 import { NextMeetingCell } from './next-meeting';
 
@@ -19,15 +21,9 @@ export type LeadListRow = Lead & {
   /** From the latest hearing (#137) */
   nextMeetingDate?: string | null;
   dealRating?: string | null;
+  /** 関心あり / 適合 from the diagnosis data (#196) */
+  mqlLevel?: AxMqlLevel | null;
 };
-
-/** 'YYYY/MM/DD' in Japan time */
-const jstDayFormat = new Intl.DateTimeFormat('ja-JP', {
-  timeZone: 'Asia/Tokyo',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-});
 
 // The in-place selects are 44px tall on the card, so a finger hits them (#110)
 const TAP_SELECT = 'h-11 px-3 text-sm';
@@ -53,7 +49,6 @@ interface LeadCardProps {
 export function LeadCard({ lead, href, onOpen, organizationId, canEdit, onLost }: LeadCardProps) {
   const t = useTranslations('leads');
   const tList = useTranslations('leadList');
-  const tCards = useTranslations('leadList.cards');
   const tAssignee = useTranslations('leadAssignee');
   const personId = useId();
 
@@ -134,16 +129,7 @@ export function LeadCard({ lead, href, onOpen, organizationId, canEdit, onLost }
             className={editable ? TAP_SELECT : undefined}
           />
         )}
-        {lead.mqlQualifiedAt && (
-          <Badge
-            color="emerald"
-            title={tCards('mqlSince', {
-              date: jstDayFormat.format(new Date(lead.mqlQualifiedAt)),
-            })}
-          >
-            {tList('mql')}
-          </Badge>
-        )}
+        <LeadMqlBadges level={lead.mqlLevel} qualifiedAt={lead.mqlQualifiedAt} />
         {consultation && <Badge color="violet">{tList('consultation')}</Badge>}
       </div>
 
