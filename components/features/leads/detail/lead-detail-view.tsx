@@ -6,6 +6,7 @@ import { LeadActivityCard } from '@/components/features/lead-activity/lead-activ
 import { LeadContactBar } from '@/components/features/lead-follow-up/lead-contact-bar';
 import { LeadNextActionsCard } from '@/components/features/lead-follow-up/lead-next-actions-card';
 import { LeadHearingsCard } from '@/components/features/lead-hearings/lead-hearings-card';
+import { LeadPrepCard } from '@/components/features/lead-prep/lead-prep-card';
 import { MeetingRequestCard } from '@/components/features/meeting-requests/meeting-request-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -395,6 +396,7 @@ function LeadDetailContent({
 
           <TabsContent value="overview" className="mt-4 space-y-4">
             <MeetingRequestCard organizationId={organizationId} leadId={lead.id} />
+            <LeadPrepCard organizationId={organizationId} leadId={lead.id} />
             <LeadNextActionsCard organizationId={organizationId} leadId={lead.id} />
             {lead.agencyName?.trim() && (
               <AppointmentReviewCard organizationId={organizationId} leadId={lead.id} />
