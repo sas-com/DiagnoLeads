@@ -10,6 +10,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const addDetailsMock = vi.fn();
 const limitMock = vi.fn();
 
+// Tasks given to after(): run by the test once the response is there
+const { afterTasks } = vi.hoisted(() => ({ afterTasks: [] as Array<() => unknown> }));
+const reportServerErrorMock = vi.fn();
+
+vi.mock('next/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/server')>()),
+  after: (task: () => unknown) => {
+    afterTasks.push(task);
+  },
+}));
+vi.mock('@/lib/ops/alert', () => ({
+  reportServerError: (...args: unknown[]) => reportServerErrorMock(...args),
+}));
 vi.mock('@/lib/db/client', () => ({ db: {} }));
 vi.mock('@/lib/features/diagnostics/rate-limit', () => ({
   consumeRateLimit: (...args: unknown[]) => limitMock(...args),
@@ -123,6 +136,9 @@ describe('POST /api/diagnostics/ax-migration/details', () => {
     const response = await POST(request({ submissionId: SUBMISSION_ID, answers: { gaiji: 'none' } }));
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({ error: 'Internal server error' });
+    // The people on call hear about it after the response
+    await Promise.all(afterTasks.map((task) => task()));
+    expect(reportServerErrorMock).toHaveBeenCalledWith('ax-diagnosis/details', expect.any(Error));
     errorSpy.mockRestore();
   });
 });

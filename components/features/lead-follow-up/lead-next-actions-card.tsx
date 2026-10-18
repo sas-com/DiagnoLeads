@@ -183,6 +183,9 @@ function TaskRow({
         {task.source === 'hearing' && (
           <p className="text-xs text-muted-foreground">{t('fromHearing')}</p>
         )}
+        {task.source === 'meeting_request' && (
+          <p className="text-xs text-muted-foreground">{t('fromMeetingRequest')}</p>
+        )}
       </div>
       {canEdit && !task.done ? (
         <DueDatePicker

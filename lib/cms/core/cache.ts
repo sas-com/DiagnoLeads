@@ -10,6 +10,9 @@
 import { unstable_cache } from 'next/cache';
 import { revalidateTag } from 'next/cache';
 
+// Next.js 16 requires a cache profile; expire at once, as revalidateTag(tag) did before
+const EXPIRE_NOW = { expire: 0 };
+
 // =============================================================================
 // Cache Configuration
 // =============================================================================
@@ -93,37 +96,37 @@ export function generateCacheKey(params: Record<string, unknown>): string {
  * コレクション全体のキャッシュを無効化
  */
 export async function invalidateCollection(collection: string): Promise<void> {
-  revalidateTag(getCollectionTag(collection));
+  revalidateTag(getCollectionTag(collection), EXPIRE_NOW);
 }
 
 /**
  * 特定のドキュメントのキャッシュを無効化
  */
 export async function invalidateDocument(collection: string, id: string): Promise<void> {
-  revalidateTag(getDocumentTag(collection, id));
-  revalidateTag(getCollectionTag(collection));
+  revalidateTag(getDocumentTag(collection, id), EXPIRE_NOW);
+  revalidateTag(getCollectionTag(collection), EXPIRE_NOW);
 }
 
 /**
  * スラッグに基づくキャッシュを無効化
  */
 export async function invalidateBySlug(collection: string, slug: string): Promise<void> {
-  revalidateTag(getSlugTag(collection, slug));
-  revalidateTag(getCollectionTag(collection));
+  revalidateTag(getSlugTag(collection, slug), EXPIRE_NOW);
+  revalidateTag(getCollectionTag(collection), EXPIRE_NOW);
 }
 
 /**
  * 組織のコンテンツキャッシュを無効化
  */
 export async function invalidateOrganization(organizationId: string): Promise<void> {
-  revalidateTag(getOrganizationTag(organizationId));
+  revalidateTag(getOrganizationTag(organizationId), EXPIRE_NOW);
 }
 
 /**
  * すべてのCMSキャッシュを無効化
  */
 export async function invalidateAllCMS(): Promise<void> {
-  revalidateTag(CMS_CACHE_CONFIG.tagPrefix);
+  revalidateTag(CMS_CACHE_CONFIG.tagPrefix, EXPIRE_NOW);
 }
 
 // =============================================================================

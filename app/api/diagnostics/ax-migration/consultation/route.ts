@@ -12,12 +12,17 @@ import {
   readJsonBody,
   tooManyRequests,
 } from '@/lib/features/diagnostics/request-guard';
+import { acceptMeetingPreferences } from '@/lib/features/meeting-requests/service';
+import { meetingPreferencesSchema } from '@/lib/features/meeting-requests/types/schemas';
+import { reportServerError } from '@/lib/ops/alert';
 import { eq } from 'drizzle-orm';
 import { type NextRequest, NextResponse, after } from 'next/server';
 import { z } from 'zod';
 
 const consultationSchema = z.object({
   submissionId: z.string().uuid(),
+  /** Preferred dates, attendees and format of the first meeting, sent after the request (#155) */
+  preferences: meetingPreferencesSchema.optional(),
 });
 
 /**
@@ -27,10 +32,10 @@ const consultationSchema = z.object({
  * Idempotent: only the first of concurrent / repeated requests notifies sales.
  */
 export async function POST(req: NextRequest) {
-  const guard = checkPublicJsonRequest(req, 1024);
+  const guard = checkPublicJsonRequest(req, 2048);
   if (guard) return guard;
 
-  const read = await readJsonBody(req, 1024);
+  const read = await readJsonBody(req, 2048);
   if (!read.ok) return read.response;
   const body = read.body;
 
@@ -83,13 +88,32 @@ export async function POST(req: NextRequest) {
           });
         } catch (error) {
           console.error('AX consultation notification error:', error);
+          await reportServerError('ax-diagnosis/consultation-notify', error);
         }
       });
     }
 
-    return NextResponse.json({ ok: true, alreadyRequested: outcome.alreadyRequested });
+    const preferences = parsed.data.preferences
+      ? await acceptMeetingPreferences(
+          db,
+          {
+            organizationId: outcome.organizationId,
+            leadId,
+            submissionId: parsed.data.submissionId,
+            preferences: parsed.data.preferences,
+          },
+          (task) => after(task)
+        )
+      : undefined;
+
+    return NextResponse.json({
+      ok: true,
+      alreadyRequested: outcome.alreadyRequested,
+      ...(preferences ? { preferences } : {}),
+    });
   } catch (error) {
     console.error('AX consultation request error:', error);
+    after(() => reportServerError('ax-diagnosis/consultation', error));
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

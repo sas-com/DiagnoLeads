@@ -1,5 +1,6 @@
 'use client';
 
+import { MeetingPreferencesForm } from '@/components/features/diagnosis-runner/meeting-preferences-form';
 import { ProgressBar } from '@/components/features/diagnosis-runner/step-progress';
 import { PRIMARY_BUTTON } from '@/components/features/diagnosis-runner/styles';
 import type {
@@ -181,10 +182,18 @@ function ConsultationCta({
     <section className="space-y-3 rounded-2xl border-2 border-ax-teal/30 p-5" aria-live="polite">
       <h2 className="text-lg font-bold">{t('title')}</h2>
       {state === 'done' ? (
-        <p className="flex items-center gap-2 font-bold text-ax-teal-dark">
-          <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
-          {t('done')}
-        </p>
+        <>
+          <p className="flex items-center gap-2 font-bold text-ax-teal-dark">
+            <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+            {t('done')}
+          </p>
+          <div className="rounded-xl border border-gray-200">
+            <MeetingPreferencesForm
+              endpoint={`/api/diagnoses/${encodeURIComponent(slug)}/consultation`}
+              submissionId={submissionId}
+            />
+          </div>
+        </>
       ) : (
         <>
           <p className="text-sm leading-relaxed text-gray-700">{t('body')}</p>

@@ -21,7 +21,9 @@ export function loadPdfFontOnServer(
 ): PdfFont | null {
   if (cached === undefined) {
     try {
-      cached = { binary: bytesToBinaryString(readFileSync(filePath)) };
+      // The ignore comment keeps Turbopack from tracing the whole project for this dynamic path;
+      // outputFileTracingIncludes already bundles the font
+      cached = { binary: bytesToBinaryString(readFileSync(/* turbopackIgnore: true */ filePath)) };
     } catch (error) {
       cached = null;
       console.error(
