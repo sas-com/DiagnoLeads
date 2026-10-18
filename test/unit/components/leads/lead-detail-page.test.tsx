@@ -238,6 +238,10 @@ vi.mock('@/components/features/lead-follow-up/lead-contact-bar', () => ({
 vi.mock('@/components/features/lead-follow-up/lead-next-actions-card', () => ({
   LeadNextActionsCard: () => <p>next actions</p>,
 }));
+// The first meeting preferences (#155) have their own tests (test/unit/components/meeting-requests)
+vi.mock('@/components/features/meeting-requests/meeting-request-card', () => ({
+  MeetingRequestCard: () => null,
+}));
 vi.mock('@/components/features/lead-activity/lead-activity-card', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/components/features/lead-activity/lead-activity-card')>()),
   LeadActivityCard: () => <p>activity timeline</p>,

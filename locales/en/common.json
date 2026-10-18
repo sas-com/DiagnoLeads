@@ -3559,7 +3559,8 @@
       "checkWithOther": "Someone else (type a name)",
       "checkWithOtherLabel": "Whom to check with",
       "checkWithOtherPlaceholder": "e.g. The customer's IT department",
-      "checkWith": "Check with: {name}"
+      "checkWith": "Check with: {name}",
+      "fromMeetingRequest": "First meeting confirmed from the respondent's preferred dates"
     },
     "today": {
       "title": "Today",
@@ -3695,5 +3696,76 @@
     "recordedBy": "Recorded by {name} on {date}",
     "notRecorded": "Not recorded yet.",
     "readOnly": "You do not have permission to record it."
+  },
+  "meetingPreferences": {
+    "title": "Let us know when suits you (optional)",
+    "lead": "Send up to three options and the person in charge will pick one and confirm it by email, with fewer phone calls.",
+    "candidates": "Preferred dates and times",
+    "candidate": "Option {number}",
+    "dateLabel": "Date of option {number}",
+    "timeLabel": "Start time of option {number}",
+    "timeOption": "from {time}",
+    "candidatesHint": "From tomorrow up to 60 days ahead (Japan time). The first option is required.",
+    "attendees": "Who will attend (all that apply)",
+    "roles": {
+      "executive": "Executive / decision maker",
+      "it_manager": "IT department head",
+      "it_staff": "IT staff",
+      "business_manager": "Business department head",
+      "business_staff": "Business staff",
+      "other": "Other"
+    },
+    "format": "Format",
+    "formats": {
+      "onsite": "At your office",
+      "online": "Online"
+    },
+    "submit": "Send the options",
+    "saved": "Thank you. We will pick a date and confirm it by email.",
+    "alreadyConfirmed": "The date is already set. Please check the email from the person in charge.",
+    "invalid": "Please check the dates (from tomorrow up to 60 days ahead).",
+    "failed": "Could not send it. Please try again later."
+  },
+  "meetingRequest": {
+    "title": "Preferred dates for the first meeting",
+    "requestedAt": "Received on {date}",
+    "candidates": "Options",
+    "attendees": "Attendees",
+    "format": "Format",
+    "none": "Not given",
+    "roles": {
+      "executive": "Executive / decision maker",
+      "it_manager": "IT department head",
+      "it_staff": "IT staff",
+      "business_manager": "Business department head",
+      "business_staff": "Business staff",
+      "other": "Other"
+    },
+    "formats": {
+      "onsite": "Onsite",
+      "online": "Online"
+    },
+    "candidate": "{date} ({weekday}) from {time}",
+    "confirmedBadge": "Confirmed",
+    "confirmed": "Confirmed for {date} ({weekday}) from {time} ({name}, {at})",
+    "emailed": "Confirmation emailed ({at})",
+    "notEmailed": "No confirmation email was sent",
+    "sendEmail": "Email the confirmation to the respondent",
+    "emailUnavailable": "Email is not set up, so no confirmation can be sent. Tell them by phone.",
+    "confirm": "Confirm this date",
+    "change": "Change to another option",
+    "pick": "Pick an option",
+    "confirmDone": "Meeting confirmed",
+    "emailResult": {
+      "sent": "Confirmation sent to the respondent",
+      "not_requested": "No email was sent",
+      "not_configured": "Email is not set up, so nothing was sent",
+      "not_allowed": "Test mode: this address is not mailed",
+      "failed": "Could not send the confirmation. Tell them by phone"
+    },
+    "confirmError": "Could not confirm it. Please try again.",
+    "readOnly": "You do not have permission to confirm it.",
+    "nextMeetingNote": "The confirmed date becomes the lead's next meeting and a next action.",
+    "cancel": "Cancel"
   }
 }

@@ -244,8 +244,8 @@ describe('leads.list (sorting and filtering)', () => {
       lastActivityAt: 'greatest("leads"."updated_at", (select max(h.updated_at)',
       mqlQualifiedAt: '"leads"."mql_qualified_at"',
       assignee: '(select coalesce(nullif(trim(u.name), \'\'), u.email) from users u',
-      // Latest hearing (#137)
-      nextMeetingDate: "(select case when (h.fields -> 'nextMeetingDate' ->> 'value') ~",
+      // Latest hearing (#137), else the confirmed first meeting (#155)
+      nextMeetingDate: "coalesce((select case when (h.fields -> 'nextMeetingDate' ->> 'value') ~",
       dealRating: "(select case when (h.fields -> 'dealRating' ->> 'value') in ('a', 'b', 'c')",
     };
 
