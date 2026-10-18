@@ -12,6 +12,12 @@ export const OPS_ALERT_RULE: RateLimitRule = {
   windowMs: 10 * 60 * 1000,
 };
 
+/**
+ * The shared count waits at most this long: when the database is down the request has already
+ * spent its connect timeout, and the alert must still go out within the function's time limit
+ */
+const SHARED_COUNT_TIMEOUT_MS = 2000;
+
 /** When the database itself is down the shared count is unavailable: count per instance */
 const lastSentInInstance = new Map<string, number>();
 
@@ -41,7 +47,8 @@ export function summarizeServerError(error: unknown): ServerErrorSummary {
       .split('\n')
       .slice(1)
       .map((line) => line.trim())
-      .filter((line) => line.startsWith('at '))
+      // Real frames end with file:line:column; a multi-line message cannot pass as one
+      .filter((line) => /^at .+:\d+:\d+\)?$/.test(line))
       .slice(0, 8),
   };
 }
@@ -54,10 +61,27 @@ function recipients(): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Counted before sending: a mail that fails (Resend down) still uses the place's 10 minutes,
+ * so a broken mail service cannot turn every error into a retry
+ */
 async function allowedToSend(database: Database, where: string, now: Date): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    return (await consumeRateLimit(database, OPS_ALERT_RULE, where, now)).allowed;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error('shared count timed out')),
+        SHARED_COUNT_TIMEOUT_MS
+      );
+    });
+    const { allowed } = await Promise.race([
+      consumeRateLimit(database, OPS_ALERT_RULE, where, now),
+      timeout,
+    ]);
+    clearTimeout(timer);
+    return allowed;
   } catch {
+    clearTimeout(timer);
     const last = lastSentInInstance.get(where);
     if (last !== undefined && now.getTime() - last < OPS_ALERT_RULE.windowMs) return false;
     lastSentInInstance.set(where, now.getTime());

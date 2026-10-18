@@ -45,7 +45,33 @@ describe('summarizeServerError', () => {
   });
 });
 
+describe('summarizeServerError frames', () => {
+  it('keeps real stack frames only, not message lines that look like one', () => {
+    const error = new Error('lookup failed\nat taro@example.co.jp (entered by the respondent)');
+    error.stack = [
+      'Error: lookup failed',
+      'at taro@example.co.jp (entered by the respondent)',
+      '    at handler (/var/task/.next/server/app/api/route.js:1:2345)',
+      '    at async run (node:internal/process/task_queues:95:5)',
+    ].join('\n');
+    expect(summarizeServerError(error).frames).toEqual([
+      'at handler (/var/task/.next/server/app/api/route.js:1:2345)',
+      'at async run (node:internal/process/task_queues:95:5)',
+    ]);
+  });
+});
+
 describe('reportServerError', () => {
+  it('falls back to the per-instance count when the shared count hangs', async () => {
+    vi.useFakeTimers();
+    consumeRateLimit.mockReturnValue(new Promise(() => {}));
+    const pending = reportServerError('cron/test-db-hang', dbError(), { database });
+    await vi.advanceTimersByTimeAsync(2100);
+    await pending;
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
   it('emails the alert address, falling back to the AX sales address', async () => {
     await reportServerError('ax-diagnosis/submit', dbError(), { database });
     expect(sendEmail).toHaveBeenCalledTimes(1);
