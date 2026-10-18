@@ -33,7 +33,9 @@ vi.mock('@/lib/features/diagnostics/rate-limit', () => ({
   consumeRateLimits: (...args: unknown[]) => limitsMock(...args),
   pruneRateLimits: (...args: unknown[]) => pruneMock(...args),
 }));
+const siteKeyMock = vi.fn(() => 'site-key' as string | undefined);
 vi.mock('@/lib/features/diagnostics/turnstile', () => ({
+  turnstileSiteKey: () => siteKeyMock(),
   verifyTurnstile: (...args: unknown[]) => turnstileMock(...args),
 }));
 vi.mock('@/lib/features/diagnostics/ax-migration/submission-service', async (importOriginal) => {
@@ -136,6 +138,28 @@ describe('POST /api/diagnostics/ax-migration', () => {
       expect(company.status).toBe(200);
     } finally {
       delete process.env.APP_TEST_MODE;
+    }
+  });
+
+  it('closes the form when the site is public without Turnstile keys (#232)', async () => {
+    siteKeyMock.mockReturnValue(undefined);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const response = await POST(request(validBody));
+      expect(response.status).toBe(503);
+      expect(await response.json()).toMatchObject({ code: 'verification_unavailable' });
+      expect(submitMock).not.toHaveBeenCalled();
+
+      // In test mode the bot check stays optional
+      process.env.APP_TEST_MODE = 'true';
+      const testMode = await POST(
+        request({ ...validBody, contact: { ...validBody.contact, email: 'kurosawa@sas-com.com' } })
+      );
+      expect(testMode.status).toBe(200);
+    } finally {
+      delete process.env.APP_TEST_MODE;
+      siteKeyMock.mockReturnValue('site-key');
+      errorSpy.mockRestore();
     }
   });
 

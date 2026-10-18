@@ -293,13 +293,28 @@ describe('notifyAxMigrationSubmission', () => {
     errorSpy.mockRestore();
   });
 
-  it('notifies no one past the hourly limit of the organization (the notice went out before)', async () => {
+  it('notifies no one about a plain submission past the hourly limit (the notice went out before)', async () => {
+    overLimit('ax-notify-org', 150);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await notifyAxMigrationSubmission(base);
+    expect(webhookMock).not.toHaveBeenCalled();
+    expect(inAppMock).not.toHaveBeenCalled();
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('still shows a consultation request in the app past the hourly limit, without webhooks (#232)', async () => {
     overLimit('ax-notify-org', 150);
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     await notifyAxMigrationSubmission({ ...base, consultationRequested: true });
     expect(webhookMock).not.toHaveBeenCalled();
-    expect(inAppMock).not.toHaveBeenCalled();
-    expect(sendEmailMock).not.toHaveBeenCalled();
+    expect(inAppMock).toHaveBeenCalledWith(
+      'org-1',
+      'consultation_requested',
+      expect.any(String),
+      expect.any(String),
+      expect.objectContaining({ consultationRequested: true })
+    );
     warnSpy.mockRestore();
   });
 

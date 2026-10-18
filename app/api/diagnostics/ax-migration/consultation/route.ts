@@ -55,7 +55,9 @@ export async function POST(req: NextRequest) {
     const requestedAt = new Date();
     const outcome = await requestAxMigrationConsultation(db, parsed.data.submissionId, requestedAt);
     if (!outcome.ok) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      return outcome.reason === 'closed'
+        ? NextResponse.json({ error: 'Closed', code: 'closed' }, { status: 409 })
+        : NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
     const { leadId } = outcome;

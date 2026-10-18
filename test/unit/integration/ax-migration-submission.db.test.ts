@@ -11,6 +11,7 @@ import { emptyAxPlaybookContent } from '@/lib/features/ax-playbook/types/schemas
 import {
   type AxMigrationSubmissionInput,
   addAxMigrationDetails,
+  RESULT_SCREEN_WINDOW_MS,
   requestAxMigrationConsultation,
   submitAxMigrationDiagnosis,
 } from '@/lib/features/diagnostics/ax-migration/submission-service';
@@ -384,9 +385,9 @@ describe.skipIf(!url)('AX migration submission (PostgreSQL)', () => {
     if (!outcome.ok) throw new Error('submission failed');
 
     const results = await Promise.all([
-      requestAxMigrationConsultation(db, outcome.submissionId),
-      requestAxMigrationConsultation(db, outcome.submissionId),
-      requestAxMigrationConsultation(db, outcome.submissionId),
+      requestAxMigrationConsultation(db, outcome.submissionId, now),
+      requestAxMigrationConsultation(db, outcome.submissionId, now),
+      requestAxMigrationConsultation(db, outcome.submissionId, now),
     ]);
     const first = results.filter((r) => r.ok && !r.alreadyRequested);
     expect(first).toHaveLength(1);
@@ -411,10 +412,33 @@ describe.skipIf(!url)('AX migration submission (PostgreSQL)', () => {
     );
     if (!outcome.ok) throw new Error('submission failed');
 
-    const result = await requestAxMigrationConsultation(db, outcome.submissionId);
+    const result = await requestAxMigrationConsultation(db, outcome.submissionId, now);
     expect(result).toMatchObject({ ok: true, alreadyRequested: false, leadCreated: false });
     const lead = await pg.query.leads.findFirst({ where: eq(leads.id, existing.id) });
     expect(lead?.conversionPoint).toBe('document_download');
+  });
+
+  it('closes the consultation request once the result screen window has passed (#232)', async () => {
+    const outcome = await submitAxMigrationDiagnosis(db, organizationId, input(), now);
+    if (!outcome.ok) throw new Error('submission failed');
+
+    const late = new Date(now.getTime() + RESULT_SCREEN_WINDOW_MS + 1);
+    const result = await requestAxMigrationConsultation(db, outcome.submissionId, late);
+    expect(result).toEqual({ ok: false, reason: 'closed' });
+    const row = await pg.query.diagnosticSubmissions.findFirst({
+      where: eq(diagnosticSubmissions.id, outcome.submissionId),
+    });
+    expect(row?.consultationRequestedAt).toBeNull();
+  });
+
+  it('still answers alreadyRequested after the window for a request made in time (#232)', async () => {
+    const outcome = await submitAxMigrationDiagnosis(db, organizationId, input(), now);
+    if (!outcome.ok) throw new Error('submission failed');
+    await requestAxMigrationConsultation(db, outcome.submissionId, now);
+
+    const late = new Date(now.getTime() + RESULT_SCREEN_WINDOW_MS + 1);
+    const result = await requestAxMigrationConsultation(db, outcome.submissionId, late);
+    expect(result).toMatchObject({ ok: true, alreadyRequested: true });
   });
 
   it('returns not_found for an unknown submission', async () => {

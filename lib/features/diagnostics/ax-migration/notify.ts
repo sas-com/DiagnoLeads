@@ -189,10 +189,13 @@ export function buildSalesMessage(n: AxMigrationNotification): { title: string; 
 /**
  * Notify sales after a diagnosis or a consultation request.
  * Failures are logged and never break the respondent's flow. Past the hourly limit of the
- * organization nothing is sent (the submission is saved all the same).
+ * organization nothing is sent (the submission is saved all the same), except that a consultation
+ * request still reaches the members in the app (and by email within its own quota): a flood of
+ * submissions must not hide a real request (#232).
  */
 export async function notifyAxMigrationSubmission(n: AxMigrationNotification): Promise<void> {
-  if (!(await withinNotificationLimit(n.organizationId))) return;
+  const withinLimit = await withinNotificationLimit(n.organizationId);
+  if (!withinLimit && !n.consultationRequested) return;
   const { title, message } = buildSalesMessage(n);
   const mql = salesMql(n);
   const data = {
@@ -204,26 +207,29 @@ export async function notifyAxMigrationSubmission(n: AxMigrationNotification): P
     additionalSystem: n.additionalSystem ?? false,
   };
 
-  const tasks: Promise<unknown>[] = [
-    triggerWebhooks(n.organizationId, 'diagnostic.submitted', {
-      ...data,
-      email: n.email,
-      company: n.company,
-      name: n.name,
-      score: n.result.leadScore,
-      // mql = 関心あり（MQL）, mqlCandidate = 適合 (#139)
-      mql: mql.qualified,
-      mqlCandidate: mql.candidate,
-      mqlLevel: mql.level,
-      mqlSignals: mql.signals,
-      companySizeFit: mql.criteria.companySize,
-      sqlSignals: n.result.sqlSignals.candidate,
-      difficulty: n.result.difficulty.level,
-      urgency: n.result.urgency.level,
-      primaryChallenge: n.result.challenges.primary,
-      platform: n.result.platform ?? null,
-    }),
-  ];
+  const tasks: Promise<unknown>[] = [];
+  if (withinLimit) {
+    tasks.push(
+      triggerWebhooks(n.organizationId, 'diagnostic.submitted', {
+        ...data,
+        email: n.email,
+        company: n.company,
+        name: n.name,
+        score: n.result.leadScore,
+        // mql = 関心あり（MQL）, mqlCandidate = 適合 (#139)
+        mql: mql.qualified,
+        mqlCandidate: mql.candidate,
+        mqlLevel: mql.level,
+        mqlSignals: mql.signals,
+        companySizeFit: mql.criteria.companySize,
+        sqlSignals: n.result.sqlSignals.candidate,
+        difficulty: n.result.difficulty.level,
+        urgency: n.result.urgency.level,
+        primaryChallenge: n.result.challenges.primary,
+        platform: n.result.platform ?? null,
+      })
+    );
+  }
 
   const salesEmail = env.AX_DIAGNOSIS_SALES_EMAIL;
   // Consultation requests go to the organization's intake members (窓口) when set, in-app and
@@ -287,7 +293,7 @@ export async function notifyAxMigrationSubmission(n: AxMigrationNotification): P
         to: salesRecipients,
         subject: title,
         text: `${message}\n\n会社名: ${n.company}\n氏名: ${n.name}\nメール: ${n.email}\nリード: ${leadUrl}`,
-        html: `<p>${message}</p><ul><li>会社名: ${escapeHtml(n.company)}</li><li>氏名: ${escapeHtml(n.name)}</li><li>メール: ${escapeHtml(n.email)}</li></ul><p><a href="${leadUrl}">リードを開く</a></p>`,
+        html: `<p>${escapeHtml(message)}</p><ul><li>会社名: ${escapeHtml(n.company)}</li><li>氏名: ${escapeHtml(n.name)}</li><li>メール: ${escapeHtml(n.email)}</li></ul><p><a href="${leadUrl}">リードを開く</a></p>`,
       })
     );
   }
