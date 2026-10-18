@@ -14,8 +14,8 @@ function strings(value: unknown): string[] {
 
 describe('AX migration copy', () => {
   it.each([
-    ['ja', [...strings(ja.axSite), ...strings(ja.axDiagnosis)], /大幅に短縮|素早く正確|リスクを解消|高成長を実現|事業変革を実現|短納期|安全かつ短期間/],
-    ['en', [...strings(en.axSite), ...strings(en.axDiagnosis)], /greatly shortens|quickly and accurately|remove the (continuity )?risk|high growth|Short delivery/i],
+    ['ja', [...strings(ja.axSite), ...strings(ja.axDiagnosis)], /大幅に(短縮|圧縮)|素早く正確|リスクを解消|高成長を実現|事業変革を実現|短納期|安全かつ短期|短期に実現|即応|すぐ対応|安全な移行|混乱を回避|担保/],
+    ['en', [...strings(en.axSite), ...strings(en.axDiagnosis)], /greatly (shortens|reduces)|quickly and accurately|remove the (continuity )?risk|eliminat|prevents? misreading|avoids? confusion|achieve high growth|High growth with|Short delivery/i],
   ])('makes no unbacked claims in %s', (_, texts, claims) => {
     expect(texts.filter((text) => claims.test(text))).toEqual([]);
   });

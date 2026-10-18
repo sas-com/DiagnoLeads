@@ -524,17 +524,17 @@
         "cost": {
           "title": "Cost: maintenance that limits growth",
           "problem": "Rising maintenance costs leave little budget for growth initiatives.",
-          "solution": "Keep the initial investment low with a staged approach and shift budget to growth."
+          "solution": "Keep the initial investment low with a staged approach and aim to shift budget to growth."
         },
         "agility": {
           "title": "Agility: a system that cannot keep up with the market",
           "problem": "Every time you try to keep up with partners, markets or new ways of working, the limits of the current system or its support deadline hold you back.",
-          "solution": "Move to a supported Web platform that can take new features and use from outside the office right away."
+          "solution": "Move to a supported web platform that makes it easier to add features and use the system from outside the office."
         },
         "data": {
           "title": "Data: data that cannot support decisions",
           "problem": "Data is locked in proprietary formats, so management metrics are not available in real time.",
-          "solution": "Use AI agents to organize data and get the information needed for proactive decisions."
+          "solution": "Use AI agents to organize data and make it easier to get the information needed for proactive decisions."
         }
       },
       "noPrimaryChallenge": {
@@ -2605,7 +2605,7 @@
           "title": "Data you cannot use for decisions",
           "body": "Core data stored on AS/400 and similar systems is often locked in proprietary formats, so the figures behind management decisions are not available in real time.",
           "solutions": {
-            "first": "Prepare data in real time with AI agents",
+            "first": "Aim to prepare data in real time with AI agents",
             "second": "Get the information needed for proactive decisions"
           }
         }
@@ -2693,14 +2693,14 @@
           "title": "Speed",
           "points": {
             "first": "AI analysis* of the current system makes visualizing the specifications more efficient",
-            "second": "AI-assisted development aims to shorten the migration to a modern web system"
+            "second": "AI-assisted development aims to shorten the time it takes to move to a modern web system"
           }
         },
         "quality": {
           "title": "High quality",
           "points": {
             "first": "A migration that keeps the current specifications and makes use of existing assets",
-            "second": "The same data runs before and after the migration and the results are compared, to check the business logic"
+            "second": "The same data runs before and after the migration and the results are compared, to check that the business logic is carried over correctly"
           }
         },
         "ax": {
