@@ -14,6 +14,7 @@ import {
 } from '@/lib/features/diagnostics/request-guard';
 import { acceptMeetingPreferences } from '@/lib/features/meeting-requests/service';
 import { meetingPreferencesSchema } from '@/lib/features/meeting-requests/types/schemas';
+import { reportServerError } from '@/lib/ops/alert';
 import { eq } from 'drizzle-orm';
 import { type NextRequest, NextResponse, after } from 'next/server';
 import { z } from 'zod';
@@ -87,6 +88,7 @@ export async function POST(req: NextRequest) {
           });
         } catch (error) {
           console.error('AX consultation notification error:', error);
+          await reportServerError('ax-diagnosis/consultation-notify', error);
         }
       });
     }
@@ -111,6 +113,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error('AX consultation request error:', error);
+    after(() => reportServerError('ax-diagnosis/consultation', error));
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

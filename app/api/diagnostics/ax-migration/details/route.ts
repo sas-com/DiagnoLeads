@@ -13,7 +13,8 @@ import {
   readJsonBody,
   tooManyRequests,
 } from '@/lib/features/diagnostics/request-guard';
-import { type NextRequest, NextResponse } from 'next/server';
+import { reportServerError } from '@/lib/ops/alert';
+import { type NextRequest, NextResponse, after } from 'next/server';
 
 /**
  * POST /api/diagnostics/ax-migration/details
@@ -63,6 +64,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ result: toPublicResult(outcome.result) });
   } catch (error) {
     console.error('AX diagnosis details error:', error);
+    after(() => reportServerError('ax-diagnosis/details', error));
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
