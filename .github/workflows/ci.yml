@@ -18,8 +18,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  NODE_VERSION: '20'
-  BUN_VERSION: 'latest'
+  # Pinned so a new Bun release cannot break CI overnight; bump it on purpose
+  BUN_VERSION: '1.4.3'
 
 jobs:
   lint:
@@ -30,7 +30,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
@@ -57,7 +57,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
@@ -72,7 +72,8 @@ jobs:
   test-coverage:
     name: Test Coverage Report
     runs-on: ubuntu-latest
-    needs: test
+    # Uses nothing from the sharded tests, so it starts right after lint
+    needs: lint
     # Re-runs the whole suite, so only measure on main (PRs already run the sharded tests)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
@@ -80,7 +81,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
@@ -91,14 +92,6 @@ jobs:
         run: bun run test:coverage --run
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/diagnoleads_test
-
-      - name: Check coverage thresholds
-        run: |
-          echo "Coverage thresholds enforced (vitest.config.ts):"
-          echo "Global: lines 35%, functions 30%, branches 25%"
-          echo "lib/features/**: lines 70%, functions 65%"
-          echo "server/**: lines 65%, functions 60%"
-          echo "components/**: lines 20%, functions 15%"
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
@@ -112,13 +105,14 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [lint, test]
+    # Uses nothing from the unit tests, so it runs beside them
+    needs: lint
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
@@ -133,23 +127,6 @@ jobs:
           BETTER_AUTH_SECRET: ci-test-secret-at-least-32-chars-long
           BETTER_AUTH_URL: http://localhost:3000
           NEXT_PUBLIC_APP_URL: http://localhost:3000
-
-      - name: List build output
-        run: |
-          echo "Listing root directory..."
-          ls -la
-          echo "Checking .next directory..."
-          ls -la .next || echo ".next not found"
-          echo "Checking for standalone output..."
-          ls -la .next/standalone || echo ".next/standalone not found"
-
-      - name: Verify build output
-        run: |
-          echo "Current directory: $(pwd)"
-          echo ".next contents:"
-          find .next -type f | head -20
-          echo "Total files in .next:"
-          find .next -type f | wc -l
 
       # The whole build (without the cache): the E2E job runs it with `next start`
       - name: Upload build artifacts
@@ -188,7 +165,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
@@ -246,7 +223,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
@@ -318,7 +295,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
@@ -326,8 +303,8 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Run security audit
-        run: bun audit --audit-level=high
-        continue-on-error: true
+        # Fails on critical only: some high advisories sit in transitive packages with no fix yet
+        run: bun audit --audit-level=critical
 
   # Note: Preview deployment is handled by Vercel GitHub Integration
   # This job is disabled to avoid duplication and permission issues
