@@ -32,6 +32,7 @@ export function shouldSkipI18nMiddleware(pathname: string): boolean {
   const skipPaths = [
     '/api',
     '/_next',
+    '/_vercel', // Vercel Web Analytics (#222)
     '/static',
     '/favicon.ico',
     '/robots.txt',
