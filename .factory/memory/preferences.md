@@ -79,18 +79,11 @@
 
 ---
 
-## Supabase データベース情報
+## Supabase データベース
 
-| 項目 | 値 |
-|------|------|
-| プロジェクト名 | diagnoleads-v2 |
-| Project Ref | uifikyigoqmzfqxzwgfz |
-| Organization | mumfbjxtqqtgyznaexqx |
-| Database Password | NCMRi8gNjn8gD5Eg |
-| Direct Connection | postgresql://postgres:NCMRi8gNjn8gD5Eg@db.uifikyigoqmzfqxzwgfz.supabase.co:5432/postgres |
-| Transaction Mode (Vercel用) | postgresql://postgres.uifikyigoqmzfqxzwgfz:NCMRi8gNjn8gD5Eg@aws-1-ap-northeast-1.pooler.supabase.com:6543/postgres |
-| Personal Access Token (PAT) | sbp_bcced7f6bdc7599f3ec73160bc4033eb67408b2f |
+- プロジェクト名: diagnoleads-v2（本番で使用中。接続の手順は `docs/deployment-guide.md`）
+- 接続文字列・パスワード・アクセストークンは、Vercel の環境変数と手元の `.env.local` にだけ置く。このリポジトリ（公開）、Issue、PR、会話には書かない
 
 ---
 
-*最終更新: 2026-02-08*
+*最終更新: 2026-10-16*
