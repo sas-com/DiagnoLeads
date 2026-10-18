@@ -79,6 +79,7 @@ import { TagBadgeList } from '../tags/tag-badge';
 import { BulkActions } from './bulk-actions';
 import { LeadAssigneeSelect } from './lead-assignee-select';
 import type { LeadListRow } from './lead-card';
+import { LeadMqlBadges } from './lead-mql-badge';
 import { LeadQuickSelect } from './lead-quick-select';
 import { LeadCardList } from './list/lead-card-list';
 import { LeadListEmpty } from './list/lead-list-empty';
@@ -471,9 +472,21 @@ export function LeadTable({
       accessorKey: 'mqlQualifiedAt',
       header: sortableHeader('mqlQualifiedAt', t('mqlQualifiedAt')),
       cell: ({ row }) => {
-        const value = row.original.mqlQualifiedAt;
-        if (!value) return <span className="text-gray-400">-</span>;
-        return <span className="text-sm text-gray-600 dark:text-gray-300">{jstDay(value)}</span>;
+        // The MQL level badge (#196) and the MQL date
+        const { mqlLevel, mqlQualifiedAt } = row.original;
+        if (!mqlQualifiedAt && mqlLevel !== 'interest' && mqlLevel !== 'fit') {
+          return <span className="text-gray-400">-</span>;
+        }
+        return (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <LeadMqlBadges level={mqlLevel} qualifiedAt={mqlQualifiedAt} />
+            {mqlQualifiedAt && (
+              <span className="text-sm text-gray-600 dark:text-gray-300">
+                {jstDay(mqlQualifiedAt)}
+              </span>
+            )}
+          </div>
+        );
       },
     },
     {

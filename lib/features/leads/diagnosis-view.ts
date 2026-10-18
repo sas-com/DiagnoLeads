@@ -8,13 +8,18 @@
  */
 
 import {
-  AX_MQL_LEVELS,
   AX_MQL_REQUIRED,
   AX_MQL_SIGNALS,
   type AxMqlLevel,
   type AxMqlRequired,
   type AxMqlSignal,
 } from '@/lib/features/diagnostics/ax-migration/mql';
+import {
+  AX_RESPONSES_KEY,
+  BUILDER_RESPONSES_KEY,
+  axSummaryMqlLevel,
+  builderSummaryMqlLevel,
+} from './mql-level';
 
 export const AX_LEVELS = ['low', 'medium', 'high'] as const;
 export type AxLevel = (typeof AX_LEVELS)[number];
@@ -90,9 +95,9 @@ export interface LeadDiagnosisView {
   extra: ExtraDataEntry[];
 }
 
-const AX_KEY = 'axMigration';
+const AX_KEY = AX_RESPONSES_KEY;
 /** Same as DIAGNOSIS_LEAD_RESPONSES_KEY in diagnosis-builder/submission-service.ts */
-export const BUILDER_KEY = 'diagnosis';
+export const BUILDER_KEY = BUILDER_RESPONSES_KEY;
 
 /** Keys of the builder summary read into the view (or not shown: internal ids) */
 const BUILDER_KEYS = new Set<string>([
@@ -183,21 +188,18 @@ export function flattenExtraData(value: unknown, key: string, depth = 0): ExtraD
   return [];
 }
 
-function readMql(stored: unknown, mqlCandidate: boolean): AxMqlView {
-  if (
-    isPlainObject(stored) &&
-    typeof stored.level === 'string' &&
-    (AX_MQL_LEVELS as readonly string[]).includes(stored.level)
-  ) {
-    const listed = (value: unknown) => (Array.isArray(value) ? value : []);
-    return {
-      level: stored.level as AxMqlLevel,
-      signals: AX_MQL_SIGNALS.filter((signal) => listed(stored.signals).includes(signal)),
-      unmet: AX_MQL_REQUIRED.filter((key) => listed(stored.unmet).includes(key)),
-      legacy: false,
-    };
-  }
-  return { level: mqlCandidate ? 'fit' : 'none', signals: [], unmet: [], legacy: true };
+/** The level is read by axSummaryMqlLevel, the same rule as the lead list (#196) */
+function readMql(summary: Record<string, unknown>): AxMqlView {
+  const { level, legacy } = axSummaryMqlLevel(summary);
+  const stored = summary.mql;
+  if (legacy || !isPlainObject(stored)) return { level, signals: [], unmet: [], legacy: true };
+  const listed = (value: unknown) => (Array.isArray(value) ? value : []);
+  return {
+    level,
+    signals: AX_MQL_SIGNALS.filter((signal) => listed(stored.signals).includes(signal)),
+    unmet: AX_MQL_REQUIRED.filter((key) => listed(stored.unmet).includes(key)),
+    legacy: false,
+  };
 }
 
 function readSystem(source: Record<string, unknown>): AxSystemView {
@@ -237,13 +239,7 @@ const numberOrNull = (value: unknown): number | null =>
   typeof value === 'number' && Number.isFinite(value) ? value : null;
 
 function readBuilder(summary: Record<string, unknown>): BuilderDiagnosisView {
-  const level =
-    typeof summary.mqlLevel === 'string' &&
-    (AX_MQL_LEVELS as readonly string[]).includes(summary.mqlLevel)
-      ? (summary.mqlLevel as AxMqlLevel)
-      : summary.mqlQualified === true
-        ? 'interest'
-        : 'none';
+  const level = builderSummaryMqlLevel(summary);
   return {
     submissionId: stringOrNull(summary.submissionId),
     title: stringOrNull(summary.title),
@@ -293,7 +289,7 @@ export function readLeadDiagnosis(responses: unknown, customFields?: unknown): L
         challenges,
         department: stringOrNull(summary.department),
         mqlCandidate,
-        mql: readMql(summary.mql, mqlCandidate),
+        mql: readMql(summary),
         sqlSignals: summary.sqlSignals === true,
         consultationRequested: summary.consultationRequested === true,
         otherSystems: otherSystems.map(readSystem),

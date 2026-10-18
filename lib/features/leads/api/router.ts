@@ -1,5 +1,6 @@
 import type { db as defaultDb } from '@/lib/db/client';
 import { auditLogs, leadTags, leads, tags, users } from '@/lib/db/schema';
+import type { AxMqlLevel } from '@/lib/features/diagnostics/ax-migration/mql';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import {
@@ -78,6 +79,7 @@ import {
   leadLastActivityAt,
   leadListConditions,
   leadListOrderBy,
+  leadMqlLevel,
   leadNextMeetingDate,
   parseUtcTimestamp,
 } from './list-sql';
@@ -381,6 +383,8 @@ export const leadsRouter = router({
         offset: input.offset,
         extras: {
           lastActivityAt: sql<string>`${leadLastActivityAt}`.as('last_activity_at'),
+          // 関心あり / 適合 for the list's MQL badge (#196)
+          mqlLevel: sql<AxMqlLevel | null>`${leadMqlLevel}`.as('mql_level'),
           ...LATEST_HEARING_EXTRAS,
         },
         with: {

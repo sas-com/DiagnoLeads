@@ -151,6 +151,10 @@ describe('LeadFilterToolbar', () => {
     const presets = within(screen.getByRole('group', { name: t.presetsLabel }));
     const thisWeek = presets.getByRole('button', { name: t.presets.newThisWeek });
     expect(thisWeek).toHaveAttribute('aria-pressed', 'false');
+    // 44px tall on phones, compact from md (#196)
+    for (const button of presets.getAllByRole('button')) {
+      expect(button).toHaveClass('h-9', 'min-h-11', 'md:min-h-0');
+    }
 
     await user.click(thisWeek);
     expect(lastHref()).toBe('/ja/leads?from=2026-10-12');

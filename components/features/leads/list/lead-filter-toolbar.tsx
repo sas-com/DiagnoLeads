@@ -8,6 +8,7 @@
  *
  * It only talks to the controller from useLeadListQuery, so every change goes to the URL.
  */
+import { TAP_TARGET } from '@/components/common/tap-target';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { LeadListQueryController } from '@/hooks/use-lead-list-query';
@@ -102,7 +103,7 @@ export function LeadFilterToolbar({
                 variant={active ? 'default' : 'secondary'}
                 aria-pressed={active}
                 title={t(`presetHints.${preset}`)}
-                className="h-9 rounded-full"
+                className={cn('h-9 rounded-full', TAP_TARGET)}
                 onClick={() =>
                   active ? controller.clearFilters() : controller.applyPreset(preset)
                 }

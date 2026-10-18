@@ -5,6 +5,7 @@
  * never shows another organization's leads.
  */
 import { leads } from '@/lib/db/schema';
+import { AX_MQL_LEVELS, type AxMqlLevel } from '@/lib/features/diagnostics/ax-migration/mql';
 import {
   type AnyColumn,
   type SQL,
@@ -24,6 +25,7 @@ import {
   sql,
 } from 'drizzle-orm';
 import { NEXT_MEETING_CLOSED_STATUSES, addDays, jstWeekStart } from '../list-query';
+import { AX_RESPONSES_KEY, BUILDER_RESPONSES_KEY } from '../mql-level';
 import { DEAL_PHASES, LEAD_STATUSES, jstDate } from '../types/pipeline';
 import { DEAL_RATINGS, type LeadSortKey, type ListLeadsInput } from '../types/schemas';
 
@@ -96,6 +98,24 @@ export const leadDealRating = latestHearingValue(
     `(h.fields -> 'dealRating' ->> 'value') in (${DEAL_RATINGS.map((r) => `'${r}'`).join(', ')})`
   )
 );
+
+const MQL_LEVEL_LIST = sql.raw(AX_MQL_LEVELS.map((level) => `'${level}'`).join(', '));
+/** `responses -> 'key'` of the lead, the summary of one diagnosis */
+const responsesSummary = (key: string) => sql`(${leads.responses} -> ${sql.raw(`'${key}'`)})`;
+
+const axSummary = responsesSummary(AX_RESPONSES_KEY);
+const builderSummary = responsesSummary(BUILDER_RESPONSES_KEY);
+const axMqlLevel = sql`(case when jsonb_typeof(${axSummary}) = 'object' then (case when (${axSummary} -> 'mql' ->> 'level') in (${MQL_LEVEL_LIST}) then (${axSummary} -> 'mql' ->> 'level') when (${axSummary} -> 'mqlCandidate') = 'true'::jsonb then 'fit' else 'none' end) end)`;
+const builderMqlLevel = sql`(case when jsonb_typeof(${builderSummary}) = 'object' then (case when (${builderSummary} ->> 'mqlLevel') in (${MQL_LEVEL_LIST}) then (${builderSummary} ->> 'mqlLevel') when (${builderSummary} -> 'mqlQualified') = 'true'::jsonb then 'interest' else 'none' end) end)`;
+/**
+ * MQL level of the lead (#196): 'interest' | 'fit' | 'none', NULL without a diagnosis summary.
+ * The same rules as leadMqlLevel in lib/features/leads/mql-level.ts, read from the stored
+ * `responses` in the same query (no query per row):
+ * - AX: `mql.level`, else (judged before #139) `mqlCandidate` true = 'fit', else 'none'
+ * - builder: `mqlLevel`, else `mqlQualified` true = 'interest', else 'none'
+ * and the higher of the two when a lead has both.
+ */
+export const leadMqlLevel = sql<AxMqlLevel | null>`(select case when 'interest' in (s.ax, s.builder) then 'interest' when 'fit' in (s.ax, s.builder) then 'fit' when 'none' in (s.ax, s.builder) then 'none' end from (select ${axMqlLevel} as ax, ${builderMqlLevel} as builder) s)`;
 
 /**
  * Position in a fixed order (pipeline order instead of alphabetical). Empty and unknown values

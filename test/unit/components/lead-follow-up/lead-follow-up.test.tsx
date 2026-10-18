@@ -129,6 +129,10 @@ describe('LeadContactBar', () => {
     expect(screen.getByTestId('first-contact')).toHaveTextContent('まだ連絡の記録がありません');
     expect(screen.queryByText(/不通/)).not.toBeInTheDocument();
     const group = screen.getByRole('group', { name: '架空商事への連絡を記録' });
+    // 44px tall on phones, compact from md (#196)
+    for (const button of within(group).getAllByRole('button')) {
+      expect(button).toHaveClass('h-9', 'min-h-11', 'md:min-h-0');
+    }
     await user.click(within(group).getByRole('button', { name: '電話した' }));
 
     expect(mocks.calls.recordContact).toEqual([

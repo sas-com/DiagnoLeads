@@ -99,8 +99,8 @@ describe('ThemeToggleButton', () => {
     
     render(<ThemeToggleButton />);
     const button = screen.getByRole('button');
-    expect(button).toHaveClass('w-10');
-    expect(button).toHaveClass('h-10');
+    // 44px on phones, 40px from lg (#196)
+    expect(button).toHaveClass('w-11', 'h-11', 'lg:w-10', 'lg:h-10');
     expect(button).toHaveClass('rounded-lg');
   });
 });

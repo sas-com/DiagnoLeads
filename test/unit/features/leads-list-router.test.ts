@@ -8,6 +8,7 @@ import {
   jstDayEnd,
   jstDayStart,
   leadListOrderBy,
+  leadMqlLevel,
   parseUtcTimestamp,
 } from '@/lib/features/leads/api/list-sql';
 import { LEAD_SORT_KEYS, type LeadSortKey } from '@/lib/features/leads/types/schemas';
@@ -31,6 +32,7 @@ const render = (fragment: SQL | undefined) => {
 
 interface FindManyArgs {
   where: SQL;
+  extras: Record<string, { sql: SQL }>;
   orderBy: SQL[];
   limit: number;
   offset: number;
@@ -105,6 +107,18 @@ describe('leads.list (sorting and filtering)', () => {
     expect(findManyArgs?.offset).toBe(20);
     expect(result.items[0].lastActivityAt).toEqual(new Date('2026-10-15T12:00:00.500Z'));
     expect(result.items[0].tags).toEqual([{ id: 't', name: 'tag' }]);
+  });
+
+  it('reads the MQL level of each lead in the same query (#196)', async () => {
+    await caller.leads.list({ organizationId: ORG_ID });
+    const extra = findManyArgs?.extras.mqlLevel;
+    expect(extra).toBeDefined();
+    expect(render(extra?.sql).sql).toContain(render(leadMqlLevel).sql);
+  });
+
+  it('keeps the MQL filter on the MQL date (#196)', async () => {
+    expect((await whereOf({ mql: true })).sql).toContain('"leads"."mql_qualified_at" is not null');
+    expect((await whereOf({ mql: false })).sql).toContain('"leads"."mql_qualified_at" is null');
   });
 
   it('counts with the same conditions as the page', async () => {

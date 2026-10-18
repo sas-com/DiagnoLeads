@@ -1,5 +1,6 @@
 'use client';
 
+import { TAP_TARGET } from '@/components/common/tap-target';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -81,7 +82,8 @@ export function ContactQuickActions({
   const submit = (kind: ContactKind, text?: string) =>
     record.mutate({ organizationId, leadId, kind, note: text?.trim() ? text : null });
 
-  const size = compact ? 'h-8 px-2 text-xs' : 'h-9';
+  // The lead page's bar is 44px tall on phones (#196); the dashboard row stays compact
+  const size = compact ? 'h-8 px-2 text-xs' : cn('h-9', TAP_TARGET);
   return (
     <fieldset
       aria-label={t('recordFor', { lead: leadLabel })}

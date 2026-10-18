@@ -271,3 +271,58 @@ describe('LeadTable on a phone (cards, #110)', () => {
     expect(screen.queryByRole('list', { name: t.cards.label })).not.toBeInTheDocument();
   });
 });
+
+describe('MQL level badges in the list (#196)', () => {
+  const levels = messages.leadActivity.summary.mqlLevels;
+  const leads = [
+    makeLead('i1', { company: '関心商事', mqlLevel: 'interest' }),
+    makeLead('f1', { company: '適合商事', mqlLevel: 'fit', mqlQualifiedAt: null }),
+    makeLead('m1', { company: '手動商事', mqlLevel: null }),
+    makeLead('n1', { company: '対象外商事', mqlLevel: 'none', mqlQualifiedAt: null }),
+    makeLead('x1', { company: 'データなし商事', mqlQualifiedAt: null }),
+  ];
+
+  it('shows 関心あり / 適合 / MQL on the cards, with the MQL date as the tooltip', () => {
+    renderList({ leads });
+    const card = (name: string) => within(screen.getByRole('listitem', { name: new RegExp(name) }));
+
+    const interest = card('関心商事').getByText(levels.interest);
+    expect(interest).toHaveAttribute('title', 'MQL判定日：2026/10/01');
+    expect(card('関心商事').queryByText(t.mql)).not.toBeInTheDocument();
+    expect(card('関心商事').queryByText(levels.fit)).not.toBeInTheDocument();
+
+    expect(card('適合商事').getByText(levels.fit)).toBeInTheDocument();
+    expect(card('適合商事').queryByTestId('lead-mql-badge')).not.toBeInTheDocument();
+
+    // An MQL date without a level (e.g. set by hand) keeps the plain MQL badge
+    expect(card('手動商事').getByText(t.mql)).toHaveAttribute('title', 'MQL判定日：2026/10/01');
+
+    for (const name of ['対象外商事', 'データなし商事']) {
+      expect(card(name).queryByTestId('lead-mql-badge')).not.toBeInTheDocument();
+      expect(card(name).queryByTestId('lead-mql-fit-badge')).not.toBeInTheDocument();
+    }
+  });
+
+  it('shows the same badges and the date in the table column', () => {
+    setWidth(1440);
+    renderList({ leads, columnPreferences: { mqlQualifiedAt: true } });
+    const row = (name: string) => {
+      const cell = screen.getByRole('cell', { name: new RegExp(name) });
+      const tr = cell.closest('tr');
+      if (!tr) throw new Error('no row');
+      return within(tr);
+    };
+
+    expect(row('関心商事').getByText(levels.interest)).toHaveAttribute(
+      'title',
+      'MQL判定日：2026/10/01'
+    );
+    expect(row('関心商事').getByText('2026/10/01')).toBeInTheDocument();
+    expect(row('適合商事').getByText(levels.fit)).toBeInTheDocument();
+    expect(row('手動商事').getByText(t.mql)).toBeInTheDocument();
+    for (const name of ['対象外商事', 'データなし商事']) {
+      expect(row(name).queryByTestId('lead-mql-badge')).not.toBeInTheDocument();
+      expect(row(name).queryByTestId('lead-mql-fit-badge')).not.toBeInTheDocument();
+    }
+  });
+});

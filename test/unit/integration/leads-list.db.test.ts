@@ -339,6 +339,56 @@ describe.skipIf(!url)('lead list (PostgreSQL)', () => {
     });
   });
 
+  describe('MQL level (#196)', () => {
+    it('reads the level from the stored diagnosis summaries, like the lead page', async () => {
+      // An organization of its own, so the fixture counts above stay as they are
+      const orgC = await createOrganization('一覧テストC株式会社');
+      const callerC = await callerFor(orgC);
+      const cases: [string, Record<string, unknown>, string | null][] = [
+        ['ax-interest', { axMigration: { mql: { level: 'interest' }, mqlCandidate: true } }, 'interest'],
+        ['ax-fit', { axMigration: { mql: { level: 'fit' } } }, 'fit'],
+        ['ax-none', { axMigration: { mql: { level: 'none' }, mqlCandidate: true } }, 'none'],
+        // Judged before 2026-10-16 (#139): only mqlCandidate
+        ['ax-legacy-fit', { axMigration: { mqlCandidate: true } }, 'fit'],
+        ['ax-legacy-none', { axMigration: { mqlCandidate: false } }, 'none'],
+        ['ax-broken-level', { axMigration: { mql: { level: 'hot' }, mqlCandidate: true } }, 'fit'],
+        ['builder-fit', { diagnosis: { mqlLevel: 'fit', mqlQualified: false } }, 'fit'],
+        ['builder-qualified', { diagnosis: { mqlQualified: true } }, 'interest'],
+        ['both', { axMigration: { mqlCandidate: true }, diagnosis: { mqlLevel: 'interest' } }, 'interest'],
+        ['none', {}, null],
+        ['not-an-object', { axMigration: 'x', diagnosis: [1] }, null],
+      ];
+      const nameOf = new Map<string, string>();
+      for (const [name, responses] of cases) {
+        const [row] = await pg
+          .insert(leads)
+          .values({
+            organizationId: orgC,
+            email: `${name}-${unique()}@example.com`,
+            status: 'new',
+            responses,
+            // A hand-set MQL date does not change the level
+            mqlQualifiedAt: name === 'none' ? at('2026-10-10T00:00:00Z') : null,
+          })
+          .returning();
+        nameOf.set(row.id, name);
+      }
+
+      const result = await callerC.leads.list({ organizationId: orgC, limit: 100 });
+      const levels = Object.fromEntries(
+        result.items.map((item: { id: string; mqlLevel: string | null }) => [
+          nameOf.get(item.id),
+          item.mqlLevel,
+        ])
+      );
+      expect(levels).toEqual(Object.fromEntries(cases.map(([name, , level]) => [name, level])));
+
+      // The MQL filter stays on the MQL date
+      const mql = await callerC.leads.list({ organizationId: orgC, mql: true });
+      expect(mql.items.map((item: { id: string }) => nameOf.get(item.id))).toEqual(['none']);
+    });
+  });
+
   it('has exactly the five fixture leads in the organization', async () => {
     // Sanity: the fixture rows are where the test expects them
     const rows = await pg.select({ id: leads.id }).from(leads).where(eq(leads.organizationId, orgA));

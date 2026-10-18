@@ -92,7 +92,7 @@ export function OrganizationSwitcher() {
         <summary
           data-testid="organization-switcher"
           aria-label={t('label')}
-          className="flex items-center justify-between w-[200px] px-3 py-2 text-sm border rounded-md hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800 cursor-pointer list-none"
+          className="flex items-center justify-between w-[200px] min-h-11 lg:min-h-0 px-3 py-2 text-sm border rounded-md hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800 cursor-pointer list-none"
         >
           <div className="flex-1 truncate" data-testid="current-org-name">
             {currentOrg?.name || t('select')}
