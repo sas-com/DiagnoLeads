@@ -394,7 +394,7 @@ describe('Integration: invalidateCollection', () => {
 
   it('should call revalidateTag', async () => {
     await invalidateCollection('blog-posts');
-    expect(revalidateTag).toHaveBeenCalledWith('cms:blog-posts');
+    expect(revalidateTag).toHaveBeenCalledWith('cms:blog-posts', { expire: 0 });
   });
 });
 
@@ -405,8 +405,8 @@ describe('Integration: invalidateDocument', () => {
 
   it('should call revalidateTag for document and collection', async () => {
     await invalidateDocument('blog-posts', 'post-123');
-    expect(revalidateTag).toHaveBeenCalledWith('cms:blog-posts:post-123');
-    expect(revalidateTag).toHaveBeenCalledWith('cms:blog-posts');
+    expect(revalidateTag).toHaveBeenCalledWith('cms:blog-posts:post-123', { expire: 0 });
+    expect(revalidateTag).toHaveBeenCalledWith('cms:blog-posts', { expire: 0 });
   });
 });
 
@@ -417,8 +417,8 @@ describe('Integration: invalidateBySlug', () => {
 
   it('should call revalidateTag for slug and collection', async () => {
     await invalidateBySlug('blog-posts', 'hello-world');
-    expect(revalidateTag).toHaveBeenCalledWith('cms:blog-posts:slug:hello-world');
-    expect(revalidateTag).toHaveBeenCalledWith('cms:blog-posts');
+    expect(revalidateTag).toHaveBeenCalledWith('cms:blog-posts:slug:hello-world', { expire: 0 });
+    expect(revalidateTag).toHaveBeenCalledWith('cms:blog-posts', { expire: 0 });
   });
 });
 
@@ -429,7 +429,7 @@ describe('Integration: invalidateOrganization', () => {
 
   it('should call revalidateTag for organization', async () => {
     await invalidateOrganization('org-123');
-    expect(revalidateTag).toHaveBeenCalledWith('cms:org:org-123');
+    expect(revalidateTag).toHaveBeenCalledWith('cms:org:org-123', { expire: 0 });
   });
 });
 
@@ -440,7 +440,7 @@ describe('Integration: invalidateAllCMS', () => {
 
   it('should call revalidateTag for cms root', async () => {
     await invalidateAllCMS();
-    expect(revalidateTag).toHaveBeenCalledWith('cms');
+    expect(revalidateTag).toHaveBeenCalledWith('cms', { expire: 0 });
   });
 });
 
