@@ -99,12 +99,12 @@ describe('AX migration landing page', () => {
       '現行仕様調査',
       'マイグレーション',
       'AX化',
-      '短納期',
+      'スピード',
       '高品質',
     ]) {
       expect(screen.getAllByRole('heading', { level: 3, name }).length).toBeGreaterThanOrEqual(1);
     }
-    expect(screen.getByText('高成長の経営判断').tagName).toBe('EM');
+    expect(screen.getByText('経営判断').tagName).toBe('EM');
     const reasons = screen.getByRole('heading', { level: 2, name: '選ばれる理由' }).closest('section');
     expect(
       within(reasons as HTMLElement).getByText(/^※お預かりした仕様書・ソースコードなどは/)
