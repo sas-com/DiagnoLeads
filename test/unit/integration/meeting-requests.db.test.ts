@@ -142,12 +142,35 @@ describe.skipIf(!url)('meeting requests (PostgreSQL)', () => {
           organizationId: org,
           leadId: null,
           submissionId: '00000000-0000-4000-8000-000000000000',
+          identityVerified: true,
           preferences: { candidates: OPTIONS, attendeeRoles: [], meetingFormat: null },
         },
         later,
         NOW
       )
     ).toBe('unavailable');
+
+    // An answer tied to the lead by email only never changes it, even before a confirmation
+    expect(
+      await acceptMeetingPreferences(
+        pg,
+        {
+          organizationId: org,
+          leadId,
+          submissionId: '00000000-0000-4000-8000-000000000000',
+          identityVerified: false,
+          preferences: {
+            candidates: [{ date: '2026-10-30', time: '16:00' }],
+            attendeeRoles: [],
+            meetingFormat: null,
+          },
+        },
+        later,
+        NOW
+      )
+    ).toBe('unavailable');
+    const after = await callers.rep.meetingRequests.get({ organizationId: org, leadId });
+    expect(after.request.candidates).toEqual([{ date: '2026-10-22', time: '11:00' }]);
     expect(later).not.toHaveBeenCalled();
   });
 
