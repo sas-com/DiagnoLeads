@@ -1,4 +1,5 @@
 import type { db as defaultDb } from '@/lib/db/client';
+import { unwrapQueryError } from '@/lib/db/query-error';
 import { env } from '@/lib/env';
 import { type RateLimitRule, consumeRateLimit } from '@/lib/features/diagnostics/rate-limit';
 import { isEmailConfigured, sendEmail } from '@/lib/features/email';
@@ -34,7 +35,8 @@ export interface ServerErrorSummary {
  * What of an error goes into the alert: names and code locations, never its message or
  * database detail (they can hold a respondent's email address or answers)
  */
-export function summarizeServerError(error: unknown): ServerErrorSummary {
+export function summarizeServerError(thrown: unknown): ServerErrorSummary {
+  const error = unwrapQueryError(thrown);
   if (!(error instanceof Error)) return { name: typeof error, frames: [] };
   const fields = error as Error & Record<string, unknown>;
   const text = (value: unknown) => (typeof value === 'string' ? value : undefined);
