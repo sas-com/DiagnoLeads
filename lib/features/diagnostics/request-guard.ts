@@ -2,6 +2,14 @@ import { isIP } from 'node:net';
 import { type NextRequest, NextResponse } from 'next/server';
 
 /**
+ * Body limit of the consultation requests, which may carry the first meeting preferences
+ * (#155, #244). The largest body the form can send is about 1.4 KB: every option ticked and a
+ * 300 character Japanese note (3 bytes a character; the note refuses control characters and lone
+ * surrogates, which JSON would escape to six bytes each).
+ */
+export const CONSULTATION_BODY_MAX_BYTES = 2048;
+
+/**
  * Basic checks for the public diagnosis endpoints (no authentication):
  * - JSON only (rejects text/plain "simple requests" that cross-site forms can send)
  * - same-origin only when the browser sends an Origin header

@@ -1,8 +1,10 @@
 /**
  * The respondent's preferred dates on the lead page (#155): pick one and confirm it, with or
- * without the confirmation email; a confirmed meeting can be changed. Made-up names.
+ * without the confirmation email; a confirmed meeting can be changed; the topics and the note
+ * of #244. Made-up names.
  */
 import { MeetingRequestCard } from '@/components/features/meeting-requests/meeting-request-card';
+import enMessages from '@/locales/en/common.json';
 import messages from '@/locales/ja/common.json';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
@@ -34,6 +36,8 @@ const request = (values: Record<string, unknown> = {}) => ({
   ],
   attendeeRoles: ['executive', 'it_staff'],
   meetingFormat: 'online',
+  topics: [],
+  topicNote: null,
   confirmed: null,
   confirmationEmailedAt: null,
   requestedAt: new Date('2026-10-16T01:00:00Z'),
@@ -57,6 +61,49 @@ beforeEach(() => {
 });
 
 describe('MeetingRequestCard', () => {
+  it('shows the topics and the note as plain text (#244)', () => {
+    mocks.result = {
+      data: {
+        request: request({
+          topics: ['result_detail', 'cost'],
+          topicNote: '<b>移行</b>の時期\n来期の予算',
+        }),
+        canEdit: true,
+        emailConfigured: true,
+      },
+      isError: false,
+    };
+    const { container } = renderCard();
+    expect(screen.getByText('相談したい内容')).toBeInTheDocument();
+    expect(screen.getByText('診断結果の詳しい説明、費用の目安')).toBeInTheDocument();
+    const note = screen.getByText(/<b>移行<\/b>の時期/);
+    expect(note).toHaveClass('whitespace-pre-wrap');
+    expect(container.querySelector('b')).toBeNull();
+  });
+
+  it('joins the topics with the separator of the locale', () => {
+    mocks.result = {
+      data: {
+        request: request({ topics: ['result_detail', 'cost'] }),
+        canEdit: true,
+        emailConfigured: true,
+      },
+      isError: false,
+    };
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages} timeZone="Asia/Tokyo">
+        <MeetingRequestCard organizationId={ORG_ID} leadId={LEAD_ID} />
+      </NextIntlClientProvider>
+    );
+    expect(screen.getByText('The diagnosis result in detail, Rough costs')).toBeInTheDocument();
+  });
+
+  it('says none when no topic was chosen and leaves the note out', () => {
+    renderCard();
+    expect(screen.getByText('相談したい内容')).toBeInTheDocument();
+    expect(screen.queryByText('ご相談内容（自由記述）')).not.toBeInTheDocument();
+  });
+
   it('shows the options, attendees and format, and confirms the picked one with the email', () => {
     renderCard();
     expect(screen.getByText('経営層・決裁者、情報システム部門の担当者')).toBeInTheDocument();
