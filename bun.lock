@@ -119,6 +119,9 @@
       },
     },
   },
+  "patchedDependencies": {
+    "drizzle-orm@0.45.4": "patches/drizzle-orm@0.45.4.patch",
+  },
   "overrides": {
     "zod-to-json-schema": "3.23.5",
   },

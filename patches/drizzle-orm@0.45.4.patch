@@ -1,0 +1,38 @@
+diff --git a/errors.cjs b/errors.cjs
+index b593f0da263a7ad7904f44e89f1c0992c39c4aad..9796b3d7a4d62b58e73df52b2d43e99ac3248fba 100644
+--- a/errors.cjs
++++ b/errors.cjs
+@@ -34,10 +34,11 @@ class DrizzleError extends Error {
+ }
+ class DrizzleQueryError extends Error {
+   constructor(query, params, cause) {
+-    super(`Failed query: ${query}
+-params: ${params}`);
++    // Patched (DiagnoLeads #236): parameter values can hold personal data, so keep them out of
++    // the message and out of what console.error / util.inspect prints
++    super(`Failed query: ${query}`);
+     this.query = query;
+-    this.params = params;
++    Object.defineProperty(this, "params", { value: params, enumerable: false, writable: true, configurable: true });
+     this.cause = cause;
+     Error.captureStackTrace(this, DrizzleQueryError);
+     if (cause) this.cause = cause;
+diff --git a/errors.js b/errors.js
+index 6db8b6365e30f239bf2738504937ed81733e82dd..8886558c60848817ade423f349e3cc98f651728f 100644
+--- a/errors.js
++++ b/errors.js
+@@ -9,10 +9,11 @@ class DrizzleError extends Error {
+ }
+ class DrizzleQueryError extends Error {
+   constructor(query, params, cause) {
+-    super(`Failed query: ${query}
+-params: ${params}`);
++    // Patched (DiagnoLeads #236): parameter values can hold personal data, so keep them out of
++    // the message and out of what console.error / util.inspect prints
++    super(`Failed query: ${query}`);
+     this.query = query;
+-    this.params = params;
++    Object.defineProperty(this, "params", { value: params, enumerable: false, writable: true, configurable: true });
+     this.cause = cause;
+     Error.captureStackTrace(this, DrizzleQueryError);
+     if (cause) this.cause = cause;
