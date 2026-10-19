@@ -210,6 +210,14 @@ describe.skipIf(!url)('when to act (PostgreSQL)', () => {
     expect(soon.items.filter((lead: { actBy: string | null }) => lead.actBy && lead.actBy > '2029-01-01')).toEqual([]);
   });
 
+  it('stops the morning run when its time is up, leaving the rest for the next run', async () => {
+    let tick = 0;
+    // Each check of the clock moves it on by 6 s: the second lead is past the 10 s budget
+    const result = await recomputeRecentlyUpdated(pg, new Date(), { clock: () => (tick += 6000) });
+    expect(result.recomputed).toBe(1);
+    expect(result.pending).toBeGreaterThan(0);
+  });
+
   it('lets owners and admins change the settings, recomputing the leads', async () => {
     await expect(
       callers.member.actTiming.updateSettings({ organizationId: org, settings: { migrationMonths: 24, noticeMonths: 1 } })

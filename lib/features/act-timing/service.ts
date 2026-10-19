@@ -23,7 +23,7 @@ import {
 import { AX_MIGRATION_DIAGNOSTIC_KEY } from '@/lib/features/diagnostics/ax-migration/definition';
 import { parseStoredHearingFields } from '@/lib/features/lead-hearings/types/schemas';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
-import { and, desc, eq, gte, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, isNull, sql } from 'drizzle-orm';
 import { type ActTiming, computeActTiming } from './compute';
 import { type ActTimingSettings, readActTimingSettings } from './types/schemas';
 
@@ -32,8 +32,13 @@ type Database = Pick<typeof defaultDb, 'select' | 'insert' | 'update' | 'delete'
 
 /** Leads updated within this many days are recomputed by the morning run */
 export const RECOMPUTE_RECENT_DAYS = 2;
-/** Leads recomputed per morning run */
-export const RECOMPUTE_BATCH = 500;
+/** Leads recomputed per morning run, oldest update first; the rest wait for the next run */
+export const RECOMPUTE_BATCH = 100;
+/**
+ * Time the morning run spends recomputing: it shares the function's time limit (30 s on
+ * Vercel) with the due notices that follow, so it stops early and leaves the rest for tomorrow
+ */
+export const RECOMPUTE_TIME_BUDGET_MS = 10_000;
 
 export interface ActTimingState {
   timing: ActTiming | null;
@@ -227,15 +232,25 @@ export async function recomputeOrganization(
 }
 
 /** The morning run: leads updated in the last days (diagnosis answers, status changes) */
-export async function recomputeRecentlyUpdated(db: Database, now: Date = new Date()) {
+export async function recomputeRecentlyUpdated(
+  db: Database,
+  now: Date = new Date(),
+  options: { timeBudgetMs?: number; clock?: () => number } = {}
+) {
+  const clock = options.clock ?? Date.now;
+  const startedAt = clock();
+  const budget = options.timeBudgetMs ?? RECOMPUTE_TIME_BUDGET_MS;
   const since = new Date(now.getTime() - RECOMPUTE_RECENT_DAYS * 24 * 60 * 60 * 1000);
   const rows = await db
     .select({ id: leads.id, organizationId: leads.organizationId })
     .from(leads)
     .where(gte(leads.updatedAt, since))
+    .orderBy(asc(leads.updatedAt))
     .limit(RECOMPUTE_BATCH);
   const settingsByOrg = new Map<string, ActTimingSettings>();
+  let recomputed = 0;
   for (const row of rows) {
+    if (clock() - startedAt > budget) break;
     let settings = settingsByOrg.get(row.organizationId);
     if (!settings) {
       settings = await getActTimingSettings(db, row.organizationId);
@@ -246,8 +261,9 @@ export async function recomputeRecentlyUpdated(db: Database, now: Date = new Dat
       { organizationId: row.organizationId, leadId: row.id, userId: null },
       { now, settings }
     );
+    recomputed += 1;
   }
-  return { recomputed: rows.length };
+  return { recomputed, pending: rows.length - recomputed };
 }
 
 /** Save the organization's settings (merged into organizations.settings) */
