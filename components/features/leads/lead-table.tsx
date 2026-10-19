@@ -73,7 +73,7 @@ import {
   Settings2,
   Trash2,
 } from 'lucide-react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { TagBadgeList } from '../tags/tag-badge';
 import { BulkActions } from './bulk-actions';
@@ -118,6 +118,8 @@ export function defaultColumnVisibility(width: number): VisibilityState {
     mqlQualifiedAt: false,
     nextMeetingDate: false,
     dealRating: false,
+    // "When to act" (#151): from the columns menu
+    actBy: false,
   };
   if (width < 640) {
     return {
@@ -226,6 +228,7 @@ export function LeadTable({
 }: LeadTableProps) {
   const t = useTranslations('leads');
   const tList = useTranslations('leadList');
+  const format = useFormatter();
   const pdfLabels = usePdfReportLabels();
   const tSource = useTranslations('leadSource');
   const tPipeline = useTranslations('pipeline');
@@ -505,6 +508,24 @@ export function LeadTable({
       cell: ({ row }) => <DealRatingBadge rating={row.original.dealRating} />,
     },
     {
+      // "When to act" (#151): the 1st of the month, shown as the month
+      id: 'actBy',
+      accessorFn: (row) => row.actBy ?? null,
+      header: sortableHeader('actBy', tList('actBy')),
+      cell: ({ row }) =>
+        row.original.actBy ? (
+          <span className="whitespace-nowrap tabular-nums">
+            {format.dateTime(new Date(`${row.original.actBy}T00:00:00Z`), {
+              year: 'numeric',
+              month: 'short',
+              timeZone: 'UTC',
+            })}
+          </span>
+        ) : (
+          <span className="text-gray-400">—</span>
+        ),
+    },
+    {
       id: 'actions',
       header: () => <span className="sr-only">{tCommon('actions')}</span>,
       cell: ({ row }) => {
@@ -697,6 +718,7 @@ export function LeadTable({
     mqlQualifiedAt: t('mqlQualifiedAt'),
     nextMeetingDate: tList('nextMeeting'),
     dealRating: tList('dealRating'),
+    actBy: tList('actBy'),
   };
 
   if (isLoading) {

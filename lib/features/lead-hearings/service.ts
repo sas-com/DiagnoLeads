@@ -8,6 +8,7 @@
 
 import type { db as defaultDb } from '@/lib/db/client';
 import { diagnosisVersions, diagnosticSubmissions, leadHearings, leads } from '@/lib/db/schema';
+import { refreshActTimingAfterHearing } from '@/lib/features/act-timing/service';
 import { DIAGNOSIS_SUBMISSION_KEY_PREFIX } from '@/lib/features/diagnosis-builder/public-diagnosis';
 import { AX_MIGRATION_DIAGNOSTIC_KEY } from '@/lib/features/diagnostics/ax-migration/definition';
 import { syncHearingNextAction } from '@/lib/features/lead-follow-up/service';
@@ -307,7 +308,7 @@ export async function createLeadHearing(
   const now = options.now ?? new Date();
   const { organizationId, leadId } = input;
 
-  return db.transaction(async (tx) => {
+  const view = await db.transaction(async (tx) => {
     // Locks the lead so concurrent creates cannot pass the limit together
     const [lead] = await tx
       .select({ id: leads.id })
@@ -389,6 +390,9 @@ export async function createLeadHearing(
     });
     return toHearingView(row);
   });
+  // "When to act" follows the latest hearing (#151)
+  await refreshActTimingAfterHearing(db, { organizationId, leadId, userId: input.userId });
+  return view;
 }
 
 /**
@@ -441,6 +445,11 @@ export async function updateLeadHearing(
   });
   if (row) {
     const view = toHearingView(row);
+    await refreshActTimingAfterHearing(db, {
+      organizationId: input.organizationId,
+      leadId: row.leadId,
+      userId: input.userId,
+    });
     const after = aiSourceAnalysisOf(view.fields);
     if (after && shouldNotifyRestriction(aiSourceAnalysisOf(before), after)) {
       await notifyAiRestriction(db, {
@@ -473,7 +482,13 @@ export async function deleteLeadHearing(
   const [row] = await db
     .delete(leadHearings)
     .where(hearingScope(input.organizationId, input.id))
-    .returning({ id: leadHearings.id });
+    .returning({ id: leadHearings.id, leadId: leadHearings.leadId });
   if (!row) throw notFound('hearing');
-  return row;
+  // The previous hearing becomes the latest one (#151)
+  await refreshActTimingAfterHearing(db, {
+    organizationId: input.organizationId,
+    leadId: row.leadId,
+    userId: null,
+  });
+  return { id: row.id };
 }

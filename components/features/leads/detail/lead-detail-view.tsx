@@ -1,6 +1,7 @@
 'use client';
 
 import { PageHeader } from '@/components/common/page-header';
+import { ActTimingCard } from '@/components/features/act-timing/act-timing-card';
 import { AppointmentReviewCard } from '@/components/features/appointment-reviews/appointment-review-card';
 import { LeadActivityCard } from '@/components/features/lead-activity/lead-activity-card';
 import { LeadContactBar } from '@/components/features/lead-follow-up/lead-contact-bar';
@@ -397,6 +398,7 @@ function LeadDetailContent({
           <TabsContent value="overview" className="mt-4 space-y-4">
             <MeetingRequestCard organizationId={organizationId} leadId={lead.id} />
             <LeadPrepCard organizationId={organizationId} leadId={lead.id} />
+            <ActTimingCard organizationId={organizationId} leadId={lead.id} />
             <LeadNextActionsCard organizationId={organizationId} leadId={lead.id} />
             {lead.agencyName?.trim() && (
               <AppointmentReviewCard organizationId={organizationId} leadId={lead.id} />

@@ -1,5 +1,6 @@
 import { abTestsRouter } from '@/lib/features/ab-tests/api/router';
 import { accountRouter } from '@/lib/features/account/api/router';
+import { actTimingRouter } from '@/lib/features/act-timing/api/router';
 import { agencyContractsRouter } from '@/lib/features/agency-contracts/api/router';
 import { agencyLinksRouter } from '@/lib/features/agency-links/api/router';
 import { aiRouter } from '@/lib/features/ai/api/router';
@@ -70,6 +71,7 @@ export const appRouter = router({
   appointmentReviews: appointmentReviewsRouter, // Whether agency appointments met the conditions (Refs #149)
   meetingRequests: meetingRequestsRouter, // First meeting preferences and confirmation (Refs #155)
   leadPrep: leadPrepRouter, // Pre-meeting prep card (Refs #156)
+  actTiming: actTimingRouter, // When to act and its contact again (Refs #151)
   leadHearings: leadHearingsRouter, // Initial meeting hearings per lead (Refs #84)
   contentEditors: contentEditorsRouter, // FAQ / blog editors granted from settings (#91)
   leadActivity: leadActivityRouter, // Activity timeline per lead (Refs #101)

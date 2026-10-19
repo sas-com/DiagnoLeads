@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
+import { ActTimingSettingsCard } from '@/components/features/act-timing/act-timing-settings-card';
 import { LeadIntakeSettings } from '@/components/features/leads/lead-intake-settings';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -297,6 +298,7 @@ export default function OrganizationSettingsPage() {
 
         {/* Intake members for consultation requests (#135) */}
         {contextOrgId && <LeadIntakeSettings organizationId={contextOrgId} />}
+        {contextOrgId && <ActTimingSettingsCard organizationId={contextOrgId} />}
 
         {/* Info Callout */}
         <Callout title={t('hintsTitle')} icon={CheckCircle} color="blue">

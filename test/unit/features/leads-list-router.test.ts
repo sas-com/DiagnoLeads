@@ -261,6 +261,8 @@ describe('leads.list (sorting and filtering)', () => {
       // Latest hearing (#137), else the confirmed first meeting (#155)
       nextMeetingDate: "coalesce((select case when (h.fields -> 'nextMeetingDate' ->> 'value') ~",
       dealRating: "(select case when (h.fields -> 'dealRating' ->> 'value') in ('a', 'b', 'c')",
+      // "When to act" (#151)
+      actBy: '"leads"."act_by"',
     };
 
     it.each(LEAD_SORT_KEYS.flatMap((key) => [[key, 'asc'] as const, [key, 'desc'] as const]))(
