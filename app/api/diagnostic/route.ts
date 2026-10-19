@@ -5,7 +5,7 @@ import { isLegacyDiagnosticFormEnabled } from '@/lib/features/diagnostics/legacy
 import { generateDiagnosticResultEmail, isEmailConfigured, sendEmail } from '@/lib/features/email';
 import { triggerWebhooks } from '@/lib/features/webhooks/services/webhook-service';
 import { eq } from 'drizzle-orm';
-import { type NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse, after } from 'next/server';
 import { z } from 'zod';
 
 /**
@@ -191,20 +191,23 @@ export async function POST(req: NextRequest) {
       })
       .returning({ id: leads.id });
 
-    // Trigger webhooks for diagnostic.submitted event (non-blocking)
-    triggerWebhooks(organizationId, 'diagnostic.submitted', {
-      leadId: lead.id,
-      email: data.email,
-      name: data.name,
-      company: data.companyName,
-      score,
-      source: 'website',
-      submittedAt: data.submittedAt || new Date().toISOString(),
-    }).catch((error) => {
-      console.error('Failed to trigger webhooks:', error);
-    });
+    // Webhooks and the result email run after the response: the respondent does not wait for
+    // them, and after() keeps the function alive until they finish (#65/#66)
+    const submittedAt = data.submittedAt || new Date().toISOString();
+    after(() =>
+      triggerWebhooks(organizationId, 'diagnostic.submitted', {
+        leadId: lead.id,
+        email: data.email,
+        name: data.name,
+        company: data.companyName,
+        score,
+        source: 'website',
+        submittedAt,
+      }).catch((error) => {
+        console.error('Failed to trigger webhooks:', error);
+      })
+    );
 
-    // Send diagnostic result email (non-blocking)
     if (isEmailConfigured()) {
       const emailData = generateDiagnosticResultEmail({
         name: data.name,
@@ -220,14 +223,16 @@ export async function POST(req: NextRequest) {
         locale: (data.locale as 'en' | 'ja') || 'en',
       });
 
-      sendEmail({
-        to: data.email,
-        subject: emailData.subject,
-        html: emailData.html,
-        text: emailData.text,
-      }).catch((error) => {
-        console.error('Failed to send diagnostic result email:', error);
-      });
+      after(() =>
+        sendEmail({
+          to: data.email,
+          subject: emailData.subject,
+          html: emailData.html,
+          text: emailData.text,
+        }).catch((error) => {
+          console.error('Failed to send diagnostic result email:', error);
+        })
+      );
     }
 
     // Return success response

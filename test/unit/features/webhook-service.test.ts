@@ -22,6 +22,8 @@ global.fetch = vi.fn();
 
 import { db } from '@/lib/db/client';
 import {
+  WEBHOOK_DELIVERY_LEASE_MS,
+  WEBHOOK_DELIVERY_TIMEOUT_MS,
   cleanupOldDeliveries,
   generateWebhookSecret,
   generateWebhookSignature,
@@ -216,6 +218,149 @@ describe('webhook-service', () => {
       const result = await triggerWebhooks('org-1', 'lead.created', { leadId: 'lead-1' });
 
       expect(result.failed).toBe(1);
+    });
+  });
+
+  describe('delivery timing (#69)', () => {
+    const webhook = (id: string) => ({
+      id,
+      organizationId: 'org-1',
+      url: `https://example.com/${id}`,
+      secret: 'whsec_test',
+      events: ['lead.created'],
+      status: 'active',
+      headers: {},
+      retryConfig: { maxRetries: 3, retryDelayMs: 5000 },
+      failureCount: 0,
+    });
+    const okResponse = {
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      text: vi.fn().mockResolvedValue('ok'),
+    };
+    const flush = async () => {
+      for (let i = 0; i < 20; i++) await Promise.resolve();
+    };
+
+    it('gives up an attempt after 8 seconds', async () => {
+      expect(WEBHOOK_DELIVERY_TIMEOUT_MS).toBe(8000);
+      (db.where as ReturnType<typeof vi.fn>).mockResolvedValue([webhook('webhook-1')]);
+      (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(
+        (_url: string, init: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+          })
+      );
+
+      let result: { triggered: number; failed: number } | undefined;
+      void triggerWebhooks('org-1', 'lead.created', {}).then((r) => {
+        result = r;
+      });
+      await vi.advanceTimersByTimeAsync(WEBHOOK_DELIVERY_TIMEOUT_MS - 1);
+      expect(result).toBeUndefined();
+      await vi.advanceTimersByTimeAsync(1);
+      await flush();
+      expect(result).toEqual({ triggered: 0, failed: 1 });
+    });
+
+    it('sends to all endpoints in parallel', async () => {
+      (db.where as ReturnType<typeof vi.fn>).mockResolvedValue([
+        webhook('webhook-1'),
+        webhook('webhook-2'),
+        webhook('webhook-3'),
+      ]);
+      const pending: Array<() => void> = [];
+      (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            pending.push(() => resolve(okResponse));
+          })
+      );
+
+      const run = triggerWebhooks('org-1', 'lead.created', {});
+      await flush();
+      // All three requests are open before any of them has answered
+      expect(global.fetch).toHaveBeenCalledTimes(3);
+      for (const answer of pending) answer();
+      await expect(run).resolves.toEqual({ triggered: 3, failed: 0 });
+    });
+
+    it('a failure to record one delivery does not stop the others', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      (db.where as ReturnType<typeof vi.fn>).mockResolvedValue([
+        webhook('webhook-1'),
+        webhook('webhook-2'),
+      ]);
+      (db.returning as ReturnType<typeof vi.fn>)
+        .mockRejectedValueOnce(new Error('insert failed'))
+        .mockResolvedValueOnce([{ id: 'delivery-2' }]);
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(okResponse);
+
+      await expect(triggerWebhooks('org-1', 'lead.created', {})).resolves.toEqual({
+        triggered: 1,
+        failed: 1,
+      });
+    });
+
+    it('stores the delivery as due for retry before sending it', async () => {
+      (db.where as ReturnType<typeof vi.fn>).mockResolvedValue([webhook('webhook-1')]);
+      (db.returning as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: 'delivery-1' }]);
+      let sentAfterInsert = false;
+      (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+        sentAfterInsert = (db.values as ReturnType<typeof vi.fn>).mock.calls.length === 1;
+        return okResponse;
+      });
+
+      await triggerWebhooks('org-1', 'lead.created', {});
+
+      expect(sentAfterInsert).toBe(true);
+      expect(db.values).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'pending',
+          attempts: 1,
+          nextRetryAt: new Date(Date.now() + WEBHOOK_DELIVERY_LEASE_MS),
+        })
+      );
+      // On success the retry time is cleared
+      expect(db.set).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'success', nextRetryAt: null, attempts: 1 })
+      );
+    });
+
+    it('on failure moves the retry time by the configured delay', async () => {
+      (db.where as ReturnType<typeof vi.fn>).mockResolvedValue([webhook('webhook-1')]);
+      (db.returning as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: 'delivery-1' }]);
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ok: false,
+        status: 503,
+        statusText: 'Unavailable',
+        text: vi.fn().mockResolvedValue(''),
+      });
+
+      await triggerWebhooks('org-1', 'lead.created', {});
+
+      expect(db.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'pending',
+          attempts: 1,
+          nextRetryAt: new Date(Date.now() + 5000),
+        })
+      );
+    });
+
+    it('fails the delivery at once when maxRetries allows a single attempt', async () => {
+      (db.where as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { ...webhook('webhook-1'), retryConfig: { maxRetries: 1, retryDelayMs: 5000 } },
+      ]);
+      (db.returning as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: 'delivery-1' }]);
+      (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('refused'));
+
+      await triggerWebhooks('org-1', 'lead.created', {});
+
+      expect(db.set).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'failed', attempts: 1, nextRetryAt: null })
+      );
     });
   });
 

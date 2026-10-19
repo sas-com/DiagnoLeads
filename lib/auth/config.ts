@@ -10,6 +10,7 @@ import {
   detectLocaleFromHeaders,
   generatePasswordResetEmail,
   generateVerificationEmail,
+  runAfterResponse,
   sendAuthEmail,
 } from './email-helpers';
 import { isLocalHttpUrl } from './local-url';
@@ -48,7 +49,8 @@ export const auth = betterAuth({
     sendResetPassword: async ({ user, url }, request) => {
       const locale = detectLocaleFromHeaders(request?.headers);
       const { subject, text } = generatePasswordResetEmail(user, url, locale);
-      void sendAuthEmail({ to: user.email, subject, text });
+      // Returned, not awaited here: better-auth hands it to advanced.backgroundTasks
+      return sendAuthEmail({ to: user.email, subject, text });
     },
     /**
      * Callback after password reset is complete
@@ -67,7 +69,8 @@ export const auth = betterAuth({
     sendVerificationEmail: async ({ user, url }, request) => {
       const locale = detectLocaleFromHeaders(request?.headers);
       const { subject, text } = generateVerificationEmail(user, url, locale);
-      void sendAuthEmail({ to: user.email, subject, text });
+      // Returned, not awaited here: better-auth hands it to advanced.backgroundTasks
+      return sendAuthEmail({ to: user.email, subject, text });
     },
     sendOnSignUp: false, // Don't auto-send on signup (requireEmailVerification is false)
   },
@@ -123,10 +126,17 @@ export const auth = betterAuth({
     // Secure (__Secure-) cookies in production, except a production build served over
     // http://localhost (the E2E run with `next start`), where the browser never sends them back
     useSecureCookies: env.NODE_ENV === 'production' && !isLocalHttpUrl(env.BETTER_AUTH_URL),
-    cookieDomain: env.NODE_ENV === 'production' ? env.BETTER_AUTH_URL : undefined,
     database: {
       generateId: 'uuid',
     },
+    /**
+     * Auth emails (password reset, email verification) are sent after the response: the
+     * request does not wait for the send, so its timing does not reveal whether the account
+     * exists, and `after()` keeps the function alive until the send is done (an un-awaited
+     * promise is cut off on Vercel, #65/#66). Without this handler better-auth would await
+     * the send in the request.
+     */
+    backgroundTasks: { handler: runAfterResponse },
   },
 
   trustedOrigins: [env.NEXT_PUBLIC_APP_URL],
