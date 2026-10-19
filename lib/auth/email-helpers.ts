@@ -3,7 +3,7 @@
  * Utility functions for sending authentication-related emails
  */
 
-import { env } from '@/lib/env';
+import { after } from 'next/server';
 
 export interface AuthEmailOptions {
   to: string;
@@ -26,6 +26,27 @@ export async function sendAuthEmail({ to, subject, text }: AuthEmailOptions): Pr
   } catch (error) {
     console.error('Failed to send auth email:', error);
     // Don't throw - avoid timing attacks
+  }
+}
+
+/**
+ * Run a task after the response is sent, keeping the function alive until it settles
+ * (handler for better-auth's `advanced.backgroundTasks`).
+ *
+ * `after()` only works inside a Next.js request scope and throws elsewhere (unit tests,
+ * scripts calling `auth.api` directly). There the task is left to finish on its own with its
+ * error logged: such callers are long-lived processes that are not cut off after a response,
+ * and failing the auth call because of where it ran would be worse than a lost email.
+ */
+export function runAfterResponse(task: Promise<unknown>): void {
+  const settled = task.catch((error: unknown) => {
+    console.error('Background task failed:', error);
+  });
+  try {
+    after(() => settled);
+  } catch (error) {
+    // Outside a request scope: fire-and-forget (errors are already logged above)
+    console.warn('after() unavailable, running the background task without it:', error);
   }
 }
 

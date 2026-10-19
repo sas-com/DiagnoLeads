@@ -235,8 +235,18 @@ Vercelが自動的にLet's Encrypt証明書を発行・更新します。
 
 | パス | スケジュール | 説明 |
 |------|------------|------|
-| `/api/cron/cleanup-webhook-deliveries` | 毎日 3:00 UTC | 古いWebhook配信ログの削除 |
-| `/api/cron/process-webhook-retries` | 5分毎 | Webhookリトライ処理 |
+| `/api/cron/cleanup-webhook-deliveries` | 毎日 3:00 UTC | Webhookの再送処理と、古いWebhook配信ログの削除 |
+| `/api/cron/notify-due-tasks` | 毎日 23:00 UTC（8:00 JST） | 期日が来た次のアクション等の通知 |
+
+### Webhookの送信と再送
+
+- イベント発生時、登録された送信先へ並列に送信します（1件あたり8秒でタイムアウト）。診断フォームからの送信はレスポンスを返した後（`after()`）に行います。
+- 配信ログは送信前に「再送予定時刻（`next_retry_at`）」付きで作成します。送信が途中で打ち切られても、その時刻を過ぎた配信は再送の対象になります。
+- 失敗した配信は、Webhookごとの `retryConfig` に従って再送予定時刻を指数的に延ばします（`retryDelayMs × 2^(試行回数-1)`）。試行回数が `maxRetries`（初回を含む）に達すると `failed` になります。
+- 再送は専用のCronを持たず、毎日3:00 UTCの `/api/cron/cleanup-webhook-deliveries` がまとめて行います（Hobbyプランでは1日1回のCronしか使えない場合があるため）。1回あたり10件ずつ並列に送り、合計20秒以内に収まる範囲で処理し、残りは翌日に回します。このため、実際の再送間隔は最短でも約1日です。
+- 作成から3日を過ぎた未完了の配信は、再送せず `failed` にします（古いイベントを今さら送らないため）。無効（`inactive`）にしたWebhookへは再送しません。再送が成功すると `failed` のWebhookは `active` に戻りますが、`inactive` は変えません。
+- 再送しても `X-Webhook-ID` とペイロードの `id` は変わらないので、受信側はこれで重複を除けます。8秒のタイムアウト後に受信側が処理を終えていた場合など、同じ配信が2回届くことがあります。
+- 処理に失敗した場合は運用アラート（`cron/webhook-retries` / `cron/cleanup-webhook-deliveries`）が送られます。
 
 ### Cronジョブの確認
 
