@@ -37,15 +37,40 @@ export const axPlaybookChallengeGuideSchema = z.object({
   signals: textList,
 });
 
+/**
+ * Why a past attempt stopped (#157): the same values as the hearing's 進まなかった理由
+ * (pastBlocker). Objections and NG phrases are tagged with the reasons they answer, so the lead
+ * page can pick the ones that fit the lead.
+ */
+export const OBJECTION_REASONS = [
+  'budget',
+  'staffing',
+  'risk',
+  'priority',
+  'vendor',
+  'other',
+] as const;
+export type ObjectionReason = (typeof OBJECTION_REASONS)[number];
+
+/** Tags in the fixed order, once each; rows saved before #157 have none */
+const reasonTags = z
+  .array(z.enum(OBJECTION_REASONS))
+  .max(OBJECTION_REASONS.length)
+  .default([])
+  .transform((list) => OBJECTION_REASONS.filter((reason) => list.includes(reason)));
+
 export const axPlaybookObjectionSchema = z.object({
   customer: requiredText,
   response: requiredText,
   note: text,
+  reasons: reasonTags,
 });
 
 export const axPlaybookNgPhraseSchema = z.object({
   ng: requiredText,
   alternative: requiredText,
+  /** Empty: shown for every lead */
+  reasons: reasonTags,
 });
 
 export const axPlaybookEscalationSchema = z.object({
@@ -86,6 +111,11 @@ export const axPlaybookContentSchema = z.object({
   escalations: z.array(axPlaybookEscalationSchema).max(AX_PLAYBOOK_LIMITS.itemsMax),
   /** Rows saved before #150 have no target and read as "no condition" */
   targetCompany: axTargetCompanySchema,
+  /**
+   * What to say when no date was agreed (#157): "we will contact you by {date}". {date} is
+   * replaced on the lead page; empty uses the default wording.
+   */
+  scheduleFollowUp: text.default(''),
 });
 
 export type AxPlaybookChallengeGuide = z.infer<typeof axPlaybookChallengeGuideSchema>;
@@ -114,5 +144,6 @@ export function emptyAxPlaybookContent(): AxPlaybookContent {
     ngPhrases: [],
     escalations: [],
     targetCompany: emptyAxTargetCompany(),
+    scheduleFollowUp: '',
   };
 }

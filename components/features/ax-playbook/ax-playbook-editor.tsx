@@ -15,6 +15,8 @@ import {
 import {
   AX_PLAYBOOK_CHALLENGES,
   AX_PLAYBOOK_LIMITS,
+  OBJECTION_REASONS,
+  type ObjectionReason,
   axPlaybookContentSchema,
   emptyAxPlaybookContent,
 } from '@/lib/features/ax-playbook/types/schemas';
@@ -33,14 +35,20 @@ const ROW_FIELDS = {
   escalations: ['topic', 'contact'],
 } as const;
 
+/** Lists whose rows are tagged with the reasons a past attempt stopped (#157) */
+const TAGGED_LISTS = ['objections', 'ngPhrases'] as const;
+const isTagged = (list: RowListKey): list is (typeof TAGGED_LISTS)[number] =>
+  (TAGGED_LISTS as readonly string[]).includes(list);
+
 const EMPTY_ROWS = {
-  objections: () => ({ customer: '', response: '', note: '' }),
-  ngPhrases: () => ({ ng: '', alternative: '' }),
+  objections: () => ({ customer: '', response: '', note: '', reasons: [] as ObjectionReason[] }),
+  ngPhrases: () => ({ ng: '', alternative: '', reasons: [] as ObjectionReason[] }),
   escalations: () => ({ topic: '', contact: '' }),
 } as const;
 
 export function AxPlaybookEditor() {
   const t = useTranslations('settings.axPlaybook');
+  const tReason = useTranslations('leadHearings.options.pastBlocker');
   const format = useFormatter();
   const { organization } = useOrganization();
   const organizationId = organization?.id ?? '';
@@ -114,6 +122,25 @@ export function AxPlaybookEditor() {
     });
   };
 
+  const toggleReason = (
+    list: (typeof TAGGED_LISTS)[number],
+    index: number,
+    reason: ObjectionReason,
+    on: boolean
+  ) => {
+    setForm({
+      ...form,
+      [list]: form[list].map((row, i) =>
+        i === index
+          ? {
+              ...row,
+              reasons: on ? [...row.reasons, reason] : row.reasons.filter((r) => r !== reason),
+            }
+          : row
+      ),
+    });
+  };
+
   const addRow = (list: RowListKey) => {
     setForm({ ...form, [list]: [...form[list], EMPTY_ROWS[list]()] });
   };
@@ -152,6 +179,35 @@ export function AxPlaybookEditor() {
                 </div>
               );
             })}
+            {isTagged(list) && (
+              <fieldset className="space-y-1">
+                <legend className="text-sm font-medium">{t(`${list}.reasons`)}</legend>
+                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                  {OBJECTION_REASONS.map((reason) => {
+                    const id = `${list}-${index}-reason-${reason}`;
+                    const reasons = (row as { reasons: ObjectionReason[] }).reasons;
+                    return (
+                      <label
+                        key={reason}
+                        htmlFor={id}
+                        className="flex min-h-9 items-center gap-1.5 text-sm"
+                      >
+                        <input
+                          id={id}
+                          type="checkbox"
+                          className="h-4 w-4"
+                          checked={reasons.includes(reason)}
+                          disabled={readOnly}
+                          onChange={(e) => toggleReason(list, index, reason, e.target.checked)}
+                        />
+                        {tReason(reason)}
+                      </label>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground">{t(`${list}.reasonsHint`)}</p>
+              </fieldset>
+            )}
             {!readOnly && (
               <div className="flex justify-end">
                 <Button variant="ghost" size="sm" onClick={() => removeRow(list, index)}>
@@ -264,6 +320,25 @@ export function AxPlaybookEditor() {
       {renderRows('objections')}
       {renderRows('ngPhrases')}
       {renderRows('escalations')}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('scheduleFollowUp.title')}</CardTitle>
+          <CardDescription>{t('scheduleFollowUp.description')}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-1">
+          <Textarea
+            aria-label={t('scheduleFollowUp.title')}
+            rows={4}
+            maxLength={AX_PLAYBOOK_LIMITS.textMax}
+            placeholder={t('scheduleFollowUp.placeholder')}
+            value={form.scheduleFollowUp}
+            readOnly={readOnly}
+            onChange={(e) => setForm({ ...form, scheduleFollowUp: e.target.value })}
+          />
+          <p className="text-xs text-muted-foreground">{t('scheduleFollowUp.hint')}</p>
+        </CardContent>
+      </Card>
 
       {!readOnly && (
         <div className="flex items-center justify-end gap-3">

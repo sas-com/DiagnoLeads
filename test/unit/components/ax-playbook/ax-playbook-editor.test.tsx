@@ -78,7 +78,7 @@ describe('AxPlaybookEditor', () => {
 
     const expected = emptyAxPlaybookContent();
     expected.challenges.people.questions = ['Q1', 'Q2'];
-    expected.objections = [{ customer: 'C', response: 'R', note: '' }];
+    expected.objections = [{ customer: 'C', response: 'R', note: '', reasons: [] }];
     expect(mocks.mutate).toHaveBeenCalledWith({ organizationId: ORG_ID, content: expected });
   });
 
@@ -209,5 +209,30 @@ describe('AxPlaybookEditor', () => {
     expect(screen.getByLabelText('深掘りの質問')).toHaveValue('Q1');
     expect(screen.queryByRole('button', { name: '保存' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '行を追加' })).not.toBeInTheDocument();
+  });
+});
+
+describe('AxPlaybookEditor: objection tags and the open-schedule message (#157)', () => {
+  it('saves the reasons an objection answers and the message', async () => {
+    const content = emptyAxPlaybookContent();
+    content.objections = [{ customer: 'C', response: 'R', note: '', reasons: [] }];
+    mocks.data = { content, updatedAt: null, canEdit: true };
+    const user = userEvent.setup();
+    renderEditor();
+
+    // The {date} placeholder is shown as it is
+    expect(screen.getByText(/\{date\} は、リードの画面で選んだ日付に置き換わります/)).toBeInTheDocument();
+    await user.click(screen.getByRole('checkbox', { name: '移行のリスク' }));
+    await user.click(screen.getByRole('checkbox', { name: '予算' }));
+    await user.type(
+      screen.getByLabelText('日程が決まらなかったときの文面'),
+      '{{date}までにご連絡します'
+    );
+    await user.click(screen.getByRole('button', { name: '保存' }));
+
+    const expected = emptyAxPlaybookContent();
+    expected.objections = [{ customer: 'C', response: 'R', note: '', reasons: ['budget', 'risk'] }];
+    expected.scheduleFollowUp = '{date}までにご連絡します';
+    expect(mocks.mutate).toHaveBeenCalledWith({ organizationId: ORG_ID, content: expected });
   });
 });

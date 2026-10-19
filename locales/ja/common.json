@@ -1339,13 +1339,17 @@
         "description": "お客様の声と、その返し方。",
         "customer": "お客様の声",
         "response": "切り返し例",
-        "note": "備考"
+        "note": "備考",
+        "reasons": "効く「止まった理由」",
+        "reasonsHint": "選んだ理由に当てはまるリードの画面に、この切り返しを出します。"
       },
       "ngPhrases": {
         "title": "言ってはいけない表現",
         "description": "NG表現と言い換え例。",
         "ng": "NG表現",
-        "alternative": "言い換え例"
+        "alternative": "言い換え例",
+        "reasons": "出す「止まった理由」",
+        "reasonsHint": "何も選ばなければ、すべてのリードに出します。"
       },
       "escalations": {
         "title": "その場で答えず持ち帰る事項",
@@ -1383,6 +1387,12 @@
         },
         "save": "範囲を保存",
         "saved": "対象顧客の規模を保存しました"
+      },
+      "scheduleFollowUp": {
+        "title": "日程が決まらなかったときの文面",
+        "description": "リードの画面の「切り返しカード」で、次回の連絡を約束するときに使います。",
+        "placeholder": "例：次回の日程は、社内で確認のうえ '{date}'までにご連絡いたします。",
+        "hint": "'{date}' は、リードの画面で選んだ日付に置き換わります。空欄なら標準の文面を使います。"
       }
     },
     "agencyLinks": {
@@ -3837,5 +3847,32 @@
       "invalid": "移行期間は 1〜60、知らせる時期は 0〜12 の整数で入力してください。",
       "readOnly": "変更できるのはオーナーと管理者です。"
     }
+  },
+  "objectionCard": {
+    "title": "切り返しカード",
+    "signals": "止まった理由の手がかり",
+    "signal": "{reason}（{sources}）",
+    "sources": {
+      "hearing": "ヒアリング",
+      "lostReason": "失注・保留理由",
+      "diagnosis": "Web診断"
+    },
+    "noSignals": "過去に止まった理由はまだ分かっていません。ヒアリングの「進まなかった理由」を入力すると、合う切り返しを出します。",
+    "noPlaybook": "営業の手引きがまだ登録されていません。",
+    "openPlaybook": "営業の手引きを開く",
+    "objections": "この案件に合う切り返し",
+    "matched": "該当：{reasons}",
+    "noObjections": "手がかりに合う切り返しが手引きにありません。手引きで切り返しに「効く理由」を付けてください。",
+    "ngPhrases": "避けたい表現",
+    "scheduleTitle": "日程が決まらなかったとき",
+    "scheduleDate": "連絡する期限",
+    "defaultSchedule": "本日はお時間をいただき、ありがとうございました。次回の日程は、社内で確認のうえ {date}までにご連絡いたします。",
+    "copy": "文面をコピー",
+    "copied": "文面をコピーしました",
+    "copyError": "コピーできませんでした。文面を選んでコピーしてください。",
+    "addTakeaway": "持ち帰り事項に入れる",
+    "takeawayTitle": "次回の日程を連絡する（{date}まで）",
+    "takeawayAdded": "持ち帰り事項に入れました",
+    "takeawayError": "持ち帰り事項に入れられませんでした。もう一度お試しください。"
   }
 }

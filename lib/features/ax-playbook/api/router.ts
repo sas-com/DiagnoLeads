@@ -8,11 +8,11 @@
  * Every query is scoped by organizationId (Refs #74).
  */
 
-import type { AppAbility } from '@/lib/auth/permissions';
 import { axSalesPlaybooks } from '@/lib/db/schema';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { eq, sql } from 'drizzle-orm';
+import { canReadPlaybook } from '../access';
 import {
   axPlaybookContentSchema,
   emptyAxPlaybookContent,
@@ -20,12 +20,6 @@ import {
   updateAxPlaybookSchema,
   updateAxTargetCompanySchema,
 } from '../types/schemas';
-
-/** Roles that may not read the playbook even though they can read leads */
-const PLAYBOOK_READ_EXCLUDED_ROLES: readonly string[] = ['parent_viewer'];
-
-const canReadPlaybook = (ctx: { ability: AppAbility; membership: { role: string } }) =>
-  ctx.ability.can('read', 'Lead') && !PLAYBOOK_READ_EXCLUDED_ROLES.includes(ctx.membership.role);
 
 export const axPlaybookRouter = router({
   /**

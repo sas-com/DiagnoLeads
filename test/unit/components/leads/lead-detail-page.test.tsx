@@ -250,6 +250,10 @@ vi.mock('@/components/features/lead-prep/lead-prep-card', () => ({
 vi.mock('@/components/features/act-timing/act-timing-card', () => ({
   ActTimingCard: () => null,
 }));
+// The objection card (#157) has its own tests (test/unit/components/objection-card)
+vi.mock('@/components/features/objection-card/objection-card', () => ({
+  ObjectionCard: () => null,
+}));
 vi.mock('@/components/features/lead-activity/lead-activity-card', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/components/features/lead-activity/lead-activity-card')>()),
   LeadActivityCard: () => <p>activity timeline</p>,

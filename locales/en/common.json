@@ -1339,13 +1339,17 @@
         "description": "What the customer says and how to respond.",
         "customer": "Customer says",
         "response": "Response",
-        "note": "Note"
+        "note": "Note",
+        "reasons": "Reasons it answers",
+        "reasonsHint": "Shown on the page of leads that stopped for a chosen reason."
       },
       "ngPhrases": {
         "title": "Phrases to avoid",
         "description": "Phrases to avoid and what to say instead.",
         "ng": "Avoid",
-        "alternative": "Say instead"
+        "alternative": "Say instead",
+        "reasons": "Reasons to show it for",
+        "reasonsHint": "With none chosen, it is shown for every lead."
       },
       "escalations": {
         "title": "Topics to take back",
@@ -1383,6 +1387,12 @@
         },
         "save": "Save ranges",
         "saved": "Target company size saved"
+      },
+      "scheduleFollowUp": {
+        "title": "Message when no date was agreed",
+        "description": "Used on the lead page's objection card to promise when you will be back in touch.",
+        "placeholder": "E.g. We will check internally and contact you about the next meeting by '{date}'.",
+        "hint": "'{date}' becomes the date chosen on the lead page. Empty uses the default wording."
       }
     },
     "agencyLinks": {
@@ -3837,5 +3847,32 @@
       "invalid": "Enter whole numbers: 1-60 months to migrate, 0-12 months before.",
       "readOnly": "Only owners and admins can change this."
     }
+  },
+  "objectionCard": {
+    "title": "Objection card",
+    "signals": "Why it stopped before",
+    "signal": "{reason} ({sources})",
+    "sources": {
+      "hearing": "hearing",
+      "lostReason": "lost or on-hold reason",
+      "diagnosis": "Web diagnosis"
+    },
+    "noSignals": "Why a past attempt stopped is not known yet. Fill in \"why it did not go ahead\" in the hearing to see the objections that fit.",
+    "noPlaybook": "No sales playbook is registered yet.",
+    "openPlaybook": "Open the sales playbook",
+    "objections": "Objections that fit this deal",
+    "matched": "Fits: {reasons}",
+    "noObjections": "The playbook has no objection for these reasons. Tag objections with the reasons they answer in the playbook.",
+    "ngPhrases": "Phrases to avoid",
+    "scheduleTitle": "When no date was agreed",
+    "scheduleDate": "Contact by",
+    "defaultSchedule": "Thank you for your time today. We will check internally and contact you about the next meeting by {date}.",
+    "copy": "Copy the message",
+    "copied": "Message copied",
+    "copyError": "Could not copy it. Select the text and copy it.",
+    "addTakeaway": "Add as a takeaway",
+    "takeawayTitle": "Tell them the next meeting date (by {date})",
+    "takeawayAdded": "Added as a takeaway",
+    "takeawayError": "Could not add it. Please try again."
   }
 }
