@@ -220,7 +220,9 @@ test.describe('Authentication', () => {
   });
 
   test.describe('Protected Routes', () => {
-    test('should redirect unauthenticated users to login', async ({ page }) => {
+    // Smoke: checks that the root proxy (proxy.ts) still sends signed-out visitors to sign-in,
+    // including an encoded path that once slipped past the check (#166)
+    test('should redirect unauthenticated users to login @smoke', async ({ page }) => {
       // Clear any existing session
       await page.context().clearCookies();
 
@@ -229,6 +231,9 @@ test.describe('Authentication', () => {
 
       // Should redirect to login
       await page.waitForURL(/\/(sign-in|login)/);
+
+      await page.goto('/ja/dash%62oard');
+      await page.waitForURL(/\/ja\/login/);
     });
 
     test('should redirect to original destination after login', async ({ page }) => {

@@ -1,7 +1,7 @@
 import { GA_CONNECT_SOURCES, GA_IMG_SOURCES, GA_SCRIPT_HOST } from '@/lib/analytics/ga';
 
 /**
- * Content Security Policy of the app (set by the root middleware on every page).
+ * Content Security Policy of the app (set by the root proxy, proxy.ts, on every page).
  *
  * Production keeps scripts and <style> elements to the per-request nonce:
  * - style-src-attr: style attributes rendered on the server (progress bars, layout parts)

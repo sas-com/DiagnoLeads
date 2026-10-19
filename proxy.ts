@@ -48,7 +48,7 @@ function getSecurityHeaders(request: NextRequest) {
  * Next.js Middleware
  * Runs before every request to check i18n, rate limit, authentication, and add security headers
  */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // 0. The CMS API answers nothing while the CMS is off (lib/cms/enabled.ts, #141)
