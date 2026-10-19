@@ -139,9 +139,11 @@ describe('runAfterResponse', () => {
       throw new Error('`after` was called outside a request scope.');
     });
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const failure = Promise.reject(new Error('smtp down'));
 
     expect(() => runAfterResponse(failure)).not.toThrow();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('after() unavailable'), expect.any(Error));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(log).toHaveBeenCalledWith('Background task failed:', expect.any(Error));
   });

@@ -12,6 +12,7 @@ import {
   type WebhookDeliveryStatus,
   type WebhookEventType,
   type WebhookRetryConfig,
+  type WebhookStatus,
   webhookDeliveries,
   webhooks,
 } from '@/lib/db/schema';
@@ -104,6 +105,17 @@ export const WEBHOOK_RETRY_BATCH_SIZE = 10;
 
 /** Total time the retry processor may spend; leaves room in the 30s function limit */
 export const WEBHOOK_RETRY_TIME_BUDGET_MS = 20_000;
+
+/**
+ * Pending deliveries older than this are failed instead of retried. Earlier versions left
+ * failed and cut-off deliveries pending (some without `next_retry_at`) and never retried them;
+ * sending week-old events now would surprise the receiver, and with the daily cron 3 days
+ * still allows the default 3 attempts.
+ */
+export const WEBHOOK_RETRY_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
+
+/** Retries go to these webhooks only: a webhook the user set inactive gets nothing */
+const RETRYABLE_WEBHOOK_STATUSES: WebhookStatus[] = ['active', 'failed'];
 
 /** A new round only starts if it can finish (one attempt timeout plus this) within the budget */
 const ROUND_MARGIN_MS = 2000;
@@ -205,14 +217,16 @@ async function recordAttempt(
 
     await database
       .update(webhooks)
-      .set({
-        lastTriggeredAt: new Date(),
-        failureCount: 0,
-        // A successful retry brings back a webhook marked failed
-        ...(isRetry ? { status: 'active' as const } : {}),
-        updatedAt: new Date(),
-      })
+      .set({ lastTriggeredAt: new Date(), failureCount: 0, updatedAt: new Date() })
       .where(eq(webhooks.id, webhook.id));
+    if (isRetry) {
+      // A successful retry brings back a webhook marked failed; one the user set inactive
+      // stays inactive
+      await database
+        .update(webhooks)
+        .set({ status: 'active' })
+        .where(and(eq(webhooks.id, webhook.id), eq(webhooks.status, 'failed')));
+    }
     return;
   }
 
@@ -330,6 +344,24 @@ export async function triggerWebhooks(
 }
 
 /**
+ * Pending deliveries created more than WEBHOOK_RETRY_MAX_AGE_MS ago (with or without
+ * `next_retry_at`) are failed, whatever their webhook's status
+ */
+async function failExpiredDeliveries(database: Database, now: Date): Promise<number> {
+  const rows = await database
+    .update(webhookDeliveries)
+    .set({ status: 'failed', nextRetryAt: null, completedAt: now })
+    .where(
+      and(
+        eq(webhookDeliveries.status, 'pending'),
+        lt(webhookDeliveries.createdAt, new Date(now.getTime() - WEBHOOK_RETRY_MAX_AGE_MS))
+      )
+    )
+    .returning({ id: webhookDeliveries.id });
+  return rows.length;
+}
+
+/**
  * Pending deliveries whose attempts are used up (e.g. left by an earlier version, or an
  * attempt cut off at the last try) are failed instead of sent again
  */
@@ -356,7 +388,8 @@ async function failExhaustedDeliveries(database: Database, now: Date): Promise<n
 
 /**
  * Claim up to `limit` due retries: pending, `next_retry_at` reached, attempts below the
- * webhook's maximum. Claiming counts the attempt and moves `next_retry_at` by the lease, so a
+ * webhook's maximum, created within WEBHOOK_RETRY_MAX_AGE_MS, webhook active or failed (those of
+ * an inactive webhook are left alone and age out). Claiming counts the attempt and moves `next_retry_at` by the lease, so a
  * concurrent run skips these rows and an attempt cut off mid-way is retried after the lease.
  */
 async function claimDueRetries(database: Database, now: Date, limit: number) {
@@ -368,7 +401,14 @@ async function claimDueRetries(database: Database, now: Date, limit: number) {
       .select({ id: webhookDeliveries.id })
       .from(webhookDeliveries)
       .innerJoin(webhooks, eq(webhookDeliveries.webhookId, webhooks.id))
-      .where(and(due, lt(webhookDeliveries.attempts, maxAttemptsSql)))
+      .where(
+        and(
+          due,
+          lt(webhookDeliveries.attempts, maxAttemptsSql),
+          gte(webhookDeliveries.createdAt, new Date(now.getTime() - WEBHOOK_RETRY_MAX_AGE_MS)),
+          inArray(webhooks.status, RETRYABLE_WEBHOOK_STATUSES)
+        )
+      )
       .orderBy(asc(webhookDeliveries.nextRetryAt))
       .limit(limit)
       .for('update', { of: webhookDeliveries, skipLocked: true });
@@ -403,8 +443,11 @@ export async function processWebhookRetries({
   succeeded: number;
   failed: number;
   exhausted: number;
+  expired: number;
 }> {
   const startedAt = Date.now();
+  // Expired first, so old rows are never sent (nor counted as exhausted)
+  const expired = await failExpiredDeliveries(database, new Date());
   const exhausted = await failExhaustedDeliveries(database, new Date());
 
   let processed = 0;
@@ -448,7 +491,7 @@ export async function processWebhookRetries({
     }
   }
 
-  return { processed, succeeded, failed, exhausted };
+  return { processed, succeeded, failed, exhausted, expired };
 }
 
 /**

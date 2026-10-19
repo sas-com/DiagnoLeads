@@ -14,6 +14,7 @@ import { organizations, webhookDeliveries, webhooks } from '@/lib/db/schema';
 import {
   WEBHOOK_DELIVERY_LEASE_MS,
   WEBHOOK_DELIVERY_TIMEOUT_MS,
+  WEBHOOK_RETRY_MAX_AGE_MS,
   processWebhookRetries,
   triggerWebhooks,
 } from '@/lib/features/webhooks/services/webhook-service';
@@ -49,7 +50,10 @@ describe.skipIf(!url)('webhook retries (PostgreSQL)', () => {
     text: async () => '',
   });
 
-  async function createWebhook(retryConfig = { maxRetries: 3, retryDelayMs: 5000 }) {
+  async function createWebhook(
+    retryConfig = { maxRetries: 3, retryDelayMs: 5000 },
+    status: 'active' | 'inactive' | 'failed' = 'active'
+  ) {
     const [row] = await pg
       .insert(webhooks)
       .values({
@@ -59,6 +63,7 @@ describe.skipIf(!url)('webhook retries (PostgreSQL)', () => {
         secret: 'whsec_test',
         events: ['diagnostic.submitted'],
         retryConfig,
+        status,
       })
       .returning();
     return row.id;
@@ -69,6 +74,7 @@ describe.skipIf(!url)('webhook retries (PostgreSQL)', () => {
     attempts?: number;
     nextRetryAt?: Date | null;
     status?: 'pending' | 'success' | 'failed';
+    createdAt?: Date;
   }) {
     const [row] = await pg
       .insert(webhookDeliveries)
@@ -79,6 +85,7 @@ describe.skipIf(!url)('webhook retries (PostgreSQL)', () => {
         status: values.status ?? 'pending',
         attempts: values.attempts ?? 1,
         nextRetryAt: values.nextRetryAt === undefined ? new Date(Date.now() - 1000) : values.nextRetryAt,
+        ...(values.createdAt ? { createdAt: values.createdAt } : {}),
       })
       .returning();
     return row.id;
@@ -178,7 +185,7 @@ describe.skipIf(!url)('webhook retries (PostgreSQL)', () => {
     const result = await processWebhookRetries({ database: pg });
 
     expect(sentIds().sort()).toEqual([due, cutOff].sort());
-    expect(result).toEqual({ processed: 2, succeeded: 2, failed: 0, exhausted: 1 });
+    expect(result).toEqual({ processed: 2, succeeded: 2, failed: 0, exhausted: 1, expired: 0 });
     expect(await load(due)).toMatchObject({ status: 'success', attempts: 2, nextRetryAt: null });
     expect(await load(usedUp)).toMatchObject({ status: 'failed', attempts: 3, nextRetryAt: null });
     for (const id of [notYet, noRetryTime]) {
@@ -247,10 +254,16 @@ describe.skipIf(!url)('webhook retries (PostgreSQL)', () => {
   });
 
   it('an attempt cut off during a retry is due again only after the lease', async () => {
-    fetchMock.mockReturnValue(new Promise(() => {})); // never answers: the run is "cut off"
+    // Does not answer until the end of the test: the first run stands for one that was cut off
+    let finish: (value: unknown) => void = () => {};
+    fetchMock.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      })
+    );
     const id = await createDelivery({ attempts: 1 });
 
-    void processWebhookRetries({ database: pg, batchSize: 1 });
+    const first = processWebhookRetries({ database: pg, batchSize: 1 });
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
     const claimed = await load(id);
@@ -261,5 +274,66 @@ describe.skipIf(!url)('webhook retries (PostgreSQL)', () => {
     fetchMock.mockResolvedValue(answer(200));
     const other = await processWebhookRetries({ database: pg, timeBudgetMs: ONE_ROUND_BUDGET_MS });
     expect(other.processed).toBe(0);
+
+    finish(answer(200));
+    await expect(first).resolves.toMatchObject({ processed: 1, succeeded: 1 });
+    expect(await load(id)).toMatchObject({ status: 'success', attempts: 2 });
+  });
+
+  it('two runs at the same time send each due delivery once', async () => {
+    const ids = await Promise.all(Array.from({ length: 12 }, () => createDelivery({})));
+
+    const runs = await Promise.all([
+      processWebhookRetries({ database: pg, batchSize: 3 }),
+      processWebhookRetries({ database: pg, batchSize: 3 }),
+    ]);
+
+    expect(runs[0].processed + runs[1].processed).toBe(ids.length);
+    expect(fetchMock).toHaveBeenCalledTimes(ids.length);
+    expect(new Set(sentIds()).size).toBe(ids.length);
+    const rows = await pg.select().from(webhookDeliveries).where(inArray(webhookDeliveries.id, ids));
+    expect(rows.every((r) => r.status === 'success' && r.attempts === 2)).toBe(true);
+  });
+
+  it('sends nothing to an inactive webhook and leaves it inactive', async () => {
+    const inactive = await createWebhook(undefined, 'inactive');
+    const id = await createDelivery({ webhookId: inactive });
+
+    const result = await processWebhookRetries({ database: pg });
+
+    expect(result.processed).toBe(0);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await load(id)).toMatchObject({ status: 'pending', attempts: 1 });
+    const [hook] = await pg.select().from(webhooks).where(eq(webhooks.id, inactive));
+    expect(hook.status).toBe('inactive');
+  });
+
+  it('a successful retry brings a failed webhook back to active', async () => {
+    const failedHook = await createWebhook(undefined, 'failed');
+    const id = await createDelivery({ webhookId: failedHook });
+
+    await processWebhookRetries({ database: pg });
+
+    expect(sentIds()).toEqual([id]);
+    expect((await load(id)).status).toBe('success');
+    const [hook] = await pg.select().from(webhooks).where(eq(webhooks.id, failedHook));
+    expect(hook.status).toBe('active');
+  });
+
+  it('fails pending deliveries older than 3 days without sending them', async () => {
+    const old = new Date(Date.now() - WEBHOOK_RETRY_MAX_AGE_MS - 60_000);
+    const stale = await createDelivery({ createdAt: old });
+    const staleWithoutRetryTime = await createDelivery({ createdAt: old, nextRetryAt: null });
+    const recent = await createDelivery({
+      createdAt: new Date(Date.now() - WEBHOOK_RETRY_MAX_AGE_MS + 60 * 60 * 1000),
+    });
+
+    const result = await processWebhookRetries({ database: pg });
+
+    expect(result).toMatchObject({ expired: 2, processed: 1 });
+    expect(sentIds()).toEqual([recent]);
+    for (const id of [stale, staleWithoutRetryTime]) {
+      expect(await load(id)).toMatchObject({ status: 'failed', nextRetryAt: null, attempts: 1 });
+    }
   });
 });

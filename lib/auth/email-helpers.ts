@@ -44,8 +44,9 @@ export function runAfterResponse(task: Promise<unknown>): void {
   });
   try {
     after(() => settled);
-  } catch {
+  } catch (error) {
     // Outside a request scope: fire-and-forget (errors are already logged above)
+    console.warn('after() unavailable, running the background task without it:', error);
   }
 }
 
