@@ -22,6 +22,7 @@ export interface AxPlaybookForm {
   objections: AxPlaybookContent['objections'];
   ngPhrases: AxPlaybookContent['ngPhrases'];
   escalations: AxPlaybookContent['escalations'];
+  scheduleFollowUp: string;
 }
 
 const toLines = (items: string[]) => items.join('\n');
@@ -32,8 +33,9 @@ const fromLines = (value: string) =>
     .map((line) => line.trim())
     .filter(Boolean);
 
-const hasAnyText = (row: Record<string, string>) =>
-  Object.values(row).some((value) => value.trim() !== '');
+/** A row with any text (its reason tags alone do not keep it) */
+const hasAnyText = (row: Record<string, unknown>) =>
+  Object.values(row).some((value) => typeof value === 'string' && value.trim() !== '');
 
 export function toAxPlaybookForm(content: AxPlaybookContent): AxPlaybookForm {
   const challenges = {} as Record<AxPlaybookChallenge, AxPlaybookChallengeForm>;
@@ -48,9 +50,10 @@ export function toAxPlaybookForm(content: AxPlaybookContent): AxPlaybookForm {
   return {
     challenges,
     basicChecks: toLines(content.basicChecks),
-    objections: content.objections.map((row) => ({ ...row })),
-    ngPhrases: content.ngPhrases.map((row) => ({ ...row })),
+    objections: content.objections.map((row) => ({ ...row, reasons: [...row.reasons] })),
+    ngPhrases: content.ngPhrases.map((row) => ({ ...row, reasons: [...row.reasons] })),
     escalations: content.escalations.map((row) => ({ ...row })),
+    scheduleFollowUp: content.scheduleFollowUp,
   };
 }
 
@@ -73,5 +76,6 @@ export function fromAxPlaybookForm(form: AxPlaybookForm): AxPlaybookContent {
     escalations: form.escalations.filter(hasAnyText),
     // Saved on its own (updateTargetCompany); the server keeps the stored ranges
     targetCompany: emptyAxTargetCompany(),
+    scheduleFollowUp: form.scheduleFollowUp.trim(),
   };
 }

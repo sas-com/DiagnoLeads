@@ -10,8 +10,8 @@ describe('ax playbook form', () => {
     const content = emptyAxPlaybookContent();
     content.challenges.people = { effect: 'E', questions: ['Q1', 'Q2'], signals: ['S'] };
     content.basicChecks = ['B1'];
-    content.objections = [{ customer: 'C', response: 'R', note: 'N' }];
-    content.ngPhrases = [{ ng: 'NG', alternative: 'OK' }];
+    content.objections = [{ customer: 'C', response: 'R', note: 'N', reasons: [] }];
+    content.ngPhrases = [{ ng: 'NG', alternative: 'OK', reasons: [] }];
     content.escalations = [{ topic: 'T', contact: 'DX' }];
 
     expect(fromAxPlaybookForm(toAxPlaybookForm(content))).toEqual(content);
@@ -31,16 +31,16 @@ describe('ax playbook form', () => {
   it('drops table rows left entirely blank but keeps partly filled ones', () => {
     const form = toAxPlaybookForm(emptyAxPlaybookContent());
     form.objections = [
-      { customer: ' ', response: '', note: '' },
-      { customer: 'C', response: '', note: '' },
+      { customer: ' ', response: '', note: '', reasons: [] },
+      { customer: 'C', response: '', note: '', reasons: [] },
     ];
 
-    expect(fromAxPlaybookForm(form).objections).toEqual([{ customer: 'C', response: '', note: '' }]);
+    expect(fromAxPlaybookForm(form).objections).toEqual([{ customer: 'C', response: '', note: '', reasons: [] }]);
   });
 
   it('does not share row objects with the stored content', () => {
     const content = emptyAxPlaybookContent();
-    content.ngPhrases = [{ ng: 'NG', alternative: 'OK' }];
+    content.ngPhrases = [{ ng: 'NG', alternative: 'OK', reasons: [] }];
     const form = toAxPlaybookForm(content);
     form.ngPhrases[0].ng = 'changed';
     expect(content.ngPhrases[0].ng).toBe('NG');

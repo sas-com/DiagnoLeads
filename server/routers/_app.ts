@@ -28,6 +28,7 @@ import { meetingRequestsRouter } from '@/lib/features/meeting-requests/api/route
 import { invitationsRouter } from '@/lib/features/members/api/invitations-router';
 import { membersRouter } from '@/lib/features/members/api/router';
 import { notificationsRouter } from '@/lib/features/notifications/api/router';
+import { objectionCardRouter } from '@/lib/features/objection-card/api/router';
 import { organizationsRouter } from '@/lib/features/organizations/api/router';
 import { reportsRouter } from '@/lib/features/reports/api/router';
 import { scoringRulesRouter } from '@/lib/features/scoring-rules/api/router';
@@ -72,6 +73,7 @@ export const appRouter = router({
   meetingRequests: meetingRequestsRouter, // First meeting preferences and confirmation (Refs #155)
   leadPrep: leadPrepRouter, // Pre-meeting prep card (Refs #156)
   actTiming: actTimingRouter, // When to act and its contact again (Refs #151)
+  objectionCard: objectionCardRouter, // Objections that fit why a past attempt stopped (Refs #157)
   leadHearings: leadHearingsRouter, // Initial meeting hearings per lead (Refs #84)
   contentEditors: contentEditorsRouter, // FAQ / blog editors granted from settings (#91)
   leadActivity: leadActivityRouter, // Activity timeline per lead (Refs #101)

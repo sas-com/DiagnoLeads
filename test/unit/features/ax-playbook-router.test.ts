@@ -87,7 +87,7 @@ const toQuery = (sql: unknown) => new PgDialect().sqlToQuery(sql as SQL);
 const sampleContent = () => {
   const content = emptyAxPlaybookContent();
   content.challenges.people.questions = ['Q1'];
-  content.objections = [{ customer: 'C', response: 'R', note: '' }];
+  content.objections = [{ customer: 'C', response: 'R', note: '', reasons: [] }];
   return content;
 };
 
