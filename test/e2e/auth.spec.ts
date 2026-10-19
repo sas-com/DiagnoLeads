@@ -232,8 +232,13 @@ test.describe('Authentication', () => {
       // Should redirect to login
       await page.waitForURL(/\/(sign-in|login)/);
 
-      await page.goto('/ja/dash%62oard');
-      await page.waitForURL(/\/ja\/login/);
+      // The server answers the redirect itself (AdminSessionGuard on the page would redirect too,
+      // which would hide a proxy that no longer runs)
+      for (const path of ['/ja/dashboard', '/ja/dash%62oard']) {
+        const response = await page.request.get(path, { maxRedirects: 0 });
+        expect(response.status()).toBe(307);
+        expect(response.headers().location).toContain('/ja/login');
+      }
     });
 
     test('should redirect to original destination after login', async ({ page }) => {
