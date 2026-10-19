@@ -1,8 +1,11 @@
+import { unwrapQueryError } from '@/lib/db/query-error';
+
 /**
  * What of an error goes to the server logs: its stack and where in the database it failed,
  * never values (the database "detail" can hold an email address; inputs are never logged)
  */
-export function logDetails(cause: unknown) {
+export function logDetails(error: unknown) {
+  const cause = unwrapQueryError(error);
   if (!(cause instanceof Error)) return { cause: String(cause) };
   const fields = cause as Error & Record<string, unknown>;
   return {
