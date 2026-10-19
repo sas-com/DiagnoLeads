@@ -3490,6 +3490,13 @@
       "sortBy": "Sort (now by {column})",
       "flipOrder": "Reverse the order (now {order})",
       "mqlSince": "MQL since {date}"
+    },
+    "actBy": "When to act",
+    "actTiming": "When to act",
+    "actTimingHint": "The month to move again, from the support end, retirement and budget planning",
+    "actTimingOptions": {
+      "soon": "Within 6 months (past ones included)",
+      "has": "Worked out"
     }
   },
   "leadFollowUp": {
@@ -3561,7 +3568,8 @@
       "checkWithOtherLabel": "Whom to check with",
       "checkWithOtherPlaceholder": "e.g. The customer's IT department",
       "checkWith": "Check with: {name}",
-      "fromMeetingRequest": "First meeting confirmed from the respondent's preferred dates"
+      "fromMeetingRequest": "First meeting confirmed from the respondent's preferred dates",
+      "fromActTiming": "Contact again before \"when to act\" (created from the support end and retirement)"
     },
     "today": {
       "title": "Today",
@@ -3801,6 +3809,33 @@
       "primary": "The main challenge. Find out where it hurts most (work, people, cost)",
       "primaryWithReasons": "The main challenge. Reasons from the diagnosis: {reasons}",
       "selected": "Chosen in the diagnosis. Check how it relates to the main challenge"
+    }
+  },
+  "actTiming": {
+    "title": "When to act",
+    "notFollowed": "Not followed (won, or lost for another reason)",
+    "deadline": {
+      "supportEnd": "Support ends: {month} (hearing)",
+      "diagnosisSupportEnd": "Support ends around: {month} (estimated from the Web diagnosis)",
+      "retirement": "The person in charge retires: {month} (hearing)"
+    },
+    "start": "With {months} months to migrate, the start is {month}",
+    "budget": "Moved to the budget planning in {month}, from the fiscal year end",
+    "notice": "The assignee is told from {date}",
+    "taskDue": "A next action to contact again is set for {date}",
+    "taskDone": "The next action to contact again is done",
+    "settings": {
+      "title": "When to act",
+      "description": "From the support end, the retirement and the fiscal year end in hearings, each lead gets the month to move again, and its assignee is told before then.",
+      "migrationMonths": "Months a migration takes",
+      "migrationMonthsHint": "The start is this many months before the deadline (1-60).",
+      "noticeMonths": "Months before to tell",
+      "noticeMonthsHint": "A next action is set this many months before (0-12).",
+      "save": "Save",
+      "saved": "Saved ({count} leads recomputed)",
+      "saveError": "Could not save it. Please try again.",
+      "invalid": "Enter whole numbers: 1-60 months to migrate, 0-12 months before.",
+      "readOnly": "Only owners and admins can change this."
     }
   }
 }

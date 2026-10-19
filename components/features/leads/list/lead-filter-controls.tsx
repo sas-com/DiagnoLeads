@@ -1,14 +1,5 @@
 'use client';
 
-/**
- * Filter controls of the lead list (#131), shared by the desktop toolbar (a row of buttons)
- * and the mobile Sheet (stacked, full width):
- * - status / deal phase / inflow source / target system: multi-select (DropdownMenu checkboxes)
- * - score range: Popover with two number boxes
- * - created date range: Popover with the shadcn Calendar in range mode (Japan days)
- * - more conditions: consultation requested, MQL, SQL (qualified)
- * - next meeting (single choice) and deal rating (multi-select) of the latest hearing (#137)
- */
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import {
@@ -25,6 +16,16 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+/**
+ * Filter controls of the lead list (#131), shared by the desktop toolbar (a row of buttons)
+ * and the mobile Sheet (stacked, full width):
+ * - status / deal phase / inflow source / target system: multi-select (DropdownMenu checkboxes)
+ * - score range: Popover with two number boxes
+ * - created date range: Popover with the shadcn Calendar in range mode (Japan days)
+ * - more conditions: consultation requested, MQL, SQL (qualified)
+ * - next meeting (single choice) and deal rating (multi-select) of the latest hearing (#137)
+ */
+import { ACT_TIMING_FILTERS, type ActTimingFilter } from '@/lib/features/act-timing/types/schemas';
 import type { LeadListFilters } from '@/lib/features/leads/list-query';
 import {
   DEAL_PHASES,
@@ -504,6 +505,73 @@ export function NextMeetingFilterControl({
 }
 
 // ---------------------------------------------------------------------------
+// When to act (#151)
+// ---------------------------------------------------------------------------
+
+export interface ActTimingFilterProps {
+  value?: ActTimingFilter;
+  onChange: (value: ActTimingFilter | undefined) => void;
+  layout?: FilterLayout;
+}
+
+export function ActTimingFilterControl({
+  value,
+  onChange,
+  layout = 'inline',
+}: ActTimingFilterProps) {
+  const t = useTranslations('leadList');
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className={triggerClass(layout, value !== undefined)}
+        >
+          <span>{t('actTiming')}</span>
+          <span className="flex items-center gap-1">
+            {value && (
+              <span className="text-xs text-gray-600 dark:text-gray-300">
+                {t(`actTimingOptions.${value}`)}
+              </span>
+            )}
+            <ChevronDown className="h-4 w-4 opacity-60" aria-hidden="true" />
+          </span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-64">
+        <DropdownMenuLabel>{t('actTiming')}</DropdownMenuLabel>
+        <p className="px-2 pb-1 text-xs text-gray-500 dark:text-gray-400">{t('actTimingHint')}</p>
+        <DropdownMenuSeparator />
+        <DropdownMenuRadioGroup
+          value={value ?? ''}
+          onValueChange={(next) =>
+            onChange(
+              (ACT_TIMING_FILTERS as readonly string[]).includes(next)
+                ? (next as ActTimingFilter)
+                : undefined
+            )
+          }
+        >
+          {ACT_TIMING_FILTERS.map((option) => (
+            <DropdownMenuRadioItem key={option} value={option}>
+              {t(`actTimingOptions.${option}`)}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+        {value && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => onChange(undefined)}>{t('clear')}</DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // All controls
 // ---------------------------------------------------------------------------
 
@@ -585,6 +653,11 @@ export function LeadFilterControls({
       <NextMeetingFilterControl
         value={filters.nextMeeting}
         onChange={(nextMeeting) => onChange({ nextMeeting })}
+        layout={layout}
+      />
+      <ActTimingFilterControl
+        value={filters.actTiming}
+        onChange={(actTiming) => onChange({ actTiming })}
         layout={layout}
       />
       <MultiSelectFilter

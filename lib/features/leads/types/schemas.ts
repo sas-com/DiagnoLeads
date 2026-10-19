@@ -1,3 +1,4 @@
+import { actTimingFilterEnum } from '@/lib/features/act-timing/types/schemas';
 import { z } from 'zod';
 import {
   type LeadStatus,
@@ -129,6 +130,8 @@ export const LEAD_SORT_KEYS = [
   // From the latest hearing of the lead (#137)
   'nextMeetingDate',
   'dealRating',
+  // "When to act" (#151)
+  'actBy',
 ] as const;
 export const leadSortKeyEnum = z.enum(LEAD_SORT_KEYS);
 export type LeadSortKey = z.infer<typeof leadSortKeyEnum>;
@@ -207,6 +210,8 @@ export const listLeadsSchema = z.object({
   // Latest hearing (#137)
   nextMeeting: nextMeetingFilterEnum.optional(),
   dealRating: oneOrMany(dealRatingEnum),
+  // "When to act" (#151): within the next months (or past), or set at all
+  actTiming: actTimingFilterEnum.optional(),
   // Tag filter
   tagIds: z.array(z.string().uuid()).optional(),
 });

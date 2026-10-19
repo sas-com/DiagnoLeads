@@ -74,6 +74,8 @@ export function useFilterChipLabel(): (chip: LeadFilterChip) => string {
           return assigneeLabel(chip);
         case 'nextMeeting':
           return t(`nextMeetingOptions.${chip.value}`);
+        case 'actTiming':
+          return t(`actTimingOptions.${chip.value}`);
         case 'dealRating':
           return t('chips.value', {
             field: t('dealRating'),

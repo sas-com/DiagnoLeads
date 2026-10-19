@@ -246,6 +246,10 @@ vi.mock('@/components/features/meeting-requests/meeting-request-card', () => ({
 vi.mock('@/components/features/lead-prep/lead-prep-card', () => ({
   LeadPrepCard: () => null,
 }));
+// "When to act" (#151) has its own tests (test/unit/components/act-timing)
+vi.mock('@/components/features/act-timing/act-timing-card', () => ({
+  ActTimingCard: () => null,
+}));
 vi.mock('@/components/features/lead-activity/lead-activity-card', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/components/features/lead-activity/lead-activity-card')>()),
   LeadActivityCard: () => <p>activity timeline</p>,

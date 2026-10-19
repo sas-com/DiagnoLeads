@@ -9,6 +9,7 @@
  *
  * Pure functions only, usable on the server and in tests.
  */
+import { ACT_TIMING_FILTERS, type ActTimingFilter } from '@/lib/features/act-timing/types/schemas';
 import { z } from 'zod';
 import {
   DEAL_PHASES,
@@ -58,6 +59,8 @@ export interface LeadListFilters {
   assignee?: AssigneeFilter;
   /** Next meeting date of the latest hearing (#137) */
   nextMeeting?: NextMeetingFilter;
+  /** "When to act" (#151) */
+  actTiming?: ActTimingFilter;
   /** Deal rating of the latest hearing, any of them (#137); left out when none is chosen */
   dealRating?: DealRating[];
   /** Name, email or company */
@@ -114,6 +117,8 @@ export const FIRST_SORT_ORDER: Record<LeadSortKey, SortOrder> = {
   // Soonest meeting first, A before B and C (#137)
   nextMeetingDate: 'asc',
   dealRating: 'asc',
+  // Soonest first (#151)
+  actBy: 'asc',
 };
 
 /** Search param names. Short, readable, stable: links to the list depend on them. */
@@ -131,6 +136,7 @@ export const LEAD_LIST_PARAMS = {
   sql: 'sql',
   assignee: 'assignee',
   nextMeeting: 'next',
+  actTiming: 'act',
   dealRating: 'rating',
   search: 'q',
   sortBy: 'sort',
@@ -180,6 +186,7 @@ export const leadListUrlSchema = z.object({
   [LEAD_LIST_PARAMS.sql]: z.enum(SQL_DECISION_FILTERS).optional().catch(undefined),
   [LEAD_LIST_PARAMS.assignee]: assigneeFilterSchema.optional().catch(undefined),
   [LEAD_LIST_PARAMS.nextMeeting]: z.enum(NEXT_MEETING_FILTERS).optional().catch(undefined),
+  [LEAD_LIST_PARAMS.actTiming]: z.enum(ACT_TIMING_FILTERS).optional().catch(undefined),
   [LEAD_LIST_PARAMS.dealRating]: csvOf(DEAL_RATINGS),
   [LEAD_LIST_PARAMS.search]: z
     .string()
@@ -232,6 +239,7 @@ export function parseLeadListQuery(params: SearchParamsLike): LeadListQuery {
       sql: p[LEAD_LIST_PARAMS.sql],
       assignee: p[LEAD_LIST_PARAMS.assignee],
       nextMeeting: p[LEAD_LIST_PARAMS.nextMeeting],
+      actTiming: p[LEAD_LIST_PARAMS.actTiming],
       dealRating: p[LEAD_LIST_PARAMS.dealRating],
       search: p[LEAD_LIST_PARAMS.search],
     }),
@@ -270,6 +278,7 @@ export function serializeLeadListQuery(query: LeadListQuery): URLSearchParams {
   if (f.sql) params.set(LEAD_LIST_PARAMS.sql, f.sql);
   if (f.assignee) params.set(LEAD_LIST_PARAMS.assignee, f.assignee);
   if (f.nextMeeting) params.set(LEAD_LIST_PARAMS.nextMeeting, f.nextMeeting);
+  if (f.actTiming) params.set(LEAD_LIST_PARAMS.actTiming, f.actTiming);
   list(LEAD_LIST_PARAMS.dealRating, f.dealRating ?? []);
   if (f.search) params.set(LEAD_LIST_PARAMS.search, f.search);
   if (query.sort.by !== DEFAULT_LEAD_SORT.by || query.sort.order !== DEFAULT_LEAD_SORT.order) {
@@ -316,6 +325,7 @@ export function normalizeFilters(filters: Partial<LeadListFilters>): LeadListFil
   if (filters.sql) result.sql = filters.sql;
   if (filters.assignee) result.assignee = filters.assignee;
   if (filters.nextMeeting) result.nextMeeting = filters.nextMeeting;
+  if (filters.actTiming) result.actTiming = filters.actTiming;
   const dealRating = pick(DEAL_RATINGS, filters.dealRating);
   if (dealRating.length > 0) result.dealRating = dealRating;
   if (search) result.search = search;
@@ -360,6 +370,7 @@ export function toLeadFilterInput(
   if (f.sql) input.sqlDecision = f.sql;
   if (f.assignee) input.assignee = f.assignee;
   if (f.nextMeeting) input.nextMeeting = f.nextMeeting;
+  if (f.actTiming) input.actTiming = f.actTiming;
   if (f.dealRating && f.dealRating.length > 0) input.dealRating = f.dealRating;
   if (f.search) input.search = f.search;
   return input;
@@ -515,6 +526,7 @@ export type LeadFilterChip =
   | { kind: 'sql'; value: SqlDecisionFilter }
   | { kind: 'assignee'; value: AssigneeFilter }
   | { kind: 'nextMeeting'; value: NextMeetingFilter }
+  | { kind: 'actTiming'; value: ActTimingFilter }
   | { kind: 'dealRating'; value: DealRating }
   | { kind: 'search'; value: string };
 
@@ -539,6 +551,7 @@ export function filterChips(filters: LeadListFilters): LeadFilterChip[] {
   if (filters.sql) chips.push({ kind: 'sql', value: filters.sql });
   if (filters.assignee) chips.push({ kind: 'assignee', value: filters.assignee });
   if (filters.nextMeeting) chips.push({ kind: 'nextMeeting', value: filters.nextMeeting });
+  if (filters.actTiming) chips.push({ kind: 'actTiming', value: filters.actTiming });
   for (const value of filters.dealRating ?? []) chips.push({ kind: 'dealRating', value });
   return chips;
 }
@@ -592,6 +605,9 @@ export function removeChip(filters: LeadListFilters, chip: LeadFilterChip): Lead
       break;
     case 'nextMeeting':
       next.nextMeeting = undefined;
+      break;
+    case 'actTiming':
+      next.actTiming = undefined;
       break;
     case 'dealRating':
       next.dealRating = (filters.dealRating ?? []).filter((v) => v !== chip.value);

@@ -312,6 +312,11 @@ export const leads = pgTable(
     sqlDecision: text('sql_decision'), // 'qualified' | 'not_qualified' | null（未判定）
     sqlDecidedAt: timestamp('sql_decided_at'),
     /**
+     * "When to act" (#151): the 1st of the month to start talking again, from the support end,
+     * the retirement and the budget planning (lib/features/act-timing). Null when unknown.
+     */
+    actBy: date('act_by', { mode: 'string' }),
+    /**
      * Member in charge of the lead (#135). Set by hand, usually by the intake person who receives
      * the consultation requests; only members of the lead's organization can be assigned. Null
      * means nobody yet (担当未定), also after the user was deleted.
@@ -331,7 +336,11 @@ export const leads = pgTable(
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
-  (table) => [index('leads_assignee_user_id_idx').on(table.assigneeUserId)]
+  (table) => [
+    index('leads_assignee_user_id_idx').on(table.assigneeUserId),
+    // The list's "when to act" sort and filter (#151)
+    index('leads_org_act_by_idx').on(table.organizationId, table.actBy),
+  ]
 );
 
 /**
@@ -976,7 +985,10 @@ export const leadTasks = pgTable(
     completedBy: uuid('completed_by').references(() => users.id, { onDelete: 'set null' }),
     /** Person in charge (#135); null until assignees exist */
     assigneeId: uuid('assignee_id').references(() => users.id, { onDelete: 'set null' }),
-    /** 'manual' | 'hearing' | 'meeting_request' (the confirmed first meeting, #155) */
+    /**
+     * 'manual' | 'hearing' | 'meeting_request' (the confirmed first meeting, #155) |
+     * 'act_timing' (contact again before "when to act", #151)
+     */
     source: text('source').default('manual').notNull(),
     sourceHearingId: uuid('source_hearing_id').references(() => leadHearings.id, {
       onDelete: 'set null',
@@ -1014,7 +1026,7 @@ export const leadTasks = pgTable(
       .where(sql`${table.sourceHearingId} is not null`),
     check(
       'lead_tasks_source_check',
-      sql`${table.source} in ('manual', 'hearing', 'meeting_request')`
+      sql`${table.source} in ('manual', 'hearing', 'meeting_request', 'act_timing')`
     ),
     check('lead_tasks_kind_check', sql`${table.kind} in ('next_action', 'takeaway')`),
   ]

@@ -5,6 +5,7 @@
  * never shows another organization's leads.
  */
 import { leads } from '@/lib/db/schema';
+import { ACT_TIMING_SOON_MONTHS } from '@/lib/features/act-timing/types/schemas';
 import { AX_MQL_LEVELS, type AxMqlLevel } from '@/lib/features/diagnostics/ax-migration/mql';
 import {
   type AnyColumn,
@@ -144,6 +145,8 @@ const SORT_EXPRESSIONS: Record<LeadSortKey, AnyColumn | SQL> = {
   // Latest hearing (#137): soonest date first / A first when ascending; none last
   nextMeetingDate: leadNextMeetingDate,
   dealRating: leadDealRating,
+  // "When to act" (#151): a date column
+  actBy: leads.actBy,
 };
 
 /**
@@ -236,6 +239,14 @@ export function leadListConditions(
         sql`, `
       )})`
     );
+  }
+
+  // "When to act" (#151): set, or within the next months (past ones included)
+  if (input.actTiming === 'has') conditions.push(isNotNull(leads.actBy));
+  if (input.actTiming === 'soon') {
+    const until = new Date(`${jstDate(now)}T00:00:00Z`);
+    until.setUTCMonth(until.getUTCMonth() + ACT_TIMING_SOON_MONTHS);
+    conditions.push(lte(leads.actBy, until.toISOString().slice(0, 10)));
   }
 
   return conditions.filter((c): c is SQL => c !== undefined);

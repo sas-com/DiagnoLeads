@@ -3490,6 +3490,13 @@
       "sortBy": "並び替え（今は{column}）",
       "flipOrder": "並び順を反対にする（今は{order}）",
       "mqlSince": "MQL判定日：{date}"
+    },
+    "actBy": "動くべき時期",
+    "actTiming": "動くべき時期",
+    "actTimingHint": "保守期限・退職予定・予算策定の時期から計算した、再び動くべき月",
+    "actTimingOptions": {
+      "soon": "6か月以内（過ぎたものを含む）",
+      "has": "計算できたもの"
     }
   },
   "leadFollowUp": {
@@ -3561,7 +3568,8 @@
       "checkWithOtherLabel": "確認先の名前",
       "checkWithOtherPlaceholder": "例：取引先の情報システム部",
       "checkWith": "確認先：{name}",
-      "fromMeetingRequest": "回答者の希望日時から確定した初回商談"
+      "fromMeetingRequest": "回答者の希望日時から確定した初回商談",
+      "fromActTiming": "動くべき時期の前の再接触（保守期限・退職予定から自動で作成）"
     },
     "today": {
       "title": "今日やること",
@@ -3801,6 +3809,33 @@
       "primary": "主な課題。どこで一番困っているか（業務・人・費用）を具体的に確かめる",
       "primaryWithReasons": "主な課題。診断の理由：{reasons}",
       "selected": "診断で選ばれた課題。主な課題との関係を確かめる"
+    }
+  },
+  "actTiming": {
+    "title": "動くべき時期",
+    "notFollowed": "対象外（受注・時期以外の理由で失注）",
+    "deadline": {
+      "supportEnd": "保守期限：{month}（ヒアリング）",
+      "diagnosisSupportEnd": "保守期限の目安：{month}（Web診断の回答から推定）",
+      "retirement": "担当者の退職予定：{month}（ヒアリング）"
+    },
+    "start": "移行に {months}か月かかるとして、開始は {month}",
+    "budget": "決算月から、予算策定の時期 {month} に合わせています",
+    "notice": "{date} から担当者に知らせます",
+    "taskDue": "再接触の「次の行動」を {date} に入れています",
+    "taskDone": "再接触の「次の行動」は完了しています",
+    "settings": {
+      "title": "動くべき時期",
+      "description": "ヒアリングの保守期限・退職予定・決算月から、リードに再び動くべき時期を出し、その前に担当者へ知らせます。",
+      "migrationMonths": "移行にかかる期間（か月）",
+      "migrationMonthsHint": "期限からこの月数をさかのぼって開始時期にします（1〜60）。",
+      "noticeMonths": "何か月前に知らせるか",
+      "noticeMonthsHint": "動くべき時期のこの月数前に、担当者の「次の行動」に入れます（0〜12）。",
+      "save": "保存",
+      "saved": "保存しました（{count}件のリードを計算し直しました）",
+      "saveError": "保存できませんでした。もう一度お試しください。",
+      "invalid": "移行期間は 1〜60、知らせる時期は 0〜12 の整数で入力してください。",
+      "readOnly": "変更できるのはオーナーと管理者です。"
     }
   }
 }
