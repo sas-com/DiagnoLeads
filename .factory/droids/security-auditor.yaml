@@ -28,7 +28,7 @@ instructions: |
   ## 確認すべきファイル
   - lib/auth/ - 認証設定
   - lib/db/schema.ts - RLSポリシー
-  - middleware.ts - セキュリティヘッダー
+  - proxy.ts - セキュリティヘッダー、CSP、管理画面への誘導（Next.js 16 で middleware.ts から改名）
   - .env* - 環境変数
 
   ## レポート形式

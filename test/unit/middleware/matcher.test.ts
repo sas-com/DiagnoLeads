@@ -1,5 +1,5 @@
 /**
- * Paths the root middleware runs on. The Vercel Web Analytics script and endpoint (#222) must
+ * Paths the root proxy (proxy.ts) runs on. The Vercel Web Analytics script and endpoint (#222) must
  * stay out, or the locale routing would redirect them to /ja/_vercel/...
  */
 import { describe, expect, it, vi } from 'vitest';
@@ -12,7 +12,7 @@ vi.mock('@/lib/i18n/middleware', () => ({
   stripLocalePrefix: vi.fn(),
 }));
 
-const { config } = await import('@/middleware');
+const { config } = await import('@/proxy');
 
 // The first matcher is a regular expression over the whole path
 const general = new RegExp(`^${config.matcher[0]}$`);

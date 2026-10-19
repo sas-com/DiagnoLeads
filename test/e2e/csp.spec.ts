@@ -21,7 +21,13 @@ test.describe('Content Security Policy', () => {
         });
       });
 
-      await page.goto(path);
+      const response = await page.goto(path);
+      // No header means no violation either, so check that the proxy sent the strict policy
+      if (process.env.E2E_USE_BUILD) {
+        const policy = response?.headers()['content-security-policy'] ?? '';
+        expect(policy).toContain("'nonce-");
+        expect(policy).toContain("'strict-dynamic'");
+      }
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
       // Let late scripts and styles (fonts, the diagnosis, lazy chunks) settle
       await page.waitForLoadState('networkidle');
