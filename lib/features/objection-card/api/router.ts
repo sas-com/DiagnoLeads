@@ -5,22 +5,18 @@
  * it: those who can read leads, except viewers from a parent organization (#74).
  */
 
+import { canReadPlaybook } from '@/lib/features/ax-playbook/access';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { getObjectionCard } from '../service';
 
-const PLAYBOOK_READ_EXCLUDED_ROLES: readonly string[] = ['parent_viewer'];
-
 export const objectionCardRouter = router({
   get: organizationProcedure
     .input(z.object({ organizationId: z.string().uuid(), leadId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
-      if (
-        !ctx.ability.can('read', 'Lead') ||
-        PLAYBOOK_READ_EXCLUDED_ROLES.includes(ctx.membership.role)
-      ) {
+      if (!canReadPlaybook(ctx)) {
         throw new TRPCError({
           code: 'FORBIDDEN',
           message: 'You do not have permission to read the sales playbook',

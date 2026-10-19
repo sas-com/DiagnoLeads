@@ -117,9 +117,9 @@ export function ObjectionCard({ organizationId, leadId }: ObjectionCardProps) {
                     {t('objections')}
                   </h3>
                   <ul className="space-y-2">
-                    {data.objections.map((row) => (
+                    {data.objections.map((row, index) => (
                       <li
-                        key={`${row.customer}-${row.response}`}
+                        key={`${index}-${row.customer}`}
                         className="rounded-md border p-3 text-sm"
                       >
                         <p className="font-medium text-foreground">「{row.customer}」</p>
@@ -150,8 +150,8 @@ export function ObjectionCard({ organizationId, leadId }: ObjectionCardProps) {
                     {t('ngPhrases')}
                   </h3>
                   <ul className="space-y-1 text-sm">
-                    {data.ngPhrases.map((row) => (
-                      <li key={`${row.ng}-${row.alternative}`} className="break-words">
+                    {data.ngPhrases.map((row, index) => (
+                      <li key={`${index}-${row.ng}`} className="break-words">
                         <span className="text-red-700 line-through dark:text-red-400">
                           {row.ng}
                         </span>
