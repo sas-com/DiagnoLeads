@@ -971,6 +971,49 @@ export const leadDeliveryReviews = pgTable(
 export type LeadDeliveryReview = typeof leadDeliveryReviews.$inferSelect;
 
 /**
+ * Lead Offer Requests (Refs #153)
+ * Documents downloaded and seminars signed up for from the AX diagnosis result, and whether the
+ * respondent attended. The offers themselves are in organizations.settings.axInfoOffers; title
+ * and date are copied here so a request still reads after the offer is changed or removed.
+ */
+export const leadOfferRequests = pgTable(
+  'lead_offer_requests',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    leadId: uuid('lead_id').references(() => leads.id, { onDelete: 'cascade' }),
+    submissionId: uuid('submission_id').references(() => diagnosticSubmissions.id, {
+      onDelete: 'set null',
+    }),
+    /** 'document' | 'seminar' */
+    kind: text('kind').notNull(),
+    offerId: text('offer_id').notNull(),
+    title: text('title').notNull(),
+    /** The seminar's day; null for documents */
+    scheduledOn: date('scheduled_on', { mode: 'string' }),
+    /** The answer created the lead (or continued it): otherwise the lead was only matched by email */
+    identityVerified: boolean('identity_verified').default(false).notNull(),
+    attendedAt: timestamp('attended_at', { withTimezone: true }),
+    attendanceRecordedBy: uuid('attendance_recorded_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('lead_offer_requests_submission_offer_unique').on(
+      table.submissionId,
+      table.kind,
+      table.offerId
+    ),
+    index('lead_offer_requests_org_lead_idx').on(table.organizationId, table.leadId),
+  ]
+);
+
+export type LeadOfferRequest = typeof leadOfferRequests.$inferSelect;
+
+/**
  * Lead Contact Logs (Refs #136)
  * One row per contact a staff member recorded on a lead ("called", "emailed", "could not reach").
  * The earliest row of a lead is its first contact; the dashboard's waiting consultation

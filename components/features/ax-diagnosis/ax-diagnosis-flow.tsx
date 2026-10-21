@@ -53,6 +53,7 @@ import type {
   DiagnosticQuestion,
   DiagnosticSection,
 } from '@/lib/features/diagnostics/types';
+import type { PublicInfoOffers } from '@/lib/features/info-offers/types/schemas';
 import { formatEmailDomains } from '@/lib/i18n/format-domains';
 import { cn } from '@/lib/utils';
 import {
@@ -107,6 +108,8 @@ interface SubmissionResponse {
   submissionId: string;
   consultationRequested: boolean;
   result: AxMigrationPublicResult;
+  /** Documents and seminars, when the organization offers them (#153) */
+  offers?: PublicInfoOffers;
 }
 
 interface AxDiagnosisFlowProps {
@@ -490,6 +493,7 @@ function AxDiagnosisSteps({
           submissionId={response.submissionId}
           result={response.result}
           consultationRequested={response.consultationRequested}
+          offers={response.offers ?? null}
           embedded={embedded}
           onDiagnoseAnother={diagnoseAnother}
         />

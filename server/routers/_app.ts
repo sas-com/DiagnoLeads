@@ -20,6 +20,7 @@ import { distributionRouter } from '@/lib/features/distribution/router';
 import { embedRouter } from '@/lib/features/embed/router';
 import { filtersRouter } from '@/lib/features/filters/api/router';
 import { hierarchyRouter } from '@/lib/features/hierarchy/api/router';
+import { infoOffersRouter } from '@/lib/features/info-offers/api/router';
 import { leadActivityRouter } from '@/lib/features/lead-activity/api/router';
 import { leadFollowUpRouter } from '@/lib/features/lead-follow-up/api/router';
 import { leadHandoffRouter } from '@/lib/features/lead-handoff/api/router';
@@ -77,6 +78,7 @@ export const appRouter = router({
   leadPrep: leadPrepRouter, // Pre-meeting prep card (Refs #156)
   actTiming: actTimingRouter, // When to act and its contact again (Refs #151)
   objectionCard: objectionCardRouter, // Objections that fit why a past attempt stopped (Refs #157)
+  infoOffers: infoOffersRouter, // Documents and seminars from the AX diagnosis result (Refs #153)
   challengeGuide: challengeGuideRouter, // What to ask next for the main challenge of the diagnosis (Refs #75)
   deliveryReviews: deliveryReviewsRouter, // Phase progress and what turned out hard against the diagnosis (Refs #159)
   leadHandoff: leadHandoffRouter, // Handoff sheet of the first meeting to the technical team (Refs #86)

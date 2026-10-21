@@ -262,6 +262,10 @@ vi.mock('@/components/features/delivery-reviews/delivery-review-card', () => ({
 vi.mock('@/components/features/challenge-guide/challenge-guide-card', () => ({
   ChallengeGuideCard: () => null,
 }));
+// Documents and seminars (#153) have their own tests (test/unit/components/info-offers)
+vi.mock('@/components/features/info-offers/info-offer-requests-card', () => ({
+  InfoOfferRequestsCard: () => null,
+}));
 vi.mock('@/components/features/lead-activity/lead-activity-card', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/components/features/lead-activity/lead-activity-card')>()),
   LeadActivityCard: () => <p>activity timeline</p>,

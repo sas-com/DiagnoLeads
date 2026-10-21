@@ -33,6 +33,8 @@ export const AX_RATE_LIMITS = {
   },
   consultationPerIp: { name: 'ax-consultation-ip', limit: 10, windowMs: HOUR },
   detailsPerIp: { name: 'ax-details-ip', limit: 20, windowMs: HOUR },
+  /** Documents and seminars requested from the result (#153) */
+  offersPerIp: { name: 'ax-offers-ip', limit: 30, windowMs: HOUR },
   /**
    * Sales emails per organization, per hour and per day. The sending quota is shared with the
    * sign-in emails (password reset), so requests must not be able to use it up; past a limit

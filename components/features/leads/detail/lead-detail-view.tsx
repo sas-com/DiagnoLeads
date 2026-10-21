@@ -5,6 +5,7 @@ import { ActTimingCard } from '@/components/features/act-timing/act-timing-card'
 import { AppointmentReviewCard } from '@/components/features/appointment-reviews/appointment-review-card';
 import { ChallengeGuideCard } from '@/components/features/challenge-guide/challenge-guide-card';
 import { DeliveryReviewCard } from '@/components/features/delivery-reviews/delivery-review-card';
+import { InfoOfferRequestsCard } from '@/components/features/info-offers/info-offer-requests-card';
 import { LeadActivityCard } from '@/components/features/lead-activity/lead-activity-card';
 import { LeadContactBar } from '@/components/features/lead-follow-up/lead-contact-bar';
 import { LeadNextActionsCard } from '@/components/features/lead-follow-up/lead-next-actions-card';
@@ -422,6 +423,7 @@ function LeadDetailContent({
               onShowAnswers={showAnswers}
             />
             <ChallengeGuideCard organizationId={organizationId} leadId={lead.id} />
+            <InfoOfferRequestsCard organizationId={organizationId} leadId={lead.id} />
             <LeadFieldsCard
               card="pipeline"
               icon={Target}
