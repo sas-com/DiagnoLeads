@@ -3,6 +3,7 @@
 import { PageHeader } from '@/components/common/page-header';
 import { ActTimingCard } from '@/components/features/act-timing/act-timing-card';
 import { AppointmentReviewCard } from '@/components/features/appointment-reviews/appointment-review-card';
+import { DeliveryReviewCard } from '@/components/features/delivery-reviews/delivery-review-card';
 import { LeadActivityCard } from '@/components/features/lead-activity/lead-activity-card';
 import { LeadContactBar } from '@/components/features/lead-follow-up/lead-contact-bar';
 import { LeadNextActionsCard } from '@/components/features/lead-follow-up/lead-next-actions-card';
@@ -25,6 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useDeleteLead, useLeadAccess } from '@/hooks/use-leads';
 import { useOrganization } from '@/hooks/use-organization';
 import type { Lead } from '@/lib/db/schema';
+import { isDeliveryPhase } from '@/lib/features/delivery-reviews/report';
 import { handedOffOn } from '@/lib/features/lead-handoff/handoff';
 import {
   LEAD_TABS,
@@ -407,6 +409,9 @@ function LeadDetailContent({
             <LeadNextActionsCard organizationId={organizationId} leadId={lead.id} />
             {lead.agencyName?.trim() && (
               <AppointmentReviewCard organizationId={organizationId} leadId={lead.id} />
+            )}
+            {reachedPhases.some(isDeliveryPhase) && (
+              <DeliveryReviewCard organizationId={organizationId} leadId={lead.id} />
             )}
             <LeadHearingOverview organizationId={organizationId} leadId={lead.id} />
             {handoffOn && <LeadHandoffLink leadId={lead.id} handedOffOn={handoffOn} />}

@@ -12,6 +12,7 @@ import { contentEditorsRouter } from '@/lib/features/content/api/editors-router'
 import { contentRouter } from '@/lib/features/content/api/router';
 import { customFieldsRouter } from '@/lib/features/custom-fields/api/router';
 import { customReportsRouter } from '@/lib/features/custom-reports/api/router';
+import { deliveryReviewsRouter } from '@/lib/features/delivery-reviews/api/router';
 import { diagnosesRouter } from '@/lib/features/diagnosis-builder/api/router';
 import { diagnosticTemplatesRouter } from '@/lib/features/diagnostic-templates/api/router';
 import { distributionRouter } from '@/lib/features/distribution/router';
@@ -75,6 +76,7 @@ export const appRouter = router({
   leadPrep: leadPrepRouter, // Pre-meeting prep card (Refs #156)
   actTiming: actTimingRouter, // When to act and its contact again (Refs #151)
   objectionCard: objectionCardRouter, // Objections that fit why a past attempt stopped (Refs #157)
+  deliveryReviews: deliveryReviewsRouter, // Phase progress and what turned out hard against the diagnosis (Refs #159)
   leadHandoff: leadHandoffRouter, // Handoff sheet of the first meeting to the technical team (Refs #86)
   leadHearings: leadHearingsRouter, // Initial meeting hearings per lead (Refs #84)
   contentEditors: contentEditorsRouter, // FAQ / blog editors granted from settings (#91)

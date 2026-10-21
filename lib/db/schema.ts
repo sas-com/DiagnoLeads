@@ -12,6 +12,7 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgTable,
   primaryKey,
   text,
@@ -928,6 +929,46 @@ export const leadPrepCards = pgTable(
 );
 
 export type LeadPrepCard = typeof leadPrepCards.$inferSelect;
+
+/**
+ * Delivery Reviews (Refs #159)
+ * What turned out hard in a won deal, next to what the AX diagnosis pointed out, and the effort
+ * estimated against the effort it took. One row per lead; read side by side with the diagnosis
+ * to revise its scoring (lib/features/delivery-reviews).
+ */
+export const leadDeliveryReviews = pgTable(
+  'lead_delivery_reviews',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    leadId: uuid('lead_id')
+      .notNull()
+      .references(() => leads.id, { onDelete: 'cascade' }),
+    /** { checkpointKey: 'hard' | 'as_expected' | 'not_relevant' } (AX diagnosis checkpoint keys) */
+    checkpointOutcomes: jsonb('checkpoint_outcomes')
+      .$type<Record<string, string>>()
+      .default({})
+      .notNull(),
+    /** 'low' | 'medium' | 'high': how hard it actually was, against the diagnosis level */
+    actualDifficulty: text('actual_difficulty'),
+    /** Effort in person-months */
+    estimatedEffort: numeric('estimated_effort', { precision: 7, scale: 1, mode: 'number' }),
+    actualEffort: numeric('actual_effort', { precision: 7, scale: 1, mode: 'number' }),
+    note: text('note'),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('lead_delivery_reviews_lead_unique').on(table.leadId),
+    index('lead_delivery_reviews_organization_idx').on(table.organizationId),
+  ]
+);
+
+export type LeadDeliveryReview = typeof leadDeliveryReviews.$inferSelect;
 
 /**
  * Lead Contact Logs (Refs #136)

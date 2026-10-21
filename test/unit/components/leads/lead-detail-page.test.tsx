@@ -254,6 +254,10 @@ vi.mock('@/components/features/act-timing/act-timing-card', () => ({
 vi.mock('@/components/features/objection-card/objection-card', () => ({
   ObjectionCard: () => null,
 }));
+// The delivery review (#159) has its own tests (test/unit/components/delivery-reviews)
+vi.mock('@/components/features/delivery-reviews/delivery-review-card', () => ({
+  DeliveryReviewCard: () => <p>delivery review</p>,
+}));
 vi.mock('@/components/features/lead-activity/lead-activity-card', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/components/features/lead-activity/lead-activity-card')>()),
   LeadActivityCard: () => <p>activity timeline</p>,
@@ -491,6 +495,16 @@ describe('LeadDetailView overview', () => {
     renderPage();
     expect(within(card('営業パイプライン')).getByText('失注・保留理由')).toBeInTheDocument();
     expect(within(card('営業パイプライン')).getByText('予算')).toBeInTheDocument();
+  });
+
+  it('shows the delivery review only once the survey or a later phase was won (#159)', () => {
+    const { unmount } = renderPage();
+    expect(screen.queryByText('delivery review')).not.toBeInTheDocument();
+    unmount();
+
+    store.set([makeLead({ dealPhaseReachedAt: { proposal: '2026-09-01', survey_won: '2026-10-01' } })]);
+    renderPage();
+    expect(screen.getByText('delivery review')).toBeInTheDocument();
   });
 
   it('links to the handoff sheet once the deal moved on from the initial hearing (#86)', () => {
