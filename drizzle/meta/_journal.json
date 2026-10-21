@@ -183,6 +183,13 @@
       "when": 1792576525739,
       "tag": "0025_info_offer_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792577367195,
+      "tag": "0026_prospects",
+      "breakpoints": true
     }
   ]
 }

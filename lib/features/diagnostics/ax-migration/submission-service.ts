@@ -1,6 +1,7 @@
 import type { db as defaultDb } from '@/lib/db/client';
 import { axSalesPlaybooks, diagnosticSubmissions, leads } from '@/lib/db/schema';
 import { findActiveAgencyLink } from '@/lib/features/agency-links/service';
+import { MEMBER_REFERRAL_KIND } from '@/lib/features/agency-links/types/schemas';
 import { axTargetCompanySchema } from '@/lib/features/ax-playbook/types/schemas';
 import { and, eq, gte, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -72,6 +73,7 @@ export type SubmitOutcome =
        * recorded on the lead, and not an unverified identity
        */
       continued: boolean;
+      referralMemberUserId: string | null;
       result: AxMigrationResult;
       answers: DiagnosticAnswers;
     }
@@ -264,9 +266,13 @@ export async function submitAxMigrationDiagnosis(
     // An issued agency link decides the inflow source over the UTM parameters (#147). Like every
     // value of newLead, it is used only when the submission creates the lead
     const agencyLink = await findActiveAgencyLink(tx, organizationId, tracking.agency);
-    const inflow = agencyLink
-      ? { inflowSource: agencyLink.kind, referrerName: null, agencyName: agencyLink.agencyName }
-      : inferInflowSource(tracking);
+    // An employee's own link (#265) names the employee as the referrer, not as an agency: agency
+    // contracts and appointment reviews must not pick the lead up
+    const inflow = !agencyLink
+      ? inferInflowSource(tracking)
+      : agencyLink.kind === MEMBER_REFERRAL_KIND
+        ? { inflowSource: agencyLink.kind, referrerName: agencyLink.agencyName, agencyName: null }
+        : { inflowSource: agencyLink.kind, referrerName: null, agencyName: agencyLink.agencyName };
 
     const { leadId, existing } = await upsertLeadFromSubmission(tx, {
       organizationId,
@@ -337,6 +343,9 @@ export async function submitAxMigrationDiagnosis(
         ? { name: existing.name, company: existing.company, email: existing.email }
         : null,
       continued: continuedFrom !== null,
+      // The employee whose link brought a new lead, to tell them (#265)
+      referralMemberUserId:
+        !existing && agencyLink?.kind === MEMBER_REFERRAL_KIND ? agencyLink.memberUserId : null,
       result,
       answers,
     };

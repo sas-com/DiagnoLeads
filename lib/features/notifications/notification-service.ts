@@ -245,6 +245,8 @@ export function shouldSendInAppNotification(
     case 'member_removed':
       return prefs.inAppMemberChanges;
     case 'consultation_requested':
+    // A customer search row handed over to sales (#265) is a request to contact, like a consultation
+    case 'prospect_handed_over':
       return prefs.inAppConsultationRequested;
     case 'lead_assigned':
       return prefs.inAppAssignedToMe;
@@ -256,6 +258,8 @@ export function shouldSendInAppNotification(
     case 'hearing_ai_restricted':
     // Handoff sheets (#86) go to the members the organization chose to receive them
     case 'lead_handoff':
+    // The employee's own referral turned into a diagnosis (#265): addressed to that one person
+    case 'referral_diagnosed':
     case 'system':
       return true;
     default:
