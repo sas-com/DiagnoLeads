@@ -7,9 +7,9 @@
  *   bun run coverage:dashboard --fresh # 新規計測して表示
  */
 
-import { execSync } from 'child_process';
-import * as fs from 'fs';
-import * as path from 'path';
+import { execSync } from 'node:child_process';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 const COVERAGE_JSON = 'coverage/coverage-final.json';
 const TARGET = 80;
@@ -77,20 +77,13 @@ function formatPct(pct: number): string {
 
 function printDashboard(rawData: RawCoverageData) {
   console.log(
-    '\n' +
-      colors.bold +
-      colors.cyan +
-      '═══════════════════════════════════════════════════════════════' +
-      colors.reset
+    `\n${colors.bold}${colors.cyan}═══════════════════════════════════════════════════════════════${colors.reset}`
   );
   console.log(
-    colors.bold + '                    📊 COVERAGE DASHBOARD                        ' + colors.reset
+    `${colors.bold}                    📊 COVERAGE DASHBOARD                        ${colors.reset}`
   );
   console.log(
-    colors.cyan +
-      '═══════════════════════════════════════════════════════════════' +
-      colors.reset +
-      '\n'
+    `${colors.cyan}═══════════════════════════════════════════════════════════════${colors.reset}\n`
   );
 
   // 全体カバレッジを計算
@@ -118,7 +111,7 @@ function printDashboard(rawData: RawCoverageData) {
   const overallFunctions = totalFunctions > 0 ? (coveredFunctions / totalFunctions) * 100 : 0;
   const overallBranches = totalBranches > 0 ? (coveredBranches / totalBranches) * 100 : 0;
 
-  console.log(colors.bold + '📈 Overall Coverage' + colors.reset);
+  console.log(`${colors.bold}📈 Overall Coverage${colors.reset}`);
   console.log(`   Lines:      ${formatPct(overallLines)}`);
   console.log(`   Statements: ${formatPct(overallLines)}`);
   console.log(`   Functions:  ${formatPct(overallFunctions)}`);
@@ -168,7 +161,7 @@ function printDashboard(rawData: RawCoverageData) {
   const inProgress = sortedModules.filter((m) => m.pct < TARGET);
 
   console.log(
-    colors.bold + colors.green + `✅ 80%+ Achieved (${achieved.length} modules)` + colors.reset
+    `${colors.bold + colors.green}✅ 80%+ Achieved (${achieved.length} modules)${colors.reset}`
   );
   console.log('─'.repeat(50));
   for (const mod of achieved) {
@@ -177,7 +170,7 @@ function printDashboard(rawData: RawCoverageData) {
   console.log();
 
   console.log(
-    colors.bold + colors.yellow + `🔄 In Progress (${inProgress.length} modules)` + colors.reset
+    `${colors.bold + colors.yellow}🔄 In Progress (${inProgress.length} modules)${colors.reset}`
   );
   console.log('─'.repeat(50));
   for (const mod of inProgress) {
@@ -194,16 +187,13 @@ function printDashboard(rawData: RawCoverageData) {
   const progressPct = ((achievedCount / totalModules) * 100).toFixed(0);
 
   console.log(
-    colors.cyan + '═══════════════════════════════════════════════════════════════' + colors.reset
+    `${colors.cyan}═══════════════════════════════════════════════════════════════${colors.reset}`
   );
   console.log(
     `${colors.bold}Summary:${colors.reset} ${achievedCount}/${totalModules} modules at 80%+ (${progressPct}% complete)`
   );
   console.log(
-    colors.cyan +
-      '═══════════════════════════════════════════════════════════════' +
-      colors.reset +
-      '\n'
+    `${colors.cyan}═══════════════════════════════════════════════════════════════${colors.reset}\n`
   );
 }
 
@@ -213,7 +203,7 @@ async function main() {
 
   // キャッシュがない、または--freshが指定された場合は計測
   if (fresh || !fs.existsSync(COVERAGE_JSON)) {
-    console.log(colors.dim + '⏳ Running coverage (this may take a moment)...' + colors.reset);
+    console.log(`${colors.dim}⏳ Running coverage (this may take a moment)...${colors.reset}`);
     try {
       execSync('bun run test:coverage --reporter=json --run', {
         stdio: 'inherit',
@@ -226,7 +216,7 @@ async function main() {
 
   // JSONを読み込み
   if (!fs.existsSync(COVERAGE_JSON)) {
-    console.error(colors.red + '❌ Coverage data not found. Run with --fresh flag.' + colors.reset);
+    console.error(`${colors.red}❌ Coverage data not found. Run with --fresh flag.${colors.reset}`);
     process.exit(1);
   }
 
@@ -235,8 +225,8 @@ async function main() {
 
   // 最終更新時刻
   const stat = fs.statSync(COVERAGE_JSON);
-  console.log(colors.dim + `Last updated: ${stat.mtime.toLocaleString('ja-JP')}` + colors.reset);
-  console.log(colors.dim + 'Run with --fresh to recalculate coverage.' + colors.reset + '\n');
+  console.log(`${colors.dim}Last updated: ${stat.mtime.toLocaleString('ja-JP')}${colors.reset}`);
+  console.log(`${colors.dim}Run with --fresh to recalculate coverage.${colors.reset}\n`);
 }
 
 main().catch(console.error);
