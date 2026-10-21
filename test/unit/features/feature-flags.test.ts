@@ -14,7 +14,9 @@ import {
   clearFlagCache,
   createDefaultFlag,
   PREDEFINED_FLAGS,
+  toFeatureFlag,
 } from '@/lib/features/feature-flags/service';
+import type { featureFlags } from '@/lib/db/schema';
 import type { FeatureFlag, FeatureFlagContext } from '@/lib/features/feature-flags/types';
 
 // Mock feature flag for testing
@@ -350,6 +352,62 @@ describe('Feature Flags Service', () => {
     it('should have beta feature flags', () => {
       expect(PREDEFINED_FLAGS.BETA_WORKFLOWS).toBe('beta_workflows');
       expect(PREDEFINED_FLAGS.BETA_REPORTS).toBe('beta_reports');
+    });
+  });
+
+  // DB rows store the targets as targetOrganizationIds / targetUserIds (#263)
+  describe('toFeatureFlag', () => {
+    const ORG_ID = '660e8400-e29b-41d4-a716-446655440000';
+    const USER_ID = '550e8400-e29b-41d4-a716-446655440000';
+
+    function createRow(
+      overrides: Partial<typeof featureFlags.$inferSelect> = {}
+    ): typeof featureFlags.$inferSelect {
+      return {
+        id: 'flag-001',
+        organizationId: ORG_ID,
+        key: 'demo-flag',
+        name: 'Test Feature',
+        description: null,
+        status: 'active',
+        strategy: 'all',
+        rolloutPercentage: null,
+        targetOrganizationIds: null,
+        targetUserIds: null,
+        environments: null,
+        metadata: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...overrides,
+      };
+    }
+
+    it('maps target columns and turns null into undefined', () => {
+      const flag = toFeatureFlag(
+        createRow({ targetOrganizationIds: [ORG_ID], targetUserIds: [USER_ID] })
+      );
+
+      expect(flag.organizationIds).toEqual([ORG_ID]);
+      expect(flag.userIds).toEqual([USER_ID]);
+      expect(flag.description).toBeUndefined();
+      expect(flag.rolloutPercentage).toBeUndefined();
+      expect(flag.environments).toBeUndefined();
+    });
+
+    it('enables an organization flag for a target organization in the row', () => {
+      const flag = toFeatureFlag(
+        createRow({ strategy: 'organization', targetOrganizationIds: [ORG_ID] })
+      );
+
+      expect(evaluateFlag(flag, { organizationId: ORG_ID }).enabled).toBe(true);
+      expect(evaluateFlag(flag, { organizationId: 'other-org' }).enabled).toBe(false);
+    });
+
+    it('enables a user flag for a target user in the row', () => {
+      const flag = toFeatureFlag(createRow({ strategy: 'user', targetUserIds: [USER_ID] }));
+
+      expect(evaluateFlag(flag, { userId: USER_ID }).enabled).toBe(true);
+      expect(evaluateFlag(flag, { userId: 'other-user' }).enabled).toBe(false);
     });
   });
 });
