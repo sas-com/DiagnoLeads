@@ -156,7 +156,7 @@ vi.mock('@/lib/db/client', () => ({
   },
 }));
 
-vi.mock('@/lib/email/client', () => ({
+vi.mock('@/lib/features/email', () => ({
   sendEmail: vi.fn().mockResolvedValue({ id: 'email-123' }),
 }));
 ```

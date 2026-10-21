@@ -38,6 +38,8 @@ export type EmailBlock =
 
 export interface EmailContent {
   theme: EmailTheme;
+  /** Language of the mail (the html lang attribute). Defaults to Japanese */
+  lang?: 'ja' | 'en';
   /** Shown after the subject in the inbox list; kept short */
   preheader: string;
   /** Name in the header bar. Defaults to DiagnoLeads for internal mail */
@@ -278,7 +280,7 @@ export function renderEmail(content: EmailContent): RenderedEmail {
     .join('');
 
   const html = `<!DOCTYPE html>
-<html lang="ja">
+<html lang="${content.lang ?? 'ja'}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">

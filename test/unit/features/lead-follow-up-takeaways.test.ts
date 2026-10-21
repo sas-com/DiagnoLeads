@@ -179,5 +179,7 @@ describe('due notice wording', () => {
     expect(email.text).toContain(`https://app.example.com/ja/leads/${LEAD}`);
     expect(email.html).toContain('&lt;b&gt;見積もり&lt;/b&gt;');
     expect(email.html).not.toContain('<b>');
+    // Overdue tasks are listed first, under their own heading
+    expect(email.text.indexOf('【期限切れ】')).toBeLessThan(email.text.indexOf('【期限が近い】'));
   });
 });

@@ -15,7 +15,7 @@ vi.mock('next/server', async (importOriginal) => ({
   ...(await importOriginal<typeof import('next/server')>()),
   after,
 }));
-vi.mock('@/lib/email/client', () => ({ sendEmail }));
+vi.mock('@/lib/features/email', () => ({ sendEmail }));
 vi.mock('@/lib/db/client', () => ({ db: {} }));
 vi.mock('@/lib/env', () => ({
   env: {

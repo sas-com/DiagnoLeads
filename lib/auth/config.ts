@@ -48,9 +48,9 @@ export const auth = betterAuth({
      */
     sendResetPassword: async ({ user, url }, request) => {
       const locale = detectLocaleFromHeaders(request?.headers);
-      const { subject, text } = generatePasswordResetEmail(user, url, locale);
+      const { subject, text, html } = generatePasswordResetEmail(user, url, locale);
       // Returned, not awaited here: better-auth hands it to advanced.backgroundTasks
-      return sendAuthEmail({ to: user.email, subject, text });
+      return sendAuthEmail({ to: user.email, subject, text, html });
     },
     /**
      * Callback after password reset is complete
@@ -68,9 +68,9 @@ export const auth = betterAuth({
   emailVerification: {
     sendVerificationEmail: async ({ user, url }, request) => {
       const locale = detectLocaleFromHeaders(request?.headers);
-      const { subject, text } = generateVerificationEmail(user, url, locale);
+      const { subject, text, html } = generateVerificationEmail(user, url, locale);
       // Returned, not awaited here: better-auth hands it to advanced.backgroundTasks
-      return sendAuthEmail({ to: user.email, subject, text });
+      return sendAuthEmail({ to: user.email, subject, text, html });
     },
     sendOnSignUp: false, // Don't auto-send on signup (requireEmailVerification is false)
   },

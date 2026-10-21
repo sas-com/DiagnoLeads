@@ -75,11 +75,18 @@ describe('reportServerError', () => {
   it('emails the alert address, falling back to the AX sales address', async () => {
     await reportServerError('ax-diagnosis/submit', dbError(), { database });
     expect(sendEmail).toHaveBeenCalledTimes(1);
-    const mail = sendEmail.mock.calls[0]?.[0] as unknown as { to: string[]; subject: string; text: string };
+    const mail = sendEmail.mock.calls[0]?.[0] as unknown as {
+      to: string[];
+      subject: string;
+      text: string;
+      html: string;
+    };
     expect(mail.to).toEqual(['sales@sas-com.com']);
     expect(mail.subject).toContain('ax-diagnosis/submit');
     expect(mail.text).toContain('PostgresError (23505)');
     expect(mail.text).not.toContain('taro@example.co.jp');
+    expect(mail.html).toContain('PostgresError (23505)');
+    expect(mail.html).not.toContain('taro@example.co.jp');
 
     env.OPS_ALERT_EMAIL = 'ops@sas-com.com, oncall@sas-com.com';
     await reportServerError('ax-diagnosis/submit', dbError(), { database });

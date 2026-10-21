@@ -24,6 +24,7 @@ import {
   users,
 } from '@/lib/db/schema';
 import { filterAllowedRecipients } from '@/lib/email/allowed-recipients';
+import { renderEmail } from '@/lib/email/templates/render';
 import { contractForLead } from '@/lib/features/agency-contracts/report';
 import { leadCreatedOnSql } from '@/lib/features/agency-contracts/service';
 import { isEmailConfigured, sendEmail } from '@/lib/features/email';
@@ -285,20 +286,36 @@ export function buildReviewNotice(item: ReviewNoticeItem, today: string) {
 }
 
 /** One email listing a member's appointments of one organization */
-export function buildReviewNoticeEmail(items: ReviewNoticeItem[], today: string, appUrl: string) {
-  const lines = items.map((item) => ({
-    title: buildReviewNotice(item, today).title,
-    url: `${appUrl}/ja/leads/${item.leadId}`,
-  }));
+export function buildReviewNoticeEmail(
+  items: ReviewNoticeItem[],
+  today: string,
+  appUrl: string
+): { subject: string; html: string; text: string } {
   const intro =
     '代行会社からのアポについて、条件を満たしたかの記録がまだです。満たしていない場合は、期限までに代行会社へ連絡すると返品・取り直しの対象になります。';
-  return {
-    subject: `【期限のお知らせ】アポの条件の記録 ${items.length}件`,
-    text: `${intro}\n\n${lines.map((line) => `- ${line.title}\n  ${line.url}`).join('\n')}`,
-    html: `<p>${escapeHtml(intro)}</p><ul>${lines
-      .map((line) => `<li><a href="${escapeHtml(line.url)}">${escapeHtml(line.title)}</a></li>`)
-      .join('')}</ul>`,
-  };
+  const subject = `【期限のお知らせ】アポの条件の記録 ${items.length}件`;
+  const rendered = renderEmail({
+    theme: 'internal',
+    preheader: `アポの条件の記録 ${items.length}件の期限が近づいています`,
+    blocks: [
+      {
+        type: 'badges',
+        items: [{ label: `記録待ち ${items.length}件`, tone: 'warning' }],
+      },
+      { type: 'heading', text: 'アポの条件の記録の期限' },
+      { type: 'paragraph', text: intro },
+      {
+        type: 'links',
+        items: items.map((item) => ({
+          text: buildReviewNotice(item, today).title,
+          url: `${appUrl}/ja/leads/${item.leadId}`,
+          note: `初回商談：${jaDate(item.meetingOn)}`,
+        })),
+      },
+    ],
+    footer: ['このメールは DiagnoLeads から自動で送信しています。'],
+  });
+  return { subject, ...rendered };
 }
 
 /** Unreviewed appointments with a deadline in the notice window, before claiming */
@@ -482,13 +499,4 @@ export async function runAppointmentReviewNotices(
     }
   }
   return result;
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }

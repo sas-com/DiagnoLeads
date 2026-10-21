@@ -1,5 +1,6 @@
 import type { db as defaultDb } from '@/lib/db/client';
 import { unwrapQueryError } from '@/lib/db/query-error';
+import { renderEmail } from '@/lib/email/templates/render';
 import { env } from '@/lib/env';
 import { type RateLimitRule, consumeRateLimit } from '@/lib/features/diagnostics/rate-limit';
 import { isEmailConfigured, sendEmail } from '@/lib/features/email';
@@ -91,8 +92,6 @@ async function allowedToSend(database: Database, where: string, now: Date): Prom
   }
 }
 
-const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-
 /**
  * Tell the people on call that a server error happened (#227). Logs as before, then emails
  * OPS_ALERT_EMAIL (or the AX sales address) at most once per place every 10 minutes. Never
@@ -110,23 +109,34 @@ export async function reportServerError(
     if (!(await allowedToSend(db, where, now))) return;
 
     const summary = summarizeServerError(error);
-    const lines = [
-      `発生場所: ${where}`,
-      `時刻: ${now.toISOString()}`,
-      `種類: ${summary.name}${summary.code ? ` (${summary.code})` : ''}`,
-      ...(summary.table ? [`表: ${summary.table}`] : []),
-      ...(summary.constraint ? [`制約: ${summary.constraint}`] : []),
-      `版: ${process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? '不明'}`,
-      '',
-      ...summary.frames,
-      '',
-      '同じ発生場所の通知は10分に1通までです。詳しくは Vercel のログを確認してください。',
+    const facts = [
+      { label: '発生場所', value: where },
+      { label: '時刻', value: now.toISOString() },
+      { label: '種類', value: `${summary.name}${summary.code ? ` (${summary.code})` : ''}` },
+      ...(summary.table ? [{ label: '表', value: summary.table }] : []),
+      ...(summary.constraint ? [{ label: '制約', value: summary.constraint }] : []),
+      { label: '版', value: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? '不明' },
     ];
     await sendEmail({
       to,
       subject: `[DiagnoLeads] サーバーエラー: ${where}`,
-      text: lines.join('\n'),
-      html: `<pre style="font-family:monospace;white-space:pre-wrap">${escapeHtml(lines.join('\n'))}</pre>`,
+      ...renderEmail({
+        theme: 'internal',
+        preheader: `${where} で ${summary.name} が発生しました`,
+        blocks: [
+          { type: 'heading', text: 'サーバーエラー' },
+          { type: 'facts', rows: facts },
+          ...(summary.frames.length > 0
+            ? [{ type: 'code' as const, text: summary.frames.join('\n') }]
+            : []),
+          {
+            type: 'paragraph',
+            text: '同じ発生場所の通知は10分に1通までです。詳しくは Vercel のログを確認してください。',
+            muted: true,
+          },
+        ],
+        footer: ['このメールは DiagnoLeads から自動で送信しています。'],
+      }),
     });
   } catch (alertError) {
     console.error('Server error alert failed:', summarizeServerError(alertError));

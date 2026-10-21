@@ -4,6 +4,7 @@
  */
 import type { NotificationType } from '@/lib/db/schema';
 import { filterAllowedRecipients } from '@/lib/email/allowed-recipients';
+import { renderEmail } from '@/lib/email/templates/render';
 import { isEmailConfigured, sendEmail } from '@/lib/features/email';
 import {
   createNotification,
@@ -105,8 +106,17 @@ export async function notifyLeadAssigned(n: LeadAssignedNotification): Promise<v
         sendEmail({
           to,
           subject: title,
-          text: `${message}\n\nリード: ${leadUrl}`,
-          html: `<p>${escapeHtml(message)}</p><p><a href="${escapeHtml(leadUrl)}">リードを開く</a></p>`,
+          ...renderEmail({
+            theme: 'internal',
+            preheader: message,
+            blocks: [
+              { type: 'badges', items: [{ label: '担当割り当て', tone: 'info' }] },
+              { type: 'heading', text: title.replace(/^【担当割り当て】/, '') },
+              { type: 'paragraph', text: message },
+              { type: 'button', label: 'リードを開く', url: leadUrl },
+            ],
+            footer: ['このメールは DiagnoLeads から自動で送信しています。'],
+          }),
         })
       );
     }
@@ -118,13 +128,4 @@ export async function notifyLeadAssigned(n: LeadAssignedNotification): Promise<v
       console.error('Lead assignment notification failed:', result.reason);
     }
   }
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }

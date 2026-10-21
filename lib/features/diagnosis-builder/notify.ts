@@ -6,6 +6,7 @@
  */
 import { db } from '@/lib/db/client';
 import { filterAllowedRecipients } from '@/lib/email/allowed-recipients';
+import { type EmailBlock, type EmailFact, renderEmail } from '@/lib/email/templates/render';
 import { env } from '@/lib/env';
 import { isEmailConfigured, sendEmail } from '@/lib/features/email';
 import { notifyOrganizationMembers } from '@/lib/features/notifications/notification-service';
@@ -100,28 +101,91 @@ export function buildDiagnosisSalesMessage(n: DiagnosisNotification): {
   };
 }
 
-/** Plain-text and HTML bodies of the sales email (all values escaped in the HTML) */
-export function buildDiagnosisSalesEmail(n: DiagnosisNotification) {
-  const { title, message } = buildDiagnosisSalesMessage(n);
+/**
+ * The sales email (#285): the same judgement as the in-app message, laid out like the AX
+ * diagnosis as badges, the customer, the result and a button to the lead
+ */
+export function buildDiagnosisSalesEmail(n: DiagnosisNotification): {
+  subject: string;
+  html: string;
+  text: string;
+} {
+  const { title } = buildDiagnosisSalesMessage(n);
   const url = leadPageUrl(n.leadId);
-  const rows: [string, string][] = [
-    ['会社名', n.company],
-    ['氏名', n.name],
-    ['メール', n.email],
-    ['相談申込', n.consultationRequested ? 'あり' : 'なし'],
-    ...(n.consultationRequested
-      ? ([['連絡期限', consultationDeadline(n.requestedAt)]] as [string, string][])
-      : []),
-    ['MQL', { interest: '関心あり', fit: '適合のみ', none: '対象外' }[n.mqlLevel]],
-    ...n.mqlReasons.map((reason): [string, string] => ['MQLの理由', reason]),
+  const deadline = n.consultationRequested ? consultationDeadline(n.requestedAt) : null;
+
+  const badges: Extract<EmailBlock, { type: 'badges' }>['items'] = [
+    ...(n.consultationRequested ? [{ label: '相談申込', tone: 'danger' as const }] : []),
+    ...(n.mqlLevel === 'interest'
+      ? [{ label: '関心あり（MQL）', tone: 'warning' as const }]
+      : n.mqlLevel === 'fit'
+        ? [{ label: '適合', tone: 'info' as const }]
+        : []),
+    ...(n.identityUnverified ? [{ label: '本人未確認', tone: 'warning' as const }] : []),
   ];
-  return {
-    subject: title,
-    text: `${message}\n\n${rows.map(([k, v]) => `${k}: ${v}`).join('\n')}\nリード: ${url}`,
-    html: `<p>${escapeHtml(message)}</p><ul>${rows
-      .map(([k, v]) => `<li>${escapeHtml(k)}: ${escapeHtml(v)}</li>`)
-      .join('')}</ul><p><a href="${escapeHtml(url)}">リードを開く</a></p>`,
-  };
+  const result: EmailFact[] = [
+    { label: '診断', value: n.diagnosisTitle },
+    { label: '結果', value: n.resultTypeName ?? '該当なし' },
+    { label: 'リードスコア', value: String(n.leadScore) },
+    { label: 'MQL', value: diagnosisMqlSummary(n.mqlLevel, n.mqlReasons).replace(/^MQL: /, '') },
+    ...n.mqlReasons.map((reason) => ({ label: 'MQLの理由', value: reason })),
+  ];
+
+  const rendered = renderEmail({
+    theme: 'internal',
+    preheader: deadline
+      ? `${n.company} ${n.name} 様から相談申込。${deadline} までに連絡してください`
+      : `${n.company} ${n.name} 様が「${n.diagnosisTitle}」に回答しました`,
+    blocks: [
+      { type: 'badges', items: badges },
+      {
+        type: 'heading',
+        text: n.consultationRequested
+          ? `${n.diagnosisTitle}から相談申込がありました`
+          : `${n.diagnosisTitle}に回答がありました`,
+      },
+      ...(deadline
+        ? [
+            {
+              type: 'paragraph' as const,
+              text: 'MQL判定を経ずに営業へ引き渡します。リードの内容を確認し、期限までにご連絡ください。',
+            },
+            {
+              type: 'notice' as const,
+              tone: 'danger' as const,
+              title: '連絡期限',
+              text: `${deadline}（土日を除く営業日）`,
+            },
+          ]
+        : []),
+      ...(n.identityUnverified
+        ? [
+            {
+              type: 'notice' as const,
+              tone: 'warning' as const,
+              title: '本人確認が必要です',
+              text: '既存リードと同じメールアドレスからの回答です。本人確認のうえ対応してください（リードの内容は変更していません）。',
+            },
+          ]
+        : []),
+      {
+        type: 'facts',
+        title: 'お客様',
+        rows: [
+          { label: '会社名', value: n.company },
+          { label: '氏名', value: n.name },
+          { label: 'メール', value: n.email },
+        ],
+      },
+      { type: 'facts', title: '判定', rows: result },
+      { type: 'button', label: 'リードを開く', url },
+    ],
+    footer: [
+      'このメールは DiagnoLeads から自動で送信しています。',
+      '心当たりがない場合は、組織の管理者にお問い合わせください。',
+    ],
+  });
+  return { subject: title, ...rendered };
 }
 
 /**
@@ -224,13 +288,4 @@ async function withinLimit(
     console.error(`Diagnosis: limit ${rule.name} check failed:`, error);
     return onError;
   }
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }

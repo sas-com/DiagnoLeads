@@ -6,6 +6,7 @@
 import type { db as defaultDb } from '@/lib/db/client';
 import { leads, notifications, organizationMembers, users } from '@/lib/db/schema';
 import { filterAllowedRecipients } from '@/lib/email/allowed-recipients';
+import { renderEmail } from '@/lib/email/templates/render';
 import { isEmailConfigured, sendEmail } from '@/lib/features/email';
 import { ASSIGNABLE_ROLES } from '@/lib/features/leads/assignment';
 import { and, eq, inArray, sql } from 'drizzle-orm';
@@ -18,14 +19,6 @@ export interface HandoffNotifyDeps {
   isEmailConfigured: typeof isEmailConfigured;
   sendEmail: typeof sendEmail;
 }
-
-const escapeHtml = (value: string) =>
-  value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 
 export async function notifyLeadHandoff(
   db: Executor,
@@ -83,13 +76,28 @@ export async function notifyLeadHandoff(
     if (deps.isEmailConfigured()) {
       // In test mode only company addresses are mailed
       const to = filterAllowedRecipients(recipients.map((recipient) => recipient.email));
+      const body = renderEmail({
+        theme: 'internal',
+        preheader: message,
+        blocks: [
+          { type: 'badges', items: [{ label: '引き継ぎ', tone: 'info' }] },
+          { type: 'heading', text: title.replace(/^【引き継ぎ】/, '') },
+          { type: 'paragraph', text: message },
+          { type: 'button', label: '引き継ぎ書を開く', url },
+          {
+            type: 'paragraph',
+            text: '引き継ぎ書の内容はアプリでのみ確認できます。',
+            muted: true,
+          },
+        ],
+        footer: ['このメールは DiagnoLeads から自動で送信しています。'],
+      });
       const results = await Promise.allSettled(
         to.map((address) =>
           deps.sendEmail({
             to: [address],
             subject: title,
-            text: `${message}\n\n引き継ぎ書: ${url}`,
-            html: `<p>${escapeHtml(message)}</p><p><a href="${escapeHtml(url)}">引き継ぎ書を開く</a></p>`,
+            ...body,
           })
         )
       );
