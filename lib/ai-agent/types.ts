@@ -142,32 +142,38 @@ export type AgentType =
  */
 export const AGENT_CONFIGS: Record<AgentType, Partial<AgentConfig>> = {
   'lead-qualifier': {
-    systemPrompt: `You are a lead qualification specialist. Analyze leads and determine their quality score based on available data. Use the provided tools to gather information and make decisions.`,
+    systemPrompt:
+      'You are a lead qualification specialist. Analyze leads and determine their quality score based on available data. Use the provided tools to gather information and make decisions.',
     maxIterations: 5,
     temperature: 0.3,
   },
   'lead-enricher': {
-    systemPrompt: `You are a data enrichment specialist. Find and add relevant information to lead profiles using available tools and external data sources.`,
+    systemPrompt:
+      'You are a data enrichment specialist. Find and add relevant information to lead profiles using available tools and external data sources.',
     maxIterations: 8,
     temperature: 0.2,
   },
   'report-generator': {
-    systemPrompt: `You are a business analyst. Generate comprehensive reports based on data analysis. Use tools to query data and create insights.`,
+    systemPrompt:
+      'You are a business analyst. Generate comprehensive reports based on data analysis. Use tools to query data and create insights.',
     maxIterations: 10,
     temperature: 0.5,
   },
   'data-analyst': {
-    systemPrompt: `You are a data analyst. Analyze patterns, trends, and anomalies in business data. Provide actionable insights.`,
+    systemPrompt:
+      'You are a data analyst. Analyze patterns, trends, and anomalies in business data. Provide actionable insights.',
     maxIterations: 8,
     temperature: 0.4,
   },
   'customer-support': {
-    systemPrompt: `You are a helpful customer support agent. Answer questions accurately and help users with their issues.`,
+    systemPrompt:
+      'You are a helpful customer support agent. Answer questions accurately and help users with their issues.',
     maxIterations: 6,
     temperature: 0.7,
   },
   'content-writer': {
-    systemPrompt: `You are a content writer. Create engaging and professional content based on provided guidelines and data.`,
+    systemPrompt:
+      'You are a content writer. Create engaging and professional content based on provided guidelines and data.',
     maxIterations: 5,
     temperature: 0.8,
   },

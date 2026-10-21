@@ -310,7 +310,7 @@ export class JobQueue {
         job.status = 'pending';
         job.error = errorMessage;
         // Exponential backoff
-        job.scheduledAt = new Date(Date.now() + Math.pow(2, job.attempts) * 1000);
+        job.scheduledAt = new Date(Date.now() + 2 ** job.attempts * 1000);
         this.emit('job:retrying', job, { error: errorMessage, nextAttempt: job.scheduledAt });
       } else {
         job.status = 'failed';

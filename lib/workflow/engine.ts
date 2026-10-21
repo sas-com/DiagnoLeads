@@ -200,7 +200,7 @@ export class WorkflowEngine {
         lastError = error instanceof Error ? error : new Error(String(error));
         if (attempt < attempts - 1) {
           // Wait before retry (exponential backoff)
-          await new Promise((r) => setTimeout(r, Math.pow(2, attempt) * 1000));
+          await new Promise((r) => setTimeout(r, 2 ** attempt * 1000));
         }
       }
     }

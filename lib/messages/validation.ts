@@ -189,12 +189,12 @@ export function formatZodErrors(
 ): Record<string, string> {
   const formattedErrors: Record<string, string> = {};
 
-  errors.issues.forEach((issue) => {
+  for (const issue of errors.issues) {
     const path = issue.path.join('.');
     if (!formattedErrors[path]) {
       formattedErrors[path] = getZodErrorMessage(issue, t, tFields);
     }
-  });
+  }
 
   return formattedErrors;
 }

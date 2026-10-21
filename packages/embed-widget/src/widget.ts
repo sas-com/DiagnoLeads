@@ -136,10 +136,10 @@ export class DiagnoLeadsWidget extends HTMLElement {
 
     try {
       const leadData: LeadSubmissionData = {
-        email: this.responses['email'] as string,
-        name: this.responses['name'] as string,
-        company: this.responses['company'] as string,
-        phone: this.responses['phone'] as string,
+        email: this.responses.email as string,
+        name: this.responses.name as string,
+        company: this.responses.company as string,
+        phone: this.responses.phone as string,
         responses: this.responses,
         csrfToken: this.csrfToken,
       };
@@ -417,7 +417,7 @@ export class DiagnoLeadsWidget extends HTMLElement {
         `;
         break;
 
-      case 'checkbox':
+      case 'checkbox': {
         const checkedValues = Array.isArray(currentValue) ? currentValue : [];
         input = `
           <div class="checkbox-group">
@@ -439,6 +439,7 @@ export class DiagnoLeadsWidget extends HTMLElement {
           </div>
         `;
         break;
+      }
 
       case 'date':
         input = `
@@ -484,7 +485,7 @@ export class DiagnoLeadsWidget extends HTMLElement {
 
     // Input changes
     const inputs = this.shadow.querySelectorAll('input, select, textarea');
-    inputs.forEach((input) => {
+    for (const input of Array.from(inputs)) {
       input.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
         const name = target.name;
@@ -499,7 +500,7 @@ export class DiagnoLeadsWidget extends HTMLElement {
           this.handleInputChange(name, target.value);
         }
       });
-    });
+    }
   }
 
   private collectFormData() {

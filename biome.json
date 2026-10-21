@@ -1,11 +1,22 @@
 {
   "$schema": "https://biomejs.dev/schemas/1.9.0/schema.json",
-  "organizeImports": { "enabled": true },
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "organizeImports": {
+    "enabled": true
+  },
   "linter": {
     "enabled": true,
     "rules": {
       "recommended": true,
-      "style": { "useImportType": "error", "useExportType": "error" },
+      "style": {
+        "useImportType": "error",
+        "useExportType": "error",
+        "noNonNullAssertion": "warn"
+      },
       "suspicious": {
         "noExplicitAny": "warn",
         "noArrayIndexKey": "warn",
@@ -15,7 +26,8 @@
         "noLabelWithoutControl": "warn",
         "useButtonType": "warn",
         "useHtmlLang": "warn",
-        "noSvgWithoutTitle": "warn"
+        "noSvgWithoutTitle": "warn",
+        "useSemanticElements": "warn"
       }
     }
   },
@@ -34,5 +46,16 @@
   },
   "files": {
     "ignore": ["node_modules", ".next", "dist", "*.generated.ts", "test/**"]
+  },
+  "css": {
+    "parser": {
+      "cssModules": false
+    },
+    "linter": {
+      "enabled": false
+    },
+    "formatter": {
+      "enabled": false
+    }
   }
 }

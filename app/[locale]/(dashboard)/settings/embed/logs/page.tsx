@@ -80,9 +80,11 @@ export default function EmbedAccessLogsPage() {
           Success
         </Badge>
       );
-    } else if (statusCode >= 400 && statusCode < 500) {
+    }
+    if (statusCode >= 400 && statusCode < 500) {
       return <Badge variant="destructive">Client Error</Badge>;
-    } else if (statusCode >= 500) {
+    }
+    if (statusCode >= 500) {
       return <Badge variant="destructive">Server Error</Badge>;
     }
     return <Badge variant="secondary">{statusCode}</Badge>;

@@ -7,7 +7,7 @@ import { useEffect } from 'react';
  * Locale-specific Error Boundary
  * Catches errors within the [locale] segment
  */
-export default function Error({
+export default function LocaleError({
   error,
   reset,
 }: {
