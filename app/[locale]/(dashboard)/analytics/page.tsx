@@ -28,6 +28,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { LeadStatus } from '@/lib/features/leads/types';
 import { LEAD_STATUSES } from '@/lib/features/leads/types/pipeline';
 import { AgencyContractReportCard } from './_components/agency-contract-report-card';
+import { DeliveryReportCards } from './_components/delivery-report-cards';
 import { AcquisitionCostCard, AgencyPerformanceCard } from './_components/source-cost-cards';
 
 import { Button } from '@/components/ui/button';
@@ -666,6 +667,8 @@ export default function AnalyticsPage() {
               ))}
             </div>
           )}
+
+          <DeliveryReportCards organizationId={organizationId} />
         </TabsContent>
 
         {/* Performance Tab */}
