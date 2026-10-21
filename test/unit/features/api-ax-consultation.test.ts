@@ -2,6 +2,11 @@
  * AX migration consultation API route tests
  * The real route handler is imported; DB access and notifications are mocked.
  */
+import {
+  MAX_TOPIC_NOTE_LENGTH,
+  MEETING_ATTENDEE_ROLES,
+  MEETING_TOPICS,
+} from '@/lib/features/meeting-requests/types/schemas';
 import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -263,7 +268,8 @@ describe('POST /api/diagnostics/ax-migration/consultation', () => {
           leadId: 'lead-1',
           submissionId: SUBMISSION_ID,
           identityVerified: true,
-          preferences,
+          // Topics and the note default to none (#244)
+          preferences: { ...preferences, topics: [], topicNote: null },
         },
         expect.any(Function)
       );
@@ -313,6 +319,86 @@ describe('POST /api/diagnostics/ax-migration/consultation', () => {
       );
       expect(response.status).toBe(400);
       expect(requestMock).not.toHaveBeenCalled();
+    });
+
+    it('passes the topics and the trimmed note on (#244)', async () => {
+      requestMock.mockResolvedValue({
+        ok: true,
+        alreadyRequested: true,
+        organizationId: 'org-1',
+        leadId: 'lead-1',
+        leadCreated: true,
+        continued: false,
+      });
+      acceptMock.mockResolvedValue('saved');
+      const response = await POST(
+        request({
+          submissionId: SUBMISSION_ID,
+          preferences: { ...preferences, topics: ['cost', 'other'], topicNote: '  予算の相談  ' },
+        })
+      );
+      expect(response.status).toBe(200);
+      expect(acceptMock.mock.calls[0][1].preferences).toEqual({
+        ...preferences,
+        topics: ['cost', 'other'],
+        topicNote: '予算の相談',
+      });
+    });
+
+    it('refuses unknown or repeated topics and a note over 300 characters (#244)', async () => {
+      for (const extra of [
+        { topics: ['pricing'] },
+        { topics: ['cost', 'cost'] },
+        { topicNote: 'あ'.repeat(301) },
+      ]) {
+        const response = await POST(
+          request({ submissionId: SUBMISSION_ID, preferences: { ...preferences, ...extra } })
+        );
+        expect(response.status).toBe(400);
+      }
+      expect(requestMock).not.toHaveBeenCalled();
+    });
+
+    it('refuses a NUL or a bidi override in the note (#244)', async () => {
+      for (const topicNote of ['予算\u0000', '予算\u202e逆']) {
+        const response = await POST(
+          request({ submissionId: SUBMISSION_ID, preferences: { ...preferences, topicNote } })
+        );
+        expect(response.status).toBe(400);
+      }
+      expect(requestMock).not.toHaveBeenCalled();
+    });
+
+    it('takes the largest body the form can send within 2 KB (#244)', async () => {
+      requestMock.mockResolvedValue({
+        ok: true,
+        alreadyRequested: true,
+        organizationId: 'org-1',
+        leadId: 'lead-1',
+        leadCreated: true,
+        continued: false,
+      });
+      acceptMock.mockResolvedValue('saved');
+      const largest = {
+        submissionId: SUBMISSION_ID,
+        preferences: {
+          candidates: ['10:00', '10:30', '11:00'].map((time) => ({ date: '2030-01-08', time })),
+          attendeeRoles: [...MEETING_ATTENDEE_ROLES],
+          meetingFormat: 'onsite',
+          topics: [...MEETING_TOPICS],
+          // 3 bytes a character, the most an allowed character takes in JSON
+          topicNote: 'あ'.repeat(MAX_TOPIC_NOTE_LENGTH),
+        },
+      };
+      const size = new TextEncoder().encode(JSON.stringify(largest)).length;
+      expect(size).toBeLessThan(2048);
+      const response = await POST(request(largest, { 'content-length': String(size) }));
+      expect(response.status).toBe(200);
+    });
+
+    it('still refuses a body over 2 KB', async () => {
+      const response = await POST(request({ submissionId: SUBMISSION_ID, padding: 'x'.repeat(2100) }));
+      expect(response.status).toBe(413);
     });
 
     it('leaves the preferences out of the answer when none were sent', async () => {

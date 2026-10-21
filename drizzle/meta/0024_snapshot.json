@@ -1,6 +1,6 @@
 {
-  "id": "91e8c4cd-ee3f-433d-8188-88ca8b58f33c",
-  "prevId": "7e9a27ce-5cf0-4351-8b58-6564c9da244e",
+  "id": "94ab45a1-d5f2-46b5-bfd2-a775d817e851",
+  "prevId": "fd1c8d41-765b-45ce-9887-ac18f2be5c3a",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3865,6 +3865,19 @@
         },
         "meeting_format": {
           "name": "meeting_format",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "topics": {
+          "name": "topics",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "topic_note": {
+          "name": "topic_note",
           "type": "text",
           "primaryKey": false,
           "notNull": false

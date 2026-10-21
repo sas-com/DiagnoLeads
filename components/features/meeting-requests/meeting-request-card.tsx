@@ -22,7 +22,8 @@ const sameCandidate = (a: MeetingCandidate, b: MeetingCandidate) =>
   a.date === b.date && a.time === b.time;
 
 /**
- * The respondent's preferred dates for the first meeting (Refs #155): pick one and confirm it.
+ * The respondent's preferred dates for the first meeting (Refs #155), with what they want to
+ * talk about (#244; the note is shown as text, never as HTML): pick one and confirm it.
  * The confirmed date becomes the lead's next meeting and a next action, and the respondent gets
  * a confirmation email when asked. Shown only when preferences were sent.
  */
@@ -166,6 +167,24 @@ export function MeetingRequestCard({ organizationId, leadId }: MeetingRequestCar
                 {request.meetingFormat ? t(`formats.${request.meetingFormat}`) : t('none')}
               </dd>
             </div>
+            <div className="sm:col-span-2">
+              <dt className="text-xs text-muted-foreground">{t('topics')}</dt>
+              <dd className="text-foreground">
+                {request.topics.length > 0
+                  ? request.topics
+                      .map((topic) => t(`topicOptions.${topic}`))
+                      .join(t('topicSeparator'))
+                  : t('none')}
+              </dd>
+            </div>
+            {request.topicNote && (
+              <div className="sm:col-span-2">
+                <dt className="text-xs text-muted-foreground">{t('topicNote')}</dt>
+                <dd className="whitespace-pre-wrap break-words text-foreground">
+                  {request.topicNote}
+                </dd>
+              </div>
+            )}
           </dl>
 
           {picking ? (

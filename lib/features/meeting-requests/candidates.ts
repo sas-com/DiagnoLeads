@@ -20,6 +20,18 @@ export function candidatesInRange(candidates: MeetingCandidate[], today: string)
   return candidates.every((candidate) => candidate.date >= min && candidate.date <= max);
 }
 
+/**
+ * For each option of the form, the number (1-based) of an earlier option with the same date and
+ * time, or null. Options without a date are not compared.
+ */
+export function duplicateCandidateOf(rows: MeetingCandidate[]): (number | null)[] {
+  return rows.map((row, index) => {
+    if (!row.date) return null;
+    const earlier = rows.findIndex((r) => r.date === row.date && r.time === row.time);
+    return earlier < index ? earlier + 1 : null;
+  });
+}
+
 /** Earliest first */
 export function sortCandidates(candidates: MeetingCandidate[]): MeetingCandidate[] {
   return [...candidates].sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));

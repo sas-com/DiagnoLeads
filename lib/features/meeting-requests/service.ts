@@ -1,8 +1,8 @@
 /**
  * First meeting preferences of a consultation request, and the confirmation (Refs #155)
  *
- * - The respondent sends up to three preferred dates and times, who will attend and onsite or
- *   online, from the result page after asking for a consultation. They can send them again
+ * - The respondent sends up to three preferred dates and times, who will attend, onsite or
+ *   online, and what they want to talk about (topics and a short note, #244), from the result page after asking for a consultation. They can send them again
  *   until sales confirm one; after that the request is locked.
  * - Sales are told in-app when preferences arrive: the lead's assignee, else the intake members
  *   (#135), else every member (as for the consultation request itself).
@@ -21,16 +21,33 @@ import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { notifyOrganizationMembers } from '@/lib/features/notifications/notification-service';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { candidateLabelJa, candidatesInRange, sortCandidates } from './candidates';
-import type {
-  ConfirmMeetingInput,
-  MeetingCandidate,
-  MeetingFormat,
-  MeetingPreferences,
+import {
+  type ConfirmMeetingInput,
+  MEETING_TOPICS,
+  type MeetingCandidate,
+  type MeetingFormat,
+  type MeetingPreferences,
+  type MeetingTopic,
 } from './types/schemas';
 
 type Database = typeof defaultDb;
 
 const FORMAT_LABELS: Record<MeetingFormat, string> = { onsite: '訪問', online: 'オンライン' };
+
+/** Japanese labels of the topics for sales notices (the form and the card use the locales) */
+export const TOPIC_LABELS_JA: Record<MeetingTopic, string> = {
+  result_detail: '診断結果の詳しい説明',
+  migration_approach: '移行の進め方・手順',
+  cost: '費用の目安',
+  schedule: '期間・スケジュール',
+  target_platform: '移行先の選び方',
+  current_assessment: '現行システムの調査・資産の棚卸し',
+  internal_resources: '社内の体制・人材の不足',
+  other: 'その他',
+};
+
+/** The note is cut to this many characters in a notice; the lead page shows all of it */
+const NOTICE_NOTE_LENGTH = 100;
 
 export type SavePreferencesOutcome =
   | { status: 'saved'; first: boolean }
@@ -58,6 +75,8 @@ export async function saveMeetingPreferences(
     candidates: sortCandidates(input.preferences.candidates),
     attendeeRoles: input.preferences.attendeeRoles,
     meetingFormat: input.preferences.meetingFormat,
+    topics: input.preferences.topics,
+    topicNote: input.preferences.topicNote,
     updatedAt: now,
   };
   const [row] = await db
@@ -83,7 +102,8 @@ export async function saveMeetingPreferences(
 export function buildPreferencesNotice(input: {
   company: string | null;
   leadName: string | null;
-  preferences: Pick<MeetingPreferences, 'candidates' | 'meetingFormat'>;
+  preferences: Pick<MeetingPreferences, 'candidates' | 'meetingFormat'> &
+    Partial<Pick<MeetingPreferences, 'topics' | 'topicNote'>>;
 }) {
   const who = [input.company, input.leadName ? `${input.leadName} 様` : null]
     .filter(Boolean)
@@ -93,10 +113,23 @@ export function buildPreferencesNotice(input: {
   const format = input.preferences.meetingFormat
     ? `（${FORMAT_LABELS[input.preferences.meetingFormat]}）`
     : '';
+  const topics = (input.preferences.topics ?? []).map((topic) => TOPIC_LABELS_JA[topic]);
+  const note = input.preferences.topicNote
+    ? truncate(input.preferences.topicNote.replace(/\s+/g, ' '), NOTICE_NOTE_LENGTH)
+    : null;
+  const about = [
+    topics.length > 0 ? `相談したい内容：${topics.join('、')}。` : '',
+    note ? `ご相談内容：「${note}」。` : '',
+  ].join('');
   return {
     title: `【希望日時】${lead} から初回商談の希望日時が届きました`,
-    message: `希望：${dates}${format}。リードを開いて、候補から日程を確定してください。`,
+    message: `希望：${dates}${format}。${about}リードを開いて、候補から日程を確定してください。`,
   };
+}
+
+function truncate(value: string, length: number): string {
+  const chars = [...value];
+  return chars.length > length ? `${chars.slice(0, length).join('')}…` : value;
 }
 
 /** Tell sales that preferences arrived. Failures are logged and never fail the request */
@@ -146,6 +179,8 @@ export interface MeetingRequestView {
   candidates: MeetingCandidate[];
   attendeeRoles: string[];
   meetingFormat: MeetingFormat | null;
+  topics: MeetingTopic[];
+  topicNote: string | null;
   confirmed: (MeetingCandidate & { at: Date; byName: string | null }) | null;
   confirmationEmailedAt: Date | null;
   requestedAt: Date;
@@ -162,6 +197,8 @@ export async function getMeetingRequest(
       candidates: meetingRequests.candidates,
       attendeeRoles: meetingRequests.attendeeRoles,
       meetingFormat: meetingRequests.meetingFormat,
+      topics: meetingRequests.topics,
+      topicNote: meetingRequests.topicNote,
       confirmedOn: meetingRequests.confirmedOn,
       confirmedTime: meetingRequests.confirmedTime,
       confirmedAt: meetingRequests.confirmedAt,
@@ -185,6 +222,11 @@ export async function getMeetingRequest(
     candidates: row.candidates,
     attendeeRoles: row.attendeeRoles,
     meetingFormat: row.meetingFormat as MeetingFormat | null,
+    // Only known ids: the card looks their labels up
+    topics: row.topics.filter((topic): topic is MeetingTopic =>
+      (MEETING_TOPICS as readonly string[]).includes(topic)
+    ),
+    topicNote: row.topicNote,
     confirmed:
       row.confirmedOn && row.confirmedTime && row.confirmedAt
         ? {

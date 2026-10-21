@@ -841,7 +841,8 @@ export type NewLeadHearing = typeof leadHearings.$inferInsert;
 /**
  * Meeting Requests (Refs #155)
  * What a respondent asked for the first meeting after a consultation request (up to three
- * preferred dates and times, who will attend, onsite or online), and the one sales confirmed.
+ * preferred dates and times, who will attend, onsite or online, what to talk about), and the one
+ * sales confirmed.
  * One per lead: a later request replaces the preferences until one is confirmed.
  */
 export const meetingRequests = pgTable(
@@ -864,6 +865,10 @@ export const meetingRequests = pgTable(
     attendeeRoles: jsonb('attendee_roles').$type<string[]>().default([]).notNull(),
     /** 'onsite' | 'online'; null when the respondent did not say */
     meetingFormat: text('meeting_format'),
+    /** What the respondent wants to talk about: MEETING_TOPICS values (Refs #244) */
+    topics: jsonb('topics').$type<string[]>().default([]).notNull(),
+    /** Free text about the consultation, up to 300 characters; null when none */
+    topicNote: text('topic_note'),
     /** The confirmed meeting (Japan time); null until sales confirm one */
     confirmedOn: date('confirmed_on', { mode: 'string' }),
     confirmedTime: text('confirmed_time'),
