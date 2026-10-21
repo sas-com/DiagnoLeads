@@ -4,6 +4,7 @@ import type { AxMqlLevel } from '@/lib/features/diagnostics/ax-migration/mql';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import {
+  type Column,
   type SQL,
   and,
   between,
@@ -23,6 +24,7 @@ import {
   or,
   sql,
 } from 'drizzle-orm';
+import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 import {
   findAssignableMember,
@@ -112,8 +114,7 @@ function buildCondition(condition: FilterCondition): SQL | undefined {
   const { field, operator, value, value2 } = condition;
 
   // Map field names to lead columns
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const columnMap: Record<string, any> = {
+  const columnMap: Record<string, Column> = {
     name: leads.name,
     email: leads.email,
     company: leads.company,
@@ -611,7 +612,7 @@ export const leadsRouter = router({
       }
 
       // Build update object (only include defined fields)
-      const updateData: any = {};
+      const updateData: PgUpdateSetSource<typeof leads> = {};
       if (input.email !== undefined) updateData.email = input.email;
       if (input.name !== undefined) updateData.name = input.name;
       if (input.company !== undefined) updateData.company = input.company;

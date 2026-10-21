@@ -321,8 +321,9 @@ class LocalStorage implements StorageClient {
   async list(options: ListOptions = {}): Promise<ListResult> {
     let files = Array.from(this.files.values()).map((f) => f.metadata);
 
-    if (options.prefix) {
-      files = files.filter((f) => f.key.startsWith(options.prefix!));
+    const { prefix } = options;
+    if (prefix) {
+      files = files.filter((f) => f.key.startsWith(prefix));
     }
 
     if (options.maxKeys) {

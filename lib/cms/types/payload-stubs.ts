@@ -5,8 +5,20 @@
  * This allows the codebase to compile without PayloadCMS packages.
  */
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AccessFunction = (args: any) => boolean | Record<string, unknown>;
+// Minimal shape of the authenticated user passed to access functions
+type PayloadUser = {
+  id?: string | number;
+  role?: string;
+  [key: string]: unknown;
+};
+
+type AccessArgs = {
+  req: {
+    user?: PayloadUser | null;
+  };
+};
+
+type AccessFunction = (args: AccessArgs) => boolean | Record<string, unknown>;
 
 // Stub types for PayloadCMS
 export type CollectionConfig = {
@@ -47,8 +59,11 @@ export type CollectionConfig = {
   };
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type FieldCondition = (...args: any[]) => boolean;
+type FieldCondition = (
+  data: Record<string, unknown>,
+  siblingData: Record<string, unknown>,
+  ...rest: unknown[]
+) => boolean;
 
 export type FieldConfig = {
   name: string;
@@ -81,8 +96,8 @@ export type FieldConfig = {
   hasMany?: boolean;
   minRows?: number;
   maxRows?: number;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  validate?: (value: any, ...args: any[]) => string | boolean;
+  // Method syntax keeps parameters bivariant so validators can narrow `value`
+  validate?(value: unknown, ...args: unknown[]): string | boolean;
   fields?: FieldConfig[];
   options?: Array<{ label: string; value: string } | string>;
   admin?: {

@@ -12,11 +12,21 @@ import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { evaluateFlag, getCachedFlag, invalidateFlagCache, setCachedFlag } from '../service';
 import {
+  type FeatureFlag,
   createFeatureFlagSchema,
   evaluateFeatureFlagSchema,
   listFeatureFlagsSchema,
   updateFeatureFlagSchema,
 } from '../types';
+
+/**
+ * The service-layer FeatureFlag type does not match the DB row (nullable columns, and
+ * targetOrganizationIds/targetUserIds vs organizationIds/userIds). This type-only cast keeps the
+ * existing runtime behaviour: the row object is passed through unchanged.
+ */
+function toServiceFlag(row: typeof featureFlags.$inferSelect): FeatureFlag {
+  return row as unknown as FeatureFlag;
+}
 
 export const featureFlagsRouter = router({
   /**
@@ -103,7 +113,7 @@ export const featureFlagsRouter = router({
       }
 
       // Cache the flag
-      setCachedFlag(ctx.organization.id, flag as any);
+      setCachedFlag(ctx.organization.id, toServiceFlag(flag));
 
       return flag;
     }),
@@ -267,8 +277,8 @@ export const featureFlagsRouter = router({
         };
       }
 
-      flag = dbFlag as any;
-      setCachedFlag(ctx.organization.id, flag!);
+      flag = toServiceFlag(dbFlag);
+      setCachedFlag(ctx.organization.id, flag);
     }
 
     const context = {
@@ -278,7 +288,7 @@ export const featureFlagsRouter = router({
       attributes: input.context?.attributes,
     };
 
-    return evaluateFlag(flag!, context);
+    return evaluateFlag(flag, context);
   }),
 
   /**
@@ -317,7 +327,7 @@ export const featureFlagsRouter = router({
       for (const key of input.keys) {
         const flag = flagMap.get(key);
         if (flag) {
-          results[key] = evaluateFlag(flag as any, context).enabled;
+          results[key] = evaluateFlag(toServiceFlag(flag), context).enabled;
         } else {
           results[key] = false;
         }

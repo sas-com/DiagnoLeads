@@ -70,10 +70,12 @@ export class RealtimeHub {
 
     connection.channels.add(channel);
 
-    if (!this.channelSubscriptions.has(channel)) {
-      this.channelSubscriptions.set(channel, new Set());
+    let subscribers = this.channelSubscriptions.get(channel);
+    if (!subscribers) {
+      subscribers = new Set();
+      this.channelSubscriptions.set(channel, subscribers);
     }
-    this.channelSubscriptions.get(channel)!.add(connectionId);
+    subscribers.add(connectionId);
   }
 
   /**

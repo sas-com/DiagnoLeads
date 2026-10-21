@@ -514,7 +514,7 @@ export const scoringRulesRouter = router({
       }
 
       // Get the ruleset
-      let ruleset;
+      let ruleset: typeof leadScoringRulesets.$inferSelect | undefined;
       if (input.rulesetId) {
         ruleset = await ctx.db.query.leadScoringRulesets.findFirst({
           where: and(
@@ -655,7 +655,7 @@ export const scoringRulesRouter = router({
       }
 
       // Get the ruleset
-      let ruleset;
+      let ruleset: typeof leadScoringRulesets.$inferSelect | undefined;
       if (input.rulesetId) {
         ruleset = await ctx.db.query.leadScoringRulesets.findFirst({
           where: and(

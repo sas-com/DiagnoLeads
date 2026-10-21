@@ -2,6 +2,7 @@ import { organizationMembers, organizations } from '@/lib/db/schema';
 import { protectedProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { eq } from 'drizzle-orm';
+import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import {
   createOrganizationSchema,
   getOrganizationSchema,
@@ -95,7 +96,7 @@ export const organizationsRouter = router({
     }
 
     // Build update object
-    const updateData: any = {
+    const updateData: PgUpdateSetSource<typeof organizations> = {
       updatedAt: new Date(),
     };
     if (input.name !== undefined) updateData.name = input.name;

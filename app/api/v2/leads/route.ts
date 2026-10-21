@@ -12,7 +12,7 @@ import {
   normalizeLeadStatus,
   statusUpdateFields,
 } from '@/lib/features/leads/types/pipeline';
-import { and, desc, eq, gte, ilike, lte, or, sql } from 'drizzle-orm';
+import { type Column, and, desc, eq, gte, ilike, lte, or, sql } from 'drizzle-orm';
 import { type NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -114,13 +114,12 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
-      conditions.push(
-        or(
-          ilike(leads.email, `%${search}%`),
-          ilike(leads.name, `%${search}%`),
-          ilike(leads.company, `%${search}%`)
-        )!
+      const searchCondition = or(
+        ilike(leads.email, `%${search}%`),
+        ilike(leads.name, `%${search}%`),
+        ilike(leads.company, `%${search}%`)
       );
+      if (searchCondition) conditions.push(searchCondition);
     }
 
     if (startDate) {
@@ -140,8 +139,7 @@ export async function GET(request: NextRequest) {
     const total = countResult[0]?.count ?? 0;
 
     // Build sort
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sortColumnMap: Record<string, any> = {
+    const sortColumnMap: Record<string, Column> = {
       createdAt: leads.createdAt,
       updatedAt: leads.updatedAt,
       score: leads.score,
