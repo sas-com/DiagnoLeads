@@ -36,6 +36,7 @@ export function ChatAssistant({ organizationName, recentLeads }: ChatAssistantPr
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Scroll to bottom when messages change
+  // biome-ignore lint/correctness/useExhaustiveDependencies: messages is the trigger, not read inside
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);

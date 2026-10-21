@@ -7,7 +7,7 @@ import { useEffect } from 'react';
  * Catches errors in the app and displays a fallback UI
  * Note: Cannot use useTranslations here as it's outside IntlProvider context
  */
-export default function Error({
+export default function RootError({
   error,
   reset,
 }: {

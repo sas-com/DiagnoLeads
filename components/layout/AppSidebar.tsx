@@ -233,27 +233,22 @@ const AppSidebar: React.FC = () => {
 
   useEffect(() => {
     let submenuMatched = false;
-    ['main', 'settings'].forEach((menuType) => {
+    for (const menuType of ['main', 'settings'] as const) {
       const items = menuType === 'main' ? navItems : settingsItems;
-      items.forEach((nav, index) => {
-        if (nav.subItems) {
-          nav.subItems.forEach((subItem) => {
-            if (isActive(subItem.path)) {
-              setOpenSubmenu({
-                type: menuType as 'main' | 'settings',
-                index,
-              });
-              submenuMatched = true;
-            }
-          });
+      for (const [index, nav] of items.entries()) {
+        for (const subItem of nav.subItems ?? []) {
+          if (isActive(subItem.path)) {
+            setOpenSubmenu({ type: menuType, index });
+            submenuMatched = true;
+          }
         }
-      });
-    });
+      }
+    }
 
     if (!submenuMatched) {
       setOpenSubmenu(null);
     }
-  }, [pathname, isActive]);
+  }, [isActive, navItems, settingsItems]);
 
   useEffect(() => {
     if (openSubmenu !== null) {
