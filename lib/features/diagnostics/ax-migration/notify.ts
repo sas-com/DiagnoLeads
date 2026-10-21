@@ -237,7 +237,12 @@ export function buildSalesEmail(
     { label: '主な課題', value: primary ? CHALLENGE_LABELS[primary] : '特になし' },
     { label: 'MQL', value: mqlSummary(mql).replace(/^MQL: /, '') },
     ...(mql.criteria.companySize !== 'not_configured'
-      ? [{ label: '企業規模', value: COMPANY_SIZE_LABELS[mql.criteria.companySize] }]
+      ? [
+          {
+            label: '企業規模',
+            value: `${COMPANY_SIZE_LABELS[mql.criteria.companySize]}${mql.waived.includes('company_size') ? '（この経路では問わない）' : ''}`,
+          },
+        ]
       : []),
     { label: 'SQLの手がかり', value: n.result.sqlSignals.candidate ? 'あり' : 'なし' },
     ...(primary && effect ? [{ label: '伝える効果', value: effect }] : []),
