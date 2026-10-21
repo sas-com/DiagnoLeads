@@ -124,10 +124,13 @@ export const filtersRouter = router({
       visibilityConditions.push(eq(savedFilters.userId, ctx.user.id));
     }
 
+    // No visibility selected: return nothing rather than every filter in the organization,
+    // which would include other members' private ones (#262)
     const visibilityCondition = or(...visibilityConditions);
-    if (visibilityCondition) {
-      conditions.push(visibilityCondition);
+    if (!visibilityCondition) {
+      return [];
     }
+    conditions.push(visibilityCondition);
 
     const results = await ctx.db.query.savedFilters.findMany({
       where: and(...conditions),
