@@ -1,7 +1,7 @@
 /**
  * The respondent's preferred dates on the lead page (#155): pick one and confirm it, with or
  * without the confirmation email; a confirmed meeting can be changed; the topics and the note
- * of #244. Made-up names.
+ * of #244; the warning for an unverified answer (#274). Made-up names.
  */
 import { MeetingRequestCard } from '@/components/features/meeting-requests/meeting-request-card';
 import enMessages from '@/locales/en/common.json';
@@ -40,6 +40,7 @@ const request = (values: Record<string, unknown> = {}) => ({
   topicNote: null,
   confirmed: null,
   confirmationEmailedAt: null,
+  identityVerified: true,
   requestedAt: new Date('2026-10-16T01:00:00Z'),
   updatedAt: new Date('2026-10-16T01:00:00Z'),
   ...values,
@@ -155,6 +156,59 @@ describe('MeetingRequestCard', () => {
     expect(screen.queryByRole('radio')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '別の候補に変更する' }));
     expect(screen.getAllByRole('radio')).toHaveLength(2);
+  });
+
+  it('warns about an unverified answer and leaves the email unticked (#274)', () => {
+    mocks.result = {
+      data: {
+        request: request({ identityVerified: false }),
+        canEdit: true,
+        emailConfigured: true,
+      },
+      isError: false,
+    };
+    renderCard();
+    expect(screen.getByText('本人確認なし')).toBeInTheDocument();
+    expect(screen.getByText('本人確認ができていない回答です')).toBeInTheDocument();
+    expect(screen.getByText(/メールアドレスだけが一致した回答から届きました/)).toBeInTheDocument();
+    const email = screen.getByRole('checkbox', { name: '回答者に確定の連絡をメールで送る' });
+    expect(email).not.toBeChecked();
+    fireEvent.click(screen.getAllByRole('radio')[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'この日時で確定する' }));
+    expect(mocks.mutate).toHaveBeenLastCalledWith(expect.objectContaining({ sendEmail: false }));
+
+    // Ticked by hand, it is sent
+    fireEvent.click(email);
+    fireEvent.click(screen.getByRole('button', { name: 'この日時で確定する' }));
+    expect(mocks.mutate).toHaveBeenLastCalledWith(expect.objectContaining({ sendEmail: true }));
+  });
+
+  it('shows no warning and ticks the email for a verified answer', () => {
+    renderCard();
+    expect(screen.queryByText('本人確認なし')).not.toBeInTheDocument();
+    expect(screen.queryByText('本人確認ができていない回答です')).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: '回答者に確定の連絡をメールで送る' })).toBeChecked();
+  });
+
+  it('defaults the email from the request once it has loaded (#274)', () => {
+    mocks.result = { data: undefined, isError: false };
+    const view = renderCard();
+    mocks.result = {
+      data: {
+        request: request({ identityVerified: false }),
+        canEdit: true,
+        emailConfigured: true,
+      },
+      isError: false,
+    };
+    view.rerender(
+      <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
+        <MeetingRequestCard organizationId={ORG_ID} leadId={LEAD_ID} />
+      </NextIntlClientProvider>
+    );
+    expect(
+      screen.getByRole('checkbox', { name: '回答者に確定の連絡をメールで送る' })
+    ).not.toBeChecked();
   });
 
   it('shows nothing for a lead without preferences', () => {

@@ -119,7 +119,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
             organizationId: outcome.organizationId,
             leadId,
             submissionId: parsed.data.submissionId,
-            // An answer tied to an existing lead only by email must not change its meeting
+            // An answer tied to an existing lead only by email never replaces a verified request
             identityVerified: outcome.leadCreated,
             preferences: parsed.data.preferences,
           },
