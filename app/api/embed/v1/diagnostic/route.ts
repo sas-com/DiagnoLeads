@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { diagnosticTemplates, embedAccessLogs, embedConfigs } from '@/lib/db/schema';
+import { embedApiDisabledResponse, embedApiEnabled } from '@/lib/features/embed/availability';
 import {
   checkRateLimit,
   generateCsrfToken,
@@ -16,6 +17,7 @@ import { type NextRequest, NextResponse } from 'next/server';
  * Handle CORS preflight requests
  */
 export async function OPTIONS(request: NextRequest) {
+  if (!embedApiEnabled()) return embedApiDisabledResponse();
   const origin = request.headers.get('origin');
   return new NextResponse(null, {
     status: 204,
@@ -37,6 +39,7 @@ export async function OPTIONS(request: NextRequest) {
  * - Access logging
  */
 export async function GET(request: NextRequest) {
+  if (!embedApiEnabled()) return embedApiDisabledResponse();
   const startTime = Date.now();
   const origin = request.headers.get('origin');
   const referer = request.headers.get('referer');
