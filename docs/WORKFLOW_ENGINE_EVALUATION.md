@@ -195,7 +195,14 @@ B〜E は、どれも常時動き続けるプロセスが必要で、Vercel の�
 
 ### 7.5 着手前に決めること
 
-1. **定期実行の頻度**：Vercel の Hobby プランは定期実行が1日1回までです。「3日後」程度なら1日1回でも足りますが、数分単位の精度が要るなら、Pro プランにするか、DB 側の定期実行機能（Supabase の場合 pg_cron）で毎分ランナーを呼ぶ必要があります。どのプランで運用しているかの確認が必要です。
+1. **定期実行の頻度**：Vercel の Hobby プランは定期実行が1日1回までです。「3日後」程度なら1日1回でも足りますが、数分単位の精度が要るなら、Pro プランにするか、DB 側の定期実行機能で毎分ランナーを呼ぶ必要があります。どのプランで運用しているかの確認が必要です。
+   - **案：Supabase の pg_cron + pg_net で毎分呼ぶ**（2026年10月21日に Supabase の管理画面の情報で確認）
+     - `diagnoleads-v2` プロジェクトでは pg_cron（1.6.4）と pg_net（0.19.5）が使える状態で、まだ有効にしていません。Vault（秘密情報の保管）は有効済みです。
+     - 仕組み：pg_cron に「毎分 `/api/cron/run-workflows` を呼ぶ」ジョブを登録し、pg_net で呼び出します。`CRON_SECRET` は Vault から読み、API 側は今と同じ `isCronRequest` で確認します（アプリの変更は不要）。
+     - 費用：pg_cron・pg_net に追加料金はありません。Vercel 側の関数呼び出しが月に約4万3千回増えるため、Vercel の無料枠に収まるかを使用量の画面で確認します。
+     - 効果：Vercel の Hobby プランのままでも、待機の遅れを最大で約1日から約1分に縮められます。
+     - リスク：Supabase は**無料プラン**で、7日間ほとんど使われないとプロジェクトが自動で一時停止されます（停止中はアプリも DB に接続できない）。これはワークフローに限らず本番運用全体の課題で、本番では Pro プラン（月額 $25）への移行を検討します。また、pg_net の呼び出し結果は6時間しか残らないため、失敗の記録はアプリ側の `reportServerError` で取ります。
+     - 拡張機能の有効化とジョブの登録はマイグレーションで行い、リポジトリに残します。
 2. **図の形（`lib/workflow/`）の扱い**：削除するか、将来に向けて残すか。使われていないため、削除を推奨します。
 3. **停止条件の初期値**：どのステータスに変わったら自動のフォローを止めるか（営業と確認が必要）。
 
@@ -223,3 +230,7 @@ B〜E は、どれも常時動き続けるプロセスが必要で、Vercel の�
 - Temporal 公式ドキュメント「Develop with AI」（MIRAI 版の評価で参照したもの）
 - Inngest 公式ドキュメント「Self-hosting」 https://www.inngest.com/docs/self-hosting
 - Inngest 公式ブログ「Inngest 1.0: announcing self-hosting support」 https://www.inngest.com/blog/inngest-1-0-announcing-self-hosting-support
+- Supabase 公式ブログ「Supabase Cron」 https://supabase.com/blog/supabase-cron
+- Supabase 公式ドキュメント「pg_net: Async Networking」 https://supabase.com/docs/guides/database/extensions/pg_net
+- Supabase 公式ドキュメント「Project Pausing」 https://supabase.com/docs/guides/platform/free-project-pausing
+- Supabase 公式「Pricing & Fees」 https://supabase.com/pricing
