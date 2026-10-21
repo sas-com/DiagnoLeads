@@ -1,5 +1,6 @@
 'use client';
 
+import { useAxLandingView } from '@/components/features/ax-site/ax-landing-view';
 import { axConsultationUrl } from '@/components/features/ax-site/site-config';
 import { LiveRegion, useAnnouncer } from '@/components/features/diagnosis-runner/announcer';
 import { ConsultationRequest } from '@/components/features/diagnosis-runner/consultation-request';
@@ -67,7 +68,7 @@ import {
   Target,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AxDiagnosisResult } from './ax-diagnosis-result';
 import { AX_RUNNER_CONFIG } from './runner-config';
 import { trackAxEvent } from './tracking';
@@ -137,7 +138,7 @@ export function AxDiagnosisFlow(props: AxDiagnosisFlowProps) {
 function AxDiagnosisSteps({
   locale,
   privacyPolicyUrl,
-  embedded = false,
+  embedded: embeddedProp = false,
   turnstileSiteKey,
   allowedEmailDomains = [],
 }: AxDiagnosisFlowProps) {
@@ -146,6 +147,16 @@ function AxDiagnosisSteps({
     t('errors.testModeEmail', { domains: formatEmailDomains(domains, locale) });
   const testModeEmailError = testModeError(allowedEmailDomains);
   const [stage, setStage] = useState<'questions' | 'result'>('questions');
+  /** On the landing page, the result replaces the page (#280) */
+  const landingView = useAxLandingView();
+  const reportResult = landingView?.setResultShown;
+  // Before paint, so the page is swapped before the result is seen in the middle of it
+  useLayoutEffect(() => {
+    reportResult?.(stage === 'result');
+  }, [stage, reportResult]);
+  /** A result that replaces the landing page is the page's title (h1), as on /ax-diagnosis */
+  const embedded =
+    embeddedProp && !(stage === 'result' && landingView && !landingView.landingRequested);
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<DiagnosticAnswers>({});
   const [pendingRestore, setPendingRestore] = useState<SavedProgress<DiagnosticAnswers> | null>(
