@@ -10,6 +10,11 @@
  *   when no hearing records one) and a next action on that day (source 'meeting_request', so the
  *   due notices of #85 cover it). The respondent gets a confirmation email when asked and email
  *   is available (test mode sends only to the allowed domains).
+ * - Preferences sent with an answer tied to an existing lead by its email address only (an
+ *   unverified answer, #233) are kept too, marked for sales, but never replace preferences sent
+ *   with a verified answer (#274). Whether a request is verified is derived from its answer
+ *   (requestVerified), so no column records it. Sales are told again when verified preferences
+ *   replace unverified ones, and a confirmation must name the candidate sales saw.
  */
 import type { db as defaultDb } from '@/lib/db/client';
 import { leadTasks, leads, meetingRequests, organizations, users } from '@/lib/db/schema';
@@ -19,7 +24,7 @@ import { listIntakeMembers } from '@/lib/features/leads/assignment';
 import { notifyUsersInApp } from '@/lib/features/leads/assignment-notify';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { notifyOrganizationMembers } from '@/lib/features/notifications/notification-service';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNull, not, sql } from 'drizzle-orm';
 import { candidateLabelJa, candidatesInRange, sortCandidates } from './candidates';
 import {
   type ConfirmMeetingInput,
@@ -49,20 +54,45 @@ export const TOPIC_LABELS_JA: Record<MeetingTopic, string> = {
 /** The note is cut to this many characters in a notice; the lead page shows all of it */
 const NOTICE_NOTE_LENGTH = 100;
 
+/**
+ * Whether the meeting request came with a verified answer (#233): the answer created the lead,
+ * or continues an answer that did (findContinuationOrigin accepts only those). A request without
+ * an answer counts as verified: only verified answers were stored before #274, and a deleted
+ * answer leaves submission_id null. The one place this rule lives (#274).
+ * The names are written out: drizzle leaves columns unqualified in a select from one table,
+ * which would make the correlated subquery ambiguous. `request` names the meeting_requests row.
+ */
+function requestVerified(request = 'meeting_requests') {
+  return sql<boolean>`not exists (
+    select 1 from diagnostic_submissions ds
+    where ds.id = ${sql.identifier(request)}.submission_id
+      and ds.lead_created = false
+      and ds.continued_from_submission_id is null
+  )`;
+}
+
 export type SavePreferencesOutcome =
-  | { status: 'saved'; first: boolean }
+  /** replacedUnverified: the preferences replaced were from an unverified answer (#274) */
+  | { status: 'saved'; first: boolean; replacedUnverified: boolean }
   /** Sales already confirmed a meeting: nothing changes */
   | { status: 'confirmed' }
+  /** An unverified answer met preferences from a verified one: they are kept (#274) */
+  | { status: 'kept_verified' }
   /** A date outside tomorrow .. 60 days ahead */
   | { status: 'out_of_range' };
 
-/** Record (or replace) the preferences of a lead's consultation request */
+/**
+ * Record (or replace) the preferences of a lead's consultation request. Preferences from an
+ * unverified answer replace only unverified ones (#274); a confirmed meeting is never replaced.
+ */
 export async function saveMeetingPreferences(
   db: Database,
   input: {
     organizationId: string;
     leadId: string;
     submissionId: string | null;
+    /** The answer came from the person of the lead (see requestVerified) */
+    identityVerified: boolean;
     preferences: MeetingPreferences;
   },
   now: Date = new Date()
@@ -90,18 +120,44 @@ export async function saveMeetingPreferences(
     .onConflictDoUpdate({
       target: meetingRequests.leadId,
       set: values,
-      // A confirmed meeting is kept as it is
-      setWhere: isNull(meetingRequests.confirmedOn),
+      // A confirmed meeting is kept as it is; so are verified preferences for an unverified answer
+      setWhere: input.identityVerified
+        ? isNull(meetingRequests.confirmedOn)
+        : and(isNull(meetingRequests.confirmedOn), not(requestVerified())),
     })
-    .returning({ inserted: sql<boolean>`(xmax = 0)` });
-  if (!row) return { status: 'confirmed' };
-  return { status: 'saved', first: row.inserted };
+    .returning({
+      inserted: sql<boolean>`(xmax = 0)`,
+      // A subquery here reads the statement's snapshot: the row as it was before this update
+      replacedUnverified: sql<boolean>`exists (
+        select 1 from meeting_requests previous
+        where previous.lead_id = meeting_requests.lead_id and not ${requestVerified('previous')}
+      )`,
+    });
+  if (row) {
+    return { status: 'saved', first: row.inserted, replacedUnverified: row.replacedUnverified };
+  }
+  if (input.identityVerified) return { status: 'confirmed' };
+  // Nothing changed: tell a confirmed meeting from verified preferences that were kept
+  const [kept] = await db
+    .select({ confirmedOn: meetingRequests.confirmedOn })
+    .from(meetingRequests)
+    .where(
+      and(
+        eq(meetingRequests.leadId, input.leadId),
+        eq(meetingRequests.organizationId, input.organizationId)
+      )
+    );
+  return kept?.confirmedOn ? { status: 'confirmed' } : { status: 'kept_verified' };
 }
 
-/** Title and body of the in-app notice that preferences arrived */
+/**
+ * Title and body of the in-app notice that preferences arrived. Those from an unverified answer
+ * say so, and ask sales to check with the person before confirming (#274).
+ */
 export function buildPreferencesNotice(input: {
   company: string | null;
   leadName: string | null;
+  identityVerified: boolean;
   preferences: Pick<MeetingPreferences, 'candidates' | 'meetingFormat'> &
     Partial<Pick<MeetingPreferences, 'topics' | 'topicNote'>>;
 }) {
@@ -121,9 +177,12 @@ export function buildPreferencesNotice(input: {
     topics.length > 0 ? `相談したい内容：${topics.join('、')}。` : '',
     note ? `ご相談内容：「${note}」。` : '',
   ].join('');
+  const unverified = input.identityVerified
+    ? ''
+    : '既存のリードとメールアドレスだけが一致した回答のため、確定する前にご本人に確認してください。';
   return {
-    title: `【希望日時】${lead} から初回商談の希望日時が届きました`,
-    message: `希望：${dates}${format}。${about}リードを開いて、候補から日程を確定してください。`,
+    title: `【希望日時】${input.identityVerified ? '' : '（本人確認なし）'}${lead} から初回商談の希望日時が届きました`,
+    message: `希望：${dates}${format}。${about}${unverified}リードを開いて、候補から日程を確定してください。`,
   };
 }
 
@@ -135,7 +194,12 @@ function truncate(value: string, length: number): string {
 /** Tell sales that preferences arrived. Failures are logged and never fail the request */
 export async function notifyPreferencesReceived(
   db: Database,
-  input: { organizationId: string; leadId: string; preferences: MeetingPreferences }
+  input: {
+    organizationId: string;
+    leadId: string;
+    identityVerified: boolean;
+    preferences: MeetingPreferences;
+  }
 ): Promise<void> {
   try {
     const [lead] = await db
@@ -146,6 +210,7 @@ export async function notifyPreferencesReceived(
     const notice = buildPreferencesNotice({
       company: lead.company,
       leadName: lead.name,
+      identityVerified: input.identityVerified,
       preferences: input.preferences,
     });
     const data = { leadId: input.leadId, meetingRequest: true };
@@ -183,6 +248,8 @@ export interface MeetingRequestView {
   topicNote: string | null;
   confirmed: (MeetingCandidate & { at: Date; byName: string | null }) | null;
   confirmationEmailedAt: Date | null;
+  /** False when the preferences came with an unverified answer: check with the person (#274) */
+  identityVerified: boolean;
   requestedAt: Date;
   updatedAt: Date;
 }
@@ -206,6 +273,7 @@ export async function getMeetingRequest(
         string | null
       >`coalesce(nullif(trim(${users.name}), ''), ${users.email})`,
       confirmationEmailedAt: meetingRequests.confirmationEmailedAt,
+      identityVerified: requestVerified(),
       createdAt: meetingRequests.createdAt,
       updatedAt: meetingRequests.updatedAt,
     })
@@ -237,6 +305,7 @@ export async function getMeetingRequest(
           }
         : null,
     confirmationEmailedAt: row.confirmationEmailedAt,
+    identityVerified: row.identityVerified,
     requestedAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -295,6 +364,8 @@ export interface ConfirmDeps {
 
 export type ConfirmOutcome =
   | { ok: false; reason: 'not_found' }
+  /** The preferences changed after sales loaded them: nothing is confirmed (#274) */
+  | { ok: false; reason: 'stale' }
   | {
       ok: true;
       candidate: MeetingCandidate;
@@ -304,7 +375,8 @@ export type ConfirmOutcome =
 
 /**
  * Confirm one of the candidates (or switch to another): the lead's next meeting, a next action
- * on that day, and the confirmation email when asked.
+ * on that day, and the confirmation email when asked. The candidate at the index must still be
+ * the one sales saw: the respondent can replace unconfirmed preferences at any time (#274).
  */
 export async function confirmMeeting(
   db: Database,
@@ -337,7 +409,8 @@ export async function confirmMeeting(
       )
       .for('update', { of: meetingRequests });
     const candidate = row?.candidates[input.candidateIndex];
-    if (!row || !candidate) return null;
+    if (!row || !candidate) return { ok: false, reason: 'not_found' } as const;
+    if (!sameCandidate(candidate, input.candidate)) return { ok: false, reason: 'stale' } as const;
 
     const meetingFormat = row.meetingFormat as MeetingFormat | null;
     const title = `初回商談${meetingFormat ? `（${FORMAT_LABELS[meetingFormat]}）` : ''} ${candidate.time}〜`;
@@ -386,9 +459,9 @@ export async function confirmMeeting(
         updatedAt: now,
       })
       .where(eq(meetingRequests.id, row.id));
-    return { row, candidate, meetingFormat };
+    return { ok: true, row, candidate, meetingFormat } as const;
   });
-  if (!confirmed) return { ok: false, reason: 'not_found' };
+  if (!confirmed.ok) return confirmed;
 
   const { row, candidate, meetingFormat } = confirmed;
   if (!input.sendEmail) return { ok: true, candidate, email: 'not_requested' };
@@ -424,6 +497,10 @@ export async function confirmMeeting(
   return { ok: true, candidate, email: 'sent' };
 }
 
+function sameCandidate(a: MeetingCandidate, b: MeetingCandidate): boolean {
+  return a.date === b.date && a.time === b.time;
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -437,10 +514,12 @@ export type AcceptPreferencesStatus = 'saved' | 'confirmed' | 'out_of_range' | '
 
 /**
  * The preferences sent with a consultation request from a result page. `later` runs work after
- * the response (the route passes next/server's after): sales are told about the first ones only.
- * 'unavailable' when the request has no lead (the answer could not be tied to one), or when the
- * answer was tied to an existing lead by its email address only: it then does not change that
- * lead, the same rule as the lead update of the consultation request itself (identityUnverified).
+ * the response (the route passes next/server's after): sales are told about the first ones, and
+ * again when a verified answer replaces those of an unverified one (normal notice). An answer
+ * tied to an existing lead by its email address only (unverified) has its preferences kept,
+ * marked for sales, but they never replace those of a verified answer (#274, changing #233).
+ * 'unavailable' when the request has no lead (the answer could not be tied to one), or
+ * when an unverified answer met preferences from a verified one: the lead keeps them.
  */
 export async function acceptMeetingPreferences(
   db: Database,
@@ -456,25 +535,32 @@ export async function acceptMeetingPreferences(
   now: Date = new Date()
 ): Promise<AcceptPreferencesStatus> {
   const { leadId } = input;
-  if (!leadId || !input.identityVerified) return 'unavailable';
+  if (!leadId) return 'unavailable';
   const outcome = await saveMeetingPreferences(
     db,
     {
       organizationId: input.organizationId,
       leadId,
       submissionId: input.submissionId,
+      identityVerified: input.identityVerified,
       preferences: input.preferences,
     },
     now
   );
-  if (outcome.status === 'saved' && outcome.first) {
+  // Sales are told about the first preferences, and again when the person's own (verified)
+  // replace those of an unverified answer, which anyone could have sent (#274)
+  if (
+    outcome.status === 'saved' &&
+    (outcome.first || (input.identityVerified && outcome.replacedUnverified))
+  ) {
     later(() =>
       notifyPreferencesReceived(db, {
         organizationId: input.organizationId,
         leadId,
+        identityVerified: input.identityVerified,
         preferences: input.preferences,
       })
     );
   }
-  return outcome.status;
+  return outcome.status === 'kept_verified' ? 'unavailable' : outcome.status;
 }
