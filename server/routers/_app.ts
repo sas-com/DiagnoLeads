@@ -34,6 +34,7 @@ import { membersRouter } from '@/lib/features/members/api/router';
 import { notificationsRouter } from '@/lib/features/notifications/api/router';
 import { objectionCardRouter } from '@/lib/features/objection-card/api/router';
 import { organizationsRouter } from '@/lib/features/organizations/api/router';
+import { prospectsRouter } from '@/lib/features/prospects/api/router';
 import { reportsRouter } from '@/lib/features/reports/api/router';
 import { scoringRulesRouter } from '@/lib/features/scoring-rules/api/router';
 import { tagsRouter } from '@/lib/features/tags/api/router';
@@ -89,6 +90,7 @@ export const appRouter = router({
   leadFollowUp: leadFollowUpRouter, // Contact records and next actions per lead (Refs #136, #85)
   account: accountRouter, // The signed-in person's own account: deletion (#164)
   leadSearch: leadSearchRouter, // Header search suggestions (#164)
+  prospects: prospectsRouter, // AX customer search list, replacing the spreadsheet (#265)
 });
 
 export type AppRouter = typeof appRouter;

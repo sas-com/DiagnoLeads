@@ -384,6 +384,18 @@ export async function AxTargets({ locale }: SectionProps) {
               </span>
               <h3 className="mt-4 text-lg font-bold">{t(`items.${key}.name`)}</h3>
               <p className="mt-2 text-sm leading-relaxed text-gray-700">{t(`items.${key}.body`)}</p>
+              {key === 'access' && (
+                // A fact with its date, not a countdown (#288)
+                <div className="mt-4 rounded-lg bg-ax-mist p-3 text-sm leading-relaxed">
+                  <p>{t('accessSupport.body')}</p>
+                  <a
+                    href={`#${AX_SECTIONS.diagnosis}`}
+                    className="mt-1 inline-block font-bold text-ax-teal-dark underline underline-offset-2"
+                  >
+                    {t('accessSupport.link')}
+                  </a>
+                </div>
+              )}
             </li>
           ))}
         </ul>

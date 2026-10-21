@@ -12,9 +12,10 @@ import { agencyLinks, leads } from '@/lib/db/schema';
 import { resolveDiagnosisOrganizationId } from '@/lib/features/diagnostics/organization';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
-import { and, count, desc, eq } from 'drizzle-orm';
+import { and, count, desc, eq, ne } from 'drizzle-orm';
 import {
   type AgencyLinkKind,
+  MEMBER_REFERRAL_KIND,
   createAgencyLinkSchema,
   generateAgencyCode,
   listAgencyLinksSchema,
@@ -53,7 +54,13 @@ export const agencyLinksRouter = router({
         leads,
         and(eq(leads.agencyLinkId, agencyLinks.id), eq(leads.organizationId, ctx.organization.id))
       )
-      .where(eq(agencyLinks.organizationId, ctx.organization.id))
+      // Employees' own links (#265) are theirs: other members must not see their codes here
+      .where(
+        and(
+          eq(agencyLinks.organizationId, ctx.organization.id),
+          ne(agencyLinks.kind, MEMBER_REFERRAL_KIND)
+        )
+      )
       .groupBy(agencyLinks.id)
       .orderBy(desc(agencyLinks.createdAt));
 

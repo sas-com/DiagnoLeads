@@ -44,6 +44,12 @@ const LEVEL_BADGE: Record<Level, string> = {
 const CHALLENGE_KEYS: ChallengeType[] = ['people', 'cost', 'agility', 'data'];
 const STEP_KEYS = ['simple', 'survey', 'migration', 'ax'] as const;
 
+/** Urgency reasons that mean the support or maintenance has already ended */
+const PASSED_DEADLINE_REASONS: ReadonlySet<string> = new Set([
+  'support_passed',
+  'access_support_ended',
+]);
+
 interface AxDiagnosisResultProps {
   company: string;
   /** Migration path chosen in the first question */
@@ -110,11 +116,15 @@ export function AxDiagnosisResult({
   const reasons = [...result.reasons.difficulty, ...result.reasons.urgency];
   const unknownQuestions = unknownTechnicalQuestions(answers);
 
-  // Encourage the next step in words that fit the result
+  // Encourage the next step in words that fit the result; a deadline already passed is not
+  // "close" (#288)
+  const deadlinePassed = result.reasons.urgency.some((key) => PASSED_DEADLINE_REASONS.has(key));
   const ctaKey = result.needsHearing
     ? 'hearing'
     : result.urgency.level === 'high'
-      ? 'urgent'
+      ? deadlinePassed
+        ? 'overdue'
+        : 'urgent'
       : result.recommendation === 'consultation'
         ? 'consultation'
         : 'information';
