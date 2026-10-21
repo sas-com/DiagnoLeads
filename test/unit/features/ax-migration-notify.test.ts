@@ -78,6 +78,27 @@ describe('notifyAxMigrationSubmission', () => {
     expect(message).toContain('企業規模: 対象の範囲外（この経路では問わない）');
   });
 
+  it('tells sales the recommended Access path, and nothing for older results or other systems (#303)', async () => {
+    const access = evaluateAxMigration(
+      { ...accessAnswers, access_challenges: ['remote'] },
+      undefined,
+      new Date('2026-10-21T09:00:00+09:00')
+    );
+    expect(buildSalesMessage({ ...base, result: access }).message).toContain(
+      '移行元: Microsoft Access / 進め方の目安: Web に移す /'
+    );
+    const { accessPath: _stored, ...older } = access;
+    expect(buildSalesMessage({ ...base, result: older }).message).not.toContain('進め方の目安');
+    expect(buildSalesMessage(base).message).not.toContain('進め方の目安');
+
+    await notifyAxMigrationSubmission({ ...base, result: access });
+    expect(webhookMock).toHaveBeenCalledWith(
+      'org-1',
+      'diagnostic.submitted',
+      expect.objectContaining({ platform: 'access', accessPath: 'web' })
+    );
+  });
+
   it('says nothing about what to ask when the diagnosis has no main challenge (#75)', () => {
     const none = { ...result, challenges: { ...result.challenges, primary: null } };
     const { message } = buildSalesMessage({ ...base, result: none }, '保守費を毎年下げられる');

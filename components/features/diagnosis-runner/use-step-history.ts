@@ -83,12 +83,15 @@ export function useStepHistory<Pending = never>({
         }
         return false;
       },
-      /** Leave the entries of a finished run: the browser's back button then leaves the page */
-      rewind: () => {
+      /**
+       * Leave the entries of a finished run: the browser's back button then leaves the page.
+       * `base` is the step of the run's first entry (a run may start past step 0).
+       */
+      rewind: (base = 0) => {
         const entry = history.read();
-        if (entry?.run === runRef.current && entry.step > 0) {
+        if (entry?.run === runRef.current && entry.step > base) {
           rewinding.current = true;
-          window.history.go(-entry.step);
+          window.history.go(base - entry.step);
         }
       },
       /** Start a new run; entries of the previous one are no longer steps */

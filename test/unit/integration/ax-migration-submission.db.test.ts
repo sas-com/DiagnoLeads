@@ -511,6 +511,43 @@ describe.skipIf(!url)('AX migration submission (PostgreSQL)', () => {
       });
     });
 
+    it('stores the recommended Access path on the result and the lead, and updates it (#303)', async () => {
+      const outcome = await submitAxMigrationDiagnosis(
+        db,
+        organizationId,
+        input({ answers: accessAnswers }),
+        now
+      );
+      if (!outcome.ok) throw new Error('submission failed');
+      expect(outcome.result.accessPath).toEqual({
+        path: 'fix',
+        reasons: ['support_end', 'rules_in_tool'],
+      });
+      // Queryable from the result jsonb (the share of each path)
+      const pathOf = async () => {
+        const [row] = await pg
+          .select({ path: sql<string>`${diagnosticSubmissions.result} -> 'accessPath' ->> 'path'` })
+          .from(diagnosticSubmissions)
+          .where(eq(diagnosticSubmissions.id, outcome.submissionId));
+        return row.path;
+      };
+      expect(await pathOf()).toBe('fix');
+      const before = await pg.query.leads.findFirst({ where: eq(leads.id, outcome.leadId) });
+      expect(before?.responses).toMatchObject({ axMigration: { accessPath: 'fix' } });
+
+      const details = await addAxMigrationDetails(
+        db,
+        outcome.submissionId,
+        { access_users: '11_30' },
+        new Date(now.getTime() + 60 * 1000)
+      );
+      if (!details.ok) throw new Error(`details failed: ${details.reason}`);
+      expect(details.result.accessPath?.path).toBe('web');
+      expect(await pathOf()).toBe('web');
+      const after = await pg.query.leads.findFirst({ where: eq(leads.id, outcome.leadId) });
+      expect(after?.responses).toMatchObject({ axMigration: { accessPath: 'web' } });
+    });
+
     it('accepts only follow-up questions of the chosen path', async () => {
       const outcome = await submitAxMigrationDiagnosis(db, organizationId, input(), now);
       if (!outcome.ok) throw new Error('submission failed');

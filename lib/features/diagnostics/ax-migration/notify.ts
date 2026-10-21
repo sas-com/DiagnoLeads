@@ -10,6 +10,7 @@ import { notifyOrganizationMembers } from '@/lib/features/notifications/notifica
 import { triggerWebhooks } from '@/lib/features/webhooks/services/webhook-service';
 import { addBusinessDays } from 'date-fns';
 import { consumeRateLimit } from '../rate-limit';
+import { type AxAccessPath, readAccessPath } from './access-path';
 import { AX_MIGRATION_CONFIG } from './config';
 import type { AxMigrationResult } from './evaluate';
 import { AX_RATE_LIMITS } from './limits';
@@ -28,6 +29,12 @@ const PLATFORM_LABELS: Record<string, string> = {
   acos: 'NEC ACOS',
   access: 'Microsoft Access',
   other: 'その他・わからない',
+};
+/** Recommended Access path (#303), the wording of the result screen */
+const ACCESS_PATH_LABELS: Record<AxAccessPath, string> = {
+  fix: '直して使い続ける',
+  web: 'Web に移す',
+  replace: '既製サービスに置き換える',
 };
 /** Company size against the target ranges (#150); nothing is said when no range is set */
 const COMPANY_SIZE_LABELS = {
@@ -100,7 +107,8 @@ export interface AxMigrationNotification {
     AxMigrationResult,
     'difficulty' | 'urgency' | 'challenges' | 'mql' | 'sqlSignals' | 'leadScore' | 'needsHearing'
   > &
-    Partial<Pick<AxMigrationResult, 'platform'>>;
+    // Stored results may predate the platform and the Access path (#303)
+    Partial<Pick<AxMigrationResult, 'platform' | 'accessPath'>>;
   consultationRequested: boolean;
   leadCreated: boolean;
   /**
@@ -153,8 +161,10 @@ export function buildSalesMessage(
   const mql = salesMql(n);
   const tag = MQL_SUBJECT_TAGS[mql.level];
   const platform = n.result.platform ? PLATFORM_LABELS[n.result.platform] : undefined;
+  const accessPath = readAccessPath(n.result.accessPath);
   const summary = [
     ...(platform ? [`移行元: ${platform}`] : []),
+    ...(accessPath ? [`進め方の目安: ${ACCESS_PATH_LABELS[accessPath]}`] : []),
     `移行難易度: ${LEVEL_LABELS[n.result.difficulty.level]}`,
     `緊急度: ${LEVEL_LABELS[n.result.urgency.level]}`,
     `主な課題: ${primary ? CHALLENGE_LABELS[primary] : '特になし'}`,
@@ -377,6 +387,7 @@ export async function notifyAxMigrationSubmission(n: AxMigrationNotification): P
         urgency: n.result.urgency.level,
         primaryChallenge: n.result.challenges.primary,
         platform: n.result.platform ?? null,
+        accessPath: readAccessPath(n.result.accessPath),
       })
     );
   }
