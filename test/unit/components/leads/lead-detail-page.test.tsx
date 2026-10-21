@@ -493,6 +493,21 @@ describe('LeadDetailView overview', () => {
     expect(within(card('営業パイプライン')).getByText('予算')).toBeInTheDocument();
   });
 
+  it('links to the handoff sheet once the deal moved on from the initial hearing (#86)', () => {
+    const { unmount } = renderPage();
+    expect(screen.queryByRole('link', { name: '引き継ぎ書を開く' })).not.toBeInTheDocument();
+    unmount();
+
+    store.set([
+      makeLead({ dealPhaseReachedAt: { initial_hearing: '2026-10-01', proposal: '2026-10-20' } }),
+    ]);
+    renderPage();
+    expect(screen.getByRole('link', { name: '引き継ぎ書を開く' })).toHaveAttribute(
+      'href',
+      `/ja/leads/${LEAD_ID}/handoff`
+    );
+  });
+
   it('opens the card and field named in the URL', async () => {
     store.set([makeLead({ status: 'lost' })]);
     renderPage({ initialEdit: 'pipeline', initialField: 'lostReason' });

@@ -1190,6 +1190,7 @@ export type NotificationType =
   | 'next_action_due'
   | 'appointment_review_due'
   | 'hearing_ai_restricted'
+  | 'lead_handoff'
   | 'system';
 
 /**
