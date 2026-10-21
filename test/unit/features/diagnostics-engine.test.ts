@@ -172,6 +172,16 @@ describe('inferInflowSource（流入元の推定）', () => {
     expect(trackingSchema.parse({ agency: 'a'.repeat(60) }).agency).toHaveLength(40);
   });
 
+  it('keeps a known entry page and drops anything else (#296)', () => {
+    expect(trackingSchema.parse({ entry: 'ax-access-lp' }).entry).toBe('ax-access-lp');
+    expect(trackingSchema.parse({ entry: 'ax-lp' }).entry).toBe('ax-lp');
+    expect(trackingSchema.parse({ entry: 'ax-diagnosis' }).entry).toBe('ax-diagnosis');
+    expect(trackingSchema.parse({ entry: 'other-page', utmSource: 'g' })).toEqual({ utmSource: 'g' });
+    expect(compactTracking(trackingSchema.parse({ entry: 'ax-access-lp' }))).toEqual({
+      entry: 'ax-access-lp',
+    });
+  });
+
   it('drops empty tracking values', () => {
     expect(compactTracking({ utmSource: 'google', utmMedium: ' ', ref: undefined })).toEqual({
       utmSource: 'google',

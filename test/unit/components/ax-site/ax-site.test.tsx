@@ -355,6 +355,8 @@ describe('AX migration landing page after the diagnosis (#280)', () => {
     expect(Object.values(otherSections()).every((element) => element !== null)).toBe(true);
 
     const heading = await diagnose(user);
+    // The submission names this page as its entry (#296)
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).tracking.entry).toBe('ax-lp');
 
     for (const [name, element] of Object.entries(otherSections())) {
       expect(element, name).toBeNull();
@@ -419,6 +421,7 @@ describe('AX migration landing page after the diagnosis (#280)', () => {
       )
     );
     const heading = await diagnose(user);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).tracking.entry).toBe('ax-diagnosis');
 
     expect(screen.getAllByRole('heading', { level: 1 })).toEqual([heading]);
     expect(heading).toHaveFocus();
