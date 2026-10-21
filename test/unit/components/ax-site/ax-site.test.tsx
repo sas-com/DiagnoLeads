@@ -126,7 +126,7 @@ describe('AX migration landing page', () => {
     expect(screen.getByText('経営判断').tagName).toBe('EM');
     const reasons = screen.getByRole('heading', { level: 2, name: '選ばれる理由' }).closest('section');
     expect(
-      within(reasons as HTMLElement).getByText(/^※お預かりした仕様書・ソースコードなどは/)
+      within(reasons as HTMLElement).getByText(/^※お預かりした仕様書・ソースコードを AI で解析するかどうか/)
     ).toBeInTheDocument();
   });
 

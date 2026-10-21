@@ -2742,7 +2742,7 @@
           }
         }
       },
-      "note": "* Specifications, source code and other materials you entrust to us are processed in a secure environment where they are not used as training data.",
+      "note": "* Whether we analyze your specifications and source code with AI, and with which service, is agreed before the contract according to your internal rules.",
       "certified": {
         "title": "A DX-certified company",
         "body": "Software Agency System Co., Ltd. is certified under the DX Certification program of the Ministry of Economy, Trade and Industry."
@@ -2776,8 +2776,8 @@
           "a": "AI transformation: business transformation that makes use of AI. After the migration, AI agents are added to the new web system to analyze the system and its data, streamline operations and extend features step by step."
         },
         "data": {
-          "q": "Are the specifications and source code we provide used to train AI?",
-          "a": "No. Specifications, source code and other materials you entrust to us are processed in a secure environment where they are not used as training data."
+          "q": "How are the specifications and source code we hand over treated?",
+          "a": "Before the contract, we agree with you whether to analyze them with AI and with which service, following your internal rules. Please tell us if external AI services cannot be used."
         },
         "privacy": {
           "q": "How is my information used?",
