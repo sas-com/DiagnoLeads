@@ -17,6 +17,7 @@ import type {
 import { unknownTechnicalQuestions } from '@/lib/features/diagnostics/ax-migration/technical';
 import { applicableQuestions } from '@/lib/features/diagnostics/engine';
 import type { DiagnosticAnswers, DiagnosticLocale } from '@/lib/features/diagnostics/types';
+import type { PublicInfoOffers } from '@/lib/features/info-offers/types/schemas';
 import { cn } from '@/lib/utils';
 import {
   ArrowRight,
@@ -29,6 +30,7 @@ import {
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { createElement, useEffect, useRef, useState } from 'react';
+import { InfoOffers } from './info-offers';
 import { AX_RUNNER_CONFIG } from './runner-config';
 import { trackAxEvent } from './tracking';
 
@@ -52,6 +54,8 @@ interface AxDiagnosisResultProps {
   submissionId: string;
   result: AxMigrationPublicResult;
   consultationRequested: boolean;
+  /** Documents and seminars for those still gathering information (#153); null when none */
+  offers?: PublicInfoOffers | null;
   /** Inside the landing page: headings start one level lower */
   embedded?: boolean;
   onDiagnoseAnother: () => void;
@@ -65,6 +69,7 @@ export function AxDiagnosisResult({
   submissionId,
   result: initialResult,
   consultationRequested,
+  offers = null,
   embedded = false,
   onDiagnoseAnother,
 }: AxDiagnosisResultProps) {
@@ -414,6 +419,16 @@ export function AxDiagnosisResult({
         </ol>
       </div>
 
+      {offers && ctaKey === 'information' && (
+        <InfoOffers
+          submissionId={submissionId}
+          offers={offers}
+          primary
+          headingTag={subTag}
+          platform={platform}
+        />
+      )}
+
       <div
         className="space-y-4 rounded-2xl bg-ax-deep p-6 text-white sm:p-8 print:hidden"
         data-testid="ax-result-cta"
@@ -446,6 +461,16 @@ export function AxDiagnosisResult({
           </>
         )}
       </div>
+
+      {offers && ctaKey !== 'information' && (
+        <InfoOffers
+          submissionId={submissionId}
+          offers={offers}
+          primary={false}
+          headingTag={subTag}
+          platform={platform}
+        />
+      )}
 
       <AnswersForPrint locale={locale} answers={answers} />
 

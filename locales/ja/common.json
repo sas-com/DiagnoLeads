@@ -578,7 +578,17 @@
       "answersJoiner": "、",
       "needsHearing": "「わからない」の回答が多いため、目安の精度は高くありません。個別相談で現状を伺うと、より正確な見通しをお伝えできます。",
       "unknownsTitle": "社内で確認すると、結果の精度が上がる項目",
-      "unknownsHint": "保守会社からの案内や資産一覧、契約書で確認できることが多いです。個別相談で、調べ方からご案内することもできます。"
+      "unknownsHint": "保守会社からの案内や資産一覧、契約書で確認できることが多いです。個別相談で、調べ方からご案内することもできます。",
+      "offers": {
+        "title": "情報収集から始める",
+        "titlePrimary": "まずは情報収集から",
+        "body": "すぐに相談する段階でなくても、資料や勉強会で進め方を確かめられます。",
+        "getDocument": "資料を受け取る",
+        "openDocument": "資料を開く",
+        "signUp": "この勉強会に申し込む",
+        "seminarAccepted": "申し込みを受け付けました。開催の案内をお送りします。",
+        "failed": "受け付けられませんでした。時間をおいて、もう一度お試しください。"
+      }
     },
     "operator": "提供：エス・エー・エス株式会社 DXサービス部",
     "quoted": "「{label}」",
@@ -4055,5 +4065,43 @@
     "noPlaybook": "営業の手引きが未登録です。",
     "noGuide": "手引きに「{challenge}」の項目が未登録です。",
     "openPlaybook": "営業の手引きを開く"
+  },
+  "infoOffers": {
+    "settings": {
+      "title": "資料・勉強会（情報収集向け）",
+      "description": "AX 診断の結果画面に、相談と並べて出す資料と勉強会です。「結果画面に出す」をオンにするまで表示しません。資料の場所は、申し込みを記録したあとに回答者へ渡します。",
+      "enabled": "結果画面に出す",
+      "documents": "資料",
+      "seminars": "勉強会",
+      "addDocument": "資料を追加",
+      "addSeminar": "勉強会を追加",
+      "remove": "削除",
+      "docTitle": "資料名",
+      "docDescription": "説明",
+      "docUrl": "資料の URL（https）",
+      "semTitle": "勉強会名",
+      "semDate": "開催日",
+      "semTime": "時間",
+      "semFormat": "形式・会場",
+      "semDescription": "説明",
+      "counts": "申込 {requested} 件・出席 {attended} 件",
+      "save": "保存",
+      "saved": "資料・勉強会を保存しました",
+      "saveError": "保存できませんでした。入力を確かめてください。",
+      "readOnly": "変更できるのはオーナーと管理者です。",
+      "limit": "それぞれ最大 {max} 件まで"
+    },
+    "lead": {
+      "title": "資料・勉強会の申込",
+      "document": "資料",
+      "seminar": "勉強会",
+      "requestedAt": "{date} に申込",
+      "scheduledOn": "開催 {date}",
+      "attended": "出席した",
+      "attendedBy": "{name} が記録",
+      "unverified": "本人未確認（スコアに反映していません）",
+      "saved": "出欠を記録しました",
+      "saveError": "出欠を記録できませんでした"
+    }
   }
 }

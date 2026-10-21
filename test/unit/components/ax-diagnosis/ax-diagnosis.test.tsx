@@ -597,6 +597,51 @@ describe('AxDiagnosisResult', () => {
       )
     );
 
+  const offers = {
+    documents: [{ id: 'checklist', title: '機種別チェックリスト', description: '移行前に確かめること' }],
+    seminars: [
+      { id: 'next', title: '移行の進め方', description: '', date: '2026-11-10', time: '15:00-16:00', format: 'オンライン' },
+    ],
+  };
+
+  it('shows no documents or seminars unless the organization offers them (#153)', () => {
+    renderResult();
+    expect(screen.queryByTestId('ax-info-offers')).not.toBeInTheDocument();
+  });
+
+  it('hands out a document once its request is recorded, and signs up for a seminar (#153)', async () => {
+    const user = userEvent.setup();
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { ok: true, url: 'https://files.example.com/a.pdf' }))
+      .mockResolvedValueOnce(jsonResponse(200, { ok: true }));
+    renderResult({ offers });
+    const panel = within(screen.getByTestId('ax-info-offers'));
+    expect(panel.getByText('2026/11/10 ・ 15:00-16:00 ・ オンライン')).toBeInTheDocument();
+
+    await user.click(panel.getByRole('button', { name: '資料を受け取る' }));
+    expect(fetchMock).toHaveBeenCalledWith('/api/diagnostics/ax-migration/offers', expect.anything());
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      submissionId: 'sub-1',
+      kind: 'document',
+      offerId: 'checklist',
+    });
+    expect(await panel.findByRole('link', { name: '資料を開く' })).toHaveAttribute(
+      'href',
+      'https://files.example.com/a.pdf'
+    );
+
+    await user.click(panel.getByRole('button', { name: 'この勉強会に申し込む' }));
+    expect(await panel.findByText(/申し込みを受け付けました/)).toBeInTheDocument();
+  });
+
+  it('says so when a request fails (#153)', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(jsonResponse(409, { error: 'Unavailable' }));
+    renderResult({ offers });
+    await user.click(screen.getByRole('button', { name: '資料を受け取る' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('受け付けられませんでした');
+  });
+
   it('explains the levels and offers a consultation at the top and the bottom', () => {
     renderResult();
     expect(screen.getByTestId('ax-result-reasons')).toHaveTextContent('判定のポイント');

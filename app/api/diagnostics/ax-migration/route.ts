@@ -22,6 +22,9 @@ import {
   tooManyRequests,
 } from '@/lib/features/diagnostics/request-guard';
 import { turnstileSiteKey, verifyTurnstile } from '@/lib/features/diagnostics/turnstile';
+import { getInfoOffers } from '@/lib/features/info-offers/service';
+import { publicInfoOffers } from '@/lib/features/info-offers/types/schemas';
+import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { reportServerError } from '@/lib/ops/alert';
 import { type NextRequest, NextResponse, after } from 'next/server';
 
@@ -174,10 +177,20 @@ export async function POST(req: NextRequest) {
       })
     );
 
+    // Documents and seminars for respondents still gathering information (#153); the result is
+    // shown without them when they cannot be read
+    const offers = await getInfoOffers(db, organizationId)
+      .then((settings) => publicInfoOffers(settings, jstDate()))
+      .catch((error) => {
+        console.error('AX diagnosis: info offers could not be read:', error);
+        return null;
+      });
+
     return NextResponse.json({
       submissionId: outcome.submissionId,
       consultationRequested: parsed.data.consultationRequested,
       result: toPublicResult(outcome.result),
+      ...(offers ? { offers } : {}),
     });
   } catch (error) {
     console.error('AX diagnosis submission error:', error);

@@ -578,7 +578,17 @@
       "answersJoiner": ", ",
       "needsHearing": "Many answers were \"I don't know\", so this estimate is rough. A consultation lets us give you a more accurate outlook.",
       "unknownsTitle": "Checking these in-house will sharpen the result",
-      "unknownsHint": "Notices from the maintenance company, asset lists and contracts often have the answers. We can also show you how to find them in a consultation."
+      "unknownsHint": "Notices from the maintenance company, asset lists and contracts often have the answers. We can also show you how to find them in a consultation.",
+      "offers": {
+        "title": "Start by gathering information",
+        "titlePrimary": "Start by gathering information",
+        "body": "Not ready for a consultation yet? Documents and seminars show how a migration goes.",
+        "getDocument": "Get the document",
+        "openDocument": "Open the document",
+        "signUp": "Sign up for this seminar",
+        "seminarAccepted": "You are signed up. We will send you the details.",
+        "failed": "Could not be accepted. Please try again later."
+      }
     },
     "operator": "Provided by Software Agency System Co., Ltd., DX Services Division",
     "quoted": "\"{label}\"",
@@ -4055,5 +4065,43 @@
     "noPlaybook": "No sales playbook is registered.",
     "noGuide": "The playbook has nothing for \"{challenge}\" yet.",
     "openPlaybook": "Open the sales playbook"
+  },
+  "infoOffers": {
+    "settings": {
+      "title": "Documents and seminars (information gathering)",
+      "description": "Shown on the AX diagnosis result next to the consultation. Hidden until \"Show on the result\" is on. The document location is given to the respondent once the request is recorded.",
+      "enabled": "Show on the result",
+      "documents": "Documents",
+      "seminars": "Seminars",
+      "addDocument": "Add a document",
+      "addSeminar": "Add a seminar",
+      "remove": "Remove",
+      "docTitle": "Document name",
+      "docDescription": "Description",
+      "docUrl": "Document URL (https)",
+      "semTitle": "Seminar name",
+      "semDate": "Date",
+      "semTime": "Time",
+      "semFormat": "Format / venue",
+      "semDescription": "Description",
+      "counts": "{requested} signed up, {attended} attended",
+      "save": "Save",
+      "saved": "Documents and seminars saved",
+      "saveError": "Could not save. Please check the entries.",
+      "readOnly": "Owners and admins can change these.",
+      "limit": "Up to {max} each"
+    },
+    "lead": {
+      "title": "Documents and seminars requested",
+      "document": "Document",
+      "seminar": "Seminar",
+      "requestedAt": "Requested on {date}",
+      "scheduledOn": "Held on {date}",
+      "attended": "Attended",
+      "attendedBy": "Recorded by {name}",
+      "unverified": "Identity not confirmed (not added to the score)",
+      "saved": "Attendance recorded",
+      "saveError": "Could not record the attendance"
+    }
   }
 }

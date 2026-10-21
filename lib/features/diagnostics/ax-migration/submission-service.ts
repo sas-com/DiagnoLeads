@@ -543,6 +543,11 @@ export const axMigrationDetailsSchema = z.object({
   }),
 });
 
+/** Points documents and seminars requested by the lead added to its score (#153) */
+// Table names written out: drizzle leaves them off the columns of a single-table update, and the
+// subquery's lead_id must not be read against the wrong table
+const offerPointsSql = sql`(select coalesce(sum(r.score_points + r.attendance_points), 0)::int from lead_offer_requests r where r.lead_id = "leads"."id")`;
+
 /**
  * Add the optional follow-up answers given after the result and evaluate again.
  * Only `detail` questions of the submission's path are accepted; the answers the result was
@@ -624,10 +629,11 @@ export async function addAxMigrationDetails(
       await tx
         .update(leads)
         .set({
-          // Keep a score sales have already changed
+          // Keep a score sales have already changed. Documents and seminars requested from the
+          // result (#153) added their points on top: those are not a change by sales
           score:
             typeof previousScore === 'number'
-              ? sql`case when ${leads.score} = ${previousScore} then ${result.leadScore} else ${leads.score} end`
+              ? sql`case when ${leads.score} = ${previousScore} + ${offerPointsSql} then least(100, ${result.leadScore} + ${offerPointsSql}) else ${leads.score} end`
               : leads.score,
           responses: sql`jsonb_set(
             coalesce(${leads.responses}, '{}'::jsonb),

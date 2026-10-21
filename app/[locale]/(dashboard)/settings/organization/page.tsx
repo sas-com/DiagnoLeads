@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 import { ActTimingSettingsCard } from '@/components/features/act-timing/act-timing-settings-card';
+import { InfoOffersSettingsCard } from '@/components/features/info-offers/info-offers-settings-card';
 import { LeadHandoffSettings } from '@/components/features/lead-handoff/lead-handoff-settings';
 import { LeadIntakeSettings } from '@/components/features/leads/lead-intake-settings';
 import { Badge } from '@/components/ui/badge';
@@ -300,6 +301,7 @@ export default function OrganizationSettingsPage() {
         {/* Intake members for consultation requests (#135) */}
         {contextOrgId && <LeadIntakeSettings organizationId={contextOrgId} />}
         {contextOrgId && <LeadHandoffSettings organizationId={contextOrgId} />}
+        {contextOrgId && <InfoOffersSettingsCard organizationId={contextOrgId} />}
         {contextOrgId && <ActTimingSettingsCard organizationId={contextOrgId} />}
 
         {/* Info Callout */}
