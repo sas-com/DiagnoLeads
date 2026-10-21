@@ -57,9 +57,12 @@ describe('embedded lead form in test mode', () => {
       rateLimitPerDay: 100,
     });
     process.env.APP_TEST_MODE = 'true';
+    // The API is off unless enabled (2026-10-21); these tests are about the enabled API
+    vi.stubEnv('EMBED_API_ENABLED', 'true');
   });
   afterEach(() => {
     delete process.env.APP_TEST_MODE;
+    vi.unstubAllEnvs();
   });
 
   it('refuses an address outside the company domain and stores no lead', async () => {

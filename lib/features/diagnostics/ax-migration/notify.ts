@@ -81,7 +81,9 @@ export function mqlSummary(mql: AxMqlJudgement): string {
     case 'interest':
       return `MQL: 関心あり（${signals}）`;
     case 'fit':
-      return 'MQL: 適合のみ（業種・システムは対象。関心を示す行動・回答はまだありません）';
+      return mql.waived.length > 0
+        ? `MQL: 適合のみ（システムは対象。${mql.waived.map((key) => MQL_REQUIRED_LABELS[key]).join('・')}は問わない経路。関心を示す行動・回答はまだありません）`
+        : 'MQL: 適合のみ（業種・システムは対象。関心を示す行動・回答はまだありません）';
     default:
       return `MQL: 対象外（${mql.unmet.map((key) => MQL_REQUIRED_LABELS[key]).join('・')}が対象外）`;
   }
@@ -158,7 +160,9 @@ export function buildSalesMessage(
     `主な課題: ${primary ? CHALLENGE_LABELS[primary] : '特になし'}`,
     mqlSummary(mql),
     ...(mql.criteria.companySize !== 'not_configured'
-      ? [`企業規模: ${COMPANY_SIZE_LABELS[mql.criteria.companySize]}`]
+      ? [
+          `企業規模: ${COMPANY_SIZE_LABELS[mql.criteria.companySize]}${mql.waived.includes('company_size') ? '（この経路では問わない）' : ''}`,
+        ]
       : []),
     `SQLの手がかり: ${n.result.sqlSignals.candidate ? 'あり' : 'なし'}`,
     ...(n.result.needsHearing ? ['「わからない」の回答が多く要ヒアリング'] : []),
@@ -233,7 +237,12 @@ export function buildSalesEmail(
     { label: '主な課題', value: primary ? CHALLENGE_LABELS[primary] : '特になし' },
     { label: 'MQL', value: mqlSummary(mql).replace(/^MQL: /, '') },
     ...(mql.criteria.companySize !== 'not_configured'
-      ? [{ label: '企業規模', value: COMPANY_SIZE_LABELS[mql.criteria.companySize] }]
+      ? [
+          {
+            label: '企業規模',
+            value: `${COMPANY_SIZE_LABELS[mql.criteria.companySize]}${mql.waived.includes('company_size') ? '（この経路では問わない）' : ''}`,
+          },
+        ]
       : []),
     { label: 'SQLの手がかり', value: n.result.sqlSignals.candidate ? 'あり' : 'なし' },
     ...(primary && effect ? [{ label: '伝える効果', value: effect }] : []),

@@ -15,7 +15,7 @@ import {
   requestAxMigrationConsultation,
   submitAxMigrationDiagnosis,
 } from '@/lib/features/diagnostics/ax-migration/submission-service';
-import { as400Answers } from '@/test/fixtures/ax-migration';
+import { accessAnswers, as400Answers } from '@/test/fixtures/ax-migration';
 import { and, eq, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
@@ -482,6 +482,32 @@ describe.skipIf(!url)('AX migration submission (PostgreSQL)', () => {
       expect(lead?.score).toBe(details.result.leadScore);
       expect(lead?.responses).toMatchObject({
         axMigration: { detailsAnsweredAt: now.toISOString() },
+      });
+    });
+
+    it('makes the lead an MQL when a follow-up qualifies the Access support end (#292)', async () => {
+      const answers = { ...accessAnswers, industry: 'other', role: 'business_staff' };
+      const outcome = await submitAxMigrationDiagnosis(db, organizationId, input({ answers }), now);
+      if (!outcome.ok) throw new Error('submission failed');
+      // Access 2016 / 2019 is out of support, but that alone is no strong signal
+      expect(outcome.result.mql).toMatchObject({ level: 'fit', signals: [] });
+      const before = await pg.query.leads.findFirst({ where: eq(leads.id, outcome.leadId) });
+      expect(before?.mqlQualifiedAt).toBeNull();
+
+      const later = new Date(now.getTime() + 60 * 1000);
+      const details = await addAxMigrationDetails(
+        db,
+        outcome.submissionId,
+        { access_importance: 'company' },
+        later
+      );
+      if (!details.ok) throw new Error(`details failed: ${details.reason}`);
+      expect(details.result.mql).toMatchObject({ level: 'interest', signals: ['support_deadline'] });
+
+      const lead = await pg.query.leads.findFirst({ where: eq(leads.id, outcome.leadId) });
+      expect(lead?.mqlQualifiedAt?.getTime()).toBe(later.getTime());
+      expect(lead?.responses).toMatchObject({
+        axMigration: { mql: { level: 'interest', signals: ['support_deadline'], unmet: [] } },
       });
     });
 
