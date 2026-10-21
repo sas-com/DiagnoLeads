@@ -562,6 +562,8 @@ const offerPointsSql = sql`(select coalesce(sum(r.score_points + r.attendance_po
  * Only `detail` questions of the submission's path are accepted; the answers the result was
  * based on stay as submitted. The lead is updated only when this submission created it, or
  * (for another system of the same respondent) only that system's entry on the lead.
+ * The follow-ups can raise the lead's MQL (e.g. the impact that qualifies the Access support
+ * end, #292); like another system, they never lower it.
  */
 export async function addAxMigrationDetails(
   database: Database,
@@ -629,15 +631,22 @@ export async function addAxMigrationDetails(
       .where(eq(diagnosticSubmissions.id, submissionId));
 
     if (submission.leadId && submission.leadCreated) {
+      const [lead] = await tx
+        .select({ responses: leads.responses, mqlQualifiedAt: leads.mqlQualifiedAt })
+        .from(leads)
+        .where(eq(leads.id, submission.leadId))
+        .for('no key update');
       const summary = {
         difficulty: result.difficulty.level,
         urgency: result.urgency.level,
         needsHearing: result.needsHearing,
         detailsAnsweredAt: now.toISOString(),
+        ...(lead ? withLeadMql(axSummaryOf(lead.responses), toLeadMql(result.mql)) : {}),
       };
       await tx
         .update(leads)
         .set({
+          ...(lead && result.mql.qualified && !lead.mqlQualifiedAt ? { mqlQualifiedAt: now } : {}),
           // Keep a score sales have already changed. Documents and seminars requested from the
           // result (#153) added their points on top: those are not a change by sales
           score:
@@ -655,11 +664,11 @@ export async function addAxMigrationDetails(
         .where(eq(leads.id, submission.leadId));
     } else if (submission.leadId && submission.continuedFromSubmissionId) {
       const [lead] = await tx
-        .select({ responses: leads.responses })
+        .select({ responses: leads.responses, mqlQualifiedAt: leads.mqlQualifiedAt })
         .from(leads)
         .where(eq(leads.id, submission.leadId))
         .for('no key update');
-      const responses =
+      const updated =
         lead &&
         withOtherSystemUpdate(lead.responses, submissionId, {
           difficulty: result.difficulty.level,
@@ -667,10 +676,19 @@ export async function addAxMigrationDetails(
           needsHearing: result.needsHearing,
           detailsAnsweredAt: now.toISOString(),
         });
-      if (responses) {
+      if (lead && updated) {
+        const summary = axSummaryOf(updated);
+        const responses = {
+          ...updated,
+          axMigration: { ...summary, ...withLeadMql(summary, toLeadMql(result.mql)) },
+        };
         await tx
           .update(leads)
-          .set({ responses, updatedAt: now })
+          .set({
+            responses,
+            ...(result.mql.qualified && !lead.mqlQualifiedAt ? { mqlQualifiedAt: now } : {}),
+            updatedAt: now,
+          })
           .where(eq(leads.id, submission.leadId));
       }
     }

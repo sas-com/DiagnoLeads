@@ -45,12 +45,29 @@ export const AX_MIGRATION_CONFIG: AxMigrationConfig = {
   legacyOtherSystems: ['vb', 'webperformer', 'office_computer', 'mainframe'],
   countWebDiagnosisAsMqlAction: false,
   mql: {
+    // Access の案件は大企業の1部署を含めて業種・規模を問わず受ける（2026-10-21 オーナー決定, #292）。
+    // 相談を勧めるか（recommendation）も同じ扱い。「システム」の条件は変えない
+    anyIndustryPlatforms: ['access'],
+    anySizePlatforms: ['access'],
     strongSignals: {
       consultation: true,
       // 保守期限・リース満了が過ぎている／1年以内
       supportEnd: ['passed', 'within_1y'],
-      // Access / Office のサポート終了済み／1年以内
+      // Access / Office のサポート終了済み／1年以内。下の accessSupportWith のどれかと重なったときだけ
       accessSupport: ['ended', 'ending'],
+      // Access のサポート終了を強いシグナルにする組み合わせ（2026-10-21 オーナー決定, #292）。
+      // 2016〜2021 の買い切り版はすべてサポート終了になり、それだけでは優先度の差が出ないため。
+      // 営業と見直すときはここを変える
+      accessSupportWith: {
+        // 止まったときの影響: 部署の主要な業務／全社・取引先・お客様
+        importance: ['main', 'company'],
+        // 利用人数: 11人以上
+        users: ['11_30', 'gte31'],
+        // 基幹システムや SQL Server など、Access の外のデータを直接読み書きしている
+        features: ['external_data'],
+        // データは SQL Server などのデータベースにあり、Access は画面だけ
+        locations: ['database'],
+      },
       // 決裁に関わる役職 — 要確認（担当者クラスは含めない）
       roles: ['executive', 'it_manager', 'business_manager'],
       // 切り替えを目指す時期が1年以内 — 要確認

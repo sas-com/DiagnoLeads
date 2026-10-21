@@ -2,7 +2,7 @@
  * notifyAxMigrationSubmission: which channels fire for which events.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { as400Answers } from '@/test/fixtures/ax-migration';
+import { accessAnswers, as400Answers } from '@/test/fixtures/ax-migration';
 
 const webhookMock = vi.fn();
 const inAppMock = vi.fn();
@@ -63,6 +63,19 @@ describe('notifyAxMigrationSubmission', () => {
     quotaMock.mockResolvedValue({ allowed: true, count: 1, retryAfterSeconds: 0 });
     env.AX_DIAGNOSIS_SALES_EMAIL = 'sales1@example.jp, sales2@example.jp';
     effectMock.mockResolvedValue(null);
+  });
+
+  it('tells sales which conditions the Access path does not require (#292)', () => {
+    const access = evaluateAxMigration(
+      { ...accessAnswers, industry: 'other', role: 'business_staff', annual_revenue: 'over_30b' },
+      undefined,
+      new Date('2026-10-21T09:00:00+09:00'),
+      {},
+      { annual_revenue: ['1b_3b'], employees: [], sites: [] }
+    );
+    const { message } = buildSalesMessage({ ...base, result: access });
+    expect(message).toContain('MQL: 適合のみ（システムは対象。業種・企業規模は問わない経路。');
+    expect(message).toContain('企業規模: 対象の範囲外（この経路では問わない）');
   });
 
   it('says nothing about what to ask when the diagnosis has no main challenge (#75)', () => {
