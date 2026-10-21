@@ -9,10 +9,18 @@ import {
 import { describe, expect, it } from 'vitest';
 
 const rules: AxMqlRules = {
+  anyIndustryPlatforms: ['access'],
+  anySizePlatforms: ['access'],
   strongSignals: {
     consultation: true,
     supportEnd: ['passed', 'within_1y'],
     accessSupport: ['ended', 'ending'],
+    accessSupportWith: {
+      importance: ['main', 'company'],
+      users: ['11_30', 'gte31'],
+      features: ['external_data'],
+      locations: ['database'],
+    },
     roles: ['executive'],
     timelines: ['within_1y'],
   },
@@ -60,13 +68,14 @@ describe('judgeAxMql', () => {
       criteria: { industry: true, system: true, action: false, companySize: 'not_configured' },
       signals: [],
       unmet: [],
+      waived: [],
     });
   });
 
   it.each([
     ['consultation', { consultationRequested: true }],
     ['support_deadline', { supportEnd: 'within_1y' }],
-    ['support_deadline', { accessSupport: 'ending' }],
+    ['support_deadline', { accessSupport: 'ending', access: { importance: 'main' } }],
     ['decision_role', { role: 'executive' }],
     ['timeline_soon', { timeline: 'within_1y' }],
   ] as const)('is interested (MQL) with the %s signal', (signal, change) => {
@@ -111,10 +120,12 @@ describe('judgeAxMql', () => {
 
   it('turns a signal off with an empty list or false', () => {
     const off: AxMqlRules = {
+      ...rules,
       strongSignals: {
         consultation: false,
         supportEnd: [],
         accessSupport: [],
+        accessSupportWith: rules.strongSignals.accessSupportWith,
         roles: [],
         timelines: [],
       },
@@ -131,6 +142,125 @@ describe('judgeAxMql', () => {
     expect(judgeAxMql(fit, rules, true)).toMatchObject({
       level: 'interest',
       signals: ['web_diagnosis'],
+    });
+  });
+});
+
+// #292 (owner 2026-10-21): Access takes any industry and size; its support end needs an impact
+describe('judgeAxMql on the Access path', () => {
+  const access: AxMqlFacts = { ...fit, platform: 'access' };
+
+  it('counts the support end alone as no signal', () => {
+    for (const accessSupport of ['ended', 'ending']) {
+      expect(judgeAxMql({ ...access, accessSupport }, rules)).toMatchObject({
+        level: 'fit',
+        signals: [],
+      });
+    }
+    // Answers below the bar do not qualify it either
+    const low = {
+      importance: 'support',
+      users: '3_10',
+      features: ['vba', 'excel'],
+      location: 'shared_folder',
+    };
+    expect(judgeAxMql({ ...access, accessSupport: 'ended', access: low }, rules).level).toBe(
+      'fit'
+    );
+  });
+
+  it.each([
+    [{ importance: 'main' }],
+    [{ importance: 'company' }],
+    [{ users: '11_30' }],
+    [{ users: 'gte31' }],
+    [{ features: ['vba', 'external_data'] }],
+    [{ location: 'database' }],
+  ])('counts the support end with %j as interest', (impact) => {
+    for (const accessSupport of ['ended', 'ending']) {
+      expect(judgeAxMql({ ...access, accessSupport, access: impact }, rules)).toMatchObject({
+        level: 'interest',
+        signals: ['support_deadline'],
+      });
+    }
+  });
+
+  it('needs the support end: an impact answer alone is no signal', () => {
+    const judged = judgeAxMql(
+      { ...access, accessSupport: 'm365', access: { importance: 'company', users: 'gte31' } },
+      rules
+    );
+    expect(judged.level).toBe('fit');
+  });
+
+  it('still counts another strong signal without an impact answer', () => {
+    expect(
+      judgeAxMql({ ...access, accessSupport: 'ended', role: 'executive' }, rules)
+    ).toMatchObject({ level: 'interest', signals: ['decision_role'] });
+  });
+
+  it('does not count the support end when the qualifying lists are empty', () => {
+    const none: AxMqlRules = {
+      ...rules,
+      strongSignals: {
+        ...rules.strongSignals,
+        accessSupportWith: { importance: [], users: [], features: [], locations: [] },
+      },
+    };
+    const judged = judgeAxMql(
+      { ...access, accessSupport: 'ended', access: { importance: 'company' } },
+      none
+    );
+    expect(judged.level).toBe('fit');
+  });
+
+  it('is fit in any industry and at any company size, and shows neither as unmet', () => {
+    const judged = judgeAxMql({ ...access, industry: false, companySize: 'not_fit' }, rules);
+    expect(judged).toMatchObject({
+      level: 'fit',
+      candidate: true,
+      unmet: [],
+      waived: ['industry', 'company_size'],
+      // What the answers say is kept for sales
+      criteria: { industry: false, companySize: 'not_fit' },
+    });
+  });
+
+  it('still requires the system', () => {
+    expect(judgeAxMql({ ...access, system: false }, rules)).toMatchObject({
+      level: 'none',
+      unmet: ['system'],
+    });
+  });
+
+  it('keeps the waiver when the stored judgement is read or a consultation is added', () => {
+    const stored = judgeAxMql({ ...access, industry: false, companySize: 'not_fit' }, rules);
+    expect(readAxMql(stored)).toMatchObject({ level: 'fit', candidate: true, unmet: [] });
+    expect(withConsultationSignal(stored, rules)).toMatchObject({
+      level: 'interest',
+      signals: ['consultation'],
+      waived: ['industry', 'company_size'],
+    });
+  });
+
+  it('keeps industry and size required on the host paths', () => {
+    for (const platform of ['as400', 'acos', 'other']) {
+      const judged = judgeAxMql(
+        { ...fit, platform, industry: false, companySize: 'not_fit' },
+        rules
+      );
+      expect(judged).toMatchObject({
+        level: 'none',
+        unmet: ['industry', 'company_size'],
+        waived: [],
+      });
+    }
+  });
+
+  it('leaves the host support end as it was', () => {
+    expect(judgeAxMql({ ...fit, platform: 'as400', supportEnd: 'passed' }, rules)).toMatchObject({
+      level: 'interest',
+      signals: ['support_deadline'],
     });
   });
 });
