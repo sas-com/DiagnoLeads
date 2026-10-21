@@ -39,7 +39,6 @@ jobs:
 
       - name: Run Biome lint
         run: bun run lint
-        continue-on-error: true
 
       - name: Run TypeScript type check
         run: bun run typecheck
