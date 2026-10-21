@@ -55,10 +55,14 @@ const mockMembership: OrganizationMember & { organization: Organization } = {
 
 const dialect = new PgDialect();
 
-function whereSql(findMany: ReturnType<typeof vi.fn>): string {
+function whereQuery(findMany: ReturnType<typeof vi.fn>): { sql: string; params: unknown[] } {
   const args = findMany.mock.calls[0]?.[0] as { where: SQL } | undefined;
   if (!args) throw new Error('findMany was not called');
-  return dialect.sqlToQuery(args.where).sql;
+  return dialect.sqlToQuery(args.where);
+}
+
+function whereSql(findMany: ReturnType<typeof vi.fn>): string {
+  return whereQuery(findMany).sql;
 }
 
 describe.each([
@@ -101,9 +105,10 @@ describe.each([
   it('limits private items to the current user by default', async () => {
     await list({});
 
-    const sql = whereSql(findMany);
-    expect(sql).toContain('"organization_id" = $1');
-    expect(sql).toMatch(/"is_public" = \$\d+ or .*"user_id" = \$\d+/);
+    const { sql, params } = whereQuery(findMany);
+    // The visibility OR sits inside the AND with the organization condition
+    expect(sql).toMatch(/"organization_id" = \$1 and \(.*"is_public" = \$2 or .*"user_id" = \$3\)/);
+    expect(params).toEqual([TEST_ORG_ID, true, TEST_USER_ID]);
   });
 
   it('returns only public items when private is not selected', async () => {
