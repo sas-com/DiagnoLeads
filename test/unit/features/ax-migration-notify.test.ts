@@ -31,7 +31,7 @@ vi.mock('@/lib/features/email', () => ({
   isEmailConfigured: () => isEmailConfiguredMock(),
 }));
 
-const { notifyAxMigrationSubmission, buildSalesMessage } = await import(
+const { notifyAxMigrationSubmission, buildSalesMessage, buildSalesEmail } = await import(
   '@/lib/features/diagnostics/ax-migration/notify'
 );
 const { evaluateAxMigration } = await import('@/lib/features/diagnostics/ax-migration/evaluate');
@@ -90,6 +90,13 @@ describe('notifyAxMigrationSubmission', () => {
     const { accessPath: _stored, ...older } = access;
     expect(buildSalesMessage({ ...base, result: older }).message).not.toContain('進め方の目安');
     expect(buildSalesMessage(base).message).not.toContain('進め方の目安');
+    // The sales email shows the same row in its result table (#285)
+    expect(
+      buildSalesEmail({ ...base, result: access }, null, 'https://example.com/ja/leads/1').text
+    ).toContain('進め方の目安: Web に移す');
+    expect(buildSalesEmail(base, null, 'https://example.com/ja/leads/1').text).not.toContain(
+      '進め方の目安'
+    );
 
     await notifyAxMigrationSubmission({ ...base, result: access });
     expect(webhookMock).toHaveBeenCalledWith(

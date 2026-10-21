@@ -240,8 +240,10 @@ export function buildSalesEmail(
       ? [{ label: 'SQLの手がかりあり', tone: 'success' as const }]
       : []),
   ];
+  const accessPath = readAccessPath(n.result.accessPath);
   const result: EmailFact[] = [
     ...(platform ? [{ label: '移行元', value: platform }] : []),
+    ...(accessPath ? [{ label: '進め方の目安', value: ACCESS_PATH_LABELS[accessPath] }] : []),
     { label: '移行難易度', value: LEVEL_LABELS[n.result.difficulty.level] },
     { label: '緊急度', value: LEVEL_LABELS[n.result.urgency.level] },
     { label: '主な課題', value: primary ? CHALLENGE_LABELS[primary] : '特になし' },
