@@ -472,7 +472,54 @@
         "access_inventory": "First take stock of the tools and drop unused or duplicate ones to narrow the scope",
         "access_cloud": "Stop opening Access from cloud folders and share the data in a way that manages permissions and records",
         "access_external": "Replace the links to data outside Access (core system, SQL Server) with web system interfaces",
-        "access_devices": "Check how barcodes, label printers and other devices are used and decide their web replacements"
+        "access_devices": "Check how barcodes, label printers and other devices are used and decide their web replacements",
+        "access_64bit": "Check that it works on 64-bit Office and fix the references and the declarations that call Windows functions (Declare)",
+        "access_backup": "Keep backups of the data and a record of the fixes, so the tool can be kept in use",
+        "access_replace_fit": "Write down the current screens, reports and workflow, and check whether an off-the-shelf service covers them",
+        "access_data_export": "Decide how to move the Access data to the service (CSV and so on) and how to tidy it up first"
+      },
+      "accessPath": {
+        "title": "Recommended way forward (a guide)",
+        "recommended": "From your answers, the way that seems to fit best",
+        "reasonsTitle": "Why we think so",
+        "othersTitle": "Other ways",
+        "note": "This is a guide based on your answers. Which way to take is decided in the consultation, after we look at the tool together.",
+        "refineHint": "Answer the additional questions below (such as the number of users and what happens if the tool stops) to make the guide more precise.",
+        "paths": {
+          "fix": {
+            "title": "Fix it and keep using it",
+            "body": "We fix your current Access tool so that it works on new Office versions and PCs. The way you use it hardly changes.",
+            "short": "We fix your current Access tool so that it works again."
+          },
+          "web": {
+            "title": "Move it to the web",
+            "body": "We rebuild it as a web system used in the browser, so that many people, other sites and people working from home can use the same data.",
+            "short": "We rebuild it as a web system used in the browser."
+          },
+          "replace": {
+            "title": "Replace it with an off-the-shelf service",
+            "body": "You switch to a commercial cloud service or similar. For a tool with little custom work, nothing may need to be built.",
+            "short": "You switch to a commercial cloud service or similar."
+          }
+        },
+        "reasons": {
+          "many_users": "11 or more people use it, which is a lot for sharing one file as you do today",
+          "company_impact": "It supports important work: if it stops, the whole company, partners or customers are affected",
+          "remote": "Not being able to use it from home or other sites is a problem",
+          "audit": "You are asked to keep records of who saw or changed what, and to manage permissions",
+          "shared_stability": "Several people use a file in a shared folder or the cloud, and it cannot be shared at once, is slow or breaks",
+          "data_limit": "The data is close to the file size limit (about 2 GB), or the file is split to stay under it",
+          "many_tools": "There are 6 or more tools, which are easier to manage when brought together",
+          "simple_features": "It is mainly entry, search and printing, without VBA automation or links to other systems, software or devices",
+          "few_screens": "It has fewer than 20 screens and reports, so an off-the-shelf service may be enough",
+          "light_vba": "There is little VBA, so few business rules are built in",
+          "office_update": "What you need now is to make it work with Microsoft 365, 64-bit Office or new PCs",
+          "support_end": "Your Office is out of support or will be within a year. One way is to switch to a supported Office and fix the tool to work on it",
+          "few_users": "10 or fewer people use it, a number that works well with Access as it is",
+          "rules_in_tool": "It has custom work such as VBA or links to other systems, software or devices, so replacing it is likely to change how people work",
+          "keep_current": "None of your answers, such as sharing among many people or use from outside, calls for moving it to the web",
+          "check_unknowns": "Some answers were \"I don't know\", so we decide after checking the tool in the consultation"
+        }
       },
       "nowHere": "You are here: the free web check is complete. Next is a quick assessment (asset inventory) by our staff.",
       "nextStepLabel": "NEXT STEP",
@@ -2813,13 +2860,13 @@
   "axAccess": {
     "meta": {
       "title": "Access business tools: fix them or move them to the web? | Free web check (Access) | Software Agency System Co., Ltd.",
-      "description": "Fix your Access tool and keep using it, or move it to the web? Choose the version, VBA, number of users and more, and see how hard and how urgent the migration is. Whether to fix, move or replace it, we compare together based on the result. Free, multiple choice, about 3 minutes."
+      "description": "Fix your Access tool and keep using it, or move it to the web? Choose the version, VBA, number of users and more, and see a guide to the way forward that suits your tool. We tell you which fits: fixing it, moving it to the web, or replacing it. Free, multiple choice, about 3 minutes."
     },
     "floatingCta": "Start the free web check (Access)",
     "hero": {
       "eyebrow": "For teams using Microsoft Access business tools",
       "title": "Your Access tool: fix it and keep using it, or move it to the web?",
-      "lead": "Choose the version, VBA, number of users and more, and see how hard and how urgent the migration is. Whether to fix it, move it to the web or replace it, we compare together based on the result.",
+      "lead": "Choose the version, VBA, number of users and more, and see a guide to the way forward that suits your tool. We tell you which fits: fixing it and keeping it, moving it to the web, or replacing it.",
       "ctaCaption": "Free, multiple choice, about 3 minutes",
       "cta": "Start the free web check (Access)",
       "consult": "Book a 30-minute online consultation",
@@ -2879,7 +2926,7 @@
     },
     "paths": {
       "title": "There are three ways forward",
-      "lead": "Which one fits depends on how the tool is used. First check the state of your tool with the free web check, and we decide together in a consultation.",
+      "lead": "Which one fits depends on how the tool is used. The free web check shows which one fits as a guide, and we decide together in a consultation.",
       "fitLabel": "Fits when",
       "items": {
         "fix": {
@@ -2912,7 +2959,7 @@
         }
       },
       "fixNote": "We also take on \"fix it and keep using it\" work, such as 64-bit support, ourselves.",
-      "bridgeCta": "First check the state of your tool with the free web check"
+      "bridgeCta": "Check which one fits with the free web check"
     },
     "steps": {
       "title": "From consultation to completion",
@@ -2991,7 +3038,7 @@
     "diagnosis": {
       "eyebrow": "FREE CHECK",
       "title": "Free web check (Access)",
-      "lead": "Just answer multiple-choice questions about your Access tool. In about 3 minutes you see how hard and how urgent the migration is, and which issue to tackle first. Enter your company name and contact details at the end and the result is shown right away (it can be printed or saved as a PDF). If you wish, you can go straight on to a 30-minute online consultation. No pushy sales."
+      "lead": "Just answer multiple-choice questions about your Access tool. In about 3 minutes you see a guide to the recommended way forward (fix, move to the web or replace), how hard and how urgent the migration is, and which issue to tackle first. Enter your company name and contact details at the end and the result is shown right away (it can be printed or saved as a PDF). If you wish, you can go straight on to a 30-minute online consultation. No pushy sales."
     },
     "finalCta": {
       "title": "Start by checking the Access tool you use.",
@@ -3547,6 +3594,7 @@
       "targetSystem": "Target system",
       "difficulty": "Migration difficulty",
       "urgency": "Urgency",
+      "accessPath": "Way forward (guide)",
       "primaryChallenge": "Main challenge",
       "challenges": "Selected challenges",
       "department": "Department",
@@ -4228,7 +4276,11 @@
       "other_vb": "Visual Basic",
       "other_webperformer": "WebPerformer",
       "other_host": "COBOL, batch jobs and reports",
-      "other_inventory": "Inventory of the current setup"
+      "other_inventory": "Inventory of the current setup",
+      "access_64bit": "64-bit support and references",
+      "access_backup": "Backups and a record of the fixes",
+      "access_replace_fit": "Whether an off-the-shelf service is enough",
+      "access_data_export": "How to move the data"
     },
     "report": {
       "progressTitle": "Phased delivery progress",

@@ -9,6 +9,7 @@ import { validateAnswers } from '../engine';
 import { upsertLeadFromSubmission } from '../lead-upsert';
 import { type Tracking, compactTracking, inferInflowSource, trackingSchema } from '../tracking';
 import type { AnswerValidationIssue, DiagnosticAnswers } from '../types';
+import type { AxAccessPath } from './access-path';
 import type { AxTargetCompany } from './company-size';
 import { AX_MIGRATION_CONFIG } from './config';
 import { PHONE_PATTERN, normalizePhone } from './contact';
@@ -89,6 +90,8 @@ export interface OtherSystemEntry {
   urgency: AxMigrationResult['urgency']['level'];
   primaryChallenge: AxMigrationResult['challenges']['primary'];
   needsHearing: boolean;
+  /** Access only (#303): the recommended way forward */
+  accessPath?: AxAccessPath;
   detailsAnsweredAt?: string;
 }
 
@@ -201,6 +204,11 @@ async function loadTargetCompany(
   return parsed.success ? parsed.data : null;
 }
 
+/** The recommended Access path for the lead summary (#303); nothing for other systems */
+function accessPathSummary(result: AxMigrationResult): { accessPath?: AxAccessPath } {
+  return result.accessPath ? { accessPath: result.accessPath.path } : {};
+}
+
 /** Summary stored on a lead created by the diagnosis */
 function buildLeadSummary(
   submissionId: string,
@@ -224,6 +232,7 @@ function buildLeadSummary(
     needsHearing: result.needsHearing,
     consultationRequested: input.consultationRequested,
     platform: result.platform,
+    ...accessPathSummary(result),
     department: input.contact.department ?? null,
   };
 }
@@ -408,6 +417,7 @@ async function recordOtherSystem(
     urgency: result.urgency.level,
     primaryChallenge: result.challenges.primary,
     needsHearing: result.needsHearing,
+    ...accessPathSummary(result),
   };
   await tx
     .update(leads)
@@ -640,6 +650,7 @@ export async function addAxMigrationDetails(
         difficulty: result.difficulty.level,
         urgency: result.urgency.level,
         needsHearing: result.needsHearing,
+        ...accessPathSummary(result),
         detailsAnsweredAt: now.toISOString(),
         ...(lead ? withLeadMql(axSummaryOf(lead.responses), toLeadMql(result.mql)) : {}),
       };
@@ -674,6 +685,7 @@ export async function addAxMigrationDetails(
           difficulty: result.difficulty.level,
           urgency: result.urgency.level,
           needsHearing: result.needsHearing,
+          ...accessPathSummary(result),
           detailsAnsweredAt: now.toISOString(),
         });
       if (lead && updated) {

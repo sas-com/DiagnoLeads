@@ -651,13 +651,48 @@ describe('evaluateAxMigration', () => {
       ]);
     });
 
-    it('lists Access-specific work', () => {
+    it('lists Access-specific work that fits the recommended path (#303)', () => {
+      // Fix: no web system suggested
       expect(evaluate(accessAnswers).checkpoints).toEqual([
         'access_no_maintainer',
         'access_support',
-        'access_vba',
-        'access_excel',
+        'access_64bit',
+        'access_backup',
       ]);
+      // Web: the web system, then the VBA and Excel work to rebuild
+      expect(
+        evaluate({
+          ...accessAnswers,
+          access_maintainer: 'team',
+          access_version: ['m365'],
+          access_challenges: ['remote'],
+        }).checkpoints
+      ).toEqual(['access_web', 'access_vba', 'access_excel']);
+      // Replace: whether a service covers the tool, and how to move the data
+      expect(
+        evaluate({
+          ...accessAnswers,
+          access_maintainer: 'team',
+          access_version: ['m365'],
+          access_screens_forms: 'lt20',
+          access_features: ['excel'],
+        }).checkpoints
+      ).toEqual(['access_replace_fit', 'access_data_export']);
+    });
+
+    it('no longer suggests a web system on every Access result (#303)', () => {
+      expect(evaluate(accessAnswers).checkpoints).not.toContain('access_web');
+    });
+
+    it('keeps the path of an Access result in the public result, and null elsewhere (#303)', () => {
+      expect(toPublicResult(evaluate(accessAnswers)).accessPath).toEqual({
+        path: 'fix',
+        reasons: ['support_end', 'rules_in_tool'],
+      });
+      expect(toPublicResult(evaluate(as400Answers)).accessPath).toBeNull();
+      // Stored before #303
+      const { accessPath: _omitted, ...stored } = evaluate(accessAnswers);
+      expect(toPublicResult(stored as ReturnType<typeof evaluate>).accessPath).toBeNull();
     });
 
     it('starts many Access tools with an inventory', () => {
@@ -755,6 +790,7 @@ describe('evaluateAxMigration', () => {
   it('shows the respondent no lead score or sales judgement', () => {
     const result = toPublicResult(evaluate(as400Answers));
     expect(Object.keys(result).sort()).toEqual([
+      'accessPath',
       'challenges',
       'checkpoints',
       'difficulty',

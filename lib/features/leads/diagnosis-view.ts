@@ -8,6 +8,10 @@
  */
 
 import {
+  type AxAccessPath,
+  readAccessPath,
+} from '@/lib/features/diagnostics/ax-migration/access-path';
+import {
   AX_MQL_REQUIRED,
   AX_MQL_SIGNALS,
   type AxMqlLevel,
@@ -34,6 +38,8 @@ export interface AxSystemView {
   urgency: AxLevel | null;
   primaryChallenge: string | null;
   needsHearing: boolean;
+  /** Access only (#303): the recommended way forward; null before #303 and for other systems */
+  accessPath: AxAccessPath | null;
   /** ISO date time */
   diagnosedAt: string | null;
   detailsAnsweredAt: string | null;
@@ -128,6 +134,7 @@ const AX_SYSTEM_KEYS = [
   'urgency',
   'primaryChallenge',
   'needsHearing',
+  'accessPath',
   'diagnosedAt',
   'detailsAnsweredAt',
 ] as const;
@@ -211,6 +218,7 @@ function readSystem(source: Record<string, unknown>): AxSystemView {
     urgency: levelOrNull(source.urgency),
     primaryChallenge: stringOrNull(source.primaryChallenge),
     needsHearing: source.needsHearing === true,
+    accessPath: readAccessPath(source.accessPath),
     diagnosedAt: isoOrNull(source.diagnosedAt),
     detailsAnsweredAt: isoOrNull(source.detailsAnsweredAt),
   };

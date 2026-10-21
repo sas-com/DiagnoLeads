@@ -6,7 +6,7 @@ import { AxDiagnosisResult } from '@/components/features/ax-diagnosis/ax-diagnos
 import { axMigrationDefinition } from '@/lib/features/diagnostics/ax-migration/definition';
 import { evaluateAxMigration, toPublicResult } from '@/lib/features/diagnostics/ax-migration/evaluate';
 import messages from '@/locales/ja/common.json';
-import { as400Answers } from '@/test/fixtures/ax-migration';
+import { accessAnswers, as400Answers } from '@/test/fixtures/ax-migration';
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
@@ -684,6 +684,86 @@ describe('AxDiagnosisResult', () => {
     renderResult({ offers });
     await user.click(screen.getByRole('button', { name: '資料を受け取る' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('受け付けられませんでした');
+  });
+
+  describe('おすすめの進め方（目安） for Access (#303)', () => {
+    const accessResult = (answers = {}) =>
+      toPublicResult(
+        evaluateAxMigration(
+          { ...accessAnswers, ...answers },
+          undefined,
+          new Date('2026-10-21T09:00:00+09:00')
+        )
+      );
+    const renderAccess = (answers = {}, overrides = {}) =>
+      renderResult({
+        platform: 'access',
+        answers: { ...accessAnswers, ...answers },
+        result: accessResult(answers),
+        ...overrides,
+      });
+
+    it('highlights the recommended path with its reasons and shows the other two briefly', () => {
+      renderAccess();
+      const section = screen.getByTestId('ax-result-access-path');
+      expect(section).toHaveAttribute('data-path', 'fix');
+      expect(within(section).getByRole('heading', { name: 'おすすめの進め方（目安）' })).toBeInTheDocument();
+      const recommended = within(screen.getByTestId('ax-access-path-recommended'));
+      expect(recommended.getByText('直して使い続ける')).toBeInTheDocument();
+      expect(recommended.getByText(/サポートが終了済み/)).toBeInTheDocument();
+      const others = within(screen.getByTestId('ax-access-path-others'));
+      expect(others.getAllByRole('listitem')).toHaveLength(2);
+      expect(others.getByText('Web に移す')).toBeInTheDocument();
+      expect(others.getByText('既製サービスに置き換える')).toBeInTheDocument();
+      // A guide, decided together in the consultation; never "the web makes it safe"
+      expect(section).toHaveTextContent('ご相談のなかで');
+      expect(section).not.toHaveTextContent('安全');
+      expect(section).toHaveTextContent('下の追加の質問');
+    });
+
+    it('checks what fits the path instead of always suggesting a web system', () => {
+      renderAccess();
+      const checkpoints = screen.getByTestId('ax-result-checkpoints');
+      expect(checkpoints).toHaveTextContent('64bit 版の Office で動くか');
+      expect(checkpoints).not.toHaveTextContent('ブラウザから使えるWebシステムにし');
+      cleanup();
+
+      renderAccess({ access_challenges: ['audit'] });
+      expect(screen.getByTestId('ax-result-access-path')).toHaveAttribute('data-path', 'web');
+      expect(screen.getByTestId('ax-result-checkpoints')).toHaveTextContent('ブラウザから使えるWebシステムにし');
+    });
+
+    it.each([
+      ['fix', {}],
+      ['web', { access_challenges: ['remote'] }],
+      ['replace', { access_features: ['none'], access_screens_forms: 'lt20' }],
+    ])('keeps the next step for the %s path', (path, answers) => {
+      renderAccess(answers);
+      expect(screen.getByTestId('ax-result-access-path')).toHaveAttribute('data-path', path);
+      expect(screen.getAllByRole('button', { name: /無料の個別相談を申し込む/ })).toHaveLength(2);
+    });
+
+    it('updates the path after the follow-up questions and drops the hint', async () => {
+      fetchMock.mockResolvedValue(
+        jsonResponse(200, { result: accessResult({ access_users: '11_30' }) })
+      );
+      const user = userEvent.setup();
+      renderAccess();
+      const followUp = within(screen.getByTestId('ax-follow-up'));
+      await user.click(followUp.getByRole('button', { name: /追加質問/ }));
+      await user.click(followUp.getByRole('group', { name: /ふだん使っている人/ }).querySelectorAll('label')[2]);
+      await user.click(followUp.getByRole('button', { name: '回答して結果を更新する' }));
+      await screen.findByText(/結果を更新しました/);
+      const section = screen.getByTestId('ax-result-access-path');
+      expect(section).toHaveAttribute('data-path', 'web');
+      expect(section).toHaveTextContent('11人以上');
+      expect(section).not.toHaveTextContent('下の追加の質問');
+    });
+
+    it('shows no path for the other systems', () => {
+      renderResult();
+      expect(screen.queryByTestId('ax-result-access-path')).not.toBeInTheDocument();
+    });
   });
 
   it('explains the levels and offers a consultation at the top and the bottom', () => {
