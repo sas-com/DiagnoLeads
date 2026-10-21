@@ -232,4 +232,17 @@ describe('MeetingPreferencesForm', () => {
     await user.click(screen.getByRole('button', { name: '希望日時を送る' }));
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('日付を確認してください'));
   });
+
+  it('does not ask to retry when the answer cannot take preferences (#270)', async () => {
+    const user = userEvent.setup();
+    answer(200, { ok: true, preferences: 'unavailable' });
+    renderForm();
+    await pickDate(user, 1, 20);
+    await user.click(screen.getByRole('button', { name: '希望日時を送る' }));
+    await waitFor(() =>
+      expect(screen.getByText(/担当者からご連絡する際にお伺いします/)).toBeInTheDocument()
+    );
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '希望日時を送る' })).not.toBeInTheDocument();
+  });
 });

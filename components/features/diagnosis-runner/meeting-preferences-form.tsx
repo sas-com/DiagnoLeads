@@ -58,7 +58,7 @@ const CALENDAR_CLASSES = {
   day_today: 'border border-ax-teal-dark font-semibold',
 };
 
-type Status = 'idle' | 'sending' | 'saved' | 'confirmed' | 'invalid' | 'failed';
+type Status = 'idle' | 'sending' | 'saved' | 'confirmed' | 'unavailable' | 'invalid' | 'failed';
 
 interface Row {
   date: string;
@@ -110,12 +110,16 @@ export function MeetingPreferencesForm({
   const [status, setStatus] = useState<Status>('idle');
   const firstDateRef = useRef<HTMLButtonElement | null>(null);
 
-  if (status === 'saved' || status === 'confirmed') {
+  if (status === 'saved' || status === 'confirmed' || status === 'unavailable') {
     return (
       <output className="flex items-start gap-2 rounded-xl bg-white p-4 text-ax-ink">
         <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-ax-teal-dark" aria-hidden="true" />
         <span className="text-sm font-bold">
-          {status === 'saved' ? t('saved') : t('alreadyConfirmed')}
+          {status === 'saved'
+            ? t('saved')
+            : status === 'confirmed'
+              ? t('alreadyConfirmed')
+              : t('unavailable')}
         </span>
       </output>
     );
@@ -162,6 +166,9 @@ export function MeetingPreferencesForm({
         onSaved?.();
       } else if (body.preferences === 'confirmed') {
         setStatus('confirmed');
+      } else if (body.preferences === 'unavailable') {
+        // Not saved for this answer (no verified lead, #233); sending again would not change that
+        setStatus('unavailable');
       } else {
         setStatus(body.preferences === 'out_of_range' ? 'invalid' : 'failed');
       }

@@ -3767,6 +3767,7 @@
     "emailNote": "The person in charge will set the date and let you know by email.",
     "saved": "Thank you. We will pick a date and confirm it by email.",
     "alreadyConfirmed": "The date is already set. Please check the email from the person in charge.",
+    "unavailable": "We will ask about your preferred dates when we contact you.",
     "invalid": "Please check the dates (from tomorrow up to 60 days ahead).",
     "failed": "Could not send it. Please try again later."
   },
