@@ -43,9 +43,10 @@ export const meetingRequestsRouter = router({
       organizationId: ctx.organization.id,
       userId: ctx.user.id,
     });
-    if (!outcome.ok) {
+    if (!outcome.ok && outcome.reason === 'not_found') {
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Meeting request not found' });
     }
+    // 'stale' goes back to the card: the preferences changed while sales were picking (#274)
     return outcome;
   }),
 });

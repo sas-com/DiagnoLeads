@@ -168,6 +168,7 @@ describe('texts', () => {
     const notice = buildPreferencesNotice({
       company: '架空商事',
       leadName: '山田 花子',
+      identityVerified: true,
       preferences: {
         candidates: [
           { date: '2026-10-21', time: '10:00' },
@@ -185,6 +186,7 @@ describe('texts', () => {
     const notice = buildPreferencesNotice({
       company: '架空商事',
       leadName: null,
+      identityVerified: true,
       preferences: {
         candidates: [{ date: '2026-10-20', time: '14:00' }],
         meetingFormat: null,
@@ -196,6 +198,29 @@ describe('texts', () => {
     // Line breaks fold into one line; the note is cut at 100 characters
     expect(notice.message).toContain(`ご相談内容：「移行の 順番を${'あ'.repeat(93)}…」。`);
     expect(notice.message.endsWith('リードを開いて、候補から日程を確定してください。')).toBe(true);
+  });
+
+  it('marks the preferences of an unverified answer and asks sales to check first (#274)', () => {
+    const input = {
+      company: '架空商事',
+      leadName: '山田 花子',
+      preferences: {
+        candidates: [{ date: '2026-10-20', time: '14:00' }],
+        meetingFormat: 'online' as const,
+      },
+    };
+    const verified = buildPreferencesNotice({ ...input, identityVerified: true });
+    expect(verified).toEqual({
+      title: '【希望日時】架空商事 山田 花子 様 から初回商談の希望日時が届きました',
+      message:
+        '希望：10月20日（火）14:00（オンライン）。リードを開いて、候補から日程を確定してください。',
+    });
+    const unverified = buildPreferencesNotice({ ...input, identityVerified: false });
+    expect(unverified).toEqual({
+      title: '【希望日時】（本人確認なし）架空商事 山田 花子 様 から初回商談の希望日時が届きました',
+      message:
+        '希望：10月20日（火）14:00（オンライン）。既存のリードとメールアドレスだけが一致した回答のため、確定する前にご本人に確認してください。リードを開いて、候補から日程を確定してください。',
+    });
   });
 
   it('writes the confirmation with the date, the format and who is in charge', () => {

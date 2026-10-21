@@ -116,6 +116,11 @@ export const confirmMeetingSchema = leadScopeSchema.extend({
     .int()
     .min(0)
     .max(MAX_MEETING_CANDIDATES - 1),
+  /**
+   * The chosen candidate as sales saw it: the respondent may have replaced the preferences since
+   * (#274), and then nothing is confirmed
+   */
+  candidate: meetingCandidateSchema,
   /** Send the confirmation email to the respondent */
   sendEmail: z.boolean().default(true),
 });

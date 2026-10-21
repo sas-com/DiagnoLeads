@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import type { MeetingCandidate } from '@/lib/features/meeting-requests/types/schemas';
 import { trpc } from '@/lib/trpc/client';
-import { CalendarClock, Loader2 } from 'lucide-react';
+import { AlertTriangle, CalendarClock, Loader2 } from 'lucide-react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { useId, useState } from 'react';
 import { toast } from 'sonner';
@@ -26,6 +26,8 @@ const sameCandidate = (a: MeetingCandidate, b: MeetingCandidate) =>
  * talk about (#244; the note is shown as text, never as HTML): pick one and confirm it.
  * The confirmed date becomes the lead's next meeting and a next action, and the respondent gets
  * a confirmation email when asked. Shown only when preferences were sent.
+ * Preferences from an unverified answer (matched an existing lead by email only) carry a warning,
+ * and the confirmation email starts unticked (#274).
  */
 export function MeetingRequestCard({ organizationId, leadId }: MeetingRequestCardProps) {
   const t = useTranslations('meetingRequest');
@@ -38,12 +40,18 @@ export function MeetingRequestCard({ organizationId, leadId }: MeetingRequestCar
   );
   const [picked, setPicked] = useState<string>('');
   const [changing, setChanging] = useState(false);
-  const [sendEmail, setSendEmail] = useState(true);
+  // Null until changed: the default follows the request once it has loaded (#274)
+  const [sendEmailChoice, setSendEmail] = useState<boolean | null>(null);
   const confirm = trpc.meetingRequests.confirm.useMutation({
     onSuccess: (outcome) => {
-      setChanging(false);
       setPicked('');
       utils.meetingRequests.get.invalidate({ organizationId, leadId });
+      // The respondent replaced the preferences while sales were picking: show the new ones (#274)
+      if (!outcome.ok) {
+        toast.warning(t('stale'));
+        return;
+      }
+      setChanging(false);
       utils.leadFollowUp.tasks.invalidate();
       const emailMessage = t(`emailResult.${outcome.email}`);
       if (outcome.email === 'failed') toast.warning(`${t('confirmDone')}。${emailMessage}`);
@@ -69,6 +77,10 @@ export function MeetingRequestCard({ organizationId, leadId }: MeetingRequestCar
   const request = data?.request;
   const picking = !!request && (!request.confirmed || changing) && !!data?.canEdit;
   const emailAvailable = !!data?.emailConfigured;
+  const unverified = request?.identityVerified === false;
+  const sendEmail = sendEmailChoice ?? !unverified;
+  const warningId = `${id}-unverified`;
+  const describedBy = unverified ? warningId : undefined;
 
   return (
     <Card className="p-5">
@@ -76,12 +88,31 @@ export function MeetingRequestCard({ organizationId, leadId }: MeetingRequestCar
         <CalendarClock className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         <h2 className="text-sm font-semibold text-foreground">{t('title')}</h2>
         {request?.confirmed && <Badge color="emerald">{t('confirmedBadge')}</Badge>}
+        {unverified && <Badge color="amber">{t('unverifiedBadge')}</Badge>}
       </div>
 
       {!request || !data ? (
         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" />
       ) : (
         <div className="space-y-4">
+          {unverified && (
+            <div
+              id={warningId}
+              className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-900/50 dark:bg-amber-900/20"
+            >
+              <AlertTriangle
+                className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300"
+                aria-hidden="true"
+              />
+              <div>
+                <p className="font-medium text-amber-900 dark:text-amber-200">
+                  {t('unverifiedTitle')}
+                </p>
+                <p className="mt-1 text-amber-800 dark:text-amber-300">{t('unverifiedBody')}</p>
+              </div>
+            </div>
+          )}
+
           <p className="text-xs text-muted-foreground">
             {t('requestedAt', {
               date: format.dateTime(new Date(request.updatedAt), { dateStyle: 'medium' }),
@@ -194,6 +225,7 @@ export function MeetingRequestCard({ organizationId, leadId }: MeetingRequestCar
                   <Checkbox
                     id={`${id}-email`}
                     checked={sendEmail}
+                    aria-describedby={describedBy}
                     onCheckedChange={(checked) => setSendEmail(checked === true)}
                   />
                   <Label htmlFor={`${id}-email`} className="font-normal">
@@ -208,14 +240,19 @@ export function MeetingRequestCard({ organizationId, leadId }: MeetingRequestCar
                 <Button
                   size="sm"
                   disabled={picked === '' || confirm.isPending}
-                  onClick={() =>
+                  aria-describedby={describedBy}
+                  onClick={() => {
+                    const candidate = request.candidates[Number(picked)];
+                    if (!candidate) return;
                     confirm.mutate({
                       organizationId,
                       leadId,
                       candidateIndex: Number(picked),
+                      // Checked on the server against the current preferences (#274)
+                      candidate,
                       sendEmail: emailAvailable && sendEmail,
-                    })
-                  }
+                    });
+                  }}
                 >
                   {confirm.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
                   {t('confirm')}
