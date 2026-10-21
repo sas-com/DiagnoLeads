@@ -8,6 +8,9 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./test/setup.ts'],
+    // Long form tests type through several steps with user-event. They take ~5s when the whole
+    // suite runs in parallel and timed out at the default 5s; failing hangs still surface (#281)
+    testTimeout: 20_000,
     include: ['test/**/*.{test,spec}.{ts,tsx}'],
     exclude: ['test/e2e/**', 'node_modules/**', '.next/**'],
     coverage: {
