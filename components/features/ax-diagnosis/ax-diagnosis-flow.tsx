@@ -47,6 +47,7 @@ import { PHONE_PATTERN, normalizePhone } from '@/lib/features/diagnostics/ax-mig
 import { axMigrationDefinition } from '@/lib/features/diagnostics/ax-migration/definition';
 import type { AxMigrationPublicResult } from '@/lib/features/diagnostics/ax-migration/evaluate';
 import { pruneAnswers, shownSections } from '@/lib/features/diagnostics/engine';
+import type { AxEntryPage } from '@/lib/features/diagnostics/entry-pages';
 import { TURNSTILE_ACTION } from '@/lib/features/diagnostics/turnstile-action';
 import type {
   DiagnosticAnswers,
@@ -122,7 +123,18 @@ interface AxDiagnosisFlowProps {
   turnstileSiteKey?: string;
   /** Test mode: email domains accepted on the contact step (empty when test mode is off) */
   allowedEmailDomains?: string[];
+  /**
+   * Migration path chosen by the page (e.g. 'access' on the Access landing page): the
+   * diagnosis starts at that path's first questions. The back button still leads to the choice.
+   */
+  initialPlatform?: string;
+  /** Page the diagnosis is started from, kept with the submission (tracking.entry) */
+  entry?: AxEntryPage;
 }
+
+/** A path chosen by the page, if it is one of the options */
+const presetPlatformOf = (value: string | undefined) =>
+  platformQuestion.options.some((option) => option.value === value) ? value : undefined;
 
 const questionById = (id: string) =>
   definition.questions.find((q) => q.id === id) as DiagnosticQuestion;
@@ -141,7 +153,10 @@ function AxDiagnosisSteps({
   embedded: embeddedProp = false,
   turnstileSiteKey,
   allowedEmailDomains = [],
+  initialPlatform,
+  entry,
 }: AxDiagnosisFlowProps) {
+  const presetPlatform = presetPlatformOf(initialPlatform);
   const t = useTranslations('axDiagnosis');
   const testModeError = (domains: string[]) =>
     t('errors.testModeEmail', { domains: formatEmailDomains(domains, locale) });
@@ -157,8 +172,18 @@ function AxDiagnosisSteps({
   /** A result that replaces the landing page is the page's title (h1), as on /ax-diagnosis */
   const embedded =
     embeddedProp && !(stage === 'result' && landingView && !landingView.landingRequested);
-  const [step, setStep] = useState(0);
-  const [answers, setAnswers] = useState<DiagnosticAnswers>({});
+  /**
+   * First step of this run: 1 when the page chose the path (the platform question is skipped),
+   * 0 once the respondent goes back to the choice or starts again. Its history entry is the
+   * page's own, so the step entries of the run start there.
+   */
+  const [startStep, setStartStep] = useState(presetPlatform ? 1 : 0);
+  const [step, setStep] = useState(presetPlatform ? 1 : 0);
+  const [answers, setAnswers] = useState<DiagnosticAnswers>(() => {
+    const initial: DiagnosticAnswers = {};
+    if (presetPlatform) initial[PLATFORM_QUESTION_ID] = presetPlatform;
+    return initial;
+  });
   const [pendingRestore, setPendingRestore] = useState<SavedProgress<DiagnosticAnswers> | null>(
     null
   );
@@ -199,6 +224,8 @@ function AxDiagnosisSteps({
   const topRef = useRef<HTMLDivElement>(null);
   const stepHeadingRef = useRef<HTMLHeadingElement>(null);
   const hasInteracted = useRef(false);
+  /** The funnel's start event: sent when the path is chosen, or on the first move of a preset one */
+  const startTracked = useRef(false);
   const answersRef = useRef(answers);
   answersRef.current = answers;
 
@@ -235,16 +262,21 @@ function AxDiagnosisSteps({
   );
 
   useEffect(() => {
-    tracking.current = readTrackingParams();
+    tracking.current = { ...readTrackingParams(), ...(entry ? { entry } : {}) };
     const saved = progressStore.load();
-    if (saved) setPendingRestore(saved);
+    // A page that chose the path offers to continue only a diagnosis of that path
+    if (saved && (!presetPlatform || saved.answers[PLATFORM_QUESTION_ID] === presetPlatform)) {
+      setPendingRestore(saved);
+    }
     // The browser's back button returns to the previous step instead of leaving the page
-    history.stamp(0);
-  }, [history]);
+    history.stamp(presetPlatform ? 1 : 0);
+  }, [history, entry, presetPlatform]);
 
+  /** Only the path chosen by the page: nothing to keep, and a saved diagnosis is not replaced */
+  const onlyPreset = startStep > 0 && Object.keys(answers).length <= 1;
   // Keep the answers (not the contact details) so the respondent can continue later
   useProgressAutosave(progressStore, {
-    enabled: stage === 'questions' && !pendingRestore,
+    enabled: stage === 'questions' && !pendingRestore && !onlyPreset,
     step,
     answers,
   });
@@ -260,6 +292,10 @@ function AxDiagnosisSteps({
   /** Forward moves add a history entry; only they count as progress in the funnel */
   const goForward = (next: number) => {
     showStep(next, true);
+    if (platform && !startTracked.current) {
+      startTracked.current = true;
+      trackAxEvent('ax_diagnosis_start', { platform });
+    }
     if (platform) trackAxEvent('ax_diagnosis_step', { platform, step: next + 1 });
   };
 
@@ -268,7 +304,10 @@ function AxDiagnosisSteps({
    * Falls back to an in-place move when the current entry is not a step of this diagnosis.
    */
   const goBackTo = (target: number, errorsThere?: Record<string, string>) => {
-    if (history.back(target, step, errorsThere)) return;
+    // Steps before the run's first entry have no entry of their own: move in place
+    if (target >= startStep && history.back(target, step, errorsThere)) return;
+    // Back at the path choice on the page's entry: the run now starts there, as usual
+    if (target < startStep) setStartStep(0);
     showStep(target, false);
     history.stamp(target);
     if (errorsThere) setErrors(errorsThere);
@@ -278,11 +317,12 @@ function AxDiagnosisSteps({
     if (!pendingRestore) return;
     setAnswers(pendingRestore.answers);
     setPendingRestore(null);
+    startTracked.current = true;
     const maxStep = shownSections(definition, pendingRestore.answers).length;
-    const restored = Math.min(pendingRestore.step, maxStep);
+    const restored = Math.max(startStep, Math.min(pendingRestore.step, maxStep));
     // One entry per step, so going back walks through the restored steps
-    for (let i = 1; i < restored; i++) history.push(i);
-    showStep(restored, restored > 0);
+    for (let i = startStep + 1; i < restored; i++) history.push(i);
+    showStep(restored, restored > startStep);
   };
 
   const discardSaved = () => {
@@ -296,6 +336,7 @@ function AxDiagnosisSteps({
     setPendingRestore(null);
     // Answers of a previously chosen path are dropped; shared questions keep their answers
     setAnswers((prev) => pruneAnswers(definition, { ...prev, [PLATFORM_QUESTION_ID]: value }));
+    startTracked.current = true;
     trackAxEvent('ax_diagnosis_start', { platform: value });
     showStep(1, true);
     trackAxEvent('ax_diagnosis_step', { platform: value, step: 2 });
@@ -461,12 +502,15 @@ function AxDiagnosisSteps({
       setResponse(json as SubmissionResponse);
       setStage('result');
       // Rewind this diagnosis' step entries: the browser's back button then leaves the result
-      history.rewind();
+      history.rewind(startStep);
+      const { result } = json as SubmissionResponse;
       trackAxEvent('ax_diagnosis_complete', {
         platform,
-        difficulty: json.result.difficulty.level,
-        urgency: json.result.urgency.level,
-        primary_challenge: json.result.challenges.primary,
+        difficulty: result.difficulty.level,
+        urgency: result.urgency.level,
+        primary_challenge: result.challenges.primary,
+        // Access only: the share of each recommended path (#303)
+        ...(result.accessPath ? { access_path: result.accessPath.path } : {}),
         consultation_requested: consultation,
       });
       if (consultation) trackAxEvent('ax_consultation_request', { source: 'form', platform });
@@ -482,6 +526,9 @@ function AxDiagnosisSteps({
   /** Diagnose another system: keep the contact details, start again from the first question */
   const diagnoseAnother = () => {
     history.restart();
+    // Another system may be on another path: start from the path choice
+    setStartStep(0);
+    startTracked.current = false;
     progressStore.clear();
     setAnswers({});
     setResponse(null);
@@ -534,17 +581,18 @@ function AxDiagnosisSteps({
         </div>
       )}
       {step > 0 && !embedded && <h1 className="sr-only">{t('meta.title')}</h1>}
-      {step === 0 && <IntroPoints />}
+      {step === startStep && <IntroPoints />}
 
-      {pendingRestore && step === 0 && (
+      {pendingRestore && step === startStep && (
         <RestorePrompt onContinue={resume} onStartOver={discardSaved} />
       )}
 
       <StepProgress
         headingLevel={embedded ? 'h3' : 'h2'}
         headingRef={stepHeadingRef}
-        step={step}
-        total={TOTAL_STEPS}
+        // Counted from the run's first step (a path chosen by the page is not a step)
+        step={step - startStep}
+        total={TOTAL_STEPS - startStep}
         title={stepTitle}
       />
 

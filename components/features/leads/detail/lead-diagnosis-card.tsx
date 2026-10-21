@@ -44,6 +44,8 @@ function useAxLabels() {
     platform: (value: string) => label(tAx, `platforms.${value}`, value),
     targetSystem: (value: string) => label(tPipeline, `targetSystem.${value}`, value),
     level: (value: string) => label(tAx, `result.levels.${value}`, value),
+    /** Recommended Access path (#303), as the result screen names it */
+    accessPath: (value: string) => label(tAx, `result.accessPath.paths.${value}.title`, value),
     challenge: (value: string | null) =>
       value ? label(tAx, `result.challenges.${value}.title`, value) : t('noPrimaryChallenge'),
     /** 適合 / 関心あり（MQL） and why, in one line (#139) */
@@ -127,6 +129,7 @@ export function LeadDiagnosisCard({
       system.platform && labels.platform(system.platform),
       system.difficulty && `${t('difficulty')} ${labels.level(system.difficulty)}`,
       system.urgency && `${t('urgency')} ${labels.level(system.urgency)}`,
+      system.accessPath && `${t('accessPath')} ${labels.accessPath(system.accessPath)}`,
     ]
       .filter(Boolean)
       .join(' · ');
@@ -201,6 +204,15 @@ export function LeadDiagnosisCard({
       rows.push({ key: 'difficulty', label: t('difficulty'), value: labels.level(ax.difficulty) });
     if (ax.urgency)
       rows.push({ key: 'urgency', label: t('urgency'), value: labels.level(ax.urgency) });
+    if (ax.accessPath) {
+      rows.push({
+        key: 'accessPath',
+        label: t('accessPath'),
+        value: (
+          <span data-testid="lead-diagnosis-access-path">{labels.accessPath(ax.accessPath)}</span>
+        ),
+      });
+    }
     rows.push({
       key: 'primaryChallenge',
       label: t('primaryChallenge'),

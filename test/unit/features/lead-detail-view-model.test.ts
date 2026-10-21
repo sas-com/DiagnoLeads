@@ -41,6 +41,8 @@ describe('readLeadDiagnosis', () => {
       urgency: 'high',
       primaryChallenge: 'people',
       needsHearing: false,
+      // Summaries written before #303 have no Access path
+      accessPath: null,
       diagnosedAt: '2026-10-16T01:30:00.000Z',
       detailsAnsweredAt: null,
       challenges: ['people', 'cost'],
@@ -91,6 +93,7 @@ describe('readLeadDiagnosis', () => {
             urgency: 'low',
             primaryChallenge: null,
             needsHearing: true,
+            accessPath: 'replace',
           },
         ],
       },
@@ -104,8 +107,23 @@ describe('readLeadDiagnosis', () => {
         urgency: 'low',
         primaryChallenge: null,
         needsHearing: true,
+        accessPath: 'replace',
       }),
     ]);
+  });
+
+  it('reads the recommended Access path, and keeps an unknown one as other data (#303)', () => {
+    const access = readLeadDiagnosis({
+      axMigration: { ...axSummary, platform: 'access', accessPath: 'web' },
+    });
+    expect(access.ax?.accessPath).toBe('web');
+    expect(access.extra).toEqual([]);
+
+    const unknown = readLeadDiagnosis({
+      axMigration: { ...axSummary, platform: 'access', accessPath: 'rebuild' },
+    });
+    expect(unknown.ax?.accessPath).toBeNull();
+    expect(unknown.extra).toEqual([{ key: 'axMigration.accessPath', value: 'rebuild' }]);
   });
 
   it('treats null, missing and false values as not set', () => {

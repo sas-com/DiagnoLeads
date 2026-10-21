@@ -96,3 +96,27 @@ test.describe('AX migration landing page', () => {
     await context.close();
   });
 });
+
+/**
+ * E2E Test: Access landing page (/ax-migration/access, #296)
+ */
+test.describe('Access landing page', () => {
+  test('shows the page and starts the diagnosis on the Access questions', async ({ page }) => {
+    await page.goto('/ja/ax-migration/access');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+      'その Access、直して使うか、Web に移すか。'
+    );
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
+    await page.getByRole('link', { name: /無料Web診断（Access版）をはじめる/ }).first().click();
+    await expect(page).toHaveURL(/#diagnosis$/);
+    const diagnosis = page.locator('#diagnosis');
+    await expect(diagnosis.getByRole('group', { name: /直せる（変更できる）人/ })).toBeVisible();
+    await expect(diagnosis.getByTestId('platform-as400')).toHaveCount(0);
+  });
+
+  test('is linked from the Access item of the main landing page', async ({ page }) => {
+    await page.goto('/ja/ax-migration');
+    await page.getByRole('link', { name: 'Access の方はこちら' }).click();
+    await expect(page).toHaveURL(/\/ja\/ax-migration\/access$/);
+  });
+});

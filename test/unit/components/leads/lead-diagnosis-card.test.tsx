@@ -170,6 +170,38 @@ describe('LeadDiagnosisCard', () => {
     );
   });
 
+  it('shows the recommended Access path, also for another system (#303)', () => {
+    renderCard({
+      responses: {
+        axMigration: {
+          ...axMigration,
+          platform: 'access',
+          accessPath: 'web',
+          otherSystems: [
+            {
+              submissionId: OTHER_SUBMISSION,
+              platform: 'access',
+              difficulty: 'low',
+              urgency: 'low',
+              primaryChallenge: null,
+              needsHearing: false,
+              accessPath: 'replace',
+            },
+          ],
+        },
+      },
+    });
+    expect(screen.getByTestId('lead-diagnosis-access-path')).toHaveTextContent('Web に移す');
+    expect(value('進め方の目安')).toHaveTextContent('Web に移す');
+    const others = screen.getByText('ほかに診断したシステム').parentElement as HTMLElement;
+    expect(others).toHaveTextContent('進め方の目安 既製サービスに置き換える');
+  });
+
+  it('shows no path for a diagnosis stored before #303', () => {
+    renderCard({ responses: { axMigration: { ...axMigration, platform: 'access' } } });
+    expect(screen.queryByText('進め方の目安', { selector: 'dt' })).not.toBeInTheDocument();
+  });
+
   it('puts unknown keys in a collapsed "other data" list as text', async () => {
     const user = userEvent.setup();
     renderCard({

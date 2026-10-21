@@ -13,16 +13,19 @@ describe('search indexing policy', () => {
 
     expect(robotsFor('/ax-migration')).toEqual(NOINDEX);
     expect(robotsFor('/ax-diagnosis')).toEqual(NOINDEX);
+    expect(robotsFor('/ax-migration/access')).toEqual(NOINDEX);
     expect(sitemap()).toEqual([]);
     expect(robots().sitemap).toBeUndefined();
   });
 
-  it('after launch indexes only the AX landing page and diagnosis', () => {
+  it('after launch indexes only the AX landing pages and diagnosis', () => {
     expect(robotsFor('/ax-migration')).toEqual({ index: true, follow: true });
+    expect(robotsFor('/ax-migration/access')).toEqual({ index: true, follow: true });
     expect(robotsFor('/ax-diagnosis')).toEqual({ index: true, follow: true });
     expect(robotsFor(null)).toEqual(NOINDEX);
     expect(sitemap().map((entry) => new URL(entry.url).pathname)).toEqual([
       '/ja/ax-migration',
+      '/ja/ax-migration/access',
       '/ja/ax-diagnosis',
     ]);
     expect(robots().sitemap).toMatch(/\/sitemap\.xml$/);

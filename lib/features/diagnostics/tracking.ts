@@ -1,11 +1,13 @@
 import { z } from 'zod';
 import type { InflowSource } from '../leads/types/pipeline';
+import { AX_ENTRY_PAGES } from './entry-pages';
 
 /**
  * Tracking parameters captured on the landing page.
  * `ref` is a referral code given to partners / referrers (紹介元).
  * `agency` is the code of a sales agency link (#147); the server looks it up, so a code that is
  * unknown or disabled attributes nothing.
+ * `entry` is the page the diagnosis was started from (#296); a value outside the list is dropped.
  */
 /** Long values are cut instead of rejected so a long UTM never blocks a submission */
 const clipped = (max: number) =>
@@ -25,6 +27,7 @@ export const trackingSchema = z
     agency: clipped(40),
     referrer: clipped(500),
     landingPath: clipped(500),
+    entry: z.enum(AX_ENTRY_PAGES).optional().catch(undefined),
   })
   .default({});
 export type Tracking = z.infer<typeof trackingSchema>;
