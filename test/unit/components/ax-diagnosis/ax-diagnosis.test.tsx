@@ -604,6 +604,19 @@ describe('AxDiagnosisResult', () => {
     ],
   };
 
+  it('does not call a passed deadline close (#288)', () => {
+    const high = { ...publicResult, needsHearing: false, urgency: { ...publicResult.urgency, level: 'high' as const } };
+    const { unmount } = renderResult({
+      result: { ...high, reasons: { ...high.reasons, urgency: ['access_support_ended'] } },
+    });
+    expect(screen.getByText('切り替えの順番を、一緒に整理しませんか')).toBeInTheDocument();
+    expect(screen.queryByText(/期限が迫っています/)).not.toBeInTheDocument();
+    unmount();
+
+    renderResult({ result: { ...high, reasons: { ...high.reasons, urgency: ['maintenance_none'] } } });
+    expect(screen.getByText('期限までの段取りを、一緒に確認しませんか')).toBeInTheDocument();
+  });
+
   it('shows no documents or seminars unless the organization offers them (#153)', () => {
     renderResult();
     expect(screen.queryByTestId('ax-info-offers')).not.toBeInTheDocument();

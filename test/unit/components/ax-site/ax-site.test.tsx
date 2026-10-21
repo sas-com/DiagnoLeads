@@ -96,6 +96,15 @@ describe('AX migration landing page', () => {
     }
   });
 
+  it('states the end of Office support on the Access item, with its date (#288)', async () => {
+    await renderPage();
+    const access = screen.getByRole('heading', { level: 3, name: 'Microsoft Access' }).closest('li') as HTMLElement;
+    expect(within(access).getByText(/2026年10月13日/)).toBeInTheDocument();
+    expect(
+      within(access).getByRole('link', { name: 'お使いの版と進め方の目安を、無料Web診断で確認する' })
+    ).toHaveAttribute('href', '#diagnosis');
+  });
+
   it('follows the brochure: the four challenges, the phases and the reasons', async () => {
     await renderPage();
     expect(
