@@ -31,13 +31,6 @@ class CMSAccessDeniedError extends CMSError {
   }
 }
 
-class CMSOrganizationMismatchError extends CMSError {
-  constructor() {
-    super('Organization mismatch: You do not have access to this content', 'CMS_ORG_MISMATCH', 403);
-    this.name = 'CMSOrganizationMismatchError';
-  }
-}
-
 class CMSValidationError extends CMSError {
   constructor(message: string, details?: unknown) {
     super(message, 'CMS_VALIDATION_ERROR', 400, details);
@@ -122,17 +115,6 @@ describe('CMSAccessDeniedError', () => {
     const error = new CMSAccessDeniedError('You cannot edit this content');
     
     expect(error.message).toBe('You cannot edit this content');
-  });
-});
-
-describe('CMSOrganizationMismatchError', () => {
-  it('should create organization mismatch error', () => {
-    const error = new CMSOrganizationMismatchError();
-    
-    expect(error.message).toBe('Organization mismatch: You do not have access to this content');
-    expect(error.code).toBe('CMS_ORG_MISMATCH');
-    expect(error.statusCode).toBe(403);
-    expect(error.name).toBe('CMSOrganizationMismatchError');
   });
 });
 

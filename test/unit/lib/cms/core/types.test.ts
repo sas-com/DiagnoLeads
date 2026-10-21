@@ -22,12 +22,6 @@ import type {
   MediaAsset,
   BlogPost,
   FAQ,
-  AssessmentTemplate,
-  Industry,
-  AssessmentQuestion,
-  AssessmentOption,
-  ScoringRule,
-  ResultMessage,
   LandingPage,
   StaticPage,
   EmailTemplate,
@@ -279,92 +273,10 @@ describe('FAQ', () => {
   });
 });
 
-describe('AssessmentTemplate', () => {
-  it('should define assessment template', () => {
-    const template: AssessmentTemplate = {
-      id: 'template-1',
-      slug: 'security-assessment',
-      name: { ja: '診断名', en: 'Assessment Name' },
-      description: { ja: '説明', en: 'Description' },
-      industry: 'technology',
-      questions: [],
-      scoringRules: [],
-      resultMessages: [],
-      status: 'published',
-    };
-
-    expect(template.industry).toBe('technology');
-  });
-});
-
-describe('Industry', () => {
-  it('should define valid industries', () => {
-    const industries: Industry[] = [
-      'technology',
-      'finance',
-      'healthcare',
-      'manufacturing',
-      'retail',
-      'other',
-    ];
-
-    expect(industries).toHaveLength(6);
-  });
-});
-
-describe('AssessmentQuestion', () => {
-  it('should define question with options', () => {
-    const question: AssessmentQuestion = {
-      id: 'q-1',
-      text: { ja: '質問', en: 'Question' },
-      type: 'radio',
-      options: [
-        { value: 'a', label: { ja: 'A', en: 'A' }, score: 1 },
-        { value: 'b', label: { ja: 'B', en: 'B' }, score: 2 },
-      ],
-      required: true,
-      order: 1,
-    };
-
-    expect(question.type).toBe('radio');
-    expect(question.options).toHaveLength(2);
-  });
-});
-
-describe('ScoringRule', () => {
-  it('should define scoring rule', () => {
-    const rule: ScoringRule = {
-      minScore: 0,
-      maxScore: 50,
-      label: { ja: '低', en: 'Low' },
-      priority: 'low',
-    };
-
-    expect(rule.priority).toBe('low');
-  });
-});
-
-describe('ResultMessage', () => {
-  it('should define result message', () => {
-    const result: ResultMessage = {
-      scoreRange: { min: 0, max: 50 },
-      title: { ja: 'タイトル', en: 'Title' },
-      message: { ja: 'メッセージ', en: 'Message' },
-      recommendations: [
-        { ja: '推奨1', en: 'Recommendation 1' },
-      ],
-    };
-
-    expect(result.scoreRange.min).toBe(0);
-    expect(result.recommendations).toHaveLength(1);
-  });
-});
-
 describe('LandingPage', () => {
   it('should define landing page', () => {
     const page: LandingPage = {
       id: 'lp-1',
-      organizationId: 'org-1',
       hero: {
         headline: { ja: '見出し', en: 'Headline' },
         subheadline: { ja: 'サブ見出し', en: 'Subheadline' },
@@ -378,7 +290,7 @@ describe('LandingPage', () => {
       status: 'published',
     };
 
-    expect(page.organizationId).toBe('org-1');
+    expect(page.id).toBe('lp-1');
   });
 });
 

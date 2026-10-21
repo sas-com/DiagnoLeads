@@ -4,7 +4,7 @@
  * テスト用およびPayloadCMS未設定時のフォールバックアダプター
  */
 
-import { CMSNotFoundError, CMSOrganizationMismatchError } from '../../core/errors';
+import { CMSNotFoundError } from '../../core/errors';
 import type {
   BulkCreateParams,
   BulkDeleteParams,
@@ -28,7 +28,6 @@ import { PUBLISHABLE_COLLECTIONS } from '../../publishing';
 
 interface MockDocument {
   id: string;
-  organizationId?: string;
   [key: string]: unknown;
 }
 
@@ -61,11 +60,6 @@ export class MockCMSAdapter implements CMSAdapter {
     }
 
     let items = Array.from(collection.values());
-
-    // organizationIdフィルタリング
-    if (params.organizationId) {
-      items = items.filter((item) => item.organizationId === params.organizationId);
-    }
 
     // Published only unless asked otherwise, like the Payload adapter (#140)
     const status =
@@ -116,11 +110,6 @@ export class MockCMSAdapter implements CMSAdapter {
       return { data: null };
     }
 
-    // organizationIdチェック
-    if (params.organizationId && item.organizationId !== params.organizationId) {
-      throw new CMSOrganizationMismatchError();
-    }
-
     return { data: item as T };
   }
 
@@ -145,11 +134,6 @@ export class MockCMSAdapter implements CMSAdapter {
       return { data: null };
     }
 
-    // organizationIdチェック
-    if (params.organizationId && item.organizationId !== params.organizationId) {
-      throw new CMSOrganizationMismatchError();
-    }
-
     return { data: item as T };
   }
 
@@ -167,7 +151,6 @@ export class MockCMSAdapter implements CMSAdapter {
     const newDoc: MockDocument = {
       id,
       ...params.data,
-      organizationId: params.organizationId,
       createdAt: now,
       updatedAt: now,
     };
@@ -188,11 +171,6 @@ export class MockCMSAdapter implements CMSAdapter {
     const existing = collection.get(params.id);
     if (!existing) {
       throw new CMSNotFoundError(params.collection, params.id);
-    }
-
-    // organizationIdチェック
-    if (params.organizationId && existing.organizationId !== params.organizationId) {
-      throw new CMSOrganizationMismatchError();
     }
 
     const updatedDoc: MockDocument = {
@@ -220,11 +198,6 @@ export class MockCMSAdapter implements CMSAdapter {
       throw new CMSNotFoundError(params.collection, params.id);
     }
 
-    // organizationIdチェック
-    if (params.organizationId && existing.organizationId !== params.organizationId) {
-      throw new CMSOrganizationMismatchError();
-    }
-
     collection.delete(params.id);
 
     return { data: undefined };
@@ -239,11 +212,6 @@ export class MockCMSAdapter implements CMSAdapter {
     }
 
     let items = Array.from(collection.values());
-
-    // organizationIdフィルタリング
-    if (params.organizationId) {
-      items = items.filter((item) => item.organizationId === params.organizationId);
-    }
 
     // Published only unless asked otherwise, like the Payload adapter (#140)
     if (params.status !== 'all' && PUBLISHABLE_COLLECTIONS[params.collection]) {
@@ -286,7 +254,6 @@ export class MockCMSAdapter implements CMSAdapter {
       const result = await this.create<T>({
         collection: params.collection,
         data,
-        organizationId: params.organizationId,
       });
       results.push(result.data);
     }
@@ -303,7 +270,6 @@ export class MockCMSAdapter implements CMSAdapter {
         collection: params.collection,
         id,
         data,
-        organizationId: params.organizationId,
       });
       results.push(result.data);
     }
@@ -318,7 +284,6 @@ export class MockCMSAdapter implements CMSAdapter {
       await this.delete({
         collection: params.collection,
         id,
-        organizationId: params.organizationId,
       });
     }
 
@@ -337,12 +302,7 @@ export class MockCMSAdapter implements CMSAdapter {
     for (const collectionName of params.collections) {
       const collection = this.data.get(collectionName);
       if (collection) {
-        let items = Array.from(collection.values());
-
-        if (params.organizationId) {
-          items = items.filter((item) => item.organizationId === params.organizationId);
-        }
-
+        const items = Array.from(collection.values());
         data[collectionName] = items.map(({ id, createdAt, updatedAt, ...rest }) => rest);
       }
     }
@@ -368,7 +328,6 @@ export class MockCMSAdapter implements CMSAdapter {
           await this.create({
             collection: collectionName,
             data: item,
-            organizationId: params.organizationId,
           });
           imported++;
         } catch (error) {

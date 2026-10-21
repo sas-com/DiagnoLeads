@@ -145,7 +145,6 @@ export interface BlogPost {
   seo: SEOMetadata;
   tags?: string[];
   category?: string;
-  organizationId?: string;
 }
 
 /**
@@ -158,69 +157,13 @@ export interface FAQ {
   category: string;
   order: number;
   publishedAt: Date;
-  organizationId?: string;
 }
 
 /**
- * 診断テンプレート
- */
-export interface AssessmentTemplate {
-  id: string;
-  slug: string;
-  name: LocalizedString;
-  description: LocalizedString;
-  industry: Industry;
-  questions: AssessmentQuestion[];
-  scoringRules: ScoringRule[];
-  resultMessages: ResultMessage[];
-  publishedAt?: Date;
-  status: ContentStatus;
-  organizationId?: string;
-}
-
-export type Industry =
-  | 'technology'
-  | 'finance'
-  | 'healthcare'
-  | 'manufacturing'
-  | 'retail'
-  | 'other';
-
-export interface AssessmentQuestion {
-  id: string;
-  text: LocalizedString;
-  type: 'radio' | 'checkbox' | 'scale' | 'text';
-  options?: AssessmentOption[];
-  required: boolean;
-  order: number;
-}
-
-export interface AssessmentOption {
-  value: string;
-  label: LocalizedString;
-  score: number;
-}
-
-export interface ScoringRule {
-  minScore: number;
-  maxScore: number;
-  label: LocalizedString;
-  priority: 'low' | 'medium' | 'high' | 'urgent';
-}
-
-export interface ResultMessage {
-  scoreRange: { min: number; max: number };
-  title: LocalizedString;
-  message: LocalizedString;
-  recommendations?: LocalizedString[];
-}
-
-/**
- * ランディングページ（組織カスタマイズ用）
+ * ランディングページ
  */
 export interface LandingPage {
   id: string;
-  organizationId: string;
   hero: {
     headline: LocalizedString;
     subheadline: LocalizedString;
@@ -273,5 +216,4 @@ export interface EmailTemplate {
   subject: LocalizedString;
   body: LocalizedRichText;
   variables: string[];
-  organizationId?: string;
 }

@@ -30,13 +30,6 @@ export class CMSAccessDeniedError extends CMSError {
   }
 }
 
-export class CMSOrganizationMismatchError extends CMSError {
-  constructor() {
-    super('Organization mismatch: You do not have access to this content', 'CMS_ORG_MISMATCH', 403);
-    this.name = 'CMSOrganizationMismatchError';
-  }
-}
-
 export class CMSValidationError extends CMSError {
   constructor(message: string, details?: unknown) {
     super(message, 'CMS_VALIDATION_ERROR', 400, details);

@@ -32,11 +32,6 @@ export type {
   // Content Types
   BlogPost,
   FAQ,
-  AssessmentTemplate,
-  AssessmentQuestion,
-  AssessmentOption,
-  ScoringRule,
-  ResultMessage,
   LandingPage,
   StaticPage,
   EmailTemplate,
@@ -45,7 +40,6 @@ export type {
   SEOMetadata,
   Author,
   MediaAsset,
-  Industry,
 } from './core/types';
 
 // Diagnostic Form Types
@@ -97,7 +91,6 @@ export {
   CMSError,
   CMSNotFoundError,
   CMSAccessDeniedError,
-  CMSOrganizationMismatchError,
   CMSValidationError,
   CMSConnectionError,
   CMSConfigurationError,
@@ -114,12 +107,6 @@ export type { FindBlogPostsOptions, BlogPostsResult } from './repositories/blog.
 
 export { FAQRepository } from './repositories/faq.repository';
 export type { FindFAQsOptions, FAQsResult, FAQsByCategory } from './repositories/faq.repository';
-
-export { AssessmentRepository } from './repositories/assessment.repository';
-export type {
-  FindAssessmentsOptions,
-  AssessmentsResult,
-} from './repositories/assessment.repository';
 
 export { DiagnosticFormRepository } from './repositories/diagnostic-form.repository';
 export type {
@@ -147,20 +134,6 @@ export { MockCMSAdapter } from './adapters/mock/adapter';
 export { PayloadCMSAdapter } from './adapters/payload/adapter';
 
 // =============================================================================
-// Helpers (Multi-tenant & Utilities)
-// =============================================================================
-
-export {
-  getTenantContext,
-  getBlogRepository,
-  getFAQRepository,
-  getAssessmentRepository,
-  requireTenantContext,
-  getPublicContentContext,
-  type TenantContext,
-} from './helpers';
-
-// =============================================================================
 // Cache Layer
 // =============================================================================
 
@@ -169,12 +142,10 @@ export {
   getCollectionTag,
   getDocumentTag,
   getSlugTag,
-  getOrganizationTag,
   generateCacheKey,
   invalidateCollection,
   invalidateDocument,
   invalidateBySlug,
-  invalidateOrganization,
   invalidateAllCMS,
   createCachedQuery,
   createCachedFindById,

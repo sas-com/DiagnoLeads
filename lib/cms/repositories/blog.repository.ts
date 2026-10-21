@@ -21,7 +21,6 @@ import type { CMSAdapter, SortParams, WhereCondition, WhereOperator } from '../c
 import type { BlogPost, ContentStatus } from '../core/types';
 
 export interface FindBlogPostsOptions {
-  organizationId?: string;
   limit?: number;
   offset?: number;
   status?: ContentStatus | 'all';
@@ -31,7 +30,6 @@ export interface FindBlogPostsOptions {
 }
 
 export interface FindBlogPostBySlugOptions {
-  organizationId?: string;
   locale?: string;
   /** Published posts only unless 'all' is asked for (editors) */
   status?: 'published' | 'all';
@@ -58,7 +56,6 @@ export class BlogRepository {
    */
   async findAll(options: FindBlogPostsOptions = {}): Promise<BlogPostsResult> {
     const {
-      organizationId,
       limit = 10,
       offset = 0,
       status = 'published',
@@ -83,7 +80,6 @@ export class BlogRepository {
       limit,
       offset,
       sort,
-      organizationId,
       status: status === 'all' ? 'all' : status === 'archived' ? 'draft' : status,
     });
 
@@ -131,10 +127,10 @@ export class BlogRepository {
   /**
    * スラッグでブログ記事を取得（キャッシュ付き - 公開ページ用）
    */
-  async findBySlugCached(slug: string, organizationId?: string): Promise<BlogPost | null> {
+  async findBySlugCached(slug: string): Promise<BlogPost | null> {
     const cached = unstable_cache(
-      async () => this.findBySlug(slug, { organizationId }),
-      [`cms:${COLLECTION}:slug:${slug}:${organizationId || 'default'}`],
+      async () => this.findBySlug(slug),
+      [`cms:${COLLECTION}:slug:${slug}`],
       {
         revalidate: REVALIDATE,
         tags: [getCollectionTag(COLLECTION), getSlugTag(COLLECTION, slug)],
@@ -147,11 +143,10 @@ export class BlogRepository {
   /**
    * IDでブログ記事を取得（キャッシュなし）
    */
-  async findById(id: string, organizationId?: string): Promise<BlogPost | null> {
+  async findById(id: string): Promise<BlogPost | null> {
     const { data } = await this.adapter.findById<BlogPost>({
       collection: COLLECTION,
       id,
-      organizationId,
     });
 
     return data;
@@ -160,15 +155,11 @@ export class BlogRepository {
   /**
    * IDでブログ記事を取得（キャッシュ付き）
    */
-  async findByIdCached(id: string, organizationId?: string): Promise<BlogPost | null> {
-    const cached = unstable_cache(
-      async () => this.findById(id, organizationId),
-      [`cms:${COLLECTION}:id:${id}:${organizationId || 'default'}`],
-      {
-        revalidate: REVALIDATE,
-        tags: [getCollectionTag(COLLECTION), getDocumentTag(COLLECTION, id)],
-      }
-    );
+  async findByIdCached(id: string): Promise<BlogPost | null> {
+    const cached = unstable_cache(async () => this.findById(id), [`cms:${COLLECTION}:id:${id}`], {
+      revalidate: REVALIDATE,
+      tags: [getCollectionTag(COLLECTION), getDocumentTag(COLLECTION, id)],
+    });
 
     return cached();
   }
@@ -176,13 +167,12 @@ export class BlogRepository {
   /**
    * ブログ記事を検索
    */
-  async search(query: string, organizationId?: string, limit = 10): Promise<BlogPost[]> {
+  async search(query: string, limit = 10): Promise<BlogPost[]> {
     const { data } = await this.adapter.search<BlogPost>({
       collection: COLLECTION,
       query,
       fields: ['title.ja', 'title.en', 'content.ja', 'content.en', 'excerpt.ja', 'excerpt.en'],
       limit,
-      organizationId,
     });
 
     return data;
@@ -191,10 +181,7 @@ export class BlogRepository {
   /**
    * ブログ記事を作成
    */
-  async create(
-    post: Omit<BlogPost, 'id' | 'publishedAt' | 'updatedAt'>,
-    organizationId?: string
-  ): Promise<BlogPost> {
+  async create(post: Omit<BlogPost, 'id' | 'publishedAt' | 'updatedAt'>): Promise<BlogPost> {
     const { data } = await this.adapter.create<BlogPost>({
       collection: COLLECTION,
       data: {
@@ -202,7 +189,6 @@ export class BlogRepository {
         publishedAt: new Date(),
         updatedAt: new Date(),
       },
-      organizationId,
     });
 
     // キャッシュを無効化
@@ -214,13 +200,9 @@ export class BlogRepository {
   /**
    * ブログ記事を更新
    */
-  async update(
-    id: string,
-    updates: Partial<Omit<BlogPost, 'id'>>,
-    organizationId?: string
-  ): Promise<BlogPost> {
+  async update(id: string, updates: Partial<Omit<BlogPost, 'id'>>): Promise<BlogPost> {
     // 既存のスラッグを取得（キャッシュ無効化用）
-    const existing = await this.findById(id, organizationId);
+    const existing = await this.findById(id);
 
     const { data } = await this.adapter.update<BlogPost>({
       collection: COLLECTION,
@@ -229,7 +211,6 @@ export class BlogRepository {
         ...updates,
         updatedAt: new Date(),
       },
-      organizationId,
     });
 
     // キャッシュを無効化
@@ -247,14 +228,13 @@ export class BlogRepository {
   /**
    * ブログ記事を削除
    */
-  async delete(id: string, organizationId?: string): Promise<void> {
+  async delete(id: string): Promise<void> {
     // 既存のスラッグを取得（キャッシュ無効化用）
-    const existing = await this.findById(id, organizationId);
+    const existing = await this.findById(id);
 
     await this.adapter.delete({
       collection: COLLECTION,
       id,
-      organizationId,
     });
 
     // キャッシュを無効化
@@ -268,21 +248,17 @@ export class BlogRepository {
   /**
    * 関連記事を取得
    */
-  async findRelated(
-    postId: string,
-    options: { limit?: number; organizationId?: string } = {}
-  ): Promise<BlogPost[]> {
-    const { limit = 3, organizationId } = options;
+  async findRelated(postId: string, options: { limit?: number } = {}): Promise<BlogPost[]> {
+    const { limit = 3 } = options;
 
     // 現在の記事を取得
-    const currentPost = await this.findById(postId, organizationId);
+    const currentPost = await this.findById(postId);
     if (!currentPost) {
       return [];
     }
 
     // 同じカテゴリの記事を取得
     const { posts } = await this.findAll({
-      organizationId,
       category: currentPost.category,
       limit: limit + 1, // 自分自身を除外するため+1
       status: 'published',
@@ -295,9 +271,8 @@ export class BlogRepository {
   /**
    * 最新記事を取得（キャッシュなし）
    */
-  async findLatest(limit = 5, organizationId?: string): Promise<BlogPost[]> {
+  async findLatest(limit = 5): Promise<BlogPost[]> {
     const { posts } = await this.findAll({
-      organizationId,
       limit,
       status: 'published',
       sort: [{ field: 'publishedAt', order: 'desc' }],
@@ -309,10 +284,10 @@ export class BlogRepository {
   /**
    * 最新記事を取得（キャッシュ付き - 公開ページ用）
    */
-  async findLatestCached(limit = 5, organizationId?: string): Promise<BlogPost[]> {
+  async findLatestCached(limit = 5): Promise<BlogPost[]> {
     const cached = unstable_cache(
-      async () => this.findLatest(limit, organizationId),
-      [`cms:${COLLECTION}:latest:${limit}:${organizationId || 'default'}`],
+      async () => this.findLatest(limit),
+      [`cms:${COLLECTION}:latest:${limit}`],
       {
         revalidate: REVALIDATE,
         tags: [getCollectionTag(COLLECTION)],
@@ -325,9 +300,8 @@ export class BlogRepository {
   /**
    * カテゴリ一覧を取得（キャッシュなし）
    */
-  async getCategories(organizationId?: string): Promise<string[]> {
+  async getCategories(): Promise<string[]> {
     const { posts } = await this.findAll({
-      organizationId,
       limit: 1000, // すべて取得
       status: 'published',
     });
@@ -345,10 +319,10 @@ export class BlogRepository {
   /**
    * カテゴリ一覧を取得（キャッシュ付き - 公開ページ用）
    */
-  async getCategoriesCached(organizationId?: string): Promise<string[]> {
+  async getCategoriesCached(): Promise<string[]> {
     const cached = unstable_cache(
-      async () => this.getCategories(organizationId),
-      [`cms:${COLLECTION}:categories:${organizationId || 'default'}`],
+      async () => this.getCategories(),
+      [`cms:${COLLECTION}:categories`],
       {
         revalidate: REVALIDATE,
         tags: [getCollectionTag(COLLECTION)],
@@ -361,9 +335,8 @@ export class BlogRepository {
   /**
    * タグ一覧を取得（キャッシュなし）
    */
-  async getTags(organizationId?: string): Promise<string[]> {
+  async getTags(): Promise<string[]> {
     const { posts } = await this.findAll({
-      organizationId,
       limit: 1000,
       status: 'published',
     });
@@ -383,15 +356,11 @@ export class BlogRepository {
   /**
    * タグ一覧を取得（キャッシュ付き - 公開ページ用）
    */
-  async getTagsCached(organizationId?: string): Promise<string[]> {
-    const cached = unstable_cache(
-      async () => this.getTags(organizationId),
-      [`cms:${COLLECTION}:tags:${organizationId || 'default'}`],
-      {
-        revalidate: REVALIDATE,
-        tags: [getCollectionTag(COLLECTION)],
-      }
-    );
+  async getTagsCached(): Promise<string[]> {
+    const cached = unstable_cache(async () => this.getTags(), [`cms:${COLLECTION}:tags`], {
+      revalidate: REVALIDATE,
+      tags: [getCollectionTag(COLLECTION)],
+    });
 
     return cached();
   }
