@@ -156,6 +156,7 @@ export default function NotificationDropdown() {
                     notificationColors[notification.type] || notificationColors.system;
 
                   return (
+                    // biome-ignore lint/a11y/useKeyWithClickEvents: the mark-as-read button inside does the same by keyboard
                     <div
                       key={notification.id}
                       className={cn(

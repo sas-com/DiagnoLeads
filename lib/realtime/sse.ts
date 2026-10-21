@@ -134,7 +134,7 @@ export function formatSSEEvent(message: RealtimeMessage): string {
   lines.push(`id: ${message.id}`);
   lines.push('');
 
-  return lines.join('\n') + '\n';
+  return `${lines.join('\n')}\n`;
 }
 
 function generateConnectionId(): string {

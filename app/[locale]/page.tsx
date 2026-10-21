@@ -349,28 +349,6 @@ export default async function HomePage({
               </span>
             </div>
 
-            {/* リンク */}
-            <div className="flex items-center gap-6 text-sm text-gray-600 dark:text-gray-400">
-              <a
-                href="#"
-                className="hover:text-teal-600 dark:hover:text-teal-400 transition-colors"
-              >
-                {t('footer.privacy')}
-              </a>
-              <a
-                href="#"
-                className="hover:text-teal-600 dark:hover:text-teal-400 transition-colors"
-              >
-                {t('footer.terms')}
-              </a>
-              <a
-                href="#"
-                className="hover:text-teal-600 dark:hover:text-teal-400 transition-colors"
-              >
-                {t('footer.contact')}
-              </a>
-            </div>
-
             {/* コピーライト */}
             <p className="text-sm text-gray-500 dark:text-gray-500">
               {t('footer.copyright', { year: new Date().getFullYear() })}

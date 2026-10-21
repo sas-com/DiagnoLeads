@@ -121,6 +121,7 @@ export function LanguageSwitcherButton() {
       {isOpen && (
         <>
           {/* Backdrop */}
+          {/* biome-ignore lint/a11y/useKeyWithClickEvents: click-outside overlay; Escape is not wired yet */}
           <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
 
           {/* Dropdown Menu */}
