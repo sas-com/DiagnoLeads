@@ -108,16 +108,16 @@ const faqsRouter = router({
   /**
    * FAQ作成
    */
-  create: contentEditorProcedure.input(faqCreateSchema).mutation(async ({ input, ctx }) => {
+  create: contentEditorProcedure.input(faqCreateSchema).mutation(async ({ input }) => {
     const faqRepo = new FAQRepository();
 
+    // FAQs are site-wide content edited by the operating organization's editors, like blog
+    // posts, so they carry no organization (#264)
     const faq = await faqRepo.create({
       question: input.question,
       answer: input.answer,
       category: input.category,
       order: input.order,
-      organizationId: (ctx.session as { activeOrganizationId?: string } | null)
-        ?.activeOrganizationId,
     });
 
     return { faq };
