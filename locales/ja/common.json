@@ -2977,7 +2977,8 @@
     "sources": {
       "prefilled": "Web診断",
       "confirmed": "確認済み",
-      "corrected": "修正あり"
+      "corrected": "修正あり",
+      "agency": "代行聴取"
     },
     "required": {
       "attendeeRoles": "出席者の立場",
@@ -3124,7 +3125,7 @@
       "noChanges": "変わった項目はありません。",
       "noPrevious": "このリードの以前のヒアリングはありません。",
       "reasons": {
-        "unconfirmed": "Web診断のまま未確認",
+        "unconfirmed": "事前情報のまま未確認",
         "next": "次回",
         "missing": "未入力"
       },
@@ -4320,6 +4321,68 @@
       "title": "顧客探しの記録",
       "description": "社員がこのお客様と話した記録です。",
       "by": "{date} {recorder}"
+    }
+  },
+  "agencyHandovers": {
+    "columns": {
+      "email": "メールアドレス",
+      "company": "会社名",
+      "agencyName": "代行会社名",
+      "appointmentOn": "アポ日",
+      "contactName": "担当者名",
+      "contactTitle": "部署・役職",
+      "contactPhone": "直通電話",
+      "machineModel": "機種",
+      "machineModelConfirmed": "機種の確認",
+      "hardwareSupportEnd": "保守期限",
+      "retirementPlan": "退職予定",
+      "decisionMakerPresent": "決裁者の同席",
+      "interestLevel": "関心度",
+      "refusalReason": "断られた理由",
+      "note": "備考"
+    },
+    "menu": {
+      "leads": "リードを取り込む",
+      "agency": "代行会社のアポレポートを取り込む"
+    },
+    "import": {
+      "title": "代行会社のアポレポートを取り込む",
+      "description": "代行会社のレポート（CSV か Excel）を読み込み、メールアドレス（なければ会社名）でリードに結び付けます。新しいヒアリングには「代行聴取」として事前入力されます。リードは新しく作りません。",
+      "chooseFile": "ファイルを選ぶ",
+      "template": "様式（CSV）をダウンロード",
+      "rows": "{count} 行を読み込みました",
+      "mapping": "列の対応（様式と違う列名のときは選び直してください）",
+      "notInFile": "ファイルにない",
+      "needKey": "リードを探すために、メールアドレスか会社名の列を選んでください。",
+      "problems": "読み取れなかったセルが {count} 個あります。その欄は空のまま取り込みます。",
+      "submit": "取り込む",
+      "done": "{saved} 件を取り込みました。",
+      "unmatched": "リードが見つからなかった行：{count} 件",
+      "ambiguous": "同じ会社名のリードが複数あり、決められなかった行：{count} 件",
+      "invalid": "内容が正しくなかった行：{count} 件",
+      "close": "閉じる",
+      "empty": "行がありません。",
+      "tooMany": "一度に取り込めるのは {max} 行までです。",
+      "readError": "ファイルを読めませんでした。",
+      "error": "取り込めませんでした。",
+      "replaced": "同じリードの行が後ろにあり、そちらを取り込んだ行：{count} 件"
+    },
+    "card": {
+      "title": "代行会社からの引き継ぎ",
+      "interest": "関心度：{level}",
+      "interestLevels": {
+        "high": "高",
+        "medium": "中",
+        "low": "低"
+      },
+      "confirmed": "確認済み",
+      "notConfirmed": "未確認",
+      "decisionMaker": {
+        "yes": "同席する",
+        "no": "同席しない",
+        "unknown": "不明"
+      },
+      "footer": "{name}・{date} に取り込み"
     }
   }
 }
