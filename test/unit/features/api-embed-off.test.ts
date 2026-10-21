@@ -30,21 +30,24 @@ const request = (path: string, method: string) =>
 
 afterEach(() => vi.unstubAllEnvs());
 
-describe('embed API while off', () => {
-  it.each([
-    ['lead POST', () => leadPost(request('/api/embed/v1/lead', 'POST'))],
-    ['lead OPTIONS', () => leadOptions(request('/api/embed/v1/lead', 'OPTIONS'))],
-    ['diagnostic GET', () => diagnosticGet(request('/api/embed/v1/diagnostic?key=x', 'GET'))],
-    ['diagnostic OPTIONS', () => diagnosticOptions(request('/api/embed/v1/diagnostic', 'OPTIONS'))],
-  ])('%s answers 404 without the database', async (_name, call) => {
-    vi.stubEnv('EMBED_API_ENABLED', '');
-    const response = await call();
-    expect(response.status).toBe(404);
-    expect(dbCalls.count).toBe(0);
-  });
+const handlers: [string, () => Promise<Response>][] = [
+  ['lead POST', () => leadPost(request('/api/embed/v1/lead', 'POST'))],
+  ['lead OPTIONS', () => leadOptions(request('/api/embed/v1/lead', 'OPTIONS'))],
+  ['diagnostic GET', () => diagnosticGet(request('/api/embed/v1/diagnostic?key=x', 'GET'))],
+  ['diagnostic OPTIONS', () => diagnosticOptions(request('/api/embed/v1/diagnostic', 'OPTIONS'))],
+];
+// Unset, empty, and values that only look like "on": the API opens for 'true' alone
+const offValues: (string | undefined)[] = [undefined, '', '1', 'TRUE', 'yes'];
 
-  it('stays off for any value other than true', async () => {
-    vi.stubEnv('EMBED_API_ENABLED', '1');
-    expect((await leadPost(request('/api/embed/v1/lead', 'POST'))).status).toBe(404);
-  });
+describe('embed API while off', () => {
+  it.each(handlers.flatMap(([name, call]) => offValues.map((value) => [name, String(value), value, call] as const)))(
+    '%s answers 404 without the database (EMBED_API_ENABLED=%s)',
+    async (_name, _label, value, call) => {
+      if (value === undefined) vi.stubEnv('EMBED_API_ENABLED', undefined as unknown as string);
+      else vi.stubEnv('EMBED_API_ENABLED', value);
+      const response = await call();
+      expect(response.status).toBe(404);
+      expect(dbCalls.count).toBe(0);
+    }
+  );
 });
