@@ -258,6 +258,10 @@ vi.mock('@/components/features/objection-card/objection-card', () => ({
 vi.mock('@/components/features/delivery-reviews/delivery-review-card', () => ({
   DeliveryReviewCard: () => <p>delivery review</p>,
 }));
+// What to ask next (#75) has its own tests (test/unit/components/challenge-guide)
+vi.mock('@/components/features/challenge-guide/challenge-guide-card', () => ({
+  ChallengeGuideCard: () => null,
+}));
 vi.mock('@/components/features/lead-activity/lead-activity-card', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/components/features/lead-activity/lead-activity-card')>()),
   LeadActivityCard: () => <p>activity timeline</p>,

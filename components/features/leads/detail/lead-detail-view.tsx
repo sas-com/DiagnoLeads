@@ -3,6 +3,7 @@
 import { PageHeader } from '@/components/common/page-header';
 import { ActTimingCard } from '@/components/features/act-timing/act-timing-card';
 import { AppointmentReviewCard } from '@/components/features/appointment-reviews/appointment-review-card';
+import { ChallengeGuideCard } from '@/components/features/challenge-guide/challenge-guide-card';
 import { DeliveryReviewCard } from '@/components/features/delivery-reviews/delivery-review-card';
 import { LeadActivityCard } from '@/components/features/lead-activity/lead-activity-card';
 import { LeadContactBar } from '@/components/features/lead-follow-up/lead-contact-bar';
@@ -420,6 +421,7 @@ function LeadDetailContent({
               customFields={lead.customFields}
               onShowAnswers={showAnswers}
             />
+            <ChallengeGuideCard organizationId={organizationId} leadId={lead.id} />
             <LeadFieldsCard
               card="pipeline"
               icon={Target}

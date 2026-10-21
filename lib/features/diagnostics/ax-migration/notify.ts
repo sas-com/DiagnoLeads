@@ -1,6 +1,7 @@
 import { db } from '@/lib/db/client';
 import { filterAllowedRecipients } from '@/lib/email/allowed-recipients';
 import { env } from '@/lib/env';
+import { challengeEffectLine } from '@/lib/features/challenge-guide/service';
 import { isEmailConfigured, sendEmail } from '@/lib/features/email';
 import { consultationRecipients } from '@/lib/features/leads/assignment';
 import { notifyUsersInApp } from '@/lib/features/leads/assignment-notify';
@@ -137,7 +138,14 @@ export function consultationDeadline(
   return `${deadline.getUTCFullYear()}/${pad(deadline.getUTCMonth() + 1)}/${pad(deadline.getUTCDate())}`;
 }
 
-export function buildSalesMessage(n: AxMigrationNotification): { title: string; message: string } {
+/**
+ * @param effect One line of the sales playbook's effect for the main challenge (#75). Only this
+ *   line goes into the notification; what to ask is on the lead page.
+ */
+export function buildSalesMessage(
+  n: AxMigrationNotification,
+  effect: string | null = null
+): { title: string; message: string } {
   const primary = n.result.challenges.primary;
   const mql = salesMql(n);
   const tag = MQL_SUBJECT_TAGS[mql.level];
@@ -153,6 +161,9 @@ export function buildSalesMessage(n: AxMigrationNotification): { title: string; 
       : []),
     `SQLの手がかり: ${n.result.sqlSignals.candidate ? 'あり' : 'なし'}`,
     ...(n.result.needsHearing ? ['「わからない」の回答が多く要ヒアリング'] : []),
+    ...(primary
+      ? [...(effect ? [`伝える効果: ${effect}`] : []), '次に聞くことはリード画面で確認してください']
+      : []),
   ].join(' / ');
   const unverified = n.identityUnverified
     ? '既存リードと同じメールアドレスからの回答です。本人確認のうえ対応してください（リードの内容は変更していません）。'
@@ -210,7 +221,8 @@ export async function notifyAxMigrationSubmission(n: AxMigrationNotification): P
   ) {
     return;
   }
-  const { title, message } = buildSalesMessage(n);
+  const effect = await challengeEffectLine(n.organizationId, n.result.challenges.primary);
+  const { title, message } = buildSalesMessage(n, effect);
   const mql = salesMql(n);
   const data = {
     leadId: n.leadId,

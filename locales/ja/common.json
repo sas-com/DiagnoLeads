@@ -4039,5 +4039,16 @@
       "effortValue": "{count} 件・平均 {mean}%・超過 {over} 件",
       "noEffort": "—"
     }
+  },
+  "challengeGuide": {
+    "title": "次に聞くこと",
+    "primary": "主な課題：{challenge}",
+    "effect": "伝える効果",
+    "questions": "深掘りの質問",
+    "signals": "チャンスの合図（この答えが出たら提案に進む）",
+    "noChallenge": "診断で特に課題は選ばれていません。ヒアリングで、困っていることから確かめてください。",
+    "noPlaybook": "営業の手引きが未登録です。",
+    "noGuide": "手引きに「{challenge}」の項目が未登録です。",
+    "openPlaybook": "営業の手引きを開く"
   }
 }

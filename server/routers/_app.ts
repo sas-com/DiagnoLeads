@@ -7,6 +7,7 @@ import { aiRouter } from '@/lib/features/ai/api/router';
 import { analyticsRouter } from '@/lib/features/analytics/api/router';
 import { appointmentReviewsRouter } from '@/lib/features/appointment-reviews/api/router';
 import { axPlaybookRouter } from '@/lib/features/ax-playbook/api/router';
+import { challengeGuideRouter } from '@/lib/features/challenge-guide/api/router';
 import { commentsRouter } from '@/lib/features/comments/api/router';
 import { contentEditorsRouter } from '@/lib/features/content/api/editors-router';
 import { contentRouter } from '@/lib/features/content/api/router';
@@ -76,6 +77,7 @@ export const appRouter = router({
   leadPrep: leadPrepRouter, // Pre-meeting prep card (Refs #156)
   actTiming: actTimingRouter, // When to act and its contact again (Refs #151)
   objectionCard: objectionCardRouter, // Objections that fit why a past attempt stopped (Refs #157)
+  challengeGuide: challengeGuideRouter, // What to ask next for the main challenge of the diagnosis (Refs #75)
   deliveryReviews: deliveryReviewsRouter, // Phase progress and what turned out hard against the diagnosis (Refs #159)
   leadHandoff: leadHandoffRouter, // Handoff sheet of the first meeting to the technical team (Refs #86)
   leadHearings: leadHearingsRouter, // Initial meeting hearings per lead (Refs #84)

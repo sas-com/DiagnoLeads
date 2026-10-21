@@ -4039,5 +4039,16 @@
       "effortValue": "{count} · mean {mean}% · {over} over",
       "noEffort": "—"
     }
+  },
+  "challengeGuide": {
+    "title": "What to ask next",
+    "primary": "Main challenge: {challenge}",
+    "effect": "Effect to explain",
+    "questions": "Questions to dig deeper",
+    "signals": "Signals of an opportunity (move on to a proposal when you hear these)",
+    "noChallenge": "The diagnosis has no particular challenge. In the hearing, start from what troubles them.",
+    "noPlaybook": "No sales playbook is registered.",
+    "noGuide": "The playbook has nothing for \"{challenge}\" yet.",
+    "openPlaybook": "Open the sales playbook"
   }
 }

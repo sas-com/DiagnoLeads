@@ -22,12 +22,18 @@ vi.mock('@/lib/features/webhooks/services/webhook-service', () => ({
 vi.mock('@/lib/features/notifications/notification-service', () => ({
   notifyOrganizationMembers: (...args: unknown[]) => inAppMock(...args),
 }));
+const effectMock = vi.fn();
+vi.mock('@/lib/features/challenge-guide/service', () => ({
+  challengeEffectLine: (...args: unknown[]) => effectMock(...args),
+}));
 vi.mock('@/lib/features/email', () => ({
   sendEmail: (...args: unknown[]) => sendEmailMock(...args),
   isEmailConfigured: () => isEmailConfiguredMock(),
 }));
 
-const { notifyAxMigrationSubmission } = await import('@/lib/features/diagnostics/ax-migration/notify');
+const { notifyAxMigrationSubmission, buildSalesMessage } = await import(
+  '@/lib/features/diagnostics/ax-migration/notify'
+);
 const { evaluateAxMigration } = await import('@/lib/features/diagnostics/ax-migration/evaluate');
 
 /** Target industry and system, nothing that shows interest: 適合 only */
@@ -56,6 +62,26 @@ describe('notifyAxMigrationSubmission', () => {
     isEmailConfiguredMock.mockReturnValue(true);
     quotaMock.mockResolvedValue({ allowed: true, count: 1, retryAfterSeconds: 0 });
     env.AX_DIAGNOSIS_SALES_EMAIL = 'sales1@example.jp, sales2@example.jp';
+    effectMock.mockResolvedValue(null);
+  });
+
+  it('says nothing about what to ask when the diagnosis has no main challenge (#75)', () => {
+    const none = { ...result, challenges: { ...result.challenges, primary: null } };
+    const { message } = buildSalesMessage({ ...base, result: none }, '保守費を毎年下げられる');
+    expect(message).toContain('主な課題: 特になし');
+    expect(message).not.toContain('伝える効果');
+    expect(message).not.toContain('次に聞くこと');
+  });
+
+  it('adds one line of the playbook effect and points to the lead page, never to webhooks (#75)', async () => {
+    effectMock.mockResolvedValue('保守費を毎年下げられる');
+    await notifyAxMigrationSubmission({ ...base, consultationRequested: true });
+    expect(effectMock).toHaveBeenCalledWith('org-1', result.challenges.primary);
+    const [, , , message] = inAppMock.mock.calls[0];
+    expect(message).toContain('伝える効果: 保守費を毎年下げられる');
+    expect(message).toContain('次に聞くことはリード画面で確認してください');
+    expect(sendEmailMock.mock.calls[0][0].text).toContain('伝える効果: 保守費を毎年下げられる');
+    expect(JSON.stringify(webhookMock.mock.calls[0])).not.toContain('保守費');
   });
 
   it('always triggers the diagnostic.submitted webhook', async () => {
