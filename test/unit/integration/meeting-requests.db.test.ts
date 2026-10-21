@@ -2,7 +2,7 @@
  * First meeting preferences and their confirmation (#155) on a real PostgreSQL: saving and
  * replacing the preferences until one is confirmed, the confirmed date as the lead's next
  * meeting and a next action (moved when another option is confirmed), the confirmation email,
- * and who may confirm. All names are made up.
+ * who may confirm, and the topics and the note of #244. All names are made up.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/dl_test \
@@ -24,6 +24,10 @@ import {
   confirmMeeting,
   saveMeetingPreferences,
 } from '@/lib/features/meeting-requests/service';
+import {
+  type MeetingPreferences,
+  meetingPreferencesSchema,
+} from '@/lib/features/meeting-requests/types/schemas';
 import { appRouter } from '@/server/routers/_app';
 import { eq, inArray } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
@@ -65,14 +69,24 @@ describe.skipIf(!url)('meeting requests (PostgreSQL)', () => {
     return lead.id as string;
   }
 
-  const save = (leadId: string, candidates = OPTIONS, now = NOW) =>
+  const save = (
+    leadId: string,
+    candidates = OPTIONS,
+    now = NOW,
+    about: Pick<MeetingPreferences, 'topics' | 'topicNote'> = { topics: [], topicNote: null }
+  ) =>
     saveMeetingPreferences(
       pg,
       {
         organizationId: org,
         leadId,
         submissionId: null,
-        preferences: { candidates, attendeeRoles: ['executive', 'it_staff'], meetingFormat: 'online' },
+        preferences: {
+          candidates,
+          attendeeRoles: ['executive', 'it_staff'],
+          meetingFormat: 'online',
+          ...about,
+        },
       },
       now
     );
@@ -143,7 +157,13 @@ describe.skipIf(!url)('meeting requests (PostgreSQL)', () => {
           leadId: null,
           submissionId: '00000000-0000-4000-8000-000000000000',
           identityVerified: true,
-          preferences: { candidates: OPTIONS, attendeeRoles: [], meetingFormat: null },
+          preferences: {
+            candidates: OPTIONS,
+            attendeeRoles: [],
+            meetingFormat: null,
+            topics: [],
+            topicNote: null,
+          },
         },
         later,
         NOW
@@ -163,6 +183,8 @@ describe.skipIf(!url)('meeting requests (PostgreSQL)', () => {
             candidates: [{ date: '2026-10-30', time: '16:00' }],
             attendeeRoles: [],
             meetingFormat: null,
+            topics: ['cost'],
+            topicNote: '書き換え',
           },
         },
         later,
@@ -171,7 +193,67 @@ describe.skipIf(!url)('meeting requests (PostgreSQL)', () => {
     ).toBe('unavailable');
     const after = await callers.rep.meetingRequests.get({ organizationId: org, leadId });
     expect(after.request.candidates).toEqual([{ date: '2026-10-22', time: '11:00' }]);
+    expect(after.request).toMatchObject({ topics: [], topicNote: null });
     expect(later).not.toHaveBeenCalled();
+  });
+
+  it('stores the topics and the note, replaces them, and keeps them once confirmed (#244)', async () => {
+    const leadId = await createLead();
+    // The input as the routes parse it
+    expect(
+      await saveMeetingPreferences(
+        pg,
+        {
+          organizationId: org,
+          leadId,
+          submissionId: null,
+          preferences: meetingPreferencesSchema.parse({
+            candidates: OPTIONS,
+            topics: ['result_detail', 'internal_resources'],
+            topicNote: '  <b>来期</b>の予算で\n進めたい  ',
+          }),
+        },
+        NOW
+      )
+    ).toEqual({ status: 'saved', first: true });
+    const [row] = await pg
+      .select({ topics: meetingRequests.topics, topicNote: meetingRequests.topicNote })
+      .from(meetingRequests)
+      .where(eq(meetingRequests.leadId, leadId));
+    expect(row).toEqual({
+      topics: ['result_detail', 'internal_resources'],
+      topicNote: '<b>来期</b>の予算で\n進めたい',
+    });
+    let view = await callers.rep.meetingRequests.get({ organizationId: org, leadId });
+    expect(view.request).toMatchObject({
+      topics: ['result_detail', 'internal_resources'],
+      topicNote: '<b>来期</b>の予算で\n進めたい',
+    });
+
+    // Sent again: replaced, also back to none
+    await save(leadId, OPTIONS, NOW, { topics: ['cost'], topicNote: null });
+    view = await callers.rep.meetingRequests.get({ organizationId: org, leadId });
+    expect(view.request).toMatchObject({ topics: ['cost'], topicNote: null });
+
+    // Locked once confirmed
+    await callers.rep.meetingRequests.confirm({
+      organizationId: org,
+      leadId,
+      candidateIndex: 0,
+      sendEmail: false,
+    });
+    expect(
+      await save(leadId, OPTIONS, NOW, { topics: ['schedule'], topicNote: '変更' })
+    ).toEqual({ status: 'confirmed' });
+    view = await callers.rep.meetingRequests.get({ organizationId: org, leadId });
+    expect(view.request).toMatchObject({ topics: ['cost'], topicNote: null });
+  });
+
+  it('defaults the topics of rows saved before #244 to none', async () => {
+    const leadId = await createLead();
+    await pg.insert(meetingRequests).values({ organizationId: org, leadId, candidates: OPTIONS });
+    const view = await callers.rep.meetingRequests.get({ organizationId: org, leadId });
+    expect(view.request).toMatchObject({ topics: [], topicNote: null });
   });
 
   it('confirms an option as the next meeting and a next action, and moves them on a change', async () => {

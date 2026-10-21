@@ -30,6 +30,29 @@ export const MEETING_TIMES: readonly string[] = Array.from({ length: 19 }, (_, i
 /** Preferred dates from the next day up to this many days ahead */
 export const MEETING_DAYS_AHEAD = 60;
 
+/** What the respondent wants to talk about (Refs #244); stable ids, labels come from locales */
+export const MEETING_TOPICS = [
+  'result_detail',
+  'migration_approach',
+  'cost',
+  'schedule',
+  'target_platform',
+  'current_assessment',
+  'internal_resources',
+  'other',
+] as const;
+export type MeetingTopic = (typeof MEETING_TOPICS)[number];
+
+/** Free text about the consultation, in UTF-16 code units (what a textarea maxLength counts) */
+export const MAX_TOPIC_NOTE_LENGTH = 300;
+
+/**
+ * Like the builder's PLAIN_TEXT (no control or format characters: NUL, bidi overrides), but line
+ * breaks and tabs are allowed in the note. Lone surrogates are refused too: JSON escapes them
+ * (and control characters) to six bytes each, which would not fit the consultation body limit.
+ */
+const NOTE_TEXT = /^(?:[\n\t]|[^\p{Cc}\p{Cf}\p{Cs}])*$/u;
+
 const isoDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -60,6 +83,24 @@ export const meetingPreferencesSchema = z.object({
     .default([])
     .transform((roles) => [...new Set(roles)]),
   meetingFormat: z.enum(MEETING_FORMATS).nullable().default(null),
+  /** Stored in MEETING_TOPICS order, whatever order they were ticked in */
+  topics: z
+    .array(z.enum(MEETING_TOPICS))
+    .max(MEETING_TOPICS.length)
+    .default([])
+    .refine((topics) => new Set(topics).size === topics.length, 'Duplicate topic')
+    .transform((topics) => MEETING_TOPICS.filter((topic) => topics.includes(topic))),
+  /**
+   * Line breaks as \n, trimmed, no other control or format characters (see NOTE_TEXT); empty
+   * becomes null
+   */
+  topicNote: z
+    .string()
+    .transform((note) => note.replace(/\r\n?/g, '\n'))
+    .pipe(z.string().trim().max(MAX_TOPIC_NOTE_LENGTH).regex(NOTE_TEXT, 'Invalid character'))
+    .nullable()
+    .default(null)
+    .transform((note) => note || null),
 });
 export type MeetingPreferences = z.infer<typeof meetingPreferencesSchema>;
 

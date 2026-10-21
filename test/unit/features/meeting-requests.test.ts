@@ -1,12 +1,14 @@
 /**
  * First meeting preferences of a consultation request (Refs #155): the dates a respondent may
- * choose, the input checks, and the texts sales and the respondent get. Made-up names.
+ * choose, the input checks, and the texts sales and the respondent get; the topics and the note
+ * of #244. Made-up names.
  * 2026-10-16 is a Friday.
  */
 import {
   candidateDateRange,
   candidateLabelJa,
   candidatesInRange,
+  duplicateCandidateOf,
   sortCandidates,
 } from '@/lib/features/meeting-requests/candidates';
 import {
@@ -14,7 +16,9 @@ import {
   buildPreferencesNotice,
 } from '@/lib/features/meeting-requests/service';
 import {
+  MAX_TOPIC_NOTE_LENGTH,
   MEETING_TIMES,
+  MEETING_TOPICS,
   meetingPreferencesSchema,
 } from '@/lib/features/meeting-requests/types/schemas';
 import { describe, expect, it } from 'vitest';
@@ -47,6 +51,31 @@ describe('candidate dates', () => {
     expect(MEETING_TIMES.at(-1)).toBe('18:00');
     expect(MEETING_TIMES).toHaveLength(19);
   });
+
+  it('points each option to an earlier one with the same date and time', () => {
+    expect(
+      duplicateCandidateOf([
+        { date: '2026-10-20', time: '10:00' },
+        { date: '2026-10-20', time: '10:00' },
+        { date: '2026-10-20', time: '14:00' },
+      ])
+    ).toEqual([null, 1, null]);
+    // Options without a date are not compared
+    expect(
+      duplicateCandidateOf([
+        { date: '', time: '10:00' },
+        { date: '', time: '10:00' },
+        { date: '2026-10-21', time: '10:00' },
+      ])
+    ).toEqual([null, null, null]);
+    expect(
+      duplicateCandidateOf([
+        { date: '2026-10-21', time: '10:00' },
+        { date: '2026-10-20', time: '10:00' },
+        { date: '2026-10-21', time: '10:00' },
+      ])
+    ).toEqual([null, null, 1]);
+  });
 });
 
 describe('meetingPreferencesSchema', () => {
@@ -62,6 +91,8 @@ describe('meetingPreferencesSchema', () => {
       candidates: [{ date: '2026-10-20', time: '10:00' }],
       attendeeRoles: ['executive', 'it_staff'],
       meetingFormat: 'online',
+      topics: [],
+      topicNote: null,
     });
     expect(parse({ candidates: [{ date: '2026-10-20', time: '10:00' }] }).success).toBe(true);
   });
@@ -80,6 +111,56 @@ describe('meetingPreferencesSchema', () => {
     expect(parse({ candidates: [one], attendeeRoles: ['ceo'] }).success).toBe(false);
     expect(parse({ candidates: [one], meetingFormat: 'phone' }).success).toBe(false);
   });
+
+  it('takes known topics once each and a trimmed note up to 300 characters (#244)', () => {
+    const one = { date: '2026-10-20', time: '10:00' };
+    const parsed = parse({
+      candidates: [one],
+      topics: ['cost', 'schedule'],
+      topicNote: '  基幹システムの移行時期を相談したい\n  ',
+    });
+    expect(parsed.success && parsed.data).toMatchObject({
+      topics: ['cost', 'schedule'],
+      topicNote: '基幹システムの移行時期を相談したい',
+    });
+    expect(parse({ candidates: [one], topics: [...MEETING_TOPICS] }).success).toBe(true);
+    // Blank becomes null
+    const blank = parse({ candidates: [one], topicNote: '   ' });
+    expect(blank.success && blank.data.topicNote).toBeNull();
+    // Exactly the limit, also with spaces around it
+    const full = 'あ'.repeat(MAX_TOPIC_NOTE_LENGTH);
+    expect(parse({ candidates: [one], topicNote: ` ${full} ` }).success).toBe(true);
+  });
+
+  it('refuses unknown or repeated topics and a note over 300 characters', () => {
+    const one = { date: '2026-10-20', time: '10:00' };
+    expect(parse({ candidates: [one], topics: ['pricing'] }).success).toBe(false);
+    expect(parse({ candidates: [one], topics: ['cost', 'cost'] }).success).toBe(false);
+    expect(parse({ candidates: [one], topics: 'cost' }).success).toBe(false);
+    expect(
+      parse({ candidates: [one], topicNote: 'あ'.repeat(MAX_TOPIC_NOTE_LENGTH + 1) }).success
+    ).toBe(false);
+    expect(parse({ candidates: [one], topicNote: 42 }).success).toBe(false);
+  });
+
+  it('refuses control and format characters in the note but keeps line breaks and tabs', () => {
+    const one = { date: '2026-10-20', time: '10:00' };
+    for (const bad of ['予算\u0000', '予算\u202e逆', 'a\u0001b', 'a\u200bb', 'a\ud800b']) {
+      expect(parse({ candidates: [one], topicNote: bad }).success).toBe(false);
+    }
+    const kept = parse({ candidates: [one], topicNote: '一行目\r\n二行目\r三行目\t終わり' });
+    expect(kept.success && kept.data.topicNote).toBe('一行目\n二行目\n三行目\t終わり');
+    // A pair of surrogates (an emoji) is fine
+    expect(parse({ candidates: [one], topicNote: '了解👍' }).success).toBe(true);
+  });
+
+  it('stores the topics in the order of the list, whatever order they came in', () => {
+    const parsed = parse({
+      candidates: [{ date: '2026-10-20', time: '10:00' }],
+      topics: ['other', 'cost', 'result_detail'],
+    });
+    expect(parsed.success && parsed.data.topics).toEqual(['result_detail', 'cost', 'other']);
+  });
 });
 
 describe('texts', () => {
@@ -97,6 +178,24 @@ describe('texts', () => {
     });
     expect(notice.title).toBe('【希望日時】架空商事 山田 花子 様 から初回商談の希望日時が届きました');
     expect(notice.message).toContain('10月20日（火）14:00、10月21日（水）10:00（訪問）');
+    expect(notice.message).not.toContain('相談したい内容');
+  });
+
+  it('tells sales the topics and the note, cut short in the notice (#244)', () => {
+    const notice = buildPreferencesNotice({
+      company: '架空商事',
+      leadName: null,
+      preferences: {
+        candidates: [{ date: '2026-10-20', time: '14:00' }],
+        meetingFormat: null,
+        topics: ['cost', 'internal_resources'],
+        topicNote: `移行の\n順番を${'あ'.repeat(150)}`,
+      },
+    });
+    expect(notice.message).toContain('相談したい内容：費用の目安、社内の体制・人材の不足。');
+    // Line breaks fold into one line; the note is cut at 100 characters
+    expect(notice.message).toContain(`ご相談内容：「移行の 順番を${'あ'.repeat(93)}…」。`);
+    expect(notice.message.endsWith('リードを開いて、候補から日程を確定してください。')).toBe(true);
   });
 
   it('writes the confirmation with the date, the format and who is in charge', () => {

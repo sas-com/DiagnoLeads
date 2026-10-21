@@ -6,6 +6,7 @@ import { notifyAxMigrationSubmission } from '@/lib/features/diagnostics/ax-migra
 import { requestAxMigrationConsultation } from '@/lib/features/diagnostics/ax-migration/submission-service';
 import { consumeRateLimit } from '@/lib/features/diagnostics/rate-limit';
 import {
+  CONSULTATION_BODY_MAX_BYTES,
   checkPublicJsonRequest,
   clientIp,
   ipBlock,
@@ -21,7 +22,7 @@ import { z } from 'zod';
 
 const consultationSchema = z.object({
   submissionId: z.string().uuid(),
-  /** Preferred dates, attendees and format of the first meeting, sent after the request (#155) */
+  /** First meeting preferences, sent after the request (#155); topics and a note (#244) */
   preferences: meetingPreferencesSchema.optional(),
 });
 
@@ -32,10 +33,10 @@ const consultationSchema = z.object({
  * Idempotent: only the first of concurrent / repeated requests notifies sales.
  */
 export async function POST(req: NextRequest) {
-  const guard = checkPublicJsonRequest(req, 2048);
+  const guard = checkPublicJsonRequest(req, CONSULTATION_BODY_MAX_BYTES);
   if (guard) return guard;
 
-  const read = await readJsonBody(req, 2048);
+  const read = await readJsonBody(req, CONSULTATION_BODY_MAX_BYTES);
   if (!read.ok) return read.response;
   const body = read.body;
 

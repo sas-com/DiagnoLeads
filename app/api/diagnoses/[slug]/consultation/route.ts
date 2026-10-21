@@ -11,6 +11,7 @@ import {
 } from '@/lib/features/diagnosis-builder/submission-service';
 import { consumeRateLimit } from '@/lib/features/diagnostics/rate-limit';
 import {
+  CONSULTATION_BODY_MAX_BYTES,
   checkPublicJsonRequest,
   clientIp,
   ipBlock,
@@ -25,7 +26,7 @@ import { z } from 'zod';
 
 const consultationSchema = z.object({
   submissionId: z.string().uuid(),
-  /** Preferred dates, attendees and format of the first meeting, sent after the request (#155) */
+  /** First meeting preferences, sent after the request (#155); topics and a note (#244) */
   preferences: meetingPreferencesSchema.optional(),
 });
 
@@ -37,10 +38,10 @@ const consultationSchema = z.object({
  * pending consultation list). Idempotent: only the first request notifies sales.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
-  const guard = checkPublicJsonRequest(req, 2048);
+  const guard = checkPublicJsonRequest(req, CONSULTATION_BODY_MAX_BYTES);
   if (guard) return guard;
 
-  const read = await readJsonBody(req, 2048);
+  const read = await readJsonBody(req, CONSULTATION_BODY_MAX_BYTES);
   if (!read.ok) return read.response;
 
   const parsed = consultationSchema.safeParse(read.body);
