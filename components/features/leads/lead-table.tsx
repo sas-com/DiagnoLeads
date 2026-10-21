@@ -727,6 +727,7 @@ export function LeadTable({
         <div className="space-y-4">
           <div className="h-12 bg-gray-200 dark:bg-gray-700 animate-pulse rounded-lg" />
           {[...Array(5)].map((_, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton placeholders that are never reordered and have no identity
             <div key={i} className="h-16 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />
           ))}
         </div>

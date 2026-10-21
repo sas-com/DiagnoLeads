@@ -66,6 +66,7 @@ export default function UserDropdown() {
   return (
     <div className="relative" ref={dropdownRef}>
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-3 text-sm p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
       >
@@ -128,6 +129,7 @@ export default function UserDropdown() {
           {/* ログアウト */}
           <div className="border-t border-gray-100 dark:border-gray-700 py-2">
             <button
+              type="button"
               onClick={handleLogout}
               className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-error-600 dark:text-error-400 hover:bg-error-50 dark:hover:bg-error-900/20 transition-colors"
             >

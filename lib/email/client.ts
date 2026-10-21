@@ -27,14 +27,14 @@ type SendEmailOptions =
  * メール送信のヘルパー関数
  */
 export async function sendEmail(options: SendEmailOptions) {
-  const { subject, react, text } = options;
+  const { subject } = options;
   const to = filterAllowedRecipients(options.to);
   if (to.length === 0) throw new EmailRecipientNotAllowedError();
 
   try {
-    const emailOptions = react
-      ? { from: FROM_EMAIL, to, subject, react }
-      : { from: FROM_EMAIL, to, subject, text: text! };
+    const emailOptions = options.react
+      ? { from: FROM_EMAIL, to, subject, react: options.react }
+      : { from: FROM_EMAIL, to, subject, text: options.text };
 
     const { data, error } = await resend.emails.send(emailOptions);
 

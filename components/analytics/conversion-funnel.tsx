@@ -84,6 +84,7 @@ export function ConversionFunnel({
     return (
       <div className="space-y-4">
         {[...Array(4)].map((_, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton placeholders that are never reordered and have no identity
           <div key={i} className="animate-pulse">
             <div className="h-16 bg-gray-200 rounded" style={{ width: `${100 - i * 15}%` }} />
           </div>
@@ -137,6 +138,7 @@ export function ConversionFunnel({
             {index > 0 && (
               <div className="absolute -top-2 right-4 flex items-center gap-1 text-xs">
                 <svg
+                  aria-hidden="true"
                   className="w-3 h-3 text-gray-400 rotate-180"
                   fill="none"
                   viewBox="0 0 24 24"

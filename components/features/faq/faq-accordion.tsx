@@ -25,7 +25,7 @@ function FAQItem({ faq, locale, isOpen, onToggle }: FAQItemProps) {
   const answerText = answer.content
     .map((node) => {
       if ('content' in node && node.content) {
-        return node.content.map((textNode: any) => textNode.text || '').join('');
+        return node.content.map((child) => ('text' in child && child.text) || '').join('');
       }
       return '';
     })

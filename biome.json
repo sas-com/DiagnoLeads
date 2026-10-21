@@ -14,20 +14,7 @@
       "recommended": true,
       "style": {
         "useImportType": "error",
-        "useExportType": "error",
-        "noNonNullAssertion": "warn"
-      },
-      "suspicious": {
-        "noExplicitAny": "warn",
-        "noArrayIndexKey": "warn",
-        "noImplicitAnyLet": "warn"
-      },
-      "a11y": {
-        "noLabelWithoutControl": "warn",
-        "useButtonType": "warn",
-        "useHtmlLang": "warn",
-        "noSvgWithoutTitle": "warn",
-        "useSemanticElements": "warn"
+        "useExportType": "error"
       }
     }
   },

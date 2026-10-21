@@ -12,6 +12,22 @@ import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
+/** Values keyed by locale code (e.g. `ja`, `en`) */
+type LocalizedValue<T> = Partial<Record<string, T>>;
+
+/** Shape of the blog post document as returned by the CMS adapter */
+interface BlogPostDocument {
+  status?: string;
+  title?: LocalizedValue<string>;
+  excerpt?: LocalizedValue<string>;
+  content?: LocalizedValue<unknown>;
+  publishedAt: string;
+  category?: string;
+  tags?: string[];
+  coverImage?: { url?: string; alt?: string };
+  author?: { name?: string; title?: string; avatar?: { url?: string } };
+}
+
 interface BlogPostPageProps {
   params: Promise<{ locale: string; slug: string }>;
 }
@@ -21,16 +37,19 @@ export async function generateMetadata({ params }: BlogPostPageProps): Promise<M
   const adapter = getCMSAdapter();
 
   try {
-    const result = await adapter.findBySlug({ collection: 'blog-posts', slug, locale });
-    const post = result?.data;
+    const result = await adapter.findBySlug<BlogPostDocument>({
+      collection: 'blog-posts',
+      slug,
+      locale,
+    });
+    const postData = result?.data;
 
-    if (!post) {
+    if (!postData) {
       return {
         title: 'Post Not Found',
       };
     }
 
-    const postData = post as any;
     const title = postData.title?.[locale] || postData.title?.ja || '';
     const description = postData.excerpt?.[locale] || postData.excerpt?.ja || '';
 
@@ -73,19 +92,22 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
 
   const adapter = getCMSAdapter();
 
-  let post;
+  let postData: BlogPostDocument | null | undefined;
   try {
-    const result = await adapter.findBySlug({ collection: 'blog-posts', slug, locale });
-    post = result?.data;
+    const result = await adapter.findBySlug<BlogPostDocument>({
+      collection: 'blog-posts',
+      slug,
+      locale,
+    });
+    postData = result?.data;
   } catch (error) {
     notFound();
   }
 
-  if (!post || (post as any).status !== 'published') {
+  if (!postData || postData.status !== 'published') {
     notFound();
   }
 
-  const postData = post as any;
   const title = postData.title?.[locale] || postData.title?.ja || '';
   const content = postData.content?.[locale] || postData.content?.ja || '';
 
@@ -239,7 +261,13 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
               href={`/${locale}/blog`}
               className="inline-flex items-center text-blue-600 hover:text-blue-700 transition-colors"
             >
-              <svg className="mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg
+                className="mr-2 h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                aria-hidden="true"
+              >
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"

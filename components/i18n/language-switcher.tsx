@@ -100,6 +100,7 @@ export function LanguageSwitcherButton() {
   return (
     <div className="relative">
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
         disabled={isPending}
         className="flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
@@ -109,6 +110,7 @@ export function LanguageSwitcherButton() {
         <Globe className="h-4 w-4" />
         <span>{localeNames[currentLocale]}</span>
         <svg
+          aria-hidden="true"
           className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
           fill="none"
           viewBox="0 0 24 24"
@@ -129,6 +131,7 @@ export function LanguageSwitcherButton() {
             <div className="py-1" role="menu">
               {locales.map((locale) => (
                 <button
+                  type="button"
                   key={locale}
                   onClick={() => handleLocaleChange(locale)}
                   className={`block w-full px-4 py-2 text-left text-sm hover:bg-gray-100 ${

@@ -181,7 +181,7 @@ export function CircularProgress({
 
   return (
     <div className={`relative inline-flex flex-col items-center ${className}`}>
-      <svg width={size} height={size} className="-rotate-90">
+      <svg width={size} height={size} className="-rotate-90" aria-hidden="true">
         {/* 背景の円 */}
         <circle
           cx={size / 2}

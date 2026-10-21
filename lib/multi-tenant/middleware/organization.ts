@@ -1,5 +1,6 @@
 import { defineAbilitiesFor } from '@/lib/auth/permissions';
 import { setCurrentUser } from '@/lib/db/rls';
+import type { User } from '@/lib/db/schema';
 import type { ProtectedContext } from '@/lib/trpc/context';
 import { z } from 'zod';
 import { verifyOrganizationMembership } from '../helpers/membership';
@@ -34,7 +35,9 @@ export async function createOrganizationContext(
   const membership = await verifyOrganizationMembership(ctx.db, ctx.user.id, input.organizationId);
 
   // 2. Calculate CASL permissions based on user and membership
-  const ability = defineAbilitiesFor(ctx.user as any, membership);
+  // Type-only cast: the Better Auth user is the same record as the DB user row, with a slightly
+  // different optional/nullable shape
+  const ability = defineAbilitiesFor(ctx.user as User, membership);
 
   // 3. Set current user for RLS
   // NOTE: ctx.db is the connection pool, not a transaction, so this setting only lives for

@@ -85,6 +85,7 @@ export default function NotificationDropdown() {
   return (
     <div className="relative" ref={dropdownRef}>
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
         className="relative flex items-center justify-center w-11 h-11 lg:w-10 lg:h-10 text-gray-500 rounded-lg hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 transition-colors"
         aria-label={t('title')}
@@ -112,6 +113,7 @@ export default function NotificationDropdown() {
             </div>
             {unreadCount > 0 && (
               <button
+                type="button"
                 onClick={handleMarkAllAsRead}
                 className="text-xs text-blue-500 hover:text-blue-600 dark:text-blue-400 flex items-center gap-1 font-medium"
                 disabled={markAllAsRead.isPending}
@@ -127,6 +129,7 @@ export default function NotificationDropdown() {
             {isLoading ? (
               <div className="p-4 space-y-3">
                 {[...Array(3)].map((_, i) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton placeholders that are never reordered and have no identity
                   <div key={i} className="flex gap-3 animate-pulse">
                     <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700" />
                     <div className="flex-1 space-y-2">
@@ -196,6 +199,7 @@ export default function NotificationDropdown() {
                       </div>
                       {!notification.read && (
                         <button
+                          type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleMarkAsRead(notification.id);

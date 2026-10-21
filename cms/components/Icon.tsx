@@ -8,6 +8,8 @@ export function Icon() {
   return (
     <div style={{ width: '28px', height: '28px' }}>
       <svg
+        role="img"
+        aria-label="DiagnoLeads"
         viewBox="0 0 40 40"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"

@@ -22,6 +22,19 @@ import { organizationMembers, organizations } from '@/lib/db/schema';
 import type { DataSharingPolicy, Organization, OrganizationType } from '@/lib/db/schema';
 import { protectedProcedure, router } from '@/lib/trpc/init';
 
+/**
+ * Row returned by the get_descendant_organizations / get_ancestor_organizations /
+ * get_accessible_organizations SQL functions
+ */
+type OrganizationFunctionRow = {
+  id: string;
+  name: string;
+  slug: string;
+  organization_type: string;
+  hierarchy_level: number;
+  access_type?: string;
+};
+
 // =============================================================================
 // Input Schemas
 // =============================================================================
@@ -164,7 +177,7 @@ export const hierarchyRouter = router({
       ),
     });
 
-    if (!membership || !canAccessChildOrganizations(membership.role as any)) {
+    if (!membership || !canAccessChildOrganizations(membership.role)) {
       throw new TRPCError({
         code: 'FORBIDDEN',
         message: 'Access denied',
@@ -197,7 +210,7 @@ export const hierarchyRouter = router({
       ),
     });
 
-    if (!membership || !canAccessChildOrganizations(membership.role as any)) {
+    if (!membership || !canAccessChildOrganizations(membership.role)) {
       throw new TRPCError({
         code: 'FORBIDDEN',
         message: 'Access denied',
@@ -205,11 +218,11 @@ export const hierarchyRouter = router({
     }
 
     // Use the PostgreSQL function we created
-    const result = await ctx.db.execute(
+    const result = await ctx.db.execute<OrganizationFunctionRow>(
       sql`SELECT * FROM get_descendant_organizations(${input.organizationId}::UUID)`
     );
 
-    return (result as any[]).map((row) => ({
+    return result.map((row) => ({
       id: row.id,
       name: row.name,
       slug: row.slug,
@@ -236,11 +249,11 @@ export const hierarchyRouter = router({
       });
     }
 
-    const result = await ctx.db.execute(
+    const result = await ctx.db.execute<OrganizationFunctionRow>(
       sql`SELECT * FROM get_ancestor_organizations(${input.organizationId}::UUID)`
     );
 
-    return (result as any[]).map((row) => ({
+    return result.map((row) => ({
       id: row.id,
       name: row.name,
       slug: row.slug,
@@ -261,7 +274,7 @@ export const hierarchyRouter = router({
       ),
     });
 
-    if (!membership || !canModifyHierarchy(membership.role as any)) {
+    if (!membership || !canModifyHierarchy(membership.role)) {
       throw new TRPCError({
         code: 'FORBIDDEN',
         message: 'Only group owners can modify hierarchy',
@@ -363,7 +376,7 @@ export const hierarchyRouter = router({
         ),
       });
 
-      if (!membership || !canModifyHierarchy(membership.role as any)) {
+      if (!membership || !canModifyHierarchy(membership.role)) {
         throw new TRPCError({
           code: 'FORBIDDEN',
           message: 'Only group owners can change organization type',
@@ -392,7 +405,7 @@ export const hierarchyRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      const result = await ctx.db.execute(
+      const result = await ctx.db.execute<OrganizationFunctionRow>(
         sql`SELECT * FROM get_accessible_organizations(
           ${ctx.user.id}::UUID,
           ${input.includeDescendants}::BOOLEAN,
@@ -400,7 +413,7 @@ export const hierarchyRouter = router({
         )`
       );
 
-      return (result as any[]).map((row) => ({
+      return result.map((row) => ({
         id: row.id,
         name: row.name,
         slug: row.slug,

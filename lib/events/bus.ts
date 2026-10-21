@@ -176,11 +176,11 @@ export class EventBus {
   }
 
   private addSubscription(type: EventType, subscription: EventSubscription): void {
-    if (!this.subscriptions.has(type)) {
-      this.subscriptions.set(type, new Set());
+    let subs = this.subscriptions.get(type);
+    if (!subs) {
+      subs = new Set();
+      this.subscriptions.set(type, subs);
     }
-
-    const subs = this.subscriptions.get(type)!;
 
     if (subs.size >= this.config.maxListeners) {
       console.warn(`Max listeners (${this.config.maxListeners}) reached for event: ${type}`);

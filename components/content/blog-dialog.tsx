@@ -19,7 +19,7 @@ import {
 import type { BlogPost } from '@/lib/cms/core/types';
 import { trpc } from '@/lib/trpc/client';
 import { useTranslations } from 'next-intl';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 
 interface BlogDialogProps {
   locale: string;
@@ -40,6 +40,7 @@ export function BlogDialog({
 }: BlogDialogProps) {
   const t = useTranslations('content.blog');
   const tCommon = useTranslations('common');
+  const fieldId = useId();
   const [internalOpen, setInternalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<'ja' | 'en'>('ja');
@@ -165,7 +166,13 @@ export function BlogDialog({
       {mode === 'create' && (
         <DialogTrigger asChild>
           <Button>
-            <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg
+              className="h-4 w-4 mr-2"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              aria-hidden="true"
+            >
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -206,9 +213,12 @@ export function BlogDialog({
 
           {/* Title */}
           <div>
-            <label className="block text-sm font-medium text-gray-700">{t('postTitle')}</label>
+            <label htmlFor={`${fieldId}-title`} className="block text-sm font-medium text-gray-700">
+              {t('postTitle')}
+            </label>
             {activeTab === 'ja' ? (
               <input
+                id={`${fieldId}-title`}
                 type="text"
                 value={titleJa}
                 onChange={(e) => handleTitleChange('ja', e.target.value)}
@@ -218,6 +228,7 @@ export function BlogDialog({
               />
             ) : (
               <input
+                id={`${fieldId}-title`}
                 type="text"
                 value={titleEn}
                 onChange={(e) => handleTitleChange('en', e.target.value)}
@@ -230,12 +241,15 @@ export function BlogDialog({
 
           {/* Slug */}
           <div>
-            <label className="block text-sm font-medium text-gray-700">{t('slug')}</label>
+            <label htmlFor={`${fieldId}-slug`} className="block text-sm font-medium text-gray-700">
+              {t('slug')}
+            </label>
             <div className="mt-1 flex rounded-md shadow-sm">
               <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">
                 /blog/
               </span>
               <input
+                id={`${fieldId}-slug`}
                 type="text"
                 value={slug}
                 onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
@@ -249,9 +263,15 @@ export function BlogDialog({
 
           {/* Content */}
           <div>
-            <label className="block text-sm font-medium text-gray-700">{t('content')}</label>
+            <label
+              htmlFor={`${fieldId}-content`}
+              className="block text-sm font-medium text-gray-700"
+            >
+              {t('content')}
+            </label>
             {activeTab === 'ja' ? (
               <textarea
+                id={`${fieldId}-content`}
                 value={contentJa}
                 onChange={(e) => setContentJa(e.target.value)}
                 rows={10}
@@ -261,6 +281,7 @@ export function BlogDialog({
               />
             ) : (
               <textarea
+                id={`${fieldId}-content`}
                 value={contentEn}
                 onChange={(e) => setContentEn(e.target.value)}
                 rows={10}
@@ -273,9 +294,15 @@ export function BlogDialog({
 
           {/* Excerpt */}
           <div>
-            <label className="block text-sm font-medium text-gray-700">{t('excerpt')}</label>
+            <label
+              htmlFor={`${fieldId}-excerpt`}
+              className="block text-sm font-medium text-gray-700"
+            >
+              {t('excerpt')}
+            </label>
             {activeTab === 'ja' ? (
               <textarea
+                id={`${fieldId}-excerpt`}
                 value={excerptJa}
                 onChange={(e) => setExcerptJa(e.target.value)}
                 rows={3}
@@ -284,6 +311,7 @@ export function BlogDialog({
               />
             ) : (
               <textarea
+                id={`${fieldId}-excerpt`}
                 value={excerptEn}
                 onChange={(e) => setExcerptEn(e.target.value)}
                 rows={3}
@@ -295,8 +323,14 @@ export function BlogDialog({
 
           {/* Status */}
           <div>
-            <label className="block text-sm font-medium text-gray-700">{t('status')}</label>
+            <label
+              htmlFor={`${fieldId}-status`}
+              className="block text-sm font-medium text-gray-700"
+            >
+              {t('status')}
+            </label>
             <select
+              id={`${fieldId}-status`}
               value={status}
               onChange={(e) => setStatus(e.target.value as 'draft' | 'published')}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
@@ -320,14 +354,20 @@ export function BlogDialog({
   );
 }
 
-function extractPlainText(content: any): string {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function extractPlainText(content: unknown): string {
   if (!content) return '';
   if (typeof content === 'string') return content;
-  if (content.type === 'doc' && Array.isArray(content.content)) {
+  if (isRecord(content) && content.type === 'doc' && Array.isArray(content.content)) {
     return content.content
-      .map((node: any) => {
-        if (node.type === 'paragraph' && Array.isArray(node.content)) {
-          return node.content.map((child: any) => child.text || '').join('');
+      .map((node: unknown) => {
+        if (isRecord(node) && node.type === 'paragraph' && Array.isArray(node.content)) {
+          return node.content
+            .map((child: unknown) => (isRecord(child) && child.text) || '')
+            .join('');
         }
         return '';
       })

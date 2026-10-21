@@ -76,6 +76,7 @@ export function TagSelector({
         <PopoverTrigger asChild>
           <Button
             variant="outline"
+            // biome-ignore lint/a11y/useSemanticElements: documented shadcn combobox pattern (Popover trigger Button with role combobox)
             role="combobox"
             aria-expanded={open}
             className="w-full justify-between"

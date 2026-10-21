@@ -54,8 +54,7 @@ export type FilterCondition = z.infer<typeof filterConditionSchema>;
 /**
  * Advanced filter group schema (supports nested groups)
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const filterGroupSchema: z.ZodType<any> = z.lazy(() =>
+export const filterGroupSchema: z.ZodType<FilterGroup, z.ZodTypeDef, unknown> = z.lazy(() =>
   z.object({
     logic: z.enum(['and', 'or']),
     conditions: z.array(filterConditionSchema).default([]),

@@ -27,6 +27,7 @@ export async function AxSiteHeader({ locale, variant }: AxSiteHeaderProps) {
       {/* Above the sticky header and scrolling away with the page: the header itself stays
           lower than html scroll-padding-top (5rem), so headings scrolled to are never under it */}
       {isTestMode() && (
+        // biome-ignore lint/a11y/useSemanticElements: test-mode banner as a live region, not the result of a form calculation
         <p
           role="status"
           className="bg-amber-100 px-4 py-1.5 text-center text-xs font-bold text-amber-900"

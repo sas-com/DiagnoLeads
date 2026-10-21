@@ -90,10 +90,12 @@ export class PluginManager {
 
       // Register hooks globally
       for (const [hookType, handlers] of instance.hooks) {
-        if (!this.globalHooks.has(hookType)) {
-          this.globalHooks.set(hookType, []);
+        let globalHandlers = this.globalHooks.get(hookType);
+        if (!globalHandlers) {
+          globalHandlers = [];
+          this.globalHooks.set(hookType, globalHandlers);
         }
-        this.globalHooks.get(hookType)!.push(...handlers);
+        globalHandlers.push(...handlers);
       }
     } catch (error) {
       instance.status = 'error';
@@ -358,10 +360,12 @@ export class PluginManager {
       },
 
       registerHook: <T>(hookType: HookType, handler: HookHandler<T>) => {
-        if (!instance.hooks.has(hookType)) {
-          instance.hooks.set(hookType, []);
+        let handlers = instance.hooks.get(hookType);
+        if (!handlers) {
+          handlers = [];
+          instance.hooks.set(hookType, handlers);
         }
-        instance.hooks.get(hookType)!.push(handler as HookHandler);
+        handlers.push(handler as HookHandler);
       },
     };
   }
