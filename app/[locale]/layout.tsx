@@ -1,5 +1,5 @@
 import { ROOT_CLIENT_MESSAGES, pickMessages } from '@/lib/i18n/client-messages';
-import { locales } from '@/lib/i18n/config';
+import { type Locale, locales } from '@/lib/i18n/config';
 import { NOINDEX } from '@/lib/seo/indexing';
 import { Analytics } from '@vercel/analytics/next';
 import type { Metadata, Viewport } from 'next';
@@ -82,7 +82,7 @@ export default async function LocaleLayout({
   const { locale } = await params;
 
   // サポートされていないロケールは404
-  if (!locales.includes(locale as any)) {
+  if (!locales.includes(locale as Locale)) {
     notFound();
   }
 

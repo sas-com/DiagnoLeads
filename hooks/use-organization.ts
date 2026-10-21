@@ -100,7 +100,8 @@ export function useCurrentOrganization() {
 
   // Fetch organization data if we have a valid ID but no data
   const { data, isLoading: queryLoading } = trpc.organizations.getById.useQuery(
-    { id: organizationId! },
+    // enabled is false unless organizationId is a valid UUID, so the fallback is never sent
+    { id: organizationId ?? '' },
     {
       enabled: isValidOrg && !organization,
       staleTime: 5 * 60 * 1000, // 5 minutes

@@ -160,7 +160,7 @@ export function ImportDialog({ open, onOpenChange, organizationId, onSuccess }: 
   const handleImport = () => {
     if (!summary || !mapping) return;
 
-    const validLeads = summary.results.filter((r) => r.success && r.data).map((r) => r.data!);
+    const validLeads = summary.results.flatMap((r) => (r.success && r.data ? [r.data] : []));
 
     if (validLeads.length === 0) {
       toast.error(t('noData'));

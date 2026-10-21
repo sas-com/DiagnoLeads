@@ -272,6 +272,7 @@ export default function WebhooksSettingsPage() {
                       <h4 className="text-sm font-medium text-muted-foreground mb-2">{category}</h4>
                       <div className="space-y-2">
                         {events.map((event) => (
+                          // biome-ignore lint/a11y/noLabelWithoutControl: wraps the shadcn Checkbox (a Radix button), which Biome cannot detect as a control
                           <label
                             key={event.value}
                             className="flex items-center gap-2 cursor-pointer"

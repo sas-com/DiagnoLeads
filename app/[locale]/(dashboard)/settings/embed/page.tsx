@@ -896,7 +896,10 @@ export default function EmbedSettingsPage() {
               <Button
                 variant="outline"
                 size="icon"
-                onClick={() => copyToClipboard(newApiKey!, 'API key copied')}
+                onClick={() => {
+                  if (!newApiKey) return;
+                  copyToClipboard(newApiKey, 'API key copied');
+                }}
               >
                 <Copy className="h-4 w-4" />
               </Button>

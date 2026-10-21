@@ -2,7 +2,7 @@
  * Saved Filters tRPC Router
  * Handles CRUD operations for saved filters with advanced filtering support
  */
-import { type FilterOperator, savedFilters } from '@/lib/db/schema';
+import { type FilterGroup, type FilterOperator, savedFilters } from '@/lib/db/schema';
 import { LEAD_STATUSES } from '@/lib/features/leads/types/pipeline';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
@@ -38,9 +38,14 @@ const filterConditionSchema = z.object({
   value2: z.unknown().optional(),
 });
 
-// Using z.lazy for recursive type without explicit type annotation
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const filterGroupSchema: z.ZodType<any> = z.lazy(() =>
+type FilterGroupInput = {
+  logic: 'and' | 'or';
+  conditions: z.infer<typeof filterConditionSchema>[];
+  groups?: FilterGroupInput[];
+};
+
+// Recursive schema: z.lazy needs an explicit type annotation
+const filterGroupSchema: z.ZodType<FilterGroupInput, z.ZodTypeDef, unknown> = z.lazy(() =>
   z.object({
     logic: z.enum(['and', 'or']),
     conditions: z.array(filterConditionSchema).default([]),
@@ -119,8 +124,9 @@ export const filtersRouter = router({
       visibilityConditions.push(eq(savedFilters.userId, ctx.user.id));
     }
 
-    if (visibilityConditions.length > 0) {
-      conditions.push(or(...visibilityConditions)!);
+    const visibilityCondition = or(...visibilityConditions);
+    if (visibilityCondition) {
+      conditions.push(visibilityCondition);
     }
 
     const results = await ctx.db.query.savedFilters.findMany({
@@ -203,7 +209,8 @@ export const filtersRouter = router({
         userId: ctx.user?.id,
         name: input.name,
         description: input.description,
-        filters: input.filters,
+        // Same shape; zod only types the unknown `value` key as optional
+        filters: input.filters as FilterGroup,
         isPublic: input.isPublic,
         color: input.color,
         icon: input.icon,

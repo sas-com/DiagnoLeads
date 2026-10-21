@@ -199,10 +199,12 @@ export class JobQueue {
    * Subscribe to job events
    */
   on(event: JobEventType, handler: EventHandler): () => void {
-    if (!this.eventListeners.has(event)) {
-      this.eventListeners.set(event, new Set());
+    let listeners = this.eventListeners.get(event);
+    if (!listeners) {
+      listeners = new Set();
+      this.eventListeners.set(event, listeners);
     }
-    this.eventListeners.get(event)!.add(handler);
+    listeners.add(handler);
 
     // Return unsubscribe function
     return () => {

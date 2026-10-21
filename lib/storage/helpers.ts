@@ -25,7 +25,7 @@ export function generateFileKey(prefix: string, filename: string): string {
  */
 export function getFileExtension(filename: string): string {
   const parts = filename.split('.');
-  return parts.length > 1 ? parts.pop()!.toLowerCase() : '';
+  return parts.length > 1 ? (parts.at(-1) ?? '').toLowerCase() : '';
 }
 
 /**

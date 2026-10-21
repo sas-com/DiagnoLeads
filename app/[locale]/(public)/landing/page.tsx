@@ -49,21 +49,25 @@ export default async function LandingPage({
 
   const features = [
     {
+      id: 'aiScoring',
       icon: Brain,
       title: t('features.aiScoring.title'),
       description: t('features.aiScoring.description'),
     },
     {
+      id: 'semanticSearch',
       icon: Search,
       title: t('features.semanticSearch.title'),
       description: t('features.semanticSearch.description'),
     },
     {
+      id: 'analytics',
       icon: BarChart3,
       title: t('features.analytics.title'),
       description: t('features.analytics.description'),
     },
     {
+      id: 'multiTenant',
       icon: Users,
       title: t('features.multiTenant.title'),
       description: t('features.multiTenant.description'),
@@ -71,11 +75,11 @@ export default async function LandingPage({
   ];
 
   const benefits = [
-    t('benefits.item1'),
-    t('benefits.item2'),
-    t('benefits.item3'),
-    t('benefits.item4'),
-    t('benefits.item5'),
+    { id: 'item1', text: t('benefits.item1') },
+    { id: 'item2', text: t('benefits.item2') },
+    { id: 'item3', text: t('benefits.item3') },
+    { id: 'item4', text: t('benefits.item4') },
+    { id: 'item5', text: t('benefits.item5') },
   ];
 
   return (
@@ -147,9 +151,9 @@ export default async function LandingPage({
             <p className="text-xl text-gray-600 max-w-2xl mx-auto">{t('features.subtitle')}</p>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {features.map((feature, index) => (
+            {features.map((feature) => (
               <div
-                key={index}
+                key={feature.id}
                 className="p-6 rounded-2xl bg-gradient-to-b from-gray-50 to-white border border-gray-100 hover:shadow-lg transition-shadow"
               >
                 <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-4">
@@ -174,13 +178,13 @@ export default async function LandingPage({
               <p className="text-xl text-gray-600">{t('benefits.subtitle')}</p>
             </div>
             <div className="grid md:grid-cols-2 gap-4">
-              {benefits.map((benefit, index) => (
+              {benefits.map((benefit) => (
                 <div
-                  key={index}
+                  key={benefit.id}
                   className="flex items-start gap-3 p-4 bg-white rounded-xl border border-gray-100"
                 >
                   <CheckCircle className="h-6 w-6 text-green-500 flex-shrink-0 mt-0.5" />
-                  <span className="text-gray-700">{benefit}</span>
+                  <span className="text-gray-700">{benefit.text}</span>
                 </div>
               ))}
             </div>

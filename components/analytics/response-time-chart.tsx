@@ -21,6 +21,7 @@ export function ResponseTimeChart({ data, isLoading = false }: ResponseTimeChart
     return (
       <div className="h-64 space-y-4">
         {[...Array(4)].map((_, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton placeholders that are never reordered and have no identity
           <div key={i} className="flex items-center gap-3">
             <div className="w-20 h-4 bg-gray-200 animate-pulse rounded" />
             <div className="flex-1 h-8 bg-gray-200 animate-pulse rounded" />

@@ -587,6 +587,7 @@ export default function AnalyticsPage() {
               {sourceLoading ? (
                 <div className="space-y-3 mt-4">
                   {[...Array(5)].map((_, i) => (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton placeholders that are never reordered and have no identity
                     <div key={`skeleton-${i}`} className="h-10 bg-gray-200 animate-pulse rounded" />
                   ))}
                 </div>

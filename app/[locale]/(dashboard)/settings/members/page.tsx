@@ -98,7 +98,7 @@ export default function MembersPage() {
   const organizationId = hasValidOrgId && contextOrgId ? contextOrgId : '';
 
   const { data: currentOrg, isLoading: orgLoading } = trpc.organizations.getById.useQuery(
-    { id: contextOrgId! },
+    { id: contextOrgId ?? '' },
     {
       enabled: hasValidOrgId,
       staleTime: 5 * 60 * 1000,

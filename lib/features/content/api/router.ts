@@ -116,8 +116,9 @@ const faqsRouter = router({
       answer: input.answer,
       category: input.category,
       order: input.order,
-      organizationId: (ctx.session as any)?.activeOrganizationId,
-    } as any);
+      organizationId: (ctx.session as { activeOrganizationId?: string } | null)
+        ?.activeOrganizationId,
+    });
 
     return { faq };
   }),
@@ -256,7 +257,7 @@ const blogRouter = router({
         email: ctx.user.email,
       },
       seo: {},
-    } as any);
+    });
 
     return { post };
   }),

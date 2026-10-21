@@ -3,7 +3,9 @@ import type { NeonHttpDatabase } from 'drizzle-orm/neon-http';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import type { OrganizationRole } from './schema';
 
-type Database = NeonHttpDatabase<any> | PostgresJsDatabase<any>;
+type Database =
+  | NeonHttpDatabase<Record<string, unknown>>
+  | PostgresJsDatabase<Record<string, unknown>>;
 
 /**
  * RLS Context - session context for Row-Level Security

@@ -10,6 +10,21 @@ import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 
+/** Values keyed by locale code (e.g. `ja`, `en`) */
+type LocalizedValue<T> = Partial<Record<string, T>>;
+
+/** Shape of a blog post document as returned by the CMS adapter */
+interface BlogPostListItem {
+  id: string;
+  slug: string;
+  title?: LocalizedValue<string>;
+  excerpt?: LocalizedValue<string>;
+  publishedAt: string;
+  category?: string;
+  coverImage?: { url?: string; alt?: string };
+  author?: { name?: string; avatar?: { url?: string } };
+}
+
 interface BlogPageProps {
   params: Promise<{ locale: string }>;
   searchParams: Promise<{ page?: string; category?: string }>;
@@ -40,7 +55,7 @@ export default async function BlogPage({ params, searchParams }: BlogPageProps) 
 
   // Get blog posts from CMS
   const adapter = getCMSAdapter();
-  const result = await adapter.find({
+  const result = await adapter.find<BlogPostListItem>({
     collection: 'blog-posts',
     where: {
       status: 'published',
@@ -109,6 +124,7 @@ export default async function BlogPage({ params, searchParams }: BlogPageProps) 
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
+                aria-hidden="true"
               >
                 <path
                   strokeLinecap="round"
@@ -123,7 +139,7 @@ export default async function BlogPage({ params, searchParams }: BlogPageProps) 
           ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {posts.map((post: any) => {
+                {posts.map((post) => {
                   const title = post.title?.[locale] || post.title?.ja || '';
                   const excerpt = post.excerpt?.[locale] || post.excerpt?.ja || '';
 
@@ -147,6 +163,7 @@ export default async function BlogPage({ params, searchParams }: BlogPageProps) 
                               fill="none"
                               viewBox="0 0 24 24"
                               stroke="currentColor"
+                              aria-hidden="true"
                             >
                               <path
                                 strokeLinecap="round"

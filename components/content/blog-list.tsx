@@ -56,7 +56,7 @@ export function BlogList({ locale }: BlogListProps) {
       <div className="flex items-center space-x-4">
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as any)}
+          onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
           className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
         >
           <option value="all">{tCommon('selectAll')}</option>
@@ -72,6 +72,7 @@ export function BlogList({ locale }: BlogListProps) {
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
+            aria-hidden="true"
           >
             <path
               strokeLinecap="round"
@@ -104,6 +105,7 @@ export function BlogList({ locale }: BlogListProps) {
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
+                          aria-hidden="true"
                         >
                           <path
                             strokeLinecap="round"
@@ -142,6 +144,7 @@ export function BlogList({ locale }: BlogListProps) {
                   {/* Actions */}
                   <div className="flex items-center space-x-2">
                     <button
+                      type="button"
                       onClick={() => setSelectedPost(post)}
                       className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
                       title={tCommon('edit')}
@@ -151,6 +154,7 @@ export function BlogList({ locale }: BlogListProps) {
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
+                        aria-hidden="true"
                       >
                         <path
                           strokeLinecap="round"
@@ -161,6 +165,7 @@ export function BlogList({ locale }: BlogListProps) {
                       </svg>
                     </button>
                     <button
+                      type="button"
                       onClick={() => setDeleteTarget(post)}
                       className="p-2 text-gray-400 hover:text-red-600 transition-colors"
                       title={tCommon('delete')}
@@ -170,6 +175,7 @@ export function BlogList({ locale }: BlogListProps) {
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
+                        aria-hidden="true"
                       >
                         <path
                           strokeLinecap="round"
