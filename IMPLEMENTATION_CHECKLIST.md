@@ -356,10 +356,9 @@
   - Lexicalリッチテキストエディタ
   - 日英ローカライゼーション
   - スキーマ分離（payload schema）
-- ✅ **コレクション定義** (lib/cms/collections/)
-  - FAQs: カテゴリ、順序、マルチテナント
+- ✅ **コレクション定義** (cms/collections/。旧 lib/cms/collections/ は使われておらず #277 で削除)
+  - FAQs: カテゴリ、順序
   - BlogPosts: スラッグ、SEO、著者、カテゴリ
-  - AssessmentTemplates: 質問、スコアリング、結果メッセージ
   - Media: 画像アップロード、サイズバリエーション
   - Authors: プロフィール、ソーシャルリンク
   - Categories: 階層構造対応
@@ -422,9 +421,7 @@
 - ✅ **FAQページ実装** (app/[locale]/(public)/faq/)
   - カテゴリ別表示、アコーディオンUI
   - i18n対応（日英）
-- ✅ **マルチテナント対応** (lib/cms/helpers/tenant.ts)
-  - セッション連携ヘルパー
-  - organizationIdコンテキスト自動取得
+- ~~マルチテナント対応 (lib/cms/helpers/tenant.ts)~~ → #277 で削除。CMS はサイト全体のコンテンツだけに使う（decisions.md の [CMS]）
 
 ---
 
@@ -849,7 +846,7 @@
 **実装内容**:
 - **CMS抽象化レイヤー** (lib/cms/)
   - CMSAdapter インターフェース (CRUD、検索、バルク操作、import/export)
-  - Repository パターン (BlogRepository, FAQRepository, AssessmentRepository)
+  - Repository パターン (BlogRepository, FAQRepository。AssessmentRepository は #277 で削除)
   - Factory パターン (getCMSAdapter, CMS_PROVIDER環境変数による切り替え)
   - 依存性逆転原則に基づく設計
 - **コアTypes** (lib/cms/core/types.ts)
@@ -867,10 +864,7 @@
   - FAQAccordion コンポーネント（アコーディオン形式）
   - カテゴリ別グループ化表示
   - i18n翻訳キー（日英対応）
-- **マルチテナント** (lib/cms/helpers/tenant.ts)
-  - getTenantContext（セッションからorganizationId取得）
-  - requireTenantContext（認証必須操作用ガード）
-  - getPublicContentContext（パブリックコンテンツ用）
+- ~~マルチテナント (lib/cms/helpers/tenant.ts)~~ → #277 で削除
 
 ### 4.3 PayloadCMS統合 (16時間) ✅ 完了
 
@@ -886,10 +880,9 @@
   - Lexicalリッチテキストエディタ
   - 日英ローカライゼーション対応
   - TypeScript型自動生成設定
-- **コレクション** (lib/cms/collections/)
-  - FAQs: カテゴリ選択、表示順序、マルチテナント
+- **コレクション** (cms/collections/。旧 lib/cms/collections/ は #277 で削除)
+  - FAQs: カテゴリ選択、表示順序
   - BlogPosts: スラッグ、SEOメタデータ、著者関連、タグ
-  - AssessmentTemplates: 質問配列、スコアリングルール、結果メッセージ
   - Media: 画像アップロード（thumbnail, card, hero サイズ）
   - Authors: プロフィール、アバター、ソーシャルリンク
   - Categories: 階層構造（親カテゴリ参照）

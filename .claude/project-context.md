@@ -579,13 +579,13 @@ await payload.find({ collection: 'blog-posts' });
 ### コレクション一覧
 
 ```
-lib/cms/collections/
+cms/collections/          # payload.config.ts が読み込む（サイト全体のコンテンツ。組織ごとには扱わない #277）
 ├── FAQs.ts              # よくある質問
 ├── BlogPosts.ts         # ブログ記事
-├── AssessmentTemplates.ts # 診断テンプレート
+├── LandingPages.ts      # LP
+├── DiagnosticForms.ts   # 診断フォーム
 ├── Media.ts             # メディアファイル
-├── Authors.ts           # 著者
-└── Categories.ts        # カテゴリ
+└── Users.ts             # CMS の利用者
 ```
 
 ---
