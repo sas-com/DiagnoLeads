@@ -3824,6 +3824,7 @@
       "not_allowed": "Test mode: this address is not mailed",
       "failed": "Could not send the confirmation. Tell them by phone"
     },
+    "stale": "The preferences changed, so nothing was confirmed. Check the latest options and pick again.",
     "confirmError": "Could not confirm it. Please try again.",
     "readOnly": "You do not have permission to confirm it.",
     "nextMeetingNote": "The confirmed date becomes the lead's next meeting and a next action.",

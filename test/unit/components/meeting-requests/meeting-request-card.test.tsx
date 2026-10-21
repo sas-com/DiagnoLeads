@@ -6,25 +6,37 @@
 import { MeetingRequestCard } from '@/components/features/meeting-requests/meeting-request-card';
 import enMessages from '@/locales/en/common.json';
 import messages from '@/locales/ja/common.json';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ result: {} as Record<string, unknown>, mutate: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  result: {} as Record<string, unknown>,
+  mutate: vi.fn(),
+  invalidate: vi.fn(),
+  /** The options the card gave the confirm mutation */
+  confirmOptions: {} as { onSuccess?: (outcome: unknown) => void },
+}));
+const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }));
 
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
     useUtils: () => ({
-      meetingRequests: { get: { invalidate: vi.fn() } },
+      meetingRequests: { get: { invalidate: mocks.invalidate } },
       leadFollowUp: { tasks: { invalidate: vi.fn() } },
     }),
     meetingRequests: {
       get: { useQuery: () => mocks.result },
-      confirm: { useMutation: () => ({ mutate: mocks.mutate, isPending: false }) },
+      confirm: {
+        useMutation: (options: typeof mocks.confirmOptions) => {
+          mocks.confirmOptions = options;
+          return { mutate: mocks.mutate, isPending: false };
+        },
+      },
     },
   },
 }));
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }));
+vi.mock('sonner', () => ({ toast }));
 
 const ORG_ID = '660e8400-e29b-41d4-a716-446655440000';
 const LEAD_ID = '770e8400-e29b-41d4-a716-446655440000';
@@ -53,8 +65,17 @@ const renderCard = () =>
     </NextIntlClientProvider>
   );
 
+const EMAIL = '回答者に確定の連絡をメールで送る';
+
+const withRequest = (values: Record<string, unknown>) => ({
+  data: { request: request(values), canEdit: true, emailConfigured: true },
+  isError: false,
+});
+
 beforeEach(() => {
   mocks.mutate.mockReset();
+  mocks.invalidate.mockReset();
+  toast.warning.mockReset();
   mocks.result = {
     data: { request: request(), canEdit: true, emailConfigured: true },
     isError: false,
@@ -118,6 +139,7 @@ describe('MeetingRequestCard', () => {
       organizationId: ORG_ID,
       leadId: LEAD_ID,
       candidateIndex: 1,
+      candidate: { date: '2026-10-21', time: '10:00' },
       sendEmail: true,
     });
   });
@@ -209,6 +231,58 @@ describe('MeetingRequestCard', () => {
     expect(
       screen.getByRole('checkbox', { name: '回答者に確定の連絡をメールで送る' })
     ).not.toBeChecked();
+  });
+
+  it('points the email and the confirm button at the warning, only when unverified (#274)', () => {
+    mocks.result = withRequest({ identityVerified: false });
+    const view = renderCard();
+    const email = screen.getByRole('checkbox', { name: EMAIL });
+    const confirm = screen.getByRole('button', { name: 'この日時で確定する' });
+    const warningId = email.getAttribute('aria-describedby');
+    expect(warningId).toBeTruthy();
+    expect(confirm).toHaveAttribute('aria-describedby', warningId);
+    expect(document.getElementById(warningId as string)).toHaveTextContent(
+      '本人確認ができていない回答です'
+    );
+    view.unmount();
+
+    mocks.result = withRequest({ identityVerified: true });
+    renderCard();
+    expect(screen.getByRole('checkbox', { name: EMAIL })).not.toHaveAttribute('aria-describedby');
+    expect(screen.getByRole('button', { name: 'この日時で確定する' })).not.toHaveAttribute(
+      'aria-describedby'
+    );
+  });
+
+  it('follows the request on a refetch while the email is untouched (#274)', () => {
+    mocks.result = withRequest({ identityVerified: false });
+    const view = renderCard();
+    expect(screen.getByRole('checkbox', { name: EMAIL })).not.toBeChecked();
+    // A verified answer replaced the preferences
+    mocks.result = withRequest({ identityVerified: true });
+    view.rerender(
+      <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
+        <MeetingRequestCard organizationId={ORG_ID} leadId={LEAD_ID} />
+      </NextIntlClientProvider>
+    );
+    expect(screen.getByRole('checkbox', { name: EMAIL })).toBeChecked();
+    expect(screen.queryByText('本人確認なし')).not.toBeInTheDocument();
+  });
+
+  it('says the preferences changed and reloads them when the confirmation is stale (#274)', () => {
+    renderCard();
+    fireEvent.click(screen.getAllByRole('radio')[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'この日時で確定する' }));
+    expect(mocks.mutate).toHaveBeenLastCalledWith(
+      expect.objectContaining({ candidateIndex: 0, candidate: { date: '2026-10-20', time: '14:00' } })
+    );
+    act(() => mocks.confirmOptions.onSuccess?.({ ok: false, reason: 'stale' }));
+    expect(toast.warning).toHaveBeenCalledWith(
+      '希望日時が更新されたため、確定していません。最新の候補を確認して、もう一度選んでください。'
+    );
+    expect(mocks.invalidate).toHaveBeenCalledWith({ organizationId: ORG_ID, leadId: LEAD_ID });
+    // The pick is cleared: sales choose again from the new options
+    expect(screen.getByRole('button', { name: 'この日時で確定する' })).toBeDisabled();
   });
 
   it('shows nothing for a lead without preferences', () => {

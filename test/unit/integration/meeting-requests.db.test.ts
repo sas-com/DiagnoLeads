@@ -46,6 +46,8 @@ const OPTIONS = [
   { date: '2026-10-21', time: '10:00' },
   { date: '2026-10-20', time: '14:00' },
 ];
+/** OPTIONS as stored and shown to sales: earliest first */
+const STORED = [OPTIONS[1], OPTIONS[0]];
 
 describe.skipIf(!url)('meeting requests (PostgreSQL)', () => {
   const client = url ? postgres(url, { max: 2 }) : null;
@@ -202,10 +204,11 @@ describe.skipIf(!url)('meeting requests (PostgreSQL)', () => {
   it('saves the preferences, replaces them, and tells sales about the first ones only', async () => {
     const leadId = await createLead();
     const later = vi.fn();
-    expect(await save(leadId)).toEqual({ status: 'saved', first: true });
+    expect(await save(leadId)).toEqual({ status: 'saved', first: true, replacedUnverified: false });
     expect(await save(leadId, [{ date: '2026-10-22', time: '11:00' }])).toEqual({
       status: 'saved',
       first: false,
+      replacedUnverified: false,
     });
     const view = await callers.rep.meetingRequests.get({ organizationId: org, leadId });
     expect(view.request).toMatchObject({
@@ -352,12 +355,14 @@ describe.skipIf(!url)('meeting requests (PostgreSQL)', () => {
       organizationId: org,
       leadId,
       candidateIndex: 0,
+      candidate: STORED[0],
       sendEmail: false,
     });
     const later = vi.fn();
     expect(
       await accept(leadId, await createSubmission(leadId, 'email'), false, [{ date: '2026-10-22', time: '11:00' }], later)
     ).toBe('confirmed');
+    // A verified answer does not replace a confirmed meeting either, even an unverified one
     expect(
       await accept(leadId, await createSubmission(leadId, 'created'), true, [{ date: '2026-10-22', time: '11:00' }], later)
     ).toBe('confirmed');
@@ -375,6 +380,7 @@ describe.skipIf(!url)('meeting requests (PostgreSQL)', () => {
       organizationId: org,
       leadId: other,
       candidateIndex: 0,
+      candidate: STORED[0],
       sendEmail: false,
     });
     expect(await accept(other, await createSubmission(other, 'email'), false, OPTIONS)).toBe(
@@ -401,7 +407,7 @@ describe.skipIf(!url)('meeting requests (PostgreSQL)', () => {
         },
         NOW
       )
-    ).toEqual({ status: 'saved', first: true });
+    ).toEqual({ status: 'saved', first: true, replacedUnverified: false });
     const [row] = await pg
       .select({ topics: meetingRequests.topics, topicNote: meetingRequests.topicNote })
       .from(meetingRequests)
@@ -426,6 +432,7 @@ describe.skipIf(!url)('meeting requests (PostgreSQL)', () => {
       organizationId: org,
       leadId,
       candidateIndex: 0,
+      candidate: STORED[0],
       sendEmail: false,
     });
     expect(
@@ -452,6 +459,7 @@ describe.skipIf(!url)('meeting requests (PostgreSQL)', () => {
       organizationId: org,
       leadId,
       candidateIndex: 0,
+      candidate: STORED[0],
       sendEmail: false,
     });
     expect(first).toMatchObject({ ok: true, candidate: OPTIONS[1], email: 'not_requested' });
@@ -473,6 +481,7 @@ describe.skipIf(!url)('meeting requests (PostgreSQL)', () => {
       organizationId: org,
       leadId,
       candidateIndex: 1,
+      candidate: STORED[1],
       sendEmail: false,
     });
     expect(await nextMeetingOf(leadId)).toBe('2026-10-21');
@@ -491,7 +500,7 @@ describe.skipIf(!url)('meeting requests (PostgreSQL)', () => {
     const sendEmail = vi.fn().mockResolvedValue({ id: 'mail' });
     const outcome = await confirmMeeting(
       pg,
-      { organizationId: org, leadId, candidateIndex: 0, sendEmail: true, userId: repId },
+      { organizationId: org, leadId, candidateIndex: 0, candidate: STORED[0], sendEmail: true, userId: repId },
       { now: NOW, deps: { sendEmail, emailEnabled: () => true } }
     );
     expect(outcome).toMatchObject({ ok: true, email: 'sent' });
@@ -509,12 +518,107 @@ describe.skipIf(!url)('meeting requests (PostgreSQL)', () => {
     expect(
       await confirmMeeting(
         pg,
-        { organizationId: org, leadId: other, candidateIndex: 1, sendEmail: true, userId: repId },
+        { organizationId: org, leadId: other, candidateIndex: 1, candidate: STORED[1], sendEmail: true, userId: repId },
         { now: NOW, deps: { sendEmail, emailEnabled: () => false } }
       )
     ).toMatchObject({ ok: true, email: 'not_configured' });
     expect(sendEmail).toHaveBeenCalledTimes(1);
     expect(await nextMeetingOf(other)).toBe('2026-10-21');
+  });
+
+  it('confirms nothing when the preferences changed after sales loaded them (#274)', async () => {
+    const leadId = await createLead();
+    await accept(leadId, await createSubmission(leadId, 'email'), false, OPTIONS);
+    // Sales see STORED; meanwhile another unverified answer replaces the options
+    await accept(leadId, await createSubmission(leadId, 'email'), false, [
+      { date: '2026-10-23', time: '15:00' },
+      { date: '2026-10-22', time: '11:00' },
+    ]);
+    const sendEmail = vi.fn().mockResolvedValue({ id: 'mail' });
+    expect(
+      await confirmMeeting(
+        pg,
+        {
+          organizationId: org,
+          leadId,
+          candidateIndex: 0,
+          candidate: STORED[0],
+          sendEmail: true,
+          userId: repId,
+        },
+        { now: NOW, deps: { sendEmail, emailEnabled: () => true } }
+      )
+    ).toEqual({ ok: false, reason: 'stale' });
+    // The router hands it back to the card
+    expect(
+      await callers.rep.meetingRequests.confirm({
+        organizationId: org,
+        leadId,
+        candidateIndex: 1,
+        candidate: STORED[1],
+        sendEmail: false,
+      })
+    ).toEqual({ ok: false, reason: 'stale' });
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect((await requestOf(leadId)).confirmed).toBeNull();
+    expect(await pg.select().from(leadTasks).where(eq(leadTasks.leadId, leadId))).toHaveLength(0);
+
+    // With the options now shown, it is confirmed
+    expect(
+      await callers.rep.meetingRequests.confirm({
+        organizationId: org,
+        leadId,
+        candidateIndex: 0,
+        candidate: { date: '2026-10-22', time: '11:00' },
+        sendEmail: false,
+      })
+    ).toMatchObject({ ok: true, candidate: { date: '2026-10-22', time: '11:00' } });
+  });
+
+  it('tells sales again when verified preferences replace unverified ones (#274)', async () => {
+    const leadId = await createLead();
+    const later = vi.fn();
+    await accept(leadId, await createSubmission(leadId, 'email'), false, OPTIONS, later);
+    expect(later).toHaveBeenCalledTimes(1);
+    expect(
+      await accept(leadId, await createSubmission(leadId, 'created'), true, OPTIONS, later)
+    ).toBe('saved');
+    expect(later).toHaveBeenCalledTimes(2);
+    // Verified preferences replacing verified ones: no notice, as before
+    expect(
+      await accept(leadId, await createSubmission(leadId, 'created'), true, OPTIONS, later)
+    ).toBe('saved');
+    expect(later).toHaveBeenCalledTimes(2);
+
+    // What the upsert reports
+    const other = await createLead();
+    const unverified = await createSubmission(other, 'email');
+    expect(
+      await saveMeetingPreferences(
+        pg,
+        {
+          organizationId: org,
+          leadId: other,
+          submissionId: unverified,
+          identityVerified: false,
+          preferences: { candidates: OPTIONS, attendeeRoles: [], meetingFormat: null, topics: [], topicNote: null },
+        },
+        NOW
+      )
+    ).toEqual({ status: 'saved', first: true, replacedUnverified: false });
+    expect(
+      await saveMeetingPreferences(
+        pg,
+        {
+          organizationId: org,
+          leadId: other,
+          submissionId: await createSubmission(other, 'created'),
+          identityVerified: true,
+          preferences: { candidates: OPTIONS, attendeeRoles: [], meetingFormat: null, topics: [], topicNote: null },
+        },
+        NOW
+      )
+    ).toEqual({ status: 'saved', first: false, replacedUnverified: true });
   });
 
   it('lets parent viewers read but not confirm, and hides other leads', async () => {
@@ -524,13 +628,13 @@ describe.skipIf(!url)('meeting requests (PostgreSQL)', () => {
       (await callers.viewer.meetingRequests.get({ organizationId: org, leadId })).canEdit
     ).toBe(false);
     await expect(
-      callers.viewer.meetingRequests.confirm({ organizationId: org, leadId, candidateIndex: 0 })
+      callers.viewer.meetingRequests.confirm({ organizationId: org, leadId, candidateIndex: 0, candidate: STORED[0] })
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
 
     const without = await createLead();
     expect((await callers.rep.meetingRequests.get({ organizationId: org, leadId: without })).request).toBeNull();
     await expect(
-      callers.rep.meetingRequests.confirm({ organizationId: org, leadId: without, candidateIndex: 0 })
+      callers.rep.meetingRequests.confirm({ organizationId: org, leadId: without, candidateIndex: 0, candidate: STORED[0] })
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 });

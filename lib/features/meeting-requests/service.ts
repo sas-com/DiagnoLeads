@@ -13,7 +13,8 @@
  * - Preferences sent with an answer tied to an existing lead by its email address only (an
  *   unverified answer, #233) are kept too, marked for sales, but never replace preferences sent
  *   with a verified answer (#274). Whether a request is verified is derived from its answer
- *   (requestVerified), so no column records it.
+ *   (requestVerified), so no column records it. Sales are told again when verified preferences
+ *   replace unverified ones, and a confirmation must name the candidate sales saw.
  */
 import type { db as defaultDb } from '@/lib/db/client';
 import { leadTasks, leads, meetingRequests, organizations, users } from '@/lib/db/schema';
@@ -59,19 +60,20 @@ const NOTICE_NOTE_LENGTH = 100;
  * an answer counts as verified: only verified answers were stored before #274, and a deleted
  * answer leaves submission_id null. The one place this rule lives (#274).
  * The names are written out: drizzle leaves columns unqualified in a select from one table,
- * which would make the correlated subquery ambiguous.
+ * which would make the correlated subquery ambiguous. `request` names the meeting_requests row.
  */
-function requestVerified() {
+function requestVerified(request = 'meeting_requests') {
   return sql<boolean>`not exists (
     select 1 from diagnostic_submissions ds
-    where ds.id = meeting_requests.submission_id
+    where ds.id = ${sql.identifier(request)}.submission_id
       and ds.lead_created = false
       and ds.continued_from_submission_id is null
   )`;
 }
 
 export type SavePreferencesOutcome =
-  | { status: 'saved'; first: boolean }
+  /** replacedUnverified: the preferences replaced were from an unverified answer (#274) */
+  | { status: 'saved'; first: boolean; replacedUnverified: boolean }
   /** Sales already confirmed a meeting: nothing changes */
   | { status: 'confirmed' }
   /** An unverified answer met preferences from a verified one: they are kept (#274) */
@@ -123,8 +125,17 @@ export async function saveMeetingPreferences(
         ? isNull(meetingRequests.confirmedOn)
         : and(isNull(meetingRequests.confirmedOn), not(requestVerified())),
     })
-    .returning({ inserted: sql<boolean>`(xmax = 0)` });
-  if (row) return { status: 'saved', first: row.inserted };
+    .returning({
+      inserted: sql<boolean>`(xmax = 0)`,
+      // A subquery here reads the statement's snapshot: the row as it was before this update
+      replacedUnverified: sql<boolean>`exists (
+        select 1 from meeting_requests previous
+        where previous.lead_id = meeting_requests.lead_id and not ${requestVerified('previous')}
+      )`,
+    });
+  if (row) {
+    return { status: 'saved', first: row.inserted, replacedUnverified: row.replacedUnverified };
+  }
   if (input.identityVerified) return { status: 'confirmed' };
   // Nothing changed: tell a confirmed meeting from verified preferences that were kept
   const [kept] = await db
@@ -353,6 +364,8 @@ export interface ConfirmDeps {
 
 export type ConfirmOutcome =
   | { ok: false; reason: 'not_found' }
+  /** The preferences changed after sales loaded them: nothing is confirmed (#274) */
+  | { ok: false; reason: 'stale' }
   | {
       ok: true;
       candidate: MeetingCandidate;
@@ -362,7 +375,8 @@ export type ConfirmOutcome =
 
 /**
  * Confirm one of the candidates (or switch to another): the lead's next meeting, a next action
- * on that day, and the confirmation email when asked.
+ * on that day, and the confirmation email when asked. The candidate at the index must still be
+ * the one sales saw: the respondent can replace unconfirmed preferences at any time (#274).
  */
 export async function confirmMeeting(
   db: Database,
@@ -395,7 +409,8 @@ export async function confirmMeeting(
       )
       .for('update', { of: meetingRequests });
     const candidate = row?.candidates[input.candidateIndex];
-    if (!row || !candidate) return null;
+    if (!row || !candidate) return { ok: false, reason: 'not_found' } as const;
+    if (!sameCandidate(candidate, input.candidate)) return { ok: false, reason: 'stale' } as const;
 
     const meetingFormat = row.meetingFormat as MeetingFormat | null;
     const title = `初回商談${meetingFormat ? `（${FORMAT_LABELS[meetingFormat]}）` : ''} ${candidate.time}〜`;
@@ -444,9 +459,9 @@ export async function confirmMeeting(
         updatedAt: now,
       })
       .where(eq(meetingRequests.id, row.id));
-    return { row, candidate, meetingFormat };
+    return { ok: true, row, candidate, meetingFormat } as const;
   });
-  if (!confirmed) return { ok: false, reason: 'not_found' };
+  if (!confirmed.ok) return confirmed;
 
   const { row, candidate, meetingFormat } = confirmed;
   if (!input.sendEmail) return { ok: true, candidate, email: 'not_requested' };
@@ -482,6 +497,10 @@ export async function confirmMeeting(
   return { ok: true, candidate, email: 'sent' };
 }
 
+function sameCandidate(a: MeetingCandidate, b: MeetingCandidate): boolean {
+  return a.date === b.date && a.time === b.time;
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -495,10 +514,11 @@ export type AcceptPreferencesStatus = 'saved' | 'confirmed' | 'out_of_range' | '
 
 /**
  * The preferences sent with a consultation request from a result page. `later` runs work after
- * the response (the route passes next/server's after): sales are told about the first ones only.
- * An answer tied to an existing lead by its email address only (unverified) has its preferences
- * kept, marked for sales, but they never replace those of a verified answer (#274, changing
- * #233). 'unavailable' when the request has no lead (the answer could not be tied to one), or
+ * the response (the route passes next/server's after): sales are told about the first ones, and
+ * again when a verified answer replaces those of an unverified one (normal notice). An answer
+ * tied to an existing lead by its email address only (unverified) has its preferences kept,
+ * marked for sales, but they never replace those of a verified answer (#274, changing #233).
+ * 'unavailable' when the request has no lead (the answer could not be tied to one), or
  * when an unverified answer met preferences from a verified one: the lead keeps them.
  */
 export async function acceptMeetingPreferences(
@@ -527,7 +547,12 @@ export async function acceptMeetingPreferences(
     },
     now
   );
-  if (outcome.status === 'saved' && outcome.first) {
+  // Sales are told about the first preferences, and again when the person's own (verified)
+  // replace those of an unverified answer, which anyone could have sent (#274)
+  if (
+    outcome.status === 'saved' &&
+    (outcome.first || (input.identityVerified && outcome.replacedUnverified))
+  ) {
     later(() =>
       notifyPreferencesReceived(db, {
         organizationId: input.organizationId,
