@@ -10,23 +10,19 @@ import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { evaluateFlag, getCachedFlag, invalidateFlagCache, setCachedFlag } from '../service';
 import {
-  type FeatureFlag,
+  evaluateFlag,
+  getCachedFlag,
+  invalidateFlagCache,
+  setCachedFlag,
+  toFeatureFlag,
+} from '../service';
+import {
   createFeatureFlagSchema,
   evaluateFeatureFlagSchema,
   listFeatureFlagsSchema,
   updateFeatureFlagSchema,
 } from '../types';
-
-/**
- * The service-layer FeatureFlag type does not match the DB row (nullable columns, and
- * targetOrganizationIds/targetUserIds vs organizationIds/userIds). This type-only cast keeps the
- * existing runtime behaviour: the row object is passed through unchanged.
- */
-function toServiceFlag(row: typeof featureFlags.$inferSelect): FeatureFlag {
-  return row as unknown as FeatureFlag;
-}
 
 export const featureFlagsRouter = router({
   /**
@@ -113,7 +109,7 @@ export const featureFlagsRouter = router({
       }
 
       // Cache the flag
-      setCachedFlag(ctx.organization.id, toServiceFlag(flag));
+      setCachedFlag(ctx.organization.id, toFeatureFlag(flag));
 
       return flag;
     }),
@@ -277,7 +273,7 @@ export const featureFlagsRouter = router({
         };
       }
 
-      flag = toServiceFlag(dbFlag);
+      flag = toFeatureFlag(dbFlag);
       setCachedFlag(ctx.organization.id, flag);
     }
 
@@ -327,7 +323,7 @@ export const featureFlagsRouter = router({
       for (const key of input.keys) {
         const flag = flagMap.get(key);
         if (flag) {
-          results[key] = evaluateFlag(toServiceFlag(flag), context).enabled;
+          results[key] = evaluateFlag(toFeatureFlag(flag), context).enabled;
         } else {
           results[key] = false;
         }

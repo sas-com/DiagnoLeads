@@ -5,6 +5,7 @@
  */
 
 import crypto from 'node:crypto';
+import type { featureFlags } from '@/lib/db/schema';
 import type {
   FeatureFlag,
   FeatureFlagContext,
@@ -16,6 +17,28 @@ import type {
 // In-memory cache for feature flags (could be replaced with Redis)
 const flagCache = new Map<string, { flag: FeatureFlag; expiresAt: number }>();
 const CACHE_TTL_MS = 60 * 1000; // 1 minute cache
+
+/**
+ * Convert a feature_flags row to the service type. The table stores the targets as
+ * targetOrganizationIds / targetUserIds and uses null for unset columns (#263)
+ */
+export function toFeatureFlag(row: typeof featureFlags.$inferSelect): FeatureFlag {
+  return {
+    id: row.id,
+    key: row.key,
+    name: row.name,
+    description: row.description ?? undefined,
+    status: row.status,
+    strategy: row.strategy,
+    rolloutPercentage: row.rolloutPercentage ?? undefined,
+    organizationIds: row.targetOrganizationIds ?? undefined,
+    userIds: row.targetUserIds ?? undefined,
+    environments: row.environments ?? undefined,
+    metadata: row.metadata ?? undefined,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
 
 /**
  * Generate a deterministic hash for percentage-based rollout
