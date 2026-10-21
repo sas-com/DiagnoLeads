@@ -1,6 +1,8 @@
 import type { db as defaultDb } from '@/lib/db/client';
 import { auditLogs, leadTags, leads, tags, users } from '@/lib/db/schema';
 import type { AxMqlLevel } from '@/lib/features/diagnostics/ax-migration/mql';
+import { isFirstHandoff } from '@/lib/features/lead-handoff/handoff';
+import { notifyLeadHandoff } from '@/lib/features/lead-handoff/notify';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import {
@@ -598,7 +600,7 @@ export const leadsRouter = router({
 
     // The update and its audit row are written together; the row lock keeps the audited
     // "before" equal to the values this update replaces (Refs #101)
-    return ctx.db.transaction(async (tx) => {
+    const result = await ctx.db.transaction(async (tx) => {
       await tx.execute(sql`select 1 from ${leads} where ${leadScope} for no key update`);
 
       // Verify lead exists and belongs to organization
@@ -647,8 +649,21 @@ export const leadsRouter = router({
         );
       }
 
-      return updated;
+      return {
+        updated,
+        handedOff: !!updated && isFirstHandoff(existing, updated.dealPhaseReachedAt),
+      };
     });
+
+    // Moved on from the initial hearing: the handoff sheet goes to the technical team (#86)
+    if (result.handedOff) {
+      await notifyLeadHandoff(ctx.db, {
+        organizationId: input.organizationId,
+        leadId: input.id,
+        userId: ctx.user.id,
+      });
+    }
+    return result.updated;
   }),
 
   /**

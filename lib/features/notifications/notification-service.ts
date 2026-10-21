@@ -254,6 +254,8 @@ export function shouldSendInAppNotification(
       return prefs.inAppNextActionDue;
     // A restriction on AI source code analysis (#160) changes the plan: always told, like system
     case 'hearing_ai_restricted':
+    // Handoff sheets (#86) go to the members the organization chose to receive them
+    case 'lead_handoff':
     case 'system':
       return true;
     default:

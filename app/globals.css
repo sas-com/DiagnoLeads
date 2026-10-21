@@ -719,3 +719,24 @@ html:has(.ax-site) {
     print-color-adjust: exact;
   }
 }
+
+/* Printing the handoff sheet of the first meeting (Refs #86): same approach as the summary above */
+@media print {
+  body:has([data-lead-handoff])
+    :not(:has([data-lead-handoff])):not([data-lead-handoff], [data-lead-handoff] *) {
+    display: none !important;
+  }
+  body:has([data-lead-handoff]) :has([data-lead-handoff]) {
+    position: static !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: none !important;
+    max-width: none !important;
+  }
+  [data-lead-handoff] {
+    print-color-adjust: exact;
+  }
+}
