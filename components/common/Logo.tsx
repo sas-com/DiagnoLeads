@@ -31,6 +31,9 @@ export function Logo({
     <div className={`${sizeClasses[size]} relative flex items-center justify-center`}>
       {/* 信頼感・親しみやすさを表現したティール系ロゴ */}
       <svg
+        role="img"
+        aria-label="DiagnoLeads"
+        aria-hidden={showText && !collapsed}
         viewBox="0 0 40 40"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"

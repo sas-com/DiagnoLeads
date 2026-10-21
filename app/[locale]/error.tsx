@@ -30,6 +30,7 @@ export default function LocaleError({
           <p className="mb-4 text-sm text-gray-500">{t('errorId', { digest: error.digest })}</p>
         )}
         <button
+          type="button"
           onClick={reset}
           className="rounded-md bg-teal-600 px-4 py-2 text-white hover:bg-teal-700 transition-colors"
         >

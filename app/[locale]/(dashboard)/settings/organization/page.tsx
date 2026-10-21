@@ -40,7 +40,7 @@ export default function OrganizationSettingsPage() {
   const hasValidOrgId = Boolean(contextOrgId && isValidUUID(contextOrgId));
 
   const { data: currentOrg, isLoading: queryLoading } = trpc.organizations.getById.useQuery(
-    { id: contextOrgId! },
+    { id: contextOrgId ?? '' },
     {
       enabled: hasValidOrgId,
       staleTime: 5 * 60 * 1000,

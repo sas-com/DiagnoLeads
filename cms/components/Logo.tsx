@@ -13,6 +13,7 @@ export function Logo() {
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
           style={{ width: '100%', height: '100%' }}
+          aria-hidden="true"
         >
           <defs>
             <linearGradient id="cmsLogoGradient" x1="0%" y1="0%" x2="100%" y2="100%">

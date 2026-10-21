@@ -32,6 +32,7 @@ export function RecentActivity({ leads, isLoading = false, maxItems = 5 }: Recen
         <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('recentLeads')}</h3>
         <div className="space-y-4">
           {[...Array(maxItems)].map((_, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton placeholders that are never reordered and have no identity
             <div key={i} className="flex items-start gap-3 pb-4 border-b last:border-b-0">
               <div className="h-10 w-10 bg-gray-200 animate-pulse rounded-full" />
               <div className="flex-1 space-y-2">

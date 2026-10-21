@@ -57,6 +57,7 @@ export function FAQList({ locale }: FAQListProps) {
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
+          aria-hidden="true"
         >
           <path
             strokeLinecap="round"
@@ -87,7 +88,7 @@ export function FAQList({ locale }: FAQListProps) {
         <div key={category} className="bg-white rounded-lg shadow overflow-hidden">
           <div className="px-4 py-3 bg-gray-50 border-b">
             <h3 className="text-sm font-medium text-gray-700">
-              {t(`categories.${category}` as any)}
+              {t(`categories.${category}` as Parameters<typeof t>[0])}
             </h3>
           </div>
           <ul className="divide-y divide-gray-200">
@@ -113,6 +114,7 @@ export function FAQList({ locale }: FAQListProps) {
                     </div>
                     <div className="ml-4 flex items-center space-x-2">
                       <button
+                        type="button"
                         onClick={() => setSelectedFAQ(faq)}
                         className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
                         title={tCommon('edit')}
@@ -122,6 +124,7 @@ export function FAQList({ locale }: FAQListProps) {
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
+                          aria-hidden="true"
                         >
                           <path
                             strokeLinecap="round"
@@ -132,6 +135,7 @@ export function FAQList({ locale }: FAQListProps) {
                         </svg>
                       </button>
                       <button
+                        type="button"
                         onClick={() => setDeleteTarget(faq)}
                         className="p-1 text-gray-400 hover:text-red-600 transition-colors"
                         title={tCommon('delete')}
@@ -141,6 +145,7 @@ export function FAQList({ locale }: FAQListProps) {
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
+                          aria-hidden="true"
                         >
                           <path
                             strokeLinecap="round"
@@ -193,14 +198,20 @@ export function FAQList({ locale }: FAQListProps) {
 /**
  * RichTextコンテンツからプレーンテキストを抽出
  */
-function extractPlainText(content: any): string {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function extractPlainText(content: unknown): string {
   if (!content) return '';
   if (typeof content === 'string') return content;
-  if (content.type === 'doc' && Array.isArray(content.content)) {
+  if (isRecord(content) && content.type === 'doc' && Array.isArray(content.content)) {
     return content.content
-      .map((node: any) => {
-        if (node.type === 'paragraph' && Array.isArray(node.content)) {
-          return node.content.map((child: any) => child.text || '').join('');
+      .map((node: unknown) => {
+        if (isRecord(node) && node.type === 'paragraph' && Array.isArray(node.content)) {
+          return node.content
+            .map((child: unknown) => (isRecord(child) && child.text) || '')
+            .join('');
         }
         return '';
       })

@@ -194,6 +194,7 @@ export function KPICard({
           )}
         >
           <svg
+            aria-hidden="true"
             className={cn('mr-0.5 h-3 w-3', !isPositive && 'rotate-180')}
             fill="none"
             viewBox="0 0 24 24"

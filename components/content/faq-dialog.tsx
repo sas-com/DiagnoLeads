@@ -19,7 +19,7 @@ import {
 import type { FAQ } from '@/lib/cms/core/types';
 import { trpc } from '@/lib/trpc/client';
 import { useTranslations } from 'next-intl';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 
 const FAQ_CATEGORIES = [
   'general',
@@ -49,6 +49,7 @@ export function FAQDialog({
 }: FAQDialogProps) {
   const t = useTranslations('content.faqs');
   const tCommon = useTranslations('common');
+  const fieldId = useId();
   const [internalOpen, setInternalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -133,7 +134,13 @@ export function FAQDialog({
       {mode === 'create' && (
         <DialogTrigger asChild>
           <Button>
-            <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg
+              className="h-4 w-4 mr-2"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              aria-hidden="true"
+            >
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -154,10 +161,14 @@ export function FAQDialog({
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Question - Japanese */}
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor={`${fieldId}-question-ja`}
+              className="block text-sm font-medium text-gray-700"
+            >
               {t('question')} (日本語)
             </label>
             <input
+              id={`${fieldId}-question-ja`}
               type="text"
               value={questionJa}
               onChange={(e) => setQuestionJa(e.target.value)}
@@ -169,10 +180,14 @@ export function FAQDialog({
 
           {/* Question - English */}
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor={`${fieldId}-question-en`}
+              className="block text-sm font-medium text-gray-700"
+            >
               {t('question')} (English)
             </label>
             <input
+              id={`${fieldId}-question-en`}
               type="text"
               value={questionEn}
               onChange={(e) => setQuestionEn(e.target.value)}
@@ -184,10 +199,14 @@ export function FAQDialog({
 
           {/* Answer - Japanese */}
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor={`${fieldId}-answer-ja`}
+              className="block text-sm font-medium text-gray-700"
+            >
               {t('answer')} (日本語)
             </label>
             <textarea
+              id={`${fieldId}-answer-ja`}
               value={answerJa}
               onChange={(e) => setAnswerJa(e.target.value)}
               rows={4}
@@ -199,10 +218,14 @@ export function FAQDialog({
 
           {/* Answer - English */}
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor={`${fieldId}-answer-en`}
+              className="block text-sm font-medium text-gray-700"
+            >
               {t('answer')} (English)
             </label>
             <textarea
+              id={`${fieldId}-answer-en`}
               value={answerEn}
               onChange={(e) => setAnswerEn(e.target.value)}
               rows={4}
@@ -215,8 +238,14 @@ export function FAQDialog({
           {/* Category & Order */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">{t('category')}</label>
+              <label
+                htmlFor={`${fieldId}-category`}
+                className="block text-sm font-medium text-gray-700"
+              >
+                {t('category')}
+              </label>
               <select
+                id={`${fieldId}-category`}
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
@@ -230,8 +259,14 @@ export function FAQDialog({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">{t('order')}</label>
+              <label
+                htmlFor={`${fieldId}-order`}
+                className="block text-sm font-medium text-gray-700"
+              >
+                {t('order')}
+              </label>
               <input
+                id={`${fieldId}-order`}
                 type="number"
                 value={order}
                 onChange={(e) => setOrder(Number.parseInt(e.target.value, 10))}
@@ -256,14 +291,20 @@ export function FAQDialog({
   );
 }
 
-function extractPlainText(content: any): string {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function extractPlainText(content: unknown): string {
   if (!content) return '';
   if (typeof content === 'string') return content;
-  if (content.type === 'doc' && Array.isArray(content.content)) {
+  if (isRecord(content) && content.type === 'doc' && Array.isArray(content.content)) {
     return content.content
-      .map((node: any) => {
-        if (node.type === 'paragraph' && Array.isArray(node.content)) {
-          return node.content.map((child: any) => child.text || '').join('');
+      .map((node: unknown) => {
+        if (isRecord(node) && node.type === 'paragraph' && Array.isArray(node.content)) {
+          return node.content
+            .map((child: unknown) => (isRecord(child) && child.text) || '')
+            .join('');
         }
         return '';
       })
