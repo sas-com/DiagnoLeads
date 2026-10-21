@@ -430,7 +430,7 @@
         "access_many_tools": "Many tools are in scope, so they need to be sorted out first",
         "access_compiled": "Some parts are compiled (.accde / .mde), so their behaviour must be investigated",
         "access_single_maintainer": "Only one person (or an outside individual) can change the tool",
-        "access_support_ended": "Some of your Access (Office) versions are out of support",
+        "access_support_ended": "Some of your Access (Office) versions are out of Microsoft support. They keep working, but newly found weaknesses are no longer fixed",
         "access_support_ending": "Support for some of your Access (Office) versions ends within a year",
         "access_company_impact": "A stop would affect the whole company, partners or customers",
         "access_cloud": "Microsoft advises against using Access from OneDrive or SharePoint"
@@ -484,6 +484,10 @@
         "urgent": {
           "title": "Shall we plan the steps to the deadline together?",
           "lead": "A deadline is close. Shall we plan the steps in a consultation?"
+        },
+        "overdue": {
+          "title": "Shall we sort out the order of the switch together?",
+          "lead": "The support or maintenance has already ended. Shall we check the order of the switch in a consultation?"
         },
         "consultation": {
           "title": "We explain your result and how to proceed",
@@ -2701,6 +2705,10 @@
           "name": "Others",
           "body": "Visual Basic client-server systems, low-code products such as WebPerformer, and other office computers and mainframes."
         }
+      },
+      "accessSupport": {
+        "body": "After Access 2016 and 2019, Microsoft support for Access 2021 also ended on October 13, 2026 (Microsoft 365 is not affected).",
+        "link": "Check your version and how to proceed in the free web diagnosis"
       },
       "industries": "For mid-sized manufacturers and distributors."
     },

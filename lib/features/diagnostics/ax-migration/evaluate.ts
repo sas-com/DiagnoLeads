@@ -790,6 +790,14 @@ export function evaluateAxMigration(
     difficulty: topReasons(difficultyReasons),
     urgency: topReasons(urgencyReasons),
   };
+  // An Office out of support is a fact the respondent should always see (#288)
+  if (
+    support === 'ended' &&
+    !reasons.urgency.includes('access_support_ended') &&
+    urgencyReasons.some((reason) => reason.key === 'access_support_ended')
+  ) {
+    reasons.urgency = [...reasons.urgency.slice(0, MAX_REASONS - 1), 'access_support_ended'];
+  }
   // "Small" is said only when the size itself was answered
   if (reasons.difficulty.length === 0 && difficultyLevel === 'low' && sizeKnown) {
     reasons.difficulty = ['small_scale'];

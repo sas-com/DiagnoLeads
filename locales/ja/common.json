@@ -430,7 +430,7 @@
         "access_many_tools": "移行を考えているツールが多く、まず対象の整理が必要です",
         "access_compiled": "中身を直せない形式（.accde・.mde）の部分があり、動きから仕様を調べる必要があります",
         "access_single_maintainer": "直せる人が1人（または社外の個人）に限られています",
-        "access_support_ended": "お使いのAccess（Office）の一部は、サポートが終了しています",
+        "access_support_ended": "お使いのAccess（Office）の一部は、Microsoftのサポートが終了しています。動作は続きますが、新しく見つかった弱点の修正は提供されません",
         "access_support_ending": "お使いのAccess（Office）の一部は、1年以内にサポートが終了します",
         "access_company_impact": "止まると全社・取引先・お客様に影響します",
         "access_cloud": "OneDrive・SharePointなどからの利用は、Microsoftが避けるよう案内しています"
@@ -484,6 +484,10 @@
         "urgent": {
           "title": "期限までの段取りを、一緒に確認しませんか",
           "lead": "期限が迫っています。まずは個別相談で段取りを確認しませんか。"
+        },
+        "overdue": {
+          "title": "切り替えの順番を、一緒に整理しませんか",
+          "lead": "サポートや保守の期限は、すでに過ぎています。まずは個別相談で、切り替えの順番を確認しませんか。"
         },
         "consultation": {
           "title": "結果の解説と、移行の進め方をご案内します",
@@ -2701,6 +2705,10 @@
           "name": "その他",
           "body": "Visual Basicのクライアントサーバー型システム、WebPerformerなどのローコード製品、ほかのオフコン・汎用機もご相談ください。"
         }
+      },
+      "accessSupport": {
+        "body": "Access 2016・2019 に続き、2021 も 2026年10月13日に Microsoft のサポートが終了しました（Microsoft 365 は対象外）。",
+        "link": "お使いの版と進め方の目安を、無料Web診断で確認する"
       },
       "industries": "製造業・流通業の中堅企業さまに向けたサービスです。"
     },

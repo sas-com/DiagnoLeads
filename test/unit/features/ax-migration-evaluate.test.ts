@@ -446,6 +446,17 @@ describe('evaluateAxMigration', () => {
       );
     });
 
+    it('always shows an Office out of support among the urgency reasons (#288)', () => {
+      const result = evaluate({
+        ...accessAnswers,
+        access_importance: 'company',
+        access_location: 'cloud',
+        access_features: ['none'],
+      });
+      expect(result.reasons.urgency).toHaveLength(2);
+      expect(result.reasons.urgency).toContain('access_support_ended');
+    });
+
     it('takes the weakest version when several are in use', () => {
       const mixed = evaluate({ ...accessAnswers, access_version: ['m365', 'le2013'] });
       expect(mixed.reasons.urgency).toContain('access_support_ended');
