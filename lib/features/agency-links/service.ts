@@ -1,7 +1,7 @@
 import type { db as defaultDb } from '@/lib/db/client';
 import { agencyLinks } from '@/lib/db/schema';
 import { and, eq, isNull } from 'drizzle-orm';
-import { AGENCY_CODE_PATTERN, type AgencyLinkKind } from './types/schemas';
+import { AGENCY_CODE_PATTERN, type AnyLinkKind } from './types/schemas';
 
 type Database = typeof defaultDb;
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
@@ -9,7 +9,9 @@ type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 export interface ResolvedAgencyLink {
   id: string;
   agencyName: string;
-  kind: AgencyLinkKind;
+  kind: AnyLinkKind;
+  /** The employee of a 'member_referral' link (#265) */
+  memberUserId: string | null;
 }
 
 /**
@@ -26,7 +28,12 @@ export async function findActiveAgencyLink(
   if (!normalized || !AGENCY_CODE_PATTERN.test(normalized)) return null;
 
   const [link] = await database
-    .select({ id: agencyLinks.id, agencyName: agencyLinks.agencyName, kind: agencyLinks.kind })
+    .select({
+      id: agencyLinks.id,
+      agencyName: agencyLinks.agencyName,
+      kind: agencyLinks.kind,
+      memberUserId: agencyLinks.memberUserId,
+    })
     .from(agencyLinks)
     .where(
       and(
@@ -36,5 +43,5 @@ export async function findActiveAgencyLink(
       )
     )
     .limit(1);
-  return link ? { ...link, kind: link.kind as AgencyLinkKind } : null;
+  return link ? { ...link, kind: link.kind as AnyLinkKind } : null;
 }

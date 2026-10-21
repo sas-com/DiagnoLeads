@@ -8,7 +8,7 @@ import {
 } from './company-size';
 import { AX_MIGRATION_CONFIG, type AxMigrationConfig } from './config';
 import { AX_PLATFORMS, type AxPlatform, axMigrationDefinition } from './definition';
-import { type AxMqlJudgement, judgeAxMql } from './mql';
+import { type AxMqlJudgement, judgeAxMql, waivedConditions } from './mql';
 import { technicalQuestions, unknownTechnicalQuestions } from './technical';
 
 export type Level = 'low' | 'medium' | 'high';
@@ -120,7 +120,8 @@ export interface AxMigrationResult {
   targetSystem: TargetSystem | null;
   /**
    * MQL (#139): `candidate` = 適合 (industry × system, and a company size not outside the
-   * organization's target ranges, #150), `qualified` = 関心あり（MQL）
+   * organization's target ranges, #150; Access takes any industry and size, #292),
+   * `qualified` = 関心あり（MQL）
    * (fit + a strong signal or the minimum score). See mql.ts; rules in config.ts.
    */
   mql: AxMqlJudgement;
@@ -790,6 +791,14 @@ export function evaluateAxMigration(
     difficulty: topReasons(difficultyReasons),
     urgency: topReasons(urgencyReasons),
   };
+  // An Office out of support is a fact the respondent should always see (#288)
+  if (
+    support === 'ended' &&
+    !reasons.urgency.includes('access_support_ended') &&
+    urgencyReasons.some((reason) => reason.key === 'access_support_ended')
+  ) {
+    reasons.urgency = [...reasons.urgency.slice(0, MAX_REASONS - 1), 'access_support_ended'];
+  }
   // "Small" is said only when the size itself was answered
   if (reasons.difficulty.length === 0 && difficultyLevel === 'low' && sizeKnown) {
     reasons.difficulty = ['small_scale'];
@@ -837,8 +846,10 @@ export function evaluateAxMigration(
         otherSystem !== undefined &&
         config.legacyOtherSystems.includes(otherSystem)),
   };
-  // The respondent's next step uses industry × system only, never the confidential size ranges
-  const mqlCandidate = mqlCriteria.industry && mqlCriteria.system;
+  // The respondent's next step uses industry × system only, never the confidential size ranges.
+  // A path that takes any industry (Access, #292) is not sent to "information" for its industry
+  const industryWaived = waivedConditions(platform, config.mql).includes('industry');
+  const mqlCandidate = (mqlCriteria.industry || industryWaived) && mqlCriteria.system;
 
   // SQL の手がかり（①②必須＋③④のいずれか）: ① machine, language and rough size are known
   const known = (value: string | undefined) => value !== undefined && value !== 'unknown';
@@ -885,11 +896,18 @@ export function evaluateAxMigration(
   // 適合 / 関心あり（MQL）
   const mql = judgeAxMql(
     {
+      platform,
       ...mqlCriteria,
       companySize: companySize.fit,
       consultationRequested: actions.consultationRequested === true,
       supportEnd,
       accessSupport: support,
+      access: {
+        importance: single(answers, 'access_importance'),
+        users: single(answers, 'access_users'),
+        features: accessFeatures,
+        location: single(answers, 'access_location'),
+      },
       role,
       timeline,
       leadScore,

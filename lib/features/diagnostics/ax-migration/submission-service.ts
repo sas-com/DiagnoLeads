@@ -1,6 +1,7 @@
 import type { db as defaultDb } from '@/lib/db/client';
 import { axSalesPlaybooks, diagnosticSubmissions, leads } from '@/lib/db/schema';
 import { findActiveAgencyLink } from '@/lib/features/agency-links/service';
+import { MEMBER_REFERRAL_KIND } from '@/lib/features/agency-links/types/schemas';
 import { axTargetCompanySchema } from '@/lib/features/ax-playbook/types/schemas';
 import { and, eq, gte, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -72,6 +73,7 @@ export type SubmitOutcome =
        * recorded on the lead, and not an unverified identity
        */
       continued: boolean;
+      referralMemberUserId: string | null;
       result: AxMigrationResult;
       answers: DiagnosticAnswers;
     }
@@ -264,9 +266,13 @@ export async function submitAxMigrationDiagnosis(
     // An issued agency link decides the inflow source over the UTM parameters (#147). Like every
     // value of newLead, it is used only when the submission creates the lead
     const agencyLink = await findActiveAgencyLink(tx, organizationId, tracking.agency);
-    const inflow = agencyLink
-      ? { inflowSource: agencyLink.kind, referrerName: null, agencyName: agencyLink.agencyName }
-      : inferInflowSource(tracking);
+    // An employee's own link (#265) names the employee as the referrer, not as an agency: agency
+    // contracts and appointment reviews must not pick the lead up
+    const inflow = !agencyLink
+      ? inferInflowSource(tracking)
+      : agencyLink.kind === MEMBER_REFERRAL_KIND
+        ? { inflowSource: agencyLink.kind, referrerName: agencyLink.agencyName, agencyName: null }
+        : { inflowSource: agencyLink.kind, referrerName: null, agencyName: agencyLink.agencyName };
 
     const { leadId, existing } = await upsertLeadFromSubmission(tx, {
       organizationId,
@@ -337,6 +343,9 @@ export async function submitAxMigrationDiagnosis(
         ? { name: existing.name, company: existing.company, email: existing.email }
         : null,
       continued: continuedFrom !== null,
+      // The employee whose link brought a new lead, to tell them (#265)
+      referralMemberUserId:
+        !existing && agencyLink?.kind === MEMBER_REFERRAL_KIND ? agencyLink.memberUserId : null,
       result,
       answers,
     };
@@ -553,6 +562,8 @@ const offerPointsSql = sql`(select coalesce(sum(r.score_points + r.attendance_po
  * Only `detail` questions of the submission's path are accepted; the answers the result was
  * based on stay as submitted. The lead is updated only when this submission created it, or
  * (for another system of the same respondent) only that system's entry on the lead.
+ * The follow-ups can raise the lead's MQL (e.g. the impact that qualifies the Access support
+ * end, #292); like another system, they never lower it.
  */
 export async function addAxMigrationDetails(
   database: Database,
@@ -620,15 +631,22 @@ export async function addAxMigrationDetails(
       .where(eq(diagnosticSubmissions.id, submissionId));
 
     if (submission.leadId && submission.leadCreated) {
+      const [lead] = await tx
+        .select({ responses: leads.responses, mqlQualifiedAt: leads.mqlQualifiedAt })
+        .from(leads)
+        .where(eq(leads.id, submission.leadId))
+        .for('no key update');
       const summary = {
         difficulty: result.difficulty.level,
         urgency: result.urgency.level,
         needsHearing: result.needsHearing,
         detailsAnsweredAt: now.toISOString(),
+        ...(lead ? withLeadMql(axSummaryOf(lead.responses), toLeadMql(result.mql)) : {}),
       };
       await tx
         .update(leads)
         .set({
+          ...(lead && result.mql.qualified && !lead.mqlQualifiedAt ? { mqlQualifiedAt: now } : {}),
           // Keep a score sales have already changed. Documents and seminars requested from the
           // result (#153) added their points on top: those are not a change by sales
           score:
@@ -646,11 +664,11 @@ export async function addAxMigrationDetails(
         .where(eq(leads.id, submission.leadId));
     } else if (submission.leadId && submission.continuedFromSubmissionId) {
       const [lead] = await tx
-        .select({ responses: leads.responses })
+        .select({ responses: leads.responses, mqlQualifiedAt: leads.mqlQualifiedAt })
         .from(leads)
         .where(eq(leads.id, submission.leadId))
         .for('no key update');
-      const responses =
+      const updated =
         lead &&
         withOtherSystemUpdate(lead.responses, submissionId, {
           difficulty: result.difficulty.level,
@@ -658,10 +676,19 @@ export async function addAxMigrationDetails(
           needsHearing: result.needsHearing,
           detailsAnsweredAt: now.toISOString(),
         });
-      if (responses) {
+      if (lead && updated) {
+        const summary = axSummaryOf(updated);
+        const responses = {
+          ...updated,
+          axMigration: { ...summary, ...withLeadMql(summary, toLeadMql(result.mql)) },
+        };
         await tx
           .update(leads)
-          .set({ responses, updatedAt: now })
+          .set({
+            responses,
+            ...(result.mql.qualified && !lead.mqlQualifiedAt ? { mqlQualifiedAt: now } : {}),
+            updatedAt: now,
+          })
           .where(eq(leads.id, submission.leadId));
       }
     }

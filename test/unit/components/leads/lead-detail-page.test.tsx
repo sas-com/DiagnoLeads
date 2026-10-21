@@ -247,6 +247,10 @@ vi.mock('@/components/features/lead-prep/lead-prep-card', () => ({
   LeadPrepCard: () => null,
 }));
 // "When to act" (#151) has its own tests (test/unit/components/act-timing)
+// The customer search card (#265) is covered by test/unit/components/prospects
+vi.mock('@/components/features/prospects/lead-prospect-card', () => ({
+  LeadProspectCard: () => null,
+}));
 vi.mock('@/components/features/act-timing/act-timing-card', () => ({
   ActTimingCard: () => null,
 }));

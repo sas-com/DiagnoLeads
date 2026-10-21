@@ -131,6 +131,10 @@ const COMPANY_SIZE_FITS = ['fit', 'not_fit', 'unknown', 'not_configured'] as con
 
 function companySizeFitOf(mql: unknown): DiagnosisSummary['companySizeFit'] {
   const criteria = isPlainObject(mql) && isPlainObject(mql.criteria) ? mql.criteria : {};
+  // A path that takes any size (Access, #292): no size badge, the size is not a condition there
+  if (isPlainObject(mql) && Array.isArray(mql.waived) && mql.waived.includes('company_size')) {
+    return null;
+  }
   const fit = criteria.companySize;
   return COMPANY_SIZE_FITS.find((value) => value === fit) ?? null;
 }
