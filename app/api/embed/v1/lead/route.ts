@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { embedAccessLogs, embedConfigs, leads } from '@/lib/db/schema';
 import { isAllowedEmail, testModeEmailMessage } from '@/lib/email/allowed-recipients';
+import { embedApiDisabledResponse, embedApiEnabled } from '@/lib/features/embed/availability';
 import {
   checkRateLimit,
   getRateLimitHeaders,
@@ -19,6 +20,7 @@ import { type NextRequest, NextResponse } from 'next/server';
  * Handle CORS preflight requests
  */
 export async function OPTIONS(request: NextRequest) {
+  if (!embedApiEnabled()) return embedApiDisabledResponse();
   const origin = request.headers.get('origin');
   return new NextResponse(null, {
     status: 204,
@@ -50,6 +52,7 @@ export async function OPTIONS(request: NextRequest) {
  * - Access logging
  */
 export async function POST(request: NextRequest) {
+  if (!embedApiEnabled()) return embedApiDisabledResponse();
   const startTime = Date.now();
   const origin = request.headers.get('origin');
   const referer = request.headers.get('referer');
