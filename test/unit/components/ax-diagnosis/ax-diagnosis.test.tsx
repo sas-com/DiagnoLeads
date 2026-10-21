@@ -105,6 +105,35 @@ describe('AxDiagnosisFlow', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('starts on the path chosen by the page and still lets the respondent change it (#296)', async () => {
+    const user = userEvent.setup();
+    render(withIntl(<AxDiagnosisFlow locale="ja" initialPlatform="access" />));
+    expect(screen.queryByTestId('platform-access')).not.toBeInTheDocument();
+    expect(screen.getByText('STEP 1 / 5')).toBeInTheDocument();
+    expect(window.history.state.ax.step).toBe(1);
+
+    await user.click(inGroup(/直せる（変更できる）人/).getByLabelText(/直せる人がいない/));
+    await user.click(inGroup(/お使いのAccess/).getByLabelText('2016・2019'));
+    await next(user);
+    expect(screen.getByRole('heading', { name: /STEP 2 \/ 5/ })).toHaveFocus();
+
+    // The back button walks the history entries, then reaches the path choice in place
+    await user.click(screen.getByRole('button', { name: /戻る/ }));
+    expect(await screen.findByRole('heading', { name: /STEP 1 \/ 5/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /戻る/ }));
+    expect(screen.getByTestId('platform-access')).toHaveAttribute('aria-pressed', 'true');
+    expect(window.history.state.ax.step).toBe(0);
+    // Another path drops the Access answers, as on the main page
+    await user.click(screen.getByTestId('platform-as400'));
+    expect(screen.getByRole('heading', { name: /STEP 2 \/ 6/ })).toBeInTheDocument();
+  });
+
+  it('ignores a path the diagnosis does not have', () => {
+    render(withIntl(<AxDiagnosisFlow locale="ja" initialPlatform="unknown" />));
+    expect(screen.getByTestId('platform-as400')).toBeInTheDocument();
+    expect(screen.getByText('STEP 1 / 6')).toBeInTheDocument();
+  });
+
   it('names the unanswered questions', async () => {
     const user = userEvent.setup();
     render(withIntl(<AxDiagnosisFlow locale="ja" />));
@@ -324,7 +353,7 @@ describe('AxDiagnosisFlow', () => {
       jsonResponse(201, { submissionId: 'sub-1', consultationRequested: false, result: publicResult })
     );
     const user = userEvent.setup();
-    render(withIntl(<AxDiagnosisFlow locale="ja" />));
+    render(withIntl(<AxDiagnosisFlow locale="ja" entry="ax-lp" />));
     await answerAs400(user);
     await fillContact(user);
     await user.click(screen.getByRole('button', { name: /診断結果を見る/ }));
@@ -345,6 +374,8 @@ describe('AxDiagnosisFlow', () => {
       industry: 'manufacturing',
       role: 'it_manager',
     });
+    // The page the diagnosis was started from (#296)
+    expect(body.tracking.entry).toBe('ax-lp');
     expect(body.contact).toEqual({
       company: '三田製作所',
       name: '山田 太郎',

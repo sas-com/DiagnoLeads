@@ -55,6 +55,7 @@ export default async function AxDiagnosisPage({ params }: AxDiagnosisPageProps) 
               privacyPolicyUrl={axPrivacyPolicyUrl()}
               turnstileSiteKey={turnstileSiteKey()}
               allowedEmailDomains={allowedEmailDomains()}
+              entry="ax-diagnosis"
             />
           </div>
         </div>

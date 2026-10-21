@@ -470,7 +470,7 @@
         "other_inventory": "First take stock of the current setup (languages, database, interfaces)",
         "access_compiled": "For compiled parts (.accde / .mde), check whether the originals exist and investigate the behaviour",
         "access_inventory": "First take stock of the tools and drop unused or duplicate ones to narrow the scope",
-        "access_cloud": "Stop opening Access from cloud folders and move to a web system that shares data safely",
+        "access_cloud": "Stop opening Access from cloud folders and share the data in a way that manages permissions and records",
         "access_external": "Replace the links to data outside Access (core system, SQL Server) with web system interfaces",
         "access_devices": "Check how barcodes, label printers and other devices are used and decide their web replacements"
       },
@@ -2708,7 +2708,8 @@
       },
       "accessSupport": {
         "body": "After Access 2016 and 2019, Microsoft support for Access 2021 also ended on October 13, 2026 (Microsoft 365 is not affected).",
-        "link": "Check your version and how to proceed in the free web diagnosis"
+        "link": "Check your version and how to proceed in the free web diagnosis",
+        "page": "Using Access? See this page"
       },
       "industries": "For mid-sized manufacturers and distributors."
     },
@@ -2808,6 +2809,198 @@
       "newTab": "(opens in a new tab)",
       "copyright": "Copyright © {year} Software Agency System Co., Ltd. All rights reserved."
     }
+  },
+  "axAccess": {
+    "meta": {
+      "title": "Access business tools: fix them or move them to the web? | Free web check (Access) | Software Agency System Co., Ltd.",
+      "description": "Fix your Access tool and keep using it, or move it to the web? Choose the version, VBA, number of users and more, and see how hard and how urgent the migration is. Whether to fix, move or replace it, we compare together based on the result. Free, multiple choice, about 3 minutes."
+    },
+    "floatingCta": "Start the free web check (Access)",
+    "hero": {
+      "eyebrow": "For teams using Microsoft Access business tools",
+      "title": "Your Access tool: fix it and keep using it, or move it to the web?",
+      "lead": "Choose the version, VBA, number of users and more, and see how hard and how urgent the migration is. Whether to fix it, move it to the web or replace it, we compare together based on the result.",
+      "ctaCaption": "Free, multiple choice, about 3 minutes",
+      "cta": "Start the free web check (Access)",
+      "consult": "Book a 30-minute online consultation",
+      "pdfNote": "You can print the result or save it as a PDF and use it as it is to explain the matter to your manager or IT.",
+      "paths": {
+        "title": "Three ways forward",
+        "fix": "Fix it and keep using it",
+        "web": "Move it to the web",
+        "replace": "Replace it with an off-the-shelf service"
+      }
+    },
+    "supportEnd": {
+      "title": "End of support for Access",
+      "items": {
+        "le2013": "Access 2013 and earlier: support has already ended.",
+        "v2016": "Access 2016 and 2019: support ended on October 14, 2025.",
+        "v2021": "Access 2021: support ended on October 13, 2026.",
+        "m365": "Access in Microsoft 365 is not affected by these dates (it keeps receiving updates)."
+      },
+      "body": "After the end of support, your tools keep working. However, newly found weaknesses (vulnerabilities) are no longer fixed.",
+      "source": "Source: Microsoft lifecycle information (as of October 2026)",
+      "sourceLink": "Microsoft information {number}"
+    },
+    "problems": {
+      "title": "Does this sound familiar?",
+      "items": {
+        "m365": "It stopped working after moving to Microsoft 365, to 64-bit, or to a new PC",
+        "nobody": "The person who built it has moved on, and nobody can fix it",
+        "stability": "It is slow, the file breaks, or several people cannot use it at once",
+        "remote": "It cannot be used from outside the office or from home",
+        "excel": "There is a lot of copying into Excel and totalling by hand",
+        "control": "You are asked to keep records of who saw or changed what, and to manage permissions"
+      }
+    },
+    "risks": {
+      "title": "Risks of leaving it as it is",
+      "lead": "Even if nothing goes wrong right away, the following can happen.",
+      "items": {
+        "stop": {
+          "title": "Business stops",
+          "body": "If the tool stops working after an Office update or a PC replacement, the work that relies on it stops too."
+        },
+        "support": {
+          "title": "It keeps running on an unsupported version",
+          "body": "Business data keeps being handled on a version whose weaknesses are no longer fixed."
+        },
+        "person": {
+          "title": "Dependence on one person",
+          "body": "Without someone who understands how it works, you can decide neither to fix it nor to retire it."
+        },
+        "data": {
+          "title": "Data management",
+          "body": "Copies easily spread to personal PCs and USB drives. If the shared folder is encrypted by ransomware and there is no backup, the Access data becomes unusable at the same time."
+        }
+      },
+      "note": "Whichever way you choose, it matters to be able to manage permissions, records and backups."
+    },
+    "paths": {
+      "title": "There are three ways forward",
+      "lead": "Which one fits depends on how the tool is used. First check the state of your tool with the free web check, and we decide together in a consultation.",
+      "fitLabel": "Fits when",
+      "items": {
+        "fix": {
+          "title": "Fix it and keep using it",
+          "body": "We fix your current Access tool so that it works again.",
+          "fits": {
+            "a": "What needs fixing is clear, such as 64-bit support",
+            "b": "Few people use it",
+            "c": "It has a limited set of functions",
+            "d": "It will be used for a short time"
+          }
+        },
+        "web": {
+          "title": "Move it to the web",
+          "body": "We rebuild it as a web system used in the browser.",
+          "fits": {
+            "a": "Many people or several sites use it",
+            "b": "You want to use it from a browser or a smartphone",
+            "c": "Permissions and records must be managed (internal control)",
+            "d": "You want to add functions later"
+          }
+        },
+        "replace": {
+          "title": "Replace it with an off-the-shelf service",
+          "body": "You switch to a commercial cloud service or similar.",
+          "fits": {
+            "a": "Standard work that every company has",
+            "b": "The functions of an off-the-shelf service are enough"
+          }
+        }
+      },
+      "fixNote": "We also take on \"fix it and keep using it\" work, such as 64-bit support, ourselves.",
+      "bridgeCta": "First check the state of your tool with the free web check"
+    },
+    "steps": {
+      "title": "From consultation to completion",
+      "items": {
+        "inventory": {
+          "label": "STEP 1",
+          "title": "Inventory",
+          "body": "In a 30-minute online consultation, we ask about the number of tools and how they are used. Where needed, we take the files and check the screens and reports, the VBA, and what they connect to."
+        },
+        "decide": {
+          "label": "STEP 2",
+          "title": "Deciding the approach",
+          "body": "We decide whether to fix, move to the web or replace, and in what scope and order."
+        },
+        "migrate": {
+          "label": "STEP 3",
+          "title": "Migration",
+          "body": "We carry out the chosen approach. How to move the data and the switch-over date are decided in advance."
+        },
+        "ax": {
+          "label": "STEP 4",
+          "title": "AX",
+          "body": "After moving to the web, we add AI where it helps."
+        }
+      },
+      "aiNote": "For example, AI can be used to help with input, totals, or drafting answers to questions from within the company. We decide together where to use it after checking the work and the data. You can start by trying it on a small scale."
+    },
+    "targets": {
+      "title": "Which Access tools we cover",
+      "lead": "You can consult us about a single tool.",
+      "items": {
+        "files": ".mdb and .accdb files",
+        "versions": "From older versions to Microsoft 365",
+        "vba": "With little VBA or with a lot",
+        "links": "Linked to SQL Server or other databases, or to other systems",
+        "department": "Tools used by a single department"
+      }
+    },
+    "faq": {
+      "title": "Frequently asked questions",
+      "items": {
+        "noDocs": {
+          "q": "We have no specification documents. Can we still consult you?",
+          "a": "Yes. You can consult us without specifications. We look at the screens, reports and VBA to find out what the tool does."
+        },
+        "accde": {
+          "q": "We only have an .accde (.mde) file.",
+          "a": "We check the file and tell you what can be done. From an .accde (.mde) file the table data can usually be taken out, but the VBA code and the design of forms and reports cannot. The tool is then rebuilt by checking how its screens behave."
+        },
+        "partial": {
+          "q": "Can we move only part of it to the web?",
+          "a": "Yes. You can move the most used functions first and keep using the rest in your current Access tool."
+        },
+        "cost": {
+          "q": "What does the cost depend on?",
+          "a": "It depends on the number of screens and reports, the amount of VBA, the links to other systems and databases, and the amount and state of the data. We give you an estimate after checking the contents."
+        },
+        "period": {
+          "q": "How long does it take?",
+          "a": "It depends on the size of the tool and the approach. We tell you after checking the contents, together with the approach."
+        },
+        "useDuring": {
+          "q": "Can we keep using our current Access tool during the work?",
+          "a": "In most cases you can keep using your current Access until the switch-over day. There may be times, such as when the data is moved, when we ask you to hold off on input. We agree on the schedule with you in advance."
+        },
+        "department": {
+          "q": "Can a single department of a large company consult you?",
+          "a": "Yes. We take on a single tool of a single department."
+        },
+        "consult": {
+          "q": "How does the consultation work?",
+          "a": "It is a 30-minute online consultation as a rule. Engineers join when needed."
+        }
+      }
+    },
+    "diagnosis": {
+      "eyebrow": "FREE CHECK",
+      "title": "Free web check (Access)",
+      "lead": "Just answer multiple-choice questions about your Access tool. In about 3 minutes you see how hard and how urgent the migration is, and which issue to tackle first. Enter your company name and contact details at the end and the result is shown right away (it can be printed or saved as a PDF). If you wish, you can go straight on to a 30-minute online consultation. No pushy sales."
+    },
+    "finalCta": {
+      "title": "Start by checking the Access tool you use.",
+      "lead": "Fix it, move it to the web, or replace it. Before deciding, why not find out the current state of your tool?",
+      "caption": "Free, multiple choice, about 3 minutes",
+      "cta": "Start the free web check (Access)",
+      "consult": "Book a 30-minute online consultation"
+    },
+    "trademark": "Microsoft and Access are trademarks or registered trademarks of Microsoft Corporation in the United States and other countries."
   },
   "organizations": {
     "switcher": {

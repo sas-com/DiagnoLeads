@@ -120,6 +120,39 @@ describe('POST /api/diagnostics/ax-migration', () => {
     );
   });
 
+  it('keeps the entry page of a known landing page and drops an unknown one (#296)', async () => {
+    submitMock.mockResolvedValue({
+      ok: true,
+      submissionId: 'sub-1',
+      leadId: 'lead-1',
+      leadCreated: true,
+      existingLead: null,
+      result,
+      answers: {},
+    });
+
+    const known = await POST(
+      request({ ...validBody, tracking: { utmMedium: 'cpc', entry: 'ax-access-lp' } })
+    );
+    expect(known.status).toBe(200);
+    expect(submitMock).toHaveBeenLastCalledWith(
+      {},
+      ORG_ID,
+      expect.objectContaining({ tracking: { utmMedium: 'cpc', entry: 'ax-access-lp' } })
+    );
+
+    // Unknown or malformed values never block the submission; they are not kept
+    for (const entry of ['somewhere-else', 'x'.repeat(500), 42]) {
+      const response = await POST(request({ ...validBody, tracking: { utmMedium: 'cpc', entry } }));
+      expect(response.status).toBe(200);
+      expect(submitMock).toHaveBeenLastCalledWith(
+        {},
+        ORG_ID,
+        expect.objectContaining({ tracking: { utmMedium: 'cpc' } })
+      );
+    }
+  });
+
   it('in test mode, refuses an address outside the company domain before counting or saving', async () => {
     process.env.APP_TEST_MODE = 'true';
     try {
