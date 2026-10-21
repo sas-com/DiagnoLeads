@@ -4364,7 +4364,8 @@
       "empty": "No rows.",
       "tooMany": "Up to {max} rows at a time.",
       "readError": "Could not read the file.",
-      "error": "Could not import."
+      "error": "Could not import.",
+      "replaced": "Rows replaced by a later row for the same lead: {count}"
     },
     "card": {
       "title": "Handover from the sales agency",

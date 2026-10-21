@@ -89,16 +89,23 @@ describe.skipIf(!url)('agency handovers (PostgreSQL)', () => {
         { email: 'nobody@example.co.jp' },
         { email: foreign.email },
         { machineModel: 'no key' },
+        // An address that is not one: found by the company name
+        { email: 'not-an-address', company: byCompany.company, machineModel: 'ACOS-4' },
       ],
     });
     expect(results.map((r: { status: string }) => r.status)).toEqual([
       'saved',
-      'saved',
+      // The same lead again further down: that row wins
+      'replaced',
       'ambiguous',
       'unmatched',
       'unmatched',
       'invalid',
+      'saved',
     ]);
+    expect(
+      (await callers.member.agencyHandovers.get({ organizationId: org, leadId: byCompany.id })).handover
+    ).toMatchObject({ machineModel: 'ACOS-4' });
 
     const got = await callers.member.agencyHandovers.get({ organizationId: org, leadId: byEmail.id });
     expect(got.handover).toMatchObject({
@@ -147,6 +154,30 @@ describe.skipIf(!url)('agency handovers (PostgreSQL)', () => {
       hardwareSupportEnd: { value: '2028-03', source: 'agency' },
       earliestRetirement: { value: '2027-09', source: 'agency' },
       decisionMakerPresent: { value: 'yes', source: 'agency' },
+    });
+  });
+
+  it('rejects a date that does not exist, saving nothing of the report', async () => {
+    const target = await lead({ company: `架空電機-${unique()}` });
+    await expect(
+      callers.member.agencyHandovers.import({
+        organizationId: org,
+        rows: [{ company: target.company, appointmentOn: '2026-02-31' }],
+      })
+    ).resolves.toMatchObject({ results: [{ status: 'invalid' }] });
+    expect((await callers.member.agencyHandovers.get({ organizationId: org, leadId: target.id })).handover).toBeNull();
+  });
+
+  it('keeps the contact person from viewers of a parent organization', async () => {
+    const target = await lead({ company: `架空化学-${unique()}` });
+    await callers.member.agencyHandovers.import({
+      organizationId: org,
+      rows: [{ company: target.company, contactName: '山田 太郎', contactPhone: '03-0000-0000', machineModel: 'IBM i' }],
+    });
+    expect((await callers.viewer.agencyHandovers.get({ organizationId: org, leadId: target.id })).handover).toMatchObject({
+      contactName: null,
+      contactPhone: null,
+      machineModel: 'IBM i',
     });
   });
 

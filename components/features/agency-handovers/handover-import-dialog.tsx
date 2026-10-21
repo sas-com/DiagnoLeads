@@ -36,7 +36,13 @@ import { toast } from 'sonner';
 /** Select value for "not in the file" (Radix Select does not take an empty value) */
 const NONE = '__none';
 
-type ImportResults = { saved: number; unmatched: number; ambiguous: number; invalid: number };
+type ImportResults = {
+  saved: number;
+  unmatched: number;
+  ambiguous: number;
+  invalid: number;
+  replaced: number;
+};
 
 interface HandoverImportDialogProps {
   open: boolean;
@@ -72,6 +78,7 @@ export function HandoverImportDialog({
         saved: count('saved'),
         unmatched: count('unmatched'),
         ambiguous: count('ambiguous'),
+        replaced: count('replaced'),
         invalid: count('invalid'),
       });
       utils.agencyHandovers.get.invalidate();
@@ -145,6 +152,7 @@ export function HandoverImportDialog({
             <p className="font-medium">{t('done', { saved: results.saved })}</p>
             {results.unmatched > 0 && <p>{t('unmatched', { count: results.unmatched })}</p>}
             {results.ambiguous > 0 && <p>{t('ambiguous', { count: results.ambiguous })}</p>}
+            {results.replaced > 0 && <p>{t('replaced', { count: results.replaced })}</p>}
             {results.invalid > 0 && <p>{t('invalid', { count: results.invalid })}</p>}
           </div>
         ) : (

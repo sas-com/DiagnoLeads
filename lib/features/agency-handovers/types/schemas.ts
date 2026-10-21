@@ -2,6 +2,17 @@ import { z } from 'zod';
 
 /** Handover from the sales agency when it set up the meeting (Refs #152) */
 
+/** A YYYY-MM-DD that exists (2026-02-31 does not), so the database never rejects it */
+export function isRealDate(value: string): boolean {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return false;
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    year >= 1900 && year <= 2200 && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+  );
+}
+
 export const DECISION_MAKER_VALUES = ['yes', 'no', 'unknown'] as const;
 export const INTEREST_LEVELS = ['high', 'medium', 'low'] as const;
 export type InterestLevel = (typeof INTEREST_LEVELS)[number];
@@ -20,14 +31,11 @@ const text = (max: number) =>
 /** One row as sent to the server, after the browser read the file and mapped the columns */
 export const handoverRowSchema = z
   .object({
-    email: z.string().trim().toLowerCase().email().nullable().default(null),
+    // An address that is not one is dropped, so the company name can still find the lead
+    email: z.string().trim().toLowerCase().email().nullable().default(null).catch(null),
     company: text(HANDOVER_LIMITS.text),
     agencyName: text(HANDOVER_LIMITS.text),
-    appointmentOn: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/)
-      .nullable()
-      .default(null),
+    appointmentOn: z.string().refine(isRealDate, 'Invalid date').nullable().default(null),
     contactName: text(HANDOVER_LIMITS.text),
     contactTitle: text(HANDOVER_LIMITS.text),
     contactPhone: text(50),

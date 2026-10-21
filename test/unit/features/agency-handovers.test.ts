@@ -32,6 +32,8 @@ describe('reading cells', () => {
     expect(readDate('2026/11/5')).toBe('2026-11-05');
     expect(readDate('2026年11月5日')).toBe('2026-11-05');
     expect(readDate('来週')).toBeNull();
+    expect(readDate('2026/02/31')).toBeNull();
+    expect(readDate('2026/13/01')).toBeNull();
     expect(readYearMonth('2028/3')).toBe('2028-03');
     expect(readYearMonth('2028年3月')).toBe('2028-03');
     expect(readYearMonth('2028-03-31')).toBe('2028-03');

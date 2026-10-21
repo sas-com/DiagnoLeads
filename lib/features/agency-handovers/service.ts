@@ -12,7 +12,8 @@ import { type HandoverRow, handoverRowSchema } from './types/schemas';
 
 type Database = typeof defaultDb;
 
-export type HandoverImportStatus = 'saved' | 'unmatched' | 'ambiguous' | 'invalid';
+/** 'replaced': a later row of the same report was for the same lead and was saved instead */
+export type HandoverImportStatus = 'saved' | 'unmatched' | 'ambiguous' | 'invalid' | 'replaced';
 
 export interface HandoverImportResult {
   index: number;
@@ -84,24 +85,31 @@ export async function importHandovers(
     if (candidates.length > 1) {
       results[index] = { index, status: 'ambiguous' };
     } else if (candidates.length === 1) {
+      const earlier = toSave.get(candidates[0]);
+      if (earlier) results[earlier.index] = { index: earlier.index, status: 'replaced' };
       toSave.set(candidates[0], { index, row });
       results[index] = { index, status: 'saved', leadId: candidates[0] };
     }
   }
 
-  for (const [leadId, { row }] of toSave) {
-    const { email: _email, company: _company, ...values } = row;
-    const record = { ...values, importedBy: input.userId, updatedAt: now };
-    await db
-      .insert(agencyHandovers)
-      .values({ ...record, organizationId: input.organizationId, leadId, createdAt: now })
-      .onConflictDoUpdate({
-        target: agencyHandovers.leadId,
-        set: record,
-        // Never across organizations
-        setWhere: eq(agencyHandovers.organizationId, input.organizationId),
-      });
-  }
+  // All or nothing: a row the database rejects leaves the report unsaved, not half of it
+  await db.transaction(async (tx) => {
+    for (const [leadId, { index, row }] of toSave) {
+      const { email: _email, company: _company, ...values } = row;
+      const record = { ...values, importedBy: input.userId, updatedAt: now };
+      const [saved] = await tx
+        .insert(agencyHandovers)
+        .values({ ...record, organizationId: input.organizationId, leadId, createdAt: now })
+        .onConflictDoUpdate({
+          target: agencyHandovers.leadId,
+          set: record,
+          // Never across organizations
+          setWhere: eq(agencyHandovers.organizationId, input.organizationId),
+        })
+        .returning({ id: agencyHandovers.id });
+      if (!saved) results[index] = { index, status: 'unmatched' };
+    }
+  });
   return { results };
 }
 

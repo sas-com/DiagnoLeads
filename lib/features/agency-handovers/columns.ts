@@ -3,7 +3,7 @@
  * names each column is recognised by, and how each cell is read. Used in the browser before the
  * rows are sent; the server validates them again (types/schemas.ts).
  */
-import type { HandoverRow } from './types/schemas';
+import { type HandoverRow, isRealDate } from './types/schemas';
 
 export const HANDOVER_COLUMNS = [
   'email',
@@ -83,7 +83,8 @@ export function readDate(value: string): string | null {
   const serial = excelSerialDate(value);
   if (serial) return serial;
   const match = value.match(/^(\d{4})[/\-.年](\d{1,2})[/\-.月](\d{1,2})日?$/);
-  return match ? `${match[1]}-${pad(match[2])}-${pad(match[3])}` : null;
+  const date = match ? `${match[1]}-${pad(match[2])}-${pad(match[3])}` : null;
+  return date && isRealDate(date) ? date : null;
 }
 
 /** 2026/10, 2026-10, 2026年10月 (or a full date, or an Excel date) → 2026-10 */

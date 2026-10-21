@@ -1,9 +1,10 @@
 /**
  * Agency Handovers tRPC Router (Refs #152)
  *
- * Anyone who can read leads may read a lead's handover. Importing a report writes contact
- * details onto leads, so it needs permission to update leads (not viewers from a parent
- * organization).
+ * Anyone who can read leads may read a lead's handover, except the contact person's name and
+ * direct phone, which viewers from a parent organization do not get. Importing a report saves
+ * those contact details (agency_handovers), so it needs permission to update leads (not viewers
+ * from a parent organization).
  */
 
 import type { AppAbility } from '@/lib/auth/permissions';
@@ -31,7 +32,12 @@ export const agencyHandoversRouter = router({
     });
     if (handover === undefined)
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Lead not found' });
-    return { handover };
+    return {
+      handover:
+        handover && ctx.membership.role === 'parent_viewer'
+          ? { ...handover, contactName: null, contactPhone: null }
+          : handover,
+    };
   }),
 
   import: organizationProcedure.input(importHandoversSchema).mutation(async ({ ctx, input }) => {
