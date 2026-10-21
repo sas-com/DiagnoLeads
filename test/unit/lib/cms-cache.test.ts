@@ -10,7 +10,6 @@ import {
   getCollectionTag,
   getDocumentTag,
   getSlugTag,
-  getOrganizationTag,
   generateCacheKey,
   getCacheStats,
   resetCacheStats,
@@ -62,13 +61,6 @@ describe('getSlugTag', () => {
 
   it('should handle complex slugs', () => {
     expect(getSlugTag('posts', 'how-to-use-typescript')).toBe('cms:posts:slug:how-to-use-typescript');
-  });
-});
-
-describe('getOrganizationTag', () => {
-  it('should generate organization tag', () => {
-    expect(getOrganizationTag('org-123')).toBe('cms:org:org-123');
-    expect(getOrganizationTag('acme-corp')).toBe('cms:org:acme-corp');
   });
 });
 

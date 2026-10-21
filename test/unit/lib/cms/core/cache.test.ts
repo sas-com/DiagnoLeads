@@ -16,12 +16,10 @@ import {
   getCollectionTag,
   getDocumentTag,
   getSlugTag,
-  getOrganizationTag,
   generateCacheKey,
   invalidateCollection,
   invalidateDocument,
   invalidateBySlug,
-  invalidateOrganization,
   invalidateAllCMS,
   createCachedQuery,
   createCachedFindById,
@@ -87,15 +85,6 @@ describe('getSlugTag', () => {
 
   it('should generate slug tag', () => {
     expect(getSlugTag('blog-posts', 'hello-world')).toBe('cms:blog-posts:slug:hello-world');
-  });
-});
-
-describe('getOrganizationTag', () => {
-  const getOrganizationTag = (organizationId: string): string =>
-    `${CMS_CACHE_CONFIG.tagPrefix}:org:${organizationId}`;
-
-  it('should generate organization tag', () => {
-    expect(getOrganizationTag('org-123')).toBe('cms:org:org-123');
   });
 });
 
@@ -189,19 +178,6 @@ describe('invalidateBySlug', () => {
     await invalidateBySlug('blog-posts', 'hello-world');
     expect(revalidateTag).toHaveBeenCalledWith('cms:blog-posts:slug:hello-world');
     expect(revalidateTag).toHaveBeenCalledWith('cms:blog-posts');
-  });
-});
-
-describe('invalidateOrganization', () => {
-  const revalidateTag = vi.fn();
-
-  const invalidateOrganization = async (organizationId: string): Promise<void> => {
-    revalidateTag(`${CMS_CACHE_CONFIG.tagPrefix}:org:${organizationId}`);
-  };
-
-  it('should invalidate organization tag', async () => {
-    await invalidateOrganization('org-123');
-    expect(revalidateTag).toHaveBeenCalledWith('cms:org:org-123');
   });
 });
 
@@ -373,12 +349,6 @@ describe('Integration: getSlugTag', () => {
   });
 });
 
-describe('Integration: getOrganizationTag', () => {
-  it('should generate organization tag', () => {
-    expect(getOrganizationTag('org-123')).toBe('cms:org:org-123');
-  });
-});
-
 describe('Integration: generateCacheKey', () => {
   it('should generate key from params', () => {
     const key = generateCacheKey({ limit: 10, status: 'published' });
@@ -419,17 +389,6 @@ describe('Integration: invalidateBySlug', () => {
     await invalidateBySlug('blog-posts', 'hello-world');
     expect(revalidateTag).toHaveBeenCalledWith('cms:blog-posts:slug:hello-world', { expire: 0 });
     expect(revalidateTag).toHaveBeenCalledWith('cms:blog-posts', { expire: 0 });
-  });
-});
-
-describe('Integration: invalidateOrganization', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('should call revalidateTag for organization', async () => {
-    await invalidateOrganization('org-123');
-    expect(revalidateTag).toHaveBeenCalledWith('cms:org:org-123', { expire: 0 });
   });
 });
 

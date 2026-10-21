@@ -19,7 +19,6 @@ import type { CMSAdapter, WhereCondition, WhereOperator } from '../core/interfac
 import type { FAQ } from '../core/types';
 
 export interface FindFAQsOptions {
-  organizationId?: string;
   /** Published FAQs only unless 'all' is asked for (editors) */
   status?: 'published' | 'all';
   category?: string;
@@ -51,7 +50,7 @@ export class FAQRepository {
    * FAQ一覧を取得（キャッシュなし - 管理画面用）
    */
   async findAll(options: FindFAQsOptions = {}): Promise<FAQsResult> {
-    const { organizationId, category, limit = 100, offset = 0, status = 'published' } = options;
+    const { category, limit = 100, offset = 0, status = 'published' } = options;
 
     const where: WhereCondition = {};
 
@@ -65,7 +64,6 @@ export class FAQRepository {
       limit,
       offset,
       sort: [{ field: 'order', order: 'asc' }],
-      organizationId,
       status,
     });
 
@@ -96,11 +94,10 @@ export class FAQRepository {
   /**
    * IDでFAQを取得（キャッシュなし）
    */
-  async findById(id: string, organizationId?: string): Promise<FAQ | null> {
+  async findById(id: string): Promise<FAQ | null> {
     const { data } = await this.adapter.findById<FAQ>({
       collection: COLLECTION,
       id,
-      organizationId,
     });
 
     return data;
@@ -109,15 +106,11 @@ export class FAQRepository {
   /**
    * IDでFAQを取得（キャッシュ付き）
    */
-  async findByIdCached(id: string, organizationId?: string): Promise<FAQ | null> {
-    const cached = unstable_cache(
-      async () => this.findById(id, organizationId),
-      [`cms:${COLLECTION}:id:${id}:${organizationId || 'default'}`],
-      {
-        revalidate: REVALIDATE,
-        tags: [getCollectionTag(COLLECTION), getDocumentTag(COLLECTION, id)],
-      }
-    );
+  async findByIdCached(id: string): Promise<FAQ | null> {
+    const cached = unstable_cache(async () => this.findById(id), [`cms:${COLLECTION}:id:${id}`], {
+      revalidate: REVALIDATE,
+      tags: [getCollectionTag(COLLECTION), getDocumentTag(COLLECTION, id)],
+    });
 
     return cached();
   }
@@ -125,12 +118,11 @@ export class FAQRepository {
   /**
    * FAQを検索
    */
-  async search(query: string, organizationId?: string): Promise<FAQ[]> {
+  async search(query: string): Promise<FAQ[]> {
     const { data } = await this.adapter.search<FAQ>({
       collection: COLLECTION,
       query,
       fields: ['question.ja', 'question.en', 'answer.ja', 'answer.en'],
-      organizationId,
     });
 
     return data;
@@ -139,8 +131,8 @@ export class FAQRepository {
   /**
    * カテゴリ別にグループ化されたFAQを取得（キャッシュなし）
    */
-  async findByCategories(organizationId?: string): Promise<FAQsByCategory[]> {
-    const { faqs } = await this.findAll({ organizationId });
+  async findByCategories(): Promise<FAQsByCategory[]> {
+    const { faqs } = await this.findAll();
 
     // カテゴリ別にグループ化
     const grouped = new Map<string, FAQ[]>();
@@ -177,10 +169,10 @@ export class FAQRepository {
   /**
    * カテゴリ別にグループ化されたFAQを取得（キャッシュ付き - 公開ページ用）
    */
-  async findByCategoriesCached(organizationId?: string): Promise<FAQsByCategory[]> {
+  async findByCategoriesCached(): Promise<FAQsByCategory[]> {
     const cached = unstable_cache(
-      async () => this.findByCategories(organizationId),
-      [`cms:${COLLECTION}:byCategories:${organizationId || 'default'}`],
+      async () => this.findByCategories(),
+      [`cms:${COLLECTION}:byCategories`],
       {
         revalidate: REVALIDATE,
         tags: [getCollectionTag(COLLECTION)],
@@ -193,14 +185,13 @@ export class FAQRepository {
   /**
    * FAQを作成
    */
-  async create(faq: Omit<FAQ, 'id' | 'publishedAt'>, organizationId?: string): Promise<FAQ> {
+  async create(faq: Omit<FAQ, 'id' | 'publishedAt'>): Promise<FAQ> {
     const { data } = await this.adapter.create<FAQ>({
       collection: COLLECTION,
       data: {
         ...faq,
         publishedAt: new Date(),
       },
-      organizationId,
     });
 
     // キャッシュを無効化
@@ -212,16 +203,11 @@ export class FAQRepository {
   /**
    * FAQを更新
    */
-  async update(
-    id: string,
-    updates: Partial<Omit<FAQ, 'id'>>,
-    organizationId?: string
-  ): Promise<FAQ> {
+  async update(id: string, updates: Partial<Omit<FAQ, 'id'>>): Promise<FAQ> {
     const { data } = await this.adapter.update<FAQ>({
       collection: COLLECTION,
       id,
       data: updates,
-      organizationId,
     });
 
     // キャッシュを無効化
@@ -233,11 +219,10 @@ export class FAQRepository {
   /**
    * FAQを削除
    */
-  async delete(id: string, organizationId?: string): Promise<void> {
+  async delete(id: string): Promise<void> {
     await this.adapter.delete({
       collection: COLLECTION,
       id,
-      organizationId,
     });
 
     // キャッシュを無効化
@@ -248,8 +233,8 @@ export class FAQRepository {
   /**
    * カテゴリ一覧を取得（キャッシュなし）
    */
-  async getCategories(organizationId?: string): Promise<string[]> {
-    const { faqs } = await this.findAll({ organizationId });
+  async getCategories(): Promise<string[]> {
+    const { faqs } = await this.findAll();
 
     const categories = new Set<string>();
     for (const faq of faqs) {
@@ -264,10 +249,10 @@ export class FAQRepository {
   /**
    * カテゴリ一覧を取得（キャッシュ付き - 公開ページ用）
    */
-  async getCategoriesCached(organizationId?: string): Promise<string[]> {
+  async getCategoriesCached(): Promise<string[]> {
     const cached = unstable_cache(
-      async () => this.getCategories(organizationId),
-      [`cms:${COLLECTION}:categories:${organizationId || 'default'}`],
+      async () => this.getCategories(),
+      [`cms:${COLLECTION}:categories`],
       {
         revalidate: REVALIDATE,
         tags: [getCollectionTag(COLLECTION)],
@@ -280,17 +265,13 @@ export class FAQRepository {
   /**
    * 順序を更新（一括）
    */
-  async updateOrder(
-    updates: Array<{ id: string; order: number }>,
-    organizationId?: string
-  ): Promise<void> {
+  async updateOrder(updates: Array<{ id: string; order: number }>): Promise<void> {
     await this.adapter.bulkUpdate({
       collection: COLLECTION,
       updates: updates.map(({ id, order }) => ({
         id,
         data: { order },
       })),
-      organizationId,
     });
 
     // キャッシュを無効化

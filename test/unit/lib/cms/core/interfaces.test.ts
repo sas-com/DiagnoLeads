@@ -13,7 +13,6 @@ describe('FindParams', () => {
       offset?: number;
       sort?: { field: string; order: 'asc' | 'desc' }[];
       locale?: string;
-      organizationId?: string;
       status?: 'draft' | 'published' | 'all';
     };
 
@@ -61,7 +60,6 @@ describe('FindByIdParams', () => {
       collection: string;
       id: string;
       locale?: string;
-      organizationId?: string;
     };
 
     const params: FindByIdParams = {
@@ -81,7 +79,6 @@ describe('FindBySlugParams', () => {
       collection: string;
       slug: string;
       locale?: string;
-      organizationId?: string;
     };
 
     const params: FindBySlugParams = {
@@ -99,7 +96,6 @@ describe('CreateParams', () => {
     type CreateParams<T> = {
       collection: string;
       data: T;
-      organizationId?: string;
     };
 
     type BlogPost = {
@@ -115,7 +111,6 @@ describe('CreateParams', () => {
         content: 'Hello, World!',
         status: 'draft',
       },
-      organizationId: 'org-123',
     };
 
     expect(params.data.title).toBe('New Post');
@@ -128,7 +123,6 @@ describe('UpdateParams', () => {
       collection: string;
       id: string;
       data: Partial<T>;
-      organizationId?: string;
     };
 
     type BlogPost = {
@@ -154,7 +148,6 @@ describe('DeleteParams', () => {
     type DeleteParams = {
       collection: string;
       id: string;
-      organizationId?: string;
     };
 
     const params: DeleteParams = {
@@ -173,7 +166,6 @@ describe('SearchParams', () => {
       query: string;
       fields?: string[];
       limit?: number;
-      organizationId?: string;
     };
 
     const params: SearchParams = {
@@ -193,7 +185,6 @@ describe('BulkCreateParams', () => {
     type BulkCreateParams<T> = {
       collection: string;
       data: T[];
-      organizationId?: string;
     };
 
     type Lead = { name: string; email: string };
@@ -215,7 +206,6 @@ describe('BulkUpdateParams', () => {
     type BulkUpdateParams<T> = {
       collection: string;
       updates: Array<{ id: string; data: Partial<T> }>;
-      organizationId?: string;
     };
 
     type Lead = { status: string };
@@ -237,7 +227,6 @@ describe('BulkDeleteParams', () => {
     type BulkDeleteParams = {
       collection: string;
       ids: string[];
-      organizationId?: string;
     };
 
     const params: BulkDeleteParams = {
@@ -269,12 +258,10 @@ describe('ExportParams', () => {
   it('should define export parameters', () => {
     type ExportParams = {
       collections: string[];
-      organizationId?: string;
     };
 
     const params: ExportParams = {
-      collections: ['blog-posts', 'faqs', 'assessments'],
-      organizationId: 'org-123',
+      collections: ['blog-posts', 'faqs', 'landing-pages'],
     };
 
     expect(params.collections).toHaveLength(3);
@@ -285,7 +272,6 @@ describe('ImportParams', () => {
   it('should define import parameters', () => {
     type ImportParams = {
       data: Record<string, unknown[]>;
-      organizationId?: string;
     };
 
     const params: ImportParams = {

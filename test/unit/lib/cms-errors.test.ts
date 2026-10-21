@@ -9,7 +9,6 @@ import {
   CMSError,
   CMSNotFoundError,
   CMSAccessDeniedError,
-  CMSOrganizationMismatchError,
   CMSValidationError,
   CMSConnectionError,
   CMSConfigurationError,
@@ -77,17 +76,6 @@ describe('CMSAccessDeniedError', () => {
   });
 });
 
-describe('CMSOrganizationMismatchError', () => {
-  it('should create organization mismatch error', () => {
-    const error = new CMSOrganizationMismatchError();
-    
-    expect(error.message).toBe('Organization mismatch: You do not have access to this content');
-    expect(error.code).toBe('CMS_ORG_MISMATCH');
-    expect(error.statusCode).toBe(403);
-    expect(error.name).toBe('CMSOrganizationMismatchError');
-  });
-});
-
 describe('CMSValidationError', () => {
   it('should create validation error with message', () => {
     const error = new CMSValidationError('Invalid input');
@@ -148,7 +136,6 @@ describe('isCMSError', () => {
     expect(isCMSError(new CMSValidationError('Invalid'))).toBe(true);
     expect(isCMSError(new CMSConnectionError())).toBe(true);
     expect(isCMSError(new CMSConfigurationError('Missing'))).toBe(true);
-    expect(isCMSError(new CMSOrganizationMismatchError())).toBe(true);
   });
 
   it('should return false for regular Error', () => {

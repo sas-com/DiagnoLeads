@@ -16,7 +16,6 @@ export interface FindParams {
   offset?: number;
   sort?: SortParams[];
   locale?: string;
-  organizationId?: string;
   /** Published documents only unless asked otherwise ('all' for editors) */
   status?: 'draft' | 'published' | 'all';
 }
@@ -25,14 +24,12 @@ export interface FindByIdParams {
   collection: string;
   id: string;
   locale?: string;
-  organizationId?: string;
 }
 
 export interface FindBySlugParams {
   collection: string;
   slug: string;
   locale?: string;
-  organizationId?: string;
   /** Published documents only unless 'all' is asked for (editors) */
   status?: 'published' | 'all';
 }
@@ -40,20 +37,17 @@ export interface FindBySlugParams {
 export interface CreateParams<T = Record<string, unknown>> {
   collection: string;
   data: T;
-  organizationId?: string;
 }
 
 export interface UpdateParams<T = Record<string, unknown>> {
   collection: string;
   id: string;
   data: Partial<T>;
-  organizationId?: string;
 }
 
 export interface DeleteParams {
   collection: string;
   id: string;
-  organizationId?: string;
 }
 
 export interface SearchParams {
@@ -61,7 +55,6 @@ export interface SearchParams {
   query: string;
   fields?: string[];
   limit?: number;
-  organizationId?: string;
   /** Published documents only unless 'all' is asked for (editors) */
   status?: 'published' | 'all';
 }
@@ -69,19 +62,16 @@ export interface SearchParams {
 export interface BulkCreateParams<T = Record<string, unknown>> {
   collection: string;
   data: T[];
-  organizationId?: string;
 }
 
 export interface BulkUpdateParams<T = Record<string, unknown>> {
   collection: string;
   updates: Array<{ id: string; data: Partial<T> }>;
-  organizationId?: string;
 }
 
 export interface BulkDeleteParams {
   collection: string;
   ids: string[];
-  organizationId?: string;
 }
 
 export interface RevalidateParams {
@@ -91,12 +81,10 @@ export interface RevalidateParams {
 
 export interface ExportParams {
   collections: string[];
-  organizationId?: string;
 }
 
 export interface ImportParams {
   data: Record<string, unknown[]>;
-  organizationId?: string;
 }
 
 // =============================================================================

@@ -11,11 +11,7 @@
 import { revalidatePath } from 'next/cache';
 import { type Payload, getPayload } from 'payload';
 import type { Where } from 'payload';
-import {
-  CMSConnectionError,
-  CMSNotFoundError,
-  CMSOrganizationMismatchError,
-} from '../../core/errors';
+import { CMSConnectionError } from '../../core/errors';
 import type {
   BulkCreateParams,
   BulkDeleteParams,
@@ -105,7 +101,6 @@ export class PayloadCMSAdapter implements CMSAdapter {
     const where = this.buildWhereQuery(
       params.collection,
       params.where,
-      params.organizationId,
       params.status ?? 'published'
     );
 
@@ -155,15 +150,8 @@ export class PayloadCMSAdapter implements CMSAdapter {
         locale: params.locale as 'ja' | 'en' | undefined,
       });
 
-      // organizationIdチェック
-      const doc = result as Record<string, unknown>;
-      if (params.organizationId && doc.organizationId !== params.organizationId) {
-        throw new CMSOrganizationMismatchError();
-      }
-
       return { data: result as T };
-    } catch (error) {
-      if (error instanceof CMSOrganizationMismatchError) throw error;
+    } catch {
       // PayloadCMSはIDが見つからない場合にエラーをスローする
       return { data: null };
     }
@@ -178,11 +166,6 @@ export class PayloadCMSAdapter implements CMSAdapter {
       },
     };
 
-    if (params.organizationId) {
-      where.organizationId = {
-        equals: params.organizationId,
-      };
-    }
     if (params.status !== 'all') Object.assign(where, publishedWhere(params.collection));
 
     const result = await this.payload?.find({
@@ -203,10 +186,7 @@ export class PayloadCMSAdapter implements CMSAdapter {
   async create<T>(params: CreateParams): Promise<CMSResponse<T>> {
     await this.ensureInitialized();
 
-    const data = draftStatusFor(params.collection, {
-      ...params.data,
-      organizationId: params.organizationId,
-    });
+    const data = draftStatusFor(params.collection, params.data);
 
     const result = await this.payload?.create({
       collection: params.collection,
@@ -219,19 +199,6 @@ export class PayloadCMSAdapter implements CMSAdapter {
   async update<T>(params: UpdateParams): Promise<CMSResponse<T>> {
     await this.ensureInitialized();
 
-    // organizationIdチェック
-    if (params.organizationId) {
-      const existing = await this.findById({
-        collection: params.collection,
-        id: params.id,
-        organizationId: params.organizationId,
-      });
-
-      if (!existing.data) {
-        throw new CMSNotFoundError(params.collection, params.id);
-      }
-    }
-
     const result = await this.payload?.update({
       collection: params.collection,
       id: params.id,
@@ -243,19 +210,6 @@ export class PayloadCMSAdapter implements CMSAdapter {
 
   async delete(params: DeleteParams): Promise<CMSResponse<void>> {
     await this.ensureInitialized();
-
-    // organizationIdチェック
-    if (params.organizationId) {
-      const existing = await this.findById({
-        collection: params.collection,
-        id: params.id,
-        organizationId: params.organizationId,
-      });
-
-      if (!existing.data) {
-        throw new CMSNotFoundError(params.collection, params.id);
-      }
-    }
 
     await this.payload?.delete({
       collection: params.collection,
@@ -289,11 +243,6 @@ export class PayloadCMSAdapter implements CMSAdapter {
       or: searchConditions,
     };
 
-    if (params.organizationId) {
-      where.organizationId = {
-        equals: params.organizationId,
-      };
-    }
     if (params.status !== 'all') Object.assign(where, publishedWhere(params.collection));
 
     const result = await this.payload?.find({
@@ -328,7 +277,6 @@ export class PayloadCMSAdapter implements CMSAdapter {
       const result = await this.create<T>({
         collection: params.collection,
         data,
-        organizationId: params.organizationId,
       });
       results.push(result.data);
     }
@@ -346,7 +294,6 @@ export class PayloadCMSAdapter implements CMSAdapter {
         collection: params.collection,
         id,
         data,
-        organizationId: params.organizationId,
       });
       results.push(result.data);
     }
@@ -363,12 +310,6 @@ export class PayloadCMSAdapter implements CMSAdapter {
         in: params.ids,
       },
     };
-
-    if (params.organizationId) {
-      where.organizationId = {
-        equals: params.organizationId,
-      };
-    }
 
     await this.payload?.delete({
       collection: params.collection,
@@ -397,17 +338,8 @@ export class PayloadCMSAdapter implements CMSAdapter {
     const data: Record<string, unknown[]> = {};
 
     for (const collectionName of params.collections) {
-      const where: Where = {};
-
-      if (params.organizationId) {
-        where.organizationId = {
-          equals: params.organizationId,
-        };
-      }
-
       const result = await this.payload?.find({
         collection: collectionName,
-        where,
         limit: 1000, // 大量エクスポート用
       });
 
@@ -435,7 +367,6 @@ export class PayloadCMSAdapter implements CMSAdapter {
           await this.create({
             collection: collectionName,
             data: item,
-            organizationId: params.organizationId,
           });
           imported++;
         } catch (error) {
@@ -466,17 +397,9 @@ export class PayloadCMSAdapter implements CMSAdapter {
   private buildWhereQuery(
     collection: string,
     where?: WhereCondition,
-    organizationId?: string,
     status?: 'draft' | 'published' | 'all'
   ): Where {
     const query: Where = {};
-
-    // organizationIdフィルター
-    if (organizationId) {
-      query.organizationId = {
-        equals: organizationId,
-      };
-    }
 
     // カスタムwhere条件を変換
     if (where) {

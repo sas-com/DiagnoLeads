@@ -62,8 +62,8 @@ describe('content.faqs.create', () => {
     });
 
     expect(create).toHaveBeenCalledTimes(1);
-    const [data, organizationId] = create.mock.calls[0] ?? [];
-    expect(data).not.toHaveProperty('organizationId');
-    expect(organizationId).toBeUndefined();
+    const call = create.mock.calls[0] ?? [];
+    expect(call).toHaveLength(1);
+    expect(call[0]).not.toHaveProperty('organizationId');
   });
 });

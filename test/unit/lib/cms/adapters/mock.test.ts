@@ -7,7 +7,6 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 // Types matching source
 interface MockDocument {
   id: string;
-  organizationId?: string;
   [key: string]: unknown;
 }
 
@@ -17,27 +16,23 @@ interface FindParams {
   limit?: number;
   offset?: number;
   sort?: Array<{ field: string; order: 'asc' | 'desc' }>;
-  organizationId?: string;
   status?: 'draft' | 'published' | 'all';
 }
 
 interface CreateParams<T = Record<string, unknown>> {
   collection: string;
   data: T;
-  organizationId?: string;
 }
 
 interface UpdateParams<T = Record<string, unknown>> {
   collection: string;
   id: string;
   data: Partial<T>;
-  organizationId?: string;
 }
 
 interface DeleteParams {
   collection: string;
   id: string;
-  organizationId?: string;
 }
 
 interface CMSResponse<T> {
@@ -113,18 +108,6 @@ describe('MockCMSAdapter', () => {
       expect(items).toHaveLength(2);
     });
 
-    it('should filter by organizationId', () => {
-      const collection = getCollection('posts');
-      collection.set('1', { id: '1', organizationId: 'org-1' });
-      collection.set('2', { id: '2', organizationId: 'org-2' });
-      collection.set('3', { id: '3', organizationId: 'org-1' });
-
-      const items = Array.from(collection.values()).filter(
-        item => item.organizationId === 'org-1'
-      );
-      expect(items).toHaveLength(2);
-    });
-
     it('should filter by status', () => {
       const collection = getCollection('posts');
       collection.set('1', { id: '1', status: 'published' });
@@ -181,18 +164,6 @@ describe('MockCMSAdapter', () => {
       const doc = collection.get('nonexistent');
       expect(doc).toBeUndefined();
     });
-
-    it('should verify organizationId', () => {
-      const collection = getCollection('posts');
-      collection.set('post-1', { id: 'post-1', organizationId: 'org-1' });
-
-      const doc = collection.get('post-1');
-      const requestOrgId = 'org-2';
-
-      if (doc?.organizationId && doc.organizationId !== requestOrgId) {
-        expect(true).toBe(true); // Organization mismatch
-      }
-    });
   });
 
   describe('findBySlug', () => {
@@ -221,15 +192,6 @@ describe('MockCMSAdapter', () => {
 
       expect(collection.has(id)).toBe(true);
       expect(collection.get(id)?.title).toBe('New Post');
-    });
-
-    it('should set organizationId if provided', () => {
-      const collection = getCollection('posts');
-      const id = generateId();
-      const newDoc = { id, title: 'Post', organizationId: 'org-123' };
-      collection.set(id, newDoc);
-
-      expect(collection.get(id)?.organizationId).toBe('org-123');
     });
   });
 
@@ -269,19 +231,6 @@ describe('MockCMSAdapter', () => {
 
       collection.delete('1');
       expect(collection.has('1')).toBe(false);
-    });
-
-    it('should verify organizationId before delete', () => {
-      const collection = getCollection('posts');
-      collection.set('1', { id: '1', organizationId: 'org-1' });
-
-      const doc = collection.get('1');
-      const requestOrgId = 'org-2';
-
-      if (doc?.organizationId !== requestOrgId) {
-        // Should not delete
-        expect(collection.has('1')).toBe(true);
-      }
     });
   });
 
@@ -412,17 +361,4 @@ describe('MockCMSAdapter error handling', () => {
     const error = new CMSNotFoundError('posts', 'nonexistent');
     expect(error.name).toBe('CMSNotFoundError');
     expect(error.message).toContain('posts');
-  });
-
-  it('should throw CMSOrganizationMismatchError', () => {
-    class CMSOrganizationMismatchError extends Error {
-      constructor(collection: string, id: string) {
-        super(`Organization mismatch for: ${collection}/${id}`);
-        this.name = 'CMSOrganizationMismatchError';
-      }
-    }
-
-    const error = new CMSOrganizationMismatchError('posts', 'post-1');
-    expect(error.name).toBe('CMSOrganizationMismatchError');
-  });
-});
+  });});

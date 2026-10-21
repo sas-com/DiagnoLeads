@@ -59,13 +59,6 @@ export function getSlugTag(collection: string, slug: string): string {
   return `${CMS_CACHE_CONFIG.tagPrefix}:${collection}:slug:${slug}`;
 }
 
-/**
- * 組織用のキャッシュタグを生成
- */
-export function getOrganizationTag(organizationId: string): string {
-  return `${CMS_CACHE_CONFIG.tagPrefix}:org:${organizationId}`;
-}
-
 // =============================================================================
 // Cache Key Generation
 // =============================================================================
@@ -113,13 +106,6 @@ export async function invalidateDocument(collection: string, id: string): Promis
 export async function invalidateBySlug(collection: string, slug: string): Promise<void> {
   revalidateTag(getSlugTag(collection, slug), EXPIRE_NOW);
   revalidateTag(getCollectionTag(collection), EXPIRE_NOW);
-}
-
-/**
- * 組織のコンテンツキャッシュを無効化
- */
-export async function invalidateOrganization(organizationId: string): Promise<void> {
-  revalidateTag(getOrganizationTag(organizationId), EXPIRE_NOW);
 }
 
 /**
