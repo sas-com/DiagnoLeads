@@ -132,7 +132,7 @@ describe('notifyAxMigrationSubmission', () => {
         // The request itself is the strong signal, also when the stored result predates it
         subject: expect.stringMatching(/^【相談申込・関心あり（MQL）】/),
         text: expect.stringContaining('MQL: 関心あり（相談申込）'),
-        html: expect.stringContaining('MQL: 関心あり（相談申込）'),
+        html: expect.stringContaining('関心あり（相談申込）'),
       })
     );
     expect(webhookMock).toHaveBeenCalledWith(

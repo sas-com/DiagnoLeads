@@ -7,6 +7,7 @@ import {
   EmailRecipientNotAllowedError,
   filterAllowedRecipients,
 } from '@/lib/email/allowed-recipients';
+import { sanitizeSubject } from '@/lib/email/templates/render';
 import { Resend } from 'resend';
 
 // Initialize Resend client (lazy to handle missing API key)
@@ -47,7 +48,8 @@ export async function sendEmail(options: SendEmailOptions): Promise<{ id: string
   const result = await client.emails.send({
     from,
     to,
-    subject: options.subject,
+    // Header values must stay on one line, whatever a caller put in the subject
+    subject: sanitizeSubject(options.subject),
     html: options.html,
     text: options.text,
     replyTo: options.replyTo,

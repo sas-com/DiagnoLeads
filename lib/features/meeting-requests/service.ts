@@ -19,6 +19,7 @@
 import type { db as defaultDb } from '@/lib/db/client';
 import { leadTasks, leads, meetingRequests, organizations, users } from '@/lib/db/schema';
 import { filterAllowedRecipients } from '@/lib/email/allowed-recipients';
+import { renderEmail, sanitizeSubject } from '@/lib/email/templates/render';
 import { isEmailConfigured, sendEmail } from '@/lib/features/email';
 import { listIntakeMembers } from '@/lib/features/leads/assignment';
 import { notifyUsersInApp } from '@/lib/features/leads/assignment-notify';
@@ -311,7 +312,7 @@ export async function getMeetingRequest(
   };
 }
 
-/** The confirmation email to the respondent */
+/** The confirmation email to the respondent (#285: laid out with the shared email blocks) */
 export function buildConfirmationEmail(input: {
   organizationName: string;
   company: string | null;
@@ -324,31 +325,45 @@ export function buildConfirmationEmail(input: {
     .filter(Boolean)
     .join(' ');
   const when = candidateLabelJa(input.candidate);
-  const lines = [
-    to ? `${to}` : 'ご担当者様',
-    '',
-    'このたびは個別相談にお申し込みいただき、ありがとうございます。',
-    '初回のご相談の日時が決まりましたので、お知らせします。',
-    '',
-    `日時：${when}〜（日本時間）`,
+  const rows = [
+    { label: '日時', value: `${when}〜（日本時間）` },
     ...(input.meetingFormat
       ? [
-          `形式：${FORMAT_LABELS[input.meetingFormat]}${
-            input.meetingFormat === 'online' ? '（接続先は別途お送りします）' : ''
-          }`,
+          {
+            label: '形式',
+            value: `${FORMAT_LABELS[input.meetingFormat]}${
+              input.meetingFormat === 'online' ? '（接続先は別途お送りします）' : ''
+            }`,
+          },
         ]
       : []),
-    ...(input.confirmedByName ? [`担当：${input.confirmedByName}`] : []),
-    '',
-    'ご都合が悪くなった場合は、このメールにご返信ください。',
-    '',
-    input.organizationName,
+    ...(input.confirmedByName ? [{ label: '担当', value: input.confirmedByName }] : []),
   ];
-  const text = lines.join('\n');
+  const rendered = renderEmail({
+    theme: 'customer',
+    brand: input.organizationName,
+    preheader: `初回のご相談は ${when}〜 に決まりました。`,
+    blocks: [
+      { type: 'paragraph', text: to || 'ご担当者様' },
+      {
+        type: 'paragraph',
+        text: 'このたびは個別相談にお申し込みいただき、ありがとうございます。\n初回のご相談の日時が決まりましたので、お知らせします。',
+      },
+      { type: 'facts', title: '初回のご相談', rows },
+      {
+        type: 'notice',
+        tone: 'info',
+        text: 'ご都合が悪くなった場合は、このメールにご返信ください。',
+      },
+      { type: 'paragraph', text: input.organizationName },
+    ],
+    footer: [
+      `このメールは、${input.organizationName}の個別相談にお申し込みいただいた方にお送りしています。`,
+    ],
+  });
   return {
-    subject: `【日程のご連絡】初回のご相談：${when}〜`,
-    text,
-    html: `<p>${lines.map(escapeHtml).join('<br>')}</p>`,
+    subject: sanitizeSubject(`【日程のご連絡】初回のご相談：${when}〜`),
+    ...rendered,
   };
 }
 
@@ -499,15 +514,6 @@ export async function confirmMeeting(
 
 function sameCandidate(a: MeetingCandidate, b: MeetingCandidate): boolean {
   return a.date === b.date && a.time === b.time;
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 export type AcceptPreferencesStatus = 'saved' | 'confirmed' | 'out_of_range' | 'unavailable';
