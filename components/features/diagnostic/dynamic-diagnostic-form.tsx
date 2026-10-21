@@ -348,6 +348,7 @@ function ResultDisplay({ result, threshold, locale, thankYouMessage }: ResultDis
             </h3>
             <ul className="space-y-2">
               {threshold.recommendations.map((rec, index) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: static recommendations from the form config, never reordered and without ids
                 <li key={index} className="flex items-start gap-2">
                   <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 shrink-0" />
                   <span>{getLocalizedText(rec.text, locale)}</span>
@@ -535,9 +536,10 @@ export function DynamicDiagnosticForm({ form, locale, onSubmit }: DynamicDiagnos
       setIsComplete(true);
 
       // Handle redirect if configured
-      if (form.settings.redirectUrl) {
+      const redirectUrl = form.settings.redirectUrl;
+      if (redirectUrl) {
         setTimeout(() => {
-          window.location.href = form.settings.redirectUrl!;
+          window.location.href = redirectUrl;
         }, 3000);
       }
     } catch (error) {

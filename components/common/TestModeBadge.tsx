@@ -17,6 +17,7 @@ export function TestModeBadge({ className = '' }: { className?: string }) {
 
   const domains = formatEmailDomains(data.domains, locale);
   return (
+    // biome-ignore lint/a11y/useSemanticElements: status badge in the header, not the result of a form calculation
     <span
       role="status"
       title={t('description', { domains })}

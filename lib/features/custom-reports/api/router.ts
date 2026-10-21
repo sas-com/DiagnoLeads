@@ -112,8 +112,9 @@ export const customReportsRouter = router({
       visibilityConditions.push(eq(customReports.userId, ctx.user.id));
     }
 
-    if (visibilityConditions.length > 0) {
-      conditions.push(or(...visibilityConditions)!);
+    const visibilityCondition = or(...visibilityConditions);
+    if (visibilityCondition) {
+      conditions.push(visibilityCondition);
     }
 
     const results = await ctx.db.query.customReports.findMany({

@@ -157,6 +157,7 @@ export function ChatAssistant({ organizationName, recentLeads }: ChatAssistantPr
             ) : (
               messages.map((message, index) => (
                 <div
+                  // biome-ignore lint/suspicious/noArrayIndexKey: append-only chat log without ids; messages are never removed or reordered
                   key={index}
                   className={cn(
                     'flex gap-2',

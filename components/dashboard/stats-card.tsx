@@ -96,6 +96,7 @@ export function StatsCard({
   return (
     <Card
       className="p-6 border-0 shadow-sm bg-white hover:shadow-lg transition-all duration-300 group"
+      // biome-ignore lint/a11y/useSemanticElements: Card renders a styled div; switching to <section> would bypass the shadcn Card component
       role="region"
       aria-label={`${title}: ${formatValue(value)}`}
     >

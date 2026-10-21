@@ -219,6 +219,7 @@ export default function DashboardPage() {
         </div>
 
         {!organizationId ? (
+          // biome-ignore lint/a11y/useSemanticElements: live-region notice, not the result of a form calculation
           <p
             role="status"
             className="rounded-lg bg-gray-50 px-4 py-6 text-center text-sm text-gray-600 dark:bg-gray-800/50 dark:text-gray-300"

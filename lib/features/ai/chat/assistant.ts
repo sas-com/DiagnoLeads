@@ -6,7 +6,7 @@
  */
 
 import { createAnthropic } from '@ai-sdk/anthropic';
-import { streamText } from 'ai';
+import { type LanguageModel, streamText } from 'ai';
 
 // Initialize Anthropic provider
 const anthropic = createAnthropic({
@@ -59,7 +59,7 @@ Be concise, helpful, and professional. Focus on actionable insights.`;
 
   try {
     const result = await streamText({
-      model: anthropic('claude-sonnet-4-20250514') as any,
+      model: anthropic('claude-sonnet-4-20250514') as LanguageModel,
       system: systemPrompt,
       messages: messages.map((msg) => ({
         role: msg.role,
@@ -102,7 +102,7 @@ Focus on key business value and next steps.`;
 
   try {
     const result = await streamText({
-      model: anthropic('claude-sonnet-4-20250514') as any,
+      model: anthropic('claude-sonnet-4-20250514') as LanguageModel,
       prompt,
     });
 

@@ -92,6 +92,7 @@ export const AIDiagnosticToolbar: React.FC = () => {
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
+          aria-hidden="true"
         >
           <path d="M12 20h.01" />
           <path d="M8.5 16a3.5 3.5 0 1 1 7 0c0 1.5-1 2-2 2.5V20h-3v-1.5c-1-.5-2-1-2-2.5z" />
@@ -143,6 +144,7 @@ export const AIDiagnosticToolbar: React.FC = () => {
             fill="none"
             stroke="currentColor"
             strokeWidth="2"
+            aria-hidden="true"
           >
             <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
           </svg>
@@ -205,6 +207,7 @@ export const AIDiagnosticToolbar: React.FC = () => {
           <div style={{ maxHeight: '300px', overflow: 'auto' }}>
             {generatedQuestions.map((q, index) => (
               <div
+                // biome-ignore lint/suspicious/noArrayIndexKey: AI-generated questions have no id, are replaced as a whole on each generation and are never reordered
                 key={index}
                 style={{
                   padding: '12px',

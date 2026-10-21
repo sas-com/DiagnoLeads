@@ -59,6 +59,7 @@ export function CategoryBar({
       <div className="flex h-2 w-full overflow-hidden rounded-full">
         {percentages.map((pct, i) => (
           <div
+            // biome-ignore lint/suspicious/noArrayIndexKey: segments are positional (colors[i] pairs with values[i]) and values may repeat
             key={i}
             className={cn('h-full', COLORS[colors[i] || 'gray'])}
             style={{ width: `${pct}%` }}

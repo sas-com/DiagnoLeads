@@ -140,6 +140,7 @@ export function AIScoreCard({ score, aiScore, onGenerateScore, isGenerating }: A
                 <h4 className="text-sm font-semibold mb-2">{t('recommendedActions')}</h4>
                 <ul className="space-y-2">
                   {aiScore.recommendedActions.map((action, index) => (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: plain strings that may repeat; the list is replaced as a whole and never reordered
                     <li key={index} className="flex items-start gap-2 text-sm">
                       <span className="text-blue-600 mt-0.5">•</span>
                       <span className="text-gray-700">{action}</span>
