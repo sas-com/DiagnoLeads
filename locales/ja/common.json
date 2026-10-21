@@ -4118,7 +4118,8 @@
       "all": "すべて",
       "overdue": "次回アクション日を過ぎた",
       "handed_over": "引き継ぎ待ち",
-      "mine": "自分の行"
+      "mine": "自分の行",
+      "reapproach": "再アプローチ（断られて、連絡時期が近い）"
     },
     "actions": {
       "add": "行を追加",
@@ -4128,7 +4129,8 @@
       "convert": "リードにする",
       "openLead": "リードを開く",
       "save": "保存",
-      "cancel": "キャンセル"
+      "cancel": "キャンセル",
+      "importCalls": "架電レポートを取り込む"
     },
     "columns": {
       "contactedOn": "日付",
@@ -4152,7 +4154,16 @@
       "remarks": "備考",
       "targetSystem": "対象システム",
       "supportEndSoon": "保守期限",
-      "troubles": "困りごと"
+      "troubles": "困りごと",
+      "agencyName": "代行会社名",
+      "estimatedSystemBasis": "推定の根拠",
+      "challengeHypothesis": "課題の仮説",
+      "contactName": "担当者名",
+      "contactPhone": "直通電話",
+      "calledOn": "架電日",
+      "callResult": "架電結果",
+      "refusalReason": "断られた理由",
+      "refusalNote": "断られた理由の詳細"
     },
     "hints": {
       "heard": "システムの種類・古さ、困りごと、見直しの時期を、分かる範囲で一言で。",
@@ -4167,7 +4178,8 @@
       "existing_end_customer": "② 既存エンド顧客",
       "bp_company": "③ BP会社",
       "marketing": "④ マーケ流入",
-      "other": "⑤ その他(交流会など)"
+      "other": "⑤ その他(交流会など)",
+      "sales_agency": "⑥ 営業代行"
     },
     "systemScope": {
       "core": "基幹",
@@ -4277,7 +4289,9 @@
       "stageWithoutNextAction": "次回アクション日が未入力（段階の入力あり）",
       "overdue": "次回アクション日を過ぎている",
       "handOverWithoutStage": "「営業へ引き継ぎ」で段階が未入力",
-      "monthFormat": "{year}年{month}月"
+      "monthFormat": "{year}年{month}月",
+      "calls": "営業代行の架電",
+      "refusedFor": "断り：{reason}"
     },
     "referral": {
       "title": "あなたの紹介リンク",
@@ -4321,6 +4335,60 @@
       "title": "顧客探しの記録",
       "description": "社員がこのお客様と話した記録です。",
       "by": "{date} {recorder}"
+    },
+    "callResult": {
+      "appointment": "アポ獲得",
+      "refused": "断り",
+      "absent": "不在",
+      "callback": "再架電"
+    },
+    "refusalReason": {
+      "budget": "予算",
+      "staffing": "人手",
+      "risk": "移行のリスク",
+      "priority": "優先度・時期",
+      "vendor": "依頼先",
+      "other": "その他"
+    },
+    "agency": {
+      "section": "営業代行の架電",
+      "hint": "担当者名と直通電話は、営業と、この行を作った人だけに見えます。次の連絡可能時期は「次回アクション日」に入れます。断られた行は、次回アクション日の30日前から「再アプローチ」に並びます。"
+    },
+    "calls": {
+      "title": "営業代行の架電レポートを取り込む",
+      "description": "代行会社の架電レポート（CSV か Excel）を読み込みます。同じ代行会社の同じ会社の行があれば更新し、なければ「営業代行」の行を足します（会社名は「株式会社」や全角・半角の違いを無視して照合します）。ファイルはこの画面の中で読み、行だけを送ります。",
+      "chooseFile": "ファイルを選ぶ",
+      "template": "様式（CSV）をダウンロード",
+      "rows": "{count} 行を取り込めます",
+      "skipped": "{count} 行は会社名が空のため飛ばします",
+      "mapping": "列の対応（様式と違う列名のときは選び直してください）",
+      "notInFile": "ファイルにない",
+      "needCompany": "会社名の列を選んでください。",
+      "problems": "読み取れなかったセルが {count} 個あります。その欄は空のまま取り込みます。",
+      "submit": "取り込む",
+      "done": "{added} 行を追加し、{updated} 行を更新しました。",
+      "close": "閉じる",
+      "empty": "行がありません。",
+      "tooMany": "一度に取り込めるのは {max} 行までです。",
+      "readError": "ファイルを読めませんでした。",
+      "error": "取り込めませんでした。",
+      "columns": {
+        "company": "会社名",
+        "agencyName": "代行会社名",
+        "calledOn": "架電日",
+        "callResult": "架電結果",
+        "department": "部署",
+        "jobTitle": "役職",
+        "contactName": "担当者名",
+        "contactPhone": "直通電話",
+        "targetSystem": "推定システム",
+        "estimatedSystemBasis": "推定の根拠",
+        "challengeHypothesis": "課題の仮説",
+        "refusalReason": "断られた理由",
+        "refusalNote": "断られた理由の詳細",
+        "nextContact": "次の連絡可能時期",
+        "heard": "備考"
+      }
     }
   },
   "agencyHandovers": {

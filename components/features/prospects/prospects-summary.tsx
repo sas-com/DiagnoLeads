@@ -1,6 +1,5 @@
 'use client';
 
-import { CALL_RESULTS, REFUSAL_REASONS } from '@/lib/features/prospects/types/schemas';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { CALL_RESULTS, REFUSAL_REASONS } from '@/lib/features/prospects/types/schemas';
 import { PROSPECT_STAGES } from '@/lib/features/prospects/types/schemas';
 import { trpc } from '@/lib/trpc/client';
 import { Loader2 } from 'lucide-react';
@@ -82,16 +82,14 @@ export function ProspectsSummary({ organizationId }: { organizationId: string })
           <CountTable
             head={[t('summary.item'), t('summary.count')]}
             rows={[
-              ...CALL_RESULTS.map(
-                (result) => [t(`callResult.${result}`), summary.calls.byResult[result]] as const
-              ),
-              ...REFUSAL_REASONS.map(
-                (reason) =>
-                  [
-                    t('summary.refusedFor', { reason: t(`refusalReason.${reason}`) }),
-                    summary.calls.refusals[reason],
-                  ] as const
-              ),
+              ...CALL_RESULTS.map((result): [string, number] => [
+                t(`callResult.${result}`),
+                summary.calls.byResult[result],
+              ]),
+              ...REFUSAL_REASONS.map((reason): [string, number] => [
+                t('summary.refusedFor', { reason: t(`refusalReason.${reason}`) }),
+                summary.calls.refusals[reason],
+              ]),
             ]}
           />
         </Section>

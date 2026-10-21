@@ -28,9 +28,9 @@ import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { CallReportImportDialog } from './call-report-import-dialog';
 import { ProspectConvertDialog } from './prospect-convert-dialog';
 import { ProspectFormDialog } from './prospect-form-dialog';
-import { CallReportImportDialog } from './call-report-import-dialog';
 import { ProspectImportDialog } from './prospect-import-dialog';
 import type { ProspectRow } from './types';
 

@@ -275,6 +275,7 @@ export const importCallRowSchema = prospectAgencyFieldsSchema.extend({
   heard: longText(PROSPECT_TEXT_MAX),
 });
 export type ImportCallRow = z.infer<typeof importCallRowSchema>;
+export type ImportCallRowInput = z.input<typeof importCallRowSchema>;
 
 export const importCallsSchema = z.object({
   organizationId: z.string().uuid(),
