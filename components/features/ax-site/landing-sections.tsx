@@ -25,6 +25,7 @@ import {
 import { getTranslations } from 'next-intl/server';
 import type { ReactNode } from 'react';
 import { AxCtaLink } from './ax-cta-link';
+import { AxDiagnosisFrame } from './ax-landing-view';
 import {
   AX_CONTACT,
   AX_FINAL_SECTION_ID,
@@ -395,30 +396,29 @@ export async function AxTargets({ locale }: SectionProps) {
 export async function AxDiagnosisSection({ locale }: SectionProps) {
   const t = await getTranslations({ locale, namespace: 'axSite.diagnosis' });
   return (
-    <section
-      id={AX_SECTIONS.diagnosis}
-      aria-labelledby="ax-diagnosis-heading"
-      className="bg-gradient-to-b from-white to-ax-mist py-16 sm:py-24"
+    <AxDiagnosisFrame
+      intro={
+        <>
+          <p aria-hidden="true" className={EYEBROW}>
+            {t('eyebrow')}
+          </p>
+          <h2 id="ax-diagnosis-heading" className={`mt-2 ${SECTION_HEADING}`}>
+            {t('title')}
+          </h2>
+          <p className="mx-auto mt-5 max-w-2xl text-center font-bold leading-relaxed">
+            {t('lead')}
+          </p>
+        </>
+      }
     >
-      <div className="mx-auto max-w-4xl px-4 sm:px-6">
-        <p aria-hidden="true" className={EYEBROW}>
-          {t('eyebrow')}
-        </p>
-        <h2 id="ax-diagnosis-heading" className={`mt-2 ${SECTION_HEADING}`}>
-          {t('title')}
-        </h2>
-        <p className="mx-auto mt-5 max-w-2xl text-center font-bold leading-relaxed">{t('lead')}</p>
-        <div className="mt-10 rounded-3xl bg-white p-5 shadow-[0_10px_40px_rgba(0,0,0,0.08)] ring-1 ring-black/5 sm:p-10">
-          <AxDiagnosisFlow
-            locale={locale}
-            privacyPolicyUrl={axPrivacyPolicyUrl()}
-            turnstileSiteKey={turnstileSiteKey()}
-            allowedEmailDomains={allowedEmailDomains()}
-            embedded
-          />
-        </div>
-      </div>
-    </section>
+      <AxDiagnosisFlow
+        locale={locale}
+        privacyPolicyUrl={axPrivacyPolicyUrl()}
+        turnstileSiteKey={turnstileSiteKey()}
+        allowedEmailDomains={allowedEmailDomains()}
+        embedded
+      />
+    </AxDiagnosisFrame>
   );
 }
 

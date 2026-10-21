@@ -1,4 +1,5 @@
 import { AxFloatingCta } from '@/components/features/ax-site/ax-floating-cta';
+import { AxLandingOnly, AxLandingView } from '@/components/features/ax-site/ax-landing-view';
 import { AxSiteShell } from '@/components/features/ax-site/ax-site-shell';
 import {
   AxChallenges,
@@ -56,17 +57,24 @@ export default async function AxMigrationPage({ params }: AxMigrationPageProps) 
 
   return (
     <AxSiteShell locale={locale} variant="landing">
-      <AxHero locale={locale} />
-      <AxProblems locale={locale} />
-      <AxChallenges locale={locale} />
-      <AxSteps locale={locale} />
-      <AxTargets locale={locale} />
-      {/* Reasons first: reassurance before the diagnosis asks for contact details */}
-      <AxReasons locale={locale} />
-      <AxDiagnosisSection locale={locale} />
-      <AxFaq locale={locale} />
-      <AxFinalCta locale={locale} />
-      <AxFloatingCta label={t('floatingCta')} />
+      {/* Once the result is shown, it replaces the rest of the page (#280) */}
+      <AxLandingView>
+        <AxLandingOnly>
+          <AxHero locale={locale} />
+          <AxProblems locale={locale} />
+          <AxChallenges locale={locale} />
+          <AxSteps locale={locale} />
+          <AxTargets locale={locale} />
+          {/* Reasons first: reassurance before the diagnosis asks for contact details */}
+          <AxReasons locale={locale} />
+        </AxLandingOnly>
+        <AxDiagnosisSection locale={locale} />
+        <AxLandingOnly>
+          <AxFaq locale={locale} />
+          <AxFinalCta locale={locale} />
+          <AxFloatingCta label={t('floatingCta')} />
+        </AxLandingOnly>
+      </AxLandingView>
     </AxSiteShell>
   );
 }
