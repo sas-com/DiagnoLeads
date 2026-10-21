@@ -531,6 +531,9 @@
 - **手順**:
   - 依存を変えたら、`bun install` で `bun.lock` を更新し、`package.json` と一緒にコミットする
   - `package.json` と `bun.lock` がずれていると、本番デプロイのインストールが `lockfile had changes, but lockfile is frozen` で失敗する（本番は前のデプロイのまま）。そのときは `bun install` でロックファイルを更新した PR を出し、マージし直す
+  - 依存を変えた PR は、マージ後に本番デプロイの成功まで見届ける。スキーマ変更（マイグレーション）と依存の変更は同じ PR に入れない（失敗すると、新しいスキーマに古いコードが残る時間が延びる）。失敗したら最優先で直す（直すまで後のマージもすべてデプロイに失敗する）
+  - 手元では差分が出ないのに失敗するときは、Bun の版の違いを疑う。ビルドログの Bun の版で `bunx bun@<その版> install --frozen-lockfile` を流して再現する。すぐ直せなければ、`installCommand` を戻す PR で逃がす
+  - ビルドキャッシュが疑わしいときは、Vercel の Redeploy で「Use existing Build Cache」を外す
   - Bun の版を上げて `bun.lock` の形式が変わる場合は、Vercel の Bun が読めるかを先に確かめる
 
 ---
