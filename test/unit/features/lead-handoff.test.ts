@@ -26,14 +26,34 @@ describe('handedOffOn', () => {
 });
 
 describe('isFirstHandoff', () => {
+  const before = (dealPhase: string | null, dealPhaseReachedAt: Record<string, string>) => ({
+    dealPhase,
+    dealPhaseReachedAt,
+  });
+
   it('is true only when the deal moves on for the first time', () => {
-    expect(isFirstHandoff({ initial_hearing: '2026-10-01' }, { initial_hearing: '2026-10-01', proposal: '2026-10-21' })).toBe(true);
+    expect(
+      isFirstHandoff(before('initial_hearing', { initial_hearing: '2026-10-01' }), {
+        initial_hearing: '2026-10-01',
+        proposal: '2026-10-21',
+      })
+    ).toBe(true);
     // Set straight to a later phase
-    expect(isFirstHandoff({}, { proposal: '2026-10-21' })).toBe(true);
+    expect(isFirstHandoff(before(null, {}), { proposal: '2026-10-21' })).toBe(true);
     // Already moved on before
-    expect(isFirstHandoff({ proposal: '2026-10-10' }, { proposal: '2026-10-10', survey_won: '2026-10-21' })).toBe(false);
+    expect(
+      isFirstHandoff(before('proposal', { proposal: '2026-10-10' }), {
+        proposal: '2026-10-10',
+        survey_won: '2026-10-21',
+      })
+    ).toBe(false);
     // Still at the initial hearing
-    expect(isFirstHandoff({}, { initial_hearing: '2026-10-21' })).toBe(false);
+    expect(isFirstHandoff(before(null, {}), { initial_hearing: '2026-10-21' })).toBe(false);
+  });
+
+  it('is false for a lead already past the initial hearing before the dates were kept', () => {
+    // The lead form sends the phase again on an unrelated save
+    expect(isFirstHandoff(before('proposal', {}), { proposal: '2026-10-21' })).toBe(false);
   });
 });
 

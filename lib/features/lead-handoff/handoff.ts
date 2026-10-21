@@ -28,9 +28,23 @@ export function handedOffOn(reachedAt: unknown): string | null {
   return dates[0] ?? null;
 }
 
-/** Whether an update moved the deal on from the initial hearing for the first time */
-export function isFirstHandoff(before: unknown, after: unknown): boolean {
-  return handedOffOn(before) === null && handedOffOn(after) !== null;
+export const isHandoffPhase = (phase: string | null | undefined): boolean =>
+  !!phase && (HANDOFF_PHASES as readonly string[]).includes(phase);
+
+/**
+ * Whether an update moved the deal on from the initial hearing for the first time. The phase
+ * before must not be a later one either: leads from before the phase dates were kept (#83) have
+ * a later phase and no date, and the lead form sends the phase again on every save.
+ */
+export function isFirstHandoff(
+  before: { dealPhase: string | null; dealPhaseReachedAt: unknown },
+  afterReachedAt: unknown
+): boolean {
+  return (
+    !isHandoffPhase(before.dealPhase) &&
+    handedOffOn(before.dealPhaseReachedAt) === null &&
+    handedOffOn(afterReachedAt) !== null
+  );
 }
 
 export interface HandoffNoticeInput {

@@ -151,6 +151,32 @@ describe.skipIf(!url)('lead handoff (PostgreSQL)', () => {
     expect(sheet.lead.handedOffOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
+  it('does not tell anyone for an old lead already past the initial hearing', async () => {
+    // From before the phase dates were kept: a later phase and no date
+    const [lead] = await pg
+      .insert(leads)
+      .values({ organizationId: org, email: `handoff-${unique()}@example.co.jp`, dealPhase: 'proposal' })
+      .returning();
+    const before = (await handoffNotices()).length;
+    // The lead form sends the phase again with an unrelated change
+    await callers.sales.leads.update({ organizationId: org, id: lead.id, dealPhase: 'proposal', phone: '03-0000-0000' });
+    expect(await handoffNotices()).toHaveLength(before);
+    expect(email.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('keeps the lead update when the email fails', async () => {
+    email.sendEmail.mockRejectedValueOnce(new Error('mail server down'));
+    const [lead] = await pg
+      .insert(leads)
+      .values({ organizationId: org, email: `handoff-${unique()}@example.co.jp` })
+      .returning();
+    const updated = await callers.sales.leads.update({ organizationId: org, id: lead.id, dealPhase: 'simple_diagnosis' });
+    expect(updated.dealPhase).toBe('simple_diagnosis');
+    expect(email.sendEmail).toHaveBeenCalledTimes(1);
+    const [row] = await pg.select({ dealPhase: leads.dealPhase }).from(leads).where(eq(leads.id, lead.id));
+    expect(row.dealPhase).toBe('simple_diagnosis');
+  });
+
   it('does not reach leads of another organization', async () => {
     const [other] = await pg
       .insert(organizations)

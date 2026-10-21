@@ -651,8 +651,7 @@ export const leadsRouter = router({
 
       return {
         updated,
-        handedOff:
-          !!updated && isFirstHandoff(existing.dealPhaseReachedAt, updated.dealPhaseReachedAt),
+        handedOff: !!updated && isFirstHandoff(existing, updated.dealPhaseReachedAt),
       };
     });
 
