@@ -30,6 +30,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { ProspectConvertDialog } from './prospect-convert-dialog';
 import { ProspectFormDialog } from './prospect-form-dialog';
+import { CallReportImportDialog } from './call-report-import-dialog';
 import { ProspectImportDialog } from './prospect-import-dialog';
 import type { ProspectRow } from './types';
 
@@ -49,6 +50,7 @@ export function ProspectsList({ organizationId }: { organizationId: string }) {
   const [deleting, setDeleting] = useState<ProspectRow | null>(null);
   const [converting, setConverting] = useState<ProspectRow | null>(null);
   const [importing, setImporting] = useState(false);
+  const [importingCalls, setImportingCalls] = useState(false);
   const remove = trpc.prospects.delete.useMutation({
     onSuccess: () => {
       toast.success(t('deleted'));
@@ -79,6 +81,28 @@ export function ProspectsList({ organizationId }: { organizationId: string }) {
     value
       ? format.dateTime(new Date(`${value}T00:00:00`), { month: 'numeric', day: 'numeric' })
       : '';
+
+  /** A sales agency's call (#161): the result, why it was turned down and the contact */
+  const agencyCall = (row: ProspectRow) =>
+    row.entry === 'sales_agency' && (row.callResult || row.agencyName || row.contactName) ? (
+      <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-1">
+          {row.callResult && (
+            <Badge variant={row.callResult === 'refused' ? 'destructive' : 'secondary'}>
+              {t(`callResult.${row.callResult}` as 'callResult.refused')}
+            </Badge>
+          )}
+          {row.refusalReason && (
+            <span>{t(`refusalReason.${row.refusalReason}` as 'refusalReason.other')}</span>
+          )}
+          {row.agencyName && <span>（{row.agencyName}）</span>}
+        </div>
+        {row.refusalNote && <p className="line-clamp-2">{row.refusalNote}</p>}
+        {(row.contactName || row.contactPhone) && (
+          <p>{[row.contactName, row.contactPhone].filter(Boolean).join(' / ')}</p>
+        )}
+      </div>
+    ) : null;
 
   const nextAction = (row: ProspectRow) => {
     const overdue = row.nextActionOn !== null && row.nextActionOn < today;
@@ -197,6 +221,12 @@ export function ProspectsList({ organizationId }: { organizationId: string }) {
               {t('actions.import')}
             </Button>
           )}
+          {isSales && (
+            <Button type="button" variant="outline" onClick={() => setImportingCalls(true)}>
+              <FileUp className="mr-2 h-4 w-4" aria-hidden="true" />
+              {t('actions.importCalls')}
+            </Button>
+          )}
           {canCreate && (
             <Button type="button" onClick={() => setEditing('new')}>
               <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
@@ -251,6 +281,7 @@ export function ProspectsList({ organizationId }: { organizationId: string }) {
                   {row.heard && (
                     <p className="line-clamp-3 whitespace-pre-line text-sm">{row.heard}</p>
                   )}
+                  {agencyCall(row)}
                   {waiting(row)}
                   {(row.nextActionOn || row.nextActionNote) && (
                     <div className="text-sm">
@@ -313,6 +344,7 @@ export function ProspectsList({ organizationId }: { organizationId: string }) {
                       </TableCell>
                       <TableCell className="text-sm">
                         <p className="line-clamp-3 whitespace-pre-line">{row.heard}</p>
+                        {agencyCall(row)}
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-sm">
                         {row.reaction && t(`reaction.${row.reaction}` as 'reaction.unknown')}
@@ -362,6 +394,13 @@ export function ProspectsList({ organizationId }: { organizationId: string }) {
           organizationId={organizationId}
           row={converting}
           onOpenChange={(open) => !open && setConverting(null)}
+        />
+      )}
+      {isSales && importingCalls && (
+        <CallReportImportDialog
+          organizationId={organizationId}
+          open
+          onOpenChange={setImportingCalls}
         />
       )}
       {isSales && (

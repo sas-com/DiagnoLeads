@@ -21,6 +21,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { TARGET_SYSTEMS } from '@/lib/features/leads/types/pipeline';
 import {
+  CALL_RESULTS,
   PROSPECT_ENTRIES,
   PROSPECT_NEXT_STEPS,
   PROSPECT_REACTIONS,
@@ -28,6 +29,7 @@ import {
   PROSPECT_SUPPORT_END,
   PROSPECT_SYSTEM_SCOPES,
   PROSPECT_TROUBLES,
+  REFUSAL_REASONS,
 } from '@/lib/features/prospects/types/schemas';
 import { trpc } from '@/lib/trpc/client';
 import { AlertTriangle, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
@@ -62,6 +64,16 @@ interface FormState {
   meetingOn: string;
   salesUserId: string;
   remarks: string;
+  // A sales agency's call (#161), written by sales
+  agencyName: string;
+  estimatedSystemBasis: string;
+  challengeHypothesis: string;
+  contactName: string;
+  contactPhone: string;
+  calledOn: string;
+  callResult: string;
+  refusalReason: string;
+  refusalNote: string;
 }
 type TextKey = Exclude<keyof FormState, 'troubles'>;
 type RequiredKey = 'contactedOn' | 'entry' | 'company';
@@ -87,6 +99,15 @@ const toForm = (row: ProspectRow | null, today: string): FormState => ({
   meetingOn: row?.meetingOn ?? '',
   salesUserId: row?.salesUserId ?? '',
   remarks: row?.remarks ?? '',
+  agencyName: row?.agencyName ?? '',
+  estimatedSystemBasis: row?.estimatedSystemBasis ?? '',
+  challengeHypothesis: row?.challengeHypothesis ?? '',
+  contactName: row?.contactName ?? '',
+  contactPhone: row?.contactPhone ?? '',
+  calledOn: row?.calledOn ?? '',
+  callResult: row?.callResult ?? '',
+  refusalReason: row?.refusalReason ?? '',
+  refusalNote: row?.refusalNote ?? '',
 });
 
 const orNull = (value: string) => value.trim() || null;
@@ -190,6 +211,16 @@ export function ProspectFormDialog({
       meetingOn: orNull(form.meetingOn),
       salesUserId: orNull(form.salesUserId),
       remarks: orNull(form.remarks),
+      // Sent as they are: the server keeps them only from sales (#161)
+      agencyName: orNull(form.agencyName),
+      estimatedSystemBasis: orNull(form.estimatedSystemBasis),
+      challengeHypothesis: orNull(form.challengeHypothesis),
+      contactName: orNull(form.contactName),
+      contactPhone: orNull(form.contactPhone),
+      calledOn: orNull(form.calledOn),
+      callResult: orNull(form.callResult) as (typeof CALL_RESULTS)[number] | null,
+      refusalReason: orNull(form.refusalReason) as (typeof REFUSAL_REASONS)[number] | null,
+      refusalNote: orNull(form.refusalNote),
     };
     if (row) update.mutate({ ...values, id: row.id });
     else create.mutate(values);
@@ -464,6 +495,54 @@ export function ProspectFormDialog({
                 </div>
               )}
             </div>
+
+            {isSales && form.entry === 'sales_agency' && (
+              <fieldset className="space-y-4 rounded-md border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
+                <legend className="px-1 text-sm font-medium">{t('agency.section')}</legend>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {field('agencyName', 'text', { maxLength: 100 })}
+                  {field('calledOn', 'date')}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="prospect-callResult">{t('columns.callResult')}</Label>
+                    <Select value={form.callResult || NONE} onValueChange={set('callResult')}>
+                      <SelectTrigger id="prospect-callResult">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NONE}>{t('none')}</SelectItem>
+                        {CALL_RESULTS.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {t(`callResult.${option}`)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="prospect-refusalReason">{t('columns.refusalReason')}</Label>
+                    <Select value={form.refusalReason || NONE} onValueChange={set('refusalReason')}>
+                      <SelectTrigger id="prospect-refusalReason">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NONE}>{t('none')}</SelectItem>
+                        {REFUSAL_REASONS.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {t(`refusalReason.${option}`)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {field('contactName', 'text', { maxLength: 100 })}
+                  {field('contactPhone', 'text', { maxLength: 30 })}
+                  {field('estimatedSystemBasis', 'text', { maxLength: 500 })}
+                  {field('challengeHypothesis', 'text', { maxLength: 500 })}
+                </div>
+                {field('refusalNote', 'text', { maxLength: 500 })}
+                <p className="text-xs text-muted-foreground">{t('agency.hint')}</p>
+              </fieldset>
+            )}
 
             {isSales && (
               <fieldset className="space-y-4 rounded-md border border-sky-200 bg-sky-50/50 p-4 dark:border-sky-900 dark:bg-sky-950/30">

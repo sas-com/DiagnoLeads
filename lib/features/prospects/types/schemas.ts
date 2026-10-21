@@ -1,3 +1,4 @@
+import { OBJECTION_REASONS } from '@/lib/features/ax-playbook/types/schemas';
 import { targetSystemEnum } from '@/lib/features/leads/types/pipeline';
 import { z } from 'zod';
 
@@ -14,6 +15,8 @@ export const PROSPECT_ENTRIES = [
   'bp_company',
   'marketing',
   'other',
+  // Companies a sales agency called (#161)
+  'sales_agency',
 ] as const;
 export const prospectEntryEnum = z.enum(PROSPECT_ENTRIES);
 export type ProspectEntry = z.infer<typeof prospectEntryEnum>;
@@ -168,6 +171,37 @@ export const prospectMemberFieldsSchema = z.object({
     .optional(),
 });
 
+/** Result of a sales agency's call (#161) */
+export const CALL_RESULTS = ['appointment', 'refused', 'absent', 'callback'] as const;
+export const callResultEnum = z.enum(CALL_RESULTS);
+export type CallResult = z.infer<typeof callResultEnum>;
+
+/** Why a call was turned down: the same values as the hearing's pastBlocker (#157) */
+export const REFUSAL_REASONS = OBJECTION_REASONS;
+export const refusalReasonEnum = z.enum(REFUSAL_REASONS);
+export type RefusalReason = z.infer<typeof refusalReasonEnum>;
+
+/** Columns of a sales agency's call report (#161), written by sales */
+export const prospectAgencyFieldsSchema = z.object({
+  agencyName: shortText(100),
+  estimatedSystemBasis: longText(500),
+  challengeHypothesis: longText(500),
+  contactName: shortText(100),
+  contactPhone: z
+    .string()
+    .trim()
+    .max(30)
+    .regex(/^[0-9+\-() ]*$/)
+    .transform((value) => value || null)
+    .nullable()
+    .optional(),
+  calledOn: optionalDate,
+  callResult: callResultEnum.nullable().optional(),
+  refusalReason: refusalReasonEnum.nullable().optional(),
+  refusalNote: longText(500),
+});
+export type ProspectAgencyFields = z.infer<typeof prospectAgencyFieldsSchema>;
+
 /** Columns sales fill in (light blue in the spreadsheet) */
 export const prospectSalesFieldsSchema = z.object({
   stage: prospectStageEnum.nullable().optional(),
@@ -178,9 +212,12 @@ export const prospectSalesFieldsSchema = z.object({
 
 /**
  * all; overdue: an open row whose next action date has passed; handed_over: handed over and not
- * yet a lead; mine: rows the user added or follows as sales
+ * yet a lead; mine: rows the user added or follows as sales; reapproach: calls turned down
+ * whose next contact is due within REAPPROACH_DAYS (or past), not a lead yet (#161)
  */
-export const PROSPECT_FILTERS = ['all', 'overdue', 'handed_over', 'mine'] as const;
+export const PROSPECT_FILTERS = ['all', 'overdue', 'handed_over', 'mine', 'reapproach'] as const;
+/** Turned-down calls show in the re-approach list this many days before their next contact */
+export const REAPPROACH_DAYS = 30;
 
 export const listProspectsSchema = z.object({
   organizationId: z.string().uuid(),
@@ -189,11 +226,13 @@ export const listProspectsSchema = z.object({
 
 export const createProspectSchema = prospectMemberFieldsSchema
   .merge(prospectSalesFieldsSchema)
+  .merge(prospectAgencyFieldsSchema)
   .extend({ organizationId: z.string().uuid() });
 export type CreateProspectInput = z.infer<typeof createProspectSchema>;
 
 export const updateProspectSchema = prospectMemberFieldsSchema
   .merge(prospectSalesFieldsSchema)
+  .merge(prospectAgencyFieldsSchema)
   .extend({ organizationId: z.string().uuid(), id: z.string().uuid() });
 export type UpdateProspectInput = z.infer<typeof updateProspectSchema>;
 
@@ -219,6 +258,27 @@ export const PROSPECT_IMPORT_MAX_ROWS = 500;
 export const importProspectsSchema = z.object({
   organizationId: z.string().uuid(),
   rows: z.array(importProspectRowSchema).min(1).max(PROSPECT_IMPORT_MAX_ROWS),
+});
+
+/**
+ * One row of a sales agency's call report (#161), read in the browser. A row finds the agency's
+ * existing row for the same company (sameCompany) and agency, or becomes a new one
+ */
+export const importCallRowSchema = prospectAgencyFieldsSchema.extend({
+  company: z.string().trim().min(1).max(200).regex(PLAIN_TEXT),
+  department: shortText(100),
+  jobTitle: shortText(100),
+  targetSystem: targetSystemEnum.nullable().optional(),
+  /** Next time the company may be called: a date, or a rough time */
+  nextActionOn: optionalDate,
+  nextActionNote: shortText(100),
+  heard: longText(PROSPECT_TEXT_MAX),
+});
+export type ImportCallRow = z.infer<typeof importCallRowSchema>;
+
+export const importCallsSchema = z.object({
+  organizationId: z.string().uuid(),
+  rows: z.array(importCallRowSchema).min(1).max(PROSPECT_IMPORT_MAX_ROWS),
 });
 
 /** Rows of other people about a company with a similar name, while a member types it */

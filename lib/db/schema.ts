@@ -2929,6 +2929,20 @@ export const prospects = pgTable(
     handedOverAt: timestamp('handed_over_at', { withTimezone: true }),
     /** Lead the row became, or an existing lead of the same person it was linked to */
     leadId: uuid('lead_id').references((): AnyPgColumn => leads.id, { onDelete: 'set null' }),
+    // Rows from a sales agency's call report (entry 'sales_agency', #161). Written by sales;
+    // the contact is shown only to sales and the row's creator
+    agencyName: text('agency_name'),
+    /** Why the agency guessed the core system (target_system) */
+    estimatedSystemBasis: text('estimated_system_basis'),
+    challengeHypothesis: text('challenge_hypothesis'),
+    contactName: text('contact_name'),
+    contactPhone: text('contact_phone'),
+    calledOn: date('called_on', { mode: 'string' }),
+    /** CALL_RESULTS */
+    callResult: text('call_result'),
+    /** OBJECTION_REASONS: why the call was turned down, for the summary */
+    refusalReason: text('refusal_reason'),
+    refusalNote: text('refusal_note'),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),

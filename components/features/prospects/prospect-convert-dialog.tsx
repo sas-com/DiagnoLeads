@@ -34,8 +34,9 @@ export function ProspectConvertDialog({
   const router = useRouter();
   const utils = trpc.useUtils();
   const [email, setEmail] = useState('');
-  const [name, setName] = useState(row.surname ?? '');
-  const [phone, setPhone] = useState('');
+  // An agency's call names the contact (#161)
+  const [name, setName] = useState(row.contactName ?? row.surname ?? '');
+  const [phone, setPhone] = useState(row.contactPhone ?? '');
   const convert = trpc.prospects.convertToLead.useMutation({
     onSuccess: ({ leadId, linkedExisting }) => {
       toast.success(linkedExisting ? t('convert.linked') : t('convert.done'));
