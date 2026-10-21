@@ -503,11 +503,14 @@ function AxDiagnosisSteps({
       setStage('result');
       // Rewind this diagnosis' step entries: the browser's back button then leaves the result
       history.rewind(startStep);
+      const { result } = json as SubmissionResponse;
       trackAxEvent('ax_diagnosis_complete', {
         platform,
-        difficulty: json.result.difficulty.level,
-        urgency: json.result.urgency.level,
-        primary_challenge: json.result.challenges.primary,
+        difficulty: result.difficulty.level,
+        urgency: result.urgency.level,
+        primary_challenge: result.challenges.primary,
+        // Access only: the share of each recommended path (#303)
+        ...(result.accessPath ? { access_path: result.accessPath.path } : {}),
         consultation_requested: consultation,
       });
       if (consultation) trackAxEvent('ax_consultation_request', { source: 'form', platform });

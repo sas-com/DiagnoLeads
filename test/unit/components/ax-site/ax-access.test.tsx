@@ -150,6 +150,26 @@ describe('Access landing page', () => {
     expect(screen.getByText(/米国 Microsoft Corporation の米国およびその他の国/)).toBeInTheDocument();
   });
 
+  it('says the check gives a guide to the path that fits, decided together (#303)', async () => {
+    await renderPage();
+    expect(
+      screen.getByText(
+        '版や VBA、利用人数などを選ぶと、ツールに合った進め方の目安が分かります。直して使うか、Web に移すか、置き換えるか、合うものをお伝えします。'
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByText(/無料Web診断で、どれが合うかの目安が分かります。進め方は、相談のうえで一緒に決めます。/)).toBeInTheDocument();
+    expect(screen.getByText(/おすすめの進め方（直す・Web に移す・置き換える）の目安/)).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'どれが合うか、無料Web診断で確かめる' })
+    ).toHaveAttribute('href', '#diagnosis');
+    // Never promises that a web system is safe, and the old wording is gone
+    expect(document.body).not.toHaveTextContent(/Web 化すれば安全|Web に移せば安全/);
+    expect(screen.queryByText(/移行の難しさと急ぎ度合いの目安が分かります。直して使うか/)).toBeNull();
+
+    const metadata = await generateMetadata({ params });
+    expect(metadata.description).toContain('ツールに合った進め方の目安が分かります');
+  });
+
   it('points the diagnosis buttons at the embedded diagnosis', async () => {
     await renderPage();
     const buttons = screen.getAllByRole('link', { name: /無料Web診断/ });

@@ -932,10 +932,17 @@ const questions: DiagnosticQuestion[] = [
         '部署ごとにデータが分かれ、全社で集計・活用できない',
         'Data is split by department and cannot be used company-wide'
       ),
+      // Reworded for #303 (the value is kept, so stored answers read the same way): the Office
+      // support end itself is asked by access_version
       option(
         'support',
-        'Office・Windowsのサポート終了やPCの入れ替えで、動かなくなる心配がある',
-        'Worried it will stop working with Office / Windows end of support or new PCs'
+        'Microsoft 365・64bit 化・PC の入れ替えで動かない（動かなくなりそう）',
+        'It does not work (or may stop working) after moving to Microsoft 365, 64-bit or a new PC'
+      ),
+      option(
+        'audit',
+        '誰が見た・変えたかの記録や、権限の管理を求められている',
+        'We are asked to keep records of who saw or changed what, and to manage permissions'
       ),
       option('none', '特にない', 'None in particular'),
     ],
