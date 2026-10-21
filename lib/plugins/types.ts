@@ -130,6 +130,7 @@ export type HookType =
 /**
  * Hook handler
  */
+// biome-ignore lint/suspicious/noConfusingVoidType: handlers may return nothing to keep the data as is
 export type HookHandler<T = unknown> = (data: T) => Promise<T | void> | T | void;
 
 /**

@@ -54,13 +54,14 @@ export default buildConfig({
   },
 
   // Database adapter - PostgreSQL with separate schema
-  // push: true enables automatic schema synchronization during development
-  // For production, consider using migrations instead
+  // Schema push rewrites the cms schema (ALTER) on the first CMS request in dev.
+  // It runs only when PAYLOAD_PUSH=true, so a wrong DATABASE_URL cannot alter
+  // the production schema by accident (#235).
   db: postgresAdapter({
     // TLS settings matching the production database (lib/cms/db-pool.ts, #141)
     pool: cmsPoolConfig(process.env.DATABASE_URL || ''),
     schemaName: 'cms',
-    push: true,
+    push: process.env.PAYLOAD_PUSH === 'true',
   }),
 
   // Image processing
