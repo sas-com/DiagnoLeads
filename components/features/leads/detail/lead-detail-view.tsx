@@ -7,6 +7,7 @@ import { DeliveryReviewCard } from '@/components/features/delivery-reviews/deliv
 import { LeadActivityCard } from '@/components/features/lead-activity/lead-activity-card';
 import { LeadContactBar } from '@/components/features/lead-follow-up/lead-contact-bar';
 import { LeadNextActionsCard } from '@/components/features/lead-follow-up/lead-next-actions-card';
+import { LeadHandoffLink } from '@/components/features/lead-handoff/lead-handoff-link';
 import { LeadHearingsCard } from '@/components/features/lead-hearings/lead-hearings-card';
 import { LeadPrepCard } from '@/components/features/lead-prep/lead-prep-card';
 import { MeetingRequestCard } from '@/components/features/meeting-requests/meeting-request-card';
@@ -26,6 +27,7 @@ import { useDeleteLead, useLeadAccess } from '@/hooks/use-leads';
 import { useOrganization } from '@/hooks/use-organization';
 import type { Lead } from '@/lib/db/schema';
 import { isDeliveryPhase } from '@/lib/features/delivery-reviews/report';
+import { handedOffOn } from '@/lib/features/lead-handoff/handoff';
 import {
   LEAD_TABS,
   type LeadCardField,
@@ -273,6 +275,7 @@ function LeadDetailContent({
       timeZone: TIME_ZONE,
     });
   const reachedPhases = DEAL_PHASES.filter((phase) => lead.dealPhaseReachedAt?.[phase]);
+  const handoffOn = handedOffOn(lead.dealPhaseReachedAt);
 
   return (
     <div className="space-y-6">
@@ -411,6 +414,7 @@ function LeadDetailContent({
               <DeliveryReviewCard organizationId={organizationId} leadId={lead.id} />
             )}
             <LeadHearingOverview organizationId={organizationId} leadId={lead.id} />
+            {handoffOn && <LeadHandoffLink leadId={lead.id} handedOffOn={handoffOn} />}
             <LeadDiagnosisCard
               responses={lead.responses}
               customFields={lead.customFields}

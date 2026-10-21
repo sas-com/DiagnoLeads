@@ -21,6 +21,7 @@ import { filtersRouter } from '@/lib/features/filters/api/router';
 import { hierarchyRouter } from '@/lib/features/hierarchy/api/router';
 import { leadActivityRouter } from '@/lib/features/lead-activity/api/router';
 import { leadFollowUpRouter } from '@/lib/features/lead-follow-up/api/router';
+import { leadHandoffRouter } from '@/lib/features/lead-handoff/api/router';
 import { leadHearingsRouter } from '@/lib/features/lead-hearings/api/router';
 import { leadPrepRouter } from '@/lib/features/lead-prep/api/router';
 import { leadSearchRouter } from '@/lib/features/lead-search/api/router';
@@ -76,6 +77,7 @@ export const appRouter = router({
   actTiming: actTimingRouter, // When to act and its contact again (Refs #151)
   objectionCard: objectionCardRouter, // Objections that fit why a past attempt stopped (Refs #157)
   deliveryReviews: deliveryReviewsRouter, // Phase progress and what turned out hard against the diagnosis (Refs #159)
+  leadHandoff: leadHandoffRouter, // Handoff sheet of the first meeting to the technical team (Refs #86)
   leadHearings: leadHearingsRouter, // Initial meeting hearings per lead (Refs #84)
   contentEditors: contentEditorsRouter, // FAQ / blog editors granted from settings (#91)
   leadActivity: leadActivityRouter, // Activity timeline per lead (Refs #101)

@@ -3875,6 +3875,38 @@
     "takeawayAdded": "Added as a takeaway",
     "takeawayError": "Could not add it. Please try again."
   },
+  "leadHandoff": {
+    "title": "Handoff sheet",
+    "linkDescription": "Moved on from the initial hearing on {date}. Review and print what goes to the technical team on one sheet.",
+    "open": "Open the handoff sheet",
+    "backToLead": "Back to the lead",
+    "print": "Print",
+    "noName": "Lead without a name",
+    "dealPhase": "Deal phase",
+    "handedOffOn": "Handed off on",
+    "assignee": "Sales assignee",
+    "hearingOn": "Hearing",
+    "unset": "Not set",
+    "notYet": "Not yet",
+    "noHearing": "None",
+    "notYetNote": "This deal has not moved on from the initial hearing yet. When it does, the recipients are notified.",
+    "noHearingNote": "No hearing has been recorded. Record one under \"Hearings\" on the lead.",
+    "todoTitle": "Unconfirmed and for next time",
+    "takeawaysTitle": "Takeaways",
+    "due": "Due {date}",
+    "checkWith": "Check with {name}",
+    "loadError": "Could not load the handoff sheet.",
+    "settings": {
+      "title": "Handoff sheet recipients",
+      "description": "Members told that a handoff sheet is ready when a deal moves on from the initial hearing (e.g. the technical team). They are notified in the app; emails carry only the link to the sheet.",
+      "none": "No recipients yet. Until you choose some, the sheet is only opened from the lead page.",
+      "limit": "Choose up to {max} members.",
+      "save": "Save",
+      "saved": "Handoff sheet recipients saved",
+      "saveError": "Could not save the handoff sheet recipients",
+      "readOnly": "Owners and admins can change the recipients."
+    }
+  },
   "deliveryReviews": {
     "title": "Delivery review",
     "description": "Record what turned out hard and how far the effort was from the estimate. Used to revise the diagnosis scoring.",

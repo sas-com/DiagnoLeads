@@ -14,6 +14,7 @@ import {
   Bell,
   Check,
   CheckCheck,
+  FileOutput,
   FileSpreadsheet,
   Mail,
   Star,
@@ -33,6 +34,8 @@ const notificationIcons: Record<string, React.ElementType> = {
   export_completed: FileSpreadsheet,
   member_invited: Mail,
   member_removed: UserMinus,
+  // Handoff sheet of the first meeting (#86)
+  lead_handoff: FileOutput,
   system: Bell,
 };
 
@@ -44,6 +47,7 @@ const notificationColors: Record<string, string> = {
   export_completed: 'bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400',
   member_invited: 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400',
   member_removed: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
+  lead_handoff: 'bg-teal-100 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400',
   system: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
 };
 
