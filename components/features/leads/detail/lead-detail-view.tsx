@@ -2,6 +2,7 @@
 
 import { PageHeader } from '@/components/common/page-header';
 import { ActTimingCard } from '@/components/features/act-timing/act-timing-card';
+import { AgencyHandoverCard } from '@/components/features/agency-handovers/agency-handover-card';
 import { AppointmentReviewCard } from '@/components/features/appointment-reviews/appointment-review-card';
 import { ChallengeGuideCard } from '@/components/features/challenge-guide/challenge-guide-card';
 import { DeliveryReviewCard } from '@/components/features/delivery-reviews/delivery-review-card';
@@ -405,6 +406,7 @@ function LeadDetailContent({
 
           <TabsContent value="overview" className="mt-4 space-y-4">
             <MeetingRequestCard organizationId={organizationId} leadId={lead.id} />
+            <AgencyHandoverCard organizationId={organizationId} leadId={lead.id} />
             <LeadPrepCard organizationId={organizationId} leadId={lead.id} />
             <ObjectionCard organizationId={organizationId} leadId={lead.id} />
             <ActTimingCard organizationId={organizationId} leadId={lead.id} />

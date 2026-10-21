@@ -2,6 +2,7 @@ import { abTestsRouter } from '@/lib/features/ab-tests/api/router';
 import { accountRouter } from '@/lib/features/account/api/router';
 import { actTimingRouter } from '@/lib/features/act-timing/api/router';
 import { agencyContractsRouter } from '@/lib/features/agency-contracts/api/router';
+import { agencyHandoversRouter } from '@/lib/features/agency-handovers/api/router';
 import { agencyLinksRouter } from '@/lib/features/agency-links/api/router';
 import { aiRouter } from '@/lib/features/ai/api/router';
 import { analyticsRouter } from '@/lib/features/analytics/api/router';
@@ -79,6 +80,7 @@ export const appRouter = router({
   actTiming: actTimingRouter, // When to act and its contact again (Refs #151)
   objectionCard: objectionCardRouter, // Objections that fit why a past attempt stopped (Refs #157)
   infoOffers: infoOffersRouter, // Documents and seminars from the AX diagnosis result (Refs #153)
+  agencyHandovers: agencyHandoversRouter, // What the sales agency heard at the appointment (Refs #152)
   challengeGuide: challengeGuideRouter, // What to ask next for the main challenge of the diagnosis (Refs #75)
   deliveryReviews: deliveryReviewsRouter, // Phase progress and what turned out hard against the diagnosis (Refs #159)
   leadHandoff: leadHandoffRouter, // Handoff sheet of the first meeting to the technical team (Refs #86)

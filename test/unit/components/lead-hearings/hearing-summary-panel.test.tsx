@@ -120,7 +120,7 @@ describe('HearingSummaryPanel', () => {
     const text = writeText.mock.calls[0][0] as string;
     expect(text.split('\n')[0]).toBe('【商談のまとめ】Company A / Lead A（2026年10月16日）');
     expect(text).toContain('■ 次回に確認すること');
-    expect(text).toContain('・対象システム（Web診断のまま未確認）');
+    expect(text).toContain('・対象システム（事前情報のまま未確認）');
   });
 
   it('falls back to a hidden textarea when the Clipboard API is missing', async () => {
@@ -162,7 +162,7 @@ describe('HearingSummaryPanel', () => {
     const list = screen.getByTestId('hearing-summary-todos');
     const buttons = within(list).getAllByRole('button');
     // targetSystem is both unconfirmed and missing: listed once
-    expect(buttons.map((b) => b.textContent)).toContain('対象システム(Web診断のまま未確認)');
+    expect(buttons.map((b) => b.textContent)).toContain('対象システム(事前情報のまま未確認)');
     expect(buttons.filter((b) => b.textContent?.startsWith('対象システム('))).toHaveLength(1);
 
     fireEvent.click(within(list).getByRole('button', { name: /予算の状態/ }));

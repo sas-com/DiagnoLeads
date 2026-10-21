@@ -1021,6 +1021,53 @@ export const leadOfferRequests = pgTable(
 export type LeadOfferRequest = typeof leadOfferRequests.$inferSelect;
 
 /**
+ * Agency Handovers (Refs #152)
+ * What the sales agency heard when it set up the meeting, imported from its report (CSV in our
+ * format). One row per lead; a later import replaces it. A new hearing is prefilled from it
+ * (source 'agency', not confirmed until the meeting). Contact details are kept (owner decision
+ * of 2026-10-21).
+ */
+export const agencyHandovers = pgTable(
+  'agency_handovers',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    leadId: uuid('lead_id')
+      .notNull()
+      .references(() => leads.id, { onDelete: 'cascade' }),
+    agencyName: text('agency_name'),
+    appointmentOn: date('appointment_on', { mode: 'string' }),
+    contactName: text('contact_name'),
+    contactTitle: text('contact_title'),
+    contactPhone: text('contact_phone'),
+    machineModel: text('machine_model'),
+    /** The agency confirmed the model with the customer (null: not said) */
+    machineModelConfirmed: boolean('machine_model_confirmed'),
+    /** YYYY-MM */
+    hardwareSupportEnd: text('hardware_support_end'),
+    /** YYYY-MM: the earliest retirement of those who keep the system */
+    retirementPlan: text('retirement_plan'),
+    /** 'yes' | 'no' | 'unknown' */
+    decisionMakerPresent: text('decision_maker_present'),
+    /** 'high' | 'medium' | 'low' */
+    interestLevel: text('interest_level'),
+    refusalReason: text('refusal_reason'),
+    note: text('note'),
+    importedBy: uuid('imported_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('agency_handovers_lead_unique').on(table.leadId),
+    index('agency_handovers_organization_idx').on(table.organizationId),
+  ]
+);
+
+export type AgencyHandover = typeof agencyHandovers.$inferSelect;
+
+/**
  * Lead Contact Logs (Refs #136)
  * One row per contact a staff member recorded on a lead ("called", "emailed", "could not reach").
  * The earliest row of a lead is its first contact; the dashboard's waiting consultation

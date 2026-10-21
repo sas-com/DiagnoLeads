@@ -9,6 +9,10 @@
 import type { db as defaultDb } from '@/lib/db/client';
 import { diagnosisVersions, diagnosticSubmissions, leadHearings, leads } from '@/lib/db/schema';
 import { refreshActTimingAfterHearing } from '@/lib/features/act-timing/service';
+import {
+  findHandoverForPrefill,
+  handoverHearingFields,
+} from '@/lib/features/agency-handovers/service';
 import { DIAGNOSIS_SUBMISSION_KEY_PREFIX } from '@/lib/features/diagnosis-builder/public-diagnosis';
 import { AX_MIGRATION_DIAGNOSTIC_KEY } from '@/lib/features/diagnostics/ax-migration/definition';
 import { syncHearingNextAction } from '@/lib/features/lead-follow-up/service';
@@ -362,6 +366,11 @@ export async function createLeadHearing(
         fields = built.fields;
         prefill = built.snapshot;
       }
+      // What the sales agency heard fills what the diagnosis did not (#152)
+      fields = handoverHearingFields(
+        await findHandoverForPrefill(tx, { organizationId, leadId }),
+        fields
+      );
     }
 
     const [row] = await tx
