@@ -25,6 +25,7 @@ import { turnstileSiteKey, verifyTurnstile } from '@/lib/features/diagnostics/tu
 import { getInfoOffers } from '@/lib/features/info-offers/service';
 import { publicInfoOffers } from '@/lib/features/info-offers/types/schemas';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
+import { notifyReferralDiagnosed } from '@/lib/features/prospects/referrals';
 import { reportServerError } from '@/lib/ops/alert';
 import { type NextRequest, NextResponse, after } from 'next/server';
 
@@ -176,6 +177,19 @@ export async function POST(req: NextRequest) {
         return reportServerError('ax-diagnosis/notify', error);
       })
     );
+
+    // The employee whose own link brought the new lead is told (#265)
+    const referralMemberUserId = outcome.referralMemberUserId;
+    if (referralMemberUserId) {
+      after(() =>
+        notifyReferralDiagnosed(db, {
+          organizationId,
+          memberUserId: referralMemberUserId,
+          leadId: outcome.leadId,
+          company: identity.company ?? '',
+        })
+      );
+    }
 
     // Documents and seminars for respondents still gathering information (#153); the result is
     // shown without them when they cannot be read

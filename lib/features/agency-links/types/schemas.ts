@@ -7,6 +7,12 @@ import { z } from 'zod';
 export const AGENCY_LINK_KINDS = ['telemarketing_agency', 'referral_agency'] as const;
 export const agencyLinkKindEnum = z.enum(AGENCY_LINK_KINDS);
 export type AgencyLinkKind = z.infer<typeof agencyLinkKindEnum>;
+/**
+ * Kinds stored in agency_links: the agency kinds issued from the settings, and the employee's own
+ * link issued from the customer search screen (#265)
+ */
+export const MEMBER_REFERRAL_KIND = 'member_referral' as const;
+export type AnyLinkKind = AgencyLinkKind | typeof MEMBER_REFERRAL_KIND;
 
 /** Lowercase letters and digits without look-alikes (0/o, 1/l/i), so a code read aloud survives */
 const CODE_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';

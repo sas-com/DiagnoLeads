@@ -8,6 +8,7 @@ import {
   RiQuestionLine,
   RiSettings4Line,
   RiUserLine,
+  RiUserSearchLine,
 } from '@remixicon/react';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
@@ -51,6 +52,12 @@ const AppSidebar: React.FC = () => {
         name: t('leads'),
         nameKey: 'leads',
         path: `/${locale}/leads`,
+      },
+      {
+        icon: <RiUserSearchLine className="w-5 h-5" />,
+        name: t('prospects'),
+        nameKey: 'prospects',
+        path: `/${locale}/prospects`,
       },
       {
         icon: <RiBarChartLine className="w-5 h-5" />,

@@ -26,6 +26,8 @@ export const INFLOW_SOURCES = [
   // Outsourced sales (#83): the agency name and cost are recorded on the lead
   'telemarketing_agency',
   'referral_agency',
+  // An employee's own diagnosis link or customer search row (#265); referrerName is the employee
+  'member_referral',
 ] as const;
 export const inflowSourceEnum = z.enum(INFLOW_SOURCES);
 export type InflowSource = z.infer<typeof inflowSourceEnum>;

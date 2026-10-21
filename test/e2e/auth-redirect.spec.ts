@@ -10,6 +10,7 @@ test.describe('Sign-in redirect for signed-out visitors', () => {
   const direct = [
     { path: '/ja/dashboard', login: '/ja/login' },
     { path: '/en/leads', login: '/en/login' },
+    { path: '/ja/prospects', login: '/ja/login' },
     // Percent-encoded language and page: the router serves /ja/dashboard
     { path: '/%6Aa/dash%62oard', login: '/ja/login' },
     // A page id ending in .png must not pass as a static file

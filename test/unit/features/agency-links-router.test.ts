@@ -115,7 +115,9 @@ describe('agencyLinks.list', () => {
     expect(result.canManage).toBe(canManage);
     const where = toQuery(dbState.whereArgs[0]);
     expect(where.sql).toContain('"organization_id"');
-    expect(where.params).toEqual([ORG_ID]);
+    // Employees' own referral links (#265) are left out
+    expect(where.sql).toContain('"kind" <>');
+    expect(where.params).toEqual([ORG_ID, 'member_referral']);
   });
 
   it.each(['parent_viewer', null])('forbids %s', async (role) => {
