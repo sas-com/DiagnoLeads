@@ -52,7 +52,7 @@ ALTER TABLE "prospects" ADD CONSTRAINT "prospects_updated_by_users_id_fk" FOREIG
 CREATE INDEX "prospects_organization_idx" ON "prospects" USING btree ("organization_id","contacted_on");--> statement-breakpoint
 CREATE INDEX "prospects_lead_idx" ON "prospects" USING btree ("lead_id");--> statement-breakpoint
 ALTER TABLE "agency_links" ADD CONSTRAINT "agency_links_member_user_id_users_id_fk" FOREIGN KEY ("member_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "agency_links_member_idx" ON "agency_links" USING btree ("organization_id","member_user_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "agency_links_member_active_unique" ON "agency_links" USING btree ("organization_id","member_user_id") WHERE "agency_links"."kind" = 'member_referral' AND "agency_links"."disabled_at" IS NULL;--> statement-breakpoint
 ALTER TABLE "agency_links" ADD CONSTRAINT "agency_links_kind_check" CHECK ("agency_links"."kind" IN ('telemarketing_agency', 'referral_agency', 'member_referral'));--> statement-breakpoint
 ALTER TABLE "prospects" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "prospect_meeting_targets" ENABLE ROW LEVEL SECURITY;

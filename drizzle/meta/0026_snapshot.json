@@ -1,5 +1,5 @@
 {
-  "id": "e7299083-1aef-4543-86fc-0b7e91f653c6",
+  "id": "9c565e5c-5296-4d8c-9923-6def14f865c8",
   "prevId": "b37e5642-413e-4553-8d57-6e807407626f",
   "version": "7",
   "dialect": "postgresql",
@@ -383,8 +383,8 @@
           "method": "btree",
           "with": {}
         },
-        "agency_links_member_idx": {
-          "name": "agency_links_member_idx",
+        "agency_links_member_active_unique": {
+          "name": "agency_links_member_active_unique",
           "columns": [
             {
               "expression": "organization_id",
@@ -399,7 +399,8 @@
               "nulls": "last"
             }
           ],
-          "isUnique": false,
+          "isUnique": true,
+          "where": "\"agency_links\".\"kind\" = 'member_referral' AND \"agency_links\".\"disabled_at\" IS NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}

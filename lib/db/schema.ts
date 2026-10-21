@@ -656,7 +656,10 @@ export const agencyLinks = pgTable(
       'agency_links_kind_check',
       sql`${table.kind} IN ('telemarketing_agency', 'referral_agency', 'member_referral')`
     ),
-    index('agency_links_member_idx').on(table.organizationId, table.memberUserId),
+    // One active link per employee: asking twice at once cannot make two (#265)
+    uniqueIndex('agency_links_member_active_unique')
+      .on(table.organizationId, table.memberUserId)
+      .where(sql`${table.kind} = 'member_referral' AND ${table.disabledAt} IS NULL`),
   ]
 );
 

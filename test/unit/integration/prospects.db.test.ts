@@ -387,6 +387,10 @@ describe.skipIf(!url)('prospects (PostgreSQL)', () => {
     expect(after.leads).toBe(1);
     const [link] = await pg.select().from(agencyLinks).where(eq(agencyLinks.memberUserId, ids.memberA));
     expect(link?.kind).toBe('member_referral');
+
+    // Other members never see an employee's code on the agency link settings
+    const agencyList = await callers.memberB.agencyLinks.list({ organizationId });
+    expect(agencyList.links.map((l: { kind: string }) => l.kind)).not.toContain('member_referral');
   });
 
   it('tells sales once when a row is handed over, and lists it as waiting', async () => {

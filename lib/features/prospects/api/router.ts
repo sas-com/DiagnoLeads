@@ -268,9 +268,6 @@ export const prospectsRouter = router({
     assertCanRead(ctx);
     const existing = await findOwnRow(ctx, input.id);
     const { organizationId: _organizationId, id, ...fields } = input;
-    // Sales are told the first time a row is handed over, not on every later save
-    const handedOverNow = fields.nextStep === 'hand_over' && !existing.handedOverAt;
-
     const [row] = await ctx.db
       .update(prospects)
       .set({
@@ -279,7 +276,6 @@ export const prospectsRouter = router({
         // became a lead: the lead's own phase is the one followed from then on
         ...(isSales(ctx) ? await salesColumns(ctx, fields, existing.salesUserId) : {}),
         ...(existing.leadId ? { stage: existing.stage } : {}),
-        ...(handedOverNow ? { handedOverAt: new Date() } : {}),
         updatedBy: ctx.user.id,
         updatedAt: new Date(),
       })
@@ -287,7 +283,22 @@ export const prospectsRouter = router({
       .returning({ id: prospects.id });
     if (!row || row.id !== id)
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Prospect not found' });
-    if (handedOverNow) await tellSales(ctx, row.id, fields.company);
+    // Sales are told the first time a row is handed over, not on every later save. Marking it
+    // only while unmarked makes two saves at the same moment tell them once
+    if (fields.nextStep === 'hand_over' && !existing.handedOverAt) {
+      const [marked] = await ctx.db
+        .update(prospects)
+        .set({ handedOverAt: new Date() })
+        .where(
+          and(
+            eq(prospects.id, row.id),
+            eq(prospects.organizationId, ctx.organization.id),
+            isNull(prospects.handedOverAt)
+          )
+        )
+        .returning({ id: prospects.id });
+      if (marked) await tellSales(ctx, row.id, fields.company);
+    }
     return row;
   }),
 

@@ -82,9 +82,17 @@ export async function getOrCreateMemberLink(
       memberUserId: input.userId,
       createdBy: input.userId,
     })
+    // Another request may have made it a moment ago: then use that one
+    .onConflictDoNothing()
     .returning({ id: agencyLinks.id, code: agencyLinks.code });
-  if (!created) throw new Error('Could not create the referral link');
-  return toLink(created);
+  if (created) return toLink(created);
+  const [made] = await db
+    .select({ id: agencyLinks.id, code: agencyLinks.code })
+    .from(agencyLinks)
+    .where(where)
+    .limit(1);
+  if (!made) throw new Error('Could not create the referral link');
+  return toLink(made);
 }
 
 /**
