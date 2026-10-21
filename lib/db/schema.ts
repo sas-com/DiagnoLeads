@@ -995,6 +995,13 @@ export const leadOfferRequests = pgTable(
     scheduledOn: date('scheduled_on', { mode: 'string' }),
     /** The answer created the lead (or continued it): otherwise the lead was only matched by email */
     identityVerified: boolean('identity_verified').default(false).notNull(),
+    /**
+     * Points this request and its attendance actually added to the lead score (after the cap of
+     * 100), so taking the attendance back removes exactly these, and the diagnosis can tell them
+     * from a score sales changed
+     */
+    scorePoints: integer('score_points').default(0).notNull(),
+    attendancePoints: integer('attendance_points').default(0).notNull(),
     attendedAt: timestamp('attended_at', { withTimezone: true }),
     attendanceRecordedBy: uuid('attendance_recorded_by').references(() => users.id, {
       onDelete: 'set null',

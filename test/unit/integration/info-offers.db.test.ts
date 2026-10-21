@@ -11,7 +11,12 @@
 import type { Database } from '@/lib/db/client';
 import * as schema from '@/lib/db/schema';
 import { diagnosticSubmissions, leads, organizationMembers, organizations, users } from '@/lib/db/schema';
+import {
+  addAxMigrationDetails,
+  submitAxMigrationDiagnosis,
+} from '@/lib/features/diagnostics/ax-migration/submission-service';
 import { requestInfoOffer, saveInfoOffers } from '@/lib/features/info-offers/service';
+import { as400Answers } from '@/test/fixtures/ax-migration';
 import { appRouter } from '@/server/routers/_app';
 import { eq, inArray } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
@@ -147,6 +152,67 @@ describe.skipIf(!url)('info offers (PostgreSQL)', () => {
     expect((await leadOf(leadId)).score).toBe(60);
     await callers.member.infoOffers.setAttendance({ organizationId: org, id: request.id, attended: false });
     expect((await leadOf(leadId)).score).toBe(50);
+  });
+
+  it('takes back exactly what attending added when the score was capped', async () => {
+    const { leadId, submissionId } = await answer({ leadCreated: true });
+    await pg.update(leads).set({ score: 95 }).where(eq(leads.id, leadId));
+    await requestInfoOffer(pg, { submissionId, kind: 'seminar', offerId: 'next' }, NOW);
+    expect((await leadOf(leadId)).score).toBe(100);
+    const [request] = (await callers.member.infoOffers.leadRequests({ organizationId: org, leadId })).items;
+    await callers.member.infoOffers.setAttendance({ organizationId: org, id: request.id, attended: true });
+    expect((await leadOf(leadId)).score).toBe(100);
+    // Attending added nothing at 100, so taking it back removes nothing
+    await callers.member.infoOffers.setAttendance({ organizationId: org, id: request.id, attended: false });
+    expect((await leadOf(leadId)).score).toBe(100);
+  });
+
+  it('counts the same offer once for one person, and keeps the diagnosis score updates', async () => {
+    const outcome = await submitAxMigrationDiagnosis(
+      pg as unknown as Parameters<typeof submitAxMigrationDiagnosis>[0],
+      org,
+      {
+        answers: as400Answers,
+        contact: { company: '架空製作所', name: '山田 太郎', email: `offers-ax-${unique()}@example.co.jp` },
+        privacyConsent: true,
+        consultationRequested: false,
+        tracking: {},
+        locale: 'ja',
+      },
+      NOW
+    );
+    if (!outcome.ok) throw new Error('submission failed');
+    const base = outcome.result.leadScore;
+    await requestInfoOffer(pg, { submissionId: outcome.submissionId, kind: 'document', offerId: 'checklist' }, NOW);
+    expect((await leadOf(outcome.leadId)).score).toBe(Math.min(100, base + 5));
+
+    // Another system diagnosed from the result: the same document again adds nothing
+    const [continued] = await pg
+      .insert(diagnosticSubmissions)
+      .values({
+        organizationId: org,
+        leadId: outcome.leadId,
+        diagnosticKey: 'ax-migration',
+        diagnosticVersion: 3,
+        answers: {},
+        result: {},
+        leadCreated: false,
+        continuedFromSubmissionId: outcome.submissionId,
+        createdAt: NOW,
+      })
+      .returning();
+    await requestInfoOffer(pg, { submissionId: continued.id, kind: 'document', offerId: 'checklist' }, NOW);
+    expect((await leadOf(outcome.leadId)).score).toBe(Math.min(100, base + 5));
+
+    // Follow-up answers still update the diagnosis score, with the document's points on top
+    const details = await addAxMigrationDetails(
+      pg as unknown as Parameters<typeof addAxMigrationDetails>[0],
+      outcome.submissionId,
+      { as400_screens_forms: 'gte1000', gaiji: 'many' },
+      NOW
+    );
+    if (!details.ok) throw new Error(`details failed: ${details.reason}`);
+    expect((await leadOf(outcome.leadId)).score).toBe(Math.min(100, details.result.leadScore + 5));
   });
 
   it('lets only owners and admins change the offers', async () => {

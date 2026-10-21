@@ -8,6 +8,8 @@ CREATE TABLE "lead_offer_requests" (
 	"title" text NOT NULL,
 	"scheduled_on" date,
 	"identity_verified" boolean DEFAULT false NOT NULL,
+	"score_points" integer DEFAULT 0 NOT NULL,
+	"attendance_points" integer DEFAULT 0 NOT NULL,
 	"attended_at" timestamp with time zone,
 	"attendance_recorded_by" uuid,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL

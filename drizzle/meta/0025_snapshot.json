@@ -1,5 +1,5 @@
 {
-  "id": "73792310-ebe9-43ba-9ec0-80d11bd59c99",
+  "id": "b37e5642-413e-4553-8d57-6e807407626f",
   "prevId": "94ab45a1-d5f2-46b5-bfd2-a775d817e851",
   "version": "7",
   "dialect": "postgresql",
@@ -2993,6 +2993,20 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
+        },
+        "score_points": {
+          "name": "score_points",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "attendance_points": {
+          "name": "attendance_points",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         },
         "attended_at": {
           "name": "attended_at",
