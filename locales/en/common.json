@@ -236,6 +236,7 @@
     "management": "Management",
     "dashboard": "Dashboard",
     "leads": "Lead Management",
+    "prospects": "Customer search (AX)",
     "content": "Content",
     "faqs": "FAQ",
     "blog": "Blog",
@@ -684,7 +685,8 @@
       "seminar": "Seminar",
       "advertising": "Advertising",
       "telemarketing_agency": "Sales agency (telemarketing)",
-      "referral_agency": "Sales agency (referrals)"
+      "referral_agency": "Sales agency (referrals)",
+      "member_referral": "Employee referral"
     },
     "conversionPoint": {
       "consultation": "Consultation Request",
@@ -4103,6 +4105,222 @@
       "unverified": "Identity not confirmed (not added to the score)",
       "saved": "Attendance recorded",
       "saveError": "Could not record the attendance"
+    }
+  },
+  "prospects": {
+    "title": "Customer search (AX)",
+    "description": "SAS members record the customers they talked to through their connections, and sales take the next step. Write the company, department, title and surname only; no full names, contact details or contract information.",
+    "tabs": {
+      "list": "List",
+      "summary": "Summary"
+    },
+    "filters": {
+      "all": "All",
+      "overdue": "Next action overdue",
+      "handed_over": "Waiting for sales",
+      "mine": "My rows"
+    },
+    "actions": {
+      "add": "Add a row",
+      "import": "Import from Excel",
+      "edit": "Edit",
+      "delete": "Delete",
+      "convert": "Make a lead",
+      "openLead": "Open the lead",
+      "save": "Save",
+      "cancel": "Cancel"
+    },
+    "columns": {
+      "contactedOn": "Date",
+      "entry": "Entry",
+      "company": "Company",
+      "department": "Department",
+      "jobTitle": "Title",
+      "surname": "Surname",
+      "explainedOn": "Explained on",
+      "heard": "What we heard",
+      "systemScope": "Core / peripheral",
+      "reaction": "Reaction",
+      "nextStep": "Next step",
+      "nextActionOn": "Next action on",
+      "nextActionNote": "Rough time of the next action",
+      "recorder": "Written by",
+      "updatedAt": "Updated",
+      "stage": "Stage",
+      "meetingOn": "Meeting on",
+      "salesUser": "Sales",
+      "remarks": "Remarks",
+      "targetSystem": "System",
+      "supportEndSoon": "Support ends",
+      "troubles": "Troubles"
+    },
+    "hints": {
+      "heard": "In a few words: the kind and age of the system, troubles, when it will be reviewed.",
+      "nextActionOn": "The day of the next move (call, visit, documents). If not decided, roughly when to check.",
+      "explainedOn": "The day you explained the AX migration (including the quick diagnosis)",
+      "salesSection": "Filled in by sales",
+      "surname": "Surname only (no full name)",
+      "nextActionNote": "When there is no date yet (e.g. mid-November)"
+    },
+    "entry": {
+      "member_network": "1. SAS member connection",
+      "existing_end_customer": "2. Existing end customer",
+      "bp_company": "3. Business partner",
+      "marketing": "4. Marketing",
+      "other": "5. Other (events, etc.)"
+    },
+    "systemScope": {
+      "core": "Core",
+      "peripheral": "Peripheral"
+    },
+    "reaction": {
+      "has_issue": "Has a problem",
+      "considering": "Considering",
+      "no_plan": "No plan",
+      "unknown": "Unknown"
+    },
+    "nextStep": {
+      "hand_over": "Hand over to sales",
+      "keep_checking": "Keep checking",
+      "ask_more": "Ask more",
+      "pass": "Pass"
+    },
+    "stage": {
+      "interest": "1 Interest",
+      "quick_diagnosis": "2 Quick diagnosis",
+      "spec_survey": "3 Current spec survey",
+      "proposal": "4 Migration proposal",
+      "contract": "5 Contract",
+      "nurturing": "Nurturing",
+      "dropped": "Dropped"
+    },
+    "none": "Not selected",
+    "empty": "No rows yet. Use \"Add a row\" to start.",
+    "emptyFiltered": "No rows match.",
+    "overdue": "Overdue",
+    "forbidden": "You do not have permission to see this list.",
+    "loadError": "Could not load. Please try again later.",
+    "count": "{count} rows",
+    "dialog": {
+      "addTitle": "Add a row",
+      "editTitle": "Edit the row"
+    },
+    "saved": "Saved",
+    "saveError": "Could not save. Check the input and try again.",
+    "deleteConfirm": {
+      "title": "Delete this row?",
+      "description": "The row for {company} will be deleted. This cannot be undone."
+    },
+    "deleted": "Deleted",
+    "required": "Date, entry and company are required",
+    "import": {
+      "title": "Import from Excel",
+      "description": "Choose the \"customer search\" Excel file as it is. The file is read on this screen and only the rows are sent. The example row is skipped.",
+      "choose": "Choose a file",
+      "preview": "{count} rows can be imported",
+      "skipped": "{count} rows are skipped (the example or no company)",
+      "errors": "{count} rows cannot be read and are not imported",
+      "line": "Line {line}",
+      "confirm": "Import {count} rows",
+      "duplicateWarning": "There are already {count} rows. Importing the same file twice duplicates them.",
+      "done": "Imported {count} rows",
+      "error": "Could not import. Please try again.",
+      "readError": "Could not read the file. Check that it is an Excel (.xlsx) file.",
+      "notices": "{count} values fit no column and are kept in the remarks"
+    },
+    "convert": {
+      "title": "Make a lead",
+      "description": "Move a customer you now have a contact for to the leads. The company and the sales person come from this row.",
+      "email": "Email",
+      "name": "Name (optional)",
+      "phone": "Phone (optional)",
+      "submit": "Create the lead",
+      "done": "Lead created",
+      "error": "Could not create the lead. Please try again.",
+      "linked": "Linked to the existing lead with the same email"
+    },
+    "summary": {
+      "overall": "Overall progress",
+      "item": "Item",
+      "count": "Count",
+      "total": "Rows written",
+      "hasIssue": "Reaction: has a problem",
+      "handOver": "Next step: hand over to sales",
+      "keepChecking": "Next step: keep checking",
+      "meetings": "Meetings held (meeting date entered)",
+      "contracts": "Contracts (stage 5)",
+      "nurturing": "Nurturing",
+      "passed": "Passed (next step)",
+      "stages": "Progress by stage",
+      "stage": "Stage",
+      "current": "Now",
+      "share": "Share",
+      "reached": "Reached this stage",
+      "progressRate": "From the previous stage",
+      "withStage": "Rows with a stage",
+      "entries": "Progress by entry",
+      "entry": "Entry",
+      "recorded": "Rows",
+      "entryStage": "Entry × stage",
+      "sum": "Total",
+      "months": "By month, against the meeting target",
+      "month": "Month",
+      "monthMeetings": "Meetings",
+      "meetingsToDate": "Meetings to date",
+      "target": "Target to date",
+      "gap": "Against the target",
+      "editTargets": "Edit targets",
+      "saveTargets": "Save targets",
+      "targetsSaved": "Targets saved",
+      "targetsHint": "For each month, the running total of meetings aimed at by the end of the month. Leave it empty for no target.",
+      "checks": "For sales to check",
+      "stageWithoutNextAction": "No next action date (stage entered)",
+      "overdue": "Next action date passed",
+      "handOverWithoutStage": "Handed over without a stage",
+      "monthFormat": "{month}/{year}"
+    },
+    "referral": {
+      "title": "Your referral link",
+      "description": "Ask customers to take the AX diagnosis through this link or QR code. It is recorded as your referral, and you are told when someone answers.",
+      "show": "Show my referral link",
+      "copy": "Copy the link",
+      "copied": "Copied",
+      "leads": "{count} diagnoses so far",
+      "qrAlt": "QR code of your referral link",
+      "error": "Could not get your referral link. Please try again."
+    },
+    "supportEnd": {
+      "yes": "Within a year",
+      "no": "Later",
+      "unknown": "Unknown"
+    },
+    "troubles": {
+      "few_maintainers": "Few people know it",
+      "no_documents": "No documents",
+      "hard_to_change": "Hard to change",
+      "maintenance_cost": "Costly to maintain",
+      "data_unusable": "Data not usable for management"
+    },
+    "form": {
+      "quickHint": "Date, entry and company are enough to save. Pick only what you know.",
+      "more": "More details (department, title, surname, explained on)",
+      "less": "Hide details",
+      "similar": "{count} other rows look like the same company. Talk to whoever wrote them so you do not overlap.",
+      "similarItem": "{date} {recorder}",
+      "errors": {
+        "contactedOn": "Enter the date",
+        "entry": "Choose the entry",
+        "company": "Enter the company"
+      },
+      "handOverHint": "Choosing \"Hand over to sales\" tells sales when you save."
+    },
+    "handedOverDays": "Handed over {days} days ago",
+    "leadBadge": "Lead: {status}",
+    "leadLocked": "Rows that became leads are followed on the lead page",
+    "leadCard": {
+      "title": "Customer search records",
+      "description": "What employees heard when they talked to this customer.",
+      "by": "{date} {recorder}"
     }
   },
   "agencyHandovers": {

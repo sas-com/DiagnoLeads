@@ -236,6 +236,7 @@
     "management": "管理",
     "dashboard": "ダッシュボード",
     "leads": "リード管理",
+    "prospects": "顧客探し（AX）",
     "content": "コンテンツ",
     "faqs": "FAQ",
     "blog": "ブログ",
@@ -684,7 +685,8 @@
       "seminar": "勉強会・セミナー",
       "advertising": "広告",
       "telemarketing_agency": "営業代行（テレアポ）",
-      "referral_agency": "営業代行（紹介型）"
+      "referral_agency": "営業代行（紹介型）",
+      "member_referral": "社員の紹介"
     },
     "conversionPoint": {
       "consultation": "相談申込",
@@ -4103,6 +4105,222 @@
       "unverified": "本人未確認（スコアに反映していません）",
       "saved": "出欠を記録しました",
       "saveError": "出欠を記録できませんでした"
+    }
+  },
+  "prospects": {
+    "title": "顧客探し一覧（AX）",
+    "description": "SASメンバーがつてで話したお客様を記録し、営業が次の一手を進めます。会社名・部門・役職・苗字までを書き、フルネーム・連絡先・契約情報は書きません。",
+    "tabs": {
+      "list": "一覧",
+      "summary": "集計"
+    },
+    "filters": {
+      "all": "すべて",
+      "overdue": "次回アクション日を過ぎた",
+      "handed_over": "引き継ぎ待ち",
+      "mine": "自分の行"
+    },
+    "actions": {
+      "add": "行を追加",
+      "import": "Excelから取り込む",
+      "edit": "編集",
+      "delete": "削除",
+      "convert": "リードにする",
+      "openLead": "リードを開く",
+      "save": "保存",
+      "cancel": "キャンセル"
+    },
+    "columns": {
+      "contactedOn": "日付",
+      "entry": "入口",
+      "company": "会社名",
+      "department": "部門",
+      "jobTitle": "役職",
+      "surname": "苗字",
+      "explainedOn": "説明日",
+      "heard": "聞いた話",
+      "systemScope": "基幹・周辺",
+      "reaction": "反応",
+      "nextStep": "次の一手",
+      "nextActionOn": "次回アクション日",
+      "nextActionNote": "次回アクションの目安",
+      "recorder": "記入者",
+      "updatedAt": "更新日",
+      "stage": "現在の段階",
+      "meetingOn": "商談日",
+      "salesUser": "営業担当",
+      "remarks": "備考",
+      "targetSystem": "対象システム",
+      "supportEndSoon": "保守期限",
+      "troubles": "困りごと"
+    },
+    "hints": {
+      "heard": "システムの種類・古さ、困りごと、見直しの時期を、分かる範囲で一言で。",
+      "nextActionOn": "次に動く日（連絡・訪問・資料送付など）。決まっていなければ、いつごろ確認するかの目安で構いません。",
+      "explainedOn": "AXマイグレーションの話（簡易診断のご案内を含む）をした日",
+      "salesSection": "営業が記入する欄",
+      "surname": "苗字だけを書きます（フルネームは書きません）",
+      "nextActionNote": "日付が決まっていないときの目安（例: 11月中旬）"
+    },
+    "entry": {
+      "member_network": "① SASメンバーのつて",
+      "existing_end_customer": "② 既存エンド顧客",
+      "bp_company": "③ BP会社",
+      "marketing": "④ マーケ流入",
+      "other": "⑤ その他(交流会など)"
+    },
+    "systemScope": {
+      "core": "基幹",
+      "peripheral": "周辺"
+    },
+    "reaction": {
+      "has_issue": "困りごとあり",
+      "considering": "検討中",
+      "no_plan": "予定なし",
+      "unknown": "不明"
+    },
+    "nextStep": {
+      "hand_over": "営業へ引き継ぎ",
+      "keep_checking": "継続的に確認",
+      "ask_more": "追加で聞く",
+      "pass": "見送り"
+    },
+    "stage": {
+      "interest": "1 関心確認",
+      "quick_diagnosis": "2 簡易診断",
+      "spec_survey": "3 現行仕様調査",
+      "proposal": "4 移行提案",
+      "contract": "5 契約",
+      "nurturing": "育成",
+      "dropped": "見送り"
+    },
+    "none": "未選択",
+    "empty": "まだ行がありません。「行を追加」から記入してください。",
+    "emptyFiltered": "条件に合う行はありません。",
+    "overdue": "期限切れ",
+    "forbidden": "この一覧を見る権限がありません。",
+    "loadError": "読み込めませんでした。時間をおいてもう一度お試しください。",
+    "count": "{count}件",
+    "dialog": {
+      "addTitle": "行を追加",
+      "editTitle": "行を編集"
+    },
+    "saved": "保存しました",
+    "saveError": "保存できませんでした。入力を確かめて、もう一度お試しください。",
+    "deleteConfirm": {
+      "title": "この行を削除しますか？",
+      "description": "{company} の行を削除します。元に戻せません。"
+    },
+    "deleted": "削除しました",
+    "required": "日付・入口・会社名は必須です",
+    "import": {
+      "title": "Excelから取り込む",
+      "description": "「顧客探し一覧」の Excel をそのまま選んでください。ファイルはこの画面の中で読み、行だけを送ります。記入例の行は取り込みません。",
+      "choose": "ファイルを選ぶ",
+      "preview": "{count}行を取り込めます",
+      "skipped": "{count}行は記入例か会社名が空のため飛ばします",
+      "errors": "{count}行は読めないため取り込みません",
+      "line": "{line}行目",
+      "confirm": "{count}行を取り込む",
+      "duplicateWarning": "すでに{count}行あります。同じ Excel を2回取り込むと、行が重複します。",
+      "done": "{count}行を取り込みました",
+      "error": "取り込めませんでした。もう一度お試しください。",
+      "readError": "ファイルを読めませんでした。Excel（.xlsx）か確かめてください。",
+      "notices": "{count}件の値は、当てはまる欄がないため備考に残します"
+    },
+    "convert": {
+      "title": "リードにする",
+      "description": "連絡先を得たお客様を、リード（商談の管理）に移します。会社名と営業担当はこの行から引き継ぎます。",
+      "email": "メールアドレス",
+      "name": "氏名（任意）",
+      "phone": "電話番号（任意）",
+      "submit": "リードを作る",
+      "done": "リードを作りました",
+      "error": "リードを作れませんでした。もう一度お試しください。",
+      "linked": "同じメールアドレスの既存のリードにつなぎました"
+    },
+    "summary": {
+      "overall": "全体の進み具合",
+      "item": "項目",
+      "count": "件数",
+      "total": "記入された件数",
+      "hasIssue": "反応が「困りごとあり」",
+      "handOver": "次の一手が「営業へ引き継ぎ」",
+      "keepChecking": "次の一手が「継続的に確認」",
+      "meetings": "商談実施（商談日の入力あり）",
+      "contracts": "契約（段階が「5 契約」）",
+      "nurturing": "育成",
+      "passed": "見送り（次の一手）",
+      "stages": "段階別の進捗",
+      "stage": "段階",
+      "current": "現在の件数",
+      "share": "構成比",
+      "reached": "その段階まで進んだ累計",
+      "progressRate": "前の段階からの進み率",
+      "withStage": "段階の入力あり 合計",
+      "entries": "入口別の進捗",
+      "entry": "入口",
+      "recorded": "記入件数",
+      "entryStage": "入口 × 段階の件数",
+      "sum": "合計",
+      "months": "月別の推移と商談目標",
+      "month": "月",
+      "monthMeetings": "商談実施",
+      "meetingsToDate": "商談の累計",
+      "target": "商談目標の累計",
+      "gap": "目標との差",
+      "editTargets": "目標を直す",
+      "saveTargets": "目標を保存",
+      "targetsSaved": "目標を保存しました",
+      "targetsHint": "月ごとに、その月の末までの商談の累計の目標を入れます。空欄の月は目標なしとします。",
+      "checks": "営業が確認する件数",
+      "stageWithoutNextAction": "次回アクション日が未入力（段階の入力あり）",
+      "overdue": "次回アクション日を過ぎている",
+      "handOverWithoutStage": "「営業へ引き継ぎ」で段階が未入力",
+      "monthFormat": "{year}年{month}月"
+    },
+    "referral": {
+      "title": "あなたの紹介リンク",
+      "description": "お客様に、このリンクか QR から AX 診断を受けてもらってください。あなたの紹介として記録され、診断があるとお知らせします。",
+      "show": "紹介リンクを出す",
+      "copy": "リンクをコピー",
+      "copied": "コピーしました",
+      "leads": "これまでに {count} 件の診断につながりました",
+      "qrAlt": "あなたの紹介リンクの QR コード",
+      "error": "紹介リンクを出せませんでした。もう一度お試しください。"
+    },
+    "supportEnd": {
+      "yes": "1年以内",
+      "no": "まだ先",
+      "unknown": "分からない"
+    },
+    "troubles": {
+      "few_maintainers": "担当者が少ない・属人化",
+      "no_documents": "資料がない",
+      "hard_to_change": "改修・機能追加が難しい",
+      "maintenance_cost": "保守費用がかさむ",
+      "data_unusable": "データを経営に使えない"
+    },
+    "form": {
+      "quickHint": "日付・入口・会社名だけで保存できます。分かることだけ選んでください。",
+      "more": "詳しく書く（部門・役職・苗字・説明日など）",
+      "less": "詳しい欄を閉じる",
+      "similar": "同じ会社らしい記録がほかに {count} 件あります。重ならないよう、記入者に声をかけてください。",
+      "similarItem": "{date} {recorder}",
+      "errors": {
+        "contactedOn": "日付を入れてください",
+        "entry": "入口を選んでください",
+        "company": "会社名を入れてください"
+      },
+      "handOverHint": "「営業へ引き継ぎ」にすると、保存したときに営業へ知らせます。"
+    },
+    "handedOverDays": "引き継いで {days} 日",
+    "leadBadge": "リード: {status}",
+    "leadLocked": "リードになった行は、リードの画面で進めます",
+    "leadCard": {
+      "title": "顧客探しの記録",
+      "description": "社員がこのお客様と話した記録です。",
+      "by": "{date} {recorder}"
     }
   },
   "agencyHandovers": {

@@ -637,9 +637,14 @@ export const agencyLinks = pgTable(
     /** Random code put in the link (?agency=...); hard to guess so attribution cannot be faked */
     code: text('code').notNull().unique('agency_links_code_unique'),
     agencyName: text('agency_name').notNull(),
-    /** Inflow source given to the lead: 'telemarketing_agency' | 'referral_agency' */
+    /**
+     * Inflow source given to the lead: 'telemarketing_agency' | 'referral_agency', or
+     * 'member_referral' for an employee's own link (#265; agencyName is then the employee's name)
+     */
     kind: text('kind').notNull(),
     campaign: text('campaign'),
+    /** The employee a 'member_referral' link belongs to */
+    memberUserId: uuid('member_user_id').references(() => users.id, { onDelete: 'set null' }),
     /** Set when the link is disabled; a disabled link no longer attributes answers */
     disabledAt: timestamp('disabled_at', { withTimezone: true }),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
@@ -649,8 +654,12 @@ export const agencyLinks = pgTable(
     index('agency_links_organization_idx').on(table.organizationId, table.createdAt),
     check(
       'agency_links_kind_check',
-      sql`${table.kind} IN ('telemarketing_agency', 'referral_agency')`
+      sql`${table.kind} IN ('telemarketing_agency', 'referral_agency', 'member_referral')`
     ),
+    // One active link per employee: asking twice at once cannot make two (#265)
+    uniqueIndex('agency_links_member_active_unique')
+      .on(table.organizationId, table.memberUserId)
+      .where(sql`${table.kind} = 'member_referral' AND ${table.disabledAt} IS NULL`),
   ]
 );
 
@@ -1334,6 +1343,8 @@ export type NotificationType =
   | 'appointment_review_due'
   | 'hearing_ai_restricted'
   | 'lead_handoff'
+  | 'prospect_handed_over' // A customer search row was handed over to sales (#265)
+  | 'referral_diagnosed' // Someone answered the diagnosis through an employee's link (#265)
   | 'system';
 
 /**
@@ -2913,3 +2924,91 @@ export const auditLogsRelations = relations(auditLogs, ({ one }) => ({
 
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type NewAuditLog = typeof auditLogs.$inferInsert;
+
+/**
+ * Prospects of the AX migration found through SAS members' connections (#265). Replaces the
+ * "customer search" spreadsheet: members add the people they talked to, sales add the stage,
+ * the meeting date and who follows up. Holds the company, department, title and surname only;
+ * full names and contact details stay out until sales turn the row into a lead.
+ */
+export const prospects = pgTable(
+  'prospects',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    /** Day of the conversation the row is about */
+    contactedOn: date('contacted_on', { mode: 'string' }).notNull(),
+    /** How the contact came about (PROSPECT_ENTRIES) */
+    entry: text('entry').notNull(),
+    company: text('company').notNull(),
+    department: text('department'),
+    jobTitle: text('job_title'),
+    surname: text('surname'),
+    /** Day the AX migration (including the free quick diagnosis) was explained */
+    explainedOn: date('explained_on', { mode: 'string' }),
+    /** What was heard: kind and age of the system, troubles, when it is reviewed */
+    heard: text('heard'),
+    /** PROSPECT_SYSTEM_SCOPES: core system or a system around it */
+    systemScope: text('system_scope'),
+    /** PROSPECT_REACTIONS */
+    reaction: text('reaction'),
+    /** PROSPECT_NEXT_STEPS */
+    nextStep: text('next_step'),
+    /** TARGET_SYSTEMS of the leads: the legacy system heard about */
+    targetSystem: text('target_system'),
+    /** Whether the system's support ends within a year: 'yes' | 'no' | 'unknown' */
+    supportEndSoon: text('support_end_soon'),
+    /** PROSPECT_TROUBLES picked from the chips */
+    troubles: jsonb('troubles').$type<string[]>().default([]).notNull(),
+    nextActionOn: date('next_action_on', { mode: 'string' }),
+    /** When to check, when there is no date yet ("mid-November") */
+    nextActionNote: text('next_action_note'),
+    /** Who wrote the row, as text: imported rows keep the spreadsheet's name */
+    recorderName: text('recorder_name'),
+    /** Written by sales: PROSPECT_STAGES */
+    stage: text('stage'),
+    meetingOn: date('meeting_on', { mode: 'string' }),
+    salesUserId: uuid('sales_user_id').references(() => users.id, { onDelete: 'set null' }),
+    remarks: text('remarks'),
+    /** When the next step was first set to hand over to sales (sales were notified then) */
+    handedOverAt: timestamp('handed_over_at', { withTimezone: true }),
+    /** Lead the row became, or an existing lead of the same person it was linked to */
+    leadId: uuid('lead_id').references((): AnyPgColumn => leads.id, { onDelete: 'set null' }),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('prospects_organization_idx').on(table.organizationId, table.contactedOn),
+    // Several rows (two members met the same person) may lead to one lead
+    index('prospects_lead_idx').on(table.leadId),
+  ]
+);
+
+export type Prospect = typeof prospects.$inferSelect;
+export type NewProspect = typeof prospects.$inferInsert;
+
+/**
+ * Meetings targeted for the prospect summary, set by sales (#265): the running total aimed at by
+ * the end of each month, as in the spreadsheet's "cumulative meeting target" column
+ */
+export const prospectMeetingTargets = pgTable(
+  'prospect_meeting_targets',
+  {
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    /** First day of the month */
+    month: date('month', { mode: 'string' }).notNull(),
+    meetings: integer('meetings').notNull(),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.organizationId, table.month] }),
+    check('prospect_meeting_targets_meetings_check', sql`${table.meetings} >= 0`),
+  ]
+);
