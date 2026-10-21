@@ -123,8 +123,9 @@ export function escapeHtml(value: string): string {
 }
 
 /**
- * The link when it is safe to put behind a button: https, or http on localhost for
- * development. Anything else (javascript:, data:, relative paths, other http hosts) is null.
+ * The link when it is safe to put behind a button: https, or http on localhost outside
+ * production. Anything else (javascript:, data:, relative paths, other http hosts, links with
+ * a user name or password) is null and the mail shows the label alone.
  */
 export function safeUrl(url: string): string | null {
   let parsed: URL;
@@ -133,9 +134,11 @@ export function safeUrl(url: string): string | null {
   } catch {
     return null;
   }
+  if (parsed.username || parsed.password) return null;
   if (parsed.protocol === 'https:') return parsed.toString();
   if (
     parsed.protocol === 'http:' &&
+    process.env.NODE_ENV !== 'production' &&
     (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1')
   ) {
     return parsed.toString();
@@ -143,10 +146,13 @@ export function safeUrl(url: string): string | null {
   return null;
 }
 
-/** A subject on one line: header values must not carry line breaks */
+/**
+ * A subject on one line: header values must not carry line breaks or other control
+ * characters (including U+0085, U+2028 and U+2029)
+ */
 export function sanitizeSubject(subject: string): string {
   return subject
-    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/[\p{Cc}\u2028\u2029]+/gu, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim();
 }
@@ -191,8 +197,9 @@ function renderBlock(block: EmailBlock, p: Palette): string {
     }
     case 'button': {
       const url = safeUrl(block.url);
+      // An unsafe link is left out entirely: the label alone, never the address
       if (!url) {
-        return `<p style="margin:0 0 20px;font-size:14px;color:${p.ink};">${escapeHtml(block.label)}: ${escapeHtml(block.url)}</p>`;
+        return `<p style="margin:0 0 20px;font-size:14px;color:${p.ink};">${escapeHtml(block.label)}</p>`;
       }
       return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:4px 0 24px;"><tr><td style="border-radius:8px;background:${p.accent};"><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:700;line-height:1.4;color:${p.accentText};text-decoration:none;border-radius:8px;">${escapeHtml(block.label)}</a></td></tr></table>`;
     }
@@ -239,15 +246,17 @@ function blockText(block: EmailBlock, theme: EmailTheme): string {
       ].join('\n');
     case 'notice':
       return `※ ${block.title ? `${block.title}${colon}` : ''}${block.text}`;
-    case 'button':
-      return `▶ ${block.label}\n${block.url}`;
+    case 'button': {
+      const url = safeUrl(block.url);
+      return url ? `▶ ${block.label}\n${url}` : block.label;
+    }
     case 'links':
       return [
         ...(block.title ? [`【${block.title}】`] : []),
-        ...block.items.map(
-          (item) =>
-            `- ${item.text}${item.note ? `（${item.note}）` : ''}${item.url ? `\n  ${item.url}` : ''}`
-        ),
+        ...block.items.map((item) => {
+          const url = item.url ? safeUrl(item.url) : null;
+          return `- ${item.text}${item.note ? `（${item.note}）` : ''}${url ? `\n  ${url}` : ''}`;
+        }),
       ].join('\n');
     case 'code':
       return block.text;

@@ -5,7 +5,7 @@ import {
   safeUrl,
   sanitizeSubject,
 } from '@/lib/email/templates/render';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 // The shared email layout is the only place that writes HTML for mail (#285)
 
@@ -38,6 +38,23 @@ describe('safeUrl', () => {
     expect(safeUrl('/ja/leads/1')).toBeNull();
     expect(safeUrl('http://example.com/')).toBeNull();
     expect(safeUrl('')).toBeNull();
+    expect(safeUrl('\u0001javascript:alert(1)')).toBeNull();
+    expect(safeUrl('java\tscript:alert(1)')).toBeNull();
+  });
+
+  it('refuses links with a user name or password', () => {
+    expect(safeUrl('https://user:pw@evil.example/')).toBeNull();
+    expect(safeUrl('https://diagnoleads-v2.vercel.app@evil.example/')).toBeNull();
+  });
+
+  it('refuses localhost in production', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    try {
+      expect(safeUrl('http://localhost:3000/ja/leads/1')).toBeNull();
+      expect(safeUrl('https://diagnoleads-v2.vercel.app/ja/leads/1')).not.toBeNull();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
 
@@ -46,6 +63,7 @@ describe('sanitizeSubject', () => {
     expect(sanitizeSubject('【相談申込】\r\nBcc: x@example.com\t様')).toBe(
       '【相談申込】 Bcc: x@example.com 様'
     );
+    expect(sanitizeSubject('a\u000bb\u000cc\u0000d\u0085e\u2028f\u2029g')).toBe('a b c d e f g');
   });
 });
 
@@ -84,7 +102,12 @@ describe('renderEmail', () => {
     expect(html).not.toContain('href="javascript');
     expect(html).not.toContain('href="data');
     expect(html).not.toMatch(/<a [^>]*href=/);
-    expect(html).toContain('リードを開く: javascript:alert(1)');
+    // The address of a refused link appears in neither part
+    expect(html).not.toContain('javascript:');
+    expect(html).not.toContain('data:text');
+    expect(html).toContain('リードを開く');
+    expect(text).not.toContain('javascript:');
+    expect(text).not.toContain('data:text');
     expect(text).toContain('リードを開く');
   });
 
