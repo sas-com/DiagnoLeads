@@ -3,10 +3,12 @@
 import {
   type WebhookHeaderRow,
   WebhookHeadersEditor,
+  hasDuplicateNames,
   isRowComplete,
+  keepsStoredValue,
   rowsFromMaskedHeaders,
   rowsToHeaderInput,
-  rowsToHeaderRecord,
+  rowsToNewHeaders,
 } from '@/components/features/webhooks/webhook-headers-editor';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,7 +32,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useOrganization } from '@/hooks/use-organization';
-import { WEBHOOK_HEADER_MASK } from '@/lib/features/webhooks/services/webhook-headers';
+import {
+  WEBHOOK_HEADER_MASK,
+  isOriginChanged,
+} from '@/lib/features/webhooks/services/webhook-headers';
 import { trpc } from '@/lib/trpc/client';
 import {
   Activity,
@@ -76,17 +81,29 @@ interface WebhookFormData {
   url: string;
   events: WebhookEvent[];
   headers: WebhookHeaderRow[];
+  /** The URL as saved (edit only) */
+  savedUrl?: string;
 }
 
 const EMPTY_FORM: WebhookFormData = { name: '', url: '', events: [], headers: [] };
+
+/**
+ * The URL's origin changes while a stored header value would be kept: the server refuses this
+ * (the receiver's credentials must not follow the webhook elsewhere), so every value must be
+ * entered again or the header removed
+ */
+const isReentryRequired = (form: WebhookFormData) =>
+  form.savedUrl !== undefined &&
+  isOriginChanged(form.savedUrl, form.url) &&
+  keepsStoredValue(form.headers);
 
 const isFormComplete = (form: WebhookFormData) =>
   form.name !== '' &&
   form.url !== '' &&
   form.events.length > 0 &&
   form.headers.every(isRowComplete) &&
-  // A header name may be given only once
-  new Set(form.headers.map((row) => row.name.trim())).size === form.headers.length;
+  !hasDuplicateNames(form.headers) &&
+  !isReentryRequired(form);
 
 const EVENTS_BY_CATEGORY = Object.entries(
   WEBHOOK_EVENTS.reduce(
@@ -167,6 +184,7 @@ function WebhookFormFields({
       <WebhookHeadersEditor
         rows={form.headers}
         onChange={(headers) => onChange((prev) => ({ ...prev, headers }))}
+        reentryRequired={isReentryRequired(form)}
       />
     </div>
   );
@@ -247,7 +265,7 @@ export default function WebhooksSettingsPage() {
       name: formData.name,
       url: formData.url,
       events: formData.events,
-      headers: rowsToHeaderRecord(formData.headers),
+      headers: rowsToNewHeaders(formData.headers),
     });
   };
 
@@ -257,6 +275,7 @@ export default function WebhooksSettingsPage() {
       url: webhook.url,
       events: webhook.events as WebhookEvent[],
       headers: rowsFromMaskedHeaders(webhook.headers),
+      savedUrl: webhook.url,
     });
     setEditingWebhook(webhook.id);
   };

@@ -4,6 +4,10 @@
  */
 import {
   WEBHOOK_HEADER_MASK,
+  buildWebhookHeaders,
+  isOriginChanged,
+  isReservedWebhookHeaderName,
+  isValidWebhookHeaderName,
   maskWebhookHeaders,
   mergeWebhookHeaders,
 } from '@/lib/features/webhooks/services/webhook-headers';
@@ -67,19 +71,126 @@ describe('mergeWebhookHeaders', () => {
     });
   });
 
-  it('matches names exactly', () => {
-    expect(mergeWebhookHeaders(stored, [{ name: 'authorization' }])).toMatchObject({
-      ok: false,
-      reason: 'missing_value',
+  it('matches names without regard to case: a rename of the case keeps the value', () => {
+    expect(mergeWebhookHeaders(stored, [{ name: 'authorization' }, { name: 'x-tenant' }])).toEqual({
+      ok: true,
+      headers: { authorization: 'Bearer made-up-token-314', 'x-tenant': 'tenant-made-up' },
     });
   });
 
-  it('refuses a name given twice', () => {
+  it('refuses a name given twice, in any case', () => {
     expect(
       mergeWebhookHeaders(stored, [
         { name: 'X-Tenant' },
         { name: 'X-Tenant', value: 'tenant-other' },
       ])
     ).toEqual({ ok: false, reason: 'duplicate_name', name: 'X-Tenant' });
+    expect(
+      mergeWebhookHeaders(stored, [
+        { name: 'X-Tenant', value: 'a' },
+        { name: 'x-TENANT', value: 'b' },
+      ])
+    ).toEqual({ ok: false, reason: 'duplicate_name', name: 'x-TENANT' });
+  });
+
+  describe('when the origin changes (requireNewValues)', () => {
+    it('refuses to keep a stored value, missing or masked', () => {
+      for (const kept of [{ name: 'Authorization' }, { name: 'authorization', value: WEBHOOK_HEADER_MASK }]) {
+        expect(
+          mergeWebhookHeaders(stored, [kept, { name: 'X-Tenant', value: 'new' }], {
+            requireNewValues: true,
+          })
+        ).toMatchObject({ ok: false, reason: 'headers_reentry_required' });
+      }
+    });
+
+    it('accepts every value entered again, or the headers removed', () => {
+      expect(
+        mergeWebhookHeaders(stored, [{ name: 'Authorization', value: 'Bearer made-up-new' }], {
+          requireNewValues: true,
+        })
+      ).toEqual({ ok: true, headers: { Authorization: 'Bearer made-up-new' } });
+      expect(mergeWebhookHeaders(stored, [], { requireNewValues: true })).toEqual({
+        ok: true,
+        headers: {},
+      });
+    });
+  });
+
+  it('keeps a __proto__ name as an ordinary header (N2)', () => {
+    // jsonb comes back through JSON.parse, which makes __proto__ an own key
+    const fromJson = JSON.parse('{"__proto__":"made-up-proto"}') as Record<string, string>;
+    const merged = mergeWebhookHeaders(fromJson, [
+      { name: '__proto__' },
+      { name: 'constructor', value: 'c' },
+    ]);
+    expect(merged.ok).toBe(true);
+    if (!merged.ok) return;
+    expect(Object.keys(merged.headers)).toEqual(['__proto__', 'constructor']);
+    expect(JSON.stringify(merged.headers)).toBe('{"__proto__":"made-up-proto","constructor":"c"}');
+  });
+});
+
+describe('buildWebhookHeaders', () => {
+  it('builds the map from the list, keeping __proto__ as a key', () => {
+    const result = buildWebhookHeaders([
+      { name: '__proto__', value: 'p' },
+      { name: 'X-Tenant', value: 't' },
+    ]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(Object.keys(result.headers)).toEqual(['__proto__', 'X-Tenant']);
+    expect(JSON.stringify(result.headers)).toBe('{"__proto__":"p","X-Tenant":"t"}');
+  });
+
+  it('refuses a name given twice, in any case', () => {
+    expect(
+      buildWebhookHeaders([
+        { name: 'Authorization', value: 'a' },
+        { name: 'AUTHORIZATION', value: 'b' },
+      ])
+    ).toEqual({ ok: false, reason: 'duplicate_name', name: 'AUTHORIZATION' });
+  });
+});
+
+describe('header names', () => {
+  it('reserves the names the delivery sets or the client controls, in any case', () => {
+    for (const name of [
+      'Content-Type',
+      'user-agent',
+      'HOST',
+      'Content-Length',
+      'Transfer-Encoding',
+      'Connection',
+      'X-Webhook-Signature',
+      'X-Webhook-ID',
+      'x-webhook-event',
+      'X-Webhook-Future',
+    ]) {
+      expect(isReservedWebhookHeaderName(name)).toBe(true);
+      expect(isValidWebhookHeaderName(name)).toBe(false);
+    }
+    expect(isReservedWebhookHeaderName('Authorization')).toBe(false);
+    expect(isReservedWebhookHeaderName('X-Webhooks')).toBe(false);
+  });
+
+  it('accepts tokens only', () => {
+    expect(isValidWebhookHeaderName('Authorization')).toBe(true);
+    expect(isValidWebhookHeaderName('a'.repeat(100))).toBe(true);
+    expect(isValidWebhookHeaderName('a'.repeat(101))).toBe(false);
+    expect(isValidWebhookHeaderName(' X')).toBe(false);
+    expect(isValidWebhookHeaderName('X:Y')).toBe(false);
+    expect(isValidWebhookHeaderName('')).toBe(false);
+  });
+});
+
+describe('isOriginChanged', () => {
+  it('compares scheme, host and port only', () => {
+    expect(isOriginChanged('https://a.example.com/x', 'https://a.example.com/y?z=1')).toBe(false);
+    expect(isOriginChanged('https://a.example.com/x', 'https://a.example.com:443/x')).toBe(false);
+    expect(isOriginChanged('https://a.example.com/x', 'http://a.example.com/x')).toBe(true);
+    expect(isOriginChanged('https://a.example.com/x', 'https://b.example.com/x')).toBe(true);
+    expect(isOriginChanged('https://a.example.com/x', 'https://a.example.com:8443/x')).toBe(true);
+    expect(isOriginChanged('https://a.example.com/x', 'not a url')).toBe(true);
   });
 });

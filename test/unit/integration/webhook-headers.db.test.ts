@@ -6,6 +6,8 @@
  * - the receiver's response body and the error text are shown to those who manage webhooks;
  *   members see the outcome only
  * - the test send reaches the chosen webhook only, even when another one subscribes to the event
+ * - moving the URL to another origin requires every header value again (S1)
+ * - another organization's webhook is not found, and its deliveries are not listed
  * The HTTP side is a stubbed fetch. All names and values are made up.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
@@ -21,6 +23,7 @@ import {
   webhookDeliveries,
   webhooks,
 } from '@/lib/db/schema';
+import { WEBHOOK_HEADER_MASK } from '@/lib/features/webhooks/services/webhook-headers';
 import { appRouter } from '@/server/routers/_app';
 import { eq, inArray } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
@@ -48,11 +51,15 @@ describe.skipIf(!url)('webhook headers and test send (PostgreSQL)', () => {
   const callers = {} as Record<'owner' | 'admin' | 'member' | 'group_owner', Caller>;
   const fetchMock = vi.fn();
 
-  async function createWebhook(name: string, headers: Record<string, string>) {
+  async function createWebhook(
+    name: string,
+    headers: Record<string, string>,
+    organizationId: string = org
+  ) {
     const [row] = await pg
       .insert(webhooks)
       .values({
-        organizationId: org,
+        organizationId,
         name,
         url: `https://hooks.example.com/${unique()}`,
         secret: 'whsec_test',
@@ -99,8 +106,10 @@ describe.skipIf(!url)('webhook headers and test send (PostgreSQL)', () => {
     fetchMock.mockReset();
   });
 
+  const otherOrganizations: string[] = [];
+
   afterAll(async () => {
-    await pg.delete(organizations).where(eq(organizations.id, org));
+    await pg.delete(organizations).where(inArray(organizations.id, [org, ...otherOrganizations]));
     if (userIds.length > 0) await pg.delete(users).where(inArray(users.id, userIds));
     await client?.end();
   });
@@ -243,6 +252,137 @@ describe.skipIf(!url)('webhook headers and test send (PostgreSQL)', () => {
     expect(asOwner.deliveries[0]).toMatchObject({
       error: 'HTTP 502: made-up upstream internals',
       response: 'made-up proxy page',
+    });
+  });
+
+  describe("moving the URL to another origin (S1)", () => {
+    const stored = { Authorization: 'Bearer made-up-s1', 'X-Tenant': 'tenant-made-up-s1' };
+    const rowOf = async (id: string) =>
+      (await pg.select().from(webhooks).where(eq(webhooks.id, id)))[0];
+
+    it('refuses to keep stored values, missing or masked, and changes nothing', async () => {
+      const id = await createWebhook('移す連携', stored);
+      const before = await rowOf(id);
+
+      for (const headers of [
+        undefined,
+        [{ name: 'Authorization' }, { name: 'X-Tenant', value: 'new' }],
+        [
+          { name: 'Authorization', value: WEBHOOK_HEADER_MASK },
+          { name: 'X-Tenant', value: 'new' },
+        ],
+      ]) {
+        await expect(
+          callers.admin.webhooks.update({
+            organizationId: org,
+            id,
+            url: 'https://collector.example.net/steal',
+            headers,
+          })
+        ).rejects.toMatchObject({
+          code: 'BAD_REQUEST',
+          message: expect.stringMatching(/^headers_reentry_required:/),
+        });
+      }
+
+      const after = await rowOf(id);
+      expect(after.url).toBe(before.url);
+      expect(after.headers).toEqual(stored);
+    });
+
+    it('accepts the move with every value entered again', async () => {
+      const id = await createWebhook('移す連携2', stored);
+      await callers.admin.webhooks.update({
+        organizationId: org,
+        id,
+        url: 'https://new-receiver.example.org/hook',
+        headers: [
+          { name: 'authorization', value: 'Bearer made-up-new-receiver' },
+          { name: 'X-Tenant', value: 'tenant-new' },
+        ],
+      });
+      const after = await rowOf(id);
+      expect(after.url).toBe('https://new-receiver.example.org/hook');
+      expect(after.headers).toEqual({
+        authorization: 'Bearer made-up-new-receiver',
+        'X-Tenant': 'tenant-new',
+      });
+    });
+
+    it('keeps stored values when only the path changes, and a case-only rename keeps the value', async () => {
+      const id = await createWebhook('パスだけ変える連携', stored);
+      const before = await rowOf(id);
+      const sameOrigin = `${new URL(before.url).origin}/another-path`;
+      await callers.admin.webhooks.update({
+        organizationId: org,
+        id,
+        url: sameOrigin,
+        headers: [{ name: 'AUTHORIZATION' }, { name: 'X-Tenant', value: WEBHOOK_HEADER_MASK }],
+      });
+      const after = await rowOf(id);
+      expect(after.url).toBe(sameOrigin);
+      expect(after.headers).toEqual({
+        AUTHORIZATION: 'Bearer made-up-s1',
+        'X-Tenant': 'tenant-made-up-s1',
+      });
+    });
+  });
+
+  describe("another organization's webhook", () => {
+    let foreignWebhook: string;
+    const FOREIGN_VALUE = 'Bearer made-up-foreign';
+
+    beforeAll(async () => {
+      const [row] = await pg
+        .insert(organizations)
+        .values({ name: '別組織テスト株式会社', slug: `headers-other-${unique()}` })
+        .returning();
+      otherOrganizations.push(row.id);
+      foreignWebhook = await createWebhook('別組織の連携', { Authorization: FOREIGN_VALUE }, row.id);
+      await pg.insert(webhookDeliveries).values({
+        webhookId: foreignWebhook,
+        eventType: 'diagnostic.submitted',
+        payload: { id: unique(), event: 'diagnostic.submitted', data: {} },
+        status: 'failed',
+        error: 'made-up foreign error',
+        attempts: 1,
+      });
+    });
+
+    it('get, update, test and delete answer NOT_FOUND and change nothing', async () => {
+      vi.stubGlobal('fetch', fetchMock);
+      const ref = { organizationId: org, id: foreignWebhook };
+      for (const call of [
+        () => callers.owner.webhooks.get(ref),
+        () =>
+          callers.owner.webhooks.update({
+            ...ref,
+            name: '乗っ取り',
+            headers: [{ name: 'Authorization', value: 'Bearer made-up-hijack' }],
+          }),
+        () => callers.owner.webhooks.test(ref),
+        () => callers.owner.webhooks.delete(ref),
+      ]) {
+        await expect(call()).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      }
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      const [row] = await pg.select().from(webhooks).where(eq(webhooks.id, foreignWebhook));
+      expect(row.name).toBe('別組織の連携');
+      expect(row.headers).toEqual({ Authorization: FOREIGN_VALUE });
+      const deliveries = await pg
+        .select()
+        .from(webhookDeliveries)
+        .where(eq(webhookDeliveries.webhookId, foreignWebhook));
+      expect(deliveries).toHaveLength(1);
+    });
+
+    it('lists none of its deliveries', async () => {
+      const result = await callers.owner.webhooks.deliveries({
+        organizationId: org,
+        webhookId: foreignWebhook,
+      });
+      expect(result.deliveries).toEqual([]);
     });
   });
 });

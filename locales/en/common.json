@@ -1282,7 +1282,11 @@
       "addHeader": "Add header",
       "replaceHeaderValue": "Enter a new value",
       "keepHeaderValue": "Keep the saved value",
-      "removeHeader": "Remove {name}"
+      "removeHeader": "Remove {name}",
+      "headersReentryRequired": "The endpoint's domain changes, so the saved header values cannot be used. Enter every value again or remove the headers.",
+      "replaceAllHeaderValues": "Enter all values again",
+      "headerNameInvalid": "This header name cannot be used. Use a name without spaces or symbols such as \":\". Content-Type, User-Agent, Host and names starting with X-Webhook- are reserved.",
+      "headerNameDuplicate": "The same header name is given more than once (case does not matter)."
     },
     "embed": {
       "title": "Embed Widget Settings",

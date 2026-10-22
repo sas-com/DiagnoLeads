@@ -24,7 +24,9 @@ import { db } from '@/lib/db/client';
 import {
   WEBHOOK_DELIVERY_LEASE_MS,
   WEBHOOK_DELIVERY_TIMEOUT_MS,
+  INVALID_HEADERS_ERROR,
   cleanupOldDeliveries,
+  describeRequestError,
   generateWebhookSecret,
   generateWebhookSignature,
   processWebhookRetries,
@@ -409,6 +411,119 @@ describe('webhook-service', () => {
         Authorization: 'Bearer made-up-token-314',
         'X-Tenant': 'tenant-made-up',
       });
+    });
+  });
+
+  describe('request headers and error text (#314)', () => {
+    const SECRET_VALUE = 'Bearer made-up-token-314';
+    const base = {
+      id: 'webhook-1',
+      organizationId: 'org-1',
+      name: 'CRM',
+      url: 'https://hooks.example.com/one',
+      secret: 'whsec_test',
+      events: ['lead.created' as const],
+      status: 'active' as const,
+      retryConfig: { maxRetries: 3, retryDelayMs: 5000 },
+      lastTriggeredAt: null,
+      failureCount: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const ok = { ok: true, status: 200, statusText: 'OK', text: vi.fn().mockResolvedValue('') };
+    const storedErrors = () =>
+      (db.set as ReturnType<typeof vi.fn>).mock.calls
+        .map(([values]) => (values as { error?: unknown }).error)
+        .filter((e) => e !== undefined);
+    const sentHeaders = () =>
+      (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].headers as Record<string, string>;
+
+    beforeEach(() => {
+      (db.returning as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: 'delivery-1' }]);
+    });
+
+    it('stores a fixed message, not the value, when a stored header cannot be sent', async () => {
+      // Saved before values were checked
+      const webhook = { ...base, headers: { Authorization: `${SECRET_VALUE}\r\nX-Evil: 1` } };
+
+      await expect(sendWebhookDelivery(webhook, 'lead.created', {})).resolves.toEqual({
+        success: false,
+      });
+
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(storedErrors()).toEqual([INVALID_HEADERS_ERROR]);
+    });
+
+    it('never stores the raw message of a network error', async () => {
+      const webhook = { ...base, headers: { Authorization: SECRET_VALUE } };
+      (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValue(
+        new TypeError(`Headers.append: "${SECRET_VALUE}" is an invalid header value`)
+      );
+
+      await sendWebhookDelivery(webhook, 'lead.created', {});
+
+      expect(storedErrors()).toEqual(['Network error']);
+    });
+
+    it('describes failures with fixed texts and a system code only', () => {
+      const refused = new TypeError('fetch failed made-up-token');
+      (refused as { cause?: unknown }).cause = Object.assign(new Error('connect made-up-token'), {
+        code: 'ECONNREFUSED',
+      });
+      expect(describeRequestError(refused)).toBe('Network error (ECONNREFUSED)');
+      expect(describeRequestError(Object.assign(new Error('x'), { name: 'AbortError' }))).toBe(
+        'Request timed out'
+      );
+      // A code that is not a plain identifier is not copied
+      expect(describeRequestError(Object.assign(new Error('x'), { code: 'made-up token' }))).toBe(
+        'Network error'
+      );
+      expect(describeRequestError('made-up-token')).toBe('Network error');
+    });
+
+    it("skips stored reserved names, so the delivery's own headers are sent", async () => {
+      // Saved before names were checked
+      const webhook = {
+        ...base,
+        headers: {
+          'x-webhook-signature': 'forged',
+          'content-type': 'text/plain',
+          Host: 'internal.example.com',
+          Authorization: SECRET_VALUE,
+        },
+      };
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(ok);
+
+      await sendWebhookDelivery(webhook, 'lead.created', {});
+
+      const headers = sentHeaders();
+      expect(Object.keys(headers).map((n) => n.toLowerCase()).sort()).toEqual([
+        'authorization',
+        'content-type',
+        'user-agent',
+        'x-webhook-event',
+        'x-webhook-id',
+        'x-webhook-signature',
+      ]);
+      expect(headers['Content-Type']).toBe('application/json');
+      expect(headers['X-Webhook-Signature']).toMatch(/^t=\d+,v1=/);
+      expect(headers.Authorization).toBe(SECRET_VALUE);
+    });
+
+    it('skips a stored __proto__ header without losing the others (N2)', async () => {
+      // jsonb comes back through JSON.parse, which makes __proto__ an own key
+      const webhook = {
+        ...base,
+        headers: JSON.parse(
+          '{"__proto__":"made-up-proto","X-Tenant":"tenant-made-up"}'
+        ) as Record<string, string>,
+      };
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(ok);
+
+      await sendWebhookDelivery(webhook, 'lead.created', {});
+
+      expect(Object.keys(sentHeaders())).not.toContain('__proto__');
+      expect(sentHeaders()['X-Tenant']).toBe('tenant-made-up');
     });
   });
 

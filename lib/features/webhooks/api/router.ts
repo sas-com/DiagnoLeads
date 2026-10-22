@@ -10,7 +10,14 @@ import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { maskWebhookHeaders, mergeWebhookHeaders } from '../services/webhook-headers';
+import {
+  type MergeWebhookHeadersResult,
+  type WebhookHeadersError,
+  buildWebhookHeaders,
+  isOriginChanged,
+  maskWebhookHeaders,
+  mergeWebhookHeaders,
+} from '../services/webhook-headers';
 import { generateWebhookSecret, sendWebhookDelivery } from '../services/webhook-service';
 import {
   createWebhookSchema,
@@ -31,6 +38,27 @@ function toClientWebhook(webhook: Webhook, { fullSecret = false }: { fullSecret?
     secret: fullSecret ? webhook.secret : maskSecret(webhook.secret),
     headers: maskWebhookHeaders(webhook.headers),
   };
+}
+
+const HEADER_ERROR_MESSAGES: Record<WebhookHeadersError, (name: string) => string> = {
+  duplicate_name: (name) => `duplicate_name: header "${name}" is given more than once`,
+  missing_value: (name) => `missing_value: header "${name}" needs a value`,
+  headers_reentry_required: () =>
+    "headers_reentry_required: the URL's origin changes, so enter every header value again or remove the headers",
+};
+
+/**
+ * The header map to store, or BAD_REQUEST. The message starts with a fixed code
+ * (e.g. `headers_reentry_required`) the client can match.
+ */
+function headersOrThrow(result: MergeWebhookHeadersResult): Record<string, string> {
+  if (!result.ok) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: HEADER_ERROR_MESSAGES[result.reason](result.name),
+    });
+  }
+  return result.headers;
 }
 
 /** What the current user may do, so the settings page shows only the buttons they can use */
@@ -123,6 +151,7 @@ export const webhooksRouter = router({
       });
     }
 
+    const headers = headersOrThrow(buildWebhookHeaders(input.headers ?? []));
     const secret = generateWebhookSecret();
 
     const [webhook] = await ctx.db
@@ -133,7 +162,7 @@ export const webhooksRouter = router({
         url: input.url,
         secret,
         events: input.events,
-        headers: input.headers || {},
+        headers,
         retryConfig: input.retryConfig || { maxRetries: 3, retryDelayMs: 5000 },
       })
       .returning();
@@ -176,18 +205,17 @@ export const webhooksRouter = router({
     if (input.url) updateData.url = input.url;
     if (input.events) updateData.events = input.events;
     if (input.status) updateData.status = input.status;
+    // Stored header values (often the receiver's credentials) must not follow the webhook to
+    // another receiver: when the origin changes, every value must be entered again
+    const originChanged = input.url !== undefined && isOriginChanged(existing[0].url, input.url);
     if (input.headers) {
-      const merged = mergeWebhookHeaders(existing[0].headers, input.headers);
-      if (!merged.ok) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message:
-            merged.reason === 'duplicate_name'
-              ? `Header "${merged.name}" is given more than once`
-              : `Header "${merged.name}" needs a value`,
-        });
-      }
-      updateData.headers = merged.headers;
+      updateData.headers = headersOrThrow(
+        mergeWebhookHeaders(existing[0].headers, input.headers, {
+          requireNewValues: originChanged,
+        })
+      );
+    } else if (originChanged && Object.keys(existing[0].headers ?? {}).length > 0) {
+      headersOrThrow({ ok: false, reason: 'headers_reentry_required', name: '' });
     }
     if (input.retryConfig) updateData.retryConfig = input.retryConfig;
 

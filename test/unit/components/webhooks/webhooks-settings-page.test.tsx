@@ -192,4 +192,94 @@ describe('WebhooksSettingsPage', () => {
       })
     );
   });
+
+  it('asks for every header value again when the URL moves to another origin (S1)', async () => {
+    mocks.list = listed(ALL);
+    renderPage();
+
+    await userEvent.click(screen.getByRole('button', { name: '編集' }));
+    const dialog = await screen.findByRole('dialog');
+    const save = within(dialog).getByRole('button', { name: '保存' });
+
+    // Same origin, another path: the stored values may be kept
+    const url = within(dialog).getByLabelText('エンドポイントURL');
+    await userEvent.clear(url);
+    await userEvent.type(url, 'https://hooks.example.com/other-path');
+    expect(within(dialog).queryByText(/保存済みのヘッダーの値は使えません/)).not.toBeInTheDocument();
+    expect(save).toBeEnabled();
+
+    // Another host: saving is blocked until every value is entered again
+    await userEvent.clear(url);
+    await userEvent.type(url, 'https://elsewhere.example.net/hook');
+    expect(within(dialog).getByText(/保存済みのヘッダーの値は使えません/)).toBeInTheDocument();
+    expect(save).toBeDisabled();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'すべての値を入れ直す' }));
+    expect(within(dialog).getByLabelText('Authorization の値')).toHaveValue('');
+    expect(within(dialog).getByLabelText('X-Tenant の値')).toHaveValue('');
+    expect(within(dialog).queryByText(/保存済みのヘッダーの値は使えません/)).not.toBeInTheDocument();
+    expect(save).toBeDisabled();
+
+    await userEvent.type(within(dialog).getByLabelText('Authorization の値'), 'Bearer made-up-a');
+    await userEvent.type(within(dialog).getByLabelText('X-Tenant の値'), 'tenant-made-up');
+    expect(save).toBeEnabled();
+    await userEvent.click(save);
+
+    expect(mocks.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: 'https://elsewhere.example.net/hook',
+        headers: [
+          { name: 'Authorization', value: 'Bearer made-up-a' },
+          { name: 'X-Tenant', value: 'tenant-made-up' },
+        ],
+      })
+    );
+  });
+
+  it('flags a reserved or malformed name and a duplicate, and blocks saving', async () => {
+    mocks.list = listed(ALL);
+    renderPage();
+
+    await userEvent.click(screen.getByRole('button', { name: '編集' }));
+    const dialog = await screen.findByRole('dialog');
+    const save = within(dialog).getByRole('button', { name: '保存' });
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'ヘッダーを追加' }));
+    const names = within(dialog).getAllByLabelText('ヘッダー名');
+    const added = names[names.length - 1];
+
+    await userEvent.type(added, 'X-Webhook-Signature');
+    expect(within(dialog).getByText(/このヘッダー名は使えません/)).toBeInTheDocument();
+    expect(save).toBeDisabled();
+
+    await userEvent.clear(added);
+    await userEvent.type(added, 'x-tenant');
+    expect(within(dialog).queryByText(/このヘッダー名は使えません/)).not.toBeInTheDocument();
+    expect(within(dialog).getByText(/同じヘッダー名が複数あります/)).toBeInTheDocument();
+    await userEvent.type(within(dialog).getByLabelText('x-tenant の値'), 'v');
+    expect(save).toBeDisabled();
+  });
+
+  it('creates a webhook with its headers as a list, names trimmed', async () => {
+    mocks.list = listed(ALL, []);
+    renderPage();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Webhookを作成' }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.type(within(dialog).getByLabelText('Webhook名'), 'CRM');
+    await userEvent.type(within(dialog).getByLabelText('エンドポイントURL'), 'https://hooks.example.com/new');
+    await userEvent.click(within(dialog).getByText('Lead Created'));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'ヘッダーを追加' }));
+    await userEvent.type(within(dialog).getByLabelText('ヘッダー名'), ' Authorization ');
+    await userEvent.type(within(dialog).getByLabelText(/の値$/), 'Bearer made-up-new');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Webhookを作成' }));
+
+    expect(mocks.create).toHaveBeenCalledWith({
+      organizationId: ORG_ID,
+      name: 'CRM',
+      url: 'https://hooks.example.com/new',
+      events: ['lead.created'],
+      headers: [{ name: 'Authorization', value: 'Bearer made-up-new' }],
+    });
+  });
 });

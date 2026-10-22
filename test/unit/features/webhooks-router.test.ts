@@ -579,7 +579,7 @@ describe("Webhooks Router", () => {
 				name: "New Webhook",
 				url: "https://example.com/new-webhook",
 				events: ["lead.created"],
-				headers: { "X-Custom-Header": HEADER_VALUE },
+				headers: [{ name: "X-Custom-Header", value: HEADER_VALUE }],
 			});
 			const updated = await caller.webhooks.update({
 				organizationId: TEST_ORG_ID,
@@ -682,6 +682,141 @@ describe("Webhooks Router", () => {
 					name: "Renamed",
 				});
 				expect(set.mock.calls[0][0]).not.toHaveProperty("headers");
+			});
+
+			it("refuses a name given twice, in any case (duplicate_name)", async () => {
+				const set = captureSet();
+				await expect(
+					callerAs("admin").webhooks.update({
+						organizationId: TEST_ORG_ID,
+						id: TEST_WEBHOOK_ID,
+						headers: [{ name: "X-Keep" }, { name: "x-keep", value: "other" }],
+					}),
+				).rejects.toMatchObject({
+					code: "BAD_REQUEST",
+					message: expect.stringMatching(/^duplicate_name:/),
+				});
+				expect(set).not.toHaveBeenCalled();
+			});
+
+			it("refuses duplicate names on create too", async () => {
+				await expect(
+					callerAs("admin").webhooks.create({
+						organizationId: TEST_ORG_ID,
+						name: "New Webhook",
+						url: "https://example.com/new-webhook",
+						events: ["lead.created"],
+						headers: [
+							{ name: "Authorization", value: "a" },
+							{ name: "AUTHORIZATION", value: "b" },
+						],
+					}),
+				).rejects.toMatchObject({
+					code: "BAD_REQUEST",
+					message: expect.stringMatching(/^duplicate_name:/),
+				});
+				expect(mockDb.insert).not.toHaveBeenCalled();
+			});
+
+			it("refuses a reserved name", async () => {
+				const set = captureSet();
+				await expect(
+					callerAs("admin").webhooks.update({
+						organizationId: TEST_ORG_ID,
+						id: TEST_WEBHOOK_ID,
+						headers: [{ name: "X-Webhook-Signature", value: "forged" }],
+					}),
+				).rejects.toMatchObject({ code: "BAD_REQUEST" });
+				expect(set).not.toHaveBeenCalled();
+			});
+
+			it("refuses headers from a member (FORBIDDEN)", async () => {
+				const set = captureSet();
+				await expect(
+					callerAs("member").webhooks.update({
+						organizationId: TEST_ORG_ID,
+						id: TEST_WEBHOOK_ID,
+						headers: [{ name: "Authorization", value: "Bearer made-up-member" }],
+					}),
+				).rejects.toMatchObject({ code: "FORBIDDEN" });
+				expect(set).not.toHaveBeenCalled();
+			});
+
+			describe("when the URL's origin changes (S1)", () => {
+				// storedWebhook.url is https://example.com/webhook
+				it("refuses to keep stored values when headers are not sent", async () => {
+					const set = captureSet();
+					await expect(
+						callerAs("admin").webhooks.update({
+							organizationId: TEST_ORG_ID,
+							id: TEST_WEBHOOK_ID,
+							url: "https://attacker.example.net/collect",
+						}),
+					).rejects.toMatchObject({
+						code: "BAD_REQUEST",
+						message: expect.stringMatching(/^headers_reentry_required:/),
+					});
+					expect(set).not.toHaveBeenCalled();
+				});
+
+				it("refuses a missing or masked value", async () => {
+					for (const kept of [
+						{ name: "Authorization" },
+						{ name: "Authorization", value: WEBHOOK_HEADER_MASK },
+					]) {
+						const set = captureSet();
+						await expect(
+							callerAs("admin").webhooks.update({
+								organizationId: TEST_ORG_ID,
+								id: TEST_WEBHOOK_ID,
+								url: "http://example.com:8080/webhook",
+								headers: [kept],
+							}),
+						).rejects.toMatchObject({
+							code: "BAD_REQUEST",
+							message: expect.stringMatching(/^headers_reentry_required:/),
+						});
+						expect(set).not.toHaveBeenCalled();
+					}
+				});
+
+				it("accepts every value entered again, or the headers removed", async () => {
+					let set = captureSet();
+					await callerAs("admin").webhooks.update({
+						organizationId: TEST_ORG_ID,
+						id: TEST_WEBHOOK_ID,
+						url: "https://other.example.org/hook",
+						headers: [{ name: "Authorization", value: "Bearer made-up-for-other" }],
+					});
+					expect(set).toHaveBeenCalledWith(
+						expect.objectContaining({
+							url: "https://other.example.org/hook",
+							headers: { Authorization: "Bearer made-up-for-other" },
+						}),
+					);
+
+					set = captureSet();
+					await callerAs("admin").webhooks.update({
+						organizationId: TEST_ORG_ID,
+						id: TEST_WEBHOOK_ID,
+						url: "https://other.example.org/hook",
+						headers: [],
+					});
+					expect(set).toHaveBeenCalledWith(expect.objectContaining({ headers: {} }));
+				});
+
+				it("keeps stored values when only the path changes", async () => {
+					const set = captureSet();
+					await callerAs("admin").webhooks.update({
+						organizationId: TEST_ORG_ID,
+						id: TEST_WEBHOOK_ID,
+						url: "https://example.com/another-path?x=1",
+						headers: [{ name: "Authorization" }],
+					});
+					expect(set).toHaveBeenCalledWith(
+						expect.objectContaining({ headers: { Authorization: "Bearer made-up-old" } }),
+					);
+				});
 			});
 
 			it("refuses a new header without a value", async () => {

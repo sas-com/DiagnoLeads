@@ -1282,7 +1282,11 @@
       "addHeader": "ヘッダーを追加",
       "replaceHeaderValue": "値を入れ直す",
       "keepHeaderValue": "元の値を使う",
-      "removeHeader": "{name} を削除"
+      "removeHeader": "{name} を削除",
+      "headersReentryRequired": "送信先のドメインが変わるため、保存済みのヘッダーの値は使えません。すべての値を入れ直すか、ヘッダーを削除してください。",
+      "replaceAllHeaderValues": "すべての値を入れ直す",
+      "headerNameInvalid": "このヘッダー名は使えません。空白や「:」などの記号を含まない名前にしてください。Content-Type、User-Agent、Host や X-Webhook- で始まる名前は使えません。",
+      "headerNameDuplicate": "同じヘッダー名が複数あります（大文字・小文字は区別しません）。"
     },
     "embed": {
       "title": "埋め込みウィジェット設定",
