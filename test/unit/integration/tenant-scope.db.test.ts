@@ -152,6 +152,9 @@ describe.skipIf(!url)('tenant scope of ids sent to the admin API (PostgreSQL)', 
       expect(await tagIdsOf(leadA)).toEqual([tagA]);
       expect(await tagIdsOf(leadA2)).toEqual([tagA]);
 
+      await asA.tags.setLeadTags({ organizationId: orgA, leadId: leadA2, tagIds: [tagA, tagA] });
+      expect(await tagIdsOf(leadA2)).toEqual([tagA]);
+
       await asA.tags.removeFromLead({ organizationId: orgA, leadId: leadA2, tagId: tagA });
       expect(await tagIdsOf(leadA2)).toEqual([]);
     });
@@ -221,7 +224,9 @@ describe.skipIf(!url)('tenant scope of ids sent to the admin API (PostgreSQL)', 
         .insert(leadComments)
         .values({ organizationId: orgA, leadId: leadA2, content: 'on another lead' })
         .returning();
-      const before = await pg.select().from(leadComments);
+      const commentsOfBoth = () =>
+        pg.select().from(leadComments).where(inArray(leadComments.organizationId, [orgA, orgB]));
+      const before = await commentsOfBoth();
 
       const notFound = { code: 'NOT_FOUND' };
       await expect(
@@ -247,7 +252,7 @@ describe.skipIf(!url)('tenant scope of ids sent to the admin API (PostgreSQL)', 
         asA.comments.addActivity({ organizationId: orgA, leadId: leadB, content: 'x' })
       ).rejects.toMatchObject(notFound);
 
-      expect(await pg.select().from(leadComments)).toHaveLength(before.length);
+      expect(await commentsOfBoth()).toHaveLength(before.length);
     });
   });
 
@@ -302,6 +307,19 @@ describe.skipIf(!url)('tenant scope of ids sent to the admin API (PostgreSQL)', 
         })
       ).rejects.toMatchObject({ code: 'NOT_FOUND' });
 
+      const [row] = await pg.select().from(organizations).where(eq(organizations.id, child));
+      expect(row.parentOrganizationId).toBeNull();
+    });
+
+    it('refuses a parent where the caller is only an admin', async () => {
+      const parent = await createOrganization('Scope admin parent');
+      const child = await createOrganization('Scope child 3');
+      const groupOwner = await createMember(child, 'group_owner');
+      await pg.insert(organizationMembers).values({ organizationId: parent, userId: groupOwner, role: 'admin' });
+
+      await expect(
+        callerFor(groupOwner).hierarchy.setParent({ organizationId: child, parentOrganizationId: parent })
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
       const [row] = await pg.select().from(organizations).where(eq(organizations.id, child));
       expect(row.parentOrganizationId).toBeNull();
     });

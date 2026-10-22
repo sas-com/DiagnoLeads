@@ -135,7 +135,9 @@ export const embedRouter = router({
           expiresAt: input.data.expiresAt ? new Date(input.data.expiresAt) : undefined,
           updatedAt: new Date(),
         })
-        .where(eq(embedConfigs.id, input.id))
+        .where(
+          and(eq(embedConfigs.id, input.id), eq(embedConfigs.organizationId, ctx.organization.id))
+        )
         .returning();
 
       return {
@@ -174,7 +176,9 @@ export const embedRouter = router({
           apiKeyHash: newApiKeyHash,
           updatedAt: new Date(),
         })
-        .where(eq(embedConfigs.id, input.id))
+        .where(
+          and(eq(embedConfigs.id, input.id), eq(embedConfigs.organizationId, ctx.organization.id))
+        )
         .returning();
 
       return {
@@ -203,7 +207,11 @@ export const embedRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Embed config not found' });
       }
 
-      await db.delete(embedConfigs).where(eq(embedConfigs.id, input.id));
+      await db
+        .delete(embedConfigs)
+        .where(
+          and(eq(embedConfigs.id, input.id), eq(embedConfigs.organizationId, ctx.organization.id))
+        );
 
       return { success: true };
     }),

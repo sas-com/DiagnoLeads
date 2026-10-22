@@ -269,18 +269,14 @@ export const tagsRouter = router({
     await assertInOrganization(ctx.db, 'lead', input.organizationId, input.leadId);
     await assertInOrganization(ctx.db, 'tag', input.organizationId, input.tagIds);
 
-    // Delete existing tags
-    await ctx.db.delete(leadTags).where(eq(leadTags.leadId, input.leadId));
-
-    // Insert new tags
-    if (input.tagIds.length > 0) {
-      await ctx.db.insert(leadTags).values(
-        input.tagIds.map((tagId) => ({
-          leadId: input.leadId,
-          tagId,
-        }))
-      );
-    }
+    // Replaced in one transaction: a failed insert must not leave the lead without its tags
+    const tagIds = [...new Set(input.tagIds)];
+    await ctx.db.transaction(async (tx) => {
+      await tx.delete(leadTags).where(eq(leadTags.leadId, input.leadId));
+      if (tagIds.length > 0) {
+        await tx.insert(leadTags).values(tagIds.map((tagId) => ({ leadId: input.leadId, tagId })));
+      }
+    });
 
     // Get updated tags
     const result = await ctx.db
@@ -341,16 +337,17 @@ export const tagsRouter = router({
       await assertInOrganization(ctx.db, 'lead', input.organizationId, input.leadIds);
       await assertInOrganization(ctx.db, 'tag', input.organizationId, input.tagIds);
 
-      // Delete existing tags for all leads
-      await ctx.db.delete(leadTags).where(inArray(leadTags.leadId, input.leadIds));
-
-      // Insert new tags for all leads
-      if (input.tagIds.length > 0 && input.leadIds.length > 0) {
-        const values = input.leadIds.flatMap((leadId) =>
-          input.tagIds.map((tagId) => ({ leadId, tagId }))
-        );
-        await ctx.db.insert(leadTags).values(values);
-      }
+      // Replaced in one transaction: a failed insert must not leave the leads without their tags
+      const leadIds = [...new Set(input.leadIds)];
+      const tagIds = [...new Set(input.tagIds)];
+      await ctx.db.transaction(async (tx) => {
+        await tx.delete(leadTags).where(inArray(leadTags.leadId, leadIds));
+        if (tagIds.length > 0 && leadIds.length > 0) {
+          await tx
+            .insert(leadTags)
+            .values(leadIds.flatMap((leadId) => tagIds.map((tagId) => ({ leadId, tagId }))));
+        }
+      });
 
       return { success: true, updatedCount: input.leadIds.length };
     }),

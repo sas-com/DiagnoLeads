@@ -117,6 +117,8 @@ describe("Tags Router", () => {
 			set: vi.fn().mockReturnThis(),
 			delete: vi.fn().mockReturnThis(),
 			onConflictDoNothing: vi.fn().mockReturnThis(),
+			// Runs the callback on the same mock, so a transaction looks like plain calls
+			transaction: vi.fn(async (run: (tx: unknown) => unknown) => run(mockDb)),
 		};
 	}
 
