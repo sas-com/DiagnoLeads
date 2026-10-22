@@ -16,6 +16,14 @@ export const accessOfficeSupportEnd: Column = {
   updatedAt: '2026-10-22',
   related: 'access',
   cta: 'access-diagnosis',
+  thumbnail: {
+    icon: 'calendar-x',
+    lines: [
+      'Access 2016・2019・2021 の',
+      'サポート終了：使い続けると',
+      'どうなり、何をすればよいか',
+    ],
+  },
   blocks: [
     { type: 'h2', id: 'support-ended', text: 'Access のサポートが、相次いで終わりました' },
     {

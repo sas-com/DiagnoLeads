@@ -39,6 +39,41 @@ export type ColumnRelatedPage = 'access';
 /** Where the call to action at the end of an article leads */
 export type ColumnCta = 'access-diagnosis';
 
+/**
+ * Line icons a thumbnail can show (lucide names; scripts/generate-column-thumbnails.ts maps each
+ * to its lucide icon, so a key without an icon fails the type check there)
+ */
+export const COLUMN_THUMBNAIL_ICONS = [
+  'calendar-x',
+  'shield-alert',
+  'git-fork',
+  'scale',
+  'folder-open',
+  'users',
+  'file-lock',
+  'database',
+  'hard-drive',
+] as const;
+export type ColumnThumbnailIcon = (typeof COLUMN_THUMBNAIL_ICONS)[number];
+
+/** Colour of the icon and the rule of a thumbnail: ax-yellow (default) or ax-mist */
+export const COLUMN_THUMBNAIL_ACCENTS = ['yellow', 'mist'] as const;
+export type ColumnThumbnailAccent = (typeof COLUMN_THUMBNAIL_ACCENTS)[number];
+
+/** At most this many lines of title on a thumbnail */
+export const COLUMN_THUMBNAIL_MAX_LINES = 3;
+
+/** Title card of an article (#335): a 1200x630 PNG made by `bun run columns:thumbnails` */
+export interface ColumnThumbnail {
+  icon: ColumnThumbnailIcon;
+  accent?: ColumnThumbnailAccent;
+  /**
+   * The title broken into lines by hand, so that no line ends with a lone character or two.
+   * Joined without spaces, they must equal the title without spaces.
+   */
+  lines?: string[];
+}
+
 export interface Column {
   slug: string;
   locale: ColumnLocale;
@@ -58,6 +93,7 @@ export interface Column {
    * (Excel, SQL Server...). Without it, the notice of the landing page is shown.
    */
   trademark?: string;
+  thumbnail: ColumnThumbnail;
 }
 
 /** Path of the column list, without the locale */
@@ -66,6 +102,17 @@ export type ColumnPath = typeof COLUMN_INDEX_PATH | `${typeof COLUMN_INDEX_PATH}
 
 export function columnPath(slug: string): ColumnPath {
   return `${COLUMN_INDEX_PATH}/${slug}`;
+}
+
+/** Size of the thumbnails (the size Open Graph and X recommend for large cards) */
+export const COLUMN_THUMBNAIL_SIZE = { width: 1200, height: 630 } as const;
+
+/** Directory of the thumbnails under public/ */
+export const COLUMN_THUMBNAIL_DIR = '/images/columns';
+
+/** Path of an article's thumbnail on this site (a file in public/) */
+export function columnThumbnailPath(slug: string): string {
+  return `${COLUMN_THUMBNAIL_DIR}/${slug}.png`;
 }
 
 /**
@@ -180,6 +227,33 @@ export function validateColumn(column: Column): string[] {
   }
   for (const href of columnLinks(column)) {
     if (!isAllowedHref(href)) problems.push(`link "${href}" is neither a site path nor https`);
+  }
+  problems.push(...validateThumbnail(column));
+  return problems;
+}
+
+const withoutSpaces = (text: string) => text.replace(/\s/g, '');
+
+function validateThumbnail({ thumbnail, title }: Column): string[] {
+  const problems: string[] = [];
+  if (!(COLUMN_THUMBNAIL_ICONS as readonly string[]).includes(thumbnail.icon)) {
+    problems.push(`thumbnail icon "${thumbnail.icon}" is unknown`);
+  }
+  if (
+    thumbnail.accent !== undefined &&
+    !(COLUMN_THUMBNAIL_ACCENTS as readonly string[]).includes(thumbnail.accent)
+  ) {
+    problems.push(`thumbnail accent "${thumbnail.accent}" is unknown`);
+  }
+  const { lines } = thumbnail;
+  if (lines !== undefined) {
+    if (lines.length === 0 || lines.length > COLUMN_THUMBNAIL_MAX_LINES) {
+      problems.push(`thumbnail has ${lines.length} lines (1 to ${COLUMN_THUMBNAIL_MAX_LINES})`);
+    }
+    if (lines.some((line) => line.trim() === '')) problems.push('a thumbnail line is empty');
+    if (withoutSpaces(lines.join('')) !== withoutSpaces(title)) {
+      problems.push('thumbnail lines are not the title');
+    }
   }
   return problems;
 }

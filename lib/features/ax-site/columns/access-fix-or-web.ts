@@ -16,6 +16,10 @@ export const accessFixOrWeb: Column = {
   updatedAt: '2026-10-22',
   related: 'access',
   cta: 'access-diagnosis',
+  thumbnail: {
+    icon: 'git-fork',
+    lines: ['Access を直すか、Web に移すか：', '判断の目安を表で整理する'],
+  },
   blocks: [
     { type: 'h2', id: 'compare', text: '3つの進め方を、同じ物差しで比べる' },
     {

@@ -23,6 +23,22 @@ test.describe('AX migration columns', () => {
       .evaluateAll((scripts) => scripts.map((s) => JSON.parse(s.textContent ?? '')['@type']));
     expect(types).toEqual(['Article', 'BreadcrumbList']);
 
+    // The title card (#335): decorative, loaded through the image optimizer under the CSP,
+    // and shared with an absolute URL
+    const thumbnail = page.locator('article header img');
+    await expect(thumbnail).toHaveAttribute('alt', '');
+    await expect
+      .poll(() => thumbnail.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth))
+      .toBeGreaterThan(0);
+    await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
+      'content',
+      /^https?:\/\/.+\/images\/columns\/access-office-support-end\.png$/
+    );
+    await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute(
+      'content',
+      'summary_large_image'
+    );
+
     // The contents lead to the headings
     await page.getByRole('navigation', { name: '目次' }).getByRole('link', { name: '出典' }).click();
     await expect(page).toHaveURL(/#sources$/);

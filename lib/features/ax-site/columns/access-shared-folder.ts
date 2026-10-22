@@ -16,6 +16,10 @@ export const accessSharedFolder: Column = {
   updatedAt: '2026-10-22',
   related: 'access',
   cta: 'access-diagnosis',
+  thumbnail: {
+    icon: 'users',
+    lines: ['共有フォルダの Access を', '何人かで使うと起きること'],
+  },
   blocks: [
     { type: 'h2', id: 'simplest-way', text: 'いちばん手軽な共有のしかた' },
     {

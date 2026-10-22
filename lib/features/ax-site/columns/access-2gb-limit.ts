@@ -15,6 +15,10 @@ export const access2gbLimit: Column = {
   updatedAt: '2026-10-22',
   related: 'access',
   cta: 'access-diagnosis',
+  thumbnail: {
+    icon: 'database',
+    lines: ['Access の 2GB の', '上限に近づいたら'],
+  },
   blocks: [
     { type: 'h2', id: 'limit', text: 'Access のファイルは、2GB まで' },
     {

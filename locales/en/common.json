@@ -3229,7 +3229,11 @@
     "publishedAt": "Published",
     "updatedAt": "Updated",
     "readArticle": "Read the article",
-    "ctaLead": "The free web check gives a guide to the way forward that suits your Access tool."
+    "ctaLead": "The free web check gives a guide to the way forward that suits your Access tool.",
+    "thumbnailLabel": "Article | {topic}",
+    "topics": {
+      "access": "Microsoft Access"
+    }
   },
   "organizations": {
     "switcher": {
