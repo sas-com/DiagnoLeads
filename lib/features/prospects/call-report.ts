@@ -132,6 +132,28 @@ const pick = <T extends string>(text: string, table: Record<string, T>, values: 
 
 export type CallCellProblem = { column: CallColumn; value: string };
 
+/** Text limits of the server (importCallRowSchema): longer cells are cut, not refused */
+const LIMITS: Partial<Record<CallColumn, number>> = {
+  company: 200,
+  agencyName: 100,
+  department: 100,
+  jobTitle: 100,
+  contactName: 100,
+  estimatedSystemBasis: 500,
+  challengeHypothesis: 500,
+  refusalNote: 500,
+  heard: 2000,
+};
+
+/** 全角 digits and dashes to ASCII; an extension or anything else makes it unreadable */
+export function readPhone(value: string): string | null {
+  const ascii = value
+    .replace(/[０-９]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xfee0))
+    .replace(/[－ー―‐−（）＋]/g, (mark) => ({ '（': '(', '）': ')', '＋': '+' })[mark] ?? '-')
+    .trim();
+  return /^[0-9+\-() ]{1,30}$/.test(ascii) ? ascii : null;
+}
+
 const cell = (value: unknown): string => {
   if (value === null || value === undefined) return '';
   if (value instanceof Date) return value.toISOString().slice(0, 10);
@@ -152,7 +174,16 @@ export function readCallRow(
     const header = mapping[column];
     return header ? cell(raw[header]) : '';
   };
-  const text = (column: CallColumn) => value(column) || null;
+  const text = (column: CallColumn) => {
+    const input = value(column);
+    if (!input) return null;
+    const max = LIMITS[column];
+    if (max && input.length > max) {
+      problems.push({ column, value: input.slice(0, 20) });
+      return input.slice(0, max);
+    }
+    return input;
+  };
   const read = <T>(column: CallColumn, parse: (input: string) => T | null): T | null => {
     const input = value(column);
     if (!input) return null;
@@ -173,7 +204,7 @@ export function readCallRow(
       department: text('department'),
       jobTitle: text('jobTitle'),
       contactName: text('contactName'),
-      contactPhone: text('contactPhone'),
+      contactPhone: read('contactPhone', readPhone),
       targetSystem: read('targetSystem', (input) => pick(input, SYSTEM_WORDS, TARGET_SYSTEMS)),
       estimatedSystemBasis: text('estimatedSystemBasis'),
       challengeHypothesis: text('challengeHypothesis'),

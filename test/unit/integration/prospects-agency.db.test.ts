@@ -119,15 +119,31 @@ describe.skipIf(!url)('prospects from sales agency calls (PostgreSQL)', () => {
   it('lists turned-down calls due soon for re-approach, not as overdue', async () => {
     await callers.sales.prospects.importCalls({
       organizationId,
-      rows: [{ company: '架空精機', agencyName: '架空テレアポ', callResult: 'refused', refusalReason: 'risk', nextActionOn: days(-5) }],
+      rows: [
+        { company: '架空精機', agencyName: '架空テレアポ', callResult: 'refused', refusalReason: 'risk', nextActionOn: days(-5) },
+        // Only a rough time: listed after the dated ones
+        { company: '架空化学', agencyName: '架空テレアポ', callResult: 'refused', refusalReason: 'risk', nextActionNote: '来年の春' },
+        // Passed: no longer followed
+        { company: '架空金属', agencyName: '架空テレアポ', callResult: 'refused', refusalReason: 'risk', nextActionOn: days(1) },
+      ],
     });
+    await pg.update(prospects).set({ nextStep: 'pass' }).where(and(eq(prospects.organizationId, organizationId), eq(prospects.company, '架空金属')));
     const reapproach = await callers.sales.prospects.list({ organizationId, filter: 'reapproach' });
-    expect(reapproach.prospects.map((row: { company: string }) => row.company)).toEqual(['架空精機', '架空物産']);
+    expect(reapproach.prospects.map((row: { company: string }) => row.company)).toEqual(['架空精機', '架空物産', '架空化学']);
     const overdue = await callers.sales.prospects.list({ organizationId, filter: 'overdue' });
     expect(overdue.prospects.map((row: { company: string }) => row.company)).not.toContain('架空精機');
     const { summary } = await callers.sales.prospects.summary({ organizationId });
-    expect(summary.calls.refusals).toMatchObject({ budget: 1, priority: 1, risk: 1 });
+    expect(summary.calls.refusals).toMatchObject({ budget: 1, priority: 1, risk: 3 });
     expect(summary.checks.overdue).toBe(0);
+  });
+
+  it('clears the earlier refusal when a later call was not turned down', async () => {
+    await callers.sales.prospects.importCalls({
+      organizationId,
+      rows: [{ company: '架空精機', agencyName: '架空テレアポ', callResult: 'appointment' }],
+    });
+    const [row] = (await agencyRows()).filter((item) => item.company === '架空精機');
+    expect(row).toMatchObject({ callResult: 'appointment', refusalReason: null, refusalNote: null });
   });
 
   it('makes a lead counted for the agency, with the contact', async () => {

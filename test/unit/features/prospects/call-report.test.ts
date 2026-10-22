@@ -7,6 +7,7 @@ import {
   callTemplateCsv,
   detectCallMapping,
   readCallRow,
+  readPhone,
 } from '@/lib/features/prospects/call-report';
 import { summarizeProspects } from '@/lib/features/prospects/summary';
 import { importCallRowSchema } from '@/lib/features/prospects/types/schemas';
@@ -39,6 +40,21 @@ describe('readCallRow', () => {
     );
     expect(row).toMatchObject({ callResult: null, nextActionOn: null, nextActionNote: '来年の春' });
     expect(problems).toEqual([{ column: 'callResult', value: '検討中かも' }]);
+  });
+
+  it('reads phone numbers written in full width and cuts long text, reporting both', () => {
+    expect(readPhone('０３－１２３４－５６７８')).toBe('03-1234-5678');
+    expect(readPhone('03-1234-5678 内線12')).toBeNull();
+    const phoneMapping = detectCallMapping(['会社名', '直通電話', '備考']);
+    const { row, problems } = readCallRow(
+      { 会社名: '架空工業', 直通電話: '03-1234-5678 内線12', 備考: 'あ'.repeat(2100) },
+      phoneMapping
+    );
+    expect(row).toMatchObject({ contactPhone: null });
+    expect(row?.heard).toHaveLength(2000);
+    expect(problems.map((problem) => problem.column)).toEqual(['contactPhone', 'heard']);
+    // The row still passes the server's check
+    expect(importCallRowSchema.safeParse(row).success).toBe(true);
   });
 
   it('skips a row without a company', () => {

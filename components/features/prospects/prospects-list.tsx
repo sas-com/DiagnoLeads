@@ -105,7 +105,9 @@ export function ProspectsList({ organizationId }: { organizationId: string }) {
     ) : null;
 
   const nextAction = (row: ProspectRow) => {
-    const overdue = row.nextActionOn !== null && row.nextActionOn < today;
+    // A turned-down call is followed in the re-approach list, not as overdue (#161)
+    const overdue =
+      row.nextActionOn !== null && row.nextActionOn < today && row.callResult !== 'refused';
     return (
       <>
         <span className={overdue ? 'font-semibold text-red-600 dark:text-red-400' : ''}>

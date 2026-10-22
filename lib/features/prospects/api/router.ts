@@ -79,17 +79,17 @@ const INFLOW_BY_ENTRY: Partial<Record<ProspectEntry, InflowSource>> = {
   sales_agency: 'telemarketing_agency',
 };
 
-/**
- * Rows that need nothing more: passed, dropped, contracted, or already a lead. Calls turned down
- * are followed in the re-approach list instead (#161)
- */
-const openRow = () =>
+/** Rows still followed: not passed, dropped, contracted, or already a lead */
+const notClosed = () =>
   and(
     isNull(prospects.leadId),
     or(isNull(prospects.nextStep), ne(prospects.nextStep, 'pass')),
-    or(isNull(prospects.stage), notInArray(prospects.stage, ['dropped', 'contract'])),
-    or(isNull(prospects.callResult), ne(prospects.callResult, 'refused'))
+    or(isNull(prospects.stage), notInArray(prospects.stage, ['dropped', 'contract']))
   );
+
+/** Open rows for "overdue": calls turned down are followed in the re-approach list instead (#161) */
+const openRow = () =>
+  and(notClosed(), or(isNull(prospects.callResult), ne(prospects.callResult, 'refused')));
 
 /** A date some days after an ISO date */
 const addDays = (date: string, days: number) =>
@@ -117,11 +117,16 @@ export const prospectsRouter = router({
       filters.push(eq(prospects.nextStep, 'hand_over'), isNull(prospects.leadId));
     }
     if (input.filter === 'reapproach') {
-      filters.push(
-        eq(prospects.callResult, 'refused'),
-        isNull(prospects.leadId),
+      // A rough time only ("next spring") is listed too, after the dated ones, so no turned-down
+      // call drops out of sight
+      const due = or(
+        isNull(prospects.nextActionOn),
         lte(prospects.nextActionOn, addDays(today, REAPPROACH_DAYS))
       );
+      const open = notClosed();
+      filters.push(eq(prospects.callResult, 'refused'));
+      if (due) filters.push(due);
+      if (open) filters.push(open);
     }
     if (input.filter === 'mine') {
       const mine = or(eq(prospects.createdBy, ctx.user.id), eq(prospects.salesUserId, ctx.user.id));
@@ -150,7 +155,7 @@ export const prospectsRouter = router({
       .where(and(...filters))
       .orderBy(
         ...(input.filter === 'reapproach'
-          ? [asc(prospects.nextActionOn)]
+          ? [sql`${prospects.nextActionOn} asc nulls last`]
           : [desc(prospects.contactedOn), desc(prospects.createdAt)])
       );
 
@@ -381,17 +386,25 @@ export const prospectsRouter = router({
     assertSales(ctx);
     const now = new Date();
     const today = jstDate();
-    const existing = await ctx.db
-      .select({ id: prospects.id, company: prospects.company, agencyName: prospects.agencyName })
-      .from(prospects)
-      .where(
-        and(eq(prospects.organizationId, ctx.organization.id), eq(prospects.entry, 'sales_agency'))
-      );
+
     const sameAgency = (a: string | null | undefined, b: string | null | undefined) =>
       (a ?? '').trim() === (b ?? '').trim();
     let added = 0;
     let updated = 0;
     await ctx.db.transaction(async (tx) => {
+      // One import at a time per organization, so two at once cannot add the same company twice
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${`prospect-calls:${ctx.organization.id}`}))`
+      );
+      const existing = await tx
+        .select({ id: prospects.id, company: prospects.company, agencyName: prospects.agencyName })
+        .from(prospects)
+        .where(
+          and(
+            eq(prospects.organizationId, ctx.organization.id),
+            eq(prospects.entry, 'sales_agency')
+          )
+        );
       for (const row of input.rows) {
         const found = existing.find(
           (item) =>
@@ -408,10 +421,15 @@ export const prospectsRouter = router({
             heard: row.heard ?? null,
           }).filter(([, value]) => value !== null)
         );
+        // A call that was not turned down this time clears the earlier refusal
+        const refusal =
+          row.callResult && row.callResult !== 'refused'
+            ? { refusalReason: null, refusalNote: null }
+            : {};
         if (found) {
           await tx
             .update(prospects)
-            .set({ ...filled, updatedBy: ctx.user.id, updatedAt: now })
+            .set({ ...filled, ...refusal, updatedBy: ctx.user.id, updatedAt: now })
             .where(
               and(eq(prospects.id, found.id), eq(prospects.organizationId, ctx.organization.id))
             );
@@ -561,6 +579,7 @@ export const prospectsRouter = router({
             .values({
               organizationId: ctx.organization.id,
               email,
+              // From here on the contact follows the lead's own visibility, like any lead's (#161)
               name: input.name ?? prospect.contactName ?? prospect.surname,
               company: prospect.company,
               phone: input.phone ?? prospect.contactPhone ?? null,
