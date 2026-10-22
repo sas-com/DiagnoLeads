@@ -3229,7 +3229,11 @@
     "publishedAt": "公開日",
     "updatedAt": "更新日",
     "readArticle": "記事を読む",
-    "ctaLead": "お使いの Access ツールに合う進め方の目安を、無料Web診断で確かめられます。"
+    "ctaLead": "お使いの Access ツールに合う進め方の目安を、無料Web診断で確かめられます。",
+    "thumbnailLabel": "コラム｜{topic}",
+    "topics": {
+      "access": "Microsoft Access"
+    }
   },
   "organizations": {
     "switcher": {

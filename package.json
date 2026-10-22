@@ -30,6 +30,7 @@
     "db:studio": "drizzle-kit studio",
     "openapi:generate": "tsx scripts/generate-openapi.ts",
     "i18n:check": "tsx scripts/check-i18n.ts",
+    "columns:thumbnails": "bun run scripts/generate-column-thumbnails.ts",
     "i18n:check-hardcoded": "tsx scripts/check-hardcoded-strings.ts",
     "prepare": "git rev-parse --git-dir > /dev/null 2>&1 && lefthook install || true"
   },
