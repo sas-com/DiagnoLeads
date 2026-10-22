@@ -1,9 +1,10 @@
 /**
- * Webhook settings page (real ja messages, tRPC mocked) — #314
+ * Webhook settings page (real ja messages, tRPC mocked) — #314, #321
  *
  * A user without the right to view webhooks sees 「権限がありません」 instead of the empty state;
  * the create, edit, pause and delete buttons appear only for those allowed to use them; stored
- * header values are never on the page, and the edit form keeps or replaces each one.
+ * header values are never on the page, and the edit form keeps or replaces each one. A refused
+ * destination is flagged for managers, and a refused test send or URL gets a message (#321).
  */
 import WebhooksSettingsPage from '@/app/[locale]/(dashboard)/settings/webhooks/page';
 import { WEBHOOK_HEADER_MASK } from '@/lib/features/webhooks/services/webhook-headers';
@@ -38,18 +39,48 @@ const mocks = vi.hoisted(() => ({
   toastError: vi.fn(),
   /** When set, update calls fail with this error */
   updateError: null as null | { message: string; data?: { code?: string } },
+  /** When set, create calls fail with this error */
+  createError: null as null | { message: string; data?: { code?: string } },
+  test: vi.fn(),
+  /** When set, test sends fail with this error; otherwise they report `testSuccess` */
+  testError: null as null | { message: string; data?: { code?: string } },
+  testSuccess: true,
+  toastSuccess: vi.fn(),
 }));
 
 vi.mock('@/hooks/use-organization', () => ({
   useOrganization: () => ({ organization: { id: ORG_ID }, isLoading: false }),
 }));
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: mocks.toastError } }));
+vi.mock('sonner', () => ({ toast: { success: mocks.toastSuccess, error: mocks.toastError } }));
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
     useUtils: () => ({ webhooks: { list: { invalidate: vi.fn() } } }),
     webhooks: {
       list: { useQuery: () => mocks.list },
-      create: { useMutation: () => ({ mutate: mocks.create, isPending: false }) },
+      create: {
+        useMutation: (options: { onError?: (error: MutationError) => void }) => ({
+          mutate: (input: unknown) => {
+            mocks.create(input);
+            if (mocks.createError) options.onError?.(mocks.createError);
+          },
+          isPending: false,
+        }),
+      },
+      test: {
+        useMutation: (options: {
+          onSuccess?: (result: { success: boolean }) => void;
+          onError?: (error: MutationError) => void;
+          onSettled?: () => void;
+        }) => ({
+          mutate: (input: unknown) => {
+            mocks.test(input);
+            if (mocks.testError) options.onError?.(mocks.testError);
+            else options.onSuccess?.({ success: mocks.testSuccess });
+            options.onSettled?.();
+          },
+          isPending: false,
+        }),
+      },
       update: {
         useMutation: (options: { onError?: (error: MutationError) => void }) => ({
           mutate: (input: unknown) => {
@@ -77,6 +108,7 @@ const webhook = {
     { name: 'X-Tenant', masked: true },
   ],
   retryConfig: { maxRetries: 3, retryDelayMs: 5000 },
+  urlRefusal: null as string | null,
   lastTriggeredAt: null,
   failureCount: 0,
   createdAt: '2026-10-22T00:00:00Z',
@@ -102,6 +134,9 @@ const renderPage = () =>
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.updateError = null;
+  mocks.createError = null;
+  mocks.testError = null;
+  mocks.testSuccess = true;
 });
 
 describe('WebhooksSettingsPage', () => {
@@ -123,6 +158,7 @@ describe('WebhooksSettingsPage', () => {
     expect(screen.queryByRole('button', { name: '編集' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '一時停止' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '削除' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'テスト送信' })).not.toBeInTheDocument();
   });
 
   it('hides the first-webhook button without permission to create', () => {
@@ -335,5 +371,67 @@ describe('WebhooksSettingsPage', () => {
     await userEvent.type(value, 'Bearer made-up-ascii');
     expect(within(dialog).queryByText(/値に使えるのは半角/)).not.toBeInTheDocument();
     expect(save).toBeEnabled();
+  });
+  describe('destination guard and test sends (#321)', () => {
+    it('flags a webhook whose destination is refused, with the reason', () => {
+      mocks.list = listed(ALL, [{ ...webhook, url: 'https://10.0.0.5/hook', urlRefusal: 'address' }]);
+      renderPage();
+
+      expect(screen.getByText('送信先が許可されていません')).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          'この URL には送信しません（社内用または予約済みの IP アドレスです）。URL を変更してください。'
+        )
+      ).toBeInTheDocument();
+    });
+
+    it('shows no badge for an allowed destination', () => {
+      mocks.list = listed(ALL);
+      renderPage();
+
+      expect(screen.queryByText('送信先が許可されていません')).not.toBeInTheDocument();
+    });
+
+    it('explains a refused URL when saving', async () => {
+      mocks.list = listed(ALL);
+      mocks.updateError = {
+        message: 'destination_not_allowed (host): webhooks can only be sent to public https URLs',
+        data: { code: 'BAD_REQUEST' },
+      };
+      renderPage();
+
+      await userEvent.click(screen.getByRole('button', { name: '編集' }));
+      const dialog = await screen.findByRole('dialog');
+      await userEvent.click(within(dialog).getByRole('button', { name: '保存' }));
+
+      expect(mocks.toastError).toHaveBeenCalledWith(
+        expect.stringContaining('この URL には送信できません。')
+      );
+    });
+
+    it('sends a test to the chosen webhook and reports it', async () => {
+      mocks.list = listed(ALL);
+      renderPage();
+
+      await userEvent.click(screen.getByRole('button', { name: 'テスト送信' }));
+
+      expect(mocks.test).toHaveBeenCalledWith({ organizationId: ORG_ID, id: WEBHOOK_ID });
+      expect(mocks.toastSuccess).toHaveBeenCalledWith('テスト送信しました');
+    });
+
+    it('shows the limit when test sends are refused (TOO_MANY_REQUESTS)', async () => {
+      mocks.list = listed(ALL);
+      mocks.testError = {
+        message: 'test_rate_limited: at most 3 test sends per 10 minutes (per webhook)',
+        data: { code: 'TOO_MANY_REQUESTS' },
+      };
+      renderPage();
+
+      await userEvent.click(screen.getByRole('button', { name: 'テスト送信' }));
+
+      expect(mocks.toastError).toHaveBeenCalledWith(
+        'テスト送信の上限に達しました（1つの Webhook につき 10 分間に 3 回、組織全体で 1 時間に 10 回まで）。しばらくしてからもう一度お試しください。'
+      );
+    });
   });
 });

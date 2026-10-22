@@ -68,8 +68,9 @@ export const ENDPOINT_RATE_LIMITS: Record<string, RateLimitConfig> = {
   '/api/trpc/leads.bulkUpdate': { max: 10, windowMs: 60 * 1000 },
   '/api/trpc/leads.bulkDelete': { max: 5, windowMs: 60 * 1000 },
 
-  // Webhook
-  '/api/trpc/webhooks.test': { max: 10, windowMs: 60 * 1000 },
+  // Webhook test sends are limited in the tRPC procedure, counted in the database
+  // (WEBHOOK_TEST_SEND_LIMITS, #321): a path entry here missed batched URLs and counted per
+  // instance
 
   // REST API v2
   '/api/v2/leads': { max: 200, windowMs: 60 * 1000 },

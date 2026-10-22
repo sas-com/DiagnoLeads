@@ -1288,7 +1288,23 @@
       "headerNameInvalid": "このヘッダー名は使えません。空白や「:」などの記号を含まない名前にしてください。Content-Type、User-Agent、Host や X-Webhook- で始まる名前は使えません。",
       "headerNameDuplicate": "同じヘッダー名が複数あります（大文字・小文字は区別しません）。",
       "headerValueInvalid": "値に使えるのは半角の英数字・記号・空白だけです（日本語などの全角文字や改行は使えません）。2,000文字までです。",
-      "conflict": "ほかの変更と重なりました。画面を読み込み直してから、もう一度保存してください。"
+      "conflict": "ほかの変更と重なりました。画面を読み込み直してから、もう一度保存してください。",
+      "destinationNotAllowed": "この URL には送信できません。インターネットに公開されている https の URL を、ポート番号を付けずに入力してください。社内のアドレスや localhost、ユーザー名・パスワード入りの URL は使えません。",
+      "destinationBlocked": "送信先が許可されていません",
+      "destinationBlockedDescription": "この URL には送信しません（{reason}）。URL を変更してください。",
+      "destinationReasons": {
+        "invalid_url": "URL の形式が正しくありません",
+        "scheme": "https 以外の URL です",
+        "credentials": "URL にユーザー名やパスワードが含まれています",
+        "port": "標準以外のポート番号が指定されています",
+        "host": "社内向けのホスト名です",
+        "address": "社内用または予約済みの IP アドレスです",
+        "resolved_address": "社内用または予約済みの IP アドレスを指しています"
+      },
+      "test": "テスト送信",
+      "testSent": "テスト送信しました",
+      "testFailed": "テスト送信に失敗しました。送信先の設定を確認してください。",
+      "testRateLimited": "テスト送信の上限に達しました（1つの Webhook につき 10 分間に {perWebhook} 回、組織全体で 1 時間に {perOrganization} 回まで）。しばらくしてからもう一度お試しください。"
     },
     "embed": {
       "title": "埋め込みウィジェット設定",

@@ -20,6 +20,14 @@ vi.mock('@/lib/db/client', () => ({
 // Mock fetch
 global.fetch = vi.fn();
 
+// Host names resolve to a public address unless a test says otherwise (#321)
+const dnsMocks = vi.hoisted(() => ({ lookup: vi.fn() }));
+vi.mock('node:dns/promises', () => ({
+  lookup: dnsMocks.lookup,
+  default: { lookup: dnsMocks.lookup },
+}));
+const PUBLIC_ADDRESS = [{ address: '93.184.215.14', family: 4 }];
+
 import { db } from '@/lib/db/client';
 import {
   WEBHOOK_DELIVERY_LEASE_MS,
@@ -40,6 +48,8 @@ describe('webhook-service', () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-02-08T12:00:00Z'));
+    dnsMocks.lookup.mockReset();
+    dnsMocks.lookup.mockResolvedValue(PUBLIC_ADDRESS);
   });
 
   describe('generateWebhookSignature', () => {
@@ -243,7 +253,7 @@ describe('webhook-service', () => {
       text: vi.fn().mockResolvedValue('ok'),
     };
     const flush = async () => {
-      for (let i = 0; i < 20; i++) await Promise.resolve();
+      for (let i = 0; i < 50; i++) await Promise.resolve();
     };
 
     it('gives up an attempt after 8 seconds', async () => {
@@ -411,6 +421,138 @@ describe('webhook-service', () => {
         Authorization: 'Bearer made-up-token-314',
         'X-Tenant': 'tenant-made-up',
       });
+    });
+  });
+
+  describe('destination guard and redirects (#321)', () => {
+    const base = {
+      id: 'webhook-1',
+      organizationId: 'org-1',
+      name: 'CRM',
+      url: 'https://hooks.example.com/one',
+      secret: 'whsec_test',
+      events: ['lead.created' as const],
+      status: 'active' as const,
+      headers: {},
+      retryConfig: { maxRetries: 3, retryDelayMs: 5000 },
+      lastTriggeredAt: null,
+      failureCount: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const deliveryUpdates = () =>
+      (db.set as ReturnType<typeof vi.fn>).mock.calls
+        .map(([values]) => values as Record<string, unknown>)
+        .filter((values) => 'attempts' in values);
+
+    beforeEach(() => {
+      (db.returning as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: 'delivery-1' }]);
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        text: vi.fn().mockResolvedValue('ok'),
+      });
+    });
+
+    it.each([
+      ['a private address', [{ address: '10.1.2.3', family: 4 }]],
+      ['the metadata address', [{ address: '169.254.169.254', family: 4 }]],
+      ['an IPv6 loopback', [{ address: '::1', family: 6 }]],
+      ['an IPv4-mapped loopback', [{ address: '::ffff:127.0.0.1', family: 6 }]],
+      [
+        'one private address among public ones',
+        [
+          { address: '93.184.215.14', family: 4 },
+          { address: '192.168.0.10', family: 4 },
+        ],
+      ],
+      ['no address', []],
+    ])('refuses a host name that resolves to %s, without sending or retrying', async (_, addresses) => {
+      dnsMocks.lookup.mockResolvedValue(addresses);
+
+      await expect(sendWebhookDelivery(base, 'lead.created', {})).resolves.toEqual({
+        success: false,
+      });
+
+      expect(dnsMocks.lookup).toHaveBeenCalledWith('hooks.example.com', { all: true });
+      expect(global.fetch).not.toHaveBeenCalled();
+      const [stored] = deliveryUpdates();
+      // A fixed text and a reason code; never the address
+      expect(stored).toMatchObject({
+        status: 'failed',
+        error: 'Destination not allowed (resolved_address)',
+        nextRetryAt: null,
+      });
+      for (const { address } of addresses) {
+        expect(JSON.stringify(stored)).not.toContain(address);
+      }
+    });
+
+    it.each([
+      ['https://127.0.0.1/hook', 'address'],
+      ['https://2130706433/hook', 'address'],
+      ['https://0x7f.1/hook', 'address'],
+      ['https://[::ffff:169.254.169.254]/hook', 'address'],
+      ['https://LOCALHOST./hook', 'host'],
+      ['https://user:secret@hooks.example.com/hook', 'credentials'],
+      ['https://hooks.example.com:6379/hook', 'port'],
+    ])('refuses %s before any lookup (%s)', async (url, reason) => {
+      await sendWebhookDelivery({ ...base, url }, 'lead.created', {});
+
+      expect(dnsMocks.lookup).not.toHaveBeenCalled();
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(deliveryUpdates()[0]).toMatchObject({
+        status: 'failed',
+        error: `Destination not allowed (${reason})`,
+      });
+    });
+
+    it('treats a name that does not resolve as a network error, retried later', async () => {
+      dnsMocks.lookup.mockRejectedValue(
+        Object.assign(new Error('getaddrinfo ENOTFOUND hooks.example.com'), { code: 'ENOTFOUND' })
+      );
+
+      await sendWebhookDelivery(base, 'lead.created', {});
+
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(deliveryUpdates()[0]).toMatchObject({
+        status: 'pending',
+        error: 'Network error (ENOTFOUND)',
+      });
+    });
+
+    it('does not follow redirects, and counts a 3xx answer as a failure', async () => {
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ok: false,
+        status: 302,
+        statusText: 'Found',
+        text: vi.fn().mockResolvedValue(''),
+      });
+
+      await expect(sendWebhookDelivery(base, 'lead.created', {})).resolves.toEqual({
+        success: false,
+      });
+
+      const [, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect((init as RequestInit).redirect).toBe('manual');
+      expect(deliveryUpdates()[0]).toMatchObject({
+        status: 'pending',
+        statusCode: 302,
+        error: 'HTTP 302: Redirect not followed',
+      });
+    });
+
+    it('sends to a host name that resolves to public addresses only', async () => {
+      dnsMocks.lookup.mockResolvedValue([
+        { address: '93.184.215.14', family: 4 },
+        { address: '2606:2800:21f:cb07:6820:80da:af6b:8b2c', family: 6 },
+      ]);
+
+      await expect(sendWebhookDelivery(base, 'lead.created', {})).resolves.toEqual({
+        success: true,
+      });
+      expect(global.fetch).toHaveBeenCalledTimes(1);
     });
   });
 

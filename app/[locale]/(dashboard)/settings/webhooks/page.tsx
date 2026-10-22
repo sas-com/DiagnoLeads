@@ -32,6 +32,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useOrganization } from '@/hooks/use-organization';
+import { WEBHOOK_TEST_SEND_LIMITS } from '@/lib/features/webhooks/services/test-send-limits';
 import {
   WEBHOOK_HEADER_MASK,
   isUrlChanged,
@@ -51,6 +52,8 @@ import {
   Play,
   Plus,
   RefreshCw,
+  Send,
+  ShieldAlert,
   Trash2,
   Webhook,
   X,
@@ -198,6 +201,7 @@ export default function WebhooksSettingsPage() {
   const [formData, setFormData] = useState<WebhookFormData>(EMPTY_FORM);
   const [editForm, setEditForm] = useState<WebhookFormData>(EMPTY_FORM);
   const [showSecret, setShowSecret] = useState<string | null>(null);
+  const [testingWebhook, setTestingWebhook] = useState<string | null>(null);
 
   const utils = trpc.useUtils();
 
@@ -214,6 +218,12 @@ export default function WebhooksSettingsPage() {
   const canUpdate = webhooks?.permissions.canUpdate ?? false;
   const canDelete = webhooks?.permissions.canDelete ?? false;
 
+  /** A URL our servers do not send to (#321) gets a message saying which URLs are allowed */
+  const saveErrorMessage = (error: { message: string }) =>
+    error.message.startsWith('destination_not_allowed')
+      ? t('destinationNotAllowed')
+      : error.message;
+
   // Mutations
   const createWebhook = trpc.webhooks.create.useMutation({
     onSuccess: () => {
@@ -223,13 +233,13 @@ export default function WebhooksSettingsPage() {
       toast.success(t('created'));
     },
     onError: (error) => {
-      toast.error(error.message);
+      toast.error(saveErrorMessage(error));
     },
   });
 
   /** A save that met another change (CONFLICT) gets a message saying what to do */
   const updateErrorMessage = (error: { message: string; data?: { code?: string } | null }) =>
-    error.data?.code === 'CONFLICT' ? t('conflict') : error.message;
+    error.data?.code === 'CONFLICT' ? t('conflict') : saveErrorMessage(error);
 
   const updateWebhook = trpc.webhooks.update.useMutation({
     onSuccess: () => {
@@ -260,6 +270,30 @@ export default function WebhooksSettingsPage() {
       toast.error(updateErrorMessage(error));
     },
   });
+
+  const testWebhook = trpc.webhooks.test.useMutation({
+    onSuccess: (result) => {
+      if (result.success) toast.success(t('testSent'));
+      else toast.error(t('testFailed'));
+    },
+    onError: (error) => {
+      toast.error(
+        error.data?.code === 'TOO_MANY_REQUESTS'
+          ? t('testRateLimited', {
+              perWebhook: WEBHOOK_TEST_SEND_LIMITS.perWebhook.limit,
+              perOrganization: WEBHOOK_TEST_SEND_LIMITS.perOrganization.limit,
+            })
+          : error.message
+      );
+    },
+    onSettled: () => setTestingWebhook(null),
+  });
+
+  const handleTest = (webhookId: string) => {
+    if (!organization?.id) return;
+    setTestingWebhook(webhookId);
+    testWebhook.mutate({ organizationId: organization.id, id: webhookId });
+  };
 
   const handleCreate = () => {
     if (!organization?.id) return;
@@ -461,15 +495,42 @@ export default function WebhooksSettingsPage() {
                       <Webhook className="h-5 w-5 text-muted-foreground" />
                       <CardTitle className="text-lg">{webhook.name}</CardTitle>
                       {getStatusBadge(webhook.status)}
+                      {webhook.urlRefusal && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                          <ShieldAlert className="h-3 w-3" />
+                          {t('destinationBlocked')}
+                        </span>
+                      )}
                     </div>
                     <CardDescription className="flex items-center gap-2">
                       <ExternalLink className="h-3 w-3" />
                       <code className="text-xs">{webhook.url}</code>
                     </CardDescription>
+                    {webhook.urlRefusal && (
+                      <p className="text-xs text-amber-800 dark:text-amber-400">
+                        {t('destinationBlockedDescription', {
+                          reason: t(`destinationReasons.${webhook.urlRefusal}`),
+                        })}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     {canUpdate && (
                       <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={t('test')}
+                          title={t('test')}
+                          disabled={testingWebhook === webhook.id}
+                          onClick={() => handleTest(webhook.id)}
+                        >
+                          {testingWebhook === webhook.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Send className="h-4 w-4" />
+                          )}
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"

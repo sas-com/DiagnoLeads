@@ -410,6 +410,28 @@ POST /api/trpc/webhooks.create
 - `blog.published` - Blog post published
 - `faq.published` - FAQ published
 
+**Allowed destinations (#321):** the URL must be `https:` on the default port (443), without a
+user name or password. Outside production (`NODE_ENV` other than `production`) `http:` on port 80
+is accepted as well. IP addresses in private, loopback, link-local, CGNAT, multicast, unspecified,
+documentation or other reserved ranges (IPv4 and IPv6, including IPv4-mapped forms and
+169.254.169.254) are refused, as are `localhost`, names without a dot, and names under
+`.localhost`, `.local`, `.internal`, `.home.arpa`, `.arpa`, `.lan`, `.intranet` and `.corp`.
+Create and update answer `BAD_REQUEST` (`destination_not_allowed (<reason>)`). Before every
+delivery the host name is resolved and the delivery is refused if any address is in a blocked
+range; redirects are not followed (a 3xx answer is a failure). A refused delivery stores
+`Destination not allowed (<reason>)` and is not retried. The check and the connection resolve
+the name separately, so a DNS answer that changes in between (DNS rebinding) is not fully
+excluded; pinning the address would need a custom connector.
+
+#### Test Webhook
+```
+POST /api/trpc/webhooks.test
+```
+Sends one delivery marked `"test": true` to the chosen webhook. It is tried once: a failure is not
+retried and does not count towards the webhook's failure count. At most 3 test sends per webhook
+in 10 minutes and 10 per organization in an hour (`WEBHOOK_TEST_SEND_LIMITS`), counted from the
+stored deliveries; over the limit the answer is `TOO_MANY_REQUESTS`.
+
 ---
 
 ## Error Handling
