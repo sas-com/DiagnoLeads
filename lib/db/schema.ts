@@ -3026,3 +3026,161 @@ export const prospectMeetingTargets = pgTable(
     check('prospect_meeting_targets_meetings_check', sql`${table.meetings} >= 0`),
   ]
 );
+
+/**
+ * Respondent Email Consents (#154)
+ * One row per request from a respondent to receive mail (e.g. a copy of the AX result): the
+ * consent text version and time, and the double opt-in. The confirmation token is stored only as
+ * a SHA-256 hash. Kept when the lead is deleted (the consent record outlives it).
+ */
+export const respondentEmailConsents = pgTable(
+  'respondent_email_consents',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    leadId: uuid('lead_id').references(() => leads.id, { onDelete: 'set null' }),
+    submissionId: uuid('submission_id'),
+    /** Normalised (trimmed, lowercase) by lib/features/respondent-email/normalize.ts */
+    email: text('email').notNull(),
+    /** What the mail is for; a new purpose (e.g. 'nurture') needs a migration of the check */
+    purpose: text('purpose').notNull(),
+    /** Version of the consent text the respondent agreed to */
+    consentVersion: text('consent_version').notNull(),
+    consentedAt: timestamp('consented_at', { withTimezone: true }).defaultNow().notNull(),
+    /** 'ja' | 'en' */
+    locale: text('locale').notNull(),
+    confirmTokenHash: text('confirm_token_hash').unique(
+      'respondent_email_consents_confirm_token_hash_unique'
+    ),
+    confirmExpiresAt: timestamp('confirm_expires_at', { withTimezone: true }),
+    confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+    withdrawnAt: timestamp('withdrawn_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('respondent_email_consents_org_email_idx').on(
+      table.organizationId,
+      table.email,
+      table.purpose,
+      table.createdAt
+    ),
+    uniqueIndex('respondent_email_consents_submission_purpose_unique').on(
+      table.submissionId,
+      table.purpose
+    ),
+    // For the ON DELETE SET NULL of the lead
+    index('respondent_email_consents_lead_idx').on(table.leadId),
+    // Named explicitly: the generated name is longer than PostgreSQL's 63-character limit
+    foreignKey({
+      name: 'respondent_email_consents_submission_fk',
+      columns: [table.submissionId],
+      foreignColumns: [diagnosticSubmissions.id],
+    }).onDelete('set null'),
+    check('respondent_email_consents_purpose_check', sql`${table.purpose} in ('ax_result_copy')`),
+    check('respondent_email_consents_locale_check', sql`${table.locale} in ('ja', 'en')`),
+  ]
+);
+
+export type RespondentEmailConsent = typeof respondentEmailConsents.$inferSelect;
+export type NewRespondentEmailConsent = typeof respondentEmailConsents.$inferInsert;
+
+/**
+ * Respondent Email Sends (#154)
+ * One row per mail to a respondent, written before sending and updated with the result. The
+ * unsubscribe token of the mail is stored only as a SHA-256 hash. Not deleted with the lead.
+ */
+export const respondentEmailSends = pgTable(
+  'respondent_email_sends',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    consentId: uuid('consent_id'),
+    leadId: uuid('lead_id').references(() => leads.id, { onDelete: 'set null' }),
+    submissionId: uuid('submission_id'),
+    /** 'confirmation' | 'result' */
+    kind: text('kind').notNull(),
+    /** Normalised (trimmed, lowercase) */
+    email: text('email').notNull(),
+    /** 'pending' | 'sent' | 'failed' | 'suppressed' | 'quota' */
+    status: text('status').notNull(),
+    resendMessageId: text('resend_message_id'),
+    unsubscribeTokenHash: text('unsubscribe_token_hash').unique(
+      'respondent_email_sends_unsubscribe_token_hash_unique'
+    ),
+    /** Short machine-readable reason of a failure; never the address or a token */
+    errorCode: text('error_code'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('respondent_email_sends_org_email_idx').on(
+      table.organizationId,
+      table.email,
+      table.createdAt
+    ),
+    // For the ON DELETE SET NULL of the lead
+    index('respondent_email_sends_lead_idx').on(table.leadId),
+    // Named explicitly: the generated names are longer than PostgreSQL's 63-character limit
+    foreignKey({
+      name: 'respondent_email_sends_consent_fk',
+      columns: [table.consentId],
+      foreignColumns: [respondentEmailConsents.id],
+    }).onDelete('set null'),
+    foreignKey({
+      name: 'respondent_email_sends_submission_fk',
+      columns: [table.submissionId],
+      foreignColumns: [diagnosticSubmissions.id],
+    }).onDelete('set null'),
+    check('respondent_email_sends_kind_check', sql`${table.kind} in ('confirmation', 'result')`),
+    check(
+      'respondent_email_sends_status_check',
+      sql`${table.status} in ('pending', 'sent', 'failed', 'suppressed', 'quota')`
+    ),
+  ]
+);
+
+export type RespondentEmailSend = typeof respondentEmailSends.$inferSelect;
+export type NewRespondentEmailSend = typeof respondentEmailSends.$inferInsert;
+
+/**
+ * Email Suppressions (#154)
+ * Addresses of an organization that must not receive respondent mail (unsubscribed, never
+ * asked, bounced, complained, or stopped by staff). Checked right before every send. No foreign
+ * key to leads on purpose: the suppression must survive the lead's deletion.
+ */
+export const emailSuppressions = pgTable(
+  'email_suppressions',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    /** Normalised (trimmed, lowercase) */
+    email: text('email').notNull(),
+    /** 'unsubscribed' | 'not_requested' | 'bounced' | 'complained' | 'staff' */
+    reason: text('reason').notNull(),
+    /** 'one_click' | 'unsubscribe_page' | 'confirm_page' | 'resend_webhook' | 'staff' */
+    source: text('source').notNull(),
+    sendId: uuid('send_id').references(() => respondentEmailSends.id, { onDelete: 'set null' }),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('email_suppressions_org_email_unique').on(table.organizationId, table.email),
+    check(
+      'email_suppressions_reason_check',
+      sql`${table.reason} in ('unsubscribed', 'not_requested', 'bounced', 'complained', 'staff')`
+    ),
+    check(
+      'email_suppressions_source_check',
+      sql`${table.source} in ('one_click', 'unsubscribe_page', 'confirm_page', 'resend_webhook', 'staff')`
+    ),
+  ]
+);
+
+export type EmailSuppression = typeof emailSuppressions.$inferSelect;
+export type NewEmailSuppression = typeof emailSuppressions.$inferInsert;

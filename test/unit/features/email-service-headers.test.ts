@@ -1,6 +1,7 @@
 /**
  * One-click unsubscribe of sendEmail (#154, RFC 8058): both headers are added in the required
- * form, only for an https link and a single recipient.
+ * form, only for an https link and a single recipient. The idempotency key reaches Resend as its
+ * request option.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -79,5 +80,18 @@ describe('sendEmail listUnsubscribe', () => {
       })
     ).rejects.toThrow(/exactly one recipient/);
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it('passes idempotencyKey to Resend as a request option', async () => {
+    const { sendEmail } = await import('@/lib/features/email/email-service');
+    await sendEmail({ ...base, idempotencyKey: 'respondent-email:send-1' });
+    expect(send.mock.calls[0]?.[1]).toEqual({ idempotencyKey: 'respondent-email:send-1' });
+    expect(send.mock.calls[0]?.[0]).not.toHaveProperty('idempotencyKey');
+  });
+
+  it('calls Resend with the payload only when there is no idempotencyKey', async () => {
+    const { sendEmail } = await import('@/lib/features/email/email-service');
+    await sendEmail(base);
+    expect(send.mock.calls[0]).toHaveLength(1);
   });
 });
