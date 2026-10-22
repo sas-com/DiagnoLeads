@@ -150,4 +150,28 @@ describe('renderEmail', () => {
     const { html } = render(blocks);
     expect(html).not.toMatch(/<img|<link|<script|url\(/i);
   });
+
+  it('logs a refused link with its scheme and host only, never the token', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      render([
+        { type: 'button', label: 'リセット', url: 'http://app.example.com/reset?token=secret123' },
+      ]);
+      expect(warn).toHaveBeenCalledTimes(1);
+      const message = String(warn.mock.calls[0]?.[0]);
+      expect(message).toContain('http://app.example.com');
+      expect(message).not.toContain('secret123');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('writes nothing for an empty list or table, not even its title', () => {
+    const { text } = render([
+      { type: 'links', title: '期限切れ', items: [] },
+      { type: 'facts', title: 'お客様', rows: [] },
+      { type: 'paragraph', text: '本文' },
+    ]);
+    expect(text).toBe('本文');
+  });
 });

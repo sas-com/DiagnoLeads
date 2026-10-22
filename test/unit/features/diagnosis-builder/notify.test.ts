@@ -82,18 +82,29 @@ describe('buildDiagnosisSalesEmail', () => {
     try {
       const mail = buildDiagnosisSalesEmail({ ...base, company: '<b>架空</b>商事' });
       expect(mail.subject).toContain('2026/10/20 までに連絡');
+      expect(mail.text).toContain('[相談申込] [関心あり（MQL）]');
       expect(mail.text).toContain('会社名: <b>架空</b>商事');
-      expect(mail.text).toContain('相談申込: あり');
       expect(mail.text).toContain('MQL: 関心あり');
       expect(mail.text).toContain('連絡期限: 2026/10/20');
       expect(mail.text).toContain('MQLの理由: 今年中に移行する予定（強いシグナル）');
-      expect(mail.text).toContain('リード: https://app.example.com/ja/leads/lead-1');
+      expect(mail.text).toContain('リードを開く\nhttps://app.example.com/ja/leads/lead-1');
       expect(mail.html).toContain('&lt;b&gt;架空&lt;/b&gt;商事');
       expect(mail.html).not.toContain('<b>架空');
       expect(mail.html).toContain('href="https://app.example.com/ja/leads/lead-1"');
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+
+  it('marks an unverified identity and leaves out the deadline without a consultation', () => {
+    const mail = buildDiagnosisSalesEmail({
+      ...base,
+      consultationRequested: false,
+      identityUnverified: true,
+    });
+    expect(mail.text).toContain('[関心あり（MQL）] [本人未確認]');
+    expect(mail.text).toContain('本人確認が必要です');
+    expect(mail.text).not.toContain('連絡期限');
   });
 });
 

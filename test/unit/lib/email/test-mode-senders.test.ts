@@ -1,5 +1,6 @@
 /**
- * Test mode applies to every sender: recipients outside the allowed domains never reach Resend.
+ * Test mode applies to the email sender (every mail, auth included, goes through
+ * lib/features/email): recipients outside the allowed domains never reach Resend.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -35,38 +36,6 @@ describe('test mode in the email senders', () => {
     await expect(sendEmail({ to: 'x@gmail.com', subject: 's', html: 'h' })).rejects.toThrow(
       /test mode email domains/
     );
-    expect(send).toHaveBeenCalledTimes(1);
-  });
-
-  it('auth email sender keeps only company addresses and uses EMAIL_FROM', async () => {
-    process.env.EMAIL_FROM = 'DiagnoLeads <noreply@mail.sas-com.com>';
-    const { sendEmail } = await import('@/lib/email/client');
-
-    await sendEmail({ to: 'user@sas-com.com', subject: 's', text: 't' });
-    expect(send.mock.calls[0][0]).toMatchObject({
-      to: ['user@sas-com.com'],
-      from: 'DiagnoLeads <noreply@mail.sas-com.com>',
-    });
-    await expect(sendEmail({ to: 'user@gmail.com', subject: 's', text: 't' })).rejects.toThrow();
-    expect(send).toHaveBeenCalledTimes(1);
-  });
-
-  it('template sender filters to, cc and bcc and reports when nobody is left', async () => {
-    const { sendEmail } = await import('@/lib/features/integrations/email/resend-service');
-
-    const ok = await sendEmail({
-      to: ['a@sas-com.com', 'b@gmail.com'],
-      cc: ['c@gmail.com'],
-      bcc: ['d@sas-com.com'],
-      subject: 's',
-      template: 'welcome',
-      data: {},
-    });
-    expect(ok.success).toBe(true);
-    expect(send.mock.calls[0][0]).toMatchObject({ to: ['a@sas-com.com'], cc: undefined, bcc: ['d@sas-com.com'] });
-
-    const refused = await sendEmail({ to: 'b@gmail.com', subject: 's', template: 'welcome', data: {} });
-    expect(refused.success).toBe(false);
     expect(send).toHaveBeenCalledTimes(1);
   });
 

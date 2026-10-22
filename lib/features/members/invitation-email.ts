@@ -1,4 +1,5 @@
 import type { InvitationRole } from '@/lib/db/schema';
+import { renderEmail } from '@/lib/email/templates/render';
 import { isEmailConfigured, sendEmail } from '@/lib/features/email';
 
 const ROLE_LABELS: Record<InvitationRole, string> = { member: 'メンバー', admin: '管理者' };
@@ -8,15 +9,6 @@ export function invitationUrl(
   baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
 ): string {
   return `${baseUrl.replace(/\/$/, '')}/ja/invite/${token}`;
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 export type InvitationEmailResult =
@@ -47,20 +39,38 @@ export async function sendInvitationEmail(input: {
   });
   const role = ROLE_LABELS[input.role];
   const subject = `【DiagnoLeads】${input.organizationName} への招待`;
-  const text = [
-    `${input.inviterName} さんから、DiagnoLeads の「${input.organizationName}」に${role}として招待されました。`,
-    '',
-    '次のリンクを開いて参加してください。アカウントをお持ちでない場合は、このメールアドレスで新規登録すると参加できます。',
-    input.url,
-    '',
-    `このリンクの有効期限は ${expires} までです。心当たりがない場合は、このメールを破棄してください。`,
-  ].join('\n');
-  const html = [
-    `<p>${escapeHtml(input.inviterName)} さんから、DiagnoLeads の「${escapeHtml(input.organizationName)}」に${role}として招待されました。</p>`,
-    '<p>次のリンクを開いて参加してください。アカウントをお持ちでない場合は、このメールアドレスで新規登録すると参加できます。</p>',
-    `<p><a href="${escapeHtml(input.url)}">招待を承認する</a></p>`,
-    `<p>このリンクの有効期限は ${expires} までです。心当たりがない場合は、このメールを破棄してください。</p>`,
-  ].join('');
+  const { text, html } = renderEmail({
+    theme: 'internal',
+    brand: 'DiagnoLeads',
+    preheader: `${input.inviterName} さんから「${input.organizationName}」への招待が届いています`,
+    blocks: [
+      { type: 'heading', text: `「${input.organizationName}」への招待` },
+      {
+        type: 'paragraph',
+        text: `${input.inviterName} さんから、DiagnoLeads の「${input.organizationName}」に${role}として招待されました。`,
+      },
+      {
+        type: 'facts',
+        rows: [
+          { label: '招待した人', value: input.inviterName },
+          { label: '組織', value: input.organizationName },
+          { label: '役割', value: role },
+          { label: '有効期限', value: `${expires} まで` },
+        ],
+      },
+      {
+        type: 'paragraph',
+        text: '次のボタンから参加してください。アカウントをお持ちでない場合は、このメールアドレスで新規登録すると参加できます。',
+      },
+      { type: 'button', label: '招待を承認する', url: input.url },
+      {
+        type: 'notice',
+        tone: 'info',
+        text: `このリンクの有効期限は ${expires} までです。このメールに心当たりがない場合は破棄してください。`,
+      },
+    ],
+    footer: ['このメールは DiagnoLeads から自動で送信しています。'],
+  });
 
   try {
     await sendEmail({ to: input.to, subject, text, html });

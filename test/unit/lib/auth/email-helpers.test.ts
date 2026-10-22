@@ -4,8 +4,8 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock the email client
-vi.mock('@/lib/email/client', () => ({
+// Mock the email service
+vi.mock('@/lib/features/email', () => ({
   sendEmail: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -162,29 +162,54 @@ describe('generateVerificationEmail', () => {
   });
 });
 
+describe('auth email HTML', () => {
+  const hostile = { name: '<script>alert(1)</script>', email: 'x@example.com' };
+  const url = 'https://app.diagnoleads.com/reset-password/token123';
+
+  it.each([
+    ['reset', 'ja', generatePasswordResetEmail],
+    ['reset', 'en', generatePasswordResetEmail],
+    ['verification', 'ja', generateVerificationEmail],
+    ['verification', 'en', generateVerificationEmail],
+  ] as const)('%s (%s): escapes the name and links the URL behind a button', (_, locale, build) => {
+    const { html } = build(hostile, url, locale);
+    expect(html).not.toContain('<script>');
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(html).toContain(`href="${url}"`);
+    expect(html).toContain(`<html lang="${locale}">`);
+  });
+
+  it('says in the HTML that the reset link expires in 1 hour', () => {
+    expect(generatePasswordResetEmail(hostile, url, 'ja').html).toContain('1時間で期限切れ');
+    expect(generatePasswordResetEmail(hostile, url, 'en').html).toContain('expire in 1 hour');
+  });
+});
+
 describe('sendAuthEmail', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it('should call sendEmail with correct parameters', async () => {
-    const { sendEmail } = await import('@/lib/email/client');
+    const { sendEmail } = await import('@/lib/features/email');
 
     await sendAuthEmail({
       to: 'test@example.com',
       subject: 'Test Subject',
       text: 'Test message body',
+      html: '<p>Test message body</p>',
     });
 
     expect(sendEmail).toHaveBeenCalledWith({
       to: 'test@example.com',
       subject: 'Test Subject',
       text: 'Test message body',
+      html: '<p>Test message body</p>',
     });
   });
 
   it('should not throw when sendEmail fails', async () => {
-    const { sendEmail } = await import('@/lib/email/client');
+    const { sendEmail } = await import('@/lib/features/email');
     vi.mocked(sendEmail).mockRejectedValueOnce(new Error('SMTP error'));
 
     // Should not throw
@@ -193,19 +218,21 @@ describe('sendAuthEmail', () => {
         to: 'test@example.com',
         subject: 'Test',
         text: 'Test',
+        html: 'Test',
       })
     ).resolves.toBeUndefined();
   });
 
   it('should log error when sendEmail fails', async () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const { sendEmail } = await import('@/lib/email/client');
+    const { sendEmail } = await import('@/lib/features/email');
     vi.mocked(sendEmail).mockRejectedValueOnce(new Error('Network error'));
 
     await sendAuthEmail({
       to: 'test@example.com',
       subject: 'Test',
       text: 'Test',
+      html: 'Test',
     });
 
     expect(consoleErrorSpy).toHaveBeenCalledWith(

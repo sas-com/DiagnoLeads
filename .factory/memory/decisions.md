@@ -307,7 +307,7 @@
 - **決定**: 環境変数 `APP_TEST_MODE=true` でテストモードにする。テストモード中は、メールは許可ドメイン（`APP_TEST_MODE_EMAIL_DOMAINS`、既定 `sas-com.com`）宛てだけに送り、メンバー招待と新規登録で許可ドメイン以外のアドレスは入力エラーにする。切り替えは Vercel の環境変数で行う
 - **理由**: まだテスト段階で、送信元を自社ドメインに切り替えた後もメール確認と組織作成の上限がない。社外へ誤って送る心配と、スパムの中継に使われる心配をなくす（オーナー判断）
 - **ルール**:
-  - Resend を呼ぶ送信処理（`lib/features/email/email-service.ts`・`lib/email/client.ts`・`lib/features/integrations/email/resend-service.ts`）はすべて `filterAllowedRecipients` を通す。新しい送信処理を足すときも同じ
+  - Resend を呼ぶ送信処理（2026-10-21 の #285 で `lib/features/email/email-service.ts` の1つにまとめた）は `filterAllowedRecipients` を通す。新しい送信処理を足すときも同じ
   - AX 診断の連絡先メールも、テストモード中は許可ドメインだけ受け付ける（2026-10-16 オーナー判断で変更。当初は「社外のお客様のため制限しない」としていた）。サーバー（`/api/diagnostics/ax-migration`、`email_domain_not_allowed`）と画面（連絡先の入力段階）の両方で判定する
   - 招待は `members.invite` で、新規登録は better-auth の `hooks.before` で判定する（`EMAIL_DOMAIN_NOT_ALLOWED`）
 - **見直す条件**: 一般公開するとき。テストモードを外す前に、新規登録のメール確認と組織作成の上限を入れる

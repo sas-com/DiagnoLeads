@@ -38,6 +38,8 @@ export type EmailBlock =
 
 export interface EmailContent {
   theme: EmailTheme;
+  /** Language of the mail (the html lang attribute). Defaults to Japanese */
+  lang?: 'ja' | 'en';
   /** Shown after the subject in the inbox list; kept short */
   preheader: string;
   /** Name in the header bar. Defaults to DiagnoLeads for internal mail */
@@ -157,6 +159,26 @@ export function sanitizeSubject(subject: string): string {
     .trim();
 }
 
+/**
+ * safeUrl for a link the mail wants to show. A refusal drops the link, so it is logged: an
+ * http BETTER_AUTH_URL or NEXT_PUBLIC_APP_URL would otherwise send mail without its link
+ * unnoticed. Only the scheme and host are logged; reset links carry a token.
+ */
+function linkUrl(url: string): string | null {
+  const safe = safeUrl(url);
+  if (!safe) {
+    let where = 'unparsable';
+    try {
+      const parsed = new URL(url.trim());
+      where = `${parsed.protocol}//${parsed.hostname}`;
+    } catch {
+      // keep 'unparsable'
+    }
+    console.warn(`Email: link left out (${where}); only https links are sent`);
+  }
+  return safe;
+}
+
 const text = (value: string) => escapeHtml(value).replace(/\r?\n/g, '<br>');
 
 function renderBlock(block: EmailBlock, p: Palette): string {
@@ -196,7 +218,7 @@ function renderBlock(block: EmailBlock, p: Palette): string {
       return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;"><tr><td style="padding:12px 16px;border-left:4px solid ${tone.border};background:${tone.bg};border-radius:4px;">${title}<p style="margin:0;font-size:14px;line-height:1.7;color:${tone.text};">${text(block.text)}</p></td></tr></table>`;
     }
     case 'button': {
-      const url = safeUrl(block.url);
+      const url = linkUrl(block.url);
       // An unsafe link is left out entirely: the label alone, never the address
       if (!url) {
         return `<p style="margin:0 0 20px;font-size:14px;color:${p.ink};">${escapeHtml(block.label)}</p>`;
@@ -210,7 +232,7 @@ function renderBlock(block: EmailBlock, p: Palette): string {
         : '';
       const items = block.items
         .map((item, index) => {
-          const url = item.url ? safeUrl(item.url) : null;
+          const url = item.url ? linkUrl(item.url) : null;
           const label = url
             ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="color:${p.accent};font-weight:700;text-decoration:underline;">${escapeHtml(item.text)}</a>`
             : escapeHtml(item.text);
@@ -240,6 +262,7 @@ function blockText(block: EmailBlock, theme: EmailTheme): string {
     case 'badges':
       return block.items.map((item) => `[${item.label}]`).join(' ');
     case 'facts':
+      if (block.rows.length === 0) return '';
       return [
         ...(block.title ? [`【${block.title}】`] : []),
         ...block.rows.map((row) => `${row.label}${colon}${row.value}`),
@@ -251,6 +274,7 @@ function blockText(block: EmailBlock, theme: EmailTheme): string {
       return url ? `▶ ${block.label}\n${url}` : block.label;
     }
     case 'links':
+      if (block.items.length === 0) return '';
       return [
         ...(block.title ? [`【${block.title}】`] : []),
         ...block.items.map((item) => {
@@ -278,7 +302,7 @@ export function renderEmail(content: EmailContent): RenderedEmail {
     .join('');
 
   const html = `<!DOCTYPE html>
-<html lang="ja">
+<html lang="${content.lang ?? 'ja'}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">

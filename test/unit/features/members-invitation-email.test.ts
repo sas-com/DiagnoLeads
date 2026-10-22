@@ -36,6 +36,19 @@ describe('invitation email', () => {
     expect(sent.html).toContain('山田 &lt;太郎&gt;');
     expect(sent.html).toContain('A&amp;B 商事');
     expect(sent.html).not.toContain('<太郎>');
+    expect(sent.html).toContain('href="https://app.example/ja/invite/tok"');
+  });
+
+  it('escapes a script in the names', async () => {
+    await sendInvitationEmail({
+      ...input,
+      inviterName: '<script>alert(1)</script>',
+      organizationName: '"><img src=x onerror=alert(1)>',
+    });
+    const sent = email.sendEmail.mock.calls[0][0];
+    expect(sent.html).not.toContain('<script>');
+    expect(sent.html).not.toContain('<img');
+    expect(sent.html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
   });
 
   it('reports instead of throwing when email is not configured or sending fails', async () => {

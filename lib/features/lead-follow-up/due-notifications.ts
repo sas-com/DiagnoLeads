@@ -18,6 +18,7 @@
 import type { Database } from '@/lib/db/client';
 import { leadTasks, leads, notifications, organizationMembers, users } from '@/lib/db/schema';
 import { filterAllowedRecipients } from '@/lib/email/allowed-recipients';
+import { type EmailLinkItem, renderEmail } from '@/lib/email/templates/render';
 import { isEmailConfigured, sendEmail } from '@/lib/features/email';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
 import {
@@ -110,24 +111,49 @@ export function buildDueNotice(item: DueNoticeItem, today: string) {
 }
 
 /** One email listing a member's tasks of one organization */
-export function buildDueNoticeEmail(items: DueNoticeItem[], today: string, appUrl: string) {
-  const lines = items.map((item) => {
-    const { title } = buildDueNotice(item, today);
-    return { title, url: `${appUrl}/ja/leads/${item.leadId}` };
+export function buildDueNoticeEmail(
+  items: DueNoticeItem[],
+  today: string,
+  appUrl: string
+): { subject: string; html: string; text: string } {
+  const toLink = (item: DueNoticeItem): EmailLinkItem => ({
+    text: buildDueNotice(item, today).title,
+    url: `${appUrl}/ja/leads/${item.leadId}`,
   });
-  const overdue = items.filter((item) => item.notice === 'overdue').length;
+  const overdueItems = items.filter((item) => item.notice === 'overdue');
+  const dueSoonItems = items.filter((item) => item.notice !== 'overdue');
+  const overdue = overdueItems.length;
   const subject =
     overdue > 0
       ? `【期限のお知らせ】期限切れ ${overdue}件を含む ${items.length}件の次の行動・持ち帰り事項`
       : `【期限のお知らせ】期限が近い次の行動・持ち帰り事項 ${items.length}件`;
   const intro = '担当の次の行動・持ち帰り事項の期限が近づいている、または過ぎています。';
-  return {
-    subject,
-    text: `${intro}\n\n${lines.map((line) => `- ${line.title}\n  ${line.url}`).join('\n')}`,
-    html: `<p>${escapeHtml(intro)}</p><ul>${lines
-      .map((line) => `<li><a href="${escapeHtml(line.url)}">${escapeHtml(line.title)}</a></li>`)
-      .join('')}</ul>`,
-  };
+  const rendered = renderEmail({
+    theme: 'internal',
+    preheader: subject.replace(/^【期限のお知らせ】/, ''),
+    blocks: [
+      {
+        type: 'badges',
+        items: [
+          ...(overdue > 0 ? [{ label: `期限切れ ${overdue}件`, tone: 'danger' as const }] : []),
+          ...(dueSoonItems.length > 0
+            ? [{ label: `期限が近い ${dueSoonItems.length}件`, tone: 'warning' as const }]
+            : []),
+        ],
+      },
+      { type: 'heading', text: '期限のお知らせ' },
+      { type: 'paragraph', text: intro },
+      { type: 'links', title: '期限切れ', items: overdueItems.map(toLink) },
+      { type: 'links', title: '期限が近い', items: dueSoonItems.map(toLink) },
+      {
+        type: 'paragraph',
+        text: '済んでいるものは、リード画面で完了にしてください。',
+        muted: true,
+      },
+    ],
+    footer: ['このメールは DiagnoLeads から自動で送信しています。'],
+  });
+  return { subject, ...rendered };
 }
 
 /**
@@ -318,13 +344,4 @@ export async function runDueTaskNotifications(
     }
   }
   return result;
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
