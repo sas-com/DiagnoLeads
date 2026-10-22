@@ -14,20 +14,34 @@ describe('search indexing policy', () => {
     expect(robotsFor('/ax-migration')).toEqual(NOINDEX);
     expect(robotsFor('/ax-diagnosis')).toEqual(NOINDEX);
     expect(robotsFor('/ax-migration/access')).toEqual(NOINDEX);
+    expect(robotsFor('/ax-migration/column')).toEqual(NOINDEX);
+    expect(robotsFor('/ax-migration/column/access-office-support-end')).toEqual(NOINDEX);
     expect(sitemap()).toEqual([]);
     expect(robots().sitemap).toBeUndefined();
   });
 
-  it('after launch indexes only the AX landing pages and diagnosis', () => {
+  it('after launch indexes only the AX landing pages, diagnosis and columns', () => {
     expect(robotsFor('/ax-migration')).toEqual({ index: true, follow: true });
     expect(robotsFor('/ax-migration/access')).toEqual({ index: true, follow: true });
     expect(robotsFor('/ax-diagnosis')).toEqual({ index: true, follow: true });
+    expect(robotsFor('/ax-migration/column')).toEqual({ index: true, follow: true });
+    expect(robotsFor('/ax-migration/column/access-office-support-end')).toEqual({
+      index: true,
+      follow: true,
+    });
+    // A column path is indexable only for a published article
+    expect(robotsFor('/ax-migration/column/no-such-article')).toEqual(NOINDEX);
     expect(robotsFor(null)).toEqual(NOINDEX);
     expect(sitemap().map((entry) => new URL(entry.url).pathname)).toEqual([
       '/ja/ax-migration',
       '/ja/ax-migration/access',
       '/ja/ax-diagnosis',
+      '/ja/ax-migration/column',
+      '/ja/ax-migration/column/access-office-support-end',
     ]);
+    // Columns carry the date of their article rather than the build time
+    const article = sitemap().find((entry) => entry.url.endsWith('/access-office-support-end'));
+    expect(article?.lastModified).toEqual(new Date('2026-10-22T00:00:00+09:00'));
     expect(robots().sitemap).toMatch(/\/sitemap\.xml$/);
   });
 

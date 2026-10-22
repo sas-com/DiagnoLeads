@@ -2960,7 +2960,8 @@
       },
       "body": "サポートが終わっても、ツールはそのまま動きます。ただし、新しく見つかった弱点（脆弱性）は直されなくなります。",
       "source": "出典：Microsoft のライフサイクル情報（2026年10月時点）",
-      "sourceLink": "Microsoft の公開情報 {number}"
+      "sourceLink": "Microsoft の公開情報 {number}",
+      "relatedColumn": "関連コラム"
     },
     "problems": {
       "title": "こんなとき、ありませんか",
@@ -3120,6 +3121,24 @@
       "consult": "30分のオンライン相談を予約する"
     },
     "trademark": "Microsoft、Access は、米国 Microsoft Corporation の米国およびその他の国における商標または登録商標です。"
+  },
+  "axColumn": {
+    "meta": {
+      "title": "コラム｜AXマイグレーション｜エス・エー・エス株式会社",
+      "description": "基幹システムや Access の業務ツールについて、サポート終了の事実や進め方の選び方を、公開情報をもとに整理したコラムです。",
+      "articleTitle": "{title}｜{siteName}"
+    },
+    "label": "コラム",
+    "title": "コラム",
+    "lead": "基幹システムや業務ツールの移行を考えるときに知っておきたいことを、公開情報をもとに整理しています。",
+    "breadcrumbLabel": "パンくずリスト",
+    "breadcrumbHome": "AXマイグレーション",
+    "toc": "目次",
+    "sources": "出典",
+    "publishedAt": "公開日",
+    "updatedAt": "更新日",
+    "readArticle": "記事を読む",
+    "ctaLead": "お使いの Access ツールに合う進め方の目安を、無料Web診断で確かめられます。"
   },
   "organizations": {
     "switcher": {
