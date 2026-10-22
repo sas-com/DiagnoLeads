@@ -5,15 +5,20 @@
  * - The data is built from an allowlist of lead columns (leadWebhookData). A lead row is never
  *   sent as it is: answers, custom fields, referrer and agency data, acquisition cost, the
  *   assignee, act timing, qualification details and AI data stay inside DiagnoLeads.
- * - Sending happens after the response (runAfterResponse), so a slow or failing endpoint never
- *   delays or fails the change of the lead. Call it after the transaction has committed.
+ * - Sending runs alongside and after the response (runAfterResponse keeps the function alive
+ *   until it ends), so a slow or failing endpoint never delays or fails the change of the lead.
+ *   Call it after the transaction has committed: the task starts right away.
  * - One call sends at most LEAD_WEBHOOK_EVENT_LIMIT events; the rest are dropped and reported
  *   once. Within the limit, events that do not fit in the time budget are queued for the
- *   retry processor instead of being lost (triggerWebhookBatch).
+ *   retry processor, up to WEBHOOK_BATCH_QUEUE_LIMIT deliveries (triggerWebhookBatch); the
+ *   deliveries dropped past that are reported too.
+ * - Leads created from a public form (embed) count against a per-organization hourly limit, so
+ *   form spam cannot be relayed to the organization's endpoints without bound.
  */
 import { runAfterResponse } from '@/lib/auth/email-helpers';
 import { type Database, db } from '@/lib/db/client';
 import { leads } from '@/lib/db/schema';
+import { type RateLimitRule, consumeRateLimit } from '@/lib/features/diagnostics/rate-limit';
 import { reportServerError } from '@/lib/ops/alert';
 import { and, eq } from 'drizzle-orm';
 import type { WebhookEventType } from '../types/schemas';
@@ -128,8 +133,26 @@ export async function sendLeadEvents(
       options.database ? { database: options.database } : {}
     );
   }
-  await triggerWebhookBatch(organizationId, within.map(toWebhookEvent), options);
+  const { dropped } = await triggerWebhookBatch(
+    organizationId,
+    within.map(toWebhookEvent),
+    options
+  );
+  if (dropped > 0) {
+    await reportServerError(
+      'webhooks/lead-events-queue-limit',
+      new Error(`${dropped} lead event deliveries were not queued (queue limit reached)`),
+      options.database ? { database: options.database } : {}
+    );
+  }
 }
+
+/** lead.created events from public forms (embed) per organization and hour */
+export const PUBLIC_LEAD_EVENTS_PER_ORGANIZATION: RateLimitRule = {
+  name: 'lead-events-public-org',
+  limit: 100,
+  windowMs: 60 * 60 * 1000,
+};
 
 /**
  * Send the events after the response. Errors are logged, never thrown: a webhook must not fail
@@ -151,8 +174,22 @@ export function emitLeadEvents(
 export async function sendLeadCreatedById(
   organizationId: string,
   leadId: string,
-  { database = db }: { database?: Database } = {}
+  { database = db, limit }: { database?: Database; limit?: RateLimitRule } = {}
 ): Promise<void> {
+  if (limit) {
+    const quota = await consumeRateLimit(database, limit, organizationId);
+    if (!quota.allowed) {
+      // Once per window; the count only, never lead data
+      if (quota.count === limit.limit + 1) {
+        await reportServerError(
+          'webhooks/lead-events-rate-limit',
+          new Error(`lead.created from public forms over ${limit.limit} per hour`),
+          { database }
+        );
+      }
+      return;
+    }
+  }
   const [lead] = await database
     .select()
     .from(leads)
@@ -165,7 +202,7 @@ export async function sendLeadCreatedById(
 export function emitLeadCreatedById(
   organizationId: string,
   leadId: string,
-  options: { database?: Database } = {}
+  options: { database?: Database; limit?: RateLimitRule } = {}
 ): void {
   runAfterResponse(sendLeadCreatedById(organizationId, leadId, options));
 }

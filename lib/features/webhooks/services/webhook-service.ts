@@ -596,10 +596,17 @@ export async function triggerWebhooks(
 export const WEBHOOK_BATCH_TIME_BUDGET_MS = 15_000;
 
 /**
+ * Most deliveries one call of triggerWebhookBatch queues. The retry queue is shared by every
+ * organization and worked once a day, so one bulk change must not fill it; past this the
+ * deliveries are dropped and counted (the caller reports them).
+ */
+export const WEBHOOK_BATCH_QUEUE_LIMIT = 100;
+
+/**
  * Trigger several events of one organization (#308), reading its webhooks once. Events are sent
  * one after another while a whole attempt still fits in the time budget; the rest are stored as
- * due deliveries for the retry processor (the daily webhook cron), so none is lost when the
- * function would run out of time.
+ * due deliveries for the retry processor (the daily webhook cron), up to
+ * WEBHOOK_BATCH_QUEUE_LIMIT; deliveries past that are dropped and returned as a count.
  */
 export async function triggerWebhookBatch(
   organizationId: string,
@@ -608,8 +615,8 @@ export async function triggerWebhookBatch(
     database = db,
     timeBudgetMs = WEBHOOK_BATCH_TIME_BUDGET_MS,
   }: { database?: Database; timeBudgetMs?: number } = {}
-): Promise<{ sent: number; failed: number; queued: number }> {
-  const counts = { sent: 0, failed: 0, queued: 0 };
+): Promise<{ sent: number; failed: number; queued: number; dropped: number }> {
+  const counts = { sent: 0, failed: 0, queued: 0, dropped: 0 };
   if (events.length === 0) return counts;
 
   const activeWebhooks = await database
@@ -625,6 +632,10 @@ export async function triggerWebhookBatch(
 
     const fits =
       Date.now() - startedAt + WEBHOOK_DELIVERY_TIMEOUT_MS + ROUND_MARGIN_MS <= timeBudgetMs;
+    if (!fits && counts.queued + subscribed.length > WEBHOOK_BATCH_QUEUE_LIMIT) {
+      counts.dropped += subscribed.length;
+      continue;
+    }
     const results = await Promise.allSettled(
       subscribed.map(async (webhook) => {
         if (!fits) {
@@ -803,7 +814,8 @@ export async function processWebhookRetries({
         const payload = delivery.payload as unknown as WebhookPayload;
         const result = await deliverWebhook(webhook, payload, delivery.id);
         await recordAttempt(database, webhook, delivery.id, delivery.attempts, result, {
-          isRetry: true,
+          // A queued delivery (#308) reaches here for its first attempt
+          isRetry: delivery.attempts > 1,
           isTest: payload.test === true,
         });
         return result.success;

@@ -13,7 +13,10 @@ import {
 } from '@/lib/features/embed/security';
 import { publicLeadSubmissionSchema } from '@/lib/features/embed/types';
 import type { EmbedAccessLogEntry, PublicLeadSubmissionResponse } from '@/lib/features/embed/types';
-import { emitLeadCreatedById } from '@/lib/features/webhooks/services/lead-events';
+import {
+  PUBLIC_LEAD_EVENTS_PER_ORGANIZATION,
+  emitLeadCreatedById,
+} from '@/lib/features/webhooks/services/lead-events';
 import { eq } from 'drizzle-orm';
 import { type NextRequest, NextResponse } from 'next/server';
 
@@ -248,8 +251,11 @@ export async function POST(request: NextRequest) {
       .returning({ id: leads.id });
 
     logEntry.leadId = lead.id;
-    // lead.created to the organization's webhooks, after the response (#308)
-    emitLeadCreatedById(config.organizationId, lead.id);
+    // lead.created to the organization's webhooks, after the response, within the hourly
+    // limit for public forms (#308)
+    emitLeadCreatedById(config.organizationId, lead.id, {
+      limit: PUBLIC_LEAD_EVENTS_PER_ORGANIZATION,
+    });
 
     // 11. Update usage statistics
     await db

@@ -15,7 +15,7 @@ import {
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { triggerWebhookBatch, reportServerError } = vi.hoisted(() => ({
-  triggerWebhookBatch: vi.fn().mockResolvedValue({ sent: 0, failed: 0, queued: 0 }),
+  triggerWebhookBatch: vi.fn().mockResolvedValue({ sent: 0, failed: 0, queued: 0, dropped: 0 }),
   reportServerError: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('@/lib/features/webhooks/services/webhook-service', () => ({ triggerWebhookBatch }));
@@ -159,6 +159,15 @@ describe('sendLeadEvents', () => {
     const [where, error] = reportServerError.mock.calls[0];
     expect(where).toBe('webhooks/lead-events-limit');
     expect(String(error)).toContain(`3 of ${LEAD_WEBHOOK_EVENT_LIMIT + 3}`);
+  });
+
+  it('reports the deliveries the queue limit dropped, as a count', async () => {
+    triggerWebhookBatch.mockResolvedValueOnce({ sent: 0, failed: 0, queued: 100, dropped: 4 });
+    await sendLeadEvents('org', [{ type: 'lead.deleted', leadId: 'lead-1', deletedAt: new Date() }]);
+    expect(reportServerError).toHaveBeenCalledTimes(1);
+    const [where, error] = reportServerError.mock.calls[0];
+    expect(where).toBe('webhooks/lead-events-queue-limit');
+    expect(String(error)).toContain('4 lead event deliveries');
   });
 
   it('sends nothing for no events', async () => {

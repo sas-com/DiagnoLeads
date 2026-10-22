@@ -17,8 +17,12 @@ import {
   webhookDeliveries,
   webhooks,
 } from '@/lib/db/schema';
-import { LEAD_WEBHOOK_FIELDS } from '@/lib/features/webhooks/services/lead-events';
 import {
+  LEAD_WEBHOOK_FIELDS,
+  sendLeadCreatedById,
+} from '@/lib/features/webhooks/services/lead-events';
+import {
+  WEBHOOK_BATCH_QUEUE_LIMIT,
   processWebhookRetries,
   triggerWebhookBatch,
 } from '@/lib/features/webhooks/services/webhook-service';
@@ -239,7 +243,7 @@ describe.skipIf(!url)('lead webhook events (PostgreSQL)', () => {
       ],
       { database: pg, timeBudgetMs: 0 }
     );
-    expect(counts).toEqual({ sent: 0, failed: 0, queued: 2 });
+    expect(counts).toEqual({ sent: 0, failed: 0, queued: 2, dropped: 0 });
     expect(fetchMock).not.toHaveBeenCalled();
 
     const queued = await deliveriesOf(webhookA);
@@ -254,5 +258,48 @@ describe.skipIf(!url)('lead webhook events (PostgreSQL)', () => {
       ['success', 1],
       ['success', 1],
     ]);
+  });
+
+  it('queues up to the queue limit and drops the rest', async () => {
+    const events = Array.from({ length: WEBHOOK_BATCH_QUEUE_LIMIT + 2 }, (_, i) => ({
+      eventType: 'lead.deleted' as const,
+      data: { id: `q-${i}` },
+    }));
+    const counts = await triggerWebhookBatch(orgA, events, { database: pg, timeBudgetMs: 0 });
+    expect(counts).toEqual({ sent: 0, failed: 0, queued: WEBHOOK_BATCH_QUEUE_LIMIT, dropped: 2 });
+    expect(await deliveriesOf(webhookA)).toHaveLength(WEBHOOK_BATCH_QUEUE_LIMIT);
+  });
+
+  it('counts the failed first attempt of a queued delivery as a failure of the webhook', async () => {
+    await pg.update(webhooks).set({ failureCount: 0 }).where(eq(webhooks.id, webhookA));
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: 'Internal Server Error',
+      text: async () => '',
+    });
+    await triggerWebhookBatch(orgA, [{ eventType: 'lead.deleted', data: { id: 'f' } }], {
+      database: pg,
+      timeBudgetMs: 0,
+    });
+    await processWebhookRetries({ database: pg });
+
+    const [webhook] = await pg.select().from(webhooks).where(eq(webhooks.id, webhookA));
+    expect(webhook.failureCount).toBe(1);
+    const [delivery] = await deliveriesOf(webhookA);
+    expect([delivery.status, delivery.attempts]).toEqual(['pending', 1]);
+  });
+
+  it('stops lead.created from public forms at the hourly limit of the organization', async () => {
+    const [lead] = await pg
+      .insert(leads)
+      .values({ organizationId: orgA, email: `form-${unique()}@example.com` })
+      .returning();
+    const limit = { name: `test-public-${unique()}`, limit: 1, windowMs: 60_000 };
+
+    await sendLeadCreatedById(orgA, lead.id, { database: pg, limit });
+    await sendLeadCreatedById(orgA, lead.id, { database: pg, limit });
+
+    expect((await deliveriesOf(webhookA)).map((d) => d.eventType)).toEqual(['lead.created']);
   });
 });

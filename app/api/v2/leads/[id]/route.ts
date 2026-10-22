@@ -229,12 +229,16 @@ export async function DELETE(
     }
 
     // Delete lead
-    await db
+    const deleted = await db
       .delete(leads)
-      .where(and(eq(leads.id, id), eq(leads.organizationId, authResult.organizationId)));
-    emitLeadEvents(authResult.organizationId, [
-      { type: 'lead.deleted', leadId: existing.id, deletedAt: new Date() },
-    ]);
+      .where(and(eq(leads.id, id), eq(leads.organizationId, authResult.organizationId)))
+      .returning({ id: leads.id });
+    // Only when this request deleted it (a concurrent delete sends its own event)
+    if (deleted.length > 0) {
+      emitLeadEvents(authResult.organizationId, [
+        { type: 'lead.deleted', leadId: existing.id, deletedAt: new Date() },
+      ]);
+    }
 
     return NextResponse.json({ message: 'Lead deleted successfully' }, { status: 200 });
   } catch (error) {
