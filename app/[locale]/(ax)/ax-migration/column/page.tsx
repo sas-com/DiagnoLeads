@@ -96,21 +96,26 @@ export default async function ColumnIndexPage({ params }: ColumnIndexPageProps) 
                   stretched over the card: the image and "read the article" are not second links,
                   so a screen reader announces each article once. The card shows the focus.
                 */}
-                <article className="relative rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5 focus-within:outline focus-within:outline-3 focus-within:outline-offset-2 focus-within:outline-ax-teal-dark sm:flex sm:gap-6 sm:p-6">
+                {/*
+                  A grid (#347): on phones a small image beside the date and the title, and the
+                  summary across the card below them, so that a screen shows several articles; from
+                  sm the image on the left of all of it
+                */}
+                <article className="relative grid grid-cols-[6rem_minmax(0,1fr)] gap-x-4 gap-y-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5 focus-within:outline focus-within:outline-3 focus-within:outline-offset-2 focus-within:outline-ax-teal-dark sm:grid-cols-[15rem_minmax(0,1fr)] sm:gap-x-6 sm:p-6">
                   {/* Decorative: the link below names the article; not a second link to it */}
                   <ColumnThumbnail
                     slug={column.slug}
-                    sizes="(min-width: 640px) 240px, calc(100vw - 4rem)"
-                    className="rounded-xl sm:w-60 sm:shrink-0 sm:self-start"
+                    sizes="(min-width: 640px) 240px, 96px"
+                    className="self-start rounded-lg sm:row-span-3 sm:rounded-xl"
                   />
-                  <div className="mt-4 px-2 pb-2 sm:mt-0 sm:px-0 sm:pb-0">
+                  <div>
                     <p className="text-sm text-gray-600">
                       {t('publishedAt')}{' '}
                       <time dateTime={column.publishedAt}>
                         {formatColumnDate(column.publishedAt, locale)}
                       </time>
                     </p>
-                    <h2 className="mt-2 text-lg font-bold leading-snug sm:text-xl">
+                    <h2 className="mt-1 text-base font-bold leading-snug sm:mt-2 sm:text-xl">
                       <a
                         href={`/${locale}${columnPath(column.slug)}`}
                         className="outline-none after:absolute after:inset-0 after:rounded-2xl after:content-[''] hover:text-ax-teal-dark hover:underline hover:underline-offset-4"
@@ -118,14 +123,14 @@ export default async function ColumnIndexPage({ params }: ColumnIndexPageProps) 
                         {column.title}
                       </a>
                     </h2>
-                    <p className="mt-3 text-sm leading-relaxed text-gray-700">
-                      {column.description}
-                    </p>
-                    <p className="mt-4 flex items-center gap-1 text-sm font-bold text-ax-teal-dark">
-                      <span aria-hidden="true">{t('readArticle')}</span>
-                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                    </p>
                   </div>
+                  <p className="col-span-2 text-sm leading-relaxed text-gray-700 sm:col-span-1 sm:col-start-2">
+                    {column.description}
+                  </p>
+                  <p className="col-span-2 flex items-center gap-1 text-sm font-bold text-ax-teal-dark sm:col-span-1 sm:col-start-2">
+                    <span aria-hidden="true">{t('readArticle')}</span>
+                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </p>
                 </article>
               </li>
             ))}
