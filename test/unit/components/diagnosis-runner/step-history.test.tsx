@@ -7,6 +7,17 @@ afterEach(() => {
   window.history.replaceState(null, '', '/');
 });
 
+/**
+ * Go back and wait until the browser has moved (popstate fired). jsdom moves in two nested
+ * timeouts, so a fixed sleep can end before the move when the test process stalls (#346).
+ * Listeners added earlier (the hook's) run before this one resolves.
+ */
+const backAndSettle = () =>
+  new Promise<void>((resolve) => {
+    window.addEventListener('popstate', () => resolve(), { once: true });
+    window.history.back();
+  });
+
 describe('createStepHistory', () => {
   const steps = createStepHistory('runner');
 
@@ -91,12 +102,15 @@ describe('useStepHistory', () => {
       hook.result.current.push(1);
     });
     hook.rerender({ isActive: false });
-    window.history.back();
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await backAndSettle();
+    // Step 0 of the current run, ignored while inactive
+    const current = window.history.state.runner;
+    expect(current.step).toBe(0);
     hook.rerender({ isActive: true });
-    window.history.back();
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    // The first back is ignored (inactive), the second lands on the previous run
+    await backAndSettle();
+    // Step 0 of the previous run, ignored as another run's entry
+    expect(window.history.state.runner).toMatchObject({ step: 0 });
+    expect(window.history.state.runner.run).not.toBe(current.run);
     expect(onStep).not.toHaveBeenCalled();
   });
 
