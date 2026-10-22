@@ -25,6 +25,13 @@ export const webhooksRouter = router({
    * List webhooks for the organization
    */
   list: organizationProcedure.input(listWebhooksSchema).query(async ({ ctx, input }) => {
+    if (!ctx.ability.can('read', 'Webhook')) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: 'You do not have permission to view webhooks',
+      });
+    }
+
     const { status, limit, offset } = input;
 
     const conditions = [eq(webhooks.organizationId, ctx.organization.id)];
@@ -63,6 +70,13 @@ export const webhooksRouter = router({
   get: organizationProcedure
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
+      if (!ctx.ability.can('read', 'Webhook')) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'You do not have permission to view webhooks',
+        });
+      }
+
       const webhook = await db
         .select()
         .from(webhooks)
@@ -156,7 +170,7 @@ export const webhooksRouter = router({
     const [updated] = await db
       .update(webhooks)
       .set(updateData)
-      .where(eq(webhooks.id, input.id))
+      .where(and(eq(webhooks.id, input.id), eq(webhooks.organizationId, ctx.organization.id)))
       .returning();
 
     return {
@@ -193,7 +207,9 @@ export const webhooksRouter = router({
         });
       }
 
-      await db.delete(webhooks).where(eq(webhooks.id, input.id));
+      await db
+        .delete(webhooks)
+        .where(and(eq(webhooks.id, input.id), eq(webhooks.organizationId, ctx.organization.id)));
 
       return { success: true };
     }),
@@ -234,7 +250,7 @@ export const webhooksRouter = router({
           secret: newSecret,
           updatedAt: new Date(),
         })
-        .where(eq(webhooks.id, input.id))
+        .where(and(eq(webhooks.id, input.id), eq(webhooks.organizationId, ctx.organization.id)))
         .returning();
 
       return {
@@ -247,6 +263,14 @@ export const webhooksRouter = router({
    * Test a webhook by sending a test event
    */
   test: organizationProcedure.input(testWebhookSchema).mutation(async ({ ctx, input }) => {
+    // Sending is a change on the receiving side, so it takes the right to update
+    if (!ctx.ability.can('update', 'Webhook')) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: 'You do not have permission to test webhooks',
+      });
+    }
+
     // Verify ownership
     const existing = await db
       .select()
@@ -284,6 +308,13 @@ export const webhooksRouter = router({
    * List webhook deliveries
    */
   deliveries: organizationProcedure.input(listDeliveriesSchema).query(async ({ ctx, input }) => {
+    if (!ctx.ability.can('read', 'Webhook')) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: 'You do not have permission to view webhook deliveries',
+      });
+    }
+
     const { webhookId, status, limit, offset } = input;
 
     // One where() with every condition: a second where() call replaces the first, which would
