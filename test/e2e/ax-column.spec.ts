@@ -55,6 +55,27 @@ test.describe('AX migration columns', () => {
       .click();
     await expect(page).toHaveURL(new RegExp(`${path}$`));
 
+    // The whole card leads to the article (#344): its image and "read the article" too
+    await page.goto('/ja/ax-migration/column');
+    await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
+      'content',
+      /^https?:\/\/.+\/images\/og\/ax-column-ja\.png$/
+    );
+    await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute(
+      'content',
+      'summary_large_image'
+    );
+    const card = page.locator('li > article').first();
+    await expect(card.getByRole('link')).toHaveCount(1);
+    // A click where the image or the text is shown lands on the stretched link above them
+    for (const target of [card.locator('img'), card.getByText('記事を読む')]) {
+      const box = await target.boundingBox();
+      if (!box) throw new Error('the card part is not shown');
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      await expect(page).toHaveURL(new RegExp(`${path}$`));
+      await page.goBack();
+    }
+
     const missing = await page.goto('/ja/ax-migration/column/no-such-article');
     expect(missing?.status()).toBe(404);
   });

@@ -17,7 +17,7 @@ export const accessOfficeSupportEnd: Column = {
   related: 'access',
   cta: 'access-diagnosis',
   thumbnail: {
-    icon: 'calendar-x',
+    icon: 'shield-alert',
     lines: [
       'Access 2016・2019・2021 の',
       'サポート終了：使い続けると',

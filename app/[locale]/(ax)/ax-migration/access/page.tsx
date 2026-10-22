@@ -18,6 +18,7 @@ import { AxFloatingCta } from '@/components/features/ax-site/ax-floating-cta';
 import { AxLandingOnly, AxLandingView } from '@/components/features/ax-site/ax-landing-view';
 import { AxSiteShell } from '@/components/features/ax-site/ax-site-shell';
 import { AxFaq, AxFinalCta } from '@/components/features/ax-site/landing-sections';
+import { axShareImage } from '@/lib/features/ax-site/share-images';
 import { robotsFor } from '@/lib/seo/indexing';
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
@@ -30,6 +31,9 @@ export async function generateMetadata({ params }: AxAccessPageProps): Promise<M
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: 'axAccess.meta' });
   const site = await getTranslations({ locale, namespace: 'axSite.meta' });
+  const messages = await getTranslations({ locale });
+  // Share image (#344): the hero heading, also its alt text
+  const image = axShareImage('ax-access', locale, messages('axAccess.hero.title'));
   return {
     title: { absolute: t('title') },
     description: t('description'),
@@ -47,8 +51,14 @@ export async function generateMetadata({ params }: AxAccessPageProps): Promise<M
       title: t('title'),
       description: t('description'),
       siteName: site('siteName'),
+      images: [image],
     },
-    twitter: { card: 'summary', title: t('title'), description: t('description') },
+    twitter: {
+      card: 'summary_large_image',
+      title: t('title'),
+      description: t('description'),
+      images: [image],
+    },
     // Indexed only after public launch (test mode off, which needs the publication approval)
     robots: robotsFor('/ax-migration/access'),
   };

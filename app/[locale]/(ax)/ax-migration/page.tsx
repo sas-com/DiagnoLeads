@@ -13,6 +13,7 @@ import {
   AxSteps,
   AxTargets,
 } from '@/components/features/ax-site/landing-sections';
+import { axShareImage } from '@/lib/features/ax-site/share-images';
 import { robotsFor } from '@/lib/seo/indexing';
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
@@ -24,6 +25,9 @@ interface AxMigrationPageProps {
 export async function generateMetadata({ params }: AxMigrationPageProps): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: 'axSite.meta' });
+  const messages = await getTranslations({ locale });
+  // Share image (#344): the hero heading, also its alt text
+  const image = axShareImage('ax-migration', locale, messages('axSite.hero.title'));
   return {
     title: { absolute: t('title') },
     description: t('description'),
@@ -41,8 +45,14 @@ export async function generateMetadata({ params }: AxMigrationPageProps): Promis
       title: t('title'),
       description: t('description'),
       siteName: t('siteName'),
+      images: [image],
     },
-    twitter: { card: 'summary', title: t('title'), description: t('description') },
+    twitter: {
+      card: 'summary_large_image',
+      title: t('title'),
+      description: t('description'),
+      images: [image],
+    },
     // Indexed only after public launch (test mode off, which needs the publication approval)
     robots: robotsFor('/ax-migration'),
   };

@@ -216,6 +216,28 @@ describe('AX migration landing page metadata', () => {
     for (const text of [title, metadata.description ?? '']) expect(text).not.toMatch(/Access/);
     expect(metadata.alternates?.canonical).toBe('/ja/ax-migration');
   });
+
+  it('shares a large image of the hero heading with an absolute URL (#344)', async () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://example.jp');
+    const image = {
+      url: 'https://example.jp/images/og/ax-migration-ja.png',
+      width: 1200,
+      height: 630,
+      alt: '今の基幹システムのまま、AI時代の経営判断はできますか？',
+    };
+    const metadata = await generateMetadata({ params: Promise.resolve({ locale: 'ja' }) });
+    // A page-level openGraph replaces the layout one: it keeps its own type and site name
+    expect(metadata.openGraph).toMatchObject({
+      type: 'website',
+      siteName: 'エス・エー・エス株式会社',
+      images: [image],
+    });
+    expect(metadata.twitter).toMatchObject({ card: 'summary_large_image', images: [image] });
+    const english = await generateMetadata({ params: Promise.resolve({ locale: 'en' }) });
+    expect(english.openGraph?.images).toEqual([
+      expect.objectContaining({ url: 'https://example.jp/images/og/ax-migration-en.png' }),
+    ]);
+  });
 });
 
 describe('AxSiteHeader', () => {

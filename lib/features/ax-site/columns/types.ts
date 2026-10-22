@@ -41,18 +41,21 @@ export type ColumnCta = 'access-diagnosis';
 
 /**
  * Line icons a thumbnail can show (lucide names; scripts/generate-column-thumbnails.ts maps each
- * to its lucide icon, so a key without an icon fails the type check there)
+ * to its lucide icon, so a key without an icon fails the type check there). The share images of
+ * the landing pages and the column list use the same set (share-images.ts).
  */
 export const COLUMN_THUMBNAIL_ICONS = [
-  'calendar-x',
   'shield-alert',
-  'git-fork',
+  'signpost',
+  'split',
   'scale',
   'folder-open',
   'users',
   'file-lock',
   'database',
   'hard-drive',
+  'server-cog',
+  'book-open',
 ] as const;
 export type ColumnThumbnailIcon = (typeof COLUMN_THUMBNAIL_ICONS)[number];
 
