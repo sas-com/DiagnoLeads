@@ -120,6 +120,7 @@
     },
   },
   "patchedDependencies": {
+    "sonner@1.7.0": "patches/sonner@1.7.0.patch",
     "drizzle-orm@0.45.4": "patches/drizzle-orm@0.45.4.patch",
   },
   "overrides": {
