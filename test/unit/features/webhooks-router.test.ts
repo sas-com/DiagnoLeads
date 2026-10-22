@@ -8,20 +8,6 @@ vi.mock("@/lib/db/rls", () => ({
 	setCurrentUser: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("@/lib/auth/permissions", () => ({
-	defineAbilitiesFor: vi.fn((user, membership) => ({
-		can: vi.fn((action: string) => {
-			if (
-				membership.role === "member" &&
-				(action === "create" || action === "delete")
-			) {
-				return false;
-			}
-			return true;
-		}),
-	})),
-}));
-
 vi.mock("@/lib/features/webhooks/services/webhook-service", () => ({
 	generateWebhookSecret: vi.fn(() => "test-secret-12345678901234567890"),
 	triggerWebhooks: vi.fn().mockResolvedValue({ triggered: 1, failed: 0 }),
@@ -488,6 +474,69 @@ describe("Webhooks Router", () => {
 			});
 
 			expect(Array.isArray(result)).toBe(true);
+		});
+	});
+
+	describe("role permissions", () => {
+		/** A caller whose membership in the organization has the given role */
+		const callerAs = (role: string) => {
+			mockDb.query.organizationMembers.findFirst.mockResolvedValue({
+				...mockMembership,
+				role,
+			});
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			return appRouter.createCaller(mockContext as any);
+		};
+
+		const reads = {
+			list: (caller: ReturnType<typeof callerAs>) =>
+				caller.webhooks.list({ organizationId: TEST_ORG_ID }),
+			get: (caller: ReturnType<typeof callerAs>) =>
+				caller.webhooks.get({ organizationId: TEST_ORG_ID, id: TEST_WEBHOOK_ID }),
+			deliveries: (caller: ReturnType<typeof callerAs>) =>
+				caller.webhooks.deliveries({ organizationId: TEST_ORG_ID }),
+		};
+
+		// Roles without any right on webhooks (lib/auth/permissions.ts)
+		for (const role of ["parent_viewer", "group_admin"]) {
+			for (const [name, call] of Object.entries(reads)) {
+				it(`refuses ${name} to ${role}`, async () => {
+					await expect(call(callerAs(role))).rejects.toMatchObject({
+						code: "FORBIDDEN",
+					});
+				});
+			}
+
+			it(`refuses test to ${role}`, async () => {
+				await expect(
+					callerAs(role).webhooks.test({
+						organizationId: TEST_ORG_ID,
+						id: TEST_WEBHOOK_ID,
+					}),
+				).rejects.toMatchObject({ code: "FORBIDDEN" });
+			});
+		}
+
+		it("lets a member read but not send a test", async () => {
+			const caller = callerAs("member");
+			mockDbClientRef.current!.select.mockReturnValue({
+				from: vi.fn().mockReturnValue({
+					where: vi.fn().mockReturnValue({
+						orderBy: vi.fn().mockReturnValue({
+							limit: vi.fn().mockReturnValue({
+								offset: vi.fn().mockResolvedValue([mockWebhook]),
+							}),
+						}),
+					}),
+				}),
+			});
+			await expect(
+				caller.webhooks.list({ organizationId: TEST_ORG_ID }),
+			).resolves.toBeDefined();
+
+			await expect(
+				caller.webhooks.test({ organizationId: TEST_ORG_ID, id: TEST_WEBHOOK_ID }),
+			).rejects.toMatchObject({ code: "FORBIDDEN" });
 		});
 	});
 });
