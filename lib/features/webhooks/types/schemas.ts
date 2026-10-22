@@ -76,7 +76,16 @@ export const updateWebhookSchema = z.object({
   url: z.string().url().optional(),
   events: z.array(z.enum(webhookEventTypes)).min(1).optional(),
   status: z.enum(webhookStatuses).optional(),
-  headers: z.record(z.string()).optional(),
+  // The complete list of custom headers. A header without a value (or with
+  // WEBHOOK_HEADER_MASK) keeps its stored value; a name left out is removed (#314)
+  headers: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(256),
+        value: z.string().optional(),
+      })
+    )
+    .optional(),
   retryConfig: z
     .object({
       maxRetries: z.number().int().min(0).max(10),

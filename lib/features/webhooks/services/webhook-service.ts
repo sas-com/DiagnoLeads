@@ -299,6 +299,21 @@ async function sendNewDelivery(
 }
 
 /**
+ * Send one delivery to the given webhook only, whatever the other webhooks subscribed to the
+ * event (the settings page's test send, #314). Same delivery record, timeout and retry lease
+ * as an event delivery.
+ */
+export async function sendWebhookDelivery(
+  webhook: Webhook,
+  eventType: WebhookEventType,
+  data: Record<string, unknown>,
+  { database = db }: { database?: Database } = {}
+): Promise<{ success: boolean }> {
+  const success = await sendNewDelivery(database, webhook, webhook.organizationId, eventType, data);
+  return { success };
+}
+
+/**
  * Trigger webhooks for a specific event. Endpoints are sent to in parallel, so one slow
  * endpoint does not delay the others.
  */

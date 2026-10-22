@@ -166,7 +166,7 @@ describe('updateWebhookSchema', () => {
       url: 'https://new-url.com/webhook',
       events: ['lead.deleted'] as const,
       status: 'active' as const,
-      headers: { 'X-New-Header': 'value' },
+      headers: [{ name: 'X-New-Header', value: 'value' }, { name: 'X-Kept-Header' }],
     };
 
     const result = updateWebhookSchema.parse(input);

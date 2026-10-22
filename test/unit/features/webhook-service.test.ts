@@ -28,6 +28,7 @@ import {
   generateWebhookSecret,
   generateWebhookSignature,
   processWebhookRetries,
+  sendWebhookDelivery,
   triggerWebhooks,
   verifyWebhookSignature,
 } from '@/lib/features/webhooks/services/webhook-service';
@@ -361,6 +362,53 @@ describe('webhook-service', () => {
       expect(db.set).toHaveBeenCalledWith(
         expect.objectContaining({ status: 'failed', attempts: 1, nextRetryAt: null })
       );
+    });
+  });
+
+  describe('sendWebhookDelivery (#314)', () => {
+    // Made-up values: the stored headers are sent as-is, only the browser never sees them
+    const webhook = {
+      id: 'webhook-1',
+      organizationId: 'org-1',
+      name: 'CRM',
+      url: 'https://hooks.example.com/one',
+      secret: 'whsec_test',
+      events: ['lead.created' as const],
+      status: 'inactive' as const,
+      headers: { Authorization: 'Bearer made-up-token-314', 'X-Tenant': 'tenant-made-up' },
+      retryConfig: { maxRetries: 3, retryDelayMs: 5000 },
+      lastTriggeredAt: null,
+      failureCount: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    it('sends one delivery to the given webhook with the stored header values', async () => {
+      (db.returning as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: 'delivery-1' }]);
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        text: vi.fn().mockResolvedValue('ok'),
+      });
+
+      await expect(sendWebhookDelivery(webhook, 'lead.created', { test: true })).resolves.toEqual({
+        success: true,
+      });
+
+      // No lookup of other webhooks subscribed to the event
+      expect(db.select).not.toHaveBeenCalled();
+      expect(db.values).toHaveBeenCalledTimes(1);
+      expect(db.values).toHaveBeenCalledWith(
+        expect.objectContaining({ webhookId: 'webhook-1', eventType: 'lead.created' })
+      );
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      const [url, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(url).toBe('https://hooks.example.com/one');
+      expect((init as RequestInit).headers).toMatchObject({
+        Authorization: 'Bearer made-up-token-314',
+        'X-Tenant': 'tenant-made-up',
+      });
     });
   });
 

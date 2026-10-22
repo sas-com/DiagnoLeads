@@ -1,4 +1,9 @@
 import type { Organization, OrganizationMember, User } from "@/lib/db/schema";
+import { WEBHOOK_HEADER_MASK } from "@/lib/features/webhooks/services/webhook-headers";
+import {
+	sendWebhookDelivery,
+	triggerWebhooks,
+} from "@/lib/features/webhooks/services/webhook-service";
 import { appRouter } from "@/server/routers/_app";
 import { TRPCError } from "@trpc/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -11,6 +16,7 @@ vi.mock("@/lib/db/rls", () => ({
 vi.mock("@/lib/features/webhooks/services/webhook-service", () => ({
 	generateWebhookSecret: vi.fn(() => "test-secret-12345678901234567890"),
 	triggerWebhooks: vi.fn().mockResolvedValue({ triggered: 1, failed: 0 }),
+	sendWebhookDelivery: vi.fn().mockResolvedValue({ success: true }),
 }));
 
 // Use vi.hoisted to ensure variables are available before vi.mock hoisting
@@ -23,7 +29,8 @@ const { createMockWebhook, createMockDbClient, mockDbClientRef } = vi.hoisted(()
 		events: ["lead.created", "lead.updated"],
 		secret: "webhook-secret-123456789012345678",
 		status: "active",
-		headers: { "X-Custom-Header": "value" },
+		// Made-up value; it must never come back to a browser (#314)
+		headers: { "X-Custom-Header": "made-up-header-value-314" },
 		retryConfig: { maxRetries: 3, retryDelayMs: 5000 },
 		lastTriggeredAt: new Date(),
 		failureCount: 0,
@@ -155,36 +162,14 @@ describe("Webhooks Router", () => {
 	let mockDb: ReturnType<typeof createMockDb>;
 	let mockContext: ReturnType<typeof createMockContext>;
 
+	/**
+	 * The router queries ctx.db; the same object stands for the db client module, so a test can
+	 * set up either reference
+	 */
 	function createMockDb() {
-		return {
-			query: {
-				organizationMembers: {
-					findFirst: vi.fn().mockResolvedValue(mockMembership),
-				},
-				webhooks: {
-					findFirst: vi.fn(),
-					findMany: vi.fn(),
-				},
-				webhookDeliveries: {
-					findFirst: vi.fn(),
-					findMany: vi.fn(),
-				},
-			},
-			select: vi.fn().mockReturnThis(),
-			from: vi.fn().mockReturnThis(),
-			where: vi.fn().mockReturnThis(),
-			orderBy: vi.fn().mockReturnThis(),
-			limit: vi.fn().mockReturnThis(),
-			offset: vi.fn().mockReturnThis(),
-			insert: vi.fn().mockReturnThis(),
-			values: vi.fn().mockReturnThis(),
-			returning: vi.fn(),
-			update: vi.fn().mockReturnThis(),
-			set: vi.fn().mockReturnThis(),
-			delete: vi.fn().mockReturnThis(),
-			innerJoin: vi.fn().mockReturnThis(),
-			$dynamic: vi.fn().mockReturnThis(),
-		};
+		const client = createMockDbClient(mockWebhook);
+		client.query.organizationMembers.findFirst.mockResolvedValue(mockMembership);
+		return client;
 	}
 
 	function createMockContext() {
@@ -202,11 +187,28 @@ describe("Webhooks Router", () => {
 		};
 	}
 
+	/** Rows returned by the deliveries query (select, join, where, order, limit, offset) */
+	function mockDeliveryRows(rows: unknown[]) {
+		mockDb.select.mockReturnValue({
+			from: vi.fn().mockReturnValue({
+				innerJoin: vi.fn().mockReturnValue({
+					where: vi.fn().mockReturnValue({
+						orderBy: vi.fn().mockReturnValue({
+							limit: vi.fn().mockReturnValue({
+								offset: vi.fn().mockResolvedValue(rows),
+							}),
+						}),
+					}),
+				}),
+			}),
+		} as unknown as ReturnType<typeof mockDb.select>);
+	}
+
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockDb = createMockDb();
 		mockContext = createMockContext();
-		mockDbClientRef.current = createMockDbClient(mockWebhook);
+		mockDbClientRef.current = mockDb;
 	});
 
 	describe("list", () => {
@@ -449,7 +451,7 @@ describe("Webhooks Router", () => {
 	describe("deliveries", () => {
 		it("should return delivery history", async () => {
 			const resultMock = [{ delivery: mockDelivery, webhookName: "Lead Created Webhook" }];
-			mockDb.offset.mockResolvedValueOnce(resultMock);
+			mockDeliveryRows(resultMock);
 
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			const caller = appRouter.createCaller(mockContext as any);
@@ -537,6 +539,233 @@ describe("Webhooks Router", () => {
 			await expect(
 				caller.webhooks.test({ organizationId: TEST_ORG_ID, id: TEST_WEBHOOK_ID }),
 			).rejects.toMatchObject({ code: "FORBIDDEN" });
+		});
+	});
+	describe("header values, delivery responses and the test send (#314)", () => {
+		const HEADER_VALUE = "made-up-header-value-314";
+
+		const callerAs = (role: string) => {
+			mockDb.query.organizationMembers.findFirst.mockResolvedValue({
+				...mockMembership,
+				role,
+			});
+			return appRouter.createCaller(
+				mockContext as unknown as Parameters<typeof appRouter.createCaller>[0],
+			);
+		};
+
+		for (const role of ["owner", "admin", "member", "group_owner"]) {
+			it(`never returns a header value to ${role} from list or get`, async () => {
+				const caller = callerAs(role);
+				const list = await caller.webhooks.list({ organizationId: TEST_ORG_ID });
+				const one = await caller.webhooks.get({
+					organizationId: TEST_ORG_ID,
+					id: TEST_WEBHOOK_ID,
+				});
+
+				expect(JSON.stringify(list)).not.toContain(HEADER_VALUE);
+				expect(JSON.stringify(one)).not.toContain(HEADER_VALUE);
+				expect(list.webhooks[0].headers).toEqual([
+					{ name: "X-Custom-Header", masked: true },
+				]);
+				expect(one.headers).toEqual([{ name: "X-Custom-Header", masked: true }]);
+			});
+		}
+
+		it("never returns a header value from create, update or regenerateSecret", async () => {
+			const caller = callerAs("admin");
+			const created = await caller.webhooks.create({
+				organizationId: TEST_ORG_ID,
+				name: "New Webhook",
+				url: "https://example.com/new-webhook",
+				events: ["lead.created"],
+				headers: { "X-Custom-Header": HEADER_VALUE },
+			});
+			const updated = await caller.webhooks.update({
+				organizationId: TEST_ORG_ID,
+				id: TEST_WEBHOOK_ID,
+				name: "Renamed",
+			});
+			const regenerated = await caller.webhooks.regenerateSecret({
+				organizationId: TEST_ORG_ID,
+				id: TEST_WEBHOOK_ID,
+			});
+
+			for (const result of [created, updated, regenerated]) {
+				expect(JSON.stringify(result)).not.toContain(HEADER_VALUE);
+				expect(result.headers).toEqual([{ name: "X-Custom-Header", masked: true }]);
+			}
+		});
+
+		it("tells the page which buttons the user may use", async () => {
+			const asMember = await callerAs("member").webhooks.list({
+				organizationId: TEST_ORG_ID,
+			});
+			expect(asMember.permissions).toEqual({
+				canCreate: false,
+				canUpdate: false,
+				canDelete: false,
+			});
+
+			const asAdmin = await callerAs("admin").webhooks.list({
+				organizationId: TEST_ORG_ID,
+			});
+			expect(asAdmin.permissions).toEqual({
+				canCreate: true,
+				canUpdate: true,
+				canDelete: true,
+			});
+		});
+
+		describe("update merges the headers", () => {
+			const storedWebhook = {
+				...mockWebhook,
+				headers: {
+					Authorization: "Bearer made-up-old",
+					"X-Keep": "keep-made-up",
+					"X-Masked": "masked-made-up",
+					"X-Drop": "drop-made-up",
+				},
+			};
+
+			/** The values the update writes */
+			function captureSet() {
+				mockDb.select.mockReturnValue({
+					from: vi.fn().mockReturnValue({
+						where: vi.fn().mockReturnValue({
+							limit: vi.fn().mockResolvedValue([storedWebhook]),
+						}),
+					}),
+				} as unknown as ReturnType<typeof mockDb.select>);
+				const set = vi.fn().mockReturnValue({
+					where: vi.fn().mockReturnValue({
+						returning: vi.fn().mockResolvedValue([storedWebhook]),
+					}),
+				});
+				mockDb.update.mockReturnValue({ set } as unknown as ReturnType<
+					typeof mockDb.update
+				>);
+				return set;
+			}
+
+			it("keeps a masked or missing value, replaces a new one and drops a removed name", async () => {
+				const set = captureSet();
+				const result = await callerAs("admin").webhooks.update({
+					organizationId: TEST_ORG_ID,
+					id: TEST_WEBHOOK_ID,
+					headers: [
+						{ name: "Authorization", value: "Bearer made-up-new" },
+						{ name: "X-Keep" },
+						{ name: "X-Masked", value: WEBHOOK_HEADER_MASK },
+						{ name: "X-Added", value: "added-made-up" },
+					],
+				});
+
+				expect(set).toHaveBeenCalledWith(
+					expect.objectContaining({
+						headers: {
+							Authorization: "Bearer made-up-new",
+							"X-Keep": "keep-made-up",
+							"X-Masked": "masked-made-up",
+							"X-Added": "added-made-up",
+						},
+					}),
+				);
+				expect(JSON.stringify(result)).not.toContain("made-up");
+			});
+
+			it("leaves the headers alone when none are sent", async () => {
+				const set = captureSet();
+				await callerAs("admin").webhooks.update({
+					organizationId: TEST_ORG_ID,
+					id: TEST_WEBHOOK_ID,
+					name: "Renamed",
+				});
+				expect(set.mock.calls[0][0]).not.toHaveProperty("headers");
+			});
+
+			it("refuses a new header without a value", async () => {
+				const set = captureSet();
+				await expect(
+					callerAs("admin").webhooks.update({
+						organizationId: TEST_ORG_ID,
+						id: TEST_WEBHOOK_ID,
+						headers: [{ name: "X-Unknown" }],
+					}),
+				).rejects.toMatchObject({ code: "BAD_REQUEST" });
+				expect(set).not.toHaveBeenCalled();
+			});
+		});
+
+		describe("deliveries", () => {
+			const row = {
+				delivery: {
+					...mockDelivery,
+					status: "failed",
+					statusCode: 502,
+					response: '{"made-up":"receiver answer"}',
+					error: "HTTP 502: made-up upstream internals",
+				},
+				webhookName: "Lead Created Webhook",
+			};
+
+			it("hides the response body and the error from a member", async () => {
+				const caller = callerAs("member");
+				mockDeliveryRows([row]);
+				const result = await caller.webhooks.deliveries({ organizationId: TEST_ORG_ID });
+
+				expect(result.canViewDetails).toBe(false);
+				expect(result.deliveries[0].response).toBeNull();
+				expect(result.deliveries[0].error).toBeNull();
+				expect(JSON.stringify(result)).not.toContain("receiver answer");
+				expect(JSON.stringify(result)).not.toContain("upstream internals");
+				// The outcome is still there
+				expect(result.deliveries[0]).toMatchObject({
+					status: "failed",
+					statusCode: 502,
+					attempts: 1,
+				});
+			});
+
+			for (const role of ["owner", "admin", "group_owner"]) {
+				it(`shows the response body and the error to ${role}`, async () => {
+					const caller = callerAs(role);
+					mockDeliveryRows([row]);
+					const result = await caller.webhooks.deliveries({ organizationId: TEST_ORG_ID });
+
+					expect(result.canViewDetails).toBe(true);
+					expect(result.deliveries[0].response).toBe('{"made-up":"receiver answer"}');
+					expect(result.deliveries[0].error).toBe("HTTP 502: made-up upstream internals");
+				});
+			}
+		});
+
+		describe("test send", () => {
+			it("sends to the chosen webhook only", async () => {
+				const result = await callerAs("admin").webhooks.test({
+					organizationId: TEST_ORG_ID,
+					id: TEST_WEBHOOK_ID,
+				});
+
+				expect(triggerWebhooks).not.toHaveBeenCalled();
+				expect(sendWebhookDelivery).toHaveBeenCalledTimes(1);
+				expect(sendWebhookDelivery).toHaveBeenCalledWith(
+					expect.objectContaining({ id: TEST_WEBHOOK_ID }),
+					"lead.created",
+					expect.objectContaining({ test: true }),
+					{ database: mockDb },
+				);
+				expect(result).toEqual({ success: true, triggered: 1, failed: 0 });
+			});
+
+			it("reports a failed attempt", async () => {
+				vi.mocked(sendWebhookDelivery).mockResolvedValueOnce({ success: false });
+				const result = await callerAs("admin").webhooks.test({
+					organizationId: TEST_ORG_ID,
+					id: TEST_WEBHOOK_ID,
+				});
+				expect(result).toEqual({ success: false, triggered: 0, failed: 1 });
+			});
 		});
 	});
 });

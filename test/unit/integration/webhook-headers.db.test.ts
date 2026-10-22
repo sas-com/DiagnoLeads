@@ -1,0 +1,248 @@
+/**
+ * Webhook custom headers, delivery responses and the test send (#314) on a real PostgreSQL:
+ * - list / get never return a header value, whatever the role
+ * - an update keeps a stored value unless a new one is given, and drops a removed name
+ * - a delivery still sends the stored values
+ * - the receiver's response body and the error text are shown to those who manage webhooks;
+ *   members see the outcome only
+ * - the test send reaches the chosen webhook only, even when another one subscribes to the event
+ * The HTTP side is a stubbed fetch. All names and values are made up.
+ *
+ * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
+ *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/dl_test \
+ *     bunx vitest --run test/unit/integration/webhook-headers.db.test.ts
+ */
+import * as schema from '@/lib/db/schema';
+import {
+  type OrganizationRole,
+  organizationMembers,
+  organizations,
+  users,
+  webhookDeliveries,
+  webhooks,
+} from '@/lib/db/schema';
+import { appRouter } from '@/server/routers/_app';
+import { eq, inArray } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/lib/db/rls', () => ({ setCurrentUser: vi.fn().mockResolvedValue(undefined) }));
+
+const url = process.env.TEST_DATABASE_URL;
+
+const TOKEN = 'Bearer made-up-token-314';
+const TENANT = 'tenant-made-up-314';
+
+type Caller = ReturnType<typeof appRouter.createCaller>;
+
+describe.skipIf(!url)('webhook headers and test send (PostgreSQL)', () => {
+  const client = url ? postgres(url, { max: 4 }) : null;
+  // biome-ignore lint/style/noNonNullAssertion: guarded by skipIf
+  const pg = (client ? drizzle(client, { schema }) : null)!;
+  const unique = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const userIds: string[] = [];
+  let org: string;
+  let chosen: string;
+  let other: string;
+  const callers = {} as Record<'owner' | 'admin' | 'member' | 'group_owner', Caller>;
+  const fetchMock = vi.fn();
+
+  async function createWebhook(name: string, headers: Record<string, string>) {
+    const [row] = await pg
+      .insert(webhooks)
+      .values({
+        organizationId: org,
+        name,
+        url: `https://hooks.example.com/${unique()}`,
+        secret: 'whsec_test',
+        events: ['diagnostic.submitted'],
+        headers,
+      })
+      .returning();
+    return row.id;
+  }
+
+  async function callerAs(role: OrganizationRole): Promise<Caller> {
+    const [user] = await pg
+      .insert(users)
+      .values({ email: `headers-${role}-${unique()}@example.com`, name: `ヘッダー ${role}` })
+      .returning();
+    userIds.push(user.id);
+    await pg.insert(organizationMembers).values({ organizationId: org, userId: user.id, role });
+    return appRouter.createCaller({
+      db: pg,
+      session: { session: { id: 's', userId: user.id }, user },
+      user,
+    } as unknown as Parameters<typeof appRouter.createCaller>[0]);
+  }
+
+  const storedHeaders = async (id: string) =>
+    (await pg.select({ headers: webhooks.headers }).from(webhooks).where(eq(webhooks.id, id)))[0]
+      ?.headers;
+
+  beforeAll(async () => {
+    const [row] = await pg
+      .insert(organizations)
+      .values({ name: 'ヘッダーテスト株式会社', slug: `headers-${unique()}` })
+      .returning();
+    org = row.id;
+    chosen = await createWebhook('選んだ連携', { Authorization: TOKEN, 'X-Tenant': TENANT });
+    other = await createWebhook('別の連携', { Authorization: 'Bearer made-up-other' });
+    for (const role of ['owner', 'admin', 'member', 'group_owner'] as const) {
+      callers[role] = await callerAs(role);
+    }
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    fetchMock.mockReset();
+  });
+
+  afterAll(async () => {
+    await pg.delete(organizations).where(eq(organizations.id, org));
+    if (userIds.length > 0) await pg.delete(users).where(inArray(users.id, userIds));
+    await client?.end();
+  });
+
+  for (const role of ['owner', 'admin', 'member', 'group_owner'] as const) {
+    it(`list and get return header names only to ${role}`, async () => {
+      const list = await callers[role].webhooks.list({ organizationId: org, limit: 100 });
+      const one = await callers[role].webhooks.get({ organizationId: org, id: chosen });
+
+      for (const result of [list, one]) {
+        expect(JSON.stringify(result)).not.toContain('made-up');
+      }
+      expect(one.headers).toEqual([
+        { name: 'Authorization', masked: true },
+        { name: 'X-Tenant', masked: true },
+      ]);
+    });
+  }
+
+  it('an update keeps masked values, replaces new ones and removes dropped names', async () => {
+    const id = await createWebhook('更新する連携', {
+      Authorization: 'Bearer made-up-old',
+      'X-Keep': 'keep-made-up',
+      'X-Drop': 'drop-made-up',
+    });
+
+    const result = await callers.admin.webhooks.update({
+      organizationId: org,
+      id,
+      headers: [
+        { name: 'Authorization', value: 'Bearer made-up-new' },
+        { name: 'X-Keep' },
+        { name: 'X-Added', value: 'added-made-up' },
+      ],
+    });
+
+    expect(JSON.stringify(result)).not.toContain('made-up');
+    expect(await storedHeaders(id)).toEqual({
+      Authorization: 'Bearer made-up-new',
+      'X-Keep': 'keep-made-up',
+      'X-Added': 'added-made-up',
+    });
+
+    // Saving the edit form unchanged sends every name without a value: nothing changes
+    await callers.admin.webhooks.update({
+      organizationId: org,
+      id,
+      headers: [{ name: 'Authorization' }, { name: 'X-Keep' }, { name: 'X-Added' }],
+    });
+    expect(await storedHeaders(id)).toEqual({
+      Authorization: 'Bearer made-up-new',
+      'X-Keep': 'keep-made-up',
+      'X-Added': 'added-made-up',
+    });
+  });
+
+  it('the test send makes one delivery, to the chosen webhook, with the stored header values', async () => {
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      text: async () => '{"made-up":"receiver answer"}',
+    });
+
+    const result = await callers.admin.webhooks.test({ organizationId: org, id: chosen });
+    expect(result).toEqual({ success: true, triggered: 1, failed: 0 });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.headers).toMatchObject({ Authorization: TOKEN, 'X-Tenant': TENANT });
+
+    const deliveries = await pg
+      .select()
+      .from(webhookDeliveries)
+      .where(inArray(webhookDeliveries.webhookId, [chosen, other]));
+    expect(deliveries).toHaveLength(1);
+    expect(deliveries[0]).toMatchObject({
+      webhookId: chosen,
+      eventType: 'diagnostic.submitted',
+      status: 'success',
+      response: '{"made-up":"receiver answer"}',
+    });
+  });
+
+  it('shows the response body to a manager, the outcome only to a member', async () => {
+    const asMember = await callers.member.webhooks.deliveries({
+      organizationId: org,
+      webhookId: chosen,
+    });
+    expect(asMember.canViewDetails).toBe(false);
+    expect(asMember.deliveries).toHaveLength(1);
+    expect(asMember.deliveries[0]).toMatchObject({
+      status: 'success',
+      statusCode: 200,
+      attempts: 1,
+      response: null,
+      error: null,
+    });
+    expect(JSON.stringify(asMember)).not.toContain('receiver answer');
+
+    const asAdmin = await callers.admin.webhooks.deliveries({
+      organizationId: org,
+      webhookId: chosen,
+    });
+    expect(asAdmin.canViewDetails).toBe(true);
+    expect(asAdmin.deliveries[0].response).toBe('{"made-up":"receiver answer"}');
+  });
+
+  it('hides the error text of a failed delivery from a member', async () => {
+    const id = await createWebhook('失敗する連携', {});
+    await pg.insert(webhookDeliveries).values({
+      webhookId: id,
+      eventType: 'diagnostic.submitted',
+      payload: { id: unique(), event: 'diagnostic.submitted', data: {} },
+      status: 'failed',
+      statusCode: 502,
+      error: 'HTTP 502: made-up upstream internals',
+      response: 'made-up proxy page',
+      attempts: 3,
+      completedAt: new Date(),
+    });
+
+    const asMember = await callers.member.webhooks.deliveries({ organizationId: org, webhookId: id });
+    expect(asMember.canViewDetails).toBe(false);
+    expect(asMember.deliveries).toHaveLength(1);
+    expect(asMember.deliveries[0]).toMatchObject({
+      status: 'failed',
+      statusCode: 502,
+      attempts: 3,
+      error: null,
+      response: null,
+    });
+    expect(asMember.deliveries[0].createdAt).toBeInstanceOf(Date);
+    expect(asMember.deliveries[0].completedAt).toBeInstanceOf(Date);
+    expect(JSON.stringify(asMember)).not.toContain('made-up');
+
+    const asOwner = await callers.owner.webhooks.deliveries({ organizationId: org, webhookId: id });
+    expect(asOwner.canViewDetails).toBe(true);
+    expect(asOwner.deliveries[0]).toMatchObject({
+      error: 'HTTP 502: made-up upstream internals',
+      response: 'made-up proxy page',
+    });
+  });
+});
