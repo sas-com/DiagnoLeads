@@ -1,5 +1,6 @@
 import {
   type EmailBlock,
+  type EmailFooterLink,
   escapeHtml,
   renderEmail,
   safeUrl,
@@ -11,7 +12,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 const HOSTILE = `<script>alert("x")</script><img src=x onerror='y'>`;
 
-function render(blocks: EmailBlock[], extra: { brand?: string; footer?: string[] } = {}) {
+function render(
+  blocks: EmailBlock[],
+  extra: { brand?: string; footer?: string[]; footerLinks?: EmailFooterLink[] } = {}
+) {
   return renderEmail({ theme: 'internal', preheader: HOSTILE, blocks, ...extra });
 }
 
@@ -173,5 +177,53 @@ describe('renderEmail', () => {
       { type: 'paragraph', text: '本文' },
     ]);
     expect(text).toBe('本文');
+  });
+
+  describe('footer links', () => {
+    it('links safe footer links under the footer text and lists them in the text part', () => {
+      const { html, text } = renderEmail({
+        theme: 'customer',
+        brand: '架空システムズ',
+        preheader: 'x',
+        blocks: [{ type: 'paragraph', text: '本文' }],
+        footer: ['このメールは架空のお知らせです。'],
+        footerLinks: [
+          { label: '配信停止', url: 'https://app.example.com/unsubscribe?token=a&b=1' },
+          { label: HOSTILE, url: 'https://example.com/privacy' },
+        ],
+      });
+      expect(html).toContain('href="https://app.example.com/unsubscribe?token=a&amp;b=1"');
+      expect(html).toContain('href="https://example.com/privacy"');
+      expect(html).not.toContain('<script>');
+      expect(html).toContain('&lt;script&gt;');
+      expect(text).toBe(
+        [
+          '本文',
+          '----------------------------------------\nこのメールは架空のお知らせです。\n配信停止：https://app.example.com/unsubscribe?token=a&b=1',
+        ].join('\n\n') + `\n${HOSTILE}：https://example.com/privacy`
+      );
+    });
+
+    it('shows the label alone for a refused link, in html and text', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const { html, text } = render([{ type: 'paragraph', text: '本文' }], {
+          footerLinks: [{ label: '配信停止', url: 'javascript:alert(1)' }],
+        });
+        expect(html).not.toContain('javascript:');
+        expect(html).toContain('配信停止');
+        expect(text).toBe('本文\n\n----------------------------------------\n配信停止');
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('writes the footer area for links alone', () => {
+      const { html, text } = render([{ type: 'paragraph', text: '本文' }], {
+        footerLinks: [{ label: 'Privacy', url: 'https://example.com/privacy' }],
+      });
+      expect(html).toContain('href="https://example.com/privacy"');
+      expect(text).toBe('本文\n\n----------------------------------------\nPrivacy: https://example.com/privacy');
+    });
   });
 });

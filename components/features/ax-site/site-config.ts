@@ -8,22 +8,8 @@ export const AX_SITE_LINKS = {
   relatedService: 'https://maru2-dx.com/',
 } as const;
 
-/** Phone and email of the DX Services Division, as printed on the AX migration brochure */
-export const AX_CONTACT = {
-  email: 'dx-agency@sas-com.com',
-  phone: '03-5427-3663',
-  phoneE164: '+81354273663',
-} as const;
-
-/** Privacy policy linked from the consent text and the footer */
-export function axPrivacyPolicyUrl(): string | undefined {
-  return process.env.NEXT_PUBLIC_AX_PRIVACY_POLICY_URL || undefined;
-}
-
-/** Booking page for a consultation without taking the diagnosis (e.g. Microsoft Bookings) */
-export function axConsultationUrl(): string | undefined {
-  return process.env.NEXT_PUBLIC_AX_CONSULTATION_URL || undefined;
-}
+// Contact and policy links live in lib so server code (respondent mail) can use them (#154)
+export { AX_CONTACT, axConsultationUrl, axPrivacyPolicyUrl } from '@/lib/features/ax-site/contact';
 
 /** Last call to action and footer: the phone CTA bar stays hidden while they are on screen */
 export const AX_FINAL_SECTION_ID = 'ax-final';

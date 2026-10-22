@@ -1,0 +1,22 @@
+/**
+ * Contact details and policy links of the AX migration site, shared by the site components
+ * and server code such as the respondent mail (#154).
+ * Optional URLs come from environment variables; the links are hidden while they are not set.
+ */
+
+/** Phone and email of the DX Services Division, as printed on the AX migration brochure */
+export const AX_CONTACT = {
+  email: 'dx-agency@sas-com.com',
+  phone: '03-5427-3663',
+  phoneE164: '+81354273663',
+} as const;
+
+/** Privacy policy linked from the consent text and the footer */
+export function axPrivacyPolicyUrl(): string | undefined {
+  return process.env.NEXT_PUBLIC_AX_PRIVACY_POLICY_URL || undefined;
+}
+
+/** Booking page for a consultation without taking the diagnosis (e.g. Microsoft Bookings) */
+export function axConsultationUrl(): string | undefined {
+  return process.env.NEXT_PUBLIC_AX_CONSULTATION_URL || undefined;
+}
