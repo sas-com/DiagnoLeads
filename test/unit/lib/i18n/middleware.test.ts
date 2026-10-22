@@ -262,6 +262,8 @@ describe('Integration: shouldSkipI18nMiddleware', () => {
     expect(shouldSkipI18nMiddleware('/fonts/roboto.woff2')).toBe(false); // woff2 not in list
     // The PDF font the browser fetches (#189)
     expect(shouldSkipI18nMiddleware('/fonts/NotoSansJP-Regular-subset.ttf')).toBe(true);
+    // Documents offered on the AX result page, served as they are (#153)
+    expect(shouldSkipI18nMiddleware('/documents/ax-migration-pamphlet-ver01.pdf')).toBe(true);
     expect(shouldSkipI18nMiddleware('/styles/main.css')).toBe(true);
     expect(shouldSkipI18nMiddleware('/scripts/app.js')).toBe(true);
   });
