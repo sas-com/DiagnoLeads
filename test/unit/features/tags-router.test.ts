@@ -8,6 +8,12 @@ vi.mock("@/lib/db/rls", () => ({
 	setCurrentUser: vi.fn().mockResolvedValue(undefined),
 }));
 
+// The organization of lead and tag ids is checked on a real database in
+// test/unit/integration/tenant-scope.db.test.ts (#350)
+vi.mock("@/lib/multi-tenant/helpers/scope", () => ({
+	assertInOrganization: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("@/lib/auth/permissions", () => ({
 	defineAbilitiesFor: vi.fn((user, membership) => ({
 		can: vi.fn((action: string) => {

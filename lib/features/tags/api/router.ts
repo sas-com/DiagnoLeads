@@ -3,6 +3,7 @@
  * Handles CRUD operations for tags and lead-tag associations
  */
 import { leadTags, tags } from '@/lib/db/schema';
+import { assertInOrganization } from '@/lib/multi-tenant/helpers/scope';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { and, eq, inArray } from 'drizzle-orm';
@@ -209,6 +210,9 @@ export const tagsRouter = router({
       });
     }
 
+    await assertInOrganization(ctx.db, 'lead', input.organizationId, input.leadId);
+    await assertInOrganization(ctx.db, 'tag', input.organizationId, input.tagId);
+
     // Check if already exists
     const existing = await ctx.db.query.leadTags.findFirst({
       where: and(eq(leadTags.leadId, input.leadId), eq(leadTags.tagId, input.tagId)),
@@ -242,6 +246,7 @@ export const tagsRouter = router({
         });
       }
 
+      await assertInOrganization(ctx.db, 'lead', input.organizationId, input.leadId);
       await ctx.db
         .delete(leadTags)
         .where(and(eq(leadTags.leadId, input.leadId), eq(leadTags.tagId, input.tagId)));
@@ -259,6 +264,10 @@ export const tagsRouter = router({
         message: 'リードを更新する権限がありません',
       });
     }
+
+    // Both checked before anything is deleted
+    await assertInOrganization(ctx.db, 'lead', input.organizationId, input.leadId);
+    await assertInOrganization(ctx.db, 'tag', input.organizationId, input.tagIds);
 
     // Delete existing tags
     await ctx.db.delete(leadTags).where(eq(leadTags.leadId, input.leadId));
@@ -280,7 +289,7 @@ export const tagsRouter = router({
       })
       .from(leadTags)
       .innerJoin(tags, eq(leadTags.tagId, tags.id))
-      .where(eq(leadTags.leadId, input.leadId));
+      .where(and(eq(leadTags.leadId, input.leadId), eq(tags.organizationId, input.organizationId)));
 
     return result.map((r) => r.tag);
   }),
@@ -296,13 +305,15 @@ export const tagsRouter = router({
       });
     }
 
+    await assertInOrganization(ctx.db, 'lead', input.organizationId, input.leadId);
+
     const result = await ctx.db
       .select({
         tag: tags,
       })
       .from(leadTags)
       .innerJoin(tags, eq(leadTags.tagId, tags.id))
-      .where(eq(leadTags.leadId, input.leadId));
+      .where(and(eq(leadTags.leadId, input.leadId), eq(tags.organizationId, input.organizationId)));
 
     return result.map((r) => r.tag);
   }),
@@ -325,6 +336,10 @@ export const tagsRouter = router({
           message: 'リードを更新する権限がありません',
         });
       }
+
+      // Both checked before anything is deleted
+      await assertInOrganization(ctx.db, 'lead', input.organizationId, input.leadIds);
+      await assertInOrganization(ctx.db, 'tag', input.organizationId, input.tagIds);
 
       // Delete existing tags for all leads
       await ctx.db.delete(leadTags).where(inArray(leadTags.leadId, input.leadIds));

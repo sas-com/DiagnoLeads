@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { embedAccessLogs, embedConfigs } from '@/lib/db/schema';
+import { assertInOrganization } from '@/lib/multi-tenant/helpers/scope';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { and, desc, eq } from 'drizzle-orm';
@@ -68,6 +69,9 @@ export const embedRouter = router({
    * Returns the API key only once - it cannot be retrieved later
    */
   create: organizationProcedure.input(createEmbedConfigSchema).mutation(async ({ ctx, input }) => {
+    if (input.diagnosticTemplateId) {
+      await assertInOrganization(db, 'template', ctx.organization.id, input.diagnosticTemplateId);
+    }
     const apiKey = generateApiKey();
     const apiKeyHash = hashApiKey(apiKey);
 
@@ -114,6 +118,14 @@ export const embedRouter = router({
 
       if (!existing) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Embed config not found' });
+      }
+      if (input.data.diagnosticTemplateId) {
+        await assertInOrganization(
+          db,
+          'template',
+          ctx.organization.id,
+          input.data.diagnosticTemplateId
+        );
       }
 
       const [updated] = await db
