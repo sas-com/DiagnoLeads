@@ -143,6 +143,9 @@ describe('Access landing page', () => {
     for (const id of ['problems', 'steps', 'targets', 'faq', 'diagnosis']) {
       expect(document.getElementById(id), id).not.toBeNull();
     }
+    // The AS/400 and ACOS sections are the main page's (#311)
+    expect(document.getElementById('as400-migration')).toBeNull();
+    expect(document.getElementById('acos-migration')).toBeNull();
     expect(screen.getByText(/2025年10月14日/)).toBeInTheDocument();
     expect(screen.getByText(/2026年10月13日/)).toBeInTheDocument();
     expect(screen.getByText(/出典：Microsoft のライフサイクル情報/)).toBeInTheDocument();

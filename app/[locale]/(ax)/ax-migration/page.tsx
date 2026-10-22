@@ -7,6 +7,7 @@ import {
   AxFaq,
   AxFinalCta,
   AxHero,
+  AxHostPlatforms,
   AxProblems,
   AxReasons,
   AxSteps,
@@ -65,6 +66,8 @@ export default async function AxMigrationPage({ params }: AxMigrationPageProps) 
           <AxChallenges locale={locale} />
           <AxSteps locale={locale} />
           <AxTargets locale={locale} />
+          {/* AS/400 and ACOS, each with its own heading (#311) */}
+          <AxHostPlatforms locale={locale} />
           {/* Reasons first: reassurance before the diagnosis asks for contact details */}
           <AxReasons locale={locale} />
         </AxLandingOnly>

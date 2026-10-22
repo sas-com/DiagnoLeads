@@ -4,6 +4,7 @@ import { trackAxEvent } from '@/components/features/ax-diagnosis/tracking';
 import { cn } from '@/lib/utils';
 import { ArrowRight } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { useAxLandingView } from './ax-landing-view';
 
 type CtaVariant = 'diagnosis' | 'consultation';
 
@@ -25,6 +26,11 @@ interface AxCtaLinkProps {
   external?: boolean;
   className?: string;
   tabIndex?: number;
+  /**
+   * Migration path the embedded diagnosis starts on (#311). Without the diagnosis taking it
+   * (no script yet, or the result is shown), the link just leads to `href`.
+   */
+  platform?: string;
   children: ReactNode;
 }
 
@@ -37,13 +43,24 @@ export function AxCtaLink({
   external = false,
   className,
   tabIndex,
+  platform,
   children,
 }: AxCtaLinkProps) {
+  const landingView = useAxLandingView();
   return (
     <a
       href={href}
       tabIndex={tabIndex}
-      onClick={() => trackAxEvent('ax_lp_cta_click', { cta: variant, location })}
+      onClick={(event) => {
+        trackAxEvent('ax_lp_cta_click', { cta: variant, location });
+        // The diagnosis moves itself into view; following the link would add a history entry
+        // between its steps. A click that opens a new tab or window is left to the browser.
+        const plainClick =
+          event.button === 0 && !(event.metaKey || event.ctrlKey || event.shiftKey || event.altKey);
+        if (platform && plainClick && landingView?.startOnPath(platform)) {
+          event.preventDefault();
+        }
+      }}
       {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
       className={cn(
         'inline-flex items-center justify-center gap-2 px-7 py-4 text-base font-bold transition-colors focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2',

@@ -413,6 +413,63 @@ export async function AxTargets({ locale }: SectionProps) {
   );
 }
 
+const HOST_PLATFORMS = [
+  { key: 'as400', icon: Server },
+  { key: 'acos', icon: Cpu },
+] as const;
+const HOST_POINT_KEYS = ['deadline', 'people', 'edi', 'assets'] as const;
+
+/**
+ * One section per host platform, each with its own heading for readers (and searches) of that
+ * platform (#311). Its button starts the embedded diagnosis on the platform's questions.
+ */
+export async function AxHostPlatforms({ locale }: SectionProps) {
+  const t = await getTranslations({ locale, namespace: 'axSite.hosts' });
+  return (
+    <div className="bg-ax-mist py-16 sm:py-24">
+      <div className="mx-auto grid max-w-6xl gap-6 px-4 sm:px-6 lg:grid-cols-2">
+        {HOST_PLATFORMS.map(({ key, icon: Icon }) => (
+          <section
+            key={key}
+            id={AX_SECTIONS[key]}
+            aria-labelledby={`ax-${key}-heading`}
+            className="flex flex-col rounded-2xl bg-white p-6 shadow-sm sm:p-8"
+          >
+            <div className="flex items-center gap-3">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-ax-teal text-white">
+                <Icon className="h-6 w-6" aria-hidden="true" />
+              </span>
+              <h2 id={`ax-${key}-heading`} className="text-xl font-bold leading-snug sm:text-2xl">
+                {t(`${key}.title`)}
+              </h2>
+            </div>
+            <p className="mt-4 leading-relaxed text-gray-700">{t(`${key}.lead`)}</p>
+            <ul className="mt-5 flex-1 space-y-4">
+              {HOST_POINT_KEYS.map((point) => (
+                <li key={point} className="flex gap-3">
+                  <Check className="mt-1 h-5 w-5 shrink-0 text-ax-teal-dark" aria-hidden="true" />
+                  <p className="text-sm leading-relaxed">
+                    <span className="block font-bold">{t(`${key}.points.${point}.label`)}</span>
+                    {t(`${key}.points.${point}.body`)}
+                  </p>
+                </li>
+              ))}
+            </ul>
+            <AxCtaLink
+              href={`#${AX_SECTIONS.diagnosis}`}
+              location={key}
+              platform={key}
+              className="mt-8 self-center"
+            >
+              {t(`${key}.cta`)}
+            </AxCtaLink>
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export async function AxDiagnosisSection({ locale }: SectionProps) {
   const t = await getTranslations({ locale, namespace: 'axSite.diagnosis' });
   return (

@@ -299,8 +299,8 @@ const questions: DiagnosticQuestion[] = [
     {
       ...detail,
       description: text(
-        'NTT東日本は、INSネットの提供を2028年12月末で終えると発表しています。',
-        'NTT East has announced that INS Net will end in December 2028.'
+        'NTT東日本・西日本は、INSネットの提供を2028年12月31日で終えると発表しています。',
+        'NTT East and West have announced that INS Net will end on December 31, 2028.'
       ),
     }
   ),
@@ -549,8 +549,8 @@ const questions: DiagnosticQuestion[] = [
         '電話回線（INSネット）を使う古いEDI（JCA手順・全銀手順など）が残っている',
         'Old EDI over phone lines (INS Net, JCA or Zengin protocols) is still in use',
         text(
-          'NTT東日本は、INSネットの提供を2028年12月末で終えると発表しています',
-          'NTT East has announced that INS Net will end in December 2028'
+          'NTT東日本・西日本は、INSネットの提供を2028年12月31日で終えると発表しています',
+          'NTT East and West have announced that INS Net will end on December 31, 2028'
         )
       ),
       option('web', '銀行・Web受注・EC・POSなど', 'Banks, Web orders, e-commerce, POS'),

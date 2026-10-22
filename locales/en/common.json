@@ -2760,6 +2760,54 @@
       },
       "industries": "For mid-sized manufacturers and distributors."
     },
+    "hosts": {
+      "as400": {
+        "title": "Migrating from AS/400 (IBM i)",
+        "lead": "What can prompt a migration, and what to check before one.",
+        "points": {
+          "deadline": {
+            "label": "End of support or lease",
+            "body": "Check when support for the server, OS or product, or the lease, ends. IBM standard support for IBM i 7.3 and 7.4 has ended; only paid extended support remains."
+          },
+          "people": {
+            "label": "Who can change it",
+            "body": "Check whether only one or two people in-house can change the RPG, COBOL or CL programs, and whether they will retire or move within a few years."
+          },
+          "edi": {
+            "label": "EDI over phone lines",
+            "body": "Check whether old EDI over INS Net (JCA or Zengin protocols) is still in use. NTT East and West have announced that INS Net will end on December 31, 2028."
+          },
+          "assets": {
+            "label": "Screens, forms, data and links",
+            "body": "List the 5250 screens and printed forms, printing on special forms and handheld terminals, the data staff pull out with Query or Excel transfers, and the exchanges with other systems and partners."
+          }
+        },
+        "cta": "Start the free web diagnosis with the AS/400 questions"
+      },
+      "acos": {
+        "title": "Migrating from NEC ACOS",
+        "lead": "What can prompt a migration, and what to check before one.",
+        "points": {
+          "deadline": {
+            "label": "End of support or lease",
+            "body": "Check when support for the ACOS-2 or ACOS-4 machine or products, or the lease, ends. Notices from the maintenance company or the lease contract will tell you."
+          },
+          "people": {
+            "label": "Who can change it",
+            "body": "Check whether only one or two people in-house can change the COBOL programs and the job procedures (JCL), and whether they will retire or move within a few years."
+          },
+          "edi": {
+            "label": "EDI over phone lines",
+            "body": "Check whether old EDI over INS Net (JCA or Zengin protocols) is still in use. NTT East and West have announced that INS Net will end on December 31, 2028."
+          },
+          "assets": {
+            "label": "Screens, forms, data and links",
+            "body": "List the business screens (opened with ETOS and so on) and printed forms, the overnight and month-end jobs, how the data is stored (ADBS, RIQS II, files), the character codes (JIPS) and custom characters, and the exchanges with other systems and partners."
+          }
+        },
+        "cta": "Start the free web diagnosis with the ACOS questions"
+      }
+    },
     "diagnosis": {
       "eyebrow": "FREE CHECK",
       "title": "Start with the free web check",
