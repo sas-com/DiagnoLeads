@@ -195,6 +195,19 @@ describe('Access landing page', () => {
     expect(metadata.robots).toEqual({ index: false, follow: false });
   });
 
+  it('shares a large image of the hero heading with an absolute URL (#344)', async () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://example.jp');
+    const image = {
+      url: 'https://example.jp/images/og/ax-access-ja.png',
+      width: 1200,
+      height: 630,
+      alt: 'その Access、直して使うか、Web に移すか。',
+    };
+    const metadata = await generateMetadata({ params });
+    expect(metadata.openGraph).toMatchObject({ type: 'website', images: [image] });
+    expect(metadata.twitter).toMatchObject({ card: 'summary_large_image', images: [image] });
+  });
+
   it('starts the diagnosis on the Access questions, without the platform question', async () => {
     const user = userEvent.setup();
     await renderPage();

@@ -21,7 +21,17 @@ import {
   articleJsonLd,
   breadcrumbListJsonLd,
 } from '@/lib/features/ax-site/columns/structured-data';
-import { describe, expect, it } from 'vitest';
+import {
+  AX_SHARE_IMAGES,
+  type AxSharePage,
+  axShareImage,
+  axShareImagePath,
+  axShareLocale,
+} from '@/lib/features/ax-site/share-images';
+import en from '@/locales/en/common.json';
+import ja from '@/locales/ja/common.json';
+import { type AbstractIntlMessages, createTranslator } from 'next-intl';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const article = getColumn('access-office-support-end') as Column;
 
@@ -144,23 +154,33 @@ describe('the Access series', () => {
   });
 });
 
-describe('column thumbnails (#335)', () => {
-  /** Width and height from the IHDR chunk of a PNG */
-  const pngSize = (png: Buffer) => ({ width: png.readUInt32BE(16), height: png.readUInt32BE(20) });
+/** Width and height from the IHDR chunk of a PNG */
+const pngSize = (png: Buffer) => ({ width: png.readUInt32BE(16), height: png.readUInt32BE(20) });
 
+/** A 1200x630 PNG under 120 KB in public/ (bun run columns:thumbnails) */
+function expectCardPng(publicPath: string) {
+  const png = readFileSync(path.join(process.cwd(), 'public', publicPath));
+  expect(png.subarray(1, 4).toString('ascii')).toBe('PNG');
+  expect(pngSize(png)).toEqual(COLUMN_THUMBNAIL_SIZE);
+  expect(png.byteLength).toBeLessThan(120 * 1024);
+}
+
+describe('column thumbnails (#335)', () => {
   it.each(COLUMNS.map((column) => [column.slug, column] as const))(
-    '%s has its 1200x630 PNG under 200 KB in public/ (bun run columns:thumbnails)',
+    '%s has its 1200x630 PNG under 120 KB in public/ (bun run columns:thumbnails)',
     (slug) => {
       expect(columnThumbnailPath(slug)).toBe(`/images/columns/${slug}.png`);
-      const png = readFileSync(path.join(process.cwd(), 'public', columnThumbnailPath(slug)));
-      expect(png.subarray(1, 4).toString('ascii')).toBe('PNG');
-      expect(pngSize(png)).toEqual(COLUMN_THUMBNAIL_SIZE);
-      expect(png.byteLength).toBeLessThan(200 * 1024);
+      expectCardPng(columnThumbnailPath(slug));
     }
   );
 
+  it('shows the risk on the support-end article and the way forward on the fix-or-web one', () => {
+    expect(getColumn('access-office-support-end')?.thumbnail.icon).toBe('shield-alert');
+    expect(getColumn('access-fix-or-web')?.thumbnail.icon).toBe('signpost');
+  });
+
   it('breaks the titles into at most 3 lines that make up the title', () => {
-    const lines = (lines: string[]) => ({ ...article, thumbnail: { icon: 'calendar-x' as const, lines } });
+    const lines = (lines: string[]) => ({ ...article, thumbnail: { icon: 'shield-alert' as const, lines } });
     expect(validateColumn(lines(['Access 2016・2019・2021 の', 'サポート終了'])).at(-1)).toBe(
       'thumbnail lines are not the title'
     );
@@ -174,6 +194,49 @@ describe('column thumbnails (#335)', () => {
       'thumbnail icon "rocket" is unknown',
       'thumbnail accent "pink" is unknown',
     ]);
+  });
+});
+
+describe('share images of the landing pages and the column list (#344)', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  const images = (Object.keys(AX_SHARE_IMAGES) as AxSharePage[]).flatMap((page) =>
+    AX_SHARE_IMAGES[page].locales.map((locale) => [`${page}-${locale}`, page, locale] as const)
+  );
+
+  it.each(images)('%s has its 1200x630 PNG under 120 KB in public/', (name, page, locale) => {
+    expect(axShareImagePath(page, locale)).toBe(`/images/og/${name}.png`);
+    expectCardPng(axShareImagePath(page, locale));
+  });
+
+  it.each(images)('%s says only what the page says: no duration, cost or rate', (_, page, locale) => {
+    const messages: AbstractIntlMessages = locale === 'en' ? en : ja;
+    const t = createTranslator({ locale, messages });
+    const { labelKey, titleKey } = AX_SHARE_IMAGES[page];
+    for (const key of [labelKey, titleKey]) {
+      const text = t(key as never);
+      // A missing message comes back as its key
+      expect(text).not.toContain(key);
+      expect(text).not.toMatch(/\d+\s*(?:%|％|割|円|ヶ月|か月|カ月|週間|日で|minutes?|months?|weeks?|yen)|削減|短縮|reduc|cut|save/i);
+    }
+  });
+
+  it('uses the image of the page locale, or the first one the page has', () => {
+    expect(axShareLocale('ax-migration', 'en')).toBe('en');
+    expect(axShareLocale('ax-column', 'en')).toBe('ja');
+    expect(axShareLocale('ax-access', 'fr')).toBe('ja');
+  });
+
+  it('gives the metadata an absolute URL, the size and the alt text', () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://example.jp');
+    expect(axShareImage('ax-access', 'en', 'alt')).toEqual({
+      url: 'https://example.jp/images/og/ax-access-en.png',
+      width: 1200,
+      height: 630,
+      alt: 'alt',
+    });
   });
 });
 

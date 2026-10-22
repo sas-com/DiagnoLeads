@@ -345,6 +345,49 @@ describe('column list page', () => {
     expect(metadata.robots).toEqual({ index: false, follow: false });
     await expect(ColumnIndexPage(params('en'))).rejects.toMatchObject(NOT_FOUND);
   });
+
+  it('shares a large image of its lead with an absolute URL (#344)', async () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://example.jp');
+    const image = {
+      url: 'https://example.jp/images/og/ax-column-ja.png',
+      width: 1200,
+      height: 630,
+      alt: '基幹システムや業務ツールの移行を考えるときに知っておきたいことを、公開情報をもとに整理しています。',
+    };
+    const metadata = await generateIndexMetadata(params());
+    expect(metadata.openGraph).toMatchObject({
+      type: 'website',
+      siteName: 'エス・エー・エス株式会社',
+      images: [image],
+    });
+    expect(metadata.twitter).toMatchObject({ card: 'summary_large_image', images: [image] });
+  });
+
+  it('makes the whole card lead to the article through its one title link (#344)', async () => {
+    const { container } = render(withIntl(await resolveServerTree(await ColumnIndexPage(params()))));
+    for (const card of container.querySelectorAll<HTMLElement>('li > article')) {
+      // One link, the title: the image and "read the article" are not links of their own
+      const links = within(card).getAllByRole('link');
+      expect(links).toHaveLength(1);
+      const [link] = links;
+      expect(link.closest('h2')).not.toBeNull();
+      expect(link).toHaveAccessibleName(card.querySelector('h2')?.textContent ?? '');
+      // The link is stretched over the card, which is its positioning box and shows the focus
+      expect(link.className).toContain('after:absolute');
+      expect(link.className).toContain('after:inset-0');
+      expect(card.className).toContain('relative');
+      expect(card.className).toMatch(/focus-within:outline-ax-teal-dark/);
+      // No element between the card and the link creates another positioning box
+      let node = link.parentElement;
+      while (node && node !== card) {
+        expect(node.className).not.toMatch(/\b(relative|absolute|fixed|sticky)\b/);
+        node = node.parentElement;
+      }
+      expect(card.querySelector('img')).toHaveAttribute('alt', '');
+      // "Read the article" is hidden from screen readers: the title already names the article
+      expect(within(card).getByText('記事を読む')).toHaveAttribute('aria-hidden', 'true');
+    }
+  });
 });
 
 describe('Access landing page', () => {

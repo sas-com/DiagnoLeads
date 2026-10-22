@@ -9,6 +9,7 @@ import {
   isColumnLocale,
 } from '@/lib/features/ax-site/columns';
 import { breadcrumbListJsonLd } from '@/lib/features/ax-site/columns/structured-data';
+import { axShareImage } from '@/lib/features/ax-site/share-images';
 import { robotsFor, siteBaseUrl } from '@/lib/seo/indexing';
 import { ArrowRight } from 'lucide-react';
 import type { Metadata } from 'next';
@@ -31,6 +32,9 @@ export async function generateMetadata({ params }: ColumnIndexPageProps): Promis
   const t = await getTranslations({ locale, namespace: 'axColumn.meta' });
   const site = await getTranslations({ locale, namespace: 'axSite.meta' });
   const path = `/${locale}${COLUMN_INDEX_PATH}`;
+  const list = await getTranslations({ locale, namespace: 'axColumn' });
+  // Share image (#344): the lead of the list, also its alt text
+  const image = axShareImage('ax-column', locale, list('lead'));
   return {
     title: { absolute: t('title') },
     description: t('description'),
@@ -45,8 +49,14 @@ export async function generateMetadata({ params }: ColumnIndexPageProps): Promis
       title: t('title'),
       description: t('description'),
       siteName: site('siteName'),
+      images: [image],
     },
-    twitter: { card: 'summary', title: t('title'), description: t('description') },
+    twitter: {
+      card: 'summary_large_image',
+      title: t('title'),
+      description: t('description'),
+      images: [image],
+    },
     // Indexed only after public launch (test mode off, which needs the publication approval)
     robots: robotsFor(COLUMN_INDEX_PATH),
   };
@@ -81,7 +91,12 @@ export default async function ColumnIndexPage({ params }: ColumnIndexPageProps) 
           <ul className="mt-10 space-y-5">
             {columns.map((column) => (
               <li key={column.slug}>
-                <article className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5 sm:flex sm:gap-6 sm:p-6">
+                {/*
+                  The whole card leads to the article (#344) through the one link of the title,
+                  stretched over the card: the image and "read the article" are not second links,
+                  so a screen reader announces each article once. The card shows the focus.
+                */}
+                <article className="relative rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5 focus-within:outline focus-within:outline-3 focus-within:outline-offset-2 focus-within:outline-ax-teal-dark sm:flex sm:gap-6 sm:p-6">
                   {/* Decorative: the link below names the article; not a second link to it */}
                   <ColumnThumbnail
                     slug={column.slug}
@@ -98,7 +113,7 @@ export default async function ColumnIndexPage({ params }: ColumnIndexPageProps) 
                     <h2 className="mt-2 text-lg font-bold leading-snug sm:text-xl">
                       <a
                         href={`/${locale}${columnPath(column.slug)}`}
-                        className="hover:text-ax-teal-dark hover:underline hover:underline-offset-4"
+                        className="outline-none after:absolute after:inset-0 after:rounded-2xl after:content-[''] hover:text-ax-teal-dark hover:underline hover:underline-offset-4"
                       >
                         {column.title}
                       </a>

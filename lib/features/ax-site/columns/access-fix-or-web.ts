@@ -17,7 +17,7 @@ export const accessFixOrWeb: Column = {
   related: 'access',
   cta: 'access-diagnosis',
   thumbnail: {
-    icon: 'git-fork',
+    icon: 'signpost',
     lines: ['Access を直すか、Web に移すか：', '判断の目安を表で整理する'],
   },
   blocks: [

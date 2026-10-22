@@ -1,6 +1,8 @@
 /**
  * Thumbnails of the AX column articles (#335): one 1200x630 PNG per article in
  * public/images/columns/<slug>.png, used at the top of the article, on the list and for sharing.
+ * With the same template, the share images of the landing pages and the column list (#344):
+ * public/images/og/<page>-<locale>.png (lib/features/ax-site/share-images.ts).
  *
  * Usage: bun run columns:thumbnails
  *
@@ -23,21 +25,30 @@ import {
   columnThumbnailPath,
   validateColumn,
 } from '@/lib/features/ax-site/columns';
+import {
+  AX_SHARE_IMAGES,
+  type AxShareLocale,
+  type AxSharePage,
+  axShareImagePath,
+} from '@/lib/features/ax-site/share-images';
+import en from '@/locales/en/common.json';
 import ja from '@/locales/ja/common.json';
 import { chromium } from '@playwright/test';
 import {
-  CalendarX,
+  BookOpen,
   Database,
   FileLock,
   FolderOpen,
-  GitFork,
   HardDrive,
   type LucideIcon,
   Scale,
+  ServerCog,
   ShieldAlert,
+  Signpost,
+  Split,
   Users,
 } from 'lucide-react';
-import { createTranslator } from 'next-intl';
+import { type AbstractIntlMessages, createTranslator } from 'next-intl';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
@@ -53,18 +64,20 @@ const AX = {
 const ACCENTS: Record<ColumnThumbnailAccent, string> = { yellow: AX.yellow, mist: AX.mist };
 
 const ICONS: Record<ColumnThumbnailIcon, LucideIcon> = {
-  'calendar-x': CalendarX,
   'shield-alert': ShieldAlert,
-  'git-fork': GitFork,
+  signpost: Signpost,
+  split: Split,
   scale: Scale,
   'folder-open': FolderOpen,
   users: Users,
   'file-lock': FileLock,
   database: Database,
   'hard-drive': HardDrive,
+  'server-cog': ServerCog,
+  'book-open': BookOpen,
 };
 
-const MESSAGES: Record<ColumnLocale, typeof ja> = { ja };
+const MESSAGES: Record<ColumnLocale | AxShareLocale, typeof ja> = { ja, en };
 
 /** Largest and smallest title size in px: the largest one whose lines fit is used */
 const TITLE_MAX_SIZE = 68;
@@ -72,7 +85,7 @@ const TITLE_MIN_SIZE = 44;
 /** Width of the title column in px (the icon takes the right side) */
 const TITLE_WIDTH = 720;
 /** Files above this size are refused (OG crawlers and the list page load them) */
-const MAX_BYTES = 200 * 1024;
+const MAX_BYTES = 120 * 1024;
 
 const FONTS_CSS =
   'https://fonts.googleapis.com/css2?family=Lato:wght@900&family=Noto+Sans+JP:wght@500;700;900&display=block';
@@ -119,17 +132,70 @@ function patternSvg(accent: string): string {
 </svg>`;
 }
 
-function cardHtml(column: Column): string {
-  const t = createTranslator({ locale: column.locale, messages: MESSAGES[column.locale] });
-  const label = t('axColumn.thumbnailLabel', { topic: t(`axColumn.topics.${column.related}`) });
-  const accent = ACCENTS[column.thumbnail.accent ?? 'yellow'];
-  const lines = column.thumbnail.lines;
-  const title = lines
-    ? lines.map((line) => `<span class="line">${escapeHtml(line)}</span>`).join('')
-    : escapeHtml(column.title);
+/** What one image shows, and where it goes */
+interface Card {
+  /** Name in the log and in the errors */
+  name: string;
+  /** Path of the file under public/ */
+  file: string;
+  locale: ColumnLocale | AxShareLocale;
+  /** Small label at the top */
+  label: string;
+  title: string;
+  /** The title broken into lines by hand (otherwise the browser breaks it between phrases) */
+  lines?: string[];
+  icon: ColumnThumbnailIcon;
+  accent: ColumnThumbnailAccent;
+}
+
+function translator(locale: Card['locale']) {
+  return createTranslator({ locale, messages: MESSAGES[locale] });
+}
+
+function columnCard(column: Column): Card {
+  const t = translator(column.locale);
+  return {
+    name: column.slug,
+    file: columnThumbnailPath(column.slug),
+    locale: column.locale,
+    label: t('axColumn.thumbnailLabel', { topic: t(`axColumn.topics.${column.related}`) }),
+    title: column.title,
+    lines: column.thumbnail.lines,
+    icon: column.thumbnail.icon,
+    accent: column.thumbnail.accent ?? 'yellow',
+  };
+}
+
+/** Share images of the landing pages and the column list: the page's own label and heading */
+function shareCards(): Card[] {
+  return (Object.keys(AX_SHARE_IMAGES) as AxSharePage[]).flatMap((page) => {
+    const spec = AX_SHARE_IMAGES[page];
+    return spec.locales.map((locale): Card => {
+      // The keys of a spec are plain strings: look them up in the untyped messages
+      const messages: AbstractIntlMessages = MESSAGES[locale];
+      const t = createTranslator({ locale, messages });
+      return {
+        name: `${page}-${locale}`,
+        file: axShareImagePath(page, locale),
+        locale,
+        label: t(spec.labelKey as never),
+        title: t(spec.titleKey as never),
+        icon: spec.icon,
+        accent: 'yellow',
+      };
+    });
+  });
+}
+
+function cardHtml(card: Card): string {
+  const brand = MESSAGES[card.locale].axSite.brand;
+  const accent = ACCENTS[card.accent];
+  const title = card.lines
+    ? card.lines.map((line) => `<span class="line">${escapeHtml(line)}</span>`).join('')
+    : escapeHtml(card.title);
 
   return `<!doctype html>
-<html lang="${column.locale}">
+<html lang="${card.locale}">
 <head>
 <meta charset="utf-8">
 <link rel="stylesheet" href="${FONTS_CSS}">
@@ -150,29 +216,33 @@ function cardHtml(column: Column): string {
     background: ${AX.deep};
   }
   .pattern { position: absolute; inset: 0; }
+  /* Label, AX mark and company name at 32px or more: readable when the card is 400px wide */
   .label {
     position: absolute;
-    top: 64px;
+    top: 56px;
     left: 80px;
+    right: 160px;
     display: flex;
     align-items: center;
-    gap: 14px;
-    font-size: 26px;
+    gap: 16px;
+    line-height: 1.3;
+    font-size: 34px;
     font-weight: 700;
     letter-spacing: 0.06em;
     color: ${AX.mist};
   }
   .label::before {
     content: '';
-    width: 10px;
-    height: 30px;
+    flex: none;
+    width: 12px;
+    height: 38px;
     border-radius: 2px;
     background: ${accent};
   }
   .title-area {
     position: absolute;
-    top: 130px;
-    bottom: 132px;
+    top: 128px;
+    bottom: 166px;
     left: 80px;
     width: ${TITLE_WIDTH}px;
     display: flex;
@@ -185,13 +255,15 @@ function cardHtml(column: Column): string {
     letter-spacing: 0.02em;
     font-feature-settings: 'palt';
     line-break: strict;
+    /* Japanese breaks between phrases, not inside a word */
+    word-break: auto-phrase;
     text-wrap: pretty;
-      }
+  }
   .title .line { display: block; white-space: nowrap; }
   .icon {
     position: absolute;
     left: 840px;
-    top: 180px;
+    top: 172px;
     width: 240px;
     height: 240px;
     border-radius: 50%;
@@ -206,7 +278,8 @@ function cardHtml(column: Column): string {
     left: 80px;
     right: 80px;
     bottom: 56px;
-    padding-top: 26px;
+    padding-top: 22px;
+    line-height: 1.2;
     border-top: 1px solid rgba(255, 255, 255, 0.22);
     display: flex;
     align-items: baseline;
@@ -216,22 +289,22 @@ function cardHtml(column: Column): string {
   .brand .ax {
     font-family: 'Lato', 'Noto Sans JP', sans-serif;
     font-weight: 900;
-    font-size: 40px;
+    font-size: 52px;
     letter-spacing: -0.01em;
   }
-  .brand .name { font-size: 28px; font-weight: 700; }
-  .operator { font-size: 24px; font-weight: 500; color: rgba(255, 255, 255, 0.9); }
+  .brand .name { font-size: 36px; font-weight: 700; }
+  .operator { font-size: 32px; font-weight: 700; color: rgba(255, 255, 255, 0.92); }
 </style>
 </head>
 <body>
 <div class="card">
   ${patternSvg(accent)}
-  <p class="label">${escapeHtml(label)}</p>
+  <p class="label">${escapeHtml(card.label)}</p>
   <div class="title-area"><h1 class="title" id="title">${title}</h1></div>
-  <div class="icon">${iconSvg(column.thumbnail.icon, accent)}</div>
+  <div class="icon">${iconSvg(card.icon, accent)}</div>
   <div class="footer">
-    <p class="brand"><span class="ax">AX</span><span class="name">${escapeHtml(ja.axSite.brand.name)}</span></p>
-    <p class="operator">${escapeHtml(ja.axSite.brand.operator)}</p>
+    <p class="brand"><span class="ax">AX</span><span class="name">${escapeHtml(brand.name)}</span></p>
+    <p class="operator">${escapeHtml(brand.operator)}</p>
   </div>
 </div>
 </body>
@@ -290,27 +363,28 @@ async function main() {
       viewport: { width: COLUMN_THUMBNAIL_SIZE.width, height: COLUMN_THUMBNAIL_SIZE.height },
       deviceScaleFactor: 1,
     });
-    for (const column of COLUMNS) {
-      await page.setContent(cardHtml(column), { waitUntil: 'networkidle' });
-      const text = `${column.title}${ja.axSite.brand.name}${ja.axSite.brand.operator}AX`;
+    const cards = [...COLUMNS.map(columnCard), ...shareCards()];
+    for (const card of cards) {
+      await page.setContent(cardHtml(card), { waitUntil: 'networkidle' });
+      const { brand } = MESSAGES[card.locale].axSite;
       const fit = await page.evaluate(fitTitle, {
         maxSize: TITLE_MAX_SIZE,
         minSize: TITLE_MIN_SIZE,
         maxLines: COLUMN_THUMBNAIL_MAX_LINES,
-        text: `${text}${await page.locator('.label').innerText()}`,
+        text: `${card.title}${card.label}${brand.name}${brand.operator}AX`,
       });
-      if (!fit.fonts) throw new Error(`${column.slug}: the web fonts did not load`);
+      if (!fit.fonts) throw new Error(`${card.name}: the web fonts did not load`);
       if (fit.size === 0) {
         throw new Error(
-          `${column.slug}: the title does not fit in ${COLUMN_THUMBNAIL_MAX_LINES} lines; set thumbnail.lines`
+          `${card.name}: the title does not fit in ${COLUMN_THUMBNAIL_MAX_LINES} lines; set thumbnail.lines`
         );
       }
 
-      const file = path.join(OUT_DIR, columnThumbnailPath(column.slug));
+      const file = path.join(OUT_DIR, card.file);
       await mkdir(path.dirname(file), { recursive: true });
       const png = await page.screenshot({ type: 'png', animations: 'disabled', caret: 'hide' });
       if (png.byteLength > MAX_BYTES) {
-        throw new Error(`${column.slug}: ${png.byteLength} bytes, above ${MAX_BYTES}`);
+        throw new Error(`${card.name}: ${png.byteLength} bytes, above ${MAX_BYTES}`);
       }
       await writeFile(file, png);
       const { size } = await stat(file);
