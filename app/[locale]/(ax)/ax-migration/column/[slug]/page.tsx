@@ -146,7 +146,7 @@ export default async function ColumnPage({ params }: ColumnPageProps) {
             </AxCtaLink>
           </aside>
           <p className="mt-10 text-xs leading-relaxed text-gray-600">
-            {messages(COLUMN_TRADEMARK_KEYS[column.related])}
+            {column.trademark ?? messages(COLUMN_TRADEMARK_KEYS[column.related])}
           </p>
         </div>
       </article>

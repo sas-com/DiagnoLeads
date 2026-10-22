@@ -53,6 +53,11 @@ export interface Column {
   related: ColumnRelatedPage;
   cta: ColumnCta;
   blocks: ColumnBlock[];
+  /**
+   * Trademark notice at the end, for an article that names more products than its landing page
+   * (Excel, SQL Server...). Without it, the notice of the landing page is shown.
+   */
+  trademark?: string;
 }
 
 /** Path of the column list, without the locale */
@@ -93,6 +98,7 @@ export function inlineText(content: Inline): string {
 /** Every text of an article, for the copy checks */
 export function columnStrings(column: Column): string[] {
   const texts = [column.title, column.seoTitle, column.description];
+  if (column.trademark !== undefined) texts.push(column.trademark);
   for (const block of column.blocks) {
     switch (block.type) {
       case 'h2':
@@ -142,6 +148,7 @@ export function validateColumn(column: Column): string[] {
   for (const field of ['title', 'seoTitle', 'description'] as const) {
     if (column[field].trim() === '') problems.push(`${field} is empty`);
   }
+  if (column.trademark?.trim() === '') problems.push('trademark is empty');
   const badDates = (['publishedAt', 'updatedAt'] as const).filter(
     (field) => !DATE.test(column[field]) || Number.isNaN(Date.parse(column[field]))
   );

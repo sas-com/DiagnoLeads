@@ -109,11 +109,17 @@ const SUPPORT_SOURCES = [
   'https://support.microsoft.com/KB/5002369',
 ] as const;
 
+/** The column about the end of Office support, linked from that section */
+const SUPPORT_END_COLUMN = 'access-office-support-end';
+
 /** Facts with their source and date; no countdown (#158) */
 export async function AxAccessSupportEnd({ locale }: SectionProps) {
   const t = await getTranslations({ locale, namespace: 'axAccess.supportEnd' });
-  // The articles on the subject, in the page's language only (they are Japanese for now, #324)
-  const columns = columnsFor('access').filter((column) => column.locale === locale);
+  // The article on the support end only (the other Access columns are on the column list),
+  // in the page's language only (they are Japanese for now, #324)
+  const columns = columnsFor('access').filter(
+    (column) => column.locale === locale && column.slug === SUPPORT_END_COLUMN
+  );
   return (
     <section aria-labelledby="ax-access-support-heading" className="bg-ax-mist py-12 sm:py-16">
       <div className="mx-auto max-w-3xl px-4 sm:px-6">

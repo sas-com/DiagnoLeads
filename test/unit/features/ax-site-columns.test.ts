@@ -63,9 +63,80 @@ describe('column content', () => {
     expect(COLUMN_PATHS).toEqual([
       '/ax-migration/column',
       '/ax-migration/column/access-office-support-end',
+      '/ax-migration/column/access-fix-or-web',
+      '/ax-migration/column/access-shared-folder',
+      '/ax-migration/column/access-accde-only',
+      '/ax-migration/column/access-2gb-limit',
     ]);
     expect(columnUpdatedAt('/ax-migration/column')).toBe('2026-10-22');
     expect(columnUpdatedAt('/ax-migration/access')).toBeUndefined();
+  });
+});
+
+describe('the Access series', () => {
+  const series = COLUMNS.filter((column) => column.slug !== 'access-office-support-end');
+
+  it('is listed in reading order after the support-end article', () => {
+    expect(COLUMNS.map((column) => column.slug)).toEqual([
+      'access-office-support-end',
+      'access-fix-or-web',
+      'access-shared-folder',
+      'access-accde-only',
+      'access-2gb-limit',
+    ]);
+  });
+
+  it.each(series.map((column) => [column.slug, column] as const))(
+    '%s is dated, in Japanese, tied to the Access page and ends with the diagnosis',
+    (_, column) => {
+      expect(column).toMatchObject({
+        locale: 'ja',
+        publishedAt: '2026-10-22',
+        updatedAt: '2026-10-22',
+        related: 'access',
+        cta: 'access-diagnosis',
+      });
+      expect(columnLinks(column)).toContain('/ja/ax-migration/access#diagnosis');
+      expect(columnStrings(column)).toContain('（2026年10月時点の情報です）');
+    }
+  );
+
+  it.each(series.map((column) => [column.slug, column] as const))(
+    '%s links only to published articles and the diagnosis inside the site, and cites Microsoft over https',
+    (_, column) => {
+      const published = new Set(COLUMNS.map((c) => `/ja/ax-migration/column/${c.slug}`));
+      for (const href of columnLinks(column).filter((h) => h.startsWith('/'))) {
+        expect(href === '/ja/ax-migration/access#diagnosis' || published.has(href)).toBe(true);
+      }
+      const sources = column.blocks.flatMap((block) =>
+        block.type === 'sources' ? block.items : []
+      );
+      expect(sources.length).toBeGreaterThan(0);
+      for (const { href } of sources) {
+        expect(new URL(href).hostname).toMatch(/^(learn|support)\.microsoft\.com$/);
+      }
+    }
+  );
+
+  it('names the products of each article in its own trademark notice', () => {
+    expect(article.trademark).toBeUndefined();
+    const notice = (slug: string) => getColumn(slug)?.trademark;
+    expect(notice('access-fix-or-web')).toMatch(/^Microsoft、Access、SQL Server、Excel は、/);
+    expect(notice('access-shared-folder')).toMatch(
+      /^Microsoft、Access、SQL Server、OneDrive、SharePoint は、/
+    );
+    expect(notice('access-accde-only')).toMatch(/^Microsoft、Access、Excel は、/);
+    expect(notice('access-2gb-limit')).toMatch(/^Microsoft、Access、SQL Server は、/);
+  });
+
+  it('says so when a source is an old technical document (previous-versions)', () => {
+    for (const column of series) {
+      const sources = column.blocks.flatMap((block) =>
+        block.type === 'sources' ? block.items : []
+      );
+      if (!sources.some(({ href }) => href.includes('/previous-versions/'))) continue;
+      expect(columnStrings(column).some((text) => text.includes('古い技術資料'))).toBe(true);
+    }
   });
 });
 
@@ -91,6 +162,10 @@ describe('column validation', () => {
       { type: 'sources', items: [{ title: 't', href: 'relative/path' }], notes: [] },
     ],
   };
+
+  it('refuses an empty trademark notice', () => {
+    expect(validateColumn({ ...article, trademark: ' ' })).toEqual(['trademark is empty']);
+  });
 
   it('reports every problem', () => {
     expect(validateColumn(broken)).toEqual([

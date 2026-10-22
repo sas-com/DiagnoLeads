@@ -194,6 +194,21 @@ describe('column article page', () => {
     ]);
   });
 
+  it('shows the trademark notice of an article that names more products, instead of the page one', async () => {
+    render(withIntl(await resolveServerTree(await ColumnPage(articleParams('ja', 'access-shared-folder')))));
+    expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent)).toEqual([
+      '共有フォルダの Access を何人かで使うと起きること',
+    ]);
+    expect(
+      screen.getByText(
+        'Microsoft、Access、SQL Server、OneDrive、SharePoint は、米国 Microsoft Corporation の米国およびその他の国における商標または登録商標です。'
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/^Microsoft、Access は、/)).toBeNull();
+    // A path in the text stays text, backslashes included
+    expect(screen.getByText('\\\\サーバー名\\フォルダ名').tagName).toBe('CODE');
+  });
+
   it('has the article metadata, its own canonical address and no index in test mode', async () => {
     vi.stubEnv('APP_TEST_MODE', 'true');
     const metadata = await generateMetadata(articleParams());
@@ -245,7 +260,19 @@ describe('column list page', () => {
         name: 'Access 2016・2019・2021 のサポート終了：使い続けるとどうなり、何をすればよいか',
       })
     ).toHaveAttribute('href', '/ja/ax-migration/column/access-office-support-end');
-    expect(screen.getByText('2026年10月22日')).toBeInTheDocument();
+    // Every article, in reading order
+    expect(
+      screen
+        .getAllByRole('heading', { level: 2 })
+        .map((heading) => within(heading).getByRole('link').getAttribute('href'))
+    ).toEqual([
+      '/ja/ax-migration/column/access-office-support-end',
+      '/ja/ax-migration/column/access-fix-or-web',
+      '/ja/ax-migration/column/access-shared-folder',
+      '/ja/ax-migration/column/access-accde-only',
+      '/ja/ax-migration/column/access-2gb-limit',
+    ]);
+    expect(screen.getAllByText('2026年10月22日')).toHaveLength(5);
     expect(jsonLd(container)[0]['@type']).toBe('BreadcrumbList');
   });
 
@@ -275,5 +302,11 @@ describe('Access landing page', () => {
     expect(
       within(section).getByRole('link', { name: /Access 2016・2019・2021 のサポート終了/ })
     ).toHaveAttribute('href', '/ja/ax-migration/column/access-office-support-end');
+    // Only the support-end article there; the others are on the column list
+    expect(
+      within(section)
+        .getAllByRole('link')
+        .filter((link) => link.getAttribute('href')?.includes('/column/'))
+    ).toHaveLength(1);
   });
 });
