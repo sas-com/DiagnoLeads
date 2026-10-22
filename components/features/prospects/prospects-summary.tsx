@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { CALL_RESULTS, REFUSAL_REASONS } from '@/lib/features/prospects/types/schemas';
 import { PROSPECT_STAGES } from '@/lib/features/prospects/types/schemas';
 import { trpc } from '@/lib/trpc/client';
 import { Loader2 } from 'lucide-react';
@@ -75,6 +76,24 @@ export function ProspectsSummary({ organizationId }: { organizationId: string })
           highlight
         />
       </Section>
+
+      {summary.calls.total > 0 && (
+        <Section title={t('summary.calls')}>
+          <CountTable
+            head={[t('summary.item'), t('summary.count')]}
+            rows={[
+              ...CALL_RESULTS.map((result): [string, number] => [
+                t(`callResult.${result}`),
+                summary.calls.byResult[result],
+              ]),
+              ...REFUSAL_REASONS.map((reason): [string, number] => [
+                t('summary.refusedFor', { reason: t(`refusalReason.${reason}`) }),
+                summary.calls.refusals[reason],
+              ]),
+            ]}
+          />
+        </Section>
+      )}
 
       <Section title={t('summary.stages')} wide>
         <div className="overflow-x-auto">

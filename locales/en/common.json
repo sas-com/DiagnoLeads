@@ -4419,7 +4419,8 @@
       "all": "All",
       "overdue": "Next action overdue",
       "handed_over": "Waiting for sales",
-      "mine": "My rows"
+      "mine": "My rows",
+      "reapproach": "Re-approach (turned down, contact due)"
     },
     "actions": {
       "add": "Add a row",
@@ -4429,7 +4430,8 @@
       "convert": "Make a lead",
       "openLead": "Open the lead",
       "save": "Save",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "importCalls": "Import a call report"
     },
     "columns": {
       "contactedOn": "Date",
@@ -4453,7 +4455,16 @@
       "remarks": "Remarks",
       "targetSystem": "System",
       "supportEndSoon": "Support ends",
-      "troubles": "Troubles"
+      "troubles": "Troubles",
+      "agencyName": "Agency",
+      "estimatedSystemBasis": "Basis of the estimate",
+      "challengeHypothesis": "Challenge hypothesis",
+      "contactName": "Contact",
+      "contactPhone": "Direct phone",
+      "calledOn": "Called on",
+      "callResult": "Call result",
+      "refusalReason": "Refusal reason",
+      "refusalNote": "Refusal details"
     },
     "hints": {
       "heard": "In a few words: the kind and age of the system, troubles, when it will be reviewed.",
@@ -4468,7 +4479,8 @@
       "existing_end_customer": "2. Existing end customer",
       "bp_company": "3. Business partner",
       "marketing": "4. Marketing",
-      "other": "5. Other (events, etc.)"
+      "other": "5. Other (events, etc.)",
+      "sales_agency": "⑥ Sales agency"
     },
     "systemScope": {
       "core": "Core",
@@ -4578,7 +4590,9 @@
       "stageWithoutNextAction": "No next action date (stage entered)",
       "overdue": "Next action date passed",
       "handOverWithoutStage": "Handed over without a stage",
-      "monthFormat": "{month}/{year}"
+      "monthFormat": "{month}/{year}",
+      "calls": "Sales agencies' calls",
+      "refusedFor": "Turned down: {reason}"
     },
     "referral": {
       "title": "Your referral link",
@@ -4622,6 +4636,60 @@
       "title": "Customer search records",
       "description": "What employees heard when they talked to this customer.",
       "by": "{date} {recorder}"
+    },
+    "callResult": {
+      "appointment": "Appointment",
+      "refused": "Turned down",
+      "absent": "Not available",
+      "callback": "Call back"
+    },
+    "refusalReason": {
+      "budget": "Budget",
+      "staffing": "Staffing",
+      "risk": "Migration risk",
+      "priority": "Priority / timing",
+      "vendor": "Vendor",
+      "other": "Other"
+    },
+    "agency": {
+      "section": "Sales agency's call",
+      "hint": "The contact and direct phone are shown only to sales and to whoever added the row. Put the next possible contact in \"Next action date\": turned-down rows appear under \"Re-approach\" 30 days before it."
+    },
+    "calls": {
+      "title": "Import a sales agency's call report",
+      "description": "Read the agency's call report (CSV or Excel). A row of the same company and agency is updated, otherwise a \"Sales agency\" row is added (company names match regardless of \"Co., Ltd.\" and full/half width). The file is read on this screen; only the rows are sent.",
+      "chooseFile": "Choose a file",
+      "template": "Download the format (CSV)",
+      "rows": "{count} rows can be imported",
+      "skipped": "{count} rows without a company are skipped",
+      "mapping": "Columns (choose again when the names differ from the format)",
+      "notInFile": "Not in the file",
+      "needCompany": "Choose the company column.",
+      "problems": "{count} cells could not be read. Those fields are left empty.",
+      "submit": "Import",
+      "done": "{added} rows added, {updated} updated.",
+      "close": "Close",
+      "empty": "No rows.",
+      "tooMany": "Up to {max} rows at a time.",
+      "readError": "Could not read the file.",
+      "error": "Could not import.",
+      "columns": {
+        "company": "Company",
+        "agencyName": "Agency",
+        "calledOn": "Called on",
+        "callResult": "Result",
+        "department": "Department",
+        "jobTitle": "Title",
+        "contactName": "Contact",
+        "contactPhone": "Direct phone",
+        "targetSystem": "Estimated system",
+        "estimatedSystemBasis": "Basis of the estimate",
+        "challengeHypothesis": "Challenge hypothesis",
+        "refusalReason": "Refusal reason",
+        "refusalNote": "Refusal details",
+        "nextContact": "Next contact",
+        "heard": "Note"
+      }
     }
   },
   "agencyHandovers": {

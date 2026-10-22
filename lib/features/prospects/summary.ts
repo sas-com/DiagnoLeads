@@ -1,10 +1,14 @@
 import {
+  CALL_RESULTS,
+  type CallResult,
   PROSPECT_ENTRIES,
   PROSPECT_FUNNEL_STAGES,
   PROSPECT_STAGES,
   type ProspectEntry,
   type ProspectFunnelStage,
   type ProspectStage,
+  REFUSAL_REASONS,
+  type RefusalReason,
 } from './types/schemas';
 
 /**
@@ -22,6 +26,9 @@ export interface SummaryProspect {
   nextActionNote: string | null;
   stage: string | null;
   meetingOn: string | null;
+  /** A sales agency's call (#161) */
+  callResult?: string | null;
+  refusalReason?: string | null;
 }
 
 export interface MeetingTarget {
@@ -77,6 +84,12 @@ export interface ProspectSummary {
     stageWithoutNextAction: number;
     overdue: number;
     handOverWithoutStage: number;
+  };
+  /** Calls of sales agencies (#161): the results and why calls were turned down */
+  calls: {
+    total: number;
+    byResult: Record<CallResult, number>;
+    refusals: Record<RefusalReason, number>;
   };
 }
 
@@ -205,8 +218,24 @@ export function summarizeProspects(
       stageWithoutNextAction: count(
         (row) => row.stage !== null && row.nextActionOn === null && row.nextActionNote === null
       ),
-      overdue: count((row) => row.nextActionOn !== null && row.nextActionOn < today),
+      // Calls turned down are followed in the re-approach list, not as overdue (#161)
+      overdue: count(
+        (row) =>
+          row.nextActionOn !== null && row.nextActionOn < today && row.callResult !== 'refused'
+      ),
       handOverWithoutStage: count((row) => row.nextStep === 'hand_over' && row.stage === null),
+    },
+    calls: {
+      total: count((row) => row.callResult != null),
+      byResult: Object.fromEntries(
+        CALL_RESULTS.map((result) => [result, count((row) => row.callResult === result)])
+      ) as Record<CallResult, number>,
+      refusals: Object.fromEntries(
+        REFUSAL_REASONS.map((reason) => [
+          reason,
+          count((row) => row.callResult === 'refused' && row.refusalReason === reason),
+        ])
+      ) as Record<RefusalReason, number>,
     },
   };
 }

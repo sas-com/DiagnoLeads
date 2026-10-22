@@ -24,18 +24,21 @@ import { type InflowSource, jstDate } from '@/lib/features/leads/types/pipeline'
 import type { OrganizationContext } from '@/lib/multi-tenant/types';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
-import { and, asc, desc, eq, isNull, lt, ne, notInArray, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, lt, lte, ne, notInArray, or, sql } from 'drizzle-orm';
 import { type AnyPgColumn, alias } from 'drizzle-orm/pg-core';
 import { leadNoteFromProspect, sameCompany } from '../lead-link';
 import { getOrCreateMemberLink, notifyProspectHandedOver } from '../referrals';
 import { summarizeProspects } from '../summary';
 import {
   PROSPECT_TEXT_MAX,
+  type ProspectAgencyFields,
   type ProspectEntry,
+  REAPPROACH_DAYS,
   convertToLeadSchema,
   createProspectSchema,
   deleteProspectSchema,
   forLeadSchema,
+  importCallsSchema,
   importProspectsSchema,
   listProspectsSchema,
   myReferralLinkSchema,
@@ -72,15 +75,25 @@ const INFLOW_BY_ENTRY: Partial<Record<ProspectEntry, InflowSource>> = {
   member_network: MEMBER_REFERRAL_KIND,
   existing_end_customer: 'existing_customer',
   bp_company: 'referral_partner',
+  // Counted in the agency's results (#148, #149), which read leads.agencyName
+  sales_agency: 'telemarketing_agency',
 };
 
-/** Rows that need nothing more: passed, dropped, contracted, or already a lead */
-const openRow = () =>
+/** Rows still followed: not passed, dropped, contracted, or already a lead */
+const notClosed = () =>
   and(
     isNull(prospects.leadId),
     or(isNull(prospects.nextStep), ne(prospects.nextStep, 'pass')),
     or(isNull(prospects.stage), notInArray(prospects.stage, ['dropped', 'contract']))
   );
+
+/** Open rows for "overdue": calls turned down are followed in the re-approach list instead (#161) */
+const openRow = () =>
+  and(notClosed(), or(isNull(prospects.callResult), ne(prospects.callResult, 'refused')));
+
+/** A date some days after an ISO date */
+const addDays = (date: string, days: number) =>
+  new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 
 /** Name of a user, or the email when the name is empty (as memberDisplayName) */
 const userName = (table: { name: AnyPgColumn; email: AnyPgColumn }) =>
@@ -102,6 +115,18 @@ export const prospectsRouter = router({
     }
     if (input.filter === 'handed_over') {
       filters.push(eq(prospects.nextStep, 'hand_over'), isNull(prospects.leadId));
+    }
+    if (input.filter === 'reapproach') {
+      // A rough time only ("next spring") is listed too, after the dated ones, so no turned-down
+      // call drops out of sight
+      const due = or(
+        isNull(prospects.nextActionOn),
+        lte(prospects.nextActionOn, addDays(today, REAPPROACH_DAYS))
+      );
+      const open = notClosed();
+      filters.push(eq(prospects.callResult, 'refused'));
+      if (due) filters.push(due);
+      if (open) filters.push(open);
     }
     if (input.filter === 'mine') {
       const mine = or(eq(prospects.createdBy, ctx.user.id), eq(prospects.salesUserId, ctx.user.id));
@@ -128,7 +153,11 @@ export const prospectsRouter = router({
         and(eq(leads.id, prospects.leadId), eq(leads.organizationId, ctx.organization.id))
       )
       .where(and(...filters))
-      .orderBy(desc(prospects.contactedOn), desc(prospects.createdAt));
+      .orderBy(
+        ...(input.filter === 'reapproach'
+          ? [sql`${prospects.nextActionOn} asc nulls last`]
+          : [desc(prospects.contactedOn), desc(prospects.createdAt)])
+      );
 
     const salesView = isSales(ctx);
     // Sales pick the person in charge from those who can hold leads (as for lead assignees)
@@ -137,6 +166,10 @@ export const prospectsRouter = router({
     return {
       prospects: rows.map(({ prospect, creatorName, salesName, lead }) => ({
         ...prospect,
+        // The agency's contact person: sales and the row's creator only (#161)
+        ...(salesView || prospect.createdBy === ctx.user.id
+          ? {}
+          : { contactName: null, contactPhone: null }),
         recorder: prospect.recorderName ?? creatorName,
         salesName: prospect.salesUserId ? salesName : null,
         lead: lead?.id ? lead : null,
@@ -254,6 +287,7 @@ export const prospectsRouter = router({
       .values({
         ...memberColumns(fields),
         ...salesFields,
+        ...(isSales(ctx) ? agencyColumns(fields) : {}),
         handedOverAt: handedOver ? new Date() : null,
         organizationId: ctx.organization.id,
         createdBy: ctx.user.id,
@@ -275,6 +309,7 @@ export const prospectsRouter = router({
         // Members cannot change what sales wrote, and nobody changes the stage of a row that
         // became a lead: the lead's own phase is the one followed from then on
         ...(isSales(ctx) ? await salesColumns(ctx, fields, existing.salesUserId) : {}),
+        ...(isSales(ctx) ? agencyColumns(fields) : {}),
         ...(existing.leadId ? { stage: existing.stage } : {}),
         updatedBy: ctx.user.id,
         updatedAt: new Date(),
@@ -341,6 +376,91 @@ export const prospectsRouter = router({
     return { imported: inserted.length };
   }),
 
+  /**
+   * A sales agency's call report (#161), read in the browser. Each row updates the agency's row
+   * for the same company (sameCompany, the same agency name) or adds one; only the filled cells
+   * change an existing row. Imported rows notify nobody.
+   */
+  importCalls: organizationProcedure.input(importCallsSchema).mutation(async ({ ctx, input }) => {
+    assertCanRead(ctx);
+    assertSales(ctx);
+    const now = new Date();
+    const today = jstDate();
+
+    const sameAgency = (a: string | null | undefined, b: string | null | undefined) =>
+      (a ?? '').trim() === (b ?? '').trim();
+    let added = 0;
+    let updated = 0;
+    await ctx.db.transaction(async (tx) => {
+      // One import at a time per organization, so two at once cannot add the same company twice
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${`prospect-calls:${ctx.organization.id}`}))`
+      );
+      const existing = await tx
+        .select({ id: prospects.id, company: prospects.company, agencyName: prospects.agencyName })
+        .from(prospects)
+        .where(
+          and(
+            eq(prospects.organizationId, ctx.organization.id),
+            eq(prospects.entry, 'sales_agency')
+          )
+        );
+      for (const row of input.rows) {
+        const found = existing.find(
+          (item) =>
+            sameCompany(item.company, row.company) && sameAgency(item.agencyName, row.agencyName)
+        );
+        const filled = Object.fromEntries(
+          Object.entries({
+            ...agencyColumns(row),
+            department: row.department ?? null,
+            jobTitle: row.jobTitle ?? null,
+            targetSystem: row.targetSystem ?? null,
+            nextActionOn: row.nextActionOn ?? null,
+            nextActionNote: row.nextActionNote ?? null,
+            heard: row.heard ?? null,
+          }).filter(([, value]) => value !== null)
+        );
+        // A call that was not turned down this time clears the earlier refusal
+        const refusal =
+          row.callResult && row.callResult !== 'refused'
+            ? { refusalReason: null, refusalNote: null }
+            : {};
+        if (found) {
+          await tx
+            .update(prospects)
+            .set({ ...filled, ...refusal, updatedBy: ctx.user.id, updatedAt: now })
+            .where(
+              and(eq(prospects.id, found.id), eq(prospects.organizationId, ctx.organization.id))
+            );
+          updated += 1;
+        } else {
+          const [inserted] = await tx
+            .insert(prospects)
+            .values({
+              ...filled,
+              organizationId: ctx.organization.id,
+              entry: 'sales_agency',
+              company: row.company,
+              contactedOn: row.calledOn ?? today,
+              recorderName: row.agencyName ?? null,
+              createdBy: ctx.user.id,
+              updatedBy: ctx.user.id,
+            })
+            .returning({
+              id: prospects.id,
+              company: prospects.company,
+              agencyName: prospects.agencyName,
+            });
+          // A later row of the same report about the same company updates this one
+          if (inserted) existing.push(inserted);
+          added += 1;
+        }
+      }
+    });
+    return { added, updated };
+  }),
+
   summary: organizationProcedure.input(summarySchema).query(async ({ ctx }) => {
     assertCanRead(ctx);
     const [rows, targets] = await Promise.all([
@@ -354,6 +474,8 @@ export const prospectsRouter = router({
           nextActionNote: prospects.nextActionNote,
           stage: prospects.stage,
           meetingOn: prospects.meetingOn,
+          callResult: prospects.callResult,
+          refusalReason: prospects.refusalReason,
         })
         .from(prospects)
         .where(eq(prospects.organizationId, ctx.organization.id)),
@@ -457,11 +579,14 @@ export const prospectsRouter = router({
             .values({
               organizationId: ctx.organization.id,
               email,
-              name: input.name ?? prospect.surname,
+              // From here on the contact follows the lead's own visibility, like any lead's (#161)
+              name: input.name ?? prospect.contactName ?? prospect.surname,
               company: prospect.company,
-              phone: input.phone ?? null,
+              phone: input.phone ?? prospect.contactPhone ?? null,
               status: 'new',
               inflowSource: INFLOW_BY_ENTRY[prospect.entry as ProspectEntry] ?? null,
+              // A new lead from an agency's call counts for the agency (#161)
+              agencyName: prospect.entry === 'sales_agency' ? prospect.agencyName : null,
               referrerName: referrer,
               targetSystem: prospect.targetSystem,
               conversionPoint: 'via_sales',
@@ -628,4 +753,19 @@ async function findOwnRow(ctx: Ctx, id: string) {
     });
   }
   return row;
+}
+
+/** The agency's columns (#161); only sales write them */
+function agencyColumns(fields: ProspectAgencyFields) {
+  return {
+    agencyName: fields.agencyName ?? null,
+    estimatedSystemBasis: fields.estimatedSystemBasis ?? null,
+    challengeHypothesis: fields.challengeHypothesis ?? null,
+    contactName: fields.contactName ?? null,
+    contactPhone: fields.contactPhone ?? null,
+    calledOn: fields.calledOn ?? null,
+    callResult: fields.callResult ?? null,
+    refusalReason: fields.refusalReason ?? null,
+    refusalNote: fields.refusalNote ?? null,
+  };
 }

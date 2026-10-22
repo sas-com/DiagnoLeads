@@ -76,7 +76,7 @@ describe('summarizeProspects', () => {
     expect(bp).toMatchObject({ total: 2, hasIssue: 1, handOver: 1, meetings: 0 });
     expect(bp?.byStage.interest).toBe(2);
     expect(summary.entries.find((e) => e.entry === 'other')?.meetings).toBe(1);
-    expect(summary.entries.map((e) => e.entry)).toHaveLength(5);
+    expect(summary.entries.map((e) => e.entry)).toHaveLength(6); // ⑥ sales agency (#161)
   });
 
   it('lists the months from the first record to the last target, with the running totals', () => {
