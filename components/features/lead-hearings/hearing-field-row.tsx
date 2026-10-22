@@ -18,6 +18,7 @@ import {
   type HearingItemStatus,
   choosesOtherOption,
   hasOtherOption,
+  hearingLabel,
   isUnconfirmedSource,
 } from '@/lib/features/lead-hearings/catalog';
 import { normalizeHearingValue } from '@/lib/features/lead-hearings/form';
@@ -74,7 +75,7 @@ export const HearingFieldRow = memo(function HearingFieldRow({
 }: HearingFieldRowProps) {
   const t = useTranslations('leadHearings');
   const tRoot = useTranslations();
-  const label = tRoot(field.labelKey);
+  const label = hearingLabel(tRoot, field);
   const id = `hearing-${field.key}`;
   const hasDiagnosisValue =
     isUnconfirmedSource(entry.source) && normalizeHearingValue(field, entry.value) !== undefined;

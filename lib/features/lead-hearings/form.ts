@@ -22,6 +22,7 @@ import {
   choosesOtherOption,
   getHearingField,
   hasOtherOption,
+  isHearingCustomFieldKey,
   isUnconfirmedSource,
 } from './catalog';
 import { type HearingMissingItems, computeMissingItems } from './missing';
@@ -266,20 +267,32 @@ export function fromIsoDate(iso: string | undefined): Date | undefined {
  * Form state → fields to save: complete values only, untouched fields left out. An "other" note
  * is saved (trimmed) only while an "other" option is chosen, so no stale note outlives its option.
  */
-export function toSavedHearingFields(form: HearingFields): HearingFields {
+export function toSavedHearingFields(
+  form: HearingFields,
+  /** The organization's own fields (#98); values of others are not saved */
+  customFields: readonly HearingFieldDefinition[] = []
+): HearingFields {
   const saved: HearingFields = {};
-  for (const field of HEARING_FIELDS) {
-    const entry = form[field.key];
+  const fields = [...HEARING_FIELDS, ...customFields];
+  for (const field of fields) {
+    const key = field.key as HearingFieldKey;
+    const entry = form[key];
     if (!entry) continue;
     const value = normalizeHearingValue(field, entry.value);
     if (value === undefined && entry.status === 'not_yet' && entry.source === null) continue;
     const otherNote = effectiveOtherNote(field, value, entry.otherNote);
-    saved[field.key] = {
+    saved[key] = {
       ...(value !== undefined ? { value } : {}),
       status: entry.status,
       source: entry.source,
       ...(otherNote !== undefined ? { otherNote } : {}),
     };
+  }
+  // An own field the screen does not know (its settings did not load) is sent as it is, never
+  // dropped; the server checks it
+  const known = new Set<string>(fields.map((field) => field.key));
+  for (const [key, entry] of Object.entries(form)) {
+    if (isHearingCustomFieldKey(key) && !known.has(key) && entry) saved[key] = entry;
   }
   return saved;
 }
@@ -290,13 +303,14 @@ export function toSavedHearingFields(form: HearingFields): HearingFields {
  */
 export function computeFormMissingItems(
   form: HearingFields,
-  requiredItems: readonly HearingRequiredItem[] = DEFAULT_HEARING_CATALOG.requiredItems
+  requiredItems: readonly HearingRequiredItem[] = DEFAULT_HEARING_CATALOG.requiredItems,
+  fieldOf: (key: string) => HearingFieldDefinition | undefined = getHearingField
 ): HearingMissingItems {
   const fields: HearingFields = {};
   for (const item of requiredItems) {
     for (const key of item.keys) {
       const entry = form[key];
-      const field = getHearingField(key);
+      const field = fieldOf(key);
       if (!entry || !field || key in fields) continue;
       fields[key] = { ...entry, value: normalizeHearingValue(field, entry.value) };
     }

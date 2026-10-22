@@ -19,6 +19,7 @@ import {
   choosesOtherOption,
   getHearingField,
   hasOtherOption,
+  isHearingCustomFieldKey,
 } from '../catalog';
 
 /** Value of one field; the shape depends on the field type (see catalog.ts) */
@@ -132,7 +133,47 @@ const saveEntrySchemas = new Map<string, z.ZodType<HearingFieldEntry>>(
   ])
 );
 
-/** Strict schema for saving: every key must be in the catalog and every value valid */
+/** Entry to save for a field (also the organization's own fields, checked on the server) */
+export function hearingSaveEntrySchemaFor(
+  field: HearingFieldDefinition
+): z.ZodType<HearingFieldEntry> {
+  return (saveEntrySchemas.get(field.key) ??
+    entryObjectFor(field).refine(
+      (entry) =>
+        (entry as HearingFieldEntry).otherNote === undefined || choosesOtherOption(entry.value),
+      { message: 'A note needs an "other" option', path: ['otherNote'] }
+    )) as unknown as z.ZodType<HearingFieldEntry>;
+}
+
+/** Longest text of an organization's own text field (#98) */
+export const HEARING_CUSTOM_TEXT_MAX_LENGTH = 1000;
+/** Options of an organization's own choice field in use (#98) */
+export const HEARING_CUSTOM_OPTIONS_MAX = 30;
+/** Options kept with a field, archived ones included */
+export const HEARING_CUSTOM_OPTIONS_STORED_MAX = 100;
+const CUSTOM_KEY_PATTERN = /^custom:[a-z0-9]{8}$/;
+
+/**
+ * The shape of an entry of an organization's own field (#98). Which options exist is known
+ * only from the organization's settings, so the server checks the values against them.
+ */
+const customEntrySchema = z
+  .object({
+    value: z
+      .union([
+        z.string().trim().min(1).max(HEARING_CUSTOM_TEXT_MAX_LENGTH),
+        z.array(z.string().min(1).max(40)).min(1).max(HEARING_CUSTOM_OPTIONS_STORED_MAX),
+      ])
+      .optional(),
+    status: statusSchema,
+    source: sourceSchema,
+  })
+  .strict() as unknown as z.ZodType<HearingFieldEntry>;
+
+/**
+ * Strict schema for saving: every key must be in the catalog (or be an organization's own
+ * field) and every value valid
+ */
 export const hearingFieldsSchema = z
   .object(
     Object.fromEntries(
@@ -142,7 +183,14 @@ export const hearingFieldsSchema = z
       ])
     )
   )
-  .strict() as unknown as z.ZodType<HearingFields>;
+  .catchall(customEntrySchema)
+  .superRefine((value, ctx) => {
+    for (const key of Object.keys(value)) {
+      if (!getHearingField(key) && !CUSTOM_KEY_PATTERN.test(key)) {
+        ctx.addIssue({ code: z.ZodIssueCode.unrecognized_keys, keys: [key] });
+      }
+    }
+  }) as unknown as z.ZodType<HearingFields>;
 
 /**
  * Read stored fields. Keys that are not in the catalog (retired) or whose entry no longer
@@ -158,7 +206,12 @@ export function parseStoredHearingFields(raw: unknown): {
     return { fields, droppedKeys };
   }
   for (const [key, entry] of Object.entries(raw)) {
-    const schema = getHearingField(key) ? entrySchemas.get(key) : undefined;
+    // An organization's own field is kept by its shape; its settings say how to read it
+    const schema = getHearingField(key)
+      ? entrySchemas.get(key)
+      : isHearingCustomFieldKey(key) && CUSTOM_KEY_PATTERN.test(key)
+        ? customEntrySchema
+        : undefined;
     const parsed = schema?.safeParse(entry);
     if (parsed?.success) {
       fields[key] = parsed.data;

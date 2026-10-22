@@ -30,6 +30,7 @@ import {
   type HearingCatalogOverrides,
   type HearingRequiredItem,
   LEAD_HEARINGS_MAX_PER_LEAD,
+  isHearingCustomFieldKey,
   resolveHearingCatalog,
 } from './catalog';
 import { computeMissingItems } from './missing';
@@ -40,6 +41,7 @@ import {
   type HearingFields,
   type HearingPrefillSnapshot,
   type UpdateLeadHearingInput,
+  hearingSaveEntrySchemaFor,
   parseStoredHearingFields,
 } from './types/schemas';
 
@@ -453,6 +455,12 @@ export async function updateLeadHearing(
       .from(leadHearings)
       .where(hearingScope(input.organizationId, input.id));
     before = previous ? parseStoredHearingFields(previous.fields).fields : {};
+    // Values of the organization's own fields must fit how it defined them (#98)
+    assertCustomFieldValues(
+      input.fields,
+      await getHearingOverrides(tx, input.organizationId),
+      before
+    );
     const [saved] = await tx
       .update(leadHearings)
       .set({
@@ -542,4 +550,25 @@ export function withoutHiddenFields(
   return Object.fromEntries(
     Object.entries(fields).filter(([key]) => !hidden.has(key))
   ) as HearingFields;
+}
+
+/**
+ * Values of the organization's own fields (#98), checked against its settings: the field must
+ * exist (archived ones still do, so older records save as they are) and the value fit it
+ */
+export function assertCustomFieldValues(
+  fields: HearingFields,
+  overrides: Pick<HearingCatalogOverrides, 'customFields'>,
+  /** The record as stored: a value the settings no longer know saves only unchanged */
+  stored: HearingFields = {}
+): void {
+  const defined = new Map((overrides.customFields ?? []).map((field) => [field.key, field]));
+  for (const [key, entry] of Object.entries(fields)) {
+    if (!isHearingCustomFieldKey(key)) continue;
+    const field = defined.get(key);
+    if (!field && JSON.stringify(entry) === JSON.stringify(stored[key])) continue;
+    if (!field || !hearingSaveEntrySchemaFor(field).safeParse(entry).success) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: `Invalid value for ${key}` });
+    }
+  }
 }

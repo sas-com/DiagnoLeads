@@ -46,6 +46,13 @@ describe.skipIf(!url)('hearing settings (PostgreSQL)', () => {
     return lead.id as string;
   };
 
+  /** Save with the version as it is now (as a screen just loaded would) */
+  // biome-ignore lint/suspicious/noExplicitAny: tRPC callers
+  const saveSettings = async (caller: any, input: { organizationId: string; settings: unknown }) => {
+    const { settings } = await callers.admin.leadHearings.catalogSettings({ organizationId: org });
+    return caller.leadHearings.updateCatalogSettings({ ...input, expectedVersion: settings.version });
+  };
+
   beforeAll(async () => {
     const [row] = await pg
       .insert(organizations)
@@ -77,22 +84,27 @@ describe.skipIf(!url)('hearing settings (PostgreSQL)', () => {
   it('lets only owners and admins change the settings, versioned in the audit log', async () => {
     const read = await callers.member.leadHearings.catalogSettings({ organizationId: org });
     expect(read).toEqual({
-      settings: { hidden: [], required: null, order: {}, version: 0 },
+      settings: { hidden: [], required: null, order: {}, customFields: [], version: 0 },
       canEdit: false,
     });
     await expect(
-      callers.member.leadHearings.updateCatalogSettings({
+      saveSettings(callers.member, {
         organizationId: org,
         settings: { hidden: ['machineModel'], required: null, order: {} },
       })
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
 
-    const settings = { hidden: ['machineModel'], required: null, order: { meeting: ['attendeeRoles'] } };
+    const settings = {
+      hidden: ['machineModel'],
+      required: null,
+      order: { meeting: ['attendeeRoles'] },
+      customFields: [],
+    };
     expect(
-      await callers.admin.leadHearings.updateCatalogSettings({ organizationId: org, settings })
+      await saveSettings(callers.admin, { organizationId: org, settings })
     ).toEqual({ version: 1 });
     expect(
-      await callers.admin.leadHearings.updateCatalogSettings({ organizationId: org, settings })
+      await saveSettings(callers.admin, { organizationId: org, settings })
     ).toEqual({ version: 2 });
     expect((await callers.admin.leadHearings.catalogSettings({ organizationId: org })).settings).toEqual({
       ...settings,
@@ -120,15 +132,18 @@ describe.skipIf(!url)('hearing settings (PostgreSQL)', () => {
     expect(row.settings).toMatchObject({ other: 1 });
   });
 
-  it('gives two saves at once versions one after the other', async () => {
+  it('refuses a save over settings someone else changed, also when two save at once', async () => {
     const before = (await callers.admin.leadHearings.catalogSettings({ organizationId: org })).settings
       .version;
     const settings = { hidden: [], required: null, order: {} };
-    const results = await Promise.all([
-      callers.admin.leadHearings.updateCatalogSettings({ organizationId: org, settings }),
-      callers.admin.leadHearings.updateCatalogSettings({ organizationId: org, settings }),
+    const results = await Promise.allSettled([
+      callers.admin.leadHearings.updateCatalogSettings({ organizationId: org, settings, expectedVersion: before }),
+      callers.admin.leadHearings.updateCatalogSettings({ organizationId: org, settings, expectedVersion: before }),
     ]);
-    expect(results.map((r: { version: number }) => r.version).sort()).toEqual([before + 1, before + 2]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toEqual([
+      { status: 'fulfilled', value: { version: before + 1 } },
+    ]);
+    expect(results.find((r) => r.status === 'rejected')).toMatchObject({ reason: { code: 'CONFLICT' } });
   });
 
   it('counts a newly required field as missing at once', async () => {
@@ -140,7 +155,7 @@ describe.skipIf(!url)('hearing settings (PostgreSQL)', () => {
     });
     expect(hearing.missing.missing).not.toContain('field:budgetStatus');
 
-    await callers.admin.leadHearings.updateCatalogSettings({
+    await saveSettings(callers.admin, {
       organizationId: org,
       settings: { hidden: [], required: ['targetSystem', 'budgetStatus'], order: {} },
     });
@@ -163,7 +178,7 @@ describe.skipIf(!url)('hearing settings (PostgreSQL)', () => {
       answers: { platform: 'as400', timeline: 'within_1y' },
       result: { challenges: { primary: 'people', selected: ['people'] } },
     });
-    await callers.admin.leadHearings.updateCatalogSettings({
+    await saveSettings(callers.admin, {
       organizationId: org,
       settings: { hidden: ['targetSystem'], required: null, order: {} },
     });
@@ -191,5 +206,78 @@ describe.skipIf(!url)('hearing settings (PostgreSQL)', () => {
     expect(next.fields.targetSystem).toBeUndefined();
     const earlier = await callers.member.leadHearings.get({ organizationId: org, id: hearing.id });
     expect(earlier.fields.targetSystem?.value).toBe('as400');
+  });
+
+  it("keeps the organization's own fields: values checked, required, and readable once removed", async () => {
+    const own = {
+      id: 'wish0001',
+      label: '導入時期の希望',
+      type: 'single',
+      section: 'requirements',
+      options: [
+        { id: 'this0001', label: '今期' },
+        { id: 'next0001', label: '来期' },
+      ],
+    };
+    await saveSettings(callers.admin, {
+      organizationId: org,
+      settings: { hidden: [], required: ['custom:wish0001'], order: {}, customFields: [own] },
+    });
+    const leadId = await createLead();
+    const hearing = await callers.member.leadHearings.create({
+      organizationId: org,
+      leadId,
+      heldOn: '2026-10-22',
+    });
+    expect(hearing.missing.missing).toEqual(['field:custom:wish0001']);
+
+    const save = (value: string, expectedUpdatedAt: Date) =>
+      callers.member.leadHearings.update({
+        organizationId: org,
+        id: hearing.id,
+        heldOn: '2026-10-22',
+        fields: { 'custom:wish0001': { value, status: 'done', source: null } },
+        expectedUpdatedAt,
+      });
+    await expect(save('nope0000', hearing.updatedAt)).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    const saved = await save('next0001', hearing.updatedAt);
+    expect(saved.missing.missing).toEqual([]);
+    const summaryItem = async () =>
+      (await callers.member.leadHearings.summary({ organizationId: org, id: hearing.id })).summary.sections
+        .flatMap((section: { items: { key: string; label: string; value: string | null }[] }) => section.items)
+        .find((item: { key: string }) => item.key === 'custom:wish0001');
+    expect(await summaryItem()).toMatchObject({ label: '導入時期の希望', value: '来期' });
+
+    // The option and then the field are taken away: kept archived, the record still reads
+    await saveSettings(callers.admin, {
+      organizationId: org,
+      settings: {
+        hidden: [],
+        required: null,
+        order: {},
+        customFields: [{ ...own, options: [own.options[0]] }],
+      },
+    });
+    await saveSettings(callers.admin, {
+      organizationId: org,
+      settings: { hidden: [], required: null, order: {}, customFields: [] },
+    });
+    const { settings } = await callers.member.leadHearings.catalogSettings({ organizationId: org });
+    expect(settings.customFields).toEqual([
+      {
+        ...own,
+        archived: true,
+        options: [own.options[0], { ...own.options[1], archived: true }],
+      },
+    ]);
+    expect(await summaryItem()).toMatchObject({ label: '導入時期の希望', value: '来期' });
+    const read = await callers.member.leadHearings.get({ organizationId: org, id: hearing.id });
+    expect(read.fields['custom:wish0001']?.value).toBe('next0001');
+    expect(read.missing.missing).not.toContain('field:custom:wish0001');
+    // The record saves as it is, archived option and all
+    await save('next0001', read.updatedAt);
+    // A new hearing does not carry the removed field over
+    const next = await callers.member.leadHearings.create({ organizationId: org, leadId, heldOn: '2026-10-23' });
+    expect(next.fields['custom:wish0001']).toBeUndefined();
   });
 });

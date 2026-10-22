@@ -20,7 +20,12 @@ import type {
   HearingSectionId,
   HearingValueSource,
 } from './catalog';
-import { isOtherOption, isUnconfirmedSource } from './catalog';
+import {
+  hearingLabel,
+  isHearingCustomFieldKey,
+  isOtherOption,
+  isUnconfirmedSource,
+} from './catalog';
 import { effectiveOtherNote, normalizeHearingValue } from './form';
 import { computeMissingItems } from './missing';
 import type { HearingFieldEntry, HearingFieldValue, HearingFields } from './types/schemas';
@@ -43,6 +48,8 @@ export const HEARING_SUMMARY_SECTIONS = [
   'challenges',
   'requirements',
   'result',
+  /** The organization's own fields (#98), in the editor's order; left out when there are none */
+  'own',
 ] as const;
 export type HearingSummarySectionId = (typeof HEARING_SUMMARY_SECTIONS)[number];
 
@@ -73,6 +80,8 @@ export const HEARING_SUMMARY_LAYOUT: Record<HearingSummarySectionId, readonly He
     'aiSourceAnalysis',
     'aiSourceAnalysisConditions',
   ],
+  // Filled from the catalog: the organization's own fields it shows
+  own: [],
   result: ['dealRating', 'nextMeetingDate', 'nextMeetingAttendees'],
 };
 
@@ -252,7 +261,7 @@ export function buildHearingSummary(
   );
   const label = (key: HearingFieldKey) => {
     const field = catalogFields.get(key)?.field;
-    return field ? t(field.labelKey) : key;
+    return field ? hearingLabel(t, field) : key;
   };
   const todo = (key: HearingFieldKey): HearingSummaryTodo => ({
     key,
@@ -285,7 +294,7 @@ export function buildHearingSummary(
       if (canonical(before, noteBefore) === canonical(after, noteAfter)) continue;
       changes.push({
         key,
-        label: t(field.labelKey),
+        label: hearingLabel(t, field),
         before: hearingValueText(field, before, labels, noteBefore),
         after: hearingValueText(field, after, labels, noteAfter),
       });
@@ -296,14 +305,17 @@ export function buildHearingSummary(
   const sections = HEARING_SUMMARY_SECTIONS.map((id) => ({
     id,
     title: t(`leadHearings.summary.sections.${id}`),
-    items: HEARING_SUMMARY_LAYOUT[id].flatMap((key): HearingSummaryItem[] => {
+    items: (id === 'own'
+      ? [...catalogFields.keys()].filter(isHearingCustomFieldKey)
+      : HEARING_SUMMARY_LAYOUT[id]
+    ).flatMap((key): HearingSummaryItem[] => {
       const entry = catalogFields.get(key);
       if (!entry) return [];
       const stored = fields[key];
       return [
         {
           key,
-          label: t(entry.field.labelKey),
+          label: hearingLabel(t, entry.field),
           value: hearingValueText(entry.field, stored?.value, labels, stored?.otherNote),
           status: stored?.status ?? 'not_yet',
           source: stored?.source ?? null,

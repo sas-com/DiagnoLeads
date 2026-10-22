@@ -31,6 +31,7 @@ const settings = (values: Record<string, unknown> = {}) => ({
   hidden: [],
   required: null,
   order: {},
+  customFields: [],
   version: 0,
   ...values,
 });
@@ -82,7 +83,12 @@ describe('HearingSettingsCard', () => {
     renderCard();
     fireEvent.click(screen.getByRole('checkbox', { name: '機種・バージョン を聞く' }));
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
-    expect(saved()).toEqual({ hidden: ['machineModel'], required: null, order: {} });
+    expect(saved()).toEqual({
+      hidden: ['machineModel'],
+      required: null,
+      order: {},
+      customFields: [],
+    });
   });
 
   it('moves a field within its section', () => {
@@ -114,6 +120,79 @@ describe('HearingSettingsCard', () => {
     fireEvent.click(screen.getByRole('button', { name: '初期の設定に戻す' }));
     expect(screen.getByRole('checkbox', { name: '機種・バージョン を聞く' })).toBeChecked();
     expect(meetingRows()[0]).toBe('hearing-setting-meetingFormat');
+  });
+
+  it('adds an own choice field, asked and required like the others', () => {
+    renderCard();
+    fireEvent.click(screen.getByRole('button', { name: '独自の項目を追加' }));
+    fireEvent.change(screen.getByLabelText('項目名'), { target: { value: '導入時期の希望' } });
+    fireEvent.change(screen.getByLabelText('答え方'), { target: { value: 'single' } });
+    fireEvent.change(screen.getByLabelText('導入時期の希望 の選択肢 1'), {
+      target: { value: '今期' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '選択肢を追加' }));
+    // A choice left empty is dropped on save
+    fireEvent.click(screen.getByRole('checkbox', { name: '導入時期の希望 を必須にする' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+    const [field] = saved().customFields;
+    expect(field).toMatchObject({
+      label: '導入時期の希望',
+      type: 'single',
+      section: 'requirements',
+      options: [{ label: '今期' }],
+    });
+    expect(field.options).toHaveLength(1);
+    expect(saved().required).toContain(`custom:${field.id}`);
+  });
+
+  it('refuses an own field without a name', () => {
+    renderCard();
+    fireEvent.click(screen.getByRole('button', { name: '独自の項目を追加' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    expect(mocks.mutate).not.toHaveBeenCalled();
+  });
+
+  it('removes a saved own field from every list, and keeps its type fixed', () => {
+    const own = {
+      id: 'note0001',
+      label: '社内の呼び名',
+      type: 'text',
+      section: 'customer',
+      options: [],
+    };
+    const archived = { ...own, id: 'gone0001', label: '昔の項目', archived: true };
+    mocks.result = {
+      data: {
+        settings: settings({
+          customFields: [own, archived],
+          hidden: ['custom:gone0001'],
+          order: { customer: ['custom:note0001'] },
+        }),
+        canEdit: true,
+      },
+      isError: false,
+    };
+    renderCard();
+    expect(screen.getByTestId('hearing-setting-custom:note0001')).toBeInTheDocument();
+    // An archived field is not in the lists, only among the removed ones to bring back
+    expect(screen.queryByTestId('hearing-setting-custom:gone0001')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '昔の項目 を戻す' })).toBeInTheDocument();
+    expect(screen.getByLabelText('答え方')).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: '社内の呼び名 を削除' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    expect(saved()).toEqual({
+      hidden: ['custom:gone0001'],
+      required: null,
+      order: {},
+      // Both kept archived, so older records still read them
+      customFields: [archived, { ...own, archived: true }],
+    });
+    expect(mocks.mutate.mock.calls.at(-1)?.[0].expectedVersion).toBe(0);
+    // A removed field can be brought back
+    fireEvent.click(screen.getByRole('button', { name: '社内の呼び名 を戻す' }));
+    expect(screen.getByTestId('hearing-setting-custom:note0001')).toBeInTheDocument();
   });
 
   it('lets members only read them', () => {

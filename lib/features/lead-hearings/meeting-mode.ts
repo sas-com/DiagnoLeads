@@ -9,6 +9,7 @@
 import type {
   HearingCatalogField,
   HearingCatalogView,
+  HearingFieldDefinition,
   HearingFieldKey,
   HearingItemStatus,
   HearingRequiredItem,
@@ -94,13 +95,14 @@ export function itemHasStatus(
 export function toggleHearingItemStatus(
   form: HearingFields,
   item: HearingRequiredItem,
-  status: HearingItemStatus
+  status: HearingItemStatus,
+  fieldOf: (key: string) => HearingFieldDefinition | undefined = getHearingField
 ): HearingFields {
   const undo = itemHasStatus(form, item, status);
   const next: HearingFields = { ...form };
   for (const key of item.keys) {
     const entry = entryOf(form, key as HearingFieldKey);
-    const field = getHearingField(key);
+    const field = fieldOf(key);
     const hasValue = field ? normalizeHearingValue(field, entry.value) !== undefined : false;
     next[key] = { ...entry, status: undo ? (hasValue ? 'done' : 'not_yet') : status };
   }

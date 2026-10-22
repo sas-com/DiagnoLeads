@@ -313,6 +313,52 @@ describe('LeadHearingEditor', () => {
     expect(screen.queryByText('機種・バージョン')).not.toBeInTheDocument();
   });
 
+  it("records the organization's own fields, keeping an archived choice the record has (#98)", async () => {
+    const user = userEvent.setup();
+    const own = (id: string, label: string, options: { id: string; label: string; archived?: boolean }[]) => ({
+      id,
+      label,
+      type: 'multiple',
+      section: 'requirements',
+      options,
+    });
+    mocks.catalogSettings = {
+      settings: {
+        hidden: [],
+        required: null,
+        order: {},
+        customFields: [
+          own('wish0001', '導入時期の希望', [
+            { id: 'this0001', label: '今期' },
+            { id: 'next0001', label: '来期', archived: true },
+          ]),
+          own('gone0001', '使わない項目', [{ id: 'aaaa0001', label: 'A' }]),
+        ].map((field, index) => (index === 1 ? { ...field, archived: true } : field)),
+        version: 2,
+      },
+      canEdit: true,
+    };
+    mocks.data = hearing({
+      fields: {
+        ...hearing().fields,
+        'custom:wish0001': { value: ['next0001'], status: 'done', source: null },
+      },
+    });
+    render(editor());
+    await user.click(screen.getByRole('tab', { name: /要件/ }));
+    const group = screen.getByRole('group', { name: '導入時期の希望' });
+    expect(within(group).getByLabelText('来期')).toBeChecked();
+    expect(screen.queryByText('使わない項目')).not.toBeInTheDocument();
+
+    await user.click(within(group).getByLabelText('今期'));
+    await user.click(screen.getByRole('button', { name: '保存' }));
+    expect(savedFields()['custom:wish0001']).toEqual({
+      value: ['this0001', 'next0001'],
+      status: 'done',
+      source: null,
+    });
+  });
+
   it('shows not found for a hearing of another lead', () => {
     mocks.data = hearing({ leadId: '110e8400-e29b-41d4-a716-446655440000' });
     render(editor());
