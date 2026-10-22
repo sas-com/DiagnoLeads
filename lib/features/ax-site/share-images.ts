@@ -18,6 +18,11 @@ export interface AxShareImageSpec {
   labelKey: string;
   /** Message key of the title of the image, also its alt text */
   titleKey: string;
+  /**
+   * The title broken into lines by hand, per locale (otherwise the browser breaks it between
+   * phrases); the lines joined must be the title
+   */
+  lines?: Partial<Record<AxShareLocale, readonly string[]>>;
   icon: ColumnThumbnailIcon;
 }
 
@@ -34,6 +39,8 @@ export const AX_SHARE_IMAGES: Record<AxSharePage, AxShareImageSpec> = {
     locales: ['ja', 'en'],
     labelKey: 'axAccess.hero.eyebrow',
     titleKey: 'axAccess.hero.title',
+    // The two choices on one line (#347)
+    lines: { ja: ['その Access、', '直して使うか、Web に移すか。'] },
     icon: 'split',
   },
   // The column list (Japanese only): its heading as the label, its lead as the title
