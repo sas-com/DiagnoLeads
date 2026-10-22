@@ -1,4 +1,6 @@
 import { allowedEmailDomains, isTestMode } from '@/lib/email/allowed-recipients';
+import { isColumnLocale } from '@/lib/features/ax-site/columns';
+import { COLUMN_INDEX_PATH } from '@/lib/features/ax-site/columns/types';
 import { formatEmailDomains } from '@/lib/i18n/format-domains';
 import { getTranslations } from 'next-intl/server';
 import { AxCtaLink } from './ax-cta-link';
@@ -60,6 +62,15 @@ export async function AxSiteHeader({ locale, variant }: AxSiteHeaderProps) {
                 {t(`header.nav.${id}`)}
               </a>
             ))}
+            {/* Columns exist in Japanese only: no link to a page that would 404 */}
+            {isColumnLocale(locale) && (
+              <a
+                href={`/${locale}${COLUMN_INDEX_PATH}`}
+                className="text-ax-ink transition-colors hover:text-ax-teal-dark"
+              >
+                {t('header.nav.column')}
+              </a>
+            )}
           </nav>
           <AxCtaLink
             href={sectionHref(AX_SECTIONS.diagnosis)}
