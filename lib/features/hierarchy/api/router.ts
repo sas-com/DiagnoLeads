@@ -281,11 +281,21 @@ export const hierarchyRouter = router({
       });
     }
 
-    // Validate parent exists (if not null)
+    // Validate the parent (if not null): the caller must manage it too, or an organization could
+    // join a group it does not belong to (#350). Answered as missing, like an unknown id.
     if (input.parentOrganizationId) {
-      const parent = await ctx.db.query.organizations.findFirst({
-        where: eq(organizations.id, input.parentOrganizationId),
+      const parentMembership = await ctx.db.query.organizationMembers.findFirst({
+        where: and(
+          eq(organizationMembers.organizationId, input.parentOrganizationId),
+          eq(organizationMembers.userId, ctx.user.id)
+        ),
       });
+      const parent =
+        parentMembership && canModifyHierarchy(parentMembership.role)
+          ? await ctx.db.query.organizations.findFirst({
+              where: eq(organizations.id, input.parentOrganizationId),
+            })
+          : undefined;
 
       if (!parent) {
         throw new TRPCError({
