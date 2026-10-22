@@ -1,3 +1,5 @@
+import en from '@/locales/en/common.json';
+import ja from '@/locales/ja/common.json';
 /**
  * Who sends the mail a respondent of the AX diagnosis receives (#154).
  *
@@ -5,9 +7,7 @@
  * Division as printed in the AX site footer, the division's contact details, and the privacy
  * policy. Replies go to the same contact address.
  */
-import { AX_CONTACT, axPrivacyPolicyUrl } from '@/components/features/ax-site/site-config';
-import en from '@/locales/en/common.json';
-import ja from '@/locales/ja/common.json';
+import { AX_CONTACT, axPrivacyPolicyUrl } from './contact';
 
 export type AxMailLocale = 'ja' | 'en';
 

@@ -1,6 +1,6 @@
 /**
- * Extra header fields of sendEmail (#154): passed to Resend as given, and refused before
- * sending when they could split or forge other header fields.
+ * One-click unsubscribe of sendEmail (#154, RFC 8058): both headers are added in the required
+ * form, only for an https link and a single recipient.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,7 +11,7 @@ vi.mock('resend', () => ({
   },
 }));
 
-describe('sendEmail headers', () => {
+describe('sendEmail listUnsubscribe', () => {
   const saved = { ...process.env };
 
   beforeEach(() => {
@@ -25,73 +25,59 @@ describe('sendEmail headers', () => {
     process.env = { ...saved };
   });
 
-  it('passes the headers to Resend unchanged', async () => {
+  const base = { to: 'x@example.com', subject: 's', html: 'h' };
+
+  it('adds List-Unsubscribe and List-Unsubscribe-Post for one recipient', async () => {
     const { sendEmail } = await import('@/lib/features/email/email-service');
-    const headers = {
-      'List-Unsubscribe': '<https://app.example.com/unsubscribe?token=abc>',
+    await sendEmail({
+      ...base,
+      listUnsubscribe: { url: 'https://app.example.com/api/email/unsubscribe/one-click?t=abc' },
+    });
+    expect(send.mock.calls[0]?.[0].headers).toEqual({
+      'List-Unsubscribe': '<https://app.example.com/api/email/unsubscribe/one-click?t=abc>',
       'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-    };
-    await sendEmail({ to: 'x@example.com', subject: 's', html: 'h', headers });
-    expect(send.mock.calls[0]?.[0].headers).toEqual(headers);
+    });
   });
 
-  it('sends no headers field when none are given', async () => {
+  it('sends no headers field without an unsubscribe link', async () => {
     const { sendEmail } = await import('@/lib/features/email/email-service');
-    await sendEmail({ to: 'x@example.com', subject: 's', html: 'h' });
+    await sendEmail(base);
     expect(send.mock.calls[0]?.[0]).not.toHaveProperty('headers');
   });
 
   it.each([
-    'List Unsubscribe',
-    'X-Test:',
-    'X-Ünicode',
-    '',
-    'X-A\r\nBcc',
-    'X-Test',
-    'Bcc',
-    'cc',
-    'To',
-    'FROM',
-    'reply-to',
-    'Subject',
-    'content-type',
-  ])(
-    'refuses the header name %j before sending',
-    async (name) => {
-      const { sendEmail } = await import('@/lib/features/email/email-service');
-      await expect(
-        sendEmail({ to: 'x@example.com', subject: 's', html: 'h', headers: { [name]: 'v' } })
-      ).rejects.toThrow(/Email header not allowed/);
-      expect(send).not.toHaveBeenCalled();
-    }
-  );
+    'http://app.example.com/u?t=abc',
+    'javascript:alert(1)',
+    'https://user:pw@app.example.com/u',
+    '/api/email/unsubscribe',
+  ])('refuses the unsubscribe link %j before sending', async (url) => {
+    const { sendEmail } = await import('@/lib/features/email/email-service');
+    await expect(sendEmail({ ...base, listUnsubscribe: { url } })).rejects.toThrow(
+      /unsubscribe link is not https/
+    );
+    expect(send).not.toHaveBeenCalled();
+  });
 
-  it.each(['a\r\nBcc: y@example.com', 'a\nb', 'a\u0000b', 'a\tb', 'a b', 'a\u0085b'])(
-    'refuses the header value %j before sending',
-    async (value) => {
-      const { sendEmail } = await import('@/lib/features/email/email-service');
-      await expect(
-        sendEmail({
-          to: 'x@example.com',
-          subject: 's',
-          html: 'h',
-          headers: { 'List-Unsubscribe': value },
-        })
-      ).rejects.toThrow(/Invalid value for email header List-Unsubscribe/);
-      expect(send).not.toHaveBeenCalled();
-    }
-  );
+  it('never puts a line break into the header (the URL parser drops it)', async () => {
+    const { sendEmail } = await import('@/lib/features/email/email-service');
+    await sendEmail({
+      ...base,
+      listUnsubscribe: { url: 'https://app.example.com/u?t=a\r\nBcc: y@example.com' },
+    });
+    const header: string = send.mock.calls[0]?.[0].headers['List-Unsubscribe'];
+    expect(header).not.toMatch(/[\r\n]/);
+    expect(header).toMatch(/^<https:\/\/app\.example\.com\/[^\s<>]*>$/);
+  });
 
-  it('refuses the same header twice in different case', async () => {
+  it('refuses an unsubscribe link when the mail has several recipients', async () => {
     const { sendEmail } = await import('@/lib/features/email/email-service');
     await expect(
       sendEmail({
-        to: 'x@example.com',
-        subject: 's',
-        html: 'h',
-        headers: { 'List-Unsubscribe': '<https://a.example/>', 'list-unsubscribe': '<https://b.example/>' },
+        ...base,
+        to: ['a@example.com', 'b@example.com'],
+        listUnsubscribe: { url: 'https://app.example.com/u?t=abc' },
       })
-    ).rejects.toThrow(/Email header not allowed/);
+    ).rejects.toThrow(/exactly one recipient/);
     expect(send).not.toHaveBeenCalled();
   });
 });

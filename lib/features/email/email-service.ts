@@ -7,7 +7,7 @@ import {
   EmailRecipientNotAllowedError,
   filterAllowedRecipients,
 } from '@/lib/email/allowed-recipients';
-import { sanitizeSubject } from '@/lib/email/templates/render';
+import { safeUrl, sanitizeSubject } from '@/lib/email/templates/render';
 import { Resend } from 'resend';
 
 // Initialize Resend client (lazy to handle missing API key)
@@ -35,39 +35,39 @@ export interface SendEmailOptions {
   from?: string;
   replyTo?: string;
   /**
-   * Extra header fields (#154). Only List-Unsubscribe and List-Unsubscribe-Post are allowed:
-   * recipient, sender or content headers would bypass filterAllowedRecipients or forge the
-   * mail. Values stay on one line. An invalid header fails the send instead of being dropped.
+   * One-click unsubscribe (RFC 8058, #154): the https URL that stops this recipient's mail.
+   * sendEmail adds both List-Unsubscribe and List-Unsubscribe-Post. The URL carries a
+   * per-recipient token, so the mail must have exactly one recipient.
    */
-  headers?: Record<string, string>;
+  listUnsubscribe?: { url: string };
 }
 
-const ALLOWED_HEADERS = new Set(['list-unsubscribe', 'list-unsubscribe-post']);
-// Line breaks and other control characters (including U+0085, U+2028 and U+2029)
-const HEADER_VALUE_FORBIDDEN = /[\p{Cc}\u2028\u2029]/u;
-
-/** Throw when a header is not one we send or could split or forge other header fields */
-function assertValidHeaders(headers: Record<string, string>): void {
-  const seen = new Set<string>();
-  for (const [name, value] of Object.entries(headers)) {
-    const key = name.toLowerCase();
-    if (!ALLOWED_HEADERS.has(key) || seen.has(key)) {
-      throw new Error('Email header not allowed');
-    }
-    seen.add(key);
-    if (typeof value !== 'string' || HEADER_VALUE_FORBIDDEN.test(value)) {
-      throw new Error(`Invalid value for email header ${name}`);
-    }
+/** The unsubscribe headers for one recipient, or an error before anything is sent */
+function unsubscribeHeaders(
+  listUnsubscribe: { url: string },
+  recipients: string[]
+): Record<string, string> {
+  if (recipients.length !== 1) {
+    throw new Error('A mail with an unsubscribe link must have exactly one recipient');
   }
+  const url = safeUrl(listUnsubscribe.url);
+  // safeUrl returns a normalised https URL: ASCII only, no line breaks or angle brackets
+  if (!url) throw new Error('The unsubscribe link is not https');
+  return {
+    'List-Unsubscribe': `<${url}>`,
+    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+  };
 }
 
 /**
  * Send an email
  */
 export async function sendEmail(options: SendEmailOptions): Promise<{ id: string }> {
-  if (options.headers) assertValidHeaders(options.headers);
   const to = filterAllowedRecipients(options.to);
   if (to.length === 0) throw new EmailRecipientNotAllowedError();
+  const headers = options.listUnsubscribe
+    ? unsubscribeHeaders(options.listUnsubscribe, to)
+    : undefined;
   const client = getResendClient();
   const from = options.from || process.env.EMAIL_FROM || 'DiagnoLeads <noreply@diagnoleads.com>';
 
@@ -79,7 +79,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<{ id: string
     html: options.html,
     text: options.text,
     replyTo: options.replyTo,
-    ...(options.headers ? { headers: options.headers } : {}),
+    ...(headers ? { headers } : {}),
   });
 
   if (result.error) {
