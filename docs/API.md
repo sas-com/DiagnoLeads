@@ -429,8 +429,10 @@ POST /api/trpc/webhooks.test
 ```
 Sends one delivery marked `"test": true` to the chosen webhook. It is tried once: a failure is not
 retried and does not count towards the webhook's failure count. At most 3 test sends per webhook
-in 10 minutes and 10 per organization in an hour (`WEBHOOK_TEST_SEND_LIMITS`), counted from the
-stored deliveries; over the limit the answer is `TOO_MANY_REQUESTS`.
+in 10 minutes (counted from the stored deliveries), 10 per organization in an hour and 20 per user
+in an hour across organizations (counted in `public_rate_limits`, so deleting and recreating a
+webhook does not reset them); see `WEBHOOK_TEST_SEND_LIMITS`. Over a limit the answer is
+`TOO_MANY_REQUESTS`.
 
 ---
 

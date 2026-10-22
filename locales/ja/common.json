@@ -1304,7 +1304,7 @@
       "test": "テスト送信",
       "testSent": "テスト送信しました",
       "testFailed": "テスト送信に失敗しました。送信先の設定を確認してください。",
-      "testRateLimited": "テスト送信の上限に達しました（1つの Webhook につき 10 分間に {perWebhook} 回、組織全体で 1 時間に {perOrganization} 回まで）。しばらくしてからもう一度お試しください。"
+      "testRateLimited": "テスト送信の上限に達しました（1つの Webhook につき 10 分間に {perWebhook} 回、組織全体で 1 時間に {perOrganization} 回、1 人あたり 1 時間に {perUser} 回まで）。しばらくしてからもう一度お試しください。"
     },
     "embed": {
       "title": "埋め込みウィジェット設定",

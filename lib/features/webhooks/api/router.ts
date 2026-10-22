@@ -91,6 +91,13 @@ const urlRefusalOf = (webhook: Webhook, canManage: boolean): WebhookUrlRefusal |
   return checked.ok ? null : checked.reason;
 };
 
+/** The scope of each test send limit, in the TOO_MANY_REQUESTS message */
+const TEST_LIMIT_SCOPES = {
+  perWebhook: 'per webhook',
+  perOrganization: 'per organization',
+  perUser: 'per user',
+} as const;
+
 /** What the current user may do, so the settings page shows only the buttons they can use */
 const permissionsOf = (ability: AppAbility) => ({
   canCreate: ability.can('create', 'Webhook'),
@@ -395,12 +402,15 @@ export const webhooksRouter = router({
     // To this webhook only: other webhooks subscribed to the event must not get test data
     // (#314). Limited per organization and per webhook, counted in the database so that every
     // server instance (and a batched tRPC request) counts alike (#321).
-    const result = await sendTestDelivery(existing[0], { database: ctx.db });
+    const result = await sendTestDelivery(existing[0], {
+      userId: ctx.user.id,
+      database: ctx.db,
+    });
     if (!result.allowed) {
       const { limit, windowMs } = WEBHOOK_TEST_SEND_LIMITS[result.limit];
       throw new TRPCError({
         code: 'TOO_MANY_REQUESTS',
-        message: `test_rate_limited: at most ${limit} test sends per ${windowMs / 60_000} minutes (${result.limit === 'perWebhook' ? 'per webhook' : 'per organization'})`,
+        message: `test_rate_limited: at most ${limit} test sends per ${windowMs / 60_000} minutes (${TEST_LIMIT_SCOPES[result.limit]})`,
       });
     }
     const { success } = result;

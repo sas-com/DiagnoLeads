@@ -17,7 +17,8 @@ import {
   webhooks,
 } from '@/lib/db/schema';
 import { and, asc, eq, gte, inArray, lt, lte, not, sql } from 'drizzle-orm';
-import { WEBHOOK_TEST_SEND_LIMITS } from './test-send-limits';
+import { consumeRateLimits } from '../../diagnostics/rate-limit';
+import { WEBHOOK_TEST_SEND_LIMITS, type WebhookTestSendLimit } from './test-send-limits';
 import { checkWebhookDestination, destinationErrorFor } from './url-guard';
 import { isReservedWebhookHeaderName } from './webhook-headers';
 
@@ -100,6 +101,7 @@ export { WEBHOOK_TEST_SEND_LIMITS };
 /**
  * A test delivery: marked with `test: true` on the payload, or (stored before #321) with the
  * test data. Never null, so it can be negated.
+ * Never spread user-provided keys into event `data` (or the payload): they could fake this mark.
  */
 const isTestDeliverySql = sql`coalesce(
   (${webhookDeliveries.payload} ->> 'test') = 'true'
@@ -474,23 +476,27 @@ export async function sendWebhookDelivery(
 
 export type TestDeliveryResult =
   | { allowed: true; success: boolean }
-  | { allowed: false; limit: 'perOrganization' | 'perWebhook' };
+  | { allowed: false; limit: WebhookTestSendLimit; retryAfterSeconds?: number };
 
 /**
  * The settings page's test send (#314, #321): one delivery to this webhook only, marked as a
  * test, tried once (never retried, not counted as a failure of the webhook).
  *
- * Limited by WEBHOOK_TEST_SEND_LIMITS, counted from the stored test deliveries. The count and
- * the new record are made in one transaction holding a lock per organization, so concurrent
- * requests (from any server instance) cannot both take the last place. A refused request
- * stores nothing.
+ * Limited by WEBHOOK_TEST_SEND_LIMITS, checked in this order:
+ * 1. per webhook, counted from its stored test deliveries;
+ * 2. per user (across organizations), then per organization, counted in `public_rate_limits`,
+ *    which deleting a webhook does not reset. These are consumed only once the per-webhook
+ *    check has passed. A request the per-user limit refuses does not use up the organization's
+ *    allowance; one the organization limit refuses has used one of the user's.
+ * Everything runs in one transaction holding a lock per organization, so concurrent requests
+ * (from any server instance) cannot both take the last place. A refused request stores no
+ * delivery.
  */
 export async function sendTestDelivery(
   webhook: Webhook,
-  { database = db, now = new Date() }: { database?: Database; now?: Date } = {}
+  { userId, database = db, now = new Date() }: { userId: string; database?: Database; now?: Date }
 ): Promise<TestDeliveryResult> {
-  const { perOrganization, perWebhook } = WEBHOOK_TEST_SEND_LIMITS;
-  const organizationSince = new Date(now.getTime() - perOrganization.windowMs);
+  const { perWebhook, perOrganization, perUser } = WEBHOOK_TEST_SEND_LIMITS;
   const webhookSince = new Date(now.getTime() - perWebhook.windowMs);
   const eventType = webhook.events[0] || 'lead.created';
   const data = { test: true, message: WEBHOOK_TEST_MESSAGE, timestamp: now.toISOString() };
@@ -500,29 +506,35 @@ export async function sendTestDelivery(
       sql`select pg_advisory_xact_lock(hashtext(${`webhook-test-send:${webhook.organizationId}`}))`
     );
     const [counts] = await tx
-      .select({
-        organization: sql<number>`count(*)::int`,
-        webhook: sql<number>`(count(*) filter (where ${and(
-          eq(webhookDeliveries.webhookId, webhook.id),
-          gte(webhookDeliveries.createdAt, webhookSince)
-        )}))::int`,
-      })
+      .select({ webhook: sql<number>`count(*)::int` })
       .from(webhookDeliveries)
-      .innerJoin(webhooks, eq(webhookDeliveries.webhookId, webhooks.id))
       .where(
         and(
-          eq(webhooks.organizationId, webhook.organizationId),
-          gte(webhookDeliveries.createdAt, organizationSince),
+          eq(webhookDeliveries.webhookId, webhook.id),
+          gte(webhookDeliveries.createdAt, webhookSince),
           isTestDeliverySql
         )
       );
-
     if ((counts?.webhook ?? 0) >= perWebhook.limit) {
       return { allowed: false, limit: 'perWebhook' } as const;
     }
-    if ((counts?.organization ?? 0) >= perOrganization.limit) {
-      return { allowed: false, limit: 'perOrganization' } as const;
+
+    const quota = await consumeRateLimits(
+      tx,
+      [
+        { rule: perUser, identifier: userId },
+        { rule: perOrganization, identifier: webhook.organizationId },
+      ],
+      now
+    );
+    if (!quota.allowed) {
+      return {
+        allowed: false,
+        limit: quota.rule === perUser.name ? 'perUser' : 'perOrganization',
+        retryAfterSeconds: quota.retryAfterSeconds,
+      } as const;
     }
+
     const stored = await insertDelivery(tx, webhook, webhook.organizationId, eventType, data, {
       test: true,
     });

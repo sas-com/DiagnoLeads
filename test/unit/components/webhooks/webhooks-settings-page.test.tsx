@@ -430,7 +430,7 @@ describe('WebhooksSettingsPage', () => {
       await userEvent.click(screen.getByRole('button', { name: 'テスト送信' }));
 
       expect(mocks.toastError).toHaveBeenCalledWith(
-        'テスト送信の上限に達しました（1つの Webhook につき 10 分間に 3 回、組織全体で 1 時間に 10 回まで）。しばらくしてからもう一度お試しください。'
+        'テスト送信の上限に達しました（1つの Webhook につき 10 分間に 3 回、組織全体で 1 時間に 10 回、1 人あたり 1 時間に 20 回まで）。しばらくしてからもう一度お試しください。'
       );
     });
   });

@@ -181,7 +181,10 @@ function inIpv6Range(groups: number[], network: number[], prefix: number): boole
 
 /** Blocked IPv6 ranges, in addition to the IPv4 forms checked by their IPv4 address */
 const BLOCKED_IPV6_RANGES: readonly (readonly [string, number])[] = [
-  ['::', 96], // unspecified, loopback (::1) and the deprecated IPv4-compatible form
+  // IETF reserved: unspecified, loopback (::1), the deprecated IPv4-compatible form and
+  // IPv4-translated (::ffff:0:0:0/96). IPv4-mapped and NAT64 are within it too, but are judged
+  // by their IPv4 address before these ranges are looked at.
+  ['::', 8],
   ['64:ff9b:1::', 48], // local-use NAT64
   ['100::', 64], // discard-only
   ['2001::', 23], // IETF protocol assignments (Teredo, ORCHID, ...)

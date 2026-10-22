@@ -4,10 +4,13 @@
  *   and does not deactivate the webhook
  * - a test delivery left pending (cut off mid-way, or stored before #321) is failed by the retry
  *   processor instead of being sent again
- * - test sends are limited per webhook and per organization, counted from the delivery records;
- *   over the limit the procedure answers TOO_MANY_REQUESTS and stores nothing
- * - the count stays within the organization, and concurrent requests cannot pass the limit
- * - a webhook whose URL is refused gets no request, and the delivery stores a fixed message
+ * - test sends are limited per webhook (from the delivery records), per organization and per
+ *   user (in public_rate_limits); over a limit the procedure answers TOO_MANY_REQUESTS and
+ *   stores nothing
+ * - deleting and recreating webhooks does not reset the organization limit; the user limit
+ *   counts across organizations; concurrent requests cannot pass the limit
+ * - a webhook whose URL is refused gets no request, the delivery stores a fixed message, and the
+ *   retry processor ends such a delivery instead of retrying it
  * The HTTP side is a stubbed fetch and DNS is mocked. All names are made up.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
@@ -15,7 +18,15 @@
  *     bunx vitest --run test/unit/integration/webhook-test-send.db.test.ts
  */
 import * as schema from '@/lib/db/schema';
-import { organizationMembers, organizations, users, webhookDeliveries, webhooks } from '@/lib/db/schema';
+import {
+  organizationMembers,
+  organizations,
+  publicRateLimits,
+  users,
+  webhookDeliveries,
+  webhooks,
+} from '@/lib/db/schema';
+import { rateLimitKey } from '@/lib/features/diagnostics/rate-limit';
 import {
   WEBHOOK_TEST_MESSAGE,
   WEBHOOK_TEST_SEND_LIMITS,
@@ -47,6 +58,8 @@ describe.skipIf(!url)('webhook test sends (PostgreSQL)', () => {
   const userIds: string[] = [];
   let org: string;
   let otherOrg: string;
+  let thirdOrg: string;
+  let userId: string;
   let first: string;
   let second: string;
   let foreign: string;
@@ -126,15 +139,28 @@ describe.skipIf(!url)('webhook test sends (PostgreSQL)', () => {
       .insert(organizations)
       .values({ name: '別組織株式会社', slug: `test-send-other-${unique()}` })
       .returning();
+    const [c] = await pg
+      .insert(organizations)
+      .values({ name: '三番目株式会社', slug: `test-send-third-${unique()}` })
+      .returning();
     org = a.id;
     otherOrg = b.id;
+    thirdOrg = c.id;
 
     const [user] = await pg
       .insert(users)
       .values({ email: `test-send-${unique()}@example.com`, name: 'テスト送信 管理者' })
       .returning();
     userIds.push(user.id);
-    await pg.insert(organizationMembers).values({ organizationId: org, userId: user.id, role: 'admin' });
+    userId = user.id;
+    // An admin of all three organizations: the per-user limit counts across them
+    await pg.insert(organizationMembers).values(
+      [org, otherOrg, thirdOrg].map((organizationId) => ({
+        organizationId,
+        userId: user.id,
+        role: 'admin' as const,
+      }))
+    );
     admin = appRouter.createCaller({
       db: pg,
       session: { session: { id: 's', userId: user.id }, user },
@@ -146,7 +172,17 @@ describe.skipIf(!url)('webhook test sends (PostgreSQL)', () => {
     vi.stubGlobal('fetch', fetchMock);
     fetchMock.mockReset();
     fetchMock.mockResolvedValue(answer(200));
-    await pg.delete(webhooks).where(inArray(webhooks.organizationId, [org, otherOrg]));
+    await pg.delete(webhooks).where(inArray(webhooks.organizationId, [org, otherOrg, thirdOrg]));
+    // Each test starts with fresh organization and user windows
+    const { perOrganization, perUser } = WEBHOOK_TEST_SEND_LIMITS;
+    await pg
+      .delete(publicRateLimits)
+      .where(
+        inArray(publicRateLimits.key, [
+          ...[org, otherOrg, thirdOrg].map((id) => rateLimitKey(perOrganization, id)),
+          rateLimitKey(perUser, userId),
+        ])
+      );
     first = await createWebhook(org, '最初の連携');
     second = await createWebhook(org, '二番目の連携');
     foreign = await createWebhook(otherOrg, '別組織の連携');
@@ -157,7 +193,7 @@ describe.skipIf(!url)('webhook test sends (PostgreSQL)', () => {
   });
 
   afterAll(async () => {
-    await pg.delete(organizations).where(inArray(organizations.id, [org, otherOrg]));
+    await pg.delete(organizations).where(inArray(organizations.id, [org, otherOrg, thirdOrg]));
     if (userIds.length > 0) await pg.delete(users).where(inArray(users.id, userIds));
     await client?.end();
   });
@@ -240,7 +276,7 @@ describe.skipIf(!url)('webhook test sends (PostgreSQL)', () => {
   });
 
   describe('rate limit', () => {
-    const { perWebhook, perOrganization } = WEBHOOK_TEST_SEND_LIMITS;
+    const { perWebhook, perOrganization, perUser } = WEBHOOK_TEST_SEND_LIMITS;
 
     it(`allows ${perWebhook.limit} test sends per webhook in ${perWebhook.windowMs / 60_000} minutes, then answers TOO_MANY_REQUESTS`, async () => {
       for (let i = 0; i < perWebhook.limit; i++) {
@@ -272,32 +308,93 @@ describe.skipIf(!url)('webhook test sends (PostgreSQL)', () => {
       });
     });
 
-    it(`allows ${perOrganization.limit} test sends per organization in an hour, legacy ones included`, async () => {
-      // Spread over webhooks, so the per-webhook limit is not what refuses
-      const spread = await Promise.all(
-        Array.from({ length: 4 }, (_, i) => createWebhook(org, `連携 ${i}`))
-      );
-      for (let i = 0; i < perOrganization.limit; i++) {
-        await storeDelivery(spread[i % spread.length], i % 2 === 0 ? 'test' : 'legacy-test');
+    /** Send `count` tests in the organization, spread over new webhooks below the per-webhook limit */
+    async function sendTests(organizationId: string, count: number) {
+      for (let i = 0; i < count; i++) {
+        if (i % perWebhook.limit === 0) spreadWebhook = await createWebhook(organizationId, `連携 ${i}`);
+        await expect(
+          admin.webhooks.test({ organizationId, id: spreadWebhook })
+        ).resolves.toMatchObject({ success: true });
       }
+    }
+    let spreadWebhook = '';
+
+    it(`allows ${perOrganization.limit} test sends per organization in an hour`, async () => {
+      await sendTests(org, perOrganization.limit);
 
       await expect(admin.webhooks.test({ organizationId: org, id: first })).rejects.toMatchObject({
         code: 'TOO_MANY_REQUESTS',
         message: expect.stringMatching(/^test_rate_limited:.*per organization/),
       });
       expect(await deliveriesOf(first)).toHaveLength(0);
-      expect(fetchMock).not.toHaveBeenCalled();
+      expect(fetchMock).toHaveBeenCalledTimes(perOrganization.limit);
     });
 
-    it("does not count event deliveries, nor another organization's test sends", async () => {
-      for (let i = 0; i < perOrganization.limit; i++) {
-        await storeDelivery(foreign, 'test');
-        await storeDelivery(second, 'event');
+    it('does not reset the organization limit when webhooks are deleted and created again', async () => {
+      await sendTests(org, perOrganization.limit);
+      // Deleting the webhooks deletes their deliveries too
+      await pg.delete(webhooks).where(eq(webhooks.organizationId, org));
+      const recreated = await createWebhook(org, '作り直した連携');
+
+      await expect(
+        admin.webhooks.test({ organizationId: org, id: recreated })
+      ).rejects.toMatchObject({
+        code: 'TOO_MANY_REQUESTS',
+        message: expect.stringMatching(/^test_rate_limited:.*per organization/),
+      });
+      expect(await deliveriesOf(recreated)).toHaveLength(0);
+    });
+
+    it(`allows ${perUser.limit} test sends per user in an hour, across organizations`, async () => {
+      // Two organizations at their own limit make up the user's limit
+      await sendTests(org, perOrganization.limit);
+      await sendTests(otherOrg, perUser.limit - perOrganization.limit);
+      const fresh = await createWebhook(thirdOrg, '三番目の連携');
+
+      await expect(
+        admin.webhooks.test({ organizationId: thirdOrg, id: fresh })
+      ).rejects.toMatchObject({
+        code: 'TOO_MANY_REQUESTS',
+        message: expect.stringMatching(/^test_rate_limited:.*per user/),
+      });
+      expect(await deliveriesOf(fresh)).toHaveLength(0);
+      // Refused by the user limit: the third organization's allowance is not used up
+      const thirdWindow = await pg
+        .select()
+        .from(publicRateLimits)
+        .where(eq(publicRateLimits.key, rateLimitKey(perOrganization, thirdOrg)));
+      expect(thirdWindow).toHaveLength(0);
+    });
+
+    it("does not count another organization's sends, nor event deliveries", async () => {
+      await sendTests(otherOrg, perOrganization.limit);
+      for (let i = 0; i < perWebhook.limit; i++) {
+        await storeDelivery(first, 'event');
       }
 
       await expect(admin.webhooks.test({ organizationId: org, id: first })).resolves.toMatchObject({
         success: true,
       });
+    });
+
+    it('a request refused per webhook uses up neither the organization nor the user limit', async () => {
+      for (let i = 0; i < perWebhook.limit; i++) {
+        await storeDelivery(first, i % 2 === 0 ? 'test' : 'legacy-test');
+      }
+      await expect(admin.webhooks.test({ organizationId: org, id: first })).rejects.toMatchObject({
+        code: 'TOO_MANY_REQUESTS',
+        message: expect.stringMatching(/per webhook/),
+      });
+      const windows = await pg
+        .select()
+        .from(publicRateLimits)
+        .where(
+          inArray(publicRateLimits.key, [
+            rateLimitKey(perOrganization, org),
+            rateLimitKey(perUser, userId),
+          ])
+        );
+      expect(windows).toHaveLength(0);
     });
 
     it('does not let concurrent requests pass the limit', async () => {
@@ -342,6 +439,37 @@ describe.skipIf(!url)('webhook test sends (PostgreSQL)', () => {
       const list = await admin.webhooks.list({ organizationId: org, limit: 100 });
       expect(list.webhooks.find((w) => w.id === internal)?.urlRefusal).toBe('address');
       expect(list.webhooks.find((w) => w.id === first)?.urlRefusal).toBeNull();
+    });
+
+    it('the retry processor ends a delivery to a refused destination instead of retrying it', async () => {
+      const internal = await createWebhook(org, '社内宛ての連携', 'https://10.0.0.8/hook');
+      const [pending] = await pg
+        .insert(webhookDeliveries)
+        .values({
+          webhookId: internal,
+          eventType: 'diagnostic.submitted',
+          payload: { id: unique(), event: 'diagnostic.submitted', data: { leadId: 'made-up' } },
+          status: 'pending',
+          attempts: 1,
+          nextRetryAt: new Date(Date.now() - 1000),
+        })
+        .returning();
+
+      await processWebhookRetries({ database: pg });
+      expect(sentIds()).not.toContain(pending.id);
+      const [row] = await deliveriesOf(internal);
+      expect(row).toMatchObject({
+        status: 'failed',
+        attempts: 2,
+        nextRetryAt: null,
+        error: 'Destination not allowed (address)',
+      });
+      expect(row.completedAt).not.toBeNull();
+
+      // Not picked up again by a later run
+      await processWebhookRetries({ database: pg });
+      expect((await deliveriesOf(internal))[0].attempts).toBe(2);
+      expect(sentIds()).not.toContain(pending.id);
     });
 
     it('refuses to create a webhook for an internal URL', async () => {

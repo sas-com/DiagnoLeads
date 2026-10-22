@@ -945,7 +945,7 @@ describe("Webhooks Router", () => {
 				expect(sendTestDelivery).toHaveBeenCalledTimes(1);
 				expect(sendTestDelivery).toHaveBeenCalledWith(
 					expect.objectContaining({ id: TEST_WEBHOOK_ID }),
-					{ database: mockDb },
+					{ userId: TEST_USER_ID, database: mockDb },
 				);
 				expect(result).toEqual({ success: true, triggered: 1, failed: 0 });
 			});
@@ -960,7 +960,7 @@ describe("Webhooks Router", () => {
 			});
 
 			// #321: counted in the database, so batched requests and every instance count alike
-			for (const limit of ["perWebhook", "perOrganization"] as const) {
+			for (const limit of ["perWebhook", "perOrganization", "perUser"] as const) {
 				it(`returns TOO_MANY_REQUESTS over the ${limit} limit`, async () => {
 					vi.mocked(sendTestDelivery).mockResolvedValueOnce({ allowed: false, limit });
 					await expect(

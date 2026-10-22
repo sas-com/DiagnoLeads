@@ -1304,7 +1304,7 @@
       "test": "Send test",
       "testSent": "Test webhook sent",
       "testFailed": "The test webhook failed. Check the destination settings.",
-      "testRateLimited": "Test send limit reached (up to {perWebhook} per webhook every 10 minutes and {perOrganization} per organization every hour). Try again later."
+      "testRateLimited": "Test send limit reached (up to {perWebhook} per webhook every 10 minutes, {perOrganization} per organization every hour and {perUser} per user every hour). Try again later."
     },
     "embed": {
       "title": "Embed Widget Settings",

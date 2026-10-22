@@ -282,6 +282,7 @@ export default function WebhooksSettingsPage() {
           ? t('testRateLimited', {
               perWebhook: WEBHOOK_TEST_SEND_LIMITS.perWebhook.limit,
               perOrganization: WEBHOOK_TEST_SEND_LIMITS.perOrganization.limit,
+              perUser: WEBHOOK_TEST_SEND_LIMITS.perUser.limit,
             })
           : error.message
       );
