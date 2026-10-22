@@ -3274,7 +3274,8 @@
       "prefilled": "Web診断",
       "confirmed": "確認済み",
       "corrected": "修正あり",
-      "agency": "代行聴取"
+      "agency": "代行聴取",
+      "referral": "社員の記録"
     },
     "required": {
       "attendeeRoles": "出席者の立場",

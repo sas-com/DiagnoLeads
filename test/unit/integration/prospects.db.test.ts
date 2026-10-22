@@ -521,4 +521,46 @@ describe.skipIf(!url)('prospects (PostgreSQL)', () => {
     });
     expect((await rowOf(id)).stage).toBe('quick_diagnosis');
   });
+
+  it('prefills a new hearing with what the employee heard, after the diagnosis and the agency', async () => {
+    const { id } = await callers.memberA.prospects.create({
+      organizationId,
+      ...base,
+      company: 'ヒアリング工業',
+      targetSystem: 'acos',
+      supportEndSoon: 'yes',
+      troubles: ['few_maintainers'],
+      heard: '担当は来春に退職予定',
+    });
+    const { leadId } = await callers.sales.prospects.convertToLead({
+      organizationId,
+      id,
+      email: `hearing-${unique()}@example.co.jp`,
+    });
+    const hearing = await callers.sales.leadHearings.create({
+      organizationId,
+      leadId,
+      heldOn: '2026-10-28',
+    });
+    const fields = hearing.fields as Record<string, { value: unknown; source: string }>;
+    expect(fields.targetSystem).toMatchObject({ value: 'acos', source: 'referral' });
+    expect(fields.challengeNotes?.source).toBe('referral');
+    expect(String(fields.challengeNotes?.value)).toContain('担当は来春に退職予定');
+
+    // A field the organization does not ask gets nothing (#98)
+    await pg
+      .update(organizations)
+      .set({ settings: { hearingCatalog: { hidden: ['challengeNotes'], required: [], order: {} } } })
+      .where(eq(organizations.id, organizationId));
+    const second = await callers.sales.leadHearings.create({
+      organizationId,
+      leadId,
+      heldOn: '2026-10-29',
+      carryOver: false,
+    });
+    const secondFields = second.fields as Record<string, unknown>;
+    expect(secondFields.challengeNotes).toBeUndefined();
+    expect(secondFields.targetSystem).toMatchObject({ source: 'referral' });
+    await pg.update(organizations).set({ settings: {} }).where(eq(organizations.id, organizationId));
+  });
 });

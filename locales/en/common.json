@@ -3274,7 +3274,8 @@
       "prefilled": "Web diagnosis",
       "confirmed": "Confirmed",
       "corrected": "Corrected",
-      "agency": "Sales agency"
+      "agency": "Sales agency",
+      "referral": "Employee record"
     },
     "required": {
       "attendeeRoles": "Attendees' roles",
