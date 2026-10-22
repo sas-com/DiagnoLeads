@@ -16,6 +16,10 @@ import {
 import { DIAGNOSIS_SUBMISSION_KEY_PREFIX } from '@/lib/features/diagnosis-builder/public-diagnosis';
 import { AX_MIGRATION_DIAGNOSTIC_KEY } from '@/lib/features/diagnostics/ax-migration/definition';
 import { syncHearingNextAction } from '@/lib/features/lead-follow-up/service';
+import {
+  findProspectsForPrefill,
+  referralHearingFields,
+} from '@/lib/features/prospects/hearing-prefill';
 import { TRPCError } from '@trpc/server';
 import { and, count, desc, eq, like, lt, or, sql } from 'drizzle-orm';
 import { aiSourceAnalysisOf, shouldNotifyRestriction } from './ai-policy';
@@ -387,6 +391,11 @@ export async function createLeadHearing(
       // What the sales agency heard fills what the diagnosis did not (#152)
       fields = handoverHearingFields(
         await findHandoverForPrefill(tx, { organizationId, leadId }),
+        fields
+      );
+      // Then what employees heard in the customer search (#265): diagnosis > agency > employee
+      fields = referralHearingFields(
+        await findProspectsForPrefill(tx, { organizationId, leadId }),
         fields
       );
     }

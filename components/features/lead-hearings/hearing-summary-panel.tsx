@@ -27,6 +27,8 @@ const SOURCE_COLORS = {
   confirmed: 'emerald',
   corrected: 'violet',
   agency: 'amber',
+  // What an employee heard in the customer search (#265)
+  referral: 'yellow',
 } as const;
 
 /**

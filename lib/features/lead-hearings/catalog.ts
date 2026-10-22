@@ -40,15 +40,22 @@ export type HearingItemStatus = (typeof HEARING_ITEM_STATUSES)[number];
 
 /**
  * Where a value came from: 事前情報 (the Web diagnosis) / 商談で確認済み / 修正あり / 代行聴取
- * (what the sales agency heard when it set up the meeting, #152).
+ * (what the sales agency heard when it set up the meeting, #152) / 社員の記録 (what an employee
+ * heard in the customer search, #265).
  * null when there was no prior information and the value was entered in the meeting.
  */
-export const HEARING_VALUE_SOURCES = ['prefilled', 'confirmed', 'corrected', 'agency'] as const;
+export const HEARING_VALUE_SOURCES = [
+  'prefilled',
+  'confirmed',
+  'corrected',
+  'agency',
+  'referral',
+] as const;
 export type HearingValueSource = (typeof HEARING_VALUE_SOURCES)[number];
 
 /** Sources of prior information: not confirmed until the meeting confirms or corrects them */
 export const isUnconfirmedSource = (source: HearingValueSource | null | undefined): boolean =>
-  source === 'prefilled' || source === 'agency';
+  source === 'prefilled' || source === 'agency' || source === 'referral';
 
 /**
  * An option is labelled either by a locale key (labelKey) or, when the option set is the Web

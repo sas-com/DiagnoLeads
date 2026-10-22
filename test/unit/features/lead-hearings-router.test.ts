@@ -264,6 +264,8 @@ describe('leadHearings.create', () => {
       ],
       // No handover from a sales agency (#152)
       [],
+      // No customer search row linked to the lead (#265)
+      [],
       [hearingRow()],
     ];
 
