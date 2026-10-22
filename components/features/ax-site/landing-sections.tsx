@@ -35,15 +35,16 @@ import {
   axPrivacyPolicyUrl,
 } from './site-config';
 
-interface SectionProps {
+export interface SectionProps {
   locale: DiagnosticLocale;
 }
 
-const SECTION_HEADING = 'text-center text-2xl font-bold leading-snug sm:text-[2.25rem]';
-const EYEBROW = 'text-center font-ax-latin text-sm font-bold tracking-[0.2em] text-ax-teal-dark';
+export const SECTION_HEADING = 'text-center text-2xl font-bold leading-snug sm:text-[2.25rem]';
+export const EYEBROW =
+  'text-center font-ax-latin text-sm font-bold tracking-[0.2em] text-ax-teal-dark';
 
 /** "＼ … ／" frames the caption in Japanese; screen readers skip the marks */
-function CtaCaption({
+export function CtaCaption({
   locale,
   className,
   children,
@@ -384,6 +385,25 @@ export async function AxTargets({ locale }: SectionProps) {
               </span>
               <h3 className="mt-4 text-lg font-bold">{t(`items.${key}.name`)}</h3>
               <p className="mt-2 text-sm leading-relaxed text-gray-700">{t(`items.${key}.body`)}</p>
+              {key === 'access' && (
+                // A fact with its date, not a countdown (#288)
+                <div className="mt-4 rounded-lg bg-ax-mist p-3 text-sm leading-relaxed">
+                  <p>{t('accessSupport.body')}</p>
+                  <a
+                    href={`#${AX_SECTIONS.diagnosis}`}
+                    className="mt-1 inline-block font-bold text-ax-teal-dark underline underline-offset-2"
+                  >
+                    {t('accessSupport.link')}
+                  </a>
+                  {/* The Access landing page (#296) */}
+                  <a
+                    href={`/${locale}/ax-migration/access`}
+                    className="mt-1 block font-bold text-ax-teal-dark underline underline-offset-2"
+                  >
+                    {t('accessSupport.page')}
+                  </a>
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -417,6 +437,7 @@ export async function AxDiagnosisSection({ locale }: SectionProps) {
         turnstileSiteKey={turnstileSiteKey()}
         allowedEmailDomains={allowedEmailDomains()}
         embedded
+        entry="ax-lp"
       />
     </AxDiagnosisFrame>
   );
@@ -468,7 +489,7 @@ export async function AxReasons({ locale }: SectionProps) {
   );
 }
 
-const FAQ_KEYS = [
+const FAQ_KEYS: readonly string[] = [
   'cost',
   'who',
   'targets',
@@ -477,10 +498,16 @@ const FAQ_KEYS = [
   'ax',
   'data',
   'privacy',
-] as const;
+];
 
-export async function AxFaq({ locale }: SectionProps) {
-  const t = await getTranslations({ locale, namespace: 'axSite.faq' });
+interface FaqProps extends SectionProps {
+  /** Messages with `title` and `items.<key>.q` / `.a` (another landing page has its own) */
+  namespace?: string;
+  keys?: readonly string[];
+}
+
+export async function AxFaq({ locale, namespace = 'axSite.faq', keys = FAQ_KEYS }: FaqProps) {
+  const t = await getTranslations({ locale, namespace });
   return (
     <section
       id={AX_SECTIONS.faq}
@@ -492,7 +519,7 @@ export async function AxFaq({ locale }: SectionProps) {
           {t('title')}
         </h2>
         <div className="mt-10 space-y-3">
-          {FAQ_KEYS.map((key) => (
+          {keys.map((key) => (
             <details key={key} className="group rounded-2xl bg-white p-5 shadow-sm">
               <summary className="flex cursor-pointer list-none items-start justify-between gap-4 font-bold [&::-webkit-details-marker]:hidden">
                 <span className="flex gap-3">
@@ -520,8 +547,17 @@ export async function AxFaq({ locale }: SectionProps) {
   );
 }
 
-export async function AxFinalCta({ locale }: SectionProps) {
+interface FinalCtaProps extends SectionProps {
+  /** Messages for the title, lead, caption and buttons; the contact details stay the site's */
+  copyNamespace?: string;
+  /** Prefix of the analytics locations (e.g. 'access-' gives 'access-final') */
+  locationPrefix?: string;
+}
+
+export async function AxFinalCta({ locale, copyNamespace, locationPrefix = '' }: FinalCtaProps) {
   const t = await getTranslations({ locale, namespace: 'axSite.finalCta' });
+  const copy = copyNamespace ? await getTranslations({ locale, namespace: copyNamespace }) : t;
+  const location = `${locationPrefix}final`;
   const consultationUrl = axConsultationUrl();
   return (
     <section
@@ -531,28 +567,28 @@ export async function AxFinalCta({ locale }: SectionProps) {
     >
       <div className="mx-auto max-w-3xl px-4 sm:px-6">
         <h2 id="ax-final-heading" className="text-2xl font-bold leading-snug sm:text-3xl">
-          {t('title')}
+          {copy('title')}
         </h2>
         <p className="mx-auto mt-4 max-w-2xl font-bold leading-relaxed text-white/90">
-          {t('lead')}
+          {copy('lead')}
         </p>
         <CtaCaption locale={locale} className="mt-8">
-          {t('caption')}
+          {copy('caption')}
         </CtaCaption>
         <div className="mt-3 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <AxCtaLink href={`#${AX_SECTIONS.diagnosis}`} location="final" tone="dark">
-            {t('cta')}
+          <AxCtaLink href={`#${AX_SECTIONS.diagnosis}`} location={location} tone="dark">
+            {copy('cta')}
           </AxCtaLink>
           {consultationUrl && (
             <AxCtaLink
               href={consultationUrl}
               variant="consultation"
-              location="final"
+              location={location}
               tone="dark"
               external
               className="bg-white text-ax-teal-dark hover:bg-ax-mist"
             >
-              {t('consult')}
+              {copy('consult')}
             </AxCtaLink>
           )}
         </div>

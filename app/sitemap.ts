@@ -2,7 +2,7 @@ import { INDEXABLE_PATHS, isIndexable } from '@/lib/seo/indexing';
 import type { MetadataRoute } from 'next';
 
 /**
- * Sitemap: the AX landing page and diagnosis (Japanese), only after public launch.
+ * Sitemap: the AX landing pages and diagnosis (Japanese), only after public launch.
  * Empty while test mode is on, so no page is offered for indexing.
  */
 export default function sitemap(): MetadataRoute.Sitemap {

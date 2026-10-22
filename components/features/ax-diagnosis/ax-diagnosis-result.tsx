@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { createElement, useEffect, useRef, useState } from 'react';
+import { AccessPathSection } from './access-path-section';
 import { InfoOffers } from './info-offers';
 import { AX_RUNNER_CONFIG } from './runner-config';
 import { trackAxEvent } from './tracking';
@@ -43,6 +44,12 @@ const LEVEL_BADGE: Record<Level, string> = {
 
 const CHALLENGE_KEYS: ChallengeType[] = ['people', 'cost', 'agility', 'data'];
 const STEP_KEYS = ['simple', 'survey', 'migration', 'ax'] as const;
+
+/** Urgency reasons that mean the support or maintenance has already ended */
+const PASSED_DEADLINE_REASONS: ReadonlySet<string> = new Set([
+  'support_passed',
+  'access_support_ended',
+]);
 
 interface AxDiagnosisResultProps {
   company: string;
@@ -77,6 +84,8 @@ export function AxDiagnosisResult({
   const tDiagnosis = useTranslations('axDiagnosis');
   const tPlatform = useTranslations('axDiagnosis.platforms');
   const [result, setResult] = useState(initialResult);
+  /** The follow-up answers were sent: the Access path no longer needs the hint to refine it */
+  const [refined, setRefined] = useState(false);
   const [requested, setRequested] = useState(consultationRequested);
   const [sending, setSending] = useState(false);
   /** Which button the failed request came from: the message is shown next to it */
@@ -110,11 +119,15 @@ export function AxDiagnosisResult({
   const reasons = [...result.reasons.difficulty, ...result.reasons.urgency];
   const unknownQuestions = unknownTechnicalQuestions(answers);
 
-  // Encourage the next step in words that fit the result
+  // Encourage the next step in words that fit the result; a deadline already passed is not
+  // "close" (#288)
+  const deadlinePassed = result.reasons.urgency.some((key) => PASSED_DEADLINE_REASONS.has(key));
   const ctaKey = result.needsHearing
     ? 'hearing'
     : result.urgency.level === 'high'
-      ? 'urgent'
+      ? deadlinePassed
+        ? 'overdue'
+        : 'urgent'
       : result.recommendation === 'consultation'
         ? 'consultation'
         : 'information';
@@ -286,6 +299,14 @@ export function AxDiagnosisResult({
         </div>
       )}
 
+      {result.accessPath && (
+        <AccessPathSection
+          accessPath={result.accessPath}
+          headingTag={subTag}
+          showRefineHint={!refined}
+        />
+      )}
+
       {!requested && (
         <div className="space-y-2 rounded-2xl border-2 border-ax-teal/30 p-4 print:hidden">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -391,7 +412,10 @@ export function AxDiagnosisResult({
         locale={locale}
         answers={answers}
         submissionId={submissionId}
-        onUpdated={setResult}
+        onUpdated={(updated) => {
+          setResult(updated);
+          setRefined(true);
+        }}
       />
 
       <div className="space-y-4">
@@ -618,11 +642,14 @@ function FollowUpQuestions({ locale, answers, submissionId, onUpdated }: FollowU
       });
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.result) throw new Error(`HTTP ${res.status}`);
-      onUpdated(json.result as AxMigrationPublicResult);
+      const updated = json.result as AxMigrationPublicResult;
+      onUpdated(updated);
       setState('done');
       trackAxEvent('ax_diagnosis_follow_up', {
         answered: answered.length,
         total: questions.length,
+        // The follow-ups (users, impact, size...) can change the recommended path (#303)
+        ...(updated.accessPath ? { access_path: updated.accessPath.path } : {}),
       });
     } catch {
       setState('failed');

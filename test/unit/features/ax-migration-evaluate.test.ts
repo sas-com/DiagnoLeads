@@ -188,9 +188,110 @@ describe('evaluateAxMigration', () => {
       expect(result.mql).toMatchObject({ level: 'interest', signals: ['consultation'] });
     });
 
-    it('counts an Access version whose support is ending as a near deadline', () => {
-      const result = evaluate({ ...accessAnswers, role: 'business_staff', timeline: '1_2y' });
-      expect(result.mql).toMatchObject({ level: 'interest', signals: ['support_deadline'] });
+    // #292 (owner 2026-10-21): every Access 2016-2021 is out of support now, so the support end
+    // counts only together with an impact answer
+    describe('the Access support end (#292)', () => {
+      const ended = { ...accessAnswers, role: 'business_staff', timeline: '1_2y' };
+
+      it('alone is not a strong signal', () => {
+        expect(evaluate(ended).mql).toMatchObject({ level: 'fit', signals: [] });
+        const ending = { ...ended, access_version: ['v2021'] };
+        expect(evaluate(ending).mql).toMatchObject({ level: 'fit', signals: [] });
+        const low = {
+          ...ended,
+          access_importance: 'support',
+          access_users: '3_10',
+          access_location: 'shared_folder',
+        };
+        expect(evaluate(low).mql.level).toBe('fit');
+      });
+
+      it.each([
+        ['the main task of the department', { access_importance: 'main' }],
+        ['the whole company or customers', { access_importance: 'company' }],
+        ['11-30 users', { access_users: '11_30' }],
+        ['31 users or more', { access_users: 'gte31' }],
+        ['data outside Access', { access_features: ['vba', 'external_data'] }],
+        ['data in a database', { access_location: 'database' }],
+      ] as const)('with %s is interest (MQL)', (_, change) => {
+        expect(evaluate({ ...ended, ...change }).mql).toMatchObject({
+          level: 'interest',
+          qualified: true,
+          signals: ['support_deadline'],
+        });
+        // The ending support (Office 2021 before its end date) qualifies the same way
+        expect(evaluate({ ...ended, ...change, access_version: ['v2021'] }).mql.level).toBe(
+          'interest'
+        );
+      });
+
+      it('with a supported version and an impact answer is not a strong signal', () => {
+        const supported = { ...ended, access_version: ['m365'], access_importance: 'company' };
+        expect(evaluate(supported).mql.level).toBe('fit');
+      });
+    });
+
+    describe('the Access path takes any industry and size (#292)', () => {
+      /** Outside the target industry, low difficulty and urgency, no strong signal */
+      const smallTool: DiagnosticAnswers = {
+        ...accessAnswers,
+        industry: 'other',
+        role: 'business_staff',
+        access_version: ['m365'],
+        access_maintainer: 'team',
+        access_tools: '1',
+        access_screens_forms: 'lt20',
+        access_features: ['none'],
+        access_challenges: ['none'],
+        annual_revenue: 'over_30b',
+      };
+      const target = { annual_revenue: ['1b_3b'], employees: [], sites: [] };
+
+      it('is fit outside the target industry and size ranges, without showing them unmet', () => {
+        const result = evaluateAxMigration(smallTool, AX_MIGRATION_CONFIG, NOW, {}, target);
+        expect(result.companySize.fit).toBe('not_fit');
+        expect(result.mql).toMatchObject({
+          level: 'fit',
+          candidate: true,
+          unmet: [],
+          waived: ['industry', 'company_size'],
+          criteria: { industry: false, system: true, companySize: 'not_fit' },
+        });
+      });
+
+      it('is interest with a strong signal in any industry', () => {
+        const result = evaluateAxMigration(
+          { ...smallTool, role: 'executive' },
+          AX_MIGRATION_CONFIG,
+          NOW,
+          {},
+          target
+        );
+        expect(result.mql).toMatchObject({ level: 'interest', signals: ['decision_role'] });
+      });
+
+      it('recommends a consultation in another industry', () => {
+        const result = evaluate(smallTool);
+        expect(result.difficulty.level).not.toBe('high');
+        expect(result.urgency.level).not.toBe('high');
+        expect(result.recommendation).toBe('consultation');
+        // Without the waiver the industry alone would send it to "information"
+        const strict = {
+          ...AX_MIGRATION_CONFIG,
+          mql: { ...AX_MIGRATION_CONFIG.mql, anyIndustryPlatforms: [] },
+        };
+        expect(evaluateAxMigration(smallTool, strict, NOW).recommendation).toBe('information');
+      });
+
+      it('leaves the host paths as they were: industry and size are required', () => {
+        const host = { ...as400Answers, industry: 'other', annual_revenue: 'over_30b' };
+        const result = evaluateAxMigration(host, AX_MIGRATION_CONFIG, NOW, {}, target);
+        expect(result.mql).toMatchObject({
+          level: 'none',
+          unmet: ['industry', 'company_size'],
+          waived: [],
+        });
+      });
     });
 
     it('is not an MQL outside the target, whatever the signals', () => {
@@ -446,6 +547,17 @@ describe('evaluateAxMigration', () => {
       );
     });
 
+    it('always shows an Office out of support among the urgency reasons (#288)', () => {
+      const result = evaluate({
+        ...accessAnswers,
+        access_importance: 'company',
+        access_location: 'cloud',
+        access_features: ['none'],
+      });
+      expect(result.reasons.urgency).toHaveLength(2);
+      expect(result.reasons.urgency).toContain('access_support_ended');
+    });
+
     it('takes the weakest version when several are in use', () => {
       const mixed = evaluate({ ...accessAnswers, access_version: ['m365', 'le2013'] });
       expect(mixed.reasons.urgency).toContain('access_support_ended');
@@ -539,13 +651,48 @@ describe('evaluateAxMigration', () => {
       ]);
     });
 
-    it('lists Access-specific work', () => {
+    it('lists Access-specific work that fits the recommended path (#303)', () => {
+      // Fix: no web system suggested
       expect(evaluate(accessAnswers).checkpoints).toEqual([
         'access_no_maintainer',
         'access_support',
-        'access_vba',
-        'access_excel',
+        'access_64bit',
+        'access_backup',
       ]);
+      // Web: the web system, then the VBA and Excel work to rebuild
+      expect(
+        evaluate({
+          ...accessAnswers,
+          access_maintainer: 'team',
+          access_version: ['m365'],
+          access_challenges: ['remote'],
+        }).checkpoints
+      ).toEqual(['access_web', 'access_vba', 'access_excel']);
+      // Replace: whether a service covers the tool, and how to move the data
+      expect(
+        evaluate({
+          ...accessAnswers,
+          access_maintainer: 'team',
+          access_version: ['m365'],
+          access_screens_forms: 'lt20',
+          access_features: ['excel'],
+        }).checkpoints
+      ).toEqual(['access_replace_fit', 'access_data_export']);
+    });
+
+    it('no longer suggests a web system on every Access result (#303)', () => {
+      expect(evaluate(accessAnswers).checkpoints).not.toContain('access_web');
+    });
+
+    it('keeps the path of an Access result in the public result, and null elsewhere (#303)', () => {
+      expect(toPublicResult(evaluate(accessAnswers)).accessPath).toEqual({
+        path: 'fix',
+        reasons: ['support_end', 'rules_in_tool'],
+      });
+      expect(toPublicResult(evaluate(as400Answers)).accessPath).toBeNull();
+      // Stored before #303
+      const { accessPath: _omitted, ...stored } = evaluate(accessAnswers);
+      expect(toPublicResult(stored as ReturnType<typeof evaluate>).accessPath).toBeNull();
     });
 
     it('starts many Access tools with an inventory', () => {
@@ -643,6 +790,7 @@ describe('evaluateAxMigration', () => {
   it('shows the respondent no lead score or sales judgement', () => {
     const result = toPublicResult(evaluate(as400Answers));
     expect(Object.keys(result).sort()).toEqual([
+      'accessPath',
       'challenges',
       'checkpoints',
       'difficulty',

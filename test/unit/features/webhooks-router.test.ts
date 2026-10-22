@@ -462,37 +462,20 @@ describe("Webhooks Router", () => {
 
 	describe("deliveries", () => {
 		it("should return delivery history", async () => {
-			// Create a chainable mock that returns itself for $dynamic().where() calls
 			const resultMock = [{ delivery: mockDelivery, webhookName: "Lead Created Webhook" }];
-
-			const createDynamicChain = () => {
-				const chain: Record<string, unknown> = {};
-				chain.where = vi.fn().mockReturnValue(chain);
-				chain.orderBy = vi.fn().mockReturnValue(chain);
-				chain.limit = vi.fn().mockReturnValue(chain);
-				chain.offset = vi.fn().mockResolvedValue(resultMock);
-				return chain;
-			};
-
-			mockDbClientRef.current!.select.mockReturnValue({
-				from: vi.fn().mockReturnValue({
-					innerJoin: vi.fn().mockReturnValue({
-						where: vi.fn().mockReturnValue({
-							$dynamic: vi.fn().mockReturnValue(createDynamicChain()),
-						}),
-					}),
-				}),
-			});
+			mockDb.offset.mockResolvedValueOnce(resultMock);
 
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			const caller = appRouter.createCaller(mockContext as any);
 			const result = await caller.webhooks.deliveries({
 				organizationId: TEST_ORG_ID,
 				webhookId: TEST_WEBHOOK_ID,
+				status: "success",
 			});
 
 			expect(result.deliveries).toHaveLength(1);
 			expect(result.deliveries[0].status).toBe("success");
+			// The organization scope is checked on a real database in webhook-deliveries.db.test.ts
 		});
 	});
 

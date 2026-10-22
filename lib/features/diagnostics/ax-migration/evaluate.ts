@@ -1,6 +1,7 @@
 import type { TargetSystem } from '@/lib/features/leads/types/pipeline';
 import { multiple, single, toPercent } from '../engine';
 import type { DiagnosticAnswers } from '../types';
+import { type AxAccessPathResult, judgeAccessPath } from './access-path';
 import {
   type AxCompanySizeResult,
   type AxTargetCompany,
@@ -8,7 +9,7 @@ import {
 } from './company-size';
 import { AX_MIGRATION_CONFIG, type AxMigrationConfig } from './config';
 import { AX_PLATFORMS, type AxPlatform, axMigrationDefinition } from './definition';
-import { type AxMqlJudgement, judgeAxMql } from './mql';
+import { type AxMqlJudgement, judgeAxMql, waivedConditions } from './mql';
 import { technicalQuestions, unknownTechnicalQuestions } from './technical';
 
 export type Level = 'low' | 'medium' | 'high';
@@ -82,6 +83,11 @@ export const AX_CHECKPOINT_KEYS = [
   'access_size',
   'access_excel',
   'access_web',
+  // Fit the recommended Access path (#303)
+  'access_64bit',
+  'access_backup',
+  'access_replace_fit',
+  'access_data_export',
   'other_vb',
   'other_webperformer',
   'other_host',
@@ -115,12 +121,18 @@ export interface AxMigrationResult {
   reasons: { difficulty: AxReasonKey[]; urgency: AxReasonKey[] };
   /** What to check for this migration (message keys), at most four */
   checkpoints: AxCheckpointKey[];
+  /**
+   * Access only (#303): the recommended way forward (fix / web / replace) and why, as a guide.
+   * null for the other paths; results stored before #303 have no such key (read it as null).
+   */
+  accessPath: AxAccessPathResult | null;
   /** Lead score stored on leads.score (0-100) */
   leadScore: number;
   targetSystem: TargetSystem | null;
   /**
    * MQL (#139): `candidate` = 適合 (industry × system, and a company size not outside the
-   * organization's target ranges, #150), `qualified` = 関心あり（MQL）
+   * organization's target ranges, #150; Access takes any industry and size, #292),
+   * `qualified` = 関心あり（MQL）
    * (fit + a strong signal or the minimum score). See mql.ts; rules in config.ts.
    */
   mql: AxMqlJudgement;
@@ -273,7 +285,16 @@ const ACCESS = {
   difficultyMax: 25 + 30 + 15 + 5,
   maintainerUrgency: { nobody: 30, individual: 20, one: 18, vendor: 8, team: 3, unknown: 15 },
   support: { ended: 25, ending: 20, v2024: 8, m365: 3, unknown: 12 },
-  challenges: { support: 6, people: 4, stability: 4, manual: 2, remote: 2, data: 2, none: 0 },
+  challenges: {
+    support: 6,
+    people: 4,
+    stability: 4,
+    audit: 4,
+    manual: 2,
+    remote: 2,
+    data: 2,
+    none: 0,
+  },
   challengesCap: 10,
   importance: { support: 4, main: 12, company: 20, unknown: 0 },
   /** Shared folders work for a few people; OneDrive / SharePoint is advised against by Microsoft */
@@ -371,6 +392,8 @@ const ACCESS_CHALLENGE_CATEGORY: Record<string, ChallengeType> = {
   remote: 'agility',
   support: 'agility',
   data: 'data',
+  // Records and permissions: how the data is managed
+  audit: 'data',
 };
 
 const CHALLENGE_ORDER: ChallengeType[] = ['people', 'cost', 'agility', 'data'];
@@ -484,6 +507,7 @@ export function evaluateAxMigration(
   const difficultyReasons: Weighted[] = [];
   const urgencyReasons: Weighted[] = [];
   const checkpoints: AxCheckpointKey[] = [];
+  let accessPath: AxAccessPathResult | null = null;
 
   let difficultyRaw = 0;
   let difficultyMax = 1;
@@ -730,19 +754,47 @@ export function evaluateAxMigration(
       urgencyFloor = URGENCY_MEDIUM;
     }
 
+    accessPath = judgeAccessPath(
+      {
+        tools,
+        screens,
+        features: accessFeatures,
+        vbaAmount: single(answers, 'access_vba_amount'),
+        users,
+        importance,
+        location,
+        size,
+        challenges: accessChallenges,
+        support,
+      },
+      config.accessPath
+    );
+
+    // What to check first whatever the path, then what fits the recommended path. The web
+    // system is no longer suggested on every result (#303)
     if (accessMaintainer === 'nobody') checkpoints.push('access_no_maintainer');
     if (support === 'ended' || support === 'ending') checkpoints.push('access_support');
     if (sources === 'compiled') checkpoints.push('access_compiled');
-    if (tools === '6_20' || tools === '21_50' || tools === 'gte51') {
-      checkpoints.push('access_inventory');
+    const manyTools = tools === '6_20' || tools === '21_50' || tools === 'gte51';
+    if (accessPath.path === 'fix') {
+      checkpoints.push('access_64bit');
+      if (location === 'cloud') checkpoints.push('access_cloud');
+      checkpoints.push('access_backup');
+    } else if (accessPath.path === 'replace') {
+      checkpoints.push('access_replace_fit');
+      if (manyTools) checkpoints.push('access_inventory');
+      if (location === 'cloud') checkpoints.push('access_cloud');
+      checkpoints.push('access_data_export');
+    } else {
+      if (manyTools) checkpoints.push('access_inventory');
+      checkpoints.push('access_web');
+      if (location === 'cloud') checkpoints.push('access_cloud');
+      if (accessFeatures.includes('vba')) checkpoints.push('access_vba');
+      if (accessFeatures.includes('external_data')) checkpoints.push('access_external');
+      if (accessFeatures.includes('devices')) checkpoints.push('access_devices');
+      if (size === 'gte1gb' || size === 'split') checkpoints.push('access_size');
+      if (accessFeatures.includes('excel')) checkpoints.push('access_excel');
     }
-    if (location === 'cloud') checkpoints.push('access_cloud');
-    if (accessFeatures.includes('vba')) checkpoints.push('access_vba');
-    if (accessFeatures.includes('external_data')) checkpoints.push('access_external');
-    if (accessFeatures.includes('devices')) checkpoints.push('access_devices');
-    if (size === 'gte1gb' || size === 'split') checkpoints.push('access_size');
-    if (accessFeatures.includes('excel')) checkpoints.push('access_excel');
-    checkpoints.push('access_web');
   } else if (platform === 'other') {
     const programs = single(answers, 'other_programs');
     const legacyEdi = single(answers, 'legacy_edi') === 'yes';
@@ -790,6 +842,14 @@ export function evaluateAxMigration(
     difficulty: topReasons(difficultyReasons),
     urgency: topReasons(urgencyReasons),
   };
+  // An Office out of support is a fact the respondent should always see (#288)
+  if (
+    support === 'ended' &&
+    !reasons.urgency.includes('access_support_ended') &&
+    urgencyReasons.some((reason) => reason.key === 'access_support_ended')
+  ) {
+    reasons.urgency = [...reasons.urgency.slice(0, MAX_REASONS - 1), 'access_support_ended'];
+  }
   // "Small" is said only when the size itself was answered
   if (reasons.difficulty.length === 0 && difficultyLevel === 'low' && sizeKnown) {
     reasons.difficulty = ['small_scale'];
@@ -837,8 +897,10 @@ export function evaluateAxMigration(
         otherSystem !== undefined &&
         config.legacyOtherSystems.includes(otherSystem)),
   };
-  // The respondent's next step uses industry × system only, never the confidential size ranges
-  const mqlCandidate = mqlCriteria.industry && mqlCriteria.system;
+  // The respondent's next step uses industry × system only, never the confidential size ranges.
+  // A path that takes any industry (Access, #292) is not sent to "information" for its industry
+  const industryWaived = waivedConditions(platform, config.mql).includes('industry');
+  const mqlCandidate = (mqlCriteria.industry || industryWaived) && mqlCriteria.system;
 
   // SQL の手がかり（①②必須＋③④のいずれか）: ① machine, language and rough size are known
   const known = (value: string | undefined) => value !== undefined && value !== 'unknown';
@@ -885,11 +947,18 @@ export function evaluateAxMigration(
   // 適合 / 関心あり（MQL）
   const mql = judgeAxMql(
     {
+      platform,
       ...mqlCriteria,
       companySize: companySize.fit,
       consultationRequested: actions.consultationRequested === true,
       supportEnd,
       accessSupport: support,
+      access: {
+        importance: single(answers, 'access_importance'),
+        users: single(answers, 'access_users'),
+        features: accessFeatures,
+        location: single(answers, 'access_location'),
+      },
       role,
       timeline,
       leadScore,
@@ -915,6 +984,7 @@ export function evaluateAxMigration(
     },
     reasons,
     checkpoints: [...new Set(checkpoints)].slice(0, MAX_CHECKPOINTS),
+    accessPath,
     leadScore,
     targetSystem: deriveTargetSystem(platform, otherSystem),
     mql,
@@ -943,6 +1013,7 @@ export type AxMigrationPublicResult = Pick<
   | 'challenges'
   | 'reasons'
   | 'checkpoints'
+  | 'accessPath'
   | 'needsHearing'
   | 'recommendation'
 >;
@@ -955,6 +1026,8 @@ export function toPublicResult(result: AxMigrationResult): AxMigrationPublicResu
     challenges: result.challenges,
     reasons: result.reasons,
     checkpoints: result.checkpoints,
+    // Results stored before #303 have no path
+    accessPath: result.accessPath ?? null,
     needsHearing: result.needsHearing,
     recommendation: result.recommendation,
   };

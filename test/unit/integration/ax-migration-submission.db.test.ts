@@ -15,7 +15,7 @@ import {
   requestAxMigrationConsultation,
   submitAxMigrationDiagnosis,
 } from '@/lib/features/diagnostics/ax-migration/submission-service';
-import { as400Answers } from '@/test/fixtures/ax-migration';
+import { accessAnswers, as400Answers } from '@/test/fixtures/ax-migration';
 import { and, eq, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
@@ -483,6 +483,69 @@ describe.skipIf(!url)('AX migration submission (PostgreSQL)', () => {
       expect(lead?.responses).toMatchObject({
         axMigration: { detailsAnsweredAt: now.toISOString() },
       });
+    });
+
+    it('makes the lead an MQL when a follow-up qualifies the Access support end (#292)', async () => {
+      const answers = { ...accessAnswers, industry: 'other', role: 'business_staff' };
+      const outcome = await submitAxMigrationDiagnosis(db, organizationId, input({ answers }), now);
+      if (!outcome.ok) throw new Error('submission failed');
+      // Access 2016 / 2019 is out of support, but that alone is no strong signal
+      expect(outcome.result.mql).toMatchObject({ level: 'fit', signals: [] });
+      const before = await pg.query.leads.findFirst({ where: eq(leads.id, outcome.leadId) });
+      expect(before?.mqlQualifiedAt).toBeNull();
+
+      const later = new Date(now.getTime() + 60 * 1000);
+      const details = await addAxMigrationDetails(
+        db,
+        outcome.submissionId,
+        { access_importance: 'company' },
+        later
+      );
+      if (!details.ok) throw new Error(`details failed: ${details.reason}`);
+      expect(details.result.mql).toMatchObject({ level: 'interest', signals: ['support_deadline'] });
+
+      const lead = await pg.query.leads.findFirst({ where: eq(leads.id, outcome.leadId) });
+      expect(lead?.mqlQualifiedAt?.getTime()).toBe(later.getTime());
+      expect(lead?.responses).toMatchObject({
+        axMigration: { mql: { level: 'interest', signals: ['support_deadline'], unmet: [] } },
+      });
+    });
+
+    it('stores the recommended Access path on the result and the lead, and updates it (#303)', async () => {
+      const outcome = await submitAxMigrationDiagnosis(
+        db,
+        organizationId,
+        input({ answers: accessAnswers }),
+        now
+      );
+      if (!outcome.ok) throw new Error('submission failed');
+      expect(outcome.result.accessPath).toEqual({
+        path: 'fix',
+        reasons: ['support_end', 'rules_in_tool'],
+      });
+      // Queryable from the result jsonb (the share of each path)
+      const pathOf = async () => {
+        const [row] = await pg
+          .select({ path: sql<string>`${diagnosticSubmissions.result} -> 'accessPath' ->> 'path'` })
+          .from(diagnosticSubmissions)
+          .where(eq(diagnosticSubmissions.id, outcome.submissionId));
+        return row.path;
+      };
+      expect(await pathOf()).toBe('fix');
+      const before = await pg.query.leads.findFirst({ where: eq(leads.id, outcome.leadId) });
+      expect(before?.responses).toMatchObject({ axMigration: { accessPath: 'fix' } });
+
+      const details = await addAxMigrationDetails(
+        db,
+        outcome.submissionId,
+        { access_users: '11_30' },
+        new Date(now.getTime() + 60 * 1000)
+      );
+      if (!details.ok) throw new Error(`details failed: ${details.reason}`);
+      expect(details.result.accessPath?.path).toBe('web');
+      expect(await pathOf()).toBe('web');
+      const after = await pg.query.leads.findFirst({ where: eq(leads.id, outcome.leadId) });
+      expect(after?.responses).toMatchObject({ axMigration: { accessPath: 'web' } });
     });
 
     it('accepts only follow-up questions of the chosen path', async () => {

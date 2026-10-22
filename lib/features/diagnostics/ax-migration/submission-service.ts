@@ -9,6 +9,7 @@ import { validateAnswers } from '../engine';
 import { upsertLeadFromSubmission } from '../lead-upsert';
 import { type Tracking, compactTracking, inferInflowSource, trackingSchema } from '../tracking';
 import type { AnswerValidationIssue, DiagnosticAnswers } from '../types';
+import type { AxAccessPath } from './access-path';
 import type { AxTargetCompany } from './company-size';
 import { AX_MIGRATION_CONFIG } from './config';
 import { PHONE_PATTERN, normalizePhone } from './contact';
@@ -89,6 +90,8 @@ export interface OtherSystemEntry {
   urgency: AxMigrationResult['urgency']['level'];
   primaryChallenge: AxMigrationResult['challenges']['primary'];
   needsHearing: boolean;
+  /** Access only (#303): the recommended way forward */
+  accessPath?: AxAccessPath;
   detailsAnsweredAt?: string;
 }
 
@@ -201,6 +204,11 @@ async function loadTargetCompany(
   return parsed.success ? parsed.data : null;
 }
 
+/** The recommended Access path for the lead summary (#303); nothing for other systems */
+function accessPathSummary(result: AxMigrationResult): { accessPath?: AxAccessPath } {
+  return result.accessPath ? { accessPath: result.accessPath.path } : {};
+}
+
 /** Summary stored on a lead created by the diagnosis */
 function buildLeadSummary(
   submissionId: string,
@@ -224,6 +232,7 @@ function buildLeadSummary(
     needsHearing: result.needsHearing,
     consultationRequested: input.consultationRequested,
     platform: result.platform,
+    ...accessPathSummary(result),
     department: input.contact.department ?? null,
   };
 }
@@ -408,6 +417,7 @@ async function recordOtherSystem(
     urgency: result.urgency.level,
     primaryChallenge: result.challenges.primary,
     needsHearing: result.needsHearing,
+    ...accessPathSummary(result),
   };
   await tx
     .update(leads)
@@ -562,6 +572,8 @@ const offerPointsSql = sql`(select coalesce(sum(r.score_points + r.attendance_po
  * Only `detail` questions of the submission's path are accepted; the answers the result was
  * based on stay as submitted. The lead is updated only when this submission created it, or
  * (for another system of the same respondent) only that system's entry on the lead.
+ * The follow-ups can raise the lead's MQL (e.g. the impact that qualifies the Access support
+ * end, #292); like another system, they never lower it.
  */
 export async function addAxMigrationDetails(
   database: Database,
@@ -629,15 +641,23 @@ export async function addAxMigrationDetails(
       .where(eq(diagnosticSubmissions.id, submissionId));
 
     if (submission.leadId && submission.leadCreated) {
+      const [lead] = await tx
+        .select({ responses: leads.responses, mqlQualifiedAt: leads.mqlQualifiedAt })
+        .from(leads)
+        .where(eq(leads.id, submission.leadId))
+        .for('no key update');
       const summary = {
         difficulty: result.difficulty.level,
         urgency: result.urgency.level,
         needsHearing: result.needsHearing,
+        ...accessPathSummary(result),
         detailsAnsweredAt: now.toISOString(),
+        ...(lead ? withLeadMql(axSummaryOf(lead.responses), toLeadMql(result.mql)) : {}),
       };
       await tx
         .update(leads)
         .set({
+          ...(lead && result.mql.qualified && !lead.mqlQualifiedAt ? { mqlQualifiedAt: now } : {}),
           // Keep a score sales have already changed. Documents and seminars requested from the
           // result (#153) added their points on top: those are not a change by sales
           score:
@@ -655,22 +675,32 @@ export async function addAxMigrationDetails(
         .where(eq(leads.id, submission.leadId));
     } else if (submission.leadId && submission.continuedFromSubmissionId) {
       const [lead] = await tx
-        .select({ responses: leads.responses })
+        .select({ responses: leads.responses, mqlQualifiedAt: leads.mqlQualifiedAt })
         .from(leads)
         .where(eq(leads.id, submission.leadId))
         .for('no key update');
-      const responses =
+      const updated =
         lead &&
         withOtherSystemUpdate(lead.responses, submissionId, {
           difficulty: result.difficulty.level,
           urgency: result.urgency.level,
           needsHearing: result.needsHearing,
+          ...accessPathSummary(result),
           detailsAnsweredAt: now.toISOString(),
         });
-      if (responses) {
+      if (lead && updated) {
+        const summary = axSummaryOf(updated);
+        const responses = {
+          ...updated,
+          axMigration: { ...summary, ...withLeadMql(summary, toLeadMql(result.mql)) },
+        };
         await tx
           .update(leads)
-          .set({ responses, updatedAt: now })
+          .set({
+            responses,
+            ...(result.mql.qualified && !lead.mqlQualifiedAt ? { mqlQualifiedAt: now } : {}),
+            updatedAt: now,
+          })
           .where(eq(leads.id, submission.leadId));
       }
     }
