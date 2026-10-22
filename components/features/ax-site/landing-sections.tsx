@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
 import type { ReactNode } from 'react';
+import { AxCrossLink } from './ax-cross-link';
 import { AxCtaLink } from './ax-cta-link';
 import { AxDiagnosisFrame } from './ax-landing-view';
 import {
@@ -389,19 +390,23 @@ export async function AxTargets({ locale }: SectionProps) {
                 // A fact with its date, not a countdown (#288)
                 <div className="mt-4 rounded-lg bg-ax-mist p-3 text-sm leading-relaxed">
                   <p>{t('accessSupport.body')}</p>
-                  <a
+                  {/* Diagnosed here, on the Access questions (#332); the Access page is for
+                      readers who want the details first */}
+                  <AxCtaLink
                     href={`#${AX_SECTIONS.diagnosis}`}
-                    className="mt-1 inline-block font-bold text-ax-teal-dark underline underline-offset-2"
+                    location="targets-access"
+                    platform="access"
+                    className="mt-3 w-full px-4 py-3 text-sm"
                   >
                     {t('accessSupport.link')}
-                  </a>
-                  {/* The Access landing page (#296) */}
-                  <a
+                  </AxCtaLink>
+                  <AxCrossLink
                     href={`/${locale}/ax-migration/access`}
-                    className="mt-1 block font-bold text-ax-teal-dark underline underline-offset-2"
+                    placement="targets-access"
+                    className="mt-2 inline-block rounded py-1 font-bold text-ax-teal-dark underline underline-offset-2 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ax-teal-dark"
                   >
                     {t('accessSupport.page')}
-                  </a>
+                  </AxCrossLink>
                 </div>
               )}
             </li>

@@ -2669,8 +2669,8 @@
   },
   "axSite": {
     "meta": {
-      "title": "AXマイグレーション｜AS/400・NEC ACOS・AccessからWebシステムへ｜エス・エー・エス株式会社",
-      "description": "今の基幹システムのまま、AI時代の経営判断はできますか？AS/400、NEC ACOS、Microsoft Accessなどで動く基幹システム・業務ツールを、現行の仕様を守ったまま最新のWebシステムへ。AIによる仕様の可視化から、移行後のAX化までご支援します。まずは無料Web診断から。",
+      "title": "AXマイグレーション｜AS/400・NEC ACOSなどの基幹システムをWebへ｜エス・エー・エス株式会社",
+      "description": "今の基幹システムのまま、AI時代の経営判断はできますか？AS/400（IBM i）やNEC ACOSなどのホストコンピュータで動く基幹システムや、その周りの業務システムを、現行の仕様を守ったまま最新のWebシステムへ。AIによる仕様の可視化から、移行後のAX化までご支援します。まずは無料Web診断から。",
       "siteName": "エス・エー・エス株式会社"
     },
     "brand": {
@@ -2689,7 +2689,14 @@
         "faq": "よくある質問",
         "column": "コラム"
       },
-      "cta": "無料Web診断"
+      "cta": "無料Web診断",
+      "pageTop": "このページの先頭へ",
+      "menu": {
+        "button": "メニュー",
+        "navLabel": "サイト内のメニュー",
+        "top": "AXマイグレーション トップ",
+        "access": "Microsoft Access の移行"
+      }
     },
     "hero": {
       "eyebrow": "製造業・流通業の中堅企業さまへ",
@@ -2837,8 +2844,8 @@
       },
       "accessSupport": {
         "body": "Access 2016・2019 に続き、2021 も 2026年10月13日に Microsoft のサポートが終了しました（Microsoft 365 は対象外）。",
-        "link": "お使いの版と進め方の目安を、無料Web診断で確認する",
-        "page": "Access の方はこちら"
+        "link": "Accessの質問から無料Web診断をはじめる",
+        "page": "Access の3つの道（直す・Web に移す・置き換える）を詳しく見る"
       },
       "industries": "製造業・流通業の中堅企業さまに向けたサービスです。"
     },
@@ -2986,7 +2993,13 @@
       "related": "DX代行サービス『まるマルDX』",
       "privacy": "個人情報保護方針",
       "newTab": "（新しいタブで開きます）",
-      "copyright": "Copyright © {year} Software Agency System Co., Ltd. All rights reserved."
+      "copyright": "Copyright © {year} Software Agency System Co., Ltd. All rights reserved.",
+      "sitePages": {
+        "label": "サイト内のページ",
+        "top": "AXマイグレーション トップ",
+        "access": "Microsoft Access の移行",
+        "column": "コラム"
+      }
     }
   },
   "axAccess": {
@@ -3171,7 +3184,8 @@
     "diagnosis": {
       "eyebrow": "FREE CHECK",
       "title": "無料Web診断（Access版）",
-      "lead": "Access のツールについて、選択式の質問に答えるだけ。約3分で、おすすめの進め方（直す・Web に移す・置き換える）の目安と、移行の難しさと急ぎ度合い、先に手を付けたい課題が分かります。最後に会社名とご連絡先を入力すると、結果をその場で表示します（印刷・PDF 保存もできます）。ご希望の方は、そのまま30分のオンライン相談に進めます。無理な営業はいたしません。"
+      "lead": "Access のツールについて、選択式の質問に答えるだけ。約3分で、おすすめの進め方（直す・Web に移す・置き換える）の目安と、移行の難しさと急ぎ度合い、先に手を付けたい課題が分かります。最後に会社名とご連絡先を入力すると、結果をその場で表示します（印刷・PDF 保存もできます）。ご希望の方は、そのまま30分のオンライン相談に進めます。無理な営業はいたしません。",
+      "presetNote": "Access 以外のシステムは「戻る」から選び直せます。"
     },
     "finalCta": {
       "title": "まずは、お使いの Access を確かめるところから。",
@@ -3180,7 +3194,24 @@
       "cta": "無料Web診断（Access版）をはじめる",
       "consult": "30分のオンライン相談を予約する"
     },
-    "trademark": "Microsoft、Access は、米国 Microsoft Corporation の米国およびその他の国における商標または登録商標です。"
+    "trademark": "Microsoft、Access は、米国 Microsoft Corporation の米国およびその他の国における商標または登録商標です。",
+    "breadcrumb": "Microsoft Access の移行",
+    "pathsColumn": {
+      "lead": "3つの道のどれが合うか、判断の目安を表で整理したコラムもあります。"
+    },
+    "hosts": {
+      "title": "AS/400・ACOS など基幹システムの移行をお考えの方へ",
+      "lead": "AS/400（IBM i）や NEC ACOS などの移行と、システムごとの無料Web診断は、AXマイグレーションのページでご案内しています。",
+      "links": {
+        "as400": "AS/400（IBM i）からの移行について読む",
+        "acos": "NEC ACOS からの移行について読む",
+        "targets": "対象となるシステムの一覧を見る"
+      }
+    },
+    "columns": {
+      "title": "Access の移行に関するコラム",
+      "all": "コラムの一覧を見る"
+    }
   },
   "axColumn": {
     "meta": {

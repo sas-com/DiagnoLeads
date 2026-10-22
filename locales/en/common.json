@@ -2669,8 +2669,8 @@
   },
   "axSite": {
     "meta": {
-      "title": "AX Migration | From AS/400, NEC ACOS and Access to web systems | Software Agency System Co., Ltd.",
-      "description": "Can you make management decisions for the AI era with your current core system? We migrate core systems and business tools on AS/400, NEC ACOS, Microsoft Access and more to modern web systems while keeping their current specifications, from visualizing the specifications with AI to AX after the migration. Start with the free web check.",
+      "title": "AX Migration | Core systems such as AS/400 and NEC ACOS to the web | Software Agency System Co., Ltd.",
+      "description": "Can you make management decisions for the AI era with your current core system? We migrate core systems on host computers such as AS/400 (IBM i) and NEC ACOS, and the business systems around them, to modern web systems while keeping their current specifications, from visualizing the specifications with AI to AX after the migration. Start with the free web check.",
       "siteName": "Software Agency System Co., Ltd."
     },
     "brand": {
@@ -2689,7 +2689,14 @@
         "faq": "FAQ",
         "column": "Columns"
       },
-      "cta": "Free web check"
+      "cta": "Free web check",
+      "pageTop": "Back to the top of this page",
+      "menu": {
+        "button": "Menu",
+        "navLabel": "Site menu",
+        "top": "AX Migration home",
+        "access": "Microsoft Access migration"
+      }
     },
     "hero": {
       "eyebrow": "For mid-sized manufacturers and distributors",
@@ -2837,8 +2844,8 @@
       },
       "accessSupport": {
         "body": "After Access 2016 and 2019, Microsoft support for Access 2021 also ended on October 13, 2026 (Microsoft 365 is not affected).",
-        "link": "Check your version and how to proceed in the free web diagnosis",
-        "page": "Using Access? See this page"
+        "link": "Start the free web diagnosis with the Access questions",
+        "page": "See the three ways for Access in detail (fix, move to the web, replace)"
       },
       "industries": "For mid-sized manufacturers and distributors."
     },
@@ -2986,7 +2993,13 @@
       "related": "DX service \"Maru Maru DX\"",
       "privacy": "Privacy policy",
       "newTab": "(opens in a new tab)",
-      "copyright": "Copyright © {year} Software Agency System Co., Ltd. All rights reserved."
+      "copyright": "Copyright © {year} Software Agency System Co., Ltd. All rights reserved.",
+      "sitePages": {
+        "label": "Pages on this site",
+        "top": "AX Migration home",
+        "access": "Microsoft Access migration",
+        "column": "Articles"
+      }
     }
   },
   "axAccess": {
@@ -3171,7 +3184,8 @@
     "diagnosis": {
       "eyebrow": "FREE CHECK",
       "title": "Free web check (Access)",
-      "lead": "Just answer multiple-choice questions about your Access tool. In about 3 minutes you see a guide to the recommended way forward (fix, move to the web or replace), how hard and how urgent the migration is, and which issue to tackle first. Enter your company name and contact details at the end and the result is shown right away (it can be printed or saved as a PDF). If you wish, you can go straight on to a 30-minute online consultation. No pushy sales."
+      "lead": "Just answer multiple-choice questions about your Access tool. In about 3 minutes you see a guide to the recommended way forward (fix, move to the web or replace), how hard and how urgent the migration is, and which issue to tackle first. Enter your company name and contact details at the end and the result is shown right away (it can be printed or saved as a PDF). If you wish, you can go straight on to a 30-minute online consultation. No pushy sales.",
+      "presetNote": "For a system other than Access, go back with “Back” and choose it there."
     },
     "finalCta": {
       "title": "Start by checking the Access tool you use.",
@@ -3180,7 +3194,24 @@
       "cta": "Start the free web check (Access)",
       "consult": "Book a 30-minute online consultation"
     },
-    "trademark": "Microsoft and Access are trademarks or registered trademarks of Microsoft Corporation in the United States and other countries."
+    "trademark": "Microsoft and Access are trademarks or registered trademarks of Microsoft Corporation in the United States and other countries.",
+    "breadcrumb": "Microsoft Access migration",
+    "pathsColumn": {
+      "lead": "An article compares the three ways in a table, to help you choose."
+    },
+    "hosts": {
+      "title": "Migrating a core system such as AS/400 or ACOS?",
+      "lead": "Migrating AS/400 (IBM i), NEC ACOS and other systems, and the free web check for each system, are covered on the AX Migration page.",
+      "links": {
+        "as400": "Read about migrating from AS/400 (IBM i)",
+        "acos": "Read about migrating from NEC ACOS",
+        "targets": "See the systems we migrate"
+      }
+    },
+    "columns": {
+      "title": "Articles on migrating Access",
+      "all": "See all articles"
+    }
   },
   "axColumn": {
     "meta": {

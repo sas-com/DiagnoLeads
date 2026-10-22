@@ -4,6 +4,7 @@ import { trackAxEvent } from '@/components/features/ax-diagnosis/tracking';
 import { cn } from '@/lib/utils';
 import { ArrowRight } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { currentAxPage, followAxLink } from './ax-cross-link';
 import { useAxLandingView } from './ax-landing-view';
 
 type CtaVariant = 'diagnosis' | 'consultation';
@@ -31,6 +32,11 @@ interface AxCtaLinkProps {
    * (no script yet, or the result is shown), the link just leads to `href`.
    */
   platform?: string;
+  /**
+   * Place of the button for a link to another page of the site (#332), when it differs from
+   * `location` (e.g. 'end' for the column-end-<slug> button). Defaults to `location`.
+   */
+  placement?: string;
   children: ReactNode;
 }
 
@@ -44,6 +50,7 @@ export function AxCtaLink({
   className,
   tabIndex,
   platform,
+  placement,
   children,
 }: AxCtaLinkProps) {
   const landingView = useAxLandingView();
@@ -52,13 +59,22 @@ export function AxCtaLink({
       href={href}
       tabIndex={tabIndex}
       onClick={(event) => {
-        trackAxEvent('ax_lp_cta_click', { cta: variant, location });
+        const page = currentAxPage()?.page;
+        trackAxEvent('ax_lp_cta_click', { cta: variant, location, ...(page ? { page } : {}) });
         // The diagnosis moves itself into view; following the link would add a history entry
         // between its steps. A click that opens a new tab or window is left to the browser.
         const plainClick =
           event.button === 0 && !(event.metaKey || event.ctrlKey || event.shiftKey || event.altKey);
         if (platform && plainClick && landingView?.startOnPath(platform)) {
           event.preventDefault();
+          return;
+        }
+        if (!external) followAxLink(event.currentTarget, href, placement ?? location);
+      }}
+      // A middle click opens another page in a new tab: it carries `from` as well
+      onAuxClick={(event) => {
+        if (event.button === 1 && !external) {
+          followAxLink(event.currentTarget, href, placement ?? location);
         }
       }}
       {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}

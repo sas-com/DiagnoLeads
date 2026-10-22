@@ -66,6 +66,17 @@ export const COLUMN_CTAS: Record<ColumnCta, { href: string; labelKey: 'axAccess.
 };
 
 /**
+ * Diagnosis button of the header on the articles of a landing page (#332): the same diagnosis as
+ * the button at the end, named after it, rather than the main page's diagnosis
+ */
+export const COLUMN_HEADER_CTAS: Record<
+  ColumnRelatedPage,
+  { href: string; labelKey: 'axAccess.diagnosis.title' }
+> = {
+  access: { href: '/ja/ax-migration/access#diagnosis', labelKey: 'axAccess.diagnosis.title' },
+};
+
+/**
  * Trademark notice of the landing page an article belongs to, shown at its end unless the article
  * has its own (Column.trademark)
  */

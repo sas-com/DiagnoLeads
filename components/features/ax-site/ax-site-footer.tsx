@@ -1,5 +1,8 @@
+import { isColumnLocale } from '@/lib/features/ax-site/columns';
+import { COLUMN_INDEX_PATH } from '@/lib/features/ax-site/columns/types';
 import { ExternalLink } from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
+import { AxCrossLink } from './ax-cross-link';
 import { AxLogo } from './ax-logo';
 import { AX_FOOTER_ID, AX_SITE_LINKS, axPrivacyPolicyUrl } from './site-config';
 
@@ -12,6 +15,15 @@ export async function AxSiteFooter({ locale }: { locale: string }) {
     { href: AX_SITE_LINKS.operator, label: t('company') },
     { href: AX_SITE_LINKS.relatedService, label: t('related') },
     ...(privacyPolicyUrl ? [{ href: privacyPolicyUrl, label: t('privacy') }] : []),
+  ];
+  // Pages of this site, reachable from every page also on phones (the header menu is hidden
+  // there); columns exist in Japanese only, so no link to a page that would 404 (#332)
+  const sitePages = [
+    { href: `/${locale}/ax-migration`, label: t('sitePages.top') },
+    { href: `/${locale}/ax-migration/access`, label: t('sitePages.access') },
+    ...(isColumnLocale(locale)
+      ? [{ href: `/${locale}${COLUMN_INDEX_PATH}`, label: t('sitePages.column') }]
+      : []),
   ];
 
   return (
@@ -42,7 +54,22 @@ export async function AxSiteFooter({ locale }: { locale: string }) {
             ))}
           </ul>
         </div>
-        <hr className="mt-10 border-white/60" />
+        <nav aria-label={t('sitePages.label')} className="mt-8">
+          <ul className="flex flex-wrap gap-x-6 gap-y-2 text-sm font-bold">
+            {sitePages.map(({ href, label }) => (
+              <li key={href}>
+                <AxCrossLink
+                  href={href}
+                  placement="footer"
+                  className="inline-block rounded py-1 underline underline-offset-4 hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                >
+                  {label}
+                </AxCrossLink>
+              </li>
+            ))}
+          </ul>
+        </nav>
+        <hr className="mt-8 border-white/60" />
         {/* Rendered per request (the page is dynamic); recheck the year if it becomes static */}
         <p className="mt-6 text-right">
           <small className="text-xs">{t('copyright', { year: new Date().getFullYear() })}</small>
