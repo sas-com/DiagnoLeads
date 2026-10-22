@@ -10,7 +10,7 @@ import {
 } from '@/lib/features/diagnostics/request-guard';
 import { requestInfoOffer } from '@/lib/features/info-offers/service';
 import { requestInfoOfferSchema } from '@/lib/features/info-offers/types/schemas';
-import { reportServerError } from '@/lib/ops/alert';
+import { reportRejectedRequest, reportServerError } from '@/lib/ops/alert';
 import { type NextRequest, NextResponse, after } from 'next/server';
 
 const MAX_BYTES = 1024;
@@ -37,7 +37,10 @@ export async function POST(req: NextRequest) {
     const ip = clientIp(req);
     if (ip) {
       const limit = await consumeRateLimit(db, AX_RATE_LIMITS.offersPerIp, ipBlock(ip));
-      if (!limit.allowed) return tooManyRequests(limit.retryAfterSeconds);
+      if (!limit.allowed) {
+        after(() => reportRejectedRequest('ax-diagnosis/offers', 'rate_limited'));
+        return tooManyRequests(limit.retryAfterSeconds);
+      }
     }
 
     const outcome = await requestInfoOffer(db, parsed.data);

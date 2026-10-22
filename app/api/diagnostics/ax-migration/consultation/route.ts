@@ -15,7 +15,7 @@ import {
 } from '@/lib/features/diagnostics/request-guard';
 import { acceptMeetingPreferences } from '@/lib/features/meeting-requests/service';
 import { meetingPreferencesSchema } from '@/lib/features/meeting-requests/types/schemas';
-import { reportServerError } from '@/lib/ops/alert';
+import { reportRejectedRequest, reportServerError } from '@/lib/ops/alert';
 import { eq } from 'drizzle-orm';
 import { type NextRequest, NextResponse, after } from 'next/server';
 import { z } from 'zod';
@@ -50,7 +50,10 @@ export async function POST(req: NextRequest) {
     const ip = clientIp(req);
     if (ip) {
       const limit = await consumeRateLimit(db, AX_RATE_LIMITS.consultationPerIp, ipBlock(ip));
-      if (!limit.allowed) return tooManyRequests(limit.retryAfterSeconds);
+      if (!limit.allowed) {
+        after(() => reportRejectedRequest('ax-diagnosis/consultation', 'rate_limited'));
+        return tooManyRequests(limit.retryAfterSeconds);
+      }
     }
 
     const requestedAt = new Date();

@@ -22,6 +22,13 @@ vi.mock('next/server', async (importOriginal) => ({
     afterTasks.push(task);
   },
 }));
+
+// Refusals are reported after the response (#351)
+const { reportRejectedRequest } = vi.hoisted(() => ({ reportRejectedRequest: vi.fn() }));
+vi.mock('@/lib/ops/alert', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/ops/alert')>()),
+  reportRejectedRequest,
+}));
 vi.mock('@/lib/db/client', () => ({ db: {} }));
 vi.mock('@/lib/features/diagnostics/ax-migration/notify', () => ({
   notifyAxMigrationSubmission: (...args: unknown[]) => notifyMock(...args),
@@ -211,7 +218,10 @@ describe('POST /api/diagnostics/ax-migration', () => {
     expect(response.status).toBe(200);
     expect((await response.json()).result.difficulty).toBeDefined();
     expect(submitMock).not.toHaveBeenCalled();
-    expect(afterTasks).toHaveLength(0);
+    // Nothing stored; only the refusal is counted, after the response
+    expect(afterTasks).toHaveLength(1);
+    await runAfterTasks();
+    expect(reportRejectedRequest).toHaveBeenCalledWith('ax-diagnosis/submit', 'honeypot');
   });
 
   it('accepts an empty honeypot', async () => {

@@ -26,7 +26,7 @@ import { getInfoOffers } from '@/lib/features/info-offers/service';
 import { publicInfoOffers } from '@/lib/features/info-offers/types/schemas';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { notifyReferralDiagnosed } from '@/lib/features/prospects/referrals';
-import { reportServerError } from '@/lib/ops/alert';
+import { reportRejectedRequest, reportServerError } from '@/lib/ops/alert';
 import { type NextRequest, NextResponse, after } from 'next/server';
 
 /** Upper bound for the request body (answers + contact + tracking are a few KB) */
@@ -80,6 +80,7 @@ export async function POST(req: NextRequest) {
 
   // Honeypot filled: answer like a normal success so bots learn nothing, but store nothing
   if (parsed.data.website) {
+    after(() => reportRejectedRequest('ax-diagnosis/submit', 'honeypot'));
     return NextResponse.json({
       submissionId: crypto.randomUUID(),
       consultationRequested: parsed.data.consultationRequested,
@@ -107,6 +108,9 @@ export async function POST(req: NextRequest) {
   }
   const verification = await verifyTurnstile(parsed.data.turnstileToken, ip, req.nextUrl.hostname);
   if (!verification.ok) {
+    if (verification.reason !== 'unavailable') {
+      after(() => reportRejectedRequest('ax-diagnosis/submit', 'verification_failed'));
+    }
     return verification.reason === 'unavailable'
       ? NextResponse.json(
           { error: 'Verification unavailable', code: 'verification_unavailable' },
@@ -135,6 +139,7 @@ export async function POST(req: NextRequest) {
     );
     if (!limit.allowed) {
       console.warn(`AX diagnosis: rate limit reached (${limit.rule})`);
+      after(() => reportRejectedRequest('ax-diagnosis/submit', 'rate_limited'));
       return tooManyRequests(limit.retryAfterSeconds);
     }
 
