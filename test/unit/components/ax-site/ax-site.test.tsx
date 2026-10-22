@@ -513,3 +513,27 @@ describe('AX migration landing page after the diagnosis (#280)', () => {
     expect(document.getElementById('acos-migration')).toBeNull();
   });
 });
+
+describe('AX header navigation (#324)', () => {
+  it('links to the column list in Japanese', async () => {
+    await renderPage();
+    const nav = screen.getByRole('navigation', { name: 'ページ内のメニュー' });
+    expect(within(nav).getByRole('link', { name: 'コラム' })).toHaveAttribute(
+      'href',
+      '/ja/ax-migration/column'
+    );
+  });
+
+  it('has no column link on the English page, where no column exists', async () => {
+    const { AxSiteHeader } = await import('@/components/features/ax-site/ax-site-header');
+    const enMessages = (await import('@/locales/en/common.json')).default;
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages} timeZone="Asia/Tokyo">
+        {await AxSiteHeader({ locale: 'en', variant: 'landing' })}
+      </NextIntlClientProvider>
+    );
+    const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href') ?? '');
+    expect(hrefs.length).toBeGreaterThan(0);
+    expect(hrefs.some((href) => href.includes('/column'))).toBe(false);
+  });
+});
