@@ -18,6 +18,7 @@ import {
   type HearingItemStatus,
   choosesOtherOption,
   hasOtherOption,
+  isUnconfirmedSource,
 } from '@/lib/features/lead-hearings/catalog';
 import { normalizeHearingValue } from '@/lib/features/lead-hearings/form';
 import type {
@@ -30,7 +31,12 @@ import { useTranslations } from 'next-intl';
 import { memo } from 'react';
 import { HearingFieldInput, type HearingFieldVariant, usesChipInput } from './hearing-field-inputs';
 
-const SOURCE_COLORS = { prefilled: 'blue', confirmed: 'emerald', corrected: 'violet' } as const;
+const SOURCE_COLORS = {
+  prefilled: 'blue',
+  confirmed: 'emerald',
+  corrected: 'violet',
+  agency: 'amber',
+} as const;
 
 interface HearingFieldRowProps {
   field: HearingFieldDefinition;
@@ -69,7 +75,7 @@ export const HearingFieldRow = memo(function HearingFieldRow({
   const label = tRoot(field.labelKey);
   const id = `hearing-${field.key}`;
   const hasDiagnosisValue =
-    entry.source === 'prefilled' && normalizeHearingValue(field, entry.value) !== undefined;
+    isUnconfirmedSource(entry.source) && normalizeHearingValue(field, entry.value) !== undefined;
   const canConfirm = !readOnly && hasDiagnosisValue;
   // A required field holding the Web diagnosis answer is not empty: it is waiting to be confirmed
   const marker = missing ? (hasDiagnosisValue ? 'unconfirmed' : 'missing') : null;

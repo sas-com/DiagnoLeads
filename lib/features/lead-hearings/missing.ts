@@ -6,7 +6,12 @@
  * - unconfirmed: still holding the Web diagnosis value that nobody confirmed in the meeting.
  */
 
-import { DEFAULT_HEARING_CATALOG, type HearingFieldKey, type HearingRequiredItem } from './catalog';
+import {
+  DEFAULT_HEARING_CATALOG,
+  type HearingFieldKey,
+  type HearingRequiredItem,
+  isUnconfirmedSource,
+} from './catalog';
 import type { HearingFieldEntry, HearingFields } from './types/schemas';
 
 export interface HearingMissingItems {
@@ -46,7 +51,7 @@ export function computeMissingItems(
   };
   for (const item of requiredItems) {
     const missingKeys = item.keys.filter((key) => !isHearingEntryFilled(fields[key]));
-    const unconfirmedKeys = item.keys.filter((key) => fields[key]?.source === 'prefilled');
+    const unconfirmedKeys = item.keys.filter((key) => isUnconfirmedSource(fields[key]?.source));
     if (missingKeys.length > 0) {
       result.missing.push(item.id);
       result.missingKeys.push(...missingKeys);

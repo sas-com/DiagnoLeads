@@ -270,6 +270,10 @@ vi.mock('@/components/features/challenge-guide/challenge-guide-card', () => ({
 vi.mock('@/components/features/info-offers/info-offer-requests-card', () => ({
   InfoOfferRequestsCard: () => null,
 }));
+// The agency handover (#152) has its own tests (test/unit/components/agency-handovers)
+vi.mock('@/components/features/agency-handovers/agency-handover-card', () => ({
+  AgencyHandoverCard: () => null,
+}));
 vi.mock('@/components/features/lead-activity/lead-activity-card', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/components/features/lead-activity/lead-activity-card')>()),
   LeadActivityCard: () => <p>activity timeline</p>,

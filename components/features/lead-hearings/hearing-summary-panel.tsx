@@ -22,7 +22,12 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 import { toast } from 'sonner';
 
-const SOURCE_COLORS = { prefilled: 'blue', confirmed: 'emerald', corrected: 'violet' } as const;
+const SOURCE_COLORS = {
+  prefilled: 'blue',
+  confirmed: 'emerald',
+  corrected: 'violet',
+  agency: 'amber',
+} as const;
 
 /**
  * Put text on the clipboard: the Clipboard API, or (without it, e.g. over plain http) a

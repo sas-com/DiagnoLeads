@@ -286,26 +286,24 @@ export const webhooksRouter = router({
   deliveries: organizationProcedure.input(listDeliveriesSchema).query(async ({ ctx, input }) => {
     const { webhookId, status, limit, offset } = input;
 
-    // Build query to get deliveries for webhooks owned by this organization
-    let query = db
+    // One where() with every condition: a second where() call replaces the first, which would
+    // drop the organization scope
+    const conditions = [eq(webhooks.organizationId, ctx.organization.id)];
+    if (webhookId) {
+      conditions.push(eq(webhookDeliveries.webhookId, webhookId));
+    }
+    if (status) {
+      conditions.push(eq(webhookDeliveries.status, status));
+    }
+
+    const results = await ctx.db
       .select({
         delivery: webhookDeliveries,
         webhookName: webhooks.name,
       })
       .from(webhookDeliveries)
       .innerJoin(webhooks, eq(webhookDeliveries.webhookId, webhooks.id))
-      .where(eq(webhooks.organizationId, ctx.organization.id))
-      .$dynamic();
-
-    if (webhookId) {
-      query = query.where(eq(webhookDeliveries.webhookId, webhookId));
-    }
-
-    if (status) {
-      query = query.where(eq(webhookDeliveries.status, status));
-    }
-
-    const results = await query
+      .where(and(...conditions))
       .orderBy(desc(webhookDeliveries.createdAt))
       .limit(limit)
       .offset(offset);
