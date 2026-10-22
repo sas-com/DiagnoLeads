@@ -31,7 +31,7 @@ vi.mock('@/lib/features/email', () => ({
   isEmailConfigured: () => isEmailConfiguredMock(),
 }));
 
-const { notifyAxMigrationSubmission, buildSalesMessage } = await import(
+const { notifyAxMigrationSubmission, buildSalesMessage, buildSalesEmail } = await import(
   '@/lib/features/diagnostics/ax-migration/notify'
 );
 const { evaluateAxMigration } = await import('@/lib/features/diagnostics/ax-migration/evaluate');
@@ -90,6 +90,13 @@ describe('notifyAxMigrationSubmission', () => {
     const { accessPath: _stored, ...older } = access;
     expect(buildSalesMessage({ ...base, result: older }).message).not.toContain('進め方の目安');
     expect(buildSalesMessage(base).message).not.toContain('進め方の目安');
+    // The sales email shows the same row in its result table (#285)
+    expect(
+      buildSalesEmail({ ...base, result: access }, null, 'https://example.com/ja/leads/1').text
+    ).toContain('進め方の目安: Web に移す');
+    expect(buildSalesEmail(base, null, 'https://example.com/ja/leads/1').text).not.toContain(
+      '進め方の目安'
+    );
 
     await notifyAxMigrationSubmission({ ...base, result: access });
     expect(webhookMock).toHaveBeenCalledWith(
@@ -166,7 +173,7 @@ describe('notifyAxMigrationSubmission', () => {
         // The request itself is the strong signal, also when the stored result predates it
         subject: expect.stringMatching(/^【相談申込・関心あり（MQL）】/),
         text: expect.stringContaining('MQL: 関心あり（相談申込）'),
-        html: expect.stringContaining('MQL: 関心あり（相談申込）'),
+        html: expect.stringContaining('関心あり（相談申込）'),
       })
     );
     expect(webhookMock).toHaveBeenCalledWith(

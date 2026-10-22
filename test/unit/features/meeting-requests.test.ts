@@ -236,7 +236,8 @@ describe('texts', () => {
     expect(email.text).toContain('日時：10月20日（火）14:00〜（日本時間）');
     expect(email.text).toContain('形式：オンライン（接続先は別途お送りします）');
     expect(email.text).toContain('担当：営業 太郎');
-    expect(email.text.trim().endsWith('架空システムズ')).toBe(true);
+    // Signed by the organization
+    expect(email.text).toContain('\n\n架空システムズ\n\n');
     // Names are escaped in the HTML part
     expect(
       buildConfirmationEmail({

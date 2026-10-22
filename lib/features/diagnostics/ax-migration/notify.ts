@@ -1,5 +1,6 @@
 import { db } from '@/lib/db/client';
 import { filterAllowedRecipients } from '@/lib/email/allowed-recipients';
+import { type EmailBlock, type EmailFact, renderEmail } from '@/lib/email/templates/render';
 import { env } from '@/lib/env';
 import { challengeEffectLine } from '@/lib/features/challenge-guide/service';
 import { isEmailConfigured, sendEmail } from '@/lib/features/email';
@@ -212,6 +213,127 @@ export function buildSalesMessage(
 }
 
 /**
+ * The sales email for a consultation request (#285): the same judgement as the in-app message,
+ * laid out as badges, the customer, the result and a button to the lead
+ */
+export function buildSalesEmail(
+  n: AxMigrationNotification,
+  effect: string | null,
+  leadUrl: string
+): { subject: string; html: string; text: string } {
+  const { title } = buildSalesMessage(n, effect);
+  const mql = salesMql(n);
+  const primary = n.result.challenges.primary;
+  const platform = n.result.platform ? PLATFORM_LABELS[n.result.platform] : undefined;
+  const deadline = consultationDeadline(n.requestedAt);
+
+  const badges: Extract<EmailBlock, { type: 'badges' }>['items'] = [
+    ...(n.consultationRequested ? [{ label: '相談申込', tone: 'danger' as const }] : []),
+    ...(mql.level === 'interest'
+      ? [{ label: '関心あり（MQL）', tone: 'warning' as const }]
+      : mql.level === 'fit'
+        ? [{ label: '適合', tone: 'info' as const }]
+        : []),
+    ...(n.identityUnverified ? [{ label: '本人未確認', tone: 'warning' as const }] : []),
+    ...(n.additionalSystem ? [{ label: '別システム', tone: 'info' as const }] : []),
+    ...(n.result.sqlSignals.candidate
+      ? [{ label: 'SQLの手がかりあり', tone: 'success' as const }]
+      : []),
+  ];
+  const accessPath = readAccessPath(n.result.accessPath);
+  const result: EmailFact[] = [
+    ...(platform ? [{ label: '移行元', value: platform }] : []),
+    ...(accessPath ? [{ label: '進め方の目安', value: ACCESS_PATH_LABELS[accessPath] }] : []),
+    { label: '移行難易度', value: LEVEL_LABELS[n.result.difficulty.level] },
+    { label: '緊急度', value: LEVEL_LABELS[n.result.urgency.level] },
+    { label: '主な課題', value: primary ? CHALLENGE_LABELS[primary] : '特になし' },
+    { label: 'MQL', value: mqlSummary(mql).replace(/^MQL: /, '') },
+    ...(mql.criteria.companySize !== 'not_configured'
+      ? [
+          {
+            label: '企業規模',
+            value: `${COMPANY_SIZE_LABELS[mql.criteria.companySize]}${mql.waived.includes('company_size') ? '（この経路では問わない）' : ''}`,
+          },
+        ]
+      : []),
+    { label: 'SQLの手がかり', value: n.result.sqlSignals.candidate ? 'あり' : 'なし' },
+    ...(primary && effect ? [{ label: '伝える効果', value: effect }] : []),
+  ];
+
+  const rendered = renderEmail({
+    theme: 'internal',
+    preheader: `${n.company} ${n.name} 様から相談申込。${deadline} までに連絡してください`,
+    blocks: [
+      { type: 'badges', items: badges },
+      { type: 'heading', text: 'AXマイグレーション診断から相談申込がありました' },
+      {
+        type: 'paragraph',
+        text: 'MQL判定を経ずに営業へ引き渡します。リードの内容を確認し、期限までにご連絡ください。',
+      },
+      {
+        type: 'notice',
+        tone: 'danger',
+        title: '連絡期限',
+        text: `${deadline}（土日を除く営業日）`,
+      },
+      ...(n.identityUnverified
+        ? [
+            {
+              type: 'notice' as const,
+              tone: 'warning' as const,
+              title: '本人確認が必要です',
+              text: '既存リードと同じメールアドレスからの回答です。本人確認のうえ対応してください（リードの内容は変更していません）。',
+            },
+          ]
+        : []),
+      ...(n.additionalSystem
+        ? [
+            {
+              type: 'notice' as const,
+              tone: 'info' as const,
+              text: '最初の診断と同じ画面から、別のシステムも続けて診断されました（リードの診断結果に追記しています）。',
+            },
+          ]
+        : []),
+      {
+        type: 'facts',
+        title: 'お客様',
+        rows: [
+          { label: '会社名', value: n.company },
+          { label: '氏名', value: n.name },
+          { label: 'メール', value: n.email },
+        ],
+      },
+      { type: 'facts', title: '診断結果', rows: result },
+      ...(n.result.needsHearing
+        ? [
+            {
+              type: 'notice' as const,
+              tone: 'info' as const,
+              text: '「わからない」の回答が多いため、ヒアリングで確認してください。',
+            },
+          ]
+        : []),
+      { type: 'button', label: 'リードを開く', url: leadUrl },
+      ...(primary
+        ? [
+            {
+              type: 'paragraph' as const,
+              text: '次に聞くことはリード画面で確認できます。',
+              muted: true,
+            },
+          ]
+        : []),
+    ],
+    footer: [
+      'このメールは DiagnoLeads から自動で送信しています。',
+      '心当たりがない場合は、組織の管理者にお問い合わせください。',
+    ],
+  });
+  return { subject: title, ...rendered };
+}
+
+/**
  * Notify sales after a diagnosis or a consultation request.
  * Failures are logged and never break the respondent's flow. Past the hourly limit of the
  * organization nothing is sent (the submission is saved all the same), except that a consultation
@@ -329,14 +451,7 @@ export async function notifyAxMigrationSubmission(n: AxMigrationNotification): P
     (await withinSalesEmailQuota(n.organizationId))
   ) {
     const leadUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/ja/leads/${n.leadId}`;
-    tasks.push(
-      sendEmail({
-        to: salesRecipients,
-        subject: title,
-        text: `${message}\n\n会社名: ${n.company}\n氏名: ${n.name}\nメール: ${n.email}\nリード: ${leadUrl}`,
-        html: `<p>${escapeHtml(message)}</p><ul><li>会社名: ${escapeHtml(n.company)}</li><li>氏名: ${escapeHtml(n.name)}</li><li>メール: ${escapeHtml(n.email)}</li></ul><p><a href="${escapeHtml(leadUrl)}">リードを開く</a></p>`,
-      })
-    );
+    tasks.push(sendEmail({ to: salesRecipients, ...buildSalesEmail(n, effect, leadUrl) }));
   }
 
   const results = await Promise.allSettled(tasks);
@@ -392,8 +507,16 @@ async function noticeLimitReached(organizationId: string, rule: OrganizationLimi
           sendEmail({
             to: salesEmail.split(',').map((address) => address.trim()),
             subject: notice.title,
-            text: notice.message,
-            html: `<p>${escapeHtml(notice.message)}</p>`,
+            ...renderEmail({
+              theme: 'internal',
+              preheader: notice.message,
+              blocks: [
+                { type: 'badges', items: [{ label: '通知の上限', tone: 'warning' }] },
+                { type: 'heading', text: notice.title },
+                { type: 'paragraph', text: notice.message },
+              ],
+              footer: ['このメールは DiagnoLeads から自動で送信しています。'],
+            }),
           }),
         ]
       : []),
@@ -450,13 +573,4 @@ async function withinSalesEmailQuota(organizationId: string): Promise<boolean> {
     console.error('AX diagnosis: sales email limit check failed:', error);
     return false;
   }
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
