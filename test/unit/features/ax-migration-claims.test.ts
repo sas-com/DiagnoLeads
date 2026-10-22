@@ -2,6 +2,7 @@
  * The AX migration site may not assert results it has no records for (#224, #51): a published
  * page is advertising. Restore a claim only together with the figures that back it.
  */
+import { axMigrationDefinition } from '@/lib/features/diagnostics/ax-migration/definition';
 import en from '@/locales/en/common.json';
 import ja from '@/locales/ja/common.json';
 import { describe, expect, it } from 'vitest';
@@ -26,5 +27,21 @@ describe('AX migration copy', () => {
     ['en', strings(en.axAccess), /without (stopping|interruption|downtime)|zero downtime|makes? it safe|No\.? ?1|one-stop/i],
   ])('keeps the Access page copy within the agreed lines in %s', (_, texts, claims) => {
     expect(texts.filter((text) => claims.test(text))).toEqual([]);
+  });
+
+  // The AS/400 and ACOS sections (#311): calm and factual. The platforms are not said to be
+  // attacked, and the only date is the one the diagnosis itself gives (phone-line EDI)
+  const ediNote = axMigrationDefinition.questions.find((q) => q.id === 'legacy_edi')?.description;
+  it.each([
+    ['ja', strings(ja.axSite.hosts), /狙われ|攻撃|サイバー|ランサム|脆弱|危険|今すぐ|手遅れ|円/, ediNote?.ja],
+    ['en', strings(en.axSite.hosts), /target(ed)? by|attack|cyber|ransom|vulnerab|danger|right now|too late|yen|¥/i, ediNote?.en],
+  ])('keeps the host platform copy within the agreed lines in %s', (_, texts, claims, edi) => {
+    expect(texts.filter((text) => claims.test(text))).toEqual([]);
+    const years = texts.flatMap((text) => text.match(/(?<!\d)(?:19|20)\d{2}(?!\d)/g) ?? []);
+    expect(new Set(years)).toEqual(new Set(['2028']));
+    expect(edi).toMatch(/2028/);
+    for (const text of texts.filter((t) => t.includes('2028'))) {
+      expect(text).toContain(edi?.replace(/[。.]$/, ''));
+    }
   });
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useAxLandingView } from '@/components/features/ax-site/ax-landing-view';
+import { type PathStarter, useAxLandingView } from '@/components/features/ax-site/ax-landing-view';
 import { axConsultationUrl } from '@/components/features/ax-site/site-config';
 import { LiveRegion, useAnnouncer } from '@/components/features/diagnosis-runner/announcer';
 import { ConsultationRequest } from '@/components/features/diagnosis-runner/consultation-request';
@@ -341,6 +341,26 @@ function AxDiagnosisSteps({
     showStep(1, true);
     trackAxEvent('ax_diagnosis_step', { platform: value, step: 2 });
   };
+
+  /**
+   * A section of the landing page starts the diagnosis on its path (#311): at the path choice it
+   * is chosen as if the respondent had clicked it, so the back button returns to the choice.
+   * A diagnosis already under way keeps its answers and is only brought into view; a shown
+   * result is left to the link itself (it leads to the result).
+   */
+  const startOnPath = useRef<PathStarter>(() => false);
+  startOnPath.current = (value) => {
+    if (stage !== 'questions' || !presetPlatformOf(value)) return false;
+    if (step === 0) choosePlatform(value);
+    else scrollToStart(topRef.current);
+    return true;
+  };
+  const registerPathStarter = landingView?.registerPathStarter;
+  useEffect(() => {
+    if (!registerPathStarter) return;
+    registerPathStarter((value) => startOnPath.current(value));
+    return () => registerPathStarter(null);
+  }, [registerPathStarter]);
 
   const setSingle = (questionId: string, value: string) => {
     setAnswers((prev) => ({ ...prev, [questionId]: value }));

@@ -82,6 +82,8 @@ describe('AX migration landing page', () => {
       'ヒト・モノ・カネ・情報。すべてが、レガシーな基幹システムに縛られています',
       'システム移行はゴールではなく、AX化の出発点',
       '対象となるシステム',
+      'AS/400（IBM i）からの移行を考えている方へ',
+      'NEC ACOSからの移行を考えている方へ',
       'まずは「無料Web診断」から',
       '選ばれる理由',
       'よくある質問',
@@ -277,6 +279,82 @@ describe('AxFloatingCta', () => {
   });
 });
 
+describe('AS/400 and ACOS sections of the landing page (#311)', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    vi.mocked(Element.prototype.scrollIntoView).mockClear();
+  });
+
+  afterEach(() => {
+    window.history.replaceState(null, '', '/');
+  });
+
+  const section = (id: string) => document.getElementById(id) as HTMLElement;
+  const startButton = (id: string) => within(section(id)).getByRole('link', { name: /無料Web診断をはじめる/ });
+
+  it('gives each platform its own heading, triggers and checks after the targets', async () => {
+    await renderPage();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    const targets = screen.getByRole('heading', { level: 2, name: '対象となるシステム' });
+    for (const [id, name] of [
+      ['as400-migration', 'AS/400（IBM i）からの移行を考えている方へ'],
+      ['acos-migration', 'NEC ACOSからの移行を考えている方へ'],
+    ]) {
+      const heading = within(section(id)).getByRole('heading', { level: 2, name });
+      expect(section(id)).toHaveAccessibleName(name);
+      expect(targets.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(within(section(id)).getAllByRole('listitem')).toHaveLength(4);
+      // The one date is the one the diagnosis itself states (legacy_edi)
+      expect(within(section(id)).getByText(/INSネットの提供を2028年12月31日で終える/)).toBeInTheDocument();
+      // Without a script the button still leads to the diagnosis
+      expect(startButton(id)).toHaveAttribute('href', '#diagnosis');
+    }
+    expect(within(section('as400-migration')).getByText(/RPG・COBOL・CL/)).toBeInTheDocument();
+    expect(within(section('acos-migration')).getByText(/ETOS/)).toBeInTheDocument();
+  });
+
+  it.each([
+    ['as400-migration', 'as400', /STEP 2 \/ 6\s*運用と期限/],
+    ['acos-migration', 'acos', /STEP 2 \/ 6\s*機種と運用/],
+  ])('starts the embedded diagnosis on the platform of %s', async (id, platform, step) => {
+    const user = userEvent.setup();
+    await renderPage();
+    const diagnosis = section('diagnosis');
+
+    await user.click(startButton(id));
+
+    const heading = within(diagnosis).getByRole('heading', { name: step });
+    expect(heading).toHaveFocus();
+    expect(within(diagnosis).queryByTestId(`platform-${platform}`)).not.toBeInTheDocument();
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    // A step entry of its own, without the link's #diagnosis in between
+    expect(window.history.state.ax.step).toBe(1);
+    expect(window.location.hash).toBe('');
+
+    // The back button leads to the path choice, with the platform chosen
+    await user.click(within(diagnosis).getByRole('button', { name: /戻る/ }));
+    expect(await within(diagnosis).findByTestId(`platform-${platform}`)).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    expect(window.history.state.ax.step).toBe(0);
+  });
+
+  it('keeps a diagnosis already under way', async () => {
+    const user = userEvent.setup();
+    await renderPage();
+    const diagnosis = section('diagnosis');
+    await user.click(within(diagnosis).getByTestId('platform-acos'));
+    vi.mocked(Element.prototype.scrollIntoView).mockClear();
+
+    await user.click(startButton('as400-migration'));
+
+    expect(within(diagnosis).getByRole('heading', { name: /STEP 2 \/ 6\s*機種と運用/ })).toBeInTheDocument();
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    expect(window.location.hash).toBe('');
+  });
+});
+
 describe('AX migration landing page after the diagnosis (#280)', () => {
   const fetchMock = vi.fn();
   type User = ReturnType<typeof userEvent.setup>;
@@ -341,6 +419,8 @@ describe('AX migration landing page after the diagnosis (#280)', () => {
     challenges: document.getElementById('ax-challenges-heading'),
     steps: document.getElementById('steps'),
     targets: document.getElementById('targets'),
+    as400: document.getElementById('as400-migration'),
+    acos: document.getElementById('acos-migration'),
     reasons: document.getElementById('ax-reasons-heading'),
     faq: document.getElementById('faq'),
     final: document.getElementById('ax-final'),
@@ -428,5 +508,8 @@ describe('AX migration landing page after the diagnosis (#280)', () => {
     expect(window.scrollTo).not.toHaveBeenCalled();
     // Header links open the landing page; nothing on this page is swapped out
     expect(screen.getByRole('link', { name: '進め方' })).toHaveAttribute('href', '/ja/ax-migration#steps');
+    // The host platform sections belong to the landing page only (#311)
+    expect(document.getElementById('as400-migration')).toBeNull();
+    expect(document.getElementById('acos-migration')).toBeNull();
   });
 });

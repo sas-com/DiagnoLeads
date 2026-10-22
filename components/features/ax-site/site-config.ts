@@ -36,6 +36,9 @@ export const AX_SECTIONS = {
   problems: 'problems',
   steps: 'steps',
   targets: 'targets',
+  /** Sections for readers of one host platform (#311) */
+  as400: 'as400-migration',
+  acos: 'acos-migration',
   diagnosis: 'diagnosis',
   faq: 'faq',
 } as const;

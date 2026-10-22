@@ -21,7 +21,17 @@ interface AxLandingViewValue {
   landingRequested: boolean;
   /** The embedded diagnosis tells when its result is shown and when it is left */
   setResultShown: (shown: boolean) => void;
+  /**
+   * The embedded diagnosis registers how it starts on a migration path (null when it leaves),
+   * so a section of the page can start it there (#311)
+   */
+  registerPathStarter: (starter: PathStarter | null) => void;
+  /** Start the embedded diagnosis on a path; false when nothing handled it (e.g. no diagnosis) */
+  startOnPath: (platform: string) => boolean;
 }
+
+/** Starts the diagnosis on a path; false when it does not (e.g. its result is shown) */
+export type PathStarter = (platform: string) => boolean;
 
 const AxLandingViewContext = createContext<AxLandingViewValue | null>(null);
 
@@ -125,9 +135,19 @@ export function AxLandingView({ children }: { children: ReactNode }) {
     };
   }, [resultOnly]);
 
+  /** Kept in a ref: registering does not render the page again */
+  const pathStarter = useRef<PathStarter | null>(null);
+  const registerPathStarter = useCallback((starter: PathStarter | null) => {
+    pathStarter.current = starter;
+  }, []);
+  const startOnPath = useCallback(
+    (platform: string) => pathStarter.current?.(platform) ?? false,
+    []
+  );
+
   const value = useMemo(
-    () => ({ resultOnly, landingRequested, setResultShown }),
-    [resultOnly, landingRequested, setResultShown]
+    () => ({ resultOnly, landingRequested, setResultShown, registerPathStarter, startOnPath }),
+    [resultOnly, landingRequested, setResultShown, registerPathStarter, startOnPath]
   );
   return <AxLandingViewContext.Provider value={value}>{children}</AxLandingViewContext.Provider>;
 }
