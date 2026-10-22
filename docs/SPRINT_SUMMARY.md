@@ -1,5 +1,7 @@
 # DiagnoLeads v2 Sprint Summary
 
+> **注記（2026-10-23）**: この文書は 2026-02 時点の記録です。ここに出てくる `lib/jobs/`・`lib/events/`・`lib/plugins/`・`lib/ai-agent/`・`lib/workflow/` は、アプリから使われていなかったため #306（PR #340）で削除しました。使用例のコードは、今は動きません。
+
 ## 実装完了サマリー (最終更新: 2026-02-05)
 
 ### Sprint 3 - P0/P1 タスク
