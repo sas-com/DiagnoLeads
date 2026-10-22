@@ -323,13 +323,8 @@ lib/
 │   ├── workflows/      # ワークフロー
 │   └── ...
 ├── cache/              # キャッシュ
-├── jobs/               # バックグラウンドジョブ
 ├── storage/            # ファイルストレージ
-├── events/             # イベントバス
-├── plugins/            # プラグインシステム
 ├── realtime/           # リアルタイム通信
-├── ai-agent/           # AIエージェント
-├── workflow/           # ワークフローエンジン
 └── api-docs/           # APIドキュメント
 ```
 
