@@ -1,13 +1,20 @@
 import { expect, test } from '@playwright/test';
 
 /**
- * E2E Test: no Content Security Policy violation on the public AX pages.
+ * E2E Test: no Content Security Policy violation on the public AX pages, and on the login page,
+ * which loads sonner (its runtime <style> is patched out, #213).
  * Meaningful against the production build (CI, E2E_USE_BUILD), which sends the strict CSP; the
  * dev server's policy is loose. A violation means something was blocked: a script, a style or a
  * request the page needs (#207, #211).
  */
 test.describe('Content Security Policy', () => {
-  for (const path of ['/ja/ax-migration', '/en/ax-migration', '/ja/ax-diagnosis']) {
+  for (const path of [
+    '/ja/ax-migration',
+    '/en/ax-migration',
+    '/ja/ax-migration/access',
+    '/ja/ax-diagnosis',
+    '/ja/login',
+  ]) {
     test(`${path} runs without a violation @smoke`, async ({ page }) => {
       const violations: string[] = [];
       page.on('console', (message) => {

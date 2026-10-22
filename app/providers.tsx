@@ -11,8 +11,8 @@ import { useState } from 'react';
 import superjson from 'superjson';
 
 /**
- * Loaded only where it is rendered: sonner adds a <style> tag (blocked by the production CSP)
- * as soon as its module runs, so the AX migration site must not load it at all (#207)
+ * Loaded only where it is rendered: the AX migration site shows no toasts, so it does not load
+ * sonner at all (#207). sonner's runtime <style> tag is patched out (#213).
  */
 const AppToaster = dynamic(
   () => import('@/components/common/AppToaster').then((module) => module.AppToaster),

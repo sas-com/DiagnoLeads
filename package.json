@@ -105,7 +105,7 @@
     "recharts": "^3.5.1",
     "resend": "^6.5.2",
     "sharp": "^0.35.5",
-    "sonner": "^1.7.0",
+    "sonner": "1.7.0",
     "superjson": "^2.2.5",
     "tailwind-merge": "^2.5.0",
     "tailwind-variants": "^3.2.2",
@@ -157,6 +157,7 @@
     "zod-i18n": "^0.0.1"
   },
   "patchedDependencies": {
-    "drizzle-orm@0.45.4": "patches/drizzle-orm@0.45.4.patch"
+    "drizzle-orm@0.45.4": "patches/drizzle-orm@0.45.4.patch",
+    "sonner@1.7.0": "patches/sonner@1.7.0.patch"
   }
 }

@@ -3,9 +3,8 @@
 import { Toaster } from 'sonner';
 
 /**
- * Toast container (app/providers.tsx). sonner also tries to add its styles in a <style> tag that
- * the production CSP blocks (they come from globals.css instead); keeping it off the AX migration
- * site, which shows no toasts, keeps that page's console clean.
+ * Toast container (app/providers.tsx). Its styles come from globals.css: the <style> tag sonner
+ * would add without the CSP nonce is patched out (patches/sonner@1.7.0.patch, #213).
  */
 export function AppToaster() {
   return <Toaster position="top-right" richColors closeButton />;
