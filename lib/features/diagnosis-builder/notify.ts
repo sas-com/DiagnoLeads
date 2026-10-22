@@ -10,6 +10,7 @@ import { type EmailBlock, type EmailFact, renderEmail } from '@/lib/email/templa
 import { env } from '@/lib/env';
 import { isEmailConfigured, sendEmail } from '@/lib/features/email';
 import { notifyOrganizationMembers } from '@/lib/features/notifications/notification-service';
+import { sendLeadCreatedById } from '@/lib/features/webhooks/services/lead-events';
 import { triggerWebhooks } from '@/lib/features/webhooks/services/webhook-service';
 import { AX_RATE_LIMITS } from '../diagnostics/ax-migration/limits';
 import { consultationDeadline } from '../diagnostics/ax-migration/notify';
@@ -221,6 +222,8 @@ export async function notifyDiagnosisSubmission(n: DiagnosisNotification): Promi
       resultType: n.resultTypeName,
     }),
   ];
+  // A new lead is a lead.created too (#308), within the same limit as diagnostic.submitted
+  if (n.leadCreated) tasks.push(sendLeadCreatedById(n.organizationId, n.leadId));
 
   // In-app: consultation requests and new leads (a repeat answer changes nothing on the lead)
   if (n.consultationRequested || n.leadCreated) {

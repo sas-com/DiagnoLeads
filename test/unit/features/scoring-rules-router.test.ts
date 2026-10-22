@@ -358,6 +358,8 @@ describe("Scoring Rules Router", () => {
 		it("should calculate score for a lead", async () => {
 			mockDb.query.leadScoringRulesets.findFirst.mockResolvedValue(mockRuleset);
 			mockDb.query.leads.findFirst.mockResolvedValue(mockLead);
+			// The update returns the scored lead (sent as lead.scored when the score changed)
+			mockDb.returning.mockResolvedValue([mockLead]);
 
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			const caller = appRouter.createCaller(mockContext as any);
@@ -374,6 +376,8 @@ describe("Scoring Rules Router", () => {
 		it("should use default ruleset if none specified", async () => {
 			mockDb.query.leadScoringRulesets.findFirst.mockResolvedValue(mockRuleset);
 			mockDb.query.leads.findFirst.mockResolvedValue(mockLead);
+			// The update returns the scored lead (sent as lead.scored when the score changed)
+			mockDb.returning.mockResolvedValue([mockLead]);
 
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			const caller = appRouter.createCaller(mockContext as any);

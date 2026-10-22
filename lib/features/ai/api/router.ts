@@ -8,6 +8,7 @@
  */
 
 import { leads } from '@/lib/db/schema';
+import { emitLeadEvents, leadChangeEvents } from '@/lib/features/webhooks/services/lead-events';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { and, eq, sql } from 'drizzle-orm';
@@ -67,6 +68,9 @@ export const aiRouter = router({
       })
       .where(and(eq(leads.id, input.leadId), eq(leads.organizationId, input.organizationId)))
       .returning();
+    if (updated) {
+      emitLeadEvents(input.organizationId, leadChangeEvents(lead, updated), { database: ctx.db });
+    }
 
     return {
       lead: updated,
@@ -123,6 +127,15 @@ export const aiRouter = router({
       });
 
       const updatedLeads = await Promise.all(updatePromises);
+      const before = new Map(leadsToScore.map((lead) => [lead.id, lead]));
+      emitLeadEvents(
+        input.organizationId,
+        updatedLeads.flatMap(([lead]) => {
+          const previous = lead ? before.get(lead.id) : undefined;
+          return lead && previous ? leadChangeEvents(previous, lead) : [];
+        }),
+        { database: ctx.db }
+      );
 
       return {
         leads: updatedLeads.map(([lead]) => lead),

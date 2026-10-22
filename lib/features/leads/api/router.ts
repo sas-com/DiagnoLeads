@@ -3,6 +3,11 @@ import { auditLogs, leadTags, leads, tags, users } from '@/lib/db/schema';
 import type { AxMqlLevel } from '@/lib/features/diagnostics/ax-migration/mql';
 import { isFirstHandoff } from '@/lib/features/lead-handoff/handoff';
 import { notifyLeadHandoff } from '@/lib/features/lead-handoff/notify';
+import {
+  type LeadEvent,
+  emitLeadEvents,
+  leadChangeEvents,
+} from '@/lib/features/webhooks/services/lead-events';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import {
@@ -289,7 +294,7 @@ export const leadsRouter = router({
 
     const now = new Date();
     // Create the lead and its audit row together (Refs #101)
-    return ctx.db.transaction(async (tx) => {
+    const created = await ctx.db.transaction(async (tx) => {
       const [lead] = await tx
         .insert(leads)
         .values({
@@ -317,6 +322,12 @@ export const leadsRouter = router({
       }
       return lead;
     });
+    if (created) {
+      emitLeadEvents(input.organizationId, [{ type: 'lead.created', lead: created }], {
+        database: ctx.db,
+      });
+    }
+    return created;
   }),
 
   /**
@@ -650,10 +661,16 @@ export const leadsRouter = router({
       }
 
       return {
+        existing,
         updated,
         handedOff: !!updated && isFirstHandoff(existing, updated.dealPhaseReachedAt),
       };
     });
+    if (result.updated) {
+      emitLeadEvents(input.organizationId, leadChangeEvents(result.existing, result.updated), {
+        database: ctx.db,
+      });
+    }
 
     // Moved on from the initial hearing: the handoff sheet goes to the technical team (#86)
     if (result.handedOff) {
@@ -827,8 +844,9 @@ export const leadsRouter = router({
     }
 
     const leadScope = and(eq(leads.id, input.id), eq(leads.organizationId, input.organizationId));
+    let deletedAt: Date | null = null;
 
-    return ctx.db.transaction(async (tx) => {
+    const result = await ctx.db.transaction(async (tx) => {
       // Verify lead exists and belongs to organization
       const existing = await tx.query.leads.findFirst({ where: leadScope });
 
@@ -841,6 +859,7 @@ export const leadsRouter = router({
 
       // Delete lead (the audit row keeps only the name and company)
       await tx.delete(leads).where(leadScope);
+      deletedAt = new Date();
       await writeLeadAuditLogs(
         tx,
         { organizationId: input.organizationId, userId: ctx.user.id, at: new Date() },
@@ -855,6 +874,14 @@ export const leadsRouter = router({
 
       return { success: true };
     });
+    if (deletedAt) {
+      emitLeadEvents(
+        input.organizationId,
+        [{ type: 'lead.deleted', leadId: input.id, deletedAt }],
+        { database: ctx.db }
+      );
+    }
+    return result;
   }),
 
   /**
@@ -877,7 +904,7 @@ export const leadsRouter = router({
         eq(leads.organizationId, input.organizationId)
       );
 
-      return ctx.db.transaction(async (tx) => {
+      const outcome = await ctx.db.transaction(async (tx) => {
         // Lock the rows so the audited "before" is the status this update replaces
         await tx.execute(sql`select 1 from ${leads} where ${scope} for no key update`);
         const before = await tx.query.leads.findMany({
@@ -893,7 +920,7 @@ export const leadsRouter = router({
             updatedAt: now,
           })
           .where(scope)
-          .returning({ id: leads.id });
+          .returning();
 
         // One audit row per lead whose status actually changed (Refs #101)
         const updatedIds = new Set(result.map((row) => row.id));
@@ -909,11 +936,18 @@ export const leadsRouter = router({
             }))
         );
 
-        return {
-          success: true,
-          updatedCount: result.length,
-        };
+        const previousStatus = new Map(before.map((row) => [row.id, row.status]));
+        const events: LeadEvent[] = [];
+        for (const lead of result) {
+          const previous = previousStatus.get(lead.id);
+          if (previous !== undefined && previous !== lead.status) {
+            events.push({ type: 'lead.status_changed', lead, previousStatus: previous });
+          }
+        }
+        return { response: { success: true, updatedCount: result.length }, events };
       });
+      emitLeadEvents(input.organizationId, outcome.events, { database: ctx.db });
+      return outcome.response;
     }),
 
   /**
@@ -928,7 +962,7 @@ export const leadsRouter = router({
       });
     }
 
-    return ctx.db.transaction(async (tx) => {
+    const deleted = await ctx.db.transaction(async (tx) => {
       // Delete all leads matching the IDs and organization
       const result = await tx
         .delete(leads)
@@ -945,11 +979,18 @@ export const leadsRouter = router({
         }))
       );
 
-      return {
-        success: true,
-        deletedCount: result.length,
-      };
+      return result;
     });
+    const deletedAt = new Date();
+    emitLeadEvents(
+      input.organizationId,
+      deleted.map((row) => ({ type: 'lead.deleted' as const, leadId: row.id, deletedAt })),
+      { database: ctx.db }
+    );
+    return {
+      success: true,
+      deletedCount: deleted.length,
+    };
   }),
 
   /**
@@ -976,7 +1017,7 @@ export const leadsRouter = router({
       score: lead.score,
     }));
 
-    return ctx.db.transaction(async (tx) => {
+    const created = await ctx.db.transaction(async (tx) => {
       const result = await tx.insert(leads).values(leadsToInsert).returning();
 
       await writeLeadAuditLogs(
@@ -990,10 +1031,16 @@ export const leadsRouter = router({
         }))
       );
 
-      return {
-        success: true,
-        createdCount: result.length,
-      };
+      return result;
     });
+    emitLeadEvents(
+      input.organizationId,
+      created.map((lead) => ({ type: 'lead.created' as const, lead })),
+      { database: ctx.db }
+    );
+    return {
+      success: true,
+      createdCount: created.length,
+    };
   }),
 });
