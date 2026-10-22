@@ -9,7 +9,12 @@
  *
  * The text lives in locales (axDiagnosis.resultEmail) so the copy checks cover it.
  */
-import { type EmailBlock, type EmailFooterLink, renderEmail } from '@/lib/email/templates/render';
+import {
+  type EmailBlock,
+  type EmailFooterLink,
+  renderEmail,
+  safeUrl,
+} from '@/lib/email/templates/render';
 import {
   type AxMailLocale,
   type AxSenderIdentity,
@@ -35,6 +40,18 @@ export interface BuiltEmail {
   subject: string;
   html: string;
   text: string;
+  /** Replies reach the sender's department; pass it to sendEmail */
+  replyTo: string;
+}
+
+/**
+ * The confirm and unsubscribe links must survive safeUrl: a mail without them would break the
+ * double opt-in or the unsubscribe the owner asked for, so building fails instead (#154)
+ */
+function requireSafeUrl(url: string, what: string): string {
+  const safe = safeUrl(url);
+  if (!safe) throw new Error(`AX result email: the ${what} link is not https`);
+  return safe;
 }
 
 const MESSAGES = { ja: ja.axDiagnosis, en: en.axDiagnosis } as const;
@@ -80,6 +97,7 @@ export function buildAxResultConfirmationEmail(input: {
   confirmUrl: string;
   unsubscribeUrl: string;
 }): BuiltEmail {
+  requireSafeUrl(input.unsubscribeUrl, 'unsubscribe');
   const sender = axSenderIdentity(input.locale);
   const m = messages(input.locale).resultEmail;
   const rendered = renderEmail({
@@ -90,7 +108,7 @@ export function buildAxResultConfirmationEmail(input: {
     blocks: [
       { type: 'paragraph', text: m.sender.greeting },
       { type: 'paragraph', text: m.confirm.intro },
-      { type: 'button', label: m.confirm.button, url: input.confirmUrl },
+      { type: 'button', label: m.confirm.button, url: requireSafeUrl(input.confirmUrl, 'confirm') },
       {
         type: 'paragraph',
         muted: true,
@@ -102,7 +120,7 @@ export function buildAxResultConfirmationEmail(input: {
     footer: [m.confirm.footer],
     footerLinks: footerLinks(sender, input.unsubscribeUrl),
   });
-  return { subject: m.confirm.subject, ...rendered };
+  return { subject: m.confirm.subject, ...rendered, replyTo: sender.replyTo };
 }
 
 export type AxResultEmailLink = 'consultation' | 'rediagnosis';
@@ -143,6 +161,7 @@ export function buildAxResultEmail(input: {
   unsubscribeUrl: string;
   diagnosedAt: Date;
 }): BuiltEmail {
+  requireSafeUrl(input.unsubscribeUrl, 'unsubscribe');
   const { locale, result } = input;
   const sender = axSenderIdentity(locale);
   const all = messages(locale);
@@ -209,5 +228,5 @@ export function buildAxResultEmail(input: {
     footer: [m.result.footer],
     footerLinks: footerLinks(sender, input.unsubscribeUrl),
   });
-  return { subject: m.result.subject, ...rendered };
+  return { subject: m.result.subject, ...rendered, replyTo: sender.replyTo };
 }

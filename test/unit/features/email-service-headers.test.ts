@@ -41,13 +41,27 @@ describe('sendEmail headers', () => {
     expect(send.mock.calls[0]?.[0]).not.toHaveProperty('headers');
   });
 
-  it.each(['List Unsubscribe', 'X-Test:', 'X-Ünicode', '', 'X-A\r\nBcc'])(
+  it.each([
+    'List Unsubscribe',
+    'X-Test:',
+    'X-Ünicode',
+    '',
+    'X-A\r\nBcc',
+    'X-Test',
+    'Bcc',
+    'cc',
+    'To',
+    'FROM',
+    'reply-to',
+    'Subject',
+    'content-type',
+  ])(
     'refuses the header name %j before sending',
     async (name) => {
       const { sendEmail } = await import('@/lib/features/email/email-service');
       await expect(
         sendEmail({ to: 'x@example.com', subject: 's', html: 'h', headers: { [name]: 'v' } })
-      ).rejects.toThrow(/Invalid email header name/);
+      ).rejects.toThrow(/Email header not allowed/);
       expect(send).not.toHaveBeenCalled();
     }
   );
@@ -57,9 +71,27 @@ describe('sendEmail headers', () => {
     async (value) => {
       const { sendEmail } = await import('@/lib/features/email/email-service');
       await expect(
-        sendEmail({ to: 'x@example.com', subject: 's', html: 'h', headers: { 'X-Test': value } })
-      ).rejects.toThrow(/Invalid value for email header X-Test/);
+        sendEmail({
+          to: 'x@example.com',
+          subject: 's',
+          html: 'h',
+          headers: { 'List-Unsubscribe': value },
+        })
+      ).rejects.toThrow(/Invalid value for email header List-Unsubscribe/);
       expect(send).not.toHaveBeenCalled();
     }
   );
+
+  it('refuses the same header twice in different case', async () => {
+    const { sendEmail } = await import('@/lib/features/email/email-service');
+    await expect(
+      sendEmail({
+        to: 'x@example.com',
+        subject: 's',
+        html: 'h',
+        headers: { 'List-Unsubscribe': '<https://a.example/>', 'list-unsubscribe': '<https://b.example/>' },
+      })
+    ).rejects.toThrow(/Email header not allowed/);
+    expect(send).not.toHaveBeenCalled();
+  });
 });

@@ -35,23 +35,26 @@ export interface SendEmailOptions {
   from?: string;
   replyTo?: string;
   /**
-   * Extra header fields such as List-Unsubscribe (#154). Names are letters, digits and
-   * hyphens; values stay on one line. An invalid header fails the send instead of being
-   * dropped or rewritten.
+   * Extra header fields (#154). Only List-Unsubscribe and List-Unsubscribe-Post are allowed:
+   * recipient, sender or content headers would bypass filterAllowedRecipients or forge the
+   * mail. Values stay on one line. An invalid header fails the send instead of being dropped.
    */
   headers?: Record<string, string>;
 }
 
-const HEADER_NAME = /^[A-Za-z0-9-]+$/;
+const ALLOWED_HEADERS = new Set(['list-unsubscribe', 'list-unsubscribe-post']);
 // Line breaks and other control characters (including U+0085, U+2028 and U+2029)
 const HEADER_VALUE_FORBIDDEN = /[\p{Cc}\u2028\u2029]/u;
 
-/** Throw when a header could split or forge other header fields */
+/** Throw when a header is not one we send or could split or forge other header fields */
 function assertValidHeaders(headers: Record<string, string>): void {
+  const seen = new Set<string>();
   for (const [name, value] of Object.entries(headers)) {
-    if (!HEADER_NAME.test(name)) {
-      throw new Error('Invalid email header name');
+    const key = name.toLowerCase();
+    if (!ALLOWED_HEADERS.has(key) || seen.has(key)) {
+      throw new Error('Email header not allowed');
     }
+    seen.add(key);
     if (typeof value !== 'string' || HEADER_VALUE_FORBIDDEN.test(value)) {
       throw new Error(`Invalid value for email header ${name}`);
     }

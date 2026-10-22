@@ -290,4 +290,31 @@ describe('AX result mail', () => {
       }
     }
   });
+
+  // A mail without a working confirm or unsubscribe link is never built (#154 review)
+  it('refuses to build a mail whose confirm or unsubscribe link is not https', () => {
+    expect(() =>
+      buildAxResultConfirmationEmail({
+        locale: 'ja',
+        confirmUrl: 'http://app.example.com/confirm',
+        unsubscribeUrl: UNSUBSCRIBE_URL,
+      })
+    ).toThrow(/confirm link/);
+    expect(() =>
+      buildAxResultConfirmationEmail({
+        locale: 'ja',
+        confirmUrl: CONFIRM_URL,
+        unsubscribeUrl: 'javascript:alert(1)',
+      })
+    ).toThrow(/unsubscribe link/);
+  });
+
+  it('returns the sender department as the reply-to address', () => {
+    const mail = buildAxResultConfirmationEmail({
+      locale: 'ja',
+      confirmUrl: CONFIRM_URL,
+      unsubscribeUrl: UNSUBSCRIBE_URL,
+    });
+    expect(mail.replyTo).toMatch(/@/);
+  });
 });
