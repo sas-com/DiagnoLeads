@@ -47,6 +47,16 @@ export interface EmailContent {
   blocks: EmailBlock[];
   /** Small print under the card, one entry per line */
   footer?: string[];
+  /**
+   * Small links under the footer text, such as unsubscribe and the privacy policy (#154).
+   * Only safe links are linked (see safeUrl); a refused one leaves its label alone.
+   */
+  footerLinks?: EmailFooterLink[];
+}
+
+export interface EmailFooterLink {
+  label: string;
+  url: string;
 }
 
 export interface RenderedEmail {
@@ -289,6 +299,28 @@ function blockText(block: EmailBlock, theme: EmailTheme): string {
   }
 }
 
+function renderFooterLinks(links: EmailFooterLink[], p: Palette): string {
+  if (links.length === 0) return '';
+  const items = links
+    .map((link) => {
+      const url = linkUrl(link.url);
+      return url
+        ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="color:${p.muted};text-decoration:underline;">${escapeHtml(link.label)}</a>`
+        : escapeHtml(link.label);
+    })
+    .join(`<span style="color:${p.border};">&nbsp;|&nbsp;</span>`);
+  return `<p style="margin:8px 0 4px;font-size:12px;line-height:1.7;color:${p.muted};">${items}</p>`;
+}
+
+/** One line per footer link: "label: url" (the label alone when the link is refused) */
+function footerLinksText(links: EmailFooterLink[], theme: EmailTheme): string[] {
+  const colon = theme === 'customer' ? '：' : ': ';
+  return links.map((link) => {
+    const url = safeUrl(link.url);
+    return url ? `${link.label}${colon}${url}` : link.label;
+  });
+}
+
 /** Render the HTML and the plain-text part of a mail */
 export function renderEmail(content: EmailContent): RenderedEmail {
   const p = PALETTES[content.theme];
@@ -300,6 +332,8 @@ export function renderEmail(content: EmailContent): RenderedEmail {
         `<p style="margin:0 0 4px;font-size:12px;line-height:1.7;color:${p.muted};">${text(line)}</p>`
     )
     .join('');
+  const footerLinks = renderFooterLinks(content.footerLinks ?? [], p);
+  const small = footer + footerLinks;
 
   const html = `<!DOCTYPE html>
 <html lang="${content.lang ?? 'ja'}">
@@ -317,19 +351,23 @@ export function renderEmail(content: EmailContent): RenderedEmail {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;font-family:${FONT};">
 <tr><td style="padding:16px 24px;background:${p.header};border-radius:12px 12px 0 0;font-size:16px;font-weight:700;letter-spacing:0.02em;color:${p.headerText};">${escapeHtml(brand)}</td></tr>
 <tr><td style="padding:28px 24px 8px;background:${p.card};border:1px solid ${p.border};border-top:0;border-radius:0 0 12px 12px;">${body}</td></tr>
-${footer ? `<tr><td style="padding:16px 24px 0;font-family:${FONT};">${footer}</td></tr>` : ''}
+${small ? `<tr><td style="padding:16px 24px 0;font-family:${FONT};">${small}</td></tr>` : ''}
 </table>
 </td></tr>
 </table>
 </body>
 </html>`;
 
+  const footerText = [
+    ...(content.footer ?? []),
+    ...footerLinksText(content.footerLinks ?? [], content.theme),
+  ];
   const textPart = [
     ...content.blocks
       .map((block) => blockText(block, content.theme))
       .filter((part) => part.length > 0),
-    ...(content.footer && content.footer.length > 0
-      ? [`----------------------------------------\n${content.footer.join('\n')}`]
+    ...(footerText.length > 0
+      ? [`----------------------------------------\n${footerText.join('\n')}`]
       : []),
   ].join('\n\n');
 

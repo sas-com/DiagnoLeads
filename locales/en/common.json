@@ -644,7 +644,48 @@
     },
     "operator": "Provided by Software Agency System Co., Ltd., DX Services Division",
     "quoted": "\"{label}\"",
-    "listJoiner": " or "
+    "listJoiner": " or ",
+    "resultEmail": {
+      "consent": {
+        "label": "Receive the diagnosis result by email",
+        "body": "We first send a confirmation email to the address you entered. We send the result only if you press the button in that email. You can stop receiving our emails at any time."
+      },
+      "confirm": {
+        "subject": "Please confirm: sending your AX migration diagnosis result",
+        "preheader": "Press the button and we will send your diagnosis result by email.",
+        "intro": "Someone asked, on the result page of the free AX migration web diagnosis, to receive the diagnosis result by email.\nIf you would like us to send it, please press the button below.",
+        "button": "Confirm and send the result",
+        "expiry": "The button is valid for {hours} hours after this email was sent.",
+        "notRequested": "If you did not ask for this, please discard this email. We will not send the result unless the button is pressed.\nTo stop receiving emails from us, use the \"Unsubscribe\" link below.",
+        "footer": "You receive this email because this address was entered to receive the result of the free AX migration web diagnosis."
+      },
+      "result": {
+        "subject": "Your AX migration diagnosis result",
+        "preheader": "Here is the diagnosis result you asked for.",
+        "intro": "Thank you for using the free AX migration web diagnosis.\nHere is the diagnosis result you asked for.",
+        "factsTitle": "Diagnosis result",
+        "diagnosedOn": "Diagnosed on",
+        "platform": "Current platform",
+        "note": "This result is a guide based on your answers. We can give a closer outlook after looking at the current system.",
+        "rediagnoseHint": "Many answers were \"I don't know\", so this guide is not very precise. If you can check some of them within your company, taking the diagnosis again gives a more reliable guide.",
+        "consultationLead": "In an individual consultation, we explain the result and how a migration could proceed.",
+        "consultationButton": "Request a free consultation",
+        "rediagnoseLead": "To review your answers or diagnose another system, start here.",
+        "rediagnoseButton": "Take the diagnosis again",
+        "footer": "You receive this email because you asked for the result of the free AX migration web diagnosis and pressed the confirmation button."
+      },
+      "sender": {
+        "greeting": "Dear customer",
+        "title": "Sender of this email",
+        "operator": "Sender",
+        "address": "Address",
+        "email": "Email",
+        "phone": "Phone",
+        "replyNote": "Replies to this email reach the {department}.",
+        "unsubscribe": "Unsubscribe",
+        "privacy": "Privacy policy"
+      }
+    }
   },
   "publicDiagnosis": {
     "progress": "STEP {current} / {total}",
@@ -2921,6 +2962,8 @@
     },
     "footer": {
       "operator": "Provided by Software Agency System Co., Ltd., DX Services Division",
+      "companyName": "Software Agency System Co., Ltd.",
+      "department": "DX Services Division",
       "address": "4F, 3-4-10 Mita, Minato-ku, Tokyo 108-0073, Japan",
       "company": "Company",
       "related": "DX service \"Maru Maru DX\"",
