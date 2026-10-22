@@ -3508,8 +3508,12 @@
         "removeShort": "Remove",
         "untitled": "Own field {number}",
         "untitledShort": "(unnamed field)",
-        "invalid": "Could not save. Give your own fields a name, and choice fields their choices."
-      }
+        "invalid": "Could not save. Give your own fields a name, and choice fields their choices.",
+        "archived": "Removed own fields (recorded values are kept)",
+        "restore": "Bring back {field}",
+        "restoreShort": "Bring back"
+      },
+      "conflict": "Someone else saved the hearing fields first. Reload the page, then make your changes."
     }
   },
   "leadActivity": {

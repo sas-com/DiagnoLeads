@@ -12,6 +12,7 @@ import {
   BASE_REQUIRED_KEYS,
   DEFAULT_HEARING_SETTINGS,
   customFieldDefinition,
+  hearingCustomFieldSchema,
   hearingSettingsSchema,
   mergeCustomFields,
   overridesFromSettings,
@@ -263,6 +264,30 @@ describe("the organization's own fields", () => {
     ).toBe(false);
   });
 
+  it('limits the fields and options in use, not the archived ones kept for older records', () => {
+    const field = (n: number, archived = false) => ({
+      ...note,
+      id: `f${String(n).padStart(7, '0')}`,
+      ...(archived ? { archived: true } : {}),
+    });
+    const many = (inUse: number, kept: number) =>
+      Array.from({ length: inUse + kept }, (_, n) => field(n, n >= inUse));
+    expect(hearingSettingsSchema.safeParse({ customFields: many(30, 40) }).success).toBe(true);
+    expect(hearingSettingsSchema.safeParse({ customFields: many(31, 0) }).success).toBe(false);
+    const options = (inUse: number, kept: number) =>
+      Array.from({ length: inUse + kept }, (_, n) => ({
+        id: `o${String(n).padStart(7, '0')}`,
+        label: `${n}`,
+        ...(n >= inUse ? { archived: true } : {}),
+      }));
+    expect(hearingCustomFieldSchema.safeParse({ ...select, options: options(30, 50) }).success).toBe(
+      true
+    );
+    expect(hearingCustomFieldSchema.safeParse({ ...select, options: options(31, 0) }).success).toBe(
+      false
+    );
+  });
+
   it('reads the stored own fields one by one, leaving out broken ones', () => {
     const settings = readHearingSettings({
       hearingCatalog: {
@@ -309,6 +334,9 @@ describe('values of own fields', () => {
     expect(() =>
       assertCustomFieldValues({ 'custom:cccc3333': entry('x') } as HearingFields, overrides)
     ).toThrow();
+    // ...unless the record already has it unchanged (settings that broke must not block saving)
+    const stored = { 'custom:cccc3333': entry('x') } as HearingFields;
+    expect(() => assertCustomFieldValues(stored, overrides, stored)).not.toThrow();
   });
 
   it('are sent as they are when the screen does not know the field', () => {

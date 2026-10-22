@@ -14,7 +14,7 @@ import {
   newHearingCustomId,
 } from '@/lib/features/lead-hearings/catalog-settings';
 import { HEARING_CUSTOM_OPTIONS_MAX } from '@/lib/features/lead-hearings/types/schemas';
-import { Plus, Trash2, X } from 'lucide-react';
+import { Plus, RotateCcw, Trash2, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useId } from 'react';
 
@@ -24,14 +24,17 @@ const SELECT_CLASS =
 interface HearingCustomFieldsEditorProps {
   /** The fields in use (archived ones are not edited here) */
   fields: readonly HearingCustomField[];
+  /** Fields removed earlier: kept so older records read, and can be brought back */
+  archived: readonly HearingCustomField[];
   /** Ids already saved: their type stays (older values are of that type) */
   savedIds: ReadonlySet<string>;
-  /** Fields the organization has, archived ones included (the limit counts them) */
-  total: number;
+  /** Option ids already saved: removing one keeps it archived */
+  savedOptionIds: ReadonlySet<string>;
   canEdit: boolean;
   onAdd: (field: HearingCustomField) => void;
   onChange: (field: HearingCustomField) => void;
   onRemove: (id: string) => void;
+  onRestore: (id: string) => void;
 }
 
 /**
@@ -40,12 +43,14 @@ interface HearingCustomFieldsEditorProps {
  */
 export function HearingCustomFieldsEditor({
   fields,
+  archived,
   savedIds,
-  total,
+  savedOptionIds,
   canEdit,
   onAdd,
   onChange,
   onRemove,
+  onRestore,
 }: HearingCustomFieldsEditorProps) {
   const t = useTranslations('leadHearings.settings.custom');
   const tSection = useTranslations('leadHearings.sections');
@@ -188,7 +193,12 @@ export function HearingCustomFieldsEditor({
                           onClick={() =>
                             onChange({
                               ...field,
-                              options: field.options.filter((o) => o.id !== option.id),
+                              // A saved option is kept archived; a new one just goes
+                              options: savedOptionIds.has(option.id)
+                                ? field.options.map((o) =>
+                                    o.id === option.id ? { ...o, archived: true } : o
+                                  )
+                                : field.options.filter((o) => o.id !== option.id),
                             })
                           }
                         >
@@ -197,7 +207,7 @@ export function HearingCustomFieldsEditor({
                       )}
                     </div>
                   ))}
-                  {canEdit && field.options.length < HEARING_CUSTOM_OPTIONS_MAX && (
+                  {canEdit && activeOptions.length < HEARING_CUSTOM_OPTIONS_MAX && (
                     <Button
                       type="button"
                       variant="outline"
@@ -224,12 +234,40 @@ export function HearingCustomFieldsEditor({
           type="button"
           variant="outline"
           size="sm"
-          disabled={total >= HEARING_CUSTOM_FIELDS_MAX}
+          disabled={fields.length >= HEARING_CUSTOM_FIELDS_MAX}
           onClick={add}
         >
           <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
           {t('add')}
         </Button>
+      )}
+      {archived.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground">{t('archived')}</p>
+          <ul className="divide-y rounded-md border">
+            {archived.map((field) => (
+              <li
+                key={field.id}
+                className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm"
+              >
+                <span className="min-w-0 truncate text-muted-foreground">{field.label}</span>
+                {canEdit && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={fields.length >= HEARING_CUSTOM_FIELDS_MAX}
+                    aria-label={t('restore', { field: field.label })}
+                    onClick={() => onRestore(field.id)}
+                  >
+                    <RotateCcw className="mr-1 h-4 w-4" aria-hidden="true" />
+                    {t('restoreShort')}
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </section>
   );

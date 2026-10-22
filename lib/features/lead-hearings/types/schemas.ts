@@ -147,8 +147,10 @@ export function hearingSaveEntrySchemaFor(
 
 /** Longest text of an organization's own text field (#98) */
 export const HEARING_CUSTOM_TEXT_MAX_LENGTH = 1000;
-/** Options of an organization's own choice field (#98) */
+/** Options of an organization's own choice field in use (#98) */
 export const HEARING_CUSTOM_OPTIONS_MAX = 30;
+/** Options kept with a field, archived ones included */
+export const HEARING_CUSTOM_OPTIONS_STORED_MAX = 100;
 const CUSTOM_KEY_PATTERN = /^custom:[a-z0-9]{8}$/;
 
 /**
@@ -160,7 +162,7 @@ const customEntrySchema = z
     value: z
       .union([
         z.string().trim().min(1).max(HEARING_CUSTOM_TEXT_MAX_LENGTH),
-        z.array(z.string().min(1).max(40)).min(1).max(HEARING_CUSTOM_OPTIONS_MAX),
+        z.array(z.string().min(1).max(40)).min(1).max(HEARING_CUSTOM_OPTIONS_STORED_MAX),
       ])
       .optional(),
     status: statusSchema,

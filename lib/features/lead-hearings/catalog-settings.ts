@@ -24,14 +24,17 @@ import {
 } from './catalog';
 import {
   HEARING_CUSTOM_OPTIONS_MAX,
+  HEARING_CUSTOM_OPTIONS_STORED_MAX,
   HEARING_CUSTOM_TEXT_MAX_LENGTH,
   type HearingFields,
 } from './types/schemas';
 
 export const HEARING_SETTINGS_KEY = 'hearingCatalog';
 
-/** The organization's own fields, archived ones included */
+/** The organization's own fields in use */
 export const HEARING_CUSTOM_FIELDS_MAX = 30;
+/** Own fields kept, archived ones included (they stay so older records read) */
+export const HEARING_CUSTOM_FIELDS_STORED_MAX = 100;
 export const HEARING_CUSTOM_LABEL_MAX_LENGTH = 60;
 export const HEARING_CUSTOM_OPTION_LABEL_MAX_LENGTH = 40;
 export const HEARING_CUSTOM_FIELD_TYPES = ['text', 'single', 'multiple'] as const;
@@ -63,13 +66,19 @@ export const hearingCustomFieldSchema = z
     label: z.string().trim().min(1).max(HEARING_CUSTOM_LABEL_MAX_LENGTH),
     type: z.enum(HEARING_CUSTOM_FIELD_TYPES),
     section: z.enum(HEARING_SECTIONS),
-    options: z.array(customOptionSchema).max(HEARING_CUSTOM_OPTIONS_MAX).default([]),
+    options: z.array(customOptionSchema).max(HEARING_CUSTOM_OPTIONS_STORED_MAX).default([]),
     archived: z.boolean().optional(),
   })
   .strict()
   .refine((field) => new Set(field.options.map((o) => o.id)).size === field.options.length, {
     message: 'Option ids must be unique',
   })
+  .refine(
+    (field) => field.options.filter((o) => !o.archived).length <= HEARING_CUSTOM_OPTIONS_MAX,
+    {
+      message: `At most ${HEARING_CUSTOM_OPTIONS_MAX} options in use`,
+    }
+  )
   .refine(
     (field) =>
       field.type === 'text'
@@ -88,7 +97,7 @@ const keyList = z
       .refine((key) => BASE_KEYS.has(key) || CUSTOM_KEY_PATTERN.test(key), 'Unknown field')
       .transform((key) => key as HearingFieldKey)
   )
-  .max(HEARING_FIELD_KEYS.length + HEARING_CUSTOM_FIELDS_MAX)
+  .max(HEARING_FIELD_KEYS.length + HEARING_CUSTOM_FIELDS_STORED_MAX)
   .transform((keys) => [...new Set(keys)]);
 
 export const hearingSettingsSchema = z
@@ -108,9 +117,18 @@ export const hearingSettingsSchema = z
       .partial()
       .default({}),
     /** The organization's own fields */
-    customFields: z.array(hearingCustomFieldSchema).max(HEARING_CUSTOM_FIELDS_MAX).default([]),
+    customFields: z
+      .array(hearingCustomFieldSchema)
+      .max(HEARING_CUSTOM_FIELDS_STORED_MAX)
+      .default([]),
   })
   .superRefine((value, ctx) => {
+    if (value.customFields.filter((f) => !f.archived).length > HEARING_CUSTOM_FIELDS_MAX) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `At most ${HEARING_CUSTOM_FIELDS_MAX} own fields in use`,
+      });
+    }
     // A hidden field cannot be required
     if (value.required?.some((key) => value.hidden.includes(key))) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'A hidden field cannot be required' });
@@ -166,7 +184,7 @@ export function readHearingSettings(settings: unknown): StoredHearingSettings {
     .map((field) => hearingCustomFieldSchema.safeParse(field))
     .flatMap((parsed) => (parsed.success ? [parsed.data] : []))
     .filter((field, index, list) => list.findIndex((f) => f.id === field.id) === index)
-    .slice(0, HEARING_CUSTOM_FIELDS_MAX);
+    .slice(0, HEARING_CUSTOM_FIELDS_STORED_MAX);
   const known = new Set<string>([...BASE_KEYS, ...customFields.map((f) => customFieldKey(f.id))]);
   const active = new Set<string>([
     ...BASE_KEYS,

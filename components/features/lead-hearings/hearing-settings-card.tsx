@@ -80,7 +80,8 @@ export function HearingSettingsCard({ organizationId }: { organizationId: string
       utils.leadHearings.catalogSettings.invalidate({ organizationId });
       toast.success(t('saved'));
     },
-    onError: () => toast.error(t('saveError')),
+    onError: (error) =>
+      toast.error(error.data?.code === 'CONFLICT' ? t('conflict') : t('saveError')),
   });
 
   useEffect(() => {
@@ -95,7 +96,9 @@ export function HearingSettingsCard({ organizationId }: { organizationId: string
     const own = draft?.custom.find((item) => customFieldKey(item.id) === key);
     return own?.label || t('custom.untitledShort');
   };
-  const savedIds = new Set((query.data?.settings.customFields ?? []).map((field) => field.id));
+  const savedFields = query.data?.settings.customFields ?? [];
+  const savedIds = new Set(savedFields.map((field) => field.id));
+  const savedOptionIds = new Set(savedFields.flatMap((field) => field.options.map((o) => o.id)));
 
   const addCustom = (field: HearingCustomField) => {
     if (!draft) return;
@@ -129,9 +132,15 @@ export function HearingSettingsCard({ organizationId }: { organizationId: string
     if (!draft) return;
     const key = customFieldKey(fieldId);
     const without = (set: Set<string>) => new Set([...set].filter((k) => k !== key));
+    const removed = draft.custom.find((item) => item.id === fieldId);
     setDraft({
       ...draft,
       custom: draft.custom.filter((item) => item.id !== fieldId),
+      // A saved field is kept archived (older records read it); a new one just goes
+      archived:
+        removed && savedIds.has(fieldId)
+          ? [...draft.archived, { ...removed, archived: true }]
+          : draft.archived,
       hidden: without(draft.hidden),
       required: without(draft.required),
       order: Object.fromEntries(
@@ -140,6 +149,22 @@ export function HearingSettingsCard({ organizationId }: { organizationId: string
           keys.filter((k) => k !== key),
         ])
       ),
+    });
+  };
+
+  const restoreCustom = (fieldId: string) => {
+    if (!draft) return;
+    const field = draft.archived.find((item) => item.id === fieldId);
+    if (!field) return;
+    const restored = { ...field, archived: undefined };
+    setDraft({
+      ...draft,
+      archived: draft.archived.filter((item) => item.id !== fieldId),
+      custom: [...draft.custom, restored],
+      order: {
+        ...draft.order,
+        [field.section]: [...draft.order[field.section], customFieldKey(fieldId)],
+      },
     });
   };
 
@@ -198,7 +223,11 @@ export function HearingSettingsCard({ organizationId }: { organizationId: string
       toast.error(t('custom.invalid'));
       return;
     }
-    save.mutate({ organizationId, settings: parsed.data });
+    save.mutate({
+      organizationId,
+      settings: parsed.data,
+      expectedVersion: query.data?.settings.version ?? 0,
+    });
   };
 
   return (
@@ -289,8 +318,10 @@ export function HearingSettingsCard({ organizationId }: { organizationId: string
             ))}
             <HearingCustomFieldsEditor
               fields={draft.custom}
+              archived={draft.archived}
               savedIds={savedIds}
-              total={draft.custom.length + draft.archived.length}
+              savedOptionIds={savedOptionIds}
+              onRestore={restoreCustom}
               canEdit={canEdit}
               onAdd={addCustom}
               onChange={changeCustom}

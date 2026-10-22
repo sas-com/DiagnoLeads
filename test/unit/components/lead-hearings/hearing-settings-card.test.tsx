@@ -175,7 +175,9 @@ describe('HearingSettingsCard', () => {
     };
     renderCard();
     expect(screen.getByTestId('hearing-setting-custom:note0001')).toBeInTheDocument();
-    expect(screen.queryByText('昔の項目')).not.toBeInTheDocument();
+    // An archived field is not in the lists, only among the removed ones to bring back
+    expect(screen.queryByTestId('hearing-setting-custom:gone0001')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '昔の項目 を戻す' })).toBeInTheDocument();
     expect(screen.getByLabelText('答え方')).toBeDisabled();
 
     fireEvent.click(screen.getByRole('button', { name: '社内の呼び名 を削除' }));
@@ -184,9 +186,13 @@ describe('HearingSettingsCard', () => {
       hidden: ['custom:gone0001'],
       required: null,
       order: {},
-      // The archived one is sent back as it is; the removed one is archived by the server
-      customFields: [archived],
+      // Both kept archived, so older records still read them
+      customFields: [archived, { ...own, archived: true }],
     });
+    expect(mocks.mutate.mock.calls.at(-1)?.[0].expectedVersion).toBe(0);
+    // A removed field can be brought back
+    fireEvent.click(screen.getByRole('button', { name: '社内の呼び名 を戻す' }));
+    expect(screen.getByTestId('hearing-setting-custom:note0001')).toBeInTheDocument();
   });
 
   it('lets members only read them', () => {
