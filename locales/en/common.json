@@ -2960,7 +2960,8 @@
       },
       "body": "After the end of support, your tools keep working. However, newly found weaknesses (vulnerabilities) are no longer fixed.",
       "source": "Source: Microsoft lifecycle information (as of October 2026)",
-      "sourceLink": "Microsoft information {number}"
+      "sourceLink": "Microsoft information {number}",
+      "relatedColumn": "Related article"
     },
     "problems": {
       "title": "Does this sound familiar?",
@@ -3120,6 +3121,24 @@
       "consult": "Book a 30-minute online consultation"
     },
     "trademark": "Microsoft and Access are trademarks or registered trademarks of Microsoft Corporation in the United States and other countries."
+  },
+  "axColumn": {
+    "meta": {
+      "title": "Articles | AX Migration | Software Agency System Co., Ltd.",
+      "description": "Articles on core systems and Access business tools: the facts about the end of support and how to choose the way forward, based on public information.",
+      "articleTitle": "{title} | {siteName}"
+    },
+    "label": "Articles",
+    "title": "Articles",
+    "lead": "What to know when you consider migrating a core system or a business tool, based on public information.",
+    "breadcrumbLabel": "Breadcrumb",
+    "breadcrumbHome": "AX Migration",
+    "toc": "Contents",
+    "sources": "Sources",
+    "publishedAt": "Published",
+    "updatedAt": "Updated",
+    "readArticle": "Read the article",
+    "ctaLead": "The free web check gives a guide to the way forward that suits your Access tool."
   },
   "organizations": {
     "switcher": {

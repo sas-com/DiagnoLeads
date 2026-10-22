@@ -1,5 +1,5 @@
 import { ADMIN_PAGE_PREFIXES } from '@/lib/routes/admin-pages';
-import { INDEXABLE_PATHS, isIndexable } from '@/lib/seo/indexing';
+import { INDEXABLE_PATHS, isIndexable, siteBaseUrl } from '@/lib/seo/indexing';
 import type { MetadataRoute } from 'next';
 
 /**
@@ -8,7 +8,7 @@ import type { MetadataRoute } from 'next';
  * sitemap, and only after public launch (lib/seo/indexing.ts).
  */
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://diagnoleads-v2.vercel.app';
+  const baseUrl = siteBaseUrl();
   const launched = INDEXABLE_PATHS.some((path) => isIndexable(path));
 
   return {

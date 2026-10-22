@@ -1,7 +1,9 @@
 import { AxDiagnosisFlow } from '@/components/features/ax-diagnosis/ax-diagnosis-flow';
 import { allowedEmailDomains } from '@/lib/email/allowed-recipients';
+import { columnPath, columnsFor } from '@/lib/features/ax-site/columns';
 import { turnstileSiteKey } from '@/lib/features/diagnostics/turnstile';
 import {
+  ArrowRight,
   Check,
   CirclePause,
   ClipboardList,
@@ -110,6 +112,8 @@ const SUPPORT_SOURCES = [
 /** Facts with their source and date; no countdown (#158) */
 export async function AxAccessSupportEnd({ locale }: SectionProps) {
   const t = await getTranslations({ locale, namespace: 'axAccess.supportEnd' });
+  // The articles on the subject, in the page's language only (they are Japanese for now, #324)
+  const columns = columnsFor('access').filter((column) => column.locale === locale);
   return (
     <section aria-labelledby="ax-access-support-heading" className="bg-ax-mist py-12 sm:py-16">
       <div className="mx-auto max-w-3xl px-4 sm:px-6">
@@ -147,6 +151,24 @@ export async function AxAccessSupportEnd({ locale }: SectionProps) {
               </a>
             ))}
           </p>
+          {columns.length > 0 && (
+            <div className="mt-6 border-t border-gray-200 pt-4">
+              <p className="text-sm font-bold text-ax-teal-dark">{t('relatedColumn')}</p>
+              <ul className="mt-2 space-y-2">
+                {columns.map((column) => (
+                  <li key={column.slug}>
+                    <a
+                      href={`/${column.locale}${columnPath(column.slug)}`}
+                      className="inline-flex items-start gap-1 font-bold leading-relaxed underline underline-offset-4 hover:text-ax-teal-dark"
+                    >
+                      {column.title}
+                      <ArrowRight className="mt-1.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       </div>
     </section>
