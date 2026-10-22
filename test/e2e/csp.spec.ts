@@ -17,6 +17,8 @@ test.describe('Content Security Policy', () => {
     '/ja/ax-migration/column/access-office-support-end',
     '/ja/ax-migration/column/access-shared-folder',
     '/ja/ax-diagnosis',
+    // Unsubscribe page of the respondent mail (#154)
+    '/ja/email/unsubscribe',
     '/ja/login',
   ]) {
     test(`${path} runs without a violation @smoke`, async ({ page }) => {
