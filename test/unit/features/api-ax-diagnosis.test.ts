@@ -224,6 +224,22 @@ describe('POST /api/diagnostics/ax-migration', () => {
     expect(reportRejectedRequest).toHaveBeenCalledWith('ax-diagnosis/submit', 'honeypot');
   });
 
+  it('reports a failed bot check after the response, but not an unavailable one', async () => {
+    turnstileMock.mockResolvedValueOnce({ ok: false, reason: 'invalid' });
+    const refused = await POST(request({ ...validBody, answers: fullAnswers }));
+    expect(refused.status).toBe(403);
+    await runAfterTasks();
+    expect(reportRejectedRequest).toHaveBeenCalledWith('ax-diagnosis/submit', 'verification_failed');
+
+    reportRejectedRequest.mockClear();
+    afterTasks.length = 0;
+    turnstileMock.mockResolvedValueOnce({ ok: false, reason: 'unavailable' });
+    const unavailable = await POST(request({ ...validBody, answers: fullAnswers }));
+    expect(unavailable.status).toBe(503);
+    await runAfterTasks();
+    expect(reportRejectedRequest).not.toHaveBeenCalled();
+  });
+
   it('accepts an empty honeypot', async () => {
     submitMock.mockResolvedValue({
       ok: true,

@@ -124,13 +124,13 @@ describe('reportServerError', () => {
 });
 
 describe('reportRejectedRequest (#351)', () => {
-  /** The shared count answers per rule: rejections counted so far, and whether an alert may go */
-  function counts(rejections: number, alertAllowed = true) {
-    consumeRateLimit.mockImplementation(async (_db: unknown, rule: { name: string }) =>
-      rule.name === REJECTION_ALERT_RULE.name
-        ? { allowed: rejections <= REJECTION_ALERT_RULE.limit, count: rejections, retryAfterSeconds: 600 }
-        : { allowed: alertAllowed, count: 1, retryAfterSeconds: 600 }
-    );
+  /** The shared count: refusals counted so far in this window, this one included */
+  function counts(rejections: number) {
+    consumeRateLimit.mockResolvedValue({
+      allowed: rejections <= REJECTION_ALERT_RULE.limit,
+      count: rejections,
+      retryAfterSeconds: 600,
+    });
   }
 
   it('counts each refusal per place and stays quiet up to the limit', async () => {
@@ -149,6 +149,8 @@ describe('reportRejectedRequest (#351)', () => {
     counts(REJECTION_ALERT_RULE.limit + 1);
     await reportRejectedRequest('ax-diagnosis/submit', 'honeypot', { database });
     expect(sendEmail).toHaveBeenCalledTimes(1);
+    // One write per refusal: the count itself decides the one mail of the window
+    expect(consumeRateLimit).toHaveBeenCalledTimes(1);
     const mail = sendEmail.mock.calls[0]?.[0] as unknown as {
       to: string[];
       subject: string;
@@ -161,8 +163,16 @@ describe('reportRejectedRequest (#351)', () => {
   });
 
   it('sends at most one alert per place within the window', async () => {
-    counts(REJECTION_ALERT_RULE.limit + 5, false);
+    counts(REJECTION_ALERT_RULE.limit + 2);
     await reportRejectedRequest('ax-diagnosis/submit', 'rate_limited', { database });
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('counts nothing without a recipient or mail service', async () => {
+    env.AX_DIAGNOSIS_SALES_EMAIL = undefined;
+    counts(REJECTION_ALERT_RULE.limit + 1);
+    await reportRejectedRequest('ax-diagnosis/submit', 'honeypot', { database });
+    expect(consumeRateLimit).not.toHaveBeenCalled();
     expect(sendEmail).not.toHaveBeenCalled();
   });
 

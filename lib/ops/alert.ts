@@ -179,8 +179,8 @@ async function sendOpsAlert(to: string[], alert: OpsAlert): Promise<void> {
 
 /**
  * A public form refused a request as a likely bot (#351). Logs the place and reason, counts it
- * per place in the shared table, and once more than REJECTION_ALERT_RULE.limit come within the
- * window, emails the same people as a server error (at most once per place every 10 minutes).
+ * per place in the shared table, and when the count passes REJECTION_ALERT_RULE.limit within
+ * the window, emails the same people as a server error (once per place per window).
  * Holds nothing about the sender. Never throws: call it after the response, e.g. in after().
  */
 export async function reportRejectedRequest(
@@ -190,13 +190,14 @@ export async function reportRejectedRequest(
 ): Promise<void> {
   console.warn(`Public form refused a request: ${where} (${reason})`);
   try {
-    const db = database ?? (await import('@/lib/db/client')).db;
-    const { count } = await sharedCount(db, REJECTION_ALERT_RULE, where, now);
-    if (count <= REJECTION_ALERT_RULE.limit) return;
-
+    // Nobody to tell (development, previews): nothing is counted
     const to = recipients();
     if (to.length === 0 || !isEmailConfigured()) return;
-    if (!(await allowedToSend(db, `rejections:${where}`, now))) return;
+    const db = database ?? (await import('@/lib/db/client')).db;
+    // One write per refusal. The count is atomic, so exactly one refusal of the window sees
+    // limit + 1 and sends; a flood adds no second write per request
+    const { count } = await sharedCount(db, REJECTION_ALERT_RULE, where, now);
+    if (count !== REJECTION_ALERT_RULE.limit + 1) return;
 
     const minutes = REJECTION_ALERT_RULE.windowMs / 60_000;
     await sendOpsAlert(to, {
