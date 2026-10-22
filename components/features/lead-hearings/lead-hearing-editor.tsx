@@ -425,8 +425,9 @@ export function LeadHearingEditor({
     );
   }
 
-  // Until the form holds this hearing, never render (or save) another one
-  if (!hearing.data || !form || !baseUpdatedAt || !loaded) {
+  // Until the form holds this hearing, never render (or save) another one; the organization's
+  // settings first too, so hidden fields do not flash (on error the defaults are used)
+  if (!hearing.data || !form || !baseUpdatedAt || !loaded || catalogSettings.isPending) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

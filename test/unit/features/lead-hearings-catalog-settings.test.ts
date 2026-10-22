@@ -43,6 +43,8 @@ describe('resolveHearingCatalog with organization settings', () => {
       show: ['machineModel'],
     });
     expect(keysOf(view, 'currentSystem')).toContain('machineModel');
+    // ...but not as required, so the screens agree with the missing count of the list
+    expect(view.requiredItems.find((item) => item.id === 'system')?.keys).toEqual(['targetSystem']);
   });
 
   it('orders the fields of a section, the rest following in the base order', () => {
@@ -112,6 +114,24 @@ describe('hearing settings', () => {
         hearingCatalog: { hidden: ['machineModel'], required: null, order: {}, version: 3 },
       })
     ).toEqual({ hidden: ['machineModel'], required: null, order: {}, version: 3 });
+  });
+
+  it('keeps the rest of the settings when a stored key is no longer in the catalog', () => {
+    expect(
+      readHearingSettings({
+        hearingCatalog: {
+          hidden: ['machineModel', 'removedField'],
+          required: ['targetSystem', 'removedField', 'machineModel'],
+          order: { meeting: ['removedField', 'attendeeRoles'], unknownSection: ['x'] },
+          version: 4,
+        },
+      })
+    ).toEqual({
+      hidden: ['machineModel'],
+      required: ['targetSystem'],
+      order: { meeting: ['attendeeRoles'] },
+      version: 4,
+    });
   });
 
   it('turns the settings into catalog overrides', () => {

@@ -83,26 +83,29 @@ export const leadHearingsRouter = router({
           message: 'You do not have permission to change the hearing settings',
         });
       }
-      const before = await getHearingSettings(ctx.db, ctx.organization.id);
-      const version = await saveHearingSettings(
-        ctx.db,
-        ctx.organization.id,
-        input.settings,
-        before.version
-      );
-      // The version of each change is kept in the audit log with what changed
-      await ctx.db.insert(auditLogs).values({
-        organizationId: ctx.organization.id,
-        userId: ctx.user.id,
-        action: 'update',
-        resource: 'organization',
-        resourceId: ctx.organization.id,
-        changes: {
-          before: { hearingCatalog: before },
-          after: { hearingCatalog: { ...input.settings, version } },
-        },
+      // The change and its audit log row together; the row lock orders concurrent saves
+      return ctx.db.transaction(async (tx) => {
+        const before = await getHearingSettings(tx, ctx.organization.id, { forUpdate: true });
+        const version = await saveHearingSettings(
+          tx,
+          ctx.organization.id,
+          input.settings,
+          before.version
+        );
+        // The version of each change is kept in the audit log with what changed
+        await tx.insert(auditLogs).values({
+          organizationId: ctx.organization.id,
+          userId: ctx.user.id,
+          action: 'update',
+          resource: 'organization',
+          resourceId: ctx.organization.id,
+          changes: {
+            before: { hearingCatalog: before },
+            after: { hearingCatalog: { ...input.settings, version } },
+          },
+        });
+        return { version };
       });
-      return { version };
     }),
 
   /** Hearings of a lead, newest meeting first, with the count of open required items */

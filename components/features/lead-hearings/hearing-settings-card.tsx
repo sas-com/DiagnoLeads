@@ -100,10 +100,22 @@ export function HearingSettingsCard({ organizationId }: { organizationId: string
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     if (!draft) return;
+    // Only what differs from the base is kept, so fields and required items added to the base
+    // later reach the organization too
+    const base = baseOrder();
+    const required = [...draft.required].filter((key) => !draft.hidden.has(key));
+    const baseRequired = BASE_REQUIRED_KEYS.filter((key) => !draft.hidden.has(key));
+    const sameRequired =
+      required.length === baseRequired.length &&
+      baseRequired.every((key) => draft.required.has(key));
     const parsed = hearingSettingsSchema.safeParse({
       hidden: [...draft.hidden],
-      required: [...draft.required],
-      order: draft.order,
+      required: sameRequired ? null : required,
+      order: Object.fromEntries(
+        HEARING_SECTIONS.filter(
+          (section) => draft.order[section].join() !== base[section].join()
+        ).map((section) => [section, draft.order[section]])
+      ),
     });
     if (!parsed.success) {
       toast.error(t('saveError'));

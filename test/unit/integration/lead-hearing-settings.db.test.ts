@@ -120,6 +120,17 @@ describe.skipIf(!url)('hearing settings (PostgreSQL)', () => {
     expect(row.settings).toMatchObject({ other: 1 });
   });
 
+  it('gives two saves at once versions one after the other', async () => {
+    const before = (await callers.admin.leadHearings.catalogSettings({ organizationId: org })).settings
+      .version;
+    const settings = { hidden: [], required: null, order: {} };
+    const results = await Promise.all([
+      callers.admin.leadHearings.updateCatalogSettings({ organizationId: org, settings }),
+      callers.admin.leadHearings.updateCatalogSettings({ organizationId: org, settings }),
+    ]);
+    expect(results.map((r: { version: number }) => r.version).sort()).toEqual([before + 1, before + 2]);
+  });
+
   it('counts a newly required field as missing at once', async () => {
     const leadId = await createLead();
     const hearing = await callers.member.leadHearings.create({
@@ -174,5 +185,11 @@ describe.skipIf(!url)('hearing settings (PostgreSQL)', () => {
       section.items.map((item) => item.key)
     );
     expect(keys).toContain('targetSystem');
+
+    // The next hearing does not carry the hidden field's value over; the earlier one keeps it
+    const next = await callers.member.leadHearings.create({ organizationId: org, leadId, heldOn: '2026-10-23' });
+    expect(next.fields.targetSystem).toBeUndefined();
+    const earlier = await callers.member.leadHearings.get({ organizationId: org, id: hearing.id });
+    expect(earlier.fields.targetSystem?.value).toBe('as400');
   });
 });

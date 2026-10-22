@@ -78,6 +78,13 @@ describe('HearingSettingsCard', () => {
     expect(saved().required).not.toContain('targetSystem');
   });
 
+  it('saves only what differs from the base, so later base changes still apply', () => {
+    renderCard();
+    fireEvent.click(screen.getByRole('checkbox', { name: '機種・バージョン を聞く' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    expect(saved()).toEqual({ hidden: ['machineModel'], required: null, order: {} });
+  });
+
   it('moves a field within its section', () => {
     renderCard();
     expect(meetingRows()[0]).toBe('hearing-setting-meetingFormat');
@@ -87,7 +94,9 @@ describe('HearingSettingsCard', () => {
       'hearing-setting-meetingFormat',
     ]);
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
-    expect(saved().order.meeting).toEqual(['attendeeRoles', 'meetingFormat', 'decisionMakerPresent']);
+    expect(saved().order).toEqual({
+      meeting: ['attendeeRoles', 'meetingFormat', 'decisionMakerPresent'],
+    });
   });
 
   it('starts from the saved settings and goes back to the defaults', () => {

@@ -389,9 +389,10 @@ export async function createLeadHearing(
         await findHandoverForPrefill(tx, { organizationId, leadId }),
         fields
       );
-      // Nothing is prefilled into a field the organization does not ask (#98)
-      fields = withoutHiddenFields(fields, await getHearingOverrides(tx, organizationId));
     }
+    // Nothing is prefilled or carried over into a field the organization does not ask (#98);
+    // the earlier hearing keeps its value
+    fields = withoutHiddenFields(fields, await getHearingOverrides(tx, organizationId));
 
     const [row] = await tx
       .insert(leadHearings)

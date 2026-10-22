@@ -20,12 +20,15 @@ export { hearingSettingsSchema } from './catalog-settings';
 
 export async function getHearingSettings(
   db: Pick<typeof defaultDb, 'select'>,
-  organizationId: string
+  organizationId: string,
+  options: { forUpdate?: boolean } = {}
 ): Promise<StoredHearingSettings> {
-  const [row] = await db
+  const query = db
     .select({ settings: organizations.settings })
     .from(organizations)
     .where(eq(organizations.id, organizationId));
+  // Saving locks the row, so two saves at once get versions one after the other
+  const [row] = await (options.forUpdate ? query.for('update') : query);
   return readHearingSettings(row?.settings);
 }
 

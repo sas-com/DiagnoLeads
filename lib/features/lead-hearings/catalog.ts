@@ -453,15 +453,17 @@ export function resolveHearingCatalog(
   base: HearingBaseCatalog,
   overrides: HearingCatalogOverrides = {}
 ): HearingCatalogView {
-  const hidden = new Set<string>(overrides.hidden ?? []);
+  const notAsked = new Set<string>(overrides.hidden ?? []);
+  const hidden = new Set(notAsked);
   for (const key of overrides.show ?? []) hidden.delete(key);
-  // A hidden field is never required
+  // A field not asked is never required, even where a record's value still shows it, so the
+  // screens and the missing count of the list agree
   const givenItems = overrides.requiredItems ?? base.requiredItems;
   const requiredItems =
-    hidden.size === 0
+    notAsked.size === 0
       ? givenItems
       : givenItems.flatMap((item) => {
-          const keys = item.keys.filter((key) => !hidden.has(key));
+          const keys = item.keys.filter((key) => !notAsked.has(key));
           return keys.length > 0 ? [{ ...item, keys }] : [];
         });
   const requiredKeys = new Set<string>(requiredItems.flatMap((item) => item.keys));

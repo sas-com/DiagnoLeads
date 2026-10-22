@@ -60,16 +60,39 @@ export const DEFAULT_HEARING_SETTINGS: StoredHearingSettings = {
   version: 0,
 };
 
-/** Read the stored settings; broken values read as the defaults */
+const KNOWN_KEYS = new Set<string>(HEARING_FIELD_KEYS);
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === 'object' && !Array.isArray(value);
+/** The known field keys of a stored list; anything else is left out */
+const knownKeys = (value: unknown): HearingFieldKey[] =>
+  Array.isArray(value)
+    ? (value.filter((key) => typeof key === 'string' && KNOWN_KEYS.has(key)) as HearingFieldKey[])
+    : [];
+
+/**
+ * Read the stored settings. Keys the catalog no longer has are left out one by one, so removing
+ * or renaming a field in code keeps the rest of the organization's choices; a hidden field is
+ * not required. Anything unreadable reads as the defaults.
+ */
 export function readHearingSettings(settings: unknown): StoredHearingSettings {
-  const value =
-    settings && typeof settings === 'object' && !Array.isArray(settings)
-      ? (settings as Record<string, unknown>)[HEARING_SETTINGS_KEY]
-      : undefined;
-  if (!value || typeof value !== 'object') return DEFAULT_HEARING_SETTINGS;
-  const parsed = hearingSettingsSchema.safeParse(value);
+  const value = isRecord(settings) ? settings[HEARING_SETTINGS_KEY] : undefined;
+  if (!isRecord(value)) return DEFAULT_HEARING_SETTINGS;
+  const hidden = knownKeys(value.hidden);
+  const storedOrder = isRecord(value.order) ? value.order : {};
+  const parsed = hearingSettingsSchema.safeParse({
+    hidden,
+    required: Array.isArray(value.required)
+      ? knownKeys(value.required).filter((key) => !hidden.includes(key))
+      : null,
+    order: Object.fromEntries(
+      HEARING_SECTIONS.filter((id) => Array.isArray(storedOrder[id])).map((id) => [
+        id,
+        knownKeys(storedOrder[id]),
+      ])
+    ),
+  });
   if (!parsed.success) return DEFAULT_HEARING_SETTINGS;
-  const version = (value as { version?: unknown }).version;
+  const version = value.version;
   return { ...parsed.data, version: typeof version === 'number' ? version : 0 };
 }
 
