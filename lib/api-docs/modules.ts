@@ -233,35 +233,6 @@ export const workflowsModule: ApiModule = {
         },
       },
     },
-    {
-      path: '/api/trpc/workflows.execute',
-      method: 'post',
-      summary: 'Execute workflow',
-      description: 'Manually trigger a workflow execution',
-      tags: ['Workflows'],
-      requestBody: {
-        schema: {
-          type: 'object',
-          properties: {
-            workflowId: { type: 'string' },
-            input: { type: 'object' },
-          },
-          required: ['workflowId'],
-        },
-      },
-      responses: {
-        '200': {
-          description: 'Workflow execution started',
-          schema: {
-            type: 'object',
-            properties: {
-              executionId: { type: 'string' },
-              status: { type: 'string' },
-            },
-          },
-        },
-      },
-    },
   ],
   schemas: {
     Workflow: {

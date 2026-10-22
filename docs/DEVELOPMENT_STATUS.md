@@ -262,13 +262,8 @@
 | audit-logs.test.ts | 23 | インフラ |
 | rate-limit.test.ts | 28 | インフラ |
 | cache.test.ts | 25 | インフラ |
-| jobs.test.ts | 22 | インフラ |
 | storage.test.ts | 34 | インフラ |
-| events.test.ts | 24 | インフラ |
-| plugins.test.ts | 23 | インフラ |
 | realtime.test.ts | 29 | インフラ |
-| ai-agent.test.ts | 23 | AI |
-| workflow.test.ts | 11 | 自動化 |
 | api-docs.test.ts | 26 | ドキュメント |
 | diagnostic-submit.test.ts | 30 | 診断 |
 | ai-scoring.test.ts | 29 | AI |
@@ -323,13 +318,8 @@ lib/
 │   ├── workflows/      # ワークフロー
 │   └── ...
 ├── cache/              # キャッシュ
-├── jobs/               # バックグラウンドジョブ
 ├── storage/            # ファイルストレージ
-├── events/             # イベントバス
-├── plugins/            # プラグインシステム
 ├── realtime/           # リアルタイム通信
-├── ai-agent/           # AIエージェント
-├── workflow/           # ワークフローエンジン
 └── api-docs/           # APIドキュメント
 ```
 
