@@ -12,6 +12,10 @@ import { and, desc, eq } from 'drizzle-orm';
 import { type NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+// TODO(#314): this REST API has no role check yet and returns stored header values as-is (the
+// tRPC router masks them with maskWebhookHeaders). Add both with the PR that enables API keys;
+// v2 authentication always fails until then.
+
 // ============================================================================
 // Schemas
 // ============================================================================

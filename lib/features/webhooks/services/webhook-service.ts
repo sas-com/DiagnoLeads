@@ -17,6 +17,7 @@ import {
   webhooks,
 } from '@/lib/db/schema';
 import { and, asc, eq, gte, inArray, lt, lte, sql } from 'drizzle-orm';
+import { isReservedWebhookHeaderName } from './webhook-headers';
 
 /**
  * Generate HMAC signature for webhook payload
@@ -130,6 +131,53 @@ const maxAttemptsSql = sql`coalesce((${webhooks.retryConfig} ->> 'maxRetries')::
 
 type DeliveryResult = { success: boolean; statusCode?: number; error?: string; response?: string };
 
+/** Stored instead of the error text when the custom headers cannot be sent */
+export const INVALID_HEADERS_ERROR = 'Invalid request headers';
+
+/**
+ * A fixed description of a failed request. The raw message is never stored: it is shown to
+ * those who manage webhooks and could quote a header value (#314). A system error code
+ * (e.g. ECONNREFUSED) is kept when there is one, as it tells nothing about the headers.
+ */
+export function describeRequestError(error: unknown): string {
+  if (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError')) {
+    return 'Request timed out';
+  }
+  const codeOf = (value: unknown) => {
+    const code = (value as { code?: unknown } | null)?.code;
+    return typeof code === 'string' && /^[A-Za-z_]{1,40}$/.test(code) ? code : undefined;
+  };
+  const code =
+    codeOf(error) ??
+    (error instanceof Error ? codeOf((error as { cause?: unknown }).cause) : undefined);
+  return code ? `Network error (${code})` : 'Network error';
+}
+
+/**
+ * The request headers: the custom ones, then those the delivery sets. A stored custom header
+ * with a reserved name (saved before names were checked) is skipped, so the delivery's own
+ * headers cannot be replaced (`__proto__` is reserved too). Built through a Map and
+ * Object.fromEntries, which define keys rather than assign them.
+ * Throws if a custom header cannot be sent (e.g. a value with a line break saved before values
+ * were checked).
+ */
+function buildRequestHeaders(
+  webhook: Webhook,
+  ownHeaders: Record<string, string>
+): Record<string, string> {
+  const map = new Map<string, string>();
+  for (const [name, value] of Object.entries(webhook.headers ?? {})) {
+    if (!isReservedWebhookHeaderName(name)) map.set(name, value);
+  }
+  for (const [name, value] of Object.entries(ownHeaders)) {
+    map.set(name, value);
+  }
+  const headers = Object.fromEntries(map);
+  // Same checks as fetch makes, before any network activity
+  new Headers(headers);
+  return headers;
+}
+
 /**
  * Deliver a webhook to a specific endpoint
  */
@@ -141,14 +189,19 @@ async function deliverWebhook(
   const payloadString = JSON.stringify(payload);
   const signature = generateWebhookSignature(payloadString, webhook.secret);
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'X-Webhook-Signature': signature,
-    'X-Webhook-ID': deliveryId,
-    'X-Webhook-Event': payload.event,
-    'User-Agent': 'DiagnoLeads-Webhook/1.0',
-    ...(webhook.headers || {}),
-  };
+  let headers: Record<string, string>;
+  try {
+    headers = buildRequestHeaders(webhook, {
+      'Content-Type': 'application/json',
+      'X-Webhook-Signature': signature,
+      'X-Webhook-ID': deliveryId,
+      'X-Webhook-Event': payload.event,
+      'User-Agent': 'DiagnoLeads-Webhook/1.0',
+    });
+  } catch {
+    // The error text can quote the header value
+    return { success: false, error: INVALID_HEADERS_ERROR };
+  }
 
   const controller = new AbortController();
   // Covers reading the response body too, so a slow body cannot outlast the timeout
@@ -178,10 +231,9 @@ async function deliverWebhook(
       response: responseText.slice(0, 1000),
     };
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return {
       success: false,
-      error: errorMessage,
+      error: describeRequestError(error),
     };
   } finally {
     clearTimeout(timeout);
@@ -224,7 +276,7 @@ async function recordAttempt(
       // stays inactive
       await database
         .update(webhooks)
-        .set({ status: 'active' })
+        .set({ status: 'active', updatedAt: new Date() })
         .where(and(eq(webhooks.id, webhook.id), eq(webhooks.status, 'failed')));
     }
     return;
@@ -296,6 +348,21 @@ async function sendNewDelivery(
   const result = await deliverWebhook(webhook, payload, delivery.id);
   await recordAttempt(database, webhook, delivery.id, 1, result, { isRetry: false });
   return result.success;
+}
+
+/**
+ * Send one delivery to the given webhook only, whatever the other webhooks subscribed to the
+ * event (the settings page's test send, #314). Same delivery record, timeout and retry lease
+ * as an event delivery.
+ */
+export async function sendWebhookDelivery(
+  webhook: Webhook,
+  eventType: WebhookEventType,
+  data: Record<string, unknown>,
+  { database = db }: { database?: Database } = {}
+): Promise<{ success: boolean }> {
+  const success = await sendNewDelivery(database, webhook, webhook.organizationId, eventType, data);
+  return { success };
 }
 
 /**

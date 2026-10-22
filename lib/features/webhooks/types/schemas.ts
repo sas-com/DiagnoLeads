@@ -5,6 +5,15 @@
  */
 
 import { z } from 'zod';
+import {
+  WEBHOOK_HEADERS_MAX_COUNT,
+  WEBHOOK_HEADER_MASK,
+  WEBHOOK_HEADER_NAME_MAX_LENGTH,
+  WEBHOOK_HEADER_NAME_PATTERN,
+  WEBHOOK_HEADER_VALUE_MAX_LENGTH,
+  WEBHOOK_HEADER_VALUE_PATTERN,
+  isReservedWebhookHeaderName,
+} from '../services/webhook-headers';
 
 // Webhook Event Types
 export const webhookEventTypes = [
@@ -53,12 +62,32 @@ export const webhookConfigSchema = z.object({
 
 export type WebhookConfig = z.infer<typeof webhookConfigSchema>;
 
+// Custom header name: an RFC 7230 token (no surrounding whitespace), not one the delivery
+// sets itself. Duplicates (in any case) are refused when the headers are built (#314)
+const webhookHeaderNameSchema = z
+  .string()
+  .min(1)
+  .max(WEBHOOK_HEADER_NAME_MAX_LENGTH)
+  .regex(WEBHOOK_HEADER_NAME_PATTERN, 'Invalid header name')
+  .refine((name) => !isReservedWebhookHeaderName(name), 'This header name is reserved');
+
+// Custom header value: printable ASCII and tab only (no CR, LF, NUL or non-ASCII text, which
+// fetch would refuse at every delivery)
+const webhookHeaderValueSchema = z
+  .string()
+  .max(WEBHOOK_HEADER_VALUE_MAX_LENGTH)
+  .regex(WEBHOOK_HEADER_VALUE_PATTERN, 'Invalid header value');
+
 // Create Webhook Input
 export const createWebhookSchema = z.object({
   name: z.string().min(1).max(100),
   url: z.string().url(),
   events: z.array(z.enum(webhookEventTypes)).min(1),
-  headers: z.record(z.string()).optional(),
+  // A list rather than a record: a record would drop a name such as `__proto__` when parsed
+  headers: z
+    .array(z.object({ name: webhookHeaderNameSchema, value: webhookHeaderValueSchema }))
+    .max(WEBHOOK_HEADERS_MAX_COUNT)
+    .optional(),
   retryConfig: z
     .object({
       maxRetries: z.number().int().min(0).max(10).default(3),
@@ -76,7 +105,18 @@ export const updateWebhookSchema = z.object({
   url: z.string().url().optional(),
   events: z.array(z.enum(webhookEventTypes)).min(1).optional(),
   status: z.enum(webhookStatuses).optional(),
-  headers: z.record(z.string()).optional(),
+  // The complete list of custom headers. A header without a value (or with
+  // WEBHOOK_HEADER_MASK) keeps its stored value; a name left out is removed (#314)
+  headers: z
+    .array(
+      z.object({
+        name: webhookHeaderNameSchema,
+        // The mask (not ASCII, so never a real value) means "keep", like a missing value
+        value: z.union([z.literal(WEBHOOK_HEADER_MASK), webhookHeaderValueSchema]).optional(),
+      })
+    )
+    .max(WEBHOOK_HEADERS_MAX_COUNT)
+    .optional(),
   retryConfig: z
     .object({
       maxRetries: z.number().int().min(0).max(10),

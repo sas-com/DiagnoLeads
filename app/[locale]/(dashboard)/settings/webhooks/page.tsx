@@ -1,5 +1,15 @@
 'use client';
 
+import {
+  type WebhookHeaderRow,
+  WebhookHeadersEditor,
+  hasDuplicateNames,
+  isRowComplete,
+  keepsStoredValue,
+  rowsFromMaskedHeaders,
+  rowsToHeaderInput,
+  rowsToNewHeaders,
+} from '@/components/features/webhooks/webhook-headers-editor';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -22,6 +32,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useOrganization } from '@/hooks/use-organization';
+import {
+  WEBHOOK_HEADER_MASK,
+  isUrlChanged,
+} from '@/lib/features/webhooks/services/webhook-headers';
 import { trpc } from '@/lib/trpc/client';
 import {
   Activity,
@@ -31,6 +45,7 @@ import {
   Edit,
   ExternalLink,
   Loader2,
+  Lock,
   MoreVertical,
   Pause,
   Play,
@@ -65,7 +80,114 @@ interface WebhookFormData {
   name: string;
   url: string;
   events: WebhookEvent[];
-  secret?: string;
+  headers: WebhookHeaderRow[];
+  /** The URL as saved (edit only) */
+  savedUrl?: string;
+}
+
+const EMPTY_FORM: WebhookFormData = { name: '', url: '', events: [], headers: [] };
+
+/**
+ * The URL changes (host, path or anything else) while a stored header value would be kept: the
+ * server refuses this (the receiver's credentials must not follow the webhook elsewhere), so
+ * every value must be entered again or the header removed
+ */
+const isReentryRequired = (form: WebhookFormData) =>
+  form.savedUrl !== undefined &&
+  isUrlChanged(form.savedUrl, form.url) &&
+  keepsStoredValue(form.headers);
+
+const isFormComplete = (form: WebhookFormData) =>
+  form.name !== '' &&
+  form.url !== '' &&
+  form.events.length > 0 &&
+  form.headers.every(isRowComplete) &&
+  !hasDuplicateNames(form.headers) &&
+  !isReentryRequired(form);
+
+const EVENTS_BY_CATEGORY = Object.entries(
+  WEBHOOK_EVENTS.reduce(
+    (acc, event) => {
+      if (!acc[event.category]) acc[event.category] = [];
+      acc[event.category].push(event);
+      return acc;
+    },
+    {} as Record<string, (typeof WEBHOOK_EVENTS)[number][]>
+  )
+);
+
+/** Name, URL, events and custom headers: shared by the create and edit dialogs */
+function WebhookFormFields({
+  form,
+  onChange,
+}: {
+  form: WebhookFormData;
+  onChange: (update: (prev: WebhookFormData) => WebhookFormData) => void;
+}) {
+  const t = useTranslations('settings.webhooks');
+
+  const handleToggleEvent = (event: WebhookEvent) => {
+    onChange((prev) => ({
+      ...prev,
+      events: prev.events.includes(event)
+        ? prev.events.filter((e) => e !== event)
+        : [...prev.events, event],
+    }));
+  };
+
+  return (
+    <div className="grid gap-4 py-4">
+      <div className="grid gap-2">
+        <Label htmlFor="name">{t('name')}</Label>
+        <Input
+          id="name"
+          value={form.name}
+          onChange={(e) => onChange((prev) => ({ ...prev, name: e.target.value }))}
+          placeholder={t('namePlaceholder')}
+        />
+      </div>
+
+      <div className="grid gap-2">
+        <Label htmlFor="url">{t('url')}</Label>
+        <Input
+          id="url"
+          type="url"
+          value={form.url}
+          onChange={(e) => onChange((prev) => ({ ...prev, url: e.target.value }))}
+          placeholder="https://example.com/webhook"
+        />
+      </div>
+
+      <div className="grid gap-2">
+        <Label>{t('events')}</Label>
+        <div className="rounded-lg border p-4 max-h-64 overflow-y-auto">
+          {EVENTS_BY_CATEGORY.map(([category, events]) => (
+            <div key={category} className="mb-4 last:mb-0">
+              <h4 className="text-sm font-medium text-muted-foreground mb-2">{category}</h4>
+              <div className="space-y-2">
+                {events.map((event) => (
+                  // biome-ignore lint/a11y/noLabelWithoutControl: wraps the shadcn Checkbox (a Radix button), which Biome cannot detect as a control
+                  <label key={event.value} className="flex items-center gap-2 cursor-pointer">
+                    <Checkbox
+                      checked={form.events.includes(event.value)}
+                      onCheckedChange={() => handleToggleEvent(event.value)}
+                    />
+                    <span className="text-sm">{event.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <WebhookHeadersEditor
+        rows={form.headers}
+        onChange={(headers) => onChange((prev) => ({ ...prev, headers }))}
+        reentryRequired={isReentryRequired(form)}
+      />
+    </div>
+  );
 }
 
 export default function WebhooksSettingsPage() {
@@ -73,33 +195,41 @@ export default function WebhooksSettingsPage() {
   const { organization } = useOrganization();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingWebhook, setEditingWebhook] = useState<string | null>(null);
-  const [formData, setFormData] = useState<WebhookFormData>({
-    name: '',
-    url: '',
-    events: [],
-  });
+  const [formData, setFormData] = useState<WebhookFormData>(EMPTY_FORM);
+  const [editForm, setEditForm] = useState<WebhookFormData>(EMPTY_FORM);
   const [showSecret, setShowSecret] = useState<string | null>(null);
 
   const utils = trpc.useUtils();
 
   // Fetch webhooks
-  const { data: webhooks, isLoading } = trpc.webhooks.list.useQuery(
+  const {
+    data: webhooks,
+    isLoading,
+    error,
+  } = trpc.webhooks.list.useQuery(
     { organizationId: organization?.id ?? '' },
     { enabled: !!organization?.id }
   );
+  const canCreate = webhooks?.permissions.canCreate ?? false;
+  const canUpdate = webhooks?.permissions.canUpdate ?? false;
+  const canDelete = webhooks?.permissions.canDelete ?? false;
 
   // Mutations
   const createWebhook = trpc.webhooks.create.useMutation({
     onSuccess: () => {
       utils.webhooks.list.invalidate();
       setIsCreateOpen(false);
-      setFormData({ name: '', url: '', events: [] });
+      setFormData(EMPTY_FORM);
       toast.success(t('created'));
     },
     onError: (error) => {
       toast.error(error.message);
     },
   });
+
+  /** A save that met another change (CONFLICT) gets a message saying what to do */
+  const updateErrorMessage = (error: { message: string; data?: { code?: string } | null }) =>
+    error.data?.code === 'CONFLICT' ? t('conflict') : error.message;
 
   const updateWebhook = trpc.webhooks.update.useMutation({
     onSuccess: () => {
@@ -108,7 +238,7 @@ export default function WebhooksSettingsPage() {
       toast.success(t('updated'));
     },
     onError: (error) => {
-      toast.error(error.message);
+      toast.error(updateErrorMessage(error));
     },
   });
 
@@ -127,7 +257,7 @@ export default function WebhooksSettingsPage() {
       utils.webhooks.list.invalidate();
     },
     onError: (error) => {
-      toast.error(error.message);
+      toast.error(updateErrorMessage(error));
     },
   });
 
@@ -139,16 +269,32 @@ export default function WebhooksSettingsPage() {
       name: formData.name,
       url: formData.url,
       events: formData.events,
+      headers: rowsToNewHeaders(formData.headers),
     });
   };
 
-  const handleToggleEvent = (event: WebhookEvent) => {
-    setFormData((prev) => ({
-      ...prev,
-      events: prev.events.includes(event)
-        ? prev.events.filter((e) => e !== event)
-        : [...prev.events, event],
-    }));
+  const handleStartEdit = (webhook: NonNullable<typeof webhooks>['webhooks'][number]) => {
+    setEditForm({
+      name: webhook.name,
+      url: webhook.url,
+      events: webhook.events as WebhookEvent[],
+      headers: rowsFromMaskedHeaders(webhook.headers),
+      savedUrl: webhook.url,
+    });
+    setEditingWebhook(webhook.id);
+  };
+
+  const handleUpdate = () => {
+    if (!organization?.id || !editingWebhook) return;
+
+    updateWebhook.mutate({
+      organizationId: organization.id,
+      id: editingWebhook,
+      name: editForm.name,
+      url: editForm.url,
+      events: editForm.events,
+      headers: rowsToHeaderInput(editForm.headers),
+    });
   };
 
   const handleToggleStatus = (webhookId: string, currentStatus: string) => {
@@ -212,6 +358,26 @@ export default function WebhooksSettingsPage() {
     );
   }
 
+  if (error?.data?.code === 'FORBIDDEN') {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+          <p className="text-muted-foreground">{t('description')}</p>
+        </div>
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Lock className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium mb-2">{t('forbidden')}</h3>
+            <p className="text-muted-foreground text-center max-w-md">
+              {t('forbiddenDescription')}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -220,97 +386,68 @@ export default function WebhooksSettingsPage() {
           <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
           <p className="text-muted-foreground">{t('description')}</p>
         </div>
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              {t('create')}
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>{t('createTitle')}</DialogTitle>
-              <DialogDescription>{t('createDescription')}</DialogDescription>
-            </DialogHeader>
-
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="name">{t('name')}</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                  placeholder={t('namePlaceholder')}
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="url">{t('url')}</Label>
-                <Input
-                  id="url"
-                  type="url"
-                  value={formData.url}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, url: e.target.value }))}
-                  placeholder="https://example.com/webhook"
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <Label>{t('events')}</Label>
-                <div className="rounded-lg border p-4 max-h-64 overflow-y-auto">
-                  {Object.entries(
-                    WEBHOOK_EVENTS.reduce(
-                      (acc, event) => {
-                        if (!acc[event.category]) acc[event.category] = [];
-                        acc[event.category].push(event);
-                        return acc;
-                      },
-                      {} as Record<string, (typeof WEBHOOK_EVENTS)[number][]>
-                    )
-                  ).map(([category, events]) => (
-                    <div key={category} className="mb-4 last:mb-0">
-                      <h4 className="text-sm font-medium text-muted-foreground mb-2">{category}</h4>
-                      <div className="space-y-2">
-                        {events.map((event) => (
-                          // biome-ignore lint/a11y/noLabelWithoutControl: wraps the shadcn Checkbox (a Radix button), which Biome cannot detect as a control
-                          <label
-                            key={event.value}
-                            className="flex items-center gap-2 cursor-pointer"
-                          >
-                            <Checkbox
-                              checked={formData.events.includes(event.value)}
-                              onCheckedChange={() => handleToggleEvent(event.value)}
-                            />
-                            <span className="text-sm">{event.label}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
-                {t('cancel')}
-              </Button>
-              <Button
-                onClick={handleCreate}
-                disabled={
-                  !formData.name ||
-                  !formData.url ||
-                  formData.events.length === 0 ||
-                  createWebhook.isPending
-                }
-              >
-                {createWebhook.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        {canCreate && (
+          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
                 {t('create')}
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>{t('createTitle')}</DialogTitle>
+                <DialogDescription>{t('createDescription')}</DialogDescription>
+              </DialogHeader>
+
+              <WebhookFormFields form={formData} onChange={setFormData} />
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
+                  {t('cancel')}
+                </Button>
+                <Button
+                  onClick={handleCreate}
+                  disabled={!isFormComplete(formData) || createWebhook.isPending}
+                >
+                  {createWebhook.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {t('create')}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
+
+      {/* Edit dialog */}
+      <Dialog
+        open={editingWebhook !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditingWebhook(null);
+        }}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{t('editTitle')}</DialogTitle>
+            <DialogDescription>{t('editDescription')}</DialogDescription>
+          </DialogHeader>
+
+          <WebhookFormFields form={editForm} onChange={setEditForm} />
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingWebhook(null)}>
+              {t('cancel')}
+            </Button>
+            <Button
+              onClick={handleUpdate}
+              disabled={!isFormComplete(editForm) || updateWebhook.isPending}
+            >
+              {updateWebhook.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {t('save')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Webhooks List */}
       {webhooks?.webhooks && webhooks.webhooks.length > 0 ? (
@@ -331,20 +468,40 @@ export default function WebhooksSettingsPage() {
                     </CardDescription>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleToggleStatus(webhook.id, webhook.status)}
-                    >
-                      {webhook.status === 'active' ? (
-                        <Pause className="h-4 w-4" />
-                      ) : (
-                        <Play className="h-4 w-4" />
-                      )}
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(webhook.id)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                    {canUpdate && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={webhook.status === 'active' ? t('pause') : t('resume')}
+                          onClick={() => handleToggleStatus(webhook.id, webhook.status)}
+                        >
+                          {webhook.status === 'active' ? (
+                            <Pause className="h-4 w-4" />
+                          ) : (
+                            <Play className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={t('edit')}
+                          onClick={() => handleStartEdit(webhook)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
+                    {canDelete && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={t('delete')}
+                        onClick={() => handleDelete(webhook.id)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardHeader>
@@ -393,6 +550,23 @@ export default function WebhooksSettingsPage() {
                     </div>
                   </div>
 
+                  {/* Custom headers: names only, values are never sent to the browser */}
+                  {webhook.headers.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium mb-2">{t('headers')}</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {webhook.headers.map((header) => (
+                          <code
+                            key={header.name}
+                            className="rounded bg-muted px-2 py-1 text-xs font-mono"
+                          >
+                            {header.name}: {WEBHOOK_HEADER_MASK}
+                          </code>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Stats */}
                   <div className="flex items-center gap-6 text-sm text-muted-foreground">
                     {webhook.lastTriggeredAt && (
@@ -419,10 +593,12 @@ export default function WebhooksSettingsPage() {
             <p className="text-muted-foreground text-center mb-4 max-w-md">
               {t('noWebhooksDescription')}
             </p>
-            <Button onClick={() => setIsCreateOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              {t('createFirst')}
-            </Button>
+            {canCreate && (
+              <Button onClick={() => setIsCreateOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                {t('createFirst')}
+              </Button>
+            )}
           </CardContent>
         </Card>
       )}
