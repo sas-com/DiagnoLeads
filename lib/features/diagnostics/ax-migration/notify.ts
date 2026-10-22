@@ -7,6 +7,7 @@ import { isEmailConfigured, sendEmail } from '@/lib/features/email';
 import { consultationRecipients } from '@/lib/features/leads/assignment';
 import { notifyUsersInApp } from '@/lib/features/leads/assignment-notify';
 import { notifyOrganizationMembers } from '@/lib/features/notifications/notification-service';
+import { sendLeadCreatedById } from '@/lib/features/webhooks/services/lead-events';
 import { triggerWebhooks } from '@/lib/features/webhooks/services/webhook-service';
 import { addBusinessDays } from 'date-fns';
 import { consumeRateLimit } from '../rate-limit';
@@ -370,6 +371,10 @@ export async function notifyAxMigrationSubmission(n: AxMigrationNotification): P
   };
 
   const tasks: Promise<unknown>[] = [];
+  // A new lead is a lead.created too (#308), within the same limit as the other webhooks
+  if (withinLimit && n.leadCreated) {
+    tasks.push(sendLeadCreatedById(n.organizationId, n.leadId));
+  }
   if (withinLimit) {
     tasks.push(
       triggerWebhooks(n.organizationId, 'diagnostic.submitted', {

@@ -21,6 +21,7 @@ import {
 } from '@/lib/features/leads/assignment';
 import { creationAuditValues, writeLeadAuditLogs } from '@/lib/features/leads/audit';
 import { type InflowSource, jstDate } from '@/lib/features/leads/types/pipeline';
+import { type LeadEvent, emitLeadEvents } from '@/lib/features/webhooks/services/lead-events';
 import type { OrganizationContext } from '@/lib/multi-tenant/types';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
@@ -535,8 +536,9 @@ export const prospectsRouter = router({
       }
       const now = new Date();
       const email = input.email.toLowerCase();
+      let createdLead: LeadEvent | null = null;
 
-      return ctx.db.transaction(async (tx) => {
+      const result = await ctx.db.transaction(async (tx) => {
         const creator = alias(users, 'creator');
         const [found] = await tx
           .select({ prospect: prospects, creatorName: userName(creator) })
@@ -595,6 +597,7 @@ export const prospectsRouter = router({
             .returning();
           if (!lead) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
           leadId = lead.id;
+          createdLead = { type: 'lead.created', lead };
           await writeLeadAuditLogs(
             tx,
             { organizationId: ctx.organization.id, userId: ctx.user.id, at: now },
@@ -625,6 +628,9 @@ export const prospectsRouter = router({
           );
         return { leadId, linkedExisting: Boolean(existingLead) };
       });
+      // A prospect linked to an existing lead creates nothing
+      if (createdLead) emitLeadEvents(ctx.organization.id, [createdLead], { database: ctx.db });
+      return result;
     }),
 });
 

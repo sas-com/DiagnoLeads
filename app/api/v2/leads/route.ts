@@ -1,10 +1,4 @@
 import { getAuthenticatedOrganization } from '@/lib/api/v2-auth';
-/**
- * REST API v2 - Leads Endpoint
- *
- * GET /api/v2/leads - List leads
- * POST /api/v2/leads - Create a new lead
- */
 import { db } from '@/lib/db';
 import { leads } from '@/lib/db/schema';
 import {
@@ -12,6 +6,13 @@ import {
   normalizeLeadStatus,
   statusUpdateFields,
 } from '@/lib/features/leads/types/pipeline';
+/**
+ * REST API v2 - Leads Endpoint
+ *
+ * GET /api/v2/leads - List leads
+ * POST /api/v2/leads - Create a new lead
+ */
+import { emitLeadEvents } from '@/lib/features/webhooks/services/lead-events';
 import { type Column, and, desc, eq, gte, ilike, lte, or, sql } from 'drizzle-orm';
 import { type NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -254,6 +255,9 @@ export async function POST(request: NextRequest) {
         customFields: customFields ?? {},
       })
       .returning();
+    if (newLead) {
+      emitLeadEvents(authResult.organizationId, [{ type: 'lead.created', lead: newLead }]);
+    }
 
     return NextResponse.json(
       {
