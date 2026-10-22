@@ -115,11 +115,11 @@ test.describe('Access landing page', () => {
   });
 
   test('is linked from the Access item of the main landing page', async ({ page }) => {
-    await page.goto('/ja/ax-migration?utm_source=e2e');
-    await page.getByRole('link', { name: /3つの道を詳しく見る/ }).click();
-    // The move between the pages is named, and the campaign is carried over (#332)
+    await page.goto('/ja/ax-migration?utm_source=e2e&ref=e2e-ref');
+    await page.getByRole('link', { name: /Access の3つの道.*を詳しく見る/ }).click();
+    // The move between the pages is named; the campaign and the referral are carried over (#332)
     await expect(page).toHaveURL(
-      /\/ja\/ax-migration\/access\?utm_source=e2e&from=ax-lp-targets-access$/
+      /\/ja\/ax-migration\/access\?utm_source=e2e&ref=e2e-ref&from=ax-lp-targets-access$/
     );
   });
 

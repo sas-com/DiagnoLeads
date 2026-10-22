@@ -58,15 +58,24 @@ describe('isLandingHref', () => {
 });
 
 describe('crossLinkHref', () => {
-  it('adds from and carries the utm_* of the current address, keeping the anchor', () => {
+  it('adds from and carries the utm_*, ref and agency of the current address, keeping the anchor', () => {
     expect(
       crossLinkHref(
         '/ja/ax-migration/access#diagnosis',
         'ax-lp-targets-access',
-        '?utm_source=google&utm_medium=cpc&ref=partner&agency=abc'
+        '?utm_source=google&utm_medium=cpc&ref=partner&agency=abc&gclid=x'
       )
     ).toBe(
-      '/ja/ax-migration/access?utm_source=google&utm_medium=cpc&from=ax-lp-targets-access#diagnosis'
+      '/ja/ax-migration/access?utm_source=google&utm_medium=cpc&ref=partner&agency=abc&from=ax-lp-targets-access#diagnosis'
+    );
+  });
+
+  it('carries the referral and the agency link (#147) like the utm_*, unless the link sets them', () => {
+    expect(
+      crossLinkHref('/ja/ax-migration/access', 'ax-lp-footer', '?agency=ag-123&ref=partner-a&x=1')
+    ).toBe('/ja/ax-migration/access?agency=ag-123&ref=partner-a&from=ax-lp-footer');
+    expect(crossLinkHref('/ja/ax-migration?ref=own', 'ax-column-body', '?ref=partner-a&agency=ag-1')).toBe(
+      '/ja/ax-migration?ref=own&agency=ag-1&from=ax-column-body'
     );
   });
 
@@ -86,6 +95,22 @@ describe('readTrackingParams', () => {
     expect(readTrackingParams()).toMatchObject({
       from: 'ax-lp-targets-access',
       utmSource: 'google',
+      landingPath: '/ja/ax-migration/access',
+    });
+  });
+
+  it('reads the agency and the referral carried by a cross link as before', () => {
+    const href = crossLinkHref(
+      '/ja/ax-migration/access#diagnosis',
+      'ax-lp-targets-access',
+      '?utm_source=google&agency=ag-123&ref=partner-a'
+    );
+    window.history.replaceState(null, '', href);
+    expect(readTrackingParams()).toMatchObject({
+      utmSource: 'google',
+      agency: 'ag-123',
+      ref: 'partner-a',
+      from: 'ax-lp-targets-access',
       landingPath: '/ja/ax-migration/access',
     });
   });

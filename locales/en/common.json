@@ -2844,8 +2844,8 @@
       },
       "accessSupport": {
         "body": "After Access 2016 and 2019, Microsoft support for Access 2021 also ended on October 13, 2026 (Microsoft 365 is not affected).",
-        "link": "Start the free web check with the Access questions",
-        "page": "See the three ways in detail: fix, move to the web or replace (page for Microsoft Access users)"
+        "link": "Start the free web diagnosis with the Access questions",
+        "page": "See the three ways for Access in detail (fix, move to the web, replace)"
       },
       "industries": "For mid-sized manufacturers and distributors."
     },
@@ -2996,7 +2996,7 @@
       "copyright": "Copyright © {year} Software Agency System Co., Ltd. All rights reserved.",
       "sitePages": {
         "label": "Pages on this site",
-        "top": "Home",
+        "top": "AX Migration home",
         "access": "Microsoft Access migration",
         "column": "Articles"
       }
@@ -3195,13 +3195,13 @@
       "consult": "Book a 30-minute online consultation"
     },
     "trademark": "Microsoft and Access are trademarks or registered trademarks of Microsoft Corporation in the United States and other countries.",
-    "breadcrumb": "Microsoft Access",
+    "breadcrumb": "Microsoft Access migration",
     "pathsColumn": {
       "lead": "An article compares the three ways in a table, to help you choose."
     },
     "hosts": {
       "title": "Migrating a core system such as AS/400 or ACOS?",
-      "lead": "Migrating systems other than Access is covered on the AX Migration page.",
+      "lead": "Migrating AS/400 (IBM i), NEC ACOS and other systems, and the free web check for each system, are covered on the AX Migration page.",
       "links": {
         "as400": "Read about migrating from AS/400 (IBM i)",
         "acos": "Read about migrating from NEC ACOS",

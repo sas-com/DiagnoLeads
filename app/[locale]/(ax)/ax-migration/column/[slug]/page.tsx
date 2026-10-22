@@ -117,6 +117,7 @@ export default async function ColumnPage({ params }: ColumnPageProps) {
               index < crumbs.length - 1 ? { name, href: path } : { name }
             )}
             label={t('breadcrumbLabel')}
+            crossLinks
           />
           <header className="mt-8">
             <p className="text-sm font-bold tracking-wider text-ax-teal-dark">{t('label')}</p>

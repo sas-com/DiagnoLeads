@@ -11,7 +11,8 @@ export function currentAxPage() {
 
 /**
  * A link is being followed (click, middle click, Enter): when it leads to another page of the AX
- * site, send `ax_cross_link_click` and add `from` and the current utm_* to the address it opens.
+ * site, send `ax_cross_link_click` and add `from` and the current utm_*, ref and agency to the
+ * address it opens.
  * The href in the markup stays a plain path, so the link works without JavaScript (#332).
  */
 export function followAxLink(anchor: HTMLAnchorElement, href: string, placement: string): void {
@@ -24,6 +25,8 @@ export function followAxLink(anchor: HTMLAnchorElement, href: string, placement:
     from_page: current.page,
     to_page: target.page,
     location: placement,
+    // The section the link opens (e.g. the AS/400, ACOS or targets section of the main page)
+    ...(url.hash.length > 1 ? { to_section: decodeURIComponent(url.hash.slice(1)) } : {}),
     ...(current.columnSlug ? { column_slug: current.columnSlug } : {}),
   });
   anchor.href = crossLinkHref(href, `${current.page}-${placement}`, window.location.search);

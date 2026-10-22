@@ -87,11 +87,12 @@ export default async function AxAccessPage({ params }: AxAccessPageProps) {
           {/* Readers of AS/400 or ACOS: the main page's sections on their system */}
           <AxAccessHostSystems locale={locale} />
           <AxFaq locale={locale} namespace="axAccess.faq" keys={ACCESS_FAQ_KEYS} />
-          <AxAccessColumns locale={locale} />
         </AxLandingOnly>
         <AxAccessDiagnosisSection locale={locale} />
         <AxLandingOnly>
           <AxFinalCta locale={locale} copyNamespace="axAccess.finalCta" locationPrefix="access-" />
+          {/* After the last call to action: no links away right before the diagnosis */}
+          <AxAccessColumns locale={locale} />
           <AxFloatingCta label={t('floatingCta')} />
         </AxLandingOnly>
       </AxLandingView>

@@ -121,7 +121,7 @@ describe('Access card of the main landing page', () => {
     const user = userEvent.setup();
     await renderMain();
 
-    const button = accessCard().getByRole('link', { name: 'Access の質問から無料Web診断をはじめる' });
+    const button = accessCard().getByRole('link', { name: 'Accessの質問から無料Web診断をはじめる' });
     expect(button).toHaveAttribute('href', '#diagnosis');
     await user.click(button);
 
@@ -140,7 +140,7 @@ describe('Access card of the main landing page', () => {
     await renderMain();
 
     const link = accessCard().getByRole('link', {
-      name: '直す・Web に移す・置き換える、3つの道を詳しく見る（Microsoft Access の方向けページ）',
+      name: 'Access の3つの道（直す・Web に移す・置き換える）を詳しく見る',
     });
     // Without JavaScript the plain path works
     expect(link).toHaveAttribute('href', '/ja/ax-migration/access');
@@ -169,7 +169,7 @@ describe('Access landing page links', () => {
       'href',
       '/ja/ax-migration'
     );
-    expect(crumbs.getByText('Microsoft Access')).toHaveAttribute('aria-current', 'page');
+    expect(crumbs.getByText('Microsoft Access の移行')).toHaveAttribute('aria-current', 'page');
   });
 
   it('names the logo after where it leads (the top of this page)', async () => {
@@ -193,16 +193,18 @@ describe('Access landing page links', () => {
       ['対象となるシステムの一覧を見る', '/ja/ax-migration#targets'],
     ]);
 
-    await user.click(links[1]);
+    for (const link of links) await user.click(link);
     expect(links[1]).toHaveAttribute('href', '/ja/ax-migration?from=ax-access-lp-hosts#acos-migration');
-    expect(events('ax_cross_link_click')).toEqual([
-      {
+    // The three links are told apart by the section they open
+    expect(events('ax_cross_link_click')).toEqual(
+      ['as400-migration', 'acos-migration', 'targets'].map((to_section) => ({
         event: 'ax_cross_link_click',
         from_page: 'ax-access-lp',
         to_page: 'ax-lp',
         location: 'hosts',
-      },
-    ]);
+        to_section,
+      }))
+    );
   });
 
   it('links the table of the three ways after their section', async () => {
@@ -272,7 +274,7 @@ describe('Access landing page links', () => {
 
 describe('Footer pages of the site', () => {
   const expected = [
-    ['トップ', '/ja/ax-migration'],
+    ['AXマイグレーション トップ', '/ja/ax-migration'],
     ['Microsoft Access の移行', '/ja/ax-migration/access'],
     ['コラム', '/ja/ax-migration/column'],
   ];
@@ -348,6 +350,7 @@ describe('Access columns', () => {
         from_page: 'ax-column',
         to_page: 'ax-access-lp',
         location: 'header',
+        to_section: 'diagnosis',
         column_slug: slug,
       },
     ]);
@@ -380,8 +383,28 @@ describe('Access columns', () => {
       from_page: 'ax-column',
       to_page: 'ax-access-lp',
       location: 'body',
+      to_section: 'diagnosis',
       column_slug: slug,
     });
+  });
+
+  it('measures the breadcrumb link to the main page as a move between pages', async () => {
+    window.history.replaceState(null, '', `/ja/ax-migration/column/${slug}`);
+    const user = userEvent.setup();
+    await renderColumn(slug);
+    const crumbs = within(screen.getByRole('navigation', { name: 'パンくずリスト' }));
+    const home = crumbs.getByRole('link', { name: 'AXマイグレーション' });
+    await user.click(home);
+    expect(home).toHaveAttribute('href', '/ja/ax-migration?from=ax-column-breadcrumb');
+    expect(events('ax_cross_link_click')).toEqual([
+      {
+        event: 'ax_cross_link_click',
+        from_page: 'ax-column',
+        to_page: 'ax-lp',
+        location: 'breadcrumb',
+        column_slug: slug,
+      },
+    ]);
   });
 
   it('leaves links to other columns as plain links', async () => {
@@ -414,11 +437,34 @@ describe('entry of the diagnosis events', () => {
     expect(events('ax_diagnosis_start')[0]).not.toHaveProperty('entry');
   });
 
+  it('adds the from of the address, when the site wrote it, the same way (#332)', () => {
+    window.history.replaceState(null, '', '/ja/ax-migration/access?from=ax-lp-targets-access');
+    setAxDiagnosisEntry('ax-access-lp');
+    trackAxEvent('ax_diagnosis_complete', { platform: 'access' });
+    trackAxEvent('ax_cross_link_click', { from_page: 'ax-access-lp', to_page: 'ax-lp', location: 'hosts' });
+    expect(events('ax_diagnosis_complete')).toEqual([
+      {
+        event: 'ax_diagnosis_complete',
+        entry: 'ax-access-lp',
+        from: 'ax-lp-targets-access',
+        platform: 'access',
+      },
+    ]);
+    expect(events('ax_cross_link_click')[0]).not.toHaveProperty('from');
+
+    window.history.replaceState(null, '', '/ja/ax-migration/access?from=somewhere-else');
+    setAxDiagnosisEntry('ax-access-lp');
+    trackAxEvent('ax_diagnosis_step', { platform: 'access', step: 2 });
+    expect(events('ax_diagnosis_step')).toEqual([
+      { event: 'ax_diagnosis_step', entry: 'ax-access-lp', platform: 'access', step: 2 },
+    ]);
+  });
+
   it('is sent with the start and step events of the main page diagnosis', async () => {
     window.history.replaceState(null, '', '/ja/ax-migration');
     const user = userEvent.setup();
     await renderMain();
-    await user.click(accessCard().getByRole('link', { name: 'Access の質問から無料Web診断をはじめる' }));
+    await user.click(accessCard().getByRole('link', { name: 'Accessの質問から無料Web診断をはじめる' }));
     expect(events('ax_diagnosis_start')).toEqual([
       { event: 'ax_diagnosis_start', entry: 'ax-lp', platform: 'access' },
     ]);

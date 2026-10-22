@@ -105,7 +105,7 @@ describe('AX migration landing page', () => {
     const access = screen.getByRole('heading', { level: 3, name: 'Microsoft Access' }).closest('li') as HTMLElement;
     expect(within(access).getByText(/2026年10月13日/)).toBeInTheDocument();
     expect(
-      within(access).getByRole('link', { name: 'Access の質問から無料Web診断をはじめる' })
+      within(access).getByRole('link', { name: 'Accessの質問から無料Web診断をはじめる' })
     ).toHaveAttribute('href', '#diagnosis');
   });
 

@@ -2,8 +2,8 @@
  * Links between the pages of the AX migration site (#332): the main landing page, the Access
  * landing page, the columns and the diagnosis page.
  *
- * A link that leads to another of these pages carries `?from=<page>-<placement>` and the utm_*
- * of the current address, so the inflow of a page can be told apart from the moves inside the
+ * A link that leads to another of these pages carries `?from=<page>-<placement>` and the utm_*,
+ * `ref` and `agency` of the current address (the agency attribution of #147 survives the move), so the inflow of a page can be told apart from the moves inside the
  * site. Both are added when the link is followed; the href itself stays a plain path, so the link
  * works without JavaScript and the canonical address of every page stays as it is.
  *
@@ -84,16 +84,21 @@ export function isLandingHref(href: string): boolean {
   return target !== null && LANDING_PAGES.has(target.page);
 }
 
+/** Parameters of the current address a link to another page carries, besides the utm_* */
+const CARRIED_PARAMS: ReadonlySet<string> = new Set(['ref', 'agency']);
+
 /**
  * Address of a link that leads to another page of the site: `from` names where it was followed,
- * and the utm_* of the current address that the link does not set itself are carried over.
+ * and the utm_*, ref and agency of the current address that the link does not set itself are
+ * carried over.
  * A `from` outside the list is left out; the link still works.
  */
 export function crossLinkHref(href: string, from: string, currentSearch: string): string {
   const url = new URL(href, 'https://ax.invalid');
   const current = new URLSearchParams(currentSearch);
   for (const [key, value] of current) {
-    if (key.startsWith('utm_') && !url.searchParams.has(key)) url.searchParams.set(key, value);
+    const carried = key.startsWith('utm_') || CARRIED_PARAMS.has(key);
+    if (carried && !url.searchParams.has(key)) url.searchParams.set(key, value);
   }
   if (isAxFrom(from)) url.searchParams.set('from', from);
   return `${url.pathname}${url.search}${url.hash}`;

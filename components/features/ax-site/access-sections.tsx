@@ -486,7 +486,7 @@ export async function AxAccessHostSystems({ locale }: SectionProps) {
   );
 }
 
-/** The Access columns and the column list, after the questions (#332) */
+/** The Access columns and the column list, at the end of the page (#332) */
 export async function AxAccessColumns({ locale }: SectionProps) {
   const t = await getTranslations({ locale, namespace: 'axAccess.columns' });
   // Articles are Japanese for now (#324): no section in another language

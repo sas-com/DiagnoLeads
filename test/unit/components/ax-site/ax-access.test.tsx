@@ -134,9 +134,10 @@ describe('Access landing page', () => {
       '対象になる Access',
       'AS/400・ACOS など基幹システムの移行をお考えの方へ',
       'よくある質問',
-      'Access の移行に関するコラム',
       '無料Web診断（Access版）',
       'まずは、お使いの Access を確かめるところから。',
+      // After the last call to action, not right before the diagnosis (#332)
+      'Access の移行に関するコラム',
     ]);
     for (const name of ['直して使い続ける', 'Web に移す', '既製サービスに置き換える']) {
       expect(screen.getByRole('heading', { level: 3, name })).toBeInTheDocument();
@@ -251,12 +252,15 @@ describe('Access landing page', () => {
       expect(body.tracking.entry).toBe('ax-access-lp');
       expect(body.tracking.from).toBe('ax-lp-targets-access');
       expect(body.tracking.landingPath).toBe('/');
-      // The funnel events name the page the diagnosis was started from
-      const sent = (analytics.dataLayer ?? []) as { event?: string; entry?: string }[];
+      // The funnel events name the page the diagnosis was started from and the link that led there
+      const sent = (analytics.dataLayer ?? []) as { event?: string; entry?: string; from?: string }[];
       for (const name of ['ax_diagnosis_start', 'ax_diagnosis_step', 'ax_diagnosis_complete']) {
         const found = sent.filter((entry) => entry.event === name);
         expect(found.length, name).toBeGreaterThan(0);
-        for (const event of found) expect(event.entry, name).toBe('ax-access-lp');
+        for (const event of found) {
+          expect(event.entry, name).toBe('ax-access-lp');
+          expect(event.from, name).toBe('ax-lp-targets-access');
+        }
       }
       analytics.dataLayer = undefined;
 
@@ -302,7 +306,7 @@ describe('Main landing page', () => {
       .closest('li') as HTMLElement;
     expect(
       within(access).getByRole('link', {
-        name: '直す・Web に移す・置き換える、3つの道を詳しく見る（Microsoft Access の方向けページ）',
+        name: 'Access の3つの道（直す・Web に移す・置き換える）を詳しく見る',
       })
     ).toHaveAttribute('href', '/ja/ax-migration/access');
   });

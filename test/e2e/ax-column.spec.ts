@@ -28,7 +28,8 @@ test.describe('AX migration columns', () => {
     await expect(page).toHaveURL(/#sources$/);
 
     await page.getByRole('link', { name: '無料Web診断（Access版）をはじめる' }).click();
-    await expect(page).toHaveURL(/\/ja\/ax-migration\/access#diagnosis$/);
+    // The move from the article is named on the address (#332)
+    await expect(page).toHaveURL(/\/ja\/ax-migration\/access\?from=ax-column-end#diagnosis$/);
   });
 
   test('lists the article and answers 404 for an unknown one', async ({ page }) => {
