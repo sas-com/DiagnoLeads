@@ -1,4 +1,8 @@
+import { access2gbLimit } from './access-2gb-limit';
+import { accessAccdeOnly } from './access-accde-only';
+import { accessFixOrWeb } from './access-fix-or-web';
 import { accessOfficeSupportEnd } from './access-office-support-end';
+import { accessSharedFolder } from './access-shared-folder';
 import {
   COLUMN_INDEX_PATH,
   type Column,
@@ -11,8 +15,17 @@ import {
 
 export * from './types';
 
-/** Published articles, newest first */
-export const COLUMNS: readonly Column[] = [accessOfficeSupportEnd];
+/**
+ * Published articles, in reading order (the list page and the related links follow it): why to
+ * act, how to choose, then the problems one by one
+ */
+export const COLUMNS: readonly Column[] = [
+  accessOfficeSupportEnd,
+  accessFixOrWeb,
+  accessSharedFolder,
+  accessAccdeOnly,
+  access2gbLimit,
+];
 
 /** The only locale with articles; other locales have no column pages (404) */
 export const COLUMN_LOCALE: ColumnLocale = 'ja';
@@ -52,7 +65,10 @@ export const COLUMN_CTAS: Record<ColumnCta, { href: string; labelKey: 'axAccess.
   'access-diagnosis': { href: '/ja/ax-migration/access#diagnosis', labelKey: 'axAccess.hero.cta' },
 };
 
-/** Trademark notice of the landing page an article belongs to, shown at its end */
+/**
+ * Trademark notice of the landing page an article belongs to, shown at its end unless the article
+ * has its own (Column.trademark)
+ */
 export const COLUMN_TRADEMARK_KEYS: Record<ColumnRelatedPage, 'axAccess.trademark'> = {
   access: 'axAccess.trademark',
 };

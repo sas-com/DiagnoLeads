@@ -15,6 +15,7 @@ test.describe('Content Security Policy', () => {
     // Column pages carry JSON-LD: a data block, which the policy does not block (#324)
     '/ja/ax-migration/column',
     '/ja/ax-migration/column/access-office-support-end',
+    '/ja/ax-migration/column/access-shared-folder',
     '/ja/ax-diagnosis',
     '/ja/login',
   ]) {
