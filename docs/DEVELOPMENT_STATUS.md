@@ -103,13 +103,8 @@
 | Audit Logs | ✅ | ✅ (23) |
 | Rate Limiting | ✅ | ✅ (28) |
 | Redis Cache | ✅ | ✅ (25) |
-| Background Jobs | ✅ | ✅ (22) |
 | File Storage | ✅ | ✅ (34) |
-| Event Bus | ✅ | ✅ (24) |
-| Plugin System | ✅ | ✅ (23) |
 | Realtime SSE | ✅ | ✅ (29) |
-| AI Agent | ✅ | ✅ (23) |
-| Workflow Engine | ✅ | ✅ (11) |
 | API Docs | ✅ | ✅ (26) |
 
 ---
