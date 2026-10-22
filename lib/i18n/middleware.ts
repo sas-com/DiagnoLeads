@@ -42,7 +42,8 @@ export function shouldSkipI18nMiddleware(pathname: string): boolean {
   ];
 
   // ファイル拡張子を持つパスをスキップ
-  const fileExtensions = /\.(svg|png|jpg|jpeg|gif|webp|ico|css|js|json|xml|txt|ttf)$/;
+  // pdf: documents in public/ offered on the AX result page (#153)
+  const fileExtensions = /\.(svg|png|jpg|jpeg|gif|webp|ico|css|js|json|xml|txt|ttf|pdf)$/;
 
   return skipPaths.some((path) => pathname.startsWith(path)) || fileExtensions.test(pathname);
 }
