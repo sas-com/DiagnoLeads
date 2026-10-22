@@ -29,6 +29,7 @@ interface MutationOptions {
 }
 
 const mocks = vi.hoisted(() => ({
+  catalogSettings: undefined as unknown,
   mutate: vi.fn(),
   refetch: vi.fn(),
   data: undefined as unknown,
@@ -51,6 +52,8 @@ vi.mock('@/lib/trpc/client', () => ({
       },
     }),
     leadHearings: {
+      // The organization's settings (#98): the defaults unless a test sets them
+      catalogSettings: { useQuery: () => ({ data: mocks.catalogSettings }) },
       get: {
         useQuery: () => ({
           data: mocks.error ? undefined : mocks.data,
@@ -146,6 +149,7 @@ beforeEach(() => {
   mocks.data = hearing();
   mocks.error = null;
   mocks.summary = undefined;
+  mocks.catalogSettings = undefined;
   window.localStorage.clear();
 });
 
@@ -294,6 +298,19 @@ describe('LeadHearingEditor', () => {
     // Saving still guards against the newer row that was not loaded into the form
     await user.click(screen.getByRole('button', { name: '保存' }));
     expect(mocks.mutate.mock.calls[0][0].expectedUpdatedAt).toEqual(UPDATED_AT);
+  });
+
+  it('leaves out the fields the organization does not ask, unless this hearing has a value (#98)', async () => {
+    const user = userEvent.setup();
+    mocks.catalogSettings = {
+      settings: { hidden: ['machineModel', 'targetSystem'], required: null, order: {}, version: 1 },
+      canEdit: true,
+    };
+    render(editor());
+    await user.click(screen.getByRole('tab', { name: /現行システム/ }));
+    // targetSystem has a value in this hearing, so it still shows
+    expect(screen.getByText('対象システム')).toBeInTheDocument();
+    expect(screen.queryByText('機種・バージョン')).not.toBeInTheDocument();
   });
 
   it('shows not found for a hearing of another lead', () => {

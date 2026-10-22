@@ -7,9 +7,11 @@
  */
 
 import type { AppAbility } from '@/lib/auth/permissions';
+import { auditLogs } from '@/lib/db/schema';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
-import { DEFAULT_HEARING_CATALOG } from '../catalog';
+import { z } from 'zod';
+import { HEARING_BASE_CATALOG, resolveHearingCatalog } from '../catalog';
 import {
   createLeadHearing,
   deleteLeadHearing,
@@ -19,12 +21,19 @@ import {
   listPrefillSources,
   updateLeadHearing,
 } from '../service';
+import {
+  getHearingOverrides,
+  getHearingSettings,
+  hearingSettingsSchema,
+  saveHearingSettings,
+} from '../settings';
 import { buildHearingSummary } from '../summary';
 import { hearingSummaryLabels } from '../summary-messages';
 import {
   createLeadHearingSchema,
   deleteLeadHearingSchema,
   getLeadHearingSchema,
+  hearingCatalogSettingsSchema,
   leadHearingPrefillSourcesSchema,
   leadHearingSummarySchema,
   listLeadHearingsSchema,
@@ -50,6 +59,52 @@ function assertCanWrite(ability: AppAbility) {
 }
 
 export const leadHearingsRouter = router({
+  /**
+   * The organization's hearing settings (#98): which fields are asked, their order and which are
+   * required. Everyone who reads hearings gets them (the screens follow them); owners and admins
+   * change them.
+   */
+  catalogSettings: organizationProcedure
+    .input(hearingCatalogSettingsSchema)
+    .query(async ({ ctx }) => {
+      assertCanRead(ctx.ability);
+      return {
+        settings: await getHearingSettings(ctx.db, ctx.organization.id),
+        canEdit: ctx.ability.can('update', 'Settings'),
+      };
+    }),
+
+  updateCatalogSettings: organizationProcedure
+    .input(z.object({ organizationId: z.string().uuid(), settings: hearingSettingsSchema }))
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.ability.can('update', 'Settings')) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'You do not have permission to change the hearing settings',
+        });
+      }
+      const before = await getHearingSettings(ctx.db, ctx.organization.id);
+      const version = await saveHearingSettings(
+        ctx.db,
+        ctx.organization.id,
+        input.settings,
+        before.version
+      );
+      // The version of each change is kept in the audit log with what changed
+      await ctx.db.insert(auditLogs).values({
+        organizationId: ctx.organization.id,
+        userId: ctx.user.id,
+        action: 'update',
+        resource: 'organization',
+        resourceId: ctx.organization.id,
+        changes: {
+          before: { hearingCatalog: before },
+          after: { hearingCatalog: { ...input.settings, version } },
+        },
+      });
+      return { version };
+    }),
+
   /** Hearings of a lead, newest meeting first, with the count of open required items */
   listByLead: organizationProcedure.input(listLeadHearingsSchema).query(async ({ ctx, input }) => {
     assertCanRead(ctx.ability);
@@ -79,10 +134,15 @@ export const leadHearingsRouter = router({
       organizationId: ctx.organization.id,
       id: input.id,
     });
-    // Organization overrides (#98) will resolve their own catalog here
+    // The organization's catalog (#98); hidden fields this record has a value for still show
+    const overrides = await getHearingOverrides(ctx.db, ctx.organization.id);
+    const catalog = resolveHearingCatalog(HEARING_BASE_CATALOG, {
+      ...overrides,
+      show: Object.keys(source.fields),
+    });
     const summary = buildHearingSummary(
       { heldOn: source.heldOn, fields: source.fields, lead: source.lead },
-      DEFAULT_HEARING_CATALOG,
+      catalog,
       hearingSummaryLabels(input.locale ?? 'ja'),
       source.previous
     );

@@ -3445,6 +3445,22 @@
       "changed": "Changed",
       "item": "Item",
       "otherNote": "{label} ({note})"
+    },
+    "settings": {
+      "title": "Hearing fields",
+      "description": "Choose the fields asked in the first meeting hearing, which are required and their order. Changes apply at once to the hearing sheet, the missing-item check and the meeting summary.",
+      "asked": "Ask",
+      "required": "Required",
+      "askedLabel": "Ask {field}",
+      "requiredLabel": "Require {field}",
+      "moveUp": "Move {field} up",
+      "moveDown": "Move {field} down",
+      "save": "Save",
+      "reset": "Back to the defaults",
+      "saved": "Hearing fields saved",
+      "saveError": "Could not save",
+      "readOnly": "Owners and admins can change these.",
+      "note": "A field no longer asked keeps the values already recorded, which still show on those records. Fields not asked are not prefilled from the Web diagnosis or the sales agency. Changes are kept in the audit log."
     }
   },
   "leadActivity": {
