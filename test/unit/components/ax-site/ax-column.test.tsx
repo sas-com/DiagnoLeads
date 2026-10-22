@@ -24,7 +24,7 @@ vi.mock('next/font/google', () => ({
   Lato: () => ({ variable: 'font-lato' }),
 }));
 
-const { default: ColumnPage, generateMetadata, generateStaticParams } = await import(
+const { default: ColumnPage, generateMetadata } = await import(
   '@/app/[locale]/(ax)/ax-migration/column/[slug]/page'
 );
 const { default: ColumnIndexPage, generateMetadata: generateIndexMetadata } = await import(
@@ -228,9 +228,9 @@ describe('column article page', () => {
     await expect(ColumnPage(articleParams('en'))).rejects.toMatchObject(NOT_FOUND);
   });
 
-  it('prebuilds the Japanese articles only', () => {
-    expect(generateStaticParams({ params: { locale: 'ja' } })).toEqual([{ slug }]);
-    expect(generateStaticParams({ params: { locale: 'en' } })).toEqual([]);
+  it('is rendered per request like the other AX pages (the shell reads the CSP nonce)', async () => {
+    const page = await import('@/app/[locale]/(ax)/ax-migration/column/[slug]/page');
+    expect('generateStaticParams' in page).toBe(false);
   });
 });
 

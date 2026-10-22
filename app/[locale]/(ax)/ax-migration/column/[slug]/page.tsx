@@ -41,12 +41,6 @@ async function findColumn(params: ColumnPageProps['params']): Promise<Column> {
   return column;
 }
 
-export function generateStaticParams({ params }: { params: { locale: string } }) {
-  return COLUMNS.filter((column) => column.locale === params.locale).map((column) => ({
-    slug: column.slug,
-  }));
-}
-
 export async function generateMetadata({ params }: ColumnPageProps): Promise<Metadata> {
   const column = await findColumn(params);
   const t = await getTranslations({ locale: column.locale, namespace: 'axColumn.meta' });
