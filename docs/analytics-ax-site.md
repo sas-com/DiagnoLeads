@@ -51,6 +51,7 @@ AX マイグレーションのサイト（`/ja/ax-migration` と、その下の 
 | `ax_diagnosis_follow_up` | 結果のあとの追加質問に答えた | `answered`、`total`、`access_path`（Access のみ） |
 | `ax_result_print` | 結果を印刷・PDF 保存した | `platform`、`location` |
 | `ax_document_request`／`ax_seminar_request` | 資料・勉強会を申し込んだ | `platform` |
+| `ax_result_email_request` | 結果をメールで受け取るボタンを押し、受け付けられた（`AX_RESULT_EMAIL_ENABLED` が有効のときだけ表示。#154） | `platform`、`status`（`accepted`／`already_requested`） |
 
 `ax_lp_cta_click` の `location` の主な値：`hero`、`final`、`header`、`floating`、`as400`、`acos`、`targets-access`、`access-hero`、`access-paths`、`access-final`、`column-end-<slug>`。
 

@@ -2,6 +2,7 @@ import { AxDiagnosisFlow } from '@/components/features/ax-diagnosis/ax-diagnosis
 import { AxSiteShell } from '@/components/features/ax-site/ax-site-shell';
 import { axPrivacyPolicyUrl } from '@/components/features/ax-site/site-config';
 import { allowedEmailDomains } from '@/lib/email/allowed-recipients';
+import { axResultEmailEnabled } from '@/lib/features/diagnostics/ax-migration/result-email-config';
 import { turnstileSiteKey } from '@/lib/features/diagnostics/turnstile';
 import { robotsFor } from '@/lib/seo/indexing';
 import type { Metadata } from 'next';
@@ -55,6 +56,7 @@ export default async function AxDiagnosisPage({ params }: AxDiagnosisPageProps) 
               privacyPolicyUrl={axPrivacyPolicyUrl()}
               turnstileSiteKey={turnstileSiteKey()}
               allowedEmailDomains={allowedEmailDomains()}
+              resultEmailEnabled={axResultEmailEnabled()}
               entry="ax-diagnosis"
             />
           </div>

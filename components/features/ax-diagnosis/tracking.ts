@@ -3,7 +3,8 @@ import { isAxFrom } from '@/lib/features/ax-site/cross-links';
 /**
  * Send AX diagnosis events to GA4 (gtag, loaded by AxAnalytics when a measurement ID is set) or
  * to a GTM data layer when one is present. Used to measure the funnel (start → complete →
- * consultation) and hypothesis H1. Without either, nothing is sent.
+ * consultation) and hypothesis H1. Without either, nothing is sent. The events and their
+ * parameters are listed in docs/analytics-ax-site.md (e.g. ax_result_email_request, #154).
  */
 type AnalyticsWindow = Window & {
   dataLayer?: unknown[];

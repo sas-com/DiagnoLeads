@@ -94,4 +94,19 @@ describe('sendEmail listUnsubscribe', () => {
     await sendEmail(base);
     expect(send.mock.calls[0]).toHaveLength(1);
   });
+
+  it("throws Resend's error name and status as an EmailProviderError (#154)", async () => {
+    send.mockResolvedValue({
+      data: null,
+      error: { name: 'invalid_idempotent_request', statusCode: 409, message: 'Same key' },
+    });
+    const { sendEmail, EmailProviderError } = await import('@/lib/features/email/email-service');
+    const error = await sendEmail({ ...base, idempotencyKey: 'k' }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(EmailProviderError);
+    expect(error).toMatchObject({
+      code: 'invalid_idempotent_request',
+      statusCode: 409,
+      message: 'Failed to send email: Same key',
+    });
+  });
 });

@@ -10,6 +10,23 @@ import {
 import { safeUrl, sanitizeSubject } from '@/lib/email/templates/render';
 import { Resend } from 'resend';
 
+/**
+ * Resend refused the request. `code` is Resend's error name (e.g. 'invalid_idempotent_request':
+ * the idempotency key was already used with another payload, so the first request went through;
+ * #154). The message is Resend's and never carries the recipient.
+ */
+export class EmailProviderError extends Error {
+  readonly code: string;
+  readonly statusCode: number | null;
+
+  constructor(code: string, statusCode: number | null, message: string) {
+    super(`Failed to send email: ${message}`);
+    this.name = 'EmailProviderError';
+    this.code = code;
+    this.statusCode = statusCode;
+  }
+}
+
 // Initialize Resend client (lazy to handle missing API key)
 let resendClient: Resend | null = null;
 
@@ -91,7 +108,11 @@ export async function sendEmail(options: SendEmailOptions): Promise<{ id: string
     : await client.emails.send(payload);
 
   if (result.error) {
-    throw new Error(`Failed to send email: ${result.error.message}`);
+    throw new EmailProviderError(
+      result.error.name,
+      result.error.statusCode ?? null,
+      result.error.message
+    );
   }
 
   return { id: result.data?.id || '' };

@@ -4,7 +4,7 @@
  */
 import { emailSuppressions, respondentEmailSends } from '@/lib/db/schema';
 import { EmailRecipientNotAllowedError } from '@/lib/email/allowed-recipients';
-import type { SendEmailOptions } from '@/lib/features/email/email-service';
+import { EmailProviderError, type SendEmailOptions } from '@/lib/features/email/email-service';
 import {
   hashToken,
   isSuppressed,
@@ -269,6 +269,36 @@ describe('sendRespondentEmail', () => {
     const logged = JSON.stringify(errorLog.mock.calls);
     expect(logged).not.toContain('taro@example.com');
     expect(logged).not.toContain('https://app.example.com/');
+  });
+
+  it("records Resend's idempotent replay (409) as already sent", async () => {
+    sendEmail.mockRejectedValue(
+      new EmailProviderError('invalid_idempotent_request', 409, 'Same key, other payload')
+    );
+    const { db, updates } = fakeDb();
+    const result = await sendRespondentEmail(db, { sendEmail }, { ...input, idempotencyKey: 'k-1' });
+    expect(result).toEqual({ outcome: 'already_sent', sendId: 'row-1' });
+    expect(updates).toEqual([
+      {
+        table: respondentEmailSends,
+        set: { status: 'sent', errorCode: 'idempotent_replay', sentAt: expect.any(Date) },
+      },
+    ]);
+  });
+
+  it('treats a 409 without an idempotency key, or another Resend error, as a failure', async () => {
+    sendEmail.mockRejectedValue(
+      new EmailProviderError('invalid_idempotent_request', 409, 'Same key, other payload')
+    );
+    const { db } = fakeDb();
+    expect(await sendRespondentEmail(db, { sendEmail }, input)).toMatchObject({
+      outcome: 'failed',
+      errorCode: 'send_failed',
+    });
+    sendEmail.mockRejectedValue(new EmailProviderError('concurrent_idempotent_requests', 409, 'x'));
+    expect(
+      await sendRespondentEmail(fakeDb().db, { sendEmail }, { ...input, idempotencyKey: 'k-1' })
+    ).toMatchObject({ outcome: 'failed', errorCode: 'send_failed' });
   });
 
   it('marks the row failed when the mail cannot be built', async () => {

@@ -640,6 +640,24 @@
         "signUp": "Sign up for this seminar",
         "seminarAccepted": "You are signed up. We will send you the details.",
         "failed": "Could not be accepted. Please try again later."
+      },
+      "email": {
+        "title": "Receive the diagnosis result by email",
+        "address": "Send to: {email}",
+        "addressNote": "This is the email address you entered for this diagnosis. To use another address, please take the diagnosis again.",
+        "consentVersion": "Consent text, version {version}",
+        "privacy": "For how we handle personal information, see our <link>privacy policy</link>.",
+        "button": "Agree and receive the confirmation email",
+        "sending": "Sending…",
+        "accepted": {
+          "title": "Your request has been received",
+          "body": "We will send you a confirmation email. Open the page with the button in that email and confirm there. The button works for {hours} hours after the email is sent.",
+          "note": "We send at most one confirmation email to the same address every 24 hours. If it does not arrive, please also check your spam folder."
+        },
+        "alreadyRequested": "You have already asked for this result. Please check the confirmation email we sent.",
+        "closed": "Requests from this page close 24 hours after the diagnosis. Please run the diagnosis again to make a request.",
+        "unavailable": "We cannot take requests at the moment. Please try again later.",
+        "failed": "Your request could not be completed. Please try again later."
       }
     },
     "operator": "Provided by Software Agency System Co., Ltd., DX Services Division",
@@ -707,6 +725,50 @@
         "title": "The link is incomplete",
         "body": "The address of this page is missing the information needed to unsubscribe. Please open the unsubscribe link in the email again as it is. If that does not work, please contact us using the details below."
       },
+      "error": "We could not complete your request. Please try again later.",
+      "contact": {
+        "title": "Contact",
+        "lead": "If you have any questions, please contact us.",
+        "email": "Email",
+        "phone": "Phone"
+      }
+    },
+    "emailConfirm": {
+      "meta": {
+        "title": "Confirm sending your result | AX Migration"
+      },
+      "title": "Confirm sending your diagnosis result",
+      "intro": "We will send the result of the free AX migration web diagnosis by email. If you wish to receive it, please press \"Receive the result\".",
+      "note": "We send nothing until you press the button.",
+      "confirm": "Receive the result",
+      "decline": "I did not ask for this / do not send",
+      "declineNote": "If you did not ask for this, or do not want emails from us, press this button. We will not send the result and will stop emails to this address.",
+      "sending": "Processing…",
+      "sent": {
+        "title": "Your result has been sent",
+        "body": "We have sent the result by email. If it does not arrive within a few minutes, please also check your spam folder."
+      },
+      "alreadySent": {
+        "title": "Your result has already been sent",
+        "body": "The result for this request has already been sent. If you cannot find the email, please also check your spam folder."
+      },
+      "declined": {
+        "title": "Emails stopped",
+        "body": "We will not send the result, and we will no longer send emails about the free AX migration web diagnosis to this address."
+      },
+      "unsubscribed": {
+        "title": "This address is unsubscribed",
+        "body": "This address has been unsubscribed, so we will not send the result."
+      },
+      "invalid": {
+        "title": "This link cannot be used",
+        "body": "The link may have expired ({hours} hours), already been used, or be incorrect. If you need the result, please take the diagnosis again and make a new request."
+      },
+      "incomplete": {
+        "title": "The link is incomplete",
+        "body": "The address of this page is missing the information needed to confirm. Please open the page again with the button in the confirmation email. If that does not work, please contact us using the details below."
+      },
+      "busy": "Your request is being processed. Please wait a moment and try again.",
       "error": "We could not complete your request. Please try again later.",
       "contact": {
         "title": "Contact",

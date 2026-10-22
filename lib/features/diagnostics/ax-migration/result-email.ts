@@ -23,18 +23,14 @@ import {
 import en from '@/locales/en/common.json';
 import ja from '@/locales/ja/common.json';
 import type { AxMigrationPublicResult } from './evaluate';
+import { AX_RESULT_EMAIL_CONFIRM_TTL_HOURS } from './result-email-config';
 
-/** Version of the consent text the respondent agrees to; bump it when the text changes */
-export const AX_RESULT_EMAIL_CONSENT_VERSION = '2026-10-22';
-
-/** Locale keys of the consent text shown next to the request button */
-export const AX_RESULT_EMAIL_CONSENT_KEYS = {
-  label: 'axDiagnosis.resultEmail.consent.label',
-  body: 'axDiagnosis.resultEmail.consent.body',
-} as const;
-
-/** How long the confirmation button stays valid */
-export const AX_RESULT_EMAIL_CONFIRM_TTL_HOURS = 72;
+export {
+  AX_RESULT_EMAIL_CONFIRM_TTL_HOURS,
+  AX_RESULT_EMAIL_CONSENT_KEYS,
+  AX_RESULT_EMAIL_CONSENT_VERSION,
+  axResultEmailEnabled,
+} from './result-email-config';
 
 export interface BuiltEmail {
   subject: string;

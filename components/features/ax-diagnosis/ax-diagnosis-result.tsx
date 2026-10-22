@@ -32,6 +32,7 @@ import { useTranslations } from 'next-intl';
 import { createElement, useEffect, useRef, useState } from 'react';
 import { AccessPathSection } from './access-path-section';
 import { InfoOffers } from './info-offers';
+import { ResultEmailRequest } from './result-email-request';
 import { AX_RUNNER_CONFIG } from './runner-config';
 import { trackAxEvent } from './tracking';
 
@@ -65,6 +66,11 @@ interface AxDiagnosisResultProps {
   offers?: PublicInfoOffers | null;
   /** Inside the landing page: headings start one level lower */
   embedded?: boolean;
+  /**
+   * The result by email (#154), offered only while AX_RESULT_EMAIL_ENABLED is on (null hides
+   * it). The address is the one typed on the contact step, for display only
+   */
+  resultEmail?: { email: string; privacyPolicyUrl?: string } | null;
   onDiagnoseAnother: () => void;
 }
 
@@ -78,6 +84,7 @@ export function AxDiagnosisResult({
   consultationRequested,
   offers = null,
   embedded = false,
+  resultEmail = null,
   onDiagnoseAnother,
 }: AxDiagnosisResultProps) {
   const t = useTranslations('axDiagnosis.result');
@@ -499,6 +506,19 @@ export function AxDiagnosisResult({
       <AnswersForPrint locale={locale} answers={answers} />
 
       <p className="text-xs leading-relaxed text-gray-600">{t('disclaimer')}</p>
+
+      {/* Next to the print button at the end, away from the documents block (#153), which the
+          information case puts high up */}
+      {resultEmail && (
+        <ResultEmailRequest
+          submissionId={submissionId}
+          locale={locale}
+          email={resultEmail.email}
+          privacyPolicyUrl={resultEmail.privacyPolicyUrl}
+          platform={platform}
+          headingTag={subTag}
+        />
+      )}
 
       {/* On paper: who made it and where to go next */}
       <div className="hidden space-y-1 border-t border-gray-300 pt-3 text-xs leading-relaxed print:block">

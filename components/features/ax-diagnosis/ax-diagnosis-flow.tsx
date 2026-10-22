@@ -130,6 +130,8 @@ interface AxDiagnosisFlowProps {
   initialPlatform?: string;
   /** Page the diagnosis is started from, kept with the submission (tracking.entry) */
   entry?: AxEntryPage;
+  /** Offer the result by email on the result screen (AX_RESULT_EMAIL_ENABLED, read on the server) */
+  resultEmailEnabled?: boolean;
 }
 
 /** A path chosen by the page, if it is one of the options */
@@ -155,6 +157,7 @@ function AxDiagnosisSteps({
   allowedEmailDomains = [],
   initialPlatform,
   entry,
+  resultEmailEnabled = false,
 }: AxDiagnosisFlowProps) {
   const presetPlatform = presetPlatformOf(initialPlatform);
   const t = useTranslations('axDiagnosis');
@@ -579,6 +582,9 @@ function AxDiagnosisSteps({
           consultationRequested={response.consultationRequested}
           offers={response.offers ?? null}
           embedded={embedded}
+          resultEmail={
+            resultEmailEnabled ? { email: contact.email.trim(), privacyPolicyUrl } : null
+          }
           onDiagnoseAnother={diagnoseAnother}
         />
       </div>

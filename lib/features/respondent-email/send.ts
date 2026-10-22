@@ -11,7 +11,7 @@
 import type { Database } from '@/lib/db/client';
 import { respondentEmailSends } from '@/lib/db/schema';
 import { EmailRecipientNotAllowedError } from '@/lib/email/allowed-recipients';
-import type { SendEmailOptions } from '@/lib/features/email/email-service';
+import { EmailProviderError, type SendEmailOptions } from '@/lib/features/email/email-service';
 import { eq } from 'drizzle-orm';
 import { normaliseEmail } from './normalize';
 import { isSuppressed } from './suppression';
@@ -54,6 +54,12 @@ export interface SendRespondentEmailInput {
 
 export type SendRespondentEmailResult =
   | { outcome: 'sent'; sendId: string; messageId: string }
+  /**
+   * Resend refused a retry because the idempotency key was already used for another payload
+   * (each attempt carries its own unsubscribe token): the earlier attempt went out. The earlier
+   * row keeps the token of the delivered mail, so its unsubscribe link still works
+   */
+  | { outcome: 'already_sent'; sendId: string }
   | { outcome: 'suppressed'; sendId: string }
   | { outcome: 'failed'; sendId: string | null; errorCode: RespondentEmailErrorCode };
 
@@ -118,6 +124,17 @@ export async function sendRespondentEmail(
     });
     messageId = result.id;
   } catch (error) {
+    if (
+      input.idempotencyKey &&
+      error instanceof EmailProviderError &&
+      error.code === 'invalid_idempotent_request'
+    ) {
+      await db
+        .update(respondentEmailSends)
+        .set({ status: 'sent', errorCode: 'idempotent_replay', sentAt: new Date() })
+        .where(eq(respondentEmailSends.id, sendId));
+      return { outcome: 'already_sent', sendId };
+    }
     if (error instanceof EmailRecipientNotAllowedError) errorCode = 'recipient_not_allowed';
     console.error('[respondent-email] send failed', { sendId, errorCode });
     await db

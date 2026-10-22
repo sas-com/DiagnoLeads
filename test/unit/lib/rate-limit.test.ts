@@ -137,6 +137,19 @@ describe('unsubscribe endpoints (#154)', () => {
   });
 });
 
+describe('result email endpoints (#154)', () => {
+  it('limits the request and the confirm page by exact path, not by the diagnosis prefix', () => {
+    expect(getRateLimitConfig('/api/diagnostics/ax-migration/result-email')).toEqual({
+      max: 5,
+      windowMs: 60 * 1000,
+    });
+    expect(getRateLimitConfig('/api/diagnostics/ax-migration/result-email/confirm')).toEqual({
+      max: 10,
+      windowMs: 60 * 1000,
+    });
+  });
+});
+
 describe('getRateLimitConfig', () => {
   describe('exact match endpoints', () => {
     it('should return exact match config for login', () => {

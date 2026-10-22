@@ -42,4 +42,19 @@ export const AX_RATE_LIMITS = {
    */
   salesEmailPerOrganizationHourly: { name: 'ax-sales-email-org-hour', limit: 10, windowMs: HOUR },
   salesEmailPerOrganization: { name: 'ax-sales-email-org', limit: 30, windowMs: DAY },
+  /** The "receive the result by email" button of the result screen (#154) */
+  resultEmailRequestPerIp: { name: 'ax-result-email-ip', limit: 10, windowMs: HOUR },
+  /** The buttons of the confirm page (receive / decline) */
+  resultEmailConfirmPerIp: { name: 'ax-result-email-confirm-ip', limit: 20, windowMs: HOUR },
+  /**
+   * Confirmation mails to respondents per organization, per hour and per day, counted before
+   * each attempt (also for a suppressed address, so attempts cannot pile up rows). Separate from
+   * the sign-in and sales mail; past a limit the request answers 503 and nothing is recorded
+   */
+  respondentEmailPerOrganizationHourly: {
+    name: 'ax-respondent-email-org-hour',
+    limit: 30,
+    windowMs: HOUR,
+  },
+  respondentEmailPerOrganization: { name: 'ax-respondent-email-org', limit: 100, windowMs: DAY },
 } as const satisfies Record<string, RateLimitRule>;

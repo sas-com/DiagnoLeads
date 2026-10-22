@@ -900,3 +900,96 @@ describe('AxDiagnosisResult', () => {
     expect(onDiagnoseAnother).toHaveBeenCalled();
   });
 });
+
+describe('Result by email (#154)', () => {
+  const submitted = jsonResponse(201, {
+    submissionId: 'sub-1',
+    consultationRequested: false,
+    result: publicResult,
+  });
+
+  async function finish(user: User) {
+    await answerAs400(user);
+    await fillContact(user);
+    await user.click(screen.getByRole('button', { name: /診断結果を見る/ }));
+    await screen.findByRole('heading', { name: '診断結果' });
+  }
+
+  it('is hidden unless the flag is on', async () => {
+    fetchMock.mockResolvedValue(submitted);
+    const user = userEvent.setup();
+    render(withIntl(<AxDiagnosisFlow locale="ja" />));
+    await finish(user);
+    expect(screen.queryByTestId('ax-result-email')).not.toBeInTheDocument();
+  });
+
+  it('shows the typed address, the consent with its version, and posts only the submission', async () => {
+    fetchMock.mockResolvedValueOnce(submitted);
+    const user = userEvent.setup();
+    render(
+      withIntl(
+        <AxDiagnosisFlow
+          locale="ja"
+          resultEmailEnabled
+          privacyPolicyUrl="https://example.co.jp/privacy"
+        />
+      )
+    );
+    await finish(user);
+
+    const block = screen.getByTestId('ax-result-email');
+    expect(within(block).getByText('送信先：yamada@example.jp')).toBeInTheDocument();
+    expect(within(block).getByText(messages.axDiagnosis.resultEmail.consent.body)).toBeInTheDocument();
+    expect(within(block).getByText('同意文 2026-10-22 版')).toBeInTheDocument();
+    expect(within(block).getByRole('link', { name: '個人情報保護方針' })).toHaveAttribute(
+      'href',
+      'https://example.co.jp/privacy'
+    );
+
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { status: 'accepted' }));
+    await user.click(within(block).getByRole('button', { name: '同意して確認のメールを受け取る' }));
+    expect(await within(block).findByText('お申し込みを受け付けました')).toBeInTheDocument();
+    expect(within(block).getByText(/72時間/)).toBeInTheDocument();
+    const [url, init] = fetchMock.mock.calls.at(-1) as [string, RequestInit];
+    expect(url).toBe('/api/diagnostics/ax-migration/result-email');
+    // The address is decided on the server: the request carries none
+    expect(JSON.parse(init.body as string)).toEqual({ submissionId: 'sub-1', locale: 'ja' });
+  });
+
+  const renderResult = () =>
+    render(
+      withIntl(
+        <AxDiagnosisResult
+          company="三田製作所"
+          platform="as400"
+          locale="ja"
+          answers={as400Answers}
+          submissionId="sub-1"
+          result={publicResult}
+          consultationRequested={false}
+          resultEmail={{ email: 'yamada@example.jp' }}
+          onDiagnoseAnother={vi.fn()}
+        />
+      )
+    );
+
+  it.each([
+    [jsonResponse(200, { status: 'already_requested' }), 'この診断結果の送付は、すでにお申し込みいただいています。お送りした確認のメールをご確認ください。'],
+    [jsonResponse(409, { status: 'closed' }), messages.axDiagnosis.result.email.closed],
+    [jsonResponse(503, { status: 'unavailable' }), messages.axDiagnosis.result.email.unavailable],
+    [jsonResponse(500, {}), messages.axDiagnosis.result.email.failed],
+  ])('explains each answer (%#)', async (response, text) => {
+    fetchMock.mockResolvedValueOnce(response);
+    const user = userEvent.setup();
+    renderResult();
+    await user.click(screen.getByRole('button', { name: '同意して確認のメールを受け取る' }));
+    expect(await screen.findByText(text)).toBeInTheDocument();
+  });
+
+  it('leaves the privacy link out without a policy URL and is not printed', () => {
+    renderResult();
+    const block = screen.getByTestId('ax-result-email');
+    expect(within(block).queryByRole('link')).not.toBeInTheDocument();
+    expect(block).toHaveClass('print:hidden');
+  });
+});
