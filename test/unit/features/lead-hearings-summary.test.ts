@@ -327,7 +327,7 @@ describe('formatHearingSummaryText', () => {
       }),
       t
     );
-    expect(text).toContain('・対象システム: AS/400（Web診断のまま未確認）');
+    expect(text).toContain('・対象システム: AS/400（事前情報のまま未確認）');
     expect(text).toContain('・機種・バージョン: Power 9（一部確認）');
     expect(text).toContain('・予算の状態: 次回確認');
     expect(text).toContain('・進まなかった理由: 対象外');
@@ -343,7 +343,7 @@ describe('formatHearingSummaryText', () => {
       t
     );
     const todo = text.split('■ 次回に確認すること\n')[1].split('\n');
-    expect(todo).toEqual(['・対象システム（Web診断のまま未確認 / 次回）', '・機種・バージョン（未入力）']);
+    expect(todo).toEqual(['・対象システム（事前情報のまま未確認 / 次回）', '・機種・バージョン（未入力）']);
     expect(text.match(/・対象システム（/g)).toHaveLength(1);
   });
 

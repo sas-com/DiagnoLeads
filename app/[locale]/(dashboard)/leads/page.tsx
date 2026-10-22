@@ -1,6 +1,12 @@
 'use client';
 
 import { LeadFilterToolbar } from '@/components/features/leads/list/lead-filter-toolbar';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useLeadExport } from '@/hooks/use-lead-export';
 import { useLeadListPreferences, useLeadListQuery } from '@/hooks/use-lead-list-query';
 import {
@@ -72,6 +78,14 @@ const LeadDeleteDialog = dynamic(
   { ssr: false }
 );
 
+const HandoverImportDialog = dynamic(
+  () =>
+    import('@/components/features/agency-handovers/handover-import-dialog').then((mod) => ({
+      default: mod.HandoverImportDialog,
+    })),
+  { ssr: false }
+);
+
 const ImportDialog = dynamic(
   () =>
     import('@/components/features/leads/import-dialog').then((mod) => ({
@@ -118,6 +132,7 @@ function LeadsPageContent() {
   const tDetail = useTranslations('leadDetail');
   const tStatus = useTranslations('status');
   const tCommon = useTranslations('common');
+  const tHandover = useTranslations('agencyHandovers.menu');
   const locale = useLocale();
   const router = useRouter();
   const { organizationId: contextOrgId, isLoading: contextLoading } = useOrganization();
@@ -128,6 +143,7 @@ function LeadsPageContent() {
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [handoverImportOpen, setHandoverImportOpen] = useState(false);
   const [detailsSheetOpen, setDetailsSheetOpen] = useState(false);
   // The lead shown in the side panel is tracked by id and read from the queries, so the panel
   // shows the saved values after a change instead of the copy taken from the list
@@ -264,14 +280,23 @@ function LeadsPageContent() {
         </div>
         {/* Below sm the two buttons share the width, so neither runs off the screen (#163) */}
         <div className="flex w-full items-center gap-2 sm:w-auto sm:gap-3">
-          <Button
-            variant="outline"
-            className="h-11 flex-1 sm:h-12 sm:flex-none sm:px-8"
-            onClick={() => setImportDialogOpen(true)}
-          >
-            <Upload className="mr-2 h-5 w-5 shrink-0" />
-            {tCommon('import')}
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="h-11 flex-1 sm:h-12 sm:flex-none sm:px-8">
+                <Upload className="mr-2 h-5 w-5 shrink-0" />
+                {tCommon('import')}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => setImportDialogOpen(true)}>
+                {tHandover('leads')}
+              </DropdownMenuItem>
+              {/* What the sales agency heard at the appointment (#152) */}
+              <DropdownMenuItem onSelect={() => setHandoverImportOpen(true)}>
+                {tHandover('agency')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button
             className="h-11 flex-1 sm:h-12 sm:flex-none sm:px-8"
             onClick={() => setCreateDialogOpen(true)}
@@ -444,6 +469,15 @@ function LeadsPageContent() {
       />
 
       {/* Import Dialog */}
+      {/* Mounted only while open: it is rarely used */}
+      {handoverImportOpen && (
+        <HandoverImportDialog
+          open
+          onOpenChange={setHandoverImportOpen}
+          organizationId={organizationId}
+        />
+      )}
+
       <ImportDialog
         open={importDialogOpen}
         onOpenChange={setImportDialogOpen}

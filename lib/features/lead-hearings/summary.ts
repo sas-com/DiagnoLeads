@@ -20,7 +20,7 @@ import type {
   HearingSectionId,
   HearingValueSource,
 } from './catalog';
-import { isOtherOption } from './catalog';
+import { isOtherOption, isUnconfirmedSource } from './catalog';
 import { effectiveOtherNote, normalizeHearingValue } from './form';
 import { computeMissingItems } from './missing';
 import type { HearingFieldEntry, HearingFieldValue, HearingFields } from './types/schemas';
@@ -462,7 +462,7 @@ export function formatHearingSummaryText(
           note: t('leadHearings.statuses.partial'),
         });
       }
-      if (item.value !== null && item.source === 'prefilled') {
+      if (item.value !== null && isUnconfirmedSource(item.source)) {
         value = t('leadHearings.summary.text.note', {
           text: value,
           note: t('leadHearings.summary.reasons.unconfirmed'),

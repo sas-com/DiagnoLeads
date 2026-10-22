@@ -256,6 +256,8 @@ describe('leadHearings.create', () => {
           createdAt: new Date('2026-10-01T00:00:00Z'),
         },
       ],
+      // No handover from a sales agency (#152)
+      [],
       [hearingRow()],
     ];
 

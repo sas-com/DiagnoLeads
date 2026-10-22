@@ -22,6 +22,7 @@ import {
   choosesOtherOption,
   getHearingField,
   hasOtherOption,
+  isUnconfirmedSource,
 } from './catalog';
 import { type HearingMissingItems, computeMissingItems } from './missing';
 import {
@@ -98,7 +99,7 @@ export function changeHearingValue(
   const after = normalizeHearingValue(field, value);
   const changed = !sameValue(before, after);
   const source =
-    changed && (entry.source === 'prefilled' || entry.source === 'confirmed')
+    changed && (isUnconfirmedSource(entry.source) || entry.source === 'confirmed')
       ? 'corrected'
       : entry.source;
   const status =

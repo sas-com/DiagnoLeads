@@ -3225,7 +3225,8 @@
     "sources": {
       "prefilled": "Web diagnosis",
       "confirmed": "Confirmed",
-      "corrected": "Corrected"
+      "corrected": "Corrected",
+      "agency": "Sales agency"
     },
     "required": {
       "attendeeRoles": "Attendees' roles",
@@ -3372,7 +3373,7 @@
       "noChanges": "Nothing changed.",
       "noPrevious": "This lead has no earlier hearing.",
       "reasons": {
-        "unconfirmed": "Web diagnosis value, not confirmed",
+        "unconfirmed": "Prior information, not confirmed",
         "next": "Next time",
         "missing": "Not entered"
       },
@@ -4573,6 +4574,68 @@
       "title": "Customer search records",
       "description": "What employees heard when they talked to this customer.",
       "by": "{date} {recorder}"
+    }
+  },
+  "agencyHandovers": {
+    "columns": {
+      "email": "Email",
+      "company": "Company",
+      "agencyName": "Agency",
+      "appointmentOn": "Appointment date",
+      "contactName": "Contact",
+      "contactTitle": "Department / title",
+      "contactPhone": "Direct phone",
+      "machineModel": "Model",
+      "machineModelConfirmed": "Model confirmed",
+      "hardwareSupportEnd": "Support end",
+      "retirementPlan": "Retirement",
+      "decisionMakerPresent": "Decision maker present",
+      "interestLevel": "Interest",
+      "refusalReason": "Refusal reason",
+      "note": "Note"
+    },
+    "menu": {
+      "leads": "Import leads",
+      "agency": "Import an agency's appointment report"
+    },
+    "import": {
+      "title": "Import an agency's appointment report",
+      "description": "Read the agency's report (CSV or Excel) and attach each row to a lead by email address (or company name). New hearings are prefilled as \"Sales agency\". No lead is created.",
+      "chooseFile": "Choose a file",
+      "template": "Download the format (CSV)",
+      "rows": "{count} rows read",
+      "mapping": "Columns (choose again when the names differ from the format)",
+      "notInFile": "Not in the file",
+      "needKey": "Choose the email or the company column to find the leads.",
+      "problems": "{count} cells could not be read. Those fields are left empty.",
+      "submit": "Import",
+      "done": "{saved} imported.",
+      "unmatched": "Rows without a lead: {count}",
+      "ambiguous": "Rows with several leads of the same company: {count}",
+      "invalid": "Rows with invalid content: {count}",
+      "close": "Close",
+      "empty": "No rows.",
+      "tooMany": "Up to {max} rows at a time.",
+      "readError": "Could not read the file.",
+      "error": "Could not import.",
+      "replaced": "Rows replaced by a later row for the same lead: {count}"
+    },
+    "card": {
+      "title": "Handover from the sales agency",
+      "interest": "Interest: {level}",
+      "interestLevels": {
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low"
+      },
+      "confirmed": "confirmed",
+      "notConfirmed": "not confirmed",
+      "decisionMaker": {
+        "yes": "Will attend",
+        "no": "Will not attend",
+        "unknown": "Unknown"
+      },
+      "footer": "Imported by {name} on {date}"
     }
   }
 }
