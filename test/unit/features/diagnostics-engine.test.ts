@@ -182,6 +182,17 @@ describe('inferInflowSource（流入元の推定）', () => {
     });
   });
 
+  it('keeps a known cross-link origin (from) and drops anything else (#332)', () => {
+    expect(trackingSchema.parse({ from: 'ax-lp-targets-access' }).from).toBe('ax-lp-targets-access');
+    expect(trackingSchema.parse({ from: 'ax-column-end' }).from).toBe('ax-column-end');
+    for (const from of ['ax-lp-hero', 'evil', '<script>', 'ax-lp-footer-x', 42]) {
+      expect(trackingSchema.parse({ from, utmSource: 'g' }), String(from)).toEqual({ utmSource: 'g' });
+    }
+    expect(compactTracking(trackingSchema.parse({ from: 'ax-access-lp-hosts' }))).toEqual({
+      from: 'ax-access-lp-hosts',
+    });
+  });
+
   it('drops empty tracking values', () => {
     expect(compactTracking({ utmSource: 'google', utmMedium: ' ', ref: undefined })).toEqual({
       utmSource: 'google',

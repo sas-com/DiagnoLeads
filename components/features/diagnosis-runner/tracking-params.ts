@@ -1,4 +1,9 @@
-/** UTM / referral / agency link parameters of the landing page, read once when the diagnosis starts */
+import { isAxFrom } from '@/lib/features/ax-site/cross-links';
+
+/**
+ * UTM / referral / agency link parameters of the landing page, read once when the diagnosis starts.
+ * `from` names the link of another AX page that led here (#332); only the site's own values are kept.
+ */
 export function readTrackingParams(): Record<string, string> {
   if (typeof window === 'undefined') return {};
   const params = new URLSearchParams(window.location.search);
@@ -13,6 +18,7 @@ export function readTrackingParams(): Record<string, string> {
     agency: params.get('agency')?.slice(0, 40) || undefined,
     referrer: document.referrer ? document.referrer.slice(0, 500) : undefined,
     landingPath: window.location.pathname.slice(0, 500),
+    from: isAxFrom(params.get('from')) ? (params.get('from') ?? undefined) : undefined,
   };
   return Object.fromEntries(
     Object.entries(tracking).filter((entry): entry is [string, string] => Boolean(entry[1]))

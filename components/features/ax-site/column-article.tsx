@@ -5,8 +5,10 @@ import {
   isAllowedHref,
   isExternalHref,
 } from '@/lib/features/ax-site/columns';
+import { isLandingHref } from '@/lib/features/ax-site/cross-links';
 import { ChevronRight, ExternalLink, Info } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { AxCrossLink } from './ax-cross-link';
 
 /**
  * Renderer of the column articles (#324). Every text goes through React as text, never as HTML,
@@ -32,6 +34,14 @@ function ColumnLink({
 }: { href: string; labels: ColumnLabels; children: ReactNode }) {
   // Refused links are shown as their text (validateColumn keeps them out of the content)
   if (!isAllowedHref(href)) return <>{children}</>;
+  // A link to a landing page or the diagnosis is measured as a move between pages (#332)
+  if (isLandingHref(href)) {
+    return (
+      <AxCrossLink href={href} placement="body" className={LINK}>
+        {children}
+      </AxCrossLink>
+    );
+  }
   if (!isExternalHref(href)) {
     return (
       <a href={href} className={LINK}>
@@ -266,15 +276,29 @@ export interface Crumb {
   href?: string;
 }
 
-export function ColumnBreadcrumbs({ items, label }: { items: Crumb[]; label: string }) {
+const CRUMB_LINK =
+  'inline-block rounded py-1 underline underline-offset-4 hover:text-ax-teal-dark focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ax-teal-dark';
+
+interface ColumnBreadcrumbsProps {
+  items: Crumb[];
+  label: string;
+  /** Measure the links as moves between pages (e.g. on the Access landing page, #332) */
+  crossLinks?: boolean;
+}
+
+export function ColumnBreadcrumbs({ items, label, crossLinks = false }: ColumnBreadcrumbsProps) {
   return (
     <nav aria-label={label} className="text-xs text-gray-600 sm:text-sm">
       <ol className="flex flex-wrap items-center gap-x-1 gap-y-1">
         {items.map((item, index) => (
           <li key={item.name} className="flex items-center gap-1">
             {index > 0 && <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
-            {item.href ? (
-              <a href={item.href} className="underline underline-offset-4 hover:text-ax-teal-dark">
+            {item.href && crossLinks ? (
+              <AxCrossLink href={item.href} placement="breadcrumb" className={CRUMB_LINK}>
+                {item.name}
+              </AxCrossLink>
+            ) : item.href ? (
+              <a href={item.href} className={CRUMB_LINK}>
                 {item.name}
               </a>
             ) : (

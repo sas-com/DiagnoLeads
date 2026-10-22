@@ -72,7 +72,7 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AxDiagnosisResult } from './ax-diagnosis-result';
 import { AX_RUNNER_CONFIG } from './runner-config';
-import { trackAxEvent } from './tracking';
+import { setAxDiagnosisEntry, trackAxEvent } from './tracking';
 
 const definition = axMigrationDefinition;
 /** The first question chooses the migration path; the following sections depend on it */
@@ -271,6 +271,12 @@ function AxDiagnosisSteps({
     // The browser's back button returns to the previous step instead of leaving the page
     history.stamp(presetPlatform ? 1 : 0);
   }, [history, entry, presetPlatform]);
+
+  // Events of this diagnosis carry the page it was started from (#332)
+  useEffect(() => {
+    setAxDiagnosisEntry(entry);
+    return () => setAxDiagnosisEntry(undefined);
+  }, [entry]);
 
   /** Only the path chosen by the page: nothing to keep, and a saved diagnosis is not replaced */
   const onlyPreset = startStep > 0 && Object.keys(answers).length <= 1;

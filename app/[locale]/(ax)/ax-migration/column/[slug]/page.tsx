@@ -11,6 +11,7 @@ import { AX_SITE_LINKS } from '@/components/features/ax-site/site-config';
 import {
   COLUMNS,
   COLUMN_CTAS,
+  COLUMN_HEADER_CTAS,
   COLUMN_INDEX_PATH,
   COLUMN_TRADEMARK_KEYS,
   type Column,
@@ -79,6 +80,7 @@ export default async function ColumnPage({ params }: ColumnPageProps) {
   const site = await getTranslations({ locale, namespace: 'axSite' });
   const labels = { sources: t('sources'), newTab: site('footer.newTab') };
   const cta = COLUMN_CTAS[column.cta];
+  const headerCta = COLUMN_HEADER_CTAS[column.related];
 
   const baseUrl = siteBaseUrl();
   const crumbs = [
@@ -89,7 +91,11 @@ export default async function ColumnPage({ params }: ColumnPageProps) {
   const url = `${baseUrl}${crumbs[2].path}`;
 
   return (
-    <AxSiteShell locale={locale} variant="standalone">
+    <AxSiteShell
+      locale={locale}
+      variant="standalone"
+      headerCta={{ href: headerCta.href, label: messages(headerCta.labelKey) }}
+    >
       <JsonLd
         data={articleJsonLd(column, {
           url,
@@ -141,7 +147,13 @@ export default async function ColumnPage({ params }: ColumnPageProps) {
 
           <aside className="mt-14 rounded-3xl bg-ax-deep px-6 py-8 text-center text-white">
             <p className="font-bold leading-relaxed">{t('ctaLead')}</p>
-            <AxCtaLink href={cta.href} tone="dark" location="column-end" className="mt-5">
+            <AxCtaLink
+              href={cta.href}
+              tone="dark"
+              location={`column-end-${column.slug}`}
+              placement="end"
+              className="mt-5"
+            >
               {messages(cta.labelKey)}
             </AxCtaLink>
           </aside>

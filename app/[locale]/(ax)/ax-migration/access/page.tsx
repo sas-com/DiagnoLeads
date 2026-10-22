@@ -1,8 +1,12 @@
 import {
   ACCESS_FAQ_KEYS,
+  AxAccessBreadcrumbs,
+  AxAccessColumns,
   AxAccessDiagnosisSection,
   AxAccessHero,
+  AxAccessHostSystems,
   AxAccessPaths,
+  AxAccessPathsColumn,
   AxAccessProblems,
   AxAccessRisks,
   AxAccessSteps,
@@ -58,20 +62,32 @@ export default async function AxAccessPage({ params }: AxAccessPageProps) {
   const { locale: requested } = await params;
   const locale = requested === 'en' ? 'en' : 'ja';
   const t = await getTranslations({ locale, namespace: 'axAccess' });
+  const site = await getTranslations({ locale, namespace: 'axSite' });
 
   return (
-    <AxSiteShell locale={locale} variant="landing">
+    // The logo leads to the top of this page (#top), and is named so
+    <AxSiteShell
+      locale={locale}
+      variant="landing"
+      page="ax-access-lp"
+      logoLabel={site('header.pageTop')}
+    >
       {/* Once the result is shown, it replaces the rest of the page (#280) */}
       <AxLandingView>
         <AxLandingOnly>
+          <AxAccessBreadcrumbs locale={locale} />
           <AxAccessHero locale={locale} />
           <AxAccessSupportEnd locale={locale} />
           <AxAccessProblems locale={locale} />
           <AxAccessRisks locale={locale} />
           <AxAccessPaths locale={locale} />
+          <AxAccessPathsColumn locale={locale} />
           <AxAccessSteps locale={locale} />
           <AxAccessTargets locale={locale} />
+          {/* Readers of AS/400 or ACOS: the main page's sections on their system */}
+          <AxAccessHostSystems locale={locale} />
           <AxFaq locale={locale} namespace="axAccess.faq" keys={ACCESS_FAQ_KEYS} />
+          <AxAccessColumns locale={locale} />
         </AxLandingOnly>
         <AxAccessDiagnosisSection locale={locale} />
         <AxLandingOnly>

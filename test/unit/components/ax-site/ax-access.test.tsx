@@ -132,7 +132,9 @@ describe('Access landing page', () => {
       '進め方は、3つあります',
       'ご相談からの流れ',
       '対象になる Access',
+      'AS/400・ACOS など基幹システムの移行をお考えの方へ',
       'よくある質問',
+      'Access の移行に関するコラム',
       '無料Web診断（Access版）',
       'まずは、お使いの Access を確かめるところから。',
     ]);
@@ -236,6 +238,10 @@ describe('Access landing page', () => {
     'records the page as the entry and shows only the result (#280)',
     { timeout: 30000 },
     async () => {
+      // Arrived from the main page's Access card (#332)
+      window.history.replaceState(null, '', '/?from=ax-lp-targets-access');
+      const analytics = window as Window & { dataLayer?: unknown[] };
+      analytics.dataLayer = [];
       const user = userEvent.setup();
       await renderPage();
       const heading = await answerAccess(user);
@@ -243,16 +249,41 @@ describe('Access landing page', () => {
       const body = JSON.parse(fetchMock.mock.calls[0][1].body);
       expect(body.answers.platform).toBe('access');
       expect(body.tracking.entry).toBe('ax-access-lp');
+      expect(body.tracking.from).toBe('ax-lp-targets-access');
       expect(body.tracking.landingPath).toBe('/');
+      // The funnel events name the page the diagnosis was started from
+      const sent = (analytics.dataLayer ?? []) as { event?: string; entry?: string }[];
+      for (const name of ['ax_diagnosis_start', 'ax_diagnosis_step', 'ax_diagnosis_complete']) {
+        const found = sent.filter((entry) => entry.event === name);
+        expect(found.length, name).toBeGreaterThan(0);
+        for (const event of found) expect(event.entry, name).toBe('ax-access-lp');
+      }
+      analytics.dataLayer = undefined;
 
       // The result replaces the page: one h1, without the other sections
       expect(screen.getAllByRole('heading', { level: 1 })).toEqual([heading]);
       expect(document.getElementById('ax-hero-heading')).toBeNull();
       expect(document.getElementById('faq')).toBeNull();
       expect(document.getElementById('ax-final')).toBeNull();
+      // The links to the other pages (#332) leave with the sections
+      expect(screen.queryByRole('navigation', { name: 'パンくずリスト' })).toBeNull();
+      expect(document.getElementById('ax-access-hosts-heading')).toBeNull();
+      expect(document.getElementById('ax-access-columns-heading')).toBeNull();
+      expect(screen.queryByRole('link', { name: /Access を直すか、Web に移すか/ })).toBeNull();
+      expect(screen.queryByText('Access 以外のシステムは「戻る」から選び直せます。')).toBeNull();
       expect(diagnosis()).toContainElement(heading);
       // The step entries are rewound to the page's own entry
       await waitFor(() => expect(window.history.state.ax.step).toBe(1));
+
+      // A section of the phone menu brings the page back, as the header links do (#332)
+      await user.click(screen.getByRole('button', { name: 'メニュー' }));
+      await user.click(
+        within(screen.getByRole('navigation', { name: 'サイト内のメニュー' })).getByRole('link', {
+          name: 'よくある質問',
+        })
+      );
+      expect(document.getElementById('faq')).not.toBeNull();
+      expect(screen.getByRole('button', { name: 'メニュー' })).toHaveAttribute('aria-expanded', 'false');
 
       // Another system starts from the path choice, with the page back
       await user.click(screen.getByRole('button', { name: '別のシステムも診断する' }));
@@ -269,9 +300,10 @@ describe('Main landing page', () => {
     const access = screen
       .getByRole('heading', { level: 3, name: 'Microsoft Access' })
       .closest('li') as HTMLElement;
-    expect(within(access).getByRole('link', { name: 'Access の方はこちら' })).toHaveAttribute(
-      'href',
-      '/ja/ax-migration/access'
-    );
+    expect(
+      within(access).getByRole('link', {
+        name: '直す・Web に移す・置き換える、3つの道を詳しく見る（Microsoft Access の方向けページ）',
+      })
+    ).toHaveAttribute('href', '/ja/ax-migration/access');
   });
 });

@@ -57,7 +57,7 @@ export default async function AxMigrationPage({ params }: AxMigrationPageProps) 
   const t = await getTranslations({ locale, namespace: 'axSite' });
 
   return (
-    <AxSiteShell locale={locale} variant="landing">
+    <AxSiteShell locale={locale} variant="landing" page="ax-lp">
       {/* Once the result is shown, it replaces the rest of the page (#280) */}
       <AxLandingView>
         <AxLandingOnly>

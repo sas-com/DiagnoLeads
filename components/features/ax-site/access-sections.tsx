@@ -1,6 +1,6 @@
 import { AxDiagnosisFlow } from '@/components/features/ax-diagnosis/ax-diagnosis-flow';
 import { allowedEmailDomains } from '@/lib/email/allowed-recipients';
-import { columnPath, columnsFor } from '@/lib/features/ax-site/columns';
+import { COLUMN_INDEX_PATH, columnPath, columnsFor } from '@/lib/features/ax-site/columns';
 import { turnstileSiteKey } from '@/lib/features/diagnostics/turnstile';
 import {
   ArrowRight,
@@ -19,8 +19,10 @@ import {
   Wrench,
 } from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
+import { AxCrossLink } from './ax-cross-link';
 import { AxCtaLink } from './ax-cta-link';
 import { AxDiagnosisFrame } from './ax-landing-view';
+import { ColumnBreadcrumbs } from './column-article';
 import { CtaCaption, EYEBROW, SECTION_HEADING, type SectionProps } from './landing-sections';
 import {
   AX_PROBLEMS_CTA_ID,
@@ -39,6 +41,28 @@ const PATHS = [
   { key: 'web', icon: Globe },
   { key: 'replace', icon: Package },
 ] as const;
+
+/** Text link to another page of the site: descriptive text, a touch target, the logo's outline */
+const CROSS_LINK =
+  'inline-flex items-start gap-1 rounded py-1 font-bold leading-relaxed text-ax-teal-dark underline underline-offset-4 hover:text-ax-deep focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ax-teal-dark';
+
+/** Where this page sits in the site, above the hero (#332) */
+export async function AxAccessBreadcrumbs({ locale }: SectionProps) {
+  const tc = await getTranslations({ locale, namespace: 'axColumn' });
+  const t = await getTranslations({ locale, namespace: 'axAccess' });
+  return (
+    <div className="mx-auto max-w-6xl px-4 pt-6 sm:px-6">
+      <ColumnBreadcrumbs
+        items={[
+          { name: tc('breadcrumbHome'), href: `/${locale}/ax-migration` },
+          { name: t('breadcrumb') },
+        ]}
+        label={tc('breadcrumbLabel')}
+        crossLinks
+      />
+    </div>
+  );
+}
 
 export async function AxAccessHero({ locale }: SectionProps) {
   const t = await getTranslations({ locale, namespace: 'axAccess.hero' });
@@ -316,6 +340,35 @@ export async function AxAccessPaths({ locale }: SectionProps) {
   );
 }
 
+/** The column that compares the three ways in a table, after the section on them (#332) */
+const PATHS_COLUMN = 'access-fix-or-web';
+
+export async function AxAccessPathsColumn({ locale }: SectionProps) {
+  const t = await getTranslations({ locale, namespace: 'axAccess.pathsColumn' });
+  // Articles are Japanese for now (#324): nothing to link to in another language
+  const column = columnsFor('access').find(
+    (item) => item.locale === locale && item.slug === PATHS_COLUMN
+  );
+  if (!column) return null;
+  return (
+    <div className="-mt-8 bg-ax-mist pb-16 sm:-mt-12 sm:pb-24">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6">
+        <div className="rounded-2xl bg-white px-6 py-5 text-center shadow-sm">
+          <p className="text-sm leading-relaxed text-gray-700">{t('lead')}</p>
+          <AxCrossLink
+            href={`/${column.locale}${columnPath(column.slug)}`}
+            placement="paths"
+            className={`mt-2 ${CROSS_LINK}`}
+          >
+            {column.title}
+            <ArrowRight className="mt-1.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          </AxCrossLink>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const STEPS = [
   { key: 'inventory', icon: ClipboardList },
   { key: 'decide', icon: Route },
@@ -393,6 +446,87 @@ export async function AxAccessTargets({ locale }: SectionProps) {
   );
 }
 
+const HOST_LINKS = [
+  { key: 'as400', id: AX_SECTIONS.as400 },
+  { key: 'acos', id: AX_SECTIONS.acos },
+  { key: 'targets', id: AX_SECTIONS.targets },
+] as const;
+
+/**
+ * For readers of AS/400 or ACOS who arrive here: the sections of the main page on their system,
+ * instead of a dead end (#332)
+ */
+export async function AxAccessHostSystems({ locale }: SectionProps) {
+  const t = await getTranslations({ locale, namespace: 'axAccess.hosts' });
+  return (
+    <section aria-labelledby="ax-access-hosts-heading" className="bg-white py-12 sm:py-16">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6">
+        <div className="rounded-2xl border border-gray-200 p-6 sm:p-8">
+          <h2 id="ax-access-hosts-heading" className="text-xl font-bold leading-snug sm:text-2xl">
+            {t('title')}
+          </h2>
+          <p className="mt-3 leading-relaxed text-gray-700">{t('lead')}</p>
+          <ul className="mt-4 space-y-1">
+            {HOST_LINKS.map(({ key, id }) => (
+              <li key={key}>
+                <AxCrossLink
+                  href={`/${locale}/ax-migration#${id}`}
+                  placement="hosts"
+                  className={CROSS_LINK}
+                >
+                  {t(`links.${key}`)}
+                  <ArrowRight className="mt-1.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                </AxCrossLink>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** The Access columns and the column list, after the questions (#332) */
+export async function AxAccessColumns({ locale }: SectionProps) {
+  const t = await getTranslations({ locale, namespace: 'axAccess.columns' });
+  // Articles are Japanese for now (#324): no section in another language
+  const columns = columnsFor('access').filter((column) => column.locale === locale);
+  if (columns.length === 0) return null;
+  return (
+    <section aria-labelledby="ax-access-columns-heading" className="bg-white py-16 sm:py-20">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6">
+        <h2 id="ax-access-columns-heading" className={SECTION_HEADING}>
+          {t('title')}
+        </h2>
+        <ul className="mt-8 space-y-3">
+          {columns.map((column) => (
+            <li key={column.slug} className="rounded-2xl bg-ax-mist px-5 py-3">
+              <AxCrossLink
+                href={`/${column.locale}${columnPath(column.slug)}`}
+                placement="related"
+                className={CROSS_LINK}
+              >
+                {column.title}
+                <ArrowRight className="mt-1.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              </AxCrossLink>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-6 text-center">
+          <AxCrossLink
+            href={`/${locale}${COLUMN_INDEX_PATH}`}
+            placement="related"
+            className={CROSS_LINK}
+          >
+            {t('all')}
+            <ArrowRight className="mt-1.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          </AxCrossLink>
+        </p>
+      </div>
+    </section>
+  );
+}
+
 export const ACCESS_FAQ_KEYS = [
   'noDocs',
   'accde',
@@ -419,6 +553,10 @@ export async function AxAccessDiagnosisSection({ locale }: SectionProps) {
           </h2>
           <p className="mx-auto mt-5 max-w-2xl text-center font-bold leading-relaxed">
             {t('lead')}
+          </p>
+          {/* The diagnosis opens on the Access questions; other systems are one step back */}
+          <p className="mx-auto mt-3 max-w-2xl text-center text-sm leading-relaxed text-gray-700">
+            {t('presetNote')}
           </p>
         </>
       }

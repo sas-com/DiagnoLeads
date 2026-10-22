@@ -7,10 +7,12 @@ interface AxLogoProps {
   /** White on the dark footer, like the footer logo of maru2-dx.com */
   tone?: 'light' | 'dark';
   className?: string;
+  /** Smaller below 360px wide, so the header fits next to its buttons at 320px */
+  narrow?: boolean;
 }
 
 /** Text logo: "AX" in the brand teal followed by the service name, like the maru2-dx.com logo */
-export function AxLogo({ name, operator, tone = 'light', className }: AxLogoProps) {
+export function AxLogo({ name, operator, tone = 'light', className, narrow = false }: AxLogoProps) {
   const onDark = tone === 'dark';
   return (
     <span className={cn('inline-flex flex-col leading-none', className)}>
@@ -18,12 +20,19 @@ export function AxLogo({ name, operator, tone = 'light', className }: AxLogoProp
         <span
           className={cn(
             'font-ax-latin text-2xl font-black tracking-tight',
+            narrow && 'max-[359px]:text-xl',
             onDark ? 'text-white' : 'text-ax-teal-dark'
           )}
         >
           AX
         </span>
-        <span className={cn('text-lg font-bold', onDark ? 'text-white' : 'text-ax-ink')}>
+        <span
+          className={cn(
+            'text-lg font-bold',
+            narrow && 'max-[359px]:text-sm',
+            onDark ? 'text-white' : 'text-ax-ink'
+          )}
+        >
           {name}
         </span>
       </span>

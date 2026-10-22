@@ -19,7 +19,9 @@ vi.mock('next/font/google', () => ({
   Lato: () => ({ variable: 'font-lato' }),
 }));
 
-const { default: AxMigrationPage } = await import('@/app/[locale]/(ax)/ax-migration/page');
+const { default: AxMigrationPage, generateMetadata } = await import(
+  '@/app/[locale]/(ax)/ax-migration/page'
+);
 const { default: AxDiagnosisPage } = await import('@/app/[locale]/(ax)/ax-diagnosis/page');
 const { AxSiteHeader } = await import('@/components/features/ax-site/ax-site-header');
 const { AxSiteFooter } = await import('@/components/features/ax-site/ax-site-footer');
@@ -103,7 +105,7 @@ describe('AX migration landing page', () => {
     const access = screen.getByRole('heading', { level: 3, name: 'Microsoft Access' }).closest('li') as HTMLElement;
     expect(within(access).getByText(/2026年10月13日/)).toBeInTheDocument();
     expect(
-      within(access).getByRole('link', { name: 'お使いの版と進め方の目安を、無料Web診断で確認する' })
+      within(access).getByRole('link', { name: 'Access の質問から無料Web診断をはじめる' })
     ).toHaveAttribute('href', '#diagnosis');
   });
 
@@ -198,6 +200,21 @@ describe('AX migration landing page', () => {
     expect(booking).toHaveAttribute('href', 'https://bookings.example.com/ax');
     expect(booking).toHaveAttribute('target', '_blank');
     expect(booking).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+});
+
+describe('AX migration landing page metadata', () => {
+  it('names host systems, not Access: Access searches belong to the Access page (#332)', async () => {
+    const metadata = await generateMetadata({ params: Promise.resolve({ locale: 'ja' }) });
+    const title = 'AXマイグレーション｜AS/400・NEC ACOSなどの基幹システムをWebへ｜エス・エー・エス株式会社';
+    expect(metadata.title).toEqual({ absolute: title });
+    expect(metadata.description).toContain('AS/400（IBM i）やNEC ACOS');
+    expect(metadata.openGraph?.title).toBe(title);
+    expect(metadata.twitter?.title).toBe(title);
+    expect(metadata.openGraph?.description).toBe(metadata.description);
+    expect(metadata.twitter?.description).toBe(metadata.description);
+    for (const text of [title, metadata.description ?? '']) expect(text).not.toMatch(/Access/);
+    expect(metadata.alternates?.canonical).toBe('/ja/ax-migration');
   });
 });
 

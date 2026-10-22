@@ -115,8 +115,18 @@ test.describe('Access landing page', () => {
   });
 
   test('is linked from the Access item of the main landing page', async ({ page }) => {
-    await page.goto('/ja/ax-migration');
-    await page.getByRole('link', { name: 'Access の方はこちら' }).click();
-    await expect(page).toHaveURL(/\/ja\/ax-migration\/access$/);
+    await page.goto('/ja/ax-migration?utm_source=e2e');
+    await page.getByRole('link', { name: /3つの道を詳しく見る/ }).click();
+    // The move between the pages is named, and the campaign is carried over (#332)
+    await expect(page).toHaveURL(
+      /\/ja\/ax-migration\/access\?utm_source=e2e&from=ax-lp-targets-access$/
+    );
+  });
+
+  test('links back to the main landing page for AS/400 readers (#332)', async ({ page }) => {
+    await page.goto('/ja/ax-migration/access');
+    await page.getByRole('link', { name: 'AS/400（IBM i）からの移行について読む' }).click();
+    await expect(page).toHaveURL(/\/ja\/ax-migration\?from=ax-access-lp-hosts#as400-migration$/);
+    await expect(page.getByRole('heading', { level: 2, name: /AS\/400（IBM i）からの移行/ })).toBeVisible();
   });
 });
