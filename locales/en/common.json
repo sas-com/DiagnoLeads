@@ -1329,7 +1329,23 @@
       "headerNameInvalid": "This header name cannot be used. Use a name without spaces or symbols such as \":\". Content-Type, User-Agent, Host and names starting with X-Webhook- are reserved.",
       "headerNameDuplicate": "The same header name is given more than once (case does not matter).",
       "headerValueInvalid": "Values may contain only ASCII letters, digits, symbols and spaces (no other characters or line breaks), up to 2,000 characters.",
-      "conflict": "This change overlapped with another one. Reload the page and save again."
+      "conflict": "This change overlapped with another one. Reload the page and save again.",
+      "destinationNotAllowed": "Webhooks cannot be sent to this URL. Enter a public https URL without a port number. Internal addresses, localhost and URLs with a user name or password are not allowed.",
+      "destinationBlocked": "Destination not allowed",
+      "destinationBlockedDescription": "Nothing is sent to this URL ({reason}). Change the URL.",
+      "destinationReasons": {
+        "invalid_url": "the URL is not valid",
+        "scheme": "the URL is not https",
+        "credentials": "the URL contains a user name or password",
+        "port": "the URL has a non-standard port",
+        "host": "the host name is for internal networks",
+        "address": "the IP address is internal or reserved",
+        "resolved_address": "the host name points to an internal or reserved IP address"
+      },
+      "test": "Send test",
+      "testSent": "Test webhook sent",
+      "testFailed": "The test webhook failed. Check the destination settings.",
+      "testRateLimited": "Test send limit reached (up to {perWebhook} per webhook every 10 minutes, {perOrganization} per organization every hour and {perUser} per user every hour). Try again later."
     },
     "embed": {
       "title": "Embed Widget Settings",

@@ -23,6 +23,12 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Host names resolve to a public address: no real DNS lookup (#321)
+vi.mock('node:dns/promises', () => {
+  const lookup = async () => [{ address: '93.184.215.14', family: 4 }];
+  return { lookup, default: { lookup } };
+});
+
 const url = process.env.TEST_DATABASE_URL;
 
 /** A first round fits (it starts within 1s), a second one after slow endpoints does not */
@@ -185,7 +191,7 @@ describe.skipIf(!url)('webhook retries (PostgreSQL)', () => {
     const result = await processWebhookRetries({ database: pg });
 
     expect(sentIds().sort()).toEqual([due, cutOff].sort());
-    expect(result).toEqual({ processed: 2, succeeded: 2, failed: 0, exhausted: 1, expired: 0 });
+    expect(result).toEqual({ processed: 2, succeeded: 2, failed: 0, exhausted: 1, expired: 0, testsFailed: 0 });
     expect(await load(due)).toMatchObject({ status: 'success', attempts: 2, nextRetryAt: null });
     expect(await load(usedUp)).toMatchObject({ status: 'failed', attempts: 3, nextRetryAt: null });
     for (const id of [notYet, noRetryTime]) {

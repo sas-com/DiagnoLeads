@@ -1,7 +1,7 @@
 import type { Organization, OrganizationMember, User } from "@/lib/db/schema";
 import { WEBHOOK_HEADER_MASK } from "@/lib/features/webhooks/services/webhook-headers";
 import {
-	sendWebhookDelivery,
+	sendTestDelivery,
 	triggerWebhooks,
 } from "@/lib/features/webhooks/services/webhook-service";
 import { appRouter } from "@/server/routers/_app";
@@ -13,10 +13,15 @@ vi.mock("@/lib/db/rls", () => ({
 	setCurrentUser: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("@/lib/features/webhooks/services/webhook-service", () => ({
+vi.mock("@/lib/features/webhooks/services/webhook-service", async () => ({
+	WEBHOOK_TEST_SEND_LIMITS: (
+		await vi.importActual<typeof import("@/lib/features/webhooks/services/test-send-limits")>(
+			"@/lib/features/webhooks/services/test-send-limits",
+		)
+	).WEBHOOK_TEST_SEND_LIMITS,
 	generateWebhookSecret: vi.fn(() => "test-secret-12345678901234567890"),
 	triggerWebhooks: vi.fn().mockResolvedValue({ triggered: 1, failed: 0 }),
-	sendWebhookDelivery: vi.fn().mockResolvedValue({ success: true }),
+	sendTestDelivery: vi.fn().mockResolvedValue({ allowed: true, success: true }),
 }));
 
 // Use vi.hoisted to ensure variables are available before vi.mock hoisting
@@ -769,7 +774,7 @@ describe("Webhooks Router", () => {
 							callerAs("admin").webhooks.update({
 								organizationId: TEST_ORG_ID,
 								id: TEST_WEBHOOK_ID,
-								url: "http://example.com:8080/webhook",
+								url: "https://example.com/webhook/v2",
 								headers: [kept],
 							}),
 						).rejects.toMatchObject({
@@ -937,23 +942,143 @@ describe("Webhooks Router", () => {
 				});
 
 				expect(triggerWebhooks).not.toHaveBeenCalled();
-				expect(sendWebhookDelivery).toHaveBeenCalledTimes(1);
-				expect(sendWebhookDelivery).toHaveBeenCalledWith(
+				expect(sendTestDelivery).toHaveBeenCalledTimes(1);
+				expect(sendTestDelivery).toHaveBeenCalledWith(
 					expect.objectContaining({ id: TEST_WEBHOOK_ID }),
-					"lead.created",
-					expect.objectContaining({ test: true }),
-					{ database: mockDb },
+					{ userId: TEST_USER_ID, database: mockDb },
 				);
 				expect(result).toEqual({ success: true, triggered: 1, failed: 0 });
 			});
 
 			it("reports a failed attempt", async () => {
-				vi.mocked(sendWebhookDelivery).mockResolvedValueOnce({ success: false });
+				vi.mocked(sendTestDelivery).mockResolvedValueOnce({ allowed: true, success: false });
 				const result = await callerAs("admin").webhooks.test({
 					organizationId: TEST_ORG_ID,
 					id: TEST_WEBHOOK_ID,
 				});
 				expect(result).toEqual({ success: false, triggered: 0, failed: 1 });
+			});
+
+			// #321: counted in the database, so batched requests and every instance count alike
+			for (const limit of ["perWebhook", "perOrganization", "perUser"] as const) {
+				it(`returns TOO_MANY_REQUESTS over the ${limit} limit`, async () => {
+					vi.mocked(sendTestDelivery).mockResolvedValueOnce({ allowed: false, limit });
+					await expect(
+						callerAs("admin").webhooks.test({
+							organizationId: TEST_ORG_ID,
+							id: TEST_WEBHOOK_ID,
+						}),
+					).rejects.toMatchObject({
+						code: "TOO_MANY_REQUESTS",
+						message: expect.stringMatching(/^test_rate_limited:/),
+					});
+				});
+			}
+		});
+
+		describe("destination guard (#321)", () => {
+			const refused = [
+				"https://127.0.0.1/hook",
+				"https://169.254.169.254/latest/meta-data/",
+				"https://[::1]/hook",
+				"https://localhost/hook",
+				"https://metadata.google.internal/hook",
+				"https://user:pass@example.com/hook",
+				"https://example.com:8443/hook",
+				"ftp://example.com/hook",
+			];
+
+			for (const url of refused) {
+				it(`refuses to create a webhook for ${url}`, async () => {
+					await expect(
+						callerAs("admin").webhooks.create({
+							organizationId: TEST_ORG_ID,
+							name: "Internal",
+							url,
+							events: ["lead.created"],
+						}),
+					).rejects.toMatchObject({
+						code: "BAD_REQUEST",
+						message: expect.stringMatching(/^destination_not_allowed \(/),
+					});
+					expect(mockDb.insert).not.toHaveBeenCalled();
+				});
+			}
+
+			it("refuses to move a webhook to an internal URL", async () => {
+				mockDb.select.mockReturnValue({
+					from: vi.fn().mockReturnValue({
+						where: vi.fn().mockReturnValue({
+							limit: vi.fn().mockResolvedValue([{ ...mockWebhook, headers: {} }]),
+						}),
+					}),
+				} as unknown as ReturnType<typeof mockDb.select>);
+				await expect(
+					callerAs("admin").webhooks.update({
+						organizationId: TEST_ORG_ID,
+						id: TEST_WEBHOOK_ID,
+						url: "https://10.0.0.8/hook",
+					}),
+				).rejects.toMatchObject({
+					code: "BAD_REQUEST",
+					message: expect.stringMatching(/^destination_not_allowed \(address\)/),
+				});
+				expect(mockDb.update).not.toHaveBeenCalled();
+			});
+
+			it("still lets a webhook saved with a refused URL be renamed", async () => {
+				const internal = { ...mockWebhook, url: "https://10.0.0.8/hook", headers: {} };
+				mockDb.select.mockReturnValue({
+					from: vi.fn().mockReturnValue({
+						where: vi.fn().mockReturnValue({
+							limit: vi.fn().mockResolvedValue([internal]),
+						}),
+					}),
+				} as unknown as ReturnType<typeof mockDb.select>);
+				mockDb.update.mockReturnValue({
+					set: vi.fn().mockReturnValue({
+						where: vi.fn().mockReturnValue({
+							returning: vi.fn().mockResolvedValue([{ ...internal, name: "Renamed" }]),
+						}),
+					}),
+				} as unknown as ReturnType<typeof mockDb.update>);
+				const result = await callerAs("admin").webhooks.update({
+					organizationId: TEST_ORG_ID,
+					id: TEST_WEBHOOK_ID,
+					name: "Renamed",
+					url: "https://10.0.0.8/hook",
+				});
+				expect(result.name).toBe("Renamed");
+			});
+
+			function listReturns(rows: unknown[]) {
+				mockDb.select.mockReturnValue({
+					from: vi.fn().mockReturnValue({
+						where: vi.fn().mockReturnValue({
+							orderBy: vi.fn().mockReturnValue({
+								limit: vi.fn().mockReturnValue({
+									offset: vi.fn().mockResolvedValue(rows),
+								}),
+							}),
+						}),
+					}),
+				} as unknown as ReturnType<typeof mockDb.select>);
+			}
+
+			it("tells managers why a stored URL is refused, and nobody else", async () => {
+				const rows = [
+					{ ...mockWebhook, id: "a", url: "https://10.0.0.8/hook", headers: {} },
+					{ ...mockWebhook, id: "b", url: "https://hooks.example.com/ok", headers: {} },
+				];
+				listReturns(rows);
+				const asAdmin = await callerAs("admin").webhooks.list({ organizationId: TEST_ORG_ID });
+				expect(asAdmin.webhooks.map((w) => w.urlRefusal)).toEqual(["address", null]);
+
+				listReturns(rows);
+				const asMember = await callerAs("member").webhooks.list({
+					organizationId: TEST_ORG_ID,
+				});
+				expect(asMember.webhooks.map((w) => w.urlRefusal)).toEqual([null, null]);
 			});
 		});
 	});

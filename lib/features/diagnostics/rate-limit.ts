@@ -6,6 +6,9 @@ import { inArray, lt, sql } from 'drizzle-orm';
 
 type Database = typeof defaultDb;
 
+/** The database or a transaction of it: counting only needs an insert */
+export type RateLimitDatabase = Pick<Database, 'insert'>;
+
 /** One limit: at most `limit` requests per `windowMs` for the same identifier */
 export interface RateLimitRule {
   /** Short name; part of the key, so each rule counts separately */
@@ -45,7 +48,7 @@ export function rateLimitKey(rule: RateLimitRule, identifier: string): string {
  * a window has ended starts the next one. A single upsert, so concurrent requests all count.
  */
 export async function consumeRateLimit(
-  database: Database,
+  database: RateLimitDatabase,
   rule: RateLimitRule,
   identifier: string,
   now: Date = new Date()
@@ -76,7 +79,7 @@ export async function consumeRateLimit(
  * later (wider) rules are not used up by requests that were refused anyway.
  */
 export async function consumeRateLimits(
-  database: Database,
+  database: RateLimitDatabase,
   checks: { rule: RateLimitRule; identifier: string }[],
   now: Date = new Date()
 ): Promise<{ allowed: true } | { allowed: false; rule: string; retryAfterSeconds: number }> {

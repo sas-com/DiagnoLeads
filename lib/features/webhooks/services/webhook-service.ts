@@ -16,7 +16,10 @@ import {
   webhookDeliveries,
   webhooks,
 } from '@/lib/db/schema';
-import { and, asc, eq, gte, inArray, lt, lte, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, lt, lte, not, sql } from 'drizzle-orm';
+import { consumeRateLimits } from '../../diagnostics/rate-limit';
+import { WEBHOOK_TEST_SEND_LIMITS, type WebhookTestSendLimit } from './test-send-limits';
+import { checkWebhookDestination, destinationErrorFor } from './url-guard';
 import { isReservedWebhookHeaderName } from './webhook-headers';
 
 /**
@@ -86,7 +89,28 @@ interface WebhookPayload {
   timestamp: string;
   organizationId: string;
   data: Record<string, unknown>;
+  /** Set on a test send from the settings page only (#321) */
+  test?: true;
 }
+
+/** The message of a test send; also how test deliveries stored before #321 are recognised */
+export const WEBHOOK_TEST_MESSAGE = 'This is a test webhook from DiagnoLeads';
+
+export { WEBHOOK_TEST_SEND_LIMITS };
+
+/**
+ * A test delivery: marked with `test: true` on the payload, or (stored before #321) with the
+ * test data. Never null, so it can be negated.
+ * Never spread user-provided keys into event `data` (or the payload): they could fake this mark.
+ */
+const isTestDeliverySql = sql`coalesce(
+  (${webhookDeliveries.payload} ->> 'test') = 'true'
+  or (
+    (${webhookDeliveries.payload} -> 'data' ->> 'test') = 'true'
+    and (${webhookDeliveries.payload} -> 'data' ->> 'message') = ${WEBHOOK_TEST_MESSAGE}
+  ),
+  false
+)`;
 
 /**
  * One delivery attempt gives up after this long. Short enough that sending to several
@@ -129,7 +153,17 @@ const DEFAULT_RETRY_CONFIG: WebhookRetryConfig = { maxRetries: 3, retryDelayMs: 
  */
 const maxAttemptsSql = sql`coalesce((${webhooks.retryConfig} ->> 'maxRetries')::int, ${DEFAULT_RETRY_CONFIG.maxRetries})`;
 
-type DeliveryResult = { success: boolean; statusCode?: number; error?: string; response?: string };
+/** A transaction of `Database`, which can store a delivery as the database itself can */
+type DatabaseTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
+
+type DeliveryResult = {
+  success: boolean;
+  statusCode?: number;
+  error?: string;
+  response?: string;
+  /** false when sending again cannot help (the destination is refused): no retry is scheduled */
+  retryable?: boolean;
+};
 
 /** Stored instead of the error text when the custom headers cannot be sent */
 export const INVALID_HEADERS_ERROR = 'Invalid request headers';
@@ -204,17 +238,36 @@ async function deliverWebhook(
   }
 
   const controller = new AbortController();
-  // Covers reading the response body too, so a slow body cannot outlast the timeout
+  // Covers resolving the host name and reading the response body too, so neither a slow DNS
+  // answer nor a slow body can outlast the timeout
   const timeout = setTimeout(() => controller.abort(), WEBHOOK_DELIVERY_TIMEOUT_MS);
   try {
+    // Before every attempt (first, retry, test): the URL rules, then every address the host
+    // name resolves to (#321). Only a fixed text and a reason code are stored, never the address.
+    const destination = await abortable(checkWebhookDestination(webhook.url), controller.signal);
+    if (!destination.ok) {
+      return { success: false, error: destinationErrorFor(destination.reason), retryable: false };
+    }
+
     const response = await fetch(webhook.url, {
       method: 'POST',
       headers,
       body: payloadString,
       signal: controller.signal,
+      // A redirect is not followed: a public URL could send the request on to an internal one
+      redirect: 'manual',
     });
 
     const responseText = await response.text().catch(() => '');
+
+    if (response.status >= 300 && response.status < 400) {
+      return {
+        success: false,
+        statusCode: response.status,
+        error: `HTTP ${response.status}: Redirect not followed`,
+        response: responseText.slice(0, 1000),
+      };
+    }
 
     if (response.ok) {
       return {
@@ -240,6 +293,20 @@ async function deliverWebhook(
   }
 }
 
+/** The promise, or a rejection with the signal's reason once it is aborted */
+function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      const error = new Error('The operation was aborted');
+      error.name = 'AbortError';
+      reject(error);
+    };
+    if (signal.aborted) return onAbort();
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+  });
+}
+
 /**
  * Store the outcome of an attempt. `attempts` already counts this attempt (it is counted when
  * the attempt starts). On failure the next retry follows the exponential backoff
@@ -251,8 +318,26 @@ async function recordAttempt(
   deliveryId: string,
   attempts: number,
   result: DeliveryResult,
-  { isRetry }: { isRetry: boolean }
+  { isRetry, isTest = false }: { isRetry: boolean; isTest?: boolean }
 ): Promise<void> {
+  // A test send is tried once and leaves the webhook as it is: no retry, no failure count, no
+  // automatic deactivation, no "last triggered" time (#321)
+  if (isTest) {
+    await database
+      .update(webhookDeliveries)
+      .set({
+        status: result.success ? 'success' : 'failed',
+        statusCode: result.statusCode,
+        response: result.response,
+        error: result.success ? null : result.error,
+        attempts,
+        completedAt: new Date(),
+        nextRetryAt: null,
+      })
+      .where(eq(webhookDeliveries.id, deliveryId));
+    return;
+  }
+
   if (result.success) {
     await database
       .update(webhookDeliveries)
@@ -283,7 +368,7 @@ async function recordAttempt(
   }
 
   const retryConfig = webhook.retryConfig || DEFAULT_RETRY_CONFIG;
-  const exhausted = attempts >= retryConfig.maxRetries;
+  const exhausted = attempts >= retryConfig.maxRetries || result.retryable === false;
   await database
     .update(webhookDeliveries)
     .set({
@@ -315,22 +400,24 @@ async function recordAttempt(
 }
 
 /**
- * Create the delivery record and make the first attempt. The record is due for retry
- * (`next_retry_at`) from the start, so an attempt that never finishes is retried later.
+ * Store the delivery record of a first attempt. It is due (`next_retry_at`) from the start, so
+ * an attempt that never finishes is retried later (a test send's is failed instead).
  */
-async function sendNewDelivery(
-  database: Database,
+async function insertDelivery(
+  database: Database | DatabaseTransaction,
   webhook: Webhook,
   organizationId: string,
   eventType: WebhookEventType,
-  data: Record<string, unknown>
-): Promise<boolean> {
+  data: Record<string, unknown>,
+  { test = false }: { test?: boolean } = {}
+) {
   const payload: WebhookPayload = {
     id: crypto.randomUUID(),
     event: eventType,
     timestamp: new Date().toISOString(),
     organizationId,
     data,
+    ...(test ? { test: true as const } : {}),
   };
 
   const [delivery] = await database
@@ -344,16 +431,38 @@ async function sendNewDelivery(
       nextRetryAt: new Date(Date.now() + WEBHOOK_DELIVERY_LEASE_MS),
     })
     .returning();
+  return { delivery, payload };
+}
 
+/** Make the first attempt of a stored delivery and record it */
+async function sendStoredDelivery(
+  database: Database,
+  webhook: Webhook,
+  { delivery, payload }: Awaited<ReturnType<typeof insertDelivery>>
+): Promise<boolean> {
   const result = await deliverWebhook(webhook, payload, delivery.id);
-  await recordAttempt(database, webhook, delivery.id, 1, result, { isRetry: false });
+  await recordAttempt(database, webhook, delivery.id, 1, result, {
+    isRetry: false,
+    isTest: payload.test === true,
+  });
   return result.success;
+}
+
+/** Create the delivery record and make the first attempt */
+async function sendNewDelivery(
+  database: Database,
+  webhook: Webhook,
+  organizationId: string,
+  eventType: WebhookEventType,
+  data: Record<string, unknown>
+): Promise<boolean> {
+  const stored = await insertDelivery(database, webhook, organizationId, eventType, data);
+  return sendStoredDelivery(database, webhook, stored);
 }
 
 /**
  * Send one delivery to the given webhook only, whatever the other webhooks subscribed to the
- * event (the settings page's test send, #314). Same delivery record, timeout and retry lease
- * as an event delivery.
+ * event (#314). Same delivery record, timeout and retry lease as an event delivery.
  */
 export async function sendWebhookDelivery(
   webhook: Webhook,
@@ -363,6 +472,78 @@ export async function sendWebhookDelivery(
 ): Promise<{ success: boolean }> {
   const success = await sendNewDelivery(database, webhook, webhook.organizationId, eventType, data);
   return { success };
+}
+
+export type TestDeliveryResult =
+  | { allowed: true; success: boolean }
+  | { allowed: false; limit: WebhookTestSendLimit; retryAfterSeconds?: number };
+
+/**
+ * The settings page's test send (#314, #321): one delivery to this webhook only, marked as a
+ * test, tried once (never retried, not counted as a failure of the webhook).
+ *
+ * Limited by WEBHOOK_TEST_SEND_LIMITS, checked in this order:
+ * 1. per webhook, counted from its stored test deliveries;
+ * 2. per user (across organizations), then per organization, counted in `public_rate_limits`,
+ *    which deleting a webhook does not reset. These are consumed only once the per-webhook
+ *    check has passed. A request the per-user limit refuses does not use up the organization's
+ *    allowance; one the organization limit refuses has used one of the user's.
+ * Everything runs in one transaction holding a lock per organization, so concurrent requests
+ * (from any server instance) cannot both take the last place. A refused request stores no
+ * delivery.
+ */
+export async function sendTestDelivery(
+  webhook: Webhook,
+  { userId, database = db, now = new Date() }: { userId: string; database?: Database; now?: Date }
+): Promise<TestDeliveryResult> {
+  const { perWebhook, perOrganization, perUser } = WEBHOOK_TEST_SEND_LIMITS;
+  const webhookSince = new Date(now.getTime() - perWebhook.windowMs);
+  const eventType = webhook.events[0] || 'lead.created';
+  const data = { test: true, message: WEBHOOK_TEST_MESSAGE, timestamp: now.toISOString() };
+
+  const reserved = await database.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${`webhook-test-send:${webhook.organizationId}`}))`
+    );
+    const [counts] = await tx
+      .select({ webhook: sql<number>`count(*)::int` })
+      .from(webhookDeliveries)
+      .where(
+        and(
+          eq(webhookDeliveries.webhookId, webhook.id),
+          gte(webhookDeliveries.createdAt, webhookSince),
+          isTestDeliverySql
+        )
+      );
+    if ((counts?.webhook ?? 0) >= perWebhook.limit) {
+      return { allowed: false, limit: 'perWebhook' } as const;
+    }
+
+    const quota = await consumeRateLimits(
+      tx,
+      [
+        { rule: perUser, identifier: userId },
+        { rule: perOrganization, identifier: webhook.organizationId },
+      ],
+      now
+    );
+    if (!quota.allowed) {
+      return {
+        allowed: false,
+        limit: quota.rule === perUser.name ? 'perUser' : 'perOrganization',
+        retryAfterSeconds: quota.retryAfterSeconds,
+      } as const;
+    }
+
+    const stored = await insertDelivery(tx, webhook, webhook.organizationId, eventType, data, {
+      test: true,
+    });
+    return { allowed: true, stored } as const;
+  });
+
+  if (!reserved.allowed) return reserved;
+  const success = await sendStoredDelivery(database, webhook, reserved.stored);
+  return { allowed: true, success };
 }
 
 /**
@@ -429,6 +610,25 @@ async function failExpiredDeliveries(database: Database, now: Date): Promise<num
 }
 
 /**
+ * Test deliveries are never retried (#321). One still pending once its lease has passed was
+ * cut off mid-way (or stored before #321 as retryable): it is failed, not sent again.
+ */
+async function failDueTestDeliveries(database: Database, now: Date): Promise<number> {
+  const rows = await database
+    .update(webhookDeliveries)
+    .set({ status: 'failed', nextRetryAt: null, completedAt: now })
+    .where(
+      and(
+        eq(webhookDeliveries.status, 'pending'),
+        lte(webhookDeliveries.nextRetryAt, now),
+        isTestDeliverySql
+      )
+    )
+    .returning({ id: webhookDeliveries.id });
+  return rows.length;
+}
+
+/**
  * Pending deliveries whose attempts are used up (e.g. left by an earlier version, or an
  * attempt cut off at the last try) are failed instead of sent again
  */
@@ -441,7 +641,8 @@ async function failExhaustedDeliveries(database: Database, now: Date): Promise<n
       and(
         eq(webhookDeliveries.status, 'pending'),
         lte(webhookDeliveries.nextRetryAt, now),
-        gte(webhookDeliveries.attempts, maxAttemptsSql)
+        gte(webhookDeliveries.attempts, maxAttemptsSql),
+        not(isTestDeliverySql)
       )
     );
 
@@ -473,7 +674,9 @@ async function claimDueRetries(database: Database, now: Date, limit: number) {
           due,
           lt(webhookDeliveries.attempts, maxAttemptsSql),
           gte(webhookDeliveries.createdAt, new Date(now.getTime() - WEBHOOK_RETRY_MAX_AGE_MS)),
-          inArray(webhooks.status, RETRYABLE_WEBHOOK_STATUSES)
+          inArray(webhooks.status, RETRYABLE_WEBHOOK_STATUSES),
+          // Test sends are tried once only (#321)
+          not(isTestDeliverySql)
         )
       )
       .orderBy(asc(webhookDeliveries.nextRetryAt))
@@ -511,10 +714,12 @@ export async function processWebhookRetries({
   failed: number;
   exhausted: number;
   expired: number;
+  testsFailed: number;
 }> {
   const startedAt = Date.now();
   // Expired first, so old rows are never sent (nor counted as exhausted)
   const expired = await failExpiredDeliveries(database, new Date());
+  const testsFailed = await failDueTestDeliveries(database, new Date());
   const exhausted = await failExhaustedDeliveries(database, new Date());
 
   let processed = 0;
@@ -540,6 +745,7 @@ export async function processWebhookRetries({
         const result = await deliverWebhook(webhook, payload, delivery.id);
         await recordAttempt(database, webhook, delivery.id, delivery.attempts, result, {
           isRetry: true,
+          isTest: payload.test === true,
         });
         return result.success;
       })
@@ -558,7 +764,7 @@ export async function processWebhookRetries({
     }
   }
 
-  return { processed, succeeded, failed, exhausted, expired };
+  return { processed, succeeded, failed, exhausted, expired, testsFailed };
 }
 
 /**

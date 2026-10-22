@@ -10,6 +10,7 @@ import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
+import { type WebhookUrlRefusal, checkWebhookUrl } from '../services/url-guard';
 import {
   type MergeWebhookHeadersResult,
   type WebhookHeadersError,
@@ -18,7 +19,11 @@ import {
   maskWebhookHeaders,
   mergeWebhookHeaders,
 } from '../services/webhook-headers';
-import { generateWebhookSecret, sendWebhookDelivery } from '../services/webhook-service';
+import {
+  WEBHOOK_TEST_SEND_LIMITS,
+  generateWebhookSecret,
+  sendTestDelivery,
+} from '../services/webhook-service';
 import {
   createWebhookSchema,
   listDeliveriesSchema,
@@ -61,6 +66,38 @@ function headersOrThrow(result: MergeWebhookHeadersResult): Record<string, strin
   return result.headers;
 }
 
+/**
+ * Refuse a destination our servers must not send to (#321): BAD_REQUEST with a message that
+ * starts with the fixed code `destination_not_allowed`, which the client matches
+ */
+function assertDestinationAllowed(url: string): void {
+  const checked = checkWebhookUrl(url);
+  if (!checked.ok) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: `destination_not_allowed (${checked.reason}): webhooks can only be sent to public https URLs on the default port`,
+    });
+  }
+}
+
+/**
+ * Why deliveries to this webhook are refused, for those who manage webhooks (null for others,
+ * and when allowed). Webhooks saved before #321 keep their URL; only their deliveries are
+ * refused.
+ */
+const urlRefusalOf = (webhook: Webhook, canManage: boolean): WebhookUrlRefusal | null => {
+  if (!canManage) return null;
+  const checked = checkWebhookUrl(webhook.url);
+  return checked.ok ? null : checked.reason;
+};
+
+/** The scope of each test send limit, in the TOO_MANY_REQUESTS message */
+const TEST_LIMIT_SCOPES = {
+  perWebhook: 'per webhook',
+  perOrganization: 'per organization',
+  perUser: 'per user',
+} as const;
+
 /** What the current user may do, so the settings page shows only the buttons they can use */
 const permissionsOf = (ability: AppAbility) => ({
   canCreate: ability.can('create', 'Webhook'),
@@ -101,8 +138,12 @@ export const webhooksRouter = router({
       .from(webhooks)
       .where(and(...conditions));
 
+    const canManage = ctx.ability.can('update', 'Webhook');
     return {
-      webhooks: results.map((w) => toClientWebhook(w)),
+      webhooks: results.map((w) => ({
+        ...toClientWebhook(w),
+        urlRefusal: urlRefusalOf(w, canManage),
+      })),
       total: countResult.length,
       limit,
       offset,
@@ -151,6 +192,7 @@ export const webhooksRouter = router({
       });
     }
 
+    assertDestinationAllowed(input.url);
     const headers = headersOrThrow(buildWebhookHeaders(input.headers ?? []));
     const secret = generateWebhookSecret();
 
@@ -209,6 +251,9 @@ export const webhooksRouter = router({
     // another receiver, nor to another path of a shared one: when the URL changes at all, every
     // value must be entered again. Sending the same URL again (or none) keeps them.
     const urlChanged = input.url !== undefined && isUrlChanged(existing[0].url, input.url);
+    // Checked only when the URL changes: a webhook saved before the check can still be renamed,
+    // paused or deleted (its deliveries are refused anyway)
+    if (input.url !== undefined && urlChanged) assertDestinationAllowed(input.url);
     if (input.headers) {
       updateData.headers = headersOrThrow(
         mergeWebhookHeaders(existing[0].headers, input.headers, {
@@ -354,20 +399,21 @@ export const webhooksRouter = router({
       });
     }
 
-    // Trigger a test event
-    const testData = {
-      test: true,
-      message: 'This is a test webhook from DiagnoLeads',
-      timestamp: new Date().toISOString(),
-    };
-
-    // Use the first subscribed event type for testing
-    const eventType = existing[0].events[0] || 'lead.created';
-
-    // To this webhook only: other webhooks subscribed to the event must not get test data (#314)
-    const { success } = await sendWebhookDelivery(existing[0], eventType, testData, {
+    // To this webhook only: other webhooks subscribed to the event must not get test data
+    // (#314). Limited per organization and per webhook, counted in the database so that every
+    // server instance (and a batched tRPC request) counts alike (#321).
+    const result = await sendTestDelivery(existing[0], {
+      userId: ctx.user.id,
       database: ctx.db,
     });
+    if (!result.allowed) {
+      const { limit, windowMs } = WEBHOOK_TEST_SEND_LIMITS[result.limit];
+      throw new TRPCError({
+        code: 'TOO_MANY_REQUESTS',
+        message: `test_rate_limited: at most ${limit} test sends per ${windowMs / 60_000} minutes (${TEST_LIMIT_SCOPES[result.limit]})`,
+      });
+    }
+    const { success } = result;
 
     return {
       success,

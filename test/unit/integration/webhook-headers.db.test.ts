@@ -33,6 +33,12 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 
 vi.mock('@/lib/db/rls', () => ({ setCurrentUser: vi.fn().mockResolvedValue(undefined) }));
 
+// Host names resolve to a public address: no real DNS lookup (#321)
+vi.mock('node:dns/promises', () => {
+  const lookup = async () => [{ address: '93.184.215.14', family: 4 }];
+  return { lookup, default: { lookup } };
+});
+
 const url = process.env.TEST_DATABASE_URL;
 
 const TOKEN = 'Bearer made-up-token-314';
