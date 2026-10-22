@@ -5,6 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { WEBHOOK_HEADER_MASK } from '@/lib/features/webhooks/services/webhook-headers';
 import {
   webhookEventTypes,
   webhookStatuses,
@@ -237,12 +238,32 @@ describe('custom header validation (#314)', () => {
     });
   }
 
-  for (const value of ['line\nbreak', 'carriage\rreturn', 'nul\0byte', 'x'.repeat(2001)]) {
+  for (const value of [
+    'line\nbreak',
+    'carriage\rreturn',
+    'nul\0byte',
+    'x'.repeat(2001),
+    '日本語のトークン',
+    'caf\u00e9',
+    'bell\u0007',
+    'del\u007f',
+  ]) {
     it(`refuses the value ${JSON.stringify(value.slice(0, 20))}`, () => {
       expect(create([{ name: 'X-Value', value }])).toBe(false);
       expect(update([{ name: 'X-Value', value }])).toBe(false);
     });
   }
+
+  it('accepts printable ASCII and tab', () => {
+    const ascii = Array.from({ length: 0x7f - 0x20 }, (_, i) => String.fromCharCode(0x20 + i)).join('');
+    expect(create([{ name: 'X-Value', value: `${ascii}\t` }])).toBe(true);
+    expect(update([{ name: 'X-Value', value: `${ascii}\t` }])).toBe(true);
+  });
+
+  it('accepts the mask as "keep" in an update only', () => {
+    expect(update([{ name: 'X-Value', value: WEBHOOK_HEADER_MASK }])).toBe(true);
+    expect(create([{ name: 'X-Value', value: WEBHOOK_HEADER_MASK }])).toBe(false);
+  });
 
   it('accepts a value of 2,000 characters', () => {
     expect(create([{ name: 'X-Value', value: 'x'.repeat(2000) }])).toBe(true);

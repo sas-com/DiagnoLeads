@@ -7,6 +7,7 @@
 import { z } from 'zod';
 import {
   WEBHOOK_HEADERS_MAX_COUNT,
+  WEBHOOK_HEADER_MASK,
   WEBHOOK_HEADER_NAME_MAX_LENGTH,
   WEBHOOK_HEADER_NAME_PATTERN,
   WEBHOOK_HEADER_VALUE_MAX_LENGTH,
@@ -70,7 +71,8 @@ const webhookHeaderNameSchema = z
   .regex(WEBHOOK_HEADER_NAME_PATTERN, 'Invalid header name')
   .refine((name) => !isReservedWebhookHeaderName(name), 'This header name is reserved');
 
-// Custom header value: no CR, LF or NUL
+// Custom header value: printable ASCII and tab only (no CR, LF, NUL or non-ASCII text, which
+// fetch would refuse at every delivery)
 const webhookHeaderValueSchema = z
   .string()
   .max(WEBHOOK_HEADER_VALUE_MAX_LENGTH)
@@ -109,7 +111,8 @@ export const updateWebhookSchema = z.object({
     .array(
       z.object({
         name: webhookHeaderNameSchema,
-        value: webhookHeaderValueSchema.optional(),
+        // The mask (not ASCII, so never a real value) means "keep", like a missing value
+        value: z.union([z.literal(WEBHOOK_HEADER_MASK), webhookHeaderValueSchema]).optional(),
       })
     )
     .max(WEBHOOK_HEADERS_MAX_COUNT)

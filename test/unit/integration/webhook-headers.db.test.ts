@@ -6,7 +6,8 @@
  * - the receiver's response body and the error text are shown to those who manage webhooks;
  *   members see the outcome only
  * - the test send reaches the chosen webhook only, even when another one subscribes to the event
- * - moving the URL to another origin requires every header value again (S1)
+ * - any change of the URL requires every header value again (S1)
+ * - an update that met another change between its read and its write answers CONFLICT
  * - another organization's webhook is not found, and its deliveries are not listed
  * The HTTP side is a stubbed fetch. All names and values are made up.
  *
@@ -25,7 +26,7 @@ import {
 } from '@/lib/db/schema';
 import { WEBHOOK_HEADER_MASK } from '@/lib/features/webhooks/services/webhook-headers';
 import { appRouter } from '@/server/routers/_app';
-import { eq, inArray } from 'drizzle-orm';
+import { type SQL, eq, inArray } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -70,7 +71,7 @@ describe.skipIf(!url)('webhook headers and test send (PostgreSQL)', () => {
     return row.id;
   }
 
-  async function callerAs(role: OrganizationRole): Promise<Caller> {
+  async function callerAs(role: OrganizationRole, database: typeof pg = pg): Promise<Caller> {
     const [user] = await pg
       .insert(users)
       .values({ email: `headers-${role}-${unique()}@example.com`, name: `ヘッダー ${role}` })
@@ -78,7 +79,7 @@ describe.skipIf(!url)('webhook headers and test send (PostgreSQL)', () => {
     userIds.push(user.id);
     await pg.insert(organizationMembers).values({ organizationId: org, userId: user.id, role });
     return appRouter.createCaller({
-      db: pg,
+      db: database,
       session: { session: { id: 's', userId: user.id }, user },
       user,
     } as unknown as Parameters<typeof appRouter.createCaller>[0]);
@@ -309,22 +310,46 @@ describe.skipIf(!url)('webhook headers and test send (PostgreSQL)', () => {
       });
     });
 
-    it('keeps stored values when only the path changes, and a case-only rename keeps the value', async () => {
+    it('refuses to keep stored values when only the path or query changes', async () => {
       const id = await createWebhook('パスだけ変える連携', stored);
       const before = await rowOf(id);
-      const sameOrigin = `${new URL(before.url).origin}/another-path`;
-      await callers.admin.webhooks.update({
-        organizationId: org,
-        id,
-        url: sameOrigin,
-        headers: [{ name: 'AUTHORIZATION' }, { name: 'X-Tenant', value: WEBHOOK_HEADER_MASK }],
-      });
+      // A shared receiver tells its users apart by path
+      for (const url of [`${new URL(before.url).origin}/another-path`, `${before.url}?x=1`]) {
+        await expect(
+          callers.admin.webhooks.update({
+            organizationId: org,
+            id,
+            url,
+            headers: [{ name: 'Authorization' }, { name: 'X-Tenant', value: WEBHOOK_HEADER_MASK }],
+          })
+        ).rejects.toMatchObject({
+          code: 'BAD_REQUEST',
+          message: expect.stringMatching(/^headers_reentry_required:/),
+        });
+      }
       const after = await rowOf(id);
-      expect(after.url).toBe(sameOrigin);
-      expect(after.headers).toEqual({
-        AUTHORIZATION: 'Bearer made-up-s1',
-        'X-Tenant': 'tenant-made-up-s1',
-      });
+      expect(after.url).toBe(before.url);
+      expect(after.headers).toEqual(stored);
+    });
+
+    it('keeps stored values when the same URL is sent again, or none; a case-only rename keeps the value', async () => {
+      const id = await createWebhook('同じURLの連携', stored);
+      const before = await rowOf(id);
+      const parsed = new URL(before.url);
+      const sameUrlWritten = `${parsed.protocol}//${parsed.host.toUpperCase()}:443${parsed.pathname}`;
+
+      for (const url of [before.url, sameUrlWritten, undefined]) {
+        await callers.admin.webhooks.update({
+          organizationId: org,
+          id,
+          url,
+          headers: [{ name: 'AUTHORIZATION' }, { name: 'X-Tenant', value: WEBHOOK_HEADER_MASK }],
+        });
+        expect((await rowOf(id)).headers).toEqual({
+          AUTHORIZATION: 'Bearer made-up-s1',
+          'X-Tenant': 'tenant-made-up-s1',
+        });
+      }
     });
   });
 
@@ -383,6 +408,108 @@ describe.skipIf(!url)('webhook headers and test send (PostgreSQL)', () => {
         webhookId: foreignWebhook,
       });
       expect(result.deliveries).toEqual([]);
+    });
+  });
+
+  describe('a change between the read and the write (B)', () => {
+    /**
+     * The database, except that the router's UPDATE first runs `beforeWrite`: another tab's
+     * change lands after the router has read the row and before it writes
+     */
+    function racingDatabase(beforeWrite: () => Promise<unknown>): typeof pg {
+      return new Proxy(pg, {
+        get(target, prop, receiver) {
+          if (prop !== 'update') return Reflect.get(target, prop, receiver);
+          return (table: typeof webhooks) => ({
+            set: (values: Partial<typeof webhooks.$inferInsert>) => ({
+              where: (condition: SQL | undefined) => ({
+                returning: async () => {
+                  await beforeWrite();
+                  return target.update(table).set(values).where(condition).returning();
+                },
+              }),
+            }),
+          });
+        },
+      });
+    }
+
+    const rowOf = async (id: string) =>
+      (await pg.select().from(webhooks).where(eq(webhooks.id, id)))[0];
+
+    it('answers CONFLICT and leaves the other change in place when the URL moved meanwhile', async () => {
+      const id = await createWebhook('競合する連携', { Authorization: 'Bearer made-up-race' });
+      const caller = await callerAs(
+        'admin',
+        racingDatabase(() =>
+          pg
+            .update(webhooks)
+            .set({ url: 'https://moved.example.org/hook', headers: {}, updatedAt: new Date() })
+            .where(eq(webhooks.id, id))
+        )
+      );
+
+      await expect(
+        caller.webhooks.update({
+          organizationId: org,
+          id,
+          name: '古い画面からの保存',
+          headers: [{ name: 'Authorization' }],
+        })
+      ).rejects.toMatchObject({ code: 'CONFLICT', message: expect.stringMatching(/^conflict:/) });
+
+      const after = await rowOf(id);
+      expect(after.name).toBe('競合する連携');
+      expect(after.url).toBe('https://moved.example.org/hook');
+      expect(after.headers).toEqual({});
+    });
+
+    it('answers CONFLICT when only the headers changed meanwhile', async () => {
+      const id = await createWebhook('ヘッダーが変わる連携', { Authorization: 'Bearer made-up-race' });
+      const caller = await callerAs(
+        'admin',
+        racingDatabase(() =>
+          pg
+            .update(webhooks)
+            .set({ headers: { Authorization: 'Bearer made-up-other-tab' }, updatedAt: new Date() })
+            .where(eq(webhooks.id, id))
+        )
+      );
+
+      await expect(
+        caller.webhooks.update({ organizationId: org, id, status: 'inactive' })
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+
+      const after = await rowOf(id);
+      expect(after.status).toBe('active');
+      expect(after.headers).toEqual({ Authorization: 'Bearer made-up-other-tab' });
+    });
+
+    it('does not conflict with a delivery recorded meanwhile', async () => {
+      const id = await createWebhook('配信中の連携', { Authorization: 'Bearer made-up-race' });
+      const caller = await callerAs(
+        'admin',
+        // What a delivery writes: counters and updated_at, not the URL or the headers
+        racingDatabase(() =>
+          pg
+            .update(webhooks)
+            .set({ lastTriggeredAt: new Date(), failureCount: 0, updatedAt: new Date() })
+            .where(eq(webhooks.id, id))
+        )
+      );
+
+      await caller.webhooks.update({ organizationId: org, id, name: '保存できる' });
+      const after = await rowOf(id);
+      expect(after.name).toBe('保存できる');
+      expect(after.headers).toEqual({ Authorization: 'Bearer made-up-race' });
+    });
+
+    it('moves updated_at on every update', async () => {
+      const id = await createWebhook('更新日時の連携', {});
+      const before = await rowOf(id);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      await callers.admin.webhooks.update({ organizationId: org, id, name: '更新日時2' });
+      expect((await rowOf(id)).updatedAt.getTime()).toBeGreaterThan(before.updatedAt.getTime());
     });
   });
 });

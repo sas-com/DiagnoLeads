@@ -5,7 +5,7 @@
 import {
   WEBHOOK_HEADER_MASK,
   buildWebhookHeaders,
-  isOriginChanged,
+  isUrlChanged,
   isReservedWebhookHeaderName,
   isValidWebhookHeaderName,
   maskWebhookHeaders,
@@ -184,13 +184,24 @@ describe('header names', () => {
   });
 });
 
-describe('isOriginChanged', () => {
-  it('compares scheme, host and port only', () => {
-    expect(isOriginChanged('https://a.example.com/x', 'https://a.example.com/y?z=1')).toBe(false);
-    expect(isOriginChanged('https://a.example.com/x', 'https://a.example.com:443/x')).toBe(false);
-    expect(isOriginChanged('https://a.example.com/x', 'http://a.example.com/x')).toBe(true);
-    expect(isOriginChanged('https://a.example.com/x', 'https://b.example.com/x')).toBe(true);
-    expect(isOriginChanged('https://a.example.com/x', 'https://a.example.com:8443/x')).toBe(true);
-    expect(isOriginChanged('https://a.example.com/x', 'not a url')).toBe(true);
+describe('isUrlChanged', () => {
+  it('ignores what new URL() normalises', () => {
+    expect(isUrlChanged('https://a.example.com/x', 'https://a.example.com/x')).toBe(false);
+    expect(isUrlChanged('https://a.example.com/x', 'https://A.Example.COM:443/x')).toBe(false);
+    expect(isUrlChanged('HTTPS://a.example.com', 'https://a.example.com/')).toBe(false);
+  });
+
+  it('counts any other change: scheme, host, port, path or query', () => {
+    const before = 'https://hooks.example.com/u/team-a';
+    for (const after of [
+      'http://hooks.example.com/u/team-a',
+      'https://other.example.com/u/team-a',
+      'https://hooks.example.com:8443/u/team-a',
+      'https://hooks.example.com/u/team-b',
+      'https://hooks.example.com/u/team-a?x=1',
+      'not a url',
+    ]) {
+      expect(isUrlChanged(before, after)).toBe(true);
+    }
   });
 });

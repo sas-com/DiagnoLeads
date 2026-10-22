@@ -34,7 +34,7 @@ import {
 import { useOrganization } from '@/hooks/use-organization';
 import {
   WEBHOOK_HEADER_MASK,
-  isOriginChanged,
+  isUrlChanged,
 } from '@/lib/features/webhooks/services/webhook-headers';
 import { trpc } from '@/lib/trpc/client';
 import {
@@ -88,13 +88,13 @@ interface WebhookFormData {
 const EMPTY_FORM: WebhookFormData = { name: '', url: '', events: [], headers: [] };
 
 /**
- * The URL's origin changes while a stored header value would be kept: the server refuses this
- * (the receiver's credentials must not follow the webhook elsewhere), so every value must be
- * entered again or the header removed
+ * The URL changes (host, path or anything else) while a stored header value would be kept: the
+ * server refuses this (the receiver's credentials must not follow the webhook elsewhere), so
+ * every value must be entered again or the header removed
  */
 const isReentryRequired = (form: WebhookFormData) =>
   form.savedUrl !== undefined &&
-  isOriginChanged(form.savedUrl, form.url) &&
+  isUrlChanged(form.savedUrl, form.url) &&
   keepsStoredValue(form.headers);
 
 const isFormComplete = (form: WebhookFormData) =>
@@ -227,6 +227,10 @@ export default function WebhooksSettingsPage() {
     },
   });
 
+  /** A save that met another change (CONFLICT) gets a message saying what to do */
+  const updateErrorMessage = (error: { message: string; data?: { code?: string } | null }) =>
+    error.data?.code === 'CONFLICT' ? t('conflict') : error.message;
+
   const updateWebhook = trpc.webhooks.update.useMutation({
     onSuccess: () => {
       utils.webhooks.list.invalidate();
@@ -234,7 +238,7 @@ export default function WebhooksSettingsPage() {
       toast.success(t('updated'));
     },
     onError: (error) => {
-      toast.error(error.message);
+      toast.error(updateErrorMessage(error));
     },
   });
 
@@ -253,7 +257,7 @@ export default function WebhooksSettingsPage() {
       utils.webhooks.list.invalidate();
     },
     onError: (error) => {
-      toast.error(error.message);
+      toast.error(updateErrorMessage(error));
     },
   });
 

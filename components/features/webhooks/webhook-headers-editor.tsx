@@ -50,9 +50,15 @@ export function rowsFromMaskedHeaders(headers: MaskedWebhookHeader[]): WebhookHe
 const hasInvalidName = (row: WebhookHeaderRow) =>
   !row.stored && row.name.trim() !== '' && !isValidWebhookHeaderName(row.name.trim());
 
+/** A value the server would refuse (not printable ASCII, or too long) */
+const hasInvalidValue = (row: WebhookHeaderRow) =>
+  (!row.stored || row.replacing) &&
+  (row.value.length > WEBHOOK_HEADER_VALUE_MAX_LENGTH ||
+    !WEBHOOK_HEADER_VALUE_PATTERN.test(row.value));
+
 /**
- * A row is complete when it has a valid name and, unless the stored value is kept, a value
- * without line breaks
+ * A row is complete when it has a valid name and, unless the stored value is kept, a value of
+ * printable ASCII
  */
 export function isRowComplete(row: WebhookHeaderRow): boolean {
   if (row.stored && !row.replacing) return true;
@@ -193,6 +199,9 @@ export function WebhookHeadersEditor({
             </div>
             {hasInvalidName(row) && (
               <p className="text-sm text-destructive">{t('headerNameInvalid')}</p>
+            )}
+            {hasInvalidValue(row) && (
+              <p className="text-sm text-destructive">{t('headerValueInvalid')}</p>
             )}
           </div>
         );

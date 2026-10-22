@@ -29,24 +29,36 @@ type ListResult = {
   error: { data: { code: string } } | null;
 };
 
+type MutationError = { message: string; data?: { code?: string } };
 const mocks = vi.hoisted(() => ({
   list: undefined as unknown as ListResult,
   update: vi.fn(),
   create: vi.fn(),
   remove: vi.fn(),
+  toastError: vi.fn(),
+  /** When set, update calls fail with this error */
+  updateError: null as null | { message: string; data?: { code?: string } },
 }));
 
 vi.mock('@/hooks/use-organization', () => ({
   useOrganization: () => ({ organization: { id: ORG_ID }, isLoading: false }),
 }));
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: mocks.toastError } }));
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
     useUtils: () => ({ webhooks: { list: { invalidate: vi.fn() } } }),
     webhooks: {
       list: { useQuery: () => mocks.list },
       create: { useMutation: () => ({ mutate: mocks.create, isPending: false }) },
-      update: { useMutation: () => ({ mutate: mocks.update, isPending: false }) },
+      update: {
+        useMutation: (options: { onError?: (error: MutationError) => void }) => ({
+          mutate: (input: unknown) => {
+            mocks.update(input);
+            if (mocks.updateError) options.onError?.(mocks.updateError);
+          },
+          isPending: false,
+        }),
+      },
       delete: { useMutation: () => ({ mutate: mocks.remove, isPending: false }) },
     },
   },
@@ -89,6 +101,7 @@ const renderPage = () =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.updateError = null;
 });
 
 describe('WebhooksSettingsPage', () => {
@@ -193,7 +206,7 @@ describe('WebhooksSettingsPage', () => {
     );
   });
 
-  it('asks for every header value again when the URL moves to another origin (S1)', async () => {
+  it('asks for every header value again when the URL changes at all (S1)', async () => {
     mocks.list = listed(ALL);
     renderPage();
 
@@ -201,12 +214,18 @@ describe('WebhooksSettingsPage', () => {
     const dialog = await screen.findByRole('dialog');
     const save = within(dialog).getByRole('button', { name: '保存' });
 
-    // Same origin, another path: the stored values may be kept
+    // The same URL typed again (normalised): the stored values may be kept
     const url = within(dialog).getByLabelText('エンドポイントURL');
     await userEvent.clear(url);
-    await userEvent.type(url, 'https://hooks.example.com/other-path');
+    await userEvent.type(url, 'https://HOOKS.example.com:443/crm');
     expect(within(dialog).queryByText(/保存済みのヘッダーの値は使えません/)).not.toBeInTheDocument();
     expect(save).toBeEnabled();
+
+    // Another path of the same receiver: blocked
+    await userEvent.clear(url);
+    await userEvent.type(url, 'https://hooks.example.com/other-path');
+    expect(within(dialog).getByText(/保存済みのヘッダーの値は使えません/)).toBeInTheDocument();
+    expect(save).toBeDisabled();
 
     // Another host: saving is blocked until every value is entered again
     await userEvent.clear(url);
@@ -281,5 +300,40 @@ describe('WebhooksSettingsPage', () => {
       events: ['lead.created'],
       headers: [{ name: 'Authorization', value: 'Bearer made-up-new' }],
     });
+  });
+
+  it('explains a CONFLICT instead of showing the server message', async () => {
+    mocks.list = listed(ALL);
+    mocks.updateError = { message: 'conflict: the webhook was changed meanwhile', data: { code: 'CONFLICT' } };
+    renderPage();
+
+    await userEvent.click(screen.getByRole('button', { name: '編集' }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: '保存' }));
+
+    expect(mocks.toastError).toHaveBeenCalledWith(
+      'ほかの変更と重なりました。画面を読み込み直してから、もう一度保存してください。'
+    );
+  });
+
+  it('flags a value that is not printable ASCII and blocks saving', async () => {
+    mocks.list = listed(ALL);
+    renderPage();
+
+    await userEvent.click(screen.getByRole('button', { name: '編集' }));
+    const dialog = await screen.findByRole('dialog');
+    const save = within(dialog).getByRole('button', { name: '保存' });
+
+    const [replaceAuthorization] = within(dialog).getAllByRole('button', { name: '値を入れ直す' });
+    await userEvent.click(replaceAuthorization);
+    const value = within(dialog).getByLabelText('Authorization の値');
+    await userEvent.type(value, 'トークン');
+    expect(within(dialog).getByText(/値に使えるのは半角の英数字・記号・空白だけです/)).toBeInTheDocument();
+    expect(save).toBeDisabled();
+
+    await userEvent.clear(value);
+    await userEvent.type(value, 'Bearer made-up-ascii');
+    expect(within(dialog).queryByText(/値に使えるのは半角/)).not.toBeInTheDocument();
+    expect(save).toBeEnabled();
   });
 });

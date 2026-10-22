@@ -8,14 +8,20 @@
  * to import from client components.
  */
 
-/** Shown in place of a stored header value; sent back as a value, it means "keep" */
+/**
+ * Shown in place of a stored header value; sent back as a value, it means "keep". Not ASCII,
+ * so it can never be a real value.
+ */
 export const WEBHOOK_HEADER_MASK = '••••••••';
 
 /** RFC 7230 token: no spaces, colons or control characters (so no surrounding whitespace) */
 export const WEBHOOK_HEADER_NAME_PATTERN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
 export const WEBHOOK_HEADER_NAME_MAX_LENGTH = 100;
-/** No CR, LF or NUL: a value cannot start another header line */
-export const WEBHOOK_HEADER_VALUE_PATTERN = /^[^\r\n\0]*$/;
+/**
+ * Printable ASCII and tab only: no CR, LF or NUL (a value cannot start another header line),
+ * and no other characters fetch would refuse at every delivery
+ */
+export const WEBHOOK_HEADER_VALUE_PATTERN = /^[\t\x20-\x7E]*$/;
 export const WEBHOOK_HEADER_VALUE_MAX_LENGTH = 2000;
 export const WEBHOOK_HEADERS_MAX_COUNT = 20;
 
@@ -96,8 +102,9 @@ export function buildWebhookHeaders(
  * it. Names match without regard to case, so changing only the case keeps the value (stored
  * under the new spelling). A new name without a value, or a name given twice, is refused.
  *
- * With `requireNewValues` (the URL's origin changes), keeping any stored value is refused: the
- * stored credentials must not follow the webhook to another receiver.
+ * With `requireNewValues` (the URL changes), keeping any stored value is refused: the stored
+ * credentials must not follow the webhook to another receiver, or to another path of a shared
+ * receiver.
  */
 export function mergeWebhookHeaders(
   stored: Record<string, string> | null | undefined,
@@ -138,10 +145,15 @@ export function mergeWebhookHeaders(
   return { ok: true, headers: Object.fromEntries(merged) };
 }
 
-/** Whether two URLs differ in scheme, host or port. An unparsable URL counts as different. */
-export function isOriginChanged(previousUrl: string, nextUrl: string): boolean {
+/**
+ * Whether two URLs differ once normalised (`new URL().href`: case of the scheme and host, the
+ * default port, an empty path). Any other difference counts, the path and query included: a
+ * shared receiver (e.g. a hooks service) tells its users apart by path. An unparsable URL
+ * counts as different.
+ */
+export function isUrlChanged(previousUrl: string, nextUrl: string): boolean {
   try {
-    return new URL(previousUrl).origin !== new URL(nextUrl).origin;
+    return new URL(previousUrl).href !== new URL(nextUrl).href;
   } catch {
     return true;
   }

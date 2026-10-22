@@ -8,13 +8,13 @@ import type { AppAbility } from '@/lib/auth/permissions';
 import { type Webhook, webhookDeliveries, webhooks } from '@/lib/db/schema';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import {
   type MergeWebhookHeadersResult,
   type WebhookHeadersError,
   buildWebhookHeaders,
-  isOriginChanged,
+  isUrlChanged,
   maskWebhookHeaders,
   mergeWebhookHeaders,
 } from '../services/webhook-headers';
@@ -44,7 +44,7 @@ const HEADER_ERROR_MESSAGES: Record<WebhookHeadersError, (name: string) => strin
   duplicate_name: (name) => `duplicate_name: header "${name}" is given more than once`,
   missing_value: (name) => `missing_value: header "${name}" needs a value`,
   headers_reentry_required: () =>
-    "headers_reentry_required: the URL's origin changes, so enter every header value again or remove the headers",
+    'headers_reentry_required: the URL changes, so enter every header value again or remove the headers',
 };
 
 /**
@@ -206,24 +206,46 @@ export const webhooksRouter = router({
     if (input.events) updateData.events = input.events;
     if (input.status) updateData.status = input.status;
     // Stored header values (often the receiver's credentials) must not follow the webhook to
-    // another receiver: when the origin changes, every value must be entered again
-    const originChanged = input.url !== undefined && isOriginChanged(existing[0].url, input.url);
+    // another receiver, nor to another path of a shared one: when the URL changes at all, every
+    // value must be entered again. Sending the same URL again (or none) keeps them.
+    const urlChanged = input.url !== undefined && isUrlChanged(existing[0].url, input.url);
     if (input.headers) {
       updateData.headers = headersOrThrow(
         mergeWebhookHeaders(existing[0].headers, input.headers, {
-          requireNewValues: originChanged,
+          requireNewValues: urlChanged,
         })
       );
-    } else if (originChanged && Object.keys(existing[0].headers ?? {}).length > 0) {
+    } else if (urlChanged && Object.keys(existing[0].headers ?? {}).length > 0) {
       headersOrThrow({ ok: false, reason: 'headers_reentry_required', name: '' });
     }
     if (input.retryConfig) updateData.retryConfig = input.retryConfig;
 
+    // Written only if the URL and headers are still those read above: the checks and the merge
+    // were made against them, so a change in between (e.g. another tab moving the URL) must not
+    // be overwritten with values kept for the old URL. Compared on these columns rather than
+    // updated_at, which deliveries also move and which is stored with more precision than a
+    // JavaScript Date holds.
     const [updated] = await ctx.db
       .update(webhooks)
       .set(updateData)
-      .where(and(eq(webhooks.id, input.id), eq(webhooks.organizationId, ctx.organization.id)))
+      .where(
+        and(
+          eq(webhooks.id, input.id),
+          eq(webhooks.organizationId, ctx.organization.id),
+          eq(webhooks.url, existing[0].url),
+          existing[0].headers === null
+            ? isNull(webhooks.headers)
+            : eq(webhooks.headers, existing[0].headers)
+        )
+      )
       .returning();
+
+    if (!updated) {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: 'conflict: the webhook was changed meanwhile; reload it and save again',
+      });
+    }
 
     return toClientWebhook(updated);
   }),

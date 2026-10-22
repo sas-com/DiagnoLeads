@@ -276,7 +276,7 @@ async function recordAttempt(
       // stays inactive
       await database
         .update(webhooks)
-        .set({ status: 'active' })
+        .set({ status: 'active', updatedAt: new Date() })
         .where(and(eq(webhooks.id, webhook.id), eq(webhooks.status, 'failed')));
     }
     return;

@@ -742,7 +742,7 @@ describe("Webhooks Router", () => {
 				expect(set).not.toHaveBeenCalled();
 			});
 
-			describe("when the URL's origin changes (S1)", () => {
+			describe("when the URL changes (S1, any change)", () => {
 				// storedWebhook.url is https://example.com/webhook
 				it("refuses to keep stored values when headers are not sent", async () => {
 					const set = captureSet();
@@ -805,17 +805,71 @@ describe("Webhooks Router", () => {
 					expect(set).toHaveBeenCalledWith(expect.objectContaining({ headers: {} }));
 				});
 
-				it("keeps stored values when only the path changes", async () => {
-					const set = captureSet();
-					await callerAs("admin").webhooks.update({
+				it("refuses to keep stored values when only the path or query changes", async () => {
+					// A shared receiver tells its users apart by path
+					for (const url of [
+						"https://example.com/another-path",
+						"https://example.com/webhook?x=1",
+					]) {
+						for (const headers of [undefined, [{ name: "Authorization" }]]) {
+							const set = captureSet();
+							await expect(
+								callerAs("admin").webhooks.update({
+									organizationId: TEST_ORG_ID,
+									id: TEST_WEBHOOK_ID,
+									url,
+									headers,
+								}),
+							).rejects.toMatchObject({
+								code: "BAD_REQUEST",
+								message: expect.stringMatching(/^headers_reentry_required:/),
+							});
+							expect(set).not.toHaveBeenCalled();
+						}
+					}
+				});
+
+				it("keeps stored values when the same URL is sent again, or none", async () => {
+					for (const url of [
+						"https://example.com/webhook",
+						"https://EXAMPLE.com:443/webhook",
+						undefined,
+					]) {
+						const set = captureSet();
+						await callerAs("admin").webhooks.update({
+							organizationId: TEST_ORG_ID,
+							id: TEST_WEBHOOK_ID,
+							url,
+							headers: [{ name: "Authorization" }],
+						});
+						expect(set).toHaveBeenCalledWith(
+							expect.objectContaining({
+								headers: { Authorization: "Bearer made-up-old" },
+							}),
+						);
+					}
+				});
+			});
+
+			it("answers CONFLICT when the row changed between the read and the write", async () => {
+				captureSet();
+				// The conditional UPDATE matched no row
+				mockDb.update.mockReturnValue({
+					set: vi.fn().mockReturnValue({
+						where: vi.fn().mockReturnValue({
+							returning: vi.fn().mockResolvedValue([]),
+						}),
+					}),
+				} as unknown as ReturnType<typeof mockDb.update>);
+				await expect(
+					callerAs("admin").webhooks.update({
 						organizationId: TEST_ORG_ID,
 						id: TEST_WEBHOOK_ID,
-						url: "https://example.com/another-path?x=1",
-						headers: [{ name: "Authorization" }],
-					});
-					expect(set).toHaveBeenCalledWith(
-						expect.objectContaining({ headers: { Authorization: "Bearer made-up-old" } }),
-					);
+						name: "Renamed",
+					}),
+				).rejects.toMatchObject({
+					code: "CONFLICT",
+					message: expect.stringMatching(/^conflict:/),
 				});
 			});
 
