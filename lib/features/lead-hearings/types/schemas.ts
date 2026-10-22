@@ -246,3 +246,6 @@ export const leadHearingSummarySchema = z
 
 export type CreateLeadHearingInput = z.infer<typeof createLeadHearingSchema>;
 export type UpdateLeadHearingInput = z.infer<typeof updateLeadHearingSchema>;
+
+/** The organization's hearing settings (#98) */
+export const hearingCatalogSettingsSchema = z.object({ organizationId }).strict();

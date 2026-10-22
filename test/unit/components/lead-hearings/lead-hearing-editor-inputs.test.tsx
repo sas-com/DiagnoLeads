@@ -25,6 +25,7 @@ interface MutationOptions {
 }
 
 const mocks = vi.hoisted(() => ({
+  catalogSettings: undefined as unknown,
   mutate: vi.fn(),
   refetch: vi.fn(),
   data: undefined as unknown,
@@ -47,6 +48,8 @@ vi.mock('@/lib/trpc/client', () => ({
       },
     }),
     leadHearings: {
+      // The organization's settings (#98): the defaults unless a test sets them
+      catalogSettings: { useQuery: () => ({ data: mocks.catalogSettings }) },
       get: {
         useQuery: () => ({
           data: mocks.error ? undefined : mocks.data,

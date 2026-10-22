@@ -20,9 +20,17 @@ import { TRPCError } from '@trpc/server';
 import { and, count, desc, eq, like, lt, or, sql } from 'drizzle-orm';
 import { aiSourceAnalysisOf, shouldNotifyRestriction } from './ai-policy';
 import { notifyAiRestriction } from './ai-policy-notify';
-import { HEARING_CATALOG_VERSION, LEAD_HEARINGS_MAX_PER_LEAD } from './catalog';
+import {
+  HEARING_BASE_CATALOG,
+  HEARING_CATALOG_VERSION,
+  type HearingCatalogOverrides,
+  type HearingRequiredItem,
+  LEAD_HEARINGS_MAX_PER_LEAD,
+  resolveHearingCatalog,
+} from './catalog';
 import { computeMissingItems } from './missing';
 import { buildBuilderHearingPrefill, buildHearingPrefill, isVerifiedSubmission } from './prefill';
+import { getHearingOverrides } from './settings';
 import {
   type CreateLeadHearingInput,
   type HearingFields,
@@ -58,7 +66,16 @@ async function assertLeadInOrganization(db: Executor, organizationId: string, le
 
 type HearingRow = typeof leadHearings.$inferSelect;
 
-function toHearingView(row: HearingRow) {
+/** The organization's required items (#98): what the missing-item check reads */
+async function organizationRequiredItems(
+  db: Pick<Executor, 'select'>,
+  organizationId: string
+): Promise<readonly HearingRequiredItem[]> {
+  return resolveHearingCatalog(HEARING_BASE_CATALOG, await getHearingOverrides(db, organizationId))
+    .requiredItems;
+}
+
+function toHearingView(row: HearingRow, requiredItems: readonly HearingRequiredItem[]) {
   const { fields, droppedKeys } = parseStoredHearingFields(row.fields);
   return {
     id: row.id,
@@ -69,7 +86,7 @@ function toHearingView(row: HearingRow) {
     /** Stored keys the current catalog no longer accepts; the next save drops them */
     droppedKeys,
     prefill: row.prefill ?? null,
-    missing: computeMissingItems(fields),
+    missing: computeMissingItems(fields, requiredItems),
     createdBy: row.createdBy,
     updatedBy: row.updatedBy,
     createdAt: row.createdAt,
@@ -84,6 +101,7 @@ export async function listLeadHearings(
   input: { organizationId: string; leadId: string }
 ) {
   await assertLeadInOrganization(db, input.organizationId, input.leadId);
+  const requiredItems = await organizationRequiredItems(db, input.organizationId);
   // Only the columns the list shows; the diagnosis snapshot is reduced to whether there is one
   const rows = await db
     .select({
@@ -100,7 +118,7 @@ export async function listLeadHearings(
     .orderBy(desc(leadHearings.heldOn), desc(leadHearings.createdAt));
   return rows.map(({ fields: stored, ...row }) => {
     const { fields } = parseStoredHearingFields(stored);
-    const missing = computeMissingItems(fields);
+    const missing = computeMissingItems(fields, requiredItems);
     const dealRating = fields.dealRating?.value;
     return {
       dealRating: typeof dealRating === 'string' ? dealRating : null,
@@ -125,7 +143,7 @@ export async function getLeadHearing(db: Executor, input: { organizationId: stri
     .where(hearingScope(input.organizationId, input.id))
     .limit(1);
   if (!row) throw notFound('hearing');
-  return toHearingView(row);
+  return toHearingView(row, await organizationRequiredItems(db, input.organizationId));
 }
 
 /**
@@ -372,6 +390,9 @@ export async function createLeadHearing(
         fields
       );
     }
+    // Nothing is prefilled or carried over into a field the organization does not ask (#98);
+    // the earlier hearing keeps its value
+    fields = withoutHiddenFields(fields, await getHearingOverrides(tx, organizationId));
 
     const [row] = await tx
       .insert(leadHearings)
@@ -397,7 +418,7 @@ export async function createLeadHearing(
       userId: input.userId,
       now,
     });
-    return toHearingView(row);
+    return toHearingView(row, await organizationRequiredItems(tx, organizationId));
   });
   // "When to act" follows the latest hearing (#151)
   await refreshActTimingAfterHearing(db, { organizationId, leadId, userId: input.userId });
@@ -453,7 +474,7 @@ export async function updateLeadHearing(
     return saved;
   });
   if (row) {
-    const view = toHearingView(row);
+    const view = toHearingView(row, await organizationRequiredItems(db, input.organizationId));
     await refreshActTimingAfterHearing(db, {
       organizationId: input.organizationId,
       leadId: row.leadId,
@@ -500,4 +521,16 @@ export async function deleteLeadHearing(
     userId: null,
   });
   return { id: row.id };
+}
+
+/** The fields without those the organization does not ask (#98) */
+export function withoutHiddenFields(
+  fields: HearingFields,
+  overrides: Pick<HearingCatalogOverrides, 'hidden'>
+): HearingFields {
+  const hidden = new Set(overrides.hidden ?? []);
+  if (hidden.size === 0) return fields;
+  return Object.fromEntries(
+    Object.entries(fields).filter(([key]) => !hidden.has(key))
+  ) as HearingFields;
 }

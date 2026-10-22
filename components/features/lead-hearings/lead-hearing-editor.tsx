@@ -11,12 +11,19 @@ import { useSession } from '@/lib/auth/client';
 import { autosaveStatus } from '@/lib/features/lead-hearings/autosave';
 import {
   DEFAULT_HEARING_CATALOG,
+  HEARING_BASE_CATALOG,
+  HEARING_SECTIONS,
   type HearingFieldDefinition,
   type HearingFieldKey,
   type HearingItemStatus,
   type HearingRequiredItem,
   type HearingSectionId,
+  resolveHearingCatalog,
 } from '@/lib/features/lead-hearings/catalog';
+import {
+  type HearingSettings,
+  overridesFromSettings,
+} from '@/lib/features/lead-hearings/catalog-settings';
 import {
   changeHearingOtherNote,
   changeHearingValue,
@@ -71,19 +78,33 @@ import { HearingFieldRow } from './hearing-field-row';
 import { HearingSummaryPanel } from './hearing-summary-panel';
 import { useHearingAutosave } from './use-hearing-autosave';
 
-/** Organization overrides (#98) will resolve their own catalog view */
-const catalog = DEFAULT_HEARING_CATALOG;
-
-/** Meeting mode: each required item with its fields, then the other fields per section */
-const meetingItems = catalog.requiredItems.map((item) => ({
-  item,
-  fields: requiredItemFields(catalog, item),
-}));
-const otherSections = otherFieldsBySection(catalog);
-const otherFieldCount = otherSections.reduce((sum, section) => sum + section.fields.length, 0);
-const meetingItemKeys = new Set<string>(
-  meetingItems.flatMap(({ fields }) => fields.map(({ field }) => field.key))
-);
+/**
+ * The organization's catalog (#98) as the editor uses it. Meeting mode: each required item with
+ * its fields, then the other fields per section. Hidden fields this record has a value for still
+ * show, so an older record stays readable.
+ */
+function editorCatalog(settings: HearingSettings | null, shownKeys: readonly string[]) {
+  const catalog = settings
+    ? resolveHearingCatalog(HEARING_BASE_CATALOG, {
+        ...overridesFromSettings(settings),
+        show: shownKeys,
+      })
+    : DEFAULT_HEARING_CATALOG;
+  const meetingItems = catalog.requiredItems.map((item) => ({
+    item,
+    fields: requiredItemFields(catalog, item),
+  }));
+  const otherSections = otherFieldsBySection(catalog);
+  return {
+    catalog,
+    meetingItems,
+    otherSections,
+    otherFieldCount: otherSections.reduce((sum, section) => sum + section.fields.length, 0),
+    meetingItemKeys: new Set<string>(
+      meetingItems.flatMap(({ fields }) => fields.map(({ field }) => field.key))
+    ),
+  };
+}
 
 /** Frames to wait for a field to appear after a jump from the summary */
 const JUMP_MAX_FRAMES = 10;
@@ -147,7 +168,7 @@ export function LeadHearingEditor({
   // Fields whose status the user picked on this screen (a typed value then keeps that status).
   // Only read by the handlers, so a ref: picking a status does not need another render.
   const statusPicked = useRef(new Set<string>());
-  const [tab, setTab] = useState<HearingSectionId>(catalog.sections[0].id);
+  const [tab, setTab] = useState<HearingSectionId>(HEARING_SECTIONS[0]);
   const [conflict, setConflict] = useState(false);
   const [othersOpen, setOthersOpen] = useState(false);
   const [view, setView] = useState<HearingEditorView>(initialView);
@@ -178,6 +199,15 @@ export function LeadHearingEditor({
   const hearing = trpc.leadHearings.get.useQuery(
     { organizationId: orgId, id: hearingId },
     { enabled: !!orgId, retry: false }
+  );
+  const catalogSettings = trpc.leadHearings.catalogSettings.useQuery(
+    { organizationId: orgId },
+    { enabled: !!orgId, retry: false, staleTime: 60_000 }
+  );
+  const shownKeys = useMemo(() => Object.keys(hearing.data?.fields ?? {}), [hearing.data]);
+  const { catalog, meetingItems, otherSections, otherFieldCount, meetingItemKeys } = useMemo(
+    () => editorCatalog(catalogSettings.data?.settings ?? null, shownKeys),
+    [catalogSettings.data, shownKeys]
   );
   const lead = trpc.leads.get.useQuery(
     { organizationId: orgId, id: leadId },
@@ -268,8 +298,14 @@ export function LeadHearingEditor({
   const autosave = useHearingAutosave({ enabled: loaded && !readOnly, start: startSave });
   const { notifyEdit } = autosave;
 
-  const missing = useMemo(() => computeFormMissingItems(form ?? {}, catalog.requiredItems), [form]);
-  const missingBySection = useMemo(() => countBySection(missing.missingKeys, catalog), [missing]);
+  const missing = useMemo(
+    () => computeFormMissingItems(form ?? {}, catalog.requiredItems),
+    [form, catalog]
+  );
+  const missingBySection = useMemo(
+    () => countBySection(missing.missingKeys, catalog),
+    [missing, catalog]
+  );
   const missingKeySet = useMemo(() => new Set<string>(missing.missingKeys), [missing]);
 
   const prefill = (hearing.data?.prefill ?? null) as HearingPrefillSnapshot | null;
@@ -284,7 +320,7 @@ export function LeadHearingEditor({
       }
     }
     return byKey;
-  }, [prefill, diagnosisLocale]);
+  }, [prefill, diagnosisLocale, catalog]);
 
   // Stable handlers, so a change re-renders only the row that changed
   const updateEntry = useCallback(
@@ -389,8 +425,9 @@ export function LeadHearingEditor({
     );
   }
 
-  // Until the form holds this hearing, never render (or save) another one
-  if (!hearing.data || !form || !baseUpdatedAt || !loaded) {
+  // Until the form holds this hearing, never render (or save) another one; the organization's
+  // settings first too, so hidden fields do not flash (on error the defaults are used)
+  if (!hearing.data || !form || !baseUpdatedAt || !loaded || catalogSettings.isPending) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

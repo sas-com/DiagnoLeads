@@ -415,11 +415,20 @@ export const HEARING_BASE_CATALOG: HearingBaseCatalog = {
 };
 
 /**
- * Changes an organization makes to the base catalog. Only the required items for now; the
- * organization settings (#98) add visibility, order and custom fields here.
+ * Changes an organization makes to the base catalog (#98): fields it does not ask, the order of
+ * the fields in each section, and the required items. Custom fields come later.
  */
 export interface HearingCatalogOverrides {
   requiredItems?: readonly HearingRequiredItem[];
+  /** Fields the organization does not ask */
+  hidden?: readonly string[];
+  /** Field order per section; fields not listed follow in the base order */
+  order?: Partial<Record<HearingSectionId, readonly string[]>>;
+  /**
+   * Hidden fields to show all the same: those a record already has a value for, so an older
+   * record stays readable after the field was hidden
+   */
+  show?: readonly string[];
 }
 
 export interface HearingCatalogField {
@@ -444,18 +453,41 @@ export function resolveHearingCatalog(
   base: HearingBaseCatalog,
   overrides: HearingCatalogOverrides = {}
 ): HearingCatalogView {
-  const requiredItems = overrides.requiredItems ?? base.requiredItems;
+  const notAsked = new Set<string>(overrides.hidden ?? []);
+  const hidden = new Set(notAsked);
+  for (const key of overrides.show ?? []) hidden.delete(key);
+  // A field not asked is never required, even where a record's value still shows it, so the
+  // screens and the missing count of the list agree
+  const givenItems = overrides.requiredItems ?? base.requiredItems;
+  const requiredItems =
+    notAsked.size === 0
+      ? givenItems
+      : givenItems.flatMap((item) => {
+          const keys = item.keys.filter((key) => !notAsked.has(key));
+          return keys.length > 0 ? [{ ...item, keys }] : [];
+        });
   const requiredKeys = new Set<string>(requiredItems.flatMap((item) => item.keys));
   const sectionOf = new Map<HearingFieldKey, HearingSectionId>();
-  const sections = base.sections.map((id) => ({
-    id,
-    fields: base.fields
-      .filter((field) => field.section === id)
-      .map((field) => {
+  const sections = base.sections.map((id) => {
+    const inSection = base.fields.filter((field) => field.section === id && !hidden.has(field.key));
+    const order = overrides.order?.[id] ?? [];
+    const rank = (key: string) => {
+      const index = order.indexOf(key);
+      return index === -1 ? order.length : index;
+    };
+    // Stable: fields not in the order keep the base order after the ordered ones
+    const ordered = inSection
+      .map((field, index) => ({ field, index }))
+      .sort((a, b) => rank(a.field.key) - rank(b.field.key) || a.index - b.index)
+      .map(({ field }) => field);
+    return {
+      id,
+      fields: ordered.map((field) => {
         sectionOf.set(field.key as HearingFieldKey, id);
         return { field, required: requiredKeys.has(field.key) };
       }),
-  }));
+    };
+  });
   return { sections, requiredItems, sectionOf };
 }
 

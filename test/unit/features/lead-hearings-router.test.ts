@@ -8,6 +8,12 @@ import type { SQL } from 'drizzle-orm';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// The organization's hearing settings (#98) are read from the DB; here they are the defaults,
+// so the queued results stay those of the hearing queries (the DB test covers the settings)
+vi.mock('@/lib/features/lead-hearings/settings', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/features/lead-hearings/settings')>()),
+  getHearingOverrides: vi.fn().mockResolvedValue({}),
+}));
 vi.mock('@/lib/db/rls', () => ({ setCurrentUser: vi.fn().mockResolvedValue(undefined) }));
 // The router must use ctx.db; the global client is left empty so a stray use fails
 vi.mock('@/lib/db/client', () => ({ db: {} }));

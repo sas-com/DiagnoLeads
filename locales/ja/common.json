@@ -3445,6 +3445,22 @@
       "changed": "前回から変更",
       "item": "項目",
       "otherNote": "{label}（{note}）"
+    },
+    "settings": {
+      "title": "ヒアリングの項目",
+      "description": "初回商談のヒアリングで聞く項目、必須にする項目、並び順を決めます。変えた内容は、ヒアリング票・未入力の判定・商談のまとめにすぐ反映されます。",
+      "asked": "聞く",
+      "required": "必須",
+      "askedLabel": "{field} を聞く",
+      "requiredLabel": "{field} を必須にする",
+      "moveUp": "{field} を上へ",
+      "moveDown": "{field} を下へ",
+      "save": "保存",
+      "reset": "初期の設定に戻す",
+      "saved": "ヒアリングの項目を保存しました",
+      "saveError": "保存できませんでした",
+      "readOnly": "変更できるのはオーナーと管理者です。",
+      "note": "聞かない項目にしても、すでに記録した値は消えず、その記録では表示されます。聞かない項目には、Web診断や代行聴取の事前入力をしません。変更は監査ログに残ります。"
     }
   },
   "leadActivity": {
