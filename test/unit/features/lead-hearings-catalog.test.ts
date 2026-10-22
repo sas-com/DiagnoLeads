@@ -125,7 +125,11 @@ describe('resolveHearingCatalog', () => {
         expect(view.sectionOf.get(field.key as never)).toBe(field.section);
       }
     }
-    expect(view).toEqual(DEFAULT_HEARING_CATALOG);
+    const { fieldOf, ...rest } = view;
+    const { fieldOf: _defaultFieldOf, ...defaults } = DEFAULT_HEARING_CATALOG;
+    expect(rest).toEqual(defaults);
+    expect(fieldOf('targetSystem')?.key).toBe('targetSystem');
+    expect(fieldOf('notAField')).toBeUndefined();
   });
 
   it('marks exactly the keys of the required items as required', () => {

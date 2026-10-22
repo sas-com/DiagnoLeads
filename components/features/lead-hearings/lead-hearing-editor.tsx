@@ -18,6 +18,7 @@ import {
   type HearingItemStatus,
   type HearingRequiredItem,
   type HearingSectionId,
+  hearingLabel,
   resolveHearingCatalog,
 } from '@/lib/features/lead-hearings/catalog';
 import {
@@ -83,12 +84,10 @@ import { useHearingAutosave } from './use-hearing-autosave';
  * its fields, then the other fields per section. Hidden fields this record has a value for still
  * show, so an older record stays readable.
  */
-function editorCatalog(settings: HearingSettings | null, shownKeys: readonly string[]) {
-  const catalog = settings
-    ? resolveHearingCatalog(HEARING_BASE_CATALOG, {
-        ...overridesFromSettings(settings),
-        show: shownKeys,
-      })
+function editorCatalog(settings: HearingSettings | null, stored: HearingFields) {
+  const overrides = settings ? overridesFromSettings(settings, stored) : null;
+  const catalog = overrides
+    ? resolveHearingCatalog(HEARING_BASE_CATALOG, { ...overrides, show: Object.keys(stored) })
     : DEFAULT_HEARING_CATALOG;
   const meetingItems = catalog.requiredItems.map((item) => ({
     item,
@@ -97,6 +96,7 @@ function editorCatalog(settings: HearingSettings | null, shownKeys: readonly str
   const otherSections = otherFieldsBySection(catalog);
   return {
     catalog,
+    customFields: overrides?.customFields ?? [],
     meetingItems,
     otherSections,
     otherFieldCount: otherSections.reduce((sum, section) => sum + section.fields.length, 0),
@@ -204,11 +204,14 @@ export function LeadHearingEditor({
     { organizationId: orgId },
     { enabled: !!orgId, retry: false, staleTime: 60_000 }
   );
-  const shownKeys = useMemo(() => Object.keys(hearing.data?.fields ?? {}), [hearing.data]);
-  const { catalog, meetingItems, otherSections, otherFieldCount, meetingItemKeys } = useMemo(
-    () => editorCatalog(catalogSettings.data?.settings ?? null, shownKeys),
-    [catalogSettings.data, shownKeys]
-  );
+  // Fields the record has values for still show; archived options only where chosen (#98)
+  const { catalog, customFields, meetingItems, otherSections, otherFieldCount, meetingItemKeys } =
+    useMemo(
+      () => editorCatalog(catalogSettings.data?.settings ?? null, hearing.data?.fields ?? {}),
+      [catalogSettings.data, hearing.data]
+    );
+  const customFieldsRef = useRef(customFields);
+  customFieldsRef.current = customFields;
   const lead = trpc.leads.get.useQuery(
     { organizationId: orgId, id: leadId },
     { enabled: !!orgId, retry: false }
@@ -279,7 +282,9 @@ export function LeadHearingEditor({
     const expectedUpdatedAt = baseUpdatedAtRef.current;
     const date = heldOnRef.current;
     if (!current || !expectedUpdatedAt) return false;
-    const parsed = hearingFieldsSchema.safeParse(toSavedHearingFields(current));
+    const parsed = hearingFieldsSchema.safeParse(
+      toSavedHearingFields(current, customFieldsRef.current)
+    );
     if (!parsed.success || !ISO_DATE_PATTERN.test(date)) {
       if (manual) toast.error(t('editor.invalid'));
       return false;
@@ -299,7 +304,7 @@ export function LeadHearingEditor({
   const { notifyEdit } = autosave;
 
   const missing = useMemo(
-    () => computeFormMissingItems(form ?? {}, catalog.requiredItems),
+    () => computeFormMissingItems(form ?? {}, catalog.requiredItems, catalog.fieldOf),
     [form, catalog]
   );
   const missingBySection = useMemo(
@@ -361,10 +366,12 @@ export function LeadHearingEditor({
   const handleItemStatus = useCallback(
     (item: HearingRequiredItem, status: HearingItemStatus) => {
       for (const key of item.keys) statusPicked.current.add(key);
-      setForm((current) => (current ? toggleHearingItemStatus(current, item, status) : current));
+      setForm((current) =>
+        current ? toggleHearingItemStatus(current, item, status, catalog.fieldOf) : current
+      );
       notifyEdit();
     },
-    [notifyEdit]
+    [notifyEdit, catalog]
   );
 
   // After a jump from the summary: show the field and put the focus on its input. The record
@@ -498,7 +505,7 @@ export function LeadHearingEditor({
                     className="h-11 sm:h-9"
                     onClick={() => goToField(firstMissingOf(item.keys))}
                   >
-                    {tRoot(item.labelKey)}
+                    {hearingLabel(tRoot, item)}
                   </Button>
                 </li>
               ))}
@@ -513,7 +520,7 @@ export function LeadHearingEditor({
             {catalog.requiredItems
               .filter((item) => missing.unconfirmed.includes(item.id))
               .map((item) => (
-                <li key={item.id}>{tRoot(item.labelKey)}</li>
+                <li key={item.id}>{hearingLabel(tRoot, item)}</li>
               ))}
           </ul>
         </Callout>
@@ -649,7 +656,7 @@ export function LeadHearingEditor({
           {meetingMode ? (
             <div className="space-y-4" data-testid="hearing-meeting-mode">
               {meetingItems.map(({ item, fields }) => {
-                const itemLabel = tRoot(item.labelKey);
+                const itemLabel = hearingLabel(tRoot, item);
                 const filled = !missing.missing.includes(item.id);
                 const quickStatuses = [
                   ['next', t('meeting.next'), t('meeting.nextOf', { item: itemLabel })],

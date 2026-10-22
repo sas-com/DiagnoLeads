@@ -65,12 +65,19 @@ export interface HearingOption {
   value: string;
   labelKey?: string;
   label?: LocalizedText;
+  /**
+   * An option an organization removed from its own field (#98): kept so older records still
+   * read, not offered for new answers
+   */
+  archived?: boolean;
 }
 
 interface FieldBase<K extends string> {
   key: K;
   section: HearingSectionId;
   labelKey: string;
+  /** The name an organization gave its own field (#98); shown instead of labelKey */
+  label?: string;
 }
 
 export interface HearingChoiceField<K extends string = string> extends FieldBase<K> {
@@ -327,9 +334,17 @@ export const HEARING_FIELDS = [
   textField('outcomeNotes', 'outcome'),
 ] as const;
 
-export type HearingFieldKey = (typeof HEARING_FIELDS)[number]['key'];
+/** Keys of the fields defined in code */
+export type HearingBaseFieldKey = (typeof HEARING_FIELDS)[number]['key'];
+/** Keys of an organization's own fields (#98): 'custom:' and the field's id */
+export type HearingCustomFieldKey = `custom:${string}`;
+export type HearingFieldKey = HearingBaseFieldKey | HearingCustomFieldKey;
 
-export const HEARING_FIELD_KEYS = HEARING_FIELDS.map((field) => field.key) as HearingFieldKey[];
+export const HEARING_CUSTOM_FIELD_PREFIX = 'custom:';
+export const isHearingCustomFieldKey = (key: string): key is HearingCustomFieldKey =>
+  key.startsWith(HEARING_CUSTOM_FIELD_PREFIX);
+
+export const HEARING_FIELD_KEYS = HEARING_FIELDS.map((field) => field.key) as HearingBaseFieldKey[];
 
 const fieldsByKey = new Map<string, HearingFieldDefinition>(
   HEARING_FIELDS.map((field) => [field.key, field])
@@ -339,7 +354,7 @@ export function getHearingField(key: string): HearingFieldDefinition | undefined
   return fieldsByKey.get(key);
 }
 
-export function isHearingFieldKey(key: string): key is HearingFieldKey {
+export function isHearingFieldKey(key: string): key is HearingBaseFieldKey {
   return fieldsByKey.has(key);
 }
 
@@ -375,11 +390,13 @@ export function choosesOtherOption(value: unknown): boolean {
 export interface HearingRequiredItem {
   id: string;
   labelKey: string;
+  /** The name of an organization's own field (#98); shown instead of labelKey */
+  label?: string;
   /** Every key must be filled (or marked not applicable) for the item to count as filled */
   keys: readonly HearingFieldKey[];
 }
 
-const required = (id: string, keys: HearingFieldKey[]): HearingRequiredItem => ({
+const required = (id: string, keys: HearingBaseFieldKey[]): HearingRequiredItem => ({
   id,
   labelKey: `leadHearings.required.${id}`,
   keys,
@@ -436,7 +453,15 @@ export interface HearingCatalogOverrides {
    * record stays readable after the field was hidden
    */
   show?: readonly string[];
+  /** The organization's own fields (#98), after the base fields of their section */
+  customFields?: readonly HearingFieldDefinition[];
 }
+
+/** The name of a field or a required item: the organization's own, or from the locales */
+export const hearingLabel = (
+  t: (key: string) => string,
+  item: { label?: string; labelKey: string }
+): string => item.label ?? t(item.labelKey);
 
 export interface HearingCatalogField {
   field: HearingFieldDefinition;
@@ -454,6 +479,8 @@ export interface HearingCatalogView {
   sections: readonly HearingCatalogSection[];
   requiredItems: readonly HearingRequiredItem[];
   sectionOf: ReadonlyMap<HearingFieldKey, HearingSectionId>;
+  /** Every field the catalog knows, shown or not (base and the organization's own) */
+  fieldOf: (key: string) => HearingFieldDefinition | undefined;
 }
 
 export function resolveHearingCatalog(
@@ -475,8 +502,10 @@ export function resolveHearingCatalog(
         });
   const requiredKeys = new Set<string>(requiredItems.flatMap((item) => item.keys));
   const sectionOf = new Map<HearingFieldKey, HearingSectionId>();
+  const allFields = [...base.fields, ...(overrides.customFields ?? [])];
+  const byKey = new Map<string, HearingFieldDefinition>(allFields.map((f) => [f.key, f]));
   const sections = base.sections.map((id) => {
-    const inSection = base.fields.filter((field) => field.section === id && !hidden.has(field.key));
+    const inSection = allFields.filter((field) => field.section === id && !hidden.has(field.key));
     const order = overrides.order?.[id] ?? [];
     const rank = (key: string) => {
       const index = order.indexOf(key);
@@ -495,7 +524,7 @@ export function resolveHearingCatalog(
       }),
     };
   });
-  return { sections, requiredItems, sectionOf };
+  return { sections, requiredItems, sectionOf, fieldOf: (key) => byKey.get(key) };
 }
 
 /** The catalog without organization overrides */

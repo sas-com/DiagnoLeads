@@ -3431,7 +3431,8 @@
         "currentSystem": "Current state",
         "challenges": "Challenges",
         "requirements": "Requirements",
-        "result": "Rating and next meeting"
+        "result": "Rating and next meeting",
+        "own": "Your own fields"
       },
       "yearMonth": "{year}-{mm}",
       "date": "{year}-{mm}-{dd}",
@@ -3485,7 +3486,30 @@
       "saved": "Hearing fields saved",
       "saveError": "Could not save",
       "readOnly": "Owners and admins can change these.",
-      "note": "A field no longer asked keeps the values already recorded, which still show on those records. Fields not asked are not prefilled from the Web diagnosis or the sales agency. Changes are kept in the audit log."
+      "note": "A field no longer asked keeps the values already recorded, which still show on those records. Fields not asked are not prefilled from the Web diagnosis or the sales agency. Removing one of your own fields keeps its recorded values and its name. Changes are kept in the audit log.",
+      "custom": {
+        "title": "Your own fields",
+        "description": "Add fields only your organization asks. In the list above you choose whether they are asked, required and where they go.",
+        "empty": "No fields of your own yet.",
+        "label": "Field name",
+        "type": "Answer",
+        "section": "Section",
+        "types": {
+          "text": "Free text",
+          "single": "One choice",
+          "multiple": "Several choices"
+        },
+        "options": "Choices",
+        "optionLabel": "Choice {number} of {field}",
+        "addOption": "Add a choice",
+        "removeOption": "Remove the choice \"{option}\"",
+        "add": "Add a field",
+        "remove": "Remove {field}",
+        "removeShort": "Remove",
+        "untitled": "Own field {number}",
+        "untitledShort": "(unnamed field)",
+        "invalid": "Could not save. Give your own fields a name, and choice fields their choices."
+      }
     }
   },
   "leadActivity": {

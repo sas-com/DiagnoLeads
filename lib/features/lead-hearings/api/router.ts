@@ -12,6 +12,7 @@ import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { HEARING_BASE_CATALOG, resolveHearingCatalog } from '../catalog';
+import { mergeCustomFields } from '../catalog-settings';
 import {
   createLeadHearing,
   deleteLeadHearing,
@@ -86,10 +87,22 @@ export const leadHearingsRouter = router({
       // The change and its audit log row together; the row lock orders concurrent saves
       return ctx.db.transaction(async (tx) => {
         const before = await getHearingSettings(tx, ctx.organization.id, { forUpdate: true });
+        // The organization's own fields are never deleted: those taken away stay archived
+        const merged = hearingSettingsSchema.safeParse({
+          ...input.settings,
+          customFields: mergeCustomFields(before.customFields, input.settings.customFields),
+        });
+        if (!merged.success) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Too many fields of the organization, archived ones included',
+          });
+        }
+        const settings = merged.data;
         const version = await saveHearingSettings(
           tx,
           ctx.organization.id,
-          input.settings,
+          settings,
           before.version
         );
         // The version of each change is kept in the audit log with what changed
@@ -101,7 +114,7 @@ export const leadHearingsRouter = router({
           resourceId: ctx.organization.id,
           changes: {
             before: { hearingCatalog: before },
-            after: { hearingCatalog: { ...input.settings, version } },
+            after: { hearingCatalog: { ...settings, version } },
           },
         });
         return { version };

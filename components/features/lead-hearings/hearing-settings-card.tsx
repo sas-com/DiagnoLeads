@@ -6,7 +6,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { HEARING_BASE_CATALOG, HEARING_SECTIONS } from '@/lib/features/lead-hearings/catalog';
 import {
   BASE_REQUIRED_KEYS,
+  type HearingCustomField,
   type HearingSettings,
+  customFieldKey,
   hearingSettingsSchema,
 } from '@/lib/features/lead-hearings/catalog-settings';
 import { trpc } from '@/lib/trpc/client';
@@ -14,23 +16,36 @@ import { ArrowDown, ArrowUp, Loader2, RotateCcw } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useId, useState } from 'react';
 import { toast } from 'sonner';
+import { HearingCustomFieldsEditor } from './hearing-custom-fields-editor';
 
 interface Draft {
   hidden: Set<string>;
   required: Set<string>;
   order: Record<string, string[]>;
+  /** The organization's own fields in use */
+  custom: HearingCustomField[];
+  /** Archived own fields: sent back as they are */
+  archived: HearingCustomField[];
 }
 
-const baseOrder = (): Record<string, string[]> =>
+/** The order with nothing changed: base fields, then the own fields of the section */
+const baseOrder = (custom: readonly HearingCustomField[]): Record<string, string[]> =>
   Object.fromEntries(
     HEARING_SECTIONS.map((section) => [
       section,
-      HEARING_BASE_CATALOG.fields.filter((field) => field.section === section).map((f) => f.key),
+      [
+        ...HEARING_BASE_CATALOG.fields.filter((f) => f.section === section).map((f) => f.key),
+        ...custom.filter((f) => f.section === section).map((f) => customFieldKey(f.id)),
+      ],
     ])
   );
 
-function toDraft(settings: HearingSettings): Draft {
-  const order = baseOrder();
+function toDraft(
+  settings: Pick<HearingSettings, 'hidden' | 'required' | 'order'>,
+  allCustom: readonly HearingCustomField[]
+): Draft {
+  const custom = allCustom.filter((field) => !field.archived);
+  const order = baseOrder(custom);
   for (const section of HEARING_SECTIONS) {
     const saved: readonly string[] = settings.order[section] ?? [];
     const rank = (key: string) => {
@@ -43,6 +58,8 @@ function toDraft(settings: HearingSettings): Draft {
     hidden: new Set(settings.hidden),
     required: new Set<string>(settings.required ?? BASE_REQUIRED_KEYS),
     order,
+    custom,
+    archived: allCustom.filter((field) => field.archived),
   };
 }
 
@@ -67,14 +84,63 @@ export function HearingSettingsCard({ organizationId }: { organizationId: string
   });
 
   useEffect(() => {
-    if (query.data) setDraft(toDraft(query.data.settings));
+    if (query.data) setDraft(toDraft(query.data.settings, query.data.settings.customFields ?? []));
   }, [query.data]);
 
   if (query.isError) return null;
   const canEdit = !!query.data?.canEdit;
   const labelOf = (key: string) => {
     const field = HEARING_BASE_CATALOG.fields.find((item) => item.key === key);
-    return field ? tRoot(field.labelKey) : key;
+    if (field) return tRoot(field.labelKey);
+    const own = draft?.custom.find((item) => customFieldKey(item.id) === key);
+    return own?.label || t('custom.untitledShort');
+  };
+  const savedIds = new Set((query.data?.settings.customFields ?? []).map((field) => field.id));
+
+  const addCustom = (field: HearingCustomField) => {
+    if (!draft) return;
+    const key = customFieldKey(field.id);
+    setDraft({
+      ...draft,
+      custom: [...draft.custom, field],
+      order: { ...draft.order, [field.section]: [...draft.order[field.section], key] },
+    });
+  };
+  const changeCustom = (field: HearingCustomField) => {
+    if (!draft) return;
+    const key = customFieldKey(field.id);
+    const previous = draft.custom.find((item) => item.id === field.id);
+    let order = draft.order;
+    // A field moved to another section goes to the end of it
+    if (previous && previous.section !== field.section) {
+      order = {
+        ...order,
+        [previous.section]: order[previous.section].filter((k) => k !== key),
+        [field.section]: [...order[field.section], key],
+      };
+    }
+    setDraft({
+      ...draft,
+      order,
+      custom: draft.custom.map((item) => (item.id === field.id ? field : item)),
+    });
+  };
+  const removeCustom = (fieldId: string) => {
+    if (!draft) return;
+    const key = customFieldKey(fieldId);
+    const without = (set: Set<string>) => new Set([...set].filter((k) => k !== key));
+    setDraft({
+      ...draft,
+      custom: draft.custom.filter((item) => item.id !== fieldId),
+      hidden: without(draft.hidden),
+      required: without(draft.required),
+      order: Object.fromEntries(
+        Object.entries(draft.order).map(([section, keys]) => [
+          section,
+          keys.filter((k) => k !== key),
+        ])
+      ),
+    });
   };
 
   const toggle = (which: 'hidden' | 'required', key: string, on: boolean) => {
@@ -102,7 +168,7 @@ export function HearingSettingsCard({ organizationId }: { organizationId: string
     if (!draft) return;
     // Only what differs from the base is kept, so fields and required items added to the base
     // later reach the organization too
-    const base = baseOrder();
+    const base = baseOrder(draft.custom);
     const required = [...draft.required].filter((key) => !draft.hidden.has(key));
     const baseRequired = BASE_REQUIRED_KEYS.filter((key) => !draft.hidden.has(key));
     const sameRequired =
@@ -116,9 +182,20 @@ export function HearingSettingsCard({ organizationId }: { organizationId: string
           (section) => draft.order[section].join() !== base[section].join()
         ).map((section) => [section, draft.order[section]])
       ),
+      customFields: [
+        ...draft.custom.map((field) => ({
+          ...field,
+          label: field.label.trim(),
+          // Options left empty are dropped
+          options: field.options
+            .map((o) => ({ ...o, label: o.label.trim() }))
+            .filter((o) => o.label !== ''),
+        })),
+        ...draft.archived,
+      ],
     });
     if (!parsed.success) {
-      toast.error(t('saveError'));
+      toast.error(t('custom.invalid'));
       return;
     }
     save.mutate({ organizationId, settings: parsed.data });
@@ -210,6 +287,15 @@ export function HearingSettingsCard({ organizationId }: { organizationId: string
                 </ul>
               </fieldset>
             ))}
+            <HearingCustomFieldsEditor
+              fields={draft.custom}
+              savedIds={savedIds}
+              total={draft.custom.length + draft.archived.length}
+              canEdit={canEdit}
+              onAdd={addCustom}
+              onChange={changeCustom}
+              onRemove={removeCustom}
+            />
             {canEdit ? (
               <div className="flex flex-wrap gap-2">
                 <Button type="submit" disabled={save.isPending}>
@@ -219,7 +305,15 @@ export function HearingSettingsCard({ organizationId }: { organizationId: string
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setDraft(toDraft({ hidden: [], required: null, order: {} }))}
+                  onClick={() =>
+                    // The own fields stay; only what is asked, required and the order go back
+                    setDraft(
+                      toDraft({ hidden: [], required: null, order: {} }, [
+                        ...draft.custom,
+                        ...draft.archived,
+                      ])
+                    )
+                  }
                 >
                   <RotateCcw className="mr-1 h-4 w-4" aria-hidden="true" />
                   {t('reset')}

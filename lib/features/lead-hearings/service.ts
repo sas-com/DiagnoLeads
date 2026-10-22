@@ -30,6 +30,7 @@ import {
   type HearingCatalogOverrides,
   type HearingRequiredItem,
   LEAD_HEARINGS_MAX_PER_LEAD,
+  isHearingCustomFieldKey,
   resolveHearingCatalog,
 } from './catalog';
 import { computeMissingItems } from './missing';
@@ -40,6 +41,7 @@ import {
   type HearingFields,
   type HearingPrefillSnapshot,
   type UpdateLeadHearingInput,
+  hearingSaveEntrySchemaFor,
   parseStoredHearingFields,
 } from './types/schemas';
 
@@ -446,6 +448,8 @@ export async function updateLeadHearing(
   // Always move updatedAt forward, even within the same millisecond
   const updatedAt = new Date(Math.max(now.getTime(), input.expectedUpdatedAt.getTime() + 1));
   let before: HearingFields = {};
+  // Values of the organization's own fields must fit how it defined them (#98)
+  assertCustomFieldValues(input.fields, await getHearingOverrides(db, input.organizationId));
   const row = await db.transaction(async (tx) => {
     // The answer on AI analysis before this save, to tell the assignee only of a change (#160)
     const [previous] = await tx
@@ -542,4 +546,22 @@ export function withoutHiddenFields(
   return Object.fromEntries(
     Object.entries(fields).filter(([key]) => !hidden.has(key))
   ) as HearingFields;
+}
+
+/**
+ * Values of the organization's own fields (#98), checked against its settings: the field must
+ * exist (archived ones still do, so older records save as they are) and the value fit it
+ */
+export function assertCustomFieldValues(
+  fields: HearingFields,
+  overrides: Pick<HearingCatalogOverrides, 'customFields'>
+): void {
+  const defined = new Map((overrides.customFields ?? []).map((field) => [field.key, field]));
+  for (const [key, entry] of Object.entries(fields)) {
+    if (!isHearingCustomFieldKey(key)) continue;
+    const field = defined.get(key);
+    if (!field || !hearingSaveEntrySchemaFor(field).safeParse(entry).success) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: `Invalid value for ${key}` });
+    }
+  }
 }

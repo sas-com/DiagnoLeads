@@ -63,13 +63,14 @@ const COMPLETE: HearingFields = {
 };
 
 describe('buildHearingSummary: sections', () => {
-  it('has the four sections with the layout fields in order', () => {
+  it('has the sections with the layout fields in order, own fields last (none here)', () => {
     const summary = build(COMPLETE);
     expect(summary.sections.map((s) => [s.id, s.title])).toEqual([
       ['currentSystem', '現状'],
       ['challenges', '課題'],
       ['requirements', '要件'],
       ['result', '評価と次回'],
+      ['own', '独自の項目'],
     ]);
     for (const section of summary.sections) {
       expect(section.items.map((i) => i.key)).toEqual(HEARING_SUMMARY_LAYOUT[section.id]);
