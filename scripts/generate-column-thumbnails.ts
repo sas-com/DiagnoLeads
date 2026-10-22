@@ -174,12 +174,18 @@ function shareCards(): Card[] {
       // The keys of a spec are plain strings: look them up in the untyped messages
       const messages: AbstractIntlMessages = MESSAGES[locale];
       const t = createTranslator({ locale, messages });
+      const title: string = t(spec.titleKey as never);
+      const lines = spec.lines?.[locale];
+      if (lines && lines.join('').replace(/\s/g, '') !== title.replace(/\s/g, '')) {
+        throw new Error(`${page}-${locale}: the lines are not the title`);
+      }
       return {
         name: `${page}-${locale}`,
         file: axShareImagePath(page, locale),
         locale,
         label: t(spec.labelKey as never),
-        title: t(spec.titleKey as never),
+        title,
+        lines: lines ? [...lines] : undefined,
         icon: spec.icon,
         accent: 'yellow',
       };

@@ -223,6 +223,23 @@ describe('share images of the landing pages and the column list (#344)', () => {
     }
   });
 
+  it.each(images)('%s breaks its title by hand only into the title itself', (_, page, locale) => {
+    const lines = AX_SHARE_IMAGES[page].lines?.[locale];
+    if (!lines) return;
+    const messages: AbstractIntlMessages = locale === 'en' ? en : ja;
+    const title: string = createTranslator({ locale, messages })(
+      AX_SHARE_IMAGES[page].titleKey as never
+    );
+    expect(lines.join('').replace(/\s/g, '')).toBe(title.replace(/\s/g, ''));
+  });
+
+  it('puts the two choices of the Access title on one line (#347)', () => {
+    expect(AX_SHARE_IMAGES['ax-access'].lines?.ja).toEqual([
+      'その Access、',
+      '直して使うか、Web に移すか。',
+    ]);
+  });
+
   it('uses the image of the page locale, or the first one the page has', () => {
     expect(axShareLocale('ax-migration', 'en')).toBe('en');
     expect(axShareLocale('ax-column', 'en')).toBe('ja');
