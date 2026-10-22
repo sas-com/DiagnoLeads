@@ -685,6 +685,35 @@
         "unsubscribe": "Unsubscribe",
         "privacy": "Privacy policy"
       }
+    },
+    "emailUnsubscribe": {
+      "meta": {
+        "title": "Unsubscribe | AX Migration"
+      },
+      "title": "Unsubscribe from our emails",
+      "intro": "This stops the emails we send you about the AX Migration Free Web Check. If you wish to proceed, please press the button below.",
+      "note": "Nothing changes until you press the button.",
+      "button": "Unsubscribe",
+      "sending": "Processing…",
+      "done": {
+        "title": "You have been unsubscribed",
+        "body": "We will no longer send emails about the AX Migration Free Web Check to this address. If an email was already on its way, we apologize for the inconvenience."
+      },
+      "invalid": {
+        "title": "This link cannot be used",
+        "body": "The link may be incorrect or no longer valid. Please try the unsubscribe link in the email again, or contact us using the details below."
+      },
+      "incomplete": {
+        "title": "The link is incomplete",
+        "body": "The address of this page is missing the information needed to unsubscribe. Please open the unsubscribe link in the email again as it is. If that does not work, please contact us using the details below."
+      },
+      "error": "We could not complete your request. Please try again later.",
+      "contact": {
+        "title": "Contact",
+        "lead": "If you have any questions, please contact us.",
+        "email": "Email",
+        "phone": "Phone"
+      }
     }
   },
   "publicDiagnosis": {
@@ -3229,7 +3258,11 @@
     "publishedAt": "Published",
     "updatedAt": "Updated",
     "readArticle": "Read the article",
-    "ctaLead": "The free web check gives a guide to the way forward that suits your Access tool."
+    "ctaLead": "The free web check gives a guide to the way forward that suits your Access tool.",
+    "thumbnailLabel": "Article | {topic}",
+    "topics": {
+      "access": "Microsoft Access"
+    }
   },
   "organizations": {
     "switcher": {

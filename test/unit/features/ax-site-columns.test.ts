@@ -2,12 +2,16 @@
  * Column articles of the AX migration site (#324): the content is typed data, checked here
  * before it is published.
  */
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import {
   COLUMNS,
   COLUMN_PATHS,
+  COLUMN_THUMBNAIL_SIZE,
   type Column,
   columnLinks,
   columnStrings,
+  columnThumbnailPath,
   columnUpdatedAt,
   getColumn,
   isAllowedHref,
@@ -140,6 +144,39 @@ describe('the Access series', () => {
   });
 });
 
+describe('column thumbnails (#335)', () => {
+  /** Width and height from the IHDR chunk of a PNG */
+  const pngSize = (png: Buffer) => ({ width: png.readUInt32BE(16), height: png.readUInt32BE(20) });
+
+  it.each(COLUMNS.map((column) => [column.slug, column] as const))(
+    '%s has its 1200x630 PNG under 200 KB in public/ (bun run columns:thumbnails)',
+    (slug) => {
+      expect(columnThumbnailPath(slug)).toBe(`/images/columns/${slug}.png`);
+      const png = readFileSync(path.join(process.cwd(), 'public', columnThumbnailPath(slug)));
+      expect(png.subarray(1, 4).toString('ascii')).toBe('PNG');
+      expect(pngSize(png)).toEqual(COLUMN_THUMBNAIL_SIZE);
+      expect(png.byteLength).toBeLessThan(200 * 1024);
+    }
+  );
+
+  it('breaks the titles into at most 3 lines that make up the title', () => {
+    const lines = (lines: string[]) => ({ ...article, thumbnail: { icon: 'calendar-x' as const, lines } });
+    expect(validateColumn(lines(['Access 2016・2019・2021 の', 'サポート終了'])).at(-1)).toBe(
+      'thumbnail lines are not the title'
+    );
+    expect(validateColumn(lines(['a', 'b', 'c', 'd']))).toContain('thumbnail has 4 lines (1 to 3)');
+    expect(validateColumn(lines([' ', article.title]))).toContain('a thumbnail line is empty');
+  });
+
+  it('refuses an unknown icon or accent', () => {
+    const odd = { ...article, thumbnail: { icon: 'rocket', accent: 'pink' } } as unknown as Column;
+    expect(validateColumn(odd)).toEqual([
+      'thumbnail icon "rocket" is unknown',
+      'thumbnail accent "pink" is unknown',
+    ]);
+  });
+});
+
 describe('column validation', () => {
   const broken: Column = {
     ...article,
@@ -179,6 +216,8 @@ describe('column validation', () => {
       'link "javascript:alert(1)" is neither a site path nor https',
       'link "//evil.example/" is neither a site path nor https',
       'link "relative/path" is neither a site path nor https',
+      // The empty title no longer matches the lines of the thumbnail
+      'thumbnail lines are not the title',
     ]);
   });
 
@@ -201,7 +240,12 @@ describe('column structured data', () => {
   it('describes the article with its dates and the operator', () => {
     const url = 'https://example.jp/ja/ax-migration/column/access-office-support-end';
     expect(
-      articleJsonLd(article, { url, operatorName: 'エス・エー・エス株式会社', operatorUrl: 'https://sas-com.com/' })
+      articleJsonLd(article, {
+        url,
+        imageUrl: 'https://example.jp/images/columns/access-office-support-end.png',
+        operatorName: 'エス・エー・エス株式会社',
+        operatorUrl: 'https://sas-com.com/',
+      })
     ).toEqual({
       '@context': 'https://schema.org',
       '@type': 'Article',
@@ -212,6 +256,12 @@ describe('column structured data', () => {
       dateModified: '2026-10-22T00:00:00+09:00',
       mainEntityOfPage: { '@type': 'WebPage', '@id': url },
       url,
+      image: {
+        '@type': 'ImageObject',
+        url: 'https://example.jp/images/columns/access-office-support-end.png',
+        width: 1200,
+        height: 630,
+      },
       author: { '@type': 'Organization', name: 'エス・エー・エス株式会社', url: 'https://sas-com.com/' },
       publisher: { '@type': 'Organization', name: 'エス・エー・エス株式会社', url: 'https://sas-com.com/' },
     });

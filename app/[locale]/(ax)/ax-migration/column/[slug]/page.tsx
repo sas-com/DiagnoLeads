@@ -7,16 +7,19 @@ import {
   JsonLd,
   columnToc,
 } from '@/components/features/ax-site/column-article';
+import { ColumnThumbnail } from '@/components/features/ax-site/column-thumbnail';
 import { AX_SITE_LINKS } from '@/components/features/ax-site/site-config';
 import {
   COLUMNS,
   COLUMN_CTAS,
   COLUMN_HEADER_CTAS,
   COLUMN_INDEX_PATH,
+  COLUMN_THUMBNAIL_SIZE,
   COLUMN_TRADEMARK_KEYS,
   type Column,
   columnDateTime,
   columnPath,
+  columnThumbnailPath,
   formatColumnDate,
   getColumn,
   isColumnLocale,
@@ -35,6 +38,11 @@ interface ColumnPageProps {
 }
 
 /** Articles exist in Japanese only; other locales and unknown slugs are 404 */
+/** Absolute URL of an article's thumbnail, for sharing and the structured data */
+function thumbnailUrl(column: Column): string {
+  return `${siteBaseUrl()}${columnThumbnailPath(column.slug)}`;
+}
+
 async function findColumn(params: ColumnPageProps['params']): Promise<Column> {
   const { locale, slug } = await params;
   const column = getColumn(slug);
@@ -48,6 +56,8 @@ export async function generateMetadata({ params }: ColumnPageProps): Promise<Met
   const site = await getTranslations({ locale: column.locale, namespace: 'axSite.meta' });
   const title = t('articleTitle', { title: column.seoTitle, siteName: site('siteName') });
   const path = `/${column.locale}${columnPath(column.slug)}`;
+  // The title card (#335); its alt is the title, since a shared card shows the image alone
+  const image = { url: thumbnailUrl(column), ...COLUMN_THUMBNAIL_SIZE, alt: column.title };
   return {
     title: { absolute: title },
     description: column.description,
@@ -64,8 +74,14 @@ export async function generateMetadata({ params }: ColumnPageProps): Promise<Met
       siteName: site('siteName'),
       publishedTime: columnDateTime(column.publishedAt),
       modifiedTime: columnDateTime(column.updatedAt),
+      images: [image],
     },
-    twitter: { card: 'summary', title, description: column.description },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description: column.description,
+      images: [image],
+    },
     // Indexed only after public launch (test mode off, which needs the publication approval)
     robots: robotsFor(columnPath(column.slug)),
   };
@@ -99,6 +115,7 @@ export default async function ColumnPage({ params }: ColumnPageProps) {
       <JsonLd
         data={articleJsonLd(column, {
           url,
+          imageUrl: thumbnailUrl(column),
           operatorName: site('meta.siteName'),
           operatorUrl: AX_SITE_LINKS.operator,
         })}
@@ -120,6 +137,13 @@ export default async function ColumnPage({ params }: ColumnPageProps) {
             crossLinks
           />
           <header className="mt-8">
+            {/* The width of the article column: 40em of 17px from 640px, the screen below */}
+            <ColumnThumbnail
+              slug={column.slug}
+              sizes="(min-width: 640px) 680px, calc(100vw - 2rem)"
+              preload
+              className="mb-8 shadow-sm"
+            />
             <p className="text-sm font-bold tracking-wider text-ax-teal-dark">{t('label')}</p>
             <h1 className="mt-2 text-[1.625rem] font-bold leading-snug sm:text-[2rem]">
               {column.title}

@@ -8,6 +8,7 @@ import { getMessages, getTranslations } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { Providers } from '../providers';
 import '../globals.css';
+import { googleSiteVerification } from '@/lib/seo/site-verification';
 
 /**
  * Viewport configuration for performance
@@ -32,6 +33,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: 'metadata.root' });
+  const googleVerification = googleSiteVerification();
 
   return {
     title: {
@@ -54,6 +56,8 @@ export async function generateMetadata({
       locale: locale === 'ja' ? 'ja_JP' : 'en_US',
       siteName: t('title'),
     },
+    // Search Console ownership (HTML tag), inherited by every page under the locale
+    ...(googleVerification ? { verification: { google: googleVerification } } : {}),
   };
 }
 

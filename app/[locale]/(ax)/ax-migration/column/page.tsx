@@ -1,5 +1,6 @@
 import { AxSiteShell } from '@/components/features/ax-site/ax-site-shell';
 import { ColumnBreadcrumbs, JsonLd } from '@/components/features/ax-site/column-article';
+import { ColumnThumbnail } from '@/components/features/ax-site/column-thumbnail';
 import {
   COLUMNS,
   COLUMN_INDEX_PATH,
@@ -80,26 +81,36 @@ export default async function ColumnIndexPage({ params }: ColumnIndexPageProps) 
           <ul className="mt-10 space-y-5">
             {columns.map((column) => (
               <li key={column.slug}>
-                <article className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-black/5 sm:p-8">
-                  <p className="text-sm text-gray-600">
-                    {t('publishedAt')}{' '}
-                    <time dateTime={column.publishedAt}>
-                      {formatColumnDate(column.publishedAt, locale)}
-                    </time>
-                  </p>
-                  <h2 className="mt-2 text-lg font-bold leading-snug sm:text-xl">
-                    <a
-                      href={`/${locale}${columnPath(column.slug)}`}
-                      className="hover:text-ax-teal-dark hover:underline hover:underline-offset-4"
-                    >
-                      {column.title}
-                    </a>
-                  </h2>
-                  <p className="mt-3 text-sm leading-relaxed text-gray-700">{column.description}</p>
-                  <p className="mt-4 flex items-center gap-1 text-sm font-bold text-ax-teal-dark">
-                    <span aria-hidden="true">{t('readArticle')}</span>
-                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </p>
+                <article className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5 sm:flex sm:gap-6 sm:p-6">
+                  {/* Decorative: the link below names the article; not a second link to it */}
+                  <ColumnThumbnail
+                    slug={column.slug}
+                    sizes="(min-width: 640px) 240px, calc(100vw - 4rem)"
+                    className="rounded-xl sm:w-60 sm:shrink-0 sm:self-start"
+                  />
+                  <div className="mt-4 px-2 pb-2 sm:mt-0 sm:px-0 sm:pb-0">
+                    <p className="text-sm text-gray-600">
+                      {t('publishedAt')}{' '}
+                      <time dateTime={column.publishedAt}>
+                        {formatColumnDate(column.publishedAt, locale)}
+                      </time>
+                    </p>
+                    <h2 className="mt-2 text-lg font-bold leading-snug sm:text-xl">
+                      <a
+                        href={`/${locale}${columnPath(column.slug)}`}
+                        className="hover:text-ax-teal-dark hover:underline hover:underline-offset-4"
+                      >
+                        {column.title}
+                      </a>
+                    </h2>
+                    <p className="mt-3 text-sm leading-relaxed text-gray-700">
+                      {column.description}
+                    </p>
+                    <p className="mt-4 flex items-center gap-1 text-sm font-bold text-ax-teal-dark">
+                      <span aria-hidden="true">{t('readArticle')}</span>
+                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </p>
+                  </div>
                 </article>
               </li>
             ))}

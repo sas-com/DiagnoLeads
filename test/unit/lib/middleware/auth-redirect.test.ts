@@ -51,6 +51,8 @@ describe('sign-in redirect for admin pages', () => {
   it('leaves public pages alone', () => {
     expect(signInRedirect(request('/ja/ax-diagnosis'))).toBeNull();
     expect(signInRedirect(request('/ja/invite/tok'))).toBeNull();
+    expect(signInRedirect(request('/ja/email/unsubscribe'))).toBeNull();
+    expect(signInRedirect(request('/en/email/unsubscribe'))).toBeNull();
     expect(signInRedirect(request('/ja'))).toBeNull();
   });
 });

@@ -17,6 +17,10 @@ export const accessAccdeOnly: Column = {
   updatedAt: '2026-10-22',
   related: 'access',
   cta: 'access-diagnosis',
+  thumbnail: {
+    icon: 'file-lock',
+    lines: ['.accde（.mde）しか', '残っていないときにできること'],
+  },
   blocks: [
     { type: 'h2', id: 'what-is-accde', text: '.accde と .mde は、「中身を直せない形」のファイル' },
     {

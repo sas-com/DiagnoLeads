@@ -40,6 +40,11 @@ export interface SendEmailOptions {
    * per-recipient token, so the mail must have exactly one recipient.
    */
   listUnsubscribe?: { url: string };
+  /**
+   * Resend's Idempotency-Key: a retry with the same key within 24 hours does not send the mail
+   * again (#154). Use a key derived from what is being sent, never the address.
+   */
+  idempotencyKey?: string;
 }
 
 /** The unsubscribe headers for one recipient, or an error before anything is sent */
@@ -71,7 +76,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<{ id: string
   const client = getResendClient();
   const from = options.from || process.env.EMAIL_FROM || 'DiagnoLeads <noreply@diagnoleads.com>';
 
-  const result = await client.emails.send({
+  const payload = {
     from,
     to,
     // Header values must stay on one line, whatever a caller put in the subject
@@ -80,7 +85,10 @@ export async function sendEmail(options: SendEmailOptions): Promise<{ id: string
     text: options.text,
     replyTo: options.replyTo,
     ...(headers ? { headers } : {}),
-  });
+  };
+  const result = options.idempotencyKey
+    ? await client.emails.send(payload, { idempotencyKey: options.idempotencyKey })
+    : await client.emails.send(payload);
 
   if (result.error) {
     throw new Error(`Failed to send email: ${result.error.message}`);

@@ -21,6 +21,8 @@ interface AxSiteShellProps {
   logoLabel?: string;
   /** The landing page shown, if any (the header menu links to the other one) */
   page?: AxLandingPage;
+  /** GA4 on this page (off where the URL carries a secret, e.g. the unsubscribe page) */
+  analytics?: boolean;
   children: ReactNode;
 }
 
@@ -31,10 +33,11 @@ export async function AxSiteShell({
   headerCta,
   logoLabel,
   page,
+  analytics = true,
   children,
 }: AxSiteShellProps) {
   const t = await getTranslations({ locale, namespace: 'axSite' });
-  const measurementId = gaMeasurementId();
+  const measurementId = analytics ? gaMeasurementId() : undefined;
   return (
     <div
       id="top"

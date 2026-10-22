@@ -90,6 +90,12 @@ export const ENDPOINT_RATE_LIMITS: Record<string, RateLimitConfig> = {
   '/api/embed/v1/diagnostic': { max: 60, windowMs: 60 * 1000 },
   '/api/embed/v1/lead': { max: 60, windowMs: 60 * 1000 },
 
+  // Unsubscribe of respondent mail (#154): the page button, and the RFC 8058 one-click POST,
+  // which mail providers send from their servers (one address speaks for many recipients).
+  // The DB limits (RESPONDENT_EMAIL_RATE_LIMITS) hold across instances
+  '/api/email/unsubscribe': { max: 10, windowMs: 60 * 1000 },
+  '/api/email/unsubscribe/one-click': { max: 60, windowMs: 60 * 1000 },
+
   // GraphQL
   '/api/graphql': { max: 100, windowMs: 60 * 1000 },
 };

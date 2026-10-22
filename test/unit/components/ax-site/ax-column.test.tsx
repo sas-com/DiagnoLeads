@@ -187,11 +187,50 @@ describe('column article page', () => {
       publisher: { name: 'エス・エー・エス株式会社' },
     });
     expect(article.url).toMatch(/\/ja\/ax-migration\/column\/access-office-support-end$/);
+    expect(article.image).toMatchObject({ width: 1200, height: 630 });
+    expect(article.image.url).toMatch(
+      /^https?:\/\/[^/]+\/images\/columns\/access-office-support-end\.png$/
+    );
     expect(breadcrumbs.itemListElement.map((item: { name: string }) => item.name)).toEqual([
       'AXマイグレーション',
       'コラム',
       'Access 2016・2019・2021 のサポート終了：使い続けるとどうなり、何をすればよいか',
     ]);
+  });
+
+  it('shows its title card above the heading, decorative and through the image optimizer', async () => {
+    const { container } = render(
+      withIntl(await resolveServerTree(await ColumnPage(articleParams())))
+    );
+    const header = container.querySelector('article header') as HTMLElement;
+    const image = header.querySelector('img') as HTMLImageElement;
+    // Empty alt: the h1 right below says the same
+    expect(image).toHaveAttribute('alt', '');
+    expect(screen.queryByRole('img')).toBeNull();
+    expect(image).toHaveAttribute('width', '1200');
+    expect(image).toHaveAttribute('height', '630');
+    expect(decodeURIComponent(image.getAttribute('src') ?? '')).toContain(
+      '/images/columns/access-office-support-end.png'
+    );
+    // Before the heading, loaded early (preload: not lazy)
+    expect(
+      image.compareDocumentPosition(screen.getByRole('heading', { level: 1 })) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(image).not.toHaveAttribute('loading', 'lazy');
+  });
+
+  it('shares the title card with an absolute URL on Open Graph and X', async () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://example.jp');
+    const metadata = await generateMetadata(articleParams('ja', 'access-2gb-limit'));
+    const image = {
+      url: 'https://example.jp/images/columns/access-2gb-limit.png',
+      width: 1200,
+      height: 630,
+      alt: 'Access の 2GB の上限に近づいたら',
+    };
+    expect(metadata.openGraph?.images).toEqual([image]);
+    expect(metadata.twitter).toMatchObject({ card: 'summary_large_image', images: [image] });
   });
 
   it('shows the trademark notice of an article that names more products, instead of the page one', async () => {
@@ -274,6 +313,26 @@ describe('column list page', () => {
     ]);
     expect(screen.getAllByText('2026年10月22日')).toHaveLength(5);
     expect(jsonLd(container)[0]['@type']).toBe('BreadcrumbList');
+
+    // Each card shows its title card, decorative: the link of the card stays the title
+    const cards = [...container.querySelectorAll('li > article')];
+    expect(cards).toHaveLength(5);
+    expect(
+      cards.map((card) => {
+        const image = card.querySelector('img');
+        expect(image).toHaveAttribute('alt', '');
+        expect(within(card as HTMLElement).getAllByRole('link')).toHaveLength(1);
+        return decodeURIComponent(image?.getAttribute('src') ?? '').match(
+          /\/images\/columns\/([a-z0-9-]+)\.png/
+        )?.[1];
+      })
+    ).toEqual([
+      'access-office-support-end',
+      'access-fix-or-web',
+      'access-shared-folder',
+      'access-accde-only',
+      'access-2gb-limit',
+    ]);
   });
 
   it('has its metadata and answers 404 in English', async () => {

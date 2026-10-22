@@ -1,5 +1,5 @@
 import { columnDateTime } from './index';
-import type { Column } from './types';
+import { COLUMN_THUMBNAIL_SIZE, type Column } from './types';
 
 /** Structured data (schema.org) of the column pages; URLs are absolute */
 
@@ -24,7 +24,18 @@ export function breadcrumbListJsonLd(items: BreadcrumbItem[]): Record<string, un
 
 export function articleJsonLd(
   column: Column,
-  { url, operatorName, operatorUrl }: { url: string; operatorName: string; operatorUrl: string }
+  {
+    url,
+    imageUrl,
+    operatorName,
+    operatorUrl,
+  }: {
+    url: string;
+    /** Absolute URL of the article's thumbnail */
+    imageUrl: string;
+    operatorName: string;
+    operatorUrl: string;
+  }
 ): Record<string, unknown> {
   const operator = { '@type': 'Organization', name: operatorName, url: operatorUrl };
   return {
@@ -37,6 +48,12 @@ export function articleJsonLd(
     dateModified: columnDateTime(column.updatedAt),
     mainEntityOfPage: { '@type': 'WebPage', '@id': url },
     url,
+    image: {
+      '@type': 'ImageObject',
+      url: imageUrl,
+      width: COLUMN_THUMBNAIL_SIZE.width,
+      height: COLUMN_THUMBNAIL_SIZE.height,
+    },
     author: operator,
     publisher: operator,
   };
