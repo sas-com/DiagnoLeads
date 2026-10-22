@@ -12,6 +12,8 @@ import {
   normaliseEmail,
   sendRespondentEmail,
   suppress,
+  unsubscribeByToken,
+  unsubscribeUrls,
 } from '@/lib/features/respondent-email';
 import { createHash } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -148,7 +150,8 @@ describe('sendRespondentEmail', () => {
     text: `stop: ${unsubscribeUrl}`,
     replyTo: 'dx@example.co.jp',
   }));
-  const unsubscribeUrlFor = (token: string) => `https://app.example.com/u/${token}`;
+  const unsubscribePageUrlFor = (token: string) => `https://app.example.com/ja/u#t=${token}`;
+  const oneClickUrlFor = (token: string) => `https://app.example.com/one-click?t=${token}`;
   let sendEmail: ReturnType<typeof vi.fn<(o: SendEmailOptions) => Promise<{ id: string }>>>;
   let errorLog: ReturnType<typeof vi.spyOn>;
 
@@ -171,11 +174,12 @@ describe('sendRespondentEmail', () => {
     consentId: 'consent-1',
     leadId: 'lead-1',
     submissionId: 'sub-1',
-    unsubscribeUrlFor,
+    unsubscribePageUrlFor,
+    oneClickUrlFor,
     build,
   };
 
-  it('records a pending row, sends with the unsubscribe URL and marks it sent', async () => {
+  it('records a pending row, sends with both unsubscribe URLs and marks it sent', async () => {
     const { db, inserts, updates } = fakeDb();
     const result = await sendRespondentEmail(db, { sendEmail }, { ...input, idempotencyKey: 'k-1' });
     expect(result).toEqual({ outcome: 'sent', sendId: 'row-1', messageId: 'resend-1' });
@@ -194,19 +198,22 @@ describe('sendRespondentEmail', () => {
     });
 
     const options = sendEmail.mock.calls[0][0];
-    const url = options.listUnsubscribe?.url ?? '';
-    const token = url.replace('https://app.example.com/u/', '');
+    const oneClickUrl = options.listUnsubscribe?.url ?? '';
+    const token = oneClickUrl.replace('https://app.example.com/one-click?t=', '');
+    expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    const pageUrl = unsubscribePageUrlFor(token);
     // Only the hash of the token is stored
     expect(row.unsubscribeTokenHash).toBe(hashToken(token));
     expect(JSON.stringify(row)).not.toContain(token);
-    expect(build).toHaveBeenCalledWith(url);
+    // The footer gets the page (token in the fragment), the header the one-click POST
+    expect(build).toHaveBeenCalledWith(pageUrl);
     expect(options).toEqual({
       to: 'taro@example.com',
       subject: '件名',
-      html: `<a href="${url}">stop</a>`,
-      text: `stop: ${url}`,
+      html: `<a href="${pageUrl}">stop</a>`,
+      text: `stop: ${pageUrl}`,
       replyTo: 'dx@example.co.jp',
-      listUnsubscribe: { url },
+      listUnsubscribe: { url: oneClickUrl },
       idempotencyKey: 'k-1',
     });
 
@@ -261,7 +268,7 @@ describe('sendRespondentEmail', () => {
     ]);
     const logged = JSON.stringify(errorLog.mock.calls);
     expect(logged).not.toContain('taro@example.com');
-    expect(logged).not.toContain('https://app.example.com/u/');
+    expect(logged).not.toContain('https://app.example.com/');
   });
 
   it('marks the row failed when the mail cannot be built', async () => {
@@ -281,10 +288,169 @@ describe('sendRespondentEmail', () => {
     expect(updates[0].set).toEqual({ status: 'failed', errorCode: 'build_failed' });
   });
 
+  it('marks the row failed and sends nothing when an unsubscribe URL is not https', async () => {
+    const { db, updates } = fakeDb();
+    const result = await sendRespondentEmail(
+      db,
+      { sendEmail },
+      {
+        ...input,
+        ...unsubscribeUrls({ locale: 'ja', baseUrl: 'http://app.example.com' }),
+      }
+    );
+    expect(result).toMatchObject({ outcome: 'failed', errorCode: 'build_failed' });
+    expect(build).not.toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(updates[0].set).toEqual({ status: 'failed', errorCode: 'build_failed' });
+  });
+
   it('never records a delivered mail as failed when the final update fails', async () => {
     const { db, updates } = fakeDb({ failUpdate: true });
     await expect(sendRespondentEmail(db, { sendEmail }, input)).rejects.toThrow('db down');
     expect(sendEmail).toHaveBeenCalledTimes(1);
     expect(updates).toEqual([]);
+  });
+});
+
+describe('unsubscribeUrls', () => {
+  const token = 'AbC-_123456789012345678901234567890123456789';
+
+  it('puts the token in the fragment of the page and in the query of the one-click URL', () => {
+    const urls = unsubscribeUrls({ locale: 'ja', baseUrl: 'https://app.example.com/' });
+    expect(urls.unsubscribePageUrlFor(token)).toBe(
+      `https://app.example.com/ja/email/unsubscribe#t=${token}`
+    );
+    expect(urls.oneClickUrlFor(token)).toBe(
+      `https://app.example.com/api/email/unsubscribe/one-click?t=${token}`
+    );
+    // The fragment never reaches the server: the path and query of the page carry no token
+    const page = new URL(urls.unsubscribePageUrlFor(token));
+    expect(`${page.pathname}${page.search}`).not.toContain(token);
+    expect(new URL(urls.oneClickUrlFor(token)).searchParams.get('t')).toBe(token);
+  });
+
+  it('uses the English page for en and NEXT_PUBLIC_APP_URL by default', () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://diagnoleads.example.jp');
+    try {
+      const urls = unsubscribeUrls({ locale: 'en' });
+      expect(urls.unsubscribePageUrlFor(token)).toBe(
+        `https://diagnoleads.example.jp/en/email/unsubscribe#t=${token}`
+      );
+      expect(urls.oneClickUrlFor(token)).toBe(
+        `https://diagnoleads.example.jp/api/email/unsubscribe/one-click?t=${token}`
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it.each([
+    ['http on another host', 'http://app.example.com'],
+    ['an empty base', ''],
+    ['a relative base', '/app'],
+    ['credentials', 'https://user:pass@app.example.com'],
+  ])('throws for %s', (_label, baseUrl) => {
+    const urls = unsubscribeUrls({ locale: 'ja', baseUrl });
+    expect(() => urls.unsubscribePageUrlFor(token)).toThrow(/not https/);
+    expect(() => urls.oneClickUrlFor(token)).toThrow(/not https/);
+  });
+
+  it('throws when NEXT_PUBLIC_APP_URL is not set', () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', '');
+    try {
+      expect(() => unsubscribeUrls({ locale: 'ja' }).oneClickUrlFor(token)).toThrow(/not https/);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+});
+
+describe('unsubscribeByToken', () => {
+  /** A send found by its token hash, and the suppressions written */
+  function unsubscribeDb(send: { id: string; organizationId: string; email: string } | null) {
+    const lookups: unknown[] = [];
+    const inserts: { table: unknown; values: Record<string, unknown> }[] = [];
+    const db = {
+      select: () => ({
+        from: (table: unknown) => ({
+          where: (condition: unknown) => ({
+            limit: async () => {
+              lookups.push({ table, condition });
+              return send ? [send] : [];
+            },
+          }),
+        }),
+      }),
+      insert: (table: unknown) => ({
+        values: (values: Record<string, unknown>) => ({
+          onConflictDoNothing: () => ({
+            returning: async () => {
+              inserts.push({ table, values });
+              return [{ id: 'sup-1' }];
+            },
+          }),
+        }),
+      }),
+    };
+    // biome-ignore lint/suspicious/noExplicitAny: fake of the drizzle query builder
+    return { db: db as any, lookups, inserts };
+  }
+
+  const token = newToken().token;
+
+  it.each(['one_click', 'unsubscribe_page'] as const)(
+    'suppresses the address of the send with source %s',
+    async (source) => {
+      const { db, lookups, inserts } = unsubscribeDb({
+        id: 'send-1',
+        organizationId: 'org-1',
+        email: 'taro@example.com',
+      });
+      await expect(unsubscribeByToken(db, token, source)).resolves.toBe('done');
+      expect(lookups).toHaveLength(1);
+      expect((lookups[0] as { table: unknown }).table).toBe(respondentEmailSends);
+      expect(inserts).toEqual([
+        {
+          table: emailSuppressions,
+          values: {
+            organizationId: 'org-1',
+            email: 'taro@example.com',
+            reason: 'unsubscribed',
+            source,
+            sendId: 'send-1',
+            createdBy: null,
+          },
+        },
+      ]);
+    }
+  );
+
+  it('answers not_found for an unknown token and writes nothing', async () => {
+    const { db, inserts } = unsubscribeDb(null);
+    await expect(unsubscribeByToken(db, token, 'one_click')).resolves.toBe('not_found');
+    expect(inserts).toEqual([]);
+  });
+
+  it('answers not_found for an empty token without a lookup', async () => {
+    const { db, lookups } = unsubscribeDb(null);
+    await expect(unsubscribeByToken(db, '', 'unsubscribe_page')).resolves.toBe('not_found');
+    expect(lookups).toEqual([]);
+  });
+
+  it('logs neither the token nor the address', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const { db } = unsubscribeDb({ id: 's', organizationId: 'o', email: 'taro@example.com' });
+      await unsubscribeByToken(db, token, 'one_click');
+      const logged = JSON.stringify([log.mock.calls, error.mock.calls, warn.mock.calls]);
+      expect(logged).not.toContain(token);
+      expect(logged).not.toContain('taro@example.com');
+    } finally {
+      log.mockRestore();
+      error.mockRestore();
+      warn.mockRestore();
+    }
   });
 });

@@ -127,6 +127,16 @@ describe('ENDPOINT_RATE_LIMITS', () => {
   });
 });
 
+describe('unsubscribe endpoints (#154)', () => {
+  it('limits the page button and the one-click POST separately, by exact path', () => {
+    expect(getRateLimitConfig('/api/email/unsubscribe')).toEqual({ max: 10, windowMs: 60 * 1000 });
+    expect(getRateLimitConfig('/api/email/unsubscribe/one-click')).toEqual({
+      max: 60,
+      windowMs: 60 * 1000,
+    });
+  });
+});
+
 describe('getRateLimitConfig', () => {
   describe('exact match endpoints', () => {
     it('should return exact match config for login', () => {

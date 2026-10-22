@@ -24,6 +24,8 @@ import {
   newToken,
   sendRespondentEmail,
   suppress,
+  unsubscribeByToken,
+  unsubscribeUrls,
 } from '@/lib/features/respondent-email';
 import { eq, inArray } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
@@ -68,7 +70,10 @@ describe.skipIf(!url)('respondent email (PostgreSQL)', () => {
     text: unsubscribeUrl,
     replyTo: 'dx@example.co.jp',
   });
-  const unsubscribeUrlFor = (token: string) => `https://app.example.com/unsubscribe/${token}`;
+  const urls = unsubscribeUrls({ locale: 'ja', baseUrl: 'https://app.example.com' });
+  /** The token of a sent mail, from its one-click URL */
+  const tokenOf = (options: SendEmailOptions) =>
+    new URL(options.listUnsubscribe?.url ?? '').searchParams.get('t') ?? '';
 
   beforeAll(async () => {
     for (const name of ['回答者メールテスト', '回答者メールテスト（別組織）']) {
@@ -128,7 +133,7 @@ describe.skipIf(!url)('respondent email (PostgreSQL)', () => {
       consentId: consent.id,
       leadId,
       submissionId,
-      unsubscribeUrlFor,
+      ...urls,
       build: mail,
     });
     expect(sent.outcome).toBe('sent');
@@ -159,7 +164,7 @@ describe.skipIf(!url)('respondent email (PostgreSQL)', () => {
       kind: 'result',
       leadId,
       submissionId,
-      unsubscribeUrlFor,
+      ...urls,
       build: mail,
       idempotencyKey: `test-${unique()}`,
     });
@@ -168,7 +173,7 @@ describe.skipIf(!url)('respondent email (PostgreSQL)', () => {
 
     const options = sendEmail.mock.calls[0][0];
     expect(options.to).toBe(email);
-    const token = (options.listUnsubscribe?.url ?? '').split('/').pop() ?? '';
+    const token = tokenOf(options);
     const [row] = await pg
       .select()
       .from(respondentEmailSends)
@@ -194,7 +199,7 @@ describe.skipIf(!url)('respondent email (PostgreSQL)', () => {
       organizationId: org,
       email,
       kind: 'result',
-      unsubscribeUrlFor,
+      ...urls,
       build,
     });
     expect(result.outcome).toBe('suppressed');
@@ -214,7 +219,7 @@ describe.skipIf(!url)('respondent email (PostgreSQL)', () => {
       organizationId: org,
       email,
       kind: 'confirmation',
-      unsubscribeUrlFor,
+      ...urls,
       build: mail,
     });
     errorLog.mockRestore();
@@ -277,6 +282,97 @@ describe.skipIf(!url)('respondent email (PostgreSQL)', () => {
     await expect(pg.insert(emailSuppressions).values({ ...suppression, source: 'api' })).rejects.toThrow();
   });
 
+  it('unsubscribes by the token of a sent mail, once, with the source and the send id', async () => {
+    const { leadId, submissionId, email } = await newLead();
+    const sendEmail = fakeSend();
+    const sent = await sendRespondentEmail(pg, { sendEmail }, {
+      organizationId: org,
+      email,
+      kind: 'result',
+      leadId,
+      submissionId,
+      ...urls,
+      build: mail,
+    });
+    expect(sent.outcome).toBe('sent');
+    if (sent.outcome !== 'sent') return;
+    const token = tokenOf(sendEmail.mock.calls[0][0]);
+    // The footer gets the page with the same token in the fragment
+    expect(sendEmail.mock.calls[0][0].html).toContain(`/ja/email/unsubscribe#t=${token}`);
+
+    expect(await isSuppressed(pg, org, email)).toBe(false);
+    expect(await unsubscribeByToken(pg, token, 'one_click')).toBe('done');
+    expect(await isSuppressed(pg, org, email)).toBe(true);
+    expect(await isSuppressed(pg, otherOrg, email)).toBe(false);
+
+    // Idempotent: the page button after the one-click keeps the first suppression
+    expect(await unsubscribeByToken(pg, token, 'unsubscribe_page')).toBe('done');
+    const rows = await pg
+      .select()
+      .from(emailSuppressions)
+      .where(eq(emailSuppressions.email, email));
+    expect(rows).toEqual([
+      expect.objectContaining({
+        organizationId: org,
+        email,
+        reason: 'unsubscribed',
+        source: 'one_click',
+        sendId: sent.sendId,
+        createdBy: null,
+      }),
+    ]);
+
+    // The next mail to the address is not sent
+    const next = fakeSend();
+    const again = await sendRespondentEmail(pg, { sendEmail: next }, {
+      organizationId: org,
+      email,
+      kind: 'result',
+      ...urls,
+      build: mail,
+    });
+    expect(again.outcome).toBe('suppressed');
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('records the page as the source when the page unsubscribes first', async () => {
+    const email = `page-${unique()}@example.com`;
+    const sendEmail = fakeSend();
+    const sent = await sendRespondentEmail(pg, { sendEmail }, {
+      organizationId: org,
+      email,
+      kind: 'confirmation',
+      ...urls,
+      build: mail,
+    });
+    if (sent.outcome !== 'sent') throw new Error('not sent');
+    expect(await unsubscribeByToken(pg, tokenOf(sendEmail.mock.calls[0][0]), 'unsubscribe_page')).toBe('done');
+    const [row] = await pg.select().from(emailSuppressions).where(eq(emailSuppressions.email, email));
+    expect(row).toMatchObject({ source: 'unsubscribe_page', sendId: sent.sendId, reason: 'unsubscribed' });
+  });
+
+  it('answers not_found for an unknown token and writes nothing', async () => {
+    const before = await pg.select({ id: emailSuppressions.id }).from(emailSuppressions);
+    expect(await unsubscribeByToken(pg, newToken().token, 'one_click')).toBe('not_found');
+    expect(await unsubscribeByToken(pg, '', 'unsubscribe_page')).toBe('not_found');
+    const after = await pg.select({ id: emailSuppressions.id }).from(emailSuppressions);
+    expect(after).toHaveLength(before.length);
+  });
+
+  it('cannot unsubscribe with a suppressed send, which has no token', async () => {
+    const email = `nohash-${unique()}@example.com`;
+    await suppress(pg, { organizationId: org, email, reason: 'staff', source: 'staff' });
+    await sendRespondentEmail(pg, { sendEmail: fakeSend() }, {
+      organizationId: org,
+      email,
+      kind: 'result',
+      ...urls,
+      build: mail,
+    });
+    // A row without a token hash is never matched (NULL equals nothing)
+    expect(await unsubscribeByToken(pg, 'null', 'one_click')).toBe('not_found');
+  });
+
   it('removes all three with the organization', async () => {
     const [row] = await pg
       .insert(organizations)
@@ -288,7 +384,7 @@ describe.skipIf(!url)('respondent email (PostgreSQL)', () => {
       organizationId: row.id,
       email: `other-${email}`,
       kind: 'result',
-      unsubscribeUrlFor,
+      ...urls,
       build: mail,
     });
     await pg.delete(organizations).where(eq(organizations.id, row.id));

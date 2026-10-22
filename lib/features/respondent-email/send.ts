@@ -39,10 +39,15 @@ export interface SendRespondentEmailInput {
   consentId?: string | null;
   leadId?: string | null;
   submissionId?: string | null;
-  /** The https URL of the unsubscribe page (and one-click POST) for this mail's token */
-  unsubscribeUrlFor: (token: string) => string;
-  /** Builds the mail with the unsubscribe URL in its footer */
-  build: (unsubscribeUrl: string) => RespondentEmailContent;
+  /**
+   * The https URL of the unsubscribe page for this mail's token, linked from the footer (see
+   * unsubscribeUrls: the token is in the fragment)
+   */
+  unsubscribePageUrlFor: (token: string) => string;
+  /** The https URL of the one-click POST (RFC 8058) for the List-Unsubscribe header */
+  oneClickUrlFor: (token: string) => string;
+  /** Builds the mail with the unsubscribe page URL in its footer */
+  build: (unsubscribePageUrl: string) => RespondentEmailContent;
   /** Passed to Resend so a retry of the same send does not deliver twice */
   idempotencyKey?: string;
 }
@@ -96,10 +101,11 @@ export async function sendRespondentEmail(
   let errorCode: RespondentEmailErrorCode = 'build_failed';
   let messageId: string;
   try {
-    // The same URL serves the footer link (a page with a button) and the one-click POST
-    // (RFC 8058): the route tells them apart by method
-    const unsubscribeUrl = input.unsubscribeUrlFor(unsubscribe.token);
-    const content = input.build(unsubscribeUrl);
+    // The footer links to a page with a button (opening it changes nothing, so mail scanners
+    // cannot unsubscribe anyone); the header points mail providers to the one-click POST
+    const pageUrl = input.unsubscribePageUrlFor(unsubscribe.token);
+    const oneClickUrl = input.oneClickUrlFor(unsubscribe.token);
+    const content = input.build(pageUrl);
     errorCode = 'send_failed';
     const result = await deps.sendEmail({
       to: email,
@@ -107,7 +113,7 @@ export async function sendRespondentEmail(
       html: content.html,
       text: content.text,
       replyTo: content.replyTo,
-      listUnsubscribe: { url: unsubscribeUrl },
+      listUnsubscribe: { url: oneClickUrl },
       ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
     });
     messageId = result.id;

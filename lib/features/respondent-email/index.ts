@@ -19,3 +19,15 @@ export {
   type SendRespondentEmailInput,
   type SendRespondentEmailResult,
 } from './send';
+export {
+  unsubscribeByToken,
+  type UnsubscribeOutcome,
+  type UnsubscribeSource,
+} from './unsubscribe';
+export {
+  ONE_CLICK_UNSUBSCRIBE_PATH,
+  UNSUBSCRIBE_PAGE_PATH,
+  unsubscribeUrls,
+  type UnsubscribeLocale,
+  type UnsubscribeUrls,
+} from './unsubscribe-urls';

@@ -28,7 +28,7 @@ describe('CMS on or off', () => {
     for (const path of ['/api/cms/ai-generate', '/api/cms/figma/webhook', '/api/cms-users', '/api/cms-users/me', '/api/blog-posts', '/api/graphql', '/api/anything', '/api/TRPC/x', '/api/', '/api/health%2Fx', '/api/tr%70c%2fx']) {
       expect(isCmsApiPath(path), path).toBe(true);
     }
-    for (const path of ['/api/trpc/content.blog.list', '/api/tr%70c/x', '/api/auth/sign-in/email', '/api/health', '/api/cron/cleanup-webhook-deliveries', '/api/embed/v1/x', '/ja/blog', '/apix']) {
+    for (const path of ['/api/trpc/content.blog.list', '/api/tr%70c/x', '/api/auth/sign-in/email', '/api/health', '/api/cron/cleanup-webhook-deliveries', '/api/embed/v1/x', '/api/email/unsubscribe', '/api/email/unsubscribe/one-click', '/ja/blog', '/apix']) {
       expect(isCmsApiPath(path), path).toBe(false);
     }
   });
