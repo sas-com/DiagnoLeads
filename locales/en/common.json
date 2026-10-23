@@ -1156,6 +1156,61 @@
       "rateCounts": "{withNext} of {total} first meetings",
       "rateEmpty": "No first meetings in the period",
       "rateOverdueLink": "See leads whose next meeting passed"
+    },
+    "studio": {
+      "status": {
+        "title": "Where things stand",
+        "toLeads": "Leads",
+        "pending": "Consultations awaiting a reply",
+        "due": "My next actions due today",
+        "meetings": "Meetings this week",
+        "unit": ""
+      },
+      "analytics": {
+        "title": "Analytics",
+        "toAnalytics": "Analytics",
+        "metricLabel": "Figure to show",
+        "metric": {
+          "leads": "New leads",
+          "consultations": "Consultation requests"
+        },
+        "period": "Last {days} days, per day (Japan time)",
+        "periodWeekly": "Last {days} days, per week (Japan time)",
+        "chartLabel": "{metric} in the last {days} days: {total}",
+        "platforms": "By source system"
+      },
+      "insights": {
+        "title": "Insights of the last {days} days",
+        "count": "{value}",
+        "changeLabel": "Compared with the previous {days} days",
+        "fitOnly": "Plus {value} fit only",
+        "leads": {
+          "increase": "New leads went up against the previous {days} days",
+          "decrease": "New leads went down against the previous {days} days",
+          "same": "New leads are the same as in the previous {days} days",
+          "none": "New leads"
+        },
+        "consultations": {
+          "increase": "Consultation requests went up against the previous {days} days",
+          "decrease": "Consultation requests went down against the previous {days} days",
+          "same": "Consultation requests are the same as in the previous {days} days",
+          "none": "Consultation requests"
+        },
+        "mql": {
+          "increase": "MQL (interested) went up against the previous {days} days",
+          "decrease": "MQL (interested) went down against the previous {days} days",
+          "same": "MQL (interested) is the same as in the previous {days} days",
+          "none": "MQL (interested)"
+        },
+        "score": {
+          "increase": "The average score of new leads went up",
+          "decrease": "The average score of new leads went down",
+          "same": "The average score of new leads is unchanged",
+          "none": "Average score of new leads"
+        },
+        "previous": "Previous {days} days: {value}",
+        "noPrevious": "Nothing in the previous {days} days"
+      }
     }
   },
   "leads": {

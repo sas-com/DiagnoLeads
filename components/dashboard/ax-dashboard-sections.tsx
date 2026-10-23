@@ -1,24 +1,16 @@
 'use client';
 
-import { BarChart } from '@/components/charts';
 import { ContactQuickActions } from '@/components/features/lead-follow-up/contact-quick-actions';
-import {
-  LEAD_STATUS_BADGE_CLASSES,
-  LEAD_STATUS_COLORS,
-} from '@/components/features/leads/lead-status-styles';
-import { BadgeDelta } from '@/components/ui/badge-delta';
+import { LEAD_STATUS_BADGE_CLASSES } from '@/components/features/leads/lead-status-styles';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { ProgressBar } from '@/components/ui/progress-bar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   jstShortDay,
-  periodDelta,
   periodRange,
   receivedAt,
   shortDay,
-  signed,
 } from '@/lib/features/analytics/dashboard-format';
 import { AX_MIGRATION_CONFIG } from '@/lib/features/diagnostics/ax-migration/config';
 import {
@@ -30,7 +22,6 @@ import { cn } from '@/lib/utils';
 import { AlertCircle, ArrowRight, RotateCw } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
-import type { ReactNode } from 'react';
 
 export type DashboardData = RouterOutputs['analytics']['getDashboard'];
 /** What a card can show: placeholders while loading, a retry on error, or the figures */
@@ -39,10 +30,8 @@ export type CardState = 'loading' | 'error' | 'ready';
 const KNOWN_PLATFORMS = ['as400', 'acos', 'access', 'other', 'unknown'] as const;
 /** Scores at or above this stand out in the recent leads */
 const HIGHLIGHT_SCORE = 70;
-const CHART_HEIGHT = 200;
 
 const headingClass = 'text-base font-semibold text-gray-900 sm:text-lg dark:text-gray-50';
-const subtleClass = 'text-sm text-gray-500 dark:text-gray-400';
 const emptyClass =
   'rounded-lg bg-gray-50 px-4 py-6 text-center text-sm text-gray-500 dark:bg-gray-800/50 dark:text-gray-400';
 
@@ -127,134 +116,6 @@ function SkeletonRows({ rows, className }: { rows: number; className?: string })
   );
 }
 
-/* ------------------------------------------------------------------ KPI */
-
-type KpiProps = {
-  label: string;
-  days: number;
-  value?: number | null;
-  previous?: number | null;
-  /** Counts (件) or a score; scores show no percent change */
-  kind: 'count' | 'score';
-  /** One more line under the comparison (e.g. the 適合のみ count next to MQL) */
-  detail?: string;
-};
-
-function KpiCard({ label, days, value, previous, kind, detail }: KpiProps) {
-  const { tw, numberFormat } = useDashboardText();
-  const count = (n: number) =>
-    kind === 'count' ? tw('kpi.count', { value: numberFormat(n) }) : numberFormat(n);
-  const hasValue = value !== undefined && value !== null;
-  const comparable = hasValue && previous !== undefined && previous !== null;
-  const delta = comparable ? periodDelta(value, previous) : null;
-
-  let note = '';
-  if (previous !== undefined) {
-    if (previous === null) note = tw('kpi.noPreviousScore', { days });
-    else if (kind === 'count' && delta?.rate !== null && delta?.rate !== undefined)
-      note = tw('kpi.previousWithRate', {
-        days,
-        value: count(previous),
-        rate: `${signed(delta.rate)}%`,
-      });
-    else note = tw('kpi.previous', { days, value: count(previous) });
-  }
-
-  return (
-    <Card className="p-4 sm:p-5">
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="text-sm font-medium text-gray-600 dark:text-gray-300">{label}</h3>
-        <PeriodTag days={days} />
-      </div>
-      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-        <p className="text-2xl font-bold tabular-nums text-gray-900 sm:text-3xl dark:text-gray-50">
-          {hasValue ? numberFormat(value) : tw('kpi.noScore')}
-          {hasValue && kind === 'score' && (
-            <span className="ml-1 text-sm font-normal text-gray-500 dark:text-gray-400">
-              {tw('kpi.scoreSuffix')}
-            </span>
-          )}
-        </p>
-        {delta && (
-          <BadgeDelta deltaType={delta.type} size="sm" className="tabular-nums">
-            <span className="sr-only">{tw('kpi.deltaLabel', { days })}</span>
-            {signed(delta.delta, count)}
-          </BadgeDelta>
-        )}
-      </div>
-      {note && (
-        <p className="mt-1.5 text-xs text-gray-500 tabular-nums dark:text-gray-400">{note}</p>
-      )}
-      {detail && (
-        <p className="mt-0.5 text-xs text-gray-500 tabular-nums dark:text-gray-400">{detail}</p>
-      )}
-    </Card>
-  );
-}
-
-export function KpiSection({
-  state,
-  data,
-  onRetry,
-}: { state: CardState; data?: DashboardData; onRetry: () => void }) {
-  const { tw } = useDashboardText();
-  const tWidgets = useTranslations('dashboard.widgets');
-  if (state === 'error') {
-    return (
-      <Card className="p-4 sm:p-6">
-        <h2 className={cn(headingClass, 'mb-3')}>{tWidgets('kpis')}</h2>
-        <CardError onRetry={onRetry} />
-      </Card>
-    );
-  }
-  if (state === 'loading' || !data) {
-    return (
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4" data-testid="card-skeleton">
-        {[0, 1, 2, 3].map((i) => (
-          <Card key={i} className="space-y-3 p-4 sm:p-5">
-            <Skeleton className="h-4 w-20" />
-            <Skeleton className="h-8 w-24" />
-            <Skeleton className="h-3 w-full" />
-          </Card>
-        ))}
-      </div>
-    );
-  }
-  return (
-    <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-      <KpiCard
-        label={tw('kpi.newLeads')}
-        days={data.days}
-        value={data.newLeads}
-        previous={data.previousNewLeads}
-        kind="count"
-      />
-      <KpiCard
-        label={tw('kpi.consultations')}
-        days={data.days}
-        value={data.consultations}
-        previous={data.previousConsultations}
-        kind="count"
-      />
-      <KpiCard
-        label={tw('kpi.mqlInterest')}
-        days={data.days}
-        value={data.mql}
-        previous={data.previousMql}
-        kind="count"
-        detail={data.fitOnly > 0 ? tw('kpi.fitOnly', { value: data.fitOnly }) : undefined}
-      />
-      <KpiCard
-        label={tw('kpi.averageScore')}
-        days={data.days}
-        value={data.averageScore}
-        previous={data.previousAverageScore}
-        kind="score"
-      />
-    </div>
-  );
-}
-
 /* ------------------------------------------------- Pending consultations */
 
 type Pending = DashboardData['pendingConsultations'][number];
@@ -298,7 +159,7 @@ export function PendingSection({
   const rest = data ? total - data.pendingConsultations.length : 0;
 
   return (
-    <Card className="p-4 sm:p-6">
+    <Card className="p-4 shadow-none sm:p-6 dark:border-gray-800">
       <div className="mb-2 sm:mb-3">
         <h2 className={headingClass}>
           {tw('pending.title')}
@@ -378,7 +239,7 @@ export function PendingSection({
                   leadId={item.id}
                   leadLabel={item.company ?? item.name ?? tw('recent.noCompany')}
                   compact
-                  className="shrink-0"
+                  className="min-w-0 lg:shrink-0"
                 />
               )}
             </li>
@@ -398,228 +259,6 @@ export function PendingSection({
         </div>
       )}
     </Card>
-  );
-}
-
-/* ----------------------------------------------------------------- Trend */
-
-export function TrendSection({
-  state,
-  data,
-  onRetry,
-  narrow,
-  days,
-}: {
-  state: CardState;
-  data?: DashboardData;
-  onRetry: () => void;
-  narrow: boolean;
-  /** Chosen period, shown until its figures arrive */
-  days: number;
-}) {
-  const { tw, locale, numberFormat } = useDashboardText();
-  const consultationsLabel = tw('trend.consultations');
-  const othersLabel = tw('trend.others');
-  const weekly = data?.trend.unit === 'week';
-  const points = data?.trend.points ?? [];
-  const label = (start: string) =>
-    weekly ? tw('trend.weekLabel', { date: shortDay(start) }) : shortDay(start);
-  const chartData = points.map((p) => ({
-    date: label(p.start),
-    [consultationsLabel]: p.consultations,
-    [othersLabel]: p.leads - p.consultations,
-  }));
-  const total = points.reduce((sum, p) => sum + p.leads, 0);
-  const peak = points.reduce<(typeof points)[number] | undefined>(
-    (best, p) => (!best || p.leads > best.leads ? p : best),
-    undefined
-  );
-  const summary =
-    data && peak
-      ? tw('trend.summary', {
-          days: data.days,
-          total: numberFormat(total),
-          consultations: numberFormat(points.reduce((sum, p) => sum + p.consultations, 0)),
-          peak: label(peak.start),
-          max: numberFormat(peak.leads),
-        })
-      : '';
-
-  return (
-    <Card className="p-4 sm:p-6">
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className={headingClass}>{tw('trend.title')}</h2>
-            <PeriodTag days={data?.days ?? days} />
-          </div>
-          <p className={subtleClass}>
-            {weekly ? tw('trend.descriptionWeekly') : tw('trend.description')}
-          </p>
-        </div>
-        <ul
-          className="flex items-center gap-4 text-xs text-gray-600 dark:text-gray-300"
-          aria-hidden="true"
-        >
-          <li className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-sm bg-brand-500" />
-            {consultationsLabel}
-          </li>
-          <li className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-sm bg-gray-300 dark:bg-gray-600" />
-            {othersLabel}
-          </li>
-        </ul>
-      </div>
-      <div style={{ height: CHART_HEIGHT }}>
-        {state === 'error' ? (
-          <CardError onRetry={onRetry} className="h-full" />
-        ) : state === 'loading' || !data ? (
-          <Skeleton className="h-full w-full" data-testid="chart-skeleton" />
-        ) : total === 0 ? (
-          <p className={cn(emptyClass, 'flex h-full items-center justify-center')}>
-            {tw('trend.empty')}
-          </p>
-        ) : (
-          <div role="img" aria-label={summary} className="h-full">
-            <BarChart
-              data={chartData}
-              index="date"
-              categories={[consultationsLabel, othersLabel]}
-              colors={['teal', 'lightGray']}
-              stacked
-              valueFormatter={(value) => (locale === 'ja' ? `${value}件` : String(value))}
-              integerValues
-              maxCategoryLabels={narrow ? 4 : weekly ? 13 : 10}
-              columnWidth={points.length <= 7 ? '45%' : '75%'}
-              height={CHART_HEIGHT}
-            />
-          </div>
-        )}
-      </div>
-    </Card>
-  );
-}
-
-/* ------------------------------------------------------------- Breakdown */
-
-function BreakdownRow({
-  label,
-  count,
-  total,
-  color,
-  href,
-}: {
-  label: string;
-  count: number;
-  total: number;
-  color: Parameters<typeof ProgressBar>[0]['color'];
-  href?: string;
-}) {
-  const percent = total > 0 ? Math.round((count / total) * 100) : 0;
-  const body = (
-    <>
-      <div className="mb-1 flex items-baseline justify-between gap-2 text-sm">
-        <span className="text-gray-700 dark:text-gray-200">{label}</span>
-        <span className="tabular-nums text-gray-900 dark:text-gray-50">
-          <span className="font-semibold">{count}</span>
-          <span className="ml-2 inline-block w-9 text-right text-xs text-gray-500 dark:text-gray-400">
-            {percent}%
-          </span>
-        </span>
-      </div>
-      <ProgressBar value={percent} color={color} />
-    </>
-  );
-  return (
-    <li>
-      {href ? (
-        <Link
-          href={href}
-          className="-mx-2 block rounded-md px-2 py-1 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:hover:bg-gray-800/60"
-        >
-          {body}
-        </Link>
-      ) : (
-        <div className="py-1">{body}</div>
-      )}
-    </li>
-  );
-}
-
-export function BreakdownSection({
-  state,
-  data,
-  onRetry,
-  days,
-}: {
-  state: CardState;
-  data?: DashboardData;
-  onRetry: () => void;
-  /** Chosen period, shown until its figures arrive */
-  days: number;
-}) {
-  const { tw, locale, platformName } = useDashboardText();
-  const tStatus = useTranslations('status');
-  const totalStatus = (data?.statuses ?? []).reduce((sum, s) => sum + s.count, 0);
-  const totalPlatform = (data?.platforms ?? []).reduce((sum, p) => sum + p.count, 0);
-  const body = (content: ReactNode) =>
-    state === 'error' ? (
-      <CardError onRetry={onRetry} />
-    ) : state === 'loading' || !data ? (
-      <SkeletonRows rows={5} />
-    ) : (
-      content
-    );
-
-  return (
-    <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
-      <Card className="p-4 sm:p-6">
-        <div className="flex items-center gap-2">
-          <h2 className={headingClass}>{tw('statuses.title')}</h2>
-          <PeriodTag days="all" />
-        </div>
-        <p className={cn(subtleClass, 'mb-3')}>{tw('statuses.description')}</p>
-        {body(
-          <ul className="space-y-1">
-            {(data?.statuses ?? []).map((item) => (
-              <BreakdownRow
-                key={item.status}
-                label={tStatus(item.status)}
-                count={item.count}
-                total={totalStatus}
-                color={LEAD_STATUS_COLORS[item.status]}
-                href={leadListHref(locale, { status: [item.status] })}
-              />
-            ))}
-          </ul>
-        )}
-      </Card>
-      <Card className="p-4 sm:p-6">
-        <div className="flex items-center gap-2">
-          <h2 className={headingClass}>{tw('platforms.title')}</h2>
-          <PeriodTag days={data?.days ?? days} />
-        </div>
-        <p className={cn(subtleClass, 'mb-3')}>{tw('platforms.description')}</p>
-        {body(
-          data && data.platforms.length === 0 ? (
-            <p className={emptyClass}>{tw('platforms.empty')}</p>
-          ) : (
-            <ul className="space-y-1">
-              {(data?.platforms ?? []).map((item) => (
-                <BreakdownRow
-                  key={item.platform}
-                  label={platformName(item.platform)}
-                  count={item.count}
-                  total={totalPlatform}
-                  color={item.platform === 'unknown' ? 'gray' : 'blue'}
-                />
-              ))}
-            </ul>
-          )
-        )}
-      </Card>
-    </div>
   );
 }
 

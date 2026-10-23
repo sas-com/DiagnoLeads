@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import type { ApexOptions } from 'apexcharts';
 import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
+import { integerAxis } from './bar-chart';
 
 const ReactApexChart = dynamic(() => import('react-apexcharts'), {
   ssr: false,
@@ -41,6 +42,8 @@ const COLORS = {
   pink: '#ec4899',
   rose: '#f43f5e',
   brand: '#465fff',
+  /** Project brand (teal, --color-brand-500) */
+  teal: '#14b8a6',
 };
 
 interface AreaChartProps {
@@ -55,6 +58,10 @@ interface AreaChartProps {
   className?: string;
   curveType?: 'smooth' | 'straight' | 'stepline';
   height?: number;
+  /** Counts: a whole-number y-axis from zero */
+  integerValues?: boolean;
+  /** Show at most this many category labels (long date ranges); the tooltip still names each point */
+  maxCategoryLabels?: number;
 }
 
 export function AreaChart({
@@ -69,6 +76,8 @@ export function AreaChart({
   className,
   curveType = 'smooth',
   height = 350,
+  integerValues = false,
+  maxCategoryLabels,
 }: AreaChartProps) {
   const isDark = useIsDarkMode();
   const xAxisCategories = data.map((item) => String(item[index]));
@@ -160,6 +169,9 @@ export function AreaChart({
     xaxis: {
       type: 'category',
       categories: xAxisCategories,
+      ...(maxCategoryLabels && xAxisCategories.length > maxCategoryLabels
+        ? { tickAmount: maxCategoryLabels, tickPlacement: 'on' as const }
+        : {}),
       axisBorder: {
         show: false,
       },
@@ -167,6 +179,8 @@ export function AreaChart({
         show: false,
       },
       labels: {
+        // Only for thinned date axes; other charts keep the library's label behaviour
+        ...(maxCategoryLabels ? { rotate: 0, hideOverlappingLabels: true } : {}),
         style: {
           fontSize: '12px',
           colors: textColor,
@@ -174,12 +188,13 @@ export function AreaChart({
       },
     },
     yaxis: {
+      ...(integerValues ? integerAxis(data, categories, false) : {}),
       labels: {
         style: {
           fontSize: '12px',
           colors: [textColor],
         },
-        formatter: (val: number) => valueFormatter(val),
+        formatter: (val: number) => valueFormatter(integerValues ? Math.round(val) : val),
       },
     },
   };

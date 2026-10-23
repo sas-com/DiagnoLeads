@@ -206,7 +206,11 @@ export function BarChart({
 }
 
 /** Whole-number y-axis for counts: from zero, at most five even ticks, never fractions */
-function integerAxis(data: Record<string, unknown>[], categories: string[], stacked: boolean) {
+export function integerAxis(
+  data: Record<string, unknown>[],
+  categories: string[],
+  stacked: boolean
+) {
   const value = (row: Record<string, unknown>, key: string) => Number(row[key]) || 0;
   const max = Math.max(
     1,

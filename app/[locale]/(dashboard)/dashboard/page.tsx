@@ -1,18 +1,19 @@
 'use client';
 
 import {
-  BreakdownSection,
   type CardState,
-  KpiSection,
   PendingSection,
   RecentSection,
-  TrendSection,
-  leadListHref,
 } from '@/components/dashboard/ax-dashboard-sections';
 import {
   NextMeetingRateSection,
   WeekMeetingsSection,
 } from '@/components/dashboard/meeting-sections';
+import {
+  AnalyticsPanel,
+  PipelineSection,
+  StatusOverview,
+} from '@/components/dashboard/studio-sections';
 import {
   DashboardWidget,
   type WidgetDefinition,
@@ -21,6 +22,7 @@ import {
   visibleWidgetIds,
 } from '@/components/dashboard/widget-settings';
 import { DueTasksSection } from '@/components/features/lead-follow-up/due-tasks-section';
+import { STUDIO_PAGE_CLASS, StudioPageHeader } from '@/components/studio';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useLeadAccess } from '@/hooks/use-leads';
@@ -29,7 +31,6 @@ import { trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
 import {
   Activity,
-  ArrowUpRight,
   BarChart3,
   CalendarCheck,
   CalendarClock,
@@ -38,8 +39,7 @@ import {
   ListTodo,
   Users,
 } from 'lucide-react';
-import { useLocale, useTranslations } from 'next-intl';
-import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Fragment, type ReactNode, useEffect, useState } from 'react';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -57,8 +57,10 @@ const WIDGET_IDS = [
   'breakdown',
   'recent',
 ] as const;
-/** Widgets whose figures follow the chosen period; the period switch sits above the first one */
+/** Widgets whose figures follow the chosen period */
 const PERIOD_WIDGETS: readonly string[] = ['kpis', 'meetingRate', 'trend', 'breakdown'];
+/** Widgets shown together in the analytics panel, at the place of the first of them (#410) */
+const ANALYTICS_WIDGETS: readonly string[] = ['trend', 'breakdown', 'kpis'];
 
 const iconClass = 'h-4 w-4 text-gray-500 dark:text-gray-400';
 const WIDGET_DEFINITIONS: WidgetDefinition[] = [
@@ -115,14 +117,14 @@ const WIDGET_DEFINITIONS: WidgetDefinition[] = [
 ];
 
 /**
- * Dashboard for the AX migration sales team: the consultation requests waiting for a reply (by
- * contact deadline) first, then real figures for the chosen period against the previous one,
- * the trend, the pipeline and migration sources, and the latest leads.
+ * Dashboard for the AX migration sales team, in the look of the STUDIO dashboard (#410): where
+ * things stand now (consultations waiting for a reply, next actions, this week's meetings), the
+ * lists behind them, then the analytics panel (the period's figure and curve, migration sources,
+ * what changed against the previous period), the pipeline and the latest leads.
  */
 export default function DashboardPage() {
   const t = useTranslations('dashboard');
   const tw = useTranslations('dashboard.ax');
-  const locale = useLocale();
   const { organizationId: contextOrgId } = useOrganization();
   const organizationId = contextOrgId && UUID.test(contextOrgId) ? contextOrgId : '';
   const [days, setDays] = useState<Period>(30);
@@ -145,11 +147,13 @@ export default function DashboardPage() {
   };
 
   const order = visibleWidgetIds(widgetConfig);
-  const toolbarBefore = order.find((id) => PERIOD_WIDGETS.includes(id));
+  const showsPeriod = order.some((id) => PERIOD_WIDGETS.includes(id));
+  const firstAnalytics = order.find((id) => ANALYTICS_WIDGETS.includes(id));
+  const visible = (id: string) => order.includes(id);
 
   const toolbar = (
-    <div className="flex items-center justify-between gap-3">
-      {toolbarBefore ? (
+    <>
+      {showsPeriod && (
         <ToggleGroup
           type="single"
           size="sm"
@@ -158,7 +162,7 @@ export default function DashboardPage() {
             if (value) setDays(Number(value) as Period);
           }}
           aria-label={tw('periodLabel')}
-          className="rounded-lg border border-gray-200 bg-white p-1 dark:border-gray-700 dark:bg-gray-900"
+          className="rounded-md border border-gray-200 bg-white p-0.5 dark:border-gray-700 dark:bg-gray-900"
         >
           {PERIODS.map((value) => (
             <ToggleGroupItem key={value} value={String(value)}>
@@ -166,8 +170,6 @@ export default function DashboardPage() {
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
-      ) : (
-        <span />
       )}
       <WidgetSettings
         widgets={WIDGET_DEFINITIONS}
@@ -175,7 +177,7 @@ export default function DashboardPage() {
         onConfigChange={setWidgetConfig}
         compact={narrow}
       />
-    </div>
+    </>
   );
 
   const sections: Record<string, ReactNode> = {
@@ -188,35 +190,35 @@ export default function DashboardPage() {
         canRecordContact={access.canEdit}
       />
     ),
-    today: <DueTasksSection organizationId={organizationId} />,
+    // The "next actions" figure of the status block jumps here
+    today: (
+      <div id="dashboard-today" className="scroll-mt-24">
+        <DueTasksSection organizationId={organizationId} />
+      </div>
+    ),
     meetings: <WeekMeetingsSection organizationId={organizationId} />,
-    kpis: <KpiSection state={state} data={data} onRetry={retry} />,
     meetingRate: <NextMeetingRateSection organizationId={organizationId} days={days} />,
-    trend: <TrendSection state={state} data={data} onRetry={retry} narrow={narrow} days={days} />,
-    breakdown: <BreakdownSection state={state} data={data} onRetry={retry} days={days} />,
     recent: <RecentSection state={state} data={data} onRetry={retry} />,
   };
+  const analytics = (
+    <AnalyticsPanel
+      state={state}
+      data={data}
+      onRetry={retry}
+      days={days}
+      narrow={narrow}
+      show={{ trend: visible('trend'), breakdown: visible('breakdown'), kpis: visible('kpis') }}
+    />
+  );
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="space-y-4 py-1 sm:space-y-6 sm:px-2 sm:py-4">
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl dark:text-gray-50">
-              {t('title')}
-            </h1>
-            <p className="mt-1 hidden text-gray-500 sm:block dark:text-gray-400">
-              {tw('description')}
-            </p>
-          </div>
-          <Link
-            href={leadListHref(locale)}
-            className="hidden items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-brand-600 hover:bg-brand-50 sm:inline-flex dark:text-brand-400 dark:hover:bg-brand-500/10"
-          >
-            {tw('toLeads')}
-            <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
-          </Link>
-        </div>
+      <div className={cn(STUDIO_PAGE_CLASS, 'space-y-10 py-1 sm:space-y-14 sm:px-2 sm:py-6')}>
+        <StudioPageHeader
+          title={t('title')}
+          description={tw('description')}
+          actions={organizationId ? toolbar : undefined}
+        />
 
         {!organizationId ? (
           // biome-ignore lint/a11y/useSemanticElements: live-region notice, not the result of a form calculation
@@ -228,11 +230,29 @@ export default function DashboardPage() {
           </p>
         ) : (
           <>
-            {!toolbarBefore && toolbar}
-            {order.map((id) => (
-              <Fragment key={id}>
-                {id === toolbarBefore && toolbar}
-                <DashboardWidget id={id} config={widgetConfig}>
+            <StatusOverview organizationId={organizationId} state={state} data={data} />
+            {order.map((id) => {
+              if (ANALYTICS_WIDGETS.includes(id)) {
+                // The three share one panel, at the place of the first of them; the pipeline (all
+                // leads by status, part of the breakdown) stays at the breakdown's own place
+                return (
+                  <Fragment key={id}>
+                    {id === firstAnalytics && (
+                      <div
+                        aria-busy={isPlaceholderData}
+                        className={cn('transition-opacity', isPlaceholderData && 'opacity-60')}
+                      >
+                        {analytics}
+                      </div>
+                    )}
+                    {id === 'breakdown' && (
+                      <PipelineSection state={state} data={data} onRetry={retry} />
+                    )}
+                  </Fragment>
+                );
+              }
+              return (
+                <DashboardWidget key={id} id={id} config={widgetConfig}>
                   <section
                     aria-busy={isPlaceholderData && PERIOD_WIDGETS.includes(id)}
                     className={cn(
@@ -243,15 +263,14 @@ export default function DashboardPage() {
                     {sections[id]}
                   </section>
                 </DashboardWidget>
-              </Fragment>
-            ))}
+              );
+            })}
           </>
         )}
       </div>
     </TooltipProvider>
   );
 }
-
 /** Phone-width screens get fewer date labels and an icon-only settings button */
 function useNarrowScreen() {
   const [narrow, setNarrow] = useState(false);

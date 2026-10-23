@@ -1156,6 +1156,61 @@
       "rateCounts": "{withNext}件 / 初回商談 {total}件",
       "rateEmpty": "期間中の初回商談はありません",
       "rateOverdueLink": "次回日程の過ぎたリードを見る"
+    },
+    "studio": {
+      "status": {
+        "title": "対応状況",
+        "toLeads": "リード一覧",
+        "pending": "返信待ちの相談",
+        "due": "今日までの次の行動（自分）",
+        "meetings": "今週の商談",
+        "unit": "件"
+      },
+      "analytics": {
+        "title": "アナリティクス",
+        "toAnalytics": "分析",
+        "metricLabel": "表示する数",
+        "metric": {
+          "leads": "新規リード数",
+          "consultations": "相談申込数"
+        },
+        "period": "直近{days}日・日ごと（日本時間）",
+        "periodWeekly": "直近{days}日・週ごと（日本時間）",
+        "chartLabel": "直近{days}日の{metric}は{total}件",
+        "platforms": "移行元システムごと"
+      },
+      "insights": {
+        "title": "過去{days}日間のインサイト",
+        "count": "{value}件",
+        "changeLabel": "前の{days}日間と比べて",
+        "fitOnly": "ほかに適合のみ {value}件",
+        "leads": {
+          "increase": "新規リードが前の{days}日間より増えました",
+          "decrease": "新規リードが前の{days}日間より減りました",
+          "same": "新規リードは前の{days}日間と同じです",
+          "none": "新規リード"
+        },
+        "consultations": {
+          "increase": "相談申込が前の{days}日間より増えました",
+          "decrease": "相談申込が前の{days}日間より減りました",
+          "same": "相談申込は前の{days}日間と同じです",
+          "none": "相談申込"
+        },
+        "mql": {
+          "increase": "MQL（関心あり）が前の{days}日間より増えました",
+          "decrease": "MQL（関心あり）が前の{days}日間より減りました",
+          "same": "MQL（関心あり）は前の{days}日間と同じです",
+          "none": "MQL（関心あり）"
+        },
+        "score": {
+          "increase": "新規リードの平均スコアが上がりました",
+          "decrease": "新規リードの平均スコアが下がりました",
+          "same": "新規リードの平均スコアは変わりません",
+          "none": "新規リードの平均スコア"
+        },
+        "previous": "前の{days}日間 {value}",
+        "noPrevious": "前の{days}日間は値なし"
+      }
     }
   },
   "leads": {

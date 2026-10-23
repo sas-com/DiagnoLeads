@@ -47,7 +47,7 @@ export function WeekMeetingsSection({ organizationId }: { organizationId: string
   const rest = data ? data.total - data.items.length : 0;
 
   return (
-    <Card className="p-4 sm:p-6" data-testid="week-meetings">
+    <Card className="p-4 shadow-none sm:p-6 dark:border-gray-800" data-testid="week-meetings">
       <div className="mb-2 flex items-start justify-between gap-3 sm:mb-3">
         <div>
           <h2 className={headingClass}>
@@ -154,7 +154,7 @@ export function NextMeetingRateSection({
   const data = query.data;
 
   return (
-    <Card className="p-4 sm:p-6" data-testid="next-meeting-rate">
+    <Card className="p-4 shadow-none sm:p-6 dark:border-gray-800" data-testid="next-meeting-rate">
       <div className="mb-2 flex items-start justify-between gap-3">
         <div>
           <h2 className={headingClass}>{t('rateTitle')}</h2>

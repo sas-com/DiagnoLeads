@@ -39,6 +39,13 @@ vi.mock('@/lib/trpc/client', () => ({
         },
       },
     },
+    // The status block's figures (#410); the lists themselves are mocked below
+    leadFollowUp: {
+      dueTasks: { useQuery: () => ({ data: { total: 5 }, isLoading: false }) },
+    },
+    leads: {
+      weekMeetings: { useQuery: () => ({ data: { total: 2 }, isLoading: false }) },
+    },
   },
 }));
 vi.mock('@/hooks/use-leads', () => ({
@@ -66,6 +73,11 @@ vi.mock('@/hooks/use-organization', () => ({
   useOrganization: () => ({ organizationId: mocks.organizationId, isLoading: false }),
 }));
 vi.mock('@/components/charts', () => ({
+  AreaChart: (props: { categories: string[]; colors: string[]; data: unknown[] }) => (
+    <pre data-testid="area-chart">
+      {JSON.stringify({ categories: props.categories, colors: props.colors, data: props.data })}
+    </pre>
+  ),
   BarChart: (props: { categories: string[]; colors: string[]; stacked?: boolean; data: unknown[] }) => (
     <pre data-testid="bar-chart">
       {JSON.stringify({
@@ -202,12 +214,13 @@ const renderPage = () =>
   );
 
 const chartProps = () =>
-  JSON.parse(screen.getByTestId('bar-chart').textContent ?? '{}') as {
+  JSON.parse(screen.getByTestId('area-chart').textContent ?? '{}') as {
     categories: string[];
     colors: string[];
-    stacked: boolean;
     data: Record<string, unknown>[];
   };
+const follows = (a: Element, b: Element) =>
+  Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
 
 describe('DashboardPage', () => {
   beforeEach(() => {
@@ -223,22 +236,42 @@ describe('DashboardPage', () => {
     renderPage();
 
     expect(mocks.query).toHaveBeenCalledWith({ organizationId: ORG_ID, days: 30 });
-    // New leads 6 vs 0: a change, but no percent against nothing
-    expect(screen.getByText('+6件')).toBeInTheDocument();
-    expect(screen.getByText('前の30日間 0件')).toBeInTheDocument();
-    // Consultations 3 vs 1, MQL 4 vs 5
-    expect(screen.getByText('+2件')).toBeInTheDocument();
-    expect(screen.getByText('前の30日間 1件 → +200%')).toBeInTheDocument();
-    expect(screen.getByText('−1件')).toBeInTheDocument();
-    expect(screen.getByText('前の30日間 5件 → −20%')).toBeInTheDocument();
-    // MQL counts 関心あり only; 適合 only is a separate line (#139)
-    expect(screen.getByText('MQL（関心あり）')).toBeInTheDocument();
-    expect(screen.getByText('ほかに適合のみ 2件')).toBeInTheDocument();
-    // Average score: points, no percent
-    expect(screen.getByText('+7')).toBeInTheDocument();
-    expect(screen.getByText('前の30日間 70')).toBeInTheDocument();
+    const insights = within(screen.getByTestId('insights'));
+    expect(insights.getByRole('heading', { name: '過去30日間のインサイト' })).toBeInTheDocument();
+    // New leads 6 vs 0: up, but no percent against nothing; the previous value is still named
+    const leads = insights.getByText('新規リードが前の30日間より増えました').parentElement as HTMLElement;
+    expect(within(leads).getByText('6件')).toBeInTheDocument();
+    expect(within(leads).queryByText(/%/)).not.toBeInTheDocument();
+    expect(within(leads).getByText('前の30日間 0件')).toBeInTheDocument();
+    // Consultations 3 vs 1, MQL 4 vs 5 (関心あり only, 適合のみ beside it, #139)
+    const consultations = insights.getByText('相談申込が前の30日間より増えました')
+      .parentElement as HTMLElement;
+    expect(within(consultations).getByText(/200\.0%/)).toHaveClass('text-emerald-600');
+    const mql = insights.getByText('MQL（関心あり）が前の30日間より減りました').parentElement as HTMLElement;
+    expect(within(mql).getByText(/20\.0%/)).toHaveClass('text-rose-600');
+    expect(within(mql).getByText('前の30日間 5件 / ほかに適合のみ 2件')).toBeInTheDocument();
+    // Average score: points, its change in percent
+    const score = insights.getByText('新規リードの平均スコアが上がりました').parentElement as HTMLElement;
+    expect(within(score).getByText('77')).toBeInTheDocument();
+    expect(within(score).getByText(/10\.0%/)).toBeInTheDocument();
     expect(screen.queryByText(/前月比/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/\+15\.3%/)).not.toBeInTheDocument();
+  });
+
+  it('opens with where things stand: waiting requests, next actions and meetings, each a link (#410)', () => {
+    renderPage();
+
+    const status = within(screen.getByTestId('status-overview'));
+    expect(status.getByRole('heading', { name: '対応状況' })).toBeInTheDocument();
+    expect(status.getByRole('link', { name: /返信待ちの相談\s*12/ })).toHaveAttribute(
+      'href',
+      '/ja/leads?status=new&consult=1'
+    );
+    expect(status.getByRole('link', { name: /今日までの次の行動（自分）\s*5/ })).toHaveAttribute(
+      'href',
+      '#dashboard-today'
+    );
+    expect(status.getByRole('link', { name: /今週の商談\s*2/ })).toBeInTheDocument();
+    expect(status.getByRole('link', { name: /リード一覧/ })).toHaveAttribute('href', '/ja/leads');
   });
 
   it('shows lateness in business days next to the deadline, linked to the lead', () => {
@@ -261,9 +294,7 @@ describe('DashboardPage', () => {
       'href',
       '/ja/leads?status=new&consult=1'
     );
-    const pipeline = screen.getByRole('heading', { name: 'いまのパイプライン' }).closest('div.rounded-lg');
-    expect(pipeline).not.toBeNull();
-    const rows = within(pipeline as HTMLElement).getAllByRole('link');
+    const rows = within(screen.getByTestId('pipeline')).getAllByRole('link');
     expect(rows).toHaveLength(5);
     expect(rows.map((row) => row.getAttribute('href'))).toEqual([
       '/ja/leads?status=new',
@@ -274,34 +305,42 @@ describe('DashboardPage', () => {
     ]);
   });
 
-  it('puts the waiting requests first and the period switch right above the figures', () => {
+  it('puts the period switch by the title, then the status, the waiting requests and the analytics', () => {
     renderPage();
 
-    const pending = screen.getByRole('heading', { name: /連絡待ちの相談申込/ });
     const period = screen.getByRole('group', { name: '集計期間' });
-    const firstKpi = screen.getByRole('heading', { name: '新規リード' });
-    const follows = (a: Element, b: Element) =>
-      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(follows(pending, period)).toBe(true);
-    expect(follows(period, firstKpi)).toBe(true);
-    expect(screen.getAllByText('直近30日').length).toBeGreaterThanOrEqual(6);
-    expect(screen.getByText('全期間')).toBeInTheDocument();
+    const status = screen.getByTestId('status-overview');
+    const pending = screen.getByRole('heading', { name: /連絡待ちの相談申込/ });
+    const analytics = screen.getByTestId('analytics-panel');
+    expect(follows(screen.getByRole('heading', { level: 1, name: 'ダッシュボード' }), period)).toBe(true);
+    expect(follows(period, status)).toBe(true);
+    expect(follows(status, pending)).toBe(true);
+    expect(follows(pending, analytics)).toBe(true);
+    expect(within(analytics).getByRole('link', { name: /分析/ })).toHaveAttribute('href', '/ja/analytics');
   });
 
-  it('stacks consultation requests under the other new leads, without red or blue', () => {
+  it('draws the figure of the period as a curve, switching between new leads and consultations', async () => {
+    const user = userEvent.setup();
     renderPage();
 
-    const chart = chartProps();
-    expect(chart.stacked).toBe(true);
-    expect(chart.categories).toEqual(['相談申込', 'その他']);
-    expect(chart.colors).toEqual(['teal', 'lightGray']);
-    expect(chart.data).toEqual([
-      { date: '10/15', 相談申込: 1, その他: 0 },
-      { date: '10/16', 相談申込: 1, その他: 2 },
+    const panel = within(screen.getByTestId('analytics-panel'));
+    expect(panel.getByText('4')).toBeInTheDocument();
+    expect(chartProps()).toEqual({
+      categories: ['新規リード数'],
+      colors: ['teal'],
+      data: [
+        { date: '10/15', 新規リード数: 1 },
+        { date: '10/16', 新規リード数: 3 },
+      ],
+    });
+    expect(panel.getByRole('img')).toHaveAccessibleName('直近30日の新規リード数は4件');
+
+    await user.selectOptions(panel.getByRole('combobox', { name: '表示する数' }), 'consultations');
+    expect(chartProps().data).toEqual([
+      { date: '10/15', 相談申込数: 1 },
+      { date: '10/16', 相談申込数: 1 },
     ]);
-    expect(screen.getByRole('img')).toHaveAccessibleName(
-      '直近30日の新規リードは4件（うち相談申込2件）。最も多かったのは10/16の3件です'
-    );
+    expect(panel.getByText('2')).toBeInTheDocument();
   });
 
   it('labels weekly bars for 90 days', () => {
@@ -319,7 +358,7 @@ describe('DashboardPage', () => {
     renderPage();
 
     expect(chartProps().data.map((d) => d.date)).toEqual(['7/19〜', '7/20〜']);
-    expect(screen.getByText('週ごと（月曜はじまり・日本時間）')).toBeInTheDocument();
+    expect(screen.getByText('直近90日・週ごと（日本時間）')).toBeInTheDocument();
   });
 
   it('lists recent leads by company with status, received time and highlighted scores', () => {
@@ -353,7 +392,9 @@ describe('DashboardPage', () => {
     renderPage();
 
     const unknown = screen.getByText('不明（AX診断以外）').closest('li');
-    expect(unknown?.querySelector('.bg-gray-500')).not.toBeNull();
+    expect(unknown?.querySelector('.bg-gray-400')).not.toBeNull();
+    const sources = within(screen.getByTestId('analytics-panel')).getAllByRole('listitem');
+    expect(sources.at(-1)).toBe(unknown);
   });
 
   it('says so when there is nothing to show', () => {
@@ -373,21 +414,21 @@ describe('DashboardPage', () => {
     expect(screen.getByText('連絡待ちの相談申込はありません')).toBeInTheDocument();
     expect(screen.getAllByText('この期間のリードはありません')).toHaveLength(2);
     expect(screen.getByText('まだリードがありません')).toBeInTheDocument();
-    expect(screen.getByText('前の30日間 スコアなし')).toBeInTheDocument();
-    expect(screen.queryByTestId('bar-chart')).not.toBeInTheDocument();
+    expect(screen.getByText('新規リードの平均スコア')).toBeInTheDocument();
+    expect(screen.getByText('前の30日間は値なし')).toBeInTheDocument();
+    expect(screen.queryByTestId('area-chart')).not.toBeInTheDocument();
   });
 
   it('shows placeholders while loading, never an empty chart or "nothing waiting"', () => {
     mocks.data = undefined;
     renderPage();
 
-    expect(screen.getAllByTestId('card-skeleton').length).toBeGreaterThanOrEqual(5);
+    expect(screen.getAllByTestId('card-skeleton').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByTestId('chart-skeleton')).toBeInTheDocument();
-    expect(screen.queryByTestId('bar-chart')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('area-chart')).not.toBeInTheDocument();
     expect(screen.queryByText('連絡待ちの相談申込はありません')).not.toBeInTheDocument();
-    // The cards that follow the period already name it; only the pipeline is all time
-    expect(screen.getAllByText('直近30日')).toHaveLength(2);
-    expect(screen.getAllByText('全期間')).toHaveLength(1);
+    // The status block waits too, never showing 0 for the waiting requests
+    expect(within(screen.getByTestId('status-overview')).queryByText('0')).not.toBeInTheDocument();
   });
 
   it('shows an error with a reload button in each card, never "nothing waiting"', async () => {
@@ -397,10 +438,10 @@ describe('DashboardPage', () => {
     renderPage();
 
     const alerts = screen.getAllByRole('alert');
-    expect(alerts).toHaveLength(6); // pending, figures, trend, pipeline, sources, recent
+    expect(alerts).toHaveLength(4); // pending, analytics, pipeline, recent
     for (const alert of alerts) expect(alert).toHaveTextContent('読み込めませんでした');
     expect(screen.queryByText('連絡待ちの相談申込はありません')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('bar-chart')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('area-chart')).not.toBeInTheDocument();
 
     await user.click(within(alerts[0]).getByRole('button', { name: '再読み込み' }));
     expect(mocks.refetch).toHaveBeenCalledTimes(1);
@@ -427,9 +468,11 @@ describe('DashboardPage', () => {
 
     const pending = screen.getByRole('heading', { name: /連絡待ちの相談申込/ });
     const today = screen.getByTestId('due-tasks');
-    const firstKpi = screen.getByRole('heading', { name: '新規リード' });
-    expect(Boolean(pending.compareDocumentPosition(today) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
-    expect(Boolean(today.compareDocumentPosition(firstKpi) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    const analytics = screen.getByTestId('analytics-panel');
+    expect(follows(pending, today)).toBe(true);
+    expect(follows(today, analytics)).toBe(true);
+    // The status block's "next actions" figure jumps to this list
+    expect(today.closest('#dashboard-today')).not.toBeNull();
   });
 
   it('offers the one-tap contact buttons on each waiting request only to staff who can edit leads', () => {
@@ -477,15 +520,13 @@ describe('DashboardPage', () => {
   it('shows this week’s meetings after the next actions and the meeting rate after the figures, with the period (#137)', async () => {
     const user = userEvent.setup();
     renderPage();
-    const follows = (a: Element, b: Element) =>
-      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
     const today = screen.getByTestId('due-tasks');
     const meetings = screen.getByTestId('week-meetings');
-    const firstKpi = screen.getByRole('heading', { name: '新規リード' });
+    const analytics = screen.getByTestId('analytics-panel');
     const rate = screen.getByTestId('next-meeting-rate');
     expect(follows(today, meetings)).toBe(true);
-    expect(follows(meetings, firstKpi)).toBe(true);
-    expect(follows(firstKpi, rate)).toBe(true);
+    expect(follows(meetings, analytics)).toBe(true);
+    expect(follows(analytics, rate)).toBe(true);
     expect(rate).toHaveAttribute('data-days', '30');
     await user.click(screen.getByRole('radio', { name: '7日' }));
     expect(screen.getByTestId('next-meeting-rate')).toHaveAttribute('data-days', '7');
@@ -504,8 +545,7 @@ describe('DashboardPage', () => {
 
     expect(screen.queryByRole('heading', { name: '最近のリード' })).not.toBeInTheDocument();
     const pending = screen.getByRole('heading', { name: /連絡待ちの相談申込/ });
-    const firstKpi = screen.getByRole('heading', { name: '新規リード' });
-    expect(Boolean(pending.compareDocumentPosition(firstKpi) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect(follows(pending, screen.getByTestId('analytics-panel'))).toBe(true);
   });
 });
 
