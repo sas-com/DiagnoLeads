@@ -1,6 +1,7 @@
 /**
  * Organization isolation of the comments router (#356): a member of organization B who passes the id
- * of organization A's comment or lead gets NOT_FOUND (getCount answers 0), and A's rows stay as they were.
+ * of organization A's comment or lead gets NOT_FOUND (list is empty, getCount answers 0), and A's rows
+ * stay as they were.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/dl_test \
@@ -101,6 +102,12 @@ describe.skipIf(!url)('comments organization isolation (PostgreSQL)', () => {
     const before = await stateOfA();
     await expect(calls[name]()).rejects.toMatchObject({ code: 'NOT_FOUND' });
     expect(await stateOfA()).toEqual(before);
+  });
+
+  it('list of a lead of another organization comes back empty', async () => {
+    const page = await adminB.comments.list({ ...asB(), leadId: leadA });
+    expect(JSON.stringify(page)).not.toContain('Comment of A');
+    expect(JSON.stringify(page)).not.toContain(commentA);
   });
 
   it('getCount of a lead of another organization answers 0', async () => {
