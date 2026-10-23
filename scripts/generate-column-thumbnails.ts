@@ -38,6 +38,7 @@ import {
   BookOpen,
   Database,
   FileLock,
+  FileSearch,
   FolderOpen,
   HardDrive,
   type LucideIcon,
@@ -75,6 +76,7 @@ const ICONS: Record<ColumnThumbnailIcon, LucideIcon> = {
   'hard-drive': HardDrive,
   'server-cog': ServerCog,
   'book-open': BookOpen,
+  'file-search': FileSearch,
 };
 
 const MESSAGES: Record<ColumnLocale | AxShareLocale, typeof ja> = { ja, en };

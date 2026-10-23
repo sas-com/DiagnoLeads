@@ -418,8 +418,15 @@ export async function AxAccessSteps({ locale }: SectionProps) {
 
 const TARGET_KEYS = ['files', 'versions', 'vba', 'links', 'department'] as const;
 
+/** The column on telling Access files apart, for readers who cannot tell which file is one (#367) */
+const FILE_TYPES_COLUMN = 'access-file-types';
+
 export async function AxAccessTargets({ locale }: SectionProps) {
   const t = await getTranslations({ locale, namespace: 'axAccess.targets' });
+  // Articles are Japanese for now (#324): no link in another language
+  const fileTypes = columnsFor('access').find(
+    (item) => item.locale === locale && item.slug === FILE_TYPES_COLUMN
+  );
   return (
     <section
       id={AX_SECTIONS.targets}
@@ -442,6 +449,18 @@ export async function AxAccessTargets({ locale }: SectionProps) {
             </li>
           ))}
         </ul>
+        {fileTypes && (
+          <p className="mt-6 text-center">
+            <AxCrossLink
+              href={`/${fileTypes.locale}${columnPath(fileTypes.slug)}`}
+              placement="targets"
+              className="inline-flex items-start gap-1 rounded py-1 font-bold leading-relaxed text-white underline underline-offset-4 hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            >
+              {t('fileTypesLink')}
+              <ArrowRight className="mt-1.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            </AxCrossLink>
+          </p>
+        )}
       </div>
     </section>
   );

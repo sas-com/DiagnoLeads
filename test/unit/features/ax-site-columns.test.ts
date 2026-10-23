@@ -81,8 +81,9 @@ describe('column content', () => {
       '/ax-migration/column/access-shared-folder',
       '/ax-migration/column/access-accde-only',
       '/ax-migration/column/access-2gb-limit',
+      '/ax-migration/column/access-file-types',
     ]);
-    expect(columnUpdatedAt('/ax-migration/column')).toBe('2026-10-22');
+    expect(columnUpdatedAt('/ax-migration/column')).toBe('2026-10-23');
     expect(columnUpdatedAt('/ax-migration/access')).toBeUndefined();
   });
 });
@@ -97,16 +98,19 @@ describe('the Access series', () => {
       'access-shared-folder',
       'access-accde-only',
       'access-2gb-limit',
+      'access-file-types',
     ]);
   });
 
   it.each(series.map((column) => [column.slug, column] as const))(
     '%s is dated, in Japanese, tied to the Access page and ends with the diagnosis',
     (_, column) => {
+      // The file types article (#367) came a day after the others
+      const date = column.slug === 'access-file-types' ? '2026-10-23' : '2026-10-22';
       expect(column).toMatchObject({
         locale: 'ja',
-        publishedAt: '2026-10-22',
-        updatedAt: '2026-10-22',
+        publishedAt: date,
+        updatedAt: date,
         related: 'access',
         cta: 'access-diagnosis',
       });
@@ -141,6 +145,9 @@ describe('the Access series', () => {
     );
     expect(notice('access-accde-only')).toMatch(/^Microsoft、Access、Excel は、/);
     expect(notice('access-2gb-limit')).toMatch(/^Microsoft、Access、SQL Server は、/);
+    expect(notice('access-file-types')).toMatch(
+      /^Microsoft、Access、Excel、SQL Server、Windows、Microsoft 365 は、/
+    );
   });
 
   it('says so when a source is an old technical document (previous-versions)', () => {

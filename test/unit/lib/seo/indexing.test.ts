@@ -42,6 +42,7 @@ describe('search indexing policy', () => {
       '/ja/ax-migration/column/access-shared-folder',
       '/ja/ax-migration/column/access-accde-only',
       '/ja/ax-migration/column/access-2gb-limit',
+      '/ja/ax-migration/column/access-file-types',
     ]);
     // Columns carry the date of their article rather than the build time
     const article = sitemap().find((entry) => entry.url.endsWith('/access-office-support-end'));
