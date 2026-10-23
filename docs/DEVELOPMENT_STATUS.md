@@ -72,9 +72,9 @@
 
 | 機能 | 状態 | テスト |
 |------|------|--------|
-| ワークフローエンジン | ✅ | ✅ |
-| トリガー/アクション | ✅ | ✅ |
-| スケジュールレポート | ✅ | ⚠️ |
+| ワークフローエンジン | 📋（定義の保存の API のみ。画面と実行は未実装。計画は `docs/WORKFLOW_ENGINE_EVALUATION.md`） | ✅（定義の保存の API のみ） |
+| トリガー/アクション | 📋（定義として保存できるだけで、実行されない） | - |
+| スケジュールレポート | 🚧（設定の保存と手動実行の記録のみ。レポートを生成・送信する処理はない） | ⚠️ |
 
 ### 診断フォーム
 
@@ -103,13 +103,8 @@
 | Audit Logs | ✅ | ✅ (23) |
 | Rate Limiting | ✅ | ✅ (28) |
 | Redis Cache | ✅ | ✅ (25) |
-| Background Jobs | ✅ | ✅ (22) |
 | File Storage | ✅ | ✅ (34) |
-| Event Bus | ✅ | ✅ (24) |
-| Plugin System | ✅ | ✅ (23) |
 | Realtime SSE | ✅ | ✅ (29) |
-| AI Agent | ✅ | ✅ (23) |
-| Workflow Engine | ✅ | ✅ (11) |
 | API Docs | ✅ | ✅ (26) |
 
 ---
@@ -262,13 +257,8 @@
 | audit-logs.test.ts | 23 | インフラ |
 | rate-limit.test.ts | 28 | インフラ |
 | cache.test.ts | 25 | インフラ |
-| jobs.test.ts | 22 | インフラ |
 | storage.test.ts | 34 | インフラ |
-| events.test.ts | 24 | インフラ |
-| plugins.test.ts | 23 | インフラ |
 | realtime.test.ts | 29 | インフラ |
-| ai-agent.test.ts | 23 | AI |
-| workflow.test.ts | 11 | 自動化 |
 | api-docs.test.ts | 26 | ドキュメント |
 | diagnostic-submit.test.ts | 30 | 診断 |
 | ai-scoring.test.ts | 29 | AI |

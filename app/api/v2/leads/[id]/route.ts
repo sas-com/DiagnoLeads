@@ -1,11 +1,4 @@
 import { getAuthenticatedOrganization } from '@/lib/api/v2-auth';
-/**
- * REST API v2 - Single Lead Endpoint
- *
- * GET /api/v2/leads/[id] - Get a lead
- * PATCH /api/v2/leads/[id] - Update a lead
- * DELETE /api/v2/leads/[id] - Delete a lead
- */
 import { db } from '@/lib/db';
 import { leads } from '@/lib/db/schema';
 import {
@@ -13,6 +6,14 @@ import {
   normalizeLeadStatus,
   statusUpdateFields,
 } from '@/lib/features/leads/types/pipeline';
+/**
+ * REST API v2 - Single Lead Endpoint
+ *
+ * GET /api/v2/leads/[id] - Get a lead
+ * PATCH /api/v2/leads/[id] - Update a lead
+ * DELETE /api/v2/leads/[id] - Delete a lead
+ */
+import { emitLeadEvents, leadChangeEvents } from '@/lib/features/webhooks/services/lead-events';
 import { and, eq } from 'drizzle-orm';
 import { type NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -173,6 +174,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       .set(updateData)
       .where(and(eq(leads.id, id), eq(leads.organizationId, authResult.organizationId)))
       .returning();
+    if (updated) {
+      emitLeadEvents(authResult.organizationId, leadChangeEvents(existing, updated));
+    }
 
     return NextResponse.json({
       data: updated,
@@ -225,9 +229,16 @@ export async function DELETE(
     }
 
     // Delete lead
-    await db
+    const deleted = await db
       .delete(leads)
-      .where(and(eq(leads.id, id), eq(leads.organizationId, authResult.organizationId)));
+      .where(and(eq(leads.id, id), eq(leads.organizationId, authResult.organizationId)))
+      .returning({ id: leads.id });
+    // Only when this request deleted it (a concurrent delete sends its own event)
+    if (deleted.length > 0) {
+      emitLeadEvents(authResult.organizationId, [
+        { type: 'lead.deleted', leadId: existing.id, deletedAt: new Date() },
+      ]);
+    }
 
     return NextResponse.json({ message: 'Lead deleted successfully' }, { status: 200 });
   } catch (error) {

@@ -1,13 +1,14 @@
-/**
- * Lead Scoring Rules tRPC Router
- * Handles custom lead scoring ruleset management and score calculation
- */
 import {
   type ScoringCondition,
   type ScoringRule,
   leadScoringRulesets,
   leads,
 } from '@/lib/db/schema';
+/**
+ * Lead Scoring Rules tRPC Router
+ * Handles custom lead scoring ruleset management and score calculation
+ */
+import { emitLeadEvents } from '@/lib/features/webhooks/services/lead-events';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { and, desc, eq } from 'drizzle-orm';
@@ -563,13 +564,21 @@ export const scoringRulesRouter = router({
       );
 
       // Update lead score
-      await ctx.db
+      const [updated] = await ctx.db
         .update(leads)
         .set({
           score: result.score,
           updatedAt: new Date(),
         })
-        .where(eq(leads.id, input.leadId));
+        .where(and(eq(leads.id, input.leadId), eq(leads.organizationId, input.organizationId)))
+        .returning();
+      if (updated && updated.score !== lead.score) {
+        emitLeadEvents(
+          input.organizationId,
+          [{ type: 'lead.scored', lead: updated, previousScore: lead.score }],
+          { database: ctx.db }
+        );
+      }
 
       return {
         leadId: input.leadId,

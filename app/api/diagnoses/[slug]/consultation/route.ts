@@ -20,6 +20,7 @@ import {
 } from '@/lib/features/diagnostics/request-guard';
 import { acceptMeetingPreferences } from '@/lib/features/meeting-requests/service';
 import { meetingPreferencesSchema } from '@/lib/features/meeting-requests/types/schemas';
+import { reportRejectedRequest } from '@/lib/ops/alert';
 import { eq } from 'drizzle-orm';
 import { type NextRequest, NextResponse, after } from 'next/server';
 import { z } from 'zod';
@@ -57,7 +58,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
         DIAGNOSIS_RATE_LIMITS.consultationPerIp,
         ipBlock(ip)
       );
-      if (!limit.allowed) return tooManyRequests(limit.retryAfterSeconds);
+      if (!limit.allowed) {
+        after(() => reportRejectedRequest('diagnosis/consultation', 'rate_limited'));
+        return tooManyRequests(limit.retryAfterSeconds);
+      }
     }
 
     // Requests are taken while the diagnosis is published (also for an earlier version)

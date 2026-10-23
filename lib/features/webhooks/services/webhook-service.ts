@@ -409,7 +409,7 @@ async function insertDelivery(
   organizationId: string,
   eventType: WebhookEventType,
   data: Record<string, unknown>,
-  { test = false }: { test?: boolean } = {}
+  { test = false, queued = false }: { test?: boolean; queued?: boolean } = {}
 ) {
   const payload: WebhookPayload = {
     id: crypto.randomUUID(),
@@ -427,8 +427,9 @@ async function insertDelivery(
       eventType,
       payload: payload as unknown as Record<string, unknown>,
       status: 'pending',
-      attempts: 1,
-      nextRetryAt: new Date(Date.now() + WEBHOOK_DELIVERY_LEASE_MS),
+      // A queued delivery is sent by the retry processor as its first attempt
+      attempts: queued ? 0 : 1,
+      nextRetryAt: queued ? new Date() : new Date(Date.now() + WEBHOOK_DELIVERY_LEASE_MS),
     })
     .returning();
   return { delivery, payload };
@@ -591,6 +592,75 @@ export async function triggerWebhooks(
   return { triggered, failed };
 }
 
+/** How long one call of triggerWebhookBatch sends before it only queues the rest */
+export const WEBHOOK_BATCH_TIME_BUDGET_MS = 15_000;
+
+/**
+ * Most deliveries one call of triggerWebhookBatch queues. The retry queue is shared by every
+ * organization and worked once a day, so one bulk change must not fill it; past this the
+ * deliveries are dropped and counted (the caller reports them).
+ */
+export const WEBHOOK_BATCH_QUEUE_LIMIT = 100;
+
+/**
+ * Trigger several events of one organization (#308), reading its webhooks once. Events are sent
+ * one after another while a whole attempt still fits in the time budget; the rest are stored as
+ * due deliveries for the retry processor (the daily webhook cron), up to
+ * WEBHOOK_BATCH_QUEUE_LIMIT; deliveries past that are dropped and returned as a count.
+ */
+export async function triggerWebhookBatch(
+  organizationId: string,
+  events: { eventType: WebhookEventType; data: Record<string, unknown> }[],
+  {
+    database = db,
+    timeBudgetMs = WEBHOOK_BATCH_TIME_BUDGET_MS,
+  }: { database?: Database; timeBudgetMs?: number } = {}
+): Promise<{ sent: number; failed: number; queued: number; dropped: number }> {
+  const counts = { sent: 0, failed: 0, queued: 0, dropped: 0 };
+  if (events.length === 0) return counts;
+
+  const activeWebhooks = await database
+    .select()
+    .from(webhooks)
+    .where(and(eq(webhooks.organizationId, organizationId), eq(webhooks.status, 'active')));
+  if (activeWebhooks.length === 0) return counts;
+
+  const startedAt = Date.now();
+  for (const { eventType, data } of events) {
+    const subscribed = activeWebhooks.filter((w) => w.events.includes(eventType));
+    if (subscribed.length === 0) continue;
+
+    const fits =
+      Date.now() - startedAt + WEBHOOK_DELIVERY_TIMEOUT_MS + ROUND_MARGIN_MS <= timeBudgetMs;
+    if (!fits && counts.queued + subscribed.length > WEBHOOK_BATCH_QUEUE_LIMIT) {
+      counts.dropped += subscribed.length;
+      continue;
+    }
+    const results = await Promise.allSettled(
+      subscribed.map(async (webhook) => {
+        if (!fits) {
+          await insertDelivery(database, webhook, organizationId, eventType, data, {
+            queued: true,
+          });
+          return 'queued' as const;
+        }
+        return (await sendNewDelivery(database, webhook, organizationId, eventType, data))
+          ? ('sent' as const)
+          : ('failed' as const);
+      })
+    );
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        counts[result.value]++;
+      } else {
+        console.error('Failed to record webhook delivery:', result.reason);
+        counts.failed++;
+      }
+    }
+  }
+  return counts;
+}
+
 /**
  * Pending deliveries created more than WEBHOOK_RETRY_MAX_AGE_MS ago (with or without
  * `next_retry_at`) are failed, whatever their webhook's status
@@ -744,7 +814,8 @@ export async function processWebhookRetries({
         const payload = delivery.payload as unknown as WebhookPayload;
         const result = await deliverWebhook(webhook, payload, delivery.id);
         await recordAttempt(database, webhook, delivery.id, delivery.attempts, result, {
-          isRetry: true,
+          // A queued delivery (#308) reaches here for its first attempt
+          isRetry: delivery.attempts > 1,
           isTest: payload.test === true,
         });
         return result.success;

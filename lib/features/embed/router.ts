@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { embedAccessLogs, embedConfigs } from '@/lib/db/schema';
+import { assertInOrganization } from '@/lib/multi-tenant/helpers/scope';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { and, desc, eq } from 'drizzle-orm';
@@ -68,6 +69,9 @@ export const embedRouter = router({
    * Returns the API key only once - it cannot be retrieved later
    */
   create: organizationProcedure.input(createEmbedConfigSchema).mutation(async ({ ctx, input }) => {
+    if (input.diagnosticTemplateId) {
+      await assertInOrganization(db, 'template', ctx.organization.id, input.diagnosticTemplateId);
+    }
     const apiKey = generateApiKey();
     const apiKeyHash = hashApiKey(apiKey);
 
@@ -115,6 +119,14 @@ export const embedRouter = router({
       if (!existing) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Embed config not found' });
       }
+      if (input.data.diagnosticTemplateId) {
+        await assertInOrganization(
+          db,
+          'template',
+          ctx.organization.id,
+          input.data.diagnosticTemplateId
+        );
+      }
 
       const [updated] = await db
         .update(embedConfigs)
@@ -123,7 +135,9 @@ export const embedRouter = router({
           expiresAt: input.data.expiresAt ? new Date(input.data.expiresAt) : undefined,
           updatedAt: new Date(),
         })
-        .where(eq(embedConfigs.id, input.id))
+        .where(
+          and(eq(embedConfigs.id, input.id), eq(embedConfigs.organizationId, ctx.organization.id))
+        )
         .returning();
 
       return {
@@ -162,7 +176,9 @@ export const embedRouter = router({
           apiKeyHash: newApiKeyHash,
           updatedAt: new Date(),
         })
-        .where(eq(embedConfigs.id, input.id))
+        .where(
+          and(eq(embedConfigs.id, input.id), eq(embedConfigs.organizationId, ctx.organization.id))
+        )
         .returning();
 
       return {
@@ -191,7 +207,11 @@ export const embedRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Embed config not found' });
       }
 
-      await db.delete(embedConfigs).where(eq(embedConfigs.id, input.id));
+      await db
+        .delete(embedConfigs)
+        .where(
+          and(eq(embedConfigs.id, input.id), eq(embedConfigs.organizationId, ctx.organization.id))
+        );
 
       return { success: true };
     }),

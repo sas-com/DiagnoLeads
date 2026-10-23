@@ -54,8 +54,6 @@ diagnoleads-v2/
 │   ├── db/                # Drizzle ORM
 │   ├── auth/              # Better Auth
 │   ├── cache/             # Redis/Memory cache
-│   ├── jobs/              # Background jobs
-│   ├── events/            # Event bus
 │   └── ...
 ├── components/            # React components
 ├── test/

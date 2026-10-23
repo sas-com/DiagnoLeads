@@ -3,6 +3,7 @@
  * Handles CRUD operations for lead comments and notes
  */
 import { leadComments, users } from '@/lib/db/schema';
+import { assertInOrganization } from '@/lib/multi-tenant/helpers/scope';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { and, desc, eq, isNull } from 'drizzle-orm';
@@ -79,6 +80,8 @@ export const commentsRouter = router({
           },
         },
         replies: {
+          // Replies of the same organization only, however the row was written
+          where: eq(leadComments.organizationId, input.organizationId),
           with: {
             user: {
               columns: {
@@ -117,6 +120,25 @@ export const commentsRouter = router({
         code: 'FORBIDDEN',
         message: 'コメントを作成する権限がありません',
       });
+    }
+
+    await assertInOrganization(ctx.db, 'lead', input.organizationId, input.leadId);
+    if (input.parentId) {
+      // A reply stays in the thread of the same lead
+      const [parent] = await ctx.db
+        .select({ id: leadComments.id })
+        .from(leadComments)
+        .where(
+          and(
+            eq(leadComments.id, input.parentId),
+            eq(leadComments.organizationId, input.organizationId),
+            eq(leadComments.leadId, input.leadId)
+          )
+        )
+        .limit(1);
+      if (!parent) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'The parent comment was not found' });
+      }
     }
 
     const [comment] = await ctx.db
@@ -298,6 +320,8 @@ export const commentsRouter = router({
           message: 'アクティビティを記録する権限がありません',
         });
       }
+
+      await assertInOrganization(ctx.db, 'lead', input.organizationId, input.leadId);
 
       const [activity] = await ctx.db
         .insert(leadComments)
