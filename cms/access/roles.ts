@@ -48,3 +48,13 @@ export const selfOrAdmin: Access = ({ req }) => {
 
 /** Field-level: admins only */
 export const adminOnlyField: FieldAccess = ({ req }) => isAdmin(req.user);
+
+/** Any signed-in CMS user (admin, editor or viewer) */
+export const cmsUser: Access = ({ req }) => roleOf(req.user) !== null;
+
+/**
+ * For collections with drafts: signed-in CMS users read every document, drafts included;
+ * everyone else only published ones (#418)
+ */
+export const publishedOrCmsUser: Access = ({ req }) =>
+  roleOf(req.user) !== null ? true : { _status: { equals: 'published' } };

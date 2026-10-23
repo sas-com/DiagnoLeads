@@ -1,3 +1,5 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { postgresAdapter } from '@payloadcms/db-postgres';
 import { lexicalEditor } from '@payloadcms/richtext-lexical';
 import { en } from '@payloadcms/translations/languages/en';
@@ -5,9 +7,11 @@ import { ja } from '@payloadcms/translations/languages/ja';
 import { buildConfig } from 'payload';
 import sharp from 'sharp';
 
-import { Media, Users } from './cms/collections';
+import { AxColumns, Media, Users } from './cms/collections';
 import { cmsPoolConfig } from './lib/cms/db-pool';
 import { payloadSecret } from './lib/cms/secret';
+
+const dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
  * Payload CMS Configuration
@@ -38,7 +42,7 @@ export default buildConfig({
   },
 
   // Collections
-  collections: [Users, Media],
+  collections: [Users, Media, AxColumns],
 
   // Global configuration
   globals: [],
@@ -64,6 +68,9 @@ export default buildConfig({
     pool: cmsPoolConfig(process.env.DATABASE_URL || ''),
     schemaName: 'cms',
     push: process.env.PAYLOAD_PUSH === 'true',
+    // Migrations of the cms schema (#418). Production gets them as SQL the owner runs in the
+    // SQL Editor (cms/migrations/sql/), which also records them in cms.payload_migrations.
+    migrationDir: path.resolve(dirname, 'cms/migrations'),
   }),
 
   // Image processing

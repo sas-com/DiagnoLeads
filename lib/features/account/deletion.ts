@@ -148,7 +148,7 @@ export async function deleteAccount(
       .delete(verification)
       .where(or(eq(verification.value, user.id), eq(verification.identifier, user.email)));
     // Cascades: accounts, sessions, organization_members, notifications,
-    // notification_preferences, content_editors. Other references become null.
+    // notification_preferences. Other references become null.
     await tx.delete(users).where(eq(users.id, user.id));
     return { ok: true as const };
   });

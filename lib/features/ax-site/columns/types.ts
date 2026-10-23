@@ -33,11 +33,16 @@ export type ColumnBlock =
 /** Locales an article can be written in (Japanese only for now) */
 export type ColumnLocale = 'ja';
 
-/** Landing pages a column belongs to: the page links back to it and shares its notices */
-export type ColumnRelatedPage = 'access';
+/**
+ * Landing pages a column belongs to: the page links back to it and shares its notices. The list
+ * is also the options of the CMS field (cms/collections/AxColumns.ts, #418).
+ */
+export const COLUMN_RELATED_PAGES = ['access'] as const;
+export type ColumnRelatedPage = (typeof COLUMN_RELATED_PAGES)[number];
 
-/** Where the call to action at the end of an article leads */
-export type ColumnCta = 'access-diagnosis';
+/** Where the call to action at the end of an article leads (also the CMS field's options) */
+export const COLUMN_CTA_VALUES = ['access-diagnosis'] as const;
+export type ColumnCta = (typeof COLUMN_CTA_VALUES)[number];
 
 /**
  * Line icons a thumbnail can show (lucide names; scripts/generate-column-thumbnails.ts maps each
