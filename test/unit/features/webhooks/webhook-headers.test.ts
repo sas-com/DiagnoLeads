@@ -162,6 +162,13 @@ describe('header names', () => {
       'Content-Length',
       'Transfer-Encoding',
       'Connection',
+      // Connection-level headers node:http would send (#330)
+      'Upgrade',
+      'Keep-Alive',
+      'Expect',
+      'TE',
+      'Trailer',
+      'Proxy-Connection',
       'X-Webhook-Signature',
       'X-Webhook-ID',
       'x-webhook-event',

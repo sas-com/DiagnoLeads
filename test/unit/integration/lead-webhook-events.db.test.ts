@@ -40,6 +40,12 @@ vi.mock('node:dns/promises', () => {
   return { lookup, default: { lookup } };
 });
 
+// Deliveries go through the pinned transport (#330); it is replaced by one that calls the
+// fetch stub below
+vi.mock('@/lib/features/webhooks/services/pinned-request', async () =>
+  (await import('@/test/mocks/webhook-transport')).transportThroughFetchStub()
+);
+
 // The tasks run after the response are collected so the test can wait for them
 const { pending } = vi.hoisted(() => ({ pending: [] as Promise<unknown>[] }));
 vi.mock('@/lib/auth/email-helpers', async (importOriginal) => ({

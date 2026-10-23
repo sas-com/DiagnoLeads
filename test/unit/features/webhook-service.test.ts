@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock database
 vi.mock('@/lib/db/client', () => ({
@@ -17,8 +17,12 @@ vi.mock('@/lib/db/client', () => ({
   },
 }));
 
-// Mock fetch
+// Mock fetch: deliveries go through the pinned transport, which is replaced by one that calls
+// this stub (#330)
 global.fetch = vi.fn();
+vi.mock('@/lib/features/webhooks/services/pinned-request', async () =>
+  (await import('@/test/mocks/webhook-transport')).transportThroughFetchStub()
+);
 
 // Host names resolve to a public address unless a test says otherwise (#321)
 const dnsMocks = vi.hoisted(() => ({ lookup: vi.fn() }));
@@ -29,6 +33,13 @@ vi.mock('node:dns/promises', () => ({
 const PUBLIC_ADDRESS = [{ address: '93.184.215.14', family: 4 }];
 
 import { db } from '@/lib/db/client';
+import * as pinnedRequest from '@/lib/features/webhooks/services/pinned-request';
+import { sendThroughFetchStub } from '@/test/mocks/webhook-transport';
+import { EventEmitter } from 'node:events';
+import type { ClientRequest, IncomingMessage } from 'node:http';
+import type { RequestOptions } from 'node:https';
+import type { LookupFunction } from 'node:net';
+import { Readable } from 'node:stream';
 import {
   WEBHOOK_DELIVERY_LEASE_MS,
   WEBHOOK_DELIVERY_TIMEOUT_MS,
@@ -534,8 +545,8 @@ describe('webhook-service', () => {
         success: false,
       });
 
-      const [, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-      expect((init as RequestInit).redirect).toBe('manual');
+      // Sent once; the transport never follows a Location (pinned-request.test.ts)
+      expect(global.fetch).toHaveBeenCalledTimes(1);
       expect(deliveryUpdates()[0]).toMatchObject({
         status: 'pending',
         statusCode: 302,
@@ -553,6 +564,117 @@ describe('webhook-service', () => {
         success: true,
       });
       expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('connection pinned to the checked address (#330)', () => {
+    const base = {
+      id: 'webhook-1',
+      organizationId: 'org-1',
+      name: 'CRM',
+      url: 'https://hooks.example.com/one',
+      secret: 'whsec_test',
+      events: ['lead.created' as const],
+      status: 'active' as const,
+      headers: {},
+      retryConfig: { maxRetries: 3, retryDelayMs: 5000 },
+      lastTriggeredAt: null,
+      failureCount: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const transport = vi.mocked(pinnedRequest.sendPinnedRequest);
+    const actual = async () =>
+      vi.importActual<typeof pinnedRequest>('@/lib/features/webhooks/services/pinned-request');
+
+    /** The real transport with a request function that records its options and answers 200 */
+    async function recordConnection() {
+      const { sendPinnedRequest } = await actual();
+      const connections: RequestOptions[] = [];
+      const request: pinnedRequest.RequestFunction = (options, onResponse) => {
+        connections.push(options);
+        const req = new EventEmitter() as unknown as ClientRequest;
+        Object.assign(req, {
+          destroy: vi.fn(),
+          end: () => {
+            const response = Object.assign(Readable.from([Buffer.from('ok')]), {
+              statusCode: 200,
+              statusMessage: 'OK',
+            }) as unknown as IncomingMessage;
+            onResponse(response);
+          },
+        });
+        return req;
+      };
+      transport.mockImplementation((options) => sendPinnedRequest({ ...options, request }));
+      return connections;
+    }
+
+    const lookupAddress = (options: RequestOptions) =>
+      new Promise<unknown>((resolve) => {
+        (options.lookup as LookupFunction)('hooks.example.com', {}, (_error, address) =>
+          resolve(address)
+        );
+      });
+
+    beforeEach(() => {
+      (db.returning as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: 'delivery-1' }]);
+    });
+
+    afterEach(() => {
+      transport.mockImplementation(sendThroughFetchStub);
+    });
+
+    it('hands the transport the addresses that were checked', async () => {
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+        status: 200,
+        statusText: 'OK',
+        text: vi.fn().mockResolvedValue('ok'),
+      });
+
+      await sendWebhookDelivery(base, 'lead.created', {});
+
+      expect(transport).toHaveBeenCalledTimes(1);
+      expect(transport.mock.calls[0][0]).toMatchObject({
+        url: new URL('https://hooks.example.com/one'),
+        addresses: PUBLIC_ADDRESS,
+        method: 'POST',
+      });
+    });
+
+    it('connects to the checked public address even if the name now resolves to 127.0.0.1', async () => {
+      // DNS rebinding: public for the check, loopback for any later lookup
+      dnsMocks.lookup
+        .mockResolvedValueOnce(PUBLIC_ADDRESS)
+        .mockResolvedValue([{ address: '127.0.0.1', family: 4 }]);
+      const connections = await recordConnection();
+
+      await expect(sendWebhookDelivery(base, 'lead.created', {})).resolves.toEqual({
+        success: true,
+      });
+
+      expect(dnsMocks.lookup).toHaveBeenCalledTimes(1);
+      expect(connections).toHaveLength(1);
+      const [options] = connections;
+      // The socket goes where the lookup says; it never asks DNS again
+      await expect(lookupAddress(options)).resolves.toBe('93.184.215.14');
+      expect(dnsMocks.lookup).toHaveBeenCalledTimes(1);
+      // The name is still what TLS checks the certificate against, and what the receiver sees
+      expect(options).toMatchObject({
+        hostname: 'hooks.example.com',
+        servername: 'hooks.example.com',
+        headers: expect.objectContaining({ Host: 'hooks.example.com' }),
+      });
+      expect(options).not.toHaveProperty('rejectUnauthorized');
+    });
+
+    it('connects to whatever the check of this attempt accepted', async () => {
+      dnsMocks.lookup.mockResolvedValue([{ address: '93.184.215.99', family: 4 }]);
+      const connections = await recordConnection();
+
+      await sendWebhookDelivery(base, 'lead.created', {});
+
+      await expect(lookupAddress(connections[0])).resolves.toBe('93.184.215.99');
     });
   });
 

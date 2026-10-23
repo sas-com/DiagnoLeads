@@ -229,6 +229,28 @@ describe('checkWebhookDestination', () => {
     expect(resolve).toHaveBeenCalledWith('hooks.example.com');
   });
 
+  it('returns the checked addresses in order, for the connection to use (#330)', async () => {
+    const resolve = resolverOf('93.184.215.14', '2606:2800:21f:cb07:6820:80da:af6b:8b2c');
+    const checked = await checkWebhookDestination('https://hooks.example.com/hook', { resolve });
+    expect(checked).toMatchObject({
+      ok: true,
+      addresses: [
+        { address: '93.184.215.14', family: 4 },
+        { address: '2606:2800:21f:cb07:6820:80da:af6b:8b2c', family: 6 },
+      ],
+    });
+    expect(resolve).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns an IP literal host as the only address (#330)', async () => {
+    await expect(
+      checkWebhookDestination('https://93.184.215.14/hook', { resolve: resolverOf() })
+    ).resolves.toMatchObject({ ok: true, addresses: [{ address: '93.184.215.14', family: 4 }] });
+    await expect(
+      checkWebhookDestination('https://[2606:4700:4700::1111]/hook', { resolve: resolverOf() })
+    ).resolves.toMatchObject({ ok: true, addresses: [{ address: '2606:4700:4700::1111', family: 6 }] });
+  });
+
   it('resolves the name without a trailing dot and in lower case', async () => {
     const resolve = resolverOf('93.184.215.14');
     await checkWebhookDestination('https://Hooks.Example.COM./hook', { resolve });
