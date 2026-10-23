@@ -2654,7 +2654,8 @@
     },
     "brand": {
       "name": "Migration",
-      "operator": "Software Agency System Co., Ltd."
+      "operator": "Software Agency System Co., Ltd.",
+      "logoAlt": "Maru Maru DX AX Migration"
     },
     "skipToContent": "Skip to content",
     "floatingCta": "Start the free web check",
@@ -2663,6 +2664,8 @@
       "navLabel": "On this page",
       "nav": {
         "problems": "Challenges",
+        "reasons": "Why us",
+        "demo": "Demo",
         "steps": "Approach",
         "targets": "Systems",
         "faq": "FAQ",
@@ -2685,30 +2688,23 @@
       "ctaCaption": "Multiple choice, about 3 minutes",
       "cta": "Start the free web check",
       "consult": "Book a free consultation",
-      "preview": {
-        "title": "Sample result",
-        "difficulty": "Migration difficulty",
-        "urgency": "Urgency",
-        "medium": "Medium",
-        "high": "High",
-        "challenge": "Priority challenge",
-        "challengeValue": "People: a system that depends on a few people",
-        "next": "We explain how to proceed from your result",
-        "caption": "Example only. The result depends on your answers."
-      }
+      "demo": "See the demo",
+      "imageAlt": "An AS/400 order entry screen being replaced by the screen of a modern web system"
+    },
+    "overview": {
+      "title": "From core system migration to AX, in one service",
+      "lead": "We move legacy core systems such as AS/400 to a modern web system with AI-assisted analysis and development, then add AI agents to turn it into a platform that puts management data to work.",
+      "stepLabel": "STEP {number}",
+      "items": {
+        "survey": "Analyze the current system with AI and visualize its specifications",
+        "migration": "Keep the current specifications and migrate step by step",
+        "ax": "Extend features with AI agents and put data to use"
+      },
+      "closing": "Migration is not the goal but the starting point of AX."
     },
     "problems": {
       "title": "Does this sound familiar?",
-      "lead": "We want to keep the core system running, but...",
-      "items": {
-        "people": "The engineers who know our AS/400 or ACOS are retiring",
-        "blackbox": "The documents are outdated and nobody fully understands the system",
-        "cost": "Maintenance costs keep rising and leave no budget for new investment",
-        "eos": "Hardware or software support is about to end",
-        "access": "Department Access tools keep multiplying and only their authors can fix them",
-        "start": "We want to modernize but do not know where to start"
-      },
-      "bridge": "If any of these apply, start by checking how urgent a renewal is with the free web check (about 3 minutes).",
+      "bridge": "If any of these sound familiar, start by checking how urgent a renewal is with the free web check (about 3 minutes).",
       "bridgeCta": "Start the free web check"
     },
     "challenges": {
@@ -2753,11 +2749,11 @@
         }
       },
       "solutionsLabel": "What AX migration aims for",
-      "band": "Build a foundation for growth with AX migration",
-      "closing": "From a system that just runs operations to one that supports <em>management decisions</em>"
+      "hesitation": "You know a renewal is needed, but cost, time and the impact on daily work hold you back.",
+      "answer": "We answer these concerns with three strengths."
     },
     "steps": {
-      "title": "Migration is not the goal but the starting point of AX",
+      "title": "How we proceed to AX",
       "lead": "A phased approach (survey, migration, extension) keeps risk and investment low. After the migration, AI agents analyze the system and its data to help streamline operations, and further features build a foundation that adapts more easily to change and supports growth.",
       "items": {
         "web": {
@@ -2876,6 +2872,23 @@
         "cta": "Start the free web diagnosis with the ACOS questions"
       }
     },
+    "trust": {
+      "title": "Why you can rely on us",
+      "items": {
+        "security": {
+          "title": "Security",
+          "body": "Specifications, source code and other materials you entrust to us are processed in a secure environment where they are not used as training data."
+        },
+        "scope": {
+          "title": "Scope",
+          "body": "Besides AS/400 (IBM i), NEC ACOS and Microsoft Access, we also take on Visual Basic systems and other office computers and mainframes."
+        },
+        "certified": {
+          "title": "DX-certified company",
+          "body": "Software Agency System Co., Ltd. is certified under the DX Certification program of the Ministry of Economy, Trade and Industry."
+        }
+      }
+    },
     "diagnosis": {
       "eyebrow": "FREE CHECK",
       "title": "Start with the free web check",
@@ -2883,8 +2896,11 @@
     },
     "reasons": {
       "title": "Why customers choose us",
+      "tagline": "Fast, careful, and beyond.",
+      "lead": "AI-assisted analysis and development, combined with experience in core system migration, aim for both speed and quality, with support on to AX after the migration.",
       "items": {
         "speed": {
+          "concern": "If time is the concern",
           "title": "Speed",
           "points": {
             "first": "AI analysis* of the current system makes visualizing the specifications more efficient",
@@ -2892,6 +2908,7 @@
           }
         },
         "quality": {
+          "concern": "If the impact on operations is the concern",
           "title": "High quality",
           "points": {
             "first": "A migration that keeps the current specifications and makes use of existing assets",
@@ -2899,6 +2916,7 @@
           }
         },
         "ax": {
+          "concern": "If the return on investment is the concern",
           "title": "AX",
           "points": {
             "first": "Work toward the next-generation business transformation you aim for",
@@ -2906,11 +2924,14 @@
           }
         }
       },
-      "note": "* Specifications, source code and other materials you entrust to us are processed in a secure environment where they are not used as training data.",
-      "certified": {
-        "title": "A DX-certified company",
-        "body": "Software Agency System Co., Ltd. is certified under the DX Certification program of the Ministry of Economy, Trade and Industry."
-      }
+      "note": "* Specifications, source code and other materials you entrust to us are processed in a secure environment where they are not used as training data."
+    },
+    "demo": {
+      "eyebrow": "Demo",
+      "title": "See it on real screens",
+      "lead": "Using an order entry screen as the example, switch on the spot between a screen that recreates the look of the current system (AS/400) and a modern web screen as it could look after the migration.",
+      "cta": "See the demo",
+      "imageAlt": "Demo screen showing an AS/400-style order entry screen next to a web order entry screen as it could look after the migration"
     },
     "faq": {
       "title": "FAQ",

@@ -25,7 +25,7 @@ const { default: AxMigrationPage, generateMetadata } = await import(
 const { default: AxDiagnosisPage } = await import('@/app/[locale]/(ax)/ax-diagnosis/page');
 const { AxSiteHeader } = await import('@/components/features/ax-site/ax-site-header');
 const { AxSiteFooter } = await import('@/components/features/ax-site/ax-site-footer');
-const { AxHero } = await import('@/components/features/ax-site/landing-sections');
+const { AxFinalCta } = await import('@/components/features/ax-site/landing-sections');
 const { AxFloatingCta } = await import('@/components/features/ax-site/ax-floating-cta');
 
 beforeAll(() => {
@@ -80,14 +80,16 @@ describe('AX migration landing page', () => {
 
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     for (const name of [
-      'こんなお悩みありませんか？',
+      '基幹システムの移行から、AX化までを一貫してご支援',
       'ヒト・モノ・カネ・情報。すべてが、レガシーな基幹システムに縛られています',
-      'システム移行はゴールではなく、AX化の出発点',
+      '選ばれる理由',
+      '実際の画面でご確認いただけます',
+      'AX化の進め方',
       '対象となるシステム',
       'AS/400（IBM i）からの移行を考えている方へ',
       'NEC ACOSからの移行を考えている方へ',
+      '安心して任せられる理由',
       'まずは「無料Web診断」から',
-      '選ばれる理由',
       'よくある質問',
       '次の一歩を、AXへの一歩に。',
     ]) {
@@ -127,7 +129,10 @@ describe('AX migration landing page', () => {
     ]) {
       expect(screen.getAllByRole('heading', { level: 3, name }).length).toBeGreaterThanOrEqual(1);
     }
-    expect(screen.getByText('経営判断').tagName).toBe('EM');
+    // Each strength answers one concern (#414)
+    for (const concern of ['「期間」の不安に', '「業務影響」の不安に', '「費用対効果」の不安に']) {
+      expect(screen.getByText(concern)).toBeInTheDocument();
+    }
     const reasons = screen.getByRole('heading', { level: 2, name: '選ばれる理由' }).closest('section');
     expect(
       within(reasons as HTMLElement).getByText(/^※お預かりした仕様書・ソースコードなどは/)
@@ -146,10 +151,10 @@ describe('AX migration landing page', () => {
       .getAllByRole('heading', { level: 3 })
       .map((heading) => heading.textContent);
     expect(steps.slice(0, 2)).toEqual(['無料Web診断（約3分）', '簡易診断（担当者による資産の棚卸し）']);
-    // Reasons come before the diagnosis, which asks for contact details
-    const reasons = screen.getByRole('heading', { level: 2, name: '選ばれる理由' });
+    // Reassurance comes before the diagnosis, which asks for contact details
+    const trust = screen.getByRole('heading', { level: 2, name: '安心して任せられる理由' });
     const diagnosis = screen.getByRole('heading', { level: 2, name: 'まずは「無料Web診断」から' });
-    expect(reasons.compareDocumentPosition(diagnosis) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(trust.compareDocumentPosition(diagnosis) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     for (const question of ['「AX化」とは何ですか？', '今の保守会社がソースコードを持っています。相談できますか？']) {
       expect(screen.getByText(question)).toBeInTheDocument();
     }
@@ -190,12 +195,26 @@ describe('AX migration landing page', () => {
     for (const button of buttons) expect(button).toHaveAttribute('href', '#diagnosis');
   });
 
+  it('opens the demo in a new tab from the hero and the demo section (#414)', async () => {
+    await renderPage();
+    const demos = screen.getAllByRole('link', { name: /デモを見る/ });
+    expect(demos).toHaveLength(2);
+    for (const demo of demos) {
+      expect(demo).toHaveAttribute('href', 'https://as400-pre-migration.vercel.app/');
+      expect(demo).toHaveAttribute('target', '_blank');
+      expect(demo).toHaveAttribute('rel', 'noopener noreferrer');
+    }
+    expect(
+      screen.getByRole('img', { name: /AS\/400風の受注入力画面と、移行後を想定したWebの受注入力画面/ })
+    ).toBeInTheDocument();
+  });
+
   it('shows the booking button only when a booking URL is configured', async () => {
-    render(withIntl(await AxHero({ locale: 'ja' })));
+    render(withIntl(await AxFinalCta({ locale: 'ja' })));
     expect(screen.queryByRole('link', { name: /無料相談を予約する/ })).not.toBeInTheDocument();
 
     vi.stubEnv('NEXT_PUBLIC_AX_CONSULTATION_URL', 'https://bookings.example.com/ax');
-    render(withIntl(await AxHero({ locale: 'ja' })));
+    render(withIntl(await AxFinalCta({ locale: 'ja' })));
     const booking = screen.getByRole('link', { name: /無料相談を予約する/ });
     expect(booking).toHaveAttribute('href', 'https://bookings.example.com/ax');
     expect(booking).toHaveAttribute('target', '_blank');
@@ -269,7 +288,7 @@ describe('AxSiteFooter', () => {
   it('shows the logo and the copyright of the current year', async () => {
     render(withIntl(await AxSiteFooter({ locale: 'ja' })));
     const footer = screen.getByRole('contentinfo');
-    expect(within(footer).getByText('マイグレーション')).toBeInTheDocument();
+    expect(within(footer).getByRole('img', { name: 'まるマルDX AXマイグレーション' })).toBeInTheDocument();
     expect(
       within(footer).getByText(`Copyright © ${new Date().getFullYear()}`, { exact: false })
     ).toBeInTheDocument();

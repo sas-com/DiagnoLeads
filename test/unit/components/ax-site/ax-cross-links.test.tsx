@@ -508,10 +508,14 @@ describe('Header menu on phones', () => {
     menu.getAllByRole('link').map((link) => [link.textContent, link.getAttribute('href')]);
   const SECTIONS_HERE = [
     ['お悩み', '#problems'],
+    ['選ばれる理由', '#reasons'],
+    ['デモ', '#demo'],
     ['進め方', '#steps'],
     ['対象システム', '#targets'],
     ['よくある質問', '#faq'],
   ];
+  // The Access page has no reasons or demo section of its own (#414)
+  const ACCESS_SECTIONS = SECTIONS_HERE.filter(([, href]) => !['#reasons', '#demo'].includes(href));
 
   it('opens and closes the panel with its button', async () => {
     const user = userEvent.setup();
@@ -545,7 +549,7 @@ describe('Header menu on phones', () => {
     const user = userEvent.setup();
     await renderAccess();
     expect(items(await openMenu(user))).toEqual([
-      ...SECTIONS_HERE,
+      ...ACCESS_SECTIONS,
       ['コラム', '/ja/ax-migration/column'],
       ['AXマイグレーション トップ', '/ja/ax-migration'],
     ]);
@@ -556,6 +560,8 @@ describe('Header menu on phones', () => {
     await renderColumn('access-2gb-limit');
     expect(items(await openMenu(user))).toEqual([
       ['お悩み', '/ja/ax-migration#problems'],
+      ['選ばれる理由', '/ja/ax-migration#reasons'],
+      ['デモ', '/ja/ax-migration#demo'],
       ['進め方', '/ja/ax-migration#steps'],
       ['対象システム', '/ja/ax-migration#targets'],
       ['よくある質問', '/ja/ax-migration#faq'],
@@ -572,6 +578,8 @@ describe('Header menu on phones', () => {
     const menu = within(screen.getByRole('navigation', { name: 'Site menu' }));
     expect(menu.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
       '#problems',
+      '#reasons',
+      '#demo',
       '#steps',
       '#targets',
       '#faq',

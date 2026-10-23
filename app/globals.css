@@ -60,6 +60,14 @@
   --color-ax-coral-dark: #b9372a;
   --color-ax-mist: #f3f3f3;
   --color-ax-ink: #333333;
+  /*
+   * Landing page in the STUDIO design (#414): forest for dark bands and buttons, neon only on
+   * forest (8.6:1), leaf for green text on white or mist (5.1:1 or more), cloud for cards.
+   */
+  --color-ax-forest: #002005;
+  --color-ax-neon: #1fd40d;
+  --color-ax-leaf: #18730e;
+  --color-ax-cloud: #eeeeee;
 
   /* DiagnoLeads Brand Colors - Trust & Friendly Teal Palette */
   --color-brand-25: #f0fdfa;

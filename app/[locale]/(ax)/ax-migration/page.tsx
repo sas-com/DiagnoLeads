@@ -3,15 +3,17 @@ import { AxLandingOnly, AxLandingView } from '@/components/features/ax-site/ax-l
 import { AxSiteShell } from '@/components/features/ax-site/ax-site-shell';
 import {
   AxChallenges,
+  AxDemo,
   AxDiagnosisSection,
   AxFaq,
   AxFinalCta,
   AxHero,
   AxHostPlatforms,
-  AxProblems,
+  AxOverview,
   AxReasons,
   AxSteps,
   AxTargets,
+  AxTrust,
 } from '@/components/features/ax-site/landing-sections';
 import { axShareImage } from '@/lib/features/ax-site/share-images';
 import { robotsFor } from '@/lib/seo/indexing';
@@ -71,15 +73,18 @@ export default async function AxMigrationPage({ params }: AxMigrationPageProps) 
       {/* Once the result is shown, it replaces the rest of the page (#280) */}
       <AxLandingView>
         <AxLandingOnly>
+          {/* Order of the STUDIO design (#414), with the systems and the diagnosis added */}
           <AxHero locale={locale} />
-          <AxProblems locale={locale} />
+          <AxOverview locale={locale} />
           <AxChallenges locale={locale} />
+          <AxReasons locale={locale} />
+          <AxDemo locale={locale} />
           <AxSteps locale={locale} />
           <AxTargets locale={locale} />
           {/* AS/400 and ACOS, each with its own heading (#311) */}
           <AxHostPlatforms locale={locale} />
-          {/* Reasons first: reassurance before the diagnosis asks for contact details */}
-          <AxReasons locale={locale} />
+          {/* Reassurance right before the diagnosis asks for contact details */}
+          <AxTrust locale={locale} />
         </AxLandingOnly>
         <AxDiagnosisSection locale={locale} />
         <AxLandingOnly>
