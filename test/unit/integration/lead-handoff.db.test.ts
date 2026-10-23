@@ -194,4 +194,28 @@ describe.skipIf(!url)('lead handoff (PostgreSQL)', () => {
       await pg.delete(organizations).where(eq(organizations.id, other.id));
     }
   });
+
+  it('never takes a member of another organization as a recipient (#356)', async () => {
+    const [other] = await pg
+      .insert(organizations)
+      .values({ name: '別組織', slug: `handoff-other-${unique()}` })
+      .returning();
+    const [outsider] = await pg
+      .insert(users)
+      .values({ email: `handoff-outsider-${unique()}@example.co.jp`, name: '別組織 太郎' })
+      .returning();
+    try {
+      await pg
+        .insert(organizationMembers)
+        .values({ organizationId: other.id, userId: outsider.id, role: 'admin' });
+      const before = await callers.admin.leadHandoff.recipients({ organizationId: org });
+      await expect(
+        callers.admin.leadHandoff.setRecipients({ organizationId: org, userIds: [outsider.id] })
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(await callers.admin.leadHandoff.recipients({ organizationId: org })).toEqual(before);
+    } finally {
+      await pg.delete(organizations).where(eq(organizations.id, other.id));
+      await pg.delete(users).where(eq(users.id, outsider.id));
+    }
+  });
 });
