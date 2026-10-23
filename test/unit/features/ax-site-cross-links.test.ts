@@ -40,7 +40,11 @@ describe('isAxFrom', () => {
     expect(isAxFrom('ax-lp-targets-access')).toBe(true);
     expect(isAxFrom('ax-access-lp-footer')).toBe(true);
     expect(isAxFrom('ax-column-body')).toBe(true);
-    for (const value of ['ax-lp', 'ax-lp-hero', 'lp-footer', 'ax-lp-footer ', '', null, 1]) {
+    // The column under the diagnosis result, on each page the diagnosis is shown (#363)
+    expect(isAxFrom('ax-diagnosis-result')).toBe(true);
+    expect(isAxFrom('ax-lp-result')).toBe(true);
+    expect(isAxFrom('ax-access-lp-result')).toBe(true);
+    for (const value of ['ax-lp', 'ax-lp-hero', 'ax-diagnosis-results', 'lp-footer', 'ax-lp-footer ', '', null, 1]) {
       expect(isAxFrom(value), String(value)).toBe(false);
     }
   });

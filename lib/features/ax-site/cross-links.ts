@@ -31,6 +31,8 @@ export const AX_LINK_PLACEMENTS = [
   'related',
   'body',
   'end',
+  // The column the diagnosis result recommends (#363), on whichever page the diagnosis is shown
+  'result',
 ] as const;
 export type AxLinkPlacement = (typeof AX_LINK_PLACEMENTS)[number];
 

@@ -1004,3 +1004,153 @@ describe('Result by email (#154)', () => {
     expect(block).toHaveClass('print:hidden');
   });
 });
+
+describe('Column for the Access result (#363)', () => {
+  type AnalyticsWindow = Window & { dataLayer?: unknown[]; gtag?: unknown };
+  const crossLinkEvents = () =>
+    ((window as AnalyticsWindow).dataLayer ?? []).filter(
+      (entry) => (entry as { event?: unknown }).event === 'ax_cross_link_click'
+    );
+  /** jsdom does not navigate; the address a click opens is the link's href after the click */
+  const stopNavigation = (event: MouseEvent) => event.preventDefault();
+
+  beforeEach(() => {
+    (window as AnalyticsWindow).gtag = undefined;
+    (window as AnalyticsWindow).dataLayer = [];
+    document.addEventListener('click', stopNavigation);
+  });
+
+  afterEach(() => {
+    document.removeEventListener('click', stopNavigation);
+    (window as AnalyticsWindow).dataLayer = undefined;
+  });
+
+  const accessResult = toPublicResult(evaluateAxMigration(accessAnswers));
+  const renderResult = (overrides: Partial<Parameters<typeof AxDiagnosisResult>[0]> = {}) =>
+    render(
+      withIntl(
+        <AxDiagnosisResult
+          company="三田製作所"
+          platform="access"
+          locale="ja"
+          answers={accessAnswers}
+          submissionId="sub-1"
+          result={accessResult}
+          consultationRequested={false}
+          onDiagnoseAnother={vi.fn()}
+          {...overrides}
+        />
+      )
+    );
+
+  it('shows exactly one article under the consultation block, without a filled button', () => {
+    // Access 2016 / 2019 is out of support
+    renderResult();
+    const block = screen.getByTestId('ax-result-column');
+    expect(block).toHaveAttribute('data-column', 'access-office-support-end');
+    expect(block).toHaveClass('print:hidden');
+    expect(
+      within(block).getByRole('heading', { name: '回答に合わせて、次に読みたいコラム' })
+    ).toBeInTheDocument();
+    const links = within(block).getAllByRole('link');
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveAttribute('href', '/ja/ax-migration/column/access-office-support-end');
+    // A new tab: going back in the same tab could lose the result, which lives only in memory
+    expect(links[0]).toHaveAttribute('target', '_blank');
+    expect(links[0]).toHaveAttribute('rel', 'noopener');
+    expect(links[0]).toHaveAccessibleName(/（新しいタブで開きます）$/);
+    expect(block).toHaveTextContent('この結果はこのページに残ります');
+    expect(links[0]).toHaveTextContent(
+      'Access 2016・2019・2021 のサポート終了：使い続けるとどうなり、何をすればよいか'
+    );
+    expect(block).toHaveTextContent('Access 2016・2019は2025年10月');
+    expect(within(block).queryByRole('button')).not.toBeInTheDocument();
+    // Decorative thumbnail
+    expect(block.querySelector('img')).toHaveAttribute('alt', '');
+    // Right after the consultation block
+    expect(screen.getByTestId('ax-result-cta').nextElementSibling).toBe(block);
+  });
+
+  it('follows the answers', () => {
+    renderResult({
+      answers: { ...accessAnswers, access_version: ['m365'], access_sources: 'compiled' },
+    });
+    expect(screen.getByTestId('ax-result-column')).toHaveAttribute(
+      'data-column',
+      'access-accde-only'
+    );
+    expect(screen.getByRole('link', { name: /\.accde（\.mde）しか残っていない/ })).toHaveAttribute(
+      'href',
+      '/ja/ax-migration/column/access-accde-only'
+    );
+  });
+
+  it('changes the article when the follow-up answers point to another one', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(200, { result: accessResult }));
+    const user = userEvent.setup();
+    renderResult({ answers: { ...accessAnswers, access_version: ['m365'] } });
+    expect(screen.getByTestId('ax-result-column')).toHaveAttribute(
+      'data-column',
+      'access-fix-or-web'
+    );
+    const followUp = within(screen.getByTestId('ax-follow-up'));
+    await user.click(followUp.getByRole('button', { name: /追加質問/ }));
+    await user.click(
+      within(followUp.getByRole('group', { name: /データが入ったファイルの容量/ })).getByLabelText(
+        /1GB以上/
+      )
+    );
+    await user.click(followUp.getByRole('button', { name: '回答して結果を更新する' }));
+    await screen.findByText(/結果を更新しました/);
+    expect(screen.getByTestId('ax-result-column')).toHaveAttribute(
+      'data-column',
+      'access-2gb-limit'
+    );
+  });
+
+  it('carries from, the utm_*, ref and agency, and sends ax_cross_link_click with the article', async () => {
+    window.history.replaceState(null, '', '/ja/ax-diagnosis?utm_source=google&ref=partner-a&agency=ag-1');
+    const user = userEvent.setup();
+    renderResult();
+    const link = within(screen.getByTestId('ax-result-column')).getByRole('link');
+    await user.click(link);
+    expect(link).toHaveAttribute(
+      'href',
+      '/ja/ax-migration/column/access-office-support-end?utm_source=google&ref=partner-a&agency=ag-1&from=ax-diagnosis-result'
+    );
+    expect(crossLinkEvents()).toEqual([
+      {
+        event: 'ax_cross_link_click',
+        from_page: 'ax-diagnosis',
+        to_page: 'ax-column',
+        location: 'result',
+        column_slug: 'access-office-support-end',
+      },
+    ]);
+  });
+
+  it('names the landing page the diagnosis is embedded in, like entry', async () => {
+    window.history.replaceState(null, '', '/ja/ax-migration/access');
+    const user = userEvent.setup();
+    renderResult({ embedded: true });
+    const link = within(screen.getByTestId('ax-result-column')).getByRole('link');
+    await user.click(link);
+    expect(link.getAttribute('href')).toBe(
+      '/ja/ax-migration/column/access-office-support-end?from=ax-access-lp-result'
+    );
+    expect(crossLinkEvents()[0]).toMatchObject({ from_page: 'ax-access-lp', location: 'result' });
+  });
+
+  it('shows no article for the other systems or a locale without articles', () => {
+    const { unmount } = renderResult({
+      platform: 'as400',
+      answers: as400Answers,
+      result: publicResult,
+    });
+    expect(screen.queryByTestId('ax-result-column')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Access/ })).not.toBeInTheDocument();
+    unmount();
+    renderResult({ locale: 'en' });
+    expect(screen.queryByTestId('ax-result-column')).not.toBeInTheDocument();
+  });
+});
