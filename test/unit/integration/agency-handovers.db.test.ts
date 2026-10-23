@@ -190,4 +190,19 @@ describe.skipIf(!url)('agency handovers (PostgreSQL)', () => {
       callers.member.agencyHandovers.get({ organizationId: org, leadId: foreign.id })
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
+
+  it("never matches another organization's lead by its company name (#356)", async () => {
+    // Only the other organization has a lead of this company
+    const company = `別組織だけの会社-${unique()}`;
+    const foreign = await lead({ company }, orgIds[1]);
+    const { results } = await callers.member.agencyHandovers.import({
+      organizationId: org,
+      rows: [{ company, machineModel: 'IBM Power 9' }],
+    });
+    expect(results.map((r: { status: string }) => r.status)).toEqual(['unmatched']);
+    expect(
+      (await callers.other.agencyHandovers.get({ organizationId: orgIds[1], leadId: foreign.id }))
+        .handover
+    ).toBeNull();
+  });
 });
