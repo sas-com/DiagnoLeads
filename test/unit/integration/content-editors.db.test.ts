@@ -137,6 +137,18 @@ describe.skipIf(!url)('content editors (PostgreSQL)', () => {
     expect(rows).toHaveLength(0);
   });
 
+  it('forbids an admin of another organization to revoke, and the grant stays (#356)', async () => {
+    await callerFor(owner).contentEditors.grant({ userId: member.id });
+    const before = await pg.select().from(contentEditors).where(eq(contentEditors.userId, member.id));
+    expect(before).toHaveLength(1);
+    await expect(
+      callerFor(otherAdmin).contentEditors.revoke({ userId: member.id })
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(
+      await pg.select().from(contentEditors).where(eq(contentEditors.userId, member.id))
+    ).toEqual(before);
+  });
+
   it('a granted user who leaves the operating organization can no longer edit', async () => {
     await pg
       .delete(organizationMembers)
