@@ -131,6 +131,19 @@ describe('content mutations', () => {
     expect(mocks.del).not.toHaveBeenCalled();
   });
 
+  it('forbid changing a FAQ or a post by its id to anyone but an editor (#356)', async () => {
+    // Content belongs to the whole site: an admin of any other organization is not an editor
+    const outsider = callerAs('other@example.com');
+    await expect(outsider.faqs.update({ id: 'f1', order: 1 })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    await expect(outsider.blog.update({ id: 'p1', slug: 'taken-over' })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    await expect(outsider.faqs.delete({ id: 'f1' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(mocks.del).not.toHaveBeenCalled();
+  });
+
   it('forbid everyone when no editor is configured', async () => {
     env.CONTENT_EDITOR_EMAILS = '';
     state.grants = new Set();
