@@ -621,6 +621,23 @@ describe.skipIf(!url)('lead activity (PostgreSQL)', () => {
       }
     });
 
+    it('shows a parent organization viewer the suppressions without their reasons (#365)', async () => {
+      const page = await viewerA.leadActivity.list({
+        organizationId: orgA,
+        leadId,
+        limit: 50,
+        types: emailKinds,
+      });
+      const items = page.items as Array<Record<string, unknown> & { kind: string }>;
+      expect(items.filter((e) => e.kind === 'email_unsubscribed')).toEqual([
+        expect.objectContaining({ reason: null, source: null, actor: null }),
+        expect.objectContaining({ reason: null, source: null, actor: null }),
+      ]);
+      expect(items.find((e) => e.id === `email-request:${declinedId}`)).toMatchObject({
+        request: { state: 'declined', notRequested: false },
+      });
+    });
+
     it('never shows the rows of another organization', async () => {
       await expect(
         adminB.leadActivity.list({ organizationId: orgB, leadId, limit: 50 })

@@ -256,6 +256,26 @@ describe('LeadActivityCard', () => {
     expect(screen.getByText('診断結果をメールで送付')).toBeInTheDocument();
   });
 
+  it('shows a suppression without its reason as a warning not to email (#365)', () => {
+    mocks.list = {
+      data: pages({
+        id: 'email-suppression:s1',
+        kind: 'email_unsubscribed',
+        at: new Date('2026-10-12T01:00:00Z'),
+        actor: null,
+        reason: null,
+        source: null,
+      }),
+    };
+    renderCard();
+
+    expect(screen.getByText('メールの配信を停止')).toBeInTheDocument();
+    expect(
+      screen.getByText('このアドレスにはメールを送らないでください。停止の理由は管理者が確認できます')
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/経路:/)).not.toBeInTheDocument();
+  });
+
   it('filters by the email kinds', async () => {
     mocks.list = { data: pages(update) };
     renderCard();

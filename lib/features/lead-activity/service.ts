@@ -39,6 +39,10 @@
  *   staff member for a staff suppression). Addresses, tokens, message ids and error codes are
  *   never part of an event
  *
+ * Why an address was suppressed (reason, source, the staff member, and "not requested" on a
+ * declined request) is only returned with showSuppressionReasons, which the router sets for
+ * those who can update settings (#365). Everyone else gets the suppression without its reason
+ *
  * A lead has few events, so each source's newest rows (up to PER_SOURCE_LIMIT) are merged and
  * paginated in memory: newest first, ties broken by the event id (descending).
  */
@@ -355,9 +359,12 @@ export async function listLeadActivities(
     cursor?: LeadActivityCursor | null;
     /** For the expiry of result email links; the current time by default */
     now?: Date;
+    /** Include why addresses were suppressed (#365); hidden by default */
+    showSuppressionReasons?: boolean;
   }
 ): Promise<LeadActivityPage> {
   const { organizationId, leadId } = input;
+  const showReasons = input.showSuppressionReasons === true;
   const now = input.now ?? new Date();
   const lead = await findLead(db, organizationId, leadId);
 
@@ -542,7 +549,7 @@ export async function listLeadActivities(
   for (const row of comments) if (row.userId) userIds.add(row.userId);
   for (const row of audits) if (row.userId) userIds.add(row.userId);
   for (const row of contacts) if (row.createdBy) userIds.add(row.createdBy);
-  for (const row of suppressions) if (row.createdBy) userIds.add(row.createdBy);
+  if (showReasons) for (const row of suppressions) if (row.createdBy) userIds.add(row.createdBy);
   const people =
     userIds.size === 0
       ? []
@@ -683,7 +690,9 @@ export async function listLeadActivities(
 
   // Respondent mail (#154)
   const notRequested = new Set(
-    suppressions.filter((row) => row.reason === 'not_requested').map((row) => row.email)
+    showReasons
+      ? suppressions.filter((row) => row.reason === 'not_requested').map((row) => row.email)
+      : []
   );
   for (const row of consents) {
     events.push({
@@ -704,9 +713,9 @@ export async function listLeadActivities(
       id: `email-suppression:${row.id}`,
       kind: 'email_unsubscribed',
       at: row.createdAt,
-      actor: actor(row.createdBy),
-      reason,
-      source,
+      ...(showReasons
+        ? { actor: actor(row.createdBy), reason, source }
+        : { actor: null, reason: null, source: null }),
     });
   }
 

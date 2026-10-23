@@ -450,8 +450,9 @@ describe('leadActivity.list: respondent email (#154)', () => {
     'result_email_sent',
     'email_unsubscribed',
   ] as const;
-  const listEmail = () =>
-    callerAs('member').leadActivity.list({
+  // Reasons are shown to those who can update settings (#365); see the role test below
+  const listEmail = (role = 'admin') =>
+    callerAs(role).leadActivity.list({
       organizationId: ORG_ID,
       leadId: LEAD_ID,
       limit: 50,
@@ -590,6 +591,102 @@ describe('leadActivity.list: respondent email (#154)', () => {
     expect(text).not.toContain('hanako@example.com');
     expect(text).not.toContain('idempotent_replay');
     expect(text).not.toMatch(/token|resend/i);
+  });
+
+  describe('why an address was suppressed (#365)', () => {
+    const queueSuppressed = () =>
+      queue({
+        submissions: [],
+        // One suppression per address, as in the database (email_suppressions_org_email_unique):
+        // the declined request's address and the lead's current one
+        consents: [
+          consent({ email: 'old@example.com', withdrawnAt: at('2026-10-10T01:00:00.000Z') }),
+        ],
+        suppressions: [
+          {
+            id: 's1',
+            email: 'old@example.com',
+            reason: 'not_requested',
+            source: 'confirm_page',
+            createdBy: null,
+            createdAt: at('2026-10-10T01:00:00.000Z'),
+          },
+          {
+            id: 's2',
+            email: 'hanako@example.com',
+            reason: 'complained',
+            source: 'staff',
+            createdBy: STAFF_ID,
+            createdAt: at('2026-10-11T00:00:00.000Z'),
+          },
+        ],
+        users: [{ id: STAFF_ID, name: '営業 一郎', email: 'staff@example.com' }],
+      });
+
+    it.each(['owner', 'admin', 'group_owner', 'group_admin'])(
+      'shows the reason, source and staff member to %s',
+      async (role) => {
+        queueSuppressed();
+        const { items } = await listEmail(role);
+        expect(items).toMatchObject([
+          { kind: 'email_unsubscribed', reason: 'complained', source: 'staff', actor: { id: STAFF_ID } },
+          { kind: 'email_unsubscribed', reason: 'not_requested', source: 'confirm_page' },
+          { kind: 'result_email_requested', request: { state: 'declined', notRequested: true } },
+        ]);
+      }
+    );
+
+    it.each(['member', 'parent_viewer'])(
+      'shows %s that the address is suppressed, never why or by whom',
+      async (role) => {
+        queueSuppressed();
+        const { items } = await listEmail(role);
+        expect(items).toEqual([
+          {
+            id: 'email-suppression:s2',
+            kind: 'email_unsubscribed',
+            at: at('2026-10-11T00:00:00.000Z'),
+            actor: null,
+            reason: null,
+            source: null,
+          },
+          {
+            id: 'email-suppression:s1',
+            kind: 'email_unsubscribed',
+            at: at('2026-10-10T01:00:00.000Z'),
+            actor: null,
+            reason: null,
+            source: null,
+          },
+          expect.objectContaining({
+            kind: 'result_email_requested',
+            request: { state: 'declined', at: at('2026-10-10T01:00:00.000Z'), notRequested: false },
+          }),
+        ]);
+        const text = JSON.stringify(items);
+        expect(text).not.toMatch(/complained|not_requested|confirm_page|営業 一郎/);
+      }
+    );
+
+    it('hides the reasons when the service is called without the flag', async () => {
+      queueSuppressed();
+      const { listLeadActivities } = await import('@/lib/features/lead-activity/service');
+      // biome-ignore lint/suspicious/noExplicitAny: fake database
+      const page = await listLeadActivities(fakeDb as any, {
+        organizationId: ORG_ID,
+        leadId: LEAD_ID,
+        limit: 50,
+        types: [...emailKinds],
+      });
+      const hidden = { actor: null, reason: null, source: null };
+      expect(page.items.filter((e) => e.kind === 'email_unsubscribed')).toEqual([
+        expect.objectContaining({ id: 'email-suppression:s2', ...hidden }),
+        expect.objectContaining({ id: 'email-suppression:s1', ...hidden }),
+      ]);
+      expect(page.items.find((e) => e.kind === 'result_email_requested')).toMatchObject({
+        request: { state: 'declined', notRequested: false },
+      });
+    });
   });
 
   it('reads requests, sends and suppressions of this organization only', async () => {
