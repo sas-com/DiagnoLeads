@@ -3232,7 +3232,7 @@
       "title": "対象になる Access",
       "lead": "1つのツールからご相談いただけます。",
       "items": {
-        "files": ".mdb・.accdb のファイル",
+        "files": ".mdb・.accdb のファイル（.accde・.mde しか残っていないものも）",
         "versions": "古い版から Microsoft 365 まで",
         "vba": "VBA が少ないものから多いものまで",
         "links": "SQL Server などのデータベースや、ほかのシステムとつながっているもの",
