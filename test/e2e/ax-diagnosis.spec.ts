@@ -93,6 +93,11 @@ test.describe('AX migration diagnosis', () => {
 
     await expect(page.getByText('移行元：Microsoft Access')).toBeVisible();
     await expect(page.getByText('個別相談のお申し込みを受け付けました')).toBeVisible();
+    // One article for the answers: Access 2016 / 2019 is out of support (#363)
+    await expect(page.getByTestId('ax-result-column').getByRole('link')).toHaveAttribute(
+      'href',
+      '/ja/ax-migration/column/access-office-support-end'
+    );
 
     const followUp = page.getByTestId('ax-follow-up');
     await followUp.getByRole('button', { name: /追加質問/ }).click();

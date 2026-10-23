@@ -35,14 +35,15 @@ AX マイグレーションのサイト（`/ja/ax-migration` と、その下の 
 | `from` | ほかの AX ページから来たときの、元のページと置き場所：`<ページ>-<置き場所>`（例：`ax-lp-targets-access`、`ax-column-end`）。許可した値だけ（`lib/features/ax-site/cross-links.ts`） |
 
 - ページ：`ax-lp`／`ax-access-lp`／`ax-column-index`／`ax-column`／`ax-diagnosis`
-- 置き場所：`header`／`footer`／`breadcrumb`／`targets-access`／`hosts`／`paths`／`related`／`body`／`end`
+- 置き場所：`header`／`footer`／`breadcrumb`／`targets-access`／`hosts`／`paths`／`related`／`body`／`end`／`result`
+- `result` は、Access の診断結果の下に出す、回答に合うコラム1本へのリンク（#363）。ページは診断を表示しているページなので、`entry` と同じく `ax-diagnosis-result`（単独の診断ページ）／`ax-access-lp-result`（Access LP）／`ax-lp-result`（メイン LP）のどれかになる
 
 ### イベントの一覧
 
 | イベント | いつ | パラメータ |
 |---|---|---|
 | `ax_lp_cta_click` | 診断・相談のボタンを押した | `cta`（`diagnosis`／`consultation`）、`location`、`page` |
-| `ax_cross_link_click` | ほかの AX ページへのリンクを押した | `from_page`、`to_page`、`location`、`to_section`（移動先に # があるとき）、`column_slug`（コラムのページから） |
+| `ax_cross_link_click` | ほかの AX ページへのリンクを押した | `from_page`、`to_page`、`location`、`to_section`（移動先に # があるとき）、`column_slug`（コラムのページから。`location=result` のときは、結果が案内したコラム） |
 | `ax_diagnosis_start` | 診断を始めた | `platform` |
 | `ax_diagnosis_step` | 次の質問へ進んだ | `platform`、`step` |
 | `ax_diagnosis_complete` | 結果を表示した | `platform`、`difficulty`、`urgency`、`primary_challenge`、`access_path`（Access のみ）、`consultation_requested` |
@@ -73,7 +74,8 @@ AX マイグレーションのサイト（`/ja/ax-migration` と、その下の 
 |---|---|
 | LP ごとの、診断の開始から完了までの割合 | `ax_diagnosis_start` と `ax_diagnosis_complete` を `entry` で分ける |
 | メイン LP の Access の人が、その場で診断したか、Access LP に移ったか | その場：`entry=ax-lp` かつ `platform=access`。移った：`entry=ax-access-lp` かつ `from=ax-lp-targets-access` |
-| どのコラムが診断につながったか | `ax_cross_link_click` の `column_slug`、`ax_lp_cta_click` の `location=column-end-<slug>` |
+| どのコラムが診断につながったか | `ax_cross_link_click` の `column_slug`（`location=result` を除く）、`ax_lp_cta_click` の `location=column-end-<slug>` |
+| 診断結果から、どのコラムが読まれたか | `ax_cross_link_click` の `location=result` を `column_slug` で分ける。コラム側の流入は `from` が `-result` で終わるもの |
 | 基幹システムの人が Access LP から移れたか | `ax_cross_link_click` の `from_page=ax-access-lp`、`location=hosts`、`to_section` |
 
 回答の記録（DB の `diagnostic_submissions.tracking`）にも、`entry`・`from`・UTM・`agency`・`ref` が残ります。

@@ -84,7 +84,7 @@ export interface AxAccessPathRules {
   fix: {
     /** access_challenges: Microsoft 365, 64-bit or a new PC */
     challenges: readonly string[];
-    /** Office support status (see accessSupport in evaluate.ts) */
+    /** Office support status (see accessSupport in access-support.ts) */
     supports: readonly string[];
     /** access_users */
     users: readonly string[];

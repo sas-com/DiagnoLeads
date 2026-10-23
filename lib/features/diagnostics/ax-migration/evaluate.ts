@@ -2,6 +2,7 @@ import type { TargetSystem } from '@/lib/features/leads/types/pipeline';
 import { multiple, single, toPercent } from '../engine';
 import type { DiagnosticAnswers } from '../types';
 import { type AxAccessPathResult, judgeAccessPath } from './access-path';
+import { accessSupport } from './access-support';
 import {
   type AxCompanySizeResult,
   type AxTargetCompany,
@@ -304,48 +305,6 @@ const ACCESS = {
   operationCap: 15,
   urgencyMax: 30 + 25 + 10,
 };
-
-/**
- * End of support of the Access / Office versions (Microsoft lifecycle, checked 2026-10-11).
- * Statuses are computed from these dates, so the result never goes stale.
- */
-const ACCESS_SUPPORT_END: Record<string, string | null> = {
-  le2013: '2023-04-11',
-  v2016_2019: '2025-10-14',
-  v2021: '2026-10-13',
-  v2024: '2029-10-09',
-  m365: null,
-};
-const DAY_MS = 24 * 60 * 60 * 1000;
-const YEAR_MS = 365 * DAY_MS;
-
-type AccessSupport = 'ended' | 'ending' | 'v2024' | 'm365' | 'unknown';
-
-/** The weakest support among the versions in use */
-function accessSupport(versions: string[], now: Date): AccessSupport | undefined {
-  if (versions.length === 0) return undefined;
-  if (versions.includes('unknown')) return 'unknown';
-  let worst: AccessSupport = 'm365';
-  const rank: Record<AccessSupport, number> = {
-    ended: 4,
-    ending: 3,
-    v2024: 2,
-    unknown: 1,
-    m365: 0,
-  };
-  for (const version of versions) {
-    const end = ACCESS_SUPPORT_END[version];
-    let status: AccessSupport = version === 'v2024' ? 'v2024' : 'm365';
-    if (end) {
-      // Microsoft still ships updates on the end date, so support ends when that day is over
-      const remaining = new Date(`${end}T00:00:00+09:00`).getTime() + DAY_MS - now.getTime();
-      if (remaining <= 0) status = 'ended';
-      else if (remaining <= YEAR_MS) status = 'ending';
-    }
-    if (rank[status] > rank[worst]) worst = status;
-  }
-  return worst;
-}
 
 // ── Other / not sure ──────────────────────────────────────────────────────────────
 const OTHER = {
