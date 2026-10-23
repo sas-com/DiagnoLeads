@@ -438,7 +438,7 @@ describe('DashboardPage', () => {
     renderPage();
 
     const alerts = screen.getAllByRole('alert');
-    expect(alerts).toHaveLength(4); // pending, analytics, pipeline, recent
+    expect(alerts).toHaveLength(4); // pending, recent, analytics, pipeline
     for (const alert of alerts) expect(alert).toHaveTextContent('読み込めませんでした');
     expect(screen.queryByText('連絡待ちの相談申込はありません')).not.toBeInTheDocument();
     expect(screen.queryByTestId('area-chart')).not.toBeInTheDocument();
@@ -463,14 +463,21 @@ describe('DashboardPage', () => {
     expect(mocks.query).toHaveBeenLastCalledWith({ organizationId: ORG_ID, days: 7 });
   });
 
-  it('puts the next actions due today right after the waiting requests', () => {
+  it('orders the blocks by priority: what needs doing first, then the figures to look back on', () => {
     renderPage();
 
-    const pending = screen.getByRole('heading', { name: /連絡待ちの相談申込/ });
-    const today = screen.getByTestId('due-tasks');
-    const analytics = screen.getByTestId('analytics-panel');
-    expect(follows(pending, today)).toBe(true);
-    expect(follows(today, analytics)).toBe(true);
+    const blocks = [
+      screen.getByTestId('status-overview'),
+      screen.getByRole('heading', { name: /連絡待ちの相談申込/ }),
+      screen.getByTestId('due-tasks'),
+      screen.getByTestId('week-meetings'),
+      screen.getByRole('heading', { name: '最近のリード' }),
+      screen.getByTestId('analytics-panel'),
+      screen.getByTestId('next-meeting-rate'),
+      screen.getByTestId('pipeline'),
+    ];
+    for (let i = 1; i < blocks.length; i++) expect(follows(blocks[i - 1], blocks[i])).toBe(true);
+    const today = blocks[2];
     // The status block's "next actions" figure jumps to this list
     expect(today.closest('#dashboard-today')).not.toBeNull();
   });
@@ -494,45 +501,81 @@ describe('DashboardPage', () => {
     expect(screen.getAllByText(/^不通 \d+回$/).map((e) => e.textContent)).toEqual(['不通 2回']);
   });
 
-  it('reorders widgets from the customize dialog with buttons', async () => {
+  it('shows the meeting rate for the chosen period (#137)', async () => {
     const user = userEvent.setup();
     renderPage();
-
-    await user.click(screen.getByRole('button', { name: 'カスタマイズ' }));
-    await user.click(screen.getByRole('button', { name: '「最近のリード」を上へ' }));
-    await user.click(screen.getByRole('button', { name: '保存' }));
-
-    const recent = screen.getByRole('heading', { name: '最近のリード' });
-    const pipeline = screen.getByRole('heading', { name: 'いまのパイプライン' });
-    expect(Boolean(recent.compareDocumentPosition(pipeline) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
-    expect(JSON.parse(localStorage.getItem('dashboard-widget-config-v2') ?? '[]')).toEqual([
-      { id: 'pending', enabled: true, order: 0 },
-      { id: 'today', enabled: true, order: 1 },
-      { id: 'meetings', enabled: true, order: 2 },
-      { id: 'kpis', enabled: true, order: 3 },
-      { id: 'meetingRate', enabled: true, order: 4 },
-      { id: 'trend', enabled: true, order: 5 },
-      { id: 'recent', enabled: true, order: 6 },
-      { id: 'breakdown', enabled: true, order: 7 },
-    ]);
-  });
-
-  it('shows this week’s meetings after the next actions and the meeting rate after the figures, with the period (#137)', async () => {
-    const user = userEvent.setup();
-    renderPage();
-    const today = screen.getByTestId('due-tasks');
-    const meetings = screen.getByTestId('week-meetings');
-    const analytics = screen.getByTestId('analytics-panel');
-    const rate = screen.getByTestId('next-meeting-rate');
-    expect(follows(today, meetings)).toBe(true);
-    expect(follows(meetings, analytics)).toBe(true);
-    expect(follows(analytics, rate)).toBe(true);
-    expect(rate).toHaveAttribute('data-days', '30');
+    expect(screen.getByTestId('next-meeting-rate')).toHaveAttribute('data-days', '30');
     await user.click(screen.getByRole('radio', { name: '7日' }));
     expect(screen.getByTestId('next-meeting-rate')).toHaveAttribute('data-days', '7');
   });
 
-  it('keeps hidden widgets from older settings but uses the new order', () => {
+  it('lists every block in the customize dialog and saves the new order', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole('button', { name: 'カスタマイズ' }));
+    const dialog = within(screen.getByRole('dialog'));
+    expect(dialog.getAllByRole('switch')).toHaveLength(8);
+    await user.click(dialog.getByRole('button', { name: '「パイプライン」を上へ' }));
+    await user.click(dialog.getByRole('button', { name: '「対応状況」を下へ' }));
+    await user.click(dialog.getByRole('button', { name: '保存' }));
+
+    const status = screen.getByTestId('status-overview');
+    const pending = screen.getByRole('heading', { name: /連絡待ちの相談申込/ });
+    const pipeline = screen.getByTestId('pipeline');
+    const rate = screen.getByTestId('next-meeting-rate');
+    expect(follows(pending, status)).toBe(true);
+    expect(follows(pipeline, rate)).toBe(true);
+    expect(JSON.parse(localStorage.getItem('dashboard-widget-config-v3') ?? '[]')).toEqual([
+      { id: 'pending', enabled: true, order: 0 },
+      { id: 'status', enabled: true, order: 1 },
+      { id: 'today', enabled: true, order: 2 },
+      { id: 'meetings', enabled: true, order: 3 },
+      { id: 'recent', enabled: true, order: 4 },
+      { id: 'analytics', enabled: true, order: 5 },
+      { id: 'pipeline', enabled: true, order: 6 },
+      { id: 'meetingRate', enabled: true, order: 7 },
+    ]);
+  });
+
+  it('hides a block, and the period switch once no shown block uses it', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole('button', { name: 'カスタマイズ' }));
+    const dialog = within(screen.getByRole('dialog'));
+    await user.click(dialog.getByRole('switch', { name: 'アナリティクス' }));
+    await user.click(dialog.getByRole('switch', { name: '次回日程の決定率' }));
+    await user.click(dialog.getByRole('button', { name: '保存' }));
+
+    expect(screen.queryByTestId('analytics-panel')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('next-meeting-rate')).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: '集計期間' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('status-overview')).toBeInTheDocument();
+  });
+
+  it('carries hidden blocks over from the previous settings but uses the priority order', () => {
+    localStorage.setItem(
+      'dashboard-widget-config-v2',
+      JSON.stringify([
+        { id: 'kpis', enabled: false, order: 0 },
+        { id: 'trend', enabled: false, order: 1 },
+        { id: 'breakdown', enabled: false, order: 2 },
+        { id: 'recent', enabled: true, order: 3 },
+        { id: 'pending', enabled: true, order: 4 },
+      ])
+    );
+    renderPage();
+
+    // The analytics panel and the pipeline replace the three hidden widgets
+    expect(screen.queryByTestId('analytics-panel')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('pipeline')).not.toBeInTheDocument();
+    const pending = screen.getByRole('heading', { name: /連絡待ちの相談申込/ });
+    expect(follows(pending, screen.getByRole('heading', { name: '最近のリード' }))).toBe(true);
+    expect(follows(screen.getByTestId('status-overview'), pending)).toBe(true);
+  });
+
+  it('keeps hidden widgets from the oldest settings', () => {
     localStorage.setItem(
       'dashboard-widget-config',
       JSON.stringify([
@@ -575,6 +618,20 @@ describe('reconcileWidgetConfig', () => {
       { id: 'recent', enabled: true, order: 1 },
       { id: 'kpis', enabled: false, order: 2 },
       { id: 'trend', enabled: true, order: 3 },
+    ]);
+  });
+
+  it('shows a widget that replaces earlier ones when any of them was shown', () => {
+    const saved = [
+      { id: 'trend', enabled: false, order: 0 },
+      { id: 'kpis', enabled: true, order: 1 },
+      { id: 'breakdown', enabled: false, order: 2 },
+    ];
+    const aliases = { analytics: ['trend', 'kpis'], pipeline: ['breakdown'] };
+    expect(reconcileWidgetConfig(saved, ['analytics', 'pipeline', 'status'], { aliases })).toEqual([
+      { id: 'analytics', enabled: true, order: 0 },
+      { id: 'pipeline', enabled: false, order: 1 },
+      { id: 'status', enabled: true, order: 2 },
     ]);
   });
 

@@ -108,8 +108,8 @@ type Metric = 'leads' | 'consultations';
 
 /**
  * The analytics panel: the figure of the period with its daily (or weekly) curve, the migration
- * sources as thin bars, and what changed against the previous period. Each part follows its
- * widget's switch (trend, breakdown, kpis).
+ * sources as thin bars, and what changed against the previous period. One widget on the
+ * dashboard: it is shown, hidden and moved as a whole.
  */
 export function AnalyticsPanel({
   state,
@@ -117,14 +117,12 @@ export function AnalyticsPanel({
   onRetry,
   days,
   narrow,
-  show,
 }: {
   state: CardState;
   data?: DashboardData;
   onRetry: () => void;
   days: number;
   narrow: boolean;
-  show: { trend: boolean; breakdown: boolean; kpis: boolean };
 }) {
   const t = useTranslations('dashboard.studio');
   const tw = useTranslations('dashboard.ax');
@@ -171,110 +169,96 @@ export function AnalyticsPanel({
           <CardError onRetry={onRetry} />
         ) : (
           <>
-            {(show.trend || show.breakdown) && (
-              <div
-                className={
-                  show.trend && show.breakdown
-                    ? 'grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_17rem]'
-                    : undefined
-                }
-              >
-                {show.trend && (
-                  <div className="min-w-0">
-                    <div className="relative inline-flex items-center">
-                      <label htmlFor={selectId} className="sr-only">
-                        {t('analytics.metricLabel')}
-                      </label>
-                      <select
-                        id={selectId}
-                        value={metric}
-                        onChange={(event) => setMetric(event.target.value as Metric)}
-                        className="cursor-pointer appearance-none border-0 bg-transparent p-0 pr-5 text-sm font-bold text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-gray-50"
-                      >
-                        <option value="leads">{t('analytics.metric.leads')}</option>
-                        <option value="consultations">{t('analytics.metric.consultations')}</option>
-                      </select>
-                      <ChevronDown
-                        className="pointer-events-none absolute right-0 h-3.5 w-3.5 text-gray-500"
-                        aria-hidden="true"
+            <div className="grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_17rem]">
+              <div className="min-w-0">
+                <div className="relative inline-flex items-center">
+                  <label htmlFor={selectId} className="sr-only">
+                    {t('analytics.metricLabel')}
+                  </label>
+                  <select
+                    id={selectId}
+                    value={metric}
+                    onChange={(event) => setMetric(event.target.value as Metric)}
+                    className="cursor-pointer appearance-none border-0 bg-transparent p-0 pr-5 text-sm font-bold text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-gray-50"
+                  >
+                    <option value="leads">{t('analytics.metric.leads')}</option>
+                    <option value="consultations">{t('analytics.metric.consultations')}</option>
+                  </select>
+                  <ChevronDown
+                    className="pointer-events-none absolute right-0 h-3.5 w-3.5 text-gray-500"
+                    aria-hidden="true"
+                  />
+                </div>
+                <div className="mt-4 text-4xl font-bold tabular-nums text-gray-900 dark:text-gray-50">
+                  {loading ? <Skeleton className="h-10 w-20" /> : number(total)}
+                </div>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {weekly
+                    ? t('analytics.periodWeekly', { days: period })
+                    : t('analytics.period', { days: period })}
+                </p>
+                <div className="mt-6" style={{ height: CHART_HEIGHT }}>
+                  {loading ? (
+                    placeholder(CHART_HEIGHT)
+                  ) : total === 0 ? (
+                    <p className="flex h-full items-center justify-center rounded-md bg-gray-50 text-sm text-gray-500 dark:bg-gray-800/50 dark:text-gray-400">
+                      {tw('trend.empty')}
+                    </p>
+                  ) : (
+                    <div
+                      role="img"
+                      aria-label={t('analytics.chartLabel', {
+                        metric: metricLabel,
+                        days: period,
+                        total: number(total),
+                      })}
+                      className="h-full"
+                    >
+                      <AreaChart
+                        data={chartData}
+                        index="date"
+                        categories={[metricLabel]}
+                        colors={['teal']}
+                        integerValues
+                        maxCategoryLabels={narrow ? 4 : 6}
+                        showLegend={false}
+                        valueFormatter={(value) => (locale === 'ja' ? `${value}件` : String(value))}
+                        height={CHART_HEIGHT}
                       />
                     </div>
-                    <div className="mt-4 text-4xl font-bold tabular-nums text-gray-900 dark:text-gray-50">
-                      {loading ? <Skeleton className="h-10 w-20" /> : number(total)}
-                    </div>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {weekly
-                        ? t('analytics.periodWeekly', { days: period })
-                        : t('analytics.period', { days: period })}
-                    </p>
-                    <div className="mt-6" style={{ height: CHART_HEIGHT }}>
-                      {loading ? (
-                        placeholder(CHART_HEIGHT)
-                      ) : total === 0 ? (
-                        <p className="flex h-full items-center justify-center rounded-md bg-gray-50 text-sm text-gray-500 dark:bg-gray-800/50 dark:text-gray-400">
-                          {tw('trend.empty')}
-                        </p>
-                      ) : (
-                        <div
-                          role="img"
-                          aria-label={t('analytics.chartLabel', {
-                            metric: metricLabel,
-                            days: period,
-                            total: number(total),
-                          })}
-                          className="h-full"
-                        >
-                          <AreaChart
-                            data={chartData}
-                            index="date"
-                            categories={[metricLabel]}
-                            colors={['teal']}
-                            integerValues
-                            maxCategoryLabels={narrow ? 4 : 6}
-                            showLegend={false}
-                            valueFormatter={(value) =>
-                              locale === 'ja' ? `${value}件` : String(value)
-                            }
-                            height={CHART_HEIGHT}
-                          />
-                        </div>
-                      )}
-                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold text-gray-900 dark:text-gray-50">
+                  {t('analytics.platforms')}
+                </h3>
+                {loading ? (
+                  <div className="mt-4 space-y-4">
+                    {[0, 1, 2].map((i) => (
+                      <Skeleton key={i} className="h-8 w-full" />
+                    ))}
                   </div>
-                )}
-                {show.breakdown && (
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-bold text-gray-900 dark:text-gray-50">
-                      {t('analytics.platforms')}
-                    </h3>
-                    {loading ? (
-                      <div className="mt-4 space-y-4">
-                        {[0, 1, 2].map((i) => (
-                          <Skeleton key={i} className="h-8 w-full" />
-                        ))}
-                      </div>
-                    ) : platforms.length === 0 ? (
-                      <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
-                        {tw('platforms.empty')}
-                      </p>
-                    ) : (
-                      <ul className="mt-2">
-                        {platforms.map((item) => (
-                          <StudioBarRow
-                            key={item.platform}
-                            label={platformName(item.platform)}
-                            value={number(item.count)}
-                            share={platformTotal > 0 ? (item.count / platformTotal) * 100 : 0}
-                            muted={item.platform === 'unknown'}
-                          />
-                        ))}
-                      </ul>
-                    )}
-                  </div>
+                ) : platforms.length === 0 ? (
+                  <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
+                    {tw('platforms.empty')}
+                  </p>
+                ) : (
+                  <ul className="mt-2">
+                    {platforms.map((item) => (
+                      <StudioBarRow
+                        key={item.platform}
+                        label={platformName(item.platform)}
+                        value={number(item.count)}
+                        share={platformTotal > 0 ? (item.count / platformTotal) * 100 : 0}
+                        muted={item.platform === 'unknown'}
+                      />
+                    ))}
+                  </ul>
                 )}
               </div>
-            )}
-            {show.kpis && <Insights data={loading ? undefined : data} days={period} />}
+            </div>
+            <Insights data={loading ? undefined : data} days={period} />
           </>
         )}
       </StudioPanel>

@@ -31,39 +31,51 @@ import { trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
 import {
   Activity,
-  BarChart3,
   CalendarCheck,
   CalendarClock,
   Clock,
+  Gauge,
   Layers,
   ListTodo,
   Users,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { Fragment, type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PERIODS = [7, 30, 90] as const;
 type Period = (typeof PERIODS)[number];
 
-/** Default order: what needs a reply first, the next actions due, then the figures of the period */
+/**
+ * Default order, by priority: where things stand, then what needs doing (consultations waiting for a
+ * reply, next actions due, this week's meetings, the newest leads), then the figures to look back on
+ */
 const WIDGET_IDS = [
+  'status',
   'pending',
   'today',
   'meetings',
-  'kpis',
-  'meetingRate',
-  'trend',
-  'breakdown',
   'recent',
+  'analytics',
+  'meetingRate',
+  'pipeline',
 ] as const;
 /** Widgets whose figures follow the chosen period */
-const PERIOD_WIDGETS: readonly string[] = ['kpis', 'meetingRate', 'trend', 'breakdown'];
-/** Widgets shown together in the analytics panel, at the place of the first of them (#410) */
-const ANALYTICS_WIDGETS: readonly string[] = ['trend', 'breakdown', 'kpis'];
+const PERIOD_WIDGETS: readonly string[] = ['analytics', 'meetingRate'];
+/** Earlier widgets that the current ones replace, to carry over saved shown/hidden choices */
+const WIDGET_ALIASES = {
+  analytics: ['trend', 'breakdown', 'kpis'],
+  pipeline: ['breakdown'],
+};
 
 const iconClass = 'h-4 w-4 text-gray-500 dark:text-gray-400';
 const WIDGET_DEFINITIONS: WidgetDefinition[] = [
+  {
+    id: 'status',
+    titleKey: 'status',
+    descriptionKey: 'statusDesc',
+    icon: <Gauge className={iconClass} />,
+  },
   {
     id: 'pending',
     titleKey: 'pending',
@@ -84,10 +96,16 @@ const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     icon: <CalendarClock className={iconClass} />,
   },
   {
-    id: 'kpis',
-    titleKey: 'kpis',
-    descriptionKey: 'kpisDesc',
-    icon: <BarChart3 className={iconClass} />,
+    id: 'recent',
+    titleKey: 'recent',
+    descriptionKey: 'recentDesc',
+    icon: <Users className={iconClass} />,
+  },
+  {
+    id: 'analytics',
+    titleKey: 'analytics',
+    descriptionKey: 'analyticsDesc',
+    icon: <Activity className={iconClass} />,
   },
   {
     // KPI: next meeting fixed at the first meeting (#137)
@@ -97,30 +115,19 @@ const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     icon: <CalendarCheck className={iconClass} />,
   },
   {
-    id: 'trend',
-    titleKey: 'trend',
-    descriptionKey: 'trendDesc',
-    icon: <Activity className={iconClass} />,
-  },
-  {
-    id: 'breakdown',
-    titleKey: 'breakdown',
-    descriptionKey: 'breakdownDesc',
+    id: 'pipeline',
+    titleKey: 'pipeline',
+    descriptionKey: 'pipelineDesc',
     icon: <Layers className={iconClass} />,
-  },
-  {
-    id: 'recent',
-    titleKey: 'recent',
-    descriptionKey: 'recentDesc',
-    icon: <Users className={iconClass} />,
   },
 ];
 
 /**
  * Dashboard for the AX migration sales team, in the look of the STUDIO dashboard (#410): where
- * things stand now (consultations waiting for a reply, next actions, this week's meetings), the
- * lists behind them, then the analytics panel (the period's figure and curve, migration sources,
- * what changed against the previous period), the pipeline and the latest leads.
+ * things stand now, the lists behind it (consultations waiting for a reply, next actions, this
+ * week's meetings, the latest leads), then the analytics panel (the period's figure and curve,
+ * migration sources, what changed against the previous period), the meeting rate and the
+ * pipeline. Each block is one widget that can be hidden or moved.
  */
 export default function DashboardPage() {
   const t = useTranslations('dashboard');
@@ -128,7 +135,7 @@ export default function DashboardPage() {
   const { organizationId: contextOrgId } = useOrganization();
   const organizationId = contextOrgId && UUID.test(contextOrgId) ? contextOrgId : '';
   const [days, setDays] = useState<Period>(30);
-  const [widgetConfig, setWidgetConfig] = useWidgetConfig([...WIDGET_IDS]);
+  const [widgetConfig, setWidgetConfig] = useWidgetConfig([...WIDGET_IDS], WIDGET_ALIASES);
   const narrow = useNarrowScreen();
   const access = useLeadAccess(organizationId);
 
@@ -148,8 +155,6 @@ export default function DashboardPage() {
 
   const order = visibleWidgetIds(widgetConfig);
   const showsPeriod = order.some((id) => PERIOD_WIDGETS.includes(id));
-  const firstAnalytics = order.find((id) => ANALYTICS_WIDGETS.includes(id));
-  const visible = (id: string) => order.includes(id);
 
   const toolbar = (
     <>
@@ -181,6 +186,7 @@ export default function DashboardPage() {
   );
 
   const sections: Record<string, ReactNode> = {
+    status: <StatusOverview organizationId={organizationId} state={state} data={data} />,
     pending: (
       <PendingSection
         state={state}
@@ -199,17 +205,11 @@ export default function DashboardPage() {
     meetings: <WeekMeetingsSection organizationId={organizationId} />,
     meetingRate: <NextMeetingRateSection organizationId={organizationId} days={days} />,
     recent: <RecentSection state={state} data={data} onRetry={retry} />,
+    analytics: (
+      <AnalyticsPanel state={state} data={data} onRetry={retry} days={days} narrow={narrow} />
+    ),
+    pipeline: <PipelineSection state={state} data={data} onRetry={retry} />,
   };
-  const analytics = (
-    <AnalyticsPanel
-      state={state}
-      data={data}
-      onRetry={retry}
-      days={days}
-      narrow={narrow}
-      show={{ trend: visible('trend'), breakdown: visible('breakdown'), kpis: visible('kpis') }}
-    />
-  );
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -230,41 +230,19 @@ export default function DashboardPage() {
           </p>
         ) : (
           <>
-            <StatusOverview organizationId={organizationId} state={state} data={data} />
-            {order.map((id) => {
-              if (ANALYTICS_WIDGETS.includes(id)) {
-                // The three share one panel, at the place of the first of them; the pipeline (all
-                // leads by status, part of the breakdown) stays at the breakdown's own place
-                return (
-                  <Fragment key={id}>
-                    {id === firstAnalytics && (
-                      <div
-                        aria-busy={isPlaceholderData}
-                        className={cn('transition-opacity', isPlaceholderData && 'opacity-60')}
-                      >
-                        {analytics}
-                      </div>
-                    )}
-                    {id === 'breakdown' && (
-                      <PipelineSection state={state} data={data} onRetry={retry} />
-                    )}
-                  </Fragment>
-                );
-              }
-              return (
-                <DashboardWidget key={id} id={id} config={widgetConfig}>
-                  <section
-                    aria-busy={isPlaceholderData && PERIOD_WIDGETS.includes(id)}
-                    className={cn(
-                      'transition-opacity',
-                      isPlaceholderData && PERIOD_WIDGETS.includes(id) && 'opacity-60'
-                    )}
-                  >
-                    {sections[id]}
-                  </section>
-                </DashboardWidget>
-              );
-            })}
+            {order.map((id) => (
+              <DashboardWidget key={id} id={id} config={widgetConfig}>
+                <div
+                  aria-busy={isPlaceholderData && PERIOD_WIDGETS.includes(id)}
+                  className={cn(
+                    'transition-opacity',
+                    isPlaceholderData && PERIOD_WIDGETS.includes(id) && 'opacity-60'
+                  )}
+                >
+                  {sections[id]}
+                </div>
+              </DashboardWidget>
+            ))}
           </>
         )}
       </div>
