@@ -184,6 +184,88 @@ describe('LeadActivityCard', () => {
     expect(screen.queryByRole('button', { name: 'もっと見る' })).not.toBeInTheDocument();
   });
 
+  it('shows each state of a request for the result by email (#154)', () => {
+    const request = (id: string, state: Record<string, unknown>) => ({
+      id: `email-request:${id}`,
+      kind: 'result_email_requested',
+      at: new Date('2026-10-10T01:00:00Z'),
+      actor: null,
+      consentId: id,
+      request: state,
+    });
+    mocks.list = {
+      data: pages(
+        request('w', { state: 'waiting', at: null }),
+        request('c', { state: 'confirmed', at: new Date('2026-10-10T01:04:00Z') }),
+        request('d', {
+          state: 'declined',
+          at: new Date('2026-10-10T02:00:00Z'),
+          notRequested: true,
+        }),
+        request('e', { state: 'expired', at: new Date('2026-10-11T01:00:00Z') })
+      ),
+    };
+    renderCard();
+
+    expect(screen.getAllByText('診断結果のメール送付を依頼')).toHaveLength(4);
+    expect(screen.getByText('確認待ち')).toBeInTheDocument();
+    expect(screen.getByText('確認メールのリンクはまだ押されていません')).toBeInTheDocument();
+    expect(screen.getByText('確認済み')).toBeInTheDocument();
+    expect(screen.getByText('2026/10/10 10:04に確認されました')).toBeInTheDocument();
+    expect(screen.getByText('依頼していないと回答')).toBeInTheDocument();
+    expect(screen.getByText('2026/10/10 11:00に確認画面で辞退されました')).toBeInTheDocument();
+    expect(screen.getByText('リンク期限切れ')).toBeInTheDocument();
+    expect(screen.getByText('2026/10/11 10:00に確認リンクの期限が切れました')).toBeInTheDocument();
+  });
+
+  it('shows a result mail sent and a suppression with its reason and source (#154)', () => {
+    mocks.list = {
+      data: pages(
+        {
+          id: 'email-suppression:s1',
+          kind: 'email_unsubscribed',
+          at: new Date('2026-10-12T01:00:00Z'),
+          actor: null,
+          reason: 'unsubscribed',
+          source: 'one_click',
+        },
+        {
+          id: 'email-suppression:s2',
+          kind: 'email_unsubscribed',
+          at: new Date('2026-10-11T01:00:00Z'),
+          actor: { id: 'u1', name: '営業 一郎' },
+          reason: 'staff',
+          source: 'staff',
+        },
+        {
+          id: 'email-sent:c1',
+          kind: 'result_email_sent',
+          at: new Date('2026-10-10T01:05:00Z'),
+          actor: null,
+          consentId: 'c1',
+        }
+      ),
+    };
+    renderCard();
+
+    expect(screen.getByText('メールの配信停止')).toBeInTheDocument();
+    expect(screen.getByText('経路: メール内の配信停止リンク')).toBeInTheDocument();
+    expect(screen.getByText('担当者がメールの配信を停止')).toBeInTheDocument();
+    expect(screen.getByText('経路: 管理画面')).toBeInTheDocument();
+    expect(screen.getByText(/営業 一郎/)).toBeInTheDocument();
+    expect(screen.getByText('診断結果をメールで送付')).toBeInTheDocument();
+  });
+
+  it('filters by the email kinds', async () => {
+    mocks.list = { data: pages(update) };
+    renderCard();
+
+    await userEvent.click(screen.getByRole('button', { name: 'メール' }));
+    expect(mocks.listInputs.at(-1)).toMatchObject({
+      types: ['result_email_requested', 'result_email_sent', 'email_unsubscribed'],
+    });
+  });
+
   it('shows empty, loading and error states', async () => {
     mocks.list = { data: pages() };
     const { unmount } = renderCard();

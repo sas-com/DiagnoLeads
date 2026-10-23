@@ -3728,7 +3728,8 @@
       "diagnosis": "診断・相談",
       "hearing": "ヒアリング",
       "comment": "コメント",
-      "sales": "営業の操作"
+      "sales": "営業の操作",
+      "email": "メール"
     },
     "empty": "まだ履歴はありません。",
     "loadError": "活動履歴を読み込めませんでした。",
@@ -3762,6 +3763,15 @@
         "call": "電話で連絡",
         "email": "メールで連絡",
         "no_answer": "電話したがつながらなかった"
+      },
+      "result_email_requested": "診断結果のメール送付を依頼",
+      "result_email_sent": "診断結果をメールで送付",
+      "email_unsubscribed": {
+        "unsubscribed": "メールの配信停止",
+        "not_requested": "メールの受け取りを拒否",
+        "bounced": "メールが届かないため配信停止",
+        "complained": "迷惑メールの報告により配信停止",
+        "staff": "担当者がメールの配信を停止"
       }
     },
     "unverified": "本人未確認",
@@ -3822,7 +3832,25 @@
       "sqlUndecided": "未判定"
     },
     "changeArrow": "{before} → {after}",
-    "firstContact": "初回連絡"
+    "firstContact": "初回連絡",
+    "emailRequest": {
+      "waiting": "確認待ち",
+      "confirmed": "確認済み",
+      "declined": "辞退",
+      "notRequested": "依頼していないと回答",
+      "expired": "リンク期限切れ",
+      "waitingHelp": "確認メールのリンクはまだ押されていません",
+      "confirmedAt": "{date}に確認されました",
+      "declinedAt": "{date}に確認画面で辞退されました",
+      "expiredAt": "{date}に確認リンクの期限が切れました"
+    },
+    "emailSource": {
+      "one_click": "経路: メール内の配信停止リンク",
+      "unsubscribe_page": "経路: 配信停止ページ",
+      "confirm_page": "経路: 確認ページ",
+      "resend_webhook": "経路: 配信サービスからの通知",
+      "staff": "経路: 管理画面"
+    }
   },
   "sidebarWidget": {
     "label": "公開中の診断",

@@ -12,10 +12,13 @@ import * as schema from '@/lib/db/schema';
 import {
   auditLogs,
   diagnosticSubmissions,
+  emailSuppressions,
   leadComments,
   leads,
   organizationMembers,
   organizations,
+  respondentEmailConsents,
+  respondentEmailSends,
   users,
 } from '@/lib/db/schema';
 import { appRouter } from '@/server/routers/_app';
@@ -432,6 +435,205 @@ describe.skipIf(!url)('lead activity (PostgreSQL)', () => {
       await expect(
         adminB.leadActivity.submissionAnswers({ organizationId: orgB, leadId, submissionId: first })
       ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+  });
+
+  describe('respondent email (#154)', () => {
+    const HOUR = 60 * 60 * 1000;
+    const ago = (hours: number) => new Date(Date.now() - hours * HOUR);
+    const emailKinds = ['result_email_requested', 'result_email_sent', 'email_unsubscribed'];
+    let leadId: string;
+    let leadAddress: string;
+    let oldAddress: string;
+    let confirmedId: string;
+    let declinedId: string;
+    let expiredId: string;
+    let waitingId: string;
+
+    const consentRow = (organizationId: string, email: string, overrides = {}) => ({
+      organizationId,
+      leadId,
+      email,
+      purpose: 'ax_result_copy',
+      consentVersion: 'test-v1',
+      locale: 'ja',
+      confirmExpiresAt: new Date(Date.now() + 24 * HOUR),
+      ...overrides,
+    });
+
+    beforeAll(async () => {
+      leadAddress = `mail-${unique()}@example.com`;
+      oldAddress = `old-${unique()}@example.com`;
+      const lead = await adminA.leads.create({ organizationId: orgA, email: leadAddress });
+      leadId = lead.id;
+
+      const inserted = await pg
+        .insert(respondentEmailConsents)
+        .values([
+          consentRow(orgA, leadAddress, {
+            createdAt: ago(50),
+            confirmedAt: ago(49),
+            confirmTokenHash: `hash-${unique()}`,
+          }),
+          // Declined from an address the lead no longer has
+          consentRow(orgA, oldAddress, { createdAt: ago(40), withdrawnAt: ago(39) }),
+          consentRow(orgA, leadAddress, { createdAt: ago(30), confirmExpiresAt: ago(6) }),
+          consentRow(orgA, leadAddress, { createdAt: ago(1) }),
+        ])
+        .returning({ id: respondentEmailConsents.id });
+      [confirmedId, declinedId, expiredId, waitingId] = inserted.map((row) => row.id);
+
+      await pg.insert(respondentEmailSends).values([
+        // A confirmation is not listed
+        {
+          organizationId: orgA,
+          consentId: confirmedId,
+          leadId,
+          kind: 'confirmation',
+          email: leadAddress,
+          status: 'sent',
+          createdAt: ago(50),
+          sentAt: ago(50),
+        },
+        // The result went out; the retry was refused as its replay: one event
+        {
+          organizationId: orgA,
+          consentId: confirmedId,
+          leadId,
+          kind: 'result',
+          email: leadAddress,
+          status: 'sent',
+          resendMessageId: 'msg-secret',
+          unsubscribeTokenHash: `unsub-${unique()}`,
+          createdAt: ago(49),
+          sentAt: ago(49),
+        },
+        {
+          organizationId: orgA,
+          consentId: confirmedId,
+          leadId,
+          kind: 'result',
+          email: leadAddress,
+          status: 'failed',
+          errorCode: 'idempotent_replay',
+          createdAt: ago(48),
+        },
+        // A failed result mail did not go out
+        {
+          organizationId: orgA,
+          consentId: expiredId,
+          leadId,
+          kind: 'result',
+          email: leadAddress,
+          status: 'failed',
+          errorCode: 'send_failed',
+          createdAt: ago(29),
+        },
+      ]);
+
+      await pg.insert(emailSuppressions).values([
+        // Matched by the address of the declined request
+        {
+          organizationId: orgA,
+          email: oldAddress,
+          reason: 'not_requested',
+          source: 'confirm_page',
+          createdAt: ago(39),
+        },
+        // Matched by the lead's current address
+        {
+          organizationId: orgA,
+          email: leadAddress,
+          reason: 'unsubscribed',
+          source: 'one_click',
+          createdAt: ago(2),
+        },
+        // Another address of the same organization
+        {
+          organizationId: orgA,
+          email: `someone-${unique()}@example.com`,
+          reason: 'bounced',
+          source: 'resend_webhook',
+        },
+        // The same address in another organization
+        {
+          organizationId: orgB,
+          email: leadAddress,
+          reason: 'complained',
+          source: 'resend_webhook',
+        },
+      ]);
+
+      // Rows of another organization pointing at this lead must never appear
+      const [foreignConsent] = await pg
+        .insert(respondentEmailConsents)
+        .values(consentRow(orgB, leadAddress, { createdAt: ago(3) }))
+        .returning({ id: respondentEmailConsents.id });
+      await pg.insert(respondentEmailSends).values({
+        organizationId: orgB,
+        consentId: foreignConsent.id,
+        leadId,
+        kind: 'result',
+        email: leadAddress,
+        status: 'sent',
+        createdAt: ago(3),
+        sentAt: ago(3),
+      });
+    });
+
+    it('shows each request with its state, one sent result and the suppressions of the lead', async () => {
+      const page = await adminA.leadActivity.list({
+        organizationId: orgA,
+        leadId,
+        limit: 50,
+        types: emailKinds,
+      });
+      const items = page.items as Array<Record<string, unknown> & { id: string; kind: string }>;
+      expect(items.map((e) => e.kind)).toEqual([
+        'result_email_requested', // waiting (1 h ago)
+        'email_unsubscribed', // unsubscribed (2 h ago)
+        'result_email_requested', // expired (30 h ago)
+        'email_unsubscribed', // not requested (39 h ago)
+        'result_email_requested', // declined (40 h ago)
+        'result_email_sent', // 49 h ago, the replay not listed
+        'result_email_requested', // confirmed (50 h ago)
+      ]);
+      const byId = (id: string) => items.find((e) => e.id === id);
+      expect(byId(`email-request:${waitingId}`)).toMatchObject({
+        request: { state: 'waiting', at: null },
+      });
+      expect(byId(`email-request:${expiredId}`)).toMatchObject({ request: { state: 'expired' } });
+      expect(byId(`email-request:${declinedId}`)).toMatchObject({
+        request: { state: 'declined', notRequested: true },
+      });
+      expect(byId(`email-request:${confirmedId}`)).toMatchObject({
+        request: { state: 'confirmed' },
+      });
+      expect(byId(`email-sent:${confirmedId}`)).toMatchObject({ consentId: confirmedId });
+      expect(items.filter((e) => e.kind === 'email_unsubscribed')).toEqual([
+        expect.objectContaining({ reason: 'unsubscribed', source: 'one_click', actor: null }),
+        expect.objectContaining({ reason: 'not_requested', source: 'confirm_page' }),
+      ]);
+
+      const text = JSON.stringify(items);
+      for (const secret of [leadAddress, oldAddress, 'msg-secret', 'idempotent_replay', 'hash-']) {
+        expect(text).not.toContain(secret);
+      }
+    });
+
+    it('never shows the rows of another organization', async () => {
+      await expect(
+        adminB.leadActivity.list({ organizationId: orgB, leadId, limit: 50 })
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      const page = await adminA.leadActivity.list({
+        organizationId: orgA,
+        leadId,
+        limit: 50,
+        types: emailKinds,
+      });
+      expect(page.items).toHaveLength(7);
+      expect(page.items.some((e: { reason?: string }) => e.reason === 'complained')).toBe(false);
+      expect(page.items.some((e: { reason?: string }) => e.reason === 'bounced')).toBe(false);
     });
   });
 });

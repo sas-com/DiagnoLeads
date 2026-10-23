@@ -89,8 +89,11 @@ const at = (iso: string) => new Date(iso);
 
 const T0 = at('2026-10-01T01:00:00.000Z');
 
+const LEAD_EMAIL = 'Hanako@Example.com';
+
 const leadRow = (overrides: Record<string, unknown> = {}) => ({
   id: LEAD_ID,
+  email: LEAD_EMAIL,
   source: 'website',
   responses: {
     axMigration: { submissionId: SUB_1, detailsAnsweredAt: '2026-10-01T01:05:00.000Z' },
@@ -147,7 +150,10 @@ const auditRow = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-/** Queue: lead, submissions, hearings, comments, audit rows, contact records, staff names */
+/**
+ * Queue: lead, submissions, hearings, comments, audit rows, contact records, result email
+ * requests, result sends, suppressions, staff names
+ */
 function queue(
   options: {
     lead?: Record<string, unknown>;
@@ -156,6 +162,9 @@ function queue(
     comments?: unknown[];
     audits?: unknown[];
     contacts?: unknown[];
+    consents?: unknown[];
+    sends?: unknown[];
+    suppressions?: unknown[];
     users?: unknown[];
   } = {}
 ) {
@@ -166,6 +175,9 @@ function queue(
     options.comments ?? [],
     options.audits ?? [],
     options.contacts ?? [],
+    options.consents ?? [],
+    options.sends ?? [],
+    options.suppressions ?? [],
     options.users ?? [{ id: STAFF_ID, name: null, email: 'staff@example.com' }],
   ];
 }
@@ -249,8 +261,9 @@ describe('leadActivity.list', () => {
 
     const [leadWhere, ...sourceWheres] = dbState.wheres;
     expect(toQuery(leadWhere).params).toEqual([LEAD_ID, ORG_ID]);
-    // submissions, hearings, comments, audit rows, contact records (staff names are by id)
-    for (const where of sourceWheres.slice(0, 5)) {
+    // submissions, hearings, comments, audit rows, contact records, result email requests and
+    // result sends (staff names are by id)
+    for (const where of sourceWheres.slice(0, 7)) {
       const { sql, params } = toQuery(where);
       expect(sql).toContain('"organization_id"');
       expect(params).toContain(ORG_ID);
@@ -406,6 +419,208 @@ describe('leadActivity.list', () => {
 
   it('rejects a page larger than 100', async () => {
     await expect(list({ limit: 101 })).rejects.toThrow();
+  });
+});
+
+describe('leadActivity.list: respondent email (#154)', () => {
+  const NOW = at('2026-10-20T00:00:00.000Z');
+  const CONSENT_1 = 'aa0e8400-e29b-41d4-a716-446655440001';
+  const CONSENT_2 = 'aa0e8400-e29b-41d4-a716-446655440002';
+  const consent = (overrides: Record<string, unknown>) => ({
+    id: CONSENT_1,
+    email: 'hanako@example.com',
+    confirmExpiresAt: at('2026-10-11T00:00:00.000Z'),
+    confirmedAt: null,
+    withdrawnAt: null,
+    createdAt: at('2026-10-10T00:00:00.000Z'),
+    ...overrides,
+  });
+  const send = (overrides: Record<string, unknown>) => ({
+    id: 'bb0e8400-e29b-41d4-a716-446655440001',
+    consentId: CONSENT_1,
+    email: 'hanako@example.com',
+    status: 'sent',
+    errorCode: null,
+    createdAt: at('2026-10-10T00:05:00.000Z'),
+    sentAt: at('2026-10-10T00:05:01.000Z'),
+    ...overrides,
+  });
+  const emailKinds = [
+    'result_email_requested',
+    'result_email_sent',
+    'email_unsubscribed',
+  ] as const;
+  const listEmail = () =>
+    callerAs('member').leadActivity.list({
+      organizationId: ORG_ID,
+      leadId: LEAD_ID,
+      limit: 50,
+      types: [...emailKinds],
+    });
+
+  it('shows each state of a request: confirmed, declined, expired and waiting', async () => {
+    queue({
+      submissions: [],
+      consents: [
+        consent({ id: 'c-confirmed', confirmedAt: at('2026-10-10T00:04:00.000Z') }),
+        consent({ id: 'c-declined', withdrawnAt: at('2026-10-10T01:00:00.000Z') }),
+        consent({ id: 'c-expired' }),
+        consent({ id: 'c-waiting', confirmExpiresAt: at('2026-10-21T00:00:00.000Z') }),
+      ],
+    });
+    // The fixed clock of the expiry is the service's input, not the router's
+    const { listLeadActivities } = await import('@/lib/features/lead-activity/service');
+    // biome-ignore lint/suspicious/noExplicitAny: fake database
+    const page = await listLeadActivities(fakeDb as any, {
+      organizationId: ORG_ID,
+      leadId: LEAD_ID,
+      limit: 50,
+      types: [...emailKinds],
+      now: NOW,
+    });
+    const byId = (id: string) => page.items.find((e) => e.id === `email-request:${id}`);
+    expect(byId('c-confirmed')).toMatchObject({
+      kind: 'result_email_requested',
+      actor: null,
+      request: { state: 'confirmed', at: at('2026-10-10T00:04:00.000Z') },
+    });
+    expect(byId('c-declined')).toMatchObject({
+      request: { state: 'declined', notRequested: false },
+    });
+    expect(byId('c-expired')).toMatchObject({
+      request: { state: 'expired', at: at('2026-10-11T00:00:00.000Z') },
+    });
+    expect(byId('c-waiting')).toMatchObject({ request: { state: 'waiting', at: null } });
+  });
+
+  it('marks a declined request as "not requested" when the address was suppressed for that', async () => {
+    queue({
+      submissions: [],
+      consents: [consent({ withdrawnAt: at('2026-10-10T01:00:00.000Z') })],
+      suppressions: [
+        {
+          id: 's1',
+          email: 'hanako@example.com',
+          reason: 'not_requested',
+          source: 'confirm_page',
+          createdBy: null,
+          createdAt: at('2026-10-10T01:00:00.000Z'),
+        },
+      ],
+    });
+    const { items } = await listEmail();
+    expect(items.map((e) => e.kind)).toEqual(['email_unsubscribed', 'result_email_requested']);
+    expect(items[0]).toEqual({
+      id: 'email-suppression:s1',
+      kind: 'email_unsubscribed',
+      at: at('2026-10-10T01:00:00.000Z'),
+      actor: null,
+      reason: 'not_requested',
+      source: 'confirm_page',
+    });
+    expect(items[1]).toMatchObject({ request: { state: 'declined', notRequested: true } });
+  });
+
+  it('counts a result mail once: a replay of a sent mail is not listed again', async () => {
+    queue({
+      submissions: [],
+      sends: [
+        send({
+          id: 'replay',
+          status: 'failed',
+          errorCode: 'idempotent_replay',
+          createdAt: at('2026-10-10T00:06:00.000Z'),
+          sentAt: null,
+        }),
+        send({}),
+        // Another request whose success was never recorded: the replay stands for it
+        send({
+          id: 'replay-only',
+          consentId: CONSENT_2,
+          status: 'failed',
+          errorCode: 'idempotent_replay',
+          createdAt: at('2026-10-12T00:00:00.000Z'),
+          sentAt: null,
+        }),
+      ],
+    });
+    const { items } = await listEmail();
+    expect(items).toEqual([
+      {
+        id: `email-sent:${CONSENT_2}`,
+        kind: 'result_email_sent',
+        at: at('2026-10-12T00:00:00.000Z'),
+        actor: null,
+        consentId: CONSENT_2,
+      },
+      {
+        id: `email-sent:${CONSENT_1}`,
+        kind: 'result_email_sent',
+        at: at('2026-10-10T00:05:01.000Z'),
+        actor: null,
+        consentId: CONSENT_1,
+      },
+    ]);
+  });
+
+  it('names the staff member of a staff suppression and never exposes addresses or codes', async () => {
+    queue({
+      submissions: [],
+      consents: [consent({ confirmedAt: at('2026-10-10T00:04:00.000Z') })],
+      sends: [send({})],
+      suppressions: [
+        {
+          id: 's2',
+          email: 'hanako@example.com',
+          reason: 'staff',
+          source: 'staff',
+          createdBy: STAFF_ID,
+          createdAt: at('2026-10-15T00:00:00.000Z'),
+        },
+      ],
+      users: [{ id: STAFF_ID, name: '営業 一郎', email: 'staff@example.com' }],
+    });
+    const { items } = await listEmail();
+    expect(items[0]).toMatchObject({
+      kind: 'email_unsubscribed',
+      reason: 'staff',
+      actor: { id: STAFF_ID, name: '営業 一郎' },
+    });
+    const text = JSON.stringify(items);
+    expect(text).not.toContain('hanako@example.com');
+    expect(text).not.toContain('idempotent_replay');
+    expect(text).not.toMatch(/token|resend/i);
+  });
+
+  it('reads requests, sends and suppressions of this organization only', async () => {
+    queue({
+      submissions: [],
+      consents: [consent({ email: 'old@example.com' })],
+      sends: [send({ email: 'sent@example.com' })],
+    });
+    await listEmail();
+    // lead, 5 sources, consents, sends, suppressions
+    const [consentWhere, sendWhere, suppressionWhere] = dbState.wheres.slice(6, 9);
+    const consentQuery = toQuery(consentWhere);
+    expect(consentQuery.sql).toContain('"respondent_email_consents"."organization_id"');
+    expect(consentQuery.params).toEqual([ORG_ID, LEAD_ID, 'ax_result_copy']);
+    const sendQuery = toQuery(sendWhere);
+    expect(sendQuery.sql).toContain('"respondent_email_sends"."organization_id"');
+    expect(sendQuery.params).toEqual([ORG_ID, LEAD_ID, 'result', 'sent', 'failed', 'idempotent_replay']);
+    // Matched by the lead's current address (normalised) and those of its requests and mails
+    const suppressionQuery = toQuery(suppressionWhere);
+    expect(suppressionQuery.sql).toContain('"email_suppressions"."organization_id"');
+    expect(suppressionQuery.params).toEqual([
+      ORG_ID,
+      'hanako@example.com',
+      'old@example.com',
+      'sent@example.com',
+    ]);
+  });
+
+  it('puts the new kinds under the email filter', async () => {
+    const { LEAD_ACTIVITY_FILTERS } = await import('@/lib/features/lead-activity/types/schemas');
+    expect(LEAD_ACTIVITY_FILTERS.email).toEqual([...emailKinds]);
   });
 });
 

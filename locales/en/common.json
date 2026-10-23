@@ -3728,7 +3728,8 @@
       "diagnosis": "Diagnoses & consultations",
       "hearing": "Hearings",
       "comment": "Comments",
-      "sales": "Sales actions"
+      "sales": "Sales actions",
+      "email": "Email"
     },
     "empty": "No activity yet.",
     "loadError": "Could not load the activity.",
@@ -3762,6 +3763,15 @@
         "call": "Contacted by phone",
         "email": "Contacted by email",
         "no_answer": "Called, no answer"
+      },
+      "result_email_requested": "Result by email requested",
+      "result_email_sent": "Result sent by email",
+      "email_unsubscribed": {
+        "unsubscribed": "Unsubscribed from email",
+        "not_requested": "Refused email (did not request it)",
+        "bounced": "Email stopped: could not be delivered",
+        "complained": "Email stopped: reported as spam",
+        "staff": "Email stopped by staff"
       }
     },
     "unverified": "Identity unverified",
@@ -3822,7 +3832,25 @@
       "sqlUndecided": "Undecided"
     },
     "changeArrow": "{before} → {after}",
-    "firstContact": "First contact"
+    "firstContact": "First contact",
+    "emailRequest": {
+      "waiting": "Awaiting confirmation",
+      "confirmed": "Confirmed",
+      "declined": "Declined",
+      "notRequested": "Said they did not request it",
+      "expired": "Link expired",
+      "waitingHelp": "The link in the confirmation email has not been pressed yet",
+      "confirmedAt": "Confirmed on {date}",
+      "declinedAt": "Declined on the confirm page on {date}",
+      "expiredAt": "The confirmation link expired on {date}"
+    },
+    "emailSource": {
+      "one_click": "Via: unsubscribe link in the email",
+      "unsubscribe_page": "Via: unsubscribe page",
+      "confirm_page": "Via: confirm page",
+      "resend_webhook": "Via: notice from the email provider",
+      "staff": "Via: admin screen"
+    }
   },
   "sidebarWidget": {
     "label": "Public diagnosis",
