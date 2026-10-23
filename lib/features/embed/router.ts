@@ -8,11 +8,34 @@ import { z } from 'zod';
 import { generateApiKey, hashApiKey } from './security';
 import { createEmbedConfigSchema, updateEmbedConfigSchema } from './types';
 
+/**
+ * Who may use this router (#356): anyone who can read leads may see the embed configs; creating,
+ * changing and deleting them is for those who can update settings
+ */
+const embedViewingProcedure = organizationProcedure.use(({ ctx, next }) => {
+  if (!ctx.ability.can('read', 'Lead')) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'You do not have permission to view embed configs',
+    });
+  }
+  return next();
+});
+const embedManagerProcedure = organizationProcedure.use(({ ctx, next }) => {
+  if (!ctx.ability.can('update', 'Settings')) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'You do not have permission to manage embed configs',
+    });
+  }
+  return next();
+});
+
 export const embedRouter = router({
   /**
    * List all embed configs for the organization
    */
-  list: organizationProcedure.query(async ({ ctx }) => {
+  list: embedViewingProcedure.query(async ({ ctx }) => {
     const configs = await db.query.embedConfigs.findMany({
       where: eq(embedConfigs.organizationId, ctx.organization.id),
       orderBy: [desc(embedConfigs.createdAt)],
@@ -39,7 +62,7 @@ export const embedRouter = router({
   /**
    * Get a single embed config by ID
    */
-  get: organizationProcedure
+  get: embedViewingProcedure
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       const config = await db.query.embedConfigs.findFirst({
@@ -68,7 +91,7 @@ export const embedRouter = router({
    * Create a new embed config
    * Returns the API key only once - it cannot be retrieved later
    */
-  create: organizationProcedure.input(createEmbedConfigSchema).mutation(async ({ ctx, input }) => {
+  create: embedManagerProcedure.input(createEmbedConfigSchema).mutation(async ({ ctx, input }) => {
     if (input.diagnosticTemplateId) {
       await assertInOrganization(db, 'template', ctx.organization.id, input.diagnosticTemplateId);
     }
@@ -106,7 +129,7 @@ export const embedRouter = router({
   /**
    * Update an existing embed config
    */
-  update: organizationProcedure
+  update: embedManagerProcedure
     .input(z.object({ id: z.string().uuid(), data: updateEmbedConfigSchema }))
     .mutation(async ({ ctx, input }) => {
       const existing = await db.query.embedConfigs.findFirst({
@@ -152,7 +175,7 @@ export const embedRouter = router({
    * Regenerate API key for an embed config
    * Returns the new API key only once
    */
-  regenerateApiKey: organizationProcedure
+  regenerateApiKey: embedManagerProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const existing = await db.query.embedConfigs.findFirst({
@@ -193,7 +216,7 @@ export const embedRouter = router({
   /**
    * Delete an embed config
    */
-  delete: organizationProcedure
+  delete: embedManagerProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const existing = await db.query.embedConfigs.findFirst({
@@ -219,7 +242,7 @@ export const embedRouter = router({
   /**
    * Get access logs for an embed config
    */
-  getAccessLogs: organizationProcedure
+  getAccessLogs: embedViewingProcedure
     .input(
       z.object({
         embedConfigId: z.string().uuid(),
@@ -253,7 +276,7 @@ export const embedRouter = router({
   /**
    * Get usage statistics for an embed config
    */
-  getStats: organizationProcedure
+  getStats: embedViewingProcedure
     .input(z.object({ embedConfigId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       const config = await db.query.embedConfigs.findFirst({

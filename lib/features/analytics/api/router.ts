@@ -1,3 +1,4 @@
+import type { AppAbility } from '@/lib/auth/permissions';
 import { leads } from '@/lib/db/schema';
 import { LEAD_STATUSES, type LeadStatus } from '@/lib/features/leads/types/pipeline';
 import { organizationProcedure, router } from '@/lib/trpc/init';
@@ -38,6 +39,13 @@ import {
   getStatusBreakdownSchema,
 } from '../types/schemas';
 
+/** Every figure here is built from the organization's leads: same rule as the leads list (#356) */
+function assertCanReadLeads(ability: AppAbility) {
+  if (!ability.can('read', 'Lead')) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'リードを閲覧する権限がありません' });
+  }
+}
+
 /**
  * Analytics Router
  * Provides statistics and analytics for dashboard
@@ -56,9 +64,7 @@ export const analyticsRouter = router({
     )
     .query(({ ctx, input }) => {
       // Names and companies of leads are shown: same rule as the leads list
-      if (!ctx.ability.can('read', 'Lead')) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'リードを閲覧する権限がありません' });
-      }
+      assertCanReadLeads(ctx.ability);
       return getDashboardSummary(ctx.db, input.organizationId, input.days);
     }),
 
@@ -69,6 +75,7 @@ export const analyticsRouter = router({
   getOverview: organizationProcedure
     .input(getOverviewSchema)
     .query(async ({ ctx, input }): Promise<OverviewStats> => {
+      assertCanReadLeads(ctx.ability);
       const { organizationId } = input;
 
       // Get total leads for organization
@@ -146,6 +153,7 @@ export const analyticsRouter = router({
   getLeadTrend: organizationProcedure
     .input(getLeadTrendSchema)
     .query(async ({ ctx, input }): Promise<TrendDataPoint[]> => {
+      assertCanReadLeads(ctx.ability);
       const { organizationId, dateRange, granularity } = input;
 
       const period = inPeriod(organizationId, dateRange);
@@ -186,6 +194,7 @@ export const analyticsRouter = router({
   getSourceBreakdown: organizationProcedure
     .input(getSourceBreakdownSchema)
     .query(({ ctx, input }): Promise<SourceBreakdown[]> => {
+      assertCanReadLeads(ctx.ability);
       const { organizationId, dateRange } = input;
       return getInflowSourceBreakdown(ctx.db, organizationId, analyticsPeriodStart(dateRange));
     }),
@@ -197,6 +206,7 @@ export const analyticsRouter = router({
   getStatusBreakdown: organizationProcedure
     .input(getStatusBreakdownSchema)
     .query(async ({ ctx, input }): Promise<StatusBreakdown[]> => {
+      assertCanReadLeads(ctx.ability);
       const { organizationId, dateRange } = input;
 
       const period = inPeriod(organizationId, dateRange);
@@ -231,6 +241,7 @@ export const analyticsRouter = router({
   getConversionFunnel: organizationProcedure
     .input(getConversionFunnelSchema)
     .query(async ({ ctx, input }): Promise<ConversionFunnelData> => {
+      assertCanReadLeads(ctx.ability);
       const { organizationId, dateRange } = input;
 
       const period = inPeriod(organizationId, dateRange);
@@ -318,6 +329,7 @@ export const analyticsRouter = router({
   getScoreDistribution: organizationProcedure
     .input(getScoreDistributionSchema)
     .query(async ({ ctx, input }): Promise<ScoreDistributionData[]> => {
+      assertCanReadLeads(ctx.ability);
       const { organizationId, dateRange } = input;
 
       const period = inPeriod(organizationId, dateRange);
@@ -365,6 +377,7 @@ export const analyticsRouter = router({
   getResponseTime: organizationProcedure
     .input(getResponseTimeSchema)
     .query(({ ctx, input }): Promise<ResponseTimeResult> => {
+      assertCanReadLeads(ctx.ability);
       const { organizationId, dateRange } = input;
       return getResponseTimeDistribution(ctx.db, organizationId, analyticsPeriodStart(dateRange));
     }),
@@ -376,6 +389,7 @@ export const analyticsRouter = router({
   getAcquisitionCost: organizationProcedure
     .input(getAcquisitionCostSchema)
     .query(({ ctx, input }): Promise<AcquisitionCostSummary> => {
+      assertCanReadLeads(ctx.ability);
       const { organizationId, dateRange } = input;
       return getAcquisitionCost(ctx.db, organizationId, analyticsPeriodStart(dateRange));
     }),
@@ -387,6 +401,7 @@ export const analyticsRouter = router({
   getAgencyPerformance: organizationProcedure
     .input(getAgencyPerformanceSchema)
     .query(({ ctx, input }): Promise<AgencyPerformanceRow[]> => {
+      assertCanReadLeads(ctx.ability);
       const { organizationId, dateRange } = input;
       return getAgencyPerformance(ctx.db, organizationId, analyticsPeriodStart(dateRange));
     }),
@@ -398,6 +413,7 @@ export const analyticsRouter = router({
   getComparison: organizationProcedure
     .input(getComparisonSchema)
     .query(async ({ ctx, input }): Promise<ComparisonResult> => {
+      assertCanReadLeads(ctx.ability);
       const { organizationId, currentPeriod, previousPeriod } = input;
 
       // Helper to get metrics for a period

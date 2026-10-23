@@ -4,6 +4,7 @@
  */
 import { leads } from '@/lib/db/schema';
 import { organizationProcedure, router } from '@/lib/trpc/init';
+import { TRPCError } from '@trpc/server';
 import { and, desc, eq, ilike, or } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -22,6 +23,10 @@ export function escapeLikePattern(text: string): string {
 
 export const leadSearchRouter = router({
   suggest: organizationProcedure.input(suggestLeadsSchema).query(async ({ ctx, input }) => {
+    // Names, addresses and companies of leads: same rule as the leads list (#356)
+    if (!ctx.ability.can('read', 'Lead')) {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'リードを閲覧する権限がありません' });
+    }
     const pattern = `%${escapeLikePattern(input.query)}%`;
     return ctx.db
       .select({

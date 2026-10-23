@@ -555,6 +555,13 @@ export const abTestsRouter = router({
    * Record an event for A/B testing
    */
   recordEvent: organizationProcedure.input(recordEventSchema).mutation(async ({ ctx, input }) => {
+    // Changes the counters of the test (#356)
+    if (!ctx.ability.can('update', 'Lead')) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: 'A/Bテストを更新する権限がありません',
+      });
+    }
     const test = await ctx.db.query.diagnosticAbTests.findFirst({
       where: and(
         eq(diagnosticAbTests.id, input.testId),
@@ -728,6 +735,13 @@ export const abTestsRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
+      // Changes the impression counter of the chosen variant (#356)
+      if (!ctx.ability.can('update', 'Lead')) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'A/Bテストを更新する権限がありません',
+        });
+      }
       const test = await ctx.db.query.diagnosticAbTests.findFirst({
         where: and(
           eq(diagnosticAbTests.id, input.testId),
