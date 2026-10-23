@@ -597,11 +597,15 @@ describe('leadActivity.list: respondent email (#154)', () => {
     const queueSuppressed = () =>
       queue({
         submissions: [],
-        consents: [consent({ withdrawnAt: at('2026-10-10T01:00:00.000Z') })],
+        // One suppression per address, as in the database (email_suppressions_org_email_unique):
+        // the declined request's address and the lead's current one
+        consents: [
+          consent({ email: 'old@example.com', withdrawnAt: at('2026-10-10T01:00:00.000Z') }),
+        ],
         suppressions: [
           {
             id: 's1',
-            email: 'hanako@example.com',
+            email: 'old@example.com',
             reason: 'not_requested',
             source: 'confirm_page',
             createdBy: null,
@@ -674,9 +678,14 @@ describe('leadActivity.list: respondent email (#154)', () => {
         limit: 50,
         types: [...emailKinds],
       });
-      expect(page.items.every((e) => e.kind !== 'email_unsubscribed' || e.reason === null)).toBe(
-        true
-      );
+      const hidden = { actor: null, reason: null, source: null };
+      expect(page.items.filter((e) => e.kind === 'email_unsubscribed')).toEqual([
+        expect.objectContaining({ id: 'email-suppression:s2', ...hidden }),
+        expect.objectContaining({ id: 'email-suppression:s1', ...hidden }),
+      ]);
+      expect(page.items.find((e) => e.kind === 'result_email_requested')).toMatchObject({
+        request: { state: 'declined', notRequested: false },
+      });
     });
   });
 
