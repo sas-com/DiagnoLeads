@@ -25,11 +25,9 @@
  * - At delivery the host name is resolved (`dns.lookup`, all addresses) and the delivery is
  *   refused if ANY address is in a blocked range.
  *
- * Remaining gap: fetch resolves the name again when it connects, so a DNS server that answers
- * differently within that moment (DNS rebinding) can still pass. Pinning the checked address
- * needs a custom connector (undici's Agent with a `connect.lookup`, or node:https with a
- * `lookup` option); undici is not a direct dependency, and Node's built-in fetch does not
- * expose its Agent, so this is not done here.
+ * The addresses checked at delivery are returned with the verdict, and the request connects to
+ * them only (`pinned-request.ts`, #330). Resolving the name again when connecting would let a
+ * DNS server answer differently the second time (DNS rebinding).
  */
 
 import { lookup as dnsLookup } from 'node:dns/promises';
@@ -52,6 +50,13 @@ export type WebhookUrlRefusal =
   | 'resolved_address';
 
 export type WebhookUrlCheck = { ok: true; url: URL } | { ok: false; reason: WebhookUrlRefusal };
+
+/** An address the destination check has accepted; the only ones a delivery may connect to */
+export type VettedAddress = { address: string; family: 4 | 6 };
+
+export type WebhookDestinationCheck =
+  | { ok: true; url: URL; addresses: VettedAddress[] }
+  | { ok: false; reason: WebhookUrlRefusal };
 
 /** The delivery error stored for a refusal, e.g. `Destination not allowed (address)` */
 export function destinationErrorFor(reason: WebhookUrlRefusal): string {
@@ -282,24 +287,32 @@ export type HostResolver = (hostname: string) => Promise<{ address: string }[]>;
 
 const resolveAll: HostResolver = (hostname) => dnsLookup(hostname, { all: true });
 
+/** The family of an address that passed `isBlockedAddress`, taken from the address itself */
+function vetted(address: string): VettedAddress {
+  return { address, family: isIP(address) === 6 ? 6 : 4 };
+}
+
 /**
  * Check a webhook URL right before sending: the URL rules, then every address the host name
  * resolves to. A name that does not resolve throws the resolver's error (a network failure,
- * retried like any other), so only a refusal is returned as `ok: false`.
+ * retried like any other), so only a refusal is returned as `ok: false`. On success the checked
+ * addresses are returned in the resolver's order: the request must connect to these and not
+ * resolve the name again (#330).
  */
 export async function checkWebhookDestination(
   value: string,
   { resolve = resolveAll, allowHttp }: { resolve?: HostResolver; allowHttp?: boolean } = {}
-): Promise<WebhookUrlCheck> {
+): Promise<WebhookDestinationCheck> {
   const checked = checkWebhookUrl(value, { allowHttp });
   if (!checked.ok) return checked;
 
   const host = normalizeHostname(checked.url.hostname);
-  if (isIP(host) !== 0) return checked;
+  // An IP literal was checked by checkWebhookUrl, and is the only address to connect to
+  if (isIP(host) !== 0) return { ...checked, addresses: [vetted(host)] };
 
   const addresses = await resolve(host);
   if (addresses.length === 0 || addresses.some(({ address }) => isBlockedAddress(address))) {
     return { ok: false, reason: 'resolved_address' };
   }
-  return checked;
+  return { ...checked, addresses: addresses.map(({ address }) => vetted(address)) };
 }

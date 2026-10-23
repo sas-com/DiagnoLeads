@@ -18,6 +18,7 @@ import {
 } from '@/lib/db/schema';
 import { and, asc, eq, gte, inArray, lt, lte, not, sql } from 'drizzle-orm';
 import { consumeRateLimits } from '../../diagnostics/rate-limit';
+import { sendPinnedRequest } from './pinned-request';
 import { WEBHOOK_TEST_SEND_LIMITS, type WebhookTestSendLimit } from './test-send-limits';
 import { checkWebhookDestination, destinationErrorFor } from './url-guard';
 import { isReservedWebhookHeaderName } from './webhook-headers';
@@ -207,7 +208,8 @@ function buildRequestHeaders(
     map.set(name, value);
   }
   const headers = Object.fromEntries(map);
-  // Same checks as fetch makes, before any network activity
+  // Same checks as fetch made (node:http would refuse the same values), before any network
+  // activity
   new Headers(headers);
   return headers;
 }
@@ -249,39 +251,36 @@ async function deliverWebhook(
       return { success: false, error: destinationErrorFor(destination.reason), retryable: false };
     }
 
-    const response = await fetch(webhook.url, {
+    // Connects to the addresses just checked, never resolving the name again (#330). A
+    // redirect is not followed: a public URL could send the request on to an internal one.
+    const response = await sendPinnedRequest({
+      url: destination.url,
+      addresses: destination.addresses,
       method: 'POST',
       headers,
       body: payloadString,
       signal: controller.signal,
-      // A redirect is not followed: a public URL could send the request on to an internal one
-      redirect: 'manual',
     });
-
-    const responseText = await response.text().catch(() => '');
+    const responseText = response.body.slice(0, 1000); // Limit response size
 
     if (response.status >= 300 && response.status < 400) {
       return {
         success: false,
         statusCode: response.status,
         error: `HTTP ${response.status}: Redirect not followed`,
-        response: responseText.slice(0, 1000),
+        response: responseText,
       };
     }
 
-    if (response.ok) {
-      return {
-        success: true,
-        statusCode: response.status,
-        response: responseText.slice(0, 1000), // Limit response size
-      };
+    if (response.status >= 200 && response.status < 300) {
+      return { success: true, statusCode: response.status, response: responseText };
     }
 
     return {
       success: false,
       statusCode: response.status,
       error: `HTTP ${response.status}: ${response.statusText}`,
-      response: responseText.slice(0, 1000),
+      response: responseText,
     };
   } catch (error) {
     return {

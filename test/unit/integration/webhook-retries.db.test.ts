@@ -29,6 +29,12 @@ vi.mock('node:dns/promises', () => {
   return { lookup, default: { lookup } };
 });
 
+// Deliveries go through the pinned transport (#330); it is replaced by one that calls the
+// fetch stub below
+vi.mock('@/lib/features/webhooks/services/pinned-request', async () =>
+  (await import('@/test/mocks/webhook-transport')).transportThroughFetchStub()
+);
+
 const url = process.env.TEST_DATABASE_URL;
 
 /** A first round fits (it starts within 1s), a second one after slow endpoints does not */

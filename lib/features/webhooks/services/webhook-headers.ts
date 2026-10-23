@@ -29,7 +29,8 @@ export const WEBHOOK_HEADERS_MAX_COUNT = 20;
  * Names the delivery sets itself or the HTTP client controls (lower case). Every header the
  * delivery sets is covered: Content-Type, User-Agent and the X-Webhook-* ones (signature, ID,
  * event). `__proto__` is a valid token, but fetch's own conversion of a header object drops it,
- * so it could never be sent.
+ * so it could never be sent. The connection-level ones (Upgrade, Keep-Alive, Expect, TE, Trailer,
+ * Proxy-Connection) were refused by fetch; node:http, used since #330, would send them.
  */
 const RESERVED_HEADER_NAMES = new Set([
   'content-type',
@@ -38,6 +39,12 @@ const RESERVED_HEADER_NAMES = new Set([
   'content-length',
   'transfer-encoding',
   'connection',
+  'upgrade',
+  'keep-alive',
+  'expect',
+  'te',
+  'trailer',
+  'proxy-connection',
   '__proto__',
 ]);
 const RESERVED_HEADER_PREFIX = 'x-webhook-';
