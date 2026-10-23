@@ -288,7 +288,7 @@ describe('AxSiteFooter', () => {
   it('shows the logo and the copyright of the current year', async () => {
     render(withIntl(await AxSiteFooter({ locale: 'ja' })));
     const footer = screen.getByRole('contentinfo');
-    expect(within(footer).getByRole('img', { name: 'まるマルDX AIマイグレーション' })).toBeInTheDocument();
+    expect(within(footer).getByRole('img', { name: 'まるマルDX AXマイグレーション' })).toBeInTheDocument();
     expect(
       within(footer).getByText(`Copyright © ${new Date().getFullYear()}`, { exact: false })
     ).toBeInTheDocument();

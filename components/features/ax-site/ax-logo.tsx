@@ -17,7 +17,7 @@ const LOGO = {
   dark: '/images/ax-migration/logo-white.webp',
 } as const;
 
-/** "まるマルDX AIマイグレーション" logo of the STUDIO design */
+/** "まるマルDX AXマイグレーション" logo of the STUDIO design (its "AI" redrawn as "AX") */
 export function AxLogo({ alt, tone = 'light', className, narrow = false }: AxLogoProps) {
   return (
     <Image
