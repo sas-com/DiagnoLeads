@@ -38,28 +38,37 @@ interface WidgetSettingsProps {
   compact?: boolean;
 }
 
-/** Settings saved since the order is applied to the page */
-const STORAGE_KEY = 'dashboard-widget-config-v2';
+/** Settings saved since each block on the page is one widget, in priority order (#410) */
+const STORAGE_KEY = 'dashboard-widget-config-v3';
 /**
- * Earlier settings: their order was never applied (always the default), so only the shown/hidden
- * choices are carried over and the current default order wins.
+ * Earlier settings, newest first. Their widgets were split differently (and the oldest never
+ * applied its order), so only the shown/hidden choices are carried over and the current default
+ * order wins.
  */
-const LEGACY_STORAGE_KEY = 'dashboard-widget-config';
+const PREVIOUS_STORAGE_KEYS = ['dashboard-widget-config-v2', 'dashboard-widget-config'];
+
+/** Earlier widget ids that a current widget takes over, e.g. { analytics: ['trend', 'kpis'] } */
+export type WidgetAliases = Record<string, readonly string[]>;
 
 /**
  * Saved settings meet the current widget list: widgets that no longer exist are dropped and new
- * ones are shown, so a redesign never hides a widget behind an old saved setting. With
- * `keepOrder`, the saved order is kept and new widgets take their default place.
+ * ones are shown, so a redesign never hides a widget behind an old saved setting. A widget that
+ * replaces earlier ones (`aliases`) is shown if any of them was. With `keepOrder`, the saved order
+ * is kept and new widgets take their default place.
  */
 export function reconcileWidgetConfig(
   stored: unknown,
   defaultWidgets: string[],
-  { keepOrder = false }: { keepOrder?: boolean } = {}
+  { keepOrder = false, aliases = {} }: { keepOrder?: boolean; aliases?: WidgetAliases } = {}
 ): WidgetConfig[] {
   const saved = Array.isArray(stored) ? (stored as WidgetConfig[]) : [];
   const entries = defaultWidgets.map((id, index) => {
     const entry = saved.find((item) => item?.id === id);
-    return { id, enabled: entry ? entry.enabled !== false : true, entry, index };
+    const earlier = saved.filter((item) => aliases[id]?.includes(item?.id));
+    const enabled = entry
+      ? entry.enabled !== false
+      : earlier.length === 0 || earlier.some((item) => item.enabled !== false);
+    return { id, enabled, entry, index };
   });
   if (!keepOrder) {
     return entries.map(({ id, enabled }, order) => ({ id, enabled, order }));
@@ -102,7 +111,8 @@ function readStored(key: string): unknown {
 }
 
 export function useWidgetConfig(
-  defaultWidgets: string[]
+  defaultWidgets: string[],
+  aliases: WidgetAliases = {}
 ): [WidgetConfig[], (config: WidgetConfig[]) => void] {
   const [config, setConfig] = useState<WidgetConfig[]>(() => {
     if (typeof window === 'undefined') {
@@ -111,7 +121,8 @@ export function useWidgetConfig(
 
     const stored = readStored(STORAGE_KEY);
     if (stored) return reconcileWidgetConfig(stored, defaultWidgets, { keepOrder: true });
-    return reconcileWidgetConfig(readStored(LEGACY_STORAGE_KEY), defaultWidgets);
+    const previous = PREVIOUS_STORAGE_KEYS.map(readStored).find(Boolean);
+    return reconcileWidgetConfig(previous, defaultWidgets, { aliases });
   });
 
   useEffect(() => {
@@ -211,7 +222,7 @@ export function WidgetSettings({
           <DialogDescription>{t('description')}</DialogDescription>
         </DialogHeader>
 
-        <div className="py-4 space-y-2">
+        <div className="min-w-0 space-y-2 py-4">
           {sortedWidgets.map((item, position) => {
             const widget = widgets.find((w) => w.id === item.id);
             if (!widget) return null;
