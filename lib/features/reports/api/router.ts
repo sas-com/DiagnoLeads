@@ -566,7 +566,13 @@ export const reportsRouter = router({
           ),
           updatedAt: now,
         })
-        .where(eq(scheduledReports.id, existing.id));
+        // Read above with the organization; written with it too (#356)
+        .where(
+          and(
+            eq(scheduledReports.id, existing.id),
+            eq(scheduledReports.organizationId, input.organizationId)
+          )
+        );
 
       return historyEntry;
     }),

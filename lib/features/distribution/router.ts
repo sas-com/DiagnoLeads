@@ -33,6 +33,9 @@ const campaignEditProcedure = organizationProcedure.use(({ ctx, next }) => {
 });
 
 export const distributionRouter = router({
+  /** Whether the current member may create, change and delete campaigns (to hide the buttons) */
+  canManage: campaignViewProcedure.query(({ ctx }) => ctx.ability.can('update', 'Settings')),
+
   /**
    * List all QR campaigns for the organization
    */

@@ -76,6 +76,12 @@ export default function QRCampaignsPage() {
     { enabled: !!organization?.id }
   );
 
+  // Only those who can update settings may change campaigns (#356)
+  const { data: canManage = false } = trpc.distribution.canManage.useQuery(
+    { organizationId: organization?.id ?? '' },
+    { enabled: !!organization?.id }
+  );
+
   // Fetch diagnostic templates for selection
   const { data: templates } = trpc.diagnosticTemplates.list.useQuery(
     { organizationId: organization?.id ?? '' },
@@ -195,12 +201,14 @@ export default function QRCampaignsPage() {
           </p>
         </div>
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              New Campaign
-            </Button>
-          </DialogTrigger>
+          {canManage && (
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                New Campaign
+              </Button>
+            </DialogTrigger>
+          )}
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Create QR Campaign</DialogTitle>
@@ -336,12 +344,14 @@ export default function QRCampaignsPage() {
                   <div className="flex items-center gap-2">
                     <Switch
                       checked={campaign.isActive}
+                      disabled={!canManage}
                       onCheckedChange={() => handleToggleActive(campaign.id, campaign.isActive)}
                     />
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 text-destructive"
+                      hidden={!canManage}
                       onClick={() => handleDelete(campaign.id)}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -429,7 +439,7 @@ export default function QRCampaignsPage() {
             <p className="mt-1 text-sm text-muted-foreground">
               Create your first QR code campaign for offline distribution
             </p>
-            <Button className="mt-4" onClick={() => setIsCreateOpen(true)}>
+            <Button className="mt-4" hidden={!canManage} onClick={() => setIsCreateOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
               Create Campaign
             </Button>

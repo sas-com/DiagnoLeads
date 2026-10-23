@@ -2,6 +2,7 @@
  * A/B Tests tRPC Router
  * Handles A/B testing for diagnostic forms
  */
+import type { db as defaultDb } from '@/lib/db/client';
 import { type AbTestVariant, diagnosticAbTests, diagnosticTemplates } from '@/lib/db/schema';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
@@ -132,6 +133,33 @@ function calculateImprovement(baseline: number, variant: number): number {
 // Router
 // ============================================================================
 
+type Executor = typeof defaultDb;
+
+/**
+ * Every variant must use a template of the test's organization (create and update, #356)
+ */
+async function assertVariantTemplatesInOrganization(
+  db: Executor,
+  organizationId: string,
+  variants: { name: string; templateId: string }[]
+) {
+  for (const variant of variants) {
+    const template = await db.query.diagnosticTemplates.findFirst({
+      where: and(
+        eq(diagnosticTemplates.id, variant.templateId),
+        eq(diagnosticTemplates.organizationId, organizationId)
+      ),
+    });
+
+    if (!template) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: `バリアントテンプレート ${variant.name} が見つかりません`,
+      });
+    }
+  }
+}
+
 export const abTestsRouter = router({
   /**
    * List A/B tests
@@ -225,21 +253,7 @@ export const abTestsRouter = router({
     }
 
     // Verify all variant templates exist
-    for (const variant of input.variants) {
-      const template = await ctx.db.query.diagnosticTemplates.findFirst({
-        where: and(
-          eq(diagnosticTemplates.id, variant.templateId),
-          eq(diagnosticTemplates.organizationId, input.organizationId)
-        ),
-      });
-
-      if (!template) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: `バリアントテンプレート ${variant.name} が見つかりません`,
-        });
-      }
-    }
+    await assertVariantTemplatesInOrganization(ctx.db, input.organizationId, input.variants);
 
     // Verify traffic percentages sum to 100
     const totalTraffic = input.variants.reduce((sum, v) => sum + v.trafficPercent, 0);
@@ -300,8 +314,9 @@ export const abTestsRouter = router({
       });
     }
 
-    // Verify traffic percentages if updating variants
+    // Verify the templates and traffic percentages if updating variants
     if (input.variants) {
+      await assertVariantTemplatesInOrganization(ctx.db, input.organizationId, input.variants);
       const totalTraffic = input.variants.reduce((sum, v) => sum + v.trafficPercent, 0);
       if (totalTraffic !== 100) {
         throw new TRPCError({
@@ -600,7 +615,13 @@ export const abTestsRouter = router({
         variants: variants as AbTestVariant[],
         updatedAt: new Date(),
       })
-      .where(eq(diagnosticAbTests.id, input.testId));
+      // Read above with the organization; written with it too (#356)
+      .where(
+        and(
+          eq(diagnosticAbTests.id, input.testId),
+          eq(diagnosticAbTests.organizationId, input.organizationId)
+        )
+      );
 
     return { success: true };
   }),
