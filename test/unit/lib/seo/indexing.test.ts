@@ -61,7 +61,6 @@ describe('search indexing policy', () => {
         '/*/settings',
         '/*/analytics',
         '/*/organizations',
-        '/*/content',
         '/*/login',
         '/*/signup',
         '/*/invite/',

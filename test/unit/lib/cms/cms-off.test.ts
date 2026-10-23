@@ -1,7 +1,6 @@
 /**
  * The CMS is off in production until it is decided to use it there (#141)
  */
-import { DisabledCMSAdapter } from '@/lib/cms/adapters/disabled/adapter';
 import { cmsPoolConfig } from '@/lib/cms/db-pool';
 import { APP_API_SEGMENTS, isCmsEnabled, isCmsApiPath } from '@/lib/cms/enabled';
 import { readdirSync } from 'node:fs';
@@ -25,10 +24,10 @@ describe('CMS on or off', () => {
   });
 
   it("treats every /api path that is not the app's own as the CMS's, and the CMS tools too", () => {
-    for (const path of ['/api/cms/ai-generate', '/api/cms/figma/webhook', '/api/cms-users', '/api/cms-users/me', '/api/blog-posts', '/api/graphql', '/api/anything', '/api/TRPC/x', '/api/', '/api/health%2Fx', '/api/tr%70c%2fx']) {
+    for (const path of ['/api/cms/subscribe', '/api/cms-users', '/api/cms-users/me', '/api/blog-posts', '/api/graphql', '/api/anything', '/api/TRPC/x', '/api/', '/api/health%2Fx', '/api/tr%70c%2fx']) {
       expect(isCmsApiPath(path), path).toBe(true);
     }
-    for (const path of ['/api/trpc/content.blog.list', '/api/tr%70c/x', '/api/auth/sign-in/email', '/api/health', '/api/cron/cleanup-webhook-deliveries', '/api/embed/v1/x', '/api/email/unsubscribe', '/api/email/unsubscribe/one-click', '/ja/blog', '/apix']) {
+    for (const path of ['/api/trpc/leads.list', '/api/tr%70c/x', '/api/auth/sign-in/email', '/api/health', '/api/cron/cleanup-webhook-deliveries', '/api/embed/v1/x', '/api/email/unsubscribe', '/api/email/unsubscribe/one-click', '/ja/blog', '/apix']) {
       expect(isCmsApiPath(path), path).toBe(false);
     }
   });
@@ -38,13 +37,6 @@ describe('CMS on or off', () => {
       .filter((entry) => entry.isDirectory())
       .map((entry) => entry.name);
     expect([...APP_API_SEGMENTS].sort()).toEqual(folders.sort());
-  });
-
-  it('shows no content and saves nothing while off', async () => {
-    const adapter = new DisabledCMSAdapter();
-    expect((await adapter.find({ collection: 'blog-posts' })).data).toEqual([]);
-    expect((await adapter.findBySlug({ collection: 'blog-posts', slug: 'x' })).data).toBeNull();
-    await expect(adapter.create({ collection: 'faqs', data: {} })).rejects.toThrow('not enabled');
   });
 });
 

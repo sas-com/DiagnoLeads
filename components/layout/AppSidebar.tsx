@@ -2,10 +2,8 @@
 import { Logo, LogoMark } from '@/components/common/Logo';
 import { useSidebar } from '@/context/SidebarContext';
 import {
-  RiArticleLine,
   RiBarChartLine,
   RiDashboardLine,
-  RiQuestionLine,
   RiSettings4Line,
   RiUserLine,
   RiUserSearchLine,
@@ -99,20 +97,6 @@ const AppSidebar: React.FC = () => {
             nameKey: 'agencyLinks',
             path: `/${locale}/settings/agency-links`,
           },
-          {
-            name: t('contentEditors'),
-            nameKey: 'contentEditors',
-            path: `/${locale}/settings/content-editors`,
-          },
-        ],
-      },
-      {
-        icon: <RiArticleLine className="w-5 h-5" />,
-        name: t('content'),
-        nameKey: 'content',
-        subItems: [
-          { name: t('faqs'), nameKey: 'faqs', path: `/${locale}/content/faqs` },
-          { name: t('blog'), nameKey: 'blog', path: `/${locale}/content/blog` },
         ],
       },
     ],

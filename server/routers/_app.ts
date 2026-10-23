@@ -10,8 +10,6 @@ import { appointmentReviewsRouter } from '@/lib/features/appointment-reviews/api
 import { axPlaybookRouter } from '@/lib/features/ax-playbook/api/router';
 import { challengeGuideRouter } from '@/lib/features/challenge-guide/api/router';
 import { commentsRouter } from '@/lib/features/comments/api/router';
-import { contentEditorsRouter } from '@/lib/features/content/api/editors-router';
-import { contentRouter } from '@/lib/features/content/api/router';
 import { customFieldsRouter } from '@/lib/features/custom-fields/api/router';
 import { customReportsRouter } from '@/lib/features/custom-reports/api/router';
 import { deliveryReviewsRouter } from '@/lib/features/delivery-reviews/api/router';
@@ -57,7 +55,6 @@ export const appRouter = router({
   invitations: invitationsRouter,
   ai: aiRouter,
   hierarchy: hierarchyRouter, // Phase 2.7: ホールディングス・グループ企業対応
-  content: contentRouter, // Phase 4.4: コンテンツ管理UI
   webhooks: webhooksRouter, // Phase 5.1: Webhook基盤
   notifications: notificationsRouter, // Phase 9: 通知機能
   tags: tagsRouter, // Phase 9: リードタグ機能
@@ -86,7 +83,6 @@ export const appRouter = router({
   deliveryReviews: deliveryReviewsRouter, // Phase progress and what turned out hard against the diagnosis (Refs #159)
   leadHandoff: leadHandoffRouter, // Handoff sheet of the first meeting to the technical team (Refs #86)
   leadHearings: leadHearingsRouter, // Initial meeting hearings per lead (Refs #84)
-  contentEditors: contentEditorsRouter, // FAQ / blog editors granted from settings (#91)
   leadActivity: leadActivityRouter, // Activity timeline per lead (Refs #101)
   diagnoses: diagnosesRouter, // Diagnosis builder: drafts and published versions (Refs #114)
   leadFollowUp: leadFollowUpRouter, // Contact records and next actions per lead (Refs #136, #85)

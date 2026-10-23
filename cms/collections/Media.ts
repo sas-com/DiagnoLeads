@@ -1,4 +1,5 @@
 import type { CollectionConfig } from 'payload';
+import { editorOrAdmin } from '../access/roles';
 
 /**
  * Media Collection
@@ -15,6 +16,10 @@ export const Media: CollectionConfig = {
   },
   access: {
     read: () => true,
+    // Viewers and signed-out visitors cannot upload, replace or delete files (#413)
+    create: editorOrAdmin,
+    update: editorOrAdmin,
+    delete: editorOrAdmin,
   },
   upload: {
     staticDir: 'public/media',
