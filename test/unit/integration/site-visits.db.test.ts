@@ -141,8 +141,10 @@ describe.skipIf(!url)('site visits (PostgreSQL)', () => {
     expect(await view('/ja/faq')).toBe('recorded');
     expect(await view(`/ja/d/${builderSlug}`)).toBe('recorded');
     expect(await view('/ja/d/not-published-anywhere')).toBe('no_organization');
+    expect(await view('/ja/ax-migration/column/access-file-types')).toBe('recorded');
+    expect(await view('/ja/ax-migration/column/made-up-column')).toBe('unknown_page');
 
-    const [ax] = await visitsOf(axOrg);
+    const [ax] = (await visitsOf(axOrg)).filter((row) => row.pageType === 'ax-lp');
     expect(ax).toMatchObject({
       path: '/ja/ax-migration',
       pageType: 'ax-lp',
@@ -200,6 +202,30 @@ describe.skipIf(!url)('site visits (PostgreSQL)', () => {
     expect(await visitsOf(axOrg)).toHaveLength(SITE_VISIT_RATE_LIMIT.limit + 1);
   });
 
+  it('counts the limit by address, so changing the browser does not get past it', async () => {
+    const now = new Date('2026-10-23T03:00:00Z');
+    for (let i = 0; i < SITE_VISIT_RATE_LIMIT.limit; i++) {
+      await view('/ja/ax-migration', { now, userAgent: `${CHROME} rotate/${i}` });
+    }
+    expect(await view('/ja/ax-migration', { now, userAgent: `${CHROME} rotate/x` })).toBe(
+      'rate_limited'
+    );
+  });
+
+  it('records without a rate limit when there is no trusted address', async () => {
+    const now = new Date('2026-10-23T03:00:00Z');
+    for (let i = 0; i <= SITE_VISIT_RATE_LIMIT.limit; i++) {
+      expect(await view('/ja/ax-migration', { now, ip: '' })).toBe('recorded');
+    }
+  });
+
+  it("leaves a later day's salt alone (servers on either side of midnight)", async () => {
+    await view('/ja/ax-migration', { now: new Date('2026-10-24T03:00:00Z') });
+    await view('/ja/ax-migration', { now: new Date('2026-10-23T14:59:00Z') });
+    const salts = await pg.select().from(siteVisitSalts);
+    expect(salts.map((row) => row.day).sort()).toEqual(['2026-10-23', '2026-10-24']);
+  });
+
   it('keeps the daily totals, then deletes views past 90 days and past salts', async () => {
     const old = new Date('2026-07-01T03:00:00Z');
     const recent = new Date('2026-10-22T03:00:00Z');
@@ -225,6 +251,12 @@ describe.skipIf(!url)('site visits (PostgreSQL)', () => {
     );
     expect((await visitsOf(axOrg)).map((row) => row.day)).toEqual(['2026-10-22']);
     expect(await pg.select().from(siteVisitSalts)).toEqual([]);
+    // Rate limit windows that ended a day ago are cleaned up as well: the July views' window
+    // goes, the window of the view of the day before stays
+    const [{ windows }] = (await pg.execute(
+      sql`select count(*)::int as windows from public_rate_limits where key like ${`${SITE_VISIT_RATE_LIMIT.name}:%`}`
+    )) as unknown as [{ windows: number }];
+    expect(windows).toBe(1);
 
     // A second run recounts the same days without doubling them
     await maintainSiteVisits(pg, new Date('2026-10-23T03:00:00Z'));

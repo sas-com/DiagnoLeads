@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import type { db as defaultDb } from '@/lib/db/client';
 import { siteVisitSalts } from '@/lib/db/schema';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
-import { eq, ne } from 'drizzle-orm';
+import { eq, lt } from 'drizzle-orm';
 
 type Database = typeof defaultDb;
 
@@ -17,8 +17,9 @@ type Database = typeof defaultDb;
 export const visitDayOf = (now: Date = new Date()) => jstDate(now);
 
 /**
- * The salt of the day, made by the first view of the day. The salts of other days are deleted
- * here as well (the daily maintenance does it too, for days without views).
+ * The salt of the day, made by the first view of the day. The salts of past days are deleted
+ * here as well (the daily maintenance does it too, for days without views); a later day's salt
+ * is left alone, so two servers on either side of midnight do not delete each other's.
  */
 export async function daySalt(db: Pick<Database, 'insert' | 'select' | 'delete'>, day: string) {
   await db
@@ -29,9 +30,17 @@ export async function daySalt(db: Pick<Database, 'insert' | 'select' | 'delete'>
     .select({ salt: siteVisitSalts.salt })
     .from(siteVisitSalts)
     .where(eq(siteVisitSalts.day, day));
-  await db.delete(siteVisitSalts).where(ne(siteVisitSalts.day, day));
+  await db.delete(siteVisitSalts).where(lt(siteVisitSalts.day, day));
   if (!row) throw new Error(`No site visit salt for ${day}`);
   return row.salt;
+}
+
+/**
+ * What the rate limit counts a visitor as: the day's salt and the address block (IPv6 by its
+ * /64), without the browser, so changing the user agent does not get past it
+ */
+export function rateLimitIdentityOf(salt: string, ipBlockValue: string): string {
+  return createHash('sha256').update(`${salt}\n${ipBlockValue}`).digest('base64url');
 }
 
 export function visitorHashOf(input: {

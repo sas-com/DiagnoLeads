@@ -1,5 +1,5 @@
 {
-  "id": "1a41ecf0-e57a-4853-b85f-36ab1fd8243b",
+  "id": "752f85bf-dc87-4d10-b976-025359336daa",
   "prevId": "c7ef7ed8-31f4-49d7-95a2-6ef73214f454",
   "version": "7",
   "dialect": "postgresql",
@@ -6936,13 +6936,6 @@
           "type": "date",
           "primaryKey": false,
           "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
         }
       },
       "indexes": {
@@ -6984,21 +6977,6 @@
             },
             {
               "expression": "day",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "site_visits_created_at_idx": {
-          "name": "site_visits_created_at_idx",
-          "columns": [
-            {
-              "expression": "created_at",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

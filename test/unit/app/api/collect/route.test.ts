@@ -91,8 +91,17 @@ describe('POST /api/collect', () => {
     ['no path', { search: '' }],
     ['a broken body', '{not json'],
     ['a body too large', { ...VIEW, referrer: `https://x.example/${'a'.repeat(5000)}` }],
+    ['a body too large in bytes', { ...VIEW, referrer: `https://x.example/${'あ'.repeat(1500)}` }],
   ])('ignores %s', async (_name, body) => {
     expect((await POST(beacon(body))).status).toBe(204);
+    expect(recordSiteVisit).not.toHaveBeenCalled();
+  });
+
+  it('refuses a body announced as too large without reading it', async () => {
+    const req = beacon(VIEW, { 'content-length': '100000' });
+    const read = vi.spyOn(req, 'text');
+    expect((await POST(req)).status).toBe(204);
+    expect(read).not.toHaveBeenCalled();
     expect(recordSiteVisit).not.toHaveBeenCalled();
   });
 

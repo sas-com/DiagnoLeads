@@ -55,8 +55,10 @@ export async function POST(req: NextRequest) {
   const userAgent = req.headers.get('user-agent') ?? '';
   if (isBot(userAgent)) return noContent();
 
+  // Refuse a large body before reading it; the read is checked too (no Content-Length)
+  if (Number(req.headers.get('content-length') ?? 0) > MAX_BODY_BYTES) return noContent();
   const text = await req.text();
-  if (text.length > MAX_BODY_BYTES) return noContent();
+  if (new TextEncoder().encode(text).length > MAX_BODY_BYTES) return noContent();
   const beacon = parseBeacon(text);
   const page = beacon ? sitePageOf(beacon.path) : null;
   if (!beacon || !page) return noContent();

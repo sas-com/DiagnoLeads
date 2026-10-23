@@ -31,6 +31,8 @@ export interface SitePage {
   path: string;
   pageType: SitePageType;
   owner: SitePageOwner;
+  /** On a column page: the article, which the server checks exists before counting */
+  columnSlug?: string;
 }
 
 const MAX_PATH_LENGTH = 300;
@@ -46,13 +48,17 @@ const SIMPLE_PAGES: Record<string, SitePageType> = {
 export function sitePageOf(rawPath: string): SitePage | null {
   if (rawPath.length > MAX_PATH_LENGTH || !rawPath.startsWith('/')) return null;
   const path = rawPath.length > 1 ? rawPath.replace(/\/+$/, '') : rawPath;
-  // Only plain path characters: no query, fragment, encoded slashes or dot segments
-  if (!/^\/[A-Za-z0-9\-_/.~%]*$/.test(path) || path.includes('..') || path.includes('//')) {
+  // Only plain path characters: no query, fragment, percent-encoding or dot segments
+  if (!/^\/[A-Za-z0-9\-_/.~]*$/.test(path) || path.includes('..') || path.includes('//')) {
     return null;
   }
 
   const ax = axPageOf(path);
-  if (ax) return { path, pageType: ax.page, owner: { kind: 'ax' } };
+  if (ax) {
+    return ax.columnSlug
+      ? { path, pageType: ax.page, owner: { kind: 'ax' }, columnSlug: ax.columnSlug }
+      : { path, pageType: ax.page, owner: { kind: 'ax' } };
+  }
 
   const match = /^\/(?:ja|en)(?:\/([^/]+)(?:\/([^/]+))?)?$/.exec(path);
   if (!match) return null;
@@ -65,5 +71,8 @@ export function sitePageOf(rawPath: string): SitePage | null {
   const pageType = SIMPLE_PAGES[first];
   if (!pageType) return null;
   if (second !== undefined && pageType !== 'legacy-diagnostic') return null;
-  return { path, pageType, owner: { kind: 'default' } };
+  // The legacy form's templates are not checked: all of its pages count as the form itself, so
+  // made-up slugs cannot add paths
+  const counted = second === undefined ? path : path.slice(0, path.length - second.length - 1);
+  return { path: counted, pageType, owner: { kind: 'default' } };
 }

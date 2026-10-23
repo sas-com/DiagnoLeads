@@ -30,7 +30,6 @@ CREATE TABLE "site_visits" (
 	"device" text NOT NULL,
 	"visitor_hash" text NOT NULL,
 	"day" date NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "site_visits_device_check" CHECK ("site_visits"."device" in ('desktop', 'mobile', 'tablet'))
 );
 --> statement-breakpoint
@@ -38,7 +37,6 @@ ALTER TABLE "site_visit_daily" ADD CONSTRAINT "site_visit_daily_organization_id_
 ALTER TABLE "site_visits" ADD CONSTRAINT "site_visits_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "site_visits_org_day_idx" ON "site_visits" USING btree ("organization_id","day");--> statement-breakpoint
 CREATE INDEX "site_visits_org_path_day_idx" ON "site_visits" USING btree ("organization_id","path","day");--> statement-breakpoint
-CREATE INDEX "site_visits_created_at_idx" ON "site_visits" USING btree ("created_at");--> statement-breakpoint
 ALTER TABLE "site_visits" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "site_visit_daily" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "site_visit_salts" ENABLE ROW LEVEL SECURITY;

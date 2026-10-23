@@ -31,7 +31,6 @@ describe('sitePageOf', () => {
     ['/ja/landing', 'landing', 'default'],
     ['/ja/faq', 'faq', 'default'],
     ['/ja/diagnostic', 'legacy-diagnostic', 'default'],
-    ['/ja/diagnostic/some-template', 'legacy-diagnostic', 'default'],
   ])('measures %s as %s', (path, pageType, owner) => {
     expect(sitePageOf(path)).toMatchObject({ pageType, owner: { kind: owner } });
   });
@@ -44,7 +43,22 @@ describe('sitePageOf', () => {
     });
   });
 
+  it('names the column of a column page, for the server to check', () => {
+    expect(sitePageOf('/ja/ax-migration/column/access-file-types')).toMatchObject({
+      columnSlug: 'access-file-types',
+    });
+    expect(sitePageOf('/ja/ax-migration/column')).not.toHaveProperty('columnSlug');
+  });
+
+  it('counts every page of the legacy form as the form itself', () => {
+    expect(sitePageOf('/ja/diagnostic/made-up-1')).toMatchObject({
+      path: '/ja/diagnostic',
+      pageType: 'legacy-diagnostic',
+    });
+  });
+
   it.each([
+    '/ja/ax-migration/column/a%2Fb',
     '/ja/dashboard',
     '/ja/leads/123',
     '/ja/settings/embed',
@@ -109,6 +123,9 @@ describe('request details', () => {
       fromRef: 'ax-lp-header',
     });
     expect(visitParamsOf('?from=evil')).toMatchObject({ fromRef: null, utmSource: null });
+    // A mailing tool may put the subscriber's address in utm_*
+    expect(visitParamsOf('?utm_content=taro%40example.com&utm_term=a@b').utmContent).toBeNull();
+    expect(visitParamsOf('?utm_term=a@b').utmTerm).toBeNull();
     expect(visitParamsOf(`?utm_source=${'y'.repeat(500)}`).utmSource).toHaveLength(200);
     expect(visitParamsOf(undefined)).toMatchObject({ utmSource: null, fromRef: null });
   });

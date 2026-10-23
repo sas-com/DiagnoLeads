@@ -43,9 +43,10 @@ export interface SiteVisitParams {
   fromRef: string | null;
 }
 
+/** A value that looks like an email address is dropped: a mailing tool may put one in utm_* */
 const clip = (value: string | null) => {
   const trimmed = value?.trim();
-  return trimmed ? trimmed.slice(0, 200) : null;
+  return trimmed && !trimmed.includes('@') ? trimmed.slice(0, 200) : null;
 };
 
 /** The utm_* and `from` of the page's query string ("?utm_source=x&from=ax-lp-header") */

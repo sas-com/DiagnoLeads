@@ -3218,14 +3218,15 @@ export const siteVisits = pgTable(
     /** 'desktop' | 'mobile' | 'tablet' */
     device: text('device').notNull(),
     visitorHash: text('visitor_hash').notNull(),
-    /** Day in Japan the view counts for (the salt's day) */
+    /**
+     * Day in Japan the view counts for (the salt's day). No time of day is kept: a precise time
+     * could be matched with a diagnosis answered at the same moment
+     */
     day: date('day', { mode: 'string' }).notNull(),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     index('site_visits_org_day_idx').on(table.organizationId, table.day),
     index('site_visits_org_path_day_idx').on(table.organizationId, table.path, table.day),
-    index('site_visits_created_at_idx').on(table.createdAt),
     check('site_visits_device_check', sql`${table.device} in ('desktop', 'mobile', 'tablet')`),
   ]
 );
