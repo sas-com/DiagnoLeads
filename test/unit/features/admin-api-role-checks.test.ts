@@ -119,14 +119,21 @@ const READS: Record<string, Call> = {
   'embed.getStats': (c) => c.embed.getStats({ ...org, embedConfigId: ID }),
   'distribution.listCampaigns': (c) => c.distribution.listCampaigns(org),
   'distribution.getCampaign': (c) => c.distribution.getCampaign({ ...org, id: ID }),
-  'distribution.getCampaignStats': (c) => c.distribution.getCampaignStats({ ...org, id: ID }),
+  'distribution.getCampaignStats': (c) =>
+    c.distribution.getCampaignStats({ ...org, campaignId: ID }),
+  // Mutations, but they only build a QR code
+  'distribution.generateCampaignQR': (c) =>
+    c.distribution.generateCampaignQR({ ...org, campaignId: ID }),
+  'distribution.generateQRCode': (c) =>
+    c.distribution.generateQRCode({ ...org, diagnosticTemplateId: ID }),
+  // Picks a variant without writing (recordEvent records the impression)
+  'abTests.selectVariant': (c) => c.abTests.selectVariant({ ...org, testId: ID }),
 };
 
 /** Counters of A/B tests and templates: same rule as the other changes in those routers */
 const COUNTERS: Record<string, Call> = {
   'abTests.recordEvent': (c) =>
     c.abTests.recordEvent({ ...org, testId: ID, variantTemplateId: ID, eventType: 'impression' }),
-  'abTests.selectVariant': (c) => c.abTests.selectVariant({ ...org, testId: ID }),
   'diagnosticTemplates.incrementSubmission': (c) =>
     c.diagnosticTemplates.incrementSubmission({ ...org, id: ID }),
 };

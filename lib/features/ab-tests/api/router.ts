@@ -735,11 +735,11 @@ export const abTestsRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      // Changes the impression counter of the chosen variant (#356)
-      if (!ctx.ability.can('update', 'Lead')) {
+      // Only reads the test (the impression is recorded by recordEvent): same rule as get (#356)
+      if (!ctx.ability.can('read', 'Lead')) {
         throw new TRPCError({
           code: 'FORBIDDEN',
-          message: 'A/Bテストを更新する権限がありません',
+          message: 'A/Bテストを閲覧する権限がありません',
         });
       }
       const test = await ctx.db.query.diagnosticAbTests.findFirst({
