@@ -237,7 +237,12 @@ export const membersRouter = router({
         role: input.role,
         updatedAt: new Date(),
       })
-      .where(eq(organizationMembers.id, input.membershipId))
+      .where(
+        and(
+          eq(organizationMembers.id, input.membershipId),
+          eq(organizationMembers.organizationId, input.organizationId)
+        )
+      )
       .returning();
 
     return updated;
@@ -290,7 +295,14 @@ export const membersRouter = router({
     }
 
     // Delete membership
-    await ctx.db.delete(organizationMembers).where(eq(organizationMembers.id, input.membershipId));
+    await ctx.db
+      .delete(organizationMembers)
+      .where(
+        and(
+          eq(organizationMembers.id, input.membershipId),
+          eq(organizationMembers.organizationId, input.organizationId)
+        )
+      );
 
     return {
       success: true,

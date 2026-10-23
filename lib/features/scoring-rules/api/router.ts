@@ -725,7 +725,8 @@ export const scoringRulesRouter = router({
               score: result.score,
               updatedAt: new Date(),
             })
-            .where(eq(leads.id, lead.id));
+            // Read above with the organization; written with it too (#356)
+            .where(and(eq(leads.id, lead.id), eq(leads.organizationId, input.organizationId)));
           updatedCount++;
         }
       }

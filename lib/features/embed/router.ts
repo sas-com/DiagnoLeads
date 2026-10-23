@@ -32,6 +32,9 @@ const embedManagerProcedure = organizationProcedure.use(({ ctx, next }) => {
 });
 
 export const embedRouter = router({
+  /** Whether the current member may create, change and delete configs (to hide the buttons) */
+  canManage: embedViewingProcedure.query(({ ctx }) => ctx.ability.can('update', 'Settings')),
+
   /**
    * List all embed configs for the organization
    */

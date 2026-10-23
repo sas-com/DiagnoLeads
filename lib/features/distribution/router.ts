@@ -33,6 +33,9 @@ const campaignEditProcedure = organizationProcedure.use(({ ctx, next }) => {
 });
 
 export const distributionRouter = router({
+  /** Whether the current member may create, change and delete campaigns (to hide the buttons) */
+  canManage: campaignViewProcedure.query(({ ctx }) => ctx.ability.can('update', 'Settings')),
+
   /**
    * List all QR campaigns for the organization
    */
@@ -187,7 +190,9 @@ export const distributionRouter = router({
           expiresAt: input.data.expiresAt ? new Date(input.data.expiresAt) : null,
           updatedAt: new Date(),
         })
-        .where(eq(qrCampaigns.id, input.id))
+        .where(
+          and(eq(qrCampaigns.id, input.id), eq(qrCampaigns.organizationId, ctx.organization.id))
+        )
         .returning();
 
       return updated;
@@ -210,7 +215,11 @@ export const distributionRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'QR campaign not found' });
       }
 
-      await db.delete(qrCampaigns).where(eq(qrCampaigns.id, input.id));
+      await db
+        .delete(qrCampaigns)
+        .where(
+          and(eq(qrCampaigns.id, input.id), eq(qrCampaigns.organizationId, ctx.organization.id))
+        );
 
       return { success: true };
     }),

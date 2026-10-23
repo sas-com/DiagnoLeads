@@ -172,6 +172,18 @@ async function codeOf(call: Call, role: string): Promise<string> {
 }
 
 describe('admin API role checks (#356)', () => {
+  describe.each([
+    ['embed.canManage', (c: Caller) => c.embed.canManage(org)],
+    ['distribution.canManage', (c: Caller) => c.distribution.canManage(org)],
+  ] as const)('%s (hides the buttons of the settings pages)', (_name, call) => {
+    it.each(['owner', 'admin', 'group_owner', 'group_admin'])('is true for %s', async (role) => {
+      await expect(call(callerAs(role))).resolves.toBe(true);
+    });
+    it.each(['member', 'parent_viewer'])('is false for %s', async (role) => {
+      await expect(call(callerAs(role))).resolves.toBe(false);
+    });
+  });
+
   describe.each(Object.entries(READS))('%s', (_name, call) => {
     it('is refused without the right to read leads', async () => {
       await expect(call(callerAs(NO_ROLE))).rejects.toEqual(forbidden);

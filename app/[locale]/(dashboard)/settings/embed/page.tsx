@@ -141,6 +141,12 @@ export default function EmbedSettingsPage() {
     { enabled: !!organization?.id }
   );
 
+  // Only those who can update settings may change configs (#356)
+  const { data: canManage = false } = trpc.embed.canManage.useQuery(
+    { organizationId: organization?.id ?? '' },
+    { enabled: !!organization?.id }
+  );
+
   // Fetch diagnostic templates for selection
   const { data: templates } = trpc.diagnosticTemplates.list.useQuery(
     { organizationId: organization?.id ?? '' },
@@ -334,12 +340,14 @@ export default function EmbedSettingsPage() {
               if (!open) resetForm();
             }}
           >
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                New Configuration
-              </Button>
-            </DialogTrigger>
+            {canManage && (
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  New Configuration
+                </Button>
+              </DialogTrigger>
+            )}
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Create Embed Configuration</DialogTitle>
@@ -768,11 +776,14 @@ export default function EmbedSettingsPage() {
                   <div className="flex items-center gap-2">
                     <Switch
                       checked={config.isActive}
+                      disabled={!canManage}
                       onCheckedChange={() => handleToggleActive(config.id, config.isActive)}
                     />
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(config.id)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                    {canManage && (
+                      <Button variant="ghost" size="icon" onClick={() => handleDelete(config.id)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardHeader>
@@ -791,6 +802,7 @@ export default function EmbedSettingsPage() {
                       variant="outline"
                       size="sm"
                       onClick={() => handleRegenerateApiKey(config.id)}
+                      hidden={!canManage}
                       disabled={regenerateApiKey.isPending}
                     >
                       {regenerateApiKey.isPending ? (
@@ -862,10 +874,12 @@ export default function EmbedSettingsPage() {
               Create an embed configuration to add diagnostic widgets to your external websites.
               Each configuration includes a unique API key and customizable settings.
             </p>
-            <Button onClick={() => setIsCreateOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create First Configuration
-            </Button>
+            {canManage && (
+              <Button onClick={() => setIsCreateOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create First Configuration
+              </Button>
+            )}
           </CardContent>
         </Card>
       )}
