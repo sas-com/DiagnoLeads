@@ -299,6 +299,14 @@ describe('sendRespondentEmail', () => {
     ).toMatchObject({ outcome: 'failed', errorCode: 'send_failed' });
   });
 
+  it('records a send that hit the time limit as send_timeout', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    sendEmail.mockRejectedValue(new EmailProviderError('timeout', null, 'no answer'));
+    expect(
+      await sendRespondentEmail(fakeDb().db, { sendEmail }, { ...input, idempotencyKey: 'k-2' })
+    ).toMatchObject({ outcome: 'failed', errorCode: 'send_timeout' });
+  });
+
   it('marks the row failed when the mail cannot be built', async () => {
     const { db, updates } = fakeDb();
     const result = await sendRespondentEmail(

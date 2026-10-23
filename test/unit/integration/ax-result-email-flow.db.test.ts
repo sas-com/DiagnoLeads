@@ -71,7 +71,9 @@ describe.skipIf(!url)('AX result by email (PostgreSQL)', () => {
   const unique = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const orgIds: string[] = [];
   let org: string;
-  const now = new Date('2026-10-23T01:00:00Z');
+  // The real time, to the second: send rows get created_at from the database clock, and the
+  // 24-hour rule compares it with this value, so a fixed date would drift as the clock passes it
+  const now = new Date(Math.floor(Date.now() / 1000) * 1000);
   const later = (ms: number) => new Date(now.getTime() + ms);
   const HOUR = 60 * 60 * 1000;
 
@@ -433,6 +435,37 @@ describe.skipIf(!url)('AX result by email (PostgreSQL)', () => {
       expect(sendEmail).not.toHaveBeenCalled();
     });
 
+    // A retry would carry a new token and so a new idempotency key: Resend could not stop a
+    // second confirmation if the first one did go out, so a timeout counts as sent (#355 review)
+    it('counts a confirmation that hit the time limit as possibly sent', async () => {
+      const email = `Timeout-${unique()}@example.co.jp`;
+      const timeoutOrg = await newOrg();
+      const { submissionId } = await submit(email, timeoutOrg);
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      sendEmail.mockRejectedValueOnce(new EmailProviderError('timeout', null, 'no answer'));
+      expect(await requestAxResultEmail(pg, deps(), { submissionId, locale: 'ja', now })).toEqual({
+        outcome: 'unavailable',
+      });
+      const consent = await consentOf(submissionId);
+      expect(await sendsOf(consent.id)).toMatchObject([
+        { kind: 'confirmation', status: 'failed', errorCode: 'send_timeout' },
+      ]);
+
+      sendEmail.mockClear();
+      expect(await requestAxResultEmail(pg, deps(), { submissionId, locale: 'ja', now })).toEqual({
+        outcome: 'already_requested',
+      });
+      const other = await submit(email, timeoutOrg, later(HOUR));
+      expect(
+        await requestAxResultEmail(pg, deps(), {
+          submissionId: other.submissionId,
+          locale: 'ja',
+          now: later(HOUR),
+        })
+      ).toEqual({ outcome: 'accepted', delivery: 'recent_confirmation' });
+      expect(sendEmail).not.toHaveBeenCalled();
+    });
+
     it('treats concurrent_idempotent_requests as a failure the respondent can retry', async () => {
       const { submissionId } = await submit(`Busy-${unique()}@example.co.jp`, await newOrg());
       vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -535,6 +568,15 @@ describe.skipIf(!url)('AX result by email (PostgreSQL)', () => {
       const { token } = await requested();
       sendEmail.mockRejectedValueOnce(new Error('Failed to send email: down'));
       vi.spyOn(console, 'error').mockImplementation(() => {});
+      expect(await confirmAxResultEmail(pg, deps(), { token, now: later(HOUR) })).toBe('failed');
+      expect(await confirmAxResultEmail(pg, deps(), { token, now: later(HOUR) })).toBe('sent');
+    });
+
+    // Result mail keeps one idempotency key per consent, so a retry after a timeout is safe
+    it('keeps the link for another try when the result mail hit the time limit', async () => {
+      const { token } = await requested();
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      sendEmail.mockRejectedValueOnce(new EmailProviderError('timeout', null, 'no answer'));
       expect(await confirmAxResultEmail(pg, deps(), { token, now: later(HOUR) })).toBe('failed');
       expect(await confirmAxResultEmail(pg, deps(), { token, now: later(HOUR) })).toBe('sent');
     });

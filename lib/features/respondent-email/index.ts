@@ -12,6 +12,7 @@ export {
 } from './suppression';
 export {
   IDEMPOTENT_REPLAY,
+  SEND_TIMEOUT,
   sendRespondentEmail,
   type RespondentEmailContent,
   type RespondentEmailDeps,

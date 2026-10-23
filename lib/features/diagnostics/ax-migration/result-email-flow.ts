@@ -28,6 +28,7 @@ import type { AxMailLocale } from '@/lib/features/ax-site/sender-identity';
 import {
   IDEMPOTENT_REPLAY,
   type RespondentEmailDeps,
+  SEND_TIMEOUT,
   hashToken,
   newToken,
   normaliseEmail,
@@ -77,6 +78,14 @@ const wentOut = () =>
     inArray(respondentEmailSends.status, ['sent', 'pending']),
     eq(respondentEmailSends.errorCode, IDEMPOTENT_REPLAY)
   );
+
+/**
+ * For confirmations only: also an attempt that hit the time limit. A retry issues a new token,
+ * so its idempotency key differs and Resend would not stop a second mail; a timed-out
+ * confirmation therefore counts as sent for the 24-hour rule. Result mail keeps one key per
+ * consent across attempts, so a timeout there stays retryable (wentOut)
+ */
+const confirmationWentOut = () => or(wentOut(), eq(respondentEmailSends.errorCode, SEND_TIMEOUT));
 
 const BUSY = Symbol('busy');
 
@@ -220,7 +229,7 @@ export async function requestAxResultEmail(
               eq(respondentEmailSends.consentId, existing.id),
               eq(respondentEmailSends.kind, 'confirmation'),
               or(
-                wentOut(),
+                confirmationWentOut(),
                 eq(respondentEmailSends.status, 'suppressed'),
                 eq(respondentEmailSends.errorCode, 'recipient_not_allowed')
               )
@@ -239,7 +248,7 @@ export async function requestAxResultEmail(
             eq(respondentEmailSends.organizationId, organizationId),
             eq(respondentEmailSends.email, email),
             eq(respondentEmailSends.kind, 'confirmation'),
-            wentOut(),
+            confirmationWentOut(),
             gte(respondentEmailSends.createdAt, new Date(now.getTime() - CONFIRMATION_INTERVAL_MS))
           )
         )

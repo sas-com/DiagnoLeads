@@ -69,6 +69,7 @@ export type RespondentEmailErrorCode =
   | 'invalid_address'
   | 'build_failed'
   | 'recipient_not_allowed'
+  | 'send_timeout'
   | 'send_failed';
 
 /**
@@ -77,6 +78,12 @@ export type RespondentEmailErrorCode =
  * a check for "a mail already went out" must count it like 'sent' and 'pending'
  */
 export const IDEMPOTENT_REPLAY = 'idempotent_replay';
+/**
+ * Error code of an attempt that hit the send time limit: Resend may still have delivered it.
+ * Callers whose retries would carry a different idempotency key (a new confirmation token)
+ * must count it as possibly sent, or the respondent gets two mails and the first link breaks
+ */
+export const SEND_TIMEOUT = 'send_timeout';
 
 /** The database or a transaction of it */
 export type RespondentEmailDatabase = Pick<Database, 'select' | 'insert' | 'update'>;
@@ -143,6 +150,7 @@ export async function sendRespondentEmail(
       return { outcome: 'already_sent', sendId };
     }
     if (error instanceof EmailRecipientNotAllowedError) errorCode = 'recipient_not_allowed';
+    if (error instanceof EmailProviderError && error.code === 'timeout') errorCode = SEND_TIMEOUT;
     console.error('[respondent-email] send failed', { sendId, errorCode });
     await db
       .update(respondentEmailSends)
