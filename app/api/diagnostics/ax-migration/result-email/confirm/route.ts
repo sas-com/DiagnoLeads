@@ -13,7 +13,7 @@ import {
   tooManyRequests,
 } from '@/lib/features/diagnostics/request-guard';
 import { sendEmail } from '@/lib/features/email/email-service';
-import { reportServerError } from '@/lib/ops/alert';
+import { reportRejectedRequest, reportServerError } from '@/lib/ops/alert';
 import { type NextRequest, NextResponse, after } from 'next/server';
 import { z } from 'zod';
 
@@ -70,7 +70,10 @@ export async function POST(req: NextRequest) {
       const limit = await consumeRateLimits(db, [
         { rule: AX_RATE_LIMITS.resultEmailConfirmPerIp, identifier: ipBlock(ip) },
       ]);
-      if (!limit.allowed) return tooManyRequests(limit.retryAfterSeconds);
+      if (!limit.allowed) {
+        after(() => reportRejectedRequest('ax-diagnosis/result-email-confirm', 'rate_limited'));
+        return tooManyRequests(limit.retryAfterSeconds);
+      }
     }
 
     const { token, action } = parsed.data;

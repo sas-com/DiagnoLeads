@@ -11,12 +11,20 @@ const confirmMock = vi.fn();
 const declineMock = vi.fn();
 const limitsMock = vi.fn();
 
+const rejectedMock = vi.fn();
+
 vi.mock('next/server', async (importOriginal) => ({
   ...(await importOriginal<typeof import('next/server')>()),
-  after: () => {},
+  // Run the after() work at once so what it reports can be checked
+  after: (task: () => unknown) => {
+    void task();
+  },
 }));
 vi.mock('@/lib/db/client', () => ({ db: {} }));
-vi.mock('@/lib/ops/alert', () => ({ reportServerError: vi.fn() }));
+vi.mock('@/lib/ops/alert', () => ({
+  reportServerError: vi.fn(),
+  reportRejectedRequest: (...args: unknown[]) => rejectedMock(...args),
+}));
 vi.mock('@/lib/features/email/email-service', () => ({ sendEmail: vi.fn() }));
 vi.mock('@/lib/features/diagnostics/ax-migration/result-email-flow', () => ({
   requestAxResultEmail: (...args: unknown[]) => requestMock(...args),
@@ -41,6 +49,7 @@ const post = (path: string, body: unknown, headers: Record<string, string> = {})
   });
 
 beforeEach(() => {
+    rejectedMock.mockReset();
   vi.clearAllMocks();
   vi.stubEnv('AX_RESULT_EMAIL_ENABLED', 'true');
   requestMock.mockResolvedValue({ outcome: 'accepted', delivery: 'sent' });
@@ -144,6 +153,7 @@ describe('POST /api/diagnostics/ax-migration/result-email', () => {
     limitsMock.mockResolvedValue({ allowed: false, rule: 'ax-result-email-ip', retryAfterSeconds: 120 });
     const response = await requestRoute.POST(post(PATH, body, { 'x-real-ip': '203.0.113.7' }));
     expect(response.status).toBe(429);
+    expect(rejectedMock).toHaveBeenCalledWith(expect.any(String), 'rate_limited');
     expect(response.headers.get('Retry-After')).toBe('120');
     expect(limitsMock.mock.calls[0][1]).toEqual([
       { rule: expect.objectContaining({ name: 'ax-result-email-ip', limit: 10 }), identifier: '203.0.113.7' },
@@ -239,6 +249,7 @@ describe('POST /api/diagnostics/ax-migration/result-email/confirm', () => {
       post(PATH, { token: TOKEN, action: 'confirm' }, { 'x-real-ip': '203.0.113.7' })
     );
     expect(response.status).toBe(429);
+    expect(rejectedMock).toHaveBeenCalledWith(expect.any(String), 'rate_limited');
     expect(limitsMock.mock.calls[0][1][0].rule).toMatchObject({ name: 'ax-result-email-confirm-ip', limit: 20 });
     expect(confirmMock).not.toHaveBeenCalled();
   });

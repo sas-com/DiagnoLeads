@@ -9,12 +9,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const unsubscribeMock = vi.fn();
 const limitsMock = vi.fn();
 
+const rejectedMock = vi.fn();
+
 vi.mock('next/server', async (importOriginal) => ({
   ...(await importOriginal<typeof import('next/server')>()),
-  after: () => {},
+  // Run the after() work at once so what it reports can be checked
+  after: (task: () => unknown) => {
+    void task();
+  },
 }));
 vi.mock('@/lib/db/client', () => ({ db: {} }));
-vi.mock('@/lib/ops/alert', () => ({ reportServerError: vi.fn() }));
+vi.mock('@/lib/ops/alert', () => ({
+  reportServerError: vi.fn(),
+  reportRejectedRequest: (...args: unknown[]) => rejectedMock(...args),
+}));
 vi.mock('@/lib/features/respondent-email', () => ({
   unsubscribeByToken: (...args: unknown[]) => unsubscribeMock(...args),
 }));
@@ -28,6 +36,7 @@ const oneClick = await import('@/app/api/email/unsubscribe/one-click/route');
 const TOKEN = 'AbC-_123456789012345678901234567890123456789';
 
 beforeEach(() => {
+    rejectedMock.mockReset();
   vi.clearAllMocks();
   unsubscribeMock.mockResolvedValue('done');
   limitsMock.mockResolvedValue({ allowed: true });
@@ -97,6 +106,7 @@ describe('POST /api/email/unsubscribe (page button)', () => {
     limitsMock.mockResolvedValue({ allowed: false, rule: 'email-unsubscribe-ip', retryAfterSeconds: 90 });
     const response = await page.POST(request({ token: TOKEN }, { 'x-real-ip': '203.0.113.9' }));
     expect(response.status).toBe(429);
+    expect(rejectedMock).toHaveBeenCalledWith(expect.any(String), 'rate_limited');
     expect(response.headers.get('Retry-After')).toBe('90');
     expect(limitsMock).toHaveBeenCalledWith(expect.anything(), [
       { rule: expect.objectContaining({ name: 'email-unsubscribe-ip' }), identifier: '203.0.113.9' },
@@ -221,6 +231,7 @@ describe('/api/email/unsubscribe/one-click (RFC 8058)', () => {
       })
     );
     expect(refused.status).toBe(429);
+    expect(rejectedMock).toHaveBeenCalledWith(expect.any(String), 'rate_limited');
     expect(refused.headers.get('Retry-After')).toBe('30');
     expect(unsubscribeMock).not.toHaveBeenCalled();
   });
