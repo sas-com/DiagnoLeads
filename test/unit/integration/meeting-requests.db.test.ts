@@ -637,4 +637,25 @@ describe.skipIf(!url)('meeting requests (PostgreSQL)', () => {
       callers.rep.meetingRequests.confirm({ organizationId: org, leadId: without, candidateIndex: 0, candidate: STORED[0] })
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
+
+  it('never returns the preferences of a lead of another organization (#356)', async () => {
+    const [other] = await pg
+      .insert(organizations)
+      .values({ name: '別組織', slug: `meeting-other-${unique()}` })
+      .returning();
+    try {
+      const [lead] = await pg
+        .insert(leads)
+        .values({ organizationId: other.id, email: `meeting-${unique()}@example.co.jp` })
+        .returning();
+      await pg
+        .insert(meetingRequests)
+        .values({ organizationId: other.id, leadId: lead.id, candidates: OPTIONS });
+      // Read with this organization: another organization's preferences are never returned
+      const view = await callers.rep.meetingRequests.get({ organizationId: org, leadId: lead.id });
+      expect(view.request).toBeNull();
+    } finally {
+      await pg.delete(organizations).where(eq(organizations.id, other.id));
+    }
+  });
 });
