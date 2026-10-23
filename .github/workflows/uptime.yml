@@ -1,0 +1,68 @@
+# Uptime check of production (#51). Runs outside Vercel, so it also notices when Vercel or the
+# whole site is down. A failure opens one issue labelled "uptime" (GitHub emails the owner);
+# the next successful run comments and closes it. Scheduled runs can start late by a few minutes.
+name: Uptime
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check production
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      BASE_URL: https://diagnoleads-v2.vercel.app
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/uptime-check.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Check the pages
+        id: check
+        run: |
+          set +e
+          bash scripts/uptime-check.sh > failures.txt
+          echo "failed=$?" >> "$GITHUB_OUTPUT"
+          cat failures.txt
+
+      - name: Open an issue when down
+        if: steps.check.outputs.failed != '0'
+        run: |
+          open=$(gh issue list --label uptime --state open --json number --jq '.[0].number')
+          if [ -n "$open" ]; then
+            echo "Issue #$open is already open"
+            exit 1
+          fi
+          gh label create uptime --color B60205 --description "Production uptime check" 2>/dev/null || true
+          {
+            echo "本番の死活監視で、応答しないページがありました（$(TZ=Asia/Tokyo date '+%Y-%m-%d %H:%M') JST）。"
+            echo
+            cat failures.txt
+            echo
+            echo "- 監視：[実行の記録](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})"
+            echo "- 確かめる場所：Vercel のデプロイとログ、Supabase の状態"
+            echo "- 戻れば、次の監視（10分ごと）がこの Issue を閉じます"
+          } > body.md
+          gh issue create --title "本番が応答していません（死活監視）" --label uptime --body-file body.md
+          exit 1
+
+      - name: Close the issue when back
+        if: steps.check.outputs.failed == '0'
+        run: |
+          for n in $(gh issue list --label uptime --state open --json number --jq '.[].number'); do
+            gh issue close "$n" --comment "復旧を確認しました（$(TZ=Asia/Tokyo date '+%Y-%m-%d %H:%M') JST）。"
+          done

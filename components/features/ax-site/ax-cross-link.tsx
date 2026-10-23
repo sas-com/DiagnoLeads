@@ -14,20 +14,28 @@ export function currentAxPage() {
  * site, send `ax_cross_link_click` and add `from` and the current utm_*, ref and agency to the
  * address it opens.
  * The href in the markup stays a plain path, so the link works without JavaScript (#332).
+ * `columnSlug` names the article the link is about when the page is not that article (the
+ * column the diagnosis result recommends, #363); on a column page it is the page's article.
  */
-export function followAxLink(anchor: HTMLAnchorElement, href: string, placement: string): void {
+export function followAxLink(
+  anchor: HTMLAnchorElement,
+  href: string,
+  placement: string,
+  columnSlug?: string
+): void {
   const url = new URL(href, window.location.href);
   if (url.origin !== window.location.origin) return;
   const current = axPageOf(window.location.pathname);
   const target = axPageOf(url.pathname);
   if (!current || !target || url.pathname === window.location.pathname) return;
+  const slug = columnSlug ?? current.columnSlug;
   trackAxEvent('ax_cross_link_click', {
     from_page: current.page,
     to_page: target.page,
     location: placement,
     // The section the link opens (e.g. the AS/400, ACOS or targets section of the main page)
     ...(url.hash.length > 1 ? { to_section: decodeURIComponent(url.hash.slice(1)) } : {}),
-    ...(current.columnSlug ? { column_slug: current.columnSlug } : {}),
+    ...(slug ? { column_slug: slug } : {}),
   });
   anchor.href = crossLinkHref(href, `${current.page}-${placement}`, window.location.search);
 }
@@ -36,7 +44,14 @@ interface AxCrossLinkProps {
   href: string;
   /** Where the link is on the page (footer, breadcrumb, related...), for `from` and the event */
   placement: string;
+  /** The article the link recommends, sent as `column_slug` (the diagnosis result, #363) */
+  columnSlug?: string;
   className?: string;
+  /**
+   * Open the page in a new tab, so that the page left behind keeps its state (the diagnosis
+   * result, which only lives in memory, #363)
+   */
+  newTab?: boolean;
   /** Called when the link is clicked, after the address is set (e.g. to close a menu) */
   onNavigate?: () => void;
   children: ReactNode;
@@ -46,18 +61,26 @@ interface AxCrossLinkProps {
 export function AxCrossLink({
   href,
   placement,
+  columnSlug,
   className,
+  newTab = false,
   onNavigate,
   children,
 }: AxCrossLinkProps) {
   const onFollow = (event: MouseEvent<HTMLAnchorElement>) => {
     // A right click opens the menu, it does not follow the link
     if (event.type === 'auxclick' && event.button !== 1) return;
-    followAxLink(event.currentTarget, href, placement);
+    followAxLink(event.currentTarget, href, placement, columnSlug);
     if (event.type === 'click') onNavigate?.();
   };
   return (
-    <a href={href} onClick={onFollow} onAuxClick={onFollow} className={className}>
+    <a
+      href={href}
+      onClick={onFollow}
+      onAuxClick={onFollow}
+      className={className}
+      {...(newTab ? { target: '_blank', rel: 'noopener' } : {})}
+    >
       {children}
     </a>
   );

@@ -32,6 +32,7 @@ import { useTranslations } from 'next-intl';
 import { createElement, useEffect, useRef, useState } from 'react';
 import { AccessPathSection } from './access-path-section';
 import { InfoOffers } from './info-offers';
+import { ResultColumnLink } from './result-column-link';
 import { ResultEmailRequest } from './result-email-request';
 import { AX_RUNNER_CONFIG } from './runner-config';
 import { trackAxEvent } from './tracking';
@@ -93,6 +94,8 @@ export function AxDiagnosisResult({
   const [result, setResult] = useState(initialResult);
   /** The follow-up answers were sent: the Access path no longer needs the hint to refine it */
   const [refined, setRefined] = useState(false);
+  /** The follow-up answers sent: they can change the column the result recommends (#363) */
+  const [followUpAnswers, setFollowUpAnswers] = useState<DiagnosticAnswers>({});
   const [requested, setRequested] = useState(consultationRequested);
   const [sending, setSending] = useState(false);
   /** Which button the failed request came from: the message is shown next to it */
@@ -419,9 +422,10 @@ export function AxDiagnosisResult({
         locale={locale}
         answers={answers}
         submissionId={submissionId}
-        onUpdated={(updated) => {
+        onUpdated={(updated, sent) => {
           setResult(updated);
           setRefined(true);
+          setFollowUpAnswers(sent);
         }}
       />
 
@@ -492,6 +496,14 @@ export function AxDiagnosisResult({
           </>
         )}
       </div>
+
+      {/* One article that fits the Access answers, quieter than the consultation (#363) */}
+      <ResultColumnLink
+        platform={platform}
+        locale={locale}
+        answers={{ ...answers, ...followUpAnswers }}
+        headingTag={subTag}
+      />
 
       {offers && ctaKey !== 'information' && (
         <InfoOffers
@@ -621,7 +633,8 @@ interface FollowUpQuestionsProps {
   locale: DiagnosticLocale;
   answers: DiagnosticAnswers;
   submissionId: string;
-  onUpdated: (result: AxMigrationPublicResult) => void;
+  /** The updated result and the answers that were sent */
+  onUpdated: (result: AxMigrationPublicResult, sent: DiagnosticAnswers) => void;
 }
 
 /**
@@ -651,19 +664,20 @@ function FollowUpQuestions({ locale, answers, submissionId, onUpdated }: FollowU
   const send = async () => {
     if (state === 'sending' || answered.length === 0) return;
     setState('sending');
+    const sent: DiagnosticAnswers = Object.fromEntries(answered.map((id) => [id, values[id]]));
     try {
       const res = await fetch('/api/diagnostics/ax-migration/details', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           submissionId,
-          answers: Object.fromEntries(answered.map((id) => [id, values[id]])),
+          answers: sent,
         }),
       });
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.result) throw new Error(`HTTP ${res.status}`);
       const updated = json.result as AxMigrationPublicResult;
-      onUpdated(updated);
+      onUpdated(updated, sent);
       setState('done');
       trackAxEvent('ax_diagnosis_follow_up', {
         answered: answered.length,

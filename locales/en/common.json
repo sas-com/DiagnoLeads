@@ -552,6 +552,11 @@
         "failed": "Could not send the request. Please try again later.",
         "closed": "Requests from this page close 24 hours after the diagnosis. Please run the diagnosis again to request a consultation."
       },
+      "column": {
+        "label": "An article that fits your answers",
+        "note": "The article opens in a new tab. This result stays on this page.",
+        "newTab": " (opens in a new tab)"
+      },
       "diagnoseAnother": "Check another system",
       "levels": {
         "low": "Low",
