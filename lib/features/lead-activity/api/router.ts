@@ -2,7 +2,8 @@
  * Lead activity tRPC router (Refs #101)
  *
  * Anyone who can read leads may read the timeline (including viewers from a parent
- * organization). Every query is scoped by organizationId and leadId (see ../service.ts).
+ * organization). Why an address was suppressed is shown only to those who can update settings
+ * (#365). Every query is scoped by organizationId and leadId (see ../service.ts).
  */
 
 import type { AppAbility } from '@/lib/auth/permissions';
@@ -30,6 +31,7 @@ export const leadActivityRouter = router({
       types: input.types,
       limit: input.limit,
       cursor: input.cursor,
+      showSuppressionReasons: ctx.ability.can('update', 'Settings'),
     });
   }),
 

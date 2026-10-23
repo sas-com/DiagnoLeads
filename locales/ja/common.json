@@ -3771,7 +3771,8 @@
         "not_requested": "メールの受け取りを拒否",
         "bounced": "メールが届かないため配信停止",
         "complained": "迷惑メールの報告により配信停止",
-        "staff": "担当者がメールの配信を停止"
+        "staff": "担当者がメールの配信を停止",
+        "withheld": "メールの配信を停止"
       }
     },
     "unverified": "本人未確認",
@@ -3844,6 +3845,7 @@
       "declinedAt": "{date}に確認画面で辞退されました",
       "expiredAt": "{date}に確認リンクの期限が切れました"
     },
+    "emailSuppressedNotice": "このアドレスにはメールを送らないでください。停止の理由は管理者が確認できます",
     "emailSource": {
       "one_click": "経路: メール内の配信停止リンク",
       "unsubscribe_page": "経路: 配信停止ページ",

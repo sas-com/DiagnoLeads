@@ -232,9 +232,14 @@ function ActivityItem({
           </p>
         )}
         {event.kind === 'result_email_requested' && <EmailRequestDetail event={event} />}
-        {event.kind === 'email_unsubscribed' && (
-          <p className="text-sm text-gray-600">{t(`emailSource.${event.source}`)}</p>
-        )}
+        {event.kind === 'email_unsubscribed' &&
+          (event.source ? (
+            <p className="text-sm text-gray-600">{t(`emailSource.${event.source}`)}</p>
+          ) : (
+            <p className="text-sm text-amber-700 dark:text-amber-400">
+              {t('emailSuppressedNotice')}
+            </p>
+          ))}
         {event.kind === 'contact_recorded' && event.note && (
           <p className="line-clamp-3 whitespace-pre-wrap break-words text-sm text-gray-700">
             {event.note}
@@ -295,7 +300,8 @@ export function EventTitle({ event }: { event: LeadActivityEvent }) {
     case 'contact_recorded':
       return t(`kinds.contact_recorded.${event.contactKind}`);
     case 'email_unsubscribed':
-      return t(`kinds.email_unsubscribed.${event.reason}`);
+      // The reason is only sent to those who can update settings (#365)
+      return t(`kinds.email_unsubscribed.${event.reason ?? 'withheld'}`);
     default:
       return t(`kinds.${event.kind}`);
   }

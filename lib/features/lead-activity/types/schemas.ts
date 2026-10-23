@@ -128,7 +128,7 @@ export interface BuilderDiagnosisSummary {
  * - waiting: the link of the confirmation mail has not been pressed yet
  * - confirmed: the link was pressed (the result mail follows)
  * - declined: withdrawn on the confirm page; notRequested when the address was then suppressed
- *   as "I did not ask for this"
+ *   as "I did not ask for this" (always false for those who may not see reasons, #365)
  * - expired: the link ran out before it was pressed
  * `at` is when that happened (null while waiting); for expired, when the link ran out
  */
@@ -205,8 +205,9 @@ export type LeadActivityEvent = EventBase &
     | { kind: 'result_email_sent'; consentId: string | null }
     | {
         kind: 'email_unsubscribed';
-        reason: EmailSuppressionReasonView;
-        source: EmailSuppressionSourceView;
+        /** null for those who may not see why an address was suppressed (#365) */
+        reason: EmailSuppressionReasonView | null;
+        source: EmailSuppressionSourceView | null;
       }
   );
 

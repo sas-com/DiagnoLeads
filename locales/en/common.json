@@ -3771,7 +3771,8 @@
         "not_requested": "Refused email (did not request it)",
         "bounced": "Email stopped: could not be delivered",
         "complained": "Email stopped: reported as spam",
-        "staff": "Email stopped by staff"
+        "staff": "Email stopped by staff",
+        "withheld": "Email stopped"
       }
     },
     "unverified": "Identity unverified",
@@ -3844,6 +3845,7 @@
       "declinedAt": "Declined on the confirm page on {date}",
       "expiredAt": "The confirmation link expired on {date}"
     },
+    "emailSuppressedNotice": "Do not email this address. Admins can see why it was stopped",
     "emailSource": {
       "one_click": "Via: unsubscribe link in the email",
       "unsubscribe_page": "Via: unsubscribe page",
