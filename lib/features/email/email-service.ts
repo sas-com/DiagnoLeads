@@ -10,6 +10,65 @@ import {
 import { safeUrl, sanitizeSubject } from '@/lib/email/templates/render';
 import { Resend } from 'resend';
 
+/**
+ * Resend refused the request, or did not answer in time. `code` is Resend's error name, or
+ * 'timeout'. The message is Resend's (or ours) and never carries the recipient.
+ *
+ * The two 409 errors of an idempotency key (#154), as Resend documents them
+ * (https://resend.com/docs/dashboard/emails/idempotency-keys and
+ * https://resend.com/docs/api-reference/errors; both names are in RESEND_ERROR_CODE_KEY of the
+ * resend package's types):
+ * - `invalid_idempotent_request`: "this idempotency key has already been used on a request that
+ *   had a different payload" within the last 24 hours; "retrying this request is useless without
+ *   changing the idempotency key or payload". An earlier request with this key reached Resend,
+ *   so the mail is taken as delivered: `isIdempotentReplay`
+ * - `concurrent_idempotent_requests`: "another request with the same idempotency key is in
+ *   progress"; "it is safe to retry this request later". Nothing is known yet about the earlier
+ *   request, so this is an ordinary, retryable failure and never taken as sent
+ */
+export class EmailProviderError extends Error {
+  readonly code: string;
+  readonly statusCode: number | null;
+
+  constructor(code: string, statusCode: number | null, message: string) {
+    super(`Failed to send email: ${message}`);
+    this.name = 'EmailProviderError';
+    this.code = code;
+    this.statusCode = statusCode;
+  }
+
+  /** An earlier request with the same idempotency key went through (see above) */
+  get isIdempotentReplay(): boolean {
+    return this.code === 'invalid_idempotent_request';
+  }
+}
+
+/**
+ * How long sendEmail waits for Resend (#154). A request holding a lock and database connections
+ * must not wait for the whole maxDuration (30 s). A timeout is a failure; if the timed-out
+ * request did go through, the idempotency key keeps a retry from delivering twice.
+ */
+export const EMAIL_SEND_TIMEOUT_MS = 10_000;
+
+/**
+ * Resend's SDK (6.x) takes no AbortSignal for emails.send, so the wait is cut with a race: the
+ * request may still finish in the background, but nothing waits for it any more
+ */
+async function withTimeout<T>(request: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new EmailProviderError('timeout', null, `no answer from Resend in ${ms} ms`)),
+      ms
+    );
+  });
+  try {
+    return await Promise.race([request, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Initialize Resend client (lazy to handle missing API key)
 let resendClient: Resend | null = null;
 
@@ -86,12 +145,17 @@ export async function sendEmail(options: SendEmailOptions): Promise<{ id: string
     replyTo: options.replyTo,
     ...(headers ? { headers } : {}),
   };
-  const result = options.idempotencyKey
-    ? await client.emails.send(payload, { idempotencyKey: options.idempotencyKey })
-    : await client.emails.send(payload);
+  const request = options.idempotencyKey
+    ? client.emails.send(payload, { idempotencyKey: options.idempotencyKey })
+    : client.emails.send(payload);
+  const result = await withTimeout(request, EMAIL_SEND_TIMEOUT_MS);
 
   if (result.error) {
-    throw new Error(`Failed to send email: ${result.error.message}`);
+    throw new EmailProviderError(
+      result.error.name,
+      result.error.statusCode ?? null,
+      result.error.message
+    );
   }
 
   return { id: result.data?.id || '' };

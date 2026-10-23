@@ -53,6 +53,7 @@ describe('sign-in redirect for admin pages', () => {
     expect(signInRedirect(request('/ja/invite/tok'))).toBeNull();
     expect(signInRedirect(request('/ja/email/unsubscribe'))).toBeNull();
     expect(signInRedirect(request('/en/email/unsubscribe'))).toBeNull();
+    expect(signInRedirect(request('/ja/ax-diagnosis/email/confirm'))).toBeNull();
     expect(signInRedirect(request('/ja'))).toBeNull();
   });
 });

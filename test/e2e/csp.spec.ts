@@ -19,6 +19,8 @@ test.describe('Content Security Policy', () => {
     '/ja/ax-diagnosis',
     // Unsubscribe page of the respondent mail (#154)
     '/ja/email/unsubscribe',
+    // Confirm page of the result by email (#154)
+    '/ja/ax-diagnosis/email/confirm',
     '/ja/login',
   ]) {
     test(`${path} runs without a violation @smoke`, async ({ page }) => {

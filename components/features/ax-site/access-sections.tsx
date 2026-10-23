@@ -1,6 +1,7 @@
 import { AxDiagnosisFlow } from '@/components/features/ax-diagnosis/ax-diagnosis-flow';
 import { allowedEmailDomains } from '@/lib/email/allowed-recipients';
 import { COLUMN_INDEX_PATH, columnPath, columnsFor } from '@/lib/features/ax-site/columns';
+import { axResultEmailEnabled } from '@/lib/features/diagnostics/ax-migration/result-email-config';
 import { turnstileSiteKey } from '@/lib/features/diagnostics/turnstile';
 import {
   ArrowRight,
@@ -566,6 +567,7 @@ export async function AxAccessDiagnosisSection({ locale }: SectionProps) {
         privacyPolicyUrl={axPrivacyPolicyUrl()}
         turnstileSiteKey={turnstileSiteKey()}
         allowedEmailDomains={allowedEmailDomains()}
+        resultEmailEnabled={axResultEmailEnabled()}
         embedded
         initialPlatform="access"
         entry="ax-access-lp"

@@ -1,5 +1,6 @@
 import { AxDiagnosisFlow } from '@/components/features/ax-diagnosis/ax-diagnosis-flow';
 import { allowedEmailDomains } from '@/lib/email/allowed-recipients';
+import { axResultEmailEnabled } from '@/lib/features/diagnostics/ax-migration/result-email-config';
 import { turnstileSiteKey } from '@/lib/features/diagnostics/turnstile';
 import type { DiagnosticLocale } from '@/lib/features/diagnostics/types';
 import { cn } from '@/lib/utils';
@@ -498,6 +499,7 @@ export async function AxDiagnosisSection({ locale }: SectionProps) {
         privacyPolicyUrl={axPrivacyPolicyUrl()}
         turnstileSiteKey={turnstileSiteKey()}
         allowedEmailDomains={allowedEmailDomains()}
+        resultEmailEnabled={axResultEmailEnabled()}
         embedded
         entry="ax-lp"
       />

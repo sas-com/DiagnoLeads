@@ -4,7 +4,7 @@
  */
 import { emailSuppressions, respondentEmailSends } from '@/lib/db/schema';
 import { EmailRecipientNotAllowedError } from '@/lib/email/allowed-recipients';
-import type { SendEmailOptions } from '@/lib/features/email/email-service';
+import { EmailProviderError, type SendEmailOptions } from '@/lib/features/email/email-service';
 import {
   hashToken,
   isSuppressed,
@@ -269,6 +269,42 @@ describe('sendRespondentEmail', () => {
     const logged = JSON.stringify(errorLog.mock.calls);
     expect(logged).not.toContain('taro@example.com');
     expect(logged).not.toContain('https://app.example.com/');
+  });
+
+  it("answers already_sent for Resend's idempotent replay (409) and records this attempt as failed", async () => {
+    sendEmail.mockRejectedValue(
+      new EmailProviderError('invalid_idempotent_request', 409, 'Same key, other payload')
+    );
+    const { db, updates } = fakeDb();
+    const result = await sendRespondentEmail(db, { sendEmail }, { ...input, idempotencyKey: 'k-1' });
+    expect(result).toEqual({ outcome: 'already_sent', sendId: 'row-1' });
+    // This attempt's unsubscribe token was never delivered: the row is not 'sent'
+    expect(updates).toEqual([
+      { table: respondentEmailSends, set: { status: 'failed', errorCode: 'idempotent_replay' } },
+    ]);
+  });
+
+  it('treats a 409 without an idempotency key, or another Resend error, as a failure', async () => {
+    sendEmail.mockRejectedValue(
+      new EmailProviderError('invalid_idempotent_request', 409, 'Same key, other payload')
+    );
+    const { db } = fakeDb();
+    expect(await sendRespondentEmail(db, { sendEmail }, input)).toMatchObject({
+      outcome: 'failed',
+      errorCode: 'send_failed',
+    });
+    sendEmail.mockRejectedValue(new EmailProviderError('concurrent_idempotent_requests', 409, 'x'));
+    expect(
+      await sendRespondentEmail(fakeDb().db, { sendEmail }, { ...input, idempotencyKey: 'k-1' })
+    ).toMatchObject({ outcome: 'failed', errorCode: 'send_failed' });
+  });
+
+  it('records a send that hit the time limit as send_timeout', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    sendEmail.mockRejectedValue(new EmailProviderError('timeout', null, 'no answer'));
+    expect(
+      await sendRespondentEmail(fakeDb().db, { sendEmail }, { ...input, idempotencyKey: 'k-2' })
+    ).toMatchObject({ outcome: 'failed', errorCode: 'send_timeout' });
   });
 
   it('marks the row failed when the mail cannot be built', async () => {

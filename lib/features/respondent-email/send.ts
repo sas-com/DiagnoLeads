@@ -11,7 +11,7 @@
 import type { Database } from '@/lib/db/client';
 import { respondentEmailSends } from '@/lib/db/schema';
 import { EmailRecipientNotAllowedError } from '@/lib/email/allowed-recipients';
-import type { SendEmailOptions } from '@/lib/features/email/email-service';
+import { EmailProviderError, type SendEmailOptions } from '@/lib/features/email/email-service';
 import { eq } from 'drizzle-orm';
 import { normaliseEmail } from './normalize';
 import { isSuppressed } from './suppression';
@@ -54,6 +54,14 @@ export interface SendRespondentEmailInput {
 
 export type SendRespondentEmailResult =
   | { outcome: 'sent'; sendId: string; messageId: string }
+  /**
+   * Resend refused a retry because the idempotency key was already used for another payload
+   * (each attempt carries its own unsubscribe token): the earlier attempt went out. This
+   * attempt's row is recorded as 'failed' with the error code 'idempotent_replay' (see
+   * IDEMPOTENT_REPLAY); the earlier row keeps the token of the delivered mail, so its
+   * unsubscribe link still works
+   */
+  | { outcome: 'already_sent'; sendId: string }
   | { outcome: 'suppressed'; sendId: string }
   | { outcome: 'failed'; sendId: string | null; errorCode: RespondentEmailErrorCode };
 
@@ -61,7 +69,21 @@ export type RespondentEmailErrorCode =
   | 'invalid_address'
   | 'build_failed'
   | 'recipient_not_allowed'
+  | 'send_timeout'
   | 'send_failed';
+
+/**
+ * The error code of a send row whose attempt Resend refused as an idempotent replay: the row is
+ * 'failed' (nothing was delivered by it) but an earlier attempt with the same key went out, so
+ * a check for "a mail already went out" must count it like 'sent' and 'pending'
+ */
+export const IDEMPOTENT_REPLAY = 'idempotent_replay';
+/**
+ * Error code of an attempt that hit the send time limit: Resend may still have delivered it.
+ * Callers whose retries would carry a different idempotency key (a new confirmation token)
+ * must count it as possibly sent, or the respondent gets two mails and the first link breaks
+ */
+export const SEND_TIMEOUT = 'send_timeout';
 
 /** The database or a transaction of it */
 export type RespondentEmailDatabase = Pick<Database, 'select' | 'insert' | 'update'>;
@@ -118,7 +140,17 @@ export async function sendRespondentEmail(
     });
     messageId = result.id;
   } catch (error) {
+    if (input.idempotencyKey && error instanceof EmailProviderError && error.isIdempotentReplay) {
+      // This attempt delivered nothing (its unsubscribe token never left the server), so its row
+      // is 'failed'; the error code tells callers that an earlier attempt went out
+      await db
+        .update(respondentEmailSends)
+        .set({ status: 'failed', errorCode: IDEMPOTENT_REPLAY })
+        .where(eq(respondentEmailSends.id, sendId));
+      return { outcome: 'already_sent', sendId };
+    }
     if (error instanceof EmailRecipientNotAllowedError) errorCode = 'recipient_not_allowed';
+    if (error instanceof EmailProviderError && error.code === 'timeout') errorCode = SEND_TIMEOUT;
     console.error('[respondent-email] send failed', { sendId, errorCode });
     await db
       .update(respondentEmailSends)

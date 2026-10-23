@@ -9,7 +9,7 @@ import {
 } from '@/lib/features/diagnostics/request-guard';
 import { unsubscribeByToken } from '@/lib/features/respondent-email';
 import { RESPONDENT_EMAIL_RATE_LIMITS } from '@/lib/features/respondent-email/limits';
-import { reportServerError } from '@/lib/ops/alert';
+import { reportRejectedRequest, reportServerError } from '@/lib/ops/alert';
 import { type NextRequest, NextResponse, after } from 'next/server';
 import { z } from 'zod';
 
@@ -58,7 +58,10 @@ export async function POST(req: NextRequest) {
       const limit = await consumeRateLimits(db, [
         { rule: RESPONDENT_EMAIL_RATE_LIMITS.unsubscribePerIp, identifier: ipBlock(ip) },
       ]);
-      if (!limit.allowed) return tooManyRequests(limit.retryAfterSeconds);
+      if (!limit.allowed) {
+        after(() => reportRejectedRequest('respondent-email/unsubscribe', 'rate_limited'));
+        return tooManyRequests(limit.retryAfterSeconds);
+      }
     }
 
     const status = await unsubscribeByToken(db, parsed.data.token, 'unsubscribe_page');
