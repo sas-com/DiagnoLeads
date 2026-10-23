@@ -76,12 +76,12 @@ describe('column content', () => {
   it('lists the index and every article for indexing, dated by the newest article', () => {
     expect(COLUMN_PATHS).toEqual([
       '/ax-migration/column',
+      '/ax-migration/column/access-file-types',
       '/ax-migration/column/access-office-support-end',
       '/ax-migration/column/access-fix-or-web',
       '/ax-migration/column/access-shared-folder',
       '/ax-migration/column/access-accde-only',
       '/ax-migration/column/access-2gb-limit',
-      '/ax-migration/column/access-file-types',
     ]);
     expect(columnUpdatedAt('/ax-migration/column')).toBe('2026-10-23');
     expect(columnUpdatedAt('/ax-migration/access')).toBeUndefined();
@@ -91,14 +91,14 @@ describe('column content', () => {
 describe('the Access series', () => {
   const series = COLUMNS.filter((column) => column.slug !== 'access-office-support-end');
 
-  it('is listed in reading order after the support-end article', () => {
+  it('is listed in reading order: the file types first (#372), then the support-end article', () => {
     expect(COLUMNS.map((column) => column.slug)).toEqual([
+      'access-file-types',
       'access-office-support-end',
       'access-fix-or-web',
       'access-shared-folder',
       'access-accde-only',
       'access-2gb-limit',
-      'access-file-types',
     ]);
   });
 

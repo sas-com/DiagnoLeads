@@ -3232,7 +3232,7 @@
       "title": "Which Access tools we cover",
       "lead": "You can consult us about a single tool.",
       "items": {
-        "files": ".mdb and .accdb files",
+        "files": ".mdb and .accdb files (also when only .accde or .mde files are left)",
         "versions": "From older versions to Microsoft 365",
         "vba": "With little VBA or with a lot",
         "links": "Linked to SQL Server or other databases, or to other systems",

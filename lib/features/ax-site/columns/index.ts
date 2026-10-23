@@ -17,16 +17,17 @@ import {
 export * from './types';
 
 /**
- * Published articles, in reading order (the list page and the related links follow it): why to
- * act, how to choose, the problems one by one, then how to tell the files apart (#367)
+ * Published articles, in reading order (the list page and the related links follow it): how to
+ * tell the files apart first, for readers who are not sure their tool is Access (#372), then why
+ * to act, how to choose and the problems one by one
  */
 export const COLUMNS: readonly Column[] = [
+  accessFileTypes,
   accessOfficeSupportEnd,
   accessFixOrWeb,
   accessSharedFolder,
   accessAccdeOnly,
   access2gbLimit,
-  accessFileTypes,
 ];
 
 /** The only locale with articles; other locales have no column pages (404) */
