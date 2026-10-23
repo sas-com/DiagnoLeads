@@ -21,6 +21,9 @@ import {
   History,
   ListPlus,
   Loader2,
+  MailCheck,
+  MailPlus,
+  MailX,
   MessageSquare,
   Pencil,
   Phone,
@@ -50,7 +53,17 @@ const KIND_ICONS: Record<LeadActivityEvent['kind'], ComponentType<{ className?: 
   sql_decided: Target,
   phase_reached: Flag,
   contact_recorded: Phone,
+  result_email_requested: MailPlus,
+  result_email_sent: MailCheck,
+  email_unsubscribed: MailX,
 };
+
+const EMAIL_REQUEST_BADGE_COLORS = {
+  waiting: 'blue',
+  confirmed: 'emerald',
+  declined: 'amber',
+  expired: 'gray',
+} as const;
 
 /** Pipeline fields whose values are labelled under the `pipeline` namespace */
 const PIPELINE_VALUE_FIELDS = new Set([
@@ -178,6 +191,13 @@ function ActivityItem({
           {event.kind === 'contact_recorded' && event.first && (
             <Badge color="emerald">{t('firstContact')}</Badge>
           )}
+          {event.kind === 'result_email_requested' && (
+            <Badge color={EMAIL_REQUEST_BADGE_COLORS[event.request.state]}>
+              {event.request.state === 'declined' && event.request.notRequested
+                ? t('emailRequest.notRequested')
+                : t(`emailRequest.${event.request.state}`)}
+            </Badge>
+          )}
         </div>
         <p className="text-xs text-gray-500">
           {dateOnly ? (
@@ -210,6 +230,10 @@ function ActivityItem({
               ? t('kinds.consultationWithSubmission')
               : t('kinds.consultationLater')}
           </p>
+        )}
+        {event.kind === 'result_email_requested' && <EmailRequestDetail event={event} />}
+        {event.kind === 'email_unsubscribed' && (
+          <p className="text-sm text-gray-600">{t(`emailSource.${event.source}`)}</p>
         )}
         {event.kind === 'contact_recorded' && event.note && (
           <p className="line-clamp-3 whitespace-pre-wrap break-words text-sm text-gray-700">
@@ -270,9 +294,31 @@ export function EventTitle({ event }: { event: LeadActivityEvent }) {
       return t('kinds.phase_reached', { phase: tPipeline(`dealPhase.${event.phase}`) });
     case 'contact_recorded':
       return t(`kinds.contact_recorded.${event.contactKind}`);
+    case 'email_unsubscribed':
+      return t(`kinds.email_unsubscribed.${event.reason}`);
     default:
       return t(`kinds.${event.kind}`);
   }
+}
+
+/** Where the respondent's request for the result by email stands (#154) */
+function EmailRequestDetail({
+  event,
+}: {
+  event: Extract<LeadActivityEvent, { kind: 'result_email_requested' }>;
+}) {
+  const t = useTranslations('leadActivity');
+  const format = useFormatter();
+  const { request } = event;
+  if (request.state === 'waiting') {
+    return <p className="text-sm text-gray-600">{t('emailRequest.waitingHelp')}</p>;
+  }
+  const date = format.dateTime(new Date(request.at), {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: TIME_ZONE,
+  });
+  return <p className="text-sm text-gray-600">{t(`emailRequest.${request.state}At`, { date })}</p>;
 }
 
 const COMPANY_SIZE_BADGE_COLORS = {

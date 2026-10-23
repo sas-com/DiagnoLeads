@@ -23,6 +23,18 @@ describe('listLeadActivitiesSchema', () => {
     ).toBe(true);
   });
 
+  it('accepts the respondent email kinds as a filter (#154)', () => {
+    expect(
+      listLeadActivitiesSchema.safeParse({
+        ...base,
+        types: ['result_email_requested', 'result_email_sent', 'email_unsubscribed'],
+      }).success
+    ).toBe(true);
+    expect(listLeadActivitiesSchema.safeParse({ ...base, types: ['email_sent'] }).success).toBe(
+      false
+    );
+  });
+
   it('still rejects other unknown keys', () => {
     expect(listLeadActivitiesSchema.safeParse({ ...base, other: 1 }).success).toBe(false);
     expect(listLeadActivitiesSchema.safeParse({ ...base, direction: 'sideways' }).success).toBe(

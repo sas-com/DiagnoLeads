@@ -26,6 +26,18 @@
  *   audit row records the same change (MQL / SQL: an audit row with that value at exactly that
  *   time; phase: an audit row setting that phase on that day in Japan). Those are shown as
  *   lead_updated instead, so a judgement is never listed twice
+ * - result_email_requested: respondent_email_consents of the lead (purpose 'ax_result_copy',
+ *   #154) at created_at, with where the double opt-in stands: confirmed (confirmed_at), declined
+ *   (withdrawn_at; "not requested" when the address is suppressed for that reason), expired
+ *   (confirm_expires_at passed unconfirmed) or waiting. Confirmation mails are not listed
+ * - result_email_sent: respondent_email_sends of the lead, kind 'result', that went out: one per
+ *   request ('sent', or a 'failed' attempt Resend refused as the replay of one that went out,
+ *   which is never listed on its own), at sent_at (the replay's created_at when no send of the
+ *   request recorded its success)
+ * - email_unsubscribed: email_suppressions of the organization for the lead's current address or
+ *   an address of its requests and result mails, at created_at with the reason and source (the
+ *   staff member for a staff suppression). Addresses, tokens, message ids and error codes are
+ *   never part of an event
  *
  * A lead has few events, so each source's newest rows (up to PER_SOURCE_LIMIT) are merged and
  * paginated in memory: newest first, ties broken by the event id (descending).
@@ -36,10 +48,13 @@ import {
   auditLogs,
   diagnosisVersions,
   diagnosticSubmissions,
+  emailSuppressions,
   leadComments,
   leadContactLogs,
   leadHearings,
   leads,
+  respondentEmailConsents,
+  respondentEmailSends,
   users,
 } from '@/lib/db/schema';
 import type { DiagnosisDefinition } from '@/lib/features/diagnosis-builder/definition';
@@ -55,21 +70,27 @@ import {
   type LeadAuditValue,
 } from '@/lib/features/leads/audit';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
+import { normaliseEmail } from '@/lib/features/respondent-email/normalize';
+import { IDEMPOTENT_REPLAY } from '@/lib/features/respondent-email/send';
 import { TRPCError } from '@trpc/server';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import type {
   BuilderDiagnosisSummary,
   DiagnosisIdentity,
   DiagnosisMqlLevelView,
   DiagnosisSummary,
+  EmailSuppressionReasonView,
+  EmailSuppressionSourceView,
   LeadActivityActor,
   LeadActivityCursor,
   LeadActivityEvent,
   LeadActivityKind,
   LeadActivityPage,
   LeadFieldChange,
+  ResultEmailRequestState,
   SubmissionAnswerView,
 } from './types/schemas';
+import { EMAIL_SUPPRESSION_REASONS, EMAIL_SUPPRESSION_SOURCES } from './types/schemas';
 
 type Database = typeof defaultDb;
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
@@ -92,6 +113,7 @@ async function findLead(db: Executor, organizationId: string, leadId: string) {
   const [lead] = await db
     .select({
       id: leads.id,
+      email: leads.email,
       source: leads.source,
       responses: leads.responses,
       mqlQualifiedAt: leads.mqlQualifiedAt,
@@ -254,6 +276,72 @@ function isAfterCursor(event: LeadActivityEvent, cursor: LeadActivityCursor): bo
   return at < cursorAt || (at === cursorAt && event.id < cursor.id);
 }
 
+/** Respondent mail of the lead: the AX result by email (#154) */
+const RESULT_EMAIL_PURPOSE = 'ax_result_copy';
+
+/** Where a request for the result by email stands at `now` */
+export function resultEmailRequestStateOf(
+  consent: {
+    confirmedAt: Date | null;
+    withdrawnAt: Date | null;
+    confirmExpiresAt: Date | null;
+  },
+  notRequested: boolean,
+  now: Date
+): ResultEmailRequestState {
+  if (consent.confirmedAt) return { state: 'confirmed', at: consent.confirmedAt };
+  if (consent.withdrawnAt) return { state: 'declined', at: consent.withdrawnAt, notRequested };
+  if (consent.confirmExpiresAt && consent.confirmExpiresAt.getTime() <= now.getTime()) {
+    return { state: 'expired', at: consent.confirmExpiresAt };
+  }
+  return { state: 'waiting', at: null };
+}
+
+interface ResultSendRow {
+  id: string;
+  consentId: string | null;
+  status: string;
+  errorCode: string | null;
+  createdAt: Date;
+  sentAt: Date | null;
+}
+
+/**
+ * Result mails that went out, one per request: a 'sent' row wins over an idempotent replay (the
+ * same mail refused a second time), and among several the earliest is kept
+ */
+export function resultEmailSentEvents(rows: ResultSendRow[]): LeadActivityEvent[] {
+  const wentOut = (row: ResultSendRow) =>
+    row.status === 'sent' || (row.status === 'failed' && row.errorCode === IDEMPOTENT_REPLAY);
+  const rank = (row: ResultSendRow) => (row.status === 'sent' ? 0 : 1);
+  const timeOf = (row: ResultSendRow) => row.sentAt ?? row.createdAt;
+  const chosen = new Map<string, ResultSendRow>();
+  for (const row of rows) {
+    if (!wentOut(row)) continue;
+    const key = row.consentId ?? `send:${row.id}`;
+    const current = chosen.get(key);
+    if (
+      !current ||
+      rank(row) < rank(current) ||
+      (rank(row) === rank(current) && timeOf(row).getTime() < timeOf(current).getTime())
+    ) {
+      chosen.set(key, row);
+    }
+  }
+  return [...chosen.entries()].map(([key, row]) => ({
+    id: `email-sent:${key}`,
+    kind: 'result_email_sent',
+    at: timeOf(row),
+    actor: null,
+    consentId: row.consentId,
+  }));
+}
+
+const suppressionReasonOf = (value: string): EmailSuppressionReasonView | null =>
+  EMAIL_SUPPRESSION_REASONS.find((reason) => reason === value) ?? null;
+const suppressionSourceOf = (value: string): EmailSuppressionSourceView | null =>
+  EMAIL_SUPPRESSION_SOURCES.find((source) => source === value) ?? null;
+
 /** Midnight in Japan of a 'YYYY-MM-DD' date */
 const jstMidnight = (date: string) => new Date(`${date}T00:00:00+09:00`);
 
@@ -265,98 +353,185 @@ export async function listLeadActivities(
     types?: LeadActivityKind[];
     limit: number;
     cursor?: LeadActivityCursor | null;
+    /** For the expiry of result email links; the current time by default */
+    now?: Date;
   }
 ): Promise<LeadActivityPage> {
   const { organizationId, leadId } = input;
+  const now = input.now ?? new Date();
   const lead = await findLead(db, organizationId, leadId);
 
-  const [submissions, hearings, comments, audits, contacts] = await Promise.all([
-    db
-      .select({
-        id: diagnosticSubmissions.id,
-        diagnosticKey: diagnosticSubmissions.diagnosticKey,
-        diagnosticVersion: diagnosticSubmissions.diagnosticVersion,
-        leadCreated: diagnosticSubmissions.leadCreated,
-        continuedFromSubmissionId: diagnosticSubmissions.continuedFromSubmissionId,
-        consultationRequestedAt: diagnosticSubmissions.consultationRequestedAt,
-        answers: diagnosticSubmissions.answers,
-        result: diagnosticSubmissions.result,
-        createdAt: diagnosticSubmissions.createdAt,
-        // Builder diagnoses: only the parts of the answered version the timeline shows
-        versionTitle: sql<string | null>`${diagnosisVersions.definition}->>'title'`,
-        versionResultTypes: sql<unknown>`${diagnosisVersions.definition}->'resultTypes'`,
-      })
-      .from(diagnosticSubmissions)
-      .leftJoin(diagnosisVersions, submissionVersion)
-      .where(
-        and(
-          eq(diagnosticSubmissions.organizationId, organizationId),
-          eq(diagnosticSubmissions.leadId, leadId)
+  const [submissions, hearings, comments, audits, contacts, consents, resultSends] =
+    await Promise.all([
+      db
+        .select({
+          id: diagnosticSubmissions.id,
+          diagnosticKey: diagnosticSubmissions.diagnosticKey,
+          diagnosticVersion: diagnosticSubmissions.diagnosticVersion,
+          leadCreated: diagnosticSubmissions.leadCreated,
+          continuedFromSubmissionId: diagnosticSubmissions.continuedFromSubmissionId,
+          consultationRequestedAt: diagnosticSubmissions.consultationRequestedAt,
+          answers: diagnosticSubmissions.answers,
+          result: diagnosticSubmissions.result,
+          createdAt: diagnosticSubmissions.createdAt,
+          // Builder diagnoses: only the parts of the answered version the timeline shows
+          versionTitle: sql<string | null>`${diagnosisVersions.definition}->>'title'`,
+          versionResultTypes: sql<unknown>`${diagnosisVersions.definition}->'resultTypes'`,
+        })
+        .from(diagnosticSubmissions)
+        .leftJoin(diagnosisVersions, submissionVersion)
+        .where(
+          and(
+            eq(diagnosticSubmissions.organizationId, organizationId),
+            eq(diagnosticSubmissions.leadId, leadId)
+          )
         )
-      )
-      .orderBy(desc(diagnosticSubmissions.createdAt))
-      .limit(PER_SOURCE_LIMIT),
-    db
-      .select({
-        id: leadHearings.id,
-        heldOn: leadHearings.heldOn,
-        createdBy: leadHearings.createdBy,
-        updatedBy: leadHearings.updatedBy,
-        createdAt: leadHearings.createdAt,
-        updatedAt: leadHearings.updatedAt,
-      })
-      .from(leadHearings)
-      .where(and(eq(leadHearings.organizationId, organizationId), eq(leadHearings.leadId, leadId)))
-      .orderBy(desc(leadHearings.updatedAt))
-      .limit(PER_SOURCE_LIMIT),
-    db
-      .select({
-        id: leadComments.id,
-        type: leadComments.type,
-        excerpt: sql<string>`left(${leadComments.content}, ${COMMENT_EXCERPT_LENGTH})`,
-        parentId: leadComments.parentId,
-        userId: leadComments.userId,
-        createdAt: leadComments.createdAt,
-      })
-      .from(leadComments)
-      .where(and(eq(leadComments.organizationId, organizationId), eq(leadComments.leadId, leadId)))
-      .orderBy(desc(leadComments.createdAt))
-      .limit(PER_SOURCE_LIMIT),
-    db
-      .select({
-        id: auditLogs.id,
-        action: auditLogs.action,
-        userId: auditLogs.userId,
-        changes: auditLogs.changes,
-        metadata: auditLogs.metadata,
-        createdAt: auditLogs.createdAt,
-      })
-      .from(auditLogs)
-      .where(
-        and(
-          eq(auditLogs.organizationId, organizationId),
-          eq(auditLogs.resource, LEAD_AUDIT_RESOURCE),
-          eq(auditLogs.resourceId, leadId),
-          inArray(auditLogs.action, ['create', 'update'])
+        .orderBy(desc(diagnosticSubmissions.createdAt))
+        .limit(PER_SOURCE_LIMIT),
+      db
+        .select({
+          id: leadHearings.id,
+          heldOn: leadHearings.heldOn,
+          createdBy: leadHearings.createdBy,
+          updatedBy: leadHearings.updatedBy,
+          createdAt: leadHearings.createdAt,
+          updatedAt: leadHearings.updatedAt,
+        })
+        .from(leadHearings)
+        .where(
+          and(eq(leadHearings.organizationId, organizationId), eq(leadHearings.leadId, leadId))
         )
-      )
-      .orderBy(desc(auditLogs.createdAt))
-      .limit(PER_SOURCE_LIMIT),
-    db
-      .select({
-        id: leadContactLogs.id,
-        kind: leadContactLogs.kind,
-        note: leadContactLogs.note,
-        createdBy: leadContactLogs.createdBy,
-        contactedAt: leadContactLogs.contactedAt,
-      })
-      .from(leadContactLogs)
-      .where(
-        and(eq(leadContactLogs.organizationId, organizationId), eq(leadContactLogs.leadId, leadId))
-      )
-      .orderBy(desc(leadContactLogs.contactedAt), desc(leadContactLogs.id))
-      .limit(PER_SOURCE_LIMIT),
-  ]);
+        .orderBy(desc(leadHearings.updatedAt))
+        .limit(PER_SOURCE_LIMIT),
+      db
+        .select({
+          id: leadComments.id,
+          type: leadComments.type,
+          excerpt: sql<string>`left(${leadComments.content}, ${COMMENT_EXCERPT_LENGTH})`,
+          parentId: leadComments.parentId,
+          userId: leadComments.userId,
+          createdAt: leadComments.createdAt,
+        })
+        .from(leadComments)
+        .where(
+          and(eq(leadComments.organizationId, organizationId), eq(leadComments.leadId, leadId))
+        )
+        .orderBy(desc(leadComments.createdAt))
+        .limit(PER_SOURCE_LIMIT),
+      db
+        .select({
+          id: auditLogs.id,
+          action: auditLogs.action,
+          userId: auditLogs.userId,
+          changes: auditLogs.changes,
+          metadata: auditLogs.metadata,
+          createdAt: auditLogs.createdAt,
+        })
+        .from(auditLogs)
+        .where(
+          and(
+            eq(auditLogs.organizationId, organizationId),
+            eq(auditLogs.resource, LEAD_AUDIT_RESOURCE),
+            eq(auditLogs.resourceId, leadId),
+            inArray(auditLogs.action, ['create', 'update'])
+          )
+        )
+        .orderBy(desc(auditLogs.createdAt))
+        .limit(PER_SOURCE_LIMIT),
+      db
+        .select({
+          id: leadContactLogs.id,
+          kind: leadContactLogs.kind,
+          note: leadContactLogs.note,
+          createdBy: leadContactLogs.createdBy,
+          contactedAt: leadContactLogs.contactedAt,
+        })
+        .from(leadContactLogs)
+        .where(
+          and(
+            eq(leadContactLogs.organizationId, organizationId),
+            eq(leadContactLogs.leadId, leadId)
+          )
+        )
+        .orderBy(desc(leadContactLogs.contactedAt), desc(leadContactLogs.id))
+        .limit(PER_SOURCE_LIMIT),
+      // Requests for the result by email (never the token or its hash)
+      db
+        .select({
+          id: respondentEmailConsents.id,
+          email: respondentEmailConsents.email,
+          confirmExpiresAt: respondentEmailConsents.confirmExpiresAt,
+          confirmedAt: respondentEmailConsents.confirmedAt,
+          withdrawnAt: respondentEmailConsents.withdrawnAt,
+          createdAt: respondentEmailConsents.createdAt,
+        })
+        .from(respondentEmailConsents)
+        .where(
+          and(
+            eq(respondentEmailConsents.organizationId, organizationId),
+            eq(respondentEmailConsents.leadId, leadId),
+            eq(respondentEmailConsents.purpose, RESULT_EMAIL_PURPOSE)
+          )
+        )
+        .orderBy(desc(respondentEmailConsents.createdAt))
+        .limit(PER_SOURCE_LIMIT),
+      // Result mails that went out (the error code only to recognise a replay; never shown)
+      db
+        .select({
+          id: respondentEmailSends.id,
+          consentId: respondentEmailSends.consentId,
+          email: respondentEmailSends.email,
+          status: respondentEmailSends.status,
+          errorCode: respondentEmailSends.errorCode,
+          createdAt: respondentEmailSends.createdAt,
+          sentAt: respondentEmailSends.sentAt,
+        })
+        .from(respondentEmailSends)
+        .where(
+          and(
+            eq(respondentEmailSends.organizationId, organizationId),
+            eq(respondentEmailSends.leadId, leadId),
+            eq(respondentEmailSends.kind, 'result'),
+            or(
+              eq(respondentEmailSends.status, 'sent'),
+              and(
+                eq(respondentEmailSends.status, 'failed'),
+                eq(respondentEmailSends.errorCode, IDEMPOTENT_REPLAY)
+              )
+            )
+          )
+        )
+        .orderBy(desc(respondentEmailSends.createdAt))
+        .limit(PER_SOURCE_LIMIT),
+    ]);
+
+  // Suppressions of the organization for any address the lead is or was mailed at
+  const addresses = new Set<string>();
+  const leadAddress = normaliseEmail(lead.email);
+  if (leadAddress) addresses.add(leadAddress);
+  for (const row of consents) addresses.add(row.email);
+  for (const row of resultSends) addresses.add(row.email);
+  const suppressions =
+    addresses.size === 0
+      ? []
+      : await db
+          .select({
+            id: emailSuppressions.id,
+            email: emailSuppressions.email,
+            reason: emailSuppressions.reason,
+            source: emailSuppressions.source,
+            createdBy: emailSuppressions.createdBy,
+            createdAt: emailSuppressions.createdAt,
+          })
+          .from(emailSuppressions)
+          .where(
+            and(
+              eq(emailSuppressions.organizationId, organizationId),
+              inArray(emailSuppressions.email, [...addresses])
+            )
+          )
+          .orderBy(desc(emailSuppressions.createdAt))
+          .limit(PER_SOURCE_LIMIT);
 
   // Staff names, only for the people who did something on this lead
   const userIds = new Set<string>();
@@ -367,6 +542,7 @@ export async function listLeadActivities(
   for (const row of comments) if (row.userId) userIds.add(row.userId);
   for (const row of audits) if (row.userId) userIds.add(row.userId);
   for (const row of contacts) if (row.createdBy) userIds.add(row.createdBy);
+  for (const row of suppressions) if (row.createdBy) userIds.add(row.createdBy);
   const people =
     userIds.size === 0
       ? []
@@ -504,6 +680,35 @@ export async function listLeadActivities(
       first: index === contacts.length - 1 && contacts.length < PER_SOURCE_LIMIT,
     });
   });
+
+  // Respondent mail (#154)
+  const notRequested = new Set(
+    suppressions.filter((row) => row.reason === 'not_requested').map((row) => row.email)
+  );
+  for (const row of consents) {
+    events.push({
+      id: `email-request:${row.id}`,
+      kind: 'result_email_requested',
+      at: row.createdAt,
+      actor: null,
+      consentId: row.id,
+      request: resultEmailRequestStateOf(row, notRequested.has(row.email), now),
+    });
+  }
+  events.push(...resultEmailSentEvents(resultSends));
+  for (const row of suppressions) {
+    const reason = suppressionReasonOf(row.reason);
+    const source = suppressionSourceOf(row.source);
+    if (!reason || !source) continue;
+    events.push({
+      id: `email-suppression:${row.id}`,
+      kind: 'email_unsubscribed',
+      at: row.createdAt,
+      actor: actor(row.createdBy),
+      reason,
+      source,
+    });
+  }
 
   // Dates on the lead, unless an audit row already shows the same change
   const recorded = (match: (after: Record<string, unknown>, at: Date) => boolean) =>

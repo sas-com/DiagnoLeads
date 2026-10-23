@@ -22,6 +22,9 @@ export const LEAD_ACTIVITY_KINDS = [
   'sql_decided',
   'phase_reached',
   'contact_recorded',
+  'result_email_requested',
+  'result_email_sent',
+  'email_unsubscribed',
 ] as const;
 export type LeadActivityKind = (typeof LEAD_ACTIVITY_KINDS)[number];
 
@@ -38,6 +41,7 @@ export const LEAD_ACTIVITY_FILTERS = {
     'phase_reached',
     'contact_recorded',
   ],
+  email: ['result_email_requested', 'result_email_sent', 'email_unsubscribed'],
 } as const satisfies Record<string, readonly LeadActivityKind[]>;
 export type LeadActivityFilter = keyof typeof LEAD_ACTIVITY_FILTERS;
 
@@ -119,6 +123,39 @@ export interface BuilderDiagnosisSummary {
   leadScore: number | null;
 }
 
+/**
+ * Where a respondent's request for the result by email stands (#154):
+ * - waiting: the link of the confirmation mail has not been pressed yet
+ * - confirmed: the link was pressed (the result mail follows)
+ * - declined: withdrawn on the confirm page; notRequested when the address was then suppressed
+ *   as "I did not ask for this"
+ * - expired: the link ran out before it was pressed
+ * `at` is when that happened (null while waiting); for expired, when the link ran out
+ */
+export type ResultEmailRequestState =
+  | { state: 'waiting'; at: null }
+  | { state: 'confirmed'; at: Date }
+  | { state: 'declined'; at: Date; notRequested: boolean }
+  | { state: 'expired'; at: Date };
+
+export const EMAIL_SUPPRESSION_REASONS = [
+  'unsubscribed',
+  'not_requested',
+  'bounced',
+  'complained',
+  'staff',
+] as const;
+export type EmailSuppressionReasonView = (typeof EMAIL_SUPPRESSION_REASONS)[number];
+
+export const EMAIL_SUPPRESSION_SOURCES = [
+  'one_click',
+  'unsubscribe_page',
+  'confirm_page',
+  'resend_webhook',
+  'staff',
+] as const;
+export type EmailSuppressionSourceView = (typeof EMAIL_SUPPRESSION_SOURCES)[number];
+
 export interface LeadFieldChange {
   field: string;
   before: LeadAuditValue;
@@ -163,6 +200,13 @@ export type LeadActivityEvent = EventBase &
         note: string | null;
         /** The earliest contact record of the lead (its first contact) */
         first: boolean;
+      }
+    | { kind: 'result_email_requested'; consentId: string; request: ResultEmailRequestState }
+    | { kind: 'result_email_sent'; consentId: string | null }
+    | {
+        kind: 'email_unsubscribed';
+        reason: EmailSuppressionReasonView;
+        source: EmailSuppressionSourceView;
       }
   );
 
