@@ -305,12 +305,12 @@ describe('column list page', () => {
         .getAllByRole('heading', { level: 2 })
         .map((heading) => within(heading).getByRole('link').getAttribute('href'))
     ).toEqual([
+      '/ja/ax-migration/column/access-file-types',
       '/ja/ax-migration/column/access-office-support-end',
       '/ja/ax-migration/column/access-fix-or-web',
       '/ja/ax-migration/column/access-shared-folder',
       '/ja/ax-migration/column/access-accde-only',
       '/ja/ax-migration/column/access-2gb-limit',
-      '/ja/ax-migration/column/access-file-types',
     ]);
     expect(screen.getAllByText('2026年10月22日')).toHaveLength(5);
     expect(screen.getAllByText('2026年10月23日')).toHaveLength(1);
@@ -329,12 +329,12 @@ describe('column list page', () => {
         )?.[1];
       })
     ).toEqual([
+      'access-file-types',
       'access-office-support-end',
       'access-fix-or-web',
       'access-shared-folder',
       'access-accde-only',
       'access-2gb-limit',
-      'access-file-types',
     ]);
   });
 
