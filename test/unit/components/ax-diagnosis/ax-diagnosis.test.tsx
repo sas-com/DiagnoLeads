@@ -973,8 +973,19 @@ describe('Result by email (#154)', () => {
       )
     );
 
+  it('shows the same text for a second request as for the first (the API answers accepted for both)', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { status: 'accepted' }));
+    const user = userEvent.setup();
+    renderResult();
+    await user.click(screen.getByRole('button', { name: '同意して確認のメールを受け取る' }));
+    expect(await screen.findByText('お申し込みを受け付けました')).toBeInTheDocument();
+    expect(screen.getByText(/確認のメールをお送りします。/)).toBeInTheDocument();
+    expect(screen.queryByText(/すでにお申し込み/)).not.toBeInTheDocument();
+  });
+
   it.each([
-    [jsonResponse(200, { status: 'already_requested' }), 'この診断結果の送付は、すでにお申し込みいただいています。お送りした確認のメールをご確認ください。'],
+    // An answer the API no longer gives is not taken as accepted
+    [jsonResponse(200, { status: 'already_requested' }), messages.axDiagnosis.result.email.failed],
     [jsonResponse(409, { status: 'closed' }), messages.axDiagnosis.result.email.closed],
     [jsonResponse(503, { status: 'unavailable' }), messages.axDiagnosis.result.email.unavailable],
     [jsonResponse(500, {}), messages.axDiagnosis.result.email.failed],

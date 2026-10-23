@@ -56,8 +56,10 @@ export type SendRespondentEmailResult =
   | { outcome: 'sent'; sendId: string; messageId: string }
   /**
    * Resend refused a retry because the idempotency key was already used for another payload
-   * (each attempt carries its own unsubscribe token): the earlier attempt went out. The earlier
-   * row keeps the token of the delivered mail, so its unsubscribe link still works
+   * (each attempt carries its own unsubscribe token): the earlier attempt went out. This
+   * attempt's row is recorded as 'failed' with the error code 'idempotent_replay' (see
+   * IDEMPOTENT_REPLAY); the earlier row keeps the token of the delivered mail, so its
+   * unsubscribe link still works
    */
   | { outcome: 'already_sent'; sendId: string }
   | { outcome: 'suppressed'; sendId: string }
@@ -68,6 +70,13 @@ export type RespondentEmailErrorCode =
   | 'build_failed'
   | 'recipient_not_allowed'
   | 'send_failed';
+
+/**
+ * The error code of a send row whose attempt Resend refused as an idempotent replay: the row is
+ * 'failed' (nothing was delivered by it) but an earlier attempt with the same key went out, so
+ * a check for "a mail already went out" must count it like 'sent' and 'pending'
+ */
+export const IDEMPOTENT_REPLAY = 'idempotent_replay';
 
 /** The database or a transaction of it */
 export type RespondentEmailDatabase = Pick<Database, 'select' | 'insert' | 'update'>;
@@ -124,14 +133,12 @@ export async function sendRespondentEmail(
     });
     messageId = result.id;
   } catch (error) {
-    if (
-      input.idempotencyKey &&
-      error instanceof EmailProviderError &&
-      error.code === 'invalid_idempotent_request'
-    ) {
+    if (input.idempotencyKey && error instanceof EmailProviderError && error.isIdempotentReplay) {
+      // This attempt delivered nothing (its unsubscribe token never left the server), so its row
+      // is 'failed'; the error code tells callers that an earlier attempt went out
       await db
         .update(respondentEmailSends)
-        .set({ status: 'sent', errorCode: 'idempotent_replay', sentAt: new Date() })
+        .set({ status: 'failed', errorCode: IDEMPOTENT_REPLAY })
         .where(eq(respondentEmailSends.id, sendId));
       return { outcome: 'already_sent', sendId };
     }

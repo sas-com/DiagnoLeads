@@ -32,10 +32,11 @@ const bodySchema = z.object({
  * mail of the double opt-in to the address of the submission's lead.
  *
  * Answers `{ status: 'accepted' }` whether the mail went out, the address is suppressed, a
- * confirmation already went to it in the last 24 hours, or test mode refused it, so nothing
- * about the address can be learnt. `already_requested` (200) for this submission, `closed` (409)
- * after the result screen's day, 404 for an unknown submission, `unavailable` (503) when the
- * organization's quota is used up or the mail could not be sent.
+ * confirmation already went to it in the last 24 hours, test mode refused it or this submission
+ * had already asked, so nothing about the address can be learnt. `closed` (409) after the result
+ * screen's day, 404 for an unknown submission, `unavailable` (503) when the organization's quota
+ * is used up, the mail could not be sent (pressing again sends a new confirmation) or the server
+ * is busy.
  *
  * 404 while AX_RESULT_EMAIL_ENABLED is not 'true' (the button is hidden then too).
  */
@@ -67,9 +68,11 @@ export async function POST(req: NextRequest) {
 
     const result = await requestAxResultEmail(db, { sendEmail }, parsed.data);
     switch (result.outcome) {
+      // The same answer: whether an earlier press sent a confirmation, or found the address
+      // suppressed, must not show
       case 'accepted':
       case 'already_requested':
-        return NextResponse.json({ status: result.outcome });
+        return NextResponse.json({ status: 'accepted' });
       case 'closed':
         return NextResponse.json({ error: 'Closed', status: 'closed' }, { status: 409 });
       case 'not_found':

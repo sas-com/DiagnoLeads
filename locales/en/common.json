@@ -654,7 +654,6 @@
           "body": "We will send you a confirmation email. Open the page with the button in that email and confirm there. The button works for {hours} hours after the email is sent.",
           "note": "We send at most one confirmation email to the same address every 24 hours. If it does not arrive, please also check your spam folder."
         },
-        "alreadyRequested": "You have already asked for this result. Please check the confirmation email we sent.",
         "closed": "Requests from this page close 24 hours after the diagnosis. Please run the diagnosis again to make a request.",
         "unavailable": "We cannot take requests at the moment. Please try again later.",
         "failed": "Your request could not be completed. Please try again later."

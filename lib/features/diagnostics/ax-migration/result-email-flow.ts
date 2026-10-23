@@ -8,7 +8,10 @@
  * - The first mail is the fixed-text confirmation; the result goes out only after its button
  *   (on the confirm page, by POST) is pressed. One confirmation per address and 24 hours
  * - Whether a mail went out, the address was suppressed, a confirmation was sent in the last
- *   24 hours or test mode refused the address, the request answers the same 'accepted'
+ *   24 hours, test mode refused the address or this submission had already asked, the API
+ *   answers the same 'accepted' (the outcome below tells them apart for tests and logs only)
+ * - A confirmation that could not be sent keeps its consent: pressing the button again sends a
+ *   new confirmation (with a new link) for the same consent
  *
  * Neither the address nor a token is logged.
  */
@@ -23,6 +26,7 @@ import { isAllowedEmail as defaultIsAllowedEmail } from '@/lib/email/allowed-rec
 import { axConsultationUrl } from '@/lib/features/ax-site/contact';
 import type { AxMailLocale } from '@/lib/features/ax-site/sender-identity';
 import {
+  IDEMPOTENT_REPLAY,
   type RespondentEmailDeps,
   hashToken,
   newToken,
@@ -31,17 +35,16 @@ import {
   suppress,
   unsubscribeUrls,
 } from '@/lib/features/respondent-email';
-import { and, eq, gt, gte, inArray, isNull, sql } from 'drizzle-orm';
+import { and, eq, gt, gte, inArray, isNull, or, sql } from 'drizzle-orm';
 import { consumeRateLimits } from '../rate-limit';
 import { AX_MIGRATION_DIAGNOSTIC_KEY } from './definition';
 import { type AxMigrationResult, toPublicResult } from './evaluate';
 import { AX_RATE_LIMITS } from './limits';
+import { buildAxResultConfirmationEmail, buildAxResultEmail } from './result-email';
 import {
   AX_RESULT_EMAIL_CONFIRM_TTL_HOURS,
   AX_RESULT_EMAIL_CONSENT_VERSION,
-  buildAxResultConfirmationEmail,
-  buildAxResultEmail,
-} from './result-email';
+} from './result-email-config';
 import { RESULT_SCREEN_WINDOW_MS } from './submission-service';
 
 const HOUR = 60 * 60 * 1000;
@@ -65,13 +68,25 @@ function baseUrlOf(deps: AxResultEmailDeps): string {
   return (deps.baseUrl ?? process.env.NEXT_PUBLIC_APP_URL ?? '').trim().replace(/\/+$/, '');
 }
 
+/**
+ * A send that went out or may have: 'sent', 'pending' (the outcome was never recorded), or an
+ * attempt Resend refused as the replay of one that went out (see IDEMPOTENT_REPLAY)
+ */
+const wentOut = () =>
+  or(
+    inArray(respondentEmailSends.status, ['sent', 'pending']),
+    eq(respondentEmailSends.errorCode, IDEMPOTENT_REPLAY)
+  );
+
 const BUSY = Symbol('busy');
 
 /**
  * Lock-holding operations running at once in this server instance. Each holds one connection
  * for its lock and needs another for its work, so without a cap a burst could take every
- * connection of the pool (10) for locks and wait forever for the work. Past the cap the request
- * answers 'unavailable' and the confirm page 'busy' (both ask to try again).
+ * connection of this instance's pool (10, lib/db/client) for locks and wait forever for the
+ * work. The cap protects that pool only, not the connections of Supabase as a whole (other
+ * instances have their own pools). Past the cap the request answers 'unavailable' and the
+ * confirm page 'busy' (both ask to try again).
  */
 const MAX_IN_FLIGHT = 4;
 let inFlight = 0;
@@ -114,14 +129,19 @@ async function holdingLock<T>(
 // ---------------------------------------------------------------------------------------------
 
 /**
- * What the request answers. 'accepted' covers every case the browser must not tell apart; the
- * delivery says what actually happened (for tests and the activity history, never the response).
+ * What the request did. The API answers 'accepted' for 'accepted' and 'already_requested' alike
+ * (the browser must not tell them apart); the delivery and 'already_requested' say what actually
+ * happened, for tests and logs, never the response.
  */
 export type RequestAxResultEmailResult =
   | {
       outcome: 'accepted';
       delivery: 'sent' | 'suppressed' | 'recent_confirmation' | 'not_allowed';
     }
+  /**
+   * This submission already asked, and its confirmation went out (or may have), was suppressed
+   * or refused by test mode, or the request was confirmed or withdrawn: nothing more is sent
+   */
   | { outcome: 'already_requested' }
   | { outcome: 'closed' }
   | { outcome: 'not_found' }
@@ -175,7 +195,11 @@ export async function requestAxResultEmail(
     'wait',
     async (): Promise<RequestAxResultEmailResult> => {
       const [existing] = await db
-        .select({ id: respondentEmailConsents.id })
+        .select({
+          id: respondentEmailConsents.id,
+          confirmedAt: respondentEmailConsents.confirmedAt,
+          withdrawnAt: respondentEmailConsents.withdrawnAt,
+        })
         .from(respondentEmailConsents)
         .where(
           and(
@@ -184,7 +208,27 @@ export async function requestAxResultEmail(
           )
         )
         .limit(1);
-      if (existing) return { outcome: 'already_requested' };
+      if (existing) {
+        if (existing.confirmedAt || existing.withdrawnAt) return { outcome: 'already_requested' };
+        // Its confirmation went out (or may have), was suppressed or was refused by test mode.
+        // Only a consent whose every confirmation failed to send gets another one
+        const [handled] = await db
+          .select({ id: respondentEmailSends.id })
+          .from(respondentEmailSends)
+          .where(
+            and(
+              eq(respondentEmailSends.consentId, existing.id),
+              eq(respondentEmailSends.kind, 'confirmation'),
+              or(
+                wentOut(),
+                eq(respondentEmailSends.status, 'suppressed'),
+                eq(respondentEmailSends.errorCode, 'recipient_not_allowed')
+              )
+            )
+          )
+          .limit(1);
+        if (handled) return { outcome: 'already_requested' };
+      }
 
       // One confirmation per address in 24 hours, whichever submission asked for it
       const [recent] = await db
@@ -195,7 +239,7 @@ export async function requestAxResultEmail(
             eq(respondentEmailSends.organizationId, organizationId),
             eq(respondentEmailSends.email, email),
             eq(respondentEmailSends.kind, 'confirmation'),
-            inArray(respondentEmailSends.status, ['sent', 'pending']),
+            wentOut(),
             gte(respondentEmailSends.createdAt, new Date(now.getTime() - CONFIRMATION_INTERVAL_MS))
           )
         )
@@ -215,22 +259,33 @@ export async function requestAxResultEmail(
       );
       if (!quota.allowed) return { outcome: 'unavailable' };
 
+      // A new link every time: only its hash is stored, so the link of a confirmation that was
+      // not sent cannot be sent again (and it never left the server)
       const confirm = newToken();
-      const [consent] = await db
-        .insert(respondentEmailConsents)
-        .values({
-          organizationId,
-          leadId,
-          submissionId: submission.id,
-          email,
-          purpose: PURPOSE,
-          consentVersion: AX_RESULT_EMAIL_CONSENT_VERSION,
-          consentedAt: now,
-          locale,
-          confirmTokenHash: confirm.hash,
-          confirmExpiresAt: new Date(now.getTime() + AX_RESULT_EMAIL_CONFIRM_TTL_HOURS * HOUR),
-        })
-        .returning({ id: respondentEmailConsents.id });
+      const request = {
+        consentVersion: AX_RESULT_EMAIL_CONSENT_VERSION,
+        consentedAt: now,
+        locale,
+        confirmTokenHash: confirm.hash,
+        confirmExpiresAt: new Date(now.getTime() + AX_RESULT_EMAIL_CONFIRM_TTL_HOURS * HOUR),
+      };
+      const [consent] = existing
+        ? await db
+            .update(respondentEmailConsents)
+            .set(request)
+            .where(eq(respondentEmailConsents.id, existing.id))
+            .returning({ id: respondentEmailConsents.id })
+        : await db
+            .insert(respondentEmailConsents)
+            .values({
+              organizationId,
+              leadId,
+              submissionId: submission.id,
+              email,
+              purpose: PURPOSE,
+              ...request,
+            })
+            .returning({ id: respondentEmailConsents.id });
 
       const base = baseUrlOf(deps);
       // The token is in the fragment: browsers never send it, so it reaches no server log
@@ -248,7 +303,12 @@ export async function requestAxResultEmail(
           ...unsubscribeUrls({ locale, baseUrl: base }),
           build: (unsubscribeUrl) =>
             buildAxResultConfirmationEmail({ locale, confirmUrl, unsubscribeUrl }),
-          idempotencyKey: `ax-confirm:${consent.id}`,
+          // Per link, not per consent: a retry after a failed send carries a new link (and a new
+          // unsubscribe token), so with the consent's key alone Resend would answer
+          // invalid_idempotent_request whenever it had recorded the failed attempt, and a mail
+          // that never went out would be taken as sent. The prefix of the link's hash is fixed
+          // for this attempt and tells nothing about the link (SHA-256 of 256 random bits)
+          idempotencyKey: `ax-confirm:${consent.id}:${confirm.hash.slice(0, 16)}`,
         }
       );
 
@@ -259,9 +319,8 @@ export async function requestAxResultEmail(
       if (sent.errorCode === 'recipient_not_allowed') {
         return { outcome: 'accepted', delivery: 'not_allowed' };
       }
-      // Not sent (Resend or the build failed): drop the consent so that the respondent can try
-      // again; the failed send row stays as the record of the attempt
-      await db.delete(respondentEmailConsents).where(eq(respondentEmailConsents.id, consent.id));
+      // Not sent (Resend failed, timed out or the build failed): the consent and the failed send
+      // row stay as the record of the request; pressing the button again sends a new link
       return { outcome: 'unavailable' };
     }
   );
@@ -279,7 +338,10 @@ export type ConfirmAxResultEmailOutcome =
   | 'already_sent'
   /** Unknown, used, withdrawn or expired token, or the diagnosis or lead is gone */
   | 'expired_or_invalid'
-  /** Another press of the same link is being handled */
+  /**
+   * Another press of the same link is being handled, or this server instance already runs as
+   * many lock-holding operations as it allows (MAX_IN_FLIGHT); either way, try again shortly
+   */
   | 'busy'
   /** The address was unsubscribed after the confirmation mail: nothing is sent */
   | 'unsubscribed'
@@ -289,8 +351,9 @@ export type ConfirmAxResultEmailOutcome =
 /**
  * The "receive the result" button of the confirm page. Presses of the same link are handled one
  * at a time (the second answers 'busy'), and a request yields at most one result mail: a result
- * send already recorded (sent or pending) answers 'already_sent', and Resend's idempotency key
- * (`ax-result:<consent>`) stops a retry after an unrecorded success.
+ * send already recorded (sent, pending, or an idempotent replay) answers 'already_sent', and
+ * Resend's idempotency key (`ax-result:<consent>`, the same for every attempt) stops a retry
+ * after an unrecorded success or a timeout.
  */
 export async function confirmAxResultEmail(
   db: Database,
@@ -343,7 +406,7 @@ export async function confirmAxResultEmail(
           and(
             eq(respondentEmailSends.consentId, consent.id),
             eq(respondentEmailSends.kind, 'result'),
-            inArray(respondentEmailSends.status, ['sent', 'pending'])
+            wentOut()
           )
         )
         .limit(1);

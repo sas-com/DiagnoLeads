@@ -1,8 +1,9 @@
 /**
  * The AX result by email (#154) on a real PostgreSQL: the request from the result screen
  * (recipient from the lead, one confirmation per address and 24 hours, suppression, quota, test
- * mode) and the confirm page (one result mail even for concurrent presses, expiry, decline,
- * Resend's idempotent replay, the result rebuilt from the stored submission).
+ * mode, a new confirmation after a failed one, the same API answer for a second request) and the
+ * confirm page (one result mail even for concurrent presses, expiry, decline, Resend's idempotent
+ * replay, the result rebuilt from the stored submission).
  * All names are made up; sendEmail is a fake, so no mail is sent.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
@@ -20,7 +21,7 @@ import {
   respondentEmailSends,
 } from '@/lib/db/schema';
 import { AX_RATE_LIMITS } from '@/lib/features/diagnostics/ax-migration/limits';
-import { AX_RESULT_EMAIL_CONSENT_VERSION } from '@/lib/features/diagnostics/ax-migration/result-email';
+import { AX_RESULT_EMAIL_CONSENT_VERSION } from '@/lib/features/diagnostics/ax-migration/result-email-config';
 import {
   type AxResultEmailDeps,
   confirmAxResultEmail,
@@ -30,13 +31,35 @@ import {
 import { submitAxMigrationDiagnosis } from '@/lib/features/diagnostics/ax-migration/submission-service';
 import { rateLimitKey } from '@/lib/features/diagnostics/rate-limit';
 import { EmailProviderError, type SendEmailOptions } from '@/lib/features/email/email-service';
-import { suppress } from '@/lib/features/respondent-email';
+import { hashToken, suppress } from '@/lib/features/respondent-email';
 import ja from '@/locales/ja/common.json';
 import { as400Answers } from '@/test/fixtures/ax-migration';
 import { and, eq, inArray } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
+import { NextRequest } from 'next/server';
 import postgres from 'postgres';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// The API route (one test) runs on this database with a fake sendEmail; every other test passes
+// its own sendEmail and test-mode check to the flow
+const routeDeps = vi.hoisted(() => ({
+  db: null as unknown,
+  sendEmail: null as unknown as (o: unknown) => Promise<{ id: string }>,
+}));
+vi.mock('@/lib/db/client', () => ({
+  get db() {
+    return routeDeps.db;
+  },
+}));
+vi.mock('@/lib/features/email/email-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/features/email/email-service')>()),
+  sendEmail: (o: unknown) => routeDeps.sendEmail(o),
+}));
+vi.mock('@/lib/email/allowed-recipients', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/email/allowed-recipients')>()),
+  isAllowedEmail: () => true,
+}));
+vi.mock('@/lib/ops/alert', () => ({ reportServerError: vi.fn() }));
 
 const url = process.env.TEST_DATABASE_URL;
 
@@ -115,12 +138,14 @@ describe.skipIf(!url)('AX result by email (PostgreSQL)', () => {
 
   beforeAll(async () => {
     org = await newOrg();
+    routeDeps.db = pg;
   });
 
   beforeEach(() => {
     sendEmail = vi
       .fn<(o: SendEmailOptions) => Promise<{ id: string }>>()
       .mockResolvedValue({ id: 'msg-1' });
+    routeDeps.sendEmail = (o) => sendEmail(o as SendEmailOptions);
   });
 
   afterAll(async () => {
@@ -152,7 +177,10 @@ describe.skipIf(!url)('AX result by email (PostgreSQL)', () => {
       expect(sendEmail).toHaveBeenCalledTimes(1);
       const options = sendEmail.mock.calls[0][0];
       expect(options.to).toBe(email.toLowerCase());
-      expect(options.idempotencyKey).toBe(`ax-confirm:${consent.id}`);
+      // Per link: the consent and the start of the link's hash
+      expect(options.idempotencyKey).toBe(
+        `ax-confirm:${consent.id}:${consent.confirmTokenHash?.slice(0, 16)}`
+      );
       expect(options.replyTo).toBeTruthy();
       // The token is in the fragment of the confirm page, and only its hash is stored
       const token = tokenOf(options);
@@ -173,6 +201,37 @@ describe.skipIf(!url)('AX result by email (PostgreSQL)', () => {
       const again = await requestAxResultEmail(pg, deps(), { submissionId, locale: 'ja', now });
       expect(again).toEqual({ outcome: 'already_requested' });
       expect(sendEmail).not.toHaveBeenCalled();
+    });
+
+    it('answers the API with the same accepted for a second request of the same submission', async () => {
+      const route = await import('@/app/api/diagnostics/ax-migration/result-email/route');
+      vi.stubEnv('AX_RESULT_EMAIL_ENABLED', 'true');
+      vi.stubEnv('VERCEL', '');
+      try {
+        // The route uses the real clock: a fresh organization and submission
+        const apiOrg = await newOrg();
+        const { submissionId } = await submit(`Api-${unique()}@example.co.jp`, apiOrg, new Date());
+        const post = () =>
+          route.POST(
+            new NextRequest('http://localhost/api/diagnostics/ax-migration/result-email', {
+              method: 'POST',
+              body: JSON.stringify({ submissionId, locale: 'ja' }),
+              headers: { 'content-type': 'application/json' },
+            })
+          );
+        const first = await post();
+        const second = await post();
+        expect(first.status).toBe(200);
+        expect(second.status).toBe(200);
+        expect(await first.json()).toEqual({ status: 'accepted' });
+        expect(await second.json()).toEqual({ status: 'accepted' });
+        // The first press sent the confirmation; the second (already_requested) sent nothing
+        expect(sendEmail).toHaveBeenCalledTimes(1);
+        const consent = await consentOf(submissionId);
+        expect((await sendsOf(consent.id)).map((s) => s.status)).toEqual(['sent']);
+      } finally {
+        vi.unstubAllEnvs();
+      }
     });
 
     it('sends no second confirmation to the same address within 24 hours', async () => {
@@ -260,21 +319,137 @@ describe.skipIf(!url)('AX result by email (PostgreSQL)', () => {
       expect(await consentOf(submissionId)).toBeUndefined();
     });
 
-    it('drops the consent when the mail cannot be sent, so the respondent can try again', async () => {
-      const { submissionId } = await submit(`Down-${unique()}@example.co.jp`);
+    it('keeps the consent when the mail cannot be sent, and a retry sends a new confirmation', async () => {
+      // Own organizations for these: the hourly quota of the shared one is not used up
+      const { submissionId } = await submit(`Down-${unique()}@example.co.jp`, await newOrg());
       sendEmail.mockRejectedValueOnce(new Error('Failed to send email: down'));
       vi.spyOn(console, 'error').mockImplementation(() => {});
 
       expect(await requestAxResultEmail(pg, deps(), { submissionId, locale: 'ja', now })).toEqual({
         outcome: 'unavailable',
       });
-      expect(await consentOf(submissionId)).toBeUndefined();
+      const kept = await consentOf(submissionId);
+      expect(kept).toBeDefined();
+      expect((await sendsOf(kept.id)).map((s) => s.status)).toEqual(['failed']);
+      const failedOptions = sendEmail.mock.calls[0][0];
+      const failedToken = tokenOf(failedOptions);
 
+      const retryAt = later(HOUR);
+      expect(
+        await requestAxResultEmail(pg, deps(), { submissionId, locale: 'en', now: retryAt })
+      ).toEqual({ outcome: 'accepted', delivery: 'sent' });
+      expect(sendEmail).toHaveBeenCalledTimes(2);
+
+      // The same consent, with a new link (and a new key: the payload changed)
+      const retried = await consentOf(submissionId);
+      expect(retried.id).toBe(kept.id);
+      expect(retried.confirmTokenHash).not.toBe(kept.confirmTokenHash);
+      expect(retried.confirmExpiresAt?.getTime()).toBe(retryAt.getTime() + 72 * HOUR);
+      expect(retried.locale).toBe('en');
+      const options = sendEmail.mock.calls[1][0];
+      const token = tokenOf(options);
+      expect(token).not.toBe(failedToken);
+      expect(options.idempotencyKey).toBe(
+        `ax-confirm:${kept.id}:${retried.confirmTokenHash?.slice(0, 16)}`
+      );
+      expect(options.idempotencyKey).not.toBe(failedOptions.idempotencyKey);
+      expect((await sendsOf(kept.id)).map((s) => s.status).sort()).toEqual(['failed', 'sent']);
+
+      // The link that never went out does not work; the new one does
+      sendEmail.mockClear();
+      expect(await confirmAxResultEmail(pg, deps(), { token: failedToken, now: retryAt })).toBe(
+        'expired_or_invalid'
+      );
+      expect(await confirmAxResultEmail(pg, deps(), { token, now: retryAt })).toBe('sent');
+
+      // Once a confirmation went out, another press sends nothing
+      sendEmail.mockClear();
+      expect(
+        await requestAxResultEmail(pg, deps(), { submissionId, locale: 'ja', now: retryAt })
+      ).toEqual({ outcome: 'already_requested' });
+      expect(sendEmail).not.toHaveBeenCalled();
+    });
+
+    it('keeps the 24-hour rule for a retry after a failed confirmation', async () => {
+      const email = `Retry24-${unique()}@example.co.jp`;
+      const retryOrg = await newOrg();
+      const first = await submit(email, retryOrg);
+      sendEmail.mockRejectedValueOnce(new Error('Failed to send email: down'));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      expect(
+        await requestAxResultEmail(pg, deps(), { submissionId: first.submissionId, locale: 'ja', now })
+      ).toEqual({ outcome: 'unavailable' });
+
+      // Another diagnosis with the address gets its confirmation meanwhile
+      const second = await submit(email, retryOrg, later(HOUR));
+      expect(
+        await requestAxResultEmail(pg, deps(), {
+          submissionId: second.submissionId,
+          locale: 'ja',
+          now: later(HOUR),
+        })
+      ).toEqual({ outcome: 'accepted', delivery: 'sent' });
+
+      sendEmail.mockClear();
+      expect(
+        await requestAxResultEmail(pg, deps(), {
+          submissionId: first.submissionId,
+          locale: 'ja',
+          now: later(2 * HOUR),
+        })
+      ).toEqual({ outcome: 'accepted', delivery: 'recent_confirmation' });
+      expect(sendEmail).not.toHaveBeenCalled();
+    });
+
+    it('counts a confirmation refused as an idempotent replay as sent', async () => {
+      const email = `Replay-${unique()}@example.co.jp`;
+      const replayOrg = await newOrg();
+      const { submissionId } = await submit(email, replayOrg);
+      sendEmail.mockRejectedValueOnce(
+        new EmailProviderError('invalid_idempotent_request', 409, 'Same key, other payload')
+      );
       expect(await requestAxResultEmail(pg, deps(), { submissionId, locale: 'ja', now })).toEqual({
         outcome: 'accepted',
         delivery: 'sent',
       });
-      expect(sendEmail).toHaveBeenCalledTimes(2);
+      const consent = await consentOf(submissionId);
+      expect(await sendsOf(consent.id)).toMatchObject([
+        { kind: 'confirmation', status: 'failed', errorCode: 'idempotent_replay' },
+      ]);
+
+      // Neither a retry of this request nor another diagnosis within 24 hours sends again
+      sendEmail.mockClear();
+      expect(await requestAxResultEmail(pg, deps(), { submissionId, locale: 'ja', now })).toEqual({
+        outcome: 'already_requested',
+      });
+      const other = await submit(email, replayOrg, later(HOUR));
+      expect(
+        await requestAxResultEmail(pg, deps(), {
+          submissionId: other.submissionId,
+          locale: 'ja',
+          now: later(HOUR),
+        })
+      ).toEqual({ outcome: 'accepted', delivery: 'recent_confirmation' });
+      expect(sendEmail).not.toHaveBeenCalled();
+    });
+
+    it('treats concurrent_idempotent_requests as a failure the respondent can retry', async () => {
+      const { submissionId } = await submit(`Busy-${unique()}@example.co.jp`, await newOrg());
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      sendEmail.mockRejectedValueOnce(
+        new EmailProviderError('concurrent_idempotent_requests', 409, 'In progress')
+      );
+      expect(await requestAxResultEmail(pg, deps(), { submissionId, locale: 'ja', now })).toEqual({
+        outcome: 'unavailable',
+      });
+      const consent = await consentOf(submissionId);
+      expect(await sendsOf(consent.id)).toMatchObject([
+        { status: 'failed', errorCode: 'send_failed' },
+      ]);
+      expect(await requestAxResultEmail(pg, deps(), { submissionId, locale: 'ja', now })).toEqual({
+        outcome: 'accepted',
+        delivery: 'sent',
+      });
     });
   });
 
@@ -373,9 +548,21 @@ describe.skipIf(!url)('AX result by email (PostgreSQL)', () => {
         'already_sent'
       );
       expect((await consentOf(consent.submissionId as string)).confirmTokenHash).toBeNull();
+      // This attempt delivered nothing: failed, with the code that says an earlier one went out
       expect((await sendsOf(consent.id)).filter((s) => s.kind === 'result')).toMatchObject([
-        { status: 'sent', errorCode: 'idempotent_replay' },
+        { status: 'failed', errorCode: 'idempotent_replay' },
       ]);
+
+      // Counted as sent: even with a working link, nothing more is sent
+      await pg
+        .update(respondentEmailConsents)
+        .set({ confirmTokenHash: hashToken(token) })
+        .where(eq(respondentEmailConsents.id, consent.id));
+      sendEmail.mockClear();
+      expect(await confirmAxResultEmail(pg, deps(), { token, now: later(HOUR) })).toBe(
+        'already_sent'
+      );
+      expect(sendEmail).not.toHaveBeenCalled();
     });
 
     it('answers already_sent when an earlier attempt is still pending, without sending', async () => {

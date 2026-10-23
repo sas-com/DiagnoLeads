@@ -5,12 +5,14 @@
 import { axSenderIdentity } from '@/lib/features/ax-site/sender-identity';
 import type { AxMigrationPublicResult } from '@/lib/features/diagnostics/ax-migration/evaluate';
 import {
-  AX_RESULT_EMAIL_CONSENT_KEYS,
-  AX_RESULT_EMAIL_CONSENT_VERSION,
   buildAxResultConfirmationEmail,
   buildAxResultEmail,
   withResultEmailUtm,
 } from '@/lib/features/diagnostics/ax-migration/result-email';
+import {
+  AX_RESULT_EMAIL_CONSENT_KEYS,
+  AX_RESULT_EMAIL_CONSENT_VERSION,
+} from '@/lib/features/diagnostics/ax-migration/result-email-config';
 import en from '@/locales/en/common.json';
 import ja from '@/locales/ja/common.json';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';

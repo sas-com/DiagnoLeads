@@ -271,18 +271,16 @@ describe('sendRespondentEmail', () => {
     expect(logged).not.toContain('https://app.example.com/');
   });
 
-  it("records Resend's idempotent replay (409) as already sent", async () => {
+  it("answers already_sent for Resend's idempotent replay (409) and records this attempt as failed", async () => {
     sendEmail.mockRejectedValue(
       new EmailProviderError('invalid_idempotent_request', 409, 'Same key, other payload')
     );
     const { db, updates } = fakeDb();
     const result = await sendRespondentEmail(db, { sendEmail }, { ...input, idempotencyKey: 'k-1' });
     expect(result).toEqual({ outcome: 'already_sent', sendId: 'row-1' });
+    // This attempt's unsubscribe token was never delivered: the row is not 'sent'
     expect(updates).toEqual([
-      {
-        table: respondentEmailSends,
-        set: { status: 'sent', errorCode: 'idempotent_replay', sentAt: expect.any(Date) },
-      },
+      { table: respondentEmailSends, set: { status: 'failed', errorCode: 'idempotent_replay' } },
     ]);
   });
 

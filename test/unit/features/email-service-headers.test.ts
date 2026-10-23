@@ -109,4 +109,69 @@ describe('sendEmail listUnsubscribe', () => {
       message: 'Failed to send email: Same key',
     });
   });
+
+  it('marks only invalid_idempotent_request as an idempotent replay', async () => {
+    const { EmailProviderError } = await import('@/lib/features/email/email-service');
+    expect(new EmailProviderError('invalid_idempotent_request', 409, 'x').isIdempotentReplay).toBe(
+      true
+    );
+    // Another request with the key is still in progress: retryable, nothing known to be sent
+    expect(
+      new EmailProviderError('concurrent_idempotent_requests', 409, 'x').isIdempotentReplay
+    ).toBe(false);
+    expect(new EmailProviderError('application_error', 500, 'x').isIdempotentReplay).toBe(false);
+  });
+});
+
+describe('sendEmail timeout', () => {
+  const saved = { ...process.env };
+
+  beforeEach(() => {
+    vi.resetModules();
+    vi.useFakeTimers();
+    send.mockReset();
+    process.env.RESEND_API_KEY = 'test-key';
+    process.env.APP_TEST_MODE = 'false';
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    process.env = { ...saved };
+  });
+
+  const base = { to: 'x@example.com', subject: 's', html: 'h' };
+
+  it('gives up on Resend after EMAIL_SEND_TIMEOUT_MS with a timeout error', async () => {
+    send.mockReturnValue(new Promise(() => {}));
+    const { sendEmail, EmailProviderError, EMAIL_SEND_TIMEOUT_MS } = await import(
+      '@/lib/features/email/email-service'
+    );
+    expect(EMAIL_SEND_TIMEOUT_MS).toBe(10_000);
+    const pending = sendEmail({ ...base, idempotencyKey: 'k' }).catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(EMAIL_SEND_TIMEOUT_MS - 1);
+    let settled = false;
+    void pending.then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    const error = await pending;
+    expect(error).toBeInstanceOf(EmailProviderError);
+    expect(error).toMatchObject({ code: 'timeout', statusCode: null, isIdempotentReplay: false });
+  });
+
+  it('answers normally before the limit and leaves no timer behind', async () => {
+    send.mockImplementation(
+      () =>
+        new Promise((resolve) =>
+          setTimeout(() => resolve({ data: { id: 'email-2' }, error: null }), 9_000)
+        )
+    );
+    const { sendEmail } = await import('@/lib/features/email/email-service');
+    const pending = sendEmail(base);
+    await vi.advanceTimersByTimeAsync(9_000);
+    await expect(pending).resolves.toEqual({ id: 'email-2' });
+    expect(vi.getTimerCount()).toBe(0);
+  });
 });

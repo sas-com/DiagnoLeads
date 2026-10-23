@@ -25,14 +25,7 @@ interface ResultEmailRequestProps {
   headingTag: 'h2' | 'h4';
 }
 
-type State =
-  | 'idle'
-  | 'sending'
-  | 'accepted'
-  | 'already_requested'
-  | 'closed'
-  | 'unavailable'
-  | 'error';
+type State = 'idle' | 'sending' | 'accepted' | 'closed' | 'unavailable' | 'error';
 
 const BUTTON =
   'inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-ax-teal-dark px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-ax-deep focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ax-teal-dark aria-disabled:cursor-wait aria-disabled:opacity-70';
@@ -75,10 +68,9 @@ export function ResultEmailRequest({
       }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = (await res.json()) as { status?: string };
-      if (json.status !== 'accepted' && json.status !== 'already_requested') {
-        throw new Error('Unexpected answer');
-      }
-      setState(json.status);
+      // One answer for every case, an earlier request for this diagnosis included (#154)
+      if (json.status !== 'accepted') throw new Error('Unexpected answer');
+      setState('accepted');
       requestAnimationFrame(() => doneRef.current?.focus());
       trackAxEvent('ax_result_email_request', { platform, status: json.status });
     } catch {
@@ -86,7 +78,7 @@ export function ResultEmailRequest({
     }
   };
 
-  const done = state === 'accepted' || state === 'already_requested';
+  const done = state === 'accepted';
 
   return (
     <div
@@ -104,18 +96,12 @@ export function ResultEmailRequest({
         <output ref={doneRef} tabIndex={-1} className="block space-y-2 outline-none">
           <span className="flex items-center gap-2 font-bold text-ax-teal-dark">
             <CheckCircle2 className="h-5 w-5 shrink-0" aria-hidden="true" />
-            {state === 'accepted' ? t('accepted.title') : t('alreadyRequested')}
+            {t('accepted.title')}
           </span>
-          {state === 'accepted' && (
-            <>
-              <span className="block text-sm leading-relaxed">
-                {t('accepted.body', { hours: AX_RESULT_EMAIL_CONFIRM_TTL_HOURS })}
-              </span>
-              <span className="block text-xs leading-relaxed text-gray-600">
-                {t('accepted.note')}
-              </span>
-            </>
-          )}
+          <span className="block text-sm leading-relaxed">
+            {t('accepted.body', { hours: AX_RESULT_EMAIL_CONFIRM_TTL_HOURS })}
+          </span>
+          <span className="block text-xs leading-relaxed text-gray-600">{t('accepted.note')}</span>
         </output>
       ) : (
         <>

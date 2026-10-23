@@ -25,13 +25,6 @@ import ja from '@/locales/ja/common.json';
 import type { AxMigrationPublicResult } from './evaluate';
 import { AX_RESULT_EMAIL_CONFIRM_TTL_HOURS } from './result-email-config';
 
-export {
-  AX_RESULT_EMAIL_CONFIRM_TTL_HOURS,
-  AX_RESULT_EMAIL_CONSENT_KEYS,
-  AX_RESULT_EMAIL_CONSENT_VERSION,
-  axResultEmailEnabled,
-} from './result-email-config';
-
 export interface BuiltEmail {
   subject: string;
   html: string;

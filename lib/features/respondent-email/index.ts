@@ -11,6 +11,7 @@ export {
   type SuppressionSource,
 } from './suppression';
 export {
+  IDEMPOTENT_REPLAY,
   sendRespondentEmail,
   type RespondentEmailContent,
   type RespondentEmailDeps,

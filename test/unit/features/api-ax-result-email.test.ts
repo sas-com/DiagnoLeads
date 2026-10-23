@@ -68,18 +68,31 @@ describe('POST /api/diagnostics/ax-migration/result-email', () => {
     );
   });
 
-  it.each(['sent', 'suppressed', 'recent_confirmation', 'not_allowed'])(
-    'answers the same accepted when the delivery was %s',
-    async (delivery) => {
-      requestMock.mockResolvedValue({ outcome: 'accepted', delivery });
-      const response = await requestRoute.POST(post(PATH, body));
-      expect(response.status).toBe(200);
-      expect(await response.json()).toEqual({ status: 'accepted' });
-    }
-  );
+  it.each([
+    { outcome: 'accepted', delivery: 'sent' },
+    { outcome: 'accepted', delivery: 'suppressed' },
+    { outcome: 'accepted', delivery: 'recent_confirmation' },
+    { outcome: 'accepted', delivery: 'not_allowed' },
+    // A second press for the same diagnosis: telling it apart would show whether the first one
+    // sent a confirmation (or found the address suppressed) or not
+    { outcome: 'already_requested' },
+  ])('answers the same accepted for %o', async (outcome) => {
+    requestMock.mockResolvedValue(outcome);
+    const response = await requestRoute.POST(post(PATH, body));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: 'accepted' });
+  });
+
+  it('cannot tell a second request for the same submission from a first one', async () => {
+    requestMock.mockResolvedValueOnce({ outcome: 'accepted', delivery: 'recent_confirmation' });
+    requestMock.mockResolvedValueOnce({ outcome: 'already_requested' });
+    const first = await requestRoute.POST(post(PATH, body));
+    const second = await requestRoute.POST(post(PATH, body));
+    expect(second.status).toBe(first.status);
+    expect(await second.text()).toBe(await first.text());
+  });
 
   it.each([
-    [{ outcome: 'already_requested' }, 200, { status: 'already_requested' }],
     [{ outcome: 'closed' }, 409, { error: 'Closed', status: 'closed' }],
     [{ outcome: 'not_found' }, 404, { error: 'Not found' }],
     [{ outcome: 'unavailable' }, 503, { error: 'Unavailable', status: 'unavailable' }],
