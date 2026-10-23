@@ -10,7 +10,8 @@ vi.mock('@/lib/features/diagnostics/rate-limit', () => ({ consumeRateLimit }));
 const env: Record<string, string | undefined> = {};
 vi.mock('@/lib/env', () => ({ env }));
 
-const { reportServerError, summarizeServerError } = await import('@/lib/ops/alert');
+const { REJECTION_ALERT_RULE, reportRejectedRequest, reportServerError, summarizeServerError } =
+  await import('@/lib/ops/alert');
 const database = {} as never;
 
 function dbError() {
@@ -119,5 +120,73 @@ describe('reportServerError', () => {
     env.AX_DIAGNOSIS_SALES_EMAIL = 'sales@sas-com.com';
     sendEmail.mockRejectedValueOnce(new Error('resend down'));
     await expect(reportServerError('y', dbError(), { database })).resolves.toBeUndefined();
+  });
+});
+
+describe('reportRejectedRequest (#351)', () => {
+  /** The shared count: refusals counted so far in this window, this one included */
+  function counts(rejections: number) {
+    consumeRateLimit.mockResolvedValue({
+      allowed: rejections <= REJECTION_ALERT_RULE.limit,
+      count: rejections,
+      retryAfterSeconds: 600,
+    });
+  }
+
+  it('counts each refusal per place and stays quiet up to the limit', async () => {
+    counts(REJECTION_ALERT_RULE.limit);
+    await reportRejectedRequest('ax-diagnosis/submit', 'verification_failed', { database });
+    expect(consumeRateLimit).toHaveBeenCalledWith(
+      database,
+      REJECTION_ALERT_RULE,
+      'ax-diagnosis/submit',
+      expect.any(Date)
+    );
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('emails once the limit is passed, with the place and the reason', async () => {
+    counts(REJECTION_ALERT_RULE.limit + 1);
+    await reportRejectedRequest('ax-diagnosis/submit', 'honeypot', { database });
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    // One write per refusal: the count itself decides the one mail of the window
+    expect(consumeRateLimit).toHaveBeenCalledTimes(1);
+    const mail = sendEmail.mock.calls[0]?.[0] as unknown as {
+      to: string[];
+      subject: string;
+      text: string;
+    };
+    expect(mail.to).toEqual(['sales@sas-com.com']);
+    expect(mail.subject).toContain('ax-diagnosis/submit');
+    expect(mail.text).toContain('honeypot');
+    expect(mail.text).toContain(String(REJECTION_ALERT_RULE.limit + 1));
+  });
+
+  it('sends at most one alert per place within the window', async () => {
+    counts(REJECTION_ALERT_RULE.limit + 2);
+    await reportRejectedRequest('ax-diagnosis/submit', 'rate_limited', { database });
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('counts nothing without a recipient or mail service', async () => {
+    env.AX_DIAGNOSIS_SALES_EMAIL = undefined;
+    counts(REJECTION_ALERT_RULE.limit + 1);
+    await reportRejectedRequest('ax-diagnosis/submit', 'honeypot', { database });
+    expect(consumeRateLimit).not.toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('never throws, and sends nothing when the count cannot be taken', async () => {
+    consumeRateLimit.mockRejectedValue(new Error('connection refused'));
+    await expect(
+      reportRejectedRequest('ax-diagnosis/submit', 'verification_failed', { database })
+    ).resolves.toBeUndefined();
+    expect(sendEmail).not.toHaveBeenCalled();
+
+    counts(REJECTION_ALERT_RULE.limit + 1);
+    sendEmail.mockRejectedValueOnce(new Error('resend down'));
+    await expect(
+      reportRejectedRequest('ax-diagnosis/submit', 'verification_failed', { database })
+    ).resolves.toBeUndefined();
   });
 });

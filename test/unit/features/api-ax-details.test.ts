@@ -22,6 +22,7 @@ vi.mock('next/server', async (importOriginal) => ({
 }));
 vi.mock('@/lib/ops/alert', () => ({
   reportServerError: (...args: unknown[]) => reportServerErrorMock(...args),
+  reportRejectedRequest: vi.fn(),
 }));
 vi.mock('@/lib/db/client', () => ({ db: {} }));
 vi.mock('@/lib/features/diagnostics/rate-limit', () => ({

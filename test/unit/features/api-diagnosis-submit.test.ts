@@ -53,6 +53,13 @@ vi.mock('next/server', async (importOriginal) => ({
     afterTasks.push(task);
   },
 }));
+
+// Refusals are reported after the response (#351)
+const { reportRejectedRequest } = vi.hoisted(() => ({ reportRejectedRequest: vi.fn() }));
+vi.mock('@/lib/ops/alert', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/ops/alert')>()),
+  reportRejectedRequest,
+}));
 vi.mock('@/lib/db/client', () => ({ db: fakeDb }));
 vi.mock('@/lib/features/diagnosis-builder/public-diagnosis', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/features/diagnosis-builder/public-diagnosis')>()),
@@ -263,7 +270,10 @@ describe('POST /api/diagnoses/[slug]/submit', () => {
     expect(json.submissionId).toEqual(expect.any(String));
     expect(json.result).toEqual({ axes: {}, overall: 0, tiers: {}, resultTypeId: null });
     expect(calls).toEqual([]);
-    expect(afterTasks).toHaveLength(0);
+    // Nothing stored; only the refusal is counted, after the response
+    expect(afterTasks).toHaveLength(1);
+    await runAfterTasks();
+    expect(reportRejectedRequest).toHaveBeenCalledWith('diagnosis/submit', 'honeypot');
   });
 
   it('accepts an empty honeypot', async () => {

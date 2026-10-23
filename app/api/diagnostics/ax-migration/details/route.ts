@@ -13,7 +13,7 @@ import {
   readJsonBody,
   tooManyRequests,
 } from '@/lib/features/diagnostics/request-guard';
-import { reportServerError } from '@/lib/ops/alert';
+import { reportRejectedRequest, reportServerError } from '@/lib/ops/alert';
 import { type NextRequest, NextResponse, after } from 'next/server';
 
 /**
@@ -42,7 +42,10 @@ export async function POST(req: NextRequest) {
     const ip = clientIp(req);
     if (ip) {
       const limit = await consumeRateLimit(db, AX_RATE_LIMITS.detailsPerIp, ipBlock(ip));
-      if (!limit.allowed) return tooManyRequests(limit.retryAfterSeconds);
+      if (!limit.allowed) {
+        after(() => reportRejectedRequest('ax-diagnosis/details', 'rate_limited'));
+        return tooManyRequests(limit.retryAfterSeconds);
+      }
     }
 
     const outcome = await addAxMigrationDetails(db, parsed.data.submissionId, parsed.data.answers);

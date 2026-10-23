@@ -21,6 +21,7 @@ import {
 } from '@/lib/features/diagnostics/request-guard';
 import { turnstileSiteKey, verifyTurnstile } from '@/lib/features/diagnostics/turnstile';
 import { DIAGNOSIS_TURNSTILE_ACTION } from '@/lib/features/diagnostics/turnstile-action';
+import { reportRejectedRequest } from '@/lib/ops/alert';
 import { type NextRequest, NextResponse, after } from 'next/server';
 
 /** Upper bound for the request body (answers incl. free text + contact + tracking) */
@@ -53,6 +54,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
 
   // Honeypot filled: answer like a success so bots learn nothing, but look at and store nothing
   if (typeof body === 'object' && body !== null && isFilled(Reflect.get(body, 'website'))) {
+    after(() => reportRejectedRequest('diagnosis/submit', 'honeypot'));
     return NextResponse.json({
       submissionId: crypto.randomUUID(),
       consultationRequested: false,
@@ -125,6 +127,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     DIAGNOSIS_TURNSTILE_ACTION
   );
   if (!verification.ok) {
+    if (verification.reason !== 'unavailable') {
+      after(() => reportRejectedRequest('diagnosis/submit', 'verification_failed'));
+    }
     return verification.reason === 'unavailable'
       ? NextResponse.json(
           { error: 'Verification unavailable', code: 'verification_unavailable' },
@@ -151,6 +156,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     );
     if (!limit.allowed) {
       console.warn(`Diagnosis submission: rate limit reached (${limit.rule})`);
+      after(() => reportRejectedRequest('diagnosis/submit', 'rate_limited'));
       return tooManyRequests(limit.retryAfterSeconds);
     }
 

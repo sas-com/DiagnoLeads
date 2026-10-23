@@ -22,6 +22,13 @@ vi.mock('next/server', async (importOriginal) => ({
     afterTasks.push(task);
   },
 }));
+
+// Refusals are reported after the response (#351)
+const { reportRejectedRequest } = vi.hoisted(() => ({ reportRejectedRequest: vi.fn() }));
+vi.mock('@/lib/ops/alert', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/ops/alert')>()),
+  reportRejectedRequest,
+}));
 vi.mock('@/lib/db/client', () => ({ db: {} }));
 vi.mock('@/lib/features/diagnostics/ax-migration/notify', () => ({
   notifyAxMigrationSubmission: (...args: unknown[]) => notifyMock(...args),
@@ -211,7 +218,26 @@ describe('POST /api/diagnostics/ax-migration', () => {
     expect(response.status).toBe(200);
     expect((await response.json()).result.difficulty).toBeDefined();
     expect(submitMock).not.toHaveBeenCalled();
-    expect(afterTasks).toHaveLength(0);
+    // Nothing stored; only the refusal is counted, after the response
+    expect(afterTasks).toHaveLength(1);
+    await runAfterTasks();
+    expect(reportRejectedRequest).toHaveBeenCalledWith('ax-diagnosis/submit', 'honeypot');
+  });
+
+  it('reports a failed bot check after the response, but not an unavailable one', async () => {
+    turnstileMock.mockResolvedValueOnce({ ok: false, reason: 'invalid' });
+    const refused = await POST(request({ ...validBody, answers: fullAnswers }));
+    expect(refused.status).toBe(403);
+    await runAfterTasks();
+    expect(reportRejectedRequest).toHaveBeenCalledWith('ax-diagnosis/submit', 'verification_failed');
+
+    reportRejectedRequest.mockClear();
+    afterTasks.length = 0;
+    turnstileMock.mockResolvedValueOnce({ ok: false, reason: 'unavailable' });
+    const unavailable = await POST(request({ ...validBody, answers: fullAnswers }));
+    expect(unavailable.status).toBe(503);
+    await runAfterTasks();
+    expect(reportRejectedRequest).not.toHaveBeenCalled();
   });
 
   it('accepts an empty honeypot', async () => {
