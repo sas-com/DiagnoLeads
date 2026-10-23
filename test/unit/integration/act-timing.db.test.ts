@@ -18,7 +18,7 @@ import {
   organizations,
   users,
 } from '@/lib/db/schema';
-import { recomputeRecentlyUpdated } from '@/lib/features/act-timing/service';
+import { RECOMPUTE_RECENT_DAYS, recomputeRecentlyUpdated } from '@/lib/features/act-timing/service';
 import { appRouter } from '@/server/routers/_app';
 import { and, eq, inArray } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
@@ -30,6 +30,14 @@ vi.mock('@/lib/db/rls', () => ({ setCurrentUser: vi.fn().mockResolvedValue(undef
 const url = process.env.TEST_DATABASE_URL;
 
 const done = (value: unknown) => ({ value, status: 'done', source: null });
+
+/**
+ * An update time just inside the morning run's window. The run takes every organization's
+ * recently updated leads, oldest first and a batch at a time; other DB tests running at the same
+ * time add their own leads, so a lead updated "now" could be left for the next run (#357).
+ */
+const earliestInWindow = () =>
+  new Date(Date.now() - (RECOMPUTE_RECENT_DAYS * 24 * 60 - 1) * 60 * 1000);
 
 describe.skipIf(!url)('when to act (PostgreSQL)', () => {
   const client = url ? postgres(url, { max: 2 }) : null;
@@ -156,7 +164,10 @@ describe.skipIf(!url)('when to act (PostgreSQL)', () => {
 
     const other = await leadWithHearing({ hardwareSupportEnd: done('2030-09') });
     expect(await tasksOf(other.leadId)).toHaveLength(1);
-    await pg.update(leads).set({ status: 'lost', lostReason: 'budget', updatedAt: new Date() }).where(eq(leads.id, other.leadId));
+    await pg
+      .update(leads)
+      .set({ status: 'lost', lostReason: 'budget', updatedAt: earliestInWindow() })
+      .where(eq(leads.id, other.leadId));
     // The morning run picks up the status change
     await recomputeRecentlyUpdated(pg);
     expect(await tasksOf(other.leadId)).toEqual([]);
@@ -168,7 +179,12 @@ describe.skipIf(!url)('when to act (PostgreSQL)', () => {
   it('estimates from the diagnosis answer through the morning run', async () => {
     const [lead] = await pg
       .insert(leads)
-      .values({ organizationId: org, email: `act-${unique()}@example.co.jp`, company: '診断だけ商事' })
+      .values({
+        organizationId: org,
+        email: `act-${unique()}@example.co.jp`,
+        company: '診断だけ商事',
+        updatedAt: earliestInWindow(),
+      })
       .returning();
     await pg.insert(diagnosticSubmissions).values({
       organizationId: org,
