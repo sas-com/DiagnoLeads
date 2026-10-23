@@ -6,6 +6,8 @@
 export const AX_SITE_LINKS = {
   operator: 'https://sas-com.com/',
   relatedService: 'https://maru2-dx.com/',
+  /** Order entry screen before and after the migration, switchable on the spot (#414) */
+  demo: 'https://as400-pre-migration.vercel.app/',
 } as const;
 
 // Contact and policy links live in lib so server code (respondent mail) can use them (#154)
@@ -20,6 +22,8 @@ export const AX_FOOTER_ID = 'ax-footer';
 /** Section anchors on the landing page */
 export const AX_SECTIONS = {
   problems: 'problems',
+  reasons: 'reasons',
+  demo: 'demo',
   steps: 'steps',
   targets: 'targets',
   /** Sections for readers of one host platform (#311) */

@@ -1,48 +1,33 @@
 import { cn } from '@/lib/utils';
+import Image from 'next/image';
 
 interface AxLogoProps {
-  name: string;
-  /** Company line under the name; omitted where the company is named nearby */
-  operator?: string;
-  /** White on the dark footer, like the footer logo of maru2-dx.com */
+  /** Empty where a link around the logo names it already */
+  alt: string;
+  /** White on the dark footer */
   tone?: 'light' | 'dark';
   className?: string;
   /** Smaller below 360px wide, so the header fits next to its buttons at 320px */
   narrow?: boolean;
 }
 
-/** Text logo: "AX" in the brand teal followed by the service name, like the maru2-dx.com logo */
-export function AxLogo({ name, operator, tone = 'light', className, narrow = false }: AxLogoProps) {
-  const onDark = tone === 'dark';
+// Both files are 1773×520 (STUDIO design, #414)
+const LOGO = {
+  light: '/images/ax-migration/logo.webp',
+  dark: '/images/ax-migration/logo-white.webp',
+} as const;
+
+/** "まるマルDX AIマイグレーション" logo of the STUDIO design */
+export function AxLogo({ alt, tone = 'light', className, narrow = false }: AxLogoProps) {
   return (
-    <span className={cn('inline-flex flex-col leading-none', className)}>
-      <span className="flex items-baseline gap-1">
-        <span
-          className={cn(
-            'font-ax-latin text-2xl font-black tracking-tight',
-            narrow && 'max-[359px]:text-xl',
-            onDark ? 'text-white' : 'text-ax-teal-dark'
-          )}
-        >
-          AX
-        </span>
-        <span
-          className={cn(
-            'text-lg font-bold',
-            narrow && 'max-[359px]:text-sm',
-            onDark ? 'text-white' : 'text-ax-ink'
-          )}
-        >
-          {name}
-        </span>
-      </span>
-      {operator && (
-        <span
-          className={cn('mt-1 text-xs font-medium', onDark ? 'text-white/90' : 'text-gray-600')}
-        >
-          {operator}
-        </span>
-      )}
-    </span>
+    <Image
+      src={LOGO[tone]}
+      alt={alt}
+      width={1773}
+      height={520}
+      sizes="180px"
+      priority={tone === 'light'}
+      className={cn('h-10 w-auto sm:h-12', narrow && 'max-[359px]:h-8', className)}
+    />
   );
 }

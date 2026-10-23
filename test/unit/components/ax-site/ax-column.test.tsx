@@ -206,7 +206,7 @@ describe('column article page', () => {
     const image = header.querySelector('img') as HTMLImageElement;
     // Empty alt: the h1 right below says the same
     expect(image).toHaveAttribute('alt', '');
-    expect(screen.queryByRole('img')).toBeNull();
+    expect(within(header).queryByRole('img')).toBeNull();
     expect(image).toHaveAttribute('width', '1200');
     expect(image).toHaveAttribute('height', '630');
     expect(decodeURIComponent(image.getAttribute('src') ?? '')).toContain(

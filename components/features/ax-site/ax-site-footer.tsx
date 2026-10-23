@@ -27,13 +27,11 @@ export async function AxSiteFooter({ locale }: { locale: string }) {
   ];
 
   return (
-    // ax-teal-dark rather than the lighter teal of maru2-dx.com: white small text needs 4.5:1
-    <footer id={AX_FOOTER_ID} className="bg-ax-teal-dark text-white">
+    <footer id={AX_FOOTER_ID} className="bg-ax-forest text-white">
       <div className="mx-auto max-w-6xl px-4 pb-8 pt-12 sm:px-6">
         <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
           <div className="space-y-3">
-            {/* The operator line below names the company already */}
-            <AxLogo name={tb('name')} tone="dark" />
+            <AxLogo alt={tb('logoAlt')} tone="dark" />
             <p className="text-sm font-bold">{t('operator')}</p>
             <address className="text-xs not-italic text-white/90">{t('address')}</address>
           </div>
