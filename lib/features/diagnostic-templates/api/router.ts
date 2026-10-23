@@ -308,6 +308,12 @@ export const diagnosticTemplatesRouter = router({
    * Get a template by slug (for public access)
    */
   getBySlug: organizationProcedure.input(getTemplateBySlugSchema).query(async ({ ctx, input }) => {
+    if (!ctx.ability.can('read', 'Lead')) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: '診断テンプレートを閲覧する権限がありません',
+      });
+    }
     const template = await ctx.db.query.diagnosticTemplates.findFirst({
       where: and(
         eq(diagnosticTemplates.slug, input.slug),
@@ -641,6 +647,13 @@ export const diagnosticTemplatesRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // Changes the counters of the template (#356)
+      if (!ctx.ability.can('update', 'Lead')) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: '診断テンプレートを更新する権限がありません',
+        });
+      }
       await ctx.db
         .update(diagnosticTemplates)
         .set({

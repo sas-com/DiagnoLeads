@@ -9,11 +9,34 @@ import { createQRCampaignSchema, generateQRCodeSchema } from './types';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
+/**
+ * Who may use this router (#356): anyone who can read leads may see the QR campaigns; creating,
+ * changing and deleting them is for those who can update settings
+ */
+const campaignViewProcedure = organizationProcedure.use(({ ctx, next }) => {
+  if (!ctx.ability.can('read', 'Lead')) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'You do not have permission to view QR campaigns',
+    });
+  }
+  return next();
+});
+const campaignEditProcedure = organizationProcedure.use(({ ctx, next }) => {
+  if (!ctx.ability.can('update', 'Settings')) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'You do not have permission to manage QR campaigns',
+    });
+  }
+  return next();
+});
+
 export const distributionRouter = router({
   /**
    * List all QR campaigns for the organization
    */
-  listCampaigns: organizationProcedure.query(async ({ ctx }) => {
+  listCampaigns: campaignViewProcedure.query(async ({ ctx }) => {
     const campaigns = await db.query.qrCampaigns.findMany({
       where: eq(qrCampaigns.organizationId, ctx.organization.id),
       orderBy: [desc(qrCampaigns.createdAt)],
@@ -34,7 +57,7 @@ export const distributionRouter = router({
   /**
    * Get a single QR campaign by ID
    */
-  getCampaign: organizationProcedure
+  getCampaign: campaignViewProcedure
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       const campaign = await db.query.qrCampaigns.findFirst({
@@ -66,7 +89,7 @@ export const distributionRouter = router({
   /**
    * Create a new QR campaign
    */
-  createCampaign: organizationProcedure
+  createCampaign: campaignEditProcedure
     .input(createQRCampaignSchema)
     .mutation(async ({ ctx, input }) => {
       // Verify template exists and belongs to organization
@@ -133,7 +156,7 @@ export const distributionRouter = router({
   /**
    * Update a QR campaign
    */
-  updateCampaign: organizationProcedure
+  updateCampaign: campaignEditProcedure
     .input(
       z.object({
         id: z.string().uuid(),
@@ -173,7 +196,7 @@ export const distributionRouter = router({
   /**
    * Delete a QR campaign
    */
-  deleteCampaign: organizationProcedure
+  deleteCampaign: campaignEditProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const existing = await db.query.qrCampaigns.findFirst({
@@ -195,7 +218,7 @@ export const distributionRouter = router({
   /**
    * Generate QR code for an existing campaign
    */
-  generateCampaignQR: organizationProcedure
+  generateCampaignQR: campaignViewProcedure
     .input(
       z.object({
         campaignId: z.string().uuid(),
@@ -229,7 +252,7 @@ export const distributionRouter = router({
   /**
    * Generate a QR code (on-demand, not stored)
    */
-  generateQRCode: organizationProcedure
+  generateQRCode: campaignViewProcedure
     .input(generateQRCodeSchema)
     .mutation(async ({ ctx, input }) => {
       // Verify template exists
@@ -269,7 +292,7 @@ export const distributionRouter = router({
   /**
    * Get scan statistics for a campaign
    */
-  getCampaignStats: organizationProcedure
+  getCampaignStats: campaignViewProcedure
     .input(z.object({ campaignId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       const campaign = await db.query.qrCampaigns.findFirst({
