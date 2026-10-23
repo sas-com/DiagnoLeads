@@ -1,14 +1,15 @@
 /**
- * Organization isolation of leads.bulkDelete (#356): a member of organization B who passes the ids
- * of organization A's leads deletes nothing (deletedCount 0), and A's leads stay as they were. The
- * other lead procedures are covered by tenant-scope.db.test.ts and the leads DB tests.
+ * Organization isolation of the leads router (#356): a member of organization B who passes the ids
+ * of organization A's leads gets NOT_FOUND (bulk changes skip them), and A's leads stay as they
+ * were. Members of A cannot be chosen for B's intake. assign is covered by lead-assignee.db.test.ts.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/dl_test \
- *     bunx vitest --run test/unit/integration/leads-bulk-delete-org-isolation.db.test.ts
+ *     bunx vitest --run test/unit/integration/leads-org-isolation.db.test.ts
  */
 import * as schema from '@/lib/db/schema';
 import { leads, organizationMembers, organizations, users } from '@/lib/db/schema';
+import { getIntakeUserIds } from '@/lib/features/leads/assignment';
 import { appRouter } from '@/server/routers/_app';
 import { eq, inArray } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
@@ -19,7 +20,7 @@ vi.mock('@/lib/db/rls', () => ({ setCurrentUser: vi.fn().mockResolvedValue(undef
 
 const url = process.env.TEST_DATABASE_URL;
 
-describe.skipIf(!url)('leads.bulkDelete organization isolation (PostgreSQL)', () => {
+describe.skipIf(!url)('leads organization isolation (PostgreSQL)', () => {
   const client = url ? postgres(url, { max: 2 }) : null;
   // biome-ignore lint/style/noNonNullAssertion: guarded by skipIf
   const pg = (client ? drizzle(client, { schema }) : null)!;
@@ -87,6 +88,38 @@ describe.skipIf(!url)('leads.bulkDelete organization isolation (PostgreSQL)', ()
   });
 
   const asB = () => ({ organizationId: orgB });
+
+  const calls: Record<string, () => Promise<unknown>> = {
+    get: () => adminB.leads.get({ ...asB(), id: leadA }),
+    update: () => adminB.leads.update({ ...asB(), id: leadA, name: 'Changed by B' }),
+    delete: () => adminB.leads.delete({ ...asB(), id: leadA }),
+  };
+
+  it.each(Object.keys(calls))('%s with a lead of another organization answers NOT_FOUND', async (name) => {
+    const before = await stateOfA();
+    await expect(calls[name]()).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(await stateOfA()).toEqual(before);
+  });
+
+  it('bulkUpdateStatus skips leads of another organization', async () => {
+    const before = await stateOfA();
+    await adminB.leads.bulkUpdateStatus({ ...asB(), ids: [leadA], status: 'won' });
+    expect(await stateOfA()).toEqual(before);
+  });
+
+  it("setIntake refuses members of another organization and keeps B's intake", async () => {
+    const [user] = await pg
+      .insert(users)
+      .values({ email: `leads-iso-a-${unique()}@example.com`, name: 'Member of A' })
+      .returning();
+    userIds.push(user.id);
+    await pg.insert(organizationMembers).values({ organizationId: orgA, userId: user.id, role: 'member' });
+    const before = await getIntakeUserIds(pg, orgB);
+    await expect(adminB.leads.setIntake({ ...asB(), userIds: [user.id] })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    expect(await getIntakeUserIds(pg, orgB)).toEqual(before);
+  });
 
   it('deletes nothing of another organization, even mixed with its own ids', async () => {
     const before = await stateOfA();
