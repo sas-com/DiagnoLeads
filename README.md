@@ -26,6 +26,51 @@ AI-Powered B2B Diagnostic Platform for **Holdings, Group Companies & Enterprise 
 
 👉 **[Read our Multi-Tenant Strategy](./docs/MULTI_TENANT_STRATEGY.md)** for detailed architecture
 
+## アクセス情報
+
+- **本番**: https://diagnoleads-v2.vercel.app （Vercel。`/` は `/ja` へ転送。英語は `/en/…`）
+- **テストモード中**（2026-10-29 の公開まで）: 社外のメールアドレスからは診断・相談を送れない。AX の2ページは検索エンジンに載らない。公開の準備と条件は #51
+- パスワード・API キー・テスト用アカウント・DB の接続先は、このリポジトリに書かない
+
+### 公開ページ（ログイン不要）
+
+| ページ | URL | 備考 |
+|---|---|---|
+| AX マイグレーション LP | [/ja/ax-migration](https://diagnoleads-v2.vercel.app/ja/ax-migration) | |
+| Access 版 LP | [/ja/ax-migration/access](https://diagnoleads-v2.vercel.app/ja/ax-migration/access) | |
+| コラム一覧 | [/ja/ax-migration/column](https://diagnoleads-v2.vercel.app/ja/ax-migration/column) | 記事は `/ja/ax-migration/column/<slug>`（`lib/features/ax-site/columns/`） |
+| AX 移行診断 | [/ja/ax-diagnosis](https://diagnoleads-v2.vercel.app/ja/ax-diagnosis) | 社員の紹介リンクは `?agency=<コード>` 付き（管理画面の「顧客探し」で出す） |
+| 診断結果メールの確認 | `/ja/ax-diagnosis/email/confirm` | メールのボタンから開く。結果メールは本番ではオフ（#154） |
+| 配信停止 | `/ja/email/unsubscribe` | メールのリンクから開く |
+| 診断ビルダーで作った診断 | `/ja/d/<slug>` | 公開中の診断だけ表示 |
+| 旧来の汎用診断 | `/ja/diagnostic` | AX 移行診断へ転送（#71） |
+| ブログ・FAQ | [/ja/blog](https://diagnoleads-v2.vercel.app/ja/blog)・[/ja/faq](https://diagnoleads-v2.vercel.app/ja/faq) | |
+
+### 管理画面（ログインが必要）
+
+| 画面 | URL | 備考 |
+|---|---|---|
+| ログイン | [/ja/login](https://diagnoleads-v2.vercel.app/ja/login) | 新規登録は招待リンク（`/ja/invite/<token>`、48時間有効）からだけ。招待は組織の owner・admin が「設定 → メンバー」で出す |
+| ダッシュボード | `/ja/dashboard` | |
+| リード | `/ja/leads` | 詳細は `/ja/leads/<leadId>`（ヒアリング・引き継ぎ） |
+| 顧客探し（AX） | `/ja/prospects` | 社員の記録・紹介リンク・営業への引き継ぎ |
+| 分析 | `/ja/analytics` | |
+| 設定 | `/ja/settings` | 組織・メンバー・紹介リンク（agency-links）・AX プレイブック・Webhook・QR キャンペーン・埋め込み・コンテンツ編集者 |
+| コンテンツ（ブログ・FAQ の編集） | `/ja/content/blog`・`/ja/content/faqs` | 編集できるのはコンテンツ編集者（「設定 → コンテンツ編集者」で指定）だけ。`/admin` はダッシュボードへ転送 |
+
+### API・運用
+
+| 項目 | 場所 | 備考 |
+|---|---|---|
+| 死活確認 | [/api/health](https://diagnoleads-v2.vercel.app/api/health) | `{"status":"ok"}` を返す（DB は見ない） |
+| 死活監視 | GitHub Actions「Uptime」（`.github/workflows/uptime.yml`） | 10分ごとに本番を確かめ、落ちたら `uptime` ラベルの Issue を立てる（#364） |
+| エラー通知 | `lib/ops/alert.ts` | サーバーエラーと、公開フォームでボットを断った回数が多いときに `OPS_ALERT_EMAIL` へメール（#227・#351） |
+| 埋め込み API | `/api/embed/v1/*` | 停止中（404）。`EMBED_API_ENABLED=true` で有効になる（#293） |
+| ホスティング | Vercel（プロジェクト `diagnoleads-v2`） | 環境変数は Vercel で管理。閲覧には権限が必要 |
+| データベース | Supabase（PostgreSQL） | 本番へのマイグレーションの適用はオーナーが行う |
+| 本番 DB の戻し手順 | [docs/runbooks/database-restore.md](./docs/runbooks/database-restore.md) | |
+| 個人情報保護方針 | https://sas-com.com/privacy/ | AX の診断と LP からリンク |
+
 ## Quick Start
 
 ```bash
@@ -351,7 +396,8 @@ docs(readme): update setup instructions
 ## Documentation
 
 - [Deployment Guide](./docs/deployment-guide.md) - Production deployment instructions
-- [Backup Strategy](./docs/backup-strategy.md) - Database backup and recovery
+- [Backup Strategy](./docs/backup-strategy.md) - Database backup and recovery (general, 2026-01)
+- [Database Restore Runbook](./docs/runbooks/database-restore.md) - Restoring the production database (Supabase)
 - [Multi-Tenant Strategy](./docs/MULTI_TENANT_STRATEGY.md) - Holdings/Group architecture
 - [Implementation Checklist](./IMPLEMENTATION_CHECKLIST.md) - Development progress
 
