@@ -1,0 +1,237 @@
+/**
+ * The site's own visit measurement (#412) against PostgreSQL: each view lands in the organization
+ * whose page it is, the IP address and the browser are never stored, a visitor counts once per
+ * day and cannot be matched across days, one visitor cannot flood the table, and the daily
+ * maintenance keeps the totals while deleting old views and past salts.
+ *
+ * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
+ *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/dl_test \
+ *     bunx vitest --run test/unit/integration/site-visits.db.test.ts
+ */
+import type { Database } from '@/lib/db/client';
+import * as schema from '@/lib/db/schema';
+import {
+  diagnoses,
+  diagnosisVersions,
+  organizations,
+  siteVisitDaily,
+  siteVisitSalts,
+  siteVisits,
+} from '@/lib/db/schema';
+import { hashDefinition } from '@/lib/features/diagnosis-builder/versions';
+import { maintainSiteVisits } from '@/lib/features/site-visits/maintenance';
+import { sitePageOf } from '@/lib/features/site-visits/pages';
+import { SITE_VISIT_RATE_LIMIT, recordSiteVisit } from '@/lib/features/site-visits/record';
+import { visitParamsOf } from '@/lib/features/site-visits/request';
+import { eq, inArray, sql } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cloudReadiness } from '../../fixtures/diagnosis-builder';
+
+// The organizations the pages belong to (AX site and default pages)
+const { owners } = vi.hoisted(() => ({
+  owners: { ax: crypto.randomUUID(), fallback: crypto.randomUUID() },
+}));
+vi.mock('@/lib/features/diagnostics/organization', () => ({
+  resolveDiagnosisOrganizationId: () => owners.ax,
+  resolveDefaultOrganizationId: () => owners.fallback,
+}));
+
+const url = process.env.TEST_DATABASE_URL;
+
+const CHROME =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36';
+const IPHONE =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
+const IP = '203.0.113.77';
+
+describe.skipIf(!url)('site visits (PostgreSQL)', () => {
+  const client = url ? postgres(url, { max: 2 }) : null;
+  // biome-ignore lint/style/noNonNullAssertion: guarded by skipIf
+  const pg = (client ? drizzle(client, { schema }) : null)! as unknown as Database;
+  const unique = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const organizationIds: string[] = [];
+  let axOrg: string;
+  let defaultOrg: string;
+  let builderOrg: string;
+  let builderSlug: string;
+
+  async function createOrganization(name: string, id?: string) {
+    const [org] = await pg
+      .insert(organizations)
+      .values({ id, name, slug: `visits-${unique()}` })
+      .returning();
+    organizationIds.push(org.id);
+    return org.id;
+  }
+
+  async function publishDiagnosis(organizationId: string, slug: string) {
+    const definition = cloudReadiness();
+    const [row] = await pg
+      .insert(diagnoses)
+      .values({ organizationId, slug, name: '架空の診断', status: 'published', draftDefinition: definition })
+      .returning({ id: diagnoses.id });
+    const [version] = await pg
+      .insert(diagnosisVersions)
+      .values({
+        diagnosisId: row.id,
+        organizationId,
+        version: 1,
+        definition,
+        definitionHash: hashDefinition(definition),
+        changeSummary: {
+          previousVersion: null,
+          questionsAdded: [],
+          questionsRemoved: [],
+          questionsChanged: [],
+          partsChanged: [],
+        },
+        publishedAt: new Date('2026-10-01T00:00:00Z'),
+      })
+      .returning({ id: diagnosisVersions.id });
+    await pg.update(diagnoses).set({ currentVersionId: version.id }).where(eq(diagnoses.id, row.id));
+  }
+
+  const view = (
+    path: string,
+    overrides: Partial<{ ip: string; userAgent: string; now: Date; search: string }> = {}
+  ) => {
+    const page = sitePageOf(path);
+    if (!page) throw new Error(`not measured: ${path}`);
+    return recordSiteVisit(pg, {
+      page,
+      params: visitParamsOf(overrides.search ?? ''),
+      referrerHost: 'www.google.com',
+      ip: overrides.ip ?? IP,
+      userAgent: overrides.userAgent ?? CHROME,
+      now: overrides.now,
+    });
+  };
+
+  const visitsOf = (organizationId: string) =>
+    pg.select().from(siteVisits).where(eq(siteVisits.organizationId, organizationId));
+
+  beforeAll(async () => {
+    axOrg = await createOrganization('計測 AX', owners.ax);
+    defaultOrg = await createOrganization('計測 既定', owners.fallback);
+    builderOrg = await createOrganization('計測 ビルダー');
+    builderSlug = `visits-${unique()}`.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    await publishDiagnosis(builderOrg, builderSlug);
+  });
+
+  beforeEach(async () => {
+    await pg.delete(siteVisits).where(inArray(siteVisits.organizationId, organizationIds));
+    await pg.delete(siteVisitDaily).where(inArray(siteVisitDaily.organizationId, organizationIds));
+    await pg.delete(siteVisitSalts);
+    await pg.execute(sql`delete from public_rate_limits where key like ${`${SITE_VISIT_RATE_LIMIT.name}:%`}`);
+  });
+
+  afterAll(async () => {
+    if (organizationIds.length > 0) {
+      await pg.delete(organizations).where(inArray(organizations.id, organizationIds));
+    }
+    await client?.end();
+  });
+
+  it("records each view in the organization whose page it is, decided on the server", async () => {
+    expect(await view('/ja/ax-migration', { search: '?utm_source=news&from=ax-column-end' })).toBe(
+      'recorded'
+    );
+    expect(await view('/ja/faq')).toBe('recorded');
+    expect(await view(`/ja/d/${builderSlug}`)).toBe('recorded');
+    expect(await view('/ja/d/not-published-anywhere')).toBe('no_organization');
+
+    const [ax] = await visitsOf(axOrg);
+    expect(ax).toMatchObject({
+      path: '/ja/ax-migration',
+      pageType: 'ax-lp',
+      referrerHost: 'www.google.com',
+      utmSource: 'news',
+      fromRef: 'ax-column-end',
+      device: 'desktop',
+    });
+    expect((await visitsOf(defaultOrg)).map((row) => row.pageType)).toEqual(['faq']);
+    expect((await visitsOf(builderOrg)).map((row) => row.pageType)).toEqual(['diagnosis']);
+  });
+
+  it('stores neither the IP address nor the browser, in the visits or the rate limits', async () => {
+    await view('/ja/ax-migration');
+    const dump = JSON.stringify([
+      await pg.select().from(siteVisits),
+      await pg.execute(sql`select * from public_rate_limits`),
+    ]);
+    expect(dump).not.toContain(IP);
+    expect(dump).not.toContain('Chrome/129');
+    expect(dump).not.toContain('Windows NT');
+  });
+
+  it('counts a visitor once a day and cannot match them across days', async () => {
+    const day1 = new Date('2026-10-23T03:00:00Z');
+    const day2 = new Date('2026-10-24T03:00:00Z');
+    await view('/ja/ax-migration', { now: day1 });
+    await view('/ja/ax-migration/access', { now: day1 });
+    await view('/ja/ax-migration', { now: day1, ip: '198.51.100.9', userAgent: IPHONE });
+    await view('/ja/ax-migration', { now: day2 });
+
+    const rows = await visitsOf(axOrg);
+    const day1Hashes = new Set(rows.filter((r) => r.day === '2026-10-23').map((r) => r.visitorHash));
+    expect(day1Hashes.size).toBe(2);
+    const [day2Row] = rows.filter((r) => r.day === '2026-10-24');
+    expect(day1Hashes.has(day2Row.visitorHash)).toBe(false);
+    expect(rows.find((r) => r.device === 'mobile')).toBeDefined();
+  });
+
+  it("keeps only the current day's salt", async () => {
+    await view('/ja/ax-migration', { now: new Date('2026-10-23T03:00:00Z') });
+    await view('/ja/ax-migration', { now: new Date('2026-10-24T03:00:00Z') });
+    const salts = await pg.select().from(siteVisitSalts);
+    expect(salts.map((row) => row.day)).toEqual(['2026-10-24']);
+  });
+
+  it('drops views past the limit of one visitor', async () => {
+    const now = new Date('2026-10-23T03:00:00Z');
+    for (let i = 0; i < SITE_VISIT_RATE_LIMIT.limit; i++) {
+      expect(await view('/ja/ax-migration', { now })).toBe('recorded');
+    }
+    expect(await view('/ja/ax-migration', { now })).toBe('rate_limited');
+    // Another visitor is not affected
+    expect(await view('/ja/ax-migration', { now, ip: '198.51.100.9' })).toBe('recorded');
+    expect(await visitsOf(axOrg)).toHaveLength(SITE_VISIT_RATE_LIMIT.limit + 1);
+  });
+
+  it('keeps the daily totals, then deletes views past 90 days and past salts', async () => {
+    const old = new Date('2026-07-01T03:00:00Z');
+    const recent = new Date('2026-10-22T03:00:00Z');
+    await view('/ja/ax-migration', { now: old });
+    await view('/ja/ax-migration', { now: old });
+    await view('/ja/ax-migration', { now: old, ip: '198.51.100.9' });
+    await view('/ja/ax-migration/access', { now: recent });
+
+    const result = await maintainSiteVisits(pg, new Date('2026-10-23T03:00:00Z'));
+    expect(result.deleted).toBe(3);
+
+    const totals = await pg
+      .select()
+      .from(siteVisitDaily)
+      .where(eq(siteVisitDaily.organizationId, axOrg));
+    expect(
+      totals.map(({ day, path, pageType, visitors, pageviews }) => ({ day, path, pageType, visitors, pageviews }))
+    ).toEqual(
+      expect.arrayContaining([
+        { day: '2026-07-01', path: '/ja/ax-migration', pageType: 'ax-lp', visitors: 2, pageviews: 3 },
+        { day: '2026-10-22', path: '/ja/ax-migration/access', pageType: 'ax-access-lp', visitors: 1, pageviews: 1 },
+      ])
+    );
+    expect((await visitsOf(axOrg)).map((row) => row.day)).toEqual(['2026-10-22']);
+    expect(await pg.select().from(siteVisitSalts)).toEqual([]);
+
+    // A second run recounts the same days without doubling them
+    await maintainSiteVisits(pg, new Date('2026-10-23T03:00:00Z'));
+    const again = await pg
+      .select()
+      .from(siteVisitDaily)
+      .where(eq(siteVisitDaily.organizationId, axOrg));
+    expect(again).toHaveLength(2);
+  });
+});

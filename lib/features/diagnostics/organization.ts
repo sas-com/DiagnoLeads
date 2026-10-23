@@ -8,3 +8,8 @@ import { env } from '@/lib/env';
 export function resolveDiagnosisOrganizationId(): string | null {
   return env.AX_DIAGNOSIS_ORGANIZATION_ID ?? env.DEFAULT_ORGANIZATION_ID ?? null;
 }
+
+/** Organization of the default public pages (top page, FAQ, the legacy diagnostic form) */
+export function resolveDefaultOrganizationId(): string | null {
+  return env.DEFAULT_ORGANIZATION_ID ?? null;
+}
