@@ -56,7 +56,7 @@ describe('ja wording (Refs #163)', () => {
     expect(ja.header.userDropdown.settings).toBe(ja.settings.organization.title);
   });
 
-  it('has the keys the personal settings, members and FAQ screens ask for', () => {
+  it('has the keys the personal settings and members screens ask for', () => {
     for (const key of [
       'description',
       'reset',
@@ -70,7 +70,6 @@ describe('ja wording (Refs #163)', () => {
     }
     expect(ja.settings.organization.roleOwner).toBe('オーナー');
     expect(ja.settings.members.totalMembers).toBe('メンバー数');
-    expect(ja.content.faqs.categories.features).toBeTruthy();
   });
 
   it('gives the icon-only header buttons Japanese names', () => {

@@ -40,9 +40,6 @@ export const env = createEnv({
     TURNSTILE_SITE_KEY: z.string().optional(),
     TURNSTILE_SECRET_KEY: z.string().optional(),
 
-    // FAQ / blog editors (comma-separated emails); unset = nobody can edit (#87)
-    CONTENT_EDITOR_EMAILS: z.string().optional(),
-
     // Legacy generic diagnosis form: off in production unless 'true' (#71)
     LEGACY_DIAGNOSTIC_FORM_ENABLED: z.string().optional(),
   },
@@ -75,7 +72,6 @@ export const env = createEnv({
     OPS_ALERT_EMAIL: process.env.OPS_ALERT_EMAIL,
     TURNSTILE_SITE_KEY: process.env.TURNSTILE_SITE_KEY,
     TURNSTILE_SECRET_KEY: process.env.TURNSTILE_SECRET_KEY,
-    CONTENT_EDITOR_EMAILS: process.env.CONTENT_EDITOR_EMAILS,
     LEGACY_DIAGNOSTIC_FORM_ENABLED: process.env.LEGACY_DIAGNOSTIC_FORM_ENABLED,
 
     // Client

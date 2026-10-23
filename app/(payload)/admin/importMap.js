@@ -22,18 +22,12 @@ import { ItalicFeatureClient as ItalicFeatureClient_e70f5e05f09f93e00b997edb1ef0
 import { RscEntryLexicalCell as RscEntryLexicalCell_44fe37237e0ebf4470c9990d8cb7b07e } from '@payloadcms/richtext-lexical/rsc';
 import { RscEntryLexicalField as RscEntryLexicalField_44fe37237e0ebf4470c9990d8cb7b07e } from '@payloadcms/richtext-lexical/rsc';
 import { LexicalDiffComponent as LexicalDiffComponent_44fe37237e0ebf4470c9990d8cb7b07e } from '@payloadcms/richtext-lexical/rsc';
-import { AIDiagnosticToolbar as AIDiagnosticToolbar_81ee7c5036cc2ebf2a4eb64fe21ffe3e } from '../../../cms/components/AIDiagnosticToolbar';
-import { AIFAQToolbar as AIFAQToolbar_ee38123b9a6427e45afda329c62a5841 } from '../../../cms/components/AIFAQToolbar';
-import { AIToolbar as AIToolbar_f770839684754e9fa6cd2d3a96013fd7 } from '../../../cms/components/AIToolbar';
 import { Icon as Icon_0a600d9af3dc55b21579d9d4738c4649 } from '../../../cms/components/Icon';
 import { Logo as Logo_eff45f4666ccfb98ed72245053f5e77e } from '../../../cms/components/Logo';
 import { StyleProvider as StyleProvider_4ec9853338a93a1441b541a7c5450817 } from '../../../cms/components/StyleProvider';
 
 /** @type import('payload').ImportMap */
 export const importMap = {
-  '/cms/components/AIDiagnosticToolbar#AIDiagnosticToolbar':
-    AIDiagnosticToolbar_81ee7c5036cc2ebf2a4eb64fe21ffe3e,
-  '/cms/components/AIToolbar#AIToolbar': AIToolbar_f770839684754e9fa6cd2d3a96013fd7,
   '@payloadcms/richtext-lexical/rsc#RscEntryLexicalCell':
     RscEntryLexicalCell_44fe37237e0ebf4470c9990d8cb7b07e,
   '@payloadcms/richtext-lexical/rsc#RscEntryLexicalField':
@@ -80,7 +74,6 @@ export const importMap = {
     BoldFeatureClient_e70f5e05f09f93e00b997edb1ef0c864,
   '@payloadcms/richtext-lexical/client#ItalicFeatureClient':
     ItalicFeatureClient_e70f5e05f09f93e00b997edb1ef0c864,
-  '/cms/components/AIFAQToolbar#AIFAQToolbar': AIFAQToolbar_ee38123b9a6427e45afda329c62a5841,
   '/cms/components/Icon#Icon': Icon_0a600d9af3dc55b21579d9d4738c4649,
   '/cms/components/Logo#Logo': Logo_eff45f4666ccfb98ed72245053f5e77e,
   '/cms/components/StyleProvider#StyleProvider': StyleProvider_4ec9853338a93a1441b541a7c5450817,

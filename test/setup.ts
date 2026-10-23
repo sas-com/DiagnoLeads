@@ -97,18 +97,6 @@ vi.mock('@payload-config', () => ({
   default: {},
 }));
 
-vi.mock('@/lib/cms/adapters/payload/adapter', () => ({
-  PayloadCMSAdapter: class {
-    async initialize() {}
-    async getBlogs() {
-      return [];
-    }
-    async getFAQs() {
-      return [];
-    }
-  },
-}));
-
 vi.mock('payload', () => ({
   getPayload: vi.fn().mockResolvedValue({}),
 }));

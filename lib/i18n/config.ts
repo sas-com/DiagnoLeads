@@ -48,6 +48,17 @@ export const localeConfig = {
 };
 
 /**
+ * A supported locale, or the default one. For paths built from a route param, so that a
+ * redirect never carries an arbitrary value (#413).
+ */
+export function supportedLocaleOr(
+  value: string | undefined,
+  fallback: Locale = defaultLocale
+): Locale {
+  return locales.includes(value as Locale) ? (value as Locale) : fallback;
+}
+
+/**
  * URLからロケールを取得
  */
 export function getLocaleFromPathname(pathname: string): Locale | undefined {

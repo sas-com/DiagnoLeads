@@ -1,3 +1,4 @@
+import { supportedLocaleOr } from '@/lib/i18n/config';
 import { redirect } from 'next/navigation';
 
 /**
@@ -10,5 +11,5 @@ export default async function OrganizationsPage({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
-  redirect(`/${locale}/settings/organization`);
+  redirect(`/${supportedLocaleOr(locale)}/settings/organization`);
 }
