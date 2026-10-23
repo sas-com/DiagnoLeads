@@ -38,6 +38,7 @@ describe('axPageOf', () => {
 describe('isAxFrom', () => {
   it('accepts a page and a link placement of the site only', () => {
     expect(isAxFrom('ax-lp-targets-access')).toBe(true);
+    expect(isAxFrom('ax-access-lp-targets')).toBe(true);
     expect(isAxFrom('ax-access-lp-footer')).toBe(true);
     expect(isAxFrom('ax-column-body')).toBe(true);
     // The column under the diagnosis result, on each page the diagnosis is shown (#363)

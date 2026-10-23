@@ -26,6 +26,8 @@ export const AX_LINK_PLACEMENTS = [
   'footer',
   'breadcrumb',
   'targets-access',
+  // The Access page's link to the file types column, under the tools it covers (#367)
+  'targets',
   'hosts',
   'paths',
   'related',

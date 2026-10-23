@@ -56,6 +56,7 @@ export const COLUMN_THUMBNAIL_ICONS = [
   'hard-drive',
   'server-cog',
   'book-open',
+  'file-search',
 ] as const;
 export type ColumnThumbnailIcon = (typeof COLUMN_THUMBNAIL_ICONS)[number];
 

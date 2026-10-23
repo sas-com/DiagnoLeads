@@ -1,5 +1,6 @@
 import { access2gbLimit } from './access-2gb-limit';
 import { accessAccdeOnly } from './access-accde-only';
+import { accessFileTypes } from './access-file-types';
 import { accessFixOrWeb } from './access-fix-or-web';
 import { accessOfficeSupportEnd } from './access-office-support-end';
 import { accessSharedFolder } from './access-shared-folder';
@@ -17,7 +18,7 @@ export * from './types';
 
 /**
  * Published articles, in reading order (the list page and the related links follow it): why to
- * act, how to choose, then the problems one by one
+ * act, how to choose, the problems one by one, then how to tell the files apart (#367)
  */
 export const COLUMNS: readonly Column[] = [
   accessOfficeSupportEnd,
@@ -25,6 +26,7 @@ export const COLUMNS: readonly Column[] = [
   accessSharedFolder,
   accessAccdeOnly,
   access2gbLimit,
+  accessFileTypes,
 ];
 
 /** The only locale with articles; other locales have no column pages (404) */

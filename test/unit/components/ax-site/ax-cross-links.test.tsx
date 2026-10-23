@@ -207,6 +207,30 @@ describe('Access landing page links', () => {
     );
   });
 
+  it('leads readers who cannot tell their files apart to the file types column (#367)', async () => {
+    window.history.replaceState(null, '', '/ja/ax-migration/access');
+    const user = userEvent.setup();
+    await renderAccess();
+
+    const targets = within(screen.getByRole('region', { name: '対象になる Access' }));
+    const link = targets.getByRole('link', { name: 'Access のファイルか分からない方へ：拡張子での見分け方' });
+    expect(link).toHaveAttribute('href', '/ja/ax-migration/column/access-file-types');
+
+    await user.click(link);
+    expect(link).toHaveAttribute(
+      'href',
+      '/ja/ax-migration/column/access-file-types?from=ax-access-lp-targets'
+    );
+    expect(events('ax_cross_link_click')).toEqual([
+      {
+        event: 'ax_cross_link_click',
+        from_page: 'ax-access-lp',
+        to_page: 'ax-column',
+        location: 'targets',
+      },
+    ]);
+  });
+
   it('links the table of the three ways after their section', async () => {
     await renderAccess();
     const pathsHeading = screen.getByRole('heading', { level: 2, name: '進め方は、3つあります' });

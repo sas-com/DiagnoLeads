@@ -35,7 +35,8 @@ AX マイグレーションのサイト（`/ja/ax-migration` と、その下の 
 | `from` | ほかの AX ページから来たときの、元のページと置き場所：`<ページ>-<置き場所>`（例：`ax-lp-targets-access`、`ax-column-end`）。許可した値だけ（`lib/features/ax-site/cross-links.ts`） |
 
 - ページ：`ax-lp`／`ax-access-lp`／`ax-column-index`／`ax-column`／`ax-diagnosis`
-- 置き場所：`header`／`footer`／`breadcrumb`／`targets-access`／`hosts`／`paths`／`related`／`body`／`end`／`result`
+- 置き場所：`header`／`footer`／`breadcrumb`／`targets-access`／`targets`／`hosts`／`paths`／`related`／`body`／`end`／`result`
+- `targets` は、Access LP の「対象になる Access」の下にある、拡張子での見分け方のコラムへのリンク（#367、`ax-access-lp-targets`）。メイン LP の Access 欄からの `targets-access` とは別
 - `result` は、Access の診断結果の下に出す、回答に合うコラム1本へのリンク（#363）。ページは診断を表示しているページなので、`entry` と同じく `ax-diagnosis-result`（単独の診断ページ）／`ax-access-lp-result`（Access LP）／`ax-lp-result`（メイン LP）のどれかになる
 
 ### イベントの一覧

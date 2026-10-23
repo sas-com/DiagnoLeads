@@ -3237,7 +3237,8 @@
         "vba": "With little VBA or with a lot",
         "links": "Linked to SQL Server or other databases, or to other systems",
         "department": "Tools used by a single department"
-      }
+      },
+      "fileTypesLink": "Not sure if a file is an Access file? How to tell by its extension"
     },
     "faq": {
       "title": "Frequently asked questions",
