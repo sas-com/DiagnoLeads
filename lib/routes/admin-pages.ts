@@ -9,6 +9,5 @@ export const ADMIN_PAGE_PREFIXES = [
   '/analytics',
   '/settings',
   '/organizations',
-  '/content',
   '/prospects',
 ] as const;

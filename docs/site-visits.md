@@ -21,6 +21,10 @@
   from site_visits group by 1, 2 order by 1 desc, 2;
   ```
 - 管理画面（`/ja/dashboard` など）を開いても、`/api/collect` への送信が出ないことを見る
+- 記録が**運営の組織**（`AX_DIAGNOSIS_ORGANIZATION_ID`、なければ `DEFAULT_ORGANIZATION_ID`）に入っていることを見る。どちらの変数も空だと、自社のページ（AX サイト・トップ・landing）は1件も記録されない：
+  ```sql
+  select organization_id, count(*) from site_visits group by 1;
+  ```
 
 ## 記録するもの
 

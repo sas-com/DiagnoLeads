@@ -11,6 +11,7 @@ import {
   getLocaleFromPathname,
   addLocalePrefix,
   removeLocalePrefix,
+  supportedLocaleOr,
   type Locale,
 } from '@/lib/i18n/config';
 
@@ -152,6 +153,16 @@ describe('removeLocalePrefix', () => {
 
   it('should not remove non-locale prefixes', () => {
     expect(removeLocalePrefix('/fr/dashboard')).toBe('/fr/dashboard');
+  });
+});
+
+describe('supportedLocaleOr', () => {
+  it('keeps a supported locale and falls back to ja for anything else', () => {
+    expect(supportedLocaleOr('en')).toBe('en');
+    expect(supportedLocaleOr('ja')).toBe('ja');
+    expect(supportedLocaleOr('evil.example')).toBe('ja');
+    expect(supportedLocaleOr('/evil.example')).toBe('ja');
+    expect(supportedLocaleOr(undefined)).toBe('ja');
   });
 });
 

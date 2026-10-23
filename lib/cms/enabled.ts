@@ -32,7 +32,7 @@ export const APP_API_SEGMENTS = [
   'v2',
 ] as const;
 
-/** App routes that only serve CMS editors (AI drafts, Figma): off with the CMS too */
+/** App routes that only serve CMS editors (event stream): off with the CMS too */
 const CMS_TOOL_SEGMENTS = new Set(['cms']);
 const APP_API = new Set<string>(
   APP_API_SEGMENTS.filter((segment) => !CMS_TOOL_SEGMENTS.has(segment))

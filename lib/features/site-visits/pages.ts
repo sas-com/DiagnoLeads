@@ -14,17 +14,15 @@ export type SitePageType =
   | 'diagnosis'
   | 'legacy-diagnostic'
   | 'home'
-  | 'landing'
-  | 'faq';
+  | 'landing';
 
 /**
- * Whose site the page is: the AX site's organization (AX_DIAGNOSIS_ORGANIZATION_ID), the
- * default organization, or the organization of a diagnosis made with the builder
+ * Whose site the page is: the operating organization (the company's own pages: the AX site, the
+ * top page, landing and the legacy form; AX_DIAGNOSIS_ORGANIZATION_ID, else
+ * DEFAULT_ORGANIZATION_ID, as for the content editors) or the organization of a diagnosis made
+ * with the builder
  */
-export type SitePageOwner =
-  | { kind: 'ax' }
-  | { kind: 'default' }
-  | { kind: 'diagnosis'; slug: string };
+export type SitePageOwner = { kind: 'operator' } | { kind: 'diagnosis'; slug: string };
 
 export interface SitePage {
   /** Normalised path: no query, fragment or trailing slash */
@@ -40,7 +38,7 @@ const MAX_PATH_LENGTH = 300;
 const SIMPLE_PAGES: Record<string, SitePageType> = {
   '': 'home',
   landing: 'landing',
-  faq: 'faq',
+  // Shown only while the legacy form is on; its template pages redirect to the AX diagnosis
   diagnostic: 'legacy-diagnostic',
 };
 
@@ -56,8 +54,8 @@ export function sitePageOf(rawPath: string): SitePage | null {
   const ax = axPageOf(path);
   if (ax) {
     return ax.columnSlug
-      ? { path, pageType: ax.page, owner: { kind: 'ax' }, columnSlug: ax.columnSlug }
-      : { path, pageType: ax.page, owner: { kind: 'ax' } };
+      ? { path, pageType: ax.page, owner: { kind: 'operator' }, columnSlug: ax.columnSlug }
+      : { path, pageType: ax.page, owner: { kind: 'operator' } };
   }
 
   const match = /^\/(?:ja|en)(?:\/([^/]+)(?:\/([^/]+))?)?$/.exec(path);
@@ -69,10 +67,6 @@ export function sitePageOf(rawPath: string): SitePage | null {
       : null;
   }
   const pageType = SIMPLE_PAGES[first];
-  if (!pageType) return null;
-  if (second !== undefined && pageType !== 'legacy-diagnostic') return null;
-  // The legacy form's templates are not checked: all of its pages count as the form itself, so
-  // made-up slugs cannot add paths
-  const counted = second === undefined ? path : path.slice(0, path.length - second.length - 1);
-  return { path: counted, pageType, owner: { kind: 'default' } };
+  if (!pageType || second !== undefined) return null;
+  return { path, pageType, owner: { kind: 'operator' } };
 }

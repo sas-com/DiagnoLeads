@@ -21,16 +21,15 @@ const ANDROID_TABLET =
 
 describe('sitePageOf', () => {
   it.each([
-    ['/ja/ax-migration', 'ax-lp', 'ax'],
-    ['/ja/ax-migration/', 'ax-lp', 'ax'],
-    ['/en/ax-migration/access', 'ax-access-lp', 'ax'],
-    ['/ja/ax-migration/column', 'ax-column-index', 'ax'],
-    ['/ja/ax-migration/column/access-file-types', 'ax-column', 'ax'],
-    ['/ja/ax-diagnosis', 'ax-diagnosis', 'ax'],
-    ['/ja', 'home', 'default'],
-    ['/ja/landing', 'landing', 'default'],
-    ['/ja/faq', 'faq', 'default'],
-    ['/ja/diagnostic', 'legacy-diagnostic', 'default'],
+    ['/ja/ax-migration', 'ax-lp', 'operator'],
+    ['/ja/ax-migration/', 'ax-lp', 'operator'],
+    ['/en/ax-migration/access', 'ax-access-lp', 'operator'],
+    ['/ja/ax-migration/column', 'ax-column-index', 'operator'],
+    ['/ja/ax-migration/column/access-file-types', 'ax-column', 'operator'],
+    ['/ja/ax-diagnosis', 'ax-diagnosis', 'operator'],
+    ['/ja', 'home', 'operator'],
+    ['/ja/landing', 'landing', 'operator'],
+    ['/ja/diagnostic', 'legacy-diagnostic', 'operator'],
   ])('measures %s as %s', (path, pageType, owner) => {
     expect(sitePageOf(path)).toMatchObject({ pageType, owner: { kind: owner } });
   });
@@ -50,13 +49,6 @@ describe('sitePageOf', () => {
     expect(sitePageOf('/ja/ax-migration/column')).not.toHaveProperty('columnSlug');
   });
 
-  it('counts every page of the legacy form as the form itself', () => {
-    expect(sitePageOf('/ja/diagnostic/made-up-1')).toMatchObject({
-      path: '/ja/diagnostic',
-      pageType: 'legacy-diagnostic',
-    });
-  });
-
   it.each([
     '/ja/ax-migration/column/a%2Fb',
     '/ja/dashboard',
@@ -69,6 +61,9 @@ describe('sitePageOf', () => {
     '/ja/email/unsubscribe',
     '/ja/blog',
     '/ja/blog/post',
+    '/ja/faq',
+    // Template pages of the legacy form redirect to the AX diagnosis (#413)
+    '/ja/diagnostic/made-up-1',
     '/ja/d',
     '/ja/faq/extra',
     '/fr/ax-migration',

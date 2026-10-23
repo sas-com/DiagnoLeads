@@ -53,7 +53,7 @@ describe('POST /api/collect', () => {
     expect(res.headers.get('set-cookie')).toBeNull();
     expect(recordSiteVisit).toHaveBeenCalledTimes(1);
     expect(recordSiteVisit.mock.calls[0][1]).toEqual({
-      page: { path: '/ja/ax-migration/access', pageType: 'ax-access-lp', owner: { kind: 'ax' } },
+      page: { path: '/ja/ax-migration/access', pageType: 'ax-access-lp', owner: { kind: 'operator' } },
       params: {
         utmSource: 'newsletter',
         utmMedium: null,

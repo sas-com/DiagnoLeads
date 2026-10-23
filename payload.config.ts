@@ -5,8 +5,9 @@ import { ja } from '@payloadcms/translations/languages/ja';
 import { buildConfig } from 'payload';
 import sharp from 'sharp';
 
-import { BlogPosts, DiagnosticForms, FAQs, LandingPages, Media, Users } from './cms/collections';
+import { Media, Users } from './cms/collections';
 import { cmsPoolConfig } from './lib/cms/db-pool';
+import { payloadSecret } from './lib/cms/secret';
 
 /**
  * Payload CMS Configuration
@@ -37,7 +38,7 @@ export default buildConfig({
   },
 
   // Collections
-  collections: [Users, Media, DiagnosticForms, BlogPosts, FAQs, LandingPages],
+  collections: [Users, Media],
 
   // Global configuration
   globals: [],
@@ -45,8 +46,9 @@ export default buildConfig({
   // Rich text editor
   editor: lexicalEditor(),
 
-  // Secret key
-  secret: process.env.PAYLOAD_SECRET || 'your-secret-key-change-in-production',
+  // Secret key: no default. Throws here when the CMS is on and PAYLOAD_SECRET is missing; with
+  // the CMS off it stays empty so builds pass, and Payload refuses to start (lib/cms/secret.ts)
+  secret: payloadSecret(),
 
   // TypeScript output
   typescript: {

@@ -29,13 +29,10 @@ import postgres from 'postgres';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cloudReadiness } from '../../fixtures/diagnosis-builder';
 
-// The organizations the pages belong to (AX site and default pages)
-const { owners } = vi.hoisted(() => ({
-  owners: { ax: crypto.randomUUID(), fallback: crypto.randomUUID() },
-}));
+// The operating organization: the company's own pages (AX site, top page, landing) belong to it
+const { owners } = vi.hoisted(() => ({ owners: { operator: crypto.randomUUID() } }));
 vi.mock('@/lib/features/diagnostics/organization', () => ({
-  resolveDiagnosisOrganizationId: () => owners.ax,
-  resolveDefaultOrganizationId: () => owners.fallback,
+  resolveDiagnosisOrganizationId: () => owners.operator,
 }));
 
 const url = process.env.TEST_DATABASE_URL;
@@ -53,7 +50,6 @@ describe.skipIf(!url)('site visits (PostgreSQL)', () => {
   const unique = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const organizationIds: string[] = [];
   let axOrg: string;
-  let defaultOrg: string;
   let builderOrg: string;
   let builderSlug: string;
 
@@ -113,8 +109,7 @@ describe.skipIf(!url)('site visits (PostgreSQL)', () => {
     pg.select().from(siteVisits).where(eq(siteVisits.organizationId, organizationId));
 
   beforeAll(async () => {
-    axOrg = await createOrganization('計測 AX', owners.ax);
-    defaultOrg = await createOrganization('計測 既定', owners.fallback);
+    axOrg = await createOrganization('計測 運営', owners.operator);
     builderOrg = await createOrganization('計測 ビルダー');
     builderSlug = `visits-${unique()}`.toLowerCase().replace(/[^a-z0-9-]/g, '');
     await publishDiagnosis(builderOrg, builderSlug);
@@ -138,7 +133,7 @@ describe.skipIf(!url)('site visits (PostgreSQL)', () => {
     expect(await view('/ja/ax-migration', { search: '?utm_source=news&from=ax-column-end' })).toBe(
       'recorded'
     );
-    expect(await view('/ja/faq')).toBe('recorded');
+    expect(await view('/ja/landing')).toBe('recorded');
     expect(await view(`/ja/d/${builderSlug}`)).toBe('recorded');
     expect(await view('/ja/d/not-published-anywhere')).toBe('no_organization');
     expect(await view('/ja/ax-migration/column/access-file-types')).toBe('recorded');
@@ -153,7 +148,12 @@ describe.skipIf(!url)('site visits (PostgreSQL)', () => {
       fromRef: 'ax-column-end',
       device: 'desktop',
     });
-    expect((await visitsOf(defaultOrg)).map((row) => row.pageType)).toEqual(['faq']);
+    // The top page and landing belong to the operating organization too
+    expect((await visitsOf(axOrg)).map((row) => row.pageType).sort()).toEqual([
+      'ax-column',
+      'ax-lp',
+      'landing',
+    ]);
     expect((await visitsOf(builderOrg)).map((row) => row.pageType)).toEqual(['diagnosis']);
   });
 

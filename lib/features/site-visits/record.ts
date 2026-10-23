@@ -2,10 +2,7 @@ import type { db as defaultDb } from '@/lib/db/client';
 import { siteVisits } from '@/lib/db/schema';
 import { getColumn } from '@/lib/features/ax-site/columns';
 import { findPublicDiagnosis } from '@/lib/features/diagnosis-builder/public-diagnosis';
-import {
-  resolveDefaultOrganizationId,
-  resolveDiagnosisOrganizationId,
-} from '@/lib/features/diagnostics/organization';
+import { resolveDiagnosisOrganizationId } from '@/lib/features/diagnostics/organization';
 import { consumeRateLimit } from '@/lib/features/diagnostics/rate-limit';
 import { ipBlock } from '@/lib/features/diagnostics/request-guard';
 import type { SitePage } from './pages';
@@ -24,10 +21,8 @@ export const SITE_VISIT_RATE_LIMIT = { name: 'site-visit', limit: 120, windowMs:
 /** The organization whose site the page is, decided on the server (never sent by the page) */
 export async function organizationOfPage(db: Database, page: SitePage): Promise<string | null> {
   switch (page.owner.kind) {
-    case 'ax':
+    case 'operator':
       return resolveDiagnosisOrganizationId();
-    case 'default':
-      return resolveDefaultOrganizationId();
     case 'diagnosis':
       return (await findPublicDiagnosis(db, page.owner.slug))?.organizationId ?? null;
   }

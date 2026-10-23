@@ -84,43 +84,6 @@
         "copyright": "© {year} DiagnoLeads. All rights reserved."
       }
     },
-    "blog": {
-      "meta": {
-        "title": "Blog",
-        "description": "Get the latest news, use cases, and industry insights from DiagnoLeads."
-      },
-      "title": "Blog",
-      "subtitle": "Latest lead generation tips, use cases, and industry trends",
-      "noPosts": "No posts yet",
-      "noPostsDescription": "There are no published posts at the moment. Please check back later.",
-      "previous": "Previous",
-      "next": "Next",
-      "backToList": "Back to Blog",
-      "cta": {
-        "title": "Ready to try our free diagnostic?",
-        "description": "Let AI analyze the best lead generation strategy for your business.",
-        "button": "Take Free Diagnostic"
-      }
-    },
-    "faq": {
-      "meta": {
-        "title": "Frequently Asked Questions",
-        "description": "Find answers to common questions about DiagnoLeads."
-      },
-      "title": "Frequently Asked Questions",
-      "subtitle": "Find answers to your questions about DiagnoLeads",
-      "categories": {
-        "features": "Features",
-        "pricing": "Pricing",
-        "technical": "Technical",
-        "general": "General"
-      },
-      "contact": {
-        "title": "Can't find what you're looking for?",
-        "description": "Feel free to contact us. Our team will be happy to assist you.",
-        "button": "Contact Us"
-      }
-    },
     "diagnostic": {
       "meta": {
         "title": "Free Diagnostic",
@@ -237,9 +200,6 @@
     "dashboard": "Dashboard",
     "leads": "Lead Management",
     "prospects": "Customer search (AX)",
-    "content": "Content",
-    "faqs": "FAQ",
-    "blog": "Blog",
     "analytics": "Analytics",
     "settings": "Settings",
     "organization": "Organization",
@@ -250,7 +210,6 @@
     "qrCampaigns": "QR Campaigns",
     "axPlaybook": "Sales playbook (AX)",
     "agencyLinks": "Agency links",
-    "contentEditors": "Content editors",
     "profile": "Profile",
     "logout": "Logout"
   },
@@ -1035,14 +994,8 @@
       "conversionRadialDesc": "Radial progress charts",
       "recentActivity": "Recent Activity",
       "recentActivityDesc": "Latest lead activity",
-      "kpis": "Key figures",
-      "kpisDesc": "New leads, consultations, MQL, average score",
       "pending": "Consultations waiting",
       "pendingDesc": "Nearest deadline first",
-      "trend": "Trend",
-      "trendDesc": "New leads (consultation requests and others)",
-      "breakdown": "Breakdown",
-      "breakdownDesc": "By status and migration source",
       "recent": "Recent leads",
       "recentDesc": "Latest leads",
       "moveUp": "Move \"{name}\" up",
@@ -1052,7 +1005,13 @@
       "meetings": "Meetings this week",
       "meetingsDesc": "Leads with a next meeting this week (soonest first)",
       "meetingRate": "Next meeting rate",
-      "meetingRateDesc": "Share of first meetings that fixed a next meeting"
+      "meetingRateDesc": "Share of first meetings that fixed a next meeting",
+      "status": "Where things stand",
+      "statusDesc": "Counts of waiting requests, actions due today and meetings this week",
+      "analytics": "Analytics",
+      "analyticsDesc": "Trend of the period, migration sources and change from the previous period",
+      "pipeline": "Pipeline",
+      "pipelineDesc": "All leads by status"
     },
     "ax": {
       "description": "Leads from the AX migration diagnosis and consultation requests that need a reply",
@@ -1156,6 +1115,61 @@
       "rateCounts": "{withNext} of {total} first meetings",
       "rateEmpty": "No first meetings in the period",
       "rateOverdueLink": "See leads whose next meeting passed"
+    },
+    "studio": {
+      "status": {
+        "title": "Where things stand",
+        "toLeads": "Leads",
+        "pending": "Consultations awaiting a reply",
+        "due": "My next actions due today",
+        "meetings": "Meetings this week",
+        "unit": ""
+      },
+      "analytics": {
+        "title": "Analytics",
+        "toAnalytics": "Analytics",
+        "metricLabel": "Figure to show",
+        "metric": {
+          "leads": "New leads",
+          "consultations": "Consultation requests"
+        },
+        "period": "Last {days} days, per day (Japan time)",
+        "periodWeekly": "Last {days} days, per week (Japan time)",
+        "chartLabel": "{metric} in the last {days} days: {total}",
+        "platforms": "By source system"
+      },
+      "insights": {
+        "title": "Insights of the last {days} days",
+        "count": "{value}",
+        "changeLabel": "Compared with the previous {days} days",
+        "fitOnly": "Plus {value} fit only",
+        "leads": {
+          "increase": "New leads went up against the previous {days} days",
+          "decrease": "New leads went down against the previous {days} days",
+          "same": "New leads are the same as in the previous {days} days",
+          "none": "New leads"
+        },
+        "consultations": {
+          "increase": "Consultation requests went up against the previous {days} days",
+          "decrease": "Consultation requests went down against the previous {days} days",
+          "same": "Consultation requests are the same as in the previous {days} days",
+          "none": "Consultation requests"
+        },
+        "mql": {
+          "increase": "MQL (interested) went up against the previous {days} days",
+          "decrease": "MQL (interested) went down against the previous {days} days",
+          "same": "MQL (interested) is the same as in the previous {days} days",
+          "none": "MQL (interested)"
+        },
+        "score": {
+          "increase": "The average score of new leads went up",
+          "decrease": "The average score of new leads went down",
+          "same": "The average score of new leads is unchanged",
+          "none": "Average score of new leads"
+        },
+        "previous": "Previous {days} days: {value}",
+        "noPrevious": "Nothing in the previous {days} days"
+      }
     }
   },
   "leads": {
@@ -1720,43 +1734,6 @@
       "returnDeadlineHint": "E.g. 1 for \"by the next business day after the visit\". Weekends are skipped (public holidays are not). Empty: no deadline.",
       "defaultCriteria": "The decision maker attended\nThe target system was confirmed\nWe talked for the agreed time"
     },
-    "contentEditors": {
-      "title": "Content editors",
-      "description": "Choose who can create, update and delete FAQs and blog posts. Candidates are members of the operating organization.",
-      "notConfiguredTitle": "The operating organization is not set",
-      "notConfiguredBody": "Editors cannot be chosen here because the operating organization is not set yet. Until it is, only the people a system administrator chose separately can edit.",
-      "forbiddenTitle": "You cannot manage editors",
-      "forbiddenBody": "Only owners and admins of the operating organization can add or remove content editors.",
-      "envFallbackTitle": "About the fallback list",
-      "envFallbackBody": "Besides the editors chosen here, people a system administrator chose separately can also edit. Owners and admins cannot edit unless they are chosen here.",
-      "addTitle": "Add an editor",
-      "addDescription": "Choose from the members of the operating organization.",
-      "selectLabel": "Member to add",
-      "selectPlaceholder": "Select a member",
-      "noCandidates": "There are no members to add.",
-      "add": "Add",
-      "granted": "Added as an editor",
-      "grantError": "Could not add the editor. Please try again later",
-      "listTitle": "Editors",
-      "listDescription": "Members who leave the operating organization can no longer edit, even if they are still listed.",
-      "noEditors": "No editors yet.",
-      "name": "Name",
-      "email": "Email",
-      "grantedAt": "Added on",
-      "actions": "Actions",
-      "unnamed": "(No name)",
-      "inactive": "Inactive",
-      "inactiveHint": "Not a member of the operating organization, so cannot edit",
-      "revoke": "Remove",
-      "revokeConfirmTitle": "Remove this editor?",
-      "revokeConfirmBody": "{user} will no longer be able to edit FAQs and blog posts.",
-      "cancel": "Cancel",
-      "revoked": "Removed the editor",
-      "revokeError": "Could not remove the editor. Please try again later",
-      "loadErrorTitle": "Could not load",
-      "loadErrorBody": "The list of editors could not be loaded.",
-      "retry": "Retry"
-    },
     "members": {
       "title": "Member Management",
       "description": "Invite and manage organization members",
@@ -2197,99 +2174,6 @@
         "appointmentQuality": "Appointments meeting the conditions",
         "appointmentQualityValue": "{met} / {reviewed} ({rate}%)"
       }
-    }
-  },
-  "content": {
-    "title": "Content Management",
-    "description": "Manage FAQs, blog posts, and announcements",
-    "faqs": {
-      "title": "FAQ Management",
-      "description": "Manage frequently asked questions",
-      "createNew": "Create New FAQ",
-      "editFaq": "Edit FAQ",
-      "deleteFaq": "Delete FAQ",
-      "deleteConfirmTitle": "Delete FAQ?",
-      "deleteConfirmMessage": "This action cannot be undone. The FAQ will be permanently deleted.",
-      "question": "Question",
-      "questionPlaceholder": "Enter question...",
-      "answer": "Answer",
-      "answerPlaceholder": "Enter answer...",
-      "category": "Category",
-      "order": "Display Order",
-      "orderHelp": "Lower numbers appear first",
-      "status": "Status",
-      "published": "Published",
-      "draft": "Draft",
-      "noFaqs": "No FAQs",
-      "noFaqsDescription": "Create your first FAQ",
-      "categories": {
-        "general": "General",
-        "diagnostic": "Diagnostics",
-        "pricing": "Pricing",
-        "account": "Account",
-        "security": "Security",
-        "technical": "Technical",
-        "features": "Features"
-      },
-      "saving": "Saving...",
-      "saveSuccess": "FAQ saved successfully",
-      "saveError": "Failed to save FAQ",
-      "deleteSuccess": "FAQ deleted successfully",
-      "deleteError": "Failed to delete FAQ"
-    },
-    "blog": {
-      "title": "Blog Management",
-      "description": "Manage blog posts",
-      "createNew": "Create New Post",
-      "editPost": "Edit Post",
-      "deletePost": "Delete Post",
-      "deleteConfirmTitle": "Delete Post?",
-      "deleteConfirmMessage": "This action cannot be undone. The post will be permanently deleted.",
-      "postTitle": "Title",
-      "titlePlaceholder": "Enter post title...",
-      "slug": "Slug",
-      "slugPlaceholder": "url-friendly-slug",
-      "slugHelp": "URL identifier (lowercase letters, numbers, and hyphens)",
-      "content": "Content",
-      "contentPlaceholder": "Enter post content...",
-      "excerpt": "Excerpt",
-      "excerptPlaceholder": "Enter post excerpt...",
-      "author": "Author",
-      "category": "Category",
-      "tags": "Tags",
-      "tagsPlaceholder": "Enter tags...",
-      "coverImage": "Cover Image",
-      "selectImage": "Select Image",
-      "removeImage": "Remove Image",
-      "status": "Status",
-      "published": "Published",
-      "draft": "Draft",
-      "publishedAt": "Published Date",
-      "noPosts": "No Posts",
-      "noPostsDescription": "Create your first post",
-      "preview": "Preview",
-      "seo": {
-        "title": "SEO Settings",
-        "metaTitle": "Meta Title",
-        "metaTitlePlaceholder": "Title shown in search results",
-        "metaDescription": "Meta Description",
-        "metaDescriptionPlaceholder": "Description shown in search results",
-        "keywords": "Keywords",
-        "keywordsPlaceholder": "Enter keywords separated by commas",
-        "noIndex": "Hide from search engines"
-      },
-      "saving": "Saving...",
-      "saveSuccess": "Post saved successfully",
-      "saveError": "Failed to save post",
-      "deleteConfirmation": "Are you sure you want to delete this post?",
-      "deleteWarning": "This action cannot be undone. The post and all associated data will be permanently deleted.",
-      "deleting": "Deleting...",
-      "deleteSuccess": "Post deleted successfully",
-      "deleteError": "Failed to delete post"
-    },
-    "editorOnly": {
-      "title": "Only designated editors can make changes",
-      "body": "Only the editors designated under \"Content editors\" in the settings can create, update or delete FAQs and blog posts. Ask an editor if you need a change."
     }
   },
   "header": {

@@ -37,7 +37,7 @@ export function DueTasksSection({ organizationId }: { organizationId: string }) 
   };
 
   return (
-    <Card className="p-4 sm:p-6">
+    <Card className="p-4 shadow-none sm:p-6 dark:border-gray-800">
       <div className="mb-2 flex flex-wrap items-start justify-between gap-2 sm:mb-3">
         <div className="min-w-0">
           <h2 className="text-base font-semibold text-gray-900 sm:text-lg dark:text-gray-50">

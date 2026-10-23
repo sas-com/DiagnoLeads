@@ -1191,6 +1191,8 @@ export type LeadTask = typeof leadTasks.$inferSelect;
  * Users who may edit FAQs and blog posts, granted from the settings screen by an owner / admin
  * of the operating organization. A grant only counts while the user is still a member of that
  * organization (#91).
+ *
+ * Unused since #413; dropped in P2 (#339)
  */
 export const contentEditors = pgTable('content_editors', {
   userId: uuid('user_id')

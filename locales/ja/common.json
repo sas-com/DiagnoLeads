@@ -192,43 +192,6 @@
         "scoreMax": "/ 100",
         "followUp": "担当者より、診断結果に基づいた具体的なご提案をさせていただきます。"
       }
-    },
-    "blog": {
-      "meta": {
-        "title": "ブログ",
-        "description": "DiagnoLeadsの最新情報、活用事例、業界インサイトをお届けします。"
-      },
-      "title": "ブログ",
-      "subtitle": "最新のリード獲得ノウハウ、活用事例、業界トレンドをお届けします",
-      "noPosts": "記事がありません",
-      "noPostsDescription": "現在公開されている記事はありません。しばらくお待ちください。",
-      "previous": "前へ",
-      "next": "次へ",
-      "backToList": "ブログ一覧に戻る",
-      "cta": {
-        "title": "無料診断を試してみませんか？",
-        "description": "AIがあなたのビジネスに最適なリード獲得戦略を分析します。",
-        "button": "無料診断を受ける"
-      }
-    },
-    "faq": {
-      "meta": {
-        "title": "よくある質問",
-        "description": "DiagnoLeadsに関するよくある質問と回答をまとめました。"
-      },
-      "title": "よくある質問",
-      "subtitle": "DiagnoLeadsについてのご質問にお答えします",
-      "categories": {
-        "features": "機能について",
-        "pricing": "料金について",
-        "technical": "技術的な質問",
-        "general": "その他"
-      },
-      "contact": {
-        "title": "お探しの回答が見つかりませんか？",
-        "description": "お気軽にお問い合わせください。担当者がご質問にお答えします。",
-        "button": "お問い合わせ"
-      }
     }
   },
   "navigation": {
@@ -237,9 +200,6 @@
     "dashboard": "ダッシュボード",
     "leads": "リード管理",
     "prospects": "顧客探し（AX）",
-    "content": "コンテンツ",
-    "faqs": "FAQ",
-    "blog": "ブログ",
     "analytics": "分析",
     "settings": "設定",
     "organization": "組織",
@@ -250,7 +210,6 @@
     "qrCampaigns": "QRコードキャンペーン",
     "axPlaybook": "営業の手引き（AX）",
     "agencyLinks": "営業代行リンク",
-    "contentEditors": "コンテンツ編集者",
     "profile": "プロフィール",
     "logout": "ログアウト"
   },
@@ -1035,14 +994,8 @@
       "conversionRadialDesc": "ラジアル進捗チャート",
       "recentActivity": "最近のアクティビティ",
       "recentActivityDesc": "最新のリードアクティビティ",
-      "kpis": "主要な数字",
-      "kpisDesc": "新規リード・相談申込・MQL・平均スコア",
       "pending": "連絡待ちの相談申込",
       "pendingDesc": "連絡期限の近い順",
-      "trend": "推移",
-      "trendDesc": "新規リード（相談申込とその他）",
-      "breakdown": "内訳",
-      "breakdownDesc": "ステータス別・移行元システム別",
       "recent": "最近のリード",
       "recentDesc": "最新のリード一覧",
       "moveUp": "「{name}」を上へ",
@@ -1052,7 +1005,13 @@
       "meetings": "今週の商談予定",
       "meetingsDesc": "次回日程が今週のリード（早い順）",
       "meetingRate": "次回日程の決定率",
-      "meetingRateDesc": "初回商談から次回日程が決まった率"
+      "meetingRateDesc": "初回商談から次回日程が決まった率",
+      "status": "対応状況",
+      "statusDesc": "連絡待ち・今日やること・今週の商談の件数",
+      "analytics": "アナリティクス",
+      "analyticsDesc": "期間の推移・移行元システム・前の期間との比較",
+      "pipeline": "パイプライン",
+      "pipelineDesc": "全リードのステータス別の件数"
     },
     "ax": {
       "description": "AX移行診断から届いたリードと、対応が必要な相談申込を確認します",
@@ -1156,6 +1115,61 @@
       "rateCounts": "{withNext}件 / 初回商談 {total}件",
       "rateEmpty": "期間中の初回商談はありません",
       "rateOverdueLink": "次回日程の過ぎたリードを見る"
+    },
+    "studio": {
+      "status": {
+        "title": "対応状況",
+        "toLeads": "リード一覧",
+        "pending": "返信待ちの相談",
+        "due": "今日までの次の行動（自分）",
+        "meetings": "今週の商談",
+        "unit": "件"
+      },
+      "analytics": {
+        "title": "アナリティクス",
+        "toAnalytics": "分析",
+        "metricLabel": "表示する数",
+        "metric": {
+          "leads": "新規リード数",
+          "consultations": "相談申込数"
+        },
+        "period": "直近{days}日・日ごと（日本時間）",
+        "periodWeekly": "直近{days}日・週ごと（日本時間）",
+        "chartLabel": "直近{days}日の{metric}は{total}件",
+        "platforms": "移行元システムごと"
+      },
+      "insights": {
+        "title": "過去{days}日間のインサイト",
+        "count": "{value}件",
+        "changeLabel": "前の{days}日間と比べて",
+        "fitOnly": "ほかに適合のみ {value}件",
+        "leads": {
+          "increase": "新規リードが前の{days}日間より増えました",
+          "decrease": "新規リードが前の{days}日間より減りました",
+          "same": "新規リードは前の{days}日間と同じです",
+          "none": "新規リード"
+        },
+        "consultations": {
+          "increase": "相談申込が前の{days}日間より増えました",
+          "decrease": "相談申込が前の{days}日間より減りました",
+          "same": "相談申込は前の{days}日間と同じです",
+          "none": "相談申込"
+        },
+        "mql": {
+          "increase": "MQL（関心あり）が前の{days}日間より増えました",
+          "decrease": "MQL（関心あり）が前の{days}日間より減りました",
+          "same": "MQL（関心あり）は前の{days}日間と同じです",
+          "none": "MQL（関心あり）"
+        },
+        "score": {
+          "increase": "新規リードの平均スコアが上がりました",
+          "decrease": "新規リードの平均スコアが下がりました",
+          "same": "新規リードの平均スコアは変わりません",
+          "none": "新規リードの平均スコア"
+        },
+        "previous": "前の{days}日間 {value}",
+        "noPrevious": "前の{days}日間は値なし"
+      }
     }
   },
   "leads": {
@@ -1720,43 +1734,6 @@
       "returnDeadlineHint": "例：「訪問の翌営業日中」なら 1。土日は数えません（祝日は考慮しません）。空欄は期限なし。",
       "defaultCriteria": "決裁者が同席した\n対象の機種を確認できた\n所定の時間話せた"
     },
-    "contentEditors": {
-      "title": "コンテンツ編集者",
-      "description": "FAQ・ブログを作成・更新・削除できる担当者を指定します。候補は運営組織のメンバーです。",
-      "notConfiguredTitle": "運営組織が設定されていません",
-      "notConfiguredBody": "運営組織がまだ設定されていないため、画面から編集者を指定できません。それまでは、システム管理者が別途指定した担当者だけが編集できます。",
-      "forbiddenTitle": "編集者を指定する権限がありません",
-      "forbiddenBody": "コンテンツ編集者を指定・解除できるのは、運営組織のオーナーと管理者だけです。",
-      "envFallbackTitle": "予備の指定について",
-      "envFallbackBody": "ここで指定した担当者のほか、システム管理者が別途指定した担当者も編集できます。オーナーや管理者も、ここで指定されなければ編集できません。",
-      "addTitle": "編集者を追加",
-      "addDescription": "運営組織のメンバーから選びます。",
-      "selectLabel": "追加するメンバー",
-      "selectPlaceholder": "メンバーを選択",
-      "noCandidates": "追加できるメンバーがいません。",
-      "add": "追加",
-      "granted": "編集者に追加しました",
-      "grantError": "追加できませんでした。時間をおいて再度お試しください",
-      "listTitle": "指定済みの編集者",
-      "listDescription": "運営組織から外れたメンバーは、指定が残っていても編集できません。",
-      "noEditors": "まだ指定されていません。",
-      "name": "名前",
-      "email": "メールアドレス",
-      "grantedAt": "指定日",
-      "actions": "操作",
-      "unnamed": "（名前未設定）",
-      "inactive": "無効",
-      "inactiveHint": "運営組織のメンバーではないため、編集できません",
-      "revoke": "解除",
-      "revokeConfirmTitle": "編集者から外しますか？",
-      "revokeConfirmBody": "{user} は FAQ・ブログを編集できなくなります。",
-      "cancel": "キャンセル",
-      "revoked": "編集者から外しました",
-      "revokeError": "解除できませんでした。時間をおいて再度お試しください",
-      "loadErrorTitle": "読み込めませんでした",
-      "loadErrorBody": "編集者の一覧を取得できませんでした。",
-      "retry": "再読み込み"
-    },
     "members": {
       "title": "メンバー管理",
       "description": "組織メンバーの招待と管理を行います",
@@ -2197,99 +2174,6 @@
         "appointmentQuality": "条件を満たしたアポ",
         "appointmentQualityValue": "{met}／{reviewed}件（{rate}%）"
       }
-    }
-  },
-  "content": {
-    "title": "コンテンツ管理",
-    "description": "FAQ、ブログ記事、お知らせを管理します",
-    "faqs": {
-      "title": "FAQ管理",
-      "description": "よくある質問を管理します",
-      "createNew": "新規FAQ作成",
-      "editFaq": "FAQを編集",
-      "deleteFaq": "FAQを削除",
-      "deleteConfirmTitle": "FAQを削除しますか？",
-      "deleteConfirmMessage": "この操作は取り消せません。FAQが完全に削除されます。",
-      "question": "質問",
-      "questionPlaceholder": "質問を入力...",
-      "answer": "回答",
-      "answerPlaceholder": "回答を入力...",
-      "category": "カテゴリ",
-      "order": "表示順序",
-      "orderHelp": "小さい数字ほど上に表示されます",
-      "status": "ステータス",
-      "published": "公開",
-      "draft": "下書き",
-      "noFaqs": "FAQがありません",
-      "noFaqsDescription": "最初のFAQを作成しましょう",
-      "categories": {
-        "general": "一般",
-        "diagnostic": "診断について",
-        "pricing": "料金・プラン",
-        "account": "アカウント",
-        "security": "セキュリティ",
-        "technical": "テクニカル",
-        "features": "機能"
-      },
-      "saving": "保存中...",
-      "saveSuccess": "FAQを保存しました",
-      "saveError": "FAQの保存に失敗しました",
-      "deleteSuccess": "FAQを削除しました",
-      "deleteError": "FAQの削除に失敗しました"
-    },
-    "blog": {
-      "title": "ブログ管理",
-      "description": "ブログ記事を管理します",
-      "createNew": "新規記事作成",
-      "editPost": "記事を編集",
-      "deletePost": "記事を削除",
-      "deleteConfirmTitle": "記事を削除しますか？",
-      "deleteConfirmMessage": "この操作は取り消せません。記事が完全に削除されます。",
-      "postTitle": "タイトル",
-      "titlePlaceholder": "記事タイトルを入力...",
-      "slug": "スラッグ",
-      "slugPlaceholder": "url-friendly-slug",
-      "slugHelp": "URLに使用される識別子（英数字とハイフン）",
-      "content": "本文",
-      "contentPlaceholder": "記事の本文を入力...",
-      "excerpt": "概要",
-      "excerptPlaceholder": "記事の概要を入力...",
-      "author": "著者",
-      "category": "カテゴリ",
-      "tags": "タグ",
-      "tagsPlaceholder": "タグを入力...",
-      "coverImage": "カバー画像",
-      "selectImage": "画像を選択",
-      "removeImage": "画像を削除",
-      "status": "ステータス",
-      "published": "公開",
-      "draft": "下書き",
-      "publishedAt": "公開日",
-      "noPosts": "記事がありません",
-      "noPostsDescription": "最初の記事を作成しましょう",
-      "preview": "プレビュー",
-      "seo": {
-        "title": "SEO設定",
-        "metaTitle": "メタタイトル",
-        "metaTitlePlaceholder": "検索結果に表示されるタイトル",
-        "metaDescription": "メタディスクリプション",
-        "metaDescriptionPlaceholder": "検索結果に表示される説明文",
-        "keywords": "キーワード",
-        "keywordsPlaceholder": "キーワードをカンマ区切りで入力",
-        "noIndex": "検索エンジンにインデックスさせない"
-      },
-      "saving": "保存中...",
-      "saveSuccess": "記事を保存しました",
-      "saveError": "記事の保存に失敗しました",
-      "deleteConfirmation": "この記事を削除してもよろしいですか？",
-      "deleteWarning": "この操作は取り消せません。記事とそれに関連するすべてのデータが完全に削除されます。",
-      "deleting": "削除中...",
-      "deleteSuccess": "記事を削除しました",
-      "deleteError": "記事の削除に失敗しました"
-    },
-    "editorOnly": {
-      "title": "編集できるのは指定された担当者だけです",
-      "body": "FAQ・ブログの作成・更新・削除は、設定画面の「コンテンツ編集者」で指定された担当者のみ行えます。変更が必要な場合は担当者に依頼してください。"
     }
   },
   "header": {
