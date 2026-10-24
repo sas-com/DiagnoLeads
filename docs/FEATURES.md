@@ -540,8 +540,8 @@ AI駆動のリードスコアリング、マルチテナント対応、ホール
 
 | 中分類 | 技術 | バージョン |
 |--------|------|-----------|
-| SDK | Vercel AI SDK | 5.0 |
-| LLM | Anthropic Claude | 4.5 Sonnet |
+| SDK | Anthropic SDK（`@anthropic-ai/sdk`） | 1.x |
+| LLM | Anthropic Claude | Sonnet 5.5 |
 | Embeddings | OpenAI | text-embedding-3-small |
 | ベクトルDB | pgvector | - |
 
