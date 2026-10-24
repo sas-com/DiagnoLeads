@@ -43,6 +43,9 @@ jobs:
       - name: Run TypeScript type check
         run: bun run typecheck
 
+      - name: Check import boundaries (docs/ARCHITECTURE.md)
+        run: bun run arch:check
+
   test:
     name: Unit Tests (${{ matrix.shard }})
     runs-on: ubuntu-latest
