@@ -675,6 +675,17 @@ span.flatpickr-weekday,
   --color-ax-deep: var(--color-ax-forest);
 }
 
+/*
+ * The same on the html element of the site's pages, for the parts drawn outside the site in a
+ * portal (the calendar of the meeting form, #537). A rule of its own: a browser without :has()
+ * drops only this one, not the greens of the site.
+ */
+html:has(.ax-site) {
+  --color-ax-teal: #258a2f;
+  --color-ax-teal-dark: var(--color-ax-leaf);
+  --color-ax-deep: var(--color-ax-forest);
+}
+
 /* AX migration site: keep focused elements clear of the sticky header and the phone CTA bar */
 html:has(.ax-site) {
   /* The sticky header is about 4.5rem tall (the test-mode banner sits above it and scrolls away) */
