@@ -54,7 +54,9 @@ export const auth = betterAuth({
       return sendAuthEmail({ to: user.email, subject, text, html });
     },
     /**
-     * Callback after password reset is complete
+     * Callback after password reset is complete. Never throw here: better-auth (1.6.33) calls it
+     * after the token is used and the new password is stored, but before it deletes the user's
+     * sessions, so a throw leaves them signed in elsewhere and returns 500 (#529)
      */
     onPasswordReset: async ({ user }) => {
       console.log(`Password reset completed for user: ${user.email}`);

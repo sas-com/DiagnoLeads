@@ -56,7 +56,7 @@ describe('auth configuration', () => {
     });
   });
 
-  it('generates UUIDs and trusts only the app URL as an origin', async () => {
+  it('generates UUIDs and passes only the app URL as trustedOrigins', async () => {
     const options = await loadAuth();
 
     expect(options.advanced?.database?.generateId).toBe('uuid');
