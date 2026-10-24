@@ -99,9 +99,30 @@ describe('POST /api/collect', () => {
 
   it('refuses a body announced as too large without reading it', async () => {
     const req = beacon(VIEW, { 'content-length': '100000' });
-    const read = vi.spyOn(req, 'text');
     expect((await POST(req)).status).toBe(204);
-    expect(read).not.toHaveBeenCalled();
+    expect(req.bodyUsed).toBe(false);
+    expect(recordSiteVisit).not.toHaveBeenCalled();
+  });
+
+  it('stops reading a body without Content-Length once it passes the limit', async () => {
+    // A chunked body that would go on for a megabyte
+    let pulled = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled++;
+        if (pulled > 1024) controller.close();
+        else controller.enqueue(new TextEncoder().encode('a'.repeat(1024)));
+      },
+    });
+    const req = new NextRequest('https://app.example/api/collect', {
+      method: 'POST',
+      body,
+      duplex: 'half',
+      headers: { origin: 'https://app.example', 'user-agent': CHROME },
+    } as RequestInit & { duplex: 'half' });
+    expect(req.headers.get('content-length')).toBeNull();
+    expect((await POST(req)).status).toBe(204);
+    expect(pulled).toBeLessThan(16);
     expect(recordSiteVisit).not.toHaveBeenCalled();
   });
 
@@ -109,6 +130,23 @@ describe('POST /api/collect', () => {
     vi.stubEnv('VERCEL', '');
     await POST(beacon(VIEW));
     expect(recordSiteVisit.mock.calls[0][1]).toMatchObject({ ip: '' });
+  });
+
+  it('tells the people on call once, when an organization passes its daily cap', async () => {
+    recordSiteVisit.mockResolvedValueOnce('daily_cap_reached');
+    expect((await POST(beacon(VIEW))).status).toBe(204);
+    expect(reportServerError).toHaveBeenCalledTimes(1);
+    expect(reportServerError).toHaveBeenCalledWith(
+      'site-visits/daily-cap',
+      expect.objectContaining({ name: 'SiteVisitDailyCapReached' })
+    );
+
+    // The views refused after it are not reported again
+    for (const result of ['daily_cap', 'rate_limited', 'no_organization', 'recorded']) {
+      recordSiteVisit.mockResolvedValueOnce(result);
+      expect((await POST(beacon(VIEW))).status).toBe(204);
+    }
+    expect(reportServerError).toHaveBeenCalledTimes(1);
   });
 
   it('reports a failure and still answers 204', async () => {

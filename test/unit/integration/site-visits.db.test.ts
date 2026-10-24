@@ -18,11 +18,19 @@ import {
   siteVisitSalts,
   siteVisits,
 } from '@/lib/db/schema';
+import { createHash } from 'node:crypto';
 import { hashDefinition } from '@/lib/features/diagnosis-builder/versions';
+import { rateLimitKey } from '@/lib/features/diagnostics/rate-limit';
 import { maintainSiteVisits } from '@/lib/features/site-visits/maintenance';
 import { sitePageOf } from '@/lib/features/site-visits/pages';
-import { SITE_VISIT_RATE_LIMIT, recordSiteVisit } from '@/lib/features/site-visits/record';
+import {
+  SITE_VISIT_DAILY_CAP,
+  SITE_VISIT_RATE_LIMIT,
+  SITE_VISIT_RATE_LIMIT_48,
+  recordSiteVisit,
+} from '@/lib/features/site-visits/record';
 import { visitParamsOf } from '@/lib/features/site-visits/request';
+import { forgetDaySaltForTests } from '@/lib/features/site-visits/visitor';
 import { eq, inArray, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
@@ -119,7 +127,10 @@ describe.skipIf(!url)('site visits (PostgreSQL)', () => {
     await pg.delete(siteVisits).where(inArray(siteVisits.organizationId, organizationIds));
     await pg.delete(siteVisitDaily).where(inArray(siteVisitDaily.organizationId, organizationIds));
     await pg.delete(siteVisitSalts);
-    await pg.execute(sql`delete from public_rate_limits where key like ${`${SITE_VISIT_RATE_LIMIT.name}:%`}`);
+    // Every rule of the measurement: site-visit, site-visit-48 and site-visit-org-day
+    await pg.execute(sql`delete from public_rate_limits where key like ${`${SITE_VISIT_RATE_LIMIT.name}%`}`);
+    // The salts table was just emptied: this server must not keep using the salt it read before
+    forgetDaySaltForTests();
   });
 
   afterAll(async () => {
@@ -168,6 +179,18 @@ describe.skipIf(!url)('site visits (PostgreSQL)', () => {
     expect(dump).not.toContain('Windows NT');
   });
 
+  it('keys the visitor hash with the server secret, so the salt and the hash alone cannot be matched', async () => {
+    await view('/ja/ax-migration');
+    const [{ salt }] = await pg.select().from(siteVisitSalts);
+    const [row] = await visitsOf(axOrg);
+    // What anyone who can read the two tables could compute for a known address and browser
+    const unkeyed = createHash('sha256')
+      .update(`${salt}\n${axOrg}\n${IP}\n${CHROME}`)
+      .digest('base64url');
+    expect(row.visitorHash).not.toBe(unkeyed);
+    expect(row.visitorHash).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  });
+
   it('counts a visitor once a day and cannot match them across days', async () => {
     const day1 = new Date('2026-10-23T03:00:00Z');
     const day2 = new Date('2026-10-24T03:00:00Z');
@@ -209,6 +232,44 @@ describe.skipIf(!url)('site visits (PostgreSQL)', () => {
     }
     expect(await view('/ja/ax-migration', { now, userAgent: `${CHROME} rotate/x` })).toBe(
       'rate_limited'
+    );
+  });
+
+  it('counts IPv6 by its /64 and by its /48, so rotating /64s does not get past the limit', async () => {
+    const now = new Date('2026-10-23T03:00:00Z');
+    // Six /64s of one /48 at the limit of each /64 make 720 views; the /48 stops them at 600
+    let recorded = 0;
+    for (let subnet = 0; subnet < 6; subnet++) {
+      for (let i = 0; i < SITE_VISIT_RATE_LIMIT.limit; i++) {
+        const result = await view('/ja/ax-migration', {
+          now,
+          ip: `2001:db8:1:${subnet.toString(16)}::${(i + 1).toString(16)}`,
+        });
+        if (result === 'recorded') recorded++;
+      }
+    }
+    expect(recorded).toBe(SITE_VISIT_RATE_LIMIT_48.limit);
+    expect(await view('/ja/ax-migration', { now, ip: '2001:db8:1:ff::1' })).toBe('rate_limited');
+    // Another /48 is not affected
+    expect(await view('/ja/ax-migration', { now, ip: '2001:db8:2::1' })).toBe('recorded');
+  });
+
+  it("stops writing an organization's views past its daily cap and flags the one that passed it", async () => {
+    const now = new Date('2026-10-23T03:00:00Z');
+    // As if the organization had recorded all but one of its views today
+    await pg.execute(sql`
+      insert into public_rate_limits (key, count, reset_at)
+      values (${rateLimitKey(SITE_VISIT_DAILY_CAP, `${axOrg}:2026-10-23`)}, ${SITE_VISIT_DAILY_CAP.limit - 1}, ${'2026-10-24T03:00:00Z'}::timestamptz)
+    `);
+    expect(await view('/ja/ax-migration', { now })).toBe('recorded');
+    expect(await view('/ja/ax-migration', { now, ip: '198.51.100.9' })).toBe('daily_cap_reached');
+    expect(await view('/ja/ax-migration', { now, ip: '198.51.100.10' })).toBe('daily_cap');
+    expect(await visitsOf(axOrg)).toHaveLength(1);
+
+    // Another organization keeps recording, and so does the next day
+    expect(await view(`/ja/d/${builderSlug}`, { now })).toBe('recorded');
+    expect(await view('/ja/ax-migration', { now: new Date('2026-10-24T03:00:00Z') })).toBe(
+      'recorded'
     );
   });
 

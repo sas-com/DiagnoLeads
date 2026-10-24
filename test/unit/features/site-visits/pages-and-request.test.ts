@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { env } from '@/lib/env';
 import { sitePageOf } from '@/lib/features/site-visits/pages';
 import {
   deviceOf,
@@ -143,6 +145,24 @@ describe('visitor hash', () => {
     expect(hash).not.toContain('203.0.113.5');
     expect(hash).not.toContain('Chrome');
     expect(hash).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  });
+
+  it('is keyed by the server secret, so the salt and the hash alone cannot be matched', () => {
+    const hash = visitorHashOf(base);
+    // What anyone who can read the salts and the hashes could compute without the key
+    const unkeyed = createHash('sha256')
+      .update(`${base.salt}\n${base.organizationId}\n${base.ip}\n${base.userAgent}`)
+      .digest('base64url');
+    expect(hash).not.toBe(unkeyed);
+
+    const secret = env.BETTER_AUTH_SECRET;
+    try {
+      Object.assign(env, { BETTER_AUTH_SECRET: 'another-secret-key-for-testing-only' });
+      expect(visitorHashOf(base)).not.toBe(hash);
+    } finally {
+      Object.assign(env, { BETTER_AUTH_SECRET: secret });
+    }
+    expect(visitorHashOf(base)).toBe(hash);
   });
 
   it('counts a view for the day in Japan', () => {

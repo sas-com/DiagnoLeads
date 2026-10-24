@@ -1,5 +1,5 @@
 import { db } from '@/lib/db/client';
-import { clientIp } from '@/lib/features/diagnostics/request-guard';
+import { clientIp, readJsonBody } from '@/lib/features/diagnostics/request-guard';
 import { siteVisitsEnabled } from '@/lib/features/site-visits/enabled';
 import { sitePageOf } from '@/lib/features/site-visits/pages';
 import { recordSiteVisit } from '@/lib/features/site-visits/record';
@@ -23,20 +23,15 @@ interface Beacon {
   referrer: string;
 }
 
-function parseBeacon(text: string): Beacon | null {
-  try {
-    const value: unknown = JSON.parse(text);
-    if (!value || typeof value !== 'object') return null;
-    const { path, search, referrer } = value as Record<string, unknown>;
-    if (typeof path !== 'string') return null;
-    return {
-      path,
-      search: typeof search === 'string' ? search : '',
-      referrer: typeof referrer === 'string' ? referrer : '',
-    };
-  } catch {
-    return null;
-  }
+function beaconOf(value: unknown): Beacon | null {
+  if (!value || typeof value !== 'object') return null;
+  const { path, search, referrer } = value as Record<string, unknown>;
+  if (typeof path !== 'string') return null;
+  return {
+    path,
+    search: typeof search === 'string' ? search : '',
+    referrer: typeof referrer === 'string' ? referrer : '',
+  };
 }
 
 /** Only the site's own pages send views (browsers set Origin on POST) */
@@ -50,27 +45,37 @@ function fromThisSite(req: NextRequest): boolean {
   }
 }
 
+/** What the alert holds when an organization's views pass the daily cap: only this name */
+function dailyCapReached(): Error {
+  const error = new Error('Site visits of an organization reached the daily cap');
+  error.name = 'SiteVisitDailyCapReached';
+  return error;
+}
+
 export async function POST(req: NextRequest) {
   if (!siteVisitsEnabled() || !fromThisSite(req)) return noContent();
   const userAgent = req.headers.get('user-agent') ?? '';
   if (isBot(userAgent)) return noContent();
 
-  // Refuse a large body before reading it; the read is checked too (no Content-Length)
+  // Refuse a large body before reading it; a body without Content-Length is cut off while read
   if (Number(req.headers.get('content-length') ?? 0) > MAX_BODY_BYTES) return noContent();
-  const text = await req.text();
-  if (new TextEncoder().encode(text).length > MAX_BODY_BYTES) return noContent();
-  const beacon = parseBeacon(text);
+  const read = await readJsonBody(req, MAX_BODY_BYTES);
+  const beacon = read.ok ? beaconOf(read.body) : null;
   const page = beacon ? sitePageOf(beacon.path) : null;
   if (!beacon || !page) return noContent();
 
   try {
-    await recordSiteVisit(db, {
+    const result = await recordSiteVisit(db, {
       page,
       params: visitParamsOf(beacon.search),
       referrerHost: referrerHostOf(beacon.referrer),
       ip: clientIp(req) ?? '',
       userAgent,
     });
+    // Once per organization and day; the alert itself sends at most one mail per 10 minutes
+    if (result === 'daily_cap_reached') {
+      await reportServerError('site-visits/daily-cap', dailyCapReached());
+    }
   } catch (error) {
     await reportServerError('site-visits/collect', error);
   }
