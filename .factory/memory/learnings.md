@@ -73,6 +73,13 @@
   - ガードを変えたら、ふだんの作業（コミット・PR・検索）で実際に使って誤検知を探す
   - 外部からの PR はチェックアウトせず、`gh pr diff` で読む（そのブランチのフックが動くため。運用はオーナーの判断待ち）
 
+### [Harness] next dev が AGENTS.md と next-env.d.ts を書き換える
+- **日付**: 2026-10-24
+- **状況**: Next.js 16 の `next dev` は、AI エージェントを検知すると AGENTS.md に管理ブロック（同梱のドキュメントを読むようにという指示）を書き足し、`next-env.d.ts` も書き換える。並行するセッションは、コミットの前に毎回 `git checkout` で戻していた（管理者サイトと SFA のセッションの報告）
+- **原因**: AGENTS.md にブロックが無いと、`next dev` は起動のたびに書き足す（`node_modules/next/dist/server/lib/generate-agent-files.js`）。`next-env.d.ts` は Next.js が管理するファイルなのに、Git で追跡していた
+- **解決策**: AGENTS.md にブロックをコミットした（#441。Next.js の関数で生成し、最新と判定されることを確かめた）。Claude Code は CLAUDE.md があると AGENTS.md を読まないので、同じ指示を CLAUDE.md の「実装」にも書いた。`next-env.d.ts` は Git から外す（#460）
+- **教訓**: ツールが作業ツリーを書き換えるときは、戻し続けずに、ツールの公式の扱い（コミットする・無視する・設定で止める）に合わせる
+
 ---
 
 ## Git関連

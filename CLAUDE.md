@@ -1,6 +1,6 @@
 # DiagnoLeads 開発ルール
 
-<!-- 保守する人へ：このファイルは毎回のセッションで全文が読み込まれる（サブエージェントも読む）。200行以内に保ち、毎回守ることだけを書く。経緯は .factory/memory/decisions/、手順はスキル（.claude/skills/）、ディレクトリごとの決まりは .claude/rules/、機械で判定できる守りはフック（.claude/hooks/）へ。この HTML コメントは Claude には渡されない -->
+<!-- 保守する人へ：このファイルは毎回のセッションで全文が読み込まれる（サブエージェントも読む。組み込みの Explore と Plan は読まない）。200行以内に保ち、毎回守ることだけを書く。経緯は .factory/memory/decisions/、手順はスキル（.claude/skills/）、ディレクトリごとの決まりは .claude/rules/、機械で判定できる守りはフック（.claude/hooks/）へ。この HTML コメントは Claude には渡されない -->
 
 DiagnoLeads は、AX マイグレーション（レガシー基幹システムの AI 移行）のリードを診断フォームで集めて管理する B2B SaaS。Next.js 16（App Router）・tRPC 11・Drizzle（PostgreSQL / Supabase）・Better Auth・CASL で作り、Vercel にデプロイする（main へのマージで本番に自動デプロイ）。**リポジトリは公開されている。**
 
@@ -35,6 +35,7 @@ Issue → 決定を読む → ブランチ → 実装 → 速い検証 → 全�
    - ファイルを読むと、関係する決定をフックが知らせる。変更する前に本文を読み、従う。蒸し返すときはオーナーに確かめる
 3. **ブランチ**：最新の main から `<type>/<issue>-<短い説明>` を切る（type は下のコミットの type）
 4. **実装**：既存のコードの書き方に合わせる。`any` を使わない。画面の文字列は `locales/`（ja・en）に置く
+   - Next.js 16 の API と規約は学習データと違うことがある。Next.js の書き方は、`node_modules/next/dist/docs/` の該当するガイドで確かめてから書く
 5. **速い検証（作業中）**
    - 関係するテストだけ流す：`bunx vitest run <path>`（1ファイル約2秒）
    - 型チェック：`bun run typecheck`（2回目以降は約8秒）
