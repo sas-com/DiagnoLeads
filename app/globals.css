@@ -664,6 +664,17 @@ span.flatpickr-weekday,
   @apply bg-gray-900 text-gray-100;
 }
 
+/*
+ * AX migration site in the greens of the STUDIO design (#420): the teal names keep their roles
+ * (teal decorative, teal-dark for white text at 4.5:1 or more, deep for dark bands) inside the
+ * site only, so the diagnoses of the builder keep their teal.
+ */
+.ax-site {
+  --color-ax-teal: #258a2f;
+  --color-ax-teal-dark: var(--color-ax-leaf);
+  --color-ax-deep: var(--color-ax-forest);
+}
+
 /* AX migration site: keep focused elements clear of the sticky header and the phone CTA bar */
 html:has(.ax-site) {
   /* The sticky header is about 4.5rem tall (the test-mode banner sits above it and scrolls away) */

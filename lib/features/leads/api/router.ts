@@ -62,9 +62,12 @@ import { leadExportPdfBase64 } from '../export-pdf';
 import { getNextMeetingRate, getWeekMeetings } from '../meetings';
 import {
   LEAD_STATUSES,
+  LOST_ON_HOLD_MESSAGE,
   type LeadPipelineFields,
   type LeadStatus,
+  dropsOnHoldReason,
   jstDate,
+  makesLostOnHold,
   qualificationUpdateFields,
   statusUpdateFields,
 } from '../types/pipeline';
@@ -290,6 +293,9 @@ export const leadsRouter = router({
         code: 'FORBIDDEN',
         message: 'リードを作成する権限がありません',
       });
+    }
+    if (makesLostOnHold(null, input)) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: LOST_ON_HOLD_MESSAGE });
     }
 
     const now = new Date();
@@ -623,6 +629,9 @@ export const leadsRouter = router({
           message: 'リードが見つかりません',
         });
       }
+      if (makesLostOnHold(existing, input)) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: LOST_ON_HOLD_MESSAGE });
+      }
 
       // Build update object (only include defined fields)
       const updateData: PgUpdateSetSource<typeof leads> = {};
@@ -637,6 +646,7 @@ export const leadsRouter = router({
       if (input.source !== undefined) updateData.source = input.source;
       if (input.responses !== undefined) updateData.responses = input.responses;
       Object.assign(updateData, pickPipelineFields(input));
+      if (dropsOnHoldReason(existing, input)) updateData.lostReason = null;
       Object.assign(updateData, qualificationUpdateFields(input, existing, now));
       if (input.dealPhase) {
         // First date each phase was reached; the existing date wins (right side of ||), and
@@ -908,7 +918,7 @@ export const leadsRouter = router({
         // Lock the rows so the audited "before" is the status this update replaces
         await tx.execute(sql`select 1 from ${leads} where ${scope} for no key update`);
         const before = await tx.query.leads.findMany({
-          columns: { id: true, status: true },
+          columns: { id: true, status: true, lostReason: true },
           where: scope,
         });
 
@@ -917,6 +927,12 @@ export const leadsRouter = router({
           .update(leads)
           .set({
             ...statusUpdateFields(input.status),
+            // Leads on hold that are now lost drop the reason 保留 (#445)
+            ...(input.status === 'lost'
+              ? {
+                  lostReason: sql`case when ${leads.status} <> 'lost' and ${leads.lostReason} = 'on_hold' then null else ${leads.lostReason} end`,
+                }
+              : {}),
             updatedAt: now,
           })
           .where(scope)
@@ -929,11 +945,22 @@ export const leadsRouter = router({
           { organizationId: input.organizationId, userId: ctx.user.id, at: now },
           before
             .filter((row) => updatedIds.has(row.id) && row.status !== input.status)
-            .map((row) => ({
-              action: 'update' as const,
-              leadId: row.id,
-              changes: { before: { status: row.status }, after: { status: input.status } },
-            }))
+            .map((row) =>
+              dropsOnHoldReason(row, { status: input.status })
+                ? {
+                    action: 'update' as const,
+                    leadId: row.id,
+                    changes: {
+                      before: { status: row.status, lostReason: row.lostReason },
+                      after: { status: input.status, lostReason: null },
+                    },
+                  }
+                : {
+                    action: 'update' as const,
+                    leadId: row.id,
+                    changes: { before: { status: row.status }, after: { status: input.status } },
+                  }
+            )
         );
 
         const previousStatus = new Map(before.map((row) => [row.id, row.status]));

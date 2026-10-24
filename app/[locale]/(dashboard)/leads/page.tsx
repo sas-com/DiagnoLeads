@@ -32,7 +32,7 @@ import { Metric, Text, Title } from '@/components/ui/metric';
 import { ProgressBar } from '@/components/ui/progress-bar';
 
 import type { Lead } from '@/lib/db/schema';
-import type { CreateLeadInput } from '@/lib/features/leads/types';
+import { type CreateLeadInput, hasLostReason } from '@/lib/features/leads/types';
 import { trpc } from '@/lib/trpc/client';
 import { Plus, Target, TrendingUp, Upload, UserCheck, Users } from 'lucide-react';
 
@@ -176,6 +176,7 @@ function LeadsPageContent() {
   const {
     data: leadsData,
     isLoading,
+    isError: listFailed,
     refetch: refetchList,
   } = useListLeads(listQuery.listInput(organizationId, preferences.pageSize), {
     keepPrevious: true,
@@ -254,7 +255,8 @@ function LeadsPageContent() {
 
   // A lost lead should say why: offer to add it on the lead page, without blocking the list
   const handleLost = (lead: Lead) => {
-    if (lead.lostReason) return;
+    // 保留 is dropped when the lead is lost (#445): it is no reason for the loss
+    if (hasLostReason(lead.lostReason)) return;
     toast(tDetail('quick.lostReasonPrompt'), {
       action: {
         label: tDetail('quick.lostReasonAction'),
@@ -431,6 +433,9 @@ function LeadsPageContent() {
         }
         hasFilters={listQuery.hasFilters}
         onClearFilters={listQuery.clearFilters}
+        // A failed request is not "no leads yet" (#431)
+        loadFailed={listFailed}
+        onCreate={access.canCreate ? () => setCreateDialogOpen(true) : undefined}
         onExport={organizationId ? leadExport.exportLeads : undefined}
         exporting={leadExport.isExporting}
         toolbar={(actions) => (

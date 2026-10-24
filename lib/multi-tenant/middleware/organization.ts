@@ -21,7 +21,8 @@ export const organizationInputSchema = z
  * 1. Validates organizationId in input
  * 2. Verifies user is a member of the organization
  * 3. Calculates CASL permissions based on role
- * 4. Sets current user for RLS (all subsequent DB queries respect RLS policies)
+ * 4. Sets the current user for RLS, which is not in effect yet (see the NOTE below): every query
+ *    must still filter by organizationId
  *
  * @param ctx - Protected context (requires authentication)
  * @param input - Must contain organizationId

@@ -4,13 +4,7 @@
  * Summarizes a lead with Claude through the Anthropic SDK (ai.generateSummary).
  */
 
-import Anthropic from '@anthropic-ai/sdk';
-
-// The summary uses the Anthropic SDK directly: `ai` 4.x sends temperature 0 when none is
-// given, and Claude Sonnet 5.5 rejects non-default sampling parameters
-const anthropicClient = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+import { CLAUDE_MAX_TOKENS, CLAUDE_MODEL, anthropic as claude } from '../client';
 
 /**
  * Generate lead summary
@@ -38,9 +32,9 @@ Notes: ${lead.notes || 'N/A'}
 Focus on key business value and next steps.`;
 
   try {
-    const message = await anthropicClient.messages.create({
-      model: 'claude-sonnet-5-5',
-      max_tokens: 8000,
+    const message = await claude.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: CLAUDE_MAX_TOKENS,
       output_config: { effort: 'low' },
       messages: [{ role: 'user', content: prompt }],
     });
@@ -50,7 +44,15 @@ Focus on key business value and next steps.`;
       .map((block) => (block.type === 'text' ? block.text : ''))
       .join('');
 
-    return summary.trim() || 'Unable to generate summary';
+    if (!summary.trim()) {
+      console.error('Lead summary: no text in the response', message.stop_reason);
+      return 'Unable to generate summary';
+    }
+    if (message.stop_reason === 'max_tokens') {
+      console.error('Lead summary: cut off at max_tokens');
+    }
+
+    return summary.trim();
   } catch (error) {
     console.error('Error generating lead summary:', error);
     return 'Unable to generate summary';

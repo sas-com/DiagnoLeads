@@ -94,7 +94,8 @@ export const leadFollowUpRouter = router({
 
   /**
    * Open next actions and takeaways due today or earlier, for the dashboard: the user's own
-   * (scope 'mine', the default) or everyone's with the user's own first ('all')
+   * (scope 'mine', the default) or everyone's with the user's own first ('all'). The first
+   * DUE_TASKS_SHOWN, or `limit` when the card is opened to show the rest (#431)
    */
   dueTasks: organizationProcedure.input(dueTasksSchema).query(async ({ ctx, input }) => {
     assertCanRead(ctx.ability);
@@ -104,6 +105,7 @@ export const leadFollowUpRouter = router({
       today,
       userId: ctx.user.id,
       scope: input.scope,
+      limit: input.limit,
     });
     return { ...due, scope: input.scope, today, canEdit: ctx.ability.can('update', 'Lead') };
   }),

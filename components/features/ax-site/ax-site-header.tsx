@@ -34,6 +34,8 @@ type NavItem = 'problems' | 'reasons' | 'demo' | 'steps' | 'targets' | 'faq';
 const NAV_ITEMS: readonly NavItem[] = ['problems', 'reasons', 'demo', 'steps', 'targets', 'faq'];
 /** The Access page has no reasons or demo section of its own */
 const ACCESS_NAV_ITEMS: readonly NavItem[] = ['problems', 'steps', 'targets', 'faq'];
+const NAV_LINK =
+  'rounded text-ax-ink transition-colors hover:text-ax-leaf focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-ax-forest';
 
 export async function AxSiteHeader({ locale, variant, cta, logoLabel, page }: AxSiteHeaderProps) {
   const t = await getTranslations({ locale, namespace: 'axSite' });
@@ -89,20 +91,13 @@ export async function AxSiteHeader({ locale, variant, cta, logoLabel, page }: Ax
             className="hidden items-center gap-5 text-sm font-bold lg:flex xl:gap-7"
           >
             {navItems.map((id) => (
-              <a
-                key={id}
-                href={sectionHref(AX_SECTIONS[id])}
-                className="text-ax-ink transition-colors hover:text-ax-leaf"
-              >
+              <a key={id} href={sectionHref(AX_SECTIONS[id])} className={NAV_LINK}>
                 {t(`header.nav.${id}`)}
               </a>
             ))}
             {/* Columns exist in Japanese only: no link to a page that would 404 */}
             {isColumnLocale(locale) && (
-              <a
-                href={`/${locale}${COLUMN_INDEX_PATH}`}
-                className="text-ax-ink transition-colors hover:text-ax-leaf"
-              >
+              <a href={`/${locale}${COLUMN_INDEX_PATH}`} className={NAV_LINK}>
                 {t('header.nav.column')}
               </a>
             )}
@@ -112,7 +107,7 @@ export async function AxSiteHeader({ locale, variant, cta, logoLabel, page }: Ax
               href={cta?.href ?? sectionHref(AX_SECTIONS.diagnosis)}
               location="header"
               // Compact on phones, so it fits between the logo and the menu button down to 320px
-              className="px-4 py-2.5 text-sm max-sm:gap-1 max-sm:px-3 max-sm:text-xs max-sm:[&>svg]:hidden sm:px-5"
+              className="min-h-11 px-4 py-2.5 text-sm max-sm:gap-1 max-sm:px-3 max-sm:text-xs max-sm:[&>svg]:hidden sm:px-5"
             >
               {cta?.label ?? t('header.cta')}
             </AxCtaLink>

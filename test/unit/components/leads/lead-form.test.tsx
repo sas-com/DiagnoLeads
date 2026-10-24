@@ -12,6 +12,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
+  Element.prototype.hasPointerCapture ??= () => false;
   globalThis.ResizeObserver ??= class {
     observe() {}
     unobserve() {}
@@ -96,5 +97,21 @@ describe('LeadForm', () => {
     await user.click(screen.getByRole('button', { name: '作成' }));
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     expect(onSubmit.mock.calls[0][0].score).toBeUndefined();
+  });
+
+  it('refuses to make a lead on hold lost and says why (#445)', async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(
+      withIntl(
+        <LeadForm lead={{ ...lead, status: 'nurturing', lostReason: 'on_hold' }} onSubmit={onSubmit} />
+      )
+    );
+    await user.click(screen.getByRole('combobox', { name: messages.leads.status }));
+    await user.click(screen.getByRole('option', { name: messages.status.lost }));
+    await user.click(screen.getByRole('button', { name: '更新' }));
+
+    expect(await screen.findByText(messages.leads.lostOnHold)).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 });

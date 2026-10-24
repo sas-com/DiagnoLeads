@@ -35,7 +35,7 @@ vi.mock('@/hooks/use-lead-assignee', () => ({
   useAssignLead: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
-vi.mock('@/lib/trpc/client', () => ({ trpc: {} }));
+vi.mock('@/lib/trpc/client', () => ({ trpc: { useUtils: () => ({}) } }));
 vi.mock('@/lib/features/reports/pdf-export-service', () => ({
   downloadPDF: vi.fn(),
   exportLeadsToPDF: vi.fn(),
@@ -253,6 +253,36 @@ describe('LeadTable on a phone (cards, #110)', () => {
   it('says when there are no leads yet', () => {
     renderList({ leads: [], total: 0 });
     expect(screen.getByText(messages.leads.noLeads)).toBeInTheDocument();
+    // Roles that cannot create leads get no create button (#431)
+    expect(
+      screen.queryByRole('button', { name: messages.leads.addFirstLead })
+    ).not.toBeInTheDocument();
+  });
+
+  it('creates the first lead from there (#431)', async () => {
+    const user = userEvent.setup();
+    const onCreate = vi.fn();
+    renderList({ leads: [], total: 0, onCreate });
+    await user.click(screen.getByRole('button', { name: messages.leads.addFirstLead }));
+    expect(onCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('says the list could not be loaded, with a retry, not "no leads yet" (#431)', async () => {
+    const user = userEvent.setup();
+    const props = renderList({
+      leads: [],
+      total: 0,
+      loadFailed: true,
+      onRefresh: vi.fn(),
+      onCreate: vi.fn(),
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent(messages.common.loadError);
+    expect(screen.queryByText(messages.leads.noLeads)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: messages.leads.addFirstLead })
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: messages.common.retry }));
+    expect(props.onRefresh).toHaveBeenCalledTimes(1);
   });
 
   it('shows read-only badges to roles that cannot edit', () => {
@@ -307,7 +337,8 @@ describe('MQL level badges in the list (#196)', () => {
     setWidth(1440);
     renderList({ leads, columnPreferences: { mqlQualifiedAt: true } });
     const row = (name: string) => {
-      const cell = screen.getByRole('cell', { name: new RegExp(name) });
+      // The company's own cell (the row's checkbox is named after the company too, #431)
+      const cell = screen.getByRole('cell', { name });
       const tr = cell.closest('tr');
       if (!tr) throw new Error('no row');
       return within(tr);

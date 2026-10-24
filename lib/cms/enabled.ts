@@ -17,6 +17,8 @@ export function isCmsEnabled(): boolean {
 export const APP_API_SEGMENTS = [
   'auth',
   'cms',
+  // The site's own visit measurement (#412)
+  'collect',
   'cron',
   'diagnoses',
   'diagnostic',
