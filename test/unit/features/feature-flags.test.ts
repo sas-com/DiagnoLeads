@@ -345,8 +345,7 @@ describe('Feature Flags Service', () => {
     });
 
     it('should have integration feature flags', () => {
-      expect(PREDEFINED_FLAGS.SLACK_INTEGRATION).toBe('slack_integration');
-      expect(PREDEFINED_FLAGS.ZAPIER_INTEGRATION).toBe('zapier_integration');
+      expect(PREDEFINED_FLAGS.CRM_SYNC).toBe('crm_sync');
     });
 
     it('should have beta feature flags', () => {
