@@ -10,6 +10,7 @@
  */
 import * as schema from '@/lib/db/schema';
 import {
+  auditLogs,
   dealHistory,
   deals,
   leads,
@@ -175,6 +176,123 @@ describe.skipIf(!url)('sales targets and forecast (PostgreSQL)', () => {
       ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
       const outside = await adminB.salesTargets.get({ organizationId: orgB });
       expect(outside.targets).toEqual([]);
+    });
+
+    it('refuses viewers, and admins of another organization', async () => {
+      const entries = [{ userId: null, month: thisMonth, amount: 1 }];
+      for (const call of [
+        () => viewerA.salesTargets.save({ organizationId: orgA, entries }),
+        () => viewerA.salesTargets.setFiscalYearStart({ organizationId: orgA, month: 1 }),
+        () => adminB.salesTargets.save({ organizationId: orgA, entries }),
+        () => adminB.salesTargets.setFiscalYearStart({ organizationId: orgA, month: 1 }),
+        () => adminB.salesTargets.get({ organizationId: orgA }),
+      ]) {
+        await expect(call()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      }
+      const read = await adminA.salesTargets.get({ organizationId: orgA });
+      expect(read.fiscalYearStartMonth).toBe(4);
+      expect(read.targets).not.toContainEqual({ userId: null, month: thisMonth, amount: 1 });
+    });
+
+    it('refuses a month sent twice and a year out of range', async () => {
+      for (const entries of [
+        [
+          { userId: null, month: thisMonth, amount: 1 },
+          { userId: null, month: thisMonth, amount: 2 },
+        ],
+        [{ userId: null, month: '0000-01-01', amount: 1 }],
+        [{ userId: null, month: '9999-12-01', amount: 1 }],
+      ]) {
+        await expect(
+          adminA.salesTargets.save({ organizationId: orgA, entries })
+        ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      }
+    });
+
+    it('lets the target of someone who left be removed, not set, and names them without email', async () => {
+      const { userId: leftId } = await callerFor(orgA, 'member', '退職 次郎');
+      await adminA.salesTargets.save({
+        organizationId: orgA,
+        entries: [{ userId: leftId, month: thisMonth, amount: 5_000_000 }],
+      });
+      await pg
+        .delete(organizationMembers)
+        .where(
+          and(eq(organizationMembers.organizationId, orgA), eq(organizationMembers.userId, leftId))
+        );
+
+      const read = await adminA.salesTargets.get({ organizationId: orgA });
+      expect(read.members.map((member: { userId: string }) => member.userId)).not.toContain(leftId);
+      expect(read.formerMembers).toEqual([{ userId: leftId, displayName: '退職 次郎' }]);
+      await expect(
+        adminA.salesTargets.save({
+          organizationId: orgA,
+          entries: [{ userId: leftId, month: thisMonth, amount: 6_000_000 }],
+        })
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(
+        await adminA.salesTargets.save({
+          organizationId: orgA,
+          entries: [{ userId: leftId, month: thisMonth, amount: null }],
+        })
+      ).toEqual({ saved: 0, removed: 1 });
+      expect((await adminA.salesTargets.get({ organizationId: orgA })).formerMembers).toEqual([]);
+    });
+
+    it('records each change of the targets and of the fiscal year start in the audit log', async () => {
+      const org = await createOrganization('監査の記録');
+      const { caller, userId: ownerId } = await callerFor(org, 'owner', '監査 一郎');
+      const { userId: repId } = await callerFor(org, 'member', '監査 花子');
+      const auditRows = (resource: string) =>
+        pg
+          .select()
+          .from(auditLogs)
+          .where(and(eq(auditLogs.organizationId, org), eq(auditLogs.resource, resource)));
+
+      await caller.salesTargets.save({
+        organizationId: org,
+        entries: [
+          { userId: null, month: thisMonth, amount: 10_000_000 },
+          { userId: repId, month: thisMonth, amount: 4_000_000 },
+        ],
+      });
+      // An entry equal to what is stored is left alone
+      expect(
+        await caller.salesTargets.save({
+          organizationId: org,
+          entries: [
+            { userId: null, month: thisMonth, amount: 10_000_000 },
+            { userId: repId, month: thisMonth, amount: 3_000_000 },
+          ],
+        })
+      ).toEqual({ saved: 1, removed: 0 });
+      await caller.salesTargets.save({
+        organizationId: org,
+        entries: [{ userId: repId, month: thisMonth, amount: 3_000_000 }],
+      });
+
+      const targetRows = await auditRows('sales_target');
+      expect(targetRows).toHaveLength(2);
+      expect(targetRows).toContainEqual(
+        expect.objectContaining({
+          userId: ownerId,
+          action: 'update',
+          resourceId: org,
+          changes: {
+            before: [{ userId: repId, month: thisMonth, amount: 4_000_000 }],
+            after: [{ userId: repId, month: thisMonth, amount: 3_000_000 }],
+          },
+        })
+      );
+
+      await caller.salesTargets.setFiscalYearStart({ organizationId: org, month: 1 });
+      await caller.salesTargets.setFiscalYearStart({ organizationId: org, month: 1 });
+      const startRows = await auditRows('organization');
+      expect(startRows).toHaveLength(1);
+      expect(startRows[0]).toMatchObject({
+        userId: ownerId,
+        changes: { before: { fiscalYearStartMonth: 4 }, after: { fiscalYearStartMonth: 1 } },
+      });
     });
 
     it('moves the fiscal year to the month the owner sets', async () => {

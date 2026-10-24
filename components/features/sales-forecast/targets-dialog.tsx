@@ -47,6 +47,8 @@ const parseAmount = (text: string): number | null | 'invalid' => {
 /**
  * Set the month's won amount targets for the whole organization and each member (Refs #437),
  * and the month the fiscal year starts. Owners and admins only (the router checks it too).
+ * Only the boxes that changed are sent, so two people editing other boxes do not undo each
+ * other. Someone who left keeps their row while they hold a target, which can only be removed.
  */
 export function TargetsDialog({ open, onOpenChange, organizationId }: TargetsDialogProps) {
   const t = useTranslations('salesForecast.targets');
@@ -92,6 +94,10 @@ export function TargetsDialog({ open, onOpenChange, organizationId }: TargetsDia
           : data.months[0]
         : null;
 
+  const storedAmount = (userId: string | null) =>
+    data?.targets.find((target) => target.userId === userId && target.month === selectedMonth)
+      ?.amount ?? null;
+
   // Fill the boxes with the stored targets of the month
   useEffect(() => {
     if (!data || !selectedMonth) return;
@@ -102,7 +108,10 @@ export function TargetsDialog({ open, onOpenChange, organizationId }: TargetsDia
     setAmounts({
       [ORGANIZATION]: text(stored(null)),
       ...Object.fromEntries(
-        data.members.map((member) => [member.userId, text(stored(member.userId))])
+        [...data.members, ...data.formerMembers].map((member) => [
+          member.userId,
+          text(stored(member.userId)),
+        ])
       ),
     });
     setSubmitted(false);
@@ -117,31 +126,49 @@ export function TargetsDialog({ open, onOpenChange, organizationId }: TargetsDia
 
   const rows = data
     ? [
-        { key: ORGANIZATION, userId: null, label: t('organization') },
+        { key: ORGANIZATION, userId: null, label: t('organization'), former: false },
         ...data.members.map((member) => ({
           key: member.userId,
           userId: member.userId,
           label: member.displayName,
+          former: false,
         })),
+        ...data.formerMembers
+          .filter((holder) => storedAmount(holder.userId) !== null)
+          .map((holder) => ({
+            key: holder.userId,
+            userId: holder.userId,
+            label: holder.displayName ?? t('formerMember'),
+            former: true,
+          })),
       ]
     : [];
   const parsed = Object.fromEntries(
-    rows.map((row) => [row.key, parseAmount(amounts[row.key] ?? '')])
+    rows.map((row) => {
+      const value = parseAmount(amounts[row.key] ?? '');
+      // Someone who left cannot be given a target, only have theirs removed
+      const refused = row.former && value !== null && value !== storedAmount(row.userId);
+      return [row.key, refused ? 'former' : value];
+    })
   );
-  const invalid = rows.some((row) => parsed[row.key] === 'invalid');
+  const invalid = rows.some((row) => parsed[row.key] === 'invalid' || parsed[row.key] === 'former');
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     setSubmitted(true);
     if (!selectedMonth || invalid) return;
-    save.mutate({
-      organizationId,
-      entries: rows.map((row) => ({
+    const entries = rows
+      .filter((row) => parsed[row.key] !== storedAmount(row.userId))
+      .map((row) => ({
         userId: row.userId,
         month: selectedMonth,
         amount: parsed[row.key] as number | null,
-      })),
-    });
+      }));
+    if (entries.length === 0) {
+      onOpenChange(false);
+      return;
+    }
+    save.mutate({ organizationId, entries });
   };
 
   return (
@@ -224,7 +251,14 @@ export function TargetsDialog({ open, onOpenChange, organizationId }: TargetsDia
                 <legend className="sr-only">{t('month')}</legend>
                 {rows.map((row) => {
                   const inputId = `${id}-${row.key}`;
-                  const bad = submitted && parsed[row.key] === 'invalid';
+                  const error = submitted ? parsed[row.key] : null;
+                  const bad = error === 'invalid' || error === 'former';
+                  const helpId =
+                    row.userId === null
+                      ? `${id}-organization-help`
+                      : row.former
+                        ? `${inputId}-former-help`
+                        : undefined;
                   return (
                     <div
                       key={row.key}
@@ -238,11 +272,9 @@ export function TargetsDialog({ open, onOpenChange, organizationId }: TargetsDia
                           value={amounts[row.key] ?? ''}
                           aria-invalid={bad}
                           aria-describedby={
-                            row.userId === null
-                              ? `${id}-organization-help`
-                              : bad
-                                ? `${inputId}-error`
-                                : undefined
+                            [helpId, bad ? `${inputId}-error` : undefined]
+                              .filter(Boolean)
+                              .join(' ') || undefined
                           }
                           onChange={(event) =>
                             setAmounts((current) => ({ ...current, [row.key]: event.target.value }))
@@ -253,16 +285,16 @@ export function TargetsDialog({ open, onOpenChange, organizationId }: TargetsDia
                             id={`${inputId}-error`}
                             className="text-sm text-red-600 dark:text-red-400"
                           >
-                            {t('amountInvalid')}
+                            {t(error === 'former' ? 'formerMemberInvalid' : 'amountInvalid')}
                           </p>
                         )}
                       </div>
-                      {row.userId === null && (
+                      {helpId && (
                         <p
-                          id={`${id}-organization-help`}
+                          id={helpId}
                           className="text-xs text-gray-500 sm:col-span-2 dark:text-gray-400"
                         >
-                          {t('organizationHelp')}
+                          {t(row.former ? 'formerMemberHelp' : 'organizationHelp')}
                         </p>
                       )}
                     </div>

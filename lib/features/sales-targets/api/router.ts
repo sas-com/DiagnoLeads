@@ -13,6 +13,7 @@ import { TRPCError } from '@trpc/server';
 import { fiscalYearOf, fiscalYearRange } from '../fiscal-year';
 import {
   getFiscalYearStartMonth,
+  listFormerTargetHolders,
   listTargets,
   saveTargets,
   setFiscalYearStartMonth,
@@ -37,6 +38,11 @@ export const salesTargetsRouter = router({
       listTargets(ctx.db, { organizationId, months: range.months }),
       listAssignableMembers(ctx.db, organizationId),
     ]);
+    const formerMembers = await listFormerTargetHolders(
+      ctx.db,
+      targets,
+      new Set(members.map((member) => member.userId))
+    );
     return {
       fiscalYear,
       fiscalYearStartMonth: startMonth,
@@ -44,6 +50,11 @@ export const salesTargetsRouter = router({
       members: members.map((member) => ({
         userId: member.userId,
         displayName: memberDisplayName(member),
+      })),
+      /** Hold a target but can no longer hold leads: their targets can only be removed */
+      formerMembers: formerMembers.map((holder) => ({
+        userId: holder.userId,
+        displayName: holder.name,
       })),
       targets,
       canEdit: ctx.ability.can('update', 'Settings'),
@@ -73,7 +84,11 @@ export const salesTargetsRouter = router({
           message: 'You do not have permission to change the fiscal year',
         });
       }
-      await setFiscalYearStartMonth(ctx.db, ctx.organization.id, input.month);
+      await setFiscalYearStartMonth(ctx.db, {
+        organizationId: ctx.organization.id,
+        month: input.month,
+        userId: ctx.user.id,
+      });
       return { fiscalYearStartMonth: input.month };
     }),
 });

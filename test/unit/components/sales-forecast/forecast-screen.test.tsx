@@ -214,30 +214,78 @@ describe('TargetsDialog', () => {
       return `${year}-${String(month).padStart(2, '0')}-01`;
     }),
     members: [{ userId: REP, displayName: '営業 花子' }],
+    formerMembers: [] as { userId: string; displayName: string | null }[],
     targets: [{ userId: REP, month: '2026-10-01', amount: 8_000_000 }],
     canEdit: true,
   };
+  const pickOctober = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(screen.getByRole('combobox', { name: '月' }));
+    await user.click(screen.getByRole('option', { name: '2026-10' }));
+  };
 
-  it('fills the month and saves the organization and every member, empty as none', async () => {
+  it('fills the month and saves only the boxes that changed', async () => {
     const user = userEvent.setup();
     mocks.targets = { data: targetsData };
     const onOpenChange = vi.fn();
     renderWithIntl(<TargetsDialog open onOpenChange={onOpenChange} organizationId={ORG_ID} />);
-    await user.click(screen.getByRole('combobox', { name: '月' }));
-    await user.click(screen.getByRole('option', { name: '2026-10' }));
+    await pickOctober(user);
     expect(screen.getByLabelText('営業 花子')).toHaveValue('8000000');
     await user.type(screen.getByLabelText('組織全体'), '20,000,000');
     await user.click(screen.getByRole('button', { name: '保存' }));
+    // The member's unchanged 8,000,000 is not sent, so another admin's edit of it is kept
     expect(mocks.saves).toEqual([
       {
         organizationId: ORG_ID,
-        entries: [
-          { userId: null, month: '2026-10-01', amount: 20_000_000 },
-          { userId: REP, month: '2026-10-01', amount: 8_000_000 },
-        ],
+        entries: [{ userId: null, month: '2026-10-01', amount: 20_000_000 }],
       },
     ]);
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('removes a target by emptying its box and closes without a call when nothing changed', async () => {
+    const user = userEvent.setup();
+    mocks.targets = { data: targetsData };
+    const onOpenChange = vi.fn();
+    renderWithIntl(<TargetsDialog open onOpenChange={onOpenChange} organizationId={ORG_ID} />);
+    await pickOctober(user);
+    await user.click(screen.getByRole('button', { name: '保存' }));
+    expect(mocks.saves).toEqual([]);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+
+    await user.clear(screen.getByLabelText('営業 花子'));
+    await user.click(screen.getByRole('button', { name: '保存' }));
+    expect(mocks.saves).toEqual([
+      { organizationId: ORG_ID, entries: [{ userId: REP, month: '2026-10-01', amount: null }] },
+    ]);
+  });
+
+  it('only lets the target of someone who left be removed', async () => {
+    const user = userEvent.setup();
+    const LEFT = '770e8400-e29b-41d4-a716-446655440099';
+    mocks.targets = {
+      data: {
+        ...targetsData,
+        formerMembers: [{ userId: LEFT, displayName: '退職 次郎' }],
+        targets: [...targetsData.targets, { userId: LEFT, month: '2026-10-01', amount: 5_000_000 }],
+      },
+    };
+    renderWithIntl(<TargetsDialog open onOpenChange={vi.fn()} organizationId={ORG_ID} />);
+    await pickOctober(user);
+    const box = screen.getByLabelText('退職 次郎');
+    expect(box).toHaveValue('5000000');
+    expect(box).toHaveAccessibleDescription(/組織にいない人の目標です/);
+
+    await user.clear(box);
+    await user.type(box, '6000000');
+    await user.click(screen.getByRole('button', { name: '保存' }));
+    expect(screen.getByText('組織にいない人の目標は、欄を空にして消すことだけができます')).toBeInTheDocument();
+    expect(mocks.saves).toEqual([]);
+
+    await user.clear(box);
+    await user.click(screen.getByRole('button', { name: '保存' }));
+    expect(mocks.saves).toEqual([
+      { organizationId: ORG_ID, entries: [{ userId: LEFT, month: '2026-10-01', amount: null }] },
+    ]);
   });
 
   it('refuses amounts that are not whole yen', async () => {

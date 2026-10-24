@@ -1534,7 +1534,10 @@
       "saved": "Targets saved",
       "startSaved": "Fiscal year start changed",
       "error": "Could not save. Please try again",
-      "readOnly": "Only owners and admins can change the targets"
+      "readOnly": "Only owners and admins can change the targets",
+      "formerMember": "Someone who left",
+      "formerMemberHelp": "The target of someone no longer in the organization. It can only be removed (empty the box and save)",
+      "formerMemberInvalid": "The target of someone who left can only be removed by emptying the box"
     },
     "state": {
       "loadError": "Could not load the forecast",
