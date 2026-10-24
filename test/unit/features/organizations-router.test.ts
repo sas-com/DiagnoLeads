@@ -257,6 +257,27 @@ describe('Organizations Router', () => {
       expect(mockDb.insert).toHaveBeenCalledTimes(2); // Organization + Membership
     });
 
+    // #483: a new organization starts with empty settings; features write their keys themselves
+    it('should create with empty settings, even when settings are sent', async () => {
+      mockDb.query.organizations.findFirst.mockResolvedValue(null);
+      mockDb.returning.mockResolvedValueOnce([mockOrganization]);
+      mockDb.values.mockReturnThis();
+      mockDb.insert.mockReturnThis();
+
+      const caller = appRouter.createCaller(mockContext);
+      await caller.organizations.create({
+        name: 'New Organization',
+        slug: 'new-org',
+        settings: { leadIntakeUserIds: ['user-123'] },
+      } as Parameters<typeof caller.organizations.create>[0]);
+
+      expect(mockDb.values.mock.calls[0][0]).toEqual({
+        name: 'New Organization',
+        slug: 'new-org',
+        settings: {},
+      });
+    });
+
     it('should throw CONFLICT if slug is already taken', async () => {
       mockDb.query.organizations.findFirst.mockResolvedValue(mockOrganization);
 

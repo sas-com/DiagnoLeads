@@ -136,7 +136,7 @@ export const organizationsRouter = router({
       .values({
         name: input.name,
         slug: input.slug,
-        settings: input.settings || {},
+        settings: {},
       })
       .returning();
 

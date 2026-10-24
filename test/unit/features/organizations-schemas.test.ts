@@ -188,23 +188,19 @@ describe('createOrganizationSchema', () => {
     expect(result.slug).toBe('my-organization');
   });
 
-  it('should accept full input with settings', () => {
+  // #483: each feature writes its own key in organizations.settings through its own checks
+  it('should strip settings so the create cannot place keys', () => {
     const input = {
       name: 'Enterprise Corp',
       slug: 'enterprise-corp',
       settings: {
-        plan: 'enterprise',
-        maxUsers: 100,
-        features: ['sso', 'audit-logs'],
+        leadIntakeUserIds: ['123e4567-e89b-12d3-a456-426614174000'],
       },
     };
 
     const result = createOrganizationSchema.parse(input);
-    expect(result.settings).toEqual({
-      plan: 'enterprise',
-      maxUsers: 100,
-      features: ['sso', 'audit-logs'],
-    });
+    expect(result).toEqual({ name: 'Enterprise Corp', slug: 'enterprise-corp' });
+    expect(result).not.toHaveProperty('settings');
   });
 
   it('should require name', () => {

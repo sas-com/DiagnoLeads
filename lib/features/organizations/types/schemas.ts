@@ -38,7 +38,11 @@ export const updateOrganizationSchema = z.object({
 export type UpdateOrganizationInput = z.infer<typeof updateOrganizationSchema>;
 
 /**
- * Create organization schema
+ * Create organization schema: the name and the slug only.
+ *
+ * `settings` is not accepted either (#483): a new organization starts with `{}` and each feature
+ * writes its own key through its own procedure, with that procedure's checks (members only, etc.).
+ * A settings field sent anyway is stripped by zod.
  */
 export const createOrganizationSchema = z.object({
   name: z.string().min(1).max(255),
@@ -47,6 +51,5 @@ export const createOrganizationSchema = z.object({
     .min(1)
     .max(255)
     .regex(/^[a-z0-9-]+$/),
-  settings: z.record(z.unknown()).default({}).optional(),
 });
 export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>;
