@@ -68,19 +68,68 @@ export type FilterGroup = {
 };
 
 /**
+ * Longest contact values a lead takes (#575), the same as the public diagnosis forms (AX
+ * migration, builder) take them. The DB columns are `text`, so these are the only limits.
+ * The names of the inflow (agencyName, referrerName) take 200 (leadPipelineFieldsSchema).
+ */
+export const LEAD_TEXT_MAX_LENGTH = {
+  name: 100,
+  company: 200,
+  email: 254,
+  phone: 30,
+} as const;
+export type LeadTextField = keyof typeof LEAD_TEXT_MAX_LENGTH;
+
+/**
+ * A contact value of the lead, refused over its limit with the Japanese message of
+ * `validation.maxLength` (locales/ja). A form passing its own error map (the lead page's cards,
+ * the new lead form) shows the message in the page's language instead.
+ */
+export function leadTextSchema(field: LeadTextField) {
+  const max = LEAD_TEXT_MAX_LENGTH[field];
+  return z
+    .string({
+      errorMap: (issue, ctx) =>
+        issue.code === z.ZodIssueCode.too_big
+          ? { message: `最大${max}文字までです` }
+          : { message: ctx.defaultError },
+    })
+    .max(max);
+}
+
+/**
+ * Longest diagnostic responses written through leads.create / leads.update, as compact JSON
+ * (#575). The screens send none: a new lead gets {} and the diagnoses write their own.
+ */
+export const LEAD_RESPONSES_MAX_CHARS = 20_000;
+
+/** Whether the responses fit LEAD_RESPONSES_MAX_CHARS (false when they are no JSON, e.g. a BigInt) */
+function responsesFit(responses: Record<string, unknown>): boolean {
+  try {
+    return JSON.stringify(responses).length <= LEAD_RESPONSES_MAX_CHARS;
+  } catch {
+    return false;
+  }
+}
+
+const leadResponsesSchema = z
+  .record(z.unknown())
+  .refine(responsesFit, `診断の回答は JSON で最大${LEAD_RESPONSES_MAX_CHARS}文字までです`);
+
+/**
  * Lead creation schema
  */
 export const createLeadSchema = z
   .object({
     organizationId: z.string().uuid(),
-    email: z.string().email('有効なメールアドレスを入力してください'),
-    name: z.string().optional(),
-    company: z.string().optional(),
-    phone: z.string().optional(),
+    email: leadTextSchema('email').email('有効なメールアドレスを入力してください'),
+    name: leadTextSchema('name').optional(),
+    company: leadTextSchema('company').optional(),
+    phone: leadTextSchema('phone').optional(),
     status: leadStatusEnum.default('new'),
     score: z.number().int().min(0).max(100).optional(),
     source: leadSourceEnum.optional(),
-    responses: z.record(z.unknown()).default({}),
+    responses: leadResponsesSchema.default({}),
   })
   .merge(leadPipelineFieldsSchema);
 export type CreateLeadInput = z.infer<typeof createLeadSchema>;
@@ -92,14 +141,14 @@ export const updateLeadSchema = z
   .object({
     organizationId: z.string().uuid(),
     id: z.string().uuid(),
-    email: z.string().email('有効なメールアドレスを入力してください').optional(),
-    name: z.string().optional(),
-    company: z.string().optional(),
-    phone: z.string().optional(),
+    email: leadTextSchema('email').email('有効なメールアドレスを入力してください').optional(),
+    name: leadTextSchema('name').optional(),
+    company: leadTextSchema('company').optional(),
+    phone: leadTextSchema('phone').optional(),
     status: leadStatusEnum.optional(),
     score: z.number().int().min(0).max(100).optional(),
     source: leadSourceEnum.optional(),
-    responses: z.record(z.unknown()).optional(),
+    responses: leadResponsesSchema.optional(),
   })
   .merge(leadPipelineFieldsSchema);
 export type UpdateLeadInput = z.infer<typeof updateLeadSchema>;
@@ -286,17 +335,19 @@ export const bulkDeleteSchema = z.object({
 export type BulkDeleteInput = z.infer<typeof bulkDeleteSchema>;
 
 /**
- * Bulk create schema for importing leads
+ * Bulk create schema for importing leads. Each row has the limits of a lead made by hand; the
+ * import marks a row over them as an error before sending (import-service.ts), since one such
+ * row refuses the whole request.
  */
 export const bulkCreateSchema = z.object({
   organizationId: z.string().uuid(),
   leads: z
     .array(
       z.object({
-        email: z.string().email(),
-        name: z.string().optional(),
-        company: z.string().optional(),
-        phone: z.string().optional(),
+        email: leadTextSchema('email').email(),
+        name: leadTextSchema('name').optional(),
+        company: leadTextSchema('company').optional(),
+        phone: leadTextSchema('phone').optional(),
         status: leadStatusEnum.default('new'),
         source: leadSourceEnum.optional(),
         score: z.number().int().min(0).max(100).optional(),

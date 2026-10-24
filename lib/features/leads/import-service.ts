@@ -6,15 +6,17 @@
 import * as XLSX from 'xlsx';
 import { z } from 'zod';
 import { leadStatusEnum, normalizeLeadStatus } from './types/pipeline';
+import { leadTextSchema } from './types/schemas';
 
 /**
- * Imported lead row schema
+ * Imported lead row schema. The text limits are those of leads.bulkCreate (#575): a row over
+ * them is shown as an error and left out, instead of the server refusing every row.
  */
 const importLeadRowSchema = z.object({
-  email: z.string().email('Invalid email format'),
-  name: z.string().optional(),
-  company: z.string().optional(),
-  phone: z.string().optional(),
+  email: leadTextSchema('email').email('Invalid email format'),
+  name: leadTextSchema('name').optional(),
+  company: leadTextSchema('company').optional(),
+  phone: leadTextSchema('phone').optional(),
   status: z.preprocess(normalizeLeadStatus, leadStatusEnum).default('new'),
   source: z.enum(['website', 'embed', 'api']).optional(),
   score: z.coerce.number().int().min(0).max(100).optional(),
