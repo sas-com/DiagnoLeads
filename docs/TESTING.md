@@ -396,6 +396,11 @@ bun run test:e2e
 bun run test:e2e -- --ui
 ```
 
+- パスワードの再設定の E2E（`test/e2e/auth.spec.ts`）は、メールでしか届かないリンクのトークンを、アプリと同じ DB（`DATABASE_URL`）の `verification` の行から読む。自分専用のユーザーも DB に作って最後に消す（`test/e2e/helpers/database.ts`）
+  - ユーザーを足し消しするので、`DATABASE_URL` が手元の DB（localhost・127.0.0.1・[::1]）のときだけ動く。それ以外は飛ばす。CI では飛ばさずに落とす。DB につなぐ関数（`connectE2EDatabase`）も、手元でない DB を渡されるとエラーにする
+  - `DATABASE_URL` は、サーバーと同じ DB で、E2E の seed（`bun run test:e2e:seed`）を入れたものにする。違うと、ユーザーを作るところ（E2E の組織がない）か、トークンを読むところ（`found 0`）で落ちる
+  - テストが Playwright のタイムアウトで止まると、後片付けが走らないことがあり、`e2e-reset-*@example.com` のユーザーが手元の DB に残る（消してよい。CI は毎回新しい DB を使う）
+
 ---
 
 ## CI/CD 統合
