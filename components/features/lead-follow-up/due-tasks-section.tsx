@@ -5,32 +5,46 @@ import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { DUE_TASK_SCOPES, type DueTaskScope } from '@/lib/features/lead-follow-up/types/schemas';
+import {
+  DUE_TASKS_MAX,
+  DUE_TASKS_SHOWN,
+  DUE_TASK_SCOPES,
+  type DueTaskScope,
+} from '@/lib/features/lead-follow-up/types/schemas';
 import { trpc } from '@/lib/trpc/client';
-import { RotateCw } from 'lucide-react';
+import { ChevronDown, ChevronUp, RotateCw } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { CheckWithText, DueLabel, TaskKindBadge, useTaskTitle, useUpdateTask } from './task-parts';
 
 /**
  * Dashboard card "today" (Refs #85): open next actions and takeaways due today or earlier,
  * oldest due first, each with its lead. Shows the user's own first ("mine only", the default);
  * "everyone" lists all with the user's own on top. Ticking one completes it.
+ * The first DUE_TASKS_SHOWN are listed; "N more" opens the rest, fetched then (#431).
  */
 export function DueTasksSection({ organizationId }: { organizationId: string }) {
   const t = useTranslations('leadFollowUp.today');
   const tTasks = useTranslations('leadFollowUp.tasks');
   const locale = useLocale();
+  const listId = useId();
   const titleOf = useTaskTitle();
   const update = useUpdateTask(organizationId);
   const [scope, setScope] = useState<DueTaskScope>('mine');
+  const [expanded, setExpanded] = useState(false);
   const query = trpc.leadFollowUp.dueTasks.useQuery(
-    { organizationId, scope },
+    expanded ? { organizationId, scope, limit: DUE_TASKS_MAX } : { organizationId, scope },
     { enabled: !!organizationId, staleTime: 60 * 1000, placeholderData: (previous) => previous }
   );
   const data = query.data;
-  const rest = data ? data.total - data.items.length : 0;
+  // While the rest is on its way the first page stays; a longer list kept from before is cut
+  const items = data ? (expanded ? data.items : data.items.slice(0, DUE_TASKS_SHOWN)) : [];
+  const rest = data ? data.total - items.length : 0;
+  const loadingRest = expanded && query.isPlaceholderData;
+  const listShown = !query.isError && items.length > 0;
+  // Under the list: "N more", and once opened a way back (also when the rest failed to load)
+  const showToggle = expanded ? listShown || query.isError : listShown && rest > 0;
   const scopeLabels: Record<DueTaskScope, string> = {
     mine: t('scopeMine'),
     all: t('scopeAll'),
@@ -58,7 +72,9 @@ export function DueTasksSection({ organizationId }: { organizationId: string }) 
           variant="outline"
           value={scope}
           onValueChange={(value) => {
-            if (value) setScope(value as DueTaskScope);
+            if (!value) return;
+            setScope(value as DueTaskScope);
+            setExpanded(false);
           }}
           aria-label={t('scopeLabel')}
         >
@@ -87,13 +103,13 @@ export function DueTasksSection({ organizationId }: { organizationId: string }) 
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-10 w-full" />
         </div>
-      ) : data.items.length === 0 ? (
+      ) : items.length === 0 ? (
         <p className="rounded-lg bg-gray-50 px-4 py-6 text-center text-sm text-gray-500 dark:bg-gray-800/50 dark:text-gray-400">
           {data.scope === 'mine' ? t('emptyMine') : t('empty')}
         </p>
       ) : (
-        <ul className="divide-y divide-gray-100 dark:divide-gray-800">
-          {data.items.map((task) => {
+        <ul id={listId} className="divide-y divide-gray-100 dark:divide-gray-800">
+          {items.map((task) => {
             const title = titleOf(task);
             return (
               <li key={task.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
@@ -129,8 +145,26 @@ export function DueTasksSection({ organizationId }: { organizationId: string }) 
           })}
         </ul>
       )}
-      {rest > 0 && (
-        <p className="mt-2 text-right text-sm text-gray-500">{t('more', { count: rest })}</p>
+      {loadingRest && <Skeleton className="mt-2 h-10 w-full" />}
+      {showToggle && (
+        <div className="mt-2 flex flex-wrap items-center justify-end gap-x-3 text-sm text-gray-500">
+          {/* Past DUE_TASKS_MAX the rest stays a count */}
+          {expanded && listShown && !loadingRest && rest > 0 && (
+            <span>{t('more', { count: rest })}</span>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-auto px-1 py-0.5 text-sm text-gray-500 dark:text-gray-400"
+            aria-expanded={expanded}
+            aria-controls={listShown ? listId : undefined}
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {expanded ? t('showLess') : t('more', { count: rest })}
+            {expanded ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
+          </Button>
+        </div>
       )}
     </Card>
   );

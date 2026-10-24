@@ -2,12 +2,8 @@
 
 import { cn } from '@/lib/utils';
 import type { ApexOptions } from 'apexcharts';
-import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
-
-const ReactApexChart = dynamic(() => import('react-apexcharts'), {
-  ssr: false,
-});
+import { ApexChart } from './apex-chart';
 
 function useIsDarkMode() {
   const [isDark, setIsDark] = useState(false);
@@ -327,7 +323,7 @@ export function InteractiveAreaChart({
 
   return (
     <div className={cn('w-full', className)}>
-      <ReactApexChart options={options} series={series} type="area" height={height} />
+      <ApexChart options={options} series={series} type="area" height={height} />
     </div>
   );
 }
@@ -485,13 +481,13 @@ export function BrushChart({
 
   return (
     <div className={cn('w-full', className)}>
-      <ReactApexChart
+      <ApexChart
         options={mainOptions}
         series={[{ name: category, data: seriesData }]}
         type="area"
         height={mainHeight}
       />
-      <ReactApexChart
+      <ApexChart
         options={brushOptions}
         series={[{ name: category, data: seriesData }]}
         type="area"

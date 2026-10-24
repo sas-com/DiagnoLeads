@@ -1,5 +1,6 @@
 'use client';
 
+import { InlineLoadError } from '@/components/common/inline-load-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -61,7 +62,8 @@ export function MeetingRequestCard({ organizationId, leadId }: MeetingRequestCar
   });
 
   const data = query.data;
-  if (query.isError || (data && !data.request)) return null;
+  // A failed request shows an error in the card (#431); only "not allowed" hides it
+  if (query.error?.data?.code === 'FORBIDDEN' || (data && !data.request)) return null;
 
   const day = (value: string) =>
     format.dateTime(new Date(`${value}T00:00:00Z`), { dateStyle: 'medium', timeZone: 'UTC' });
@@ -91,7 +93,9 @@ export function MeetingRequestCard({ organizationId, leadId }: MeetingRequestCar
         {unverified && <Badge color="amber">{t('unverifiedBadge')}</Badge>}
       </div>
 
-      {!request || !data ? (
+      {!data && query.isError ? (
+        <InlineLoadError onRetry={() => void query.refetch()} />
+      ) : !request || !data ? (
         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" />
       ) : (
         <div className="space-y-4">

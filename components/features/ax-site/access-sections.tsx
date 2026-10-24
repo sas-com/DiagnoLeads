@@ -3,19 +3,19 @@ import { allowedEmailDomains } from '@/lib/email/allowed-recipients';
 import { COLUMN_INDEX_PATH, columnPath, columnsFor } from '@/lib/features/ax-site/columns';
 import { axResultEmailEnabled } from '@/lib/features/diagnostics/ax-migration/result-email-config';
 import { turnstileSiteKey } from '@/lib/features/diagnostics/turnstile';
+import { cn } from '@/lib/utils';
 import {
   ArrowRight,
   Check,
+  CircleCheck,
   CirclePause,
-  ClipboardList,
+  ExternalLink,
   Globe,
   HardDrive,
   Info,
-  MonitorUp,
   Package,
-  Route,
+  Server,
   ShieldOff,
-  Sparkles,
   UserRound,
   Wrench,
 } from 'lucide-react';
@@ -24,8 +24,15 @@ import { AxCrossLink } from './ax-cross-link';
 import { AxCtaLink } from './ax-cta-link';
 import { AxDiagnosisFrame } from './ax-landing-view';
 import { ColumnBreadcrumbs } from './column-article';
-import { CtaCaption, EYEBROW, SECTION_HEADING, type SectionProps } from './landing-sections';
 import {
+  CtaCaption,
+  DiagnosisIntro,
+  SECTION_HEADING,
+  SECTION_LEAD,
+  type SectionProps,
+} from './landing-sections';
+import {
+  AX_HERO_CTA_ID,
   AX_PROBLEMS_CTA_ID,
   AX_SECTIONS,
   axConsultationUrl,
@@ -34,7 +41,8 @@ import {
 
 /**
  * Sections of the Access landing page (#296). It shares the frame, the header anchors
- * (AX_SECTIONS) and the look of the main landing page; the copy lives in `axAccess`.
+ * (AX_SECTIONS) and the look of the main landing page, the STUDIO design (#414, #425); the copy
+ * lives in `axAccess`.
  */
 
 const PATHS = [
@@ -45,14 +53,17 @@ const PATHS = [
 
 /** Text link to another page of the site: descriptive text, a touch target, the logo's outline */
 const CROSS_LINK =
-  'inline-flex items-start gap-1 rounded py-1 font-bold leading-relaxed text-ax-teal-dark underline underline-offset-4 hover:text-ax-deep focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ax-teal-dark';
+  'inline-flex items-start gap-1 rounded py-1 font-bold leading-relaxed text-ax-leaf underline underline-offset-4 hover:text-ax-forest focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ax-forest';
+/** White icon on a forest square, as on the cards of the main page */
+const ICON_TILE =
+  'flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-ax-forest text-white';
 
 /** Where this page sits in the site, above the hero (#332) */
 export async function AxAccessBreadcrumbs({ locale }: SectionProps) {
   const tc = await getTranslations({ locale, namespace: 'axColumn' });
   const t = await getTranslations({ locale, namespace: 'axAccess' });
   return (
-    <div className="mx-auto max-w-6xl px-4 pt-6 sm:px-6">
+    <div className="mx-auto max-w-6xl px-4 py-3 sm:px-6">
       <ColumnBreadcrumbs
         items={[
           { name: tc('breadcrumbHome'), href: `/${locale}/ax-migration` },
@@ -65,26 +76,43 @@ export async function AxAccessBreadcrumbs({ locale }: SectionProps) {
   );
 }
 
+const TRIGGER_KEYS = ['support', 'people', 'm365'] as const;
+
 export async function AxAccessHero({ locale }: SectionProps) {
   const t = await getTranslations({ locale, namespace: 'axAccess.hero' });
+  const common = await getTranslations({ locale, namespace: 'axSite' });
   const consultationUrl = axConsultationUrl();
 
   return (
-    <section aria-labelledby="ax-hero-heading" className="relative overflow-hidden bg-white">
-      <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-14 sm:px-6 md:py-20 lg:grid-cols-[1.15fr_0.85fr]">
+    <section aria-labelledby="ax-hero-heading" className="overflow-hidden bg-ax-forest text-white">
+      <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-14 sm:px-6 md:py-20 lg:grid-cols-[1.1fr_0.9fr] lg:gap-14">
         <div className="space-y-6">
-          <p className="text-sm font-bold tracking-wider text-ax-teal-dark">{t('eyebrow')}</p>
+          <p className="text-sm font-bold tracking-wider text-ax-neon">{t('eyebrow')}</p>
           <h1
             id="ax-hero-heading"
             className="text-[1.75rem] font-bold leading-snug sm:text-4xl lg:text-[2.6rem] lg:leading-[1.35]"
           >
             {t('title')}
           </h1>
-          <p className="font-bold leading-relaxed">{t('lead')}</p>
-          <div className="space-y-3 pt-2">
+          <p className="leading-relaxed text-white/90">{t('lead')}</p>
+          {/* What brings an Access tool up for review, ahead of the check, as on the main page */}
+          <div>
+            <p className="text-sm font-bold text-white/90">{t('triggersLabel')}</p>
+            <ul className="mt-2 flex flex-wrap gap-2">
+              {TRIGGER_KEYS.map((key) => (
+                <li
+                  key={key}
+                  className="rounded border border-white/60 px-3 py-1.5 text-sm font-bold leading-snug"
+                >
+                  {t(`triggers.${key}`)}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div id={AX_HERO_CTA_ID} className="space-y-3 pt-2">
             <CtaCaption locale={locale}>{t('ctaCaption')}</CtaCaption>
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-              <AxCtaLink href={`#${AX_SECTIONS.diagnosis}`} location="access-hero">
+              <AxCtaLink href={`#${AX_SECTIONS.diagnosis}`} location="access-hero" tone="dark">
                 {t('cta')}
               </AxCtaLink>
               {consultationUrl && (
@@ -92,35 +120,31 @@ export async function AxAccessHero({ locale }: SectionProps) {
                   href={consultationUrl}
                   variant="consultation"
                   location="access-hero"
+                  tone="dark"
                   external
+                  newTabLabel={common('newTab')}
                 >
                   {t('consult')}
                 </AxCtaLink>
               )}
             </div>
-            <p className="text-sm leading-relaxed text-gray-700">{t('pdfNote')}</p>
+            <p className="text-sm leading-relaxed text-white/90">{t('pdfNote')}</p>
           </div>
         </div>
 
-        <div className="relative mx-auto w-full max-w-md">
-          {/* Decorative glow in the site's lime-to-teal gradient */}
-          <div
-            aria-hidden="true"
-            className="absolute -inset-6 rounded-[3rem] bg-gradient-to-br from-ax-lime to-ax-teal opacity-30 blur-2xl"
-          />
-          <div className="relative space-y-3 rounded-3xl bg-white p-6 shadow-[0_12px_40px_rgba(0,0,0,0.12)] ring-1 ring-black/5">
-            <p className="text-sm font-bold text-ax-teal-dark">{t('paths.title')}</p>
-            <ul className="space-y-3">
-              {PATHS.map(({ key, icon: Icon }) => (
-                <li key={key} className="flex items-center gap-3 rounded-2xl bg-ax-mist p-4">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-ax-teal text-white">
-                    <Icon className="h-5 w-5" aria-hidden="true" />
-                  </span>
-                  <span className="font-bold">{t(`paths.${key}`)}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
+        {/* The three ways in place of the main page's picture */}
+        <div className="mx-auto w-full max-w-md bg-white p-6 text-ax-ink sm:p-8">
+          <p className="text-sm font-bold text-ax-leaf">{t('paths.title')}</p>
+          <ul className="mt-4 space-y-3">
+            {PATHS.map(({ key, icon: Icon }) => (
+              <li key={key} className="flex items-center gap-4 bg-ax-cloud p-4">
+                <span className={ICON_TILE}>
+                  <Icon className="h-6 w-6" aria-hidden="true" />
+                </span>
+                <span className="font-bold">{t(`paths.${key}`)}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
     </section>
@@ -140,58 +164,59 @@ const SUPPORT_END_COLUMN = 'access-office-support-end';
 /** Facts with their source and date; no countdown (#158) */
 export async function AxAccessSupportEnd({ locale }: SectionProps) {
   const t = await getTranslations({ locale, namespace: 'axAccess.supportEnd' });
+  const common = await getTranslations({ locale, namespace: 'axSite' });
   // The article on the support end only (the other Access columns are on the column list),
   // in the page's language only (they are Japanese for now, #324)
   const columns = columnsFor('access').filter(
     (column) => column.locale === locale && column.slug === SUPPORT_END_COLUMN
   );
   return (
-    <section aria-labelledby="ax-access-support-heading" className="bg-ax-mist py-12 sm:py-16">
+    <section aria-labelledby="ax-access-support-heading" className="bg-white py-14 sm:py-20">
       <div className="mx-auto max-w-3xl px-4 sm:px-6">
-        <div className="rounded-2xl bg-white p-6 shadow-sm sm:p-8">
-          <h2
-            id="ax-access-support-heading"
-            className="flex items-center gap-2 text-xl font-bold sm:text-2xl"
-          >
-            <Info className="h-6 w-6 shrink-0 text-ax-teal-dark" aria-hidden="true" />
-            {t('title')}
-          </h2>
+        {/* A dated fact: set apart by the forest rule, not by a warning color */}
+        <div className="border-t-4 border-ax-forest bg-ax-cloud p-6 sm:p-8">
+          {/* The same heading as the box for AS/400 and ACOS readers */}
+          <div className="flex items-center gap-3">
+            <span className={ICON_TILE}>
+              <Info className="h-6 w-6" aria-hidden="true" />
+            </span>
+            <h2 id="ax-access-support-heading" className="text-xl font-bold sm:text-2xl">
+              {t('title')}
+            </h2>
+          </div>
           <ul className="mt-5 space-y-2">
             {SUPPORT_KEYS.map((key) => (
               <li key={key} className="flex gap-2 font-bold leading-relaxed">
-                <span
-                  aria-hidden="true"
-                  className="mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full bg-ax-teal-dark"
-                />
+                <span aria-hidden="true" className="mt-2.5 h-1.5 w-1.5 shrink-0 bg-ax-forest" />
                 <span>{t(`items.${key}`)}</span>
               </li>
             ))}
           </ul>
           <p className="mt-4 leading-relaxed text-gray-700">{t('body')}</p>
-          <p className="mt-4 text-xs text-gray-600">
-            {t('source')}
+          {/* The links side by side and at least 24px high, so a finger can pick either */}
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
+            <p>{t('source')}</p>
             {SUPPORT_SOURCES.map((href, index) => (
               <a
                 key={href}
                 href={href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="ml-2 underline underline-offset-2"
+                className="inline-flex min-h-6 items-center gap-0.5 rounded underline underline-offset-2 hover:text-ax-forest focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ax-forest"
               >
                 {t('sourceLink', { number: index + 1 })}
+                <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+                <span className="sr-only">{common('newTab')}</span>
               </a>
             ))}
-          </p>
+          </div>
           {columns.length > 0 && (
-            <div className="mt-6 border-t border-gray-200 pt-4">
-              <p className="text-sm font-bold text-ax-teal-dark">{t('relatedColumn')}</p>
+            <div className="mt-6 border-t border-gray-300 pt-4">
+              <p className="text-sm font-bold text-ax-leaf">{t('relatedColumn')}</p>
               <ul className="mt-2 space-y-2">
                 {columns.map((column) => (
                   <li key={column.slug}>
-                    <a
-                      href={`/${column.locale}${columnPath(column.slug)}`}
-                      className="inline-flex items-start gap-1 font-bold leading-relaxed underline underline-offset-4 hover:text-ax-teal-dark"
-                    >
+                    <a href={`/${column.locale}${columnPath(column.slug)}`} className={CROSS_LINK}>
                       {column.title}
                       <ArrowRight className="mt-1.5 h-4 w-4 shrink-0" aria-hidden="true" />
                     </a>
@@ -214,31 +239,18 @@ export async function AxAccessProblems({ locale }: SectionProps) {
     <section
       id={AX_SECTIONS.problems}
       aria-labelledby="ax-problems-heading"
-      className="relative overflow-hidden bg-gradient-to-br from-ax-lime via-[#8cc386] to-ax-teal py-16 sm:py-24"
+      className="bg-ax-mist py-16 sm:py-24"
     >
-      {/* Faint rings like the lightbulb motif of maru2-dx.com */}
-      <div
-        aria-hidden="true"
-        className="absolute -left-24 top-10 h-96 w-96 rounded-full border-[48px] border-white/20"
-      />
-      <div
-        aria-hidden="true"
-        className="absolute -right-16 bottom-0 h-72 w-72 rounded-full border-[36px] border-white/15"
-      />
-      <div className="relative mx-auto max-w-5xl px-4 text-center sm:px-6">
-        <h2
-          id="ax-problems-heading"
-          className="inline-block bg-white px-6 py-2 text-2xl font-bold sm:text-[2.25rem]"
-        >
+      <div className="mx-auto max-w-5xl px-4 sm:px-6">
+        <h2 id="ax-problems-heading" className={SECTION_HEADING}>
           {t('title')}
         </h2>
         <ul className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {PROBLEM_KEYS.map((key) => (
-            <li
-              key={key}
-              className="flex min-h-24 items-center justify-center rounded-[2.5rem] border-2 border-ax-ink bg-white px-6 py-4 text-center font-bold leading-relaxed"
-            >
-              {t(`items.${key}`)}
+            <li key={key} className="flex gap-3 bg-white p-5 font-bold leading-relaxed sm:p-6">
+              {/* A plain mark: a check next to a problem would read as "no problem" */}
+              <span aria-hidden="true" className="mt-2.5 h-2 w-2 shrink-0 bg-ax-forest" />
+              <span>{t(`items.${key}`)}</span>
             </li>
           ))}
         </ul>
@@ -263,11 +275,11 @@ export async function AxAccessRisks({ locale }: SectionProps) {
         <h2 id="ax-access-risks-heading" className={SECTION_HEADING}>
           {t('title')}
         </h2>
-        <p className="mx-auto mt-5 max-w-3xl text-center font-bold leading-relaxed">{t('lead')}</p>
-        <ul className="mt-12 grid gap-5 sm:grid-cols-2">
+        <p className={SECTION_LEAD}>{t('lead')}</p>
+        <ul className="mt-12 grid gap-6 sm:grid-cols-2">
           {RISKS.map(({ key, icon: Icon }) => (
-            <li key={key} className="flex gap-4 rounded-2xl bg-ax-mist p-6">
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-ax-deep text-white">
+            <li key={key} className="flex gap-4 bg-ax-cloud p-6 sm:p-8">
+              <span className={ICON_TILE}>
                 <Icon className="h-6 w-6" aria-hidden="true" />
               </span>
               <div>
@@ -279,7 +291,7 @@ export async function AxAccessRisks({ locale }: SectionProps) {
             </li>
           ))}
         </ul>
-        <p className="mt-8 text-center text-sm font-bold">{t('note')}</p>
+        <p className="mt-10 text-center font-bold leading-relaxed">{t('note')}</p>
       </div>
     </section>
   );
@@ -301,25 +313,23 @@ export async function AxAccessPaths({ locale }: SectionProps) {
         <h2 id="ax-access-paths-heading" className={SECTION_HEADING}>
           {t('title')}
         </h2>
-        <p className="mx-auto mt-5 max-w-3xl text-center font-bold leading-relaxed">{t('lead')}</p>
-        <ul className="mt-12 grid gap-5 md:grid-cols-3">
+        <p className={SECTION_LEAD}>{t('lead')}</p>
+        <ul className="mt-12 grid gap-6 md:grid-cols-3">
           {PATHS.map(({ key, icon: Icon }) => (
-            <li key={key} className="flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm">
-              <div className="flex items-center gap-3 bg-ax-teal-dark px-6 py-4 text-white">
+            <li key={key} className="flex flex-col bg-white">
+              <div className="flex items-center gap-3 bg-ax-forest px-6 py-4 text-white">
                 <Icon className="h-6 w-6 shrink-0" aria-hidden="true" />
                 <h3 className="text-lg font-bold">{t(`items.${key}.title`)}</h3>
               </div>
-              <div className="flex-1 space-y-4 p-6">
+              <div className="flex flex-1 flex-col gap-5 p-6">
                 <p className="text-sm leading-relaxed text-gray-700">{t(`items.${key}.body`)}</p>
-                <div>
-                  <p className="text-xs font-bold text-ax-teal-dark">{t('fitLabel')}</p>
-                  <ul className="mt-2 space-y-2 text-sm leading-relaxed">
+                {/* The green box of the main page's challenge cards */}
+                <div className="flex-1 rounded bg-ax-leaf/10 p-4">
+                  <p className="text-sm font-bold text-ax-leaf">{t('fitLabel')}</p>
+                  <ul className="mt-3 space-y-2">
                     {PATH_FITS[key].map((fit) => (
-                      <li key={fit} className="flex gap-2">
-                        <Check
-                          className="mt-0.5 h-4 w-4 shrink-0 text-ax-teal-dark"
-                          aria-hidden="true"
-                        />
+                      <li key={fit} className="flex gap-2 text-sm font-bold leading-snug">
+                        <CircleCheck className="h-5 w-5 shrink-0 text-ax-leaf" aria-hidden="true" />
                         <span>{t(`items.${key}.fits.${fit}`)}</span>
                       </li>
                     ))}
@@ -329,7 +339,7 @@ export async function AxAccessPaths({ locale }: SectionProps) {
             </li>
           ))}
         </ul>
-        <p className="mt-8 text-center text-sm font-bold">{t('fixNote')}</p>
+        <p className="mt-10 text-center font-bold leading-relaxed">{t('fixNote')}</p>
         {/* The phone CTA bar stays hidden next to this button, as below the concerns of the main page */}
         <div id={AX_PROBLEMS_CTA_ID} className="mt-8 text-center">
           <AxCtaLink href={`#${AX_SECTIONS.diagnosis}`} location="access-paths">
@@ -354,7 +364,7 @@ export async function AxAccessPathsColumn({ locale }: SectionProps) {
   return (
     <div className="-mt-8 bg-ax-mist pb-16 sm:-mt-12 sm:pb-24">
       <div className="mx-auto max-w-3xl px-4 sm:px-6">
-        <div className="rounded-2xl bg-white px-6 py-5 text-center shadow-sm">
+        <div className="bg-white px-6 py-5 text-center">
           <p className="text-sm leading-relaxed text-gray-700">{t('lead')}</p>
           <AxCrossLink
             href={`/${column.locale}${columnPath(column.slug)}`}
@@ -370,13 +380,10 @@ export async function AxAccessPathsColumn({ locale }: SectionProps) {
   );
 }
 
-const STEPS = [
-  { key: 'inventory', icon: ClipboardList },
-  { key: 'decide', icon: Route },
-  { key: 'migrate', icon: MonitorUp },
-  { key: 'ax', icon: Sparkles },
-] as const;
+/** The free check first, as on the main page, then the steps of an Access project */
+const STEPS = ['web', 'inventory', 'decide', 'migrate', 'ax'] as const;
 
+/** Timeline of the main page's steps: the lead stays in view next to it on wide screens */
 export async function AxAccessSteps({ locale }: SectionProps) {
   const t = await getTranslations({ locale, namespace: 'axAccess.steps' });
   return (
@@ -385,32 +392,40 @@ export async function AxAccessSteps({ locale }: SectionProps) {
       aria-labelledby="ax-steps-heading"
       className="bg-white py-16 sm:py-24"
     >
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        <h2 id="ax-steps-heading" className={SECTION_HEADING}>
-          {t('title')}
-        </h2>
-        <ol className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {STEPS.map(({ key, icon: Icon }) => (
-            <li key={key} className="flex flex-col rounded-2xl bg-ax-mist p-6">
-              <div className="flex items-center gap-3">
+      <div className="mx-auto grid max-w-6xl gap-10 px-4 sm:px-6 lg:grid-cols-[0.8fr_1.2fr] lg:gap-16">
+        <div className="lg:sticky lg:top-24 lg:self-start">
+          <h2 id="ax-steps-heading" className="text-2xl font-bold leading-snug sm:text-[2.25rem]">
+            {t('title')}
+          </h2>
+          <p className="mt-5 text-sm leading-loose text-gray-700">{t('lead')}</p>
+        </div>
+        <ol>
+          {STEPS.map((key, index) => (
+            <li key={key} className="relative pb-10 pl-12 last:pb-0">
+              {index < STEPS.length - 1 && (
                 <span
                   aria-hidden="true"
-                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-4 border-white bg-ax-deep text-white"
-                >
-                  <Icon className="h-5 w-5" />
-                </span>
-                <p className="inline-block rounded bg-ax-teal-dark px-3 py-1 font-ax-latin text-xs font-bold tracking-wider text-white">
-                  {t(`items.${key}.label`)}
-                </p>
-              </div>
-              <h3 className="mt-4 text-lg font-bold">{t(`items.${key}.title`)}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-gray-700">{t(`items.${key}.body`)}</p>
+                  className="absolute bottom-0 left-4 top-9 w-px bg-ax-ink/50"
+                />
+              )}
+              <span
+                aria-hidden="true"
+                className="absolute left-0 top-0 flex h-8 w-8 items-center justify-center rounded-full border border-ax-ink bg-white"
+              >
+                <Check className="h-4 w-4" />
+              </span>
+              <p className="font-ax-latin text-sm font-bold text-ax-leaf">
+                {t(`items.${key}.label`)}
+              </p>
+              <h3 className="mt-1 text-lg font-bold">{t(`items.${key}.title`)}</h3>
+              <p className="mt-3 text-sm leading-relaxed text-gray-700">{t(`items.${key}.body`)}</p>
+              {/* Where AI may come in, with the step that adds it */}
+              {key === 'ax' && (
+                <p className="mt-4 bg-ax-cloud p-4 text-sm leading-relaxed">{t('aiNote')}</p>
+              )}
             </li>
           ))}
         </ol>
-        <p className="mx-auto mt-8 max-w-3xl rounded-2xl border border-ax-teal/40 px-6 py-4 text-center text-sm leading-relaxed">
-          {t('aiNote')}
-        </p>
       </div>
     </section>
   );
@@ -431,20 +446,17 @@ export async function AxAccessTargets({ locale }: SectionProps) {
     <section
       id={AX_SECTIONS.targets}
       aria-labelledby="ax-targets-heading"
-      className="bg-ax-deep py-16 text-white sm:py-24"
+      className="bg-ax-mist py-16 sm:py-24"
     >
       <div className="mx-auto max-w-3xl px-4 sm:px-6">
         <h2 id="ax-targets-heading" className={SECTION_HEADING}>
           {t('title')}
         </h2>
-        <p className="mt-5 text-center font-bold leading-relaxed">{t('lead')}</p>
+        <p className={SECTION_LEAD}>{t('lead')}</p>
         <ul className="mt-10 space-y-3">
           {TARGET_KEYS.map((key) => (
-            <li
-              key={key}
-              className="flex items-start gap-3 rounded-2xl bg-white px-5 py-4 font-bold text-ax-ink"
-            >
-              <Check className="mt-0.5 h-5 w-5 shrink-0 text-ax-teal-dark" aria-hidden="true" />
+            <li key={key} className="flex items-start gap-3 bg-white px-5 py-4 font-bold">
+              <CircleCheck className="mt-0.5 h-5 w-5 shrink-0 text-ax-leaf" aria-hidden="true" />
               <span>{t(`items.${key}`)}</span>
             </li>
           ))}
@@ -454,7 +466,7 @@ export async function AxAccessTargets({ locale }: SectionProps) {
             <AxCrossLink
               href={`/${fileTypes.locale}${columnPath(fileTypes.slug)}`}
               placement="targets"
-              className="inline-flex items-start gap-1 rounded py-1 font-bold leading-relaxed text-white underline underline-offset-4 hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+              className={CROSS_LINK}
             >
               {t('fileTypesLink')}
               <ArrowRight className="mt-1.5 h-4 w-4 shrink-0" aria-hidden="true" />
@@ -479,13 +491,18 @@ const HOST_LINKS = [
 export async function AxAccessHostSystems({ locale }: SectionProps) {
   const t = await getTranslations({ locale, namespace: 'axAccess.hosts' });
   return (
-    <section aria-labelledby="ax-access-hosts-heading" className="bg-white py-12 sm:py-16">
+    <section aria-labelledby="ax-access-hosts-heading" className="bg-white py-14 sm:py-20">
       <div className="mx-auto max-w-3xl px-4 sm:px-6">
-        <div className="rounded-2xl border border-gray-200 p-6 sm:p-8">
-          <h2 id="ax-access-hosts-heading" className="text-xl font-bold leading-snug sm:text-2xl">
-            {t('title')}
-          </h2>
-          <p className="mt-3 leading-relaxed text-gray-700">{t('lead')}</p>
+        <div className="bg-ax-cloud p-6 sm:p-8">
+          <div className="flex items-center gap-3">
+            <span className={ICON_TILE}>
+              <Server className="h-6 w-6" aria-hidden="true" />
+            </span>
+            <h2 id="ax-access-hosts-heading" className="text-xl font-bold leading-snug sm:text-2xl">
+              {t('title')}
+            </h2>
+          </div>
+          <p className="mt-4 leading-relaxed text-gray-700">{t('lead')}</p>
           <ul className="mt-4 space-y-1">
             {HOST_LINKS.map(({ key, id }) => (
               <li key={key}>
@@ -520,11 +537,15 @@ export async function AxAccessColumns({ locale }: SectionProps) {
         </h2>
         <ul className="mt-8 space-y-3">
           {columns.map((column) => (
-            <li key={column.slug} className="rounded-2xl bg-ax-mist px-5 py-3">
+            <li key={column.slug}>
+              {/* The whole row is the link, as it looks like one */}
               <AxCrossLink
                 href={`/${column.locale}${columnPath(column.slug)}`}
                 placement="related"
-                className={CROSS_LINK}
+                className={cn(
+                  CROSS_LINK,
+                  'w-full justify-between rounded-none bg-ax-cloud px-5 py-3 hover:bg-ax-leaf/10'
+                )}
               >
                 {column.title}
                 <ArrowRight className="mt-1.5 h-4 w-4 shrink-0" aria-hidden="true" />
@@ -551,6 +572,7 @@ export const ACCESS_FAQ_KEYS = [
   'noDocs',
   'accde',
   'partial',
+  'webSecurity',
   'cost',
   'period',
   'useDuring',
@@ -563,22 +585,13 @@ export async function AxAccessDiagnosisSection({ locale }: SectionProps) {
   const t = await getTranslations({ locale, namespace: 'axAccess.diagnosis' });
   return (
     <AxDiagnosisFrame
-      intro={
-        <>
-          <p aria-hidden="true" className={EYEBROW}>
-            {t('eyebrow')}
-          </p>
-          <h2 id="ax-diagnosis-heading" className={`mt-2 ${SECTION_HEADING}`}>
-            {t('title')}
-          </h2>
-          <p className="mx-auto mt-5 max-w-2xl text-center font-bold leading-relaxed">
-            {t('lead')}
-          </p>
-          {/* The diagnosis opens on the Access questions; other systems are one step back */}
-          <p className="mx-auto mt-3 max-w-2xl text-center text-sm leading-relaxed text-gray-700">
-            {t('presetNote')}
-          </p>
-        </>
+      intro={<DiagnosisIntro eyebrow={t('eyebrow')} title={t('title')} lead={t('lead')} />}
+      // The diagnosis opens on the Access questions; other systems are one step back, which
+      // the note under its Back button says
+      note={
+        <p className="mx-auto mt-4 max-w-2xl text-center text-sm leading-relaxed text-gray-700">
+          {t('presetNote')}
+        </p>
       }
     >
       <AxDiagnosisFlow

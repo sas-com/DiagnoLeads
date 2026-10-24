@@ -16,7 +16,7 @@ DiagnoLeads は、AX マイグレーション（レガシー基幹システム�
 8. 範囲外の作業は別の Issue に切り出す。「ついでに」を同じ PR に入れない
 9. 原則に違反したら `.factory/memory/violations.md` に記録し、再発防止策を仕組み（フックかこのファイル）に入れる
 
-フックが止めるもの（理由はメッセージに出る）：bun.lock と `.env*` の編集、`.env*` の読み取りと表示、Bun の共有キャッシュとつながった node_modules への書き込み（`bun patch` のコピーの編集は確認が出る）、秘密情報の書き込みと送信、専門エージェント（名前が `-specialist`）の中での書き込み。ガードは判定できないときも止める（すぐに続ける必要があるときは、オーナーが `.claude/settings.local.json` に `"disableAllHooks": true` を書く）。main は GitHub のブランチ保護で守られている（必須の検査が緑でないコミットは push できない。force push と削除もできない。PR は必須ではない）。権限の deny は `git push origin main` などの決まった形だけを止める。DB を変えるスクリプトと E2E は、権限で毎回確認が出る（`.claude/settings.json`）。
+フックが止めるもの（理由はメッセージに出る）：bun.lock と `.env*` の編集、`.env*` の読み取りと表示、Bun の共有キャッシュとつながった node_modules への書き込み（`bun patch` のコピーの編集は確認が出る）、秘密情報の書き込みと送信、専門エージェント（名前が `-specialist`）の中での書き込み。ガードは判定できないときも止める（すぐに続ける必要があるときは、オーナーが `.claude/settings.local.json` に `"disableAllHooks": true` を書く）。main は GitHub のブランチ保護で守られている（PR 経由でのみマージできる。直接 push はできない。必須の検査が緑でないコミットは push できない。force push と削除もできない。承認は0でよく、管理者にも適用される）。権限の deny は `git push origin main` などの決まった形だけを止める。DB を変えるスクリプトと E2E は、権限で毎回確認が出る（`.claude/settings.json`）。
 
 ## 作業の流れ（SprintPath）
 

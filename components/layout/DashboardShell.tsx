@@ -7,6 +7,11 @@ import Backdrop from '@/components/layout/Backdrop';
 import { SidebarProvider } from '@/context/SidebarContext';
 import { useSidebar } from '@/context/SidebarContext';
 import { ThemeProvider } from '@/context/ThemeContext';
+import { shareCspNonceWithScrollLock } from '@/lib/csp/document-nonce';
+
+// Once per page, before any dialog or select opens: Radix's scroll lock adds a <style> element,
+// which the CSP allows only with the page's nonce (#317)
+shareCspNonceWithScrollLock();
 
 function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const { isExpanded, isHovered, isMobileOpen } = useSidebar();
