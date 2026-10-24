@@ -37,8 +37,13 @@
     ],
     "ask": [
       "Bash(bun run db*)",
+      "Bash(bun scripts/db-*)",
+      "Bash(bunx tsx scripts/db-*)",
+      "Bash(npx tsx scripts/db-*)",
+      "Bash(tsx scripts/db-*)",
       "Bash(bun run test:e2e*)",
       "Bash(bunx drizzle-kit *)",
+      "Bash(git fetch *--u*)",
       "Edit(./node_modules/**)"
     ],
     "deny": [
@@ -69,7 +74,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-start.ts",
+            "command": "bun",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/session-start.ts"],
             "timeout": 300
           }
         ]
@@ -81,8 +87,10 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-tool-guard.ts",
-            "timeout": 10
+            "command": "bun",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/pre-tool-guard.ts"],
+            "timeout": 10,
+            "onFailure": "block"
           }
         ]
       }
@@ -93,7 +101,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-tool-decisions.ts",
+            "command": "bun",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/post-tool-decisions.ts"],
             "timeout": 10
           }
         ]
