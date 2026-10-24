@@ -746,7 +746,9 @@ describe('AxDiagnosisResult', () => {
     ])('keeps the next step for the %s path', (path, answers) => {
       renderAccess(answers);
       expect(screen.getByTestId('ax-result-access-path')).toHaveAttribute('data-path', path);
-      expect(screen.getAllByRole('button', { name: /無料の個別相談を申し込む/ })).toHaveLength(2);
+      // The consultation of the Access page, by the same name everywhere on the result (#538)
+      expect(screen.getAllByRole('button', { name: /30分の無料オンライン相談を申し込む/ })).toHaveLength(2);
+      expect(screen.queryByText(/個別相談|移行の進め方/)).not.toBeInTheDocument();
     });
 
     /** Titles of the next steps, in order */
@@ -794,6 +796,8 @@ describe('AxDiagnosisResult', () => {
       const steps = screen.getByTestId('ax-result-steps');
       expect(within(steps).getByRole('heading', { name: 'このあとの流れ' })).toBeInTheDocument();
       expect(steps).toHaveTextContent('次は、30分のオンライン相談で棚卸しを始めます。');
+      // Whether checking the files costs anything is said before, never left to guess (#538)
+      expect(steps).toHaveTextContent('ファイルを確かめる作業に費用がかかる場合は、前もってお伝えします。');
       expect(stepTitles()).toEqual(titles);
       // Never the migration to a web system of the other paths' steps
       expect(steps).not.toHaveTextContent('最新のWebシステムへ移行します');
@@ -815,8 +819,9 @@ describe('AxDiagnosisResult', () => {
       fetchMock.mockResolvedValue(jsonResponse(200, { ok: true, alreadyRequested: false }));
       const user = userEvent.setup();
       renderAccess();
-      await user.click(screen.getAllByRole('button', { name: /無料の個別相談を申し込む/ })[0]);
-      expect(await screen.findByText('所要時間の目安：30分程度（オンライン）')).toBeInTheDocument();
+      await user.click(screen.getAllByRole('button', { name: /30分の無料オンライン相談を申し込む/ })[0]);
+      expect(await screen.findByText('30分のオンライン相談のお申し込みを受け付けました')).toBeInTheDocument();
+      expect(screen.getByText('所要時間の目安：30分程度（オンライン）')).toBeInTheDocument();
       expect(screen.queryByText('所要時間の目安：60分程度')).not.toBeInTheDocument();
       expect(screen.queryByRole('group', { name: 'ご希望の形式' })).not.toBeInTheDocument();
     });

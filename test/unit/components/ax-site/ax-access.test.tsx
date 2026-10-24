@@ -215,6 +215,12 @@ describe('Access landing page', () => {
       .getAllByRole('heading', { level: 3 })
       .map((heading) => heading.textContent);
     expect(steps).toEqual(['無料Web診断（Access版・約3分）', '棚卸し', '進め方の決定', '移行', 'AX化']);
+    // The inventory is not called free: a cost for checking the files is said beforehand (#538)
+    expect(
+      within(document.getElementById('steps') as HTMLElement).getByText(
+        /ファイルを確かめる作業に費用がかかる場合は、前もってお伝えします。$/
+      )
+    ).toBeInTheDocument();
   });
 
   it('answers the worry about moving to the web, next to the partial move (#466)', async () => {
