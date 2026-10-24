@@ -131,6 +131,8 @@ export const LEAD_SORT_KEYS = [
   'dealRating',
   // "When to act" (#151)
   'actBy',
+  // MQL level of the diagnosis: 関心あり, 適合, 対象外, then none (#447)
+  'mqlLevel',
 ] as const;
 export const leadSortKeyEnum = z.enum(LEAD_SORT_KEYS);
 export type LeadSortKey = z.infer<typeof leadSortKeyEnum>;
@@ -155,6 +157,14 @@ export type AssigneeFilter = z.infer<typeof assigneeFilterSchema>;
 export const NEXT_MEETING_FILTERS = ['has', 'none', 'overdue', 'thisWeek'] as const;
 export const nextMeetingFilterEnum = z.enum(NEXT_MEETING_FILTERS);
 export type NextMeetingFilter = z.infer<typeof nextMeetingFilterEnum>;
+
+/**
+ * MQL level filter (#447): the level of the lead's diagnosis (leadMqlLevel), or 'unknown' for a
+ * lead without a diagnosis (e.g. added by hand)
+ */
+export const MQL_LEVEL_FILTERS = ['interest', 'fit', 'none', 'unknown'] as const;
+export const mqlLevelFilterEnum = z.enum(MQL_LEVEL_FILTERS);
+export type MqlLevelFilter = z.infer<typeof mqlLevelFilterEnum>;
 
 /** Deal rating of the lead's latest hearing (#137); same values as the hearing sheet */
 export const DEAL_RATINGS = ['a', 'b', 'c'] as const;
@@ -209,6 +219,8 @@ export const listLeadsSchema = z.object({
   // Latest hearing (#137)
   nextMeeting: nextMeetingFilterEnum.optional(),
   dealRating: oneOrMany(dealRatingEnum),
+  // MQL level of the diagnosis (#447)
+  mqlLevel: oneOrMany(mqlLevelFilterEnum),
   // "When to act" (#151): within the next months (or past), or set at all
   actTiming: actTimingFilterEnum.optional(),
   // Tag filter
