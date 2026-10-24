@@ -392,7 +392,8 @@ export type ConfirmOutcome =
 /**
  * Confirm one of the candidates (or switch to another): the lead's next meeting, a next action
  * on that day, and the confirmation email when asked. The candidate at the index must still be
- * the one sales saw: the respondent can replace unconfirmed preferences at any time (#274).
+ * the one sales saw: the respondent can replace unconfirmed preferences (#274) for
+ * MEETING_PREFERENCES_WINDOW_MS after the consultation request (#241).
  */
 export async function confirmMeeting(
   db: Database,
