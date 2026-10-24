@@ -72,7 +72,8 @@ export const organizationsRouter = router({
 
   /**
    * Update organization
-   * Only owner can update organization details
+   * Only owner can update organization details. Only the name and the slug change; the
+   * settings belong to the features that write them (#483)
    */
   update: protectedProcedure.input(updateOrganizationSchema).mutation(async ({ ctx, input }) => {
     // Verify user is owner
@@ -101,7 +102,6 @@ export const organizationsRouter = router({
     };
     if (input.name !== undefined) updateData.name = input.name;
     if (input.slug !== undefined) updateData.slug = input.slug;
-    if (input.settings !== undefined) updateData.settings = input.settings;
 
     // Update organization
     const [updated] = await ctx.db

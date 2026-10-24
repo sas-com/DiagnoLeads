@@ -18,7 +18,12 @@ export const listOrganizationsSchema = z.object({
 export type ListOrganizationsInput = z.infer<typeof listOrganizationsSchema>;
 
 /**
- * Update organization schema
+ * Update organization schema: the name and the slug only.
+ *
+ * `settings` is not accepted (#483). Features keep their own keys in organizations.settings
+ * (leadIntakeUserIds, leadHandoffUserIds, actTiming, hearingCatalog, axInfoOffers) and each
+ * merges only its key in SQL; replacing the whole object here would erase them all. A settings
+ * field sent anyway is stripped by zod. When a caller needs one, add it key by key with a merge.
  */
 export const updateOrganizationSchema = z.object({
   id: z.string().uuid(),
@@ -29,7 +34,6 @@ export const updateOrganizationSchema = z.object({
     .max(255)
     .regex(/^[a-z0-9-]+$/)
     .optional(),
-  settings: z.record(z.unknown()).optional(),
 });
 export type UpdateOrganizationInput = z.infer<typeof updateOrganizationSchema>;
 

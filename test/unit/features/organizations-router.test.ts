@@ -187,6 +187,25 @@ describe('Organizations Router', () => {
       expect(mockDb.update).toHaveBeenCalled();
     });
 
+    // #483: the settings belong to the features that write them, key by key
+    it('should never write settings, even when they are sent', async () => {
+      mockDb.query.organizationMembers.findFirst.mockResolvedValue(mockMembership);
+      mockDb.returning.mockResolvedValue([{ ...mockOrganization, name: 'Updated Name' }]);
+
+      const caller = appRouter.createCaller(mockContext);
+      await caller.organizations.update({
+        id: TEST_ORG_ID,
+        name: 'Updated Name',
+        slug: 'updated-slug',
+        settings: {},
+      } as Parameters<typeof caller.organizations.update>[0]);
+
+      expect(mockDb.set).toHaveBeenCalledTimes(1);
+      const written = mockDb.set.mock.calls[0][0];
+      expect(written).toMatchObject({ name: 'Updated Name', slug: 'updated-slug' });
+      expect(written).not.toHaveProperty('settings');
+    });
+
     it('should deny non-owner from updating', async () => {
       const adminMembership = { ...mockMembership, role: 'admin' as const };
       mockDb.query.organizationMembers.findFirst.mockResolvedValue(adminMembership);

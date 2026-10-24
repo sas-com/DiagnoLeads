@@ -108,9 +108,11 @@ describe('updateOrganizationSchema', () => {
     expect(result.slug).toBe('new-org-slug');
   });
 
-  it('should accept settings update', () => {
+  // #483: features keep their own keys in organizations.settings; the update never replaces it
+  it('should strip settings so the update cannot replace them', () => {
     const input = {
       id: '123e4567-e89b-12d3-a456-426614174000',
+      name: 'Updated Organization Name',
       settings: {
         theme: 'dark',
         notifications: true,
@@ -118,10 +120,11 @@ describe('updateOrganizationSchema', () => {
     };
 
     const result = updateOrganizationSchema.parse(input);
-    expect(result.settings).toEqual({
-      theme: 'dark',
-      notifications: true,
+    expect(result).toEqual({
+      id: '123e4567-e89b-12d3-a456-426614174000',
+      name: 'Updated Organization Name',
     });
+    expect(result).not.toHaveProperty('settings');
   });
 
   it('should validate slug format', () => {
