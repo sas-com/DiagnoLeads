@@ -316,6 +316,17 @@ export const RULES: Rule[] = [
     },
   },
   {
+    id: 'test-paths-resolve',
+    description: 'every path a test imports or passes to vi.mock and the like exists',
+    mode: 'error',
+    check: (graph) =>
+      unique(
+        graph.testPaths
+          .filter((entry) => entry.resolved === null)
+          .map((entry) => `${entry.from} -> ${entry.spec}`)
+      ),
+  },
+  {
     id: 'features-in-cycles',
     description: 'features that import each other (directly or through others)',
     mode: 'allowlist',

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import {
   compareWithAllowlist,
   formatAllowlist,
@@ -11,13 +12,16 @@ import {
   type Edge,
   type ImportGraph,
   parseImports,
+  parseTestPaths,
+  type TestPath,
 } from '@/scripts/architecture/graph';
 import { RULES } from '@/scripts/architecture/rules';
 
 function graphOf(
   files: Record<string, { useClient?: boolean; useServer?: boolean }>,
   edges: Array<[string, string, { typeOnly?: boolean; values?: string[] }?]>,
-  externals: Array<[string, string]> = []
+  externals: Array<[string, string]> = [],
+  testPaths: TestPath[] = []
 ): ImportGraph {
   return {
     files: new Map(
@@ -44,6 +48,7 @@ function graphOf(
       line: 1,
     })),
     unresolved: [],
+    testPaths,
   };
 }
 
@@ -96,6 +101,91 @@ type T = typeof import('@/lib/t');
 
   it('only treats a leading directive as use client', () => {
     expect(parseImports('a.ts', "import x from 'x';\n'use client';").useClient).toBe(false);
+  });
+});
+
+describe('parseTestPaths', () => {
+  it('reads imports and the paths given to vi.mock and the like, not comments or computed paths', () => {
+    const paths = parseTestPaths(
+      'test/unit/x.test.ts',
+      `import { a } from '@/lib/a';
+import type { B } from './b';
+// vi.mock('@/lib/commented-out');
+vi.mock('@/lib/c', () => ({}));
+vi.doMock(\`@/lib/d\`);
+vi.mock(import('@/lib/e'));
+const actual = await vi.importActual<typeof import('@/lib/f')>('@/lib/f');
+vi.mock(\`@/lib/\${name}\`);
+const g = await import('./g');
+const h = require('./h');
+vi.unmock('next/navigation');
+vi.doUnmock('@/lib/i');
+const j = await vi.importMock('@/lib/j');
+`
+    );
+    expect(paths.map(({ spec, kind, line }) => `${kind} ${spec} ${line}`).sort()).toEqual([
+      'import ./b 2',
+      'import ./g 9',
+      'import ./h 10',
+      'import @/lib/a 1',
+      'import @/lib/e 6',
+      'import @/lib/f 7',
+      'mock @/lib/c 4',
+      'mock @/lib/d 5',
+      'mock @/lib/f 7',
+      'mock @/lib/i 12',
+      'mock @/lib/j 13',
+      'mock next/navigation 11',
+    ]);
+  });
+
+  it('skips joined paths and is not misled by quotes in regular expressions', () => {
+    const paths = parseTestPaths(
+      'test/unit/x.test.ts',
+      `const messages = await import('@/locales/' + locale + '/common.json');
+const fixture = require('../fixtures/' + name);
+const strip = (x: string) => x.replace(/\`/g, '').replace(/it's/g, '');
+const { a } = await import('@/lib/after-regex');
+const sample = \`
+import { b } from '@/lib/inside-a-template';
+\`;
+`
+    );
+    expect(paths.map(({ spec }) => spec)).toEqual(['@/lib/after-regex']);
+  });
+});
+
+describe('test paths in a repository', () => {
+  let root = '';
+  beforeAll(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'arch-test-paths-'));
+  });
+  afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
+  const write = (file: string, text: string) => {
+    fs.mkdirSync(path.join(root, path.dirname(file)), { recursive: true });
+    fs.writeFileSync(path.join(root, file), text);
+  };
+
+  it('fails on a vi.mock of a path that does not exist, and leaves packages alone', () => {
+    write('lib/present.ts', 'export const x = 1;\n');
+    write('lib/data.json', '{}\n');
+    write('test/mocks/payload-config.ts', 'export default {};\n');
+    write(
+      'test/unit/a.test.ts',
+      `import { x } from '@/lib/present';
+import config from '@payload-config';
+import data from '@/lib/data';
+import raw from '@/lib/present?raw';
+vi.mock('../../lib/present.js');
+vi.mock('@/lib/missing');
+vi.mock('next/navigation');
+`
+    );
+    const graph = buildImportGraph(root);
+    expect(graph.testPaths.find((entry) => entry.spec === '@payload-config')?.resolved).toBe(
+      'test/mocks/payload-config.ts'
+    );
+    expect(check('test-paths-resolve', graph)).toEqual(['test/unit/a.test.ts -> @/lib/missing']);
   });
 });
 
@@ -229,6 +319,22 @@ describe('rules', () => {
     expect(check('ui-kit-imports-app-code', graph)).toEqual([
       'components/ui/table.tsx -> lib/features/leads/types/pipeline.ts',
     ]);
+  });
+
+  it('test-paths-resolve: lists each test path that resolves to nothing', () => {
+    const entry = (spec: string, resolved: string | null): TestPath => ({
+      from: 'test/unit/x.test.ts',
+      spec,
+      kind: 'mock',
+      line: 1,
+      resolved,
+    });
+    const graph = graphOf({}, [], [], [
+      entry('@/lib/a', 'lib/a.ts'),
+      entry('@/lib/gone', null),
+      entry('@/lib/gone', null),
+    ]);
+    expect(check('test-paths-resolve', graph)).toEqual(['test/unit/x.test.ts -> @/lib/gone']);
   });
 
   it('payload-outside-cms: only the CMS code imports Payload', () => {

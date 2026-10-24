@@ -29,7 +29,7 @@
 
 ## 2. 機械で守るルール（`bun run arch:check`）
 
-`scripts/check-architecture.ts` が、TypeScript の構文木から app・lib・server・components・hooks・context・cms の import を読む（`import type` は区別する）。ルールは2種類ある。
+`scripts/check-architecture.ts` が、TypeScript の構文木から app・lib・server・components・hooks・context・cms の import を読む（`import type` は区別する）。`test/` は、import と `vi.mock` などに渡すパスが実在するかだけを見る（ほかのルールの対象には入れない）。ルールは2種類ある。
 
 - 例外なし：違反が1件でもあれば失敗する。許可リストには載せられない（`--update` でも書き出さない）
 - 許可リスト：ルールが入る前からあった違反を `scripts/architecture/allowlist.txt` に1件ずつ載せてある。載っていない違反があると失敗する。載っているのに消えた違反があっても失敗する（`--update` で行を消す）
@@ -45,6 +45,7 @@
 | `ui-kit-imports-app-code` | `components/ui` は `components/ui`・`lib/utils.ts`・`lib/csp/` だけを読む | 例外なし |
 | `payload-outside-cms` | Payload を読むのは CMS の置き場所だけ | 例外なし |
 | `file-cycles` | ファイル単位の import の循環を作らない | 例外なし |
+| `test-paths-resolve` | テストが import するパスと、`vi.mock`・`vi.doMock`・`vi.unmock`・`vi.doUnmock`・`vi.importActual`・`vi.importMock` に渡すパスが実在する（パッケージ名は見ない。テストの `@payload-config` は vitest の別名どおり `test/mocks/payload-config.ts`）。存在しないパスへの `vi.mock` はテストを黙って素通りさせるので、ファイルを消す・移したときに、古いパスを指したまま残ったテストをこの検査が見つける | 例外なし |
 | `features-in-cycles` | 互いに依存し合う機能（間接も含む）を増やさない | 許可リスト 20 |
 | `cross-feature-internal` | 他の機能から読むのは公開面（`types/**`・`types.ts`・`service.ts`。ほかに `email/index.ts`・`respondent-email/index.ts`）だけ。項目は読まれる側のファイル | 許可リスト 45 |
 | `features-use-global-db` | 機能のコードはグローバルの `db` を使わず、`ctx.db` か引数の executor を使う（RLS で接続を差し替えるため） | 許可リスト 12 |
@@ -58,6 +59,7 @@
 - `features-in-cycles` は、循環に入っている機能の名前の一覧で比べる。今ある2つの循環（18機能と2機能）がつながっても検出しない
 - 公開ページの採点のルールが見るのは、公開ページ（`(ax)`・`(public)`・`[...rest]`・トップと共通のレイアウト）から `'use client'` の境界を越えて値でたどれるファイル。ブラウザのコードの判定では、`'use server'` のファイル（サーバーアクション）とその先はたどらない
 - `unregistered-routers` は、`api/` の下の `*-router.ts` をほかのルーターに組み込む形（_app.ts に直接登録しない）も未登録として数える。その形を使うときは、許可リストに足して PR に理由を書く
+- `test-paths-resolve` が見るのは、パスの文字列がそのまま書かれているものだけ（`` vi.mock(`@/lib/${name}`) `` や `import('@/locales/' + locale)` のように組み立てたパスは見ない）。パスが実在しても、テストが読むモジュールと mock したモジュールが違う（再 export の元を mock していない）ことは検出しない
 
 ## 3. 機能1つの型
 
