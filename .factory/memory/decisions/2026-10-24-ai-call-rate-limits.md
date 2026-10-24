@@ -5,7 +5,7 @@ category: Security
 title: "AI の呼び出しの回数制限と、tRPC のバッチの件数の上限（#405）"
 status: active
 superseded_by: []
-issues: [405, 443, 576]
+issues: [405, 443, 576, 598]
 paths: ["lib/features/ai/limits.ts", "lib/features/ai/prompt-input.ts", "lib/features/ai/embeddings/openai.ts", "lib/features/ai/api/router.ts", "lib/trpc/batch-limit.ts"]
 ---
 
@@ -20,7 +20,7 @@ paths: ["lib/features/ai/limits.ts", "lib/features/ai/prompt-input.ts", "lib/fea
   - 回数は手続きの中で DB で数える。パスで数える middleware の制限には頼らない（バッチの1件ごと・インスタンスをまたいで数えるため。#321 の Webhook のテスト送信と同じ）
   - 断ったリクエストも数える（ほかの `public_rate_limits` の規則と同じ）。一括が枠に収まらないときは全件断り、その件数を数える。クライアントは `TOO_MANY_REQUESTS` を再試行しない（`lib/trpc/retry.ts`）
   - 埋め込み（OpenAI）を呼ぶ手続き（`ai.semanticSearch`・`ai.updateEmbedding`）は、埋め込み1回を1件と数え、Claude とは別の枠 `EMBEDDING_CALL_LIMITS`（ユーザーごと1時間に300件→組織ごと1時間に600件→組織ごと1日に3,000件）で同じように数える（`consumeEmbeddingCalls`。#576）。Claude と同じ枠にしないのは、埋め込み1回の費用が Claude の1回よりずっと小さく、検索で Claude の残りの枠（スコアリングなど）を使い切らないようにするため。数える場所と断り方は Claude と同じ（権限の確認と組織での読み込みの後、OpenAI を呼ぶ直前）
-  - 埋め込みに渡す文にも上限を置く：検索の文（`semanticSearchSchema` の `query`）は500文字まで（超えると `BAD_REQUEST`）、リードの文（`prepareLeadText`）は項目ごとに1,000文字・全体で2,000文字に切る（1文字が数トークンになる文でもモデルの入力の上限を超えないように。超えると、数えた後に OpenAI に断られる）。埋め込みにリードの項目を足すときは、`prepareLeadText` の中で切る。OpenAI を呼ぶ関数（`generateEmbedding`・まだ使っていない `generateEmbeddingsBatch`）を新しく呼ぶときは、埋め込む文の件数を `consumeEmbeddingCalls` で数える
+  - 埋め込みに渡す文にも上限を置く：検索の文（`semanticSearchSchema` の `query`）は500文字まで（超えると `BAD_REQUEST`）、リードの文（`prepareLeadText`）は項目ごとに1,000文字・全体で2,000文字に切る（1文字が数トークンになる文でもモデルの入力の上限を超えないように。超えると、数えた後に OpenAI に断られる）。埋め込みにリードの項目を足すときは、`prepareLeadText` の中で切る。OpenAI を呼ぶ関数（`generateEmbedding`）を新しく呼ぶときは、埋め込む文の件数を `consumeEmbeddingCalls` で数える。まとめて埋め込む関数（`generateEmbeddingsBatch`）は使っていなかったので消した（#598）。作り直すときは件数分を数え、1件ずつ `prepareLeadText` と同じ上限で切る
   - OpenAI の client（`embeddings/openai.ts`）は、Claude の client（`client.ts`）と同じくタイムアウト20秒・再試行なしにする。SDK の既定（再試行2回・タイムアウト10分）のままだと、数えた1件に対して OpenAI に最大3回送り、Vercel の関数の30秒も超える（読み取り専用のレビューの指摘、#576）
   - 断るときの文言は、Claude が「AI の利用の上限…」、埋め込みが「AI 検索・埋め込みの利用の上限…」（`ai.updateEmbedding` も同じ枠で断られるため）
   - `ai.findSimilar` は保存済みの埋め込みを pgvector で比べるだけで OpenAI を呼ばないので、数えない。OpenAI を呼ぶように変えるときは `consumeEmbeddingCalls` を足す
