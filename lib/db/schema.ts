@@ -1354,22 +1354,33 @@ export type NotificationType =
  * Notifications Table
  * Stores in-app notifications for users
  */
-export const notifications = pgTable('notifications', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  userId: uuid('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  organizationId: uuid('organization_id').references(() => organizations.id, {
-    onDelete: 'cascade',
-  }),
-  type: text('type').$type<NotificationType>().notNull(),
-  title: text('title').notNull(),
-  message: text('message').notNull(),
-  data: jsonb('data').$type<Record<string, unknown>>(),
-  read: boolean('read').default(false).notNull(),
-  readAt: timestamp('read_at'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+export const notifications = pgTable(
+  'notifications',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    organizationId: uuid('organization_id').references(() => organizations.id, {
+      onDelete: 'cascade',
+    }),
+    type: text('type').$type<NotificationType>().notNull(),
+    title: text('title').notNull(),
+    message: text('message').notNull(),
+    data: jsonb('data').$type<Record<string, unknown>>(),
+    read: boolean('read').default(false).notNull(),
+    readAt: timestamp('read_at'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    // The bell lists and counts a member's notifications of an organization, newest first (#433)
+    index('notifications_user_org_created_idx').on(
+      table.userId,
+      table.organizationId,
+      table.createdAt
+    ),
+  ]
+);
 
 /**
  * Notification Preferences Table
@@ -1461,16 +1472,24 @@ export const tags = pgTable('tags', {
 /**
  * Lead-Tag junction table (many-to-many)
  */
-export const leadTags = pgTable('lead_tags', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  leadId: uuid('lead_id')
-    .notNull()
-    .references(() => leads.id, { onDelete: 'cascade' }),
-  tagId: uuid('tag_id')
-    .notNull()
-    .references(() => tags.id, { onDelete: 'cascade' }),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+export const leadTags = pgTable(
+  'lead_tags',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    leadId: uuid('lead_id')
+      .notNull()
+      .references(() => leads.id, { onDelete: 'cascade' }),
+    tagId: uuid('tag_id')
+      .notNull()
+      .references(() => tags.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    // The lead list reads each lead's tags; the tag filter and deleting a tag go by the tag (#433)
+    index('lead_tags_lead_idx').on(table.leadId),
+    index('lead_tags_tag_idx').on(table.tagId),
+  ]
+);
 
 export const tagsRelations = relations(tags, ({ one, many }) => ({
   organization: one(organizations, {
@@ -1510,27 +1529,34 @@ export type CommentType = 'comment' | 'note' | 'activity';
  * Lead Comments Table
  * Stores comments, notes, and activity logs for leads
  */
-export const leadComments = pgTable('lead_comments', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  leadId: uuid('lead_id')
-    .notNull()
-    .references(() => leads.id, { onDelete: 'cascade' }),
-  /** Author; null once the author deleted their account (the comment stays with the lead) */
-  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
-  organizationId: uuid('organization_id')
-    .notNull()
-    .references(() => organizations.id, { onDelete: 'cascade' }),
-  content: text('content').notNull(),
-  type: text('type').$type<CommentType>().default('comment').notNull(),
-  /** For activity logs - stores metadata about the activity */
-  metadata: jsonb('metadata').$type<Record<string, unknown>>(),
-  /** Parent comment ID for threaded replies */
-  parentId: uuid('parent_id'),
-  /** Whether this comment is pinned */
-  isPinned: boolean('is_pinned').default(false).notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+export const leadComments = pgTable(
+  'lead_comments',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    leadId: uuid('lead_id')
+      .notNull()
+      .references(() => leads.id, { onDelete: 'cascade' }),
+    /** Author; null once the author deleted their account (the comment stays with the lead) */
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    content: text('content').notNull(),
+    type: text('type').$type<CommentType>().default('comment').notNull(),
+    /** For activity logs - stores metadata about the activity */
+    metadata: jsonb('metadata').$type<Record<string, unknown>>(),
+    /** Parent comment ID for threaded replies */
+    parentId: uuid('parent_id'),
+    /** Whether this comment is pinned */
+    isPinned: boolean('is_pinned').default(false).notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    // A lead's comments, newest first: the activity feed and the comments of the lead page (#433)
+    index('lead_comments_lead_created_idx').on(table.leadId, table.createdAt),
+  ]
+);
 
 /**
  * Lead Comments Relations
@@ -2888,28 +2914,40 @@ export type AuditAction = 'create' | 'read' | 'update' | 'delete' | 'login' | 'l
  * Audit Logs Table
  * Records all important actions for compliance and debugging
  */
-export const auditLogs = pgTable('audit_logs', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  organizationId: uuid('organization_id')
-    .notNull()
-    .references(() => organizations.id, { onDelete: 'cascade' }),
-  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
-  /** Action performed */
-  action: text('action').$type<AuditAction>().notNull(),
-  /** Resource type (e.g., 'lead', 'organization') */
-  resource: text('resource').notNull(),
-  /** Resource ID */
-  resourceId: text('resource_id'),
-  /** Changes made (for update actions) */
-  changes: jsonb('changes').$type<{ before?: unknown; after?: unknown }>(),
-  /** Request metadata */
-  ipAddress: text('ip_address'),
-  userAgent: text('user_agent'),
-  /** Additional context */
-  metadata: jsonb('metadata').$type<Record<string, unknown>>(),
-  /** Timestamp */
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+export const auditLogs = pgTable(
+  'audit_logs',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+    /** Action performed */
+    action: text('action').$type<AuditAction>().notNull(),
+    /** Resource type (e.g., 'lead', 'organization') */
+    resource: text('resource').notNull(),
+    /** Resource ID */
+    resourceId: text('resource_id'),
+    /** Changes made (for update actions) */
+    changes: jsonb('changes').$type<{ before?: unknown; after?: unknown }>(),
+    /** Request metadata */
+    ipAddress: text('ip_address'),
+    userAgent: text('user_agent'),
+    /** Additional context */
+    metadata: jsonb('metadata').$type<Record<string, unknown>>(),
+    /** Timestamp */
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    // The lead page's activity reads one resource's rows of the organization, newest first (#433)
+    index('audit_logs_org_resource_created_idx').on(
+      table.organizationId,
+      table.resource,
+      table.resourceId,
+      table.createdAt
+    ),
+  ]
+);
 
 /**
  * Audit Logs Relations
