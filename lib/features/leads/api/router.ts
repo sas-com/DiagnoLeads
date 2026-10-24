@@ -65,6 +65,7 @@ import {
   LOST_ON_HOLD_MESSAGE,
   type LeadPipelineFields,
   type LeadStatus,
+  dropsOnHoldReason,
   jstDate,
   makesLostOnHold,
   qualificationUpdateFields,
@@ -645,6 +646,7 @@ export const leadsRouter = router({
       if (input.source !== undefined) updateData.source = input.source;
       if (input.responses !== undefined) updateData.responses = input.responses;
       Object.assign(updateData, pickPipelineFields(input));
+      if (dropsOnHoldReason(existing, input)) updateData.lostReason = null;
       Object.assign(updateData, qualificationUpdateFields(input, existing, now));
       if (input.dealPhase) {
         // First date each phase was reached; the existing date wins (right side of ||), and
@@ -919,15 +921,18 @@ export const leadsRouter = router({
           columns: { id: true, status: true, lostReason: true },
           where: scope,
         });
-        if (before.some((row) => makesLostOnHold(row, { status: input.status }))) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: LOST_ON_HOLD_MESSAGE });
-        }
 
         // Update all leads matching the IDs and organization
         const result = await tx
           .update(leads)
           .set({
             ...statusUpdateFields(input.status),
+            // Leads on hold that are now lost drop the reason 保留 (#445)
+            ...(input.status === 'lost'
+              ? {
+                  lostReason: sql`case when ${leads.status} <> 'lost' and ${leads.lostReason} = 'on_hold' then null else ${leads.lostReason} end`,
+                }
+              : {}),
             updatedAt: now,
           })
           .where(scope)
@@ -940,11 +945,22 @@ export const leadsRouter = router({
           { organizationId: input.organizationId, userId: ctx.user.id, at: now },
           before
             .filter((row) => updatedIds.has(row.id) && row.status !== input.status)
-            .map((row) => ({
-              action: 'update' as const,
-              leadId: row.id,
-              changes: { before: { status: row.status }, after: { status: input.status } },
-            }))
+            .map((row) =>
+              dropsOnHoldReason(row, { status: input.status })
+                ? {
+                    action: 'update' as const,
+                    leadId: row.id,
+                    changes: {
+                      before: { status: row.status, lostReason: row.lostReason },
+                      after: { status: input.status, lostReason: null },
+                    },
+                  }
+                : {
+                    action: 'update' as const,
+                    leadId: row.id,
+                    changes: { before: { status: row.status }, after: { status: input.status } },
+                  }
+            )
         );
 
         const previousStatus = new Map(before.map((row) => [row.id, row.status]));

@@ -108,9 +108,10 @@ export function LeadForm({ lead, onSubmit, isLoading }: LeadFormProps) {
           Object.entries(values).filter(([key]) => Boolean(dirty[key as keyof FormValues]))
         ) as Partial<FormValues>)
       : values;
-    // 保留 is not a loss (#445); the server refuses it too
-    if (makesLostOnHold(lead, changes)) {
-      form.setError('lostReason', { message: t('lostOnHold') });
+    // 保留 is not a loss (#445). The form shows the reason, so ask to choose again rather than
+    // let the server drop 保留 (it refuses 保留 sent with a lost lead too)
+    if (makesLostOnHold(lead, { status: values.status, lostReason: values.lostReason })) {
+      form.setError('lostReason', { message: t('lostOnHold') }, { shouldFocus: true });
       return;
     }
     return onSubmit(changes);
@@ -181,7 +182,13 @@ export function LeadForm({ lead, onSubmit, isLoading }: LeadFormProps) {
           render={({ field }) => (
             <FormItem>
               <FormLabel>{t('status')}</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value}>
+              <Select
+                onValueChange={(value) => {
+                  field.onChange(value);
+                  form.clearErrors('lostReason');
+                }}
+                value={field.value}
+              >
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder={t('status')} />
@@ -239,7 +246,7 @@ export function LeadForm({ lead, onSubmit, isLoading }: LeadFormProps) {
                       value={field.value ?? NONE}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger ref={field.ref}>
                           <SelectValue placeholder={t('notSet')} />
                         </SelectTrigger>
                       </FormControl>
