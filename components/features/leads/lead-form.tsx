@@ -30,6 +30,7 @@ import {
   SQL_DECISIONS,
   TARGET_SYSTEMS,
   createLeadSchema,
+  makesLostOnHold,
 } from '@/lib/features/leads/types';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
@@ -101,13 +102,18 @@ export function LeadForm({ lead, onSubmit, isLoading }: LeadFormProps) {
   // consultation request, an MQL from another diagnosis, follow-up answers, a new score) are not
   // set back to what the form was opened with
   const submit = form.handleSubmit((values) => {
-    if (!lead) return onSubmit(values);
     const dirty = form.formState.dirtyFields as Partial<Record<keyof FormValues, unknown>>;
-    return onSubmit(
-      Object.fromEntries(
-        Object.entries(values).filter(([key]) => Boolean(dirty[key as keyof FormValues]))
-      ) as Partial<FormValues>
-    );
+    const changes = lead
+      ? (Object.fromEntries(
+          Object.entries(values).filter(([key]) => Boolean(dirty[key as keyof FormValues]))
+        ) as Partial<FormValues>)
+      : values;
+    // 保留 is not a loss (#445); the server refuses it too
+    if (makesLostOnHold(lead, changes)) {
+      form.setError('lostReason', { message: t('lostOnHold') });
+      return;
+    }
+    return onSubmit(changes);
   });
 
   return (

@@ -2,7 +2,9 @@ import { getAuthenticatedOrganization } from '@/lib/api/v2-auth';
 import { db } from '@/lib/db';
 import { leads } from '@/lib/db/schema';
 import {
+  LOST_ON_HOLD_MESSAGE,
   leadStatusEnum,
+  makesLostOnHold,
   normalizeLeadStatus,
   statusUpdateFields,
 } from '@/lib/features/leads/types/pipeline';
@@ -157,6 +159,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     const { email, name, company, phone, source, status, score, responses, customFields } =
       parsedBody.data;
+
+    if (makesLostOnHold(existing, { status })) {
+      return NextResponse.json(
+        { error: 'Validation Error', message: LOST_ON_HOLD_MESSAGE },
+        { status: 400 }
+      );
+    }
 
     if (email !== undefined) updateData.email = email;
     if (name !== undefined) updateData.name = name;

@@ -1,6 +1,7 @@
 import {
   LEAD_STATUSES,
   leadPipelineFieldsSchema,
+  makesLostOnHold,
   normalizeLeadStatus,
   qualificationUpdateFields,
   statusUpdateFields,
@@ -111,5 +112,35 @@ describe('leadPipelineFieldsSchema', () => {
     expect(() => leadPipelineFieldsSchema.parse({ dealPhase: 'closing' })).toThrow();
     expect(() => leadPipelineFieldsSchema.parse({ targetSystem: 'windows' })).toThrow();
     expect(() => leadPipelineFieldsSchema.parse({ sqlDecision: 'maybe' })).toThrow();
+  });
+});
+
+describe('makesLostOnHold (#445)', () => {
+  const nurturingOnHold = { status: 'nurturing', lostReason: 'on_hold' };
+  const lostOnHold = { status: 'lost', lostReason: 'on_hold' };
+
+  it('refuses a new lead lost on hold', () => {
+    expect(makesLostOnHold(null, { status: 'lost', lostReason: 'on_hold' })).toBe(true);
+    expect(makesLostOnHold(undefined, { status: 'lost', lostReason: 'timing' })).toBe(false);
+    expect(makesLostOnHold(null, { status: 'nurturing', lostReason: 'on_hold' })).toBe(false);
+  });
+
+  it('refuses moving a lead on hold to lost, or giving a lost lead the reason on hold', () => {
+    expect(makesLostOnHold(nurturingOnHold, { status: 'lost' })).toBe(true);
+    expect(makesLostOnHold({ status: 'lost', lostReason: 'budget' }, { lostReason: 'on_hold' })).toBe(
+      true
+    );
+  });
+
+  it('allows putting a lead on hold while nurturing, and leaving lost with another reason', () => {
+    expect(makesLostOnHold({ status: 'new', lostReason: null }, nurturingOnHold)).toBe(false);
+    expect(makesLostOnHold(nurturingOnHold, { status: 'lost', lostReason: 'timing' })).toBe(false);
+    expect(makesLostOnHold(lostOnHold, { lostReason: null })).toBe(false);
+    expect(makesLostOnHold(lostOnHold, { status: 'nurturing' })).toBe(false);
+  });
+
+  it('lets a lead lost on hold before #445 be saved while it stays so', () => {
+    expect(makesLostOnHold(lostOnHold, { status: 'lost' })).toBe(false);
+    expect(makesLostOnHold(lostOnHold, {})).toBe(false);
   });
 });

@@ -62,9 +62,11 @@ import { leadExportPdfBase64 } from '../export-pdf';
 import { getNextMeetingRate, getWeekMeetings } from '../meetings';
 import {
   LEAD_STATUSES,
+  LOST_ON_HOLD_MESSAGE,
   type LeadPipelineFields,
   type LeadStatus,
   jstDate,
+  makesLostOnHold,
   qualificationUpdateFields,
   statusUpdateFields,
 } from '../types/pipeline';
@@ -290,6 +292,9 @@ export const leadsRouter = router({
         code: 'FORBIDDEN',
         message: 'リードを作成する権限がありません',
       });
+    }
+    if (makesLostOnHold(null, input)) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: LOST_ON_HOLD_MESSAGE });
     }
 
     const now = new Date();
@@ -623,6 +628,9 @@ export const leadsRouter = router({
           message: 'リードが見つかりません',
         });
       }
+      if (makesLostOnHold(existing, input)) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: LOST_ON_HOLD_MESSAGE });
+      }
 
       // Build update object (only include defined fields)
       const updateData: PgUpdateSetSource<typeof leads> = {};
@@ -908,9 +916,12 @@ export const leadsRouter = router({
         // Lock the rows so the audited "before" is the status this update replaces
         await tx.execute(sql`select 1 from ${leads} where ${scope} for no key update`);
         const before = await tx.query.leads.findMany({
-          columns: { id: true, status: true },
+          columns: { id: true, status: true, lostReason: true },
           where: scope,
         });
+        if (before.some((row) => makesLostOnHold(row, { status: input.status }))) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: LOST_ON_HOLD_MESSAGE });
+        }
 
         // Update all leads matching the IDs and organization
         const result = await tx

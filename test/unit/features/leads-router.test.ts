@@ -135,6 +135,19 @@ describe('Leads Router', () => {
   });
 
   describe('create', () => {
+    it('refuses a new lead lost on hold (#445)', async () => {
+      const caller = appRouter.createCaller(mockContext);
+      await expect(
+        caller.leads.create({
+          organizationId: TEST_ORG_ID,
+          email: 'hold@example.com',
+          status: 'lost',
+          lostReason: 'on_hold',
+        })
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(mockDb.insert).not.toHaveBeenCalled();
+    });
+
     it('should create a new lead successfully', async () => {
       mockDb.returning.mockResolvedValue([mockLead]);
 
@@ -428,6 +441,29 @@ describe('Leads Router', () => {
       expect(setArg).not.toHaveProperty('mqlQualifiedAt');
     });
 
+    it('refuses to make a lead lost on hold (#445)', async () => {
+      mockDb.query.leads.findFirst.mockResolvedValue({ ...mockLead, lostReason: 'on_hold' });
+      const caller = appRouter.createCaller(mockContext);
+
+      await expect(
+        caller.leads.update({ organizationId: TEST_ORG_ID, id: TEST_LEAD_ID, status: 'lost' })
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(mockDb.set).not.toHaveBeenCalled();
+    });
+
+    it('keeps saving a lead lost on hold before #445 when status and reason stay', async () => {
+      mockDb.query.leads.findFirst.mockResolvedValue({
+        ...mockLead,
+        status: 'lost',
+        lostReason: 'on_hold',
+      });
+      mockDb.returning.mockResolvedValue([mockLead]);
+      const caller = appRouter.createCaller(mockContext);
+
+      await caller.leads.update({ organizationId: TEST_ORG_ID, id: TEST_LEAD_ID, name: 'Renamed' });
+      expect(mockDb.set).toHaveBeenCalledWith(expect.objectContaining({ name: 'Renamed' }));
+    });
+
     it('rejects unknown pipeline values', async () => {
       const caller = appRouter.createCaller(mockContext);
       await expect(
@@ -584,6 +620,23 @@ describe('Leads Router', () => {
         status: 'lost',
       });
       expect(mockDb.set.mock.calls.at(-1)?.[0]).not.toHaveProperty('hasNegotiated');
+    });
+
+    it('refuses to move a lead on hold to lost in bulk (#445)', async () => {
+      mockDb.query.leads.findMany.mockResolvedValue([
+        { id: TEST_LEAD_ID, status: 'new', lostReason: null },
+        { id: TEST_LEAD_ID_2, status: 'nurturing', lostReason: 'on_hold' },
+      ]);
+      const caller = appRouter.createCaller(mockContext);
+
+      await expect(
+        caller.leads.bulkUpdateStatus({
+          organizationId: TEST_ORG_ID,
+          ids: [TEST_LEAD_ID, TEST_LEAD_ID_2],
+          status: 'lost',
+        })
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(mockDb.update).not.toHaveBeenCalled();
     });
 
     it('should return count of 0 when no leads match', async () => {

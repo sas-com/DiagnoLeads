@@ -1180,6 +1180,7 @@
     "targetSystem": "対象システム",
     "referrerName": "紹介元",
     "lostReason": "失注・保留理由",
+    "lostOnHold": "「保留」は失注の理由にできません。保留のリードは状態をナーチャリングにしてください",
     "hasNegotiated": "商談済み",
     "mqlQualifiedAt": "MQL判定日",
     "sqlDecision": "SQL判定",
