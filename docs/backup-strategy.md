@@ -1,6 +1,6 @@
 # Backup Strategy
 
-> **2026-10-23 追記**：この文書は 2026-01 時点の一般論（Neon 前提）です。本番（Supabase）で実際に戻すときは [docs/runbooks/database-restore.md](./runbooks/database-restore.md) に従ってください。`scripts/restore-database.sh` は本番では使いません。
+> **2026-10-23 追記**：この文書は 2026-01 時点の一般論（Neon 前提）です。本番（Supabase）で実際に戻すときは [docs/runbooks/database-restore.md](./runbooks/database-restore.md) に従ってください。`scripts/backup-database.sh` と `scripts/restore-database.sh` は 2026-10-24 に消しました（#515）。下のコード例は当時の記録です。
 
 DiagnoLeads データベースバックアップ戦略ドキュメント
 

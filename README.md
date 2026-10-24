@@ -135,9 +135,8 @@ bun run db:generate     # Generate Drizzle migrations
 bun run db:push         # Push schema to database
 bun run db:studio       # Open Drizzle Studio GUI
 
-# Backup (Production)
-./scripts/backup-database.sh   # Backup database
-./scripts/restore-database.sh  # Restore from backup
+# Backup (Production): see docs/runbooks/database-restore.md
+bash scripts/prod-dump.sh      # Dump production as the read-only role
 ```
 
 ## Development Services

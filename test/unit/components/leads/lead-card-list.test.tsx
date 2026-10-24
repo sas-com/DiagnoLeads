@@ -35,7 +35,7 @@ vi.mock('@/hooks/use-lead-assignee', () => ({
   useAssignLead: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
-vi.mock('@/lib/trpc/client', () => ({ trpc: {} }));
+vi.mock('@/lib/trpc/client', () => ({ trpc: { useUtils: () => ({}) } }));
 vi.mock('@/lib/features/reports/pdf-export-service', () => ({
   downloadPDF: vi.fn(),
   exportLeadsToPDF: vi.fn(),
