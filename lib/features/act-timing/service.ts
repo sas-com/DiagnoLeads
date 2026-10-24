@@ -23,7 +23,7 @@ import {
 import { AX_MIGRATION_DIAGNOSTIC_KEY } from '@/lib/features/diagnostics/ax-migration/definition';
 import { parseStoredHearingFields } from '@/lib/features/lead-hearings/types/schemas';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
-import { and, asc, desc, eq, gte, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, isNull, sql } from 'drizzle-orm';
 import { type ActTiming, computeActTiming } from './compute';
 import { type ActTimingSettings, readActTimingSettings } from './types/schemas';
 
@@ -32,11 +32,12 @@ type Database = Pick<typeof defaultDb, 'select' | 'insert' | 'update' | 'delete'
 
 /** Leads updated within this many days are recomputed by the morning run */
 export const RECOMPUTE_RECENT_DAYS = 2;
-/** Leads recomputed per morning run, oldest update first; the rest wait for the next run */
+/** Leads the morning run reads per page; it reads page after page until done or out of time */
 export const RECOMPUTE_BATCH = 100;
 /**
  * Time the morning run spends recomputing: it shares the function's time limit (30 s on
- * Vercel) with the due notices that follow, so it stops early and leaves the rest for tomorrow
+ * Vercel) with the due notices that follow, so it stops early and leaves the rest (the oldest
+ * updates) for tomorrow
  */
 export const RECOMPUTE_TIME_BUDGET_MS = 10_000;
 
@@ -231,39 +232,74 @@ export async function recomputeOrganization(
   return rows.length;
 }
 
-/** The morning run: leads updated in the last days (diagnosis answers, status changes) */
+/**
+ * The morning run: every lead updated in the last days (diagnosis answers, status changes), of
+ * every organization, a page at a time, until none is left or the time is up (#374).
+ *
+ * Newest update first: a run cut short leaves the oldest updates, which the previous run had
+ * already reached while they were new, rather than the ones no run has seen yet. Each lead is
+ * recomputed in its own organization with that organization's settings.
+ */
 export async function recomputeRecentlyUpdated(
   db: Database,
   now: Date = new Date(),
   options: { timeBudgetMs?: number; clock?: () => number } = {}
-) {
+): Promise<{ recomputed: number; pending: number }> {
   const clock = options.clock ?? Date.now;
   const startedAt = clock();
   const budget = options.timeBudgetMs ?? RECOMPUTE_TIME_BUDGET_MS;
   const since = new Date(now.getTime() - RECOMPUTE_RECENT_DAYS * 24 * 60 * 60 * 1000);
-  const rows = await db
-    .select({ id: leads.id, organizationId: leads.organizationId })
-    .from(leads)
-    .where(gte(leads.updatedAt, since))
-    .orderBy(asc(leads.updatedAt))
-    .limit(RECOMPUTE_BATCH);
+  // The last lead reached. Its update time is kept as text: a Date would drop the microseconds
+  // and skip, or read again, the leads updated within the same millisecond
+  let last: { updatedAt: string; id: string } | null = null;
+  const notReached = () =>
+    and(
+      gte(leads.updatedAt, since),
+      last
+        ? sql`(${leads.updatedAt}, ${leads.id}) < (${last.updatedAt}::timestamp, ${last.id}::uuid)`
+        : undefined
+    );
   const settingsByOrg = new Map<string, ActTimingSettings>();
   let recomputed = 0;
-  for (const row of rows) {
-    if (clock() - startedAt > budget) break;
-    let settings = settingsByOrg.get(row.organizationId);
-    if (!settings) {
-      settings = await getActTimingSettings(db, row.organizationId);
-      settingsByOrg.set(row.organizationId, settings);
+  let page: { id: string; organizationId: string; updatedAt: string }[];
+  do {
+    page = await db
+      .select({
+        id: leads.id,
+        organizationId: leads.organizationId,
+        updatedAt: sql<string>`${leads.updatedAt}::text`,
+      })
+      .from(leads)
+      .where(notReached())
+      .orderBy(desc(leads.updatedAt), desc(leads.id))
+      .limit(RECOMPUTE_BATCH);
+    for (const row of page) {
+      if (clock() - startedAt > budget) {
+        const [left] = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(leads)
+          .where(notReached());
+        const pending = left?.count ?? 0;
+        console.warn(
+          `When to act: the morning run stopped at its time limit, ${pending} leads left`
+        );
+        return { recomputed, pending };
+      }
+      let settings = settingsByOrg.get(row.organizationId);
+      if (!settings) {
+        settings = await getActTimingSettings(db, row.organizationId);
+        settingsByOrg.set(row.organizationId, settings);
+      }
+      await recomputeActTiming(
+        db,
+        { organizationId: row.organizationId, leadId: row.id, userId: null },
+        { now, settings }
+      );
+      last = { updatedAt: row.updatedAt, id: row.id };
+      recomputed += 1;
     }
-    await recomputeActTiming(
-      db,
-      { organizationId: row.organizationId, leadId: row.id, userId: null },
-      { now, settings }
-    );
-    recomputed += 1;
-  }
-  return { recomputed, pending: rows.length - recomputed };
+  } while (page.length === RECOMPUTE_BATCH);
+  return { recomputed, pending: 0 };
 }
 
 /** Save the organization's settings (merged into organizations.settings) */

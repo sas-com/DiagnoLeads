@@ -18,9 +18,9 @@ import {
   organizations,
   users,
 } from '@/lib/db/schema';
-import { RECOMPUTE_RECENT_DAYS, recomputeRecentlyUpdated } from '@/lib/features/act-timing/service';
+import { RECOMPUTE_BATCH, recomputeRecentlyUpdated } from '@/lib/features/act-timing/service';
 import { appRouter } from '@/server/routers/_app';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -30,14 +30,6 @@ vi.mock('@/lib/db/rls', () => ({ setCurrentUser: vi.fn().mockResolvedValue(undef
 const url = process.env.TEST_DATABASE_URL;
 
 const done = (value: unknown) => ({ value, status: 'done', source: null });
-
-/**
- * An update time just inside the morning run's window. The run takes every organization's
- * recently updated leads, oldest first and a batch at a time; other DB tests running at the same
- * time add their own leads, so a lead updated "now" could be left for the next run (#357).
- */
-const earliestInWindow = () =>
-  new Date(Date.now() - (RECOMPUTE_RECENT_DAYS * 24 * 60 - 1) * 60 * 1000);
 
 describe.skipIf(!url)('when to act (PostgreSQL)', () => {
   const client = url ? postgres(url, { max: 2 }) : null;
@@ -166,7 +158,7 @@ describe.skipIf(!url)('when to act (PostgreSQL)', () => {
     expect(await tasksOf(other.leadId)).toHaveLength(1);
     await pg
       .update(leads)
-      .set({ status: 'lost', lostReason: 'budget', updatedAt: earliestInWindow() })
+      .set({ status: 'lost', lostReason: 'budget', updatedAt: new Date() })
       .where(eq(leads.id, other.leadId));
     // The morning run picks up the status change
     await recomputeRecentlyUpdated(pg);
@@ -183,7 +175,7 @@ describe.skipIf(!url)('when to act (PostgreSQL)', () => {
         organizationId: org,
         email: `act-${unique()}@example.co.jp`,
         company: '診断だけ商事',
-        updatedAt: earliestInWindow(),
+        updatedAt: new Date(),
       })
       .returning();
     await pg.insert(diagnosticSubmissions).values({
@@ -262,6 +254,103 @@ describe.skipIf(!url)('when to act (PostgreSQL)', () => {
     const result = await recomputeRecentlyUpdated(pg, new Date(), { clock: () => (tick += 6000) });
     expect(result.recomputed).toBe(1);
     expect(result.pending).toBeGreaterThan(0);
+  });
+
+  it('recomputes every lead updated in the window, past one page, each with its own settings (#374)', async () => {
+    // The run reads every organization's leads. These are dated a year ahead and the run is
+    // given that date, so it reads only them, not the leads other DB tests add meanwhile.
+    const runAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+    const updatedAt = new Date(runAt.getTime() - 60 * 60 * 1000);
+    const created = await pg
+      .insert(organizations)
+      .values([
+        { name: '時期まとめてA', slug: `act-many-a-${unique()}` },
+        {
+          name: '時期まとめてB',
+          slug: `act-many-b-${unique()}`,
+          settings: { actTiming: { migrationMonths: 24, noticeMonths: 1 } },
+        },
+      ])
+      .returning({ id: organizations.id });
+    const [orgA, orgB] = created.map((row) => row.id);
+    try {
+      const total = RECOMPUTE_BATCH * 2 + 30;
+      const inserted = await pg
+        .insert(leads)
+        .values(
+          Array.from({ length: total }, (_, i) => ({
+            organizationId: i % 3 === 0 ? orgB : orgA,
+            email: `act-many-${i}-${unique()}@example.co.jp`,
+          }))
+        )
+        .returning({ id: leads.id, organizationId: leads.organizationId });
+      await pg.insert(diagnosticSubmissions).values(
+        inserted.map((lead) => ({
+          organizationId: lead.organizationId,
+          leadId: lead.id,
+          diagnosticKey: 'ax-migration',
+          diagnosticVersion: 3,
+          answers: { support_end: '1_3y' },
+          result: {},
+          createdAt: new Date('2026-10-16T00:00:00Z'),
+        }))
+      );
+      const ids = inserted.map((lead) => lead.id);
+      // Half share one update time to the microsecond (their order rests on the id); the rest
+      // are a microsecond apart, finer than a JS Date
+      await pg.execute(sql`
+        update leads set updated_at = ${updatedAt.toISOString()}::timestamp
+          + case when o.ord <= ${total / 2} then interval '0' else o.ord * interval '1 microsecond' end
+        from (select id, row_number() over (order by id) as ord from leads where id in ${ids}) as o
+        where leads.id = o.id`);
+      // The order the run takes them in: newest update first, then the id
+      const newestFirst = (
+        await pg
+          .select({ id: leads.id })
+          .from(leads)
+          .where(inArray(leads.id, ids))
+          .orderBy(desc(leads.updatedAt), desc(leads.id))
+      ).map((row) => row.id);
+
+      // Cut short past the first page: the newest leads, and the count of those left
+      let tick = 0;
+      const cut = await recomputeRecentlyUpdated(pg, runAt, {
+        timeBudgetMs: RECOMPUTE_BATCH + 20,
+        clock: () => tick++,
+      });
+      expect(cut.recomputed).toBeGreaterThan(RECOMPUTE_BATCH);
+      expect(cut.recomputed).toBeLessThan(total);
+      expect(cut.pending).toBe(total - cut.recomputed);
+      const reached = await pg
+        .select({ id: leads.id })
+        .from(leads)
+        .where(and(inArray(leads.id, ids), isNotNull(leads.actBy)));
+      expect(new Set(reached.map((row) => row.id))).toEqual(new Set(newestFirst.slice(0, cut.recomputed)));
+
+      // With the time it needs: every one of them, none left
+      expect(await recomputeRecentlyUpdated(pg, runAt, { timeBudgetMs: 120_000 })).toEqual({
+        recomputed: total,
+        pending: 0,
+      });
+      const rows = await pg
+        .select({ organizationId: leads.organizationId, actBy: leads.actBy })
+        .from(leads)
+        .where(inArray(leads.id, ids));
+      expect(rows).toHaveLength(total);
+      // 2026-10 + 24 months = 2028-10; A takes 12 months to migrate, B 24 (its own settings)
+      for (const row of rows) {
+        expect(row.actBy).toBe(row.organizationId === orgA ? '2027-10-01' : '2026-10-01');
+      }
+      const tasks = await pg
+        .select({ leadId: leadTasks.leadId, organizationId: leadTasks.organizationId })
+        .from(leadTasks)
+        .where(and(inArray(leadTasks.leadId, ids), eq(leadTasks.source, 'act_timing')));
+      expect(tasks).toHaveLength(total);
+      const orgOf = new Map(inserted.map((lead) => [lead.id, lead.organizationId]));
+      expect(tasks.every((task) => task.organizationId === orgOf.get(task.leadId))).toBe(true);
+    } finally {
+      await pg.delete(organizations).where(inArray(organizations.id, [orgA, orgB]));
+    }
   });
 
   it('lets owners and admins change the settings, recomputing the leads', async () => {
