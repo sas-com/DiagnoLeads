@@ -1,8 +1,7 @@
 import type { AppAbility } from '@/lib/auth/permissions';
 import { leads } from '@/lib/db/schema';
-import { listMqlLevel } from '@/lib/features/leads/api/list-sql';
+import { countLeadsByMqlLevel } from '@/lib/features/leads/service';
 import { LEAD_STATUSES, type LeadStatus } from '@/lib/features/leads/types/pipeline';
-import { MQL_LEVEL_FILTERS, type MqlLevelFilter } from '@/lib/features/leads/types/schemas';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { and, count, desc, eq, gte, sql } from 'drizzle-orm';
@@ -105,18 +104,7 @@ export const analyticsRouter = router({
 
       // Leads per MQL level, as the list filters them (#605): the sign of how promising leads
       // are, instead of the average score (#447)
-      const mqlLevelRows = await ctx.db
-        .select({ level: listMqlLevel, count: count() })
-        .from(leads)
-        .where(eq(leads.organizationId, organizationId))
-        .groupBy(sql`1`);
-      const mqlLevels = Object.fromEntries(MQL_LEVEL_FILTERS.map((level) => [level, 0])) as Record<
-        MqlLevelFilter,
-        number
-      >;
-      for (const row of mqlLevelRows) {
-        mqlLevels[row.level ?? 'unknown'] += Number(row.count);
-      }
+      const mqlLevels = await countLeadsByMqlLevel(ctx.db, organizationId);
       const mqlRate = totalLeads > 0 ? (mqlLevels.interest / totalLeads) * 100 : 0;
 
       // Get leads by status
