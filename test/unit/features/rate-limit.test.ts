@@ -12,6 +12,10 @@ import {
   getRateLimitInfo,
   type RateLimitResult,
 } from '@/lib/middleware/rate-limit';
+import { appRouter } from '@/server/routers/_app';
+
+/** The procedures mounted in appRouter, as in /api/trpc/<procedure> */
+const procedures = Object.keys(appRouter._def.procedures);
 
 describe('Rate Limit Configuration', () => {
   describe('DEFAULT_RATE_LIMITS', () => {
@@ -54,13 +58,25 @@ describe('Rate Limit Configuration', () => {
       expect(ENDPOINT_RATE_LIMITS['/api/auth/sign-up']).toEqual({ max: 3, windowMs: 60000 });
     });
 
-    it('should have limits for AI endpoints', () => {
-      expect(ENDPOINT_RATE_LIMITS['/api/trpc/ai.scoreLeads']).toEqual({ max: 10, windowMs: 60000 });
+    it('has no entries for the AI procedures: each one gets the AI default (#405, #577)', () => {
+      const aiEntries = Object.keys(ENDPOINT_RATE_LIMITS).filter((endpoint) =>
+        endpoint.startsWith('/api/trpc/ai.')
+      );
+      expect(aiEntries).toEqual([]);
+      // Every procedure of the AI router, so one renamed or added is checked too. This is the
+      // path limit only (per IP and instance). The paid calls are counted in the procedures, in
+      // the database: the Claude calls against AI_CALL_LIMITS (#405), and #576 counts the
+      // OpenAI embeddings (semanticSearch, updateEmbedding) the same way, against
+      // EMBEDDING_CALL_LIMITS
+      const aiProcedures = procedures.filter((procedure) => procedure.startsWith('ai.'));
+      expect(aiProcedures).toContain('ai.scoreLead');
+      for (const procedure of aiProcedures) {
+        expect(getRateLimitConfig(`/api/trpc/${procedure}`)).toBe(DEFAULT_RATE_LIMITS.ai);
+      }
     });
 
     it('should have strict limits for export endpoints', () => {
       expect(ENDPOINT_RATE_LIMITS['/api/trpc/leads.export']).toEqual({ max: 5, windowMs: 60000 });
-      expect(ENDPOINT_RATE_LIMITS['/api/trpc/auditLogs.export']).toEqual({ max: 3, windowMs: 60000 });
     });
 
     it('should have limits for bulk operations', () => {
@@ -72,6 +88,27 @@ describe('Rate Limit Configuration', () => {
       expect(ENDPOINT_RATE_LIMITS['/api/v2/leads']).toEqual({ max: 200, windowMs: 60000 });
       expect(ENDPOINT_RATE_LIMITS['/api/v2/analytics']).toEqual({ max: 60, windowMs: 60000 });
     });
+  });
+});
+
+// An entry that hits no procedure reads as a limit that does not exist (#577)
+describe('tRPC entries of ENDPOINT_RATE_LIMITS', () => {
+  const TRPC_PREFIX = '/api/trpc/';
+  const entries = Object.keys(ENDPOINT_RATE_LIMITS)
+    .filter((endpoint) => endpoint.startsWith(TRPC_PREFIX))
+    .map((endpoint) => endpoint.slice(TRPC_PREFIX.length));
+
+  it('each hits a procedure mounted in appRouter, exactly or as a prefix', () => {
+    expect(entries.length).toBeGreaterThan(0);
+    const dead = entries.filter((entry) => !procedures.some((path) => path.startsWith(entry)));
+    expect(dead).toEqual([]);
+  });
+
+  it('limits leads.bulkUpdateStatus with the leads.bulkUpdate prefix', () => {
+    expect(procedures).toContain('leads.bulkUpdateStatus');
+    expect(getRateLimitConfig('/api/trpc/leads.bulkUpdateStatus')).toBe(
+      ENDPOINT_RATE_LIMITS['/api/trpc/leads.bulkUpdate']
+    );
   });
 });
 

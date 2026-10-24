@@ -288,6 +288,8 @@ export type DiagnosisConsultationOutcome =
       organizationId: string;
       leadId: string | null;
       leadCreated: boolean;
+      /** When the consultation was requested: now, or the earlier request (#241) */
+      requestedAt: Date;
     }
   | { ok: false; reason: 'not_found' };
 
@@ -338,6 +340,9 @@ export async function requestBuilderConsultation(
         organizationId: submission.organizationId,
         leadId: submission.leadId,
         leadCreated: submission.leadCreated,
+        // Set by the request that won and never cleared; the answer's own time only satisfies the
+        // type, and would close the window for the preferences sooner, not later
+        requestedAt: submission.consultationRequestedAt ?? submission.createdAt,
       };
     }
 
@@ -397,6 +402,7 @@ export async function requestBuilderConsultation(
       organizationId: claimed.organizationId,
       leadId: claimed.leadId,
       leadCreated: claimed.leadCreated,
+      requestedAt: now,
     };
   });
 }

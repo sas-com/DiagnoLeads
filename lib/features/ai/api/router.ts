@@ -9,6 +9,9 @@
  * Every procedure that calls Claude (scoring, prediction, summary, alone or in a batch) counts
  * each lead it hands to Claude against AI_CALL_LIMITS (../limits.ts) first, and hands Claude
  * the lead through leadForClaude (../prompt-input.ts), which bounds the size of each call (#405).
+ * The procedures that embed a text with OpenAI (semanticSearch, updateEmbedding) count each
+ * embedding against EMBEDDING_CALL_LIMITS first, and the text they embed is bounded (#576).
+ * findSimilar compares stored embeddings only, without calling OpenAI.
  */
 
 import { leads } from '@/lib/db/schema';
@@ -18,7 +21,7 @@ import { TRPCError } from '@trpc/server';
 import { and, eq, inArray } from 'drizzle-orm';
 import { generateLeadSummary } from '../chat/assistant';
 import { prepareLeadText } from '../embeddings/openai';
-import { consumeAiCalls } from '../limits';
+import { consumeAiCalls, consumeEmbeddingCalls } from '../limits';
 import { predictConversion, predictConversionBatch } from '../prediction/conversion';
 import { leadForClaude } from '../prompt-input';
 import { scoreLeadWithAI, scoreLeadsBatch } from '../scoring/claude';
@@ -194,6 +197,12 @@ export const aiRouter = router({
         });
       }
 
+      // Embedding the query is a paid OpenAI call: counted per user and organization
+      await consumeEmbeddingCalls(ctx.db, {
+        userId: ctx.user.id,
+        organizationId: input.organizationId,
+        calls: 1,
+      });
       const results = await semanticSearch(input.query, input.organizationId, {
         limit: input.limit,
         minSimilarity: input.minSimilarity,
@@ -293,9 +302,14 @@ export const aiRouter = router({
         });
       }
 
-      // Prepare text from lead data
+      // Prepare text from lead data (bounded), and embed it: a paid OpenAI call, counted
       const text = prepareLeadText(lead);
-      await updateLeadEmbedding(input.leadId, text);
+      await consumeEmbeddingCalls(ctx.db, {
+        userId: ctx.user.id,
+        organizationId: input.organizationId,
+        calls: 1,
+      });
+      await updateLeadEmbedding(input.leadId, input.organizationId, text);
 
       return { success: true };
     }),

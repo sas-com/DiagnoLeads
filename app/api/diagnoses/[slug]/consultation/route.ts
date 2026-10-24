@@ -126,6 +126,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
             // An answer tied to an existing lead only by email never replaces a verified request.
             // Builder answers never have continued_from_submission_id: this matches requestVerified
             identityVerified: outcome.leadCreated,
+            // Accepted for a day after the request, not for as long as the id is kept (#241)
+            requestedAt: outcome.requestedAt,
             preferences: parsed.data.preferences,
           },
           (task) => after(task)

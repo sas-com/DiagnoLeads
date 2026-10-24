@@ -1,3 +1,5 @@
+import type { SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock database
@@ -22,6 +24,11 @@ import {
   semanticSearch,
   updateLeadEmbedding,
 } from '@/lib/features/ai/search/semantic';
+
+const dialect = new PgDialect();
+/** The SQL text and parameters of the first argument of a recorded call */
+const queryOf = (fn: unknown, call = 0) =>
+  dialect.sqlToQuery((fn as ReturnType<typeof vi.fn>).mock.calls[call][0] as SQL);
 
 describe('semantic-search', () => {
   beforeEach(() => {
@@ -125,6 +132,34 @@ describe('semantic-search', () => {
 
       await expect(findSimilarLeads('lead-1', 'org-1')).rejects.toThrow('Finding similar leads failed');
     });
+
+    it('reads the reference lead by its id and the organization searched (#583)', async () => {
+      (db.where as ReturnType<typeof vi.fn>).mockResolvedValue([{ embedding: '[0.1,0.2,0.3]' }]);
+      (db.execute as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+      await findSimilarLeads('lead-1', 'org-1');
+
+      const read = queryOf(db.where);
+      // The parameters are what proves the scope; the rendered SQL is only loosely checked so a
+      // drizzle upgrade that changes parentheses or case does not fail this test
+      expect(read.sql).toMatch(/"organization_id" = \$2/);
+      expect(read.params).toEqual(['lead-1', 'org-1']);
+      // The search itself stays in the organization too
+      const search = queryOf(db.execute);
+      expect(search.sql).toMatch(/organization_id = \$\d+/);
+      expect(search.params).toContain('org-1');
+    });
+
+    it('never searches when the reference lead is not in the organization (#583)', async () => {
+      // A lead of another organization: the read in this organization finds nothing
+      (db.where as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+      await expect(findSimilarLeads('lead-of-other-org', 'org-1')).rejects.toThrow(
+        'Finding similar leads failed'
+      );
+      expect(queryOf(db.where).params).toEqual(['lead-of-other-org', 'org-1']);
+      expect(db.execute).not.toHaveBeenCalled();
+    });
   });
 
   describe('updateLeadEmbedding', () => {
@@ -132,16 +167,30 @@ describe('semantic-search', () => {
       (generateEmbedding as ReturnType<typeof vi.fn>).mockResolvedValue(new Array(1536).fill(0.1));
       (db.execute as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
 
-      await updateLeadEmbedding('lead-1', 'John Doe at Acme Corp');
+      await updateLeadEmbedding('lead-1', 'org-1', 'John Doe at Acme Corp');
 
       expect(generateEmbedding).toHaveBeenCalledWith('John Doe at Acme Corp');
+    });
+
+    it('writes the embedding on the lead with its id and organization only (#583)', async () => {
+      (generateEmbedding as ReturnType<typeof vi.fn>).mockResolvedValue([0.1, 0.2]);
+      (db.execute as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+
+      await updateLeadEmbedding('lead-1', 'org-1', 'text');
+
+      expect(db.execute).toHaveBeenCalledTimes(1);
+      const update = queryOf(db.execute);
+      expect(update.sql.replace(/\s+/g, ' ').trim()).toBe(
+        'UPDATE "leads" SET embedding = $1::vector WHERE id = $2 AND organization_id = $3'
+      );
+      expect(update.params).toEqual(['[0.1,0.2]', 'lead-1', 'org-1']);
     });
 
     it('should not throw on embedding failure', async () => {
       (generateEmbedding as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('API Error'));
 
       // Should not throw - errors are caught internally
-      await updateLeadEmbedding('lead-1', 'text');
+      await updateLeadEmbedding('lead-1', 'org-1', 'text');
       // If we reach here, no error was thrown
       expect(true).toBe(true);
     });
@@ -151,7 +200,7 @@ describe('semantic-search', () => {
       (db.execute as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('DB Error'));
 
       // Should not throw - errors are caught internally
-      await updateLeadEmbedding('lead-1', 'text');
+      await updateLeadEmbedding('lead-1', 'org-1', 'text');
       // If we reach here, no error was thrown
       expect(true).toBe(true);
     });

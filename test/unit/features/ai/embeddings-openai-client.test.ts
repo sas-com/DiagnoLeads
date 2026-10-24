@@ -7,13 +7,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const openai = vi.hoisted(() => ({
   create: vi.fn(),
-  clients: [] as { apiKey?: string }[],
+  clients: [] as { apiKey?: string; timeout?: number; maxRetries?: number }[],
 }));
 
 vi.mock('openai', () => ({
   OpenAI: class {
     embeddings = { create: openai.create };
-    constructor(options: { apiKey?: string }) {
+    constructor(options: { apiKey?: string; timeout?: number; maxRetries?: number }) {
       openai.clients.push(options);
     }
   },
@@ -62,7 +62,11 @@ describe('OpenAI embeddings', () => {
       await generateEmbedding('b');
       await generateEmbeddingsBatch(['c']);
 
-      expect(openai.clients).toEqual([{ apiKey: 'sk-test-embeddings' }]);
+      // One 20-second attempt, no retries: the one call counted is one request, within the
+      // 30 seconds of a Vercel function (as the Claude client)
+      expect(openai.clients).toEqual([
+        { apiKey: 'sk-test-embeddings', timeout: 20_000, maxRetries: 0 },
+      ]);
       expect(openai.create).toHaveBeenCalledTimes(3);
     });
 
