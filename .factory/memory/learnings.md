@@ -34,6 +34,18 @@
 - **解決策**: テスト内でインライン実装するか、dynamic importを使用
 - **教訓**: 外部モジュールのテストでは、importエラーの可能性を考慮
 
+### [Test] `*.integration.ts` は vitest に拾われない
+- **日付**: 2026-10-24
+- **状況**: 決定（2026-02-07）と TESTING.md が結合テストの名前を `*.integration.ts` としていたが、vitest の include は `test/**/*.{test,spec}.{ts,tsx}` だけだった
+- **原因**: 決めた命名と、テストの設定を突き合わせていなかった
+- **解決策**: 命名を実態（`*.test.ts`、実 DB は `test/unit/integration/*.db.test.ts`）に合わせた（`decisions/2026-10-24-test-file-naming.md`）
+- **教訓**: ファイルの置き場所や名前の決まりは、それを読むツールの設定（vitest・biome・tsconfig の include）と一緒に確かめる
+
+### [Test] 検証にかかる時間（2026-10-24 時点）
+- **日付**: 2026-10-24
+- **状況**: クラウドのセッション（4コア）で、全ユニットテスト約6分（約6,500件）、型チェックは初回56秒・2回目以降8秒（`tsconfig.tsbuildinfo` が効く）、lint 1秒、テスト1ファイル2秒。CI はテストを4分割して約2分
+- **教訓**: 作業中は関係するテストだけ（`bunx vitest run <path>`）を回し、全体はコミットの前に1回流す
+
 ---
 
 ## 設定関連
@@ -45,6 +57,13 @@
 - **解決策**: `bun run dev`に更新
 - **教訓**: 設定ファイルのコマンドは、プロジェクトのパッケージマネージャーに合わせる
 
+### [Harness] クラウドのセッションには依存が入っていない
+- **日付**: 2026-10-24
+- **状況**: Claude Code on the web のセッションは毎回まっさらなクローンから始まり、node_modules が無かった。CLAUDE.md の必須チェック（test・typecheck・lint）がそのままでは動かなかった
+- **原因**: 依存を入れる仕組みが無かった（`.claude/settings.json` が無かった）
+- **解決策**: SessionStart フックで、クラウド（`CLAUDE_CODE_REMOTE=true`）のときだけ `bun install --frozen-lockfile` を流す（約8秒、入っていれば1秒未満。#427）
+- **教訓**: 毎回必要な準備は、文章で頼まずにフックで行う
+
 ---
 
 ## Git関連
@@ -55,6 +74,16 @@
 - **原因**: SprintPathのContinuous Quality原則の違反
 - **解決策**: コミット前に必ず`bun run test && bun run typecheck && bun run lint`を実行
 - **教訓**: 品質ゲートは厳守。ショートカットしない
+
+---
+
+## 依存関連
+
+### [Deps] node_modules ではなく bun patch で直す
+- **日付**: 2026-10-22
+- **状況**: `bun patch sonner` がバージョンの曖昧さでエラーになったのに、node_modules を直接書き換えた。ファイルは Bun の共有キャッシュとハードリンクでつながっていて、ほかのワークツリーと本体のチェックアウトにも広がった（violations.md 2026-10-22）
+- **解決策**: `bun patch <name>@<version>` で取り出したコピー（リンク数1）を編集し、`bun patch --commit` で確定した
+- **教訓**: 依存を変える前に `stat -c %h` でリンク数が1であることを確かめる。コマンドがエラーなら次の手順に進まない。2026-10-24 からは、フックが node_modules と共有キャッシュの編集を止める
 
 ---
 
@@ -136,6 +165,3 @@
 - **結果**: 進捗の可視化、優先度の明確化
 - **学び**: SprintPathのIssue-First原則は効果的
 
----
-
-*最終更新: 2026-02-06*

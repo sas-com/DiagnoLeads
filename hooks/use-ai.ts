@@ -2,7 +2,7 @@
  * React hooks for AI features
  *
  * Provides easy-to-use hooks for:
- * - Lead scoring with Claude 4.5 Sonnet
+ * - Lead scoring with Claude Sonnet 5.5
  * - Semantic search with pgvector
  * - Lead summaries and insights
  */
