@@ -8,8 +8,11 @@ paths:
 # スキーマの変更（Drizzle）
 
 - 変更は追加だけにする（列や表を足す）。列を消す・名前を変える・型を変えるときは、段階に分けて別の PR にする。マージの前後で、古いコードと新しいスキーマが同時に動く時間があるため
-- 手順：`lib/db/schema.ts` を変える → `bun run db:generate` で `drizzle/` に SQL とメタを作る → 手元の DB に `bun run db:migrate` → テスト。`drizzle/meta/` は手で直さない
+  - 既存の表に NOT NULL の列を足すときは DEFAULT を付ける（本番に先に流すので、マージまでの間も古いコードの INSERT が通るように）
+- 手順：`lib/db/schema.ts` を変える → `bun run db:generate` で `drizzle/` に SQL とメタを作る → 手元の DB に `bun run db:migrate` → テスト。`drizzle/meta/` は、下のぶつかったときの手順のほかは手で直さない
+- main を取り込んで、マイグレーションの番号か `when`（`drizzle/meta/_journal.json`）がほかの PR とぶつかったら、番号だけを付け替えない。自分の `drizzle/<番号>_*.sql`・`drizzle/meta/<番号>_snapshot.json`・ジャーナルの自分の行を消し、`bun run db:generate` で作り直す。drizzle の migrator は、本番に記録済みの最新より `when` が新しいものだけを流すので、古い `when` が残ると黙って飛ばされる
 - 本番 DB への適用は、マージの前にオーナーの承認を得て行う。マージすると本番に自動でデプロイされ、新しいコードが新しいスキーマを読みに行くため。接続文字列を会話やログに出さない
+  - 本番には、ジャーナルの順に流す。前の番号がまだ本番に無ければ、その適用を待つ
 - スキーマの変更と依存の変更は同じ PR に入れない（失敗したとき、新しいスキーマに古いコードが残る時間が延びる。`decisions/2026-10-21-frozen-lockfile-on-vercel`）
-- DB のコマンドを流す前に、`DATABASE_URL` が手元の DB を指していることを確かめる（Claude Code では、DB を変えるスクリプトは毎回確認が出る）
+- 手元で DB のコマンドを流すときは、手元の DB の URL をコマンドの前に付けて流す（`docs/TESTING.md` の「実 DB テスト」と同じ）。`.env.local` の値は表示しない（Claude Code では、DB を変えるスクリプトは毎回確認が出る）
 - マイグレーションと SQL は、実 DB のテスト（`test/unit/integration/*.db.test.ts`）で確かめる。手順は `docs/TESTING.md`

@@ -421,7 +421,7 @@ const fallbackScore: LeadScore = {
 
 - すべてのAI操作は`organizationProcedure`経由
 - 他組織のデータにアクセス不可
-- RLSによる自動フィルタリング
+- 各クエリを `organizationId` で絞る（RLS は今は効いていない。`openspec/specs/architecture.md` の注意）
 
 ### APIキー管理
 

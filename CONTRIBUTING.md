@@ -11,7 +11,7 @@ DiagnoLeads v2への貢献を検討いただきありがとうございます。
 ### 前提条件
 
 - Node.js 20+
-- Bun 1.1+
+- Bun 1.4.3（`.mise.toml`。CI も同じ版）
 - Docker & Docker Compose
 - Git
 
@@ -164,9 +164,7 @@ test(webhooks): add delivery retry tests
 
 #### PRマージ条件
 
-- [ ] 全体のカバレッジが下がっていないこと（1%以上の低下でCI失敗）
-- [ ] 新規コードのカバレッジが70%以上であること
-- [ ] 既存テストが全てパスすること
+マージの条件は、CLAUDE.md の「作業の流れ」とスキル `ship`（`.claude/skills/ship/SKILL.md`）にある。カバレッジは main への push のときだけ、`vitest.config.ts` のしきい値で測る。
 
 #### テスト必須のケース
 
@@ -181,10 +179,10 @@ test(webhooks): add delivery retry tests
 
 ```bash
 # 全テスト実行
-bun run test
+bun run test:run
 
 # 特定ファイル
-bun run test test/unit/features/leads.test.ts
+bunx vitest run test/unit/features/ax-playbook-router.test.ts
 
 # カバレッジ
 bun run test:coverage
@@ -227,7 +225,7 @@ describe('FeatureName', () => {
 bun run test:e2e
 
 # UIモード
-bun run test:e2e:ui
+bun run test:e2e -- --ui
 
 # 特定ファイル
 bunx playwright test test/e2e/auth.spec.ts
@@ -239,7 +237,7 @@ bunx playwright test test/e2e/auth.spec.ts
 
 ### PRチェックリスト
 
-- [ ] テストが全てパスする (`bun run test`)
+- [ ] テストが全てパスする (`bun run test:run`)
 - [ ] 型チェックがパスする (`bun run typecheck`)
 - [ ] リントがパスする (`bun run lint`)
 - [ ] 必要に応じてドキュメントを更新

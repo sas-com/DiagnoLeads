@@ -1,6 +1,7 @@
 ---
 paths:
   - "lib/features/*/api/**"
+  - "lib/features/*/router.ts"
   - "server/routers/**"
   - "lib/trpc/**"
   - "lib/multi-tenant/**"
@@ -11,7 +12,8 @@ paths:
 組織（テナント）の分離がこのプロダクトの土台。RLS はまだ効いていない（`lib/multi-tenant/middleware/organization.ts` の NOTE）ので、分離は各クエリの条件だけで守られている。
 
 - 組織のデータを扱う手続きは `organizationProcedure` で受ける。入力の `organizationId` でメンバーシップを確かめ、`ctx.ability` を作る。`protectedProcedure` で組織のデータを読み書きしない
-- 最初に権限を確かめる：`if (!ctx.ability.can('<action>', '<Subject>')) throw new TRPCError({ code: 'FORBIDDEN', message: '…する権限がありません' })`。閲覧は `read Lead`、設定の変更は `update Settings` のように、同じルーターのほかの手続きに合わせる
+  - hierarchy と organizations のルーターには、`protectedProcedure` の中で手でメンバーシップを確かめる古い形が残っている。新しい手続きでは真似しない。そのファイルに手続きを足すときも、所属と権限の確認を省かない（古い形を直すなら別の Issue にする）
+- 最初に権限を確かめる：`if (!ctx.ability.can('<action>', '<Subject>')) throw new TRPCError({ code: 'FORBIDDEN', message: '<メッセージ>' })`。閲覧は `read Lead`、設定の変更は `update Settings` のように、アクション・対象・メッセージの言語を同じルーターのほかの手続きに合わせる
 - 読み込みも書き込みも `eq(<table>.organizationId, input.organizationId)` を条件に入れる。直前に組織で絞って読んだ行を書くときも入れる（`decisions/2026-10-23-admin-api-role-checks`）。id だけで更新・削除しない
 - 入力で受け取ったほかの行の id（リード・タグ・テンプレートなど）は、使う前に `assertInOrganization`（`lib/multi-tenant/helpers/scope.ts`）で同じ組織のものか確かめる。別の組織の行は NOT_FOUND（存在しない id と同じ答え）にする
 - 誰が読めて誰が変えられるかは、関係する決定に合わせる。parent_viewer（親組織の閲覧者）はリードを読めるが、営業の手引きなど読めないものがある

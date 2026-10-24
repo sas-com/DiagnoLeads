@@ -134,7 +134,7 @@ it('test 1', () => {
 *.test.ts（test/unit/ の下）
 ```
 
-vitest が実行するのは `test/**/*.{test,spec}.{ts,tsx}` だけ。`*.integration.ts` は実行されないので使わない（2026-10-24 の決定 `2026-10-24-test-file-naming`）。実際の PostgreSQL を使うものは、下の「実 DB テスト」の `*.db.test.ts`。
+vitest が実行するのは `test/**/*.{test,spec}.{ts,tsx}` だけ（`test/e2e/` は除く。Playwright が流す）。`*.integration.ts` は実行されないので使わない（2026-10-24 の決定 `2026-10-24-test-file-naming`）。実際の PostgreSQL を使うものは、下の「実 DB テスト」の `*.db.test.ts`。
 
 ### 対象
 - DB操作（Drizzle ORM モック）
@@ -387,18 +387,18 @@ bun run test:e2e -- --ui
 
 ### 実行タイミング
 
-| 種別 | PR | main | release |
-|------|-----|------|---------|
-| Unit | ✅ | ✅ | ✅ |
-| Integration | ✅ | ✅ | ✅ |
-| E2E（PR ではスモークテスト） | ✅ | ✅ | ✅ |
+| 種別 | PR | main |
+|------|-----|------|
+| Unit | ✅ | ✅ |
+| Integration（実 DB） | ✅ | ✅ |
+| E2E（CI では `@smoke` のテストだけ） | ✅ | ✅ |
+
+`@smoke` の付かない E2E は CI では流れない。手元で `bun run test:e2e` を流して確かめる。
 
 ### 失敗時の対応
 
-```yaml
-# Unit/Integration 失敗 → PRマージ不可
-# E2E 失敗 → リリース不可
-```
+- GitHub が必須にしている検査（Lint & Type Check・Unit Tests ×4・DB Integration Tests・Build）が落ちると、マージできない
+- E2E と Security Scan は必須ではない。緑を自分で確かめてからマージする（マージの条件はスキル `ship`）
 
 ---
 
