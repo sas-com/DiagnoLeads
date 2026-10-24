@@ -1180,6 +1180,7 @@
     "targetSystem": "Target System",
     "referrerName": "Referrer",
     "lostReason": "Lost / On-hold Reason",
+    "lostOnHold": "A lead on hold cannot be lost. To lose it, change the reason from \"On hold\"; to keep it on hold, set the status to nurturing",
     "hasNegotiated": "Negotiated",
     "mqlQualifiedAt": "MQL Date",
     "sqlDecision": "SQL Decision",

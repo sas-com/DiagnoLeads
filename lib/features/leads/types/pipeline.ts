@@ -91,6 +91,43 @@ export const LOST_REASONS = [
 export const lostReasonEnum = z.enum(LOST_REASONS);
 export type LostReason = z.infer<typeof lostReasonEnum>;
 
+/** Message for a lead that would be 失注 with the reason 保留 (#445) */
+export const LOST_ON_HOLD_MESSAGE =
+  '「保留」のままでは失注にできません。失注にするときは失注・保留理由を「保留」以外に変え、保留のままにするときは状態をナーチャリングにしてください';
+
+/**
+ * 保留 is not a loss (#445): a lead on hold is nurtured, so the act timing (#151) follows it and
+ * it is not counted as lost. True when the write names 保留 as the reason of a lost lead. A lead
+ * already lost on hold (before #445) can still be saved while it stays so. Moving a lead on hold
+ * to lost without a reason is not refused: the reason 保留 is dropped (dropsOnHoldReason), so the
+ * lost reason can be asked for, as the deals do (#435).
+ */
+export function makesLostOnHold(
+  before: { status: string; lostReason: string | null } | null | undefined,
+  input: { status?: string; lostReason?: string | null }
+): boolean {
+  if (input.lostReason !== 'on_hold') return false;
+  if ((input.status ?? before?.status) !== 'lost') return false;
+  return before?.status !== 'lost' || before.lostReason !== 'on_hold';
+}
+
+/** Whether moving the lead to lost drops its reason 保留 (#445): it held, it did not lose */
+export function dropsOnHoldReason(
+  before: { status: string; lostReason: string | null } | null | undefined,
+  input: { status?: string; lostReason?: string | null }
+): boolean {
+  return (
+    input.status === 'lost' &&
+    input.lostReason === undefined &&
+    before?.lostReason === 'on_hold' &&
+    before.status !== 'lost'
+  );
+}
+
+/** Whether a lost reason was given: 保留 is no reason for a loss (the lost reason prompt) */
+export const hasLostReason = (lostReason: string | null | undefined): boolean =>
+  !!lostReason && lostReason !== 'on_hold';
+
 /** SQL判定: recorded by sales after the hearing（null = 未判定） */
 export const SQL_DECISIONS = ['qualified', 'not_qualified'] as const;
 export const sqlDecisionEnum = z.enum(SQL_DECISIONS);
