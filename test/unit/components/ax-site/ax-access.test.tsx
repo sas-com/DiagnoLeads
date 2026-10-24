@@ -255,6 +255,11 @@ describe('Access landing page', () => {
 
     // The band names this page's diagnosis and reports its own place
     const band = within(document.getElementById('ax-consult') as HTMLElement);
+    // With no booking page, the band still says that the 30-minute consultation is free (#467)
+    expect(band.queryByRole('link', { name: /予約する/ })).toBeNull();
+    expect(
+      band.getByText('30分の無料オンライン相談は、お電話・メールでもお申し込みいただけます。')
+    ).toBeInTheDocument();
     await user.click(band.getByRole('link', { name: /無料Web診断（Access版）をはじめる/ }));
     expect(analytics.dataLayer).toContainEqual({
       event: 'ax_lp_cta_click',
