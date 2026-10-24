@@ -57,16 +57,14 @@ export function uniqueClientAddress(): string {
 /**
  * Submit the sign-in or sign-up form on the page and return better-auth's answer
  *
- * The forms report a refusal with a toast. The toaster is loaded after the page
- * (app/providers.tsx) and sonner drops a toast raised before it is mounted, so the form is sent
- * only once the toaster's region is on the page: on a busy runner, a test that sends the form
- * right after the page loads would otherwise lose the toast it checks for
+ * The forms report a refusal inside the form (role="alert"), not with a toast, so the form can
+ * be sent right after the page loads: the toaster is loaded later and a toast raised before it
+ * mounts is lost (#597)
  */
 export async function submitAuthForm(
   page: Page,
   endpoint: '/sign-in/email' | '/sign-up/email'
 ): Promise<Response> {
-  await page.getByRole('region', { name: /^Notifications/ }).waitFor({ state: 'attached' });
   const [response] = await Promise.all([
     page.waitForResponse(
       (r) => r.request().method() === 'POST' && new URL(r.url()).pathname === `/api/auth${endpoint}`
