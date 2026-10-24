@@ -23,7 +23,6 @@ import {
   type OverviewStats,
   type PeriodMetrics,
   type ResponseTimeResult,
-  type ScoreDistributionData,
   type SourceBreakdown,
   type StatusBreakdown,
   type TrendDataPoint,
@@ -34,7 +33,6 @@ import {
   getLeadTrendSchema,
   getOverviewSchema,
   getResponseTimeSchema,
-  getScoreDistributionSchema,
   getSourceBreakdownSchema,
   getStatusBreakdownSchema,
 } from '../types/schemas';
@@ -320,54 +318,6 @@ export const analyticsRouter = router({
         overallConversionRate: rate(wonTotal, totalLeads),
         averageConversionDays,
       };
-    }),
-
-  /**
-   * Get Score Distribution
-   * Returns distribution of leads by score ranges (0-25, 26-50, 51-75, 76-100)
-   */
-  getScoreDistribution: organizationProcedure
-    .input(getScoreDistributionSchema)
-    .query(async ({ ctx, input }): Promise<ScoreDistributionData[]> => {
-      assertCanReadLeads(ctx.ability);
-      const { organizationId, dateRange } = input;
-
-      const period = inPeriod(organizationId, dateRange);
-
-      // Get total count of leads with scores
-      const totalResult = await ctx.db
-        .select({ count: count() })
-        .from(leads)
-        .where(and(period, sql`${leads.score} IS NOT NULL`));
-
-      const total = totalResult[0]?.count || 0;
-
-      // Get counts for each score range
-      const ranges = [
-        { min: 0, max: 25, label: '0-25' },
-        { min: 26, max: 50, label: '26-50' },
-        { min: 51, max: 75, label: '51-75' },
-        { min: 76, max: 100, label: '76-100' },
-      ];
-
-      const distribution: ScoreDistributionData[] = [];
-
-      for (const range of ranges) {
-        const countResult = await ctx.db
-          .select({ count: count() })
-          .from(leads)
-          .where(and(period, gte(leads.score, range.min), lte(leads.score, range.max)));
-
-        const rangeCount = countResult[0]?.count || 0;
-
-        distribution.push({
-          range: range.label,
-          count: rangeCount,
-          percentage: total > 0 ? Math.round((rangeCount / total) * 10000) / 100 : 0,
-        });
-      }
-
-      return distribution;
     }),
 
   /**
