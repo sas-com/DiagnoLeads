@@ -184,6 +184,9 @@ describe('DealsScreen', () => {
     expect(mocks.updates).toEqual([]);
 
     await user.click(screen.getByRole('combobox', { name: '失注理由' }));
+    // 保留 is not a loss (#445), so a deal cannot be lost for it
+    expect(screen.getByRole('option', { name: '時期' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: '保留' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('option', { name: '他社選定' }));
     await user.type(screen.getByLabelText('競合（任意）'), '架空システムズ');
     await user.click(screen.getByRole('button', { name: '失注にする' }));

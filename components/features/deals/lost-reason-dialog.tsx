@@ -19,13 +19,18 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  DEAL_LOST_REASONS,
+  type DealLostReason,
+  dealLostReasonEnum,
+} from '@/lib/features/deals/types/pipeline';
 import { DEAL_LIMITS } from '@/lib/features/deals/types/schemas';
-import { LOST_REASONS, type LostReason } from '@/lib/features/leads/types/pipeline';
+import type { LostReason } from '@/lib/features/leads/types/pipeline';
 import { useTranslations } from 'next-intl';
 import { type FormEvent, useEffect, useId, useState } from 'react';
 
 export interface LostValues {
-  lostReason: LostReason;
+  lostReason: DealLostReason;
   lostNote: string | null;
   competitor: string | null;
 }
@@ -34,8 +39,8 @@ interface LostReasonDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   dealName: string;
-  /** Values already on the deal */
-  initial?: Partial<LostValues>;
+  /** Values already on the deal; a reason a deal can no longer take is not preselected */
+  initial?: Partial<Omit<LostValues, 'lostReason'>> & { lostReason?: LostReason };
   pending?: boolean;
   onConfirm: (values: LostValues) => void;
 }
@@ -53,14 +58,15 @@ export function LostReasonDialog({
   const tReason = useTranslations('pipeline.lostReason');
   const tCommon = useTranslations('common');
   const id = useId();
-  const [reason, setReason] = useState<LostReason | ''>('');
+  const [reason, setReason] = useState<DealLostReason | ''>('');
   const [note, setNote] = useState('');
   const [competitor, setCompetitor] = useState('');
   const [showError, setShowError] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    setReason(initial?.lostReason ?? '');
+    const initialReason = dealLostReasonEnum.safeParse(initial?.lostReason);
+    setReason(initialReason.success ? initialReason.data : '');
     setNote(initial?.lostNote ?? '');
     setCompetitor(initial?.competitor ?? '');
     setShowError(false);
@@ -93,7 +99,7 @@ export function LostReasonDialog({
             <Select
               value={reason}
               onValueChange={(value) => {
-                setReason(value as LostReason);
+                setReason(value as DealLostReason);
                 setShowError(false);
               }}
             >
@@ -105,7 +111,7 @@ export function LostReasonDialog({
                 <SelectValue placeholder={t('reasonPlaceholder')} />
               </SelectTrigger>
               <SelectContent>
-                {LOST_REASONS.map((value) => (
+                {DEAL_LOST_REASONS.map((value) => (
                   <SelectItem key={value} value={value}>
                     {tReason(value)}
                   </SelectItem>
