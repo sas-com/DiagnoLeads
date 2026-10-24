@@ -130,9 +130,10 @@ describe('Access landing page', () => {
       'こんなとき、ありませんか',
       'そのままにしたときのリスク',
       '進め方は、3つあります',
-      'ご相談からの流れ',
-      // The phone halfway down, as on the main page (#425)
-      '移行の進め方、まずはご相談ください',
+      // The steps start with the free check (#425)
+      '無料Web診断からの流れ',
+      // The phone halfway down, as on the main page, in this page's words (#425)
+      '直すか、Web に移すか。迷ったら、ご相談ください',
       '対象になる Access',
       'AS/400・ACOS など基幹システムの移行をお考えの方へ',
       'よくある質問',
@@ -243,14 +244,23 @@ describe('Access landing page', () => {
     const trust = screen.getByRole('heading', { level: 2, name: '安心して任せられる理由' });
     const diagnosis = screen.getByRole('heading', { level: 2, name: '無料Web診断（Access版）' });
     expect(trust.compareDocumentPosition(diagnosis) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The scope card speaks of Access work, not of the host systems listed on the main page
+    const trustSection = within(trust.closest('section') as HTMLElement);
+    expect(
+      trustSection.getByText(
+        '直す・Web に移す・置き換える、どの進め方もご相談いただけます。1つの部署の、1つのツールからお受けします。'
+      )
+    ).toBeInTheDocument();
+    expect(trustSection.queryByText(/AS\/400/)).toBeNull();
+    expect(trustSection.getByText(/学習データとして利用されない/)).toBeInTheDocument();
   });
 
   it('says which links open a new tab: the booking and the Microsoft sources', async () => {
     vi.stubEnv('NEXT_PUBLIC_AX_CONSULTATION_URL', 'https://bookings.example.com/ax');
     await renderPage();
-    // In the hero and in the final call to action
+    // In the hero, the consultation band and the final call to action
     const bookings = screen.getAllByRole('link', { name: /30分のオンライン相談を予約する/ });
-    expect(bookings).toHaveLength(2);
+    expect(bookings).toHaveLength(3);
     for (const booking of bookings) {
       expect(booking).toHaveAccessibleName('30分のオンライン相談を予約する（新しいタブで開きます）');
       expect(booking).toHaveAttribute('href', 'https://bookings.example.com/ax');

@@ -150,6 +150,23 @@ test.describe('Access landing page', () => {
     await context.close();
   });
 
+  test('shows the first question right after the hero button on phones (#425)', async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const page = await context.newPage();
+    await page.goto('/ja/ax-migration/access');
+    await page
+      .locator('#ax-hero-cta')
+      .getByRole('link', { name: /無料Web診断（Access版）をはじめる/ })
+      .click();
+    await expect(page).toHaveURL(/#diagnosis$/);
+    await expect(
+      page.locator('#diagnosis').getByText('このツールを直せる（変更できる）人は？')
+    ).toBeInViewport();
+    await context.close();
+  });
+
   test('links back to the main landing page for AS/400 readers (#332)', async ({ page }) => {
     await page.goto('/ja/ax-migration/access');
     await page.getByRole('link', { name: 'AS/400（IBM i）からの移行について読む' }).click();

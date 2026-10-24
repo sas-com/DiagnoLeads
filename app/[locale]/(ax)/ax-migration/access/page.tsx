@@ -101,15 +101,17 @@ export default async function AxAccessPage({ params }: AxAccessPageProps) {
           {/* The phone and the diagnosis halfway down the page, as on the main page (#425) */}
           <AxConsultBand
             locale={locale}
-            ctaNamespace="axAccess.finalCta"
+            copyNamespace="axAccess.consultBand"
+            buttonsNamespace="axAccess.finalCta"
             locationPrefix="access-"
           />
           <AxAccessTargets locale={locale} />
           {/* Readers of AS/400 or ACOS: the main page's sections on their system */}
           <AxAccessHostSystems locale={locale} />
           <AxFaq locale={locale} namespace="axAccess.faq" keys={ACCESS_FAQ_KEYS} />
-          {/* Reassurance right before the diagnosis asks for contact details, as on the main page */}
-          <AxTrust locale={locale} />
+          {/* Reassurance right before the diagnosis asks for contact details, as on the main
+              page; the scope card speaks of Access work */}
+          <AxTrust locale={locale} scopeNamespace="axAccess.trustScope" />
         </AxLandingOnly>
         <AxAccessDiagnosisSection locale={locale} />
         <AxLandingOnly>

@@ -241,7 +241,7 @@ describe('Access landing page links', () => {
     expect(link).toHaveAttribute('href', '/ja/ax-migration/column/access-fix-or-web');
     expect(pathsHeading.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(
-      link.compareDocumentPosition(screen.getByRole('heading', { level: 2, name: 'ご相談からの流れ' })) &
+      link.compareDocumentPosition(screen.getByRole('heading', { level: 2, name: '無料Web診断からの流れ' })) &
         Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
   });

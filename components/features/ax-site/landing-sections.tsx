@@ -551,9 +551,19 @@ const TRUST = [
   { key: 'certified', icon: BadgeCheck },
 ] as const;
 
+interface TrustProps extends SectionProps {
+  /** Messages for the scope card (`title`, `body`), for a page about one kind of system */
+  scopeNamespace?: string;
+}
+
 /** Reassurance right before the diagnosis asks for contact details */
-export async function AxTrust({ locale }: SectionProps) {
+export async function AxTrust({ locale, scopeNamespace }: TrustProps) {
   const t = await getTranslations({ locale, namespace: 'axSite.trust' });
+  const scope = scopeNamespace
+    ? await getTranslations({ locale, namespace: scopeNamespace })
+    : null;
+  const text = (key: (typeof TRUST)[number]['key'], field: 'title' | 'body') =>
+    key === 'scope' && scope ? scope(field) : t(`items.${key}.${field}`);
   return (
     <section aria-labelledby="ax-trust-heading" className="bg-white py-16 sm:py-24">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
@@ -567,10 +577,8 @@ export async function AxTrust({ locale }: SectionProps) {
                 <Icon className="h-6 w-6" aria-hidden="true" />
               </span>
               <div>
-                <h3 className="font-bold">{t(`items.${key}.title`)}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-gray-700">
-                  {t(`items.${key}.body`)}
-                </p>
+                <h3 className="font-bold">{text(key, 'title')}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-gray-700">{text(key, 'body')}</p>
               </div>
             </li>
           ))}
@@ -584,12 +592,10 @@ interface DiagnosisIntroProps {
   eyebrow: string;
   title: string;
   lead: string;
-  /** Under the lead, e.g. how to leave the path the diagnosis starts on */
-  children?: ReactNode;
 }
 
 /** Eyebrow, heading and lead above the embedded diagnosis of a landing page */
-export function DiagnosisIntro({ eyebrow, title, lead, children }: DiagnosisIntroProps) {
+export function DiagnosisIntro({ eyebrow, title, lead }: DiagnosisIntroProps) {
   return (
     <>
       {/* Small, so the first question is on screen right after a jump here */}
@@ -600,7 +606,6 @@ export function DiagnosisIntro({ eyebrow, title, lead, children }: DiagnosisIntr
         {title}
       </h2>
       <p className="mx-auto mt-5 max-w-2xl text-center leading-relaxed text-gray-700">{lead}</p>
-      {children}
     </>
   );
 }
@@ -797,8 +802,10 @@ async function ContactBand({
 }
 
 interface ConsultBandProps extends SectionProps {
-  /** Messages with the button label `cta` (the Access page names its own diagnosis) */
-  ctaNamespace?: string;
+  /** Messages for the title and lead (the Access page has its own) */
+  copyNamespace?: string;
+  /** Messages with the buttons `cta` and `consult`: those of the page's final call to action */
+  buttonsNamespace?: string;
   /** Prefix of the analytics location (e.g. 'access-' gives 'access-consult-band') */
   locationPrefix?: string;
 }
@@ -806,11 +813,12 @@ interface ConsultBandProps extends SectionProps {
 /** Consultation band in the middle of the page, after the steps (#420) */
 export async function AxConsultBand({
   locale,
-  ctaNamespace = 'axSite.finalCta',
+  copyNamespace = 'axSite.consultBand',
+  buttonsNamespace = 'axSite.finalCta',
   locationPrefix = '',
 }: ConsultBandProps) {
-  const t = await getTranslations({ locale, namespace: 'axSite.consultBand' });
-  const button = await getTranslations({ locale, namespace: ctaNamespace });
+  const t = await getTranslations({ locale, namespace: copyNamespace });
+  const buttons = await getTranslations({ locale, namespace: buttonsNamespace });
   return (
     <ContactBand
       locale={locale}
@@ -818,7 +826,9 @@ export async function AxConsultBand({
       headingId="ax-consult-heading"
       title={t('title')}
       lead={t('lead')}
-      cta={button('cta')}
+      cta={buttons('cta')}
+      // The booking button too, once a booking page is set, as in the final call to action
+      consult={buttons('consult')}
       location={`${locationPrefix}consult-band`}
     />
   );

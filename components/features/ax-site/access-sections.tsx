@@ -3,6 +3,7 @@ import { allowedEmailDomains } from '@/lib/email/allowed-recipients';
 import { COLUMN_INDEX_PATH, columnPath, columnsFor } from '@/lib/features/ax-site/columns';
 import { axResultEmailEnabled } from '@/lib/features/diagnostics/ax-migration/result-email-config';
 import { turnstileSiteKey } from '@/lib/features/diagnostics/turnstile';
+import { cn } from '@/lib/utils';
 import {
   ArrowRight,
   Check,
@@ -174,13 +175,15 @@ export async function AxAccessSupportEnd({ locale }: SectionProps) {
       <div className="mx-auto max-w-3xl px-4 sm:px-6">
         {/* A dated fact: set apart by the forest rule, not by a warning color */}
         <div className="border-t-4 border-ax-forest bg-ax-cloud p-6 sm:p-8">
-          <h2
-            id="ax-access-support-heading"
-            className="flex items-center gap-2 text-xl font-bold sm:text-2xl"
-          >
-            <Info className="h-6 w-6 shrink-0 text-ax-leaf" aria-hidden="true" />
-            {t('title')}
-          </h2>
+          {/* The same heading as the box for AS/400 and ACOS readers */}
+          <div className="flex items-center gap-3">
+            <span className={ICON_TILE}>
+              <Info className="h-6 w-6" aria-hidden="true" />
+            </span>
+            <h2 id="ax-access-support-heading" className="text-xl font-bold sm:text-2xl">
+              {t('title')}
+            </h2>
+          </div>
           <ul className="mt-5 space-y-2">
             {SUPPORT_KEYS.map((key) => (
               <li key={key} className="flex gap-2 font-bold leading-relaxed">
@@ -190,22 +193,23 @@ export async function AxAccessSupportEnd({ locale }: SectionProps) {
             ))}
           </ul>
           <p className="mt-4 leading-relaxed text-gray-700">{t('body')}</p>
-          <p className="mt-4 text-xs text-gray-600">
-            {t('source')}
+          {/* The links side by side and at least 24px high, so a finger can pick either */}
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
+            <p>{t('source')}</p>
             {SUPPORT_SOURCES.map((href, index) => (
               <a
                 key={href}
                 href={href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="ml-2 inline-flex items-center gap-0.5 rounded underline underline-offset-2 hover:text-ax-forest focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ax-forest"
+                className="inline-flex min-h-6 items-center gap-0.5 rounded underline underline-offset-2 hover:text-ax-forest focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ax-forest"
               >
                 {t('sourceLink', { number: index + 1 })}
                 <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
                 <span className="sr-only">{common('newTab')}</span>
               </a>
             ))}
-          </p>
+          </div>
           {columns.length > 0 && (
             <div className="mt-6 border-t border-gray-300 pt-4">
               <p className="text-sm font-bold text-ax-leaf">{t('relatedColumn')}</p>
@@ -244,7 +248,8 @@ export async function AxAccessProblems({ locale }: SectionProps) {
         <ul className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {PROBLEM_KEYS.map((key) => (
             <li key={key} className="flex gap-3 bg-white p-5 font-bold leading-relaxed sm:p-6">
-              <CircleCheck className="mt-1 h-5 w-5 shrink-0 text-ax-leaf" aria-hidden="true" />
+              {/* A plain mark: a check next to a problem would read as "no problem" */}
+              <span aria-hidden="true" className="mt-2.5 h-2 w-2 shrink-0 bg-ax-forest" />
               <span>{t(`items.${key}`)}</span>
             </li>
           ))}
@@ -532,11 +537,15 @@ export async function AxAccessColumns({ locale }: SectionProps) {
         </h2>
         <ul className="mt-8 space-y-3">
           {columns.map((column) => (
-            <li key={column.slug} className="bg-ax-cloud px-5 py-3">
+            <li key={column.slug}>
+              {/* The whole row is the link, as it looks like one */}
               <AxCrossLink
                 href={`/${column.locale}${columnPath(column.slug)}`}
                 placement="related"
-                className={CROSS_LINK}
+                className={cn(
+                  CROSS_LINK,
+                  'w-full justify-between rounded-none bg-ax-cloud px-5 py-3 hover:bg-ax-leaf/10'
+                )}
               >
                 {column.title}
                 <ArrowRight className="mt-1.5 h-4 w-4 shrink-0" aria-hidden="true" />
@@ -575,13 +584,13 @@ export async function AxAccessDiagnosisSection({ locale }: SectionProps) {
   const t = await getTranslations({ locale, namespace: 'axAccess.diagnosis' });
   return (
     <AxDiagnosisFrame
-      intro={
-        <DiagnosisIntro eyebrow={t('eyebrow')} title={t('title')} lead={t('lead')}>
-          {/* The diagnosis opens on the Access questions; other systems are one step back */}
-          <p className="mx-auto mt-3 max-w-2xl text-center text-sm leading-relaxed text-gray-700">
-            {t('presetNote')}
-          </p>
-        </DiagnosisIntro>
+      intro={<DiagnosisIntro eyebrow={t('eyebrow')} title={t('title')} lead={t('lead')} />}
+      // The diagnosis opens on the Access questions; other systems are one step back, which
+      // the note under its Back button says
+      note={
+        <p className="mx-auto mt-4 max-w-2xl text-center text-sm leading-relaxed text-gray-700">
+          {t('presetNote')}
+        </p>
       }
     >
       <AxDiagnosisFlow

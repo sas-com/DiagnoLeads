@@ -3148,8 +3148,8 @@
       "bridgeCta": "Check which one fits with the free web check"
     },
     "steps": {
-      "title": "From consultation to completion",
-      "lead": "The free web check and a 30-minute online consultation show where your tool stands; then we decide the way forward together.",
+      "title": "From the free web check to completion",
+      "lead": "The free web check gives a first guide; a consultation and an inventory show what is in the tool, and then we decide the way forward together.",
       "items": {
         "web": {
           "label": "First",
@@ -3178,6 +3178,10 @@
         }
       },
       "aiNote": "For example, AI can be used to help with input, totals, or drafting answers to questions from within the company. We decide together where to use it after checking the work and the data. You can start by trying it on a small scale."
+    },
+    "consultBand": {
+      "title": "Fix it or move it to the web? If you are unsure, talk to us",
+      "lead": "Besides the free web check, we take questions by phone and email."
     },
     "targets": {
       "title": "Which Access tools we cover",
@@ -3228,10 +3232,14 @@
         }
       }
     },
+    "trustScope": {
+      "title": "Scope",
+      "body": "You can consult us on every way forward: fixing it, moving it to the web or replacing it. We take on a single tool of a single department."
+    },
     "diagnosis": {
       "eyebrow": "FREE CHECK",
       "title": "Free web check (Access)",
-      "lead": "Just answer multiple-choice questions about your Access tool. In about 3 minutes you see a guide to the recommended way forward (fix, move to the web or replace), how hard and how urgent the migration is, and which issue to tackle first. Enter your company name and contact details at the end and the result is shown right away (it can be printed or saved as a PDF). If you wish, you can go straight on to a 30-minute online consultation. No pushy sales.",
+      "lead": "Just answer multiple-choice questions about your Access tool. In about 3 minutes you see a guide to the recommended way forward (fix, move to the web or replace), how hard and how urgent the migration is, and which issue to tackle first. Enter your company name and contact details at the end and the result is shown right away (it can be printed or saved as a PDF). No pushy sales.",
       "presetNote": "For a system other than Access, go back with “Back” and choose it there."
     },
     "finalCta": {
