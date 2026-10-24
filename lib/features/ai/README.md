@@ -1,6 +1,6 @@
 # AI Features
 
-AI-powered features for DiagnoLeads using Claude 4.5 Sonnet and OpenAI Embeddings.
+AI-powered features for DiagnoLeads using Claude Sonnet 5.5 and OpenAI Embeddings.
 
 ## Features
 

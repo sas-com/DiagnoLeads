@@ -4,6 +4,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
+import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema';
 
 // Initialize Anthropic client lazily
 let anthropicClient: Anthropic | null = null;
@@ -46,6 +47,40 @@ export interface ConversionPrediction {
   risks: string[];
 }
 
+const predictionOutputFormat = jsonSchemaOutputFormat({
+  type: 'object',
+  properties: {
+    probability: { type: 'number', description: 'Conversion probability, 0-100' },
+    confidence: { type: 'string', enum: ['low', 'medium', 'high'] },
+    estimatedDaysToConversion: { type: ['number', 'null'] },
+    factors: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          impact: { type: 'string', enum: ['positive', 'negative', 'neutral'] },
+          weight: { type: 'number', description: 'Weight, 1-10' },
+          description: { type: 'string', description: 'Brief description' },
+        },
+        required: ['name', 'impact', 'weight', 'description'],
+        additionalProperties: false,
+      },
+    },
+    recommendations: { type: 'array', items: { type: 'string' } },
+    risks: { type: 'array', items: { type: 'string' } },
+  },
+  required: [
+    'probability',
+    'confidence',
+    'estimatedDaysToConversion',
+    'factors',
+    'recommendations',
+    'risks',
+  ],
+  additionalProperties: false,
+});
+
 export interface ConversionFactor {
   name: string;
   impact: 'positive' | 'negative' | 'neutral';
@@ -62,20 +97,23 @@ export async function predictConversion(lead: LeadForPrediction): Promise<Conver
   const prompt = buildPredictionPrompt(lead);
 
   try {
-    const message = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1024,
+    const message = await client.messages.parse({
+      model: 'claude-sonnet-5-5',
+      max_tokens: 16000,
       messages: [
         {
           role: 'user',
           content: prompt,
         },
       ],
+      output_config: { effort: 'low', format: predictionOutputFormat },
     });
 
-    const responseText = message.content[0].type === 'text' ? message.content[0].text : '';
+    if (!message.parsed_output) {
+      return generateFallbackPrediction(lead);
+    }
 
-    return parsePredictionResponse(responseText, lead);
+    return normalizePrediction(message.parsed_output);
   } catch (error) {
     console.error('Conversion prediction error:', error);
     // Return a fallback prediction based on simple heuristics
@@ -125,62 +163,31 @@ Lead Information:
 - Days Since Creation: ${leadAge}
 - Diagnostic Responses: ${JSON.stringify(lead.responses || {}, null, 2)}
 
-Based on this information, provide a conversion prediction in the following JSON format:
-{
-  "probability": <number 0-100>,
-  "confidence": "<low|medium|high>",
-  "estimatedDaysToConversion": <number or null>,
-  "factors": [
-    {
-      "name": "<factor name>",
-      "impact": "<positive|negative|neutral>",
-      "weight": <number 1-10>,
-      "description": "<brief description>"
-    }
-  ],
-  "recommendations": ["<action 1>", "<action 2>"],
-  "risks": ["<risk 1>", "<risk 2>"]
-}
+Based on this information, predict the conversion: probability (0-100), confidence, estimated days to conversion (or null), the key factors (impact and a 1-10 weight each), recommendations, and risks.
 
 Consider:
 1. Lead completeness (contact info, company info)
 2. Engagement signals (responses, score)
 3. Time factors (lead age, status progression)
 4. Source quality
-5. Industry patterns for B2B conversion
-
-Respond ONLY with valid JSON, no additional text.`;
+5. Industry patterns for B2B conversion`;
 }
 
 /**
- * Parse the AI response into a ConversionPrediction
+ * Clamp the structured output into the ranges the UI expects
  */
-function parsePredictionResponse(response: string, lead: LeadForPrediction): ConversionPrediction {
-  try {
-    // Extract JSON from the response
-    const jsonMatch = response.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('No JSON found in response');
-    }
-
-    const parsed = JSON.parse(jsonMatch[0]);
-
-    return {
-      probability: Math.min(100, Math.max(0, Number(parsed.probability) || 0)),
-      confidence: validateConfidence(parsed.confidence),
-      estimatedDaysToConversion: parsed.estimatedDaysToConversion ?? null,
-      factors: (parsed.factors || []).map((f: ConversionFactor) => ({
-        name: String(f.name || ''),
-        impact: validateImpact(f.impact),
-        weight: Math.min(10, Math.max(1, Number(f.weight) || 5)),
-        description: String(f.description || ''),
-      })),
-      recommendations: (parsed.recommendations || []).map(String),
-      risks: (parsed.risks || []).map(String),
-    };
-  } catch {
-    return generateFallbackPrediction(lead);
-  }
+function normalizePrediction(parsed: ConversionPrediction): ConversionPrediction {
+  return {
+    probability: Math.min(100, Math.max(0, parsed.probability)),
+    confidence: parsed.confidence,
+    estimatedDaysToConversion: parsed.estimatedDaysToConversion,
+    factors: parsed.factors.map((f) => ({
+      ...f,
+      weight: Math.min(10, Math.max(1, f.weight)),
+    })),
+    recommendations: parsed.recommendations,
+    risks: parsed.risks,
+  };
 }
 
 /**
@@ -309,18 +316,4 @@ function generateFallbackPrediction(lead: LeadForPrediction): ConversionPredicti
     recommendations,
     risks,
   };
-}
-
-function validateConfidence(value: unknown): 'low' | 'medium' | 'high' {
-  if (value === 'low' || value === 'medium' || value === 'high') {
-    return value;
-  }
-  return 'medium';
-}
-
-function validateImpact(value: unknown): 'positive' | 'negative' | 'neutral' {
-  if (value === 'positive' || value === 'negative' || value === 'neutral') {
-    return value;
-  }
-  return 'neutral';
 }

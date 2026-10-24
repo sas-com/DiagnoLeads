@@ -1,7 +1,7 @@
 /**
  * AI Chat Assistant
  *
- * Streaming chat interface using Vercel AI SDK and Claude 4.5 Sonnet.
+ * Streaming chat interface using Vercel AI SDK and Claude Sonnet 5.5.
  * Provides contextual assistance for lead management and insights.
  */
 
@@ -59,13 +59,12 @@ Be concise, helpful, and professional. Focus on actionable insights.`;
 
   try {
     const result = await streamText({
-      model: anthropic('claude-sonnet-4-20250514') as LanguageModel,
+      model: anthropic('claude-sonnet-5-5') as LanguageModel,
       system: systemPrompt,
       messages: messages.map((msg) => ({
         role: msg.role,
         content: msg.content,
       })),
-      temperature: 0.7,
     });
 
     return result.toTextStreamResponse();
@@ -102,7 +101,7 @@ Focus on key business value and next steps.`;
 
   try {
     const result = await streamText({
-      model: anthropic('claude-sonnet-4-20250514') as LanguageModel,
+      model: anthropic('claude-sonnet-5-5') as LanguageModel,
       prompt,
     });
 

@@ -2,7 +2,7 @@
  * AI Features tRPC Router
  *
  * Provides AI-powered functionality for lead management:
- * - Lead scoring with Claude 4.5 Sonnet
+ * - Lead scoring with Claude Sonnet 5.5
  * - Semantic search with pgvector
  * - Lead summaries and insights
  */

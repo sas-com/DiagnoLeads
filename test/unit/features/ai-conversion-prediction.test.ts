@@ -11,31 +11,28 @@ import type {
   ConversionFactor,
 } from '@/lib/features/ai/prediction/conversion';
 
+const { mockParse } = vi.hoisted(() => ({ mockParse: vi.fn() }));
+
 // Mock Anthropic SDK
 vi.mock('@anthropic-ai/sdk', () => ({
   default: class MockAnthropic {
     messages = {
-      create: vi.fn().mockResolvedValue({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              probability: 75,
-              confidence: 'medium',
-              estimatedDaysToConversion: 14,
-              factors: [
-                {
-                  name: 'High Score',
-                  impact: 'positive',
-                  weight: 8,
-                  description: 'Lead has high engagement',
-                },
-              ],
-              recommendations: ['Schedule demo', 'Send case study'],
-              risks: ['Budget concerns'],
-            }),
-          },
-        ],
+      parse: mockParse.mockResolvedValue({
+        parsed_output: {
+          probability: 75,
+          confidence: 'medium',
+          estimatedDaysToConversion: 14,
+          factors: [
+            {
+              name: 'High Score',
+              impact: 'positive',
+              weight: 8,
+              description: 'Lead has high engagement',
+            },
+          ],
+          recommendations: ['Schedule demo', 'Send case study'],
+          risks: ['Budget concerns'],
+        },
       }),
     };
   },
@@ -313,5 +310,61 @@ describe('Prediction prompt building', () => {
     expect(name).toBe('Unknown');
     expect(company).toBe('Unknown');
     expect(score).toBe('Not scored');
+  });
+});
+
+describe('predictConversion', () => {
+  const lead: LeadForPrediction = {
+    id: 'lead-1',
+    email: 'buyer@example.com',
+    name: null,
+    company: 'Acme',
+    phone: null,
+    status: 'qualified',
+    score: 70,
+    source: 'diagnostic',
+    responses: null,
+    createdAt: new Date(),
+  };
+
+  it('should return the structured output from claude-sonnet-5-5', async () => {
+    const { predictConversion } = await import('@/lib/features/ai/prediction/conversion');
+
+    const prediction = await predictConversion(lead);
+
+    expect(prediction.probability).toBe(75);
+    expect(prediction.factors[0].impact).toBe('positive');
+    const request = mockParse.mock.calls.at(-1)?.[0];
+    expect(request.model).toBe('claude-sonnet-5-5');
+    expect(request.output_config.effort).toBe('low');
+  });
+
+  it('should clamp probability and weight into range', async () => {
+    const { predictConversion } = await import('@/lib/features/ai/prediction/conversion');
+    mockParse.mockResolvedValueOnce({
+      parsed_output: {
+        probability: 140,
+        confidence: 'high',
+        estimatedDaysToConversion: null,
+        factors: [{ name: 'f', impact: 'neutral', weight: 25, description: 'd' }],
+        recommendations: [],
+        risks: [],
+      },
+    });
+
+    const prediction = await predictConversion(lead);
+
+    expect(prediction.probability).toBe(100);
+    expect(prediction.factors[0].weight).toBe(10);
+  });
+
+  it('should fall back to heuristics when there is no parsed output', async () => {
+    const { predictConversion } = await import('@/lib/features/ai/prediction/conversion');
+    mockParse.mockResolvedValueOnce({ parsed_output: null, stop_reason: 'max_tokens' });
+
+    const prediction = await predictConversion(lead);
+
+    expect(prediction.probability).toBeGreaterThan(0);
+    expect(prediction.factors.length).toBeGreaterThan(0);
   });
 });

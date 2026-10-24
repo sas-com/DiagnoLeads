@@ -1,5 +1,5 @@
 /**
- * AI Lead Scoring Service using Claude 4.5 Sonnet
+ * AI Lead Scoring Service using Claude Sonnet 5.5
  *
  * Analyzes leads and provides intelligent scoring based on:
  * - Company size and industry
@@ -8,6 +8,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
+import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema';
 import { z } from 'zod';
 
 // Initialize Anthropic client
@@ -19,12 +20,30 @@ const anthropic = new Anthropic({
 const LeadScoreSchema = z.object({
   score: z.number().min(0).max(100).describe('Lead score from 0-100'),
   confidence: z.enum(['low', 'medium', 'high']).describe('Confidence level'),
-  reasoning: z.string().describe('Explanation of the score'),
+  reasoning: z.string().describe('One or two sentences explaining the score for the sales rep'),
   recommendedActions: z.array(z.string()).describe('Suggested next steps'),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).describe('Priority level'),
 });
 
 export type LeadScore = z.infer<typeof LeadScoreSchema>;
+
+// The same shape for Claude's structured output. Ranges stay in the descriptions;
+// LeadScoreSchema enforces them on the result.
+const leadScoreOutputFormat = jsonSchemaOutputFormat({
+  type: 'object',
+  properties: {
+    score: { type: 'number', description: 'Lead score from 0-100' },
+    confidence: { type: 'string', enum: ['low', 'medium', 'high'] },
+    reasoning: {
+      type: 'string',
+      description: 'One or two sentences explaining the score for the sales rep',
+    },
+    recommendedActions: { type: 'array', items: { type: 'string' } },
+    priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
+  },
+  required: ['score', 'confidence', 'reasoning', 'recommendedActions', 'priority'],
+  additionalProperties: false,
+});
 
 /**
  * Score a lead using Claude AI
@@ -54,10 +73,10 @@ Lead Information:
 - Notes: ${lead.notes || 'N/A'}
 - Created: ${lead.createdAt ? lead.createdAt.toISOString() : 'N/A'}
 
-Provide a JSON response with:
+Return:
 1. score (0-100): Overall lead quality score
 2. confidence (low/medium/high): How confident you are in this score
-3. reasoning: Brief explanation of the score
+3. reasoning: One or two sentences for the sales rep on why the lead got this score (the conclusion, not your working)
 4. recommendedActions: Array of 2-3 specific action items
 5. priority (low/medium/high/urgent): Priority level for follow-up
 
@@ -68,36 +87,23 @@ Consider factors like:
 - Lead engagement level
 - Timing and urgency signals`;
 
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1024,
+    const message = await anthropic.messages.parse({
+      model: 'claude-sonnet-5-5',
+      max_tokens: 16000,
       messages: [
         {
           role: 'user',
           content: prompt,
         },
       ],
+      output_config: { effort: 'low', format: leadScoreOutputFormat },
     });
 
-    // Extract JSON from response
-    const content = message.content[0];
-    if (content.type !== 'text') {
-      throw new Error('Unexpected response format from Claude');
+    if (!message.parsed_output) {
+      throw new Error(`No structured output from Claude (stop_reason: ${message.stop_reason})`);
     }
 
-    // Parse JSON response (Claude might wrap it in markdown code blocks)
-    const jsonMatch =
-      content.text.match(/```json\n([\s\S]*?)\n```/) || content.text.match(/\{[\s\S]*\}/);
-
-    if (!jsonMatch) {
-      throw new Error('Could not extract JSON from Claude response');
-    }
-
-    const jsonText = jsonMatch[1] || jsonMatch[0];
-    const parsed = JSON.parse(jsonText);
-
-    // Validate with Zod
-    return LeadScoreSchema.parse(parsed);
+    return LeadScoreSchema.parse(message.parsed_output);
   } catch (error) {
     console.error('Error scoring lead with AI:', error);
 

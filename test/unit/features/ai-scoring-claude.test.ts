@@ -6,11 +6,13 @@
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
+const { mockParse } = vi.hoisted(() => ({ mockParse: vi.fn() }));
+
 // Mock Anthropic SDK
 vi.mock('@anthropic-ai/sdk', () => ({
   default: class MockAnthropic {
     messages = {
-      create: vi.fn(),
+      parse: mockParse,
     };
   },
 }));
@@ -111,6 +113,54 @@ describe('scoreLeadWithAI', () => {
       const score = await scoreLeadWithAI(lead);
 
       expect(Array.isArray(score.recommendedActions)).toBe(true);
+    });
+  });
+
+  describe('structured output', () => {
+    it('should return the parsed output and request it from claude-sonnet-5-5', async () => {
+      const parsed: LeadScore = {
+        score: 82,
+        confidence: 'high',
+        reasoning: 'CTO at a mid-size manufacturer with a dated core system.',
+        recommendedActions: ['Book a discovery call', 'Share the migration case study'],
+        priority: 'high',
+      };
+      mockParse.mockResolvedValueOnce({ parsed_output: parsed, stop_reason: 'end_turn' });
+
+      const score = await scoreLeadWithAI({ email: 'cto@example.com', position: 'CTO' });
+
+      expect(score).toEqual(parsed);
+      const request = mockParse.mock.calls[0][0];
+      expect(request.model).toBe('claude-sonnet-5-5');
+      expect(request.output_config.effort).toBe('low');
+      expect(request.output_config.format).toBeDefined();
+      expect(request).not.toHaveProperty('temperature');
+    });
+
+    it('should fall back when the output is out of range', async () => {
+      mockParse.mockResolvedValueOnce({
+        parsed_output: {
+          score: 150,
+          confidence: 'high',
+          reasoning: 'x',
+          recommendedActions: [],
+          priority: 'high',
+        },
+        stop_reason: 'end_turn',
+      });
+
+      const score = await scoreLeadWithAI({ email: 'range@example.com' });
+
+      expect(score.score).toBe(50);
+      expect(score.confidence).toBe('low');
+    });
+
+    it('should fall back when there is no parsed output', async () => {
+      mockParse.mockResolvedValueOnce({ parsed_output: null, stop_reason: 'max_tokens' });
+
+      const score = await scoreLeadWithAI({ email: 'cut@example.com' });
+
+      expect(score.score).toBe(50);
     });
   });
 

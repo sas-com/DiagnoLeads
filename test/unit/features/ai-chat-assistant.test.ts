@@ -35,7 +35,6 @@ describe('ai-chat-assistant', () => {
       expect(streamText).toHaveBeenCalledWith(
         expect.objectContaining({
           messages: [{ role: 'user', content: 'Hello' }],
-          temperature: 0.7,
         })
       );
       expect(result).toBeInstanceOf(Response);
