@@ -1,0 +1,34 @@
+{
+  "features-in-cycles": [
+    "act-timing",
+    "agency-contracts",
+    "agency-handovers",
+    "agency-links",
+    "analytics",
+    "appointment-reviews",
+    "ax-playbook",
+    "ax-site",
+    "challenge-guide",
+    "diagnosis-builder",
+    "diagnostics",
+    "lead-follow-up",
+    "lead-handoff",
+    "lead-hearings",
+    "lead-prep",
+    "leads",
+    "prospects",
+    "reports",
+    "respondent-email",
+    "webhooks"
+  ],
+  "infra-imports-features": [
+    "lib/auth/config.ts -> lib/features/members/invitations.ts",
+    "lib/auth/email-helpers.ts -> lib/features/email/index.ts",
+    "lib/db/schema.ts -> lib/features/ax-playbook/types/schemas.ts",
+    "lib/db/schema.ts -> lib/features/diagnosis-builder/definition.ts",
+    "lib/db/schema.ts -> lib/features/lead-hearings/types/schemas.ts",
+    "lib/ops/alert.ts -> lib/features/diagnostics/rate-limit.ts",
+    "lib/ops/alert.ts -> lib/features/email/index.ts",
+    "lib/seo/indexing.ts -> lib/features/ax-site/columns/index.ts"
+  ]
+}
