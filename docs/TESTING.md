@@ -124,10 +124,13 @@ it('test 1', () => {
 - 時間で動く処理（入力の後の待ち・自動保存）を、本物の時計で待たない
   - 待ちそのものを確かめるテストは、偽のタイマー（`vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })`）で時計を進める。入力は `fireEvent` で送る（user-event と `findBy`・`waitFor` は中で `setTimeout` を待つので、vitest の偽のタイマーの下では止まる）
   - 待ちがテストの対象でないときは、その処理を止める（例：`lead-hearing-editor-inputs.test.tsx` は自動保存を止め、自動保存は `lead-hearing-editor.test.tsx` で偽のタイマーを使って確かめる）
-- 要素の多い画面では、`getByRole`・`getByLabelText` を画面全体にかけず、`within()` で行・セクション・ダイアログに絞る。`getByRole` は同じ役割の要素すべての名前を計算し、`getByLabelText` はすべての入力欄とボタンのラベルを探すので、ボタンが100を超える画面では1回に0.1〜1秒かかる
+- 要素の多い画面では、`getByLabelText` と、数の多い役割（ボタンなど）の `getByRole` を画面全体にかけず、`within()` で行・セクション・ダイアログ（ポップオーバー）に絞る。`getByRole` は指定した役割の要素すべての名前を計算し、`getByLabelText` は画面のすべての要素のラベルを探すので、ボタンが100を超える画面では1回に0.1〜1秒かかる
+  - タブのように数の少ない役割なら、画面全体にかけても軽い（例：`lead-hearing-editor-inputs.test.tsx` は、どの行にも入らない商談日の入力欄を `getByRole('textbox', …)` で探す）
 - 長い値は `type` で1文字ずつ打たず、`clear` と `paste` で入れる（1文字ごとに画面全体が描き直される）。1文字ごとの動きを確かめるときだけ `type` を使う
 - `testTimeout`（20秒、`vitest.config.ts`）を上げて済ませない。遅さが隠れるうえ、時間切れになったテストは止まらずに動き続け、同じファイルの次のテストの入力欄に文字を打ち込んで落とす
-- 負荷の下で確かめるときは、CPU を回すだけのプロセス（`timeout 600 sh -c 'while :; do :; done'`）を数本起こし、同じファイルを複数の vitest で同時に流す。終わったら、起こしたプロセスを PID で止める
+- 負荷の下で確かめるときは、CPU を回すだけのプロセスと vitest を `taskset -c 0` で1つのコアにまとめる。手元のマシンはほかのセッションと共用しているので、全部のコアに負荷をかける形（プロセスを何本も起こし、複数の vitest を同時に流す）は使わない。ほかのセッションのテストを時間切れにして、同じ問題をよそに起こす
+  - 例：`taskset -c 0 timeout 600 sh -c 'while :; do :; done' &` を3本起こして PID を控え、`taskset -c 0 bunx vitest run <ファイル> --reporter=verbose` で各テストの時間を見る。各テストが3〜6倍遅くなり、確かめるには足りる。終わったら、起こしたプロセスを PID で止める
+- 手元で全体（`bun run test:run`）を流すときは、型チェック・ビルド・E2E と並べない。ほかのセッションも重い処理をしているときは、`bun run test:run --maxWorkers=2` のように並列数を抑える（既定はコアの数 − 1。4コアなら3）
 
 ### カバレッジ目標
 - **ビジネスロジック**: 80%+

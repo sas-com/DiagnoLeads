@@ -153,10 +153,16 @@ beforeEach(() => {
   mocks.summary = undefined;
   window.localStorage.clear();
 });
+// Controls are looked up inside their row, the open section, the save bar or the calendar: in
+// meeting mode a query over the whole editor goes through ~120 buttons, and getByLabelText reads
+// the labels of every element (docs/TESTING.md 1.5, #573)
 const fieldRow = (key: string) => screen.getByTestId(`hearing-field-${key}`);
-// In the save bar: in meeting mode a query over the whole editor goes through ~120 buttons
 const saveButton = () =>
   within(screen.getByTestId('hearing-save-bar')).getByRole('button', { name: '保存' });
+// The section shown in detail mode (its tab's name also holds the count of missing fields)
+const sectionPanel = (name: RegExp) => within(screen.getByRole('tabpanel', { name }));
+// The calendar and the month picker open in a popover outside the row
+const popover = async () => within(await screen.findByRole('dialog'));
 const lh = messages.leadHearings;
 const fill = (template: string, values: Record<string, string | number>) =>
   Object.entries(values).reduce((text, [k, v]) => text.replace(`{${k}}`, String(v)), template);
@@ -179,6 +185,8 @@ const noteBox = (key: string) =>
   within(fieldRow(key)).queryByRole('textbox', {
     name: fill(lh.editor.otherNoteOf, { field: fieldLabel(key) }),
   });
+// The input that the field name labels, in its row
+const fieldControl = (key: string) => within(fieldRow(key)).getByLabelText(fieldLabel(key));
 
 describe('"other" note (detail mode)', () => {
   beforeEach(() => window.localStorage.setItem(MODE_KEY, 'detail'));
@@ -292,13 +300,15 @@ describe('dates and months in the editor', () => {
     const user = userEvent.setup();
     render(editor());
 
-    const heldOn = screen.getByLabelText(lh.editor.heldOn);
+    // The meeting date is in the header, outside every row. There are only a few textboxes, so
+    // this query over the whole editor stays cheap
+    const heldOn = screen.getByRole('textbox', { name: lh.editor.heldOn });
     expect(heldOn).toHaveValue('2026/10/15');
     await user.clear(heldOn);
     await user.type(heldOn, '2026/10/16');
 
     await user.click(screen.getByRole('tab', { name: /結果/ }));
-    await user.type(screen.getByLabelText(fieldLabel('nextMeetingDate')), '2026/11/5');
+    await user.type(fieldControl('nextMeetingDate'), '2026/11/5');
     await user.click(saveButton());
 
     expect(mocks.mutate.mock.calls[0][0].heldOn).toBe('2026-10-16');
@@ -317,13 +327,13 @@ describe('dates and months in the editor', () => {
     render(editor());
 
     await user.click(screen.getByRole('tab', { name: /結果/ }));
-    expect(screen.getByLabelText(fieldLabel('nextMeetingDate'))).toHaveValue('2026/11/05');
+    expect(fieldControl('nextMeetingDate')).toHaveValue('2026/11/05');
     await user.click(
-      screen.getByRole('button', {
+      within(fieldRow('nextMeetingDate')).getByRole('button', {
         name: fill(lh.editor.openCalendar, { field: fieldLabel('nextMeetingDate') }),
       })
     );
-    await user.click(await screen.findByRole('button', { name: lh.editor.clear }));
+    await user.click((await popover()).getByRole('button', { name: lh.editor.clear }));
     await user.click(saveButton());
     expect(savedFields().nextMeetingDate).toEqual({ status: 'done', source: null });
   });
@@ -337,10 +347,12 @@ describe('dates and months in the editor', () => {
 
     await user.click(screen.getByRole('tab', { name: /現行システム/ }));
     const label = fieldLabel('earliestRetirement');
-    await user.click(screen.getByRole('button', { name: `${label}: 2027年3月` }));
-    await user.click(await screen.findByRole('button', { name: lh.editor.nextYear }));
-    await user.click(screen.getByRole('button', { name: '2028年10月' }));
-    expect(screen.getByRole('button', { name: `${label}: 2028年10月` })).toBeInTheDocument();
+    const row = within(fieldRow('earliestRetirement'));
+    await user.click(row.getByRole('button', { name: `${label}: 2027年3月` }));
+    const picker = await popover();
+    await user.click(picker.getByRole('button', { name: lh.editor.nextYear }));
+    await user.click(picker.getByRole('button', { name: '2028年10月' }));
+    expect(row.getByRole('button', { name: `${label}: 2028年10月` })).toBeInTheDocument();
     await user.click(saveButton());
     expect(savedFields().earliestRetirement).toEqual({
       value: '2028-10',
@@ -378,7 +390,8 @@ describe('missing required fields', () => {
     render(editor());
 
     await user.click(screen.getByRole('tab', { name: /結果/ }));
-    await user.click(screen.getByRole('button', { name: '対象システムと機種' }));
-    await waitFor(() => expect(screen.getByLabelText(fieldLabel('machineModel'))).toHaveFocus());
+    // The warning is at the top of the section
+    await user.click(sectionPanel(/結果/).getByRole('button', { name: '対象システムと機種' }));
+    await waitFor(() => expect(fieldControl('machineModel')).toHaveFocus());
   });
 });

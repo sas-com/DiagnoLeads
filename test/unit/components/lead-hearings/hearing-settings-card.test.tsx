@@ -52,9 +52,12 @@ const saved = () => mocks.mutate.mock.calls.at(-1)?.[0].settings;
 const row = (key: string) => within(screen.getByTestId(`hearing-setting-${key}`));
 const section = (name: string) => within(screen.getByRole('group', { name }));
 const ownFields = () => within(screen.getByRole('region', { name: '独自の項目' }));
-// The save and reset buttons below the lists, found by their text for the same reason
-const formButton = (text: '保存' | '初期の設定に戻す') =>
-  screen.getByText(text, { selector: 'button' });
+// The save and reset buttons below the lists, found by their text for the same reason. The
+// read-only test looks for them the same way, from the same texts, so the tests that press them
+// and the one that expects none cannot drift apart
+type FormButtonText = '保存' | '初期の設定に戻す';
+const formButton = (text: FormButtonText) => screen.getByText(text, { selector: 'button' });
+const queryFormButton = (text: FormButtonText) => screen.queryByText(text, { selector: 'button' });
 const meetingRows = () =>
   section('実施情報')
     .getAllByRole('listitem')
@@ -220,7 +223,8 @@ describe('HearingSettingsCard', () => {
     expect(
       row('targetSystem').getByRole('checkbox', { name: '対象システム を聞く' })
     ).toBeDisabled();
-    expect(screen.queryByRole('button', { name: '保存' })).not.toBeInTheDocument();
+    expect(queryFormButton('保存')).not.toBeInTheDocument();
+    expect(queryFormButton('初期の設定に戻す')).not.toBeInTheDocument();
     expect(screen.getByText('変更できるのはオーナーと管理者です。')).toBeInTheDocument();
   });
 });
