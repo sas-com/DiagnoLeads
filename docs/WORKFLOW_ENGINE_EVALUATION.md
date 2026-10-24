@@ -394,7 +394,7 @@ A案は点数が最下位（54点）でも「費用ゼロ」を理由に推奨�
 #### P3：AI エージェントの流れ
 
 - #48 の AI 分析は、まず `after()` とリトライで作り、失敗率を測ってからランナーに載せるかを決める。
-- `lib/ai-agent/` は削除する（#306）。必要になったら、利用中の AI SDK（`ai`、`@ai-sdk/anthropic`）の標準機能を使う。
+- `lib/ai-agent/` は削除する（#306）。必要になったら、Anthropic SDK（`@anthropic-ai/sdk`）を直接使う（2026-10-24 の決定 `2026-10-24-ai-calls-via-anthropic-sdk`。Vercel AI SDK は #432 で外す方向）。
 - 社内向けの自動報告（#72）は Claude Managed Agents の試行として別扱いにし、プロダクトには組み込まない。
 
 #### P4：申請・承認
