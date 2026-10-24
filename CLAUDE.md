@@ -94,7 +94,7 @@ Issue → 決定を読む → ブランチ → 実装 → 速い検証 → 全�
 ## UI
 
 - その時点のモダンな UI 部品を採用する。今の標準は shadcn/ui（Radix UI + Tailwind CSS v4）。部品は `bunx shadcn@latest add <component>` で `components/ui/` に足す
-- グラフは1つのライブラリに寄せる。今は Recharts と ApexCharts が併存していて、整理の方針は Issue で決める
+- グラフは今 ApexCharts（`components/charts/`）だけを使っている。recharts は package.json にあるが import されていない。どちらに寄せるかは #53 で決める
 - 新しい UI ライブラリを入れるときは、Issue に理由を残し、決定を記録する
 
 ## 専門エージェントとスキル

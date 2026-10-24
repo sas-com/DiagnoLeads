@@ -100,6 +100,8 @@ leads               // リード（organizationId外部キー）
 
 ### Row-Level Security (RLS)
 
+> **注意（2026-10-24）**: RLS のポリシーはあるが、今は効いていない。`setCurrentUser` がトランザクションの外で呼ばれ、設定がその1文でしか生きないため（`lib/multi-tenant/middleware/organization.ts` の NOTE）。テナントの分離は、各クエリの `organizationId` の条件とメンバーシップの検証に頼っている。
+
 ```sql
 -- PostgreSQL RLS ポリシー
 CREATE POLICY "leads_select" ON "leads"
@@ -136,10 +138,11 @@ const appRouter = router({
   analytics: analyticsRouter,
 });
 
-// organizationProcedure = 自動的に組織スコープ適用
+// organizationProcedure = メンバーシップ検証 + CASL の権限（ctx.ability）
+// 組織による絞り込みは自動では掛からない。各クエリに organizationId の条件を書く
 export const organizationProcedure = protectedProcedure
   .input(z.object({ organizationId: z.string().uuid() }))
-  .use(/* メンバーシップ検証 + RLS適用 */);
+  .use(/* メンバーシップ検証 + 権限の計算 */);
 ```
 
 ### Layer 2: OpenAPI（外部API）
@@ -174,9 +177,9 @@ Layer 2: tRPC Middleware
 ├─ organizationProcedure（メンバーシップ検証）
 └─ CASL権限チェック
 
-Layer 3: Database RLS
+Layer 3: Database RLS（ポリシーはあるが、今は効いていない。上の注意）
 ├─ PostgreSQL Row-Level Security
-└─ 自動的にorganization_id条件追加
+└─ 組織の絞り込みは各クエリの organizationId の条件で行う
 ```
 
 ### セキュリティ機能
