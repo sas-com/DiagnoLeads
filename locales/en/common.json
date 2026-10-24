@@ -1115,7 +1115,6 @@
       "recent": {
         "title": "Recent leads",
         "platform": "Source",
-        "score": "Score",
         "received": "Received",
         "consultation": "Consultation",
         "empty": "No leads yet",
@@ -1125,8 +1124,7 @@
         "mql": "MQL",
         "today": "Today {time}",
         "yesterday": "Yesterday",
-        "noCompany": "(no company)",
-        "highlight": "Worth a look (score 70+ or MQL)"
+        "noCompany": "(no company)"
       },
       "noOrganization": "Choose an organization to see its leads here",
       "periodTag": "Last {days} days",
@@ -1196,12 +1194,6 @@
           "same": "MQL (interested) is the same as in the previous {days} days",
           "none": "MQL (interested)"
         },
-        "score": {
-          "increase": "The average score of new leads went up",
-          "decrease": "The average score of new leads went down",
-          "same": "The average score of new leads is unchanged",
-          "none": "Average score of new leads"
-        },
         "previous": "Previous {days} days: {value}",
         "noPrevious": "Nothing in the previous {days} days"
       }
@@ -1218,6 +1210,7 @@
     "lostOnHold": "A lead on hold cannot be lost. To lose it, change the reason from \"On hold\"; to keep it on hold, set the status to nurturing",
     "hasNegotiated": "Negotiated",
     "mqlQualifiedAt": "MQL Date",
+    "mqlLevel": "MQL level",
     "sqlDecision": "SQL Decision",
     "sqlDecidedAt": "SQL Decision Date",
     "sqlUndecided": "Undecided",
@@ -2128,7 +2121,6 @@
         "totalLeads": "Total Leads",
         "newLeadsThisMonth": "New Leads This Month",
         "conversionRate": "Conversion Rate",
-        "averageScore": "Average Score",
         "vsLastPeriod": "vs. last period"
       },
       "tabs": {
@@ -2146,7 +2138,6 @@
         "sourceBreakdown": "Source Breakdown",
         "sourceTable": "Source Details",
         "conversionFunnel": "Conversion Funnel",
-        "scoreDistribution": "Score Distribution",
         "responseTime": "Response Time",
         "sourceBreakdownPeriod": "Inflow source of leads registered: {period}",
         "responseTimePending": "Coming soon (shown once first contacts are recorded)"
@@ -2160,8 +2151,7 @@
       "noData": "No data available",
       "comingSoon": "Coming soon",
       "performanceSummary": {
-        "title": "Performance summary",
-        "quality": "Lead quality (average score)"
+        "title": "Performance summary"
       },
       "acquisitionCost": {
         "title": "Acquisition cost by inflow source",
@@ -2734,7 +2724,7 @@
         "people": "Retirement or transfer of the people who can fix it",
         "edi": "EDI over INS Net (announced to end on December 31, 2028)"
       },
-      "ctaCaption": "See the maintenance deadlines and how hard a migration would be in about 3 minutes",
+      "ctaCaption": "See how pressing your deadlines are and how hard a migration would be, in about 3 minutes",
       "cta": "Start the free web check",
       "consult": "Book a free consultation",
       "demo": "See the demo",
@@ -2762,7 +2752,7 @@
       "nowLabel": "Today",
       "items": {
         "people": {
-          "voice": "Only one or two people in the company can fix the RPG or COBOL",
+          "voice": "“Only one or two people in the company can fix the RPG or COBOL”",
           "label": "People",
           "title": "A core system that depends on a few people",
           "body": "Years of person-dependent changes have turned the specifications into a black box, and fewer engineers can work on it every year, raising the risk to business continuity.",
@@ -2772,7 +2762,7 @@
           }
         },
         "agility": {
-          "voice": "Every new customer or product means a slow round of changes",
+          "voice": "“Every new customer or product means a slow round of changes”",
           "label": "Agility",
           "title": "A system that cannot keep up with the market",
           "body": "Every time you try to respond to new customers or market changes, the limits of the existing system hold back new products and services.",
@@ -2782,7 +2772,7 @@
           }
         },
         "cost": {
-          "voice": "Maintenance costs keep rising and leave no budget for new investment",
+          "voice": "“Maintenance costs keep rising and leave no budget for new investment”",
           "label": "Cost",
           "title": "\"Life-extension costs\" that limit growth",
           "body": "The more maintenance and additions to the current system cost, the less budget is left for new challenges that drive the business forward.",
@@ -2792,7 +2782,7 @@
           }
         },
         "data": {
-          "voice": "The figures for management meetings are collected by hand in Excel every month",
+          "voice": "“The figures for management meetings are collected by hand in Excel every month”",
           "label": "Data",
           "title": "Data you cannot use for decisions",
           "body": "Core data stored on AS/400 and similar systems is often locked in proprietary formats, so the figures behind management decisions are not available in real time.",
@@ -3035,6 +3025,10 @@
           "q": "What does \"AX\" mean?",
           "a": "AI transformation: business transformation that makes use of AI. After the migration, AI agents are added to the new web system to analyze the system and its data, streamline operations and extend features step by step."
         },
+        "webSecurity": {
+          "q": "We are worried about vulnerabilities and cyberattacks if we move to a web system.",
+          "a": "That is a fair concern. A web system also carries a risk: when a weakness (vulnerability) is found in software it uses, that weakness can be exploited until it is fixed. So when we decide how to migrate, we decide with you how widely the system can be reached (for example, only on your internal network, or from outside the office as well), who keeps fixing weaknesses as they are found and how, and how logins, permissions, records and backups are managed. Note also that once maintenance of the OS or a product ends, weaknesses found in it are no longer fixed, and this applies to your current system too."
+        },
         "data": {
           "q": "Are the specifications and source code we provide used to train AI?",
           "a": "No. Specifications, source code and other materials you entrust to us are processed in a secure environment where they are not used as training data."
@@ -3047,7 +3041,7 @@
     },
     "finalCta": {
       "title": "Make your next step a step toward AX.",
-      "lead": "Start with the free web check to see the maintenance deadlines and how hard a migration would be. You can also reach us by phone or email.",
+      "lead": "Start with the free web check to see how pressing your deadlines are and how hard a migration would be. You can also reach us by phone or email.",
       "caption": "Multiple choice, about 3 minutes",
       "cta": "Start the free web check",
       "consult": "Book a free consultation",
@@ -3096,7 +3090,7 @@
       },
       "ctaCaption": "Free, multiple choice, about 3 minutes",
       "cta": "Start the free web check (Access)",
-      "consult": "Book a 30-minute online consultation",
+      "consult": "Book a free 30-minute online consultation",
       "pdfNote": "You can print the result or save it as a PDF and use it as it is to explain the matter to your manager or IT.",
       "paths": {
         "title": "Three ways forward",
@@ -3223,7 +3217,7 @@
     },
     "consultBand": {
       "title": "Fix it or move it to the web? If you are unsure, talk to us",
-      "lead": "Besides the free web check, we take questions by phone and email."
+      "lead": "You can also apply for the free 30-minute online consultation by phone or email."
     },
     "targets": {
       "title": "Which Access tools we cover",
@@ -3252,9 +3246,13 @@
           "q": "Can we move only part of it to the web?",
           "a": "Yes. You can move the most used functions first and keep using the rest in your current Access tool."
         },
+        "webSecurity": {
+          "q": "We are worried about vulnerabilities and cyberattacks if we move to the web.",
+          "a": "That is a fair concern. A web system also carries a risk: when a weakness (vulnerability) is found in software it uses, that weakness can be exploited until it is fixed. So when we decide the approach, we decide with you how widely the system can be reached (for example, only on your internal network, or from outside the office as well), who keeps fixing weaknesses as they are found and how, and how logins, permissions, records and backups are managed. Note also that versions of Access whose support has ended get no fixes when weaknesses are found."
+        },
         "cost": {
           "q": "What does the cost depend on?",
-          "a": "It depends on the number of screens and reports, the amount of VBA, the links to other systems and databases, and the amount and state of the data. We give you an estimate after checking the contents."
+          "a": "It depends on the number of screens and reports, the amount of VBA, the links to other systems and databases, and the amount and state of the data. We give you an estimate after checking the contents. The free web check and the 30-minute online consultation cost nothing."
         },
         "period": {
           "q": "How long does it take?",
@@ -3270,7 +3268,7 @@
         },
         "consult": {
           "q": "How does the consultation work?",
-          "a": "It is a 30-minute online consultation as a rule. Engineers join when needed."
+          "a": "It is a free 30-minute online consultation as a rule. Engineers join when needed. You can apply from the result of the free web check, or by phone or email."
         }
       }
     },
@@ -3289,7 +3287,7 @@
       "lead": "Fix it, move it to the web, or replace it. Before deciding, why not find out the current state of your tool?",
       "caption": "Free, multiple choice, about 3 minutes",
       "cta": "Start the free web check (Access)",
-      "consult": "Book a 30-minute online consultation"
+      "consult": "Book a free 30-minute online consultation"
     },
     "trademark": "Microsoft and Access are trademarks or registered trademarks of Microsoft Corporation in the United States and other countries.",
     "breadcrumb": "Microsoft Access migration",
@@ -4130,6 +4128,13 @@
       "soon": "Within 6 months (past ones included)",
       "has": "Worked out",
       "none": "No next action and no month to act (use with a status)"
+    },
+    "mqlLevel": "MQL level",
+    "mqlLevelOptions": {
+      "interest": "Interested (MQL)",
+      "fit": "Fit",
+      "none": "Not a target",
+      "unknown": "No diagnosis"
     }
   },
   "leadFollowUp": {

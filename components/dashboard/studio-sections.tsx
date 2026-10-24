@@ -271,14 +271,14 @@ function Insights({ data, days }: { data?: DashboardData; days: number }) {
   const t = useTranslations('dashboard.studio.insights');
   const number = useNumber();
   const card = (
-    key: 'leads' | 'consultations' | 'mql' | 'score',
+    key: 'leads' | 'consultations' | 'mql',
     value: number | null,
     previous: number | null,
     extra?: string
   ) => {
     const delta = value !== null && previous !== null ? periodDelta(value, previous) : null;
     const direction = !delta ? 'none' : delta.type === 'unchanged' ? 'same' : delta.type;
-    const show = (n: number) => (key === 'score' ? number(n) : t('count', { value: number(n) }));
+    const show = (n: number) => t('count', { value: number(n) });
     // What the change is measured against, also when there is no percent (nothing before)
     const before =
       previous === null
@@ -300,13 +300,13 @@ function Insights({ data, days }: { data?: DashboardData; days: number }) {
     <div data-testid="insights">
       <h3 className="text-sm font-bold text-gray-900 dark:text-gray-50">{t('title', { days })}</h3>
       {!data ? (
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[0, 1, 2, 3].map((i) => (
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {[0, 1, 2].map((i) => (
             <Skeleton key={i} className="h-36 w-full" />
           ))}
         </div>
       ) : (
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
           {card('leads', data.newLeads, data.previousNewLeads)}
           {card('consultations', data.consultations, data.previousConsultations)}
           {card(
@@ -315,7 +315,6 @@ function Insights({ data, days }: { data?: DashboardData; days: number }) {
             data.previousMql,
             data.fitOnly > 0 ? t('fitOnly', { value: number(data.fitOnly) }) : undefined
           )}
-          {card('score', data.averageScore, data.previousAverageScore)}
         </div>
       )}
     </div>

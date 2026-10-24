@@ -4,6 +4,7 @@ import * as SelectPrimitive from '@radix-ui/react-select';
 import { Check, ChevronDown, ChevronUp } from 'lucide-react';
 import * as React from 'react';
 
+import { documentCspNonce } from '@/lib/csp/document-nonce';
 import { cn } from '@/lib/utils';
 
 const Select = SelectPrimitive.Root;
@@ -77,7 +78,9 @@ const SelectContent = React.forwardRef<
       {...props}
     >
       <SelectScrollUpButton />
+      {/* The viewport adds a <style> element (it hides the scrollbar), allowed by the nonce */}
       <SelectPrimitive.Viewport
+        nonce={documentCspNonce()}
         className={cn(
           'p-1',
           position === 'popper' &&

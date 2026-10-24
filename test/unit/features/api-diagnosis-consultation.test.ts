@@ -53,6 +53,8 @@ const preferences = {
   attendeeRoles: ['executive'],
   meetingFormat: 'online',
 };
+/** When the consultation of the answer was requested, as the service returns it */
+const REQUESTED_AT = new Date('2030-01-06T01:00:00Z');
 
 describe('POST /api/diagnoses/[slug]/consultation with meeting preferences', () => {
   beforeEach(() => {
@@ -63,6 +65,7 @@ describe('POST /api/diagnoses/[slug]/consultation with meeting preferences', () 
       organizationId: 'org-1',
       leadId: 'lead-1',
       leadCreated: true,
+      requestedAt: REQUESTED_AT,
     });
     acceptMock.mockResolvedValue('saved');
   });
@@ -82,6 +85,8 @@ describe('POST /api/diagnoses/[slug]/consultation with meeting preferences', () 
       leadId: 'lead-1',
       submissionId: SUBMISSION_ID,
       identityVerified: true,
+      // The window for the preferences runs from the consultation request (#241)
+      requestedAt: REQUESTED_AT,
       preferences: { ...preferences, topics: ['schedule'], topicNote: '来期から' },
     });
 
@@ -91,12 +96,32 @@ describe('POST /api/diagnoses/[slug]/consultation with meeting preferences', () 
       organizationId: 'org-1',
       leadId: 'lead-1',
       leadCreated: false,
+      requestedAt: REQUESTED_AT,
     });
     await POST(request({ submissionId: SUBMISSION_ID, preferences }), params);
     expect(acceptMock.mock.calls[1][1]).toMatchObject({
       identityVerified: false,
       preferences: { topics: [], topicNote: null },
     });
+  });
+
+  it('times the preferences sent with the first request from that request (#241)', async () => {
+    requestMock.mockResolvedValue({
+      ok: true,
+      alreadyRequested: false,
+      organizationId: 'org-1',
+      leadId: 'lead-1',
+      leadCreated: true,
+      requestedAt: REQUESTED_AT,
+    });
+    const response = await POST(request({ submissionId: SUBMISSION_ID, preferences }), params);
+    expect(await response.json()).toEqual({
+      ok: true,
+      alreadyRequested: false,
+      preferences: 'saved',
+    });
+    // The time the service recorded, not one the route makes up
+    expect(acceptMock.mock.calls[0][1]).toMatchObject({ requestedAt: REQUESTED_AT });
   });
 
   it('refuses unknown or repeated topics and a note over 300 characters', async () => {

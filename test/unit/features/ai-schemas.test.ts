@@ -6,6 +6,8 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  AI_BATCH_MAX,
+  MAX_SEMANTIC_SEARCH_QUERY_CHARS,
   scoreLeadSchema,
   semanticSearchSchema,
   findSimilarLeadsSchema,
@@ -85,6 +87,18 @@ describe('semanticSearchSchema', () => {
         query: '',
       })
     ).toThrow();
+  });
+
+  it('should reject a query longer than the embedding takes (#576)', () => {
+    const organizationId = '123e4567-e89b-12d3-a456-426614174000';
+    const longest = '検'.repeat(MAX_SEMANTIC_SEARCH_QUERY_CHARS);
+
+    expect(semanticSearchSchema.parse({ organizationId, query: longest }).query).toBe(longest);
+    const result = semanticSearchSchema.safeParse({ organizationId, query: `${longest}索` });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe(
+      `検索クエリは${MAX_SEMANTIC_SEARCH_QUERY_CHARS}文字以内で入力してください`
+    );
   });
 
   it('should validate limit range', () => {
@@ -193,11 +207,12 @@ describe('batchScoreLeadsSchema', () => {
     ).toThrow();
   });
 
-  it('should limit to 50 leadIds', () => {
-    const leadIds = Array(51)
+  it('should limit to one parallel group (AI_BATCH_MAX, 5) of leadIds', () => {
+    const leadIds = Array(AI_BATCH_MAX + 1)
       .fill(null)
-      .map((_, i) => `123e4567-e89b-12d3-a456-42661417400${i.toString().padStart(1, '0')}`);
+      .map(() => '123e4567-e89b-12d3-a456-426614174001');
 
+    expect(AI_BATCH_MAX).toBe(5);
     expect(() =>
       batchScoreLeadsSchema.parse({
         organizationId: '123e4567-e89b-12d3-a456-426614174000',
@@ -206,8 +221,8 @@ describe('batchScoreLeadsSchema', () => {
     ).toThrow();
   });
 
-  it('should accept exactly 50 leadIds', () => {
-    const leadIds = Array(50)
+  it('should accept exactly AI_BATCH_MAX leadIds', () => {
+    const leadIds = Array(AI_BATCH_MAX)
       .fill(null)
       .map(() => '123e4567-e89b-12d3-a456-426614174001');
 
@@ -215,7 +230,7 @@ describe('batchScoreLeadsSchema', () => {
       organizationId: '123e4567-e89b-12d3-a456-426614174000',
       leadIds,
     });
-    expect(result.leadIds).toHaveLength(50);
+    expect(result.leadIds).toHaveLength(AI_BATCH_MAX);
   });
 });
 
@@ -255,8 +270,8 @@ describe('batchPredictConversionSchema', () => {
     ).toThrow();
   });
 
-  it('should limit to 20 leadIds', () => {
-    const leadIds = Array(21)
+  it('should limit to one parallel group (AI_BATCH_MAX) of leadIds', () => {
+    const leadIds = Array(AI_BATCH_MAX + 1)
       .fill(null)
       .map(() => '123e4567-e89b-12d3-a456-426614174001');
 

@@ -124,6 +124,16 @@ const listed = (permissions: Permissions, webhooks: unknown[] = [webhook]): List
 const NONE = { canCreate: false, canUpdate: false, canDelete: false };
 const ALL = { canCreate: true, canUpdate: true, canDelete: true };
 
+/**
+ * Puts a value into an input in one step (clear, then paste). Typed key by key, every key renders
+ * the whole page again: the URL test typed ~130 keys, took over 20 s on a loaded machine, and after
+ * timing out went on typing into the inputs of the next tests (#573).
+ */
+const fill = async (input: HTMLElement, text: string) => {
+  await userEvent.clear(input);
+  await userEvent.paste(text);
+};
+
 const renderPage = () =>
   render(
     <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
@@ -203,13 +213,13 @@ describe('WebhooksSettingsPage', () => {
     await userEvent.click(replaceAuthorization);
     const newValue = within(dialog).getByLabelText('Authorization の値');
     expect(newValue).toHaveValue('');
-    await userEvent.type(newValue, 'Bearer made-up-new');
+    await fill(newValue, 'Bearer made-up-new');
 
     // Add a header, then remove X-Tenant
     await userEvent.click(within(dialog).getByRole('button', { name: 'ヘッダーを追加' }));
     const names = within(dialog).getAllByLabelText('ヘッダー名');
-    await userEvent.type(names[names.length - 1], 'X-Trace');
-    await userEvent.type(within(dialog).getByLabelText('X-Trace の値'), 'trace-made-up');
+    await fill(names[names.length - 1], 'X-Trace');
+    await fill(within(dialog).getByLabelText('X-Trace の値'), 'trace-made-up');
     await userEvent.click(within(dialog).getByRole('button', { name: 'X-Tenant を削除' }));
 
     await userEvent.click(within(dialog).getByRole('button', { name: '保存' }));
@@ -252,20 +262,17 @@ describe('WebhooksSettingsPage', () => {
 
     // The same URL typed again (normalised): the stored values may be kept
     const url = within(dialog).getByLabelText('エンドポイントURL');
-    await userEvent.clear(url);
-    await userEvent.type(url, 'https://HOOKS.example.com:443/crm');
+    await fill(url, 'https://HOOKS.example.com:443/crm');
     expect(within(dialog).queryByText(/保存済みのヘッダーの値は使えません/)).not.toBeInTheDocument();
     expect(save).toBeEnabled();
 
     // Another path of the same receiver: blocked
-    await userEvent.clear(url);
-    await userEvent.type(url, 'https://hooks.example.com/other-path');
+    await fill(url, 'https://hooks.example.com/other-path');
     expect(within(dialog).getByText(/保存済みのヘッダーの値は使えません/)).toBeInTheDocument();
     expect(save).toBeDisabled();
 
     // Another host: saving is blocked until every value is entered again
-    await userEvent.clear(url);
-    await userEvent.type(url, 'https://elsewhere.example.net/hook');
+    await fill(url, 'https://elsewhere.example.net/hook');
     expect(within(dialog).getByText(/保存済みのヘッダーの値は使えません/)).toBeInTheDocument();
     expect(save).toBeDisabled();
 
@@ -275,8 +282,8 @@ describe('WebhooksSettingsPage', () => {
     expect(within(dialog).queryByText(/保存済みのヘッダーの値は使えません/)).not.toBeInTheDocument();
     expect(save).toBeDisabled();
 
-    await userEvent.type(within(dialog).getByLabelText('Authorization の値'), 'Bearer made-up-a');
-    await userEvent.type(within(dialog).getByLabelText('X-Tenant の値'), 'tenant-made-up');
+    await fill(within(dialog).getByLabelText('Authorization の値'), 'Bearer made-up-a');
+    await fill(within(dialog).getByLabelText('X-Tenant の値'), 'tenant-made-up');
     expect(save).toBeEnabled();
     await userEvent.click(save);
 
@@ -303,15 +310,14 @@ describe('WebhooksSettingsPage', () => {
     const names = within(dialog).getAllByLabelText('ヘッダー名');
     const added = names[names.length - 1];
 
-    await userEvent.type(added, 'X-Webhook-Signature');
+    await fill(added, 'X-Webhook-Signature');
     expect(within(dialog).getByText(/このヘッダー名は使えません/)).toBeInTheDocument();
     expect(save).toBeDisabled();
 
-    await userEvent.clear(added);
-    await userEvent.type(added, 'x-tenant');
+    await fill(added, 'x-tenant');
     expect(within(dialog).queryByText(/このヘッダー名は使えません/)).not.toBeInTheDocument();
     expect(within(dialog).getByText(/同じヘッダー名が複数あります/)).toBeInTheDocument();
-    await userEvent.type(within(dialog).getByLabelText('x-tenant の値'), 'v');
+    await fill(within(dialog).getByLabelText('x-tenant の値'), 'v');
     expect(save).toBeDisabled();
   });
 
@@ -321,12 +327,12 @@ describe('WebhooksSettingsPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Webhookを作成' }));
     const dialog = await screen.findByRole('dialog');
-    await userEvent.type(within(dialog).getByLabelText('Webhook名'), 'CRM');
-    await userEvent.type(within(dialog).getByLabelText('エンドポイントURL'), 'https://hooks.example.com/new');
+    await fill(within(dialog).getByLabelText('Webhook名'), 'CRM');
+    await fill(within(dialog).getByLabelText('エンドポイントURL'), 'https://hooks.example.com/new');
     await userEvent.click(within(dialog).getByText('Lead Created'));
     await userEvent.click(within(dialog).getByRole('button', { name: 'ヘッダーを追加' }));
-    await userEvent.type(within(dialog).getByLabelText('ヘッダー名'), ' Authorization ');
-    await userEvent.type(within(dialog).getByLabelText(/の値$/), 'Bearer made-up-new');
+    await fill(within(dialog).getByLabelText('ヘッダー名'), ' Authorization ');
+    await fill(within(dialog).getByLabelText(/の値$/), 'Bearer made-up-new');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Webhookを作成' }));
 
     expect(mocks.create).toHaveBeenCalledWith({
@@ -363,12 +369,11 @@ describe('WebhooksSettingsPage', () => {
     const [replaceAuthorization] = within(dialog).getAllByRole('button', { name: '値を入れ直す' });
     await userEvent.click(replaceAuthorization);
     const value = within(dialog).getByLabelText('Authorization の値');
-    await userEvent.type(value, 'トークン');
+    await fill(value, 'トークン');
     expect(within(dialog).getByText(/値に使えるのは半角の英数字・記号・空白だけです/)).toBeInTheDocument();
     expect(save).toBeDisabled();
 
-    await userEvent.clear(value);
-    await userEvent.type(value, 'Bearer made-up-ascii');
+    await fill(value, 'Bearer made-up-ascii');
     expect(within(dialog).queryByText(/値に使えるのは半角/)).not.toBeInTheDocument();
     expect(save).toBeEnabled();
   });

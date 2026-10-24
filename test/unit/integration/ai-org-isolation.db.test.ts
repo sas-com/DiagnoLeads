@@ -3,13 +3,18 @@
  * organization B passes the ids of A's leads, alone or mixed with B's own. A's leads are never
  * handed to the AI (scoring, summary, embedding, prediction, similar leads), their scores stay as
  * they were, and B's search stays in B. The Claude calls are counted against AI_CALL_LIMITS
- * (#405), concurrent calls (a batched HTTP request) included. The AI services are stubs; the
- * organization checks and the counting run against the real database. All values are fictional.
+ * (#405) and the OpenAI embeddings against EMBEDDING_CALL_LIMITS (#576), concurrent calls (a
+ * batched HTTP request) included. The AI services are stubs; the
+ * organization checks and the counting run against the real database. The functions that store
+ * and compare the embeddings (lib/features/ai/search/semantic.ts) also run on it, with OpenAI
+ * stubbed: they write and read a lead only in the organization named (#583). All values are
+ * fictional.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/dl_test \
  *     bunx vitest --run test/unit/integration/ai-org-isolation.db.test.ts
  */
+import { db } from '@/lib/db';
 import * as schema from '@/lib/db/schema';
 import {
   leads,
@@ -18,7 +23,7 @@ import {
   publicRateLimits,
   users,
 } from '@/lib/db/schema';
-import { AI_CALL_LIMITS } from '@/lib/features/ai/limits';
+import { AI_CALL_LIMITS, EMBEDDING_CALL_LIMITS } from '@/lib/features/ai/limits';
 import { consumeRateLimit, rateLimitKey } from '@/lib/features/diagnostics/rate-limit';
 import { appRouter } from '@/server/routers/_app';
 import { eq, inArray } from 'drizzle-orm';
@@ -67,7 +72,31 @@ vi.mock('@/lib/features/ai/search/semantic', () => ({
   findSimilarLeads: ai.findSimilarLeads,
   updateLeadEmbedding: ai.updateLeadEmbedding,
 }));
-vi.mock('@/lib/features/ai/embeddings/openai', () => ({ prepareLeadText: ai.prepareLeadText }));
+// The OpenAI embedding the real semantic.ts functions get (kept apart from the stubs above, whose
+// calls leadIdsGiven reads)
+const openai = vi.hoisted(() => ({
+  generateEmbedding: vi.fn<(text: string) => Promise<number[]>>(),
+}));
+vi.mock('@/lib/features/ai/embeddings/openai', () => ({
+  prepareLeadText: ai.prepareLeadText,
+  generateEmbedding: openai.generateEmbedding,
+}));
+// semantic.ts uses the app's database client; point it at the test database
+const connection = vi.hoisted(() => ({
+  url: process.env.TEST_DATABASE_URL,
+  client: null as { end: () => Promise<void> } | null,
+}));
+vi.mock('@/lib/db', async (importOriginal) => {
+  const pg = await import('postgres');
+  const { drizzle: connect } = await import('drizzle-orm/postgres-js');
+  const dbSchema = await import('@/lib/db/schema');
+  const client = pg.default(connection.url ?? 'postgres://unused@127.0.0.1:1/unused', { max: 2 });
+  connection.client = client;
+  return {
+    ...(await importOriginal<typeof import('@/lib/db')>()),
+    db: connect(client, { schema: dbSchema }),
+  };
+});
 
 const url = process.env.TEST_DATABASE_URL;
 
@@ -162,15 +191,16 @@ describe.skipIf(!url)('AI features: organization isolation (PostgreSQL)', () => 
   afterAll(async () => {
     if (orgA) await pg.delete(organizations).where(inArray(organizations.id, [orgA, orgB]));
     if (userIds.length > 0) await pg.delete(users).where(inArray(users.id, userIds));
-    const counters = [
-      ...userIds.map((id) => rateLimitKey(AI_CALL_LIMITS.perUser, id)),
+    const counters = [AI_CALL_LIMITS, EMBEDDING_CALL_LIMITS].flatMap((limits) => [
+      ...userIds.map((id) => rateLimitKey(limits.perUser, id)),
       ...[orgA, orgB].flatMap((id) => [
-        rateLimitKey(AI_CALL_LIMITS.perOrganization, id),
-        rateLimitKey(AI_CALL_LIMITS.perOrganizationDaily, id),
+        rateLimitKey(limits.perOrganization, id),
+        rateLimitKey(limits.perOrganizationDaily, id),
       ]),
-    ];
+    ]);
     await pg.delete(publicRateLimits).where(inArray(publicRateLimits.key, counters));
     await client?.end();
+    await connection.client?.end();
   });
 
   it("refuses B's admin when it names organization A itself", async () => {
@@ -282,6 +312,44 @@ describe.skipIf(!url)('AI features: organization isolation (PostgreSQL)', () => 
     expect(await scoreOfB()).toBe(77);
   });
 
+  it("keeps the score of B's leads the AI fell back on, and refuses a batch where all fell back (batchScoreLeads)", async () => {
+    const [second] = await pg
+      .insert(leads)
+      .values({ organizationId: orgB, email: `ai-iso-b2-${unique()}@example.co.jp`, score: 6 })
+      .returning({ id: leads.id });
+    const scoresOf = async (ids: string[]) =>
+      new Map(
+        (await pg.select({ id: leads.id, score: leads.score }).from(leads).where(inArray(leads.id, ids))).map(
+          (row) => [row.id, row.score]
+        )
+      );
+    const ids = [leadB, second.id];
+    const before = await scoresOf(ids);
+
+    // Every lead fell back: nothing is written and the caller gets an error, not "0 scored"
+    ai.scoreLeadsBatch.mockResolvedValueOnce(
+      new Map(ids.map((id) => [id, { score: 50, isFallback: true }]))
+    );
+    await expect(
+      adminB.ai.batchScoreLeads({ organizationId: orgB, leadIds: ids })
+    ).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE' });
+    expect(await scoresOf(ids)).toEqual(before);
+
+    // One fell back: only the other is written, and the fallback is reported
+    ai.scoreLeadsBatch.mockResolvedValueOnce(
+      new Map([
+        [leadB, { score: 50, isFallback: true }],
+        [second.id, { score: 88, isFallback: false }],
+      ])
+    );
+    const result = await adminB.ai.batchScoreLeads({ organizationId: orgB, leadIds: ids });
+    expect(result.leads.map((lead: { id: string }) => lead.id)).toEqual([second.id]);
+    expect(result.failedLeadIds).toEqual([leadB]);
+    const after = await scoresOf(ids);
+    expect(after.get(leadB)).toBe(before.get(leadB));
+    expect(after.get(second.id)).toBe(88);
+  });
+
   it("searches B's leads only (semanticSearch)", async () => {
     await adminB.ai.semanticSearch({ organizationId: orgB, query: '基幹システム' });
     expect(ai.semanticSearch).toHaveBeenCalledWith(
@@ -289,5 +357,122 @@ describe.skipIf(!url)('AI features: organization isolation (PostgreSQL)', () => 
       orgB,
       expect.objectContaining({ limit: 10 })
     );
+  });
+
+  it('counts every concurrent embedding in counters of its own, and nothing for A or a refused caller (#576)', async () => {
+    const counted = (key: string) =>
+      pg
+        .select({ count: publicRateLimits.count })
+        .from(publicRateLimits)
+        .where(eq(publicRateLimits.key, key))
+        .then(([row]) => row?.count ?? 0);
+    const userKey = rateLimitKey(EMBEDDING_CALL_LIMITS.perUser, memberBId);
+    const orgKey = rateLimitKey(EMBEDDING_CALL_LIMITS.perOrganization, orgB);
+    const claudeOrgKey = rateLimitKey(AI_CALL_LIMITS.perOrganization, orgB);
+    const [userBefore, orgBefore, claudeBefore] = await Promise.all(
+      [userKey, orgKey, claudeOrgKey].map(counted)
+    );
+    const embedded = () =>
+      ai.semanticSearch.mock.calls.length + ai.updateLeadEmbedding.mock.calls.length;
+
+    // A's lead, or organization A itself: refused before anything is counted
+    await expect(
+      memberB.ai.updateEmbedding({ organizationId: orgB, leadId: leadsA[0] })
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(
+      memberB.ai.semanticSearch({ organizationId: orgA, query: '基幹システム' })
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(await counted(userKey)).toBe(userBefore);
+    expect(await counted(orgKey)).toBe(orgBefore);
+
+    // One embedding left for this user in the hour
+    await consumeRateLimit(
+      pg,
+      EMBEDDING_CALL_LIMITS.perUser,
+      memberBId,
+      new Date(),
+      EMBEDDING_CALL_LIMITS.perUser.limit - 1 - userBefore
+    );
+    // Three calls at once, as one batched HTTP request runs them
+    const results = await Promise.allSettled([
+      memberB.ai.semanticSearch({ organizationId: orgB, query: '基幹システム' }),
+      memberB.ai.updateEmbedding({ organizationId: orgB, leadId: leadB }),
+      memberB.ai.semanticSearch({ organizationId: orgB, query: '製造業' }),
+    ]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    const refused = results.filter((result) => result.status === 'rejected');
+    expect(refused).toHaveLength(2);
+    for (const result of refused) {
+      expect((result as PromiseRejectedResult).reason).toMatchObject({ code: 'TOO_MANY_REQUESTS' });
+    }
+    expect(embedded()).toBe(1);
+    // The organization counted only the call that ran, and the Claude calls none of them
+    expect(await counted(orgKey)).toBe(orgBefore + 1);
+    expect(await counted(claudeOrgKey)).toBe(claudeBefore);
+  });
+
+  it("stores and compares embeddings in the organization named only: A's lead is neither written nor the base of B's search (updateLeadEmbedding, findSimilarLeads, #583)", async () => {
+    // The real functions (the router tests above use stubs), on the test database
+    const { findSimilarLeads, updateLeadEmbedding } = await vi.importActual<
+      typeof import('@/lib/features/ai/search/semantic')
+    >('@/lib/features/ai/search/semantic');
+    // A 1536-dimension embedding that points mostly along one axis
+    const along = (axis: number) =>
+      Array.from({ length: 1536 }, (_, index) => (index === axis ? 1 : 0.01));
+    const embeddingsOf = async (ids: string[]) =>
+      new Map(
+        (
+          await pg
+            .select({ id: leads.id, embedding: leads.embedding })
+            .from(leads)
+            .where(inArray(leads.id, ids))
+        ).map((row) => [row.id, row.embedding])
+      );
+    const [nearB] = await pg
+      .insert(leads)
+      .values({ organizationId: orgB, email: `ai-iso-b3-${unique()}@example.co.jp` })
+      .returning({ id: leads.id });
+
+    // A's lead with organization B named: not written
+    openai.generateEmbedding.mockResolvedValue(along(0));
+    await updateLeadEmbedding(leadsA[0], orgB, 'テキスト');
+    expect((await embeddingsOf([leadsA[0]])).get(leadsA[0])).toBeNull();
+
+    // Each lead with its own organization named: written
+    await updateLeadEmbedding(leadsA[0], orgA, 'テキスト');
+    openai.generateEmbedding.mockResolvedValue(along(1));
+    await updateLeadEmbedding(leadB, orgB, 'テキスト');
+    openai.generateEmbedding.mockResolvedValue(along(2));
+    await updateLeadEmbedding(nearB.id, orgB, 'テキスト');
+    const stored = await embeddingsOf([leadsA[0], leadB, nearB.id]);
+    expect(stored.get(leadsA[0])?.[0]).toBe(1);
+    expect(stored.get(leadB)?.[1]).toBe(1);
+    expect(stored.get(nearB.id)?.[2]).toBe(1);
+
+    // The comparison query runs on the app's client; the reason of a failure is only logged
+    const comparisons = vi.spyOn(db, 'execute');
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const loggedReasons = () =>
+      logged.mock.calls.map((call) => (call[1] as Error | undefined)?.message);
+    try {
+      // A's lead (it has an embedding now) is not read as the base of a search in B: no search
+      await expect(findSimilarLeads(leadsA[0], orgB)).rejects.toThrow(
+        'Finding similar leads failed'
+      );
+      expect(loggedReasons()).toContain('Reference lead not found or has no embedding');
+      expect(comparisons).not.toHaveBeenCalled();
+
+      // B's own lead is read as the base, and the search in B runs. The comparison query itself
+      // fails on PostgreSQL today (#590); once it is fixed, expect B's other lead (nearB) only.
+      // Either way the base is found, so this call logs no "not found" (and logs nothing once
+      // the comparison succeeds); the log of the call above is cleared first
+      logged.mockClear();
+      await findSimilarLeads(leadB, orgB).catch(() => undefined);
+      expect(comparisons).toHaveBeenCalledTimes(1);
+      expect(loggedReasons()).not.toContain('Reference lead not found or has no embedding');
+    } finally {
+      comparisons.mockRestore();
+      logged.mockRestore();
+    }
   });
 });

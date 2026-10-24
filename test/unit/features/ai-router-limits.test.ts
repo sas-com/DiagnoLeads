@@ -2,19 +2,30 @@
  * Rate limits of the AI procedures that call Claude (#405): every lead handed to Claude is
  * counted per user, per organization (hour) and per organization (day) before the call, alone
  * or in a batch; a refused request never reaches Claude, and the lead handed over has its text
- * cut (leadForClaude, ai-prompt-input.test.ts). The database and the AI services are stubs (the
- * counting itself runs on PostgreSQL in ai-org-isolation.db.test.ts).
+ * cut (leadForClaude, ai-prompt-input.test.ts). The procedures that embed a text with OpenAI
+ * (#576) are counted the same way in counters of their own, and the text embedded is bounded.
+ * The database and the AI services are stubs (the counting itself runs on PostgreSQL in
+ * ai-org-isolation.db.test.ts).
  */
 import type { Organization, OrganizationMember, User } from '@/lib/db/schema';
-import { AI_CALL_LIMITS, consumeAiCalls } from '@/lib/features/ai/limits';
+import { MAX_EMBEDDING_TEXT_CHARS } from '@/lib/features/ai/embeddings/openai';
+import {
+  AI_CALL_LIMITS,
+  EMBEDDING_CALL_LIMITS,
+  consumeAiCalls,
+  consumeEmbeddingCalls,
+} from '@/lib/features/ai/limits';
 import { MAX_PROMPT_FIELD_CHARS, PROMPT_TRUNCATED } from '@/lib/features/ai/prompt-input';
+import { MAX_SEMANTIC_SEARCH_QUERY_CHARS } from '@/lib/features/ai/types/schemas';
 import { leadChangeEvents } from '@/lib/features/webhooks/services/lead-events';
 import { appRouter } from '@/server/routers/_app';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/db/rls', () => ({ setCurrentUser: vi.fn().mockResolvedValue(undefined) }));
 
-const { ai, rateLimit } = vi.hoisted(() => ({
+const { ai, rateLimit, openai, globalDb } = vi.hoisted(() => ({
   ai: {
     scoreLeadWithAI: vi.fn(),
     scoreLeadsBatch: vi.fn(),
@@ -23,6 +34,19 @@ const { ai, rateLimit } = vi.hoisted(() => ({
     generateLeadSummary: vi.fn(),
   },
   rateLimit: { consumeRateLimits: vi.fn() },
+  // The OpenAI embeddings API, as lib/features/ai/embeddings/openai.ts calls it
+  openai: { create: vi.fn() },
+  // The global db that lib/features/ai/search/semantic.ts reads and writes embeddings with
+  globalDb: { execute: vi.fn(), select: vi.fn() },
+}));
+vi.mock('openai', () => ({
+  OpenAI: vi.fn(function OpenAI() {
+    return { embeddings: { create: openai.create } };
+  }),
+}));
+vi.mock('@/lib/db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/db')>()),
+  db: globalDb,
 }));
 vi.mock('@/lib/features/ai/scoring/claude', () => ({
   scoreLeadWithAI: ai.scoreLeadWithAI,
@@ -252,6 +276,169 @@ describe('AI router: rate limits of the Claude calls', () => {
     await expect(viewer.caller.ai.scoreLead(one)).rejects.toMatchObject({ code: 'FORBIDDEN' });
 
     expect(rateLimit.consumeRateLimits).not.toHaveBeenCalled();
+  });
+});
+
+const embeddingChecksFor = (cost: number) => [
+  ['ai-embedding-user', USER_ID, cost],
+  ['ai-embedding-org', ORG_ID, cost],
+  ['ai-embedding-org-day', ORG_ID, cost],
+];
+
+describe('AI router: rate limits of the OpenAI embeddings', () => {
+  const search = { organizationId: ORG_ID, query: '製造業で基幹システムが古い会社' };
+  const one = { organizationId: ORG_ID, leadId: LEAD_1 };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv('OPENAI_API_KEY', 'test-openai-key');
+    rateLimit.consumeRateLimits.mockResolvedValue({ allowed: true });
+    openai.create.mockResolvedValue({ data: [{ embedding: [0.1, 0.2, 0.3] }] });
+    globalDb.execute.mockResolvedValue([]);
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('counts one embedding per user, organization and day before embedding a search query', async () => {
+    const { caller } = createCaller();
+
+    await caller.ai.semanticSearch(search);
+
+    expect(countedChecks()).toEqual(embeddingChecksFor(1));
+    expect(openai.create).toHaveBeenCalledTimes(1);
+    expect(openai.create.mock.calls[0][0]).toMatchObject({ input: search.query });
+    expect(rateLimit.consumeRateLimits.mock.invocationCallOrder[0]).toBeLessThan(
+      openai.create.mock.invocationCallOrder[0]
+    );
+  });
+
+  it('counts one embedding before embedding a lead found in the organization', async () => {
+    const { caller, db } = createCaller();
+    db.query.leads.findFirst.mockResolvedValue(leadRow(LEAD_1));
+
+    await caller.ai.updateEmbedding(one);
+
+    expect(countedChecks()).toEqual(embeddingChecksFor(1));
+    expect(openai.create).toHaveBeenCalledTimes(1);
+    expect(rateLimit.consumeRateLimits.mock.invocationCallOrder[0]).toBeLessThan(
+      openai.create.mock.invocationCallOrder[0]
+    );
+    // The embedding is stored once OpenAI has answered, on the lead in the organization only (#583)
+    expect(globalDb.execute).toHaveBeenCalledTimes(1);
+    const update = new PgDialect().sqlToQuery(globalDb.execute.mock.calls[0][0] as SQL);
+    expect(update.sql).toMatch(/WHERE id = \$\d+ AND organization_id = \$\d+/);
+    expect(update.params.slice(-2)).toEqual([LEAD_1, ORG_ID]);
+  });
+
+  it('never calls OpenAI once a limit refuses, and names the limit', async () => {
+    const { caller, db } = createCaller();
+    db.query.leads.findFirst.mockResolvedValue(leadRow(LEAD_1));
+    refusedBy('ai-embedding-user', 600);
+
+    await expect(caller.ai.semanticSearch(search)).rejects.toMatchObject({
+      code: 'TOO_MANY_REQUESTS',
+      message:
+        'AI 検索・埋め込みの利用の上限（1時間に300件・ユーザーごと）に達しました。約10分後にもう一度お試しください',
+    });
+    // Updating a lead's embedding shares the counters, so its refusal names both uses
+    await expect(caller.ai.updateEmbedding(one)).rejects.toMatchObject({
+      code: 'TOO_MANY_REQUESTS',
+      message:
+        'AI 検索・埋め込みの利用の上限（1時間に300件・ユーザーごと）に達しました。約10分後にもう一度お試しください',
+    });
+
+    expect(openai.create).not.toHaveBeenCalled();
+    // Nothing is searched or stored either
+    expect(globalDb.execute).not.toHaveBeenCalled();
+  });
+
+  it('counts nothing for a lead outside the organization, a caller without the right or a query too long', async () => {
+    const { caller, db } = createCaller();
+    db.query.leads.findFirst.mockResolvedValue(undefined);
+    await expect(caller.ai.updateEmbedding(one)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+    const viewer = createCaller('parent_viewer');
+    viewer.db.query.leads.findFirst.mockResolvedValue(leadRow(LEAD_1));
+    await expect(viewer.caller.ai.updateEmbedding(one)).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+
+    // Not a member of the organization named
+    const outsider = createCaller();
+    outsider.db.query.organizationMembers.findFirst.mockResolvedValue(undefined);
+    await expect(outsider.caller.ai.semanticSearch(search)).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    await expect(outsider.caller.ai.updateEmbedding(one)).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+
+    await expect(
+      caller.ai.semanticSearch({
+        ...search,
+        query: 'あ'.repeat(MAX_SEMANTIC_SEARCH_QUERY_CHARS + 1),
+      })
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+    expect(rateLimit.consumeRateLimits).not.toHaveBeenCalled();
+    expect(openai.create).not.toHaveBeenCalled();
+  });
+
+  it('embeds a query of the longest length, and a lead with its text cut', async () => {
+    const { caller, db } = createCaller();
+    const longest = 'あ'.repeat(MAX_SEMANTIC_SEARCH_QUERY_CHARS);
+    await caller.ai.semanticSearch({ ...search, query: longest });
+    expect(openai.create.mock.calls[0][0]).toMatchObject({ input: longest });
+
+    db.query.leads.findFirst.mockResolvedValue({
+      ...leadRow(LEAD_1),
+      name: 'n'.repeat(5_000),
+      company: 'c'.repeat(2_000_000),
+    });
+    await caller.ai.updateEmbedding(one);
+    const embedded = openai.create.mock.calls[1][0].input as string;
+    expect(embedded.length).toBeLessThanOrEqual(MAX_EMBEDDING_TEXT_CHARS);
+    expect(embedded).toContain(`${LEAD_1}@example.co.jp`);
+  });
+
+  it('counts nothing for similar leads: they compare the stored embeddings without OpenAI', async () => {
+    const { caller, db } = createCaller();
+    db.query.leads.findFirst.mockResolvedValue(leadRow(LEAD_1));
+    const where = vi.fn(async (_condition: SQL) => [{ embedding: '[0.1,0.2,0.3]' }]);
+    globalDb.select.mockReturnValue({ from: () => ({ where }) });
+
+    await caller.ai.findSimilar(one);
+
+    // The reference lead is read in the organization named, too (#583)
+    expect(new PgDialect().sqlToQuery(where.mock.calls[0][0]).params).toEqual([LEAD_1, ORG_ID]);
+    expect(globalDb.execute).toHaveBeenCalledTimes(1);
+    expect(rateLimit.consumeRateLimits).not.toHaveBeenCalled();
+    expect(openai.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('consumeEmbeddingCalls', () => {
+  beforeEach(() => vi.clearAllMocks());
+  const database = {} as Parameters<typeof consumeEmbeddingCalls>[0];
+
+  it('counts in counters of its own, not those of the Claude calls', async () => {
+    rateLimit.consumeRateLimits.mockResolvedValue({ allowed: true });
+    await consumeEmbeddingCalls(database, { userId: USER_ID, organizationId: ORG_ID, calls: 1 });
+    expect(countedChecks()).toEqual(embeddingChecksFor(1));
+    const claudeRules = Object.values(AI_CALL_LIMITS).map((rule) => rule.name as string);
+    expect(
+      Object.values(EMBEDDING_CALL_LIMITS).filter((rule) => claudeRules.includes(rule.name))
+    ).toEqual([]);
+  });
+
+  it('names the daily limit in hours when its window ends hours later', async () => {
+    refusedBy(EMBEDDING_CALL_LIMITS.perOrganizationDaily.name, 5 * 60 * 60);
+    await expect(
+      consumeEmbeddingCalls(database, { userId: USER_ID, organizationId: ORG_ID, calls: 1 })
+    ).rejects.toMatchObject({
+      code: 'TOO_MANY_REQUESTS',
+      message:
+        'AI 検索・埋め込みの利用の上限（1日に3000件・組織ごと）に達しました。約5時間後にもう一度お試しください',
+    });
   });
 });
 

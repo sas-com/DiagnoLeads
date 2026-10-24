@@ -117,6 +117,21 @@ it('test 1', () => {
 });
 ```
 
+#### 1.5 画面のテストは、CPU の混み具合で結果が変わらないように書く
+
+手元では並行するセッションと CPU を取り合い、画面のテストが単独のときの5〜7倍遅くなることがある（#573）。遅くなっても落ちないように、次のように書く。
+
+- 時間で動く処理（入力の後の待ち・自動保存）を、本物の時計で待たない
+  - 待ちそのものを確かめるテストは、偽のタイマー（`vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })`）で時計を進める。入力は `fireEvent` で送る（user-event と `findBy`・`waitFor` は中で `setTimeout` を待つので、vitest の偽のタイマーの下では止まる）
+  - 待ちがテストの対象でないときは、その処理を止める（例：`lead-hearing-editor-inputs.test.tsx` は自動保存を止め、自動保存は `lead-hearing-editor.test.tsx` で偽のタイマーを使って確かめる）
+- 要素の多い画面では、`getByLabelText` と、数の多い役割（ボタンなど）の `getByRole` を画面全体にかけず、`within()` で行・セクション・ダイアログ（ポップオーバー）に絞る。`getByRole` は指定した役割の要素すべての名前を計算し、`getByLabelText` は画面のすべての要素のラベルを探すので、ボタンが100を超える画面では1回に0.1〜1秒かかる
+  - タブのように数の少ない役割なら、画面全体にかけても軽い（例：`lead-hearing-editor-inputs.test.tsx` は、どの行にも入らない商談日の入力欄を `getByRole('textbox', …)` で探す）
+- 長い値は `type` で1文字ずつ打たず、`clear` と `paste` で入れる（1文字ごとに画面全体が描き直される）。1文字ごとの動きを確かめるときだけ `type` を使う
+- `testTimeout`（20秒、`vitest.config.ts`）を上げて済ませない。遅さが隠れるうえ、時間切れになったテストは止まらずに動き続け、同じファイルの次のテストの入力欄に文字を打ち込んで落とす
+- 負荷の下で確かめるときは、CPU を回すだけのプロセスと vitest を `taskset -c 0` で1つのコアにまとめる。手元のマシンはほかのセッションと共用しているので、全部のコアに負荷をかける形（プロセスを何本も起こし、複数の vitest を同時に流す）は使わない。ほかのセッションのテストを時間切れにして、同じ問題をよそに起こす
+  - 例：`taskset -c 0 timeout 600 sh -c 'while :; do :; done' &` を3本起こして PID を控え、`taskset -c 0 bunx vitest run <ファイル> --reporter=verbose` で各テストの時間を見る。各テストが3〜6倍遅くなり、確かめるには足りる。終わったら、起こしたプロセスを PID で止める
+- 手元で全体（`bun run test:run`）を流すときは、型チェック・ビルド・E2E と並べない。ほかのセッションも重い処理をしているときは、`bun run test:run --maxWorkers=2` のように並列数を抑える（既定はコアの数 − 1。4コアなら3）
+
 ### カバレッジ目標
 - **ビジネスロジック**: 80%+
 - **バリデーション**: 100%
@@ -380,6 +395,11 @@ bun run test:e2e
 # UIモードで実行
 bun run test:e2e -- --ui
 ```
+
+- パスワードの再設定の E2E（`test/e2e/auth.spec.ts`）は、メールでしか届かないリンクのトークンを、アプリと同じ DB（`DATABASE_URL`）の `verification` の行から読む。自分専用のユーザーも DB に作って最後に消す（`test/e2e/helpers/database.ts`）
+  - ユーザーを足し消しするので、`DATABASE_URL` が手元の DB（localhost・127.0.0.1・[::1]）のときだけ動く。それ以外は飛ばす。CI では飛ばさずに落とす。DB につなぐ関数（`connectE2EDatabase`）も、手元でない DB を渡されるとエラーにする
+  - `DATABASE_URL` は、サーバーと同じ DB で、E2E の seed（`bun run test:e2e:seed`）を入れたものにする。違うと、ユーザーを作るところ（E2E の組織がない）か、トークンを読むところ（`found 0`）で落ちる
+  - テストが Playwright のタイムアウトで止まると、後片付けが走らないことがあり、`e2e-reset-*@example.com` のユーザーが手元の DB に残る（消してよい。CI は毎回新しい DB を使う）
 
 ---
 

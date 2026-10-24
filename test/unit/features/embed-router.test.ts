@@ -223,9 +223,8 @@ describe('Embed Config Validation Edge Cases', () => {
     expect(result.success).toBe(true);
   });
 
-  it('should reject bare wildcard origin (use security isOriginAllowed for runtime)', () => {
+  it('should reject bare wildcard origin', () => {
     // Note: The schema requires URL format or wildcard subdomain format
-    // Bare '*' is handled at runtime by isOriginAllowed function, not in schema
     const config = {
       name: 'Test Widget',
       allowedOrigins: ['*'],

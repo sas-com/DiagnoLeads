@@ -82,7 +82,6 @@ export function LeadForm({ lead, onSubmit, isLoading }: LeadFormProps) {
       company: lead?.company ?? '',
       phone: lead?.phone ?? '',
       status: (lead?.status as LeadStatus) ?? 'new',
-      score: lead?.score ?? undefined,
       source: (lead?.source as 'website' | 'embed' | 'api') ?? undefined,
       responses: lead?.responses ?? {},
       inflowSource: (lead?.inflowSource as FormValues['inflowSource']) ?? null,
@@ -202,29 +201,6 @@ export function LeadForm({ lead, onSubmit, isLoading }: LeadFormProps) {
                   ))}
                 </SelectContent>
               </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="score"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t('score')} (0-100)</FormLabel>
-              <FormControl>
-                <Input
-                  type="number"
-                  min={0}
-                  max={100}
-                  {...field}
-                  value={field.value ?? ''}
-                  onChange={(e) =>
-                    field.onChange(e.target.value ? Number.parseInt(e.target.value) : undefined)
-                  }
-                />
-              </FormControl>
               <FormMessage />
             </FormItem>
           )}
