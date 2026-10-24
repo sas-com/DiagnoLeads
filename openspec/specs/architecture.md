@@ -65,8 +65,8 @@ DiagnoLeads v2 は、AI駆動のB2B診断プラットフォームをマルチテ
 
 | 技術 | バージョン | 用途 |
 |------|-----------|------|
-| Vercel AI SDK | 5.0+ | AI統合 |
-| Anthropic Claude | 3.5 Sonnet | LLM |
+| Anthropic SDK（`@anthropic-ai/sdk`） | 1.x | Claude の呼び出し（決定 `2026-10-24-ai-calls-via-anthropic-sdk`） |
+| Anthropic Claude | Sonnet 5.5 | LLM |
 | Tremor | 3.18+ | ダッシュボードチャート |
 
 ### 開発ツール
