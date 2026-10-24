@@ -59,16 +59,19 @@ export const ENDPOINT_RATE_LIMITS: Record<string, RateLimitConfig> = {
   // to guess here, so it counts like other API reads.
   '/api/auth/get-session': DEFAULT_RATE_LIMITS.api,
 
-  // AI機能
-  '/api/trpc/ai.scoreLeads': { max: 10, windowMs: 60 * 1000 },
-  '/api/trpc/ai.search': { max: 30, windowMs: 60 * 1000 },
+  // Every /api/trpc/ entry must hit a procedure mounted in server/routers/_app.ts, exactly or
+  // as a prefix (#577). The AI procedures have none: their paths get DEFAULT_RATE_LIMITS.ai
+  // below. A path entry misses batched URLs and counts per instance, so the paid calls are
+  // counted in the procedures, in the database: the Claude calls against AI_CALL_LIMITS (#405),
+  // and #576 counts the OpenAI embeddings (semanticSearch, updateEmbedding) the same way,
+  // against EMBEDDING_CALL_LIMITS.
 
   // エクスポート
   '/api/trpc/leads.export': { max: 5, windowMs: 60 * 1000 },
-  '/api/trpc/auditLogs.export': { max: 3, windowMs: 60 * 1000 },
 
   // バルク操作
   '/api/trpc/leads.bulkCreate': { max: 10, windowMs: 60 * 1000 },
+  // Prefix of leads.bulkUpdateStatus
   '/api/trpc/leads.bulkUpdate': { max: 10, windowMs: 60 * 1000 },
   '/api/trpc/leads.bulkDelete': { max: 5, windowMs: 60 * 1000 },
 
