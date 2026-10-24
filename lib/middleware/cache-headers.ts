@@ -6,18 +6,18 @@ const LOCALE_PAGE = /^\/(ja|en)(\/|$)/i;
  * Cache control headers by path type
  */
 export function getCacheHeaders(pathname: string): Record<string, string> {
-  // Static assets - cache for 1 year
-  if (STATIC_FILE.test(pathname) && !LOCALE_PAGE.test(pathname)) {
-    return {
-      'Cache-Control': 'public, max-age=31536000, immutable',
-    };
-  }
-
   // API routes - no cache
   if (pathname.startsWith('/api/')) {
     return {
       'Cache-Control': 'no-store, no-cache, must-revalidate',
     };
+  }
+
+  // Files - left to Next.js. The proxy does not run on the build files nor on the folders of
+  // public/ (proxy.ts); what reaches it is an icon of the app (Next.js caches it itself) or a
+  // missing file, whose 404 must not be kept for a year (#68)
+  if (STATIC_FILE.test(pathname) && !LOCALE_PAGE.test(pathname)) {
+    return {};
   }
 
   // HTML pages - short cache with revalidation
