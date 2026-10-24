@@ -280,10 +280,11 @@ describe.skipIf(!url)('deals (PostgreSQL)', () => {
       ]);
       const audits = await auditOf('deal', created.id);
       expect(audits.map((row) => row.action)).toEqual(['create', 'update', 'update', 'update']);
-      expect(audits[3].changes).toEqual({
-        before: { nextStep: '見積を送る' },
-        after: { nextStep: '電話' },
-      });
+      // Free text is recorded as changed, never as text (it may name people)
+      expect(audits[2].changes).toEqual({ before: { probability: 70 }, after: { probability: 55 } });
+      expect(audits[2].metadata).toEqual({ leadId: lead.id, changedText: ['nextStep'] });
+      expect(audits[3].changes).toEqual({ before: {}, after: {} });
+      expect(JSON.stringify(audits)).not.toContain('見積を送る');
     });
 
     it('closes won deals on today and reopens them without the close day', async () => {
@@ -321,6 +322,9 @@ describe.skipIf(!url)('deals (PostgreSQL)', () => {
       });
       expect(lost).toMatchObject({ stage: 'lost', lostReason: 'competitor', closedOn: jstDate() });
       expect(await leadOf(lead.id)).toMatchObject({ status: 'lost', lostReason: 'competitor' });
+      const [, lostAudit] = await auditOf('deal', deal.id);
+      expect(lostAudit.metadata).toEqual({ leadId: lead.id, changedText: ['lostNote'] });
+      expect(JSON.stringify(lostAudit.changes)).not.toContain('他社が安かった');
 
       const reopened = await adminA.deals.update({
         organizationId: orgA,
@@ -385,6 +389,19 @@ describe.skipIf(!url)('deals (PostgreSQL)', () => {
       await expect(
         viewerA.deals.update({ organizationId: orgA, dealId: deal.id, stage: 'won' })
       ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
+
+    it('links two deals to each other at the same time', async () => {
+      const [leadA, leadB] = [await createLead(orgA), await createLead(orgA)];
+      const a = await adminA.deals.create({ organizationId: orgA, leadId: leadA.id, name: 'A' });
+      const b = await adminA.deals.create({ organizationId: orgA, leadId: leadB.id, name: 'B' });
+      await Promise.all([
+        adminA.deals.update({ organizationId: orgA, dealId: a.id, previousDealId: b.id }),
+        memberA.deals.update({ organizationId: orgA, dealId: b.id, previousDealId: a.id }),
+      ]);
+      const rows = await pg.select().from(deals).where(eq(deals.organizationId, orgA));
+      expect(rows.find((row) => row.id === a.id)?.previousDealId).toBe(b.id);
+      expect(rows.find((row) => row.id === b.id)?.previousDealId).toBe(a.id);
     });
 
     it('moves the lead right when two of its deals change at the same time', async () => {
