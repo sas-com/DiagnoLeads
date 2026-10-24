@@ -99,7 +99,7 @@ export async function predictConversion(lead: LeadForPrediction): Promise<Conver
   try {
     const message = await client.messages.parse({
       model: 'claude-sonnet-5-5',
-      max_tokens: 16000,
+      max_tokens: 8000,
       messages: [
         {
           role: 'user',
