@@ -235,7 +235,7 @@ describe.skipIf(!url)('site visits (PostgreSQL)', () => {
     );
   });
 
-  it('counts IPv6 by its /64 and by its /48, so rotating /64s does not get past the limit', async () => {
+  it('counts IPv6 by its /48 first and by its /64, so rotating /64s neither gets past the limit nor adds rows', async () => {
     const now = new Date('2026-10-23T03:00:00Z');
     // Six /64s of one /48 at the limit of each /64 make 720 views; the /48 stops them at 600
     let recorded = 0;
@@ -249,7 +249,23 @@ describe.skipIf(!url)('site visits (PostgreSQL)', () => {
       }
     }
     expect(recorded).toBe(SITE_VISIT_RATE_LIMIT_48.limit);
-    expect(await view('/ja/ax-migration', { now, ip: '2001:db8:1:ff::1' })).toBe('rate_limited');
+
+    // The /48 is counted first: the views it refuses add no row for their /64, however many
+    // /64s they rotate through (the sixth /64 above was refused by the /48 from its first view)
+    const windowsPer64 = async () => {
+      const [{ windows }] = (await pg.execute(
+        sql`select count(*)::int as windows from public_rate_limits where key like ${`${SITE_VISIT_RATE_LIMIT.name}:%`}`
+      )) as unknown as [{ windows: number }];
+      return windows;
+    };
+    expect(await windowsPer64()).toBe(5);
+    for (let subnet = 0x100; subnet < 0x110; subnet++) {
+      expect(await view('/ja/ax-migration', { now, ip: `2001:db8:1:${subnet.toString(16)}::1` })).toBe(
+        'rate_limited'
+      );
+    }
+    expect(await windowsPer64()).toBe(5);
+
     // Another /48 is not affected
     expect(await view('/ja/ax-migration', { now, ip: '2001:db8:2::1' })).toBe('recorded');
   });

@@ -9,8 +9,26 @@ const { recordSiteVisit, reportServerError } = vi.hoisted(() => ({
   reportServerError: vi.fn(),
 }));
 vi.mock('@/lib/features/site-visits/record', () => ({ recordSiteVisit }));
-vi.mock('@/lib/ops/alert', () => ({ reportServerError }));
+vi.mock('@/lib/ops/alert', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/ops/alert')>()),
+  reportServerError,
+}));
 vi.mock('@/lib/db/client', () => ({ db: {} }));
+const { afterTasks } = vi.hoisted(() => ({ afterTasks: [] as (() => unknown)[] }));
+vi.mock('next/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/server')>()),
+  // Kept to run once the response is back, as Next.js runs after() work
+  after: (task: () => unknown) => {
+    afterTasks.push(task);
+  },
+}));
+
+/** POST, then run the after() work it left, as Next.js does once the response has been sent */
+async function post(req: NextRequest) {
+  const res = await POST(req);
+  for (const task of afterTasks.splice(0)) await task();
+  return res;
+}
 
 const CHROME =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36';
@@ -40,6 +58,7 @@ const VIEW = {
 describe('POST /api/collect', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    afterTasks.length = 0;
     vi.stubEnv('SITE_VISITS_ENABLED', 'true');
     vi.stubEnv('VERCEL', '1');
     recordSiteVisit.mockResolvedValue('recorded');
@@ -47,7 +66,7 @@ describe('POST /api/collect', () => {
   afterEach(() => vi.unstubAllEnvs());
 
   it('records a view with the page, its parameters and the host of the referrer only', async () => {
-    const res = await POST(beacon(VIEW));
+    const res = await post(beacon(VIEW));
     expect(res.status).toBe(204);
     expect(await res.text()).toBe('');
     expect(res.headers.get('set-cookie')).toBeNull();
@@ -70,9 +89,9 @@ describe('POST /api/collect', () => {
 
   it('writes nothing while the measurement is off', async () => {
     vi.stubEnv('SITE_VISITS_ENABLED', '');
-    expect((await POST(beacon(VIEW))).status).toBe(204);
+    expect((await post(beacon(VIEW))).status).toBe(204);
     vi.stubEnv('SITE_VISITS_ENABLED', 'false');
-    expect((await POST(beacon(VIEW))).status).toBe(204);
+    expect((await post(beacon(VIEW))).status).toBe(204);
     expect(recordSiteVisit).not.toHaveBeenCalled();
   });
 
@@ -82,7 +101,7 @@ describe('POST /api/collect', () => {
     ['a bot', { 'user-agent': 'Googlebot/2.1' }],
     ['no user agent', { 'user-agent': '' }],
   ])('ignores a request from %s', async (_name, headers) => {
-    expect((await POST(beacon(VIEW, headers))).status).toBe(204);
+    expect((await post(beacon(VIEW, headers))).status).toBe(204);
     expect(recordSiteVisit).not.toHaveBeenCalled();
   });
 
@@ -93,13 +112,13 @@ describe('POST /api/collect', () => {
     ['a body too large', { ...VIEW, referrer: `https://x.example/${'a'.repeat(5000)}` }],
     ['a body too large in bytes', { ...VIEW, referrer: `https://x.example/${'あ'.repeat(1500)}` }],
   ])('ignores %s', async (_name, body) => {
-    expect((await POST(beacon(body))).status).toBe(204);
+    expect((await post(beacon(body))).status).toBe(204);
     expect(recordSiteVisit).not.toHaveBeenCalled();
   });
 
   it('refuses a body announced as too large without reading it', async () => {
     const req = beacon(VIEW, { 'content-length': '100000' });
-    expect((await POST(req)).status).toBe(204);
+    expect((await post(req)).status).toBe(204);
     expect(req.bodyUsed).toBe(false);
     expect(recordSiteVisit).not.toHaveBeenCalled();
   });
@@ -121,20 +140,20 @@ describe('POST /api/collect', () => {
       headers: { origin: 'https://app.example', 'user-agent': CHROME },
     } as RequestInit & { duplex: 'half' });
     expect(req.headers.get('content-length')).toBeNull();
-    expect((await POST(req)).status).toBe(204);
+    expect((await post(req)).status).toBe(204);
     expect(pulled).toBeLessThan(16);
     expect(recordSiteVisit).not.toHaveBeenCalled();
   });
 
   it('records without an address when the platform does not give a trusted one', async () => {
     vi.stubEnv('VERCEL', '');
-    await POST(beacon(VIEW));
+    await post(beacon(VIEW));
     expect(recordSiteVisit.mock.calls[0][1]).toMatchObject({ ip: '' });
   });
 
   it('tells the people on call once, when an organization passes its daily cap', async () => {
     recordSiteVisit.mockResolvedValueOnce('daily_cap_reached');
-    expect((await POST(beacon(VIEW))).status).toBe(204);
+    expect((await post(beacon(VIEW))).status).toBe(204);
     expect(reportServerError).toHaveBeenCalledTimes(1);
     expect(reportServerError).toHaveBeenCalledWith(
       'site-visits/daily-cap',
@@ -144,15 +163,33 @@ describe('POST /api/collect', () => {
     // The views refused after it are not reported again
     for (const result of ['daily_cap', 'rate_limited', 'no_organization', 'recorded']) {
       recordSiteVisit.mockResolvedValueOnce(result);
-      expect((await POST(beacon(VIEW))).status).toBe(204);
+      expect((await post(beacon(VIEW))).status).toBe(204);
     }
     expect(reportServerError).toHaveBeenCalledTimes(1);
   });
 
-  it('reports a failure and still answers 204', async () => {
-    const error = new Error('db down');
+  it('reports a failure after answering 204, and logs only what the error is', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    // A database error's text holds the values of the query (the visitor hash, the utm_*)
+    const error = Object.assign(new Error('insert into site_visits values ($1) params: newsletter'), {
+      name: 'PostgresError',
+      code: '57P01',
+    });
     recordSiteVisit.mockRejectedValue(error);
-    expect((await POST(beacon(VIEW))).status).toBe(204);
+
+    const res = await POST(beacon(VIEW));
+    expect(res.status).toBe(204);
+    // The alert waits for the response
+    expect(reportServerError).not.toHaveBeenCalled();
+    for (const task of afterTasks.splice(0)) await task();
     expect(reportServerError).toHaveBeenCalledWith('site-visits/collect', error);
+
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    expect(consoleError.mock.calls[0]).toEqual([
+      'Site visit collect error:',
+      expect.objectContaining({ name: 'PostgresError', code: '57P01' }),
+    ]);
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain('newsletter');
+    consoleError.mockRestore();
   });
 });

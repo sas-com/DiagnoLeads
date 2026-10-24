@@ -80,18 +80,19 @@ describe('addressLimitsOf', () => {
     expect(limits[0].identifier).not.toContain('203.0.113');
   });
 
-  it('counts an IPv6 address by its /64, then by its /48', () => {
+  it('counts an IPv6 address by its /48 first, then by its /64', () => {
+    // The /48 first: a view it refuses writes no row for a new /64
     const limits = addressLimitsOf('salt', '2001:db8:1:2::5');
-    expect(limits.map(({ rule }) => rule)).toEqual([SITE_VISIT_RATE_LIMIT, SITE_VISIT_RATE_LIMIT_48]);
+    expect(limits.map(({ rule }) => rule)).toEqual([SITE_VISIT_RATE_LIMIT_48, SITE_VISIT_RATE_LIMIT]);
     const sameSlash64 = addressLimitsOf('salt', '2001:db8:1:2:aaaa::9');
     const otherSlash64 = addressLimitsOf('salt', '2001:0db8:0001:00ff::1');
     const otherSlash48 = addressLimitsOf('salt', '2001:db8:3:2::5');
     expect(sameSlash64.map(({ identifier }) => identifier)).toEqual(
       limits.map(({ identifier }) => identifier)
     );
-    expect(otherSlash64[0].identifier).not.toBe(limits[0].identifier);
-    expect(otherSlash64[1].identifier).toBe(limits[1].identifier);
-    expect(otherSlash48[1].identifier).not.toBe(limits[1].identifier);
+    expect(otherSlash64[0].identifier).toBe(limits[0].identifier);
+    expect(otherSlash64[1].identifier).not.toBe(limits[1].identifier);
+    expect(otherSlash48[0].identifier).not.toBe(limits[0].identifier);
   });
 
   it('changes with the salt of the day', () => {

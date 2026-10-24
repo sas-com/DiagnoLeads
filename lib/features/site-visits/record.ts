@@ -30,8 +30,9 @@ export const SITE_VISIT_RATE_LIMIT = {
 } as const satisfies RateLimitRule;
 
 /**
- * IPv6 views per /48 and window, counted after the /64: one /48 holds 65,536 /64s, so the limit
- * per /64 alone can be rotated around. Loose enough for a company network handing out /64s
+ * IPv6 views per /48 and window, counted before the /64: one /48 holds 65,536 /64s, so the limit
+ * per /64 alone can be rotated around, and a view the /48 refuses must not add a row for a new
+ * /64 to the rate limit table. Loose enough for a company network handing out /64s
  */
 export const SITE_VISIT_RATE_LIMIT_48 = {
   name: 'site-visit-48',
@@ -57,15 +58,20 @@ function block48Of(block64: string): string | null {
   return `${block64.split(':').slice(0, 3).join(':')}::/48`;
 }
 
-/** The address limits of one view, narrowest first */
+/**
+ * The address limits of one view, in the order they are counted. For IPv6 the /48 comes first,
+ * so rotating /64s within a refused /48 writes nothing new: the rows of the rate limit table
+ * stay bounded by the views each /48 is allowed. The cost is that one /64 sending past its own
+ * limit also uses up the /48 for the window; only the measurement stops there
+ */
 export function addressLimitsOf(salt: string, ip: string) {
   const block = ipBlock(ip);
   const block48 = block48Of(block);
+  const perBlock = { rule: SITE_VISIT_RATE_LIMIT, identifier: rateLimitIdentityOf(salt, block) };
+  if (!block48) return [perBlock];
   return [
-    { rule: SITE_VISIT_RATE_LIMIT, identifier: rateLimitIdentityOf(salt, block) },
-    ...(block48
-      ? [{ rule: SITE_VISIT_RATE_LIMIT_48, identifier: rateLimitIdentityOf(salt, block48) }]
-      : []),
+    { rule: SITE_VISIT_RATE_LIMIT_48, identifier: rateLimitIdentityOf(salt, block48) },
+    perBlock,
   ];
 }
 

@@ -4,8 +4,8 @@ import { siteVisitsEnabled } from '@/lib/features/site-visits/enabled';
 import { sitePageOf } from '@/lib/features/site-visits/pages';
 import { recordSiteVisit } from '@/lib/features/site-visits/record';
 import { isBot, referrerHostOf, visitParamsOf } from '@/lib/features/site-visits/request';
-import { reportServerError } from '@/lib/ops/alert';
-import { type NextRequest, NextResponse } from 'next/server';
+import { reportServerError, summarizeServerError } from '@/lib/ops/alert';
+import { type NextRequest, NextResponse, after } from 'next/server';
 
 /**
  * One view of a public page, sent by the page itself with navigator.sendBeacon (#412).
@@ -74,10 +74,13 @@ export async function POST(req: NextRequest) {
     });
     // Once per organization and day; the alert itself sends at most one mail per 10 minutes
     if (result === 'daily_cap_reached') {
-      await reportServerError('site-visits/daily-cap', dailyCapReached());
+      after(() => reportServerError('site-visits/daily-cap', dailyCapReached()));
     }
   } catch (error) {
-    await reportServerError('site-visits/collect', error);
+    // Names and code locations only: the database error's text can hold the visitor hash and
+    // the utm_* values. Logged here because the alert is thinned out and may not be configured
+    console.error('Site visit collect error:', summarizeServerError(error));
+    after(() => reportServerError('site-visits/collect', error));
   }
   return noContent();
 }
