@@ -576,6 +576,38 @@
           "body": "Extend features with AI agents and put your data to work."
         }
       },
+      "accessSteps": {
+        "title": "What happens next",
+        "nowHere": "You are here: the free web check is complete. Next, the inventory of your tools begins with a 30-minute online consultation.",
+        "items": {
+          "inventory": {
+            "title": "Inventory",
+            "body": "In a 30-minute online consultation, we ask about the number of tools and how they are used. Where needed, we take the files and check what is in them."
+          },
+          "decide": {
+            "title": "Deciding the approach",
+            "body": "Based on this result and the inventory, we decide together whether to fix, move to the web or replace, and in what scope and order."
+          },
+          "fix": {
+            "title": "Fix it and keep using it",
+            "body": "We fix your current Access tool so that it works again."
+          },
+          "web": {
+            "title": "Move it to the web",
+            "body": "We rebuild it as a web system used in the browser. How to move the data and the switch-over date are decided in advance."
+          },
+          "replace": {
+            "title": "Replace it with an off-the-shelf service",
+            "body": "You switch to a commercial cloud service or similar. How to move the data and the switch-over date are decided in advance."
+          },
+          "ax": {
+            "title": "AX",
+            "body": "After moving to the web, we add AI where it helps."
+          }
+        }
+      },
+      "accessMeetingDuration": "About 30 minutes (online)",
+      "accessDisclaimer": "This result is an estimate based on your answers. We tell you the exact approach, schedule and cost after checking the contents of the tool.",
       "stepLabel": "STEP {number}",
       "title": "Your result",
       "subtitle": "An estimate based on the answers from {company}",
