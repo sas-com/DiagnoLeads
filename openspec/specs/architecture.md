@@ -1,6 +1,6 @@
 # DiagnoLeads v2 アーキテクチャ仕様
 
-> **Source of Truth**: DiagnoLeads v2 のアーキテクチャ全体を定義する仕様書
+> **位置づけ（2026-10-24）**: 2025-11 時点の計画の記録。実装と食い違うところは実装を正とする（RLS は下の注意、プラグインは #306 で削除して作らない）
 >
 > **最終更新**: 2025-11-28
 > **ステータス**: Phase 1-2.6完了、Phase 3進行中（実装完了率: 79%）
@@ -30,7 +30,7 @@ DiagnoLeads v2 は、AI駆動のB2B診断プラットフォームをマルチテ
 1. **階層的マルチテナント** - 組織ごとの完全なデータ分離 + グループ横断機能
 2. **AI駆動開発** - OpenSpecベースの仕様駆動開発
 3. **型安全性** - TypeScript + tRPC + Drizzle ORMによるE2E型安全性
-4. **拡張性** - プラグインアーキテクチャによる機能拡張
+4. **拡張性** - 機能ごとのモジュール（`lib/features/`）を足して広げる（プラグインの仕組みは #306 で削除）
 5. **セキュリティファースト** - CSP、レート制限、RLS、CASL権限管理
 6. **エンタープライズ対応** - ホールディングス・グループ企業・M&A
 
@@ -100,6 +100,8 @@ leads               // リード（organizationId外部キー）
 
 ### Row-Level Security (RLS)
 
+> **注意（2026-10-24）**: RLS は今は効いていない。テナントのポリシーがあるのは5表（leads・organizations・organization_members・sessions・users）だけで、`FORCE ROW LEVEL SECURITY` も無い。`setCurrentUser` はトランザクションの外で呼ばれ、設定がその1文でしか生きない（`lib/multi-tenant/middleware/organization.ts` の NOTE）。テナントの分離は、各クエリの `organizationId` の条件とメンバーシップの検証に頼っている。RLS を効かせる作業は #51 で予定している。
+
 ```sql
 -- PostgreSQL RLS ポリシー
 CREATE POLICY "leads_select" ON "leads"
@@ -136,10 +138,11 @@ const appRouter = router({
   analytics: analyticsRouter,
 });
 
-// organizationProcedure = 自動的に組織スコープ適用
+// organizationProcedure = メンバーシップ検証 + CASL の権限（ctx.ability）
+// 組織による絞り込みは自動では掛からない。各クエリに organizationId の条件を書く
 export const organizationProcedure = protectedProcedure
   .input(z.object({ organizationId: z.string().uuid() }))
-  .use(/* メンバーシップ検証 + RLS適用 */);
+  .use(/* メンバーシップ検証 + 権限の計算 */);
 ```
 
 ### Layer 2: OpenAPI（外部API）
@@ -174,16 +177,16 @@ Layer 2: tRPC Middleware
 ├─ organizationProcedure（メンバーシップ検証）
 └─ CASL権限チェック
 
-Layer 3: Database RLS
+Layer 3: Database RLS（ポリシーはあるが、今は効いていない。上の注意）
 ├─ PostgreSQL Row-Level Security
-└─ 自動的にorganization_id条件追加
+└─ 組織の絞り込みは各クエリの organizationId の条件で行う
 ```
 
 ### セキュリティ機能
 
 - ✅ Content Security Policy（nonce-based）
 - ✅ レート制限（IP-based、メモリストア）
-- ✅ Row-Level Security（PostgreSQL）
+- Row-Level Security（PostgreSQL）：ポリシーは一部の表だけで、今は効いていない（上の注意）
 - ✅ CSRF保護（BetterAuth）
 - ✅ XSS防止（React、Server Components）
 - ✅ SQL Injection防止（Drizzle ORM）
@@ -300,7 +303,7 @@ Trigger.dev             # バックグラウンドジョブ
 
 - コアフレームワーク
 - 認証基盤（BetterAuth）
-- データベース（Drizzle + RLS）
+- データベース（Drizzle。RLS は今は効いていない）
 - セキュリティ（CSP、レート制限）
 - テストインフラ
 
@@ -347,7 +350,9 @@ Trigger.dev             # バックグラウンドジョブ
 
 ## 拡張性設計
 
-### プラグインアーキテクチャ（計画中）
+### プラグインアーキテクチャ（作らない）
+
+> プラグインの仕組み（`lib/plugins/`）は、サーバーレスでは意味がなく使われていなかったため #306 で削除した。下は 2025-11 時点の案の記録。
 
 ```typescript
 interface DiagnoLeadsPlugin {
