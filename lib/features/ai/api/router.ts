@@ -7,7 +7,8 @@
  * - Lead summaries and insights
  *
  * Every procedure that calls Claude (scoring, prediction, summary, alone or in a batch) counts
- * each lead it hands to Claude against AI_CALL_LIMITS (../limits.ts) first (#405).
+ * each lead it hands to Claude against AI_CALL_LIMITS (../limits.ts) first, and hands Claude
+ * the lead through leadForClaude (../prompt-input.ts), which bounds the size of each call (#405).
  */
 
 import { leads } from '@/lib/db/schema';
@@ -19,6 +20,7 @@ import { generateLeadSummary } from '../chat/assistant';
 import { prepareLeadText } from '../embeddings/openai';
 import { consumeAiCalls } from '../limits';
 import { predictConversion, predictConversionBatch } from '../prediction/conversion';
+import { leadForClaude } from '../prompt-input';
 import { scoreLeadWithAI, scoreLeadsBatch } from '../scoring/claude';
 import { findSimilarLeads, semanticSearch, updateLeadEmbedding } from '../search/semantic';
 import {
@@ -66,7 +68,7 @@ export const aiRouter = router({
       organizationId: input.organizationId,
       calls: 1,
     });
-    const aiScore = await scoreLeadWithAI(lead);
+    const aiScore = await scoreLeadWithAI(leadForClaude(lead));
 
     // Update lead with AI score
     const [updated] = await ctx.db
@@ -122,7 +124,7 @@ export const aiRouter = router({
         organizationId: input.organizationId,
         calls: leadsToScore.length,
       });
-      const scoresMap = await scoreLeadsBatch(leadsToScore);
+      const scoresMap = await scoreLeadsBatch(leadsToScore.map(leadForClaude));
 
       // Update all leads with scores
       const updatePromises = leadsToScore.map((lead) => {
@@ -242,7 +244,7 @@ export const aiRouter = router({
         organizationId: input.organizationId,
         calls: 1,
       });
-      const summary = await generateLeadSummary(lead);
+      const summary = await generateLeadSummary(leadForClaude(lead));
 
       return { summary };
     }),
@@ -312,7 +314,7 @@ export const aiRouter = router({
         organizationId: input.organizationId,
         calls: 1,
       });
-      const prediction = await predictConversion(lead);
+      const prediction = await predictConversion(leadForClaude(lead));
 
       return {
         leadId: lead.id,
@@ -355,7 +357,7 @@ export const aiRouter = router({
         organizationId: input.organizationId,
         calls: leadsToPredict.length,
       });
-      const predictionsMap = await predictConversionBatch(leadsToPredict);
+      const predictionsMap = await predictConversionBatch(leadsToPredict.map(leadForClaude));
 
       return {
         predictions: Array.from(predictionsMap.entries()).map(([leadId, prediction]) => ({

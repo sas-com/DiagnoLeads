@@ -1,11 +1,14 @@
 /**
  * Rate limits of the AI procedures that call Claude (#405): every lead handed to Claude is
  * counted per user, per organization (hour) and per organization (day) before the call, alone
- * or in a batch; a refused request never reaches Claude. The database and the AI services are
- * stubs (the counting itself runs on PostgreSQL in ai-org-isolation.db.test.ts).
+ * or in a batch; a refused request never reaches Claude, and the lead handed over has its text
+ * cut (leadForClaude, ai-prompt-input.test.ts). The database and the AI services are stubs (the
+ * counting itself runs on PostgreSQL in ai-org-isolation.db.test.ts).
  */
 import type { Organization, OrganizationMember, User } from '@/lib/db/schema';
 import { AI_CALL_LIMITS, consumeAiCalls } from '@/lib/features/ai/limits';
+import { MAX_PROMPT_FIELD_CHARS, PROMPT_TRUNCATED } from '@/lib/features/ai/prompt-input';
+import { leadChangeEvents } from '@/lib/features/webhooks/services/lead-events';
 import { appRouter } from '@/server/routers/_app';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -206,6 +209,31 @@ describe('AI router: rate limits of the Claude calls', () => {
     for (const stub of Object.values(ai)) expect(stub).not.toHaveBeenCalled();
     // The score is not written either
     expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it('hands Claude the lead with its text cut, and keeps the stored lead for the change events', async () => {
+    const { caller, db } = createCaller();
+    const huge = { ...leadRow(LEAD_1), company: 'c'.repeat(2_000_000) };
+    const cut = `${'c'.repeat(MAX_PROMPT_FIELD_CHARS)} ${PROMPT_TRUNCATED}`;
+    db.query.leads.findFirst.mockResolvedValue(huge);
+    db.query.leads.findMany.mockResolvedValue([huge, leadRow(LEAD_2)]);
+    const one = { organizationId: ORG_ID, leadId: LEAD_1 };
+    const batch = { organizationId: ORG_ID, leadIds: [LEAD_1, LEAD_2] };
+
+    await caller.ai.scoreLead(one);
+    await caller.ai.generateSummary(one);
+    await caller.ai.predictConversion(one);
+    await caller.ai.batchScoreLeads(batch);
+    await caller.ai.batchPredictConversion(batch);
+
+    for (const stub of [ai.scoreLeadWithAI, ai.generateLeadSummary, ai.predictConversion]) {
+      expect(stub.mock.calls[0][0]).toMatchObject({ id: LEAD_1, company: cut });
+    }
+    for (const stub of [ai.scoreLeadsBatch, ai.predictConversionBatch]) {
+      expect(stub.mock.calls[0][0]).toMatchObject([{ id: LEAD_1, company: cut }, { id: LEAD_2 }]);
+    }
+    // The change events compare the stored lead, not the copy handed to Claude
+    expect(vi.mocked(leadChangeEvents).mock.calls[0][0]).toBe(huge);
   });
 
   it('counts nothing for a lead outside the organization or a caller without the right', async () => {
