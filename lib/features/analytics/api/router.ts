@@ -5,7 +5,7 @@ import { LEAD_STATUSES, type LeadStatus } from '@/lib/features/leads/types/pipel
 import { MQL_LEVEL_FILTERS, type MqlLevelFilter } from '@/lib/features/leads/types/schemas';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
-import { and, count, desc, eq, gte, lte, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { getDashboardSummary } from '../dashboard';
 import {
