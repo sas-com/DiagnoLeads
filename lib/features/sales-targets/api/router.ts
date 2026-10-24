@@ -7,12 +7,11 @@
  * 2026-10-24). Every query is scoped by organizationId (see ../service.ts).
  */
 
-import { canReadDeals } from '@/lib/features/deals/access';
+import { canReadDeals } from '@/lib/features/deals/service';
 import { listAssignableMembers, memberDisplayName } from '@/lib/features/leads/assignment';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
-import { fiscalYearOf, fiscalYearRange } from '../fiscal-year';
 import {
   getFiscalYearStartMonth,
   listFormerTargetHolders,
@@ -20,6 +19,7 @@ import {
   saveTargets,
   setFiscalYearStartMonth,
 } from '../service';
+import { fiscalYearOf, fiscalYearRange } from '../types/fiscal-year';
 import { fiscalYearStartSchema, saveTargetsSchema, targetsQuerySchema } from '../types/schemas';
 
 export const salesTargetsRouter = router({

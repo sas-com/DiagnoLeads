@@ -20,7 +20,7 @@ import {
   fiscalYearOf,
   fiscalYearRange,
   readFiscalYearStartMonth,
-} from '@/lib/features/sales-targets/fiscal-year';
+} from '@/lib/features/sales-targets/types/fiscal-year';
 import { describe, expect, it } from 'vitest';
 
 describe('forecastRange', () => {

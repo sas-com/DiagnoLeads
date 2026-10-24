@@ -1,6 +1,6 @@
 import { DEAL_LIMITS } from '@/lib/features/deals/types/schemas';
 import { z } from 'zod';
-import { fiscalYearStartMonthSchema } from '../fiscal-year';
+import { fiscalYearStartMonthSchema } from './fiscal-year';
 
 /** Input of the sales targets API (Refs #437) */
 

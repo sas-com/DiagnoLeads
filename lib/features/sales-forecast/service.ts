@@ -19,8 +19,8 @@ import {
   OPEN_DEAL_STAGES,
 } from '@/lib/features/deals/types/pipeline';
 import { memberDisplayName } from '@/lib/features/leads/assignment';
-import type { MonthRange } from '@/lib/features/sales-targets/fiscal-year';
 import { listTargets } from '@/lib/features/sales-targets/service';
+import type { MonthRange } from '@/lib/features/sales-targets/types/fiscal-year';
 import { type SQL, and, asc, between, desc, eq, gt, inArray, lt, lte, or, sql } from 'drizzle-orm';
 import {
   type DealChangeInput,

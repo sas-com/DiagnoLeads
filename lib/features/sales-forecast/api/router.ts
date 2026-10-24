@@ -6,7 +6,7 @@
  * targets and to the rep only (ownerRowsFor). Every query is scoped by organizationId.
  */
 
-import { canReadDeals } from '@/lib/features/deals/access';
+import { canReadDeals } from '@/lib/features/deals/service';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { getFiscalYearStartMonth } from '@/lib/features/sales-targets/service';
 import { organizationProcedure, router } from '@/lib/trpc/init';

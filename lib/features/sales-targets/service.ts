@@ -10,7 +10,7 @@ import { auditLogs, organizations, salesTargets, users } from '@/lib/db/schema';
 import { findAssignableMember } from '@/lib/features/leads/assignment';
 import { TRPCError } from '@trpc/server';
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
-import { SALES_FORECAST_SETTINGS_KEY, readFiscalYearStartMonth } from './fiscal-year';
+import { SALES_FORECAST_SETTINGS_KEY, readFiscalYearStartMonth } from './types/fiscal-year';
 import type { SaveTargetsInput } from './types/schemas';
 
 type Database = typeof defaultDb;

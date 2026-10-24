@@ -10,7 +10,7 @@ import {
   fiscalYearOf,
   fiscalYearRange,
   monthRange,
-} from '@/lib/features/sales-targets/fiscal-year';
+} from '@/lib/features/sales-targets/types/fiscal-year';
 import { z } from 'zod';
 
 export const FORECAST_PERIODS = ['thisMonth', 'thisQuarter', 'thisFiscalYear'] as const;
