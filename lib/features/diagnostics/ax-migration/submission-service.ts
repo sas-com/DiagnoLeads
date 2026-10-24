@@ -454,6 +454,8 @@ export async function requestAxMigrationConsultation(
       leadCreated: boolean;
       /** A "diagnose another system" submission of the respondent who created the lead */
       continued: boolean;
+      /** When the consultation was requested: now, or the earlier request (#241) */
+      requestedAt: Date;
     }
   | { ok: false; reason: 'not_found' | 'closed' }
 > {
@@ -499,6 +501,7 @@ export async function requestAxMigrationConsultation(
         leadId: submission.leadId,
         leadCreated: submission.leadCreated,
         continued: submission.continuedFromSubmissionId !== null,
+        requestedAt: submission.consultationRequestedAt,
       };
     }
 
@@ -543,6 +546,7 @@ export async function requestAxMigrationConsultation(
       leadId: claimed.leadId,
       leadCreated: claimed.leadCreated,
       continued,
+      requestedAt: now,
     };
   });
 }

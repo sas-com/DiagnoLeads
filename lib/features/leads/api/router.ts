@@ -62,9 +62,12 @@ import { leadExportPdfBase64 } from '../export-pdf';
 import { getNextMeetingRate, getWeekMeetings } from '../meetings';
 import {
   LEAD_STATUSES,
+  LOST_ON_HOLD_MESSAGE,
   type LeadPipelineFields,
   type LeadStatus,
+  dropsOnHoldReason,
   jstDate,
+  makesLostOnHold,
   qualificationUpdateFields,
   statusUpdateFields,
 } from '../types/pipeline';
@@ -290,6 +293,9 @@ export const leadsRouter = router({
         code: 'FORBIDDEN',
         message: 'リードを作成する権限がありません',
       });
+    }
+    if (makesLostOnHold(null, input)) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: LOST_ON_HOLD_MESSAGE });
     }
 
     const now = new Date();
@@ -547,8 +553,8 @@ export const leadsRouter = router({
     }),
 
   /**
-   * Figures of the list page's cards for the whole organization (#131): leads per status and
-   * the average score of the leads that have one. Not affected by the list filters.
+   * Figures of the list page's cards for the whole organization (#131): leads per status. Not
+   * affected by the list filters. No average score: the MQL level is the sign (#447).
    */
   statusCounts: organizationProcedure.query(async ({ ctx, input }) => {
     if (!ctx.ability.can('read', 'Lead')) {
@@ -562,8 +568,6 @@ export const leadsRouter = router({
       .select({
         status: leads.status,
         count: count(),
-        scoreSum: sql<string | null>`sum(${leads.score})`,
-        scored: count(leads.score),
       })
       .from(leads)
       .where(eq(leads.organizationId, input.organizationId))
@@ -574,8 +578,6 @@ export const leadsRouter = router({
       number
     >;
     let total = 0;
-    let scoreSum = 0;
-    let scored = 0;
     for (const row of rows) {
       const n = Number(row.count);
       total += n;
@@ -583,14 +585,11 @@ export const leadsRouter = router({
       if ((LEAD_STATUSES as readonly string[]).includes(row.status)) {
         byStatus[row.status as LeadStatus] += n;
       }
-      scoreSum += Number(row.scoreSum ?? 0);
-      scored += Number(row.scored);
     }
 
     return {
       total,
       byStatus,
-      averageScore: scored > 0 ? scoreSum / scored : null,
     };
   }),
 
@@ -623,6 +622,9 @@ export const leadsRouter = router({
           message: 'リードが見つかりません',
         });
       }
+      if (makesLostOnHold(existing, input)) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: LOST_ON_HOLD_MESSAGE });
+      }
 
       // Build update object (only include defined fields)
       const updateData: PgUpdateSetSource<typeof leads> = {};
@@ -637,6 +639,7 @@ export const leadsRouter = router({
       if (input.source !== undefined) updateData.source = input.source;
       if (input.responses !== undefined) updateData.responses = input.responses;
       Object.assign(updateData, pickPipelineFields(input));
+      if (dropsOnHoldReason(existing, input)) updateData.lostReason = null;
       Object.assign(updateData, qualificationUpdateFields(input, existing, now));
       if (input.dealPhase) {
         // First date each phase was reached; the existing date wins (right side of ||), and
@@ -908,7 +911,7 @@ export const leadsRouter = router({
         // Lock the rows so the audited "before" is the status this update replaces
         await tx.execute(sql`select 1 from ${leads} where ${scope} for no key update`);
         const before = await tx.query.leads.findMany({
-          columns: { id: true, status: true },
+          columns: { id: true, status: true, lostReason: true },
           where: scope,
         });
 
@@ -917,6 +920,12 @@ export const leadsRouter = router({
           .update(leads)
           .set({
             ...statusUpdateFields(input.status),
+            // Leads on hold that are now lost drop the reason 保留 (#445)
+            ...(input.status === 'lost'
+              ? {
+                  lostReason: sql`case when ${leads.status} <> 'lost' and ${leads.lostReason} = 'on_hold' then null else ${leads.lostReason} end`,
+                }
+              : {}),
             updatedAt: now,
           })
           .where(scope)
@@ -929,11 +938,22 @@ export const leadsRouter = router({
           { organizationId: input.organizationId, userId: ctx.user.id, at: now },
           before
             .filter((row) => updatedIds.has(row.id) && row.status !== input.status)
-            .map((row) => ({
-              action: 'update' as const,
-              leadId: row.id,
-              changes: { before: { status: row.status }, after: { status: input.status } },
-            }))
+            .map((row) =>
+              dropsOnHoldReason(row, { status: input.status })
+                ? {
+                    action: 'update' as const,
+                    leadId: row.id,
+                    changes: {
+                      before: { status: row.status, lostReason: row.lostReason },
+                      after: { status: input.status, lostReason: null },
+                    },
+                  }
+                : {
+                    action: 'update' as const,
+                    leadId: row.id,
+                    changes: { before: { status: row.status }, after: { status: input.status } },
+                  }
+            )
         );
 
         const previousStatus = new Map(before.map((row) => [row.id, row.status]));

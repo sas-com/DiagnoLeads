@@ -372,9 +372,16 @@ describe.skipIf(!url)('builder diagnosis submission (PostgreSQL)', () => {
         organizationId,
         leadId: outcome.leadId,
         leadCreated: true,
+        requestedAt: at,
       });
-      const second = await requestBuilderConsultation(db, diagnosisId, outcome.submissionId, at);
-      expect(second).toMatchObject({ ok: true, alreadyRequested: true });
+      // A later call gets the time of the first request: the preferences close a day after it (#241)
+      const second = await requestBuilderConsultation(
+        db,
+        diagnosisId,
+        outcome.submissionId,
+        new Date(at.getTime() + 60_000)
+      );
+      expect(second).toMatchObject({ ok: true, alreadyRequested: true, requestedAt: at });
 
       const lead = await pg.query.leads.findFirst({ where: eq(leads.id, outcome.leadId) });
       expect(lead?.conversionPoint).toBe('consultation');

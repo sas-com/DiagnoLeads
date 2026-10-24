@@ -70,23 +70,13 @@ const cardSchema = updateLeadSchema.pick({
   conversionPoint: true,
   dealPhase: true,
   targetSystem: true,
-  score: true,
   mqlQualified: true,
   sqlDecision: true,
   lostReason: true,
 });
 type CardValues = z.infer<typeof cardSchema>;
-/** In the form an emptied score is null (an undefined value would bring back the default) */
-type CardFormValues = Omit<CardValues, 'score'> & { score?: number | null };
-/** The update cannot clear the score: an emptied score keeps the stored one */
-const cardFormSchema = cardSchema.extend({
-  score: z.preprocess(
-    (value) => (value === null ? undefined : value),
-    updateLeadSchema.shape.score
-  ),
-});
 /** Form field names are the card fields */
-type CardFieldName = FieldPath<CardFormValues> & LeadCardField;
+type CardFieldName = FieldPath<CardValues> & LeadCardField;
 
 const SELECT_OPTIONS: Partial<Record<LeadCardField, readonly string[]>> = {
   inflowSource: INFLOW_SOURCES,
@@ -106,9 +96,9 @@ const TEXT_TYPES: Partial<Record<LeadCardField, 'text' | 'email' | 'tel'>> = {
 };
 /** Text fields stored as null when emptied (the others are plain strings) */
 const NULLABLE_TEXT = new Set<LeadCardField>(['agencyName', 'referrerName']);
-const NUMBER_FIELDS = new Set<LeadCardField>(['score', 'acquisitionCost']);
+const NUMBER_FIELDS = new Set<LeadCardField>(['acquisitionCost']);
 
-function formValues(lead: Lead): CardFormValues {
+function formValues(lead: Lead): CardValues {
   return {
     name: lead.name ?? '',
     company: lead.company ?? '',
@@ -121,7 +111,6 @@ function formValues(lead: Lead): CardFormValues {
     conversionPoint: (lead.conversionPoint as CardValues['conversionPoint']) ?? null,
     dealPhase: (lead.dealPhase as CardValues['dealPhase']) ?? null,
     targetSystem: (lead.targetSystem as CardValues['targetSystem']) ?? null,
-    score: lead.score ?? null,
     mqlQualified: Boolean(lead.mqlQualifiedAt),
     sqlDecision: (lead.sqlDecision as CardValues['sqlDecision']) ?? null,
     lostReason: (lead.lostReason as CardValues['lostReason']) ?? null,
@@ -134,7 +123,6 @@ function useFieldLabel() {
   const tDetail = useTranslations('leadDetail');
   return (field: LeadCardField, editing = false) => {
     if (field === 'mqlQualified') return editing ? t('mqlQualified') : tDetail('fields.mql');
-    if (field === 'score') return tDetail('score');
     return t(field);
   };
 }
@@ -331,8 +319,6 @@ function FieldValue({ field, lead }: { field: LeadCardField; lead: Lead }) {
           {lead.phone}
         </a>
       );
-    case 'score':
-      return <>{lead.score} / 100</>;
     case 'acquisitionCost':
       return (
         <>{format.number(lead.acquisitionCost ?? 0, { style: 'currency', currency: 'JPY' })}</>
@@ -413,8 +399,8 @@ function CardForm({
     [t, tValidation]
   );
 
-  const form = useForm<CardFormValues>({
-    resolver: zodResolver(cardFormSchema, { errorMap }),
+  const form = useForm<CardValues>({
+    resolver: zodResolver(cardSchema, { errorMap }),
     defaultValues: formValues(lead),
   });
   const { isDirty } = form.formState;
@@ -435,10 +421,10 @@ function CardForm({
   }, [focusTarget, form]);
 
   const submit = form.handleSubmit(async (values) => {
-    const dirty = form.formState.dirtyFields as Partial<Record<keyof CardFormValues, unknown>>;
+    const dirty = form.formState.dirtyFields as Partial<Record<keyof CardValues, unknown>>;
     const changes = Object.fromEntries(
       Object.entries(values).filter(
-        ([key, value]) => Boolean(dirty[key as keyof CardFormValues]) && value !== undefined
+        ([key, value]) => Boolean(dirty[key as keyof CardValues]) && value !== undefined
       )
     ) as Partial<CardValues>;
     if (Object.keys(changes).length === 0) {
@@ -479,7 +465,11 @@ function CardForm({
               control={form.control}
               name={name}
               render={({ field }) => {
-                const options = SELECT_OPTIONS[name];
+                // A lost lead cannot be put on hold (#445): on hold is nurturing
+                const options =
+                  name === 'lostReason' && lead.status === 'lost' && lead.lostReason !== 'on_hold'
+                    ? SELECT_OPTIONS[name]?.filter((option) => option !== 'on_hold')
+                    : SELECT_OPTIONS[name];
                 if (name === 'mqlQualified') {
                   return (
                     <FormItem className="flex items-center gap-2 space-y-0 sm:col-span-2">
@@ -525,12 +515,7 @@ function CardForm({
                 if (NUMBER_FIELDS.has(name)) {
                   return (
                     <FormItem>
-                      <FormLabel>
-                        {label(name, true)}
-                        {name === 'score' && (
-                          <span className="ml-1 text-muted-foreground">(0-100)</span>
-                        )}
-                      </FormLabel>
+                      <FormLabel>{label(name, true)}</FormLabel>
                       <FormControl>
                         <Input
                           ref={field.ref}

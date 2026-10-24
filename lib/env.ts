@@ -42,6 +42,9 @@ export const env = createEnv({
 
     // Legacy generic diagnosis form: off in production unless 'true' (#71)
     LEGACY_DIAGNOSTIC_FORM_ENABLED: z.string().optional(),
+    // "true" requires a verified address to accept an invitation (#128); anything else but
+    // "false" fails at start, so a mistyped value cannot leave it off unnoticed
+    INVITE_REQUIRE_VERIFIED_EMAIL: z.enum(['true', 'false']).optional(),
   },
 
   /**
@@ -73,6 +76,7 @@ export const env = createEnv({
     TURNSTILE_SITE_KEY: process.env.TURNSTILE_SITE_KEY,
     TURNSTILE_SECRET_KEY: process.env.TURNSTILE_SECRET_KEY,
     LEGACY_DIAGNOSTIC_FORM_ENABLED: process.env.LEGACY_DIAGNOSTIC_FORM_ENABLED,
+    INVITE_REQUIRE_VERIFIED_EMAIL: process.env.INVITE_REQUIRE_VERIFIED_EMAIL,
 
     // Client
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,

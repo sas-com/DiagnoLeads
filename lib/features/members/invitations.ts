@@ -41,6 +41,18 @@ export function isDuplicatePendingInvitation(error: unknown): boolean {
 /** An invitation can be accepted for 48 hours, so a leaked link is usable only briefly */
 export const INVITATION_TTL_MS = 48 * 60 * 60 * 1000;
 
+/**
+ * Whether accepting an invitation needs a verified email address (INVITE_REQUIRE_VERIFIED_EMAIL=
+ * true, #128). Signing up with the invitation link proves only that one has the link; checking
+ * the address proves the mailbox too, so a leaked link cannot bring someone else in. Off until the
+ * company sender domain works, since the check sends a verification email to the invitee.
+ */
+export function inviteEmailVerificationRequired(
+  value = process.env.INVITE_REQUIRE_VERIFIED_EMAIL
+): boolean {
+  return value === 'true';
+}
+
 export function hashInvitationToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
@@ -179,19 +191,24 @@ export type AcceptInvitationResult =
         | 'revoked'
         | 'already_used'
         | 'email_mismatch'
-        | 'email_not_allowed';
+        | 'email_not_allowed'
+        | 'email_not_verified';
     };
 
 /**
  * Add the signed-in user to the organization of the invitation. The user's email must match the
- * invited address, so a forwarded link cannot be used by someone else. Accepting the same
- * invitation again as the same user succeeds without changes.
+ * invited address, so a forwarded link cannot be used by someone else, and with
+ * `requireVerifiedEmail` the address must have been verified. Accepting the same invitation again
+ * as the same user succeeds without changes.
  */
 export async function acceptInvitation(
   db: Database,
   token: string,
   user: { id: string; email: string },
-  now: Date = new Date()
+  now: Date = new Date(),
+  {
+    requireVerifiedEmail = inviteEmailVerificationRequired(),
+  }: { requireVerifiedEmail?: boolean } = {}
 ): Promise<AcceptInvitationResult> {
   return db.transaction(async (tx) => {
     const [invitation] = await tx
@@ -214,6 +231,15 @@ export async function acceptInvitation(
     }
     // Test mode: an invitation made before it was turned on cannot bring in an outside address
     if (!isAllowedEmail(invitation.email)) return { ok: false, reason: 'email_not_allowed' };
+    if (requireVerifiedEmail) {
+      // Read from the database: the session cookie can hold the state from before verifying
+      const [account] = await tx
+        .select({ emailVerified: users.emailVerified })
+        .from(users)
+        .where(eq(users.id, user.id))
+        .limit(1);
+      if (account?.emailVerified !== true) return { ok: false, reason: 'email_not_verified' };
+    }
 
     const [membership] = await tx
       .select({ id: organizationMembers.id })

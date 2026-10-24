@@ -40,13 +40,6 @@ vi.mock('@/lib/trpc/client', () => ({
           isError: false,
         })),
       },
-      getScoreDistribution: {
-        useQuery: vi.fn(() => ({
-          data: [{ range: '0-20', count: 10 }],
-          isLoading: false,
-          isError: false,
-        })),
-      },
       getResponseTime: {
         useQuery: vi.fn(() => ({
           data: { average: 3600 },
@@ -65,7 +58,6 @@ import {
   useLeadTrend,
   useOverview,
   useResponseTime,
-  useScoreDistribution,
   useSourceBreakdown,
   useStatusBreakdown,
 } from '@/hooks/use-analytics';
@@ -131,14 +123,6 @@ describe('useConversionFunnel', () => {
   });
 });
 
-describe('useScoreDistribution', () => {
-  it('should return score distribution data', () => {
-    const { result } = renderHook(() => useScoreDistribution(validOrgId));
-
-    expect(result.current).toBeDefined();
-    expect(result.current.isLoading).toBe(false);
-  });
-});
 
 describe('useResponseTime', () => {
   it('should return response time data', () => {

@@ -51,6 +51,14 @@ const notificationColors: Record<string, string> = {
   system: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
 };
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The lead a notification is about, when its data names one (data.leadId) */
+function leadIdOf(data: Record<string, unknown> | null): string | null {
+  const leadId = data?.leadId;
+  return typeof leadId === 'string' && UUID.test(leadId) ? leadId : null;
+}
+
 export default function NotificationDropdown() {
   const t = useTranslations('notifications');
   const locale = useLocale();
@@ -161,13 +169,16 @@ export default function NotificationDropdown() {
                   const Icon = notificationIcons[notification.type] || Bell;
                   const colorClass =
                     notificationColors[notification.type] || notificationColors.system;
+                  const leadId = leadIdOf(notification.data);
 
                   return (
+                    // A row about a lead opens it: the title's link covers the row (its ::after),
+                    // and the click still reaches the row, which marks the notification as read
                     // biome-ignore lint/a11y/useKeyWithClickEvents: the mark-as-read button inside does the same by keyboard
                     <div
                       key={notification.id}
                       className={cn(
-                        'flex gap-3 p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer',
+                        'relative flex gap-3 p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer',
                         !notification.read && 'bg-blue-50/50 dark:bg-blue-900/10'
                       )}
                       onClick={() => !notification.read && handleMarkAsRead(notification.id)}
@@ -189,7 +200,17 @@ export default function NotificationDropdown() {
                               : 'text-gray-900 dark:text-white font-medium'
                           )}
                         >
-                          {notification.title}
+                          {leadId ? (
+                            <Link
+                              href={`/${locale}/leads/${leadId}`}
+                              className="rounded-sm after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-brand-500"
+                              onClick={() => setIsOpen(false)}
+                            >
+                              {notification.title}
+                            </Link>
+                          ) : (
+                            notification.title
+                          )}
                         </p>
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">
                           {notification.message}
@@ -208,7 +229,7 @@ export default function NotificationDropdown() {
                             e.stopPropagation();
                             handleMarkAsRead(notification.id);
                           }}
-                          className="flex-shrink-0 p-1 text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400"
+                          className="relative z-10 flex-shrink-0 p-1 text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400"
                           title={t('markAsRead')}
                         >
                           <Check className="w-4 h-4" />
@@ -224,7 +245,7 @@ export default function NotificationDropdown() {
           {/* Footer */}
           <div className="p-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
             <Link
-              href="/settings#notifications"
+              href={`/${locale}/settings#notifications`}
               className="block w-full text-center text-sm text-blue-500 hover:text-blue-600 dark:text-blue-400 font-medium py-1"
               onClick={() => setIsOpen(false)}
             >

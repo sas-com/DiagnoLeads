@@ -1,5 +1,6 @@
 'use client';
 
+import { InlineLoadError } from '@/components/common/inline-load-error';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { trpc } from '@/lib/trpc/client';
@@ -23,7 +24,8 @@ export function ActTimingCard({ organizationId, leadId }: ActTimingCardProps) {
     { organizationId, leadId },
     { enabled: !!organizationId, retry: false }
   );
-  if (query.isError) return null;
+  // A failed request shows an error in the card (#431); only "not allowed" hides it
+  if (query.error?.data?.code === 'FORBIDDEN') return null;
   const data = query.data;
   if (data && !data.timing) return null;
 
@@ -43,7 +45,9 @@ export function ActTimingCard({ organizationId, leadId }: ActTimingCardProps) {
         <h2 className="text-sm font-semibold text-foreground">{t('title')}</h2>
         {data?.timing && !data.followed && <Badge color="gray">{t('notFollowed')}</Badge>}
       </div>
-      {!data?.timing ? (
+      {!data && query.isError ? (
+        <InlineLoadError onRetry={() => void query.refetch()} />
+      ) : !data?.timing ? (
         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" />
       ) : (
         <div className="space-y-2 text-sm">

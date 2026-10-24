@@ -1,4 +1,5 @@
-import type { Page } from '@playwright/test';
+import { randomInt } from 'node:crypto';
+import type { Page, Response } from '@playwright/test';
 
 /**
  * E2E test authentication helper
@@ -44,6 +45,38 @@ export const TEST_USERS = {
 } as const;
 
 /**
+ * A client address of its own (sent as X-Forwarded-For) for a test, as each person has in
+ * production. The proxy (lib/middleware/rate-limit.ts) and better-auth count sign-ins, sign-ups
+ * and session reads per address, and every test runs on the same machine: on one shared address,
+ * tests would use up each other's allowance (5 session reads a minute, #519) and fail at random.
+ */
+export function uniqueClientAddress(): string {
+  return `10.${randomInt(256)}.${randomInt(256)}.${randomInt(256)}`;
+}
+
+/**
+ * Submit the sign-in or sign-up form on the page and return better-auth's answer
+ *
+ * The forms report a refusal with a toast. The toaster is loaded after the page
+ * (app/providers.tsx) and sonner drops a toast raised before it is mounted, so the form is sent
+ * only once the toaster's region is on the page: on a busy runner, a test that sends the form
+ * right after the page loads would otherwise lose the toast it checks for
+ */
+export async function submitAuthForm(
+  page: Page,
+  endpoint: '/sign-in/email' | '/sign-up/email'
+): Promise<Response> {
+  await page.getByRole('region', { name: /^Notifications/ }).waitFor({ state: 'attached' });
+  const [response] = await Promise.all([
+    page.waitForResponse(
+      (r) => r.request().method() === 'POST' && new URL(r.url()).pathname === `/api/auth${endpoint}`
+    ),
+    page.click('form button[type="submit"]'),
+  ]);
+  return response;
+}
+
+/**
  * Navigate to login page and authenticate
  */
 export async function login(page: Page, user: TestUser): Promise<void> {
@@ -61,7 +94,7 @@ export async function login(page: Page, user: TestUser): Promise<void> {
 }
 
 /**
- * Logout from the application
+ * Logout from the application with the user menu in the header (components/header/UserDropdown.tsx)
  */
 export async function logout(page: Page): Promise<void> {
   // Click user menu

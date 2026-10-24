@@ -13,8 +13,9 @@ test.describe('AX migration landing page', () => {
     for (const name of [
       '基幹システムの移行から、AX化までを一貫してご支援',
       'ヒト・モノ・カネ・情報。すべてが、レガシーな基幹システムに縛られています',
-      '選ばれる理由',
-      '実際の画面でご確認いただけます',
+      'AXマイグレーションの3つの特長',
+      '移行の進め方、まずはご相談ください',
+      '受注入力の画面で、移行前後を見比べられます',
       'AX化の進め方',
       '対象となるシステム',
       '安心して任せられる理由',
@@ -51,7 +52,7 @@ test.describe('AX migration landing page', () => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('診断結果');
     await expect(page.getByRole('heading', { level: 1 })).toBeFocused();
     await expect(page.locator('#ax-hero-heading')).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: '選ばれる理由' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'AXマイグレーションの3つの特長' })).toHaveCount(0);
     await expect(page.locator('#faq')).toHaveCount(0);
     await expect(page.locator('#ax-diagnosis-heading')).toHaveCount(0);
     await expect(page.getByTestId('ax-floating-cta')).toHaveCount(0);
@@ -123,6 +124,47 @@ test.describe('Access landing page', () => {
     await expect(page).toHaveURL(
       /\/ja\/ax-migration\/access\?utm_source=e2e&ref=e2e-ref&from=ax-lp-targets-access$/
     );
+  });
+
+  test('keeps the phone CTA bar off the hero buttons, as on the main page (#425)', async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const page = await context.newPage();
+    await page.goto('/ja/ax-migration/access');
+    const bar = page.getByTestId('ax-floating-cta');
+    await expect(bar).toHaveAttribute('aria-hidden', 'true');
+    // The heading has scrolled away, the hero buttons are still on screen
+    await page.evaluate(() => {
+      const heading = document.getElementById('ax-hero-heading') as HTMLElement;
+      window.scrollTo(0, heading.getBoundingClientRect().bottom + window.scrollY + 10);
+    });
+    await expect(page.locator('#ax-hero-cta')).toBeInViewport();
+    await expect(bar).toHaveAttribute('aria-hidden', 'true');
+    await page.getByRole('heading', { name: 'そのままにしたときのリスク' }).scrollIntoViewIfNeeded();
+    await expect(bar).toHaveAttribute('aria-hidden', 'false');
+    await page.locator('#ax-consult').scrollIntoViewIfNeeded();
+    await expect(bar).toHaveAttribute('aria-hidden', 'true');
+    await page.locator('#diagnosis').scrollIntoViewIfNeeded();
+    await expect(bar).toHaveAttribute('aria-hidden', 'true');
+    await context.close();
+  });
+
+  test('shows the first question right after the hero button on phones (#425)', async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const page = await context.newPage();
+    await page.goto('/ja/ax-migration/access');
+    await page
+      .locator('#ax-hero-cta')
+      .getByRole('link', { name: /無料Web診断（Access版）をはじめる/ })
+      .click();
+    await expect(page).toHaveURL(/#diagnosis$/);
+    await expect(
+      page.locator('#diagnosis').getByText('このツールを直せる（変更できる）人は？')
+    ).toBeInViewport();
+    await context.close();
   });
 
   test('links back to the main landing page for AS/400 readers (#332)', async ({ page }) => {

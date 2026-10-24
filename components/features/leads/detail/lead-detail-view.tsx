@@ -13,6 +13,7 @@ import { LeadNextActionsCard } from '@/components/features/lead-follow-up/lead-n
 import { LeadHandoffLink } from '@/components/features/lead-handoff/lead-handoff-link';
 import { LeadHearingsCard } from '@/components/features/lead-hearings/lead-hearings-card';
 import { LeadPrepCard } from '@/components/features/lead-prep/lead-prep-card';
+import { LeadMqlBadges } from '@/components/features/leads/lead-mql-badge';
 import { MeetingRequestCard } from '@/components/features/meeting-requests/meeting-request-card';
 import { ObjectionCard } from '@/components/features/objection-card/objection-card';
 import { LeadProspectCard } from '@/components/features/prospects/lead-prospect-card';
@@ -40,7 +41,8 @@ import {
   isLeadTab,
 } from '@/lib/features/leads/detail-fields';
 import { isNextMeetingOverdue } from '@/lib/features/leads/list-query';
-import { DEAL_PHASES } from '@/lib/features/leads/types';
+import { leadMqlLevel } from '@/lib/features/leads/mql-level';
+import { DEAL_PHASES, hasLostReason } from '@/lib/features/leads/types';
 import { trpc } from '@/lib/trpc/client';
 import {
   AlertTriangle,
@@ -252,7 +254,8 @@ function LeadDetailContent({
 
   // A lost lead should say why; ask without getting in the way
   const handleLost = () => {
-    if (lead.lostReason) return;
+    // 保留 is dropped when the lead is lost (#445): it is no reason for the loss
+    if (hasLostReason(lead.lostReason)) return;
     toast(t('quick.lostReasonPrompt'), {
       action: {
         label: t('quick.lostReasonAction'),
@@ -304,11 +307,8 @@ function LeadDetailContent({
               canEdit={access.canEdit}
               className={access.canEdit ? HEADER_TAP : undefined}
             />
-            <Badge color="gray" data-testid="lead-score">
-              {typeof lead.score === 'number'
-                ? t('scoreValue', { score: lead.score })
-                : t('noScore')}
-            </Badge>
+            {/* The MQL level, not the score, says how promising the lead is (#447) */}
+            <LeadMqlBadges level={leadMqlLevel(lead.responses)} qualifiedAt={lead.mqlQualifiedAt} />
             {lead.hasNegotiated && <Badge color="emerald">{tLeads('hasNegotiated')}</Badge>}
             {/* The latest hearing's next meeting has passed with no newer hearing (#137) */}
             {lead.nextMeetingDate && isNextMeetingOverdue(lead) && (
@@ -424,6 +424,7 @@ function LeadDetailContent({
             <LeadDiagnosisCard
               responses={lead.responses}
               customFields={lead.customFields}
+              score={lead.score}
               onShowAnswers={showAnswers}
             />
             <ChallengeGuideCard organizationId={organizationId} leadId={lead.id} />

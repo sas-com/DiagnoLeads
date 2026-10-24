@@ -29,6 +29,8 @@ import {
   LEAD_SORT_KEYS,
   type LeadSortKey,
   type ListLeadsInput,
+  MQL_LEVEL_FILTERS,
+  type MqlLevelFilter,
   NEXT_MEETING_FILTERS,
   type NextMeetingFilter,
   SQL_DECISION_FILTERS,
@@ -63,6 +65,8 @@ export interface LeadListFilters {
   actTiming?: ActTimingFilter;
   /** Deal rating of the latest hearing, any of them (#137); left out when none is chosen */
   dealRating?: DealRating[];
+  /** MQL level of the diagnosis, any of them (#447); left out when none is chosen */
+  mqlLevel?: MqlLevelFilter[];
   /** Name, email or company */
   search?: string;
 }
@@ -119,6 +123,8 @@ export const FIRST_SORT_ORDER: Record<LeadSortKey, SortOrder> = {
   dealRating: 'asc',
   // Soonest first (#151)
   actBy: 'asc',
+  // 関心あり first (#447)
+  mqlLevel: 'asc',
 };
 
 /** Search param names. Short, readable, stable: links to the list depend on them. */
@@ -138,6 +144,7 @@ export const LEAD_LIST_PARAMS = {
   nextMeeting: 'next',
   actTiming: 'act',
   dealRating: 'rating',
+  mqlLevel: 'level',
   search: 'q',
   sortBy: 'sort',
   sortOrder: 'order',
@@ -188,6 +195,7 @@ export const leadListUrlSchema = z.object({
   [LEAD_LIST_PARAMS.nextMeeting]: z.enum(NEXT_MEETING_FILTERS).optional().catch(undefined),
   [LEAD_LIST_PARAMS.actTiming]: z.enum(ACT_TIMING_FILTERS).optional().catch(undefined),
   [LEAD_LIST_PARAMS.dealRating]: csvOf(DEAL_RATINGS),
+  [LEAD_LIST_PARAMS.mqlLevel]: csvOf(MQL_LEVEL_FILTERS),
   [LEAD_LIST_PARAMS.search]: z
     .string()
     .optional()
@@ -211,6 +219,11 @@ export function parseLeadListQuery(params: SearchParamsLike): LeadListQuery {
     raw[name] = params.get(name) || undefined;
   }
   const p = leadListUrlSchema.parse(raw);
+  // The score is no longer offered to sort by (#447): an old link sorted by it gets the default
+  if (p[LEAD_LIST_PARAMS.sortBy] === 'score') {
+    p[LEAD_LIST_PARAMS.sortBy] = undefined;
+    p[LEAD_LIST_PARAMS.sortOrder] = undefined;
+  }
 
   let scoreMin = p[LEAD_LIST_PARAMS.scoreMin];
   let scoreMax = p[LEAD_LIST_PARAMS.scoreMax];
@@ -241,6 +254,7 @@ export function parseLeadListQuery(params: SearchParamsLike): LeadListQuery {
       nextMeeting: p[LEAD_LIST_PARAMS.nextMeeting],
       actTiming: p[LEAD_LIST_PARAMS.actTiming],
       dealRating: p[LEAD_LIST_PARAMS.dealRating],
+      mqlLevel: p[LEAD_LIST_PARAMS.mqlLevel],
       search: p[LEAD_LIST_PARAMS.search],
     }),
     sort: {
@@ -280,6 +294,7 @@ export function serializeLeadListQuery(query: LeadListQuery): URLSearchParams {
   if (f.nextMeeting) params.set(LEAD_LIST_PARAMS.nextMeeting, f.nextMeeting);
   if (f.actTiming) params.set(LEAD_LIST_PARAMS.actTiming, f.actTiming);
   list(LEAD_LIST_PARAMS.dealRating, f.dealRating ?? []);
+  list(LEAD_LIST_PARAMS.mqlLevel, f.mqlLevel ?? []);
   if (f.search) params.set(LEAD_LIST_PARAMS.search, f.search);
   if (query.sort.by !== DEFAULT_LEAD_SORT.by || query.sort.order !== DEFAULT_LEAD_SORT.order) {
     params.set(LEAD_LIST_PARAMS.sortBy, query.sort.by);
@@ -328,6 +343,8 @@ export function normalizeFilters(filters: Partial<LeadListFilters>): LeadListFil
   if (filters.actTiming) result.actTiming = filters.actTiming;
   const dealRating = pick(DEAL_RATINGS, filters.dealRating);
   if (dealRating.length > 0) result.dealRating = dealRating;
+  const mqlLevel = pick(MQL_LEVEL_FILTERS, filters.mqlLevel);
+  if (mqlLevel.length > 0) result.mqlLevel = mqlLevel;
   if (search) result.search = search;
   return result;
 }
@@ -372,6 +389,7 @@ export function toLeadFilterInput(
   if (f.nextMeeting) input.nextMeeting = f.nextMeeting;
   if (f.actTiming) input.actTiming = f.actTiming;
   if (f.dealRating && f.dealRating.length > 0) input.dealRating = f.dealRating;
+  if (f.mqlLevel && f.mqlLevel.length > 0) input.mqlLevel = f.mqlLevel;
   if (f.search) input.search = f.search;
   return input;
 }
@@ -528,6 +546,7 @@ export type LeadFilterChip =
   | { kind: 'nextMeeting'; value: NextMeetingFilter }
   | { kind: 'actTiming'; value: ActTimingFilter }
   | { kind: 'dealRating'; value: DealRating }
+  | { kind: 'mqlLevel'; value: MqlLevelFilter }
   | { kind: 'search'; value: string };
 
 /** One chip per condition (one per selected value for the multi-selects) */
@@ -553,6 +572,7 @@ export function filterChips(filters: LeadListFilters): LeadFilterChip[] {
   if (filters.nextMeeting) chips.push({ kind: 'nextMeeting', value: filters.nextMeeting });
   if (filters.actTiming) chips.push({ kind: 'actTiming', value: filters.actTiming });
   for (const value of filters.dealRating ?? []) chips.push({ kind: 'dealRating', value });
+  for (const value of filters.mqlLevel ?? []) chips.push({ kind: 'mqlLevel', value });
   return chips;
 }
 
@@ -611,6 +631,9 @@ export function removeChip(filters: LeadListFilters, chip: LeadFilterChip): Lead
       break;
     case 'dealRating':
       next.dealRating = (filters.dealRating ?? []).filter((v) => v !== chip.value);
+      break;
+    case 'mqlLevel':
+      next.mqlLevel = (filters.mqlLevel ?? []).filter((v) => v !== chip.value);
       break;
     case 'search':
       next.search = undefined;

@@ -108,6 +108,8 @@ export async function POST(req: NextRequest) {
             submissionId: parsed.data.submissionId,
             // An answer tied to an existing lead only by email never replaces a verified request
             identityVerified: outcome.leadCreated || outcome.continued,
+            // Accepted for a day after the request, not for as long as the id is kept (#241)
+            requestedAt: outcome.requestedAt,
             preferences: parsed.data.preferences,
           },
           (task) => after(task)

@@ -32,10 +32,10 @@
     "i18n:check": "tsx scripts/check-i18n.ts",
     "columns:thumbnails": "bun run scripts/generate-column-thumbnails.ts",
     "i18n:check-hardcoded": "tsx scripts/check-hardcoded-strings.ts",
+    "memory:index": "bun scripts/memory-index.ts",
     "prepare": "git rev-parse --git-dir > /dev/null 2>&1 && lefthook install || true"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "1.2.12",
     "@anthropic-ai/sdk": "^1.3.0",
     "@asteasolutions/zod-to-openapi": "^8.1.0",
     "@aws-sdk/client-s3": "^3.1152.0",
@@ -78,7 +78,6 @@
     "@types/qrcode": "^1.5.6",
     "@upstash/redis": "^1.36.2",
     "@vercel/analytics": "2.0.1",
-    "ai": "4.1.61",
     "apexcharts": "^5.3.6",
     "better-auth": "~1.6.33",
     "class-variance-authority": "^0.7.1",
@@ -103,7 +102,6 @@
     "react-day-picker": "8.10.1",
     "react-dom": "^19.2.0",
     "react-hook-form": "^7.66.1",
-    "recharts": "^3.5.1",
     "resend": "^6.5.2",
     "sharp": "^0.35.5",
     "sonner": "1.7.0",

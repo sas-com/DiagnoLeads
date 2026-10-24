@@ -187,6 +187,25 @@ describe('Organizations Router', () => {
       expect(mockDb.update).toHaveBeenCalled();
     });
 
+    // #483: the settings belong to the features that write them, key by key
+    it('should never write settings, even when they are sent', async () => {
+      mockDb.query.organizationMembers.findFirst.mockResolvedValue(mockMembership);
+      mockDb.returning.mockResolvedValue([{ ...mockOrganization, name: 'Updated Name' }]);
+
+      const caller = appRouter.createCaller(mockContext);
+      await caller.organizations.update({
+        id: TEST_ORG_ID,
+        name: 'Updated Name',
+        slug: 'updated-slug',
+        settings: {},
+      } as Parameters<typeof caller.organizations.update>[0]);
+
+      expect(mockDb.set).toHaveBeenCalledTimes(1);
+      const written = mockDb.set.mock.calls[0][0];
+      expect(written).toMatchObject({ name: 'Updated Name', slug: 'updated-slug' });
+      expect(written).not.toHaveProperty('settings');
+    });
+
     it('should deny non-owner from updating', async () => {
       const adminMembership = { ...mockMembership, role: 'admin' as const };
       mockDb.query.organizationMembers.findFirst.mockResolvedValue(adminMembership);
@@ -236,6 +255,27 @@ describe('Organizations Router', () => {
 
       expect(result).toEqual(mockOrganization);
       expect(mockDb.insert).toHaveBeenCalledTimes(2); // Organization + Membership
+    });
+
+    // #483: a new organization starts with empty settings; features write their keys themselves
+    it('should create with empty settings, even when settings are sent', async () => {
+      mockDb.query.organizations.findFirst.mockResolvedValue(null);
+      mockDb.returning.mockResolvedValueOnce([mockOrganization]);
+      mockDb.values.mockReturnThis();
+      mockDb.insert.mockReturnThis();
+
+      const caller = appRouter.createCaller(mockContext);
+      await caller.organizations.create({
+        name: 'New Organization',
+        slug: 'new-org',
+        settings: { leadIntakeUserIds: ['user-123'] },
+      } as Parameters<typeof caller.organizations.create>[0]);
+
+      expect(mockDb.values.mock.calls[0][0]).toEqual({
+        name: 'New Organization',
+        slug: 'new-org',
+        settings: {},
+      });
     });
 
     it('should throw CONFLICT if slug is already taken', async () => {

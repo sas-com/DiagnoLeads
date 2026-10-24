@@ -30,6 +30,7 @@ import {
   SQL_DECISIONS,
   TARGET_SYSTEMS,
   createLeadSchema,
+  makesLostOnHold,
 } from '@/lib/features/leads/types';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
@@ -81,7 +82,6 @@ export function LeadForm({ lead, onSubmit, isLoading }: LeadFormProps) {
       company: lead?.company ?? '',
       phone: lead?.phone ?? '',
       status: (lead?.status as LeadStatus) ?? 'new',
-      score: lead?.score ?? undefined,
       source: (lead?.source as 'website' | 'embed' | 'api') ?? undefined,
       responses: lead?.responses ?? {},
       inflowSource: (lead?.inflowSource as FormValues['inflowSource']) ?? null,
@@ -101,13 +101,19 @@ export function LeadForm({ lead, onSubmit, isLoading }: LeadFormProps) {
   // consultation request, an MQL from another diagnosis, follow-up answers, a new score) are not
   // set back to what the form was opened with
   const submit = form.handleSubmit((values) => {
-    if (!lead) return onSubmit(values);
     const dirty = form.formState.dirtyFields as Partial<Record<keyof FormValues, unknown>>;
-    return onSubmit(
-      Object.fromEntries(
-        Object.entries(values).filter(([key]) => Boolean(dirty[key as keyof FormValues]))
-      ) as Partial<FormValues>
-    );
+    const changes = lead
+      ? (Object.fromEntries(
+          Object.entries(values).filter(([key]) => Boolean(dirty[key as keyof FormValues]))
+        ) as Partial<FormValues>)
+      : values;
+    // 保留 is not a loss (#445). The form shows the reason, so ask to choose again rather than
+    // let the server drop 保留 (it refuses 保留 sent with a lost lead too)
+    if (makesLostOnHold(lead, { status: values.status, lostReason: values.lostReason })) {
+      form.setError('lostReason', { message: t('lostOnHold') }, { shouldFocus: true });
+      return;
+    }
+    return onSubmit(changes);
   });
 
   return (
@@ -175,7 +181,13 @@ export function LeadForm({ lead, onSubmit, isLoading }: LeadFormProps) {
           render={({ field }) => (
             <FormItem>
               <FormLabel>{t('status')}</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value}>
+              <Select
+                onValueChange={(value) => {
+                  field.onChange(value);
+                  form.clearErrors('lostReason');
+                }}
+                value={field.value}
+              >
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder={t('status')} />
@@ -189,29 +201,6 @@ export function LeadForm({ lead, onSubmit, isLoading }: LeadFormProps) {
                   ))}
                 </SelectContent>
               </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="score"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t('score')} (0-100)</FormLabel>
-              <FormControl>
-                <Input
-                  type="number"
-                  min={0}
-                  max={100}
-                  {...field}
-                  value={field.value ?? ''}
-                  onChange={(e) =>
-                    field.onChange(e.target.value ? Number.parseInt(e.target.value) : undefined)
-                  }
-                />
-              </FormControl>
               <FormMessage />
             </FormItem>
           )}
@@ -233,7 +222,7 @@ export function LeadForm({ lead, onSubmit, isLoading }: LeadFormProps) {
                       value={field.value ?? NONE}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger ref={field.ref}>
                           <SelectValue placeholder={t('notSet')} />
                         </SelectTrigger>
                       </FormControl>

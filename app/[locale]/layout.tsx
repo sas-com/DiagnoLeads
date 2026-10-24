@@ -1,3 +1,5 @@
+import { SiteVisitBeacon } from '@/components/features/site-visits/site-visit-beacon';
+import { siteVisitsEnabled } from '@/lib/features/site-visits/enabled';
 import { ROOT_CLIENT_MESSAGES, pickMessages } from '@/lib/i18n/client-messages';
 import { type Locale, locales } from '@/lib/i18n/config';
 import { NOINDEX } from '@/lib/seo/indexing';
@@ -107,6 +109,8 @@ export default async function LocaleLayout({
         {/* Vercel Web Analytics (#222): page views, no cookies. Its script is same-origin
             (/_vercel/insights) and added by a nonced script, so the CSP allows it */}
         <Analytics />
+        {/* The site's own visit measurement (#412): public pages only, while it is on */}
+        {siteVisitsEnabled() && <SiteVisitBeacon />}
       </body>
     </html>
   );
