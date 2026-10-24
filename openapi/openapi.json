@@ -575,48 +575,6 @@
           }
         }
       }
-    },
-    "/api/chat": {
-      "post": {
-        "summary": "Chat with AI assistant",
-        "description": "Send a message to the AI assistant and receive a streaming response",
-        "tags": ["AI"],
-        "security": [{ "bearerAuth": [] }],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "messages": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "role": { "type": "string", "enum": ["user", "assistant", "system"] },
-                        "content": { "type": "string" }
-                      },
-                      "required": ["role", "content"]
-                    }
-                  }
-                },
-                "required": ["messages"]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Streaming AI response",
-            "content": {
-              "text/event-stream": {
-                "schema": { "type": "string" }
-              }
-            }
-          }
-        }
-      }
     }
   },
   "components": {
