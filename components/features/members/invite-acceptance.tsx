@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { authClient, useSession } from '@/lib/auth/client';
+import { VERIFY_IN_SIGNED_IN_BROWSER } from '@/lib/auth/verify-email-guard';
 import { useOrganizationContext } from '@/lib/context/organization-context';
 import { trpc } from '@/lib/trpc/client';
 import { useLocale, useTranslations } from 'next-intl';
@@ -17,11 +18,14 @@ import { useEffect, useState } from 'react';
  */
 export function InviteAcceptance({
   token,
-  verificationFailed = false,
+  verificationError,
 }: {
   token: string;
-  /** The verification link came back with an error (expired or invalid) */
-  verificationFailed?: boolean;
+  /**
+   * Error code the verification link came back with: opened outside the signed-in browser, or
+   * expired or invalid
+   */
+  verificationError?: string;
 }) {
   const t = useTranslations('settings.auth.invite');
   const locale = useLocale();
@@ -67,6 +71,12 @@ export function InviteAcceptance({
   });
 
   const back = `/${locale}/invite/${token}`;
+  const verificationErrorText =
+    verificationError === undefined
+      ? null
+      : verificationError === VERIFY_IN_SIGNED_IN_BROWSER
+        ? t('verifyInSignedInBrowser')
+        : t('verifyLinkFailed');
 
   if (preview.isLoading || session.isPending) {
     return <Panel>{t('loading')}</Panel>;
@@ -121,6 +131,11 @@ export function InviteAcceptance({
     return (
       <Panel title={t('title')}>
         {summary}
+        {verificationErrorText && (
+          <p className="mt-4 text-sm text-red-600" role="alert">
+            {verificationErrorText}
+          </p>
+        )}
         <div className="mt-6 space-y-3">
           <Button asChild className="w-full">
             <Link href={`/${locale}/signup?${signupQuery}`}>{t('signUpToJoin')}</Link>
@@ -170,9 +185,9 @@ export function InviteAcceptance({
       <Panel title={t('title')}>
         {summary}
         <p className="mt-4 text-sm">{t('verifyFirst', { email: invitation.email })}</p>
-        {verificationFailed && verification === 'idle' && (
+        {verificationErrorText && verification === 'idle' && (
           <p className="mt-4 text-sm text-red-600" role="alert">
-            {t('verifyLinkFailed')}
+            {verificationErrorText}
           </p>
         )}
         {verification === 'sent' && (

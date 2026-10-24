@@ -65,10 +65,10 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mocks.push, refresh: mocks.refresh }),
 }));
 
-const renderPage = ({ verificationFailed = false } = {}) =>
+const renderPage = ({ verificationError }: { verificationError?: string } = {}) =>
   render(
     <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
-      <InviteAcceptance token={TOKEN} verificationFailed={verificationFailed} />
+      <InviteAcceptance token={TOKEN} verificationError={verificationError} />
     </NextIntlClientProvider>
   );
 
@@ -154,9 +154,28 @@ describe('InviteAcceptance', () => {
         data: { user: { email: 'new@example.com', emailVerified: false } },
         isPending: false,
       };
-      renderPage({ verificationFailed: true });
+      renderPage({ verificationError: 'INVALID_TOKEN' });
 
       expect(screen.getByRole('alert')).toHaveTextContent('確認のリンクの有効期限が切れているか');
+    });
+
+    it('asks to open the link in the signed-in browser when it was opened elsewhere', () => {
+      mocks.session = {
+        data: { user: { email: 'new@example.com', emailVerified: false } },
+        isPending: false,
+      };
+      renderPage({ verificationError: 'VERIFY_IN_SIGNED_IN_BROWSER' });
+
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        '確認のリンクは、登録したときと同じブラウザで、ログインしたまま開いてください'
+      );
+    });
+
+    it('says the same to someone signed out who opened the link', () => {
+      renderPage({ verificationError: 'VERIFY_IN_SIGNED_IN_BROWSER' });
+
+      expect(screen.getByRole('alert')).toHaveTextContent('ログインしてから、確認メールをもう一度送ってください。');
+      expect(screen.getByRole('link', { name: 'ログインして参加する（アカウントをお持ちの方）' })).toBeInTheDocument();
     });
 
     it('offers to join on coming back from the link, although the session cookie is stale', async () => {

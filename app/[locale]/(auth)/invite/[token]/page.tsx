@@ -13,5 +13,6 @@ export default async function InvitePage({
 }) {
   const { token } = await params;
   const { error } = await searchParams;
-  return <InviteAcceptance token={token} verificationFailed={error !== undefined} />;
+  const verificationError = typeof error === 'string' ? error : error?.[0];
+  return <InviteAcceptance token={token} verificationError={verificationError} />;
 }
