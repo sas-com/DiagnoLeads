@@ -40,6 +40,19 @@ describe('contentSecurityPolicy with GA4', () => {
     ]);
   });
 
+  it('adds the image hosts of Google’s CSP guide, Google signals included', () => {
+    expect(directive(contentSecurityPolicy('n', false, { analytics: true }), 'img-src')).toEqual([
+      "'self'",
+      'blob:',
+      'data:',
+      'https://*.google-analytics.com',
+      'https://*.googletagmanager.com',
+      'https://*.g.doubleclick.net',
+      'https://*.google.com',
+      'https://*.google.co.jp',
+    ]);
+  });
+
   it('keeps scripts to the nonce in production (gtag.js comes through strict-dynamic)', () => {
     expect(directive(contentSecurityPolicy('n', false, { analytics: true }), 'script-src')).toEqual([
       "'self'",

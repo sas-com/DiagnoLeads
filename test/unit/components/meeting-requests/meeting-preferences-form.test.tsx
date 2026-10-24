@@ -9,15 +9,24 @@ import messages from '@/locales/ja/common.json';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
+import type { ComponentProps } from 'react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const SUBMISSION_ID = '33333333-3333-4333-8333-333333333333';
 const fetchMock = vi.fn();
 
-const renderForm = (onSaved = vi.fn()) =>
+const renderForm = (
+  onSaved = vi.fn(),
+  props: Pick<ComponentProps<typeof MeetingPreferencesForm>, 'duration' | 'fixedFormat'> = {}
+) =>
   render(
     <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
-      <MeetingPreferencesForm endpoint="/api/x/consultation" submissionId={SUBMISSION_ID} onSaved={onSaved} />
+      <MeetingPreferencesForm
+        endpoint="/api/x/consultation"
+        submissionId={SUBMISSION_ID}
+        onSaved={onSaved}
+        {...props}
+      />
     </NextIntlClientProvider>
   );
 
@@ -202,6 +211,21 @@ describe('MeetingPreferencesForm', () => {
       },
     });
     expect(onSaved).toHaveBeenCalled();
+  });
+
+  it('shows another duration and sends the only format without asking (#455)', async () => {
+    const user = userEvent.setup();
+    answer(200, { ok: true, preferences: 'saved' });
+    renderForm(vi.fn(), { duration: '所要時間の目安：30分程度（オンライン）', fixedFormat: 'online' });
+    expect(screen.getByText('所要時間の目安：30分程度（オンライン）')).toBeInTheDocument();
+    expect(screen.queryByText('所要時間の目安：60分程度')).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'ご希望の形式' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('訪問')).not.toBeInTheDocument();
+
+    await pickDate(user, 1, 20);
+    await user.click(screen.getByRole('button', { name: '希望日時を送る' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).preferences.meetingFormat).toBe('online');
   });
 
   it('sends no topics and no note when none were given', async () => {

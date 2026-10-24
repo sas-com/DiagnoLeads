@@ -164,6 +164,7 @@ interface LeadTableProps {
   getLeadHref?: (lead: LeadWithTags) => string;
   onEdit?: (lead: LeadWithTags) => void;
   onDelete?: (lead: LeadWithTags) => void;
+  /** Reloads the list: after bulk actions, and the retry when it could not be loaded */
   onRefresh?: () => void;
   /** Status and deal phase change in place; read-only roles get plain badges (Refs #109) */
   canEdit?: boolean;
@@ -185,6 +186,10 @@ interface LeadTableProps {
   /** Filters are applied: an empty page means "no match", not "no leads yet" */
   hasFilters?: boolean;
   onClearFilters?: () => void;
+  /** The list request failed: an empty page shows an error with a retry (onRefresh) (#431) */
+  loadFailed?: boolean;
+  /** Opens the create dialog from "no leads yet"; left out for roles that cannot create leads */
+  onCreate?: () => void;
   /** Renders the toolbar above the table; gets the columns and export menus to place */
   toolbar?: (actions: ReactNode) => ReactNode;
   /**
@@ -222,6 +227,8 @@ export function LeadTable({
   onColumnPreferencesChange,
   hasFilters = false,
   onClearFilters,
+  loadFailed = false,
+  onCreate,
   toolbar,
   onExport,
   exporting = false,
@@ -280,19 +287,24 @@ export function LeadTable({
             (table.getIsSomePageRowsSelected() && 'indeterminate')
           }
           onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label="Select all"
+          aria-label={tCommon('selectAll')}
           className="translate-y-[2px]"
         />
       ),
-      cell: ({ row }) => (
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label="Select row"
-          className="translate-y-[2px]"
-          onClick={(e) => e.stopPropagation()}
-        />
-      ),
+      cell: ({ row }) => {
+        const { company, name, email } = row.original;
+        return (
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(value) => row.toggleSelected(!!value)}
+            aria-label={tList('selectRow', {
+              name: [company, name].filter(Boolean).join(' ') || email || t('nameNotSet'),
+            })}
+            className="translate-y-[2px]"
+            onClick={(e) => e.stopPropagation()}
+          />
+        );
+      },
       enableSorting: false,
       enableHiding: false,
     },
@@ -853,6 +865,9 @@ export function LeadTable({
           onLost={onLost}
           hasFilters={hasFilters}
           onClearFilters={onClearFilters}
+          loadFailed={loadFailed}
+          onRetry={onRefresh}
+          onCreate={onCreate}
         />
       ) : (
         /* Table */
@@ -898,7 +913,13 @@ export function LeadTable({
               ) : (
                 <TableRow>
                   <TableCell colSpan={columns.length} className="h-64 text-center">
-                    <LeadListEmpty hasFilters={hasFilters} onClearFilters={onClearFilters} />
+                    <LeadListEmpty
+                      hasFilters={hasFilters}
+                      onClearFilters={onClearFilters}
+                      loadFailed={loadFailed}
+                      onRetry={onRefresh}
+                      onCreate={onCreate}
+                    />
                   </TableCell>
                 </TableRow>
               )}

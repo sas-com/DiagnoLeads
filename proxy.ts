@@ -11,6 +11,7 @@ import {
   getRateLimitConfig,
   setRateLimitHeaders,
 } from './lib/middleware/rate-limit';
+import { SECURITY_HEADERS } from './lib/middleware/security-headers';
 
 /**
  * Security headers including CSP
@@ -31,13 +32,7 @@ function getSecurityHeaders(request: NextRequest) {
     }),
 
     // セキュリティヘッダー
-    'X-DNS-Prefetch-Control': 'on',
-    'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
-    'X-Frame-Options': 'DENY',
-    'X-Content-Type-Options': 'nosniff',
-    'X-XSS-Protection': '1; mode=block',
-    'Referrer-Policy': 'strict-origin-when-cross-origin',
-    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+    ...SECURITY_HEADERS,
 
     // CSP nonce for inline scripts
     'X-Nonce': nonce,
@@ -127,11 +122,15 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - public files
-     * - admin (PayloadCMS admin panel)
+     * - images/, fonts/ (the folders of public/), by name: any other path gets the headers,
+     *   also when it ends like a file (app/icon.svg is served by the app, #68)
+     * - admin (PayloadCMS admin panel), that segment only: off in production (vercel.json sends
+     *   it to the dashboard), and the strict policy would block the <style> elements its UI
+     *   adds (react-select, sonner). Its headers are decided before the CMS is turned on in
+     *   production (#525, Epic #339 P12)
      * - _vercel (Vercel Web Analytics script and endpoint, #222)
      */
-    '/((?!_next/static|_next/image|_vercel|favicon.ico|admin|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|_vercel|favicon.ico|images/|fonts/|admin(?:/|$)).*)',
     // Pages of each language, even when the last segment looks like an image ("y.png" can be
     // a page id): they need the sign-in redirect and the security headers
     '/(ja|en)/:path*',

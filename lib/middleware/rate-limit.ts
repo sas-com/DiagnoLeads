@@ -50,17 +50,21 @@ export const ENDPOINT_RATE_LIMITS: Record<string, RateLimitConfig> = {
   // better-auth endpoint paths (/api/auth/sign-in/email, /api/auth/sign-up/email)
   '/api/auth/sign-in': { max: 5, windowMs: 60 * 1000 },
   '/api/auth/sign-up': { max: 3, windowMs: 60 * 1000 },
-  '/api/auth/forgot-password': { max: 3, windowMs: 60 * 1000 },
+  // better-auth's password reset request (the old /forgot-password path no longer exists)
+  '/api/auth/request-password-reset': { max: 3, windowMs: 60 * 1000 },
   '/api/auth/reset-password': { max: 3, windowMs: 60 * 1000 },
+  '/api/auth/send-verification-email': { max: 3, windowMs: 60 * 1000 },
+  // Reading the session: every page asks for it (useSession), so the strict auth limit (5 a
+  // minute per IP) made signed-in staff behind one office IP look signed out (#519). Nothing
+  // to guess here, so it counts like other API reads.
+  '/api/auth/get-session': DEFAULT_RATE_LIMITS.api,
 
   // AI機能
   '/api/trpc/ai.scoreLeads': { max: 10, windowMs: 60 * 1000 },
-  '/api/trpc/ai.chat': { max: 30, windowMs: 60 * 1000 },
   '/api/trpc/ai.search': { max: 30, windowMs: 60 * 1000 },
 
   // エクスポート
   '/api/trpc/leads.export': { max: 5, windowMs: 60 * 1000 },
-  '/api/trpc/reports.export': { max: 5, windowMs: 60 * 1000 },
   '/api/trpc/auditLogs.export': { max: 3, windowMs: 60 * 1000 },
 
   // バルク操作
@@ -90,8 +94,6 @@ export const ENDPOINT_RATE_LIMITS: Record<string, RateLimitConfig> = {
   // Diagnoses made in the builder: /api/diagnoses/[slug]/submit and /consultation (prefix)
   '/api/diagnoses/': { max: 10, windowMs: 60 * 1000 },
   '/api/diagnostic': { max: 30, windowMs: 60 * 1000 },
-  '/api/embed/v1/diagnostic': { max: 60, windowMs: 60 * 1000 },
-  '/api/embed/v1/lead': { max: 60, windowMs: 60 * 1000 },
 
   // Unsubscribe of respondent mail (#154): the page button, and the RFC 8058 one-click POST,
   // which mail providers send from their servers (one address speaks for many recipients).
@@ -269,6 +271,7 @@ export function getRateLimitConfig(pathname: string): RateLimitConfig {
   }
 
   // 診断フォーム
+  // 'embed': the embed settings screen's tRPC calls (/api/trpc/embed.*)
   if (pathname.includes('diagnostic') || pathname.includes('embed')) {
     return DEFAULT_RATE_LIMITS.diagnostic;
   }

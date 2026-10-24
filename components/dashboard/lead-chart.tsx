@@ -16,7 +16,7 @@ interface LeadChartProps {
 }
 
 /**
- * LeadChart component using recharts AreaChart
+ * LeadChart component using the ApexCharts AreaChart from components/charts
  * Displays lead trends over time with total and converted leads
  */
 export function LeadChart({

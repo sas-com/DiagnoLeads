@@ -2,7 +2,7 @@
  * Select Component Tests
  */
 
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import {
   Select,
@@ -296,5 +296,34 @@ describe('Select accessibility', () => {
       </Select>
     );
     expect(screen.getByRole('listbox')).toBeInTheDocument();
+  });
+});
+
+describe('Select under the CSP', () => {
+  // Removed even when the test fails, so later tests see no nonce
+  afterEach(() => {
+    for (const script of document.querySelectorAll('script[nonce]')) script.remove();
+  });
+
+  it('gives the <style> of the open list the page’s nonce (#317)', () => {
+    const script = document.createElement('script');
+    script.setAttribute('nonce', 'abc123');
+    document.head.appendChild(script);
+
+    render(
+      <Select defaultOpen>
+        <SelectTrigger>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="1">Option</SelectItem>
+        </SelectContent>
+      </Select>
+    );
+    const styles = [...document.querySelectorAll('style')].filter((style) =>
+      style.textContent?.includes('[data-radix-select-viewport]')
+    );
+    expect(styles.length).toBeGreaterThan(0);
+    for (const style of styles) expect(style.getAttribute('nonce')).toBe('abc123');
   });
 });

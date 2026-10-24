@@ -2,11 +2,7 @@
 
 import { cn } from '@/lib/utils';
 import type { ApexOptions } from 'apexcharts';
-import dynamic from 'next/dynamic';
-
-const ReactApexChart = dynamic(() => import('react-apexcharts'), {
-  ssr: false,
-});
+import { ApexChart } from './apex-chart';
 
 const COLORS = {
   blue: '#3b82f6',
@@ -85,7 +81,7 @@ export function SparkAreaChart({
 
   return (
     <div className={cn('w-full h-full', className)}>
-      <ReactApexChart options={options} series={series} type="area" height={height} />
+      <ApexChart options={options} series={series} type="area" height={height} />
     </div>
   );
 }

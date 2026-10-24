@@ -18,20 +18,16 @@ describe('AppRouter expected structure', () => {
     'notifications',
     'tags',
     'comments',
-    'reports',
     'workflows',
-    'customFields',
     'filters',
-    'customReports',
     'diagnosticTemplates',
     'abTests',
-    'scoringRules',
     'embed',
     'distribution',
   ];
 
-  it('should have 22 expected routers', () => {
-    expect(expectedRouters.length).toBe(22);
+  it('should have 18 expected routers', () => {
+    expect(expectedRouters.length).toBe(18);
   });
 
   it('should include health router', () => {
@@ -82,24 +78,12 @@ describe('AppRouter expected structure', () => {
     expect(expectedRouters).toContain('comments');
   });
 
-  it('should include reports router', () => {
-    expect(expectedRouters).toContain('reports');
-  });
-
   it('should include workflows router', () => {
     expect(expectedRouters).toContain('workflows');
   });
 
-  it('should include customFields router', () => {
-    expect(expectedRouters).toContain('customFields');
-  });
-
   it('should include filters router', () => {
     expect(expectedRouters).toContain('filters');
-  });
-
-  it('should include customReports router', () => {
-    expect(expectedRouters).toContain('customReports');
   });
 
   it('should include diagnosticTemplates router', () => {
@@ -108,10 +92,6 @@ describe('AppRouter expected structure', () => {
 
   it('should include abTests router', () => {
     expect(expectedRouters).toContain('abTests');
-  });
-
-  it('should include scoringRules router', () => {
-    expect(expectedRouters).toContain('scoringRules');
   });
 
   it('should include embed router', () => {
@@ -125,7 +105,7 @@ describe('AppRouter expected structure', () => {
 
 describe('Router naming conventions', () => {
   it('should use camelCase for router names', () => {
-    const routers = ['customFields', 'customReports', 'diagnosticTemplates', 'abTests', 'scoringRules'];
+    const routers = ['diagnosticTemplates', 'abTests'];
     for (const router of routers) {
       expect(router).toMatch(/^[a-z][a-zA-Z]*$/);
     }
@@ -151,7 +131,7 @@ describe('Router categories', () => {
   });
 
   it('should have advanced routers', () => {
-    const advancedRouters = ['workflows', 'customFields', 'customReports', 'abTests', 'scoringRules'];
-    expect(advancedRouters.length).toBe(5);
+    const advancedRouters = ['workflows', 'abTests'];
+    expect(advancedRouters.length).toBe(2);
   });
 });
