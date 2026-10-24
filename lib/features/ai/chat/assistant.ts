@@ -1,14 +1,14 @@
 /**
  * AI lead summary
  *
- * Summarizes a lead with Claude through the Vercel AI SDK (ai.generateSummary).
+ * Summarizes a lead with Claude through the Anthropic SDK (ai.generateSummary).
  */
 
-import { createAnthropic } from '@ai-sdk/anthropic';
-import { type LanguageModel, streamText } from 'ai';
+import Anthropic from '@anthropic-ai/sdk';
 
-// Initialize Anthropic provider
-const anthropic = createAnthropic({
+// The summary uses the Anthropic SDK directly: `ai` 4.x sends temperature 0 when none is
+// given, and Claude Sonnet 5.5 rejects non-default sampling parameters
+const anthropicClient = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
@@ -38,18 +38,19 @@ Notes: ${lead.notes || 'N/A'}
 Focus on key business value and next steps.`;
 
   try {
-    const result = await streamText({
-      model: anthropic('claude-sonnet-4-20250514') as LanguageModel,
-      prompt,
+    const message = await anthropicClient.messages.create({
+      model: 'claude-sonnet-5-5',
+      max_tokens: 8000,
+      output_config: { effort: 'low' },
+      messages: [{ role: 'user', content: prompt }],
     });
 
-    // Convert stream to text
-    let summary = '';
-    for await (const textPart of result.textStream) {
-      summary += textPart;
-    }
+    // Thinking blocks come before the text, so collect only the text blocks
+    const summary = message.content
+      .map((block) => (block.type === 'text' ? block.text : ''))
+      .join('');
 
-    return summary.trim();
+    return summary.trim() || 'Unable to generate summary';
   } catch (error) {
     console.error('Error generating lead summary:', error);
     return 'Unable to generate summary';

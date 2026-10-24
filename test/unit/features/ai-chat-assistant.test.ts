@@ -1,15 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock the AI SDK
-vi.mock('@ai-sdk/anthropic', () => ({
-  createAnthropic: vi.fn(() => vi.fn()),
+const { mockCreate } = vi.hoisted(() => ({ mockCreate: vi.fn() }));
+
+vi.mock('@anthropic-ai/sdk', () => ({
+  default: class MockAnthropic {
+    messages = { create: mockCreate };
+  },
 }));
 
-vi.mock('ai', () => ({
-  streamText: vi.fn(),
-}));
-
-import { streamText } from 'ai';
 import { generateLeadSummary } from '@/lib/features/ai/chat/assistant';
 
 describe('ai-chat-assistant', () => {
@@ -18,18 +16,15 @@ describe('ai-chat-assistant', () => {
   });
 
   describe('generateLeadSummary', () => {
+    const textResponse = (...texts: string[]) => ({
+      content: [
+        { type: 'thinking', thinking: '', signature: 'sig' },
+        ...texts.map((text) => ({ type: 'text', text })),
+      ],
+    });
+
     it('should generate summary for a lead', async () => {
-      const mockTextStream = {
-        [Symbol.asyncIterator]: async function* () {
-          yield 'This is ';
-          yield 'a lead ';
-          yield 'summary.';
-        },
-      };
-      const mockResponse = {
-        textStream: mockTextStream,
-      };
-      (streamText as ReturnType<typeof vi.fn>).mockResolvedValue(mockResponse);
+      mockCreate.mockResolvedValue(textResponse('This is ', 'a lead summary.'));
 
       const lead = {
         name: 'John Doe',
@@ -43,24 +38,15 @@ describe('ai-chat-assistant', () => {
 
       const result = await generateLeadSummary(lead);
 
-      expect(streamText).toHaveBeenCalledWith(
-        expect.objectContaining({
-          prompt: expect.stringContaining('John Doe'),
-        })
-      );
+      const request = mockCreate.mock.calls[0][0];
+      expect(request.model).toBe('claude-sonnet-5-5');
+      expect(request).not.toHaveProperty('temperature');
+      expect(request.messages[0].content).toContain('John Doe');
       expect(result).toBe('This is a lead summary.');
     });
 
     it('should handle lead with null fields', async () => {
-      const mockTextStream = {
-        [Symbol.asyncIterator]: async function* () {
-          yield 'Summary for unknown lead.';
-        },
-      };
-      const mockResponse = {
-        textStream: mockTextStream,
-      };
-      (streamText as ReturnType<typeof vi.fn>).mockResolvedValue(mockResponse);
+      mockCreate.mockResolvedValue(textResponse('Summary for unknown lead.'));
 
       const lead = {
         name: null,
@@ -74,61 +60,38 @@ describe('ai-chat-assistant', () => {
 
       const result = await generateLeadSummary(lead);
 
-      expect(streamText).toHaveBeenCalledWith(
-        expect.objectContaining({
-          prompt: expect.stringContaining('N/A'),
-        })
-      );
+      expect(mockCreate.mock.calls[0][0].messages[0].content).toContain('N/A');
       expect(result).toBe('Summary for unknown lead.');
     });
 
     it('should handle partial lead data', async () => {
-      const mockTextStream = {
-        [Symbol.asyncIterator]: async function* () {
-          yield 'Partial summary.';
-        },
-      };
-      const mockResponse = {
-        textStream: mockTextStream,
-      };
-      (streamText as ReturnType<typeof vi.fn>).mockResolvedValue(mockResponse);
+      mockCreate.mockResolvedValue(textResponse('Partial summary.'));
 
-      const lead = {
-        name: 'Jane',
-        company: 'Acme',
-      };
-
-      const result = await generateLeadSummary(lead);
+      const result = await generateLeadSummary({ name: 'Jane', company: 'Acme' });
 
       expect(result).toBe('Partial summary.');
     });
 
     it('should return error message on API failure', async () => {
-      (streamText as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('API Error'));
+      mockCreate.mockRejectedValue(new Error('API Error'));
 
-      const lead = {
-        name: 'Test Lead',
-      };
+      const result = await generateLeadSummary({ name: 'Test Lead' });
 
-      const result = await generateLeadSummary(lead);
+      expect(result).toBe('Unable to generate summary');
+    });
+
+    it('should return error message when there is no text', async () => {
+      mockCreate.mockResolvedValue(textResponse());
+
+      const result = await generateLeadSummary({ name: 'Test Lead' });
 
       expect(result).toBe('Unable to generate summary');
     });
 
     it('should trim whitespace from summary', async () => {
-      const mockTextStream = {
-        [Symbol.asyncIterator]: async function* () {
-          yield '  Summary with spaces  ';
-        },
-      };
-      const mockResponse = {
-        textStream: mockTextStream,
-      };
-      (streamText as ReturnType<typeof vi.fn>).mockResolvedValue(mockResponse);
+      mockCreate.mockResolvedValue(textResponse('  Summary with spaces  '));
 
-      const lead = { name: 'Test' };
-
-      const result = await generateLeadSummary(lead);
+      const result = await generateLeadSummary({ name: 'Test' });
 
       expect(result).toBe('Summary with spaces');
     });
