@@ -36,4 +36,5 @@ Claude Code では、読んだ・編集したファイルに関係する決定�
 
 - 古くなった決定を `superseded` にする。`paths` がずれていれば直す（ずれはユニットテストが検出する）
 - 学びの重複をまとめる
-- Claude Code の `/doctor prompt-audit` で、CLAUDE.md や記録の古い・矛盾した指示を探す
+- Claude Code の `/doctor prompt-audit`（CLAUDE.md と `.claude/`）と `/doctor prompt-audit .factory/memory`（記録。既定の対象外なのでパスを渡す）で、古い・矛盾した指示を探す
+- Anthropic の公式の変更（Claude Code の変更履歴、モデルの提供終了の予定）を確かめ、CLAUDE.md・`.claude/`・`lib/features/ai/` を見直す（スキル `official-check`）
