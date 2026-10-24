@@ -61,7 +61,6 @@ export function LeadCard({ lead, href, onOpen, organizationId, canEdit, onLost }
   const secondary = lead.company ? person || lead.email : person ? lead.email : null;
   const label = [primary, lead.company ? person : null].filter(Boolean).join(' ');
   const editable = canEdit && !!organizationId;
-  const hasScore = typeof lead.score === 'number';
   const consultation = lead.conversionPoint === 'consultation';
 
   // Covers the whole card; the focus ring is drawn on the cover
@@ -102,15 +101,6 @@ export function LeadCard({ lead, href, onOpen, organizationId, canEdit, onLost }
             </p>
           )}
         </div>
-        {hasScore && (
-          <p className="shrink-0 text-right leading-none" data-testid="lead-card-score">
-            <span className="sr-only">{t('score')} </span>
-            <span className="text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100">
-              {lead.score}
-            </span>
-            <span className="text-xs text-gray-500 dark:text-gray-400">/100</span>
-          </p>
-        )}
       </div>
 
       {/* Above the card's link: changing a value does not open the lead */}

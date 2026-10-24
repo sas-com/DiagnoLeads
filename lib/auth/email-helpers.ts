@@ -140,6 +140,10 @@ export function generateVerificationEmail(
             type: 'paragraph',
             text: 'DiagnoLeadsへのご登録ありがとうございます。\n以下のボタンからメールアドレスを確認してください。',
           },
+          {
+            type: 'paragraph',
+            text: 'ボタンは、登録したときと同じブラウザで、ログインしたまま開いてください。別の端末やメールアプリから開くと確認できません。',
+          },
           { type: 'button', label: 'メールアドレスを確認する', url },
           {
             type: 'notice',
@@ -163,6 +167,10 @@ export function generateVerificationEmail(
         {
           type: 'paragraph',
           text: 'Thank you for registering with DiagnoLeads.\nClick the button below to verify your email.',
+        },
+        {
+          type: 'paragraph',
+          text: 'Open it in the same browser you signed up in, while signed in. Opening it on another device or in a mail app does not work.',
         },
         { type: 'button', label: 'Verify email', url },
         {

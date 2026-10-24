@@ -154,7 +154,8 @@ describe('LeadTable on a phone (cards, #110)', () => {
     expect(
       within(card).getByRole('combobox', { name: '担当者を変更（現在：佐藤 花子）' })
     ).toBeInTheDocument();
-    expect(within(card).getByTestId('lead-card-score')).toHaveTextContent('スコア 72/100');
+    // The MQL level, not the score, says how promising the lead is (#447)
+    expect(within(card).queryByTestId('lead-card-score')).not.toBeInTheDocument();
     expect(within(card).getByText('2020/01/10')).toBeInTheDocument();
     expect(within(card).getByTestId('next-meeting-overdue')).toHaveTextContent(t.overdue);
     expect(within(card).getByText(t.mql)).toHaveAttribute('title', 'MQL判定日：2026/10/01');
@@ -163,7 +164,6 @@ describe('LeadTable on a phone (cards, #110)', () => {
     // No company and no name: the email leads; empty facts are left out
     const bare = screen.getByRole('listitem', { name: 'hanako@example.jp' });
     expect(within(bare).getByRole('link', { name: 'hanako@example.jp' })).toBeInTheDocument();
-    expect(within(bare).queryByTestId('lead-card-score')).not.toBeInTheDocument();
     expect(within(bare).queryByText(t.mql)).not.toBeInTheDocument();
     expect(within(bare).queryByText(t.consultation)).not.toBeInTheDocument();
     expect(
@@ -220,8 +220,10 @@ describe('LeadTable on a phone (cards, #110)', () => {
     const sortBy = screen.getByRole('combobox', { name: '並び替え（今は作成日）' });
 
     await user.click(sortBy);
-    await user.click(await screen.findByRole('option', { name: 'スコア' }));
-    expect(props.onSort).toHaveBeenLastCalledWith('score');
+    // No score to sort by (#447)
+    expect(screen.queryByRole('option', { name: 'スコア' })).not.toBeInTheDocument();
+    await user.click(await screen.findByRole('option', { name: '会社名' }));
+    expect(props.onSort).toHaveBeenLastCalledWith('company');
 
     await user.click(screen.getByRole('button', { name: '並び順を反対にする（今は降順）' }));
     expect(props.onSort).toHaveBeenLastCalledWith('createdAt');
@@ -253,6 +255,36 @@ describe('LeadTable on a phone (cards, #110)', () => {
   it('says when there are no leads yet', () => {
     renderList({ leads: [], total: 0 });
     expect(screen.getByText(messages.leads.noLeads)).toBeInTheDocument();
+    // Roles that cannot create leads get no create button (#431)
+    expect(
+      screen.queryByRole('button', { name: messages.leads.addFirstLead })
+    ).not.toBeInTheDocument();
+  });
+
+  it('creates the first lead from there (#431)', async () => {
+    const user = userEvent.setup();
+    const onCreate = vi.fn();
+    renderList({ leads: [], total: 0, onCreate });
+    await user.click(screen.getByRole('button', { name: messages.leads.addFirstLead }));
+    expect(onCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('says the list could not be loaded, with a retry, not "no leads yet" (#431)', async () => {
+    const user = userEvent.setup();
+    const props = renderList({
+      leads: [],
+      total: 0,
+      loadFailed: true,
+      onRefresh: vi.fn(),
+      onCreate: vi.fn(),
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent(messages.common.loadError);
+    expect(screen.queryByText(messages.leads.noLeads)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: messages.leads.addFirstLead })
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: messages.common.retry }));
+    expect(props.onRefresh).toHaveBeenCalledTimes(1);
   });
 
   it('shows read-only badges to roles that cannot edit', () => {
@@ -307,7 +339,8 @@ describe('MQL level badges in the list (#196)', () => {
     setWidth(1440);
     renderList({ leads, columnPreferences: { mqlQualifiedAt: true } });
     const row = (name: string) => {
-      const cell = screen.getByRole('cell', { name: new RegExp(name) });
+      // The company's own cell (the row's checkbox is named after the company too, #431)
+      const cell = screen.getByRole('cell', { name });
       const tr = cell.closest('tr');
       if (!tr) throw new Error('no row');
       return within(tr);

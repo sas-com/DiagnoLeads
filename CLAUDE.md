@@ -16,7 +16,7 @@ DiagnoLeads は、AX マイグレーション（レガシー基幹システム�
 8. 範囲外の作業は別の Issue に切り出す。「ついでに」を同じ PR に入れない
 9. 原則に違反したら `.factory/memory/violations.md` に記録し、再発防止策を仕組み（フックかこのファイル）に入れる
 
-フックが止めるもの（理由はメッセージに出る）：bun.lock と `.env*` の編集、`.env*` の読み取りと表示、Bun の共有キャッシュとつながった node_modules への書き込み（`bun patch` のコピーの編集は確認が出る）、秘密情報の書き込みと送信。main は GitHub のブランチ保護で守られている（必須の検査が緑でないコミットは push できない。force push と削除もできない。PR は必須ではない）。権限の deny は `git push origin main` などの決まった形だけを止める。DB を変えるスクリプトと E2E は、権限で毎回確認が出る（`.claude/settings.json`）。
+フックが止めるもの（理由はメッセージに出る）：bun.lock と `.env*` の編集、`.env*` の読み取りと表示、Bun の共有キャッシュとつながった node_modules への書き込み（`bun patch` のコピーの編集は確認が出る）、秘密情報の書き込みと送信、専門エージェント（名前が `-specialist`）の中での書き込み。ガードは判定できないときも止める（すぐに続ける必要があるときは、オーナーが `.claude/settings.local.json` に `"disableAllHooks": true` を書く）。main は GitHub のブランチ保護で守られている（PR 経由でのみマージできる。直接 push はできない。必須の検査が緑でないコミットは push できない。force push と削除もできない。承認は0でよく、管理者にも適用される）。権限の deny は `git push origin main` などの決まった形だけを止める。DB を変えるスクリプトと E2E は、権限で毎回確認が出る（`.claude/settings.json`）。
 
 ## 作業の流れ（SprintPath）
 
@@ -95,7 +95,7 @@ Issue → 決定を読む → ブランチ → 実装 → 速い検証 → 全�
 ## UI
 
 - その時点のモダンな UI 部品を採用する。今の標準は shadcn/ui（Radix UI + Tailwind CSS v4）。部品は `bunx shadcn@latest add <component>` で `components/ui/` に足す
-- グラフは今 ApexCharts（`components/charts/`）だけを使っている。recharts は package.json にあるが import されていない。どちらに寄せるかは #53 で決める
+- グラフは ApexCharts（`components/charts/`）に寄せる（決定 `2026-10-24-chart-library-apexcharts`）。新しいグラフ用のライブラリは入れない（shadcn/ui の Chart も入れない）。使っていない recharts は #53 で依存から外す
 - 新しい UI ライブラリを入れるときは、Issue に理由を残し、決定を記録する
 
 ## 専門エージェントとスキル
@@ -111,7 +111,7 @@ Issue → 決定を読む → ブランチ → 実装 → 速い検証 → 全�
 | 決定・違反・学びを記録する | スキル `record-decision` |
 | Claude の設定・Claude API を変える前に、公式ドキュメントで確かめる | スキル `official-check` |
 
-専門エージェントには読み取り専用で頼む（ファイルの編集・コミット・コメントを禁じる）。
+専門エージェントには読み取り専用で頼む（ファイルの編集・コミット・コメントを禁じる。書き込みのコマンドはフックも止める）。
 
 ## Issue のラベル
 

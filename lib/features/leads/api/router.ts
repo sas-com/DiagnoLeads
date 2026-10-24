@@ -555,8 +555,8 @@ export const leadsRouter = router({
     }),
 
   /**
-   * Figures of the list page's cards for the whole organization (#131): leads per status and
-   * the average score of the leads that have one. Not affected by the list filters.
+   * Figures of the list page's cards for the whole organization (#131): leads per status. Not
+   * affected by the list filters. No average score: the MQL level is the sign (#447).
    */
   statusCounts: organizationProcedure.query(async ({ ctx, input }) => {
     if (!ctx.ability.can('read', 'Lead')) {
@@ -570,8 +570,6 @@ export const leadsRouter = router({
       .select({
         status: leads.status,
         count: count(),
-        scoreSum: sql<string | null>`sum(${leads.score})`,
-        scored: count(leads.score),
       })
       .from(leads)
       .where(eq(leads.organizationId, input.organizationId))
@@ -582,8 +580,6 @@ export const leadsRouter = router({
       number
     >;
     let total = 0;
-    let scoreSum = 0;
-    let scored = 0;
     for (const row of rows) {
       const n = Number(row.count);
       total += n;
@@ -591,14 +587,11 @@ export const leadsRouter = router({
       if ((LEAD_STATUSES as readonly string[]).includes(row.status)) {
         byStatus[row.status as LeadStatus] += n;
       }
-      scoreSum += Number(row.scoreSum ?? 0);
-      scored += Number(row.scored);
     }
 
     return {
       total,
       byStatus,
-      averageScore: scored > 0 ? scoreSum / scored : null,
     };
   }),
 

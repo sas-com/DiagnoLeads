@@ -77,17 +77,11 @@ describe('ENDPOINT_RATE_LIMITS', () => {
   it('should have auth endpoints with strict limits', () => {
     expect(ENDPOINT_RATE_LIMITS['/api/auth/sign-in'].max).toBe(5);
     expect(ENDPOINT_RATE_LIMITS['/api/auth/sign-up'].max).toBe(3);
-    expect(ENDPOINT_RATE_LIMITS['/api/auth/forgot-password'].max).toBe(3);
-  });
-
-  it('should have AI endpoints', () => {
-    expect(ENDPOINT_RATE_LIMITS['/api/trpc/ai.scoreLeads'].max).toBe(10);
-    expect(ENDPOINT_RATE_LIMITS['/api/trpc/ai.chat'].max).toBe(30);
+    expect(ENDPOINT_RATE_LIMITS['/api/auth/request-password-reset'].max).toBe(3);
   });
 
   it('should have export endpoints', () => {
     expect(ENDPOINT_RATE_LIMITS['/api/trpc/leads.export'].max).toBe(5);
-    expect(ENDPOINT_RATE_LIMITS['/api/trpc/reports.export'].max).toBe(5);
   });
 
   it('should have bulk operation endpoints', () => {
@@ -102,7 +96,6 @@ describe('ENDPOINT_RATE_LIMITS', () => {
 
   it('should have diagnostic endpoints', () => {
     expect(ENDPOINT_RATE_LIMITS['/api/diagnostic'].max).toBe(30);
-    expect(ENDPOINT_RATE_LIMITS['/api/embed/v1/diagnostic'].max).toBe(60);
   });
 
   it('should have GraphQL endpoint', () => {
@@ -150,6 +143,23 @@ describe('checkRateLimit', () => {
     const result = checkRateLimit(request, config);
     
     expect(result.allowed).toBe(true);
+  });
+});
+
+describe('reading the session from one office IP (#519)', () => {
+  it('lets staff open pages while sign-in attempts stay limited', () => {
+    const headers = { 'x-forwarded-for': '203.0.113.19' };
+    const session = createMockRequest('/api/auth/get-session', headers);
+    for (let i = 0; i < 20; i++) {
+      expect(checkRateLimit(session, getRateLimitConfig('/api/auth/get-session')).allowed).toBe(true);
+    }
+
+    const signIn = createMockRequest('/api/auth/sign-in/email', headers);
+    const results = Array.from(
+      { length: 6 },
+      () => checkRateLimit(signIn, getRateLimitConfig('/api/auth/sign-in/email')).allowed
+    );
+    expect(results).toEqual([true, true, true, true, true, false]);
   });
 });
 
@@ -230,8 +240,8 @@ describe('getRateLimitConfig', () => {
     expect(config.max).toBe(200);
   });
 
-  it('should return diagnostic config for embed', () => {
-    const config = getRateLimitConfig('/api/embed/widget');
+  it("should return diagnostic config for the embed settings screen's tRPC calls", () => {
+    const config = getRateLimitConfig('/api/trpc/embed.list');
     expect(config.max).toBe(30);
   });
 

@@ -35,7 +35,7 @@ import type { ListedLead } from '@/components/features/leads/lead-card';
 import type { Lead } from '@/lib/db/schema';
 import { type CreateLeadInput, hasLostReason } from '@/lib/features/leads/types';
 import { trpc } from '@/lib/trpc/client';
-import { Plus, Target, TrendingUp, Upload, UserCheck, Users } from 'lucide-react';
+import { Plus, Target, Upload, UserCheck, Users } from 'lucide-react';
 
 function TableSkeleton() {
   return (
@@ -177,6 +177,7 @@ function LeadsPageContent() {
   const {
     data: leadsData,
     isLoading,
+    isError: listFailed,
     refetch: refetchList,
   } = useListLeads(listQuery.listInput(organizationId, preferences.pageSize), {
     keepPrevious: true,
@@ -216,7 +217,6 @@ function LeadsPageContent() {
   const negotiatingLeads = counts?.byStatus.negotiating ?? 0;
   const wonLeads = counts?.byStatus.won ?? 0;
   const conversionRate = totalLeads > 0 ? (wonLeads / totalLeads) * 100 : 0;
-  const averageScore = counts?.averageScore ?? 0;
 
   const handleCreateLead = async (data: Omit<CreateLeadInput, 'organizationId'>) => {
     await createLead.mutateAsync({ ...data, organizationId });
@@ -310,7 +310,7 @@ function LeadsPageContent() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
         {/* Total Leads: the whole list */}
         <StatCardLink href={listHref()}>
           <Card className="p-6 h-full" decoration="top" decorationColor="blue">
@@ -382,27 +382,6 @@ function LeadsPageContent() {
             </div>
           </Card>
         </StatCardLink>
-
-        {/* Average Score: highest scores first */}
-        <StatCardLink href={listHref({}, { by: 'score', order: 'desc' })}>
-          <Card className="p-6 h-full" decoration="top" decorationColor="emerald">
-            <div className="flex items-start justify-between">
-              <div>
-                <Text>{t('averageScore') || 'Average Score'}</Text>
-                <Metric className="mt-2">
-                  {averageScore.toFixed(0)}
-                  <span className="text-lg font-normal text-gray-500">/100</span>
-                </Metric>
-              </div>
-              <div className="p-3 bg-emerald-50 rounded-xl">
-                <TrendingUp className="h-6 w-6 text-emerald-600" />
-              </div>
-            </div>
-            <div className="mt-4">
-              <ProgressBar value={averageScore} color="emerald" />
-            </div>
-          </Card>
-        </StatCardLink>
       </div>
 
       {/* Lead Table */}
@@ -433,6 +412,9 @@ function LeadsPageContent() {
         }
         hasFilters={listQuery.hasFilters}
         onClearFilters={listQuery.clearFilters}
+        // A failed request is not "no leads yet" (#431)
+        loadFailed={listFailed}
+        onCreate={access.canCreate ? () => setCreateDialogOpen(true) : undefined}
         onExport={organizationId ? leadExport.exportLeads : undefined}
         exporting={leadExport.isExporting}
         toolbar={(actions) => (

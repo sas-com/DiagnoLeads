@@ -13,7 +13,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ProgressBar } from '@/components/ui/progress-bar';
 import {
   Select,
   SelectContent,
@@ -105,6 +104,13 @@ const isSortKey = (id: string): id is LeadSortKey =>
   (LEAD_SORT_KEYS as readonly string[]).includes(id);
 
 /**
+ * The sort key of a column, for aria-sort: the column id, except the MQL column, which keeps its
+ * id (saved column choices) but sorts by the MQL level (#447)
+ */
+export const columnSortKey = (id: string): LeadSortKey | undefined =>
+  id === 'mqlQualifiedAt' ? 'mqlLevel' : isSortKey(id) ? id : undefined;
+
+/**
  * Columns shown by default for a window width. The member's own choices (kept per browser)
  * are applied on top. Below xl the email is hidden so the status stays in view
  * without scrolling sideways (#131); it can be shown again from the columns menu.
@@ -114,7 +120,6 @@ const isSortKey = (id: string): id is LeadSortKey =>
 export function defaultColumnVisibility(width: number): VisibilityState {
   const optional = {
     lastActivityAt: false,
-    mqlQualifiedAt: false,
     nextMeetingDate: false,
     dealRating: false,
     // "When to act" (#151): from the columns menu
@@ -133,6 +138,8 @@ export function defaultColumnVisibility(width: number): VisibilityState {
       createdAt: false,
       tags: false,
       assignee: false,
+      // The cards show the MQL level on phones
+      mqlQualifiedAt: false,
     };
   }
   if (width < 1024) {
@@ -163,6 +170,7 @@ interface LeadTableProps {
   getLeadHref?: (lead: LeadWithTags) => string;
   onEdit?: (lead: LeadWithTags) => void;
   onDelete?: (lead: LeadWithTags) => void;
+  /** Reloads the list: after bulk actions, and the retry when it could not be loaded */
   onRefresh?: () => void;
   /** Status and deal phase change in place; read-only roles get plain badges (Refs #109) */
   canEdit?: boolean;
@@ -184,6 +192,10 @@ interface LeadTableProps {
   /** Filters are applied: an empty page means "no match", not "no leads yet" */
   hasFilters?: boolean;
   onClearFilters?: () => void;
+  /** The list request failed: an empty page shows an error with a retry (onRefresh) (#431) */
+  loadFailed?: boolean;
+  /** Opens the create dialog from "no leads yet"; left out for roles that cannot create leads */
+  onCreate?: () => void;
   /** Renders the toolbar above the table; gets the columns and export menus to place */
   toolbar?: (actions: ReactNode) => ReactNode;
   /**
@@ -221,6 +233,8 @@ export function LeadTable({
   onColumnPreferencesChange,
   hasFilters = false,
   onClearFilters,
+  loadFailed = false,
+  onCreate,
   toolbar,
   onExport,
   exporting = false,
@@ -268,6 +282,10 @@ export function LeadTable({
   const sortableHeader = (column: LeadSortKey, label: string) => () => (
     <SortableHeader label={label} column={column} sort={sort} onSort={onSort} />
   );
+  const ariaSortOf = (columnId: string) => {
+    const key = columnSortKey(columnId);
+    return key ? ariaSortFor(sort, key) : undefined;
+  };
 
   const columns: ColumnDef<LeadWithTags>[] = [
     {
@@ -279,19 +297,24 @@ export function LeadTable({
             (table.getIsSomePageRowsSelected() && 'indeterminate')
           }
           onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label="Select all"
+          aria-label={tCommon('selectAll')}
           className="translate-y-[2px]"
         />
       ),
-      cell: ({ row }) => (
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label="Select row"
-          className="translate-y-[2px]"
-          onClick={(e) => e.stopPropagation()}
-        />
-      ),
+      cell: ({ row }) => {
+        const { company, name, email } = row.original;
+        return (
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(value) => row.toggleSelected(!!value)}
+            aria-label={tList('selectRow', {
+              name: [company, name].filter(Boolean).join(' ') || email || t('nameNotSet'),
+            })}
+            className="translate-y-[2px]"
+            onClick={(e) => e.stopPropagation()}
+          />
+        );
+      },
       enableSorting: false,
       enableHiding: false,
     },
@@ -382,6 +405,28 @@ export function LeadTable({
       ),
     },
     {
+      accessorKey: 'mqlQualifiedAt',
+      // The MQL level says how promising a lead is (#447): shown by default, sorted by it
+      header: sortableHeader('mqlLevel', t('mqlLevel')),
+      cell: ({ row }) => {
+        // The MQL level badge (#196) and the MQL date
+        const { mqlLevel, mqlQualifiedAt } = row.original;
+        if (!mqlQualifiedAt && mqlLevel !== 'interest' && mqlLevel !== 'fit') {
+          return <span className="text-gray-400">-</span>;
+        }
+        return (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <LeadMqlBadges level={mqlLevel} qualifiedAt={mqlQualifiedAt} />
+            {mqlQualifiedAt && (
+              <span className="text-sm text-gray-600 dark:text-gray-300">
+                {jstDay(mqlQualifiedAt)}
+              </span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
       accessorKey: 'inflowSource',
       header: t('inflowSource'),
       cell: ({ row }) => {
@@ -403,32 +448,6 @@ export function LeadTable({
           return <span className="text-gray-400">-</span>;
         }
         return <TagBadgeList tags={leadTags} maxVisible={2} />;
-      },
-    },
-    {
-      accessorKey: 'score',
-      header: sortableHeader('score', t('score')),
-      cell: ({ row }) => {
-        const score = row.getValue('score') as number | null;
-        if (score === null || score === undefined) {
-          return <span className="text-gray-400">-</span>;
-        }
-        const getScoreColor = (s: number): 'red' | 'yellow' | 'emerald' => {
-          if (s >= 70) return 'emerald';
-          if (s >= 40) return 'yellow';
-          return 'red';
-        };
-        return (
-          <div className="w-24">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                {score}
-              </span>
-              <span className="text-xs text-gray-500 dark:text-gray-400">/100</span>
-            </div>
-            <ProgressBar value={score} color={getScoreColor(score)} className="h-1.5" />
-          </div>
-        );
       },
     },
     {
@@ -467,27 +486,6 @@ export function LeadTable({
           <span className="text-sm text-gray-500">
             {formatDistance(new Date(value), new Date(), { addSuffix: true, locale: dateLocale })}
           </span>
-        );
-      },
-    },
-    {
-      accessorKey: 'mqlQualifiedAt',
-      header: sortableHeader('mqlQualifiedAt', t('mqlQualifiedAt')),
-      cell: ({ row }) => {
-        // The MQL level badge (#196) and the MQL date
-        const { mqlLevel, mqlQualifiedAt } = row.original;
-        if (!mqlQualifiedAt && mqlLevel !== 'interest' && mqlLevel !== 'fit') {
-          return <span className="text-gray-400">-</span>;
-        }
-        return (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <LeadMqlBadges level={mqlLevel} qualifiedAt={mqlQualifiedAt} />
-            {mqlQualifiedAt && (
-              <span className="text-sm text-gray-600 dark:text-gray-300">
-                {jstDay(mqlQualifiedAt)}
-              </span>
-            )}
-          </div>
         );
       },
     },
@@ -710,11 +708,10 @@ export function LeadTable({
     assignee: tAssignee('label'),
     inflowSource: t('inflowSource'),
     tags: locale === 'ja' ? 'タグ' : 'Tags',
-    score: t('score'),
     source: t('source'),
     createdAt: t('createdAt'),
     lastActivityAt: tList('sort.lastActivityAt'),
-    mqlQualifiedAt: t('mqlQualifiedAt'),
+    mqlQualifiedAt: t('mqlLevel'),
     nextMeetingDate: tList('nextMeeting'),
     dealRating: tList('dealRating'),
     actBy: tList('actBy'),
@@ -852,6 +849,9 @@ export function LeadTable({
           onLost={onLost}
           hasFilters={hasFilters}
           onClearFilters={onClearFilters}
+          loadFailed={loadFailed}
+          onRetry={onRefresh}
+          onCreate={onCreate}
         />
       ) : (
         /* Table */
@@ -864,11 +864,7 @@ export function LeadTable({
                     <TableHead
                       key={header.id}
                       className="whitespace-nowrap bg-gray-50 dark:bg-gray-800"
-                      aria-sort={
-                        isSortKey(header.column.id)
-                          ? ariaSortFor(sort, header.column.id)
-                          : undefined
-                      }
+                      aria-sort={ariaSortOf(header.column.id)}
                     >
                       {header.isPlaceholder
                         ? null
@@ -897,7 +893,13 @@ export function LeadTable({
               ) : (
                 <TableRow>
                   <TableCell colSpan={columns.length} className="h-64 text-center">
-                    <LeadListEmpty hasFilters={hasFilters} onClearFilters={onClearFilters} />
+                    <LeadListEmpty
+                      hasFilters={hasFilters}
+                      onClearFilters={onClearFilters}
+                      loadFailed={loadFailed}
+                      onRetry={onRefresh}
+                      onCreate={onCreate}
+                    />
                   </TableCell>
                 </TableRow>
               )}

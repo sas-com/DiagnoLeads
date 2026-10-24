@@ -40,6 +40,7 @@ describe('search indexing policy', () => {
       '/ja/ax-migration/column/access-file-types',
       '/ja/ax-migration/column/access-office-support-end',
       '/ja/ax-migration/column/access-fix-or-web',
+      '/ja/ax-migration/column/access-web-security',
       '/ja/ax-migration/column/access-shared-folder',
       '/ja/ax-migration/column/access-accde-only',
       '/ja/ax-migration/column/access-2gb-limit',

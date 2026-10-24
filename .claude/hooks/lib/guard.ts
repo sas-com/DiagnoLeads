@@ -27,7 +27,7 @@ export const fileLinkCount: LinkCount = (absolutePath) => {
   }
 };
 
-const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
+export const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 
 /** Inside the project: the relative path; outside: the absolute one (rules apply to both) */
 export function displayPath(root: string, filePath: string): string {
@@ -371,6 +371,15 @@ export function splitShell(line: string): string[][] {
     } else if (char === ';' || char === '|' || char === '&') {
       endCommand();
       if ((char === '|' || char === '&') && line[i + 1] === char) i++;
+    } else if (char === '#' && !inWord) {
+      // A comment runs to the end of the line (only at a word boundary: foo#bar is literal)
+      const end = line.indexOf('\n', i);
+      i = end === -1 ? line.length : end - 1;
+    } else if (char === '<' && line[i + 1] === '<' && line[i + 2] === '<') {
+      // <<< is a here-string: one operator, and the next word is data, not a heredoc delimiter
+      endWord();
+      words.push('<<<');
+      i += 2;
     } else if (char === '<' && line[i + 1] === '<' && line[i + 2] !== '<') {
       // << and <<- start a here document; the next word is its delimiter
       endWord();
@@ -405,8 +414,18 @@ const ENV_PATH_WORD = /^(?:.*\/)?\.env(?:\.[\w-]+)*(?:\*|\.\*)?$/;
 // An env file named inside a script (python -c "open('.env.local')")
 const ENV_IN_SCRIPT = /(?<![\w$])\.env(?:\.[\w-]+)*(?![\w-])/g;
 
+// Option keys whose value is a file to read (node --env-file=, dd if=/of=, curl --data=@…). Split on
+// `=` only after one of these, so a search pattern like `git log --grep=.env.local` is left alone
+const FILE_VALUE_KEY =
+  /^(if|of|--env-file|--file|--config|--data|--data-ascii|--data-binary|--data-raw|--upload-file|--form|--form-string)$/;
+
 function namesSecretEnvFile(word: string): boolean {
-  return ENV_PATH_WORD.test(word) && !word.endsWith('.example');
+  if (/\s/.test(word)) return false; // a word with spaces is text (a commit message), not a path
+  // Also inside a word: curl -d @.env and -F a=@.env, --env-file=.env, dd if=.env, $(<.env)
+  const parts = [word, ...word.split(/[@<():,`]/)];
+  const eq = word.indexOf('=');
+  if (eq !== -1 && FILE_VALUE_KEY.test(word.slice(0, eq))) parts.push(word.slice(eq + 1));
+  return parts.some((part) => ENV_PATH_WORD.test(part) && !part.endsWith('.example'));
 }
 
 function scriptReadsSecretEnvFile(script: string): boolean {
@@ -421,12 +440,12 @@ const SAFE_WITH_ENV = new Set(['source', '.', 'set', 'ls', 'test', '[', '[[', 'w
 const INTERPRETERS = /^(python3?|node|bun|deno|ruby|perl|php)$/;
 const SCRIPT_FLAGS = new Set(['-c', '-e', '-p', '--eval', '--print']);
 
-function isRedirection(word: string): boolean {
+export function isRedirection(word: string): boolean {
   return /^\d?[<>]/.test(word) || /^&>/.test(word);
 }
 
 /** Operands of a command: words after the program that are not flags or redirections */
-function operands(words: string[]): string[] {
+export function operands(words: string[]): string[] {
   const result: string[] = [];
   for (let i = 1; i < words.length; i++) {
     const word = words[i] ?? '';
@@ -439,25 +458,114 @@ function operands(words: string[]): string[] {
   return result;
 }
 
-/** Paths a command writes: redirection targets, tee, cp/mv/install/ln destinations, sed -i … */
-function writeTargets(program: string, words: string[]): string[] {
+/**
+ * The directory given with -t / --target-directory (cp, mv, install, ln), where the destination
+ * is not the last operand. In a cluster such as -rt the value is the rest of it or the next word.
+ */
+function targetDirectories(words: string[]): string[] {
+  const dirs: string[] = [];
+  for (let i = 1; i < words.length; i++) {
+    const word = words[i] ?? '';
+    if (word === '-t' || word === '--target-directory') dirs.push(words[i + 1] ?? '');
+    else if (word.startsWith('--target-directory=')) dirs.push(word.slice(19));
+    else if (/^-[a-zA-Z]+$/.test(word) && word.includes('t')) {
+      dirs.push(word.slice(word.indexOf('t') + 1) || (words[i + 1] ?? ''));
+    }
+  }
+  return dirs.filter(Boolean);
+}
+
+/** Paths a command writes: redirections, tee, cp/mv/install/ln destinations, sed -i, sort -o … */
+export function writeTargets(program: string, words: string[]): string[] {
   const targets: string[] = [];
   words.forEach((word, i) => {
-    if (/^(\d|&)?>/.test(word) && !word.endsWith('&') && words[i + 1])
-      targets.push(words[i + 1] ?? '');
+    // >, >>, >|, n>, &>, >& : a redirection. n>&1 and >&- only duplicate or close a descriptor,
+    // but >&file writes the file, so a `&` operator counts unless the next word is a digit or -
+    if (!/^(\d|&)?>>?[&|]?$/.test(word)) return;
+    const next = words[i + 1] ?? '';
+    const duplicates = word.endsWith('&') && /^(\d+|-)$/.test(next);
+    if (next && !duplicates) targets.push(next);
   });
   const args = operands(words);
   if (program === 'tee' || program === 'truncate') targets.push(...args);
-  if (['cp', 'mv', 'install', 'ln', 'rsync'].includes(program) && args.length > 1) {
+  const dirs = ['cp', 'mv', 'install', 'ln'].includes(program) ? targetDirectories(words) : [];
+  if (dirs.length > 0) {
+    targets.push(...dirs);
+  } else if (['cp', 'mv', 'install', 'ln', 'rsync'].includes(program) && args.length > 1) {
     targets.push(args.at(-1) ?? '');
   }
-  if ((program === 'sed' || program === 'perl') && words.some((w) => /^-[a-zA-Z]*i/.test(w))) {
-    targets.push(...(program === 'sed' && !words.includes('-e') ? args.slice(1) : args));
+  if ((program === 'sed' || program === 'perl') && isInPlace(words)) {
+    targets.push(...(program === 'sed' ? sedFileOperands(words) : args));
   }
   if (program === 'dd') {
     for (const word of words) if (word.startsWith('of=')) targets.push(word.slice(3));
   }
+  if (program === 'sort') targets.push(...sortOutputs(words));
+  if (program === 'uniq') targets.push(...uniqOperands(words).slice(1, 2));
   return targets.filter(Boolean);
+}
+
+/**
+ * The file sort writes with -o / --output (or a prefix such as --out). In a group such as -ro the
+ * first letter that takes a value (k, t, o, S, T) takes the rest of the group or the next word.
+ */
+function sortOutputs(words: string[]): string[] {
+  const outputs: string[] = [];
+  for (let i = 1; i < words.length; i++) {
+    const word = words[i] ?? '';
+    const name = word.split('=')[0] ?? '';
+    if (name.length >= 3 && '--output'.startsWith(name)) {
+      outputs.push(word.includes('=') ? word.slice(name.length + 1) : (words[i + 1] ?? ''));
+    } else if (/^-[a-zA-Z]/.test(word)) {
+      const valued = /[ktoST]/.exec(word.slice(1));
+      if (valued?.[0] === 'o') outputs.push(word.slice(valued.index + 2) || (words[i + 1] ?? ''));
+    }
+  }
+  return outputs;
+}
+
+// sed edits files in place with -i (a short cluster, with an optional backup suffix) or --in-place
+export function isInPlace(words: string[]): boolean {
+  return words.some((w) => /^-[a-zA-Z]*i/.test(w) || /^--in-place/.test(w));
+}
+
+// sed's file operands: everything but options, their values and (when no -e/-f) the first operand,
+// which is the script. Used to find what `sed -i` writes.
+export function sedFileOperands(words: string[]): string[] {
+  const takesValue = (w: string) =>
+    ['-e', '-f', '-l', '--expression', '--file', '--line-length'].includes(w);
+  // The script is given by -e/-f (short cluster) or --expression/--file rather than as an operand
+  const hasScriptFlag = words.some(
+    (w) => (/^-[a-zA-Z]*[ef]/.test(w) && !w.startsWith('--')) || /^--(expression|file)/.test(w)
+  );
+  const files: string[] = [];
+  let scriptSeen = hasScriptFlag;
+  for (let i = 1; i < words.length; i++) {
+    const word = words[i] ?? '';
+    if (isRedirection(word)) i++;
+    else if (takesValue(word)) i++;
+    else if (word.startsWith('-')) continue;
+    else if (!scriptSeen) scriptSeen = true;
+    else files.push(word);
+  }
+  return files;
+}
+
+/** uniq [INPUT [OUTPUT]]: the operands, without the values of -f, -s and -w */
+function uniqOperands(words: string[]): string[] {
+  const files: string[] = [];
+  for (let i = 1; i < words.length; i++) {
+    const word = words[i] ?? '';
+    if (
+      isRedirection(word) ||
+      /^-[a-zA-Z]*[fsw]$|^--(skip-fields|skip-chars|check-chars)$/.test(word)
+    ) {
+      i++;
+    } else if (!word.startsWith('-') || word === '-') {
+      files.push(word);
+    }
+  }
+  return files;
 }
 
 /** The words of a grep-like command that name files, without its pattern */

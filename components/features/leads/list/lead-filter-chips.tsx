@@ -81,6 +81,11 @@ export function useFilterChipLabel(): (chip: LeadFilterChip) => string {
             field: t('dealRating'),
             value: chip.value.toUpperCase(),
           });
+        case 'mqlLevel':
+          return t('chips.value', {
+            field: t('mqlLevel'),
+            value: t(`mqlLevelOptions.${chip.value}`),
+          });
       }
     },
     [t, tStatus, tPipeline, assigneeLabel]

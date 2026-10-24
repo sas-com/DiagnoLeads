@@ -1,6 +1,5 @@
 'use client';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Sheet,
@@ -9,6 +8,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { leadMqlLevel } from '@/lib/features/leads/mql-level';
 import { ClipboardList, ExternalLink } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
@@ -17,6 +17,7 @@ import { LeadHearingOverview } from './detail/lead-hearing-overview';
 import { LeadRecentActivity } from './detail/lead-recent-activity';
 import { LeadAssigneeSelect } from './lead-assignee-select';
 import type { ListedLead } from './lead-card';
+import { LeadMqlBadges } from './lead-mql-badge';
 import { LeadQuickSelect } from './lead-quick-select';
 
 /** Facts shown in the panel when they have a value */
@@ -98,11 +99,10 @@ export function LeadSummarySheet({
                   canEdit={canEdit}
                 />
                 <LeadAssigneeSelect lead={lead} organizationId={organizationId} canEdit={canEdit} />
-                <Badge color="gray">
-                  {typeof lead.score === 'number'
-                    ? t('scoreValue', { score: lead.score })
-                    : t('noScore')}
-                </Badge>
+                <LeadMqlBadges
+                  level={leadMqlLevel(lead.responses)}
+                  qualifiedAt={lead.mqlQualifiedAt}
+                />
               </div>
 
               {facts.length > 0 && (
@@ -124,6 +124,7 @@ export function LeadSummarySheet({
                 compact
                 responses={lead.responses}
                 customFields={lead.customFields}
+                score={lead.score}
                 answersHref={(submissionId) =>
                   `${pageHref}?tab=diagnosis&submission=${submissionId}`
                 }

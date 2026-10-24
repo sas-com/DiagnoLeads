@@ -580,6 +580,12 @@ describe('AxDiagnosisFlow: another system and the bot check', () => {
     await act(async () => scripts()[0].dispatchEvent(new Event('error')));
 
     expect(screen.getByText('送信前の確認を表示できませんでした。')).toBeInTheDocument();
+    // Without a booking page, the phone and email are the way out (#420)
+    expect(screen.getByRole('link', { name: '03-5427-3663' })).toHaveAttribute('href', 'tel:+81354273663');
+    expect(screen.getByRole('link', { name: 'dx-agency@sas-com.com' })).toHaveAttribute(
+      'href',
+      'mailto:dx-agency@sas-com.com'
+    );
     // The contact details stay: trying again does not reload the page
     expect(screen.getByLabelText(/会社名/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '確認をやり直す' }));
@@ -743,12 +749,19 @@ describe('AxDiagnosisResult', () => {
       expect(screen.getAllByRole('button', { name: /無料の個別相談を申し込む/ })).toHaveLength(2);
     });
 
+    /** Titles of the next steps, in order */
+    const stepTitles = () =>
+      within(screen.getByTestId('ax-result-steps'))
+        .getAllByRole('listitem')
+        .map((item) => item.querySelectorAll('p')[1]?.textContent);
+
     it('updates the path after the follow-up questions and drops the hint', async () => {
       fetchMock.mockResolvedValue(
         jsonResponse(200, { result: accessResult({ access_users: '11_30' }) })
       );
       const user = userEvent.setup();
       renderAccess();
+      expect(stepTitles()).toEqual(['棚卸し', '進め方の決定', '直して使い続ける']);
       const followUp = within(screen.getByTestId('ax-follow-up'));
       await user.click(followUp.getByRole('button', { name: /追加質問/ }));
       await user.click(followUp.getByRole('group', { name: /ふだん使っている人/ }).querySelectorAll('label')[2]);
@@ -758,11 +771,54 @@ describe('AxDiagnosisResult', () => {
       expect(section).toHaveAttribute('data-path', 'web');
       expect(section).toHaveTextContent('11人以上');
       expect(section).not.toHaveTextContent('下の追加の質問');
+      // The next steps follow the new path (#457)
+      expect(stepTitles()).toEqual(['棚卸し', '進め方の決定', 'Web に移す', 'AX化']);
     });
 
     it('shows no path for the other systems', () => {
       renderResult();
       expect(screen.queryByTestId('ax-result-access-path')).not.toBeInTheDocument();
+    });
+
+    it.each([
+      ['fix', {}, ['棚卸し', '進め方の決定', '直して使い続ける']],
+      ['web', { access_challenges: ['remote'] }, ['棚卸し', '進め方の決定', 'Web に移す', 'AX化']],
+      [
+        'replace',
+        { access_features: ['none'], access_screens_forms: 'lt20' },
+        ['棚卸し', '進め方の決定', '既製サービスに置き換える'],
+      ],
+    ])('lays out the next steps of the %s path as the Access page does (#457)', (path, answers, titles) => {
+      renderAccess(answers);
+      expect(screen.getByTestId('ax-result-access-path')).toHaveAttribute('data-path', path);
+      const steps = screen.getByTestId('ax-result-steps');
+      expect(within(steps).getByRole('heading', { name: 'このあとの流れ' })).toBeInTheDocument();
+      expect(steps).toHaveTextContent('次は、30分のオンライン相談で棚卸しを始めます。');
+      expect(stepTitles()).toEqual(titles);
+      // Never the migration to a web system of the other paths' steps
+      expect(steps).not.toHaveTextContent('最新のWebシステムへ移行します');
+      expect(steps).not.toHaveTextContent('簡易診断');
+      // Nor the survey of the other paths in the disclaimer
+      expect(screen.getByText(/ツールの中身を確かめたうえでお伝えします/)).toBeInTheDocument();
+      expect(screen.queryByText(/現行仕様調査で確定します/)).not.toBeInTheDocument();
+    });
+
+    it('keeps the steps of the other systems (#457)', () => {
+      renderResult();
+      const steps = screen.getByTestId('ax-result-steps');
+      expect(within(steps).getByRole('heading', { name: '小さく始めて、移行の先のAX化まで' })).toBeInTheDocument();
+      expect(stepTitles()).toEqual(['簡易診断', '現行仕様調査', 'マイグレーション', 'AX化']);
+      expect(screen.getByText(/現行仕様調査で確定します/)).toBeInTheDocument();
+    });
+
+    it('asks for a 30-minute online consultation, without asking the format (#455)', async () => {
+      fetchMock.mockResolvedValue(jsonResponse(200, { ok: true, alreadyRequested: false }));
+      const user = userEvent.setup();
+      renderAccess();
+      await user.click(screen.getAllByRole('button', { name: /無料の個別相談を申し込む/ })[0]);
+      expect(await screen.findByText('所要時間の目安：30分程度（オンライン）')).toBeInTheDocument();
+      expect(screen.queryByText('所要時間の目安：60分程度')).not.toBeInTheDocument();
+      expect(screen.queryByRole('group', { name: 'ご希望の形式' })).not.toBeInTheDocument();
     });
   });
 
@@ -799,6 +855,9 @@ describe('AxDiagnosisResult', () => {
     );
     expect(await screen.findByText('個別相談のお申し込みを受け付けました')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /無料の個別相談を申し込む/ })).not.toBeInTheDocument();
+    // The usual consultation outside Access: about an hour, onsite or online (#455)
+    expect(screen.getByText('所要時間の目安：60分程度')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'ご希望の形式' })).toBeInTheDocument();
   });
 
   it('shows a failed consultation request next to the button that was pressed', async () => {
