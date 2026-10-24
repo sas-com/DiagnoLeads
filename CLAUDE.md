@@ -9,12 +9,12 @@ DiagnoLeads は、AX マイグレーション（レガシー基幹システム�
 1. **秘密情報を書かない**。接続文字列・API キー・トークンは Vercel と手元の `.env.local` にだけ置き、コード・ドキュメント・MemoryBank・Issue・PR・会話に出さない。社外秘（取引先名・単価・営業の手引きの本文）も同じ
 2. **組織のデータは必ず組織で絞る**。tRPC は `organizationProcedure` で受けて `ctx.ability` で権限を確かめ、読み書きのすべてのクエリを `organizationId` で絞る（RLS はまだ効いていない）
 3. **テストが通らなければコミットしない。main に直接 push しない**
-4. **依存は `bun add` / `bun remove` / `bun patch <name>@<version>` で変える**。node_modules と bun.lock を手で編集しない
+4. **依存は `bun add` / `bun remove` / `bun patch <name>@<version>` で変える**。node_modules は `bun patch` で取り出したコピーだけを編集し、bun.lock は手で編集しない
 5. **Issue を閉じる前に、エビデンスを Issue に書く**（テスト結果と、受け入れ基準を満たしたこと）
 6. **範囲外の作業は別の Issue に切り出す**。「ついでに」を同じ PR に入れない
 7. **原則に違反したら** `.factory/memory/violations.md` に記録し、再発防止策を仕組み（フックかこのファイル）に入れる
 
-フックが止めるもの（理由はメッセージに出る）：node_modules・Bun の共有キャッシュ・bun.lock・`.env*` の編集、秘密情報の書き込みと送信、`.env*` の中身の表示。権限では、`.env*` の読み取りと main への push を禁止し、DB を変えるスクリプトと E2E は毎回確認する（`.claude/settings.json`）。
+フックが止めるもの（理由はメッセージに出る）：bun.lock と `.env*` の編集、`.env*` の読み取りと表示、Bun の共有キャッシュとつながった node_modules への書き込み（`bun patch` のコピーの編集は確認が出る）、秘密情報の書き込みと送信。権限では main への push を禁止し、DB を変えるスクリプトと E2E は毎回確認する（`.claude/settings.json`）。
 
 ## 作業の流れ（SprintPath）
 
