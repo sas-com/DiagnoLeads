@@ -43,19 +43,11 @@ const results = await semanticSearch(
 const similar = await findSimilarLeads(leadId, organizationId);
 ```
 
-### 3. Chat Assistant (`chat/assistant.ts`)
-- Streaming AI responses
-- Contextual lead insights
-- Automated summaries
+### 3. Lead Summary (`chat/assistant.ts`)
+- Short lead summaries with Claude (Anthropic SDK)
 
 ```typescript
-import { generateChatResponse, generateLeadSummary } from '@/lib/features/ai';
-
-// Chat with context
-const response = await generateChatResponse(messages, {
-  organizationName: 'Acme Inc',
-  recentLeads: leads,
-});
+import { generateLeadSummary } from '@/lib/features/ai';
 
 // Generate lead summary
 const summary = await generateLeadSummary(lead);
