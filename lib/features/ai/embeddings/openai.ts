@@ -10,13 +10,21 @@ import { OpenAI } from 'openai';
 // Lazy initialize OpenAI client to avoid throwing during module load
 let _openai: OpenAI | null = null;
 
+/**
+ * Limits of each embedding request, as for the Claude client (../client.ts): Vercel functions
+ * stop at 30 seconds, and the SDK default (2 retries, 10-minute timeout) would send up to three
+ * requests for the one call consumeEmbeddingCalls counted
+ */
+const OPENAI_TIMEOUT_MS = 20_000;
+const OPENAI_MAX_RETRIES = 0;
+
 function getOpenAI(): OpenAI {
   if (!_openai) {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       throw new Error('OPENAI_API_KEY environment variable is not set');
     }
-    _openai = new OpenAI({ apiKey });
+    _openai = new OpenAI({ apiKey, timeout: OPENAI_TIMEOUT_MS, maxRetries: OPENAI_MAX_RETRIES });
   }
   return _openai;
 }

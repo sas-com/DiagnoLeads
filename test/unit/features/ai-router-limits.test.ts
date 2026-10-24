@@ -332,10 +332,13 @@ describe('AI router: rate limits of the OpenAI embeddings', () => {
     await expect(caller.ai.semanticSearch(search)).rejects.toMatchObject({
       code: 'TOO_MANY_REQUESTS',
       message:
-        'AI 検索の利用の上限（1時間に300件・ユーザーごと）に達しました。約10分後にもう一度お試しください',
+        'AI 検索・埋め込みの利用の上限（1時間に300件・ユーザーごと）に達しました。約10分後にもう一度お試しください',
     });
+    // Updating a lead's embedding shares the counters, so its refusal names both uses
     await expect(caller.ai.updateEmbedding(one)).rejects.toMatchObject({
       code: 'TOO_MANY_REQUESTS',
+      message:
+        'AI 検索・埋め込みの利用の上限（1時間に300件・ユーザーごと）に達しました。約10分後にもう一度お試しください',
     });
 
     expect(openai.create).not.toHaveBeenCalled();
@@ -428,7 +431,7 @@ describe('consumeEmbeddingCalls', () => {
     ).rejects.toMatchObject({
       code: 'TOO_MANY_REQUESTS',
       message:
-        'AI 検索の利用の上限（1日に3000件・組織ごと）に達しました。約5時間後にもう一度お試しください',
+        'AI 検索・埋め込みの利用の上限（1日に3000件・組織ごと）に達しました。約5時間後にもう一度お試しください',
     });
   });
 });

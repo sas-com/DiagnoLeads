@@ -117,5 +117,5 @@ export async function consumeEmbeddingCalls(
   count: CallCount,
   now: Date = new Date()
 ): Promise<void> {
-  await consumeCalls(database, EMBEDDING_CALL_LIMITS, 'AI 検索の利用', count, now);
+  await consumeCalls(database, EMBEDDING_CALL_LIMITS, 'AI 検索・埋め込みの利用', count, now);
 }
