@@ -283,6 +283,16 @@ describe.skipIf(!url)('builder consultation recipients (PostgreSQL)', () => {
     expect((await inAppFor(n.leadId)).map((row) => row.userId)).not.toContain(nonIntakeMember.id);
   });
 
+  it("mails the intake members instead of the sales addresses when the operator's organization has them", async () => {
+    // The same rule as the AX diagnosis: the intake members take the place of the sales addresses
+    testEnv.AX_DIAGNOSIS_ORGANIZATION_ID = withIntake;
+    const n = await consultationOn(withIntake);
+    await notifyDiagnosisSubmission(n);
+    expect(mailedTo()).toEqual([intakeMember.email]);
+    expect(mailedTo()).not.toContain(SALES);
+    expect(await inAppFor(n.leadId)).toEqual(byUser(withIntake, [intakeMember]));
+  });
+
   it('mails no organization the sales addresses when no operator is configured', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {

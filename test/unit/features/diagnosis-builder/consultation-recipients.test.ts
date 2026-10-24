@@ -130,8 +130,27 @@ describe('notifyDiagnosisSubmission: consultation recipients', () => {
       expect.any(String),
       expect.any(Object)
     );
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('no sales email sent'));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('no intake member'));
     warn.mockRestore();
+  });
+
+  it('tells a test-mode filter apart from a missing address in the runtime logs', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.stubEnv('APP_TEST_MODE', 'true');
+    vi.stubEnv('APP_TEST_MODE_EMAIL_DOMAINS', 'company.example.jp');
+    try {
+      consultationRecipientsMock.mockResolvedValue({
+        intakeUserIds: ['user-a'],
+        emails: ['a@other.example.jp'],
+      });
+      await notifyDiagnosisSubmission(consultation(OTHER));
+      expect(sendEmailMock).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('no recipient is allowed in test mode'));
+      expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('no intake member'));
+    } finally {
+      vi.unstubAllEnvs();
+      warn.mockRestore();
+    }
   });
 
   it('tells only the intake members of the organization, in-app and by email', async () => {

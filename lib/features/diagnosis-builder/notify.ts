@@ -285,10 +285,17 @@ export async function notifyDiagnosisSubmission(n: DiagnosisNotification): Promi
 
   // Sales email for consultation requests, within the same caps as the AX diagnosis (the
   // sending quota is shared with the sign-in emails)
-  const salesRecipients = filterAllowedRecipients(consultation?.emails ?? []);
-  if (n.consultationRequested && salesRecipients.length === 0) {
+  const salesAddresses = consultation?.emails ?? [];
+  // In test mode only company addresses are mailed; decide that before using the quota
+  const salesRecipients = filterAllowedRecipients(salesAddresses);
+  if (n.consultationRequested && salesAddresses.length === 0) {
+    // Visible in the runtime logs: a missing setting, not a failed send
     console.warn(
-      'Diagnosis consultation: no sales email sent (no intake member, and no allowed sales address for this organization)'
+      'Diagnosis consultation: no sales email sent (no intake member, and no sales address for this organization)'
+    );
+  } else if (n.consultationRequested && salesRecipients.length === 0) {
+    console.warn(
+      'Diagnosis consultation: no sales email sent (no recipient is allowed in test mode)'
     );
   }
   if (
