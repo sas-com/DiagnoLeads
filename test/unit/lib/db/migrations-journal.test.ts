@@ -28,7 +28,8 @@ interface Exceptions {
 }
 
 const EXCEPTIONS: Exceptions = {
-  // Generated before 0013/0014 were merged. Kept so the hashes in production stay the same
+  // Generated before 0013/0014 were merged and already applied in production. Generating it again
+  // would give it a newer `when`, and the migrator would run its DDL a second time
   whenOutOfOrder: ['0015_agency_links'],
   // Never journaled. #433 decides whether its indexes become a real migration
   sqlOutsideJournal: ['0001_performance_optimization'],
@@ -38,7 +39,10 @@ const FIX =
   'Merge main, delete your own drizzle/<n>_*.sql and drizzle/meta/<n>_snapshot.json and the ' +
   'journal entry, then run `bun run db:generate` again so the number and `when` come after main. ' +
   'If your migration was generated on top of another open PR (its snapshot follows that PR), ' +
-  'wait until that PR is merged, merge main, and only then generate again.';
+  'wait until that PR is merged, merge main, and only then generate again. ' +
+  'If your migration is already applied in production, do not generate it again (the migrator ' +
+  'would run its DDL a second time): ask the owner. Like 0015, it keeps its SQL and `when` and ' +
+  'goes into EXCEPTIONS.whenOutOfOrder.';
 
 function journalProblems(
   entries: JournalEntry[],
@@ -140,6 +144,13 @@ describe('journalProblems', () => {
       none
     );
     expect(problems).toContain('entry 2 has idx 1 (numbers must be 0, 1, 2, ...)');
+  });
+
+  it('finds a skipped number', () => {
+    const entries = [entry(0, 'a', 1), entry(2, 'c', 2)];
+    expect(journalProblems(entries, ['0000_a', '0002_c'], chain(3), none)).toContain(
+      'entry 1 has idx 2 (numbers must be 0, 1, 2, ...)'
+    );
   });
 
   it('finds a when that the migrator would skip', () => {
