@@ -12,6 +12,9 @@ on:
     # 03:17 JST; scheduled runs can start late
     - cron: '17 18 * * *'
   workflow_dispatch:
+  # Trial only (this branch is deleted after the run; never merged)
+  push:
+    branches: [chore/569-lighthouse-trial]
 
 permissions:
   contents: read
