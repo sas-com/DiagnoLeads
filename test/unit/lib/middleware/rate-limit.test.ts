@@ -77,7 +77,7 @@ describe('ENDPOINT_RATE_LIMITS', () => {
   it('should have auth endpoints with strict limits', () => {
     expect(ENDPOINT_RATE_LIMITS['/api/auth/sign-in'].max).toBe(5);
     expect(ENDPOINT_RATE_LIMITS['/api/auth/sign-up'].max).toBe(3);
-    expect(ENDPOINT_RATE_LIMITS['/api/auth/forgot-password'].max).toBe(3);
+    expect(ENDPOINT_RATE_LIMITS['/api/auth/request-password-reset'].max).toBe(3);
   });
 
   it('should have AI endpoints', () => {
@@ -150,6 +150,23 @@ describe('checkRateLimit', () => {
     const result = checkRateLimit(request, config);
     
     expect(result.allowed).toBe(true);
+  });
+});
+
+describe('reading the session from one office IP (#519)', () => {
+  it('lets staff open pages while sign-in attempts stay limited', () => {
+    const headers = { 'x-forwarded-for': '203.0.113.19' };
+    const session = createMockRequest('/api/auth/get-session', headers);
+    for (let i = 0; i < 20; i++) {
+      expect(checkRateLimit(session, getRateLimitConfig('/api/auth/get-session')).allowed).toBe(true);
+    }
+
+    const signIn = createMockRequest('/api/auth/sign-in/email', headers);
+    const results = Array.from(
+      { length: 6 },
+      () => checkRateLimit(signIn, getRateLimitConfig('/api/auth/sign-in/email')).allowed
+    );
+    expect(results).toEqual([true, true, true, true, true, false]);
   });
 });
 
