@@ -566,11 +566,18 @@ export async function deleteTask(
  * Open next actions and takeaways of the organization due today or earlier (Japan calendar day),
  * with the lead's name. scope 'mine' keeps only those the user is responsible for
  * (responsibleUserSql); 'all' lists everyone's with the user's own first. Oldest due first
- * within each. counts gives both totals for the dashboard's switch.
+ * within each, the first `limit` (DUE_TASKS_SHOWN by default). counts gives both totals for the
+ * dashboard's switch.
  */
 export async function listDueTasks(
   db: Executor,
-  input: { organizationId: string; today: string; userId: string; scope?: DueTaskScope }
+  input: {
+    organizationId: string;
+    today: string;
+    userId: string;
+    scope?: DueTaskScope;
+    limit?: number;
+  }
 ): Promise<{ items: DueTaskView[]; total: number; counts: Record<DueTaskScope, number> }> {
   const scope = input.scope ?? 'mine';
   const mine = sql<boolean>`(${responsibleUserSql} is not distinct from ${input.userId}::uuid)`;
@@ -602,7 +609,7 @@ export async function listDueTasks(
         asc(leadTasks.createdAt),
         asc(leadTasks.id)
       )
-      .limit(DUE_TASKS_SHOWN),
+      .limit(input.limit ?? DUE_TASKS_SHOWN),
     db
       .select({
         all: count(),

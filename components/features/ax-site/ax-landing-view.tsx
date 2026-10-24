@@ -164,6 +164,11 @@ export function AxLandingOnly({ children }: { children: ReactNode }) {
 interface AxDiagnosisFrameProps {
   /** Eyebrow, heading and lead of the section (left out while only the result is shown) */
   intro: ReactNode;
+  /**
+   * Under the diagnosis, e.g. how to leave the path it starts on: below rather than above, so
+   * a jump here still shows the first question (left out with the intro)
+   */
+  note?: ReactNode;
   children: ReactNode;
 }
 
@@ -171,7 +176,7 @@ interface AxDiagnosisFrameProps {
  * Diagnosis section of the landing page. While only the result is shown it takes the layout
  * of /ax-diagnosis; the diagnosis stays at the same place in the tree, so it keeps its state.
  */
-export function AxDiagnosisFrame({ intro, children }: AxDiagnosisFrameProps) {
+export function AxDiagnosisFrame({ intro, note, children }: AxDiagnosisFrameProps) {
   const resultOnly = useAxLandingView()?.resultOnly ?? false;
   return (
     <section
@@ -179,7 +184,8 @@ export function AxDiagnosisFrame({ intro, children }: AxDiagnosisFrameProps) {
       aria-labelledby={resultOnly ? undefined : 'ax-diagnosis-heading'}
       className={cn(
         'bg-gradient-to-b from-white to-ax-mist',
-        resultOnly ? 'py-10 sm:py-14' : 'py-16 sm:py-24'
+        // Little room above the intro: a jump here should show the first question too (#420)
+        resultOnly ? 'py-10 sm:py-14' : 'pb-16 pt-10 sm:pb-24 sm:pt-12'
       )}
     >
       <div className={cn('mx-auto px-4', resultOnly ? 'max-w-3xl' : 'max-w-4xl sm:px-6')}>
@@ -187,11 +193,13 @@ export function AxDiagnosisFrame({ intro, children }: AxDiagnosisFrameProps) {
         <div
           className={cn(
             'rounded-3xl bg-white p-5 shadow-[0_10px_40px_rgba(0,0,0,0.08)] ring-1 ring-black/5 sm:p-10',
-            !resultOnly && 'mt-10'
+            // Closer to the intro on phones, for the same reason (#425)
+            !resultOnly && 'mt-6 sm:mt-10'
           )}
         >
           {children}
         </div>
+        {resultOnly ? null : note}
       </div>
     </section>
   );

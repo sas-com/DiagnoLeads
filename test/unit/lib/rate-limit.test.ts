@@ -67,7 +67,7 @@ describe('ENDPOINT_RATE_LIMITS', () => {
     });
 
     it('should have strict password reset rate limits', () => {
-      expect(ENDPOINT_RATE_LIMITS['/api/auth/forgot-password']).toEqual({ max: 3, windowMs: 60 * 1000 });
+      expect(ENDPOINT_RATE_LIMITS['/api/auth/request-password-reset']).toEqual({ max: 3, windowMs: 60 * 1000 });
       expect(ENDPOINT_RATE_LIMITS['/api/auth/reset-password']).toEqual({ max: 3, windowMs: 60 * 1000 });
     });
   });

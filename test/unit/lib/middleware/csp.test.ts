@@ -2,6 +2,7 @@
  * Content Security Policy: the guarantees the production policy must keep.
  * A change that weakens one of them has to change this test too.
  */
+import { GA_IMG_SOURCES } from '@/lib/analytics/ga';
 import { contentSecurityPolicy, isLocalHost } from '@/lib/middleware/csp';
 import { describe, expect, it } from 'vitest';
 
@@ -38,6 +39,18 @@ describe('contentSecurityPolicy (production)', () => {
 
   it('allows frames only from Cloudflare Turnstile', () => {
     expect(policy.get('frame-src')).toEqual(['https://challenges.cloudflare.com']);
+  });
+
+  it('loads images only from the app itself and from the page (no other host, #68)', () => {
+    expect(policy.get('img-src')).toEqual(["'self'", 'blob:', 'data:']);
+  });
+
+  it('adds only the GA4 image hosts when GA4 is on', () => {
+    const sources = directives(contentSecurityPolicy('abc123', false, { analytics: true })).get(
+      'img-src'
+    );
+    expect(sources).toEqual(["'self'", 'blob:', 'data:', ...GA_IMG_SOURCES]);
+    expect(sources).not.toContain('https:');
   });
 
   it('keeps plugins, framing by other sites and foreign form targets out', () => {

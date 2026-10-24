@@ -259,6 +259,8 @@
     "columns": "Columns",
     "openMenu": "Open menu",
     "saving": "Saving...",
+    "loadError": "Could not be loaded",
+    "retry": "Reload",
     "weekdays": {
       "sunday": "Sunday",
       "monday": "Monday",
@@ -329,7 +331,8 @@
       "done": "The check before sending is complete",
       "unavailable": "The check before sending could not be shown.",
       "retry": "Try the check again",
-      "alternative": "Some company networks block it. In that case, please contact us through the <link>consultation booking page</link>."
+      "alternative": "Some company networks block it. In that case, please contact us through the <link>consultation booking page</link>.",
+      "alternativeContact": "Some company networks block it. In that case, please contact us by phone (<phone></phone>) or email (<email></email>)."
     },
     "contact": {
       "description": "The result is shown on this page. We use your contact details to explain the result and offer a consultation.",
@@ -576,6 +579,38 @@
           "body": "Extend features with AI agents and put your data to work."
         }
       },
+      "accessSteps": {
+        "title": "What happens next",
+        "nowHere": "You are here: the free web check is complete. Next, the inventory of your tools begins with a 30-minute online consultation.",
+        "items": {
+          "inventory": {
+            "title": "Inventory",
+            "body": "In a 30-minute online consultation, we ask about the number of tools and how they are used. Where needed, we take the files and check what is in them."
+          },
+          "decide": {
+            "title": "Deciding the approach",
+            "body": "Based on this result and the inventory, we decide together whether to fix, move to the web or replace, and in what scope and order."
+          },
+          "fix": {
+            "title": "Fix it and keep using it",
+            "body": "We fix your current Access tool so that it works again."
+          },
+          "web": {
+            "title": "Move it to the web",
+            "body": "We rebuild it as a web system used in the browser. How to move the data and the switch-over date are decided in advance."
+          },
+          "replace": {
+            "title": "Replace it with an off-the-shelf service",
+            "body": "You switch to a commercial cloud service or similar. How to move the data and the switch-over date are decided in advance."
+          },
+          "ax": {
+            "title": "AX",
+            "body": "After moving to the web, we add AI where it helps."
+          }
+        }
+      },
+      "accessMeetingDuration": "About 30 minutes (online)",
+      "accessDisclaimer": "This result is an estimate based on your answers. We tell you the exact approach, schedule and cost after checking the contents of the tool.",
       "stepLabel": "STEP {number}",
       "title": "Your result",
       "subtitle": "An estimate based on the answers from {company}",
@@ -1909,7 +1944,14 @@
         "expiredDescription": "This invitation has expired. Ask the person who invited you to send it again.",
         "revokedDescription": "This invitation was revoked or replaced by a newer one. Open the link in the latest invitation email.",
         "acceptedDescription": "This invitation has already been used. If you have joined, open the dashboard.",
-        "openDashboard": "Open the dashboard"
+        "openDashboard": "Open the dashboard",
+        "verifyFirst": "Before you join, we check that {email} is your email address. Send yourself a verification email and open its link in this browser, signed in; it brings you back here.",
+        "sendVerification": "Send a verification email",
+        "resendVerification": "Send the verification email again",
+        "verificationSent": "We sent a verification email to {email}. Open its link in this browser to come back here and join. If it does not arrive, check your spam folder.",
+        "verificationFailed": "The verification email could not be sent. Wait a moment and try again.",
+        "verifyLinkFailed": "The verification link has expired or is not valid. Send the verification email again.",
+        "verifyInSignedInBrowser": "Open the verification link in the same browser you signed up in, while signed in (opening it from a phone mail app does not work). Sign in and send the verification email again."
       }
     },
     "ai": {
@@ -2665,7 +2707,7 @@
       "navLabel": "On this page",
       "nav": {
         "problems": "Challenges",
-        "reasons": "Why us",
+        "reasons": "Features",
         "demo": "Demo",
         "steps": "Approach",
         "targets": "Systems",
@@ -2686,7 +2728,13 @@
       "title": "Can you make management decisions for the AI era with your current core system?",
       "tagline": "From a legacy core system to a flexible, extensible IT platform.",
       "lead": "We move core systems and business tools running on AS/400, NEC ACOS or Microsoft Access to a modern web system while keeping today's specifications, and support you on to AI agents and data use (AX).",
-      "ctaCaption": "Multiple choice, about 3 minutes",
+      "deadlinesLabel": "Is one of these coming up?",
+      "deadlines": {
+        "lease": "End of maintenance or lease",
+        "people": "Retirement or transfer of the people who can fix it",
+        "edi": "EDI over INS Net (announced to end on December 31, 2028)"
+      },
+      "ctaCaption": "See how pressing your deadlines are and how hard a migration would be, in about 3 minutes",
       "cta": "Start the free web check",
       "consult": "Book a free consultation",
       "demo": "See the demo",
@@ -2695,7 +2743,7 @@
     "overview": {
       "title": "From core system migration to AX, in one service",
       "lead": "We move legacy core systems such as AS/400 to a modern web system with AI-assisted analysis and development, then add AI agents to turn it into a platform that puts management data to work.",
-      "stepLabel": "STEP {number}",
+      "stepLabel": "Phase {number}",
       "items": {
         "survey": "Analyze the current system with AI and visualize its specifications",
         "migration": "Keep the current specifications and migrate step by step",
@@ -2711,8 +2759,10 @@
     "challenges": {
       "title": "People, things, money and information: all of them are tied to the legacy core system",
       "lead": "Behind these concerns lie four challenges: people, things, money and information.",
+      "nowLabel": "Today",
       "items": {
         "people": {
+          "voice": "“Only one or two people in the company can fix the RPG or COBOL”",
           "label": "People",
           "title": "A core system that depends on a few people",
           "body": "Years of person-dependent changes have turned the specifications into a black box, and fewer engineers can work on it every year, raising the risk to business continuity.",
@@ -2722,6 +2772,7 @@
           }
         },
         "agility": {
+          "voice": "“Every new customer or product means a slow round of changes”",
           "label": "Agility",
           "title": "A system that cannot keep up with the market",
           "body": "Every time you try to respond to new customers or market changes, the limits of the existing system hold back new products and services.",
@@ -2731,6 +2782,7 @@
           }
         },
         "cost": {
+          "voice": "“Maintenance costs keep rising and leave no budget for new investment”",
           "label": "Cost",
           "title": "\"Life-extension costs\" that limit growth",
           "body": "The more maintenance and additions to the current system cost, the less budget is left for new challenges that drive the business forward.",
@@ -2740,6 +2792,7 @@
           }
         },
         "data": {
+          "voice": "“The figures for management meetings are collected by hand in Excel every month”",
           "label": "Data",
           "title": "Data you cannot use for decisions",
           "body": "Core data stored on AS/400 and similar systems is often locked in proprietary formats, so the figures behind management decisions are not available in real time.",
@@ -2762,8 +2815,13 @@
           "title": "Free web check (about 3 minutes)",
           "body": "Answer multiple-choice questions to see the migration difficulty, the urgency of a renewal and the challenge to tackle first right away."
         },
-        "simple": {
+        "consult": {
           "label": "Next",
+          "title": "Free consultation",
+          "body": "Based on your result, we explain how to proceed and what to check next."
+        },
+        "simple": {
+          "label": "Then",
           "title": "Quick assessment (asset inventory by our staff)",
           "body": "An inventory of your assets (number of programs, languages, integrations) gives an estimate of the migration difficulty."
         },
@@ -2896,13 +2954,13 @@
       "lead": "Choose the system you want to migrate and answer multiple-choice questions. You will see the migration difficulty, the urgency and the challenge to tackle first. At the end, enter your company and contact details to see the result right away (you can also print it or save it as a PDF). No pushy sales."
     },
     "reasons": {
-      "title": "Why customers choose us",
-      "tagline": "Fast, careful, and beyond.",
-      "lead": "AI-assisted analysis and development, combined with experience in core system migration, aim for both speed and quality, with support on to AX after the migration.",
+      "title": "Three features of AX migration",
+      "tagline": "Visualize with AI, verify by comparison, and go on to AX.",
+      "lead": "We combine AI-assisted analysis and development with experience in core system migration, and proceed step by step.",
       "items": {
         "speed": {
           "concern": "If time is the concern",
-          "title": "Speed",
+          "title": "Visualize the current specifications with AI",
           "points": {
             "first": "AI analysis* of the current system makes visualizing the specifications more efficient",
             "second": "AI-assisted development aims to shorten the time it takes to move to a modern web system"
@@ -2910,26 +2968,30 @@
         },
         "quality": {
           "concern": "If the impact on operations is the concern",
-          "title": "High quality",
+          "title": "Run the same data through old and new and compare",
           "points": {
             "first": "A migration that keeps the current specifications and makes use of existing assets",
             "second": "The same data runs before and after the migration and the results are compared, to check that the business logic is carried over correctly"
           }
         },
         "ax": {
-          "concern": "If the return on investment is the concern",
-          "title": "AX",
+          "concern": "If the cost is the concern",
+          "title": "Proceed step by step, on to AX",
           "points": {
-            "first": "Work toward the next-generation business transformation you aim for",
-            "second": "AI agents make a wide range of management data usable"
+            "first": "Agree on the method and schedule after Phase 1, then move on",
+            "second": "You do not have to order the whole project at once. After the migration, AI agents aim to put management data to use."
           }
         }
       },
       "note": "* Specifications, source code and other materials you entrust to us are processed in a secure environment where they are not used as training data."
     },
+    "consultBand": {
+      "title": "Talk to us about how to proceed",
+      "lead": "Besides the free web check, we take questions by phone and email."
+    },
     "demo": {
       "eyebrow": "Demo",
-      "title": "See it on real screens",
+      "title": "Compare an order entry screen before and after the migration",
       "lead": "Using an order entry screen as the example, switch on the spot between a screen that recreates the look of the current system (AS/400) and a modern web screen as it could look after the migration.",
       "cta": "See the demo",
       "imageAlt": "Demo screen showing an AS/400-style order entry screen next to a web order entry screen as it could look after the migration"
@@ -2949,6 +3011,18 @@
           "q": "Which systems are covered?",
           "a": "AS/400 (IBM i), NEC ACOS and Microsoft Access. Please also ask about Visual Basic systems, low-code products such as WebPerformer, and other office computers and mainframes."
         },
+        "costTime": {
+          "q": "How much does it cost and how long does it take?",
+          "a": "It depends greatly on the number of programs, screens and forms, and on the integrations, so it is settled in the current-system survey (Phase 1). The free web check and the consultation cost nothing."
+        },
+        "partial": {
+          "q": "Can we start with some operations or systems only?",
+          "a": "Yes. We agree on the method and schedule with you in Phase 1 and migrate step by step. You do not have to order the whole project at once."
+        },
+        "prepare": {
+          "q": "Is there anything to prepare before the consultation?",
+          "a": "You can consult us without it. It helps to have the maintenance and lease contracts, a rough count of programs, screens and forms, and a list of the connected systems and business partners."
+        },
         "vendorSource": {
           "q": "Our maintenance vendor holds the source code. Can we still consult you?",
           "a": "Yes. First, we check with you whether the source code held by your maintenance vendor or supplier can be provided for the survey (contract and cost)."
@@ -2960,6 +3034,10 @@
         "ax": {
           "q": "What does \"AX\" mean?",
           "a": "AI transformation: business transformation that makes use of AI. After the migration, AI agents are added to the new web system to analyze the system and its data, streamline operations and extend features step by step."
+        },
+        "webSecurity": {
+          "q": "We are worried about vulnerabilities and cyberattacks if we move to a web system.",
+          "a": "That is a fair concern. A web system also carries a risk: when a weakness (vulnerability) is found in software it uses, that weakness can be exploited until it is fixed. So when we decide how to migrate, we decide with you how widely the system can be reached (for example, only on your internal network, or from outside the office as well), who keeps fixing weaknesses as they are found and how, and how logins, permissions, records and backups are managed. Note also that once maintenance of the OS or a product ends, weaknesses found in it are no longer fixed, and this applies to your current system too."
         },
         "data": {
           "q": "Are the specifications and source code we provide used to train AI?",
@@ -2973,7 +3051,7 @@
     },
     "finalCta": {
       "title": "Make your next step a step toward AX.",
-      "lead": "Start by telling us about your current systems and challenges. Together, we will propose a renewal that leads to smiles.",
+      "lead": "Start with the free web check to see how pressing your deadlines are and how hard a migration would be. You can also reach us by phone or email.",
       "caption": "Multiple choice, about 3 minutes",
       "cta": "Start the free web check",
       "consult": "Book a free consultation",
@@ -3001,7 +3079,8 @@
         "access": "Microsoft Access migration",
         "column": "Articles"
       }
-    }
+    },
+    "newTab": "(opens in a new tab)"
   },
   "axAccess": {
     "meta": {
@@ -3013,9 +3092,15 @@
       "eyebrow": "For teams using Microsoft Access business tools",
       "title": "Your Access tool: fix it and keep using it, or move it to the web?",
       "lead": "Choose the version, VBA, number of users and more, and see a guide to the way forward that suits your tool. We tell you which fits: fixing it and keeping it, moving it to the web, or replacing it.",
+      "triggersLabel": "Does one of these apply?",
+      "triggers": {
+        "support": "End of support for Access 2016, 2019 and 2021",
+        "people": "The person who built it moving on",
+        "m365": "A move to Microsoft 365 or 64-bit"
+      },
       "ctaCaption": "Free, multiple choice, about 3 minutes",
       "cta": "Start the free web check (Access)",
-      "consult": "Book a 30-minute online consultation",
+      "consult": "Book a free 30-minute online consultation",
       "pdfNote": "You can print the result or save it as a PDF and use it as it is to explain the matter to your manager or IT.",
       "paths": {
         "title": "Three ways forward",
@@ -3109,8 +3194,14 @@
       "bridgeCta": "Check which one fits with the free web check"
     },
     "steps": {
-      "title": "From consultation to completion",
+      "title": "From the free web check to completion",
+      "lead": "The free web check gives a first guide; a consultation and an inventory show what is in the tool, and then we decide the way forward together.",
       "items": {
+        "web": {
+          "label": "First",
+          "title": "Free web check (Access, about 3 minutes)",
+          "body": "Answer multiple-choice questions to see right away a guide to the recommended way forward (fix, move to the web or replace) and the issue to tackle first."
+        },
         "inventory": {
           "label": "STEP 1",
           "title": "Inventory",
@@ -3133,6 +3224,10 @@
         }
       },
       "aiNote": "For example, AI can be used to help with input, totals, or drafting answers to questions from within the company. We decide together where to use it after checking the work and the data. You can start by trying it on a small scale."
+    },
+    "consultBand": {
+      "title": "Fix it or move it to the web? If you are unsure, talk to us",
+      "lead": "You can also apply for the free 30-minute online consultation by phone or email."
     },
     "targets": {
       "title": "Which Access tools we cover",
@@ -3161,9 +3256,13 @@
           "q": "Can we move only part of it to the web?",
           "a": "Yes. You can move the most used functions first and keep using the rest in your current Access tool."
         },
+        "webSecurity": {
+          "q": "We are worried about vulnerabilities and cyberattacks if we move to the web.",
+          "a": "That is a fair concern. A web system also carries a risk: when a weakness (vulnerability) is found in software it uses, that weakness can be exploited until it is fixed. So when we decide the approach, we decide with you how widely the system can be reached (for example, only on your internal network, or from outside the office as well), who keeps fixing weaknesses as they are found and how, and how logins, permissions, records and backups are managed. Note also that versions of Access whose support has ended get no fixes when weaknesses are found."
+        },
         "cost": {
           "q": "What does the cost depend on?",
-          "a": "It depends on the number of screens and reports, the amount of VBA, the links to other systems and databases, and the amount and state of the data. We give you an estimate after checking the contents."
+          "a": "It depends on the number of screens and reports, the amount of VBA, the links to other systems and databases, and the amount and state of the data. We give you an estimate after checking the contents. The free web check and the 30-minute online consultation cost nothing."
         },
         "period": {
           "q": "How long does it take?",
@@ -3179,14 +3278,18 @@
         },
         "consult": {
           "q": "How does the consultation work?",
-          "a": "It is a 30-minute online consultation as a rule. Engineers join when needed."
+          "a": "It is a free 30-minute online consultation as a rule. Engineers join when needed. You can apply from the result of the free web check, or by phone or email."
         }
       }
+    },
+    "trustScope": {
+      "title": "Scope",
+      "body": "You can consult us on every way forward: fixing it, moving it to the web or replacing it. We take on a single tool of a single department."
     },
     "diagnosis": {
       "eyebrow": "FREE CHECK",
       "title": "Free web check (Access)",
-      "lead": "Just answer multiple-choice questions about your Access tool. In about 3 minutes you see a guide to the recommended way forward (fix, move to the web or replace), how hard and how urgent the migration is, and which issue to tackle first. Enter your company name and contact details at the end and the result is shown right away (it can be printed or saved as a PDF). If you wish, you can go straight on to a 30-minute online consultation. No pushy sales.",
+      "lead": "Just answer multiple-choice questions about your Access tool. In about 3 minutes you see a guide to the recommended way forward (fix, move to the web or replace), how hard and how urgent the migration is, and which issue to tackle first. Enter your company name and contact details at the end and the result is shown right away (it can be printed or saved as a PDF). No pushy sales.",
       "presetNote": "For a system other than Access, go back with “Back” and choose it there."
     },
     "finalCta": {
@@ -3194,7 +3297,7 @@
       "lead": "Fix it, move it to the web, or replace it. Before deciding, why not find out the current state of your tool?",
       "caption": "Free, multiple choice, about 3 minutes",
       "cta": "Start the free web check (Access)",
-      "consult": "Book a 30-minute online consultation"
+      "consult": "Book a free 30-minute online consultation"
     },
     "trademark": "Microsoft and Access are trademarks or registered trademarks of Microsoft Corporation in the United States and other countries.",
     "breadcrumb": "Microsoft Access migration",
@@ -3999,6 +4102,7 @@
     "firstPage": "First page",
     "lastPage": "Last page",
     "pageSize": "Rows per page",
+    "selectRow": "Select {name}",
     "pageSizeOption": "{count} per page",
     "nextMeeting": "Next meeting",
     "dealRating": "Deal rating",
@@ -4115,6 +4219,7 @@
       "loadError": "Could not load",
       "retry": "Reload",
       "more": "{count} more",
+      "showLess": "Show less",
       "noLeadName": "Lead without a name",
       "descriptionAll": "Next actions and takeaways due today or overdue. Tick one to mark it done.",
       "scopeLabel": "Show",
