@@ -50,8 +50,14 @@ export const ENDPOINT_RATE_LIMITS: Record<string, RateLimitConfig> = {
   // better-auth endpoint paths (/api/auth/sign-in/email, /api/auth/sign-up/email)
   '/api/auth/sign-in': { max: 5, windowMs: 60 * 1000 },
   '/api/auth/sign-up': { max: 3, windowMs: 60 * 1000 },
-  '/api/auth/forgot-password': { max: 3, windowMs: 60 * 1000 },
+  // better-auth's password reset request (the old /forgot-password path no longer exists)
+  '/api/auth/request-password-reset': { max: 3, windowMs: 60 * 1000 },
   '/api/auth/reset-password': { max: 3, windowMs: 60 * 1000 },
+  '/api/auth/send-verification-email': { max: 3, windowMs: 60 * 1000 },
+  // Reading the session: every page asks for it (useSession), so the strict auth limit (5 a
+  // minute per IP) made signed-in staff behind one office IP look signed out (#519). Nothing
+  // to guess here, so it counts like other API reads.
+  '/api/auth/get-session': DEFAULT_RATE_LIMITS.api,
 
   // AI機能
   '/api/trpc/ai.scoreLeads': { max: 10, windowMs: 60 * 1000 },

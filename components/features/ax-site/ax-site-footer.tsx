@@ -27,7 +27,8 @@ export async function AxSiteFooter({ locale }: { locale: string }) {
   ];
 
   return (
-    <footer id={AX_FOOTER_ID} className="bg-ax-forest text-white">
+    // The rule on top parts it from the final call to action, which has the same forest
+    <footer id={AX_FOOTER_ID} className="border-t border-white/25 bg-ax-forest text-white">
       <div className="mx-auto max-w-6xl px-4 pb-8 pt-12 sm:px-6">
         <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
           <div className="space-y-3">

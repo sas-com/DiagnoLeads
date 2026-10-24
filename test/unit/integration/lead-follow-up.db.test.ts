@@ -294,6 +294,35 @@ describe.skipIf(!url)('lead follow-up (PostgreSQL)', () => {
       expect(due.items.map((t: { id: string }) => t.id)).toEqual([overdue.id, today.id]);
       expect(due.items[0].lead).toEqual({ name: '佐藤 一郎', company: '架空商事' });
       expect(due.today).toBe(dayFromToday(0));
+
+      // The dashboard lists the first ones; the total still counts all (#431)
+      const first = await caller.leadFollowUp.dueTasks({ organizationId: org, limit: 1 });
+      expect(first.total).toBe(2);
+      expect(first.items.map((t: { id: string }) => t.id)).toEqual([overdue.id]);
+    });
+
+    it('lists the first 20 by default and the rest when asked (#431)', async () => {
+      const org = await createOrganization('フォローテストD');
+      const { caller } = await callerFor(org, 'member');
+      const leadId = await createLead(org);
+      for (let index = 0; index < 22; index++) {
+        await caller.leadFollowUp.createTask({
+          organizationId: org,
+          leadId,
+          title: `期限切れ ${index + 1}`,
+          dueOn: dayFromToday(-1),
+        });
+      }
+
+      const first = await caller.leadFollowUp.dueTasks({ organizationId: org });
+      expect(first.total).toBe(22);
+      expect(first.items).toHaveLength(20);
+      const all = await caller.leadFollowUp.dueTasks({ organizationId: org, limit: 200 });
+      expect(all.items).toHaveLength(22);
+      // The same order: the opened list starts with the first page
+      expect(all.items.slice(0, 20).map((t: { id: string }) => t.id)).toEqual(
+        first.items.map((t: { id: string }) => t.id)
+      );
     });
   });
 

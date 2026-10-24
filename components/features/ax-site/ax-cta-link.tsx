@@ -2,7 +2,7 @@
 
 import { trackAxEvent } from '@/components/features/ax-diagnosis/tracking';
 import { cn } from '@/lib/utils';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, ExternalLink } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { currentAxPage, followAxLink } from './ax-cross-link';
 import { useAxLandingView } from './ax-landing-view';
@@ -45,6 +45,11 @@ interface AxCtaLinkProps {
    * `location` (e.g. 'end' for the column-end-<slug> button). Defaults to `location`.
    */
   placement?: string;
+  /**
+   * Read after the label of an external link, e.g. "(opens in a new tab)" (#420); the external
+   * link icon replaces the arrow then
+   */
+  newTabLabel?: string;
   children: ReactNode;
 }
 
@@ -59,6 +64,7 @@ export function AxCtaLink({
   tabIndex,
   platform,
   placement,
+  newTabLabel,
   children,
 }: AxCtaLinkProps) {
   const landingView = useAxLandingView();
@@ -94,7 +100,14 @@ export function AxCtaLink({
       )}
     >
       {children}
-      <ArrowRight className="h-5 w-5 shrink-0" aria-hidden="true" />
+      {external && newTabLabel ? (
+        <>
+          <ExternalLink className="h-5 w-5 shrink-0" aria-hidden="true" />
+          <span className="sr-only">{newTabLabel}</span>
+        </>
+      ) : (
+        <ArrowRight className="h-5 w-5 shrink-0" aria-hidden="true" />
+      )}
     </a>
   );
 }

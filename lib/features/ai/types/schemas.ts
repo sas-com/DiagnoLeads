@@ -49,11 +49,17 @@ export const updateEmbeddingSchema = z.object({
 export type UpdateEmbeddingInput = z.infer<typeof updateEmbeddingSchema>;
 
 /**
+ * Leads per batch call. They go to Claude in parallel, so one batch takes about as long as one
+ * call and stays inside Vercel's 30-second function limit (#534)
+ */
+export const AI_BATCH_MAX = 5;
+
+/**
  * Batch score leads schema
  */
 export const batchScoreLeadsSchema = z.object({
   organizationId: z.string().uuid(),
-  leadIds: z.array(z.string().uuid()).min(1).max(50),
+  leadIds: z.array(z.string().uuid()).min(1).max(AI_BATCH_MAX),
 });
 export type BatchScoreLeadsInput = z.infer<typeof batchScoreLeadsSchema>;
 
@@ -71,6 +77,6 @@ export type PredictConversionInput = z.infer<typeof predictConversionSchema>;
  */
 export const batchPredictConversionSchema = z.object({
   organizationId: z.string().uuid(),
-  leadIds: z.array(z.string().uuid()).min(1).max(20),
+  leadIds: z.array(z.string().uuid()).min(1).max(AI_BATCH_MAX),
 });
 export type BatchPredictConversionInput = z.infer<typeof batchPredictConversionSchema>;
