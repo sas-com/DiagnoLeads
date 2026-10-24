@@ -266,6 +266,22 @@ describe.skipIf(!url)('AI features: organization isolation (PostgreSQL)', () => 
     expect(await counted(orgKey)).toBe(orgBefore + 2);
   });
 
+  it("keeps B's lead score when the AI falls back, and stores a real score (scoreLead)", async () => {
+    const one = { organizationId: orgB, leadId: leadB };
+    const scoreOfB = async () =>
+      (await pg.select({ score: leads.score }).from(leads).where(inArray(leads.id, [leadB])))[0]
+        ?.score;
+    const before = await scoreOfB();
+
+    ai.scoreLeadWithAI.mockResolvedValueOnce({ score: 50, isFallback: true });
+    await expect(adminB.ai.scoreLead(one)).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE' });
+    expect(await scoreOfB()).toBe(before);
+
+    ai.scoreLeadWithAI.mockResolvedValueOnce({ score: 77, isFallback: false });
+    await adminB.ai.scoreLead(one);
+    expect(await scoreOfB()).toBe(77);
+  });
+
   it("searches B's leads only (semanticSearch)", async () => {
     await adminB.ai.semanticSearch({ organizationId: orgB, query: '基幹システム' });
     expect(ai.semanticSearch).toHaveBeenCalledWith(

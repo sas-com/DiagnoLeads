@@ -8,6 +8,7 @@ import {
   toggleChoice,
 } from '@/components/features/diagnosis-runner/question-view';
 import { DiagnosisRunnerProvider } from '@/components/features/diagnosis-runner/runner-context';
+import type { AxAccessPath } from '@/lib/features/diagnostics/ax-migration/access-path';
 import { axMigrationDefinition } from '@/lib/features/diagnostics/ax-migration/definition';
 import type {
   AxMigrationPublicResult,
@@ -46,6 +47,14 @@ const LEVEL_BADGE: Record<Level, string> = {
 
 const CHALLENGE_KEYS: ChallengeType[] = ['people', 'cost', 'agility', 'data'];
 const STEP_KEYS = ['simple', 'survey', 'migration', 'ax'] as const;
+
+/**
+ * Steps after an Access check (#457): the flow of the Access page (#158), with the work of the
+ * path recommended; AX only follows a move to the web
+ */
+function accessStepKeys(path: AxAccessPath): string[] {
+  return ['inventory', 'decide', path, ...(path === 'web' ? ['ax'] : [])];
+}
 
 /** Urgency reasons that mean the support or maintenance has already ended */
 const PASSED_DEADLINE_REASONS: ReadonlySet<string> = new Set([
@@ -126,6 +135,10 @@ export function AxDiagnosisResult({
     (key) => key !== primary && result.challenges.selected.includes(key)
   );
   const platformLabel = platform ? tPlatform(platform) : '';
+  // An Access result follows the recommended path, also after the follow-up answers change it
+  const accessPath = result.accessPath?.path;
+  const stepKeys: readonly string[] = accessPath ? accessStepKeys(accessPath) : STEP_KEYS;
+  const stepsPrefix = accessPath ? 'accessSteps.items' : 'steps';
   const reasons = [...result.reasons.difficulty, ...result.reasons.urgency];
   const unknownQuestions = unknownTechnicalQuestions(answers);
 
@@ -429,14 +442,23 @@ export function AxDiagnosisResult({
         }}
       />
 
-      <div className="space-y-4">
-        {createElement(subTag, { className: 'text-lg font-bold' }, t('stepsTitle'))}
+      <div className="space-y-4" data-testid="ax-result-steps">
+        {createElement(
+          subTag,
+          { className: 'text-lg font-bold' },
+          accessPath ? t('accessSteps.title') : t('stepsTitle')
+        )}
         <p className="flex items-center gap-2 text-sm font-bold text-ax-teal-dark">
           <MapPin className="h-4 w-4" aria-hidden="true" />
-          {t('nowHere')}
+          {accessPath ? t('accessSteps.nowHere') : t('nowHere')}
         </p>
-        <ol className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {STEP_KEYS.map((key, index) => (
+        <ol
+          className={cn(
+            'grid gap-3',
+            stepKeys.length === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2 lg:grid-cols-4'
+          )}
+        >
+          {stepKeys.map((key, index) => (
             <li
               key={key}
               className={cn(
@@ -447,8 +469,10 @@ export function AxDiagnosisResult({
               <p className="font-ax-latin text-xs font-bold tracking-widest text-ax-teal-dark">
                 {index === 0 ? t('nextStepLabel') : t('stepLabel', { number: index + 1 })}
               </p>
-              <p className="mt-1 font-bold">{t(`steps.${key}.title`)}</p>
-              <p className="mt-2 text-xs leading-relaxed text-gray-700">{t(`steps.${key}.body`)}</p>
+              <p className="mt-1 font-bold">{t(`${stepsPrefix}.${key}.title`)}</p>
+              <p className="mt-2 text-xs leading-relaxed text-gray-700">
+                {t(`${stepsPrefix}.${key}.body`)}
+              </p>
             </li>
           ))}
         </ol>
@@ -481,6 +505,10 @@ export function AxDiagnosisResult({
               endpoint="/api/diagnostics/ax-migration/consultation"
               submissionId={submissionId}
               onSaved={() => trackAxEvent('ax_meeting_preferences', { platform })}
+              // Access is a 30-minute online consultation, as its landing page says (#158, #455)
+              {...(platform === 'access'
+                ? { duration: t('accessMeetingDuration'), fixedFormat: 'online' as const }
+                : {})}
             />
           </>
         ) : (
@@ -517,7 +545,10 @@ export function AxDiagnosisResult({
 
       <AnswersForPrint locale={locale} answers={answers} />
 
-      <p className="text-xs leading-relaxed text-gray-600">{t('disclaimer')}</p>
+      {/* The Access steps have no current-system survey: the Access page's FAQ wording (#457) */}
+      <p className="text-xs leading-relaxed text-gray-600">
+        {accessPath ? t('accessDisclaimer') : t('disclaimer')}
+      </p>
 
       {/* Next to the print button at the end, away from the documents block (#153), which the
           information case puts high up */}

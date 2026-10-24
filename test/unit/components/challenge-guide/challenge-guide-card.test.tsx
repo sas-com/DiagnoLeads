@@ -5,6 +5,7 @@
 import { ChallengeGuideCard } from '@/components/features/challenge-guide/challenge-guide-card';
 import messages from '@/locales/ja/common.json';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -76,8 +77,18 @@ describe('ChallengeGuideCard', () => {
     expect(container).toBeEmptyDOMElement();
     unmount();
 
-    mocks.result = { data: undefined, isError: true };
+    mocks.result = { data: undefined, isError: true, error: { data: { code: 'FORBIDDEN' } } };
     const second = renderCard();
     expect(second.container).toBeEmptyDOMElement();
+  });
+
+  it('says so in the card when it could not be loaded, with a retry (#431)', async () => {
+    const refetch = vi.fn();
+    mocks.result = { data: undefined, isError: true, error: { data: { code: 'TIMEOUT' } }, refetch };
+    renderCard();
+    expect(screen.getByRole('heading', { name: '次に聞くこと' })).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('読み込めませんでした');
+    await userEvent.setup().click(screen.getByRole('button', { name: '再読み込み' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
   });
 });
