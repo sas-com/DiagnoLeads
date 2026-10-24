@@ -255,7 +255,8 @@ export const accessFileTypes: Column = {
     },
     {
       type: 'p',
-      content: 'ご希望の方は、30分のオンライン相談もご利用いただけます。無理な営業はいたしません。',
+      content:
+        'ご希望の方は、30分の無料オンライン相談もご利用いただけます。無理な営業はいたしません。',
     },
 
     { type: 'h2', id: 'related', text: 'あわせて読みたい記事' },
