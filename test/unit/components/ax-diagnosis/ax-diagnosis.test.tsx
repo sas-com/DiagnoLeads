@@ -580,6 +580,12 @@ describe('AxDiagnosisFlow: another system and the bot check', () => {
     await act(async () => scripts()[0].dispatchEvent(new Event('error')));
 
     expect(screen.getByText('送信前の確認を表示できませんでした。')).toBeInTheDocument();
+    // Without a booking page, the phone and email are the way out (#420)
+    expect(screen.getByRole('link', { name: '03-5427-3663' })).toHaveAttribute('href', 'tel:+81354273663');
+    expect(screen.getByRole('link', { name: 'dx-agency@sas-com.com' })).toHaveAttribute(
+      'href',
+      'mailto:dx-agency@sas-com.com'
+    );
     // The contact details stay: trying again does not reload the page
     expect(screen.getByLabelText(/会社名/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '確認をやり直す' }));

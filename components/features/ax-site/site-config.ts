@@ -18,6 +18,9 @@ export const AX_FINAL_SECTION_ID = 'ax-final';
 /** Diagnosis button below the concerns: the phone CTA bar stays hidden next to it as well */
 export const AX_PROBLEMS_CTA_ID = 'ax-problems-cta';
 export const AX_FOOTER_ID = 'ax-footer';
+/** Diagnosis buttons of the hero and the consultation band: the phone CTA bar stays hidden too */
+export const AX_HERO_CTA_ID = 'ax-hero-cta';
+export const AX_CONSULT_BAND_ID = 'ax-consult';
 
 /** Section anchors on the landing page */
 export const AX_SECTIONS = {

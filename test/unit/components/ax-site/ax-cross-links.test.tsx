@@ -508,7 +508,7 @@ describe('Header menu on phones', () => {
     menu.getAllByRole('link').map((link) => [link.textContent, link.getAttribute('href')]);
   const SECTIONS_HERE = [
     ['お悩み', '#problems'],
-    ['選ばれる理由', '#reasons'],
+    ['特長', '#reasons'],
     ['デモ', '#demo'],
     ['進め方', '#steps'],
     ['対象システム', '#targets'],
@@ -560,7 +560,7 @@ describe('Header menu on phones', () => {
     await renderColumn('access-2gb-limit');
     expect(items(await openMenu(user))).toEqual([
       ['お悩み', '/ja/ax-migration#problems'],
-      ['選ばれる理由', '/ja/ax-migration#reasons'],
+      ['特長', '/ja/ax-migration#reasons'],
       ['デモ', '/ja/ax-migration#demo'],
       ['進め方', '/ja/ax-migration#steps'],
       ['対象システム', '/ja/ax-migration#targets'],

@@ -5,7 +5,7 @@ import { env } from '@/lib/env';
 import { isSignupInvited } from '@/lib/features/members/invitations';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { APIError, createAuthMiddleware } from 'better-auth/api';
+import { APIError, createAuthMiddleware, getSessionFromCtx } from 'better-auth/api';
 import {
   detectLocaleFromHeaders,
   generatePasswordResetEmail,
@@ -14,6 +14,7 @@ import {
   sendAuthEmail,
 } from './email-helpers';
 import { isLocalHttpUrl } from './local-url';
+import { refusedVerificationRedirect, verificationTokenEmail } from './verify-email-guard';
 
 function invitationRequired() {
   return new APIError('FORBIDDEN', {
@@ -89,9 +90,23 @@ export const auth = betterAuth({
    * token of a pending invitation for the address. Checked before better-auth looks the address
    * up, so uninvited callers cannot probe which addresses are registered, and again when the user
    * row is created, so no other path can add users. Existing users sign in as before.
+   *
+   * An email verification link counts only in a browser signed in as the account it verifies
+   * (see verify-email-guard.ts); elsewhere it comes back to its page with an error code.
    */
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
+      if (ctx.path === '/verify-email') {
+        const email = verificationTokenEmail(ctx.query?.token);
+        const session = await getSessionFromCtx(ctx, { disableCookieCache: true });
+        if (email && session?.user.email.toLowerCase() === email) return;
+        const back = refusedVerificationRedirect(ctx.query?.callbackURL);
+        if (back) throw ctx.redirect(back);
+        throw new APIError('FORBIDDEN', {
+          message: 'Open the verification link in the browser signed in to the account',
+          code: 'VERIFY_IN_SIGNED_IN_BROWSER',
+        });
+      }
       if (ctx.path !== '/sign-up/email') return;
       const body = (ctx.body ?? {}) as { email?: unknown; invitationToken?: unknown };
       const email = typeof body.email === 'string' ? body.email : '';

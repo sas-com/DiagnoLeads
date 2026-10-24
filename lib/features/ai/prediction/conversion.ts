@@ -3,20 +3,8 @@
  * Uses AI to predict lead conversion probability
  */
 
-import Anthropic from '@anthropic-ai/sdk';
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema';
-
-// Initialize Anthropic client lazily
-let anthropicClient: Anthropic | null = null;
-
-function getAnthropicClient(): Anthropic {
-  if (!anthropicClient) {
-    anthropicClient = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY || '',
-    });
-  }
-  return anthropicClient;
-}
+import { CLAUDE_MAX_TOKENS, CLAUDE_MODEL, anthropic } from '../client';
 
 export interface LeadForPrediction {
   id: string;
@@ -92,14 +80,12 @@ export interface ConversionFactor {
  * Predict conversion probability for a single lead
  */
 export async function predictConversion(lead: LeadForPrediction): Promise<ConversionPrediction> {
-  const client = getAnthropicClient();
-
   const prompt = buildPredictionPrompt(lead);
 
   try {
-    const message = await client.messages.parse({
-      model: 'claude-sonnet-5-5',
-      max_tokens: 8000,
+    const message = await anthropic.messages.parse({
+      model: CLAUDE_MODEL,
+      max_tokens: CLAUDE_MAX_TOKENS,
       messages: [
         {
           role: 'user',
