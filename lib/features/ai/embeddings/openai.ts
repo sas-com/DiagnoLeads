@@ -62,8 +62,25 @@ export async function generateEmbeddingsBatch(texts: string[]): Promise<number[]
 }
 
 /**
+ * Longest text of one lead field that is embedded. The lead inputs have no length limit, so
+ * without it one lead could cost far more than the one call EMBEDDING_CALL_LIMITS counts (#576).
+ */
+export const MAX_EMBEDDING_FIELD_CHARS = 1_000;
+
+/** Longest text embedded for one lead, all its fields together */
+export const MAX_EMBEDDING_TEXT_CHARS = 4_000;
+
+/** `text` cut to `max` characters, never inside a surrogate pair */
+function clipText(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const last = text.charCodeAt(max - 1);
+  return text.slice(0, last >= 0xd800 && last <= 0xdbff ? max - 1 : max);
+}
+
+/**
  * Prepare lead text for embedding
- * Combines relevant lead fields into a searchable text
+ * Combines relevant lead fields into a searchable text, each field cut to
+ * MAX_EMBEDDING_FIELD_CHARS and the whole to MAX_EMBEDDING_TEXT_CHARS
  */
 export function prepareLeadText(lead: {
   name?: string | null;
@@ -73,14 +90,9 @@ export function prepareLeadText(lead: {
   industry?: string | null;
   position?: string | null;
 }): string {
-  const parts = [
-    lead.name,
-    lead.email,
-    lead.company,
-    lead.industry,
-    lead.position,
-    lead.notes,
-  ].filter(Boolean);
+  const parts = [lead.name, lead.email, lead.company, lead.industry, lead.position, lead.notes]
+    .filter((part): part is string => Boolean(part))
+    .map((part) => clipText(part, MAX_EMBEDDING_FIELD_CHARS));
 
-  return parts.join(' ');
+  return clipText(parts.join(' '), MAX_EMBEDDING_TEXT_CHARS);
 }

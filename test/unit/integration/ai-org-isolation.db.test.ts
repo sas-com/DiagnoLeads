@@ -3,7 +3,8 @@
  * organization B passes the ids of A's leads, alone or mixed with B's own. A's leads are never
  * handed to the AI (scoring, summary, embedding, prediction, similar leads), their scores stay as
  * they were, and B's search stays in B. The Claude calls are counted against AI_CALL_LIMITS
- * (#405), concurrent calls (a batched HTTP request) included. The AI services are stubs; the
+ * (#405) and the OpenAI embeddings against EMBEDDING_CALL_LIMITS (#576), concurrent calls (a
+ * batched HTTP request) included. The AI services are stubs; the
  * organization checks and the counting run against the real database. All values are fictional.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
@@ -18,7 +19,7 @@ import {
   publicRateLimits,
   users,
 } from '@/lib/db/schema';
-import { AI_CALL_LIMITS } from '@/lib/features/ai/limits';
+import { AI_CALL_LIMITS, EMBEDDING_CALL_LIMITS } from '@/lib/features/ai/limits';
 import { consumeRateLimit, rateLimitKey } from '@/lib/features/diagnostics/rate-limit';
 import { appRouter } from '@/server/routers/_app';
 import { eq, inArray } from 'drizzle-orm';
@@ -162,13 +163,13 @@ describe.skipIf(!url)('AI features: organization isolation (PostgreSQL)', () => 
   afterAll(async () => {
     if (orgA) await pg.delete(organizations).where(inArray(organizations.id, [orgA, orgB]));
     if (userIds.length > 0) await pg.delete(users).where(inArray(users.id, userIds));
-    const counters = [
-      ...userIds.map((id) => rateLimitKey(AI_CALL_LIMITS.perUser, id)),
+    const counters = [AI_CALL_LIMITS, EMBEDDING_CALL_LIMITS].flatMap((limits) => [
+      ...userIds.map((id) => rateLimitKey(limits.perUser, id)),
       ...[orgA, orgB].flatMap((id) => [
-        rateLimitKey(AI_CALL_LIMITS.perOrganization, id),
-        rateLimitKey(AI_CALL_LIMITS.perOrganizationDaily, id),
+        rateLimitKey(limits.perOrganization, id),
+        rateLimitKey(limits.perOrganizationDaily, id),
       ]),
-    ];
+    ]);
     await pg.delete(publicRateLimits).where(inArray(publicRateLimits.key, counters));
     await client?.end();
   });
@@ -327,5 +328,57 @@ describe.skipIf(!url)('AI features: organization isolation (PostgreSQL)', () => 
       orgB,
       expect.objectContaining({ limit: 10 })
     );
+  });
+
+  it('counts every concurrent embedding in counters of its own, and nothing for A or a refused caller (#576)', async () => {
+    const counted = (key: string) =>
+      pg
+        .select({ count: publicRateLimits.count })
+        .from(publicRateLimits)
+        .where(eq(publicRateLimits.key, key))
+        .then(([row]) => row?.count ?? 0);
+    const userKey = rateLimitKey(EMBEDDING_CALL_LIMITS.perUser, memberBId);
+    const orgKey = rateLimitKey(EMBEDDING_CALL_LIMITS.perOrganization, orgB);
+    const claudeOrgKey = rateLimitKey(AI_CALL_LIMITS.perOrganization, orgB);
+    const [userBefore, orgBefore, claudeBefore] = await Promise.all(
+      [userKey, orgKey, claudeOrgKey].map(counted)
+    );
+    const embedded = () =>
+      ai.semanticSearch.mock.calls.length + ai.updateLeadEmbedding.mock.calls.length;
+
+    // A's lead, or organization A itself: refused before anything is counted
+    await expect(
+      memberB.ai.updateEmbedding({ organizationId: orgB, leadId: leadsA[0] })
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(
+      memberB.ai.semanticSearch({ organizationId: orgA, query: '基幹システム' })
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(await counted(userKey)).toBe(userBefore);
+    expect(await counted(orgKey)).toBe(orgBefore);
+
+    // One embedding left for this user in the hour
+    await consumeRateLimit(
+      pg,
+      EMBEDDING_CALL_LIMITS.perUser,
+      memberBId,
+      new Date(),
+      EMBEDDING_CALL_LIMITS.perUser.limit - 1 - userBefore
+    );
+    // Three calls at once, as one batched HTTP request runs them
+    const results = await Promise.allSettled([
+      memberB.ai.semanticSearch({ organizationId: orgB, query: '基幹システム' }),
+      memberB.ai.updateEmbedding({ organizationId: orgB, leadId: leadB }),
+      memberB.ai.semanticSearch({ organizationId: orgB, query: '製造業' }),
+    ]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    const refused = results.filter((result) => result.status === 'rejected');
+    expect(refused).toHaveLength(2);
+    for (const result of refused) {
+      expect((result as PromiseRejectedResult).reason).toMatchObject({ code: 'TOO_MANY_REQUESTS' });
+    }
+    expect(embedded()).toBe(1);
+    // The organization counted only the call that ran, and the Claude calls none of them
+    expect(await counted(orgKey)).toBe(orgBefore + 1);
+    expect(await counted(claudeOrgKey)).toBe(claudeBefore);
   });
 });
