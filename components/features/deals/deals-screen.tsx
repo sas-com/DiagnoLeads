@@ -25,6 +25,7 @@ import { DealBoard } from './deal-board';
 import { DealFormDialog } from './deal-form-dialog';
 import { DEAL_PERIODS, type DealPeriod, isDealPeriod, periodRange } from './deal-format';
 import { DealTable } from './deal-table';
+import { DealsForbidden } from './deals-forbidden';
 import { LostReasonDialog } from './lost-reason-dialog';
 import { useDealMutations } from './use-deal-mutations';
 
@@ -102,6 +103,17 @@ export function DealsScreen() {
       }
     );
   };
+
+  if (board.error?.data?.code === 'FORBIDDEN') {
+    return (
+      <div className="mx-auto w-full max-w-7xl space-y-6 py-1 sm:px-2 sm:py-6">
+        <h1 className="text-2xl font-bold tracking-wide text-gray-900 sm:text-[2rem] dark:text-gray-50">
+          {t('title')}
+        </h1>
+        <DealsForbidden />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 py-1 sm:px-2 sm:py-6">

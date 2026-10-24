@@ -26,6 +26,7 @@ import { toast } from 'sonner';
 import { DealFormDialog } from './deal-form-dialog';
 import { formatYen } from './deal-format';
 import { DealStageBadge } from './deal-stage-badge';
+import { DealsForbidden } from './deals-forbidden';
 import { LostReasonDialog } from './lost-reason-dialog';
 import { useDealMutations } from './use-deal-mutations';
 
@@ -66,6 +67,14 @@ export function DealDetailView({ dealId }: { dealId: string }) {
     </Link>
   );
 
+  if (query.error?.data?.code === 'FORBIDDEN') {
+    return (
+      <div className="mx-auto max-w-5xl space-y-4">
+        {back}
+        <DealsForbidden />
+      </div>
+    );
+  }
   if (query.isError) {
     const missing = query.error.data?.code === 'NOT_FOUND';
     return (
