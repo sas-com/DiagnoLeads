@@ -6,8 +6,7 @@ import {
   addMonths,
   budgetPlanningMonth,
   computeActTiming,
-  diagnosisSupportEndMonth,
-} from '@/lib/features/act-timing/compute';
+  diagnosisSupportEndMonth, actByAhead } from '@/lib/features/act-timing/compute';
 import { DEFAULT_ACT_TIMING_SETTINGS, readActTimingSettings } from '@/lib/features/act-timing/types/schemas';
 import { describe, expect, it } from 'vitest';
 
@@ -112,5 +111,14 @@ describe('helpers', () => {
       DEFAULT_ACT_TIMING_SETTINGS
     );
     expect(readActTimingSettings(null)).toEqual({ migrationMonths: 12, noticeMonths: 3 });
+  });
+});
+
+describe('actByAhead (#446)', () => {
+  it('counts this month and later, not a past month or none', () => {
+    expect(actByAhead('2026-10-01', '2026-10-24')).toBe(true);
+    expect(actByAhead('2027-04-01', '2026-10-24')).toBe(true);
+    expect(actByAhead('2026-09-01', '2026-10-24')).toBe(false);
+    expect(actByAhead(null, '2026-10-24')).toBe(false);
   });
 });

@@ -54,11 +54,11 @@ export function cardOfField(field: string): LeadCardId | null {
   return null;
 }
 
-/** Lost / on-hold reason only matters for a lost lead */
+/** Lost / on-hold reason matters for a lost lead, and for a nurtured one put on hold (#445) */
 export const showsLostReason = (status: string): boolean =>
-  status === ('lost' satisfies LeadStatus);
+  status === ('lost' satisfies LeadStatus) || status === ('nurturing' satisfies LeadStatus);
 
-/** Fields the card shows for this lead (lostReason only when the lead is lost) */
+/** Fields the card shows for this lead (lostReason only when the lead is lost or nurtured) */
 export function cardFields(
   card: LeadCardId,
   lead: Pick<LeadFieldValues, 'status'>
