@@ -84,8 +84,9 @@ export function BulkActions({
       onActionComplete();
       setShowStatusDialog(false);
     },
-    onError: () => {
-      toast.error(t('updateError'));
+    // A refused value (e.g. a lead on hold made lost, #445) says why; anything else stays generic
+    onError: (error) => {
+      toast.error(error.data?.code === 'BAD_REQUEST' ? error.message : t('updateError'));
     },
   });
 

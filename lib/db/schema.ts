@@ -3188,6 +3188,81 @@ export const emailSuppressions = pgTable(
 export type EmailSuppression = typeof emailSuppressions.$inferSelect;
 export type NewEmailSuppression = typeof emailSuppressions.$inferInsert;
 
+// ============================================================================
+// Site visits (#412, Epic #411)
+// ============================================================================
+
+/**
+ * One view of a public page, counted by the site's own measurement. No cookie is set and the
+ * visitor's IP address and browser are never stored: `visitorHash` is a hash of them with the
+ * day's salt (site_visit_salts), which is deleted the next day, so a visitor cannot be matched
+ * across days. Rows are deleted after 90 days (the daily totals stay in site_visit_daily).
+ */
+export const siteVisits = pgTable(
+  'site_visits',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    /** Path without query or fragment, e.g. /ja/ax-migration/column/access-file-types */
+    path: text('path').notNull(),
+    /** Kind of page (lib/features/site-visits/pages.ts) */
+    pageType: text('page_type').notNull(),
+    /** Host of the referrer only, never the full URL */
+    referrerHost: text('referrer_host'),
+    utmSource: text('utm_source'),
+    utmMedium: text('utm_medium'),
+    utmCampaign: text('utm_campaign'),
+    utmContent: text('utm_content'),
+    utmTerm: text('utm_term'),
+    /** AX cross-link origin (`from`), only the allowed values */
+    fromRef: text('from_ref'),
+    /** 'desktop' | 'mobile' | 'tablet' */
+    device: text('device').notNull(),
+    visitorHash: text('visitor_hash').notNull(),
+    /**
+     * Day in Japan the view counts for (the salt's day). No time of day is kept: a precise time
+     * could be matched with a diagnosis answered at the same moment
+     */
+    day: date('day', { mode: 'string' }).notNull(),
+  },
+  (table) => [
+    index('site_visits_org_day_idx').on(table.organizationId, table.day),
+    index('site_visits_org_path_day_idx').on(table.organizationId, table.path, table.day),
+    check('site_visits_device_check', sql`${table.device} in ('desktop', 'mobile', 'tablet')`),
+  ]
+);
+
+export type SiteVisit = typeof siteVisits.$inferSelect;
+
+/**
+ * Daily totals per page, kept after the visits themselves are deleted. Visitors are the day's
+ * distinct visitor hashes, so a period's visitors are the sum of its days.
+ */
+export const siteVisitDaily = pgTable(
+  'site_visit_daily',
+  {
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    day: date('day', { mode: 'string' }).notNull(),
+    path: text('path').notNull(),
+    pageType: text('page_type').notNull(),
+    visitors: integer('visitors').notNull(),
+    pageviews: integer('pageviews').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.organizationId, table.day, table.path] })]
+);
+
+/** The salt of each day in Japan; a day's salt is deleted once the day is over */
+export const siteVisitSalts = pgTable('site_visit_salts', {
+  day: date('day', { mode: 'string' }).primaryKey(),
+  salt: text('salt').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
 // ---- SFA: deals (Refs #435, Epic #430) ----
 
 /**
