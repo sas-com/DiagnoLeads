@@ -18,7 +18,7 @@ paths: ["lib/email/**", "lib/features/email/index.ts", "lib/features/email/email
 - **却下案**: 今のまま残し、#514 の許可リスト（`scripts/architecture/allowlist.txt`）の2行を恒久的な例外にする（基盤が機能に依存する形が残る）
 - **ルール**:
   - 基盤からメールを送るとき、送れるかを確かめるときは `@/lib/email/send` を読む。機能からは今までどおり `@/lib/features/email`
-  - 移す PR で替える `vi.mock('@/lib/features/email')`：`test/unit/lib/auth/email-helpers.test.ts`・`test/unit/lib/auth/auth-email-background.test.ts`・`test/unit/lib/ops/alert.test.ts`。lib/auth を触るので、読み取り専用のレビューを通す
+  - 移す PR で替える `vi.mock('@/lib/features/email')`：`email-helpers.ts`・`alert.ts` を通る送信を mock しているテスト（2026-10-24 時点で `test/unit/lib/auth/email-helpers.test.ts`・`test/unit/lib/auth/auth-email-background.test.ts`・`test/unit/lib/ops/alert.test.ts`・`test/unit/integration/password-reset-sessions.db.test.ts`。移す前に grep で数え直す）。lib/auth を触るので、読み取り専用のレビューを通す
   - 移す PR で、決定 2026-10-16-test-mode の送信処理の置き場所の記述と `paths` も直し、この決定の `paths` の `email-service.ts` を `lib/email/send.ts` の側に寄せる
   - `lib/features/email/index.ts` は、#514 の許可リストの `feature-index-files` に負債として残る（入口として使い続けるため）
   - 時期：#514 と #471 の後。RLS の作業中（11/4〜11/14）は行わない（`email-helpers.ts` が RLS の範囲）。#300 の着手より前
