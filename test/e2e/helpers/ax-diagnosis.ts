@@ -1,4 +1,4 @@
-import { type Locator, type Page, expect } from '@playwright/test';
+import { type Locator, type Page, type Route, expect } from '@playwright/test';
 
 /**
  * Helpers for the AX migration diagnosis (v2) E2E tests.
@@ -89,18 +89,68 @@ export async function waitForBotCheck(page: Page) {
   });
 }
 
-/** Submit and return the request body sent and the JSON the API answered */
-export async function submitWithRequest(page: Page) {
+type Json = Record<string, unknown>;
+
+interface Submission {
+  /** The request body the page sent */
+  sent: Json;
+  /** The JSON the API answered */
+  body: Json;
+}
+
+type Answer = { submission: Submission; status: number } | Error;
+
+const isSubmissionUrl = (url: URL) => url.pathname === '/api/diagnostics/ax-migration';
+
+/**
+ * Submit and return the request body sent and the JSON the API answered.
+ *
+ * The answer is copied on its way to the page (#572). Read from the browser after the click
+ * (`response.json()`), it was once already gone in CI ("No resource with given identifier
+ * found"): the browser drops a body when the page navigates away, and the page moves in its
+ * history as soon as it shows the result.
+ */
+export async function submitWithRequest(page: Page): Promise<Submission> {
   await waitForBotCheck(page);
-  const responsePromise = page.waitForResponse(
-    (response) =>
-      response.url().endsWith('/api/diagnostics/ax-migration') &&
-      response.request().method() === 'POST'
-  );
-  await page.getByRole('button', { name: /診断結果を見る/ }).click();
-  const response = await responsePromise;
-  expect(response.status()).toBe(200);
-  return { sent: response.request().postDataJSON(), body: await response.json() };
+  let settle: (answer: Answer) => void = () => {};
+  const answered = new Promise<Answer>((resolve) => {
+    settle = resolve;
+  });
+  const handler = async (route: Route) => {
+    if (route.request().method() !== 'POST') {
+      await route.fallback();
+      return;
+    }
+    try {
+      const response = await route.fetch();
+      const text = await response.text();
+      let body: Json;
+      try {
+        body = JSON.parse(text);
+      } catch {
+        body = { text };
+      }
+      // The page gets the same answer, as if the request had gone straight through
+      await route.fulfill({ response });
+      settle({
+        submission: { sent: route.request().postDataJSON(), body },
+        status: response.status(),
+      });
+    } catch (error) {
+      settle(error instanceof Error ? error : new Error(String(error)));
+      await route.abort().catch(() => {});
+    }
+  };
+  await page.route(isSubmissionUrl, handler);
+  try {
+    await page.getByRole('button', { name: /診断結果を見る/ }).click();
+    const answer = await answered;
+    if (answer instanceof Error) throw answer;
+    expect(answer.status, JSON.stringify(answer.submission.body)).toBe(200);
+    return answer.submission;
+  } finally {
+    await page.unroute(isSubmissionUrl, handler);
+  }
 }
 
 /** Submit and return the JSON the API answered */
