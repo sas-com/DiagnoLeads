@@ -80,6 +80,38 @@
 - **解決策**: AGENTS.md にブロックをコミットした（#441。Next.js の関数で生成し、最新と判定されることを確かめた）。Claude Code は CLAUDE.md があると AGENTS.md を読まないので、同じ指示を CLAUDE.md の「実装」にも書いた。`next-env.d.ts` は Git から外す（#460）
 - **教訓**: ツールが作業ツリーを書き換えるときは、戻し続けずに、ツールの公式の扱い（コミットする・無視する・設定で止める）に合わせる
 
+### [Harness] 手元で DB つきの E2E を動かす
+- **日付**: 2026-10-24
+- **状況**: 結果画面と相談の申込（#455・#457）を、実際の API と DB で確かめたかった。DB が要る E2E は、`AX_DIAGNOSIS_ORGANIZATION_ID` が無いと飛ばされる
+- **原因**: セッションには PostgreSQL 16 が入っているが止まっていて、マイグレーションに要る pgvector が無い
+- **解決策**: `.github/workflows/ci.yml` の E2E の手順をなぞった
+  1. `apt-get install -y postgresql-16-pgvector`、`pg_ctlcluster 16 main start`
+  2. postgres のパスワードを CI と同じにして、DB `diagnoleads_test` と vector・ltree・`drizzle` スキーマを作る
+  3. `bun run db:migrate`、CI と同じ組織の INSERT、`bun run test:e2e:seed`
+  4. 本番ビルドを CI と同じ環境変数で `bun run start` し、Playwright は一時設定で `/opt/pw-browsers/chromium` を使う
+- **教訓**: CI の手順どおりに用意すれば、手元でも DB つきの E2E が通る（`ax-diagnosis.spec.ts` の7件で確認）
+
+### [Harness] プロジェクトの Playwright と、入っている Chromium の版がずれている
+- **日付**: 2026-10-24
+- **状況**: プロジェクトの Playwright（1.64.1）は Chromium 1248 を探すが、セッションに入っているのは 1243（`/opt/pw-browsers`）。`bun run columns:thumbnails` もそのままでは起動しない
+- **解決策**: スクリプトを変えずに、`chromium.launch` に `executablePath: '/opt/pw-browsers/chromium'` と `proxy: { server: process.env.HTTPS_PROXY }` を足す一時ファイルを作り、`bun --preload <そのファイル> scripts/generate-column-thumbnails.ts` で動かした（`bun --preload … run …` の形では動かない）
+  - Google Fonts はプロキシ経由で取れる。証明書はブラウザの NSS に入っているので、TLS の検証は外さない
+  - スクリプトはサムネイルと SNS 用の画像を全部作り直す。新しい画像だけを残し、ほかは `git checkout` で戻した（#465）
+- **教訓**: `playwright install` はせず、起動の設定で入っている Chromium を使う
+
+### [Harness] `pkill -f` は、それを実行したシェル自身にも当たる
+- **日付**: 2026-10-24
+- **状況**: `pkill -f "next start"` を含むコマンドを実行したら、そのコマンドのシェルが止まり（終了コード 144）、サーバーは残った
+- **原因**: `pkill -f` はコマンドの行全体で探す。実行中のシェルの行にも同じ文字列が入っている
+- **解決策**: `ps` で PID を確かめて `kill <PID>` で止めた
+- **教訓**: 止めたいプロセスは PID で指定する
+
+### [Test] 手元で診断を続けて送ると、回数制限に当たる
+- **日付**: 2026-10-24
+- **状況**: E2E の直後にスクリーンショット用のスクリプトで診断を送ったら、結果画面が出ずにタイムアウトした。時間を空けて流し直すと通った
+- **原因**: `proxy.ts` の回数制限（`diagnostic` は1分に30回）に当たったとみられる。手元の送信は、すべて同じアドレスから来る
+- **教訓**: 手元で E2E と画面の確認を続けて流すときは、1分ほど空けるか、送る回数を減らす
+
 ---
 
 ## Git関連
