@@ -5,6 +5,7 @@ import { ActTimingCard } from '@/components/features/act-timing/act-timing-card'
 import { AgencyHandoverCard } from '@/components/features/agency-handovers/agency-handover-card';
 import { AppointmentReviewCard } from '@/components/features/appointment-reviews/appointment-review-card';
 import { ChallengeGuideCard } from '@/components/features/challenge-guide/challenge-guide-card';
+import { CommentsSection } from '@/components/features/comments/comments-section';
 import { DeliveryReviewCard } from '@/components/features/delivery-reviews/delivery-review-card';
 import { InfoOfferRequestsCard } from '@/components/features/info-offers/info-offer-requests-card';
 import { LeadActivityCard } from '@/components/features/lead-activity/lead-activity-card';
@@ -472,6 +473,11 @@ function LeadDetailContent({
 
           <TabsContent value="activity" className="mt-4">
             <LeadActivityCard leadId={lead.id} />
+          </TabsContent>
+
+          {/* Comments and notes of the team (#555) */}
+          <TabsContent value="memos" className="mt-4">
+            <CommentsSection organizationId={organizationId} leadId={lead.id} />
           </TabsContent>
 
           <TabsContent value="diagnosis" className="mt-4">

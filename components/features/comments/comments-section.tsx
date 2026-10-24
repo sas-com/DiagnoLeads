@@ -1,7 +1,16 @@
 'use client';
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import type { CommentType } from '@/lib/db/schema';
 import { trpc } from '@/lib/trpc/client';
@@ -16,36 +25,43 @@ import { CommentItem, type CommentWithUser } from './comment-item';
 interface CommentsSectionProps {
   organizationId: string;
   leadId: string;
-  currentUserId: string;
-  isAdmin?: boolean;
 }
 
 type FilterType = 'all' | 'comment' | 'note' | 'activity';
 
-export function CommentsSection({
-  organizationId,
-  leadId,
-  currentUserId,
-  isAdmin = false,
-}: CommentsSectionProps) {
+/**
+ * The lead's comments and notes (#555). Who may write, and edit or delete others' comments,
+ * comes with the list from the server (the same checks as the writes).
+ */
+export function CommentsSection({ organizationId, leadId }: CommentsSectionProps) {
   const t = useTranslations('comments');
+  const tCommon = useTranslations('common');
   const [filter, setFilter] = useState<FilterType>('all');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const utils = trpc.useUtils();
 
-  const { data, isLoading, refetch } = trpc.comments.list.useQuery(
+  // All types at once: the filter only narrows what is shown, so each tab keeps its count
+  const { data, isLoading } = trpc.comments.list.useQuery(
     {
       organizationId,
       leadId,
-      type: filter,
+      type: 'all',
     },
     { enabled: !!organizationId && !!leadId }
   );
 
+  // A written comment also shows in the lead's activity (its first 200 characters)
+  const refresh = () => {
+    void utils.comments.list.invalidate({ organizationId, leadId });
+    void utils.comments.getCount.invalidate({ organizationId, leadId });
+    void utils.leadActivity.list.invalidate();
+  };
+
   const createComment = trpc.comments.create.useMutation({
     onSuccess: () => {
       toast.success(t('createSuccess'));
-      utils.comments.list.invalidate({ organizationId, leadId });
+      refresh();
     },
     onError: () => {
       toast.error(t('createError'));
@@ -55,7 +71,7 @@ export function CommentsSection({
   const updateComment = trpc.comments.update.useMutation({
     onSuccess: () => {
       toast.success(t('updateSuccess'));
-      utils.comments.list.invalidate({ organizationId, leadId });
+      refresh();
     },
     onError: () => {
       toast.error(t('updateError'));
@@ -65,7 +81,8 @@ export function CommentsSection({
   const deleteComment = trpc.comments.delete.useMutation({
     onSuccess: () => {
       toast.success(t('deleteSuccess'));
-      utils.comments.list.invalidate({ organizationId, leadId });
+      setDeletingId(null);
+      refresh();
     },
     onError: () => {
       toast.error(t('deleteError'));
@@ -75,7 +92,7 @@ export function CommentsSection({
   const togglePin = trpc.comments.togglePin.useMutation({
     onSuccess: (data) => {
       toast.success(data.isPinned ? t('pinSuccess') : t('unpinSuccess'));
-      utils.comments.list.invalidate({ organizationId, leadId });
+      refresh();
     },
     onError: () => {
       toast.error(t('pinError'));
@@ -109,14 +126,7 @@ export function CommentsSection({
     });
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm(t('deleteConfirm'))) {
-      deleteComment.mutate({
-        organizationId,
-        id,
-      });
-    }
-  };
+  const handleDelete = (id: string) => setDeletingId(id);
 
   const handleTogglePin = (id: string) => {
     togglePin.mutate({
@@ -126,6 +136,7 @@ export function CommentsSection({
   };
 
   const comments = data?.items ?? [];
+  const viewer = data?.viewer;
   const filterCounts = {
     all: comments.length,
     comment: comments.filter((c) => c.type === 'comment').length,
@@ -142,13 +153,15 @@ export function CommentsSection({
           <Badge color="gray">{data?.total ?? 0}</Badge>
         </div>
 
-        {/* Add new comment/note */}
-        <CommentForm
-          organizationId={organizationId}
-          leadId={leadId}
-          onSubmit={handleSubmit}
-          isLoading={createComment.isPending}
-        />
+        {/* Add new comment/note: not for read-only members */}
+        {viewer?.canWrite && (
+          <CommentForm
+            organizationId={organizationId}
+            leadId={leadId}
+            onSubmit={handleSubmit}
+            isLoading={createComment.isPending}
+          />
+        )}
 
         {/* Filter tabs */}
         <div className="flex gap-2 border-b border-gray-200 dark:border-gray-700 pb-2">
@@ -209,19 +222,44 @@ export function CommentsSection({
                 <CommentItem
                   key={comment.id}
                   comment={comment as CommentWithUser}
-                  currentUserId={currentUserId}
+                  currentUserId={viewer?.userId ?? ''}
                   organizationId={organizationId}
                   leadId={leadId}
-                  isAdmin={isAdmin}
+                  isAdmin={viewer?.canModerate ?? false}
                   onEdit={handleEdit}
                   onDelete={handleDelete}
                   onTogglePin={handleTogglePin}
-                  onReply={handleReply}
+                  onReply={viewer?.canWrite ? handleReply : undefined}
                 />
               ))
           )}
         </div>
       </div>
+
+      <AlertDialog open={deletingId !== null} onOpenChange={(open) => !open && setDeletingId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('deleteTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('deleteConfirm')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteComment.isPending}>
+              {tCommon('cancel')}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                // Stays open until the delete is done (closed on success)
+                event.preventDefault();
+                if (deletingId) deleteComment.mutate({ organizationId, id: deletingId });
+              }}
+              disabled={deleteComment.isPending}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {tCommon('delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
@@ -239,6 +277,7 @@ function FilterButton({ active, onClick, count, icon, children }: FilterButtonPr
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={active}
       className={cn(
         'flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-t-md transition-colors border-b-2 -mb-[2px]',
         active

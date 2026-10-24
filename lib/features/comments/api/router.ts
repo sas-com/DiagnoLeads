@@ -1,13 +1,45 @@
 /**
  * Comments tRPC Router
  * Handles CRUD operations for lead comments and notes
+ *
+ * Every write leaves one `audit_logs` row in the same transaction (resource 'lead_comment',
+ * resourceId = comment id, metadata.leadId), without the text: memos may name people, and the
+ * lead audit keeps no contact details either (#101, #555).
  */
-import { leadComments, users } from '@/lib/db/schema';
+import type { db as defaultDb } from '@/lib/db/client';
+import { type AuditAction, type LeadComment, auditLogs, leadComments } from '@/lib/db/schema';
 import { assertInOrganization } from '@/lib/multi-tenant/helpers/scope';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, count, desc, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
+
+type Transaction = Parameters<Parameters<(typeof defaultDb)['transaction']>[0]>[0];
+
+export const COMMENT_AUDIT_RESOURCE = 'lead_comment';
+
+/** One audit row for a write to a comment (Refs #555) */
+function auditComment(
+  tx: Transaction,
+  input: {
+    organizationId: string;
+    userId: string;
+    action: AuditAction;
+    comment: Pick<LeadComment, 'id' | 'leadId'>;
+    changes?: { before?: unknown; after?: unknown };
+    metadata?: Record<string, unknown>;
+  }
+) {
+  return tx.insert(auditLogs).values({
+    organizationId: input.organizationId,
+    userId: input.userId,
+    action: input.action,
+    resource: COMMENT_AUDIT_RESOURCE,
+    resourceId: input.comment.id,
+    changes: input.changes,
+    metadata: { leadId: input.comment.leadId, ...input.metadata },
+  });
+}
 
 // Schemas
 const createCommentSchema = z.object({
@@ -97,17 +129,23 @@ export const commentsRouter = router({
       },
     });
 
-    // Get total count
-    const totalCount = await ctx.db
-      .select({ count: leadComments.id })
+    const [total] = await ctx.db
+      .select({ value: count() })
       .from(leadComments)
       .where(and(...conditions));
 
     return {
       items: results,
-      total: totalCount.length,
+      total: total?.value ?? 0,
       limit: input.limit,
       offset: input.offset,
+      // What the screen offers: writing needs update Lead; others' comments are edited and
+      // deleted by their author or an owner only (the checks of update and delete below)
+      viewer: {
+        userId: ctx.session.user.id,
+        canWrite: ctx.ability.can('update', 'Lead'),
+        canModerate: ctx.ability.can('manage', 'all'),
+      },
     };
   }),
 
@@ -141,18 +179,28 @@ export const commentsRouter = router({
       }
     }
 
-    const [comment] = await ctx.db
-      .insert(leadComments)
-      .values({
-        leadId: input.leadId,
-        userId: ctx.session.user.id,
+    const comment = await ctx.db.transaction(async (tx) => {
+      const [row] = await tx
+        .insert(leadComments)
+        .values({
+          leadId: input.leadId,
+          userId: ctx.session.user.id,
+          organizationId: input.organizationId,
+          content: input.content,
+          type: input.type,
+          parentId: input.parentId,
+          metadata: input.metadata,
+        })
+        .returning();
+      await auditComment(tx, {
         organizationId: input.organizationId,
-        content: input.content,
-        type: input.type,
-        parentId: input.parentId,
-        metadata: input.metadata,
-      })
-      .returning();
+        userId: ctx.session.user.id,
+        action: 'create',
+        comment: row,
+        changes: { after: { type: row.type, parentId: row.parentId } },
+      });
+      return row;
+    });
 
     // Fetch with user info
     const result = await ctx.db.query.leadComments.findFirst({
@@ -206,18 +254,30 @@ export const commentsRouter = router({
       });
     }
 
-    const [updated] = await ctx.db
-      .update(leadComments)
-      .set({
-        content: input.content,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(eq(leadComments.id, input.id), eq(leadComments.organizationId, input.organizationId))
-      )
-      .returning();
+    // The same text is no edit: nothing is written, the comment does not read as edited
+    if (input.content === existing.content) return existing;
 
-    return updated;
+    return ctx.db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(leadComments)
+        .set({
+          content: input.content,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(eq(leadComments.id, input.id), eq(leadComments.organizationId, input.organizationId))
+        )
+        .returning();
+      await auditComment(tx, {
+        organizationId: input.organizationId,
+        userId: ctx.session.user.id,
+        action: 'update',
+        comment: existing,
+        // Only that the text changed, never the text
+        metadata: { changedText: ['content'] },
+      });
+      return updated;
+    });
   }),
 
   /**
@@ -253,11 +313,34 @@ export const commentsRouter = router({
       });
     }
 
-    await ctx.db
-      .delete(leadComments)
-      .where(
-        and(eq(leadComments.id, input.id), eq(leadComments.organizationId, input.organizationId))
-      );
+    await ctx.db.transaction(async (tx) => {
+      // Replies answer their comment and would stay in the lead's activity on their own
+      // (parent_id has no foreign key): they go with it
+      const replies = await tx
+        .delete(leadComments)
+        .where(
+          and(
+            eq(leadComments.parentId, existing.id),
+            eq(leadComments.organizationId, input.organizationId)
+          )
+        )
+        .returning({ id: leadComments.id });
+      await tx
+        .delete(leadComments)
+        .where(
+          and(eq(leadComments.id, input.id), eq(leadComments.organizationId, input.organizationId))
+        );
+      await auditComment(tx, {
+        organizationId: input.organizationId,
+        userId: ctx.session.user.id,
+        action: 'delete',
+        comment: existing,
+        changes: {
+          before: { type: existing.type, isPinned: existing.isPinned, authorId: existing.userId },
+        },
+        metadata: replies.length > 0 ? { replies: replies.length } : undefined,
+      });
+    });
 
     return { success: true };
   }),
@@ -287,18 +370,24 @@ export const commentsRouter = router({
       });
     }
 
-    const [updated] = await ctx.db
-      .update(leadComments)
-      .set({
-        isPinned: !existing.isPinned,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(eq(leadComments.id, input.id), eq(leadComments.organizationId, input.organizationId))
-      )
-      .returning();
-
-    return updated;
+    return ctx.db.transaction(async (tx) => {
+      // Not an edit of the text: updatedAt stays, so the comment does not read as edited
+      const [updated] = await tx
+        .update(leadComments)
+        .set({ isPinned: !existing.isPinned })
+        .where(
+          and(eq(leadComments.id, input.id), eq(leadComments.organizationId, input.organizationId))
+        )
+        .returning();
+      await auditComment(tx, {
+        organizationId: input.organizationId,
+        userId: ctx.session.user.id,
+        action: 'update',
+        comment: existing,
+        changes: { before: { isPinned: existing.isPinned }, after: { isPinned: updated.isPinned } },
+      });
+      return updated;
+    });
   }),
 
   /**
@@ -323,19 +412,27 @@ export const commentsRouter = router({
 
       await assertInOrganization(ctx.db, 'lead', input.organizationId, input.leadId);
 
-      const [activity] = await ctx.db
-        .insert(leadComments)
-        .values({
-          leadId: input.leadId,
-          userId: ctx.session.user.id,
+      return ctx.db.transaction(async (tx) => {
+        const [activity] = await tx
+          .insert(leadComments)
+          .values({
+            leadId: input.leadId,
+            userId: ctx.session.user.id,
+            organizationId: input.organizationId,
+            content: input.content,
+            type: 'activity',
+            metadata: input.metadata,
+          })
+          .returning();
+        await auditComment(tx, {
           organizationId: input.organizationId,
-          content: input.content,
-          type: 'activity',
-          metadata: input.metadata,
-        })
-        .returning();
-
-      return activity;
+          userId: ctx.session.user.id,
+          action: 'create',
+          comment: activity,
+          changes: { after: { type: activity.type, parentId: null } },
+        });
+        return activity;
+      });
     }),
 
   /**
@@ -356,8 +453,8 @@ export const commentsRouter = router({
         });
       }
 
-      const result = await ctx.db
-        .select({ count: leadComments.id })
+      const [result] = await ctx.db
+        .select({ value: count() })
         .from(leadComments)
         .where(
           and(
@@ -366,6 +463,6 @@ export const commentsRouter = router({
           )
         );
 
-      return { count: result.length };
+      return { count: result?.value ?? 0 };
     }),
 });

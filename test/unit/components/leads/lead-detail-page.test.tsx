@@ -278,6 +278,10 @@ vi.mock('@/components/features/lead-activity/lead-activity-card', async (importO
   ...(await importOriginal<typeof import('@/components/features/lead-activity/lead-activity-card')>()),
   LeadActivityCard: () => <p>activity timeline</p>,
 }));
+// Covered by comments-section.test.tsx
+vi.mock('@/components/features/comments/comments-section', () => ({
+  CommentsSection: ({ leadId }: { leadId: string }) => <p>comments of {leadId}</p>,
+}));
 
 beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
@@ -439,6 +443,15 @@ describe('LeadDetailView tabs', () => {
 
     await user.click(screen.getByRole('tab', { name: '概要' }));
     expect(window.location.search).toBe('');
+  });
+
+  it("shows the lead's comments and notes in their own tab (#555)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole('tab', { name: 'メモ' }));
+    expect(screen.getByText(`comments of ${LEAD_ID}`)).toBeInTheDocument();
+    expect(window.location.search).toBe('?tab=memos');
   });
 
   it('opens the tab from the URL and drops one-off parameters', () => {

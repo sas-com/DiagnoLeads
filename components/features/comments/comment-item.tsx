@@ -140,8 +140,8 @@ export function CommentItem({
           {canModify && comment.type !== 'activity' && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                  <MoreHorizontal className="h-4 w-4" />
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={t('actions')}>
+                  <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -187,6 +187,7 @@ export function CommentItem({
               <textarea
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
+                aria-label={t('editLabel')}
                 className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2 text-sm resize-none"
                 rows={3}
               />
