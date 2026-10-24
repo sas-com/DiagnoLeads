@@ -115,4 +115,26 @@ describe('LeadPrepCard', () => {
     renderCard();
     expect(screen.queryByRole('button', { name: '準備を始める' })).not.toBeInTheDocument();
   });
+
+  it('says so in the card when it could not be loaded, with a retry (#431)', () => {
+    const refetch = vi.fn();
+    mocks.result = { data: undefined, isError: true, error: { data: { code: 'NOT_FOUND' } }, refetch };
+    renderCard();
+    expect(screen.getByRole('heading', { name: '事前調査カード' })).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('読み込めませんでした');
+    expect(screen.queryByRole('button', { name: '準備を始める' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '再読み込み' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the card on screen when a reload fails after it was shown (#431)', () => {
+    mocks.result = {
+      data: { card: null, canEdit: true, draftSource },
+      isError: true,
+      error: { data: { code: 'INTERNAL_SERVER_ERROR' } },
+    };
+    renderCard();
+    expect(screen.getByText(/まだ準備していません/)).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
 });

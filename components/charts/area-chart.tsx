@@ -2,13 +2,9 @@
 
 import { cn } from '@/lib/utils';
 import type { ApexOptions } from 'apexcharts';
-import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
+import { ApexChart } from './apex-chart';
 import { integerAxis } from './bar-chart';
-
-const ReactApexChart = dynamic(() => import('react-apexcharts'), {
-  ssr: false,
-});
 
 function useIsDarkMode() {
   const [isDark, setIsDark] = useState(false);
@@ -201,7 +197,7 @@ export function AreaChart({
 
   return (
     <div className={cn('w-full', className)}>
-      <ReactApexChart options={options} series={series} type="area" height={height} />
+      <ApexChart options={options} series={series} type="area" height={height} />
     </div>
   );
 }

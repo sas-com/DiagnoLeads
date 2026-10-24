@@ -308,17 +308,19 @@ describe('column list page', () => {
       '/ja/ax-migration/column/access-file-types',
       '/ja/ax-migration/column/access-office-support-end',
       '/ja/ax-migration/column/access-fix-or-web',
+      '/ja/ax-migration/column/access-web-security',
       '/ja/ax-migration/column/access-shared-folder',
       '/ja/ax-migration/column/access-accde-only',
       '/ja/ax-migration/column/access-2gb-limit',
     ]);
     expect(screen.getAllByText('2026年10月22日')).toHaveLength(5);
     expect(screen.getAllByText('2026年10月23日')).toHaveLength(1);
+    expect(screen.getAllByText('2026年10月24日')).toHaveLength(1);
     expect(jsonLd(container)[0]['@type']).toBe('BreadcrumbList');
 
     // Each card shows its title card, decorative: the link of the card stays the title
     const cards = [...container.querySelectorAll('li > article')];
-    expect(cards).toHaveLength(6);
+    expect(cards).toHaveLength(7);
     expect(
       cards.map((card) => {
         const image = card.querySelector('img');
@@ -332,6 +334,7 @@ describe('column list page', () => {
       'access-file-types',
       'access-office-support-end',
       'access-fix-or-web',
+      'access-web-security',
       'access-shared-folder',
       'access-accde-only',
       'access-2gb-limit',

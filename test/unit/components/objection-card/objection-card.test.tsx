@@ -87,8 +87,23 @@ describe('ObjectionCard', () => {
       '/ja/settings/ax-playbook'
     );
     unmount();
-    mocks.result = { data: undefined, isError: true };
+    mocks.result = { data: undefined, isError: true, error: { data: { code: 'FORBIDDEN' } } };
     const { container } = renderCard();
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('says so in the card when it could not be loaded, with a retry (#431)', () => {
+    const refetch = vi.fn();
+    mocks.result = {
+      data: undefined,
+      isError: true,
+      error: { data: { code: 'INTERNAL_SERVER_ERROR' } },
+      refetch,
+    };
+    renderCard();
+    expect(screen.getByRole('heading', { name: '切り返しカード' })).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('読み込めませんでした');
+    fireEvent.click(screen.getByRole('button', { name: '再読み込み' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
   });
 });

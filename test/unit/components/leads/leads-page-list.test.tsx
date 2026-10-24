@@ -2,7 +2,8 @@
  * Leads page with the server-driven list (#131): URL <-> filters <-> leads.list input, sort
  * headers, paging, page size, quick filters, chips, the organization-wide cards and the columns.
  * The router's URL really changes; the list hook records what it was asked for.
- * Also the latest hearing's columns, filters and presets (#137) and the server export (#173).
+ * Also the latest hearing's columns, filters and presets (#137) and the server export (#173),
+ * the empty and failed list and the names of the row selection (#431).
  */
 import LeadsPage from '@/app/[locale]/(dashboard)/leads/page';
 import { LEAD_LIST_PREFERENCES_KEY } from '@/hooks/use-lead-list-query';
@@ -52,6 +53,10 @@ const server = vi.hoisted(() => ({
   inputs: [] as ListLeadsInput[],
   items: [] as unknown[],
   total: 0,
+  /** The list request failed (#431) */
+  failed: false,
+  refetch: vi.fn(),
+  access: { canCreate: true, canEdit: false, canDelete: false },
 }));
 
 const exporter = vi.hoisted(() => ({
@@ -111,10 +116,14 @@ vi.mock('@/hooks/use-organization', () => ({
 vi.mock('@/hooks/use-leads', () => ({
   useListLeads: (input: ListLeadsInput) => {
     server.inputs.push(input);
+    if (server.failed) {
+      return { data: undefined, isLoading: false, isError: true, refetch: server.refetch };
+    }
     return {
       data: { items: server.items, total: server.total, limit: input.limit, offset: input.offset },
       isLoading: false,
-      refetch: vi.fn(),
+      isError: false,
+      refetch: server.refetch,
     };
   },
   useLeadStatusCounts: () => ({
@@ -127,7 +136,7 @@ vi.mock('@/hooks/use-leads', () => ({
   }),
   useCreateLead: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateLead: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useLeadAccess: () => ({ canCreate: true, canEdit: false, canDelete: false }),
+  useLeadAccess: () => server.access,
   useDeleteLead: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
@@ -182,6 +191,9 @@ beforeEach(() => {
   server.inputs.length = 0;
   server.items = [makeLead('a1'), makeLead('a2', { name: '佐藤 花子', source: 'api' })];
   server.total = 45;
+  server.failed = false;
+  server.refetch.mockClear();
+  server.access = { canCreate: true, canEdit: false, canDelete: false };
   exporter.mutateAsync.mockReset();
   for (const fn of Object.values(exporter.toast)) fn.mockClear();
 });
@@ -479,5 +491,93 @@ describe('LeadsPage list (server-driven)', () => {
     await user.click(screen.getByRole('button', { name: messages.common.export }));
     await user.click(await screen.findByRole('menuitem', { name: 'JSON' }));
     await waitFor(() => expect(exporter.toast.error).toHaveBeenCalledWith(t.export.failed));
+  });
+});
+
+describe('LeadsPage empty and failed list (#431)', () => {
+  const noLeads = () => {
+    server.items = [];
+    server.total = 0;
+  };
+
+  it('opens the create dialog from "no leads yet"', async () => {
+    const user = userEvent.setup();
+    noLeads();
+    renderPage();
+    expect(await screen.findByText(messages.leads.noLeads)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: messages.leads.addFirstLead }));
+    expect(
+      await screen.findByRole('dialog', { name: messages.leads.createLeadTitle })
+    ).toBeInTheDocument();
+  });
+
+  it('has no create button in the empty list for roles that cannot create leads', async () => {
+    noLeads();
+    server.access = { canCreate: false, canEdit: false, canDelete: false };
+    renderPage();
+    expect(await screen.findByText(messages.leads.noLeads)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: messages.leads.addFirstLead })
+    ).not.toBeInTheDocument();
+  });
+
+  it('says the list could not be loaded, with a retry, instead of "no leads yet"', async () => {
+    const user = userEvent.setup();
+    server.failed = true;
+    renderPage();
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(messages.common.loadError);
+    expect(screen.queryByText(messages.leads.noLeads)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: messages.leads.addFirstLead })
+    ).not.toBeInTheDocument();
+
+    await user.click(within(alert).getByRole('button', { name: messages.common.retry }));
+    expect(server.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does the same in the cards on a phone', async () => {
+    const user = userEvent.setup();
+    setWidth(390);
+    server.failed = true;
+    const view = renderPage();
+    const alert = await screen.findByRole('alert');
+    await user.click(within(alert).getByRole('button', { name: messages.common.retry }));
+    expect(server.refetch).toHaveBeenCalledTimes(1);
+    view.unmount();
+
+    server.failed = false;
+    noLeads();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: messages.leads.addFirstLead }));
+    expect(
+      await screen.findByRole('dialog', { name: messages.leads.createLeadTitle })
+    ).toBeInTheDocument();
+  });
+});
+
+describe('LeadsPage row selection names (#431)', () => {
+  it('names the checkboxes after the lead and the clear button of the bulk actions', async () => {
+    const user = userEvent.setup();
+    server.items = [
+      makeLead('a1', { name: '佐藤 花子' }),
+      makeLead('a2', { name: null, company: null }),
+    ];
+    renderPage();
+    const grid = within(await table());
+    expect(grid.getByRole('checkbox', { name: 'すべて選択' })).toBeInTheDocument();
+    // Without a company or a name, the email names the row
+    expect(grid.getByRole('checkbox', { name: 'a2@example.jpを選択' })).toBeInTheDocument();
+    expect(grid.queryByRole('checkbox', { name: 'Select row' })).not.toBeInTheDocument();
+
+    // The cells render again after each change, so the checkbox is looked up each time
+    const row = () => grid.getByRole('checkbox', { name: '三田製作所 佐藤 花子を選択' });
+    await user.click(row());
+    expect(row()).toBeChecked();
+    await user.click(await screen.findByRole('button', { name: '選択を解除' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: '選択を解除' })).not.toBeInTheDocument()
+    );
+    expect(row()).not.toBeChecked();
   });
 });
