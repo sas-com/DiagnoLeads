@@ -6,7 +6,7 @@ title: "API キー方式の埋め込みウィジェットを廃止する（#49�
 status: active
 superseded_by: []
 issues: [49, 505, 564]
-paths: ["lib/features/embed/**", "app/[locale]/(dashboard)/settings/embed/**"]
+paths: ["lib/features/embed/**", "app/[locale]/(dashboard)/settings/embed/**", "lib/cms/enabled.ts"]
 ---
 
 ### [Architecture] API キー方式の埋め込みウィジェットを廃止する（#49・#505）

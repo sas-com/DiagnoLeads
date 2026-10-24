@@ -12,8 +12,9 @@
  *   once. Within the limit, events that do not fit in the time budget are queued for the
  *   retry processor, up to WEBHOOK_BATCH_QUEUE_LIMIT deliveries (triggerWebhookBatch); the
  *   deliveries dropped past that are reported too.
- * - Leads created from a public form (embed) count against a per-organization hourly limit, so
- *   form spam cannot be relayed to the organization's endpoints without bound.
+ * - sendLeadCreatedById can count leads created from a public form against a per-organization
+ *   hourly limit (`limit`), so form spam cannot be relayed to the organization's endpoints
+ *   without bound.
  */
 import { runAfterResponse } from '@/lib/auth/email-helpers';
 import { type Database, db } from '@/lib/db/client';
@@ -147,13 +148,6 @@ export async function sendLeadEvents(
   }
 }
 
-/** lead.created events from public forms (embed) per organization and hour */
-export const PUBLIC_LEAD_EVENTS_PER_ORGANIZATION: RateLimitRule = {
-  name: 'lead-events-public-org',
-  limit: 100,
-  windowMs: 60 * 60 * 1000,
-};
-
 /**
  * Send the events after the response. Errors are logged, never thrown: a webhook must not fail
  * the change of a lead. Call it once the change has committed.
@@ -168,7 +162,7 @@ export function emitLeadEvents(
 }
 
 /**
- * lead.created for a lead whose id is all the caller has (a diagnosis or embed submission): the
+ * lead.created for a lead whose id is all the caller has (a diagnosis submission): the
  * lead is read after the response, within its organization, and skipped when it is gone.
  */
 export async function sendLeadCreatedById(
@@ -196,13 +190,4 @@ export async function sendLeadCreatedById(
     .where(and(eq(leads.id, leadId), eq(leads.organizationId, organizationId)));
   if (!lead) return;
   await sendLeadEvents(organizationId, [{ type: 'lead.created', lead }], { database });
-}
-
-/** emitLeadEvents for a created lead known by its id only */
-export function emitLeadCreatedById(
-  organizationId: string,
-  leadId: string,
-  options: { database?: Database; limit?: RateLimitRule } = {}
-): void {
-  runAfterResponse(sendLeadCreatedById(organizationId, leadId, options));
 }

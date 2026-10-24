@@ -5,7 +5,8 @@
  *
  * In test mode every sender passes its recipients through filterAllowedRecipients before calling
  * Resend, and inviting or signing up an address outside the domains is a validation error.
- * The public AX diagnosis accepts only these domains as well.
+ * The public diagnoses (AX migration and the builder's diagnoses) accept only these domains as
+ * well.
  */
 export const DEFAULT_TEST_MODE_EMAIL_DOMAINS = 'sas-com.com';
 
