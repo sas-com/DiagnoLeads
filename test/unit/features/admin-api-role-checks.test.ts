@@ -120,11 +120,9 @@ const READS: Record<string, Call> = {
   'distribution.getCampaign': (c) => c.distribution.getCampaign({ ...org, id: ID }),
   'distribution.getCampaignStats': (c) =>
     c.distribution.getCampaignStats({ ...org, campaignId: ID }),
-  // Mutations, but they only build a QR code
+  // A mutation, but it only builds a QR code
   'distribution.generateCampaignQR': (c) =>
     c.distribution.generateCampaignQR({ ...org, campaignId: ID }),
-  'distribution.generateQRCode': (c) =>
-    c.distribution.generateQRCode({ ...org, diagnosticTemplateId: ID }),
   // Picks a variant without writing (recordEvent records the impression)
   'abTests.selectVariant': (c) => c.abTests.selectVariant({ ...org, testId: ID }),
 };

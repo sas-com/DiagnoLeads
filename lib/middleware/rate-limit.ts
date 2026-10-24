@@ -106,6 +106,12 @@ export const ENDPOINT_RATE_LIMITS: Record<string, RateLimitConfig> = {
 
   // GraphQL
   '/api/graphql': { max: 100, windowMs: 60 * 1000 },
+
+  // The QR entry of campaigns (/q/<code>, #503). Counted per code here (the key holds the
+  // path), so the limit per address across codes is in the DB (QR_ENTRY_RATE_LIMITS). Loose:
+  // people at one event can scan the same code from one address. Also keeps a code that
+  // contains "embed" from getting the diagnostic limit below
+  '/q/': { max: 60, windowMs: 60 * 1000 },
 };
 
 /**

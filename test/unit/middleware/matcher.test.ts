@@ -31,6 +31,8 @@ describe('middleware matcher', () => {
     expect(runsOn('/ax-diagnosis')).toBe(true);
     expect(runsOn('/')).toBe(true);
     expect(runsOn('/robots.txt')).toBe(true);
+    // The QR entry of campaigns (#503): rate limit and security headers
+    expect(runsOn('/q/AbCd2345')).toBe(true);
     expect(runsOn('/_next/static/chunks/main.js')).toBe(false);
   });
 

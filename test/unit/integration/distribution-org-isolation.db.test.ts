@@ -129,8 +129,6 @@ describe.skipIf(!url)('distribution organization isolation (PostgreSQL)', () => 
         name: 'Campaign by B',
         diagnosticTemplateId: templateA,
       }),
-    'generateQRCode (template of A)': () =>
-      adminB.distribution.generateQRCode({ ...asB(), diagnosticTemplateId: templateA }),
   };
 
   it.each(Object.keys(calls))('%s with ids of another organization answers NOT_FOUND', async (name) => {

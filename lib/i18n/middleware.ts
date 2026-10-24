@@ -39,6 +39,9 @@ export function shouldSkipI18nMiddleware(pathname: string): boolean {
     '/sitemap.xml',
     '/manifest.json',
     '/admin', // PayloadCMS admin panel
+    // The QR entry of campaigns (app/q/[code]/route.ts, #503): a route outside [locale] that
+    // redirects to a page of a language itself
+    '/q/',
   ];
 
   // ファイル拡張子を持つパスをスキップ

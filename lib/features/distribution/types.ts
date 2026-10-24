@@ -1,6 +1,18 @@
 import { z } from 'zod';
 
 /**
+ * Path of the public entry of a QR campaign: /q/<short code> (app/q/[code]/route.ts, #503).
+ * Not /d/: that is the public page of builder diagnoses, which looks up slugs, not short codes
+ */
+export const QR_ENTRY_PATH = '/q';
+
+/**
+ * What a short code can be before the database is asked. generateShortCode makes 8 letters and
+ * digits; codes are compared case-sensitively ("AbC" and "abc" are different codes)
+ */
+export const SHORT_CODE_PATTERN = /^[A-Za-z0-9]{1,64}$/;
+
+/**
  * QR Code Generation Input Schema
  */
 export const generateQRCodeSchema = z.object({
