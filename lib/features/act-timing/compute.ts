@@ -54,6 +54,14 @@ export const isMonth = (value: unknown): value is string =>
 export const addMonths = (month: string, months: number) => fromIndex(toIndex(month) + months);
 
 /**
+ * Whether "when to act" (the 1st of a month) still lies ahead of a Japan day: this month or later.
+ * A past month brings nobody back: its next action was done or removed and is not made again
+ * (#446)
+ */
+export const actByAhead = (actBy: string | null | undefined, today: string): boolean =>
+  !!actBy && actBy >= `${today.slice(0, 7)}-01`;
+
+/**
  * The diagnosis answer as a month: where the range is open, its middle (within a year: in 6
  * months; 1-3 years: in 2 years); already ended: the month of the diagnosis. Beyond 3 years, no
  * machine of their own and unknown give nothing.

@@ -134,7 +134,7 @@ describe('axPlaybook.get', () => {
     warn.mockRestore();
   });
 
-  // Roles as recorded in .factory/memory/decisions.md
+  // Roles as recorded in .factory/memory/decisions/2026-10-15-sales-playbook-in-db.md
   it.each([
     ['owner', true],
     ['admin', true],

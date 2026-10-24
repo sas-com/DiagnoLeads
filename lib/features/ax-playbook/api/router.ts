@@ -3,8 +3,9 @@
  *
  * Anyone who can read leads may read the playbook, except viewers from a parent organization
  * (sales know-how is need-to-know); only those who can update settings may change it (see
- * .factory/memory/decisions.md for the roles). The target company size ranges (#150) are the
- * exception: every reader may change them, and saving the rest of the playbook keeps them.
+ * .factory/memory/decisions/2026-10-15-sales-playbook-in-db.md for the roles). The target
+ * company size ranges (#150) are the exception: every reader may change them, and saving the
+ * rest of the playbook keeps them.
  * Every query is scoped by organizationId (Refs #74).
  */
 
