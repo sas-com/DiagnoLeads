@@ -36,7 +36,9 @@ const EXCEPTIONS: Exceptions = {
 
 const FIX =
   'Merge main, delete your own drizzle/<n>_*.sql and drizzle/meta/<n>_snapshot.json and the ' +
-  'journal entry, then run `bun run db:generate` again so the number and `when` come after main.';
+  'journal entry, then run `bun run db:generate` again so the number and `when` come after main. ' +
+  'If your migration was generated on top of another open PR (its snapshot follows that PR), ' +
+  'wait until that PR is merged, merge main, and only then generate again.';
 
 function journalProblems(
   entries: JournalEntry[],
