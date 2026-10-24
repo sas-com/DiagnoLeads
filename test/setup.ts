@@ -37,6 +37,7 @@ vi.mock('@anthropic-ai/sdk', () => ({
       create: vi.fn().mockResolvedValue({
         content: [{ type: 'text', text: 'Mock response' }],
       }),
+      parse: vi.fn().mockResolvedValue({ content: [], parsed_output: null }),
     };
   },
   Anthropic: class MockAnthropic {
@@ -45,6 +46,7 @@ vi.mock('@anthropic-ai/sdk', () => ({
       create: vi.fn().mockResolvedValue({
         content: [{ type: 'text', text: 'Mock response' }],
       }),
+      parse: vi.fn().mockResolvedValue({ content: [], parsed_output: null }),
     };
   },
 }));

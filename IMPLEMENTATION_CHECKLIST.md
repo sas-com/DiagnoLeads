@@ -450,7 +450,7 @@
 
 **Phase 3.1 完了: AI基盤セットアップ**
 - ✅ Vercel AI SDK 5.0+ 統合
-- ✅ Anthropic Claude 4.5 Sonnet API設定
+- ✅ Anthropic Claude Sonnet 5.5 API設定
 - ✅ OpenAI Embeddings (text-embedding-3-small)
 - ✅ pgvector拡張マイグレーション
 - ✅ 全文検索マイグレーション (PostgreSQL tsvector)
@@ -726,10 +726,10 @@
 
 **AI Services層**:
 - ✅ OpenAI Embeddings (text-embedding-3-small, 1536次元)
-- ✅ Claude 4.5 Sonnet リードスコアリング（0-100点、信頼度、推奨アクション）
+- ✅ Claude Sonnet 5.5 リードスコアリング（0-100点、信頼度、推奨アクション）
 - ✅ pgvector セマンティック検索（コサイン類似度）
 - ✅ 類似リード検索（ベクトル類似度）
-- ✅ AI要約生成（Vercel AI SDK ストリーミング）
+- ✅ AI要約生成（Anthropic SDK）
 - ✅ バッチ処理（並行数5、Rate Limiting対応）
 
 **データベース層**:
@@ -775,7 +775,7 @@
 ### 技術スタック
 
 - Vercel AI SDK 5.0+ (ストリーミング、フック統合)
-- Anthropic Claude 4.5 Sonnet (リード分析、スコアリング)
+- Anthropic Claude Sonnet 5.5 (リード分析、スコアリング)
 - OpenAI text-embedding-3-small (1536次元ベクトル化)
 - pgvector (ベクトル検索、HNSW index)
 - PostgreSQL tsvector + GIN (全文検索)
