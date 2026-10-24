@@ -101,7 +101,6 @@ const READS: Record<string, Call> = {
   'analytics.getSourceBreakdown': (c) => c.analytics.getSourceBreakdown(org),
   'analytics.getStatusBreakdown': (c) => c.analytics.getStatusBreakdown(org),
   'analytics.getConversionFunnel': (c) => c.analytics.getConversionFunnel(org),
-  'analytics.getScoreDistribution': (c) => c.analytics.getScoreDistribution(org),
   'analytics.getResponseTime': (c) => c.analytics.getResponseTime(org),
   'analytics.getAcquisitionCost': (c) => c.analytics.getAcquisitionCost(org),
   'analytics.getAgencyPerformance': (c) => c.analytics.getAgencyPerformance(org),

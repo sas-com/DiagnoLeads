@@ -89,7 +89,6 @@ vi.mock('@/hooks/use-analytics', () => ({
     { status: 'lost', count: 3, percentage: 30 },
   ]),
   useConversionFunnel: query(undefined),
-  useScoreDistribution: query([]),
   useResponseTime: live('responseTime', () => ({
     status: 'pending',
     reason: 'first_contact_not_recorded',

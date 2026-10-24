@@ -145,9 +145,6 @@ export type DashboardSummary = {
   previousMql: number;
   /** 適合のみ (#139): leads created in the period that fit but show no interest yet */
   fitOnly: number;
-  /** Average score of the leads created in the period; null when there are none */
-  averageScore: number | null;
-  previousAverageScore: number | null;
   daily: { date: string; leads: number; consultations: number }[];
   /** Bars of the trend chart: per day up to 30 days, per week beyond */
   trend: { unit: 'day' | 'week'; points: DashboardTrendPoint[] };
@@ -160,7 +157,6 @@ export type DashboardSummary = {
     name: string | null;
     company: string | null;
     platform: string | null;
-    score: number | null;
     status: LeadStatus;
     /** Qualified as MQL (at any time) */
     mql: boolean;
@@ -236,12 +232,6 @@ export async function getDashboardSummary(
           mql: sql<number>`count(*) filter (where ${mqlIn(fromIso, endIso)})`,
           previousMql: sql<number>`count(*) filter (where ${mqlIn(previousFromIso, fromIso)})`,
           fitOnly: sql<number>`count(*) filter (where ${createdIn(fromIso, endIso)} and ${fitOnly})`,
-          averageScore: sql<
-            string | null
-          >`avg(${leads.score}) filter (where ${createdIn(fromIso, endIso)})`,
-          previousAverageScore: sql<
-            string | null
-          >`avg(${leads.score}) filter (where ${createdIn(previousFromIso, fromIso)})`,
           pendingTotal: sql<number>`count(*) filter (where ${waitingForFirstContact(organizationId)})`,
         })
         .from(leads)
@@ -299,7 +289,6 @@ export async function getDashboardSummary(
           name: leads.name,
           company: leads.company,
           platform: platformOf,
-          score: leads.score,
           status: leads.status,
           mqlQualifiedAt: leads.mqlQualifiedAt,
           conversionPoint: leads.conversionPoint,
@@ -340,8 +329,6 @@ export async function getDashboardSummary(
       };
     })
     .sort((a, b) => a.deadline.localeCompare(b.deadline));
-  const roundedAverage = (value: string | null | undefined) =>
-    value === null || value === undefined ? null : Math.round(Number(value));
 
   return {
     days,
@@ -352,8 +339,6 @@ export async function getDashboardSummary(
     mql: Number(totals?.mql ?? 0),
     previousMql: Number(totals?.previousMql ?? 0),
     fitOnly: Number(totals?.fitOnly ?? 0),
-    averageScore: roundedAverage(totals?.averageScore),
-    previousAverageScore: roundedAverage(totals?.previousAverageScore),
     daily,
     trend: bucketTrend(daily),
     statuses: LEAD_STATUSES.map((status) => ({ status, count: statusCounts.get(status) ?? 0 })),
@@ -367,7 +352,6 @@ export async function getDashboardSummary(
       name: row.name,
       company: row.company,
       platform: row.platform,
-      score: row.score,
       status: row.status as LeadStatus,
       mql: row.mqlQualifiedAt !== null,
       consultation: row.conversionPoint === 'consultation',

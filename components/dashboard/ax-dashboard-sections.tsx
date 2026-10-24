@@ -28,8 +28,6 @@ export type DashboardData = RouterOutputs['analytics']['getDashboard'];
 export type CardState = 'loading' | 'error' | 'ready';
 
 const KNOWN_PLATFORMS = ['as400', 'acos', 'access', 'other', 'unknown'] as const;
-/** Scores at or above this stand out in the recent leads */
-const HIGHLIGHT_SCORE = 70;
 
 const headingClass = 'text-base font-semibold text-gray-900 sm:text-lg dark:text-gray-50';
 const emptyClass =
@@ -275,9 +273,7 @@ function useRecentText() {
     if (at.kind === 'yesterday') return text.tw('recent.yesterday');
     return at.date;
   };
-  const highlighted = (lead: RecentLead) =>
-    lead.mql || (lead.score !== null && lead.score >= HIGHLIGHT_SCORE);
-  return { ...text, tStatus, received, highlighted };
+  return { ...text, tStatus, received };
 }
 
 function StatusBadge({ status }: { status: RecentLead['status'] }) {
@@ -309,21 +305,6 @@ function LeadTags({ lead }: { lead: RecentLead }) {
         </span>
       )}
     </>
-  );
-}
-
-function Score({ lead }: { lead: RecentLead }) {
-  const { tw, highlighted } = useRecentText();
-  if (lead.score === null) return <span className="text-gray-400 dark:text-gray-500">—</span>;
-  return highlighted(lead) ? (
-    <span
-      title={tw('recent.highlight')}
-      className="inline-block min-w-8 rounded bg-brand-50 px-1.5 py-0.5 text-center font-bold text-brand-700 dark:bg-brand-500/15 dark:text-brand-300"
-    >
-      {lead.score}
-    </span>
-  ) : (
-    <span className="font-semibold text-gray-900 dark:text-gray-50">{lead.score}</span>
   );
 }
 
@@ -386,7 +367,6 @@ export function RecentSection({
                       {platformName(lead.platform)}
                     </span>
                     <span className="flex shrink-0 items-center gap-2 tabular-nums">
-                      <Score lead={lead} />
                       <span>{received(lead)}</span>
                     </span>
                   </span>
@@ -407,9 +387,6 @@ export function RecentSection({
                   </th>
                   <th scope="col" className="px-3 py-2 font-medium">
                     {tw('recent.platform')}
-                  </th>
-                  <th scope="col" className="px-3 py-2 text-right font-medium">
-                    {tw('recent.score')}
                   </th>
                   <th scope="col" className="px-6 py-2 text-right font-medium">
                     {tw('recent.received')}
@@ -437,9 +414,6 @@ export function RecentSection({
                     </td>
                     <td className="px-3 py-2.5 text-gray-600 dark:text-gray-300">
                       {platformName(lead.platform)}
-                    </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">
-                      <Score lead={lead} />
                     </td>
                     <td className="whitespace-nowrap px-6 py-2.5 text-right text-gray-500 tabular-nums dark:text-gray-400">
                       {received(lead)}
