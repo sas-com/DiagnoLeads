@@ -12,6 +12,7 @@ import {
   statusFromDeals,
 } from '@/lib/features/deals/lead-sync';
 import {
+  DEAL_LOST_REASONS,
   DEAL_STAGES,
   OPEN_DEAL_STAGES,
   STAGE_PROBABILITY,
@@ -155,6 +156,7 @@ describe('latestLostReason', () => {
           updatedAt: new Date('2026-10-21T00:00:00Z'),
         }),
         deal({ stage: 'lost', lostReason: 'not-a-reason', closedOn: '2026-10-30' }),
+        deal({ stage: 'lost', lostReason: 'on_hold', closedOn: '2026-10-31' }),
       ])
     ).toBe('competitor');
     expect(latestLostReason([deal({ stage: 'proposal' })])).toBeNull();
@@ -194,6 +196,23 @@ describe('leadChangesFromDeals', () => {
     ).toEqual({ status: 'lost' });
   });
 
+  // 保留 is not a loss (#445): a lead lost through its deals is not left as 失注 + 保留
+  it('replaces 保留 with the reason of the latest lost deal', () => {
+    const lostDeal = deal({ stage: 'lost', lostReason: 'timing', closedOn: '2026-10-10' });
+    expect(
+      leadChangesFromDeals(
+        { ...lead, status: 'negotiating', hasNegotiated: true, lostReason: 'on_hold' },
+        [lostDeal]
+      )
+    ).toEqual({ status: 'lost', lostReason: 'timing' });
+    expect(
+      leadChangesFromDeals(
+        { ...lead, status: 'nurturing', hasNegotiated: true, lostReason: 'on_hold' },
+        [deal({ stage: 'proposal' })]
+      )
+    ).toEqual({ status: 'negotiating', dealPhase: 'proposal' });
+  });
+
   it('changes nothing when the lead is up to date or has no deals', () => {
     expect(
       leadChangesFromDeals(
@@ -231,9 +250,18 @@ describe('createDealSchema', () => {
     [{ stage: 'closed' }],
     [{ expectedCloseOn: '2026-02-30' }],
     [{ lostReason: 'unknown' }],
+    [{ lostReason: 'on_hold' }],
     [{ ownerUserId: 'not-a-uuid' }],
   ])('rejects %o', (overrides) => {
     expect(createDealSchema.safeParse({ ...base, ...overrides }).success).toBe(false);
+  });
+
+  it('takes the lost reasons of the leads except 保留 (#445)', () => {
+    expect(DEAL_LOST_REASONS).not.toContain('on_hold');
+    expect(DEAL_LOST_REASONS).toContain('timing');
+    expect(createDealSchema.parse({ ...base, stage: 'lost', lostReason: 'timing' }).lostReason).toBe(
+      'timing'
+    );
   });
 });
 
