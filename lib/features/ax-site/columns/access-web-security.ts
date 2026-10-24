@@ -4,8 +4,9 @@ import type { Column } from './types';
  * What the PHP vulnerabilities of October 2026 (PHP2shell) say about moving an Access tool to the
  * web (#465). Facts from the PHP project's pages and IPA's alert (listed in the sources); the
  * article never says that the web makes a tool safe (#296) and gives no attack figures (#324).
- * The fixed versions are those of the release of 21 October 2026: review them with the next PHP
- * release and before PHP 8.2 reaches its end of support (31 December 2026).
+ * The fixed versions are those of the release of 21 October 2026, and the advisory of 23 October
+ * (CVE-2026-115560) waits for the next regular release: review them with that release and before
+ * PHP 8.2 reaches its end of support (31 December 2026).
  */
 export const accessWebSecurity: Column = {
   slug: 'access-web-security',
@@ -50,7 +51,7 @@ export const accessWebSecurity: Column = {
     {
       type: 'p',
       content:
-        '開発元は、完全な回避策はなく、更新することが唯一の確実な対策だとしています。直った版は次のとおりです（2026年10月21日の公開時点）。',
+        '開発元は、完全な回避策はなく、更新することが唯一の確実な対策だとしています。2件を直した版は次のとおりです（2026年10月21日の公開時点）。',
     },
     {
       type: 'ul',
@@ -61,16 +62,26 @@ export const accessWebSecurity: Column = {
         'PHP 8.2 系は 8.2.35 以降',
       ],
     },
-    { type: 'p', content: 'PHP 8.2 は、2026年12月31日で開発元のサポートが終わる予定です。' },
     {
       type: 'p',
       content:
-        'PHP 8.1 以前の版は、開発元のサポートが終わっています。今回は例外として、開発元が 7.4・8.0・8.1 向けに最小限の修正を公開したほか、OS などの提供元が修正を出している場合もあります。修正があるかは、サーバーを管理する人に確かめます。IPA（情報処理推進機構）は、修正が提供されない版を使っている場合、サポートされている版への更新か、対策済みの製品・サービスへの移行を検討するよう案内しています。',
+        'IPA（情報処理推進機構）の注意喚起によると、影響を受けるのは、8.2〜8.5 系のうち、上の版より前の版です。IPA は、調査に関わった Wiz 社の話として、PHP 5.4 以降の版も、2件の少なくともどちらかの影響を受けると紹介しています。',
     },
     {
       type: 'p',
       content:
-        'PHP は、使っている製品やサービスの中で動いていることもあります。IPA は、影響をその製品の開発元やサービスの提供元の情報で確かめるよう案内しています。すぐに更新できない場合は、つながる範囲を絞ること、それが難しければ外からのつながりを断つことやサービスを一時止めることも含めて判断するよう案内しています。',
+        '10月23日には、開発元が追加の案内を出しました。まれな設定とプログラムの組み合わせのときにだけ起きる、別の弱点（CVE-2026-115560）についてで、次の定例の更新で直すまでの間、関係する機能を設定で止めておくよう勧めています。',
+    },
+    { type: 'p', content: 'PHP 8.2 は、2026年12月31日で開発元のサポートが終わる予定です。' },
+    {
+      type: 'p',
+      content:
+        'PHP 8.1 以前の版は、開発元のサポートが終わっています。今回は例外として、開発元が 7.4・8.0・8.1 向けに最小限の修正を公開しました（7.3 以前の版向けには出ていません）。OS などの提供元が修正を出している場合もあります。修正があるかは、サーバーを管理する人に確かめます。IPA は、修正が提供されない版を使っている場合、サポートされている版への更新か、対策済みの製品・サービスへの移行を検討するよう案内しています。',
+    },
+    {
+      type: 'p',
+      content:
+        'PHP は、使っている製品やサービスの中で動いていることもあります。IPA は、影響をその製品の開発元やサービスの提供元の情報で確かめるよう案内しています。すぐに更新できない場合は、更新や移行が済むまで、環境に合った暫定の対策や、つながる範囲を絞ることを検討するよう案内しています。有効な暫定の対策が難しいときは、被害や業務への影響を踏まえて、外からのつながりを断つことや、サービスを一時止めることが必要かを判断するよう求めています。',
     },
     {
       type: 'p',
@@ -82,7 +93,7 @@ export const accessWebSecurity: Column = {
     {
       type: 'p',
       content:
-        '開発元は、PHP を使うすべての人に、ただちに更新するよう強く勧めています。そのうえで、危なさが特に大きくなるのは、次の2つが重なったサーバーです。',
+        '開発元は、PHP を使うすべての人に、ただちに更新するよう強く勧めています。どのサーバーでも更新は要りますが、一般に、危なさが特に大きくなるのは、次の2つが重なったサーバーです。',
     },
     {
       type: 'ul',
@@ -137,7 +148,7 @@ export const accessWebSecurity: Column = {
     {
       type: 'p',
       content:
-        'VPN を使わずに在宅やほかの拠点から使うなら、会社のアカウントでのログイン（シングルサインオン）と多要素認証を済ませないとシステムに届かない入口を、システムの手前に置きます。システムの中のログイン画面だけでは、今回のようにログインより前に起きる弱点は防げません。',
+        'VPN を使わずに在宅やほかの拠点から使うなら、会社のアカウントでのログイン（シングルサインオン）と多要素認証を済ませないとシステムに届かない入口を、システムの手前に置きます。この入口もインターネットに開いているので、VPN の機器と同じく更新し続けるか、提供元が更新し続けるサービスを使います。システムの中のログイン画面だけでは、今回のようにログインより前に起きる弱点は防げません。',
     },
     { type: 'h3', id: 'keep-fixing', text: '2. 弱点が見つかったとき、誰がどう直すか' },
     {
@@ -224,6 +235,10 @@ export const accessWebSecurity: Column = {
           title:
             'PHP「Security advisory: Critical remote code execution vulnerabilities, update now」（2026年10月21日）',
           href: 'https://www.php.net/archive/2026.php#2026-10-21-5',
+        },
+        {
+          title: 'PHP「Informational advisory: Session upload progress」（2026年10月23日）',
+          href: 'https://www.php.net/archive/2026.php#2026-10-23-1',
         },
         {
           title: 'PHP「Supported Versions」',
