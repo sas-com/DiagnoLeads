@@ -25,6 +25,7 @@ export const MOBILE_SORT_KEYS = [
   'lastActivityAt',
   'nextMeetingDate',
   'actBy',
+  'mqlLevel',
   'company',
   'name',
   'status',
@@ -60,6 +61,7 @@ export function LeadSortControl({ sort, onSort, className }: LeadSortControlProp
     nextMeetingDate: tList('nextMeeting'),
     dealRating: tList('dealRating'),
     actBy: tList('actBy'),
+    mqlLevel: t('mqlLevel'),
   };
   // A sort from a link (email, updated) stays selectable
   const keys: readonly LeadSortKey[] = (MOBILE_SORT_KEYS as readonly LeadSortKey[]).includes(

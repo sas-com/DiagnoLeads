@@ -324,14 +324,11 @@ describe.skipIf(!url)('lead list (PostgreSQL)', () => {
       expect(a).toEqual({
         total: 5,
         byStatus: { new: 1, nurturing: 1, negotiating: 1, won: 1, lost: 1 },
-        // L3 has no score: (80 + 40 + 95 + 10) / 4
-        averageScore: 56.25,
       });
       const b = await callerB.leads.statusCounts({ organizationId: orgB });
       expect(b).toEqual({
         total: 1,
         byStatus: { new: 1, nurturing: 0, negotiating: 0, won: 0, lost: 0 },
-        averageScore: 85,
       });
       await expect(callerA.leads.statusCounts({ organizationId: orgB })).rejects.toMatchObject({
         code: 'FORBIDDEN',
@@ -386,6 +383,41 @@ describe.skipIf(!url)('lead list (PostgreSQL)', () => {
       // The MQL filter stays on the MQL date
       const mql = await callerC.leads.list({ organizationId: orgC, mql: true });
       expect(mql.items.map((item: { id: string }) => nameOf.get(item.id))).toEqual(['none']);
+    });
+
+    it('filters and sorts by the level, 関心あり first and leads without a diagnosis last (#447)', async () => {
+      const orgD = await createOrganization('一覧テストD株式会社');
+      const callerD = await callerFor(orgD);
+      const responsesOf: Record<string, Record<string, unknown>> = {
+        interest: { axMigration: { mql: { level: 'interest' } } },
+        fit: { axMigration: { mql: { level: 'fit' } } },
+        none: { axMigration: { mql: { level: 'none' } } },
+        unknown: {},
+      };
+      const nameOf = new Map<string, string>();
+      // Inserted in an order that differs from the level order
+      for (const name of ['unknown', 'fit', 'none', 'interest']) {
+        const [row] = await pg
+          .insert(leads)
+          .values({
+            organizationId: orgD,
+            email: `${name}-${unique()}@example.com`,
+            responses: responsesOf[name],
+          })
+          .returning();
+        nameOf.set(row.id, name);
+      }
+      const names = (items: { id: string }[]) => items.map((item) => nameOf.get(item.id));
+
+      const sorted = await callerD.leads.list({ organizationId: orgD, sortBy: 'mqlLevel', sortOrder: 'asc' });
+      expect(names(sorted.items)).toEqual(['interest', 'fit', 'none', 'unknown']);
+      const reversed = await callerD.leads.list({ organizationId: orgD, sortBy: 'mqlLevel', sortOrder: 'desc' });
+      expect(names(reversed.items)).toEqual(['none', 'fit', 'interest', 'unknown']);
+
+      const fitOrUnknown = await callerD.leads.list({ organizationId: orgD, mqlLevel: ['fit', 'unknown'] });
+      expect(names(fitOrUnknown.items).sort()).toEqual(['fit', 'unknown']);
+      const interest = await callerD.leads.list({ organizationId: orgD, mqlLevel: 'interest' });
+      expect(names(interest.items)).toEqual(['interest']);
     });
   });
 

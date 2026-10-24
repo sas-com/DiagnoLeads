@@ -34,7 +34,7 @@ import { ProgressBar } from '@/components/ui/progress-bar';
 import type { Lead } from '@/lib/db/schema';
 import { type CreateLeadInput, hasLostReason } from '@/lib/features/leads/types';
 import { trpc } from '@/lib/trpc/client';
-import { Plus, Target, TrendingUp, Upload, UserCheck, Users } from 'lucide-react';
+import { Plus, Target, Upload, UserCheck, Users } from 'lucide-react';
 
 function TableSkeleton() {
   return (
@@ -309,7 +309,7 @@ function LeadsPageContent() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
         {/* Total Leads: the whole list */}
         <StatCardLink href={listHref()}>
           <Card className="p-6 h-full" decoration="top" decorationColor="blue">

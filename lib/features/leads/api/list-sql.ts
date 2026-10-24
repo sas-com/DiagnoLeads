@@ -147,6 +147,8 @@ const SORT_EXPRESSIONS: Record<LeadSortKey, AnyColumn | SQL> = {
   dealRating: leadDealRating,
   // "When to act" (#151): a date column
   actBy: leads.actBy,
+  // 関心あり, 適合, 対象外 when ascending; leads without a diagnosis last (#447)
+  mqlLevel: sql`(case ${leadMqlLevel} when 'interest' then 0 when 'fit' then 1 when 'none' then 2 end)`,
 };
 
 /**
@@ -239,6 +241,22 @@ export function leadListConditions(
         sql`, `
       )})`
     );
+  }
+
+  // MQL level of the diagnosis (#447); 'unknown' is a lead without a diagnosis
+  const levels = oneOrMany(input.mqlLevel);
+  if (levels.length > 0) {
+    const known = levels.filter((level) => level !== 'unknown');
+    const matches = [
+      known.length > 0
+        ? sql`${leadMqlLevel} in (${sql.join(
+            known.map((level) => sql`${level}`),
+            sql`, `
+          )})`
+        : undefined,
+      levels.includes('unknown') ? sql`${leadMqlLevel} is null` : undefined,
+    ].filter((c): c is SQL => c !== undefined);
+    conditions.push(matches.length === 1 ? matches[0] : (or(...matches) as SQL));
   }
 
   // "When to act" (#151): set, or within the next months (past ones included)

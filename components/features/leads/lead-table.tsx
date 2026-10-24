@@ -114,7 +114,6 @@ const isSortKey = (id: string): id is LeadSortKey =>
 export function defaultColumnVisibility(width: number): VisibilityState {
   const optional = {
     lastActivityAt: false,
-    mqlQualifiedAt: false,
     nextMeetingDate: false,
     dealRating: false,
     // "When to act" (#151): from the columns menu
@@ -133,6 +132,8 @@ export function defaultColumnVisibility(width: number): VisibilityState {
       createdAt: false,
       tags: false,
       assignee: false,
+      // The cards show the MQL level on phones
+      mqlQualifiedAt: false,
     };
   }
   if (width < 1024) {
@@ -394,6 +395,28 @@ export function LeadTable({
       ),
     },
     {
+      accessorKey: 'mqlQualifiedAt',
+      // The MQL level says how promising a lead is (#447): shown by default, sorted by it
+      header: sortableHeader('mqlLevel', t('mqlLevel')),
+      cell: ({ row }) => {
+        // The MQL level badge (#196) and the MQL date
+        const { mqlLevel, mqlQualifiedAt } = row.original;
+        if (!mqlQualifiedAt && mqlLevel !== 'interest' && mqlLevel !== 'fit') {
+          return <span className="text-gray-400">-</span>;
+        }
+        return (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <LeadMqlBadges level={mqlLevel} qualifiedAt={mqlQualifiedAt} />
+            {mqlQualifiedAt && (
+              <span className="text-sm text-gray-600 dark:text-gray-300">
+                {jstDay(mqlQualifiedAt)}
+              </span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
       accessorKey: 'inflowSource',
       header: t('inflowSource'),
       cell: ({ row }) => {
@@ -453,27 +476,6 @@ export function LeadTable({
           <span className="text-sm text-gray-500">
             {formatDistance(new Date(value), new Date(), { addSuffix: true, locale: dateLocale })}
           </span>
-        );
-      },
-    },
-    {
-      accessorKey: 'mqlQualifiedAt',
-      header: sortableHeader('mqlQualifiedAt', t('mqlQualifiedAt')),
-      cell: ({ row }) => {
-        // The MQL level badge (#196) and the MQL date
-        const { mqlLevel, mqlQualifiedAt } = row.original;
-        if (!mqlQualifiedAt && mqlLevel !== 'interest' && mqlLevel !== 'fit') {
-          return <span className="text-gray-400">-</span>;
-        }
-        return (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <LeadMqlBadges level={mqlLevel} qualifiedAt={mqlQualifiedAt} />
-            {mqlQualifiedAt && (
-              <span className="text-sm text-gray-600 dark:text-gray-300">
-                {jstDay(mqlQualifiedAt)}
-              </span>
-            )}
-          </div>
         );
       },
     },
@@ -699,7 +701,7 @@ export function LeadTable({
     source: t('source'),
     createdAt: t('createdAt'),
     lastActivityAt: tList('sort.lastActivityAt'),
-    mqlQualifiedAt: t('mqlQualifiedAt'),
+    mqlQualifiedAt: t('mqlLevel'),
     nextMeetingDate: tList('nextMeeting'),
     dealRating: tList('dealRating'),
     actBy: tList('actBy'),

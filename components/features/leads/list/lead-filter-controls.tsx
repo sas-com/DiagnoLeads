@@ -13,8 +13,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 /**
  * Filter controls of the lead list (#131), shared by the desktop toolbar (a row of buttons)
@@ -34,6 +32,7 @@ import {
 } from '@/lib/features/leads/types/pipeline';
 import {
   DEAL_RATINGS,
+  MQL_LEVEL_FILTERS,
   NEXT_MEETING_FILTERS,
   type NextMeetingFilter,
 } from '@/lib/features/leads/types/schemas';
@@ -42,7 +41,7 @@ import { format as formatDate } from 'date-fns';
 import { enUS, ja } from 'date-fns/locale';
 import { CalendarDays, ChevronDown } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
-import { useId, useState } from 'react';
+import { useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { AssigneeFilterControl } from './assignee-filter';
 import { formatDay } from './lead-filter-chips';
@@ -492,6 +491,14 @@ export function LeadFilterControls({
         optionLabel={(v) => tPipeline(`dealPhase.${v}`)}
         selected={filters.dealPhase}
         onChange={(dealPhase) => onChange({ dealPhase })}
+        layout={layout}
+      />
+      <MultiSelectFilter
+        label={t('mqlLevel')}
+        options={MQL_LEVEL_FILTERS}
+        optionLabel={(v) => t(`mqlLevelOptions.${v}`)}
+        selected={filters.mqlLevel ?? []}
+        onChange={(mqlLevel) => onChange({ mqlLevel })}
         layout={layout}
       />
       <MultiSelectFilter

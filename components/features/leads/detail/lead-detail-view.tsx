@@ -424,6 +424,7 @@ function LeadDetailContent({
             <LeadDiagnosisCard
               responses={lead.responses}
               customFields={lead.customFields}
+              score={lead.score}
               onShowAnswers={showAnswers}
             />
             <ChallengeGuideCard organizationId={organizationId} leadId={lead.id} />

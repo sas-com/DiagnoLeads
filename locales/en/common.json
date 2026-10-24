@@ -1218,6 +1218,7 @@
     "lostOnHold": "A lead on hold cannot be lost. To lose it, change the reason from \"On hold\"; to keep it on hold, set the status to nurturing",
     "hasNegotiated": "Negotiated",
     "mqlQualifiedAt": "MQL Date",
+    "mqlLevel": "MQL level",
     "sqlDecision": "SQL Decision",
     "sqlDecidedAt": "SQL Decision Date",
     "sqlUndecided": "Undecided",
@@ -4138,6 +4139,13 @@
       "soon": "Within 6 months (past ones included)",
       "has": "Worked out",
       "none": "No next action and no month to act (use with a status)"
+    },
+    "mqlLevel": "MQL level",
+    "mqlLevelOptions": {
+      "interest": "Interested (MQL)",
+      "fit": "Fit",
+      "none": "Not a fit",
+      "unknown": "No diagnosis"
     }
   },
   "leadFollowUp": {
