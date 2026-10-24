@@ -1,3 +1,4 @@
+import { lostReasonEnum } from '@/lib/features/leads/types/pipeline';
 import { z } from 'zod';
 
 /**
@@ -27,6 +28,14 @@ export const CLOSED_DEAL_STAGES = ['won', 'lost'] as const satisfies readonly De
 
 export const isOpenStage = (stage: string): stage is OpenDealStage =>
   (OPEN_DEAL_STAGES as readonly string[]).includes(stage);
+
+/**
+ * Lost reasons of a deal: those of the leads without 保留, which is not a loss (#445). A stalled
+ * deal stays open, or is lost for timing.
+ */
+export const dealLostReasonEnum = lostReasonEnum.exclude(['on_hold']);
+export const DEAL_LOST_REASONS = dealLostReasonEnum.options;
+export type DealLostReason = z.infer<typeof dealLostReasonEnum>;
 
 /**
  * Probability (%) a deal starts with when it enters the stage; the rep can change it per deal.

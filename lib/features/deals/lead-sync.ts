@@ -9,7 +9,8 @@
  *   it is further than the lead's own; the first day of a phase is kept as before.
  * - The status is 成約 when a deal is won, 商談中 while a deal is open, 失注 when every deal is
  *   lost. A lead already 成約 stays 成約 (a later deal does not undo the earlier win).
- * - A lead that becomes 失注 without its own lost reason takes the one of its latest lost deal.
+ * - A lead that becomes 失注 without its own lost reason, or with 保留 (not a loss, #445), takes
+ *   the one of its latest lost deal.
  * Deleting a deal changes nothing on the lead (a deletion is a correction; staff fix the lead).
  */
 import {
@@ -17,8 +18,8 @@ import {
   type DealPhase,
   type LeadStatus,
   type LostReason,
-  lostReasonEnum,
 } from '@/lib/features/leads/types/pipeline';
+import { dealLostReasonEnum } from './types/pipeline';
 
 export interface SyncDeal {
   kind: string;
@@ -88,7 +89,9 @@ export function statusFromDeals(current: string, deals: SyncDeal[]): LeadStatus 
 /** Lost reason of the deal lost last (by close day, then by update) */
 export function latestLostReason(deals: SyncDeal[]): LostReason | null {
   const lost = deals
-    .filter((deal) => deal.stage === 'lost' && lostReasonEnum.safeParse(deal.lostReason).success)
+    .filter(
+      (deal) => deal.stage === 'lost' && dealLostReasonEnum.safeParse(deal.lostReason).success
+    )
     .sort(
       (a, b) =>
         (b.closedOn ?? '').localeCompare(a.closedOn ?? '') ||
@@ -109,7 +112,8 @@ export function leadChangesFromDeals(lead: SyncLead, deals: SyncDeal[]): LeadSyn
   const status = statusFromDeals(lead.status, deals);
   if (status && status !== lead.status) changes.status = status;
 
-  if ((changes.status ?? lead.status) === 'lost' && !lead.lostReason) {
+  const ownReason = lead.lostReason === 'on_hold' ? null : lead.lostReason;
+  if ((changes.status ?? lead.status) === 'lost' && !ownReason) {
     const reason = latestLostReason(deals);
     if (reason) changes.lostReason = reason;
   }

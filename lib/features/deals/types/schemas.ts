@@ -1,7 +1,7 @@
 import { isoDateSchema } from '@/lib/features/lead-hearings/types/schemas';
-import { lostReasonEnum, targetSystemEnum } from '@/lib/features/leads/types/pipeline';
+import { targetSystemEnum } from '@/lib/features/leads/types/pipeline';
 import { z } from 'zod';
-import { dealKindEnum, dealStageEnum, forecastOverrideEnum } from './pipeline';
+import { dealKindEnum, dealLostReasonEnum, dealStageEnum, forecastOverrideEnum } from './pipeline';
 
 /** Input of the deals API (Refs #435) */
 
@@ -43,7 +43,7 @@ const dealFields = {
   probability,
   forecastOverride: forecastOverrideEnum.nullish(),
   expectedCloseOn: isoDateSchema.nullish(),
-  lostReason: lostReasonEnum.nullish(),
+  lostReason: dealLostReasonEnum.nullish(),
   lostNote: optionalText(DEAL_LIMITS.lostNote),
   competitor: optionalText(DEAL_LIMITS.competitor),
   targetSystem: targetSystemEnum.nullish(),
