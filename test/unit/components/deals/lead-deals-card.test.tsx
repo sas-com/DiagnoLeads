@@ -13,7 +13,12 @@ const ORG_ID = '660e8400-e29b-41d4-a716-446655440000';
 const LEAD_ID = '770e8400-e29b-41d4-a716-446655440001';
 
 const mocks = vi.hoisted(() => ({
-  forLead: { data: undefined as unknown, isError: false, refetch: vi.fn() },
+  forLead: {
+    data: undefined as unknown,
+    isError: false,
+    error: null as unknown,
+    refetch: vi.fn(),
+  },
 }));
 
 vi.mock('@/lib/trpc/client', () => ({
@@ -45,7 +50,7 @@ function renderCard() {
 }
 
 beforeEach(() => {
-  mocks.forLead = { data: undefined, isError: false, refetch: vi.fn() };
+  mocks.forLead = { data: undefined, isError: false, error: null, refetch: vi.fn() };
 });
 
 describe('LeadDealsCard', () => {
@@ -82,5 +87,16 @@ describe('LeadDealsCard', () => {
     expect(screen.getByText('商談を読み込めませんでした')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '再読み込み' }));
     expect(mocks.forLead.refetch).toHaveBeenCalled();
+  });
+
+  it("is left out for a parent organization's viewer, who may not read deals", () => {
+    mocks.forLead = {
+      data: undefined,
+      isError: true,
+      error: { data: { code: 'FORBIDDEN' } },
+      refetch: vi.fn(),
+    };
+    const { container } = renderCard();
+    expect(container).toBeEmptyDOMElement();
   });
 });

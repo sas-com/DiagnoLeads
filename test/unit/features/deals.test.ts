@@ -3,6 +3,9 @@
  * their lead forward and the input schemas. The DB behaviour is covered by
  * test/unit/integration/deals.db.test.ts.
  */
+import { defineAbilitiesFor } from '@/lib/auth/permissions';
+import type { OrganizationMember, User } from '@/lib/db/schema';
+import { canReadDeals } from '@/lib/features/deals/access';
 import {
   type SyncDeal,
   furtherPhase,
@@ -301,5 +304,38 @@ describe('boardSchema', () => {
       boardSchema.safeParse({ organizationId: ORG, closeFrom: '2026-12-01', closeTo: '2026-11-01' })
         .success
     ).toBe(false);
+  });
+});
+
+describe('canReadDeals', () => {
+  const user: User = {
+    id: 'user-1',
+    name: '営業 花子',
+    email: 'rep@example.com',
+    emailVerified: true,
+    image: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+  const ctxFor = (role: string) => {
+    const membership: OrganizationMember = {
+      id: 'membership-1',
+      organizationId: ORG,
+      userId: user.id,
+      role: role as OrganizationMember['role'],
+      createdAt: new Date(),
+      updatedAt: null,
+    };
+    return { ability: defineAbilitiesFor(user, membership), membership };
+  };
+
+  it.each(['owner', 'admin', 'member', 'group_owner', 'group_admin'])('lets %s read deals', (role) => {
+    expect(canReadDeals(ctxFor(role))).toBe(true);
+  });
+
+  it("keeps a parent organization's viewers out, though they can read leads", () => {
+    const ctx = ctxFor('parent_viewer');
+    expect(ctx.ability.can('read', 'Lead')).toBe(true);
+    expect(canReadDeals(ctx)).toBe(false);
   });
 });

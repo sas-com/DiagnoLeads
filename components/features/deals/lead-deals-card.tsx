@@ -33,6 +33,10 @@ export function LeadDealsCard({
     .filter((deal) => isOpenStage(deal.stage))
     .reduce((sum, deal) => sum + (deal.amount ?? 0), 0);
 
+  // A parent organization's viewer may read the lead but not its deals: no card, like the
+  // playbook cards (lib/features/deals/access.ts)
+  if (query.error?.data?.code === 'FORBIDDEN') return null;
+
   return (
     <Card className="p-5">
       <div className="mb-3 flex items-center gap-2">

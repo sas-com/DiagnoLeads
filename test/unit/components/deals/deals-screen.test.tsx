@@ -211,6 +211,20 @@ describe('DealsScreen', () => {
     expect(mocks.board.refetch).toHaveBeenCalled();
   });
 
+  it("tells a parent organization's viewer they may not see the deals", () => {
+    mocks.board = {
+      data: undefined,
+      isError: true,
+      error: { data: { code: 'FORBIDDEN' } },
+      isPlaceholderData: false,
+      refetch: vi.fn(),
+    } as typeof mocks.board;
+    renderScreen();
+    expect(screen.getByText('商談を見る権限がありません')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '再読み込み' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: '一覧' })).not.toBeInTheDocument();
+  });
+
   it('explains where deals come from while there are none', () => {
     mocks.board = { data: boardData([]), isError: false, isPlaceholderData: false, refetch: vi.fn() };
     renderScreen();

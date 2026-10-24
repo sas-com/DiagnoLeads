@@ -533,9 +533,11 @@ describe.skipIf(!url)('deals (PostgreSQL)', () => {
       });
     });
 
-    it('lets read-only viewers read but not change', async () => {
-      const board = await viewerA.deals.board({ organizationId: orgA });
-      expect(board).toMatchObject({ canEdit: false, canDelete: false });
+    it("keeps a parent organization's viewers out and tells members what they may do", async () => {
+      // Amounts and the pipeline are for the organization's own sales (owner decision 2026-10-24)
+      await expect(viewerA.deals.board({ organizationId: orgA })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
       const memberBoard = await memberA.deals.board({ organizationId: orgA });
       expect(memberBoard).toMatchObject({ canEdit: true, canDelete: false });
     });
@@ -546,9 +548,15 @@ describe.skipIf(!url)('deals (PostgreSQL)', () => {
       const lead = await createLead(orgA);
       const first = await adminA.deals.create({ organizationId: orgA, leadId: lead.id, name: '一' });
       const second = await adminA.deals.create({ organizationId: orgA, leadId: lead.id, name: '二' });
-      const listed = await viewerA.deals.forLead({ organizationId: orgA, leadId: lead.id });
+      const listed = await memberA.deals.forLead({ organizationId: orgA, leadId: lead.id });
       expect(listed.items.map((d: { id: string }) => d.id)).toEqual([first.id, second.id]);
-      expect(listed.canEdit).toBe(false);
+      expect(listed).toMatchObject({ canEdit: true, canDelete: false });
+      await expect(
+        viewerA.deals.forLead({ organizationId: orgA, leadId: lead.id })
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(
+        viewerA.deals.get({ organizationId: orgA, dealId: first.id })
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
       await expect(
         adminB.deals.forLead({ organizationId: orgB, leadId: lead.id })
       ).rejects.toMatchObject({ code: 'NOT_FOUND' });
@@ -561,7 +569,7 @@ describe.skipIf(!url)('deals (PostgreSQL)', () => {
       const lead = await createLead(orgA);
       const deal = await adminA.deals.create({ organizationId: orgA, leadId: lead.id, name: '調査' });
       await memberA.deals.update({ organizationId: orgA, dealId: deal.id, amount: 1_500_000 });
-      const detail = await viewerA.deals.get({ organizationId: orgA, dealId: deal.id });
+      const detail = await memberA.deals.get({ organizationId: orgA, dealId: deal.id });
       expect(detail.lead).toMatchObject({ id: lead.id, company: '架空商事' });
       expect(detail.history.map((h: { changedFields: string[] }) => h.changedFields)).toEqual([
         ['amount'],

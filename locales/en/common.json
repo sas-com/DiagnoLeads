@@ -1436,7 +1436,9 @@
       "empty": "No deals yet",
       "emptyHint": "Create deals from a lead's page or with \"New deal\" here",
       "truncated": "Showing up to {limit} deals. Narrow them down with the filters",
-      "readOnly": "Read only"
+      "readOnly": "Read only",
+      "forbiddenTitle": "You cannot see the deals",
+      "forbiddenBody": "Deals, their amounts, the forecast and the targets are shown to members who can view leads, except viewers from a parent organization."
     },
     "toasts": {
       "created": "Deal created",
