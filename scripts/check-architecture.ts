@@ -22,10 +22,24 @@ const ALLOWLIST_FILE = path.join(ROOT, 'scripts/architecture/allowlist.txt');
 const update = process.argv.includes('--update');
 const graph = buildImportGraph(ROOT);
 const violations = new Map(RULES.map((rule) => [rule.id, rule.check(graph)]));
+const allowlist = parseAllowlist(
+  fs.existsSync(ALLOWLIST_FILE) ? fs.readFileSync(ALLOWLIST_FILE, 'utf8') : ''
+);
 
 if (update) {
-  fs.writeFileSync(ALLOWLIST_FILE, formatAllowlist(RULES, violations));
+  const text = formatAllowlist(RULES, violations);
+  fs.writeFileSync(ALLOWLIST_FILE, text);
   console.log(`Wrote ${path.relative(ROOT, ALLOWLIST_FILE)}`);
+  // A new line is an exception that needs a reason in the PR, so it is never added silently
+  const written = parseAllowlist(text);
+  const missingFrom = (from: Map<string, Set<string>>, to: Map<string, Set<string>>) =>
+    [...from].flatMap(([id, items]) =>
+      [...items].filter((item) => !to.get(id)?.has(item)).map((item) => `${id} ${item}`)
+    );
+  for (const line of missingFrom(written, allowlist)) {
+    console.log(`added (write the reason in the PR): ${line}`);
+  }
+  for (const line of missingFrom(allowlist, written)) console.log(`removed: ${line}`);
   const blocked = RULES.filter((rule) => rule.mode === 'error' && violations.get(rule.id)?.length);
   for (const rule of blocked) {
     console.log(`FAIL ${rule.id}: ${rule.description}. This rule has no allowlist. Fix:`);
@@ -34,9 +48,6 @@ if (update) {
   process.exit(blocked.length > 0 ? 1 : 0);
 }
 
-const allowlist = parseAllowlist(
-  fs.existsSync(ALLOWLIST_FILE) ? fs.readFileSync(ALLOWLIST_FILE, 'utf8') : ''
-);
 const outcomes = compareWithAllowlist(RULES, violations, allowlist);
 
 let failed = false;

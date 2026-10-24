@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   AI_BATCH_MAX,
+  MAX_SEMANTIC_SEARCH_QUERY_CHARS,
   scoreLeadSchema,
   semanticSearchSchema,
   findSimilarLeadsSchema,
@@ -86,6 +87,18 @@ describe('semanticSearchSchema', () => {
         query: '',
       })
     ).toThrow();
+  });
+
+  it('should reject a query longer than the embedding takes (#576)', () => {
+    const organizationId = '123e4567-e89b-12d3-a456-426614174000';
+    const longest = '検'.repeat(MAX_SEMANTIC_SEARCH_QUERY_CHARS);
+
+    expect(semanticSearchSchema.parse({ organizationId, query: longest }).query).toBe(longest);
+    const result = semanticSearchSchema.safeParse({ organizationId, query: `${longest}索` });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe(
+      `検索クエリは${MAX_SEMANTIC_SEARCH_QUERY_CHARS}文字以内で入力してください`
+    );
   });
 
   it('should validate limit range', () => {

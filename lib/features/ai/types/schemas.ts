@@ -10,11 +10,22 @@ export const scoreLeadSchema = z.object({
 export type ScoreLeadInput = z.infer<typeof scoreLeadSchema>;
 
 /**
+ * Longest search query: it is embedded (a paid OpenAI call, counted as one) as it is (#576)
+ */
+export const MAX_SEMANTIC_SEARCH_QUERY_CHARS = 500;
+
+/**
  * Semantic search schema
  */
 export const semanticSearchSchema = z.object({
   organizationId: z.string().uuid(),
-  query: z.string().min(1, '検索クエリを入力してください'),
+  query: z
+    .string()
+    .min(1, '検索クエリを入力してください')
+    .max(
+      MAX_SEMANTIC_SEARCH_QUERY_CHARS,
+      `検索クエリは${MAX_SEMANTIC_SEARCH_QUERY_CHARS}文字以内で入力してください`
+    ),
   limit: z.number().int().min(1).max(50).default(10),
   minSimilarity: z.number().min(0).max(1).default(0.7),
 });

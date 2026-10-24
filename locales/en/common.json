@@ -1115,7 +1115,6 @@
       "recent": {
         "title": "Recent leads",
         "platform": "Source",
-        "score": "Score",
         "received": "Received",
         "consultation": "Consultation",
         "empty": "No leads yet",
@@ -1125,8 +1124,7 @@
         "mql": "MQL",
         "today": "Today {time}",
         "yesterday": "Yesterday",
-        "noCompany": "(no company)",
-        "highlight": "Worth a look (score 70+ or MQL)"
+        "noCompany": "(no company)"
       },
       "noOrganization": "Choose an organization to see its leads here",
       "periodTag": "Last {days} days",
@@ -1196,12 +1194,6 @@
           "same": "MQL (interested) is the same as in the previous {days} days",
           "none": "MQL (interested)"
         },
-        "score": {
-          "increase": "The average score of new leads went up",
-          "decrease": "The average score of new leads went down",
-          "same": "The average score of new leads is unchanged",
-          "none": "Average score of new leads"
-        },
         "previous": "Previous {days} days: {value}",
         "noPrevious": "Nothing in the previous {days} days"
       }
@@ -1218,6 +1210,7 @@
     "lostOnHold": "A lead on hold cannot be lost. To lose it, change the reason from \"On hold\"; to keep it on hold, set the status to nurturing",
     "hasNegotiated": "Negotiated",
     "mqlQualifiedAt": "MQL Date",
+    "mqlLevel": "MQL level",
     "sqlDecision": "SQL Decision",
     "sqlDecidedAt": "SQL Decision Date",
     "sqlUndecided": "Undecided",
@@ -2128,7 +2121,6 @@
         "totalLeads": "Total Leads",
         "newLeadsThisMonth": "New Leads This Month",
         "conversionRate": "Conversion Rate",
-        "averageScore": "Average Score",
         "vsLastPeriod": "vs. last period"
       },
       "tabs": {
@@ -2146,7 +2138,6 @@
         "sourceBreakdown": "Source Breakdown",
         "sourceTable": "Source Details",
         "conversionFunnel": "Conversion Funnel",
-        "scoreDistribution": "Score Distribution",
         "responseTime": "Response Time",
         "sourceBreakdownPeriod": "Inflow source of leads registered: {period}",
         "responseTimePending": "Coming soon (shown once first contacts are recorded)"
@@ -2160,8 +2151,7 @@
       "noData": "No data available",
       "comingSoon": "Coming soon",
       "performanceSummary": {
-        "title": "Performance summary",
-        "quality": "Lead quality (average score)"
+        "title": "Performance summary"
       },
       "acquisitionCost": {
         "title": "Acquisition cost by inflow source",
@@ -4138,6 +4128,13 @@
       "soon": "Within 6 months (past ones included)",
       "has": "Worked out",
       "none": "No next action and no month to act (use with a status)"
+    },
+    "mqlLevel": "MQL level",
+    "mqlLevelOptions": {
+      "interest": "Interested (MQL)",
+      "fit": "Fit",
+      "none": "Not a target",
+      "unknown": "No diagnosis"
     }
   },
   "leadFollowUp": {

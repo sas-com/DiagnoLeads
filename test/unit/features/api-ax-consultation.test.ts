@@ -249,6 +249,7 @@ describe('POST /api/diagnostics/ax-migration/consultation', () => {
     };
 
     it('records them on the lead after the request, and says what happened', async () => {
+      const requestedAt = new Date('2030-01-06T01:00:00Z');
       requestMock.mockResolvedValue({
         ok: true,
         alreadyRequested: true,
@@ -256,6 +257,7 @@ describe('POST /api/diagnostics/ax-migration/consultation', () => {
         leadId: 'lead-1',
         leadCreated: true,
         continued: false,
+        requestedAt,
       });
       acceptMock.mockResolvedValue('saved');
       const response = await POST(request({ submissionId: SUBMISSION_ID, preferences }));
@@ -268,6 +270,8 @@ describe('POST /api/diagnostics/ax-migration/consultation', () => {
           leadId: 'lead-1',
           submissionId: SUBMISSION_ID,
           identityVerified: true,
+          // The window for the preferences runs from the earlier consultation request (#241)
+          requestedAt,
           // Topics and the note default to none (#244)
           preferences: { ...preferences, topics: [], topicNote: null },
         },
@@ -275,6 +279,22 @@ describe('POST /api/diagnostics/ax-migration/consultation', () => {
       );
       // Already requested: sales were told then, not again
       expect(notifyMock).not.toHaveBeenCalled();
+    });
+
+    it('times the preferences sent with the first request from that request (#241)', async () => {
+      const requestedAt = new Date('2030-01-06T01:00:00Z');
+      requestMock.mockResolvedValue({
+        ok: true,
+        alreadyRequested: false,
+        organizationId: 'org-1',
+        leadId: 'lead-1',
+        leadCreated: true,
+        continued: false,
+        requestedAt,
+      });
+      acceptMock.mockResolvedValue('saved');
+      await POST(request({ submissionId: SUBMISSION_ID, preferences }));
+      expect(acceptMock.mock.calls[0][1]).toMatchObject({ requestedAt });
     });
 
     it('marks an answer tied to an existing lead by email only as unverified', async () => {

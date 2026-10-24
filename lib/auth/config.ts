@@ -54,12 +54,22 @@ export const auth = betterAuth({
       return sendAuthEmail({ to: user.email, subject, text, html });
     },
     /**
-     * Callback after password reset is complete
+     * Callback after password reset is complete. Never throw here: better-auth (1.6.33) calls it
+     * after the token is used and the new password is stored, but before it deletes the user's
+     * sessions, so a throw leaves them signed in elsewhere and returns 500 (#529)
      */
     onPasswordReset: async ({ user }) => {
       console.log(`Password reset completed for user: ${user.email}`);
     },
     resetPasswordTokenExpiresIn: 60 * 60, // 1 hour
+    /**
+     * A reset deletes every session of the user, including one in the browser that made the
+     * reset (the reset page sends the user to sign in again), so someone who knew the old
+     * password, or registered the address first, is signed out (#529). A browser that still
+     * holds the session_data cookie can be served from it until it expires (cookieCache.maxAge
+     * below, #578).
+     */
+    revokeSessionsOnPasswordReset: true,
   },
 
   /**
