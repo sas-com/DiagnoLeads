@@ -93,17 +93,17 @@ export default function SettingsPage() {
 
     setIsChangingPassword(true);
     try {
-      const result = await authClient.$fetch<{ user?: unknown; error?: { message?: string } }>(
-        '/change-password',
-        {
-          method: 'POST',
-          body: {
-            currentPassword,
-            newPassword,
-            revokeOtherSessions: false,
-          },
-        }
-      );
+      /**
+       * Always ends the user's other sessions (owner's decision, #591), like a reset does (#529).
+       * better-auth (1.6.33) deletes every session of the user and signs this browser in again
+       * with a new session cookie; called through the client (not $fetch), it then reloads the
+       * session, so this tab stays signed in and holds the new session.
+       */
+      const result = await authClient.changePassword({
+        currentPassword,
+        newPassword,
+        revokeOtherSessions: true,
+      });
 
       if (result.error) {
         const errorMessage = result.error.message?.toLowerCase() || '';
