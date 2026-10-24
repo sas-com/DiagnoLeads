@@ -66,6 +66,10 @@ test.describe('AX migration diagnosis', () => {
 
     await page.getByRole('button', { name: /無料の個別相談を申し込む/ }).first().click();
     await expect(page.getByText('個別相談のお申し込みを受け付けました')).toBeVisible();
+    // The other systems keep their steps and the usual consultation (#455, #457)
+    await expect(page.getByTestId('ax-result-steps')).toContainText('小さく始めて、移行の先のAX化まで');
+    await expect(page.getByText('所要時間の目安：60分程度')).toBeVisible();
+    await expect(page.getByRole('group', { name: 'ご希望の形式' })).toBeVisible();
   });
 
   test('completes the NEC ACOS path @smoke', async ({ page }) => {
@@ -93,6 +97,14 @@ test.describe('AX migration diagnosis', () => {
 
     await expect(page.getByText('移行元：Microsoft Access')).toBeVisible();
     await expect(page.getByText('個別相談のお申し込みを受け付けました')).toBeVisible();
+    // The steps follow the Access page, and the consultation is its 30-minute online one
+    // (#455, #457)
+    const steps = page.getByTestId('ax-result-steps');
+    await expect(steps.getByRole('heading', { name: 'このあとの流れ' })).toBeVisible();
+    await expect(steps.getByRole('listitem').first()).toContainText('棚卸し');
+    await expect(steps).not.toContainText('最新のWebシステムへ移行します');
+    await expect(page.getByText('所要時間の目安：30分程度（オンライン）')).toBeVisible();
+    await expect(page.getByRole('group', { name: 'ご希望の形式' })).toHaveCount(0);
     // One article for the answers: Access 2016 / 2019 is out of support (#363)
     await expect(page.getByTestId('ax-result-column').getByRole('link')).toHaveAttribute(
       'href',
