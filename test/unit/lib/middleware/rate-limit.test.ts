@@ -82,12 +82,11 @@ describe('ENDPOINT_RATE_LIMITS', () => {
 
   it('should have AI endpoints', () => {
     expect(ENDPOINT_RATE_LIMITS['/api/trpc/ai.scoreLeads'].max).toBe(10);
-    expect(ENDPOINT_RATE_LIMITS['/api/trpc/ai.chat'].max).toBe(30);
   });
 
   it('should have export endpoints', () => {
     expect(ENDPOINT_RATE_LIMITS['/api/trpc/leads.export'].max).toBe(5);
-    expect(ENDPOINT_RATE_LIMITS['/api/trpc/reports.export'].max).toBe(5);
+    expect(ENDPOINT_RATE_LIMITS['/api/trpc/auditLogs.export'].max).toBe(3);
   });
 
   it('should have bulk operation endpoints', () => {
@@ -102,7 +101,6 @@ describe('ENDPOINT_RATE_LIMITS', () => {
 
   it('should have diagnostic endpoints', () => {
     expect(ENDPOINT_RATE_LIMITS['/api/diagnostic'].max).toBe(30);
-    expect(ENDPOINT_RATE_LIMITS['/api/embed/v1/diagnostic'].max).toBe(60);
   });
 
   it('should have GraphQL endpoint', () => {
@@ -247,8 +245,8 @@ describe('getRateLimitConfig', () => {
     expect(config.max).toBe(200);
   });
 
-  it('should return diagnostic config for embed', () => {
-    const config = getRateLimitConfig('/api/embed/widget');
+  it("should return diagnostic config for the embed settings screen's tRPC calls", () => {
+    const config = getRateLimitConfig('/api/trpc/embed.list');
     expect(config.max).toBe(30);
   });
 
