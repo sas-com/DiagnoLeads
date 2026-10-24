@@ -1,5 +1,6 @@
 'use client';
 
+import { InlineLoadError } from '@/components/common/inline-load-error';
 import { Card } from '@/components/ui/card';
 import { trpc } from '@/lib/trpc/client';
 import { Lightbulb, Loader2 } from 'lucide-react';
@@ -28,7 +29,8 @@ export function ChallengeGuideCard({ organizationId, leadId }: ChallengeGuideCar
     { enabled: !!organizationId, retry: false }
   );
 
-  if (query.isError) return null;
+  // Hidden from those who may not read the playbook; a failed request shows an error (#431)
+  if (query.error?.data?.code === 'FORBIDDEN') return null;
   const data = query.data;
   if (data && !data.hasDiagnosis) return null;
 
@@ -68,7 +70,9 @@ export function ChallengeGuideCard({ organizationId, leadId }: ChallengeGuideCar
         )}
       </div>
 
-      {!data ? (
+      {!data && query.isError ? (
+        <InlineLoadError onRetry={() => void query.refetch()} />
+      ) : !data ? (
         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" />
       ) : !data.primary ? (
         <p className="text-sm text-muted-foreground">{t('noChallenge')}</p>

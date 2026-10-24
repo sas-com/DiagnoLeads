@@ -4,7 +4,7 @@
  */
 import { ActTimingCard } from '@/components/features/act-timing/act-timing-card';
 import messages from '@/locales/ja/common.json';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -61,6 +61,22 @@ describe('ActTimingCard', () => {
 
   it('shows nothing when the dates are unknown', () => {
     mocks.result = { data: data({ timing: null }), isError: false };
+    const { container } = renderCard();
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('says so in the card when it could not be loaded, with a retry (#431)', () => {
+    const refetch = vi.fn();
+    mocks.result = { data: undefined, isError: true, error: { data: undefined }, refetch };
+    renderCard();
+    expect(screen.getByRole('heading', { name: '動くべき時期' })).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('読み込めませんでした');
+    fireEvent.click(screen.getByRole('button', { name: '再読み込み' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays hidden from those who may not read it', () => {
+    mocks.result = { data: undefined, isError: true, error: { data: { code: 'FORBIDDEN' } } };
     const { container } = renderCard();
     expect(container).toBeEmptyDOMElement();
   });
