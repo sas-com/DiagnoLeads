@@ -51,3 +51,10 @@ drizzle/meta/*
 *.db
 *.db-journal
 .env*.local
+
+# Env files: only the templates are tracked
+.env*
+!.env*.example
+
+# Personal Claude Code settings
+.claude/settings.local.json
