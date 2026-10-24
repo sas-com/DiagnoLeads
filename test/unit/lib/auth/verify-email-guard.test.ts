@@ -28,12 +28,12 @@ describe('verificationTokenEmail', () => {
 });
 
 describe('refusedVerificationRedirect', () => {
-  it('sends a path on this site back with the error code', () => {
-    expect(refusedVerificationRedirect('/ja/invite/abc')).toBe(
-      `/ja/invite/abc?error=${VERIFY_IN_SIGNED_IN_BROWSER}`
+  it('sends the invite page back with the error code', () => {
+    expect(refusedVerificationRedirect('/ja/invite/abc_D-9')).toBe(
+      `/ja/invite/abc_D-9?error=${VERIFY_IN_SIGNED_IN_BROWSER}`
     );
-    expect(refusedVerificationRedirect('/ja/invite/abc?x=1')).toBe(
-      `/ja/invite/abc?x=1&error=${VERIFY_IN_SIGNED_IN_BROWSER}`
+    expect(refusedVerificationRedirect('/en/invite/abc')).toBe(
+      `/en/invite/abc?error=${VERIFY_IN_SIGNED_IN_BROWSER}`
     );
   });
 
@@ -43,6 +43,13 @@ describe('refusedVerificationRedirect', () => {
     ['a backslash trick', '/\\evil.example/'],
     ['nothing', undefined],
     ['a relative path without a slash', 'ja/invite'],
+    ['a tab that browsers drop', '/\t/evil.example'],
+    ['a newline', '/\n/evil.example'],
+    ['an encoded slash', '/%2F%2Fevil.example'],
+    ['an encoded backslash', '/%5Cevil.example'],
+    ['another page of the site', '/ja/dashboard'],
+    ['the invite page with more after it', '/ja/invite/abc/../../x'],
+    ['the invite page with a query', '/ja/invite/abc?next=//evil.example'],
   ])('refuses %s', (_, url) => {
     expect(refusedVerificationRedirect(url)).toBeNull();
   });

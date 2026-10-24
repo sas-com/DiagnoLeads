@@ -4,6 +4,9 @@
  * so someone holding a leaked invitation link could sign up with the invited address, send the
  * verification email to the real owner and wait for them to open it. Requiring the same signed-in
  * account in the browser that opens the link closes that.
+ *
+ * The check compares addresses, not user ids. That holds while addresses are unique and cannot be
+ * changed; review it if `user.changeEmail` is ever turned on.
  */
 
 /** The error code put on the callback URL when the link was opened elsewhere */
@@ -27,11 +30,17 @@ export function verificationTokenEmail(token: unknown): string | null {
 }
 
 /**
- * Where to send someone whose link was refused: the callback path with the error code, or null
- * when the callback is not a path on this site (then the request is refused without a redirect)
+ * The only page verification links come back to: the invite page (/ja/invite/<token>). Matched
+ * whole, because the hook redirects before better-auth checks the callback, and a looser rule
+ * lets values such as "/\t/evil.example" through, which browsers read as another site.
+ */
+const INVITE_PAGE = /^\/(ja|en)\/invite\/[A-Za-z0-9_-]+$/;
+
+/**
+ * Where to send someone whose link was refused: the invite page with the error code, or null for
+ * any other callback (then the request is refused without a redirect)
  */
 export function refusedVerificationRedirect(callbackURL: unknown): string | null {
-  if (typeof callbackURL !== 'string' || !/^\/(?![/\\])/.test(callbackURL)) return null;
-  const separator = callbackURL.includes('?') ? '&' : '?';
-  return `${callbackURL}${separator}error=${VERIFY_IN_SIGNED_IN_BROWSER}`;
+  if (typeof callbackURL !== 'string' || !INVITE_PAGE.test(callbackURL)) return null;
+  return `${callbackURL}?error=${VERIFY_IN_SIGNED_IN_BROWSER}`;
 }
