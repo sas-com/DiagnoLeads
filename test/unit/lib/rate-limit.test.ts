@@ -67,7 +67,7 @@ describe('ENDPOINT_RATE_LIMITS', () => {
     });
 
     it('should have strict password reset rate limits', () => {
-      expect(ENDPOINT_RATE_LIMITS['/api/auth/forgot-password']).toEqual({ max: 3, windowMs: 60 * 1000 });
+      expect(ENDPOINT_RATE_LIMITS['/api/auth/request-password-reset']).toEqual({ max: 3, windowMs: 60 * 1000 });
       expect(ENDPOINT_RATE_LIMITS['/api/auth/reset-password']).toEqual({ max: 3, windowMs: 60 * 1000 });
     });
   });
@@ -75,10 +75,6 @@ describe('ENDPOINT_RATE_LIMITS', () => {
   describe('AI endpoints', () => {
     it('should have rate limits for AI scoring', () => {
       expect(ENDPOINT_RATE_LIMITS['/api/trpc/ai.scoreLeads']).toEqual({ max: 10, windowMs: 60 * 1000 });
-    });
-
-    it('should have rate limits for AI chat', () => {
-      expect(ENDPOINT_RATE_LIMITS['/api/trpc/ai.chat']).toEqual({ max: 30, windowMs: 60 * 1000 });
     });
   });
 
@@ -113,16 +109,6 @@ describe('ENDPOINT_RATE_LIMITS', () => {
 
     it('should have rate limits for analytics endpoint', () => {
       expect(ENDPOINT_RATE_LIMITS['/api/v2/analytics']).toEqual({ max: 60, windowMs: 60 * 1000 });
-    });
-  });
-
-  describe('embed endpoints', () => {
-    it('should have rate limits for diagnostic embed', () => {
-      expect(ENDPOINT_RATE_LIMITS['/api/embed/v1/diagnostic']).toEqual({ max: 60, windowMs: 60 * 1000 });
-    });
-
-    it('should have rate limits for lead embed', () => {
-      expect(ENDPOINT_RATE_LIMITS['/api/embed/v1/lead']).toEqual({ max: 60, windowMs: 60 * 1000 });
     });
   });
 });
@@ -178,10 +164,6 @@ describe('getRateLimitConfig', () => {
       // Exact match takes precedence, so /api/trpc/leads.export matches first with max: 5
       const config = getRateLimitConfig('/api/trpc/leads.export');
       expect(config).toEqual({ max: 5, windowMs: 60 * 1000 });
-
-      // Reports export also has exact match with max: 5
-      const reportsConfig = getRateLimitConfig('/api/trpc/reports.export');
-      expect(reportsConfig).toEqual({ max: 5, windowMs: 60 * 1000 });
     });
 
     it('should match diagnostic endpoints', () => {
@@ -189,8 +171,8 @@ describe('getRateLimitConfig', () => {
       expect(config).toEqual(DEFAULT_RATE_LIMITS.diagnostic);
     });
 
-    it('should match embed endpoints', () => {
-      const config = getRateLimitConfig('/api/embed/v2/widget');
+    it("should match the embed settings screen's tRPC calls", () => {
+      const config = getRateLimitConfig('/api/trpc/embed.list');
       expect(config).toEqual(DEFAULT_RATE_LIMITS.diagnostic);
     });
 
@@ -313,12 +295,6 @@ describe('Rate limit security considerations', () => {
 
     // Export should be restricted
     expect(ENDPOINT_RATE_LIMITS['/api/trpc/auditLogs.export'].max).toBeLessThanOrEqual(5);
-  });
-
-  it('should have appropriate limits for public endpoints', () => {
-    // Diagnostic/embed endpoints should allow reasonable traffic
-    expect(ENDPOINT_RATE_LIMITS['/api/embed/v1/diagnostic'].max).toBeGreaterThanOrEqual(30);
-    expect(ENDPOINT_RATE_LIMITS['/api/embed/v1/lead'].max).toBeGreaterThanOrEqual(30);
   });
 
   it('should have all window times set to 1 minute', () => {

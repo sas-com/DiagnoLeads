@@ -2,9 +2,12 @@
 
 /**
  * What the lead list shows when the page has no rows, in the table and in the card list (#110):
- * "nothing matches" with a way to clear the filters, or "no leads yet".
+ * "nothing matches" with a way to clear the filters, "no leads yet", or that the list could not
+ * be loaded, with a retry (#431).
  */
+import { InlineLoadError } from '@/components/common/inline-load-error';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { UserPlus, Users } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
@@ -12,11 +15,26 @@ export interface LeadListEmptyProps {
   /** Filters are applied: an empty page means "no match", not "no leads yet" */
   hasFilters: boolean;
   onClearFilters?: () => void;
+  /** The list request failed: an error, not "no leads yet" */
+  loadFailed?: boolean;
+  onRetry?: () => void;
+  /** Opens the create dialog from "no leads yet"; without it (no permission) there is no button */
+  onCreate?: () => void;
 }
 
-export function LeadListEmpty({ hasFilters, onClearFilters }: LeadListEmptyProps) {
+export function LeadListEmpty({
+  hasFilters,
+  onClearFilters,
+  loadFailed = false,
+  onRetry,
+  onCreate,
+}: LeadListEmptyProps) {
   const t = useTranslations('leads');
   const tList = useTranslations('leadList');
+
+  if (loadFailed) {
+    return <InlineLoadError onRetry={onRetry} className="mx-auto max-w-md" />;
+  }
 
   if (hasFilters) {
     return (
@@ -40,13 +58,15 @@ export function LeadListEmpty({ hasFilters, onClearFilters }: LeadListEmptyProps
         <Users className="h-10 w-10 text-blue-400 dark:text-blue-300" />
       </div>
       <p className="mb-2 text-xl font-semibold text-gray-900 dark:text-gray-100">{t('noLeads')}</p>
-      <p className="mb-6 max-w-sm text-sm text-gray-500 dark:text-gray-400">
+      <p className={cn('max-w-sm text-sm text-gray-500 dark:text-gray-400', onCreate && 'mb-6')}>
         {t('noLeadsDescription')}
       </p>
-      <Button size="lg">
-        <UserPlus className="mr-2 h-5 w-5" />
-        {t('addFirstLead')}
-      </Button>
+      {onCreate && (
+        <Button size="lg" onClick={onCreate}>
+          <UserPlus className="mr-2 h-5 w-5" />
+          {t('addFirstLead')}
+        </Button>
+      )}
     </div>
   );
 }

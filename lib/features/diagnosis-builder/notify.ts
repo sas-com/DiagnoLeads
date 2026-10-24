@@ -3,17 +3,25 @@
  * diagnosis (lib/features/diagnostics/ax-migration/notify.ts): a consultation request gets the
  * company, the contact deadline (2 business days, JST) and the MQL reasons in the title / body,
  * and an email with a link to the lead page. Respondents of a diagnosis are never mailed here.
+ * A consultation request reaches only people of the diagnosis's organization (#481).
  */
 import { db } from '@/lib/db/client';
 import { filterAllowedRecipients } from '@/lib/email/allowed-recipients';
 import { type EmailBlock, type EmailFact, renderEmail } from '@/lib/email/templates/render';
 import { env } from '@/lib/env';
 import { isEmailConfigured, sendEmail } from '@/lib/features/email';
+import {
+  type AssignmentExecutor,
+  type ConsultationRecipients,
+  consultationRecipients,
+} from '@/lib/features/leads/assignment';
+import { notifyUsersInApp } from '@/lib/features/leads/assignment-notify';
 import { notifyOrganizationMembers } from '@/lib/features/notifications/notification-service';
 import { sendLeadCreatedById } from '@/lib/features/webhooks/services/lead-events';
 import { triggerWebhooks } from '@/lib/features/webhooks/services/webhook-service';
 import { AX_RATE_LIMITS } from '../diagnostics/ax-migration/limits';
 import { consultationDeadline } from '../diagnostics/ax-migration/notify';
+import { resolveDiagnosisOrganizationId } from '../diagnostics/organization';
 import { consumeRateLimit } from '../diagnostics/rate-limit';
 import type { DiagnosisMqlLevel } from './evaluate';
 import { DIAGNOSIS_RATE_LIMITS } from './limits';
@@ -190,6 +198,26 @@ export function buildDiagnosisSalesEmail(n: DiagnosisNotification): {
 }
 
 /**
+ * Who hears about a consultation request on a builder diagnosis (#481): people of the
+ * diagnosis's organization only. Its intake members (窓口) in-app and by email when it has any;
+ * otherwise every member in-app, and by email the sales addresses (AX_DIAGNOSIS_SALES_EMAIL) only
+ * when the diagnosis belongs to the operator's organization, the one that receives the AX
+ * diagnosis. Another organization without intake gets no email: the company, name and email of
+ * its respondents must never reach the operator's sales.
+ */
+export async function builderConsultationRecipients(
+  executor: AssignmentExecutor,
+  organizationId: string
+): Promise<ConsultationRecipients> {
+  const operatorOrganizationId = resolveDiagnosisOrganizationId();
+  const salesEmail =
+    operatorOrganizationId !== null && organizationId === operatorOrganizationId
+      ? env.AX_DIAGNOSIS_SALES_EMAIL
+      : undefined;
+  return consultationRecipients(executor, organizationId, salesEmail);
+}
+
+/**
  * Notify sales after a submission or a consultation request. Failures are logged and never
  * break the respondent's flow. Past the hourly limit of the organization nothing is sent (the
  * submission is saved all the same).
@@ -225,8 +253,25 @@ export async function notifyDiagnosisSubmission(n: DiagnosisNotification): Promi
   // A new lead is a lead.created too (#308), within the same limit as diagnostic.submitted
   if (n.leadCreated) tasks.push(sendLeadCreatedById(n.organizationId, n.leadId));
 
-  // In-app: consultation requests and new leads (a repeat answer changes nothing on the lead)
-  if (n.consultationRequested || n.leadCreated) {
+  // Consultation requests go to the diagnosis's organization only (#481)
+  const consultation = n.consultationRequested
+    ? await builderConsultationRecipients(db, n.organizationId)
+    : null;
+
+  // In-app: consultation requests (to the intake members when set) and new leads (a repeat
+  // answer changes nothing on the lead)
+  if (consultation && consultation.intakeUserIds.length > 0) {
+    tasks.push(
+      notifyUsersInApp(
+        consultation.intakeUserIds,
+        n.organizationId,
+        'consultation_requested',
+        title,
+        message,
+        data
+      )
+    );
+  } else if (n.consultationRequested || n.leadCreated) {
     tasks.push(
       notifyOrganizationMembers(
         n.organizationId,
@@ -238,14 +283,20 @@ export async function notifyDiagnosisSubmission(n: DiagnosisNotification): Promi
     );
   }
 
-  // Sales email for consultation requests, to the same address and within the same caps as the
-  // AX diagnosis (the sending quota is shared with the sign-in emails)
-  const salesEmail = env.AX_DIAGNOSIS_SALES_EMAIL;
-  const salesRecipients = filterAllowedRecipients(
-    salesEmail ? salesEmail.split(',').map((address) => address.trim()) : []
-  );
-  if (n.consultationRequested && salesRecipients.length === 0) {
-    console.warn('Diagnosis consultation: no sales email sent (no allowed sales address is set)');
+  // Sales email for consultation requests, within the same caps as the AX diagnosis (the
+  // sending quota is shared with the sign-in emails)
+  const salesAddresses = consultation?.emails ?? [];
+  // In test mode only company addresses are mailed; decide that before using the quota
+  const salesRecipients = filterAllowedRecipients(salesAddresses);
+  if (n.consultationRequested && salesAddresses.length === 0) {
+    // Visible in the runtime logs: a missing setting, not a failed send
+    console.warn(
+      'Diagnosis consultation: no sales email sent (no intake member, and no sales address for this organization)'
+    );
+  } else if (n.consultationRequested && salesRecipients.length === 0) {
+    console.warn(
+      'Diagnosis consultation: no sales email sent (no recipient is allowed in test mode)'
+    );
   }
   if (
     n.consultationRequested &&

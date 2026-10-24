@@ -82,6 +82,10 @@ interface MeetingPreferencesFormProps {
   submissionId: string;
   /** Called once the preferences were taken */
   onSaved?: () => void;
+  /** The duration guide, when this consultation is not the usual one (e.g. Access, #455) */
+  duration?: string;
+  /** The only format of this consultation: sent as is, without asking (#455) */
+  fixedFormat?: MeetingFormat;
 }
 
 /**
@@ -93,6 +97,8 @@ export function MeetingPreferencesForm({
   endpoint,
   submissionId,
   onSaved,
+  duration,
+  fixedFormat,
 }: MeetingPreferencesFormProps) {
   const t = useTranslations('meetingPreferences');
   const id = useId();
@@ -103,7 +109,7 @@ export function MeetingPreferencesForm({
     Array.from({ length: MAX_MEETING_CANDIDATES }, () => ({ date: '', time: DEFAULT_TIME }))
   );
   const [roles, setRoles] = useState<MeetingAttendeeRole[]>([]);
-  const [format, setFormat] = useState<MeetingFormat | null>(null);
+  const [format, setFormat] = useState<MeetingFormat | null>(fixedFormat ?? null);
   const [topics, setTopics] = useState<MeetingTopic[]>([]);
   const [note, setNote] = useState('');
   const [attempted, setAttempted] = useState(false);
@@ -190,7 +196,7 @@ export function MeetingPreferencesForm({
         </p>
         <p className="flex items-center gap-1.5 text-sm font-bold text-ax-teal-dark">
           <Clock className="h-4 w-4 shrink-0" aria-hidden="true" />
-          {t('duration')}
+          {duration ?? t('duration')}
         </p>
         <p className="text-sm leading-relaxed text-gray-700">{t('lead')}</p>
       </div>
@@ -325,23 +331,25 @@ export function MeetingPreferencesForm({
         </div>
       </fieldset>
 
-      <fieldset className="space-y-2">
-        <legend className="text-sm font-bold">{t('format')}</legend>
-        <div className="flex flex-wrap gap-x-4 gap-y-2">
-          {MEETING_FORMATS.map((value) => (
-            <label key={value} className="flex min-h-11 items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name={`${id}-format`}
-                className="h-5 w-5 accent-ax-teal-dark"
-                checked={format === value}
-                onChange={() => setFormat(value)}
-              />
-              {t(`formats.${value}`)}
-            </label>
-          ))}
-        </div>
-      </fieldset>
+      {!fixedFormat && (
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-bold">{t('format')}</legend>
+          <div className="flex flex-wrap gap-x-4 gap-y-2">
+            {MEETING_FORMATS.map((value) => (
+              <label key={value} className="flex min-h-11 items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name={`${id}-format`}
+                  className="h-5 w-5 accent-ax-teal-dark"
+                  checked={format === value}
+                  onChange={() => setFormat(value)}
+                />
+                {t(`formats.${value}`)}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      )}
 
       <div className="space-y-2">
         <p className="text-xs text-gray-600">{t('emailNote')}</p>

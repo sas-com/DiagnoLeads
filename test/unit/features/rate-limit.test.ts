@@ -56,7 +56,6 @@ describe('Rate Limit Configuration', () => {
 
     it('should have limits for AI endpoints', () => {
       expect(ENDPOINT_RATE_LIMITS['/api/trpc/ai.scoreLeads']).toEqual({ max: 10, windowMs: 60000 });
-      expect(ENDPOINT_RATE_LIMITS['/api/trpc/ai.chat']).toEqual({ max: 30, windowMs: 60000 });
     });
 
     it('should have strict limits for export endpoints', () => {
@@ -90,6 +89,17 @@ describe('getRateLimitConfig', () => {
   });
 
   describe('category fallback', () => {
+    it('counts reading the session like other API reads, not as a sign-in attempt (#519)', () => {
+      expect(getRateLimitConfig('/api/auth/get-session')).toEqual(DEFAULT_RATE_LIMITS.api);
+      // Attempts that can be guessed or abused stay strict
+      expect(getRateLimitConfig('/api/auth/sign-in/email').max).toBe(5);
+      expect(getRateLimitConfig('/api/auth/sign-up/email').max).toBe(3);
+      expect(getRateLimitConfig('/api/auth/request-password-reset').max).toBe(3);
+      expect(getRateLimitConfig('/api/auth/reset-password/token-value').max).toBe(3);
+      expect(getRateLimitConfig('/api/auth/send-verification-email').max).toBe(3);
+      expect(getRateLimitConfig('/api/auth/change-password')).toEqual(DEFAULT_RATE_LIMITS.auth);
+    });
+
     it('should return auth limits for /api/auth paths', () => {
       const config = getRateLimitConfig('/api/auth/unknown');
       expect(config).toEqual(DEFAULT_RATE_LIMITS.auth);

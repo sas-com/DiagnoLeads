@@ -282,6 +282,44 @@ describe.skipIf(!url)('AI features: organization isolation (PostgreSQL)', () => 
     expect(await scoreOfB()).toBe(77);
   });
 
+  it("keeps the score of B's leads the AI fell back on, and refuses a batch where all fell back (batchScoreLeads)", async () => {
+    const [second] = await pg
+      .insert(leads)
+      .values({ organizationId: orgB, email: `ai-iso-b2-${unique()}@example.co.jp`, score: 6 })
+      .returning({ id: leads.id });
+    const scoresOf = async (ids: string[]) =>
+      new Map(
+        (await pg.select({ id: leads.id, score: leads.score }).from(leads).where(inArray(leads.id, ids))).map(
+          (row) => [row.id, row.score]
+        )
+      );
+    const ids = [leadB, second.id];
+    const before = await scoresOf(ids);
+
+    // Every lead fell back: nothing is written and the caller gets an error, not "0 scored"
+    ai.scoreLeadsBatch.mockResolvedValueOnce(
+      new Map(ids.map((id) => [id, { score: 50, isFallback: true }]))
+    );
+    await expect(
+      adminB.ai.batchScoreLeads({ organizationId: orgB, leadIds: ids })
+    ).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE' });
+    expect(await scoresOf(ids)).toEqual(before);
+
+    // One fell back: only the other is written, and the fallback is reported
+    ai.scoreLeadsBatch.mockResolvedValueOnce(
+      new Map([
+        [leadB, { score: 50, isFallback: true }],
+        [second.id, { score: 88, isFallback: false }],
+      ])
+    );
+    const result = await adminB.ai.batchScoreLeads({ organizationId: orgB, leadIds: ids });
+    expect(result.leads.map((lead: { id: string }) => lead.id)).toEqual([second.id]);
+    expect(result.failedLeadIds).toEqual([leadB]);
+    const after = await scoresOf(ids);
+    expect(after.get(leadB)).toBe(before.get(leadB));
+    expect(after.get(second.id)).toBe(88);
+  });
+
   it("searches B's leads only (semanticSearch)", async () => {
     await adminB.ai.semanticSearch({ organizationId: orgB, query: '基幹システム' });
     expect(ai.semanticSearch).toHaveBeenCalledWith(

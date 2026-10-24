@@ -4,6 +4,7 @@ import { accessFileTypes } from './access-file-types';
 import { accessFixOrWeb } from './access-fix-or-web';
 import { accessOfficeSupportEnd } from './access-office-support-end';
 import { accessSharedFolder } from './access-shared-folder';
+import { accessWebSecurity } from './access-web-security';
 import {
   COLUMN_INDEX_PATH,
   type Column,
@@ -19,12 +20,14 @@ export * from './types';
 /**
  * Published articles, in reading order (the list page and the related links follow it): how to
  * tell the files apart first, for readers who are not sure their tool is Access (#372), then why
- * to act, how to choose and the problems one by one
+ * to act, how to choose (and how to protect a tool moved to the web, #465) and the problems one
+ * by one
  */
 export const COLUMNS: readonly Column[] = [
   accessFileTypes,
   accessOfficeSupportEnd,
   accessFixOrWeb,
+  accessWebSecurity,
   accessSharedFolder,
   accessAccdeOnly,
   access2gbLimit,

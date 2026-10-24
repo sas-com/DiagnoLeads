@@ -2,12 +2,8 @@
 
 import { cn } from '@/lib/utils';
 import type { ApexOptions } from 'apexcharts';
-import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
-
-const ReactApexChart = dynamic(() => import('react-apexcharts'), {
-  ssr: false,
-});
+import { ApexChart } from './apex-chart';
 
 const COLORS = {
   blue: '#3b82f6',
@@ -200,7 +196,7 @@ export function BarChart({
 
   return (
     <div className={cn('w-full', className)}>
-      <ReactApexChart options={options} series={series} type="bar" height={height} />
+      <ApexChart options={options} series={series} type="bar" height={height} />
     </div>
   );
 }

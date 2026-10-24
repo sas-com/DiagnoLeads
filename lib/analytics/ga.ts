@@ -12,7 +12,11 @@ export function gaMeasurementId(): string | undefined {
 
 /**
  * Hosts gtag.js loads from and sends hits to (Google's GA4 CSP guidance). doubleclick.net and
- * google.com receive hits once Google signals is turned on in the GA4 property.
+ * google.com receive hits once Google signals is turned on in the GA4 property; with it, images
+ * also go to the visitor's own Google domain (google.co.jp for visitors in Japan). The guide:
+ * https://developers.google.com/tag-platform/security/guides/csp
+ * Anyone can serve from these hosts (Apps Script, their own GA property), so with GA4 on the
+ * policy does not stop data from being carried out of the page (lib/middleware/csp.ts).
  */
 export const GA_SCRIPT_HOST = 'https://www.googletagmanager.com';
 export const GA_CONNECT_SOURCES = [
@@ -25,4 +29,7 @@ export const GA_CONNECT_SOURCES = [
 export const GA_IMG_SOURCES = [
   'https://*.google-analytics.com',
   'https://*.googletagmanager.com',
+  'https://*.g.doubleclick.net',
+  'https://*.google.com',
+  'https://*.google.co.jp',
 ] as const;
