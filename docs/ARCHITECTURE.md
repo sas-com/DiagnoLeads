@@ -91,7 +91,7 @@ components/features/<feature>/
 - `lib/features/<feature>/`（上の型）
 - `components/features/<feature>/`
 - `app/[locale]/(dashboard)/<feature>/page.tsx`
-- テスト（`docs/TESTING.md`）：`test/unit/features/<feature>*.test.ts`、`test/unit/integration/<feature>*.db.test.ts`（組織の分離を含む）、`test/unit/components/<feature>/`
+- テスト（`docs/TESTING.md`）：`test/unit/features/<feature>*.test.ts`（機能のテストが複数あるときは `test/unit/features/<feature>/` に置いてよい。決定 `2026-10-24-test-feature-subdirectories`）、`test/unit/integration/<feature>*.db.test.ts`（組織の分離を含む）、`test/unit/components/<feature>/`
 - 決めたことがあれば `.factory/memory/decisions/<日付>-<名前>.md`
 
 編集する共有のファイル（ハブ）：
