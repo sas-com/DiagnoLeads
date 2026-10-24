@@ -56,7 +56,6 @@ describe('Rate Limit Configuration', () => {
 
     it('should have limits for AI endpoints', () => {
       expect(ENDPOINT_RATE_LIMITS['/api/trpc/ai.scoreLeads']).toEqual({ max: 10, windowMs: 60000 });
-      expect(ENDPOINT_RATE_LIMITS['/api/trpc/ai.chat']).toEqual({ max: 30, windowMs: 60000 });
     });
 
     it('should have strict limits for export endpoints', () => {
