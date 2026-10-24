@@ -298,3 +298,29 @@ describe('Select accessibility', () => {
     expect(screen.getByRole('listbox')).toBeInTheDocument();
   });
 });
+
+describe('Select under the CSP', () => {
+  it('gives the <style> of the open list the page’s nonce (#317)', () => {
+    const script = document.createElement('script');
+    script.setAttribute('nonce', 'abc123');
+    document.head.appendChild(script);
+
+    render(
+      <Select defaultOpen>
+        <SelectTrigger>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="1">Option</SelectItem>
+        </SelectContent>
+      </Select>
+    );
+    const styles = [...document.querySelectorAll('style')].filter((style) =>
+      style.textContent?.includes('[data-radix-select-viewport]')
+    );
+    expect(styles.length).toBeGreaterThan(0);
+    for (const style of styles) expect(style.getAttribute('nonce')).toBe('abc123');
+
+    script.remove();
+  });
+});
