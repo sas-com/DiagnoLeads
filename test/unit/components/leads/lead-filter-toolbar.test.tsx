@@ -7,11 +7,11 @@ import { LeadFilterToolbar } from '@/components/features/leads/list/lead-filter-
 import { SortableHeader, ariaSortFor } from '@/components/features/leads/list/sortable-header';
 import { useLeadListQuery } from '@/hooks/use-lead-list-query';
 import messages from '@/locales/ja/common.json';
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import type { ReactNode } from 'react';
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Menus and popovers render slowly on a cold CI coverage run
 vi.setConfig({ testTimeout: 20000 });
@@ -71,6 +71,10 @@ beforeEach(() => {
   nav.replace.mockClear();
 });
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 function withIntl(children: ReactNode) {
   return (
     <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
@@ -79,8 +83,10 @@ function withIntl(children: ReactNode) {
   );
 }
 
+const SEARCH_PAUSE_MS = 30;
+
 function Toolbar({ total = 12 }: { total?: number }) {
-  const controller = useLeadListQuery({ searchDebounceMs: 30, now: () => NOW });
+  const controller = useLeadListQuery({ searchDebounceMs: SEARCH_PAUSE_MS, now: () => NOW });
   return (
     <>
       <LeadFilterToolbar controller={controller} total={total} />
@@ -207,12 +213,22 @@ describe('LeadFilterToolbar', () => {
     expect(lastHref()).toBe('/ja/leads?mql=1');
   });
 
-  it('sends the search after a pause, replacing the history entry', async () => {
-    const user = userEvent.setup();
+  it('sends the search after a pause, replacing the history entry', () => {
+    // The pause runs on a fake clock. On the real one, a busy machine let the pause pass between
+    // two keys or before the first check, and the search went out early (#573). user-event waits
+    // on setTimeout itself, so the keys are sent with fireEvent
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     renderAt('status=new&page=2');
-    await user.type(screen.getByRole('searchbox', { name: t.searchLabel }), '山田');
+    const box = screen.getByRole('searchbox', { name: t.searchLabel });
+    fireEvent.change(box, { target: { value: '山' } });
+    act(() => vi.advanceTimersByTime(SEARCH_PAUSE_MS - 1));
+    // Each key starts the pause again
+    fireEvent.change(box, { target: { value: '山田' } });
+    act(() => vi.advanceTimersByTime(SEARCH_PAUSE_MS - 1));
     expect(nav.replace).not.toHaveBeenCalled();
-    await waitFor(() => expect(nav.replace).toHaveBeenCalledTimes(1));
+
+    act(() => vi.advanceTimersByTime(1));
+    expect(nav.replace).toHaveBeenCalledTimes(1);
     expect(nav.replace).toHaveBeenLastCalledWith('/ja/leads?status=new&q=%E5%B1%B1%E7%94%B0', {
       scroll: false,
     });
