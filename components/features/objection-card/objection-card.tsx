@@ -1,5 +1,6 @@
 'use client';
 
+import { InlineLoadError } from '@/components/common/inline-load-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -47,7 +48,8 @@ export function ObjectionCard({ organizationId, leadId }: ObjectionCardProps) {
     onError: () => toast.error(t('takeawayError')),
   });
 
-  if (query.isError) return null;
+  // Hidden from those who may not read the playbook; a failed request shows an error (#431)
+  if (query.error?.data?.code === 'FORBIDDEN') return null;
   const data = query.data;
   const followUpOn = date ?? (data ? addBusinessDays(data.today, FOLLOW_UP_BUSINESS_DAYS) : '');
   const dateLabel = followUpOn
@@ -80,7 +82,9 @@ export function ObjectionCard({ organizationId, leadId }: ObjectionCardProps) {
         <h2 className="text-sm font-semibold text-foreground">{t('title')}</h2>
       </div>
 
-      {!data ? (
+      {!data && query.isError ? (
+        <InlineLoadError onRetry={() => void query.refetch()} />
+      ) : !data ? (
         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" />
       ) : (
         <div className="space-y-4">

@@ -130,10 +130,15 @@ describe('Access landing page', () => {
       'こんなとき、ありませんか',
       'そのままにしたときのリスク',
       '進め方は、3つあります',
-      'ご相談からの流れ',
+      // The steps start with the free check (#425)
+      '無料Web診断からの流れ',
+      // The phone halfway down, as on the main page, in this page's words (#425)
+      '直すか、Web に移すか。迷ったら、ご相談ください',
       '対象になる Access',
       'AS/400・ACOS など基幹システムの移行をお考えの方へ',
       'よくある質問',
+      // Reassurance right before the diagnosis asks for contact details (#425)
+      '安心して任せられる理由',
       '無料Web診断（Access版）',
       'まずは、お使いの Access を確かめるところから。',
       // After the last call to action, not right before the diagnosis (#332)
@@ -164,7 +169,10 @@ describe('Access landing page', () => {
       )
     ).toBeInTheDocument();
     expect(screen.getByText(/無料Web診断で、どれが合うかの目安が分かります。進め方は、相談のうえで一緒に決めます。/)).toBeInTheDocument();
-    expect(screen.getByText(/おすすめの進め方（直す・Web に移す・置き換える）の目安/)).toBeInTheDocument();
+    // The diagnosis intro (the first of the steps says the same, #425)
+    expect(
+      within(diagnosis()).getByText(/おすすめの進め方（直す・Web に移す・置き換える）の目安/)
+    ).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: 'どれが合うか、無料Web診断で確かめる' })
     ).toHaveAttribute('href', '#diagnosis');
@@ -181,6 +189,116 @@ describe('Access landing page', () => {
     const buttons = screen.getAllByRole('link', { name: /無料Web診断/ });
     expect(buttons.length).toBeGreaterThanOrEqual(3);
     for (const button of buttons) expect(button).toHaveAttribute('href', '#diagnosis');
+  });
+
+  it('names what brings an Access tool up for review, above the hero buttons (#425)', async () => {
+    await renderPage();
+    const hero = screen.getByRole('heading', { level: 1 }).closest('section') as HTMLElement;
+    const triggers = within(hero).getByText('こんなきっかけはありませんか')
+      .nextElementSibling as HTMLElement;
+    expect(within(triggers).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      'Access 2016・2019・2021 のサポート終了',
+      '作った人の異動・退職',
+      'Microsoft 365・64bit 版への切り替え',
+    ]);
+    // The phone CTA bar watches the buttons on their own, as on the main page (#420)
+    const buttons = document.getElementById('ax-hero-cta') as HTMLElement;
+    expect(hero).toContainElement(buttons);
+    expect(
+      within(buttons).getByRole('link', { name: /無料Web診断（Access版）をはじめる/ })
+    ).toHaveAttribute('href', '#diagnosis');
+  });
+
+  it('starts the steps with the free check, as on the main page (#425)', async () => {
+    await renderPage();
+    const steps = within(document.getElementById('steps') as HTMLElement)
+      .getAllByRole('heading', { level: 3 })
+      .map((heading) => heading.textContent);
+    expect(steps).toEqual(['無料Web診断（Access版・約3分）', '棚卸し', '進め方の決定', '移行', 'AX化']);
+  });
+
+  it('answers the worry about moving to the web, next to the partial move (#466)', async () => {
+    await renderPage();
+    const faq = document.getElementById('faq') as HTMLElement;
+    const questions = [...faq.querySelectorAll('summary')].map((summary) =>
+      summary.textContent?.replace(/^Q/, '')
+    );
+    expect(questions.indexOf('Web に移すと、脆弱性やサイバー攻撃が心配です。')).toBe(
+      questions.indexOf('一部だけ Web に移せますか？') + 1
+    );
+    const answer = within(faq).getByText(/^ご心配はもっともです。/);
+    expect(answer).toHaveTextContent('進め方を決めるときに一緒に決めます。');
+    expect(answer).toHaveTextContent('サポートが終わった版の Access は、弱点が見つかっても直されません。');
+  });
+
+  it('says the 30-minute online consultation is free, as the main page and the result do (#467)', async () => {
+    await renderPage();
+    const faq = within(document.getElementById('faq') as HTMLElement);
+    expect(
+      faq.getByText(/^30分の無料オンライン相談が基本です。内容に応じて、エンジニアも同席します。/)
+    ).toBeInTheDocument();
+    expect(faq.getByText(/無料Web診断と30分のオンライン相談に、費用はかかりません。$/)).toBeInTheDocument();
+  });
+
+  it('puts the phone halfway down and at the end, and the reassurance before the diagnosis (#425)', async () => {
+    window.history.replaceState(null, '', '/ja/ax-migration/access');
+    const analytics = window as Window & { dataLayer?: unknown[] };
+    analytics.dataLayer = [];
+    const user = userEvent.setup();
+    await renderPage();
+
+    const emails = screen.getAllByRole('link', { name: 'dx-agency@sas-com.com' });
+    const phones = screen.getAllByRole('link', { name: '03-5427-3663' });
+    expect(emails).toHaveLength(2);
+    expect(phones).toHaveLength(2);
+    for (const phone of phones) expect(phone).toHaveAttribute('href', 'tel:+81354273663');
+
+    // The band names this page's diagnosis and reports its own place
+    const band = within(document.getElementById('ax-consult') as HTMLElement);
+    // With no booking page, the band still says that the 30-minute consultation is free (#467)
+    expect(band.queryByRole('link', { name: /予約する/ })).toBeNull();
+    expect(
+      band.getByText('30分の無料オンライン相談は、お電話・メールでもお申し込みいただけます。')
+    ).toBeInTheDocument();
+    await user.click(band.getByRole('link', { name: /無料Web診断（Access版）をはじめる/ }));
+    expect(analytics.dataLayer).toContainEqual({
+      event: 'ax_lp_cta_click',
+      cta: 'diagnosis',
+      location: 'access-consult-band',
+      page: 'ax-access-lp',
+    });
+    analytics.dataLayer = undefined;
+
+    const trust = screen.getByRole('heading', { level: 2, name: '安心して任せられる理由' });
+    const diagnosis = screen.getByRole('heading', { level: 2, name: '無料Web診断（Access版）' });
+    expect(trust.compareDocumentPosition(diagnosis) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The scope card speaks of Access work, not of the host systems listed on the main page
+    const trustSection = within(trust.closest('section') as HTMLElement);
+    expect(
+      trustSection.getByText(
+        '直す・Web に移す・置き換える、どの進め方もご相談いただけます。1つの部署の、1つのツールからお受けします。'
+      )
+    ).toBeInTheDocument();
+    expect(trustSection.queryByText(/AS\/400/)).toBeNull();
+    expect(trustSection.getByText(/学習データとして利用されない/)).toBeInTheDocument();
+  });
+
+  it('says which links open a new tab: the booking and the Microsoft sources', async () => {
+    vi.stubEnv('NEXT_PUBLIC_AX_CONSULTATION_URL', 'https://bookings.example.com/ax');
+    await renderPage();
+    // In the hero, the consultation band and the final call to action
+    const bookings = screen.getAllByRole('link', { name: /30分の無料オンライン相談を予約する/ });
+    expect(bookings).toHaveLength(3);
+    for (const booking of bookings) {
+      expect(booking).toHaveAccessibleName('30分の無料オンライン相談を予約する（新しいタブで開きます）');
+      expect(booking).toHaveAttribute('href', 'https://bookings.example.com/ax');
+      expect(booking).toHaveAttribute('target', '_blank');
+    }
+    for (const number of [1, 2]) {
+      expect(
+        screen.getByRole('link', { name: `Microsoft の公開情報 ${number}（新しいタブで開きます）` })
+      ).toHaveAttribute('target', '_blank');
+    }
   });
 
   it('has its own canonical address, the operator site and no index in test mode', async () => {

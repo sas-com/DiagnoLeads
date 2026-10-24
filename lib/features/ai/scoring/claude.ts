@@ -10,6 +10,7 @@
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema';
 import { z } from 'zod';
 import { CLAUDE_MAX_TOKENS, CLAUDE_MODEL, anthropic } from '../client';
+import { AI_BATCH_MAX } from '../types/schemas';
 
 // Lead score response schema
 const LeadScoreSchema = z.object({
@@ -137,10 +138,9 @@ export async function scoreLeadsBatch(
 ): Promise<Map<string, LeadScoreResult>> {
   const scores = new Map<string, LeadScoreResult>();
 
-  // Process leads in parallel (with concurrency limit)
-  const BATCH_SIZE = 5;
-  for (let i = 0; i < leads.length; i += BATCH_SIZE) {
-    const batch = leads.slice(i, i + BATCH_SIZE);
+  // Process leads in parallel; the router accepts at most one group (AI_BATCH_MAX)
+  for (let i = 0; i < leads.length; i += AI_BATCH_MAX) {
+    const batch = leads.slice(i, i + AI_BATCH_MAX);
     const results = await Promise.all(
       batch.map(async (lead) => ({
         id: lead.id,

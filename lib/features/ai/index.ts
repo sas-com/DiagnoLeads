@@ -4,7 +4,6 @@
  * Centralizes all AI-powered features for DiagnoLeads:
  * - Lead scoring with Claude AI
  * - Semantic search with OpenAI embeddings
- * - Chat assistant
  * - Lead insights and summaries
  */
 
@@ -22,8 +21,8 @@ export {
   type SemanticSearchResult,
 } from './search/semantic';
 
-// Export chat
-export { generateChatResponse, generateLeadSummary, type ChatMessage } from './chat/assistant';
+// Export summaries
+export { generateLeadSummary } from './chat/assistant';
 
 // Export types and schemas
 export type {

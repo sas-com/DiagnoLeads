@@ -7,6 +7,12 @@ import { GA_CONNECT_SOURCES, GA_IMG_SOURCES, GA_SCRIPT_HOST } from '@/lib/analyt
  * - style-src-attr: style attributes rendered on the server (progress bars, layout parts)
  *   cannot run scripts, so they are allowed. Never put user text into a style attribute
  *   (colors are checked against a pattern, numbers are clamped).
+ * - img-src: the app's own images (public/, next/image), images made in the page (blob:, data:,
+ *   such as the QR code of a referral link) and, with GA4 on, its hosts. No other host: the app
+ *   shows no image from elsewhere, and an image from another host can track visitors or carry
+ *   data out of the page. With GA4 on this is no wall against carrying data out: anyone can
+ *   serve from a Google host (Apps Script on script.google.com, the hit endpoint of their own
+ *   GA property). It is still narrower than https:
  * - connect-src: only with GA4 on (its hit endpoints); otherwise default-src 'self' applies
  *   (gtag.js itself is added by the page's script, which 'strict-dynamic' allows)
  * - frame-src: the Cloudflare Turnstile check on the public diagnosis (its script is added by
@@ -14,7 +20,7 @@ import { GA_CONNECT_SOURCES, GA_IMG_SOURCES, GA_SCRIPT_HOST } from '@/lib/analyt
  *   having no nonce)
  */
 export interface CspOptions {
-  /** GA4 is on (lib/analytics/ga.ts): allow its script host (development) and hit endpoints */
+  /** GA4 is on (lib/analytics/ga.ts): allow its script host (development), hits and images */
   analytics?: boolean;
   /**
    * upgrade-insecure-requests (default on). Off only for http://localhost (the E2E run against
@@ -34,13 +40,14 @@ export function contentSecurityPolicy(
   { analytics = false, upgradeInsecureRequests = true }: CspOptions = {}
 ): string {
   const gaConnect = analytics ? ` ${GA_CONNECT_SOURCES.join(' ')}` : '';
+  const gaImg = analytics ? ` ${GA_IMG_SOURCES.join(' ')}` : '';
   const policy = isDevelopment
     ? // Development: より緩い CSP（Hot Reload 対応）
       `
     default-src 'self';
     script-src 'self' 'unsafe-eval' 'unsafe-inline' https://challenges.cloudflare.com${analytics ? ` ${GA_SCRIPT_HOST}` : ''};
     style-src 'self' 'unsafe-inline';
-    img-src 'self' blob: data:${analytics ? ` ${GA_IMG_SOURCES.join(' ')}` : ''};
+    img-src 'self' blob: data:${gaImg};
     font-src 'self' data:;
     connect-src 'self' ws: wss:${gaConnect};
     frame-src https://challenges.cloudflare.com;
@@ -55,7 +62,7 @@ export function contentSecurityPolicy(
     script-src 'self' 'nonce-${nonce}' 'strict-dynamic';
     style-src 'self' 'nonce-${nonce}';
     style-src-attr 'unsafe-inline';
-    img-src 'self' blob: data: https:;
+    img-src 'self' blob: data:${gaImg};
     font-src 'self' data:;
     ${analytics ? `connect-src 'self'${gaConnect};` : ''}
     frame-src https://challenges.cloudflare.com;

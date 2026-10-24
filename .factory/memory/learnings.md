@@ -102,6 +102,38 @@
 - **解決策**: ガード（PreToolUse）だけ `onFailure: block`（起動の失敗・タイムアウト）＋スクリプトの想定外のエラーで exit 2。セッション開始と決定通知のフックは従来どおり素通し。止まったら `.claude/settings.local.json` の `disableAllHooks: true` で一時的に外す（#461）
 - **教訓**: 安全のためのフックは、黙って通るより止まって気づく側にする。ただし全部を止める側にはせず、守りのフックだけに絞り、逃げ道（公式の `disableAllHooks`）を用意する
 
+### [Harness] 手元で DB つきの E2E を動かす
+- **日付**: 2026-10-24
+- **状況**: 結果画面と相談の申込（#455・#457）を、実際の API と DB で確かめたかった。DB が要る E2E は、`AX_DIAGNOSIS_ORGANIZATION_ID` が無いと飛ばされる
+- **原因**: セッションには PostgreSQL 16 が入っているが止まっていて、マイグレーションに要る pgvector が無い
+- **解決策**: `.github/workflows/ci.yml` の E2E の手順をなぞった
+  1. `apt-get install -y postgresql-16-pgvector`、`pg_ctlcluster 16 main start`
+  2. postgres のパスワードを CI と同じにして、DB `diagnoleads_test` と vector・ltree・`drizzle` スキーマを作る
+  3. `bun run db:migrate`、CI と同じ組織の INSERT、`bun run test:e2e:seed`
+  4. 本番ビルドを CI と同じ環境変数で `bun run start` し、Playwright は一時設定で `/opt/pw-browsers/chromium` を使う
+- **教訓**: CI の手順どおりに用意すれば、手元でも DB つきの E2E が通る（`ax-diagnosis.spec.ts` の7件で確認）
+
+### [Harness] プロジェクトの Playwright と、入っている Chromium の版がずれている
+- **日付**: 2026-10-24
+- **状況**: プロジェクトの Playwright（1.64.1）は Chromium 1248 を探すが、セッションに入っているのは 1243（`/opt/pw-browsers`）。`bun run columns:thumbnails` もそのままでは起動しない
+- **解決策**: スクリプトを変えずに、`chromium.launch` に `executablePath: '/opt/pw-browsers/chromium'` と `proxy: { server: process.env.HTTPS_PROXY }` を足す一時ファイルを作り、`bun --preload <そのファイル> scripts/generate-column-thumbnails.ts` で動かした（`bun --preload … run …` の形では動かない）
+  - Google Fonts はプロキシ経由で取れる。証明書はブラウザの NSS に入っているので、TLS の検証は外さない
+  - スクリプトはサムネイルと SNS 用の画像を全部作り直す。新しい画像だけを残し、ほかは `git checkout` で戻した（#465）
+- **教訓**: `playwright install` はせず、起動の設定で入っている Chromium を使う
+
+### [Harness] `pkill -f` は、それを実行したシェル自身にも当たる
+- **日付**: 2026-10-24
+- **状況**: `pkill -f "next start"` を含むコマンドを実行したら、そのコマンドのシェルが止まり（終了コード 144）、サーバーは残った
+- **原因**: `pkill -f` はコマンドの行全体で探す。実行中のシェルの行にも同じ文字列が入っている
+- **解決策**: `ps` で PID を確かめて `kill <PID>` で止めた
+- **教訓**: 止めたいプロセスは PID で指定する
+
+### [Test] 手元で診断を続けて送ると、回数制限に当たる
+- **日付**: 2026-10-24
+- **状況**: E2E の直後にスクリーンショット用のスクリプトで診断を送ったら、結果画面が出ずにタイムアウトした。時間を空けて流し直すと通った
+- **原因**: `proxy.ts` の回数制限（`diagnostic` は1分に30回）に当たったとみられる。手元の送信は、すべて同じアドレスから来る
+- **教訓**: 手元で E2E と画面の確認を続けて流すときは、1分ほど空けるか、送る回数を減らす
+
 ---
 
 ## Git関連
@@ -112,6 +144,20 @@
 - **原因**: SprintPathのContinuous Quality原則の違反
 - **解決策**: コミット前に必ず`bun run test && bun run typecheck && bun run lint`を実行
 - **教訓**: 品質ゲートは厳守。ショートカットしない
+
+### [Git] 積んだ PR のベースを main に切り替えても、CI は走らない
+- **日付**: 2026-10-24
+- **状況**: #424 のマージ後に、その上に積んだ #440 のベースを main に切り替えた。CI は動かず、前のベース（`feat/ax-lp-review`）の上で通った結果が残った。そのあいだにも、main には別の PR が入っていた
+- **原因**: `ci.yml` の `pull_request` は types を指定していないので、既定の opened・synchronize・reopened でしか動かない。ベースの変更は edited なので、CI が走らない
+- **解決策**: GitHub の update branch（`update_pull_request_branch`）で main を取り込み、新しい head で CI を流し直した。#485 も、#440 のマージ後に同じ手順をとった
+- **教訓**: 積んだ PR は、ベースを切り替えたあとに main を取り込み、main の上の CI が緑になってからマージする
+
+### [Git] main へ続けてマージすると、途中の CI が取り消される
+- **日付**: 2026-10-24
+- **状況**: #440・#463・#499・#485 を数分おきにマージした。main の push の CI は、#440・#463・#485 の run が cancelled になった。#499 の run と、#485 を含む後の run（#551 のマージ）だけが最後まで走った
+- **原因**: CI の concurrency は main で1つにまとまる。走っている run の後ろに待てるのは1本だけで、新しい push が来ると、待っている run は取り消される（push の run は `cancel-in-progress` ではないので、走っている run は止まらない）
+- **解決策**: マージした変更を含む、最新の完了した run が緑なのを確かめた（#499 の run は 4ee6537、#485 を含む run は 4db00b3）
+- **教訓**: main で通ったかは、そのマージの run ではなく、そのマージを含む最新の完了した run で確かめる。取り消された run を、失敗と取り違えない
 
 ---
 
@@ -186,13 +232,6 @@
 - **原因**: 全テスト実行に10秒以上かかる
 - **解決策**: 特定テストのみ実行（`bun run test path/to/test.ts`）、CI環境では並列実行
 - **教訓**: 開発中は関連テストのみ実行、コミット前に全テスト実行
-
-### [Performance] withPayload が全ページに Critical-CH を付けていた
-- **日付**: 2026-10-24
-- **状況**: 本番の Lighthouse（#497）で、どのページでも最初の訪問に「307 Internal Redirect」が出て、モバイルで 0.56〜0.99 秒遅れていた
-- **原因**: `@payloadcms/next` の `withPayload`（3.91.0、`dist/withPayload/withPayload.js`）が、`headers()` に `source: '/:path*'` で `Accept-CH`・`Vary`・`Critical-CH`（値はどれも `Sec-CH-Prefers-Color-Scheme`）を足す。`Critical-CH` があると、Chrome はヒントを付けてリクエストを送り直す。このヒントを読むのは、Payload の管理画面の RootLayout（`getRequestTheme`）だけ
-- **解決策**: `next.config.ts` で withPayload の結果を `withAdminOnlyClientHints`（`lib/cms/client-hints.ts`）で包み、3つを `/admin/:path*` だけに移した（#509）。`test/unit/lib/cms/client-hints.test.ts` が、本物の next.config の `headers()` を、Next.js が routes-manifest に書く正規表現で照合する
-- **教訓**: Next.js のプラグイン（`withXxx`）は、すべての応答に効く設定（headers など）を黙って足すことがある。入れる・上げるときは、公開ページの応答ヘッダーを `curl -sI` で確かめる。Payload を上げてこのテストが落ちたら、`withPayload.js` で付け方が変わっていないかを見る
 
 ---
 

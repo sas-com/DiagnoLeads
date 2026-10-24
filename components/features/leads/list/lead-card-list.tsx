@@ -19,6 +19,11 @@ export interface LeadCardListProps {
   onLost?: (lead: LeadListRow) => void;
   hasFilters?: boolean;
   onClearFilters?: () => void;
+  /** The list request failed: the empty state says so, with a retry (#431) */
+  loadFailed?: boolean;
+  onRetry?: () => void;
+  /** Opens the create dialog from "no leads yet" */
+  onCreate?: () => void;
 }
 
 export function LeadCardList({
@@ -30,13 +35,22 @@ export function LeadCardList({
   onLost,
   hasFilters = false,
   onClearFilters,
+  loadFailed = false,
+  onRetry,
+  onCreate,
 }: LeadCardListProps) {
   const t = useTranslations('leadList.cards');
 
   if (leads.length === 0) {
     return (
       <div className="px-4 py-8">
-        <LeadListEmpty hasFilters={hasFilters} onClearFilters={onClearFilters} />
+        <LeadListEmpty
+          hasFilters={hasFilters}
+          onClearFilters={onClearFilters}
+          loadFailed={loadFailed}
+          onRetry={onRetry}
+          onCreate={onCreate}
+        />
       </div>
     );
   }
