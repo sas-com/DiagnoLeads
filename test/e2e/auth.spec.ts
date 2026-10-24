@@ -255,34 +255,42 @@ test.describe('Authentication', () => {
     }) => {
       await login(page, TEST_USERS.member);
       const cookies = await page.context().cookies();
-      const sessionCookie = cookies.find((cookie) => cookie.name.endsWith('.session_token'));
-      if (!sessionCookie) throw new Error('No session cookie after sign-in');
+      if (!cookies.some((cookie) => cookie.name.endsWith('.session_token'))) {
+        throw new Error('No session cookie after sign-in');
+      }
 
-      // Whom the server signs in with the session cookie alone, asked outside the browser. The
-      // proxy only looks for a session cookie, and the session cached in a cookie next to it
-      // (session.cookieCache) is taken as it is for 5 minutes, so neither would show whether
-      // sign-out ended the session; without the cache, better-auth looks it up in the database
-      const address = uniqueClientAddress();
+      // Every cookie the browser holds, sent from outside the browser as someone who copied them
+      // would. The proxy only looks for a session cookie, so the pages alone would not show
+      // whether sign-out ended the session; the server must look it up in the database on each
+      // read (no session cache in a cookie, #578)
+      const copied = {
+        cookie: cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join('; '),
+        'x-forwarded-for': uniqueClientAddress(),
+      };
       const signedInAs = async () => {
-        const response = await request.get('/api/auth/get-session', {
-          headers: {
-            cookie: `${sessionCookie.name}=${sessionCookie.value}`,
-            'x-forwarded-for': address,
-          },
-        });
+        const response = await request.get('/api/auth/get-session', { headers: copied });
         expect(response.status()).toBe(200);
         const session = (await response.json()) as { user: { email: string } } | null;
         return session?.user.email ?? null;
       };
+      // A protected tRPC procedure (signed in, no organization) that only reads
+      const trpcStatus = async () => {
+        const response = await request.get('/api/trpc/account.soleOwnedOrganizations', {
+          headers: copied,
+        });
+        return response.status();
+      };
       expect(await signedInAs()).toBe(TEST_USERS.member.email);
+      expect(await trpcStatus()).toBe(200);
 
       await logout(page);
 
       // The admin pages send the visitor to sign-in again
       await page.goto('/ja/dashboard');
       await page.waitForURL(/\/ja\/login/);
-      // and the session itself has ended: the cookie kept from before signs no one in
+      // and the session itself has ended: the cookies kept from before sign no one in
       expect(await signedInAs()).toBeNull();
+      expect(await trpcStatus()).toBe(401);
     });
   });
 
