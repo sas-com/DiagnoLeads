@@ -5,6 +5,7 @@
 
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema';
 import { CLAUDE_MAX_TOKENS, CLAUDE_MODEL, anthropic } from '../client';
+import { AI_BATCH_MAX } from '../types/schemas';
 
 export interface LeadForPrediction {
   id: string;
@@ -116,10 +117,9 @@ export async function predictConversionBatch(
 ): Promise<Map<string, ConversionPrediction>> {
   const results = new Map<string, ConversionPrediction>();
 
-  // Process in parallel with concurrency limit
-  const batchSize = 5;
-  for (let i = 0; i < leads.length; i += batchSize) {
-    const batch = leads.slice(i, i + batchSize);
+  // Process in parallel; the router accepts at most one group (AI_BATCH_MAX)
+  for (let i = 0; i < leads.length; i += AI_BATCH_MAX) {
+    const batch = leads.slice(i, i + AI_BATCH_MAX);
     const predictions = await Promise.all(batch.map((lead) => predictConversion(lead)));
     batch.forEach((lead, index) => {
       results.set(lead.id, predictions[index]);

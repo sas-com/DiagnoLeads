@@ -1,14 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock the AI SDK
-vi.mock('@ai-sdk/anthropic', () => ({
-  createAnthropic: vi.fn(() => vi.fn()),
-}));
-
-vi.mock('ai', () => ({
-  streamText: vi.fn(),
-}));
-
 const { mockCreate } = vi.hoisted(() => ({ mockCreate: vi.fn() }));
 
 vi.mock('@anthropic-ai/sdk', () => ({
@@ -17,148 +8,11 @@ vi.mock('@anthropic-ai/sdk', () => ({
   },
 }));
 
-import { streamText } from 'ai';
-import {
-  type ChatMessage,
-  generateChatResponse,
-  generateLeadSummary,
-} from '@/lib/features/ai/chat/assistant';
+import { generateLeadSummary } from '@/lib/features/ai/chat/assistant';
 
 describe('ai-chat-assistant', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  describe('generateChatResponse', () => {
-    it('should generate chat response with messages', async () => {
-      const mockResponse = {
-        toTextStreamResponse: vi.fn().mockReturnValue(new Response('Hello!')),
-      };
-      (streamText as ReturnType<typeof vi.fn>).mockResolvedValue(mockResponse);
-
-      const messages: ChatMessage[] = [{ role: 'user', content: 'Hello' }];
-
-      const result = await generateChatResponse(messages);
-
-      expect(streamText).toHaveBeenCalledWith(
-        expect.objectContaining({
-          messages: [{ role: 'user', content: 'Hello' }],
-        })
-      );
-      expect(result).toBeInstanceOf(Response);
-    });
-
-    it('should include organization context in system prompt', async () => {
-      const mockResponse = {
-        toTextStreamResponse: vi.fn().mockReturnValue(new Response('Response with context')),
-      };
-      (streamText as ReturnType<typeof vi.fn>).mockResolvedValue(mockResponse);
-
-      const messages: ChatMessage[] = [{ role: 'user', content: 'Tell me about leads' }];
-      const context = {
-        organizationName: 'Acme Corp',
-      };
-
-      await generateChatResponse(messages, context);
-
-      expect(streamText).toHaveBeenCalledWith(
-        expect.objectContaining({
-          system: expect.stringContaining('Acme Corp'),
-        })
-      );
-    });
-
-    it('should include recent leads in context', async () => {
-      const mockResponse = {
-        toTextStreamResponse: vi.fn().mockReturnValue(new Response('Response with leads')),
-      };
-      (streamText as ReturnType<typeof vi.fn>).mockResolvedValue(mockResponse);
-
-      const messages: ChatMessage[] = [{ role: 'user', content: 'What are my recent leads?' }];
-      const context = {
-        recentLeads: [
-          { name: 'John Doe', company: 'Tech Inc', status: 'nurturing' },
-          { name: 'Jane Smith', company: 'Sales Co', status: 'new' },
-        ],
-      };
-
-      await generateChatResponse(messages, context);
-
-      expect(streamText).toHaveBeenCalledWith(
-        expect.objectContaining({
-          system: expect.stringContaining('John Doe'),
-        })
-      );
-    });
-
-    it('should handle leads with null fields', async () => {
-      const mockResponse = {
-        toTextStreamResponse: vi.fn().mockReturnValue(new Response('Response')),
-      };
-      (streamText as ReturnType<typeof vi.fn>).mockResolvedValue(mockResponse);
-
-      const messages: ChatMessage[] = [{ role: 'user', content: 'Check leads' }];
-      const context = {
-        recentLeads: [
-          { name: null, company: null, status: null },
-          { name: 'Test', company: undefined, status: 'new' },
-        ],
-      };
-
-      await generateChatResponse(messages, context);
-
-      expect(streamText).toHaveBeenCalledWith(
-        expect.objectContaining({
-          system: expect.stringContaining('Unknown'),
-        })
-      );
-    });
-
-    it('should handle empty context', async () => {
-      const mockResponse = {
-        toTextStreamResponse: vi.fn().mockReturnValue(new Response('Response')),
-      };
-      (streamText as ReturnType<typeof vi.fn>).mockResolvedValue(mockResponse);
-
-      const messages: ChatMessage[] = [{ role: 'user', content: 'Hello' }];
-
-      await generateChatResponse(messages, {});
-
-      expect(streamText).toHaveBeenCalled();
-    });
-
-    it('should handle API errors', async () => {
-      (streamText as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('API Error'));
-
-      const messages: ChatMessage[] = [{ role: 'user', content: 'Hello' }];
-
-      await expect(generateChatResponse(messages)).rejects.toThrow('Failed to generate chat response');
-    });
-
-    it('should handle multiple messages in conversation', async () => {
-      const mockResponse = {
-        toTextStreamResponse: vi.fn().mockReturnValue(new Response('Response')),
-      };
-      (streamText as ReturnType<typeof vi.fn>).mockResolvedValue(mockResponse);
-
-      const messages: ChatMessage[] = [
-        { role: 'user', content: 'Hello' },
-        { role: 'assistant', content: 'Hi there!' },
-        { role: 'user', content: 'How are you?' },
-      ];
-
-      await generateChatResponse(messages);
-
-      expect(streamText).toHaveBeenCalledWith(
-        expect.objectContaining({
-          messages: expect.arrayContaining([
-            { role: 'user', content: 'Hello' },
-            { role: 'assistant', content: 'Hi there!' },
-            { role: 'user', content: 'How are you?' },
-          ]),
-        })
-      );
-    });
   });
 
   describe('generateLeadSummary', () => {

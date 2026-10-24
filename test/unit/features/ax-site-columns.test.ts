@@ -79,23 +79,38 @@ describe('column content', () => {
       '/ax-migration/column/access-file-types',
       '/ax-migration/column/access-office-support-end',
       '/ax-migration/column/access-fix-or-web',
+      '/ax-migration/column/access-web-security',
       '/ax-migration/column/access-shared-folder',
       '/ax-migration/column/access-accde-only',
       '/ax-migration/column/access-2gb-limit',
     ]);
-    expect(columnUpdatedAt('/ax-migration/column')).toBe('2026-10-23');
+    expect(columnUpdatedAt('/ax-migration/column')).toBe('2026-10-24');
     expect(columnUpdatedAt('/ax-migration/access')).toBeUndefined();
   });
 });
 
 describe('the Access series', () => {
   const series = COLUMNS.filter((column) => column.slug !== 'access-office-support-end');
+  const PUBLISHED_ON: Record<string, string> = {
+    'access-file-types': '2026-10-23',
+    'access-web-security': '2026-10-24',
+  };
+  const MICROSOFT_HOSTS = /^(learn|support)\.microsoft\.com$/;
+  /**
+   * The facts of an article come from the publisher of the product: Microsoft for Access, and for
+   * the PHP vulnerabilities (#465) the PHP project and IPA, the Japanese public body that alerts
+   * on them
+   */
+  const SOURCE_HOSTS: Record<string, RegExp> = {
+    'access-web-security': /^www\.(php\.net|ipa\.go\.jp)$/,
+  };
 
   it('is listed in reading order: the file types first (#372), then the support-end article', () => {
     expect(COLUMNS.map((column) => column.slug)).toEqual([
       'access-file-types',
       'access-office-support-end',
       'access-fix-or-web',
+      'access-web-security',
       'access-shared-folder',
       'access-accde-only',
       'access-2gb-limit',
@@ -105,8 +120,9 @@ describe('the Access series', () => {
   it.each(series.map((column) => [column.slug, column] as const))(
     '%s is dated, in Japanese, tied to the Access page and ends with the diagnosis',
     (_, column) => {
-      // The file types article (#367) came a day after the others
-      const date = column.slug === 'access-file-types' ? '2026-10-23' : '2026-10-22';
+      // The file types article (#367) came a day after the others, the web security one (#465)
+      // two days after
+      const date = PUBLISHED_ON[column.slug] ?? '2026-10-22';
       expect(column).toMatchObject({
         locale: 'ja',
         publishedAt: date,
@@ -120,7 +136,7 @@ describe('the Access series', () => {
   );
 
   it.each(series.map((column) => [column.slug, column] as const))(
-    '%s links only to published articles and the diagnosis inside the site, and cites Microsoft over https',
+    '%s links only to published articles and the diagnosis inside the site, and cites official pages over https',
     (_, column) => {
       const published = new Set(COLUMNS.map((c) => `/ja/ax-migration/column/${c.slug}`));
       for (const href of columnLinks(column).filter((h) => h.startsWith('/'))) {
@@ -131,7 +147,8 @@ describe('the Access series', () => {
       );
       expect(sources.length).toBeGreaterThan(0);
       for (const { href } of sources) {
-        expect(new URL(href).hostname).toMatch(/^(learn|support)\.microsoft\.com$/);
+        expect(href.startsWith('https://')).toBe(true);
+        expect(new URL(href).hostname).toMatch(SOURCE_HOSTS[column.slug] ?? MICROSOFT_HOSTS);
       }
     }
   );
@@ -148,6 +165,8 @@ describe('the Access series', () => {
     expect(notice('access-file-types')).toMatch(
       /^Microsoft、Access、Excel、SQL Server、Windows、Microsoft 365 は、/
     );
+    // Names no Microsoft product besides Access: the notice of the Access page
+    expect(notice('access-web-security')).toBeUndefined();
   });
 
   it('says so when a source is an old technical document (previous-versions)', () => {
