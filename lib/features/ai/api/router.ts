@@ -135,6 +135,15 @@ export const aiRouter = router({
 
       // Update the leads Claude scored; a fallback keeps the lead's current score
       const scoredLeads = leadsToScore.filter((lead) => !scoresMap.get(lead.id)?.isFallback);
+      const failedLeadIds = leadsToScore
+        .filter((lead) => scoresMap.get(lead.id)?.isFallback)
+        .map((lead) => lead.id);
+      if (scoredLeads.length === 0) {
+        throw new TRPCError({
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'AI でリードを評価できませんでした。時間をおいてやり直してください',
+        });
+      }
       const updatePromises = scoredLeads.map((lead) => {
         const aiScore = scoresMap.get(lead.id);
         if (!aiScore) {
@@ -163,6 +172,7 @@ export const aiRouter = router({
 
       return {
         leads: updatedLeads.map(([lead]) => lead),
+        failedLeadIds,
         scores: Array.from(scoresMap.entries()).map(([id, score]) => ({
           leadId: id,
           ...score,
