@@ -1,14 +1,16 @@
 /**
  * Deals tRPC router (Refs #435, Epic #430)
  *
- * Anyone who can read leads may read deals (including viewers from a parent organization);
- * creating and changing them needs permission to update leads, and deleting needs permission to
- * delete leads (not members). Every query is scoped by organizationId (see ../service.ts).
+ * Those who can read leads may read deals, except viewers from a parent organization (see
+ * ../access.ts); creating and changing them needs permission to update leads, and deleting needs
+ * permission to delete leads (not members). Every query is scoped by organizationId (see
+ * ../service.ts).
  */
 
 import type { AppAbility } from '@/lib/auth/permissions';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
+import { canReadDeals } from '../access';
 import {
   afterDealChange,
   createDeal,
@@ -32,10 +34,14 @@ const MESSAGES = {
   delete: 'You do not have permission to delete deals',
 } as const;
 
-function assertCan(ability: AppAbility, action: 'read' | 'update' | 'delete') {
+function assertCan(ability: AppAbility, action: 'update' | 'delete') {
   if (!ability.can(action, 'Lead')) {
     throw new TRPCError({ code: 'FORBIDDEN', message: MESSAGES[action] });
   }
+}
+
+function assertCanRead(ctx: Parameters<typeof canReadDeals>[0]) {
+  if (!canReadDeals(ctx)) throw new TRPCError({ code: 'FORBIDDEN', message: MESSAGES.read });
 }
 
 /** What the screens may offer, from the same checks the mutations make */
@@ -47,7 +53,7 @@ const accessOf = (ability: AppAbility) => ({
 export const dealsRouter = router({
   /** The pipeline board: deals by stage with each stage's totals */
   board: organizationProcedure.input(boardSchema).query(async ({ ctx, input }) => {
-    assertCan(ctx.ability, 'read');
+    assertCanRead(ctx);
     const board = await getBoard(ctx.db, {
       ...input,
       organizationId: ctx.organization.id,
@@ -58,7 +64,7 @@ export const dealsRouter = router({
 
   /** Deals of one lead (the lead page) */
   forLead: organizationProcedure.input(leadDealsSchema).query(async ({ ctx, input }) => {
-    assertCan(ctx.ability, 'read');
+    assertCanRead(ctx);
     const items = await listLeadDeals(ctx.db, {
       organizationId: ctx.organization.id,
       leadId: input.leadId,
@@ -68,7 +74,7 @@ export const dealsRouter = router({
   }),
 
   get: organizationProcedure.input(dealScopeSchema).query(async ({ ctx, input }) => {
-    assertCan(ctx.ability, 'read');
+    assertCanRead(ctx);
     const deal = await getDeal(ctx.db, {
       organizationId: ctx.organization.id,
       dealId: input.dealId,
