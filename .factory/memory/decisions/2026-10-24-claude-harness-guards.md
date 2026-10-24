@@ -18,7 +18,7 @@ paths: [".claude/settings.json", ".claude/hooks/**"]
     - セッション開始：クラウドでは `bun install --frozen-lockfile`。決定の索引を出す
     - 編集・読み取り・コマンド・MCP の前（`pre-tool-guard.ts`）に止めるもの
       - bun.lock と `.env*` の編集
-      - `.env*` の読み取りと表示。`source`・`grep -q`・`test -f` のように値を出さない使い方と、env ファイル同士のコピーは通す
+      - `.env*` の読み取りと表示。`source`・`grep -q`・`test -f` のように値を出さない使い方と、env ファイル同士のコピーは通す。語の中に書いた形（`curl -d @.env.local`・`--env-file=.env.local`・`dd if=.env.local`・`$(<.env.local)`）も止める（#508）
       - Bun の共有キャッシュとハードリンクでつながった node_modules のファイル（リンク数2以上）への書き込み。`bun patch` で取り出したコピー（リンク数1）の編集は、利用者に確認を出す
       - 秘密情報の書き込みと送信：本番の接続文字列・API キー・秘密鍵、`NAME=値` の形の秘密の値
     - テストの架空の値は、文字列を組み立てて書くか、ファイルのその行に `gitleaks:allow` を付ける（Issue・PR・コマンドには効かない）

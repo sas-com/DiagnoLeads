@@ -1,5 +1,5 @@
 /** Plumbing shared by the hook entry points in .claude/hooks/: stdin/stdout, paths, temp files */
-import { existsSync, lstatSync, mkdirSync } from 'node:fs';
+import { chmodSync, existsSync, lstatSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -57,6 +57,8 @@ export function privateTmpDir(): string {
   if (!stat.isDirectory() || (uid !== undefined && stat.uid !== uid)) {
     throw new Error(`${dir} is not a private directory`);
   }
+  // An existing directory of ours keeps the mode it was made with; close it again
+  if ((stat.mode & 0o077) !== 0) chmodSync(dir, 0o700);
   return dir;
 }
 

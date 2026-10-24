@@ -406,7 +406,10 @@ const ENV_PATH_WORD = /^(?:.*\/)?\.env(?:\.[\w-]+)*(?:\*|\.\*)?$/;
 const ENV_IN_SCRIPT = /(?<![\w$])\.env(?:\.[\w-]+)*(?![\w-])/g;
 
 function namesSecretEnvFile(word: string): boolean {
-  return ENV_PATH_WORD.test(word) && !word.endsWith('.example');
+  // Also inside a word without spaces (a message is text): curl -d @.env and -F a=<.env,
+  // --env-file=.env, dd if=.env, $(<.env)
+  const parts = /\s/.test(word) ? [word] : [word, ...word.split(/[@<=():,`]/)];
+  return parts.some((part) => ENV_PATH_WORD.test(part) && !part.endsWith('.example'));
 }
 
 function scriptReadsSecretEnvFile(script: string): boolean {
@@ -439,7 +442,24 @@ export function operands(words: string[]): string[] {
   return result;
 }
 
-/** Paths a command writes: redirection targets, tee, cp/mv/install/ln destinations, sed -i … */
+/**
+ * The directory given with -t / --target-directory (cp, mv, install, ln), where the destination
+ * is not the last operand. In a cluster such as -rt the value is the rest of it or the next word.
+ */
+function targetDirectories(words: string[]): string[] {
+  const dirs: string[] = [];
+  for (let i = 1; i < words.length; i++) {
+    const word = words[i] ?? '';
+    if (word === '-t' || word === '--target-directory') dirs.push(words[i + 1] ?? '');
+    else if (word.startsWith('--target-directory=')) dirs.push(word.slice(19));
+    else if (/^-[a-zA-Z]+$/.test(word) && word.includes('t')) {
+      dirs.push(word.slice(word.indexOf('t') + 1) || (words[i + 1] ?? ''));
+    }
+  }
+  return dirs.filter(Boolean);
+}
+
+/** Paths a command writes: redirections, tee, cp/mv/install/ln destinations, sed -i, sort -o … */
 export function writeTargets(program: string, words: string[]): string[] {
   const targets: string[] = [];
   words.forEach((word, i) => {
@@ -448,7 +468,10 @@ export function writeTargets(program: string, words: string[]): string[] {
   });
   const args = operands(words);
   if (program === 'tee' || program === 'truncate') targets.push(...args);
-  if (['cp', 'mv', 'install', 'ln', 'rsync'].includes(program) && args.length > 1) {
+  const dirs = ['cp', 'mv', 'install', 'ln'].includes(program) ? targetDirectories(words) : [];
+  if (dirs.length > 0) {
+    targets.push(...dirs);
+  } else if (['cp', 'mv', 'install', 'ln', 'rsync'].includes(program) && args.length > 1) {
     targets.push(args.at(-1) ?? '');
   }
   if ((program === 'sed' || program === 'perl') && words.some((w) => /^-[a-zA-Z]*i/.test(w))) {
@@ -457,7 +480,45 @@ export function writeTargets(program: string, words: string[]): string[] {
   if (program === 'dd') {
     for (const word of words) if (word.startsWith('of=')) targets.push(word.slice(3));
   }
+  if (program === 'sort') targets.push(...sortOutputs(words));
+  if (program === 'uniq') targets.push(...uniqOperands(words).slice(1, 2));
   return targets.filter(Boolean);
+}
+
+/**
+ * The file sort writes with -o / --output (or a prefix such as --out). In a group such as -ro the
+ * first letter that takes a value (k, t, o, S, T) takes the rest of the group or the next word.
+ */
+function sortOutputs(words: string[]): string[] {
+  const outputs: string[] = [];
+  for (let i = 1; i < words.length; i++) {
+    const word = words[i] ?? '';
+    const name = word.split('=')[0] ?? '';
+    if (name.length >= 3 && '--output'.startsWith(name)) {
+      outputs.push(word.includes('=') ? word.slice(name.length + 1) : (words[i + 1] ?? ''));
+    } else if (/^-[a-zA-Z]/.test(word)) {
+      const valued = /[ktoST]/.exec(word.slice(1));
+      if (valued?.[0] === 'o') outputs.push(word.slice(valued.index + 2) || (words[i + 1] ?? ''));
+    }
+  }
+  return outputs;
+}
+
+/** uniq [INPUT [OUTPUT]]: the operands, without the values of -f, -s and -w */
+function uniqOperands(words: string[]): string[] {
+  const files: string[] = [];
+  for (let i = 1; i < words.length; i++) {
+    const word = words[i] ?? '';
+    if (
+      isRedirection(word) ||
+      /^-[a-zA-Z]*[fsw]$|^--(skip-fields|skip-chars|check-chars)$/.test(word)
+    ) {
+      i++;
+    } else if (!word.startsWith('-') || word === '-') {
+      files.push(word);
+    }
+  }
+  return files;
 }
 
 /** The words of a grep-like command that name files, without its pattern */

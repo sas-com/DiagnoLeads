@@ -6,13 +6,13 @@
  * settings hooks fire inside subagents in every session, while frontmatter hooks are skipped where
  * the folder is never trusted (-p, the SDK).
  *
- * A command must be one that only reads: unknown programs, inline scripts and writes outside the
- * temp directory are refused. This stops mistakes and injected instructions, not a determined
- * attacker (known limits: decision 2026-10-24-harness-guards-hardening).
+ * A command must be one that only reads: unknown programs, inline scripts, options that write a
+ * file or run a command, variables that change what a program runs, and every write except to
+ * /dev/null are refused. This stops mistakes and injected instructions, not a determined attacker
+ * (known limits: decision 2026-10-24-harness-guards-hardening).
  */
-import { tmpdir } from 'node:os';
-import { basename, isAbsolute, resolve } from 'node:path';
-import { EDIT_TOOLS, type Finding, operands, splitShell, writeTargets } from './guard';
+import { basename } from 'node:path';
+import { EDIT_TOOLS, type Finding, isRedirection, splitShell, writeTargets } from './guard';
 
 /** The specialist agents are named `<area>-specialist` and are read-only by definition */
 export function isReadOnlyAgent(agentType: string | undefined): agentType is string {
@@ -34,10 +34,12 @@ export function checkReadOnlyToolCall(
   root: string
 ): Finding | null {
   if (EDIT_TOOLS.has(toolName)) return refusal(agentType, `${toolName} はファイルを書き換える`);
-  // MCP tools: only the ones whose name says they read (github __issue_read, __list_issues …)
+  // MCP tools: only the ones whose name says they read (github __issue_read, __list_issues …),
+  // and none that also names a change (get_or_create_…)
   if (toolName.startsWith('mcp__')) {
     const action = toolName.split('__').at(-1) ?? '';
-    return /(^|_)(get|list|search|read|view|query|find|describe)(_|$)/.test(action)
+    const writes = MCP_WRITE_VERB.test(action);
+    return !writes && /(^|_)(get|list|search|read|view|query|find|describe)(_|$)/.test(action)
       ? null
       : refusal(agentType, `\`${toolName}\` は読み取りのツールではない`);
   }
@@ -48,20 +50,27 @@ export function checkReadOnlyToolCall(
   return null;
 }
 
+// Words that only ever name a change. Ones that are also nouns in reading tools (pull_request_read,
+// get_check_run, get_trigger) are left out: a tool without a reading verb is refused anyway
+const MCP_WRITE_VERB =
+  /(^|_)(create|update|delete|add|remove|write|edit|insert|replace|send|upload|modify|rename|trash|untrash|dispatch|enable|disable|assign|unassign|reopen|resolve|unresolve|fork|forward|respond|reply)(_|$)/;
+
 /** A set from words separated by white space (keeps the long lists below readable) */
 function wordSet(list: string): Set<string> {
   return new Set(list.trim().split(/\s+/));
 }
 
-// Programs that only read (output goes to stdout; redirections are checked separately)
+// Programs that only read (output goes to stdout; redirections, and the options of these that
+// write a file or run a command, are checked below)
 const READERS = wordSet(`
-  cat head tail grep egrep fgrep rg ls tree wc sort uniq cut tr paste join column nl fold comm
-  diff cmp jq stat file du df pwd echo printf date which type basename dirname realpath readlink
-  test [ [[ true false cd sleep seq expr id whoami uname hostname nproc sha256sum sha1sum md5sum
-  shasum base64 od hexdump xxd strings tac rev mktemp sed
-  read export local declare set unset shift return exit break continue wait :
+  cat head tail grep egrep fgrep rg ls wc sort uniq cut tr paste join column nl fold comm diff cmp
+  jq stat du df pwd echo printf date which type basename dirname realpath readlink test [ [[ true
+  false cd sleep seq expr id whoami uname nproc sha256sum sha1sum md5sum shasum base64 od hexdump
+  strings tac rev sed tee read export local declare set unset shift return exit break continue
+  wait :
 `);
-// Shell keywords: these introduce a command (if cmd; while cmd; do cmd), the others hold none
+// Shell keywords: these introduce a command (if cmd; while cmd; do cmd), the others hold none.
+// `case` is left out: its branches (x) cmd) would hide a command
 const KEYWORDS_BEFORE_COMMAND = new Set([
   'if',
   'elif',
@@ -72,26 +81,53 @@ const KEYWORDS_BEFORE_COMMAND = new Set([
   'else',
   '!',
 ]);
-const KEYWORDS_ALONE = new Set(['for', 'select', 'case', 'in', 'done', 'fi', 'esac']);
+const KEYWORDS_ALONE = new Set(['in', 'done', 'fi']);
+// for and select set the variable named after them
+const LOOP_KEYWORDS = new Set(['for', 'select']);
 // Programs that run what follows them
 const WRAPPERS = new Set(['time', 'nice', 'timeout', 'nohup', 'command', 'builtin', 'stdbuf']);
-// Programs that create, change or remove files: allowed only on scratch paths
-const SCRATCH_ONLY = new Set(['rm', 'rmdir', 'unlink', 'mkdir', 'touch', 'mv']);
+// Programs that create, change or remove files
+const FILE_CHANGERS = new Set(['rm', 'rmdir', 'unlink', 'mkdir', 'touch', 'mv', 'cp']);
 const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash']);
 const INTERPRETERS = new Set(['node', 'deno', 'python', 'python3', 'ruby', 'perl', 'php']);
 const VERSION_FLAGS = new Set(['--version', '-v', '-V', '--help', '-h']);
 const FIXING_FLAG = /^--(write|fix|apply|apply-unsafe|unsafe)(=|$)/;
+const ENV_DISPLAY = '環境変数の表示（秘密の値が出ることがある）';
 
-const TEMP_ROOTS = [...new Set([tmpdir(), '/tmp', process.env.TMPDIR ?? ''].filter(Boolean))].map(
-  (dir) => resolve(dir)
-);
+const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
+// Variables a program may be given: locale, time zone, colours, terminal size. Others can make it
+// run something else (GIT_EXTERNAL_DIFF, GIT_CONFIG_*, NODE_OPTIONS, BASH_ENV, PATH, HOME)
+const SAFE_ENV = /^(LANG|LANGUAGE|LC_[A-Z]+|TZ|NO_COLOR|FORCE_COLOR|CI|TERM|COLUMNS|LINES|IFS)$/;
+// The script's own variables (for f in …, read line): lowercase, and not exported unless asked
+const SHELL_VARIABLE = /^[a-z_][a-z0-9_]*$/;
 
-/** /dev/null and absolute paths under the temp directory (relative paths depend on `cd`) */
-function isScratch(path: string): boolean {
-  if (['/dev/null', '/dev/stdout', '/dev/stderr'].includes(path)) return true;
-  if (!isAbsolute(path)) return false;
-  const absolute = resolve(path);
-  return TEMP_ROOTS.some((dir) => absolute === dir || absolute.startsWith(`${dir}/`));
+/** Writes that change nothing: thrown away or shown */
+function isDiscarded(path: string): boolean {
+  return ['/dev/null', '/dev/stdout', '/dev/stderr'].includes(path);
+}
+
+/** Variables set for a program (exported) or only in the shell */
+function variableViolation(names: string[], exported: boolean): string | null {
+  const name = names.find((n) => !SAFE_ENV.test(n) && (exported || !SHELL_VARIABLE.test(n)));
+  return name === undefined
+    ? null
+    : `変数 \`${name}\` の指定（LANG・TZ などのほかは、プログラムに別のコマンドを動かさせられる）`;
+}
+
+/** The words of a command without its redirections (2>&1, < file), which were checked apart */
+function withoutRedirections(words: string[]): string[] {
+  const result: string[] = [];
+  for (let i = 0; i < words.length; i++) {
+    if (isRedirection(words[i] ?? '')) i++;
+    else result.push(words[i] ?? '');
+  }
+  return result;
+}
+
+/** Whether `word` is the long option `full` or a prefix of it (git and GNU tools take those) */
+function abbreviates(word: string, full: string): boolean {
+  const name = word.split('=')[0] ?? '';
+  return name.length >= 3 && full.startsWith(name);
 }
 
 /**
@@ -130,33 +166,47 @@ export function readOnlyViolation(line: string, root: string, depth = 0): string
     if (reason) return reason;
   }
   for (const words of splitShell(line)) {
-    const start = words.findIndex((w) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(w));
-    if (start === -1) continue;
-    const reason = commandViolation(words.slice(start), root, depth);
+    const reason = commandViolation(words, root, depth);
     if (reason) return reason;
   }
   return null;
 }
 
 function commandViolation(words: string[], root: string, depth: number): string | null {
+  // FOO=1 cmd passes FOO to cmd; FOO=1 alone sets it in the shell
+  const start = words.findIndex((w) => !ASSIGNMENT.test(w));
+  if (start !== 0) {
+    const names = (start === -1 ? words : words.slice(0, start)).map((w) => w.split('=')[0] ?? '');
+    return (
+      variableViolation(names, start !== -1) ??
+      (start === -1 ? null : commandViolation(words.slice(start), root, depth))
+    );
+  }
   const first = words[0] ?? '';
   if (KEYWORDS_ALONE.has(first)) return null;
+  if (LOOP_KEYWORDS.has(first)) return variableViolation([words[1] ?? ''], false);
   if (KEYWORDS_BEFORE_COMMAND.has(first)) {
     return words.length > 1 ? commandViolation(words.slice(1), root, depth) : null;
   }
   const program = basename(first);
-  const args = words.slice(1);
+  const args = withoutRedirections(words.slice(1));
 
   for (const target of writeTargets(program, words)) {
-    if (!isScratch(target)) return `\`${target}\` への書き込み`;
+    if (!isDiscarded(target)) {
+      return `\`${target}\` への書き込み（出力はパイプでつなぐか /dev/null に捨てる）`;
+    }
   }
 
   if (program === 'env') {
-    const rest = args.filter((w) => !w.startsWith('-') && !/^[A-Za-z_][A-Za-z0-9_]*=/.test(w));
-    if (rest.length === 0) return '環境変数の表示（秘密の値が出ることがある）';
-    return commandViolation(args.slice(args.indexOf(rest[0] ?? '')), root, depth);
+    const rest = args.filter((w) => !w.startsWith('-') && !ASSIGNMENT.test(w));
+    if (rest.length === 0) return ENV_DISPLAY;
+    const names = args.filter((w) => ASSIGNMENT.test(w)).map((w) => w.split('=')[0] ?? '');
+    return (
+      variableViolation(names, true) ??
+      commandViolation(args.slice(args.indexOf(rest[0] ?? '')), root, depth)
+    );
   }
-  if (program === 'printenv') return '環境変数の表示（秘密の値が出ることがある）';
+  if (program === 'printenv') return ENV_DISPLAY;
   if (WRAPPERS.has(program)) {
     if (program === 'command' && (args[0] === '-v' || args[0] === '-V')) return null;
     const rest = args.findIndex(
@@ -174,24 +224,60 @@ function commandViolation(words: string[], root: string, depth: number): string 
       ? null
       : `\`${program}\` でのコードの実行（中身を検査できない）`;
   }
-  if (SCRATCH_ONLY.has(program)) {
-    const paths = operands(words);
-    return paths.length > 0 && paths.every(isScratch) ? null : `\`${program}\` でのファイルの変更`;
-  }
+  if (FILE_CHANGERS.has(program)) return `\`${program}\` でのファイルの変更`;
 
   switch (program) {
-    case 'cp':
-    case 'tee':
-    case 'truncate':
-    case 'dd':
-      return null; // destinations were checked as write targets above
     case 'sed':
-      return null; // -i was checked as a write target above
+      return sedViolation(args);
     case 'awk':
     case 'gawk':
     case 'mawk':
-      return args.some((w) => /system\s*\(|print[f]?\b[^;}]*[>|]|\|\s*getline/.test(w))
-        ? 'awk でのファイルへの出力かコマンドの実行'
+      // A program from a file (-f, gawk -i/-E/-l) cannot be inspected
+      return args.some((w) => /^-[fiEl]|^--(file|include|exec|load)/.test(w)) ||
+        args.some((w) => /system\s*\(|print[f]?\b[^;}]*[>|]|\|\s*getline/.test(w))
+        ? 'awk でのファイルへの出力かコマンドの実行（プログラムはコマンドに直接書く）'
+        : null;
+    case 'rg': {
+      // --pre runs a command on every file, --hostname-bin one for hyperlinks
+      const runs = args.find((w) => /^--(pre|hostname-bin)(=|$)/.test(w));
+      return runs ? `rg の \`${runs}\`（コマンドを動かす）` : null;
+    }
+    case 'sort': {
+      // The compress program is run on the data being sorted
+      const runs = args.find((w) => abbreviates(w, '--compress-program'));
+      return runs ? `sort の \`${runs}\`（コマンドを動かす）` : null;
+    }
+    case 'date':
+      return args.some((w) => /^(--set|-[uR]*s)/.test(w)) ? 'date での時刻の変更' : null;
+    case 'printf': {
+      const flag = args.findIndex((w) => w.startsWith('-v'));
+      if (flag === -1) return null;
+      const word = args[flag] ?? '';
+      return variableViolation([word === '-v' ? (args[flag + 1] ?? '') : word.slice(2)], false);
+    }
+    case 'read':
+      return variableViolation(readNames(args), false);
+    case 'export': {
+      const names = args.filter((w) => !w.startsWith('-')).map((w) => w.split('=')[0] ?? '');
+      return names.length === 0 || args.includes('-p')
+        ? ENV_DISPLAY
+        : variableViolation(names, true);
+    }
+    case 'declare':
+    case 'local': {
+      const flags = args.filter((w) => /^[-+]/.test(w)).join('');
+      const names = args.filter((w) => !/^[-+]/.test(w)).map((w) => w.split('=')[0] ?? '');
+      if (names.length === 0 || flags.includes('p')) return ENV_DISPLAY;
+      // -n makes a name stand for another variable (PATH); -x exports
+      return flags.includes('n')
+        ? `\`${program} -n\`（別の変数を書き換えられる）`
+        : variableViolation(names, flags.includes('x'));
+    }
+    case 'set':
+      if (args.length === 0) return ENV_DISPLAY;
+      // -a exports every variable set afterwards; -k passes assignments anywhere in a command
+      return args.some((w) => /^-[a-zA-Z]*[ak]/.test(w) || w === 'allexport' || w === 'keyword')
+        ? '`set -a`・`set -k`（変数をプログラムに渡す）'
         : null;
     case 'find':
       return findViolation(args, root, depth);
@@ -212,38 +298,54 @@ function commandViolation(words: string[], root: string, depth: number): string 
       return npmViolation(program, args);
     case 'curl':
       return curlViolation(args);
-    case 'wget':
-      return wgetViolation(args);
-    case 'tar': {
-      // The mode is in the first word (tvf, -tvf) or a flag; file names are not modes
-      const modes = [args[0] ?? '', ...args.slice(1).filter((w) => w.startsWith('-'))];
-      const lists = modes.some((w) => w === '--list' || /^-?[a-zA-Z]*t[a-zA-Z]*$/.test(w));
-      const writes = modes.some(
-        (w) =>
-          /^--(create|extract|get|append|update|delete)$/.test(w) ||
-          (/^-?[a-zA-Z]+$/.test(w) && /[cxru]/.test(w.replace(/^-/, '')))
-      );
-      if (lists && !writes) return null;
-      // Extracting into the temp directory (to inspect another revision) changes nothing here
-      const extracts = modes.some(
-        (w) => w === '--extract' || w === '--get' || (/^-?[a-zA-Z]+$/.test(w) && w.includes('x'))
-      );
-      const creates = modes.some(
-        (w) =>
-          /^--(create|append|update|delete)$/.test(w) ||
-          (/^-?[a-zA-Z]+$/.test(w) && /[cru]/.test(w.replace(/^-/, '')))
-      );
-      const dirFlag = args.findIndex((w) => w === '-C' || w === '--directory');
-      const dir = dirFlag === -1 ? '' : (args[dirFlag + 1] ?? '');
-      return extracts && !creates && isScratch(dir)
-        ? null
-        : 'tar での展開や作成（展開は `-C /tmp/...` で一時ディレクトリへ）';
-    }
-    case 'unzip':
-      return args.some((w) => ['-l', '-v', '-p', '-t', '-Z'].includes(w)) ? null : 'unzip での展開';
     default:
       return READERS.has(program) ? null : `許可していないコマンド \`${program}\``;
   }
+}
+
+/** The scripts of a sed command: the values of -e, or else its first operand */
+function sedScripts(args: string[]): string[] {
+  const scripts: string[] = [];
+  const files: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const word = args[i] ?? '';
+    const cluster = /^-[a-zA-Z]*?e(.*)$/.exec(word); // -e, -ne, -e's/a/b/'
+    if (word === '--expression') scripts.push(args[++i] ?? '');
+    else if (word.startsWith('--expression=')) scripts.push(word.slice(13));
+    else if (cluster && !word.startsWith('--')) scripts.push(cluster[1] || (args[++i] ?? ''));
+    else if (word === '-l') i++;
+    else if (!word.startsWith('-')) files.push(word);
+  }
+  return scripts.length > 0 ? scripts : files.slice(0, 1);
+}
+
+/**
+ * sed: the e command and the s///e flag run a command, w and W write a file (-i was checked as a
+ * write target). GNU sed refuses all of them with --sandbox; a script from a file (-f) cannot be
+ * inspected.
+ */
+function sedViolation(args: string[]): string | null {
+  if (args.includes('--sandbox')) return null;
+  if (args.some((w) => /^(-[a-zA-Z]*f|--file)/.test(w))) return 'sed のファイルからのスクリプト';
+  return sedScripts(args).some((script) => /[ewW]/.test(script))
+    ? 'sed のスクリプトの e・w（コマンドの実行かファイルへの書き込みになりうる。`--sandbox` を付けるか、grep -n で読む）'
+    : null;
+}
+
+/** The variables `read` sets: its operands and the array of -a (other options take a value) */
+function readNames(args: string[]): string[] {
+  const names: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const word = args[i] ?? '';
+    const option = /^-[a-zA-Z]*?([adinNptu])(.*)$/.exec(word);
+    if (!word.startsWith('-')) {
+      names.push(word);
+    } else if (option) {
+      const value = option[2] || (args[++i] ?? '');
+      if (option[1] === 'a') names.push(value);
+    }
+  }
+  return names;
 }
 
 function findViolation(args: string[], root: string, depth: number): string | null {
@@ -274,6 +376,7 @@ function xargsViolation(args: string[], root: string, depth: number): string | n
 }
 
 // git fetch and git merge-tree write objects and remote-tracking refs, never a branch or the tree
+// (fetch src:dst is refused below)
 const GIT_READS = wordSet(`
   status log show diff blame annotate grep ls-files ls-tree ls-remote rev-parse rev-list
   merge-base cat-file describe shortlog for-each-ref show-ref name-rev check-ignore check-attr
@@ -299,6 +402,8 @@ const GIT_WRITES = {
 };
 // Subcommands whose --output (archive: also -o) writes a file
 const GIT_OUTPUTS = new Set(['diff', 'log', 'show', 'whatchanged', 'range-diff', 'diff-tree']);
+// A repository given by URL (https://…, git@host:…), not a refspec with a colon
+const REMOTE_URL = /^[a-z][a-z0-9+.-]*:\/\/|^[^/:]+@[^/:]+:/;
 
 function gitViolation(args: string[]): string | null {
   let i = 0;
@@ -313,6 +418,28 @@ function gitViolation(args: string[]): string | null {
   const sub = args[i] ?? '';
   const rest = args.slice(i + 1);
   const positional = rest.filter((w) => !w.startsWith('-'));
+  // Options that run a command: --upload-pack (ls-remote: -u) and --exec for a local repository,
+  // and grep -O, which opens the matching files with the program it names
+  const runs = rest.find(
+    (w) =>
+      abbreviates(w, '--upload-pack') ||
+      abbreviates(w, '--exec') ||
+      (sub === 'ls-remote' && /^-[a-zA-Z]*u/.test(w)) ||
+      (sub === 'grep' && (/^-[a-zA-Z]*O/.test(w) || abbreviates(w, '--open-files-in-pager')))
+  );
+  if (runs) return `\`git ${sub} ${runs}\`（コマンドを動かせる）`;
+  // fetch src:dst writes a local branch; --refmap and --set-upstream change refs and config
+  if (sub === 'fetch') {
+    const changes = rest.find(
+      (w) =>
+        abbreviates(w, '--refmap') ||
+        abbreviates(w, '--set-upstream') ||
+        (!w.startsWith('-') && w.includes(':') && !REMOTE_URL.test(w))
+    );
+    if (changes) {
+      return `\`git fetch ${changes}\` はブランチか設定を変える（\`git fetch origin pull/1/head\` で取り、FETCH_HEAD を読む）`;
+    }
+  }
   if (GIT_OUTPUTS.has(sub) || sub === 'archive') {
     const output = rest.findIndex(
       (w) => w === '--output' || w.startsWith('--output=') || (sub === 'archive' && w === '-o')
@@ -320,7 +447,7 @@ function gitViolation(args: string[]): string | null {
     if (output !== -1) {
       const word = rest[output] ?? '';
       const target = word.startsWith('--output=') ? word.slice(9) : (rest[output + 1] ?? '');
-      if (!isScratch(target)) return `\`git ${sub}\` の \`${target}\` への出力`;
+      if (!isDiscarded(target)) return `\`git ${sub}\` の \`${target}\` への出力`;
     }
   }
 
@@ -389,26 +516,44 @@ function ghViolation(args: string[]): string | null {
     const effective = (explicit ?? method ?? (sendsFields ? 'POST' : 'GET')).toUpperCase();
     return effective === 'GET' || effective === 'HEAD' ? null : `\`gh api\` の ${effective}`;
   }
+  if (group === 'auth' && args.some((w) => w === '--show-token' || /^-[a-zA-Z]*t/.test(w))) {
+    return '`gh auth status --show-token`（トークンが出る）';
+  }
   const allowed = GH_READS[group];
   if (allowed === 'any' || allowed?.has(action)) return null;
   return `\`gh ${group} ${action}\` は GitHub を変えるか、許可していない`;
 }
 
-// package.json scripts that only read (format, db:*, build and the like write)
-const READ_SCRIPTS = wordSet(`
-  test test:run test:fast test:components test:features test:lib typecheck lint memory:index
-  i18n:check i18n:check-hardcoded
-`);
+// package.json scripts that only read, each checked with the options of the program it runs
+// (format, db:*, build and the like write)
+const READ_SCRIPTS = new Map<string, (args: string[]) => string | null>([
+  ['test', vitestViolation],
+  ['test:run', vitestViolation],
+  ['test:fast', vitestViolation],
+  ['test:components', vitestViolation],
+  ['test:features', vitestViolation],
+  ['test:lib', vitestViolation],
+  ['typecheck', (args) => tscViolation(['--noEmit', ...args])],
+  ['lint', (args) => biomeViolation(['check', '.', ...args])],
+  // These ignore their arguments
+  ['memory:index', () => null],
+  ['i18n:check', () => null],
+  ['i18n:check-hardcoded', () => null],
+]);
+
+function scriptViolation(runner: string, script: string, args: string[]): string | null {
+  const check = READ_SCRIPTS.get(script);
+  if (!check) return `\`${runner} run ${script}\` は読み取りのスクリプトではない`;
+  return check(args.filter((w) => w !== '--'));
+}
 
 function bunViolation(args: string[]): string | null {
   const [sub = '', script = ''] = args;
   if (args.length === 1 && VERSION_FLAGS.has(sub)) return null;
-  if (sub === 'run') {
-    return READ_SCRIPTS.has(script) && !args.some((w) => FIXING_FLAG.test(w))
-      ? null
-      : `\`bun run ${script}\` は読み取りのスクリプトではない`;
+  if (sub === 'run') return scriptViolation('bun', script, args.slice(2));
+  if (sub === 'test') {
+    return '`bun test`（vitest の設定を使わず、実 DB のテストまで動かす。`bun run test:run` か `bunx vitest run` で動かす）';
   }
-  if (sub === 'test') return null;
   if (sub === 'x') return packageRunnerViolation(args.slice(1));
   return `\`bun ${sub}\`（依存の変更かコードの実行）`;
 }
@@ -417,16 +562,72 @@ function packageRunnerViolation(args: string[]): string | null {
   const start = args.findIndex((w) => !w.startsWith('-'));
   const pkg = args[start] ?? '';
   const rest = args.slice(start + 1);
-  if (rest.some((w) => FIXING_FLAG.test(w))) return `\`${pkg}\` でのファイルの書き換え`;
-  if (pkg === 'vitest') {
-    return rest.some((w) => w === '-u' || w.startsWith('--update'))
-      ? 'vitest のスナップショットの更新'
-      : null;
-  }
-  if (pkg === 'tsc')
-    return rest.includes('--noEmit') ? null : 'tsc での出力（`--noEmit` を付ける）';
-  if (pkg === '@biomejs/biome' || pkg === 'biome') return null;
+  if (pkg === 'vitest') return vitestViolation(rest);
+  if (pkg === 'tsc') return tscViolation(rest);
+  if (pkg === '@biomejs/biome' || pkg === 'biome') return biomeViolation(rest);
   return `\`${pkg || '(なし)'}\` の実行（許可していないパッケージ）`;
+}
+
+// vitest options that neither write files nor load code from a path (--config, --root, --dir,
+// --setupFiles, --outputFile, --coverage, -u and the like are left out)
+const VITEST_FLAGS = wordSet(`
+  --run --silent --passWithNoTests --no-coverage --allowOnly --hideSkippedTests --no-color
+  --no-file-parallelism --changed --bail -t --testNamePattern --reporter --project --retry
+  --testTimeout --maxWorkers --exclude
+`);
+const VITEST_VALUES = wordSet(`
+  -t --testNamePattern --reporter --project --retry --testTimeout --maxWorkers --exclude --bail
+`);
+// Reporters that print (html and blob write files, a path loads code)
+const VITEST_REPORTERS = wordSet(`
+  default basic verbose dot json junit tap tap-flat tree hanging-process github-actions
+`);
+
+function vitestViolation(args: string[]): string | null {
+  for (let i = 0; i < args.length; i++) {
+    const word = args[i] ?? '';
+    if (!word.startsWith('-')) {
+      // run, related and file filters read; init writes a setup
+      if (word === 'init') return '`vitest init`（ファイルを書く）';
+      continue;
+    }
+    const eq = word.indexOf('=');
+    const name = eq === -1 ? word : word.slice(0, eq);
+    if (!VITEST_FLAGS.has(name)) {
+      return `vitest の \`${name}\`（ファイルを書くか、コードを読み込むことがある）`;
+    }
+    const value = eq !== -1 ? word.slice(eq + 1) : VITEST_VALUES.has(name) ? args[++i] : undefined;
+    if (name === '--reporter' && !VITEST_REPORTERS.has(value ?? '')) {
+      return `vitest の reporter \`${value ?? ''}\`（ファイルを書くか、コードを読み込む）`;
+    }
+  }
+  return null;
+}
+
+// tsc options that write files whatever --noEmit says; tsc reads option names in any case
+const TSC_WRITES = wordSet(
+  '-b --build --init --generatetrace --generatecpuprofile --tsbuildinfofile'
+);
+
+function tscViolation(args: string[]): string | null {
+  const words = args.map((w) => w.toLowerCase());
+  const noEmit = words.lastIndexOf('--noemit');
+  if (noEmit === -1 || words[noEmit + 1] === 'false') return 'tsc での出力（`--noEmit` を付ける）';
+  const writes = words.find((w) => TSC_WRITES.has(w));
+  return writes ? `tsc の \`${writes}\`（ファイルを書く）` : null;
+}
+
+// Biome commands that only report (without --write); init, migrate and the daemon write files
+const BIOME_COMMANDS = wordSet('check lint format ci explain search version rage');
+
+function biomeViolation(args: string[]): string | null {
+  if (args.length === 1 && VERSION_FLAGS.has(args[0] ?? '')) return null;
+  const command = args.find((w) => !w.startsWith('-')) ?? '';
+  if (!BIOME_COMMANDS.has(command)) {
+    return `\`biome ${command || '(なし)'}\`（許可していないコマンド）`;
+  }
+  const writes = args.find((w) => FIXING_FLAG.test(w) || /^--log-(file|path)(=|$)/.test(w));
+  return writes ? `biome の \`${writes}\`（ファイルを書く）` : null;
 }
 
 function npmViolation(program: string, args: string[]): string | null {
@@ -434,57 +635,62 @@ function npmViolation(program: string, args: string[]): string | null {
   if (args.length === 1 && VERSION_FLAGS.has(sub)) return null;
   if (['ls', 'list', 'view', 'info', 'outdated', 'why'].includes(sub)) return null;
   if (sub === 'audit' && !args.includes('fix')) return null;
-  if (sub === 'run' && READ_SCRIPTS.has(script)) return null;
+  if (sub === 'run') return scriptViolation(program, script, args.slice(2));
   return `\`${program} ${sub}\`（依存の変更かコードの実行）`;
 }
+
+// curl options for reading a page to stdout. The rest send data or write files (-d, -F, -T, -K,
+// -O, -c, -D, --libcurl, --trace …); the values of -o, -X, -w and -H are checked
+const CURL_FLAGS = wordSet(`
+  -s --silent -S --show-error -L --location -f --fail --fail-with-body -I --head -i --include
+  -v --verbose --compressed -G --get -g --globoff --http1.1 --http2 -H --header -A --user-agent
+  -m --max-time --connect-timeout --retry --max-redirs -r --range -e --referer -w --write-out
+  -o --output -X --request --url
+`);
+const CURL_VALUES = wordSet(`
+  -H --header -A --user-agent -m --max-time --connect-timeout --retry --max-redirs -r --range
+  -e --referer -w --write-out -o --output -X --request --url
+`);
 
 function curlViolation(args: string[]): string | null {
   for (let i = 0; i < args.length; i++) {
     const word = args[i] ?? '';
-    if (
-      /^(-d|--data|--data-\w+|-F|--form|--form-string|-T|--upload-file|--json|-K|--config)(=|$)/.test(
-        word
-      ) ||
-      /^-[dFTK]./.test(word)
-    ) {
-      return 'curl での送信';
+    if (!word.startsWith('-')) continue;
+    if (word.startsWith('--')) {
+      const eq = word.indexOf('=');
+      const name = eq === -1 ? word : word.slice(0, eq);
+      if (!CURL_FLAGS.has(name)) return `curl の \`${name}\`（送信かファイルへの保存）`;
+      if (!CURL_VALUES.has(name)) continue;
+      const reason = curlValueViolation(name, eq === -1 ? (args[++i] ?? '') : word.slice(eq + 1));
+      if (reason) return reason;
+      continue;
     }
-    const method =
-      word === '-X' || word === '--request'
-        ? (args[i + 1] ?? '')
-        : word.startsWith('--request=')
-          ? word.slice(10)
-          : /^-X\w/.test(word)
-            ? word.slice(2)
-            : '';
-    if (method && !['GET', 'HEAD'].includes(method.toUpperCase())) return `curl の ${method}`;
-    if (word === '-O' || word.startsWith('--remote-name')) return 'curl でのファイルへの保存';
-    const output =
-      word === '-o' || word === '--output' || word === '-D' || word === '--dump-header'
-        ? (args[i + 1] ?? '')
-        : word.startsWith('--output=')
-          ? word.slice(9)
-          : /^-o./.test(word)
-            ? word.slice(2)
-            : '';
-    if (output && output !== '-' && !isScratch(output)) return `curl の \`${output}\` への保存`;
+    // -sSL is -s -S -L; a letter that takes a value ends the group (-o-, -XGET)
+    for (let j = 1; j < word.length; j++) {
+      const name = `-${word[j]}`;
+      if (!CURL_FLAGS.has(name)) return `curl の \`${name}\`（送信かファイルへの保存）`;
+      if (!CURL_VALUES.has(name)) continue;
+      const reason = curlValueViolation(name, word.slice(j + 1) || (args[++i] ?? ''));
+      if (reason) return reason;
+      break;
+    }
   }
   return null;
 }
 
-function wgetViolation(args: string[]): string | null {
-  if (args.some((w) => /^--(post-data|post-file|method|body-data|body-file)(=|$)/.test(w))) {
-    return 'wget での送信';
+function curlValueViolation(name: string, value: string): string | null {
+  if ((name === '-o' || name === '--output') && value !== '-' && !isDiscarded(value)) {
+    return `curl の \`${value}\` への保存`;
   }
-  const index = args.findIndex(
-    (w) => w === '-O' || /^-q?O/.test(w) || w.startsWith('--output-document')
-  );
-  if (index === -1) return 'wget でのファイルへの保存（`-O -` で標準出力に出す）';
-  const word = args[index] ?? '';
-  const target = word.startsWith('--output-document=')
-    ? word.slice(18)
-    : /^-q?O./.test(word)
-      ? word.replace(/^-q?O/, '')
-      : (args[index + 1] ?? '');
-  return target === '-' || isScratch(target) ? null : `wget の \`${target}\` への保存`;
+  if ((name === '-X' || name === '--request') && !['GET', 'HEAD'].includes(value.toUpperCase())) {
+    return `curl の ${value}`;
+  }
+  // %output{file} in --write-out writes a file (curl 8.3); -H @file sends a file's lines
+  if ((name === '-w' || name === '--write-out') && value.includes('%output')) {
+    return 'curl の --write-out でのファイルへの出力';
+  }
+  if ((name === '-H' || name === '--header') && value.startsWith('@')) {
+    return 'curl の -H @file（ファイルの中身を送る）';
+  }
+  return null;
 }

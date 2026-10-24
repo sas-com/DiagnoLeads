@@ -3,7 +3,7 @@
  * Path and temp-file helpers of the hooks (.claude/hooks/lib/io.ts, #461): the checkout a file
  * belongs to (worktrees have a .git file) and the per-user directory for logs and state.
  */
-import { statSync } from 'node:fs';
+import { chmodSync, statSync } from 'node:fs';
 import { checkoutRoot, privateTmpDir } from '@/.claude/hooks/lib/io';
 import { describe, expect, it } from 'vitest';
 
@@ -30,5 +30,12 @@ describe('privateTmpDir', () => {
     expect(stat.isDirectory()).toBe(true);
     expect(stat.mode & 0o077).toBe(0);
     expect(privateTmpDir()).toBe(dir);
+  });
+
+  it('closes an existing directory of ours that others could open', () => {
+    const dir = privateTmpDir();
+    chmodSync(dir, 0o755);
+    privateTmpDir();
+    expect(statSync(dir).mode & 0o077).toBe(0);
   });
 });
