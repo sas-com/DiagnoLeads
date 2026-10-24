@@ -121,6 +121,7 @@ const h = require('./h');
 vi.unmock('next/navigation');
 vi.doUnmock('@/lib/i');
 const j = await vi.importMock('@/lib/j');
+vitest.mock('@/lib/k');
 `
     );
     expect(paths.map(({ spec, kind, line }) => `${kind} ${spec} ${line}`).sort()).toEqual([
@@ -135,6 +136,7 @@ const j = await vi.importMock('@/lib/j');
       'mock @/lib/f 7',
       'mock @/lib/i 12',
       'mock @/lib/j 13',
+      'mock @/lib/k 14',
       'mock next/navigation 11',
     ]);
   });

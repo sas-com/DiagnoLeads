@@ -137,7 +137,7 @@ function exportValues(node: ts.ExportDeclaration): string[] {
 const isViPathCall = (callee: ts.Expression): boolean =>
   ts.isPropertyAccessExpression(callee) &&
   ts.isIdentifier(callee.expression) &&
-  callee.expression.text === 'vi' &&
+  (callee.expression.text === 'vi' || callee.expression.text === 'vitest') &&
   VI_PATH_FUNCTIONS.has(callee.name.text);
 
 /**
@@ -259,9 +259,10 @@ function isFile(candidate: string): boolean {
 function resolveFile(root: string, base: string): string | null {
   const toRel = (abs: string): string => path.relative(root, abs).split(path.sep).join('/');
   if (isFile(base)) return toRel(base);
+  for (const ext of RESOLVE_EXTS) if (isFile(base + ext)) return toRel(base + ext);
   // TypeScript and Vite let './x.js' point at x.ts
-  const stem = base.replace(/\.(m?js|jsx)$/, '');
-  for (const ext of RESOLVE_EXTS) if (isFile(stem + ext)) return toRel(stem + ext);
+  const jsStem = base.match(/^(.*)\.(m?js|jsx)$/)?.[1];
+  for (const ext of ['.ts', '.tsx']) if (jsStem && isFile(jsStem + ext)) return toRel(jsStem + ext);
   for (const index of INDEX_FILES) {
     const candidate = path.join(base, index);
     if (isFile(candidate)) return toRel(candidate);
