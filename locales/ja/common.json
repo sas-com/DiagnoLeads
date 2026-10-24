@@ -200,6 +200,7 @@
     "dashboard": "ダッシュボード",
     "leads": "リード管理",
     "deals": "商談",
+    "forecast": "予測",
     "prospects": "顧客探し（AX）",
     "analytics": "分析",
     "settings": "設定",
@@ -1453,6 +1454,91 @@
       "forecastOverride": "予測の区分",
       "expectedCloseOn": "受注予定日",
       "ownerUserId": "担当"
+    }
+  },
+  "salesForecast": {
+    "title": "予測",
+    "description": "目標に対する受注と見込みを、期間ごと・担当者ごとに見ます",
+    "periodLabel": "期間",
+    "periods": {
+      "thisMonth": "今月",
+      "thisQuarter": "今四半期",
+      "thisFiscalYear": "今期"
+    },
+    "range": "{from}〜{to}",
+    "fiscalYearNote": "期の始まり：{month}月",
+    "setTargets": "目標を設定",
+    "tiles": {
+      "target": "目標",
+      "won": "受注済み",
+      "forecast": "見込み（受注＋コミット）",
+      "bestCase": "ベストケース",
+      "gap": "目標との差",
+      "weighted": "パイプライン（加重）",
+      "achievement": "達成率 {rate}",
+      "forecastAchievement": "見込みの達成率 {rate}",
+      "noTarget": "目標なし",
+      "above": "目標を {amount} 上回る見込み"
+    },
+    "table": {
+      "caption": "担当者ごとの予測",
+      "owner": "担当",
+      "target": "目標",
+      "won": "受注済み",
+      "commit": "コミット",
+      "bestCase": "ベストケース",
+      "pipeline": "パイプライン",
+      "weighted": "加重",
+      "achievement": "達成率",
+      "gap": "目標との差",
+      "total": "合計",
+      "unassigned": "担当未定",
+      "noTarget": "—"
+    },
+    "notes": {
+      "overdue": "受注予定日が期間より前のまま開いている商談が{count}件（{amount}）あります。数字には入りません。日付を見直してください",
+      "noAmount": "金額が未定の商談が{count}件あります",
+      "toBoard": "商談のボードを開く"
+    },
+    "changes": {
+      "title": "この1週間の動き",
+      "description": "1週間前の時点と比べた、商談の変化です",
+      "amountDelta": "開いている商談の金額の増減 {amount}",
+      "empty": "この1週間に変わった商談はありません",
+      "groups": {
+        "created": "新しい商談",
+        "advanced": "前進",
+        "movedBack": "後退",
+        "won": "受注",
+        "lost": "失注",
+        "reopened": "再開",
+        "slipped": "受注予定日の延期"
+      },
+      "summary": "{count}件・{amount}",
+      "stageChange": "{from} → {to}",
+      "dateChange": "受注予定日 {from} → {to}",
+      "noDate": "未定"
+    },
+    "targets": {
+      "title": "目標を設定",
+      "description": "月ごとの受注額の目標です（税抜）。空欄は目標なし",
+      "fiscalYear": "年度",
+      "fiscalYearOption": "{year}年度（{from}〜）",
+      "startMonth": "期の始まり",
+      "startMonthOption": "{month}月",
+      "month": "月",
+      "organization": "組織全体",
+      "organizationHelp": "組織全体の目標がない月は、担当者の目標の合計を使います",
+      "amountInvalid": "0以上の整数で入力してください",
+      "save": "保存",
+      "saved": "目標を保存しました",
+      "startSaved": "期の始まりを変更しました",
+      "error": "保存できませんでした。もう一度お試しください",
+      "readOnly": "目標を変更できるのはオーナーと管理者です"
+    },
+    "state": {
+      "loadError": "予測を読み込めませんでした",
+      "retry": "再読み込み"
     }
   },
   "settings": {

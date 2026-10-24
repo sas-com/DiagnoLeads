@@ -225,6 +225,13 @@
       "when": 1792803684354,
       "tag": "0031_deals",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1792806401588,
+      "tag": "0032_sales_targets",
+      "breakpoints": true
     }
   ]
 }
