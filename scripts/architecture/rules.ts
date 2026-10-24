@@ -265,7 +265,7 @@ export const RULES: Rule[] = [
   },
   {
     id: 'ui-kit-imports-app-code',
-    description: 'components/ui imports only components/ui and lib/utils.ts',
+    description: 'components/ui imports only components/ui, lib/utils.ts and lib/csp/',
     mode: 'error',
     check: (graph) =>
       unique(
@@ -274,7 +274,9 @@ export const RULES: Rule[] = [
             (edge) =>
               edge.from.startsWith('components/ui/') &&
               !edge.to.startsWith('components/ui/') &&
-              edge.to !== 'lib/utils.ts'
+              edge.to !== 'lib/utils.ts' &&
+              // The page's CSP nonce, for components that add <style> elements (#317)
+              !edge.to.startsWith('lib/csp/')
           )
           .map(edgeKey)
       ),

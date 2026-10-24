@@ -23,7 +23,7 @@
 | ④ 基盤 | `lib/` の features 以外（`db`・`trpc`・`auth`・`multi-tenant`・`email`・`ops`・`cron`・`i18n`・`middleware` など） | 機能をまたいで使う仕組み。機能を import しない |
 
 - 画面（②）が機能（③）から値で読んでよいのは、`types/` と純粋なファイル（DB を使わないもの）だけ。`service.ts` は `import type` だけ、`api/` は読まない
-- `components/ui` は `components/ui` と `lib/utils.ts` だけを import する末端の部品
+- `components/ui` は `components/ui`・`lib/utils.ts`・`lib/csp/`（ブラウザで `<style>` を足す部品が、ページの CSP の nonce を読む。#317）だけを import する末端の部品
 - Payload（`payload`・`@payloadcms/*`・`@payload-config`）を読むのは `cms/`・`app/(payload)/`・`lib/cms/`・`payload.config.ts` だけ。組織ごとのデータは Payload ではなくアプリの DB に置く
 - 公開ページ（`app/[locale]/(ax)/`・`(public)/`）は Server Component を基本にし、必要な所だけ `'use client'` にする。採点のコードはクライアントに送らない（点数はサーバーだけで計算する）
 
@@ -42,11 +42,11 @@
 | `feature-imports-other-router` | 機能のルーター（`api/`・`router.ts`）を読むのは、同じ機能と `server/routers/` だけ | 例外なし |
 | `client-imports-server-only` | ブラウザで動くコードから、サーバー専用のファイル（`lib/db`、`server/`、`lib/trpc/{init,context}`、`lib/auth/config`、機能の `api/`・`router.ts`・`service.ts`）とパッケージ（`postgres`・`drizzle-orm`・`payload`・`resend`・`@anthropic-ai/sdk`・`openai`・`next/headers`・`node:*` など）に届かない | 例外なし |
 | `public-bundle-imports-scoring` | 公開ページのクライアントに、採点（`diagnostics/ax-migration/{evaluate,mql,config}`・`diagnosis-builder/evaluate`）を入れない | 例外なし |
-| `ui-kit-imports-app-code` | `components/ui` は `components/ui` と `lib/utils.ts` だけを読む | 例外なし |
+| `ui-kit-imports-app-code` | `components/ui` は `components/ui`・`lib/utils.ts`・`lib/csp/` だけを読む | 例外なし |
 | `payload-outside-cms` | Payload を読むのは CMS の置き場所だけ | 例外なし |
 | `file-cycles` | ファイル単位の import の循環を作らない | 例外なし |
 | `features-in-cycles` | 互いに依存し合う機能（間接も含む）を増やさない | 許可リスト 20 |
-| `cross-feature-internal` | 他の機能から読むのは公開面（`types/**`・`types.ts`・`service.ts`。ほかに `email/index.ts`・`respondent-email/index.ts`）だけ。項目は読まれる側のファイル | 許可リスト 43 |
+| `cross-feature-internal` | 他の機能から読むのは公開面（`types/**`・`types.ts`・`service.ts`。ほかに `email/index.ts`・`respondent-email/index.ts`）だけ。項目は読まれる側のファイル | 許可リスト 45 |
 | `features-use-global-db` | 機能のコードはグローバルの `db` を使わず、`ctx.db` か引数の executor を使う（RLS で接続を差し替えるため） | 許可リスト 12 |
 | `feature-index-files` | lib/features に `index.ts`（barrel）を作らない | 許可リスト 19 |
 | `unregistered-routers` | 機能のルーターはすべて `server/routers/_app.ts` に登録する | 許可リスト 2 |
@@ -54,7 +54,7 @@
 許可リストの数は減らす方向にだけ動かす。
 
 検査の限界：
-- `cross-feature-internal` の項目は読まれる側のファイルなので、許可リストにある内部のファイルを別の機能が新しく読んでも検出しない（許可リストの43ファイルは、事実上の公開面になっている）。新しく読むときは、相手の `service.ts` か `types/` に出すことを先に考える
+- `cross-feature-internal` の項目は読まれる側のファイルなので、許可リストにある内部のファイルを別の機能が新しく読んでも検出しない（許可リストの45ファイルは、事実上の公開面になっている）。新しく読むときは、相手の `service.ts` か `types/` に出すことを先に考える
 - `features-in-cycles` は、循環に入っている機能の名前の一覧で比べる。今ある2つの循環（18機能と2機能）がつながっても検出しない
 - 公開ページの採点のルールが見るのは、公開ページ（`(ax)`・`(public)`・`[...rest]`・トップと共通のレイアウト）から `'use client'` の境界を越えて値でたどれるファイル。ブラウザのコードの判定では、`'use server'` のファイル（サーバーアクション）とその先はたどらない
 - `unregistered-routers` は、`api/` の下の `*-router.ts` をほかのルーターに組み込む形（_app.ts に直接登録しない）も未登録として数える。その形を使うときは、許可リストに足して PR に理由を書く

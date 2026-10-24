@@ -5,6 +5,7 @@ cross-feature-internal lib/features/agency-contracts/report.ts
 cross-feature-internal lib/features/agency-handovers/columns.ts
 cross-feature-internal lib/features/analytics/dashboard.ts
 cross-feature-internal lib/features/ax-playbook/access.ts
+cross-feature-internal lib/features/ax-site/columns/index.ts
 cross-feature-internal lib/features/ax-site/contact.ts
 cross-feature-internal lib/features/ax-site/cross-links.ts
 cross-feature-internal lib/features/ax-site/sender-identity.ts
@@ -25,6 +26,7 @@ cross-feature-internal lib/features/diagnostics/engine.ts
 cross-feature-internal lib/features/diagnostics/lead-upsert.ts
 cross-feature-internal lib/features/diagnostics/organization.ts
 cross-feature-internal lib/features/diagnostics/rate-limit.ts
+cross-feature-internal lib/features/diagnostics/request-guard.ts
 cross-feature-internal lib/features/diagnostics/tracking.ts
 cross-feature-internal lib/features/distribution/qr-code.ts
 cross-feature-internal lib/features/email/email-service.ts

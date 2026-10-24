@@ -223,6 +223,7 @@ describe('rules', () => {
     const graph = graphOf({}, [
       ['components/ui/button.tsx', 'lib/utils.ts'],
       ['components/ui/dialog.tsx', 'components/ui/button.tsx'],
+      ['components/ui/select.tsx', 'lib/csp/document-nonce.ts'],
       ['components/ui/table.tsx', 'lib/features/leads/types/pipeline.ts'],
     ]);
     expect(check('ui-kit-imports-app-code', graph)).toEqual([
