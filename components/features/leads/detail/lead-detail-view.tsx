@@ -40,7 +40,7 @@ import {
   isLeadTab,
 } from '@/lib/features/leads/detail-fields';
 import { isNextMeetingOverdue } from '@/lib/features/leads/list-query';
-import { DEAL_PHASES } from '@/lib/features/leads/types';
+import { DEAL_PHASES, hasLostReason } from '@/lib/features/leads/types';
 import { trpc } from '@/lib/trpc/client';
 import {
   AlertTriangle,
@@ -252,7 +252,8 @@ function LeadDetailContent({
 
   // A lost lead should say why; ask without getting in the way
   const handleLost = () => {
-    if (lead.lostReason) return;
+    // 保留 is dropped when the lead is lost (#445): it is no reason for the loss
+    if (hasLostReason(lead.lostReason)) return;
     toast(t('quick.lostReasonPrompt'), {
       action: {
         label: t('quick.lostReasonAction'),

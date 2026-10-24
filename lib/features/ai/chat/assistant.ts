@@ -1,12 +1,14 @@
 /**
  * AI Chat Assistant
  *
- * Streaming chat interface using Vercel AI SDK and Claude 4.5 Sonnet.
- * Provides contextual assistance for lead management and insights.
+ * Streaming chat interface using Vercel AI SDK, plus the lead summary on the Anthropic SDK.
+ * The chat does not work on Claude Sonnet 5.5 (`ai` 4.x sends temperature 0, which it
+ * rejects) and is to be removed in #432.
  */
 
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { type LanguageModel, streamText } from 'ai';
+import { CLAUDE_MAX_TOKENS, CLAUDE_MODEL, anthropic as claude } from '../client';
 
 // Initialize Anthropic provider
 const anthropic = createAnthropic({
@@ -59,13 +61,12 @@ Be concise, helpful, and professional. Focus on actionable insights.`;
 
   try {
     const result = await streamText({
-      model: anthropic('claude-sonnet-4-20250514') as LanguageModel,
+      model: anthropic('claude-sonnet-5-5') as LanguageModel,
       system: systemPrompt,
       messages: messages.map((msg) => ({
         role: msg.role,
         content: msg.content,
       })),
-      temperature: 0.7,
     });
 
     return result.toTextStreamResponse();
@@ -101,15 +102,24 @@ Notes: ${lead.notes || 'N/A'}
 Focus on key business value and next steps.`;
 
   try {
-    const result = await streamText({
-      model: anthropic('claude-sonnet-4-20250514') as LanguageModel,
-      prompt,
+    const message = await claude.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: CLAUDE_MAX_TOKENS,
+      output_config: { effort: 'low' },
+      messages: [{ role: 'user', content: prompt }],
     });
 
-    // Convert stream to text
-    let summary = '';
-    for await (const textPart of result.textStream) {
-      summary += textPart;
+    // Thinking blocks come before the text, so collect only the text blocks
+    const summary = message.content
+      .map((block) => (block.type === 'text' ? block.text : ''))
+      .join('');
+
+    if (!summary.trim()) {
+      console.error('Lead summary: no text in the response', message.stop_reason);
+      return 'Unable to generate summary';
+    }
+    if (message.stop_reason === 'max_tokens') {
+      console.error('Lead summary: cut off at max_tokens');
     }
 
     return summary.trim();
