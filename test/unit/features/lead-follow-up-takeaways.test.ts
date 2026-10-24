@@ -16,6 +16,7 @@ import {
   type DueNoticeItem,
 } from '@/lib/features/lead-follow-up/due-notifications';
 import {
+  DUE_TASKS_MAX,
   createTaskSchema,
   dueTasksSchema,
   updateTaskSchema,
@@ -77,6 +78,14 @@ describe('task kind and whom to check with', () => {
     expect(dueTasksSchema.parse({ organizationId: ORG }).scope).toBe('mine');
     expect(dueTasksSchema.parse({ organizationId: ORG, scope: 'all' }).scope).toBe('all');
     expect(dueTasksSchema.safeParse({ organizationId: ORG, scope: 'team' }).success).toBe(false);
+  });
+
+  it('lists more when the dashboard card is opened, up to DUE_TASKS_MAX (#431)', () => {
+    expect(dueTasksSchema.parse({ organizationId: ORG }).limit).toBeUndefined();
+    expect(dueTasksSchema.parse({ organizationId: ORG, limit: DUE_TASKS_MAX }).limit).toBe(200);
+    for (const limit of [0, DUE_TASKS_MAX + 1, 1.5]) {
+      expect(dueTasksSchema.safeParse({ organizationId: ORG, limit }).success).toBe(false);
+    }
   });
 });
 

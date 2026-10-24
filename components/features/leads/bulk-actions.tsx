@@ -176,8 +176,14 @@ export function BulkActions({
         </Button>
 
         {/* Clear Selection */}
-        <Button variant="ghost" size="sm" onClick={onClearSelection} className="h-8">
-          <X className="h-4 w-4" />
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onClearSelection}
+          className="h-8"
+          aria-label={t('clearSelection')}
+        >
+          <X className="h-4 w-4" aria-hidden="true" />
         </Button>
       </div>
 
