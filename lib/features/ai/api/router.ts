@@ -5,15 +5,19 @@
  * - Lead scoring with Claude Sonnet 5.5
  * - Semantic search with pgvector
  * - Lead summaries and insights
+ *
+ * Every procedure that calls Claude (scoring, prediction, summary, alone or in a batch) counts
+ * each lead it hands to Claude against AI_CALL_LIMITS (../limits.ts) first (#405).
  */
 
 import { leads } from '@/lib/db/schema';
 import { emitLeadEvents, leadChangeEvents } from '@/lib/features/webhooks/services/lead-events';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { generateLeadSummary } from '../chat/assistant';
 import { prepareLeadText } from '../embeddings/openai';
+import { consumeAiCalls } from '../limits';
 import { predictConversion, predictConversionBatch } from '../prediction/conversion';
 import { scoreLeadWithAI, scoreLeadsBatch } from '../scoring/claude';
 import { findSimilarLeads, semanticSearch, updateLeadEmbedding } from '../search/semantic';
@@ -56,7 +60,12 @@ export const aiRouter = router({
       });
     }
 
-    // Score the lead
+    // Score the lead (a paid Claude call: counted per user and organization)
+    await consumeAiCalls(ctx.db, {
+      userId: ctx.user.id,
+      organizationId: input.organizationId,
+      calls: 1,
+    });
     const aiScore = await scoreLeadWithAI(lead);
 
     // Update lead with AI score
@@ -96,7 +105,7 @@ export const aiRouter = router({
       const leadsToScore = await ctx.db.query.leads.findMany({
         where: and(
           eq(leads.organizationId, input.organizationId),
-          sql`${leads.id} = ANY(${input.leadIds})`
+          inArray(leads.id, input.leadIds)
         ),
       });
 
@@ -107,7 +116,12 @@ export const aiRouter = router({
         });
       }
 
-      // Batch score leads
+      // Batch score leads: one Claude call per lead found, each counted
+      await consumeAiCalls(ctx.db, {
+        userId: ctx.user.id,
+        organizationId: input.organizationId,
+        calls: leadsToScore.length,
+      });
       const scoresMap = await scoreLeadsBatch(leadsToScore);
 
       // Update all leads with scores
@@ -223,6 +237,11 @@ export const aiRouter = router({
         });
       }
 
+      await consumeAiCalls(ctx.db, {
+        userId: ctx.user.id,
+        organizationId: input.organizationId,
+        calls: 1,
+      });
       const summary = await generateLeadSummary(lead);
 
       return { summary };
@@ -288,6 +307,11 @@ export const aiRouter = router({
       }
 
       // Predict conversion
+      await consumeAiCalls(ctx.db, {
+        userId: ctx.user.id,
+        organizationId: input.organizationId,
+        calls: 1,
+      });
       const prediction = await predictConversion(lead);
 
       return {
@@ -314,7 +338,7 @@ export const aiRouter = router({
       const leadsToPredict = await ctx.db.query.leads.findMany({
         where: and(
           eq(leads.organizationId, input.organizationId),
-          sql`${leads.id} = ANY(${input.leadIds})`
+          inArray(leads.id, input.leadIds)
         ),
       });
 
@@ -325,7 +349,12 @@ export const aiRouter = router({
         });
       }
 
-      // Batch predict
+      // Batch predict: one Claude call per lead found, each counted
+      await consumeAiCalls(ctx.db, {
+        userId: ctx.user.id,
+        organizationId: input.organizationId,
+        calls: leadsToPredict.length,
+      });
       const predictionsMap = await predictConversionBatch(leadsToPredict);
 
       return {
