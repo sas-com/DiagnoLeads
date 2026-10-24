@@ -6,12 +6,16 @@ node_modules
 # Testing
 coverage
 *.lcov
+playwright-report/
+test-results/
 
 # Next.js
 .next
 out
 build
 dist
+# Managed by Next.js; next dev rewrites it (node_modules/next/dist/docs: TypeScript config)
+next-env.d.ts
 
 # Production
 .vercel
@@ -58,3 +62,5 @@ drizzle/meta/*
 
 # Personal Claude Code settings
 .claude/settings.local.json
+# Worktrees created by claude --worktree
+.claude/worktrees/
