@@ -1,15 +1,23 @@
 /**
  * AI Chat Assistant
  *
- * Streaming chat interface using Vercel AI SDK and Claude 4.5 Sonnet.
- * Provides contextual assistance for lead management and insights.
+ * Streaming chat interface using Vercel AI SDK, plus the lead summary on the Anthropic SDK.
+ * The chat does not work on Claude Sonnet 5.5 (`ai` 4.x sends temperature 0, which it
+ * rejects) and is to be removed in #432.
  */
 
 import { createAnthropic } from '@ai-sdk/anthropic';
+import Anthropic from '@anthropic-ai/sdk';
 import { type LanguageModel, streamText } from 'ai';
 
 // Initialize Anthropic provider
 const anthropic = createAnthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+});
+
+// The summary uses the Anthropic SDK directly: `ai` 4.x sends temperature 0 when none is
+// given, and Claude Sonnet 5.5 rejects non-default sampling parameters
+const anthropicClient = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
@@ -59,13 +67,12 @@ Be concise, helpful, and professional. Focus on actionable insights.`;
 
   try {
     const result = await streamText({
-      model: anthropic('claude-sonnet-4-20250514') as LanguageModel,
+      model: anthropic('claude-sonnet-5-5') as LanguageModel,
       system: systemPrompt,
       messages: messages.map((msg) => ({
         role: msg.role,
         content: msg.content,
       })),
-      temperature: 0.7,
     });
 
     return result.toTextStreamResponse();
@@ -101,18 +108,19 @@ Notes: ${lead.notes || 'N/A'}
 Focus on key business value and next steps.`;
 
   try {
-    const result = await streamText({
-      model: anthropic('claude-sonnet-4-20250514') as LanguageModel,
-      prompt,
+    const message = await anthropicClient.messages.create({
+      model: 'claude-sonnet-5-5',
+      max_tokens: 8000,
+      output_config: { effort: 'low' },
+      messages: [{ role: 'user', content: prompt }],
     });
 
-    // Convert stream to text
-    let summary = '';
-    for await (const textPart of result.textStream) {
-      summary += textPart;
-    }
+    // Thinking blocks come before the text, so collect only the text blocks
+    const summary = message.content
+      .map((block) => (block.type === 'text' ? block.text : ''))
+      .join('');
 
-    return summary.trim();
+    return summary.trim() || 'Unable to generate summary';
   } catch (error) {
     console.error('Error generating lead summary:', error);
     return 'Unable to generate summary';
