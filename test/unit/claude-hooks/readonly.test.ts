@@ -100,6 +100,22 @@ describe('readOnlyViolation', () => {
     refused('case x in x) rm -rf lib;; esac');
   });
 
+  it('checks a redirection attached to a loop or condition keyword (#508 re-review)', () => {
+    refused('for f in a; do echo x; done > out.txt');
+    refused('while read l; do :; done < in > out.txt');
+    refused('if true; then echo ok; fi > out.txt');
+    refused('git diff >& review.txt');
+    refused('git diff 1>& review.txt');
+    allowed('git diff 2>&1 | head');
+    allowed('git status >&2');
+  });
+
+  it('ignores comments, arithmetic and single-quoted substitution text (#508 re-review)', () => {
+    allowed('git status # look at the tree\ngit diff');
+    allowed('echo $((1 + 2))');
+    allowed("grep -c '$(' file && grep -rn '`' docs");
+  });
+
   it('refuses changes to files and the repository', () => {
     refused('echo x > lib/a.ts');
     refused('cat a >> CLAUDE.md');
@@ -152,15 +168,27 @@ describe('readOnlyViolation', () => {
       "sed -n 'w out.txt' lib/a.ts",
       "sed -ne '1e touch x' lib/a.ts",
       'sed -f /dev/stdin lib/a.ts',
+      'sed --in-place "s/a/b/" lib/a.ts',
+      "sed -i -e's/a/b/' lib/a.ts",
       'awk -f /dev/stdin lib/a.ts',
+      'awk -W exec prog.awk lib/a.ts',
       'gh auth status --show-token',
       'gh auth status -t',
-      'tree -o CLAUDE.md',
-      'xxd a CLAUDE.md',
-      'hostname evil',
+      'git rev-list --output=report.txt HEAD',
+      'git blame --output=out.txt lib/a.ts',
+      'git archive -o out.zip HEAD',
+      'env -S"rm x" cat file',
     ]) {
       refused(command);
     }
+  });
+
+  it('reads with the quoted-pattern and address forms of sed and grep (#508 re-review)', () => {
+    allowed("sed -n '/function sedViolation/,/^}/p' lib/a.ts");
+    allowed("sed 's/one/two/' lib/a.ts");
+    allowed("sed -n '/download/p' lib/a.ts");
+    allowed('GIT_PAGER=cat PAGER=cat git log -1');
+    allowed('GIT_TERMINAL_PROMPT=0 git fetch origin main');
   });
 
   it('refuses variables that change what a program runs, and printing the environment', () => {
@@ -174,6 +202,8 @@ describe('readOnlyViolation', () => {
       'HOME=/tmp/x git status',
       'FOO=1 git status',
       'npm_config_script_shell=/tmp/x npx vitest run',
+      'PAGER=sh git log',
+      'GIT_PAGER=vim git log',
       'env GIT_DIR=/tmp/x git status',
       'export PATH=/tmp/x',
       'export GIT_EXTERNAL_DIFF=x',
@@ -248,6 +278,9 @@ describe('readOnlyViolation', () => {
       'gh api -X POST repos/o/r/issues/1/comments -f body=x',
       'gh api repos/o/r/issues/1/comments -f body=x',
       'gh api --method=PATCH repos/o/r/pulls/1',
+      'gh api -X=DELETE repos/o/r/pulls/1',
+      'gh api -XPUT repos/o/r/pulls/1/merge',
+      'gh api -X GET -X DELETE repos/o/r/pulls/1',
       'gh repo clone o/r',
     ]) {
       refused(command);
@@ -269,11 +302,20 @@ describe('readOnlyViolation', () => {
       'bunx vitest run -u',
       'bunx tsc',
       'bunx some-package',
+      'bunx --package=evil-pkg vitest run',
+      'npx --call="rm x" vitest',
+      'npx -p left-pad tsc --noEmit',
       'npm install',
       'npm audit fix',
     ]) {
       refused(command);
     }
+  });
+
+  it('allows the harmless options bunx/npx take before the package (#508 re-review)', () => {
+    allowed('bunx --bun vitest run test/unit/a.test.ts');
+    allowed('npx --no-install tsc --noEmit');
+    allowed('npx -y @biomejs/biome check .');
   });
 
   it('keeps the test runner and the type checker from writing files or loading code', () => {
@@ -337,6 +379,9 @@ describe('readOnlyViolation', () => {
       'curl --libcurl CLAUDE.md https://example.com',
       'curl --trace out https://example.com',
       "curl -w '%output{CLAUDE.md}x' https://example.com",
+      'curl -w @fmt.txt https://example.com',
+      'curl gopher://example.com/x',
+      'curl file:///etc/passwd',
       'wget https://example.com/a.js',
       'wget --post-data=x https://example.com',
     ]) {

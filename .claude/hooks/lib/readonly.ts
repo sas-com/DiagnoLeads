@@ -12,7 +12,14 @@
  * (known limits: decision 2026-10-24-harness-guards-hardening).
  */
 import { basename } from 'node:path';
-import { EDIT_TOOLS, type Finding, isRedirection, splitShell, writeTargets } from './guard';
+import {
+  EDIT_TOOLS,
+  type Finding,
+  isInPlace,
+  isRedirection,
+  splitShell,
+  writeTargets,
+} from './guard';
 
 /** The specialist agents are named `<area>-specialist` and are read-only by definition */
 export function isReadOnlyAgent(agentType: string | undefined): agentType is string {
@@ -53,7 +60,7 @@ export function checkReadOnlyToolCall(
 // Words that only ever name a change. Ones that are also nouns in reading tools (pull_request_read,
 // get_check_run, get_trigger) are left out: a tool without a reading verb is refused anyway
 const MCP_WRITE_VERB =
-  /(^|_)(create|update|delete|add|remove|write|edit|insert|replace|send|upload|modify|rename|trash|untrash|dispatch|enable|disable|assign|unassign|reopen|resolve|unresolve|fork|forward|respond|reply)(_|$)/;
+  /(^|_)(create|update|delete|add|remove|write|edit|insert|replace|send|upload|modify|rename|trash|untrash|dispatch|enable|disable|assign|unassign|reopen|resolve|unresolve|fork|forward|respond|reply|mark|dismiss|archive|subscribe|unsubscribe)(_|$)/;
 
 /** A set from words separated by white space (keeps the long lists below readable) */
 function wordSet(list: string): Set<string> {
@@ -101,6 +108,19 @@ const SAFE_ENV = /^(LANG|LANGUAGE|LC_[A-Z]+|TZ|NO_COLOR|FORCE_COLOR|CI|TERM|COLU
 // The script's own variables (for f in …, read line): lowercase, and not exported unless asked
 const SHELL_VARIABLE = /^[a-z_][a-z0-9_]*$/;
 
+/** A `NAME=value` a reviewer commonly passes and that cannot run another command */
+function isSafeAssignment(word: string): boolean {
+  const eq = word.indexOf('=');
+  if (eq === -1) return false;
+  const name = word.slice(0, eq);
+  const value = word.slice(eq + 1);
+  if (SAFE_ENV.test(name)) return true; // these are safe whatever the value
+  // A pager only reads; turning the terminal prompt off avoids a hang
+  if (/^(GIT_PAGER|GH_PAGER|PAGER)$/.test(name)) return /^(cat|less|more|)$/.test(value);
+  if (name === 'GIT_TERMINAL_PROMPT') return value === '0';
+  return false;
+}
+
 /** Writes that change nothing: thrown away or shown */
 function isDiscarded(path: string): boolean {
   return ['/dev/null', '/dev/stdout', '/dev/stderr'].includes(path);
@@ -137,6 +157,26 @@ function abbreviates(word: string, full: string): boolean {
 function embeddedCommands(line: string): string[] {
   const found: string[] = [];
   for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    // A single-quoted string is literal: grep -c '$(' names the text, it does not run it
+    if (char === "'") {
+      const end = line.indexOf("'", i + 1);
+      if (end === -1) break;
+      i = end;
+      continue;
+    }
+    // $(( … )) is arithmetic, not a command; skip it so it is not read as a substitution
+    if (line.slice(i, i + 3) === '$((') {
+      let depth = 1;
+      let j = i + 3;
+      while (j < line.length && depth > 0) {
+        if (line[j] === '(') depth++;
+        else if (line[j] === ')') depth--;
+        j++;
+      }
+      i = j - 1;
+      continue;
+    }
     const opener = line.slice(i, i + 2);
     if (opener === '$(' || opener === '<(' || opener === '>(') {
       let depth = 1;
@@ -148,7 +188,7 @@ function embeddedCommands(line: string): string[] {
       }
       found.push(line.slice(i + 2, j - 1));
       i = j - 1;
-    } else if (line[i] === '`') {
+    } else if (char === '`') {
       const end = line.indexOf('`', i + 1);
       if (end === -1) break;
       found.push(line.slice(i + 1, end));
@@ -176,13 +216,21 @@ function commandViolation(words: string[], root: string, depth: number): string 
   // FOO=1 cmd passes FOO to cmd; FOO=1 alone sets it in the shell
   const start = words.findIndex((w) => !ASSIGNMENT.test(w));
   if (start !== 0) {
-    const names = (start === -1 ? words : words.slice(0, start)).map((w) => w.split('=')[0] ?? '');
+    const leading = start === -1 ? words : words.slice(0, start);
+    const names = leading.filter((w) => !isSafeAssignment(w)).map((w) => w.split('=')[0] ?? '');
     return (
       variableViolation(names, start !== -1) ??
       (start === -1 ? null : commandViolation(words.slice(start), root, depth))
     );
   }
   const first = words[0] ?? '';
+  // A redirection writes whatever word, program or keyword it is attached to (done > out), so this
+  // is checked before the keywords that otherwise return early
+  for (const target of writeTargets(basename(first), words)) {
+    if (!isDiscarded(target)) {
+      return `\`${target}\` への書き込み（出力はパイプでつなぐか /dev/null に捨てる）`;
+    }
+  }
   if (KEYWORDS_ALONE.has(first)) return null;
   if (LOOP_KEYWORDS.has(first)) return variableViolation([words[1] ?? ''], false);
   if (KEYWORDS_BEFORE_COMMAND.has(first)) {
@@ -191,14 +239,13 @@ function commandViolation(words: string[], root: string, depth: number): string 
   const program = basename(first);
   const args = withoutRedirections(words.slice(1));
 
-  for (const target of writeTargets(program, words)) {
-    if (!isDiscarded(target)) {
-      return `\`${target}\` への書き込み（出力はパイプでつなぐか /dev/null に捨てる）`;
-    }
-  }
-
   if (program === 'env') {
-    const rest = args.filter((w) => !w.startsWith('-') && !ASSIGNMENT.test(w));
+    // env -S splits a string into a command, -i/-u/-C change the environment or directory; only
+    // `env NAME=value command` and a bare `env` (refused below) are read-only
+    if (args.some((w) => w.startsWith('-') && w !== '--')) {
+      return '`env` のオプション（`-S` はコマンドを動かし、`-i`/`-u` は環境を変える）';
+    }
+    const rest = args.filter((w) => w !== '--' && !ASSIGNMENT.test(w));
     if (rest.length === 0) return ENV_DISPLAY;
     const names = args.filter((w) => ASSIGNMENT.test(w)).map((w) => w.split('=')[0] ?? '');
     return (
@@ -232,8 +279,8 @@ function commandViolation(words: string[], root: string, depth: number): string 
     case 'awk':
     case 'gawk':
     case 'mawk':
-      // A program from a file (-f, gawk -i/-E/-l) cannot be inspected
-      return args.some((w) => /^-[fiEl]|^--(file|include|exec|load)/.test(w)) ||
+      // A program from a file (-f, gawk -i/-E/-l, mawk -W exec/source) cannot be inspected
+      return args.some((w) => /^-[fiElW]|^--(file|include|exec|load|source)/.test(w)) ||
         args.some((w) => /system\s*\(|print[f]?\b[^;}]*[>|]|\|\s*getline/.test(w))
         ? 'awk でのファイルへの出力かコマンドの実行（プログラムはコマンドに直接書く）'
         : null;
@@ -320,16 +367,44 @@ function sedScripts(args: string[]): string[] {
 }
 
 /**
- * sed: the e command and the s///e flag run a command, w and W write a file (-i was checked as a
- * write target). GNU sed refuses all of them with --sandbox; a script from a file (-f) cannot be
- * inspected.
+ * sed: in-place (-i) was checked as a write target; the e command and the s///e flag run a command,
+ * w and W write a file. GNU sed refuses all of them with --sandbox; a script from a file (-f) cannot
+ * be inspected. Addresses (/re/) and the pattern and replacement of s///y/// are stripped before
+ * looking for those commands, so `sed -n '/write/p'` is not mistaken for a write.
  */
 function sedViolation(args: string[]): string | null {
   if (args.includes('--sandbox')) return null;
+  if (isInPlace(args)) return 'sed の -i（その場で書き換える。grep -n で読む）';
   if (args.some((w) => /^(-[a-zA-Z]*f|--file)/.test(w))) return 'sed のファイルからのスクリプト';
-  return sedScripts(args).some((script) => /[ewW]/.test(script))
+  return sedScripts(args).some(sedWritesOrExecs)
     ? 'sed のスクリプトの e・w（コマンドの実行かファイルへの書き込みになりうる。`--sandbox` を付けるか、grep -n で読む）'
     : null;
+}
+
+/** Whether a sed script has an e/w/W command or s///e,w flag, ignoring addresses and s/// bodies */
+function sedWritesOrExecs(script: string): boolean {
+  let rest = '';
+  let i = 0;
+  while (i < script.length) {
+    const c = script[i] ?? '';
+    if (c === '/') {
+      i++; // a /regex/ address: skip to the closing delimiter
+      while (i < script.length && script[i] !== '/') i += script[i] === '\\' ? 2 : 1;
+      i++;
+    } else if ((c === 's' || c === 'y') && /[^\s\w\\]/.test(script[i + 1] ?? '')) {
+      const delim = script[i + 1];
+      i += 2;
+      for (let fields = 0; i < script.length && fields < 2; i++) {
+        if (script[i] === '\\') i++;
+        else if (script[i] === delim) fields++;
+      }
+      while (i < script.length && script[i] !== ';' && script[i] !== '\n') rest += script[i++]; // flags
+    } else {
+      rest += c;
+      i++;
+    }
+  }
+  return /[ewW]/.test(rest);
 }
 
 /** The variables `read` sets: its operands and the array of -a (other options take a value) */
@@ -381,7 +456,7 @@ const GIT_READS = wordSet(`
   status log show diff blame annotate grep ls-files ls-tree ls-remote rev-parse rev-list
   merge-base cat-file describe shortlog for-each-ref show-ref name-rev check-ignore check-attr
   count-objects whatchanged fetch merge-tree help version var show-branch cherry range-diff
-  diff-tree diff-files diff-index archive
+  diff-tree diff-files diff-index
 `);
 // git branch / git tag: flags that list, and flags that create, move or delete
 const GIT_LISTS = {
@@ -400,8 +475,6 @@ const GIT_WRITES = {
   `),
   tag: wordSet('-a --annotate -s --sign -u -d --delete -f --force -m -F'),
 };
-// Subcommands whose --output (archive: also -o) writes a file
-const GIT_OUTPUTS = new Set(['diff', 'log', 'show', 'whatchanged', 'range-diff', 'diff-tree']);
 // A repository given by URL (https://…, git@host:…), not a refspec with a colon
 const REMOTE_URL = /^[a-z][a-z0-9+.-]*:\/\/|^[^/:]+@[^/:]+:/;
 
@@ -440,15 +513,12 @@ function gitViolation(args: string[]): string | null {
       return `\`git fetch ${changes}\` はブランチか設定を変える（\`git fetch origin pull/1/head\` で取り、FETCH_HEAD を読む）`;
     }
   }
-  if (GIT_OUTPUTS.has(sub) || sub === 'archive') {
-    const output = rest.findIndex(
-      (w) => w === '--output' || w.startsWith('--output=') || (sub === 'archive' && w === '-o')
-    );
-    if (output !== -1) {
-      const word = rest[output] ?? '';
-      const target = word.startsWith('--output=') ? word.slice(9) : (rest[output + 1] ?? '');
-      if (!isDiscarded(target)) return `\`git ${sub}\` の \`${target}\` への出力`;
-    }
+  // --output=FILE writes a file (log, show, diff, rev-list, blame, shortlog, reflog and more take it)
+  const output = rest.findIndex((w) => w === '--output' || w.startsWith('--output='));
+  if (output !== -1) {
+    const word = rest[output] ?? '';
+    const target = word.startsWith('--output=') ? word.slice(9) : (rest[output + 1] ?? '');
+    if (!isDiscarded(target)) return `\`git ${sub}\` の \`${target}\` への出力`;
   }
 
   if (GIT_READS.has(sub)) return null;
@@ -508,13 +578,22 @@ function ghViolation(args: string[]): string | null {
   const [group = '', action = ''] = words;
   if (group === '' || group === 'help' || args.every((w) => VERSION_FLAGS.has(w))) return null;
   if (group === 'api') {
-    const method = args.find((w, i) => args[i - 1] === '-X' || args[i - 1] === '--method');
-    const explicit = args.find((w) => /^(-X|--method=)\w+/.test(w))?.replace(/^(-X|--method=)/, '');
+    // Collect every method given (-X V, -XV, -X=V, --method V/=V, a cluster ending in X); the last
+    // wins in gh, so all must be GET/HEAD. -f/-F send fields, which make the default POST
+    const methods: string[] = [];
+    for (let i = 0; i < args.length; i++) {
+      const w = args[i] ?? '';
+      if (w === '-X' || w === '--method' || /^-[a-zA-Z]*X$/.test(w))
+        methods.push(args[i + 1] ?? '');
+      else if (w.startsWith('--method=')) methods.push(w.slice(9));
+      else if (/^-X=?./.test(w)) methods.push(w.replace(/^-X=?/, ''));
+    }
     const sendsFields = args.some((w) =>
       /^(-f|-F|--field|--raw-field|--input)(=|$)|^-[fF]./.test(w)
     );
-    const effective = (explicit ?? method ?? (sendsFields ? 'POST' : 'GET')).toUpperCase();
-    return effective === 'GET' || effective === 'HEAD' ? null : `\`gh api\` の ${effective}`;
+    const effective = methods.length > 0 ? methods : [sendsFields ? 'POST' : 'GET'];
+    const bad = effective.find((m) => !['GET', 'HEAD'].includes(m.toUpperCase()));
+    return bad === undefined ? null : `\`gh api\` の ${bad || '(メソッド指定)'}`;
   }
   if (group === 'auth' && args.some((w) => w === '--show-token' || /^-[a-zA-Z]*t/.test(w))) {
     return '`gh auth status --show-token`（トークンが出る）';
@@ -558,8 +637,16 @@ function bunViolation(args: string[]): string | null {
   return `\`bun ${sub}\`（依存の変更かコードの実行）`;
 }
 
+// Options bunx/npx take before the package name. --package/--call/-p/--node-options fetch or run
+// something else, so only these harmless ones may come first
+const RUNNER_PREFIX_FLAGS = new Set(['--bun', '-y', '--yes', '--no-install', '-q', '--quiet']);
+
 function packageRunnerViolation(args: string[]): string | null {
   const start = args.findIndex((w) => !w.startsWith('-'));
+  const prefix = (start === -1 ? args : args.slice(0, start)).find(
+    (w) => !RUNNER_PREFIX_FLAGS.has(w)
+  );
+  if (prefix) return `\`${prefix}\`（パッケージの前のこのオプションは別のものを入れて動かせる）`;
   const pkg = args[start] ?? '';
   const rest = args.slice(start + 1);
   if (pkg === 'vitest') return vitestViolation(rest);
@@ -655,7 +742,13 @@ const CURL_VALUES = wordSet(`
 function curlViolation(args: string[]): string | null {
   for (let i = 0; i < args.length; i++) {
     const word = args[i] ?? '';
-    if (!word.startsWith('-')) continue;
+    if (!word.startsWith('-')) {
+      // Only http(s). gopher://, file://, dict:// and the like read or send more freely
+      if (/^[a-z][a-z0-9+.-]*:\/\//i.test(word) && !/^https?:\/\//i.test(word)) {
+        return `curl の URL \`${word}\`（http と https だけ）`;
+      }
+      continue;
+    }
     if (word.startsWith('--')) {
       const eq = word.indexOf('=');
       const name = eq === -1 ? word : word.slice(0, eq);
@@ -685,9 +778,12 @@ function curlValueViolation(name: string, value: string): string | null {
   if ((name === '-X' || name === '--request') && !['GET', 'HEAD'].includes(value.toUpperCase())) {
     return `curl の ${value}`;
   }
-  // %output{file} in --write-out writes a file (curl 8.3); -H @file sends a file's lines
-  if ((name === '-w' || name === '--write-out') && value.includes('%output')) {
-    return 'curl の --write-out でのファイルへの出力';
+  // %output{file} in --write-out writes a file (curl 8.3), @file/@- reads the format from a file
+  if (
+    (name === '-w' || name === '--write-out') &&
+    (value.includes('%output') || value.startsWith('@'))
+  ) {
+    return 'curl の --write-out でのファイルへの出力か読み込み（書式はそのまま渡す）';
   }
   if ((name === '-H' || name === '--header') && value.startsWith('@')) {
     return 'curl の -H @file（ファイルの中身を送る）';
