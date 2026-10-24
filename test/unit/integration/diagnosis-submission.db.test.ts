@@ -16,6 +16,7 @@ import {
   diagnosticSubmissions,
   leads,
   organizations,
+  users,
 } from '@/lib/db/schema';
 import { getDashboardSummary } from '@/lib/features/analytics/dashboard';
 import {
@@ -376,6 +377,58 @@ describe.skipIf(!url)('builder diagnosis submission (PostgreSQL)', () => {
       expect(plain).toMatchObject({ inflowSource: 'lp_organic', agencyLinkId: null });
     });
 
+    it("names the employee of an employee's own link, and tells them about new leads only (#265)", async () => {
+      const { diagnosis, version } = await accepted(v2);
+      const [member] = await pg
+        .insert(users)
+        .values({ email: `referral-${unique()}@example.com`, name: '社員 花子' })
+        .returning();
+      try {
+        const [link] = await pg
+          .insert(agencyLinks)
+          .values({
+            organizationId,
+            code: generateAgencyCode(),
+            agencyName: '社員 花子',
+            kind: 'member_referral',
+            memberUserId: member.id,
+          })
+          .returning();
+        const email = `referred-${unique()}@example.co.jp`;
+        const contact = { company: '架空商事', name: '試験 太郎', email };
+        const first = await submitBuilderDiagnosis(
+          db,
+          diagnosis,
+          version,
+          input({ contact, tracking: { agency: link.code } }),
+          now
+        );
+        if (!first.ok) throw new Error('submission failed');
+        expect(first.referralMemberUserId).toBe(member.id);
+        const lead = await pg.query.leads.findFirst({ where: eq(leads.id, first.leadId) });
+        expect(lead).toMatchObject({
+          inflowSource: 'member_referral',
+          referrerName: '社員 花子',
+          agencyName: null,
+          agencyLinkId: link.id,
+        });
+
+        // The same address again matches that lead: nothing new to tell the employee
+        const again = await submitBuilderDiagnosis(
+          db,
+          diagnosis,
+          version,
+          input({ contact, tracking: { agency: link.code } }),
+          now
+        );
+        if (!again.ok) throw new Error('submission failed');
+        expect(again.leadCreated).toBe(false);
+        expect(again.referralMemberUserId).toBeNull();
+      } finally {
+        await pg.delete(users).where(eq(users.id, member.id));
+      }
+    });
+
     it('rejects invalid answers without saving anything', async () => {
       const { diagnosis, version } = await accepted(v2);
       const data = input({ answers: { hosting: 'onprem', points: 100 } });
@@ -529,6 +582,19 @@ describe.skipIf(!url)('builder diagnosis submission (PostgreSQL)', () => {
           new Date(now.getTime() + 24 * HOUR)
         )
       ).toMatchObject({ ok: true, alreadyRequested: false });
+    });
+
+    it('never takes a request on a test answer (#481)', async () => {
+      const { diagnosis, version } = await accepted(v2);
+      const outcome = await submitBuilderDiagnosis(db, diagnosis, version, input(), now);
+      if (!outcome.ok) throw new Error('submission failed');
+      await pg
+        .update(diagnosticSubmissions)
+        .set({ isTest: true })
+        .where(eq(diagnosticSubmissions.id, outcome.submissionId));
+      expect(
+        await requestBuilderConsultation(db, diagnosisId, outcome.submissionId, now)
+      ).toEqual({ ok: false, reason: 'not_found' });
     });
 
     it('not found for a submission of another diagnosis', async () => {
