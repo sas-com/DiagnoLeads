@@ -2,6 +2,8 @@ import { withPayload } from '@payloadcms/next/withPayload';
 import type { NextConfig } from 'next';
 import createNextIntlPlugin from 'next-intl/plugin';
 
+import { withAdminOnlyClientHints } from './lib/cms/client-hints';
+
 const withNextIntl = createNextIntlPlugin('./lib/i18n/request.ts');
 
 const nextConfig: NextConfig = {
@@ -72,5 +74,7 @@ const withBundleAnalyzer =
     ? require('@next/bundle-analyzer')({ enabled: true })
     : (config: NextConfig) => config;
 
-// Apply plugins: next-intl -> bundle analyzer -> payload
-export default withPayload(withNextIntl(withBundleAnalyzer(nextConfig)));
+// Apply plugins: next-intl -> bundle analyzer -> payload. withPayload asks for the color-scheme
+// client hint (Critical-CH) on every path, which makes Chrome send the first request of a visit
+// twice; keep it on the Payload admin panel only, which reads it for its theme (#509)
+export default withAdminOnlyClientHints(withPayload(withNextIntl(withBundleAnalyzer(nextConfig))));

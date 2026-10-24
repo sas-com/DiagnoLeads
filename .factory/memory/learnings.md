@@ -187,6 +187,13 @@
 - **解決策**: 特定テストのみ実行（`bun run test path/to/test.ts`）、CI環境では並列実行
 - **教訓**: 開発中は関連テストのみ実行、コミット前に全テスト実行
 
+### [Performance] withPayload が全ページに Critical-CH を付けていた
+- **日付**: 2026-10-24
+- **状況**: 本番の Lighthouse（#497）で、どのページでも最初の訪問に「307 Internal Redirect」が出て、モバイルで 0.56〜0.99 秒遅れていた
+- **原因**: `@payloadcms/next` の `withPayload`（3.91.0、`dist/withPayload/withPayload.js`）が、`headers()` に `source: '/:path*'` で `Accept-CH`・`Vary`・`Critical-CH`（値はどれも `Sec-CH-Prefers-Color-Scheme`）を足す。`Critical-CH` があると、Chrome はヒントを付けてリクエストを送り直す。このヒントを読むのは、Payload の管理画面の RootLayout（`getRequestTheme`）だけ
+- **解決策**: `next.config.ts` で withPayload の結果を `withAdminOnlyClientHints`（`lib/cms/client-hints.ts`）で包み、3つを `/admin/:path*` だけに移した（#509）。`test/unit/lib/cms/client-hints.test.ts` が、本物の next.config の `headers()` を、Next.js が routes-manifest に書く正規表現で照合する
+- **教訓**: Next.js のプラグイン（`withXxx`）は、すべての応答に効く設定（headers など）を黙って足すことがある。入れる・上げるときは、公開ページの応答ヘッダーを `curl -sI` で確かめる。Payload を上げてこのテストが落ちたら、`withPayload.js` で付け方が変わっていないかを見る
+
 ---
 
 ## ドキュメント関連
