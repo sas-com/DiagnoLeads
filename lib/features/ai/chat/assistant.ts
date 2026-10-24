@@ -118,6 +118,9 @@ Focus on key business value and next steps.`;
       console.error('Lead summary: no text in the response', message.stop_reason);
       return 'Unable to generate summary';
     }
+    if (message.stop_reason === 'max_tokens') {
+      console.error('Lead summary: cut off at max_tokens');
+    }
 
     return summary.trim();
   } catch (error) {

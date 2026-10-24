@@ -20,7 +20,8 @@ describe('Claude client', () => {
   it('times out within the 30-second function limit, without retries that would exceed it', () => {
     expect(options).toHaveLength(1);
     const [opts] = options;
-    expect(opts.timeout).toBeLessThan(30_000);
+    // 20 seconds leaves room for the authorization and database work around the call
+    expect(opts.timeout).toBeLessThanOrEqual(20_000);
     expect(opts.maxRetries).toBe(0);
   });
 
