@@ -12,7 +12,7 @@ paths: ["components/charts/**"]
 ### [UI] グラフは ApexCharts に寄せ、使っていない recharts を依存から外す（#486）
 - **日付**: 2026-10-24
 - **決定**: オーナー判断。グラフのライブラリは ApexCharts（`apexcharts`・`react-apexcharts`）に寄せる
-  - 使っていない `recharts` は依存から外す。作業は #53 の「使っていない依存を外す」で、`package.json` と `bun.lock` を変えている PR #512 のマージ後に行う
+  - 使っていない `recharts` は依存から外す。作業は #53 の「使っていない依存を外す」で行う（`package.json` と `bun.lock` を変える PR #512 の後。#512 は 2026-10-24 にマージ済み）
   - shadcn/ui の Chart（`components/ui/chart.tsx`）は入れない。UI の部品は shadcn/ui に一本化する（決定 2026-10-09-ui-modern-components）が、グラフだけはその例外にする
 - **理由**:
   - 画面で使っているのは ApexCharts だけ。`recharts` の import は0件
