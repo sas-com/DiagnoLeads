@@ -72,7 +72,7 @@ components/features/<feature>/
   - 画面から：`types/` と純粋なファイル。`service.ts` は型だけ
   - `api/router.ts`：`server/routers/_app.ts` だけ
 - `index.ts` は作らない
-- 依存の向きは「新しい機能 → 既存の中心（leads・lead-hearings・webhooks・notifications・email）」。既存の機能から新しい機能を import しない。組み合わせは画面（components・app）でまとめる
+- 機能単位の循環を増やさない（`features-in-cycles`）。新しい機能は既存の中心（leads・lead-hearings・webhooks・notifications・email）を読む向きにし、中心の側から新しい機能を読まない。両方を並べる画面は components・app でまとめる
 - page.tsx は params を読んで `components/features/<feature>` の部品を置くだけにする（新しい `_components/` は作らない）
 - 公開フォームの API（`app/api/.../route.ts`）は、検査 → zod → service → `after()` の順に書く
 
@@ -94,17 +94,34 @@ components/features/<feature>/
 | `components/features/leads/detail/lead-detail-view.tsx` とそのテスト | リード詳細のカード | カードの列の切り出しは #450 で行う予定 |
 | `components/layout/AppSidebar.tsx`・`lib/routes/admin-pages.ts` | メニューとページの接頭辞 | 足し忘れはテストで落ちる |
 
+これから足す予定の機能の置き場所：
+- ワークフローのランナー（#298〜）：`lib/workflow/`（`lib/cron`・`lib/ops` と同じ基盤の層）。機能を import せず、フローの定義は引数で受ける。定義の一覧は定期実行のルートの直下に置く（`docs/WORKFLOW_ENGINE_EVALUATION.md` 7.8）
+- 営業代行の外部アカウント（#276）：役割は `lib/auth/permissions.ts`（CASL）の1か所で決め、各ルーターに `role` の比較を足さない。見せる範囲は各機能の `service.ts` の絞り込みで守る（RLS は #51 で入れる予定）
+- AI の呼び出し（#48）：Anthropic のクライアントとモデル ID は `lib/features/ai/` の1か所に置き、他の機能はその関数を呼ぶ
+- 2つ目の診断：方式の決定（`decisions/2026-10-18-second-diagnosis-timing`）を読んでから。汎用の部品（`diagnostics/` 直下・`diagnosis-builder/`）から `diagnostics/ax-migration/` を新しく読まない
+
 ## 5. `arch:check` が落ちたときの直し方
 
 1. 表示された import が本当に要るかを見る。要らなければ消す
 2. 他の機能の内部のファイルを読んでいるなら、相手の `service.ts` か `types/` から使う。なければ、相手の機能の中で `service.ts` か `types/` に出す
 3. 基盤から機能を読んでいるなら、その部品を基盤（`lib/`）に置くべきか考える
 4. ブラウザのコードからサーバー専用のファイルに届いているなら、値の import を `import type` にするか、サーバー側（Server Component・tRPC）で処理する
-5. それでも例外にするなら、`bun run arch:check --update` で許可リストに足し、PR に理由を書く
+5. それでも例外にするなら、`bun run arch:check --update` で許可リストに足し、PR に理由を1行書く。公開の直前など急ぐときもこれで通る。直すのは後の PR でよい
 
-違反を減らしたときも `--update` を流し、許可リストから消えた行を同じ PR に入れる。
+違反を減らしたときも `--update` を流し、許可リストから消えた行を同じ PR に入れる。マージの前に main を取り込み、もう一度流す（並行の PR が同じ行を消している・足していることがある）。
 
-## 6. 診断の系統と名前の対応
+## 6. ファイルを移す・分ける PR の条件
+
+ハブの分割やディレクトリの移動は、次をすべて満たすときに、移動だけの1本の PR で行う。
+
+- 移す範囲のファイルを触っている開いた PR が0（各 PR の変更ファイルの一覧で確かめる）。公開の前後（10/29）と RLS の作業中（11/4〜11/14）は行わない
+- `git diff -M` で改名として出る（中身の変更を混ぜない）
+- スキーマを分けたときは `bun run db:generate` の差分が0。文言を分けたときは、合成した結果のキーが移す前と一致する
+- 古いパスには1行の再 export を残し、importer は触るついでに新しいパスへ替える。替えるときは、テストの `vi.mock('<パス>')` も同じパスに替える（古いパスのままだとモックが効かない）
+- 決定ファイル（`.factory/memory/decisions/*.md`）の `paths` が古いパスを指していたら、同じ PR で直す（`test/unit/claude-hooks` が検出する）
+- 1回の revert で戻せる
+
+## 7. 診断の系統と名前の対応
 
 同じ「診断」が層ごとに違う名前で置かれている。改名はしない（並行の作業と衝突するため）。
 
