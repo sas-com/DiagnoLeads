@@ -79,6 +79,31 @@ export function forecastRow(figures: ForecastFigures, target: number | null): Fo
 }
 
 /**
+ * The owners' rows as a viewer may see them. Each rep's target, achievement and gap are for those
+ * who set the targets and for the rep (owner decision 2026-10-24); for anyone else the other reps'
+ * rows keep only the figures of their deals, which they can read on the board anyway.
+ */
+export function ownerRowsFor<T extends ForecastRow & { ownerUserId: string | null }>(
+  owners: T[],
+  viewer: { userId: string; seesEveryTarget: boolean }
+): (T & { targetHidden: boolean })[] {
+  return owners.map((row) => {
+    const hidden =
+      !viewer.seesEveryTarget && row.ownerUserId !== null && row.ownerUserId !== viewer.userId;
+    return hidden
+      ? {
+          ...row,
+          target: null,
+          achievement: null,
+          forecastAchievement: null,
+          gap: null,
+          targetHidden: true,
+        }
+      : { ...row, targetHidden: false };
+  });
+}
+
+/**
  * The organization's target for the period: for each month, the organization-wide target when
  * one is set, else the sum of the members' targets; null when no month has any target.
  */

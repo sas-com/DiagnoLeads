@@ -1,6 +1,7 @@
 'use client';
 
 import { formatYen } from '@/components/features/deals/deal-format';
+import { DealsForbidden } from '@/components/features/deals/deals-forbidden';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ProgressBar } from '@/components/ui/progress-bar';
@@ -120,7 +121,9 @@ export function ForecastScreen() {
         )}
       </header>
 
-      {!organizationId ? null : query.isError ? (
+      {!organizationId ? null : query.error?.data?.code === 'FORBIDDEN' ? (
+        <DealsForbidden />
+      ) : query.isError ? (
         <div
           role="alert"
           className="space-y-2 rounded-lg border border-red-200 p-4 dark:border-red-900"
@@ -161,7 +164,11 @@ export function ForecastScreen() {
             </ul>
           )}
 
-          <OwnerTable owners={data.owners} total={data.total} />
+          <OwnerTable
+            owners={data.owners}
+            total={data.total}
+            seesEveryTarget={data.canEditTargets}
+          />
 
           <ChangesSection changes={data.changes} />
         </div>
@@ -228,34 +235,58 @@ function SummaryTiles({ total }: { total: ForecastRow }) {
 function OwnerTable({
   owners,
   total,
+  seesEveryTarget,
 }: {
-  owners: (ForecastRow & { ownerUserId: string | null; ownerName: string | null })[];
+  owners: (ForecastRow & {
+    ownerUserId: string | null;
+    ownerName: string | null;
+    targetHidden: boolean;
+  })[];
   total: ForecastRow;
+  /** false: the other reps' targets are not sent (shown to those who set targets and the rep) */
+  seesEveryTarget: boolean;
 }) {
   const t = useTranslations('salesForecast.table');
   const locale = useLocale();
   const percent = usePercent();
   const yen = (amount: number | null) =>
     amount === null ? t('noTarget') : (formatYen(amount, locale) ?? '');
-  const cells = (row: ForecastRow) => (
+  const hiddenCell = (className: string) => (
+    <TableCell className={className}>
+      <span className="text-gray-500 dark:text-gray-400">{t('hidden')}</span>
+    </TableCell>
+  );
+  const cells = (row: ForecastRow, targetHidden = false) => (
     <>
-      <TableCell className="text-right tabular-nums">{yen(row.target)}</TableCell>
+      {targetHidden ? (
+        hiddenCell('text-right')
+      ) : (
+        <TableCell className="text-right tabular-nums">{yen(row.target)}</TableCell>
+      )}
       <TableCell className="text-right tabular-nums">{yen(row.won)}</TableCell>
       <TableCell className="text-right tabular-nums">{yen(row.commit)}</TableCell>
       <TableCell className="text-right tabular-nums">{yen(row.bestCase)}</TableCell>
       <TableCell className="text-right tabular-nums">{yen(row.pipeline)}</TableCell>
       <TableCell className="text-right tabular-nums">{yen(row.weighted)}</TableCell>
-      <TableCell className="min-w-32">
-        {row.achievement === null ? (
-          t('noTarget')
-        ) : (
-          <div className="space-y-1">
-            <span className="tabular-nums">{percent(row.achievement)}</span>
-            <ProgressBar value={row.achievement * 100} color="emerald" />
-          </div>
-        )}
-      </TableCell>
-      <TableCell className="text-right tabular-nums">{yen(row.gap)}</TableCell>
+      {targetHidden ? (
+        hiddenCell('min-w-32')
+      ) : (
+        <TableCell className="min-w-32">
+          {row.achievement === null ? (
+            t('noTarget')
+          ) : (
+            <div className="space-y-1">
+              <span className="tabular-nums">{percent(row.achievement)}</span>
+              <ProgressBar value={row.achievement * 100} color="emerald" />
+            </div>
+          )}
+        </TableCell>
+      )}
+      {targetHidden ? (
+        hiddenCell('text-right')
+      ) : (
+        <TableCell className="text-right tabular-nums">{yen(row.gap)}</TableCell>
+      )}
     </>
   );
 
@@ -280,7 +311,7 @@ function OwnerTable({
           {owners.map((row) => (
             <TableRow key={row.ownerUserId ?? 'unassigned'}>
               <TableCell className="font-medium">{row.ownerName ?? t('unassigned')}</TableCell>
-              {cells(row)}
+              {cells(row, row.targetHidden)}
             </TableRow>
           ))}
         </TableBody>
@@ -291,6 +322,11 @@ function OwnerTable({
           </TableRow>
         </TableFooter>
       </Table>
+      {!seesEveryTarget && (
+        <p className="border-t px-4 py-2 text-xs text-gray-500 dark:text-gray-400">
+          {t('hiddenNote')}
+        </p>
+      )}
     </Card>
   );
 }

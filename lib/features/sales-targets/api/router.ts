@@ -1,11 +1,13 @@
 /**
  * Sales targets tRPC router (Refs #437)
  *
- * Anyone who can read leads may read the targets; setting them and the month the fiscal year
- * starts needs permission to update the settings (owner / admin). Every query is scoped by
- * organizationId (see ../service.ts).
+ * Those who may read deals may read the targets (not a parent organization's viewer); setting
+ * them and the month the fiscal year starts needs permission to update the settings (owner /
+ * admin). Anyone else gets only the organization's and their own targets (owner decision
+ * 2026-10-24). Every query is scoped by organizationId (see ../service.ts).
  */
 
+import { canReadDeals } from '@/lib/features/deals/access';
 import { listAssignableMembers, memberDisplayName } from '@/lib/features/leads/assignment';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { organizationProcedure, router } from '@/lib/trpc/init';
@@ -23,26 +25,32 @@ import { fiscalYearStartSchema, saveTargetsSchema, targetsQuerySchema } from '..
 export const salesTargetsRouter = router({
   /** The targets of a fiscal year, by month, for the organization and each member */
   get: organizationProcedure.input(targetsQuerySchema).query(async ({ ctx, input }) => {
-    if (!ctx.ability.can('read', 'Lead')) {
+    if (!canReadDeals(ctx)) {
       throw new TRPCError({
         code: 'FORBIDDEN',
         message: 'You do not have permission to read targets',
       });
     }
+    const canEdit = ctx.ability.can('update', 'Settings');
     const organizationId = ctx.organization.id;
     const startMonth = await getFiscalYearStartMonth(ctx.db, organizationId);
     const [year, month] = jstDate().split('-').map(Number);
     const fiscalYear = input.fiscalYear ?? fiscalYearOf(year, month, startMonth);
     const range = fiscalYearRange(fiscalYear, startMonth);
-    const [targets, members] = await Promise.all([
+    const [allTargets, members] = await Promise.all([
       listTargets(ctx.db, { organizationId, months: range.months }),
-      listAssignableMembers(ctx.db, organizationId),
+      canEdit ? listAssignableMembers(ctx.db, organizationId) : Promise.resolve([]),
     ]);
-    const formerMembers = await listFormerTargetHolders(
-      ctx.db,
-      targets,
-      new Set(members.map((member) => member.userId))
-    );
+    const targets = canEdit
+      ? allTargets
+      : allTargets.filter((target) => target.userId === null || target.userId === ctx.user.id);
+    const formerMembers = canEdit
+      ? await listFormerTargetHolders(
+          ctx.db,
+          targets,
+          new Set(members.map((member) => member.userId))
+        )
+      : [];
     return {
       fiscalYear,
       fiscalYearStartMonth: startMonth,
@@ -57,7 +65,7 @@ export const salesTargetsRouter = router({
         displayName: holder.name,
       })),
       targets,
-      canEdit: ctx.ability.can('update', 'Settings'),
+      canEdit,
     };
   }),
 

@@ -112,7 +112,7 @@ describe.skipIf(!url)('sales targets and forecast (PostgreSQL)', () => {
   });
 
   describe('targets', () => {
-    it('lets owners and admins set the organization and member targets, and everyone read them', async () => {
+    it('lets owners and admins set the organization and member targets, and members read theirs', async () => {
       await adminA.salesTargets.save({
         organizationId: orgA,
         entries: [
@@ -130,9 +130,13 @@ describe.skipIf(!url)('sales targets and forecast (PostgreSQL)', () => {
           { userId: memberAId, month: thisMonth, amount: 8_000_000 },
         ])
       );
-      expect(read.members.map((m: { displayName: string }) => m.displayName)).toContain('営業 花子');
-      expect((await viewerA.salesTargets.get({ organizationId: orgA })).canEdit).toBe(false);
-      expect((await adminA.salesTargets.get({ organizationId: orgA })).canEdit).toBe(true);
+      // The member list is for those who set targets
+      expect(read.members).toEqual([]);
+      const managerRead = await adminA.salesTargets.get({ organizationId: orgA });
+      expect(managerRead.canEdit).toBe(true);
+      expect(managerRead.members.map((m: { displayName: string }) => m.displayName)).toContain(
+        '営業 花子'
+      );
     });
 
     it('replaces a target, removes one with null and keeps one row per month', async () => {
@@ -186,6 +190,9 @@ describe.skipIf(!url)('sales targets and forecast (PostgreSQL)', () => {
         () => adminB.salesTargets.save({ organizationId: orgA, entries }),
         () => adminB.salesTargets.setFiscalYearStart({ organizationId: orgA, month: 1 }),
         () => adminB.salesTargets.get({ organizationId: orgA }),
+        // A parent organization's viewer may not read the deals, the forecast or the targets
+        () => viewerA.salesTargets.get({ organizationId: orgA }),
+        () => viewerA.salesForecast.get({ organizationId: orgA }),
       ]) {
         await expect(call()).rejects.toMatchObject({ code: 'FORBIDDEN' });
       }
@@ -237,6 +244,42 @@ describe.skipIf(!url)('sales targets and forecast (PostgreSQL)', () => {
         })
       ).toEqual({ saved: 0, removed: 1 });
       expect((await adminA.salesTargets.get({ organizationId: orgA })).formerMembers).toEqual([]);
+    });
+
+    it("shows a member the organization's and their own targets only", async () => {
+      const org = await createOrganization('目標の見え方');
+      const { caller: manager } = await callerFor(org, 'owner', '目標 社長');
+      const { caller: rep, userId: repId } = await callerFor(org, 'member', '目標 一郎');
+      const { userId: otherId } = await callerFor(org, 'member', '目標 二郎');
+      await manager.salesTargets.save({
+        organizationId: org,
+        entries: [
+          { userId: null, month: thisMonth, amount: 20_000_000 },
+          { userId: repId, month: thisMonth, amount: 5_000_000 },
+          { userId: otherId, month: thisMonth, amount: 7_000_000 },
+        ],
+      });
+
+      const targets = await rep.salesTargets.get({ organizationId: org });
+      expect(targets.targets).toEqual(
+        expect.arrayContaining([
+          { userId: null, month: thisMonth, amount: 20_000_000 },
+          { userId: repId, month: thisMonth, amount: 5_000_000 },
+        ])
+      );
+      expect(targets.targets).toHaveLength(2);
+
+      const forecast = await rep.salesForecast.get({ organizationId: org, period: 'thisMonth' });
+      const rowOf = (id: string) =>
+        forecast.owners.find((row: { ownerUserId: string }) => row.ownerUserId === id);
+      expect(rowOf(repId)).toMatchObject({ target: 5_000_000, targetHidden: false });
+      expect(rowOf(otherId)).toMatchObject({ target: null, gap: null, targetHidden: true });
+      expect(forecast.total.target).toBe(20_000_000);
+
+      const managed = await manager.salesForecast.get({ organizationId: org, period: 'thisMonth' });
+      expect(
+        managed.owners.find((row: { ownerUserId: string }) => row.ownerUserId === otherId)
+      ).toMatchObject({ target: 7_000_000, targetHidden: false });
     });
 
     it('records each change of the targets and of the fiscal year start in the audit log', async () => {

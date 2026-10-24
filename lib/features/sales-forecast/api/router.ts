@@ -1,16 +1,19 @@
 /**
  * Forecast tRPC router (Refs #437)
  *
- * Anyone who can read leads may read the forecast (the figures come from the deals and the
- * targets, which they can read too). Every query is scoped by organizationId.
+ * Those who may read deals may read the forecast (lib/features/deals/access.ts: not a parent
+ * organization's viewer). Each rep's target and achievement are shown to those who set the
+ * targets and to the rep only (ownerRowsFor). Every query is scoped by organizationId.
  */
 
+import { canReadDeals } from '@/lib/features/deals/access';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { getFiscalYearStartMonth } from '@/lib/features/sales-targets/service';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { forecastPeriodEnum, forecastRange } from '../period';
+import { ownerRowsFor } from '../report';
 import { getForecast, getPipelineChanges } from '../service';
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -23,12 +26,13 @@ export const forecastInputSchema = z.object({
 export const salesForecastRouter = router({
   /** Targets, won and expected amounts of the period per owner, and the week's changes */
   get: organizationProcedure.input(forecastInputSchema).query(async ({ ctx, input }) => {
-    if (!ctx.ability.can('read', 'Lead')) {
+    if (!canReadDeals(ctx)) {
       throw new TRPCError({
         code: 'FORBIDDEN',
         message: 'You do not have permission to read the forecast',
       });
     }
+    const canEditTargets = ctx.ability.can('update', 'Settings');
     const organizationId = ctx.organization.id;
     const today = jstDate();
     const startMonth = await getFiscalYearStartMonth(ctx.db, organizationId);
@@ -43,8 +47,12 @@ export const salesForecastRouter = router({
       today,
       fiscalYearStartMonth: startMonth,
       ...forecast,
+      owners: ownerRowsFor(forecast.owners, {
+        userId: ctx.user.id,
+        seesEveryTarget: canEditTargets,
+      }),
       changes,
-      canEditTargets: ctx.ability.can('update', 'Settings'),
+      canEditTargets,
     };
   }),
 });

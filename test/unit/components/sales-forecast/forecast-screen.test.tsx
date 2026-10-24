@@ -94,8 +94,18 @@ const forecastData = (overrides: Record<string, unknown> = {}) => ({
   today: '2026-10-24',
   fiscalYearStartMonth: 4,
   owners: [
-    { ...forecastRow(figures, 10_000_000), ownerUserId: REP, ownerName: '営業 花子' },
-    { ...forecastRow({ ...figures, won: 0, noAmountCount: 0 }, null), ownerUserId: null, ownerName: null },
+    {
+      ...forecastRow(figures, 10_000_000),
+      ownerUserId: REP,
+      ownerName: '営業 花子',
+      targetHidden: false,
+    },
+    {
+      ...forecastRow({ ...figures, won: 0, noAmountCount: 0 }, null),
+      ownerUserId: null,
+      ownerName: null,
+      targetHidden: false,
+    },
   ],
   total: forecastRow({ ...figures, won: 2_000_000 }, 10_000_000),
   overdue: { count: 2, amount: 600_000 },
@@ -192,6 +202,42 @@ describe('ForecastScreen', () => {
     mocks.forecast.data = forecastData({ canEditTargets: false });
     renderWithIntl(<ForecastScreen />);
     expect(screen.queryByRole('button', { name: '目標を設定' })).not.toBeInTheDocument();
+  });
+
+  it("marks the other reps' targets as hidden for a rep and says why", () => {
+    mocks.forecast.data = forecastData({
+      canEditTargets: false,
+      owners: [
+        {
+          ...forecastRow(figures, null),
+          ownerUserId: 'rep-2',
+          ownerName: '営業 次郎',
+          targetHidden: true,
+        },
+      ],
+    });
+    renderWithIntl(<ForecastScreen />);
+    const table = screen.getByRole('table', { name: '担当者ごとの予測' });
+    const other = within(table).getByRole('row', { name: /営業 次郎/ });
+    expect(within(other).getAllByText('非公開')).toHaveLength(3);
+    expect(
+      screen.getByText(
+        '担当者ごとの目標・達成率・目標との差は、目標を設定する人と本人の分だけを表示します'
+      )
+    ).toBeInTheDocument();
+  });
+
+  it("tells a parent organization's viewer the forecast is not theirs to see", () => {
+    mocks.forecast = {
+      data: undefined,
+      isError: true,
+      error: { data: { code: 'FORBIDDEN' } },
+      isPlaceholderData: false,
+      refetch: vi.fn(),
+    } as typeof mocks.forecast;
+    renderWithIntl(<ForecastScreen />);
+    expect(screen.getByText('商談を見る権限がありません')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '再読み込み' })).not.toBeInTheDocument();
   });
 
   it('says when the forecast cannot be read', async () => {

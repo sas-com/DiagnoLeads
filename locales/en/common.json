@@ -1495,7 +1495,9 @@
       "gap": "Gap",
       "total": "Total",
       "unassigned": "No owner",
-      "noTarget": "—"
+      "noTarget": "—",
+      "hidden": "Hidden",
+      "hiddenNote": "Each rep's target, achievement and gap are shown only to those who set the targets and to the rep"
     },
     "notes": {
       "overdue": "{count} open deals ({amount}) still have an expected close date before this period and are not counted. Review their dates",

@@ -13,6 +13,7 @@ import {
   forecastRow,
   memberTarget,
   organizationTarget,
+  ownerRowsFor,
   sumFigures,
 } from '@/lib/features/sales-forecast/report';
 import {
@@ -222,3 +223,36 @@ describe('classifyChanges', () => {
     expect(changes.groups.created.amount).toBe(100 * (CHANGED_DEALS_SHOWN + 5));
   });
 });
+
+describe('ownerRowsFor', () => {
+  const row = (ownerUserId: string | null, target: number | null) => ({
+    ...forecastRow({ ...EMPTY_FIGURES, won: 2_000_000, commit: 1_000_000 }, target),
+    ownerUserId,
+  });
+  const owners = [row('rep-1', 10_000_000), row('rep-2', 8_000_000), row(null, null)];
+
+  it('shows every target to those who set them', () => {
+    const rows = ownerRowsFor(owners, { userId: 'manager', seesEveryTarget: true });
+    expect(rows.map((r) => [r.target, r.targetHidden])).toEqual([
+      [10_000_000, false],
+      [8_000_000, false],
+      [null, false],
+    ]);
+  });
+
+  it("shows a rep their own target and keeps only the others' deal figures", () => {
+    const rows = ownerRowsFor(owners, { userId: 'rep-1', seesEveryTarget: false });
+    expect(rows[0]).toMatchObject({ target: 10_000_000, achievement: 0.2, targetHidden: false });
+    expect(rows[1]).toMatchObject({
+      won: 2_000_000,
+      commit: 1_000_000,
+      target: null,
+      achievement: null,
+      forecastAchievement: null,
+      gap: null,
+      targetHidden: true,
+    });
+    expect(rows[2].targetHidden).toBe(false);
+  });
+});
+
