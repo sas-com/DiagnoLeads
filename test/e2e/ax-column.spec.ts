@@ -72,8 +72,11 @@ test.describe('AX migration columns', () => {
     await expect(card.getByRole('link')).toHaveCount(1);
     // A click where the image or the text is shown lands on the stretched link above them
     for (const target of [card.locator('img'), card.getByText('記事を読む')]) {
-      // The card may sit below the fold: the mouse clicks inside the viewport only
-      await target.scrollIntoViewIfNeeded();
+      // The card may sit below the fold: the mouse clicks inside the viewport only. Centred,
+      // not scrollIntoViewIfNeeded(): browsers place a partly shown element differently, and an
+      // edge position could put the click under the sticky header. Instant, so the box is read
+      // after the scroll, not during it
+      await target.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
       const box = await target.boundingBox();
       if (!box) throw new Error('the card part is not shown');
       await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
