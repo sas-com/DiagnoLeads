@@ -23,6 +23,7 @@ import {
 import { AX_MIGRATION_DIAGNOSTIC_KEY } from '@/lib/features/diagnostics/ax-migration/definition';
 import { parseStoredHearingFields } from '@/lib/features/lead-hearings/types/schemas';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
+import { reportServerError } from '@/lib/ops/alert';
 import { and, desc, eq, gte, isNull, sql } from 'drizzle-orm';
 import { type ActTiming, computeActTiming } from './compute';
 import { type ActTimingSettings, readActTimingSettings } from './types/schemas';
@@ -40,6 +41,8 @@ export const RECOMPUTE_BATCH = 100;
  * updates) for tomorrow
  */
 export const RECOMPUTE_TIME_BUDGET_MS = 10_000;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface ActTimingState {
   timing: ActTiming | null;
@@ -232,23 +235,48 @@ export async function recomputeOrganization(
   return rows.length;
 }
 
+/** What the morning run did, returned to the cron (and its JSON response) */
+export interface MorningRunResult {
+  recomputed: number;
+  /**
+   * Leads of the window the run did not reach, cut short at its time limit. They are the
+   * oldest updates, so most of them the previous run recomputed while they were new
+   */
+  pending: number;
+  /**
+   * Of the pending leads, those updated within the last day, which the previous run (a day
+   * earlier) could not have read. More than none means a day's updates no longer fit in the
+   * time budget: it is reported, the cue to revisit the decision 2026-10-24-act-timing-morning-run
+   */
+  unseen: number;
+  /** Leads whose recompute threw: logged, reported once, and the run went on with the next */
+  failed: number;
+}
+
 /**
  * The morning run: every lead updated in the last days (diagnosis answers, status changes), of
  * every organization, a page at a time, until none is left or the time is up (#374).
  *
  * Newest update first: a run cut short leaves the oldest updates, which the previous run had
  * already reached while they were new, rather than the ones no run has seen yet. Each lead is
- * recomputed in its own organization with that organization's settings.
+ * recomputed in its own organization with that organization's settings; one that fails does
+ * not stop the others.
+ *
+ * The time is checked before each lead and before each further page. The page reads and the
+ * count of the leads left are not bounded by it: leads.updated_at has no index (adding one
+ * needs a migration), so they scan the table. At today's number of leads they take little.
  */
 export async function recomputeRecentlyUpdated(
   db: Database,
   now: Date = new Date(),
   options: { timeBudgetMs?: number; clock?: () => number } = {}
-): Promise<{ recomputed: number; pending: number }> {
+): Promise<MorningRunResult> {
   const clock = options.clock ?? Date.now;
   const startedAt = clock();
   const budget = options.timeBudgetMs ?? RECOMPUTE_TIME_BUDGET_MS;
-  const since = new Date(now.getTime() - RECOMPUTE_RECENT_DAYS * 24 * 60 * 60 * 1000);
+  const outOfTime = () => clock() - startedAt > budget;
+  const since = new Date(now.getTime() - RECOMPUTE_RECENT_DAYS * DAY_MS);
+  const dayBefore = new Date(now.getTime() - DAY_MS);
   // The last lead reached. Its update time is kept as text: a Date would drop the microseconds
   // and skip, or read again, the leads updated within the same millisecond
   let last: { updatedAt: string; id: string } | null = null;
@@ -261,9 +289,41 @@ export async function recomputeRecentlyUpdated(
     );
   const settingsByOrg = new Map<string, ActTimingSettings>();
   let recomputed = 0;
-  let page: { id: string; organizationId: string; updatedAt: string }[];
-  do {
-    page = await db
+  let failed = 0;
+  let firstFailure: unknown;
+
+  const finish = async (left: { pending: number; unseen: number }) => {
+    if (failed > 0) {
+      await reportServerError('cron/act-timing-lead', firstFailure);
+    }
+    if (left.unseen > 0) {
+      // The counts only, never lead data
+      await reportServerError(
+        'cron/act-timing-time-limit',
+        new Error(`${left.unseen} leads updated within the last day were not reached`)
+      );
+    }
+    return { recomputed, failed, ...left };
+  };
+  const cutShort = async () => {
+    const [left] = await db
+      .select({
+        pending: sql<number>`count(*)::int`,
+        unseen: sql<number>`(count(*) filter (where ${gte(leads.updatedAt, dayBefore)}))::int`,
+      })
+      .from(leads)
+      .where(notReached());
+    const pending = left?.pending ?? 0;
+    const unseen = left?.unseen ?? 0;
+    console.warn(
+      `When to act: the morning run stopped at its time limit; ${pending} leads of the window not reached, ${unseen} of them updated within the last day (no earlier run read those)`
+    );
+    return finish({ pending, unseen });
+  };
+
+  let more = true;
+  while (more) {
+    const page = await db
       .select({
         id: leads.id,
         organizationId: leads.organizationId,
@@ -274,32 +334,32 @@ export async function recomputeRecentlyUpdated(
       .orderBy(desc(leads.updatedAt), desc(leads.id))
       .limit(RECOMPUTE_BATCH);
     for (const row of page) {
-      if (clock() - startedAt > budget) {
-        const [left] = await db
-          .select({ count: sql<number>`count(*)::int` })
-          .from(leads)
-          .where(notReached());
-        const pending = left?.count ?? 0;
-        console.warn(
-          `When to act: the morning run stopped at its time limit, ${pending} leads left`
+      if (outOfTime()) return cutShort();
+      try {
+        let settings = settingsByOrg.get(row.organizationId);
+        if (!settings) {
+          settings = await getActTimingSettings(db, row.organizationId);
+          settingsByOrg.set(row.organizationId, settings);
+        }
+        await recomputeActTiming(
+          db,
+          { organizationId: row.organizationId, leadId: row.id, userId: null },
+          { now, settings }
         );
-        return { recomputed, pending };
+        recomputed += 1;
+      } catch (error) {
+        // One lead must not hold back the older ones: the next run tries it again while it is
+        // in the window
+        console.error(`When to act: the morning run failed on lead ${row.id}:`, error);
+        if (failed === 0) firstFailure = error;
+        failed += 1;
       }
-      let settings = settingsByOrg.get(row.organizationId);
-      if (!settings) {
-        settings = await getActTimingSettings(db, row.organizationId);
-        settingsByOrg.set(row.organizationId, settings);
-      }
-      await recomputeActTiming(
-        db,
-        { organizationId: row.organizationId, leadId: row.id, userId: null },
-        { now, settings }
-      );
       last = { updatedAt: row.updatedAt, id: row.id };
-      recomputed += 1;
     }
-  } while (page.length === RECOMPUTE_BATCH);
-  return { recomputed, pending: 0 };
+    more = page.length === RECOMPUTE_BATCH;
+    if (more && outOfTime()) return cutShort();
+  }
+  return finish({ pending: 0, unseen: 0 });
 }
 
 /** Save the organization's settings (merged into organizations.settings) */
