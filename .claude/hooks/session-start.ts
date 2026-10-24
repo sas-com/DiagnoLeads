@@ -9,10 +9,9 @@
  */
 import { spawnSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DECISIONS_DIR, formatIndex, loadDecisions } from './lib/decisions';
-import { addContext, projectDir, readHookInput, runHook } from './lib/io';
+import { addContext, privateTmpDir, projectDir, readHookInput, runHook } from './lib/io';
 
 function installDependencies(root: string): string {
   const started = Date.now();
@@ -21,8 +20,10 @@ function installDependencies(root: string): string {
     encoding: 'utf8',
     timeout: 280_000,
   });
-  const log = join(tmpdir(), 'claude-session-start-install.log');
-  writeFileSync(log, `${result.stdout ?? ''}${result.stderr ?? ''}${result.error ?? ''}`);
+  const log = join(privateTmpDir(), 'session-start-install.log');
+  writeFileSync(log, `${result.stdout ?? ''}${result.stderr ?? ''}${result.error ?? ''}`, {
+    mode: 0o600,
+  });
   const seconds = Math.round((Date.now() - started) / 1000);
   if (result.status === 0) {
     return `依存をインストールした（bun install --frozen-lockfile、${seconds} 秒）。test・typecheck・lint はそのまま動く。`;

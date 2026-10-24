@@ -29,9 +29,9 @@
 **正しい対応:**
 ```
 ユーザー: 「〜を実装してください」
-Droid: 「対応するIssueを確認します」
-       → gh issue list で確認
-       → Issueなし: 「Issueを作成してから対応しますか？」
+エージェント: 「対応するIssueを確認します」
+       → gh issue list（または GitHub MCP）で確認
+       → Issueなし: Issueを作成し、番号を報告して作業開始（2026-10-24 から。以前は作成してよいかを確認していた）
        → Issueあり: Issue番号を記録して作業開始
 ```
 
@@ -129,7 +129,7 @@ STEP 1: CONFIRM (確認)
    │
    ├─ gh issue list --state open
    ├─ 優先度確認
-   └─ Issueなし → 作成または確認
+   └─ Issueなし → 作成して番号を報告
    │
    ▼
 STEP 2: IMPLEMENT (実装)

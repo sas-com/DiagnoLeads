@@ -25,6 +25,8 @@ describe('when to act in the lead list query', () => {
     const parsed = parseLeadListQuery(params);
     expect(parsed.filters.actTiming).toBe('soon');
     expect(parsed.sort).toEqual({ by: 'actBy', order: 'asc' });
+    // Nobody comes back to the lead (#446)
+    expect(parseLeadListQuery(new URLSearchParams('act=none')).filters.actTiming).toBe('none');
     // Unknown values are dropped
     expect(parseLeadListQuery(new URLSearchParams('act=later')).filters.actTiming).toBeUndefined();
   });

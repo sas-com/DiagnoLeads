@@ -67,6 +67,10 @@ import {
   type UpdateDealInput,
 } from './types/schemas';
 
+// Who may read deals, for the routers of other features (the forecast, the targets): they read
+// the deals through this file, not its internals (docs/ARCHITECTURE.md, #514)
+export { canReadDeals } from './access';
+
 type Database = typeof defaultDb;
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 type DealRow = typeof deals.$inferSelect;

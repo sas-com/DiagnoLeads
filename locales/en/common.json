@@ -1181,6 +1181,7 @@
     "targetSystem": "Target System",
     "referrerName": "Referrer",
     "lostReason": "Lost / On-hold Reason",
+    "lostOnHold": "A lead on hold cannot be lost. To lose it, change the reason from \"On hold\"; to keep it on hold, set the status to nurturing",
     "hasNegotiated": "Negotiated",
     "mqlQualifiedAt": "MQL Date",
     "sqlDecision": "SQL Decision",
@@ -3994,7 +3995,8 @@
       "status": "Change status (now: {value})",
       "dealPhase": "Change deal phase (now: {value})",
       "lostReasonPrompt": "Record why the lead was lost",
-      "lostReasonAction": "Add reason"
+      "lostReasonAction": "Add reason",
+      "nurturingWithoutFollowUp": "Nothing brings this lead back. Add the day to contact them as a next action"
     },
     "hearing": {
       "title": "Meeting summary",
@@ -4196,7 +4198,8 @@
     "actTimingHint": "The month to move again, from the support end, retirement and budget planning",
     "actTimingOptions": {
       "soon": "Within 6 months (past ones included)",
-      "has": "Worked out"
+      "has": "Worked out",
+      "none": "No next action and no month to act (use with a status)"
     }
   },
   "leadFollowUp": {

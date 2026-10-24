@@ -9,7 +9,7 @@ AI エージェント（Claude Code・Factory Droid など）が、セッショ�
 | 場所 | 中身 | いつ読むか |
 |------|------|-----------|
 | `decisions/` | 意思決定（1件1ファイル）。書き方は `decisions/README.md` | 索引はセッション開始時（Claude Code はフックが出す。ほかは `bun run memory:index`）。本文は作業に関係するとき |
-| `violations.md` | 原則違反の記録と再発防止策 | 作業開始前に確認する |
+| `violations.md` | 原則違反の記録と再発防止策 | 再発防止策は CLAUDE.md の「毎回守ること」とフックに入っているので、記録は違反の経緯を知りたいときに読む |
 | `learnings.md` | 起きた問題と解決策、うまくいったやり方 | 似た問題に当たったとき |
 | `preferences.md` | オーナーの好み | 作業の進め方・報告の仕方を決めるとき |
 | `decisions.md` | 移動の案内だけ（2026-10-24 に `decisions/` へ分けた） | 読まなくてよい |
@@ -36,4 +36,5 @@ Claude Code では、読んだ・編集したファイルに関係する決定�
 
 - 古くなった決定を `superseded` にする。`paths` がずれていれば直す（ずれはユニットテストが検出する）
 - 学びの重複をまとめる
-- Claude Code の `/doctor prompt-audit` で、CLAUDE.md や記録の古い・矛盾した指示を探す
+- Claude Code の `/doctor prompt-audit`（CLAUDE.md と `.claude/`）と `/doctor prompt-audit .factory/memory`（記録。既定の対象外なのでパスを渡す）で、古い・矛盾した指示を探す
+- Anthropic の公式の変更（Claude Code の変更履歴、モデルの提供終了の予定）を確かめ、CLAUDE.md・`.claude/`・`lib/features/ai/` を見直す（スキル `official-check`）

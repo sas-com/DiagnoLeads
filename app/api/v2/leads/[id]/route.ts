@@ -2,6 +2,7 @@ import { getAuthenticatedOrganization } from '@/lib/api/v2-auth';
 import { db } from '@/lib/db';
 import { leads } from '@/lib/db/schema';
 import {
+  dropsOnHoldReason,
   leadStatusEnum,
   normalizeLeadStatus,
   statusUpdateFields,
@@ -164,6 +165,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (phone !== undefined) updateData.phone = phone;
     if (source !== undefined) updateData.source = source;
     if (status !== undefined) Object.assign(updateData, statusUpdateFields(status));
+    // A lead on hold that is now lost drops the reason 保留 (#445)
+    if (dropsOnHoldReason(existing, { status })) updateData.lostReason = null;
     if (score !== undefined) updateData.score = score;
     if (responses !== undefined) updateData.responses = responses;
     if (customFields !== undefined) updateData.customFields = customFields;
