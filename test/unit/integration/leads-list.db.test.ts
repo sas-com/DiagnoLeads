@@ -222,6 +222,13 @@ describe.skipIf(!url)('lead list (PostgreSQL)', () => {
       expect(l3.lastActivityAt).toEqual(at('2026-10-15T12:00:00Z'));
       expect(l5.lastActivityAt).toEqual(at('2026-10-16T00:00:00Z'));
     });
+
+    it('does not return the search vectors (#433)', async () => {
+      const result = await callerA.leads.list({ organizationId: orgA });
+      expect(result.items[0]).toHaveProperty('email');
+      expect(result.items[0]).not.toHaveProperty('embedding');
+      expect(result.items[0]).not.toHaveProperty('searchVector');
+    });
   });
 
   describe('filters', () => {

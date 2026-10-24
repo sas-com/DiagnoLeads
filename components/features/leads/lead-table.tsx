@@ -30,7 +30,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { usePdfReportLabels } from '@/hooks/use-pdf-report-labels';
-import type { Lead } from '@/lib/db/schema';
 import { LEAD_EXPORT_MAX_ROWS } from '@/lib/features/leads/export';
 import { LEAD_PAGE_SIZES, type LeadListSort } from '@/lib/features/leads/list-query';
 import {
@@ -78,7 +77,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react
 import { TagBadgeList } from '../tags/tag-badge';
 import { BulkActions } from './bulk-actions';
 import { LeadAssigneeSelect } from './lead-assignee-select';
-import type { LeadListRow } from './lead-card';
+import type { LeadListRow, ListedLead } from './lead-card';
 import { LeadMqlBadges } from './lead-mql-badge';
 import { LeadQuickSelect } from './lead-quick-select';
 import { LeadCardList } from './list/lead-card-list';
@@ -618,7 +617,7 @@ export function LeadTable({
   const selectedLeads = table.getSelectedRowModel().rows.map((row) => row.original);
 
   // Helper functions for bulk export
-  const exportSelectedToCSV = useCallback((leadsToExport: Lead[]) => {
+  const exportSelectedToCSV = useCallback((leadsToExport: ListedLead[]) => {
     const headers = [
       'Name',
       'Email',
@@ -652,7 +651,7 @@ export function LeadTable({
     link.click();
   }, []);
 
-  const exportSelectedToJSON = useCallback((leadsToExport: Lead[]) => {
+  const exportSelectedToJSON = useCallback((leadsToExport: ListedLead[]) => {
     const data = leadsToExport.map((lead) => ({
       id: lead.id,
       name: lead.name,
@@ -673,7 +672,7 @@ export function LeadTable({
   }, []);
 
   const exportSelectedToPDF = useCallback(
-    async (leadsToExport: Lead[]) => {
+    async (leadsToExport: ListedLead[]) => {
       const data = leadsToExport.map((lead) => ({
         id: lead.id,
         email: lead.email,

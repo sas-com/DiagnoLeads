@@ -32,6 +32,7 @@ const render = (fragment: SQL | undefined) => {
 
 interface FindManyArgs {
   where: SQL;
+  columns?: Record<string, boolean>;
   extras: Record<string, { sql: SQL }>;
   orderBy: SQL[];
   limit: number;
@@ -107,6 +108,11 @@ describe('leads.list (sorting and filtering)', () => {
     expect(findManyArgs?.offset).toBe(20);
     expect(result.items[0].lastActivityAt).toEqual(new Date('2026-10-15T12:00:00.500Z'));
     expect(result.items[0].tags).toEqual([{ id: 't', name: 'tag' }]);
+  });
+
+  it('leaves the search vectors out of the page (#433)', async () => {
+    await caller.leads.list({ organizationId: ORG_ID });
+    expect(findManyArgs?.columns).toEqual({ embedding: false, searchVector: false });
   });
 
   it('reads the MQL level of each lead in the same query (#196)', async () => {

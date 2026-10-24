@@ -31,6 +31,7 @@ import { Card } from '@/components/ui/card';
 import { Metric, Text, Title } from '@/components/ui/metric';
 import { ProgressBar } from '@/components/ui/progress-bar';
 
+import type { ListedLead } from '@/components/features/leads/lead-card';
 import type { Lead } from '@/lib/db/schema';
 import type { CreateLeadInput } from '@/lib/features/leads/types';
 import { trpc } from '@/lib/trpc/client';
@@ -149,7 +150,7 @@ function LeadsPageContent() {
   // shows the saved values after a change instead of the copy taken from the list
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   // Lead whose deletion is being confirmed from the list's row menu
-  const [leadToDelete, setLeadToDelete] = useState<Lead | null>(null);
+  const [leadToDelete, setLeadToDelete] = useState<ListedLead | null>(null);
   const access = useLeadAccess(organizationId);
   const leadHref = (id: string) => `/${locale}/leads/${id}`;
 
@@ -205,7 +206,7 @@ function LeadsPageContent() {
   const deleteLead = useDeleteLead();
 
   const leads = leadsData?.items || [];
-  const selectedLead: Lead | null =
+  const selectedLead: ListedLead | null =
     loadedLead ?? leads.find((lead) => lead.id === selectedLeadId) ?? null;
 
   const counts = statusCounts.data;
@@ -241,19 +242,19 @@ function LeadsPageContent() {
     setLeadToDelete(null);
   };
 
-  const handleLeadClick = (lead: Lead) => {
+  const handleLeadClick = (lead: ListedLead) => {
     setSelectedLeadId(lead.id);
     setDetailsSheetOpen(true);
   };
 
   // Editing happens in place on the lead page: the row menu opens it with the pipeline card in
   // edit mode (Refs #109)
-  const handleRowEdit = (lead: Lead) => {
+  const handleRowEdit = (lead: ListedLead) => {
     router.push(`${leadHref(lead.id)}?edit=pipeline`);
   };
 
   // A lost lead should say why: offer to add it on the lead page, without blocking the list
-  const handleLost = (lead: Lead) => {
+  const handleLost = (lead: ListedLead) => {
     if (lead.lostReason) return;
     toast(tDetail('quick.lostReasonPrompt'), {
       action: {

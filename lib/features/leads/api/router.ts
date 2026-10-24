@@ -392,6 +392,8 @@ export const leadsRouter = router({
       ctx.db.select({ total: count() }).from(leads).where(where),
       ctx.db.query.leads.findMany({
         where,
+        // The search vectors (1536 floats and a tsvector per lead) are never shown (#433)
+        columns: { embedding: false, searchVector: false },
         orderBy: leadListOrderBy(input.sortBy, input.sortOrder),
         limit: input.limit,
         offset: input.offset,

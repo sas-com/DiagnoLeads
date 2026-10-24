@@ -32,7 +32,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { Lead } from '@/lib/db/schema';
 import { LEAD_STATUSES, type LeadStatus } from '@/lib/features/leads/types';
 import { trpc } from '@/lib/trpc/client';
 import {
@@ -47,15 +46,16 @@ import {
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import type { ListedLead } from './lead-card';
 
 interface BulkActionsProps {
-  selectedLeads: Lead[];
+  selectedLeads: ListedLead[];
   organizationId: string;
   onClearSelection: () => void;
   onActionComplete: () => void;
-  onExportCSV: (leads: Lead[]) => void;
-  onExportJSON: (leads: Lead[]) => void;
-  onExportPDF: (leads: Lead[]) => void;
+  onExportCSV: (leads: ListedLead[]) => void;
+  onExportJSON: (leads: ListedLead[]) => void;
+  onExportPDF: (leads: ListedLead[]) => void;
 }
 
 const statusOptions: readonly LeadStatus[] = LEAD_STATUSES;
