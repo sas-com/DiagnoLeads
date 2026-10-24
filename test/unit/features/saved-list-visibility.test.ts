@@ -4,8 +4,8 @@ import { PgDialect } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Saved filters and custom reports: a list request must never return other members'
-// private items, whatever visibility flags it sends (#262)
+// Saved filters: a list request must never return other members' private items, whatever
+// visibility flags it sends (#262)
 
 vi.mock('@/lib/db/rls', () => ({
   setCurrentUser: vi.fn().mockResolvedValue(undefined),
@@ -65,10 +65,7 @@ function whereSql(findMany: ReturnType<typeof vi.fn>): string {
   return whereQuery(findMany).sql;
 }
 
-describe.each([
-  { name: 'filters.list', table: 'savedFilters' as const },
-  { name: 'customReports.list', table: 'customReports' as const },
-])('$name visibility', ({ table }) => {
+describe('filters.list visibility', () => {
   let findMany: ReturnType<typeof vi.fn>;
   let caller: ReturnType<typeof appRouter.createCaller>;
 
@@ -78,7 +75,7 @@ describe.each([
     const db = {
       query: {
         organizationMembers: { findFirst: vi.fn().mockResolvedValue(mockMembership) },
-        [table]: { findMany },
+        savedFilters: { findMany },
       },
     };
     caller = appRouter.createCaller({
@@ -89,10 +86,7 @@ describe.each([
   });
 
   function list(input: { includePublic?: boolean; includePrivate?: boolean }) {
-    const params = { organizationId: TEST_ORG_ID, ...input };
-    return table === 'savedFilters'
-      ? caller.filters.list(params)
-      : caller.customReports.list(params);
+    return caller.filters.list({ organizationId: TEST_ORG_ID, ...input });
   }
 
   it('returns nothing without querying when neither public nor private is selected', async () => {

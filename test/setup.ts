@@ -51,16 +51,6 @@ vi.mock('@anthropic-ai/sdk', () => ({
   },
 }));
 
-// Mock AI SDK
-vi.mock('@ai-sdk/anthropic', () => ({
-  anthropic: vi.fn(() => ({
-    doGenerate: vi.fn(),
-  })),
-  createAnthropic: vi.fn(() => ({
-    doGenerate: vi.fn(),
-  })),
-}));
-
 // Mock lib/env to avoid t3-env validation issues
 vi.mock('@/lib/env', () => ({
   env: {
