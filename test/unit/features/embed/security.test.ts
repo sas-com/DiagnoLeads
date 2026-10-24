@@ -193,7 +193,7 @@ describe('Embed Security', () => {
       expect(headers['Content-Security-Policy']).toBeDefined();
       expect(headers['X-Content-Type-Options']).toBe('nosniff');
       expect(headers['X-Frame-Options']).toBe('SAMEORIGIN');
-      expect(headers['X-XSS-Protection']).toBe('1; mode=block');
+      expect(headers['X-XSS-Protection']).toBe('0');
       expect(headers['Referrer-Policy']).toBe('strict-origin-when-cross-origin');
     });
 

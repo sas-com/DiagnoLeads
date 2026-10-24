@@ -17,7 +17,12 @@ import {
 import { AxFloatingCta } from '@/components/features/ax-site/ax-floating-cta';
 import { AxLandingOnly, AxLandingView } from '@/components/features/ax-site/ax-landing-view';
 import { AxSiteShell } from '@/components/features/ax-site/ax-site-shell';
-import { AxFaq, AxFinalCta } from '@/components/features/ax-site/landing-sections';
+import {
+  AxConsultBand,
+  AxFaq,
+  AxFinalCta,
+  AxTrust,
+} from '@/components/features/ax-site/landing-sections';
 import { axShareImage } from '@/lib/features/ax-site/share-images';
 import { robotsFor } from '@/lib/seo/indexing';
 import type { Metadata } from 'next';
@@ -93,10 +98,20 @@ export default async function AxAccessPage({ params }: AxAccessPageProps) {
           <AxAccessPaths locale={locale} />
           <AxAccessPathsColumn locale={locale} />
           <AxAccessSteps locale={locale} />
+          {/* The phone and the diagnosis halfway down the page, as on the main page (#425) */}
+          <AxConsultBand
+            locale={locale}
+            copyNamespace="axAccess.consultBand"
+            buttonsNamespace="axAccess.finalCta"
+            locationPrefix="access-"
+          />
           <AxAccessTargets locale={locale} />
           {/* Readers of AS/400 or ACOS: the main page's sections on their system */}
           <AxAccessHostSystems locale={locale} />
           <AxFaq locale={locale} namespace="axAccess.faq" keys={ACCESS_FAQ_KEYS} />
+          {/* Reassurance right before the diagnosis asks for contact details, as on the main
+              page; the scope card speaks of Access work */}
+          <AxTrust locale={locale} scopeNamespace="axAccess.trustScope" />
         </AxLandingOnly>
         <AxAccessDiagnosisSection locale={locale} />
         <AxLandingOnly>

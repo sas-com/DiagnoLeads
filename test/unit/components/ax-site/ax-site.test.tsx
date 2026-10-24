@@ -2,6 +2,7 @@
  * AX migration landing page (server components rendered with the real messages)
  */
 import { evaluateAxMigration, toPublicResult } from '@/lib/features/diagnostics/ax-migration/evaluate';
+import enMessages from '@/locales/en/common.json';
 import messages from '@/locales/ja/common.json';
 import { as400Answers } from '@/test/fixtures/ax-migration';
 import { act, render, screen, within } from '@testing-library/react';
@@ -12,7 +13,11 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 vi.mock('next-intl/server', () => ({
   getTranslations: async ({ locale, namespace }: { locale: string; namespace?: string }) =>
-    createTranslator({ locale, messages, namespace: namespace as never }),
+    createTranslator({
+      locale,
+      messages: (locale === 'en' ? enMessages : messages) as typeof messages,
+      namespace: namespace as never,
+    }),
 }));
 vi.mock('next/font/google', () => ({
   Noto_Sans_JP: () => ({ variable: 'font-noto' }),
@@ -25,7 +30,9 @@ const { default: AxMigrationPage, generateMetadata } = await import(
 const { default: AxDiagnosisPage } = await import('@/app/[locale]/(ax)/ax-diagnosis/page');
 const { AxSiteHeader } = await import('@/components/features/ax-site/ax-site-header');
 const { AxSiteFooter } = await import('@/components/features/ax-site/ax-site-footer');
-const { AxFinalCta } = await import('@/components/features/ax-site/landing-sections');
+const { AxChallenges, AxFinalCta } = await import(
+  '@/components/features/ax-site/landing-sections'
+);
 const { AxFloatingCta } = await import('@/components/features/ax-site/ax-floating-cta');
 
 beforeAll(() => {
@@ -82,8 +89,9 @@ describe('AX migration landing page', () => {
     for (const name of [
       '基幹システムの移行から、AX化までを一貫してご支援',
       'ヒト・モノ・カネ・情報。すべてが、レガシーな基幹システムに縛られています',
-      '選ばれる理由',
-      '実際の画面でご確認いただけます',
+      'AXマイグレーションの3つの特長',
+      '移行の進め方、まずはご相談ください',
+      '受注入力の画面で、移行前後を見比べられます',
       'AX化の進め方',
       '対象となるシステム',
       'AS/400（IBM i）からの移行を考えている方へ',
@@ -124,19 +132,40 @@ describe('AX migration landing page', () => {
       '現行仕様調査',
       'マイグレーション',
       'AX化',
-      'スピード',
-      '高品質',
+      'AIで現行の仕様を見える化',
+      '新旧で同じデータを流して突き合わせる',
+      '段階的に進め、AX化まで続ける',
     ]) {
       expect(screen.getAllByRole('heading', { level: 3, name }).length).toBeGreaterThanOrEqual(1);
     }
     // Each strength answers one concern (#414)
-    for (const concern of ['「期間」の不安に', '「業務影響」の不安に', '「費用対効果」の不安に']) {
+    for (const concern of ['「期間」の不安に', '「業務影響」の不安に', '「費用」の不安に']) {
       expect(screen.getByText(concern)).toBeInTheDocument();
     }
-    const reasons = screen.getByRole('heading', { level: 2, name: '選ばれる理由' }).closest('section');
+    const reasons = screen.getByRole('heading', { level: 2, name: 'AXマイグレーションの3つの特長' }).closest('section');
     expect(
       within(reasons as HTMLElement).getByText(/^※お預かりした仕様書・ソースコードなどは/)
     ).toBeInTheDocument();
+  });
+
+  it('says what the diagnosis tells, and quotes the customers in each language (#535)', async () => {
+    await renderPage();
+    // The diagnosis asks for the deadlines: it tells how pressing they are, not what they are
+    expect(
+      screen.getByText('期限までの急ぎ度合いと、移行の難しさの目安が、約3分でわかります')
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/保守期限と移行の難しさの目安/)).toBeNull();
+    const challenges = document.getElementById('ax-challenges-heading')?.closest('section');
+    expect(
+      within(challenges as HTMLElement).getByText('「RPGやCOBOLを直せる人が、社内に1〜2人しかいない」')
+    ).toBeInTheDocument();
+
+    // No Japanese brackets around the English quotes
+    const english = render(withIntl(await AxChallenges({ locale: 'en' })));
+    expect(english.container).toHaveTextContent(
+      '“Only one or two people in the company can fix the RPG or COBOL”'
+    );
+    expect(english.container.textContent).not.toMatch(/[「」]/);
   });
 
   it('names the audience, leads from the concerns to the check and orders the steps', async () => {
@@ -150,7 +179,12 @@ describe('AX migration landing page', () => {
     const steps = within(document.getElementById('steps') as HTMLElement)
       .getAllByRole('heading', { level: 3 })
       .map((heading) => heading.textContent);
-    expect(steps.slice(0, 2)).toEqual(['無料Web診断（約3分）', '簡易診断（担当者による資産の棚卸し）']);
+    // The free consultation is a step of its own before the quick assessment (#420)
+    expect(steps.slice(0, 3)).toEqual([
+      '無料Web診断（約3分）',
+      '無料の個別相談',
+      '簡易診断（担当者による資産の棚卸し）',
+    ]);
     // Reassurance comes before the diagnosis, which asks for contact details
     const trust = screen.getByRole('heading', { level: 2, name: '安心して任せられる理由' });
     const diagnosis = screen.getByRole('heading', { level: 2, name: 'まずは「無料Web診断」から' });
@@ -162,14 +196,13 @@ describe('AX migration landing page', () => {
 
   it('links the phone and email of the DX Services Division', async () => {
     await renderPage();
-    expect(screen.getByRole('link', { name: 'dx-agency@sas-com.com' })).toHaveAttribute(
-      'href',
-      'mailto:dx-agency@sas-com.com'
-    );
-    expect(screen.getByRole('link', { name: '03-5427-3663' })).toHaveAttribute(
-      'href',
-      'tel:+81354273663'
-    );
+    // In the consultation band halfway down and in the final call to action (#420)
+    const emails = screen.getAllByRole('link', { name: 'dx-agency@sas-com.com' });
+    const phones = screen.getAllByRole('link', { name: '03-5427-3663' });
+    expect(emails).toHaveLength(2);
+    expect(phones).toHaveLength(2);
+    for (const email of emails) expect(email).toHaveAttribute('href', 'mailto:dx-agency@sas-com.com');
+    for (const phone of phones) expect(phone).toHaveAttribute('href', 'tel:+81354273663');
   });
 
   it('loads GA4 only with a valid measurement ID', async () => {
@@ -200,6 +233,8 @@ describe('AX migration landing page', () => {
     const demos = screen.getAllByRole('link', { name: /デモを見る/ });
     expect(demos).toHaveLength(2);
     for (const demo of demos) {
+      // Says it opens a new tab, not only with an icon (#420)
+      expect(demo).toHaveAccessibleName('デモを見る（新しいタブで開きます）');
       expect(demo).toHaveAttribute('href', 'https://as400-pre-migration.vercel.app/');
       expect(demo).toHaveAttribute('target', '_blank');
       expect(demo).toHaveAttribute('rel', 'noopener noreferrer');
@@ -209,13 +244,56 @@ describe('AX migration landing page', () => {
     ).toBeInTheDocument();
   });
 
+  it('names the deadlines that make a renewal urgent, above the hero buttons (#420)', async () => {
+    await renderPage();
+    const hero = screen.getByRole('heading', { level: 1 }).closest('section') as HTMLElement;
+    const deadlines = within(hero).getAllByRole('listitem').map((item) => item.textContent);
+    expect(deadlines).toEqual([
+      '保守期限・リース満了',
+      '直せる人の退職・異動',
+      'INSネットを使うEDI（2028年12月31日に提供終了と発表）',
+    ]);
+    // Before the buttons, which the phone CTA bar watches on their own
+    const buttons = document.getElementById('ax-hero-cta') as HTMLElement;
+    expect(within(buttons).getByRole('link', { name: /無料Web診断をはじめる/ })).toBeInTheDocument();
+  });
+
+  it('answers what deciders ask before a consultation (#420)', async () => {
+    await renderPage();
+    for (const question of [
+      '費用や期間はどのくらいかかりますか？',
+      '一部の業務やシステムから始められますか？',
+      '相談の前に用意しておくとよいものはありますか？',
+    ]) {
+      expect(screen.getByText(question)).toBeInTheDocument();
+    }
+  });
+
+  it('answers the worry about moving to the web, before the data questions (#466)', async () => {
+    await renderPage();
+    const faq = document.getElementById('faq') as HTMLElement;
+    const questions = [...faq.querySelectorAll('summary')].map((summary) =>
+      summary.textContent?.replace(/^Q/, '')
+    );
+    expect(questions.indexOf('Webシステムにすると、脆弱性やサイバー攻撃が心配です。')).toBe(
+      questions.indexOf('お預けした仕様書やソースコードは、AIの学習に使われますか？') - 1
+    );
+    const answer = within(faq).getByText(/^ご心配はもっともです。/);
+    expect(answer).toHaveTextContent('移行の進め方を決めるときに一緒に決めます。');
+    expect(answer).toHaveTextContent(
+      'OSや製品の保守が終わると、今お使いのシステムでも、見つかった弱点は直されなくなります。'
+    );
+  });
+
   it('shows the booking button only when a booking URL is configured', async () => {
-    render(withIntl(await AxFinalCta({ locale: 'ja' })));
+    render(withIntl(await resolveServerTree(await AxFinalCta({ locale: 'ja' }))));
     expect(screen.queryByRole('link', { name: /無料相談を予約する/ })).not.toBeInTheDocument();
 
     vi.stubEnv('NEXT_PUBLIC_AX_CONSULTATION_URL', 'https://bookings.example.com/ax');
-    render(withIntl(await AxFinalCta({ locale: 'ja' })));
+    render(withIntl(await resolveServerTree(await AxFinalCta({ locale: 'ja' }))));
     const booking = screen.getByRole('link', { name: /無料相談を予約する/ });
+    // Says it opens a new tab, as the demo buttons do (#420, #425)
+    expect(booking).toHaveAccessibleName('無料相談を予約する（新しいタブで開きます）');
     expect(booking).toHaveAttribute('href', 'https://bookings.example.com/ax');
     expect(booking).toHaveAttribute('target', '_blank');
     expect(booking).toHaveAttribute('rel', 'noopener noreferrer');

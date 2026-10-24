@@ -129,9 +129,10 @@ describe('scoreLeadWithAI', () => {
 
       const score = await scoreLeadWithAI({ email: 'cto@example.com', position: 'CTO' });
 
-      expect(score).toEqual(parsed);
+      expect(score).toEqual({ ...parsed, isFallback: false });
       const request = mockParse.mock.calls[0][0];
       expect(request.model).toBe('claude-sonnet-5-5');
+      expect(request.max_tokens).toBe(4000);
       expect(request.output_config.effort).toBe('low');
       expect(request.output_config.format).toBeDefined();
       expect(request).not.toHaveProperty('temperature');
@@ -182,7 +183,8 @@ describe('scoreLeadWithAI', () => {
       const lead = { email: 'error@example.com' };
       const score = await scoreLeadWithAI(lead);
 
-      // Fallback score should be returned
+      // Fallback score should be returned, marked so that callers do not store it
+      expect(score.isFallback).toBe(true);
       expect(score.score).toBe(50);
       expect(score.confidence).toBe('low');
       expect(score.priority).toBe('medium');

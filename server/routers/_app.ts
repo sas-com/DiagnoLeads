@@ -10,8 +10,6 @@ import { appointmentReviewsRouter } from '@/lib/features/appointment-reviews/api
 import { axPlaybookRouter } from '@/lib/features/ax-playbook/api/router';
 import { challengeGuideRouter } from '@/lib/features/challenge-guide/api/router';
 import { commentsRouter } from '@/lib/features/comments/api/router';
-import { customFieldsRouter } from '@/lib/features/custom-fields/api/router';
-import { customReportsRouter } from '@/lib/features/custom-reports/api/router';
 import { dealsRouter } from '@/lib/features/deals/api/router';
 import { deliveryReviewsRouter } from '@/lib/features/delivery-reviews/api/router';
 import { diagnosesRouter } from '@/lib/features/diagnosis-builder/api/router';
@@ -35,10 +33,8 @@ import { notificationsRouter } from '@/lib/features/notifications/api/router';
 import { objectionCardRouter } from '@/lib/features/objection-card/api/router';
 import { organizationsRouter } from '@/lib/features/organizations/api/router';
 import { prospectsRouter } from '@/lib/features/prospects/api/router';
-import { reportsRouter } from '@/lib/features/reports/api/router';
 import { salesForecastRouter } from '@/lib/features/sales-forecast/api/router';
 import { salesTargetsRouter } from '@/lib/features/sales-targets/api/router';
-import { scoringRulesRouter } from '@/lib/features/scoring-rules/api/router';
 import { tagsRouter } from '@/lib/features/tags/api/router';
 import { webhooksRouter } from '@/lib/features/webhooks/api/router';
 import { workflowsRouter } from '@/lib/features/workflows/api/router';
@@ -62,14 +58,10 @@ export const appRouter = router({
   notifications: notificationsRouter, // Phase 9: 通知機能
   tags: tagsRouter, // Phase 9: リードタグ機能
   comments: commentsRouter, // Phase 9: コメント・メモ機能
-  reports: reportsRouter, // Phase 9: スケジュールレポート機能
   workflows: workflowsRouter, // Phase 9 P1: ワークフロー自動化
-  customFields: customFieldsRouter, // Phase 9 P1: カスタムフィールド
   filters: filtersRouter, // Phase 9 P2: 高度なフィルタリング
-  customReports: customReportsRouter, // Phase 9 P2: カスタムレポートビルダー
   diagnosticTemplates: diagnosticTemplatesRouter, // Phase 9 P3: 診断テンプレート管理
   abTests: abTestsRouter, // Phase 9 P3: A/Bテスト機能
-  scoringRules: scoringRulesRouter, // Phase 9 P3: リードスコアリングルール
   embed: embedRouter, // Embed widget configuration management
   distribution: distributionRouter, // QR code and offline distribution
   axPlaybook: axPlaybookRouter, // AX sales playbook (Refs #74)
