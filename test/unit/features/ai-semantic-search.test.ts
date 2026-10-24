@@ -140,7 +140,9 @@ describe('semantic-search', () => {
       await findSimilarLeads('lead-1', 'org-1');
 
       const read = queryOf(db.where);
-      expect(read.sql).toBe('("leads"."id" = $1 and "leads"."organization_id" = $2)');
+      // The parameters are what proves the scope; the rendered SQL is only loosely checked so a
+      // drizzle upgrade that changes parentheses or case does not fail this test
+      expect(read.sql).toMatch(/"organization_id" = \$2/);
       expect(read.params).toEqual(['lead-1', 'org-1']);
       // The search itself stays in the organization too
       const search = queryOf(db.execute);

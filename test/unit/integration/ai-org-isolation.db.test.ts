@@ -452,20 +452,24 @@ describe.skipIf(!url)('AI features: organization isolation (PostgreSQL)', () => 
     // The comparison query runs on the app's client; the reason of a failure is only logged
     const comparisons = vi.spyOn(db, 'execute');
     const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const loggedReason = () => (logged.mock.calls.at(-1)?.[1] as Error | undefined)?.message;
+    const loggedReasons = () =>
+      logged.mock.calls.map((call) => (call[1] as Error | undefined)?.message);
     try {
       // A's lead (it has an embedding now) is not read as the base of a search in B: no search
       await expect(findSimilarLeads(leadsA[0], orgB)).rejects.toThrow(
         'Finding similar leads failed'
       );
-      expect(loggedReason()).toBe('Reference lead not found or has no embedding');
+      expect(loggedReasons()).toContain('Reference lead not found or has no embedding');
       expect(comparisons).not.toHaveBeenCalled();
 
       // B's own lead is read as the base, and the search in B runs. The comparison query itself
-      // fails on PostgreSQL today (#590); once it is fixed, expect B's other lead (nearB) only
+      // fails on PostgreSQL today (#590); once it is fixed, expect B's other lead (nearB) only.
+      // Either way the base is found, so this call logs no "not found" (and logs nothing once
+      // the comparison succeeds); the log of the call above is cleared first
+      logged.mockClear();
       await findSimilarLeads(leadB, orgB).catch(() => undefined);
       expect(comparisons).toHaveBeenCalledTimes(1);
-      expect(loggedReason()).not.toBe('Reference lead not found or has no embedding');
+      expect(loggedReasons()).not.toContain('Reference lead not found or has no embedding');
     } finally {
       comparisons.mockRestore();
       logged.mockRestore();
