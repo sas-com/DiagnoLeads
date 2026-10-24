@@ -8,8 +8,8 @@
  * - Cost of a contract = initial fee + monthly fee × months billed so far
  *   + the larger of the prepayment and fee per appointment × appointments.
  *   The prepayment is a deposit used up by the fees per appointment (decided 2026-10-16;
- *   see .factory/memory/decisions.md). Months billed count every calendar month the term has
- *   touched up to today, a started month as a whole one.
+ *   see .factory/memory/decisions/2026-10-16-agency-contract-funnel.md). Months billed count
+ *   every calendar month the term has touched up to today, a started month as a whole one.
  * - Funnel stages: appointment (the lead) → meeting held → SQL → phase 1 won (survey) →
  *   migration won. A later phase reached counts for the earlier ones too.
  * - Appointment quality (#149): of the leads reviewed against the agreed conditions, how many

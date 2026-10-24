@@ -52,6 +52,7 @@ export const ENDPOINT_RATE_LIMITS: Record<string, RateLimitConfig> = {
   '/api/auth/sign-up': { max: 3, windowMs: 60 * 1000 },
   '/api/auth/forgot-password': { max: 3, windowMs: 60 * 1000 },
   '/api/auth/reset-password': { max: 3, windowMs: 60 * 1000 },
+  '/api/auth/send-verification-email': { max: 3, windowMs: 60 * 1000 },
 
   // AI機能
   '/api/trpc/ai.scoreLeads': { max: 10, windowMs: 60 * 1000 },

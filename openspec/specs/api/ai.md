@@ -28,7 +28,7 @@ tRPC: trpc.ai.*
 |---------|------|
 | 認証 | `protectedProcedure` - BetterAuth セッション必須 |
 | 組織スコープ | `organizationProcedure` - 組織メンバーシップ検証 |
-| データ分離 | PostgreSQL RLS - 自動フィルタリング |
+| データ分離 | 各クエリの `organizationId` の条件（RLS は今は効いていない。`openspec/specs/architecture.md` の注意） |
 
 ---
 

@@ -137,6 +137,6 @@ AI支援で仕様に基づいた実装を実行。
 ## 関連リンク
 
 - [実装チェックリスト](/IMPLEMENTATION_CHECKLIST.md)
-- [プロジェクトコンテキスト](/.claude/project-context.md)
+- [開発ルール（CLAUDE.md）](/CLAUDE.md)
 - [マルチテナント戦略](/docs/MULTI_TENANT_STRATEGY.md)
 - [OpenSpec GitHub](https://github.com/Fission-AI/OpenSpec)

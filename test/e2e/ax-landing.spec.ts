@@ -13,8 +13,9 @@ test.describe('AX migration landing page', () => {
     for (const name of [
       '基幹システムの移行から、AX化までを一貫してご支援',
       'ヒト・モノ・カネ・情報。すべてが、レガシーな基幹システムに縛られています',
-      '選ばれる理由',
-      '実際の画面でご確認いただけます',
+      'AXマイグレーションの3つの特長',
+      '移行の進め方、まずはご相談ください',
+      '受注入力の画面で、移行前後を見比べられます',
       'AX化の進め方',
       '対象となるシステム',
       '安心して任せられる理由',
@@ -51,7 +52,7 @@ test.describe('AX migration landing page', () => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('診断結果');
     await expect(page.getByRole('heading', { level: 1 })).toBeFocused();
     await expect(page.locator('#ax-hero-heading')).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: '選ばれる理由' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'AXマイグレーションの3つの特長' })).toHaveCount(0);
     await expect(page.locator('#faq')).toHaveCount(0);
     await expect(page.locator('#ax-diagnosis-heading')).toHaveCount(0);
     await expect(page.getByTestId('ax-floating-cta')).toHaveCount(0);

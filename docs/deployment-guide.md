@@ -307,10 +307,7 @@ psql $DATABASE_URL -c "SELECT 1"
 
 ### データベースロールバック
 
-```bash
-# バックアップからリストア
-./scripts/restore-database.sh backups/diagnoleads_YYYYMMDD_HHMMSS.sql.gz
-```
+本番 DB を戻す手順は [docs/runbooks/database-restore.md](./runbooks/database-restore.md) に従う。
 
 ## セキュリティチェックリスト
 

@@ -11,7 +11,7 @@ DiagnoLeads v2への貢献を検討いただきありがとうございます。
 ### 前提条件
 
 - Node.js 20+
-- Bun 1.1+
+- Bun 1.4.3（`.mise.toml`。CI も同じ版）
 - Docker & Docker Compose
 - Git
 
@@ -32,8 +32,8 @@ cp .env.example .env.local
 # ローカルサービスの起動 (PostgreSQL, Redis, Mailhog)
 docker compose up -d
 
-# データベースのセットアップ
-bun run db:push
+# データベースのセットアップ（マイグレーションを適用）
+bun run db:migrate
 
 # 開発サーバーの起動
 bun run dev
@@ -81,7 +81,7 @@ Biomeを使用してリント・フォーマットを行います:
 bun run lint
 
 # 自動修正
-bun run lint:fix
+bun run format
 ```
 
 ### 命名規則
@@ -164,9 +164,7 @@ test(webhooks): add delivery retry tests
 
 #### PRマージ条件
 
-- [ ] 全体のカバレッジが下がっていないこと（1%以上の低下でCI失敗）
-- [ ] 新規コードのカバレッジが70%以上であること
-- [ ] 既存テストが全てパスすること
+マージの条件は、CLAUDE.md の「作業の流れ」とスキル `ship`（`.claude/skills/ship/SKILL.md`）にある。カバレッジは main への push のときだけ、`vitest.config.ts` のしきい値で測る。
 
 #### テスト必須のケース
 
@@ -181,16 +179,16 @@ test(webhooks): add delivery retry tests
 
 ```bash
 # 全テスト実行
-bun run test
+bun run test:run
 
 # 特定ファイル
-bun run test test/unit/features/leads.test.ts
+bunx vitest run test/unit/features/ax-playbook-router.test.ts
 
 # カバレッジ
 bun run test:coverage
 
-# ウォッチモード
-bun run test:watch
+# ウォッチモード（ターミナルで実行すると変更を監視する）
+bun run test
 ```
 
 ### テストファイルの配置
@@ -227,7 +225,7 @@ describe('FeatureName', () => {
 bun run test:e2e
 
 # UIモード
-bun run test:e2e:ui
+bun run test:e2e -- --ui
 
 # 特定ファイル
 bunx playwright test test/e2e/auth.spec.ts
@@ -239,7 +237,7 @@ bunx playwright test test/e2e/auth.spec.ts
 
 ### PRチェックリスト
 
-- [ ] テストが全てパスする (`bun run test`)
+- [ ] テストが全てパスする (`bun run test:run`)
 - [ ] 型チェックがパスする (`bun run typecheck`)
 - [ ] リントがパスする (`bun run lint`)
 - [ ] 必要に応じてドキュメントを更新
@@ -271,9 +269,6 @@ refactor/refactor-scope
 ### マイグレーション
 
 ```bash
-# スキーマ変更をDBに反映
-bun run db:push
-
 # マイグレーションファイル生成
 bun run db:generate
 
@@ -287,9 +282,9 @@ bun run db:studio
 ### スキーマ変更時の注意
 
 1. `lib/db/schema.ts` を変更
-2. `bun run db:push` で開発DBに反映
-3. テストを実行して確認
-4. PRにスキーマ変更を含める
+2. `bun run db:generate` でマイグレーション（`drizzle/`）を作る
+3. `bun run db:migrate` で開発DBに適用し、テストを実行して確認する
+4. PRにスキーマ変更を含める。本番 DB への適用はマージの前に行う（オーナーの承認を得て。依存の変更とは別の PR にする）
 
 ---
 

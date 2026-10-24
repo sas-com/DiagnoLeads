@@ -68,7 +68,8 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
  * 1. Validates organizationId in input
  * 2. Verifies user is a member of the organization
  * 3. Calculates CASL permissions based on role
- * 4. Sets current user for RLS (creates RLS-scoped database client)
+ * 4. Sets the current user for RLS, which is not in effect yet (see the NOTE in
+ *    lib/multi-tenant/middleware/organization.ts): every query must still filter by organizationId
  */
 export const organizationProcedure = protectedProcedure
   .input(organizationInputSchema)

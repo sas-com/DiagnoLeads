@@ -56,7 +56,21 @@ interface TurnstileWidgetProps {
   onRetry: () => void;
   /** Another way to reach the operator, offered when the check cannot be shown */
   alternativeUrl?: string;
+  /**
+   * Phone and email offered instead when there is no such page (#420): without them the
+   * respondent would be left with only the retry button. Uses the `alternativeContact` message.
+   */
+  alternativeContact?: AlternativeContact;
 }
+
+export interface AlternativeContact {
+  phone: string;
+  /** E.164, for the tel: link */
+  phoneE164: string;
+  email: string;
+}
+
+const ALTERNATIVE_LINK = 'font-bold text-ax-teal-dark underline';
 
 /** Cloudflare Turnstile check before the answers are sent (rendered only when configured) */
 export function TurnstileWidget({
@@ -66,6 +80,7 @@ export function TurnstileWidget({
   onToken,
   onRetry,
   alternativeUrl,
+  alternativeContact,
 }: TurnstileWidgetProps) {
   const t = useRunnerTranslations('verification');
   const { idPrefix } = useRunnerConfig();
@@ -123,7 +138,7 @@ export function TurnstileWidget({
           <RefreshCw className="h-4 w-4" aria-hidden="true" />
           {t('retry')}
         </button>
-        {alternativeUrl && (
+        {alternativeUrl ? (
           <p>
             {t.rich('alternative', {
               link: (chunks) => (
@@ -131,13 +146,30 @@ export function TurnstileWidget({
                   href={alternativeUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="font-bold text-ax-teal-dark underline"
+                  className={ALTERNATIVE_LINK}
                 >
                   {chunks}
                 </a>
               ),
             })}
           </p>
+        ) : (
+          alternativeContact && (
+            <p>
+              {t.rich('alternativeContact', {
+                phone: () => (
+                  <a href={`tel:${alternativeContact.phoneE164}`} className={ALTERNATIVE_LINK}>
+                    {alternativeContact.phone}
+                  </a>
+                ),
+                email: () => (
+                  <a href={`mailto:${alternativeContact.email}`} className={ALTERNATIVE_LINK}>
+                    {alternativeContact.email}
+                  </a>
+                ),
+              })}
+            </p>
+          )
         )}
       </div>
     );
