@@ -249,6 +249,8 @@ describe('AX migration landing page', () => {
     vi.stubEnv('NEXT_PUBLIC_AX_CONSULTATION_URL', 'https://bookings.example.com/ax');
     render(withIntl(await resolveServerTree(await AxFinalCta({ locale: 'ja' }))));
     const booking = screen.getByRole('link', { name: /無料相談を予約する/ });
+    // Says it opens a new tab, as the demo buttons do (#420, #425)
+    expect(booking).toHaveAccessibleName('無料相談を予約する（新しいタブで開きます）');
     expect(booking).toHaveAttribute('href', 'https://bookings.example.com/ax');
     expect(booking).toHaveAttribute('target', '_blank');
     expect(booking).toHaveAttribute('rel', 'noopener noreferrer');

@@ -49,8 +49,9 @@ export interface SectionProps {
 }
 
 export const SECTION_HEADING = 'text-center text-2xl font-bold leading-snug sm:text-[2.25rem]';
-export const EYEBROW =
-  'text-center font-ax-latin text-sm font-bold tracking-[0.2em] text-ax-teal-dark';
+/** Lead under a centered section heading, on white or mist */
+export const SECTION_LEAD = 'mx-auto mt-5 max-w-3xl text-center leading-relaxed text-gray-700';
+export const EYEBROW = 'text-center font-ax-latin text-sm font-bold tracking-[0.2em] text-ax-leaf';
 /** Forest pill above a heading, as in the STUDIO design (#414) */
 const BADGE =
   'inline-block rounded-full bg-ax-forest px-8 py-1.5 text-sm font-bold text-white sm:text-base';
@@ -153,9 +154,7 @@ export async function AxOverview({ locale }: SectionProps) {
         <h2 id="ax-overview-heading" className={SECTION_HEADING}>
           {t('title')}
         </h2>
-        <p className="mx-auto mt-5 max-w-3xl text-center leading-relaxed text-gray-700">
-          {t('lead')}
-        </p>
+        <p className={SECTION_LEAD}>{t('lead')}</p>
         <ol className="mt-12 grid gap-12 md:grid-cols-3 md:gap-14">
           {OVERVIEW_KEYS.map((key, index) => (
             <li
@@ -213,9 +212,7 @@ export async function AxChallenges({ locale }: SectionProps) {
         <h2 id="ax-challenges-heading" className={`mt-5 ${SECTION_HEADING}`}>
           {t('title')}
         </h2>
-        <p className="mx-auto mt-5 max-w-3xl text-center leading-relaxed text-gray-700">
-          {t('lead')}
-        </p>
+        <p className={SECTION_LEAD}>{t('lead')}</p>
         <ul className="mt-12 grid gap-6 sm:grid-cols-2">
           {CHALLENGES.map(({ key, icon: Icon }) => (
             <li key={key} className="flex flex-col bg-white p-6 sm:p-8">
@@ -288,9 +285,7 @@ export async function AxReasons({ locale }: SectionProps) {
           {t('title')}
         </h2>
         <p className="mt-4 text-center text-lg font-bold">{t('tagline')}</p>
-        <p className="mx-auto mt-5 max-w-3xl text-center leading-relaxed text-gray-700">
-          {t('lead')}
-        </p>
+        <p className={SECTION_LEAD}>{t('lead')}</p>
         <ul className="mt-16 grid gap-10 md:grid-cols-3 md:gap-6">
           {REASONS.map(({ key, icon: Icon }, index) => (
             <li
@@ -585,27 +580,36 @@ export async function AxTrust({ locale }: SectionProps) {
   );
 }
 
+interface DiagnosisIntroProps {
+  eyebrow: string;
+  title: string;
+  lead: string;
+  /** Under the lead, e.g. how to leave the path the diagnosis starts on */
+  children?: ReactNode;
+}
+
+/** Eyebrow, heading and lead above the embedded diagnosis of a landing page */
+export function DiagnosisIntro({ eyebrow, title, lead, children }: DiagnosisIntroProps) {
+  return (
+    <>
+      {/* Small, so the first question is on screen right after a jump here */}
+      <p aria-hidden="true" className={EYEBROW}>
+        {eyebrow}
+      </p>
+      <h2 id="ax-diagnosis-heading" className={`mt-2 ${SECTION_HEADING}`}>
+        {title}
+      </h2>
+      <p className="mx-auto mt-5 max-w-2xl text-center leading-relaxed text-gray-700">{lead}</p>
+      {children}
+    </>
+  );
+}
+
 export async function AxDiagnosisSection({ locale }: SectionProps) {
   const t = await getTranslations({ locale, namespace: 'axSite.diagnosis' });
   return (
     <AxDiagnosisFrame
-      intro={
-        <>
-          {/* Small, so the first question is on screen right after a jump here */}
-          <p
-            aria-hidden="true"
-            className="text-center font-ax-latin text-sm font-bold tracking-[0.2em] text-ax-leaf"
-          >
-            {t('eyebrow')}
-          </p>
-          <h2 id="ax-diagnosis-heading" className={`mt-2 ${SECTION_HEADING}`}>
-            {t('title')}
-          </h2>
-          <p className="mx-auto mt-5 max-w-2xl text-center leading-relaxed text-gray-700">
-            {t('lead')}
-          </p>
-        </>
-      }
+      intro={<DiagnosisIntro eyebrow={t('eyebrow')} title={t('title')} lead={t('lead')} />}
     >
       <AxDiagnosisFlow
         locale={locale}
@@ -715,6 +719,7 @@ async function ContactBand({
   location,
 }: ContactBandProps) {
   const t = await getTranslations({ locale, namespace: 'axSite.finalCta' });
+  const common = await getTranslations({ locale, namespace: 'axSite' });
   const consultationUrl = axConsultationUrl();
   return (
     <section
@@ -748,6 +753,7 @@ async function ContactBand({
               location={location}
               tone="dark"
               external
+              newTabLabel={common('newTab')}
             >
               {consult}
             </AxCtaLink>
@@ -790,10 +796,21 @@ async function ContactBand({
   );
 }
 
+interface ConsultBandProps extends SectionProps {
+  /** Messages with the button label `cta` (the Access page names its own diagnosis) */
+  ctaNamespace?: string;
+  /** Prefix of the analytics location (e.g. 'access-' gives 'access-consult-band') */
+  locationPrefix?: string;
+}
+
 /** Consultation band in the middle of the page, after the steps (#420) */
-export async function AxConsultBand({ locale }: SectionProps) {
+export async function AxConsultBand({
+  locale,
+  ctaNamespace = 'axSite.finalCta',
+  locationPrefix = '',
+}: ConsultBandProps) {
   const t = await getTranslations({ locale, namespace: 'axSite.consultBand' });
-  const final = await getTranslations({ locale, namespace: 'axSite.finalCta' });
+  const button = await getTranslations({ locale, namespace: ctaNamespace });
   return (
     <ContactBand
       locale={locale}
@@ -801,8 +818,8 @@ export async function AxConsultBand({ locale }: SectionProps) {
       headingId="ax-consult-heading"
       title={t('title')}
       lead={t('lead')}
-      cta={final('cta')}
-      location="consult-band"
+      cta={button('cta')}
+      location={`${locationPrefix}consult-band`}
     />
   );
 }

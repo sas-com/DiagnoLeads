@@ -126,6 +126,30 @@ test.describe('Access landing page', () => {
     );
   });
 
+  test('keeps the phone CTA bar off the hero buttons, as on the main page (#425)', async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const page = await context.newPage();
+    await page.goto('/ja/ax-migration/access');
+    const bar = page.getByTestId('ax-floating-cta');
+    await expect(bar).toHaveAttribute('aria-hidden', 'true');
+    // The heading has scrolled away, the hero buttons are still on screen
+    await page.evaluate(() => {
+      const heading = document.getElementById('ax-hero-heading') as HTMLElement;
+      window.scrollTo(0, heading.getBoundingClientRect().bottom + window.scrollY + 10);
+    });
+    await expect(page.locator('#ax-hero-cta')).toBeInViewport();
+    await expect(bar).toHaveAttribute('aria-hidden', 'true');
+    await page.getByRole('heading', { name: 'そのままにしたときのリスク' }).scrollIntoViewIfNeeded();
+    await expect(bar).toHaveAttribute('aria-hidden', 'false');
+    await page.locator('#ax-consult').scrollIntoViewIfNeeded();
+    await expect(bar).toHaveAttribute('aria-hidden', 'true');
+    await page.locator('#diagnosis').scrollIntoViewIfNeeded();
+    await expect(bar).toHaveAttribute('aria-hidden', 'true');
+    await context.close();
+  });
+
   test('links back to the main landing page for AS/400 readers (#332)', async ({ page }) => {
     await page.goto('/ja/ax-migration/access');
     await page.getByRole('link', { name: 'AS/400（IBM i）からの移行について読む' }).click();
