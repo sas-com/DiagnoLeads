@@ -45,7 +45,7 @@
 | `ui-kit-imports-app-code` | `components/ui` は `components/ui`・`lib/utils.ts`・`lib/csp/` だけを読む | 例外なし |
 | `payload-outside-cms` | Payload を読むのは CMS の置き場所だけ | 例外なし |
 | `file-cycles` | ファイル単位の import の循環を作らない | 例外なし |
-| `test-paths-resolve` | テストが import するパスと、`vi.mock`・`vi.doMock`・`vi.unmock`・`vi.doUnmock`・`vi.importActual`・`vi.importMock` に渡すパスが実在する（パッケージ名は見ない。テストの `@payload-config` は vitest の別名どおり `test/mocks/payload-config.ts`）。存在しないパスへの `vi.mock` はテストを黙って素通りさせるので、ファイルを消す・移したときに、古いパスを指したまま残ったテストをこの検査が見つける | 例外なし |
+| `test-paths-resolve` | テストが import するパスと、`vi.mock`・`vi.doMock`・`vi.unmock`・`vi.doUnmock`・`vi.importActual`・`vi.importMock` に渡すパスが実在する（パッケージ名は見ない。テストの `@payload-config` は vitest の別名どおり `test/mocks/payload-config.ts`）。存在しないパスへの `vi.mock` はエラーにならず、黙って効かなくなる（本物のモジュールが動き、原因の分かりにくい失敗か、副作用を伴う素通りになる）ので、ファイルを消す・移したときに、古いパスを指したまま残ったテストをこの検査が見つける | 例外なし |
 | `features-in-cycles` | 互いに依存し合う機能（間接も含む）を増やさない | 許可リスト 20 |
 | `cross-feature-internal` | 他の機能から読むのは公開面（`types/**`・`types.ts`・`service.ts`。ほかに `email/index.ts`・`respondent-email/index.ts`）だけ。項目は読まれる側のファイル | 許可リスト 45 |
 | `features-use-global-db` | 機能のコードはグローバルの `db` を使わず、`ctx.db` か引数の executor を使う（RLS で接続を差し替えるため） | 許可リスト 12 |
