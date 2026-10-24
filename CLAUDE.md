@@ -1,214 +1,120 @@
-# DiagnoLeads v2 開発ルール
+# DiagnoLeads 開発ルール
 
-## 🧠 MemoryBank
+<!-- 保守する人へ：このファイルは毎回のセッションで全文が読み込まれる（サブエージェントも読む）。200行以内に保ち、毎回守ることだけを書く。経緯は .factory/memory/decisions/、手順はスキル（.claude/skills/）、ディレクトリごとの決まりは .claude/rules/、機械で判定できる守りはフック（.claude/hooks/）へ。この HTML コメントは Claude には渡されない -->
 
-> セッション間で一貫した判断を行うための記憶システム
+DiagnoLeads は、AX マイグレーション（レガシー基幹システムの AI 移行）のリードを診断フォームで集めて管理する B2B SaaS。Next.js 16（App Router）・tRPC 11・Drizzle（PostgreSQL / Supabase）・Better Auth・CASL で作り、Vercel にデプロイする（main へのマージで本番に自動デプロイ）。**リポジトリは公開されている。**
 
-**セッション開始時に参照:**
-- `.factory/memory/decisions.md` - 過去の意思決定
-- `.factory/memory/preferences.md` - ユーザーの好み
-- `.factory/memory/learnings.md` - 過去の学習・教訓
-- `.factory/memory/violations.md` - **原則違反記録（必読）**
+## 毎回守ること
 
-**重要な決定・学習があれば該当ファイルに追記する**
-**原則違反があれば violations.md に記録する**
+1. **秘密情報を書かない**。接続文字列・API キー・トークンは Vercel と手元の `.env.local` にだけ置き、コード・ドキュメント・MemoryBank・Issue・PR・会話に出さない。社外秘（取引先名・単価・営業の手引きの本文）も同じ
+2. **組織のデータは必ず組織で絞る**。tRPC は `organizationProcedure` で受けて `ctx.ability` で権限を確かめ、読み書きのすべてのクエリを `organizationId` で絞る（RLS はまだ効いていない）
+3. **テストが通らなければコミットしない。main に直接 push しない**
+4. **依存は `bun add` / `bun remove` / `bun patch <name>@<version>` で変える**。node_modules と bun.lock を手で編集しない
+5. **Issue を閉じる前に、エビデンスを Issue に書く**（テスト結果と、受け入れ基準を満たしたこと）
+6. **範囲外の作業は別の Issue に切り出す**。「ついでに」を同じ PR に入れない
+7. **原則に違反したら** `.factory/memory/violations.md` に記録し、再発防止策を仕組み（フックかこのファイル）に入れる
 
----
+フックが止めるもの（理由はメッセージに出る）：node_modules・Bun の共有キャッシュ・bun.lock・`.env*` の編集、秘密情報の書き込みと送信、`.env*` の中身の表示。権限では、`.env*` の読み取りと main への push を禁止し、DB を変えるスクリプトと E2E は毎回確認する（`.claude/settings.json`）。
 
-## 🚀 SprintPath - アジャイル開発フレームワーク
+## 作業の流れ（SprintPath）
 
-> **SprintPath**は汎用的なアジャイル開発フレームワークです。
-> 詳細: [docs/SPRINTPATH.md](./docs/SPRINTPATH.md)
-
-### SprintPathの5原則
-
-1. **🎯 Issue-First [最重要]** - コードを書く前に、必ずIssueを確認
-2. **🔄 Continuous Quality** - テストが通らなければ、コミットしない
-3. **👤 Clear Ownership** - 役割分担を明確にし、責任者を決める
-4. **📊 Visibility** - 進捗は常に見える状態にする
-5. **🚀 Ship Small** - 大きな変更より、小さな改善を積み重ねる
-
-> **警告**: 原則違反は `.factory/memory/violations.md` に記録される
-
----
-
-## ⚠️ Droid開発フロー (SprintPath準拠)
-
-### フロー概要
+SprintPath の5原則：Issue-First・Continuous Quality・Clear Ownership・Visibility・Ship Small（`docs/SPRINTPATH.md`）
 
 ```
-CONFIRM → IMPLEMENT → VERIFY → COMMIT → REPORT
+Issue → 決定を読む → ブランチ → 実装 → 速い検証 → 全体の検証 → PR → CI → 記録 → 報告
 ```
 
----
+1. **Issue（Issue-First。省略しない）**
+   - コードを書く前に、対応する Issue を探す（`gh issue list`。gh が無いクラウドのセッションでは GitHub MCP の `list_issues` / `search_issues`）
+   - 無ければ Claude が Issue を作る（目的・やること・受け入れ基準・ラベル）。番号を報告してから着手する（`decisions/2026-10-24-issue-first-claude-creates`）
+   - 指示があいまいで受け入れ基準が書けないときだけ、先に確認する。大きい作業は Epic と子 Issue に分ける
+2. **決定を読む**
+   - セッション開始時に出る MemoryBank の索引から、作業に関係する決定の本文（`.factory/memory/decisions/<id>.md`）を開く
+   - ファイルを読むと、関係する決定をフックが知らせる。変更する前に本文を読み、従う。蒸し返すときはオーナーに確かめる
+3. **ブランチ**：最新の main から `<type>/<issue>-<短い説明>` を切る（type は下のコミットの type）
+4. **実装**：既存のコードの書き方に合わせる。`any` を使わない。画面の文字列は `locales/`（ja・en）に置く
+5. **速い検証（作業中）**
+   - 関係するテストだけ流す：`bunx vitest run <path>`（1ファイル約2秒）
+   - 型チェック：`bun run typecheck`（2回目以降は約8秒）
+6. **全体の検証（コミット前に必須）**
+   - `bun run test:run && bun run typecheck && bun run lint`（全テストは約6分）
+   - 全部通るまでコミットしない
+7. **PR**：push して PR を作り、CI（約4分）が緑になるまで見届ける。手順とマージの条件はスキル `ship`
+   - CI が緑であること
+   - 認証・セキュリティ・課金に関わる変更は、読み取り専用のレビューを通すこと（下の表）
+   - スキーマの変更は、本番 DB に適用してからマージすること
+   - 依存の変更は、マージ後に本番デプロイの成功まで見届けること
+8. **記録**：決定・違反・学びを MemoryBank に残す。手順はスキル `record-decision`
+9. **報告**：やったこと・変えたファイル・テストの結果・Issue と PR の番号を、日本語で簡潔に
 
-### STEP 1: タスク確認 (作業開始前) [必須・スキップ不可]
+## コミット
 
-**必ず実行:**
-```bash
-# 現在のIssue状況を確認
-gh issue list --state open --limit 10
+- 英語の Conventional Commits で、絵文字は使わない：`type(scope): description`。本文に変更点の箇条書きと `Refs #N`（完了させるなら `Closes #N`）を書く
+- type：`feat` `fix` `docs` `test` `refactor` `chore` `perf`
+- scope は commitlint で決まっている。この一覧から選ぶ：`auth` `leads` `assessments` `analytics` `ai` `db` `api` `ui` `embed` `integrations` `email` `jobs` `i18n` `seo` `ci` `deps` `config` `docs` `test`
+- コミット時に lefthook が整形（biome）・型チェック・commitlint を流す
+- PR のタイトルは `type(scope): 日本語の説明` にする。本文は `.github/PULL_REQUEST_TEMPLATE.md` の見出しに沿って日本語で書く
 
-# 優先度の高いタスクを確認
-gh issue list --label "priority: critical" --state open
-gh issue list --label "priority: high" --state open
-```
+## コマンド
 
-**確認事項:**
-- [ ] 対応するIssueが存在するか
-- [ ] Issueの受け入れ基準を理解したか
-- [ ] 依存関係・ブロッカーがないか
+| 目的 | コマンド |
+|------|---------|
+| 開発サーバー | `bun run dev` |
+| テスト（1ファイル・全体） | `bunx vitest run <path>` / `bun run test:run` |
+| 型・リント・整形 | `bun run typecheck` / `bun run lint` / `bun run format` |
+| E2E（DB と開発サーバーを使う） | `bun run test:e2e` |
+| 実 DB のテスト | `docs/TESTING.md` の「実 DB テスト」 |
+| マイグレーションの作成・適用（手元） | `bun run db:generate` / `bun run db:migrate` |
+| 決定の索引 | `bun run memory:index` |
 
-**Issueがない場合:** 
-```
-ユーザーに確認: 「Issueを作成してから対応しますか？」
-→ Yes: Issue作成後に作業開始
-→ No: 作業しない
-```
+## 置き場所
 
-**違反した場合:** `.factory/memory/violations.md` に記録
+- 機能：`lib/features/{feature}/`。tRPC のルーターは `api/` に置き、`server/routers/_app.ts` に登録する。型と zod のスキーマは `types/` に置く
+- 画面の部品：`components/features/{feature}/` に置く。共通の部品は `components/ui/`（shadcn/ui）
+- テスト：vitest が実行する名前だけを使う
+  - ユニット：`test/unit/**/*.test.ts(x)`
+  - 実 DB：`test/unit/integration/*.db.test.ts`
+  - E2E：`test/e2e/*.spec.ts`
+- カバレッジの目標は層ごと（Core 80% / API 70% / UI 30〜40% / E2E は主要なフロー）。詳しくは `docs/TESTING.md`
+- ディレクトリごとの決まりは `.claude/rules/` にある（ルーター・スキーマなど。該当するファイルを触ると読み込まれる）
 
----
+## UI
 
-### STEP 2: 実装
+- その時点のモダンな UI 部品を採用する。今の標準は shadcn/ui（Radix UI + Tailwind CSS v4）。部品は `bunx shadcn@latest add <component>` で `components/ui/` に足す
+- グラフは1つのライブラリに寄せる。今は Recharts と ApexCharts が併存していて、整理の方針は Issue で決める
+- 新しい UI ライブラリを入れるときは、Issue に理由を残し、決定を記録する
 
-**コーディング規約:**
-- Biomeのルールに従う
-- 既存のコードパターンを踏襲
-- `any`型を使わない
-- UI文字列は`locales/`に定義
+## 専門エージェントとスキル
 
-**ファイル配置:**
-```
-lib/features/{feature}/     # 機能モジュール
-test/unit/features/         # ユニットテスト
-components/                 # UIコンポーネント
-```
+| こういう変更・相談 | 使うもの |
+|------|---------|
+| 認証・認可、公開 API の入力チェックと回数制限、CSP、シークレット、RLS、個人情報（マージ前に必須） | `security-specialist` |
+| モジュールの分け方、データモデル、スキーマの変更、非同期処理、課金に効く設計 | `architecture-specialist` |
+| GitHub Actions、テストの構成、デプロイ、Vercel の設定 | `ci-devops-specialist` |
+| 画面の設計と操作性 | `ui-ux-specialist` |
+| 事業・マーケティング・営業の資料 | `business-` / `marketing-` / `sales-strategy-specialist` |
+| PR を出してマージできる状態にする | スキル `ship` |
+| 決定・違反・学びを記録する | スキル `record-decision` |
 
----
+専門エージェントには読み取り専用で頼む（ファイルの編集・コミット・コメントを禁じる）。
 
-### STEP 3: テスト (必須)
+## Issue のラベル
 
-**実装後に必ず実行:**
-```bash
-bun run test        # ユニットテスト
-bun run typecheck   # 型チェック
-bun run lint        # リント
-```
+`priority: critical/high/medium/low`、`type: feature/tech-debt/test/spike`、`story-points: 1/2/3/5/8`、`status: backlog/ready/in-progress/review/blocked`、`area: frontend/backend/database/devops/ai`
 
-**全てパスするまでコミットしない**
+## 参照先
 
-**認証・セキュリティ・課金に関わる PR は、マージ前に読み取り専用のレビューを通す**（範囲とやり方は `.factory/memory/decisions.md` の「[Process] 認証・セキュリティ・課金に関わる PR は…」）
+- MemoryBank（`.factory/memory/`）
+  - 決定：`decisions/`
+  - 違反：`violations.md`
+  - 学び：`learnings.md`
+  - オーナーの好み：`preferences.md`
+- 優先度とタスクの正は GitHub の Issue。`docs/ROADMAP.md`・`docs/SPRINT_BACKLOG.md`・`IMPLEMENTATION_CHECKLIST.md` などは 2026-02 以前の記録で、今の優先度を表していない
+- テスト：`docs/TESTING.md`。開発者向けの手引き：`CONTRIBUTING.md`
+- v1（FastAPI + React）は `yusuke-kurosawa/DiagnoLeads-v1-legacy` としてアーカイブ済みで、移植は Epic #31。v1 のコードへのリンクは `DiagnoLeads-v1-legacy` とコミット SHA を固定して書く（`github.com/yusuke-kurosawa/DiagnoLeads` は本リポジトリ）
 
----
+## オーナーの好み
 
-## 📊 テストカバレッジ方針
-
-> 品質の一貫性を保つため、層別にカバレッジ目標を設定
-
-### 層別カバレッジ目標
-
-| 層 | 対象ディレクトリ | 目標 | テスト方法 |
-|----|-----------------|------|-----------|
-| **Core** | `lib/features/`, `lib/db/`, `lib/auth/` | **80%** | ユニットテスト |
-| **API** | `server/`, `app/api/` | **70%** | ユニットテスト + 統合テスト |
-| **UI** | `components/`, `app/[locale]/` | **30-40%** | コンポーネントテスト |
-| **E2E** | 全ユーザーフロー | **主要フロー100%** | Playwright |
-
-### テスト優先順位
-
-1. **ビジネスロジック** (lib/features/) - 最優先
-2. **データアクセス層** (lib/db/, server/routers/) - 高優先
-3. **認証・認可** (lib/auth/) - 高優先
-4. **API エンドポイント** (app/api/) - 中優先
-5. **UIコンポーネント** (components/) - E2Eで補完
-
-### 現状と目標
-
-```
-現状 (2024-02): 全体 27.40% (1,965 tests)
-├── lib/features/: 50-90% ✅
-├── lib/auth/: 80% ✅
-├── server/: 50% 🔄
-├── app/: 0% ❌ (E2Eで補完)
-└── components/: 5% 🔄
-
-長期目標: 全体 40%+ (E2E含めた実質カバレッジ 70%+)
-```
-
-### E2Eテストで補完する領域
-
-- 診断フォーム送信フロー
-- ログイン/ログアウト
-- リード一覧/詳細/編集
-- 組織切り替え
-- ダッシュボード表示
-
----
-
-### STEP 4: コミット
-
-**コミットメッセージ形式:**
-```bash
-git commit -m "type(scope): description
-
-- 変更点1
-- 変更点2
-
-Refs #ISSUE_NUMBER (あれば)
-
-Co-authored-by: factory-droid[bot] <138933559+factory-droid[bot]@users.noreply.github.com>"
-```
-
-**Type一覧:** `feat`, `fix`, `docs`, `test`, `refactor`, `chore`, `perf`
-
----
-
-### STEP 5: 報告
-
-**作業完了時にユーザーに報告:**
-- 実装した内容
-- 追加/変更したファイル
-- テスト結果
-- 関連Issue番号 (あれば)
-
----
-
-### ラベル体系 (参照用)
-
-| カテゴリ | ラベル |
-|---------|--------|
-| 優先度 | `priority: critical/high/medium/low` |
-| タイプ | `type: feature/tech-debt/test/spike` |
-| 見積もり | `story-points: 1/2/3/5/8` |
-| ステータス | `status: backlog/ready/in-progress/review/blocked` |
-| エリア | `area: frontend/backend/database/devops/ai` |
-
----
-
-### 参照ドキュメント
-
-| ドキュメント | 内容 |
-|-------------|------|
-| `docs/SPRINTPATH.md` | SprintPathフレームワーク |
-| `docs/TESTING.md` | **テスト戦略ガイド（種別別原則・ルール）** |
-| `docs/WORKFLOW.md` | 詳細ワークフロー |
-| `docs/AGILE_PROCESS.md` | スクラムプロセス |
-| `CONTRIBUTING.md` | 開発者ガイド |
-
----
-
-## UI/コンポーネントルール
-
-- **その時点のモダンなUIコンポーネントを採用する**（2026-10-09 決定。旧方針の TailAdmin 指定は撤回）
-- 現時点の標準は **shadcn/ui**（Radix UI + Tailwind CSS v4）。部品は `components/ui/` に `bunx shadcn@latest add <component>` で追加する
-- グラフは1ライブラリに寄せる。現状 Recharts と ApexCharts が併存しているため、整理方針は Issue で決める
-- 新しいUIライブラリを導入するときは Issue で理由を残し、`.factory/memory/decisions.md` に記録する
-
----
-
-## 旧リポジトリ（v1）の参照
-
-- v1（FastAPI + React）は `yusuke-kurosawa/DiagnoLeads-v1-legacy` としてアーカイブ済み
-- 移植の計画と対象ファイルは Epic #31 を参照
-- 注意: `github.com/yusuke-kurosawa/DiagnoLeads` は本リポジトリを指す。v1 のコードへのリンクは必ず `DiagnoLeads-v1-legacy` とコミット SHA 固定で書く
+- 日本語で簡潔に答える。絵文字は使わない
+- 確認するのは重要な判断だけで、ほかは自律で進める。エラーはまず自力で解決を試み、解決できないときだけ報告する
+- README などのドキュメントは、明示的に頼まれない限り更新しない（MemoryBank の記録は別）

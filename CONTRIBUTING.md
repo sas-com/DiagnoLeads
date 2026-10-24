@@ -32,8 +32,8 @@ cp .env.example .env.local
 # ローカルサービスの起動 (PostgreSQL, Redis, Mailhog)
 docker compose up -d
 
-# データベースのセットアップ
-bun run db:push
+# データベースのセットアップ（マイグレーションを適用）
+bun run db:migrate
 
 # 開発サーバーの起動
 bun run dev
@@ -81,7 +81,7 @@ Biomeを使用してリント・フォーマットを行います:
 bun run lint
 
 # 自動修正
-bun run lint:fix
+bun run format
 ```
 
 ### 命名規則
@@ -189,8 +189,8 @@ bun run test test/unit/features/leads.test.ts
 # カバレッジ
 bun run test:coverage
 
-# ウォッチモード
-bun run test:watch
+# ウォッチモード（ターミナルで実行すると変更を監視する）
+bun run test
 ```
 
 ### テストファイルの配置
@@ -271,9 +271,6 @@ refactor/refactor-scope
 ### マイグレーション
 
 ```bash
-# スキーマ変更をDBに反映
-bun run db:push
-
 # マイグレーションファイル生成
 bun run db:generate
 
@@ -287,9 +284,9 @@ bun run db:studio
 ### スキーマ変更時の注意
 
 1. `lib/db/schema.ts` を変更
-2. `bun run db:push` で開発DBに反映
-3. テストを実行して確認
-4. PRにスキーマ変更を含める
+2. `bun run db:generate` でマイグレーション（`drizzle/`）を作る
+3. `bun run db:migrate` で開発DBに適用し、テストを実行して確認する
+4. PRにスキーマ変更を含める。本番 DB への適用はマージの前に行う（オーナーの承認を得て。依存の変更とは別の PR にする）
 
 ---
 
