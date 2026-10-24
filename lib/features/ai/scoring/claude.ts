@@ -10,6 +10,7 @@
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema';
 import { z } from 'zod';
 import { CLAUDE_MAX_TOKENS, CLAUDE_MODEL, anthropic } from '../client';
+import { reportClaudeFailure } from '../failures';
 import { AI_BATCH_MAX } from '../types/schemas';
 
 // Lead score response schema
@@ -105,6 +106,7 @@ Consider factors like:
     return { ...LeadScoreSchema.parse(message.parsed_output), isFallback: false };
   } catch (error) {
     console.error('Error scoring lead with AI:', error);
+    await reportClaudeFailure('score-lead', error);
 
     // Return fallback score
     return {
