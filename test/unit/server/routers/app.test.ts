@@ -19,19 +19,15 @@ describe('appRouter', () => {
       'notifications',
       'tags',
       'comments',
-      'reports',
       'workflows',
-      'customFields',
       'filters',
-      'customReports',
       'diagnosticTemplates',
       'abTests',
-      'scoringRules',
       'embed',
       'distribution',
     ];
 
-    expect(routers).toHaveLength(22);
+    expect(routers).toHaveLength(18);
     expect(routers).toContain('health');
     expect(routers).toContain('leads');
     expect(routers).toContain('ai');
@@ -126,14 +122,6 @@ describe('Router namespaces', () => {
     });
   });
 
-  describe('reports', () => {
-    it('should provide report endpoints', () => {
-      const endpoints = ['list', 'create', 'update', 'delete', 'generate', 'schedule'];
-      expect(endpoints).toContain('generate');
-      expect(endpoints).toContain('schedule');
-    });
-  });
-
   describe('workflows', () => {
     it('should provide workflow endpoints', () => {
       const endpoints = ['list', 'get', 'create', 'update', 'delete', 'activate', 'deactivate', 'getLogs'];
@@ -142,26 +130,10 @@ describe('Router namespaces', () => {
     });
   });
 
-  describe('customFields', () => {
-    it('should provide custom field endpoints', () => {
-      const endpoints = ['list', 'create', 'update', 'delete', 'reorder'];
-      expect(endpoints).toContain('create');
-      expect(endpoints).toContain('reorder');
-    });
-  });
-
   describe('filters', () => {
     it('should provide filter endpoints', () => {
       const endpoints = ['list', 'create', 'update', 'delete', 'apply'];
       expect(endpoints).toContain('apply');
-    });
-  });
-
-  describe('customReports', () => {
-    it('should provide custom report builder endpoints', () => {
-      const endpoints = ['list', 'create', 'update', 'delete', 'preview', 'export'];
-      expect(endpoints).toContain('preview');
-      expect(endpoints).toContain('export');
     });
   });
 
@@ -178,14 +150,6 @@ describe('Router namespaces', () => {
       const endpoints = ['list', 'get', 'create', 'update', 'delete', 'start', 'stop', 'getResults'];
       expect(endpoints).toContain('start');
       expect(endpoints).toContain('getResults');
-    });
-  });
-
-  describe('scoringRules', () => {
-    it('should provide scoring rule endpoints', () => {
-      const endpoints = ['list', 'get', 'create', 'update', 'delete', 'test', 'activate'];
-      expect(endpoints).toContain('test');
-      expect(endpoints).toContain('activate');
     });
   });
 

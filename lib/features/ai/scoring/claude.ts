@@ -7,14 +7,10 @@
  * - Potential value indicators
  */
 
-import Anthropic from '@anthropic-ai/sdk';
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema';
 import { z } from 'zod';
-
-// Initialize Anthropic client
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+import { CLAUDE_MAX_TOKENS, CLAUDE_MODEL, anthropic } from '../client';
+import { AI_BATCH_MAX } from '../types/schemas';
 
 // Lead score response schema
 const LeadScoreSchema = z.object({
@@ -26,6 +22,9 @@ const LeadScoreSchema = z.object({
 });
 
 export type LeadScore = z.infer<typeof LeadScoreSchema>;
+
+/** `isFallback` marks the placeholder returned when Claude could not score the lead; never store it */
+export type LeadScoreResult = LeadScore & { isFallback: boolean };
 
 // The same shape for Claude's structured output. Ranges stay in the descriptions;
 // LeadScoreSchema enforces them on the result.
@@ -59,7 +58,7 @@ export async function scoreLeadWithAI(lead: {
   notes?: string | null;
   status?: string | null;
   createdAt?: Date;
-}): Promise<LeadScore> {
+}): Promise<LeadScoreResult> {
   try {
     const prompt = `You are an expert B2B sales analyst. Analyze the following lead and provide a comprehensive score.
 
@@ -88,8 +87,8 @@ Consider factors like:
 - Timing and urgency signals`;
 
     const message = await anthropic.messages.parse({
-      model: 'claude-sonnet-5-5',
-      max_tokens: 8000,
+      model: CLAUDE_MODEL,
+      max_tokens: CLAUDE_MAX_TOKENS,
       messages: [
         {
           role: 'user',
@@ -103,7 +102,7 @@ Consider factors like:
       throw new Error(`No structured output from Claude (stop_reason: ${message.stop_reason})`);
     }
 
-    return LeadScoreSchema.parse(message.parsed_output);
+    return { ...LeadScoreSchema.parse(message.parsed_output), isFallback: false };
   } catch (error) {
     console.error('Error scoring lead with AI:', error);
 
@@ -114,6 +113,7 @@ Consider factors like:
       reasoning: 'Unable to analyze lead due to an error',
       recommendedActions: ['Review lead information', 'Follow up manually'],
       priority: 'medium',
+      isFallback: true,
     };
   }
 }
@@ -135,13 +135,12 @@ export async function scoreLeadsBatch(
     status?: string | null;
     createdAt?: Date;
   }>
-): Promise<Map<string, LeadScore>> {
-  const scores = new Map<string, LeadScore>();
+): Promise<Map<string, LeadScoreResult>> {
+  const scores = new Map<string, LeadScoreResult>();
 
-  // Process leads in parallel (with concurrency limit)
-  const BATCH_SIZE = 5;
-  for (let i = 0; i < leads.length; i += BATCH_SIZE) {
-    const batch = leads.slice(i, i + BATCH_SIZE);
+  // Process leads in parallel; the router accepts at most one group (AI_BATCH_MAX)
+  for (let i = 0; i < leads.length; i += AI_BATCH_MAX) {
+    const batch = leads.slice(i, i + AI_BATCH_MAX);
     const results = await Promise.all(
       batch.map(async (lead) => ({
         id: lead.id,

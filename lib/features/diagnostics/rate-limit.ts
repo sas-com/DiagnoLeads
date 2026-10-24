@@ -46,22 +46,29 @@ export function rateLimitKey(rule: RateLimitRule, identifier: string): string {
  * Count one request in a fixed window shared by every server instance (the in-memory limit in
  * the middleware is per instance, so it does not hold on serverless). The first request after
  * a window has ended starts the next one. A single upsert, so concurrent requests all count.
+ *
+ * `cost` counts one request as several (a batch of paid AI calls counts each call). A request
+ * the rule refuses has still been counted, whatever its cost, like every refused request.
  */
 export async function consumeRateLimit(
   database: RateLimitDatabase,
   rule: RateLimitRule,
   identifier: string,
-  now: Date = new Date()
+  now: Date = new Date(),
+  cost = 1
 ): Promise<RateLimitResult> {
+  if (!Number.isInteger(cost) || cost < 1) {
+    throw new RangeError(`Rate limit cost must be a positive integer, got ${cost}`);
+  }
   const resetAt = new Date(now.getTime() + rule.windowMs);
   const expired = sql`${publicRateLimits.resetAt} <= ${now.toISOString()}::timestamptz`;
   const [row] = await database
     .insert(publicRateLimits)
-    .values({ key: rateLimitKey(rule, identifier), count: 1, resetAt })
+    .values({ key: rateLimitKey(rule, identifier), count: cost, resetAt })
     .onConflictDoUpdate({
       target: publicRateLimits.key,
       set: {
-        count: sql`case when ${expired} then 1 else ${publicRateLimits.count} + 1 end`,
+        count: sql`case when ${expired} then ${cost}::int else ${publicRateLimits.count} + ${cost}::int end`,
         resetAt: sql`case when ${expired} then ${resetAt.toISOString()}::timestamptz else ${publicRateLimits.resetAt} end`,
       },
     })
@@ -80,11 +87,11 @@ export async function consumeRateLimit(
  */
 export async function consumeRateLimits(
   database: RateLimitDatabase,
-  checks: { rule: RateLimitRule; identifier: string }[],
+  checks: { rule: RateLimitRule; identifier: string; cost?: number }[],
   now: Date = new Date()
 ): Promise<{ allowed: true } | { allowed: false; rule: string; retryAfterSeconds: number }> {
-  for (const { rule, identifier } of checks) {
-    const result = await consumeRateLimit(database, rule, identifier, now);
+  for (const { rule, identifier, cost } of checks) {
+    const result = await consumeRateLimit(database, rule, identifier, now, cost);
     if (!result.allowed) {
       return { allowed: false, rule: rule.name, retryAfterSeconds: result.retryAfterSeconds };
     }

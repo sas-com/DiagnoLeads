@@ -16,7 +16,6 @@ export function isCmsEnabled(): boolean {
  */
 export const APP_API_SEGMENTS = [
   'auth',
-  'chat',
   'cms',
   // The site's own visit measurement (#412)
   'collect',
@@ -26,7 +25,6 @@ export const APP_API_SEGMENTS = [
   'diagnostics',
   // Unsubscribe of respondent mail (#154)
   'email',
-  'embed',
   'health',
   'trpc',
   'v2',

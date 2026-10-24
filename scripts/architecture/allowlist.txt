@@ -55,7 +55,6 @@ feature-index-files lib/features/audit-logs/index.ts
 feature-index-files lib/features/ax-playbook/index.ts
 feature-index-files lib/features/distribution/index.ts
 feature-index-files lib/features/email/index.ts
-feature-index-files lib/features/embed/index.ts
 feature-index-files lib/features/feature-flags/index.ts
 feature-index-files lib/features/hierarchy/index.ts
 feature-index-files lib/features/integrations/index.ts

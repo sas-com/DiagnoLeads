@@ -300,24 +300,6 @@ Search leads using natural language with AI embeddings.
 ]
 ```
 
-#### Chat with AI Assistant
-```
-POST /api/chat
-```
-
-Send messages to the AI assistant and receive streaming responses.
-
-**Request Body:**
-```json
-{
-  "messages": [
-    { "role": "user", "content": "What are my highest-scoring leads this week?" }
-  ]
-}
-```
-
-**Response:** Server-Sent Events (text/event-stream)
-
 ---
 
 ### Organizations
