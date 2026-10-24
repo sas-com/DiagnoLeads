@@ -43,8 +43,11 @@ vi.mock('@/hooks/use-lead-assignee', () => import('@/test/mocks/lead-assignee'))
 
 vi.mock('next/navigation', async () => {
   const { useSyncExternalStore } = await import('react');
+  // One object for every render, like Next's useRouter. A new one per render would re-run each
+  // effect that depends on the router, and hide an effect that misses a dependency
+  const router = { push: nav.push, replace: nav.replace, prefetch: vi.fn(), back: vi.fn() };
   return {
-    useRouter: () => ({ push: nav.push, replace: nav.replace, prefetch: vi.fn(), back: vi.fn() }),
+    useRouter: () => router,
     usePathname: () => '/ja/leads',
     useSearchParams: () => new URLSearchParams(useSyncExternalStore(nav.subscribe, nav.get)),
   };
@@ -216,15 +219,16 @@ describe('LeadFilterToolbar', () => {
   it('sends the search after a pause, replacing the history entry', () => {
     // The pause runs on a fake clock. On the real one, a busy machine let the pause pass between
     // two keys or before the first check, and the search went out early (#573). user-event waits
-    // on setTimeout itself, so the keys are sent with fireEvent
+    // on setTimeout itself, so the keys are sent with fireEvent and only the test moves the clock
+    // (docs/TESTING.md 1.5), rather than userEvent.setup({ advanceTimers })
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     renderAt('status=new&page=2');
     const box = screen.getByRole('searchbox', { name: t.searchLabel });
     fireEvent.change(box, { target: { value: '山' } });
     act(() => vi.advanceTimersByTime(SEARCH_PAUSE_MS - 1));
-    // Each key starts the pause again
     fireEvent.change(box, { target: { value: '山田' } });
     act(() => vi.advanceTimersByTime(SEARCH_PAUSE_MS - 1));
+    // Past the pause since the first key, but the second key started it again
     expect(nav.replace).not.toHaveBeenCalled();
 
     act(() => vi.advanceTimersByTime(1));
