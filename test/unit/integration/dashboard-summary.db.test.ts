@@ -162,8 +162,8 @@ describe.skipIf(!url)('dashboard summary (PostgreSQL)', () => {
     expect(s.previousConsultations).toBe(2);
     expect(s.mql).toBe(1);
     expect(s.previousMql).toBe(1);
-    expect(s.averageScore).toBe(77); // (80 + 60 + 90) / 3
-    expect(s.previousAverageScore).toBeNull(); // no scored lead in the previous period
+    // No average score: the MQL level is the sign (#447)
+    expect(s).not.toHaveProperty('averageScore');
   });
 
   it('counts MQL as 関心あり only and 適合 only apart (#139)', async () => {
@@ -264,10 +264,9 @@ describe.skipIf(!url)('dashboard summary (PostgreSQL)', () => {
     expect(s.platforms.at(-1)?.platform).toBe('unknown');
   });
 
-  it('reports no average score when the period has no leads', async () => {
+  it('reports zero new leads when the period has no leads', async () => {
     const s = await getDashboardSummary(db, organizationId, 7, new Date('2026-12-01T00:00:00Z'));
     expect(s.newLeads).toBe(0);
-    expect(s.averageScore).toBeNull();
     expect(s.pendingConsultationTotal).toBe(4);
   });
 });
