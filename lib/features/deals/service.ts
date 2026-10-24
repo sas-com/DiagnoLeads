@@ -90,12 +90,17 @@ const AUDITED_FIELDS = [
   ...HISTORY_FIELDS,
   'closedOn',
   'lostReason',
-  'lostNote',
   'competitor',
   'targetSystem',
-  'nextStep',
   'previousDealId',
 ] as const satisfies readonly (keyof DealRow)[];
+
+/**
+ * Free text that may name people (the next step, the details of a loss): the audit log records
+ * only that it changed (metadata.changedText), never the text, as the lead audit keeps no
+ * contact details (#101). The text stays on the deal itself.
+ */
+const TEXT_FIELDS = ['nextStep', 'lostNote'] as const satisfies readonly (keyof DealRow)[];
 
 export interface DealView {
   id: string;
@@ -423,7 +428,7 @@ export async function getDeal(
   };
 }
 
-/** Lock the lead (taken after the deal, see the header) and read it */
+/** Lock the lead (taken before the deal, see the header) and read it */
 async function lockLead(tx: Transaction, organizationId: string, leadId: string): Promise<Lead> {
   const scope = and(eq(leads.id, leadId), eq(leads.organizationId, organizationId));
   await tx.execute(sql`select 1 from ${leads} where ${scope} for no key update`);
@@ -614,7 +619,7 @@ export async function createDeal(
       .select(dealColumns)
       .from(deals)
       .leftJoin(users, eq(users.id, deals.ownerUserId))
-      .where(eq(deals.id, deal.id));
+      .where(and(eq(deals.id, deal.id), eq(deals.organizationId, input.organizationId)));
     return { deal: toDealView(withOwner), lead: leadMove };
   });
 }
@@ -635,7 +640,9 @@ export async function updateDeal(
     const [ref] = await tx.select({ leadId: deals.leadId }).from(deals).where(scope);
     if (!ref) throw notFound('deal');
     const lead = await lockLead(tx, input.organizationId, ref.leadId);
-    const [existing] = await tx.select().from(deals).where(scope).for('update');
+    // NO KEY UPDATE: the id does not change, and it does not block the key-share locks that a
+    // deal pointing at this one as its previous deal takes
+    const [existing] = await tx.select().from(deals).where(scope).for('no key update');
     if (!existing) throw notFound('deal');
 
     const stage = input.stage ?? oneOf(DEAL_STAGES, existing.stage, 'qualification');
@@ -710,7 +717,8 @@ export async function updateDeal(
     const before = auditValues(existing);
     const after = auditValues(updated);
     const changedAudit = AUDITED_FIELDS.filter((field) => before[field] !== after[field]);
-    if (changedAudit.length > 0) {
+    const changedText = TEXT_FIELDS.filter((field) => existing[field] !== updated[field]);
+    if (changedAudit.length > 0 || changedText.length > 0) {
       await tx.insert(auditLogs).values({
         organizationId: input.organizationId,
         userId: input.userId,
@@ -721,7 +729,10 @@ export async function updateDeal(
           before: Object.fromEntries(changedAudit.map((field) => [field, before[field]])),
           after: Object.fromEntries(changedAudit.map((field) => [field, after[field]])),
         },
-        metadata: { leadId: existing.leadId },
+        metadata: {
+          leadId: existing.leadId,
+          ...(changedText.length > 0 ? { changedText } : {}),
+        },
         createdAt: now,
       });
     }
@@ -740,7 +751,7 @@ export async function updateDeal(
       .select(dealColumns)
       .from(deals)
       .leftJoin(users, eq(users.id, deals.ownerUserId))
-      .where(eq(deals.id, existing.id));
+      .where(scope);
     return { deal: toDealView(withOwner), lead: leadMove };
   });
 }
