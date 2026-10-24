@@ -508,7 +508,7 @@ async function moveLeadForward(
   const set: PgUpdateSetSource<typeof leads> = { updatedAt: context.at };
   if (changes.status) Object.assign(set, statusUpdateFields(changes.status));
   if (changes.hasNegotiated) set.hasNegotiated = true;
-  if (changes.lostReason) set.lostReason = changes.lostReason;
+  if (changes.lostReason !== undefined) set.lostReason = changes.lostReason;
   if (changes.dealPhase) {
     set.dealPhase = changes.dealPhase;
     // The first day of each phase is kept (the existing date wins), as in leads.update (#83)

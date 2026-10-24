@@ -10,7 +10,7 @@
  * - The status is 成約 when a deal is won, 商談中 while a deal is open, 失注 when every deal is
  *   lost. A lead already 成約 stays 成約 (a later deal does not undo the earlier win).
  * - A lead that becomes 失注 without its own lost reason, or with 保留 (not a loss, #445), takes
- *   the one of its latest lost deal.
+ *   the one of its latest lost deal; without one, its 保留 is dropped, as leads.update does (#459).
  * Deleting a deal changes nothing on the lead (a deletion is a correction; staff fix the lead).
  */
 import {
@@ -40,7 +40,8 @@ export interface SyncLead {
 export interface LeadSyncChanges {
   status?: LeadStatus;
   dealPhase?: DealPhase;
-  lostReason?: LostReason;
+  /** null drops the lead's 保留 */
+  lostReason?: LostReason | null;
   hasNegotiated?: true;
 }
 
@@ -116,6 +117,8 @@ export function leadChangesFromDeals(lead: SyncLead, deals: SyncDeal[]): LeadSyn
   if ((changes.status ?? lead.status) === 'lost' && !ownReason) {
     const reason = latestLostReason(deals);
     if (reason) changes.lostReason = reason;
+    // Only data written around the API has a lost deal without a reason; never leave 失注 + 保留
+    else if (lead.lostReason === 'on_hold') changes.lostReason = null;
   }
   return changes;
 }

@@ -205,6 +205,13 @@ describe('leadChangesFromDeals', () => {
         [lostDeal]
       )
     ).toEqual({ status: 'lost', lostReason: 'timing' });
+    // A lost deal without a reason (only written around the API) drops 保留 instead
+    expect(
+      leadChangesFromDeals(
+        { ...lead, status: 'nurturing', hasNegotiated: true, lostReason: 'on_hold' },
+        [deal({ stage: 'lost', lostReason: null, closedOn: '2026-10-10' })]
+      )
+    ).toEqual({ status: 'lost', lostReason: null });
     expect(
       leadChangesFromDeals(
         { ...lead, status: 'nurturing', hasNegotiated: true, lostReason: 'on_hold' },
