@@ -1,6 +1,6 @@
 # AX サイトの計測（GA4・Search Console）の設定
 
-AX マイグレーションのサイト（`/ja/ax-migration` と、その下の Access LP・コラム、`/ja/ax-diagnosis`）の計測を、公開前（2026-10-29）に設定するための手順です。担当はマーケティング（2026-10-22 決定、`.factory/memory/decisions.md` の [Marketing]）。
+AX マイグレーションのサイト（`/ja/ax-migration` と、その下の Access LP・コラム、`/ja/ax-diagnosis`）の計測を、公開前（2026-10-29）に設定するための手順です。担当はマーケティング（2026-10-22 決定、`.factory/memory/decisions/2026-10-22-ax-site-cross-links.md`）。
 
 ## 1. 有効にする（Vercel の環境変数）
 

@@ -10,7 +10,7 @@
 ## 概要
 
 DiagnoLeads v2のAI機能は、リード管理の効率化と意思決定支援を目的としています。
-Claude 4.5 SonnetとOpenAI Embeddingsを組み合わせ、高精度なリードスコアリングとセマンティック検索を実現します。
+Claude Sonnet 5.5とOpenAI Embeddingsを組み合わせ、高精度なリードスコアリングとセマンティック検索を実現します。
 
 ### コア機能
 
@@ -30,8 +30,8 @@ Claude 4.5 SonnetとOpenAI Embeddingsを組み合わせ、高精度なリード�
 
 | 用途 | プロバイダー | モデル |
 |------|------------|--------|
-| リードスコアリング | Anthropic | claude-sonnet-4-20250514 |
-| 要約生成 | Anthropic | claude-sonnet-4-20250514 |
+| リードスコアリング | Anthropic | claude-sonnet-5-5 |
+| 要約生成 | Anthropic | claude-sonnet-5-5 |
 | 埋め込みベクトル | OpenAI | text-embedding-3-small |
 
 ### データベース拡張
@@ -220,8 +220,7 @@ interface SemanticSearchResult {
 
 | パラメータ | 値 |
 |-----------|-----|
-| モデル | claude-sonnet-4 |
-| Temperature | 0.7 |
+| モデル | claude-sonnet-5-5 |
 | 最大トークン | 150 |
 
 ### 実装ファイル
@@ -421,7 +420,7 @@ const fallbackScore: LeadScore = {
 
 - すべてのAI操作は`organizationProcedure`経由
 - 他組織のデータにアクセス不可
-- RLSによる自動フィルタリング
+- 各クエリを `organizationId` で絞る（RLS は今は効いていない。`openspec/specs/architecture.md` の注意）
 
 ### APIキー管理
 

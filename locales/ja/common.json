@@ -259,6 +259,8 @@
     "columns": "列の表示",
     "openMenu": "メニューを開く",
     "saving": "保存中...",
+    "loadError": "読み込めませんでした",
+    "retry": "再読み込み",
     "weekdays": {
       "sunday": "日曜日",
       "monday": "月曜日",
@@ -1181,6 +1183,7 @@
     "targetSystem": "対象システム",
     "referrerName": "紹介元",
     "lostReason": "失注・保留理由",
+    "lostOnHold": "「保留」のままでは失注にできません。失注にするときは失注・保留理由を「保留」以外に変え、保留のままにするときは状態をナーチャリングにしてください",
     "hasNegotiated": "商談済み",
     "mqlQualifiedAt": "MQL判定日",
     "sqlDecision": "SQL判定",
@@ -1245,7 +1248,7 @@
       "updateStatus": "ステータス変更",
       "deleteSelected": "選択を削除",
       "exportSelected": "選択をエクスポート",
-      "clearSelection": "選択解除",
+      "clearSelection": "選択を解除",
       "deleteConfirmTitle": "{count}件のリードを削除しますか？",
       "deleteConfirmMessage": "この操作は取り消せません。選択したリードはすべて完全に削除されます。",
       "updateStatusTitle": "ステータス変更",
@@ -1909,7 +1912,14 @@
         "expiredDescription": "この招待の有効期限が切れています。招待した方に、もう一度送ってもらってください。",
         "revokedDescription": "この招待は取り消されたか、新しい招待で置き換えられています。最新の招待メールのリンクを開いてください。",
         "acceptedDescription": "この招待はすでに使われています。参加済みの場合は、ダッシュボードを開いてください。",
-        "openDashboard": "ダッシュボードを開く"
+        "openDashboard": "ダッシュボードを開く",
+        "verifyFirst": "参加する前に、{email} があなたのメールアドレスであることを確かめます。確認メールを送り、メールにあるリンクをこのブラウザで開いてください（ログインしたまま）。この画面に戻ります。",
+        "sendVerification": "確認メールを送る",
+        "resendVerification": "確認メールをもう一度送る",
+        "verificationSent": "{email} に確認メールを送りました。メールのリンクをこのブラウザで開くと、この画面に戻って参加できます。届かないときは、迷惑メールのフォルダも見てください。",
+        "verificationFailed": "確認メールを送れませんでした。少し待ってから、もう一度お試しください。",
+        "verifyLinkFailed": "確認のリンクの有効期限が切れているか、正しくありません。確認メールをもう一度送ってください。",
+        "verifyInSignedInBrowser": "確認のリンクは、登録したときと同じブラウザで、ログインしたまま開いてください（スマホのメールアプリから開くと確認できません）。ログインしてから、確認メールをもう一度送ってください。"
       }
     },
     "ai": {
@@ -3890,7 +3900,8 @@
       "status": "ステータスを変更（現在：{value}）",
       "dealPhase": "商談フェーズを変更（現在：{value}）",
       "lostReasonPrompt": "失注・保留理由を入力しておきましょう",
-      "lostReasonAction": "理由を入力"
+      "lostReasonAction": "理由を入力",
+      "nurturingWithoutFollowUp": "戻ってくる手がかりがありません。次に連絡する日を次の行動に入れておきましょう"
     },
     "hearing": {
       "title": "商談のまとめ",
@@ -4059,6 +4070,7 @@
     "firstPage": "最初のページ",
     "lastPage": "最後のページ",
     "pageSize": "表示件数",
+    "selectRow": "{name}を選択",
     "pageSizeOption": "{count}件ずつ",
     "nextMeeting": "次回日程",
     "dealRating": "案件評価",
@@ -4092,7 +4104,8 @@
     "actTimingHint": "保守期限・退職予定・予算策定の時期から計算した、再び動くべき月",
     "actTimingOptions": {
       "soon": "6か月以内（過ぎたものを含む）",
-      "has": "計算できたもの"
+      "has": "計算できたもの",
+      "none": "次の行動も動くべき時期もない（状態と組み合わせて使う）"
     }
   },
   "leadFollowUp": {
@@ -4174,6 +4187,7 @@
       "loadError": "読み込めませんでした",
       "retry": "再読み込み",
       "more": "ほか{count}件",
+      "showLess": "折りたたむ",
       "noLeadName": "名前未設定のリード",
       "descriptionAll": "期限が今日まで、または期限を過ぎた次の行動と持ち帰り事項です。チェックすると完了になります。",
       "scopeLabel": "表示する範囲",

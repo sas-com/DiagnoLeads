@@ -437,6 +437,37 @@ describe.skipIf(!url)('AX diagnosis: another system and rate limits (PostgreSQL)
       expect(rows[0].key).not.toContain('example');
     });
 
+    it('counts a request with a cost as that many (a batch of AI calls, #405)', async () => {
+      const limit = rule(10);
+      const id = `cost-${unique()}`;
+      expect(await consumeRateLimit(db, limit, id, now, 4)).toEqual({
+        allowed: true,
+        count: 4,
+        retryAfterSeconds: 60,
+      });
+      expect(await consumeRateLimit(db, limit, id, later(1000), 6)).toMatchObject({
+        allowed: true,
+        count: 10,
+      });
+      // One more is over the limit, and counts like any refused request
+      expect(await consumeRateLimit(db, limit, id, later(2000), 3)).toMatchObject({
+        allowed: false,
+        count: 13,
+      });
+      // A new window starts from the cost of its first request
+      expect(await consumeRateLimit(db, limit, id, later(60_000), 5)).toEqual({
+        allowed: true,
+        count: 5,
+        retryAfterSeconds: 60,
+      });
+      const viaRules = `cost-rules-${unique()}`;
+      expect(
+        await consumeRateLimits(db, [{ rule: limit, identifier: viaRules, cost: 11 }], now)
+      ).toEqual({ allowed: false, rule: limit.name, retryAfterSeconds: 60 });
+      await expect(consumeRateLimit(db, limit, id, now, 0)).rejects.toThrow(RangeError);
+      await expect(consumeRateLimit(db, limit, id, now, 1.5)).rejects.toThrow(RangeError);
+    });
+
     it('stops at the first rule that refuses: later rules are not used up', async () => {
       const strict = rule(1);
       const wide = rule(10);

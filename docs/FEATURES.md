@@ -115,7 +115,7 @@ AI駆動のリードスコアリング、マルチテナント対応、ホール
 
 | 中分類 | 機能 | 説明 |
 |--------|------|------|
-| スコア計算 | 自動スコア計算 | Claude 4.5 Sonnetによるリード評価 (0-100点) |
+| スコア計算 | 自動スコア計算 | Claude Sonnet 5.5によるリード評価 (0-100点) |
 | スコア計算 | バッチスコアリング | 複数リードの一括スコア計算 |
 | スコア詳細 | 信頼度表示 | スコアの信頼度 (low/medium/high) |
 | スコア詳細 | 優先度判定 | リードの優先度自動判定 |
@@ -540,8 +540,8 @@ AI駆動のリードスコアリング、マルチテナント対応、ホール
 
 | 中分類 | 技術 | バージョン |
 |--------|------|-----------|
-| SDK | Vercel AI SDK | 5.0 |
-| LLM | Anthropic Claude | 4.5 Sonnet |
+| SDK | Anthropic SDK（`@anthropic-ai/sdk`） | 1.x |
+| LLM | Anthropic Claude | Sonnet 5.5 |
 | Embeddings | OpenAI | text-embedding-3-small |
 | ベクトルDB | pgvector | - |
 

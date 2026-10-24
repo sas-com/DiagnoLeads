@@ -131,8 +131,10 @@ it('test 1', () => {
 
 ### 命名規則
 ```
-*.integration.ts
+*.test.ts（test/unit/ の下）
 ```
+
+vitest が実行するのは `test/**/*.{test,spec}.{ts,tsx}` だけ（`test/e2e/` は除く。Playwright が流す）。`*.integration.ts` は実行されないので使わない（2026-10-24 の決定 `2026-10-24-test-file-naming`）。実際の PostgreSQL を使うものは、下の「実 DB テスト」の `*.db.test.ts`。
 
 ### 対象
 - DB操作（Drizzle ORM モック）
@@ -221,7 +223,7 @@ describe('UserService', () => {
 
 - 置き場所: `test/unit/integration/*.db.test.ts`
 - `TEST_DATABASE_URL` が設定されているときだけ実行される（未設定ならスキップ）
-- CI では E2E ジョブの Postgres（マイグレーション適用済み）に対して実行し、**失敗したらジョブを落とす**
+- CI では DB Integration Tests のジョブ（Postgres にマイグレーションを適用）で実行し、**失敗したらジョブを落とす**
 - ローカルでの実行例:
 
 ```bash
@@ -343,6 +345,21 @@ test('complete diagnostic form submission flow', async ({ page }) => {
 
 ---
 
+## 層ごとのカバレッジ目標
+
+品質をそろえるため、層ごとに目標を決めている（2026-02-06 の決定 `2026-02-06-coverage-by-layer`。CI のしきい値は `vitest.config.ts`）。
+
+| 層 | 対象ディレクトリ | 目標 | テスト方法 |
+|----|-----------------|------|-----------|
+| Core | `lib/features/`, `lib/db/`, `lib/auth/` | 80% | ユニットテスト |
+| API | `server/`, `app/api/` | 70% | ユニットテスト + 結合テスト |
+| UI | `components/`, `app/[locale]/` | 30〜40% | コンポーネントテスト |
+| E2E | 主なユーザーフロー | 主要フロー100% | Playwright |
+
+テストの優先順位は、ビジネスロジック（`lib/features/`）→ データアクセス（`lib/db/`、ルーター）→ 認証・認可（`lib/auth/`）→ API（`app/api/`）→ UI（E2E で補う）。E2E で補う領域は、診断フォームの送信、ログイン・ログアウト、リードの一覧・詳細・編集、組織の切り替え、ダッシュボードの表示。長期の目標は全体 40% 以上（E2E を含めた実質 70% 以上）。
+
+---
+
 ## テスト環境
 
 ### Unit / Integration
@@ -370,18 +387,18 @@ bun run test:e2e -- --ui
 
 ### 実行タイミング
 
-| 種別 | PR | main | release |
-|------|-----|------|---------|
-| Unit | ✅ | ✅ | ✅ |
-| Integration | ✅ | ✅ | ✅ |
-| E2E | ❌ | ✅ | ✅ |
+| 種別 | PR | main |
+|------|-----|------|
+| Unit | ✅ | ✅ |
+| Integration（実 DB） | ✅ | ✅ |
+| E2E（CI では `@smoke` のテストだけ） | ✅ | ✅ |
+
+`@smoke` の付かない E2E は CI では流れない。手元で `bun run test:e2e` を流して確かめる。
 
 ### 失敗時の対応
 
-```yaml
-# Unit/Integration 失敗 → PRマージ不可
-# E2E 失敗 → リリース不可
-```
+- GitHub が必須にしている検査（Lint & Type Check・Unit Tests ×4・DB Integration Tests・Build）が落ちると、マージできない
+- E2E と Security Scan は必須ではない。緑を自分で確かめてからマージする（マージの条件はスキル `ship`）
 
 ---
 

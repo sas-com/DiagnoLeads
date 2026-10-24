@@ -27,7 +27,10 @@ describe('invitations router', () => {
     // biome-ignore lint/suspicious/noExplicitAny: minimal tRPC context for the test
     const caller = appRouter.createCaller(signedOut as any);
 
-    expect(await caller.invitations.preview({ token: TOKEN })).toEqual(preview);
+    expect(await caller.invitations.preview({ token: TOKEN })).toEqual({
+      ...preview,
+      emailVerificationRequired: false,
+    });
     expect(invitations.getInvitationPreview).toHaveBeenCalledWith(db, TOKEN);
   });
 
@@ -65,6 +68,11 @@ describe('invitations router', () => {
 
   it.each([
     ['email_mismatch', 'FORBIDDEN', '招待されたメールアドレスのアカウントでログインしてください'],
+    [
+      'email_not_verified',
+      'PRECONDITION_FAILED',
+      'メールアドレスの確認が済んでいません。確認メールのリンクを開いてから参加してください',
+    ],
     ['expired', 'BAD_REQUEST', '招待の有効期限が切れています'],
     ['revoked', 'BAD_REQUEST', 'この招待は取り消されています'],
     ['already_used', 'CONFLICT', 'この招待はすでに使われています'],
@@ -78,5 +86,15 @@ describe('invitations router', () => {
       code,
       message,
     });
+  });
+});
+
+describe('inviteEmailVerificationRequired', () => {
+  it('is on only for "true"', async () => {
+    const { inviteEmailVerificationRequired } = await import('@/lib/features/members/invitations');
+    expect(inviteEmailVerificationRequired('true')).toBe(true);
+    for (const value of [undefined, '', 'false', 'TRUE', '1']) {
+      expect(inviteEmailVerificationRequired(value)).toBe(false);
+    }
   });
 });

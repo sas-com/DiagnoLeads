@@ -6,11 +6,13 @@
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
+const { mockParse } = vi.hoisted(() => ({ mockParse: vi.fn() }));
+
 // Mock Anthropic SDK
 vi.mock('@anthropic-ai/sdk', () => ({
   default: class MockAnthropic {
     messages = {
-      create: vi.fn(),
+      parse: mockParse,
     };
   },
 }));
@@ -114,13 +116,75 @@ describe('scoreLeadWithAI', () => {
     });
   });
 
+  describe('structured output', () => {
+    it('should return the parsed output and request it from claude-sonnet-5-5', async () => {
+      const parsed: LeadScore = {
+        score: 82,
+        confidence: 'high',
+        reasoning: 'CTO at a mid-size manufacturer with a dated core system.',
+        recommendedActions: ['Book a discovery call', 'Share the migration case study'],
+        priority: 'high',
+      };
+      mockParse.mockResolvedValueOnce({ parsed_output: parsed, stop_reason: 'end_turn' });
+
+      const score = await scoreLeadWithAI({ email: 'cto@example.com', position: 'CTO' });
+
+      expect(score).toEqual({ ...parsed, isFallback: false });
+      const request = mockParse.mock.calls[0][0];
+      expect(request.model).toBe('claude-sonnet-5-5');
+      expect(request.max_tokens).toBe(4000);
+      expect(request.output_config.effort).toBe('low');
+      expect(request.output_config.format).toBeDefined();
+      expect(request).not.toHaveProperty('temperature');
+    });
+
+    it('should fall back when the output is out of range', async () => {
+      mockParse.mockResolvedValueOnce({
+        parsed_output: {
+          score: 150,
+          confidence: 'high',
+          reasoning: 'x',
+          recommendedActions: [],
+          priority: 'high',
+        },
+        stop_reason: 'end_turn',
+      });
+
+      const score = await scoreLeadWithAI({ email: 'range@example.com' });
+
+      expect(score.score).toBe(50);
+      expect(score.confidence).toBe('low');
+    });
+
+    it('should request every LeadScore field in the output schema', async () => {
+      mockParse.mockResolvedValueOnce({ parsed_output: null, stop_reason: 'end_turn' });
+
+      await scoreLeadWithAI({ email: 'schema@example.com' });
+
+      const schema = mockParse.mock.calls[0][0].output_config.format.schema;
+      expect([...schema.required].sort()).toEqual(
+        ['confidence', 'priority', 'reasoning', 'recommendedActions', 'score'].sort()
+      );
+      expect(Object.keys(schema.properties).sort()).toEqual([...schema.required].sort());
+    });
+
+    it('should fall back when there is no parsed output', async () => {
+      mockParse.mockResolvedValueOnce({ parsed_output: null, stop_reason: 'max_tokens' });
+
+      const score = await scoreLeadWithAI({ email: 'cut@example.com' });
+
+      expect(score.score).toBe(50);
+    });
+  });
+
   describe('error handling', () => {
     it('should return fallback score on error', async () => {
-      // The mock returns a fallback by default when API fails
+      mockParse.mockRejectedValueOnce(new Error('529 overloaded'));
       const lead = { email: 'error@example.com' };
       const score = await scoreLeadWithAI(lead);
 
-      // Fallback score should be returned
+      // Fallback score should be returned, marked so that callers do not store it
+      expect(score.isFallback).toBe(true);
       expect(score.score).toBe(50);
       expect(score.confidence).toBe('low');
       expect(score.priority).toBe('medium');

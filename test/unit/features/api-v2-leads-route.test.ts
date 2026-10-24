@@ -69,4 +69,19 @@ describe('PATCH /api/v2/leads/[id]', () => {
     expect(response.status).toBe(400);
     expect(chain.set).not.toHaveBeenCalled();
   });
+
+  it('drops the reason on hold when a lead on hold is lost (#445)', async () => {
+    db.query.leads.findFirst.mockResolvedValue({
+      id: LEAD_ID,
+      organizationId: ORG_ID,
+      status: 'nurturing',
+      lostReason: 'on_hold',
+      hasNegotiated: false,
+    });
+    const response = await patch({ status: 'lost' });
+    expect(response.status).toBe(200);
+    expect(chain.set).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'lost', lostReason: null })
+    );
+  });
 });

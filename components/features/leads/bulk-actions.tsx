@@ -84,8 +84,9 @@ export function BulkActions({
       onActionComplete();
       setShowStatusDialog(false);
     },
-    onError: () => {
-      toast.error(t('updateError'));
+    // A refused value (e.g. a lead on hold made lost, #445) says why; anything else stays generic
+    onError: (error) => {
+      toast.error(error.data?.code === 'BAD_REQUEST' ? error.message : t('updateError'));
     },
   });
 
@@ -176,8 +177,14 @@ export function BulkActions({
         </Button>
 
         {/* Clear Selection */}
-        <Button variant="ghost" size="sm" onClick={onClearSelection} className="h-8">
-          <X className="h-4 w-4" />
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onClearSelection}
+          className="h-8"
+          aria-label={t('clearSelection')}
+        >
+          <X className="h-4 w-4" aria-hidden="true" />
         </Button>
       </div>
 

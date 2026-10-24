@@ -259,6 +259,8 @@
     "columns": "Columns",
     "openMenu": "Open menu",
     "saving": "Saving...",
+    "loadError": "Could not be loaded",
+    "retry": "Reload",
     "weekdays": {
       "sunday": "Sunday",
       "monday": "Monday",
@@ -1181,6 +1183,7 @@
     "targetSystem": "Target System",
     "referrerName": "Referrer",
     "lostReason": "Lost / On-hold Reason",
+    "lostOnHold": "A lead on hold cannot be lost. To lose it, change the reason from \"On hold\"; to keep it on hold, set the status to nurturing",
     "hasNegotiated": "Negotiated",
     "mqlQualifiedAt": "MQL Date",
     "sqlDecision": "SQL Decision",
@@ -1909,7 +1912,14 @@
         "expiredDescription": "This invitation has expired. Ask the person who invited you to send it again.",
         "revokedDescription": "This invitation was revoked or replaced by a newer one. Open the link in the latest invitation email.",
         "acceptedDescription": "This invitation has already been used. If you have joined, open the dashboard.",
-        "openDashboard": "Open the dashboard"
+        "openDashboard": "Open the dashboard",
+        "verifyFirst": "Before you join, we check that {email} is your email address. Send yourself a verification email and open its link in this browser, signed in; it brings you back here.",
+        "sendVerification": "Send a verification email",
+        "resendVerification": "Send the verification email again",
+        "verificationSent": "We sent a verification email to {email}. Open its link in this browser to come back here and join. If it does not arrive, check your spam folder.",
+        "verificationFailed": "The verification email could not be sent. Wait a moment and try again.",
+        "verifyLinkFailed": "The verification link has expired or is not valid. Send the verification email again.",
+        "verifyInSignedInBrowser": "Open the verification link in the same browser you signed up in, while signed in (opening it from a phone mail app does not work). Sign in and send the verification email again."
       }
     },
     "ai": {
@@ -3890,7 +3900,8 @@
       "status": "Change status (now: {value})",
       "dealPhase": "Change deal phase (now: {value})",
       "lostReasonPrompt": "Record why the lead was lost",
-      "lostReasonAction": "Add reason"
+      "lostReasonAction": "Add reason",
+      "nurturingWithoutFollowUp": "Nothing brings this lead back. Add the day to contact them as a next action"
     },
     "hearing": {
       "title": "Meeting summary",
@@ -4059,6 +4070,7 @@
     "firstPage": "First page",
     "lastPage": "Last page",
     "pageSize": "Rows per page",
+    "selectRow": "Select {name}",
     "pageSizeOption": "{count} per page",
     "nextMeeting": "Next meeting",
     "dealRating": "Deal rating",
@@ -4092,7 +4104,8 @@
     "actTimingHint": "The month to move again, from the support end, retirement and budget planning",
     "actTimingOptions": {
       "soon": "Within 6 months (past ones included)",
-      "has": "Worked out"
+      "has": "Worked out",
+      "none": "No next action and no month to act (use with a status)"
     }
   },
   "leadFollowUp": {
@@ -4174,6 +4187,7 @@
       "loadError": "Could not load",
       "retry": "Reload",
       "more": "{count} more",
+      "showLess": "Show less",
       "noLeadName": "Lead without a name",
       "descriptionAll": "Next actions and takeaways due today or overdue. Tick one to mark it done.",
       "scopeLabel": "Show",
