@@ -33,8 +33,10 @@ import { AxCrossLink } from './ax-cross-link';
 import { AxCtaLink } from './ax-cta-link';
 import { AxDiagnosisFrame } from './ax-landing-view';
 import {
+  AX_CONSULT_BAND_ID,
   AX_CONTACT,
   AX_FINAL_SECTION_ID,
+  AX_HERO_CTA_ID,
   AX_PROBLEMS_CTA_ID,
   AX_SECTIONS,
   AX_SITE_LINKS,
@@ -72,8 +74,11 @@ export function CtaCaption({
   );
 }
 
+const DEADLINE_KEYS = ['lease', 'people', 'edi'] as const;
+
 export async function AxHero({ locale }: SectionProps) {
   const t = await getTranslations({ locale, namespace: 'axSite.hero' });
+  const common = await getTranslations({ locale, namespace: 'axSite' });
 
   return (
     <section aria-labelledby="ax-hero-heading" className="overflow-hidden bg-ax-forest text-white">
@@ -89,7 +94,21 @@ export async function AxHero({ locale }: SectionProps) {
           </h1>
           <p className="text-lg font-bold">{t('tagline')}</p>
           <p className="leading-relaxed text-white/90">{t('lead')}</p>
-          <div className="space-y-3 pt-2">
+          {/* Deadlines and people: what makes a renewal urgent, ahead of the check (#420) */}
+          <div>
+            <p className="text-sm font-bold text-white/90">{t('deadlinesLabel')}</p>
+            <ul className="mt-2 flex flex-wrap gap-2">
+              {DEADLINE_KEYS.map((key) => (
+                <li
+                  key={key}
+                  className="rounded border border-white/60 px-3 py-1.5 text-sm font-bold leading-snug"
+                >
+                  {t(`deadlines.${key}`)}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div id={AX_HERO_CTA_ID} className="space-y-3 pt-2">
             <CtaCaption locale={locale}>{t('ctaCaption')}</CtaCaption>
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <AxCtaLink href={`#${AX_SECTIONS.diagnosis}`} location="hero" tone="dark">
@@ -101,6 +120,7 @@ export async function AxHero({ locale }: SectionProps) {
                 location="hero"
                 tone="dark"
                 external
+                newTabLabel={common('newTab')}
               >
                 {t('demo')}
               </AxCtaLink>
@@ -143,7 +163,7 @@ export async function AxOverview({ locale }: SectionProps) {
               className="relative flex flex-col items-center justify-center bg-ax-cloud px-6 py-10 text-center"
             >
               <p className="font-ax-latin text-lg font-bold">
-                {t('stepLabel', { number: String(index + 1).padStart(2, '0') })}
+                {t('stepLabel', { number: index + 1 })}
               </p>
               <h3 className="mt-2 text-lg font-bold">{steps(`${key}.title`)}</h3>
               <p className="mt-3 text-sm leading-relaxed text-gray-700">{t(`items.${key}`)}</p>
@@ -199,7 +219,13 @@ export async function AxChallenges({ locale }: SectionProps) {
         <ul className="mt-12 grid gap-6 sm:grid-cols-2">
           {CHALLENGES.map(({ key, icon: Icon }) => (
             <li key={key} className="flex flex-col bg-white p-6 sm:p-8">
-              <div className="flex items-center gap-3">
+              <p className="flex items-start gap-3 border-b border-gray-200 pb-4 font-bold leading-snug">
+                <span className="shrink-0 rounded bg-ax-cloud px-2 py-0.5 text-sm">
+                  {t('nowLabel')}
+                </span>
+                <span>「{t(`items.${key}.voice`)}」</span>
+              </p>
+              <div className="mt-4 flex items-center gap-3">
                 <Icon className="h-10 w-10 text-ax-forest" aria-hidden="true" />
                 <p className="text-sm font-bold text-ax-leaf">{t(`items.${key}.label`)}</p>
               </div>
@@ -207,8 +233,8 @@ export async function AxChallenges({ locale }: SectionProps) {
               <p className="mt-3 flex-1 text-sm leading-relaxed text-gray-700">
                 {t(`items.${key}.body`)}
               </p>
-              <div className="mt-6 border-t border-gray-200 pt-5">
-                <p className="text-sm text-gray-700">{t('solutionsLabel')}</p>
+              <div className="mt-6 rounded bg-ax-leaf/10 p-4">
+                <p className="text-sm font-bold text-ax-leaf">{t('solutionsLabel')}</p>
                 <ul className="mt-3 space-y-2">
                   {SOLUTION_KEYS.map((solution) => (
                     <li key={solution} className="flex gap-2 font-bold leading-snug">
@@ -258,23 +284,30 @@ export async function AxReasons({ locale }: SectionProps) {
       className="bg-white py-16 sm:py-24"
     >
       <div className="mx-auto max-w-5xl px-4 sm:px-6">
-        <div className="text-center">
-          <h2 id="ax-reasons-heading" className={BADGE}>
-            {t('title')}
-          </h2>
-        </div>
-        <p className={`mt-5 ${SECTION_HEADING}`}>{t('tagline')}</p>
+        <h2 id="ax-reasons-heading" className={SECTION_HEADING}>
+          {t('title')}
+        </h2>
+        <p className="mt-4 text-center text-lg font-bold">{t('tagline')}</p>
         <p className="mx-auto mt-5 max-w-3xl text-center leading-relaxed text-gray-700">
           {t('lead')}
         </p>
-        <ul className="mt-12 grid gap-6 md:grid-cols-3">
-          {REASONS.map(({ key, icon: Icon }) => (
-            <li key={key} className="flex flex-col bg-ax-cloud p-6 text-center sm:p-8">
+        <ul className="mt-16 grid gap-10 md:grid-cols-3 md:gap-6">
+          {REASONS.map(({ key, icon: Icon }, index) => (
+            <li
+              key={key}
+              className="relative flex flex-col bg-ax-cloud p-6 pt-10 text-center sm:p-8 sm:pt-12"
+            >
+              <span
+                aria-hidden="true"
+                className="absolute left-1/2 top-0 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-ax-forest font-ax-latin text-lg font-bold text-white"
+              >
+                {String(index + 1).padStart(2, '0')}
+              </span>
               <p className="text-sm text-gray-700">{t(`items.${key}.concern`)}</p>
               <Icon className="mx-auto mt-6 h-12 w-12 text-ax-forest" aria-hidden="true" />
               <h3 className="mt-4 text-xl font-bold">{t(`items.${key}.title`)}</h3>
               <p className="mt-3 font-bold leading-snug">{t(`items.${key}.points.first`)}</p>
-              <p className="mt-4 text-left text-sm leading-relaxed text-gray-700">
+              <p className="mt-4 text-sm leading-relaxed text-gray-700">
                 {t(`items.${key}.points.second`)}
               </p>
             </li>
@@ -289,6 +322,7 @@ export async function AxReasons({ locale }: SectionProps) {
 /** Order entry screen before and after the migration, on a separate site (#414) */
 export async function AxDemo({ locale }: SectionProps) {
   const t = await getTranslations({ locale, namespace: 'axSite.demo' });
+  const common = await getTranslations({ locale, namespace: 'axSite' });
   return (
     <section
       id={AX_SECTIONS.demo}
@@ -313,7 +347,8 @@ export async function AxDemo({ locale }: SectionProps) {
             location="demo"
             tone="dark"
             external
-            className="mt-8 bg-white text-ax-forest hover:bg-ax-mist"
+            newTabLabel={common('newTab')}
+            className="mt-8"
           >
             {t('cta')}
           </AxCtaLink>
@@ -331,7 +366,7 @@ export async function AxDemo({ locale }: SectionProps) {
   );
 }
 
-const STEPS = ['web', 'simple', 'survey', 'migration', 'ax'] as const;
+const STEPS = ['web', 'consult', 'simple', 'survey', 'migration', 'ax'] as const;
 const STEP_POINT_KEYS = ['first', 'second', 'third'] as const;
 
 /** The free web check and the quick assessment first, then the three phases of the brochure */
@@ -344,7 +379,7 @@ export async function AxSteps({ locale }: SectionProps) {
       className="bg-ax-mist py-16 sm:py-24"
     >
       <div className="mx-auto grid max-w-6xl gap-10 px-4 sm:px-6 lg:grid-cols-[0.8fr_1.2fr] lg:gap-16">
-        <div>
+        <div className="lg:sticky lg:top-24 lg:self-start">
           <h2 id="ax-steps-heading" className="text-2xl font-bold leading-snug sm:text-[2.25rem]">
             {t('title')}
           </h2>
@@ -371,7 +406,7 @@ export async function AxSteps({ locale }: SectionProps) {
                 {t(`items.${key}.label`)}
               </p>
               <h3 className="mt-1 text-lg font-bold">{t(`items.${key}.title`)}</h3>
-              {key === 'web' || key === 'simple' ? (
+              {key === 'web' || key === 'consult' || key === 'simple' ? (
                 <p className="mt-3 text-sm leading-relaxed text-gray-700">
                   {t(`items.${key}.body`)}
                 </p>
@@ -556,6 +591,7 @@ export async function AxDiagnosisSection({ locale }: SectionProps) {
     <AxDiagnosisFrame
       intro={
         <>
+          {/* Small, so the first question is on screen right after a jump here */}
           <p
             aria-hidden="true"
             className="text-center font-ax-latin text-sm font-bold tracking-[0.2em] text-ax-leaf"
@@ -588,6 +624,9 @@ const FAQ_KEYS: readonly string[] = [
   'cost',
   'who',
   'targets',
+  'costTime',
+  'partial',
+  'prepare',
   'vendorSource',
   'result',
   'ax',
@@ -646,74 +685,142 @@ interface FinalCtaProps extends SectionProps {
   locationPrefix?: string;
 }
 
+interface ContactBandProps extends SectionProps {
+  id: string;
+  headingId: string;
+  title: string;
+  lead: string;
+  caption?: string;
+  cta: string;
+  consult?: string;
+  location: string;
+}
+
 const CONTACT_LINK =
-  'font-ax-latin text-lg font-bold text-ax-forest underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ax-forest';
+  'inline-flex min-h-11 items-center gap-2 font-ax-latin font-bold underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white';
+
+/**
+ * Forest band with the diagnosis and the phone, repeated down the page like the consultation
+ * bands of the reference site (#420): readers who would rather call find the number on the way
+ */
+async function ContactBand({
+  locale,
+  id,
+  headingId,
+  title,
+  lead,
+  caption,
+  cta,
+  consult,
+  location,
+}: ContactBandProps) {
+  const t = await getTranslations({ locale, namespace: 'axSite.finalCta' });
+  const consultationUrl = axConsultationUrl();
+  return (
+    <section
+      id={id}
+      aria-labelledby={headingId}
+      className="bg-ax-forest py-14 text-center text-white sm:py-20"
+    >
+      <div className="mx-auto max-w-4xl px-4 sm:px-6">
+        <h2 id={headingId} className="text-2xl font-bold leading-snug sm:text-[2rem]">
+          {title}
+        </h2>
+        <p className="mx-auto mt-4 max-w-2xl leading-relaxed text-white/90">{lead}</p>
+        {caption && (
+          <CtaCaption locale={locale} className="mt-8">
+            {caption}
+          </CtaCaption>
+        )}
+        <div
+          className={cn(
+            'flex flex-col items-center justify-center gap-3 sm:flex-row',
+            caption ? 'mt-3' : 'mt-8'
+          )}
+        >
+          <AxCtaLink href={`#${AX_SECTIONS.diagnosis}`} location={location} tone="dark">
+            {cta}
+          </AxCtaLink>
+          {consultationUrl && consult && (
+            <AxCtaLink
+              href={consultationUrl}
+              variant="consultation"
+              location={location}
+              tone="dark"
+              external
+            >
+              {consult}
+            </AxCtaLink>
+          )}
+        </div>
+        <dl className="mt-8 flex flex-col items-center justify-center gap-x-8 gap-y-1 sm:flex-row">
+          <div className="flex items-center gap-2">
+            <dt>
+              <Phone className="h-5 w-5" aria-hidden="true" />
+              <span className="sr-only">{t('contact.phone')}</span>
+            </dt>
+            <dd>
+              <a href={`tel:${AX_CONTACT.phoneE164}`} className={`${CONTACT_LINK} text-xl`}>
+                {AX_CONTACT.phone}
+              </a>
+            </dd>
+          </div>
+          <div className="flex items-center gap-2">
+            <dt>
+              <Mail className="h-5 w-5" aria-hidden="true" />
+              <span className="sr-only">{t('contact.email')}</span>
+            </dt>
+            <dd>
+              <a href={`mailto:${AX_CONTACT.email}`} className={`${CONTACT_LINK} text-lg`}>
+                {AX_CONTACT.email}
+              </a>
+            </dd>
+          </div>
+        </dl>
+        <p className="mt-2 text-sm text-white/90">
+          {t('contact.department')}
+          <span aria-hidden="true"> ／ </span>
+          {/* Read as a pause instead of running the two items together */}
+          <span className="sr-only">, </span>
+          <br className="sm:hidden" />
+          {t('contact.hours')}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+/** Consultation band in the middle of the page, after the steps (#420) */
+export async function AxConsultBand({ locale }: SectionProps) {
+  const t = await getTranslations({ locale, namespace: 'axSite.consultBand' });
+  const final = await getTranslations({ locale, namespace: 'axSite.finalCta' });
+  return (
+    <ContactBand
+      locale={locale}
+      id={AX_CONSULT_BAND_ID}
+      headingId="ax-consult-heading"
+      title={t('title')}
+      lead={t('lead')}
+      cta={final('cta')}
+      location="consult-band"
+    />
+  );
+}
 
 export async function AxFinalCta({ locale, copyNamespace, locationPrefix = '' }: FinalCtaProps) {
   const t = await getTranslations({ locale, namespace: 'axSite.finalCta' });
   const copy = copyNamespace ? await getTranslations({ locale, namespace: copyNamespace }) : t;
-  const location = `${locationPrefix}final`;
-  const consultationUrl = axConsultationUrl();
   return (
-    <section
+    <ContactBand
+      locale={locale}
       id={AX_FINAL_SECTION_ID}
-      aria-labelledby="ax-final-heading"
-      className="bg-white py-16 sm:py-24"
-    >
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        <h2 id="ax-final-heading" className="text-2xl font-bold leading-snug sm:text-[2.25rem]">
-          {copy('title')}
-        </h2>
-        <p className="mt-4 max-w-3xl leading-relaxed text-gray-700">{copy('lead')}</p>
-        <CtaCaption locale={locale} className="mt-8">
-          {copy('caption')}
-        </CtaCaption>
-        <div className="mt-3 flex flex-col gap-3 sm:flex-row">
-          <AxCtaLink href={`#${AX_SECTIONS.diagnosis}`} location={location}>
-            {copy('cta')}
-          </AxCtaLink>
-          {consultationUrl && (
-            <AxCtaLink href={consultationUrl} variant="consultation" location={location} external>
-              {copy('consult')}
-            </AxCtaLink>
-          )}
-        </div>
-        <div className="mt-10 max-w-3xl rounded-md bg-ax-mist p-6">
-          <h3 className="font-bold">{t('contact.title')}</h3>
-          <dl className="mt-4 flex flex-col gap-3 sm:flex-row sm:gap-8">
-            <div className="flex items-center gap-2">
-              <dt>
-                <Mail className="h-5 w-5" aria-hidden="true" />
-                <span className="sr-only">{t('contact.email')}</span>
-              </dt>
-              <dd>
-                <a href={`mailto:${AX_CONTACT.email}`} className={CONTACT_LINK}>
-                  {AX_CONTACT.email}
-                </a>
-              </dd>
-            </div>
-            <div className="flex items-center gap-2">
-              <dt>
-                <Phone className="h-5 w-5" aria-hidden="true" />
-                <span className="sr-only">{t('contact.phone')}</span>
-              </dt>
-              <dd>
-                <a href={`tel:${AX_CONTACT.phoneE164}`} className={CONTACT_LINK}>
-                  {AX_CONTACT.phone}
-                </a>
-              </dd>
-            </div>
-          </dl>
-          <p className="mt-4 text-sm text-gray-700">
-            {t('contact.department')}
-            <span aria-hidden="true"> ／ </span>
-            {/* Read as a pause instead of running the two items together */}
-            <span className="sr-only">, </span>
-            <br className="sm:hidden" />
-            {t('contact.hours')}
-          </p>
-        </div>
-      </div>
-    </section>
+      headingId="ax-final-heading"
+      title={copy('title')}
+      lead={copy('lead')}
+      caption={copy('caption')}
+      cta={copy('cta')}
+      consult={copy('consult')}
+      location={`${locationPrefix}final`}
+    />
   );
 }
