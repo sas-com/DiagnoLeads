@@ -33,7 +33,7 @@ import { ProgressBar } from '@/components/ui/progress-bar';
 
 import type { ListedLead } from '@/components/features/leads/lead-card';
 import type { Lead } from '@/lib/db/schema';
-import type { CreateLeadInput } from '@/lib/features/leads/types';
+import { type CreateLeadInput, hasLostReason } from '@/lib/features/leads/types';
 import { trpc } from '@/lib/trpc/client';
 import { Plus, Target, TrendingUp, Upload, UserCheck, Users } from 'lucide-react';
 
@@ -255,7 +255,8 @@ function LeadsPageContent() {
 
   // A lost lead should say why: offer to add it on the lead page, without blocking the list
   const handleLost = (lead: ListedLead) => {
-    if (lead.lostReason) return;
+    // 保留 is dropped when the lead is lost (#445): it is no reason for the loss
+    if (hasLostReason(lead.lostReason)) return;
     toast(tDetail('quick.lostReasonPrompt'), {
       action: {
         label: tDetail('quick.lostReasonAction'),

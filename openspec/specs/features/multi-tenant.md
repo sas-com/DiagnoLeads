@@ -1,6 +1,8 @@
 # マルチテナント機能仕様書
 
-> **Source of Truth**: DiagnoLeads v2 マルチテナントアーキテクチャ仕様
+> **位置づけ（2026-10-24）**: 2025-11 時点の計画の記録。実装と食い違うところは実装を正とする
+>
+> **注意（2026-10-24）**: RLS は今は効いていない。`withRLS`（`lib/db/rls.ts`）はどの手続きからも呼ばれておらず、下の図と例の「RLS の自動フィルタリング」は実装されていない。`organizationProcedure` がするのは、メンバーシップの確認と権限（`ctx.ability`）の計算だけ。テナントの分離は、各クエリの `organizationId` の条件と `assertInOrganization` に頼っている（`.claude/rules/api-routers.md`、`openspec/specs/architecture.md` の RLS の注意）
 >
 > **最終更新**: 2025-11-28
 > **ステータス**: Phase 1-2 実装完了
