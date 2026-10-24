@@ -270,6 +270,10 @@ vi.mock('@/components/features/challenge-guide/challenge-guide-card', () => ({
 vi.mock('@/components/features/info-offers/info-offer-requests-card', () => ({
   InfoOfferRequestsCard: () => null,
 }));
+// The deals of the lead (#436) have their own tests (test/unit/components/deals)
+vi.mock('@/components/features/deals/lead-deals-card', () => ({
+  LeadDealsCard: () => <p>lead deals</p>,
+}));
 // The agency handover (#152) has its own tests (test/unit/components/agency-handovers)
 vi.mock('@/components/features/agency-handovers/agency-handover-card', () => ({
   AgencyHandoverCard: () => null,

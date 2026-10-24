@@ -5,6 +5,7 @@ import { ActTimingCard } from '@/components/features/act-timing/act-timing-card'
 import { AgencyHandoverCard } from '@/components/features/agency-handovers/agency-handover-card';
 import { AppointmentReviewCard } from '@/components/features/appointment-reviews/appointment-review-card';
 import { ChallengeGuideCard } from '@/components/features/challenge-guide/challenge-guide-card';
+import { LeadDealsCard } from '@/components/features/deals/lead-deals-card';
 import { DeliveryReviewCard } from '@/components/features/delivery-reviews/delivery-review-card';
 import { InfoOfferRequestsCard } from '@/components/features/info-offers/info-offer-requests-card';
 import { LeadActivityCard } from '@/components/features/lead-activity/lead-activity-card';
@@ -409,6 +410,7 @@ function LeadDetailContent({
             <MeetingRequestCard organizationId={organizationId} leadId={lead.id} />
             <LeadProspectCard organizationId={organizationId} leadId={lead.id} />
             <AgencyHandoverCard organizationId={organizationId} leadId={lead.id} />
+            <LeadDealsCard organizationId={organizationId} leadId={lead.id} />
             <LeadPrepCard organizationId={organizationId} leadId={lead.id} />
             <ObjectionCard organizationId={organizationId} leadId={lead.id} />
             <ActTimingCard organizationId={organizationId} leadId={lead.id} />

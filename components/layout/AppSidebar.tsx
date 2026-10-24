@@ -3,6 +3,7 @@ import { Logo, LogoMark } from '@/components/common/Logo';
 import { useSidebar } from '@/context/SidebarContext';
 import {
   RiBarChartLine,
+  RiBriefcase4Line,
   RiDashboardLine,
   RiSettings4Line,
   RiUserLine,
@@ -50,6 +51,12 @@ const AppSidebar: React.FC = () => {
         name: t('leads'),
         nameKey: 'leads',
         path: `/${locale}/leads`,
+      },
+      {
+        icon: <RiBriefcase4Line className="w-5 h-5" />,
+        name: t('deals'),
+        nameKey: 'deals',
+        path: `/${locale}/deals`,
       },
       {
         icon: <RiUserSearchLine className="w-5 h-5" />,
