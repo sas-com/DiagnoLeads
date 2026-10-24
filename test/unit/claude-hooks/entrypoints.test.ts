@@ -1,10 +1,11 @@
 // @vitest-environment node
 /**
  * Hook entry points as Claude Code runs them (#427): JSON on stdin, `bun <script>`, the exit
- * code and the JSON on stdout. The project is a temporary directory holding one decision.
+ * code and the JSON on stdout. The project is a temporary directory holding one decision and
+ * two node_modules files: one hard-linked as Bun's cache links them, one copy with one link.
  */
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { linkSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -21,11 +22,16 @@ function run(script: string, input: Record<string, unknown>) {
     encoding: 'utf8',
     env,
   });
-  const context = result.stdout.trim()
-    ? (JSON.parse(result.stdout) as { hookSpecificOutput: { additionalContext: string } })
-        .hookSpecificOutput.additionalContext
-    : '';
-  return { status: result.status, stderr: result.stderr, context };
+  const output = result.stdout.trim()
+    ? (JSON.parse(result.stdout) as {
+        hookSpecificOutput: {
+          additionalContext?: string;
+          permissionDecision?: string;
+          permissionDecisionReason?: string;
+        };
+      }).hookSpecificOutput
+    : {};
+  return { status: result.status, stderr: result.stderr, context: output.additionalContext ?? '', output };
 }
 
 beforeAll(() => {
@@ -47,6 +53,12 @@ beforeAll(() => {
       '',
     ].join('\n')
   );
+  // Bun on Linux installs packages as hard links into its cache; bun patch leaves one link
+  mkdirSync(join(project, 'node_modules/linked'), { recursive: true });
+  mkdirSync(join(project, 'node_modules/patched'), { recursive: true });
+  writeFileSync(join(project, 'cache-entry.js'), 'export {};\n');
+  linkSync(join(project, 'cache-entry.js'), join(project, 'node_modules/linked/index.js'));
+  writeFileSync(join(project, 'node_modules/patched/index.js'), 'export {};\n');
 });
 
 afterAll(() => {
@@ -57,11 +69,21 @@ describe('pre-tool-guard', () => {
   it('blocks with exit code 2 and tells Claude why', () => {
     const result = run('pre-tool-guard.ts', {
       tool_name: 'Edit',
-      tool_input: { file_path: join(project, 'node_modules/x/index.js'), new_string: 'x' },
+      tool_input: { file_path: join(project, 'node_modules/linked/index.js'), new_string: 'x' },
     });
     expect(result.status).toBe(2);
     expect(result.stderr).toContain('[guard:node_modules]');
-    expect(result.stderr).toContain('bun patch');
+    expect(result.stderr).toContain('リンク数 2');
+  });
+
+  it('asks the user before editing a copy bun patch took out', () => {
+    const result = run('pre-tool-guard.ts', {
+      tool_name: 'Edit',
+      tool_input: { file_path: join(project, 'node_modules/patched/index.js'), new_string: 'x' },
+    });
+    expect(result.status).toBe(0);
+    expect(result.output.permissionDecision).toBe('ask');
+    expect(result.output.permissionDecisionReason).toContain('bun patch');
   });
 
   it('lets ordinary calls through silently', () => {
@@ -69,7 +91,7 @@ describe('pre-tool-guard', () => {
       tool_name: 'Bash',
       tool_input: { command: 'git status' },
     });
-    expect(result).toEqual({ status: 0, stderr: '', context: '' });
+    expect(result).toMatchObject({ status: 0, stderr: '', context: '' });
   });
 
   it('never blocks on input it cannot parse', () => {
@@ -103,7 +125,7 @@ describe('post-tool-decisions', () => {
       tool_name: 'Edit',
       tool_input: { file_path: join(project, 'components/ui/button.tsx') },
     });
-    expect(result).toEqual({ status: 0, stderr: '', context: '' });
+    expect(result).toMatchObject({ status: 0, stderr: '', context: '' });
   });
 });
 
@@ -118,7 +140,7 @@ describe('session-start', () => {
 
   it('prints nothing on resume or fork, where the conversation already holds the index', () => {
     for (const source of ['resume', 'fork']) {
-      expect(run('session-start.ts', { hook_event_name: 'SessionStart', source })).toEqual({
+      expect(run('session-start.ts', { hook_event_name: 'SessionStart', source })).toMatchObject({
         status: 0,
         stderr: '',
         context: '',
