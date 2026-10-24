@@ -396,6 +396,9 @@ bun run test:e2e
 bun run test:e2e -- --ui
 ```
 
+- パスワードの再設定の E2E（`test/e2e/auth.spec.ts`）は、メールでしか届かないリンクのトークンを、アプリと同じ DB（`DATABASE_URL`）の `verification` の行から読む。自分専用のユーザーも DB に作って最後に消す（`test/e2e/helpers/database.ts`）
+  - ユーザーを足し消しするので、`DATABASE_URL` が手元の DB（localhost・127.0.0.1）のときだけ動く。それ以外は飛ばす。CI では飛ばさずに落とす
+
 ---
 
 ## CI/CD 統合

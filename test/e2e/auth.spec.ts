@@ -8,6 +8,7 @@ import {
   submitAuthForm,
   uniqueClientAddress,
 } from './helpers/auth';
+import { connectE2EDatabase, localDatabaseUrl } from './helpers/database';
 
 /**
  * E2E Test: authentication (#23)
@@ -18,9 +19,11 @@ import {
  * build; the details of each form (validation, loading state, error messages) are covered by the
  * unit tests in test/unit/components/auth/.
  *
- * The users come from scripts/e2e-seed.ts (test/e2e/helpers/auth.ts). Each test, and each other
- * browser or request in it, comes from a client address of its own (uniqueClientAddress), so the
- * per-address limits on sign-in, sign-up and session reads count each flow on its own.
+ * The users come from scripts/e2e-seed.ts (test/e2e/helpers/auth.ts); the password reset test
+ * makes an account of its own in the database (test/e2e/helpers/database.ts), so the seeded
+ * passwords stay as they are. Each test, and each other browser or request in it, comes from a
+ * client address of its own (uniqueClientAddress), so the per-address limits on sign-in, sign-up,
+ * reset requests and session reads count each flow on its own.
  */
 
 const auth = ja.settings.auth;
@@ -36,6 +39,24 @@ async function fillSignUp(page: Page, name: string, password: string) {
   await page.getByLabel(auth.signup.nameLabel, { exact: true }).fill(name);
   await page.getByLabel(auth.signup.passwordLabel, { exact: true }).fill(password);
   await page.getByLabel(auth.signup.confirmPasswordLabel, { exact: true }).fill(password);
+}
+
+/**
+ * Ask for a reset link from the login page, as someone who forgot the password does, and return
+ * better-auth's answer. The page reports success whatever the server answered (it must not reveal
+ * whether the address is registered), so callers check the answer as well
+ */
+async function requestPasswordReset(page: Page, email: string): Promise<Response> {
+  await page.goto('/ja/login');
+  await page.getByRole('link', { name: auth.login.forgotPassword }).click();
+  await page.waitForURL(/\/reset-password$/);
+  await page.getByLabel(auth.resetPassword.emailLabel, { exact: true }).fill(email);
+  const [response] = await Promise.all([
+    page.waitForResponse((r) => new URL(r.url()).pathname === '/api/auth/request-password-reset'),
+    page.getByRole('button', { name: auth.resetPassword.submitButton }).click(),
+  ]);
+  await expect(page.getByText(auth.resetPassword.successMessage)).toBeVisible();
+  return response;
 }
 
 /**
@@ -290,24 +311,94 @@ test.describe('Authentication', () => {
 
   test.describe('Password reset', () => {
     test('should accept a reset request from the login page @smoke', async ({ page }) => {
-      await page.goto('/ja/login');
-      await page.getByRole('link', { name: auth.login.forgotPassword }).click();
-      await page.waitForURL(/\/reset-password$/);
-      await page
-        .getByLabel(auth.resetPassword.emailLabel, { exact: true })
-        .fill(TEST_USERS.owner.email);
-
-      // The page reports success whatever the server answered (it must not reveal whether the
-      // address is registered), so the answer is checked as well
-      const [response] = await Promise.all([
-        page.waitForResponse(
-          (r) => new URL(r.url()).pathname === '/api/auth/request-password-reset'
-        ),
-        page.getByRole('button', { name: auth.resetPassword.submitButton }).click(),
-      ]);
+      const response = await requestPasswordReset(page, TEST_USERS.owner.email);
 
       expect(response.status()).toBe(200);
-      await expect(page.getByText(auth.resetPassword.successMessage)).toBeVisible();
+    });
+
+    test('should set a new password from the emailed link and sign in with it only @smoke', async ({
+      page,
+      request,
+    }) => {
+      // The link reaches the person only by email, so the test reads its token from the database
+      const databaseUrl = localDatabaseUrl();
+      test.skip(
+        !databaseUrl && !process.env.CI,
+        'Needs DATABASE_URL of a database on this machine'
+      );
+      if (!databaseUrl) throw new Error('DATABASE_URL must name the E2E database on this machine');
+
+      const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const email = `e2e-reset-${suffix}@example.com`;
+      const oldPassword = 'Old-passw0rd-2026';
+      const newPassword = 'New-passw0rd-2026';
+      // An account of its own: changing a seeded user's password would sign the other tests out
+      const database = connectE2EDatabase(databaseUrl);
+      let userId: string | undefined;
+      try {
+        userId = await database.createUser({ email, name: 'E2E Reset', password: oldPassword });
+
+        // The old password signs in before the reset (asked from another address, outside the
+        // browser, so the browser stays signed out and keeps its sign-in allowance)
+        const before = await request.post('/api/auth/sign-in/email', {
+          data: { email, password: oldPassword },
+          headers: { 'x-forwarded-for': uniqueClientAddress() },
+        });
+        expect(before.status()).toBe(200);
+
+        const requested = await requestPasswordReset(page, email);
+        expect(requested.status()).toBe(200);
+
+        // The link in the email, as better-auth builds it (the url given to sendResetPassword in
+        // lib/auth/config.ts): its token and the page the form asked to come back to
+        const token = await database.passwordResetToken(userId);
+        const { redirectTo } = requested.request().postDataJSON() as { redirectTo: string };
+        const link = `/api/auth/reset-password/${token}?callbackURL=${encodeURIComponent(redirectTo)}`;
+
+        // Opening it checks the token and leads to the form for the new password
+        await page.goto(link);
+        await page.waitForURL((url) => url.pathname === '/ja/reset-password/confirm');
+        expect(new URL(page.url()).searchParams.get('token')).toBe(token);
+        await expect(
+          page.getByRole('heading', { name: auth.resetPasswordConfirm.title })
+        ).toBeVisible();
+        await page
+          .getByLabel(auth.resetPasswordConfirm.newPasswordLabel, { exact: true })
+          .fill(newPassword);
+        await page
+          .getByLabel(auth.resetPasswordConfirm.confirmPasswordLabel, { exact: true })
+          .fill(newPassword);
+        const [reset] = await Promise.all([
+          page.waitForResponse(
+            (r) =>
+              r.request().method() === 'POST' &&
+              new URL(r.url()).pathname === '/api/auth/reset-password'
+          ),
+          page.getByRole('button', { name: auth.resetPasswordConfirm.submitButton }).click(),
+        ]);
+        expect(reset.status()).toBe(200);
+        await expect(page.getByText(auth.resetPasswordConfirm.successMessage)).toBeVisible();
+        // and the page sends the person to sign in
+        await page.waitForURL((url) => url.pathname === '/ja/login');
+
+        // The link works once
+        await page.goto(link);
+        await expect(page.getByText(auth.resetPasswordConfirm.invalidToken)).toBeVisible();
+
+        // The old password no longer signs in; the new one does
+        await page.goto('/ja/login');
+        await fillSignIn(page, { email, password: oldPassword });
+        expect((await submitAuthForm(page, '/sign-in/email')).status()).toBe(401);
+        await expect(page.getByText(auth.login.invalidCredentials)).toBeVisible();
+
+        await fillSignIn(page, { email, password: newPassword });
+        expect((await submitAuthForm(page, '/sign-in/email')).status()).toBe(200);
+        await page.waitForURL(/\/ja\/dashboard/);
+        await expect(page.getByTestId('user-menu')).toContainText(email);
+      } finally {
+        if (userId) await database.deleteUser(userId);
+        await database.close();
+      }
     });
 
     test('should refuse a reset link that is not valid @smoke', async ({ page }) => {
