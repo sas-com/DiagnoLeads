@@ -1909,7 +1909,13 @@
         "expiredDescription": "This invitation has expired. Ask the person who invited you to send it again.",
         "revokedDescription": "This invitation was revoked or replaced by a newer one. Open the link in the latest invitation email.",
         "acceptedDescription": "This invitation has already been used. If you have joined, open the dashboard.",
-        "openDashboard": "Open the dashboard"
+        "openDashboard": "Open the dashboard",
+        "verifyFirst": "Before you join, we check that {email} is your email address. Send yourself a verification email and open the link in it; it brings you back here.",
+        "sendVerification": "Send a verification email",
+        "resendVerification": "Send the verification email again",
+        "verificationSent": "We sent a verification email to {email}. Open the link in it to come back here and join. If it does not arrive, check your spam folder.",
+        "verificationFailed": "The verification email could not be sent. Wait a moment and try again.",
+        "verifyLinkFailed": "The verification link has expired or is not valid. Send the verification email again."
       }
     },
     "ai": {

@@ -3,7 +3,7 @@
  */
 import { InviteAcceptance } from '@/components/features/members/invite-acceptance';
 import messages from '@/locales/ja/common.json';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -24,11 +24,16 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   setOrganization: vi.fn(),
   signOut: vi.fn(),
+  sendVerificationEmail: vi.fn(),
+  getSession: vi.fn(),
   mutate: vi.fn(),
   preview: { data: undefined as unknown, isLoading: false },
   session: { data: null as unknown, isPending: false },
   acceptOptions: undefined as
-    | { onSuccess: (data: { organizationId: string }) => void; onError: (e: Error) => void }
+    | {
+        onSuccess: (data: { organizationId: string }) => void;
+        onError: (e: { message: string; data?: { code: string } }) => void;
+      }
     | undefined,
 }));
 
@@ -47,7 +52,11 @@ vi.mock('@/lib/trpc/client', () => ({
 }));
 vi.mock('@/lib/auth/client', () => ({
   useSession: () => mocks.session,
-  authClient: { signOut: mocks.signOut },
+  authClient: {
+    signOut: mocks.signOut,
+    sendVerificationEmail: mocks.sendVerificationEmail,
+    getSession: mocks.getSession,
+  },
 }));
 vi.mock('@/lib/context/organization-context', () => ({
   useOrganizationContext: () => ({ setOrganization: mocks.setOrganization }),
@@ -56,10 +65,10 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mocks.push, refresh: mocks.refresh }),
 }));
 
-const renderPage = () =>
+const renderPage = ({ verificationFailed = false } = {}) =>
   render(
     <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
-      <InviteAcceptance token={TOKEN} />
+      <InviteAcceptance token={TOKEN} verificationFailed={verificationFailed} />
     </NextIntlClientProvider>
   );
 
@@ -68,6 +77,7 @@ describe('InviteAcceptance', () => {
     vi.clearAllMocks();
     mocks.preview = { data: valid, isLoading: false };
     mocks.session = { data: null, isPending: false };
+    mocks.getSession.mockResolvedValue({ data: null, error: null });
   });
 
   it('offers sign-up with the invited address, and sign-in, both coming back here', () => {
@@ -97,6 +107,102 @@ describe('InviteAcceptance', () => {
     mocks.acceptOptions?.onSuccess({ organizationId: ORG_ID });
     expect(mocks.setOrganization).toHaveBeenCalledWith(ORG_ID);
     expect(mocks.push).toHaveBeenCalledWith('/ja/dashboard');
+  });
+
+  describe('when the address must be verified first (#128)', () => {
+    const required = { ...valid, emailVerificationRequired: true };
+    beforeEach(() => {
+      mocks.preview = { data: required, isLoading: false };
+    });
+
+    it('sends a verification email that comes back here instead of joining', async () => {
+      mocks.session = {
+        data: { user: { email: 'new@example.com', emailVerified: false } },
+        isPending: false,
+      };
+      mocks.sendVerificationEmail.mockResolvedValue({ data: { status: true }, error: null });
+      const user = userEvent.setup();
+      renderPage();
+
+      expect(screen.queryByRole('button', { name: '参加する' })).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: '確認メールを送る' }));
+      expect(mocks.sendVerificationEmail).toHaveBeenCalledWith({
+        email: 'new@example.com',
+        callbackURL: `/ja/invite/${TOKEN}`,
+      });
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'new@example.com に確認メールを送りました。'
+      );
+      expect(screen.getByRole('button', { name: '確認メールをもう一度送る' })).toBeInTheDocument();
+    });
+
+    it('says so when the email could not be sent', async () => {
+      mocks.session = {
+        data: { user: { email: 'new@example.com', emailVerified: false } },
+        isPending: false,
+      };
+      mocks.sendVerificationEmail.mockResolvedValue({ data: null, error: { status: 429 } });
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(screen.getByRole('button', { name: '確認メールを送る' }));
+      expect(screen.getByRole('alert')).toHaveTextContent('確認メールを送れませんでした。');
+    });
+
+    it('explains a verification link that came back expired or invalid', () => {
+      mocks.session = {
+        data: { user: { email: 'new@example.com', emailVerified: false } },
+        isPending: false,
+      };
+      renderPage({ verificationFailed: true });
+
+      expect(screen.getByRole('alert')).toHaveTextContent('確認のリンクの有効期限が切れているか');
+    });
+
+    it('offers to join on coming back from the link, although the session cookie is stale', async () => {
+      mocks.session = {
+        data: { user: { email: 'new@example.com', emailVerified: false } },
+        isPending: false,
+      };
+      mocks.getSession.mockResolvedValue({
+        data: { user: { email: 'new@example.com', emailVerified: true } },
+        error: null,
+      });
+      renderPage();
+
+      expect(await screen.findByRole('button', { name: '参加する' })).toBeInTheDocument();
+      expect(mocks.getSession).toHaveBeenCalledWith({ query: { disableCookieCache: true } });
+    });
+
+    it('joins once verified, and goes back to verifying if the server says otherwise', async () => {
+      mocks.session = {
+        data: { user: { email: 'new@example.com', emailVerified: true } },
+        isPending: false,
+      };
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(screen.getByRole('button', { name: '参加する' }));
+      expect(mocks.mutate).toHaveBeenCalledWith({ token: TOKEN });
+      act(() =>
+        mocks.acceptOptions?.onError({
+          message: 'メールアドレスの確認が済んでいません。',
+          data: { code: 'PRECONDITION_FAILED' },
+        })
+      );
+      expect(screen.getByRole('button', { name: '確認メールを送る' })).toBeInTheDocument();
+    });
+  });
+
+  it('joins without verifying while the setting is off', () => {
+    mocks.session = {
+      data: { user: { email: 'new@example.com', emailVerified: false } },
+      isPending: false,
+    };
+    renderPage();
+
+    expect(screen.getByRole('button', { name: '参加する' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '確認メールを送る' })).not.toBeInTheDocument();
   });
 
   it('asks someone signed in with another address to switch accounts', async () => {

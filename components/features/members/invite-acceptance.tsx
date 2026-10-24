@@ -7,13 +7,22 @@ import { trpc } from '@/lib/trpc/client';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 /**
  * Accepting an invitation. Signed-out visitors sign up (with the invited address filled in) or
  * sign in, and come back here; signed-in visitors with the invited address join with one click.
+ * When the address must be verified first (#128), they send themselves a verification email whose
+ * link brings them back here.
  */
-export function InviteAcceptance({ token }: { token: string }) {
+export function InviteAcceptance({
+  token,
+  verificationFailed = false,
+}: {
+  token: string;
+  /** The verification link came back with an error (expired or invalid) */
+  verificationFailed?: boolean;
+}) {
   const t = useTranslations('settings.auth.invite');
   const locale = useLocale();
   const router = useRouter();
@@ -21,12 +30,40 @@ export function InviteAcceptance({ token }: { token: string }) {
   const session = useSession();
   const preview = trpc.invitations.preview.useQuery({ token }, { retry: false });
   const [error, setError] = useState<string | null>(null);
+  // Set when the server says the address is not verified although the session says it is
+  const [verifyNeeded, setVerifyNeeded] = useState(false);
+  const [verification, setVerification] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
+  // Coming back from the verification link, the session cookie still says "not verified" for up to
+  // five minutes (cookie cache); read the session past the cache to see the verified address
+  const [verifiedNow, setVerifiedNow] = useState(false);
+  const mustCheck =
+    preview.data?.emailVerificationRequired === true &&
+    session.data?.user !== undefined &&
+    !session.data.user.emailVerified;
+  useEffect(() => {
+    if (!mustCheck) return;
+    let active = true;
+    void authClient
+      .getSession({ query: { disableCookieCache: true } })
+      .then(({ data }) => {
+        if (active && data?.user.emailVerified) setVerifiedNow(true);
+      })
+      .catch(() => {
+        // The verify step stays; the server decides when joining anyway
+      });
+    return () => {
+      active = false;
+    };
+  }, [mustCheck]);
   const accept = trpc.invitations.accept.useMutation({
     onSuccess: ({ organizationId }) => {
       setOrganization(organizationId);
       router.push(`/${locale}/dashboard`);
     },
-    onError: (e) => setError(e.message),
+    onError: (e) => {
+      if (e.data?.code === 'PRECONDITION_FAILED') setVerifyNeeded(true);
+      else setError(e.message);
+    },
   });
 
   const back = `/${locale}/invite/${token}`;
@@ -112,6 +149,50 @@ export function InviteAcceptance({ token }: { token: string }) {
           }}
         >
           {t('signOut')}
+        </Button>
+      </Panel>
+    );
+  }
+
+  if (
+    invitation.emailVerificationRequired &&
+    ((!user.emailVerified && !verifiedNow) || verifyNeeded)
+  ) {
+    const send = async () => {
+      setVerification('sending');
+      const result = await authClient.sendVerificationEmail({
+        email: user.email,
+        callbackURL: back,
+      });
+      setVerification(result.error ? 'failed' : 'sent');
+    };
+    return (
+      <Panel title={t('title')}>
+        {summary}
+        <p className="mt-4 text-sm">{t('verifyFirst', { email: invitation.email })}</p>
+        {verificationFailed && verification === 'idle' && (
+          <p className="mt-4 text-sm text-red-600" role="alert">
+            {t('verifyLinkFailed')}
+          </p>
+        )}
+        {verification === 'sent' && (
+          // biome-ignore lint/a11y/useSemanticElements: live-region notice, not the result of a form calculation
+          <p className="mt-4 text-sm text-gray-600 dark:text-gray-300" role="status">
+            {t('verificationSent', { email: invitation.email })}
+          </p>
+        )}
+        {verification === 'failed' && (
+          <p className="mt-4 text-sm text-red-600" role="alert">
+            {t('verificationFailed')}
+          </p>
+        )}
+        <Button
+          className="mt-6 w-full"
+          variant={verification === 'sent' ? 'outline' : 'default'}
+          disabled={verification === 'sending'}
+          onClick={send}
+        >
+          {verification === 'sent' ? t('resendVerification') : t('sendVerification')}
         </Button>
       </Panel>
     );
