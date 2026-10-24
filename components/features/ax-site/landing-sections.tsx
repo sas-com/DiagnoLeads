@@ -639,6 +639,7 @@ const FAQ_KEYS: readonly string[] = [
   'vendorSource',
   'result',
   'ax',
+  'webSecurity',
   'data',
   'privacy',
 ];

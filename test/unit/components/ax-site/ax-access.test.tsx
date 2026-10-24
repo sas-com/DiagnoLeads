@@ -217,6 +217,29 @@ describe('Access landing page', () => {
     expect(steps).toEqual(['無料Web診断（Access版・約3分）', '棚卸し', '進め方の決定', '移行', 'AX化']);
   });
 
+  it('answers the worry about moving to the web, next to the partial move (#466)', async () => {
+    await renderPage();
+    const faq = document.getElementById('faq') as HTMLElement;
+    const questions = [...faq.querySelectorAll('summary')].map((summary) =>
+      summary.textContent?.replace(/^Q/, '')
+    );
+    expect(questions.indexOf('Web に移すと、脆弱性やサイバー攻撃が心配です。')).toBe(
+      questions.indexOf('一部だけ Web に移せますか？') + 1
+    );
+    const answer = within(faq).getByText(/^ご心配はもっともです。/);
+    expect(answer).toHaveTextContent('進め方を決めるときに一緒に決めます。');
+    expect(answer).toHaveTextContent('サポートが終わった版の Access は、弱点が見つかっても直されません。');
+  });
+
+  it('says the 30-minute online consultation is free, as the main page and the result do (#467)', async () => {
+    await renderPage();
+    const faq = within(document.getElementById('faq') as HTMLElement);
+    expect(
+      faq.getByText(/^30分の無料オンライン相談が基本です。内容に応じて、エンジニアも同席します。/)
+    ).toBeInTheDocument();
+    expect(faq.getByText(/無料Web診断と30分のオンライン相談に、費用はかかりません。$/)).toBeInTheDocument();
+  });
+
   it('puts the phone halfway down and at the end, and the reassurance before the diagnosis (#425)', async () => {
     window.history.replaceState(null, '', '/ja/ax-migration/access');
     const analytics = window as Window & { dataLayer?: unknown[] };
@@ -259,10 +282,10 @@ describe('Access landing page', () => {
     vi.stubEnv('NEXT_PUBLIC_AX_CONSULTATION_URL', 'https://bookings.example.com/ax');
     await renderPage();
     // In the hero, the consultation band and the final call to action
-    const bookings = screen.getAllByRole('link', { name: /30分のオンライン相談を予約する/ });
+    const bookings = screen.getAllByRole('link', { name: /30分の無料オンライン相談を予約する/ });
     expect(bookings).toHaveLength(3);
     for (const booking of bookings) {
-      expect(booking).toHaveAccessibleName('30分のオンライン相談を予約する（新しいタブで開きます）');
+      expect(booking).toHaveAccessibleName('30分の無料オンライン相談を予約する（新しいタブで開きます）');
       expect(booking).toHaveAttribute('href', 'https://bookings.example.com/ax');
       expect(booking).toHaveAttribute('target', '_blank');
     }

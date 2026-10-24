@@ -572,6 +572,7 @@ export const ACCESS_FAQ_KEYS = [
   'noDocs',
   'accde',
   'partial',
+  'webSecurity',
   'cost',
   'period',
   'useDuring',

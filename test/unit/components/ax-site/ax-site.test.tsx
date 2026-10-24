@@ -242,6 +242,22 @@ describe('AX migration landing page', () => {
     }
   });
 
+  it('answers the worry about moving to the web, before the data questions (#466)', async () => {
+    await renderPage();
+    const faq = document.getElementById('faq') as HTMLElement;
+    const questions = [...faq.querySelectorAll('summary')].map((summary) =>
+      summary.textContent?.replace(/^Q/, '')
+    );
+    expect(questions.indexOf('Webシステムにすると、脆弱性やサイバー攻撃が心配です。')).toBe(
+      questions.indexOf('お預けした仕様書やソースコードは、AIの学習に使われますか？') - 1
+    );
+    const answer = within(faq).getByText(/^ご心配はもっともです。/);
+    expect(answer).toHaveTextContent('移行の進め方を決めるときに一緒に決めます。');
+    expect(answer).toHaveTextContent(
+      'OSや製品の保守が終わると、今お使いのシステムでも、見つかった弱点は直されなくなります。'
+    );
+  });
+
   it('shows the booking button only when a booking URL is configured', async () => {
     render(withIntl(await resolveServerTree(await AxFinalCta({ locale: 'ja' }))));
     expect(screen.queryByRole('link', { name: /無料相談を予約する/ })).not.toBeInTheDocument();

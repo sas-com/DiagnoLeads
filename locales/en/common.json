@@ -2993,6 +2993,10 @@
           "q": "What does \"AX\" mean?",
           "a": "AI transformation: business transformation that makes use of AI. After the migration, AI agents are added to the new web system to analyze the system and its data, streamline operations and extend features step by step."
         },
+        "webSecurity": {
+          "q": "We are worried about vulnerabilities and cyberattacks if we move to a web system.",
+          "a": "That is a fair concern. A web system also carries a risk: when a weakness (vulnerability) is found in software it uses, that weakness can be exploited until it is fixed. So when we decide how to migrate, we decide with you how widely the system can be reached (for example, only on your internal network, or from outside the office as well), who keeps fixing weaknesses as they are found and how, and how logins, permissions, records and backups are managed. Note also that once maintenance of the OS or a product ends, weaknesses found in it are no longer fixed, and this applies to your current system too."
+        },
         "data": {
           "q": "Are the specifications and source code we provide used to train AI?",
           "a": "No. Specifications, source code and other materials you entrust to us are processed in a secure environment where they are not used as training data."
@@ -3054,7 +3058,7 @@
       },
       "ctaCaption": "Free, multiple choice, about 3 minutes",
       "cta": "Start the free web check (Access)",
-      "consult": "Book a 30-minute online consultation",
+      "consult": "Book a free 30-minute online consultation",
       "pdfNote": "You can print the result or save it as a PDF and use it as it is to explain the matter to your manager or IT.",
       "paths": {
         "title": "Three ways forward",
@@ -3210,9 +3214,13 @@
           "q": "Can we move only part of it to the web?",
           "a": "Yes. You can move the most used functions first and keep using the rest in your current Access tool."
         },
+        "webSecurity": {
+          "q": "We are worried about vulnerabilities and cyberattacks if we move to the web.",
+          "a": "That is a fair concern. A web system also carries a risk: when a weakness (vulnerability) is found in software it uses, that weakness can be exploited until it is fixed. So when we decide the approach, we decide with you how widely the system can be reached (for example, only on your internal network, or from outside the office as well), who keeps fixing weaknesses as they are found and how, and how logins, permissions, records and backups are managed. Note also that versions of Access whose support has ended get no fixes when weaknesses are found."
+        },
         "cost": {
           "q": "What does the cost depend on?",
-          "a": "It depends on the number of screens and reports, the amount of VBA, the links to other systems and databases, and the amount and state of the data. We give you an estimate after checking the contents."
+          "a": "It depends on the number of screens and reports, the amount of VBA, the links to other systems and databases, and the amount and state of the data. We give you an estimate after checking the contents. The free web check and the 30-minute online consultation cost nothing."
         },
         "period": {
           "q": "How long does it take?",
@@ -3228,7 +3236,7 @@
         },
         "consult": {
           "q": "How does the consultation work?",
-          "a": "It is a 30-minute online consultation as a rule. Engineers join when needed."
+          "a": "It is a free 30-minute online consultation as a rule. Engineers join when needed. You can apply from the result of the free web check, or by phone or email."
         }
       }
     },
@@ -3247,7 +3255,7 @@
       "lead": "Fix it, move it to the web, or replace it. Before deciding, why not find out the current state of your tool?",
       "caption": "Free, multiple choice, about 3 minutes",
       "cta": "Start the free web check (Access)",
-      "consult": "Book a 30-minute online consultation"
+      "consult": "Book a free 30-minute online consultation"
     },
     "trademark": "Microsoft and Access are trademarks or registered trademarks of Microsoft Corporation in the United States and other countries.",
     "breadcrumb": "Microsoft Access migration",
