@@ -125,6 +125,14 @@ describe('InteractiveAreaChart', () => {
     expect(tooltipFormatterOf(options)(80)).toBe('80回');
   });
 
+  it('uses toLocaleString by default', () => {
+    render(<InteractiveAreaChart data={rows} index="date" categories={['visits']} />);
+
+    const { options } = lastChart();
+    expect(yAxisOf(options).labels?.formatter?.(1234)).toBe((1234).toLocaleString());
+    expect(tooltipFormatterOf(options)(1234)).toBe((1234).toLocaleString());
+  });
+
   it('follows the dark class on <html>', async () => {
     setDarkMode(true);
     render(<InteractiveAreaChart data={rows} index="date" categories={['visits']} title="t" />);
@@ -194,6 +202,14 @@ describe('BrushChart', () => {
     expect(yAxisOf(main.options).labels?.formatter?.(4)).toBe('4件');
     expect(tooltipFormatterOf(main.options)(9)).toBe('9件');
     expect(yAxisOf(brush.options).labels?.show).toBe(false);
+  });
+
+  it('uses toLocaleString by default', () => {
+    render(<BrushChart data={rows} index="date" category="visits" />);
+
+    const { main } = lastPair();
+    expect(yAxisOf(main.options).labels?.formatter?.(1234)).toBe((1234).toLocaleString());
+    expect(tooltipFormatterOf(main.options)(1234)).toBe((1234).toLocaleString());
   });
 
   it('follows the dark class on <html>', async () => {

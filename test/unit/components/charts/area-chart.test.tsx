@@ -105,6 +105,14 @@ describe('AreaChart', () => {
     expect(tooltipFormatterOf(options)(9)).toBe('9%');
   });
 
+  it('uses toLocaleString by default', () => {
+    render(<AreaChart data={rows} index="date" categories={['leads']} />);
+
+    const { options } = lastChart();
+    expect(yAxisOf(options).labels?.formatter?.(1234)).toBe((1234).toLocaleString());
+    expect(tooltipFormatterOf(options)(1234)).toBe((1234).toLocaleString());
+  });
+
   it('counts on a whole-number axis from zero, rounding the tick labels', () => {
     render(
       <AreaChart

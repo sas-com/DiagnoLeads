@@ -42,6 +42,12 @@ const renderDropdown = () =>
 /** The button that opens the menu (it shows the initials) */
 const toggle = () => screen.getAllByRole('button')[0];
 
+/**
+ * The whole text of the avatar: the first span in the button. The name and email are <p>, so a
+ * name that contains the initials (山田, User) cannot make the assertion pass.
+ */
+const initialsIn = (button: HTMLElement) => button.querySelector('span')?.textContent;
+
 /** jsdom cannot open another page; the menu's own click handlers still run */
 const stayOnPage = (event: MouseEvent) => {
   if ((event.target as Element | null)?.closest('a')) event.preventDefault();
@@ -64,26 +70,26 @@ describe('UserDropdown', () => {
   it('shows the initials of the first and last name, the name and the email', () => {
     renderDropdown();
 
-    expect(toggle()).toHaveTextContent('TY');
+    expect(initialsIn(toggle())).toBe('TY');
     expect(toggle()).toHaveTextContent('Taro Yamada');
     expect(toggle()).toHaveTextContent('taro@example.com');
   });
 
   it('takes the first two letters of a single name', () => {
-    signedInAs({ name: '山田', email: 'yamada@example.com' });
+    signedInAs({ name: '山田太郎', email: 'yamada@example.com' });
     renderDropdown();
-    expect(toggle()).toHaveTextContent('山田');
+    expect(initialsIn(toggle())).toBe('山田');
 
     signedInAs({ name: 'hanako', email: 'h@example.com' });
     renderDropdown();
-    expect(screen.getAllByRole('button')[1]).toHaveTextContent('HA');
+    expect(initialsIn(screen.getAllByRole('button')[1])).toBe('HA');
   });
 
   it('falls back to the email without a name', () => {
     signedInAs({ name: null, email: 'sales@example.com' });
     renderDropdown();
 
-    expect(toggle()).toHaveTextContent('SA');
+    expect(initialsIn(toggle())).toBe('SA');
     expect(toggle()).toHaveTextContent('sales');
   });
 
@@ -91,7 +97,7 @@ describe('UserDropdown', () => {
     signedInAs(null);
     renderDropdown();
 
-    expect(toggle()).toHaveTextContent('U');
+    expect(initialsIn(toggle())).toBe('U');
     expect(toggle()).toHaveTextContent('User');
   });
 

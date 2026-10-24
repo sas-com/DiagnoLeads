@@ -1,8 +1,10 @@
 /**
  * Member invitations (lib/features/members/invitations.ts) without a database (#28): which rows
- * are read and written, how each state of an invitation is answered, and that every query is
- * limited to the organization. The database is a fake that answers each awaited query with the
- * next queued result and records the calls. The same functions on a real PostgreSQL (locks,
+ * are read and written, how each state of an invitation is answered, and that the queries on an
+ * organization's data (revoking the earlier invitation, the membership check on acceptance,
+ * listing, revoking) are limited to that organization. Reading an invitation by its token goes by
+ * the token hash, and accepting it updates the row by id. The database is a fake that answers
+ * each awaited query with the next queued result and records the calls; it does not filter. The same functions on a real PostgreSQL (locks,
  * unique indexes, concurrent acceptance) are covered by
  * test/unit/integration/member-invitations.db.test.ts.
  */
@@ -303,14 +305,15 @@ describe('isSignupInvited', () => {
     expect(whereOf(dbState.calls[0]).params).toEqual([hashInvitationToken(TOKEN)]);
   });
 
-  it('accepts tokens of 32 to 128 characters', async () => {
-    dbState.results = [
-      [invitation({ tokenHash: hashInvitationToken('a'.repeat(32)) })],
-      [invitation({ tokenHash: hashInvitationToken('a'.repeat(128)) })],
-    ];
+  it('accepts tokens of 32 to 128 characters and looks each one up by its hash', async () => {
+    dbState.results = [[invitation()], [invitation()]];
 
     expect(await isSignupInvited(db, 'a'.repeat(32), 'new@example.com', NOW)).toBe(true);
     expect(await isSignupInvited(db, 'a'.repeat(128), 'new@example.com', NOW)).toBe(true);
+    expect(dbState.calls.map((call) => whereOf(call).params)).toEqual([
+      [hashInvitationToken('a'.repeat(32))],
+      [hashInvitationToken('a'.repeat(128))],
+    ]);
   });
 
   it('refuses another address, an unknown token and an invitation that cannot be used', async () => {

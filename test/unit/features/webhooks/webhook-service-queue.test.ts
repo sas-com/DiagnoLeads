@@ -664,7 +664,7 @@ describe('processWebhookRetries', () => {
     expect(calls('update', 'webhooks')).toHaveLength(0);
   });
 
-  it('gives up after the last attempt and marks a webhook failing for the tenth time', async () => {
+  it('gives up after the last retry and marks a webhook that already has 10 or more failures as failed', async () => {
     withRetryState({
       rounds: [[delivery('d1', 'wh-1', 3)]],
       hooks: [webhook({ failureCount: 10 })],
