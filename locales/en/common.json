@@ -3828,7 +3828,8 @@
       "status": "Change status (now: {value})",
       "dealPhase": "Change deal phase (now: {value})",
       "lostReasonPrompt": "Record why the lead was lost",
-      "lostReasonAction": "Add reason"
+      "lostReasonAction": "Add reason",
+      "nurturingWithoutFollowUp": "No next action and no month to act. Add a next action"
     },
     "hearing": {
       "title": "Meeting summary",
@@ -4030,7 +4031,8 @@
     "actTimingHint": "The month to move again, from the support end, retirement and budget planning",
     "actTimingOptions": {
       "soon": "Within 6 months (past ones included)",
-      "has": "Worked out"
+      "has": "Worked out",
+      "none": "No next action and no month to act"
     }
   },
   "leadFollowUp": {

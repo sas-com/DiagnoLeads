@@ -10,9 +10,11 @@ import {
 } from '@/components/ui/select';
 import { useUpdateLead } from '@/hooks/use-leads';
 import { DEAL_PHASES, LEAD_STATUSES, type LeadStatus } from '@/lib/features/leads/types';
+import { trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
 import { type KeyboardEvent, type MouseEvent, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { LEAD_STATUS_COLORS } from './lead-status-styles';
 
 /** Sentinel for "not set": Radix Select does not accept an empty value */
@@ -58,6 +60,7 @@ export function LeadQuickSelect({
   const tStatus = useTranslations('status');
   const tPipeline = useTranslations('pipeline');
   const updateLead = useUpdateLead();
+  const utils = trpc.useUtils();
 
   const saved = field === 'status' ? lead.status : lead.dealPhase;
   // The value chosen but not yet confirmed by the server (undefined = none)
@@ -95,12 +98,27 @@ export function LeadQuickSelect({
     if (value === shown) return;
     setPending(value);
     try {
-      await updateLead.mutateAsync({ id: lead.id, organizationId, [field]: value });
+      const updated = await updateLead.mutateAsync({ id: lead.id, organizationId, [field]: value });
       if (field === 'status' && value === 'lost') onLost?.();
+      if (field === 'status' && value === 'nurturing' && !updated?.actBy) {
+        void warnWithoutNextAction();
+      }
     } catch {
       // Back to the saved value; useUpdateLead already showed the error
       setPending(undefined);
     }
+  };
+
+  // A nurtured lead needs a next action or a "when to act" month, else nobody comes back to it
+  // (#446). Only a warning: the status is saved either way
+  const warnWithoutNextAction = async () => {
+    try {
+      const tasks = await utils.leadFollowUp.tasks.fetch({ organizationId, leadId: lead.id });
+      if (tasks.items.some((task) => !task.done)) return;
+    } catch {
+      return;
+    }
+    toast.warning(t('quick.nurturingWithoutFollowUp'));
   };
 
   const options: readonly string[] = field === 'status' ? LEAD_STATUSES : DEAL_PHASES;
