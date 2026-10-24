@@ -3,6 +3,7 @@
  */
 import { AxDiagnosisFlow } from '@/components/features/ax-diagnosis/ax-diagnosis-flow';
 import { AxDiagnosisResult } from '@/components/features/ax-diagnosis/ax-diagnosis-result';
+import { LOAD_TIMEOUT_MS } from '@/components/features/diagnosis-runner/turnstile-widget';
 import { axMigrationDefinition } from '@/lib/features/diagnostics/ax-migration/definition';
 import { evaluateAxMigration, toPublicResult } from '@/lib/features/diagnostics/ax-migration/evaluate';
 import messages from '@/locales/ja/common.json';
@@ -395,7 +396,11 @@ describe('AxDiagnosisFlow', () => {
 });
 
 describe('AxDiagnosisFlow: another system and the bot check', () => {
-  type RenderOptions = { callback: (token: string) => void };
+  type RenderOptions = {
+    callback: (token: string) => void;
+    'error-callback': (code?: string) => void;
+    'unsupported-callback': () => void;
+  };
   const installTurnstile = (onRender: (options: RenderOptions) => void = () => {}) => {
     let count = 0;
     const turnstile = {
@@ -591,7 +596,93 @@ describe('AxDiagnosisFlow: another system and the bot check', () => {
     await user.click(screen.getByRole('button', { name: '確認をやり直す' }));
     await waitFor(() => expect(scripts()).toHaveLength(1));
     expect(screen.queryByText('送信前の確認を表示できませんでした。')).not.toBeInTheDocument();
-    for (const script of scripts()) script.remove();
+    // Settle the load still under way, so the next test starts a new one
+    for (const script of scripts()) script.dispatchEvent(new Event('error'));
+  });
+
+  const expectAlternativeContact = () => {
+    expect(screen.getByText('送信前の確認を表示できませんでした。')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '03-5427-3663' })).toHaveAttribute('href', 'tel:+81354273663');
+    expect(screen.getByRole('link', { name: 'dx-agency@sas-com.com' })).toHaveAttribute(
+      'href',
+      'mailto:dx-agency@sas-com.com'
+    );
+    expect(screen.getByRole('button', { name: '確認をやり直す' })).toBeInTheDocument();
+  };
+
+  it('offers the phone and email when the script never answers (#537)', async () => {
+    window.turnstile = undefined;
+    const realSetTimeout = globalThis.setTimeout;
+    const timeouts: Array<() => void> = [];
+    const spy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(((
+      handler: () => void,
+      ms?: number,
+      ...rest: unknown[]
+    ) => {
+      if (ms === LOAD_TIMEOUT_MS) timeouts.push(handler);
+      return realSetTimeout(handler, ms, ...rest);
+    }) as typeof setTimeout);
+    const scripts = () =>
+      document.head.querySelectorAll('script[src^="https://challenges.cloudflare.com/"]');
+    try {
+      const user = userEvent.setup();
+      render(withIntl(<AxDiagnosisFlow locale="ja" turnstileSiteKey="site-key" />));
+      await answerAs400(user);
+      await waitFor(() => expect(scripts()).toHaveLength(1));
+      expect(screen.queryByText('送信前の確認を表示できませんでした。')).not.toBeInTheDocument();
+      expect(timeouts).toHaveLength(1);
+
+      // Packets dropped by a firewall: neither load nor error ever comes
+      await act(async () => timeouts[0]());
+      expectAlternativeContact();
+      // The hanging script is dropped, so trying again loads it anew
+      expect(scripts()).toHaveLength(0);
+      await user.click(screen.getByRole('button', { name: '確認をやり直す' }));
+      await waitFor(() => expect(scripts()).toHaveLength(1));
+    } finally {
+      spy.mockRestore();
+      for (const script of scripts()) script.dispatchEvent(new Event('error'));
+    }
+  });
+
+  it('offers the phone and email when the check keeps failing (#537)', async () => {
+    const renders: RenderOptions[] = [];
+    const turnstile = installTurnstile((options) => renders.push(options));
+    const user = userEvent.setup();
+    render(withIntl(<AxDiagnosisFlow locale="ja" turnstileSiteKey="site-key" />));
+    await answerAs400(user);
+    await waitFor(() => expect(renders).toHaveLength(1));
+
+    // One failure: Turnstile tries again by itself, and a pass resets the count
+    await act(async () => renders[0]['error-callback']('300010'));
+    await act(async () => renders[0].callback('token-1'));
+    await act(async () => renders[0]['error-callback']('300010'));
+    expect(screen.getByTestId('ax-turnstile')).toBeInTheDocument();
+    expect(screen.queryByText('送信前の確認を表示できませんでした。')).not.toBeInTheDocument();
+
+    // Failing again in a row: the check is given up
+    await act(async () => renders[0]['error-callback']('300010'));
+    expectAlternativeContact();
+    expect(turnstile.remove).toHaveBeenCalledWith('widget-1');
+    // The token from before the failures is not sent
+    await fillContact(user);
+    await user.click(screen.getByRole('button', { name: /診断結果を見る/ }));
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: '確認をやり直す' }));
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalledTimes(2));
+    expect(screen.getByTestId('ax-turnstile')).toBeInTheDocument();
+  });
+
+  it('offers the phone and email when the browser is not supported (#537)', async () => {
+    const renders: RenderOptions[] = [];
+    installTurnstile((options) => renders.push(options));
+    const user = userEvent.setup();
+    render(withIntl(<AxDiagnosisFlow locale="ja" turnstileSiteKey="site-key" />));
+    await answerAs400(user);
+    await waitFor(() => expect(renders).toHaveLength(1));
+    await act(async () => renders[0]['unsupported-callback']());
+    expectAlternativeContact();
   });
 
   it('says how long to wait when there were too many submissions', async () => {
