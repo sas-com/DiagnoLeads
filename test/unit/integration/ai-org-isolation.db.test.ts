@@ -5,12 +5,16 @@
  * they were, and B's search stays in B. The Claude calls are counted against AI_CALL_LIMITS
  * (#405) and the OpenAI embeddings against EMBEDDING_CALL_LIMITS (#576), concurrent calls (a
  * batched HTTP request) included. The AI services are stubs; the
- * organization checks and the counting run against the real database. All values are fictional.
+ * organization checks and the counting run against the real database. The functions that store
+ * and compare the embeddings (lib/features/ai/search/semantic.ts) also run on it, with OpenAI
+ * stubbed: they write and read a lead only in the organization named (#583). All values are
+ * fictional.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/dl_test \
  *     bunx vitest --run test/unit/integration/ai-org-isolation.db.test.ts
  */
+import { db } from '@/lib/db';
 import * as schema from '@/lib/db/schema';
 import {
   leads,
@@ -68,7 +72,31 @@ vi.mock('@/lib/features/ai/search/semantic', () => ({
   findSimilarLeads: ai.findSimilarLeads,
   updateLeadEmbedding: ai.updateLeadEmbedding,
 }));
-vi.mock('@/lib/features/ai/embeddings/openai', () => ({ prepareLeadText: ai.prepareLeadText }));
+// The OpenAI embedding the real semantic.ts functions get (kept apart from the stubs above, whose
+// calls leadIdsGiven reads)
+const openai = vi.hoisted(() => ({
+  generateEmbedding: vi.fn<(text: string) => Promise<number[]>>(),
+}));
+vi.mock('@/lib/features/ai/embeddings/openai', () => ({
+  prepareLeadText: ai.prepareLeadText,
+  generateEmbedding: openai.generateEmbedding,
+}));
+// semantic.ts uses the app's database client; point it at the test database
+const connection = vi.hoisted(() => ({
+  url: process.env.TEST_DATABASE_URL,
+  client: null as { end: () => Promise<void> } | null,
+}));
+vi.mock('@/lib/db', async (importOriginal) => {
+  const pg = await import('postgres');
+  const { drizzle: connect } = await import('drizzle-orm/postgres-js');
+  const dbSchema = await import('@/lib/db/schema');
+  const client = pg.default(connection.url ?? 'postgres://unused@127.0.0.1:1/unused', { max: 2 });
+  connection.client = client;
+  return {
+    ...(await importOriginal<typeof import('@/lib/db')>()),
+    db: connect(client, { schema: dbSchema }),
+  };
+});
 
 const url = process.env.TEST_DATABASE_URL;
 
@@ -172,6 +200,7 @@ describe.skipIf(!url)('AI features: organization isolation (PostgreSQL)', () => 
     ]);
     await pg.delete(publicRateLimits).where(inArray(publicRateLimits.key, counters));
     await client?.end();
+    await connection.client?.end();
   });
 
   it("refuses B's admin when it names organization A itself", async () => {
@@ -380,5 +409,66 @@ describe.skipIf(!url)('AI features: organization isolation (PostgreSQL)', () => 
     // The organization counted only the call that ran, and the Claude calls none of them
     expect(await counted(orgKey)).toBe(orgBefore + 1);
     expect(await counted(claudeOrgKey)).toBe(claudeBefore);
+  });
+
+  it("stores and compares embeddings in the organization named only: A's lead is neither written nor the base of B's search (updateLeadEmbedding, findSimilarLeads, #583)", async () => {
+    // The real functions (the router tests above use stubs), on the test database
+    const { findSimilarLeads, updateLeadEmbedding } = await vi.importActual<
+      typeof import('@/lib/features/ai/search/semantic')
+    >('@/lib/features/ai/search/semantic');
+    // A 1536-dimension embedding that points mostly along one axis
+    const along = (axis: number) =>
+      Array.from({ length: 1536 }, (_, index) => (index === axis ? 1 : 0.01));
+    const embeddingsOf = async (ids: string[]) =>
+      new Map(
+        (
+          await pg
+            .select({ id: leads.id, embedding: leads.embedding })
+            .from(leads)
+            .where(inArray(leads.id, ids))
+        ).map((row) => [row.id, row.embedding])
+      );
+    const [nearB] = await pg
+      .insert(leads)
+      .values({ organizationId: orgB, email: `ai-iso-b3-${unique()}@example.co.jp` })
+      .returning({ id: leads.id });
+
+    // A's lead with organization B named: not written
+    openai.generateEmbedding.mockResolvedValue(along(0));
+    await updateLeadEmbedding(leadsA[0], orgB, 'テキスト');
+    expect((await embeddingsOf([leadsA[0]])).get(leadsA[0])).toBeNull();
+
+    // Each lead with its own organization named: written
+    await updateLeadEmbedding(leadsA[0], orgA, 'テキスト');
+    openai.generateEmbedding.mockResolvedValue(along(1));
+    await updateLeadEmbedding(leadB, orgB, 'テキスト');
+    openai.generateEmbedding.mockResolvedValue(along(2));
+    await updateLeadEmbedding(nearB.id, orgB, 'テキスト');
+    const stored = await embeddingsOf([leadsA[0], leadB, nearB.id]);
+    expect(stored.get(leadsA[0])?.[0]).toBe(1);
+    expect(stored.get(leadB)?.[1]).toBe(1);
+    expect(stored.get(nearB.id)?.[2]).toBe(1);
+
+    // The comparison query runs on the app's client; the reason of a failure is only logged
+    const comparisons = vi.spyOn(db, 'execute');
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const loggedReason = () => (logged.mock.calls.at(-1)?.[1] as Error | undefined)?.message;
+    try {
+      // A's lead (it has an embedding now) is not read as the base of a search in B: no search
+      await expect(findSimilarLeads(leadsA[0], orgB)).rejects.toThrow(
+        'Finding similar leads failed'
+      );
+      expect(loggedReason()).toBe('Reference lead not found or has no embedding');
+      expect(comparisons).not.toHaveBeenCalled();
+
+      // B's own lead is read as the base, and the search in B runs. The comparison query itself
+      // fails on PostgreSQL today (#590); once it is fixed, expect B's other lead (nearB) only
+      await findSimilarLeads(leadB, orgB).catch(() => undefined);
+      expect(comparisons).toHaveBeenCalledTimes(1);
+      expect(loggedReason()).not.toBe('Reference lead not found or has no embedding');
+    } finally {
+      comparisons.mockRestore();
+      logged.mockRestore();
+    }
   });
 });

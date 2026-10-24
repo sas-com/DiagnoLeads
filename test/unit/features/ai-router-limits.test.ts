@@ -19,6 +19,8 @@ import { MAX_PROMPT_FIELD_CHARS, PROMPT_TRUNCATED } from '@/lib/features/ai/prom
 import { MAX_SEMANTIC_SEARCH_QUERY_CHARS } from '@/lib/features/ai/types/schemas';
 import { leadChangeEvents } from '@/lib/features/webhooks/services/lead-events';
 import { appRouter } from '@/server/routers/_app';
+import type { SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/db/rls', () => ({ setCurrentUser: vi.fn().mockResolvedValue(undefined) }));
@@ -320,8 +322,11 @@ describe('AI router: rate limits of the OpenAI embeddings', () => {
     expect(rateLimit.consumeRateLimits.mock.invocationCallOrder[0]).toBeLessThan(
       openai.create.mock.invocationCallOrder[0]
     );
-    // The embedding is stored once OpenAI has answered
+    // The embedding is stored once OpenAI has answered, on the lead in the organization only (#583)
     expect(globalDb.execute).toHaveBeenCalledTimes(1);
+    const update = new PgDialect().sqlToQuery(globalDb.execute.mock.calls[0][0] as SQL);
+    expect(update.sql).toMatch(/WHERE id = \$\d+ AND organization_id = \$\d+/);
+    expect(update.params.slice(-2)).toEqual([LEAD_1, ORG_ID]);
   });
 
   it('never calls OpenAI once a limit refuses, and names the limit', async () => {
@@ -398,12 +403,13 @@ describe('AI router: rate limits of the OpenAI embeddings', () => {
   it('counts nothing for similar leads: they compare the stored embeddings without OpenAI', async () => {
     const { caller, db } = createCaller();
     db.query.leads.findFirst.mockResolvedValue(leadRow(LEAD_1));
-    globalDb.select.mockReturnValue({
-      from: () => ({ where: async () => [{ embedding: '[0.1,0.2,0.3]' }] }),
-    });
+    const where = vi.fn(async (_condition: SQL) => [{ embedding: '[0.1,0.2,0.3]' }]);
+    globalDb.select.mockReturnValue({ from: () => ({ where }) });
 
     await caller.ai.findSimilar(one);
 
+    // The reference lead is read in the organization named, too (#583)
+    expect(new PgDialect().sqlToQuery(where.mock.calls[0][0]).params).toEqual([LEAD_1, ORG_ID]);
     expect(globalDb.execute).toHaveBeenCalledTimes(1);
     expect(rateLimit.consumeRateLimits).not.toHaveBeenCalled();
     expect(openai.create).not.toHaveBeenCalled();
