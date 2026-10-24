@@ -226,6 +226,36 @@ describe.skipIf(!url)('when to act (PostgreSQL)', () => {
     expect(soon.items.filter((lead: { actBy: string | null }) => lead.actBy && lead.actBy > '2029-01-01')).toEqual([]);
   });
 
+  it('lists the leads nobody comes back to: no month to act and no open next action (#446)', async () => {
+    const insertLead = async (values: Partial<typeof leads.$inferInsert> = {}) => {
+      const [lead] = await pg
+        .insert(leads)
+        .values({ organizationId: org, email: `none-${unique()}@example.co.jp`, status: 'nurturing', ...values })
+        .returning({ id: leads.id });
+      return lead.id;
+    };
+    const task = (leadId: string, completedAt: Date | null) => ({
+      organizationId: org,
+      leadId,
+      title: '架空の電話',
+      dueOn: '2026-11-02',
+      completedAt,
+    });
+    const forgotten = await insertLead();
+    const onlyDone = await insertLead();
+    const withTask = await insertLead();
+    const withMonth = await insertLead({ actBy: '2099-04-01' });
+    // A past month brings nobody back
+    const pastMonth = await insertLead({ actBy: '2020-04-01' });
+    await pg.insert(leadTasks).values([task(onlyDone, new Date()), task(withTask, null)]);
+
+    const result = await callers.member.leads.list({ organizationId: org, actTiming: 'none', limit: 100, offset: 0 });
+    const ids = result.items.map((lead: { id: string }) => lead.id);
+    expect(ids).toEqual(expect.arrayContaining([forgotten, onlyDone, pastMonth]));
+    expect(ids).not.toContain(withTask);
+    expect(ids).not.toContain(withMonth);
+  });
+
   it('stops the morning run when its time is up, leaving the rest for the next run', async () => {
     let tick = 0;
     // Each check of the clock moves it on by 6 s: the second lead is past the 10 s budget

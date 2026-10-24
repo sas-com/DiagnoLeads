@@ -3829,7 +3829,8 @@
       "status": "ステータスを変更（現在：{value}）",
       "dealPhase": "商談フェーズを変更（現在：{value}）",
       "lostReasonPrompt": "失注・保留理由を入力しておきましょう",
-      "lostReasonAction": "理由を入力"
+      "lostReasonAction": "理由を入力",
+      "nurturingWithoutFollowUp": "戻ってくる手がかりがありません。次に連絡する日を次の行動に入れておきましょう"
     },
     "hearing": {
       "title": "商談のまとめ",
@@ -4031,7 +4032,8 @@
     "actTimingHint": "保守期限・退職予定・予算策定の時期から計算した、再び動くべき月",
     "actTimingOptions": {
       "soon": "6か月以内（過ぎたものを含む）",
-      "has": "計算できたもの"
+      "has": "計算できたもの",
+      "none": "次の行動も動くべき時期もない（状態と組み合わせて使う）"
     }
   },
   "leadFollowUp": {

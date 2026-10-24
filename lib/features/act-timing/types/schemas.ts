@@ -40,8 +40,11 @@ export const updateActTimingSettingsSchema = z.object({
   settings: actTimingSettingsSchema,
 });
 
-/** List filter (#151): "when to act" within the next 6 months (or past), or set at all */
-export const ACT_TIMING_FILTERS = ['soon', 'has'] as const;
+/**
+ * List filter (#151): "when to act" within the next 6 months (or past), or set at all. 'none':
+ * neither a "when to act" month nor an open next action, so nobody comes back to the lead (#446)
+ */
+export const ACT_TIMING_FILTERS = ['soon', 'has', 'none'] as const;
 export const actTimingFilterEnum = z.enum(ACT_TIMING_FILTERS);
 export type ActTimingFilter = z.infer<typeof actTimingFilterEnum>;
 export const ACT_TIMING_SOON_MONTHS = 6;
