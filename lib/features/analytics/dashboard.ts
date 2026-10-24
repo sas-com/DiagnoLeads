@@ -1,6 +1,6 @@
 import type { db as defaultDb } from '@/lib/db/client';
 import { diagnosticSubmissions, leadContactLogs, leads } from '@/lib/db/schema';
-import { consultationDeadline } from '@/lib/features/diagnostics/ax-migration/notify';
+import { consultationDeadline } from '@/lib/features/diagnostics/types/consultation';
 import { REACHED_CONTACT_KINDS } from '@/lib/features/lead-follow-up/types/schemas';
 import { LEAD_STATUSES, type LeadStatus } from '@/lib/features/leads/types/pipeline';
 import { addDays, differenceInBusinessDays } from 'date-fns';

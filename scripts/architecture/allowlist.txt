@@ -15,12 +15,9 @@ cross-feature-internal lib/features/diagnosis-builder/public-diagnosis.ts
 cross-feature-internal lib/features/diagnostics/ax-migration/access-path.ts
 cross-feature-internal lib/features/diagnostics/ax-migration/access-support.ts
 cross-feature-internal lib/features/diagnostics/ax-migration/company-size.ts
-cross-feature-internal lib/features/diagnostics/ax-migration/contact.ts
 cross-feature-internal lib/features/diagnostics/ax-migration/definition.ts
 cross-feature-internal lib/features/diagnostics/ax-migration/evaluate.ts
-cross-feature-internal lib/features/diagnostics/ax-migration/limits.ts
 cross-feature-internal lib/features/diagnostics/ax-migration/mql.ts
-cross-feature-internal lib/features/diagnostics/ax-migration/notify.ts
 cross-feature-internal lib/features/diagnostics/ax-migration/submission-service.ts
 cross-feature-internal lib/features/diagnostics/engine.ts
 cross-feature-internal lib/features/diagnostics/lead-upsert.ts

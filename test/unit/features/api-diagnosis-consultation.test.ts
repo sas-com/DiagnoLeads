@@ -124,6 +124,17 @@ describe('POST /api/diagnoses/[slug]/consultation with meeting preferences', () 
     expect(acceptMock.mock.calls[0][1]).toMatchObject({ requestedAt: REQUESTED_AT });
   });
 
+  it('answers 409 a day after the answer and takes no preferences, as the AX route does (#481)', async () => {
+    requestMock.mockResolvedValue({ ok: false, reason: 'closed' });
+    const response = await POST(request({ submissionId: SUBMISSION_ID, preferences }), params);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'Closed', code: 'closed' });
+    expect(acceptMock).not.toHaveBeenCalled();
+
+    requestMock.mockResolvedValue({ ok: false, reason: 'not_found' });
+    expect((await POST(request({ submissionId: SUBMISSION_ID }), params)).status).toBe(404);
+  });
+
   it('refuses unknown or repeated topics and a note over 300 characters', async () => {
     for (const extra of [
       { topics: ['pricing'] },

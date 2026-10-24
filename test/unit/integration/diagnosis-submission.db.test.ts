@@ -10,6 +10,7 @@
  */
 import * as schema from '@/lib/db/schema';
 import {
+  agencyLinks,
   diagnoses,
   diagnosisVersions,
   diagnosticSubmissions,
@@ -27,6 +28,7 @@ import {
   submitBuilderDiagnosis,
 } from '@/lib/features/diagnosis-builder/submission-service';
 import { hashDefinition } from '@/lib/features/diagnosis-builder/versions';
+import { generateAgencyCode } from '@/lib/features/agency-links/types/schemas';
 import { and, eq, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
@@ -323,6 +325,57 @@ describe.skipIf(!url)('builder diagnosis submission (PostgreSQL)', () => {
       expect(outcomes.filter((o) => o.ok && o.leadCreated)).toHaveLength(1);
     });
 
+    it('takes the inflow source from an issued agency link, as the AX diagnosis does (#481)', async () => {
+      const { diagnosis, version } = await accepted(v2);
+      const [link] = await pg
+        .insert(agencyLinks)
+        .values({
+          organizationId,
+          code: generateAgencyCode(),
+          agencyName: '架空テレアポ',
+          kind: 'telemarketing_agency',
+        })
+        .returning();
+      const outcome = await submitBuilderDiagnosis(
+        db,
+        diagnosis,
+        version,
+        // The link decides over the UTM parameters
+        input({ tracking: { agency: link.code.toUpperCase(), utmMedium: 'cpc' } }),
+        now
+      );
+      if (!outcome.ok) throw new Error('submission failed');
+      expect(outcome.referralMemberUserId).toBeNull();
+      const lead = await pg.query.leads.findFirst({ where: eq(leads.id, outcome.leadId) });
+      expect(lead).toMatchObject({
+        inflowSource: 'telemarketing_agency',
+        agencyName: '架空テレアポ',
+        agencyLinkId: link.id,
+        referrerName: null,
+      });
+
+      // A link of another organization attributes nothing
+      const [other] = await pg
+        .insert(agencyLinks)
+        .values({
+          organizationId: otherOrganizationId,
+          code: generateAgencyCode(),
+          agencyName: '別組織の代行',
+          kind: 'referral_agency',
+        })
+        .returning();
+      const unrelated = await submitBuilderDiagnosis(
+        db,
+        diagnosis,
+        version,
+        input({ tracking: { agency: other.code } }),
+        now
+      );
+      if (!unrelated.ok) throw new Error('submission failed');
+      const plain = await pg.query.leads.findFirst({ where: eq(leads.id, unrelated.leadId) });
+      expect(plain).toMatchObject({ inflowSource: 'lp_organic', agencyLinkId: null });
+    });
+
     it('rejects invalid answers without saving anything', async () => {
       const { diagnosis, version } = await accepted(v2);
       const data = input({ answers: { hosting: 'onprem', points: 100 } });
@@ -448,6 +501,34 @@ describe.skipIf(!url)('builder diagnosis submission (PostgreSQL)', () => {
       const lead = await pg.query.leads.findFirst({ where: eq(leads.id, outcome.leadId) });
       expect(lead?.mqlQualifiedAt).toEqual(now);
       expect(lead?.conversionPoint).toBe('consultation');
+    });
+
+    it('closed a day after the answer, as in the AX diagnosis (#481)', async () => {
+      const { diagnosis, version } = await accepted(v2);
+      const outcome = await submitBuilderDiagnosis(db, diagnosis, version, input(), now);
+      if (!outcome.ok) throw new Error('submission failed');
+      const dayLater = new Date(now.getTime() + 24 * HOUR + 60_000);
+      expect(
+        await requestBuilderConsultation(db, diagnosisId, outcome.submissionId, dayLater)
+      ).toEqual({ ok: false, reason: 'closed' });
+      const submission = await pg.query.diagnosticSubmissions.findFirst({
+        where: eq(diagnosticSubmissions.id, outcome.submissionId),
+      });
+      expect(submission?.consultationRequestedAt).toBeNull();
+      const lead = await pg.query.leads.findFirst({ where: eq(leads.id, outcome.leadId) });
+      expect(lead?.conversionPoint).toBe('web_diagnosis');
+
+      // Up to the end of the day it is still taken
+      const again = await submitBuilderDiagnosis(db, diagnosis, version, input(), now);
+      if (!again.ok) throw new Error('submission failed');
+      expect(
+        await requestBuilderConsultation(
+          db,
+          diagnosisId,
+          again.submissionId,
+          new Date(now.getTime() + 24 * HOUR)
+        )
+      ).toMatchObject({ ok: true, alreadyRequested: false });
     });
 
     it('not found for a submission of another diagnosis', async () => {
