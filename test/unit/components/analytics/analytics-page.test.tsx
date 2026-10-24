@@ -148,6 +148,13 @@ describe('AnalyticsPage', () => {
     expect(document.body.textContent).not.toMatch(/[+-]\d+(\.\d+)?%/);
   });
 
+  it('shows no average score and no score distribution: the MQL level is the sign (#447)', () => {
+    renderPage();
+    expect(screen.queryByText(/平均スコア/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/スコア分布/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/リードの質/)).not.toBeInTheDocument();
+  });
+
   it('shows the status donut without its overlapping legend, colored per status', () => {
     renderPage();
     const statusDonut = mocks.donuts[0];

@@ -366,9 +366,7 @@ export function RecentSection({
                       {lead.company && lead.name ? ' · ' : ''}
                       {platformName(lead.platform)}
                     </span>
-                    <span className="flex shrink-0 items-center gap-2 tabular-nums">
-                      <span>{received(lead)}</span>
-                    </span>
+                    <span className="shrink-0 tabular-nums">{received(lead)}</span>
                   </span>
                 </Link>
               </li>
