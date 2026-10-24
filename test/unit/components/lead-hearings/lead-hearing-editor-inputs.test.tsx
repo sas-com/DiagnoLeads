@@ -18,6 +18,7 @@ const HEARING_ID = '880e8400-e29b-41d4-a716-446655440000';
 const UPDATED_AT = new Date('2026-10-15T01:00:00Z');
 const USER_ID = 'user-1';
 const MODE_KEY = hearingModeStorageKey(USER_ID);
+type AutosaveModule = typeof import('@/components/features/lead-hearings/use-hearing-autosave');
 
 interface MutationOptions {
   onSuccess: (result: unknown) => void;
@@ -87,6 +88,18 @@ vi.mock('@/hooks/use-organization', () => ({
   useOrganization: () => ({ organizationId: ORG_ID }),
 }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+// Autosave is off here: it saves 3 s after the last change on the real clock, and on a loaded
+// machine 3 s passed between two steps of a test, so a save of half the input went out before
+// the save button was pressed (#573). Autosave is tested with fake timers in
+// lead-hearing-editor.test.tsx.
+vi.mock('@/components/features/lead-hearings/use-hearing-autosave', async (importOriginal) => {
+  const actual = await importOriginal<AutosaveModule>();
+  return {
+    ...actual,
+    useHearingAutosave: (options: Parameters<AutosaveModule['useHearingAutosave']>[0]) =>
+      actual.useHearingAutosave({ ...options, enabled: false }),
+  };
+});
 
 beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
@@ -141,6 +154,9 @@ beforeEach(() => {
   window.localStorage.clear();
 });
 const fieldRow = (key: string) => screen.getByTestId(`hearing-field-${key}`);
+// In the save bar: in meeting mode a query over the whole editor goes through ~120 buttons
+const saveButton = () =>
+  within(screen.getByTestId('hearing-save-bar')).getByRole('button', { name: '保存' });
 const lh = messages.leadHearings;
 const fill = (template: string, values: Record<string, string | number>) =>
   Object.entries(values).reduce((text, [k, v]) => text.replace(`{${k}}`, String(v)), template);
@@ -179,7 +195,7 @@ describe('"other" note (detail mode)', () => {
     const box = noteBox('attendeeRoles');
     expect(box).toBeInTheDocument();
     await user.type(box as HTMLElement, ' note A ');
-    await user.click(screen.getByRole('button', { name: '保存' }));
+    await user.click(saveButton());
 
     expect(savedFields().attendeeRoles).toEqual({
       value: ['executive', 'other'],
@@ -200,7 +216,7 @@ describe('"other" note (detail mode)', () => {
     await user.type(noteBox('attendeeRoles') as HTMLElement, 'note A');
     await user.click(other);
     expect(noteBox('attendeeRoles')).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '保存' }));
+    await user.click(saveButton());
     expect(savedFields().attendeeRoles.value).toEqual(['executive']);
     expect(savedFields().attendeeRoles).not.toHaveProperty('otherNote');
 
@@ -244,7 +260,7 @@ describe('"other" note (meeting mode)', () => {
 
     await user.click(chipOf('other'));
     await user.type(noteBox('targetSystem') as HTMLElement, 'note C');
-    await user.click(screen.getByRole('button', { name: '保存' }));
+    await user.click(saveButton());
     expect(mocks.mutate.mock.calls[0][0].fields.targetSystem).toEqual({
       value: 'other',
       status: 'done',
@@ -260,7 +276,7 @@ describe('"other" note (meeting mode)', () => {
 
     await user.click(chipOf('as400'));
     expect(noteBox('targetSystem')).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '保存' }));
+    await user.click(saveButton());
     expect(mocks.mutate.mock.calls[1][0].fields.targetSystem).toEqual({
       value: 'as400',
       status: 'done',
@@ -283,7 +299,7 @@ describe('dates and months in the editor', () => {
 
     await user.click(screen.getByRole('tab', { name: /結果/ }));
     await user.type(screen.getByLabelText(fieldLabel('nextMeetingDate')), '2026/11/5');
-    await user.click(screen.getByRole('button', { name: '保存' }));
+    await user.click(saveButton());
 
     expect(mocks.mutate.mock.calls[0][0].heldOn).toBe('2026-10-16');
     expect(savedFields().nextMeetingDate).toEqual({
@@ -308,7 +324,7 @@ describe('dates and months in the editor', () => {
       })
     );
     await user.click(await screen.findByRole('button', { name: lh.editor.clear }));
-    await user.click(screen.getByRole('button', { name: '保存' }));
+    await user.click(saveButton());
     expect(savedFields().nextMeetingDate).toEqual({ status: 'done', source: null });
   });
 
@@ -325,7 +341,7 @@ describe('dates and months in the editor', () => {
     await user.click(await screen.findByRole('button', { name: lh.editor.nextYear }));
     await user.click(screen.getByRole('button', { name: '2028年10月' }));
     expect(screen.getByRole('button', { name: `${label}: 2028年10月` })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '保存' }));
+    await user.click(saveButton());
     expect(savedFields().earliestRetirement).toEqual({
       value: '2028-10',
       status: 'done',
