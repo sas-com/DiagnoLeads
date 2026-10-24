@@ -244,12 +244,14 @@ describe.skipIf(!url)('when to act (PostgreSQL)', () => {
     const forgotten = await insertLead();
     const onlyDone = await insertLead();
     const withTask = await insertLead();
-    const withMonth = await insertLead({ actBy: '2027-04-01' });
+    const withMonth = await insertLead({ actBy: '2099-04-01' });
+    // A past month brings nobody back
+    const pastMonth = await insertLead({ actBy: '2020-04-01' });
     await pg.insert(leadTasks).values([task(onlyDone, new Date()), task(withTask, null)]);
 
     const result = await callers.member.leads.list({ organizationId: org, actTiming: 'none', limit: 100, offset: 0 });
     const ids = result.items.map((lead: { id: string }) => lead.id);
-    expect(ids).toEqual(expect.arrayContaining([forgotten, onlyDone]));
+    expect(ids).toEqual(expect.arrayContaining([forgotten, onlyDone, pastMonth]));
     expect(ids).not.toContain(withTask);
     expect(ids).not.toContain(withMonth);
   });

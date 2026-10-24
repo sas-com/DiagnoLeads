@@ -66,8 +66,15 @@ describe('LeadQuickSelect: moving to nurturing (#446)', () => {
     expect(warning).not.toHaveBeenCalled();
   });
 
-  it('says nothing when the lead has a month to act', async () => {
-    mutateAsync.mockResolvedValue({ ...lead, status: 'nurturing', actBy: '2027-04-01' });
+  it('warns when the month to act is already past', async () => {
+    mutateAsync.mockResolvedValue({ ...lead, status: 'nurturing', actBy: '2020-04-01' });
+    fetchTasks.mockResolvedValue({ items: [] });
+    await moveToNurturing();
+    await waitFor(() => expect(warning).toHaveBeenCalled());
+  });
+
+  it('says nothing when the lead has a month to act ahead', async () => {
+    mutateAsync.mockResolvedValue({ ...lead, status: 'nurturing', actBy: '2099-04-01' });
     await moveToNurturing();
     expect(fetchTasks).not.toHaveBeenCalled();
     expect(warning).not.toHaveBeenCalled();

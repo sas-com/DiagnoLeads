@@ -246,7 +246,8 @@ export function leadListConditions(
   // Nobody comes back to the lead (#446): no "when to act" month and no open next action
   if (input.actTiming === 'none') {
     conditions.push(
-      isNull(leads.actBy),
+      // A past month brings nobody back (actByAhead in act-timing/compute.ts)
+      or(isNull(leads.actBy), lt(leads.actBy, `${jstDate(now).slice(0, 7)}-01`)) as SQL,
       sql`not exists (select 1 from lead_tasks t where t.lead_id = ${leads.id} and t.organization_id = ${leads.organizationId} and t.completed_at is null)`
     );
   }

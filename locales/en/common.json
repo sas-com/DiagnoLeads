@@ -3829,7 +3829,7 @@
       "dealPhase": "Change deal phase (now: {value})",
       "lostReasonPrompt": "Record why the lead was lost",
       "lostReasonAction": "Add reason",
-      "nurturingWithoutFollowUp": "No next action and no month to act. Add a next action"
+      "nurturingWithoutFollowUp": "Nothing brings this lead back. Add the day to contact them as a next action"
     },
     "hearing": {
       "title": "Meeting summary",
@@ -4032,7 +4032,7 @@
     "actTimingOptions": {
       "soon": "Within 6 months (past ones included)",
       "has": "Worked out",
-      "none": "No next action and no month to act"
+      "none": "No next action and no month to act (use with a status)"
     }
   },
   "leadFollowUp": {

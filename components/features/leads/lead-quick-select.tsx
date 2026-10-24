@@ -9,7 +9,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useUpdateLead } from '@/hooks/use-leads';
-import { DEAL_PHASES, LEAD_STATUSES, type LeadStatus } from '@/lib/features/leads/types';
+import { actByAhead } from '@/lib/features/act-timing/compute';
+import { DEAL_PHASES, LEAD_STATUSES, type LeadStatus, jstDate } from '@/lib/features/leads/types';
 import { trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
@@ -100,7 +101,7 @@ export function LeadQuickSelect({
     try {
       const updated = await updateLead.mutateAsync({ id: lead.id, organizationId, [field]: value });
       if (field === 'status' && value === 'lost') onLost?.();
-      if (field === 'status' && value === 'nurturing' && !updated?.actBy) {
+      if (field === 'status' && value === 'nurturing' && !actByAhead(updated?.actBy, jstDate())) {
         void warnWithoutNextAction();
       }
     } catch {
