@@ -51,6 +51,7 @@
 - **状況**: #23 で認証の E2E を `@smoke` にして本番ビルド（`next start`）で流すと、ログインしたのに画面が未ログインの表示になる（get-session が 429）ことがあり、テストがまれに落ちた
 - **原因**: `proxy.ts` の回数制限（`lib/middleware/rate-limit.ts`。get-session は1分5回、#519）と better-auth の回数制限（本番だけ有効。sign-in と sign-up は10秒に3回）は、どちらもクライアントのアドレス（X-Forwarded-For）ごとに数える。E2E のテストはどれも同じマシンから来るので、ほかのテストの分まで合わせて数えられる
 - **解決策**: テストごと（招待された人のブラウザも）に、`uniqueClientAddress()`（`test/e2e/helpers/auth.ts`）で X-Forwarded-For を変えた。本番で人ごとにアドレスが違うのと同じ形になる
+- **前提**: `lib/middleware/rate-limit.ts` の `getIdentifier` は X-Forwarded-For の先頭をそのまま信用する。本番で安全なのは、Vercel が X-Forwarded-For を書き換え、クライアントが送った値を渡さないから（https://vercel.com/docs/headers/request-headers の `x-forwarded-for`）。Enterprise の Trusted Proxy を有効にするか、Vercel の前に別のプロキシを置くと、この前提が崩れる。E2E でアドレスを変えられるのは、`next start` の前にプロキシがないから
 - **教訓**: 本番ビルドに対する E2E でログインや画面の読み込みを足すときは、アドレスごとの回数制限を考える。待ち時間（`waitForTimeout`）で避けない
 
 ---

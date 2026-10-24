@@ -1,4 +1,4 @@
-import { type Page, expect, test } from '@playwright/test';
+import { type Page, type Response, expect, test } from '@playwright/test';
 import ja from '../../locales/ja/common.json';
 import {
   TEST_USERS,
@@ -18,9 +18,9 @@ import {
  * build; the details of each form (validation, loading state, error messages) are covered by the
  * unit tests in test/unit/components/auth/.
  *
- * The users come from scripts/e2e-seed.ts (test/e2e/helpers/auth.ts). Each test, and the
- * invited person's browser, comes from a client address of its own (uniqueClientAddress), so the
- * per-address limits on sign-in and session reads count each flow on its own.
+ * The users come from scripts/e2e-seed.ts (test/e2e/helpers/auth.ts). Each test, and each other
+ * browser or request in it, comes from a client address of its own (uniqueClientAddress), so the
+ * per-address limits on sign-in, sign-up and session reads count each flow on its own.
  */
 
 const auth = ja.settings.auth;
@@ -29,6 +29,24 @@ const members = ja.settings.members;
 async function fillSignIn(page: Page, user: Pick<TestUser, 'email' | 'password'>) {
   await page.getByLabel(auth.login.emailLabel, { exact: true }).fill(user.email);
   await page.getByLabel(auth.login.passwordLabel, { exact: true }).fill(user.password);
+}
+
+/** Fill in the sign-up form except the address, which the invitation link fills in */
+async function fillSignUp(page: Page, name: string, password: string) {
+  await page.getByLabel(auth.signup.nameLabel, { exact: true }).fill(name);
+  await page.getByLabel(auth.signup.passwordLabel, { exact: true }).fill(password);
+  await page.getByLabel(auth.signup.confirmPasswordLabel, { exact: true }).fill(password);
+}
+
+/**
+ * What one procedure returned in a response of the app's tRPC client (httpBatchLink with
+ * superjson: an array with an entry for each procedure named in the path, in that order)
+ */
+async function trpcData(response: Response, procedure: string): Promise<unknown> {
+  const { pathname } = new URL(response.url());
+  const procedures = decodeURIComponent(pathname.replace('/api/trpc/', '')).split(',');
+  const entries = (await response.json()) as { result?: { data?: { json?: unknown } } }[];
+  return entries[procedures.indexOf(procedure)]?.result?.data?.json;
 }
 
 test.describe('Authentication', () => {
@@ -58,7 +76,11 @@ test.describe('Authentication', () => {
       const invited = `e2e-invitee-${suffix}@example.com`;
       const password = 'Invitee-pw-2026';
 
-      // The owner invites the address from the members page; the dialog shows the link to pass on
+      // The owner invites the address from the members page; the dialog shows the link to pass on.
+      // The owner loads three admin pages (the dashboard after sign-in, the members page and its
+      // reload at the end), each reading the session once: 3 of the 5 session reads a minute that
+      // the proxy allows an address (#519). One more read per page would fail this test with 429
+      // at times, so keep that in mind when adding page loads here before #519 is fixed
       await login(page, TEST_USERS.owner);
       await page.goto('/ja/settings/members');
       await page.getByRole('button', { name: members.inviteButton, exact: true }).click();
@@ -68,6 +90,27 @@ test.describe('Authentication', () => {
       const linkField = dialog.getByLabel(members.inviteLinkLabel, { exact: true });
       await expect(linkField).toHaveValue(/\/ja\/invite\//);
       const invitePath = new URL(await linkField.inputValue(), baseURL).pathname;
+
+      // The invited address with a token other than the link's is refused. From a browser of its
+      // own, so that the sign-ups below keep their allowance (3 a minute for an address)
+      const stranger = await browser.newContext({
+        baseURL,
+        extraHTTPHeaders: { 'x-forwarded-for': uniqueClientAddress() },
+      });
+      try {
+        const forged = await stranger.newPage();
+        const query = new URLSearchParams({ email: invited, invitation: 'x'.repeat(43) });
+        await forged.goto(`/ja/signup?${query}`);
+        await expect(forged.getByLabel(auth.signup.emailLabel, { exact: true })).toHaveValue(
+          invited
+        );
+        await fillSignUp(forged, 'E2E Stranger', password);
+        const refused = await submitAuthForm(forged, '/sign-up/email');
+        expect(refused.status()).toBe(403);
+        await expect(forged.getByText(auth.signup.invitationRequired)).toBeVisible();
+      } finally {
+        await stranger.close();
+      }
 
       // The invited person opens the link in a browser of their own, signed out
       const context = await browser.newContext({
@@ -85,10 +128,8 @@ test.describe('Authentication', () => {
         // The invited address is filled in. Another address is refused, even with the link's token
         const email = invitee.getByLabel(auth.signup.emailLabel, { exact: true });
         await expect(email).toHaveValue(invited);
-        await invitee.getByLabel(auth.signup.nameLabel, { exact: true }).fill('E2E Invitee');
+        await fillSignUp(invitee, 'E2E Invitee', password);
         await email.fill(`e2e-uninvited-${suffix}@example.com`);
-        await invitee.getByLabel(auth.signup.passwordLabel, { exact: true }).fill(password);
-        await invitee.getByLabel(auth.signup.confirmPasswordLabel, { exact: true }).fill(password);
         const refused = await submitAuthForm(invitee, '/sign-up/email');
         expect(refused.status()).toBe(403);
         await expect(invitee.getByText(auth.signup.invitationRequired)).toBeVisible();
@@ -107,9 +148,23 @@ test.describe('Authentication', () => {
         await context.close();
       }
 
-      // The owner now finds the new account among the members
+      // The owner now finds the new account in the member list, and the invitation is no longer
+      // pending. The pending invitations show the address too, so each list is checked on its own:
+      // the member list by its "joined" column, the pending ones in what the server sent the page
+      const pending = page.waitForResponse((r) =>
+        new URL(r.url()).pathname.includes('members.listInvitations')
+      );
       await page.reload();
-      await expect(page.getByText(invited)).toBeVisible();
+      const memberList = page.getByRole('table').filter({
+        has: page.getByRole('columnheader', { name: members.tableHeaderJoinedAt, exact: true }),
+      });
+      const newMember = memberList.getByRole('row').filter({ hasText: invited });
+      await expect(newMember).toContainText('E2E Invitee');
+      await expect(newMember).toContainText(members.roleMember);
+      const invitations = (await trpcData(await pending, 'members.listInvitations')) as {
+        email: string;
+      }[];
+      expect(invitations.map((invitation) => invitation.email)).not.toContain(invited);
     });
 
     test('should not accept an invitation link that is not valid @smoke', async ({ page }) => {
@@ -136,15 +191,23 @@ test.describe('Authentication', () => {
       await expect(page.getByText(auth.login.inviteOnlyNote)).toBeVisible();
     });
 
-    test('should refuse a wrong password @smoke', async ({ page }) => {
-      await page.goto('/ja/login');
-      await fillSignIn(page, { email: TEST_USERS.owner.email, password: 'Wrong-password-1' });
+    test('should refuse a wrong password alike for a registered and an unknown address @smoke', async ({
+      page,
+    }) => {
+      // The answer must not tell whether the address has an account
+      const answers: unknown[] = [];
+      for (const email of [TEST_USERS.owner.email, `e2e-unknown-${Date.now()}@example.com`]) {
+        await page.goto('/ja/login');
+        await fillSignIn(page, { email, password: 'Wrong-password-1' });
 
-      const response = await submitAuthForm(page, '/sign-in/email');
+        const response = await submitAuthForm(page, '/sign-in/email');
 
-      expect(response.status()).toBe(401);
-      await expect(page.getByText(auth.login.invalidCredentials)).toBeVisible();
-      await expect(page).toHaveURL(/\/ja\/login/);
+        expect(response.status()).toBe(401);
+        answers.push(await response.json());
+        await expect(page.getByText(auth.login.invalidCredentials)).toBeVisible();
+        await expect(page).toHaveURL(/\/ja\/login/);
+      }
+      expect(answers[1]).toEqual(answers[0]);
     });
   });
 
@@ -165,14 +228,40 @@ test.describe('Authentication', () => {
       await expect(page.getByTestId('user-menu')).toContainText(TEST_USERS.admin.email);
     });
 
-    test('should sign out from the user menu @smoke', async ({ page }) => {
+    test('should sign out from the user menu and end the session on the server @smoke', async ({
+      page,
+      request,
+    }) => {
       await login(page, TEST_USERS.member);
+      const cookies = await page.context().cookies();
+      const sessionCookie = cookies.find((cookie) => cookie.name.endsWith('.session_token'));
+      if (!sessionCookie) throw new Error('No session cookie after sign-in');
+
+      // Whom the server signs in with the session cookie alone, asked outside the browser. The
+      // proxy only looks for a session cookie, and the session cached in a cookie next to it
+      // (session.cookieCache) is taken as it is for 5 minutes, so neither would show whether
+      // sign-out ended the session; without the cache, better-auth looks it up in the database
+      const address = uniqueClientAddress();
+      const signedInAs = async () => {
+        const response = await request.get('/api/auth/get-session', {
+          headers: {
+            cookie: `${sessionCookie.name}=${sessionCookie.value}`,
+            'x-forwarded-for': address,
+          },
+        });
+        expect(response.status()).toBe(200);
+        const session = (await response.json()) as { user: { email: string } } | null;
+        return session?.user.email ?? null;
+      };
+      expect(await signedInAs()).toBe(TEST_USERS.member.email);
 
       await logout(page);
 
       // The admin pages send the visitor to sign-in again
       await page.goto('/ja/dashboard');
       await page.waitForURL(/\/ja\/login/);
+      // and the session itself has ended: the cookie kept from before signs no one in
+      expect(await signedInAs()).toBeNull();
     });
   });
 
