@@ -6,7 +6,7 @@ title: "アプリから Claude を呼ぶときは Anthropic SDK を直接使う�
 status: active
 superseded_by: []
 issues: [442, 443, 432, 449]
-paths: ["lib/features/ai/scoring/*.ts", "lib/features/ai/prediction/*.ts", "lib/features/ai/chat/*.ts"]
+paths: ["lib/features/ai/client.ts", "lib/features/ai/scoring/*.ts", "lib/features/ai/prediction/*.ts", "lib/features/ai/chat/*.ts", "lib/features/ai/api/router.ts"]
 ---
 
 ### [Architecture] アプリから Claude を呼ぶときは Anthropic SDK を直接使う（#442, #443）
@@ -16,5 +16,5 @@ paths: ["lib/features/ai/scoring/*.ts", "lib/features/ai/prediction/*.ts", "lib/
 - **却下案**: `ai` と `@ai-sdk/anthropic` を上げて使い続ける（新しいモデルへの追従が一段遅れ、層が1つ増える）。zod を 3.25 以上に上げて `zodOutputFormat` を使う（zod はアプリ全体で使っていて影響が広い。別に判断する）
 - **ルール**:
   - モデル ID は、提供終了の予定を Anthropic の公式（モデルの一覧・提供終了のページ）で確かめ、終わる前に替える
-  - 呼び出しが失敗したときに代わりの値を返す場合も、`stop_reason` やエラーをログに残す（失敗に気づけるようにする）。エラーは SDK のエラーをそのまま出してよい（リクエスト本文は入らない）。代わりの値を本物と区別して DB に書かない形は #449 で決める（今の `ai.scoreLead` は代わりの値の score 50 を `leads.score` に書く）
-  - Vercel の関数は 30 秒で止まるので、client のタイムアウト・再試行・`max_tokens` はそれに合わせる。今のコードはまだ合わせていない（client は既定の設定のまま3か所）。#449 で client とモデル ID を `lib/features/ai/client.ts` にまとめるので、それまで新しい client を足さない
+  - 呼び出しが失敗したときに代わりの値を返す場合も、`stop_reason` やエラーをログに残す（失敗に気づけるようにする）。エラーは SDK のエラーをそのまま出してよい（リクエスト本文は入らない）。代わりの値には印（スコアは `isFallback: true`）を付け、DB に書かない。単発の `ai.scoreLead` は `SERVICE_UNAVAILABLE` を返し、一括は代わりの値になったリードを更新しない（#449）
+  - Vercel の関数は 30 秒で止まるので、client のタイムアウト・再試行・`max_tokens` はそれに合わせる。client・モデル ID・`max_tokens` は `lib/features/ai/client.ts` の1か所にまとめてある（タイムアウト 20 秒・再試行なし・`max_tokens` 4000。SDK はタイムアウトした要求も再試行するので、再試行を足すと 30 秒を超える）。新しい呼び出しはこれを使い、client を増やさない（#449）
