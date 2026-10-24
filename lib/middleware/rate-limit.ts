@@ -61,8 +61,10 @@ export const ENDPOINT_RATE_LIMITS: Record<string, RateLimitConfig> = {
 
   // Every /api/trpc/ entry must hit a procedure mounted in server/routers/_app.ts, exactly or
   // as a prefix (#577). The AI procedures have none: their paths get DEFAULT_RATE_LIMITS.ai
-  // below, and the Claude calls are limited in the procedures, counted in the database
-  // (AI_CALL_LIMITS, #405), as a path entry misses batched URLs and counts per instance
+  // below. A path entry misses batched URLs and counts per instance, so the paid calls are
+  // counted in the procedures, in the database: the Claude calls against AI_CALL_LIMITS (#405),
+  // and #576 counts the OpenAI embeddings (semanticSearch, updateEmbedding) the same way,
+  // against EMBEDDING_CALL_LIMITS.
 
   // エクスポート
   '/api/trpc/leads.export': { max: 5, windowMs: 60 * 1000 },

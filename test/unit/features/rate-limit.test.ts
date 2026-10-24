@@ -14,6 +14,9 @@ import {
 } from '@/lib/middleware/rate-limit';
 import { appRouter } from '@/server/routers/_app';
 
+/** The procedures mounted in appRouter, as in /api/trpc/<procedure> */
+const procedures = Object.keys(appRouter._def.procedures);
+
 describe('Rate Limit Configuration', () => {
   describe('DEFAULT_RATE_LIMITS', () => {
     it('should have API rate limit', () => {
@@ -55,14 +58,20 @@ describe('Rate Limit Configuration', () => {
       expect(ENDPOINT_RATE_LIMITS['/api/auth/sign-up']).toEqual({ max: 3, windowMs: 60000 });
     });
 
-    it('has no entries for the AI procedures: they get the AI default (#405, #577)', () => {
+    it('has no entries for the AI procedures: each one gets the AI default (#405, #577)', () => {
       const aiEntries = Object.keys(ENDPOINT_RATE_LIMITS).filter((endpoint) =>
         endpoint.startsWith('/api/trpc/ai.')
       );
       expect(aiEntries).toEqual([]);
-      // The Claude calls are counted in the procedures, in the database (AI_CALL_LIMITS)
-      for (const procedure of ['ai.scoreLead', 'ai.batchScoreLeads', 'ai.semanticSearch']) {
-        expect(getRateLimitConfig(`/api/trpc/${procedure}`)).toEqual(DEFAULT_RATE_LIMITS.ai);
+      // Every procedure of the AI router, so one renamed or added is checked too. This is the
+      // path limit only (per IP and instance). The paid calls are counted in the procedures, in
+      // the database: the Claude calls against AI_CALL_LIMITS (#405), and #576 counts the
+      // OpenAI embeddings (semanticSearch, updateEmbedding) the same way, against
+      // EMBEDDING_CALL_LIMITS
+      const aiProcedures = procedures.filter((procedure) => procedure.startsWith('ai.'));
+      expect(aiProcedures).toContain('ai.scoreLead');
+      for (const procedure of aiProcedures) {
+        expect(getRateLimitConfig(`/api/trpc/${procedure}`)).toBe(DEFAULT_RATE_LIMITS.ai);
       }
     });
 
@@ -85,7 +94,6 @@ describe('Rate Limit Configuration', () => {
 // An entry that hits no procedure reads as a limit that does not exist (#577)
 describe('tRPC entries of ENDPOINT_RATE_LIMITS', () => {
   const TRPC_PREFIX = '/api/trpc/';
-  const procedures = Object.keys(appRouter._def.procedures);
   const entries = Object.keys(ENDPOINT_RATE_LIMITS)
     .filter((endpoint) => endpoint.startsWith(TRPC_PREFIX))
     .map((endpoint) => endpoint.slice(TRPC_PREFIX.length));
