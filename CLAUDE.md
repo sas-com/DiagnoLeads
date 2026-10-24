@@ -2,21 +2,21 @@
 
 <!-- 保守する人へ：このファイルは毎回のセッションで全文が読み込まれる（サブエージェントも読む。組み込みの Explore と Plan は読まない）。200行以内に保ち、毎回守ることだけを書く。経緯は .factory/memory/decisions/、手順はスキル（.claude/skills/）、ディレクトリごとの決まりは .claude/rules/、機械で判定できる守りはフック（.claude/hooks/）へ。この HTML コメントは Claude には渡されない -->
 
-DiagnoLeads は、AX マイグレーション（レガシー基幹システムの AI 移行）のリードを診断フォームで集めて管理する B2B SaaS。Next.js 16（App Router）・tRPC 11・Drizzle（PostgreSQL / Supabase）・Better Auth・CASL で作り、Vercel にデプロイする（main へのマージで本番に自動デプロイ）。**リポジトリは公開されている。**
+DiagnoLeads は、AX マイグレーション（レガシー基幹システムの AI 移行）のリードを診断フォームで集めて管理する B2B SaaS。Next.js 16（App Router）・tRPC 11・Drizzle（PostgreSQL / Supabase）・Better Auth・CASL で作り、Vercel にデプロイする（main へのマージで本番に自動デプロイ）。リポジトリは公開されている。
 
 ## 毎回守ること
 
 1. **出力は日本語にする**。会話・報告・Issue・PR・レビューの返信・ドキュメント・MemoryBank・ほかのセッションへの連絡・サブエージェントへの依頼が対象。英語のままにするのは、コミットメッセージ（決定 `2026-02-06-commit-message-english`）、コード（識別子とコメントは周りのコードに合わせる。ほとんど英語）、引用するコマンド・ログ・エラー
 2. **秘密情報を書かない**。接続文字列・API キー・トークンは Vercel と手元の `.env.local` にだけ置き、コード・ドキュメント・MemoryBank・Issue・PR・会話に出さない。社外秘（取引先名・単価・営業の手引きの本文）も同じ
 3. **組織のデータは必ず組織で絞る**。tRPC は `organizationProcedure` で受けて `ctx.ability` で権限を確かめ、読み書きのすべてのクエリを `organizationId` で絞る（RLS はまだ効いていない）
-4. **テストが通らなければコミットしない。main に直接 push しない**
-5. **依存は `bun add` / `bun remove` / `bun patch <name>@<version>` で変える**。node_modules は `bun patch` で取り出したコピーだけを編集し、bun.lock は手で編集しない
-6. **Claude の設定と Claude API は、Anthropic の公式ドキュメントで確かめてから変える**。対象は CLAUDE.md・`.claude/`（設定・フック・スキル・エージェント・ルール）・MemoryBank の仕組み・`lib/features/ai/` のモデルと SDK。記憶で書かず、今の公式のページを読み、PR に URL を書く（スキル `official-check`）
-7. **Issue を閉じる前に、エビデンスを Issue に書く**（テスト結果と、受け入れ基準を満たしたこと）
-8. **範囲外の作業は別の Issue に切り出す**。「ついでに」を同じ PR に入れない
-9. **原則に違反したら** `.factory/memory/violations.md` に記録し、再発防止策を仕組み（フックかこのファイル）に入れる
+4. テストが通らなければコミットしない。main に直接 push しない
+5. 依存は `bun add` / `bun remove` / `bun patch <name>@<version>` で変える。node_modules は `bun patch` で取り出したコピーだけを編集し、bun.lock は手で編集しない
+6. Claude の設定と Claude API は、Anthropic の公式ドキュメントで確かめてから変える。対象は CLAUDE.md・`.claude/`（設定・フック・スキル・エージェント・ルール）・MemoryBank の仕組み・`lib/features/ai/` のモデルと SDK。記憶で書かず、今の公式のページを読み、PR に URL を書く（スキル `official-check`）
+7. Issue を閉じる前に、エビデンスを Issue に書く（テスト結果と、受け入れ基準を満たしたこと）
+8. 範囲外の作業は別の Issue に切り出す。「ついでに」を同じ PR に入れない
+9. 原則に違反したら `.factory/memory/violations.md` に記録し、再発防止策を仕組み（フックかこのファイル）に入れる
 
-フックが止めるもの（理由はメッセージに出る）：bun.lock と `.env*` の編集、`.env*` の読み取りと表示、Bun の共有キャッシュとつながった node_modules への書き込み（`bun patch` のコピーの編集は確認が出る）、秘密情報の書き込みと送信。権限では main への push を禁止し、DB を変えるスクリプトと E2E は毎回確認する（`.claude/settings.json`）。
+フックが止めるもの（理由はメッセージに出る）：bun.lock と `.env*` の編集、`.env*` の読み取りと表示、Bun の共有キャッシュとつながった node_modules への書き込み（`bun patch` のコピーの編集は確認が出る）、秘密情報の書き込みと送信。main への直接の push は GitHub のブランチ保護で止まる（権限の deny は `git push origin main` などの決まった形だけを止める）。DB を変えるスクリプトと E2E は、権限で毎回確認が出る（`.claude/settings.json`）。
 
 ## 作業の流れ（SprintPath）
 
@@ -26,29 +26,29 @@ SprintPath の5原則：Issue-First・Continuous Quality・Clear Ownership・Vis
 Issue → 決定を読む → ブランチ → 実装 → 速い検証 → 全体の検証 → PR → CI → 記録 → 報告
 ```
 
-1. **Issue（Issue-First。省略しない）**
+1. Issue（Issue-First。省略しない）
    - コードを書く前に、対応する Issue を探す（`gh issue list`。gh が無いクラウドのセッションでは GitHub MCP の `list_issues` / `search_issues`）
    - 無ければ Claude が Issue を作る（目的・やること・受け入れ基準・ラベル）。番号を報告してから着手する（`decisions/2026-10-24-issue-first-claude-creates`）
    - 指示があいまいで受け入れ基準が書けないときだけ、先に確認する。大きい作業は Epic と子 Issue に分ける
-2. **決定を読む**
+2. 決定を読む
    - セッション開始時に出る MemoryBank の索引から、作業に関係する決定の本文（`.factory/memory/decisions/<id>.md`）を開く
    - ファイルを読むと、関係する決定をフックが知らせる。変更する前に本文を読み、従う。蒸し返すときはオーナーに確かめる
-3. **ブランチ**：最新の main から `<type>/<issue>-<短い説明>` を切る（type は下のコミットの type）
-4. **実装**：既存のコードの書き方に合わせる。`any` を使わない。画面の文字列は `locales/`（ja・en）に置く
+3. ブランチ：作業の前に `git status` と今のブランチを確かめる。最新の main から `<type>/<issue>-<短い説明>` を切る（type は下のコミットの type）
+4. 実装：既存のコードの書き方に合わせる。`any` を使わない。画面の文字列は `locales/`（ja・en）に置く
    - Next.js 16 の API と規約は学習データと違うことがある。Next.js の書き方は、`node_modules/next/dist/docs/` の該当するガイドで確かめてから書く
-5. **速い検証（作業中）**
+5. 速い検証（作業中）
    - 関係するテストだけ流す：`bunx vitest run <path>`（1ファイル約2秒）
    - 型チェック：`bun run typecheck`（2回目以降は約8秒）
-6. **全体の検証（コミット前に必須）**
+6. 全体の検証（コミット前に必須）
    - `bun run test:run && bun run typecheck && bun run lint`（全テストは約6分）
    - 全部通るまでコミットしない
-7. **PR**：push して PR を作り、CI（約4分）が緑になるまで見届ける。手順とマージの条件はスキル `ship`
+7. PR：push して PR を作り、CI（約4分）が緑になるまで見届ける。手順とマージの条件はスキル `ship`
    - CI が緑であること
    - 認証・セキュリティ・課金に関わる変更は、読み取り専用のレビューを通すこと（下の表）
    - スキーマの変更は、本番 DB に適用してからマージすること
    - 依存の変更は、マージ後に本番デプロイの成功まで見届けること
-8. **記録**：決定・違反・学びを MemoryBank に残す。手順はスキル `record-decision`
-9. **報告**：やったこと・変えたファイル・テストの結果・Issue と PR の番号を、日本語で簡潔に
+8. 記録：決定・違反・学びを MemoryBank に残す（Claude Code の自動メモリは端末ごとで、ほかの端末とクラウドのセッションからは見えない）。手順はスキル `record-decision`
+9. 報告：やったこと・変えたファイル・テストの結果・Issue と PR の番号を、日本語で簡潔に
 
 ## 並行するセッションとの連携
 
