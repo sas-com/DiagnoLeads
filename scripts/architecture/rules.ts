@@ -18,9 +18,21 @@ const SERVER_ONLY_PACKAGES = new Set([
   'payload',
   'resend',
   '@anthropic-ai/sdk',
+  '@ai-sdk/anthropic',
   'openai',
   'server-only',
 ]);
+const SERVER_ONLY_SPECS = new Set(['next/headers']);
+
+/** What other features may import: types and the service (plus the two feature barrels). */
+const isPublicSurface = (file: string): boolean =>
+  /^lib\/features\/[^/]+\/(types\/.+|types\.ts|service\.ts)$/.test(file) ||
+  file === 'lib/features/email/index.ts' ||
+  file === 'lib/features/respondent-email/index.ts';
+
+const isRouterFile = (file: string): boolean =>
+  /^lib\/features\/[^/]+\/(api\/)?[\w-]*router\.ts$/.test(file);
+const DB_MODULES = new Set(['lib/db/client.ts', 'lib/db/index.ts']);
 
 /** Scoring stays on the server (decision 2026-10-09: the score is computed only on the server). */
 const SCORING_FILES = new Set([
@@ -51,7 +63,8 @@ export function isServerOnlyFile(file: string): boolean {
     file === 'lib/trpc/context.ts' ||
     file === 'lib/auth/config.ts' ||
     file === 'payload.config.ts' ||
-    isRouter(file)
+    isRouter(file) ||
+    /^lib\/features\/[^/]+\/service\.ts$/.test(file)
   );
 }
 
@@ -203,8 +216,13 @@ export const RULES: Rule[] = [
         .map(edgeKey);
       const external = graph.externals
         .filter((entry) => !entry.typeOnly && client.has(entry.from))
-        .filter((entry) => SERVER_ONLY_PACKAGES.has(entry.pkg) || entry.pkg.startsWith('node:'))
-        .map((entry) => `${entry.from} -> ${entry.pkg}`);
+        .filter(
+          (entry) =>
+            SERVER_ONLY_PACKAGES.has(entry.pkg) ||
+            SERVER_ONLY_SPECS.has(entry.spec) ||
+            entry.pkg.startsWith('node:')
+        )
+        .map((entry) => `${entry.from} -> ${entry.spec}`);
       return unique([...internal, ...external]);
     },
   },
@@ -281,6 +299,57 @@ export const RULES: Rule[] = [
         else next.set(from, new Set([to]));
       }
       return unique(cycles([...next.keys()].sort(), next).flat());
+    },
+  },
+  {
+    id: 'cross-feature-internal',
+    description:
+      "a feature imports another feature's types/ or service.ts, not its other files (listed: the file read)",
+    check: (graph) =>
+      unique(
+        graph.edges
+          .filter((edge) => {
+            const from = featureOf(edge.from);
+            const to = featureOf(edge.to);
+            return from !== null && to !== null && from !== to && !isPublicSurface(edge.to);
+          })
+          .map((edge) => edge.to)
+      ),
+  },
+  {
+    id: 'features-use-global-db',
+    description:
+      'feature code takes the db as an argument (ctx.db or an executor), not the global one',
+    check: (graph) =>
+      unique(
+        graph.edges
+          .filter(
+            (edge) =>
+              featureOf(edge.from) !== null &&
+              DB_MODULES.has(edge.to) &&
+              edge.values.some((name) => name === 'db' || name === '*')
+          )
+          .map((edge) => edge.from)
+      ),
+  },
+  {
+    id: 'feature-index-files',
+    description: 'no index.ts barrels in lib/features (other features import types/ or service.ts)',
+    check: (graph) =>
+      unique(
+        [...graph.files.keys()].filter((file) => /^lib\/features\/[^/]+\/index\.tsx?$/.test(file))
+      ),
+  },
+  {
+    id: 'unregistered-routers',
+    description: 'every feature router is registered in server/routers/_app.ts',
+    check: (graph) => {
+      const registered = new Set(
+        graph.edges.filter((edge) => edge.from === 'server/routers/_app.ts').map((edge) => edge.to)
+      );
+      return unique(
+        [...graph.files.keys()].filter((file) => isRouterFile(file) && !registered.has(file))
+      );
     },
   },
 ];

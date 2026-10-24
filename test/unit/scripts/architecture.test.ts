@@ -1,7 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { allowlistFrom, compareWithAllowlist } from '@/scripts/architecture/allowlist';
+import {
+  compareWithAllowlist,
+  formatAllowlist,
+  parseAllowlist,
+} from '@/scripts/architecture/allowlist';
 import {
   buildImportGraph,
   type Edge,
@@ -12,7 +16,7 @@ import { RULES } from '@/scripts/architecture/rules';
 
 function graphOf(
   files: Record<string, { useClient?: boolean }>,
-  edges: Array<[string, string, { typeOnly?: boolean }?]>,
+  edges: Array<[string, string, { typeOnly?: boolean; values?: string[] }?]>,
   externals: Array<[string, string]> = []
 ): ImportGraph {
   return {
@@ -28,10 +32,17 @@ function graphOf(
         to,
         kind: 'static',
         typeOnly: options?.typeOnly ?? false,
+        values: options?.values ?? (options?.typeOnly ? [] : ['default']),
         line: 1,
       })
     ),
-    externals: externals.map(([from, pkg]) => ({ from, pkg, typeOnly: false, line: 1 })),
+    externals: externals.map(([from, spec]) => ({
+      from,
+      spec,
+      pkg: spec.startsWith('@') ? spec.split('/').slice(0, 2).join('/') : spec.split('/')[0],
+      typeOnly: false,
+      line: 1,
+    })),
     unresolved: [],
   };
 }
@@ -59,17 +70,24 @@ type T = typeof import('@/lib/t');
 `
     );
     expect(useClient).toBe(true);
-    expect(imports.map(({ spec, kind, typeOnly }) => [spec, kind, typeOnly])).toEqual([
-      ['@/lib/a', 'static', false],
-      ['@/lib/b', 'static', true],
-      ['@/lib/c', 'static', true],
-      ['@/lib/e', 'static', false],
-      ['./g', 'reexport', false],
-      ['./h', 'reexport', true],
-      ['@/lib/lazy', 'dynamic', false],
-      [null, 'dynamic', false],
-      ['@/lib/t', 'importType', true],
-    ]);
+    expect(imports.map(({ spec, kind, typeOnly, values }) => [spec, kind, typeOnly, values])).toEqual(
+      [
+        ['@/lib/a', 'static', false, ['default']],
+        ['@/lib/b', 'static', true, []],
+        ['@/lib/c', 'static', true, []],
+        ['@/lib/e', 'static', false, ['f']],
+        ['./g', 'reexport', false, ['g']],
+        ['./h', 'reexport', true, []],
+        ['@/lib/lazy', 'dynamic', false, ['*']],
+        [null, 'dynamic', false, ['*']],
+        ['@/lib/t', 'importType', true, []],
+      ]
+    );
+  });
+
+  it('treats a side-effect import as a value import', () => {
+    const [entry] = parseImports('a.ts', "import './polyfill';").imports;
+    expect(entry).toMatchObject({ spec: './polyfill', typeOnly: false, values: [] });
   });
 
   it('only treats a leading directive as use client', () => {
@@ -132,9 +150,23 @@ describe('rules', () => {
         ['components/features/leads/view.tsx', 'lib/db/schema.ts', { typeOnly: true }],
         ['app/api/leads/route.ts', 'lib/db/client.ts'],
       ],
-      [['lib/features/leads/format.ts', 'postgres']]
+      [
+        ['lib/features/leads/format.ts', 'postgres'],
+        ['components/features/leads/view.tsx', 'next/headers'],
+        ['components/features/leads/view.tsx', 'next/link'],
+      ]
     );
+    graph.edges.push({
+      from: 'components/features/leads/view.tsx',
+      to: 'lib/features/leads/service.ts',
+      kind: 'static',
+      typeOnly: false,
+      values: ['listLeads'],
+      line: 1,
+    });
     expect(check('client-imports-server-only', graph)).toEqual([
+      'components/features/leads/view.tsx -> lib/features/leads/service.ts',
+      'components/features/leads/view.tsx -> next/headers',
       'lib/features/leads/format.ts -> lib/db/client.ts',
       'lib/features/leads/format.ts -> postgres',
     ]);
@@ -203,32 +235,96 @@ describe('rules', () => {
   });
 });
 
-describe('compareWithAllowlist', () => {
+describe('rules for feature modules', () => {
+  it("cross-feature-internal: lists the other feature's file that is read, not its types or service", () => {
+    const graph = graphOf({}, [
+      ['lib/features/deals/service.ts', 'lib/features/leads/types/pipeline.ts'],
+      ['lib/features/deals/service.ts', 'lib/features/leads/service.ts'],
+      ['lib/features/deals/service.ts', 'lib/features/leads/audit.ts'],
+      ['lib/features/deals/sync.ts', 'lib/features/leads/audit.ts'],
+      ['lib/features/deals/service.ts', 'lib/features/email/index.ts'],
+      ['lib/features/deals/service.ts', 'lib/features/deals/sync.ts'],
+      ['components/features/deals/board.tsx', 'lib/features/leads/list-query.ts'],
+    ]);
+    expect(check('cross-feature-internal', graph)).toEqual(['lib/features/leads/audit.ts']);
+  });
+
+  it('features-use-global-db: importing db or the whole module counts, the types do not', () => {
+    const graph = graphOf({}, [
+      ['lib/features/a/service.ts', 'lib/db/client.ts', { values: ['db'] }],
+      ['lib/features/b/service.ts', 'lib/db/client.ts', { typeOnly: true }],
+      ['lib/features/c/service.ts', 'lib/db/index.ts', { values: ['*'] }],
+      ['lib/features/d/service.ts', 'lib/db/schema.ts', { values: ['leads'] }],
+      ['app/api/x/route.ts', 'lib/db/client.ts', { values: ['db'] }],
+    ]);
+    expect(check('features-use-global-db', graph)).toEqual([
+      'lib/features/a/service.ts',
+      'lib/features/c/service.ts',
+    ]);
+  });
+
+  it('feature-index-files and unregistered-routers look at the files themselves', () => {
+    const graph = graphOf(
+      {
+        'lib/features/leads/index.ts': {},
+        'lib/features/leads/types/index.ts': {},
+        'lib/features/leads/api/router.ts': {},
+        'lib/features/members/api/invitations-router.ts': {},
+        'lib/features/embed/router.ts': {},
+        'lib/features/audit-logs/api/router.ts': {},
+      },
+      [
+        ['server/routers/_app.ts', 'lib/features/leads/api/router.ts'],
+        ['server/routers/_app.ts', 'lib/features/members/api/invitations-router.ts'],
+        ['server/routers/_app.ts', 'lib/features/embed/router.ts'],
+      ]
+    );
+    expect(check('feature-index-files', graph)).toEqual(['lib/features/leads/index.ts']);
+    expect(check('unregistered-routers', graph)).toEqual(['lib/features/audit-logs/api/router.ts']);
+  });
+});
+
+describe('the allowlist', () => {
   const rules = [{ id: 'r', description: 'rule' }];
+  const allow = (items: string[]) => new Map([['r', new Set(items)]]);
 
   it('fails on a new violation even when an old one was removed at the same time', () => {
-    const [outcome] = compareWithAllowlist(rules, new Map([['r', ['new']]]), { r: ['old'] });
+    const [outcome] = compareWithAllowlist(rules, new Map([['r', ['new']]]), allow(['old']));
     expect(outcome.added).toEqual(['new']);
     expect(outcome.resolved).toEqual(['old']);
   });
 
   it('passes when the violations match the allowlist', () => {
-    const [outcome] = compareWithAllowlist(rules, new Map([['r', ['a', 'b']]]), { r: ['b', 'a'] });
+    const [outcome] = compareWithAllowlist(rules, new Map([['r', ['a', 'b']]]), allow(['b', 'a']));
     expect(outcome.added).toEqual([]);
     expect(outcome.resolved).toEqual([]);
   });
 
-  it('writes only the rules that have violations', () => {
-    expect(allowlistFrom(new Map([['b', ['y', 'x']], ['a', []]]))).toEqual({ b: ['x', 'y'] });
+  it('round-trips one sorted line per violation, items may contain spaces', () => {
+    const text = formatAllowlist(
+      new Map([
+        ['b', ['lib/x.ts -> lib/features/y/z.ts']],
+        ['a', ['two', 'one']],
+        ['c', []],
+      ])
+    );
+    const lines = text.split('\n').filter((line) => line && !line.startsWith('#'));
+    expect(lines).toEqual(['a one', 'a two', 'b lib/x.ts -> lib/features/y/z.ts']);
+    expect(parseAllowlist(text)).toEqual(
+      new Map([
+        ['a', new Set(['one', 'two'])],
+        ['b', new Set(['lib/x.ts -> lib/features/y/z.ts'])],
+      ])
+    );
   });
 });
 
 describe('the repository', () => {
-  it('has no violations beyond scripts/architecture/allowlist.json', () => {
+  it('has no violations beyond scripts/architecture/allowlist.txt', () => {
     const root = process.cwd();
     const graph = buildImportGraph(root);
-    const allowlist = JSON.parse(
-      fs.readFileSync(path.join(root, 'scripts/architecture/allowlist.json'), 'utf8')
+    const allowlist = parseAllowlist(
+      fs.readFileSync(path.join(root, 'scripts/architecture/allowlist.txt'), 'utf8')
     );
     const violations = new Map(RULES.map((rule) => [rule.id, rule.check(graph)]));
     const outcomes = compareWithAllowlist(RULES, violations, allowlist);

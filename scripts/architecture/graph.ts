@@ -23,11 +23,16 @@ export interface Edge {
   to: string;
   kind: ImportKind;
   typeOnly: boolean;
+  /** Names imported as values: 'default', '*' (namespace, dynamic import, require) or the name. */
+  values: string[];
   line: number;
 }
 
 export interface ExternalImport {
   from: string;
+  /** The specifier as written ('next/headers'). */
+  spec: string;
+  /** Its npm package ('next'). */
   pkg: string;
   typeOnly: boolean;
   line: number;
@@ -46,11 +51,13 @@ export interface ImportGraph {
   unresolved: Unresolved[];
 }
 
-interface RawImport {
+export interface RawImport {
+  /** null when the specifier is computed (a template literal with expressions). */
   spec: string | null;
   text: string;
   kind: ImportKind;
   typeOnly: boolean;
+  values: string[];
   line: number;
 }
 
@@ -79,7 +86,29 @@ function scriptKind(file: string): ts.ScriptKind {
   return ts.ScriptKind.JS;
 }
 
-/** Every module specifier in a file, with whether it can only bring in types. */
+function importValues(clause: ts.ImportClause | undefined): string[] {
+  if (!clause || clause.isTypeOnly) return [];
+  const values = clause.name ? ['default'] : [];
+  const bindings = clause.namedBindings;
+  if (bindings && ts.isNamespaceImport(bindings)) values.push('*');
+  if (bindings && ts.isNamedImports(bindings)) {
+    for (const element of bindings.elements) {
+      if (!element.isTypeOnly) values.push((element.propertyName ?? element.name).text);
+    }
+  }
+  return values;
+}
+
+function exportValues(node: ts.ExportDeclaration): string[] {
+  if (node.isTypeOnly) return [];
+  const clause = node.exportClause;
+  if (!clause || !ts.isNamedExports(clause)) return ['*'];
+  return clause.elements
+    .filter((element) => !element.isTypeOnly)
+    .map((element) => (element.propertyName ?? element.name).text);
+}
+
+/** Every module specifier in a file, with the names it brings in as values. */
 export function parseImports(
   file: string,
   text: string
@@ -88,6 +117,16 @@ export function parseImports(
   const lineOf = (node: ts.Node): number =>
     sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
   const imports: RawImport[] = [];
+  const add = (
+    spec: string | null,
+    text: string,
+    kind: ImportKind,
+    node: ts.Node,
+    values: string[],
+    typeOnly: boolean
+  ): void => {
+    imports.push({ spec, text, kind, typeOnly, values, line: lineOf(node) });
+  };
 
   let useClient = false;
   for (const statement of sf.statements) {
@@ -98,49 +137,30 @@ export function parseImports(
   const visit = (node: ts.Node): void => {
     if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
       const clause = node.importClause;
-      const bindings = clause?.namedBindings;
-      const typeOnly =
-        clause !== undefined &&
-        (clause.isTypeOnly ||
-          (clause.name === undefined &&
-            bindings !== undefined &&
-            ts.isNamedImports(bindings) &&
-            bindings.elements.length > 0 &&
-            bindings.elements.every((element) => element.isTypeOnly)));
-      const spec = node.moduleSpecifier.text;
-      imports.push({ spec, text: spec, kind: 'static', typeOnly, line: lineOf(node) });
+      const values = importValues(clause);
+      // A bare `import 'x'` runs the module, so it counts as a value import
+      const typeOnly = clause !== undefined && values.length === 0;
+      add(node.moduleSpecifier.text, node.moduleSpecifier.text, 'static', node, values, typeOnly);
     } else if (
       ts.isExportDeclaration(node) &&
       node.moduleSpecifier &&
       ts.isStringLiteral(node.moduleSpecifier)
     ) {
-      const clause = node.exportClause;
-      const typeOnly =
-        node.isTypeOnly ||
-        (clause !== undefined &&
-          ts.isNamedExports(clause) &&
-          clause.elements.length > 0 &&
-          clause.elements.every((element) => element.isTypeOnly));
+      const values = exportValues(node);
       const spec = node.moduleSpecifier.text;
-      imports.push({ spec, text: spec, kind: 'reexport', typeOnly, line: lineOf(node) });
+      add(spec, spec, 'reexport', node, values, values.length === 0);
     } else if (
       ts.isImportEqualsDeclaration(node) &&
       ts.isExternalModuleReference(node.moduleReference) &&
       ts.isStringLiteral(node.moduleReference.expression)
     ) {
       const spec = node.moduleReference.expression.text;
-      imports.push({
-        spec,
-        text: spec,
-        kind: 'require',
-        typeOnly: node.isTypeOnly,
-        line: lineOf(node),
-      });
+      const typeOnly = node.isTypeOnly;
+      add(spec, spec, 'require', node, typeOnly ? [] : ['*'], typeOnly);
     } else if (ts.isImportTypeNode(node)) {
       const argument = node.argument;
       if (ts.isLiteralTypeNode(argument) && ts.isStringLiteral(argument.literal)) {
-        const spec = argument.literal.text;
-        imports.push({ spec, text: spec, kind: 'importType', typeOnly: true, line: lineOf(node) });
+        add(argument.literal.text, argument.literal.text, 'importType', node, [], true);
       }
     } else if (ts.isCallExpression(node)) {
       const [argument] = node.arguments;
@@ -148,23 +168,16 @@ export function parseImports(
       const isRequire = ts.isIdentifier(node.expression) && node.expression.text === 'require';
       if ((isDynamicImport || isRequire) && argument) {
         const kind: ImportKind = isDynamicImport ? 'dynamic' : 'require';
-        if (ts.isStringLiteral(argument) || ts.isNoSubstitutionTemplateLiteral(argument)) {
-          imports.push({
-            spec: argument.text,
-            text: argument.text,
-            kind,
-            typeOnly: false,
-            line: lineOf(node),
-          });
-        } else {
-          imports.push({
-            spec: null,
-            text: argument.getText(sf),
-            kind,
-            typeOnly: false,
-            line: lineOf(node),
-          });
-        }
+        const literal =
+          ts.isStringLiteral(argument) || ts.isNoSubstitutionTemplateLiteral(argument);
+        add(
+          literal ? argument.text : null,
+          literal ? argument.text : argument.getText(sf),
+          kind,
+          node,
+          ['*'],
+          false
+        );
       }
     }
     ts.forEachChild(node, visit);
@@ -230,23 +243,13 @@ export function buildImportGraph(root: string): ImportGraph {
         continue;
       }
       const resolution = resolveSpecifier(root, file, entry.spec);
+      const { kind, typeOnly, values, line } = entry;
       if ('internal' in resolution) {
-        edges.push({
-          from: file,
-          to: resolution.internal,
-          kind: entry.kind,
-          typeOnly: entry.typeOnly,
-          line: entry.line,
-        });
+        edges.push({ from: file, to: resolution.internal, kind, typeOnly, values, line });
       } else if ('external' in resolution) {
-        externals.push({
-          from: file,
-          pkg: resolution.external,
-          typeOnly: entry.typeOnly,
-          line: entry.line,
-        });
+        externals.push({ from: file, spec: entry.spec, pkg: resolution.external, typeOnly, line });
       } else {
-        unresolved.push({ from: file, spec: entry.spec, line: entry.line });
+        unresolved.push({ from: file, spec: entry.spec, line });
       }
     }
   }
