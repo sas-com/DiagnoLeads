@@ -309,7 +309,7 @@ export const aiRouter = router({
         organizationId: input.organizationId,
         calls: 1,
       });
-      await updateLeadEmbedding(input.leadId, text);
+      await updateLeadEmbedding(input.leadId, input.organizationId, text);
 
       return { success: true };
     }),
