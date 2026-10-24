@@ -15,11 +15,11 @@ import {
 /**
  * Hidden while another diagnosis button (hero, below the concerns, consultation band, final call
  * to action) or the diagnosis is on screen, and over the footer so that it never covers the last
- * lines of the page. The hero buttons count on their own: they stay on screen after the heading
- * has scrolled away (#420).
+ * lines of the page. The hero counts by its buttons, not its heading: below the heading, the
+ * deadline tags put the buttons under the first screen of most phones, which then had no
+ * diagnosis button at all (#420, #536).
  */
 const DEFAULT_HIDE_WHEN_VISIBLE = [
-  'ax-hero-heading',
   AX_HERO_CTA_ID,
   AX_PROBLEMS_CTA_ID,
   AX_CONSULT_BAND_ID,

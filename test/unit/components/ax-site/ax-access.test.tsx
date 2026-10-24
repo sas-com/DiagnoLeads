@@ -207,6 +207,8 @@ describe('Access landing page', () => {
     expect(
       within(buttons).getByRole('link', { name: /無料Web診断（Access版）をはじめる/ })
     ).toHaveAttribute('href', '#diagnosis');
+    // Not the caption above them, which can be on screen while the buttons are not (#536)
+    expect(buttons).not.toHaveTextContent('無料・選択式・約3分');
   });
 
   it('starts the steps with the free check, as on the main page (#425)', async () => {
