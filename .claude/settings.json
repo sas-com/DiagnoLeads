@@ -21,9 +21,11 @@
       "Bash(bun install --frozen-lockfile)",
       "Bash(bunx vitest run *)",
       "Bash(bunx vitest --run *)",
-      "Bash(bunx biome check *)",
-      "Bash(bunx biome format *)",
-      "Bash(git fetch *)",
+      "Bash(bunx @biomejs/biome check *)",
+      "Bash(bunx @biomejs/biome format *)",
+      "Bash(git fetch)",
+      "Bash(git fetch origin)",
+      "Bash(git fetch origin *)",
       "Bash(gh issue list *)",
       "Bash(gh issue view *)",
       "Bash(gh pr list *)",
@@ -33,7 +35,12 @@
       "Bash(gh run list *)",
       "Bash(gh run view *)"
     ],
-    "ask": ["Bash(bun run db*)", "Bash(bun run test:e2e*)", "Bash(bunx drizzle-kit *)"],
+    "ask": [
+      "Bash(bun run db*)",
+      "Bash(bun run test:e2e*)",
+      "Bash(bunx drizzle-kit *)",
+      "Edit(./node_modules/**)"
+    ],
     "deny": [
       "Read(./.env)",
       "Read(./.env.local)",
@@ -41,6 +48,13 @@
       "Read(./.env.development)",
       "Read(./.env.production)",
       "Read(./.env.test)",
+      "Edit(./.env)",
+      "Edit(./.env.local)",
+      "Edit(./.env.*.local)",
+      "Edit(./.env.development)",
+      "Edit(./.env.production)",
+      "Edit(./.env.test)",
+      "Edit(./bun.lock)",
       "Bash(git push origin main)",
       "Bash(git push origin main *)",
       "Bash(git push -u origin main)",
@@ -63,7 +77,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "^(Edit|Write|MultiEdit|NotebookEdit|Bash)$|^mcp__",
+        "matcher": "^(Edit|Write|MultiEdit|NotebookEdit|Bash|Read|Grep)$|^mcp__",
         "hooks": [
           {
             "type": "command",
