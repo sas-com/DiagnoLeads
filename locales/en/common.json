@@ -1168,6 +1168,7 @@
         },
         "period": "Last {days} days, per day (Japan time)",
         "periodWeekly": "Last {days} days, per week (Japan time)",
+        "updatedAt": "As of {time}",
         "chartLabel": "{metric} in the last {days} days: {total}",
         "platforms": "By source system"
       },

@@ -1168,6 +1168,7 @@
         },
         "period": "直近{days}日・日ごと（日本時間）",
         "periodWeekly": "直近{days}日・週ごと（日本時間）",
+        "updatedAt": "{time}時点",
         "chartLabel": "直近{days}日の{metric}は{total}件",
         "platforms": "移行元システムごと"
       },

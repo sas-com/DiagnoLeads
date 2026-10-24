@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   refetch: vi.fn(),
   data: undefined as unknown,
+  dataUpdatedAt: 0,
   isError: false,
   organizationId: '660e8400-e29b-41d4-a716-446655440000' as string | null,
   canEdit: false,
@@ -31,6 +32,7 @@ vi.mock('@/lib/trpc/client', () => ({
           mocks.query(input);
           return {
             data: mocks.data,
+            dataUpdatedAt: mocks.dataUpdatedAt,
             isLoading: !mocks.data && !mocks.isError,
             isError: mocks.isError,
             isPlaceholderData: false,
@@ -241,9 +243,9 @@ describe('DashboardPage', () => {
     // Consultations 3 vs 1, MQL 4 vs 5 (関心あり only, 適合のみ beside it, #139)
     const consultations = insights.getByText('相談申込が前の30日間より増えました')
       .parentElement as HTMLElement;
-    expect(within(consultations).getByText(/200\.0%/)).toHaveClass('text-emerald-600');
+    expect(within(consultations).getByText(/200\.0%/)).toHaveClass('text-[var(--color-semantic-success-2)]');
     const mql = insights.getByText('MQL（関心あり）が前の30日間より減りました').parentElement as HTMLElement;
-    expect(within(mql).getByText(/20\.0%/)).toHaveClass('text-rose-600');
+    expect(within(mql).getByText(/20\.0%/)).toHaveClass('text-[var(--color-semantic-error-1)]');
     expect(within(mql).getByText('前の30日間 5件 / ほかに適合のみ 2件')).toBeInTheDocument();
     // No average score: the MQL level is the sign of how promising leads are (#447)
     expect(insights.queryByText(/平均スコア/)).not.toBeInTheDocument();
@@ -320,7 +322,7 @@ describe('DashboardPage', () => {
     expect(panel.getByText('4')).toBeInTheDocument();
     expect(chartProps()).toEqual({
       categories: ['新規リード数'],
-      colors: ['teal'],
+      colors: ['key'],
       data: [
         { date: '10/15', 新規リード数: 1 },
         { date: '10/16', 新規リード数: 3 },
@@ -352,6 +354,14 @@ describe('DashboardPage', () => {
 
     expect(chartProps().data.map((d) => d.date)).toEqual(['7/19〜', '7/20〜']);
     expect(screen.getByText('直近90日・週ごと（日本時間）')).toBeInTheDocument();
+  });
+
+  it('dates the figures with the time they were fetched (DADS guidebook, #635)', () => {
+    // 2026-10-25 05:07 UTC = 14:07 in Japan
+    mocks.dataUpdatedAt = Date.UTC(2026, 9, 25, 5, 7);
+    renderPage();
+    expect(screen.getByText(/10\/25 14:07時点/)).toBeInTheDocument();
+    mocks.dataUpdatedAt = 0;
   });
 
   it('lists recent leads by company with status, received time and the MQL tag, without scores', () => {
