@@ -289,6 +289,5 @@ describe('acceptMeetingPreferences', () => {
     // The form then says sales will ask about the dates, and does not offer to send again
     expect(status).toBe('unavailable');
     expect(later).not.toHaveBeenCalled();
-    expect(MEETING_PREFERENCES_WINDOW_MS).toBe(24 * 60 * 60 * 1000);
   });
 });

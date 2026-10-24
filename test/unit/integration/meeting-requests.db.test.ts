@@ -300,16 +300,35 @@ describe.skipIf(!url)('meeting requests (PostgreSQL)', () => {
     // Only the first preferences told sales
     expect(later).toHaveBeenCalledTimes(1);
 
-    // A new consultation request (another answer of the person) opens a new day
-    const again = await createSubmission(leadId, 'created');
+    // A week later the person answers again. Only one answer creates a lead, so this one is tied
+    // to it by the email address only (unverified). Its consultation request opens a new day,
+    // but the verified preferences above are kept (#274)
     const nextWeek = new Date(NOW.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const again = await createSubmission(leadId, 'email');
     expect(
-      await accept(leadId, again, true, [{ date: '2026-10-29', time: '11:00' }], later, {
+      await accept(leadId, again, false, [{ date: '2026-10-29', time: '11:00' }], later, {
+        requestedAt: nextWeek,
+        now: nextWeek,
+      })
+    ).toBe('unavailable');
+    expect((await requestOf(leadId)).candidates).toEqual([OPTIONS[0]]);
+    expect(later).toHaveBeenCalledTimes(1);
+
+    // A lead without preferences takes those of the new day
+    const quietLead = await createLead();
+    await createSubmission(quietLead, 'created');
+    const answeredAgain = await createSubmission(quietLead, 'email');
+    expect(
+      await accept(quietLead, answeredAgain, false, [{ date: '2026-10-29', time: '11:00' }], later, {
         requestedAt: nextWeek,
         now: nextWeek,
       })
     ).toBe('saved');
-    expect((await requestOf(leadId)).candidates).toEqual([{ date: '2026-10-29', time: '11:00' }]);
+    expect(await requestOf(quietLead)).toMatchObject({
+      candidates: [{ date: '2026-10-29', time: '11:00' }],
+      identityVerified: false,
+    });
+    expect(later).toHaveBeenCalledTimes(2);
   });
 
   it('keeps the preferences of an unverified answer, replaced only by later ones (#274)', async () => {

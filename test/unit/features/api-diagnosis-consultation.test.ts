@@ -105,6 +105,25 @@ describe('POST /api/diagnoses/[slug]/consultation with meeting preferences', () 
     });
   });
 
+  it('times the preferences sent with the first request from that request (#241)', async () => {
+    requestMock.mockResolvedValue({
+      ok: true,
+      alreadyRequested: false,
+      organizationId: 'org-1',
+      leadId: 'lead-1',
+      leadCreated: true,
+      requestedAt: REQUESTED_AT,
+    });
+    const response = await POST(request({ submissionId: SUBMISSION_ID, preferences }), params);
+    expect(await response.json()).toEqual({
+      ok: true,
+      alreadyRequested: false,
+      preferences: 'saved',
+    });
+    // The time the service recorded, not one the route makes up
+    expect(acceptMock.mock.calls[0][1]).toMatchObject({ requestedAt: REQUESTED_AT });
+  });
+
   it('refuses unknown or repeated topics and a note over 300 characters', async () => {
     for (const extra of [
       { topics: ['pricing'] },

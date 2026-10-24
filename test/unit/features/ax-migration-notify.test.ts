@@ -481,12 +481,16 @@ describe('notifyAxMigrationSubmission', () => {
         expect.anything(),
         expect.anything()
       );
-      const requestEmails = sendEmailMock.mock.calls.filter(([mail]) =>
-        String(mail.subject).startsWith('【相談申込')
-      );
-      expect(requestEmails).toEqual(
-        email ? [[expect.objectContaining({ to: intake.emails })]] : []
-      );
+      if (email) {
+        const requestEmails = sendEmailMock.mock.calls.filter(([mail]) =>
+          String(mail.subject).startsWith('【相談申込')
+        );
+        expect(requestEmails).toEqual([[expect.objectContaining({ to: intake.emails })]]);
+      } else {
+        // No email at all, whatever its subject (the counts used are past a cap, not the first
+        // over it, so no limit notice goes out either)
+        expect(sendEmailMock).not.toHaveBeenCalled();
+      }
     };
 
     it('sends a consultation request to the intake members only, in-app and by email', async () => {
