@@ -2,6 +2,7 @@
  * AX migration landing page (server components rendered with the real messages)
  */
 import { evaluateAxMigration, toPublicResult } from '@/lib/features/diagnostics/ax-migration/evaluate';
+import enMessages from '@/locales/en/common.json';
 import messages from '@/locales/ja/common.json';
 import { as400Answers } from '@/test/fixtures/ax-migration';
 import { act, render, screen, within } from '@testing-library/react';
@@ -12,7 +13,11 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 vi.mock('next-intl/server', () => ({
   getTranslations: async ({ locale, namespace }: { locale: string; namespace?: string }) =>
-    createTranslator({ locale, messages, namespace: namespace as never }),
+    createTranslator({
+      locale,
+      messages: (locale === 'en' ? enMessages : messages) as typeof messages,
+      namespace: namespace as never,
+    }),
 }));
 vi.mock('next/font/google', () => ({
   Noto_Sans_JP: () => ({ variable: 'font-noto' }),
@@ -25,7 +30,9 @@ const { default: AxMigrationPage, generateMetadata } = await import(
 const { default: AxDiagnosisPage } = await import('@/app/[locale]/(ax)/ax-diagnosis/page');
 const { AxSiteHeader } = await import('@/components/features/ax-site/ax-site-header');
 const { AxSiteFooter } = await import('@/components/features/ax-site/ax-site-footer');
-const { AxFinalCta } = await import('@/components/features/ax-site/landing-sections');
+const { AxChallenges, AxFinalCta } = await import(
+  '@/components/features/ax-site/landing-sections'
+);
 const { AxFloatingCta } = await import('@/components/features/ax-site/ax-floating-cta');
 
 beforeAll(() => {
@@ -139,6 +146,26 @@ describe('AX migration landing page', () => {
     expect(
       within(reasons as HTMLElement).getByText(/^※お預かりした仕様書・ソースコードなどは/)
     ).toBeInTheDocument();
+  });
+
+  it('says what the diagnosis tells, and quotes the customers in each language (#535)', async () => {
+    await renderPage();
+    // The diagnosis asks for the deadlines: it tells how pressing they are, not what they are
+    expect(
+      screen.getByText('期限までの急ぎ度合いと、移行の難しさの目安が、約3分でわかります')
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/保守期限と移行の難しさの目安/)).toBeNull();
+    const challenges = document.getElementById('ax-challenges-heading')?.closest('section');
+    expect(
+      within(challenges as HTMLElement).getByText('「RPGやCOBOLを直せる人が、社内に1〜2人しかいない」')
+    ).toBeInTheDocument();
+
+    // No Japanese brackets around the English quotes
+    const english = render(withIntl(await AxChallenges({ locale: 'en' })));
+    expect(english.container).toHaveTextContent(
+      '“Only one or two people in the company can fix the RPG or COBOL”'
+    );
+    expect(english.container.textContent).not.toMatch(/[「」]/);
   });
 
   it('names the audience, leads from the concerns to the check and orders the steps', async () => {

@@ -2734,7 +2734,7 @@
         "people": "Retirement or transfer of the people who can fix it",
         "edi": "EDI over INS Net (announced to end on December 31, 2028)"
       },
-      "ctaCaption": "See the maintenance deadlines and how hard a migration would be in about 3 minutes",
+      "ctaCaption": "See how pressing your deadlines are and how hard a migration would be, in about 3 minutes",
       "cta": "Start the free web check",
       "consult": "Book a free consultation",
       "demo": "See the demo",
@@ -2762,7 +2762,7 @@
       "nowLabel": "Today",
       "items": {
         "people": {
-          "voice": "Only one or two people in the company can fix the RPG or COBOL",
+          "voice": "“Only one or two people in the company can fix the RPG or COBOL”",
           "label": "People",
           "title": "A core system that depends on a few people",
           "body": "Years of person-dependent changes have turned the specifications into a black box, and fewer engineers can work on it every year, raising the risk to business continuity.",
@@ -2772,7 +2772,7 @@
           }
         },
         "agility": {
-          "voice": "Every new customer or product means a slow round of changes",
+          "voice": "“Every new customer or product means a slow round of changes”",
           "label": "Agility",
           "title": "A system that cannot keep up with the market",
           "body": "Every time you try to respond to new customers or market changes, the limits of the existing system hold back new products and services.",
@@ -2782,7 +2782,7 @@
           }
         },
         "cost": {
-          "voice": "Maintenance costs keep rising and leave no budget for new investment",
+          "voice": "“Maintenance costs keep rising and leave no budget for new investment”",
           "label": "Cost",
           "title": "\"Life-extension costs\" that limit growth",
           "body": "The more maintenance and additions to the current system cost, the less budget is left for new challenges that drive the business forward.",
@@ -2792,7 +2792,7 @@
           }
         },
         "data": {
-          "voice": "The figures for management meetings are collected by hand in Excel every month",
+          "voice": "“The figures for management meetings are collected by hand in Excel every month”",
           "label": "Data",
           "title": "Data you cannot use for decisions",
           "body": "Core data stored on AS/400 and similar systems is often locked in proprietary formats, so the figures behind management decisions are not available in real time.",
@@ -3051,7 +3051,7 @@
     },
     "finalCta": {
       "title": "Make your next step a step toward AX.",
-      "lead": "Start with the free web check to see the maintenance deadlines and how hard a migration would be. You can also reach us by phone or email.",
+      "lead": "Start with the free web check to see how pressing your deadlines are and how hard a migration would be. You can also reach us by phone or email.",
       "caption": "Multiple choice, about 3 minutes",
       "cta": "Start the free web check",
       "consult": "Book a free consultation",

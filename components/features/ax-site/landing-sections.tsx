@@ -220,7 +220,7 @@ export async function AxChallenges({ locale }: SectionProps) {
                 <span className="shrink-0 rounded bg-ax-cloud px-2 py-0.5 text-sm">
                   {t('nowLabel')}
                 </span>
-                <span>「{t(`items.${key}.voice`)}」</span>
+                <span>{t(`items.${key}.voice`)}</span>
               </p>
               <div className="mt-4 flex items-center gap-3">
                 <Icon className="h-10 w-10 text-ax-forest" aria-hidden="true" />
