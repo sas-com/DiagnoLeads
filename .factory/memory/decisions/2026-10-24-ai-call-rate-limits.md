@@ -20,6 +20,6 @@ paths: ["lib/features/ai/limits.ts", "lib/features/ai/prompt-input.ts", "lib/fea
   - 回数は手続きの中で DB で数える。パスで数える middleware の制限には頼らない（バッチの1件ごと・インスタンスをまたいで数えるため。#321 の Webhook のテスト送信と同じ）
   - 断ったリクエストも数える（ほかの `public_rate_limits` の規則と同じ）。一括が枠に収まらないときは全件断り、その件数を数える。クライアントは `TOO_MANY_REQUESTS` を再試行しない（`lib/trpc/retry.ts`）
   - 埋め込み（OpenAI）を呼ぶ手続き（`ai.semanticSearch`・`ai.updateEmbedding`）は、埋め込み1回を1件と数え、Claude とは別の枠 `EMBEDDING_CALL_LIMITS`（ユーザーごと1時間に300件→組織ごと1時間に600件→組織ごと1日に3,000件）で同じように数える（`consumeEmbeddingCalls`。#576）。Claude と同じ枠にしないのは、埋め込み1回の費用が Claude の1回よりずっと小さく、検索で Claude の残りの枠（スコアリングなど）を使い切らないようにするため。数える場所と断り方は Claude と同じ（権限の確認と組織での読み込みの後、OpenAI を呼ぶ直前）
-  - 埋め込みに渡す文にも上限を置く：検索の文（`semanticSearchSchema` の `query`）は500文字まで（超えると `BAD_REQUEST`）、リードの文（`prepareLeadText`）は項目ごとに1,000文字・全体で4,000文字に切る。埋め込みにリードの項目を足すときは、`prepareLeadText` の中で切る
+  - 埋め込みに渡す文にも上限を置く：検索の文（`semanticSearchSchema` の `query`）は500文字まで（超えると `BAD_REQUEST`）、リードの文（`prepareLeadText`）は項目ごとに1,000文字・全体で2,000文字に切る（1文字が数トークンになる文でもモデルの入力の上限を超えないように。超えると、数えた後に OpenAI に断られる）。埋め込みにリードの項目を足すときは、`prepareLeadText` の中で切る。OpenAI を呼ぶ関数（`generateEmbedding`・まだ使っていない `generateEmbeddingsBatch`）を新しく呼ぶときは、埋め込む文の件数を `consumeEmbeddingCalls` で数える
   - `ai.findSimilar` は保存済みの埋め込みを pgvector で比べるだけで OpenAI を呼ばないので、数えない。OpenAI を呼ぶように変えるときは `consumeEmbeddingCalls` を足す
   - `/api/chat`（`app/api/chat/route.ts`）も対象外で、#432 で消すまでの扱い。ログインだけで組織を確かめず、回数も数えない。いまは `ai` 4.x が temperature 0 を送り、Claude Sonnet 5.5 に断られて動かない。`ai` を上げる前に消すか、同じ回数制限と `leadForClaude` 相当の上限を付ける

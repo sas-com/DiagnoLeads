@@ -175,10 +175,17 @@ describe('prepareLeadText', () => {
     });
 
     expect(result.length).toBe(MAX_EMBEDDING_TEXT_CHARS);
-    const [name, email, company] = result.split(' ');
+    const [name, email, company, ...rest] = result.split(' ');
     expect(name).toBe('n'.repeat(MAX_EMBEDDING_FIELD_CHARS));
     expect(email).toBe('x@example.com');
-    expect(company).toBe('c'.repeat(MAX_EMBEDDING_FIELD_CHARS));
+    // The whole is cut inside the company; the later fields are left out
+    expect(company).toBe(
+      'c'.repeat(MAX_EMBEDDING_TEXT_CHARS - MAX_EMBEDDING_FIELD_CHARS - email.length - 2)
+    );
+    expect(rest).toEqual([]);
+
+    // One long field alone is cut to the field limit
+    expect(prepareLeadText({ company: long('c') })).toBe('c'.repeat(MAX_EMBEDDING_FIELD_CHARS));
   });
 
   it('keeps a short lead as it is, and never cuts inside a surrogate pair', () => {

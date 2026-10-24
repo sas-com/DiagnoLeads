@@ -23,6 +23,8 @@ function getOpenAI(): OpenAI {
 
 /**
  * Generate embedding vector for text
+ * A paid OpenAI call: callers count it with consumeEmbeddingCalls (../limits.ts) first and
+ * bound the text (#576)
  * @param text - The text to generate embedding for
  * @returns Vector embedding (1536 dimensions)
  */
@@ -43,6 +45,8 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 
 /**
  * Generate embeddings for multiple texts in batch
+ * Not called anywhere yet. Each text is a paid embedding: a caller counts them all with
+ * consumeEmbeddingCalls (`calls: texts.length`) first and bounds each text (#576)
  * @param texts - Array of texts to generate embeddings for
  * @returns Array of vector embeddings
  */
@@ -67,8 +71,12 @@ export async function generateEmbeddingsBatch(texts: string[]): Promise<number[]
  */
 export const MAX_EMBEDDING_FIELD_CHARS = 1_000;
 
-/** Longest text embedded for one lead, all its fields together */
-export const MAX_EMBEDDING_TEXT_CHARS = 4_000;
+/**
+ * Longest text embedded for one lead, all its fields together. Kept well under the model's
+ * input limit even for text that takes several tokens per character (rare kanji, emoji): a
+ * text over it is refused by OpenAI after the call has been counted
+ */
+export const MAX_EMBEDDING_TEXT_CHARS = 2_000;
 
 /** `text` cut to `max` characters, never inside a surrogate pair */
 function clipText(text: string, max: number): string {
