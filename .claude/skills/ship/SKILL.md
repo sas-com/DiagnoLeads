@@ -19,7 +19,7 @@ description: 変更を PR にしてマージできる状態まで持っていく
 ## 2. コミットと push
 
 - コミットは英語の Conventional Commits で書く。scope は CLAUDE.md の一覧から選び、本文に変更点の箇条書きと `Refs #N` か `Closes #N` を書く
-- push は `git push -u origin <branch>` で行う。main には push しない（ブランチ保護が、必須の検査が緑でないコミットを拒む。権限の deny は `git push origin main` などの決まった形だけ）
+- push は `git push -u origin <branch>` で行う。main には直接 push できない（ブランチ保護が、PR 経由でのみマージを許し、必須の検査が緑でないコミットを拒む。権限の deny は `git push origin main` などの決まった形だけ）
 
 ## 3. PR
 
@@ -52,6 +52,7 @@ description: 変更を PR にしてマージできる状態まで持っていく
 
 ## 5. マージの条件（完了の定義）
 
+- main は PR 経由でのみマージできる（直接 push は不可。承認は0でよく、管理者にも適用される）
 - CI が緑で、main と衝突していない
   - GitHub が必須にしている検査は7つ（Lint & Type Check・Unit Tests ×4・DB Integration Tests・Build）。E2E と Security Scan は必須ではないので、緑を自分で確かめる
 - 3 のレビューが要る変更に、blocker が残っていない
