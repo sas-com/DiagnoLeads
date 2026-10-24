@@ -1,7 +1,9 @@
 [tools]
-bun = "1.1.38"
+# Same Bun as CI (BUN_VERSION in .github/workflows/ci.yml); bump both together
+bun = "1.4.3"
 node = "20.11.0"
-lefthook = "1.10.1"
+# Same as the lefthook devDependency in bun.lock
+lefthook = "2.0.4"
 
 [env]
 DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/diagnoleads_dev"
