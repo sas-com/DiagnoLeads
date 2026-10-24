@@ -358,6 +358,16 @@ describe('predictConversion', () => {
     expect(prediction.factors[0].weight).toBe(10);
   });
 
+  it('should fall back to heuristics when the API fails', async () => {
+    const { predictConversion } = await import('@/lib/features/ai/prediction/conversion');
+    mockParse.mockRejectedValueOnce(new Error('529 overloaded'));
+
+    const prediction = await predictConversion(lead);
+
+    expect(prediction.probability).toBeGreaterThan(0);
+    expect(prediction.factors.length).toBeGreaterThan(0);
+  });
+
   it('should fall back to heuristics when there is no parsed output', async () => {
     const { predictConversion } = await import('@/lib/features/ai/prediction/conversion');
     mockParse.mockResolvedValueOnce({ parsed_output: null, stop_reason: 'max_tokens' });

@@ -1,8 +1,9 @@
 /**
  * AI Chat Assistant
  *
- * Streaming chat interface using Vercel AI SDK and Claude Sonnet 5.5.
- * Provides contextual assistance for lead management and insights.
+ * Streaming chat interface using Vercel AI SDK, plus the lead summary on the Anthropic SDK.
+ * The chat does not work on Claude Sonnet 5.5 (`ai` 4.x sends temperature 0, which it
+ * rejects) and is to be removed in #432.
  */
 
 import { createAnthropic } from '@ai-sdk/anthropic';

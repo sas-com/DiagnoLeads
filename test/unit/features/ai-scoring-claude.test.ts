@@ -155,6 +155,18 @@ describe('scoreLeadWithAI', () => {
       expect(score.confidence).toBe('low');
     });
 
+    it('should request every LeadScore field in the output schema', async () => {
+      mockParse.mockResolvedValueOnce({ parsed_output: null, stop_reason: 'end_turn' });
+
+      await scoreLeadWithAI({ email: 'schema@example.com' });
+
+      const schema = mockParse.mock.calls[0][0].output_config.format.schema;
+      expect([...schema.required].sort()).toEqual(
+        ['confidence', 'priority', 'reasoning', 'recommendedActions', 'score'].sort()
+      );
+      expect(Object.keys(schema.properties).sort()).toEqual([...schema.required].sort());
+    });
+
     it('should fall back when there is no parsed output', async () => {
       mockParse.mockResolvedValueOnce({ parsed_output: null, stop_reason: 'max_tokens' });
 
@@ -166,7 +178,7 @@ describe('scoreLeadWithAI', () => {
 
   describe('error handling', () => {
     it('should return fallback score on error', async () => {
-      // The mock returns a fallback by default when API fails
+      mockParse.mockRejectedValueOnce(new Error('529 overloaded'));
       const lead = { email: 'error@example.com' };
       const score = await scoreLeadWithAI(lead);
 

@@ -110,6 +110,7 @@ export async function predictConversion(lead: LeadForPrediction): Promise<Conver
     });
 
     if (!message.parsed_output) {
+      console.error('Conversion prediction: no structured output', message.stop_reason);
       return generateFallbackPrediction(lead);
     }
 
