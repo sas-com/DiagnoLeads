@@ -12,6 +12,7 @@ import { challengeGuideRouter } from '@/lib/features/challenge-guide/api/router'
 import { commentsRouter } from '@/lib/features/comments/api/router';
 import { customFieldsRouter } from '@/lib/features/custom-fields/api/router';
 import { customReportsRouter } from '@/lib/features/custom-reports/api/router';
+import { dealsRouter } from '@/lib/features/deals/api/router';
 import { deliveryReviewsRouter } from '@/lib/features/delivery-reviews/api/router';
 import { diagnosesRouter } from '@/lib/features/diagnosis-builder/api/router';
 import { diagnosticTemplatesRouter } from '@/lib/features/diagnostic-templates/api/router';
@@ -89,6 +90,7 @@ export const appRouter = router({
   account: accountRouter, // The signed-in person's own account: deletion (#164)
   leadSearch: leadSearchRouter, // Header search suggestions (#164)
   prospects: prospectsRouter, // AX customer search list, replacing the spreadsheet (#265)
+  deals: dealsRouter, // SFA deals: board, amounts, close dates and history (Refs #435)
 });
 
 export type AppRouter = typeof appRouter;
