@@ -28,7 +28,10 @@ const ORG_ID = '660e8400-e29b-41d4-a716-446655440000';
 const LEAD_ID = '880e8400-e29b-41d4-a716-446655440000';
 const USER_ID = '550e8400-e29b-41d4-a716-446655440000';
 
-/** A value of exactly `length` characters for the field (Japanese text counts per character) */
+/**
+ * A value of exactly `length` characters for the field. The length is counted in UTF-16 code
+ * units, so a Japanese character of the BMP (山, 株) counts as 1; one outside it (𠮷) counts as 2
+ */
 function valueOfLength(field: LeadTextField, length: number): string {
   switch (field) {
     case 'email':
@@ -104,6 +107,22 @@ describe('contact values (name, company, email, phone)', () => {
       }
     );
     expect(issuesOf(result)[0]?.message).toBe('too long');
+  });
+
+  it.each(TEXT_FIELDS)(
+    'trims the %s before counting it, as the public forms do, and keeps it trimmed',
+    (field) => {
+      const value = valueOfLength(field, LEAD_TEXT_MAX_LENGTH[field]);
+      expect(createLeadSchema.parse({ ...created, [field]: ` ${value}　\n` })[field]).toBe(
+        value
+      );
+      expect(updateLeadSchema.parse({ ...updated, [field]: `  ${value} ` })[field]).toBe(value);
+    }
+  );
+
+  it('counts in UTF-16 code units, as the public forms do: 𠮷 counts as 2', () => {
+    expect(createLeadSchema.safeParse({ ...created, name: '𠮷'.repeat(50) }).success).toBe(true);
+    expect(createLeadSchema.safeParse({ ...created, name: '𠮷'.repeat(51) }).success).toBe(false);
   });
 });
 
@@ -183,13 +202,25 @@ describe('bulkCreateSchema', () => {
 describe('import rows', () => {
   const mapping = { email: 'email', name: 'name', company: 'company', phone: 'phone' };
 
-  it('marks a row over a limit as an error, with the limit', () => {
+  it('marks a row over a limit as an error, with the file’s column and the limit', () => {
     const result = validateRow(
-      { email: 'lead@example.jp', company: valueOfLength('company', 201) },
-      mapping,
+      { メールアドレス: 'lead@example.jp', 会社名: valueOfLength('company', 201) },
+      { email: 'メールアドレス', company: '会社名' },
       1
     );
-    expect(result).toMatchObject({ success: false, error: '最大200文字までです' });
+    expect(result).toEqual({
+      row: 1,
+      success: false,
+      error: '会社名: 最大200文字までです',
+      // The screen tells the limit in its own language from these
+      tooLong: { column: '会社名', max: 200 },
+    });
+  });
+
+  it('starts other errors with the file’s column, without a limit to tell', () => {
+    const result = validateRow({ mail: 'not-an-email' }, { email: 'mail' }, 1);
+    expect(result).toMatchObject({ success: false, error: 'mail: Invalid email format' });
+    expect(result).not.toHaveProperty('tooLong');
   });
 
   it('takes a row at the limits', () => {

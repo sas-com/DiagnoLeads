@@ -83,7 +83,12 @@ export type LeadTextField = keyof typeof LEAD_TEXT_MAX_LENGTH;
 /**
  * A contact value of the lead, refused over its limit with the Japanese message of
  * `validation.maxLength` (locales/ja). A form passing its own error map (the lead page's cards,
- * the new lead form) shows the message in the page's language instead.
+ * the new lead form) shows the message in the page's language instead; the import reads the
+ * limit from the issue and leaves the wording to its screen (import-service.ts).
+ *
+ * As the public forms do for the name, company and email, the value is trimmed before it is
+ * counted (and kept trimmed), and the length is counted in UTF-16 code units: a character outside
+ * the BMP (𠮷) or a decomposed one (か followed by a combining mark) counts as 2.
  */
 export function leadTextSchema(field: LeadTextField) {
   const max = LEAD_TEXT_MAX_LENGTH[field];
@@ -94,6 +99,7 @@ export function leadTextSchema(field: LeadTextField) {
           ? { message: `最大${max}文字までです` }
           : { message: ctx.defaultError },
     })
+    .trim()
     .max(max);
 }
 
@@ -132,7 +138,11 @@ export const createLeadSchema = z
     responses: leadResponsesSchema.default({}),
   })
   .merge(leadPipelineFieldsSchema);
-export type CreateLeadInput = z.infer<typeof createLeadSchema>;
+/**
+ * What a client sends to leads.create: the schema's input, in which the defaulted fields
+ * (status, responses) may be left out. The screens send no responses (#575)
+ */
+export type CreateLeadInput = z.input<typeof createLeadSchema>;
 
 /**
  * Lead update schema

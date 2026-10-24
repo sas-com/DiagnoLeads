@@ -31,7 +31,13 @@ export interface ImportRowResult {
   row: number;
   success: boolean;
   data?: ImportLeadRow;
+  /** Why the row is left out, starting with the file's column it is about */
   error?: string;
+  /**
+   * A value over its length limit (#575): the file's column and the limit, so the screen names
+   * the column and tells the limit in its own language (`error` has the Japanese message)
+   */
+  tooLong?: { column: string; max: number };
 }
 
 /**
@@ -191,13 +197,28 @@ export function validateRow(
       data: validated,
     };
   } catch (error) {
-    const message = error instanceof z.ZodError ? error.errors[0]?.message : String(error);
+    if (!(error instanceof z.ZodError)) {
+      return { row: rowIndex, success: false, error: String(error) || 'Validation failed' };
+    }
+    const [issue] = error.errors;
+    const column = issue ? columnOf(issue, mapping) : undefined;
+    const message = issue?.message || 'Validation failed';
     return {
       row: rowIndex,
       success: false,
-      error: message || 'Validation failed',
+      error: column ? `${column}: ${message}` : message,
+      ...(column && issue?.code === z.ZodIssueCode.too_big && issue.type === 'string'
+        ? { tooLong: { column, max: Number(issue.maximum) } }
+        : {}),
     };
   }
+}
+
+/** The file's column holding the value an issue is about (the lead field when none is mapped) */
+function columnOf(issue: z.ZodIssue, mapping: ColumnMapping): string | undefined {
+  const [field] = issue.path;
+  if (typeof field !== 'string') return undefined;
+  return mapping[field as keyof ColumnMapping] ?? field;
 }
 
 /**
