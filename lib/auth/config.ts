@@ -60,6 +60,14 @@ export const auth = betterAuth({
       console.log(`Password reset completed for user: ${user.email}`);
     },
     resetPasswordTokenExpiresIn: 60 * 60, // 1 hour
+    /**
+     * A reset deletes every session of the user, including one in the browser that made the
+     * reset (the reset page sends the user to sign in again), so someone who knew the old
+     * password, or registered the address first, is signed out (#529). A browser that still
+     * holds the session_data cookie can be served from it until it expires (cookieCache.maxAge
+     * below, #578).
+     */
+    revokeSessionsOnPasswordReset: true,
   },
 
   /**

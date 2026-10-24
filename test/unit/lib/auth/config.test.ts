@@ -1,196 +1,83 @@
 /**
- * Auth Config Tests
+ * The options the real auth configuration (lib/auth/config.ts) passes to better-auth. The
+ * behaviour behind them is checked elsewhere: the password reset that ends the user's sessions
+ * on PostgreSQL in test/unit/integration/password-reset-sessions.db.test.ts, the auth emails in
+ * auth-email-background.test.ts.
  */
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { describe, expect, it } from 'vitest';
+vi.mock('@/lib/db/client', () => ({ db: {} }));
 
-describe('Auth configuration', () => {
-  it('should define session expiration', () => {
-    const sessionConfig = {
-      expiresIn: 60 * 60 * 24 * 7, // 7 days in seconds
-      updateAge: 60 * 60 * 24, // 1 day
-    };
-    
-    expect(sessionConfig.expiresIn).toBe(604800); // 7 days
-    expect(sessionConfig.updateAge).toBe(86400); // 1 day
+const productionEnv = {
+  NODE_ENV: 'production',
+  BETTER_AUTH_URL: 'https://app.example.com',
+  BETTER_AUTH_SECRET: 'test-secret-test-secret-test-secret-32',
+  NEXT_PUBLIC_APP_URL: 'https://app.example.com',
+};
+
+/** The configuration as it is built with the given environment */
+async function loadAuth(env: Record<string, string> = productionEnv) {
+  vi.resetModules();
+  vi.doMock('@/lib/env', () => ({ env }));
+  const { auth } = await import('@/lib/auth/config');
+  return auth.options;
+}
+
+afterEach(() => {
+  vi.doUnmock('@/lib/env');
+});
+
+describe('auth configuration', () => {
+  it('ends every session of the user when their password is reset (#529)', async () => {
+    const options = await loadAuth();
+
+    expect(options.emailAndPassword?.revokeSessionsOnPasswordReset).toBe(true);
   });
 
-  it('should define cookie cache settings', () => {
-    const cookieCacheConfig = {
+  it('keeps reset links for one hour and passwords between 8 and 128 characters', async () => {
+    const { emailAndPassword } = await loadAuth();
+
+    expect(emailAndPassword).toMatchObject({
       enabled: true,
-      maxAge: 5 * 60, // 5 minutes
-    };
-    
-    expect(cookieCacheConfig.enabled).toBe(true);
-    expect(cookieCacheConfig.maxAge).toBe(300);
-  });
-});
-
-describe('Auth advanced settings', () => {
-  it('should use secure cookies in production', () => {
-    const isProduction = process.env.NODE_ENV === 'production';
-    const useSecureCookies = isProduction;
-    
-    expect(typeof useSecureCookies).toBe('boolean');
+      minPasswordLength: 8,
+      maxPasswordLength: 128,
+      resetPasswordTokenExpiresIn: 60 * 60,
+    });
+    expect(emailAndPassword?.sendResetPassword).toEqual(expect.any(Function));
   });
 
-  it('should use UUID for ID generation', () => {
-    const dbConfig = {
-      generateId: 'uuid',
-    };
-    
-    expect(dbConfig.generateId).toBe('uuid');
-  });
-});
+  it('keeps sessions 7 days, refreshes them daily and caches them in a cookie for 5 minutes', async () => {
+    const { session } = await loadAuth();
 
-describe('Session type', () => {
-  it('should define session structure', () => {
-    type Session = {
-      id: string;
-      createdAt: Date;
-      expiresAt: Date;
-      userId: string;
-      token: string;
-    };
-    
-    const session: Session = {
-      id: 'session-123',
-      createdAt: new Date(),
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      userId: 'user-123',
-      token: 'token-xyz',
-    };
-    
-    expect(session.userId).toBe('user-123');
-  });
-});
-
-describe('User type', () => {
-  it('should define user structure', () => {
-    type User = {
-      id: string;
-      name: string | null;
-      email: string;
-      emailVerified: boolean;
-      image: string | null;
-      createdAt: Date;
-      updatedAt: Date;
-    };
-    
-    const user: User = {
-      id: 'user-123',
-      name: 'John Doe',
-      email: 'john@example.com',
-      emailVerified: true,
-      image: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    
-    expect(user.email).toBe('john@example.com');
-    expect(user.emailVerified).toBe(true);
-  });
-});
-
-describe('Organization plugin', () => {
-  it('should define organization structure', () => {
-    type Organization = {
-      id: string;
-      name: string;
-      slug: string;
-      logo: string | null;
-      createdAt: Date;
-    };
-    
-    const org: Organization = {
-      id: 'org-123',
-      name: 'Acme Inc',
-      slug: 'acme-inc',
-      logo: null,
-      createdAt: new Date(),
-    };
-    
-    expect(org.slug).toBe('acme-inc');
+    expect(session).toMatchObject({
+      expiresIn: 60 * 60 * 24 * 7,
+      updateAge: 60 * 60 * 24,
+      cookieCache: { enabled: true, maxAge: 5 * 60 },
+    });
   });
 
-  it('should define member structure', () => {
-    type Member = {
-      id: string;
-      userId: string;
-      organizationId: string;
-      role: 'owner' | 'admin' | 'member';
-      createdAt: Date;
-    };
-    
-    const member: Member = {
-      id: 'member-123',
-      userId: 'user-123',
-      organizationId: 'org-123',
-      role: 'admin',
-      createdAt: new Date(),
-    };
-    
-    expect(member.role).toBe('admin');
-  });
-});
+  it('generates UUIDs and trusts only the app URL as an origin', async () => {
+    const options = await loadAuth();
 
-describe('Invitation handling', () => {
-  it('should define invitation data', () => {
-    type InvitationData = {
-      email: string;
-      organizationId: string;
-      organizationName: string;
-      inviterName: string;
-      inviteLink: string;
-    };
-    
-    const invitation: InvitationData = {
-      email: 'newuser@example.com',
-      organizationId: 'org-123',
-      organizationName: 'Acme Inc',
-      inviterName: 'John Doe',
-      inviteLink: 'https://app.example.com/invite/abc123',
-    };
-    
-    expect(invitation.email).toBe('newuser@example.com');
-  });
-});
-
-describe('Trusted origins', () => {
-  it('should include app URL', () => {
-    const appUrl = 'https://app.diagnoleads.com';
-    const trustedOrigins = [appUrl];
-    
-    expect(trustedOrigins).toContain(appUrl);
+    expect(options.advanced?.database?.generateId).toBe('uuid');
+    expect(options.trustedOrigins).toEqual(['https://app.example.com']);
   });
 
-  it('should support multiple origins', () => {
-    const trustedOrigins = [
-      'https://app.diagnoleads.com',
-      'https://diagnoleads.com',
-    ];
-    
-    expect(trustedOrigins).toHaveLength(2);
-  });
-});
+  it.each([
+    ['production over https', productionEnv, true],
+    [
+      'a production build served over http://localhost (E2E)',
+      {
+        ...productionEnv,
+        BETTER_AUTH_URL: 'http://localhost:3000',
+        NEXT_PUBLIC_APP_URL: 'http://localhost:3000',
+      },
+      false,
+    ],
+    ['development', { ...productionEnv, NODE_ENV: 'development' }, false],
+  ])('secure cookies: %s -> %s', async (_name, env, expected) => {
+    const options = await loadAuth(env);
 
-describe('Auth middleware types', () => {
-  it('should define auth middleware config', () => {
-    type AuthMiddlewareConfig = {
-      protectedPaths: string[];
-      publicPaths: string[];
-      loginPath: string;
-      callbackPath: string;
-    };
-    
-    const config: AuthMiddlewareConfig = {
-      protectedPaths: ['/dashboard', '/settings', '/leads'],
-      publicPaths: ['/', '/login', '/signup', '/api/health'],
-      loginPath: '/login',
-      callbackPath: '/api/auth/callback',
-    };
-    
-    expect(config.protectedPaths).toContain('/dashboard');
-    expect(config.publicPaths).toContain('/login');
+    expect(options.advanced?.useSecureCookies).toBe(expected);
   });
 });
