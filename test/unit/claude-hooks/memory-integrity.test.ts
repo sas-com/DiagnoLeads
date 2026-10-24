@@ -67,4 +67,13 @@ describe('MemoryBank decisions', () => {
     );
     expect(stale).toEqual([]);
   });
+
+  // Branches cut before the split still append to decisions.md; a merge that keeps their entry
+  // there would hide it from the index and the path notices
+  it('keeps decisions.md a pointer only', () => {
+    const text = readFileSync(join(ROOT, '.factory/memory/decisions.md'), 'utf8');
+    expect(text, '決定は decisions/ に1件1ファイルで書く（decisions/README.md）').not.toMatch(
+      /^#{2,} /m
+    );
+  });
 });
