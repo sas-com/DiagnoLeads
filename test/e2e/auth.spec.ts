@@ -350,7 +350,13 @@ test.describe('Authentication', () => {
         expect(requested.status()).toBe(200);
 
         // The link in the email, as better-auth builds it (the url given to sendResetPassword in
-        // lib/auth/config.ts): its token and the page the form asked to come back to
+        // lib/auth/config.ts): its token and the page the form asked to come back to.
+        // The test rebuilds the link from better-auth's own shape (1.6.33: the verification
+        // identifier `reset-password:<token>`, the route `/reset-password/:token?callbackURL=`)
+        // rather than reading the email, which CI does not send: a wrong url in the email would
+        // not fail it (the database test of #592 checks that the email carries the token).
+        // If better-auth changes that shape, e.g. stores the token hashed, this test fails even
+        // though resets work, and needs to follow it
         const token = await database.passwordResetToken(userId);
         const { redirectTo } = requested.request().postDataJSON() as { redirectTo: string };
         const link = `/api/auth/reset-password/${token}?callbackURL=${encodeURIComponent(redirectTo)}`;
@@ -396,8 +402,12 @@ test.describe('Authentication', () => {
         await page.waitForURL(/\/ja\/dashboard/);
         await expect(page.getByTestId('user-menu')).toContainText(email);
       } finally {
-        if (userId) await database.deleteUser(userId);
-        await database.close();
+        // Close the connection even when the clean-up fails
+        try {
+          if (userId) await database.deleteUser(userId);
+        } finally {
+          await database.close();
+        }
       }
     });
 
