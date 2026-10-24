@@ -1,221 +1,178 @@
-import { expect, test } from '@playwright/test';
+import { type Page, expect, test } from '@playwright/test';
+import ja from '../../locales/ja/common.json';
+import {
+  TEST_USERS,
+  type TestUser,
+  login,
+  logout,
+  submitAuthForm,
+  uniqueClientAddress,
+} from './helpers/auth';
 
 /**
- * E2E Test: Authentication Flow
+ * E2E Test: authentication (#23)
  *
- * Tests the complete authentication cycle:
- * - User registration (signup)
- * - User login
- * - Session persistence
- * - User logout
- * - Password validation
- * - Error handling
+ * Sign-up is invite-only: an account can be created only from an invitation link, with the link's
+ * token and the invited address together (decision 2026-10-16-invite-only-signup). There is no
+ * email verification yet. Every test here is @smoke, so CI runs them against the production
+ * build; the details of each form (validation, loading state, error messages) are covered by the
+ * unit tests in test/unit/components/auth/.
+ *
+ * The users come from scripts/e2e-seed.ts (test/e2e/helpers/auth.ts). Each test, and the
+ * invited person's browser, comes from a client address of its own (uniqueClientAddress), so the
+ * per-address limits on sign-in and session reads count each flow on its own.
  */
 
+const auth = ja.settings.auth;
+const members = ja.settings.members;
+
+async function fillSignIn(page: Page, user: Pick<TestUser, 'email' | 'password'>) {
+  await page.getByLabel(auth.login.emailLabel, { exact: true }).fill(user.email);
+  await page.getByLabel(auth.login.passwordLabel, { exact: true }).fill(user.password);
+}
+
 test.describe('Authentication', () => {
-  const timestamp = Date.now();
-  const testUser = {
-    name: `E2E Test User ${timestamp}`,
-    email: `e2e-test-${timestamp}@example.com`,
-    password: process.env.E2E_TEST_PASSWORD || 'e2e-test-pw',
-  };
+  test.beforeEach(async ({ context }) => {
+    await context.setExtraHTTPHeaders({ 'x-forwarded-for': uniqueClientAddress() });
+  });
 
-  test.describe('Sign Up', () => {
-    test('should display signup page correctly @smoke', async ({ page }) => {
-      await page.goto('/signup');
+  test.describe('Sign-up by invitation', () => {
+    test('should explain that sign-up is by invitation when opened without one @smoke', async ({
+      page,
+    }) => {
+      await page.goto('/ja/signup');
 
-      // Sign-up is invite-only: without an invitation token the page explains that and links to sign-in
-      await expect(page.getByRole('heading', { name: /新規登録|Sign Up/i })).toBeVisible();
-      await expect(page.getByText(/新規登録は招待制です|invitation only/i).first()).toBeVisible();
-      await expect(page.getByRole('link', { name: /ログイン|Sign In|Log In/i })).toBeVisible();
+      await expect(page.getByRole('heading', { name: '新規登録', exact: true })).toBeVisible();
+      await expect(page.getByText(auth.signup.inviteOnlyTitle)).toBeVisible();
+      // No form to fill in without an invitation
+      await expect(page.locator('input[type="password"]')).toHaveCount(0);
+      await expect(page.getByRole('link', { name: 'ログイン', exact: true })).toBeVisible();
     });
 
-    test('should show validation errors for invalid input', async ({ page }) => {
-      await page.goto('/signup');
+    test('should register an invited person only with the invited address, then join @smoke', async ({
+      page,
+      browser,
+      baseURL,
+    }) => {
+      const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const invited = `e2e-invitee-${suffix}@example.com`;
+      const password = 'Invitee-pw-2026';
 
-      // Submit empty form
-      await page.click('button[type="submit"]');
+      // The owner invites the address from the members page; the dialog shows the link to pass on
+      await login(page, TEST_USERS.owner);
+      await page.goto('/ja/settings/members');
+      await page.getByRole('button', { name: members.inviteButton, exact: true }).click();
+      const dialog = page.getByRole('dialog');
+      await dialog.getByLabel(members.emailLabel, { exact: true }).fill(invited);
+      await dialog.getByRole('button', { name: members.sendInvite }).click();
+      const linkField = dialog.getByLabel(members.inviteLinkLabel, { exact: true });
+      await expect(linkField).toHaveValue(/\/ja\/invite\//);
+      const invitePath = new URL(await linkField.inputValue(), baseURL).pathname;
 
-      // Check for validation errors
-      await expect(page.getByText(/名前|name/i)).toBeVisible();
+      // The invited person opens the link in a browser of their own, signed out
+      const context = await browser.newContext({
+        baseURL,
+        extraHTTPHeaders: { 'x-forwarded-for': uniqueClientAddress() },
+      });
+      const invitee = await context.newPage();
+      try {
+        await invitee.goto(invitePath);
+        await expect(invitee.getByRole('heading', { name: auth.invite.title })).toBeVisible();
+        await expect(invitee.getByText(invited)).toBeVisible();
+        await invitee.getByRole('link', { name: auth.invite.signUpToJoin }).click();
+        await invitee.waitForURL(/\/ja\/signup\?/);
+
+        // The invited address is filled in. Another address is refused, even with the link's token
+        const email = invitee.getByLabel(auth.signup.emailLabel, { exact: true });
+        await expect(email).toHaveValue(invited);
+        await invitee.getByLabel(auth.signup.nameLabel, { exact: true }).fill('E2E Invitee');
+        await email.fill(`e2e-uninvited-${suffix}@example.com`);
+        await invitee.getByLabel(auth.signup.passwordLabel, { exact: true }).fill(password);
+        await invitee.getByLabel(auth.signup.confirmPasswordLabel, { exact: true }).fill(password);
+        const refused = await submitAuthForm(invitee, '/sign-up/email');
+        expect(refused.status()).toBe(403);
+        await expect(invitee.getByText(auth.signup.invitationRequired)).toBeVisible();
+
+        // With the invited address the account is created and the invite page comes back
+        await email.fill(invited);
+        const created = await submitAuthForm(invitee, '/sign-up/email');
+        expect(created.status()).toBe(200);
+        await invitee.waitForURL((url) => url.pathname === invitePath);
+
+        // Joining opens the dashboard, signed in as the new account
+        await invitee.getByRole('button', { name: auth.invite.join, exact: true }).click();
+        await invitee.waitForURL(/\/ja\/dashboard/);
+        await expect(invitee.getByTestId('user-menu')).toContainText(invited);
+      } finally {
+        await context.close();
+      }
+
+      // The owner now finds the new account among the members
+      await page.reload();
+      await expect(page.getByText(invited)).toBeVisible();
     });
 
-    test('should show error for invalid email format', async ({ page }) => {
-      await page.goto('/signup');
+    test('should not accept an invitation link that is not valid @smoke', async ({ page }) => {
+      await page.goto(`/ja/invite/${'x'.repeat(43)}`);
 
-      await page.fill('input[name="name"]', 'Test User');
-      await page.fill('input[name="email"]', 'invalid-email');
-      await page.fill('input[name="password"]', testUser.password);
-
-      await page.click('button[type="submit"]');
-
-      // Check for email validation error
-      await expect(page.getByText(/メール|email|有効/i)).toBeVisible();
-    });
-
-    test('should show error for weak password', async ({ page }) => {
-      await page.goto('/signup');
-
-      await page.fill('input[name="name"]', 'Test User');
-      await page.fill('input[name="email"]', 'test@example.com');
-      await page.fill('input[name="password"]', '123'); // Too weak
-
-      await page.click('button[type="submit"]');
-
-      // Check for password validation error
-      await expect(page.getByText(/パスワード|password|文字/i)).toBeVisible();
-    });
-
-    test('should successfully register a new user', async ({ page }) => {
-      await page.goto('/signup');
-
-      await page.fill('input[name="name"]', testUser.name);
-      await page.fill('input[name="email"]', testUser.email);
-      await page.fill('input[name="password"]', testUser.password);
-
-      await page.click('button[type="submit"]');
-
-      // Should redirect to dashboard or onboarding
-      await page.waitForURL(/\/(dashboard|onboarding|login)/);
-    });
-
-    test('should show error for duplicate email', async ({ page }) => {
-      await page.goto('/signup');
-
-      // Try to register with same email again
-      await page.fill('input[name="name"]', 'Another User');
-      await page.fill('input[name="email"]', testUser.email);
-      await page.fill('input[name="password"]', testUser.password);
-
-      await page.click('button[type="submit"]');
-
-      // Should show error about existing email
-      await expect(page.getByText(/既に|already|存在/i)).toBeVisible();
+      await expect(page.getByRole('heading', { name: auth.invite.invalidTitle })).toBeVisible();
+      await expect(page.getByRole('link', { name: auth.invite.signUpToJoin })).toHaveCount(0);
     });
   });
 
-  test.describe('Sign In', () => {
+  test.describe('Sign-in', () => {
     test('should display login page correctly @smoke', async ({ page }) => {
-      await page.goto('/login');
+      await page.goto('/ja/login');
 
-      // Check page elements
-      await expect(page.getByRole('heading', { name: /ログイン|Sign In|サインイン/i })).toBeVisible();
+      await expect(
+        page.getByRole('heading', { name: auth.login.title, exact: true })
+      ).toBeVisible();
       await expect(page.locator('input[name="email"]')).toBeVisible();
       await expect(page.locator('input[name="password"]')).toBeVisible();
-      await expect(page.getByRole('button', { name: /ログイン|Sign In|サインイン/i })).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: auth.login.submitButton, exact: true })
+      ).toBeVisible();
+      // Sign-up is by invitation, so the page says so instead of linking to it
+      await expect(page.getByText(auth.login.inviteOnlyNote)).toBeVisible();
     });
 
-    test('should show error for invalid credentials', async ({ page }) => {
-      await page.goto('/login');
+    test('should refuse a wrong password @smoke', async ({ page }) => {
+      await page.goto('/ja/login');
+      await fillSignIn(page, { email: TEST_USERS.owner.email, password: 'Wrong-password-1' });
 
-      await page.fill('input[name="email"]', 'nonexistent@example.com');
-      await page.fill('input[name="password"]', 'WrongP@ss999');
+      const response = await submitAuthForm(page, '/sign-in/email');
 
-      await page.click('button[type="submit"]');
-
-      // Should show error message
-      await expect(page.getByText(/無効|invalid|正しくない|見つかりません/i)).toBeVisible();
-    });
-
-    test('should successfully login with valid credentials', async ({ page }) => {
-      await page.goto('/login');
-
-      await page.fill('input[name="email"]', testUser.email);
-      await page.fill('input[name="password"]', testUser.password);
-
-      await page.click('button[type="submit"]');
-
-      // Should redirect to dashboard
-      await page.waitForURL(/\/dashboard/);
-    });
-
-    test('should have link to signup page', async ({ page }) => {
-      await page.goto('/login');
-
-      const signupLink = page.getByRole('link', { name: /新規登録|Sign Up|アカウント作成/i });
-      await expect(signupLink).toBeVisible();
-
-      await signupLink.click();
-      await page.waitForURL(/\/signup/);
-    });
-
-    test('should have link to password reset', async ({ page }) => {
-      await page.goto('/login');
-
-      const resetLink = page.getByRole('link', { name: /パスワード|忘れ|reset|forgot/i });
-      if (await resetLink.isVisible()) {
-        await resetLink.click();
-        await page.waitForURL(/\/(reset|forgot)/);
-      }
+      expect(response.status()).toBe(401);
+      await expect(page.getByText(auth.login.invalidCredentials)).toBeVisible();
+      await expect(page).toHaveURL(/\/ja\/login/);
     });
   });
 
-  test.describe('Session & Logout', () => {
-    test.beforeEach(async ({ page }) => {
-      // Login first
-      await page.goto('/login');
-      await page.fill('input[name="email"]', testUser.email);
-      await page.fill('input[name="password"]', testUser.password);
-      await page.click('button[type="submit"]');
-      await page.waitForURL(/\/dashboard/);
-    });
+  test.describe('Session', () => {
+    test('should return to the requested page and keep the session across a reload @smoke', async ({
+      page,
+    }) => {
+      // A signed-out visitor of an admin page signs in and lands on that page
+      await page.goto('/ja/leads');
+      await page.waitForURL(/\/ja\/login\?/);
+      await fillSignIn(page, TEST_USERS.admin);
+      await submitAuthForm(page, '/sign-in/email');
+      await page.waitForURL((url) => url.pathname === '/ja/leads');
 
-    test('should maintain session after page refresh', async ({ page }) => {
-      // Get current URL
-      const currentUrl = page.url();
-
-      // Refresh page
       await page.reload();
 
-      // Should still be on dashboard (not redirected to login)
-      await expect(page).toHaveURL(/\/dashboard/);
+      await expect(page).toHaveURL(/\/ja\/leads$/);
+      await expect(page.getByTestId('user-menu')).toContainText(TEST_USERS.admin.email);
     });
 
-    test('should display user information in header', async ({ page }) => {
-      // Look for user menu or avatar
-      const userMenu = page.locator('[data-testid="user-menu"], [data-testid="user-dropdown"]');
-      if (await userMenu.isVisible()) {
-        await expect(userMenu).toBeVisible();
-      }
-    });
+    test('should sign out from the user menu @smoke', async ({ page }) => {
+      await login(page, TEST_USERS.member);
 
-    test('should successfully logout', async ({ page }) => {
-      // Find and click logout
-      // Try different selectors for user menu
-      const userMenuSelectors = [
-        '[data-testid="user-menu"]',
-        '[data-testid="user-dropdown"]',
-        'button:has-text("ログアウト")',
-        'button:has-text("Logout")',
-      ];
+      await logout(page);
 
-      for (const selector of userMenuSelectors) {
-        const element = page.locator(selector);
-        if (await element.isVisible()) {
-          await element.click();
-          break;
-        }
-      }
-
-      // Look for logout button
-      const logoutSelectors = [
-        '[data-testid="logout-button"]',
-        'button:has-text("ログアウト")',
-        'button:has-text("Logout")',
-        'a:has-text("ログアウト")',
-        'a:has-text("Logout")',
-      ];
-
-      for (const selector of logoutSelectors) {
-        const element = page.locator(selector);
-        if (await element.isVisible()) {
-          await element.click();
-          break;
-        }
-      }
-
-      // Should redirect to login or home page
-      await page.waitForURL(/\/(sign-in|login|$)/);
+      // The admin pages send the visitor to sign-in again
+      await page.goto('/ja/dashboard');
+      await page.waitForURL(/\/ja\/login/);
     });
   });
 
@@ -240,580 +197,46 @@ test.describe('Authentication', () => {
         expect(response.headers().location).toContain('/ja/login');
       }
     });
-
-    test('should redirect to original destination after login', async ({ page }) => {
-      // Clear session
-      await page.context().clearCookies();
-
-      // Try to access specific protected route
-      await page.goto('/dashboard/settings');
-
-      // Should redirect to login
-      await page.waitForURL(/\/(sign-in|login)/);
-
-      // Login
-      await page.fill('input[name="email"]', testUser.email);
-      await page.fill('input[name="password"]', testUser.password);
-      await page.click('button[type="submit"]');
-
-      // Should redirect back to original destination (or dashboard)
-      await page.waitForURL(/\/dashboard/);
-    });
   });
 
-  test.describe('Password Reset', () => {
-    test('should display password reset request page', async ({ page }) => {
-      await page.goto('/forgot-password');
-
-      // Check page elements
-      await expect(page.getByRole('heading', { name: /パスワード|Password|リセット|Reset|忘れ/i })).toBeVisible();
-      await expect(page.locator('input[name="email"], input[type="email"]')).toBeVisible();
-      await expect(page.getByRole('button', { name: /送信|Send|リセット|Reset/i })).toBeVisible();
-    });
-
-    test('should show validation error for invalid email', async ({ page }) => {
-      await page.goto('/forgot-password');
-
-      await page.fill('input[name="email"], input[type="email"]', 'invalid-email');
-      await page.click('button[type="submit"]');
-
-      // Check for validation error
-      await expect(page.getByText(/メール|email|有効|valid/i)).toBeVisible();
-    });
-
-    test('should show success message after reset request', async ({ page }) => {
-      await page.goto('/forgot-password');
-
-      await page.fill('input[name="email"], input[type="email"]', testUser.email);
-      await page.click('button[type="submit"]');
-
-      // Wait for success message (even if email doesn't exist, show generic success for security)
-      await expect(page.getByText(/送信|sent|確認|check|メール/i)).toBeVisible({ timeout: 10000 });
-    });
-
-    test('should have link back to login', async ({ page }) => {
-      await page.goto('/forgot-password');
-
-      const loginLink = page.getByRole('link', { name: /ログイン|Sign In|戻る|Back/i });
-      await expect(loginLink).toBeVisible();
-    });
-  });
-
-  test.describe('Security', () => {
-    test('should not expose user existence via login error messages', async ({ page }) => {
-      await page.goto('/login');
-
-      // Try with non-existent email
-      await page.fill('input[name="email"]', 'nonexistent-user-xyz@example.com');
-      await page.fill('input[name="password"]', 'SomePassword123!');
-      await page.click('button[type="submit"]');
-
-      // Error message should be generic (not reveal if user exists)
-      const errorText = await page.locator('[role="alert"], .error, .text-red-500, .text-destructive').first().textContent();
-      if (errorText) {
-        expect(errorText.toLowerCase()).not.toContain('user not found');
-        expect(errorText.toLowerCase()).not.toContain('ユーザーが存在しません');
-      }
-    });
-
-    test('should rate limit login attempts', async ({ page }) => {
-      await page.goto('/login');
-
-      // Try multiple failed logins
-      for (let i = 0; i < 5; i++) {
-        await page.fill('input[name="email"]', 'test@example.com');
-        await page.fill('input[name="password"]', 'WrongPassword' + i);
-        await page.click('button[type="submit"]');
-        await page.waitForTimeout(500);
-      }
-
-      // After multiple attempts, should show rate limit or additional security message
-      const rateLimitText = page.getByText(/しばらく|wait|too many|attempts|制限/i);
-      // Rate limiting may or may not be visible depending on implementation
-      // This test just ensures the flow doesn't crash
-    });
-
-    test('should clear sensitive data on logout', async ({ page }) => {
-      // Login first
-      await page.goto('/login');
-      await page.fill('input[name="email"]', testUser.email);
-      await page.fill('input[name="password"]', testUser.password);
-      await page.click('button[type="submit"]');
-      await page.waitForURL(/\/dashboard/);
-
-      // Store some data in localStorage (simulating app behavior)
-      await page.evaluate(() => {
-        localStorage.setItem('test-data', 'sensitive');
-      });
-
-      // Logout
-      const logoutButton = page.locator('[data-testid="logout-button"], button:has-text("ログアウト"), button:has-text("Logout")').first();
-      if (await logoutButton.isVisible()) {
-        await logoutButton.click();
-        await page.waitForURL(/\/(sign-in|login|$)/);
-      }
-
-      // Cookies should be cleared
-      const cookies = await page.context().cookies();
-      const sessionCookie = cookies.find(c => c.name.includes('session') || c.name.includes('auth'));
-      // Session cookie should be cleared or expired
-      if (sessionCookie) {
-        expect(new Date(sessionCookie.expires * 1000) <= new Date()).toBeTruthy();
-      }
-    });
-
-    test('should use HTTPS for auth pages in production', async ({ page }) => {
-      // This test checks that in production, auth pages use HTTPS
-      // In development, HTTP is acceptable
-      const baseUrl = process.env.PLAYWRIGHT_TEST_BASE_URL || 'http://localhost:3000';
-      
-      if (baseUrl.startsWith('https://')) {
-        await page.goto('/login');
-        expect(page.url()).toMatch(/^https:/);
-      }
-    });
-  });
-
-  test.describe('Accessibility', () => {
-    test('should have proper form labels on login page', async ({ page }) => {
-      await page.goto('/login');
-
-      // Check email input has label
-      const emailInput = page.locator('input[name="email"]');
-      const emailLabel = await emailInput.getAttribute('aria-label') || 
-                        await page.locator('label[for="email"]').textContent();
-      expect(emailLabel).toBeTruthy();
-
-      // Check password input has label
-      const passwordInput = page.locator('input[name="password"]');
-      const passwordLabel = await passwordInput.getAttribute('aria-label') ||
-                           await page.locator('label[for="password"]').textContent();
-      expect(passwordLabel).toBeTruthy();
-    });
-
-    test('should be keyboard navigable', async ({ page }) => {
-      await page.goto('/login');
-
-      // Tab to email input
-      await page.keyboard.press('Tab');
-      let focusedElement = await page.evaluate(() => document.activeElement?.name || document.activeElement?.tagName);
-      expect(focusedElement).toBeTruthy();
-
-      // Tab to password input
-      await page.keyboard.press('Tab');
-      focusedElement = await page.evaluate(() => document.activeElement?.name || document.activeElement?.tagName);
-      expect(focusedElement).toBeTruthy();
-
-      // Tab to submit button
-      await page.keyboard.press('Tab');
-      focusedElement = await page.evaluate(() => document.activeElement?.tagName);
-      expect(focusedElement?.toLowerCase()).toBe('button');
-    });
-
-    test('should announce errors to screen readers', async ({ page }) => {
-      await page.goto('/login');
-
-      // Submit empty form
-      await page.click('button[type="submit"]');
-
-      // Check for error with ARIA attributes
-      const errorElement = page.locator('[role="alert"], [aria-live="polite"], [aria-live="assertive"]');
-      if (await errorElement.count() > 0) {
-        await expect(errorElement.first()).toBeVisible();
-      }
-    });
-  });
-
-  test.describe('Mobile', () => {
-    test.use({ viewport: { width: 375, height: 667 } });
-
-    test('should display login form properly on mobile', async ({ page }) => {
-      await page.goto('/login');
-
-      // Form should be visible
-      await expect(page.locator('input[name="email"]')).toBeVisible();
-      await expect(page.locator('input[name="password"]')).toBeVisible();
-      await expect(page.locator('button[type="submit"]')).toBeVisible();
-
-      // Form should fit within viewport
-      const form = page.locator('form').first();
-      const box = await form.boundingBox();
-      if (box) {
-        expect(box.width).toBeLessThanOrEqual(375);
-      }
-    });
-
-    test('should have touch-friendly input sizes on mobile', async ({ page }) => {
-      await page.goto('/login');
-
-      const inputs = page.locator('input:visible');
-      const inputCount = await inputs.count();
-
-      for (let i = 0; i < inputCount; i++) {
-        const input = inputs.nth(i);
-        const box = await input.boundingBox();
-        if (box) {
-          // Minimum touch target size
-          expect(box.height).toBeGreaterThanOrEqual(36);
-        }
-      }
-    });
-  });
-
-  // ============================================================
-  // 追加テスト: エラーハンドリング・ユーザーナビゲーション強化
-  // ============================================================
-
-  test.describe('Sign Up - Advanced Validation', () => {
-    test('should show error when passwords do not match', async ({ page }) => {
-      await page.goto('/signup');
-
-      await page.fill('input[name="name"]', 'Test User');
-      await page.fill('input[name="email"]', 'test@example.com');
-      await page.fill('input[name="password"]', 'ValidP@ss123');
-      await page.fill('input[name="confirmPassword"]', 'DifferentP@ss456');
-
-      await page.click('button[type="submit"]');
-
-      // Should show password mismatch error
-      await expect(page.getByText(/一致|match|同じ/i)).toBeVisible();
-    });
-
-    test('should show password complexity requirements', async ({ page }) => {
-      await page.goto('/signup');
-
-      await page.fill('input[name="name"]', 'Test User');
-      await page.fill('input[name="email"]', 'test@example.com');
-      await page.fill('input[name="password"]', 'simplepassword'); // No uppercase, no number
-      await page.fill('input[name="confirmPassword"]', 'simplepassword');
-
-      await page.click('button[type="submit"]');
-
-      // Should show complexity error (uppercase, number required)
-      await expect(page.getByText(/大文字|小文字|数字|uppercase|lowercase|number|複雑/i)).toBeVisible();
-    });
-
-    test('should disable submit button while loading', async ({ page }) => {
-      await page.goto('/signup');
-
-      await page.fill('input[name="name"]', 'Test User');
-      await page.fill('input[name="email"]', `new-user-${Date.now()}@example.com`);
-      await page.fill('input[name="password"]', 'ValidP@ss123');
-      await page.fill('input[name="confirmPassword"]', 'ValidP@ss123');
-
-      // Click submit and immediately check button state
-      const submitButton = page.locator('button[type="submit"]');
-      await submitButton.click();
-
-      // Button should be disabled or show loading state
-      const isDisabled = await submitButton.isDisabled();
-      const buttonText = await submitButton.textContent();
-      
-      // Either disabled or shows loading text
-      expect(isDisabled || buttonText?.includes('...') || buttonText?.includes('送信中') || buttonText?.includes('Loading')).toBeTruthy();
-    });
-  });
-
-  test.describe('Sign In - Error Recovery', () => {
-    test('should clear error when user starts typing after failed login', async ({ page }) => {
-      await page.goto('/login');
-
-      // First, trigger an error
-      await page.fill('input[name="email"]', 'wrong@example.com');
-      await page.fill('input[name="password"]', 'WrongPassword123');
-      await page.click('button[type="submit"]');
-
-      // Wait for error to appear
-      await page.waitForTimeout(1000);
-
-      // Start typing in email field
-      await page.fill('input[name="email"]', 'correct@example.com');
-
-      // Form should still be usable (not frozen)
-      await expect(page.locator('input[name="email"]')).toHaveValue('correct@example.com');
-    });
-
-    test('should allow retry after failed login', async ({ page }) => {
-      await page.goto('/login');
-
-      // First failed attempt
-      await page.fill('input[name="email"]', 'wrong@example.com');
-      await page.fill('input[name="password"]', 'WrongPassword123');
-      await page.click('button[type="submit"]');
-      await page.waitForTimeout(1000);
-
-      // Second attempt should be possible
-      await page.fill('input[name="email"]', testUser.email);
-      await page.fill('input[name="password"]', testUser.password);
-      
-      const submitButton = page.locator('button[type="submit"]');
-      await expect(submitButton).toBeEnabled();
-    });
-
-    test('should show helpful error message for network issues', async ({ page }) => {
-      // Simulate offline mode
-      await page.context().setOffline(true);
-      
-      await page.goto('/login');
-      await page.fill('input[name="email"]', 'test@example.com');
-      await page.fill('input[name="password"]', 'TestPassword123');
-      
-      await page.click('button[type="submit"]');
-      
-      // Should show network error or the page should handle gracefully
-      await page.waitForTimeout(2000);
-      
-      // Re-enable network
-      await page.context().setOffline(false);
-    });
-  });
-
-  test.describe('Navigation - User Flow', () => {
-    test('should navigate from login to signup and back', async ({ page }) => {
-      await page.goto('/login');
-
-      // Go to signup
-      await page.click('a[href*="signup"], a:has-text("新規登録"), a:has-text("Sign Up")');
-      await expect(page).toHaveURL(/\/signup/);
-
-      // Go back to login
-      await page.click('a[href*="login"], a:has-text("ログイン"), a:has-text("Log in")');
-      await expect(page).toHaveURL(/\/login/);
-    });
-
-    test('should navigate from login to password reset and back', async ({ page }) => {
-      await page.goto('/login');
-
-      // Go to password reset
-      const resetLink = page.locator('a[href*="reset"], a:has-text("パスワード"), a:has-text("Forgot")');
-      if (await resetLink.isVisible()) {
-        await resetLink.click();
-        await expect(page).toHaveURL(/\/(reset|forgot)/);
-
-        // Go back to login
-        const backLink = page.locator('a[href*="login"], a:has-text("戻る"), a:has-text("Back")');
-        if (await backLink.isVisible()) {
-          await backLink.click();
-          await expect(page).toHaveURL(/\/login/);
-        }
-      }
-    });
-
-    test('should handle browser back button correctly', async ({ page }) => {
-      await page.goto('/login');
-      await page.goto('/signup');
-      
-      // Press browser back
-      await page.goBack();
-      
-      // Should be on login page
-      await expect(page).toHaveURL(/\/login/);
-    });
-
-    test('should preserve form data on browser back (optional)', async ({ page }) => {
-      await page.goto('/signup');
-      
-      // Fill in some data
-      await page.fill('input[name="name"]', 'Test User');
-      await page.fill('input[name="email"]', 'test@example.com');
-      
-      // Navigate away
-      await page.goto('/login');
-      
-      // Go back
-      await page.goBack();
-      
-      // Form might or might not preserve data depending on implementation
-      // This test ensures navigation doesn't crash
-      await expect(page.locator('input[name="name"]')).toBeVisible();
-    });
-
-    test('should redirect authenticated user away from login page', async ({ page }) => {
-      // First login
-      await page.goto('/login');
-      await page.fill('input[name="email"]', testUser.email);
-      await page.fill('input[name="password"]', testUser.password);
-      await page.click('button[type="submit"]');
-      await page.waitForURL(/\/dashboard/);
-
-      // Try to access login page while authenticated
-      await page.goto('/login');
-      
-      // Should redirect to dashboard or show appropriate message
-      // (depending on implementation)
-      await page.waitForTimeout(1000);
-    });
-  });
-
-  test.describe('Loading States & UX', () => {
-    test('should show loading indicator during login', async ({ page }) => {
-      await page.goto('/login');
-
-      await page.fill('input[name="email"]', testUser.email);
-      await page.fill('input[name="password"]', testUser.password);
-
-      // Click and immediately check for loading state
-      const submitButton = page.locator('button[type="submit"]');
-      await submitButton.click();
-
-      // Check for loading indicator (spinner, text change, or disabled state)
-      const buttonText = await submitButton.textContent();
-      const isDisabled = await submitButton.isDisabled();
-      
-      // Should show some indication of loading
-      expect(
-        isDisabled || 
-        buttonText?.includes('...') || 
-        buttonText?.includes('中') ||
-        buttonText?.includes('Loading')
-      ).toBeTruthy();
-    });
-
-    test('should prevent double submission', async ({ page }) => {
-      await page.goto('/login');
-
-      await page.fill('input[name="email"]', testUser.email);
-      await page.fill('input[name="password"]', testUser.password);
-
-      const submitButton = page.locator('button[type="submit"]');
-      
-      // Rapid double click
-      await submitButton.click();
-      await submitButton.click();
-
-      // Should only submit once (button disabled after first click)
-      // Wait a moment and check we're not in error state
-      await page.waitForTimeout(500);
-      
-      // Form should not be in error state from double submission
-    });
-
-    test('should disable form inputs during submission', async ({ page }) => {
-      await page.goto('/login');
-
-      await page.fill('input[name="email"]', testUser.email);
-      await page.fill('input[name="password"]', testUser.password);
-
-      await page.click('button[type="submit"]');
-
-      // Inputs should be disabled during submission
-      const emailInput = page.locator('input[name="email"]');
-      const passwordInput = page.locator('input[name="password"]');
-
-      // At least one of these should be disabled
-      const emailDisabled = await emailInput.isDisabled();
-      const passwordDisabled = await passwordInput.isDisabled();
-
-      // Implementation may or may not disable inputs
-      // This test ensures the form handles submission gracefully
-    });
-  });
-
-  test.describe('Error Messages - UX Quality', () => {
-    test('should display user-friendly error for invalid email format', async ({ page }) => {
-      await page.goto('/login');
-
-      await page.fill('input[name="email"]', 'not-an-email');
-      await page.fill('input[name="password"]', 'TestPassword123');
-      await page.click('button[type="submit"]');
-
-      // Error should be user-friendly (not technical)
-      const errorText = await page.locator('.text-red-500, .text-destructive, [role="alert"]').first().textContent();
-      if (errorText) {
-        expect(errorText.toLowerCase()).not.toContain('regex');
-        expect(errorText.toLowerCase()).not.toContain('pattern');
-        expect(errorText.toLowerCase()).not.toContain('exception');
-      }
-    });
-
-    test('should show field-specific errors near the field', async ({ page }) => {
-      await page.goto('/signup');
-
-      // Submit empty form
-      await page.click('button[type="submit"]');
-
-      // Error messages should appear near their respective fields
-      const nameField = page.locator('input[name="name"]');
-      const nameError = nameField.locator('..').locator('.text-red-500, .text-destructive');
-      
-      // Check that errors are associated with fields (nearby in DOM)
-      const allErrors = page.locator('.text-red-500, .text-destructive, [role="alert"]');
-      expect(await allErrors.count()).toBeGreaterThan(0);
-    });
-
-    test('should clear field error when field becomes valid', async ({ page }) => {
-      await page.goto('/signup');
-
-      // Trigger email error
-      await page.fill('input[name="email"]', 'invalid');
-      await page.locator('input[name="password"]').focus(); // Trigger blur
-      
-      // Now enter valid email
-      await page.fill('input[name="email"]', 'valid@example.com');
-      await page.locator('input[name="password"]').focus(); // Trigger blur
-
-      // Email error should be cleared or not visible
-      await page.waitForTimeout(500);
-    });
-  });
-
-  test.describe('Session Expiry', () => {
-    test('should handle expired session gracefully', async ({ page }) => {
-      // Login first
-      await page.goto('/login');
-      await page.fill('input[name="email"]', testUser.email);
-      await page.fill('input[name="password"]', testUser.password);
-      await page.click('button[type="submit"]');
-      await page.waitForURL(/\/dashboard/);
-
-      // Clear cookies to simulate session expiry
-      await page.context().clearCookies();
-
-      // Try to navigate to protected route
-      await page.goto('/dashboard/leads');
-
-      // Should redirect to login with appropriate message
-      await page.waitForURL(/\/(sign-in|login)/);
-    });
-
-    test('should show session expired message when appropriate', async ({ page }) => {
-      // Navigate to login with session_expired param (if supported)
-      await page.goto('/login?session_expired=true');
-
-      // Check for session expired message (if implemented)
-      const expiredMessage = page.getByText(/セッション|session|expired|期限/i);
-      // This may or may not be implemented
-    });
-  });
-
-  test.describe('Deep Links', () => {
-    test('should redirect to intended page after login', async ({ page }) => {
-      // Clear session
-      await page.context().clearCookies();
-
-      // Try to access a deep link
-      await page.goto('/dashboard/leads');
-
-      // Should redirect to login
-      await page.waitForURL(/\/(sign-in|login)/);
-
-      // Login
-      await page.fill('input[name="email"]', testUser.email);
-      await page.fill('input[name="password"]', testUser.password);
-      await page.click('button[type="submit"]');
-
-      // Should redirect to original destination (or dashboard)
-      await page.waitForURL(/\/dashboard/);
-    });
-
-    test('should handle locale in auth URLs', async ({ page }) => {
-      // Test Japanese locale
+  test.describe('Password reset', () => {
+    test('should accept a reset request from the login page @smoke', async ({ page }) => {
       await page.goto('/ja/login');
-      await expect(page.locator('input[name="email"]')).toBeVisible();
+      await page.getByRole('link', { name: auth.login.forgotPassword }).click();
+      await page.waitForURL(/\/reset-password$/);
+      await page
+        .getByLabel(auth.resetPassword.emailLabel, { exact: true })
+        .fill(TEST_USERS.owner.email);
 
-      // Test English locale
-      await page.goto('/en/login');
-      await expect(page.locator('input[name="email"]')).toBeVisible();
+      // The page reports success whatever the server answered (it must not reveal whether the
+      // address is registered), so the answer is checked as well
+      const [response] = await Promise.all([
+        page.waitForResponse(
+          (r) => new URL(r.url()).pathname === '/api/auth/request-password-reset'
+        ),
+        page.getByRole('button', { name: auth.resetPassword.submitButton }).click(),
+      ]);
+
+      expect(response.status()).toBe(200);
+      await expect(page.getByText(auth.resetPassword.successMessage)).toBeVisible();
+    });
+
+    test('should refuse a reset link that is not valid @smoke', async ({ page }) => {
+      const newPassword = 'New-passw0rd';
+      await page.goto('/ja/reset-password/confirm?token=not-a-valid-token');
+      await page
+        .getByLabel(auth.resetPasswordConfirm.newPasswordLabel, { exact: true })
+        .fill(newPassword);
+      await page
+        .getByLabel(auth.resetPasswordConfirm.confirmPasswordLabel, { exact: true })
+        .fill(newPassword);
+
+      await page.getByRole('button', { name: auth.resetPasswordConfirm.submitButton }).click();
+
+      await expect(page.getByText(auth.resetPasswordConfirm.invalidToken)).toBeVisible();
+      await expect(
+        page.getByRole('link', { name: auth.resetPasswordConfirm.requestNewLink })
+      ).toBeVisible();
     });
   });
 });
