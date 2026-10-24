@@ -264,7 +264,7 @@ describe('leads.list (sorting and filtering)', () => {
       // "When to act" (#151)
       actBy: '"leads"."act_by"',
       // MQL level of the diagnosis (#447)
-      mqlLevel: "(case (select case when 'interest' in (s.ax, s.builder)",
+      mqlLevel: '(case (case when "leads"."mql_qualified_at" is not null then',
     };
 
     it.each(LEAD_SORT_KEYS.flatMap((key) => [[key, 'asc'] as const, [key, 'desc'] as const]))(

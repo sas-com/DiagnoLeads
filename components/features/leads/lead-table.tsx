@@ -105,6 +105,13 @@ const isSortKey = (id: string): id is LeadSortKey =>
   (LEAD_SORT_KEYS as readonly string[]).includes(id);
 
 /**
+ * The sort key of a column, for aria-sort: the column id, except the MQL column, which keeps its
+ * id (saved column choices) but sorts by the MQL level (#447)
+ */
+export const columnSortKey = (id: string): LeadSortKey | undefined =>
+  id === 'mqlQualifiedAt' ? 'mqlLevel' : isSortKey(id) ? id : undefined;
+
+/**
  * Columns shown by default for a window width. The member's own choices (kept per browser)
  * are applied on top. Below xl the email is hidden so the status stays in view
  * without scrolling sideways (#131); it can be shown again from the columns menu.
@@ -276,6 +283,10 @@ export function LeadTable({
   const sortableHeader = (column: LeadSortKey, label: string) => () => (
     <SortableHeader label={label} column={column} sort={sort} onSort={onSort} />
   );
+  const ariaSortOf = (columnId: string) => {
+    const key = columnSortKey(columnId);
+    return key ? ariaSortFor(sort, key) : undefined;
+  };
 
   const columns: ColumnDef<LeadWithTags>[] = [
     {
@@ -854,11 +865,7 @@ export function LeadTable({
                     <TableHead
                       key={header.id}
                       className="whitespace-nowrap bg-gray-50 dark:bg-gray-800"
-                      aria-sort={
-                        isSortKey(header.column.id)
-                          ? ariaSortFor(sort, header.column.id)
-                          : undefined
-                      }
+                      aria-sort={ariaSortOf(header.column.id)}
                     >
                       {header.isPlaceholder
                         ? null

@@ -393,16 +393,19 @@ describe.skipIf(!url)('lead list (PostgreSQL)', () => {
         fit: { axMigration: { mql: { level: 'fit' } } },
         none: { axMigration: { mql: { level: 'none' } } },
         unknown: {},
+        // Judged MQL by hand without a diagnosis: 関心あり, as its badge says
+        manual: {},
       };
       const nameOf = new Map<string, string>();
       // Inserted in an order that differs from the level order
-      for (const name of ['unknown', 'fit', 'none', 'interest']) {
+      for (const name of ['unknown', 'fit', 'none', 'interest', 'manual']) {
         const [row] = await pg
           .insert(leads)
           .values({
             organizationId: orgD,
             email: `${name}-${unique()}@example.com`,
             responses: responsesOf[name],
+            mqlQualifiedAt: name === 'manual' ? at('2026-10-10T00:00:00Z') : null,
           })
           .returning();
         nameOf.set(row.id, name);
@@ -410,14 +413,15 @@ describe.skipIf(!url)('lead list (PostgreSQL)', () => {
       const names = (items: { id: string }[]) => items.map((item) => nameOf.get(item.id));
 
       const sorted = await callerD.leads.list({ organizationId: orgD, sortBy: 'mqlLevel', sortOrder: 'asc' });
-      expect(names(sorted.items)).toEqual(['interest', 'fit', 'none', 'unknown']);
+      // Ties are newest first: 'manual' was inserted after 'interest'
+      expect(names(sorted.items)).toEqual(['manual', 'interest', 'fit', 'none', 'unknown']);
       const reversed = await callerD.leads.list({ organizationId: orgD, sortBy: 'mqlLevel', sortOrder: 'desc' });
-      expect(names(reversed.items)).toEqual(['none', 'fit', 'interest', 'unknown']);
+      expect(names(reversed.items)).toEqual(['none', 'fit', 'manual', 'interest', 'unknown']);
 
       const fitOrUnknown = await callerD.leads.list({ organizationId: orgD, mqlLevel: ['fit', 'unknown'] });
       expect(names(fitOrUnknown.items).sort()).toEqual(['fit', 'unknown']);
       const interest = await callerD.leads.list({ organizationId: orgD, mqlLevel: 'interest' });
-      expect(names(interest.items)).toEqual(['interest']);
+      expect(names(interest.items).sort()).toEqual(['interest', 'manual']);
     });
   });
 

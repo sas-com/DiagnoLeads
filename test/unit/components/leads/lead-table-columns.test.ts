@@ -1,7 +1,7 @@
 /**
  * Columns the lead table shows by default for a window width (#131, #447)
  */
-import { defaultColumnVisibility } from '@/components/features/leads/lead-table';
+import { columnSortKey, defaultColumnVisibility } from '@/components/features/leads/lead-table';
 import { describe, expect, it } from 'vitest';
 
 describe('defaultColumnVisibility', () => {
@@ -15,5 +15,13 @@ describe('defaultColumnVisibility', () => {
 
   it('has no score column to show (#447)', () => {
     expect(defaultColumnVisibility(1600)).not.toHaveProperty('score');
+  });
+});
+
+describe('columnSortKey', () => {
+  it('reads the MQL column as sorted by the MQL level, for aria-sort (#447)', () => {
+    expect(columnSortKey('mqlQualifiedAt')).toBe('mqlLevel');
+    expect(columnSortKey('createdAt')).toBe('createdAt');
+    expect(columnSortKey('tags')).toBeUndefined();
   });
 });

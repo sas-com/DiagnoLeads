@@ -4144,7 +4144,7 @@
     "mqlLevelOptions": {
       "interest": "Interested (MQL)",
       "fit": "Fit",
-      "none": "Not a fit",
+      "none": "Not a target",
       "unknown": "No diagnosis"
     }
   },
