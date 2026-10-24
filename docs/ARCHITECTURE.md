@@ -48,7 +48,7 @@
 | `features-in-cycles` | 互いに依存し合う機能（間接も含む）を増やさない | 許可リスト 20 |
 | `cross-feature-internal` | 他の機能から読むのは公開面（`types/**`・`types.ts`・`service.ts`。ほかに `email/index.ts`・`respondent-email/index.ts`）だけ。項目は読まれる側のファイル | 許可リスト 45 |
 | `features-use-global-db` | 機能のコードはグローバルの `db` を使わず、`ctx.db` か引数の executor を使う（RLS で接続を差し替えるため） | 許可リスト 12 |
-| `feature-index-files` | lib/features に `index.ts`（barrel）を作らない | 許可リスト 19 |
+| `feature-index-files` | lib/features に `index.ts`（barrel）を作らない | 許可リスト 18 |
 | `unregistered-routers` | 機能のルーターはすべて `server/routers/_app.ts` に登録する | 許可リスト 2 |
 
 許可リストの数は減らす方向にだけ動かす。
@@ -142,6 +142,6 @@ components/features/<feature>/
 | AX 診断（コードで定義） | 現役 | `/[locale]/ax-migration`（LP）・`/ax-migration/access`・`/ax-diagnosis` | `/api/diagnostics/ax-migration`（ほかに consultation・details・offers・result-email） | `diagnostics/ax-migration/`（エンジンと防御の部品は `diagnostics/` 直下） | `ax-diagnosis`・`ax-site`・`diagnosis-runner` | `axDiagnosis`・`axSite`・`axAccess`・`axColumn` | `diagnostic_submissions`（key は `ax-migration`）、`leads.responses.axMigration` |
 | 診断ビルダー | 公開側だけ動く。管理画面は #117〜#121 | `/[locale]/d/[slug]` | `/api/diagnoses/[slug]/submit`・`consultation`、tRPC `diagnoses` | `diagnosis-builder/` | `public-diagnosis`・`diagnosis-runner` | `publicDiagnosis` | `diagnoses`・`diagnosis_versions`、`diagnostic_submissions`（key は `d:<id>`） |
 | 旧汎用フォーム | 本番で無効（`LEGACY_DIAGNOSTIC_FORM_ENABLED`） | `/[locale]/diagnostic` | `/api/diagnostic` | `diagnostics/legacy-form.ts` | `diagnostic` | `public.diagnostic` | `leads` に直接 |
-| テンプレート・埋め込み・QR・A/B | 既定でオフ（`EMBED_API_ENABLED`） | `settings/embed`・`settings/qr-campaigns` | `/api/embed/v1/*`、tRPC `diagnosticTemplates`・`embed`・`distribution`・`abTests` | `diagnostic-templates/`・`embed/`・`distribution/`・`ab-tests/`、`packages/embed-widget`（ビルドも配信もしていない） | なし（ページに直書き） | `settings.embed`・`settings.qrCampaigns` | `diagnostic_templates`・`embed_configs`・`qr_campaigns` など |
+| テンプレート・埋め込み・QR・A/B | 使っていない（API キー方式の埋め込みの公開 API とウィジェットは #505 で消した） | `settings/embed`・`settings/qr-campaigns` | tRPC `diagnosticTemplates`・`embed`・`distribution`・`abTests` | `diagnostic-templates/`・`embed/`・`distribution/`・`ab-tests/` | なし（ページに直書き） | `settings.embed`・`settings.qrCampaigns` | `diagnostic_templates`・`embed_configs`・`qr_campaigns` など |
 
 新しい診断を足すときは、2つ目の診断の方式の決定（`decisions/2026-10-18-second-diagnosis-timing`）を先に読む。
