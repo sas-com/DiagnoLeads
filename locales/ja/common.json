@@ -4280,7 +4280,7 @@
       "totalLeads": "リード数",
       "newThisMonth": "今月の新規",
       "conversionRate": "成約率",
-      "averageScore": "平均スコア",
+      "mqlRate": "MQL率（関心あり）",
       "statusDistribution": "ステータス別の件数",
       "sourceDistribution": "流入元別の件数",
       "funnel": "コンバージョンファネル",

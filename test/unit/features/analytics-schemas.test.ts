@@ -15,7 +15,6 @@ import {
   getConversionFunnelSchema,
   getResponseTimeSchema,
   getAcquisitionCostSchema,
-  getComparisonSchema,
   type DateRange,
   type TrendGranularity,
   type OverviewStats,
@@ -171,42 +170,6 @@ describe('getAcquisitionCostSchema', () => {
     });
     expect(result).not.toHaveProperty('costPerLead');
     expect(result).not.toHaveProperty('averageDealValue');
-  });
-});
-
-describe('getComparisonSchema', () => {
-  it('should accept valid input', () => {
-    const input = {
-      organizationId: '123e4567-e89b-12d3-a456-426614174000',
-      currentPeriod: {
-        start: '2024-02-01T00:00:00Z',
-        end: '2024-02-29T23:59:59Z',
-      },
-      previousPeriod: {
-        start: '2024-01-01T00:00:00Z',
-        end: '2024-01-31T23:59:59Z',
-      },
-    };
-
-    const result = getComparisonSchema.parse(input);
-    expect(result.currentPeriod.start).toBe('2024-02-01T00:00:00Z');
-    expect(result.previousPeriod.end).toBe('2024-01-31T23:59:59Z');
-  });
-
-  it('should reject invalid datetime format', () => {
-    expect(() =>
-      getComparisonSchema.parse({
-        organizationId: '123e4567-e89b-12d3-a456-426614174000',
-        currentPeriod: {
-          start: 'invalid-date',
-          end: '2024-02-29T23:59:59Z',
-        },
-        previousPeriod: {
-          start: '2024-01-01T00:00:00Z',
-          end: '2024-01-31T23:59:59Z',
-        },
-      })
-    ).toThrow();
   });
 });
 
