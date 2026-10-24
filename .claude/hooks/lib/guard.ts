@@ -27,7 +27,7 @@ export const fileLinkCount: LinkCount = (absolutePath) => {
   }
 };
 
-const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
+export const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 
 /** Inside the project: the relative path; outside: the absolute one (rules apply to both) */
 export function displayPath(root: string, filePath: string): string {
@@ -421,12 +421,12 @@ const SAFE_WITH_ENV = new Set(['source', '.', 'set', 'ls', 'test', '[', '[[', 'w
 const INTERPRETERS = /^(python3?|node|bun|deno|ruby|perl|php)$/;
 const SCRIPT_FLAGS = new Set(['-c', '-e', '-p', '--eval', '--print']);
 
-function isRedirection(word: string): boolean {
+export function isRedirection(word: string): boolean {
   return /^\d?[<>]/.test(word) || /^&>/.test(word);
 }
 
 /** Operands of a command: words after the program that are not flags or redirections */
-function operands(words: string[]): string[] {
+export function operands(words: string[]): string[] {
   const result: string[] = [];
   for (let i = 1; i < words.length; i++) {
     const word = words[i] ?? '';
@@ -440,7 +440,7 @@ function operands(words: string[]): string[] {
 }
 
 /** Paths a command writes: redirection targets, tee, cp/mv/install/ln destinations, sed -i … */
-function writeTargets(program: string, words: string[]): string[] {
+export function writeTargets(program: string, words: string[]): string[] {
   const targets: string[] = [];
   words.forEach((word, i) => {
     if (/^(\d|&)?>/.test(word) && !word.endsWith('&') && words[i + 1])
