@@ -1,7 +1,7 @@
 'use client';
 
 import { type PathStarter, useAxLandingView } from '@/components/features/ax-site/ax-landing-view';
-import { axConsultationUrl } from '@/components/features/ax-site/site-config';
+import { AX_CONTACT, axConsultationUrl } from '@/components/features/ax-site/site-config';
 import { LiveRegion, useAnnouncer } from '@/components/features/diagnosis-runner/announcer';
 import { ConsultationRequest } from '@/components/features/diagnosis-runner/consultation-request';
 import {
@@ -675,6 +675,7 @@ function AxDiagnosisSteps({
                   onToken={onTurnstileToken}
                   onRetry={() => setTurnstileRun((run) => run + 1)}
                   alternativeUrl={axConsultationUrl()}
+                  alternativeContact={AX_CONTACT}
                 />
               )
             }

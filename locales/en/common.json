@@ -329,7 +329,8 @@
       "done": "The check before sending is complete",
       "unavailable": "The check before sending could not be shown.",
       "retry": "Try the check again",
-      "alternative": "Some company networks block it. In that case, please contact us through the <link>consultation booking page</link>."
+      "alternative": "Some company networks block it. In that case, please contact us through the <link>consultation booking page</link>.",
+      "alternativeContact": "Some company networks block it. In that case, please contact us by phone (<phone></phone>) or email (<email></email>)."
     },
     "contact": {
       "description": "The result is shown on this page. We use your contact details to explain the result and offer a consultation.",
@@ -1909,7 +1910,14 @@
         "expiredDescription": "This invitation has expired. Ask the person who invited you to send it again.",
         "revokedDescription": "This invitation was revoked or replaced by a newer one. Open the link in the latest invitation email.",
         "acceptedDescription": "This invitation has already been used. If you have joined, open the dashboard.",
-        "openDashboard": "Open the dashboard"
+        "openDashboard": "Open the dashboard",
+        "verifyFirst": "Before you join, we check that {email} is your email address. Send yourself a verification email and open its link in this browser, signed in; it brings you back here.",
+        "sendVerification": "Send a verification email",
+        "resendVerification": "Send the verification email again",
+        "verificationSent": "We sent a verification email to {email}. Open its link in this browser to come back here and join. If it does not arrive, check your spam folder.",
+        "verificationFailed": "The verification email could not be sent. Wait a moment and try again.",
+        "verifyLinkFailed": "The verification link has expired or is not valid. Send the verification email again.",
+        "verifyInSignedInBrowser": "Open the verification link in the same browser you signed up in, while signed in (opening it from a phone mail app does not work). Sign in and send the verification email again."
       }
     },
     "ai": {
@@ -2665,7 +2673,7 @@
       "navLabel": "On this page",
       "nav": {
         "problems": "Challenges",
-        "reasons": "Why us",
+        "reasons": "Features",
         "demo": "Demo",
         "steps": "Approach",
         "targets": "Systems",
@@ -2686,7 +2694,13 @@
       "title": "Can you make management decisions for the AI era with your current core system?",
       "tagline": "From a legacy core system to a flexible, extensible IT platform.",
       "lead": "We move core systems and business tools running on AS/400, NEC ACOS or Microsoft Access to a modern web system while keeping today's specifications, and support you on to AI agents and data use (AX).",
-      "ctaCaption": "Multiple choice, about 3 minutes",
+      "deadlinesLabel": "Is one of these coming up?",
+      "deadlines": {
+        "lease": "End of maintenance or lease",
+        "people": "Retirement or transfer of the people who can fix it",
+        "edi": "EDI over INS Net (announced to end on December 31, 2028)"
+      },
+      "ctaCaption": "See the maintenance deadlines and how hard a migration would be in about 3 minutes",
       "cta": "Start the free web check",
       "consult": "Book a free consultation",
       "demo": "See the demo",
@@ -2695,7 +2709,7 @@
     "overview": {
       "title": "From core system migration to AX, in one service",
       "lead": "We move legacy core systems such as AS/400 to a modern web system with AI-assisted analysis and development, then add AI agents to turn it into a platform that puts management data to work.",
-      "stepLabel": "STEP {number}",
+      "stepLabel": "Phase {number}",
       "items": {
         "survey": "Analyze the current system with AI and visualize its specifications",
         "migration": "Keep the current specifications and migrate step by step",
@@ -2711,8 +2725,10 @@
     "challenges": {
       "title": "People, things, money and information: all of them are tied to the legacy core system",
       "lead": "Behind these concerns lie four challenges: people, things, money and information.",
+      "nowLabel": "Today",
       "items": {
         "people": {
+          "voice": "Only one or two people in the company can fix the RPG or COBOL",
           "label": "People",
           "title": "A core system that depends on a few people",
           "body": "Years of person-dependent changes have turned the specifications into a black box, and fewer engineers can work on it every year, raising the risk to business continuity.",
@@ -2722,6 +2738,7 @@
           }
         },
         "agility": {
+          "voice": "Every new customer or product means a slow round of changes",
           "label": "Agility",
           "title": "A system that cannot keep up with the market",
           "body": "Every time you try to respond to new customers or market changes, the limits of the existing system hold back new products and services.",
@@ -2731,6 +2748,7 @@
           }
         },
         "cost": {
+          "voice": "Maintenance costs keep rising and leave no budget for new investment",
           "label": "Cost",
           "title": "\"Life-extension costs\" that limit growth",
           "body": "The more maintenance and additions to the current system cost, the less budget is left for new challenges that drive the business forward.",
@@ -2740,6 +2758,7 @@
           }
         },
         "data": {
+          "voice": "The figures for management meetings are collected by hand in Excel every month",
           "label": "Data",
           "title": "Data you cannot use for decisions",
           "body": "Core data stored on AS/400 and similar systems is often locked in proprietary formats, so the figures behind management decisions are not available in real time.",
@@ -2762,8 +2781,13 @@
           "title": "Free web check (about 3 minutes)",
           "body": "Answer multiple-choice questions to see the migration difficulty, the urgency of a renewal and the challenge to tackle first right away."
         },
-        "simple": {
+        "consult": {
           "label": "Next",
+          "title": "Free consultation",
+          "body": "Based on your result, we explain how to proceed and what to check next."
+        },
+        "simple": {
+          "label": "Then",
           "title": "Quick assessment (asset inventory by our staff)",
           "body": "An inventory of your assets (number of programs, languages, integrations) gives an estimate of the migration difficulty."
         },
@@ -2896,13 +2920,13 @@
       "lead": "Choose the system you want to migrate and answer multiple-choice questions. You will see the migration difficulty, the urgency and the challenge to tackle first. At the end, enter your company and contact details to see the result right away (you can also print it or save it as a PDF). No pushy sales."
     },
     "reasons": {
-      "title": "Why customers choose us",
-      "tagline": "Fast, careful, and beyond.",
-      "lead": "AI-assisted analysis and development, combined with experience in core system migration, aim for both speed and quality, with support on to AX after the migration.",
+      "title": "Three features of AX migration",
+      "tagline": "Visualize with AI, verify by comparison, and go on to AX.",
+      "lead": "We combine AI-assisted analysis and development with experience in core system migration, and proceed step by step.",
       "items": {
         "speed": {
           "concern": "If time is the concern",
-          "title": "Speed",
+          "title": "Visualize the current specifications with AI",
           "points": {
             "first": "AI analysis* of the current system makes visualizing the specifications more efficient",
             "second": "AI-assisted development aims to shorten the time it takes to move to a modern web system"
@@ -2910,26 +2934,30 @@
         },
         "quality": {
           "concern": "If the impact on operations is the concern",
-          "title": "High quality",
+          "title": "Run the same data through old and new and compare",
           "points": {
             "first": "A migration that keeps the current specifications and makes use of existing assets",
             "second": "The same data runs before and after the migration and the results are compared, to check that the business logic is carried over correctly"
           }
         },
         "ax": {
-          "concern": "If the return on investment is the concern",
-          "title": "AX",
+          "concern": "If the cost is the concern",
+          "title": "Proceed step by step, on to AX",
           "points": {
-            "first": "Work toward the next-generation business transformation you aim for",
-            "second": "AI agents make a wide range of management data usable"
+            "first": "Agree on the method and schedule after Phase 1, then move on",
+            "second": "You do not have to order the whole project at once. After the migration, AI agents aim to put management data to use."
           }
         }
       },
       "note": "* Specifications, source code and other materials you entrust to us are processed in a secure environment where they are not used as training data."
     },
+    "consultBand": {
+      "title": "Talk to us about how to proceed",
+      "lead": "Besides the free web check, we take questions by phone and email."
+    },
     "demo": {
       "eyebrow": "Demo",
-      "title": "See it on real screens",
+      "title": "Compare an order entry screen before and after the migration",
       "lead": "Using an order entry screen as the example, switch on the spot between a screen that recreates the look of the current system (AS/400) and a modern web screen as it could look after the migration.",
       "cta": "See the demo",
       "imageAlt": "Demo screen showing an AS/400-style order entry screen next to a web order entry screen as it could look after the migration"
@@ -2948,6 +2976,18 @@
         "targets": {
           "q": "Which systems are covered?",
           "a": "AS/400 (IBM i), NEC ACOS and Microsoft Access. Please also ask about Visual Basic systems, low-code products such as WebPerformer, and other office computers and mainframes."
+        },
+        "costTime": {
+          "q": "How much does it cost and how long does it take?",
+          "a": "It depends greatly on the number of programs, screens and forms, and on the integrations, so it is settled in the current-system survey (Phase 1). The free web check and the consultation cost nothing."
+        },
+        "partial": {
+          "q": "Can we start with some operations or systems only?",
+          "a": "Yes. We agree on the method and schedule with you in Phase 1 and migrate step by step. You do not have to order the whole project at once."
+        },
+        "prepare": {
+          "q": "Is there anything to prepare before the consultation?",
+          "a": "You can consult us without it. It helps to have the maintenance and lease contracts, a rough count of programs, screens and forms, and a list of the connected systems and business partners."
         },
         "vendorSource": {
           "q": "Our maintenance vendor holds the source code. Can we still consult you?",
@@ -2973,7 +3013,7 @@
     },
     "finalCta": {
       "title": "Make your next step a step toward AX.",
-      "lead": "Start by telling us about your current systems and challenges. Together, we will propose a renewal that leads to smiles.",
+      "lead": "Start with the free web check to see the maintenance deadlines and how hard a migration would be. You can also reach us by phone or email.",
       "caption": "Multiple choice, about 3 minutes",
       "cta": "Start the free web check",
       "consult": "Book a free consultation",
@@ -3001,7 +3041,8 @@
         "access": "Microsoft Access migration",
         "column": "Articles"
       }
-    }
+    },
+    "newTab": "(opens in a new tab)"
   },
   "axAccess": {
     "meta": {

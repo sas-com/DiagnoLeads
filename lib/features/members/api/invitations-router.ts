@@ -1,6 +1,10 @@
 import { protectedProcedure, publicProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
-import { acceptInvitation, getInvitationPreview } from '../invitations';
+import {
+  acceptInvitation,
+  getInvitationPreview,
+  inviteEmailVerificationRequired,
+} from '../invitations';
 import { acceptInviteSchema } from '../types/schemas';
 
 const ACCEPT_ERRORS = {
@@ -16,6 +20,11 @@ const ACCEPT_ERRORS = {
     code: 'FORBIDDEN',
     message: '招待されたメールアドレスのアカウントでログインしてください',
   },
+  // Its own code: the invite page offers to send the verification email on it
+  email_not_verified: {
+    code: 'PRECONDITION_FAILED',
+    message: 'メールアドレスの確認が済んでいません。確認メールのリンクを開いてから参加してください',
+  },
 } as const;
 
 /**
@@ -26,7 +35,7 @@ export const invitationsRouter = router({
   preview: publicProcedure.input(acceptInviteSchema).query(async ({ ctx, input }) => {
     const preview = await getInvitationPreview(ctx.db, input.token);
     if (!preview) throw new TRPCError(ACCEPT_ERRORS.not_found);
-    return preview;
+    return { ...preview, emailVerificationRequired: inviteEmailVerificationRequired() };
   }),
 
   accept: protectedProcedure.input(acceptInviteSchema).mutation(async ({ ctx, input }) => {

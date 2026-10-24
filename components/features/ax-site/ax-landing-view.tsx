@@ -179,7 +179,8 @@ export function AxDiagnosisFrame({ intro, children }: AxDiagnosisFrameProps) {
       aria-labelledby={resultOnly ? undefined : 'ax-diagnosis-heading'}
       className={cn(
         'bg-gradient-to-b from-white to-ax-mist',
-        resultOnly ? 'py-10 sm:py-14' : 'py-16 sm:py-24'
+        // Little room above the intro: a jump here should show the first question too (#420)
+        resultOnly ? 'py-10 sm:py-14' : 'pb-16 pt-10 sm:pb-24 sm:pt-12'
       )}
     >
       <div className={cn('mx-auto px-4', resultOnly ? 'max-w-3xl' : 'max-w-4xl sm:px-6')}>
