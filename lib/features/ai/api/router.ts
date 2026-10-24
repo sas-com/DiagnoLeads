@@ -69,6 +69,13 @@ export const aiRouter = router({
       calls: 1,
     });
     const aiScore = await scoreLeadWithAI(leadForClaude(lead));
+    if (aiScore.isFallback) {
+      // Keep the current score rather than overwriting it with the placeholder
+      throw new TRPCError({
+        code: 'SERVICE_UNAVAILABLE',
+        message: 'AI でリードを評価できませんでした。時間をおいてやり直してください',
+      });
+    }
 
     // Update lead with AI score
     const [updated] = await ctx.db
@@ -126,8 +133,9 @@ export const aiRouter = router({
       });
       const scoresMap = await scoreLeadsBatch(leadsToScore.map(leadForClaude));
 
-      // Update all leads with scores
-      const updatePromises = leadsToScore.map((lead) => {
+      // Update the leads Claude scored; a fallback keeps the lead's current score
+      const scoredLeads = leadsToScore.filter((lead) => !scoresMap.get(lead.id)?.isFallback);
+      const updatePromises = scoredLeads.map((lead) => {
         const aiScore = scoresMap.get(lead.id);
         if (!aiScore) {
           throw new Error(`Score not found for lead ${lead.id}`);

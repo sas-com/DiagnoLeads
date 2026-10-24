@@ -3,6 +3,7 @@ import { AxLandingOnly, AxLandingView } from '@/components/features/ax-site/ax-l
 import { AxSiteShell } from '@/components/features/ax-site/ax-site-shell';
 import {
   AxChallenges,
+  AxConsultBand,
   AxDemo,
   AxDiagnosisSection,
   AxFaq,
@@ -80,6 +81,8 @@ export default async function AxMigrationPage({ params }: AxMigrationPageProps) 
           <AxReasons locale={locale} />
           <AxDemo locale={locale} />
           <AxSteps locale={locale} />
+          {/* The phone and the diagnosis halfway down the page, between light sections (#420) */}
+          <AxConsultBand locale={locale} />
           <AxTargets locale={locale} />
           {/* AS/400 and ACOS, each with its own heading (#311) */}
           <AxHostPlatforms locale={locale} />

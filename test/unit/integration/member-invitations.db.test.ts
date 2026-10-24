@@ -279,4 +279,36 @@ describe.skipIf(!url)('member invitations (PostgreSQL)', () => {
       delete process.env.APP_TEST_MODE;
     }
   });
+
+  it('with verification required, joins only once the address is verified in the database', async () => {
+    const user = await newUser();
+    const { token } = await invite(user.email);
+    const required = { requireVerifiedEmail: true };
+
+    expect(await acceptInvitation(db, token, user, now, required)).toEqual({
+      ok: false,
+      reason: 'email_not_verified',
+    });
+    expect(await membershipOf(user.id)).toBeUndefined();
+    const [row] = await pg
+      .select({ status: organizationInvitations.status })
+      .from(organizationInvitations)
+      .where(eq(organizationInvitations.email, user.email));
+    expect(row.status).toBe('pending');
+
+    await pg.update(users).set({ emailVerified: true }).where(eq(users.id, user.id));
+    expect(await acceptInvitation(db, token, user, now, required)).toEqual({
+      ok: true,
+      organizationId,
+    });
+    expect((await membershipOf(user.id))?.role).toBe('member');
+  });
+
+  it('joins without verifying while the setting is off', async () => {
+    const user = await newUser();
+    const { token } = await invite(user.email);
+    expect(
+      await acceptInvitation(db, token, user, now, { requireVerifiedEmail: false })
+    ).toEqual({ ok: true, organizationId });
+  });
 });
