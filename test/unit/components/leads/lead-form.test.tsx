@@ -75,7 +75,7 @@ describe('LeadForm', () => {
     expect(onSubmit.mock.calls[0][0]).toMatchObject({ email: 'new@example.jp', status: 'new' });
   });
 
-  it('starts a new lead with an empty score and Japanese examples, and sends no score (Refs #163)', async () => {
+  it('starts a new lead with Japanese examples, no score to enter, and sends no score (Refs #163, #447)', async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
     render(withIntl(<LeadForm onSubmit={onSubmit} />));
@@ -89,9 +89,7 @@ describe('LeadForm', () => {
       'placeholder',
       '株式会社サンプル'
     );
-    const score = screen.getByRole('spinbutton', { name: /スコア/ });
-    expect(score).toHaveValue(null);
-    expect(score).not.toHaveAttribute('placeholder');
+    expect(screen.queryByRole('spinbutton', { name: /スコア/ })).not.toBeInTheDocument();
 
     await user.type(screen.getByRole('textbox', { name: /メール/ }), 'new@example.com');
     await user.click(screen.getByRole('button', { name: '作成' }));

@@ -98,11 +98,6 @@ export function LeadSummarySheet({
                   canEdit={canEdit}
                 />
                 <LeadAssigneeSelect lead={lead} organizationId={organizationId} canEdit={canEdit} />
-                <Badge color="gray">
-                  {typeof lead.score === 'number'
-                    ? t('scoreValue', { score: lead.score })
-                    : t('noScore')}
-                </Badge>
               </div>
 
               {facts.length > 0 && (

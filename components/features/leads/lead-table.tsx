@@ -13,7 +13,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ProgressBar } from '@/components/ui/progress-bar';
 import {
   Select,
   SelectContent,
@@ -419,32 +418,6 @@ export function LeadTable({
       },
     },
     {
-      accessorKey: 'score',
-      header: sortableHeader('score', t('score')),
-      cell: ({ row }) => {
-        const score = row.getValue('score') as number | null;
-        if (score === null || score === undefined) {
-          return <span className="text-gray-400">-</span>;
-        }
-        const getScoreColor = (s: number): 'red' | 'yellow' | 'emerald' => {
-          if (s >= 70) return 'emerald';
-          if (s >= 40) return 'yellow';
-          return 'red';
-        };
-        return (
-          <div className="w-24">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                {score}
-              </span>
-              <span className="text-xs text-gray-500 dark:text-gray-400">/100</span>
-            </div>
-            <ProgressBar value={score} color={getScoreColor(score)} className="h-1.5" />
-          </div>
-        );
-      },
-    },
-    {
       accessorKey: 'source',
       header: t('source'),
       cell: ({ row }) => {
@@ -723,7 +696,6 @@ export function LeadTable({
     assignee: tAssignee('label'),
     inflowSource: t('inflowSource'),
     tags: locale === 'ja' ? 'タグ' : 'Tags',
-    score: t('score'),
     source: t('source'),
     createdAt: t('createdAt'),
     lastActivityAt: tList('sort.lastActivityAt'),

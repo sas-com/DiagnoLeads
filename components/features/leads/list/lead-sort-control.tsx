@@ -25,7 +25,6 @@ export const MOBILE_SORT_KEYS = [
   'lastActivityAt',
   'nextMeetingDate',
   'actBy',
-  'score',
   'company',
   'name',
   'status',

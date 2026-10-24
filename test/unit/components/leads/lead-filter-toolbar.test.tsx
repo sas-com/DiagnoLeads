@@ -193,13 +193,9 @@ describe('LeadFilterToolbar', () => {
     expect(screen.getByRole('button', { name: `${t.inflowSource} (2件選択)` })).toBeInTheDocument();
   });
 
-  it('sets a score range', async () => {
-    const user = userEvent.setup();
-    renderAt('');
-    await user.click(screen.getByRole('button', { name: t.score }));
-    await user.type(await screen.findByLabelText(t.scoreMin), '40');
-    await user.click(screen.getByRole('button', { name: t.apply }));
-    expect(lastHref()).toBe('/ja/leads?scoreMin=40');
+  it('offers no score range, but a shared link with one still shows a removable chip (#447)', () => {
+    renderAt('scoreMin=40');
+    expect(screen.queryByRole('button', { name: t.score })).not.toBeInTheDocument();
     expect(within(chipGroup()).getByText('スコア 40 以上')).toBeInTheDocument();
   });
 

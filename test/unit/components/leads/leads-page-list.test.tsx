@@ -311,12 +311,12 @@ describe('LeadsPage list (server-driven)', () => {
       '/ja/leads',
       '/ja/leads?status=nurturing%2Cnegotiating',
       '/ja/leads?status=won',
-      '/ja/leads?sort=score&order=desc',
     ]);
     expect(within(cards[0]).getByText('120')).toBeInTheDocument();
     expect(within(cards[1]).getByText('50')).toBeInTheDocument();
     expect(within(cards[2]).getByText('15.0%')).toBeInTheDocument();
-    expect(within(cards[3]).getByText('61')).toBeInTheDocument();
+    // No average score card: the MQL level says how promising leads are (#447)
+    expect(screen.queryByText('61')).not.toBeInTheDocument();
   });
 
   it('shows the source translated', async () => {
