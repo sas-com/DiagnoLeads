@@ -105,24 +105,6 @@ export function useConversionFunnel(organizationId: string, dateRange: DateRange
 }
 
 /**
- * Hook to get score distribution data
- * Automatically disabled for invalid organization IDs (demo mode)
- */
-export function useScoreDistribution(organizationId: string, dateRange: DateRange = '30d') {
-  const isValidOrg = isValidUUID(organizationId);
-
-  return trpc.analytics.getScoreDistribution.useQuery(
-    {
-      organizationId,
-      dateRange,
-    },
-    {
-      enabled: isValidOrg,
-    }
-  );
-}
-
-/**
  * Hook to get response time distribution data
  * Automatically disabled for invalid organization IDs (demo mode)
  */

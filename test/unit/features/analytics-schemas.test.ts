@@ -13,7 +13,6 @@ import {
   getSourceBreakdownSchema,
   getStatusBreakdownSchema,
   getConversionFunnelSchema,
-  getScoreDistributionSchema,
   getResponseTimeSchema,
   getAcquisitionCostSchema,
   getComparisonSchema,
@@ -25,7 +24,6 @@ import {
   type StatusBreakdown,
   type FunnelStage,
   type ConversionFunnelData,
-  type ScoreDistributionData,
   type ResponseTimeData,
   type AcquisitionCostSummary,
   type PeriodMetrics,
@@ -145,16 +143,6 @@ describe('getConversionFunnelSchema', () => {
   });
 });
 
-describe('getScoreDistributionSchema', () => {
-  it('should accept valid input', () => {
-    const input = {
-      organizationId: '123e4567-e89b-12d3-a456-426614174000',
-    };
-
-    const result = getScoreDistributionSchema.parse(input);
-    expect(result.organizationId).toBeDefined();
-  });
-});
 
 describe('getResponseTimeSchema', () => {
   it('should accept valid input', () => {
@@ -310,17 +298,6 @@ describe('Analytics response types', () => {
     });
   });
 
-  describe('ScoreDistributionData', () => {
-    it('should create valid score distribution', () => {
-      const distribution: ScoreDistributionData = {
-        range: '76-100',
-        count: 250,
-        percentage: 25,
-      };
-
-      expect(distribution.range).toBe('76-100');
-    });
-  });
 
   describe('ResponseTimeData', () => {
     it('should create valid response time data', () => {

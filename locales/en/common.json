@@ -1115,7 +1115,6 @@
       "recent": {
         "title": "Recent leads",
         "platform": "Source",
-        "score": "Score",
         "received": "Received",
         "consultation": "Consultation",
         "empty": "No leads yet",
@@ -1125,8 +1124,7 @@
         "mql": "MQL",
         "today": "Today {time}",
         "yesterday": "Yesterday",
-        "noCompany": "(no company)",
-        "highlight": "Worth a look (score 70+ or MQL)"
+        "noCompany": "(no company)"
       },
       "noOrganization": "Choose an organization to see its leads here",
       "periodTag": "Last {days} days",
@@ -1195,12 +1193,6 @@
           "decrease": "MQL (interested) went down against the previous {days} days",
           "same": "MQL (interested) is the same as in the previous {days} days",
           "none": "MQL (interested)"
-        },
-        "score": {
-          "increase": "The average score of new leads went up",
-          "decrease": "The average score of new leads went down",
-          "same": "The average score of new leads is unchanged",
-          "none": "Average score of new leads"
         },
         "previous": "Previous {days} days: {value}",
         "noPrevious": "Nothing in the previous {days} days"
@@ -2129,7 +2121,6 @@
         "totalLeads": "Total Leads",
         "newLeadsThisMonth": "New Leads This Month",
         "conversionRate": "Conversion Rate",
-        "averageScore": "Average Score",
         "vsLastPeriod": "vs. last period"
       },
       "tabs": {
@@ -2147,7 +2138,6 @@
         "sourceBreakdown": "Source Breakdown",
         "sourceTable": "Source Details",
         "conversionFunnel": "Conversion Funnel",
-        "scoreDistribution": "Score Distribution",
         "responseTime": "Response Time",
         "sourceBreakdownPeriod": "Inflow source of leads registered: {period}",
         "responseTimePending": "Coming soon (shown once first contacts are recorded)"
@@ -2161,8 +2151,7 @@
       "noData": "No data available",
       "comingSoon": "Coming soon",
       "performanceSummary": {
-        "title": "Performance summary",
-        "quality": "Lead quality (average score)"
+        "title": "Performance summary"
       },
       "acquisitionCost": {
         "title": "Acquisition cost by inflow source",
