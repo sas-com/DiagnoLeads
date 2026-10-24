@@ -5,7 +5,7 @@
  * two node_modules files: one hard-linked as Bun's cache links them, one copy with one link.
  */
 import { spawnSync } from 'node:child_process';
-import { linkSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, linkSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -94,13 +94,40 @@ describe('pre-tool-guard', () => {
     expect(result).toMatchObject({ status: 0, stderr: '', context: '' });
   });
 
-  it('never blocks on input it cannot parse', () => {
+  it('refuses when it cannot decide (fails closed, #461)', () => {
     const result = spawnSync('bun', [join(HOOKS, 'pre-tool-guard.ts')], {
       input: 'not json',
       encoding: 'utf8',
     });
-    expect(result.status).toBe(0);
-    expect(result.stderr).toContain('pre-tool-guard:');
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain('[guard:error]');
+    expect(result.stderr).toContain('disableAllHooks');
+  });
+
+  it('stops a read-only specialist from writing, and lets it read', () => {
+    const write = run('pre-tool-guard.ts', {
+      agent_type: 'security-specialist',
+      tool_name: 'Bash',
+      tool_input: { command: 'git commit -m review' },
+    });
+    expect(write.status).toBe(2);
+    expect(write.stderr).toContain('[guard:readonly-agent]');
+
+    const read = run('pre-tool-guard.ts', {
+      agent_type: 'security-specialist',
+      tool_name: 'Bash',
+      tool_input: { command: 'git diff origin/main...HEAD --stat' },
+    });
+    expect(read).toMatchObject({ status: 0, stderr: '' });
+  });
+
+  it('leaves other subagents to the usual rules', () => {
+    const result = run('pre-tool-guard.ts', {
+      agent_type: 'Explore',
+      tool_name: 'Bash',
+      tool_input: { command: 'git commit -m work' },
+    });
+    expect(result).toMatchObject({ status: 0, stderr: '' });
   });
 });
 
@@ -117,6 +144,23 @@ describe('post-tool-decisions', () => {
     expect(first.context).toContain('2026-10-22-email-templates');
 
     expect(run('post-tool-decisions.ts', call).context).toBe('');
+  });
+
+  it('takes paths from the checkout the file is in, so a worktree matches too (#461)', () => {
+    // CLAUDE_PROJECT_DIR stays at the main checkout; the worktree has its own .git file
+    const worktree = join(project, '.claude/worktrees/review');
+    mkdirSync(join(worktree, '.factory/memory'), { recursive: true });
+    cpSync(join(project, '.factory/memory/decisions'), join(worktree, '.factory/memory/decisions'), {
+      recursive: true,
+    });
+    writeFileSync(join(worktree, '.git'), 'gitdir: ../../../.git/worktrees/review\n');
+    const result = run('post-tool-decisions.ts', {
+      session_id: `test-${process.pid}-worktree`,
+      tool_name: 'Read',
+      tool_input: { file_path: join(worktree, 'lib/features/email/email-service.ts') },
+    });
+    expect(result.context).toContain('lib/features/email/email-service.ts に関係する決定');
+    expect(result.context).toContain('2026-10-22-email-templates');
   });
 
   it('stays silent for files no decision governs', () => {
