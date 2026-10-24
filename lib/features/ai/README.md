@@ -1,6 +1,6 @@
 # AI Features
 
-AI-powered features for DiagnoLeads using Claude 4.5 Sonnet and OpenAI Embeddings.
+AI-powered features for DiagnoLeads using Claude Sonnet 5.5 and OpenAI Embeddings.
 
 ## Features
 
@@ -105,7 +105,7 @@ OPENAI_API_KEY=sk-...
 ## Implementation Status
 
 Phase 3.1 ✅ Complete:
-- [x] Vercel AI SDK integration
+- [x] Anthropic SDK integration（2026-10-24 に Vercel AI SDK から移行。決定 `2026-10-24-ai-calls-via-anthropic-sdk`）
 - [x] Anthropic Claude API setup
 - [x] OpenAI Embeddings integration
 - [x] pgvector extension migration

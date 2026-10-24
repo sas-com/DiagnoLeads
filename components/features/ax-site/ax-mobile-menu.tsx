@@ -64,7 +64,7 @@ export function AxMobileMenu({ buttonLabel, navLabel, items }: AxMobileMenuProps
         aria-controls={panelId}
         aria-label={buttonLabel}
         onClick={() => setOpen((value) => !value)}
-        className="flex h-10 w-10 items-center justify-center rounded-lg text-ax-ink hover:bg-ax-mist focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ax-teal-dark max-[359px]:h-9 max-[359px]:w-9"
+        className="flex h-10 w-10 items-center justify-center rounded-lg text-ax-ink hover:bg-ax-mist focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ax-forest max-[359px]:h-9 max-[359px]:w-9"
       >
         {open ? (
           <X className="h-6 w-6" aria-hidden="true" />
@@ -86,7 +86,7 @@ export function AxMobileMenu({ buttonLabel, navLabel, items }: AxMobileMenuProps
                   href={href}
                   placement="header"
                   onNavigate={close}
-                  className="block rounded px-2 py-3 font-bold text-ax-ink hover:text-ax-teal-dark focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ax-teal-dark"
+                  className="block rounded px-2 py-3 font-bold text-ax-ink hover:text-ax-leaf focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ax-forest"
                 >
                   {label}
                 </AxCrossLink>

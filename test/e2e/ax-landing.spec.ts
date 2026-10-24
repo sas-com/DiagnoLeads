@@ -11,12 +11,14 @@ test.describe('AX migration landing page', () => {
       '今の基幹システムのまま、AI時代の経営判断はできますか？'
     );
     for (const name of [
-      'こんなお悩みありませんか？',
+      '基幹システムの移行から、AX化までを一貫してご支援',
       'ヒト・モノ・カネ・情報。すべてが、レガシーな基幹システムに縛られています',
-      'システム移行はゴールではなく、AX化の出発点',
-      '対象となるシステム',
-      'まずは「無料Web診断」から',
       '選ばれる理由',
+      '実際の画面でご確認いただけます',
+      'AX化の進め方',
+      '対象となるシステム',
+      '安心して任せられる理由',
+      'まずは「無料Web診断」から',
       'よくある質問',
     ]) {
       await expect(page.getByRole('heading', { level: 2, name })).toBeVisible();
@@ -89,7 +91,7 @@ test.describe('AX migration landing page', () => {
     await page.goto('/ja/ax-migration');
     const bar = page.getByTestId('ax-floating-cta');
     await expect(bar).toHaveAttribute('aria-hidden', 'true');
-    await page.getByRole('heading', { name: 'システム移行はゴールではなく、AX化の出発点' }).scrollIntoViewIfNeeded();
+    await page.getByRole('heading', { name: 'AX化の進め方' }).scrollIntoViewIfNeeded();
     await expect(bar).toHaveAttribute('aria-hidden', 'false');
     await page.locator('#diagnosis').scrollIntoViewIfNeeded();
     await expect(bar).toHaveAttribute('aria-hidden', 'true');

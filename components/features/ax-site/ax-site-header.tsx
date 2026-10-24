@@ -30,17 +30,21 @@ export interface AxSiteHeaderProps {
   page?: AxLandingPage;
 }
 
-const NAV_ITEMS = ['problems', 'steps', 'targets', 'faq'] as const;
+type NavItem = 'problems' | 'reasons' | 'demo' | 'steps' | 'targets' | 'faq';
+const NAV_ITEMS: readonly NavItem[] = ['problems', 'reasons', 'demo', 'steps', 'targets', 'faq'];
+/** The Access page has no reasons or demo section of its own */
+const ACCESS_NAV_ITEMS: readonly NavItem[] = ['problems', 'steps', 'targets', 'faq'];
 
 export async function AxSiteHeader({ locale, variant, cta, logoLabel, page }: AxSiteHeaderProps) {
   const t = await getTranslations({ locale, namespace: 'axSite' });
   const landingPath = `/${locale}/ax-migration`;
   const sectionHref = (id: string) => (variant === 'landing' ? `#${id}` : `${landingPath}#${id}`);
+  const navItems = page === 'ax-access-lp' ? ACCESS_NAV_ITEMS : NAV_ITEMS;
   const tc = await getTranslations({ locale, namespace: 'common.testMode' });
   const testModeDomains = formatEmailDomains(allowedEmailDomains(), locale);
   // Phone menu (#332): the header links, then the pages of the site other than this one
   const menuItems: AxMenuItem[] = [
-    ...NAV_ITEMS.map((id) => ({
+    ...navItems.map((id) => ({
       href: sectionHref(AX_SECTIONS[id]),
       label: t(`header.nav.${id}`),
     })),
@@ -75,19 +79,20 @@ export async function AxSiteHeader({ locale, variant, cta, logoLabel, page }: Ax
           <a
             href={variant === 'landing' ? '#top' : landingPath}
             aria-label={logoLabel ?? t('header.home')}
-            className="rounded focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-ax-teal-dark"
+            className="shrink-0 rounded focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-ax-forest"
           >
-            <AxLogo name={t('brand.name')} operator={t('brand.operator')} narrow />
+            {/* The link names the logo */}
+            <AxLogo alt="" narrow />
           </a>
           <nav
             aria-label={t('header.navLabel')}
-            className="hidden items-center gap-7 text-sm font-bold lg:flex"
+            className="hidden items-center gap-5 text-sm font-bold lg:flex xl:gap-7"
           >
-            {NAV_ITEMS.map((id) => (
+            {navItems.map((id) => (
               <a
                 key={id}
                 href={sectionHref(AX_SECTIONS[id])}
-                className="text-ax-ink transition-colors hover:text-ax-teal-dark"
+                className="text-ax-ink transition-colors hover:text-ax-leaf"
               >
                 {t(`header.nav.${id}`)}
               </a>
@@ -96,7 +101,7 @@ export async function AxSiteHeader({ locale, variant, cta, logoLabel, page }: Ax
             {isColumnLocale(locale) && (
               <a
                 href={`/${locale}${COLUMN_INDEX_PATH}`}
-                className="text-ax-ink transition-colors hover:text-ax-teal-dark"
+                className="text-ax-ink transition-colors hover:text-ax-leaf"
               >
                 {t('header.nav.column')}
               </a>

@@ -43,8 +43,8 @@ AI-Powered B2B Diagnostic Platform for **Holdings, Group Companies & Enterprise 
 | 診断結果メールの確認 | `/ja/ax-diagnosis/email/confirm` | メールのボタンから開く。結果メールは本番ではオフ（#154） |
 | 配信停止 | `/ja/email/unsubscribe` | メールのリンクから開く |
 | 診断ビルダーで作った診断 | `/ja/d/<slug>` | 公開中の診断だけ表示 |
-| 旧来の汎用診断 | `/ja/diagnostic` | AX 移行診断へ転送（#71） |
-| ブログ・FAQ | [/ja/blog](https://diagnoleads-v2.vercel.app/ja/blog)・[/ja/faq](https://diagnoleads-v2.vercel.app/ja/faq) | |
+| 旧来の汎用診断 | `/ja/diagnostic`・`/ja/diagnostic/<slug>` | AX 移行診断へ転送（#71） |
+| ブログ・FAQ | `/ja/blog`・`/ja/faq` | 閉じている（404。#413）。CMS（Payload）で作り直し中（Epic #339） |
 
 ### 管理画面（ログインが必要）
 
@@ -55,8 +55,8 @@ AI-Powered B2B Diagnostic Platform for **Holdings, Group Companies & Enterprise 
 | リード | `/ja/leads` | 詳細は `/ja/leads/<leadId>`（ヒアリング・引き継ぎ） |
 | 顧客探し（AX） | `/ja/prospects` | 社員の記録・紹介リンク・営業への引き継ぎ |
 | 分析 | `/ja/analytics` | |
-| 設定 | `/ja/settings` | 組織・メンバー・紹介リンク（agency-links）・AX プレイブック・Webhook・QR キャンペーン・埋め込み・コンテンツ編集者 |
-| コンテンツ（ブログ・FAQ の編集） | `/ja/content/blog`・`/ja/content/faqs` | 編集できるのはコンテンツ編集者（「設定 → コンテンツ編集者」で指定）だけ。`/admin` はダッシュボードへ転送 |
+| 設定 | `/ja/settings` | 組織・メンバー・紹介リンク（agency-links）・AX プレイブック・Webhook・QR キャンペーン・埋め込み |
+| CMS（Payload） | `/admin` | 本番では停止中で、ダッシュボードへ転送（Epic #339） |
 
 ### API・運用
 

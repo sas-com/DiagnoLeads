@@ -7,21 +7,29 @@ import type { ReactNode } from 'react';
 import { currentAxPage, followAxLink } from './ax-cross-link';
 import { useAxLandingView } from './ax-landing-view';
 
-type CtaVariant = 'diagnosis' | 'consultation';
+type CtaVariant = 'diagnosis' | 'consultation' | 'demo';
+type CtaTone = 'light' | 'dark';
 
-const VARIANT_CLASS: Record<CtaVariant, string> = {
-  // Yellow pill: the diagnosis button of maru2-dx.com (dark text keeps the contrast)
-  diagnosis:
-    'rounded-full bg-ax-yellow text-ax-ink shadow-[0_6px_16px_rgba(0,0,0,0.18)] hover:bg-ax-yellow-dark',
-  consultation:
-    'rounded-lg bg-ax-teal-dark text-white shadow-[0_6px_16px_rgba(0,0,0,0.18)] hover:bg-ax-deep',
+// Buttons of the STUDIO design (#414): the diagnosis filled (forest, or white on forest), the
+// others outlined
+const OUTLINED: Record<CtaTone, string> = {
+  light: 'border-2 border-ax-forest bg-white text-ax-forest hover:bg-ax-mist',
+  dark: 'border-2 border-white text-white hover:bg-white/10',
+};
+const VARIANT_CLASS: Record<CtaVariant, Record<CtaTone, string>> = {
+  diagnosis: {
+    light: 'border-2 border-ax-forest bg-ax-forest text-white hover:bg-ax-forest/85',
+    dark: 'border-2 border-white bg-white text-ax-forest hover:bg-ax-mist',
+  },
+  consultation: OUTLINED,
+  demo: OUTLINED,
 };
 
 interface AxCtaLinkProps {
   href: string;
   variant?: CtaVariant;
-  /** On a dark background the focus outline is white (teal would not stand out) */
-  tone?: 'light' | 'dark';
+  /** On a dark background the button and its focus outline turn white */
+  tone?: CtaTone;
   /** Where the button is, for the analytics event (hero, header, final, floating) */
   location: string;
   external?: boolean;
@@ -79,9 +87,9 @@ export function AxCtaLink({
       }}
       {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
       className={cn(
-        'inline-flex items-center justify-center gap-2 px-7 py-4 text-base font-bold transition-colors focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2',
-        tone === 'dark' ? 'focus-visible:outline-white' : 'focus-visible:outline-ax-teal-dark',
-        VARIANT_CLASS[variant],
+        'inline-flex items-center justify-center gap-2 rounded-md px-7 py-4 text-base font-bold transition-colors focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2',
+        tone === 'dark' ? 'focus-visible:outline-white' : 'focus-visible:outline-ax-forest',
+        VARIANT_CLASS[variant][tone],
         className
       )}
     >
