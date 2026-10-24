@@ -1,8 +1,7 @@
 /**
- * AI Chat Assistant
+ * AI lead summary
  *
- * Streaming chat interface using Vercel AI SDK and Claude 4.5 Sonnet.
- * Provides contextual assistance for lead management and insights.
+ * Summarizes a lead with Claude through the Vercel AI SDK (ai.generateSummary).
  */
 
 import { createAnthropic } from '@ai-sdk/anthropic';
@@ -12,68 +11,6 @@ import { type LanguageModel, streamText } from 'ai';
 const anthropic = createAnthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
-
-export interface ChatMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
-/**
- * Generate streaming chat response
- * @param messages - Conversation history
- * @param context - Additional context (lead data, org info, etc.)
- * @returns Streaming text response
- */
-export async function generateChatResponse(
-  messages: ChatMessage[],
-  context?: {
-    organizationName?: string;
-    recentLeads?: Array<{
-      name?: string | null;
-      company?: string | null;
-      status?: string | null;
-    }>;
-  }
-) {
-  // Build system prompt with context
-  const systemPrompt = `You are DiagnoLeads AI Assistant, a helpful AI that assists with B2B lead management.
-
-You can help users with:
-- Analyzing lead data and providing insights
-- Suggesting follow-up actions
-- Answering questions about leads
-- Providing sales recommendations
-
-${context?.organizationName ? `Organization: ${context.organizationName}` : ''}
-
-${
-  context?.recentLeads && context.recentLeads.length > 0
-    ? `
-Recent Leads:
-${context.recentLeads.map((lead, i) => `${i + 1}. ${lead.name || 'Unknown'} from ${lead.company || 'Unknown Company'} (${lead.status || 'new'})`).join('\n')}
-`
-    : ''
-}
-
-Be concise, helpful, and professional. Focus on actionable insights.`;
-
-  try {
-    const result = await streamText({
-      model: anthropic('claude-sonnet-4-20250514') as LanguageModel,
-      system: systemPrompt,
-      messages: messages.map((msg) => ({
-        role: msg.role,
-        content: msg.content,
-      })),
-      temperature: 0.7,
-    });
-
-    return result.toTextStreamResponse();
-  } catch (error) {
-    console.error('Error generating chat response:', error);
-    throw new Error('Failed to generate chat response');
-  }
-}
 
 /**
  * Generate lead summary

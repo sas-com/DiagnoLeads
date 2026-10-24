@@ -16,7 +16,6 @@ export function isCmsEnabled(): boolean {
  */
 export const APP_API_SEGMENTS = [
   'auth',
-  'chat',
   'cms',
   'cron',
   'diagnoses',
