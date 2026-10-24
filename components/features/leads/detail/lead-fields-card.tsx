@@ -479,7 +479,11 @@ function CardForm({
               control={form.control}
               name={name}
               render={({ field }) => {
-                const options = SELECT_OPTIONS[name];
+                // A lost lead cannot be put on hold (#445): on hold is nurturing
+                const options =
+                  name === 'lostReason' && lead.status === 'lost' && lead.lostReason !== 'on_hold'
+                    ? SELECT_OPTIONS[name]?.filter((option) => option !== 'on_hold')
+                    : SELECT_OPTIONS[name];
                 if (name === 'mqlQualified') {
                   return (
                     <FormItem className="flex items-center gap-2 space-y-0 sm:col-span-2">

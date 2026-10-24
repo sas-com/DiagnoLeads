@@ -18,26 +18,31 @@ import {
   organizations,
   users,
 } from '@/lib/db/schema';
-import { RECOMPUTE_RECENT_DAYS, recomputeRecentlyUpdated } from '@/lib/features/act-timing/service';
+import {
+  RECOMPUTE_BATCH,
+  RECOMPUTE_RECENT_DAYS,
+  recomputeRecentlyUpdated,
+} from '@/lib/features/act-timing/service';
 import { appRouter } from '@/server/routers/_app';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, max, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/db/rls', () => ({ setCurrentUser: vi.fn().mockResolvedValue(undefined) }));
+const { reportServerError } = vi.hoisted(() => ({
+  reportServerError: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('@/lib/ops/alert', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/ops/alert')>()),
+  reportServerError,
+}));
 
 const url = process.env.TEST_DATABASE_URL;
 
 const done = (value: unknown) => ({ value, status: 'done', source: null });
-
-/**
- * An update time just inside the morning run's window. The run takes every organization's
- * recently updated leads, oldest first and a batch at a time; other DB tests running at the same
- * time add their own leads, so a lead updated "now" could be left for the next run (#357).
- */
-const earliestInWindow = () =>
-  new Date(Date.now() - (RECOMPUTE_RECENT_DAYS * 24 * 60 - 1) * 60 * 1000);
+const HOUR = 60 * 60 * 1000;
+const before = (time: Date, ms: number) => new Date(time.getTime() - ms);
 
 describe.skipIf(!url)('when to act (PostgreSQL)', () => {
   const client = url ? postgres(url, { max: 2 }) : null;
@@ -76,6 +81,17 @@ describe.skipIf(!url)('when to act (PostgreSQL)', () => {
 
   const leadOf = async (leadId: string) =>
     (await pg.select({ actBy: leads.actBy }).from(leads).where(eq(leads.id, leadId)))[0];
+  /**
+   * A time for the morning run whose window holds no lead yet. The run reads every
+   * organization's leads updated in the RECOMPUTE_RECENT_DAYS before it; the leads other DB
+   * tests add meanwhile, and those a killed run left behind, are all older than this window, so
+   * the leads a test dates just before it are the only ones the run reads (#374)
+   */
+  async function emptyWindow(): Promise<Date> {
+    const [row] = await pg.select({ latest: max(leads.updatedAt) }).from(leads);
+    const after = Math.max(Date.now(), row?.latest?.getTime() ?? 0);
+    return new Date(after + (RECOMPUTE_RECENT_DAYS + 1) * 24 * HOUR);
+  }
   const tasksOf = (leadId: string) =>
     pg
       .select({ id: leadTasks.id, title: leadTasks.title, dueOn: leadTasks.dueOn, completedAt: leadTasks.completedAt })
@@ -164,12 +180,18 @@ describe.skipIf(!url)('when to act (PostgreSQL)', () => {
 
     const other = await leadWithHearing({ hardwareSupportEnd: done('2030-09') });
     expect(await tasksOf(other.leadId)).toHaveLength(1);
+    const runAt = await emptyWindow();
     await pg
       .update(leads)
-      .set({ status: 'lost', lostReason: 'budget', updatedAt: earliestInWindow() })
+      .set({ status: 'lost', lostReason: 'budget', updatedAt: before(runAt, HOUR) })
       .where(eq(leads.id, other.leadId));
     // The morning run picks up the status change
-    await recomputeRecentlyUpdated(pg);
+    expect(await recomputeRecentlyUpdated(pg, runAt)).toEqual({
+      recomputed: 1,
+      pending: 0,
+      unseen: 0,
+      failed: 0,
+    });
     expect(await tasksOf(other.leadId)).toEqual([]);
     // "When to act" itself stays on the lead (the list can still show it)
     expect(await leadOf(other.leadId)).toEqual({ actBy: '2029-09-01' });
@@ -177,13 +199,14 @@ describe.skipIf(!url)('when to act (PostgreSQL)', () => {
   });
 
   it('estimates from the diagnosis answer through the morning run', async () => {
+    const runAt = await emptyWindow();
     const [lead] = await pg
       .insert(leads)
       .values({
         organizationId: org,
         email: `act-${unique()}@example.co.jp`,
         company: '診断だけ商事',
-        updatedAt: earliestInWindow(),
+        updatedAt: before(runAt, HOUR),
       })
       .returning();
     await pg.insert(diagnosticSubmissions).values({
@@ -195,7 +218,7 @@ describe.skipIf(!url)('when to act (PostgreSQL)', () => {
       result: {},
       createdAt: new Date('2026-10-16T00:00:00Z'),
     });
-    await recomputeRecentlyUpdated(pg);
+    expect(await recomputeRecentlyUpdated(pg, runAt)).toMatchObject({ recomputed: 1, pending: 0 });
     // 2026-10 + 24 months = 2028-10, minus 12 months
     expect(await leadOf(lead.id)).toEqual({ actBy: '2027-10-01' });
   });
@@ -226,12 +249,229 @@ describe.skipIf(!url)('when to act (PostgreSQL)', () => {
     expect(soon.items.filter((lead: { actBy: string | null }) => lead.actBy && lead.actBy > '2029-01-01')).toEqual([]);
   });
 
+  it('lists the leads nobody comes back to: no month to act and no open next action (#446)', async () => {
+    const insertLead = async (values: Partial<typeof leads.$inferInsert> = {}) => {
+      const [lead] = await pg
+        .insert(leads)
+        .values({ organizationId: org, email: `none-${unique()}@example.co.jp`, status: 'nurturing', ...values })
+        .returning({ id: leads.id });
+      return lead.id;
+    };
+    const task = (leadId: string, completedAt: Date | null) => ({
+      organizationId: org,
+      leadId,
+      title: '架空の電話',
+      dueOn: '2026-11-02',
+      completedAt,
+    });
+    const forgotten = await insertLead();
+    const onlyDone = await insertLead();
+    const withTask = await insertLead();
+    const withMonth = await insertLead({ actBy: '2099-04-01' });
+    // A past month brings nobody back
+    const pastMonth = await insertLead({ actBy: '2020-04-01' });
+    await pg.insert(leadTasks).values([task(onlyDone, new Date()), task(withTask, null)]);
+
+    const result = await callers.member.leads.list({ organizationId: org, actTiming: 'none', limit: 100, offset: 0 });
+    const ids = result.items.map((lead: { id: string }) => lead.id);
+    expect(ids).toEqual(expect.arrayContaining([forgotten, onlyDone, pastMonth]));
+    expect(ids).not.toContain(withTask);
+    expect(ids).not.toContain(withMonth);
+  });
+
   it('stops the morning run when its time is up, leaving the rest for the next run', async () => {
+    const runAt = await emptyWindow();
+    // Two leads updated within the last day before the run, one more than a day before
+    await pg.insert(leads).values(
+      [HOUR, 2 * HOUR, 30 * HOUR].map((ago) => ({
+        organizationId: org,
+        email: `act-${unique()}@example.co.jp`,
+        updatedAt: before(runAt, ago),
+      }))
+    );
+    reportServerError.mockClear();
     let tick = 0;
-    // Each check of the clock moves it on by 6 s: the second lead is past the 10 s budget
-    const result = await recomputeRecentlyUpdated(pg, new Date(), { clock: () => (tick += 6000) });
-    expect(result.recomputed).toBe(1);
-    expect(result.pending).toBeGreaterThan(0);
+    // Each check of the clock moves it on by 6 s: the second lead is past the 10 s budget. It
+    // was updated within the last day, so no earlier run read it: that is reported
+    expect(
+      await recomputeRecentlyUpdated(pg, runAt, { clock: () => (tick += 6000) })
+    ).toEqual({ recomputed: 1, pending: 2, unseen: 1, failed: 0 });
+    expect(reportServerError).toHaveBeenCalledTimes(1);
+    expect(reportServerError).toHaveBeenCalledWith('cron/act-timing-time-limit', expect.any(Error));
+
+    // By 4 s: the third lead is past it. Left is only the update the previous run read while it
+    // was new: not reported
+    reportServerError.mockClear();
+    tick = 0;
+    expect(
+      await recomputeRecentlyUpdated(pg, runAt, { clock: () => (tick += 4000) })
+    ).toEqual({ recomputed: 2, pending: 1, unseen: 0, failed: 0 });
+    expect(reportServerError).not.toHaveBeenCalled();
+  });
+
+  it('goes on past a lead whose recompute fails, and reports it (#374)', async () => {
+    const runAt = await emptyWindow();
+    const inserted = await pg
+      .insert(leads)
+      .values(
+        [1, 2, 3].map((hours) => ({
+          organizationId: org,
+          email: `act-${unique()}@example.co.jp`,
+          updatedAt: before(runAt, hours * HOUR),
+        }))
+      )
+      .returning({ id: leads.id });
+    await pg.insert(diagnosticSubmissions).values(
+      inserted.map((lead) => ({
+        organizationId: org,
+        leadId: lead.id,
+        diagnosticKey: 'ax-migration',
+        diagnosticVersion: 3,
+        answers: { support_end: '1_3y' },
+        result: {},
+        createdAt: new Date('2026-10-16T00:00:00Z'),
+      }))
+    );
+    // The first write of the run fails: the newest lead's
+    let failNext = true;
+    const flaky = new Proxy(pg, {
+      get(target, prop, receiver) {
+        if (prop === 'update' && failNext) {
+          failNext = false;
+          return () => {
+            throw new Error('made-up failure');
+          };
+        }
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+    reportServerError.mockClear();
+    expect(await recomputeRecentlyUpdated(flaky, runAt)).toEqual({
+      recomputed: 2,
+      pending: 0,
+      unseen: 0,
+      failed: 1,
+    });
+    // The older ones were still recomputed
+    expect(await Promise.all(inserted.map((lead) => leadOf(lead.id)))).toEqual([
+      { actBy: null },
+      { actBy: '2027-10-01' },
+      { actBy: '2027-10-01' },
+    ]);
+    expect(reportServerError).toHaveBeenCalledTimes(1);
+    expect(reportServerError).toHaveBeenCalledWith('cron/act-timing-lead', expect.any(Error));
+  });
+
+  it('recomputes every lead updated in the window, past one page, each with its own settings (#374)', async () => {
+    // The run reads every organization's leads: these are dated in a window no other lead is in
+    const runAt = await emptyWindow();
+    const updatedAt = before(runAt, HOUR);
+    const olderAt = before(runAt, 30 * HOUR);
+    const created = await pg
+      .insert(organizations)
+      .values([
+        { name: '時期まとめてA', slug: `act-many-a-${unique()}` },
+        {
+          name: '時期まとめてB',
+          slug: `act-many-b-${unique()}`,
+          settings: { actTiming: { migrationMonths: 24, noticeMonths: 1 } },
+        },
+      ])
+      .returning({ id: organizations.id });
+    const [orgA, orgB] = created.map((row) => row.id);
+    try {
+      const total = RECOMPUTE_BATCH * 2 + 30;
+      // Updated more than a day before the run: the previous run read them while they were new
+      const older = 20;
+      // Updated at one time to the microsecond, across the pages
+      const shared = 120;
+      const inserted = await pg
+        .insert(leads)
+        .values(
+          Array.from({ length: total }, (_, i) => ({
+            organizationId: i % 3 === 0 ? orgB : orgA,
+            email: `act-many-${i}-${unique()}@example.co.jp`,
+          }))
+        )
+        .returning({ id: leads.id, organizationId: leads.organizationId });
+      await pg.insert(diagnosticSubmissions).values(
+        inserted.map((lead) => ({
+          organizationId: lead.organizationId,
+          leadId: lead.id,
+          diagnosticKey: 'ax-migration',
+          diagnosticVersion: 3,
+          answers: { support_end: '1_3y' },
+          result: {},
+          createdAt: new Date('2026-10-16T00:00:00Z'),
+        }))
+      );
+      const ids = inserted.map((lead) => lead.id);
+      // The shared ones straddle the second and third pages (their order rests on the id); the
+      // newest and the older ones are a microsecond apart, finer than a JS Date
+      await pg.execute(sql`
+        update leads set updated_at = case
+            when o.ord <= ${older} then ${olderAt.toISOString()}::timestamp + o.ord * interval '1 microsecond'
+            when o.ord <= ${older + shared} then ${updatedAt.toISOString()}::timestamp
+            else ${updatedAt.toISOString()}::timestamp + o.ord * interval '1 microsecond'
+          end
+        from (select id, row_number() over (order by id) as ord from leads where id in ${ids}) as o
+        where leads.id = o.id`);
+      // The order the run takes them in: newest update first, then the id
+      const newestFirst = (
+        await pg
+          .select({ id: leads.id })
+          .from(leads)
+          .where(inArray(leads.id, ids))
+          .orderBy(desc(leads.updatedAt), desc(leads.id))
+      ).map((row) => row.id);
+
+      // Cut short past the first page: the newest leads, and the count of those left, of them
+      // those updated within the last day
+      let tick = 0;
+      const cut = await recomputeRecentlyUpdated(pg, runAt, {
+        timeBudgetMs: RECOMPUTE_BATCH + 20,
+        clock: () => tick++,
+      });
+      expect(cut.recomputed).toBeGreaterThan(RECOMPUTE_BATCH);
+      expect(cut.recomputed).toBeLessThan(total - older);
+      expect(cut).toEqual({
+        recomputed: cut.recomputed,
+        pending: total - cut.recomputed,
+        unseen: total - older - cut.recomputed,
+        failed: 0,
+      });
+      const reached = await pg
+        .select({ id: leads.id })
+        .from(leads)
+        .where(and(inArray(leads.id, ids), isNotNull(leads.actBy)));
+      expect(new Set(reached.map((row) => row.id))).toEqual(new Set(newestFirst.slice(0, cut.recomputed)));
+
+      // With the time it needs: every one of them, none left
+      expect(await recomputeRecentlyUpdated(pg, runAt, { timeBudgetMs: 120_000 })).toEqual({
+        recomputed: total,
+        pending: 0,
+        unseen: 0,
+        failed: 0,
+      });
+      const rows = await pg
+        .select({ organizationId: leads.organizationId, actBy: leads.actBy })
+        .from(leads)
+        .where(inArray(leads.id, ids));
+      expect(rows).toHaveLength(total);
+      // 2026-10 + 24 months = 2028-10; A takes 12 months to migrate, B 24 (its own settings)
+      for (const row of rows) {
+        expect(row.actBy).toBe(row.organizationId === orgA ? '2027-10-01' : '2026-10-01');
+      }
+      const tasks = await pg
+        .select({ leadId: leadTasks.leadId, organizationId: leadTasks.organizationId })
+        .from(leadTasks)
+        .where(and(inArray(leadTasks.leadId, ids), eq(leadTasks.source, 'act_timing')));
+      expect(tasks).toHaveLength(total);
+      const orgOf = new Map(inserted.map((lead) => [lead.id, lead.organizationId]));
+      expect(tasks.every((task) => task.organizationId === orgOf.get(task.leadId))).toBe(true);
+    } finally {
+      await pg.delete(organizations).where(inArray(organizations.id, [orgA, orgB]));
+    }
   });
 
   it('lets owners and admins change the settings, recomputing the leads', async () => {
