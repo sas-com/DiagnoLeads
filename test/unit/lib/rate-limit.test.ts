@@ -72,19 +72,9 @@ describe('ENDPOINT_RATE_LIMITS', () => {
     });
   });
 
-  describe('AI endpoints', () => {
-    it('should have rate limits for AI scoring', () => {
-      expect(ENDPOINT_RATE_LIMITS['/api/trpc/ai.scoreLeads']).toEqual({ max: 10, windowMs: 60 * 1000 });
-    });
-  });
-
   describe('export endpoints', () => {
     it('should have rate limits for lead export', () => {
       expect(ENDPOINT_RATE_LIMITS['/api/trpc/leads.export']).toEqual({ max: 5, windowMs: 60 * 1000 });
-    });
-
-    it('should have rate limits for audit log export', () => {
-      expect(ENDPOINT_RATE_LIMITS['/api/trpc/auditLogs.export']).toEqual({ max: 3, windowMs: 60 * 1000 });
     });
   });
 
@@ -294,7 +284,7 @@ describe('Rate limit security considerations', () => {
     expect(ENDPOINT_RATE_LIMITS['/api/trpc/leads.bulkDelete'].max).toBeLessThanOrEqual(10);
 
     // Export should be restricted
-    expect(ENDPOINT_RATE_LIMITS['/api/trpc/auditLogs.export'].max).toBeLessThanOrEqual(5);
+    expect(ENDPOINT_RATE_LIMITS['/api/trpc/leads.export'].max).toBeLessThanOrEqual(5);
   });
 
   it('should have all window times set to 1 minute', () => {

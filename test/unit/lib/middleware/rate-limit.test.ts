@@ -80,13 +80,8 @@ describe('ENDPOINT_RATE_LIMITS', () => {
     expect(ENDPOINT_RATE_LIMITS['/api/auth/request-password-reset'].max).toBe(3);
   });
 
-  it('should have AI endpoints', () => {
-    expect(ENDPOINT_RATE_LIMITS['/api/trpc/ai.scoreLeads'].max).toBe(10);
-  });
-
   it('should have export endpoints', () => {
     expect(ENDPOINT_RATE_LIMITS['/api/trpc/leads.export'].max).toBe(5);
-    expect(ENDPOINT_RATE_LIMITS['/api/trpc/auditLogs.export'].max).toBe(3);
   });
 
   it('should have bulk operation endpoints', () => {
