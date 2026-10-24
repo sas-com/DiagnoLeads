@@ -24,9 +24,14 @@ const graph = buildImportGraph(ROOT);
 const violations = new Map(RULES.map((rule) => [rule.id, rule.check(graph)]));
 
 if (update) {
-  fs.writeFileSync(ALLOWLIST_FILE, formatAllowlist(violations));
+  fs.writeFileSync(ALLOWLIST_FILE, formatAllowlist(RULES, violations));
   console.log(`Wrote ${path.relative(ROOT, ALLOWLIST_FILE)}`);
-  process.exit(0);
+  const blocked = RULES.filter((rule) => rule.mode === 'error' && violations.get(rule.id)?.length);
+  for (const rule of blocked) {
+    console.log(`FAIL ${rule.id}: ${rule.description}. This rule has no allowlist. Fix:`);
+    for (const item of violations.get(rule.id) ?? []) console.log(`       ${item}`);
+  }
+  process.exit(blocked.length > 0 ? 1 : 0);
 }
 
 const allowlist = parseAllowlist(

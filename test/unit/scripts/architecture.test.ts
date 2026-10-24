@@ -15,7 +15,7 @@ import {
 import { RULES } from '@/scripts/architecture/rules';
 
 function graphOf(
-  files: Record<string, { useClient?: boolean }>,
+  files: Record<string, { useClient?: boolean; useServer?: boolean }>,
   edges: Array<[string, string, { typeOnly?: boolean; values?: string[] }?]>,
   externals: Array<[string, string]> = []
 ): ImportGraph {
@@ -23,7 +23,7 @@ function graphOf(
     files: new Map(
       Object.entries(files).map(([file, node]) => [
         file,
-        { path: file, useClient: node.useClient ?? false },
+        { path: file, useClient: node.useClient ?? false, useServer: node.useServer ?? false },
       ])
     ),
     edges: edges.map(
@@ -90,6 +90,10 @@ type T = typeof import('@/lib/t');
     expect(entry).toMatchObject({ spec: './polyfill', typeOnly: false, values: [] });
   });
 
+  it('reads a leading use server directive', () => {
+    expect(parseImports('a.ts', "'use server';\nimport x from 'x';").useServer).toBe(true);
+  });
+
   it('only treats a leading directive as use client', () => {
     expect(parseImports('a.ts', "import x from 'x';\n'use client';").useClient).toBe(false);
   });
@@ -134,8 +138,11 @@ describe('rules', () => {
       ['lib/features/deals/service.ts', 'lib/features/embed/router.ts'],
       ['lib/features/deals/service.ts', 'lib/features/leads/audit.ts'],
       ['lib/features/leads/api/router.ts', 'lib/features/leads/api/list-sql.ts'],
+      ['server/routers/_app.ts', 'lib/features/leads/api/router.ts'],
+      ['app/api/v2/leads/route.ts', 'lib/features/leads/api/list-sql.ts'],
     ]);
     expect(check('feature-imports-other-router', graph)).toEqual([
+      'app/api/v2/leads/route.ts -> lib/features/leads/api/list-sql.ts',
       'lib/features/deals/service.ts -> lib/features/embed/router.ts',
       'lib/features/deals/service.ts -> lib/features/leads/api/router.ts',
     ]);
@@ -172,6 +179,20 @@ describe('rules', () => {
     ]);
   });
 
+  it('client-imports-server-only: a use server file is a server action, not browser code', () => {
+    const graph = graphOf(
+      {
+        'components/features/leads/form.tsx': { useClient: true },
+        'app/[locale]/(dashboard)/leads/actions.ts': { useServer: true },
+      },
+      [
+        ['components/features/leads/form.tsx', 'app/[locale]/(dashboard)/leads/actions.ts'],
+        ['app/[locale]/(dashboard)/leads/actions.ts', 'lib/db/client.ts'],
+      ]
+    );
+    expect(check('client-imports-server-only', graph)).toEqual([]);
+  });
+
   it('public-bundle-imports-scoring: scoring stays out of what the public pages ship', () => {
     const evaluate = 'lib/features/diagnostics/ax-migration/evaluate.ts';
     const graph = graphOf(
@@ -186,8 +207,13 @@ describe('rules', () => {
         ['lib/features/diagnostics/engine.ts', evaluate],
         ['app/[locale]/(dashboard)/leads/page.tsx', 'components/features/leads/score.tsx'],
         ['components/features/leads/score.tsx', evaluate],
+        ['app/[locale]/page.tsx', 'components/features/ax-diagnosis/flow.tsx'],
       ]
     );
+    expect(check('public-bundle-imports-scoring', graph)).toEqual([
+      `lib/features/diagnostics/engine.ts -> ${evaluate}`,
+    ]);
+    graph.edges.splice(0, 2);
     expect(check('public-bundle-imports-scoring', graph)).toEqual([
       `lib/features/diagnostics/engine.ts -> ${evaluate}`,
     ]);
@@ -285,7 +311,7 @@ describe('rules for feature modules', () => {
 });
 
 describe('the allowlist', () => {
-  const rules = [{ id: 'r', description: 'rule' }];
+  const rules = [{ id: 'r', description: 'rule', mode: 'allowlist' as const }];
   const allow = (items: string[]) => new Map([['r', new Set(items)]]);
 
   it('fails on a new violation even when an old one was removed at the same time', () => {
@@ -300,8 +326,18 @@ describe('the allowlist', () => {
     expect(outcome.resolved).toEqual([]);
   });
 
+  it('never lets an error rule through, even when its violation is listed', () => {
+    const strict = [{ id: 's', description: 'strict', mode: 'error' as const }];
+    const [outcome] = compareWithAllowlist(strict, new Map([['s', ['x']]]), new Map([['s', new Set(['x'])]]));
+    expect(outcome.added).toEqual(['x']);
+    expect(outcome.resolved).toEqual(['x']);
+    expect(formatAllowlist(strict, new Map([['s', ['x']]]))).not.toContain('s x');
+  });
+
   it('round-trips one sorted line per violation, items may contain spaces', () => {
+    const modes = ['a', 'b', 'c'].map((id) => ({ id, description: id, mode: 'allowlist' as const }));
     const text = formatAllowlist(
+      modes,
       new Map([
         ['b', ['lib/x.ts -> lib/features/y/z.ts']],
         ['a', ['two', 'one']],

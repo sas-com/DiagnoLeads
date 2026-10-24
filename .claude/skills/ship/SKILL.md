@@ -7,7 +7,7 @@ description: 変更を PR にしてマージできる状態まで持っていく
 
 ## 1. コミットの前
 
-1. 全体の検証：`bun run test:run && bun run typecheck && bun run lint`。全部通るまでコミットしない
+1. 全体の検証：`bun run test:run && bun run typecheck && bun run lint && bun run arch:check`。全部通るまでコミットしない
 2. 差分を自分で読み直す（`git diff`）。次のものが紛れていないか確かめる
    - CI が落ちる原因
    - 範囲外の変更

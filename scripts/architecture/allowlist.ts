@@ -31,28 +31,35 @@ export function parseAllowlist(text: string): Allowlist {
   return allowlist;
 }
 
-/** The allowlist that matches the current code: one line per violation, sorted. */
-export function formatAllowlist(violations: Map<string, string[]>): string {
-  const lines = [...violations.entries()].flatMap(([id, items]) =>
-    items.map((item) => `${id} ${item}`)
-  );
+type RuleMode = { id: string; description: string; mode: 'error' | 'allowlist' };
+
+/**
+ * The allowlist that matches the current code: one line per violation, sorted. Only rules in
+ * allowlist mode are written, so --update cannot let a violation of an error rule through.
+ */
+export function formatAllowlist(rules: RuleMode[], violations: Map<string, string[]>): string {
+  const lines = rules
+    .filter((rule) => rule.mode === 'allowlist')
+    .flatMap((rule) => (violations.get(rule.id) ?? []).map((item) => `${rule.id} ${item}`));
   return `${HEADER}${lines.sort().join('\n')}\n`;
 }
 
 export function compareWithAllowlist(
-  rules: { id: string; description: string }[],
+  rules: RuleMode[],
   violations: Map<string, string[]>,
   allowlist: Allowlist
 ): RuleOutcome[] {
   return rules.map((rule) => {
     const current = violations.get(rule.id) ?? [];
-    const allowed = allowlist.get(rule.id) ?? new Set<string>();
+    // Lines for an error rule are never honoured; they show up as entries to remove
+    const listed = allowlist.get(rule.id) ?? new Set<string>();
+    const allowed = rule.mode === 'allowlist' ? listed : new Set<string>();
     const found = new Set(current);
     return {
       id: rule.id,
       description: rule.description,
       added: current.filter((item) => !allowed.has(item)),
-      resolved: [...allowed].filter((item) => !found.has(item)).sort(),
+      resolved: [...listed].filter((item) => !allowed.has(item) || !found.has(item)).sort(),
       total: current.length,
     };
   });

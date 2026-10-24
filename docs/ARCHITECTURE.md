@@ -29,26 +29,35 @@
 
 ## 2. 機械で守るルール（`bun run arch:check`）
 
-`scripts/check-architecture.ts` が、TypeScript の構文木から app・lib・server・components・hooks・context・cms の import を読む（`import type` は区別する）。ルールが入る前からあった違反は `scripts/architecture/allowlist.txt` に1件ずつ載せてある。載っていない違反があると失敗する。載っているのに消えた違反があっても失敗する（`--update` で行を消す）。
+`scripts/check-architecture.ts` が、TypeScript の構文木から app・lib・server・components・hooks・context・cms の import を読む（`import type` は区別する）。ルールは2種類ある。
 
-| ルール | 内容 | 許可リスト（2026-10-24） |
+- 例外なし：違反が1件でもあれば失敗する。許可リストには載せられない（`--update` でも書き出さない）
+- 許可リスト：ルールが入る前からあった違反を `scripts/architecture/allowlist.txt` に1件ずつ載せてある。載っていない違反があると失敗する。載っているのに消えた違反があっても失敗する（`--update` で行を消す）
+
+| ルール | 内容 | 種類と許可リストの件数（2026-10-24） |
 |---|---|---|
-| `lib-imports-ui` | lib は app・components・hooks・context を import しない | 0 |
-| `lib-imports-server-values` | lib から server（`AppRouter`）は型だけ | 0 |
-| `infra-imports-features` | 基盤は lib/features を import しない | 8 |
-| `feature-imports-other-router` | 他の機能のルーター（`api/`・`router.ts`）を import しない | 0 |
-| `client-imports-server-only` | ブラウザで動くコードから、サーバー専用のファイル（`lib/db`、`server/`、`lib/trpc/{init,context}`、`lib/auth/config`、機能の `api/`・`router.ts`・`service.ts`）とパッケージ（`postgres`・`drizzle-orm`・`payload`・`resend`・`@anthropic-ai/sdk`・`openai`・`next/headers`・`node:*` など）に届かない | 0 |
-| `public-bundle-imports-scoring` | 公開ページのクライアントに、採点（`diagnostics/ax-migration/{evaluate,mql,config}`・`diagnosis-builder/evaluate`）を入れない | 0 |
-| `ui-kit-imports-app-code` | `components/ui` は `components/ui` と `lib/utils.ts` だけを読む | 0 |
-| `payload-outside-cms` | Payload を読むのは CMS の置き場所だけ | 0 |
-| `file-cycles` | ファイル単位の import の循環を作らない | 0 |
-| `features-in-cycles` | 互いに依存し合う機能（間接も含む）を増やさない | 20 |
-| `cross-feature-internal` | 他の機能から読むのは公開面（`types/**`・`types.ts`・`service.ts`。ほかに `email/index.ts`・`respondent-email/index.ts`）だけ。項目は読まれる側のファイル | 43 |
-| `features-use-global-db` | 機能のコードはグローバルの `db` を使わず、`ctx.db` か引数の executor を使う（RLS で接続を差し替えるため） | 12 |
-| `feature-index-files` | lib/features に `index.ts`（barrel）を作らない | 19 |
-| `unregistered-routers` | 機能のルーターはすべて `server/routers/_app.ts` に登録する | 2 |
+| `lib-imports-ui` | lib は app・components・hooks・context を import しない | 例外なし |
+| `lib-imports-server-values` | lib から server（`AppRouter`）は型だけ | 例外なし |
+| `infra-imports-features` | 基盤は lib/features を import しない | 許可リスト 8（うち3件は `lib/db/schema.ts` が jsonb の型を機能から読む型だけの import。2件は `types/`、1件は `diagnosis-builder/definition.ts`） |
+| `feature-imports-other-router` | 機能のルーター（`api/`・`router.ts`）を読むのは、同じ機能と `server/routers/` だけ | 例外なし |
+| `client-imports-server-only` | ブラウザで動くコードから、サーバー専用のファイル（`lib/db`、`server/`、`lib/trpc/{init,context}`、`lib/auth/config`、機能の `api/`・`router.ts`・`service.ts`）とパッケージ（`postgres`・`drizzle-orm`・`payload`・`resend`・`@anthropic-ai/sdk`・`openai`・`next/headers`・`node:*` など）に届かない | 例外なし |
+| `public-bundle-imports-scoring` | 公開ページのクライアントに、採点（`diagnostics/ax-migration/{evaluate,mql,config}`・`diagnosis-builder/evaluate`）を入れない | 例外なし |
+| `ui-kit-imports-app-code` | `components/ui` は `components/ui` と `lib/utils.ts` だけを読む | 例外なし |
+| `payload-outside-cms` | Payload を読むのは CMS の置き場所だけ | 例外なし |
+| `file-cycles` | ファイル単位の import の循環を作らない | 例外なし |
+| `features-in-cycles` | 互いに依存し合う機能（間接も含む）を増やさない | 許可リスト 20 |
+| `cross-feature-internal` | 他の機能から読むのは公開面（`types/**`・`types.ts`・`service.ts`。ほかに `email/index.ts`・`respondent-email/index.ts`）だけ。項目は読まれる側のファイル | 許可リスト 43 |
+| `features-use-global-db` | 機能のコードはグローバルの `db` を使わず、`ctx.db` か引数の executor を使う（RLS で接続を差し替えるため） | 許可リスト 12 |
+| `feature-index-files` | lib/features に `index.ts`（barrel）を作らない | 許可リスト 19 |
+| `unregistered-routers` | 機能のルーターはすべて `server/routers/_app.ts` に登録する | 許可リスト 2 |
 
 許可リストの数は減らす方向にだけ動かす。
+
+検査の限界：
+- `cross-feature-internal` の項目は読まれる側のファイルなので、許可リストにある内部のファイルを別の機能が新しく読んでも検出しない（許可リストの43ファイルは、事実上の公開面になっている）。新しく読むときは、相手の `service.ts` か `types/` に出すことを先に考える
+- `features-in-cycles` は、循環に入っている機能の名前の一覧で比べる。今ある2つの循環（18機能と2機能）がつながっても検出しない
+- 公開ページの採点のルールが見るのは、公開ページ（`(ax)`・`(public)`・`[...rest]`・トップと共通のレイアウト）から `'use client'` の境界を越えて値でたどれるファイル。ブラウザのコードの判定では、`'use server'` のファイル（サーバーアクション）とその先はたどらない
+- `unregistered-routers` は、`api/` の下の `*-router.ts` をほかのルーターに組み込む形（_app.ts に直接登録しない）も未登録として数える。その形を使うときは、許可リストに足して PR に理由を書く
 
 ## 3. 機能1つの型
 
@@ -89,7 +98,7 @@ components/features/<feature>/
 | ファイル | 足すもの | 注意 |
 |---|---|---|
 | `server/routers/_app.ts` | import 1行とキー1行 | 登録しないと外から呼べない（`unregistered-routers` で落ちる） |
-| `lib/db/schema.ts` と `drizzle/` | 表の定義と `bun run db:generate` の出力 | 新しい表は末尾に区切りのコメントを付けて足す。main を取り込んで番号がぶつかったら、自分の SQL・snapshot・ジャーナルの行を消して生成し直す（`test/unit/lib/db/migrations-journal.test.ts` が検出する） |
+| `lib/db/schema.ts` と `drizzle/` | 表の定義と `bun run db:generate` の出力 | 新しい表は関連する表の近くに足す（末尾に足すと並行の PR とぶつかる。今までテキストの衝突が0件だったのは、追加の位置が散っていたから）。main を取り込んで番号がぶつかったら、自分の SQL・snapshot・ジャーナルの行を消して生成し直す。手順は `.claude/rules/db-schema.md`。番号の重複と `when` の逆転は `test/unit/lib/db/migrations-journal.test.ts`（#453 で追加）が検出する |
 | `locales/{ja,en}/common.json` | 新しい名前空間 | 名前空間ごとのファイルに分ける仕組みは #450 で入れる予定 |
 | `components/features/leads/detail/lead-detail-view.tsx` とそのテスト | リード詳細のカード | カードの列の切り出しは #450 で行う予定 |
 | `components/layout/AppSidebar.tsx`・`lib/routes/admin-pages.ts` | メニューとページの接頭辞 | 足し忘れはテストで落ちる |
@@ -106,9 +115,12 @@ components/features/<feature>/
 2. 他の機能の内部のファイルを読んでいるなら、相手の `service.ts` か `types/` から使う。なければ、相手の機能の中で `service.ts` か `types/` に出す
 3. 基盤から機能を読んでいるなら、その部品を基盤（`lib/`）に置くべきか考える
 4. ブラウザのコードからサーバー専用のファイルに届いているなら、値の import を `import type` にするか、サーバー側（Server Component・tRPC）で処理する
-5. それでも例外にするなら、`bun run arch:check --update` で許可リストに足し、PR に理由を1行書く。公開の直前など急ぐときもこれで通る。直すのは後の PR でよい
+5. 許可リストのルールで、それでも例外にするなら、`bun run arch:check --update` で許可リストに足し、PR に理由を1行書く。公開の直前など急ぐときもこれで通る。直すのは後の PR でよい。例外なしのルール（ブラウザからサーバー専用のコード、公開ページの採点など）は許可リストに載せられないので、必ず直す
 
 違反を減らしたときも `--update` を流し、許可リストから消えた行を同じ PR に入れる。マージの前に main を取り込み、もう一度流す（並行の PR が同じ行を消している・足していることがある）。
+
+- `allowlist.txt` が衝突したら（隣り合う行を別々の PR が消すと起きる）、main の側を取り、`--update` を流し直す
+- マージの順番しだいで main が落ちることがある。例：PR A が最後の importer を消して行を削り、その前の main から分かれた PR B が同じファイルを新しく読む。main で落ちたら、最初に気づいた人が `--update` と理由1行の PR を出す
 
 ## 6. ファイルを移す・分ける PR の条件
 

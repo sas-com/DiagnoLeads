@@ -16,6 +16,7 @@ export type ImportKind = 'static' | 'reexport' | 'dynamic' | 'require' | 'import
 export interface FileNode {
   path: string;
   useClient: boolean;
+  useServer: boolean;
 }
 
 export interface Edge {
@@ -112,7 +113,7 @@ function exportValues(node: ts.ExportDeclaration): string[] {
 export function parseImports(
   file: string,
   text: string
-): { useClient: boolean; imports: RawImport[] } {
+): { useClient: boolean; useServer: boolean; imports: RawImport[] } {
   const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, scriptKind(file));
   const lineOf = (node: ts.Node): number =>
     sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
@@ -129,9 +130,11 @@ export function parseImports(
   };
 
   let useClient = false;
+  let useServer = false;
   for (const statement of sf.statements) {
     if (!ts.isExpressionStatement(statement) || !ts.isStringLiteral(statement.expression)) break;
     if (statement.expression.text === 'use client') useClient = true;
+    if (statement.expression.text === 'use server') useServer = true;
   }
 
   const visit = (node: ts.Node): void => {
@@ -183,7 +186,7 @@ export function parseImports(
     ts.forEachChild(node, visit);
   };
   visit(sf);
-  return { useClient, imports };
+  return { useClient, useServer, imports };
 }
 
 function isFile(candidate: string): boolean {
@@ -232,11 +235,11 @@ export function buildImportGraph(root: string): ImportGraph {
   const unresolved: Unresolved[] = [];
 
   for (const file of listSourceFiles(root)) {
-    const { useClient, imports } = parseImports(
+    const { useClient, useServer, imports } = parseImports(
       file,
       fs.readFileSync(path.join(root, file), 'utf8')
     );
-    files.set(file, { path: file, useClient });
+    files.set(file, { path: file, useClient, useServer });
     for (const entry of imports) {
       if (entry.spec === null) {
         unresolved.push({ from: file, spec: entry.text, line: entry.line });

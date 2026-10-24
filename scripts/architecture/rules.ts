@@ -3,6 +3,11 @@ import type { Edge, ImportGraph } from './graph';
 export interface Rule {
   id: string;
   description: string;
+  /**
+   * error: no violation may exist, the allowlist cannot hold one.
+   * allowlist: violations from before the rule are listed in allowlist.txt and only go down.
+   */
+  mode: 'error' | 'allowlist';
   /** Stable keys of the violations (no line numbers, so unrelated edits do not change them). */
   check: (graph: ImportGraph) => string[];
 }
@@ -42,7 +47,15 @@ const SCORING_FILES = new Set([
   'lib/features/diagnosis-builder/evaluate.ts',
 ]);
 
-const PUBLIC_PAGE_DIRS = ['app/[locale]/(ax)/', 'app/[locale]/(public)/'];
+/** Pages a respondent can open without signing in, and the layout they share. */
+const PUBLIC_PAGE_DIRS = [
+  'app/[locale]/(ax)/',
+  'app/[locale]/(public)/',
+  'app/[locale]/[...rest]/',
+];
+const PUBLIC_PAGE_FILES = new Set(['app/[locale]/page.tsx', 'app/[locale]/layout.tsx']);
+const isPublicPage = (file: string): boolean =>
+  startsWithAny(file, PUBLIC_PAGE_DIRS) || PUBLIC_PAGE_FILES.has(file);
 
 const startsWithAny = (file: string, prefixes: string[]): boolean =>
   prefixes.some((prefix) => file.startsWith(prefix));
@@ -82,7 +95,10 @@ function outgoing(edges: Edge[]): Map<string, Edge[]> {
   return map;
 }
 
-/** Files that run in the browser: 'use client' files and everything they import by value. */
+/**
+ * Files that run in the browser: 'use client' files and everything they import by value. A
+ * 'use server' file is a server action reference, so the walk does not go past it.
+ */
 export function clientFiles(graph: ImportGraph, roots?: string[]): Set<string> {
   const next = outgoing(valueEdges(graph));
   const seen = new Set<string>();
@@ -91,6 +107,7 @@ export function clientFiles(graph: ImportGraph, roots?: string[]): Set<string> {
   while (queue.length > 0) {
     const file = queue.shift() as string;
     for (const edge of next.get(file) ?? []) {
+      if (graph.files.get(edge.to)?.useServer) continue;
       if (!seen.has(edge.to)) {
         seen.add(edge.to);
         queue.push(edge.to);
@@ -106,7 +123,7 @@ function publicClientRoots(graph: ImportGraph): string[] {
   const seen = new Set<string>();
   const roots = new Set<string>();
   const sources = new Set([...graph.files.keys(), ...graph.edges.map((edge) => edge.from)]);
-  const queue = [...sources].filter((file) => startsWithAny(file, PUBLIC_PAGE_DIRS));
+  const queue = [...sources].filter(isPublicPage);
   for (const file of queue) seen.add(file);
   while (queue.length > 0) {
     const file = queue.shift() as string;
@@ -167,6 +184,7 @@ export const RULES: Rule[] = [
   {
     id: 'lib-imports-ui',
     description: 'lib/ does not import app/, components/, hooks/ or context/',
+    mode: 'error',
     check: (graph) =>
       unique(
         graph.edges
@@ -177,6 +195,7 @@ export const RULES: Rule[] = [
   {
     id: 'lib-imports-server-values',
     description: 'lib/ imports server/ (the tRPC app router) only as a type',
+    mode: 'error',
     check: (graph) =>
       unique(
         valueEdges(graph)
@@ -187,6 +206,7 @@ export const RULES: Rule[] = [
   {
     id: 'infra-imports-features',
     description: 'lib/ outside lib/features does not import lib/features',
+    mode: 'allowlist',
     check: (graph) =>
       unique(
         graph.edges.filter((edge) => isInfra(edge.from) && featureOf(edge.to) !== null).map(edgeKey)
@@ -194,21 +214,25 @@ export const RULES: Rule[] = [
   },
   {
     id: 'feature-imports-other-router',
-    description: "a feature does not import another feature's router (api/ or router.ts)",
+    description:
+      "only server/routers and the feature itself import a feature's router (api/ or router.ts)",
+    mode: 'error',
     check: (graph) =>
       unique(
         graph.edges
-          .filter((edge) => {
-            const from = featureOf(edge.from);
-            const to = featureOf(edge.to);
-            return from !== null && to !== null && from !== to && isRouter(edge.to);
-          })
+          .filter(
+            (edge) =>
+              isRouter(edge.to) &&
+              !edge.from.startsWith('server/routers/') &&
+              featureOf(edge.from) !== featureOf(edge.to)
+          )
           .map(edgeKey)
       ),
   },
   {
     id: 'client-imports-server-only',
     description: 'browser code does not import server-only modules (DB, routers, auth config)',
+    mode: 'error',
     check: (graph) => {
       const client = clientFiles(graph);
       const internal = valueEdges(graph)
@@ -229,6 +253,7 @@ export const RULES: Rule[] = [
   {
     id: 'public-bundle-imports-scoring',
     description: 'the public diagnosis pages do not ship the scoring code to the browser',
+    mode: 'error',
     check: (graph) => {
       const client = clientFiles(graph, publicClientRoots(graph));
       return unique(
@@ -241,6 +266,7 @@ export const RULES: Rule[] = [
   {
     id: 'ui-kit-imports-app-code',
     description: 'components/ui imports only components/ui and lib/utils.ts',
+    mode: 'error',
     check: (graph) =>
       unique(
         graph.edges
@@ -256,6 +282,7 @@ export const RULES: Rule[] = [
   {
     id: 'payload-outside-cms',
     description: 'only cms/, app/(payload)/, lib/cms/ and payload.config.ts import Payload',
+    mode: 'error',
     check: (graph) => {
       const allowed = (file: string): boolean =>
         startsWithAny(file, CMS_DIRS) || file === 'payload.config.ts';
@@ -275,6 +302,7 @@ export const RULES: Rule[] = [
   {
     id: 'file-cycles',
     description: 'no import cycles between files',
+    mode: 'error',
     check: (graph) => {
       const next = new Map<string, Set<string>>();
       for (const edge of graph.edges) {
@@ -288,6 +316,7 @@ export const RULES: Rule[] = [
   {
     id: 'features-in-cycles',
     description: 'features that import each other (directly or through others)',
+    mode: 'allowlist',
     check: (graph) => {
       const next = new Map<string, Set<string>>();
       for (const edge of graph.edges) {
@@ -305,6 +334,7 @@ export const RULES: Rule[] = [
     id: 'cross-feature-internal',
     description:
       "a feature imports another feature's types/ or service.ts, not its other files (listed: the file read)",
+    mode: 'allowlist',
     check: (graph) =>
       unique(
         graph.edges
@@ -320,6 +350,7 @@ export const RULES: Rule[] = [
     id: 'features-use-global-db',
     description:
       'feature code takes the db as an argument (ctx.db or an executor), not the global one',
+    mode: 'allowlist',
     check: (graph) =>
       unique(
         graph.edges
@@ -335,6 +366,7 @@ export const RULES: Rule[] = [
   {
     id: 'feature-index-files',
     description: 'no index.ts barrels in lib/features (other features import types/ or service.ts)',
+    mode: 'allowlist',
     check: (graph) =>
       unique(
         [...graph.files.keys()].filter((file) => /^lib\/features\/[^/]+\/index\.tsx?$/.test(file))
@@ -343,6 +375,7 @@ export const RULES: Rule[] = [
   {
     id: 'unregistered-routers',
     description: 'every feature router is registered in server/routers/_app.ts',
+    mode: 'allowlist',
     check: (graph) => {
       const registered = new Set(
         graph.edges.filter((edge) => edge.from === 'server/routers/_app.ts').map((edge) => edge.to)
