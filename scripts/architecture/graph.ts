@@ -5,10 +5,23 @@ import ts from 'typescript';
 /** Production code only: tests, scripts and tool configs are not part of the app's layers. */
 export const SCAN_DIRS = ['app', 'lib', 'server', 'components', 'hooks', 'context', 'cms'];
 export const SCAN_ROOT_FILES = ['proxy.ts', 'payload.config.ts'];
+/** Tests are only checked for paths that exist (#468), not for the layers. */
+export const TEST_DIR = 'test';
+/** vitest.config.ts resolves '@payload-config' in tests to this mock. */
+const TEST_PAYLOAD_CONFIG = 'test/mocks/payload-config.ts';
+/** vi functions whose first argument is a module path. */
+const VI_PATH_FUNCTIONS = new Set([
+  'mock',
+  'doMock',
+  'unmock',
+  'doUnmock',
+  'importActual',
+  'importMock',
+]);
 
 const SOURCE_EXT = /\.(ts|tsx|js|jsx|mjs)$/;
 const SKIP_DIRS = new Set(['node_modules', '.next', 'dist', 'coverage']);
-const RESOLVE_EXTS = ['.ts', '.tsx', '.d.ts', '.js', '.jsx', '.mjs'];
+const RESOLVE_EXTS = ['.ts', '.tsx', '.d.ts', '.js', '.jsx', '.mjs', '.json'];
 const INDEX_FILES = ['index.ts', 'index.tsx', 'index.js'];
 
 export type ImportKind = 'static' | 'reexport' | 'dynamic' | 'require' | 'importType';
@@ -45,11 +58,23 @@ export interface Unresolved {
   line: number;
 }
 
+export interface TestPath {
+  from: string;
+  spec: string;
+  /** import: import, export from, import() and require. mock: given to vi.mock and the like. */
+  kind: 'import' | 'mock';
+  line: number;
+  /** The file the path resolves to, null when nothing exists there. */
+  resolved: string | null;
+}
+
 export interface ImportGraph {
   files: Map<string, FileNode>;
   edges: Edge[];
   externals: ExternalImport[];
   unresolved: Unresolved[];
+  /** Paths in test/ that point into the repository (package names are left out). */
+  testPaths: TestPath[];
 }
 
 export interface RawImport {
@@ -109,15 +134,30 @@ function exportValues(node: ts.ExportDeclaration): string[] {
     .map((element) => (element.propertyName ?? element.name).text);
 }
 
-/** Every module specifier in a file, with the names it brings in as values. */
+const isViPathCall = (callee: ts.Expression): boolean =>
+  ts.isPropertyAccessExpression(callee) &&
+  ts.isIdentifier(callee.expression) &&
+  (callee.expression.text === 'vi' || callee.expression.text === 'vitest') &&
+  VI_PATH_FUNCTIONS.has(callee.name.text);
+
+/**
+ * Every module specifier in a file, with the names it brings in as values, and the paths given
+ * to vi.mock and the like (only tests have them).
+ */
 export function parseImports(
   file: string,
   text: string
-): { useClient: boolean; useServer: boolean; imports: RawImport[] } {
+): {
+  useClient: boolean;
+  useServer: boolean;
+  imports: RawImport[];
+  mocks: Array<{ spec: string; line: number }>;
+} {
   const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, scriptKind(file));
   const lineOf = (node: ts.Node): number =>
     sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
   const imports: RawImport[] = [];
+  const mocks: Array<{ spec: string; line: number }> = [];
   const add = (
     spec: string | null,
     text: string,
@@ -167,12 +207,17 @@ export function parseImports(
       }
     } else if (ts.isCallExpression(node)) {
       const [argument] = node.arguments;
+      const literal =
+        argument !== undefined &&
+        (ts.isStringLiteral(argument) || ts.isNoSubstitutionTemplateLiteral(argument));
+      // vi.mock(import('./x')) is already an import; a computed path cannot be checked
+      if (literal && isViPathCall(node.expression)) {
+        mocks.push({ spec: argument.text, line: lineOf(argument) });
+      }
       const isDynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword;
       const isRequire = ts.isIdentifier(node.expression) && node.expression.text === 'require';
       if ((isDynamicImport || isRequire) && argument) {
         const kind: ImportKind = isDynamicImport ? 'dynamic' : 'require';
-        const literal =
-          ts.isStringLiteral(argument) || ts.isNoSubstitutionTemplateLiteral(argument);
         add(
           literal ? argument.text : null,
           literal ? argument.text : argument.getText(sf),
@@ -186,7 +231,21 @@ export function parseImports(
     ts.forEachChild(node, visit);
   };
   visit(sf);
-  return { useClient, useServer, imports };
+  return { useClient, useServer, imports, mocks };
+}
+
+/** Module paths a test file names: its imports and the paths given to vi.mock and the like. */
+export function parseTestPaths(
+  file: string,
+  text: string
+): Array<Pick<TestPath, 'spec' | 'kind' | 'line'>> {
+  const { imports, mocks } = parseImports(file, text);
+  return [
+    ...imports.flatMap(({ spec, line }) =>
+      spec === null ? [] : [{ spec, kind: 'import' as const, line }]
+    ),
+    ...mocks.map(({ spec, line }) => ({ spec, kind: 'mock' as const, line })),
+  ];
 }
 
 function isFile(candidate: string): boolean {
@@ -201,6 +260,9 @@ function resolveFile(root: string, base: string): string | null {
   const toRel = (abs: string): string => path.relative(root, abs).split(path.sep).join('/');
   if (isFile(base)) return toRel(base);
   for (const ext of RESOLVE_EXTS) if (isFile(base + ext)) return toRel(base + ext);
+  // TypeScript and Vite let './x.js' point at x.ts
+  const jsStem = base.match(/^(.*)\.(m?js|jsx)$/)?.[1];
+  for (const ext of ['.ts', '.tsx']) if (jsStem && isFile(jsStem + ext)) return toRel(jsStem + ext);
   for (const index of INDEX_FILES) {
     const candidate = path.join(base, index);
     if (isFile(candidate)) return toRel(candidate);
@@ -217,12 +279,22 @@ export function packageName(spec: string): string {
 
 type Resolution = { internal: string } | { external: string } | { missing: true };
 
-/** Follows tsconfig's paths ('@/*' and '@payload-config') and relative specifiers. */
-export function resolveSpecifier(root: string, from: string, spec: string): Resolution {
+/**
+ * Follows tsconfig's paths ('@/*' and '@payload-config') and relative specifiers. Tests pass the
+ * file vitest maps '@payload-config' to.
+ */
+export function resolveSpecifier(
+  root: string,
+  from: string,
+  spec: string,
+  payloadConfig = 'payload.config'
+): Resolution {
+  // Vite's suffixes ('./logo.svg?raw') are not part of the file name
+  const file = spec.replace(/[?#].*$/, '');
   let base: string;
-  if (spec === '@payload-config') base = path.join(root, 'payload.config');
-  else if (spec.startsWith('@/')) base = path.join(root, spec.slice(2));
-  else if (spec.startsWith('.')) base = path.join(root, path.dirname(from), spec);
+  if (spec === '@payload-config') base = path.join(root, payloadConfig);
+  else if (spec.startsWith('@/')) base = path.join(root, file.slice(2));
+  else if (spec.startsWith('.')) base = path.join(root, path.dirname(from), file);
   else return { external: packageName(spec) };
   const resolved = resolveFile(root, base);
   return resolved ? { internal: resolved } : { missing: true };
@@ -256,5 +328,17 @@ export function buildImportGraph(root: string): ImportGraph {
       }
     }
   }
-  return { files, edges, externals, unresolved };
+
+  const testPaths: TestPath[] = [];
+  const testFiles: string[] = [];
+  walk(root, TEST_DIR, testFiles);
+  for (const file of testFiles.sort()) {
+    for (const entry of parseTestPaths(file, fs.readFileSync(path.join(root, file), 'utf8'))) {
+      const resolution = resolveSpecifier(root, file, entry.spec, TEST_PAYLOAD_CONFIG);
+      if ('external' in resolution) continue;
+      const resolved = 'internal' in resolution ? resolution.internal : null;
+      testPaths.push({ from: file, ...entry, resolved });
+    }
+  }
+  return { files, edges, externals, unresolved, testPaths };
 }

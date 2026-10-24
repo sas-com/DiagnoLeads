@@ -5,8 +5,9 @@ import { Lato, Noto_Sans_JP } from 'next/font/google';
  * next/font serves them from this app, which the production CSP (font-src 'self') requires.
  */
 const notoSansJp = Noto_Sans_JP({
-  // Only the weights in use: every weight adds a set of unicode-range files to the CSS
-  weight: ['400', '500', '700'],
+  // The variable font (no weight): one @font-face per unicode-range file instead of one per
+  // weight. Google serves the same variable files either way, so the glyphs and downloads stay
+  // the same while the render-blocking CSS shrinks from 372 rules to 124 (#510)
   subsets: ['latin'],
   display: 'swap',
   // Japanese glyphs come in many unicode-range files; let the browser fetch what it needs
