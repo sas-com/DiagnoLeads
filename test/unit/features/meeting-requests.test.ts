@@ -12,6 +12,8 @@ import {
   sortCandidates,
 } from '@/lib/features/meeting-requests/candidates';
 import {
+  MEETING_PREFERENCES_WINDOW_MS,
+  acceptMeetingPreferences,
   buildConfirmationEmail,
   buildPreferencesNotice,
 } from '@/lib/features/meeting-requests/service';
@@ -21,7 +23,7 @@ import {
   MEETING_TOPICS,
   meetingPreferencesSchema,
 } from '@/lib/features/meeting-requests/types/schemas';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 describe('candidate dates', () => {
   it('runs from tomorrow up to 60 days ahead', () => {
@@ -249,5 +251,44 @@ describe('texts', () => {
         confirmedByName: null,
       }).html
     ).toContain('&lt;b&gt;x&lt;/b&gt;');
+  });
+});
+
+describe('acceptMeetingPreferences', () => {
+  it('takes no preferences more than a day after the consultation request (#241)', async () => {
+    // Refused before anything is read or written
+    const untouched = new Proxy(
+      {},
+      {
+        get() {
+          throw new Error('the database must not be used');
+        },
+      }
+    ) as Parameters<typeof acceptMeetingPreferences>[0];
+    const requestedAt = new Date('2026-10-16T01:00:00Z');
+    const later = vi.fn();
+    const status = await acceptMeetingPreferences(
+      untouched,
+      {
+        organizationId: 'org-1',
+        leadId: 'lead-1',
+        submissionId: '33333333-3333-4333-8333-333333333333',
+        identityVerified: true,
+        requestedAt,
+        preferences: {
+          candidates: [{ date: '2026-10-21', time: '10:00' }],
+          attendeeRoles: [],
+          meetingFormat: null,
+          topics: [],
+          topicNote: null,
+        },
+      },
+      later,
+      new Date(requestedAt.getTime() + MEETING_PREFERENCES_WINDOW_MS + 1)
+    );
+    // The form then says sales will ask about the dates, and does not offer to send again
+    expect(status).toBe('unavailable');
+    expect(later).not.toHaveBeenCalled();
+    expect(MEETING_PREFERENCES_WINDOW_MS).toBe(24 * 60 * 60 * 1000);
   });
 });

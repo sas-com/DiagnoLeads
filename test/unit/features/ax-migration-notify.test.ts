@@ -30,11 +30,24 @@ vi.mock('@/lib/features/email', () => ({
   sendEmail: (...args: unknown[]) => sendEmailMock(...args),
   isEmailConfigured: () => isEmailConfiguredMock(),
 }));
+// Who hears about a consultation request: the intake members (窓口, #135) when the organization
+// has any. Most tests use an organization without them.
+const recipientsMock = vi.fn();
+const inAppIntakeMock = vi.fn();
+vi.mock('@/lib/features/leads/assignment', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/features/leads/assignment')>()),
+  consultationRecipients: (...args: unknown[]) => recipientsMock(...args),
+}));
+vi.mock('@/lib/features/leads/assignment-notify', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/features/leads/assignment-notify')>()),
+  notifyUsersInApp: (...args: unknown[]) => inAppIntakeMock(...args),
+}));
 
 const { notifyAxMigrationSubmission, buildSalesMessage, buildSalesEmail } = await import(
   '@/lib/features/diagnostics/ax-migration/notify'
 );
 const { evaluateAxMigration } = await import('@/lib/features/diagnostics/ax-migration/evaluate');
+const { splitAddresses } = await import('@/lib/features/leads/assignment');
 
 /** Target industry and system, nothing that shows interest: 適合 only */
 const result = evaluateAxMigration({ ...as400Answers, role: 'it_staff' });
@@ -63,6 +76,14 @@ describe('notifyAxMigrationSubmission', () => {
     quotaMock.mockResolvedValue({ allowed: true, count: 1, retryAfterSeconds: 0 });
     env.AX_DIAGNOSIS_SALES_EMAIL = 'sales1@example.jp, sales2@example.jp';
     effectMock.mockResolvedValue(null);
+    // No intake members: every member in-app, the sales addresses by email
+    recipientsMock.mockImplementation(
+      async (_db: unknown, _organizationId: string, salesEmail: string | undefined) => ({
+        intakeUserIds: [],
+        emails: splitAddresses(salesEmail),
+      })
+    );
+    inAppIntakeMock.mockResolvedValue(undefined);
   });
 
   it('tells sales which conditions the Access path does not require (#292)', () => {
@@ -430,6 +451,106 @@ describe('notifyAxMigrationSubmission', () => {
     expect(sendEmailMock.mock.calls[0][0].subject).toBe('【AX診断】通知を一時停止しました');
     expect(webhookMock).not.toHaveBeenCalled();
     warnSpy.mockRestore();
+  });
+
+  describe('with intake members (窓口, #135)', () => {
+    const intake = {
+      intakeUserIds: ['user-intake-1', 'user-intake-2'],
+      emails: ['intake1@example.jp', 'intake2@example.jp'],
+    };
+    beforeEach(() => {
+      recipientsMock.mockResolvedValue(intake);
+    });
+
+    /** The request reached the intake members only: in-app and, when `email`, by email */
+    const expectIntakeOnly = (email: boolean) => {
+      expect(inAppIntakeMock).toHaveBeenCalledTimes(1);
+      expect(inAppIntakeMock).toHaveBeenCalledWith(
+        intake.intakeUserIds,
+        'org-1',
+        'consultation_requested',
+        expect.stringMatching(/^【相談申込・関心あり（MQL）】テスト製作所/),
+        expect.stringContaining('相談申込がありました'),
+        expect.objectContaining({ leadId: 'lead-1', consultationRequested: true })
+      );
+      // Not every member, and not the sales addresses
+      expect(inAppMock).not.toHaveBeenCalledWith(
+        'org-1',
+        'consultation_requested',
+        expect.anything(),
+        expect.anything(),
+        expect.anything()
+      );
+      const requestEmails = sendEmailMock.mock.calls.filter(([mail]) =>
+        String(mail.subject).startsWith('【相談申込')
+      );
+      expect(requestEmails).toEqual(
+        email ? [[expect.objectContaining({ to: intake.emails })]] : []
+      );
+    };
+
+    it('sends a consultation request to the intake members only, in-app and by email', async () => {
+      await notifyAxMigrationSubmission({ ...base, consultationRequested: true });
+      expect(recipientsMock).toHaveBeenCalledWith(
+        {},
+        'org-1',
+        'sales1@example.jp, sales2@example.jp'
+      );
+      expectIntakeOnly(true);
+      expect(inAppMock).not.toHaveBeenCalled();
+      expect(webhookMock).toHaveBeenCalled();
+    });
+
+    it('still reaches them past the hourly notification limit, without webhooks (#232, #241)', async () => {
+      overLimit('ax-notify-org', 150);
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      await notifyAxMigrationSubmission({ ...base, consultationRequested: true });
+      expect(quotaMock).toHaveBeenCalledWith(
+        {},
+        expect.objectContaining({ name: 'ax-notify-consultation-org' }),
+        'org-1'
+      );
+      expect(webhookMock).not.toHaveBeenCalled();
+      expectIntakeOnly(true);
+      warnSpy.mockRestore();
+    });
+
+    it('keeps them in the app past the email cap (#241)', async () => {
+      overLimit('ax-sales-email-org-hour', 15);
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      await notifyAxMigrationSubmission({ ...base, consultationRequested: true });
+      expectIntakeOnly(false);
+      warnSpy.mockRestore();
+    });
+
+    it('reaches no one past both hourly limits, without reading them (#232)', async () => {
+      quotaMock.mockImplementation(async (_db: unknown, rule: { name: string }) =>
+        rule.name === 'ax-notify-org' || rule.name === 'ax-notify-consultation-org'
+          ? { allowed: false, count: 400, retryAfterSeconds: 3600 }
+          : { allowed: true, count: 1, retryAfterSeconds: 0 }
+      );
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      await notifyAxMigrationSubmission({ ...base, consultationRequested: true });
+      expect(recipientsMock).not.toHaveBeenCalled();
+      expect(inAppIntakeMock).not.toHaveBeenCalled();
+      expect(inAppMock).not.toHaveBeenCalled();
+      expect(sendEmailMock).not.toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
+    it('leaves a new lead without a consultation request to every member', async () => {
+      await notifyAxMigrationSubmission(base);
+      expect(recipientsMock).not.toHaveBeenCalled();
+      expect(inAppIntakeMock).not.toHaveBeenCalled();
+      expect(inAppMock).toHaveBeenCalledWith(
+        'org-1',
+        'lead_created',
+        expect.any(String),
+        expect.any(String),
+        expect.any(Object)
+      );
+      expect(sendEmailMock).not.toHaveBeenCalled();
+    });
   });
 
   it('still notifies when the hourly limit cannot be checked', async () => {
