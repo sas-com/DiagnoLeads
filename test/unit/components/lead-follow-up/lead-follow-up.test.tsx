@@ -423,4 +423,61 @@ describe('DueTasksSection', () => {
     expect(within(rows[1]).queryByText('自分')).not.toBeInTheDocument();
     expect(within(rows[1]).queryByText('持ち帰り')).not.toBeInTheDocument();
   });
+
+  it('opens the rest from "ほかN件" and folds it again (#431)', async () => {
+    const due = (count: number) =>
+      Array.from({ length: count }, (_, index) => ({
+        ...task({ id: `t${index}`, title: `タスク${index + 1}` }),
+        lead: { name: '山田 花子', company: '架空商事' },
+        mine: true,
+      }));
+    mocks.due = {
+      today: '2026-10-16',
+      canEdit: true,
+      scope: 'mine',
+      total: 22,
+      counts: { mine: 22, all: 22 },
+      items: due(20),
+    };
+    const user = userEvent.setup();
+    wrap(<DueTasksSection organizationId={ORG_ID} />);
+    expect(screen.getAllByRole('listitem')).toHaveLength(20);
+    const more = screen.getByRole('button', { name: 'ほか2件' });
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+    expect(more).toHaveAttribute('aria-controls', screen.getByRole('list').id);
+
+    // Opening asks the server for the whole list
+    mocks.due = { ...(mocks.due as object), items: due(22) };
+    await user.click(more);
+    expect(mocks.dueInputs.at(-1)).toEqual({ organizationId: ORG_ID, scope: 'mine', limit: 200 });
+    expect(screen.getAllByRole('listitem')).toHaveLength(22);
+    expect(screen.getByText('タスク22')).toBeInTheDocument();
+    const less = screen.getByRole('button', { name: '折りたたむ' });
+    expect(less).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.queryByText('ほか2件')).not.toBeInTheDocument();
+
+    // Folding shows the first 20 again, even from the longer list
+    await user.click(less);
+    expect(mocks.dueInputs.at(-1)).toEqual({ organizationId: ORG_ID, scope: 'mine' });
+    expect(screen.getAllByRole('listitem')).toHaveLength(20);
+    expect(screen.getByRole('button', { name: 'ほか2件' })).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('folds the list again when the scope changes (#431)', async () => {
+    mocks.due = {
+      today: '2026-10-16',
+      canEdit: true,
+      scope: 'mine',
+      total: 2,
+      counts: { mine: 2, all: 2 },
+      items: [{ ...task(), lead: { name: '山田 花子', company: null } }],
+    };
+    const user = userEvent.setup();
+    wrap(<DueTasksSection organizationId={ORG_ID} />);
+    await user.click(screen.getByRole('button', { name: 'ほか1件' }));
+    expect(mocks.dueInputs.at(-1)).toMatchObject({ limit: 200 });
+
+    await user.click(screen.getByRole('radio', { name: '全員（2）' }));
+    expect(mocks.dueInputs.at(-1)).toEqual({ organizationId: ORG_ID, scope: 'all' });
+  });
 });
