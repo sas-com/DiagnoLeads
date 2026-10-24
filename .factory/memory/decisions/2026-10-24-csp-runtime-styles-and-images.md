@@ -14,12 +14,14 @@ paths: ["lib/middleware/csp.ts", "lib/middleware/security-headers.ts", "lib/midd
 - **決定**:
   - `X-XSS-Protection` は `0`（OWASP の推奨）。proxy のヘッダーは `lib/middleware/security-headers.ts` にまとめ、vercel.json の値と同じであることをテストで確かめる
   - 本番の `img-src` は `'self' blob: data:`。GA4 が有効なときだけ、Google の CSP ガイドの画像のホスト（`GA_IMG_SOURCES`）を足す。`https:` は戻さない
+    - GA4 が有効なときは、データの持ち出しを防ぐ壁にはならない。Google のホストには誰でも置ける（script.google.com の Apps Script、自分の GA プロパティの collect）。それでも `https:` よりは狭い
   - 実行時に `<style>` を足すライブラリには、ページの nonce を渡す。nonce はページのスクリプトから読む（`lib/csp/document-nonce.ts`）
     - ApexCharts：`components/charts/apex-chart.tsx` の `ApexChart` を使う（`chart.nonce`）
     - Radix の Select：`components/ui/select.tsx` の Viewport に `nonce`
     - Radix のスクロール固定（Dialog・Sheet・Select・DropdownMenu。react-remove-scroll → get-nonce）：`DashboardShell` で `__webpack_nonce__` を設定する
   - proxy の matcher は、public/ のフォルダー（`images/`・`fonts/`）を名前で外す。拡張子では外さない。`/admin` はその区切りだけを外す
   - proxy は、ファイルに見えるパス（言語のページと API を除く）の Cache-Control を上書きしない。Next.js に任せる
+    - `public/fonts/` の PDF 用フォント（約2.5MB）は、これまで proxy が1年の `immutable` を付けていた。今は Next.js の既定（`public, max-age=0`。毎回再検証し、変わっていなければ 304）になる。ファイル名にハッシュが無いので、差し替えたときに古いものが1年残るよりよい
   - CSP 違反の報告先と `/admin` のヘッダーは #525 に切り出した
 - **理由**:
   - アプリは外部のホストの画像を出していない。外部の画像は、訪問者の追跡やページからのデータの持ち出しに使える
@@ -32,6 +34,8 @@ paths: ["lib/middleware/csp.ts", "lib/middleware/security-headers.ts", "lib/midd
   - ApexCharts を `injectStyleSheet: false` にして CSS を取り込む：app/globals.css を並行する PR が変えている。ApexCharts を上げるたびに CSS を追う必要がある
   - `window.Apex` で全体に nonce を設定する：設定がグローバルに隠れ、グラフの部品を読んでも分からない
   - 自前の `/api/csp-report` をこの PR で作る：無認証の公開 POST で、回数制限とログの設計が要る（#525）
+- **未決**:
+  - 本番の GA4 プロパティで Google シグナルが有効か（オーナーが GA の管理者に確かめる）。無効なら、`GA_IMG_SOURCES` と `GA_CONNECT_SOURCES` から `*.g.doubleclick.net`・`*.google.com`・`*.google.co.jp` を外せる。有効なら、外部送信規律の公表とプライバシーポリシーの記載が合っているかを法務が確かめる
 - **ルール**:
   - 外部のホストの画像を出すときは、そのホストを `lib/middleware/csp.ts` に足し、`test/unit/lib/middleware/csp.test.ts` を変える
   - グラフは `ApexChart` を通して描く。`react-apexcharts` を直接 import しない

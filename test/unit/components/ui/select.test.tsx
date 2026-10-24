@@ -2,7 +2,7 @@
  * Select Component Tests
  */
 
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import {
   Select,
@@ -300,6 +300,11 @@ describe('Select accessibility', () => {
 });
 
 describe('Select under the CSP', () => {
+  // Removed even when the test fails, so later tests see no nonce
+  afterEach(() => {
+    for (const script of document.querySelectorAll('script[nonce]')) script.remove();
+  });
+
   it('gives the <style> of the open list the page’s nonce (#317)', () => {
     const script = document.createElement('script');
     script.setAttribute('nonce', 'abc123');
@@ -320,7 +325,5 @@ describe('Select under the CSP', () => {
     );
     expect(styles.length).toBeGreaterThan(0);
     for (const style of styles) expect(style.getAttribute('nonce')).toBe('abc123');
-
-    script.remove();
   });
 });

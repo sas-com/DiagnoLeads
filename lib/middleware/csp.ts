@@ -10,7 +10,9 @@ import { GA_CONNECT_SOURCES, GA_IMG_SOURCES, GA_SCRIPT_HOST } from '@/lib/analyt
  * - img-src: the app's own images (public/, next/image), images made in the page (blob:, data:,
  *   such as the QR code of a referral link) and, with GA4 on, its hosts. No other host: the app
  *   shows no image from elsewhere, and an image from another host can track visitors or carry
- *   data out of the page
+ *   data out of the page. With GA4 on this is no wall against carrying data out: anyone can
+ *   serve from a Google host (Apps Script on script.google.com, the hit endpoint of their own
+ *   GA property). It is still narrower than https:
  * - connect-src: only with GA4 on (its hit endpoints); otherwise default-src 'self' applies
  *   (gtag.js itself is added by the page's script, which 'strict-dynamic' allows)
  * - frame-src: the Cloudflare Turnstile check on the public diagnosis (its script is added by

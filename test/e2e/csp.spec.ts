@@ -1,4 +1,4 @@
-import { type Page, expect, test } from '@playwright/test';
+import { type Page, type Response, expect, test } from '@playwright/test';
 import { TEST_USERS, setupAuthenticatedTest } from './helpers/auth';
 
 /**
@@ -26,6 +26,14 @@ async function watchViolations(page: Page): Promise<string[]> {
   return violations;
 }
 
+/** No header means no violation either, so check that the proxy sent the strict policy */
+function expectStrictPolicy(response: Response | null): void {
+  if (!process.env.E2E_USE_BUILD) return;
+  const policy = response?.headers()['content-security-policy'] ?? '';
+  expect(policy).toContain("'nonce-");
+  expect(policy).toContain("'strict-dynamic'");
+}
+
 test.describe('Content Security Policy', () => {
   for (const path of [
     '/ja/ax-migration',
@@ -45,13 +53,7 @@ test.describe('Content Security Policy', () => {
     test(`${path} runs without a violation @smoke`, async ({ page }) => {
       const violations = await watchViolations(page);
 
-      const response = await page.goto(path);
-      // No header means no violation either, so check that the proxy sent the strict policy
-      if (process.env.E2E_USE_BUILD) {
-        const policy = response?.headers()['content-security-policy'] ?? '';
-        expect(policy).toContain("'nonce-");
-        expect(policy).toContain("'strict-dynamic'");
-      }
+      expectStrictPolicy(await page.goto(path));
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
       // Let late scripts and styles (fonts, the diagnosis, lazy chunks) settle
       await page.waitForLoadState('networkidle');
@@ -67,7 +69,7 @@ test.describe('Content Security Policy on the admin screens', () => {
     await setupAuthenticatedTest(page, TEST_USERS.owner);
     const violations = await watchViolations(page);
 
-    await page.goto('/ja/analytics');
+    expectStrictPolicy(await page.goto('/ja/analytics'));
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     // ApexCharts adds its stylesheet when it draws the first chart
     await expect(page.locator('.apexcharts-canvas').first()).toBeVisible();
@@ -78,7 +80,7 @@ test.describe('Content Security Policy on the admin screens', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByRole('listbox')).toBeHidden();
 
-    await page.goto('/ja/leads');
+    expectStrictPolicy(await page.goto('/ja/leads'));
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     // A modal dialog locks the page's scroll with a <style> element (react-remove-scroll)
     await page.getByRole('button', { name: '新規リード追加' }).click();
