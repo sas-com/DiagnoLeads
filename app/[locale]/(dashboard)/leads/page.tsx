@@ -176,6 +176,7 @@ function LeadsPageContent() {
   const {
     data: leadsData,
     isLoading,
+    isError: listFailed,
     refetch: refetchList,
   } = useListLeads(listQuery.listInput(organizationId, preferences.pageSize), {
     keepPrevious: true,
@@ -432,6 +433,9 @@ function LeadsPageContent() {
         }
         hasFilters={listQuery.hasFilters}
         onClearFilters={listQuery.clearFilters}
+        // A failed request is not "no leads yet" (#431)
+        loadFailed={listFailed}
+        onCreate={access.canCreate ? () => setCreateDialogOpen(true) : undefined}
         onExport={organizationId ? leadExport.exportLeads : undefined}
         exporting={leadExport.isExporting}
         toolbar={(actions) => (

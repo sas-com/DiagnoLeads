@@ -24,6 +24,8 @@ export const LEAD_TASKS_MAX_PER_LEAD = 200;
 export const RECENT_CONTACTS_LIMIT = 5;
 /** Due next actions listed on the dashboard */
 export const DUE_TASKS_SHOWN = 20;
+/** The most the dashboard lists when its "N more" is opened (#431) */
+export const DUE_TASKS_MAX = 200;
 
 /** 'meeting_request': the first meeting confirmed from the respondent's preferred dates (#155) */
 /** 'act_timing': contact again before "when to act" (#151) */
@@ -128,7 +130,12 @@ export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
 export const deleteTaskSchema = z.object({ organizationId, id }).strict();
 
 export const dueTasksSchema = z
-  .object({ organizationId, scope: z.enum(DUE_TASK_SCOPES).default('mine') })
+  .object({
+    organizationId,
+    scope: z.enum(DUE_TASK_SCOPES).default('mine'),
+    /** How many to list: DUE_TASKS_SHOWN when left out */
+    limit: z.number().int().min(1).max(DUE_TASKS_MAX).optional(),
+  })
   .strict();
 
 export interface ContactActor {

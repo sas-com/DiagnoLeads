@@ -1,5 +1,6 @@
 'use client';
 
+import { InlineLoadError } from '@/components/common/inline-load-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -57,7 +58,8 @@ export function LeadPrepCard({ organizationId, leadId }: LeadPrepCardProps) {
     onError: () => toast.error(t('saveError')),
   });
 
-  if (query.isError) return null;
+  // A failed request shows an error in the card (#431); only "not allowed" hides it
+  if (query.error?.data?.code === 'FORBIDDEN') return null;
   const data = query.data;
   const card = data?.card ?? null;
   const editing = form !== null;
@@ -102,7 +104,9 @@ export function LeadPrepCard({ organizationId, leadId }: LeadPrepCardProps) {
         )}
       </div>
 
-      {!data ? (
+      {!data && query.isError ? (
+        <InlineLoadError onRetry={() => void query.refetch()} />
+      ) : !data ? (
         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" />
       ) : editing && form ? (
         <form
