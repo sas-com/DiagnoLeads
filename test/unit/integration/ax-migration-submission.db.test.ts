@@ -142,6 +142,13 @@ describe.skipIf(!url)('AX migration submission (PostgreSQL)', () => {
       expect(lead?.responses).toMatchObject({
         axMigration: { mql: { level: 'interest', signals: ['consultation'] } },
       });
+      // The preferences sent from the result screen are timed from the answer's request (#241)
+      const preferencesCall = await requestAxMigrationConsultation(
+        db,
+        outcome.submissionId,
+        new Date(now.getTime() + 60_000)
+      );
+      expect(preferencesCall).toMatchObject({ ok: true, alreadyRequested: true, requestedAt: now });
     });
 
     it('turns a fitting lead into 関心あり on a later consultation request, and records it on the submission', async () => {
@@ -149,7 +156,8 @@ describe.skipIf(!url)('AX migration submission (PostgreSQL)', () => {
       if (!outcome.ok) throw new Error('submission failed');
       const later = new Date(now.getTime() + 60_000);
       const request = await requestAxMigrationConsultation(db, outcome.submissionId, later);
-      expect(request).toMatchObject({ ok: true, alreadyRequested: false });
+      // The preferences sent after it are timed from the request (#241)
+      expect(request).toMatchObject({ ok: true, alreadyRequested: false, requestedAt: later });
 
       const lead = await pg.query.leads.findFirst({ where: eq(leads.id, outcome.leadId) });
       expect(lead).toMatchObject({ conversionPoint: 'consultation', mqlQualifiedAt: later });
@@ -447,7 +455,8 @@ describe.skipIf(!url)('AX migration submission (PostgreSQL)', () => {
 
     const late = new Date(now.getTime() + RESULT_SCREEN_WINDOW_MS + 1);
     const result = await requestAxMigrationConsultation(db, outcome.submissionId, late);
-    expect(result).toMatchObject({ ok: true, alreadyRequested: true });
+    // With the time of the request made in time: the preferences close a day after it (#241)
+    expect(result).toMatchObject({ ok: true, alreadyRequested: true, requestedAt: now });
   });
 
   it('returns not_found for an unknown submission', async () => {

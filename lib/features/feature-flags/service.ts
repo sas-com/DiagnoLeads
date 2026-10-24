@@ -283,8 +283,6 @@ export const PREDEFINED_FLAGS = {
   ADVANCED_FILTERS: 'advanced_filters',
 
   // Integration Features
-  SLACK_INTEGRATION: 'slack_integration',
-  ZAPIER_INTEGRATION: 'zapier_integration',
   CRM_SYNC: 'crm_sync',
 
   // Experimental Features
