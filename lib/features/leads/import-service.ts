@@ -6,7 +6,7 @@
 import * as XLSX from 'xlsx';
 import { z } from 'zod';
 import { leadStatusEnum, normalizeLeadStatus } from './types/pipeline';
-import { leadTextSchema } from './types/schemas';
+import { LEAD_BULK_CREATE_MAX, leadTextSchema } from './types/schemas';
 
 /**
  * Imported lead row schema. The text limits are those of leads.bulkCreate (#575): a row over
@@ -247,6 +247,44 @@ export function processImport(
     totalRows: rows.length,
     successCount,
     errorCount,
+    results,
+  };
+}
+
+/**
+ * The valid rows of an import, in the file's order, in the parts one leads.bulkCreate takes
+ * (LEAD_BULK_CREATE_MAX each, #604). The screen sends them one after another.
+ */
+export function importBatches(
+  summary: ImportSummary,
+  size: number = LEAD_BULK_CREATE_MAX
+): ImportLeadRow[][] {
+  const rows = summary.results.flatMap((result) =>
+    result.success && result.data ? [result.data] : []
+  );
+  const batches: ImportLeadRow[][] = [];
+  for (let start = 0; start < rows.length; start += size) {
+    batches.push(rows.slice(start, start + size));
+  }
+  return batches;
+}
+
+/**
+ * The import left once its first `imported` valid rows are created (the parts sent before one
+ * failed, #604): those rows are dropped and the rest kept, the rows with an error too, so that
+ * importing again does not create a lead twice
+ */
+export function withoutImportedRows(summary: ImportSummary, imported: number): ImportSummary {
+  let skipped = 0;
+  const results = summary.results.filter((result) => {
+    if (!(result.success && result.data) || skipped >= imported) return true;
+    skipped++;
+    return false;
+  });
+  return {
+    totalRows: results.length,
+    successCount: summary.successCount - skipped,
+    errorCount: summary.errorCount,
     results,
   };
 }

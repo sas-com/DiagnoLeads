@@ -1,6 +1,5 @@
 'use client';
 
-import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import type { SemanticSearchResult } from '@/lib/features/ai';
 import { ExternalLink, Loader2, Users } from 'lucide-react';
@@ -69,11 +68,6 @@ export function SimilarLeadsCard({
                 <div className="font-medium text-gray-900 truncate">{lead.name || lead.email}</div>
                 {lead.company && (
                   <div className="text-sm text-gray-500 truncate mt-1">{lead.company}</div>
-                )}
-                {lead.industry && (
-                  <Badge variant="secondary" className="mt-2">
-                    {lead.industry}
-                  </Badge>
                 )}
               </div>
 

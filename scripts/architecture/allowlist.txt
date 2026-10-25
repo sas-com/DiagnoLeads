@@ -17,49 +17,85 @@ ax-boundary lib/features/leads/diagnosis-view.ts -> lib/features/diagnostics/ax-
 ax-boundary lib/features/leads/diagnosis-view.ts -> lib/features/diagnostics/ax-migration/mql.ts
 ax-boundary lib/features/leads/mql-level.ts -> lib/features/diagnostics/ax-migration/mql.ts
 ax-boundary lib/features/objection-card/service.ts -> lib/features/diagnostics/ax-migration/definition.ts
-cross-feature-internal lib/features/agency-contracts/report.ts
-cross-feature-internal lib/features/agency-handovers/columns.ts
-cross-feature-internal lib/features/analytics/dashboard.ts
-cross-feature-internal lib/features/ax-playbook/access.ts
-cross-feature-internal lib/features/ax-site/columns/index.ts
-cross-feature-internal lib/features/ax-site/contact.ts
-cross-feature-internal lib/features/ax-site/cross-links.ts
-cross-feature-internal lib/features/ax-site/sender-identity.ts
-cross-feature-internal lib/features/diagnosis-builder/definition.ts
-cross-feature-internal lib/features/diagnosis-builder/hearing-mapping.ts
-cross-feature-internal lib/features/diagnosis-builder/public-diagnosis.ts
-cross-feature-internal lib/features/diagnostics/ax-migration/access-path.ts
-cross-feature-internal lib/features/diagnostics/ax-migration/access-support.ts
-cross-feature-internal lib/features/diagnostics/ax-migration/company-size.ts
-cross-feature-internal lib/features/diagnostics/ax-migration/definition.ts
-cross-feature-internal lib/features/diagnostics/ax-migration/evaluate.ts
-cross-feature-internal lib/features/diagnostics/ax-migration/lead-submissions.ts
-cross-feature-internal lib/features/diagnostics/ax-migration/mql.ts
-cross-feature-internal lib/features/diagnostics/ax-migration/submission-service.ts
-cross-feature-internal lib/features/diagnostics/engine.ts
-cross-feature-internal lib/features/diagnostics/lead-upsert.ts
-cross-feature-internal lib/features/diagnostics/organization.ts
-cross-feature-internal lib/features/diagnostics/rate-limit.ts
-cross-feature-internal lib/features/diagnostics/request-guard.ts
-cross-feature-internal lib/features/diagnostics/tracking.ts
-cross-feature-internal lib/features/distribution/qr-code.ts
-cross-feature-internal lib/features/email/email-service.ts
-cross-feature-internal lib/features/lead-handoff/handoff.ts
-cross-feature-internal lib/features/lead-handoff/notify.ts
-cross-feature-internal lib/features/lead-hearings/catalog.ts
-cross-feature-internal lib/features/leads/assignment-notify.ts
-cross-feature-internal lib/features/leads/assignment.ts
-cross-feature-internal lib/features/leads/audit.ts
-cross-feature-internal lib/features/leads/diagnosis-view.ts
-cross-feature-internal lib/features/notifications/notification-service.ts
-cross-feature-internal lib/features/prospects/hearing-prefill.ts
-cross-feature-internal lib/features/reports/pdf-export-service.ts
-cross-feature-internal lib/features/reports/pdf-font.server.ts
-cross-feature-internal lib/features/reports/pdf-labels.messages.ts
-cross-feature-internal lib/features/respondent-email/normalize.ts
-cross-feature-internal lib/features/respondent-email/send.ts
-cross-feature-internal lib/features/webhooks/services/lead-events.ts
-cross-feature-internal lib/features/webhooks/services/webhook-service.ts
+cross-feature-internal act-timing -> lib/features/diagnostics/ax-migration/lead-submissions.ts
+cross-feature-internal agency-links -> lib/features/diagnostics/organization.ts
+cross-feature-internal ai -> lib/features/diagnostics/rate-limit.ts
+cross-feature-internal ai -> lib/features/webhooks/services/lead-events.ts
+cross-feature-internal appointment-reviews -> lib/features/agency-contracts/report.ts
+cross-feature-internal appointment-reviews -> lib/features/notifications/notification-service.ts
+cross-feature-internal ax-playbook -> lib/features/diagnostics/ax-migration/company-size.ts
+cross-feature-internal ax-site -> lib/features/diagnostics/ax-migration/access-support.ts
+cross-feature-internal ax-site -> lib/features/diagnostics/engine.ts
+cross-feature-internal challenge-guide -> lib/features/ax-playbook/access.ts
+cross-feature-internal challenge-guide -> lib/features/leads/diagnosis-view.ts
+cross-feature-internal delivery-reviews -> lib/features/diagnostics/ax-migration/evaluate.ts
+cross-feature-internal delivery-reviews -> lib/features/diagnostics/ax-migration/lead-submissions.ts
+cross-feature-internal diagnosis-builder -> lib/features/diagnostics/engine.ts
+cross-feature-internal diagnosis-builder -> lib/features/diagnostics/lead-upsert.ts
+cross-feature-internal diagnosis-builder -> lib/features/diagnostics/rate-limit.ts
+cross-feature-internal diagnosis-builder -> lib/features/diagnostics/tracking.ts
+cross-feature-internal diagnosis-builder -> lib/features/lead-hearings/catalog.ts
+cross-feature-internal diagnosis-builder -> lib/features/leads/assignment-notify.ts
+cross-feature-internal diagnosis-builder -> lib/features/notifications/notification-service.ts
+cross-feature-internal diagnosis-builder -> lib/features/webhooks/services/lead-events.ts
+cross-feature-internal diagnosis-builder -> lib/features/webhooks/services/webhook-service.ts
+cross-feature-internal diagnostics -> lib/features/ax-site/contact.ts
+cross-feature-internal diagnostics -> lib/features/ax-site/cross-links.ts
+cross-feature-internal diagnostics -> lib/features/ax-site/sender-identity.ts
+cross-feature-internal diagnostics -> lib/features/leads/assignment-notify.ts
+cross-feature-internal diagnostics -> lib/features/leads/assignment.ts
+cross-feature-internal diagnostics -> lib/features/notifications/notification-service.ts
+cross-feature-internal diagnostics -> lib/features/webhooks/services/lead-events.ts
+cross-feature-internal diagnostics -> lib/features/webhooks/services/webhook-service.ts
+cross-feature-internal info-offers -> lib/features/diagnostics/ax-migration/definition.ts
+cross-feature-internal info-offers -> lib/features/diagnostics/ax-migration/submission-service.ts
+cross-feature-internal lead-activity -> lib/features/diagnosis-builder/definition.ts
+cross-feature-internal lead-activity -> lib/features/diagnosis-builder/public-diagnosis.ts
+cross-feature-internal lead-activity -> lib/features/diagnostics/ax-migration/definition.ts
+cross-feature-internal lead-activity -> lib/features/leads/audit.ts
+cross-feature-internal lead-activity -> lib/features/respondent-email/normalize.ts
+cross-feature-internal lead-activity -> lib/features/respondent-email/send.ts
+cross-feature-internal lead-follow-up -> lib/features/notifications/notification-service.ts
+cross-feature-internal lead-handoff -> lib/features/leads/assignment.ts
+cross-feature-internal lead-hearings -> lib/features/diagnosis-builder/definition.ts
+cross-feature-internal lead-hearings -> lib/features/diagnosis-builder/hearing-mapping.ts
+cross-feature-internal lead-hearings -> lib/features/diagnosis-builder/public-diagnosis.ts
+cross-feature-internal lead-hearings -> lib/features/diagnostics/ax-migration/definition.ts
+cross-feature-internal lead-hearings -> lib/features/prospects/hearing-prefill.ts
+cross-feature-internal lead-prep -> lib/features/diagnostics/ax-migration/lead-submissions.ts
+cross-feature-internal lead-prep -> lib/features/leads/diagnosis-view.ts
+cross-feature-internal leads -> lib/features/analytics/dashboard.ts
+cross-feature-internal leads -> lib/features/diagnostics/ax-migration/access-path.ts
+cross-feature-internal leads -> lib/features/diagnostics/ax-migration/mql.ts
+cross-feature-internal leads -> lib/features/lead-handoff/handoff.ts
+cross-feature-internal leads -> lib/features/lead-handoff/notify.ts
+cross-feature-internal leads -> lib/features/notifications/notification-service.ts
+cross-feature-internal leads -> lib/features/reports/pdf-export-service.ts
+cross-feature-internal leads -> lib/features/reports/pdf-font.server.ts
+cross-feature-internal leads -> lib/features/reports/pdf-labels.messages.ts
+cross-feature-internal leads -> lib/features/webhooks/services/lead-events.ts
+cross-feature-internal meeting-requests -> lib/features/leads/assignment-notify.ts
+cross-feature-internal meeting-requests -> lib/features/leads/assignment.ts
+cross-feature-internal meeting-requests -> lib/features/notifications/notification-service.ts
+cross-feature-internal members -> lib/features/diagnostics/rate-limit.ts
+cross-feature-internal objection-card -> lib/features/ax-playbook/access.ts
+cross-feature-internal objection-card -> lib/features/diagnostics/ax-migration/definition.ts
+cross-feature-internal objection-card -> lib/features/leads/diagnosis-view.ts
+cross-feature-internal prospects -> lib/features/agency-handovers/columns.ts
+cross-feature-internal prospects -> lib/features/distribution/qr-code.ts
+cross-feature-internal prospects -> lib/features/leads/assignment.ts
+cross-feature-internal prospects -> lib/features/leads/audit.ts
+cross-feature-internal prospects -> lib/features/notifications/notification-service.ts
+cross-feature-internal prospects -> lib/features/webhooks/services/lead-events.ts
+cross-feature-internal respondent-email -> lib/features/diagnostics/rate-limit.ts
+cross-feature-internal respondent-email -> lib/features/email/email-service.ts
+cross-feature-internal site-visits -> lib/features/ax-site/columns/index.ts
+cross-feature-internal site-visits -> lib/features/ax-site/cross-links.ts
+cross-feature-internal site-visits -> lib/features/diagnosis-builder/public-diagnosis.ts
+cross-feature-internal site-visits -> lib/features/diagnostics/organization.ts
+cross-feature-internal site-visits -> lib/features/diagnostics/rate-limit.ts
+cross-feature-internal site-visits -> lib/features/diagnostics/request-guard.ts
+cross-feature-internal webhooks -> lib/features/diagnostics/rate-limit.ts
 feature-index-files lib/features/act-timing/index.ts
 feature-index-files lib/features/agency-contracts/index.ts
 feature-index-files lib/features/agency-links/index.ts
@@ -98,7 +134,6 @@ features-in-cycles prospects
 features-in-cycles reports
 features-in-cycles respondent-email
 features-in-cycles webhooks
-features-use-global-db lib/features/ai/search/semantic.ts
 features-use-global-db lib/features/audit-logs/api/router.ts
 features-use-global-db lib/features/audit-logs/service.ts
 features-use-global-db lib/features/challenge-guide/service.ts

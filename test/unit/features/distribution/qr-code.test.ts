@@ -15,7 +15,12 @@ vi.mock('qrcode', () => ({
   },
 }));
 
-import { generateQRCode, buildTrackingUrl, generateShortCode } from '@/lib/features/distribution/qr-code';
+import {
+  generateQRCode,
+  buildTrackingUrl,
+  campaignTrackingUrl,
+  generateShortCode,
+} from '@/lib/features/distribution/qr-code';
 import QRCode from 'qrcode';
 
 describe('generateQRCode', () => {
@@ -131,12 +136,13 @@ describe('generateQRCode', () => {
 
 describe('buildTrackingUrl', () => {
   const baseUrl = 'https://app.example.com';
-  const assessmentId = 'assessment-123';
+  const assessmentId = 'AbCd2345';
 
   it('should build basic tracking URL with default UTM params', () => {
     const result = buildTrackingUrl(baseUrl, assessmentId);
 
-    expect(result).toContain('https://app.example.com/d/assessment-123');
+    // The QR entry of the short code, not /d/ (the public page of builder diagnoses, #503)
+    expect(result).toContain('https://app.example.com/q/AbCd2345?');
     expect(result).toContain('utm_source=qrcode');
     expect(result).toContain('utm_medium=offline');
   });
@@ -208,7 +214,13 @@ describe('buildTrackingUrl', () => {
     const url = new URL(result);
 
     expect(url.hostname).toBe('app.example.com');
-    expect(url.pathname).toBe('/d/assessment-123');
+    expect(url.pathname).toBe('/q/AbCd2345');
+  });
+
+  it('keeps the case of the short code and one slash after the base URL', () => {
+    expect(new URL(buildTrackingUrl('https://app.example.com/', 'AbCd2345')).pathname).toBe(
+      '/q/AbCd2345'
+    );
   });
 
   it('should URL encode special characters', () => {
@@ -222,6 +234,31 @@ describe('buildTrackingUrl', () => {
     // Special characters should be encoded
     expect(result).toContain('utm_campaign=test+campaign');
     expect(result).toContain('name=%E7%94%B0%E4%B8%AD%E5%A4%AA%E9%83%8E');
+  });
+});
+
+describe('campaignTrackingUrl', () => {
+  const campaign = {
+    shortCode: 'AbCd2345',
+    utmSource: 'qrcode',
+    utmMedium: 'offline',
+    utmCampaign: 'fair-2026',
+    utmContent: null,
+    // Saved before #503: built for /d/, which never opened
+    trackingUrl: 'https://app.example.com/d/AbCd2345?utm_source=qrcode&utm_medium=offline',
+  };
+
+  it("builds the /q/ URL from the campaign's short code and UTM columns, not the stored URL", () => {
+    expect(campaignTrackingUrl('https://app.example.com', campaign)).toBe(
+      'https://app.example.com/q/AbCd2345?utm_source=qrcode&utm_medium=offline&utm_campaign=fair-2026'
+    );
+  });
+
+  it('leaves out the UTM columns that are empty', () => {
+    const url = new URL(
+      campaignTrackingUrl('https://app.example.com', { ...campaign, utmCampaign: null })
+    );
+    expect([...url.searchParams.keys()]).toEqual(['utm_source', 'utm_medium']);
   });
 });
 
