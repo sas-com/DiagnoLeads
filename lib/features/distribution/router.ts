@@ -4,10 +4,24 @@ import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { buildTrackingUrl, generateQRCode, generateShortCode } from './qr-code';
-import { createQRCampaignSchema, generateQRCodeSchema } from './types';
+import {
+  type CampaignUrlFields,
+  campaignTrackingUrl,
+  generateQRCode,
+  generateShortCode,
+} from './qr-code';
+import { createQRCampaignSchema } from './types';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+
+/**
+ * A campaign as the settings page gets it: the tracking URL is built from the short code
+ * (/q/<code>, #503), not read from qr_campaigns.tracking_url, which holds /d/<code> for the
+ * campaigns created before
+ */
+function withTrackingUrl<T extends CampaignUrlFields>(campaign: T): T & { trackingUrl: string } {
+  return { ...campaign, trackingUrl: campaignTrackingUrl(APP_URL, campaign) };
+}
 
 /**
  * Who may use this router (#356): anyone who can read leads may see the QR campaigns; creating,
@@ -54,7 +68,7 @@ export const distributionRouter = router({
       },
     });
 
-    return campaigns;
+    return campaigns.map((campaign) => withTrackingUrl(campaign));
   }),
 
   /**
@@ -78,13 +92,14 @@ export const distributionRouter = router({
       }
 
       // Generate fresh QR code
-      const qrCodeDataUrl = await generateQRCode(campaign.trackingUrl, {
+      const current = withTrackingUrl(campaign);
+      const qrCodeDataUrl = await generateQRCode(current.trackingUrl, {
         size: 'large',
         format: 'dataUrl',
       });
 
       return {
-        ...campaign,
+        ...current,
         qrCodeDataUrl,
       };
     }),
@@ -119,12 +134,13 @@ export const distributionRouter = router({
         attempts++;
       }
 
-      // Build tracking URL
-      const trackingUrl = buildTrackingUrl(APP_URL, shortCode, {
+      // Build tracking URL: the entry of the short code (/q/<code>, #503)
+      const trackingUrl = campaignTrackingUrl(APP_URL, {
+        shortCode,
         utmSource: input.utmSource,
         utmMedium: input.utmMedium,
-        utmCampaign: input.utmCampaign,
-        utmContent: input.utmContent,
+        utmCampaign: input.utmCampaign ?? null,
+        utmContent: input.utmContent ?? null,
       });
 
       const [campaign] = await db
@@ -195,7 +211,12 @@ export const distributionRouter = router({
         )
         .returning();
 
-      return updated;
+      // Deleted between the read and the write
+      if (!updated) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'QR campaign not found' });
+      }
+
+      return withTrackingUrl(updated);
     }),
 
   /**
@@ -246,7 +267,9 @@ export const distributionRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'QR campaign not found' });
       }
 
-      const qrCode = await generateQRCode(campaign.trackingUrl, {
+      // From the short code, so the campaigns saved with /d/<code> download a working QR code
+      const trackingUrl = campaignTrackingUrl(APP_URL, campaign);
+      const qrCode = await generateQRCode(trackingUrl, {
         size: input.size,
         format: 'dataUrl',
       });
@@ -254,47 +277,7 @@ export const distributionRouter = router({
       return {
         qrCode: typeof qrCode === 'string' ? qrCode : qrCode.toString('base64'),
         shortCode: campaign.shortCode,
-        trackingUrl: campaign.trackingUrl,
-      };
-    }),
-
-  /**
-   * Generate a QR code (on-demand, not stored)
-   */
-  generateQRCode: campaignViewProcedure
-    .input(generateQRCodeSchema)
-    .mutation(async ({ ctx, input }) => {
-      // Verify template exists
-      const template = await db.query.diagnosticTemplates.findFirst({
-        where: and(
-          eq(diagnosticTemplates.id, input.diagnosticTemplateId),
-          eq(diagnosticTemplates.organizationId, ctx.organization.id)
-        ),
-      });
-
-      if (!template) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Diagnostic template not found' });
-      }
-
-      // Build tracking URL
-      const trackingUrl = buildTrackingUrl(APP_URL, template.id, {
-        utmSource: input.utmSource,
-        utmMedium: input.utmMedium,
-        utmCampaign: input.utmCampaign,
-        utmContent: input.utmContent,
-      });
-
-      // Generate QR code
-      const qrCode = await generateQRCode(trackingUrl, {
-        size: input.size,
-        format: input.format,
-        color: input.color,
-      });
-
-      return {
-        qrCode: typeof qrCode === 'string' ? qrCode : qrCode.toString('base64'),
         trackingUrl,
-        format: input.format,
       };
     }),
 
