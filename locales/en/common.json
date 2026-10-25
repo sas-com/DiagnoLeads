@@ -401,6 +401,10 @@
       },
       "checkpointsTitle": "What to check when moving from {platform} to a web system",
       "checkpointsTitleGeneric": "What to check when moving to a web system",
+      "accessCheckpointsTitle": {
+        "fix": "What to check when fixing {platform} and keeping it in use",
+        "replace": "What to check when replacing {platform} with a ready-made service"
+      },
       "checkpoints": {
         "source_missing": "First decide how to handle the missing source code (for example analyzing the running programs)",
         "source_vendor_held": "First confirm whether the maintenance company or the vendor will hand over the source code for the survey (contract and cost)",
@@ -710,8 +714,11 @@
         "platform": "Current platform",
         "note": "This result is a guide based on your answers. We can give a closer outlook after looking at the current system.",
         "rediagnoseHint": "Many answers were \"I don't know\", so this guide is not very precise. If you can check some of them within your company, taking the diagnosis again gives a more reliable guide. If you are not sure how to check them, we can show you in an individual consultation.",
+        "accessRediagnoseHint": "Many answers were \"I don't know\", so this guide is not very precise. If you can check some of them within your company, taking the diagnosis again gives a more reliable guide. If you are not sure how to check them, we can show you in a 30-minute online consultation.",
         "consultationLead": "In an individual consultation, we explain the result and how a migration could proceed. Our staff explain an approach that fits your situation, based on the result. We will not push a sale.",
         "consultationButton": "Request a free consultation",
+        "accessConsultationLead": "In a 30-minute online consultation, we explain the result and how to proceed. Our staff explain an approach that fits your situation, based on the result. We will not push a sale.",
+        "accessConsultationButton": "Request a free 30-minute online consultation",
         "rediagnoseLead": "To review your answers or diagnose another system, start here.",
         "rediagnoseButton": "Take the diagnosis again",
         "footer": "You receive this email because you asked for the result of the free AX migration web diagnosis and pressed the confirmation button."
@@ -1034,7 +1041,6 @@
     "convertedLeads": "Converted",
     "newLeadsThisMonth": "New Leads This Month",
     "conversionRate": "Conversion Rate",
-    "averageScore": "Average Score",
     "leadTrend": "Lead Trend",
     "leadStatusBreakdown": "Lead Status Breakdown",
     "count": "",
@@ -1091,13 +1097,9 @@
         "mql": "MQL",
         "mqlInterest": "MQL (interested)",
         "fitOnly": "Also {value} fit only",
-        "averageScore": "Average score",
-        "noScore": "—",
-        "scoreSuffix": "/100",
         "count": "{value}",
         "previous": "Previous {days} days: {value}",
         "previousWithRate": "Previous {days} days: {value} → {rate}",
-        "noPreviousScore": "Previous {days} days: no score",
         "deltaLabel": "Change from the previous {days} days"
       },
       "pending": {
@@ -1253,7 +1255,6 @@
     "totalLeads": "Total Leads",
     "activeLeads": "Active Leads",
     "conversionRate": "Conversion Rate",
-    "averageScore": "Average Score",
     "createLead": "Add New Lead",
     "createLeadTitle": "Create New Lead",
     "createLeadDescription": "Enter information for the new lead.",
@@ -2162,7 +2163,9 @@
         "totalLeads": "Total Leads",
         "newLeadsThisMonth": "New Leads This Month",
         "conversionRate": "Conversion Rate",
-        "vsLastPeriod": "vs. last period"
+        "vsLastPeriod": "vs. last period",
+        "mqlInterest": "MQL (interested)",
+        "mqlRate": "{rate}% of leads of all time"
       },
       "tabs": {
         "overview": "Overview",
@@ -2183,7 +2186,9 @@
         "conversionFunnel": "Conversion Funnel",
         "responseTime": "Response Time",
         "sourceBreakdownPeriod": "Inflow source of leads registered: {period}",
-        "responseTimePending": "Coming soon (shown once first contacts are recorded)"
+        "responseTimePending": "Coming soon (shown once first contacts are recorded)",
+        "mqlLevels": "Leads by MQL level",
+        "mqlLevelsDescription": "Leads of all time. A lead with an MQL date (also one set by hand) counts as interested. Click a level to open the list"
       },
       "funnel": {
         "total": "Total",
@@ -2200,10 +2205,6 @@
       },
       "noData": "No data available",
       "leadCount": "{count, number}",
-      "comingSoon": "Coming soon",
-      "performanceSummary": {
-        "title": "Performance summary"
-      },
       "acquisitionCost": {
         "title": "Acquisition cost by inflow source",
         "description": "Sum of the acquisition cost (excl. tax) recorded on leads. Leads without a recorded cost count as leads only.",
@@ -2707,28 +2708,6 @@
     "costPerLeadBySource": "Cost per Lead by Source",
     "averageDealValue": "Average Deal Value",
     "calculate": "Calculate ROI"
-  },
-  "comparison": {
-    "title": "Comparison Analysis",
-    "description": "Compare metrics between time periods",
-    "currentPeriod": "Current Period",
-    "previousPeriod": "Previous Period",
-    "startDate": "Start Date",
-    "endDate": "End Date",
-    "compare": "Compare",
-    "changes": "Changes",
-    "insights": "Insights",
-    "noInsights": "No significant changes detected",
-    "increase": "increase",
-    "decrease": "decrease",
-    "metrics": {
-      "totalLeads": "Total Leads",
-      "convertedLeads": "Converted Leads",
-      "conversionRate": "Conversion Rate",
-      "averageScore": "Average Score"
-    },
-    "bySource": "By Source",
-    "byStatus": "By Status"
   },
   "axSite": {
     "meta": {
@@ -3936,7 +3915,6 @@
     },
     "score": "Score",
     "scoreValue": "Score {score}",
-    "noScore": "No score",
     "noDealPhase": "No phase",
     "cards": {
       "contact": "Contact",

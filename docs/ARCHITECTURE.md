@@ -34,7 +34,7 @@
 - 例外なし：違反が1件でもあれば失敗する。許可リストには載せられない（`--update` でも書き出さない）
 - 許可リスト：ルールが入る前からあった違反を `scripts/architecture/allowlist.txt` に1件ずつ載せてある。載っていない違反があると失敗する。載っているのに消えた違反があっても失敗する（`--update` で行を消す）
 
-| ルール | 内容 | 種類と許可リストの件数（2026-10-24） |
+| ルール | 内容 | 種類と許可リストの件数（2026-10-25） |
 |---|---|---|
 | `lib-imports-ui` | lib は app・components・hooks・context を import しない | 例外なし |
 | `lib-imports-server-values` | lib から server（`AppRouter`）は型だけ | 例外なし |
@@ -47,7 +47,8 @@
 | `file-cycles` | ファイル単位の import の循環を作らない | 例外なし |
 | `test-paths-resolve` | テストが import するパスと、`vi.mock`・`vi.doMock`・`vi.unmock`・`vi.doUnmock`・`vi.importActual`・`vi.importMock`（`vitest.mock` などの書き方も含む）に渡すパスが実在する（パッケージ名は見ない。テストの `@payload-config` は vitest の別名どおり `test/mocks/payload-config.ts`）。存在しないパスへの `vi.mock` はエラーにならず、黙って効かなくなる（本物のモジュールが動き、原因の分かりにくい失敗か、副作用を伴う素通りになる）ので、ファイルを消す・移したときに、古いパスを指したまま残ったテストをこの検査が見つける | 例外なし |
 | `features-in-cycles` | 互いに依存し合う機能（間接も含む）を増やさない | 許可リスト 20 |
-| `cross-feature-internal` | 他の機能から読むのは公開面（`types/**`・`types.ts`・`service.ts`。ほかに `email/index.ts`・`respondent-email/index.ts`）だけ。項目は読まれる側のファイル | 許可リスト 45 |
+| `cross-feature-internal` | 他の機能から読むのは公開面（`types/**`・`types.ts`・`service.ts`。ほかに `email/index.ts`・`respondent-email/index.ts`）だけ。項目は「読む機能 -> 読まれる側のファイル」（#623） | 許可リスト 79 |
+| `ax-boundary` | AX 診断（`diagnostics/ax-migration/`）を読むのは、AX 診断の中と、AX のための機能（`ax-*`）だけ。型だけの import も数える。項目は「読む側 -> AX のファイル」。リードの最新の AX 回答は `ax-migration/lead-submissions.ts`、営業の手引きは `ax-playbook/service.ts` から読む（#480） | 許可リスト 16 |
 | `features-use-global-db` | 機能のコードはグローバルの `db` を使わず、`ctx.db` か引数の executor を使う（RLS で接続を差し替えるため） | 許可リスト 12 |
 | `feature-index-files` | lib/features に `index.ts`（barrel）を作らない | 許可リスト 18 |
 | `unregistered-routers` | 機能のルーターはすべて `server/routers/_app.ts` に登録する | 許可リスト 2 |
@@ -55,7 +56,7 @@
 許可リストの数は減らす方向にだけ動かす。
 
 検査の限界：
-- `cross-feature-internal` の項目は読まれる側のファイルなので、許可リストにある内部のファイルを別の機能が新しく読んでも検出しない（許可リストの45ファイルは、事実上の公開面になっている）。新しく読むときは、相手の `service.ts` か `types/` に出すことを先に考える
+- `cross-feature-internal` は、読む機能の単位で見る。同じ機能の別のファイルから同じ内部のファイルを読み足しても検出しない。許可リストにあるファイルを別の機能が新しく読むと失敗する（#623 で、項目を読まれる側のファイルから「読む機能 -> ファイル」に変えた）。そのときも、許可リストに足す前に、相手の `service.ts` か `types/` に出すことを先に考える
 - `features-in-cycles` は、循環に入っている機能の名前の一覧で比べる。今ある2つの循環（18機能と2機能）がつながっても検出しない
 - 公開ページの採点のルールが見るのは、公開ページ（`(ax)`・`(public)`・`[...rest]`・トップと共通のレイアウト）から `'use client'` の境界を越えて値でたどれるファイル。ブラウザのコードの判定では、`'use server'` のファイル（サーバーアクション）とその先はたどらない。`'use server'` のファイルは直接の POST で呼べる入口になり、`organizationProcedure`・`ctx.ability` も公開 API の検査も通らない。検査を通すために `'use server'` を足さない（関数の中の `'use server'` は検出しない）
 - `unregistered-routers` は、`api/` の下の `*-router.ts` をほかのルーターに組み込む形（_app.ts に直接登録しない）も未登録として数える。その形を使うときは、許可リストに足して PR に理由を書く
@@ -109,7 +110,7 @@ components/features/<feature>/
 - ワークフローのランナー（#298〜）：`lib/workflow/`（`lib/cron`・`lib/ops` と同じ基盤の層）。機能を import せず、フローの定義は引数で受ける。定義の一覧は定期実行のルートの直下に置く（`docs/WORKFLOW_ENGINE_EVALUATION.md` 7.8）
 - 営業代行の外部アカウント（#276）：役割は `lib/auth/permissions.ts`（CASL）の1か所で決め、各ルーターに `role` の比較を足さない。見せる範囲は各機能の `service.ts` の絞り込みで守る（RLS は #51 で入れる予定）
 - AI の呼び出し（#48）：Anthropic のクライアントとモデル ID は `lib/features/ai/` の1か所に置き、他の機能はその関数を呼ぶ
-- 2つ目の診断：方式の決定（`decisions/2026-10-18-second-diagnosis-timing`）を読んでから。汎用の部品（`diagnostics/` 直下・`diagnosis-builder/`）から `diagnostics/ax-migration/` を新しく読まない
+- 2つ目の診断：ビルダーで作る（`decisions/2026-10-24-diagnosis-shared-rules`）。公開の診断の規則は `diagnostics/service.ts` と `types/` にあり、汎用の部品（`diagnostics/` 直下・`diagnosis-builder/`）は `diagnostics/ax-migration/` を読まない。ほかの機能から AX を新しく読むと `ax-boundary` で落ちる（`decisions/2026-10-25-ax-boundary`）
 
 ## 5. `arch:check` が落ちたときの直し方
 
@@ -122,7 +123,7 @@ components/features/<feature>/
 違反を減らしたときも `--update` を流し、許可リストから消えた行を同じ PR に入れる。マージの前に main を取り込み、もう一度流す（並行の PR が同じ行を消している・足していることがある）。
 
 - `allowlist.txt` が衝突したら（隣り合う行を別々の PR が消すと起きる）、main の側を取り、`--update` を流し直す
-- マージの順番しだいで main が落ちることがある。例：PR A が最後の importer を消して行を削り、その前の main から分かれた PR B が同じファイルを新しく読む。main で落ちたら、最初に気づいた人が `--update` と理由1行の PR を出す
+- マージの順番しだいで main が落ちることがある。例：PR A が最後の importer を消して行を削り、その前の main から分かれた PR B が同じ行を新しく作る（`cross-feature-internal` なら、同じ機能から同じファイルを読む。`features-in-cycles` なら、同じ機能を循環に入れる）。main で落ちたら、最初に気づいた人が `--update` と理由1行の PR を出す
 
 ## 6. ファイルを移す・分ける PR の条件
 

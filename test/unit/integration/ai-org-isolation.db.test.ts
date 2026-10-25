@@ -46,8 +46,11 @@ const ai = vi.hoisted(() => {
     scoreLeadWithAI: vi.fn(async () => ({ score: 99 })),
     scoreLeadsBatch: vi.fn(async (rows: { id: string }[]) => byId(rows, { score: 99 })),
     predictConversion: vi.fn(async () => ({ probability: 0.5 })),
-    predictConversionBatch: vi.fn(async (rows: { id: string }[]) =>
-      byId(rows, { probability: 0.5 })
+    predictConversionBatch: vi.fn(async (rows: { lead: { id: string } }[]) =>
+      byId(
+        rows.map(({ lead }) => lead),
+        { probability: 0.5 }
+      )
     ),
     generateLeadSummary: vi.fn(async () => 'まとめ'),
     semanticSearch: vi.fn(async () => []),
@@ -121,7 +124,12 @@ describe.skipIf(!url)('AI features: organization isolation (PostgreSQL)', () => 
     Object.values(ai)
       .flatMap((stub) => stub.mock.calls.flat())
       .flatMap((arg) => (Array.isArray(arg) ? arg : [arg]))
-      .map((arg) => (typeof arg === 'string' ? arg : (arg as { id?: string } | null)?.id))
+      .map((arg) => {
+        if (typeof arg === 'string') return arg;
+        // The batch prediction is handed { lead, contact } pairs (#406)
+        const item = arg as { id?: string; lead?: { id?: string } } | null;
+        return item?.id ?? item?.lead?.id;
+      })
       .filter(Boolean);
   const scoresOfA = () =>
     pg.select({ id: leads.id, score: leads.score }).from(leads).where(inArray(leads.id, leadsA));

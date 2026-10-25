@@ -56,18 +56,18 @@ export const auth = betterAuth({
     /**
      * Callback after password reset is complete. Never throw here: better-auth (1.6.33) calls it
      * after the token is used and the new password is stored, but before it deletes the user's
-     * sessions, so a throw leaves them signed in elsewhere and returns 500 (#529)
+     * sessions, so a throw leaves them signed in elsewhere and returns 500 (#529). The log names
+     * the user by id: email addresses stay out of the logs (#594)
      */
     onPasswordReset: async ({ user }) => {
-      console.log(`Password reset completed for user: ${user.email}`);
+      console.log(`Password reset completed for user ${user.id}`);
     },
     resetPasswordTokenExpiresIn: 60 * 60, // 1 hour
     /**
      * A reset deletes every session of the user, including one in the browser that made the
      * reset (the reset page sends the user to sign in again), so someone who knew the old
-     * password, or registered the address first, is signed out (#529). A browser that still
-     * holds the session_data cookie can be served from it until it expires (cookieCache.maxAge
-     * below, #578).
+     * password, or registered the address first, is signed out (#529) on its next request: the
+     * session is not cached in a cookie (session.cookieCache below, #578).
      */
     revokeSessionsOnPasswordReset: true,
   },
@@ -89,10 +89,16 @@ export const auth = betterAuth({
   session: {
     expiresIn: 60 * 60 * 24 * 7, // 7 days
     updateAge: 60 * 60 * 24, // 1 day - update session if older than this
-    cookieCache: {
-      enabled: true,
-      maxAge: 5 * 60, // 5 minutes - cache session in cookie
-    },
+    /**
+     * No session cache in a cookie: each session read (get-session, the tRPC context) looks the
+     * session up in the database, about two SELECTs per signed-in request (admin users only: a
+     * request without a session cookie, such as a respondent's, is answered without the database).
+     * Signing out, a password reset (#529) and deleting the account then end the session on the
+     * next request. With the cache on, a signed session_data cookie was trusted without the
+     * database for its maxAge (5 minutes), also when someone had copied the cookies (#578,
+     * decision 2026-10-24-session-cookie-cache-off).
+     */
+    cookieCache: { enabled: false },
   },
 
   /**
