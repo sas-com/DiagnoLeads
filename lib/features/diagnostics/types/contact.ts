@@ -2,6 +2,7 @@
  * Contact fields of the public diagnoses (the AX diagnosis and the diagnoses made in the
  * builder), shared by the forms (browser) and the API (server), #481
  */
+import { PLAIN_TEXT } from '@/lib/utils/plain-text';
 import { z } from 'zod';
 
 /** Full-width digits and long-vowel dashes typed with a Japanese IME still make a phone number */
@@ -13,8 +14,6 @@ export const normalizePhone = (value: string) =>
 
 export const PHONE_PATTERN = /^[0-9+\-() ]*$/;
 
-/** No control or format characters (line breaks, bidi overrides) in names shown to sales */
-const PLAIN_TEXT = /^[^\p{Cc}\p{Cf}]*$/u;
 export const plainText = (max: number) => z.string().trim().max(max).regex(PLAIN_TEXT);
 
 /** The contact a respondent sends with a diagnosis */
