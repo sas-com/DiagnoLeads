@@ -262,16 +262,17 @@ Sentry.init({
 
 ### 8.2 パフォーマンス
 
-```bash
-# Lighthouse スコア確認
-npx lighthouse https://app.diagnoleads.com --output=json
-```
+対象のページ・目標・測り方は決定 [2026-10-24-performance-targets](../.factory/memory/decisions/2026-10-24-performance-targets.md)（#569）に従う。
 
-目標:
-- Performance: 90+
-- Accessibility: 90+
-- Best Practices: 90+
-- SEO: 90+
+- 本番は GitHub Actions「Lighthouse」（`.github/workflows/lighthouse.yml`）が毎日1回測る。結果は実行の Summary（3回の中央値の表）と artifact（JSON、30日）にある。今は測るだけで、目標との判定はしない（#612）
+- デプロイの直後に確かめたいときは、Actions の「Lighthouse」を手動で実行するか、手元で流す
+
+```bash
+# 5ページ×モバイル・デスクトップ×3回（Node 22.19 以上（Lighthouse 13.5.0 の要件）と Chrome が要る。root では LIGHTHOUSE_CHROME_FLAGS="--headless=new --no-sandbox"）
+BASE_URL=https://diagnoleads-v2.vercel.app bash scripts/lighthouse-run.sh lighthouse-reports
+# 集計は Node 22.18 以上か Bun（bun scripts/lighthouse-summary.ts lighthouse-reports）。Node の MODULE_TYPELESS_PACKAGE_JSON の警告は無害
+node scripts/lighthouse-summary.ts lighthouse-reports
+```
 
 ### 8.3 セキュリティスキャン
 

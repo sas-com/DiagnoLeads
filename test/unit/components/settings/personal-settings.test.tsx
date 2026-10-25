@@ -50,7 +50,7 @@ vi.mock('@/lib/auth/client', () => ({
     }),
     updateUser: mocks.updateUser,
     signOut: mocks.signOut,
-    $fetch: vi.fn(),
+    changePassword: vi.fn(),
   },
 }));
 

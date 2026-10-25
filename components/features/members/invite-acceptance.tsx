@@ -37,8 +37,9 @@ export function InviteAcceptance({
   // Set when the server says the address is not verified although the session says it is
   const [verifyNeeded, setVerifyNeeded] = useState(false);
   const [verification, setVerification] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
-  // Coming back from the verification link, the session cookie still says "not verified" for up to
-  // five minutes (cookie cache); read the session past the cache to see the verified address
+  // Coming back from the verification link, read the session from the database to see the verified
+  // address. The session is not cached in a cookie (lib/auth/config.ts, #578), so useSession reads
+  // it there too; disableCookieCache keeps this right if the cache is ever turned on again
   const [verifiedNow, setVerifiedNow] = useState(false);
   const mustCheck =
     preview.data?.emailVerificationRequired === true &&

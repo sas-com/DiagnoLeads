@@ -1,5 +1,7 @@
 # DiagnoLeads v2 パフォーマンス最適化レポート
 
+> **注意（2026-10-24）**: この文書の数値は 2026-02-04 の分析（Next.js 15・webpack のビルド）で、今のビルド（Next.js 16・Turbopack）とは比べられない。今の目標と測り方は決定 [2026-10-24-performance-targets](../.factory/memory/decisions/2026-10-24-performance-targets.md)（#569）に従う。本番の値は GitHub Actions「Lighthouse」（`.github/workflows/lighthouse.yml`）の実行の Summary を見る。
+
 ## 概要
 
 本ドキュメントは、DiagnoLeads v2のパフォーマンス分析結果と最適化提案をまとめたものである。
@@ -317,13 +319,13 @@ export default function RootLayout({ children }) {
 
 ### 6.2 目標値
 
-| メトリクス | 目標 | 現状推定 |
-|-----------|------|----------|
-| LCP (Largest Contentful Paint) | < 2.5s | ~2.0s ✅ |
-| FID (First Input Delay) | < 100ms | ~50ms ✅ |
-| CLS (Cumulative Layout Shift) | < 0.1 | ~0.05 ✅ |
-| TTFB (Time to First Byte) | < 600ms | ~300ms ✅ |
-| TTI (Time to Interactive) | < 3.8s | ~3.0s ✅ |
+目標は決定 [2026-10-24-performance-targets](../.factory/memory/decisions/2026-10-24-performance-targets.md)（#569）に移した。以前の表（FID・TTI と、測っていない「現状推定」）は使わない。
+
+- 対象：公開の5ページ（`/ja/ax-migration`・`/ja/ax-migration/access`・`/ja/ax-diagnosis`・コラム一覧・最新のコラム1本）。管理画面には点数の目標を持たない
+- Lighthouse の Performance はモバイル 90 以上・デスクトップ 95 以上。Accessibility・Best Practices は 100、SEO は公開後に 100
+- モバイルの LCP 2.5 s 以下・CLS 0.1 以下・TBT 200 ms 以下
+- 3回の中央値で、公開後の値から判定する（判定は #612、JS・CSS の予算は #613）
+- 利用者の値（フィールドデータ）は取っていない。6.1 の Speed Insights も入っていない（#614）。バンドルの分析は `next analyze` に置き換える（#611）
 
 ---
 

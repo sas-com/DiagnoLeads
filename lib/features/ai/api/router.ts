@@ -203,7 +203,10 @@ export const aiRouter = router({
         organizationId: input.organizationId,
         calls: 1,
       });
-      const results = await semanticSearch(input.query, input.organizationId, {
+      const results = await semanticSearch({
+        db: ctx.db,
+        query: input.query,
+        organizationId: input.organizationId,
         limit: input.limit,
         minSimilarity: input.minSimilarity,
       });
@@ -235,7 +238,12 @@ export const aiRouter = router({
       });
     }
 
-    const similar = await findSimilarLeads(input.leadId, input.organizationId, input.limit);
+    const similar = await findSimilarLeads({
+      db: ctx.db,
+      leadId: input.leadId,
+      organizationId: input.organizationId,
+      limit: input.limit,
+    });
 
     return similar;
   }),
@@ -310,7 +318,20 @@ export const aiRouter = router({
         calls: 1,
       });
       // A failed embedding or update throws (INTERNAL_SERVER_ERROR), never reported as success
-      await updateLeadEmbedding(input.leadId, input.organizationId, text);
+      const stored = await updateLeadEmbedding({
+        db: ctx.db,
+        leadId: input.leadId,
+        organizationId: input.organizationId,
+        text,
+      });
+      if (!stored) {
+        // The lead was read in the organization just above, so only a lead deleted in between
+        // gets here: nothing was written, so it is not reported as success (#590)
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'リードが見つかりません',
+        });
+      }
 
       return { success: true };
     }),

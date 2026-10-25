@@ -3,9 +3,10 @@
  * configuration on PostgreSQL, through the same endpoints the reset pages call (request a link,
  * then reset with the token the link carries). Other users' sessions are left alone.
  *
- * The browsers that lose their session can still hold a signed session_data cookie
- * (session.cookieCache); better-auth answers from it without the database until it expires
- * (cookieCache.maxAge, 5 minutes, #578), so these checks read the session from the database.
+ * These checks send the session token cookie alone and read past the cookie cache, so they look
+ * the session up in the database. The cache is off (session.cookieCache, #578); that every cookie
+ * a browser holds is signed out once the session row is gone is checked in
+ * session-revocation.db.test.ts.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/dl_test \
