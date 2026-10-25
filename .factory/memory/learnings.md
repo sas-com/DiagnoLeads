@@ -77,6 +77,14 @@
 - **解決策**: ほかの `*.db.test.ts` と同じく `(client ? drizzle(client) : null)!` にし、一時ディレクトリは `beforeAll` で作った
 - **教訓**: 新しい `*.db.test.ts` は、コミットの前に `TEST_DATABASE_URL` なしでも1回流し、「skipped」になるのを確かめる。describe の中身では、接続や副作用のある処理を呼ばない（`beforeAll` に置く）
 
+### [Test] 本物の auth client を購読するテストは、セッションの store を止めてから終える
+- **日付**: 2026-10-25
+- **状況**: #706。`bun run test:run --maxWorkers=2` で全部のテストが通ったのに、未処理の例外 `ReferenceError: window is not defined`（better-auth の `client/broadcast-channel.mjs`）1件で終了コードが1になった。本物の `lib/auth/client.ts` をスタブしたネットワークで動かす `sign-out-other-devices.test.tsx` と `password-change.test.tsx` で起きる。1ファイルだけ流すと出ない
+- **原因**: better-auth のセッションの store（nanostores の atom）は、最後の購読が外れてから1秒後（nanostores の `STORE_UNMOUNT_DELAY`）に止まり、止まるときに `window` から自分のリスナーを外す。画面の unmount の後と、購読のないときの `sessionStore.get()` の後に、このタイマーが残る。CPU が混んでワーカーの終了が1秒より遅れると、jsdom が片付いた後にタイマーが動く
+- **解決策**: `beforeAll` で空のリスナーを付けて store をファイルの間ずっと動かし（開いたままのタブと同じ）、`afterAll` で偽のタイマー（`setTimeout`・`clearTimeout`）の下でリスナーを外し、`vi.runOnlyPendingTimers()` で jsdom があるうちに止めた。nanostores の `cleanStores` は、nanostores が直接の依存でないので使わない
+- **再現の仕方**: 組み込みの jsdom を包み、片付けの後に1.5秒待つ環境のファイルを作り、`--environment <そのファイルの絶対パス>` で、対象のファイルともう1つ時間のかかるファイルを `--maxWorkers=2` で流すと、毎回出る（ほかのファイルが流れている間は、終わりかけのワーカーの例外も拾われる）
+- **教訓**: 本物の auth client（nanostores の store）を購読するテストを足すときは、同じ形で store を止める。`@/lib/auth/client` をモックするテストには要らない。全体の実行だけで出る未処理の例外は、報告されたファイルの片付けの後に残るタイマーを疑う
+
 ---
 
 ## 設定関連

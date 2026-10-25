@@ -13,7 +13,7 @@ import en from '@/locales/en/common.json';
 import messages from '@/locales/ja/common.json';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const ORG_ID = '660e8400-e29b-41d4-a716-446655440000';
 const OLD_PASSWORD = 'Password123';
@@ -146,19 +146,37 @@ function changePassword(currentPassword: string) {
   fireEvent.click(screen.getByRole('button', { name: p.changePassword }));
 }
 
+// The session store runs while it has a listener. nanostores stops it 1 s after the last one
+// goes, and stopping removes better-auth's listeners from `window`. Keep it running for the whole
+// file, like an open tab, so that timer never runs after jsdom is gone (a worker on a busy machine
+// can outlive jsdom by more than 1 s, #706), and stop it in afterAll on a fake clock
+let stopSessionStore = () => {};
+
+beforeAll(() => {
+  stopSessionStore = sessionStore.listen(() => {});
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
   network.state.requests = [];
   network.state.sessionId = 'session-before';
   network.state.changePassword = { status: 200, body: {} };
-  // Each test starts like a fresh page load. The session store outlives a test (nanostores keeps
-  // it mounted for a second after the page unmounts, and its value stays), so empty it and mark it
-  // stale: the page then reads the session from the stub, never the one the last test left
+  // Each test starts like a fresh page load. The session store outlives a test (it runs for the
+  // whole file, above, and its value stays), so empty it and mark it stale: the page then reads
+  // the session from the stub, never the one the last test left
   sessionStore.set({ ...sessionStore.get(), data: null, isPending: true });
   authClient.$store.notify('$sessionSignal');
 });
 
 afterAll(() => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  try {
+    stopSessionStore();
+    // nanostores' 1 s stop timer, run now: better-auth removes its listeners while `window` exists
+    vi.runOnlyPendingTimers();
+  } finally {
+    vi.useRealTimers();
+  }
   vi.unstubAllGlobals();
 });
 
