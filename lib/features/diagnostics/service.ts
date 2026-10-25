@@ -25,6 +25,7 @@ import {
   splitAddresses,
 } from '@/lib/features/leads/assignment';
 import { notifyOrganizationMembers } from '@/lib/features/notifications/notification-service';
+import { isDiagnosisOrganization } from '@/lib/multi-tenant/helpers/diagnosis-organization';
 import { and, eq, gte, isNull } from 'drizzle-orm';
 import { resolveDiagnosisOrganizationId } from './organization';
 import { type RateLimitRule, consumeRateLimit } from './rate-limit';
@@ -163,8 +164,8 @@ export async function claimConsultation(
  * operator's sales.
  */
 function operatorSalesEmail(organizationId: string): string | undefined {
-  const operatorOrganizationId = resolveDiagnosisOrganizationId();
-  return operatorOrganizationId !== null && organizationId === operatorOrganizationId
+  // The same comparison as the QR entry and the agency links (#698)
+  return isDiagnosisOrganization(organizationId, resolveDiagnosisOrganizationId())
     ? env.AX_DIAGNOSIS_SALES_EMAIL
     : undefined;
 }
