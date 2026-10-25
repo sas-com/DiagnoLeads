@@ -653,6 +653,7 @@
       "difficulty": "移行難易度の目安",
       "urgency": "刷新の緊急度",
       "primaryChallenge": "優先して取り組むべき課題",
+      "answeredChallenges": "回答で選んだ課題：{items}",
       "selectedChallenges": "選択された課題",
       "stepsTitle": "小さく始めて、移行の先のAX化まで",
       "disclaimer": "本結果は回答内容にもとづく目安です。正確な移行方式・期間・費用は、現行仕様調査で確定します。",
@@ -3134,7 +3135,7 @@
       "title": "Access の業務ツール、直すか Web に移すか｜無料Web診断（Access版）｜エス・エー・エス株式会社",
       "description": "その Access、直して使うか、Web に移すか。版や VBA、利用人数などを選ぶと、ツールに合った進め方の目安が分かります。直して使うか、Web に移すか、置き換えるか、合うものをお伝えします。無料・選択式・約3分。"
     },
-    "floatingCta": "無料Web診断（Access版）をはじめる",
+    "floatingCta": "無料Web診断をはじめる",
     "hero": {
       "eyebrow": "Microsoft Access の業務ツールをお使いの方へ",
       "title": "その Access、直して使うか、Web に移すか。",

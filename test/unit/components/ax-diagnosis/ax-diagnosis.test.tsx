@@ -742,6 +742,32 @@ describe('AxDiagnosisResult', () => {
     ],
   };
 
+  it('lists the answers behind the primary challenge, so the pamphlet text never stands alone (#658)', () => {
+    // Only the support deadline and remote use: both count as モノ, whose text speaks of new
+    // products and markets
+    const answers = { ...as400Answers, challenges: ['deadline', 'remote'] };
+    const result = toPublicResult(evaluateAxMigration(answers));
+    expect(result.challenges.primary).toBe('agility');
+    renderResult({ answers, result });
+
+    const challenge = within(screen.getByTestId('ax-result-challenge'));
+    expect(challenge.getByText('モノ：市場の変化に対応できないシステム')).toBeInTheDocument();
+    expect(challenge.getByTestId('ax-result-answered')).toHaveTextContent(
+      '回答で選んだ課題：サーバー・OS・ソフトの保守期限が迫っている、社外やスマホ、テレワークから使えない'
+    );
+  });
+
+  it('lists the Access answers behind the primary challenge too (#658)', () => {
+    const answers = { ...accessAnswers, access_challenges: ['support'] };
+    const result = toPublicResult(evaluateAxMigration(answers));
+    expect(result.challenges.primary).toBe('agility');
+    renderResult({ platform: 'access', answers, result });
+
+    expect(screen.getByTestId('ax-result-answered')).toHaveTextContent(
+      '回答で選んだ課題：Microsoft 365・64bit 化・PC の入れ替えで動かない（動かなくなりそう）'
+    );
+  });
+
   it('does not call a passed deadline close (#288)', () => {
     const high = { ...publicResult, needsHearing: false, urgency: { ...publicResult.urgency, level: 'high' as const } };
     const { unmount } = renderResult({
