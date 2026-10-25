@@ -35,7 +35,7 @@ import { organizationsRouter } from '@/lib/features/organizations/api/router';
 import { prospectsRouter } from '@/lib/features/prospects/api/router';
 import { salesForecastRouter } from '@/lib/features/sales-forecast/api/router';
 import { salesTargetsRouter } from '@/lib/features/sales-targets/api/router';
-import { siteAnalyticsRouter } from '@/lib/features/site-analytics/api/router';
+import { siteAnalyticsRouter } from '@/lib/features/site-visits/api/router';
 import { tagsRouter } from '@/lib/features/tags/api/router';
 import { webhooksRouter } from '@/lib/features/webhooks/api/router';
 import { workflowsRouter } from '@/lib/features/workflows/api/router';

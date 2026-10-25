@@ -1,13 +1,13 @@
 /**
  * Site analytics tRPC router (#755, Epic #411). Readable by those who can read leads, except
  * viewers from a parent organization, as the other analytics reports. Totals only, scoped by
- * organization (see ../service.ts).
+ * organization (see ../analytics.ts).
  */
 
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
-import { siteOverviewSchema } from '../schemas';
-import { getSiteOverview } from '../service';
+import { getSiteOverview } from '../analytics';
+import { siteOverviewSchema } from '../analytics-schemas';
 
 const READ_EXCLUDED_ROLES: readonly string[] = ['parent_viewer'];
 

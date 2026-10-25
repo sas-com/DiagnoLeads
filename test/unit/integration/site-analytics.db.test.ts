@@ -17,7 +17,7 @@ import {
   siteVisits,
   users,
 } from '@/lib/db/schema';
-import { getSiteOverview } from '@/lib/features/site-analytics/service';
+import { getSiteOverview } from '@/lib/features/site-visits/analytics';
 import { appRouter } from '@/server/routers/_app';
 import { inArray } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';

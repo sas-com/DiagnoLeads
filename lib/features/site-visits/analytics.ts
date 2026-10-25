@@ -1,11 +1,11 @@
 import type { db as defaultDb } from '@/lib/db/client';
 import { diagnoses } from '@/lib/db/schema';
 import { getColumn } from '@/lib/features/ax-site/columns';
-import { SITE_VISIT_RETENTION_DAYS } from '@/lib/features/site-visits/maintenance';
-import type { SitePageType } from '@/lib/features/site-visits/pages';
-import { visitDayOf } from '@/lib/features/site-visits/visitor';
 import { and, eq, inArray, sql } from 'drizzle-orm';
-import type { SiteAnalyticsPeriod } from './schemas';
+import type { SiteAnalyticsPeriod } from './analytics-schemas';
+import { SITE_VISIT_RETENTION_DAYS } from './maintenance';
+import type { SitePageType } from './pages';
+import { visitDayOf } from './visitor';
 
 type Database = typeof defaultDb;
 

@@ -19,11 +19,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useOrganization } from '@/hooks/use-organization';
 import { periodDelta, shortDay } from '@/lib/features/analytics/dashboard-format';
+import type { SitePageTotal } from '@/lib/features/site-visits/analytics';
 import {
   SITE_ANALYTICS_PERIODS,
   type SiteAnalyticsPeriod,
-} from '@/lib/features/site-analytics/schemas';
-import type { SitePageTotal } from '@/lib/features/site-analytics/service';
+} from '@/lib/features/site-visits/analytics-schemas';
 import { trpc } from '@/lib/trpc/client';
 import { ChevronDown } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
