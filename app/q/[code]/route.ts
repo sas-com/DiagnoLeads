@@ -2,7 +2,10 @@ import { db } from '@/lib/db/client';
 import { findPublicDiagnosis } from '@/lib/features/diagnosis-builder/public-diagnosis';
 import { consumeRateLimit } from '@/lib/features/diagnostics/rate-limit';
 import { clientIp, ipBlock } from '@/lib/features/diagnostics/request-guard';
-import { QR_ENTRY_RATE_LIMITS } from '@/lib/features/distribution/limits';
+import {
+  QR_ENTRY_RATE_LIMITS,
+  QR_ENTRY_TOO_MANY_REQUESTS_TEXT,
+} from '@/lib/features/distribution/limits';
 import {
   findOpenQrCampaign,
   qrEntryRedirectPath,
@@ -13,6 +16,13 @@ import { type NextRequest, NextResponse, after } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+/**
+ * Seconds one scan may run. vercel.json limits app/api/** only, and nothing bounds a query of
+ * the database client. A scan takes milliseconds; this stops one from running on while the
+ * database is stuck, and leaves room for the connect timeout (10 s, lib/db/client.ts) and the
+ * alert after it (lib/ops/alert.ts)
+ */
+export const maxDuration = 15;
 
 /**
  * Every answer: never kept by a browser or a CDN (pausing a campaign takes effect on the next
@@ -20,11 +30,9 @@ export const runtime = 'nodejs';
  */
 const HEADERS = { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' };
 
-const notFound = () =>
-  new NextResponse('Not Found', {
-    status: 404,
-    headers: { ...HEADERS, 'Content-Type': 'text/plain; charset=utf-8' },
-  });
+const TEXT = { ...HEADERS, 'Content-Type': 'text/plain; charset=utf-8' };
+
+const notFound = () => new NextResponse('Not Found', { status: 404, headers: TEXT });
 
 /**
  * GET /q/<short code>
@@ -50,10 +58,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
       const limit = await consumeRateLimit(db, QR_ENTRY_RATE_LIMITS.perIp, ipBlock(ip));
       if (!limit.allowed) {
         after(() => reportRejectedRequest('qr-entry', 'rate_limited'));
-        return NextResponse.json(
-          { error: 'Too many requests', code: 'rate_limited' },
-          { status: 429, headers: { ...HEADERS, 'Retry-After': String(limit.retryAfterSeconds) } }
-        );
+        // Plain text: the phone that scanned the code shows the body as it is
+        return new NextResponse(QR_ENTRY_TOO_MANY_REQUESTS_TEXT, {
+          status: 429,
+          headers: { ...TEXT, 'Retry-After': String(limit.retryAfterSeconds) },
+        });
       }
     }
 
@@ -77,9 +86,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
     // The error of the database, never the code
     console.error('QR entry error:', error instanceof Error ? error.name : 'unknown');
     after(() => reportServerError('qr-entry', error));
-    return new NextResponse('Internal Server Error', {
-      status: 500,
-      headers: { ...HEADERS, 'Content-Type': 'text/plain; charset=utf-8' },
-    });
+    return new NextResponse('Internal Server Error', { status: 500, headers: TEXT });
   }
 }

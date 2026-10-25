@@ -5,8 +5,8 @@ category: Security
 title: "QR キャンペーンの入口は /q/<短縮コード>。転送先は DB の値とアプリのルートだけから作る（#503）"
 status: active
 superseded_by: []
-issues: [503, 41, 120]
-paths: ["app/q/**", "lib/features/distribution/short-code-entry.ts", "lib/features/distribution/limits.ts", "lib/features/distribution/qr-code.ts"]
+issues: [503, 41, 120, 610, 663]
+paths: ["app/q/**", "lib/features/distribution/short-code-entry.ts", "lib/features/distribution/limits.ts", "lib/features/distribution/qr-code.ts", "lib/features/distribution/router.ts"]
 ---
 
 ### [Security] QR キャンペーンの入口は /q/<短縮コード>。転送先は DB の値とアプリのルートだけから作る（#503）
@@ -15,6 +15,8 @@ paths: ["app/q/**", "lib/features/distribution/short-code-entry.ts", "lib/featur
   - 行き先：`qr_campaigns.diagnosis_id` の診断が、キャンペーンと同じ組織にあり、`/d/<slug>` がその診断を出すとき（`findPublicDiagnosis` が同じ id を返すとき）は `/ja/d/<slug>`。それ以外は AX 診断（`/ja/ax-diagnosis`。`/diagnostic/[slug]` と同じ）
   - UTM はキャンペーンの列（utm_source・utm_medium・utm_campaign・utm_content）を付ける。言語は既定の `ja`
   - 停止中・期限切れ・存在しないコードは 404（本文は `Not Found` だけ）。どの応答も `Cache-Control: no-store` と `X-Robots-Tag: noindex, nofollow`
+  - 回数制限の 429 は、入口（DB の制限）でも proxy（メモリの制限）でも、日本語1行の text/plain（`QR_ENTRY_TOO_MANY_REQUESTS_TEXT`）。QR を読んだスマートフォンは本文をそのまま表示するので JSON にしない。入口にはロケールがなく、転送先も `/ja/` なので日本語だけ
+  - 1回の読み取りは `maxDuration = 15` 秒まで（`vercel.json` の30秒は `app/api/**` だけに掛かる。DB のクライアントには SQL の実行時間の上限がない）。接続の待ち（10秒、`lib/db/client.ts`）とその後の通知が収まる長さ
   - 保存済みの `qr_campaigns.tracking_url`（#503 より前は `/d/<コード>`）は読まない。一覧の Copy URL・詳細・Download QR は、短縮コードと UTM の列から毎回 URL を作る（本番の行を書き換えない）。新しいキャンペーンは `/q/` の URL を保存する
   - 使われていなかった `distribution.generateQRCode`（テンプレートの id で `/d/` を作っていた）は外した
 - **理由**:
@@ -32,4 +34,8 @@ paths: ["app/q/**", "lib/features/distribution/short-code-entry.ts", "lib/featur
   - 保存済みの `tracking_url` を本番で書き換える（読み取りで作れば要らない。本番の書き込みに承認が要る）
   - `[locale]` の下のページで転送する（上の理由）
   - QR の URL から UTM を外す（今の画面と同じ見え方を残した。入口は URL の UTM を使わない）
-- **既知の限界**: #503 より前にダウンロードした QR の画像（`/d/<コード>`）は 404 のまま。画面から Download QR で作り直す。停止中・期限切れのコードを読んだ人への案内のページはない（本文は `Not Found`）
+- **既知の限界**:
+  - #503 より前にダウンロードした QR の画像（`/d/<コード>`）は 404 のまま。画面から Download QR で作り直す。停止中・期限切れのコードを読んだ人への案内のページはない（本文は `Not Found`）
+  - オーナーの判断待ち（#663）：`diagnosis_id` のないキャンペーンは、どの組織のものでも AX 診断へ送る（回答は AX の組織のリードになる）。`diagnosis_id` の診断が公開されていないときも AX 診断へ送る。回数制限の数値（10分120回・1分60回）が会場の Wi-Fi からの一斉の読み取りに足りるか
+  - `updateCampaign` は `expiresAt` を送らない更新（名前の変更・停止と再開）で期限を消す（#610）。入口が期限を見るので、期限の切れたキャンペーンを再開すると、また転送する
+  - RLS（#51）：入口はログインなしで、グローバルの `db` から `qr_campaigns`・`diagnoses`（`findPublicDiagnosis` と同じ）・`public_rate_limits` を組織で絞らずに読む。組織は行から取る。`qr_campaigns` の RLS は無効のまま。RLS を掛けるときは、この入口を公開の読み取りとして扱う（ポリシーか専用の接続）。掛けただけだと、すべての QR が 404 になる（閉じる側に倒れる）

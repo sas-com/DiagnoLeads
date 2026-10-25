@@ -133,6 +133,15 @@ describe('tracking URL of QR campaigns (#503)', () => {
     expect(updated.trackingUrl).toBe(EXPECTED);
   });
 
+  it('answers NOT_FOUND when the campaign is deleted between the read and the update', async () => {
+    vi.mocked(db.update).mockReturnValueOnce({
+      set: vi.fn(() => ({ where: vi.fn(() => ({ returning: vi.fn(async () => []) })) })),
+    } as unknown as ReturnType<typeof db.update>);
+    await expect(
+      adminCaller().distribution.updateCampaign({ ...org, id: CAMPAIGN_ID, data: { name: 'New' } })
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
   it('saves and returns the /q/ URL of a new campaign, with its UTM parameters', async () => {
     // The short code is free
     vi.mocked(db.query.qrCampaigns.findFirst).mockResolvedValueOnce(undefined);

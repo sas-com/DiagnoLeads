@@ -1,5 +1,8 @@
-import { GET } from '@/app/q/[code]/route';
-import { QR_ENTRY_RATE_LIMITS } from '@/lib/features/distribution/limits';
+import { GET, maxDuration } from '@/app/q/[code]/route';
+import {
+  QR_ENTRY_RATE_LIMITS,
+  QR_ENTRY_TOO_MANY_REQUESTS_TEXT,
+} from '@/lib/features/distribution/limits';
 import type { QrEntryCampaign } from '@/lib/features/distribution/short-code-entry';
 import { NextRequest } from 'next/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -149,6 +152,10 @@ describe('GET /q/[code]', () => {
     expect(res.status).toBe(429);
     expect(res.headers.get('retry-after')).toBe('42');
     expect(res.headers.get('location')).toBeNull();
+    // The phone that scanned the code shows the body as it is: one line of text, not JSON
+    expect(res.headers.get('content-type')).toBe('text/plain; charset=utf-8');
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(await res.text()).toBe(QR_ENTRY_TOO_MANY_REQUESTS_TEXT);
     expect(mocks.findOpenQrCampaign).toHaveBeenCalledTimes(1);
     expect(mocks.reportRejectedRequest).toHaveBeenCalledWith('qr-entry', 'rate_limited');
   });
@@ -163,6 +170,11 @@ describe('GET /q/[code]', () => {
     vi.stubEnv('VERCEL', '');
     expect((await scan('AbCd2345', { headers: { 'x-real-ip': '203.0.113.5' } })).status).toBe(307);
     expect(mocks.consumeRateLimit).not.toHaveBeenCalled();
+  });
+
+  it('runs for a bounded time, which vercel.json (app/api/** only) does not give it', () => {
+    expect(maxDuration).toBeGreaterThan(10);
+    expect(maxDuration).toBeLessThanOrEqual(30);
   });
 
   it('answers 500 and tells the people on call when the database fails', async () => {

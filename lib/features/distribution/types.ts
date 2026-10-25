@@ -13,34 +13,6 @@ export const QR_ENTRY_PATH = '/q';
 export const SHORT_CODE_PATTERN = /^[A-Za-z0-9]{1,64}$/;
 
 /**
- * QR Code Generation Input Schema
- */
-export const generateQRCodeSchema = z.object({
-  diagnosticTemplateId: z.string().uuid(),
-  size: z.enum(['small', 'medium', 'large', 'xlarge']).default('medium'),
-  format: z.enum(['png', 'svg', 'dataUrl']).default('dataUrl'),
-  campaignName: z.string().max(100).optional(),
-  utmSource: z.string().max(50).default('qrcode'),
-  utmMedium: z.string().max(50).default('offline'),
-  utmCampaign: z.string().max(100).optional(),
-  utmContent: z.string().max(100).optional(),
-  color: z
-    .object({
-      dark: z
-        .string()
-        .regex(/^#[0-9A-Fa-f]{6}$/)
-        .default('#000000'),
-      light: z
-        .string()
-        .regex(/^#[0-9A-Fa-f]{6}$/)
-        .default('#ffffff'),
-    })
-    .optional(),
-});
-
-export type GenerateQRCodeInput = z.infer<typeof generateQRCodeSchema>;
-
-/**
  * QR Code Campaign Schema (for tracking)
  */
 export const createQRCampaignSchema = z.object({

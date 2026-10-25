@@ -17,3 +17,12 @@ export const QR_ENTRY_RATE_LIMITS = {
    */
   perIp: { name: 'qr-entry-ip', limit: 120, windowMs: 10 * MINUTE },
 } as const satisfies Record<string, { name: string; limit: number; windowMs: number }>;
+
+/**
+ * What a visitor over a limit of the QR entry reads, both the DB limit (app/q/[code]/route.ts)
+ * and the in-memory one (proxy.ts): the phone that scanned the code shows the body as it is, so
+ * it is one line of plain text, not JSON. In Japanese only, like the page the entry sends to
+ * (/ja/…): the entry has no locale of its own
+ */
+export const QR_ENTRY_TOO_MANY_REQUESTS_TEXT =
+  'アクセスが集中しています。しばらくしてから、もう一度 QR コードを読み取ってください。';

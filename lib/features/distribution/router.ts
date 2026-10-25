@@ -211,6 +211,11 @@ export const distributionRouter = router({
         )
         .returning();
 
+      // Deleted between the read and the write
+      if (!updated) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'QR campaign not found' });
+      }
+
       return withTrackingUrl(updated);
     }),
 
