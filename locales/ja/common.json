@@ -1034,7 +1034,6 @@
     "convertedLeads": "成約数",
     "newLeadsThisMonth": "今月の新規リード",
     "conversionRate": "コンバージョン率",
-    "averageScore": "平均スコア",
     "leadTrend": "リードトレンド",
     "leadStatusBreakdown": "リードステータス内訳",
     "count": "件",
@@ -1091,13 +1090,9 @@
         "mql": "MQL",
         "mqlInterest": "MQL（関心あり）",
         "fitOnly": "ほかに適合のみ {value}件",
-        "averageScore": "平均スコア",
-        "noScore": "—",
-        "scoreSuffix": "/100",
         "count": "{value}件",
         "previous": "前の{days}日間 {value}",
         "previousWithRate": "前の{days}日間 {value} → {rate}",
-        "noPreviousScore": "前の{days}日間 スコアなし",
         "deltaLabel": "前の{days}日間との差"
       },
       "pending": {
@@ -1253,7 +1248,6 @@
     "totalLeads": "総リード数",
     "activeLeads": "アクティブリード",
     "conversionRate": "コンバージョン率",
-    "averageScore": "平均スコア",
     "createLead": "新規リード追加",
     "createLeadTitle": "新しいリードを作成",
     "createLeadDescription": "新しいリードの情報を入力してください。",
@@ -2162,7 +2156,9 @@
         "totalLeads": "総リード数",
         "newLeadsThisMonth": "今月の新規リード",
         "conversionRate": "コンバージョン率",
-        "vsLastPeriod": "前期間比"
+        "vsLastPeriod": "前期間比",
+        "mqlInterest": "MQL（関心あり）",
+        "mqlRate": "すべての期間のリードの {rate}%"
       },
       "tabs": {
         "overview": "概要",
@@ -2183,7 +2179,9 @@
         "conversionFunnel": "コンバージョンファネル",
         "responseTime": "応答時間",
         "sourceBreakdownPeriod": "{period}に登録されたリードの流入元",
-        "responseTimePending": "準備中（初回連絡の記録の追加後に表示）"
+        "responseTimePending": "準備中（初回連絡の記録の追加後に表示）",
+        "mqlLevels": "MQL段階の内訳",
+        "mqlLevelsDescription": "すべての期間のリード。MQL判定日のあるリード（手で MQL にしたものを含む）は関心ありに数えます。段階を押すと一覧で開きます"
       },
       "funnel": {
         "total": "総計",
@@ -2200,10 +2198,6 @@
       },
       "noData": "データがありません",
       "leadCount": "{count, number}件",
-      "comingSoon": "近日公開予定",
-      "performanceSummary": {
-        "title": "パフォーマンスの概要"
-      },
       "acquisitionCost": {
         "title": "流入元別の獲得費用",
         "description": "リードに記録した獲得費用（税抜）の合計です。費用が未記録のリードは件数にだけ含めています。",
@@ -2707,28 +2701,6 @@
     "costPerLeadBySource": "ソース別リード単価",
     "averageDealValue": "平均取引額",
     "calculate": "ROIを計算"
-  },
-  "comparison": {
-    "title": "比較分析",
-    "description": "期間間の指標を比較",
-    "currentPeriod": "現在の期間",
-    "previousPeriod": "前の期間",
-    "startDate": "開始日",
-    "endDate": "終了日",
-    "compare": "比較する",
-    "changes": "変化",
-    "insights": "インサイト",
-    "noInsights": "重要な変化は検出されませんでした",
-    "increase": "増加",
-    "decrease": "減少",
-    "metrics": {
-      "totalLeads": "総リード数",
-      "convertedLeads": "コンバージョン数",
-      "conversionRate": "コンバージョン率",
-      "averageScore": "平均スコア"
-    },
-    "bySource": "ソース別",
-    "byStatus": "ステータス別"
   },
   "axSite": {
     "meta": {
@@ -3936,7 +3908,6 @@
     },
     "score": "スコア",
     "scoreValue": "スコア {score}",
-    "noScore": "スコアなし",
     "noDealPhase": "フェーズ未設定",
     "cards": {
       "contact": "連絡先",
