@@ -1,0 +1,72 @@
+'use client';
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { type DealStage, STAGE_PROBABILITY } from '@/lib/features/deals/types/pipeline';
+import type { LostReason } from '@/lib/features/leads/types/pipeline';
+import { useTranslations } from 'next-intl';
+
+interface ReopenDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** The won or lost deal */
+  deal: { name: string; stage: DealStage; lostReason: LostReason | null };
+  /** The open stage it moves to */
+  stage: DealStage;
+  onConfirm: () => void;
+}
+
+/**
+ * Reopening a won or lost deal asks first (Refs #436): it clears the lost reason and details,
+ * which the audit log does not keep, resets the probability to the stage's default and drops the
+ * forecast category override; the lead of a won deal stays 成約.
+ */
+export function ReopenDialog({ open, onOpenChange, deal, stage, onConfirm }: ReopenDialogProps) {
+  const t = useTranslations('deals');
+  const tReason = useTranslations('pipeline.lostReason');
+  const tCommon = useTranslations('common');
+  const sentences: string[] = [];
+  if (deal.stage === 'lost') {
+    sentences.push(
+      deal.lostReason
+        ? t('reopenDialog.lost', { reason: tReason(deal.lostReason) })
+        : t('reopenDialog.lostNoReason')
+    );
+  }
+  sentences.push(
+    t('reopenDialog.probability', {
+      stage: t(`stages.${stage}`),
+      probability: STAGE_PROBABILITY[stage],
+    })
+  );
+  if (deal.stage === 'won') sentences.push(t('reopenDialog.won'));
+
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t('reopenDialog.title', { name: deal.name })}</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-1">
+              {sentences.map((sentence) => (
+                <p key={sentence}>{sentence}</p>
+              ))}
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{tCommon('cancel')}</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>{t('reopenDialog.confirm')}</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
