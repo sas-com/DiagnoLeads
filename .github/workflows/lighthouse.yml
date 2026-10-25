@@ -28,7 +28,7 @@ jobs:
     env:
       BASE_URL: https://diagnoleads-v2.vercel.app
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           sparse-checkout: scripts/lighthouse-*
           sparse-checkout-cone-mode: false
@@ -37,7 +37,7 @@ jobs:
 
       # Runs Lighthouse and the TypeScript of the two scripts (type stripping); Chrome is the
       # runner's own (its version is in the summary)
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
 
@@ -50,7 +50,7 @@ jobs:
 
       - name: Keep the reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: lighthouse-reports
           path: lighthouse-reports/

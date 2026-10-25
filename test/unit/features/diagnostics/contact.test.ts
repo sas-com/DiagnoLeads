@@ -128,3 +128,20 @@ describe('the phone limit of the public diagnoses', () => {
     expect(PHONE_MAX_LENGTH).toBe(LEAD_TEXT_MAX_LENGTH.phone);
   });
 });
+
+describe('the builder consent version (#754)', () => {
+  const parse = (consentVersion: string) =>
+    diagnosisSubmissionSchema.safeParse({
+      versionId: '0b6f4c1e-2d3a-4b5c-8d9e-0f1a2b3c4d5e',
+      answers: {},
+      contact,
+      privacyConsent: true,
+      consentVersion,
+    });
+
+  it('refuses a lone surrogate, which would fail the jsonb save of the consent', () => {
+    expect(parse('\ud800').success).toBe(false);
+    expect(parse('v1\udc00').success).toBe(false);
+    expect(parse('2026-10-01').success).toBe(true);
+  });
+});

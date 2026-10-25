@@ -1,3 +1,4 @@
+import { clipText, toWellFormed } from '@/lib/utils/clip-text';
 import { z } from 'zod';
 import { isAxFrom } from '../ax-site/cross-links';
 import type { InflowSource } from '../leads/types/pipeline';
@@ -12,11 +13,15 @@ import { AX_ENTRY_PAGES } from './entry-pages';
  * `from` is the link of another AX page that led to it (#332, "ax-lp-targets-access"); likewise
  * only the values the site writes are kept.
  */
-/** Long values are cut instead of rejected so a long UTM never blocks a submission */
+/**
+ * Long values are cut instead of rejected so a long UTM never blocks a submission. The cut never
+ * splits a character, and a lone surrogate sent on purpose becomes U+FFFD: tracking is stored as
+ * jsonb, which rejects lone surrogates and would lose the whole submission (#754).
+ */
 const clipped = (max: number) =>
   z
     .string()
-    .transform((value) => value.slice(0, max))
+    .transform((value) => toWellFormed(clipText(value, max)))
     .optional();
 
 export const trackingSchema = z

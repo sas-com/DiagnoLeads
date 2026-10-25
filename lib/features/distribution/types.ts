@@ -13,6 +13,31 @@ export const QR_ENTRY_PATH = '/q';
 export const SHORT_CODE_PATTERN = /^[A-Za-z0-9]{1,64}$/;
 
 /**
+ * Why a scan of a campaign goes nowhere: the /q/ entry answers 404 (#692, #695). In the order the
+ * settings page lists them. A paused or expired campaign is not found at all; a campaign that
+ * names no diagnosis goes to the AX diagnosis only when it is the AX organization's; a campaign
+ * that names a diagnosis goes there only while /d/<slug> serves it (owner decisions in #663)
+ */
+export const QR_CAMPAIGN_CLOSED_REASONS = [
+  'paused',
+  'expired',
+  'not_ax_organization',
+  'diagnosis_not_published',
+] as const;
+
+export type QrCampaignClosedReason = (typeof QR_CAMPAIGN_CLOSED_REASONS)[number];
+
+/**
+ * Where a scan of a campaign goes (campaignDestination in short-code-entry.ts, the entry's own
+ * rule): the AX diagnosis, the public page of the campaign's builder diagnosis (/d/<slug>), or
+ * nowhere, with every reason that applies
+ */
+export type QrCampaignDestination =
+  | { kind: 'ax_diagnosis' }
+  | { kind: 'diagnosis'; slug: string }
+  | { kind: 'none'; reasons: QrCampaignClosedReason[] };
+
+/**
  * QR Code Campaign Schema (for tracking)
  */
 export const createQRCampaignSchema = z.object({
