@@ -11,7 +11,8 @@ import { useState } from 'react';
 interface CommentFormProps {
   organizationId: string;
   leadId: string;
-  onSubmit: (content: string, type?: CommentType) => void;
+  /** Rejects when the write failed: the text is kept for another try */
+  onSubmit: (content: string, type?: CommentType) => Promise<void>;
   onCancel?: () => void;
   placeholder?: string;
   isReply?: boolean;
@@ -31,11 +32,15 @@ export function CommentForm({
   const [content, setContent] = useState('');
   const [type, setType] = useState<CommentType>('comment');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (content.trim()) {
-      onSubmit(content.trim(), type);
+    const text = content.trim();
+    if (!text) return;
+    try {
+      await onSubmit(text, type);
       setContent('');
+    } catch {
+      // Kept for another try; the section says what went wrong
     }
   };
 
@@ -47,6 +52,7 @@ export function CommentForm({
           <button
             type="button"
             onClick={() => setType('comment')}
+            aria-pressed={type === 'comment'}
             className={cn(
               'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-colors',
               type === 'comment'
@@ -60,6 +66,7 @@ export function CommentForm({
           <button
             type="button"
             onClick={() => setType('note')}
+            aria-pressed={type === 'note'}
             className={cn(
               'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-colors',
               type === 'note'
@@ -83,16 +90,22 @@ export function CommentForm({
           }
           className="min-h-[80px] resize-none pr-12"
           disabled={isLoading}
+          aria-label={
+            isReply ? t('replyPlaceholder') : type === 'note' ? t('typeNote') : t('typeComment')
+          }
         />
         <Button
           type="submit"
           size="sm"
           className="absolute bottom-2 right-2"
           disabled={!content.trim() || isLoading}
+          aria-label={t('send')}
         >
-          <Send className="h-4 w-4" />
+          <Send className="h-4 w-4" aria-hidden="true" />
         </Button>
       </div>
+      {/* Everyone who reads the lead's comments reads it, not only its author */}
+      {!isReply && <p className="text-sm text-muted-foreground">{t('visibleToTeam')}</p>}
 
       {/* Cancel button for replies */}
       {isReply && onCancel && (
