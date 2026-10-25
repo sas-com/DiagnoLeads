@@ -10,12 +10,41 @@ import {
 } from '@/lib/features/ax-playbook/types/schemas';
 import { getHearingField } from '@/lib/features/lead-hearings/catalog';
 import {
+  challengesFromAnswers,
   collectSignals,
   pickNgPhrases,
   pickObjections,
   scheduleFollowUpMessage,
 } from '@/lib/features/objection-card/match';
 import { describe, expect, it } from 'vitest';
+
+describe('challengesFromAnswers', () => {
+  // The answers keep "nobody knows how it works" (blackbox); the lead's summary turns it into the
+  // people category (#484)
+  it('reads the challenges as chosen in a submission', () => {
+    expect(challengesFromAnswers({ platform: 'as400', challenges: ['blackbox', 'cost'] })).toEqual([
+      'blackbox',
+      'cost',
+    ]);
+    expect(challengesFromAnswers({ challenges: 'blackbox' })).toEqual(['blackbox']);
+    expect(challengesFromAnswers({ platform: 'access', access_challenges: ['manual'] })).toEqual([]);
+    expect(challengesFromAnswers(null)).toEqual([]);
+  });
+
+  it('gives the risk signal that the summary loses', () => {
+    const summary = ['people'];
+    const answered = challengesFromAnswers({ challenges: ['blackbox'] });
+    expect(collectSignals({ pastBlockers: [], lostReason: null, challenges: summary })).toEqual([
+      { reason: 'staffing', sources: ['diagnosis'] },
+    ]);
+    expect(
+      collectSignals({ pastBlockers: [], lostReason: null, challenges: [...summary, ...answered] })
+    ).toEqual([
+      { reason: 'staffing', sources: ['diagnosis'] },
+      { reason: 'risk', sources: ['diagnosis'] },
+    ]);
+  });
+});
 
 describe('collectSignals', () => {
   it('joins the hearing, the lost reason and the diagnosis, strongest source first', () => {
