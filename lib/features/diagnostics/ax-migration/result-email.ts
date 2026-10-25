@@ -193,7 +193,13 @@ export function buildAxResultEmail(input: {
       { type: 'facts', title: m.result.factsTitle, rows },
       { type: 'paragraph', muted: true, text: m.result.note },
       ...(result.needsHearing
-        ? [{ type: 'notice' as const, tone: 'info' as const, text: m.result.rediagnoseHint }]
+        ? [
+            {
+              type: 'notice' as const,
+              tone: 'info' as const,
+              text: result.accessPath ? m.result.accessRediagnoseHint : m.result.rediagnoseHint,
+            },
+          ]
         : []),
       // Left out entirely when no consultation link is given: legal can switch it off
       ...(consultationUrl
