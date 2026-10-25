@@ -6,6 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -20,7 +21,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useUpdateLead } from '@/hooks/use-leads';
-import type { Lead } from '@/lib/db/schema';
+import type { Lead as LeadRow } from '@/lib/db/schema';
 import {
   type LeadCardField,
   type LeadCardId,
@@ -77,6 +78,9 @@ const cardSchema = updateLeadSchema.pick({
 type CardValues = z.infer<typeof cardSchema>;
 /** Form field names are the card fields */
 type CardFieldName = FieldPath<CardValues> & LeadCardField;
+
+/** leads.get also says whether the lead has deals (#444) */
+type Lead = LeadRow & { hasDeals?: boolean };
 
 const SELECT_OPTIONS: Partial<Record<LeadCardField, readonly string[]>> = {
   inflowSource: INFLOW_SOURCES,
@@ -496,12 +500,15 @@ function CardForm({
                 if (options) {
                   const noneLabel =
                     name === 'sqlDecision' ? tLeads('sqlUndecided') : tLeads('notSet');
+                  // The deals set the deal phase of a lead with deals (#444)
+                  const fromDeals = name === 'dealPhase' && lead.hasDeals === true;
                   return (
                     <FormItem>
                       <FormLabel>{label(name, true)}</FormLabel>
                       <Select
                         value={typeof field.value === 'string' ? field.value : NONE}
                         onValueChange={(value) => field.onChange(value === NONE ? null : value)}
+                        disabled={fromDeals}
                       >
                         <FormControl>
                           <SelectTrigger ref={field.ref} onBlur={field.onBlur}>
@@ -517,6 +524,7 @@ function CardForm({
                           ))}
                         </SelectContent>
                       </Select>
+                      {fromDeals && <FormDescription>{t('fromDeals')}</FormDescription>}
                       <FormMessage />
                     </FormItem>
                   );
