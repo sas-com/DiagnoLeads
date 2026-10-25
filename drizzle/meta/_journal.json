@@ -225,6 +225,13 @@
       "when": 1792758918690,
       "tag": "0031_site_visits",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1792919491722,
+      "tag": "0032_drop_content_editors",
+      "breakpoints": true
     }
   ]
 }
