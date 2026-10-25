@@ -742,6 +742,32 @@ describe('AxDiagnosisResult', () => {
     ],
   };
 
+  it('lists the answers behind the primary challenge, so the pamphlet text never stands alone (#658)', () => {
+    // Only the support deadline and remote use: both count as モノ, whose text speaks of new
+    // products and markets
+    const answers = { ...as400Answers, challenges: ['deadline', 'remote'] };
+    const result = toPublicResult(evaluateAxMigration(answers));
+    expect(result.challenges.primary).toBe('agility');
+    renderResult({ answers, result });
+
+    const challenge = within(screen.getByTestId('ax-result-challenge'));
+    expect(challenge.getByText('モノ：市場の変化に対応できないシステム')).toBeInTheDocument();
+    expect(challenge.getByTestId('ax-result-answered')).toHaveTextContent(
+      '回答で選んだ課題：サーバー・OS・ソフトの保守期限が迫っている、社外やスマホ、テレワークから使えない'
+    );
+  });
+
+  it('lists the Access answers behind the primary challenge too (#658)', () => {
+    const answers = { ...accessAnswers, access_challenges: ['support'] };
+    const result = toPublicResult(evaluateAxMigration(answers));
+    expect(result.challenges.primary).toBe('agility');
+    renderResult({ platform: 'access', answers, result });
+
+    expect(screen.getByTestId('ax-result-answered')).toHaveTextContent(
+      '回答で選んだ課題：Microsoft 365・64bit 化・PC の入れ替えで動かない（動かなくなりそう）'
+    );
+  });
+
   it('does not call a passed deadline close (#288)', () => {
     const high = { ...publicResult, needsHearing: false, urgency: { ...publicResult.urgency, level: 'high' as const } };
     const { unmount } = renderResult({
@@ -850,6 +876,36 @@ describe('AxDiagnosisResult', () => {
       expect(screen.getByTestId('ax-result-checkpoints')).toHaveTextContent('ブラウザから使えるWebシステムにし');
     });
 
+    it('names the consultation once on an Access result with many unknowns (#674)', () => {
+      const answers = { access_tools: 'unknown', access_screens_forms: 'unknown' };
+      renderAccess(answers, { result: { ...accessResult(answers), needsHearing: true } });
+      expect(screen.getByTestId('ax-result-unknowns')).toHaveTextContent(
+        '30分のオンライン相談で、調べ方からご案内することもできます。'
+      );
+      expect(screen.getByText(/30分のオンライン相談で現状を伺うと/)).toBeInTheDocument();
+      // Across the whole page, not one element at a time
+      expect(document.body).not.toHaveTextContent('個別相談');
+    });
+
+    it('narrows what to replace, not what to migrate, on the replace path (#674)', () => {
+      // Many tools lead to the web path by default; an organization's rules can still replace
+      const answers = { access_features: ['none'], access_screens_forms: 'lt20' };
+      const replace = accessResult(answers);
+      renderAccess(answers, {
+        result: { ...replace, checkpoints: ['access_replace_fit', 'access_inventory'] },
+      });
+      expect(screen.getByTestId('ax-result-access-path')).toHaveAttribute('data-path', 'replace');
+      const checkpoints = screen.getByTestId('ax-result-checkpoints');
+      expect(checkpoints).toHaveTextContent('置き換えの対象を絞ります');
+      expect(checkpoints).not.toHaveTextContent('移行の対象');
+      cleanup();
+
+      // The web path still narrows what to migrate
+      renderAccess({ access_challenges: ['remote'], access_tools: '21_50' });
+      expect(screen.getByTestId('ax-result-access-path')).toHaveAttribute('data-path', 'web');
+      expect(screen.getByTestId('ax-result-checkpoints')).toHaveTextContent('移行の対象を絞ります');
+    });
+
     it.each([
       ['fix', {}, 'Microsoft Accessを直して使い続けるときに確認すること'],
       ['web', { access_challenges: ['remote'] }, 'Microsoft AccessからWebシステムへ移行するときに確認すること'],
@@ -883,6 +939,10 @@ describe('AxDiagnosisResult', () => {
       within(screen.getByTestId('ax-result-steps'))
         .getAllByRole('listitem')
         .map((item) => item.querySelectorAll('p')[1]?.textContent);
+    const stepLabels = () =>
+      within(screen.getByTestId('ax-result-steps'))
+        .getAllByRole('listitem')
+        .map((item) => item.querySelectorAll('p')[0]?.textContent);
 
     it('updates the path after the follow-up questions and drops the hint', async () => {
       fetchMock.mockResolvedValue(
@@ -926,6 +986,8 @@ describe('AxDiagnosisResult', () => {
       // Whether checking the files costs anything is said before, never left to guess (#538)
       expect(steps).toHaveTextContent('ファイルを確かめる作業に費用がかかる場合は、前もってお伝えします。');
       expect(stepTitles()).toEqual(titles);
+      // Numbered as before (#457), not in the main page's phases (#537)
+      expect(stepLabels()).toEqual(titles.map((_, index) => (index === 0 ? 'NEXT STEP' : `STEP ${index + 1}`)));
       // Never the migration to a web system of the other paths' steps
       expect(steps).not.toHaveTextContent('最新のWebシステムへ移行します');
       expect(steps).not.toHaveTextContent('簡易診断');
@@ -934,11 +996,19 @@ describe('AxDiagnosisResult', () => {
       expect(screen.queryByText(/現行仕様調査で確定します/)).not.toBeInTheDocument();
     });
 
-    it('keeps the steps of the other systems (#457)', () => {
+    it('lays out the steps of the other systems as the main page does (#537)', () => {
       renderResult();
       const steps = screen.getByTestId('ax-result-steps');
       expect(within(steps).getByRole('heading', { name: '小さく始めて、移行の先のAX化まで' })).toBeInTheDocument();
-      expect(stepTitles()).toEqual(['簡易診断', '現行仕様調査', 'マイグレーション', 'AX化']);
+      // The free consultation comes next, as on the main page and the button below
+      expect(steps).toHaveTextContent('いまここ：無料Web診断が完了しました。次は無料の個別相談です。');
+      expect(stepTitles()).toEqual(['無料の個別相談', '簡易診断', '現行仕様調査', 'マイグレーション', 'AX化']);
+      expect(stepLabels()).toEqual(['NEXT STEP', 'その次に', 'Phase 1', 'Phase 2', 'Phase 3']);
+      // The next one across the row, two by two below: four in a row are too narrow here
+      const list = within(steps).getByRole('list');
+      expect(list).toHaveClass('sm:grid-cols-2');
+      expect(list).not.toHaveClass('lg:grid-cols-4');
+      expect(within(list).getAllByRole('listitem')[0]).toHaveClass('sm:col-span-2');
       expect(screen.getByText(/現行仕様調査で確定します/)).toBeInTheDocument();
     });
 
@@ -969,6 +1039,8 @@ describe('AxDiagnosisResult', () => {
     renderResult({ answers: { ...as400Answers, integrations: 'unknown', as400_languages: ['unknown'] } });
     const unknowns = screen.getByTestId('ax-result-unknowns');
     expect(unknowns).toHaveTextContent('社内で確認すると、結果の精度が上がる項目');
+    // Only Access names its 30-minute online consultation (#674)
+    expect(unknowns).toHaveTextContent('個別相談で、調べ方からご案内することもできます。');
     expect(within(unknowns).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
       '他のシステムや取引先とのデータのやり取りは、いくつありますか？',
       'どんな言語・方法で作られていますか？',

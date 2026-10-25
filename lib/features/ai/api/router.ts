@@ -12,6 +12,8 @@
  * The procedures that embed a text with OpenAI (semanticSearch, updateEmbedding) count each
  * embedding against EMBEDDING_CALL_LIMITS first, and the text they embed is bounded (#576).
  * findSimilar compares stored embeddings only, without calling OpenAI.
+ * Each call is handed the organization, which the usage line of its response names (../usage.ts,
+ * #47).
  */
 
 import { leads } from '@/lib/db/schema';
@@ -71,7 +73,9 @@ export const aiRouter = router({
       organizationId: input.organizationId,
       calls: 1,
     });
-    const aiScore = await scoreLeadWithAI(leadForClaude(lead));
+    const aiScore = await scoreLeadWithAI(leadForClaude(lead), {
+      organizationId: input.organizationId,
+    });
     if (aiScore.isFallback) {
       // Keep the current score rather than overwriting it with the placeholder
       throw new TRPCError({
@@ -134,7 +138,9 @@ export const aiRouter = router({
         organizationId: input.organizationId,
         calls: leadsToScore.length,
       });
-      const scoresMap = await scoreLeadsBatch(leadsToScore.map(leadForClaude));
+      const scoresMap = await scoreLeadsBatch(leadsToScore.map(leadForClaude), {
+        organizationId: input.organizationId,
+      });
 
       // Update the leads Claude scored; a fallback keeps the lead's current score
       const scoredLeads = leadsToScore.filter((lead) => !scoresMap.get(lead.id)?.isFallback);
@@ -279,7 +285,9 @@ export const aiRouter = router({
         organizationId: input.organizationId,
         calls: 1,
       });
-      const summary = await generateLeadSummary(leadForClaude(lead));
+      const summary = await generateLeadSummary(leadForClaude(lead), {
+        organizationId: input.organizationId,
+      });
 
       return { summary };
     }),
@@ -368,7 +376,9 @@ export const aiRouter = router({
         organizationId: input.organizationId,
         calls: 1,
       });
-      const prediction = await predictConversion(leadForClaude(lead), contactCompleteness(lead));
+      const prediction = await predictConversion(leadForClaude(lead), contactCompleteness(lead), {
+        organizationId: input.organizationId,
+      });
 
       return {
         leadId: lead.id,
@@ -415,7 +425,8 @@ export const aiRouter = router({
         leadsToPredict.map((lead) => ({
           lead: leadForClaude(lead),
           contact: contactCompleteness(lead),
-        }))
+        })),
+        { organizationId: input.organizationId }
       );
 
       return {

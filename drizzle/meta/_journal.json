@@ -225,6 +225,27 @@
       "when": 1792758918690,
       "tag": "0031_site_visits",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1792841927871,
+      "tag": "0032_deals",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1792845658937,
+      "tag": "0033_sales_targets",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1792881078650,
+      "tag": "0034_admin_indexes",
+      "breakpoints": true
     }
   ]
 }

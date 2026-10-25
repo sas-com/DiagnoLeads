@@ -514,8 +514,14 @@ describe('Header menu on phones', () => {
     ['対象システム', '#targets'],
     ['よくある質問', '#faq'],
   ];
-  // The Access page has no reasons or demo section of its own (#414)
-  const ACCESS_SECTIONS = SECTIONS_HERE.filter(([, href]) => !['#reasons', '#demo'].includes(href));
+  // The Access page has no reasons or demo section of its own (#414); its approach is its three
+  // ways, not the flow (#537)
+  const ACCESS_SECTIONS = [
+    ['お悩み', '#problems'],
+    ['進め方', '#paths'],
+    ['対象システム', '#targets'],
+    ['よくある質問', '#faq'],
+  ];
 
   it('opens and closes the panel with its button', async () => {
     const user = userEvent.setup();

@@ -21,6 +21,8 @@ export const AX_FOOTER_ID = 'ax-footer';
 /** Diagnosis buttons of the hero and the consultation band: the phone CTA bar stays hidden too */
 export const AX_HERO_CTA_ID = 'ax-hero-cta';
 export const AX_CONSULT_BAND_ID = 'ax-consult';
+/** Columns below the Access page's last call to action: the phone CTA bar stays hidden (#537) */
+export const AX_ACCESS_COLUMNS_ID = 'ax-access-columns';
 
 /** Section anchors on the landing page */
 export const AX_SECTIONS = {
@@ -28,6 +30,8 @@ export const AX_SECTIONS = {
   reasons: 'reasons',
   demo: 'demo',
   steps: 'steps',
+  /** The three ways of the Access page: its approach, as the header calls it (#537) */
+  paths: 'paths',
   targets: 'targets',
   /** Sections for readers of one host platform (#311) */
   as400: 'as400-migration',

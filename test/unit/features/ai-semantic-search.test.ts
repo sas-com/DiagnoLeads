@@ -64,7 +64,11 @@ describe('semantic-search', () => {
 
       const results = await semanticSearch({ ...search, query: 'tech companies' });
 
-      expect(generateEmbedding).toHaveBeenCalledWith('tech companies');
+      // The usage line of the embedding names the organization (#47)
+      expect(generateEmbedding).toHaveBeenCalledWith('tech companies', {
+        operation: 'embed-search-query',
+        organizationId: 'org-1',
+      });
       expect(db.execute).toHaveBeenCalled();
       expect(results).toEqual(mockResults);
     });
@@ -242,7 +246,10 @@ describe('semantic-search', () => {
 
       await updateLeadEmbedding({ ...one, text: 'John Doe at Acme Corp' });
 
-      expect(generateEmbedding).toHaveBeenCalledWith('John Doe at Acme Corp');
+      expect(generateEmbedding).toHaveBeenCalledWith('John Doe at Acme Corp', {
+        operation: 'embed-lead',
+        organizationId: 'org-1',
+      });
     });
 
     it('writes the embedding on the lead with its id and organization only, and reports it (#583, #590)', async () => {

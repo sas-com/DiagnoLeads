@@ -166,13 +166,15 @@ function queue(
     sends?: unknown[];
     suppressions?: unknown[];
     users?: unknown[];
+    /** The caller may not read comments (#555): the comments are not queried */
+    hideComments?: boolean;
   } = {}
 ) {
   dbState.results = [
     [leadRow(options.lead)],
     options.submissions ?? submissions,
     options.hearings ?? [],
-    options.comments ?? [],
+    ...(options.hideComments ? [] : [options.comments ?? []]),
     options.audits ?? [],
     options.contacts ?? [],
     options.consents ?? [],
@@ -410,6 +412,15 @@ describe('leadActivity.list', () => {
     }
   );
 
+  it("leaves the comments out of the parent organization's timeline, unread (#555)", async () => {
+    queue({ hideComments: true });
+    const { items } = await list({ limit: 50 }, 'parent_viewer');
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.some((item) => item.kind === 'comment')).toBe(false);
+    const sql = dbState.wheres.map((where) => toQuery(where).sql).join(' ');
+    expect(sql).not.toContain('"lead_comments"');
+  });
+
   it('rejects a user who is not a member of the organization', async () => {
     await expect(list({ limit: 10 }, null as unknown as string)).rejects.toMatchObject({
       code: 'FORBIDDEN',
@@ -594,8 +605,9 @@ describe('leadActivity.list: respondent email (#154)', () => {
   });
 
   describe('why an address was suppressed (#365)', () => {
-    const queueSuppressed = () =>
+    const queueSuppressed = (role?: string) =>
       queue({
+        hideComments: role === 'parent_viewer',
         submissions: [],
         // One suppression per address, as in the database (email_suppressions_org_email_unique):
         // the declined request's address and the lead's current one
@@ -639,7 +651,7 @@ describe('leadActivity.list: respondent email (#154)', () => {
     it.each(['member', 'parent_viewer'])(
       'shows %s that the address is suppressed, never why or by whom',
       async (role) => {
-        queueSuppressed();
+        queueSuppressed(role);
         const { items } = await listEmail(role);
         expect(items).toEqual([
           {
