@@ -11,7 +11,7 @@ import {
 } from '@/lib/features/webhooks/services/lead-events';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
-import { type SQL, and, count, eq, inArray, sql } from 'drizzle-orm';
+import { type SQL, and, count, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 import {
