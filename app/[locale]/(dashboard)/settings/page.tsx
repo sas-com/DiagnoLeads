@@ -1,6 +1,7 @@
 'use client';
 
 import { DeleteAccountCard } from '@/components/features/account/delete-account-card';
+import { SignOutOtherDevicesCard } from '@/components/features/account/sign-out-other-devices-card';
 import { NotificationSettings } from '@/components/features/notifications/notification-settings';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,8 +16,16 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 /**
- * Personal settings: profile, password, notifications of the current organization and account
- * deletion (#164)
+ * The code better-auth answers a wrong current password with on /change-password (400). Checked by
+ * code, not by message: other failures say "invalid" too (an origin it does not trust is
+ * "Invalid origin"), and those are not about the current password. `$ERROR_CODES` is used only as a
+ * type: at runtime the react client answers `authClient.$ERROR_CODES.X` with a function, not a code
+ */
+const WRONG_CURRENT_PASSWORD = 'INVALID_PASSWORD' satisfies keyof typeof authClient.$ERROR_CODES;
+
+/**
+ * Personal settings: profile, password, signing out the other devices (#647), notifications of the
+ * current organization and account deletion (#164)
  */
 export default function SettingsPage() {
   const t = useTranslations('settings.profile');
@@ -93,25 +102,20 @@ export default function SettingsPage() {
 
     setIsChangingPassword(true);
     try {
-      const result = await authClient.$fetch<{ user?: unknown; error?: { message?: string } }>(
-        '/change-password',
-        {
-          method: 'POST',
-          body: {
-            currentPassword,
-            newPassword,
-            revokeOtherSessions: false,
-          },
-        }
-      );
+      /**
+       * Always ends the user's other sessions (owner's decision, #591), like a reset does (#529).
+       * better-auth (1.6.33) deletes every session of the user and signs this browser in again
+       * with a new session cookie; called through the client (not $fetch), it then reloads the
+       * session, so this tab stays signed in and holds the new session.
+       */
+      const result = await authClient.changePassword({
+        currentPassword,
+        newPassword,
+        revokeOtherSessions: true,
+      });
 
       if (result.error) {
-        const errorMessage = result.error.message?.toLowerCase() || '';
-        if (
-          errorMessage.includes('incorrect') ||
-          errorMessage.includes('invalid') ||
-          errorMessage.includes('wrong')
-        ) {
+        if (result.error.code === WRONG_CURRENT_PASSWORD) {
           toast.error(t('currentPasswordIncorrect'));
         } else {
           toast.error(t('passwordChangeError'));
@@ -340,6 +344,8 @@ export default function SettingsPage() {
             </div>
           </div>
         </Card>
+
+        <SignOutOtherDevicesCard />
 
         {/* Notification Settings */}
         <NotificationSettings />

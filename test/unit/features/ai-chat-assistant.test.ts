@@ -65,7 +65,8 @@ describe('ai-chat-assistant', () => {
 
       const result = await generateLeadSummary(lead);
 
-      expect(mockCreate.mock.calls[0][0].messages[0].content).toContain('N/A');
+      // Missing fields are null in the lead's data block (#47)
+      expect(mockCreate.mock.calls[0][0].messages[0].content).toContain('"company": null');
       expect(result).toBe('Summary for unknown lead.');
     });
 

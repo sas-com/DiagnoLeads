@@ -42,7 +42,8 @@ const entryCost = (depth: number) => 2 * (depth + 1) + 2;
 /**
  * A copy of `value` whose indented JSON takes about `budget.left` characters at most: strings
  * are clipped, and array items and object entries are left out once the budget runs out.
- * Escapes are not counted, so text full of quotes or control characters can take more.
+ * Escapes are not counted, so text full of quotes, control characters, `<` `>` or what looks
+ * like them (which the prompt's data block escapes, prompt-safety.ts) can take more.
  */
 function boundValue(value: unknown, budget: { left: number }, depth: number): unknown {
   if (typeof value === 'string') {
