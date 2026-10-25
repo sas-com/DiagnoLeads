@@ -81,7 +81,6 @@ features-in-cycles prospects
 features-in-cycles reports
 features-in-cycles respondent-email
 features-in-cycles webhooks
-features-use-global-db lib/features/ai/search/semantic.ts
 features-use-global-db lib/features/audit-logs/api/router.ts
 features-use-global-db lib/features/audit-logs/service.ts
 features-use-global-db lib/features/challenge-guide/service.ts
