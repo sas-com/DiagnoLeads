@@ -8,7 +8,7 @@
  */
 
 import { canReadDeals } from '@/lib/features/deals/service';
-import { listAssignableMembers, memberDisplayName } from '@/lib/features/leads/assignment';
+import { listAssignableMembers, memberDisplayName } from '@/lib/features/leads/service';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
