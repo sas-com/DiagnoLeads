@@ -60,9 +60,9 @@ describe('Router namespaces', () => {
 
   describe('analytics', () => {
     it('should provide analytics endpoints', () => {
-      const endpoints = ['overview', 'leadsOverTime', 'conversionFunnel', 'scoreDistribution'];
-      expect(endpoints).toContain('overview');
-      expect(endpoints).toContain('conversionFunnel');
+      const endpoints = ['getOverview', 'getLeadTrend', 'getConversionFunnel', 'getResponseTime'];
+      expect(endpoints).toContain('getOverview');
+      expect(endpoints).toContain('getConversionFunnel');
     });
   });
 

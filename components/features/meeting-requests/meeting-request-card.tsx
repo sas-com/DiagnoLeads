@@ -54,9 +54,12 @@ export function MeetingRequestCard({ organizationId, leadId }: MeetingRequestCar
       }
       setChanging(false);
       utils.leadFollowUp.tasks.invalidate();
-      const emailMessage = t(`emailResult.${outcome.email}`);
-      if (outcome.email === 'failed') toast.warning(`${t('confirmDone')}。${emailMessage}`);
-      else toast.success(`${t('confirmDone')}。${emailMessage}`);
+      const message = t('confirmToast', {
+        done: t('confirmDone'),
+        email: t(`emailResult.${outcome.email}`),
+      });
+      if (outcome.email === 'failed') toast.warning(message);
+      else toast.success(message);
     },
     onError: () => toast.error(t('confirmError')),
   });
@@ -192,7 +195,7 @@ export function MeetingRequestCard({ organizationId, leadId }: MeetingRequestCar
               <dt className="text-xs text-muted-foreground">{t('attendees')}</dt>
               <dd className="text-foreground">
                 {request.attendeeRoles.length > 0
-                  ? request.attendeeRoles.map((role) => t(`roles.${role}`)).join('、')
+                  ? format.list(request.attendeeRoles.map((role) => t(`roles.${role}`)))
                   : t('none')}
               </dd>
             </div>

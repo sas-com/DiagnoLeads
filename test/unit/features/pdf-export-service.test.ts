@@ -100,7 +100,8 @@ describe('PDF Export Service', () => {
         totalLeads: 100,
         newLeadsThisMonth: 25,
         conversionRate: 15.5,
-        averageScore: 72,
+        mqlLevels: { interest: 3, fit: 2, none: 4, unknown: 1 },
+        mqlRate: 30,
         leadsByStatus: {
           new: 40,
           nurturing: 30,

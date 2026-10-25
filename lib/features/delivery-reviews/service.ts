@@ -3,9 +3,12 @@
  * checks permissions.
  */
 import type { db as defaultDb } from '@/lib/db/client';
-import { diagnosticSubmissions, leadDeliveryReviews, leads, users } from '@/lib/db/schema';
-import { AX_MIGRATION_DIAGNOSTIC_KEY } from '@/lib/features/diagnostics/ax-migration/definition';
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { leadDeliveryReviews, leads, users } from '@/lib/db/schema';
+import {
+  latestAxSubmission,
+  latestAxSubmissions,
+} from '@/lib/features/diagnostics/ax-migration/lead-submissions';
+import { and, eq, sql } from 'drizzle-orm';
 import {
   DELIVERY_PHASES,
   type DiagnosisAccuracy,
@@ -45,22 +48,6 @@ export function readDiagnosisSummary(result: unknown): LeadDiagnosisSummary {
   };
 }
 
-const latestSubmissions = (db: Database, organizationId: string, leadIds: string[]) =>
-  db
-    .selectDistinctOn([diagnosticSubmissions.leadId], {
-      leadId: diagnosticSubmissions.leadId,
-      result: diagnosticSubmissions.result,
-    })
-    .from(diagnosticSubmissions)
-    .where(
-      and(
-        eq(diagnosticSubmissions.organizationId, organizationId),
-        eq(diagnosticSubmissions.diagnosticKey, AX_MIGRATION_DIAGNOSTIC_KEY),
-        inArray(diagnosticSubmissions.leadId, leadIds)
-      )
-    )
-    .orderBy(asc(diagnosticSubmissions.leadId), desc(diagnosticSubmissions.createdAt));
-
 /**
  * The lead's review (null when none was saved) and its latest AX diagnosis; undefined when the
  * lead is not found
@@ -76,7 +63,7 @@ export async function getDeliveryReview(
     .from(leads)
     .where(and(eq(leads.id, input.leadId), eq(leads.organizationId, input.organizationId)));
   if (!lead) return undefined;
-  const [[row], [submission]] = await Promise.all([
+  const [[row], submission] = await Promise.all([
     db
       .select({
         checkpointOutcomes: leadDeliveryReviews.checkpointOutcomes,
@@ -97,7 +84,7 @@ export async function getDeliveryReview(
           eq(leadDeliveryReviews.organizationId, input.organizationId)
         )
       ),
-    latestSubmissions(db, input.organizationId, [input.leadId]),
+    latestAxSubmission(db, input.organizationId, input.leadId),
   ]);
   return {
     review: row
@@ -175,7 +162,7 @@ export async function getDeliveryReport(
   const submissions =
     reviews.length === 0
       ? []
-      : await latestSubmissions(
+      : await latestAxSubmissions(
           db,
           organizationId,
           reviews.map((review) => review.leadId)

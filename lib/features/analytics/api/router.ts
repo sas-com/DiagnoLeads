@@ -1,9 +1,10 @@
 import type { AppAbility } from '@/lib/auth/permissions';
 import { leads } from '@/lib/db/schema';
+import { countLeadsByMqlLevel } from '@/lib/features/leads/service';
 import { LEAD_STATUSES, type LeadStatus } from '@/lib/features/leads/types/pipeline';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
-import { and, count, desc, eq, gte, lte, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { getDashboardSummary } from '../dashboard';
 import {
@@ -16,19 +17,16 @@ import { getResponseTimeDistribution } from '../response-time';
 import {
   type AcquisitionCostSummary,
   type AgencyPerformanceRow,
-  type ComparisonResult,
   type ConversionFunnelData,
   type DateRange,
   type FunnelStage,
   type OverviewStats,
-  type PeriodMetrics,
   type ResponseTimeResult,
   type SourceBreakdown,
   type StatusBreakdown,
   type TrendDataPoint,
   getAcquisitionCostSchema,
   getAgencyPerformanceSchema,
-  getComparisonSchema,
   getConversionFunnelSchema,
   getLeadTrendSchema,
   getOverviewSchema,
@@ -68,7 +66,7 @@ export const analyticsRouter = router({
 
   /**
    * Get Overview Statistics
-   * Returns total leads, conversion rate, new leads this month, and average score
+   * Returns total leads, conversion rate, new leads this month, and leads per MQL level (#605)
    */
   getOverview: organizationProcedure
     .input(getOverviewSchema)
@@ -104,15 +102,10 @@ export const analyticsRouter = router({
       const convertedLeads = convertedLeadsResult[0]?.count || 0;
       const conversionRate = totalLeads > 0 ? (convertedLeads / totalLeads) * 100 : 0;
 
-      // Get average score (excluding null scores)
-      const avgScoreResult = await ctx.db
-        .select({
-          avg: sql<number>`COALESCE(AVG(${leads.score}), 0)`,
-        })
-        .from(leads)
-        .where(and(eq(leads.organizationId, organizationId), sql`${leads.score} IS NOT NULL`));
-
-      const averageScore = Math.round(Number(avgScoreResult[0]?.avg) || 0);
+      // Leads per MQL level, as the list filters them (#605): the sign of how promising leads
+      // are, instead of the average score (#447)
+      const mqlLevels = await countLeadsByMqlLevel(ctx.db, organizationId);
+      const mqlRate = totalLeads > 0 ? (mqlLevels.interest / totalLeads) * 100 : 0;
 
       // Get leads by status
       const leadsByStatusResult = await ctx.db
@@ -139,7 +132,8 @@ export const analyticsRouter = router({
         totalLeads,
         newLeadsThisMonth,
         conversionRate: Math.round(conversionRate * 100) / 100, // Round to 2 decimal places
-        averageScore,
+        mqlLevels,
+        mqlRate: Math.round(mqlRate * 100) / 100,
         leadsByStatus,
       };
     }),
@@ -354,155 +348,6 @@ export const analyticsRouter = router({
       assertCanReadLeads(ctx.ability);
       const { organizationId, dateRange } = input;
       return getAgencyPerformance(ctx.db, organizationId, analyticsPeriodStart(dateRange));
-    }),
-
-  /**
-   * Get Comparison Analysis
-   * Compare metrics between two time periods
-   */
-  getComparison: organizationProcedure
-    .input(getComparisonSchema)
-    .query(async ({ ctx, input }): Promise<ComparisonResult> => {
-      assertCanReadLeads(ctx.ability);
-      const { organizationId, currentPeriod, previousPeriod } = input;
-
-      // Helper to get metrics for a period
-      const getMetricsForPeriod = async (start: Date, end: Date): Promise<PeriodMetrics> => {
-        // Get total and converted counts
-        const countsResult = await ctx.db
-          .select({
-            total: count().as('total'),
-            converted: sql<number>`SUM(CASE WHEN ${leads.status} = 'won' THEN 1 ELSE 0 END)`.as(
-              'converted'
-            ),
-            avgScore: sql<number>`COALESCE(AVG(${leads.score}), 0)`.as('avgScore'),
-          })
-          .from(leads)
-          .where(
-            and(
-              eq(leads.organizationId, organizationId),
-              gte(leads.createdAt, start),
-              lte(leads.createdAt, end)
-            )
-          );
-
-        const totalLeads = countsResult[0]?.total || 0;
-        const convertedLeads = Number(countsResult[0]?.converted) || 0;
-        const averageScore = Math.round(Number(countsResult[0]?.avgScore) || 0);
-
-        // Get by source
-        const sourceData = await ctx.db
-          .select({
-            source: sql<string>`COALESCE(${leads.source}, 'unknown')`.as('source'),
-            count: count().as('count'),
-          })
-          .from(leads)
-          .where(
-            and(
-              eq(leads.organizationId, organizationId),
-              gte(leads.createdAt, start),
-              lte(leads.createdAt, end)
-            )
-          )
-          .groupBy(sql`COALESCE(${leads.source}, 'unknown')`);
-
-        const bySource: Record<string, number> = {};
-        for (const row of sourceData) {
-          bySource[row.source] = row.count;
-        }
-
-        // Get by status
-        const statusData = await ctx.db
-          .select({
-            status: leads.status,
-            count: count().as('count'),
-          })
-          .from(leads)
-          .where(
-            and(
-              eq(leads.organizationId, organizationId),
-              gte(leads.createdAt, start),
-              lte(leads.createdAt, end)
-            )
-          )
-          .groupBy(leads.status);
-
-        const byStatus: Record<string, number> = {};
-        for (const row of statusData) {
-          byStatus[row.status] = row.count;
-        }
-
-        return {
-          totalLeads,
-          convertedLeads,
-          conversionRate:
-            totalLeads > 0 ? Math.round((convertedLeads / totalLeads) * 10000) / 100 : 0,
-          averageScore,
-          bySource,
-          byStatus,
-        };
-      };
-
-      // Get metrics for both periods
-      const current = await getMetricsForPeriod(
-        new Date(currentPeriod.start),
-        new Date(currentPeriod.end)
-      );
-      const previous = await getMetricsForPeriod(
-        new Date(previousPeriod.start),
-        new Date(previousPeriod.end)
-      );
-
-      // Calculate percentage changes
-      const calculateChange = (currentVal: number, previousVal: number): number => {
-        if (previousVal === 0) return currentVal > 0 ? 100 : 0;
-        return Math.round(((currentVal - previousVal) / previousVal) * 10000) / 100;
-      };
-
-      const changes = {
-        totalLeads: calculateChange(current.totalLeads, previous.totalLeads),
-        convertedLeads: calculateChange(current.convertedLeads, previous.convertedLeads),
-        conversionRate: calculateChange(current.conversionRate, previous.conversionRate),
-        averageScore: calculateChange(current.averageScore, previous.averageScore),
-      };
-
-      // Generate insights
-      const insights: string[] = [];
-
-      if (changes.totalLeads > 10) {
-        insights.push(`Lead volume increased by ${changes.totalLeads}%`);
-      } else if (changes.totalLeads < -10) {
-        insights.push(`Lead volume decreased by ${Math.abs(changes.totalLeads)}%`);
-      }
-
-      if (changes.conversionRate > 5) {
-        insights.push(`Conversion rate improved by ${changes.conversionRate}%`);
-      } else if (changes.conversionRate < -5) {
-        insights.push(`Conversion rate dropped by ${Math.abs(changes.conversionRate)}%`);
-      }
-
-      if (changes.averageScore > 5) {
-        insights.push(`Lead quality improved (score up ${changes.averageScore}%)`);
-      } else if (changes.averageScore < -5) {
-        insights.push(`Lead quality declined (score down ${Math.abs(changes.averageScore)}%)`);
-      }
-
-      // Source comparison
-      const currentTopSource = Object.entries(current.bySource).sort((a, b) => b[1] - a[1])[0];
-      const previousTopSource = Object.entries(previous.bySource).sort((a, b) => b[1] - a[1])[0];
-
-      if (currentTopSource && previousTopSource && currentTopSource[0] !== previousTopSource[0]) {
-        insights.push(
-          `Top lead source changed from ${previousTopSource[0]} to ${currentTopSource[0]}`
-        );
-      }
-
-      return {
-        currentPeriod: current,
-        previousPeriod: previous,
-        changes,
-        insights,
-      };
     }),
 });
 

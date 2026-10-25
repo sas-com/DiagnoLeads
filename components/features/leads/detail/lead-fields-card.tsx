@@ -117,6 +117,15 @@ function formValues(lead: Lead): CardValues {
   };
 }
 
+/**
+ * The values of the card's own fields. Only these are checked when saving: a stored value of
+ * another card over a limit set later (#575) would refuse the save without showing why.
+ */
+function cardValues(lead: Lead, fields: readonly CardFieldName[]): CardValues {
+  const values = formValues(lead);
+  return Object.fromEntries(fields.map((field) => [field, values[field]])) as CardValues;
+}
+
 /** Field labels of the lead form */
 function useFieldLabel() {
   const t = useTranslations('leads');
@@ -401,7 +410,7 @@ function CardForm({
 
   const form = useForm<CardValues>({
     resolver: zodResolver(cardSchema, { errorMap }),
-    defaultValues: formValues(lead),
+    defaultValues: cardValues(lead, fields),
   });
   const { isDirty } = form.formState;
 
@@ -441,7 +450,7 @@ function CardForm({
   });
 
   const cancel = () => {
-    form.reset(formValues(lead));
+    form.reset(cardValues(lead, fields));
     onDone();
   };
 

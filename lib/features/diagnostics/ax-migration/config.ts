@@ -1,3 +1,4 @@
+import { CONSULTATION_RESPONSE_BUSINESS_DAYS } from '../types/consultation';
 import type { AxAccessPathRules } from './access-path';
 import type { AxMqlRules } from './mql';
 
@@ -128,5 +129,5 @@ export const AX_MIGRATION_CONFIG: AxMigrationConfig = {
   sqlTimelines: ['within_1y', '1_2y'],
   // 部署単位の Access は業務部門の部長・課長が決裁することが多い（2026-10-11 レビュー）
   decisionAccessRoles: ['executive', 'it_manager', 'it_staff', 'business_manager'],
-  consultationResponseBusinessDays: 2,
+  consultationResponseBusinessDays: CONSULTATION_RESPONSE_BUSINESS_DAYS,
 };

@@ -38,8 +38,10 @@ const COLORS = {
   pink: '#ec4899',
   rose: '#f43f5e',
   brand: '#465fff',
-  /** Project brand (teal, --color-brand-500) */
+  /** Project brand (teal, --color-brand-500 outside the admin site) */
   teal: '#14b8a6',
+  /** DADS key colour of the admin site: Green-900 (--color-primitive-green-900, #423) */
+  key: '#115a36',
 };
 
 interface AreaChartProps {
@@ -89,7 +91,8 @@ export function AreaChart({
   const options: ApexOptions = {
     colors: colors.map((c) => COLORS[c] || COLORS.blue),
     chart: {
-      fontFamily: 'Outfit, sans-serif',
+      // The screen's own font (DADS: Noto Sans JP), not a font of the chart library's choice
+      fontFamily: 'inherit',
       type: 'area',
       height: height,
       toolbar: {
@@ -114,12 +117,10 @@ export function AreaChart({
       curve: curveType,
       width: 2,
     },
+    // A flat, light fill: no gradient (DADS dashboard guidebook: no decorative effects)
     fill: {
-      type: 'gradient',
-      gradient: {
-        opacityFrom: 0.4,
-        opacityTo: 0.1,
-      },
+      type: 'solid',
+      opacity: 0.12,
     },
     markers: {
       size: 0,
@@ -157,7 +158,8 @@ export function AreaChart({
       show: showLegend,
       position: 'bottom',
       horizontalAlign: 'center',
-      fontFamily: 'Outfit',
+      fontFamily: 'inherit',
+      fontSize: '14px',
       labels: {
         colors: legendColor,
       },
@@ -178,7 +180,7 @@ export function AreaChart({
         // Only for thinned date axes; other charts keep the library's label behaviour
         ...(maxCategoryLabels ? { rotate: 0, hideOverlappingLabels: true } : {}),
         style: {
-          fontSize: '12px',
+          fontSize: '14px',
           colors: textColor,
         },
       },
@@ -187,7 +189,7 @@ export function AreaChart({
       ...(integerValues ? integerAxis(data, categories, false) : {}),
       labels: {
         style: {
-          fontSize: '12px',
+          fontSize: '14px',
           colors: [textColor],
         },
         formatter: (val: number) => valueFormatter(integerValues ? Math.round(val) : val),
