@@ -46,7 +46,11 @@ const LEVEL_BADGE: Record<Level, string> = {
 };
 
 const CHALLENGE_KEYS: ChallengeType[] = ['people', 'cost', 'agility', 'data'];
-const STEP_KEYS = ['simple', 'survey', 'migration', 'ax'] as const;
+/**
+ * Steps after the other systems' check, as the main page's flow names them (#537): the free
+ * consultation next, then the quick assessment and Phase 1-3
+ */
+const STEP_KEYS = ['consult', 'simple', 'survey', 'migration', 'ax'] as const;
 
 /**
  * Steps after an Access check (#457): the flow of the Access page (#158), with the work of the
@@ -139,6 +143,11 @@ export function AxDiagnosisResult({
   const accessPath = result.accessPath?.path;
   const stepKeys: readonly string[] = accessPath ? accessStepKeys(accessPath) : STEP_KEYS;
   const stepsPrefix = accessPath ? 'accessSteps.items' : 'steps';
+  // The other systems label their steps as the main page does (#537); Access numbers them (#457)
+  const stepLabel = (key: string, index: number) => {
+    if (!accessPath) return t(`steps.${key}.label`);
+    return index === 0 ? t('nextStepLabel') : t('stepLabel', { number: index + 1 });
+  };
   const reasons = [...result.reasons.difficulty, ...result.reasons.urgency];
   const unknownQuestions = unknownTechnicalQuestions(answers);
 
@@ -468,11 +477,13 @@ export function AxDiagnosisResult({
               key={key}
               className={cn(
                 'rounded-xl border-2 p-4',
-                index === 0 ? 'border-ax-teal-dark bg-ax-teal/5' : 'border-gray-200 bg-white'
+                index === 0 ? 'border-ax-teal-dark bg-ax-teal/5' : 'border-gray-200 bg-white',
+                // Five steps: the next one across the row, the four after it below
+                index === 0 && stepKeys.length === 5 && 'sm:col-span-2 lg:col-span-4'
               )}
             >
               <p className="font-ax-latin text-xs font-bold tracking-widest text-ax-teal-dark">
-                {index === 0 ? t('nextStepLabel') : t('stepLabel', { number: index + 1 })}
+                {stepLabel(key, index)}
               </p>
               <p className="mt-1 font-bold">{t(`${stepsPrefix}.${key}.title`)}</p>
               <p className="mt-2 text-xs leading-relaxed text-gray-700">

@@ -147,8 +147,9 @@ describe('Access landing page', () => {
     for (const name of ['直して使い続ける', 'Web に移す', '既製サービスに置き換える']) {
       expect(screen.getByRole('heading', { level: 3, name })).toBeInTheDocument();
     }
-    // The header anchors of the site lead to this page's sections
-    for (const id of ['problems', 'steps', 'targets', 'faq', 'diagnosis']) {
+    // The header anchors of the site lead to this page's sections; its approach is the three
+    // ways (#537)
+    for (const id of ['problems', 'paths', 'targets', 'faq', 'diagnosis']) {
       expect(document.getElementById(id), id).not.toBeNull();
     }
     // The AS/400 and ACOS sections are the main page's (#311)
@@ -165,7 +166,8 @@ describe('Access landing page', () => {
     await renderPage();
     expect(
       screen.getByText(
-        '版や VBA、利用人数などを選ぶと、ツールに合った進め方の目安が分かります。直して使うか、Web に移すか、置き換えるか、合うものをお伝えします。'
+        // The questions asked before the result; the number of users comes after it (#537)
+        '版や VBA、画面・帳票の数などを選ぶと、ツールに合った進め方の目安が分かります。直して使うか、Web に移すか、置き換えるか、合うものをお伝えします。'
       )
     ).toBeInTheDocument();
     expect(screen.getByText(/無料Web診断で、どれが合うかの目安が分かります。進め方は、相談のうえで一緒に決めます。/)).toBeInTheDocument();
@@ -182,6 +184,28 @@ describe('Access landing page', () => {
 
     const metadata = await generateMetadata({ params });
     expect(metadata.description).toContain('ツールに合った進め方の目安が分かります');
+    expect(metadata.description).toContain('画面・帳票の数');
+    expect(metadata.description).not.toContain('利用人数');
+  });
+
+  it('keeps the three ways of the hero beside its copy, not below the phone buttons (#537)', async () => {
+    await renderPage();
+    const hero = screen.getByRole('heading', { level: 1 }).closest('section') as HTMLElement;
+    const ways = within(hero).getByText('進め方は3つ').parentElement as HTMLElement;
+    expect(ways).toHaveClass('hidden', 'lg:block');
+  });
+
+  it('answers whether someone outside IT can answer, as the main page does (#537)', async () => {
+    await renderPage();
+    const faq = document.getElementById('faq') as HTMLElement;
+    const questions = [...faq.querySelectorAll('summary')].map((summary) =>
+      summary.textContent?.replace(/^Q/, '')
+    );
+    expect(questions.at(-2)).toBe('情報システムの担当者でなくても答えられますか？');
+    expect(questions.at(-1)).toBe('相談はどのように進みますか？');
+    expect(
+      within(faq).getByText('はい。すべて選択式で、わからない質問は「わからない」を選べます。詳しい質問は任意です。')
+    ).toBeInTheDocument();
   });
 
   it('points the diagnosis buttons at the embedded diagnosis', async () => {
