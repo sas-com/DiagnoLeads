@@ -1,5 +1,7 @@
 # ディレクトリ構成改善計画
 
+> **記録（2025-11）**。ここに書いたパス（`lib/ai/`・`lib/plugins/`・`server/routers/leads.ts` など）は今のリポジトリにない。今の構成は [docs/ARCHITECTURE.md](./ARCHITECTURE.md)。
+
 ## Phase 2 改善 (今すぐ実施)
 
 ### 目的

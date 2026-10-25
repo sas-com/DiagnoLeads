@@ -34,11 +34,14 @@ import { DEAL_LIMITS } from '@/lib/features/deals/types/schemas';
 import { trpc } from '@/lib/trpc/client';
 import { useTranslations } from 'next-intl';
 import { type FormEvent, type ReactNode, useEffect, useId, useState } from 'react';
+import { isDealDate, parseWhole } from './deal-format';
 import { LostReasonDialog, type LostValues } from './lost-reason-dialog';
 import { useDealMutations } from './use-deal-mutations';
 
 /** Select value for "nobody" / "automatic" (Radix needs non-empty values) */
 const NONE = '__none__';
+/** Select value of a new deal's owner left to the server (the lead's assignee) */
+const LEAD_ASSIGNEE = '__lead__';
 
 interface DealFormDialogProps {
   open: boolean;
@@ -71,22 +74,44 @@ const emptyState = (deal?: DealView): FormState => ({
   probability: deal ? String(deal.probability) : '',
   forecastOverride: deal?.forecastOverride ?? null,
   expectedCloseOn: deal?.expectedCloseOn ?? undefined,
-  // undefined: the server picks the lead's assignee (new deals only)
+  // undefined: the server picks the lead's assignee, else the creator (new deals only)
   ownerUserId: deal ? deal.ownerUserId : undefined,
   nextStep: deal?.nextStep ?? '',
 });
 
-const parseWhole = (text: string, max: number): number | null | 'invalid' => {
-  const trimmed = text.trim();
-  if (trimmed === '') return null;
-  if (!/^\d+$/.test(trimmed)) return 'invalid';
-  const value = Number(trimmed);
-  return value <= max ? value : 'invalid';
-};
+/** What the form sends; an empty probability and an owner left to the server are not sent */
+function formValues(form: FormState) {
+  const amount = parseWhole(form.amount, DEAL_LIMITS.amount);
+  const probability = parseWhole(form.probability, 100);
+  return {
+    name: form.name.trim(),
+    kind: form.kind,
+    amount: amount === 'invalid' ? null : amount,
+    expectedCloseOn: form.expectedCloseOn ?? null,
+    nextStep: form.nextStep.trim() || null,
+    forecastOverride: form.forecastOverride,
+    ...(typeof probability === 'number' ? { probability } : {}),
+    ...(form.ownerUserId !== undefined ? { ownerUserId: form.ownerUserId } : {}),
+  };
+}
+
+type FormValues = ReturnType<typeof formValues>;
+
+/** The values that differ from those the form was opened with */
+function changedValues(values: FormValues, opened: FormValues): Partial<FormValues> {
+  const changed: Partial<FormValues> = {};
+  const copy = <K extends keyof FormValues>(key: K) => {
+    if (values[key] !== opened[key]) changed[key] = values[key];
+  };
+  for (const key of Object.keys(values) as (keyof FormValues)[]) copy(key);
+  return changed;
+}
 
 /**
  * Create a deal for a lead, or edit one (Refs #436). The stage of an existing deal is changed
- * on the board or the deal page; creating one directly as lost asks for the lost reason.
+ * on the board or the deal page; creating one directly as lost asks for the lost reason, and as
+ * won says what it does to the lead. Editing sends only the fields changed in the dialog, so it
+ * does not write back a value changed elsewhere meanwhile (a stage move resets the probability).
  */
 export function DealFormDialog({
   open,
@@ -101,18 +126,29 @@ export function DealFormDialog({
   const id = useId();
   const editing = !!deal;
   const [state, setState] = useState<FormState>(() => emptyState(deal));
+  // The values the dialog was opened with, which editing compares against
+  const [initial, setInitial] = useState<FormState>(() => emptyState(deal));
   const [lead, setLead] = useState<{ id: string; label: string } | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [lostOpen, setLostOpen] = useState(false);
+  // The close date box holds text that is not a date (it shows its own error)
+  const [closeUnreadable, setCloseUnreadable] = useState(false);
   const { create, update } = useDealMutations();
   const members = trpc.leads.assignees.useQuery({ organizationId }, { enabled: open });
 
   useEffect(() => {
     if (!open) return;
-    setState(emptyState(deal));
+    const opened = emptyState(deal);
+    setState(opened);
+    setInitial(opened);
     setLead(null);
     setSubmitted(false);
   }, [open, deal]);
+
+  // The date box is mounted anew, without typed text, each time the dialog opens
+  useEffect(() => {
+    if (open) setCloseUnreadable(false);
+  }, [open]);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setState((current) => ({ ...current, [key]: value }));
@@ -125,6 +161,9 @@ export function DealFormDialog({
     name: state.name.trim() === '',
     amount: amount === 'invalid',
     probability: probability === 'invalid',
+    // A date the deals do not take (outside 2000-2100) is refused by the API too
+    expectedCloseOn:
+      closeUnreadable || (!!state.expectedCloseOn && !isDealDate(state.expectedCloseOn)),
   };
   const invalid = Object.values(errors).some(Boolean);
   const pending = create.isPending || update.isPending;
@@ -135,23 +174,19 @@ export function DealFormDialog({
   });
 
   const save = (lost?: LostValues) => {
-    const values = {
-      name: state.name.trim(),
-      kind: state.kind,
-      amount: amount as number | null,
-      expectedCloseOn: state.expectedCloseOn ?? null,
-      nextStep: state.nextStep.trim() || null,
-      forecastOverride: state.forecastOverride,
-      ...(typeof probability === 'number' ? { probability } : {}),
-      ...(state.ownerUserId !== undefined ? { ownerUserId: state.ownerUserId } : {}),
-    };
+    const values = formValues(state);
     const done = (saved: DealView) => {
       setLostOpen(false);
       onOpenChange(false);
       onSaved?.(saved);
     };
     if (deal) {
-      update.mutate({ organizationId, dealId: deal.id, ...values }, { onSuccess: done });
+      const changed = changedValues(values, formValues(initial));
+      if (Object.keys(changed).length === 0) {
+        onOpenChange(false);
+        return;
+      }
+      update.mutate({ organizationId, dealId: deal.id, ...changed }, { onSuccess: done });
     } else if (chosenLeadId) {
       create.mutate(
         { organizationId, leadId: chosenLeadId, stage: state.stage, ...values, ...lost },
@@ -202,7 +237,9 @@ export function DealFormDialog({
             )}
 
             <div className="space-y-1.5">
-              <Label htmlFor={`${id}-name`}>{t('fields.name')}</Label>
+              <Label htmlFor={`${id}-name`}>
+                {t('fields.name')} <RequiredMark />
+              </Label>
               <Input
                 id={`${id}-name`}
                 value={state.name}
@@ -241,7 +278,10 @@ export function DealFormDialog({
                     value={state.stage}
                     onValueChange={(value) => set('stage', value as DealStage)}
                   >
-                    <SelectTrigger id={`${id}-stage`}>
+                    <SelectTrigger
+                      id={`${id}-stage`}
+                      aria-describedby={state.stage === 'won' ? `${id}-won-note` : undefined}
+                    >
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -255,6 +295,20 @@ export function DealFormDialog({
                 </div>
               )}
             </div>
+
+            {!editing && state.stage === 'won' && (
+              <div
+                id={`${id}-won-note`}
+                className="space-y-1 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-500/10 dark:text-amber-200"
+              >
+                <p>
+                  {lead
+                    ? t('wonDialog.impact', { lead: lead.label })
+                    : t('wonDialog.impactUnnamed')}
+                </p>
+                <p>{t('form.wonToday')}</p>
+              </div>
+            )}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
@@ -301,18 +355,34 @@ export function DealFormDialog({
                   value={state.expectedCloseOn}
                   onChange={(value) => set('expectedCloseOn', value)}
                   readOnly={false}
+                  onInvalidChange={setCloseUnreadable}
+                  error={
+                    submitted && errors.expectedCloseOn && !closeUnreadable
+                      ? t('form.closeDateInvalid')
+                      : undefined
+                  }
                 />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor={`${id}-owner`}>{t('fields.owner')}</Label>
                 <Select
-                  value={state.ownerUserId === undefined ? undefined : (state.ownerUserId ?? NONE)}
-                  onValueChange={(value) => set('ownerUserId', value === NONE ? null : value)}
+                  value={
+                    state.ownerUserId === undefined ? LEAD_ASSIGNEE : (state.ownerUserId ?? NONE)
+                  }
+                  onValueChange={(value) =>
+                    set(
+                      'ownerUserId',
+                      value === LEAD_ASSIGNEE ? undefined : value === NONE ? null : value
+                    )
+                  }
                 >
                   <SelectTrigger id={`${id}-owner`}>
-                    <SelectValue placeholder={t('card.unassigned')} />
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    {!editing && (
+                      <SelectItem value={LEAD_ASSIGNEE}>{t('form.ownerFromLead')}</SelectItem>
+                    )}
                     <SelectItem value={NONE}>{t('form.ownerNone')}</SelectItem>
                     {(members.data ?? []).map((member) => (
                       <SelectItem key={member.userId} value={member.userId}>
@@ -408,7 +478,9 @@ function LeadPicker({
   if (value) {
     return (
       <div className="space-y-1.5">
-        <Label htmlFor={inputId}>{t('form.lead')}</Label>
+        <Label htmlFor={inputId}>
+          {t('form.lead')} <RequiredMark />
+        </Label>
         <div className="flex items-center justify-between gap-2 rounded-md border border-gray-200 px-3 py-2 dark:border-gray-700">
           <span id={inputId} className="truncate text-sm">
             {value.label}
@@ -424,7 +496,9 @@ function LeadPicker({
   const items = suggestions.data ?? [];
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={inputId}>{t('form.lead')}</Label>
+      <Label htmlFor={inputId}>
+        {t('form.lead')} <RequiredMark />
+      </Label>
       <Input
         id={inputId}
         value={text}
@@ -460,5 +534,13 @@ function LeadPicker({
       )}
       {error}
     </div>
+  );
+}
+
+/** Marks a field that must be filled; part of its label, so it is read with the field's name */
+function RequiredMark() {
+  const t = useTranslations('deals.form');
+  return (
+    <span className="text-xs font-semibold text-red-600 dark:text-red-400">{t('required')}</span>
   );
 }

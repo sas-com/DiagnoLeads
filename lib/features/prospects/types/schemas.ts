@@ -1,5 +1,6 @@
 import { OBJECTION_REASONS } from '@/lib/features/ax-playbook/types/schemas';
 import { targetSystemEnum } from '@/lib/features/leads/types/pipeline';
+import { PLAIN_TEXT } from '@/lib/utils/plain-text';
 import { z } from 'zod';
 
 /**
@@ -103,9 +104,7 @@ export const SPREADSHEET_LABELS = {
   stage: Record<string, ProspectStage>;
 };
 
-/** No control or format characters (line breaks, bidi overrides) in one-line values */
-const PLAIN_TEXT = /^[^\p{Cc}\p{Cf}]*$/u;
-/** The same for notes, which may have line breaks and tabs */
+/** For notes: no control or format characters other than line breaks and tabs */
 const NO_CONTROL = /^(?:[^\p{Cc}\p{Cf}]|[\n\t])*$/u;
 
 const shortText = (max: number) =>

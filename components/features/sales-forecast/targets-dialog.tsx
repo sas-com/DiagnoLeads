@@ -1,5 +1,15 @@
 'use client';
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -20,6 +30,7 @@ import {
 } from '@/components/ui/select';
 import { DEAL_LIMITS } from '@/lib/features/deals/types/schemas';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
+import { fiscalYearOf } from '@/lib/features/sales-targets/types/fiscal-year';
 import { trpc } from '@/lib/trpc/client';
 import { Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -36,6 +47,12 @@ interface TargetsDialogProps {
   organizationId: string;
 }
 
+/** The fiscal year and month shown; undefined / null: the current ones */
+interface Selection {
+  fiscalYear: number | undefined;
+  month: string | null;
+}
+
 const parseAmount = (text: string): number | null | 'invalid' => {
   const trimmed = text.trim().replaceAll(',', '');
   if (trimmed === '') return null;
@@ -49,6 +66,7 @@ const parseAmount = (text: string): number | null | 'invalid' => {
  * and the month the fiscal year starts. Owners and admins only (the router checks it too).
  * Only the boxes that changed are sent, so two people editing other boxes do not undo each
  * other. Someone who left keeps their row while they hold a target, which can only be removed.
+ * The fiscal year start is the organization's setting: it is saved on its own, after a question.
  */
 export function TargetsDialog({ open, onOpenChange, organizationId }: TargetsDialogProps) {
   const t = useTranslations('salesForecast.targets');
@@ -57,8 +75,13 @@ export function TargetsDialog({ open, onOpenChange, organizationId }: TargetsDia
   const utils = trpc.useUtils();
   const [fiscalYear, setFiscalYear] = useState<number | undefined>(undefined);
   const [month, setMonth] = useState<string | null>(null);
-  const [amounts, setAmounts] = useState<Record<string, string>>({});
+  // What was typed in the boxes, by month and row; the other boxes show the stored targets
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [submitted, setSubmitted] = useState(false);
+  // A switch of the year or month held while asking to drop the unsaved boxes
+  const [pendingSwitch, setPendingSwitch] = useState<Selection | null>(null);
+  // The start month asked about, kept while the question closes so its title stays
+  const [startAsk, setStartAsk] = useState<{ open: boolean; month: number } | null>(null);
   const query = trpc.salesTargets.get.useQuery(
     { organizationId, ...(fiscalYear ? { fiscalYear } : {}) },
     { enabled: open && !!organizationId }
@@ -97,30 +120,18 @@ export function TargetsDialog({ open, onOpenChange, organizationId }: TargetsDia
   const storedAmount = (userId: string | null) =>
     data?.targets.find((target) => target.userId === userId && target.month === selectedMonth)
       ?.amount ?? null;
-
-  // Fill the boxes with the stored targets of the month
-  useEffect(() => {
-    if (!data || !selectedMonth) return;
-    const stored = (userId: string | null) =>
-      data.targets.find((target) => target.userId === userId && target.month === selectedMonth)
-        ?.amount;
-    const text = (value: number | undefined) => (value === undefined ? '' : String(value));
-    setAmounts({
-      [ORGANIZATION]: text(stored(null)),
-      ...Object.fromEntries(
-        [...data.members, ...data.formerMembers].map((member) => [
-          member.userId,
-          text(stored(member.userId)),
-        ])
-      ),
-    });
-    setSubmitted(false);
-  }, [data, selectedMonth]);
+  const draftKey = (key: string) => `${selectedMonth}|${key}`;
+  const boxText = (row: { key: string; userId: string | null }) => {
+    const stored = storedAmount(row.userId);
+    return drafts[draftKey(row.key)] ?? (stored === null ? '' : String(stored));
+  };
 
   useEffect(() => {
     if (!open) {
       setFiscalYear(undefined);
       setMonth(null);
+      setDrafts({});
+      setSubmitted(false);
     }
   }, [open]);
 
@@ -145,13 +156,44 @@ export function TargetsDialog({ open, onOpenChange, organizationId }: TargetsDia
     : [];
   const parsed = Object.fromEntries(
     rows.map((row) => {
-      const value = parseAmount(amounts[row.key] ?? '');
+      const value = parseAmount(boxText(row));
       // Someone who left cannot be given a target, only have theirs removed
       const refused = row.former && value !== null && value !== storedAmount(row.userId);
       return [row.key, refused ? 'former' : value];
     })
   );
   const invalid = rows.some((row) => parsed[row.key] === 'invalid' || parsed[row.key] === 'former');
+  // A box that differs from the stored target: to save, or not valid yet
+  const unsaved = rows.some((row) => parsed[row.key] !== storedAmount(row.userId));
+
+  const applySwitch = (next: Selection) => {
+    setFiscalYear(next.fiscalYear);
+    setMonth(next.month);
+    setDrafts({});
+    setSubmitted(false);
+  };
+  // Another year or month shows its stored targets: ask first when a box is unsaved
+  const switchTo = (next: Selection) => {
+    if (unsaved) setPendingSwitch(next);
+    else applySwitch(next);
+  };
+
+  const changeStart = (startMonth: number) => {
+    if (!selectedMonth) return;
+    const shown = selectedMonth;
+    const [year, monthOfYear] = shown.split('-').map(Number);
+    setStart.mutate(
+      { organizationId, month: startMonth },
+      {
+        // Stay on the month being edited, in its fiscal year from the new start, so the
+        // boxes typed in are kept
+        onSuccess: () => {
+          setFiscalYear(fiscalYearOf(year, monthOfYear, startMonth));
+          setMonth(shown);
+        },
+      }
+    );
+  };
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -180,19 +222,16 @@ export function TargetsDialog({ open, onOpenChange, organizationId }: TargetsDia
             <DialogDescription>{t('description')}</DialogDescription>
           </DialogHeader>
 
-          {!data ? (
-            <Loader2 className="h-5 w-5 animate-spin text-gray-400" aria-hidden="true" />
-          ) : (
+          {/* A failed refetch keeps the form: its boxes may hold unsaved input */}
+          {data ? (
             <>
-              <div className="grid gap-4 sm:grid-cols-[1.5fr_1fr_1fr]">
+              <div className="grid gap-4 sm:grid-cols-[1.5fr_1fr]">
                 <div className="space-y-1.5">
                   <Label htmlFor={`${id}-year`}>{t('fiscalYear')}</Label>
                   <Select
                     value={String(data.fiscalYear)}
-                    onValueChange={(value) => {
-                      setFiscalYear(Number(value));
-                      setMonth(null);
-                    }}
+                    onValueChange={(value) => switchTo({ fiscalYear: Number(value), month: null })}
+                    disabled={setStart.isPending}
                   >
                     <SelectTrigger id={`${id}-year`}>
                       <SelectValue />
@@ -210,29 +249,12 @@ export function TargetsDialog({ open, onOpenChange, organizationId }: TargetsDia
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor={`${id}-start`}>{t('startMonth')}</Label>
+                  <Label htmlFor={`${id}-month`}>{t('month')}</Label>
                   <Select
-                    value={String(data.fiscalYearStartMonth)}
-                    onValueChange={(value) =>
-                      setStart.mutate({ organizationId, month: Number(value) })
-                    }
+                    value={selectedMonth ?? undefined}
+                    onValueChange={(value) => switchTo({ fiscalYear, month: value })}
                     disabled={setStart.isPending}
                   >
-                    <SelectTrigger id={`${id}-start`}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {MONTHS.map((value) => (
-                        <SelectItem key={value} value={String(value)}>
-                          {t('startMonthOption', { month: value })}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor={`${id}-month`}>{t('month')}</Label>
-                  <Select value={selectedMonth ?? undefined} onValueChange={setMonth}>
                     <SelectTrigger id={`${id}-month`}>
                       <SelectValue />
                     </SelectTrigger>
@@ -269,16 +291,17 @@ export function TargetsDialog({ open, onOpenChange, organizationId }: TargetsDia
                         <Input
                           id={inputId}
                           inputMode="numeric"
-                          value={amounts[row.key] ?? ''}
+                          value={boxText(row)}
                           aria-invalid={bad}
                           aria-describedby={
                             [helpId, bad ? `${inputId}-error` : undefined]
                               .filter(Boolean)
                               .join(' ') || undefined
                           }
-                          onChange={(event) =>
-                            setAmounts((current) => ({ ...current, [row.key]: event.target.value }))
-                          }
+                          onChange={(event) => {
+                            const text = event.target.value;
+                            setDrafts((current) => ({ ...current, [draftKey(row.key)]: text }));
+                          }}
                         />
                         {bad && (
                           <p
@@ -301,7 +324,56 @@ export function TargetsDialog({ open, onOpenChange, organizationId }: TargetsDia
                   );
                 })}
               </fieldset>
+
+              <section
+                aria-labelledby={`${id}-settings`}
+                className="space-y-1.5 border-t border-gray-200 pt-4 dark:border-gray-800"
+              >
+                <h3
+                  id={`${id}-settings`}
+                  className="text-sm font-semibold text-gray-900 dark:text-gray-50"
+                >
+                  {t('organizationSettings')}
+                </h3>
+                <div className="grid items-center gap-1.5 sm:grid-cols-[1fr_12rem]">
+                  <Label htmlFor={`${id}-start`}>{t('startMonth')}</Label>
+                  <Select
+                    value={String(data.fiscalYearStartMonth)}
+                    onValueChange={(value) => setStartAsk({ open: true, month: Number(value) })}
+                    disabled={setStart.isPending}
+                  >
+                    <SelectTrigger id={`${id}-start`} aria-describedby={`${id}-start-help`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MONTHS.map((value) => (
+                        <SelectItem key={value} value={String(value)}>
+                          {t('startMonthOption', { month: value })}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p
+                    id={`${id}-start-help`}
+                    className="text-xs text-gray-500 sm:col-span-2 dark:text-gray-400"
+                  >
+                    {t('startMonthHelp')}
+                  </p>
+                </div>
+              </section>
             </>
+          ) : query.isError ? (
+            <div
+              role="alert"
+              className="space-y-2 rounded-lg border border-red-200 p-4 dark:border-red-900"
+            >
+              <p className="text-sm text-red-700 dark:text-red-400">{t('loadError')}</p>
+              <Button type="button" variant="outline" onClick={() => void query.refetch()}>
+                {tCommon('retry')}
+              </Button>
+            </div>
+          ) : (
+            <Loader2 className="h-5 w-5 animate-spin text-gray-400" aria-hidden="true" />
           )}
 
           <DialogFooter>
@@ -309,10 +381,55 @@ export function TargetsDialog({ open, onOpenChange, organizationId }: TargetsDia
               {tCommon('cancel')}
             </Button>
             <Button type="submit" disabled={!data || save.isPending}>
-              {t('save')}
+              {save.isPending ? t('saving') : t('save')}
             </Button>
           </DialogFooter>
         </form>
+
+        <AlertDialog
+          open={pendingSwitch !== null}
+          onOpenChange={(next) => {
+            if (!next) setPendingSwitch(null);
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t('discardTitle')}</AlertDialogTitle>
+              <AlertDialogDescription>{t('discardDescription')}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{tCommon('cancel')}</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => pendingSwitch && applySwitch(pendingSwitch)}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {t('discardConfirm')}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog
+          open={startAsk?.open ?? false}
+          onOpenChange={(next) => {
+            if (!next) setStartAsk((current) => current && { ...current, open: false });
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {t('startConfirmTitle', { month: startAsk?.month ?? 0 })}
+              </AlertDialogTitle>
+              <AlertDialogDescription>{t('startConfirmDescription')}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{tCommon('cancel')}</AlertDialogCancel>
+              <AlertDialogAction onClick={() => startAsk && changeStart(startAsk.month)}>
+                {t('startConfirm')}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   );

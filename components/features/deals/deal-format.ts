@@ -1,9 +1,25 @@
 /**
- * Formatting for the deals screens (Refs #436): yen amounts, days in a stage and the close date
- * periods of the board's filter. Dates are Japan calendar days (YYYY-MM-DD).
+ * Formatting for the deals screens (Refs #436): yen amounts, days in a stage, the close date
+ * periods of the board's filter and the checks of typed values. Dates are Japan calendar days
+ * (YYYY-MM-DD).
  */
 
+import { updateDealSchema } from '@/lib/features/deals/types/schemas';
+
 const intlLocale = (locale: string) => (locale === 'ja' ? 'ja-JP' : 'en-US');
+
+/** A typed whole number: null when empty, 'invalid' when it is not one or is above `max` */
+export function parseWhole(text: string, max: number): number | null | 'invalid' {
+  const trimmed = text.trim();
+  if (trimmed === '') return null;
+  if (!/^\d+$/.test(trimmed)) return 'invalid';
+  const value = Number(trimmed);
+  return value <= max ? value : 'invalid';
+}
+
+/** Whether the API takes the day as a deal's date (from 2000 to 2100, like the close date) */
+export const isDealDate = (value: string): boolean =>
+  updateDealSchema.shape.closedOn.safeParse(value).success;
 
 /** "¥3,000,000"; null when there is no amount */
 export function formatYen(amount: number | null, locale: string): string | null {

@@ -5,7 +5,7 @@
  * - Won: deals won on a day of the period. Open deals count in the period of their expected
  *   close date, in their forecast category; omitted deals are left out of the weighted amount.
  * - Open deals whose expected close date is before the period are reported apart, so a date
- *   that was never moved does not hide a deal.
+ *   that was never moved does not hide a deal; so are those without one (the date is optional).
  * - The week's changes compare the deals changed since a moment with their latest history row
  *   at that moment (deal_history keeps every forecast value after each change).
  */
@@ -21,7 +21,21 @@ import {
 import { memberDisplayName } from '@/lib/features/leads/service';
 import { listTargets } from '@/lib/features/sales-targets/service';
 import type { MonthRange } from '@/lib/features/sales-targets/types/fiscal-year';
-import { type SQL, and, asc, between, desc, eq, gt, inArray, lt, lte, or, sql } from 'drizzle-orm';
+import {
+  type SQL,
+  and,
+  asc,
+  between,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lt,
+  lte,
+  or,
+  sql,
+} from 'drizzle-orm';
 import {
   type DealChangeInput,
   type ForecastFigures,
@@ -50,6 +64,8 @@ export interface Forecast {
   total: ForecastRow;
   /** Open deals expected to close before the period: not in the figures above */
   overdue: { count: number; amount: number };
+  /** Open deals without an expected close date: in no period, so not in the figures either */
+  undated: { count: number; amount: number };
 }
 
 /** The forecast category of an open deal, the same rule as forecastCategory() */
@@ -78,8 +94,17 @@ export async function getForecast(
   ) as SQL;
   const inCategory = (category: string) =>
     and(openInPeriod, sql`${categorySql} = ${category}`) as SQL;
+  // Open deals outside the figures, all read with the same scope
+  const openDealsWhere = (condition: SQL) =>
+    db
+      .select({
+        count: sql<number>`count(*)::int`,
+        amount: sql<string>`coalesce(sum(${deals.amount}), 0)`,
+      })
+      .from(deals)
+      .where(and(eq(deals.organizationId, organizationId), open, condition));
 
-  const [figures, targets, [overdue]] = await Promise.all([
+  const [figures, targets, [overdue], [undated]] = await Promise.all([
     db
       .select({
         ownerUserId: deals.ownerUserId,
@@ -95,16 +120,13 @@ export async function getForecast(
       .where(and(eq(deals.organizationId, organizationId), or(wonInPeriod, openInPeriod)))
       .groupBy(deals.ownerUserId),
     listTargets(db, { organizationId, months: range.months }),
-    db
-      .select({
-        count: sql<number>`count(*)::int`,
-        amount: sql<string>`coalesce(sum(${deals.amount}), 0)`,
-      })
-      .from(deals)
-      .where(
-        and(eq(deals.organizationId, organizationId), open, lt(deals.expectedCloseOn, range.from))
-      ),
+    openDealsWhere(lt(deals.expectedCloseOn, range.from)),
+    openDealsWhere(isNull(deals.expectedCloseOn)),
   ]);
+  const tally = (row: { count: number; amount: string } | undefined) => ({
+    count: row?.count ?? 0,
+    amount: Number(row?.amount ?? 0),
+  });
 
   const byOwner = new Map<string | null, ForecastFigures>(
     figures.map((row) => [
@@ -165,7 +187,8 @@ export async function getForecast(
       sumFigures([...byOwner.values()]),
       organizationTarget(range.months, targets)
     ),
-    overdue: { count: overdue?.count ?? 0, amount: Number(overdue?.amount ?? 0) },
+    overdue: tally(overdue),
+    undated: tally(undated),
   };
 }
 

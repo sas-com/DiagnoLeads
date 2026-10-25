@@ -1,11 +1,14 @@
 /**
- * Formatting of the deals screens (#436): yen amounts, days in a stage and the close periods
+ * Formatting of the deals screens (#436): yen amounts, days in a stage, the close periods and the
+ * checks of typed values
  */
 import {
   daysSince,
   formatYen,
   formatYenCompact,
+  isDealDate,
   isDealPeriod,
+  parseWhole,
   periodRange,
 } from '@/components/features/deals/deal-format';
 import { describe, expect, it } from 'vitest';
@@ -49,5 +52,25 @@ describe('periodRange', () => {
     expect(isDealPeriod('thisQuarter')).toBe(true);
     expect(isDealPeriod('lastYear')).toBe(false);
     expect(isDealPeriod(null)).toBe(false);
+  });
+});
+
+describe('parseWhole', () => {
+  it('reads a whole number up to the limit, empty as none', () => {
+    expect(parseWhole(' 3000000 ', 1_000_000_000_000)).toBe(3_000_000);
+    expect(parseWhole('', 100)).toBeNull();
+    expect(parseWhole('101', 100)).toBe('invalid');
+    expect(parseWhole('3.5', 100)).toBe('invalid');
+    expect(parseWhole('-1', 100)).toBe('invalid');
+  });
+});
+
+describe('isDealDate', () => {
+  it('takes the real days from 2000 to 2100 that the API takes', () => {
+    expect(isDealDate('2026-10-25')).toBe(true);
+    expect(isDealDate('2100-12-31')).toBe(true);
+    expect(isDealDate('1999-12-31')).toBe(false);
+    expect(isDealDate('2101-01-01')).toBe(false);
+    expect(isDealDate('2026-02-30')).toBe(false);
   });
 });

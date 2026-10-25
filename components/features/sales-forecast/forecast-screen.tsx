@@ -49,8 +49,8 @@ function usePercent() {
 
 /**
  * The forecast (Refs #437): for this month, quarter or fiscal year, the target, the won and
- * expected amounts in total and per owner, the open deals left before the period, and how the
- * deals changed during the week (for the weekly pipeline meeting).
+ * expected amounts in total and per owner, the open deals left before the period or without a
+ * close date, and how the deals changed during the week (for the weekly pipeline meeting).
  */
 export function ForecastScreen() {
   const t = useTranslations('salesForecast');
@@ -145,7 +145,7 @@ export function ForecastScreen() {
         >
           <SummaryTiles total={data.total} />
 
-          {(data.overdue.count > 0 || data.total.noAmountCount > 0) && (
+          {(data.overdue.count > 0 || data.undated.count > 0 || data.total.noAmountCount > 0) && (
             <ul className="space-y-1 text-sm text-amber-800 dark:text-amber-300">
               {data.overdue.count > 0 && (
                 <li>
@@ -155,6 +155,20 @@ export function ForecastScreen() {
                   })}{' '}
                   <Link href={`/${locale}/deals`} className="underline underline-offset-2">
                     {t('notes.toBoard')}
+                  </Link>
+                </li>
+              )}
+              {data.undated.count > 0 && (
+                <li>
+                  {t('notes.undated', {
+                    count: data.undated.count,
+                    amount: yen(data.undated.amount),
+                  })}{' '}
+                  <Link
+                    href={`/${locale}/deals?view=list`}
+                    className="underline underline-offset-2"
+                  >
+                    {t('notes.toList')}
                   </Link>
                 </li>
               )}

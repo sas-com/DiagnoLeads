@@ -10,6 +10,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useOrganization } from '@/hooks/use-organization';
@@ -27,8 +28,8 @@ import { DealFormDialog } from './deal-form-dialog';
 import { formatYen } from './deal-format';
 import { DealStageBadge } from './deal-stage-badge';
 import { DealsForbidden } from './deals-forbidden';
-import { LostReasonDialog } from './lost-reason-dialog';
 import { useDealMutations } from './use-deal-mutations';
+import { useStageMove } from './use-stage-move';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -52,9 +53,9 @@ export function DealDetailView({ dealId }: { dealId: string }) {
     { organizationId, dealId },
     { enabled: !!organizationId, retry: false }
   );
-  const { update, remove } = useDealMutations();
+  const { remove } = useDealMutations();
+  const stageMove = useStageMove(organizationId);
   const [editOpen, setEditOpen] = useState(false);
-  const [lostOpen, setLostOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const back = (
@@ -102,19 +103,8 @@ export function DealDetailView({ dealId }: { dealId: string }) {
     );
   }
 
-  const moveTo = (stage: DealStage) => {
-    if (stage === 'lost') {
-      setLostOpen(true);
-      return;
-    }
-    update.mutate(
-      { organizationId, dealId: deal.id, stage },
-      {
-        onSuccess: () =>
-          toast.success(t('toasts.moved', { name: deal.name, stage: t(`stages.${stage}`) })),
-      }
-    );
-  };
+  const moveTo = (stage: DealStage) =>
+    stageMove.move({ ...deal, leadLabel: deal.lead.company || deal.lead.name || '' }, stage);
 
   const open = isOpenStage(deal.stage);
   const facts: { label: string; value: ReactNode }[] = [
@@ -161,6 +151,7 @@ export function DealDetailView({ dealId }: { dealId: string }) {
             </Link>
           </p>
         </div>
+        {!deal.canEdit && <Badge color="gray">{t('state.readOnly')}</Badge>}
         {(deal.canEdit || deal.canDelete) && (
           <div className="flex gap-2">
             {deal.canEdit && (
@@ -240,28 +231,7 @@ export function DealDetailView({ dealId }: { dealId: string }) {
         deal={deal}
         onSaved={() => toast.success(t('toasts.saved'))}
       />
-      <LostReasonDialog
-        open={lostOpen}
-        onOpenChange={setLostOpen}
-        dealName={deal.name}
-        initial={{
-          lostReason: deal.lostReason ?? undefined,
-          lostNote: deal.lostNote,
-          competitor: deal.competitor,
-        }}
-        pending={update.isPending}
-        onConfirm={(values) =>
-          update.mutate(
-            { organizationId, dealId: deal.id, stage: 'lost', ...values },
-            {
-              onSuccess: () => {
-                setLostOpen(false);
-                toast.success(t('toasts.moved', { name: deal.name, stage: t('stages.lost') }));
-              },
-            }
-          )
-        }
-      />
+      {stageMove.dialogs}
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

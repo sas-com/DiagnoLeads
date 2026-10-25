@@ -22,6 +22,8 @@ interface DealBoardProps {
   columns: BoardColumn[];
   /** Japan calendar day the board was read on */
   today: string;
+  /** Days after closing that won and lost deals stay on the board, whatever the period filter */
+  closedWithinDays: number;
   canEdit: boolean;
   onMove: (deal: DealCard, stage: DealStage) => void;
 }
@@ -31,7 +33,7 @@ interface DealBoardProps {
  * amount. A card moves by dragging it to another column or, from the keyboard and on phones,
  * with its "move" menu (WCAG 2.5.7).
  */
-export function DealBoard({ columns, today, canEdit, onMove }: DealBoardProps) {
+export function DealBoard({ columns, today, closedWithinDays, canEdit, onMove }: DealBoardProps) {
   const [dragged, setDragged] = useState<DealCard | null>(null);
   const [over, setOver] = useState<DealStage | null>(null);
 
@@ -53,6 +55,7 @@ export function DealBoard({ columns, today, canEdit, onMove }: DealBoardProps) {
             key={column.stage}
             column={column}
             today={today}
+            closedWithinDays={closedWithinDays}
             canEdit={canEdit}
             onMove={onMove}
             highlighted={over === column.stage && dragged?.stage !== column.stage}
@@ -75,6 +78,7 @@ export function DealBoard({ columns, today, canEdit, onMove }: DealBoardProps) {
 function StageColumn({
   column,
   today,
+  closedWithinDays,
   canEdit,
   onMove,
   highlighted,
@@ -85,6 +89,7 @@ function StageColumn({
 }: {
   column: BoardColumn;
   today: string;
+  closedWithinDays: number;
   canEdit: boolean;
   onMove: (deal: DealCard, stage: DealStage) => void;
   highlighted: boolean;
@@ -109,7 +114,12 @@ function StageColumn({
     >
       <header className="border-b border-gray-200 px-3 py-2.5 dark:border-gray-800">
         <h2 id={headingId} className="text-sm font-bold text-gray-900 dark:text-gray-50">
-          {t(`stages.${column.stage}`)}
+          {isOpenStage(column.stage)
+            ? t(`stages.${column.stage}`)
+            : t('column.closedTitle', {
+                stage: t(`stages.${column.stage}`),
+                days: closedWithinDays,
+              })}
         </h2>
         <p className="mt-0.5 text-sm text-gray-700 dark:text-gray-300">
           {t('column.summary', {

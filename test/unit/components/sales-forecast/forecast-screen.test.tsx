@@ -1,14 +1,14 @@
 /**
  * The forecast screen (#437): the totals against the target, the owners' rows, the notes on
- * overdue and unpriced deals, the week's changes, the period in the URL, and setting the month's
- * targets (real next-intl messages; tRPC and the router mocked)
+ * overdue, undated and unpriced deals, the week's changes, the period in the URL, and setting the
+ * month's targets and the fiscal year start (real next-intl messages; tRPC and the router mocked)
  */
 import { ForecastScreen } from '@/components/features/sales-forecast/forecast-screen';
 import { TargetsDialog } from '@/components/features/sales-forecast/targets-dialog';
 import { forecastRow } from '@/lib/features/sales-forecast/report';
 import { CHANGE_KINDS } from '@/lib/features/sales-forecast/report';
 import messages from '@/locales/ja/common.json';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -19,8 +19,11 @@ const REP = '770e8400-e29b-41d4-a716-446655440001';
 const mocks = vi.hoisted(() => ({
   forecast: { data: undefined as unknown, isError: false, isPlaceholderData: false, refetch: vi.fn() },
   forecastInputs: [] as unknown[],
-  targets: { data: undefined as unknown },
+  targets: { data: undefined } as { data: unknown; isError?: boolean; refetch?: () => void },
+  targetsInputs: [] as unknown[],
   saves: [] as unknown[],
+  savePending: false,
+  startChanges: [] as unknown[],
   search: '',
   replace: vi.fn(),
   toast: { success: vi.fn(), error: vi.fn() },
@@ -40,17 +43,31 @@ vi.mock('@/lib/trpc/client', () => {
         },
       },
       salesTargets: {
-        get: { useQuery: () => mocks.targets },
+        get: {
+          useQuery: (input: unknown) => {
+            mocks.targetsInputs.push(input);
+            return mocks.targets;
+          },
+        },
         save: {
           useMutation: (options: { onSuccess?: () => void } = {}) => ({
-            isPending: false,
+            isPending: mocks.savePending,
             mutate: (input: unknown) => {
               mocks.saves.push(input);
               options.onSuccess?.();
             },
           }),
         },
-        setFiscalYearStart: { useMutation: () => ({ isPending: false, mutate: vi.fn() }) },
+        setFiscalYearStart: {
+          useMutation: (options: { onSuccess?: () => void } = {}) => ({
+            isPending: false,
+            mutate: (input: unknown, call: { onSuccess?: () => void } = {}) => {
+              mocks.startChanges.push(input);
+              options.onSuccess?.();
+              call.onSuccess?.();
+            },
+          }),
+        },
       },
     },
   };
@@ -109,6 +126,7 @@ const forecastData = (overrides: Record<string, unknown> = {}) => ({
   ],
   total: forecastRow({ ...figures, won: 2_000_000 }, 10_000_000),
   overdue: { count: 2, amount: 600_000 },
+  undated: { count: 3, amount: 900_000 },
   changes: {
     groups: {
       ...emptyGroups,
@@ -147,8 +165,11 @@ beforeEach(() => {
   mocks.forecast = { data: forecastData(), isError: false, isPlaceholderData: false, refetch: vi.fn() };
   mocks.forecastInputs = [];
   mocks.saves = [];
+  mocks.savePending = false;
+  mocks.startChanges = [];
   mocks.search = '';
   mocks.targets = { data: undefined };
+  mocks.targetsInputs = [];
 });
 
 describe('ForecastScreen', () => {
@@ -182,11 +203,29 @@ describe('ForecastScreen', () => {
     expect(within(table).getByRole('row', { name: /合計/ })).toBeInTheDocument();
   });
 
-  it('points at overdue and unpriced deals', () => {
+  it('points at overdue, undated and unpriced deals', () => {
     renderWithIntl(<ForecastScreen />);
     expect(screen.getByText(/期間より前のまま開いている商談が2件/)).toBeInTheDocument();
+    expect(screen.getByText(/受注予定日が未定のまま開いている商談が3件/)).toHaveTextContent(
+      '予測には入っていません'
+    );
     expect(screen.getByText('金額が未定の商談が1件あります')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '商談のボードを開く' })).toHaveAttribute('href', '/ja/deals');
+    expect(screen.getByRole('link', { name: '商談の一覧を開く' })).toHaveAttribute(
+      'href',
+      '/ja/deals?view=list'
+    );
+  });
+
+  it('leaves out the notes when every open deal is dated and priced', () => {
+    mocks.forecast.data = forecastData({
+      overdue: { count: 0, amount: 0 },
+      undated: { count: 0, amount: 0 },
+      total: forecastRow({ ...figures, noAmountCount: 0 }, 10_000_000),
+    });
+    renderWithIntl(<ForecastScreen />);
+    expect(screen.queryByText(/受注予定日が未定/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '商談の一覧を開く' })).not.toBeInTheDocument();
   });
 
   it("lists the week's changes with the stage moves", () => {
@@ -343,5 +382,102 @@ describe('TargetsDialog', () => {
     await user.click(screen.getByRole('button', { name: '保存' }));
     expect(screen.getByText('0以上の整数で入力してください')).toBeInTheDocument();
     expect(mocks.saves).toEqual([]);
+  });
+
+  it('asks before switching the month or the year drops the boxes typed in', async () => {
+    const user = userEvent.setup();
+    mocks.targets = { data: targetsData };
+    renderWithIntl(<TargetsDialog open onOpenChange={vi.fn()} organizationId={ORG_ID} />);
+    // Nothing typed yet: no question
+    await pickOctober(user);
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    const rep = screen.getByLabelText('営業 花子');
+    await user.clear(rep);
+    await user.type(rep, '9000000');
+
+    const pickNovember = async () => {
+      await user.click(screen.getByRole('combobox', { name: '月' }));
+      await user.click(screen.getByRole('option', { name: '2026-11' }));
+      return screen.findByRole('alertdialog', { name: '保存していない入力があります' });
+    };
+    let ask = await pickNovember();
+    expect(ask).toHaveTextContent('切り替えると、この月の入力は消えます。');
+    await user.click(within(ask).getByRole('button', { name: 'キャンセル' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(screen.getByRole('combobox', { name: '月' })).toHaveTextContent('2026-10');
+    expect(screen.getByLabelText('営業 花子')).toHaveValue('9000000');
+
+    ask = await pickNovember();
+    await user.click(within(ask).getByRole('button', { name: '切り替える' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(screen.getByRole('combobox', { name: '月' })).toHaveTextContent('2026-11');
+    expect(screen.getByLabelText('営業 花子')).toHaveValue('');
+
+    await user.type(screen.getByLabelText('組織全体'), '1000');
+    await user.click(screen.getByRole('combobox', { name: '年度' }));
+    await user.click(screen.getByRole('option', { name: /^2027年度/ }));
+    ask = await screen.findByRole('alertdialog', { name: '保存していない入力があります' });
+    await user.click(within(ask).getByRole('button', { name: '切り替える' }));
+    expect(mocks.targetsInputs.at(-1)).toEqual({ organizationId: ORG_ID, fiscalYear: 2027 });
+    expect(mocks.saves).toEqual([]);
+  });
+
+  it('changes the fiscal year start of the organization only after asking, keeping the boxes', async () => {
+    const user = userEvent.setup();
+    mocks.targets = { data: targetsData };
+    renderWithIntl(<TargetsDialog open onOpenChange={vi.fn()} organizationId={ORG_ID} />);
+    await pickOctober(user);
+    await user.type(screen.getByLabelText('組織全体'), '20000000');
+    // Apart from the year and month of the targets, as the organization's setting
+    const settings = screen.getByRole('region', { name: '組織の設定' });
+    const start = within(settings).getByRole('combobox', { name: '期の始まり' });
+    expect(start).toHaveAccessibleDescription(/組織全体の設定です/);
+    const pickJanuary = async () => {
+      await user.click(start);
+      await user.click(screen.getByRole('option', { name: '1月' }));
+      return screen.findByRole('alertdialog', { name: '1月始まりに変えますか？' });
+    };
+
+    let ask = await pickJanuary();
+    expect(ask).toHaveTextContent('四半期と今期の範囲が組織全体で変わります。');
+    await user.click(within(ask).getByRole('button', { name: 'キャンセル' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(mocks.startChanges).toEqual([]);
+    expect(start).toHaveTextContent('4月');
+
+    // What the server returns once the year starts in January
+    mocks.targets = {
+      data: {
+        ...targetsData,
+        fiscalYearStartMonth: 1,
+        months: Array.from({ length: 12 }, (_, i) => `2026-${String(i + 1).padStart(2, '0')}-01`),
+      },
+    };
+    ask = await pickJanuary();
+    await user.click(within(ask).getByRole('button', { name: '変更する' }));
+    expect(mocks.startChanges).toEqual([{ organizationId: ORG_ID, month: 1 }]);
+    expect(mocks.toast.success).toHaveBeenCalledWith('期の始まりを変更しました');
+    // The month being edited stays, in its fiscal year from January, with what was typed
+    expect(mocks.targetsInputs.at(-1)).toEqual({ organizationId: ORG_ID, fiscalYear: 2026 });
+    expect(screen.getByRole('combobox', { name: '月' })).toHaveTextContent('2026-10');
+    expect(screen.getByLabelText('組織全体')).toHaveValue('20000000');
+    expect(mocks.saves).toEqual([]);
+  });
+
+  it('says when the targets cannot be read and reads them again', async () => {
+    const user = userEvent.setup();
+    mocks.targets = { data: undefined, isError: true, refetch: vi.fn() };
+    renderWithIntl(<TargetsDialog open onOpenChange={vi.fn()} organizationId={ORG_ID} />);
+    expect(screen.getByRole('alert')).toHaveTextContent('目標を読み込めませんでした');
+    await user.click(screen.getByRole('button', { name: '再読み込み' }));
+    expect(mocks.targets.refetch).toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: '保存' })).toBeDisabled();
+  });
+
+  it('says the targets are being saved', () => {
+    mocks.targets = { data: targetsData };
+    mocks.savePending = true;
+    renderWithIntl(<TargetsDialog open onOpenChange={vi.fn()} organizationId={ORG_ID} />);
+    expect(screen.getByRole('button', { name: '保存しています…' })).toBeDisabled();
   });
 });

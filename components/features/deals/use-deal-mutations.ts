@@ -33,7 +33,9 @@ export function useDealMutations() {
       refresh();
       toast.success(t('deleted'));
     },
-    onError,
+    onError: () => {
+      toast.error(t('deleteError'));
+    },
   });
   return { create, update, remove };
 }

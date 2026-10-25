@@ -1,13 +1,13 @@
 /**
  * The pipeline board (#436): columns with their totals, the cards' warnings, and moving a card
- * with its menu (the keyboard and phone way; dragging uses the same callback). Real next-intl
- * messages and UI components.
+ * with its menu (the keyboard and phone way) or by dragging it. Real next-intl messages and UI
+ * components.
  */
 import { DealBoard } from '@/components/features/deals/deal-board';
 import type { BoardColumn, DealCard } from '@/lib/features/deals/service';
 import { DEAL_STAGES } from '@/lib/features/deals/types/pipeline';
 import messages from '@/locales/ja/common.json';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
@@ -71,7 +71,13 @@ function renderBoard(deals: DealCard[], canEdit = true) {
   const onMove = vi.fn();
   render(
     <NextIntlClientProvider locale="ja" messages={messages}>
-      <DealBoard columns={columnsWith(deals)} today={TODAY} canEdit={canEdit} onMove={onMove} />
+      <DealBoard
+        columns={columnsWith(deals)}
+        today={TODAY}
+        closedWithinDays={30}
+        canEdit={canEdit}
+        onMove={onMove}
+      />
     </NextIntlClientProvider>
   );
   return { onMove };
@@ -87,8 +93,22 @@ describe('DealBoard', () => {
     expect(within(proposal).getByText(/2件/)).toBeInTheDocument();
     expect(within(proposal).getByText(/加重/)).toBeInTheDocument();
     expect(within(proposal).getAllByRole('listitem')).toHaveLength(2);
-    expect(within(screen.getByRole('region', { name: '受注' })).getByText('商談はありません'))
-      .toBeInTheDocument();
+    expect(
+      within(screen.getByRole('region', { name: '受注（直近30日）' })).getByText('商談はありません')
+    ).toBeInTheDocument();
+  });
+
+  it('says that the won and lost columns show only the deals closed lately', () => {
+    renderBoard([]);
+    const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
+    expect(headings).toEqual([
+      '見極め',
+      '課題の確認',
+      '提案',
+      '条件の調整',
+      '受注（直近30日）',
+      '失注（直近30日）',
+    ]);
   });
 
   it('links each card to the deal and shows its company, owner and next step', () => {
@@ -105,7 +125,8 @@ describe('DealBoard', () => {
   it('warns about a passed close date and a deal without a next action', () => {
     renderBoard([card({ expectedCloseOn: '2026-10-01', hasOpenTask: false })]);
     expect(screen.getByText('受注予定日を過ぎています')).toBeInTheDocument();
-    expect(screen.getByText('次の行動がありません')).toBeInTheDocument();
+    // The lead's open tasks, not the deal's next step
+    expect(screen.getByText('リードに次の行動（タスク）がありません')).toBeInTheDocument();
   });
 
   it('does not warn about won deals', () => {
@@ -113,7 +134,7 @@ describe('DealBoard', () => {
       card({ stage: 'won', expectedCloseOn: '2026-10-01', hasOpenTask: false, closedOn: TODAY }),
     ]);
     expect(screen.queryByText('受注予定日を過ぎています')).not.toBeInTheDocument();
-    expect(screen.queryByText('次の行動がありません')).not.toBeInTheDocument();
+    expect(screen.queryByText('リードに次の行動（タスク）がありません')).not.toBeInTheDocument();
   });
 
   it('moves a card with its menu', async () => {
@@ -124,6 +145,22 @@ describe('DealBoard', () => {
     expect(items.map((item) => item.textContent)).not.toContain('「提案」へ移す');
     await user.click(screen.getByRole('menuitem', { name: '「条件の調整」へ移す' }));
     expect(onMove).toHaveBeenCalledWith(expect.objectContaining({ id: 'deal-1' }), 'negotiation');
+  });
+
+  it('moves a card dragged to another column', () => {
+    const { onMove } = renderBoard([card({})]);
+    const data = new Map<string, string>();
+    const dataTransfer = {
+      setData: (type: string, value: string) => data.set(type, value),
+      getData: (type: string) => data.get(type) ?? '',
+      effectAllowed: '',
+      dropEffect: '',
+    };
+    fireEvent.dragStart(screen.getAllByRole('listitem')[0], { dataTransfer });
+    const won = screen.getByRole('region', { name: '受注（直近30日）' });
+    fireEvent.dragOver(won, { dataTransfer });
+    fireEvent.drop(won, { dataTransfer });
+    expect(onMove).toHaveBeenCalledWith(expect.objectContaining({ id: 'deal-1' }), 'won');
   });
 
   it('offers no moves to read-only viewers', () => {

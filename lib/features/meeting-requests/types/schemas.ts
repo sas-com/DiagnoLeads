@@ -47,7 +47,7 @@ export type MeetingTopic = (typeof MEETING_TOPICS)[number];
 export const MAX_TOPIC_NOTE_LENGTH = 300;
 
 /**
- * Like the builder's PLAIN_TEXT (no control or format characters: NUL, bidi overrides), but line
+ * Like PLAIN_TEXT (lib/utils/plain-text.ts: no control or format characters), but line
  * breaks and tabs are allowed in the note. Lone surrogates are refused too: JSON escapes them
  * (and control characters) to six bytes each, which would not fit the consultation body limit.
  */
