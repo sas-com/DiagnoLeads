@@ -9,6 +9,8 @@ import { CHECKBOX_CLASS, LABEL_FOCUS } from './styles';
 
 interface ConsultationRequestProps {
   checked: boolean;
+  /** The label, when this consultation is not the usual one (e.g. Access, #538) */
+  label?: string;
   phone: string;
   phoneError?: string;
   onChange: (value: boolean) => void;
@@ -18,6 +20,7 @@ interface ConsultationRequestProps {
 /** "I would like a consultation", with an optional phone number once it is ticked */
 export function ConsultationRequest({
   checked,
+  label,
   phone,
   phoneError,
   onChange,
@@ -37,7 +40,7 @@ export function ConsultationRequest({
           className={cn('mt-0.5', CHECKBOX_CLASS)}
         />
         <span>
-          <span className="block text-sm font-bold">{t('consultation')}</span>
+          <span className="block text-sm font-bold">{label ?? t('consultation')}</span>
           <span className="block text-sm text-gray-600">{t('consultationHint')}</span>
         </span>
       </Label>

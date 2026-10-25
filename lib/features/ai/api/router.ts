@@ -23,7 +23,7 @@ import { generateLeadSummary } from '../chat/assistant';
 import { prepareLeadText } from '../embeddings/openai';
 import { consumeAiCalls, consumeEmbeddingCalls } from '../limits';
 import { predictConversion, predictConversionBatch } from '../prediction/conversion';
-import { leadForClaude } from '../prompt-input';
+import { contactCompleteness, leadForClaude } from '../prompt-input';
 import { scoreLeadWithAI, scoreLeadsBatch } from '../scoring/claude';
 import { findSimilarLeads, semanticSearch, updateLeadEmbedding } from '../search/semantic';
 import {
@@ -309,6 +309,7 @@ export const aiRouter = router({
         organizationId: input.organizationId,
         calls: 1,
       });
+      // A failed embedding or update throws (INTERNAL_SERVER_ERROR), never reported as success
       await updateLeadEmbedding(input.leadId, input.organizationId, text);
 
       return { success: true };
@@ -346,7 +347,7 @@ export const aiRouter = router({
         organizationId: input.organizationId,
         calls: 1,
       });
-      const prediction = await predictConversion(leadForClaude(lead));
+      const prediction = await predictConversion(leadForClaude(lead), contactCompleteness(lead));
 
       return {
         leadId: lead.id,
@@ -389,7 +390,12 @@ export const aiRouter = router({
         organizationId: input.organizationId,
         calls: leadsToPredict.length,
       });
-      const predictionsMap = await predictConversionBatch(leadsToPredict.map(leadForClaude));
+      const predictionsMap = await predictConversionBatch(
+        leadsToPredict.map((lead) => ({
+          lead: leadForClaude(lead),
+          contact: contactCompleteness(lead),
+        }))
+      );
 
       return {
         predictions: Array.from(predictionsMap.entries()).map(([leadId, prediction]) => ({

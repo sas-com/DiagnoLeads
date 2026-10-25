@@ -2,8 +2,21 @@
  * useLeads Hook Tests
  */
 
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
+import { NextIntlClientProvider } from 'next-intl';
+import { createElement, type ReactNode } from 'react';
+import { toast } from 'sonner';
+import {
+  leadWriteErrorKey,
+  useCreateLead,
+  useDeleteLead,
+  useUpdateLead,
+} from '@/hooks/use-leads';
+import { LOST_ON_HOLD_MESSAGE } from '@/lib/features/leads/types/pipeline';
+import { trpc } from '@/lib/trpc/client';
+import en from '@/locales/en/common.json';
+import ja from '@/locales/ja/common.json';
 
 // Mock tRPC client
 vi.mock('@/lib/trpc/client', () => ({
@@ -12,6 +25,7 @@ vi.mock('@/lib/trpc/client', () => ({
       leads: {
         list: { invalidate: vi.fn() },
         get: { invalidate: vi.fn() },
+        statusCounts: { invalidate: vi.fn() },
       },
     }),
     leads: {
@@ -218,26 +232,96 @@ describe('Lead hook return types', () => {
   });
 });
 
-describe('Toast messages', () => {
-  it('should define toast messages in Japanese', () => {
-    const messages = {
-      createLoading: 'リードを作成中...',
-      createSuccess: 'リードを作成しました',
-      updateLoading: 'リードを更新中...',
-      updateSuccess: 'リードを更新しました',
-      deleteLoading: 'リードを削除中...',
-      deleteSuccess: 'リードを削除しました',
-    };
-    
-    expect(messages.createSuccess).toContain('作成');
-    expect(messages.updateSuccess).toContain('更新');
-    expect(messages.deleteSuccess).toContain('削除');
+interface MutationOptions {
+  onMutate: () => void;
+  onSuccess: (data: unknown, variables: { id: string; organizationId: string }) => void;
+  onError: (error: { message: string; data?: { code?: string } | null }) => void;
+}
+
+const wrapper =
+  (locale: 'ja' | 'en') =>
+  ({ children }: { children: ReactNode }) =>
+    createElement(
+      NextIntlClientProvider,
+      { locale, messages: locale === 'ja' ? ja : en, timeZone: 'Asia/Tokyo' },
+      children
+    );
+
+/** The options the hook gave to useMutation, after rendering it in the locale */
+function renderWrite(write: 'create' | 'update' | 'delete', locale: 'ja' | 'en') {
+  const hook = { create: useCreateLead, update: useUpdateLead, delete: useDeleteLead }[write];
+  renderHook(() => hook(), { wrapper: wrapper(locale) });
+  const useMutation = vi.mocked(trpc.leads[write].useMutation);
+  return useMutation.mock.lastCall?.[0] as unknown as MutationOptions;
+}
+
+const variables = { id: 'lead-1', organizationId: 'org-1' };
+
+describe('Lead write toasts (#434)', () => {
+  beforeEach(() => {
+    vi.mocked(toast.loading).mockClear();
+    vi.mocked(toast.success).mockClear();
+    vi.mocked(toast.error).mockClear();
   });
 
-  it('should format error messages', () => {
-    const formatError = (message: string) => `エラー: ${message}`;
-    
-    expect(formatError('Network error')).toBe('エラー: Network error');
-    expect(formatError('Not found')).toBe('エラー: Not found');
+  it.each([
+    ['create', 'ja', 'リードを作成中...', 'リードを作成しました'],
+    ['update', 'ja', 'リードを更新中...', 'リードを更新しました'],
+    ['delete', 'ja', 'リードを削除中...', 'リードを削除しました'],
+    ['create', 'en', 'Creating the lead...', 'Lead created'],
+    ['update', 'en', 'Updating the lead...', 'Lead updated'],
+    ['delete', 'en', 'Deleting the lead...', 'Lead deleted'],
+  ] as const)('%s in %s: the progress and the result', (write, locale, loading, done) => {
+    const options = renderWrite(write, locale);
+
+    options.onMutate();
+    expect(toast.loading).toHaveBeenCalledWith(loading, { id: `${write}-lead` });
+    options.onSuccess(undefined, variables);
+    expect(toast.success).toHaveBeenCalledWith(done, { id: `${write}-lead` });
+  });
+
+  it('never shows the server text: the message comes from the code, in the page language', () => {
+    const options = renderWrite('update', 'en');
+
+    options.onError({ message: 'リードを更新する権限がありません', data: { code: 'FORBIDDEN' } });
+    expect(toast.error).toHaveBeenCalledWith('Insufficient permissions for this operation', {
+      id: 'update-lead',
+    });
+  });
+
+  it('keeps the reason a lost lead cannot stay on hold (#445), translated', () => {
+    const options = renderWrite('update', 'en');
+
+    options.onError({ message: LOST_ON_HOLD_MESSAGE, data: { code: 'BAD_REQUEST' } });
+    expect(toast.error).toHaveBeenCalledWith(en.leads.lostOnHold, { id: 'update-lead' });
+  });
+
+  it('says the write failed when the call did not reach the server', () => {
+    const options = renderWrite('delete', 'ja');
+
+    options.onError({ message: 'Failed to fetch' });
+    expect(toast.error).toHaveBeenCalledWith('リードの削除に失敗しました', { id: 'delete-lead' });
+  });
+});
+
+describe('leadWriteErrorKey', () => {
+  it.each([
+    ['UNAUTHORIZED', 'Unauthorized', 'errors.sessionExpired'],
+    ['FORBIDDEN', 'リードを削除する権限がありません', 'errors.insufficientPermissions'],
+    ['NOT_FOUND', 'リードが見つかりません', 'errors.leadNotFound'],
+    ['BAD_REQUEST', LOST_ON_HOLD_MESSAGE, 'leads.lostOnHold'],
+    ['BAD_REQUEST', 'Invalid email', 'errors.validation'],
+    ['INTERNAL_SERVER_ERROR', 'サーバーでエラーが発生しました', 'leads.toast.updateFailed'],
+  ])('%s (%s) -> %s', (code, message, key) => {
+    expect(leadWriteErrorKey({ message, data: { code } }, 'update')).toBe(key);
+  });
+
+  it('names the write that failed when there is no code', () => {
+    expect(leadWriteErrorKey({ message: 'Failed to fetch' }, 'create')).toBe(
+      'leads.toast.createFailed'
+    );
+    expect(leadWriteErrorKey({ message: 'Failed to fetch', data: null }, 'delete')).toBe(
+      'leads.toast.deleteFailed'
+    );
   });
 });

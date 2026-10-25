@@ -35,13 +35,8 @@ export const AX_RATE_LIMITS = {
   detailsPerIp: { name: 'ax-details-ip', limit: 20, windowMs: HOUR },
   /** Documents and seminars requested from the result (#153) */
   offersPerIp: { name: 'ax-offers-ip', limit: 30, windowMs: HOUR },
-  /**
-   * Sales emails per organization, per hour and per day. The sending quota is shared with the
-   * sign-in emails (password reset), so requests must not be able to use it up; past a limit
-   * sales still get the in-app notification. The hourly one keeps a burst from using up a day
-   */
-  salesEmailPerOrganizationHourly: { name: 'ax-sales-email-org-hour', limit: 10, windowMs: HOUR },
-  salesEmailPerOrganization: { name: 'ax-sales-email-org', limit: 30, windowMs: DAY },
+  // Sales emails share SALES_EMAIL_LIMITS (lib/features/diagnostics/service.ts) with the
+  // builder's diagnoses (#481)
   /** The "receive the result by email" button of the result screen (#154) */
   resultEmailRequestPerIp: { name: 'ax-result-email-ip', limit: 10, windowMs: HOUR },
   /** The buttons of the confirm page (receive / decline) */

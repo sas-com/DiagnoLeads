@@ -40,10 +40,16 @@ const FIELD_INVALID = 'border-red-700';
 const CALENDAR_ROOT = 'p-2 sm:p-3';
 const CALENDAR_COLLISION_PADDING = 8;
 const CALENDAR_SIZE = 'h-10 w-10 sm:h-11 sm:w-11';
+/**
+ * The keyboard focus ring in the site's colour: the button's brand ring stays teal outside the
+ * admin site and is too faint on white (#537)
+ */
+const CALENDAR_FOCUS_RING = 'focus-visible:ring-ax-teal-dark';
 const CALENDAR_CLASSES = {
   nav_button: cn(
     buttonVariants({ variant: 'outline' }),
     CALENDAR_SIZE,
+    CALENDAR_FOCUS_RING,
     'bg-transparent p-0 opacity-70 hover:opacity-100'
   ),
   head_cell: 'w-10 sm:w-11 rounded-md text-[0.8rem] font-normal text-gray-600',
@@ -51,6 +57,7 @@ const CALENDAR_CLASSES = {
   day: cn(
     buttonVariants({ variant: 'ghost' }),
     CALENDAR_SIZE,
+    CALENDAR_FOCUS_RING,
     'p-0 font-normal aria-selected:opacity-100'
   ),
   day_selected:

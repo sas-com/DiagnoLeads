@@ -1,8 +1,9 @@
 /**
- * Lead form: editing sends only the changed fields
+ * Lead form: editing sends only the changed fields; the input limits (#575)
  */
 import { LeadForm } from '@/components/features/leads/lead-form';
 import type { Lead } from '@/lib/db/schema';
+import enMessages from '@/locales/en/common.json';
 import messages from '@/locales/ja/common.json';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -20,8 +21,12 @@ beforeAll(() => {
   } as unknown as typeof ResizeObserver;
 });
 
-const withIntl = (ui: ReactNode) => (
-  <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
+const withIntl = (ui: ReactNode, locale: 'ja' | 'en' = 'ja') => (
+  <NextIntlClientProvider
+    locale={locale}
+    messages={locale === 'ja' ? messages : enMessages}
+    timeZone="Asia/Tokyo"
+  >
     {ui}
   </NextIntlClientProvider>
 );
@@ -73,6 +78,34 @@ describe('LeadForm', () => {
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     expect(onSubmit.mock.calls[0][0]).toMatchObject({ email: 'new@example.jp', status: 'new' });
+    // The server gives a new lead empty responses; the form sends none (#575)
+    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('responses');
+  });
+
+  it('sends a name of 100 characters (#575)', async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(withIntl(<LeadForm onSubmit={onSubmit} />));
+    await user.type(screen.getByRole('textbox', { name: /メール/ }), 'new@example.jp');
+    await user.click(screen.getByRole('textbox', { name: messages.leads.name }));
+    await user.paste('山'.repeat(100));
+    await user.click(screen.getByRole('button', { name: '作成' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0].name).toHaveLength(100);
+  });
+
+  it('tells a name over 100 characters in the page language and does not send it (#575)', async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(withIntl(<LeadForm onSubmit={onSubmit} />, 'en'));
+    await user.type(screen.getByRole('textbox', { name: /Email/ }), 'new@example.jp');
+    await user.click(screen.getByRole('textbox', { name: enMessages.leads.name }));
+    await user.paste('山'.repeat(101));
+    await user.click(screen.getByRole('button', { name: enMessages.common.create }));
+
+    expect(await screen.findByText('Maximum 100 characters allowed')).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it('starts a new lead with Japanese examples, no score to enter, and sends no score (Refs #163, #447)', async () => {

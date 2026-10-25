@@ -7,14 +7,14 @@ import {
   useLeadTrend,
   useOverview,
   useResponseTime,
-  useScoreDistribution,
   useSourceBreakdown,
   useStatusBreakdown,
 } from '@/hooks/use-analytics';
 import { useExport } from '@/hooks/use-export';
 import { useOrganization } from '@/hooks/use-organization';
-import { useLocale, useTranslations } from 'next-intl';
+import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { useState } from 'react';
 
 import { AreaChart, ChartLegend, DonutChart } from '@/components/charts';
@@ -23,10 +23,12 @@ import { Badge } from '@/components/ui/badge';
 import { BarList } from '@/components/ui/bar-list';
 import { Card } from '@/components/ui/card';
 import { Divider, Metric, Text, Title } from '@/components/ui/metric';
-import { CategoryBar, ProgressBar } from '@/components/ui/progress-bar';
+import { ProgressBar } from '@/components/ui/progress-bar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { leadListHref } from '@/lib/features/leads/list-query';
 import type { LeadStatus } from '@/lib/features/leads/types';
 import { LEAD_STATUSES } from '@/lib/features/leads/types/pipeline';
+import { MQL_LEVEL_FILTERS, type MqlLevelFilter } from '@/lib/features/leads/types/schemas';
 import { AgencyContractReportCard } from './_components/agency-contract-report-card';
 import { DeliveryReportCards } from './_components/delivery-report-cards';
 import { AcquisitionCostCard, AgencyPerformanceCard } from './_components/source-cost-cards';
@@ -49,7 +51,7 @@ import {
 import type { DateRange, TrendGranularity } from '@/lib/features/analytics/types/schemas';
 import {
   Activity,
-  Award,
+  BadgeCheck,
   BarChart3,
   Calendar,
   Download,
@@ -75,17 +77,6 @@ const ConversionFunnel = dynamic(
   }
 );
 
-const ScoreDistributionChart = dynamic(
-  () =>
-    import('@/components/analytics/score-distribution-chart').then((mod) => ({
-      default: mod.ScoreDistributionChart,
-    })),
-  {
-    loading: () => <ChartSkeleton />,
-    ssr: false,
-  }
-);
-
 const ResponseTimeChart = dynamic(
   () =>
     import('@/components/analytics/response-time-chart').then((mod) => ({
@@ -96,6 +87,17 @@ const ResponseTimeChart = dynamic(
     ssr: false,
   }
 );
+
+/**
+ * Bar colors of the MQL levels, as the list's MQL badges: 関心あり emerald, 適合 gray, and the
+ * levels without a badge in light gray
+ */
+const MQL_LEVEL_COLORS: Record<MqlLevelFilter, 'emerald' | 'gray' | 'lightGray'> = {
+  interest: 'emerald',
+  fit: 'gray',
+  none: 'lightGray',
+  unknown: 'lightGray',
+};
 
 /** Leads without a recorded 流入元 */
 const UNSET_INFLOW_SOURCE = 'unset';
@@ -127,7 +129,9 @@ export default function AnalyticsPage() {
   const tCommon = useTranslations('common');
   const tInflowSource = useTranslations('pipeline.inflowSource');
   const tLeads = useTranslations('leads');
+  const tMqlLevel = useTranslations('leadList.mqlLevelOptions');
   const locale = useLocale();
+  const format = useFormatter();
   const { organizationId: contextOrgId, isLoading: contextLoading } = useOrganization();
 
   // Only use organization ID if it's a valid UUID
@@ -152,10 +156,6 @@ export default function AnalyticsPage() {
     dateRange
   );
   const { data: funnelData, isLoading: funnelLoading } = useConversionFunnel(
-    organizationId,
-    dateRange
-  );
-  const { data: scoreDistribution, isLoading: scoreDistLoading } = useScoreDistribution(
     organizationId,
     dateRange
   );
@@ -244,22 +244,14 @@ export default function AnalyticsPage() {
   // No period-over-period change is shown until it is computed from real data (#138)
 
   // Value formatter for charts
-  const valueFormatter = (value: number) => {
-    if (locale === 'ja') {
-      return `${value.toLocaleString('ja-JP')}件`;
-    }
-    return value.toLocaleString('en-US');
-  };
+  const valueFormatter = (value: number) => t('leadCount', { count: value });
 
   // Transform lead trend data for chart
   const chartData = (leadTrend || [])
     .map((item) => ({
-      date: new Date(item.date).toLocaleDateString(locale === 'ja' ? 'ja-JP' : 'en-US', {
-        month: 'short',
-        day: 'numeric',
-      }),
-      [t('charts.totalLeads') || 'Total']: item.count,
-      [t('charts.convertedLeads') || 'Converted']: item.converted,
+      date: format.dateTime(new Date(item.date), { month: 'short', day: 'numeric' }),
+      [t('charts.totalLeads')]: item.count,
+      [t('charts.convertedLeads')]: item.converted,
     }))
     .reverse();
 
@@ -350,18 +342,16 @@ export default function AnalyticsPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
         {/* Total Leads */}
         <Card className="p-6" decoration="top" decorationColor="blue">
-          <div className="flex items-start justify-between">
-            <div>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
               <Text>{t('stats.totalLeads')}</Text>
               {overviewLoading ? (
                 <div className="h-9 w-24 bg-gray-200 animate-pulse rounded mt-2" />
               ) : (
-                <Metric className="mt-2">
-                  {(overview?.totalLeads || 0).toLocaleString(locale === 'ja' ? 'ja-JP' : 'en-US')}
-                </Metric>
+                <Metric className="mt-2">{format.number(overview?.totalLeads || 0)}</Metric>
               )}
             </div>
             <div className="p-3 bg-blue-50 rounded-xl">
@@ -371,30 +361,26 @@ export default function AnalyticsPage() {
         </Card>
 
         {/* New Leads */}
-        <Card className="p-6" decoration="top" decorationColor="emerald">
-          <div className="flex items-start justify-between">
-            <div>
+        <Card className="p-6" decoration="top" decorationColor="cyan">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
               <Text>{t('stats.newLeadsThisMonth')}</Text>
               {overviewLoading ? (
                 <div className="h-9 w-20 bg-gray-200 animate-pulse rounded mt-2" />
               ) : (
-                <Metric className="mt-2">
-                  {(overview?.newLeadsThisMonth || 0).toLocaleString(
-                    locale === 'ja' ? 'ja-JP' : 'en-US'
-                  )}
-                </Metric>
+                <Metric className="mt-2">{format.number(overview?.newLeadsThisMonth || 0)}</Metric>
               )}
             </div>
-            <div className="p-3 bg-emerald-50 rounded-xl">
-              <TrendingUp className="h-6 w-6 text-emerald-600" />
+            <div className="p-3 bg-cyan-50 rounded-xl">
+              <TrendingUp className="h-6 w-6 text-cyan-600" />
             </div>
           </div>
         </Card>
 
         {/* Conversion Rate */}
         <Card className="p-6" decoration="top" decorationColor="violet">
-          <div className="flex items-start justify-between">
-            <div>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
               <Text>{t('stats.conversionRate')}</Text>
               {overviewLoading ? (
                 <div className="h-9 w-20 bg-gray-200 animate-pulse rounded mt-2" />
@@ -411,26 +397,26 @@ export default function AnalyticsPage() {
           </div>
         </Card>
 
-        {/* Average Score */}
-        <Card className="p-6" decoration="top" decorationColor="amber">
-          <div className="flex items-start justify-between">
-            <div>
-              <Text>{t('stats.averageScore')}</Text>
+        {/* MQL (interested): the sign of how promising leads are (#447, #605) */}
+        <Card className="p-6" decoration="top" decorationColor="emerald">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <Text>{t('stats.mqlInterest')}</Text>
               {overviewLoading ? (
-                <div className="h-9 w-16 bg-gray-200 animate-pulse rounded mt-2" />
+                <div className="h-9 w-20 bg-gray-200 animate-pulse rounded mt-2" />
               ) : (
-                <Metric className="mt-2">
-                  {overview?.averageScore || 0}
-                  <span className="text-lg font-normal text-gray-500">/100</span>
-                </Metric>
+                <Metric className="mt-2">{format.number(overview?.mqlLevels.interest || 0)}</Metric>
               )}
             </div>
-            <div className="p-3 bg-amber-50 rounded-xl">
-              <Award className="h-6 w-6 text-amber-600" />
+            <div className="p-3 bg-emerald-50 rounded-xl">
+              <BadgeCheck className="h-6 w-6 text-emerald-600" />
             </div>
           </div>
           <div className="mt-4">
-            <ProgressBar value={overview?.averageScore || 0} color="amber" />
+            <ProgressBar value={overview?.mqlRate || 0} color="emerald" />
+            <Text className="mt-2">
+              {t('stats.mqlRate', { rate: (overview?.mqlRate || 0).toFixed(1) })}
+            </Text>
           </div>
         </Card>
       </div>
@@ -470,10 +456,7 @@ export default function AnalyticsPage() {
                   className="h-80 mt-4"
                   data={chartData}
                   index="date"
-                  categories={[
-                    t('charts.totalLeads') || 'Total',
-                    t('charts.convertedLeads') || 'Converted',
-                  ]}
+                  categories={[t('charts.totalLeads'), t('charts.convertedLeads')]}
                   colors={['blue', 'violet']}
                   valueFormatter={valueFormatter}
                   showLegend={true}
@@ -499,6 +482,7 @@ export default function AnalyticsPage() {
                     data={statusData}
                     colors={statusColors}
                     valueFormatter={valueFormatter}
+                    totalLabel={t('charts.total')}
                     showLabel={true}
                     showLegend={false}
                     showAnimation={true}
@@ -512,6 +496,37 @@ export default function AnalyticsPage() {
               )}
             </Card>
           </div>
+
+          {/* Leads per MQL level, counted as the list's MQL level filter (#605) */}
+          {overview && !overviewLoading && (
+            <Card className="mt-6 p-6" data-testid="mql-levels">
+              <Title>{t('charts.mqlLevels')}</Title>
+              <Text>{t('charts.mqlLevelsDescription')}</Text>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-4">
+                {MQL_LEVEL_FILTERS.map((level) => {
+                  const value = overview.mqlLevels[level];
+                  const percentage =
+                    overview.totalLeads > 0 ? (value / overview.totalLeads) * 100 : 0;
+                  return (
+                    // Opens the lead list filtered by this level (URL `level`, #447)
+                    <Link
+                      key={level}
+                      href={leadListHref({ mqlLevel: [level] }, undefined, `/${locale}/leads`)}
+                      data-testid={`mql-level-${level}`}
+                      className="block space-y-3 rounded-lg p-2 -m-2 hover:bg-gray-50 dark:hover:bg-gray-800/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <Text className="font-medium">{tMqlLevel(level)}</Text>
+                        <Text className="font-semibold">{t('leadCount', { count: value })}</Text>
+                      </div>
+                      <ProgressBar value={percentage} color={MQL_LEVEL_COLORS[level]} />
+                      <Text className="text-right">{percentage.toFixed(1)}%</Text>
+                    </Link>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
 
           {/* Status Progress Cards */}
           {overview && !overviewLoading && (
@@ -532,8 +547,7 @@ export default function AnalyticsPage() {
                           {tStatus(status.key)}
                         </Badge>
                         <Text className="font-semibold">
-                          {status.value}
-                          {locale === 'ja' ? '件' : ''}
+                          {t('leadCount', { count: status.value })}
                         </Text>
                       </div>
                       <ProgressBar value={percentage} color={status.color} />
@@ -565,6 +579,7 @@ export default function AnalyticsPage() {
                     data={sourceBarData}
                     colors={['blue', 'emerald', 'violet', 'amber', 'rose', 'cyan', 'pink']}
                     valueFormatter={valueFormatter}
+                    totalLabel={t('charts.total')}
                     showLabel={true}
                     showLegend={false}
                     showAnimation={true}
@@ -674,13 +689,7 @@ export default function AnalyticsPage() {
 
         {/* Performance Tab */}
         <TabsContent value="performance">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-            {/* Score Distribution */}
-            <Card className="p-6">
-              <Title>{t('charts.scoreDistribution')}</Title>
-              <ScoreDistributionChart data={scoreDistribution || []} isLoading={scoreDistLoading} />
-            </Card>
-
+          <div className="grid grid-cols-1 gap-6 mt-6">
             {/* Response Time */}
             <Card className="p-6">
               <Title>{t('charts.responseTime')}</Title>
@@ -696,34 +705,6 @@ export default function AnalyticsPage() {
               )}
             </Card>
           </div>
-
-          {/* Performance Summary */}
-          {overview && !overviewLoading && (
-            <Card className="mt-6 p-6">
-              <Title>{t('performanceSummary.title')}</Title>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-4">
-                <div>
-                  <Text>{t('performanceSummary.quality')}</Text>
-                  <Metric className="mt-2">{overview.averageScore}</Metric>
-                  <CategoryBar
-                    values={[25, 25, 25, 25]}
-                    colors={['red', 'yellow', 'emerald', 'blue']}
-                    markerValue={overview.averageScore}
-                    className="mt-3"
-                  />
-                </div>
-                <div>
-                  <Text>{t('stats.conversionRate')}</Text>
-                  <Metric className="mt-2">{overview.conversionRate.toFixed(1)}%</Metric>
-                  <ProgressBar value={overview.conversionRate} color="violet" className="mt-3" />
-                </div>
-                <div>
-                  <Text>{t('stats.newLeadsThisMonth')}</Text>
-                  <Metric className="mt-2">{overview.newLeadsThisMonth}</Metric>
-                </div>
-              </div>
-            </Card>
-          )}
         </TabsContent>
       </Tabs>
     </div>

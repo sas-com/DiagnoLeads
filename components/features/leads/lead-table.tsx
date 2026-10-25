@@ -442,7 +442,7 @@ export function LeadTable({
     {
       id: 'tags',
       accessorFn: (row) => row.tags,
-      header: locale === 'ja' ? 'タグ' : 'Tags',
+      header: t('tags'),
       cell: ({ row }) => {
         const leadTags = row.original.tags ?? [];
         if (leadTags.length === 0) {
@@ -708,7 +708,7 @@ export function LeadTable({
     dealPhase: t('dealPhase'),
     assignee: tAssignee('label'),
     inflowSource: t('inflowSource'),
-    tags: locale === 'ja' ? 'タグ' : 'Tags',
+    tags: t('tags'),
     source: t('source'),
     createdAt: t('createdAt'),
     lastActivityAt: tList('sort.lastActivityAt'),
@@ -796,7 +796,7 @@ export function LeadTable({
             <DropdownMenuLabel>
               {tList('export.all')}
               <span className="block text-xs font-normal text-gray-500 dark:text-gray-400">
-                {tList('export.allHint', { max: LEAD_EXPORT_MAX_ROWS.toLocaleString() })}
+                {tList('export.allHint', { max: format.number(LEAD_EXPORT_MAX_ROWS) })}
               </span>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />

@@ -91,12 +91,13 @@ test.describe('AX migration diagnosis', () => {
     await page.goto('/ja/ax-diagnosis');
     await answerAccess(page);
     await fillContact(page, `e2e-ax-access-${Date.now()}@example.com`);
-    await page.getByRole('checkbox', { name: /無料の個別相談を希望する/ }).check();
+    // The consultation of the Access page, by the same name on the form and the result (#538)
+    await page.getByRole('checkbox', { name: /30分の無料オンライン相談を希望する/ }).check();
     await page.getByRole('textbox', { name: /電話番号/ }).fill('03-0000-0000');
     await submit(page);
 
     await expect(page.getByText('移行元：Microsoft Access')).toBeVisible();
-    await expect(page.getByText('個別相談のお申し込みを受け付けました')).toBeVisible();
+    await expect(page.getByText('30分のオンライン相談のお申し込みを受け付けました')).toBeVisible();
     // The steps follow the Access page, and the consultation is its 30-minute online one
     // (#455, #457)
     const steps = page.getByTestId('ax-result-steps');

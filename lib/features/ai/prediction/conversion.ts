@@ -5,21 +5,12 @@
 
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema';
 import { CLAUDE_MAX_TOKENS, CLAUDE_MODEL, anthropic } from '../client';
+import { reportClaudeFailure } from '../failures';
+import type { ContactCompleteness, LeadForClaude } from '../prompt-input';
 import { AI_BATCH_MAX } from '../types/schemas';
 
-export interface LeadForPrediction {
-  id: string;
-  email: string;
-  name: string | null;
-  company: string | null;
-  phone: string | null;
-  status: string;
-  score: number | null;
-  source: string | null;
-  responses: Record<string, unknown> | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
+/** The lead as the prediction reads it: nothing that points at a person (#406) */
+export type LeadForPrediction = LeadForClaude;
 
 export interface ConversionPrediction {
   /** Conversion probability (0-100) */
@@ -80,7 +71,10 @@ export interface ConversionFactor {
 /**
  * Predict conversion probability for a single lead
  */
-export async function predictConversion(lead: LeadForPrediction): Promise<ConversionPrediction> {
+export async function predictConversion(
+  lead: LeadForPrediction,
+  contact: ContactCompleteness
+): Promise<ConversionPrediction> {
   const prompt = buildPredictionPrompt(lead);
 
   try {
@@ -98,14 +92,15 @@ export async function predictConversion(lead: LeadForPrediction): Promise<Conver
 
     if (!message.parsed_output) {
       console.error('Conversion prediction: no structured output', message.stop_reason);
-      return generateFallbackPrediction(lead);
+      return generateFallbackPrediction(lead, contact);
     }
 
     return normalizePrediction(message.parsed_output);
   } catch (error) {
     console.error('Conversion prediction error:', error);
+    await reportClaudeFailure('predict-conversion', error);
     // Return a fallback prediction based on simple heuristics
-    return generateFallbackPrediction(lead);
+    return generateFallbackPrediction(lead, contact);
   }
 }
 
@@ -113,15 +108,17 @@ export async function predictConversion(lead: LeadForPrediction): Promise<Conver
  * Batch predict conversion for multiple leads
  */
 export async function predictConversionBatch(
-  leads: LeadForPrediction[]
+  leads: Array<{ lead: LeadForPrediction; contact: ContactCompleteness }>
 ): Promise<Map<string, ConversionPrediction>> {
   const results = new Map<string, ConversionPrediction>();
 
   // Process in parallel; the router accepts at most one group (AI_BATCH_MAX)
   for (let i = 0; i < leads.length; i += AI_BATCH_MAX) {
     const batch = leads.slice(i, i + AI_BATCH_MAX);
-    const predictions = await Promise.all(batch.map((lead) => predictConversion(lead)));
-    batch.forEach((lead, index) => {
+    const predictions = await Promise.all(
+      batch.map(({ lead, contact }) => predictConversion(lead, contact))
+    );
+    batch.forEach(({ lead }, index) => {
       results.set(lead.id, predictions[index]);
     });
   }
@@ -140,10 +137,7 @@ function buildPredictionPrompt(lead: LeadForPrediction): string {
   return `You are an expert B2B sales analyst. Analyze this lead and predict their conversion probability.
 
 Lead Information:
-- Email: ${lead.email}
-- Name: ${lead.name || 'Unknown'}
 - Company: ${lead.company || 'Unknown'}
-- Phone: ${lead.phone ? 'Provided' : 'Not provided'}
 - Current Status: ${lead.status}
 - Lead Score: ${lead.score ?? 'Not scored'}
 - Source: ${lead.source || 'Unknown'}
@@ -153,7 +147,7 @@ Lead Information:
 Based on this information, predict the conversion: probability (0-100), confidence, estimated days to conversion (or null), the key factors (impact and a 1-10 weight each), recommendations, and risks.
 
 Consider:
-1. Lead completeness (contact info, company info)
+1. Lead completeness (company info, diagnostic responses)
 2. Engagement signals (responses, score)
 3. Time factors (lead age, status progression)
 4. Source quality
@@ -180,7 +174,10 @@ function normalizePrediction(parsed: ConversionPrediction): ConversionPrediction
 /**
  * Generate a fallback prediction based on simple heuristics
  */
-function generateFallbackPrediction(lead: LeadForPrediction): ConversionPrediction {
+function generateFallbackPrediction(
+  lead: LeadForPrediction,
+  contact: ContactCompleteness
+): ConversionPrediction {
   let probability = 30; // Base probability
   const factors: ConversionFactor[] = [];
 
@@ -225,10 +222,9 @@ function generateFallbackPrediction(lead: LeadForPrediction): ConversionPredicti
   }
 
   // Completeness factor
-  const hasName = !!lead.name;
-  const hasCompany = !!lead.company;
-  const hasPhone = !!lead.phone;
-  const completeness = [hasName, hasCompany, hasPhone].filter(Boolean).length;
+  const completeness = [contact.hasName, Boolean(lead.company), contact.hasPhone].filter(
+    Boolean
+  ).length;
 
   if (completeness >= 2) {
     probability += 10;
@@ -271,7 +267,7 @@ function generateFallbackPrediction(lead: LeadForPrediction): ConversionPredicti
 
   // Generate recommendations
   const recommendations: string[] = [];
-  if (!hasPhone) {
+  if (!contact.hasPhone) {
     recommendations.push('Request phone number for direct contact');
   }
   if (lead.status === 'new') {
@@ -291,7 +287,7 @@ function generateFallbackPrediction(lead: LeadForPrediction): ConversionPredicti
       risks.push('Lead aging without engagement - risk of going cold');
     }
   }
-  if (!hasCompany) {
+  if (!lead.company) {
     risks.push('Unknown company - difficult to qualify business fit');
   }
 

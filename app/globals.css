@@ -2,6 +2,9 @@
 /* Toast styles as a stylesheet: sonner's runtime <style> tag (no CSP nonce) is patched out
    (patches/sonner@1.7.0.patch, #213). The package does not export the file. */
 @import "../node_modules/sonner/dist/styles.css";
+/* DADS (Digital Agency Design System) tokens: --color-primitive-*, --color-neutral-*, radius,
+   elevation and type scales. The admin site maps its colors onto them below (#423, #548). */
+@import "../node_modules/@digital-go-jp/design-tokens/dist/tokens.css";
 @config "../tailwind.config.ts";
 @plugin "@tailwindcss/forms";
 
@@ -673,6 +676,72 @@ span.flatpickr-weekday,
   --color-ax-teal: #258a2f;
   --color-ax-teal-dark: var(--color-ax-leaf);
   --color-ax-deep: var(--color-ax-forest);
+}
+
+/*
+ * The same on the html element of the site's pages, for the parts drawn outside the site in a
+ * portal (the calendar of the meeting form, #537). A rule of its own: a browser without :has()
+ * drops only this one, not the greens of the site.
+ */
+html:has(.ax-site) {
+  --color-ax-teal: #258a2f;
+  --color-ax-teal-dark: var(--color-ax-leaf);
+  --color-ax-deep: var(--color-ax-forest);
+}
+
+/*
+ * Admin site in DADS (#423, #548): while an admin screen is shown (the dashboard shell or the
+ * sign-in screens carry .dl-admin), the brand scale becomes DADS Green (key color, owner's
+ * choice 2026-10-24) and the gray scale DADS Solid Gray. Set on html so dialogs and menus,
+ * which render under body, get them too. The AX site and the builder diagnoses keep theirs.
+ * brand-500 is the primary fill (Green-900, 8.3:1 with white); gray-500 is the lightest gray
+ * for text (Solid Gray 536, 4.5:1 on white); gray-400 is for borders and icons (3:1).
+ */
+html:has(.dl-admin) {
+  --color-brand-25: var(--color-primitive-green-50);
+  --color-brand-50: var(--color-primitive-green-50);
+  --color-brand-100: var(--color-primitive-green-100);
+  --color-brand-200: var(--color-primitive-green-200);
+  --color-brand-300: var(--color-primitive-green-300);
+  --color-brand-400: var(--color-primitive-green-400);
+  --color-brand-500: var(--color-primitive-green-900);
+  --color-brand-600: var(--color-primitive-green-1000);
+  --color-brand-700: var(--color-primitive-green-1100);
+  --color-brand-800: var(--color-primitive-green-1200);
+  --color-brand-900: var(--color-primitive-green-1200);
+  --color-brand-950: var(--color-primitive-green-1200);
+
+  --color-gray-25: var(--color-neutral-white);
+  --color-gray-50: var(--color-neutral-solid-gray-50);
+  --color-gray-100: var(--color-neutral-solid-gray-100);
+  --color-gray-200: var(--color-neutral-solid-gray-200);
+  --color-gray-300: var(--color-neutral-solid-gray-300);
+  --color-gray-400: var(--color-neutral-solid-gray-420);
+  --color-gray-500: var(--color-neutral-solid-gray-536);
+  --color-gray-600: var(--color-neutral-solid-gray-600);
+  --color-gray-700: var(--color-neutral-solid-gray-700);
+  --color-gray-800: var(--color-neutral-solid-gray-800);
+  --color-gray-900: var(--color-neutral-solid-gray-900);
+  --color-gray-950: var(--color-neutral-solid-gray-900);
+  --color-gray-dark: var(--color-neutral-solid-gray-900);
+
+  --app-foreground: var(--color-neutral-solid-gray-900);
+  --app-muted-foreground: var(--color-neutral-solid-gray-536);
+}
+html.dark:has(.dl-admin) {
+  --app-foreground: var(--color-neutral-solid-gray-50);
+  --app-muted-foreground: var(--color-neutral-solid-gray-300);
+}
+
+/*
+ * DADS focus: black outline around a Yellow-300 ring, on every focusable element of the admin
+ * site. DADS says the focus colors must never be changed, so this wins over the components'
+ * own focus rings.
+ */
+html:has(.dl-admin) :focus-visible {
+  outline: 4px solid var(--color-neutral-black);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--color-primitive-yellow-300);
 }
 
 /* AX migration site: keep focused elements clear of the sticky header and the phone CTA bar */
