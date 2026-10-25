@@ -5,6 +5,15 @@ import { z } from 'zod';
  *
  * Based on the AX migration sales & marketing flow (2026-10-08).
  * Labels live in locales/{ja,en}/common.json under the matching namespace.
+ *
+ * One lifecycle over the stage axes (#444): リード → MQL → 商談（見極め） → SQL → 商談 → 受注 / 失注,
+ * and 再育成 (nurturing) from any open stage. How each axis maps onto it, and which axis each
+ * report counts, is in docs/PIPELINE_LIFECYCLE.md:
+ * - status (LEAD_STATUSES): new = リード・MQL, negotiating = 商談, nurturing = 再育成, won, lost
+ * - deal phase (DEAL_PHASES): initial_hearing = 見極め, simple_diagnosis = 課題の確認,
+ *   proposal = 提案, survey_won → migration_won → ax = 受注 in steps
+ * - SQL decision (SQL_DECISIONS): qualified = SQL, the exit of 見極め
+ * - MQL level (../mql-level.ts): interest or an MQL date = MQL, fit = MQL候補
  */
 
 /** 5-stage lead status: 新規 / ナーチャリング / 商談中 / 成約 / 失注 */
