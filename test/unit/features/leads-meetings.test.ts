@@ -2,8 +2,10 @@
  * The dashboard's meetings (lib/features/leads/meetings.ts, #137) without a database (#6): the
  * Japan week the meetings of this week are read for, that both reads are limited to the
  * organization, how the rows are shaped, and the period of the KPI 「初回商談から次回日程が決まった率」.
- * The database is test/mocks/recording-db.ts; the rows the SQL matches on a real PostgreSQL are
- * covered by test/unit/integration/meeting-requests.db.test.ts and leads-list.db.test.ts.
+ * The database is test/mocks/recording-db.ts; the rows the SQL matches on a real PostgreSQL (the
+ * week's meetings and the KPI through the leads router, with the first hearing of each lead) are
+ * covered by test/unit/integration/lead-meetings-export.db.test.ts, and the week's meetings after
+ * a confirmed meeting by meeting-requests.db.test.ts.
  * 2026-10-16 is a Friday; its Japan week runs from Monday 2026-10-12 to Sunday 2026-10-18.
  */
 import { leads, users } from '@/lib/db/schema';
@@ -12,7 +14,7 @@ import {
   getNextMeetingRate,
   getWeekMeetings,
 } from '@/lib/features/leads/meetings';
-import { type RecordingDb, recordingDb, sqlOf } from '@/test/mocks/recording-db';
+import { type QueryCall, type RecordingDb, recordingDb, sqlOf } from '@/test/mocks/recording-db';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 type Database = Parameters<typeof getWeekMeetings>[0];
@@ -31,9 +33,21 @@ beforeEach(() => {
   fake = recordingDb();
 });
 
+/** The count of getWeekMeetings, told from the list by the columns it selects */
+const isCount = (call: QueryCall) =>
+  typeof call.fields === 'object' && call.fields !== null && 'total' in call.fields;
+
+/**
+ * Answers the count and the list of getWeekMeetings by what they select: the two reads run side
+ * by side, so the order they are awaited in is not relied on
+ */
+const answerWeek = (count: unknown[], list: unknown[]) => {
+  fake = recordingDb((call) => (isCount(call) ? count : list));
+};
+
 describe('getWeekMeetings', () => {
   it('reads the Japan week of now, Monday to Sunday', async () => {
-    fake.results.push([{ total: 0 }], []);
+    answerWeek([{ total: 0 }], []);
 
     const week = await getWeekMeetings(db(), ORG_ID, NOW);
 
@@ -47,7 +61,7 @@ describe('getWeekMeetings', () => {
   });
 
   it('starts the week on the Monday also late on Sunday night in Japan', async () => {
-    fake.results.push([{ total: 0 }], []);
+    answerWeek([{ total: 0 }], []);
 
     // Sunday 2026-10-18, 23:30 in Japan
     const week = await getWeekMeetings(db(), ORG_ID, new Date('2026-10-18T14:30:00Z'));
@@ -60,11 +74,14 @@ describe('getWeekMeetings', () => {
   });
 
   it('counts and lists only the leads of the organization with a next meeting in the week', async () => {
-    fake.results.push([{ total: 0 }], []);
+    answerWeek([{ total: 0 }], []);
 
     await getWeekMeetings(db(), ORG_ID, NOW);
 
-    const [count, list] = fake.calls;
+    expect(fake.calls).toHaveLength(2);
+    const count = fake.calls.find(isCount);
+    const list = fake.calls.find((call) => !isCount(call));
+    if (!count || !list) throw new Error('Expected a count and a list');
     for (const call of [count, list]) {
       expect(call).toMatchObject({ op: 'select', table: leads });
       const where = sqlOf(call.where);
@@ -81,7 +98,7 @@ describe('getWeekMeetings', () => {
   });
 
   it('returns the total and the meetings with their assignee', async () => {
-    fake.results.push(
+    answerWeek(
       [{ total: '12' }],
       [
         {
@@ -135,7 +152,7 @@ describe('getWeekMeetings', () => {
   });
 
   it('counts none when the count returns no row', async () => {
-    fake.results.push([], []);
+    answerWeek([], []);
 
     expect((await getWeekMeetings(db(), ORG_ID, NOW)).total).toBe(0);
   });

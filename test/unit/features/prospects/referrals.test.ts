@@ -16,6 +16,7 @@ import {
   organizations,
   users,
 } from '@/lib/db/schema';
+import { ASSIGNABLE_ROLES } from '@/lib/features/leads/assignment';
 import {
   type HandoverNotifyDeps,
   getOrCreateMemberLink,
@@ -238,8 +239,9 @@ describe('notifyProspectHandedOver', () => {
     const [intake, members, , insert] = fake.calls;
     expect(intake.table).toBe(organizations);
     expect(sqlOf(intake.where).params).toEqual([ORG_ID]);
-    // Only the intake member left; still checked to be a member who can act on leads here
-    expect(sqlOf(members.where).params.slice(0, 2)).toEqual([ORG_ID, SALES_A]);
+    // Only the intake member left (the employee is dropped before the lookup); still checked to
+    // be a member who can act on leads here
+    expect(sqlOf(members.where).params).toEqual([ORG_ID, SALES_A, ...ASSIGNABLE_ROLES]);
     expect(insert.values).toEqual([
       {
         userId: SALES_A,

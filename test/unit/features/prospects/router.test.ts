@@ -17,6 +17,7 @@ import {
   prospects,
   users,
 } from '@/lib/db/schema';
+import { REFUSAL_REASONS } from '@/lib/features/prospects/types/schemas';
 import { type QueryCall, type RecordingDb, recordingDb, sqlOf } from '@/test/mocks/recording-db';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -144,7 +145,31 @@ describe('who may read', () => {
     ['summary', () => viewer().summary({ organizationId: ORG_ID })],
     ['myReferralLink', () => viewer().myReferralLink({ organizationId: ORG_ID })],
     ['create', () => viewer().create(newRow)],
+    // A member who became a parent viewer still created rows of their own: changing them must
+    // stop here, as the own-row check alone would let it through
+    ['update', () => viewer().update({ ...newRow, id: ROW_ID })],
     ['delete', () => viewer().delete({ organizationId: ORG_ID, id: ROW_ID })],
+    [
+      'import',
+      () =>
+        viewer().import({
+          organizationId: ORG_ID,
+          rows: [{ contactedOn: '2026-04-01', entry: 'bp_company', company: '旧表商事' }],
+        }),
+    ],
+    [
+      'importCalls',
+      () => viewer().importCalls({ organizationId: ORG_ID, rows: [{ company: '架空商事' }] }),
+    ],
+    [
+      'setMeetingTargets',
+      () => viewer().setMeetingTargets({ organizationId: ORG_ID, targets: [] }),
+    ],
+    [
+      'convertToLead',
+      () =>
+        viewer().convertToLead({ organizationId: ORG_ID, id: ROW_ID, email: 'taro@example.com' }),
+    ],
   ])('keeps %s from viewers of a parent organization, before any query', async (_name, call) => {
     await expect(call()).rejects.toMatchObject({ code: 'FORBIDDEN' });
     expect(fake.calls).toHaveLength(0);
@@ -521,17 +546,48 @@ describe('update', () => {
     expect(writes()).toHaveLength(0);
   });
 
-  it("changes a member's own row, keeping what sales wrote", async () => {
+  it("changes a member's own row, keeping what sales and the agency wrote", async () => {
     fake.results.push([stored()], [{ id: ROW_ID }]);
 
-    expect(await member().update({ ...change, stage: 'contract', remarks: 'x' })).toEqual({
-      id: ROW_ID,
-    });
+    expect(
+      await member().update({
+        ...change,
+        stage: 'contract',
+        meetingOn: '2026-10-20',
+        salesUserId: SALES_USER,
+        remarks: 'x',
+        agencyName: '代行A',
+        estimatedSystemBasis: 'Access',
+        challengeHypothesis: '属人化',
+        contactName: '連絡 次郎',
+        contactPhone: '03-1111-1111',
+        calledOn: '2026-10-15',
+        callResult: 'refused',
+        refusalReason: REFUSAL_REASONS[0],
+        refusalNote: '今は不要',
+      })
+    ).toEqual({ id: ROW_ID });
 
     const update = callOn(prospects, 'update');
     expect(update.set).toMatchObject({ heard: '移行を検討中', updatedBy: USER_ID, updatedAt: NOW });
-    expect(update.set).not.toHaveProperty('stage');
-    expect(update.set).not.toHaveProperty('remarks');
+    // A member's save neither writes nor clears the columns of sales and of the agency's calls
+    for (const column of [
+      'stage',
+      'meetingOn',
+      'salesUserId',
+      'remarks',
+      'agencyName',
+      'estimatedSystemBasis',
+      'challengeHypothesis',
+      'contactName',
+      'contactPhone',
+      'calledOn',
+      'callResult',
+      'refusalReason',
+      'refusalNote',
+    ]) {
+      expect(update.set).not.toHaveProperty(column);
+    }
     // Only the member's own row that is not a lead yet
     const where = sqlOf(update.where);
     expect(where.sql).toBe(
@@ -753,22 +809,23 @@ describe('importCalls', () => {
 
 describe('summary', () => {
   it("summarizes the organization's rows with its meeting targets", async () => {
-    fake.results.push(
-      [
-        {
-          contactedOn: '2026-10-01',
-          entry: 'member_network',
-          reaction: 'has_issue',
-          nextStep: 'hand_over',
-          stage: null,
-          meetingOn: null,
-          callResult: null,
-          refusalReason: null,
-          nextActionOn: null,
-          nextActionNote: null,
-        },
-      ],
-      [{ month: '2026-10-01', meetings: 4 }]
+    const rows = [
+      {
+        contactedOn: '2026-10-01',
+        entry: 'member_network',
+        reaction: 'has_issue',
+        nextStep: 'hand_over',
+        stage: null,
+        meetingOn: null,
+        callResult: null,
+        refusalReason: null,
+        nextActionOn: null,
+        nextActionNote: null,
+      },
+    ];
+    // The two reads run side by side: answered by table, not by the order they are awaited
+    fake = recordingDb((call) =>
+      call.table === prospectMeetingTargets ? [{ month: '2026-10-01', meetings: 4 }] : rows
     );
 
     const result = await member().summary({ organizationId: ORG_ID });

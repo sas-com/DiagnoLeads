@@ -68,10 +68,26 @@ describe('maintainSiteVisits', () => {
   });
 
   it('writes the totals before deleting the views they count', async () => {
+    // When each query is awaited and when its answer comes: building the queries in this order
+    // and then running them side by side (Promise.all) would delete views not yet counted
+    const steps: string[] = [];
+    fake = recordingDb(async (call) => {
+      steps.push(`start ${call.op}`);
+      await Promise.resolve();
+      steps.push(`end ${call.op}`);
+      return undefined;
+    });
+
     await maintainSiteVisits(db(), NOW);
 
-    const ops = fake.calls.filter((call) => call.op !== 'select').map((call) => call.op);
-    expect(ops.slice(0, 3)).toEqual(['execute', 'delete', 'delete']);
+    expect(steps.slice(0, 6)).toEqual([
+      'start execute',
+      'end execute',
+      'start delete',
+      'end delete',
+      'start delete',
+      'end delete',
+    ]);
   });
 
   it('returns the days counted and the views deleted', async () => {
