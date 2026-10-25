@@ -80,7 +80,7 @@ const store = vi.hoisted(() => {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
-    access: { canCreate: true, canEdit: true, canDelete: true },
+    access: { canCreate: true, canEdit: true, canDelete: true, canReadComments: true },
     updateMutate: vi.fn(),
     deleteMutate: vi.fn(),
     push: vi.fn(),
@@ -282,6 +282,10 @@ vi.mock('@/components/features/lead-activity/lead-activity-card', async (importO
   ...(await importOriginal<typeof import('@/components/features/lead-activity/lead-activity-card')>()),
   LeadActivityCard: () => <p>activity timeline</p>,
 }));
+// Covered by comments-section.test.tsx
+vi.mock('@/components/features/comments/comments-section', () => ({
+  CommentsSection: ({ leadId }: { leadId: string }) => <p>comments of {leadId}</p>,
+}));
 
 beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
@@ -297,7 +301,7 @@ beforeAll(() => {
 beforeEach(() => {
   window.history.replaceState(null, '', `/ja/leads/${LEAD_ID}`);
   store.set([makeLead()]);
-  store.access = { canCreate: true, canEdit: true, canDelete: true };
+  store.access = { canCreate: true, canEdit: true, canDelete: true, canReadComments: true };
   store.updateMutate.mockReset();
   store.deleteMutate.mockReset();
   store.push.mockReset();
@@ -443,6 +447,22 @@ describe('LeadDetailView tabs', () => {
 
     await user.click(screen.getByRole('tab', { name: '概要' }));
     expect(window.location.search).toBe('');
+  });
+
+  it("shows the lead's comments and notes in their own tab (#555)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole('tab', { name: 'メモ' }));
+    expect(screen.getByText(`comments of ${LEAD_ID}`)).toBeInTheDocument();
+    expect(window.location.search).toBe('?tab=memos');
+  });
+
+  it('has no comments tab for those who may not read comments (the parent organization)', () => {
+    store.access = { canCreate: false, canEdit: false, canDelete: false, canReadComments: false };
+    renderPage();
+    expect(screen.getByRole('tab', { name: '活動履歴' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'メモ' })).not.toBeInTheDocument();
   });
 
   it('opens the tab from the URL and drops one-off parameters', () => {
@@ -666,7 +686,7 @@ describe('LeadDetailView editing in place', () => {
 
 describe('LeadDetailView permissions', () => {
   it('gives read-only roles no edit controls', () => {
-    store.access = { canCreate: false, canEdit: false, canDelete: false };
+    store.access = { canCreate: false, canEdit: false, canDelete: false, canReadComments: false };
     renderPage();
     expect(screen.queryByRole('button', { name: /を編集$/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'ヒアリングを記録' })).not.toBeInTheDocument();

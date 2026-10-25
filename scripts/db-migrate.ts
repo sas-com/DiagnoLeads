@@ -10,6 +10,7 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres from 'postgres';
 import { assertNoSkippedMigrations } from './db-migration-ledger';
+import { describeLockTimeout, isLockTimeout, setMigrationLockTimeout } from './db-migration-lock';
 
 const MIGRATIONS_FOLDER = './drizzle';
 const checkOnly = process.argv.includes('--check');
@@ -31,10 +32,13 @@ async function runMigrations() {
       console.log(`   Would apply: ${ledger.pending.join(', ') || 'nothing'}`);
       return;
     }
+    // Give up rather than hold writes behind a lock the migration waits for (#723)
+    await setMigrationLockTimeout(client);
     await migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
     console.log('✅ Migrations completed successfully');
   } catch (error) {
     console.error(checkOnly ? '❌ Check failed:' : '❌ Migration failed:', error);
+    if (isLockTimeout(error)) console.error(describeLockTimeout());
     process.exit(1);
   } finally {
     await client.end();

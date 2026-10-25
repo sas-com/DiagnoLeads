@@ -8,7 +8,14 @@
  *     bunx vitest --run test/unit/integration/comments-org-isolation.db.test.ts
  */
 import * as schema from '@/lib/db/schema';
-import { leadComments, leads, organizationMembers, organizations, users } from '@/lib/db/schema';
+import {
+  auditLogs,
+  leadComments,
+  leads,
+  organizationMembers,
+  organizations,
+  users,
+} from '@/lib/db/schema';
 import { appRouter } from '@/server/routers/_app';
 import { eq, inArray } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
@@ -69,6 +76,12 @@ describe.skipIf(!url)('comments organization isolation (PostgreSQL)', () => {
   const stateOfA = async () => ({
     comments: await pg.select().from(leadComments).where(eq(leadComments.organizationId, orgA)),
   });
+  // Audit rows of both organizations: a refused write records nothing (#555)
+  const audits = () =>
+    pg
+      .select({ id: auditLogs.id })
+      .from(auditLogs)
+      .where(inArray(auditLogs.organizationId, [orgA, orgB]));
 
   beforeAll(async () => {
     orgA = await createOrganization('切り分けA');
@@ -102,6 +115,24 @@ describe.skipIf(!url)('comments organization isolation (PostgreSQL)', () => {
     const before = await stateOfA();
     await expect(calls[name]()).rejects.toMatchObject({ code: 'NOT_FOUND' });
     expect(await stateOfA()).toEqual(before);
+  });
+
+  it('create and addActivity on ids of another organization answer NOT_FOUND and record nothing', async () => {
+    const leadB = await insertLead(orgB);
+    const before = { a: await stateOfA(), audits: await audits() };
+
+    await expect(
+      adminB.comments.create({ ...asB(), leadId: leadA, content: 'On a lead of A' })
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(
+      adminB.comments.create({ ...asB(), leadId: leadB, content: 'Reply to A', parentId: commentA })
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(
+      adminB.comments.addActivity({ ...asB(), leadId: leadA, content: 'Activity on A' })
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+    expect(await stateOfA()).toEqual(before.a);
+    expect(await audits()).toEqual(before.audits);
   });
 
   it('list of a lead of another organization comes back empty', async () => {

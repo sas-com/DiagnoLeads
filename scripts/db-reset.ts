@@ -22,12 +22,16 @@ async function resetDatabase() {
   const db = drizzle(client);
 
   try {
-    // Drop all tables
+    // Drop all tables, and drizzle's ledger: with the ledger left, db:migrate applies nothing (#677)
     await db.execute(sql`DROP SCHEMA public CASCADE`);
+    await db.execute(sql`DROP SCHEMA IF EXISTS drizzle CASCADE`);
     await db.execute(sql`CREATE SCHEMA public`);
+    // Extensions installed in public go with it, and 0001 needs these two
+    await db.execute(sql`CREATE EXTENSION IF NOT EXISTS vector`);
+    await db.execute(sql`CREATE EXTENSION IF NOT EXISTS ltree`);
 
     console.log('✅ Database reset successfully');
-    console.log('🔄 Run migrations next: npm run db:migrate');
+    console.log('🔄 Run migrations next: bun run db:migrate');
   } catch (error) {
     console.error('❌ Reset failed:', error);
     process.exit(1);

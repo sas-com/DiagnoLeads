@@ -1,10 +1,9 @@
+import { PLAIN_TEXT } from '@/lib/utils/plain-text';
 import { z } from 'zod';
 
 /** Whether an appointment from a sales agency met the agreed conditions (Refs #149) */
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
-/** No control or format characters (line breaks, bidi overrides) in labels shown to sales */
-const PLAIN_TEXT = /^[^\p{Cc}\p{Cf}]*$/u;
 
 export const APPOINTMENT_CLAIMS = ['return', 'retake'] as const;
 export type AppointmentClaim = (typeof APPOINTMENT_CLAIMS)[number];

@@ -39,10 +39,12 @@ interface CommentItemProps {
   organizationId: string;
   leadId: string;
   isAdmin?: boolean;
-  onEdit?: (id: string, content: string) => void;
+  /** Rejects when the write failed: the edit stays open */
+  onEdit?: (id: string, content: string) => Promise<void>;
   onDelete?: (id: string) => void;
   onTogglePin?: (id: string) => void;
-  onReply?: (parentId: string, content: string) => void;
+  /** Rejects when the write failed: the reply stays open */
+  onReply?: (parentId: string, content: string) => Promise<void>;
   isNested?: boolean;
 }
 
@@ -80,19 +82,29 @@ export function CommentItem({
 
   const isOwner = comment.userId !== null && comment.userId === currentUserId;
   const canModify = isOwner || isAdmin;
+  // What the menu offers: only the actions the section passed (none for read-only members)
+  const canPin = canModify && Boolean(onTogglePin);
+  const canEdit = isOwner && Boolean(onEdit);
+  const canDelete = canModify && Boolean(onDelete);
+  // Others' replies go with a comment only for an owner: the server refuses the rest
+  const deleteBlocked =
+    !isAdmin && (comment.replies ?? []).some((reply) => reply.userId !== currentUserId);
 
-  const handleSaveEdit = () => {
-    if (editContent.trim() && onEdit) {
-      onEdit(comment.id, editContent.trim());
+  const handleSaveEdit = async () => {
+    if (!editContent.trim() || !onEdit) return;
+    try {
+      await onEdit(comment.id, editContent.trim());
       setIsEditing(false);
+    } catch {
+      // Kept open with the text; the section says what went wrong
     }
   };
 
-  const handleReply = (content: string) => {
-    if (onReply) {
-      onReply(comment.id, content);
-      setIsReplying(false);
-    }
+  // A failed reply rejects to its form, which keeps the text
+  const handleReply = async (content: string) => {
+    if (!onReply) return;
+    await onReply(comment.id, content);
+    setIsReplying(false);
   };
 
   const author = comment.user;
@@ -137,15 +149,15 @@ export function CommentItem({
           </div>
 
           {/* Actions */}
-          {canModify && comment.type !== 'activity' && (
+          {(canPin || canEdit || canDelete) && comment.type !== 'activity' && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                  <MoreHorizontal className="h-4 w-4" />
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={t('actions')}>
+                  <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {onTogglePin && (
+                {canPin && onTogglePin && (
                   <DropdownMenuItem onClick={() => onTogglePin(comment.id)}>
                     {comment.isPinned ? (
                       <>
@@ -160,20 +172,26 @@ export function CommentItem({
                     )}
                   </DropdownMenuItem>
                 )}
-                {isOwner && (
+                {canEdit && (
                   <DropdownMenuItem onClick={() => setIsEditing(true)}>
                     <Pencil className="mr-2 h-4 w-4" />
                     {t('edit')}
                   </DropdownMenuItem>
                 )}
-                {canModify && onDelete && (
+                {canDelete && onDelete && (
                   <DropdownMenuItem
                     onClick={() => onDelete(comment.id)}
+                    disabled={deleteBlocked}
                     className="text-red-600 focus:text-red-600"
                   >
                     <Trash2 className="mr-2 h-4 w-4" />
                     {t('delete')}
                   </DropdownMenuItem>
+                )}
+                {canDelete && deleteBlocked && (
+                  <p className="max-w-60 px-2 pb-1.5 text-sm text-muted-foreground">
+                    {t('deleteForbidden')}
+                  </p>
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
@@ -187,6 +205,7 @@ export function CommentItem({
               <textarea
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
+                aria-label={t('editLabel')}
                 className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2 text-sm resize-none"
                 rows={3}
               />

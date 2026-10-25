@@ -5,6 +5,7 @@ import { ActTimingCard } from '@/components/features/act-timing/act-timing-card'
 import { AgencyHandoverCard } from '@/components/features/agency-handovers/agency-handover-card';
 import { AppointmentReviewCard } from '@/components/features/appointment-reviews/appointment-review-card';
 import { ChallengeGuideCard } from '@/components/features/challenge-guide/challenge-guide-card';
+import { CommentsSection } from '@/components/features/comments/comments-section';
 import { LeadDealsCard } from '@/components/features/deals/lead-deals-card';
 import { DeliveryReviewCard } from '@/components/features/delivery-reviews/delivery-review-card';
 import { InfoOfferRequestsCard } from '@/components/features/info-offers/info-offer-requests-card';
@@ -398,7 +399,7 @@ function LeadDetailContent({
           <div className="-mx-1 overflow-x-auto px-1 pb-1">
             {/* 44px tabs on phones; the bar scrolls sideways when the tabs do not fit */}
             <TabsList className="h-auto sm:h-10">
-              {LEAD_TABS.map((key) => (
+              {LEAD_TABS.filter((key) => key !== 'memos' || access.canReadComments).map((key) => (
                 <TabsTrigger key={key} value={key} className="min-h-11 sm:min-h-0">
                   {t(`tabs.${key}`)}
                 </TabsTrigger>
@@ -474,6 +475,11 @@ function LeadDetailContent({
 
           <TabsContent value="activity" className="mt-4">
             <LeadActivityCard leadId={lead.id} />
+          </TabsContent>
+
+          {/* Comments and notes of the team (#555) */}
+          <TabsContent value="memos" className="mt-4">
+            <CommentsSection organizationId={organizationId} leadId={lead.id} />
           </TabsContent>
 
           <TabsContent value="diagnosis" className="mt-4">
