@@ -308,8 +308,8 @@ export function exportAnalyticsToPDF(
         color: colors.primary,
       },
       {
-        label: labels.text('analytics.averageScore'),
-        value: data.overview.averageScore.toFixed(1),
+        label: labels.text('analytics.mqlRate'),
+        value: `${data.overview.mqlRate.toFixed(1)}%`,
         color: colors.warning,
       },
     ],

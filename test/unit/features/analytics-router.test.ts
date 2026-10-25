@@ -156,10 +156,16 @@ describe('Analytics Router', () => {
       mockDb.from.mockReturnValueOnce(mockDb);
       mockDb.where.mockResolvedValueOnce([{ count: 20 }]);
 
-      // Mock average score
+      // Mock leads per MQL level (#605); NULL is a lead without a diagnosis
       mockDb.select.mockReturnValueOnce(mockDb);
       mockDb.from.mockReturnValueOnce(mockDb);
-      mockDb.where.mockResolvedValueOnce([{ avg: 75 }]);
+      mockDb.where.mockReturnValueOnce(mockDb);
+      mockDb.groupBy.mockResolvedValueOnce([
+        { level: 'interest', count: 30 },
+        { level: 'fit', count: 25 },
+        { level: 'none', count: 35 },
+        { level: null, count: 10 },
+      ]);
 
       // Mock leads by status
       mockDb.select.mockReturnValueOnce(mockDb);
@@ -182,7 +188,7 @@ describe('Analytics Router', () => {
         totalLeads: 100,
         newLeadsThisMonth: 25,
         conversionRate: expect.any(Number),
-        averageScore: expect.any(Number),
+        mqlLevels: { interest: 30, fit: 25, none: 35, unknown: 10 },
         leadsByStatus: {
           new: 40,
           nurturing: 30,
@@ -193,7 +199,8 @@ describe('Analytics Router', () => {
       });
 
       expect(result.conversionRate).toBe(20); // 20/100 * 100 = 20%
-      expect(result.averageScore).toBe(75);
+      expect(result.mqlRate).toBe(30); // 30/100 * 100 = 30%
+      expect(result).not.toHaveProperty('averageScore');
     });
 
     it('should handle zero leads gracefully', async () => {
@@ -214,10 +221,11 @@ describe('Analytics Router', () => {
       mockDb.from.mockReturnValueOnce(mockDb);
       mockDb.where.mockResolvedValueOnce([{ count: 0 }]);
 
-      // Mock average score (0)
+      // Mock leads per MQL level (none)
       mockDb.select.mockReturnValueOnce(mockDb);
       mockDb.from.mockReturnValueOnce(mockDb);
-      mockDb.where.mockResolvedValueOnce([{ avg: 0 }]);
+      mockDb.where.mockReturnValueOnce(mockDb);
+      mockDb.groupBy.mockResolvedValueOnce([]);
 
       // Mock leads by status (empty)
       mockDb.select.mockReturnValueOnce(mockDb);
@@ -233,7 +241,8 @@ describe('Analytics Router', () => {
 
       expect(result.totalLeads).toBe(0);
       expect(result.conversionRate).toBe(0);
-      expect(result.averageScore).toBe(0);
+      expect(result.mqlRate).toBe(0);
+      expect(result.mqlLevels).toEqual({ interest: 0, fit: 0, none: 0, unknown: 0 });
     });
 
     it('should throw FORBIDDEN if user is not a member', async () => {
@@ -544,10 +553,11 @@ describe('Analytics Router', () => {
         mockDb.from.mockReturnValueOnce(mockDb);
         mockDb.where.mockResolvedValueOnce([{ count: 0 }]);
 
-        // Average score
+        // Leads per MQL level
         mockDb.select.mockReturnValueOnce(mockDb);
         mockDb.from.mockReturnValueOnce(mockDb);
-        mockDb.where.mockResolvedValueOnce([{ avg: 0 }]);
+        mockDb.where.mockReturnValueOnce(mockDb);
+        mockDb.groupBy.mockResolvedValueOnce([]);
 
         // Leads by status
         mockDb.select.mockReturnValueOnce(mockDb);
