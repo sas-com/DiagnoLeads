@@ -3,8 +3,8 @@
  * playbook. Scoped by organizationId; the router checks permissions.
  */
 import { db as defaultDb } from '@/lib/db/client';
-import { axSalesPlaybooks, leads } from '@/lib/db/schema';
-import { axPlaybookContentSchema } from '@/lib/features/ax-playbook/types/schemas';
+import { leads } from '@/lib/db/schema';
+import { readPlaybook } from '@/lib/features/ax-playbook/service';
 import type { PrepChallenge } from '@/lib/features/lead-prep/types/schemas';
 import { readLeadDiagnosis } from '@/lib/features/leads/diagnosis-view';
 import { and, eq } from 'drizzle-orm';
@@ -20,16 +20,6 @@ export interface ChallengeGuideView {
   hasPlaybook: boolean;
   /** The guide for the primary challenge; null when none is written */
   guide: ChallengeGuide | null;
-}
-
-async function readPlaybook(db: Pick<Database, 'select'>, organizationId: string) {
-  const [row] = await db
-    .select({ content: axSalesPlaybooks.content })
-    .from(axSalesPlaybooks)
-    .where(eq(axSalesPlaybooks.organizationId, organizationId));
-  // A stored playbook that no longer fits the schema reads as none (as on the settings screen)
-  const parsed = row ? axPlaybookContentSchema.safeParse(row.content) : null;
-  return parsed?.success ? parsed.data : null;
 }
 
 /** The card's content; null when the lead is not found */

@@ -57,6 +57,11 @@ const PUBLIC_PAGE_FILES = new Set(['app/[locale]/page.tsx', 'app/[locale]/layout
 const isPublicPage = (file: string): boolean =>
   startsWithAny(file, PUBLIC_PAGE_DIRS) || PUBLIC_PAGE_FILES.has(file);
 
+/** The AX diagnosis, defined in code (#480) */
+const AX_DIR = 'lib/features/diagnostics/ax-migration/';
+/** Features made for the AX diagnosis itself (its site, its playbook) read it by design */
+const isAxFeature = (file: string): boolean => /^lib\/features\/ax-[^/]+\//.test(file);
+
 const startsWithAny = (file: string, prefixes: string[]): boolean =>
   prefixes.some((prefix) => file.startsWith(prefix));
 
@@ -357,6 +362,24 @@ export const RULES: Rule[] = [
             return from !== null && to !== null && from !== to && !isPublicSurface(edge.to);
           })
           .map((edge) => edge.to)
+      ),
+  },
+  {
+    id: 'ax-boundary',
+    description:
+      'features other than the AX diagnosis and its own (ax-*) do not read diagnostics/ax-migration/, types included (listed: reader -> AX file)',
+    mode: 'allowlist',
+    check: (graph) =>
+      unique(
+        graph.edges
+          .filter(
+            (edge) =>
+              edge.to.startsWith(AX_DIR) &&
+              !edge.from.startsWith(AX_DIR) &&
+              featureOf(edge.from) !== null &&
+              !isAxFeature(edge.from)
+          )
+          .map(edgeKey)
       ),
   },
   {
