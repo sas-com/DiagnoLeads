@@ -653,6 +653,7 @@
       "difficulty": "移行難易度の目安",
       "urgency": "刷新の緊急度",
       "primaryChallenge": "優先して取り組むべき課題",
+      "answeredChallenges": "回答で選んだ課題：{items}",
       "selectedChallenges": "選択された課題",
       "stepsTitle": "小さく始めて、移行の先のAX化まで",
       "disclaimer": "本結果は回答内容にもとづく目安です。正確な移行方式・期間・費用は、現行仕様調査で確定します。",
