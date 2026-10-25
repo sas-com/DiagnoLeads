@@ -40,7 +40,7 @@ Issue → 決定を読む → ブランチ → 実装 → 速い検証 → 全�
    - 関係するテストだけ流す：`bunx vitest run <path>`（1ファイル約2秒）
    - 型チェック：`bun run typecheck`（2回目以降は約8秒）
 6. 全体の検証（コミット前に必須）
-   - `bun run test:run && bun run typecheck && bun run lint`（全テストは約6分）
+   - `bun run test:run && bun run typecheck && bun run lint && bun run arch:check`（全テストは約6分。`arch:check` は import の向きの検査で約1秒）
    - 全部通るまでコミットしない
 7. PR：push して PR を作り、CI（約4分）が緑になるまで見届ける。手順とマージの条件はスキル `ship`
    - CI が緑であること
@@ -56,6 +56,8 @@ Issue → 決定を読む → ブランチ → 実装 → 速い検証 → 全�
 
 - 着手する前に、open な PR とほかのセッションの作業範囲を確かめ、触るファイルが重ならないようにする。Epic に「他のセッションとの分担」があれば従う
   - クラウドでは claude-code-remote の `list_sessions`・`list_events` で読み、`send_message` で自分の範囲（Issue・ブランチ・触るファイル）を知らせる
+  - 着手する Issue は最新のコメントまで読む。担当の決定（オーナーの判断・ほかのセッションの「着手しました」）が書かれていれば従う。その Issue を参照する open な PR も探す（`search_pull_requests` で `repo:yusuke-kurosawa/DiagnoLeads <番号>`）
+  - 着手の連絡（`send_message`・Issue のコメント）に、この2つ（最新のコメントと参照する PR）を確かめたことを書く
 - ほかのセッションが担当しているファイルは編集しない。変えてほしいことは `send_message` か Issue で頼む
 - 衝突しやすいファイルは、触る直前に最新の main を取り込む：`locales/*/common.json`、`lib/db/schema.ts` と `drizzle/`（マイグレーションがぶつかったら、番号を付け替えずに作り直す。手順は `.claude/rules/db-schema.md`）、`server/routers/_app.ts`、`components/features/leads/detail/lead-detail-view.tsx`、`package.json`
 - 順番にマージする必要がある PR は、本文に関係する PR とマージの順番を書く
@@ -83,6 +85,7 @@ Issue → 決定を読む → ブランチ → 実装 → 速い検証 → 全�
 
 ## 置き場所
 
+- 層と依存の向き・機能の型・機能を足すときに触る場所の正本は `docs/ARCHITECTURE.md`（`bun run arch:check` で検査する）
 - 機能：`lib/features/{feature}/`。tRPC のルーターは `api/` に置き、`server/routers/_app.ts` に登録する。型と zod のスキーマは `types/` に置く
 - 画面の部品：`components/features/{feature}/` に置く。共通の部品は `components/ui/`（shadcn/ui）
 - テスト：vitest が実行する名前だけを使う

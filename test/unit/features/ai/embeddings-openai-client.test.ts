@@ -55,12 +55,12 @@ describe('OpenAI embeddings', () => {
 
     it('makes the client once, with the API key from the environment', async () => {
       vi.stubEnv('OPENAI_API_KEY', 'sk-test-embeddings');
-      const { generateEmbedding, generateEmbeddingsBatch } = await loadModule();
+      const { generateEmbedding } = await loadModule();
       openai.create.mockResolvedValue({ data: [{ embedding: vector(1) }] });
 
       await generateEmbedding('a');
       await generateEmbedding('b');
-      await generateEmbeddingsBatch(['c']);
+      await generateEmbedding('c');
 
       // One 20-second attempt, no retries: the one call counted is one request, within the
       // 30 seconds of a Vercel function (as the Claude client)
@@ -90,54 +90,6 @@ describe('OpenAI embeddings', () => {
         'Error generating embedding:',
         expect.objectContaining({ message: 'OPENAI_API_KEY environment variable is not set' })
       );
-    });
-  });
-
-  describe('generateEmbeddingsBatch', () => {
-    it('sends every text in one request and returns the vectors in order', async () => {
-      const { generateEmbeddingsBatch } = await loadModule();
-      openai.create.mockResolvedValue({
-        data: [{ embedding: vector(1) }, { embedding: vector(2) }, { embedding: vector(3) }],
-      });
-
-      expect(await generateEmbeddingsBatch(['a', 'b', 'c'])).toEqual([
-        vector(1),
-        vector(2),
-        vector(3),
-      ]);
-      expect(openai.create).toHaveBeenCalledWith({
-        model: 'text-embedding-3-small',
-        input: ['a', 'b', 'c'],
-        encoding_format: 'float',
-      });
-    });
-
-    it('returns no vectors for no texts', async () => {
-      const { generateEmbeddingsBatch } = await loadModule();
-      openai.create.mockResolvedValue({ data: [] });
-
-      expect(await generateEmbeddingsBatch([])).toEqual([]);
-    });
-
-    it('fails with a fixed message when the call fails, and logs the cause', async () => {
-      const { generateEmbeddingsBatch } = await loadModule();
-      const cause = new Error('500 Internal Server Error');
-      openai.create.mockRejectedValue(cause);
-
-      await expect(generateEmbeddingsBatch(['a'])).rejects.toThrow(
-        'Failed to generate embeddings batch'
-      );
-      expect(consoleError).toHaveBeenCalledWith('Error generating embeddings batch:', cause);
-    });
-
-    it('fails when the API key is not set', async () => {
-      vi.stubEnv('OPENAI_API_KEY', '');
-      const { generateEmbeddingsBatch } = await loadModule();
-
-      await expect(generateEmbeddingsBatch(['a'])).rejects.toThrow(
-        'Failed to generate embeddings batch'
-      );
-      expect(openai.create).not.toHaveBeenCalled();
     });
   });
 });

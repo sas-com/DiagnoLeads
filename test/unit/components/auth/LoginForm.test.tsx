@@ -130,7 +130,7 @@ describe('LoginForm', () => {
     });
   });
 
-  it('should show error toast for invalid credentials', async () => {
+  it('shows in the form the error for invalid credentials', async () => {
     mockSignIn.mockResolvedValueOnce({
       error: { code: 'INVALID_EMAIL_OR_PASSWORD', message: 'Invalid email or password' },
     });
@@ -141,12 +141,11 @@ describe('LoginForm', () => {
     await user.type(screen.getByLabelText(/passwordLabel/i), 'WrongPassword123');
     await user.click(screen.getByRole('button', { name: /submitButton/i }));
 
-    await waitFor(() => {
-      expect(toast.error).toHaveBeenCalled();
-    });
+    expect(await screen.findByRole('alert')).toHaveTextContent('settings.auth.login.invalidCredentials');
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
-  it('should show error toast for user not found', async () => {
+  it('shows in the form the error for user not found', async () => {
     mockSignIn.mockResolvedValueOnce({
       error: { code: 'USER_NOT_FOUND', message: 'User not found' },
     });
@@ -157,9 +156,8 @@ describe('LoginForm', () => {
     await user.type(screen.getByLabelText(/passwordLabel/i), 'Password123');
     await user.click(screen.getByRole('button', { name: /submitButton/i }));
 
-    await waitFor(() => {
-      expect(toast.error).toHaveBeenCalled();
-    });
+    expect(await screen.findByRole('alert')).toHaveTextContent('settings.auth.login.userNotFound');
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it('should handle network error gracefully', async () => {
@@ -171,9 +169,8 @@ describe('LoginForm', () => {
     await user.type(screen.getByLabelText(/passwordLabel/i), 'Password123');
     await user.click(screen.getByRole('button', { name: /submitButton/i }));
 
-    await waitFor(() => {
-      expect(toast.error).toHaveBeenCalled();
-    });
+    expect(await screen.findByRole('alert')).toHaveTextContent('settings.auth.login.errorToast');
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it('should disable form while loading', async () => {

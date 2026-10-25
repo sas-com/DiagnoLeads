@@ -5,6 +5,7 @@
  */
 
 import { CLAUDE_MAX_TOKENS, CLAUDE_MODEL, anthropic as claude } from '../client';
+import { reportClaudeFailure } from '../failures';
 
 /**
  * Generate lead summary
@@ -55,6 +56,7 @@ Focus on key business value and next steps.`;
     return summary.trim();
   } catch (error) {
     console.error('Error generating lead summary:', error);
+    await reportClaudeFailure('lead-summary', error);
     return 'Unable to generate summary';
   }
 }

@@ -120,9 +120,10 @@ export const leadMqlLevel = sql<AxMqlLevel | null>`(select case when 'interest' 
 
 /**
  * The level the list sorts and filters by (#447): a lead judged MQL (an MQL date, also set by
- * hand without a diagnosis) counts as 関心あり, as its green badge says (LeadMqlBadges)
+ * hand without a diagnosis) counts as 関心あり, as its green badge says (LeadMqlBadges). The
+ * analytics count leads by it too (#605), so the numbers match the list's filter
  */
-const listMqlLevel = sql<AxMqlLevel | null>`(case when ${leads.mqlQualifiedAt} is not null then 'interest' else ${leadMqlLevel} end)`;
+export const listMqlLevel = sql<AxMqlLevel | null>`(case when ${leads.mqlQualifiedAt} is not null then 'interest' else ${leadMqlLevel} end)`;
 
 /**
  * Position in a fixed order (pipeline order instead of alphabetical). Empty and unknown values

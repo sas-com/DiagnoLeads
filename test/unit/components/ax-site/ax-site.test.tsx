@@ -253,9 +253,11 @@ describe('AX migration landing page', () => {
       '直せる人の退職・異動',
       'INSネットを使うEDI（2028年12月31日に提供終了と発表）',
     ]);
-    // Before the buttons, which the phone CTA bar watches on their own
+    // Before the buttons, which the phone CTA bar watches on their own: not even the caption
+    // above them, which can be on screen while the buttons are not (#536)
     const buttons = document.getElementById('ax-hero-cta') as HTMLElement;
     expect(within(buttons).getByRole('link', { name: /無料Web診断をはじめる/ })).toBeInTheDocument();
+    expect(buttons).not.toHaveTextContent('約3分でわかります');
   });
 
   it('answers what deciders ask before a consultation (#420)', async () => {
@@ -412,6 +414,30 @@ describe('AxFloatingCta', () => {
 
     act(() => callback([{ target, isIntersecting: true } as unknown as IntersectionObserverEntry], {} as IntersectionObserver));
     expect(bar).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('watches the hero buttons, not the hero heading (#536)', () => {
+    // Below the heading, the deadline tags put the hero buttons under a phone's first screen
+    const observed: string[] = [];
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        observe(target: Element) {
+          observed.push(target.id);
+        }
+        disconnect() {}
+      }
+    );
+    render(
+      withIntl(
+        <>
+          <h1 id="ax-hero-heading">見出し</h1>
+          <div id="ax-hero-cta" />
+          <AxFloatingCta label="かんたん無料診断をはじめる" />
+        </>
+      )
+    );
+    expect(observed).toEqual(['ax-hero-cta']);
   });
 });
 

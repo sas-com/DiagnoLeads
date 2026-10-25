@@ -160,7 +160,8 @@ function ConsultationCta({
   requested: boolean;
 }) {
   const t = useTranslations(`${PUBLIC_DIAGNOSIS_RUNNER_CONFIG.namespace}.result.consultation`);
-  const [state, setState] = useState<'idle' | 'sending' | 'done' | 'failed'>(
+  // closed: the request window of this result has passed (409, #481), so a retry will not help
+  const [state, setState] = useState<'idle' | 'sending' | 'done' | 'failed' | 'closed'>(
     requested ? 'done' : 'idle'
   );
 
@@ -172,7 +173,7 @@ function ConsultationCta({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ submissionId }),
       });
-      setState(res.ok ? 'done' : 'failed');
+      setState(res.ok ? 'done' : res.status === 409 ? 'closed' : 'failed');
     } catch {
       setState('failed');
     }
@@ -194,6 +195,10 @@ function ConsultationCta({
             />
           </div>
         </>
+      ) : state === 'closed' ? (
+        <p role="alert" className="text-sm font-bold text-red-700">
+          {t('closed')}
+        </p>
       ) : (
         <>
           <p className="text-sm leading-relaxed text-gray-700">{t('body')}</p>

@@ -47,9 +47,9 @@ import type {
   PublicDiagnosisDefinition,
   PublicDiagnosisResult,
 } from '@/lib/features/diagnosis-builder/evaluate';
-import { PHONE_PATTERN, normalizePhone } from '@/lib/features/diagnostics/ax-migration/contact';
 import { pruneAnswers, shownSections } from '@/lib/features/diagnostics/engine';
 import { DIAGNOSIS_TURNSTILE_ACTION } from '@/lib/features/diagnostics/turnstile-action';
+import { PHONE_PATTERN, normalizePhone } from '@/lib/features/diagnostics/types/contact';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DiagnosisResult } from './diagnosis-result';

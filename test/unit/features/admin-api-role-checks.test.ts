@@ -104,12 +104,6 @@ const READS: Record<string, Call> = {
   'analytics.getResponseTime': (c) => c.analytics.getResponseTime(org),
   'analytics.getAcquisitionCost': (c) => c.analytics.getAcquisitionCost(org),
   'analytics.getAgencyPerformance': (c) => c.analytics.getAgencyPerformance(org),
-  'analytics.getComparison': (c) =>
-    c.analytics.getComparison({
-      ...org,
-      currentPeriod: { start: '2026-10-01T00:00:00.000Z', end: '2026-10-08T00:00:00.000Z' },
-      previousPeriod: { start: '2026-09-24T00:00:00.000Z', end: '2026-10-01T00:00:00.000Z' },
-    }),
   'diagnosticTemplates.getBySlug': (c) => c.diagnosticTemplates.getBySlug({ ...org, slug: 'x' }),
   'leadSearch.suggest': (c) => c.leadSearch.suggest({ ...org, query: '山田' }),
   'embed.list': (c) => c.embed.list(org),
