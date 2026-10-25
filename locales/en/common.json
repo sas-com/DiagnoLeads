@@ -401,6 +401,7 @@
       },
       "checkpointsTitle": "What to check when moving from {platform} to a web system",
       "checkpointsTitleGeneric": "What to check when moving to a web system",
+      "accessReplaceInventory": "First take stock of the tools and drop unused or duplicate ones to narrow what to replace",
       "accessCheckpointsTitle": {
         "fix": "What to check when fixing {platform} and keeping it in use",
         "replace": "What to check when replacing {platform} with a ready-made service"
@@ -652,14 +653,17 @@
       "difficulty": "Migration difficulty (estimate)",
       "urgency": "Urgency to modernize",
       "primaryChallenge": "The challenge to tackle first",
+      "answeredChallenges": "Challenges you chose: {items}",
       "selectedChallenges": "Challenges you selected",
       "stepsTitle": "Start small, then go beyond migration to AX",
       "disclaimer": "This result is an estimate based on your answers. The exact approach, schedule and cost are determined in the current-system survey.",
       "answersTitle": "Your answers",
       "answersJoiner": ", ",
       "needsHearing": "Many answers were \"I don't know\", so this estimate is rough. A consultation lets us give you a more accurate outlook.",
+      "accessNeedsHearing": "Many answers were \"I don't know\", so this estimate is rough. A 30-minute online consultation lets us give you a more accurate outlook.",
       "unknownsTitle": "Checking these in-house will sharpen the result",
       "unknownsHint": "Notices from the maintenance company, asset lists and contracts often have the answers. We can also show you how to find them in a consultation.",
+      "accessUnknownsHint": "Notices from the maintenance company, asset lists and contracts often have the answers. We can also show you how to find them in a 30-minute online consultation.",
       "offers": {
         "title": "Start by gathering information",
         "titlePrimary": "Start by gathering information",
@@ -3122,7 +3126,7 @@
       "title": "Access business tools: fix them or move them to the web? | Free web check (Access) | Software Agency System Co., Ltd.",
       "description": "Fix your Access tool and keep using it, or move it to the web? Choose the version, VBA, number of users and more, and see a guide to the way forward that suits your tool. We tell you which fits: fixing it, moving it to the web, or replacing it. Free, multiple choice, about 3 minutes."
     },
-    "floatingCta": "Start the free web check (Access)",
+    "floatingCta": "Start the free web check",
     "hero": {
       "eyebrow": "For teams using Microsoft Access business tools",
       "title": "Your Access tool: fix it and keep using it, or move it to the web?",

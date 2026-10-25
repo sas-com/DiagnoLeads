@@ -9,6 +9,7 @@ import {
 } from '@/components/features/diagnosis-runner/question-view';
 import { DiagnosisRunnerProvider } from '@/components/features/diagnosis-runner/runner-context';
 import type { AxAccessPath } from '@/lib/features/diagnostics/ax-migration/access-path';
+import { answeredChallengesIn } from '@/lib/features/diagnostics/ax-migration/challenge-categories';
 import { axMigrationDefinition } from '@/lib/features/diagnostics/ax-migration/definition';
 import type {
   AxMigrationPublicResult,
@@ -131,6 +132,15 @@ export function AxDiagnosisResult({
   }, []);
 
   const primary = result.challenges.primary;
+  // What the respondent chose under the primary challenge, in the question's own words (#658)
+  const answeredUnderPrimary = primary
+    ? answeredChallengesIn(answers, primary).map(
+        ({ questionId, value }) =>
+          axMigrationDefinition.questions
+            .find((question) => question.id === questionId)
+            ?.options.find((option) => option.value === value)?.label[locale] ?? value
+      )
+    : [];
   const otherSelected = CHALLENGE_KEYS.filter(
     (key) => key !== primary && result.challenges.selected.includes(key)
   );
@@ -284,7 +294,7 @@ export function AxDiagnosisResult({
 
       {result.needsHearing && (
         <p className="rounded-2xl border border-ax-yellow-dark bg-ax-yellow/20 p-4 text-sm leading-relaxed">
-          {t('needsHearing')}
+          {t(platform === 'access' ? 'accessNeedsHearing' : 'needsHearing')}
         </p>
       )}
 
@@ -355,6 +365,11 @@ export function AxDiagnosisResult({
               t(`challenges.${primary}.title`)
             )}
             <p className="leading-relaxed text-gray-700">{t(`challenges.${primary}.problem`)}</p>
+            {answeredUnderPrimary.length > 0 && (
+              <p className="text-sm leading-relaxed text-gray-600" data-testid="ax-result-answered">
+                {t('answeredChallenges', { items: answeredUnderPrimary.join(t('answersJoiner')) })}
+              </p>
+            )}
             <p className="flex items-start gap-2 rounded-xl bg-ax-teal/5 p-3 text-sm leading-relaxed">
               <CheckCircle2
                 className="mt-0.5 h-4 w-4 shrink-0 text-ax-teal-dark"
@@ -414,7 +429,12 @@ export function AxDiagnosisResult({
                   className="mt-0.5 h-4 w-4 shrink-0 text-ax-teal-dark"
                   aria-hidden="true"
                 />
-                <span>{t(`checkpoints.${key}`)}</span>
+                <span>
+                  {/* The same inventory narrows what to replace, not what to migrate (#674) */}
+                  {accessPath === 'replace' && key === 'access_inventory'
+                    ? t('accessReplaceInventory')
+                    : t(`checkpoints.${key}`)}
+                </span>
               </li>
             ))}
           </ul>
@@ -432,7 +452,9 @@ export function AxDiagnosisResult({
               <li key={question.id}>{question.label[locale]}</li>
             ))}
           </ul>
-          <p className="text-xs leading-relaxed text-gray-700">{t('unknownsHint')}</p>
+          <p className="text-xs leading-relaxed text-gray-700">
+            {t(platform === 'access' ? 'accessUnknownsHint' : 'unknownsHint')}
+          </p>
         </div>
       )}
 
