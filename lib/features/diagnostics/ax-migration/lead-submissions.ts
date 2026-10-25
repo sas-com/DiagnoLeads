@@ -1,7 +1,7 @@
 /**
- * The latest AX diagnosis answer of leads, read by other features (the act timing, the prep
- * card, the delivery reviews): the one query for it (#480), so they need not know the AX key or
- * how submissions are stored. Scoped by organizationId.
+ * The AX diagnosis answers of leads, read by other features (the act timing, the prep card, the
+ * delivery reviews, the objection card): the queries for them are here (#480), so the features
+ * need not know the AX key or how submissions are stored. Scoped by organizationId.
  */
 import type { db as defaultDb } from '@/lib/db/client';
 import { diagnosticSubmissions } from '@/lib/db/schema';
@@ -67,4 +67,23 @@ export async function latestAxSubmission(
     .orderBy(desc(diagnosticSubmissions.createdAt))
     .limit(1);
   return row ? { leadId, ...row } : null;
+}
+
+/** The answers of every AX submission of one lead, in no particular order */
+export async function axSubmissionAnswers(
+  db: Pick<Database, 'select'>,
+  organizationId: string,
+  leadId: string
+): Promise<LatestAxSubmission['answers'][]> {
+  const rows = await db
+    .select({ answers: diagnosticSubmissions.answers })
+    .from(diagnosticSubmissions)
+    .where(
+      and(
+        eq(diagnosticSubmissions.leadId, leadId),
+        eq(diagnosticSubmissions.organizationId, organizationId),
+        eq(diagnosticSubmissions.diagnosticKey, AX_MIGRATION_DIAGNOSTIC_KEY)
+      )
+    );
+  return rows.map((row) => row.answers);
 }

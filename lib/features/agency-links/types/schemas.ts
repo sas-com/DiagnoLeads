@@ -1,3 +1,4 @@
+import { PLAIN_TEXT } from '@/lib/utils/plain-text';
 import { z } from 'zod';
 
 /**
@@ -38,9 +39,6 @@ export function buildAgencyLinkUrl(origin: string, locale: string, code: string)
   url.searchParams.set('agency', code);
   return url.toString();
 }
-
-/** No control or format characters (line breaks, bidi overrides) in names shown to sales */
-const PLAIN_TEXT = /^[^\p{Cc}\p{Cf}]*$/u;
 
 export const listAgencyLinksSchema = z.object({
   organizationId: z.string().uuid(),
