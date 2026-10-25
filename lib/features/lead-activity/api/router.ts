@@ -3,16 +3,23 @@
  *
  * Anyone who can read leads may read the timeline (including viewers from a parent
  * organization). Why an address was suppressed is shown only to those who can update settings
- * (#365), and the comments only to those who may read them (#555: not the parent
- * organization). Every query is scoped by organizationId and leadId (see ../service.ts).
+ * (#365), the comments only to those who may read them (#555: not the parent organization),
+ * and which deal a contact was about only to those who may read deals (#554, #435). The
+ * contact records of a deal (the deal page) need both. Every query is scoped by organizationId
+ * and leadId or dealId (see ../service.ts).
  */
 
 import type { AppAbility } from '@/lib/auth/permissions';
 import { canReadComments } from '@/lib/features/comments/service';
+import { canReadDeals } from '@/lib/features/deals/service';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
-import { getSubmissionAnswers, listLeadActivities } from '../service';
-import { getSubmissionAnswersSchema, listLeadActivitiesSchema } from '../types/schemas';
+import { getSubmissionAnswers, listDealActivities, listLeadActivities } from '../service';
+import {
+  getSubmissionAnswersSchema,
+  listDealActivitiesSchema,
+  listLeadActivitiesSchema,
+} from '../types/schemas';
 
 function assertCanRead(ability: AppAbility) {
   if (!ability.can('read', 'Lead')) {
@@ -35,7 +42,24 @@ export const leadActivityRouter = router({
       cursor: input.cursor,
       showSuppressionReasons: ctx.ability.can('update', 'Settings'),
       hideComments: !canReadComments(ctx),
+      hideDeals: !canReadDeals(ctx),
     });
+  }),
+
+  /** The contact records of a deal, newest first (the deal page, #554) */
+  forDeal: organizationProcedure.input(listDealActivitiesSchema).query(async ({ ctx, input }) => {
+    assertCanRead(ctx.ability);
+    if (!canReadDeals(ctx)) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: 'You do not have permission to read the deals',
+      });
+    }
+    const page = await listDealActivities(ctx.db, {
+      organizationId: ctx.organization.id,
+      dealId: input.dealId,
+    });
+    return { ...page, canEdit: ctx.ability.can('update', 'Lead') };
   }),
 
   /** One diagnosis submission of the lead, with its answers and result */

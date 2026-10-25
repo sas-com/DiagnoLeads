@@ -57,6 +57,14 @@ vi.mock('@/lib/trpc/client', () => {
 vi.mock('@/hooks/use-organization', () => ({
   useOrganization: () => ({ organizationId: ORG_ID }),
 }));
+// The deal's activity is its own card (#554), tested in deal-activities-card.test.tsx
+vi.mock('@/components/features/lead-activity/deal-activities-card', () => ({
+  DealActivitiesCard: (props: { dealId: string; leadId: string; leadLabel: string }) => (
+    <div data-testid="deal-activities" data-deal={props.dealId} data-lead={props.leadId}>
+      {props.leadLabel}
+    </div>
+  ),
+}));
 vi.mock('sonner', () => ({ toast: mocks.toast }));
 
 beforeAll(() => {
@@ -157,6 +165,14 @@ describe('DealDetailView', () => {
 
     await user.click(screen.getByRole('button', { name: '開き直す' }));
     expect(mocks.updates).toEqual([{ organizationId: ORG_ID, dealId: DEAL_ID, stage: 'proposal' }]);
+  });
+
+  it("shows the activity of the deal for the deal's lead (#554)", () => {
+    renderView();
+    const card = screen.getByTestId('deal-activities');
+    expect(card).toHaveAttribute('data-deal', DEAL_ID);
+    expect(card).toHaveAttribute('data-lead', LEAD_ID);
+    expect(card).toHaveTextContent('架空商事');
   });
 
   it('tells those who cannot change deals that the page is read only', () => {

@@ -4132,7 +4132,9 @@
       "contact_recorded": {
         "call": "電話で連絡",
         "email": "メールで連絡",
-        "no_answer": "電話したがつながらなかった"
+        "no_answer": "電話したがつながらなかった",
+        "visit": "訪問",
+        "online_meeting": "オンライン商談"
       },
       "result_email_requested": "診断結果のメール送付を依頼",
       "result_email_sent": "診断結果をメールで送付",
@@ -4222,6 +4224,14 @@
       "confirm_page": "経路: 確認ページ",
       "resend_webhook": "経路: 配信サービスからの通知",
       "staff": "経路: 管理画面"
+    },
+    "dealActivities": {
+      "title": "この商談の活動",
+      "record": "活動を記録",
+      "loading": "活動を読み込み中…",
+      "loadError": "活動を読み込めませんでした",
+      "empty": "この商談の活動はまだありません。リードの連絡のバーか、ここから記録できます。",
+      "more": "新しい{shown}件を表示しています（全{total}件）"
     }
   },
   "sidebarWidget": {
@@ -4508,16 +4518,13 @@
       "kinds": {
         "call": "電話した",
         "email": "メールした",
-        "no_answer": "つながらなかった"
+        "no_answer": "つながらなかった",
+        "visit": "訪問した",
+        "online_meeting": "オンラインで商談した"
       },
       "recordFor": "{lead}への連絡を記録",
-      "withNote": "メモを付けて記録",
-      "withNoteShort": "メモ付き",
-      "kind": "連絡の内容",
       "note": "メモ（任意）",
-      "notePlaceholder": "例：担当の方は不在。明日の午前にかけ直す",
       "save": "記録する",
-      "cancel": "キャンセル",
       "recorded": "「{kind}」を記録しました",
       "undo": "取り消す",
       "undone": "記録を取り消しました",
@@ -4529,6 +4536,35 @@
       "latest": "最新：{kind}（{date}）・全{count}件",
       "noAnswerCount": "不通 {count}回"
     },
+    "activity": {
+      "open": "活動を記録",
+      "openFor": "{lead}の活動を記録",
+      "title": "活動を記録",
+      "description": "{lead}への連絡・訪問・オンライン商談を、日時と結果つきで記録します。",
+      "kind": "種類",
+      "when": "日時",
+      "whenHelp": "日本時間。今より後の日時は記録できません",
+      "whenInvalid": "日付と時刻を入れてください",
+      "whenFuture": "今より後の日時は記録できません",
+      "whenTooEarly": "2000年より前の日時は記録できません",
+      "duration": "所要時間（任意）",
+      "minutes": "分",
+      "durationInvalid": "1〜{max}の整数（分）で入れてください",
+      "outcome": "結果（任意）",
+      "noAnswerHelp": "つながらなかったときは、所要時間と結果は記録しません",
+      "deal": "商談（任意）",
+      "dealNone": "商談を選ばない",
+      "dealOption": "{name}（{stage}）",
+      "notePlaceholder": "例：現行の帳票を見せてもらった。次回は移行の範囲を相談する",
+      "saving": "記録しています…"
+    },
+    "outcomes": {
+      "advanced": "前進",
+      "no_change": "変化なし",
+      "setback": "後退"
+    },
+    "durationMinutes": "{minutes}分",
+    "dealLink": "商談：{name}",
     "tasks": {
       "title": "次の行動",
       "empty": "次の行動はまだありません",

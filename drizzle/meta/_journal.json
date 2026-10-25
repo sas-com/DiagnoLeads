@@ -246,6 +246,13 @@
       "when": 1792881078650,
       "tag": "0034_admin_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1792924621323,
+      "tag": "0035_activity_visits",
+      "breakpoints": true
     }
   ]
 }

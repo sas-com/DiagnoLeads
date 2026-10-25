@@ -4132,7 +4132,9 @@
       "contact_recorded": {
         "call": "Contacted by phone",
         "email": "Contacted by email",
-        "no_answer": "Called, no answer"
+        "no_answer": "Called, no answer",
+        "visit": "Visit",
+        "online_meeting": "Online meeting"
       },
       "result_email_requested": "Result by email requested",
       "result_email_sent": "Result sent by email",
@@ -4222,6 +4224,14 @@
       "confirm_page": "Via: confirm page",
       "resend_webhook": "Via: notice from the email provider",
       "staff": "Via: admin screen"
+    },
+    "dealActivities": {
+      "title": "Activity on this deal",
+      "record": "Record an activity",
+      "loading": "Loading the activity…",
+      "loadError": "The activity could not be loaded",
+      "empty": "No activity on this deal yet. Record one here or from the lead's contact bar.",
+      "more": "Showing the latest {shown} of {total}"
     }
   },
   "sidebarWidget": {
@@ -4508,16 +4518,13 @@
       "kinds": {
         "call": "Called",
         "email": "Emailed",
-        "no_answer": "No answer"
+        "no_answer": "No answer",
+        "visit": "Visited",
+        "online_meeting": "Met online"
       },
       "recordFor": "Record a contact with {lead}",
-      "withNote": "Record with a note",
-      "withNoteShort": "With note",
-      "kind": "What happened",
       "note": "Note (optional)",
-      "notePlaceholder": "e.g. Not available; call again tomorrow morning",
       "save": "Record",
-      "cancel": "Cancel",
       "recorded": "Recorded \"{kind}\"",
       "undo": "Undo",
       "undone": "The record was removed",
@@ -4529,6 +4536,35 @@
       "latest": "Latest: {kind} ({date}) · {count} in total",
       "noAnswerCount": "No answer ×{count}"
     },
+    "activity": {
+      "open": "Record an activity",
+      "openFor": "Record an activity for {lead}",
+      "title": "Record an activity",
+      "description": "Record a contact, a visit or an online meeting with {lead}, with its time and outcome.",
+      "kind": "What happened",
+      "when": "When",
+      "whenHelp": "Japan time. A time later than now cannot be recorded",
+      "whenInvalid": "Enter a date and a time",
+      "whenFuture": "A time later than now cannot be recorded",
+      "whenTooEarly": "A time before 2000 cannot be recorded",
+      "duration": "Duration (optional)",
+      "minutes": "minutes",
+      "durationInvalid": "Enter whole minutes from 1 to {max}",
+      "outcome": "Outcome (optional)",
+      "noAnswerHelp": "Nobody was reached, so no duration or outcome is recorded",
+      "deal": "Deal (optional)",
+      "dealNone": "No deal",
+      "dealOption": "{name} ({stage})",
+      "notePlaceholder": "e.g. They showed us their current forms. Next time we discuss the scope",
+      "saving": "Recording…"
+    },
+    "outcomes": {
+      "advanced": "Moved forward",
+      "no_change": "No change",
+      "setback": "Set back"
+    },
+    "durationMinutes": "{minutes} min",
+    "dealLink": "Deal: {name}",
     "tasks": {
       "title": "Next actions",
       "empty": "No next actions yet",

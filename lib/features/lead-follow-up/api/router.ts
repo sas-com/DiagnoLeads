@@ -59,7 +59,12 @@ export const leadFollowUpRouter = router({
     return { ...summary, canEdit: ctx.ability.can('update', 'Lead') };
   }),
 
-  /** One tap: "called", "emailed" or "could not reach", now */
+  /**
+   * One tap: "called", "emailed" or "could not reach", now; or a contact with its time,
+   * duration, outcome and deal (#554). Everyone who may change leads may read deals today; a
+   * role that may change leads but not read deals (the agency accounts of #276) must not be
+   * able to name a deal here
+   */
   recordContact: organizationProcedure
     .input(recordContactSchema)
     .mutation(async ({ ctx, input }) => {

@@ -16,10 +16,12 @@ interface LeadContactBarProps {
 
 /**
  * Under the lead page header (Refs #136): when the lead was first contacted (or that nobody
- * has yet), the latest contact, and the one-tap buttons for staff who can edit leads.
+ * has yet), the latest contact (with its duration and outcome, #554), and the one-tap buttons
+ * and "record an activity" for staff who can edit leads.
  */
 export function LeadContactBar({ organizationId, leadId, leadLabel }: LeadContactBarProps) {
   const t = useTranslations('leadFollowUp.contact');
+  const tFollowUp = useTranslations('leadFollowUp');
   const format = useFormatter();
   const query = trpc.leadFollowUp.contacts.useQuery(
     { organizationId, leadId },
@@ -70,6 +72,9 @@ export function LeadContactBar({ organizationId, leadId, leadLabel }: LeadContac
                   date: when(latest.contactedAt),
                   count: data.total,
                 })}
+                {latest.durationMinutes !== null &&
+                  ` · ${tFollowUp('durationMinutes', { minutes: latest.durationMinutes })}`}
+                {latest.outcome && ` · ${tFollowUp(`outcomes.${latest.outcome}`)}`}
                 {latest.createdBy && ` · ${latest.createdBy.name}`}
                 {latest.note && ` · ${latest.note}`}
               </p>

@@ -1,5 +1,6 @@
 'use client';
 
+import { DealActivitiesCard } from '@/components/features/lead-activity/deal-activities-card';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -208,6 +209,13 @@ export function DealDetailView({ dealId }: { dealId: string }) {
           )}
         </aside>
       </div>
+
+      <DealActivitiesCard
+        organizationId={organizationId}
+        dealId={deal.id}
+        leadId={deal.lead.id}
+        leadLabel={deal.lead.company || deal.lead.name || ''}
+      />
 
       <Card className="p-5">
         <h2 className="text-base font-bold text-gray-900 dark:text-gray-50">

@@ -1,19 +1,51 @@
 /**
- * Sales follow-up of a lead: contact records (Refs #136) and next actions (Refs #85)
+ * Sales follow-up of a lead: contact records (Refs #136, #554) and next actions (Refs #85)
  */
 
 import { isoDateSchema } from '@/lib/features/lead-hearings/types/schemas';
 import { z } from 'zod';
 
-/** What a contact record says happened: called and talked, emailed, called and nobody answered */
-export const CONTACT_KINDS = ['call', 'email', 'no_answer'] as const;
+/**
+ * What a contact record says happened: called and talked, emailed, called and nobody answered,
+ * visited, met online (#554). Kept in step with lead_contact_logs_kind_check (lib/db/schema.ts)
+ */
+export const CONTACT_KINDS = ['call', 'email', 'no_answer', 'visit', 'online_meeting'] as const;
 export type ContactKind = (typeof CONTACT_KINDS)[number];
+/** The kinds the one-tap buttons record, now and without details (#136) */
+export const QUICK_CONTACT_KINDS = [
+  'call',
+  'email',
+  'no_answer',
+] as const satisfies readonly ContactKind[];
 /**
  * Kinds that reached the person. Only these end the wait for the first contact; "no answer"
  * stays on the dashboard's waiting list (owner decision, #136). The first contact TIME (speed
  * to lead) still counts every kind, see firstContactTimes in ../service.ts.
  */
-export const REACHED_CONTACT_KINDS = ['call', 'email'] as const satisfies readonly ContactKind[];
+export const REACHED_CONTACT_KINDS = [
+  'call',
+  'email',
+  'visit',
+  'online_meeting',
+] as const satisfies readonly ContactKind[];
+
+/**
+ * How a contact left the sale: moved it forward, changed nothing, set it back (#554). Initial
+ * values, to be confirmed with the sales department. Kept in step with
+ * lead_contact_logs_outcome_check (lib/db/schema.ts)
+ */
+export const CONTACT_OUTCOMES = ['advanced', 'no_change', 'setback'] as const;
+export type ContactOutcome = (typeof CONTACT_OUTCOMES)[number];
+
+/** Minutes a contact can take: up to a day (lead_contact_logs_duration_check) */
+export const CONTACT_DURATION_MAX_MINUTES = 24 * 60;
+/** The earliest time a contact can be recorded at */
+export const CONTACT_EARLIEST_AT = new Date('2000-01-01T00:00:00+09:00');
+/**
+ * How far past the server's clock a recorded time may be (the screen's clock can run a little
+ * ahead). A time within it is recorded as now; a later one is refused as in the future
+ */
+export const CONTACT_FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
 
 export const CONTACT_NOTE_MAX = 1000;
 export const TASK_TITLE_MAX = 200;
@@ -56,14 +88,34 @@ const optionalNote = (max: number) =>
     .transform((value) => (value === '' ? null : value))
     .nullish();
 
+/**
+ * A contact to record. Left out, the time is now; the service refuses a time in the future
+ * (CONTACT_FUTURE_TOLERANCE_MS). The deal must be one of the lead's (checked by the service)
+ */
 export const recordContactSchema = z
   .object({
     organizationId,
     leadId,
     kind: z.enum(CONTACT_KINDS),
     note: optionalNote(CONTACT_NOTE_MAX),
+    contactedAt: z.date().min(CONTACT_EARLIEST_AT).optional(),
+    durationMinutes: z.number().int().min(1).max(CONTACT_DURATION_MAX_MINUTES).nullish(),
+    outcome: z.enum(CONTACT_OUTCOMES).nullish(),
+    dealId: z.string().uuid().nullish(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.kind !== 'no_answer') return;
+    for (const field of ['durationMinutes', 'outcome'] as const) {
+      if (value[field] != null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [field],
+          message: 'Nobody was reached, so a "no answer" has no duration or outcome',
+        });
+      }
+    }
+  });
 export type RecordContactInput = z.infer<typeof recordContactSchema>;
 
 export const leadScopeSchema = z.object({ organizationId, leadId }).strict();
@@ -150,6 +202,8 @@ export interface ContactLogView {
   kind: ContactKind;
   note: string | null;
   contactedAt: Date;
+  durationMinutes: number | null;
+  outcome: ContactOutcome | null;
   createdBy: ContactActor | null;
 }
 
