@@ -41,31 +41,100 @@ export const filterOperatorEnum = z.enum([
 export type FilterOperator = z.infer<typeof filterOperatorEnum>;
 
 /**
+ * Most values one filter of the list takes: the ids of tagIds, the values of a filter given
+ * several (status, dealPhase and the others, oneOrMany) and a list of the advanced filter (#604)
+ */
+export const LEAD_FILTER_MAX_VALUES = 50;
+
+/**
+ * Limits of the advanced filter of leads.list and leads.export (#604). No screen sends one yet
+ * (the list has its own filters), so these only bound what one request makes the server parse
+ * and turn into SQL. A field name is a column of the lead; a text value is as long as the
+ * list's search takes.
+ */
+export const LEAD_FILTER_LIMITS = {
+  /** Levels of groups, the top group included */
+  depth: 3,
+  /** Groups directly in one group */
+  groups: 10,
+  /** Conditions of the whole filter, every group counted */
+  conditions: 50,
+  /** Characters of a field name */
+  fieldLength: 50,
+  /** Characters of a text value */
+  valueLength: 200,
+  /** Values of a list (in, not_in) */
+  values: LEAD_FILTER_MAX_VALUES,
+} as const;
+
+/** One value a condition compares with: text, a number, a boolean or a date (superjson) */
+const filterScalarSchema = z.union([
+  z.string().max(LEAD_FILTER_LIMITS.valueLength),
+  z.number().finite(),
+  z.boolean(),
+  z.date(),
+]);
+
+/** The value of a condition: one value, none (null), or a list for in and not_in */
+const filterValueSchema = z.union([
+  filterScalarSchema,
+  z.null(),
+  z.array(filterScalarSchema).max(LEAD_FILTER_LIMITS.values),
+]);
+
+/**
  * Advanced filter condition schema
  */
 export const filterConditionSchema = z.object({
-  field: z.string().min(1),
+  field: z.string().min(1).max(LEAD_FILTER_LIMITS.fieldLength),
   operator: filterOperatorEnum,
-  value: z.unknown(),
-  value2: z.unknown().optional(),
+  value: filterValueSchema.optional(),
+  value2: filterValueSchema.optional(),
 });
 export type FilterCondition = z.infer<typeof filterConditionSchema>;
 
-/**
- * Advanced filter group schema (supports nested groups)
- */
-export const filterGroupSchema: z.ZodType<FilterGroup, z.ZodTypeDef, unknown> = z.lazy(() =>
-  z.object({
-    logic: z.enum(['and', 'or']),
-    conditions: z.array(filterConditionSchema).default([]),
-    groups: z.array(filterGroupSchema).optional(),
-  })
-);
 export type FilterGroup = {
   logic: 'and' | 'or';
   conditions: FilterCondition[];
   groups?: FilterGroup[];
 };
+
+/**
+ * A group of `levels` levels of groups, itself included. Built level by level rather than with
+ * z.lazy, so a group nested past the limit is refused with a zod issue where the limit is
+ * reached and nothing below it is parsed: a recursive schema walks down every level until the
+ * stack runs out (about 800 levels in the tests), and safeParse throws a RangeError.
+ */
+function filterGroupLevels(levels: number): z.ZodType<FilterGroup, z.ZodTypeDef, unknown> {
+  const groups =
+    levels > 1
+      ? z.array(filterGroupLevels(levels - 1)).max(LEAD_FILTER_LIMITS.groups)
+      : z.array(z.never()).max(0, `条件のグループは${LEAD_FILTER_LIMITS.depth}段までです`);
+  return z.object({
+    logic: z.enum(['and', 'or']),
+    conditions: z.array(filterConditionSchema).max(LEAD_FILTER_LIMITS.conditions).default([]),
+    groups: groups.optional(),
+  });
+}
+
+/** Conditions of a group and of the groups in it (as deep as the schema lets them be) */
+function countFilterConditions(group: FilterGroup): number {
+  return (group.groups ?? []).reduce(
+    (count, nested) => count + countFilterConditions(nested),
+    group.conditions.length
+  );
+}
+
+/**
+ * Advanced filter group schema: groups nested up to LEAD_FILTER_LIMITS.depth levels, with
+ * LEAD_FILTER_LIMITS.conditions conditions in all
+ */
+export const filterGroupSchema: z.ZodType<FilterGroup, z.ZodTypeDef, unknown> = filterGroupLevels(
+  LEAD_FILTER_LIMITS.depth
+).refine(
+  (group) => countFilterConditions(group) <= LEAD_FILTER_LIMITS.conditions,
+  `条件は全体で${LEAD_FILTER_LIMITS.conditions}個までです`
+);
 
 /**
  * Longest contact values a lead takes (#575), the same as the public diagnosis forms (AX
@@ -238,14 +307,20 @@ export const jstDaySchema = z
 
 /** One value or several (any of them matches); the single form is kept for older callers */
 const oneOrMany = <T extends z.ZodTypeAny>(item: T) =>
-  z.union([item, z.array(item).max(50)]).optional();
+  z.union([item, z.array(item).max(LEAD_FILTER_MAX_VALUES)]).optional();
+
+/**
+ * Most leads one page of the list shows. The bulk actions take as many ids (#604): the screen
+ * selects only rows of the page shown (lead-table.tsx drops the selection with the rows)
+ */
+export const LEAD_LIST_PAGE_MAX = 100;
 
 /**
  * List leads schema (#131: sorting and filtering run on the server)
  */
 export const listLeadsSchema = z.object({
   organizationId: z.string().uuid(),
-  limit: z.number().int().min(1).max(100).default(20),
+  limit: z.number().int().min(1).max(LEAD_LIST_PAGE_MAX).default(20),
   offset: z.number().int().min(0).default(0),
   status: oneOrMany(leadStatusEnum),
   source: leadSourceEnum.optional(),
@@ -283,7 +358,7 @@ export const listLeadsSchema = z.object({
   // "When to act" (#151): within the next months (or past), or set at all
   actTiming: actTimingFilterEnum.optional(),
   // Tag filter
-  tagIds: z.array(z.string().uuid()).optional(),
+  tagIds: z.array(z.string().uuid()).max(LEAD_FILTER_MAX_VALUES).optional(),
 });
 export type ListLeadsInput = z.infer<typeof listLeadsSchema>;
 
@@ -325,12 +400,18 @@ export const deleteLeadSchema = z.object({
 });
 export type DeleteLeadInput = z.infer<typeof deleteLeadSchema>;
 
+/** The leads of a bulk action: one to a page of the list (LEAD_LIST_PAGE_MAX) */
+const leadBulkIdsSchema = z
+  .array(z.string().uuid())
+  .min(1, '少なくとも1つのリードを選択してください')
+  .max(LEAD_LIST_PAGE_MAX, `一度に選べるリードは${LEAD_LIST_PAGE_MAX}件までです`);
+
 /**
  * Bulk update status schema
  */
 export const bulkUpdateStatusSchema = z.object({
   organizationId: z.string().uuid(),
-  ids: z.array(z.string().uuid()).min(1, '少なくとも1つのリードを選択してください'),
+  ids: leadBulkIdsSchema,
   status: leadStatusEnum,
 });
 export type BulkUpdateStatusInput = z.infer<typeof bulkUpdateStatusSchema>;
@@ -340,9 +421,18 @@ export type BulkUpdateStatusInput = z.infer<typeof bulkUpdateStatusSchema>;
  */
 export const bulkDeleteSchema = z.object({
   organizationId: z.string().uuid(),
-  ids: z.array(z.string().uuid()).min(1, '少なくとも1つのリードを選択してください'),
+  ids: leadBulkIdsSchema,
 });
 export type BulkDeleteInput = z.infer<typeof bulkDeleteSchema>;
+
+/**
+ * Most leads one leads.bulkCreate takes (#604). The import sends a larger file in parts of this
+ * size, one after another (import-dialog.tsx). A part stays well below the request body limit
+ * of the Vercel functions (about 4.5 MB; a row at its limits is under 2 KB of JSON) and below
+ * the bind parameters the PostgreSQL driver sends in one statement (under 65,534; the insert
+ * takes up to 9 a lead, the audit rows 8), which one request of over about 7,000 leads passed.
+ */
+export const LEAD_BULK_CREATE_MAX = 1_000;
 
 /**
  * Bulk create schema for importing leads. Each row has the limits of a lead made by hand; the
@@ -363,6 +453,7 @@ export const bulkCreateSchema = z.object({
         score: z.number().int().min(0).max(100).optional(),
       })
     )
-    .min(1, '少なくとも1つのリードを指定してください'),
+    .min(1, '少なくとも1つのリードを指定してください')
+    .max(LEAD_BULK_CREATE_MAX, `一度に取り込めるリードは${LEAD_BULK_CREATE_MAX}件までです`),
 });
 export type BulkCreateInput = z.infer<typeof bulkCreateSchema>;

@@ -41,7 +41,12 @@ describe('ai-chat-assistant', () => {
       const request = mockCreate.mock.calls[0][0];
       expect(request.model).toBe('claude-sonnet-5-5');
       expect(request).not.toHaveProperty('temperature');
-      expect(request.messages[0].content).toContain('John Doe');
+      // Nothing that points at a person goes to Claude (#406), even if the caller passes it
+      const prompt = request.messages[0].content as string;
+      expect(prompt).toContain('Tech Inc');
+      expect(prompt).not.toContain('John Doe');
+      expect(prompt).not.toContain('john@example.com');
+      expect(prompt).not.toContain('Interested in product');
       expect(result).toBe('This is a lead summary.');
     });
 
@@ -60,7 +65,8 @@ describe('ai-chat-assistant', () => {
 
       const result = await generateLeadSummary(lead);
 
-      expect(mockCreate.mock.calls[0][0].messages[0].content).toContain('N/A');
+      // Missing fields are null in the lead's data block (#47)
+      expect(mockCreate.mock.calls[0][0].messages[0].content).toContain('"company": null');
       expect(result).toBe('Summary for unknown lead.');
     });
 

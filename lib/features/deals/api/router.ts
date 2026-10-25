@@ -3,14 +3,13 @@
  *
  * Those who can read leads may read deals, except viewers from a parent organization (see
  * ../access.ts); creating and changing them needs permission to update leads, and deleting needs
- * permission to delete leads (not members). Every query is scoped by organizationId (see
- * ../service.ts).
+ * permission to delete leads (not members), both for those who may read deals. Every query is
+ * scoped by organizationId (see ../service.ts).
  */
 
-import type { AppAbility } from '@/lib/auth/permissions';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
-import { canReadDeals } from '../access';
+import { canReadDeals, canWriteDeals } from '../access';
 import {
   afterDealChange,
   createDeal,
@@ -34,20 +33,22 @@ const MESSAGES = {
   delete: 'You do not have permission to delete deals',
 } as const;
 
-function assertCan(ability: AppAbility, action: 'update' | 'delete') {
-  if (!ability.can(action, 'Lead')) {
+type AccessContext = Parameters<typeof canReadDeals>[0];
+
+function assertCan(ctx: AccessContext, action: 'update' | 'delete') {
+  if (!canWriteDeals(ctx, action)) {
     throw new TRPCError({ code: 'FORBIDDEN', message: MESSAGES[action] });
   }
 }
 
-function assertCanRead(ctx: Parameters<typeof canReadDeals>[0]) {
+function assertCanRead(ctx: AccessContext) {
   if (!canReadDeals(ctx)) throw new TRPCError({ code: 'FORBIDDEN', message: MESSAGES.read });
 }
 
 /** What the screens may offer, from the same checks the mutations make */
-const accessOf = (ability: AppAbility) => ({
-  canEdit: ability.can('update', 'Lead'),
-  canDelete: ability.can('delete', 'Lead'),
+const accessOf = (ctx: AccessContext) => ({
+  canEdit: canWriteDeals(ctx, 'update'),
+  canDelete: canWriteDeals(ctx, 'delete'),
 });
 
 export const dealsRouter = router({
@@ -59,7 +60,7 @@ export const dealsRouter = router({
       organizationId: ctx.organization.id,
       userId: ctx.user.id,
     });
-    return { ...board, ...accessOf(ctx.ability) };
+    return { ...board, ...accessOf(ctx) };
   }),
 
   /** Deals of one lead (the lead page) */
@@ -70,7 +71,7 @@ export const dealsRouter = router({
       leadId: input.leadId,
     });
     if (!items) throw new TRPCError({ code: 'NOT_FOUND', message: 'Lead not found' });
-    return { items, ...accessOf(ctx.ability) };
+    return { items, ...accessOf(ctx) };
   }),
 
   get: organizationProcedure.input(dealScopeSchema).query(async ({ ctx, input }) => {
@@ -80,11 +81,11 @@ export const dealsRouter = router({
       dealId: input.dealId,
     });
     if (!deal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Deal not found' });
-    return { ...deal, ...accessOf(ctx.ability) };
+    return { ...deal, ...accessOf(ctx) };
   }),
 
   create: organizationProcedure.input(createDealSchema).mutation(async ({ ctx, input }) => {
-    assertCan(ctx.ability, 'update');
+    assertCan(ctx, 'update');
     const context = { organizationId: ctx.organization.id, userId: ctx.user.id };
     const result = await createDeal(ctx.db, { ...input, ...context });
     await afterDealChange(ctx.db, context, result);
@@ -92,7 +93,7 @@ export const dealsRouter = router({
   }),
 
   update: organizationProcedure.input(updateDealSchema).mutation(async ({ ctx, input }) => {
-    assertCan(ctx.ability, 'update');
+    assertCan(ctx, 'update');
     const context = { organizationId: ctx.organization.id, userId: ctx.user.id };
     const result = await updateDeal(ctx.db, { ...input, ...context });
     await afterDealChange(ctx.db, context, result);
@@ -100,7 +101,7 @@ export const dealsRouter = router({
   }),
 
   delete: organizationProcedure.input(dealScopeSchema).mutation(async ({ ctx, input }) => {
-    assertCan(ctx.ability, 'delete');
+    assertCan(ctx, 'delete');
     return deleteDeal(ctx.db, {
       organizationId: ctx.organization.id,
       dealId: input.dealId,

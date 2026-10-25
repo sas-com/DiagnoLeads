@@ -26,19 +26,14 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
-// Mock QR code generation
+// Mock QR code generation. The tracking URL the router builds (/q/<code>, #503) is checked on
+// the real router in distribution/router-tracking-url.test.ts
 vi.mock('@/lib/features/distribution/qr-code', () => ({
   generateQRCode: vi.fn().mockResolvedValue('data:image/png;base64,mockQRCode'),
-  generateShortCode: vi.fn().mockReturnValue('ABC12345'),
-  buildTrackingUrl: vi.fn().mockReturnValue('https://app.diagnoleads.com/d/ABC12345'),
 }));
 
 import { db } from '@/lib/db';
-import {
-  buildTrackingUrl,
-  generateQRCode,
-  generateShortCode,
-} from '@/lib/features/distribution/qr-code';
+import { generateQRCode } from '@/lib/features/distribution/qr-code';
 
 describe('distribution-router', () => {
   beforeEach(() => {
@@ -88,7 +83,7 @@ describe('distribution-router', () => {
       const mockCampaign = {
         id: 'campaign-1',
         name: 'Test Campaign',
-        trackingUrl: 'https://app.diagnoleads.com/d/ABC12345',
+        trackingUrl: 'https://app.diagnoleads.com/q/ABC12345',
         organizationId: 'org-1',
       };
 
@@ -120,29 +115,6 @@ describe('distribution-router', () => {
   });
 
   describe('createCampaign', () => {
-    it('should create campaign with tracking URL', async () => {
-      const mockTemplate = {
-        id: 'template-1',
-        name: 'Test Template',
-        organizationId: 'org-1',
-      };
-
-      (db.query.diagnosticTemplates.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(
-        mockTemplate
-      );
-      (db.query.qrCampaigns.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
-
-      const shortCode = generateShortCode(8);
-      expect(shortCode).toBe('ABC12345');
-
-      const trackingUrl = buildTrackingUrl('https://app.diagnoleads.com', shortCode, {
-        utmSource: 'qr',
-        utmMedium: 'print',
-      });
-
-      expect(trackingUrl).toBe('https://app.diagnoleads.com/d/ABC12345');
-    });
-
     it('should throw NOT_FOUND for non-existent template', async () => {
       (db.query.diagnosticTemplates.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
 
@@ -230,7 +202,7 @@ describe('distribution-router', () => {
     it('should generate QR code for campaign', async () => {
       const mockCampaign = {
         id: 'campaign-1',
-        trackingUrl: 'https://app.diagnoleads.com/d/ABC12345',
+        trackingUrl: 'https://app.diagnoleads.com/q/ABC12345',
         shortCode: 'ABC12345',
         organizationId: 'org-1',
       };
@@ -261,36 +233,6 @@ describe('distribution-router', () => {
       }
 
       expect(generateQRCode).toHaveBeenCalledTimes(4);
-    });
-  });
-
-  describe('generateQRCode', () => {
-    it('should generate on-demand QR code', async () => {
-      const mockTemplate = {
-        id: 'template-1',
-        organizationId: 'org-1',
-      };
-
-      (db.query.diagnosticTemplates.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(
-        mockTemplate
-      );
-
-      const template = await db.query.diagnosticTemplates.findFirst({
-        where: { id: 'template-1', organizationId: 'org-1' },
-      });
-
-      expect(template).toEqual(mockTemplate);
-
-      const trackingUrl = buildTrackingUrl('https://app.diagnoleads.com', template!.id, {
-        utmSource: 'email',
-      });
-
-      const qrCode = await generateQRCode(trackingUrl, {
-        size: 'medium',
-        format: 'dataUrl',
-      });
-
-      expect(qrCode).toBe('data:image/png;base64,mockQRCode');
     });
   });
 

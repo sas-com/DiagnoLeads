@@ -35,14 +35,16 @@ console.log(score.recommendedActions); // ['Schedule demo call', ...]
 ```typescript
 import { semanticSearch, findSimilarLeads } from '@/lib/features/ai';
 
-// Natural language search (from the router, after consumeEmbeddingCalls)
-const results = await semanticSearch(
-  'tech companies in San Francisco',
-  organizationId
-);
+// Natural language search (from the router, after consumeEmbeddingCalls). Every function takes
+// the caller's database (ctx.db), not the global one (#590)
+const results = await semanticSearch({
+  db: ctx.db,
+  query: 'tech companies in San Francisco',
+  organizationId,
+});
 
-// Find similar leads
-const similar = await findSimilarLeads(leadId, organizationId);
+// Find similar leads (id, name, email, company, similarity; most similar first)
+const similar = await findSimilarLeads({ db: ctx.db, leadId, organizationId });
 ```
 
 ### 3. Lead Summary (`chat/assistant.ts`)

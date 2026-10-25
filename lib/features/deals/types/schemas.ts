@@ -32,6 +32,15 @@ const optionalText = (max: number) =>
     .transform((value) => (value === '' ? null : value))
     .nullish();
 
+/**
+ * A deal's dates: a real date from 2000 to 2100, like the target months. PostgreSQL has no year
+ * 0, so '0000-01-01' would otherwise fail in the database instead of the input check.
+ */
+const dealDate = isoDateSchema.refine(
+  (value) => /^(20\d{2}|2100)-/.test(value),
+  'A date from 2000 to 2100'
+);
+
 const amount = z.number().int().min(0).max(DEAL_LIMITS.amount).nullish();
 const probability = z.number().int().min(0).max(100);
 
@@ -42,7 +51,7 @@ const dealFields = {
   amount,
   probability,
   forecastOverride: forecastOverrideEnum.nullish(),
-  expectedCloseOn: isoDateSchema.nullish(),
+  expectedCloseOn: dealDate.nullish(),
   lostReason: dealLostReasonEnum.nullish(),
   lostNote: optionalText(DEAL_LIMITS.lostNote),
   competitor: optionalText(DEAL_LIMITS.competitor),
@@ -73,7 +82,7 @@ export const updateDealSchema = z.object({
   probability: probability.optional(),
   forecastOverride: dealFields.forecastOverride,
   expectedCloseOn: dealFields.expectedCloseOn,
-  closedOn: isoDateSchema.optional(),
+  closedOn: dealDate.optional(),
   lostReason: dealFields.lostReason,
   lostNote: dealFields.lostNote,
   competitor: dealFields.competitor,
@@ -97,8 +106,8 @@ export const boardSchema = z
     owner: boardOwnerSchema.default('all'),
     kinds: z.array(dealKindEnum).max(10).optional(),
     /** Expected close date range of the open deals (inclusive) */
-    closeFrom: isoDateSchema.optional(),
-    closeTo: isoDateSchema.optional(),
+    closeFrom: dealDate.optional(),
+    closeTo: dealDate.optional(),
     closedWithinDays: z.number().int().min(0).max(366).default(BOARD_CLOSED_DAYS_DEFAULT),
   })
   .refine((input) => !input.closeFrom || !input.closeTo || input.closeFrom <= input.closeTo, {

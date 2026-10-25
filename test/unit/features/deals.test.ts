@@ -5,7 +5,7 @@
  */
 import { defineAbilitiesFor } from '@/lib/auth/permissions';
 import type { OrganizationMember, User } from '@/lib/db/schema';
-import { canReadDeals } from '@/lib/features/deals/access';
+import { canReadDeals, canWriteDeals } from '@/lib/features/deals/access';
 import {
   type SyncDeal,
   furtherPhase,
@@ -259,11 +259,19 @@ describe('createDealSchema', () => {
     [{ kind: 'consulting' }],
     [{ stage: 'closed' }],
     [{ expectedCloseOn: '2026-02-30' }],
+    // PostgreSQL has no year 0; no deal closes outside 2000-2100
+    [{ expectedCloseOn: '0000-01-01' }],
+    [{ expectedCloseOn: '1999-12-31' }],
+    [{ expectedCloseOn: '2101-01-01' }],
     [{ lostReason: 'unknown' }],
     [{ lostReason: 'on_hold' }],
     [{ ownerUserId: 'not-a-uuid' }],
   ])('rejects %o', (overrides) => {
     expect(createDealSchema.safeParse({ ...base, ...overrides }).success).toBe(false);
+  });
+
+  it.each(['2000-01-01', '2100-12-31'])('takes the close date %s', (expectedCloseOn) => {
+    expect(createDealSchema.parse({ ...base, expectedCloseOn }).expectedCloseOn).toBe(expectedCloseOn);
   });
 
   it('takes the lost reasons of the leads except 保留 (#445)', () => {
@@ -285,6 +293,12 @@ describe('updateDealSchema', () => {
     });
     expect(parsed).toEqual({ organizationId: ORG, dealId: DEAL, amount: null, stage: 'proposal' });
   });
+
+  it('bounds the closing date like the close date', () => {
+    const scope = { organizationId: ORG, dealId: DEAL };
+    expect(updateDealSchema.safeParse({ ...scope, closedOn: '2026-10-25' }).success).toBe(true);
+    expect(updateDealSchema.safeParse({ ...scope, closedOn: '0000-01-01' }).success).toBe(false);
+  });
 });
 
 describe('boardSchema', () => {
@@ -304,10 +318,13 @@ describe('boardSchema', () => {
       boardSchema.safeParse({ organizationId: ORG, closeFrom: '2026-12-01', closeTo: '2026-11-01' })
         .success
     ).toBe(false);
+    expect(boardSchema.safeParse({ organizationId: ORG, closeFrom: '0000-01-01' }).success).toBe(
+      false
+    );
   });
 });
 
-describe('canReadDeals', () => {
+describe('canReadDeals and canWriteDeals', () => {
   const user: User = {
     id: 'user-1',
     name: '営業 花子',
@@ -317,16 +334,19 @@ describe('canReadDeals', () => {
     createdAt: new Date(),
     updatedAt: new Date(),
   };
-  const ctxFor = (role: string) => {
-    const membership: OrganizationMember = {
+  const ctxFor = (role: string, abilityRole = role) => {
+    const membershipOf = (name: string): OrganizationMember => ({
       id: 'membership-1',
       organizationId: ORG,
       userId: user.id,
-      role: role as OrganizationMember['role'],
+      role: name as OrganizationMember['role'],
       createdAt: new Date(),
       updatedAt: null,
+    });
+    return {
+      ability: defineAbilitiesFor(user, membershipOf(abilityRole)),
+      membership: membershipOf(role),
     };
-    return { ability: defineAbilitiesFor(user, membership), membership };
   };
 
   it.each(['owner', 'admin', 'member', 'group_owner', 'group_admin'])('lets %s read deals', (role) => {
@@ -337,5 +357,27 @@ describe('canReadDeals', () => {
     const ctx = ctxFor('parent_viewer');
     expect(ctx.ability.can('read', 'Lead')).toBe(true);
     expect(canReadDeals(ctx)).toBe(false);
+  });
+
+  it.each([
+    ['owner', true, true],
+    ['admin', true, true],
+    ['member', true, false],
+    ['group_owner', true, true],
+    ['group_admin', true, true],
+    ['parent_viewer', false, false],
+  ])('%s: change %s, delete %s', (role, update, remove) => {
+    expect(canWriteDeals(ctxFor(role), 'update')).toBe(update);
+    expect(canWriteDeals(ctxFor(role), 'delete')).toBe(remove);
+  });
+
+  it('keeps an excluded role from writing even when it may change leads', () => {
+    // The abilities of an admin under the excluded role's name (as an agency account would be);
+    // a write answers with the whole deal
+    const ctx = ctxFor('parent_viewer', 'admin');
+    expect(ctx.ability.can('update', 'Lead')).toBe(true);
+    expect(ctx.ability.can('delete', 'Lead')).toBe(true);
+    expect(canWriteDeals(ctx, 'update')).toBe(false);
+    expect(canWriteDeals(ctx, 'delete')).toBe(false);
   });
 });
