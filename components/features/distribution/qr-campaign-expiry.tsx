@@ -4,7 +4,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { expiryOfJstDay, lastOpenJstDayOf } from '@/lib/features/distribution/campaign-expiry';
+import {
+  expiryOfChosenDay,
+  jstDayOf,
+  lastOpenJstDayOf,
+} from '@/lib/features/distribution/campaign-expiry';
 import { trpc } from '@/lib/trpc/client';
 import { CalendarClock, Loader2 } from 'lucide-react';
 import { useFormatter, useTranslations } from 'next-intl';
@@ -27,8 +31,9 @@ interface QrCampaignExpiryProps {
 /**
  * The expiry of a QR campaign (#695): shown on every campaign, marked when it has passed, and
  * set, extended or cleared by those who can manage campaigns. A day is entered in Japan time and
- * stored as the end of that day there (expiryOfJstDay); clearing sends null. Only expiresAt is
- * sent, so the rest of the campaign stays as it is (#610)
+ * stored as the end of that day there (expiryOfJstDay); a day already over is not taken
+ * (expiryOfChosenDay); clearing sends null. Only expiresAt is sent, so the rest of the campaign
+ * stays as it is (#610)
  */
 export function QrCampaignExpiry({
   organizationId,
@@ -59,12 +64,13 @@ export function QrCampaignExpiry({
     update.mutate({ organizationId, id: campaignId, data: { expiresAt: value } });
 
   const save = () => {
-    const value = expiryOfJstDay(day);
-    if (value === null) {
-      toast.error(t('invalidDay'));
+    // A day already over would close the campaign as soon as it is saved
+    const chosen = expiryOfChosenDay(day, new Date());
+    if ('problem' in chosen) {
+      toast.error(t(chosen.problem === 'past_day' ? 'pastDay' : 'invalidDay'));
       return;
     }
-    send(value);
+    send(chosen.expiresAt);
   };
 
   const startEditing = () => {
@@ -103,6 +109,7 @@ export function QrCampaignExpiry({
           <Input
             id={inputId}
             type="date"
+            min={jstDayOf(new Date())}
             value={day}
             onChange={(event) => setDay(event.target.value)}
           />

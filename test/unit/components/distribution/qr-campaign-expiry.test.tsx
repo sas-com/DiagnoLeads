@@ -1,8 +1,9 @@
 /**
  * The expiry of a QR campaign on the settings page (#695): shown on every campaign in Japan time,
  * marked when the server says it has passed, and set, extended or cleared by those who can
- * manage campaigns. A day entered is sent as the end of that day in Japan; clearing sends null;
- * only expiresAt is sent, so a change of the expiry changes nothing else (#610).
+ * manage campaigns. A day entered is sent as the end of that day in Japan, and a day already over
+ * there is not taken; clearing sends null; only expiresAt is sent, so a change of the expiry
+ * changes nothing else (#610).
  */
 import { QrCampaignExpiry } from '@/components/features/distribution/qr-campaign-expiry';
 import en from '@/locales/en/common.json';
@@ -10,7 +11,7 @@ import ja from '@/locales/ja/common.json';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 import type { ComponentProps } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   mutate: vi.fn(),
@@ -90,6 +91,12 @@ describe('QrCampaignExpiry', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.isPending = false;
+    // 25 October 2026, 21:00 in Japan (still the 25th in UTC)
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-25T12:00:00.000Z'));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe('what it shows', () => {
@@ -171,6 +178,36 @@ describe('QrCampaignExpiry', () => {
         data: { expiresAt: null },
       });
       expect(mocks.toastSuccess).toHaveBeenCalledWith('期限を消しました');
+    });
+
+    it('offers no day before today in Japan', () => {
+      renderExpiry();
+      expect(openEditor().input.min).toBe('2026-10-25');
+    });
+
+    it('takes today, open to the end of the day in Japan', () => {
+      renderExpiry({ expired: true, expiresAt: new Date('2026-10-01T14:59:59.999Z') });
+      const { input, editor } = openEditor();
+      fireEvent.change(input, { target: { value: '2026-10-25' } });
+      fireEvent.click(within(editor).getByRole('button', { name: '保存' }));
+
+      expect(sentAndAnswered().data).toEqual({ expiresAt: '2026-10-25T14:59:59.999Z' });
+    });
+
+    it('does not take a day already over, which would stop the QR code as it is saved', () => {
+      // Meant to extend it, a day of last year is picked by mistake
+      renderExpiry();
+      const { input, editor } = openEditor();
+      for (const day of ['2026-10-24', '2025-10-31']) {
+        fireEvent.change(input, { target: { value: day } });
+        fireEvent.click(within(editor).getByRole('button', { name: '保存' }));
+      }
+
+      expect(mocks.mutate).not.toHaveBeenCalled();
+      expect(mocks.toastError).toHaveBeenCalledTimes(2);
+      expect(mocks.toastError).toHaveBeenCalledWith(ja.settings.qrCampaigns.expiry.pastDay);
+      // The editor stays open with the day, to choose another
+      expect(input.value).toBe('2025-10-31');
     });
 
     it('sends nothing without a day', () => {

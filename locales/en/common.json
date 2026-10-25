@@ -1979,6 +1979,7 @@
         "saved": "Expiry changed",
         "cleared": "Expiry cleared",
         "invalidDay": "Choose a date",
+        "pastDay": "Choose today or a later day. A past day would stop the QR code as soon as you save. To pause the campaign, turn its switch off.",
         "failed": "Could not change the expiry",
         "createLabel": "Expiry (optional)",
         "createHint": "Open until the end of the chosen day (Japan time). Leave it empty for no expiry. You can change it later."

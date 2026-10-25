@@ -26,7 +26,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { useOrganization } from '@/hooks/use-organization';
-import { expiryOfJstDay } from '@/lib/features/distribution/campaign-expiry';
+import { expiryOfChosenDay, jstDayOf } from '@/lib/features/distribution/campaign-expiry';
 import { trpc } from '@/lib/trpc/client';
 import {
   AlertCircle,
@@ -150,18 +150,18 @@ export default function QRCampaignsPage() {
       return;
     }
 
-    // The end of the chosen day in Japan; none when the field is empty (#695)
+    // The end of the chosen day in Japan, not a day already over; none when the field is empty (#695)
     const { expiresOn, ...fields } = formData;
-    const expiresAt = expiresOn ? expiryOfJstDay(expiresOn) : undefined;
-    if (expiresAt === null) {
-      toast.error(tExpiry('invalidDay'));
+    const chosen = expiresOn ? expiryOfChosenDay(expiresOn, new Date()) : undefined;
+    if (chosen && 'problem' in chosen) {
+      toast.error(tExpiry(chosen.problem === 'past_day' ? 'pastDay' : 'invalidDay'));
       return;
     }
 
     createMutation.mutate({
       organizationId: organization.id,
       ...fields,
-      ...(expiresAt ? { expiresAt } : {}),
+      ...(chosen ? { expiresAt: chosen.expiresAt } : {}),
     });
   };
 
@@ -333,6 +333,7 @@ export default function QRCampaignsPage() {
                 <Input
                   id="expiresOn"
                   type="date"
+                  min={jstDayOf(new Date())}
                   value={formData.expiresOn}
                   onChange={(e) => setFormData({ ...formData, expiresOn: e.target.value })}
                 />

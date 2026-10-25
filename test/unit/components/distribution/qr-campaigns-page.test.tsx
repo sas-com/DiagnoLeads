@@ -2,14 +2,14 @@
  * The settings page of QR campaigns (#692, #695): each campaign shows where a scan goes, as the
  * list gets it from the server, and its expiry; an expired campaign is marked expired while its
  * switch is on. The create form takes an optional expiry day, sent as the end of that day in
- * Japan, and sends no expiry when it is left empty.
+ * Japan (not a day already over there), and sends no expiry when it is left empty.
  */
 import QRCampaignsPage from '@/app/[locale]/(dashboard)/settings/qr-campaigns/page';
 import ja from '@/locales/ja/common.json';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const ORG = '660e8400-e29b-41d4-a716-446655440000';
 const TEMPLATE = '770e8400-e29b-41d4-a716-446655440002';
@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   campaigns: [] as unknown[],
   createMutate: vi.fn(),
   updateMutate: vi.fn(),
+  toastError: vi.fn(),
 }));
 
 vi.mock('@/hooks/use-organization', () => ({
@@ -48,7 +49,7 @@ vi.mock('@/lib/trpc/client', () => {
     },
   };
 });
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: mocks.toastError } }));
 
 function campaign(id: string, values: Record<string, unknown>) {
   return {
@@ -87,6 +88,12 @@ beforeAll(() => {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.campaigns = [];
+  // 25 October 2026, 21:00 in Japan; the date only, so user-event's own waits keep the real clock
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-10-25T12:00:00.000Z'));
+});
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe('QR campaigns page', () => {
@@ -143,6 +150,19 @@ describe('QR campaigns page', () => {
           expiresAt: '2026-11-03T14:59:59.999Z',
         })
       );
+    });
+
+    it('offers no day before today in Japan', () => {
+      renderPage();
+      fireEvent.click(screen.getByRole('button', { name: 'Create Campaign' }));
+      const input = within(screen.getByRole('dialog')).getByLabelText('期限（任意）');
+      expect((input as HTMLInputElement).min).toBe('2026-10-25');
+    });
+
+    it('creates nothing with a day already over, which would close the campaign from the start', async () => {
+      await fillIn('2026-10-24');
+      expect(mocks.createMutate).not.toHaveBeenCalled();
+      expect(mocks.toastError).toHaveBeenCalledWith(ja.settings.qrCampaigns.expiry.pastDay);
     });
 
     it('sends no expiry when the day is left empty', async () => {
