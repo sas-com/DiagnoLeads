@@ -35,15 +35,27 @@ const TEXT = { ...HEADERS, 'Content-Type': 'text/plain; charset=utf-8' };
 
 const notFound = () => new NextResponse('Not Found', { status: 404, headers: TEXT });
 
+/** Whether this instance has logged that no organization receives the AX diagnosis */
+let reportedNoAxOrganization = false;
+
 /**
  * Whether the AX diagnosis makes its leads in this organization. The ids are compared in one
- * case: PostgreSQL returns a uuid in lower case, the environment may hold it in either
+ * case: PostgreSQL returns a uuid in lower case, the environment may hold it in either.
+ * With no such organization every campaign without a diagnosis answers 404; that is logged once
+ * an instance, so QR codes handed out at an event do not all stop unnoticed
  */
 function receivesAxDiagnosis(organizationId: string): boolean {
   const axOrganizationId = resolveDiagnosisOrganizationId();
-  return (
-    axOrganizationId !== null && axOrganizationId.toLowerCase() === organizationId.toLowerCase()
-  );
+  if (axOrganizationId === null) {
+    if (!reportedNoAxOrganization) {
+      reportedNoAxOrganization = true;
+      console.error(
+        'QR entry: AX_DIAGNOSIS_ORGANIZATION_ID / DEFAULT_ORGANIZATION_ID is not set, so campaigns without a diagnosis answer 404'
+      );
+    }
+    return false;
+  }
+  return axOrganizationId.toLowerCase() === organizationId.toLowerCase();
 }
 
 /**

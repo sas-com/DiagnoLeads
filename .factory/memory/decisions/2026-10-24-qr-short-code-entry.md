@@ -6,7 +6,7 @@ title: "QR キャンペーンの入口は /q/<短縮コード>。転送先は DB
 status: active
 superseded_by: []
 issues: [503, 41, 120, 610, 663, 692]
-paths: ["app/q/**", "lib/features/distribution/short-code-entry.ts", "lib/features/distribution/limits.ts", "lib/features/distribution/qr-code.ts", "lib/features/distribution/router.ts"]
+paths: ["app/q/**", "lib/features/distribution/short-code-entry.ts", "lib/features/distribution/limits.ts", "lib/features/distribution/qr-code.ts", "lib/features/distribution/router.ts", "lib/middleware/rate-limit.ts", "lib/features/diagnostics/organization.ts"]
 ---
 
 ### [Security] QR キャンペーンの入口は /q/<短縮コード>。転送先は DB の値とアプリのルートだけから作る（#503）
@@ -14,7 +14,7 @@ paths: ["app/q/**", "lib/features/distribution/short-code-entry.ts", "lib/featur
 - **決定**: QR キャンペーンの画面は使い続け、QR の URL を直す（オーナー判断、#503 のコメント）。QR の URL は `/q/<短縮コード>`。入口は `[locale]` の外の Route Handler（`app/q/[code]/route.ts`）で、開いているキャンペーンを短縮コード（大文字と小文字を区別）で探し、診断へ 307 で転送する
   - 行き先（2026-10-25 に #663 で変えた。下の「オーナーの判断」）
     - `qr_campaigns.diagnosis_id` があるキャンペーン：その診断がキャンペーンと同じ組織にあり、`/d/<slug>` がその診断を出すとき（`findPublicDiagnosis` が同じ id を返すとき）は `/ja/d/<slug>`。出さないとき（停止中・アーカイブ・下書き・ほかの組織と slug がぶつかっている・ほかの組織の診断）は 404。AX 診断へは送らない
-    - `diagnosis_id` がないキャンペーン：キャンペーンの組織が `resolveDiagnosisOrganizationId()`（`lib/features/diagnostics/organization.ts`。AX 診断の回答をリードにする組織）と同じときだけ AX 診断（`/ja/ax-diagnosis`。`/diagnostic/[slug]` と同じ）。ほかの組織のキャンペーンと、その組織が設定されていないときは 404
+    - `diagnosis_id` がないキャンペーン：キャンペーンの組織が `resolveDiagnosisOrganizationId()`（`lib/features/diagnostics/organization.ts`。AX 診断の回答をリードにする組織）と同じときだけ AX 診断（`/ja/ax-diagnosis`。`/diagnostic/[slug]` と同じ）。ほかの組織のキャンペーンと、その組織が設定されていないときは 404（設定されていないことは、インスタンスごとに1回 `console.error` に出す。配った QR が黙って止まらないように）
   - UTM はキャンペーンの列（utm_source・utm_medium・utm_campaign・utm_content）を付ける。言語は既定の `ja`
   - 停止中・期限切れ・存在しないコードは 404（本文は `Not Found` だけ）。どの応答も `Cache-Control: no-store` と `X-Robots-Tag: noindex, nofollow`
   - 回数制限の 429 は、入口（DB の制限）でも proxy（メモリの制限）でも、日本語1行の text/plain（`QR_ENTRY_TOO_MANY_REQUESTS_TEXT`）。QR を読んだスマートフォンは本文をそのまま表示するので JSON にしない。入口にはロケールがなく、転送先も `/ja/` なので日本語だけ

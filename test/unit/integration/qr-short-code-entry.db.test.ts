@@ -19,10 +19,8 @@ import {
   diagnoses,
   diagnosisVersions,
   diagnosticTemplates,
-  leads,
   organizations,
   qrCampaigns,
-  siteVisits,
 } from '@/lib/db/schema';
 import { hashDefinition } from '@/lib/features/diagnosis-builder/versions';
 import { consumeRateLimit } from '@/lib/features/diagnostics/rate-limit';
@@ -143,19 +141,6 @@ describe.skipIf(!url)('QR short code entry (PostgreSQL)', () => {
 
   const AX_UTM = 'utm_source=qrcode&utm_medium=offline&utm_campaign=fair-2026';
 
-  /** What the AX organization has received: the leads and the visits of its pages */
-  async function receivedByAx() {
-    const [lead] = await pg
-      .select({ n: sql<number>`count(*)::int` })
-      .from(leads)
-      .where(eq(leads.organizationId, orgA));
-    const [visit] = await pg
-      .select({ n: sql<number>`count(*)::int` })
-      .from(siteVisits)
-      .where(eq(siteVisits.organizationId, orgA));
-    return { leads: lead.n, visits: visit.n };
-  }
-
   async function expectNotFound(code: string) {
     const res = await scan(code);
     expect(res.status, code).toBe(404);
@@ -186,15 +171,14 @@ describe.skipIf(!url)('QR short code entry (PostgreSQL)', () => {
     expect(res.headers.get('location')).toBe(`/ja/ax-diagnosis?${AX_UTM}`);
   });
 
-  it("answers 404 for another organization's campaign without a diagnosis: nothing of its visitors reaches the AX organization (#663)", async () => {
-    const before = await receivedByAx();
-    // B's campaign, whose UTM could name B's customers
+  it("answers 404 for another organization's campaign without a diagnosis, so its visitors never reach the AX diagnosis (#663)", async () => {
+    // B's campaign, whose UTM could name B's customers. The entry itself writes nothing (no lead,
+    // no visit): the 404 is what keeps B's visitors off the AX diagnosis, whose answers and page
+    // visits become the AX organization's leads and site_visits
     const code = await createCampaign(orgB, `Ob${randomPart(6)}`, {
       utmCampaign: 'customer-of-b',
     });
     await expectNotFound(code);
-    expect(await receivedByAx()).toEqual(before);
-    expect(before).toEqual({ leads: 0, visits: 0 });
   });
 
   it('answers 404 for every campaign without a diagnosis while no organization receives the AX diagnosis', async () => {

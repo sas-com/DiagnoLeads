@@ -45,11 +45,15 @@ vi.mock('next/server', async (importOriginal) => ({
 }));
 
 /** GET, then run the after() work it left, as Next.js does once the response has been sent */
-async function scan(code: string, init: { url?: string; headers?: Record<string, string> } = {}) {
+async function scan(
+  code: string,
+  init: { url?: string; headers?: Record<string, string> } = {},
+  get: typeof GET = GET
+) {
   const req = new NextRequest(init.url ?? `https://app.example/q/${code}`, {
     headers: init.headers,
   });
-  const res = await GET(req, { params: Promise.resolve({ code }) });
+  const res = await get(req, { params: Promise.resolve({ code }) });
   for (const task of mocks.afterTasks.splice(0)) await task();
   return res;
 }
@@ -113,9 +117,17 @@ describe('GET /q/[code]', () => {
       expect(mocks.findPublicDiagnosis).not.toHaveBeenCalled();
     });
 
-    it('answers 404 for every campaign while no organization receives the AX diagnosis', async () => {
+    it('answers 404 for every campaign while no organization receives the AX diagnosis, and logs it once an instance', async () => {
       mocks.axOrganizationId = null;
-      await expectNotFound(await scan('AbCd2345'));
+      const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+      // A fresh instance of the route, which has not logged yet
+      vi.resetModules();
+      const { GET: freshGet } = await import('@/app/q/[code]/route');
+      await expectNotFound(await scan('AbCd2345', {}, freshGet));
+      await expectNotFound(await scan('AbCd2345', {}, freshGet));
+      expect(errorLog).toHaveBeenCalledTimes(1);
+      expect(errorLog.mock.calls[0][0]).toContain('AX_DIAGNOSIS_ORGANIZATION_ID');
+      errorLog.mockRestore();
     });
   });
 
