@@ -110,20 +110,26 @@ export function TurnstileWidget({
   const t = useRunnerTranslations('verification');
   const { idPrefix } = useRunnerConfig();
   const containerRef = useRef<HTMLDivElement>(null);
+  const retryRef = useRef<HTMLButtonElement>(null);
+  /** Whether the respondent was on the widget when it was given up, so focus is not lost */
+  const focusRetry = useRef(false);
   const [compact, setCompact] = useState(false);
-  const [unavailable, setUnavailable] = useState(false);
+  /** Why the check is not shown: never loaded (or not supported), or it kept failing */
+  const [unavailable, setUnavailable] = useState<'unavailable' | 'failed' | null>(null);
 
   useEffect(() => {
     let widgetId: string | undefined;
     let cancelled = false;
     let errors = 0;
     // Show the other ways to reach us instead of a check that cannot be finished
-    const giveUp = () => {
+    const giveUp = (reason: 'unavailable' | 'failed') => {
       if (cancelled) return;
       onToken(null);
+      const active = document.activeElement;
+      focusRetry.current = Boolean(active && containerRef.current?.contains(active));
       if (widgetId) window.turnstile?.remove(widgetId);
       widgetId = undefined;
-      setUnavailable(true);
+      setUnavailable(reason);
     };
     onToken(null);
     loadTurnstile()
@@ -150,18 +156,22 @@ export function TurnstileWidget({
             onToken(null);
             errors += 1;
             // After the callback returns: the widget is not removed from inside its own call
-            if (errors >= MAX_CHECK_ERRORS) queueMicrotask(giveUp);
+            if (errors >= MAX_CHECK_ERRORS) queueMicrotask(() => giveUp('failed'));
           },
-          'unsupported-callback': () => queueMicrotask(giveUp),
+          'unsupported-callback': () => queueMicrotask(() => giveUp('unavailable')),
           'refresh-expired': 'auto',
         });
       })
-      .catch(giveUp);
+      .catch(() => giveUp('unavailable'));
     return () => {
       cancelled = true;
       if (widgetId) window.turnstile?.remove(widgetId);
     };
   }, [siteKey, action, locale, onToken]);
+
+  useEffect(() => {
+    if (unavailable && focusRetry.current) retryRef.current?.focus();
+  }, [unavailable]);
 
   if (unavailable) {
     return (
@@ -169,8 +179,12 @@ export function TurnstileWidget({
         className="space-y-2 rounded-xl border border-ax-yellow-dark bg-ax-yellow/10 p-3 text-sm leading-relaxed"
         data-testid={`${idPrefix}-turnstile-unavailable`}
       >
-        <p className="font-bold">{t('unavailable')}</p>
+        {/* Read out: the check can vanish while the respondent is waiting for it */}
+        <p className="font-bold" role="alert">
+          {t(unavailable)}
+        </p>
         <button
+          ref={retryRef}
           type="button"
           onClick={onRetry}
           className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 font-bold text-ax-ink hover:bg-ax-mist focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ax-teal-dark"

@@ -600,8 +600,9 @@ describe('AxDiagnosisFlow: another system and the bot check', () => {
     for (const script of scripts()) script.dispatchEvent(new Event('error'));
   });
 
-  const expectAlternativeContact = () => {
-    expect(screen.getByText('送信前の確認を表示できませんでした。')).toBeInTheDocument();
+  const expectAlternativeContact = (heading = '送信前の確認を表示できませんでした。') => {
+    // Read out when it replaces the check
+    expect(screen.getByRole('alert')).toHaveTextContent(heading);
     expect(screen.getByRole('link', { name: '03-5427-3663' })).toHaveAttribute('href', 'tel:+81354273663');
     expect(screen.getByRole('link', { name: 'dx-agency@sas-com.com' })).toHaveAttribute(
       'href',
@@ -633,8 +634,12 @@ describe('AxDiagnosisFlow: another system and the bot check', () => {
       expect(timeouts).toHaveLength(1);
 
       // Packets dropped by a firewall: neither load nor error ever comes
+      const company = screen.getByLabelText(/会社名/);
+      company.focus();
       await act(async () => timeouts[0]());
       expectAlternativeContact();
+      // Not taken away from what the respondent is typing
+      expect(company).toHaveFocus();
       // The hanging script is dropped, so trying again loads it anew
       expect(scripts()).toHaveLength(0);
       await user.click(screen.getByRole('button', { name: '確認をやり直す' }));
@@ -660,9 +665,14 @@ describe('AxDiagnosisFlow: another system and the bot check', () => {
     expect(screen.getByTestId('ax-turnstile')).toBeInTheDocument();
     expect(screen.queryByText('送信前の確認を表示できませんでした。')).not.toBeInTheDocument();
 
-    // Failing again in a row: the check is given up
+    // Failing again in a row, while the respondent is on the check: it is given up, saying
+    // it could not be completed (it was shown), and focus moves to trying again
+    const frame = document.createElement('button');
+    screen.getByTestId('ax-turnstile').appendChild(frame);
+    frame.focus();
     await act(async () => renders[0]['error-callback']('300010'));
-    expectAlternativeContact();
+    expectAlternativeContact('送信前の確認を完了できませんでした。');
+    expect(screen.getByRole('button', { name: '確認をやり直す' })).toHaveFocus();
     expect(turnstile.remove).toHaveBeenCalledWith('widget-1');
     // The token from before the failures is not sent
     await fillContact(user);
