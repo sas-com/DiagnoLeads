@@ -36,6 +36,7 @@ paths: ["app/q/**", "lib/features/distribution/short-code-entry.ts", "lib/featur
   - `/q/` は `lib/i18n/middleware.ts` のロケールの振り分けから外す。`lib/middleware/cache-headers.ts` も `no-store` にする
   - スキャンの記録（`qr_scans`・`scan_count`）は #41 でこの入口に足す。数える前に回数制限を掛けたまま、DB の書き込みを1回の要求で増やしすぎない
   - `distribution` の機能は、ほかの機能を import しない（`limits.ts` は `RateLimitRule` の形を書き写している）。診断ビルダーの公開の判定は入口（app）で組み合わせる。機能の import の循環（`features-in-cycles`）に入れないため
+  - キャンペーンの更新（`updateCampaign`）は、送られた項目だけを書く。`expiresAt` のない更新（名前の変更・停止と再開）は期限を変えず、`null` を送ったときだけ消す（#610）。入口が期限を見るので、期限を消してしまうと、期限の切れた QR がまた転送する
 - **却下案**:
   - `/d/[slug]` で slug が見つからないときに短縮コードを探す（ぶつかりが残り、どちらを開くかが行の有無で変わる）
   - 保存済みの `tracking_url` を本番で書き換える（読み取りで作れば要らない。本番の書き込みに承認が要る）
@@ -46,5 +47,5 @@ paths: ["app/q/**", "lib/features/distribution/short-code-entry.ts", "lib/featur
   - #120 で `diagnosis_id` を設定できるようになるまで、AX の組織以外のキャンペーンの QR はどれも 404 になる（2026-10-25 のオーナーの判断の1）。キャンペーンの画面には、そのことが出ない（#692）
   - `qr_campaigns.diagnosis_id` は診断の削除で null になる（`onDelete: 'set null'`）。削除できるのは公開したことのない下書きだけで、下書きのあいだは 404。削除の後は「`diagnosis_id` のないキャンペーン」になり、AX の組織のキャンペーンなら AX 診断へ送る
   - proxy のメモリの制限はインスタンスごとなので、インスタンスが増えると、1分200回より多く通る。インスタンスとコードをまたいだアドレスごとの上限は、DB の制限（10分200回）だけ
-  - `updateCampaign` は `expiresAt` を送らない更新（名前の変更・停止と再開）で期限を消す（#610）。入口が期限を見るので、期限の切れたキャンペーンを再開すると、また転送する
   - RLS（#51）：入口はログインなしで、グローバルの `db` から `qr_campaigns`・`diagnoses`（`findPublicDiagnosis` と同じ）・`public_rate_limits` を組織で絞らずに読む。組織は行から取る。`qr_campaigns` の RLS は無効のまま。RLS を掛けるときは、この入口を公開の読み取りとして扱う（ポリシーか専用の接続）。掛けただけだと、すべての QR が 404 になる（閉じる側に倒れる）
+  - #610 の修正より前に、本番の停止と再開で期限が消えたキャンペーンは戻らない（どの行の期限が消えたかの記録はない）。画面には期限が出ず、期限を付ける・延ばす・消す入力もない（#695）。期限は API で付けたときだけなので、当たる行は少ない

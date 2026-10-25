@@ -3,8 +3,11 @@
  * short code and UTM columns each time. Campaigns saved before #503 hold /d/<code> in
  * qr_campaigns.tracking_url; their list entry (Copy URL), detail and downloaded QR code must use
  * the /q/ URL without the stored rows being rewritten.
- * Runs the real router on a fake database that answers with the stored row.
+ * Also what updateCampaign writes (#610): only the fields it is sent.
+ * Runs the real router on a fake database that answers with the stored row and keeps what it is
+ * given to write.
  */
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/db/rls', () => ({ setCurrentUser: vi.fn().mockResolvedValue(undefined) }));
@@ -46,7 +49,12 @@ const STORED = {
 };
 const EXPECTED = 'http://localhost:3000/q/AbCd2345?utm_source=qrcode&utm_medium=offline&utm_campaign=fair-2026';
 
-const { store } = vi.hoisted(() => ({ store: { inserted: [] as Record<string, unknown>[] } }));
+const { store } = vi.hoisted(() => ({
+  store: {
+    inserted: [] as Record<string, unknown>[],
+    updated: [] as { set: Record<string, unknown>; where: unknown }[],
+  },
+}));
 // The distribution router uses the global client
 vi.mock('@/lib/db', () => {
   const returning = (row: () => Record<string, unknown>) => ({
@@ -69,7 +77,10 @@ vi.mock('@/lib/db', () => {
       })),
       update: vi.fn(() => ({
         set: vi.fn((values: Record<string, unknown>) => ({
-          where: vi.fn(() => returning(() => ({ ...STORED, ...values }))),
+          where: vi.fn((condition: unknown) => {
+            store.updated.push({ set: values, where: condition });
+            return returning(() => ({ ...STORED, ...values }));
+          }),
         })),
       })),
     },
@@ -99,12 +110,13 @@ function adminCaller() {
 
 const org = { organizationId: ORG_ID };
 
-describe('tracking URL of QR campaigns (#503)', () => {
-  beforeEach(() => {
-    store.inserted.length = 0;
-    vi.clearAllMocks();
-  });
+beforeEach(() => {
+  store.inserted.length = 0;
+  store.updated.length = 0;
+  vi.clearAllMocks();
+});
 
+describe('tracking URL of QR campaigns (#503)', () => {
   it('lists a campaign saved with /d/<code> with its /q/ URL (Copy URL)', async () => {
     const [campaign] = await adminCaller().distribution.listCampaigns(org);
     expect(campaign.trackingUrl).toBe(EXPECTED);
@@ -163,5 +175,53 @@ describe('tracking URL of QR campaigns (#503)', () => {
 
   it('no longer offers the on-demand QR code of a template, which pointed at /d/<template id>', () => {
     expect(Object.keys(appRouter._def.procedures)).not.toContain('distribution.generateQRCode');
+  });
+});
+
+/**
+ * #610: the switch of the settings page sends { isActive } alone. Pausing and resuming used to
+ * write expires_at = null, and the /q/ entry (#503) then forwarded an expired campaign again.
+ * expiresAt: null still clears the expiry. What the database keeps is checked on PostgreSQL in
+ * test/unit/integration/distribution-org-isolation.db.test.ts
+ */
+describe('updateCampaign writes only the fields it is sent (#610)', () => {
+  const update = (data: Record<string, unknown>) =>
+    adminCaller().distribution.updateCampaign({ ...org, id: CAMPAIGN_ID, data });
+  const written = () => store.updated[0].set;
+
+  it('does not write the expiry when the campaign is paused (the switch sends isActive alone)', async () => {
+    await update({ isActive: false });
+    expect(written()).not.toHaveProperty('expiresAt');
+    expect(written()).toMatchObject({ isActive: false });
+  });
+
+  it('does not write the expiry when the campaign is resumed', async () => {
+    await update({ isActive: true });
+    expect(written()).not.toHaveProperty('expiresAt');
+    expect(written()).toMatchObject({ isActive: true });
+  });
+
+  it('writes nothing but the name and the time of the update when only the name is sent', async () => {
+    await update({ name: 'Fair 2026 (Osaka)' });
+    expect(Object.keys(written()).sort()).toEqual(['name', 'updatedAt']);
+  });
+
+  it('changes the expiry when a new one is sent', async () => {
+    await update({ expiresAt: '2026-12-31T15:00:00.000Z' });
+    expect(written().expiresAt).toEqual(new Date('2026-12-31T15:00:00.000Z'));
+  });
+
+  it('clears the expiry when null is sent', async () => {
+    await update({ isActive: true, expiresAt: null });
+    expect(written()).toHaveProperty('expiresAt', null);
+  });
+
+  it('writes the row by its id within the organization', async () => {
+    await update({ isActive: false });
+    const { sql, params } = new PgDialect().sqlToQuery(
+      store.updated[0].where as Parameters<PgDialect['sqlToQuery']>[0]
+    );
+    expect(sql).toContain('"qr_campaigns"."organization_id" = ');
+    expect(params).toEqual(expect.arrayContaining([CAMPAIGN_ID, ORG_ID]));
   });
 });
