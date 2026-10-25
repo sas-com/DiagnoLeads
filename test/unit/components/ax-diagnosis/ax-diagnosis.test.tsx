@@ -755,6 +755,16 @@ describe('AxDiagnosisResult', () => {
     expect(screen.getByText('期限までの段取りを、一緒に確認しませんか')).toBeInTheDocument();
   });
 
+  it('describes the agility challenge as the brochure ver01 and the landing page do (#76)', () => {
+    renderResult({
+      result: { ...publicResult, challenges: { ...publicResult.challenges, primary: 'agility' } },
+    });
+    expect(screen.getByText(/新商品・新サービスの展開を妨げています/)).toBeInTheDocument();
+    expect(screen.getByText(/短いサイクルで機能を追加しやすく、市場の変化に対応しやすい仕組みへ/)).toBeInTheDocument();
+    // Not in the brochure: ways of working, the support deadline, use from outside the office
+    expect(screen.queryByText(/働き方の変化|社外からの利用/)).not.toBeInTheDocument();
+  });
+
   it('shows no documents or seminars unless the organization offers them (#153)', () => {
     renderResult();
     expect(screen.queryByTestId('ax-info-offers')).not.toBeInTheDocument();
