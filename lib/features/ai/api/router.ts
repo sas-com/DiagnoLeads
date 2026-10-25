@@ -309,6 +309,7 @@ export const aiRouter = router({
         organizationId: input.organizationId,
         calls: 1,
       });
+      // A failed embedding or update throws (INTERNAL_SERVER_ERROR), never reported as success
       await updateLeadEmbedding(input.leadId, input.organizationId, text);
 
       return { success: true };

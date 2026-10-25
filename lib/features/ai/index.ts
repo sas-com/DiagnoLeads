@@ -8,7 +8,7 @@
  */
 
 // Export embeddings
-export { generateEmbedding, generateEmbeddingsBatch, prepareLeadText } from './embeddings/openai';
+export { generateEmbedding, prepareLeadText } from './embeddings/openai';
 
 // Export scoring
 export { scoreLeadWithAI, scoreLeadsBatch, type LeadScore } from './scoring/claude';
