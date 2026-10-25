@@ -4,23 +4,15 @@
  */
 
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema';
-import { CLAUDE_MAX_TOKENS, CLAUDE_MODEL, anthropic } from '../client';
+import { CLAUDE_MAX_TOKENS, CLAUDE_MODEL, anthropic, readStructuredOutput } from '../client';
 import { reportClaudeFailure } from '../failures';
+import type { ContactCompleteness, LeadForClaude } from '../prompt-input';
+import { LEAD_DATA_TAG, UNTRUSTED_LEAD_DATA_POLICY, leadDataBlock } from '../prompt-safety';
 import { AI_BATCH_MAX } from '../types/schemas';
+import { type AiCallScope, logAiUsage } from '../usage';
 
-export interface LeadForPrediction {
-  id: string;
-  email: string;
-  name: string | null;
-  company: string | null;
-  phone: string | null;
-  status: string;
-  score: number | null;
-  source: string | null;
-  responses: Record<string, unknown> | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
+/** The lead as the prediction reads it: nothing that points at a person (#406) */
+export type LeadForPrediction = LeadForClaude;
 
 export interface ConversionPrediction {
   /** Conversion probability (0-100) */
@@ -80,14 +72,23 @@ export interface ConversionFactor {
 
 /**
  * Predict conversion probability for a single lead
+ * @param scope - The organization the call is made for, logged with the tokens used (#47)
  */
-export async function predictConversion(lead: LeadForPrediction): Promise<ConversionPrediction> {
+export async function predictConversion(
+  lead: LeadForPrediction,
+  contact: ContactCompleteness,
+  scope: AiCallScope
+): Promise<ConversionPrediction> {
   const prompt = buildPredictionPrompt(lead);
 
   try {
-    const message = await anthropic.messages.parse({
+    const startedAt = performance.now();
+    // messages.create, not messages.parse: the usage is logged before the output is parsed, so
+    // an answer cut off inside the JSON is logged too (readStructuredOutput)
+    const message = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: CLAUDE_MAX_TOKENS,
+      system: PREDICTION_SYSTEM_PROMPT,
       messages: [
         {
           role: 'user',
@@ -96,34 +97,43 @@ export async function predictConversion(lead: LeadForPrediction): Promise<Conver
       ],
       output_config: { effort: 'low', format: predictionOutputFormat },
     });
+    logAiUsage(
+      { operation: 'predict-conversion', ...scope, model: CLAUDE_MODEL, startedAt },
+      message
+    );
 
-    if (!message.parsed_output) {
+    const output = readStructuredOutput(message, predictionOutputFormat);
+    if (!output) {
       console.error('Conversion prediction: no structured output', message.stop_reason);
-      return generateFallbackPrediction(lead);
+      return generateFallbackPrediction(lead, contact);
     }
 
-    return normalizePrediction(message.parsed_output);
+    return normalizePrediction(output);
   } catch (error) {
     console.error('Conversion prediction error:', error);
     await reportClaudeFailure('predict-conversion', error);
     // Return a fallback prediction based on simple heuristics
-    return generateFallbackPrediction(lead);
+    return generateFallbackPrediction(lead, contact);
   }
 }
 
 /**
  * Batch predict conversion for multiple leads
+ * @param scope - The organization the calls are made for (one usage line per lead)
  */
 export async function predictConversionBatch(
-  leads: LeadForPrediction[]
+  leads: Array<{ lead: LeadForPrediction; contact: ContactCompleteness }>,
+  scope: AiCallScope
 ): Promise<Map<string, ConversionPrediction>> {
   const results = new Map<string, ConversionPrediction>();
 
   // Process in parallel; the router accepts at most one group (AI_BATCH_MAX)
   for (let i = 0; i < leads.length; i += AI_BATCH_MAX) {
     const batch = leads.slice(i, i + AI_BATCH_MAX);
-    const predictions = await Promise.all(batch.map((lead) => predictConversion(lead)));
-    batch.forEach((lead, index) => {
+    const predictions = await Promise.all(
+      batch.map(({ lead, contact }) => predictConversion(lead, contact, scope))
+    );
+    batch.forEach(({ lead }, index) => {
       results.set(lead.id, predictions[index]);
     });
   }
@@ -131,31 +141,38 @@ export async function predictConversionBatch(
   return results;
 }
 
+const PREDICTION_SYSTEM_PROMPT = `You are an expert B2B sales analyst. You predict whether leads will convert.
+
+${UNTRUSTED_LEAD_DATA_POLICY}`;
+
 /**
- * Build the prompt for conversion prediction
+ * Build the prompt for conversion prediction: the lead's fields and diagnostic responses only
+ * inside the <lead_data> block (untrusted, from public forms), the task after it (#47)
  */
 function buildPredictionPrompt(lead: LeadForPrediction): string {
   const leadAge = Math.floor(
     (Date.now() - new Date(lead.createdAt).getTime()) / (1000 * 60 * 60 * 24)
   );
+  const data = leadDataBlock(
+    {
+      company: lead.company || null,
+      status: lead.status,
+      score: lead.score,
+      source: lead.source || null,
+      daysSinceCreation: leadAge,
+      diagnosticResponses: lead.responses || {},
+    },
+    { where: 'predict-conversion', leadId: lead.id }
+  );
 
-  return `You are an expert B2B sales analyst. Analyze this lead and predict their conversion probability.
+  return `${data}
 
-Lead Information:
-- Email: ${lead.email}
-- Name: ${lead.name || 'Unknown'}
-- Company: ${lead.company || 'Unknown'}
-- Phone: ${lead.phone ? 'Provided' : 'Not provided'}
-- Current Status: ${lead.status}
-- Lead Score: ${lead.score ?? 'Not scored'}
-- Source: ${lead.source || 'Unknown'}
-- Days Since Creation: ${leadAge}
-- Diagnostic Responses: ${JSON.stringify(lead.responses || {}, null, 2)}
+Analyze the lead in <${LEAD_DATA_TAG}> and predict their conversion probability. In it, score is the current lead score (0-100, or null when the lead has not been scored) and status is the lead's current status.
 
 Based on this information, predict the conversion: probability (0-100), confidence, estimated days to conversion (or null), the key factors (impact and a 1-10 weight each), recommendations, and risks.
 
 Consider:
-1. Lead completeness (contact info, company info)
+1. Lead completeness (company info, diagnostic responses)
 2. Engagement signals (responses, score)
 3. Time factors (lead age, status progression)
 4. Source quality
@@ -182,7 +199,10 @@ function normalizePrediction(parsed: ConversionPrediction): ConversionPrediction
 /**
  * Generate a fallback prediction based on simple heuristics
  */
-function generateFallbackPrediction(lead: LeadForPrediction): ConversionPrediction {
+function generateFallbackPrediction(
+  lead: LeadForPrediction,
+  contact: ContactCompleteness
+): ConversionPrediction {
   let probability = 30; // Base probability
   const factors: ConversionFactor[] = [];
 
@@ -227,10 +247,9 @@ function generateFallbackPrediction(lead: LeadForPrediction): ConversionPredicti
   }
 
   // Completeness factor
-  const hasName = !!lead.name;
-  const hasCompany = !!lead.company;
-  const hasPhone = !!lead.phone;
-  const completeness = [hasName, hasCompany, hasPhone].filter(Boolean).length;
+  const completeness = [contact.hasName, Boolean(lead.company), contact.hasPhone].filter(
+    Boolean
+  ).length;
 
   if (completeness >= 2) {
     probability += 10;
@@ -273,7 +292,7 @@ function generateFallbackPrediction(lead: LeadForPrediction): ConversionPredicti
 
   // Generate recommendations
   const recommendations: string[] = [];
-  if (!hasPhone) {
+  if (!contact.hasPhone) {
     recommendations.push('Request phone number for direct contact');
   }
   if (lead.status === 'new') {
@@ -293,7 +312,7 @@ function generateFallbackPrediction(lead: LeadForPrediction): ConversionPredicti
       risks.push('Lead aging without engagement - risk of going cold');
     }
   }
-  if (!hasCompany) {
+  if (!lead.company) {
     risks.push('Unknown company - difficult to qualify business fit');
   }
 

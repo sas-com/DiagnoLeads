@@ -30,10 +30,13 @@ export interface AxSiteHeaderProps {
   page?: AxLandingPage;
 }
 
-type NavItem = 'problems' | 'reasons' | 'demo' | 'steps' | 'targets' | 'faq';
+type NavItem = 'problems' | 'reasons' | 'demo' | 'steps' | 'paths' | 'targets' | 'faq';
 const NAV_ITEMS: readonly NavItem[] = ['problems', 'reasons', 'demo', 'steps', 'targets', 'faq'];
-/** The Access page has no reasons or demo section of its own */
-const ACCESS_NAV_ITEMS: readonly NavItem[] = ['problems', 'steps', 'targets', 'faq'];
+/**
+ * The Access page has no reasons or demo section of its own, and its approach is the three ways
+ * (fix, move to the web, replace), not the flow from the diagnosis (#537)
+ */
+const ACCESS_NAV_ITEMS: readonly NavItem[] = ['problems', 'paths', 'targets', 'faq'];
 const NAV_LINK =
   'rounded text-ax-ink transition-colors hover:text-ax-leaf focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-ax-forest';
 

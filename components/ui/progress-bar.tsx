@@ -11,6 +11,7 @@ const COLORS = {
   amber: 'bg-amber-500',
   red: 'bg-red-500',
   gray: 'bg-gray-500',
+  lightGray: 'bg-gray-300 dark:bg-gray-600',
   yellow: 'bg-yellow-500',
 };
 

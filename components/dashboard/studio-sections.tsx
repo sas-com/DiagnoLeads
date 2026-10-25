@@ -117,12 +117,15 @@ export function AnalyticsPanel({
   onRetry,
   days,
   narrow,
+  updatedAt,
 }: {
   state: CardState;
   data?: DashboardData;
   onRetry: () => void;
   days: number;
   narrow: boolean;
+  /** When the figures were fetched (ms); shown as "as of" (DADS guidebook: date the data, #635) */
+  updatedAt?: number;
 }) {
   const t = useTranslations('dashboard.studio');
   const tw = useTranslations('dashboard.ax');
@@ -179,7 +182,7 @@ export function AnalyticsPanel({
                     id={selectId}
                     value={metric}
                     onChange={(event) => setMetric(event.target.value as Metric)}
-                    className="cursor-pointer appearance-none border-0 bg-transparent p-0 pr-5 text-sm font-bold text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-gray-50"
+                    className="cursor-pointer appearance-none border-0 bg-transparent p-0 pr-5 text-base font-bold text-gray-900 dark:text-gray-50"
                   >
                     <option value="leads">{t('analytics.metric.leads')}</option>
                     <option value="consultations">{t('analytics.metric.consultations')}</option>
@@ -192,10 +195,25 @@ export function AnalyticsPanel({
                 <div className="mt-4 text-4xl font-bold tabular-nums text-gray-900 dark:text-gray-50">
                   {loading ? <Skeleton className="h-10 w-20" /> : number(total)}
                 </div>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                   {weekly
                     ? t('analytics.periodWeekly', { days: period })
                     : t('analytics.period', { days: period })}
+                  {updatedAt && !loading && (
+                    <>
+                      <span aria-hidden="true"> ／ </span>
+                      <span className="sr-only">, </span>
+                      {t('analytics.updatedAt', {
+                        time: new Intl.DateTimeFormat(locale, {
+                          month: 'numeric',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          timeZone: 'Asia/Tokyo',
+                        }).format(updatedAt),
+                      })}
+                    </>
+                  )}
                 </p>
                 <div className="mt-6" style={{ height: CHART_HEIGHT }}>
                   {loading ? (
@@ -218,7 +236,7 @@ export function AnalyticsPanel({
                         data={chartData}
                         index="date"
                         categories={[metricLabel]}
-                        colors={['teal']}
+                        colors={['key']}
                         integerValues
                         maxCategoryLabels={narrow ? 4 : 6}
                         showLegend={false}

@@ -29,7 +29,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { usePdfReportLabels } from '@/hooks/use-pdf-report-labels';
-import type { Lead } from '@/lib/db/schema';
 import { LEAD_EXPORT_MAX_ROWS } from '@/lib/features/leads/export';
 import { LEAD_PAGE_SIZES, type LeadListSort } from '@/lib/features/leads/list-query';
 import {
@@ -77,7 +76,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react
 import { TagBadgeList } from '../tags/tag-badge';
 import { BulkActions } from './bulk-actions';
 import { LeadAssigneeSelect } from './lead-assignee-select';
-import type { LeadListRow } from './lead-card';
+import type { LeadListRow, ListedLead } from './lead-card';
 import { LeadMqlBadges } from './lead-mql-badge';
 import { LeadQuickSelect } from './lead-quick-select';
 import { LeadCardList } from './list/lead-card-list';
@@ -442,7 +441,7 @@ export function LeadTable({
     {
       id: 'tags',
       accessorFn: (row) => row.tags,
-      header: locale === 'ja' ? 'タグ' : 'Tags',
+      header: t('tags'),
       cell: ({ row }) => {
         const leadTags = row.original.tags ?? [];
         if (leadTags.length === 0) {
@@ -616,7 +615,7 @@ export function LeadTable({
   const selectedLeads = table.getSelectedRowModel().rows.map((row) => row.original);
 
   // Helper functions for bulk export
-  const exportSelectedToCSV = useCallback((leadsToExport: Lead[]) => {
+  const exportSelectedToCSV = useCallback((leadsToExport: ListedLead[]) => {
     const headers = [
       'Name',
       'Email',
@@ -650,7 +649,7 @@ export function LeadTable({
     link.click();
   }, []);
 
-  const exportSelectedToJSON = useCallback((leadsToExport: Lead[]) => {
+  const exportSelectedToJSON = useCallback((leadsToExport: ListedLead[]) => {
     const data = leadsToExport.map((lead) => ({
       id: lead.id,
       name: lead.name,
@@ -671,7 +670,7 @@ export function LeadTable({
   }, []);
 
   const exportSelectedToPDF = useCallback(
-    async (leadsToExport: Lead[]) => {
+    async (leadsToExport: ListedLead[]) => {
       const data = leadsToExport.map((lead) => ({
         id: lead.id,
         email: lead.email,
@@ -708,7 +707,7 @@ export function LeadTable({
     dealPhase: t('dealPhase'),
     assignee: tAssignee('label'),
     inflowSource: t('inflowSource'),
-    tags: locale === 'ja' ? 'タグ' : 'Tags',
+    tags: t('tags'),
     source: t('source'),
     createdAt: t('createdAt'),
     lastActivityAt: tList('sort.lastActivityAt'),
@@ -796,7 +795,7 @@ export function LeadTable({
             <DropdownMenuLabel>
               {tList('export.all')}
               <span className="block text-xs font-normal text-gray-500 dark:text-gray-400">
-                {tList('export.allHint', { max: LEAD_EXPORT_MAX_ROWS.toLocaleString() })}
+                {tList('export.allHint', { max: format.number(LEAD_EXPORT_MAX_ROWS) })}
               </span>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />

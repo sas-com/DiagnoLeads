@@ -12,6 +12,8 @@
  * The procedures that embed a text with OpenAI (semanticSearch, updateEmbedding) count each
  * embedding against EMBEDDING_CALL_LIMITS first, and the text they embed is bounded (#576).
  * findSimilar compares stored embeddings only, without calling OpenAI.
+ * Each call is handed the organization, which the usage line of its response names (../usage.ts,
+ * #47).
  */
 
 import { leads } from '@/lib/db/schema';
@@ -23,7 +25,7 @@ import { generateLeadSummary } from '../chat/assistant';
 import { prepareLeadText } from '../embeddings/openai';
 import { consumeAiCalls, consumeEmbeddingCalls } from '../limits';
 import { predictConversion, predictConversionBatch } from '../prediction/conversion';
-import { leadForClaude } from '../prompt-input';
+import { contactCompleteness, leadForClaude } from '../prompt-input';
 import { scoreLeadWithAI, scoreLeadsBatch } from '../scoring/claude';
 import { findSimilarLeads, semanticSearch, updateLeadEmbedding } from '../search/semantic';
 import {
@@ -71,7 +73,9 @@ export const aiRouter = router({
       organizationId: input.organizationId,
       calls: 1,
     });
-    const aiScore = await scoreLeadWithAI(leadForClaude(lead));
+    const aiScore = await scoreLeadWithAI(leadForClaude(lead), {
+      organizationId: input.organizationId,
+    });
     if (aiScore.isFallback) {
       // Keep the current score rather than overwriting it with the placeholder
       throw new TRPCError({
@@ -134,7 +138,9 @@ export const aiRouter = router({
         organizationId: input.organizationId,
         calls: leadsToScore.length,
       });
-      const scoresMap = await scoreLeadsBatch(leadsToScore.map(leadForClaude));
+      const scoresMap = await scoreLeadsBatch(leadsToScore.map(leadForClaude), {
+        organizationId: input.organizationId,
+      });
 
       // Update the leads Claude scored; a fallback keeps the lead's current score
       const scoredLeads = leadsToScore.filter((lead) => !scoresMap.get(lead.id)?.isFallback);
@@ -203,7 +209,10 @@ export const aiRouter = router({
         organizationId: input.organizationId,
         calls: 1,
       });
-      const results = await semanticSearch(input.query, input.organizationId, {
+      const results = await semanticSearch({
+        db: ctx.db,
+        query: input.query,
+        organizationId: input.organizationId,
         limit: input.limit,
         minSimilarity: input.minSimilarity,
       });
@@ -235,7 +244,12 @@ export const aiRouter = router({
       });
     }
 
-    const similar = await findSimilarLeads(input.leadId, input.organizationId, input.limit);
+    const similar = await findSimilarLeads({
+      db: ctx.db,
+      leadId: input.leadId,
+      organizationId: input.organizationId,
+      limit: input.limit,
+    });
 
     return similar;
   }),
@@ -271,7 +285,9 @@ export const aiRouter = router({
         organizationId: input.organizationId,
         calls: 1,
       });
-      const summary = await generateLeadSummary(leadForClaude(lead));
+      const summary = await generateLeadSummary(leadForClaude(lead), {
+        organizationId: input.organizationId,
+      });
 
       return { summary };
     }),
@@ -310,7 +326,20 @@ export const aiRouter = router({
         calls: 1,
       });
       // A failed embedding or update throws (INTERNAL_SERVER_ERROR), never reported as success
-      await updateLeadEmbedding(input.leadId, input.organizationId, text);
+      const stored = await updateLeadEmbedding({
+        db: ctx.db,
+        leadId: input.leadId,
+        organizationId: input.organizationId,
+        text,
+      });
+      if (!stored) {
+        // The lead was read in the organization just above, so only a lead deleted in between
+        // gets here: nothing was written, so it is not reported as success (#590)
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'リードが見つかりません',
+        });
+      }
 
       return { success: true };
     }),
@@ -347,7 +376,9 @@ export const aiRouter = router({
         organizationId: input.organizationId,
         calls: 1,
       });
-      const prediction = await predictConversion(leadForClaude(lead));
+      const prediction = await predictConversion(leadForClaude(lead), contactCompleteness(lead), {
+        organizationId: input.organizationId,
+      });
 
       return {
         leadId: lead.id,
@@ -390,7 +421,13 @@ export const aiRouter = router({
         organizationId: input.organizationId,
         calls: leadsToPredict.length,
       });
-      const predictionsMap = await predictConversionBatch(leadsToPredict.map(leadForClaude));
+      const predictionsMap = await predictConversionBatch(
+        leadsToPredict.map((lead) => ({
+          lead: leadForClaude(lead),
+          contact: contactCompleteness(lead),
+        })),
+        { organizationId: input.organizationId }
+      );
 
       return {
         predictions: Array.from(predictionsMap.entries()).map(([leadId, prediction]) => ({

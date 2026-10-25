@@ -8,6 +8,16 @@ import { useRunnerConfig, useRunnerTranslations } from './runner-context';
 const SCRIPT_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
 /** Width of the normal widget; narrower containers (small phones) get the compact one */
 const NORMAL_WIDTH = 300;
+/**
+ * How long to wait for Cloudflare's script. A firewall that drops the packets never answers,
+ * and without a limit the respondent would wait in front of an empty box (#537).
+ */
+export const LOAD_TIMEOUT_MS = 10_000;
+/**
+ * Failed checks in a row before the other ways to reach us are offered. Turnstile tries again
+ * by itself (every 8 seconds by default), so one failure can still be followed by a pass.
+ */
+export const MAX_CHECK_ERRORS = 2;
 
 interface TurnstileApi {
   render: (container: HTMLElement, options: Record<string, unknown>) => string;
@@ -24,25 +34,40 @@ let loading: Promise<TurnstileApi> | null = null;
 
 /**
  * Load Cloudflare's script once. It is added by this (nonce-trusted) script, which the
- * production CSP's 'strict-dynamic' allows. A failed load can be tried again.
+ * production CSP's 'strict-dynamic' allows. A failed or timed-out load can be tried again.
  */
 function loadTurnstile(): Promise<TurnstileApi> {
   if (window.turnstile) return Promise.resolve(window.turnstile);
-  loading ??= new Promise<TurnstileApi>((resolve, reject) => {
+  if (loading) return loading;
+  const attempt = new Promise<TurnstileApi>((resolve, reject) => {
     const script = document.createElement('script');
+    let settled = false;
+    const finish = () => {
+      settled = true;
+      clearTimeout(timer);
+    };
     const fail = (message: string) => {
-      loading = null;
+      if (settled) return;
+      finish();
+      // A later attempt may already be under way (after a timeout): leave it alone
+      if (loading === attempt) loading = null;
       script.remove();
       reject(new Error(message));
     };
+    const timer = setTimeout(() => fail('Turnstile timed out'), LOAD_TIMEOUT_MS);
     script.src = SCRIPT_SRC;
     script.async = true;
-    script.onload = () =>
-      window.turnstile ? resolve(window.turnstile) : fail('Turnstile is missing');
+    script.onload = () => {
+      if (settled) return;
+      if (!window.turnstile) return fail('Turnstile is missing');
+      finish();
+      resolve(window.turnstile);
+    };
     script.onerror = () => fail('Turnstile could not be loaded');
     document.head.appendChild(script);
   });
-  return loading;
+  loading = attempt;
+  return attempt;
 }
 
 interface TurnstileWidgetProps {
@@ -85,12 +110,27 @@ export function TurnstileWidget({
   const t = useRunnerTranslations('verification');
   const { idPrefix } = useRunnerConfig();
   const containerRef = useRef<HTMLDivElement>(null);
+  const retryRef = useRef<HTMLButtonElement>(null);
+  /** Whether the respondent was on the widget when it was given up, so focus is not lost */
+  const focusRetry = useRef(false);
   const [compact, setCompact] = useState(false);
-  const [unavailable, setUnavailable] = useState(false);
+  /** Why the check is not shown: never loaded (or not supported), or it kept failing */
+  const [unavailable, setUnavailable] = useState<'unavailable' | 'failed' | null>(null);
 
   useEffect(() => {
     let widgetId: string | undefined;
     let cancelled = false;
+    let errors = 0;
+    // Show the other ways to reach us instead of a check that cannot be finished
+    const giveUp = (reason: 'unavailable' | 'failed') => {
+      if (cancelled) return;
+      onToken(null);
+      const active = document.activeElement;
+      focusRetry.current = Boolean(active && containerRef.current?.contains(active));
+      if (widgetId) window.turnstile?.remove(widgetId);
+      widgetId = undefined;
+      setUnavailable(reason);
+    };
     onToken(null);
     loadTurnstile()
       .then((turnstile) => {
@@ -105,23 +145,33 @@ export function TurnstileWidget({
           size: narrow ? 'compact' : 'normal',
           // The site has no dark theme
           theme: 'light',
-          callback: (token: string) => onToken(token),
-          // Turnstile shows its own message (and tries again) inside the widget
+          callback: (token: string) => {
+            errors = 0;
+            onToken(token);
+          },
           'expired-callback': () => onToken(null),
-          'error-callback': () => onToken(null),
+          // Turnstile shows its own message (and tries again) inside the widget; when it
+          // keeps failing (#537), the check is given up for the phone and email
+          'error-callback': () => {
+            onToken(null);
+            errors += 1;
+            // After the callback returns: the widget is not removed from inside its own call
+            if (errors >= MAX_CHECK_ERRORS) queueMicrotask(() => giveUp('failed'));
+          },
+          'unsupported-callback': () => queueMicrotask(() => giveUp('unavailable')),
           'refresh-expired': 'auto',
         });
       })
-      .catch(() => {
-        if (cancelled) return;
-        onToken(null);
-        setUnavailable(true);
-      });
+      .catch(() => giveUp('unavailable'));
     return () => {
       cancelled = true;
       if (widgetId) window.turnstile?.remove(widgetId);
     };
   }, [siteKey, action, locale, onToken]);
+
+  useEffect(() => {
+    if (unavailable && focusRetry.current) retryRef.current?.focus();
+  }, [unavailable]);
 
   if (unavailable) {
     return (
@@ -129,8 +179,12 @@ export function TurnstileWidget({
         className="space-y-2 rounded-xl border border-ax-yellow-dark bg-ax-yellow/10 p-3 text-sm leading-relaxed"
         data-testid={`${idPrefix}-turnstile-unavailable`}
       >
-        <p className="font-bold">{t('unavailable')}</p>
+        {/* Read out: the check can vanish while the respondent is waiting for it */}
+        <p className="font-bold" role="alert">
+          {t(unavailable)}
+        </p>
         <button
+          ref={retryRef}
           type="button"
           onClick={onRetry}
           className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 font-bold text-ax-ink hover:bg-ax-mist focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ax-teal-dark"

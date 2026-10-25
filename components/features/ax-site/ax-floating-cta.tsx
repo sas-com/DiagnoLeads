@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
 import { AxCtaLink } from './ax-cta-link';
 import {
+  AX_ACCESS_COLUMNS_ID,
   AX_CONSULT_BAND_ID,
   AX_FINAL_SECTION_ID,
   AX_FOOTER_ID,
@@ -15,18 +16,27 @@ import {
 /**
  * Hidden while another diagnosis button (hero, below the concerns, consultation band, final call
  * to action) or the diagnosis is on screen, and over the footer so that it never covers the last
- * lines of the page. The hero buttons count on their own: they stay on screen after the heading
- * has scrolled away (#420).
+ * lines of the page. The hero counts by its buttons, not its heading: below the heading, the
+ * deadline tags put the buttons under the first screen of most phones, which then had no
+ * diagnosis button at all (#420, #536).
  */
 const DEFAULT_HIDE_WHEN_VISIBLE = [
-  'ax-hero-heading',
   AX_HERO_CTA_ID,
   AX_PROBLEMS_CTA_ID,
   AX_CONSULT_BAND_ID,
   AX_SECTIONS.diagnosis,
   AX_FINAL_SECTION_ID,
+  // Below the Access page's last call to action, the columns end the page (#537)
+  AX_ACCESS_COLUMNS_ID,
   AX_FOOTER_ID,
 ];
+
+/**
+ * The hero counts by its diagnosis button (the first link of its buttons), and only once most
+ * of it is on screen: a strip at the bottom edge cannot be read. Without the test-mode banner,
+ * 10-13px of the Access page's button reach the bottom of a 664px phone (#536).
+ */
+const HERO_BUTTON_VISIBLE_RATIO = 0.75;
 
 interface AxFloatingCtaProps {
   label: string;
@@ -41,19 +51,27 @@ export function AxFloatingCta({
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
+    const hero = document.getElementById(AX_HERO_CTA_ID);
+    const heroButton = hero?.querySelector('a') ?? hero;
     const targets = hideWhenVisible
-      .map((id) => document.getElementById(id))
-      .filter((el): el is HTMLElement => el !== null);
+      .map((id) => (id === AX_HERO_CTA_ID ? heroButton : document.getElementById(id)))
+      .filter((el): el is HTMLElement => el != null);
     if (targets.length === 0 || typeof IntersectionObserver === 'undefined') return;
 
     const onScreen = new Set<Element>();
-    const observer = new IntersectionObserver((entries) => {
-      for (const entry of entries) {
-        if (entry.isIntersecting) onScreen.add(entry.target);
-        else onScreen.delete(entry.target);
-      }
-      setVisible(onScreen.size === 0);
-    });
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const counts =
+            entry.isIntersecting &&
+            (entry.target !== heroButton || entry.intersectionRatio >= HERO_BUTTON_VISIBLE_RATIO);
+          if (counts) onScreen.add(entry.target);
+          else onScreen.delete(entry.target);
+        }
+        setVisible(onScreen.size === 0);
+      },
+      { threshold: [0, HERO_BUTTON_VISIBLE_RATIO] }
+    );
     for (const target of targets) observer.observe(target);
     return () => observer.disconnect();
   }, [hideWhenVisible]);

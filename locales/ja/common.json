@@ -199,6 +199,8 @@
     "management": "管理",
     "dashboard": "ダッシュボード",
     "leads": "リード管理",
+    "deals": "商談",
+    "forecast": "予測",
     "prospects": "顧客探し（AX）",
     "analytics": "分析",
     "settings": "設定",
@@ -330,9 +332,10 @@
       "help": "機械による自動送信を防ぐための確認です（Cloudflare社の仕組みを使います）。通常は数秒で自動的に終わります。チェック欄が表示された場合は、クリックしてください。",
       "done": "送信前の確認が完了しました",
       "unavailable": "送信前の確認を表示できませんでした。",
+      "failed": "送信前の確認を完了できませんでした。",
       "retry": "確認をやり直す",
-      "alternative": "社内のネットワークの設定によっては表示されないことがあります。その場合は、お手数ですが<link>個別相談の予約ページ</link>からご連絡ください。",
-      "alternativeContact": "社内のネットワークの設定によっては表示されないことがあります。その場合は、お手数ですがお電話（<phone></phone>）またはメール（<email></email>）でご連絡ください。"
+      "alternative": "社内のネットワークの設定によっては、確認が表示されない、または完了しないことがあります。その場合は、お手数ですが<link>個別相談の予約ページ</link>からご連絡ください。",
+      "alternativeContact": "社内のネットワークの設定によっては、確認が表示されない、または完了しないことがあります。その場合は、お手数ですがお電話（<phone></phone>）またはメール（<email></email>）でご連絡ください。"
     },
     "contact": {
       "description": "診断結果はこの画面に表示します。ご連絡先は、結果のご説明やご相談のご案内に使います。",
@@ -342,6 +345,7 @@
       "phone": "電話番号",
       "consultation": "結果をもとに、無料の個別相談を希望する",
       "consultationHint": "担当者からご連絡します。電話でのご連絡を希望される場合は、電話番号もご入力ください。",
+      "accessConsultation": "結果をもとに、30分の無料オンライン相談を希望する",
       "consent": "個人情報の取り扱いに同意する",
       "consentAgain": "ご連絡先は前回の入力を使います。お手数ですが、個人情報の取り扱いへの同意に、もう一度チェックを入れてください。",
       "consentNotice": "ご入力いただいた情報は、診断結果のご案内と、AXマイグレーションに関するご連絡以外には使いません。",
@@ -399,6 +403,11 @@
       },
       "checkpointsTitle": "{platform}からWebシステムへ移行するときに確認すること",
       "checkpointsTitleGeneric": "Webシステムへ移行するときに確認すること",
+      "accessReplaceInventory": "まずツールを棚卸しし、使われていないツールや重複を整理してから置き換えの対象を絞ります",
+      "accessCheckpointsTitle": {
+        "fix": "{platform}を直して使い続けるときに確認すること",
+        "replace": "{platform}から既製サービスに置き換えるときに確認すること"
+      },
       "checkpoints": {
         "source_missing": "見つからないソースの扱い（実行中のプログラムからの解析など）を、最初に確認します",
         "source_vendor_held": "保守会社や提供元が持っているソースを、調査のために出してもらえるか（契約・費用）を最初に確認します",
@@ -483,7 +492,7 @@
           "check_unknowns": "「わからない」の回答があるため、ご相談のなかでツールの中身を確かめてから決めます"
         }
       },
-      "nowHere": "いまここ：無料Web診断が完了しました。次は担当者による簡易診断（資産の棚卸し）です。",
+      "nowHere": "いまここ：無料Web診断が完了しました。次は無料の個別相談です。",
       "nextStepLabel": "NEXT STEP",
       "cta": {
         "hearing": {
@@ -548,8 +557,8 @@
         },
         "agility": {
           "title": "モノ：市場の変化に対応できないシステム",
-          "problem": "取引先や市場、働き方の変化に合わせようとするたびに、既存システムの制約や保守期限が足かせになっています。",
-          "solution": "サポートの続くWebの基盤に移り、機能の追加や社外からの利用に対応しやすくします。"
+          "problem": "新しい取引先や市場の変化に対応しようとするたびに、既存システムの制約が、新商品・新サービスの展開を妨げています。",
+          "solution": "短いサイクルで機能を追加しやすく、市場の変化に対応しやすい仕組みへ移ることをめざします。"
         },
         "data": {
           "title": "情報：経営判断に使えないデータ",
@@ -562,19 +571,28 @@
         "body": "担い手の交代や保守期限に備えて、いまのうちに現行仕様を整理しておくと、将来の判断がしやすくなります。"
       },
       "steps": {
+        "consult": {
+          "label": "NEXT STEP",
+          "title": "無料の個別相談",
+          "body": "診断結果をもとに、移行の進め方や次に確かめることをご案内します。"
+        },
         "simple": {
+          "label": "その次に",
           "title": "簡易診断",
-          "body": "資産の棚卸しで、移行難易度の目安を詳しくお示しします。"
+          "body": "担当者による資産の棚卸しで、移行難易度の目安を詳しくお示しします。"
         },
         "survey": {
+          "label": "Phase 1",
           "title": "現行仕様調査",
           "body": "AIで現行のソースコード・帳票・データ構造を解析し、仕様を可視化します。"
         },
         "migration": {
+          "label": "Phase 2",
           "title": "マイグレーション",
           "body": "現行仕様を引き継いだまま、最新のWebシステムへ移行します。"
         },
         "ax": {
+          "label": "Phase 3",
           "title": "AX化",
           "body": "AIエージェントで機能を拡張し、データを経営に活かします。"
         }
@@ -585,7 +603,7 @@
         "items": {
           "inventory": {
             "title": "棚卸し",
-            "body": "30分のオンライン相談で、ツールの数や使われ方を伺います。必要に応じてファイルをお預かりして、中身を確かめます。"
+            "body": "30分のオンライン相談で、ツールの数や使われ方を伺います。必要に応じてファイルをお預かりして、中身を確かめます。ファイルを確かめる作業に費用がかかる場合は、前もってお伝えします。"
           },
           "decide": {
             "title": "進め方の決定",
@@ -611,6 +629,30 @@
       },
       "accessMeetingDuration": "所要時間の目安：30分程度（オンライン）",
       "accessDisclaimer": "本結果は回答内容にもとづく目安です。正確な進め方・期間・費用は、ツールの中身を確かめたうえでお伝えします。",
+      "accessCta": {
+        "hearing": {
+          "title": "わからなかった項目を、一緒に確認しませんか",
+          "lead": "わからなかった項目は、30分のオンライン相談で一緒に確認できます（調べ方もご案内します）。"
+        },
+        "urgent": {
+          "title": "期限までの段取りを、一緒に確認しませんか",
+          "lead": "期限が迫っています。まずは30分のオンライン相談で段取りを確認しませんか。"
+        },
+        "overdue": {
+          "title": "切り替えの順番を、一緒に整理しませんか",
+          "lead": "サポートや保守の期限は、すでに過ぎています。まずは30分のオンライン相談で、切り替えの順番を確認しませんか。"
+        },
+        "consultation": {
+          "title": "結果の解説と、進め方をご案内します",
+          "lead": "結果の解説と進め方を、30分のオンライン相談でご案内します。"
+        },
+        "information": {
+          "title": "まずは情報収集から始めませんか",
+          "lead": "情報収集の段階でも、お気軽にご相談ください。"
+        },
+        "button": "30分の無料オンライン相談を申し込む",
+        "accepted": "30分のオンライン相談のお申し込みを受け付けました"
+      },
       "stepLabel": "STEP {number}",
       "title": "診断結果",
       "subtitle": "{company} 様の回答にもとづく目安です",
@@ -622,14 +664,17 @@
       "difficulty": "移行難易度の目安",
       "urgency": "刷新の緊急度",
       "primaryChallenge": "優先して取り組むべき課題",
+      "answeredChallenges": "回答で選んだ課題：{items}",
       "selectedChallenges": "選択された課題",
       "stepsTitle": "小さく始めて、移行の先のAX化まで",
       "disclaimer": "本結果は回答内容にもとづく目安です。正確な移行方式・期間・費用は、現行仕様調査で確定します。",
       "answersTitle": "回答の内容",
       "answersJoiner": "、",
       "needsHearing": "「わからない」の回答が多いため、目安の精度は高くありません。個別相談で現状を伺うと、より正確な見通しをお伝えできます。",
+      "accessNeedsHearing": "「わからない」の回答が多いため、目安の精度は高くありません。30分のオンライン相談で現状を伺うと、より正確な見通しをお伝えできます。",
       "unknownsTitle": "社内で確認すると、結果の精度が上がる項目",
       "unknownsHint": "保守会社からの案内や資産一覧、契約書で確認できることが多いです。個別相談で、調べ方からご案内することもできます。",
+      "accessUnknownsHint": "保守会社からの案内や資産一覧、契約書で確認できることが多いです。30分のオンライン相談で、調べ方からご案内することもできます。",
       "offers": {
         "title": "情報収集から始める",
         "titlePrimary": "まずは情報収集から",
@@ -684,8 +729,11 @@
         "platform": "移行元",
         "note": "この結果は、ご回答の内容にもとづく目安です。詳しい見通しは、現行のシステムを確認したうえでご案内します。",
         "rediagnoseHint": "「わからない」とご回答いただいた項目が多いため、目安の精度は高くありません。社内で確認できた項目があれば、もう一度診断していただくと、より確かな目安をご覧いただけます。確かめ方がわからない場合は、個別相談で調べ方からご案内します。",
+        "accessRediagnoseHint": "「わからない」とご回答いただいた項目が多いため、目安の精度は高くありません。社内で確認できた項目があれば、もう一度診断していただくと、より確かな目安をご覧いただけます。確かめ方がわからない場合は、30分のオンライン相談で調べ方からご案内します。",
         "consultationLead": "結果の解説と移行の進め方を、個別相談でご案内します。担当者が診断結果をもとに、貴社の状況に合った進め方をご説明します。無理な営業はいたしません。",
         "consultationButton": "無料の個別相談を申し込む",
+        "accessConsultationLead": "結果の解説と進め方を、30分のオンライン相談でご案内します。担当者が診断結果をもとに、貴社の状況に合った進め方をご説明します。無理な営業はいたしません。",
+        "accessConsultationButton": "30分の無料オンライン相談を申し込む",
         "rediagnoseLead": "回答を見直す場合や、別のシステムを診断する場合は、こちらからどうぞ。",
         "rediagnoseButton": "もう一度診断する",
         "footer": "このメールは、AXマイグレーション 無料Web診断で診断結果の送付をお申し込みいただき、確認のボタンを押された方にお送りしています。"
@@ -825,8 +873,9 @@
       "help": "機械による自動送信を防ぐための確認です（Cloudflare社の仕組みを使います）。通常は数秒で自動的に終わります。チェック欄が表示された場合は、クリックしてください。",
       "done": "送信前の確認が完了しました",
       "unavailable": "送信前の確認を表示できませんでした。",
+      "failed": "送信前の確認を完了できませんでした。",
       "retry": "確認をやり直す",
-      "alternative": "社内のネットワークの設定によっては表示されないことがあります。その場合は、<link>お問い合わせページ</link>からご連絡ください。"
+      "alternative": "社内のネットワークの設定によっては、確認が表示されない、または完了しないことがあります。その場合は、<link>お問い合わせページ</link>からご連絡ください。"
     },
     "contact": {
       "description": "診断結果はこの画面に表示します。ご連絡先は、結果のご説明やご相談のご案内に使います。",
@@ -1007,7 +1056,6 @@
     "convertedLeads": "成約数",
     "newLeadsThisMonth": "今月の新規リード",
     "conversionRate": "コンバージョン率",
-    "averageScore": "平均スコア",
     "leadTrend": "リードトレンド",
     "leadStatusBreakdown": "リードステータス内訳",
     "count": "件",
@@ -1064,13 +1112,9 @@
         "mql": "MQL",
         "mqlInterest": "MQL（関心あり）",
         "fitOnly": "ほかに適合のみ {value}件",
-        "averageScore": "平均スコア",
-        "noScore": "—",
-        "scoreSuffix": "/100",
         "count": "{value}件",
         "previous": "前の{days}日間 {value}",
         "previousWithRate": "前の{days}日間 {value} → {rate}",
-        "noPreviousScore": "前の{days}日間 スコアなし",
         "deltaLabel": "前の{days}日間との差"
       },
       "pending": {
@@ -1169,6 +1213,7 @@
         },
         "period": "直近{days}日・日ごと（日本時間）",
         "periodWeekly": "直近{days}日・週ごと（日本時間）",
+        "updatedAt": "{time}時点",
         "chartLabel": "直近{days}日の{metric}は{total}件",
         "platforms": "移行元システムごと"
       },
@@ -1203,6 +1248,7 @@
   "leads": {
     "pipeline": "営業パイプライン",
     "inflowSource": "流入元",
+    "tags": "タグ",
     "conversionPoint": "コンバージョンポイント",
     "dealPhase": "商談フェーズ",
     "targetSystem": "対象システム",
@@ -1224,7 +1270,6 @@
     "totalLeads": "総リード数",
     "activeLeads": "アクティブリード",
     "conversionRate": "コンバージョン率",
-    "averageScore": "平均スコア",
     "createLead": "新規リード追加",
     "createLeadTitle": "新しいリードを作成",
     "createLeadDescription": "新しいリードの情報を入力してください。",
@@ -1267,6 +1312,17 @@
     "deleteConfirmTitle": "リードを削除しますか？",
     "deleteConfirmMessage": "この操作は取り消せません。{name}のすべてのデータが完全に削除されます。",
     "deleting": "削除中...",
+    "toast": {
+      "creating": "リードを作成中...",
+      "created": "リードを作成しました",
+      "createFailed": "リードの作成に失敗しました",
+      "updating": "リードを更新中...",
+      "updated": "リードを更新しました",
+      "updateFailed": "リードの更新に失敗しました",
+      "deleting": "リードを削除中...",
+      "deleted": "リードを削除しました",
+      "deleteFailed": "リードの削除に失敗しました"
+    },
     "rowsPerPage": "表示件数",
     "addFirstLead": "最初のリードを追加",
     "bulk": {
@@ -1319,6 +1375,297 @@
       "name": "山田 太郎",
       "company": "株式会社サンプル",
       "phone": "03-1234-5678"
+    }
+  },
+  "deals": {
+    "title": "商談",
+    "description": "商談をステージごとに並べ、金額と受注予定日で進み具合を見ます",
+    "create": "商談を作る",
+    "views": {
+      "label": "表示",
+      "board": "ボード",
+      "list": "一覧"
+    },
+    "kinds": {
+      "survey": "現行調査",
+      "migration": "移行",
+      "ax": "AX 化",
+      "maintenance": "保守・運用",
+      "other": "その他"
+    },
+    "stages": {
+      "qualification": "見極め",
+      "discovery": "課題の確認",
+      "proposal": "提案",
+      "negotiation": "条件の調整",
+      "won": "受注",
+      "lost": "失注"
+    },
+    "forecast": {
+      "pipeline": "パイプライン",
+      "best_case": "ベストケース",
+      "commit": "コミット",
+      "omitted": "予測に入れない",
+      "closed": "受注済み",
+      "lost": "失注",
+      "auto": "確度から自動（{category}）"
+    },
+    "fields": {
+      "name": "商談名",
+      "kind": "種類",
+      "stage": "ステージ",
+      "amount": "金額（税抜）",
+      "probability": "確度",
+      "weightedAmount": "加重金額",
+      "forecastCategory": "予測の区分",
+      "expectedCloseOn": "受注予定日",
+      "closedOn": "受注・失注の日",
+      "owner": "担当",
+      "nextStep": "次の一手",
+      "lostReason": "失注理由",
+      "lostNote": "失注の詳細",
+      "competitor": "競合",
+      "targetSystem": "対象システム",
+      "lead": "リード",
+      "company": "会社",
+      "updatedAt": "更新日"
+    },
+    "column": {
+      "summary": "{count}件・{amount}",
+      "weighted": "加重 {amount}",
+      "empty": "商談はありません",
+      "dropHere": "ここに移す",
+      "closedTitle": "{stage}（直近{days}日）"
+    },
+    "card": {
+      "daysInStage": "このステージで{days}日",
+      "overdue": "受注予定日を過ぎています",
+      "noNextAction": "リードに次の行動（タスク）がありません",
+      "noCloseDate": "受注予定日なし",
+      "noAmount": "金額未定",
+      "unassigned": "担当未定",
+      "move": "「{name}」のステージを移動",
+      "moveTo": "「{stage}」へ移す"
+    },
+    "filters": {
+      "label": "絞り込み",
+      "owner": "担当",
+      "mine": "自分の商談",
+      "all": "全員",
+      "kind": "種類",
+      "allKinds": "すべての種類",
+      "period": "受注予定",
+      "periods": {
+        "all": "すべて",
+        "thisMonth": "今月",
+        "nextMonth": "来月",
+        "thisQuarter": "今四半期"
+      }
+    },
+    "lostDialog": {
+      "title": "「{name}」を失注にする",
+      "description": "失注理由は、勝ち負けの分析に使います",
+      "fromWon": "リードは成約のままです。",
+      "reason": "失注理由",
+      "reasonPlaceholder": "選んでください",
+      "reasonRequired": "失注理由を選んでください",
+      "note": "詳細（任意）",
+      "competitor": "競合（任意）",
+      "confirm": "失注にする"
+    },
+    "wonDialog": {
+      "title": "「{name}」を受注にする",
+      "impact": "リード「{lead}」は成約になります。商談を開き直しても、リードは成約のままです。",
+      "impactUnnamed": "このリードは成約になります。商談を開き直しても、リードは成約のままです。",
+      "fromLost": "失注理由と詳細は消えます。",
+      "closedOn": "受注日",
+      "closedOnInvalid": "受注日は2000〜2100年の日付で入力してください",
+      "confirm": "受注にする"
+    },
+    "reopenDialog": {
+      "title": "「{name}」を開き直しますか？",
+      "lost": "失注理由（{reason}）と詳細は消えます。",
+      "lostNoReason": "失注理由と詳細は消えます。",
+      "probability": "確度は「{stage}」の既定値 {probability}% になり、予測の区分の上書きも消えます。",
+      "won": "リードは成約のままです。",
+      "confirm": "開き直す"
+    },
+    "form": {
+      "createTitle": "商談を作る",
+      "editTitle": "商談を編集",
+      "lead": "リード",
+      "leadPlaceholder": "会社名・氏名・メールで探す",
+      "leadRequired": "リードを選んでください",
+      "leadSearching": "探しています…",
+      "leadNotFound": "見つかりません",
+      "leadChange": "選び直す",
+      "required": "必須",
+      "namePlaceholder": "例：AS/400 現行調査",
+      "nameRequired": "商談名を入力してください",
+      "closeDateInvalid": "受注予定日は2000〜2100年の日付で入力してください",
+      "amountHelp": "税抜の円。未定なら空欄",
+      "amountInvalid": "0以上の整数で入力してください",
+      "probabilityHelp": "空欄ならステージの既定値（{value}%）",
+      "probabilityInvalid": "0〜100の整数で入力してください",
+      "ownerNone": "担当未定",
+      "ownerFromLead": "リードの担当者（いなければ自分）",
+      "forecastAuto": "確度から自動",
+      "wonToday": "受注日は今日になります。",
+      "submitCreate": "作成",
+      "submitEdit": "保存"
+    },
+    "list": {
+      "caption": "商談の一覧",
+      "empty": "条件に合う商談はありません"
+    },
+    "detail": {
+      "back": "商談へ戻る",
+      "stagePath": "ステージ",
+      "moveTo": "「{stage}」に移す",
+      "previousDeal": "前の商談",
+      "nextDeals": "続く商談",
+      "history": "履歴",
+      "historyEmpty": "履歴はありません",
+      "historyCreated": "作成",
+      "historyChanged": "{fields}を変更",
+      "notFound": "商談が見つかりません",
+      "deleteTitle": "商談を削除しますか？",
+      "deleteDescription": "「{name}」を削除します。元に戻せません。リードの状態は変わりません。"
+    },
+    "leadCard": {
+      "title": "商談",
+      "empty": "このリードの商談はまだありません",
+      "summary": "{count}件・開いている商談 {amount}"
+    },
+    "state": {
+      "loadError": "商談を読み込めませんでした",
+      "retry": "再読み込み",
+      "empty": "まだ商談はありません",
+      "emptyHint": "商談は、リードの詳細か、この画面の「商談を作る」から作ります",
+      "truncated": "表示は{limit}件までです。条件で絞り込んでください",
+      "readOnly": "閲覧のみです",
+      "forbiddenTitle": "商談を見る権限がありません",
+      "forbiddenBody": "商談と金額・予測・目標は、リードを閲覧できるメンバーだけが見られます（親組織からの閲覧者は除く）。"
+    },
+    "toasts": {
+      "created": "商談を作りました",
+      "saved": "保存しました",
+      "moved": "「{name}」を「{stage}」に移しました",
+      "deleted": "商談を削除しました",
+      "deleteError": "削除できませんでした。もう一度お試しください",
+      "error": "保存できませんでした。もう一度お試しください"
+    },
+    "historyFields": {
+      "created": "作成",
+      "kind": "種類",
+      "stage": "ステージ",
+      "amount": "金額",
+      "probability": "確度",
+      "forecastOverride": "予測の区分",
+      "expectedCloseOn": "受注予定日",
+      "ownerUserId": "担当"
+    }
+  },
+  "salesForecast": {
+    "title": "予測",
+    "description": "目標に対する受注と見込みを、期間ごと・担当者ごとに見ます",
+    "periodLabel": "期間",
+    "periods": {
+      "thisMonth": "今月",
+      "thisQuarter": "今四半期",
+      "thisFiscalYear": "今期"
+    },
+    "range": "{from}〜{to}",
+    "fiscalYearNote": "期の始まり：{month}月",
+    "setTargets": "目標を設定",
+    "tiles": {
+      "target": "目標",
+      "won": "受注済み",
+      "forecast": "見込み（受注＋コミット）",
+      "bestCase": "ベストケース",
+      "gap": "目標との差",
+      "weighted": "パイプライン（加重）",
+      "achievement": "達成率 {rate}",
+      "forecastAchievement": "見込みの達成率 {rate}",
+      "noTarget": "目標なし",
+      "above": "目標を {amount} 上回る見込み"
+    },
+    "table": {
+      "caption": "担当者ごとの予測",
+      "owner": "担当",
+      "target": "目標",
+      "won": "受注済み",
+      "commit": "コミット",
+      "bestCase": "ベストケース",
+      "pipeline": "パイプライン",
+      "weighted": "加重",
+      "achievement": "達成率",
+      "gap": "目標との差",
+      "total": "合計",
+      "unassigned": "担当未定",
+      "noTarget": "—",
+      "hidden": "非公開",
+      "hiddenNote": "担当者ごとの目標・達成率・目標との差は、目標を設定する人と本人の分だけを表示します"
+    },
+    "notes": {
+      "overdue": "受注予定日が期間より前のまま開いている商談が{count}件（{amount}）あります。数字には入りません。日付を見直してください",
+      "undated": "受注予定日が未定のまま開いている商談が{count}件（{amount}）あります。予測には入っていません",
+      "noAmount": "金額が未定の商談が{count}件あります",
+      "toBoard": "商談のボードを開く",
+      "toList": "商談の一覧を開く"
+    },
+    "changes": {
+      "title": "この1週間の動き",
+      "description": "1週間前の時点と比べた、商談の変化です",
+      "amountDelta": "開いている商談の金額の増減 {amount}",
+      "empty": "この1週間に変わった商談はありません",
+      "groups": {
+        "created": "新しい商談",
+        "advanced": "前進",
+        "movedBack": "後退",
+        "won": "受注",
+        "lost": "失注",
+        "reopened": "再開",
+        "slipped": "受注予定日の延期"
+      },
+      "summary": "{count}件・{amount}",
+      "stageChange": "{from} → {to}",
+      "dateChange": "受注予定日 {from} → {to}",
+      "noDate": "未定"
+    },
+    "targets": {
+      "title": "目標を設定",
+      "description": "月ごとの受注額の目標です（税抜）。空欄は目標なし",
+      "fiscalYear": "年度",
+      "fiscalYearOption": "{year}年度（{from}〜）",
+      "startMonth": "期の始まり",
+      "startMonthOption": "{month}月",
+      "startMonthHelp": "組織全体の設定です。変えると、目標の保存とは別にすぐ反映されます",
+      "startConfirmTitle": "{month}月始まりに変えますか？",
+      "startConfirmDescription": "四半期と今期の範囲が組織全体で変わります。",
+      "startConfirm": "変更する",
+      "organizationSettings": "組織の設定",
+      "month": "月",
+      "organization": "組織全体",
+      "organizationHelp": "組織全体の目標がない月は、担当者の目標の合計を使います",
+      "amountInvalid": "0以上の整数で入力してください",
+      "save": "保存",
+      "saving": "保存しています…",
+      "saved": "目標を保存しました",
+      "startSaved": "期の始まりを変更しました",
+      "error": "保存できませんでした。もう一度お試しください",
+      "loadError": "目標を読み込めませんでした",
+      "discardTitle": "保存していない入力があります",
+      "discardDescription": "切り替えると、この月の入力は消えます。",
+      "discardConfirm": "切り替える",
+      "readOnly": "目標を変更できるのはオーナーと管理者です",
+      "formerMember": "組織にいない人",
+      "formerMemberHelp": "組織にいない人の目標です。消すことだけができます（欄を空にして保存）",
+      "formerMemberInvalid": "組織にいない人の目標は、欄を空にして消すことだけができます"
+    },
+    "state": {
+      "loadError": "予測を読み込めませんでした",
+      "retry": "再読み込み"
     }
   },
   "settings": {
@@ -1383,6 +1730,21 @@
         "errorSoleOwner": "オーナーがあなただけの組織があるため、削除できません",
         "errorFailed": "アカウントを削除できませんでした。時間をおいてもう一度お試しください"
       },
+      "otherDevices": {
+        "title": "ほかの端末のログイン",
+        "description": "このブラウザ以外でログインしている端末やブラウザを、まとめてログアウトさせます。このブラウザはログインしたままです。なくした端末や、身に覚えのないログインがあるときに使ってください。",
+        "expiry": "ログインは、ログインした時から7日で切れます。使い続けても延びないので、7日ごとにログインし直してください。",
+        "copiedHere": "このブラウザのログインが写された心配があるときは、ここではなくパスワードを変えてください。変えると、このブラウザも新しいログインになり、ほかのログインはすべて切れます。",
+        "open": "ほかの端末からログアウト...",
+        "dialogTitle": "ほかの端末とブラウザからログアウトしますか？",
+        "dialogDescription": "このブラウザ以外のログインを、すべて終わらせます。ほかの端末やブラウザで使うときは、もう一度ログインしてください。",
+        "cancel": "キャンセル",
+        "confirm": "ログアウトさせる",
+        "signingOut": "ログアウト中...",
+        "success": "ほかの端末とブラウザからログアウトしました",
+        "error": "ほかの端末からログアウトできませんでした。時間をおいてもう一度お試しください",
+        "sessionEnded": "このブラウザのログインが切れています。ログインし直してから、もう一度お試しください"
+      },
       "profileSection": "プロフィール",
       "nameLabel": "氏名",
       "namePlaceholder": "山田 太郎",
@@ -1410,7 +1772,7 @@
       "passwordMinLength": "パスワードは8文字以上で入力してください",
       "passwordMismatch": "新しいパスワードが一致しません",
       "currentPasswordIncorrect": "現在のパスワードが正しくありません",
-      "passwordChangeSuccess": "パスワードを変更しました",
+      "passwordChangeSuccess": "パスワードを変更しました。ほかの端末やブラウザではログアウトしました",
       "passwordChangeError": "パスワードの変更に失敗しました",
       "deleteAccountSection": "アカウント削除",
       "deleteAccountWarning": "アカウントを削除すると、すべてのデータが削除されます。この操作は取り消せません。",
@@ -2122,7 +2484,9 @@
         "totalLeads": "総リード数",
         "newLeadsThisMonth": "今月の新規リード",
         "conversionRate": "コンバージョン率",
-        "vsLastPeriod": "前期間比"
+        "vsLastPeriod": "前期間比",
+        "mqlInterest": "MQL（関心あり）",
+        "mqlRate": "すべての期間のリードの {rate}%"
       },
       "tabs": {
         "overview": "概要",
@@ -2133,6 +2497,8 @@
       "charts": {
         "leadTrend": "リード推移",
         "totalLeads": "総リード数",
+        "total": "合計",
+        "leads": "リード数",
         "convertedLeads": "成約数",
         "statusBreakdown": "ステータス分布",
         "statusBreakdownPeriod": "{period}に登録されたリード",
@@ -2141,19 +2507,25 @@
         "conversionFunnel": "コンバージョンファネル",
         "responseTime": "応答時間",
         "sourceBreakdownPeriod": "{period}に登録されたリードの流入元",
-        "responseTimePending": "準備中（初回連絡の記録の追加後に表示）"
+        "responseTimePending": "準備中（初回連絡の記録の追加後に表示）",
+        "mqlLevels": "MQL段階の内訳",
+        "mqlLevelsDescription": "すべての期間のリード。MQL判定日のあるリード（手で MQL にしたものを含む）は関心ありに数えます。段階を押すと一覧で開きます"
       },
       "funnel": {
         "total": "総計",
         "conversionRate": "コンバージョン率",
         "overallConversion": "全体コンバージョン率",
-        "fromInitial": "初回リードからの変換率"
+        "fromInitial": "初回リードからの変換率",
+        "averageDays": "成約までの平均：{days}日"
+      },
+      "responseTimePeriods": {
+        "withinHour": "1時間以内",
+        "withinDay": "1-24時間",
+        "withinThreeDays": "1-3日",
+        "overThreeDays": "3日以上"
       },
       "noData": "データがありません",
-      "comingSoon": "近日公開予定",
-      "performanceSummary": {
-        "title": "パフォーマンスの概要"
-      },
+      "leadCount": "{count, number}件",
       "acquisitionCost": {
         "title": "流入元別の獲得費用",
         "description": "リードに記録した獲得費用（税抜）の合計です。費用が未記録のリードは件数にだけ含めています。",
@@ -2271,23 +2643,32 @@
     "commentPlaceholder": "コメントを追加...",
     "notePlaceholder": "メモを追加...",
     "replyPlaceholder": "返信を入力...",
+    "visibleToTeam": "書いたメモは、組織のメンバーに見えます",
     "noComments": "コメントはまだありません",
     "noCommentsHint": "最初のコメントやメモを追加しましょう",
+    "forbidden": "メモを見る権限がありません",
+    "loadError": "メモを読み込めませんでした",
     "reply": "返信",
     "edit": "編集",
     "delete": "削除",
+    "actions": "コメントの操作",
     "pin": "ピン留め",
     "unpin": "ピン解除",
     "save": "保存",
     "cancel": "キャンセル",
+    "send": "送信",
     "edited": "編集済み",
+    "editLabel": "コメントを編集",
     "createSuccess": "コメントを追加しました",
     "createError": "コメントの追加に失敗しました",
     "updateSuccess": "コメントを更新しました",
     "updateError": "コメントの更新に失敗しました",
     "deleteSuccess": "コメントを削除しました",
     "deleteError": "コメントの削除に失敗しました",
+    "deleteForbidden": "ほかの人の返信があるコメントは、オーナーだけが削除できます",
+    "deleteTitle": "このコメントを削除しますか？",
     "deleteConfirm": "このコメントを削除してもよろしいですか？この操作は取り消せません。",
+    "deleteConfirmWithReplies": "このコメントと、返信{count, number}件を削除します。この操作は取り消せません。",
     "pinSuccess": "コメントをピン留めしました",
     "unpinSuccess": "ピン留めを解除しました",
     "pinError": "ピン留めの更新に失敗しました"
@@ -2658,28 +3039,6 @@
     "averageDealValue": "平均取引額",
     "calculate": "ROIを計算"
   },
-  "comparison": {
-    "title": "比較分析",
-    "description": "期間間の指標を比較",
-    "currentPeriod": "現在の期間",
-    "previousPeriod": "前の期間",
-    "startDate": "開始日",
-    "endDate": "終了日",
-    "compare": "比較する",
-    "changes": "変化",
-    "insights": "インサイト",
-    "noInsights": "重要な変化は検出されませんでした",
-    "increase": "増加",
-    "decrease": "減少",
-    "metrics": {
-      "totalLeads": "総リード数",
-      "convertedLeads": "コンバージョン数",
-      "conversionRate": "コンバージョン率",
-      "averageScore": "平均スコア"
-    },
-    "bySource": "ソース別",
-    "byStatus": "ステータス別"
-  },
   "axSite": {
     "meta": {
       "title": "AXマイグレーション｜AS/400・NEC ACOSなどの基幹システムをWebへ｜エス・エー・エス株式会社",
@@ -2701,6 +3060,7 @@
         "reasons": "特長",
         "demo": "デモ",
         "steps": "進め方",
+        "paths": "進め方",
         "targets": "対象システム",
         "faq": "よくある質問",
         "column": "コラム"
@@ -3076,13 +3436,13 @@
   "axAccess": {
     "meta": {
       "title": "Access の業務ツール、直すか Web に移すか｜無料Web診断（Access版）｜エス・エー・エス株式会社",
-      "description": "その Access、直して使うか、Web に移すか。版や VBA、利用人数などを選ぶと、ツールに合った進め方の目安が分かります。直して使うか、Web に移すか、置き換えるか、合うものをお伝えします。無料・選択式・約3分。"
+      "description": "その Access、直して使うか、Web に移すか。版や VBA、画面・帳票の数などを選ぶと、ツールに合った進め方の目安が分かります。直して使うか、Web に移すか、置き換えるか、合うものをお伝えします。無料・選択式・約3分。"
     },
-    "floatingCta": "無料Web診断（Access版）をはじめる",
+    "floatingCta": "無料Web診断をはじめる",
     "hero": {
       "eyebrow": "Microsoft Access の業務ツールをお使いの方へ",
       "title": "その Access、直して使うか、Web に移すか。",
-      "lead": "版や VBA、利用人数などを選ぶと、ツールに合った進め方の目安が分かります。直して使うか、Web に移すか、置き換えるか、合うものをお伝えします。",
+      "lead": "版や VBA、画面・帳票の数などを選ぶと、ツールに合った進め方の目安が分かります。直して使うか、Web に移すか、置き換えるか、合うものをお伝えします。",
       "triggersLabel": "こんなきっかけはありませんか",
       "triggers": {
         "support": "Access 2016・2019・2021 のサポート終了",
@@ -3196,7 +3556,7 @@
         "inventory": {
           "label": "STEP 1",
           "title": "棚卸し",
-          "body": "30分のオンライン相談で、ツールの数や使われ方を伺います。必要に応じてファイルをお預かりし、画面と帳票、VBA、つながっている先を確かめます。"
+          "body": "30分のオンライン相談で、ツールの数や使われ方を伺います。必要に応じてファイルをお預かりし、画面と帳票、VBA、つながっている先を確かめます。ファイルを確かめる作業に費用がかかる場合は、前もってお伝えします。"
         },
         "decide": {
           "label": "STEP 2",
@@ -3266,6 +3626,10 @@
         "department": {
           "q": "大きな会社の、1つの部署だけでも相談できますか？",
           "a": "はい。1つの部署の、1つのツールからお受けします。"
+        },
+        "who": {
+          "q": "情報システムの担当者でなくても答えられますか？",
+          "a": "はい。すべて選択式で、わからない質問は「わからない」を選べます。詳しい質問は任意です。"
         },
         "consult": {
           "q": "相談はどのように進みますか？",
@@ -3882,11 +4246,11 @@
       "overview": "概要",
       "hearings": "ヒアリング",
       "activity": "活動履歴",
+      "memos": "メモ",
       "diagnosis": "診断回答"
     },
     "score": "スコア",
     "scoreValue": "スコア {score}",
-    "noScore": "スコアなし",
     "noDealPhase": "フェーズ未設定",
     "cards": {
       "contact": "連絡先",
@@ -4447,6 +4811,7 @@
     "change": "別の候補に変更する",
     "pick": "候補を選んでください",
     "confirmDone": "日程を確定しました",
+    "confirmToast": "{done}。{email}",
     "emailResult": {
       "sent": "回答者に確定の連絡を送りました",
       "not_requested": "メールは送っていません",
@@ -4973,6 +5338,7 @@
     },
     "agency": {
       "section": "営業代行の架電",
+      "inParens": "（{name}）",
       "hint": "担当者名と直通電話は、営業と、この行を作った人だけに見えます。次の連絡可能時期は「次回アクション日」に入れます。断られた行は、次回アクション日の30日前から「再アプローチ」に並びます。"
     },
     "calls": {

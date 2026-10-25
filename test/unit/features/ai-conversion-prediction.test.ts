@@ -10,15 +10,23 @@ import type {
   ConversionPrediction,
   ConversionFactor,
 } from '@/lib/features/ai/prediction/conversion';
+import { contactCompleteness } from '@/lib/features/ai/prompt-input';
 
-const { mockParse } = vi.hoisted(() => ({ mockParse: vi.fn() }));
+const { mockCreate, reply } = vi.hoisted(() => ({
+  mockCreate: vi.fn(),
+  /** The structured output as messages.create returns it: JSON in the text block */
+  reply: (output: unknown, stop_reason = 'end_turn') => ({
+    content: [{ type: 'text', text: JSON.stringify(output) }],
+    stop_reason,
+  }),
+}));
 
 // Mock Anthropic SDK
 vi.mock('@anthropic-ai/sdk', () => ({
   default: class MockAnthropic {
     messages = {
-      parse: mockParse.mockResolvedValue({
-        parsed_output: {
+      create: mockCreate.mockResolvedValue(
+        reply({
           probability: 75,
           confidence: 'medium',
           estimatedDaysToConversion: 14,
@@ -32,8 +40,8 @@ vi.mock('@anthropic-ai/sdk', () => ({
           ],
           recommendations: ['Schedule demo', 'Send case study'],
           risks: ['Budget concerns'],
-        },
-      }),
+        })
+      ),
     };
   },
 }));
@@ -42,20 +50,16 @@ describe('LeadForPrediction type', () => {
   it('should have correct structure', () => {
     const lead: LeadForPrediction = {
       id: 'lead-123',
-      email: 'test@example.com',
-      name: 'John Doe',
       company: 'Acme Corp',
-      phone: '+1234567890',
       status: 'new',
       score: 75,
       source: 'website',
       responses: { industry: 'tech', budget: '10k-50k' },
       createdAt: new Date(),
-      updatedAt: new Date(),
     };
 
     expect(lead.id).toBe('lead-123');
-    expect(lead.email).toBe('test@example.com');
+    expect(lead.company).toBe('Acme Corp');
     expect(lead.status).toBe('new');
     expect(lead.score).toBe(75);
   });
@@ -63,19 +67,14 @@ describe('LeadForPrediction type', () => {
   it('should allow null optional fields', () => {
     const lead: LeadForPrediction = {
       id: 'lead-456',
-      email: 'minimal@example.com',
-      name: null,
       company: null,
-      phone: null,
       status: 'new',
       score: null,
       source: null,
       responses: null,
       createdAt: new Date(),
-      updatedAt: new Date(),
     };
 
-    expect(lead.name).toBeNull();
     expect(lead.company).toBeNull();
     expect(lead.score).toBeNull();
   });
@@ -192,16 +191,12 @@ describe('Fallback prediction logic', () => {
   it('should increase probability for high score leads', () => {
     const highScoreLead: LeadForPrediction = {
       id: '1',
-      email: 'high@example.com',
-      name: 'High Scorer',
       company: 'BigCo',
-      phone: null,
       status: 'new',
       score: 85,
       source: null,
       responses: null,
       createdAt: new Date(),
-      updatedAt: new Date(),
     };
 
     // High score should contribute to higher probability
@@ -211,16 +206,12 @@ describe('Fallback prediction logic', () => {
   it('should increase probability for qualified status', () => {
     const qualifiedLead: LeadForPrediction = {
       id: '2',
-      email: 'qualified@example.com',
-      name: null,
       company: null,
-      phone: null,
       status: 'negotiating',
       score: null,
       source: null,
       responses: null,
       createdAt: new Date(),
-      updatedAt: new Date(),
     };
 
     expect(qualifiedLead.status).toBe('negotiating');
@@ -229,22 +220,19 @@ describe('Fallback prediction logic', () => {
   it('should consider profile completeness', () => {
     const completeLead: LeadForPrediction = {
       id: '3',
-      email: 'complete@example.com',
-      name: 'Complete User',
       company: 'Complete Corp',
-      phone: '+1234567890',
       status: 'new',
       score: null,
       source: null,
       responses: null,
       createdAt: new Date(),
-      updatedAt: new Date(),
     };
 
-    const hasName = !!completeLead.name;
-    const hasCompany = !!completeLead.company;
-    const hasPhone = !!completeLead.phone;
-    const completeness = [hasName, hasCompany, hasPhone].filter(Boolean).length;
+    // The name and the phone number stay in the app: only whether they are there is passed on
+    const contact = contactCompleteness({ name: 'Complete User', phone: '+1234567890' });
+    const completeness = [contact.hasName, Boolean(completeLead.company), contact.hasPhone].filter(
+      Boolean
+    ).length;
 
     expect(completeness).toBe(3);
   });
@@ -291,23 +279,17 @@ describe('Prediction prompt building', () => {
   it('should handle missing optional fields in prompt', () => {
     const lead: LeadForPrediction = {
       id: 'test',
-      email: 'test@example.com',
-      name: null,
       company: null,
-      phone: null,
       status: 'new',
       score: null,
       source: null,
       responses: null,
       createdAt: new Date(),
-      updatedAt: new Date(),
     };
 
-    const name = lead.name || 'Unknown';
     const company = lead.company || 'Unknown';
     const score = lead.score ?? 'Not scored';
 
-    expect(name).toBe('Unknown');
     expect(company).toBe('Unknown');
     expect(score).toBe('Not scored');
   });
@@ -316,10 +298,7 @@ describe('Prediction prompt building', () => {
 describe('predictConversion', () => {
   const lead: LeadForPrediction = {
     id: 'lead-1',
-    email: 'buyer@example.com',
-    name: null,
     company: 'Acme',
-    phone: null,
     status: 'qualified',
     score: 70,
     source: 'diagnostic',
@@ -330,29 +309,33 @@ describe('predictConversion', () => {
   it('should return the structured output from claude-sonnet-5-5', async () => {
     const { predictConversion } = await import('@/lib/features/ai/prediction/conversion');
 
-    const prediction = await predictConversion(lead);
+    const prediction = await predictConversion(lead, { hasName: true, hasPhone: false });
 
     expect(prediction.probability).toBe(75);
     expect(prediction.factors[0].impact).toBe('positive');
-    const request = mockParse.mock.calls.at(-1)?.[0];
+    // Nothing that points at a person goes to Claude (#406)
+    const prompt = mockCreate.mock.calls.at(-1)?.[0].messages[0].content as string;
+    expect(prompt).toContain('Acme');
+    expect(prompt).not.toMatch(/Email|Name:|Phone/);
+    const request = mockCreate.mock.calls.at(-1)?.[0];
     expect(request.model).toBe('claude-sonnet-5-5');
     expect(request.output_config.effort).toBe('low');
   });
 
   it('should clamp probability and weight into range', async () => {
     const { predictConversion } = await import('@/lib/features/ai/prediction/conversion');
-    mockParse.mockResolvedValueOnce({
-      parsed_output: {
+    mockCreate.mockResolvedValueOnce(
+      reply({
         probability: 140,
         confidence: 'high',
         estimatedDaysToConversion: null,
         factors: [{ name: 'f', impact: 'neutral', weight: 25, description: 'd' }],
         recommendations: [],
         risks: [],
-      },
-    });
+      })
+    );
 
-    const prediction = await predictConversion(lead);
+    const prediction = await predictConversion(lead, { hasName: true, hasPhone: false });
 
     expect(prediction.probability).toBe(100);
     expect(prediction.factors[0].weight).toBe(10);
@@ -360,21 +343,43 @@ describe('predictConversion', () => {
 
   it('should fall back to heuristics when the API fails', async () => {
     const { predictConversion } = await import('@/lib/features/ai/prediction/conversion');
-    mockParse.mockRejectedValueOnce(new Error('529 overloaded'));
+    mockCreate.mockRejectedValueOnce(new Error('529 overloaded'));
 
-    const prediction = await predictConversion(lead);
+    const prediction = await predictConversion(lead, { hasName: true, hasPhone: false });
 
     expect(prediction.probability).toBeGreaterThan(0);
     expect(prediction.factors.length).toBeGreaterThan(0);
   });
 
-  it('should fall back to heuristics when there is no parsed output', async () => {
+  it('should fall back to heuristics when there is no text block', async () => {
     const { predictConversion } = await import('@/lib/features/ai/prediction/conversion');
-    mockParse.mockResolvedValueOnce({ parsed_output: null, stop_reason: 'max_tokens' });
+    mockCreate.mockResolvedValueOnce({ content: [], stop_reason: 'max_tokens' });
 
-    const prediction = await predictConversion(lead);
+    const prediction = await predictConversion(lead, { hasName: true, hasPhone: false });
 
     expect(prediction.probability).toBeGreaterThan(0);
     expect(prediction.factors.length).toBeGreaterThan(0);
+  });
+
+  it('should fall back to heuristics when the text is cut off inside the JSON', async () => {
+    const { predictConversion } = await import('@/lib/features/ai/prediction/conversion');
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: '{"probability": 75, "confid' }],
+      stop_reason: 'max_tokens',
+    });
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const prediction = await predictConversion(lead, { hasName: true, hasPhone: false });
+
+    expect(prediction.probability).not.toBe(75);
+    expect(prediction.factors.length).toBeGreaterThan(0);
+    // The heuristics come from parsing the cut-off text, not from a call that never happened
+    expect(errorLog).toHaveBeenCalledWith(
+      'Conversion prediction error:',
+      expect.objectContaining({
+        message: expect.stringContaining('Failed to parse structured output'),
+      })
+    );
+    errorLog.mockRestore();
   });
 });

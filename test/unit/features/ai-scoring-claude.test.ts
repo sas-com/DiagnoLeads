@@ -6,8 +6,8 @@
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-const { mockParse, reportServerError } = vi.hoisted(() => ({
-  mockParse: vi.fn(),
+const { mockCreate, reportServerError } = vi.hoisted(() => ({
+  mockCreate: vi.fn(),
   reportServerError: vi.fn(),
 }));
 vi.mock('@/lib/ops/alert', () => ({ reportServerError }));
@@ -16,10 +16,16 @@ vi.mock('@/lib/ops/alert', () => ({ reportServerError }));
 vi.mock('@anthropic-ai/sdk', () => ({
   default: class MockAnthropic {
     messages = {
-      parse: mockParse,
+      create: mockCreate,
     };
   },
 }));
+
+/** The structured output as messages.create returns it: JSON in the text block */
+const reply = (output: unknown, stop_reason = 'end_turn') => ({
+  content: [{ type: 'text', text: JSON.stringify(output) }],
+  stop_reason,
+});
 
 // Import after mocking
 import { scoreLeadWithAI, scoreLeadsBatch, type LeadScore } from '@/lib/features/ai/scoring/claude';
@@ -129,12 +135,12 @@ describe('scoreLeadWithAI', () => {
         recommendedActions: ['Book a discovery call', 'Share the migration case study'],
         priority: 'high',
       };
-      mockParse.mockResolvedValueOnce({ parsed_output: parsed, stop_reason: 'end_turn' });
+      mockCreate.mockResolvedValueOnce(reply(parsed));
 
       const score = await scoreLeadWithAI({ email: 'cto@example.com', position: 'CTO' });
 
       expect(score).toEqual({ ...parsed, isFallback: false });
-      const request = mockParse.mock.calls[0][0];
+      const request = mockCreate.mock.calls[0][0];
       expect(request.model).toBe('claude-sonnet-5-5');
       expect(request.max_tokens).toBe(4000);
       expect(request.output_config.effort).toBe('low');
@@ -143,16 +149,15 @@ describe('scoreLeadWithAI', () => {
     });
 
     it('should fall back when the output is out of range', async () => {
-      mockParse.mockResolvedValueOnce({
-        parsed_output: {
+      mockCreate.mockResolvedValueOnce(
+        reply({
           score: 150,
           confidence: 'high',
           reasoning: 'x',
           recommendedActions: [],
           priority: 'high',
-        },
-        stop_reason: 'end_turn',
-      });
+        })
+      );
 
       const score = await scoreLeadWithAI({ email: 'range@example.com' });
 
@@ -161,29 +166,52 @@ describe('scoreLeadWithAI', () => {
     });
 
     it('should request every LeadScore field in the output schema', async () => {
-      mockParse.mockResolvedValueOnce({ parsed_output: null, stop_reason: 'end_turn' });
+      mockCreate.mockResolvedValueOnce({ content: [], stop_reason: 'end_turn' });
 
       await scoreLeadWithAI({ email: 'schema@example.com' });
 
-      const schema = mockParse.mock.calls[0][0].output_config.format.schema;
+      const schema = mockCreate.mock.calls[0][0].output_config.format.schema;
       expect([...schema.required].sort()).toEqual(
         ['confidence', 'priority', 'reasoning', 'recommendedActions', 'score'].sort()
       );
       expect(Object.keys(schema.properties).sort()).toEqual([...schema.required].sort());
     });
 
-    it('should fall back when there is no parsed output', async () => {
-      mockParse.mockResolvedValueOnce({ parsed_output: null, stop_reason: 'max_tokens' });
+    it('should fall back when there is no text block', async () => {
+      mockCreate.mockResolvedValueOnce({ content: [], stop_reason: 'max_tokens' });
 
       const score = await scoreLeadWithAI({ email: 'cut@example.com' });
 
       expect(score.score).toBe(50);
     });
+
+    it('should fall back when the text is cut off inside the JSON', async () => {
+      mockCreate.mockResolvedValueOnce({
+        content: [{ type: 'text', text: '{"score": 82, "confidence": "hi' }],
+        stop_reason: 'max_tokens',
+      });
+
+      const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const score = await scoreLeadWithAI({ email: 'cut@example.com' });
+
+      expect(score).toMatchObject({ score: 50, isFallback: true });
+      // The fallback comes from parsing the cut-off text, not from a call that never happened
+      expect(errorLog).toHaveBeenCalledWith(
+        'Error scoring lead with AI:',
+        expect.objectContaining({
+          message: expect.stringContaining('Failed to parse structured output'),
+        })
+      );
+      errorLog.mockRestore();
+      // A parse error has no HTTP status: nobody on call is alerted
+      expect(reportServerError).not.toHaveBeenCalled();
+    });
   });
 
   describe('alerts', () => {
     it('alerts the people on call when the model is gone (404), and still falls back', async () => {
-      mockParse.mockRejectedValueOnce(Object.assign(new Error('model not found'), { status: 404 }));
+      mockCreate.mockRejectedValueOnce(Object.assign(new Error('model not found'), { status: 404 }));
 
       const score = await scoreLeadWithAI({ email: 'gone@example.com' });
 
@@ -193,7 +221,7 @@ describe('scoreLeadWithAI', () => {
 
     it('does not alert when Claude is only busy (529)', async () => {
       reportServerError.mockClear();
-      mockParse.mockRejectedValueOnce(Object.assign(new Error('overloaded'), { status: 529 }));
+      mockCreate.mockRejectedValueOnce(Object.assign(new Error('overloaded'), { status: 529 }));
 
       await scoreLeadWithAI({ email: 'busy@example.com' });
 
@@ -203,7 +231,7 @@ describe('scoreLeadWithAI', () => {
 
   describe('error handling', () => {
     it('should return fallback score on error', async () => {
-      mockParse.mockRejectedValueOnce(new Error('529 overloaded'));
+      mockCreate.mockRejectedValueOnce(new Error('529 overloaded'));
       const lead = { email: 'error@example.com' };
       const score = await scoreLeadWithAI(lead);
 

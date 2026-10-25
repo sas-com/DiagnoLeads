@@ -18,7 +18,7 @@ import {
 } from '@/hooks/use-leads';
 import { useOrganization } from '@/hooks/use-organization';
 import { leadListHref, toLeadFilterInput } from '@/lib/features/leads/list-query';
-import { useLocale, useTranslations } from 'next-intl';
+import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -31,6 +31,7 @@ import { Card } from '@/components/ui/card';
 import { Metric, Text, Title } from '@/components/ui/metric';
 import { ProgressBar } from '@/components/ui/progress-bar';
 
+import type { ListedLead } from '@/components/features/leads/lead-card';
 import type { Lead } from '@/lib/db/schema';
 import { type CreateLeadInput, hasLostReason } from '@/lib/features/leads/types';
 import { trpc } from '@/lib/trpc/client';
@@ -134,6 +135,7 @@ function LeadsPageContent() {
   const tCommon = useTranslations('common');
   const tHandover = useTranslations('agencyHandovers.menu');
   const locale = useLocale();
+  const format = useFormatter();
   const router = useRouter();
   const { organizationId: contextOrgId, isLoading: contextLoading } = useOrganization();
 
@@ -149,7 +151,7 @@ function LeadsPageContent() {
   // shows the saved values after a change instead of the copy taken from the list
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   // Lead whose deletion is being confirmed from the list's row menu
-  const [leadToDelete, setLeadToDelete] = useState<Lead | null>(null);
+  const [leadToDelete, setLeadToDelete] = useState<ListedLead | null>(null);
   const access = useLeadAccess(organizationId);
   const leadHref = (id: string) => `/${locale}/leads/${id}`;
 
@@ -206,7 +208,7 @@ function LeadsPageContent() {
   const deleteLead = useDeleteLead();
 
   const leads = leadsData?.items || [];
-  const selectedLead: Lead | null =
+  const selectedLead: ListedLead | null =
     loadedLead ?? leads.find((lead) => lead.id === selectedLeadId) ?? null;
 
   const counts = statusCounts.data;
@@ -241,19 +243,19 @@ function LeadsPageContent() {
     setLeadToDelete(null);
   };
 
-  const handleLeadClick = (lead: Lead) => {
+  const handleLeadClick = (lead: ListedLead) => {
     setSelectedLeadId(lead.id);
     setDetailsSheetOpen(true);
   };
 
   // Editing happens in place on the lead page: the row menu opens it with the pipeline card in
   // edit mode (Refs #109)
-  const handleRowEdit = (lead: Lead) => {
+  const handleRowEdit = (lead: ListedLead) => {
     router.push(`${leadHref(lead.id)}?edit=pipeline`);
   };
 
   // A lost lead should say why: offer to add it on the lead page, without blocking the list
-  const handleLost = (lead: Lead) => {
+  const handleLost = (lead: ListedLead) => {
     // 保留 is dropped when the lead is lost (#445): it is no reason for the loss
     if (hasLostReason(lead.lostReason)) return;
     toast(tDetail('quick.lostReasonPrompt'), {
@@ -316,9 +318,7 @@ function LeadsPageContent() {
             <div className="flex items-start justify-between">
               <div>
                 <Text>{t('totalLeads')}</Text>
-                <Metric className="mt-2">
-                  {totalLeads.toLocaleString(locale === 'ja' ? 'ja-JP' : 'en-US')}
-                </Metric>
+                <Metric className="mt-2">{format.number(totalLeads)}</Metric>
               </div>
               <div className="p-3 bg-blue-50 rounded-xl">
                 <Users className="h-6 w-6 text-blue-600" />
@@ -336,12 +336,8 @@ function LeadsPageContent() {
           <Card className="p-6 h-full" decoration="top" decorationColor="yellow">
             <div className="flex items-start justify-between">
               <div>
-                <Text>{t('activeLeads') || 'Active Leads'}</Text>
-                <Metric className="mt-2">
-                  {(nurturingLeads + negotiatingLeads).toLocaleString(
-                    locale === 'ja' ? 'ja-JP' : 'en-US'
-                  )}
-                </Metric>
+                <Text>{t('activeLeads')}</Text>
+                <Metric className="mt-2">{format.number(nurturingLeads + negotiatingLeads)}</Metric>
               </div>
               <div className="p-3 bg-yellow-50 rounded-xl">
                 <Target className="h-6 w-6 text-yellow-600" />
@@ -365,7 +361,7 @@ function LeadsPageContent() {
           <Card className="p-6 h-full" decoration="top" decorationColor="violet">
             <div className="flex items-start justify-between">
               <div>
-                <Text>{t('conversionRate') || 'Conversion Rate'}</Text>
+                <Text>{t('conversionRate')}</Text>
                 <Metric className="mt-2">{conversionRate.toFixed(1)}%</Metric>
               </div>
               <div className="p-3 bg-violet-50 rounded-xl">

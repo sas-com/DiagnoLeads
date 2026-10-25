@@ -18,4 +18,8 @@ describe('cache headers', () => {
     expect(getCacheHeaders('/api/trpc/leads.list')['Cache-Control']).toContain('no-store');
     expect(getCacheHeaders('/api/media/file/a.png')['Cache-Control']).toContain('no-store');
   });
+
+  it('never keeps the QR entry, so pausing a campaign takes effect on the next scan (#503)', () => {
+    expect(getCacheHeaders('/q/AbCd2345')).toEqual({ 'Cache-Control': 'no-store' });
+  });
 });

@@ -6,15 +6,17 @@
 import * as XLSX from 'xlsx';
 import { z } from 'zod';
 import { leadStatusEnum, normalizeLeadStatus } from './types/pipeline';
+import { LEAD_BULK_CREATE_MAX, leadTextSchema } from './types/schemas';
 
 /**
- * Imported lead row schema
+ * Imported lead row schema. The text limits are those of leads.bulkCreate (#575): a row over
+ * them is shown as an error and left out, instead of the server refusing every row.
  */
 const importLeadRowSchema = z.object({
-  email: z.string().email('Invalid email format'),
-  name: z.string().optional(),
-  company: z.string().optional(),
-  phone: z.string().optional(),
+  email: leadTextSchema('email').email('Invalid email format'),
+  name: leadTextSchema('name').optional(),
+  company: leadTextSchema('company').optional(),
+  phone: leadTextSchema('phone').optional(),
   status: z.preprocess(normalizeLeadStatus, leadStatusEnum).default('new'),
   source: z.enum(['website', 'embed', 'api']).optional(),
   score: z.coerce.number().int().min(0).max(100).optional(),
@@ -29,7 +31,13 @@ export interface ImportRowResult {
   row: number;
   success: boolean;
   data?: ImportLeadRow;
+  /** Why the row is left out, starting with the file's column it is about */
   error?: string;
+  /**
+   * A value over its length limit (#575): the file's column and the limit, so the screen names
+   * the column and tells the limit in its own language (`error` has the Japanese message)
+   */
+  tooLong?: { column: string; max: number };
 }
 
 /**
@@ -189,13 +197,28 @@ export function validateRow(
       data: validated,
     };
   } catch (error) {
-    const message = error instanceof z.ZodError ? error.errors[0]?.message : String(error);
+    if (!(error instanceof z.ZodError)) {
+      return { row: rowIndex, success: false, error: String(error) || 'Validation failed' };
+    }
+    const [issue] = error.errors;
+    const column = issue ? columnOf(issue, mapping) : undefined;
+    const message = issue?.message || 'Validation failed';
     return {
       row: rowIndex,
       success: false,
-      error: message || 'Validation failed',
+      error: column ? `${column}: ${message}` : message,
+      ...(column && issue?.code === z.ZodIssueCode.too_big && issue.type === 'string'
+        ? { tooLong: { column, max: Number(issue.maximum) } }
+        : {}),
     };
   }
+}
+
+/** The file's column holding the value an issue is about (the lead field when none is mapped) */
+function columnOf(issue: z.ZodIssue, mapping: ColumnMapping): string | undefined {
+  const [field] = issue.path;
+  if (typeof field !== 'string') return undefined;
+  return mapping[field as keyof ColumnMapping] ?? field;
 }
 
 /**
@@ -224,6 +247,44 @@ export function processImport(
     totalRows: rows.length,
     successCount,
     errorCount,
+    results,
+  };
+}
+
+/**
+ * The valid rows of an import, in the file's order, in the parts one leads.bulkCreate takes
+ * (LEAD_BULK_CREATE_MAX each, #604). The screen sends them one after another.
+ */
+export function importBatches(
+  summary: ImportSummary,
+  size: number = LEAD_BULK_CREATE_MAX
+): ImportLeadRow[][] {
+  const rows = summary.results.flatMap((result) =>
+    result.success && result.data ? [result.data] : []
+  );
+  const batches: ImportLeadRow[][] = [];
+  for (let start = 0; start < rows.length; start += size) {
+    batches.push(rows.slice(start, start + size));
+  }
+  return batches;
+}
+
+/**
+ * The import left once its first `imported` valid rows are created (the parts sent before one
+ * failed, #604): those rows are dropped and the rest kept, the rows with an error too, so that
+ * importing again does not create a lead twice
+ */
+export function withoutImportedRows(summary: ImportSummary, imported: number): ImportSummary {
+  let skipped = 0;
+  const results = summary.results.filter((result) => {
+    if (!(result.success && result.data) || skipped >= imported) return true;
+    skipped++;
+    return false;
+  });
+  return {
+    totalRows: results.length,
+    successCount: summary.successCount - skipped,
+    errorCount: summary.errorCount,
     results,
   };
 }

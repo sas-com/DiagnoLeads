@@ -268,6 +268,14 @@ describe('Integration: shouldSkipI18nMiddleware', () => {
     expect(shouldSkipI18nMiddleware('/scripts/app.js')).toBe(true);
   });
 
+  it('should skip the QR entry of campaigns, a route outside [locale] (#503)', () => {
+    expect(shouldSkipI18nMiddleware('/q/AbCd2345')).toBe(true);
+    // Only that segment: other pages that start with q keep their locale
+    expect(shouldSkipI18nMiddleware('/q')).toBe(false);
+    expect(shouldSkipI18nMiddleware('/quiz')).toBe(false);
+    expect(shouldSkipI18nMiddleware('/ja/q/AbCd2345')).toBe(false);
+  });
+
   it('should not skip regular pages', () => {
     expect(shouldSkipI18nMiddleware('/dashboard')).toBe(false);
     expect(shouldSkipI18nMiddleware('/settings/profile')).toBe(false);

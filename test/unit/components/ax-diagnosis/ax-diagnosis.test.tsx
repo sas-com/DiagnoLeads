@@ -3,6 +3,7 @@
  */
 import { AxDiagnosisFlow } from '@/components/features/ax-diagnosis/ax-diagnosis-flow';
 import { AxDiagnosisResult } from '@/components/features/ax-diagnosis/ax-diagnosis-result';
+import { LOAD_TIMEOUT_MS } from '@/components/features/diagnosis-runner/turnstile-widget';
 import { axMigrationDefinition } from '@/lib/features/diagnostics/ax-migration/definition';
 import { evaluateAxMigration, toPublicResult } from '@/lib/features/diagnostics/ax-migration/evaluate';
 import messages from '@/locales/ja/common.json';
@@ -395,7 +396,11 @@ describe('AxDiagnosisFlow', () => {
 });
 
 describe('AxDiagnosisFlow: another system and the bot check', () => {
-  type RenderOptions = { callback: (token: string) => void };
+  type RenderOptions = {
+    callback: (token: string) => void;
+    'error-callback': (code?: string) => void;
+    'unsupported-callback': () => void;
+  };
   const installTurnstile = (onRender: (options: RenderOptions) => void = () => {}) => {
     let count = 0;
     const turnstile = {
@@ -591,7 +596,103 @@ describe('AxDiagnosisFlow: another system and the bot check', () => {
     await user.click(screen.getByRole('button', { name: '確認をやり直す' }));
     await waitFor(() => expect(scripts()).toHaveLength(1));
     expect(screen.queryByText('送信前の確認を表示できませんでした。')).not.toBeInTheDocument();
-    for (const script of scripts()) script.remove();
+    // Settle the load still under way, so the next test starts a new one
+    for (const script of scripts()) script.dispatchEvent(new Event('error'));
+  });
+
+  const expectAlternativeContact = (heading = '送信前の確認を表示できませんでした。') => {
+    // Read out when it replaces the check
+    expect(screen.getByRole('alert')).toHaveTextContent(heading);
+    expect(screen.getByRole('link', { name: '03-5427-3663' })).toHaveAttribute('href', 'tel:+81354273663');
+    expect(screen.getByRole('link', { name: 'dx-agency@sas-com.com' })).toHaveAttribute(
+      'href',
+      'mailto:dx-agency@sas-com.com'
+    );
+    expect(screen.getByRole('button', { name: '確認をやり直す' })).toBeInTheDocument();
+  };
+
+  it('offers the phone and email when the script never answers (#537)', async () => {
+    window.turnstile = undefined;
+    const realSetTimeout = globalThis.setTimeout;
+    const timeouts: Array<() => void> = [];
+    const spy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(((
+      handler: () => void,
+      ms?: number,
+      ...rest: unknown[]
+    ) => {
+      if (ms === LOAD_TIMEOUT_MS) timeouts.push(handler);
+      return realSetTimeout(handler, ms, ...rest);
+    }) as typeof setTimeout);
+    const scripts = () =>
+      document.head.querySelectorAll('script[src^="https://challenges.cloudflare.com/"]');
+    try {
+      const user = userEvent.setup();
+      render(withIntl(<AxDiagnosisFlow locale="ja" turnstileSiteKey="site-key" />));
+      await answerAs400(user);
+      await waitFor(() => expect(scripts()).toHaveLength(1));
+      expect(screen.queryByText('送信前の確認を表示できませんでした。')).not.toBeInTheDocument();
+      expect(timeouts).toHaveLength(1);
+
+      // Packets dropped by a firewall: neither load nor error ever comes
+      const company = screen.getByLabelText(/会社名/);
+      company.focus();
+      await act(async () => timeouts[0]());
+      expectAlternativeContact();
+      // Not taken away from what the respondent is typing
+      expect(company).toHaveFocus();
+      // The hanging script is dropped, so trying again loads it anew
+      expect(scripts()).toHaveLength(0);
+      await user.click(screen.getByRole('button', { name: '確認をやり直す' }));
+      await waitFor(() => expect(scripts()).toHaveLength(1));
+    } finally {
+      spy.mockRestore();
+      for (const script of scripts()) script.dispatchEvent(new Event('error'));
+    }
+  });
+
+  it('offers the phone and email when the check keeps failing (#537)', async () => {
+    const renders: RenderOptions[] = [];
+    const turnstile = installTurnstile((options) => renders.push(options));
+    const user = userEvent.setup();
+    render(withIntl(<AxDiagnosisFlow locale="ja" turnstileSiteKey="site-key" />));
+    await answerAs400(user);
+    await waitFor(() => expect(renders).toHaveLength(1));
+
+    // One failure: Turnstile tries again by itself, and a pass resets the count
+    await act(async () => renders[0]['error-callback']('300010'));
+    await act(async () => renders[0].callback('token-1'));
+    await act(async () => renders[0]['error-callback']('300010'));
+    expect(screen.getByTestId('ax-turnstile')).toBeInTheDocument();
+    expect(screen.queryByText('送信前の確認を表示できませんでした。')).not.toBeInTheDocument();
+
+    // Failing again in a row, while the respondent is on the check: it is given up, saying
+    // it could not be completed (it was shown), and focus moves to trying again
+    const frame = document.createElement('button');
+    screen.getByTestId('ax-turnstile').appendChild(frame);
+    frame.focus();
+    await act(async () => renders[0]['error-callback']('300010'));
+    expectAlternativeContact('送信前の確認を完了できませんでした。');
+    expect(screen.getByRole('button', { name: '確認をやり直す' })).toHaveFocus();
+    expect(turnstile.remove).toHaveBeenCalledWith('widget-1');
+    // The token from before the failures is not sent
+    await fillContact(user);
+    await user.click(screen.getByRole('button', { name: /診断結果を見る/ }));
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: '確認をやり直す' }));
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalledTimes(2));
+    expect(screen.getByTestId('ax-turnstile')).toBeInTheDocument();
+  });
+
+  it('offers the phone and email when the browser is not supported (#537)', async () => {
+    const renders: RenderOptions[] = [];
+    installTurnstile((options) => renders.push(options));
+    const user = userEvent.setup();
+    render(withIntl(<AxDiagnosisFlow locale="ja" turnstileSiteKey="site-key" />));
+    await answerAs400(user);
+    await waitFor(() => expect(renders).toHaveLength(1));
+    await act(async () => renders[0]['unsupported-callback']());
+    expectAlternativeContact();
   });
 
   it('says how long to wait when there were too many submissions', async () => {
@@ -641,6 +742,32 @@ describe('AxDiagnosisResult', () => {
     ],
   };
 
+  it('lists the answers behind the primary challenge, so the pamphlet text never stands alone (#658)', () => {
+    // Only the support deadline and remote use: both count as モノ, whose text speaks of new
+    // products and markets
+    const answers = { ...as400Answers, challenges: ['deadline', 'remote'] };
+    const result = toPublicResult(evaluateAxMigration(answers));
+    expect(result.challenges.primary).toBe('agility');
+    renderResult({ answers, result });
+
+    const challenge = within(screen.getByTestId('ax-result-challenge'));
+    expect(challenge.getByText('モノ：市場の変化に対応できないシステム')).toBeInTheDocument();
+    expect(challenge.getByTestId('ax-result-answered')).toHaveTextContent(
+      '回答で選んだ課題：サーバー・OS・ソフトの保守期限が迫っている、社外やスマホ、テレワークから使えない'
+    );
+  });
+
+  it('lists the Access answers behind the primary challenge too (#658)', () => {
+    const answers = { ...accessAnswers, access_challenges: ['support'] };
+    const result = toPublicResult(evaluateAxMigration(answers));
+    expect(result.challenges.primary).toBe('agility');
+    renderResult({ platform: 'access', answers, result });
+
+    expect(screen.getByTestId('ax-result-answered')).toHaveTextContent(
+      '回答で選んだ課題：Microsoft 365・64bit 化・PC の入れ替えで動かない（動かなくなりそう）'
+    );
+  });
+
   it('does not call a passed deadline close (#288)', () => {
     const high = { ...publicResult, needsHearing: false, urgency: { ...publicResult.urgency, level: 'high' as const } };
     const { unmount } = renderResult({
@@ -652,6 +779,16 @@ describe('AxDiagnosisResult', () => {
 
     renderResult({ result: { ...high, reasons: { ...high.reasons, urgency: ['maintenance_none'] } } });
     expect(screen.getByText('期限までの段取りを、一緒に確認しませんか')).toBeInTheDocument();
+  });
+
+  it('describes the agility challenge as the brochure ver01 and the landing page do (#76)', () => {
+    renderResult({
+      result: { ...publicResult, challenges: { ...publicResult.challenges, primary: 'agility' } },
+    });
+    expect(screen.getByText(/新商品・新サービスの展開を妨げています/)).toBeInTheDocument();
+    expect(screen.getByText(/短いサイクルで機能を追加しやすく、市場の変化に対応しやすい仕組みへ/)).toBeInTheDocument();
+    // Not in the brochure: ways of working, the support deadline, use from outside the office
+    expect(screen.queryByText(/働き方の変化|社外からの利用/)).not.toBeInTheDocument();
   });
 
   it('shows no documents or seminars unless the organization offers them (#153)', () => {
@@ -739,6 +876,52 @@ describe('AxDiagnosisResult', () => {
       expect(screen.getByTestId('ax-result-checkpoints')).toHaveTextContent('ブラウザから使えるWebシステムにし');
     });
 
+    it('names the consultation once on an Access result with many unknowns (#674)', () => {
+      const answers = { access_tools: 'unknown', access_screens_forms: 'unknown' };
+      renderAccess(answers, { result: { ...accessResult(answers), needsHearing: true } });
+      expect(screen.getByTestId('ax-result-unknowns')).toHaveTextContent(
+        '30分のオンライン相談で、調べ方からご案内することもできます。'
+      );
+      expect(screen.getByText(/30分のオンライン相談で現状を伺うと/)).toBeInTheDocument();
+      // Across the whole page, not one element at a time
+      expect(document.body).not.toHaveTextContent('個別相談');
+    });
+
+    it('narrows what to replace, not what to migrate, on the replace path (#674)', () => {
+      // Many tools lead to the web path by default; an organization's rules can still replace
+      const answers = { access_features: ['none'], access_screens_forms: 'lt20' };
+      const replace = accessResult(answers);
+      renderAccess(answers, {
+        result: { ...replace, checkpoints: ['access_replace_fit', 'access_inventory'] },
+      });
+      expect(screen.getByTestId('ax-result-access-path')).toHaveAttribute('data-path', 'replace');
+      const checkpoints = screen.getByTestId('ax-result-checkpoints');
+      expect(checkpoints).toHaveTextContent('置き換えの対象を絞ります');
+      expect(checkpoints).not.toHaveTextContent('移行の対象');
+      cleanup();
+
+      // The web path still narrows what to migrate
+      renderAccess({ access_challenges: ['remote'], access_tools: '21_50' });
+      expect(screen.getByTestId('ax-result-access-path')).toHaveAttribute('data-path', 'web');
+      expect(screen.getByTestId('ax-result-checkpoints')).toHaveTextContent('移行の対象を絞ります');
+    });
+
+    it.each([
+      ['fix', {}, 'Microsoft Accessを直して使い続けるときに確認すること'],
+      ['web', { access_challenges: ['remote'] }, 'Microsoft AccessからWebシステムへ移行するときに確認すること'],
+      [
+        'replace',
+        { access_features: ['none'], access_screens_forms: 'lt20' },
+        'Microsoft Accessから既製サービスに置き換えるときに確認すること',
+      ],
+    ])('titles the checkpoints after the %s path (#507)', (path, answers, title) => {
+      renderAccess(answers);
+      expect(screen.getByTestId('ax-result-access-path')).toHaveAttribute('data-path', path);
+      expect(
+        within(screen.getByTestId('ax-result-checkpoints')).getByRole('heading', { name: title })
+      ).toBeInTheDocument();
+    });
+
     it.each([
       ['fix', {}],
       ['web', { access_challenges: ['remote'] }],
@@ -746,7 +929,9 @@ describe('AxDiagnosisResult', () => {
     ])('keeps the next step for the %s path', (path, answers) => {
       renderAccess(answers);
       expect(screen.getByTestId('ax-result-access-path')).toHaveAttribute('data-path', path);
-      expect(screen.getAllByRole('button', { name: /無料の個別相談を申し込む/ })).toHaveLength(2);
+      // The consultation of the Access page, by the same name everywhere on the result (#538)
+      expect(screen.getAllByRole('button', { name: /30分の無料オンライン相談を申し込む/ })).toHaveLength(2);
+      expect(screen.queryByText(/個別相談|移行の進め方/)).not.toBeInTheDocument();
     });
 
     /** Titles of the next steps, in order */
@@ -754,6 +939,10 @@ describe('AxDiagnosisResult', () => {
       within(screen.getByTestId('ax-result-steps'))
         .getAllByRole('listitem')
         .map((item) => item.querySelectorAll('p')[1]?.textContent);
+    const stepLabels = () =>
+      within(screen.getByTestId('ax-result-steps'))
+        .getAllByRole('listitem')
+        .map((item) => item.querySelectorAll('p')[0]?.textContent);
 
     it('updates the path after the follow-up questions and drops the hint', async () => {
       fetchMock.mockResolvedValue(
@@ -794,7 +983,11 @@ describe('AxDiagnosisResult', () => {
       const steps = screen.getByTestId('ax-result-steps');
       expect(within(steps).getByRole('heading', { name: 'このあとの流れ' })).toBeInTheDocument();
       expect(steps).toHaveTextContent('次は、30分のオンライン相談で棚卸しを始めます。');
+      // Whether checking the files costs anything is said before, never left to guess (#538)
+      expect(steps).toHaveTextContent('ファイルを確かめる作業に費用がかかる場合は、前もってお伝えします。');
       expect(stepTitles()).toEqual(titles);
+      // Numbered as before (#457), not in the main page's phases (#537)
+      expect(stepLabels()).toEqual(titles.map((_, index) => (index === 0 ? 'NEXT STEP' : `STEP ${index + 1}`)));
       // Never the migration to a web system of the other paths' steps
       expect(steps).not.toHaveTextContent('最新のWebシステムへ移行します');
       expect(steps).not.toHaveTextContent('簡易診断');
@@ -803,11 +996,19 @@ describe('AxDiagnosisResult', () => {
       expect(screen.queryByText(/現行仕様調査で確定します/)).not.toBeInTheDocument();
     });
 
-    it('keeps the steps of the other systems (#457)', () => {
+    it('lays out the steps of the other systems as the main page does (#537)', () => {
       renderResult();
       const steps = screen.getByTestId('ax-result-steps');
       expect(within(steps).getByRole('heading', { name: '小さく始めて、移行の先のAX化まで' })).toBeInTheDocument();
-      expect(stepTitles()).toEqual(['簡易診断', '現行仕様調査', 'マイグレーション', 'AX化']);
+      // The free consultation comes next, as on the main page and the button below
+      expect(steps).toHaveTextContent('いまここ：無料Web診断が完了しました。次は無料の個別相談です。');
+      expect(stepTitles()).toEqual(['無料の個別相談', '簡易診断', '現行仕様調査', 'マイグレーション', 'AX化']);
+      expect(stepLabels()).toEqual(['NEXT STEP', 'その次に', 'Phase 1', 'Phase 2', 'Phase 3']);
+      // The next one across the row, two by two below: four in a row are too narrow here
+      const list = within(steps).getByRole('list');
+      expect(list).toHaveClass('sm:grid-cols-2');
+      expect(list).not.toHaveClass('lg:grid-cols-4');
+      expect(within(list).getAllByRole('listitem')[0]).toHaveClass('sm:col-span-2');
       expect(screen.getByText(/現行仕様調査で確定します/)).toBeInTheDocument();
     });
 
@@ -815,8 +1016,9 @@ describe('AxDiagnosisResult', () => {
       fetchMock.mockResolvedValue(jsonResponse(200, { ok: true, alreadyRequested: false }));
       const user = userEvent.setup();
       renderAccess();
-      await user.click(screen.getAllByRole('button', { name: /無料の個別相談を申し込む/ })[0]);
-      expect(await screen.findByText('所要時間の目安：30分程度（オンライン）')).toBeInTheDocument();
+      await user.click(screen.getAllByRole('button', { name: /30分の無料オンライン相談を申し込む/ })[0]);
+      expect(await screen.findByText('30分のオンライン相談のお申し込みを受け付けました')).toBeInTheDocument();
+      expect(screen.getByText('所要時間の目安：30分程度（オンライン）')).toBeInTheDocument();
       expect(screen.queryByText('所要時間の目安：60分程度')).not.toBeInTheDocument();
       expect(screen.queryByRole('group', { name: 'ご希望の形式' })).not.toBeInTheDocument();
     });
@@ -837,6 +1039,8 @@ describe('AxDiagnosisResult', () => {
     renderResult({ answers: { ...as400Answers, integrations: 'unknown', as400_languages: ['unknown'] } });
     const unknowns = screen.getByTestId('ax-result-unknowns');
     expect(unknowns).toHaveTextContent('社内で確認すると、結果の精度が上がる項目');
+    // Only Access names its 30-minute online consultation (#674)
+    expect(unknowns).toHaveTextContent('個別相談で、調べ方からご案内することもできます。');
     expect(within(unknowns).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
       '他のシステムや取引先とのデータのやり取りは、いくつありますか？',
       'どんな言語・方法で作られていますか？',

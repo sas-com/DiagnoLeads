@@ -4,6 +4,7 @@ import type { HearingPrefillSnapshot } from '@/lib/features/lead-hearings/types/
 import { relations, sql } from 'drizzle-orm';
 import {
   type AnyPgColumn,
+  bigint,
   boolean,
   check,
   customType,
@@ -1356,22 +1357,33 @@ export type NotificationType =
  * Notifications Table
  * Stores in-app notifications for users
  */
-export const notifications = pgTable('notifications', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  userId: uuid('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  organizationId: uuid('organization_id').references(() => organizations.id, {
-    onDelete: 'cascade',
-  }),
-  type: text('type').$type<NotificationType>().notNull(),
-  title: text('title').notNull(),
-  message: text('message').notNull(),
-  data: jsonb('data').$type<Record<string, unknown>>(),
-  read: boolean('read').default(false).notNull(),
-  readAt: timestamp('read_at'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+export const notifications = pgTable(
+  'notifications',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    organizationId: uuid('organization_id').references(() => organizations.id, {
+      onDelete: 'cascade',
+    }),
+    type: text('type').$type<NotificationType>().notNull(),
+    title: text('title').notNull(),
+    message: text('message').notNull(),
+    data: jsonb('data').$type<Record<string, unknown>>(),
+    read: boolean('read').default(false).notNull(),
+    readAt: timestamp('read_at'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    // The bell lists and counts a member's notifications of an organization, newest first (#433)
+    index('notifications_user_org_created_idx').on(
+      table.userId,
+      table.organizationId,
+      table.createdAt
+    ),
+  ]
+);
 
 /**
  * Notification Preferences Table
@@ -1463,16 +1475,24 @@ export const tags = pgTable('tags', {
 /**
  * Lead-Tag junction table (many-to-many)
  */
-export const leadTags = pgTable('lead_tags', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  leadId: uuid('lead_id')
-    .notNull()
-    .references(() => leads.id, { onDelete: 'cascade' }),
-  tagId: uuid('tag_id')
-    .notNull()
-    .references(() => tags.id, { onDelete: 'cascade' }),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+export const leadTags = pgTable(
+  'lead_tags',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    leadId: uuid('lead_id')
+      .notNull()
+      .references(() => leads.id, { onDelete: 'cascade' }),
+    tagId: uuid('tag_id')
+      .notNull()
+      .references(() => tags.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    // The lead list reads each lead's tags; the tag filter and deleting a tag go by the tag (#433)
+    index('lead_tags_lead_idx').on(table.leadId),
+    index('lead_tags_tag_idx').on(table.tagId),
+  ]
+);
 
 export const tagsRelations = relations(tags, ({ one, many }) => ({
   organization: one(organizations, {
@@ -1512,27 +1532,34 @@ export type CommentType = 'comment' | 'note' | 'activity';
  * Lead Comments Table
  * Stores comments, notes, and activity logs for leads
  */
-export const leadComments = pgTable('lead_comments', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  leadId: uuid('lead_id')
-    .notNull()
-    .references(() => leads.id, { onDelete: 'cascade' }),
-  /** Author; null once the author deleted their account (the comment stays with the lead) */
-  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
-  organizationId: uuid('organization_id')
-    .notNull()
-    .references(() => organizations.id, { onDelete: 'cascade' }),
-  content: text('content').notNull(),
-  type: text('type').$type<CommentType>().default('comment').notNull(),
-  /** For activity logs - stores metadata about the activity */
-  metadata: jsonb('metadata').$type<Record<string, unknown>>(),
-  /** Parent comment ID for threaded replies */
-  parentId: uuid('parent_id'),
-  /** Whether this comment is pinned */
-  isPinned: boolean('is_pinned').default(false).notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+export const leadComments = pgTable(
+  'lead_comments',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    leadId: uuid('lead_id')
+      .notNull()
+      .references(() => leads.id, { onDelete: 'cascade' }),
+    /** Author; null once the author deleted their account (the comment stays with the lead) */
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    content: text('content').notNull(),
+    type: text('type').$type<CommentType>().default('comment').notNull(),
+    /** For activity logs - stores metadata about the activity */
+    metadata: jsonb('metadata').$type<Record<string, unknown>>(),
+    /** Parent comment ID for threaded replies */
+    parentId: uuid('parent_id'),
+    /** Whether this comment is pinned */
+    isPinned: boolean('is_pinned').default(false).notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    // A lead's comments, newest first: the activity feed and the comments of the lead page (#433)
+    index('lead_comments_lead_created_idx').on(table.leadId, table.createdAt),
+  ]
+);
 
 /**
  * Lead Comments Relations
@@ -2890,28 +2917,40 @@ export type AuditAction = 'create' | 'read' | 'update' | 'delete' | 'login' | 'l
  * Audit Logs Table
  * Records all important actions for compliance and debugging
  */
-export const auditLogs = pgTable('audit_logs', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  organizationId: uuid('organization_id')
-    .notNull()
-    .references(() => organizations.id, { onDelete: 'cascade' }),
-  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
-  /** Action performed */
-  action: text('action').$type<AuditAction>().notNull(),
-  /** Resource type (e.g., 'lead', 'organization') */
-  resource: text('resource').notNull(),
-  /** Resource ID */
-  resourceId: text('resource_id'),
-  /** Changes made (for update actions) */
-  changes: jsonb('changes').$type<{ before?: unknown; after?: unknown }>(),
-  /** Request metadata */
-  ipAddress: text('ip_address'),
-  userAgent: text('user_agent'),
-  /** Additional context */
-  metadata: jsonb('metadata').$type<Record<string, unknown>>(),
-  /** Timestamp */
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+export const auditLogs = pgTable(
+  'audit_logs',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+    /** Action performed */
+    action: text('action').$type<AuditAction>().notNull(),
+    /** Resource type (e.g., 'lead', 'organization') */
+    resource: text('resource').notNull(),
+    /** Resource ID */
+    resourceId: text('resource_id'),
+    /** Changes made (for update actions) */
+    changes: jsonb('changes').$type<{ before?: unknown; after?: unknown }>(),
+    /** Request metadata */
+    ipAddress: text('ip_address'),
+    userAgent: text('user_agent'),
+    /** Additional context */
+    metadata: jsonb('metadata').$type<Record<string, unknown>>(),
+    /** Timestamp */
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    // The lead page's activity reads one resource's rows of the organization, newest first (#433)
+    index('audit_logs_org_resource_created_idx').on(
+      table.organizationId,
+      table.resource,
+      table.resourceId,
+      table.createdAt
+    ),
+  ]
+);
 
 /**
  * Audit Logs Relations
@@ -3264,3 +3303,151 @@ export const siteVisitSalts = pgTable('site_visit_salts', {
   salt: text('salt').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+// ---- SFA: deals (Refs #435, Epic #430) ----
+
+/**
+ * Deals (Refs #435)
+ * One thing to sell to a lead, with its amount, expected close date and probability. A lead can
+ * have several deals: the AX migration is sold in steps (a survey of the current system, then the
+ * migration, then AX). Kinds and stages are defined in lib/features/deals/types/pipeline.ts.
+ * Creating or changing a deal moves the lead's status and deal phase forward in the same
+ * transaction (lib/features/deals/lead-sync.ts), so everything that reads the lead keeps working.
+ */
+export const deals = pgTable(
+  'deals',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    leadId: uuid('lead_id')
+      .notNull()
+      .references(() => leads.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    kind: text('kind').notNull().default('survey'),
+    stage: text('stage').notNull().default('qualification'),
+    /** Yen, excluding tax; null while not estimated */
+    amount: bigint('amount', { mode: 'number' }),
+    /** 0-100; reset to the stage's default whenever the stage changes */
+    probability: integer('probability').notNull().default(10),
+    /** Forecast category chosen by the rep; null follows the probability */
+    forecastOverride: text('forecast_override'),
+    /** Expected close date (Japan calendar day) */
+    expectedCloseOn: date('expected_close_on', { mode: 'string' }),
+    /** Day the deal was won or lost (Japan calendar day); cleared when it is reopened */
+    closedOn: date('closed_on', { mode: 'string' }),
+    /** LOST_REASONS of the leads; required when the deal is lost */
+    lostReason: text('lost_reason'),
+    lostNote: text('lost_note'),
+    competitor: text('competitor'),
+    /** TARGET_SYSTEMS of the leads */
+    targetSystem: text('target_system'),
+    /** The next step, in a few words, shown on the board card */
+    nextStep: text('next_step'),
+    ownerUserId: uuid('owner_user_id').references(() => users.id, { onDelete: 'set null' }),
+    /** The deal this one follows (the survey before the migration) */
+    previousDealId: uuid('previous_deal_id').references((): AnyPgColumn => deals.id, {
+      onDelete: 'set null',
+    }),
+    /** When the deal entered its current stage (days in stage on the board) */
+    stageChangedAt: timestamp('stage_changed_at', { withTimezone: true }).defaultNow().notNull(),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // The board and the forecast: deals of a stage by expected close date
+    index('deals_org_stage_close_idx').on(table.organizationId, table.stage, table.expectedCloseOn),
+    index('deals_lead_idx').on(table.leadId),
+    index('deals_owner_idx').on(table.ownerUserId),
+    // For the ON DELETE SET NULL of the previous deal
+    index('deals_previous_deal_idx').on(table.previousDealId),
+    check('deals_amount_check', sql`${table.amount} >= 0`),
+    check('deals_probability_check', sql`${table.probability} between 0 and 100`),
+  ]
+);
+
+export type Deal = typeof deals.$inferSelect;
+export type NewDeal = typeof deals.$inferInsert;
+
+/**
+ * Deal History (Refs #435)
+ * One row per change of a value the forecast reads, holding every such value after the change
+ * (not only the difference), so the pipeline as it stood at any moment is the latest row of
+ * each deal at that moment (the week-over-week view, #437). The first row is written when the
+ * deal is created.
+ */
+export const dealHistory = pgTable(
+  'deal_history',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    dealId: uuid('deal_id')
+      .notNull()
+      .references(() => deals.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    stage: text('stage').notNull(),
+    amount: bigint('amount', { mode: 'number' }),
+    probability: integer('probability').notNull(),
+    forecastOverride: text('forecast_override'),
+    expectedCloseOn: date('expected_close_on', { mode: 'string' }),
+    ownerUserId: uuid('owner_user_id').references(() => users.id, { onDelete: 'set null' }),
+    /** The values above that changed; ['created'] for the first row */
+    changedFields: jsonb('changed_fields').$type<string[]>().default([]).notNull(),
+    changedBy: uuid('changed_by').references(() => users.id, { onDelete: 'set null' }),
+    changedAt: timestamp('changed_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('deal_history_deal_changed_idx').on(table.dealId, table.changedAt),
+    index('deal_history_org_changed_idx').on(table.organizationId, table.changedAt),
+  ]
+);
+
+export type DealHistoryRow = typeof dealHistory.$inferSelect;
+
+// ---- SFA: sales targets (Refs #437, Epic #430) ----
+
+/**
+ * Sales Targets (Refs #437)
+ * The won amount aimed at in a month, for a member or (user_id null) for the organization as a
+ * whole. Set by owners and admins; the forecast compares it with the won and expected deals.
+ * When a month has no organization-wide target, the members' targets are summed.
+ */
+export const salesTargets = pgTable(
+  'sales_targets',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    /** The member the target is for; null for the organization as a whole */
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    /** First day of the month */
+    month: date('month', { mode: 'string' }).notNull(),
+    /** Yen, excluding tax */
+    amount: bigint('amount', { mode: 'number' }).notNull(),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // One target per member and month, and one for the organization (partial indexes, so
+    // they work on any PostgreSQL version without NULLS NOT DISTINCT)
+    uniqueIndex('sales_targets_member_month_unique')
+      .on(table.organizationId, table.userId, table.month)
+      .where(sql`${table.userId} is not null`),
+    uniqueIndex('sales_targets_organization_month_unique')
+      .on(table.organizationId, table.month)
+      .where(sql`${table.userId} is null`),
+    // For the ON DELETE CASCADE of the user
+    index('sales_targets_user_idx').on(table.userId),
+    check('sales_targets_amount_check', sql`${table.amount} >= 0`),
+    check('sales_targets_month_check', sql`extract(day from ${table.month}) = 1`),
+  ]
+);
+
+export type SalesTarget = typeof salesTargets.$inferSelect;

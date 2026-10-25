@@ -147,8 +147,9 @@ describe('Access landing page', () => {
     for (const name of ['直して使い続ける', 'Web に移す', '既製サービスに置き換える']) {
       expect(screen.getByRole('heading', { level: 3, name })).toBeInTheDocument();
     }
-    // The header anchors of the site lead to this page's sections
-    for (const id of ['problems', 'steps', 'targets', 'faq', 'diagnosis']) {
+    // The header anchors of the site lead to this page's sections; its approach is the three
+    // ways (#537)
+    for (const id of ['problems', 'paths', 'targets', 'faq', 'diagnosis']) {
       expect(document.getElementById(id), id).not.toBeNull();
     }
     // The AS/400 and ACOS sections are the main page's (#311)
@@ -165,7 +166,8 @@ describe('Access landing page', () => {
     await renderPage();
     expect(
       screen.getByText(
-        '版や VBA、利用人数などを選ぶと、ツールに合った進め方の目安が分かります。直して使うか、Web に移すか、置き換えるか、合うものをお伝えします。'
+        // The questions asked before the result; the number of users comes after it (#537)
+        '版や VBA、画面・帳票の数などを選ぶと、ツールに合った進め方の目安が分かります。直して使うか、Web に移すか、置き換えるか、合うものをお伝えします。'
       )
     ).toBeInTheDocument();
     expect(screen.getByText(/無料Web診断で、どれが合うかの目安が分かります。進め方は、相談のうえで一緒に決めます。/)).toBeInTheDocument();
@@ -182,6 +184,28 @@ describe('Access landing page', () => {
 
     const metadata = await generateMetadata({ params });
     expect(metadata.description).toContain('ツールに合った進め方の目安が分かります');
+    expect(metadata.description).toContain('画面・帳票の数');
+    expect(metadata.description).not.toContain('利用人数');
+  });
+
+  it('keeps the three ways of the hero beside its copy, not below the phone buttons (#537)', async () => {
+    await renderPage();
+    const hero = screen.getByRole('heading', { level: 1 }).closest('section') as HTMLElement;
+    const ways = within(hero).getByText('進め方は3つ').parentElement as HTMLElement;
+    expect(ways).toHaveClass('hidden', 'lg:block');
+  });
+
+  it('answers whether someone outside IT can answer, as the main page does (#537)', async () => {
+    await renderPage();
+    const faq = document.getElementById('faq') as HTMLElement;
+    const questions = [...faq.querySelectorAll('summary')].map((summary) =>
+      summary.textContent?.replace(/^Q/, '')
+    );
+    expect(questions.at(-2)).toBe('情報システムの担当者でなくても答えられますか？');
+    expect(questions.at(-1)).toBe('相談はどのように進みますか？');
+    expect(
+      within(faq).getByText('はい。すべて選択式で、わからない質問は「わからない」を選べます。詳しい質問は任意です。')
+    ).toBeInTheDocument();
   });
 
   it('points the diagnosis buttons at the embedded diagnosis', async () => {
@@ -189,6 +213,14 @@ describe('Access landing page', () => {
     const buttons = screen.getAllByRole('link', { name: /無料Web診断/ });
     expect(buttons.length).toBeGreaterThanOrEqual(3);
     for (const button of buttons) expect(button).toHaveAttribute('href', '#diagnosis');
+  });
+
+  it('keeps the phone bar to the short label of the main page, on one line (#672)', async () => {
+    await renderPage();
+    // With "（Access版）" it took two lines from 375px wide; the page says it is the Access check
+    const bar = screen.getByTestId('ax-floating-cta');
+    expect(bar).toHaveTextContent(/^無料Web診断をはじめる$/);
+    expect(within(bar).getByRole('link', { hidden: true })).toHaveAttribute('href', '#diagnosis');
   });
 
   it('names what brings an Access tool up for review, above the hero buttons (#425)', async () => {
@@ -207,6 +239,8 @@ describe('Access landing page', () => {
     expect(
       within(buttons).getByRole('link', { name: /無料Web診断（Access版）をはじめる/ })
     ).toHaveAttribute('href', '#diagnosis');
+    // Not the caption above them, which can be on screen while the buttons are not (#536)
+    expect(buttons).not.toHaveTextContent('無料・選択式・約3分');
   });
 
   it('starts the steps with the free check, as on the main page (#425)', async () => {
@@ -215,6 +249,12 @@ describe('Access landing page', () => {
       .getAllByRole('heading', { level: 3 })
       .map((heading) => heading.textContent);
     expect(steps).toEqual(['無料Web診断（Access版・約3分）', '棚卸し', '進め方の決定', '移行', 'AX化']);
+    // The inventory is not called free: a cost for checking the files is said beforehand (#538)
+    expect(
+      within(document.getElementById('steps') as HTMLElement).getByText(
+        /ファイルを確かめる作業に費用がかかる場合は、前もってお伝えします。$/
+      )
+    ).toBeInTheDocument();
   });
 
   it('answers the worry about moving to the web, next to the partial move (#466)', async () => {

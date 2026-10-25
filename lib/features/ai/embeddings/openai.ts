@@ -6,6 +6,7 @@
  */
 
 import { OpenAI } from 'openai';
+import { type AiCallScope, type AiOperation, logAiUsage } from '../usage';
 
 // Lazy initialize OpenAI client to avoid throwing during module load
 let _openai: OpenAI | null = null;
@@ -29,20 +30,31 @@ function getOpenAI(): OpenAI {
   return _openai;
 }
 
+/** The embedding model (1536 dimensions, the size of leads.embedding) */
+const EMBEDDING_MODEL = 'text-embedding-3-small';
+
+/** What an embedding is made for, and for which organization: logged with the tokens (#47) */
+export interface EmbeddingCall extends AiCallScope {
+  operation: Extract<AiOperation, 'embed-search-query' | 'embed-lead'>;
+}
+
 /**
  * Generate embedding vector for text
  * A paid OpenAI call: callers count it with consumeEmbeddingCalls (../limits.ts) first and
  * bound the text (#576)
  * @param text - The text to generate embedding for
+ * @param call - What the embedding is for and the organization, logged with the tokens used
  * @returns Vector embedding (1536 dimensions)
  */
-export async function generateEmbedding(text: string): Promise<number[]> {
+export async function generateEmbedding(text: string, call: EmbeddingCall): Promise<number[]> {
   try {
+    const startedAt = performance.now();
     const response = await getOpenAI().embeddings.create({
-      model: 'text-embedding-3-small',
+      model: EMBEDDING_MODEL,
       input: text,
       encoding_format: 'float',
     });
+    logAiUsage({ ...call, model: EMBEDDING_MODEL, startedAt }, response);
 
     return response.data[0].embedding;
   } catch (error) {
@@ -80,19 +92,12 @@ function clipText(text: string, max: number): string {
 }
 
 /**
- * Prepare lead text for embedding
- * Combines relevant lead fields into a searchable text, each field cut to
- * MAX_EMBEDDING_FIELD_CHARS and the whole to MAX_EMBEDDING_TEXT_CHARS
+ * Prepare lead text for embedding: the company name only, cut to MAX_EMBEDDING_FIELD_CHARS.
+ * Nothing that points at a person (name, email address, notes) goes to OpenAI (#406); callers may
+ * pass the whole lead row, so only the fields read here are sent
  */
-export function prepareLeadText(lead: {
-  name?: string | null;
-  email?: string | null;
-  company?: string | null;
-  notes?: string | null;
-  industry?: string | null;
-  position?: string | null;
-}): string {
-  const parts = [lead.name, lead.email, lead.company, lead.industry, lead.position, lead.notes]
+export function prepareLeadText(lead: { company?: string | null }): string {
+  const parts = [lead.company]
     .filter((part): part is string => Boolean(part))
     .map((part) => clipText(part, MAX_EMBEDDING_FIELD_CHARS));
 

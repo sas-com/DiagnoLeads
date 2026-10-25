@@ -149,6 +149,8 @@ export async function recordSiteVisit(
     pageType: input.page.pageType,
     referrerHost: input.referrerHost,
     ...input.params,
+    // deviceOf reads the head of the User-Agent only; the hash takes all of it, in time in
+    // proportion to its length (decision 2026-10-23-site-visit-measurement, #705)
     device: deviceOf(input.userAgent),
     visitorHash: visitorHashOf({ salt, organizationId, ip: input.ip, userAgent: input.userAgent }),
     day,
