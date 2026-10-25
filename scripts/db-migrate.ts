@@ -2,8 +2,9 @@
 import { env } from '@/lib/env';
 /**
  * Run database migrations
- * Usage: npm run db:migrate
- *        npm run db:migrate --check   # only reads the ledger: stops on a migration drizzle would skip
+ * Usage: bun run db:migrate
+ *        bun run db:migrate --check   # only reads the ledger: stops on a migration drizzle would skip
+ * (with npm, --check reaches the script only after `--`: npm run db:migrate -- --check)
  */
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
@@ -24,6 +25,7 @@ async function runMigrations() {
   try {
     // drizzle skips a migration older than the newest one recorded, without an error (#620)
     const ledger = await assertNoSkippedMigrations(client, MIGRATIONS_FOLDER);
+    for (const note of ledger.notes) console.warn(`⚠️  ${note}`);
     if (checkOnly) {
       console.log(`✅ No migration would be skipped (${ledger.recorded} recorded)`);
       console.log(`   Would apply: ${ledger.pending.join(', ') || 'nothing'}`);

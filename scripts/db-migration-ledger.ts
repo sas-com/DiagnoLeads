@@ -76,7 +76,8 @@ export async function readRecorded(
  * Journal entries the migrator would skip: not recorded, and not newer than the newest row.
  *
  * An entry counts as recorded when a row has its hash or its `when` (the migrator writes `when`
- * as `created_at`), so a SQL file edited after it was applied is not reported.
+ * as `created_at`), so a SQL file edited after it was applied does not stop the run
+ * (findEdited warns about it instead).
  */
 export function findSkipped(
   journal: JournalMigration[],
@@ -144,6 +145,50 @@ export function findPending(
   return journal.filter((entry) => entry.when > newest);
 }
 
+/** Entries recorded by `when` whose SQL changed since: the migrator never runs the change. */
+export function findEdited(
+  journal: JournalMigration[],
+  recorded: RecordedMigration[]
+): JournalMigration[] {
+  const hashes = new Set(recorded.map((row) => row.hash));
+  const times = new Set(recorded.map((row) => row.createdAt));
+  return journal.filter((entry) => times.has(entry.when) && !hashes.has(entry.hash));
+}
+
+/** Pending entries whose SQL is already recorded under another `when`: running it again fails. */
+export function findReapplied(
+  journal: JournalMigration[],
+  recorded: RecordedMigration[]
+): JournalMigration[] {
+  const hashes = new Set(recorded.map((row) => row.hash));
+  return findPending(journal, recorded).filter((entry) => hashes.has(entry.hash));
+}
+
+/** Warnings that do not stop the run: each one names a migration that needs a look. */
+export function describeNotes(
+  journal: JournalMigration[],
+  recorded: RecordedMigration[],
+  allowed: readonly string[]
+): string[] {
+  const allowedSkips = findSkipped(journal, recorded, []).filter((entry) =>
+    allowed.includes(entry.tag)
+  );
+  return [
+    ...findEdited(journal, recorded).map(
+      (entry) =>
+        `${entry.tag}: its SQL changed after it was applied, and the change will not run. Put the change in a new migration.`
+    ),
+    ...findReapplied(journal, recorded).map(
+      (entry) =>
+        `${entry.tag}: this SQL is already recorded under another \`when\`, so running it again fails. Do not generate an applied migration again: ask the owner.`
+    ),
+    ...allowedSkips.map(
+      (entry) =>
+        `${entry.tag}: not recorded and older than the newest row; passed because it is in WHEN_OUT_OF_ORDER (applied by hand).`
+    ),
+  ];
+}
+
 /**
  * Throws before anything is applied when the migrator would skip a migration. Only reads the
  * database, so `bun run db:migrate --check` can run it alone.
@@ -153,7 +198,7 @@ export async function assertNoSkippedMigrations(
   migrationsFolder: string,
   ledger: LedgerTable = DEFAULT_LEDGER,
   allowed: readonly string[] = WHEN_OUT_OF_ORDER
-): Promise<{ recorded: number; pending: string[] }> {
+): Promise<{ recorded: number; pending: string[]; notes: string[] }> {
   const journal = readJournal(migrationsFolder);
   const recorded = await readRecorded(sql, ledger);
   const skipped = findSkipped(journal, recorded, allowed);
@@ -163,5 +208,6 @@ export async function assertNoSkippedMigrations(
   return {
     recorded: recorded.length,
     pending: findPending(journal, recorded).map((entry) => entry.tag),
+    notes: describeNotes(journal, recorded, allowed),
   };
 }

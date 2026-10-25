@@ -98,6 +98,7 @@ describe.skipIf(!url)('db:migrate pre-flight check (PostgreSQL)', () => {
     await expect(assertNoSkippedMigrations(sql, regenerated, ledger, [])).resolves.toEqual({
       recorded: 2,
       pending: ['0002_site_visits'],
+      notes: [],
     });
     await run(regenerated, ledger);
     expect(await exists(ledger, 'site_visits')).toBe(true);
@@ -110,6 +111,7 @@ describe.skipIf(!url)('db:migrate pre-flight check (PostgreSQL)', () => {
     await expect(assertNoSkippedMigrations(sql, dir, ledger, [])).resolves.toEqual({
       recorded: 0,
       pending: ['0000_base', '0001_deals'],
+      notes: [],
     });
   });
 
@@ -121,6 +123,27 @@ describe.skipIf(!url)('db:migrate pre-flight check (PostgreSQL)', () => {
     await expect(assertNoSkippedMigrations(sql, y, ledger, ['0002_by_hand'])).resolves.toEqual({
       recorded: 2,
       pending: [],
+      notes: [
+        '0002_by_hand: not recorded and older than the newest row; passed because it is in WHEN_OUT_OF_ORDER (applied by hand).',
+      ],
     });
+  });
+
+  it('warns about a migration whose SQL was edited after it was applied, which drizzle never runs', async () => {
+    const ledger = newLedger();
+    const dir = folder(ledger, 'x', [['0000_base', 1000], ['0001_deals', 3000]]);
+    await run(dir, ledger);
+    fs.appendFileSync(
+      path.join(dir, '0001_deals.sql'),
+      `\nCREATE INDEX "deals_id_idx" ON "${ledger.schema}"."deals" (id);`
+    );
+
+    const result = await assertNoSkippedMigrations(sql, dir, ledger, []);
+    expect(result.pending).toEqual([]);
+    expect(result.notes).toEqual([
+      '0001_deals: its SQL changed after it was applied, and the change will not run. Put the change in a new migration.',
+    ]);
+    await run(dir, ledger);
+    expect(await exists(ledger, 'deals_id_idx')).toBe(false);
   });
 });

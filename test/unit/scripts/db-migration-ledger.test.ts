@@ -4,8 +4,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
+  describeNotes,
   describeSkipped,
+  findEdited,
   findPending,
+  findReapplied,
   findSkipped,
   findUnknown,
   type JournalMigration,
@@ -74,6 +77,34 @@ describe('findPending', () => {
   it('runs only the migrations newer than the newest recorded one, as drizzle does', () => {
     expect(findPending([base, next], [row(base)])).toEqual([next]);
     expect(findPending([base, next], [row(base), row(next)])).toEqual([]);
+  });
+});
+
+describe('warnings that do not stop the run', () => {
+  const base = migration('0000_base', 1000);
+
+  it('finds a migration whose SQL changed after it was applied', () => {
+    const edited = migration('0001_x', 2000);
+    const recorded = [row(base), { hash: 'hash-before-the-edit', createdAt: 2000 }];
+    expect(findEdited([base, edited], recorded)).toEqual([edited]);
+    expect(findEdited([base, edited], [row(base), row(edited)])).toEqual([]);
+  });
+
+  it('finds an applied migration generated again with a newer when', () => {
+    // 0001_x was applied at 2000, then generated again as 0002_x at 3000 with the same SQL
+    const again: JournalMigration = { tag: '0002_x', when: 3000, hash: 'h-0001_x' };
+    const recorded = [row(base), { hash: 'h-0001_x', createdAt: 2000 }];
+    expect(findReapplied([base, again], recorded)).toEqual([again]);
+    expect(findReapplied([base, again], [])).toEqual([]);
+  });
+
+  it('names each migration that needs a look, including the allowed skips', () => {
+    const late = migration('0015_agency_links', 1500);
+    const recorded = [row(base), { hash: 'h-0014', createdAt: 3000 }];
+    expect(describeNotes([base, late], recorded, ['0015_agency_links'])).toEqual([
+      '0015_agency_links: not recorded and older than the newest row; passed because it is in WHEN_OUT_OF_ORDER (applied by hand).',
+    ]);
+    expect(describeNotes([base], [row(base)], [])).toEqual([]);
   });
 });
 
