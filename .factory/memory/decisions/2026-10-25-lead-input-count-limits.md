@@ -6,7 +6,7 @@ title: "リードの一括操作と詳細な絞り込みの件数・入れ子の
 status: active
 superseded_by: []
 issues: [604, 575, 669, 688, 689]
-paths: ["lib/features/leads/types/schemas.ts", "lib/features/leads/import-service.ts", "components/features/leads/import-dialog.tsx"]
+paths: ["lib/features/leads/types/schemas.ts", "lib/features/leads/import-service.ts", "components/features/leads/import-dialog.tsx", "lib/features/filters/types/schemas.ts", "lib/features/tags/types/schemas.ts"]
 ---
 
 ### [Leads] リードの一括操作と詳細な絞り込みの件数・入れ子の上限、取り込みは1,000件ずつ送る（#604）
@@ -28,4 +28,6 @@ paths: ["lib/features/leads/types/schemas.ts", "lib/features/leads/import-servic
   - 分けて送るときは、1回を1つの transaction にし、順に送る。失敗したら、作れた分を知らせて、残りだけをやり直せるようにする（作れた回を送り直さない）。送っている間は画面を閉じさせない
   - 入れ子を受けるスキーマは `z.lazy` で再帰させず、段ごとに組み立てて、上限の段より下を読まない（上限を超えた入力を、スタックを使い切る前に zod の検査で断るため）
   - 取り込みの回数は middleware の回数制限（`leads.bulkCreate` は1分に10回、パスごと・IP ごと・インスタンスごと）にも数えられる。1分に約10,000件を超える取り込みは途中で 429 になりうる。そのときも残りの行がプレビューに残る（待てば続けられると知らせる文言は #689）
-  - 保存したフィルター（`filters` ルーター）とタグの一括付与（`tags` ルーター）の同じ種類の上限は #669 で付ける
+  - 保存したフィルター（`filters.create`・`filters.update`）とタグの付与（`tags.setLeadTags`・`tags.bulkSetLeadTags`）の上限は #669 で付けた
+    - 保存したフィルターは、リードのスキーマを読まず、`lib/features/filters/types/schemas.ts` の `SAVED_FILTER_LIMITS`（`LEAD_FILTER_LIMITS` と同じ数）と、段ごとに組み立てたスキーマを持つ。#699 でリードの `advancedFilter`・`filterGroupSchema`・`LEAD_FILTER_LIMITS` を消しても、保存したフィルターは変わらない
+    - タグの付与の `tagIds` は20個（`LEAD_TAGS_MAX`、`lib/features/tags/types/schemas.ts`）。タグは手で選ぶ印で、一覧はリードのタグを3つと残りの数で見せる。`bulkSetLeadTags` の `leadIds` は1ページ分（`LEAD_LIST_PAGE_MAX`）で、1回の insert は最大 100 × 20 = 2,000 行。重なった id は数に入れ、書くのは1回（前と同じ）
