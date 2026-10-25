@@ -124,7 +124,8 @@ export async function findSimilarLeads(
 
 /**
  * Update lead embedding
- * Used when a lead is created or updated
+ * Called by ai.updateEmbedding once the call has been counted (not when a lead is saved).
+ * Throws when the embedding or the update fails
  * @param leadId - Lead to store the embedding on
  * @param organizationId - Organization of the lead; a lead of another organization is not
  *   written, even when the caller has already read the lead in its organization (#583)
@@ -145,7 +146,9 @@ export async function updateLeadEmbedding(
       WHERE id = ${leadId} AND organization_id = ${organizationId}
     `);
   } catch (error) {
+    // Thrown, not swallowed: the caller has counted a paid call and must not report success
+    // when nothing was stored (#598)
     console.error('Error updating lead embedding:', error);
-    // Don't throw - embedding update failures shouldn't block lead operations
+    throw new Error('Updating lead embedding failed');
   }
 }

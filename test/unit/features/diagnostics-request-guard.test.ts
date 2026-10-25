@@ -1,7 +1,7 @@
 /**
  * Request helpers of the public diagnosis endpoints: the client address used for rate limits
  */
-import { clientIp, ipBlock } from '@/lib/features/diagnostics/request-guard';
+import { clientIp, ipBlock, readJsonBody } from '@/lib/features/diagnostics/request-guard';
 import { NextRequest } from 'next/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -39,5 +39,37 @@ describe('ipBlock', () => {
   it('puts every address of a /64 in the same block', () => {
     expect(ipBlock('2001:db8:1:2::a')).toBe(ipBlock('2001:db8:1:2:dead:beef:1:2'));
     expect(ipBlock('2001:db8:1:2::a')).not.toBe(ipBlock('2001:db8:1:3::a'));
+  });
+});
+
+describe('readJsonBody', () => {
+  const post = (body: string) =>
+    new NextRequest('http://localhost/api/diagnostics/ax-migration', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body,
+    });
+
+  it('reads a JSON body, line breaks and all', async () => {
+    const read = await readJsonBody(post('{"company":"a\\nb"}'), 1000);
+    expect(read).toEqual({ ok: true, body: { company: 'a\nb' } });
+  });
+
+  it('refuses NUL in a value or a key as invalid JSON, so it never reaches the database (#648)', async () => {
+    for (const body of ['{"company":"a\\u0000b"}', '{"answers":{"q\\u0000":"x"}}']) {
+      const read = await readJsonBody(post(body), 1000);
+      expect(read.ok).toBe(false);
+      if (!read.ok) {
+        expect(read.response.status).toBe(400);
+        expect(await read.response.json()).toEqual({ error: 'Invalid JSON' });
+      }
+    }
+  });
+
+  it('still refuses a body that is too large or not JSON', async () => {
+    const tooLarge = await readJsonBody(post(`{"a":"${'x'.repeat(50)}"}`), 10);
+    expect(!tooLarge.ok && tooLarge.response.status).toBe(413);
+    const broken = await readJsonBody(post('{'), 1000);
+    expect(!broken.ok && broken.response.status).toBe(400);
   });
 });

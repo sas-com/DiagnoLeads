@@ -5,6 +5,7 @@
 
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema';
 import { CLAUDE_MAX_TOKENS, CLAUDE_MODEL, anthropic } from '../client';
+import { reportClaudeFailure } from '../failures';
 import { AI_BATCH_MAX } from '../types/schemas';
 
 export interface LeadForPrediction {
@@ -104,6 +105,7 @@ export async function predictConversion(lead: LeadForPrediction): Promise<Conver
     return normalizePrediction(message.parsed_output);
   } catch (error) {
     console.error('Conversion prediction error:', error);
+    await reportClaudeFailure('predict-conversion', error);
     // Return a fallback prediction based on simple heuristics
     return generateFallbackPrediction(lead);
   }

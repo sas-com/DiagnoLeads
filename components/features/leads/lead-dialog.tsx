@@ -26,7 +26,8 @@ export function LeadDialog({ open, onOpenChange, onSubmit, isLoading }: LeadDial
   const t = useTranslations('leads');
 
   const handleSubmit = async (data: Partial<Omit<CreateLeadInput, 'organizationId'>>) => {
-    // A new lead gets every value of the form
+    // A new lead gets every value of the form, and no responses: CreateLeadInput is what the
+    // procedure takes, where they may be left out (the server gives {}, #575)
     await onSubmit(data as Omit<CreateLeadInput, 'organizationId'>);
     onOpenChange(false);
   };

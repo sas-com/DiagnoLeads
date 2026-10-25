@@ -35,10 +35,11 @@ import {
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
-import type { z } from 'zod';
+import { z } from 'zod';
 
-// Form schema without organizationId (will be added by parent component)
-const formSchema = createLeadSchema.omit({ organizationId: true });
+// Form schema without organizationId (will be added by parent component). The form never sends
+// the diagnostic responses: a new lead gets {} on the server and the diagnoses write their own
+const formSchema = createLeadSchema.omit({ organizationId: true, responses: true });
 type FormValues = z.infer<typeof formSchema>;
 
 /** Sentinel for "not set" because Radix Select does not accept an empty value */
@@ -73,18 +74,23 @@ export function LeadForm({ lead, onSubmit, isLoading }: LeadFormProps) {
   const tStatus = useTranslations('status');
   const tPipeline = useTranslations('pipeline');
   const tCommon = useTranslations('common');
+  const tValidation = useTranslations('validation');
 
   const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
+    resolver: zodResolver(formSchema, {
+      // Values over their limit (#575) are told in the page's language
+      errorMap: (issue, ctx) =>
+        issue.code === z.ZodIssueCode.too_big && issue.type === 'string'
+          ? { message: tValidation('maxLength', { max: Number(issue.maximum) }) }
+          : { message: ctx.defaultError },
+    }),
     defaultValues: {
       email: lead?.email ?? '',
       name: lead?.name ?? '',
       company: lead?.company ?? '',
       phone: lead?.phone ?? '',
       status: (lead?.status as LeadStatus) ?? 'new',
-      score: lead?.score ?? undefined,
       source: (lead?.source as 'website' | 'embed' | 'api') ?? undefined,
-      responses: lead?.responses ?? {},
       inflowSource: (lead?.inflowSource as FormValues['inflowSource']) ?? null,
       conversionPoint: (lead?.conversionPoint as FormValues['conversionPoint']) ?? null,
       dealPhase: (lead?.dealPhase as FormValues['dealPhase']) ?? null,
@@ -202,29 +208,6 @@ export function LeadForm({ lead, onSubmit, isLoading }: LeadFormProps) {
                   ))}
                 </SelectContent>
               </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="score"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t('score')} (0-100)</FormLabel>
-              <FormControl>
-                <Input
-                  type="number"
-                  min={0}
-                  max={100}
-                  {...field}
-                  value={field.value ?? ''}
-                  onChange={(e) =>
-                    field.onChange(e.target.value ? Number.parseInt(e.target.value) : undefined)
-                  }
-                />
-              </FormControl>
               <FormMessage />
             </FormItem>
           )}

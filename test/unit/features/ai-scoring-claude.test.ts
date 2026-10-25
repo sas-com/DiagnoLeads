@@ -6,7 +6,11 @@
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-const { mockParse } = vi.hoisted(() => ({ mockParse: vi.fn() }));
+const { mockParse, reportServerError } = vi.hoisted(() => ({
+  mockParse: vi.fn(),
+  reportServerError: vi.fn(),
+}));
+vi.mock('@/lib/ops/alert', () => ({ reportServerError }));
 
 // Mock Anthropic SDK
 vi.mock('@anthropic-ai/sdk', () => ({
@@ -174,6 +178,26 @@ describe('scoreLeadWithAI', () => {
       const score = await scoreLeadWithAI({ email: 'cut@example.com' });
 
       expect(score.score).toBe(50);
+    });
+  });
+
+  describe('alerts', () => {
+    it('alerts the people on call when the model is gone (404), and still falls back', async () => {
+      mockParse.mockRejectedValueOnce(Object.assign(new Error('model not found'), { status: 404 }));
+
+      const score = await scoreLeadWithAI({ email: 'gone@example.com' });
+
+      expect(score.isFallback).toBe(true);
+      expect(reportServerError).toHaveBeenCalledWith('ai/score-lead', expect.any(Error));
+    });
+
+    it('does not alert when Claude is only busy (529)', async () => {
+      reportServerError.mockClear();
+      mockParse.mockRejectedValueOnce(Object.assign(new Error('overloaded'), { status: 529 }));
+
+      await scoreLeadWithAI({ email: 'busy@example.com' });
+
+      expect(reportServerError).not.toHaveBeenCalled();
     });
   });
 
