@@ -81,18 +81,16 @@ function clipText(text: string, max: number): string {
 
 /**
  * Prepare lead text for embedding
- * Combines relevant lead fields into a searchable text, each field cut to
- * MAX_EMBEDDING_FIELD_CHARS and the whole to MAX_EMBEDDING_TEXT_CHARS
+ * Combines the lead fields that describe the company into a searchable text, each field cut to
+ * MAX_EMBEDDING_FIELD_CHARS and the whole to MAX_EMBEDDING_TEXT_CHARS. Nothing that points at a
+ * person (name, email address, notes) goes to OpenAI (#406)
  */
 export function prepareLeadText(lead: {
-  name?: string | null;
-  email?: string | null;
   company?: string | null;
-  notes?: string | null;
   industry?: string | null;
   position?: string | null;
 }): string {
-  const parts = [lead.name, lead.email, lead.company, lead.industry, lead.position, lead.notes]
+  const parts = [lead.company, lead.industry, lead.position]
     .filter((part): part is string => Boolean(part))
     .map((part) => clipText(part, MAX_EMBEDDING_FIELD_CHARS));
 

@@ -51,12 +51,9 @@ const leadScoreOutputFormat = jsonSchemaOutputFormat({
  * @returns AI-generated lead score and recommendations
  */
 export async function scoreLeadWithAI(lead: {
-  name?: string | null;
-  email?: string | null;
   company?: string | null;
   industry?: string | null;
   position?: string | null;
-  notes?: string | null;
   status?: string | null;
   createdAt?: Date;
 }): Promise<LeadScoreResult> {
@@ -64,13 +61,10 @@ export async function scoreLeadWithAI(lead: {
     const prompt = `You are an expert B2B sales analyst. Analyze the following lead and provide a comprehensive score.
 
 Lead Information:
-- Name: ${lead.name || 'N/A'}
-- Email: ${lead.email || 'N/A'}
 - Company: ${lead.company || 'N/A'}
 - Industry: ${lead.industry || 'N/A'}
 - Position: ${lead.position || 'N/A'}
 - Status: ${lead.status || 'N/A'}
-- Notes: ${lead.notes || 'N/A'}
 - Created: ${lead.createdAt ? lead.createdAt.toISOString() : 'N/A'}
 
 Return:
@@ -128,12 +122,9 @@ Consider factors like:
 export async function scoreLeadsBatch(
   leads: Array<{
     id: string;
-    name?: string | null;
-    email?: string | null;
     company?: string | null;
     industry?: string | null;
     position?: string | null;
-    notes?: string | null;
     status?: string | null;
     createdAt?: Date;
   }>

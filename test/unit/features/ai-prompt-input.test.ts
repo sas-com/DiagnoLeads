@@ -1,6 +1,6 @@
 /**
- * Size of a lead handed to Claude (#405): every text going into a prompt is cut, so one counted
- * call stays one bounded call however large the stored lead is.
+ * The lead handed to Claude: nothing that points at a person (#406), and every text going into a
+ * prompt is cut, so one counted call stays one bounded call however large the stored lead is (#405).
  */
 import type { Lead } from '@/lib/db/schema';
 import {
@@ -8,6 +8,7 @@ import {
   MAX_PROMPT_RESPONSES_CHARS,
   PROMPT_TRUNCATED,
   clipForPrompt,
+  contactCompleteness,
   leadForClaude,
 } from '@/lib/features/ai/prompt-input';
 import { describe, expect, it } from 'vitest';
@@ -52,41 +53,56 @@ describe('clipForPrompt', () => {
 });
 
 describe('leadForClaude', () => {
-  it('hands an ordinary lead over unchanged', () => {
+  it('hands Claude nothing that points at a person (#406)', () => {
+    const handed = leadForClaude(lead());
+
+    for (const field of ['name', 'email', 'phone', 'organizationId', 'customFields']) {
+      expect(handed).not.toHaveProperty(field);
+    }
+    expect(JSON.stringify(handed)).not.toContain('taro@example.co.jp');
+    expect(JSON.stringify(handed)).not.toContain('山田');
+    expect(JSON.stringify(handed)).not.toContain('03-0000-0000');
+  });
+
+  it('hands the company, progress and responses of an ordinary lead over unchanged', () => {
     const ordinary = lead();
-    expect(leadForClaude(ordinary)).toEqual(ordinary);
+    expect(leadForClaude(ordinary)).toEqual({
+      id: ordinary.id,
+      company: ordinary.company,
+      status: ordinary.status,
+      source: ordinary.source,
+      score: ordinary.score,
+      responses: ordinary.responses,
+      createdAt,
+    });
     expect(leadForClaude(ordinary).responses).toBe(ordinary.responses);
   });
 
   it('cuts every text field that goes into a prompt', () => {
     const huge = 'x'.repeat(3_000_000);
-    const bounded = leadForClaude(
-      lead({ name: huge, company: huge, email: `${huge}@example.com`, status: huge, source: huge })
-    );
+    const bounded = leadForClaude(lead({ company: huge, status: huge, source: huge }));
 
-    for (const field of ['name', 'company', 'email', 'status', 'source'] as const) {
+    for (const field of ['company', 'status', 'source'] as const) {
       expect(bounded[field]).toBe(`${'x'.repeat(MAX_PROMPT_FIELD_CHARS)} ${PROMPT_TRUNCATED}`);
     }
   });
 
-  it('keeps the other fields and empty values as they are', () => {
-    const bounded = leadForClaude(lead({ name: null, company: null, source: null, responses: null }));
+  it('keeps empty values as they are', () => {
+    const bounded = leadForClaude(lead({ company: null, source: null, responses: null }));
     expect(bounded).toMatchObject({
       id: '770e8400-e29b-41d4-a716-446655440001',
-      name: null,
       company: null,
       source: null,
       responses: null,
-      phone: '03-0000-0000',
       score: 40,
       createdAt,
     });
   });
 
   it('does not change the lead it is given', () => {
-    const original = lead({ name: 'y'.repeat(5_000) });
+    const original = lead({ company: 'y'.repeat(5_000) });
     leadForClaude(original);
-    expect(original.name).toHaveLength(5_000);
+    expect(original.company).toHaveLength(5_000);
   });
 
   it('keeps responses that fit untouched, long answers included', () => {
@@ -129,5 +145,15 @@ describe('leadForClaude', () => {
     const bounded = leadForClaude(lead({ responses: deep })).responses;
     expect(JSON.stringify(bounded)).toContain(PROMPT_TRUNCATED);
     expect(promptJsonLength(bounded)).toBeLessThan(MAX_PROMPT_RESPONSES_CHARS);
+  });
+});
+
+describe('contactCompleteness', () => {
+  it('says only whether a name and a phone number are there', () => {
+    expect(contactCompleteness(lead())).toEqual({ hasName: true, hasPhone: true });
+    expect(contactCompleteness(lead({ name: null, phone: '' }))).toEqual({
+      hasName: false,
+      hasPhone: false,
+    });
   });
 });

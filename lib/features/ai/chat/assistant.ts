@@ -13,22 +13,17 @@ import { reportClaudeFailure } from '../failures';
  * @returns AI-generated summary
  */
 export async function generateLeadSummary(lead: {
-  name?: string | null;
-  email?: string | null;
   company?: string | null;
   industry?: string | null;
   position?: string | null;
-  notes?: string | null;
   status?: string | null;
 }): Promise<string> {
   const prompt = `Provide a concise 2-3 sentence summary of this lead:
 
-Name: ${lead.name || 'N/A'}
 Company: ${lead.company || 'N/A'}
 Industry: ${lead.industry || 'N/A'}
 Position: ${lead.position || 'N/A'}
 Status: ${lead.status || 'N/A'}
-Notes: ${lead.notes || 'N/A'}
 
 Focus on key business value and next steps.`;
 

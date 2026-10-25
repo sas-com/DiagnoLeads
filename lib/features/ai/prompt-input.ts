@@ -101,19 +101,39 @@ function boundResponses(responses: Record<string, unknown> | null): Record<strin
 }
 
 /**
- * The lead as handed to Claude (scoring, prediction, summary): every text that goes into a
- * prompt is cut to MAX_PROMPT_FIELD_CHARS and the responses to about
- * MAX_PROMPT_RESPONSES_CHARS of JSON, so each counted call has a bounded size. Only the copy
- * handed to Claude is cut; the lead itself (and what is written back) is unchanged.
+ * The lead as handed to Claude (scoring, prediction, summary). Nothing that points at a person
+ * goes to Claude: no name, email address, phone number or free-text notes, only the company and
+ * how far the lead has come (#406). Every text that goes into a prompt is cut to
+ * MAX_PROMPT_FIELD_CHARS and the responses to about MAX_PROMPT_RESPONSES_CHARS of JSON, so each
+ * counted call has a bounded size (#405). Only the copy handed to Claude is cut; the lead itself
+ * (and what is written back) is unchanged.
  */
-export function leadForClaude(lead: Lead): Lead {
+export type LeadForClaude = Pick<
+  Lead,
+  'id' | 'company' | 'status' | 'source' | 'score' | 'responses' | 'createdAt'
+>;
+
+export function leadForClaude(lead: Lead): LeadForClaude {
   return {
-    ...lead,
-    email: clipField(lead.email),
-    name: clipField(lead.name),
+    id: lead.id,
     company: clipField(lead.company),
     status: clipField(lead.status),
     source: clipField(lead.source),
+    score: lead.score,
     responses: boundResponses(lead.responses),
+    createdAt: lead.createdAt,
   };
+}
+
+/**
+ * Whether the lead left a name and a phone number. Only the prediction's fallback heuristics read
+ * it, here in the app; it never goes into a prompt (#406)
+ */
+export interface ContactCompleteness {
+  hasName: boolean;
+  hasPhone: boolean;
+}
+
+export function contactCompleteness(lead: Pick<Lead, 'name' | 'phone'>): ContactCompleteness {
+  return { hasName: Boolean(lead.name), hasPhone: Boolean(lead.phone) };
 }
