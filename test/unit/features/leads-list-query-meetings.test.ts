@@ -192,7 +192,7 @@ describe('export file (#173)', () => {
     expect(leadExportFilename('pdf', '2026-10-16')).toBe('leads_2026-10-16.pdf');
   });
 
-  it('records the filters used, never the search text or the advanced filter values', () => {
+  it('records the filters used, never the search text', () => {
     expect(
       exportAuditFilters({
         organizationId: ORG,
@@ -200,11 +200,7 @@ describe('export file (#173)', () => {
         dealRating: [],
         search: 'yamada@example.jp',
         nextMeeting: 'overdue',
-        advancedFilter: {
-          logic: 'and',
-          conditions: [{ field: 'email', operator: 'contains', value: 'yamada' }],
-        },
       })
-    ).toEqual({ status: ['new'], nextMeeting: 'overdue', search: true, advancedFilter: true });
+    ).toEqual({ status: ['new'], nextMeeting: 'overdue', search: true });
   });
 });

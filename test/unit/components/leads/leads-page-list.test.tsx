@@ -88,8 +88,10 @@ const nav = vi.hoisted(() => {
 
 vi.mock('next/navigation', async () => {
   const { useSyncExternalStore } = await import('react');
+  // One object for every render, like Next's useRouter (#636)
+  const router = { push: nav.push, replace: nav.replace, prefetch: vi.fn(), back: vi.fn() };
   return {
-    useRouter: () => ({ push: nav.push, replace: nav.replace, prefetch: vi.fn(), back: vi.fn() }),
+    useRouter: () => router,
     usePathname: () => '/ja/leads',
     useSearchParams: () => new URLSearchParams(useSyncExternalStore(nav.subscribe, nav.get)),
   };

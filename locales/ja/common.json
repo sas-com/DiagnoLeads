@@ -1341,7 +1341,8 @@
       "updateSuccess": "{count}件のリードを更新しました",
       "deleteSuccess": "{count}件のリードを削除しました",
       "updateError": "リードの更新に失敗しました",
-      "deleteError": "リードの削除に失敗しました"
+      "deleteError": "リードの削除に失敗しました",
+      "skippedWithDeals": "商談のある {count} 件は変えていません（状態は商談から決まります）"
     },
     "import": {
       "title": "リードをインポート",
@@ -1941,7 +1942,49 @@
       "copied": "クリップボードにコピーしました",
       "confirmDelete": "このQRキャンペーンを削除してもよろしいですか？",
       "noCampaigns": "QRキャンペーンがありません",
-      "noCampaignsDescription": "オフライン配布用のQRコードキャンペーンを作成してください。"
+      "noCampaignsDescription": "オフライン配布用のQRコードキャンペーンを作成してください。",
+      "destination": {
+        "label": "読み取ると",
+        "axDiagnosis": "AX 診断",
+        "diagnosis": "診断の公開ページ（{path}）",
+        "none": "読み取っても開きません（Not Found と出ます）",
+        "reasons": {
+          "paused": {
+            "title": "停止中",
+            "action": "スイッチをオンにすると開きます。"
+          },
+          "expired": {
+            "title": "期限切れ",
+            "action": "期限を延ばすか消すと開きます。スイッチがオンでも開きません。"
+          },
+          "not_ax_organization": {
+            "title": "診断を選んでいない",
+            "action": "診断を選んでいないキャンペーンで開くのは、AX 診断の回答を受け取る組織のものだけです。キャンペーンに診断を選べるようになったら、診断を選んでください。"
+          },
+          "diagnosis_not_published": {
+            "title": "選んだ診断が公開されていない",
+            "action": "診断ビルダーで診断を公開してください。停止中・アーカイブ・下書きの診断と、ほかの組織が同じ URL で公開している診断は開きません。"
+          }
+        }
+      },
+      "expiry": {
+        "label": "期限",
+        "none": "期限なし",
+        "until": "{date} まで（日本時間）",
+        "expired": "期限切れ",
+        "edit": "期限を変える",
+        "dayLabel": "この日の終わりまで開く（日本時間）",
+        "save": "保存",
+        "clear": "期限を消す",
+        "cancel": "キャンセル",
+        "saved": "期限を変えました",
+        "cleared": "期限を消しました",
+        "invalidDay": "日付を選んでください",
+        "pastDay": "今日より前の日は選べません（保存したときから、読み取っても開かなくなります）。止めるときはスイッチをオフにしてください",
+        "failed": "期限を変えられませんでした",
+        "createLabel": "期限（任意）",
+        "createHint": "選んだ日の終わり（日本時間）まで開きます。空のときは期限なし。あとから変えられます。"
+      }
     },
     "axPlaybook": {
       "title": "営業の手引き（AXマイグレーション）",
@@ -2579,7 +2622,8 @@
         "costNotRegistered": "費用未登録（この期間の契約がありません）",
         "appointmentQuality": "条件を満たしたアポ",
         "appointmentQualityValue": "{met}／{reviewed}件（{rate}%）"
-      }
+      },
+      "siteVisits": "サイトの訪問を見る"
     }
   },
   "header": {
@@ -4378,7 +4422,8 @@
     "sheet": {
       "keyFacts": "要点"
     },
-    "nextMeetingOverdue": "次回日程 {date} が過ぎています"
+    "nextMeetingOverdue": "次回日程 {date} が過ぎています",
+    "fromDeals": "商談から反映（商談のステージで変わります）"
   },
   "leadList": {
     "searchLabel": "リードを検索",
@@ -5438,6 +5483,43 @@
         "unknown": "不明"
       },
       "footer": "{name}・{date} に取り込み"
+    }
+  },
+  "siteAnalytics": {
+    "title": "サイトの訪問",
+    "description": "公開ページの訪問者数とページビュー（自前の計測。クッキーは使いません）",
+    "periodLabel": "期間",
+    "period": "過去{days}日間",
+    "periodRange": "過去{days}日間",
+    "overview": "概要",
+    "toAnalytics": "リードの分析",
+    "metricLabel": "指標",
+    "metric": {
+      "visitors": "サイト全体の訪問者数",
+      "pageviews": "サイト全体のページビュー"
+    },
+    "change": {
+      "increase": "前の期間より{rate}%増",
+      "decrease": "前の期間より{rate}%減",
+      "unchanged": "前の期間と同じ"
+    },
+    "updatedOn": "{day}まで記録",
+    "chartLabel": "{metric}の日ごとの推移（過去{days}日間、合計{total}）",
+    "visitorsNote": "訪問者数は日ごとに数えています。同じ人が別の日に来ると、それぞれの日に数えます。",
+    "pagesTitle": "ページごとの{metric}",
+    "empty": "この期間の記録はありません",
+    "notMeasured": "まだ訪問の記録がありません。計測は、プライバシーポリシーに記載してから有効にします。",
+    "error": "読み込めませんでした。時間をおいて開き直してください。",
+    "pageType": {
+      "ax-lp": "AX マイグレーション（メイン LP）",
+      "ax-access-lp": "Access LP",
+      "ax-column-index": "コラム一覧",
+      "ax-column": "コラム",
+      "ax-diagnosis": "AX 診断",
+      "diagnosis": "診断",
+      "legacy-diagnostic": "診断フォーム（旧）",
+      "home": "トップページ",
+      "landing": "紹介ページ"
     }
   }
 }

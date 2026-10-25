@@ -61,9 +61,11 @@ vi.mock('@/lib/auth/client', () => ({
 vi.mock('@/lib/context/organization-context', () => ({
   useOrganizationContext: () => ({ setOrganization: mocks.setOrganization }),
 }));
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mocks.push, refresh: mocks.refresh }),
-}));
+vi.mock('next/navigation', () => {
+  // One object for every render, like Next's useRouter (#636)
+  const router = { push: mocks.push, refresh: mocks.refresh };
+  return { useRouter: () => router };
+});
 
 const renderPage = ({ verificationError }: { verificationError?: string } = {}) =>
   render(
