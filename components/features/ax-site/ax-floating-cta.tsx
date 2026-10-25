@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
 import { AxCtaLink } from './ax-cta-link';
 import {
+  AX_ACCESS_COLUMNS_ID,
   AX_CONSULT_BAND_ID,
   AX_FINAL_SECTION_ID,
   AX_FOOTER_ID,
@@ -25,6 +26,8 @@ const DEFAULT_HIDE_WHEN_VISIBLE = [
   AX_CONSULT_BAND_ID,
   AX_SECTIONS.diagnosis,
   AX_FINAL_SECTION_ID,
+  // Below the Access page's last call to action, the columns end the page (#537)
+  AX_ACCESS_COLUMNS_ID,
   AX_FOOTER_ID,
 ];
 

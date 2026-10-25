@@ -17,6 +17,7 @@ import {
   as400Answers,
   otherAnswers,
 } from '@/test/fixtures/ax-migration';
+import { answeredChallengesIn } from '@/lib/features/diagnostics/ax-migration/challenge-categories';
 import { describe, expect, it } from 'vitest';
 
 const NON_TECHNICAL = new Set([
@@ -800,5 +801,24 @@ describe('evaluateAxMigration', () => {
       'recommendation',
       'urgency',
     ]);
+  });
+});
+
+describe('answeredChallengesIn (#658)', () => {
+  it('lists the chosen options of one category from either challenge question', () => {
+    const answers = { challenges: ['deadline', 'people', 'remote'], access_challenges: ['support', 'manual'] };
+    expect(answeredChallengesIn(answers, 'agility')).toEqual([
+      { questionId: 'challenges', value: 'deadline' },
+      { questionId: 'challenges', value: 'remote' },
+      { questionId: 'access_challenges', value: 'support' },
+    ]);
+    expect(answeredChallengesIn(answers, 'cost')).toEqual([
+      { questionId: 'access_challenges', value: 'manual' },
+    ]);
+  });
+
+  it('gives nothing for "none" or no answer', () => {
+    expect(answeredChallengesIn({ challenges: ['none'] }, 'agility')).toEqual([]);
+    expect(answeredChallengesIn({}, 'people')).toEqual([]);
   });
 });

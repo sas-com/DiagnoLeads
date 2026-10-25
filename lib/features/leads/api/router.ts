@@ -1,5 +1,6 @@
 import type { db as defaultDb } from '@/lib/db/client';
 import { auditLogs, leadTags, leads, tags, users } from '@/lib/db/schema';
+import { canReadComments } from '@/lib/features/comments/service';
 import type { AxMqlLevel } from '@/lib/features/diagnostics/ax-migration/mql';
 import { isFirstHandoff } from '@/lib/features/lead-handoff/handoff';
 import { notifyLeadHandoff } from '@/lib/features/lead-handoff/notify';
@@ -154,6 +155,8 @@ export const leadsRouter = router({
     canCreate: ctx.ability.can('create', 'Lead'),
     canEdit: ctx.ability.can('update', 'Lead'),
     canDelete: ctx.ability.can('delete', 'Lead'),
+    // The comments tab of the lead page (#555); the comments router checks the same rule
+    canReadComments: canReadComments(ctx),
   })),
 
   /**

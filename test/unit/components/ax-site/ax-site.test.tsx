@@ -483,6 +483,29 @@ describe('AxFloatingCta', () => {
     show(0.8);
     expect(bar).toHaveAttribute('aria-hidden', 'true');
   });
+
+  it("stays hidden over the Access page's columns, below its last call to action (#537)", () => {
+    const observed: Element[] = [];
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        observe(target: Element) {
+          observed.push(target);
+        }
+        disconnect() {}
+      }
+    );
+    render(
+      withIntl(
+        <>
+          <section id="ax-final" />
+          <section id="ax-access-columns" />
+          <AxFloatingCta label="かんたん無料診断をはじめる" />
+        </>
+      )
+    );
+    expect(observed.map((target) => target.id)).toEqual(['ax-final', 'ax-access-columns']);
+  });
 });
 
 describe('AS/400 and ACOS sections of the landing page (#311)', () => {

@@ -32,6 +32,7 @@ import {
   type SectionProps,
 } from './landing-sections';
 import {
+  AX_ACCESS_COLUMNS_ID,
   AX_HERO_CTA_ID,
   AX_PROBLEMS_CTA_ID,
   AX_SECTIONS,
@@ -133,8 +134,9 @@ export async function AxAccessHero({ locale }: SectionProps) {
           </div>
         </div>
 
-        {/* The three ways in place of the main page's picture */}
-        <div className="mx-auto w-full max-w-md bg-white p-6 text-ax-ink sm:p-8">
+        {/* The three ways in place of the main page's picture; beside the copy only: below the
+            buttons on a phone, it read as more buttons and pushed the page down (#537) */}
+        <div className="mx-auto hidden w-full max-w-md bg-white p-6 text-ax-ink sm:p-8 lg:block">
           <p className="text-sm font-bold text-ax-leaf">{t('paths.title')}</p>
           <ul className="mt-4 space-y-3">
             {PATHS.map(({ key, icon: Icon }) => (
@@ -309,7 +311,11 @@ const PATH_FITS = {
 export async function AxAccessPaths({ locale }: SectionProps) {
   const t = await getTranslations({ locale, namespace: 'axAccess.paths' });
   return (
-    <section aria-labelledby="ax-access-paths-heading" className="bg-ax-mist py-16 sm:py-24">
+    <section
+      id={AX_SECTIONS.paths}
+      aria-labelledby="ax-access-paths-heading"
+      className="bg-ax-mist py-16 sm:py-24"
+    >
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <h2 id="ax-access-paths-heading" className={SECTION_HEADING}>
           {t('title')}
@@ -531,7 +537,11 @@ export async function AxAccessColumns({ locale }: SectionProps) {
   const columns = columnsFor('access').filter((column) => column.locale === locale);
   if (columns.length === 0) return null;
   return (
-    <section aria-labelledby="ax-access-columns-heading" className="bg-white py-16 sm:py-20">
+    <section
+      id={AX_ACCESS_COLUMNS_ID}
+      aria-labelledby="ax-access-columns-heading"
+      className="bg-white py-16 sm:py-20"
+    >
       <div className="mx-auto max-w-3xl px-4 sm:px-6">
         <h2 id="ax-access-columns-heading" className={SECTION_HEADING}>
           {t('title')}
@@ -578,6 +588,8 @@ export const ACCESS_FAQ_KEYS = [
   'period',
   'useDuring',
   'department',
+  // As on the main page: the diagnosis right below asks about the tool
+  'who',
   'consult',
 ] as const;
 
