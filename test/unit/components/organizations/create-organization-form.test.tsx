@@ -41,7 +41,11 @@ vi.mock('@/lib/trpc/client', () => ({
 vi.mock('@/hooks/use-organization', () => ({
   useOrganization: () => ({ setOrganization: mocks.setOrganization }),
 }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push }) }));
+vi.mock('next/navigation', () => {
+  // One object for every render, like Next's useRouter (#636)
+  const router = { push: mocks.push };
+  return { useRouter: () => router };
+});
 vi.mock('sonner', () => ({ toast: { success: mocks.toastSuccess } }));
 
 const renderForm = () =>

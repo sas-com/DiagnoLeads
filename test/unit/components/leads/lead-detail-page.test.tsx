@@ -87,11 +87,15 @@ const store = vi.hoisted(() => {
   };
 });
 
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: store.push, replace: vi.fn(), prefetch: vi.fn(), back: vi.fn() }),
-  usePathname: () => `/ja/leads/${LEAD_ID}`,
-  useSearchParams: () => new URLSearchParams(),
-}));
+vi.mock('next/navigation', () => {
+  // One object for every render, like Next's useRouter (#636)
+  const router = { push: store.push, replace: vi.fn(), prefetch: vi.fn(), back: vi.fn() };
+  return {
+    useRouter: () => router,
+    usePathname: () => `/ja/leads/${LEAD_ID}`,
+    useSearchParams: () => new URLSearchParams(),
+  };
+});
 
 // The assignee controls (#135) are tested in lead-assignee-select.test.tsx
 vi.mock('@/hooks/use-lead-assignee', () => import('@/test/mocks/lead-assignee'));

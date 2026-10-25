@@ -108,6 +108,8 @@ it('should format user name', () => {
 });
 ```
 
+モックは本物と同じく参照を保つ（Next の `useRouter` のように本物が描画のたびに同じオブジェクトを返すものは、`const router = { push: mocks.push }; useRouter: () => router` と1つだけ作って返す。描画ごとに新しいオブジェクトを返すと、それに依存する effect が毎回やり直され、依存の漏れた effect を見逃す。#636）。
+
 #### 1.4 テストデータの独立性
 ```typescript
 // ❌ Bad: 共有状態
