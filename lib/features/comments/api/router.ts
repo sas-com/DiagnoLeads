@@ -2,9 +2,10 @@
  * Comments tRPC Router
  * Handles CRUD operations for lead comments and notes
  *
- * Every write leaves one `audit_logs` row in the same transaction (resource 'lead_comment',
- * resourceId = comment id, metadata.leadId), without the text: memos may name people, and the
- * lead audit keeps no contact details either (#101, #555).
+ * Every write through this router leaves one `audit_logs` row in the same transaction
+ * (resource 'lead_comment', resourceId = comment id, metadata.leadId), without the text: memos
+ * may name people, and the lead audit keeps no contact details either (#101, #555). The note a
+ * prospect brings to the lead made from it is written by the prospects router, outside this.
  */
 import type { db as defaultDb } from '@/lib/db/client';
 import { type AuditAction, type LeadComment, auditLogs, leadComments } from '@/lib/db/schema';
@@ -122,8 +123,12 @@ export const commentsRouter = router({
           },
         },
         replies: {
-          // Replies of the same organization only, however the row was written
-          where: eq(leadComments.organizationId, input.organizationId),
+          // Replies of the same organization only, however the row was written (the lead too,
+          // for the index on (lead_id, created_at))
+          where: and(
+            eq(leadComments.organizationId, input.organizationId),
+            eq(leadComments.leadId, input.leadId)
+          ),
           with: {
             user: {
               columns: {
@@ -171,27 +176,30 @@ export const commentsRouter = router({
     }
 
     await assertInOrganization(ctx.db, 'lead', input.organizationId, input.leadId);
-    if (input.parentId) {
-      // A reply stays in the thread of the same lead, one level deep (a reply to a reply would
-      // never be listed, nor deleted with its thread)
-      const [parent] = await ctx.db
-        .select({ id: leadComments.id })
-        .from(leadComments)
-        .where(
-          and(
-            eq(leadComments.id, input.parentId),
-            eq(leadComments.organizationId, input.organizationId),
-            eq(leadComments.leadId, input.leadId),
-            isNull(leadComments.parentId)
-          )
-        )
-        .limit(1);
-      if (!parent) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'The parent comment was not found' });
-      }
-    }
 
     const comment = await ctx.db.transaction(async (tx) => {
+      if (input.parentId) {
+        // A reply stays in the thread of the same lead, one level deep (a reply to a reply
+        // would never be listed, nor deleted with its thread). The parent is held until the
+        // reply is in: a delete of the thread meanwhile waits and takes the reply with it, or
+        // ends first and this finds no parent (parent_id has no foreign key)
+        const [parent] = await tx
+          .select({ id: leadComments.id })
+          .from(leadComments)
+          .where(
+            and(
+              eq(leadComments.id, input.parentId),
+              eq(leadComments.organizationId, input.organizationId),
+              eq(leadComments.leadId, input.leadId),
+              isNull(leadComments.parentId)
+            )
+          )
+          .for('key share');
+        if (!parent) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'The parent comment was not found' });
+        }
+      }
+
       const [row] = await tx
         .insert(leadComments)
         .values({
@@ -331,6 +339,20 @@ export const commentsRouter = router({
     }
 
     await ctx.db.transaction(async (tx) => {
+      const scope = and(
+        eq(leadComments.id, input.id),
+        eq(leadComments.organizationId, input.organizationId)
+      );
+      // Held before its replies are read, so a reply being written meanwhile is either among
+      // them or finds no comment to answer. Deleted meanwhile: nothing to record
+      const [held] = await tx
+        .select({ id: leadComments.id })
+        .from(leadComments)
+        .where(scope)
+        .for('update');
+      if (!held) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'コメントが見つかりません' });
+      }
       // Replies answer their comment and would stay in the lead's activity on their own
       // (parent_id has no foreign key): they go with it. Others' replies are deleted only by
       // those who may delete anyone's comment, as one by one
@@ -345,7 +367,8 @@ export const commentsRouter = router({
         .where(
           and(
             eq(leadComments.parentId, existing.id),
-            eq(leadComments.organizationId, input.organizationId)
+            eq(leadComments.organizationId, input.organizationId),
+            eq(leadComments.leadId, existing.leadId)
           )
         )
         .for('update');
@@ -358,16 +381,7 @@ export const commentsRouter = router({
           message: 'ほかの人の返信があるコメントは削除できません',
         });
       }
-      const deleted = await tx
-        .delete(leadComments)
-        .where(
-          and(eq(leadComments.id, input.id), eq(leadComments.organizationId, input.organizationId))
-        )
-        .returning({ id: leadComments.id });
-      // Deleted meanwhile: nothing to record
-      if (deleted.length === 0) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'コメントが見つかりません' });
-      }
+      await tx.delete(leadComments).where(scope);
       for (const reply of replies) {
         await tx
           .delete(leadComments)

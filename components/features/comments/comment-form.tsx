@@ -11,7 +11,8 @@ import { useState } from 'react';
 interface CommentFormProps {
   organizationId: string;
   leadId: string;
-  onSubmit: (content: string, type?: CommentType) => void;
+  /** Rejects when the write failed: the text is kept for another try */
+  onSubmit: (content: string, type?: CommentType) => Promise<void>;
   onCancel?: () => void;
   placeholder?: string;
   isReply?: boolean;
@@ -31,11 +32,15 @@ export function CommentForm({
   const [content, setContent] = useState('');
   const [type, setType] = useState<CommentType>('comment');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (content.trim()) {
-      onSubmit(content.trim(), type);
+    const text = content.trim();
+    if (!text) return;
+    try {
+      await onSubmit(text, type);
       setContent('');
+    } catch {
+      // Kept for another try; the section says what went wrong
     }
   };
 
@@ -99,6 +104,8 @@ export function CommentForm({
           <Send className="h-4 w-4" aria-hidden="true" />
         </Button>
       </div>
+      {/* Everyone who reads the lead's comments reads it, not only its author */}
+      {!isReply && <p className="text-sm text-muted-foreground">{t('visibleToTeam')}</p>}
 
       {/* Cancel button for replies */}
       {isReply && onCancel && (

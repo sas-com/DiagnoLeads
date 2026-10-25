@@ -1,8 +1,9 @@
 /**
  * Comments of a lead on a real PostgreSQL (#555): every write leaves one audit row without the
  * text, the counts come from SQL, deleting a comment takes its replies (others' replies only
- * for an owner), pinning is no edit, the list says what the viewer may do, and the parent
- * organization reads no comment, in the comments or in the lead's activity.
+ * for an owner), even one written at the same time, pinning is no edit, the list says what the
+ * viewer may do, and the parent organization reads no comment, in the comments or in the lead's
+ * activity.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/diagnoleads_test \
@@ -18,7 +19,7 @@ import {
   users,
 } from '@/lib/db/schema';
 import { appRouter } from '@/server/routers/_app';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -246,6 +247,74 @@ describe.skipIf(!url)('lead comments: audit, counts and readers (PostgreSQL)', (
       canWrite: true,
       canModerate: true,
     });
+  });
+
+  /** Until another session waits for a row lock (or 3 seconds pass, when nothing waits) */
+  async function untilLockWait() {
+    for (let i = 0; i < 60; i++) {
+      const [row] = await pg.execute<{ waiting: number }>(
+        sql`select count(*)::int as waiting from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'`
+      );
+      if (row && row.waiting > 0) return;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  }
+
+  const outcome = (promise: Promise<unknown>) =>
+    promise.then(
+      () => 'done',
+      (error: { code?: string }) => error.code
+    );
+
+  it('leaves no reply to a comment deleted while the reply is written', async () => {
+    const parent = await as.member.comments.create({ ...scope(), content: '同時に消すメモ' });
+    // biome-ignore lint/style/noNonNullAssertion: guarded by skipIf
+    const other = postgres(url!, { max: 1 });
+    let reply: Promise<unknown> = Promise.resolve();
+    try {
+      await other.begin(async (tx) => {
+        // A delete of the thread holds the comment
+        await tx`select id from lead_comments where id = ${parent.id} for update`;
+        reply = outcome(
+          as.other.comments.create({ ...scope(), content: '間に合わない返信', parentId: parent.id })
+        );
+        await untilLockWait();
+        await tx`delete from lead_comments where id = ${parent.id}`;
+      });
+    } finally {
+      await other.end();
+    }
+
+    expect(await reply).toBe('NOT_FOUND');
+    const orphans = await pg
+      .select({ id: leadComments.id })
+      .from(leadComments)
+      .where(eq(leadComments.parentId, parent.id));
+    expect(orphans).toHaveLength(0);
+  });
+
+  it('counts a reply written while its comment is deleted', async () => {
+    const parent = await as.member.comments.create({ ...scope(), content: '同時に返信が付くメモ' });
+    // biome-ignore lint/style/noNonNullAssertion: guarded by skipIf
+    const other = postgres(url!, { max: 1 });
+    let removal: Promise<unknown> = Promise.resolve();
+    try {
+      await other.begin(async (tx) => {
+        // Someone else's reply is being written: it holds its comment
+        await tx`select id from lead_comments where id = ${parent.id} for key share`;
+        await tx`insert into lead_comments (lead_id, organization_id, user_id, content, type, parent_id)
+          values (${leadId}, ${organizationId}, ${ids['別の営業']}, '同時の返信', 'comment', ${parent.id})`;
+        removal = outcome(as.member.comments.delete({ organizationId, id: parent.id }));
+        await untilLockWait();
+      });
+    } finally {
+      await other.end();
+    }
+
+    // The delete saw the reply: someone else's, so the author alone cannot delete the thread
+    expect(await removal).toBe('FORBIDDEN');
+    expect(await row(parent.id)).toBeDefined();
+    expect(await auditOf(parent.id)).toHaveLength(1);
   });
 
   it('shows the parent organization no comment, in the comments or in the activity', async () => {

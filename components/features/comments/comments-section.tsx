@@ -11,11 +11,13 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 import { Card } from '@/components/ui/card';
 import type { CommentType } from '@/lib/db/schema';
 import { trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
-import { MessageSquare, StickyNote, Zap } from 'lucide-react';
+import { AlertTriangle, MessageSquare, RefreshCw, StickyNote, Zap } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -42,7 +44,7 @@ export function CommentsSection({ organizationId, leadId }: CommentsSectionProps
   const utils = trpc.useUtils();
 
   // All types at once: the filter only narrows what is shown, so each tab keeps its count
-  const { data, isLoading, error } = trpc.comments.list.useQuery(
+  const { data, isLoading, error, refetch } = trpc.comments.list.useQuery(
     {
       organizationId,
       leadId,
@@ -100,8 +102,9 @@ export function CommentsSection({ organizationId, leadId }: CommentsSectionProps
     },
   });
 
-  const handleSubmit = (content: string, type?: CommentType) => {
-    createComment.mutate({
+  // The writes resolve once saved: the forms clear only then, and keep the text on a failure
+  const handleSubmit = async (content: string, type?: CommentType) => {
+    await createComment.mutateAsync({
       organizationId,
       leadId,
       content,
@@ -109,8 +112,8 @@ export function CommentsSection({ organizationId, leadId }: CommentsSectionProps
     });
   };
 
-  const handleReply = (parentId: string, content: string) => {
-    createComment.mutate({
+  const handleReply = async (parentId: string, content: string) => {
+    await createComment.mutateAsync({
       organizationId,
       leadId,
       content,
@@ -119,8 +122,8 @@ export function CommentsSection({ organizationId, leadId }: CommentsSectionProps
     });
   };
 
-  const handleEdit = (id: string, content: string) => {
-    updateComment.mutate({
+  const handleEdit = async (id: string, content: string) => {
+    await updateComment.mutateAsync({
       organizationId,
       id,
       content,
@@ -138,6 +141,9 @@ export function CommentsSection({ organizationId, leadId }: CommentsSectionProps
 
   const comments = data?.items ?? [];
   const viewer = data?.viewer;
+  // Deleting a comment takes its replies
+  const deletingReplies =
+    comments.find((comment) => comment.id === deletingId)?.replies.length ?? 0;
 
   // The parent organization does not read the team's comments (#555)
   if (error?.data?.code === 'FORBIDDEN') {
@@ -145,6 +151,17 @@ export function CommentsSection({ organizationId, leadId }: CommentsSectionProps
       <Card className="p-4">
         <p className="text-sm text-muted-foreground">{t('forbidden')}</p>
       </Card>
+    );
+  }
+  // Not read is not "no comments yet"
+  if (error) {
+    return (
+      <Callout title={t('loadError')} icon={AlertTriangle} color="red">
+        <Button variant="outline" size="sm" className="mt-3" onClick={() => void refetch()}>
+          <RefreshCw className="h-4 w-4" />
+          {tCommon('retry')}
+        </Button>
+      </Callout>
     );
   }
   const filterCounts = {
@@ -251,7 +268,11 @@ export function CommentsSection({ organizationId, leadId }: CommentsSectionProps
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t('deleteTitle')}</AlertDialogTitle>
-            <AlertDialogDescription>{t('deleteConfirm')}</AlertDialogDescription>
+            <AlertDialogDescription>
+              {deletingReplies > 0
+                ? t('deleteConfirmWithReplies', { count: deletingReplies })
+                : t('deleteConfirm')}
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleteComment.isPending}>
