@@ -36,8 +36,10 @@ paths: [".github/workflows/lighthouse.yml", "scripts/lighthouse-*"]
     - 回数は5ページ×2端末×3回
     - 記録は2か所：実行の Summary（中央値の表、`scripts/lighthouse-summary.ts`）と、JSON のレポートの artifact（30日）
     - 必須の検査にしない。PR の CI に入れない。LHCI は使わない
-    - 臨時の確認は、Actions の手動実行か、手元の `bash scripts/lighthouse-run.sh` で行う
-  - 最初は測るだけにする：点数でワークフローを落とさず、Issue も開かない（ワークフローが落ちるのは、Lighthouse の結果が出なかったときだけ）
+    - 臨時の確認は、Actions の手動実行か、手元の `bash scripts/lighthouse-run.sh` で行う（Node 22.19 以上。Lighthouse 13.5.0 の要件）
+  - 最初は測るだけにする：点数でワークフローを落とさず、Issue も開かない
+    - ワークフローが落ちるのは、あるページ×端末の3回すべてで Lighthouse の結果が出なかったとき（と、ページの一覧を作れなかったとき）だけ
+    - 1回だけ結果が出なかったときは、残りの回で中央値を出し、Summary の「結果のない実行」と警告（`::warning::`）に出す。落とさない（実装の細部。2026-10-25 に PR #641 のレビューの指摘で決めた。定期の実行の失敗の通知を、測れなかったページ×端末があるときだけに絞る）
     - 目標割れで Issue を開き、戻ったら閉じる判定（`uptime.yml` と同じ形）は、公開後の基準の値が数日分そろってから足す（#612）
   - D4 バンドルの予算
     - 同じ実行の resource-summary（Lighthouse の audit）で、ページごとの JS（script）と CSS（stylesheet）の転送量（圧縮後）を取る。最初の一歩では Summary に出すだけ
@@ -60,9 +62,13 @@ paths: [".github/workflows/lighthouse.yml", "scripts/lighthouse-*"]
 - **ルール**:
   - 値は GitHub のランナーから本番を測った lab の値。#497 の手元の値とも、利用者の値（フィールドデータ、#614）とも、そのまま比べない
   - Lighthouse の版・回数・ページ・オプションを変えたら、この決定を更新する。前後の値を比べられないことを、その PR に書く
-  - 計測の送信（Vercel Web Analytics の `/_vercel/insights/view`・`event`、GA4 の `/g/collect`、自前の `/api/collect`）は `--blocked-url-patterns` で止める
+  - 計測の送信のうち、GA4 の `/g/collect` と自前の `/api/collect`（どちらも公開後に有効になる）は `--blocked-url-patterns` で止める
     - 止める理由：毎日30回の表示を、利用者の数字に混ぜないため。Lighthouse の UA はふつうの Chrome の UA（`moto g power (2022)`）で、`lib/features/site-visits` のボットの判定に当たらない
     - 止めるのは送信だけで、スクリプトの読み込みと実行は止めない。その重さは値に入る
     - 止めた要求のコンソールのエラーは Lighthouse が数えない（`errors-in-console` の `ERR_BLOCKED_BY_CLIENT.Inspector`）。Best Practices は下がらない（2026-10-24 に手元のページで確かめた）
-  - 集計（`scripts/lighthouse-*.ts`）は依存を足さない。Node 22（型の除去）と Bun の両方で動く TypeScript にする。ワークフローは Node だけを入れ、`sparse-checkout` で `scripts/lighthouse-*` だけを取り出す
+  - Vercel Web Analytics の送信は止めない。止めなくても Lighthouse の表示は数に入らない
+    - Vercel の script（本番では `/<プロジェクトのハッシュ>/script.js`。`/_vercel/insights` ではない）は、`navigator.webdriver` が真なら何も送らない。Lighthouse が動かす headless の Chrome では真になる（2026-10-25 に手元で確かめた。試しの実行 run 40143558177 の30回にも、送信の要求は1件もない）
+    - 送信先も同じハッシュの下（`/<ハッシュ>/view`・`event`・`session`）で、Vercel の都合で変わりうるので、パターンで止めない
+    - headless を外して手元で流すと、この前提が崩れうる。`LIGHTHOUSE_CHROME_FLAGS` から `--headless=new` を外さない
+  - 集計（`scripts/lighthouse-*.ts`）は依存を足さない。Node 22.18 以上（型の除去）と Bun の両方で動く TypeScript にする。ワークフローは Node だけを入れ、`sparse-checkout` で `scripts/lighthouse-*` だけを取り出す
   - ワークフローの権限は `contents: read` だけにする。判定を足すとき（#612）に `issues: write` を足す

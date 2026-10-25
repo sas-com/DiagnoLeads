@@ -5,8 +5,8 @@
  *   BASE_URL=https://diagnoleads-v2.vercel.app node scripts/lighthouse-pages.ts
  *
  * The newest column is read from the column list that BASE_URL serves, not from the repository,
- * so the run measures an article that is live there. No dependencies: runs on Node 22 (type
- * stripping) and on Bun.
+ * so the run measures an article that is live there. No dependencies: runs on Node 22.18 or later
+ * (type stripping) and on Bun.
  */
 import { pathToFileURL } from 'node:url';
 

@@ -268,8 +268,9 @@ Sentry.init({
 - デプロイの直後に確かめたいときは、Actions の「Lighthouse」を手動で実行するか、手元で流す
 
 ```bash
-# 5ページ×モバイル・デスクトップ×3回（Node 22 と Chrome が要る。root では LIGHTHOUSE_CHROME_FLAGS="--headless=new --no-sandbox"）
+# 5ページ×モバイル・デスクトップ×3回（Node 22.19 以上（Lighthouse 13.5.0 の要件）と Chrome が要る。root では LIGHTHOUSE_CHROME_FLAGS="--headless=new --no-sandbox"）
 BASE_URL=https://diagnoleads-v2.vercel.app bash scripts/lighthouse-run.sh lighthouse-reports
+# 集計は Node 22.18 以上か Bun（bun scripts/lighthouse-summary.ts lighthouse-reports）。Node の MODULE_TYPELESS_PACKAGE_JSON の警告は無害
 node scripts/lighthouse-summary.ts lighthouse-reports
 ```
 

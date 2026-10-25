@@ -6,10 +6,11 @@
  * median run.
  *
  * Only reports the numbers: nothing passes or fails on them yet (the judgement against the targets
- * is #612, the transfer size budget #613). Exits 1 only when a report cannot be read or has no
- * result.
+ * is #612, the transfer size budget #613). A run without a result is listed under the table, and
+ * its page and device get the median of the other runs; exits 1 only when no run has a result
+ * (scripts/lighthouse-run.sh fails the workflow when a page and device has no report at all).
  *   node scripts/lighthouse-summary.ts lighthouse-reports >> "$GITHUB_STEP_SUMMARY"
- * No dependencies: runs on Node 22 (type stripping) and on Bun.
+ * No dependencies: runs on Node 22.18 or later (type stripping) and on Bun.
  */
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -183,7 +184,14 @@ export function formatSummary(
     ),
   ];
   if (problems.length > 0) {
-    lines.push('', '### 結果のない実行', '', ...problems.map((problem) => `- ${problem}`));
+    lines.push(
+      '',
+      '### 結果のない実行',
+      '',
+      'ほかの回に結果があるページ×端末は、その回だけで中央値を出した（表の「回数」）。',
+      '',
+      ...problems.map((problem) => `- ${problem}`)
+    );
   }
   return `${lines.join('\n')}\n`;
 }
@@ -221,12 +229,20 @@ export function readReports(dir: string): { reports: LighthouseReport[]; problem
   return { reports, problems };
 }
 
+/**
+ * 1 only when no run has a result: while some runs of a page and device failed, the others still
+ * give its median (decision 2026-10-24-performance-targets, D3)
+ */
+export function exitCode(reports: readonly LighthouseReport[]): number {
+  return reports.some(isUsable) ? 0 : 1;
+}
+
 function main(): void {
   const dir = process.argv[2] || 'lighthouse-reports';
   const { reports, problems } = readReports(dir);
   if (reports.length === 0 && problems.length === 0) problems.push(`${dir}: no reports`);
   process.stdout.write(formatSummary(reports, problems));
-  if (problems.length > 0) process.exitCode = 1;
+  process.exitCode = exitCode(reports);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

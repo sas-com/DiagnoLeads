@@ -3,8 +3,8 @@
 # Measures only for now: the medians go to the run's summary page and the JSON reports are kept
 # 30 days as an artifact. Nothing fails or opens an issue on the scores yet; that judgement is
 # added once a baseline exists after the launch (#612, budgets #613). Kept out of the PR checks so
-# CI stays light (decision 2026-10-18-ci-light-and-audit-gate). A run fails only when Lighthouse
-# produced no result.
+# CI stays light (decision 2026-10-18-ci-light-and-audit-gate). A run fails only when a page and
+# device got no Lighthouse result in any of its runs; a single failed run is a warning.
 name: Lighthouse
 
 on:
@@ -32,6 +32,8 @@ jobs:
         with:
           sparse-checkout: scripts/lighthouse-*
           sparse-checkout-cone-mode: false
+          # npx fetches Lighthouse's dependencies unpinned; keep the token out of .git/config
+          persist-credentials: false
 
       # Runs Lighthouse and the TypeScript of the two scripts (type stripping); Chrome is the
       # runner's own (its version is in the summary)

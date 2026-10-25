@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   type LighthouseReport,
+  exitCode,
   formatSummary,
   median,
   readReports,
@@ -166,7 +167,30 @@ describe('formatSummary', () => {
     const markdown = formatSummary([withoutResources], ['ax-diagnosis-mobile-2.report.json: NO_FCP']);
 
     expect(markdown).toMatch(/\| - \| - \|\n/);
-    expect(markdown).toContain('### 結果のない実行\n\n- ax-diagnosis-mobile-2.report.json: NO_FCP');
+    expect(markdown).toContain(
+      '### 結果のない実行\n\nほかの回に結果があるページ×端末は、その回だけで中央値を出した（表の「回数」）。\n\n- ax-diagnosis-mobile-2.report.json: NO_FCP'
+    );
+  });
+});
+
+describe('exitCode', () => {
+  it('passes while any run has a result, so one failed run out of three does not fail the workflow', () => {
+    const failed: LighthouseReport = {
+      ...report({ fetchTime: '2026-10-24T23:01:00Z' }),
+      runtimeError: { code: 'NO_FCP', message: 'The page did not paint any content.' },
+    };
+
+    expect(exitCode([report(), failed, report({ fetchTime: '2026-10-24T23:02:00Z' })])).toBe(0);
+  });
+
+  it('fails when no run has a result', () => {
+    const failed: LighthouseReport = {
+      ...report(),
+      runtimeError: { code: 'NO_FCP', message: 'The page did not paint any content.' },
+    };
+
+    expect(exitCode([])).toBe(1);
+    expect(exitCode([failed])).toBe(1);
   });
 });
 
