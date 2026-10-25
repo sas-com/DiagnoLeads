@@ -1424,6 +1424,19 @@
         "errorSoleOwner": "You are the only owner of an organization, so the account cannot be deleted",
         "errorFailed": "The account could not be deleted. Please try again later"
       },
+      "otherDevices": {
+        "title": "Signed-in devices",
+        "description": "Sign out every other device and browser where you are signed in. This browser stays signed in. Use this if you lost a device or see a sign-in you do not recognize.",
+        "expiry": "A sign-in ends 7 days after you sign in. Using the app does not extend it, so sign in again every 7 days.",
+        "open": "Sign out other devices...",
+        "dialogTitle": "Sign out of all other devices and browsers?",
+        "dialogDescription": "Every sign-in except this browser ends. To use the app on those devices and browsers, sign in again.",
+        "cancel": "Cancel",
+        "confirm": "Sign them out",
+        "signingOut": "Signing out...",
+        "success": "Signed out of your other devices and browsers",
+        "error": "Your other devices could not be signed out. Please try again later"
+      },
       "profileSection": "Profile",
       "nameLabel": "Name",
       "namePlaceholder": "John Doe",
@@ -1451,7 +1464,7 @@
       "passwordMinLength": "Password must be at least 8 characters",
       "passwordMismatch": "New passwords do not match",
       "currentPasswordIncorrect": "Current password is incorrect",
-      "passwordChangeSuccess": "Password changed successfully",
+      "passwordChangeSuccess": "Password changed. You have been signed out on your other devices and browsers",
       "passwordChangeError": "Failed to change password",
       "deleteAccountSection": "Delete Account",
       "deleteAccountWarning": "Deleting your account will remove all your data. This action cannot be undone.",
