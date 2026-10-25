@@ -22,9 +22,11 @@ vi.mock('@/lib/auth/client', () => ({
     signOut: mocks.signOut,
   },
 }));
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mocks.push }),
-}));
+vi.mock('next/navigation', () => {
+  // One object for every render, like Next's useRouter (#636)
+  const router = { push: mocks.push };
+  return { useRouter: () => router };
+});
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }));
 
 const signedInAs = (user: { name?: string | null; email?: string | null } | null) => {
