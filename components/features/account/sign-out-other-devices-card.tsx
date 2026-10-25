@@ -25,6 +25,10 @@ import { toast } from 'sonner';
  * session again. A signed-out device, or a copy of its cookie, is refused from its next request
  * (session.cookieCache is off, #578). Sessions also end 7 days after sign-in without being
  * extended (session.disableSessionRefresh, decision 2026-10-25-session-absolute-expiry).
+ *
+ * A copy of this browser's own cookie holds the session that is kept, so this does not end it
+ * (better-auth keeps every session with the current token). The card says so and points to a
+ * password change, which ends every session and gives this browser a new one (#591).
  */
 export function SignOutOtherDevicesCard() {
   const t = useTranslations('settings.profile.otherDevices');
@@ -36,6 +40,14 @@ export function SignOutOtherDevicesCard() {
     try {
       const result = await authClient.revokeOtherSessions();
       if (result.error) {
+        if (result.error.status === 401) {
+          // This browser's session has ended (7 days after sign-in, or signed out elsewhere).
+          // The client reads the session again only after a success; have it read it now, so
+          // AdminSessionGuard sends this tab to sign-in
+          toast.error(t('sessionEnded'));
+          authClient.$store.notify('$sessionSignal');
+          return;
+        }
         toast.error(t('error'));
         return;
       }
@@ -62,6 +74,7 @@ export function SignOutOtherDevicesCard() {
           {t('title')}
         </h2>
         <Text>{t('description')}</Text>
+        <Text>{t('copiedHere')}</Text>
         <Text>{t('expiry')}</Text>
         <Button variant="outline" onClick={() => setOpen(true)}>
           <LogOut className="h-4 w-4 mr-2" aria-hidden="true" />

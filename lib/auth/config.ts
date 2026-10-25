@@ -93,8 +93,10 @@ export const auth = betterAuth({
      * A session ends 7 days after sign-in, however often it is used (#647, decision
      * 2026-10-25-session-absolute-expiry). Without this, better-auth (1.6.33) moves the expiry
      * to "now + expiresIn" when a session read finds it last refreshed more than updateAge ago
-     * (api/routes/session.mjs), so a copied session cookie used once a day never expires. The
-     * session_token cookie, set at sign-in for expiresIn, is then not re-issued either.
+     * (api/routes/session.mjs), so a copied session cookie used once a day never expires. A
+     * session read then does not re-issue the session_token cookie either. Saving the profile
+     * (/update-user) still re-issues the cookie for expiresIn, but the session row keeps its
+     * expires_at, and a session past it is ended on its next read.
      */
     disableSessionRefresh: true,
     /**

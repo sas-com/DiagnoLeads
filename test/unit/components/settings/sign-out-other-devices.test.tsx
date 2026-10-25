@@ -151,6 +151,15 @@ describe('sign out other devices in the personal settings', () => {
     expect(within(section()).getByRole('button', { name: o.open })).toBeEnabled();
   });
 
+  it('says that a copy of this browser\'s own sign-in needs a password change instead', async () => {
+    await renderSignedIn();
+
+    // better-auth keeps the session of this browser, so this action does not end a copy of its
+    // cookie; a password change ends every session (sign-out-other-devices.db.test.ts)
+    expect(within(section()).getByText(o.copiedHere)).toBeInTheDocument();
+    expect(o.copiedHere).toContain('パスワードを変えて');
+  });
+
   it('asks before signing anything out', async () => {
     await renderSignedIn();
 
@@ -197,8 +206,8 @@ describe('sign out other devices in the personal settings', () => {
     expect(mocks.toastError).not.toHaveBeenCalled();
   });
 
-  it('says it failed when the server refuses, e.g. the session already ended', async () => {
-    network.state.revoke = { status: 401, body: { code: 'UNAUTHORIZED', message: 'Unauthorized' } };
+  it('says it failed when the server refuses', async () => {
+    network.state.revoke = { status: 403, body: { code: 'FORBIDDEN', message: 'Invalid origin' } };
     await renderSignedIn();
     const dialog = await openConfirmation();
 
@@ -209,6 +218,27 @@ describe('sign out other devices in the personal settings', () => {
     // The action can be tried again
     await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
     expect(within(section()).getByRole('button', { name: o.open })).toBeEnabled();
+  });
+
+  it('asks to sign in again and reads the session again when this browser\'s session has ended', async () => {
+    // 7 days after sign-in, or signed out elsewhere: better-auth answers 401
+    network.state.revoke = { status: 401, body: { code: 'UNAUTHORIZED', message: 'Unauthorized' } };
+    await renderSignedIn();
+    const dialog = await openConfirmation();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: o.confirm }));
+
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith(o.sessionEnded));
+    expect(mocks.toastError).not.toHaveBeenCalledWith(o.error);
+    expect(mocks.toastSuccess).not.toHaveBeenCalled();
+    // The client does not read the session again after a failed request by itself; the card has
+    // it read again, which is what AdminSessionGuard sends to sign-in on (AdminSessionGuard.test.tsx)
+    const revokedAt = network.state.requests.findIndex((request) => request.path === REVOKE_PATH);
+    await waitFor(() =>
+      expect(network.state.requests.slice(revokedAt + 1).map((request) => request.path)).toContain(
+        '/api/auth/get-session'
+      )
+    );
   });
 
   it('says it failed when the request does not reach the server', async () => {

@@ -3,7 +3,8 @@
  * configuration on PostgreSQL, called the way the page calls it (authClient.revokeOtherSessions,
  * POST /api/auth/revoke-other-sessions with the session cookie of this browser). Every other
  * session of the user is deleted; the session of this browser stays as it was (same row, same
- * cookie, nothing re-issued), so this browser stays signed in. Other users are left alone.
+ * cookie, nothing re-issued), so this browser stays signed in. Other users are left alone. A copy
+ * of this browser's own cookie is not ended by it; a password change ends it, which the card says.
  *
  * The checks read the session from the database (disableCookieCache), so they hold whether or not
  * session.cookieCache is on; it is off since #578, so the signed-out browsers are signed out at
@@ -181,6 +182,34 @@ describe.skipIf(!url)('sign out other devices (better-auth + PostgreSQL)', () =>
     expect(res.status).toBe(401);
     expect(await sessionRows(someone.userId)).toEqual([someone.thisRow]);
     expect((await sessionOf(someone.thisBrowser))?.session.id).toBe(someone.thisRow.id);
+  });
+
+  it("does not end a copy of this browser's own cookie, which a password change does end", async () => {
+    // The known limit the card tells about (settings.profile.otherDevices.copiedHere): better-auth
+    // keeps every session with the token of this browser, and a copy holds that very token
+    const someone = await userOnThreeDevices();
+    const copyOfThisBrowser = someone.thisBrowser;
+
+    expect((await signOutOtherDevices(someone.thisBrowser)).status).toBe(200);
+    expect((await sessionOf(copyOfThisBrowser))?.session.id).toBe(someone.thisRow.id);
+
+    // What the card points to instead: the settings page's password change (#591)
+    const res = await call(
+      '/change-password',
+      { currentPassword: PASSWORD, newPassword: 'Password456', revokeOtherSessions: true },
+      someone.thisBrowser
+    );
+
+    expect(res.status).toBe(200);
+    expect(await sessionOf(copyOfThisBrowser)).toBeNull();
+    // This browser is signed in again with a new session, the only one left
+    const newCookie = sessionCookie(res);
+    expect(newCookie).not.toBe(copyOfThisBrowser);
+    const newSession = await sessionOf(newCookie);
+    expect(newSession?.user.id).toBe(someone.userId);
+    expect((await sessionRows(someone.userId)).map((row) => row.id)).toEqual([
+      newSession?.session.id,
+    ]);
   });
 
   it('refuses a browser that is not signed in', async () => {
