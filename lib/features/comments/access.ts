@@ -8,5 +8,14 @@ import type { AppAbility } from '@/lib/auth/permissions';
  */
 export const COMMENTS_READ_EXCLUDED_ROLES: readonly string[] = ['parent_viewer'];
 
-export const canReadComments = (ctx: { ability: AppAbility; membership: { role: string } }) =>
+type AccessContext = { ability: AppAbility; membership: { role: string } };
+
+export const canReadComments = (ctx: AccessContext) =>
   ctx.ability.can('read', 'Lead') && !COMMENTS_READ_EXCLUDED_ROLES.includes(ctx.membership.role);
+
+/**
+ * Who may write comments (and pin them): those who may update leads and read the comments. A
+ * write answers with the comment, so a role left out of reading is left out of writing too.
+ */
+export const canWriteComments = (ctx: AccessContext) =>
+  ctx.ability.can('update', 'Lead') && canReadComments(ctx);

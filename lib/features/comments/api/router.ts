@@ -13,7 +13,7 @@ import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { and, count, desc, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { canReadComments } from '../access';
+import { canReadComments, canWriteComments } from '../access';
 
 type Transaction = Parameters<Parameters<(typeof defaultDb)['transaction']>[0]>[0];
 
@@ -149,11 +149,11 @@ export const commentsRouter = router({
       total: total?.value ?? 0,
       limit: input.limit,
       offset: input.offset,
-      // What the screen offers: writing needs update Lead; others' comments are edited and
-      // deleted by their author or an owner only (the checks of update and delete below)
+      // What the screen offers: the checks of the writes below (others' comments are edited and
+      // deleted by their author or an owner only)
       viewer: {
         userId: ctx.session.user.id,
-        canWrite: ctx.ability.can('update', 'Lead'),
+        canWrite: canWriteComments(ctx),
         canModerate: ctx.ability.can('manage', 'all'),
       },
     };
@@ -163,7 +163,7 @@ export const commentsRouter = router({
    * Create a new comment
    */
   create: organizationProcedure.input(createCommentSchema).mutation(async ({ ctx, input }) => {
-    if (!ctx.ability.can('update', 'Lead')) {
+    if (!canWriteComments(ctx)) {
       throw new TRPCError({
         code: 'FORBIDDEN',
         message: 'コメントを作成する権限がありません',
@@ -239,7 +239,7 @@ export const commentsRouter = router({
    * Update a comment
    */
   update: organizationProcedure.input(updateCommentSchema).mutation(async ({ ctx, input }) => {
-    if (!ctx.ability.can('update', 'Lead')) {
+    if (!canWriteComments(ctx)) {
       throw new TRPCError({
         code: 'FORBIDDEN',
         message: 'コメントを更新する権限がありません',
@@ -301,7 +301,7 @@ export const commentsRouter = router({
    * Delete a comment
    */
   delete: organizationProcedure.input(deleteCommentSchema).mutation(async ({ ctx, input }) => {
-    if (!ctx.ability.can('update', 'Lead')) {
+    if (!canWriteComments(ctx)) {
       throw new TRPCError({
         code: 'FORBIDDEN',
         message: 'コメントを削除する権限がありません',
@@ -407,7 +407,7 @@ export const commentsRouter = router({
    * Toggle pin status of a comment
    */
   togglePin: organizationProcedure.input(togglePinSchema).mutation(async ({ ctx, input }) => {
-    if (!ctx.ability.can('update', 'Lead')) {
+    if (!canWriteComments(ctx)) {
       throw new TRPCError({
         code: 'FORBIDDEN',
         message: 'コメントをピン留めする権限がありません',
@@ -463,7 +463,7 @@ export const commentsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      if (!ctx.ability.can('update', 'Lead')) {
+      if (!canWriteComments(ctx)) {
         throw new TRPCError({
           code: 'FORBIDDEN',
           message: 'アクティビティを記録する権限がありません',
