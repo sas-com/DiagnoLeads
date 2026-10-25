@@ -49,7 +49,7 @@
 | `features-in-cycles` | 互いに依存し合う機能（間接も含む）を増やさない | 許可リスト 20 |
 | `cross-feature-internal` | 他の機能から読むのは公開面（`types/**`・`types.ts`・`service.ts`。ほかに `email/index.ts`・`respondent-email/index.ts`）だけ。項目は「読む機能 -> 読まれる側のファイル」（#623） | 許可リスト 79 |
 | `ax-boundary` | AX 診断（`diagnostics/ax-migration/`）を読むのは、AX 診断の中と、AX のための機能（`ax-*`）だけ。型だけの import も数える。項目は「読む側 -> AX のファイル」。リードの最新の AX 回答は `ax-migration/lead-submissions.ts`、営業の手引きは `ax-playbook/service.ts` から読む（#480） | 許可リスト 16 |
-| `features-use-global-db` | 機能のコードはグローバルの `db` を使わず、`ctx.db` か引数の executor を使う（RLS で接続を差し替えるため） | 許可リスト 12 |
+| `features-use-global-db` | 機能のコードはグローバルの `db` を使わず、`ctx.db` か引数の executor を使う（RLS で接続を差し替えるため） | 許可リスト 11 |
 | `feature-index-files` | lib/features に `index.ts`（barrel）を作らない | 許可リスト 18 |
 | `unregistered-routers` | 機能のルーターはすべて `server/routers/_app.ts` に登録する | 許可リスト 2 |
 
