@@ -6,12 +6,16 @@ import { clientIp, ipBlock } from '@/lib/features/diagnostics/request-guard';
 import {
   QR_ENTRY_RATE_LIMITS,
   QR_ENTRY_TOO_MANY_REQUESTS_TEXT,
+  QR_SCAN_DAILY_CAP,
 } from '@/lib/features/distribution/limits';
+import { type QrScanDevice, recordQrScan, scanDayOf } from '@/lib/features/distribution/scans';
 import {
+  type QrEntryCampaign,
   findOpenQrCampaign,
   qrEntryRedirectPath,
 } from '@/lib/features/distribution/short-code-entry';
 import { SHORT_CODE_PATTERN } from '@/lib/features/distribution/types';
+import { deviceOf, isBot } from '@/lib/features/site-visits/request';
 import { reportRejectedRequest, reportServerError } from '@/lib/ops/alert';
 import { type NextRequest, NextResponse, after } from 'next/server';
 
@@ -59,6 +63,64 @@ function receivesAxDiagnosis(organizationId: string): boolean {
 }
 
 /**
+ * The part of a User-Agent the device is told from. A browser's is a few hundred characters; the
+ * tablet pattern of deviceOf takes time in the square of the length, so a long header sent on
+ * purpose is cut before the patterns run (they run before the redirect is answered)
+ */
+const USER_AGENT_CHARS = 512;
+
+/**
+ * The kind of device a scan is recorded with, or null when the request is not a scan:
+ * - a bot (link previews, crawlers, monitors, no User-Agent), excluded as /api/collect excludes
+ *   them from the page views
+ * - HEAD, which Next.js answers with this GET handler: it sends nobody to the diagnosis
+ * Only the kind of device is kept of the User-Agent (decision 2026-10-23-site-visit-measurement)
+ */
+function scannedDevice(req: NextRequest): QrScanDevice | null {
+  if (req.method !== 'GET') return null;
+  const userAgent = req.headers.get('user-agent')?.slice(0, USER_AGENT_CHARS);
+  if (!userAgent || isBot(userAgent)) return null;
+  return deviceOf(userAgent);
+}
+
+/** What the alert holds when a campaign's scans pass the daily cap: only this name */
+function dailyCapReached(): Error {
+  const error = new Error('QR scans of a campaign reached the daily cap');
+  error.name = 'QrScanDailyCapReached';
+  return error;
+}
+
+/**
+ * Record a scan the entry has sent on (#41). Run after the response: the visitor never waits
+ * for the write, and a failed write is reported like the entry's other errors, never answered.
+ * Counted against the campaign's daily cap first (QR_SCAN_DAILY_CAP): past it the scan is not
+ * written, and the one scan that goes past it tells the people on call
+ */
+async function recordScan(campaign: QrEntryCampaign, device: QrScanDevice): Promise<void> {
+  try {
+    const now = new Date();
+    const day = scanDayOf(now);
+    // Counted atomically, so exactly one scan sees limit + 1 and the alert goes out once a day
+    const cap = await consumeRateLimit(db, QR_SCAN_DAILY_CAP, `${campaign.campaignId}:${day}`, now);
+    if (!cap.allowed) {
+      if (cap.count === QR_SCAN_DAILY_CAP.limit + 1) {
+        console.warn('QR scans reached the daily cap of the campaign; no more are recorded today', {
+          campaignId: campaign.campaignId,
+          day,
+        });
+        await reportServerError('qr-entry/scan-daily-cap', dailyCapReached());
+      }
+      return;
+    }
+    await recordQrScan(db, campaign, device, now);
+  } catch (error) {
+    // The error of the database, never the campaign
+    console.error('QR scan record error:', error instanceof Error ? error.name : 'unknown');
+    await reportServerError('qr-entry/scan', error);
+  }
+}
+
+/**
  * GET /q/<short code>
  *
  * The QR code of a campaign (#503). Sends the visitor to the campaign's diagnosis with the
@@ -74,7 +136,9 @@ function receivesAxDiagnosis(organizationId: string): boolean {
  * Outside [locale] (lib/i18n/middleware.ts skips /q/): the code is case-sensitive and the
  * locale routing would otherwise redirect it first.
  *
- * Scans are not recorded yet (#41 adds them here).
+ * Each scan sent on is recorded after the response (#41, recordScan): counted after the rate
+ * limit and against the campaign's daily cap, the row and the count in one statement, never a
+ * 404 or a 429.
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
@@ -112,6 +176,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
       // The AX diagnosis makes leads of the AX organization only (also 404 while it has none)
       return notFound();
     }
+
+    const device = scannedDevice(req);
+    if (device) after(() => recordScan(campaign, device));
 
     // A relative Location: the visitor stays on the host they scanned
     return new NextResponse(null, {

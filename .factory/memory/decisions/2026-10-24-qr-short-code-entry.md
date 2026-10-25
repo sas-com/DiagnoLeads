@@ -5,8 +5,8 @@ category: Security
 title: "QR キャンペーンの入口は /q/<短縮コード>。転送先は DB の値とアプリのルートだけから作る（#503）"
 status: active
 superseded_by: []
-issues: [503, 41, 120, 610, 663, 692]
-paths: ["app/q/**", "lib/features/distribution/short-code-entry.ts", "lib/features/distribution/limits.ts", "lib/features/distribution/qr-code.ts", "lib/features/distribution/router.ts", "lib/middleware/rate-limit.ts", "lib/features/diagnostics/organization.ts"]
+issues: [503, 41, 120, 610, 663, 692, 700, 702]
+paths: ["app/q/**", "lib/features/distribution/short-code-entry.ts", "lib/features/distribution/scans.ts", "lib/features/distribution/limits.ts", "lib/features/distribution/qr-code.ts", "lib/features/distribution/router.ts", "lib/middleware/rate-limit.ts", "lib/features/diagnostics/organization.ts"]
 ---
 
 ### [Security] QR キャンペーンの入口は /q/<短縮コード>。転送先は DB の値とアプリのルートだけから作る（#503）
@@ -34,7 +34,14 @@ paths: ["app/q/**", "lib/features/distribution/short-code-entry.ts", "lib/featur
   - 行き先を足すときも、キャンペーンが名指しした診断（`diagnosis_id`）があれば、そこか 404 にする。名指しした診断が使えないときに、ほかの診断（AX 診断を含む）へ回さない。AX 診断へ送るのは、AX 診断の回答を受け取る組織のキャンペーンだけ
   - 入口の転送先に、リクエストの値を入れない。行き先の候補を増やすときは、組織をキャンペーンの行から取り、そのページが同じ組織の行を出すことを確かめる
   - `/q/` は `lib/i18n/middleware.ts` のロケールの振り分けから外す。`lib/middleware/cache-headers.ts` も `no-store` にする
-  - スキャンの記録（`qr_scans`・`scan_count`）は #41 でこの入口に足す。数える前に回数制限を掛けたまま、DB の書き込みを1回の要求で増やしすぎない
+  - スキャンの記録（#41、2026-10-25）：入口が転送したスキャンごとに、`qr_scans` に1行を足し、`qr_campaigns.scan_count` を1増やす（`recordQrScan`、`lib/features/distribution/scans.ts`）
+    - 回数制限の後に数える。404・429・500 と、ボット（`/api/collect` と同じ `isBot`。UA のないものも）・HEAD（Next.js が GET の関数で答える。誰も診断へ行かない）は記録しない（HEAD を記録しないのは作者の判断。オーナー未確認）
+    - キャンペーンごとに1日（日本時間）2,000件の上限（`QR_SCAN_DAILY_CAP`、`lib/features/distribution/limits.ts`）。記録の前に「キャンペーンの id と日」で `public_rate_limits` に数え、超えたら転送だけして記録しない。超えた最初の1件だけ `console.warn`（キャンペーンの id と日）と `reportServerError('qr-entry/scan-daily-cap')` で知らせる。アドレスごとの回数制限は多数のアドレスからの水増しを止めないため（2026-10-25 の読み取り専用のレビュー。訪問の計測の組織ごとの上限と同じ形）。組織ごとでなくキャンペーンごとにしたのは、1つのコードへの水増しで同じ組織のほかのキャンペーンの記録が止まらないようにするため。値は催しの最大人数（100人）の20倍。単位と値は作者の判断で、オーナー未確認（PR #704）。変えるときはこの決定を更新する
+    - 1回のスキャンの記録は1文（`scan_count` を増やす UPDATE と、その行の組織で INSERT する CTE。ほかに1日の上限を数える `public_rate_limits` の1文）。行と数は食い違わず、同時のスキャンも行のロックで全部数える。キャンペーンが消えていれば何も書かない。組織はキャンペーンの行から取る
+    - 書き込みは応答の後（`after()`）。転送を待たせない。失敗しても転送は変わらず、入口のほかのエラーと同じく `console.error`（エラーの名前だけ）と `reportServerError('qr-entry/scan')` で知らせる。1日の上限を数えられなかったときも同じ
+    - 残すのは、キャンペーン・組織・端末の種類（`deviceOf`）・日（日本時間の0時。`scanned_at` はタイムゾーンのない列）だけ。IP（とそのハッシュ）・UA・位置・セッション・時刻は残さない（決定 `2026-10-23-site-visit-measurement` と同じ。時刻があると、同じ時刻の診断の回答と突き合わせられる）。人を指すものを持たないので、訪問の計測のような有効化の環境変数は置かない（作者の判断。オーナー未確認。プライバシーポリシーに書く前に記録を始めてよいかは、法務の確認待ち（PR #704 のレビュー））
+    - UA の判定（`isBot`・`deviceOf`、`lib/features/site-visits/request.ts`）は入口（app）で組み合わせ、`distribution` からは読まない（下の import の決まり）。UA は先頭の512文字だけを渡す（`deviceOf` のタブレットの正規表現は UA の長さの2乗の時間がかかり、入口では 307 を返す前に動くため）
+    - `getCampaignStats` は、合計を `scan_count`、端末の内訳と転換率を `qr_scans` の集計（DB で数える。全行を読まない）から返す。直近の10件は id・端末・日（`scannedOn`、日本時間の `YYYY-MM-DD` の文字列）・converted だけを返す。日を Date で返すと、タイムゾーンのない列の0時が UTC として読まれ、画面では日本時間の9:00に見えるため
   - `distribution` の機能は、ほかの機能を import しない（`limits.ts` は `RateLimitRule` の形を書き写している）。診断ビルダーの公開の判定は入口（app）で組み合わせる。機能の import の循環（`features-in-cycles`）に入れないため
   - キャンペーンの更新（`updateCampaign`）は、送られた項目だけを書く。`expiresAt` のない更新（名前の変更・停止と再開）は期限を変えず、`null` を送ったときだけ消す（#610）。入口が期限を見るので、期限を消してしまうと、期限の切れた QR がまた転送する
 - **却下案**:
@@ -49,3 +56,9 @@ paths: ["app/q/**", "lib/features/distribution/short-code-entry.ts", "lib/featur
   - proxy のメモリの制限はインスタンスごとなので、インスタンスが増えると、1分200回より多く通る。インスタンスとコードをまたいだアドレスごとの上限は、DB の制限（10分200回）だけ
   - RLS（#51）：入口はログインなしで、グローバルの `db` から `qr_campaigns`・`diagnoses`（`findPublicDiagnosis` と同じ）・`public_rate_limits` を組織で絞らずに読む。組織は行から取る。`qr_campaigns` の RLS は無効のまま。RLS を掛けるときは、この入口を公開の読み取りとして扱う（ポリシーか専用の接続）。掛けただけだと、すべての QR が 404 になる（閉じる側に倒れる）
   - #610 の修正より前に、本番の停止と再開で期限が消えたキャンペーンは戻らない（どの行の期限が消えたかの記録はない）。画面には期限が出ず、期限を付ける・延ばす・消す入力もない（#695）。期限は API で付けたときだけなので、当たる行は少ない
+  - スキャンからリードまで（`completion_count`・`qr_scans.converted`・`lead_id`）はまだ数えない（#700）。`getCampaignStats` の転換率は0のまま
+  - `qr_scans` に `campaign_id`・`lead_id`・`organization_id` の索引がない。集計とキャンペーンの削除（CASCADE）は表全体を読み、リードの削除（`lead_id` の SET NULL）と組織の削除も、どの組織の操作でも表全体を読む。記録はキャンペーンごとに1日2,000件までだが、保存の期間はなく、行は増え続ける。索引は #702（スキーマの変更なので、本番に適用してからマージする）。記録の文に `lock_timeout` はなく、キャンペーンの行が長くロックされると（索引のない CASCADE など）、応答の後の書き込みが接続を持ったまま待つ（#702 の索引でほぼなくなる）
+  - `qr_scans` の保存期間は決めていない（今は無期限。訪問の生の記録は90日の案）。今の列では個人に結び付かないが、#700 でスキャンの行とリードを結ぶなら、保存期間と削除を決める（法務・情報システム部門）
+  - `totalConversions` は `completion_count` から、`conversionRate` は `qr_scans.converted` から取る。どちらも0のままだが、#700 で片方だけを書くと食い違うので、#700 で出どころをそろえる
+  - UA の判定は `/api/collect` と同じなので、限界も同じ：`isBot` の `bot` は部分一致で、端末名に bot を含む人のスキャン（例：CUBOT の端末。推測）を落とす。iPadOS の Safari は既定でデスクトップの UA を送るので `desktop` として数える。ブラウザの UA を名乗るメールのリンク検査などは、人のスキャンとして数える。数の精度の問題で、守りの問題ではない
+  - #41 より前のスキャンは記録されていない（本番の `scan_count` は0から数え始める）
