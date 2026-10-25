@@ -273,6 +273,13 @@
 - **解決策**: スキーマバリデーションのテストと、サービス層の単体テストに分離
 - **教訓**: routerはスキーマテスト、ビジネスロジックはサービス層でテスト
 
+### [API] Route Handler の GET は、HEAD の要求でも呼ばれる
+- **日付**: 2026-10-25
+- **状況**: #41 で QR の入口（`app/q/[code]/route.ts`、GET だけを定義）にスキャンの記録を足すとき、リンクの確認ツールなどの HEAD の要求も記録に入るかを確かめた
+- **原因**: Next.js は、HEAD を定義していない Route Handler の HEAD を GET の関数で答える（`node_modules/next/dist/server/route-modules/app-route/helpers/auto-implement-methods.js`）。`req.method` は `HEAD` になる
+- **解決策**: 記録の前に `req.method !== 'GET'` なら記録しないようにし、ユニットテストで HEAD を流して確かめた
+- **教訓**: GET の Route Handler で書き込む（数える・記録する）ときは、HEAD でも同じ関数が動くことを前提にし、書き込みを `req.method` で分ける
+
 ---
 
 ## パフォーマンス関連

@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { diagnosticTemplates, qrCampaigns, qrScans } from '@/lib/db/schema';
+import { diagnosticTemplates, qrCampaigns } from '@/lib/db/schema';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { and, desc, eq } from 'drizzle-orm';
@@ -10,6 +10,7 @@ import {
   generateQRCode,
   generateShortCode,
 } from './qr-code';
+import { campaignScanStats } from './scans';
 import { createQRCampaignSchema } from './types';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
@@ -294,7 +295,8 @@ export const distributionRouter = router({
     }),
 
   /**
-   * Get scan statistics for a campaign
+   * Scan statistics of a campaign (#41): the scans the /q/ entry recorded. The total is the
+   * campaign's scan_count, which the entry counts in the same statement as each qr_scans row
    */
   getCampaignStats: campaignViewProcedure
     .input(z.object({ campaignId: z.string().uuid() }))
@@ -310,29 +312,15 @@ export const distributionRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'QR campaign not found' });
       }
 
-      const scans = await db.query.qrScans.findMany({
-        where: eq(qrScans.campaignId, input.campaignId),
-        orderBy: [desc(qrScans.scannedAt)],
+      const stats = await campaignScanStats(ctx.db, {
+        organizationId: ctx.organization.id,
+        campaignId: campaign.id,
       });
-
-      const deviceBreakdown = scans.reduce(
-        (acc, scan) => {
-          const type = scan.deviceType || 'unknown';
-          acc[type] = (acc[type] || 0) + 1;
-          return acc;
-        },
-        {} as Record<string, number>
-      );
-
-      const conversionRate =
-        scans.length > 0 ? (scans.filter((s) => s.converted).length / scans.length) * 100 : 0;
 
       return {
         totalScans: campaign.scanCount,
         totalConversions: campaign.completionCount,
-        conversionRate: Math.round(conversionRate * 100) / 100,
-        deviceBreakdown,
-        recentScans: scans.slice(0, 10),
+        ...stats,
       };
     }),
 });

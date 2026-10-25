@@ -7,11 +7,14 @@ import {
   QR_ENTRY_RATE_LIMITS,
   QR_ENTRY_TOO_MANY_REQUESTS_TEXT,
 } from '@/lib/features/distribution/limits';
+import { type QrScanDevice, recordQrScan } from '@/lib/features/distribution/scans';
 import {
+  type QrEntryCampaign,
   findOpenQrCampaign,
   qrEntryRedirectPath,
 } from '@/lib/features/distribution/short-code-entry';
 import { SHORT_CODE_PATTERN } from '@/lib/features/distribution/types';
+import { deviceOf, isBot } from '@/lib/features/site-visits/request';
 import { reportRejectedRequest, reportServerError } from '@/lib/ops/alert';
 import { type NextRequest, NextResponse, after } from 'next/server';
 
@@ -59,6 +62,34 @@ function receivesAxDiagnosis(organizationId: string): boolean {
 }
 
 /**
+ * The kind of device a scan is recorded with, or null when the request is not a scan:
+ * - a bot (link previews, crawlers, monitors, no User-Agent), excluded as /api/collect excludes
+ *   them from the page views
+ * - HEAD, which Next.js answers with this GET handler: it sends nobody to the diagnosis
+ * Only the kind of device is kept of the User-Agent (decision 2026-10-23-site-visit-measurement)
+ */
+function scannedDevice(req: NextRequest): QrScanDevice | null {
+  if (req.method !== 'GET') return null;
+  const userAgent = req.headers.get('user-agent');
+  if (!userAgent || isBot(userAgent)) return null;
+  return deviceOf(userAgent);
+}
+
+/**
+ * Record a scan the entry has sent on (#41). Run after the response: the visitor never waits
+ * for the write, and a failed write is reported like the entry's other errors, never answered
+ */
+async function recordScan(campaign: QrEntryCampaign, device: QrScanDevice): Promise<void> {
+  try {
+    await recordQrScan(db, campaign, device);
+  } catch (error) {
+    // The error of the database, never the campaign
+    console.error('QR scan record error:', error instanceof Error ? error.name : 'unknown');
+    await reportServerError('qr-entry/scan', error);
+  }
+}
+
+/**
  * GET /q/<short code>
  *
  * The QR code of a campaign (#503). Sends the visitor to the campaign's diagnosis with the
@@ -74,7 +105,8 @@ function receivesAxDiagnosis(organizationId: string): boolean {
  * Outside [locale] (lib/i18n/middleware.ts skips /q/): the code is case-sensitive and the
  * locale routing would otherwise redirect it first.
  *
- * Scans are not recorded yet (#41 adds them here).
+ * Each scan sent on is recorded after the response (#41, recordScan): counted after the rate
+ * limit, one statement per scan, never a 404 or a 429.
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
@@ -112,6 +144,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
       // The AX diagnosis makes leads of the AX organization only (also 404 while it has none)
       return notFound();
     }
+
+    const device = scannedDevice(req);
+    if (device) after(() => recordScan(campaign, device));
 
     // A relative Location: the visitor stays on the host they scanned
     return new NextResponse(null, {
