@@ -380,8 +380,9 @@ describe('GET /q/[code]', () => {
     });
 
     it('tells the device from the first 512 characters of the User-Agent only', async () => {
-      // deviceOf's tablet pattern takes time in the square of the length: a long header sent on
-      // purpose is cut first. 「Mobile」 past the cut is not read, so this counts as a tablet
+      // deviceOf's tablet pattern takes time in the square of the length: isBot and deviceOf cut
+      // a long header sent on purpose first (#705). 「Mobile」 past the cut is not read, so this
+      // counts as a tablet
       const userAgent = `${'Android '.repeat(20_000)}Mobile`;
       expect((await scan('AbCd2345', { headers: { 'user-agent': userAgent } })).status).toBe(307);
       expect(mocks.recordQrScan.mock.calls[0][2]).toBe('tablet');

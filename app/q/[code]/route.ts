@@ -63,22 +63,17 @@ function receivesAxDiagnosis(organizationId: string): boolean {
 }
 
 /**
- * The part of a User-Agent the device is told from. A browser's is a few hundred characters; the
- * tablet pattern of deviceOf takes time in the square of the length, so a long header sent on
- * purpose is cut before the patterns run (they run before the redirect is answered)
- */
-const USER_AGENT_CHARS = 512;
-
-/**
  * The kind of device a scan is recorded with, or null when the request is not a scan:
  * - a bot (link previews, crawlers, monitors, no User-Agent), excluded as /api/collect excludes
  *   them from the page views
  * - HEAD, which Next.js answers with this GET handler: it sends nobody to the diagnosis
- * Only the kind of device is kept of the User-Agent (decision 2026-10-23-site-visit-measurement)
+ * Only the kind of device is kept of the User-Agent (decision 2026-10-23-site-visit-measurement).
+ * isBot and deviceOf read only the head of the User-Agent (#705), so a long header sent on
+ * purpose does not hold the redirect (they run before it is answered)
  */
 function scannedDevice(req: NextRequest): QrScanDevice | null {
   if (req.method !== 'GET') return null;
-  const userAgent = req.headers.get('user-agent')?.slice(0, USER_AGENT_CHARS);
+  const userAgent = req.headers.get('user-agent');
   if (!userAgent || isBot(userAgent)) return null;
   return deviceOf(userAgent);
 }

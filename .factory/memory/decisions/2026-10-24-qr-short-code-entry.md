@@ -5,7 +5,7 @@ category: Security
 title: "QR キャンペーンの入口は /q/<短縮コード>。転送先は DB の値とアプリのルートだけから作る（#503）"
 status: active
 superseded_by: []
-issues: [503, 41, 120, 610, 663, 692, 700, 702]
+issues: [503, 41, 120, 610, 663, 692, 700, 702, 705]
 paths: ["app/q/**", "lib/features/distribution/short-code-entry.ts", "lib/features/distribution/scans.ts", "lib/features/distribution/limits.ts", "lib/features/distribution/qr-code.ts", "lib/features/distribution/router.ts", "lib/middleware/rate-limit.ts", "lib/features/diagnostics/organization.ts"]
 ---
 
@@ -40,7 +40,7 @@ paths: ["app/q/**", "lib/features/distribution/short-code-entry.ts", "lib/featur
     - 1回のスキャンの記録は1文（`scan_count` を増やす UPDATE と、その行の組織で INSERT する CTE。ほかに1日の上限を数える `public_rate_limits` の1文）。行と数は食い違わず、同時のスキャンも行のロックで全部数える。キャンペーンが消えていれば何も書かない。組織はキャンペーンの行から取る
     - 書き込みは応答の後（`after()`）。転送を待たせない。失敗しても転送は変わらず、入口のほかのエラーと同じく `console.error`（エラーの名前だけ）と `reportServerError('qr-entry/scan')` で知らせる。1日の上限を数えられなかったときも同じ
     - 残すのは、キャンペーン・組織・端末の種類（`deviceOf`）・日（日本時間の0時。`scanned_at` はタイムゾーンのない列）だけ。IP（とそのハッシュ）・UA・位置・セッション・時刻は残さない（決定 `2026-10-23-site-visit-measurement` と同じ。時刻があると、同じ時刻の診断の回答と突き合わせられる）。人を指すものを持たないので、訪問の計測のような有効化の環境変数は置かない（作者の判断。オーナー未確認。プライバシーポリシーに書く前に記録を始めてよいかは、法務の確認待ち（PR #704 のレビュー））
-    - UA の判定（`isBot`・`deviceOf`、`lib/features/site-visits/request.ts`）は入口（app）で組み合わせ、`distribution` からは読まない（下の import の決まり）。UA は先頭の512文字だけを渡す（`deviceOf` のタブレットの正規表現は UA の長さの2乗の時間がかかり、入口では 307 を返す前に動くため）
+    - UA の判定（`isBot`・`deviceOf`、`lib/features/site-visits/request.ts`）は入口（app）で組み合わせ、`distribution` からは読まない（下の import の決まり）。UA の判定は先頭の512文字だけで行う（`deviceOf` のタブレットの正規表現は UA の長さの2乗の時間がかかり、入口では 307 を返す前に動くため）。PR #704 では入口で切っていたが、#705 で `isBot`・`deviceOf` の中で切るように移し、入口は UA をそのまま渡す（`/api/collect` と同じ。決定 `2026-10-23-site-visit-measurement`）
     - `getCampaignStats` は、合計を `scan_count`、端末の内訳と転換率を `qr_scans` の集計（DB で数える。全行を読まない）から返す。直近の10件は id・端末・日（`scannedOn`、日本時間の `YYYY-MM-DD` の文字列）・converted だけを返す。日を Date で返すと、タイムゾーンのない列の0時が UTC として読まれ、画面では日本時間の9:00に見えるため
   - `distribution` の機能は、ほかの機能を import しない（`limits.ts` は `RateLimitRule` の形を書き写している）。診断ビルダーの公開の判定は入口（app）で組み合わせる。機能の import の循環（`features-in-cycles`）に入れないため
   - キャンペーンの更新（`updateCampaign`）は、送られた項目だけを書く。`expiresAt` のない更新（名前の変更・停止と再開）は期限を変えず、`null` を送ったときだけ消す（#610）。入口が期限を見るので、期限を消してしまうと、期限の切れた QR がまた転送する
