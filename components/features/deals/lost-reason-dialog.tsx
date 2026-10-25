@@ -41,6 +41,8 @@ interface LostReasonDialogProps {
   dealName: string;
   /** Values already on the deal; a reason a deal can no longer take is not preselected */
   initial?: Partial<Omit<LostValues, 'lostReason'>> & { lostReason?: LostReason };
+  /** The deal is won now: its lead stays 成約 */
+  fromWon?: boolean;
   pending?: boolean;
   onConfirm: (values: LostValues) => void;
 }
@@ -51,6 +53,7 @@ export function LostReasonDialog({
   onOpenChange,
   dealName,
   initial,
+  fromWon = false,
   pending = false,
   onConfirm,
 }: LostReasonDialogProps) {
@@ -91,7 +94,10 @@ export function LostReasonDialog({
         <form onSubmit={submit} className="space-y-4" noValidate>
           <DialogHeader>
             <DialogTitle>{t('title', { name: dealName })}</DialogTitle>
-            <DialogDescription>{t('description')}</DialogDescription>
+            <DialogDescription>
+              {t('description')}
+              {fromWon && ` ${t('fromWon')}`}
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-1.5">

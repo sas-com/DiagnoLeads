@@ -1,5 +1,6 @@
 'use client';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import {
@@ -11,23 +12,20 @@ import {
 } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useOrganization } from '@/hooks/use-organization';
-import type { DealCard } from '@/lib/features/deals/service';
-import { DEAL_KINDS, type DealKind, type DealStage } from '@/lib/features/deals/types/pipeline';
-import { BOARD_DEALS_LIMIT } from '@/lib/features/deals/types/schemas';
+import { DEAL_KINDS, type DealKind } from '@/lib/features/deals/types/pipeline';
+import { BOARD_CLOSED_DAYS_DEFAULT, BOARD_DEALS_LIMIT } from '@/lib/features/deals/types/schemas';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { trpc } from '@/lib/trpc/client';
 import { Loader2, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useId, useState } from 'react';
-import { toast } from 'sonner';
 import { DealBoard } from './deal-board';
 import { DealFormDialog } from './deal-form-dialog';
 import { DEAL_PERIODS, type DealPeriod, isDealPeriod, periodRange } from './deal-format';
 import { DealTable } from './deal-table';
 import { DealsForbidden } from './deals-forbidden';
-import { LostReasonDialog } from './lost-reason-dialog';
-import { useDealMutations } from './use-deal-mutations';
+import { useStageMove } from './use-stage-move';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const VIEWS = ['board', 'list'] as const;
@@ -73,8 +71,7 @@ export function DealsScreen() {
   const { view, owner, kind, period, set } = useBoardQuery();
   const today = jstDate();
   const [createOpen, setCreateOpen] = useState(false);
-  const [losing, setLosing] = useState<DealCard | null>(null);
-  const { update } = useDealMutations();
+  const stageMove = useStageMove(organizationId);
 
   const board = trpc.deals.board.useQuery(
     {
@@ -89,20 +86,6 @@ export function DealsScreen() {
   const data = board.data;
   const total = data?.columns.reduce((sum, column) => sum + column.count, 0) ?? 0;
   const cards = data?.columns.flatMap((column) => column.deals) ?? [];
-
-  const move = (deal: DealCard, stage: DealStage) => {
-    if (stage === 'lost') {
-      setLosing(deal);
-      return;
-    }
-    update.mutate(
-      { organizationId, dealId: deal.id, stage },
-      {
-        onSuccess: () =>
-          toast.success(t('toasts.moved', { name: deal.name, stage: t(`stages.${stage}`) })),
-      }
-    );
-  };
 
   if (board.error?.data?.code === 'FORBIDDEN') {
     return (
@@ -140,6 +123,7 @@ export function DealsScreen() {
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
+            {data && !data.canEdit && <Badge color="gray">{t('state.readOnly')}</Badge>}
             {data?.canEdit && (
               <Button type="button" onClick={() => setCreateOpen(true)}>
                 <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
@@ -247,8 +231,15 @@ export function DealsScreen() {
                 <DealBoard
                   columns={data.columns}
                   today={data.today}
+                  // The board is read with the API's default (closedWithinDays is not sent)
+                  closedWithinDays={BOARD_CLOSED_DAYS_DEFAULT}
                   canEdit={data.canEdit}
-                  onMove={move}
+                  onMove={(deal, stage) =>
+                    stageMove.move(
+                      { ...deal, leadLabel: deal.company || deal.leadName || '' },
+                      stage
+                    )
+                  }
                 />
               ) : (
                 <DealTable deals={cards} today={data.today} />
@@ -263,30 +254,7 @@ export function DealsScreen() {
               organizationId={organizationId}
             />
           )}
-          <LostReasonDialog
-            open={!!losing}
-            onOpenChange={(open) => !open && setLosing(null)}
-            dealName={losing?.name ?? ''}
-            initial={{
-              lostReason: losing?.lostReason ?? undefined,
-              lostNote: losing?.lostNote,
-              competitor: losing?.competitor,
-            }}
-            pending={update.isPending}
-            onConfirm={(values) => {
-              const deal = losing;
-              if (!deal) return;
-              update.mutate(
-                { organizationId, dealId: deal.id, stage: 'lost', ...values },
-                {
-                  onSuccess: () => {
-                    setLosing(null);
-                    toast.success(t('toasts.moved', { name: deal.name, stage: t('stages.lost') }));
-                  },
-                }
-              );
-            }}
-          />
+          {stageMove.dialogs}
         </>
       )}
     </div>

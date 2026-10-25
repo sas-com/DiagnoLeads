@@ -66,12 +66,6 @@ const nextConfig: NextConfig = {
   }),
 };
 
-// Bundle Analyzer (run with ANALYZE=true npm run build)
-const withBundleAnalyzer =
-  process.env.ANALYZE === 'true'
-    ? require('@next/bundle-analyzer')({ enabled: true })
-    : (config: NextConfig) => config;
-
 /**
  * withPayload adds Accept-CH, Vary and Critical-CH for Sec-CH-Prefers-Color-Scheme to every path.
  * Critical-CH makes Chrome send the first request of a visit again to add the hint (an internal
@@ -102,5 +96,6 @@ export function scopePayloadColorHints(config: NextConfig): NextConfig {
   };
 }
 
-// Apply plugins: next-intl -> bundle analyzer -> payload, then keep Payload's colour hints on /admin
-export default scopePayloadColorHints(withPayload(withNextIntl(withBundleAnalyzer(nextConfig))));
+// Apply plugins: next-intl -> payload, then keep Payload's colour hints on /admin
+// Bundle analysis uses Turbopack's `next analyze` (bun run build:analyze), not a config plugin (#611)
+export default scopePayloadColorHints(withPayload(withNextIntl(nextConfig)));

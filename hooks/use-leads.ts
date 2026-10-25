@@ -107,9 +107,16 @@ export interface LeadAccess {
   canCreate: boolean;
   canEdit: boolean;
   canDelete: boolean;
+  /** The lead's comments and notes (#555) */
+  canReadComments: boolean;
 }
 
-const NO_ACCESS: LeadAccess = { canCreate: false, canEdit: false, canDelete: false };
+const NO_ACCESS: LeadAccess = {
+  canCreate: false,
+  canEdit: false,
+  canDelete: false,
+  canReadComments: false,
+};
 
 /**
  * What the current member may do with leads. Nothing until the server answered, so read-only

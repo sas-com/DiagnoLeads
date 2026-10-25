@@ -3,10 +3,12 @@
  *
  * Anyone who can read leads may read the timeline (including viewers from a parent
  * organization). Why an address was suppressed is shown only to those who can update settings
- * (#365). Every query is scoped by organizationId and leadId (see ../service.ts).
+ * (#365), and the comments only to those who may read them (#555: not the parent
+ * organization). Every query is scoped by organizationId and leadId (see ../service.ts).
  */
 
 import type { AppAbility } from '@/lib/auth/permissions';
+import { canReadComments } from '@/lib/features/comments/service';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { getSubmissionAnswers, listLeadActivities } from '../service';
@@ -32,6 +34,7 @@ export const leadActivityRouter = router({
       limit: input.limit,
       cursor: input.cursor,
       showSuppressionReasons: ctx.ability.can('update', 'Settings'),
+      hideComments: !canReadComments(ctx),
     });
   }),
 
