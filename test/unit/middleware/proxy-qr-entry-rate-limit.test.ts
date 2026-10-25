@@ -18,7 +18,10 @@ vi.mock('@/lib/i18n/middleware', () => ({
 
 const { proxy } = await import('@/proxy');
 
-/** Sends one more request than the limit allows from one address, and returns the last answer */
+/**
+ * Sends one more request than the limit allows from one address, checking that each one within
+ * the limit (200 a minute on /q/, #663) gets through, and returns the last answer
+ */
 async function overLimit(path: string, address: string, max: number) {
   const send = () =>
     proxy(new NextRequest(`https://example.com${path}`, { headers: { 'x-forwarded-for': address } }));
@@ -37,6 +40,16 @@ describe('proxy rate limit on the QR entry (#503)', () => {
     expect(res.headers.get('x-robots-tag')).toBe('noindex, nofollow');
     expect(res.headers.get('retry-after')).not.toBeNull();
     expect(await res.text()).toBe(QR_ENTRY_TOO_MANY_REQUESTS_TEXT);
+  });
+
+  it('counts each code separately, so another code from the same address still answers (#663)', async () => {
+    const address = '198.51.100.23';
+    const res = await overLimit('/q/EfGh2345', address, ENDPOINT_RATE_LIMITS['/q/'].max);
+    expect(res.status).toBe(429);
+    const other = await proxy(
+      new NextRequest('https://example.com/q/JkMn2345', { headers: { 'x-forwarded-for': address } })
+    );
+    expect(other.status).not.toBe(429);
   });
 
   it('keeps the JSON answer on other paths', async () => {

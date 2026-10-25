@@ -117,6 +117,7 @@ describe('findOpenQrCampaign', () => {
     utmMedium: 'offline',
     utmCampaign: 'fair-2026',
     utmContent: null,
+    namedDiagnosisId: null,
     diagnosisId: null,
     diagnosisSlug: null,
   };
@@ -129,11 +130,14 @@ describe('findOpenQrCampaign', () => {
   });
 
   it("returns the campaign's organization, UTM parameters and diagnosis", async () => {
-    const db = dbAnswering([{ ...ROW, diagnosisId: 'd1', diagnosisSlug: 'cloud-readiness' }]);
+    const db = dbAnswering([
+      { ...ROW, namedDiagnosisId: 'd1', diagnosisId: 'd1', diagnosisSlug: 'cloud-readiness' },
+    ]);
     // biome-ignore lint/suspicious/noExplicitAny: fake database
     expect(await findOpenQrCampaign(db as any, 'AbCd2345', NOW)).toEqual({
       campaignId: 'c1',
       organizationId: 'org-a',
+      diagnosisId: 'd1',
       diagnosis: { id: 'd1', slug: 'cloud-readiness' },
       utm: { source: 'qrcode', medium: 'offline', campaign: 'fair-2026', content: null },
     });
@@ -142,6 +146,16 @@ describe('findOpenQrCampaign', () => {
   it('has no diagnosis when the campaign has none in its organization', async () => {
     // biome-ignore lint/suspicious/noExplicitAny: fake database
     const campaign = await findOpenQrCampaign(dbAnswering([ROW]) as any, 'AbCd2345', NOW);
+    expect(campaign?.diagnosisId).toBeNull();
+    expect(campaign?.diagnosis).toBeNull();
+  });
+
+  it('keeps the diagnosis id the campaign names when the diagnosis is not of its organization (#663)', async () => {
+    // The join found no diagnosis of the campaign's organization; the entry answers 404 for it
+    const db = dbAnswering([{ ...ROW, namedDiagnosisId: 'd-other' }]);
+    // biome-ignore lint/suspicious/noExplicitAny: fake database
+    const campaign = await findOpenQrCampaign(db as any, 'AbCd2345', NOW);
+    expect(campaign?.diagnosisId).toBe('d-other');
     expect(campaign?.diagnosis).toBeNull();
   });
 

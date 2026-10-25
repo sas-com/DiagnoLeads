@@ -12,10 +12,13 @@ const MINUTE = 60 * 1000;
 export const QR_ENTRY_RATE_LIMITS = {
   /**
    * Codes one address can open. Loose: people at one event can share an address (the venue's
-   * Wi-Fi, a mobile carrier's NAT). A short code is one of 55^8 values, so the limit is there
-   * to bound the lookups one address can make, not to stop guessing
+   * Wi-Fi, a mobile carrier's NAT), and they scan in the first minutes. Twice the largest event
+   * a QR code is handed out at, 100 people (owner decision in #663); the in-memory limit of
+   * proxy.ts ('/q/' in lib/middleware/rate-limit.ts) allows as many a minute. A short code is
+   * one of 55^8 values, so the limit is there to bound the lookups one address can make, not to
+   * stop guessing
    */
-  perIp: { name: 'qr-entry-ip', limit: 120, windowMs: 10 * MINUTE },
+  perIp: { name: 'qr-entry-ip', limit: 200, windowMs: 10 * MINUTE },
 } as const satisfies Record<string, { name: string; limit: number; windowMs: number }>;
 
 /**
