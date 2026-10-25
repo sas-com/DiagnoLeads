@@ -47,6 +47,10 @@ export interface HearingDateInputProps extends PickerProps {
   onChange: (value: string | undefined) => void;
   /** false for a date that must stay set (the meeting date): no clear button */
   clearable?: boolean;
+  /** Told whether the box holds text that is not a date, so a form can hold its save */
+  onInvalidChange?: (invalid: boolean) => void;
+  /** The form's own error about the date (e.g. a day it does not take), shown like the box's */
+  error?: string;
 }
 
 export function HearingDateInput({
@@ -57,6 +61,8 @@ export function HearingDateInput({
   readOnly,
   large = false,
   clearable = true,
+  onInvalidChange,
+  error,
 }: HearingDateInputProps) {
   const t = useTranslations('leadHearings');
   const locale = useLocale();
@@ -66,10 +72,15 @@ export function HearingDateInput({
   const [open, setOpen] = useState(false);
   const shown = draft ?? (value ? formatTypedDate(value, locale) : '');
   const invalid = draft !== null && parseTypedDate(draft) === null;
+  const message = invalid ? t('editor.dateInvalid') : error;
   const selected = fromIsoDate(value);
 
+  const changeDraft = (next: string | null) => {
+    setDraft(next);
+    onInvalidChange?.(next !== null && parseTypedDate(next) === null);
+  };
   const type = (text: string) => {
-    setDraft(text);
+    changeDraft(text);
     // A complete date is taken right away, so autosave sees it without leaving the box
     const parsed = parseTypedDate(text);
     if (typeof parsed === 'string' && parsed !== value) onChange(parsed);
@@ -83,10 +94,10 @@ export function HearingDateInput({
     } else if (parsed !== value) {
       onChange(parsed);
     }
-    setDraft(null);
+    changeDraft(null);
   };
   const pick = (next: string | undefined) => {
-    setDraft(null);
+    changeDraft(null);
     if (next !== value) onChange(next);
     setOpen(false);
   };
@@ -101,9 +112,9 @@ export function HearingDateInput({
           placeholder={t('editor.datePlaceholder')}
           autoComplete="off"
           readOnly={readOnly}
-          aria-invalid={invalid || undefined}
-          aria-describedby={invalid ? errorId : undefined}
-          className={cn('w-full sm:w-40', size, invalid && 'border-red-500')}
+          aria-invalid={message ? true : undefined}
+          aria-describedby={message ? errorId : undefined}
+          className={cn('w-full sm:w-40', size, message && 'border-red-500')}
           onChange={(e) => type(e.target.value)}
           onBlur={commit}
           onKeyDown={(e) => {
@@ -111,7 +122,7 @@ export function HearingDateInput({
               e.preventDefault();
               commit();
             } else if (e.key === 'Escape' && draft !== null) {
-              setDraft(null);
+              changeDraft(null);
             }
           }}
         />
@@ -168,9 +179,9 @@ export function HearingDateInput({
           </PopoverContent>
         </Popover>
       </div>
-      {invalid && (
+      {message && (
         <p id={errorId} className="text-xs text-red-600">
-          {t('editor.dateInvalid')}
+          {message}
         </p>
       )}
     </div>

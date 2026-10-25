@@ -1420,12 +1420,13 @@
       "summary": "{count} · {amount}",
       "weighted": "Weighted {amount}",
       "empty": "No deals",
-      "dropHere": "Move here"
+      "dropHere": "Move here",
+      "closedTitle": "{stage} (last {days} days)"
     },
     "card": {
       "daysInStage": "{days} days in this stage",
       "overdue": "Past the expected close date",
-      "noNextAction": "No next action",
+      "noNextAction": "The lead has no next action (task)",
       "noCloseDate": "No close date",
       "noAmount": "No amount yet",
       "unassigned": "No owner",
@@ -1450,12 +1451,30 @@
     "lostDialog": {
       "title": "Mark \"{name}\" as lost",
       "description": "Lost reasons feed the win/loss analysis",
+      "fromWon": "The lead stays won.",
       "reason": "Lost reason",
       "reasonPlaceholder": "Choose one",
       "reasonRequired": "Choose a lost reason",
       "note": "Details (optional)",
       "competitor": "Competitor (optional)",
       "confirm": "Mark as lost"
+    },
+    "wonDialog": {
+      "title": "Mark \"{name}\" as won",
+      "impact": "The lead \"{lead}\" becomes won. It stays won even if the deal is reopened.",
+      "impactUnnamed": "This lead becomes won. It stays won even if the deal is reopened.",
+      "fromLost": "The lost reason and details are cleared.",
+      "closedOn": "Won on",
+      "closedOnInvalid": "Enter the won date as a day from 2000 to 2100",
+      "confirm": "Mark as won"
+    },
+    "reopenDialog": {
+      "title": "Reopen \"{name}\"?",
+      "lost": "The lost reason ({reason}) and the details will be cleared.",
+      "lostNoReason": "The lost reason and the details will be cleared.",
+      "probability": "The probability becomes the {stage} default of {probability}%, and the forecast category override is cleared.",
+      "won": "The lead stays won.",
+      "confirm": "Reopen"
     },
     "form": {
       "createTitle": "New deal",
@@ -1466,14 +1485,18 @@
       "leadSearching": "Searching…",
       "leadNotFound": "No match",
       "leadChange": "Change",
+      "required": "Required",
       "namePlaceholder": "e.g. AS/400 current system survey",
       "nameRequired": "Enter a deal name",
+      "closeDateInvalid": "Enter an expected close date from 2000 to 2100",
       "amountHelp": "Yen, excluding tax. Leave empty while unknown",
       "amountInvalid": "Enter a whole number of 0 or more",
       "probabilityHelp": "Empty uses the stage default ({value}%)",
       "probabilityInvalid": "Enter a whole number from 0 to 100",
       "ownerNone": "No owner",
+      "ownerFromLead": "The lead's assignee (else you)",
       "forecastAuto": "From the probability",
+      "wonToday": "The won date will be today.",
       "submitCreate": "Create",
       "submitEdit": "Save"
     },
@@ -1515,6 +1538,7 @@
       "saved": "Saved",
       "moved": "Moved \"{name}\" to {stage}",
       "deleted": "Deal deleted",
+      "deleteError": "Could not delete. Please try again",
       "error": "Could not save. Please try again"
     },
     "historyFields": {

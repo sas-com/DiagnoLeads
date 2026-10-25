@@ -1420,12 +1420,13 @@
       "summary": "{count}件・{amount}",
       "weighted": "加重 {amount}",
       "empty": "商談はありません",
-      "dropHere": "ここに移す"
+      "dropHere": "ここに移す",
+      "closedTitle": "{stage}（直近{days}日）"
     },
     "card": {
       "daysInStage": "このステージで{days}日",
       "overdue": "受注予定日を過ぎています",
-      "noNextAction": "次の行動がありません",
+      "noNextAction": "リードに次の行動（タスク）がありません",
       "noCloseDate": "受注予定日なし",
       "noAmount": "金額未定",
       "unassigned": "担当未定",
@@ -1450,12 +1451,30 @@
     "lostDialog": {
       "title": "「{name}」を失注にする",
       "description": "失注理由は、勝ち負けの分析に使います",
+      "fromWon": "リードは成約のままです。",
       "reason": "失注理由",
       "reasonPlaceholder": "選んでください",
       "reasonRequired": "失注理由を選んでください",
       "note": "詳細（任意）",
       "competitor": "競合（任意）",
       "confirm": "失注にする"
+    },
+    "wonDialog": {
+      "title": "「{name}」を受注にする",
+      "impact": "リード「{lead}」は成約になります。商談を開き直しても、リードは成約のままです。",
+      "impactUnnamed": "このリードは成約になります。商談を開き直しても、リードは成約のままです。",
+      "fromLost": "失注理由と詳細は消えます。",
+      "closedOn": "受注日",
+      "closedOnInvalid": "受注日は2000〜2100年の日付で入力してください",
+      "confirm": "受注にする"
+    },
+    "reopenDialog": {
+      "title": "「{name}」を開き直しますか？",
+      "lost": "失注理由（{reason}）と詳細は消えます。",
+      "lostNoReason": "失注理由と詳細は消えます。",
+      "probability": "確度は「{stage}」の既定値 {probability}% になり、予測の区分の上書きも消えます。",
+      "won": "リードは成約のままです。",
+      "confirm": "開き直す"
     },
     "form": {
       "createTitle": "商談を作る",
@@ -1466,14 +1485,18 @@
       "leadSearching": "探しています…",
       "leadNotFound": "見つかりません",
       "leadChange": "選び直す",
+      "required": "必須",
       "namePlaceholder": "例：AS/400 現行調査",
       "nameRequired": "商談名を入力してください",
+      "closeDateInvalid": "受注予定日は2000〜2100年の日付で入力してください",
       "amountHelp": "税抜の円。未定なら空欄",
       "amountInvalid": "0以上の整数で入力してください",
       "probabilityHelp": "空欄ならステージの既定値（{value}%）",
       "probabilityInvalid": "0〜100の整数で入力してください",
       "ownerNone": "担当未定",
+      "ownerFromLead": "リードの担当者（いなければ自分）",
       "forecastAuto": "確度から自動",
+      "wonToday": "受注日は今日になります。",
       "submitCreate": "作成",
       "submitEdit": "保存"
     },
@@ -1515,6 +1538,7 @@
       "saved": "保存しました",
       "moved": "「{name}」を「{stage}」に移しました",
       "deleted": "商談を削除しました",
+      "deleteError": "削除できませんでした。もう一度お試しください",
       "error": "保存できませんでした。もう一度お試しください"
     },
     "historyFields": {
