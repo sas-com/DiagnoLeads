@@ -53,8 +53,7 @@ diagnoleads-v2/
 │   ├── features/          # Feature modules
 │   ├── db/                # Drizzle ORM
 │   ├── auth/              # Better Auth
-│   ├── cache/             # Redis/Memory cache
-│   └── ...
+│   └── ...                # shared infra (trpc, multi-tenant, email, ops, cron, i18n ...)
 ├── components/            # React components
 ├── test/
 │   ├── unit/              # Vitest unit tests
@@ -70,7 +69,7 @@ diagnoleads-v2/
 
 - Strict modeを使用
 - `any`の使用を避ける
-- 型定義は `types.ts` ファイルにまとめる
+- 型と zod スキーマは機能の `types/` に置く（`index.ts` は作らない）。構成の正本は [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
 ### コードスタイル
 
@@ -104,7 +103,7 @@ import crypto from 'node:crypto';
 import { z } from 'zod';
 
 // 3. Internal aliases (@/)
-import { db } from '@/lib/db';
+import { leads } from '@/lib/db/schema';
 
 // 4. Relative imports
 import { helper } from './helper';
@@ -290,24 +289,29 @@ bun run db:studio
 
 ## 新機能の追加
 
+構成と依存の向きの正本は [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)（`bun run arch:check` で機械的に検査する）。要点を再掲する。
+
 ### Feature Moduleの構造
 
 ```
 lib/features/{feature-name}/
-├── types.ts           # 型定義
-├── service.ts         # ビジネスロジック
-├── api/
-│   └── router.ts      # tRPC router
-└── index.ts           # エクスポート
+├── types/             # zod スキーマ・定数・型（画面と共有。他の機能から読んでよい）
+├── service.ts         # ビジネスロジック。db か transaction を第1引数で受け、全クエリを organizationId で絞る
+└── api/
+    └── router.ts      # tRPC router（権限の確認・入出力の zod・service の呼び出しだけ）
 ```
+
+- `index.ts`（barrel）は作らない（`arch:check` の `feature-index-files`）
+- 他の機能から読んでよいのは `types/**`・`types.ts`・`service.ts` だけ。内部のファイルが要るときは、相手の `service.ts` か `types/` に出す（`cross-feature-internal`）
+- グローバルの `db` は import せず、`ctx.db` か引数の executor を使う（RLS で接続を差し替えるため。`features-use-global-db`）
 
 ### 実装の流れ
 
-1. `types.ts` で型とZodスキーマを定義
-2. `service.ts` でビジネスロジックを実装
-3. `router.ts` でAPIエンドポイントを定義
-4. テストを作成
-5. `index.ts` でエクスポート
+1. `types/` に型と zod スキーマを定義する
+2. `service.ts` にビジネスロジックを実装する（db / executor を第1引数で受け、organizationId で絞る）
+3. `api/router.ts` に tRPC のエンドポイントを定義し、`server/routers/_app.ts` に登録する
+4. テストを作成する（`test/unit/features/`）
+5. `bun run arch:check` を流す
 
 ---
 
