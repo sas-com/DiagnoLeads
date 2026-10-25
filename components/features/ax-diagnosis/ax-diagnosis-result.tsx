@@ -284,7 +284,7 @@ export function AxDiagnosisResult({
 
       {result.needsHearing && (
         <p className="rounded-2xl border border-ax-yellow-dark bg-ax-yellow/20 p-4 text-sm leading-relaxed">
-          {t('needsHearing')}
+          {t(platform === 'access' ? 'accessNeedsHearing' : 'needsHearing')}
         </p>
       )}
 
@@ -414,7 +414,12 @@ export function AxDiagnosisResult({
                   className="mt-0.5 h-4 w-4 shrink-0 text-ax-teal-dark"
                   aria-hidden="true"
                 />
-                <span>{t(`checkpoints.${key}`)}</span>
+                <span>
+                  {/* The same inventory narrows what to replace, not what to migrate (#674) */}
+                  {accessPath === 'replace' && key === 'access_inventory'
+                    ? t('accessReplaceInventory')
+                    : t(`checkpoints.${key}`)}
+                </span>
               </li>
             ))}
           </ul>
@@ -432,7 +437,9 @@ export function AxDiagnosisResult({
               <li key={question.id}>{question.label[locale]}</li>
             ))}
           </ul>
-          <p className="text-xs leading-relaxed text-gray-700">{t('unknownsHint')}</p>
+          <p className="text-xs leading-relaxed text-gray-700">
+            {t(platform === 'access' ? 'accessUnknownsHint' : 'unknownsHint')}
+          </p>
         </div>
       )}
 
