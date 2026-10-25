@@ -10,6 +10,7 @@ import type {
   ConversionPrediction,
   ConversionFactor,
 } from '@/lib/features/ai/prediction/conversion';
+import { contactCompleteness } from '@/lib/features/ai/prompt-input';
 
 const { mockParse } = vi.hoisted(() => ({ mockParse: vi.fn() }));
 
@@ -42,20 +43,16 @@ describe('LeadForPrediction type', () => {
   it('should have correct structure', () => {
     const lead: LeadForPrediction = {
       id: 'lead-123',
-      email: 'test@example.com',
-      name: 'John Doe',
       company: 'Acme Corp',
-      phone: '+1234567890',
       status: 'new',
       score: 75,
       source: 'website',
       responses: { industry: 'tech', budget: '10k-50k' },
       createdAt: new Date(),
-      updatedAt: new Date(),
     };
 
     expect(lead.id).toBe('lead-123');
-    expect(lead.email).toBe('test@example.com');
+    expect(lead.company).toBe('Acme Corp');
     expect(lead.status).toBe('new');
     expect(lead.score).toBe(75);
   });
@@ -63,19 +60,14 @@ describe('LeadForPrediction type', () => {
   it('should allow null optional fields', () => {
     const lead: LeadForPrediction = {
       id: 'lead-456',
-      email: 'minimal@example.com',
-      name: null,
       company: null,
-      phone: null,
       status: 'new',
       score: null,
       source: null,
       responses: null,
       createdAt: new Date(),
-      updatedAt: new Date(),
     };
 
-    expect(lead.name).toBeNull();
     expect(lead.company).toBeNull();
     expect(lead.score).toBeNull();
   });
@@ -192,16 +184,12 @@ describe('Fallback prediction logic', () => {
   it('should increase probability for high score leads', () => {
     const highScoreLead: LeadForPrediction = {
       id: '1',
-      email: 'high@example.com',
-      name: 'High Scorer',
       company: 'BigCo',
-      phone: null,
       status: 'new',
       score: 85,
       source: null,
       responses: null,
       createdAt: new Date(),
-      updatedAt: new Date(),
     };
 
     // High score should contribute to higher probability
@@ -211,16 +199,12 @@ describe('Fallback prediction logic', () => {
   it('should increase probability for qualified status', () => {
     const qualifiedLead: LeadForPrediction = {
       id: '2',
-      email: 'qualified@example.com',
-      name: null,
       company: null,
-      phone: null,
       status: 'negotiating',
       score: null,
       source: null,
       responses: null,
       createdAt: new Date(),
-      updatedAt: new Date(),
     };
 
     expect(qualifiedLead.status).toBe('negotiating');
@@ -229,22 +213,19 @@ describe('Fallback prediction logic', () => {
   it('should consider profile completeness', () => {
     const completeLead: LeadForPrediction = {
       id: '3',
-      email: 'complete@example.com',
-      name: 'Complete User',
       company: 'Complete Corp',
-      phone: '+1234567890',
       status: 'new',
       score: null,
       source: null,
       responses: null,
       createdAt: new Date(),
-      updatedAt: new Date(),
     };
 
-    const hasName = !!completeLead.name;
-    const hasCompany = !!completeLead.company;
-    const hasPhone = !!completeLead.phone;
-    const completeness = [hasName, hasCompany, hasPhone].filter(Boolean).length;
+    // The name and the phone number stay in the app: only whether they are there is passed on
+    const contact = contactCompleteness({ name: 'Complete User', phone: '+1234567890' });
+    const completeness = [contact.hasName, Boolean(completeLead.company), contact.hasPhone].filter(
+      Boolean
+    ).length;
 
     expect(completeness).toBe(3);
   });
@@ -291,23 +272,17 @@ describe('Prediction prompt building', () => {
   it('should handle missing optional fields in prompt', () => {
     const lead: LeadForPrediction = {
       id: 'test',
-      email: 'test@example.com',
-      name: null,
       company: null,
-      phone: null,
       status: 'new',
       score: null,
       source: null,
       responses: null,
       createdAt: new Date(),
-      updatedAt: new Date(),
     };
 
-    const name = lead.name || 'Unknown';
     const company = lead.company || 'Unknown';
     const score = lead.score ?? 'Not scored';
 
-    expect(name).toBe('Unknown');
     expect(company).toBe('Unknown');
     expect(score).toBe('Not scored');
   });
@@ -316,10 +291,7 @@ describe('Prediction prompt building', () => {
 describe('predictConversion', () => {
   const lead: LeadForPrediction = {
     id: 'lead-1',
-    email: 'buyer@example.com',
-    name: null,
     company: 'Acme',
-    phone: null,
     status: 'qualified',
     score: 70,
     source: 'diagnostic',
@@ -330,10 +302,14 @@ describe('predictConversion', () => {
   it('should return the structured output from claude-sonnet-5-5', async () => {
     const { predictConversion } = await import('@/lib/features/ai/prediction/conversion');
 
-    const prediction = await predictConversion(lead);
+    const prediction = await predictConversion(lead, { hasName: true, hasPhone: false });
 
     expect(prediction.probability).toBe(75);
     expect(prediction.factors[0].impact).toBe('positive');
+    // Nothing that points at a person goes to Claude (#406)
+    const prompt = mockParse.mock.calls.at(-1)?.[0].messages[0].content as string;
+    expect(prompt).toContain('Acme');
+    expect(prompt).not.toMatch(/Email|Name:|Phone/);
     const request = mockParse.mock.calls.at(-1)?.[0];
     expect(request.model).toBe('claude-sonnet-5-5');
     expect(request.output_config.effort).toBe('low');
@@ -352,7 +328,7 @@ describe('predictConversion', () => {
       },
     });
 
-    const prediction = await predictConversion(lead);
+    const prediction = await predictConversion(lead, { hasName: true, hasPhone: false });
 
     expect(prediction.probability).toBe(100);
     expect(prediction.factors[0].weight).toBe(10);
@@ -362,7 +338,7 @@ describe('predictConversion', () => {
     const { predictConversion } = await import('@/lib/features/ai/prediction/conversion');
     mockParse.mockRejectedValueOnce(new Error('529 overloaded'));
 
-    const prediction = await predictConversion(lead);
+    const prediction = await predictConversion(lead, { hasName: true, hasPhone: false });
 
     expect(prediction.probability).toBeGreaterThan(0);
     expect(prediction.factors.length).toBeGreaterThan(0);
@@ -372,7 +348,7 @@ describe('predictConversion', () => {
     const { predictConversion } = await import('@/lib/features/ai/prediction/conversion');
     mockParse.mockResolvedValueOnce({ parsed_output: null, stop_reason: 'max_tokens' });
 
-    const prediction = await predictConversion(lead);
+    const prediction = await predictConversion(lead, { hasName: true, hasPhone: false });
 
     expect(prediction.probability).toBeGreaterThan(0);
     expect(prediction.factors.length).toBeGreaterThan(0);

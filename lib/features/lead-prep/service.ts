@@ -4,16 +4,11 @@
  * it is read only for those who may edit the card (see the router).
  */
 import type { db as defaultDb } from '@/lib/db/client';
-import {
-  axSalesPlaybooks,
-  diagnosticSubmissions,
-  leadPrepCards,
-  leads,
-  users,
-} from '@/lib/db/schema';
-import { AX_MIGRATION_DIAGNOSTIC_KEY } from '@/lib/features/diagnostics/ax-migration/definition';
+import { leadPrepCards, leads, users } from '@/lib/db/schema';
+import { readPlaybookContent } from '@/lib/features/ax-playbook/service';
+import { latestAxSubmission } from '@/lib/features/diagnostics/ax-migration/lead-submissions';
 import { readLeadDiagnosis } from '@/lib/features/leads/diagnosis-view';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { type PrepDraftSource, toPrepChallenge } from './draft';
 import { PREP_CHALLENGES, type PrepCardFields, type PrepChallenge } from './types/schemas';
 
@@ -72,7 +67,7 @@ export async function getPrepDraftSource(
   db: Database,
   input: { organizationId: string; leadId: string }
 ): Promise<PrepDraftSource> {
-  const [[lead], [submission], [playbook]] = await Promise.all([
+  const [[lead], submission, playbook] = await Promise.all([
     db
       .select({
         targetSystem: leads.targetSystem,
@@ -81,22 +76,8 @@ export async function getPrepDraftSource(
       })
       .from(leads)
       .where(and(eq(leads.id, input.leadId), eq(leads.organizationId, input.organizationId))),
-    db
-      .select({ result: diagnosticSubmissions.result })
-      .from(diagnosticSubmissions)
-      .where(
-        and(
-          eq(diagnosticSubmissions.leadId, input.leadId),
-          eq(diagnosticSubmissions.organizationId, input.organizationId),
-          eq(diagnosticSubmissions.diagnosticKey, AX_MIGRATION_DIAGNOSTIC_KEY)
-        )
-      )
-      .orderBy(desc(diagnosticSubmissions.createdAt))
-      .limit(1),
-    db
-      .select({ content: axSalesPlaybooks.content })
-      .from(axSalesPlaybooks)
-      .where(eq(axSalesPlaybooks.organizationId, input.organizationId)),
+    latestAxSubmission(db, input.organizationId, input.leadId),
+    readPlaybookContent(db, input.organizationId),
   ]);
 
   const ax = lead ? readLeadDiagnosis(lead.responses, lead.customFields).ax : null;
@@ -106,7 +87,7 @@ export async function getPrepDraftSource(
     ?.reasons;
   const playbookQuestions: Partial<Record<PrepChallenge, string[]>> = {};
   for (const key of PREP_CHALLENGES) {
-    const questions = playbook?.content.challenges?.[key]?.questions;
+    const questions = playbook?.challenges?.[key]?.questions;
     if (Array.isArray(questions) && questions.length > 0) playbookQuestions[key] = questions;
   }
   return {

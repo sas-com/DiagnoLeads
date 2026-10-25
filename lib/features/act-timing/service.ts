@@ -13,14 +13,8 @@
  *   for the leads updated in the last days (diagnosis answers, status changes).
  */
 import type { db as defaultDb } from '@/lib/db/client';
-import {
-  diagnosticSubmissions,
-  leadHearings,
-  leadTasks,
-  leads,
-  organizations,
-} from '@/lib/db/schema';
-import { AX_MIGRATION_DIAGNOSTIC_KEY } from '@/lib/features/diagnostics/ax-migration/definition';
+import { leadHearings, leadTasks, leads, organizations } from '@/lib/db/schema';
+import { latestAxSubmission } from '@/lib/features/diagnostics/ax-migration/lead-submissions';
 import { parseStoredHearingFields } from '@/lib/features/lead-hearings/types/schemas';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { reportServerError } from '@/lib/ops/alert';
@@ -82,7 +76,7 @@ export async function computeLeadActTiming(
 ): Promise<
   (ActTimingState & { lead: { assigneeUserId: string | null; actBy: string | null } }) | null
 > {
-  const [[lead], [hearing], [submission], resolved] = await Promise.all([
+  const [[lead], [hearing], submission, resolved] = await Promise.all([
     db
       .select({
         status: leads.status,
@@ -103,21 +97,7 @@ export async function computeLeadActTiming(
       )
       .orderBy(desc(leadHearings.heldOn), desc(leadHearings.createdAt), desc(leadHearings.id))
       .limit(1),
-    db
-      .select({
-        answers: diagnosticSubmissions.answers,
-        createdAt: diagnosticSubmissions.createdAt,
-      })
-      .from(diagnosticSubmissions)
-      .where(
-        and(
-          eq(diagnosticSubmissions.leadId, input.leadId),
-          eq(diagnosticSubmissions.organizationId, input.organizationId),
-          eq(diagnosticSubmissions.diagnosticKey, AX_MIGRATION_DIAGNOSTIC_KEY)
-        )
-      )
-      .orderBy(desc(diagnosticSubmissions.createdAt))
-      .limit(1),
+    latestAxSubmission(db, input.organizationId, input.leadId),
     settings ? Promise.resolve(settings) : getActTimingSettings(db, input.organizationId),
   ]);
   if (!lead) return null;

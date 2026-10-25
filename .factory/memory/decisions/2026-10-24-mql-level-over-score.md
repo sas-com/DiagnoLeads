@@ -24,7 +24,7 @@ paths: ["lib/features/leads/detail-fields.ts", "lib/features/leads/list-query.ts
   - 診断のない手入力のリード（紹介・代行など）は「診断なし」。見込みは MQL のチェック（パイプラインのカード）で関心ありとみなし、ヒアリングの後は商談評価 A/B/C で優先を付ける
   - 同じ段階の中の順番は、相談の申込・動くべき時期・次の商談日・最終活動日の絞り込みと並び替えで付ける
   - ダッシュボード：インサイトの平均点のカードと、最近のリードの点数の列・点数での強調を出さない（強調は MQL のタグだけ）。分析：平均点のカード・成績のまとめの「リードの質」・点数の分布のグラフを出さない。点数の分布の手続き（`analytics.getScoreDistribution`）とその部品は外した（#447 の2つ目）
-  - 分析の集計（tRPC の `analytics.getOverview`）は、平均点のかわりに MQL段階ごとの件数（`mqlLevels`）と MQL率（`mqlRate`）を返す。数え方は一覧の MQL段階の絞り込みと同じ（`listMqlLevel`。ほかの機能からは `lib/features/leads/service.ts` の `countLeadsByMqlLevel` で読む）。分析の画面の書き出し（CSV・PDF）も平均点のかわりにこれを出す（#605）
+  - 分析の集計（tRPC の `analytics.getOverview`）は、平均点のかわりに MQL段階ごとの件数（`mqlLevels`）と MQL率（`mqlRate`）を返す。数え方は一覧の MQL段階の絞り込みと同じ（`listMqlLevel`。ほかの機能からは `lib/features/leads/service.ts` の `countLeadsByMqlLevel` で読む）。分析の画面の書き出し（CSV・PDF）も平均点のかわりにこれを出す（#605）。分析の画面は、上部の KPI に MQL（関心あり）の件数と率を、概要のタブに MQL段階ごとの内訳（すべてのリード）を出す。パフォーマンスのタブの、上部と同じ数字の概要は外した（#605 の2つ目）
   - REST API v2 の分析（`app/api/v2/analytics`）の `averageScore` と、リード一覧の PDF の平均点は、外部の連携と書き出しのために残す
 - **見直しの条件**: 適合のリードの架電の取りこぼしが出たら、段階の中の優先順位の付け方（よく使う絞り込みの用意、段階を手で選べるようにするか）を見直す
 - **却下案**: 点数を正式な指標にして MQL段階を点数から決める（MQL段階は回答の中身で決まり、点数の閾値に置き換えると判定の理由が説明できなくなる）
