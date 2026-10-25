@@ -1,7 +1,9 @@
 import { getAuthenticatedOrganization } from '@/lib/api/v2-auth';
 import { db } from '@/lib/db';
 import { leads } from '@/lib/db/schema';
+import { leadIdsWithDeals } from '@/lib/features/leads/service';
 import {
+  changesDealDrivenFields,
   dropsOnHoldReason,
   leadStatusEnum,
   normalizeLeadStatus,
@@ -151,13 +153,27 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       );
     }
 
+    const { email, name, company, phone, source, status, score, responses, customFields } =
+      parsedBody.data;
+
+    // A lead with deals takes its status from the deals (#444)
+    if (
+      changesDealDrivenFields(existing, { status }) &&
+      (await leadIdsWithDeals(db, authResult.organizationId, [id])).size > 0
+    ) {
+      return NextResponse.json(
+        {
+          error: 'Conflict',
+          message: 'The status of a lead with deals is set by its deals; change the deal stage',
+        },
+        { status: 409 }
+      );
+    }
+
     // Build update data
     const updateData: Record<string, unknown> = {
       updatedAt: new Date(),
     };
-
-    const { email, name, company, phone, source, status, score, responses, customFields } =
-      parsedBody.data;
 
     if (email !== undefined) updateData.email = email;
     if (name !== undefined) updateData.name = name;

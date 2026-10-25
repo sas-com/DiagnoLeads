@@ -5,8 +5,9 @@
  * to the organization, and a deal of another organization is reported as not found. The router
  * checks permissions. Each change is one transaction that writes the deal, a deal_history row
  * when a value the forecast reads changed, an audit_logs row (resource 'deal', metadata.leadId),
- * and moves the lead forward (./lead-sync.ts) with the lead's own audit row (#101). The lead's
- * webhooks and the handoff notice (#86) go out after the commit (afterDealChange).
+ * and sets the lead's status and deal phase from its deals (./lead-sync.ts, #444) with the lead's
+ * own audit row (#101); deleting a deal does too. The lead's webhooks and the handoff notice (#86)
+ * go out after the commit (afterDealChange).
  *
  * Locks are taken lead first, then deal, on every path (deleting a lead locks it and then its
  * deals through the cascade), so changes of two deals of one lead wait for each other on the lead
@@ -493,8 +494,8 @@ function auditValues(deal: DealRow): AuditValues {
   return values;
 }
 
-/** Move the (locked) lead forward for its deals and audit it; null when nothing changed */
-async function moveLeadForward(
+/** Set the (locked) lead from its deals and audit it; null when nothing changed */
+async function syncLeadWithDeals(
   tx: Transaction,
   lead: Lead,
   context: { organizationId: string; userId: string; dealId: string; at: Date }
@@ -616,7 +617,7 @@ export async function createDeal(
       createdAt: now,
     });
 
-    const leadMove = await moveLeadForward(tx, lead, {
+    const leadMove = await syncLeadWithDeals(tx, lead, {
       organizationId: input.organizationId,
       userId: input.userId,
       dealId: deal.id,
@@ -747,7 +748,7 @@ export async function updateDeal(
     const movesLead =
       stageChanged || existing.kind !== updated.kind || existing.lostReason !== updated.lostReason;
     const leadMove = movesLead
-      ? await moveLeadForward(tx, lead, {
+      ? await syncLeadWithDeals(tx, lead, {
           organizationId: input.organizationId,
           userId: input.userId,
           dealId: existing.id,
@@ -763,14 +764,21 @@ export async function updateDeal(
   });
 }
 
-/** Delete a deal (the lead is left as it is) and audit it */
+/**
+ * Delete a deal and audit it. The lead is set from the deals left (#444): its status and deal
+ * phase go back when the deleted deal held them; with no deal left, the lead keeps what it has.
+ */
 export async function deleteDeal(
   db: Database,
   input: { organizationId: string; dealId: string; userId: string },
   now: Date = new Date()
-): Promise<{ id: string; leadId: string }> {
+): Promise<{ id: string; leadId: string; lead: LeadMove | null }> {
   return db.transaction(async (tx) => {
     const scope = and(eq(deals.id, input.dealId), eq(deals.organizationId, input.organizationId));
+    const [found] = await tx.select({ leadId: deals.leadId }).from(deals).where(scope);
+    if (!found) throw notFound('deal');
+    // The lead first, then the deal (see the header)
+    const lead = await lockLead(tx, input.organizationId, found.leadId);
     const [existing] = await tx.select().from(deals).where(scope).for('update');
     if (!existing) throw notFound('deal');
     await tx.delete(deals).where(scope);
@@ -791,7 +799,13 @@ export async function deleteDeal(
       metadata: { leadId: existing.leadId },
       createdAt: now,
     });
-    return { id: existing.id, leadId: existing.leadId };
+    const leadMove = await syncLeadWithDeals(tx, lead, {
+      organizationId: input.organizationId,
+      userId: input.userId,
+      dealId: existing.id,
+      at: now,
+    });
+    return { id: existing.id, leadId: existing.leadId, lead: leadMove };
   });
 }
 
@@ -802,7 +816,7 @@ export async function deleteDeal(
 export async function afterDealChange(
   db: Database,
   context: { organizationId: string; userId: string },
-  result: DealChangeResult
+  result: Pick<DealChangeResult, 'lead'>
 ): Promise<void> {
   const move = result.lead;
   if (!move) return;

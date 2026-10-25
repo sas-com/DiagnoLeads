@@ -1,6 +1,6 @@
 /**
- * Deals (#435): stage probabilities, the forecast category, the weighted amount, how deals move
- * their lead forward and the input schemas. The DB behaviour is covered by
+ * Deals (#435): stage probabilities, the forecast category, the weighted amount, how deals set
+ * their lead's status and deal phase (computed again on every change, #444) and the input schemas. The DB behaviour is covered by
  * test/unit/integration/deals.db.test.ts.
  */
 import { defineAbilitiesFor } from '@/lib/auth/permissions';
@@ -8,10 +8,10 @@ import type { OrganizationMember, User } from '@/lib/db/schema';
 import { canReadDeals, canWriteDeals } from '@/lib/features/deals/access';
 import {
   type SyncDeal,
-  furtherPhase,
   latestLostReason,
   leadChangesFromDeals,
   leadPhaseOfDeal,
+  phaseFromDeals,
   statusFromDeals,
 } from '@/lib/features/deals/lead-sync';
 import {
@@ -104,37 +104,39 @@ describe('leadPhaseOfDeal', () => {
   });
 });
 
-describe('furtherPhase', () => {
-  it('is the furthest phase of the deals when it is further than the lead', () => {
-    const deals = [deal({ stage: 'discovery' }), deal({ kind: 'survey', stage: 'won' })];
-    expect(furtherPhase(null, deals)).toBe('survey_won');
-    expect(furtherPhase('proposal', deals)).toBe('survey_won');
+describe('phaseFromDeals', () => {
+  it('is the furthest phase the deals stand for', () => {
+    expect(phaseFromDeals([deal({ stage: 'discovery' }), deal({ kind: 'survey', stage: 'won' })])).toBe(
+      'survey_won'
+    );
+    expect(phaseFromDeals([deal({ stage: 'proposal' })])).toBe('proposal');
   });
 
-  it('never moves the lead back', () => {
-    expect(furtherPhase('migration_won', [deal({ stage: 'proposal' })])).toBeNull();
-    expect(furtherPhase('proposal', [deal({ stage: 'proposal' })])).toBeNull();
-    expect(furtherPhase('initial_hearing', [deal({ stage: 'lost' })])).toBeNull();
+  it('is null when no deal stands for a phase (the lead keeps its own)', () => {
+    expect(phaseFromDeals([deal({ stage: 'lost' })])).toBeNull();
+    expect(phaseFromDeals([deal({ kind: 'maintenance', stage: 'won' })])).toBeNull();
+    expect(phaseFromDeals([])).toBeNull();
   });
 });
 
 describe('statusFromDeals', () => {
   it('is won when a deal is won, negotiating while one is open, lost when all are lost', () => {
-    expect(statusFromDeals('new', [deal({ stage: 'won' }), deal({ stage: 'lost' })])).toBe('won');
-    expect(statusFromDeals('new', [deal({ stage: 'lost' }), deal({ stage: 'proposal' })])).toBe(
+    expect(statusFromDeals([deal({ stage: 'won' }), deal({ stage: 'lost' })])).toBe('won');
+    expect(statusFromDeals([deal({ stage: 'lost' }), deal({ stage: 'proposal' })])).toBe(
       'negotiating'
     );
-    expect(statusFromDeals('negotiating', [deal({ stage: 'lost' })])).toBe('lost');
+    expect(statusFromDeals([deal({ stage: 'lost' })])).toBe('lost');
   });
 
-  it('keeps a won lead won and leaves a lead without deals alone', () => {
-    expect(statusFromDeals('won', [deal({ stage: 'proposal' })])).toBeNull();
-    expect(statusFromDeals('won', [deal({ stage: 'lost' })])).toBeNull();
-    expect(statusFromDeals('nurturing', [])).toBeNull();
+  it('stays won while a later deal is open, and leaves a lead without deals alone', () => {
+    expect(statusFromDeals([deal({ stage: 'won' }), deal({ kind: 'migration' })])).toBe('won');
+    expect(statusFromDeals([])).toBeNull();
   });
 
-  it('revives a lost lead when a new deal opens', () => {
-    expect(statusFromDeals('lost', [deal({ stage: 'lost' }), deal()])).toBe('negotiating');
+  // Computed again on every change (#444): the status follows the deals back too
+  it('goes back when the won deal is reopened or only open deals are left', () => {
+    expect(statusFromDeals([deal({ stage: 'negotiation' })])).toBe('negotiating');
+    expect(statusFromDeals([deal({ stage: 'lost' }), deal()])).toBe('negotiating');
   });
 });
 
@@ -221,6 +223,34 @@ describe('leadChangesFromDeals', () => {
         [deal({ stage: 'proposal' })]
       )
     ).toEqual({ status: 'negotiating', dealPhase: 'proposal' });
+  });
+
+  // Computed again on every change (#444), not only forward
+  it('moves a won lead back when its won deal is reopened or deleted', () => {
+    const won = { status: 'won', dealPhase: 'survey_won', lostReason: null, hasNegotiated: true };
+    expect(leadChangesFromDeals(won, [deal({ stage: 'negotiation' })])).toEqual({
+      status: 'negotiating',
+      dealPhase: 'proposal',
+    });
+    // A lead set by hand to a further phase follows its deals too
+    expect(leadChangesFromDeals({ ...won, status: 'negotiating', dealPhase: 'ax' }, [deal()])).toEqual(
+      { dealPhase: 'initial_hearing' }
+    );
+  });
+
+  it('keeps the phase when no deal stands for one, and keeps the lost reason when negotiated again', () => {
+    expect(
+      leadChangesFromDeals(
+        { status: 'negotiating', dealPhase: 'proposal', lostReason: null, hasNegotiated: true },
+        [deal({ stage: 'lost', lostReason: 'budget', closedOn: '2026-10-10' })]
+      )
+    ).toEqual({ status: 'lost', lostReason: 'budget' });
+    expect(
+      leadChangesFromDeals(
+        { status: 'lost', dealPhase: 'proposal', lostReason: 'timing', hasNegotiated: true },
+        [deal({ stage: 'lost', lostReason: 'timing' }), deal()]
+      )
+    ).toEqual({ status: 'negotiating', dealPhase: 'initial_hearing' });
   });
 
   it('changes nothing when the lead is up to date or has no deals', () => {

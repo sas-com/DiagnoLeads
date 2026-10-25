@@ -1,6 +1,9 @@
 import type { Organization, OrganizationMember, User } from '@/lib/db/schema';
+import { DEAL_DRIVEN_MESSAGE } from '@/lib/features/leads/types/pipeline';
 import { appRouter } from '@/server/routers/_app';
 import { TRPCError } from '@trpc/server';
+import type { SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock dependencies
@@ -94,6 +97,7 @@ describe('Leads Router', () => {
 
   let mockDb: any;
   let mockContext: any;
+  let leadsWithDeals: string[] = [];
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -122,7 +126,12 @@ describe('Leads Router', () => {
       set: vi.fn().mockReturnThis(),
       delete: vi.fn().mockReturnThis(),
       execute: vi.fn().mockResolvedValue([]),
+      // The leads that have a deal (leadIdsWithDeals, #444): none unless a test says so
+      selectDistinct: vi.fn(() => ({
+        from: () => ({ where: () => Promise.resolve(leadsWithDeals.map((leadId) => ({ leadId }))) }),
+      })),
     };
+    leadsWithDeals = [];
     // Writes run in a transaction; the fake runs it on the same mock
     mockDb.transaction = vi.fn((fn: (tx: unknown) => unknown) => fn(mockDb));
 
@@ -365,6 +374,42 @@ describe('Leads Router', () => {
     });
   });
 
+  // A lead with deals takes its status and deal phase from the deals (#444)
+  describe('update (lead with deals)', () => {
+    it('refuses to change the status or the deal phase of a lead with deals', async () => {
+      mockDb.query.leads.findFirst.mockResolvedValue({ ...mockLead, status: 'negotiating' });
+      leadsWithDeals = [TEST_LEAD_ID];
+      const caller = appRouter.createCaller(mockContext);
+
+      await expect(
+        caller.leads.update({ organizationId: TEST_ORG_ID, id: TEST_LEAD_ID, status: 'won' })
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: DEAL_DRIVEN_MESSAGE });
+      await expect(
+        caller.leads.update({ organizationId: TEST_ORG_ID, id: TEST_LEAD_ID, dealPhase: 'ax' })
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(mockDb.update).not.toHaveBeenCalled();
+    });
+
+    it('saves the other fields, and the status and phase it already has', async () => {
+      const lead = { ...mockLead, status: 'negotiating', dealPhase: 'proposal' };
+      mockDb.query.leads.findFirst.mockResolvedValue(lead);
+      mockDb.returning.mockResolvedValue([lead]);
+      leadsWithDeals = [TEST_LEAD_ID];
+      const caller = appRouter.createCaller(mockContext);
+
+      await caller.leads.update({
+        organizationId: TEST_ORG_ID,
+        id: TEST_LEAD_ID,
+        name: 'New name',
+        status: 'negotiating',
+        dealPhase: 'proposal',
+      });
+      expect(mockDb.set).toHaveBeenCalledWith(expect.objectContaining({ name: 'New name' }));
+      // The deals are only read when the write changes the status or the phase
+      expect(mockDb.selectDistinct).not.toHaveBeenCalled();
+    });
+  });
+
   describe('update (sales pipeline)', () => {
     it('sets the negotiated flag (but no SQL judgement) when moving to negotiating', async () => {
       mockDb.query.leads.findFirst.mockResolvedValue(mockLead);
@@ -603,6 +648,33 @@ describe('Leads Router', () => {
   });
 
   describe('bulkUpdateStatus', () => {
+    it('leaves out the leads with deals and says how many (#444)', async () => {
+      mockDb.query.leads.findMany.mockResolvedValue([
+        { id: TEST_LEAD_ID, status: 'new', lostReason: null },
+        { id: TEST_LEAD_ID_2, status: 'negotiating', lostReason: null },
+      ]);
+      mockDb.returning.mockResolvedValue([{ id: TEST_LEAD_ID, status: 'nurturing' }]);
+      leadsWithDeals = [TEST_LEAD_ID_2];
+      const caller = appRouter.createCaller(mockContext);
+
+      const result = await caller.leads.bulkUpdateStatus({
+        organizationId: TEST_ORG_ID,
+        ids: [TEST_LEAD_ID, TEST_LEAD_ID_2],
+        status: 'nurturing',
+      });
+      expect(result).toEqual({ success: true, updatedCount: 1, skippedWithDeals: 1 });
+      // The update's condition leaves the lead with deals out
+      const conditions = mockDb.where.mock.calls.map(([condition]: [SQL]) =>
+        new PgDialect().sqlToQuery(condition)
+      );
+      expect(
+        conditions.some(
+          (where: { sql: string; params: unknown[] }) =>
+            where.sql.includes('"leads"."id" not in') && where.params.includes(TEST_LEAD_ID_2)
+        )
+      ).toBe(true);
+    });
+
     it('should update status for multiple leads', async () => {
       mockDb.returning.mockResolvedValue([
         { id: TEST_LEAD_ID },

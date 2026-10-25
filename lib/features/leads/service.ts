@@ -2,8 +2,8 @@
  * What other features read from leads (docs/ARCHITECTURE.md): the list's internals stay in api/.
  */
 import type { db as defaultDb } from '@/lib/db/client';
-import { leads } from '@/lib/db/schema';
-import { count, eq, sql } from 'drizzle-orm';
+import { deals, leads } from '@/lib/db/schema';
+import { and, count, eq, inArray, sql } from 'drizzle-orm';
 import { listMqlLevel } from './api/list-sql';
 import { MQL_LEVEL_FILTERS, type MqlLevelFilter } from './types/schemas';
 
@@ -34,4 +34,21 @@ export async function countLeadsByMqlLevel(
     levels[row.level ?? 'unknown'] += Number(row.count);
   }
   return levels;
+}
+
+/**
+ * The leads among `leadIds` that have a deal (#444): their status and deal phase come from the
+ * deals (lib/features/deals/lead-sync.ts) and are not changed by hand
+ */
+export async function leadIdsWithDeals(
+  database: Pick<Database, 'selectDistinct'>,
+  organizationId: string,
+  leadIds: string[]
+): Promise<Set<string>> {
+  if (leadIds.length === 0) return new Set();
+  const rows = await database
+    .selectDistinct({ leadId: deals.leadId })
+    .from(deals)
+    .where(and(eq(deals.organizationId, organizationId), inArray(deals.leadId, leadIds)));
+  return new Set(rows.map((row) => row.leadId));
 }

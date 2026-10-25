@@ -15,8 +15,11 @@ const chain = {
   where: vi.fn(),
   returning: vi.fn(),
 };
+// The leads that have a deal (leadIdsWithDeals, #444)
+const dealLeads = vi.fn((): { leadId: string }[] => []);
 const db = {
   query: { leads: { findFirst: vi.fn() } },
+  selectDistinct: vi.fn(() => ({ from: () => ({ where: async () => dealLeads() }) })),
   update: vi.fn(() => chain),
   insert: vi.fn(() => chain),
   delete: vi.fn(() => chain),
@@ -81,6 +84,33 @@ describe('PATCH /api/v2/leads/[id]', () => {
     const setArg = chain.set.mock.calls[0][0];
     expect(setArg.status).toBe('nurturing');
     expect(setArg).not.toHaveProperty('hasNegotiated');
+  });
+
+  it('refuses to change the status of a lead with deals (#444)', async () => {
+    db.query.leads.findFirst.mockResolvedValue({
+      id: LEAD_ID,
+      organizationId: ORG_ID,
+      status: 'negotiating',
+      dealPhase: 'proposal',
+      hasNegotiated: true,
+    });
+    dealLeads.mockReturnValueOnce([{ leadId: LEAD_ID }]);
+    const response = await patch({ status: 'won' });
+    expect(response.status).toBe(409);
+    expect(chain.set).not.toHaveBeenCalled();
+  });
+
+  it('saves a lead with deals when the status stays (#444)', async () => {
+    db.query.leads.findFirst.mockResolvedValue({
+      id: LEAD_ID,
+      organizationId: ORG_ID,
+      status: 'negotiating',
+      dealPhase: 'proposal',
+      hasNegotiated: true,
+    });
+    const response = await patch({ status: 'negotiating', name: 'New name' });
+    expect(response.status).toBe(200);
+    expect(db.selectDistinct).not.toHaveBeenCalled();
   });
 
   it('rejects unknown statuses', async () => {

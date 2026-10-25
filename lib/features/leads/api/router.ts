@@ -61,11 +61,14 @@ import {
 } from '../export';
 import { leadExportPdfBase64 } from '../export-pdf';
 import { getNextMeetingRate, getWeekMeetings } from '../meetings';
+import { leadIdsWithDeals } from '../service';
 import {
+  DEAL_DRIVEN_MESSAGE,
   LEAD_STATUSES,
   LOST_ON_HOLD_MESSAGE,
   type LeadPipelineFields,
   type LeadStatus,
+  changesDealDrivenFields,
   dropsOnHoldReason,
   jstDate,
   makesLostOnHold,
@@ -89,6 +92,7 @@ import {
 } from '../types/schemas';
 import {
   leadDealRating,
+  leadHasDeals,
   leadLastActivityAt,
   leadListConditions,
   leadListOrderBy,
@@ -263,6 +267,11 @@ const LATEST_HEARING_EXTRAS = {
   dealRating: sql<string | null>`${leadDealRating}`.as('deal_rating'),
 };
 
+/** A lead with deals shows its status and deal phase as set by the deals (#444) */
+const DEAL_EXTRAS = {
+  hasDeals: sql<boolean>`${leadHasDeals}`.as('has_deals'),
+};
+
 /** What the lead views show of the assignee (#135) */
 const ASSIGNEE_COLUMNS = { id: true, name: true, email: true } as const;
 
@@ -353,7 +362,7 @@ export const leadsRouter = router({
 
     const lead = await ctx.db.query.leads.findFirst({
       where: and(eq(leads.id, input.id), eq(leads.organizationId, input.organizationId)),
-      extras: LATEST_HEARING_EXTRAS,
+      extras: { ...LATEST_HEARING_EXTRAS, ...DEAL_EXTRAS },
       with: {
         assignee: { columns: ASSIGNEE_COLUMNS },
         leadTags: {
@@ -411,6 +420,7 @@ export const leadsRouter = router({
           // 関心あり / 適合 for the list's MQL badge (#196)
           mqlLevel: sql<AxMqlLevel | null>`${leadMqlLevel}`.as('mql_level'),
           ...LATEST_HEARING_EXTRAS,
+          ...DEAL_EXTRAS,
         },
         with: {
           assignee: { columns: ASSIGNEE_COLUMNS },
@@ -629,6 +639,14 @@ export const leadsRouter = router({
       }
       if (makesLostOnHold(existing, input)) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: LOST_ON_HOLD_MESSAGE });
+      }
+      // The deals set the status and deal phase of a lead with deals (#444); the lead row lock
+      // above waits for a deal being created, which locks the lead first
+      if (
+        changesDealDrivenFields(existing, input) &&
+        (await leadIdsWithDeals(tx, input.organizationId, [input.id])).size > 0
+      ) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: DEAL_DRIVEN_MESSAGE });
       }
 
       // Build update object (only include defined fields)
@@ -919,8 +937,16 @@ export const leadsRouter = router({
           columns: { id: true, status: true, lostReason: true },
           where: scope,
         });
+        // Leads with deals take their status from the deals (#444): they are left out
+        const withDeals = await leadIdsWithDeals(
+          tx,
+          input.organizationId,
+          before.map((row) => row.id)
+        );
+        const changeable =
+          withDeals.size > 0 ? and(scope, notInArray(leads.id, [...withDeals])) : scope;
 
-        // Update all leads matching the IDs and organization
+        // Update the leads matching the IDs and organization that have no deal
         const result = await tx
           .update(leads)
           .set({
@@ -933,7 +959,7 @@ export const leadsRouter = router({
               : {}),
             updatedAt: now,
           })
-          .where(scope)
+          .where(changeable)
           .returning();
 
         // One audit row per lead whose status actually changed (Refs #101)
@@ -969,7 +995,14 @@ export const leadsRouter = router({
             events.push({ type: 'lead.status_changed', lead, previousStatus: previous });
           }
         }
-        return { response: { success: true, updatedCount: result.length }, events };
+        return {
+          response: {
+            success: true,
+            updatedCount: result.length,
+            skippedWithDeals: withDeals.size,
+          },
+          events,
+        };
       });
       emitLeadEvents(input.organizationId, outcome.events, { database: ctx.db });
       return outcome.response;
