@@ -2,22 +2,27 @@
 id: 2026-10-25-lead-input-count-limits
 date: 2026-10-25
 category: Leads
-title: "リードの一括操作と詳細な絞り込みの件数・入れ子の上限、取り込みは1,000件ずつ送る（#604）"
+title: "リードの一括操作と絞り込みの件数の上限、取り込みは1,000件ずつ送る（#604）"
 status: active
 superseded_by: []
 issues: [604, 575, 669, 688, 689]
 paths: ["lib/features/leads/types/schemas.ts", "lib/features/leads/import-service.ts", "components/features/leads/import-dialog.tsx"]
 ---
 
-### [Leads] リードの一括操作と詳細な絞り込みの件数・入れ子の上限、取り込みは1,000件ずつ送る（#604）
+### [Leads] リードの一括操作と絞り込みの件数の上限、取り込みは1,000件ずつ送る（#604）
 - **日付**: 2026-10-25
-- **決定**: リードの tRPC の入力に件数・入れ子の上限を置く（`lib/features/leads/types/schemas.ts`）
+- **決定**: リードの tRPC の入力に件数の上限を置く（`lib/features/leads/types/schemas.ts`）
   - `leads.bulkCreate` は1回に1,000件まで（`LEAD_BULK_CREATE_MAX`）。CSV・Excel の取り込み（`import-dialog.tsx`）は、正しい行をファイルの順に1,000件ずつ、1回ずつ順に送る（`importBatches`）。途中の回が失敗したら、作れた回の件数を知らせて一覧を読み直し、失敗した回とその後の回の行（とエラーの行）だけをプレビューに残す（`withoutImportedRows`）。もう一度押しても、作れた回は送り直さない。ただし、失敗した回がサーバーでは作られ、応答だけが届かなかったとき（関数の時間切れ、応答の前の切断）は、押し直すとその回（最大1,000件）が重なる（`leads` に `(organization_id, email)` の一意制約はない。1回で送っていた変更の前も同じ。扱いは #689）
   - 送っている間（`importing`）はダイアログを閉じない（「キャンセル」は無効、Esc・外側のクリック・×は何もしない）。閉じてもまだ送っていない回は止まらず、閉じたあとに開き直した別のファイルのプレビューを、前のループの終わりが消すため（読み取り専用のレビューの指摘）
   - `leads.bulkUpdateStatus`・`leads.bulkDelete` の `ids` は、一覧の1ページの最大（`LEAD_LIST_PAGE_MAX`、100件）まで。画面は表示中のページの行だけを選び、ページや並びが変わると選択を消す（`lead-table.tsx`）
   - `listLeadsSchema.tagIds` は、ほかの複数の値の絞り込み（`oneOrMany`）と同じ50件（`LEAD_FILTER_MAX_VALUES`）
   - `advancedFilter`（`leads.list`・`leads.export` の入れ子の条件）は #699 で消した（オーナーの判断、2026-10-25）。#604 では `LEAD_FILTER_LIMITS`（入れ子は3段、グループは10個、条件は全体で50個など）を付けたが、どの画面からも送っておらず、演算子・列の型と値の形が合わない値は 500 になっていた（#688）。将来必要になったら作り直す
-    - 消したあとに送られても、zod の既定（知らない項目を落とす）で読まずに捨て、条件に足さない。strict にして BAD_REQUEST で断ることはしない（古い呼び出し元を落とさないため）
+    - 消したあとに送られても、断らずに無視し、条件にも監査にも入れない。strict にして BAD_REQUEST で断ることはしない（古い呼び出し元を落とさないため）
+    - 無視されるのは、zod が落とすからではない（読み取り専用のレビューの指摘）
+      - `listLeadsSchema` 自体は知らない項目を落とす。ただ、`organizationProcedure` の `organizationInputSchema` が `.passthrough()` で、tRPC は複数の `.input()` の結果を重ねてつなぐので、手続きの `input`（エクスポートの `filterInput` も）には、送られた `advancedFilter` が検査されないまま残る
+      - 条件（`listWhere`・`leadListConditions`）と監査（`exportAuditFilters`）が決まった項目だけを読むので効かない。保証は手続きを通したテスト（`test/unit/features/leads-bulk-limits.test.ts`。WHERE を SQL にして比べ、監査の `filters` も比べる）で、スキーマ単体のテストではない
+      - `...input` や `...filterInput` を、監査の metadata や外への送信にそのまま広げない（送られた値がそのまま流れる）。passthrough の扱いは #743
+    - HTTP では、入れ子がとても深い値は、zod の前に superjson の `deserialize` でスタックが溢れる（手元の Node 22 で1,000〜2,000段の間）。tRPC はこれを BAD_REQUEST で返す（`resolveResponse` の入力の読み込み）ので、500 にも当番への通知にもならない。テストの `createCaller` は superjson を通らないので、10,000段でも無視される
 - **理由**: どれも件数に上限がなく、1回のリクエストで何件でも送れた。実質の上限は Vercel の関数の本文の上限（約4.5MB）だけだった。`bulkCreate` は1件あたり最大9個の bind パラメータを使い、PostgreSQL のドライバー（postgres-js）が1文に送れる数（65,534 未満）を、約7,000件を超える1回の取り込みで超えていた（#604 の作業で、drizzle の `toSQL` で数えた）。`advancedFilter` は `z.lazy` の再帰のスキーマで、入れ子を最後の段まで読み、約800段でスタックが溢れていた（`RangeError`。手元の vitest で測った。tRPC は入力のエラーとして BAD_REQUEST の「Maximum call stack size exceeded」で返すが、`safeParse` を直接呼ぶと例外が出る）
 - **却下案**:
   - 取り込みの上限を超えたら、プレビューで知らせて取り込ませない：今は1回で通る1,001〜約7,000件のファイルが通らなくなる（受け入れ基準「今の使い方で通る」に合わない）

@@ -205,8 +205,11 @@ export const LEAD_LIST_PAGE_MAX = 100;
 
 /**
  * List leads schema (#131: sorting and filtering run on the server). The nested group of
- * conditions no screen sent was removed (#699); z.object strips unknown keys, so an older
- * client that still sends it gets the list filtered by the other fields only, not an error.
+ * conditions no screen sent was removed (#699). An older client that still sends it gets the
+ * list filtered by the other fields only, not an error. This schema drops unknown keys, but the
+ * procedure's input still carries them: organizationInputSchema passes them through and tRPC
+ * merges the parsed inputs. They take no effect because listWhere and exportAuditFilters read
+ * only the fields named here, which the procedure tests of leads-bulk-limits.test.ts check.
  */
 export const listLeadsSchema = z.object({
   organizationId: z.string().uuid(),

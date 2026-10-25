@@ -3,7 +3,7 @@
  * LEAD_BULK_CREATE_MAX leads (the import sends a larger file in parts of that size), the bulk
  * actions up to a page of the list, and the tag filter as many ids as the other filters take.
  * A count at its limit passes, one over it is refused with BAD_REQUEST before anything is read
- * or written. The advanced filter is gone (#699): leads.list and leads.export drop it unread.
+ * or written. The advanced filter is gone (#699): leads.list and leads.export ignore it.
  * Values are made up.
  */
 import {
@@ -12,6 +12,12 @@ import {
   withoutImportedRows,
 } from '@/lib/features/leads/import-service';
 import { LEAD_PAGE_SIZES } from '@/lib/features/leads/list-query';
+import {
+  DEAL_PHASES,
+  INFLOW_SOURCES,
+  LEAD_STATUSES,
+  TARGET_SYSTEMS,
+} from '@/lib/features/leads/types/pipeline';
 import {
   LEAD_BULK_CREATE_MAX,
   LEAD_FILTER_MAX_VALUES,
@@ -161,8 +167,39 @@ describe('the tag filter of the list and the export', () => {
   });
 });
 
+describe('the filters given several values (status and the others) of the list and the export', () => {
+  const fields = [
+    ['status', LEAD_STATUSES[0]],
+    ['dealPhase', DEAL_PHASES[0]],
+    ['inflowSource', INFLOW_SOURCES[0]],
+    ['targetSystem', TARGET_SYSTEMS[0]],
+  ] as const;
+
+  it.each(fields)(`%s takes ${LEAD_FILTER_MAX_VALUES} values`, (field, value) => {
+    const values = Array(LEAD_FILTER_MAX_VALUES).fill(value);
+    expect(listLeadsSchema.parse({ organizationId: ORG_ID, [field]: values })[field]).toEqual(
+      values
+    );
+  });
+
+  it.each(fields)('%s refuses one value more, on the list and on the export', (field, value) => {
+    const values = Array(LEAD_FILTER_MAX_VALUES + 1).fill(value);
+    expect(
+      issuesOf(listLeadsSchema.safeParse({ organizationId: ORG_ID, [field]: values }))
+    ).toContainEqual(expect.objectContaining({ path: [field], code: 'too_big' }));
+    expect(
+      exportLeadsSchema.safeParse({ organizationId: ORG_ID, format: 'csv', [field]: values })
+        .success
+    ).toBe(false);
+  });
+});
+
 describe('an advanced filter an older client still sends (#699)', () => {
-  it('is dropped by the list and the export schemas unread, not refused', () => {
+  // The schema alone drops it, but a procedure's input still carries it: organizationInputSchema
+  // passes unknown keys through and tRPC merges the parsed inputs (#743). What keeps it out of
+  // the WHERE and the audit row is that they read only named fields, which the leads.list and
+  // leads.export tests below check through the procedures.
+  it('is dropped by the list and the export schemas, not refused', () => {
     const advancedFilter = oldAdvancedFilter();
     expect(listLeadsSchema.parse({ organizationId: ORG_ID, advancedFilter })).not.toHaveProperty(
       'advancedFilter'
@@ -330,6 +367,8 @@ describe('tRPC procedures', () => {
     expect(db.delete).not.toHaveBeenCalled();
   });
 
+  // createCaller skips superjson. Over HTTP, a nesting of 1,000 to 2,000 levels (Node 22)
+  // overflows the stack in superjson's deserialize before zod runs: BAD_REQUEST, not 500
   it('leads.list ignores an advanced filter: the WHERE is the one without it (#699)', async () => {
     const caller = appRouter.createCaller(ctx);
     const input = { organizationId: ORG_ID, status: 'new' as const };
