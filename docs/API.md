@@ -294,7 +294,6 @@ Search leads using natural language with AI embeddings.
     "email": "john@acme.com",
     "name": "John Doe",
     "company": "Acme Corp",
-    "score": 85,
     "similarity": 0.92
   }
 ]

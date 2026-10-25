@@ -1,4 +1,5 @@
 import { isIP } from 'node:net';
+import { containsNul } from '@/lib/utils/contains-nul';
 import { type NextRequest, NextResponse } from 'next/server';
 
 /**
@@ -58,7 +59,7 @@ function isAllowedOrigin(origin: string, req: NextRequest): boolean {
 
 /**
  * Read a JSON body without trusting Content-Length: chunked bodies are counted while they are
- * read and cut off past `maxBytes`.
+ * read and cut off past `maxBytes`. A body with NUL in any string is refused as invalid.
  */
 export async function readJsonBody(
   req: NextRequest,
@@ -91,11 +92,15 @@ export async function readJsonBody(
     bytes.set(chunk, offset);
     offset += chunk.byteLength;
   }
+  let body: unknown;
   try {
-    return { ok: true, body: JSON.parse(new TextDecoder().decode(bytes)) };
+    body = JSON.parse(new TextDecoder().decode(bytes));
   } catch {
     return invalid();
   }
+  // NUL cannot be stored in PostgreSQL: the write would fail and alert whoever is on call (#648)
+  if (containsNul(body)) return invalid();
+  return { ok: true, body };
 }
 
 /**

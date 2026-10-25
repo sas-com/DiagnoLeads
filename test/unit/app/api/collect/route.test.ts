@@ -105,6 +105,20 @@ describe('POST /api/collect', () => {
     expect(recordSiteVisit).not.toHaveBeenCalled();
   });
 
+  it('judges a long User-Agent from its head, and passes all of it on for the visitor hash (#705)', async () => {
+    const userAgent = `${'Android '.repeat(20_000)}Mobile`;
+    // A bot named in the head is dropped however long the rest is
+    expect((await post(beacon(VIEW, { 'user-agent': `Googlebot/2.1 ${userAgent}` }))).status).toBe(204);
+    expect(recordSiteVisit).not.toHaveBeenCalled();
+
+    // A name past the first 512 characters is not read, so the view is recorded (read whole,
+    // it would be dropped as a bot), with all of the header
+    const botPastTheHead = `${userAgent} Googlebot/2.1`;
+    expect((await post(beacon(VIEW, { 'user-agent': botPastTheHead }))).status).toBe(204);
+    expect(recordSiteVisit).toHaveBeenCalledTimes(1);
+    expect(recordSiteVisit.mock.calls[0][1].userAgent).toBe(botPastTheHead);
+  });
+
   it.each([
     ['an admin page', { ...VIEW, path: '/ja/dashboard' }],
     ['no path', { search: '' }],

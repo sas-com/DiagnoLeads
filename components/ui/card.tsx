@@ -11,6 +11,7 @@ const decorationColors = {
   red: 'border-t-red-500',
   green: 'border-t-green-500',
   gray: 'border-t-gray-400',
+  cyan: 'border-t-cyan-500',
 };
 
 interface CardProps extends React.HTMLAttributes<HTMLDivElement> {

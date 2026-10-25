@@ -11,6 +11,8 @@ import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema';
 import { z } from 'zod';
 import { CLAUDE_MAX_TOKENS, CLAUDE_MODEL, anthropic } from '../client';
 import { reportClaudeFailure } from '../failures';
+import type { LeadForClaude } from '../prompt-input';
+import { LEAD_DATA_TAG, UNTRUSTED_LEAD_DATA_POLICY, leadDataBlock } from '../prompt-safety';
 import { AI_BATCH_MAX } from '../types/schemas';
 
 // Lead score response schema
@@ -45,33 +47,30 @@ const leadScoreOutputFormat = jsonSchemaOutputFormat({
   additionalProperties: false,
 });
 
-/**
- * Score a lead using Claude AI
- * @param lead - Lead information to analyze
- * @returns AI-generated lead score and recommendations
- */
-export async function scoreLeadWithAI(lead: {
-  name?: string | null;
-  email?: string | null;
-  company?: string | null;
-  industry?: string | null;
-  position?: string | null;
-  notes?: string | null;
-  status?: string | null;
-  createdAt?: Date;
-}): Promise<LeadScoreResult> {
-  try {
-    const prompt = `You are an expert B2B sales analyst. Analyze the following lead and provide a comprehensive score.
+/** The lead as the scoring reads it: nothing that points at a person (#406) */
+type LeadForScoring = Partial<Pick<LeadForClaude, 'id' | 'company' | 'status' | 'createdAt'>>;
 
-Lead Information:
-- Name: ${lead.name || 'N/A'}
-- Email: ${lead.email || 'N/A'}
-- Company: ${lead.company || 'N/A'}
-- Industry: ${lead.industry || 'N/A'}
-- Position: ${lead.position || 'N/A'}
-- Status: ${lead.status || 'N/A'}
-- Notes: ${lead.notes || 'N/A'}
-- Created: ${lead.createdAt ? lead.createdAt.toISOString() : 'N/A'}
+const SCORING_SYSTEM_PROMPT = `You are an expert B2B sales analyst. You score leads for the sales team.
+
+${UNTRUSTED_LEAD_DATA_POLICY}`;
+
+/**
+ * The scoring request: the lead's fields only inside the <lead_data> block (untrusted, from
+ * public forms), the task after it (#47)
+ */
+function buildScoringPrompt(lead: LeadForScoring): string {
+  const data = leadDataBlock(
+    {
+      company: lead.company || null,
+      status: lead.status || null,
+      createdAt: lead.createdAt ? lead.createdAt.toISOString() : null,
+    },
+    { where: 'score-lead', leadId: lead.id }
+  );
+
+  return `${data}
+
+Analyze the lead in <${LEAD_DATA_TAG}> and provide a comprehensive score.
 
 Return:
 1. score (0-100): Overall lead quality score
@@ -82,18 +81,27 @@ Return:
 
 Consider factors like:
 - Company size and reputation
-- Decision-maker position
 - Industry fit
 - Lead engagement level
 - Timing and urgency signals`;
+}
 
+/**
+ * Score a lead using Claude AI
+ * @param lead - Lead information to analyze (its id is only logged, with the fields that look
+ *   like a prompt injection)
+ * @returns AI-generated lead score and recommendations
+ */
+export async function scoreLeadWithAI(lead: LeadForScoring): Promise<LeadScoreResult> {
+  try {
     const message = await anthropic.messages.parse({
       model: CLAUDE_MODEL,
       max_tokens: CLAUDE_MAX_TOKENS,
+      system: SCORING_SYSTEM_PROMPT,
       messages: [
         {
           role: 'user',
-          content: prompt,
+          content: buildScoringPrompt(lead),
         },
       ],
       output_config: { effort: 'low', format: leadScoreOutputFormat },
@@ -126,17 +134,7 @@ Consider factors like:
  * @returns Array of scores
  */
 export async function scoreLeadsBatch(
-  leads: Array<{
-    id: string;
-    name?: string | null;
-    email?: string | null;
-    company?: string | null;
-    industry?: string | null;
-    position?: string | null;
-    notes?: string | null;
-    status?: string | null;
-    createdAt?: Date;
-  }>
+  leads: Array<LeadForScoring & { id: string }>
 ): Promise<Map<string, LeadScoreResult>> {
   const scores = new Map<string, LeadScoreResult>();
 

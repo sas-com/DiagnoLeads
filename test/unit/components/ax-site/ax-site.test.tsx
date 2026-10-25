@@ -253,9 +253,11 @@ describe('AX migration landing page', () => {
       '直せる人の退職・異動',
       'INSネットを使うEDI（2028年12月31日に提供終了と発表）',
     ]);
-    // Before the buttons, which the phone CTA bar watches on their own
+    // Before the buttons, which the phone CTA bar watches on their own: not even the caption
+    // above them, which can be on screen while the buttons are not (#536)
     const buttons = document.getElementById('ax-hero-cta') as HTMLElement;
     expect(within(buttons).getByRole('link', { name: /無料Web診断をはじめる/ })).toBeInTheDocument();
+    expect(buttons).not.toHaveTextContent('約3分でわかります');
   });
 
   it('answers what deciders ask before a consultation (#420)', async () => {
@@ -411,6 +413,74 @@ describe('AxFloatingCta', () => {
     expect(bar).toHaveAttribute('aria-hidden', 'false');
 
     act(() => callback([{ target, isIntersecting: true } as unknown as IntersectionObserverEntry], {} as IntersectionObserver));
+    expect(bar).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('watches the hero diagnosis button, not the hero heading (#536)', () => {
+    // Below the heading, the deadline tags put the hero buttons under a phone's first screen
+    const observed: Element[] = [];
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        observe(target: Element) {
+          observed.push(target);
+        }
+        disconnect() {}
+      }
+    );
+    render(
+      withIntl(
+        <>
+          <h1 id="ax-hero-heading">見出し</h1>
+          <div id="ax-hero-cta">
+            <a href="#diagnosis">無料Web診断をはじめる</a>
+            <a href="https://example.com/booking">無料相談を予約する</a>
+          </div>
+          <AxFloatingCta label="かんたん無料診断をはじめる" />
+        </>
+      )
+    );
+    expect(observed).toEqual([screen.getByRole('link', { name: '無料Web診断をはじめる' })]);
+  });
+
+  it('counts the hero button only once most of it is on screen (#536)', () => {
+    let callback: IntersectionObserverCallback = () => {};
+    let options: IntersectionObserverInit | undefined;
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(cb: IntersectionObserverCallback, init?: IntersectionObserverInit) {
+          callback = cb;
+          options = init;
+        }
+        observe() {}
+        disconnect() {}
+      }
+    );
+    render(
+      withIntl(
+        <>
+          <div id="ax-hero-cta">
+            <a href="#diagnosis">無料Web診断をはじめる</a>
+          </div>
+          <AxFloatingCta label="かんたん無料診断をはじめる" />
+        </>
+      )
+    );
+    const bar = screen.getByText('かんたん無料診断をはじめる').closest('div') as HTMLElement;
+    const target = screen.getByRole('link', { name: '無料Web診断をはじめる' });
+    const show = (intersectionRatio: number) =>
+      act(() =>
+        callback(
+          [{ target, isIntersecting: intersectionRatio > 0, intersectionRatio } as unknown as IntersectionObserverEntry],
+          {} as IntersectionObserver
+        )
+      );
+    expect(options?.threshold).toEqual([0, 0.75]);
+    // 10px of an 84px button at the bottom edge: it cannot be read, the bar stays
+    show(0.12);
+    expect(bar).toHaveAttribute('aria-hidden', 'false');
+    show(0.8);
     expect(bar).toHaveAttribute('aria-hidden', 'true');
   });
 });

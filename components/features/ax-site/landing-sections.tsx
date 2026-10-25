@@ -109,9 +109,10 @@ export async function AxHero({ locale }: SectionProps) {
               ))}
             </ul>
           </div>
-          <div id={AX_HERO_CTA_ID} className="space-y-3 pt-2">
+          <div className="space-y-3 pt-2">
             <CtaCaption locale={locale}>{t('ctaCaption')}</CtaCaption>
-            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            {/* The phone CTA bar watches the buttons, not the caption above them (#536) */}
+            <div id={AX_HERO_CTA_ID} className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <AxCtaLink href={`#${AX_SECTIONS.diagnosis}`} location="hero" tone="dark">
                 {t('cta')}
               </AxCtaLink>

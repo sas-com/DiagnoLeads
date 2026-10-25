@@ -43,9 +43,9 @@ vi.mock('@/lib/features/leads/assignment', async (importOriginal) => ({
   consultationRecipients: (...args: unknown[]) => consultationRecipientsMock(...args),
 }));
 
-const { builderConsultationRecipients, notifyDiagnosisSubmission } = await import(
-  '@/lib/features/diagnosis-builder/notify'
-);
+const { notifyDiagnosisSubmission } = await import('@/lib/features/diagnosis-builder/notify');
+// The rule is shared with the AX diagnosis (#481)
+const { diagnosisConsultationRecipients } = await import('@/lib/features/diagnostics/service');
 
 const OPERATOR = '11111111-1111-4111-8111-111111111111';
 const OTHER = '22222222-2222-4222-8222-222222222222';
@@ -80,23 +80,23 @@ beforeEach(() => {
   env.AX_DIAGNOSIS_SALES_EMAIL = 'sales@example.jp';
 });
 
-describe('builderConsultationRecipients', () => {
+describe('diagnosisConsultationRecipients', () => {
   it("falls back to the sales addresses only for the operator's organization", async () => {
     consultationRecipientsMock.mockResolvedValue({ intakeUserIds: [], emails: [] });
-    await builderConsultationRecipients({ marker: 'tx' } as never, OPERATOR);
+    await diagnosisConsultationRecipients({ marker: 'tx' } as never, OPERATOR);
     expect(consultationRecipientsMock).toHaveBeenLastCalledWith(
       { marker: 'tx' },
       OPERATOR,
       'sales@example.jp'
     );
-    await builderConsultationRecipients({ marker: 'tx' } as never, OTHER);
+    await diagnosisConsultationRecipients({ marker: 'tx' } as never, OTHER);
     expect(consultationRecipientsMock).toHaveBeenLastCalledWith({ marker: 'tx' }, OTHER, undefined);
   });
 
   it('gives no organization the sales addresses when no operator is configured', async () => {
     operator.id = null;
     consultationRecipientsMock.mockResolvedValue({ intakeUserIds: [], emails: [] });
-    await builderConsultationRecipients({ marker: 'tx' } as never, OPERATOR);
+    await diagnosisConsultationRecipients({ marker: 'tx' } as never, OPERATOR);
     expect(consultationRecipientsMock).toHaveBeenLastCalledWith({ marker: 'tx' }, OPERATOR, undefined);
   });
 });

@@ -1,7 +1,8 @@
 /**
  * Submissions of published builder diagnoses (Refs #116)
  *
- * Same rules as the AX diagnosis (lib/features/diagnostics/ax-migration/submission-service.ts):
+ * Same rules as the AX diagnosis (lib/features/diagnostics/ax-migration/submission-service.ts;
+ * the shared ones are in lib/features/diagnostics/service.ts, #481):
  * - Scores come from the definition of the answered version, computed here; points, scores or
  *   results sent by the respondent are not part of the schema and never read.
  * - The endpoint is unauthenticated: a lead with the same email address is never changed, the
@@ -15,17 +16,13 @@ import {
   diagnosticSubmissions,
   leads,
 } from '@/lib/db/schema';
-import { and, eq, isNull, like } from 'drizzle-orm';
+import { and, eq, like } from 'drizzle-orm';
 import { z } from 'zod';
-import { PHONE_PATTERN, normalizePhone } from '../diagnostics/ax-migration/contact';
 import { upsertLeadFromSubmission } from '../diagnostics/lead-upsert';
-import {
-  type Tracking,
-  compactTracking,
-  inferInflowSource,
-  trackingSchema,
-} from '../diagnostics/tracking';
+import { claimConsultation, resolveInflow } from '../diagnostics/service';
+import { type Tracking, compactTracking, trackingSchema } from '../diagnostics/tracking';
 import type { AnswerValidationIssue } from '../diagnostics/types';
+import { contactSchema } from '../diagnostics/types/contact';
 import { type ValidatedAnswers, validateDiagnosisAnswers } from './answers';
 import type { DiagnosisDefinition } from './definition';
 import {
@@ -47,26 +44,12 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** No control or format characters (line breaks, bidi overrides) in names shown to sales */
-const PLAIN_TEXT = /^[^\p{Cc}\p{Cf}]*$/u;
-const plainText = (max: number) => z.string().trim().max(max).regex(PLAIN_TEXT);
-
 /** What the respondent's browser sends. Anything else in the body is dropped by the parse */
 export const diagnosisSubmissionSchema = z.object({
   /** The published version the questions came from (see resolveSubmittedVersion) */
   versionId: z.string().uuid(),
   answers: z.record(z.unknown()),
-  contact: z.object({
-    company: plainText(200).pipe(z.string().min(1)),
-    name: plainText(100).pipe(z.string().min(1)),
-    email: z.string().trim().email().max(254),
-    phone: z
-      .string()
-      .max(30)
-      .transform(normalizePhone)
-      .pipe(z.string().regex(PHONE_PATTERN))
-      .optional(),
-  }),
+  contact: contactSchema,
   privacyConsent: z.literal(true),
   /** consent.version of the definition shown to the respondent */
   consentVersion: z.string().trim().min(1).max(40),
@@ -94,6 +77,8 @@ export type DiagnosisSubmitOutcome =
       leadId: string;
       leadCreated: boolean;
       existingLead: ExistingLeadSnapshot | null;
+      /** The employee whose own link brought the new lead, to tell them (#265) */
+      referralMemberUserId: string | null;
       evaluation: DiagnosisEvaluation;
     }
   | { ok: false; issues: AnswerValidationIssue[] };
@@ -203,7 +188,6 @@ export async function submitBuilderDiagnosis(
     ? { ...scored, mql: withConsultationSignal(scored.mql) }
     : scored;
   const tracking: Tracking = input.tracking ?? {};
-  const inflow = inferInflowSource(tracking);
   const organizationId = diagnosis.organizationId;
   const consent: DiagnosticSubmissionConsent = {
     // The version the server serves, not whatever the browser says it showed
@@ -212,6 +196,10 @@ export async function submitBuilderDiagnosis(
   };
 
   return database.transaction(async (tx) => {
+    // An issued agency link of the organization decides the inflow source over the UTM
+    // parameters, as in the AX diagnosis (#147, #481). Used only when the submission creates the
+    // lead, like every value of newLead
+    const inflow = await resolveInflow(tx, organizationId, tracking);
     const { leadId, existing } = await upsertLeadFromSubmission(tx, {
       organizationId,
       email: input.contact.email,
@@ -226,6 +214,7 @@ export async function submitBuilderDiagnosis(
         referrerName: inflow.referrerName,
         // A ref code with an agency medium is the agency's name (#147)
         agencyName: inflow.agencyName,
+        agencyLinkId: inflow.agencyLinkId,
         conversionPoint: input.consultationRequested ? 'consultation' : 'web_diagnosis',
         // MQL date: only 関心あり (#139); 適合 alone leaves it empty
         mqlQualifiedAt: evaluation.mql.qualified ? now : null,
@@ -276,6 +265,7 @@ export async function submitBuilderDiagnosis(
       existingLead: existing
         ? { name: existing.name, company: existing.company, email: existing.email }
         : null,
+      referralMemberUserId: !existing ? inflow.referralMemberUserId : null,
       evaluation,
     };
   });
@@ -291,7 +281,7 @@ export type DiagnosisConsultationOutcome =
       /** When the consultation was requested: now, or the earlier request (#241) */
       requestedAt: Date;
     }
-  | { ok: false; reason: 'not_found' };
+  | { ok: false; reason: 'not_found' | 'closed' };
 
 /**
  * Record a consultation request made from the result page of a builder diagnosis.
@@ -304,45 +294,26 @@ export async function requestBuilderConsultation(
   submissionId: string,
   now: Date = new Date()
 ): Promise<DiagnosisConsultationOutcome> {
-  const key = diagnosisSubmissionKey(diagnosisId);
   return database.transaction(async (tx) => {
-    const [claimed] = await tx
-      .update(diagnosticSubmissions)
-      .set({ consultationRequestedAt: now })
-      .where(
-        and(
-          eq(diagnosticSubmissions.id, submissionId),
-          eq(diagnosticSubmissions.diagnosticKey, key),
-          eq(diagnosticSubmissions.isTest, false),
-          isNull(diagnosticSubmissions.consultationRequestedAt)
-        )
-      )
-      .returning({
-        organizationId: diagnosticSubmissions.organizationId,
-        leadId: diagnosticSubmissions.leadId,
-        leadCreated: diagnosticSubmissions.leadCreated,
-        result: diagnosticSubmissions.result,
-        diagnosisVersionId: diagnosticSubmissions.diagnosisVersionId,
-      });
-
-    if (!claimed) {
-      const submission = await tx.query.diagnosticSubmissions.findFirst({
-        where: and(
-          eq(diagnosticSubmissions.id, submissionId),
-          eq(diagnosticSubmissions.diagnosticKey, key),
-          eq(diagnosticSubmissions.isTest, false)
-        ),
-      });
-      if (!submission) return { ok: false as const, reason: 'not_found' as const };
+    // Only while the result screen can still be open: a day after the answer, as in the AX
+    // diagnosis (#232, #481); test answers of the preview never take a request
+    const claim = await claimConsultation(tx, {
+      submissionId,
+      diagnosticKey: diagnosisSubmissionKey(diagnosisId),
+      now,
+    });
+    if (claim.status === 'not_found' || claim.status === 'closed') {
+      return { ok: false as const, reason: claim.status };
+    }
+    const claimed = claim.submission;
+    if (claim.status === 'already_requested') {
       return {
         ok: true as const,
         alreadyRequested: true,
-        organizationId: submission.organizationId,
-        leadId: submission.leadId,
-        leadCreated: submission.leadCreated,
-        // Set by the request that won and never cleared; the answer's own time only satisfies the
-        // type, and would close the window for the preferences sooner, not later
-        requestedAt: submission.consultationRequestedAt ?? submission.createdAt,
+        organizationId: claimed.organizationId,
+        leadId: claimed.leadId,
+        leadCreated: claimed.leadCreated,
+        requestedAt: claim.requestedAt,
       };
     }
 

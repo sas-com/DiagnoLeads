@@ -6,19 +6,33 @@ import { isAxFrom } from '@/lib/features/ax-site/cross-links';
  * IP address are never stored.
  */
 
+/**
+ * The part of a User-Agent that isBot and deviceOf read (#705). A browser's is a few hundred
+ * characters; the tablet pattern of deviceOf takes time in the square of the length, so a long
+ * header sent on purpose is cut here, before any pattern runs, for every caller (/api/collect
+ * and the QR entry). isBot reads the same head, so whether a request is a bot and which device
+ * it is are told from the same characters
+ */
+const USER_AGENT_CHARS = 512;
+
+const headOf = (userAgent: string) => userAgent.slice(0, USER_AGENT_CHARS);
+
 /** Crawlers, previews and headless browsers are not visitors */
 const BOT =
   /bot|crawl|spider|slurp|preview|headless|lighthouse|facebookexternalhit|embedly|whatsapp|curl|wget|python-requests|httpclient|monitor/i;
 
+/** Judged from the first USER_AGENT_CHARS characters only */
 export function isBot(userAgent: string | null | undefined): boolean {
-  return !userAgent || BOT.test(userAgent);
+  return !userAgent || BOT.test(headOf(userAgent));
 }
 
 export type SiteDevice = 'desktop' | 'mobile' | 'tablet';
 
+/** Judged from the first USER_AGENT_CHARS characters only */
 export function deviceOf(userAgent: string): SiteDevice {
-  if (/iPad|Tablet|PlayBook|Silk|(Android(?!.*Mobile))/i.test(userAgent)) return 'tablet';
-  if (/Mobi|iPhone|iPod|Android|Windows Phone/i.test(userAgent)) return 'mobile';
+  const head = headOf(userAgent);
+  if (/iPad|Tablet|PlayBook|Silk|(Android(?!.*Mobile))/i.test(head)) return 'tablet';
+  if (/Mobi|iPhone|iPod|Android|Windows Phone/i.test(head)) return 'mobile';
   return 'desktop';
 }
 
@@ -43,10 +57,15 @@ export interface SiteVisitParams {
   fromRef: string | null;
 }
 
-/** A value that looks like an email address is dropped: a mailing tool may put one in utm_* */
+/**
+ * A value that looks like an email address is dropped: a mailing tool may put one in utm_*. So is
+ * one with NUL ("%00" in the query string), which PostgreSQL cannot store (#648).
+ */
 const clip = (value: string | null) => {
   const trimmed = value?.trim();
-  return trimmed && !trimmed.includes('@') ? trimmed.slice(0, 200) : null;
+  return trimmed && !trimmed.includes('@') && !trimmed.includes('\u0000')
+    ? trimmed.slice(0, 200)
+    : null;
 };
 
 /** The utm_* and `from` of the page's query string ("?utm_source=x&from=ax-lp-header") */

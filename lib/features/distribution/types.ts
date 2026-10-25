@@ -1,32 +1,16 @@
 import { z } from 'zod';
 
 /**
- * QR Code Generation Input Schema
+ * Path of the public entry of a QR campaign: /q/<short code> (app/q/[code]/route.ts, #503).
+ * Not /d/: that is the public page of builder diagnoses, which looks up slugs, not short codes
  */
-export const generateQRCodeSchema = z.object({
-  diagnosticTemplateId: z.string().uuid(),
-  size: z.enum(['small', 'medium', 'large', 'xlarge']).default('medium'),
-  format: z.enum(['png', 'svg', 'dataUrl']).default('dataUrl'),
-  campaignName: z.string().max(100).optional(),
-  utmSource: z.string().max(50).default('qrcode'),
-  utmMedium: z.string().max(50).default('offline'),
-  utmCampaign: z.string().max(100).optional(),
-  utmContent: z.string().max(100).optional(),
-  color: z
-    .object({
-      dark: z
-        .string()
-        .regex(/^#[0-9A-Fa-f]{6}$/)
-        .default('#000000'),
-      light: z
-        .string()
-        .regex(/^#[0-9A-Fa-f]{6}$/)
-        .default('#ffffff'),
-    })
-    .optional(),
-});
+export const QR_ENTRY_PATH = '/q';
 
-export type GenerateQRCodeInput = z.infer<typeof generateQRCodeSchema>;
+/**
+ * What a short code can be before the database is asked. generateShortCode makes 8 letters and
+ * digits; codes are compared case-sensitively ("AbC" and "abc" are different codes)
+ */
+export const SHORT_CODE_PATTERN = /^[A-Za-z0-9]{1,64}$/;
 
 /**
  * QR Code Campaign Schema (for tracking)

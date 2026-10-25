@@ -104,12 +104,6 @@ const READS: Record<string, Call> = {
   'analytics.getResponseTime': (c) => c.analytics.getResponseTime(org),
   'analytics.getAcquisitionCost': (c) => c.analytics.getAcquisitionCost(org),
   'analytics.getAgencyPerformance': (c) => c.analytics.getAgencyPerformance(org),
-  'analytics.getComparison': (c) =>
-    c.analytics.getComparison({
-      ...org,
-      currentPeriod: { start: '2026-10-01T00:00:00.000Z', end: '2026-10-08T00:00:00.000Z' },
-      previousPeriod: { start: '2026-09-24T00:00:00.000Z', end: '2026-10-01T00:00:00.000Z' },
-    }),
   'diagnosticTemplates.getBySlug': (c) => c.diagnosticTemplates.getBySlug({ ...org, slug: 'x' }),
   'leadSearch.suggest': (c) => c.leadSearch.suggest({ ...org, query: '山田' }),
   'embed.list': (c) => c.embed.list(org),
@@ -120,11 +114,9 @@ const READS: Record<string, Call> = {
   'distribution.getCampaign': (c) => c.distribution.getCampaign({ ...org, id: ID }),
   'distribution.getCampaignStats': (c) =>
     c.distribution.getCampaignStats({ ...org, campaignId: ID }),
-  // Mutations, but they only build a QR code
+  // A mutation, but it only builds a QR code
   'distribution.generateCampaignQR': (c) =>
     c.distribution.generateCampaignQR({ ...org, campaignId: ID }),
-  'distribution.generateQRCode': (c) =>
-    c.distribution.generateQRCode({ ...org, diagnosticTemplateId: ID }),
   // Picks a variant without writing (recordEvent records the impression)
   'abTests.selectVariant': (c) => c.abTests.selectVariant({ ...org, testId: ID }),
 };

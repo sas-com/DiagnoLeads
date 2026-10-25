@@ -330,9 +330,10 @@
       "help": "機械による自動送信を防ぐための確認です（Cloudflare社の仕組みを使います）。通常は数秒で自動的に終わります。チェック欄が表示された場合は、クリックしてください。",
       "done": "送信前の確認が完了しました",
       "unavailable": "送信前の確認を表示できませんでした。",
+      "failed": "送信前の確認を完了できませんでした。",
       "retry": "確認をやり直す",
-      "alternative": "社内のネットワークの設定によっては表示されないことがあります。その場合は、お手数ですが<link>個別相談の予約ページ</link>からご連絡ください。",
-      "alternativeContact": "社内のネットワークの設定によっては表示されないことがあります。その場合は、お手数ですがお電話（<phone></phone>）またはメール（<email></email>）でご連絡ください。"
+      "alternative": "社内のネットワークの設定によっては、確認が表示されない、または完了しないことがあります。その場合は、お手数ですが<link>個別相談の予約ページ</link>からご連絡ください。",
+      "alternativeContact": "社内のネットワークの設定によっては、確認が表示されない、または完了しないことがあります。その場合は、お手数ですがお電話（<phone></phone>）またはメール（<email></email>）でご連絡ください。"
     },
     "contact": {
       "description": "診断結果はこの画面に表示します。ご連絡先は、結果のご説明やご相談のご案内に使います。",
@@ -342,6 +343,7 @@
       "phone": "電話番号",
       "consultation": "結果をもとに、無料の個別相談を希望する",
       "consultationHint": "担当者からご連絡します。電話でのご連絡を希望される場合は、電話番号もご入力ください。",
+      "accessConsultation": "結果をもとに、30分の無料オンライン相談を希望する",
       "consent": "個人情報の取り扱いに同意する",
       "consentAgain": "ご連絡先は前回の入力を使います。お手数ですが、個人情報の取り扱いへの同意に、もう一度チェックを入れてください。",
       "consentNotice": "ご入力いただいた情報は、診断結果のご案内と、AXマイグレーションに関するご連絡以外には使いません。",
@@ -399,6 +401,10 @@
       },
       "checkpointsTitle": "{platform}からWebシステムへ移行するときに確認すること",
       "checkpointsTitleGeneric": "Webシステムへ移行するときに確認すること",
+      "accessCheckpointsTitle": {
+        "fix": "{platform}を直して使い続けるときに確認すること",
+        "replace": "{platform}から既製サービスに置き換えるときに確認すること"
+      },
       "checkpoints": {
         "source_missing": "見つからないソースの扱い（実行中のプログラムからの解析など）を、最初に確認します",
         "source_vendor_held": "保守会社や提供元が持っているソースを、調査のために出してもらえるか（契約・費用）を最初に確認します",
@@ -548,8 +554,8 @@
         },
         "agility": {
           "title": "モノ：市場の変化に対応できないシステム",
-          "problem": "取引先や市場、働き方の変化に合わせようとするたびに、既存システムの制約や保守期限が足かせになっています。",
-          "solution": "サポートの続くWebの基盤に移り、機能の追加や社外からの利用に対応しやすくします。"
+          "problem": "新しい取引先や市場の変化に対応しようとするたびに、既存システムの制約が、新商品・新サービスの展開を妨げています。",
+          "solution": "短いサイクルで機能を追加しやすく、市場の変化に対応しやすい仕組みへ移ることをめざします。"
         },
         "data": {
           "title": "情報：経営判断に使えないデータ",
@@ -585,7 +591,7 @@
         "items": {
           "inventory": {
             "title": "棚卸し",
-            "body": "30分のオンライン相談で、ツールの数や使われ方を伺います。必要に応じてファイルをお預かりして、中身を確かめます。"
+            "body": "30分のオンライン相談で、ツールの数や使われ方を伺います。必要に応じてファイルをお預かりして、中身を確かめます。ファイルを確かめる作業に費用がかかる場合は、前もってお伝えします。"
           },
           "decide": {
             "title": "進め方の決定",
@@ -611,6 +617,30 @@
       },
       "accessMeetingDuration": "所要時間の目安：30分程度（オンライン）",
       "accessDisclaimer": "本結果は回答内容にもとづく目安です。正確な進め方・期間・費用は、ツールの中身を確かめたうえでお伝えします。",
+      "accessCta": {
+        "hearing": {
+          "title": "わからなかった項目を、一緒に確認しませんか",
+          "lead": "わからなかった項目は、30分のオンライン相談で一緒に確認できます（調べ方もご案内します）。"
+        },
+        "urgent": {
+          "title": "期限までの段取りを、一緒に確認しませんか",
+          "lead": "期限が迫っています。まずは30分のオンライン相談で段取りを確認しませんか。"
+        },
+        "overdue": {
+          "title": "切り替えの順番を、一緒に整理しませんか",
+          "lead": "サポートや保守の期限は、すでに過ぎています。まずは30分のオンライン相談で、切り替えの順番を確認しませんか。"
+        },
+        "consultation": {
+          "title": "結果の解説と、進め方をご案内します",
+          "lead": "結果の解説と進め方を、30分のオンライン相談でご案内します。"
+        },
+        "information": {
+          "title": "まずは情報収集から始めませんか",
+          "lead": "情報収集の段階でも、お気軽にご相談ください。"
+        },
+        "button": "30分の無料オンライン相談を申し込む",
+        "accepted": "30分のオンライン相談のお申し込みを受け付けました"
+      },
       "stepLabel": "STEP {number}",
       "title": "診断結果",
       "subtitle": "{company} 様の回答にもとづく目安です",
@@ -684,8 +714,11 @@
         "platform": "移行元",
         "note": "この結果は、ご回答の内容にもとづく目安です。詳しい見通しは、現行のシステムを確認したうえでご案内します。",
         "rediagnoseHint": "「わからない」とご回答いただいた項目が多いため、目安の精度は高くありません。社内で確認できた項目があれば、もう一度診断していただくと、より確かな目安をご覧いただけます。確かめ方がわからない場合は、個別相談で調べ方からご案内します。",
+        "accessRediagnoseHint": "「わからない」とご回答いただいた項目が多いため、目安の精度は高くありません。社内で確認できた項目があれば、もう一度診断していただくと、より確かな目安をご覧いただけます。確かめ方がわからない場合は、30分のオンライン相談で調べ方からご案内します。",
         "consultationLead": "結果の解説と移行の進め方を、個別相談でご案内します。担当者が診断結果をもとに、貴社の状況に合った進め方をご説明します。無理な営業はいたしません。",
         "consultationButton": "無料の個別相談を申し込む",
+        "accessConsultationLead": "結果の解説と進め方を、30分のオンライン相談でご案内します。担当者が診断結果をもとに、貴社の状況に合った進め方をご説明します。無理な営業はいたしません。",
+        "accessConsultationButton": "30分の無料オンライン相談を申し込む",
         "rediagnoseLead": "回答を見直す場合や、別のシステムを診断する場合は、こちらからどうぞ。",
         "rediagnoseButton": "もう一度診断する",
         "footer": "このメールは、AXマイグレーション 無料Web診断で診断結果の送付をお申し込みいただき、確認のボタンを押された方にお送りしています。"
@@ -825,8 +858,9 @@
       "help": "機械による自動送信を防ぐための確認です（Cloudflare社の仕組みを使います）。通常は数秒で自動的に終わります。チェック欄が表示された場合は、クリックしてください。",
       "done": "送信前の確認が完了しました",
       "unavailable": "送信前の確認を表示できませんでした。",
+      "failed": "送信前の確認を完了できませんでした。",
       "retry": "確認をやり直す",
-      "alternative": "社内のネットワークの設定によっては表示されないことがあります。その場合は、<link>お問い合わせページ</link>からご連絡ください。"
+      "alternative": "社内のネットワークの設定によっては、確認が表示されない、または完了しないことがあります。その場合は、<link>お問い合わせページ</link>からご連絡ください。"
     },
     "contact": {
       "description": "診断結果はこの画面に表示します。ご連絡先は、結果のご説明やご相談のご案内に使います。",
@@ -853,7 +887,8 @@
         "body": "結果をもとに、担当者が課題の整理や進め方をご説明します。お申し込みいただくと、担当者からご連絡します。",
         "button": "個別相談を申し込む",
         "done": "個別相談のお申し込みを受け付けました。担当者からご連絡します。",
-        "failed": "お申し込みを送信できませんでした。時間をおいてもう一度お試しください。"
+        "failed": "お申し込みを送信できませんでした。時間をおいてもう一度お試しください。",
+        "closed": "受付期間（診断から24時間）を過ぎたため、この画面からはお申し込みいただけません。お手数ですが、もう一度診断してからお申し込みください。"
       }
     }
   },
@@ -1006,7 +1041,6 @@
     "convertedLeads": "成約数",
     "newLeadsThisMonth": "今月の新規リード",
     "conversionRate": "コンバージョン率",
-    "averageScore": "平均スコア",
     "leadTrend": "リードトレンド",
     "leadStatusBreakdown": "リードステータス内訳",
     "count": "件",
@@ -1063,13 +1097,9 @@
         "mql": "MQL",
         "mqlInterest": "MQL（関心あり）",
         "fitOnly": "ほかに適合のみ {value}件",
-        "averageScore": "平均スコア",
-        "noScore": "—",
-        "scoreSuffix": "/100",
         "count": "{value}件",
         "previous": "前の{days}日間 {value}",
         "previousWithRate": "前の{days}日間 {value} → {rate}",
-        "noPreviousScore": "前の{days}日間 スコアなし",
         "deltaLabel": "前の{days}日間との差"
       },
       "pending": {
@@ -1168,6 +1198,7 @@
         },
         "period": "直近{days}日・日ごと（日本時間）",
         "periodWeekly": "直近{days}日・週ごと（日本時間）",
+        "updatedAt": "{time}時点",
         "chartLabel": "直近{days}日の{metric}は{total}件",
         "platforms": "移行元システムごと"
       },
@@ -1202,6 +1233,7 @@
   "leads": {
     "pipeline": "営業パイプライン",
     "inflowSource": "流入元",
+    "tags": "タグ",
     "conversionPoint": "コンバージョンポイント",
     "dealPhase": "商談フェーズ",
     "targetSystem": "対象システム",
@@ -1223,7 +1255,6 @@
     "totalLeads": "総リード数",
     "activeLeads": "アクティブリード",
     "conversionRate": "コンバージョン率",
-    "averageScore": "平均スコア",
     "createLead": "新規リード追加",
     "createLeadTitle": "新しいリードを作成",
     "createLeadDescription": "新しいリードの情報を入力してください。",
@@ -1266,6 +1297,17 @@
     "deleteConfirmTitle": "リードを削除しますか？",
     "deleteConfirmMessage": "この操作は取り消せません。{name}のすべてのデータが完全に削除されます。",
     "deleting": "削除中...",
+    "toast": {
+      "creating": "リードを作成中...",
+      "created": "リードを作成しました",
+      "createFailed": "リードの作成に失敗しました",
+      "updating": "リードを更新中...",
+      "updated": "リードを更新しました",
+      "updateFailed": "リードの更新に失敗しました",
+      "deleting": "リードを削除中...",
+      "deleted": "リードを削除しました",
+      "deleteFailed": "リードの削除に失敗しました"
+    },
     "rowsPerPage": "表示件数",
     "addFirstLead": "最初のリードを追加",
     "bulk": {
@@ -1382,6 +1424,21 @@
         "errorSoleOwner": "オーナーがあなただけの組織があるため、削除できません",
         "errorFailed": "アカウントを削除できませんでした。時間をおいてもう一度お試しください"
       },
+      "otherDevices": {
+        "title": "ほかの端末のログイン",
+        "description": "このブラウザ以外でログインしている端末やブラウザを、まとめてログアウトさせます。このブラウザはログインしたままです。なくした端末や、身に覚えのないログインがあるときに使ってください。",
+        "expiry": "ログインは、ログインした時から7日で切れます。使い続けても延びないので、7日ごとにログインし直してください。",
+        "copiedHere": "このブラウザのログインが写された心配があるときは、ここではなくパスワードを変えてください。変えると、このブラウザも新しいログインになり、ほかのログインはすべて切れます。",
+        "open": "ほかの端末からログアウト...",
+        "dialogTitle": "ほかの端末とブラウザからログアウトしますか？",
+        "dialogDescription": "このブラウザ以外のログインを、すべて終わらせます。ほかの端末やブラウザで使うときは、もう一度ログインしてください。",
+        "cancel": "キャンセル",
+        "confirm": "ログアウトさせる",
+        "signingOut": "ログアウト中...",
+        "success": "ほかの端末とブラウザからログアウトしました",
+        "error": "ほかの端末からログアウトできませんでした。時間をおいてもう一度お試しください",
+        "sessionEnded": "このブラウザのログインが切れています。ログインし直してから、もう一度お試しください"
+      },
       "profileSection": "プロフィール",
       "nameLabel": "氏名",
       "namePlaceholder": "山田 太郎",
@@ -1409,7 +1466,7 @@
       "passwordMinLength": "パスワードは8文字以上で入力してください",
       "passwordMismatch": "新しいパスワードが一致しません",
       "currentPasswordIncorrect": "現在のパスワードが正しくありません",
-      "passwordChangeSuccess": "パスワードを変更しました",
+      "passwordChangeSuccess": "パスワードを変更しました。ほかの端末やブラウザではログアウトしました",
       "passwordChangeError": "パスワードの変更に失敗しました",
       "deleteAccountSection": "アカウント削除",
       "deleteAccountWarning": "アカウントを削除すると、すべてのデータが削除されます。この操作は取り消せません。",
@@ -2121,7 +2178,9 @@
         "totalLeads": "総リード数",
         "newLeadsThisMonth": "今月の新規リード",
         "conversionRate": "コンバージョン率",
-        "vsLastPeriod": "前期間比"
+        "vsLastPeriod": "前期間比",
+        "mqlInterest": "MQL（関心あり）",
+        "mqlRate": "すべての期間のリードの {rate}%"
       },
       "tabs": {
         "overview": "概要",
@@ -2132,6 +2191,8 @@
       "charts": {
         "leadTrend": "リード推移",
         "totalLeads": "総リード数",
+        "total": "合計",
+        "leads": "リード数",
         "convertedLeads": "成約数",
         "statusBreakdown": "ステータス分布",
         "statusBreakdownPeriod": "{period}に登録されたリード",
@@ -2140,19 +2201,25 @@
         "conversionFunnel": "コンバージョンファネル",
         "responseTime": "応答時間",
         "sourceBreakdownPeriod": "{period}に登録されたリードの流入元",
-        "responseTimePending": "準備中（初回連絡の記録の追加後に表示）"
+        "responseTimePending": "準備中（初回連絡の記録の追加後に表示）",
+        "mqlLevels": "MQL段階の内訳",
+        "mqlLevelsDescription": "すべての期間のリード。MQL判定日のあるリード（手で MQL にしたものを含む）は関心ありに数えます。段階を押すと一覧で開きます"
       },
       "funnel": {
         "total": "総計",
         "conversionRate": "コンバージョン率",
         "overallConversion": "全体コンバージョン率",
-        "fromInitial": "初回リードからの変換率"
+        "fromInitial": "初回リードからの変換率",
+        "averageDays": "成約までの平均：{days}日"
+      },
+      "responseTimePeriods": {
+        "withinHour": "1時間以内",
+        "withinDay": "1-24時間",
+        "withinThreeDays": "1-3日",
+        "overThreeDays": "3日以上"
       },
       "noData": "データがありません",
-      "comingSoon": "近日公開予定",
-      "performanceSummary": {
-        "title": "パフォーマンスの概要"
-      },
+      "leadCount": "{count, number}件",
       "acquisitionCost": {
         "title": "流入元別の獲得費用",
         "description": "リードに記録した獲得費用（税抜）の合計です。費用が未記録のリードは件数にだけ含めています。",
@@ -2662,28 +2729,6 @@
     "costPerLeadBySource": "ソース別リード単価",
     "averageDealValue": "平均取引額",
     "calculate": "ROIを計算"
-  },
-  "comparison": {
-    "title": "比較分析",
-    "description": "期間間の指標を比較",
-    "currentPeriod": "現在の期間",
-    "previousPeriod": "前の期間",
-    "startDate": "開始日",
-    "endDate": "終了日",
-    "compare": "比較する",
-    "changes": "変化",
-    "insights": "インサイト",
-    "noInsights": "重要な変化は検出されませんでした",
-    "increase": "増加",
-    "decrease": "減少",
-    "metrics": {
-      "totalLeads": "総リード数",
-      "convertedLeads": "コンバージョン数",
-      "conversionRate": "コンバージョン率",
-      "averageScore": "平均スコア"
-    },
-    "bySource": "ソース別",
-    "byStatus": "ステータス別"
   },
   "axSite": {
     "meta": {
@@ -3201,7 +3246,7 @@
         "inventory": {
           "label": "STEP 1",
           "title": "棚卸し",
-          "body": "30分のオンライン相談で、ツールの数や使われ方を伺います。必要に応じてファイルをお預かりし、画面と帳票、VBA、つながっている先を確かめます。"
+          "body": "30分のオンライン相談で、ツールの数や使われ方を伺います。必要に応じてファイルをお預かりし、画面と帳票、VBA、つながっている先を確かめます。ファイルを確かめる作業に費用がかかる場合は、前もってお伝えします。"
         },
         "decide": {
           "label": "STEP 2",
@@ -3892,7 +3937,6 @@
     },
     "score": "スコア",
     "scoreValue": "スコア {score}",
-    "noScore": "スコアなし",
     "noDealPhase": "フェーズ未設定",
     "cards": {
       "contact": "連絡先",
@@ -4287,7 +4331,7 @@
       "totalLeads": "リード数",
       "newThisMonth": "今月の新規",
       "conversionRate": "成約率",
-      "averageScore": "平均スコア",
+      "mqlRate": "MQL率（関心あり）",
       "statusDistribution": "ステータス別の件数",
       "sourceDistribution": "流入元別の件数",
       "funnel": "コンバージョンファネル",
@@ -4453,6 +4497,7 @@
     "change": "別の候補に変更する",
     "pick": "候補を選んでください",
     "confirmDone": "日程を確定しました",
+    "confirmToast": "{done}。{email}",
     "emailResult": {
       "sent": "回答者に確定の連絡を送りました",
       "not_requested": "メールは送っていません",
@@ -4979,6 +5024,7 @@
     },
     "agency": {
       "section": "営業代行の架電",
+      "inParens": "（{name}）",
       "hint": "担当者名と直通電話は、営業と、この行を作った人だけに見えます。次の連絡可能時期は「次回アクション日」に入れます。断られた行は、次回アクション日の30日前から「再アプローチ」に並びます。"
     },
     "calls": {
