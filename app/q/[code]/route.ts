@@ -1,5 +1,6 @@
 import { db } from '@/lib/db/client';
 import { findPublicDiagnosis } from '@/lib/features/diagnosis-builder/public-diagnosis';
+import { resolveDiagnosisOrganizationId } from '@/lib/features/diagnostics/organization';
 import { consumeRateLimit } from '@/lib/features/diagnostics/rate-limit';
 import { clientIp, ipBlock } from '@/lib/features/diagnostics/request-guard';
 import {
@@ -35,12 +36,29 @@ const TEXT = { ...HEADERS, 'Content-Type': 'text/plain; charset=utf-8' };
 const notFound = () => new NextResponse('Not Found', { status: 404, headers: TEXT });
 
 /**
+ * Whether the AX diagnosis makes its leads in this organization. The ids are compared in one
+ * case: PostgreSQL returns a uuid in lower case, the environment may hold it in either
+ */
+function receivesAxDiagnosis(organizationId: string): boolean {
+  const axOrganizationId = resolveDiagnosisOrganizationId();
+  return (
+    axOrganizationId !== null && axOrganizationId.toLowerCase() === organizationId.toLowerCase()
+  );
+}
+
+/**
  * GET /q/<short code>
  *
  * The QR code of a campaign (#503). Sends the visitor to the campaign's diagnosis with the
- * campaign's UTM parameters: its builder diagnosis on /d/<slug> while that is published, else
- * the AX diagnosis. The address is a path of this app built from the campaign row; nothing of
- * the request (host, query, headers) goes into it. A paused, expired or unknown code is 404.
+ * campaign's UTM parameters (owner decisions in #663):
+ * - a campaign that names a builder diagnosis (diagnosis_id): to /d/<slug> while that page
+ *   serves this diagnosis; 404 while it does not (paused, archived, a slug two organizations
+ *   publish, a diagnosis of another organization), never to another diagnosis
+ * - a campaign that names none: to the AX diagnosis, only when the campaign is the AX
+ *   organization's (resolveDiagnosisOrganizationId), whose leads the AX diagnosis makes; 404
+ *   for another organization's, so its visitors never become the AX organization's leads
+ * The address is a path of this app built from the campaign row; nothing of the request (host,
+ * query, headers) goes into it. A paused, expired or unknown code is 404.
  * Outside [locale] (lib/i18n/middleware.ts skips /q/): the code is case-sensitive and the
  * locale routing would otherwise redirect it first.
  *
@@ -69,12 +87,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
     const campaign = await findOpenQrCampaign(db, code);
     if (!campaign) return notFound();
 
-    // /d/<slug> serves a slug only while exactly one organization publishes it: send there only
-    // when it serves this campaign's own diagnosis
     let publishedSlug: string | null = null;
-    if (campaign.diagnosis) {
-      const published = await findPublicDiagnosis(db, campaign.diagnosis.slug);
-      if (published?.id === campaign.diagnosis.id) publishedSlug = published.slug;
+    if (campaign.diagnosisId) {
+      // The diagnosis the campaign names, or nowhere: /d/<slug> serves a slug only while exactly
+      // one organization publishes it, so send there only when it serves this very diagnosis
+      const published = campaign.diagnosis
+        ? await findPublicDiagnosis(db, campaign.diagnosis.slug)
+        : null;
+      if (!published || published.id !== campaign.diagnosisId) return notFound();
+      publishedSlug = published.slug;
+    } else if (!receivesAxDiagnosis(campaign.organizationId)) {
+      // The AX diagnosis makes leads of the AX organization only (also 404 while it has none)
+      return notFound();
     }
 
     // A relative Location: the visitor stays on the host they scanned

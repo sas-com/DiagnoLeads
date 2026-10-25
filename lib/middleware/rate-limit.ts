@@ -109,9 +109,11 @@ export const ENDPOINT_RATE_LIMITS: Record<string, RateLimitConfig> = {
 
   // The QR entry of campaigns (/q/<code>, #503). Counted per code here (the key holds the
   // path), so the limit per address across codes is in the DB (QR_ENTRY_RATE_LIMITS). Loose:
-  // people at one event can scan the same code from one address. Also keeps a code that
-  // contains "embed" from getting the diagnostic limit below
-  '/q/': { max: 60, windowMs: 60 * 1000 },
+  // people at one event scan the same code from one address (the venue's Wi-Fi), mostly in its
+  // first minute. Twice the largest event, 100 people, as many as the DB allows in 10 minutes
+  // (owner decision in #663; change both together, decision 2026-10-24-qr-short-code-entry).
+  // Also keeps a code that contains "embed" from getting the diagnostic limit below
+  '/q/': { max: 200, windowMs: 60 * 1000 },
 };
 
 /**

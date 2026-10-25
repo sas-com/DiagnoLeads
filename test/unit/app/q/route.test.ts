@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   findOpenQrCampaign: vi.fn(),
   findPublicDiagnosis: vi.fn(),
   consumeRateLimit: vi.fn(),
+  axOrganizationId: 'org-ax' as string | null,
   reportRejectedRequest: vi.fn(),
   reportServerError: vi.fn(),
   afterTasks: [] as (() => unknown)[],
@@ -24,6 +25,9 @@ vi.mock('@/lib/features/distribution/short-code-entry', async (importOriginal) =
 }));
 vi.mock('@/lib/features/diagnosis-builder/public-diagnosis', () => ({
   findPublicDiagnosis: mocks.findPublicDiagnosis,
+}));
+vi.mock('@/lib/features/diagnostics/organization', () => ({
+  resolveDiagnosisOrganizationId: () => mocks.axOrganizationId,
 }));
 vi.mock('@/lib/features/diagnostics/rate-limit', () => ({
   consumeRateLimit: mocks.consumeRateLimit,
@@ -50,25 +54,42 @@ async function scan(code: string, init: { url?: string; headers?: Record<string,
   return res;
 }
 
+/** A campaign of the AX organization that names no diagnosis */
 const CAMPAIGN: QrEntryCampaign = {
   campaignId: 'c1',
-  organizationId: 'org-a',
+  organizationId: 'org-ax',
+  diagnosisId: null,
   diagnosis: null,
   utm: { source: 'qrcode', medium: 'offline', campaign: 'fair-2026', content: null },
 };
 const AX = '/ja/ax-diagnosis?utm_source=qrcode&utm_medium=offline&utm_campaign=fair-2026';
+/** A campaign that names a builder diagnosis of its organization */
+const WITH_DIAGNOSIS: QrEntryCampaign = {
+  ...CAMPAIGN,
+  organizationId: 'org-a',
+  diagnosisId: 'd1',
+  diagnosis: { id: 'd1', slug: 'cloud-readiness' },
+};
+
+async function expectNotFound(res: Response) {
+  expect(res.status).toBe(404);
+  expect(res.headers.get('location')).toBeNull();
+  expect(res.headers.get('cache-control')).toBe('no-store');
+  expect(await res.text()).toBe('Not Found');
+}
 
 describe('GET /q/[code]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.afterTasks.length = 0;
+    mocks.axOrganizationId = 'org-ax';
     mocks.findOpenQrCampaign.mockResolvedValue(CAMPAIGN);
     mocks.findPublicDiagnosis.mockResolvedValue(null);
     mocks.consumeRateLimit.mockResolvedValue({ allowed: true, count: 1, retryAfterSeconds: 600 });
   });
   afterEach(() => vi.unstubAllEnvs());
 
-  it("redirects to the AX diagnosis with the campaign's UTM parameters, not the request's", async () => {
+  it("redirects the AX organization's campaign to the AX diagnosis with the campaign's UTM parameters, not the request's", async () => {
     const res = await scan('AbCd2345', {
       url: 'https://evil.example/q/AbCd2345?utm_source=other&next=https://evil.example',
       headers: { host: 'evil.example', 'x-forwarded-host': 'evil.example' },
@@ -85,11 +106,31 @@ describe('GET /q/[code]', () => {
     }
   });
 
-  it("redirects to the campaign's builder diagnosis while /d/<slug> serves it", async () => {
-    mocks.findOpenQrCampaign.mockResolvedValue({
-      ...CAMPAIGN,
-      diagnosis: { id: 'd1', slug: 'cloud-readiness' },
+  describe("a campaign that names no diagnosis, of another organization than the AX diagnosis's (#663)", () => {
+    it('answers 404, so its visitors never become leads of the AX organization', async () => {
+      mocks.findOpenQrCampaign.mockResolvedValue({ ...CAMPAIGN, organizationId: 'org-b' });
+      await expectNotFound(await scan('AbCd2345'));
+      expect(mocks.findPublicDiagnosis).not.toHaveBeenCalled();
     });
+
+    it('answers 404 for every campaign while no organization receives the AX diagnosis', async () => {
+      mocks.axOrganizationId = null;
+      await expectNotFound(await scan('AbCd2345'));
+    });
+  });
+
+  it('knows the AX organization whatever the case of its id in the environment', async () => {
+    const id = '0f8e2c1a-3b4d-4e5f-8a9b-0c1d2e3f4a5b';
+    mocks.axOrganizationId = id.toUpperCase();
+    // PostgreSQL returns a uuid in lower case
+    mocks.findOpenQrCampaign.mockResolvedValue({ ...CAMPAIGN, organizationId: id });
+    const res = await scan('AbCd2345');
+    expect(res.status).toBe(307);
+    expect(res.headers.get('location')).toBe(AX);
+  });
+
+  it("redirects to the campaign's builder diagnosis while /d/<slug> serves it", async () => {
+    mocks.findOpenQrCampaign.mockResolvedValue(WITH_DIAGNOSIS);
     mocks.findPublicDiagnosis.mockResolvedValue({ id: 'd1', slug: 'cloud-readiness' });
     const res = await scan('AbCd2345');
     expect(res.status).toBe(307);
@@ -99,32 +140,39 @@ describe('GET /q/[code]', () => {
     expect(mocks.findPublicDiagnosis).toHaveBeenCalledWith({ name: 'app-db' }, 'cloud-readiness');
   });
 
-  it('falls back to the AX diagnosis when the diagnosis is not published', async () => {
-    mocks.findOpenQrCampaign.mockResolvedValue({
-      ...CAMPAIGN,
-      diagnosis: { id: 'd1', slug: 'cloud-readiness' },
+  describe('a campaign whose diagnosis /d/<slug> does not serve (#663)', () => {
+    it('answers 404 while the diagnosis is not published (paused, archived), not the AX diagnosis', async () => {
+      mocks.findOpenQrCampaign.mockResolvedValue(WITH_DIAGNOSIS);
+      await expectNotFound(await scan('AbCd2345'));
     });
-    const res = await scan('AbCd2345');
-    expect(res.headers.get('location')).toBe(AX);
-  });
 
-  it('never sends to a /d/<slug> that serves another diagnosis', async () => {
-    mocks.findOpenQrCampaign.mockResolvedValue({
-      ...CAMPAIGN,
-      diagnosis: { id: 'd1', slug: 'cloud-readiness' },
+    it('answers 404 also for a campaign of the AX organization', async () => {
+      mocks.findOpenQrCampaign.mockResolvedValue({ ...WITH_DIAGNOSIS, organizationId: 'org-ax' });
+      await expectNotFound(await scan('AbCd2345'));
     });
-    // The same slug, published by another organization
-    mocks.findPublicDiagnosis.mockResolvedValue({ id: 'd-other', slug: 'cloud-readiness' });
-    const res = await scan('AbCd2345');
-    expect(res.headers.get('location')).toBe(AX);
+
+    it('never sends to a /d/<slug> that serves another diagnosis', async () => {
+      mocks.findOpenQrCampaign.mockResolvedValue(WITH_DIAGNOSIS);
+      // The same slug, published by another organization
+      mocks.findPublicDiagnosis.mockResolvedValue({ id: 'd-other', slug: 'cloud-readiness' });
+      await expectNotFound(await scan('AbCd2345'));
+    });
+
+    it('answers 404 when the diagnosis it names is not of its organization', async () => {
+      // findOpenQrCampaign leaves out a diagnosis of another organization
+      mocks.findOpenQrCampaign.mockResolvedValue({
+        ...WITH_DIAGNOSIS,
+        organizationId: 'org-ax',
+        diagnosis: null,
+      });
+      await expectNotFound(await scan('AbCd2345'));
+      expect(mocks.findPublicDiagnosis).not.toHaveBeenCalled();
+    });
   });
 
   it('answers 404 for a paused, expired or unknown code', async () => {
     mocks.findOpenQrCampaign.mockResolvedValue(null);
-    const res = await scan('AbCd2345');
-    expect(res.status).toBe(404);
-    expect(res.headers.get('location')).toBeNull();
-    expect(await res.text()).toBe('Not Found');
+    await expectNotFound(await scan('AbCd2345'));
     expect(mocks.findPublicDiagnosis).not.toHaveBeenCalled();
   });
 
@@ -147,7 +195,7 @@ describe('GET /q/[code]', () => {
       '203.0.113.5'
     );
 
-    mocks.consumeRateLimit.mockResolvedValue({ allowed: false, count: 121, retryAfterSeconds: 42 });
+    mocks.consumeRateLimit.mockResolvedValue({ allowed: false, count: 201, retryAfterSeconds: 42 });
     const res = await scan('AbCd2345', { headers: { 'x-real-ip': '203.0.113.5' } });
     expect(res.status).toBe(429);
     expect(res.headers.get('retry-after')).toBe('42');
@@ -158,6 +206,10 @@ describe('GET /q/[code]', () => {
     expect(await res.text()).toBe(QR_ENTRY_TOO_MANY_REQUESTS_TEXT);
     expect(mocks.findOpenQrCampaign).toHaveBeenCalledTimes(1);
     expect(mocks.reportRejectedRequest).toHaveBeenCalledWith('qr-entry', 'rate_limited');
+  });
+
+  it('lets 200 scans from one address in 10 minutes through: an event of 100 people, twice (#663)', () => {
+    expect(QR_ENTRY_RATE_LIMITS.perIp).toMatchObject({ limit: 200, windowMs: 10 * 60 * 1000 });
   });
 
   it('counts an IPv6 address by its /64', async () => {

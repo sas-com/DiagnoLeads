@@ -4,7 +4,8 @@
  * The QR code of a campaign holds /q/<code>. The entry finds the campaign by its code and sends
  * the visitor to the campaign's diagnosis with the campaign's UTM parameters. Where it sends is
  * built from the campaign row and the app's own routes only, never from the request, and the
- * organization is the campaign's. A paused, expired or unknown code is not found.
+ * organization is the campaign's. A paused, expired or unknown code is not found, and so is a
+ * campaign with nowhere of its own to send to (#663: see app/q/[code]/route.ts).
  *
  * Before #503 the codes were put under /d/, the public page of builder diagnoses, which looks
  * up slugs: a code never opened its campaign, and a code that read like a slug could open
@@ -33,8 +34,13 @@ export interface QrEntryCampaign {
   campaignId: string;
   organizationId: string;
   /**
-   * The builder diagnosis the campaign leads to (qr_campaigns.diagnosis_id), when it belongs to
-   * the campaign's organization; whether it is published is up to the caller (findPublicDiagnosis)
+   * qr_campaigns.diagnosis_id as stored: set when the campaign names a builder diagnosis, also
+   * one that `diagnosis` leaves out. A campaign that names one is sent there or nowhere (#663)
+   */
+  diagnosisId: string | null;
+  /**
+   * The builder diagnosis the campaign names, when it belongs to the campaign's organization;
+   * whether it is published is up to the caller (findPublicDiagnosis)
    */
   diagnosis: { id: string; slug: string } | null;
   utm: CampaignUtm;
@@ -71,6 +77,7 @@ export async function findOpenQrCampaign(
       utmMedium: qrCampaigns.utmMedium,
       utmCampaign: qrCampaigns.utmCampaign,
       utmContent: qrCampaigns.utmContent,
+      namedDiagnosisId: qrCampaigns.diagnosisId,
       diagnosisId: diagnoses.id,
       diagnosisSlug: diagnoses.slug,
     })
@@ -90,6 +97,7 @@ export async function findOpenQrCampaign(
   return {
     campaignId: row.id,
     organizationId: row.organizationId,
+    diagnosisId: row.namedDiagnosisId,
     diagnosis:
       row.diagnosisId && row.diagnosisSlug
         ? { id: row.diagnosisId, slug: row.diagnosisSlug }
@@ -106,7 +114,8 @@ export async function findOpenQrCampaign(
 /**
  * Where the entry sends the visitor, as a path of this app: the public page of the campaign's
  * builder diagnosis when `publishedSlug` is given (the caller has checked that /d/<slug> serves
- * that diagnosis), otherwise the AX diagnosis, where /diagnostic/[slug] sends too. With the
+ * that diagnosis), otherwise the AX diagnosis, where /diagnostic/[slug] sends too (the caller
+ * sends there only a campaign of the AX organization that names no diagnosis, #663). With the
  * campaign's UTM parameters; empty ones are left out.
  */
 export function qrEntryRedirectPath(

@@ -259,7 +259,10 @@ describe('getRateLimitConfig', () => {
     expect(getRateLimitConfig('/q/AbCd2345')).toBe(ENDPOINT_RATE_LIMITS['/q/']);
     // Not the diagnostic limit of paths that contain "embed"
     expect(getRateLimitConfig('/q/xembedxy')).toBe(ENDPOINT_RATE_LIMITS['/q/']);
-    expect(ENDPOINT_RATE_LIMITS['/q/']).toEqual({ max: 60, windowMs: 60 * 1000 });
+  });
+
+  it('lets 200 scans of one code from one address a minute through: an event of 100 people, twice (#663)', () => {
+    expect(ENDPOINT_RATE_LIMITS['/q/']).toEqual({ max: 200, windowMs: 60 * 1000 });
   });
 });
 

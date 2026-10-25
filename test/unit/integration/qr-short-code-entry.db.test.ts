@@ -3,7 +3,10 @@
  * its exact short code and is sent to the campaign's own diagnosis with its UTM parameters. A
  * paused, expired or unknown code is 404, a code in another case is another code, and a code
  * that reads like a slug never opens another organization's diagnosis (before #503 the codes sat
- * under /d/, the public page of builder diagnoses, which looks up slugs).
+ * under /d/, the public page of builder diagnoses, which looks up slugs). Owner decisions in
+ * #663: only the AX organization's campaigns without a diagnosis go to the AX diagnosis, a
+ * campaign whose diagnosis /d/<slug> does not serve is 404, and one address may scan 200 times
+ * in 10 minutes (an event of 100 people, twice).
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/dl_test \
@@ -16,8 +19,10 @@ import {
   diagnoses,
   diagnosisVersions,
   diagnosticTemplates,
+  leads,
   organizations,
   qrCampaigns,
+  siteVisits,
 } from '@/lib/db/schema';
 import { hashDefinition } from '@/lib/features/diagnosis-builder/versions';
 import { consumeRateLimit } from '@/lib/features/diagnostics/rate-limit';
@@ -30,12 +35,15 @@ import postgres from 'postgres';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { cloudReadiness } from '../../fixtures/diagnosis-builder';
 
-// The entry runs on the test database
-const deps = vi.hoisted(() => ({ db: null as unknown }));
+// The entry runs on the test database; organization A receives the AX diagnosis
+const deps = vi.hoisted(() => ({ db: null as unknown, axOrganizationId: null as string | null }));
 vi.mock('@/lib/db/client', () => ({
   get db() {
     return deps.db;
   },
+}));
+vi.mock('@/lib/features/diagnostics/organization', () => ({
+  resolveDiagnosisOrganizationId: () => deps.axOrganizationId,
 }));
 // after() needs a request scope; the refusal alert is not the point here
 vi.mock('next/server', async (importOriginal) => ({
@@ -78,7 +86,7 @@ describe.skipIf(!url)('QR short code entry (PostgreSQL)', () => {
   async function createDiagnosis(
     organizationId: string,
     slug: string,
-    status: 'published' | 'paused' = 'published'
+    status: 'published' | 'paused' | 'archived' = 'published'
   ) {
     const definition = cloudReadiness();
     const [row] = await pg
@@ -135,9 +143,30 @@ describe.skipIf(!url)('QR short code entry (PostgreSQL)', () => {
 
   const AX_UTM = 'utm_source=qrcode&utm_medium=offline&utm_campaign=fair-2026';
 
+  /** What the AX organization has received: the leads and the visits of its pages */
+  async function receivedByAx() {
+    const [lead] = await pg
+      .select({ n: sql<number>`count(*)::int` })
+      .from(leads)
+      .where(eq(leads.organizationId, orgA));
+    const [visit] = await pg
+      .select({ n: sql<number>`count(*)::int` })
+      .from(siteVisits)
+      .where(eq(siteVisits.organizationId, orgA));
+    return { leads: lead.n, visits: visit.n };
+  }
+
+  async function expectNotFound(code: string) {
+    const res = await scan(code);
+    expect(res.status, code).toBe(404);
+    expect(res.headers.get('location')).toBeNull();
+    expect(await res.text()).toBe('Not Found');
+  }
+
   beforeAll(async () => {
     orgA = await createOrganization('QR入口A');
     orgB = await createOrganization('QR入口B');
+    deps.axOrganizationId = orgA;
   });
 
   afterEach(() => vi.unstubAllEnvs());
@@ -150,17 +179,38 @@ describe.skipIf(!url)('QR short code entry (PostgreSQL)', () => {
     await client?.end();
   });
 
-  it("sends an open campaign without a diagnosis to the AX diagnosis with the campaign's UTM", async () => {
+  it("sends the AX organization's open campaign without a diagnosis to the AX diagnosis with the campaign's UTM", async () => {
     const code = await createCampaign(orgA, `Ax${randomPart(6)}`);
     const res = await scan(code);
     expect(res.status).toBe(307);
     expect(res.headers.get('location')).toBe(`/ja/ax-diagnosis?${AX_UTM}`);
   });
 
-  it("sends a campaign to its organization's published builder diagnosis", async () => {
+  it("answers 404 for another organization's campaign without a diagnosis: nothing of its visitors reaches the AX organization (#663)", async () => {
+    const before = await receivedByAx();
+    // B's campaign, whose UTM could name B's customers
+    const code = await createCampaign(orgB, `Ob${randomPart(6)}`, {
+      utmCampaign: 'customer-of-b',
+    });
+    await expectNotFound(code);
+    expect(await receivedByAx()).toEqual(before);
+    expect(before).toEqual({ leads: 0, visits: 0 });
+  });
+
+  it('answers 404 for every campaign without a diagnosis while no organization receives the AX diagnosis', async () => {
+    const code = await createCampaign(orgA, `Nx${randomPart(6)}`);
+    deps.axOrganizationId = null;
+    try {
+      await expectNotFound(code);
+    } finally {
+      deps.axOrganizationId = orgA;
+    }
+  });
+
+  it("sends a campaign to its organization's published builder diagnosis, also outside the AX organization", async () => {
     const slug = `qr-entry-${randomPart(8)}`;
-    const diagnosisId = await createDiagnosis(orgA, slug);
-    const code = await createCampaign(orgA, `Pb${randomPart(6)}`, {
+    const diagnosisId = await createDiagnosis(orgB, slug);
+    const code = await createCampaign(orgB, `Pb${randomPart(6)}`, {
       diagnosisId,
       utmSource: 'poster',
       utmMedium: 'print',
@@ -174,10 +224,25 @@ describe.skipIf(!url)('QR short code entry (PostgreSQL)', () => {
     );
   });
 
-  it('falls back to the AX diagnosis while the diagnosis is paused', async () => {
-    const diagnosisId = await createDiagnosis(orgA, `qr-entry-${randomPart(8)}`, 'paused');
-    const code = await createCampaign(orgA, `Ps${randomPart(6)}`, { diagnosisId });
-    expect((await scan(code)).headers.get('location')).toBe(`/ja/ax-diagnosis?${AX_UTM}`);
+  it('answers 404, not the AX diagnosis, while the diagnosis is paused or archived (#663)', async () => {
+    for (const status of ['paused', 'archived'] as const) {
+      const diagnosisId = await createDiagnosis(orgA, `qr-entry-${randomPart(8)}`, status);
+      // A campaign of the AX organization, which would otherwise go to the AX diagnosis
+      await expectNotFound(await createCampaign(orgA, `Ps${randomPart(6)}`, { diagnosisId }));
+    }
+  });
+
+  it('answers 404 while the diagnosis is a draft that was never published (#663)', async () => {
+    const [draft] = await pg
+      .insert(diagnoses)
+      .values({
+        organizationId: orgB,
+        slug: `qr-entry-${randomPart(8)}`,
+        name: '架空の下書き',
+        draftDefinition: cloudReadiness(),
+      })
+      .returning({ id: diagnoses.id });
+    await expectNotFound(await createCampaign(orgB, `Dr${randomPart(6)}`, { diagnosisId: draft.id }));
   });
 
   it('answers 404 for a paused, an expired and an unknown code', async () => {
@@ -222,33 +287,36 @@ describe.skipIf(!url)('QR short code entry (PostgreSQL)', () => {
       expect((await scan(code)).headers.get('location')).toBe(`/ja/ax-diagnosis?${AX_UTM}`);
     });
 
-    it("never follows a campaign's diagnosis id into another organization", async () => {
+    it("never follows a campaign's diagnosis id into another organization, nor to the AX diagnosis (#663)", async () => {
       const slug = `qr-entry-${randomPart(8)}`;
       const diagnosisOfB = await createDiagnosis(orgB, slug);
       const code = await createCampaign(orgA, randomPart(8), { diagnosisId: diagnosisOfB });
-      expect((await findOpenQrCampaign(pg, code))?.diagnosis).toBeNull();
-      expect((await scan(code)).headers.get('location')).toBe(`/ja/ax-diagnosis?${AX_UTM}`);
+      const campaign = await findOpenQrCampaign(pg, code);
+      expect(campaign?.diagnosis).toBeNull();
+      expect(campaign?.diagnosisId).toBe(diagnosisOfB);
+      await expectNotFound(code);
     });
   });
 
-  it('does not send to /d/<slug> while two organizations publish the slug (the page serves neither)', async () => {
+  it('answers 404 while two organizations publish the slug (the page serves neither, #663)', async () => {
     const slug = `qr-entry-${randomPart(8)}`;
     const diagnosisId = await createDiagnosis(orgA, slug);
     await createDiagnosis(orgB, slug);
     const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
     const code = await createCampaign(orgA, `Cl${randomPart(6)}`, { diagnosisId });
-    expect((await scan(code)).headers.get('location')).toBe(`/ja/ax-diagnosis?${AX_UTM}`);
+    await expectNotFound(code);
     errorLog.mockRestore();
   });
 
-  it('refuses an address past its limit on Vercel, across codes', async () => {
+  it('lets one address scan 200 times in 10 minutes on Vercel, an event of 100 people twice, and refuses the next, across codes (#663)', async () => {
     vi.stubEnv('VERCEL', '1');
     const ip = `198.51.100.${Math.floor(Math.random() * 200) + 1}`;
     const code = await createCampaign(orgA, `Rl${randomPart(6)}`);
     expect((await scan(code, { 'x-real-ip': ip })).status).toBe(307);
-    // The address has used up its window on other codes
-    const { limit } = QR_ENTRY_RATE_LIMITS.perIp;
-    await consumeRateLimit(pg, QR_ENTRY_RATE_LIMITS.perIp, ip, new Date(), limit - 1);
+    // The address has scanned other codes since: 199 of its 200 in the window
+    expect(QR_ENTRY_RATE_LIMITS.perIp).toMatchObject({ limit: 200, windowMs: 10 * 60 * 1000 });
+    await consumeRateLimit(pg, QR_ENTRY_RATE_LIMITS.perIp, ip, new Date(), 198);
+    expect((await scan(code, { 'x-real-ip': ip })).status).toBe(307);
     const res = await scan(code, { 'x-real-ip': ip });
     expect(res.status).toBe(429);
     expect(Number(res.headers.get('retry-after'))).toBeGreaterThan(0);
