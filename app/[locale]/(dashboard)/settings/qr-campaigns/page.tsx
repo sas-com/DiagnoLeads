@@ -1,5 +1,7 @@
 'use client';
 
+import { QrCampaignDestinationNotice } from '@/components/features/distribution/qr-campaign-destination';
+import { QrCampaignExpiry } from '@/components/features/distribution/qr-campaign-expiry';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,6 +26,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { useOrganization } from '@/hooks/use-organization';
+import { expiryOfJstDay } from '@/lib/features/distribution/campaign-expiry';
 import { trpc } from '@/lib/trpc/client';
 import {
   AlertCircle,
@@ -50,6 +53,8 @@ interface QRCampaignFormData {
   utmMedium: string;
   utmCampaign: string;
   utmContent: string;
+  /** The last day in Japan the campaign is open ('YYYY-MM-DD'), or '' for no expiry (#695) */
+  expiresOn: string;
 }
 
 const DEFAULT_FORM_DATA: QRCampaignFormData = {
@@ -60,10 +65,11 @@ const DEFAULT_FORM_DATA: QRCampaignFormData = {
   utmMedium: 'offline',
   utmCampaign: '',
   utmContent: '',
+  expiresOn: '',
 };
 
 export default function QRCampaignsPage() {
-  const t = useTranslations('settings');
+  const tExpiry = useTranslations('settings.qrCampaigns.expiry');
   const { organization } = useOrganization();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [formData, setFormData] = useState<QRCampaignFormData>(DEFAULT_FORM_DATA);
@@ -144,9 +150,18 @@ export default function QRCampaignsPage() {
       return;
     }
 
+    // The end of the chosen day in Japan; none when the field is empty (#695)
+    const { expiresOn, ...fields } = formData;
+    const expiresAt = expiresOn ? expiryOfJstDay(expiresOn) : undefined;
+    if (expiresAt === null) {
+      toast.error(tExpiry('invalidDay'));
+      return;
+    }
+
     createMutation.mutate({
       organizationId: organization.id,
-      ...formData,
+      ...fields,
+      ...(expiresAt ? { expiresAt } : {}),
     });
   };
 
@@ -311,6 +326,18 @@ export default function QRCampaignsPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Expiry (#695) */}
+              <div className="grid gap-2">
+                <Label htmlFor="expiresOn">{tExpiry('createLabel')}</Label>
+                <Input
+                  id="expiresOn"
+                  type="date"
+                  value={formData.expiresOn}
+                  onChange={(e) => setFormData({ ...formData, expiresOn: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">{tExpiry('createHint')}</p>
+              </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
@@ -363,6 +390,19 @@ export default function QRCampaignsPage() {
                 )}
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Where a scan goes and the expiry, decided on the server by the entry's rule (#692, #695) */}
+                <QrCampaignDestinationNotice destination={campaign.destination} />
+                <QrCampaignExpiry
+                  organizationId={organization?.id ?? ''}
+                  campaignId={campaign.id}
+                  expiresAt={campaign.expiresAt}
+                  expired={
+                    campaign.destination.kind === 'none' &&
+                    campaign.destination.reasons.includes('expired')
+                  }
+                  canManage={canManage}
+                />
+
                 {/* Stats */}
                 <div className="flex gap-4">
                   <div className="flex items-center gap-2 text-sm">

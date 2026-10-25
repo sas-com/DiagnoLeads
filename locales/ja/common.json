@@ -1635,7 +1635,48 @@
       "copied": "クリップボードにコピーしました",
       "confirmDelete": "このQRキャンペーンを削除してもよろしいですか？",
       "noCampaigns": "QRキャンペーンがありません",
-      "noCampaignsDescription": "オフライン配布用のQRコードキャンペーンを作成してください。"
+      "noCampaignsDescription": "オフライン配布用のQRコードキャンペーンを作成してください。",
+      "destination": {
+        "label": "読み取ると",
+        "axDiagnosis": "AX 診断",
+        "diagnosis": "診断の公開ページ（{path}）",
+        "none": "読み取っても開きません（Not Found と出ます）",
+        "reasons": {
+          "paused": {
+            "title": "停止中",
+            "action": "スイッチをオンにすると開きます。"
+          },
+          "expired": {
+            "title": "期限切れ",
+            "action": "期限を延ばすか消すと開きます。スイッチがオンでも開きません。"
+          },
+          "not_ax_organization": {
+            "title": "診断を選んでいない",
+            "action": "診断を選んでいないキャンペーンで開くのは、AX 診断の回答を受け取る組織のものだけです。キャンペーンに診断を選べるようになったら、診断を選んでください。"
+          },
+          "diagnosis_not_published": {
+            "title": "選んだ診断が公開されていない",
+            "action": "診断ビルダーで診断を公開してください。停止中・アーカイブ・下書きの診断と、ほかの組織が同じ URL で公開している診断は開きません。"
+          }
+        }
+      },
+      "expiry": {
+        "label": "期限",
+        "none": "期限なし",
+        "until": "{date} まで（日本時間）",
+        "expired": "期限切れ",
+        "edit": "期限を変える",
+        "dayLabel": "この日の終わりまで開く（日本時間）",
+        "save": "保存",
+        "clear": "期限を消す",
+        "cancel": "キャンセル",
+        "saved": "期限を変えました",
+        "cleared": "期限を消しました",
+        "invalidDay": "日付を選んでください",
+        "failed": "期限を変えられませんでした",
+        "createLabel": "期限（任意）",
+        "createHint": "選んだ日の終わり（日本時間）まで開きます。空のときは期限なし。あとから変えられます。"
+      }
     },
     "axPlaybook": {
       "title": "営業の手引き（AXマイグレーション）",

@@ -5,8 +5,8 @@ category: Security
 title: "QR キャンペーンの入口は /q/<短縮コード>。転送先は DB の値とアプリのルートだけから作る（#503）"
 status: active
 superseded_by: []
-issues: [503, 41, 120, 610, 663, 692, 700, 702, 705]
-paths: ["app/q/**", "lib/features/distribution/short-code-entry.ts", "lib/features/distribution/scans.ts", "lib/features/distribution/limits.ts", "lib/features/distribution/qr-code.ts", "lib/features/distribution/router.ts", "lib/middleware/rate-limit.ts", "lib/features/diagnostics/organization.ts"]
+issues: [503, 41, 120, 610, 663, 692, 695, 698, 700, 702, 705]
+paths: ["app/q/**", "lib/features/distribution/short-code-entry.ts", "lib/features/distribution/scans.ts", "lib/features/distribution/limits.ts", "lib/features/distribution/qr-code.ts", "lib/features/distribution/router.ts", "lib/features/distribution/campaign-expiry.ts", "lib/middleware/rate-limit.ts", "lib/features/diagnostics/organization.ts", "lib/multi-tenant/helpers/diagnosis-organization.ts", "components/features/distribution/**", "app/[locale]/(dashboard)/settings/qr-campaigns/**"]
 ---
 
 ### [Security] QR キャンペーンの入口は /q/<短縮コード>。転送先は DB の値とアプリのルートだけから作る（#503）
@@ -44,6 +44,11 @@ paths: ["app/q/**", "lib/features/distribution/short-code-entry.ts", "lib/featur
     - `getCampaignStats` は、合計を `scan_count`、端末の内訳と転換率を `qr_scans` の集計（DB で数える。全行を読まない）から返す。直近の10件は id・端末・日（`scannedOn`、日本時間の `YYYY-MM-DD` の文字列）・converted だけを返す。日を Date で返すと、タイムゾーンのない列の0時が UTC として読まれ、画面では日本時間の9:00に見えるため
   - `distribution` の機能は、ほかの機能を import しない（`limits.ts` は `RateLimitRule` の形を書き写している）。診断ビルダーの公開の判定は入口（app）で組み合わせる。機能の import の循環（`features-in-cycles`）に入れないため
   - キャンペーンの更新（`updateCampaign`）は、送られた項目だけを書く。`expiresAt` のない更新（名前の変更・停止と再開）は期限を変えず、`null` を送ったときだけ消す（#610）。入口が期限を見るので、期限を消してしまうと、期限の切れた QR がまた転送する
+  - 行き先の判定は1つの関数（#692・#695、2026-10-25）：入口の転送先の判定を `openCampaignDestination`（開いているキャンペーン）に移し、QR キャンペーンの画面（`distribution.listCampaigns` の `destination`）は、停止中・期限切れも理由に入れる `campaignDestination`（`isCampaignOpen` と `openCampaignDestination` を使う）で出す。入口と画面で別々に判定を書かない
+  - 画面は行き先（AX 診断・`/d/<slug>`・行き先なし）と、行き先なしの理由（停止中・期限切れ・診断を選んでいない（AX の組織以外）・選んだ診断が公開されていない）をすべて、どうすればよいかと一緒に出す。期限切れはスイッチがオンでも期限切れと出す。判定はサーバーで、組織（`ctx.organization`）のキャンペーンと診断だけを読み、診断はキャンペーンの数によらず1回のクエリ（`servedCampaignDiagnoses`）
+  - `servedCampaignDiagnoses` は `findPublicDiagnosis` の規則（`published`・同じ組織の現行の版・ほかに同じ slug を公開している診断がない）を distribution の中で書き写したもの（上の import の決まりのため）。食い違わないことは実 DB のテスト（`test/unit/integration/qr-campaign-destination.db.test.ts`）で確かめる。ほかの組織の診断は、slug がぶつかっているかだけを見る（`/d/<slug>` が誰にでも見せていること）
+  - AX 診断の組織の比べ方は1つ（#698、2026-10-25）：`resolveDiagnosisOrganizationId()` の本体を基盤（`lib/multi-tenant/helpers/diagnosis-organization.ts`）に移し、id を小文字で返す。組織との比べ方は `isDiagnosisOrganization` だけ（入口・QR キャンペーンの画面・相談申込の営業への通知・代行会社リンクの画面）。機能は今までどおり `lib/features/diagnostics/organization.ts`（再 export）から読み、distribution は基盤から読む（ほかの機能を import しない決まりは変わらない）
+  - 期限は画面から付ける・延ばす・消せる（#695、2026-10-25。作者の判断で、オーナー未確認。PR で確認する）：作成のフォームの欄と、キャンペーンごとの編集。編集は `updateCampaign` に `expiresAt` だけを送り（消すときは `null`）、権限は `updateCampaign` と同じ（設定を更新できる人。ほかの人には編集を出さない）。入力は日本時間の日で、その日の終わり（23:59:59.999 JST）を保存する（`lib/features/distribution/campaign-expiry.ts`）。API の検証（`z.string().datetime()`、送らなければ変えない #610）は変えていない
 - **却下案**:
   - `/d/[slug]` で slug が見つからないときに短縮コードを探す（ぶつかりが残り、どちらを開くかが行の有無で変わる）
   - 保存済みの `tracking_url` を本番で書き換える（読み取りで作れば要らない。本番の書き込みに承認が要る）
@@ -51,11 +56,12 @@ paths: ["app/q/**", "lib/features/distribution/short-code-entry.ts", "lib/featur
   - QR の URL から UTM を外す（今の画面と同じ見え方を残した。入口は URL の UTM を使わない）
 - **既知の限界**:
   - #503 より前にダウンロードした QR の画像（`/d/<コード>`）は 404 のまま。画面から Download QR で作り直す。停止中・期限切れのコードを読んだ人への案内のページはない（本文は `Not Found`）
-  - #120 で `diagnosis_id` を設定できるようになるまで、AX の組織以外のキャンペーンの QR はどれも 404 になる（2026-10-25 のオーナーの判断の1）。キャンペーンの画面には、そのことが出ない（#692）
+  - #120 で `diagnosis_id` を設定できるようになるまで、AX の組織以外のキャンペーンの QR はどれも 404 になる（2026-10-25 のオーナーの判断の1）。キャンペーンの画面には、#692 から「読み取っても開きません（診断を選んでいない）」と出る。AX の組織が設定されていないときも、画面は同じ理由を出す（設定の誤りは入口の `console.error` だけで知らせる）
+  - 画面の判定は `findPublicDiagnosis` の slug の形の検査（`diagnosisSlugSchema`）をしない（distribution から読めない）。ビルダーが保存する slug は作成のときに検査しているので、形の違う slug が DB にあるときだけ、画面と入口が食い違う。行き先を出すのは一覧だけで、詳細（`getCampaign`）は返さない（詳細の画面がない）
   - `qr_campaigns.diagnosis_id` は診断の削除で null になる（`onDelete: 'set null'`）。削除できるのは公開したことのない下書きだけで、下書きのあいだは 404。削除の後は「`diagnosis_id` のないキャンペーン」になり、AX の組織のキャンペーンなら AX 診断へ送る
   - proxy のメモリの制限はインスタンスごとなので、インスタンスが増えると、1分200回より多く通る。インスタンスとコードをまたいだアドレスごとの上限は、DB の制限（10分200回）だけ
   - RLS（#51）：入口はログインなしで、グローバルの `db` から `qr_campaigns`・`diagnoses`（`findPublicDiagnosis` と同じ）・`public_rate_limits` を組織で絞らずに読む。組織は行から取る。`qr_campaigns` の RLS は無効のまま。RLS を掛けるときは、この入口を公開の読み取りとして扱う（ポリシーか専用の接続）。掛けただけだと、すべての QR が 404 になる（閉じる側に倒れる）
-  - #610 の修正より前に、本番の停止と再開で期限が消えたキャンペーンは戻らない（どの行の期限が消えたかの記録はない）。画面には期限が出ず、期限を付ける・延ばす・消す入力もない（#695）。期限は API で付けたときだけなので、当たる行は少ない
+  - #610 の修正より前に、本番の停止と再開で期限が消えたキャンペーンは戻らない（どの行の期限が消えたかの記録はない）。期限は API で付けたときだけだったので、当たる行は少ない。#695 から、画面に期限が出て、付け直せる
   - スキャンからリードまで（`completion_count`・`qr_scans.converted`・`lead_id`）はまだ数えない（#700）。`getCampaignStats` の転換率は0のまま
   - `qr_scans` に `campaign_id`・`lead_id`・`organization_id` の索引がない。集計とキャンペーンの削除（CASCADE）は表全体を読み、リードの削除（`lead_id` の SET NULL）と組織の削除も、どの組織の操作でも表全体を読む。記録はキャンペーンごとに1日2,000件までだが、保存の期間はなく、行は増え続ける。索引は #702（スキーマの変更なので、本番に適用してからマージする）。記録の文に `lock_timeout` はなく、キャンペーンの行が長くロックされると（索引のない CASCADE など）、応答の後の書き込みが接続を持ったまま待つ（#702 の索引でほぼなくなる）
   - `qr_scans` の保存期間は決めていない（今は無期限。訪問の生の記録は90日の案）。今の列では個人に結び付かないが、#700 でスキャンの行とリードを結ぶなら、保存期間と削除を決める（法務・情報システム部門）
