@@ -857,7 +857,8 @@ describe('AxDiagnosisResult', () => {
         '30分のオンライン相談で、調べ方からご案内することもできます。'
       );
       expect(screen.getByText(/30分のオンライン相談で現状を伺うと/)).toBeInTheDocument();
-      expect(screen.queryByText(/個別相談/)).not.toBeInTheDocument();
+      // Across the whole page, not one element at a time
+      expect(document.body).not.toHaveTextContent('個別相談');
     });
 
     it('narrows what to replace, not what to migrate, on the replace path (#674)', () => {
