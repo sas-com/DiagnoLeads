@@ -37,8 +37,11 @@ const schemas: { name: string; parse: (phone: string) => Parsed }[] = [
   },
 ];
 
-/** The phone's issues: the form and the API read them at contact.phone */
-const phoneIssues = (result: Parsed) =>
+/**
+ * Every issue of the parse, not only the phone's, so a failure of another field fails the test
+ * as well. The form and the API read the phone's at contact.phone
+ */
+const allIssues = (result: Parsed) =>
   result.success
     ? []
     : result.error.issues.map(({ path, code, ...rest }) => ({
@@ -64,7 +67,7 @@ describe.each(schemas)('the phone number of $name (#619)', ({ parse }) => {
 
   it('refuses 30 "⑴", which are 90 characters after NFKC, at contact.phone', () => {
     const result = parse(PARENTHESIZED_ONE.repeat(30));
-    expect(phoneIssues(result)).toEqual([
+    expect(allIssues(result)).toEqual([
       { path: ['contact', 'phone'], code: 'too_big', maximum: PHONE_MAX_LENGTH },
     ]);
   });
@@ -78,7 +81,7 @@ describe.each(schemas)('the phone number of $name (#619)', ({ parse }) => {
 
   it('refuses a number that is 31 characters after normalization', () => {
     const result = parse(`${PARENTHESIZED_ONE.repeat(10)}1`);
-    expect(phoneIssues(result)).toEqual([
+    expect(allIssues(result)).toEqual([
       { path: ['contact', 'phone'], code: 'too_big', maximum: PHONE_MAX_LENGTH },
     ]);
   });
@@ -94,7 +97,7 @@ describe.each(schemas)('the phone number of $name (#619)', ({ parse }) => {
   it('refuses an input over the bound before normalization without running NFKC', () => {
     const normalize = vi.spyOn(String.prototype, 'normalize');
     const result = parse(`${' '.repeat(PHONE_INPUT_MAX_LENGTH - 9)}0312345678`);
-    expect(phoneIssues(result)).toEqual([
+    expect(allIssues(result)).toEqual([
       { path: ['contact', 'phone'], code: 'too_big', maximum: PHONE_INPUT_MAX_LENGTH },
     ]);
     expect(normalize).not.toHaveBeenCalled();
@@ -103,7 +106,7 @@ describe.each(schemas)('the phone number of $name (#619)', ({ parse }) => {
   it('refuses a huge input before NFKC as well', () => {
     const normalize = vi.spyOn(String.prototype, 'normalize');
     const result = parse(PARENTHESIZED_ONE.repeat(10_000));
-    expect(phoneIssues(result)).toEqual([
+    expect(allIssues(result)).toEqual([
       { path: ['contact', 'phone'], code: 'too_big', maximum: PHONE_INPUT_MAX_LENGTH },
     ]);
     expect(normalize).not.toHaveBeenCalled();
@@ -114,7 +117,7 @@ describe.each(schemas)('the phone number of $name (#619)', ({ parse }) => {
 
   it('still refuses a number with letters at contact.phone', () => {
     const result = parse('03-1234-5678 内線12');
-    expect(phoneIssues(result)).toEqual([
+    expect(allIssues(result)).toEqual([
       { path: ['contact', 'phone'], code: 'invalid_string', maximum: undefined },
     ]);
   });
