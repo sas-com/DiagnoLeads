@@ -5,7 +5,7 @@ category: Security
 title: "セッションはログインから7日で切り、使っていても延ばさない。設定画面で、ほかの端末をまとめてログアウトできるようにする（#647）"
 status: active
 superseded_by: []
-issues: [647, 599, 578]
+issues: [647, 599, 578, 697]
 paths: ["lib/auth/config.ts", "components/features/account/sign-out-other-devices-card.tsx", "app/[locale]/(dashboard)/settings/page.tsx"]
 ---
 
@@ -36,4 +36,4 @@ paths: ["lib/auth/config.ts", "components/features/account/sign-out-other-device
   - 写されたクッキーは、セッションを作ってから7日以内なら使える。それより前に止めるのは、A・パスワードの変更（#591）・再設定（#529）
   - 写したクッキーを持つ人も「ほかの端末からログアウト」を押せ、本人のブラウザをログアウトさせられる。本人がパスワードでログインし直して押せば、その人のセッションは消え、消されたクッキーでは押し返せない（実 DB のテストで確かめた）。パスワードを変えれば確実に止まる
   - ログインしている端末の一覧（better-auth の `listSessions`）は出していない。要るようになったら別の Issue にする
-  - 管理ユーザーの端末のマルウェア対策と、ブラウザの拡張機能の管理を誰が担うかは、まだ決まっていない（#647）
+  - 管理ユーザーの端末のマルウェア対策と、ブラウザの拡張機能の管理を誰が担うかは、まだ決まっていない（#697 で決める。#647 から切り出した）
