@@ -7,6 +7,10 @@ import { count, eq, sql } from 'drizzle-orm';
 import { listMqlLevel } from './api/list-sql';
 import { MQL_LEVEL_FILTERS, type MqlLevelFilter } from './types/schemas';
 
+// A deal moves its lead forward and assigns it like the lead page does (#435)
+export { findAssignableMember } from './assignment';
+export { diffLeadAudit, leadAuditSnapshot, writeLeadAuditLogs } from './audit';
+
 type Database = typeof defaultDb;
 
 /**

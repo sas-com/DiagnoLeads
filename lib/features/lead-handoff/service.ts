@@ -4,6 +4,10 @@ import { leadHearings, leads, users } from '@/lib/db/schema';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { handedOffOn } from './handoff';
 
+// A deal that moves its lead past the initial hearing hands it over like a lead update (#435)
+export { isFirstHandoff } from './handoff';
+export { notifyLeadHandoff } from './notify';
+
 type Database = typeof defaultDb;
 
 export interface HandoffHeader {
