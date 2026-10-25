@@ -15,6 +15,7 @@ import {
   getHearingField,
 } from '@/lib/features/lead-hearings/catalog';
 import type { HearingFieldValue } from '@/lib/features/lead-hearings/types/schemas';
+import { clipText } from '@/lib/utils/clip-text';
 import type { DiagnosisAnswerValue, DiagnosisDefinition, DiagnosisQuestion } from './definition';
 
 /** Hearing field types each question type can fill */
@@ -89,7 +90,8 @@ export function hearingValueFromAnswer(
   }
   if (field.type === 'text') {
     if (typeof answer !== 'string') return null;
-    const text = answer.trim().slice(0, field.maxLength);
+    // Never split a character: the hearing is stored as jsonb (#754)
+    const text = clipText(answer.trim(), field.maxLength);
     return text === '' ? null : { key, value: text };
   }
   return null;
