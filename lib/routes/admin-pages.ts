@@ -6,6 +6,8 @@
 export const ADMIN_PAGE_PREFIXES = [
   '/dashboard',
   '/leads',
+  '/deals',
+  '/forecast',
   '/analytics',
   '/settings',
   '/organizations',

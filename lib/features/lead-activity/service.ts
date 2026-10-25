@@ -361,6 +361,8 @@ export async function listLeadActivities(
     now?: Date;
     /** Include why addresses were suppressed (#365); hidden by default */
     showSuppressionReasons?: boolean;
+    /** Leave the comments out (#555): for those who may not read them */
+    hideComments?: boolean;
   }
 ): Promise<LeadActivityPage> {
   const { organizationId, leadId } = input;
@@ -410,21 +412,23 @@ export async function listLeadActivities(
         )
         .orderBy(desc(leadHearings.updatedAt))
         .limit(PER_SOURCE_LIMIT),
-      db
-        .select({
-          id: leadComments.id,
-          type: leadComments.type,
-          excerpt: sql<string>`left(${leadComments.content}, ${COMMENT_EXCERPT_LENGTH})`,
-          parentId: leadComments.parentId,
-          userId: leadComments.userId,
-          createdAt: leadComments.createdAt,
-        })
-        .from(leadComments)
-        .where(
-          and(eq(leadComments.organizationId, organizationId), eq(leadComments.leadId, leadId))
-        )
-        .orderBy(desc(leadComments.createdAt))
-        .limit(PER_SOURCE_LIMIT),
+      input.hideComments
+        ? Promise.resolve([])
+        : db
+            .select({
+              id: leadComments.id,
+              type: leadComments.type,
+              excerpt: sql<string>`left(${leadComments.content}, ${COMMENT_EXCERPT_LENGTH})`,
+              parentId: leadComments.parentId,
+              userId: leadComments.userId,
+              createdAt: leadComments.createdAt,
+            })
+            .from(leadComments)
+            .where(
+              and(eq(leadComments.organizationId, organizationId), eq(leadComments.leadId, leadId))
+            )
+            .orderBy(desc(leadComments.createdAt))
+            .limit(PER_SOURCE_LIMIT),
       db
         .select({
           id: auditLogs.id,
