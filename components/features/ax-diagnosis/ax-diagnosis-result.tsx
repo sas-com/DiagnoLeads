@@ -9,6 +9,7 @@ import {
 } from '@/components/features/diagnosis-runner/question-view';
 import { DiagnosisRunnerProvider } from '@/components/features/diagnosis-runner/runner-context';
 import type { AxAccessPath } from '@/lib/features/diagnostics/ax-migration/access-path';
+import { answeredChallengesIn } from '@/lib/features/diagnostics/ax-migration/challenge-categories';
 import { axMigrationDefinition } from '@/lib/features/diagnostics/ax-migration/definition';
 import type {
   AxMigrationPublicResult,
@@ -46,7 +47,21 @@ const LEVEL_BADGE: Record<Level, string> = {
 };
 
 const CHALLENGE_KEYS: ChallengeType[] = ['people', 'cost', 'agility', 'data'];
-const STEP_KEYS = ['simple', 'survey', 'migration', 'ax'] as const;
+/**
+ * Steps after the other systems' check, as the main page's flow names them (#537): the free
+ * consultation next, then the quick assessment and Phase 1-3
+ */
+const STEP_KEYS = ['consult', 'simple', 'survey', 'migration', 'ax'] as const;
+/**
+ * Columns of the steps from sm up, by their number: three in a row, four in two or four
+ * columns, five as the next one across the row and the rest two by two below (four in a row
+ * are too narrow for their text, #537)
+ */
+const STEP_COLUMNS: Record<number, string> = {
+  3: 'sm:grid-cols-3',
+  4: 'sm:grid-cols-2 lg:grid-cols-4',
+  5: 'sm:grid-cols-2',
+};
 
 /**
  * Steps after an Access check (#457): the flow of the Access page (#158), with the work of the
@@ -131,6 +146,15 @@ export function AxDiagnosisResult({
   }, []);
 
   const primary = result.challenges.primary;
+  // What the respondent chose under the primary challenge, in the question's own words (#658)
+  const answeredUnderPrimary = primary
+    ? answeredChallengesIn(answers, primary).map(
+        ({ questionId, value }) =>
+          axMigrationDefinition.questions
+            .find((question) => question.id === questionId)
+            ?.options.find((option) => option.value === value)?.label[locale] ?? value
+      )
+    : [];
   const otherSelected = CHALLENGE_KEYS.filter(
     (key) => key !== primary && result.challenges.selected.includes(key)
   );
@@ -139,6 +163,11 @@ export function AxDiagnosisResult({
   const accessPath = result.accessPath?.path;
   const stepKeys: readonly string[] = accessPath ? accessStepKeys(accessPath) : STEP_KEYS;
   const stepsPrefix = accessPath ? 'accessSteps.items' : 'steps';
+  // The other systems label their steps as the main page does (#537); Access numbers them (#457)
+  const stepLabel = (key: string, index: number) => {
+    if (!accessPath) return t(`steps.${key}.label`);
+    return index === 0 ? t('nextStepLabel') : t('stepLabel', { number: index + 1 });
+  };
   const reasons = [...result.reasons.difficulty, ...result.reasons.urgency];
   const unknownQuestions = unknownTechnicalQuestions(answers);
 
@@ -284,7 +313,7 @@ export function AxDiagnosisResult({
 
       {result.needsHearing && (
         <p className="rounded-2xl border border-ax-yellow-dark bg-ax-yellow/20 p-4 text-sm leading-relaxed">
-          {t('needsHearing')}
+          {t(platform === 'access' ? 'accessNeedsHearing' : 'needsHearing')}
         </p>
       )}
 
@@ -355,6 +384,11 @@ export function AxDiagnosisResult({
               t(`challenges.${primary}.title`)
             )}
             <p className="leading-relaxed text-gray-700">{t(`challenges.${primary}.problem`)}</p>
+            {answeredUnderPrimary.length > 0 && (
+              <p className="text-sm leading-relaxed text-gray-600" data-testid="ax-result-answered">
+                {t('answeredChallenges', { items: answeredUnderPrimary.join(t('answersJoiner')) })}
+              </p>
+            )}
             <p className="flex items-start gap-2 rounded-xl bg-ax-teal/5 p-3 text-sm leading-relaxed">
               <CheckCircle2
                 className="mt-0.5 h-4 w-4 shrink-0 text-ax-teal-dark"
@@ -414,7 +448,12 @@ export function AxDiagnosisResult({
                   className="mt-0.5 h-4 w-4 shrink-0 text-ax-teal-dark"
                   aria-hidden="true"
                 />
-                <span>{t(`checkpoints.${key}`)}</span>
+                <span>
+                  {/* The same inventory narrows what to replace, not what to migrate (#674) */}
+                  {accessPath === 'replace' && key === 'access_inventory'
+                    ? t('accessReplaceInventory')
+                    : t(`checkpoints.${key}`)}
+                </span>
               </li>
             ))}
           </ul>
@@ -432,7 +471,9 @@ export function AxDiagnosisResult({
               <li key={question.id}>{question.label[locale]}</li>
             ))}
           </ul>
-          <p className="text-xs leading-relaxed text-gray-700">{t('unknownsHint')}</p>
+          <p className="text-xs leading-relaxed text-gray-700">
+            {t(platform === 'access' ? 'accessUnknownsHint' : 'unknownsHint')}
+          </p>
         </div>
       )}
 
@@ -457,22 +498,19 @@ export function AxDiagnosisResult({
           <MapPin className="h-4 w-4" aria-hidden="true" />
           {accessPath ? t('accessSteps.nowHere') : t('nowHere')}
         </p>
-        <ol
-          className={cn(
-            'grid gap-3',
-            stepKeys.length === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2 lg:grid-cols-4'
-          )}
-        >
+        <ol className={cn('grid gap-3', STEP_COLUMNS[stepKeys.length])}>
           {stepKeys.map((key, index) => (
             <li
               key={key}
               className={cn(
                 'rounded-xl border-2 p-4',
-                index === 0 ? 'border-ax-teal-dark bg-ax-teal/5' : 'border-gray-200 bg-white'
+                index === 0 ? 'border-ax-teal-dark bg-ax-teal/5' : 'border-gray-200 bg-white',
+                // Five steps: the next one across the row, the four after it below
+                index === 0 && stepKeys.length === 5 && 'sm:col-span-2'
               )}
             >
               <p className="font-ax-latin text-xs font-bold tracking-widest text-ax-teal-dark">
-                {index === 0 ? t('nextStepLabel') : t('stepLabel', { number: index + 1 })}
+                {stepLabel(key, index)}
               </p>
               <p className="mt-1 font-bold">{t(`${stepsPrefix}.${key}.title`)}</p>
               <p className="mt-2 text-xs leading-relaxed text-gray-700">

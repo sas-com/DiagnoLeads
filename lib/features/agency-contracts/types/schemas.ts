@@ -1,11 +1,10 @@
 import { appointmentCriteriaSchema } from '@/lib/features/appointment-reviews/types/schemas';
+import { PLAIN_TEXT } from '@/lib/utils/plain-text';
 import { z } from 'zod';
 
 /** Contracts with sales agencies (Refs #148). Amounts are yen excluding tax. */
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
-/** No control or format characters (line breaks, bidi overrides) in names shown to sales */
-const PLAIN_TEXT = /^[^\p{Cc}\p{Cf}]*$/u;
 
 const yen = z.number().int().min(0).max(1_000_000_000);
 const day = z

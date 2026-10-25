@@ -10,6 +10,7 @@ import { appointmentReviewsRouter } from '@/lib/features/appointment-reviews/api
 import { axPlaybookRouter } from '@/lib/features/ax-playbook/api/router';
 import { challengeGuideRouter } from '@/lib/features/challenge-guide/api/router';
 import { commentsRouter } from '@/lib/features/comments/api/router';
+import { dealsRouter } from '@/lib/features/deals/api/router';
 import { deliveryReviewsRouter } from '@/lib/features/delivery-reviews/api/router';
 import { diagnosesRouter } from '@/lib/features/diagnosis-builder/api/router';
 import { diagnosticTemplatesRouter } from '@/lib/features/diagnostic-templates/api/router';
@@ -32,6 +33,8 @@ import { notificationsRouter } from '@/lib/features/notifications/api/router';
 import { objectionCardRouter } from '@/lib/features/objection-card/api/router';
 import { organizationsRouter } from '@/lib/features/organizations/api/router';
 import { prospectsRouter } from '@/lib/features/prospects/api/router';
+import { salesForecastRouter } from '@/lib/features/sales-forecast/api/router';
+import { salesTargetsRouter } from '@/lib/features/sales-targets/api/router';
 import { tagsRouter } from '@/lib/features/tags/api/router';
 import { webhooksRouter } from '@/lib/features/webhooks/api/router';
 import { workflowsRouter } from '@/lib/features/workflows/api/router';
@@ -81,6 +84,9 @@ export const appRouter = router({
   account: accountRouter, // The signed-in person's own account: deletion (#164)
   leadSearch: leadSearchRouter, // Header search suggestions (#164)
   prospects: prospectsRouter, // AX customer search list, replacing the spreadsheet (#265)
+  deals: dealsRouter, // SFA deals: board, amounts, close dates and history (Refs #435)
+  salesTargets: salesTargetsRouter, // Monthly targets per member and organization (Refs #437)
+  salesForecast: salesForecastRouter, // Forecast against the targets and the week's changes (Refs #437)
 });
 
 export type AppRouter = typeof appRouter;
