@@ -1,5 +1,6 @@
 import type { db as defaultDb } from '@/lib/db/client';
-import { axSalesPlaybooks, diagnosticSubmissions, leads } from '@/lib/db/schema';
+import { diagnosticSubmissions, leads } from '@/lib/db/schema';
+import { readPlaybookContent } from '@/lib/features/ax-playbook/service';
 import { axTargetCompanySchema } from '@/lib/features/ax-playbook/types/schemas';
 import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -177,13 +178,9 @@ async function loadTargetCompany(
   database: Database | Transaction,
   organizationId: string
 ): Promise<AxTargetCompany | null> {
-  const [playbook] = await database
-    .select({ content: axSalesPlaybooks.content })
-    .from(axSalesPlaybooks)
-    .where(eq(axSalesPlaybooks.organizationId, organizationId))
-    .limit(1);
+  const content = await readPlaybookContent(database, organizationId);
   const parsed = axTargetCompanySchema.safeParse(
-    (playbook?.content as { targetCompany?: unknown } | undefined)?.targetCompany
+    (content as { targetCompany?: unknown } | null)?.targetCompany
   );
   return parsed.success ? parsed.data : null;
 }

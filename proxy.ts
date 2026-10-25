@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { gaMeasurementId } from './lib/analytics/ga';
 import { isCmsApiPath, isCmsEnabled } from './lib/cms/enabled';
+import { QR_ENTRY_TOO_MANY_REQUESTS_TEXT } from './lib/features/distribution/limits';
 import { intlMiddleware, shouldSkipI18nMiddleware, stripLocalePrefix } from './lib/i18n/middleware';
 import { signInRedirect } from './lib/middleware/auth-redirect';
 import { SIGN_IN_REDIRECT_CACHE_HEADERS, getCacheHeaders } from './lib/middleware/cache-headers';
@@ -71,14 +72,24 @@ export async function proxy(request: NextRequest) {
   const rateLimitResult = checkRateLimit(request, rateLimitConfig);
 
   if (!rateLimitResult.allowed) {
-    // Rate limit exceeded
-    const response = NextResponse.json(
-      {
-        error: 'Too Many Requests',
-        message: 'レート制限を超過しました。しばらくしてから再度お試しください。',
-      },
-      { status: 429 }
-    );
+    // Rate limit exceeded. The QR entry (#503) is opened by a phone's camera, which shows the
+    // body as it is: one line of text, never kept, like the entry's own answers
+    const response = pathnameWithoutLocale.startsWith('/q/')
+      ? new NextResponse(QR_ENTRY_TOO_MANY_REQUESTS_TEXT, {
+          status: 429,
+          headers: {
+            'Content-Type': 'text/plain; charset=utf-8',
+            'Cache-Control': 'no-store',
+            'X-Robots-Tag': 'noindex, nofollow',
+          },
+        })
+      : NextResponse.json(
+          {
+            error: 'Too Many Requests',
+            message: 'レート制限を超過しました。しばらくしてから再度お試しください。',
+          },
+          { status: 429 }
+        );
 
     setRateLimitHeaders(response.headers, rateLimitResult);
     return response;

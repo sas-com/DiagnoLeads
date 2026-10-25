@@ -25,7 +25,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/db/rls', () => ({ setCurrentUser: vi.fn().mockResolvedValue(undefined) }));
 
-const { ai, rateLimit, openai, globalDb } = vi.hoisted(() => ({
+const { ai, rateLimit, openai } = vi.hoisted(() => ({
   ai: {
     scoreLeadWithAI: vi.fn(),
     scoreLeadsBatch: vi.fn(),
@@ -36,17 +36,25 @@ const { ai, rateLimit, openai, globalDb } = vi.hoisted(() => ({
   rateLimit: { consumeRateLimits: vi.fn() },
   // The OpenAI embeddings API, as lib/features/ai/embeddings/openai.ts calls it
   openai: { create: vi.fn() },
-  // The global db that lib/features/ai/search/semantic.ts reads and writes embeddings with
-  globalDb: { execute: vi.fn(), select: vi.fn() },
 }));
 vi.mock('openai', () => ({
   OpenAI: vi.fn(function OpenAI() {
     return { embeddings: { create: openai.create } };
   }),
 }));
+// lib/features/ai/search/semantic.ts reads and writes embeddings with ctx.db (#590): any use of
+// the global client fails the test
 vi.mock('@/lib/db', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/db')>()),
-  db: globalDb,
+  db: new Proxy(
+    {},
+    {
+      get: (_target, property) => {
+        if (typeof property === 'symbol' || property === 'then') return undefined;
+        throw new Error(`the global db was used (db.${property})`);
+      },
+    }
+  ),
 }));
 vi.mock('@/lib/features/ai/scoring/claude', () => ({
   scoreLeadWithAI: ai.scoreLeadWithAI,
@@ -121,6 +129,10 @@ function createCaller(role: OrganizationMember['role'] = 'admin') {
         })),
       })),
     })),
+    // The raw queries of lib/features/ai/search/semantic.ts (search, comparison, the embedding's
+    // UPDATE … RETURNING id), and its read of the reference lead
+    execute: vi.fn().mockResolvedValue([]),
+    select: vi.fn(),
   };
   const caller = appRouter.createCaller({
     db,
@@ -253,9 +265,33 @@ describe('AI router: rate limits of the Claude calls', () => {
     for (const stub of [ai.scoreLeadWithAI, ai.generateLeadSummary, ai.predictConversion]) {
       expect(stub.mock.calls[0][0]).toMatchObject({ id: LEAD_1, company: cut });
     }
-    for (const stub of [ai.scoreLeadsBatch, ai.predictConversionBatch]) {
-      expect(stub.mock.calls[0][0]).toMatchObject([{ id: LEAD_1, company: cut }, { id: LEAD_2 }]);
+    expect(ai.scoreLeadsBatch.mock.calls[0][0]).toMatchObject([
+      { id: LEAD_1, company: cut },
+      { id: LEAD_2 },
+    ]);
+    expect(ai.predictConversionBatch.mock.calls[0][0]).toMatchObject([
+      { lead: { id: LEAD_1, company: cut } },
+      { lead: { id: LEAD_2 } },
+    ]);
+
+    // Nothing that points at a person reaches Claude (#406): the prediction gets only whether
+    // a name and a phone number are there, for its fallback heuristics
+    const handed = [
+      ai.scoreLeadWithAI.mock.calls[0][0],
+      ai.generateLeadSummary.mock.calls[0][0],
+      ai.predictConversion.mock.calls[0][0],
+      ...ai.scoreLeadsBatch.mock.calls[0][0],
+      ...ai.predictConversionBatch.mock.calls[0][0].map((item: { lead: unknown }) => item.lead),
+    ];
+    for (const lead of handed) {
+      for (const field of ['name', 'email', 'phone']) {
+        expect(lead).not.toHaveProperty(field);
+      }
     }
+    expect(ai.predictConversion.mock.calls[0][1]).toEqual({
+      hasName: expect.any(Boolean),
+      hasPhone: expect.any(Boolean),
+    });
     // The change events compare the stored lead, not the copy handed to Claude
     expect(vi.mocked(leadChangeEvents).mock.calls[0][0]).toBe(huge);
   });
@@ -294,7 +330,6 @@ describe('AI router: rate limits of the OpenAI embeddings', () => {
     vi.stubEnv('OPENAI_API_KEY', 'test-openai-key');
     rateLimit.consumeRateLimits.mockResolvedValue({ allowed: true });
     openai.create.mockResolvedValue({ data: [{ embedding: [0.1, 0.2, 0.3] }] });
-    globalDb.execute.mockResolvedValue([]);
   });
   afterEach(() => vi.unstubAllEnvs());
 
@@ -314,19 +349,36 @@ describe('AI router: rate limits of the OpenAI embeddings', () => {
   it('counts one embedding before embedding a lead found in the organization', async () => {
     const { caller, db } = createCaller();
     db.query.leads.findFirst.mockResolvedValue(leadRow(LEAD_1));
+    db.execute.mockResolvedValue([{ id: LEAD_1 }]);
 
-    await caller.ai.updateEmbedding(one);
+    await expect(caller.ai.updateEmbedding(one)).resolves.toEqual({ success: true });
 
     expect(countedChecks()).toEqual(embeddingChecksFor(1));
     expect(openai.create).toHaveBeenCalledTimes(1);
     expect(rateLimit.consumeRateLimits.mock.invocationCallOrder[0]).toBeLessThan(
       openai.create.mock.invocationCallOrder[0]
     );
-    // The embedding is stored once OpenAI has answered, on the lead in the organization only (#583)
-    expect(globalDb.execute).toHaveBeenCalledTimes(1);
-    const update = new PgDialect().sqlToQuery(globalDb.execute.mock.calls[0][0] as SQL);
-    expect(update.sql).toMatch(/WHERE id = \$\d+ AND organization_id = \$\d+/);
+    // The embedding is stored once OpenAI has answered, with ctx.db, on the lead in the
+    // organization only (#583, #590)
+    expect(db.execute).toHaveBeenCalledTimes(1);
+    const update = new PgDialect().sqlToQuery(db.execute.mock.calls[0][0] as SQL);
+    expect(update.sql).toMatch(/WHERE id = \$\d+ AND organization_id = \$\d+\s+RETURNING id/);
     expect(update.params.slice(-2)).toEqual([LEAD_1, ORG_ID]);
+  });
+
+  it('answers NOT_FOUND, after counting, when the lead read just before is gone when the embedding is stored (#590)', async () => {
+    const { caller, db } = createCaller();
+    db.query.leads.findFirst.mockResolvedValue(leadRow(LEAD_1));
+    // UPDATE … RETURNING id wrote no row: the lead was deleted between the read and the write
+    db.execute.mockResolvedValue([]);
+
+    await expect(caller.ai.updateEmbedding(one)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'リードが見つかりません',
+    });
+    expect(countedChecks()).toEqual(embeddingChecksFor(1));
+    expect(openai.create).toHaveBeenCalledTimes(1);
+    expect(db.execute).toHaveBeenCalledTimes(1);
   });
 
   it('fails, after counting, when OpenAI fails: never reports success with nothing stored (#598)', async () => {
@@ -339,7 +391,7 @@ describe('AI router: rate limits of the OpenAI embeddings', () => {
       code: 'INTERNAL_SERVER_ERROR',
     });
     expect(countedChecks()).toEqual(embeddingChecksFor(1));
-    expect(globalDb.execute).not.toHaveBeenCalled();
+    expect(db.execute).not.toHaveBeenCalled();
     consoleError.mockRestore();
   });
 
@@ -362,7 +414,7 @@ describe('AI router: rate limits of the OpenAI embeddings', () => {
 
     expect(openai.create).not.toHaveBeenCalled();
     // Nothing is searched or stored either
-    expect(globalDb.execute).not.toHaveBeenCalled();
+    expect(db.execute).not.toHaveBeenCalled();
   });
 
   it('counts nothing for a lead outside the organization, a caller without the right or a query too long', async () => {
@@ -408,23 +460,26 @@ describe('AI router: rate limits of the OpenAI embeddings', () => {
       name: 'n'.repeat(5_000),
       company: 'c'.repeat(2_000_000),
     });
+    db.execute.mockResolvedValue([{ id: LEAD_1 }]);
     await caller.ai.updateEmbedding(one);
     const embedded = openai.create.mock.calls[1][0].input as string;
     expect(embedded.length).toBeLessThanOrEqual(MAX_EMBEDDING_TEXT_CHARS);
-    expect(embedded).toContain(`${LEAD_1}@example.co.jp`);
+    // Nothing that points at a person goes to OpenAI (#406)
+    expect(embedded).not.toContain(`${LEAD_1}@example.co.jp`);
+    expect(embedded).not.toContain('nnnn');
   });
 
   it('counts nothing for similar leads: they compare the stored embeddings without OpenAI', async () => {
     const { caller, db } = createCaller();
     db.query.leads.findFirst.mockResolvedValue(leadRow(LEAD_1));
-    const where = vi.fn(async (_condition: SQL) => [{ embedding: '[0.1,0.2,0.3]' }]);
-    globalDb.select.mockReturnValue({ from: () => ({ where }) });
+    const where = vi.fn(async (_condition: SQL) => [{ embedding: [0.1, 0.2, 0.3] }]);
+    db.select.mockReturnValue({ from: () => ({ where }) });
 
     await caller.ai.findSimilar(one);
 
-    // The reference lead is read in the organization named, too (#583)
+    // The reference lead is read with ctx.db in the organization named, too (#583, #590)
     expect(new PgDialect().sqlToQuery(where.mock.calls[0][0]).params).toEqual([LEAD_1, ORG_ID]);
-    expect(globalDb.execute).toHaveBeenCalledTimes(1);
+    expect(db.execute).toHaveBeenCalledTimes(1);
     expect(rateLimit.consumeRateLimits).not.toHaveBeenCalled();
     expect(openai.create).not.toHaveBeenCalled();
   });

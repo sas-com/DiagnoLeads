@@ -1,6 +1,5 @@
 'use client';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -118,7 +117,6 @@ export function SemanticSearch({ organizationId }: SemanticSearchProps) {
                         <div className="text-sm text-gray-600 truncate mt-1">{lead.company}</div>
                       )}
                       <div className="flex items-center gap-2 mt-2">
-                        {lead.industry && <Badge variant="secondary">{lead.industry}</Badge>}
                         <span className="text-xs text-gray-500">{lead.email}</span>
                       </div>
                     </div>

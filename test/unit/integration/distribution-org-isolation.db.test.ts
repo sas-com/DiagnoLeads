@@ -1,7 +1,7 @@
 /**
  * Organization isolation of the distribution router (#356): a member of organization B who
  * passes the id of organization A's QR campaign or template gets NOT_FOUND, and A's campaigns
- * stay as they were.
+ * stay as they were. Also what an update of A's own campaign keeps (#610).
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/dl_test \
@@ -15,6 +15,7 @@ import {
   qrCampaigns,
   users,
 } from '@/lib/db/schema';
+import { findOpenQrCampaign } from '@/lib/features/distribution/short-code-entry';
 import { appRouter } from '@/server/routers/_app';
 import { eq, inArray } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
@@ -129,8 +130,6 @@ describe.skipIf(!url)('distribution organization isolation (PostgreSQL)', () => 
         name: 'Campaign by B',
         diagnosticTemplateId: templateA,
       }),
-    'generateQRCode (template of A)': () =>
-      adminB.distribution.generateQRCode({ ...asB(), diagnosticTemplateId: templateA }),
   };
 
   it.each(Object.keys(calls))('%s with ids of another organization answers NOT_FOUND', async (name) => {
@@ -147,5 +146,80 @@ describe.skipIf(!url)('distribution organization isolation (PostgreSQL)', () => 
     await expect(
       adminB.distribution.getCampaign({ organizationId: orgA, id: campaignA })
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  /**
+   * #610: an update writes only the fields it is sent. The switch of the settings page sends
+   * { isActive } alone, and the /q/ entry checks expires_at, so pausing and resuming must keep it
+   */
+  describe('updateCampaign keeps the fields it is not sent (#610)', () => {
+    const EXPIRES_AT = new Date('2026-11-30T15:00:00.000Z');
+    // biome-ignore lint/suspicious/noExplicitAny: tRPC caller
+    let adminA: any;
+
+    beforeAll(async () => {
+      adminA = await callerFor(orgA);
+    });
+
+    async function campaignOfA(expiresAt = EXPIRES_AT) {
+      const [campaign] = await pg
+        .insert(qrCampaigns)
+        .values({
+          organizationId: orgA,
+          diagnosticTemplateId: templateA,
+          name: 'Fair',
+          description: 'Booth A',
+          shortCode: `e${unique().replace(/[^a-z0-9]/g, '')}`.slice(0, 20),
+          trackingUrl: 'https://example.com/e',
+          expiresAt,
+        })
+        .returning();
+      return campaign;
+    }
+
+    const stored = async (id: string) => {
+      const [row] = await pg.select().from(qrCampaigns).where(eq(qrCampaigns.id, id));
+      return row;
+    };
+    const update = (id: string, data: Record<string, unknown>) =>
+      adminA.distribution.updateCampaign({ organizationId: orgA, id, data });
+
+    it('keeps expires_at when the campaign is paused and resumed', async () => {
+      const { id } = await campaignOfA();
+      await update(id, { isActive: false });
+      expect(await stored(id)).toMatchObject({ isActive: false, expiresAt: EXPIRES_AT });
+      await update(id, { isActive: true });
+      expect(await stored(id)).toMatchObject({ isActive: true, expiresAt: EXPIRES_AT });
+    });
+
+    it('keeps expires_at and the description when only the name changes', async () => {
+      const { id } = await campaignOfA();
+      await update(id, { name: 'Fair (Osaka)' });
+      expect(await stored(id)).toMatchObject({
+        name: 'Fair (Osaka)',
+        description: 'Booth A',
+        isActive: true,
+        expiresAt: EXPIRES_AT,
+      });
+    });
+
+    it('changes expires_at when a new one is sent', async () => {
+      const { id } = await campaignOfA();
+      await update(id, { expiresAt: '2026-12-31T15:00:00.000Z' });
+      expect((await stored(id)).expiresAt).toEqual(new Date('2026-12-31T15:00:00.000Z'));
+    });
+
+    it('clears expires_at when null is sent', async () => {
+      const { id } = await campaignOfA();
+      await update(id, { expiresAt: null });
+      expect((await stored(id)).expiresAt).toBeNull();
+    });
+
+    it('leaves an expired campaign closed at the /q/ entry after a pause and a resume', async () => {
+      const expired = await campaignOfA(new Date(Date.now() - 60_000));
+      await update(expired.id, { isActive: false });
+      await update(expired.id, { isActive: true });
+      expect(await findOpenQrCampaign(pg, expired.shortCode)).toBeNull();
+    });
   });
 });

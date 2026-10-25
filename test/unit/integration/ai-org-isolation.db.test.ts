@@ -7,14 +7,14 @@
  * batched HTTP request) included. The AI services are stubs; the
  * organization checks and the counting run against the real database. The functions that store
  * and compare the embeddings (lib/features/ai/search/semantic.ts) also run on it, with OpenAI
- * stubbed: they write and read a lead only in the organization named (#583). All values are
- * fictional.
+ * stubbed: they run on the caller's database (ctx.db, never the global client), write and read a
+ * lead only in the organization named (#583), and return the organization's leads most similar
+ * first (#590). All values are fictional.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/dl_test \
  *     bunx vitest --run test/unit/integration/ai-org-isolation.db.test.ts
  */
-import { db } from '@/lib/db';
 import * as schema from '@/lib/db/schema';
 import {
   leads,
@@ -24,6 +24,7 @@ import {
   users,
 } from '@/lib/db/schema';
 import { AI_CALL_LIMITS, EMBEDDING_CALL_LIMITS } from '@/lib/features/ai/limits';
+import type * as Semantic from '@/lib/features/ai/search/semantic';
 import { consumeRateLimit, rateLimitKey } from '@/lib/features/diagnostics/rate-limit';
 import { appRouter } from '@/server/routers/_app';
 import { eq, inArray } from 'drizzle-orm';
@@ -46,13 +47,16 @@ const ai = vi.hoisted(() => {
     scoreLeadWithAI: vi.fn(async () => ({ score: 99 })),
     scoreLeadsBatch: vi.fn(async (rows: { id: string }[]) => byId(rows, { score: 99 })),
     predictConversion: vi.fn(async () => ({ probability: 0.5 })),
-    predictConversionBatch: vi.fn(async (rows: { id: string }[]) =>
-      byId(rows, { probability: 0.5 })
+    predictConversionBatch: vi.fn(async (rows: { lead: { id: string } }[]) =>
+      byId(
+        rows.map(({ lead }) => lead),
+        { probability: 0.5 }
+      )
     ),
     generateLeadSummary: vi.fn(async () => 'まとめ'),
-    semanticSearch: vi.fn(async () => []),
-    findSimilarLeads: vi.fn(async () => []),
-    updateLeadEmbedding: vi.fn(async () => undefined),
+    semanticSearch: vi.fn<typeof Semantic.semanticSearch>(async () => []),
+    findSimilarLeads: vi.fn<typeof Semantic.findSimilarLeads>(async () => []),
+    updateLeadEmbedding: vi.fn<typeof Semantic.updateLeadEmbedding>(async () => true),
     prepareLeadText: vi.fn(() => 'text'),
   };
 });
@@ -81,22 +85,20 @@ vi.mock('@/lib/features/ai/embeddings/openai', () => ({
   prepareLeadText: ai.prepareLeadText,
   generateEmbedding: openai.generateEmbedding,
 }));
-// semantic.ts uses the app's database client; point it at the test database
-const connection = vi.hoisted(() => ({
-  url: process.env.TEST_DATABASE_URL,
-  client: null as { end: () => Promise<void> } | null,
+// semantic.ts runs on the caller's database (ctx.db, #590): any use of the app's global client
+// fails the test
+vi.mock('@/lib/db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/db')>()),
+  db: new Proxy(
+    {},
+    {
+      get: (_target, property) => {
+        if (typeof property === 'symbol' || property === 'then') return undefined;
+        throw new Error(`the global db was used (db.${property}); pass ctx.db instead`);
+      },
+    }
+  ),
 }));
-vi.mock('@/lib/db', async (importOriginal) => {
-  const pg = await import('postgres');
-  const { drizzle: connect } = await import('drizzle-orm/postgres-js');
-  const dbSchema = await import('@/lib/db/schema');
-  const client = pg.default(connection.url ?? 'postgres://unused@127.0.0.1:1/unused', { max: 2 });
-  connection.client = client;
-  return {
-    ...(await importOriginal<typeof import('@/lib/db')>()),
-    db: connect(client, { schema: dbSchema }),
-  };
-});
 
 const url = process.env.TEST_DATABASE_URL;
 
@@ -115,14 +117,25 @@ describe.skipIf(!url)('AI features: organization isolation (PostgreSQL)', () => 
   let memberBId: string;
   const leadsA: string[] = [];
   let leadB: string;
+  /** Organizations a test created for itself, deleted with A and B */
+  const otherOrganizations: string[] = [];
 
-  /** Every lead id any AI stub was given */
+  /** Every lead id any AI stub was given (as an id, a lead, or the leadId of named arguments) */
   const leadIdsGiven = () =>
     Object.values(ai)
-      .flatMap((stub) => stub.mock.calls.flat())
+      .flatMap((stub) => (stub.mock.calls as unknown[][]).flat())
       .flatMap((arg) => (Array.isArray(arg) ? arg : [arg]))
-      .map((arg) => (typeof arg === 'string' ? arg : (arg as { id?: string } | null)?.id))
+      .map((arg) => {
+        if (typeof arg === 'string') return arg;
+        // The semantic functions take named arguments (#590); the batch prediction is handed
+        // { lead, contact } pairs (#406)
+        const item = arg as { id?: string; leadId?: string; lead?: { id?: string } } | null;
+        return item?.id ?? item?.leadId ?? item?.lead?.id;
+      })
       .filter(Boolean);
+  /** The real semantic.ts (the router tests use the stubs above) */
+  const actualSemantic = () =>
+    vi.importActual<typeof Semantic>('@/lib/features/ai/search/semantic');
   const scoresOfA = () =>
     pg.select({ id: leads.id, score: leads.score }).from(leads).where(inArray(leads.id, leadsA));
 
@@ -189,18 +202,20 @@ describe.skipIf(!url)('AI features: organization isolation (PostgreSQL)', () => 
   });
 
   afterAll(async () => {
-    if (orgA) await pg.delete(organizations).where(inArray(organizations.id, [orgA, orgB]));
+    const organizationIds = [orgA, orgB, ...otherOrganizations].filter(Boolean);
+    if (organizationIds.length > 0) {
+      await pg.delete(organizations).where(inArray(organizations.id, organizationIds));
+    }
     if (userIds.length > 0) await pg.delete(users).where(inArray(users.id, userIds));
     const counters = [AI_CALL_LIMITS, EMBEDDING_CALL_LIMITS].flatMap((limits) => [
       ...userIds.map((id) => rateLimitKey(limits.perUser, id)),
-      ...[orgA, orgB].flatMap((id) => [
+      ...organizationIds.flatMap((id) => [
         rateLimitKey(limits.perOrganization, id),
         rateLimitKey(limits.perOrganizationDaily, id),
       ]),
     ]);
     await pg.delete(publicRateLimits).where(inArray(publicRateLimits.key, counters));
     await client?.end();
-    await connection.client?.end();
   });
 
   it("refuses B's admin when it names organization A itself", async () => {
@@ -350,13 +365,12 @@ describe.skipIf(!url)('AI features: organization isolation (PostgreSQL)', () => 
     expect(after.get(second.id)).toBe(88);
   });
 
-  it("searches B's leads only (semanticSearch)", async () => {
+  it("searches B's leads only, on the caller's database (semanticSearch)", async () => {
     await adminB.ai.semanticSearch({ organizationId: orgB, query: '基幹システム' });
-    expect(ai.semanticSearch).toHaveBeenCalledWith(
-      '基幹システム',
-      orgB,
-      expect.objectContaining({ limit: 10 })
-    );
+    expect(ai.semanticSearch).toHaveBeenCalledTimes(1);
+    const [named] = ai.semanticSearch.mock.calls[0];
+    expect(named).toMatchObject({ query: '基幹システム', organizationId: orgB, limit: 10 });
+    expect(named.db).toBe(pg);
   });
 
   it('counts every concurrent embedding in counters of its own, and nothing for A or a refused caller (#576)', async () => {
@@ -413,9 +427,7 @@ describe.skipIf(!url)('AI features: organization isolation (PostgreSQL)', () => 
 
   it("stores and compares embeddings in the organization named only: A's lead is neither written nor the base of B's search (updateLeadEmbedding, findSimilarLeads, #583)", async () => {
     // The real functions (the router tests above use stubs), on the test database
-    const { findSimilarLeads, updateLeadEmbedding } = await vi.importActual<
-      typeof import('@/lib/features/ai/search/semantic')
-    >('@/lib/features/ai/search/semantic');
+    const { findSimilarLeads, updateLeadEmbedding } = await actualSemantic();
     // A 1536-dimension embedding that points mostly along one axis
     const along = (axis: number) =>
       Array.from({ length: 1536 }, (_, index) => (index === axis ? 1 : 0.01));
@@ -428,51 +440,220 @@ describe.skipIf(!url)('AI features: organization isolation (PostgreSQL)', () => 
             .where(inArray(leads.id, ids))
         ).map((row) => [row.id, row.embedding])
       );
+    const store = (leadId: string, organizationId: string) =>
+      updateLeadEmbedding({ db: pg, leadId, organizationId, text: 'テキスト' });
     const [nearB] = await pg
       .insert(leads)
       .values({ organizationId: orgB, email: `ai-iso-b3-${unique()}@example.co.jp` })
       .returning({ id: leads.id });
 
-    // A's lead with organization B named: not written
+    // A's lead with organization B named: not written, and reported as not written (#590)
     openai.generateEmbedding.mockResolvedValue(along(0));
-    await updateLeadEmbedding(leadsA[0], orgB, 'テキスト');
+    await expect(store(leadsA[0], orgB)).resolves.toBe(false);
     expect((await embeddingsOf([leadsA[0]])).get(leadsA[0])).toBeNull();
 
     // Each lead with its own organization named: written
-    await updateLeadEmbedding(leadsA[0], orgA, 'テキスト');
+    await expect(store(leadsA[0], orgA)).resolves.toBe(true);
     openai.generateEmbedding.mockResolvedValue(along(1));
-    await updateLeadEmbedding(leadB, orgB, 'テキスト');
+    await expect(store(leadB, orgB)).resolves.toBe(true);
     openai.generateEmbedding.mockResolvedValue(along(2));
-    await updateLeadEmbedding(nearB.id, orgB, 'テキスト');
+    await expect(store(nearB.id, orgB)).resolves.toBe(true);
     const stored = await embeddingsOf([leadsA[0], leadB, nearB.id]);
     expect(stored.get(leadsA[0])?.[0]).toBe(1);
     expect(stored.get(leadB)?.[1]).toBe(1);
     expect(stored.get(nearB.id)?.[2]).toBe(1);
 
-    // The comparison query runs on the app's client; the reason of a failure is only logged
-    const comparisons = vi.spyOn(db, 'execute');
+    // The comparison query runs on the database passed; the reason of a failure is only logged
+    const comparisons = vi.spyOn(pg, 'execute');
     const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const loggedReasons = () =>
       logged.mock.calls.map((call) => (call[1] as Error | undefined)?.message);
     try {
       // A's lead (it has an embedding now) is not read as the base of a search in B: no search
-      await expect(findSimilarLeads(leadsA[0], orgB)).rejects.toThrow(
-        'Finding similar leads failed'
-      );
+      await expect(
+        findSimilarLeads({ db: pg, leadId: leadsA[0], organizationId: orgB })
+      ).rejects.toThrow('Finding similar leads failed');
       expect(loggedReasons()).toContain('Reference lead not found or has no embedding');
       expect(comparisons).not.toHaveBeenCalled();
 
-      // B's own lead is read as the base, and the search in B runs. The comparison query itself
-      // fails on PostgreSQL today (#590); once it is fixed, expect B's other lead (nearB) only.
-      // Either way the base is found, so this call logs no "not found" (and logs nothing once
-      // the comparison succeeds); the log of the call above is cleared first
+      // B's own lead is read as the base, and the search in B finds B's other lead with an
+      // embedding only: not A's, although A's is as close to the base as nearB
       logged.mockClear();
-      await findSimilarLeads(leadB, orgB).catch(() => undefined);
+      const similar = await findSimilarLeads({ db: pg, leadId: leadB, organizationId: orgB });
+      expect(similar.map((lead) => lead.id)).toEqual([nearB.id]);
       expect(comparisons).toHaveBeenCalledTimes(1);
-      expect(loggedReasons()).not.toContain('Reference lead not found or has no embedding');
+      expect(logged).not.toHaveBeenCalled();
     } finally {
       comparisons.mockRestore();
       logged.mockRestore();
     }
+  });
+
+  describe('comparing the embeddings on PostgreSQL (#590)', () => {
+    // Small fixed directions, padded with zeros to the 1536 dimensions of the column
+    const vec = (...head: number[]) => [
+      ...head,
+      ...Array.from({ length: 1536 - head.length }, () => 0),
+    ];
+    const leadOf = (organizationId: string, label: string, embedding: number[] | null) => ({
+      organizationId,
+      name: `類似${label}`,
+      company: `架空${label}株式会社`,
+      email: `ai-sim-${label}-${unique()}@example.co.jp`,
+      embedding,
+    });
+    let orgC: string;
+    let orgD: string;
+    const fixtures = new Map<
+      string,
+      { id: string; name: string | null; email: string; company: string | null }
+    >();
+    const id = (label: string) => fixtures.get(label)?.id;
+    /** The result expected for a lead: its columns and its similarity, nothing else */
+    const found = (label: string, similarity: number) => ({
+      ...fixtures.get(label),
+      similarity: expect.closeTo(similarity, 5),
+    });
+    const NEAR = 1 / Math.sqrt(1.04); // (1, 0.2) against (1, 0)
+    const MID = Math.SQRT1_2; // (1, 1) against (1, 0)
+
+    beforeAll(async () => {
+      const created = await pg
+        .insert(organizations)
+        .values([
+          { name: '類似C', slug: `ai-sim-c-${unique()}` },
+          { name: '類似D', slug: `ai-sim-d-${unique()}` },
+        ])
+        .returning({ id: organizations.id });
+      orgC = created[0].id;
+      orgD = created[1].id;
+      otherOrganizations.push(orgC, orgD);
+      // B's admin is an admin of C too, to call the router there
+      await pg
+        .insert(organizationMembers)
+        .values({ organizationId: orgC, userId: userIds[0], role: 'admin' });
+      // Stored through the vector column type, as updateLeadEmbedding's readers get them back
+      const rows = await pg
+        .insert(leads)
+        .values([
+          leadOf(orgC, 'base', vec(1)),
+          leadOf(orgC, 'near', vec(1, 0.2)),
+          leadOf(orgC, 'mid', vec(1, 1)),
+          leadOf(orgC, 'far', vec(0, 0, 1)),
+          leadOf(orgC, 'none', null),
+          // D's twin points the same way as C's base (similarity 1): a search that left its
+          // organization would put it first
+          leadOf(orgD, 'twin', vec(1)),
+          leadOf(orgD, 'other', vec(1, 0.1)),
+        ])
+        .returning({ id: leads.id, name: leads.name, email: leads.email, company: leads.company });
+      for (const row of rows) fixtures.set(row.name?.replace('類似', '') ?? '', row);
+    });
+
+    it("returns the organization's other leads with an embedding, most similar first, never another organization's (findSimilarLeads)", async () => {
+      const { findSimilarLeads } = await actualSemantic();
+      const base = { db: pg, leadId: id('base') ?? '', organizationId: orgC };
+
+      expect(await findSimilarLeads(base)).toEqual([
+        found('near', NEAR),
+        found('mid', MID),
+        found('far', 0),
+      ]);
+      expect(await findSimilarLeads({ ...base, limit: 2 })).toEqual([
+        found('near', NEAR),
+        found('mid', MID),
+      ]);
+      // From D's twin, D's other lead only, although C's base points the same way as the twin
+      expect(
+        await findSimilarLeads({ db: pg, leadId: id('twin') ?? '', organizationId: orgD })
+      ).toEqual([found('other', 1 / Math.sqrt(1.01))]);
+
+      // D's lead is never the base of a search in C
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      try {
+        await expect(
+          findSimilarLeads({ db: pg, leadId: id('twin') ?? '', organizationId: orgC })
+        ).rejects.toThrow('Finding similar leads failed');
+        expect(logged.mock.calls.map((call) => (call[1] as Error).message)).toEqual([
+          'Reference lead not found or has no embedding',
+        ]);
+      } finally {
+        logged.mockRestore();
+      }
+    });
+
+    it("returns the organization's leads only, most similar to the query first (semanticSearch)", async () => {
+      const { semanticSearch } = await actualSemantic();
+      openai.generateEmbedding.mockResolvedValue(vec(1));
+      const search = { db: pg, query: '基幹システム', organizationId: orgC };
+
+      // The default threshold (0.7) keeps base, near and mid; D's twin (1) is not C's
+      expect(await semanticSearch(search)).toEqual([
+        found('base', 1),
+        found('near', NEAR),
+        found('mid', MID),
+      ]);
+      expect(await semanticSearch({ ...search, minSimilarity: 0 })).toEqual([
+        found('base', 1),
+        found('near', NEAR),
+        found('mid', MID),
+        found('far', 0),
+      ]);
+      expect(await semanticSearch({ ...search, minSimilarity: 0, limit: 2 })).toEqual([
+        found('base', 1),
+        found('near', NEAR),
+      ]);
+      expect(openai.generateEmbedding).toHaveBeenCalledWith('基幹システム');
+    });
+
+    it('runs the procedures with the real functions on ctx.db (findSimilar, semanticSearch)', async () => {
+      const actual = await actualSemantic();
+      ai.findSimilarLeads.mockImplementationOnce(actual.findSimilarLeads);
+      ai.semanticSearch.mockImplementationOnce(actual.semanticSearch);
+      openai.generateEmbedding.mockResolvedValue(vec(1));
+      const ids = (rows: { id: string }[]) => rows.map((row) => row.id);
+
+      expect(ids(await adminB.ai.findSimilar({ organizationId: orgC, leadId: id('base') }))).toEqual(
+        [id('near'), id('mid'), id('far')]
+      );
+      expect(
+        ids(await adminB.ai.semanticSearch({ organizationId: orgC, query: '基幹システム' }))
+      ).toEqual([id('base'), id('near'), id('mid')]);
+      expect(ai.findSimilarLeads.mock.calls[0][0].db).toBe(pg);
+      expect(ai.semanticSearch.mock.calls[0][0].db).toBe(pg);
+    });
+
+    it('stores the embedding through the router, and answers NOT_FOUND, not success, when the lead is gone before it is stored (updateEmbedding)', async () => {
+      const actual = await actualSemantic();
+      ai.updateLeadEmbedding.mockImplementation(actual.updateLeadEmbedding);
+      const [kept, gone] = await pg
+        .insert(leads)
+        .values([leadOf(orgC, 'kept', null), leadOf(orgC, 'gone', null)])
+        .returning({ id: leads.id });
+      try {
+        openai.generateEmbedding.mockResolvedValue(vec(0, 1));
+        await expect(
+          adminB.ai.updateEmbedding({ organizationId: orgC, leadId: kept.id })
+        ).resolves.toEqual({ success: true });
+        const [row] = await pg
+          .select({ embedding: leads.embedding })
+          .from(leads)
+          .where(eq(leads.id, kept.id));
+        expect(row.embedding).toEqual(vec(0, 1));
+        expect(ai.updateLeadEmbedding.mock.calls[0][0].db).toBe(pg);
+
+        // Read in C by the router, then deleted while OpenAI answers: nothing is written
+        openai.generateEmbedding.mockImplementationOnce(async () => {
+          await pg.delete(leads).where(eq(leads.id, gone.id));
+          return vec(0, 1);
+        });
+        await expect(
+          adminB.ai.updateEmbedding({ organizationId: orgC, leadId: gone.id })
+        ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      } finally {
+        ai.updateLeadEmbedding.mockImplementation(async () => true);
+        await pg.delete(leads).where(inArray(leads.id, [kept.id, gone.id]));
+      }
+    });
   });
 });

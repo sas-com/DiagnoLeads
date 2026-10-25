@@ -851,6 +851,22 @@ describe('AxDiagnosisResult', () => {
     });
 
     it.each([
+      ['fix', {}, 'Microsoft Accessを直して使い続けるときに確認すること'],
+      ['web', { access_challenges: ['remote'] }, 'Microsoft AccessからWebシステムへ移行するときに確認すること'],
+      [
+        'replace',
+        { access_features: ['none'], access_screens_forms: 'lt20' },
+        'Microsoft Accessから既製サービスに置き換えるときに確認すること',
+      ],
+    ])('titles the checkpoints after the %s path (#507)', (path, answers, title) => {
+      renderAccess(answers);
+      expect(screen.getByTestId('ax-result-access-path')).toHaveAttribute('data-path', path);
+      expect(
+        within(screen.getByTestId('ax-result-checkpoints')).getByRole('heading', { name: title })
+      ).toBeInTheDocument();
+    });
+
+    it.each([
       ['fix', {}],
       ['web', { access_challenges: ['remote'] }],
       ['replace', { access_features: ['none'], access_screens_forms: 'lt20' }],

@@ -371,17 +371,63 @@ describe('rules', () => {
 });
 
 describe('rules for feature modules', () => {
-  it("cross-feature-internal: lists the other feature's file that is read, not its types or service", () => {
+  it("cross-feature-internal: lists each feature that reads another feature's file, not its types or service", () => {
     const graph = graphOf({}, [
       ['lib/features/deals/service.ts', 'lib/features/leads/types/pipeline.ts'],
       ['lib/features/deals/service.ts', 'lib/features/leads/service.ts'],
       ['lib/features/deals/service.ts', 'lib/features/leads/audit.ts'],
       ['lib/features/deals/sync.ts', 'lib/features/leads/audit.ts'],
+      ['lib/features/forecast/service.ts', 'lib/features/leads/audit.ts'],
       ['lib/features/deals/service.ts', 'lib/features/email/index.ts'],
       ['lib/features/deals/service.ts', 'lib/features/deals/sync.ts'],
       ['components/features/deals/board.tsx', 'lib/features/leads/list-query.ts'],
     ]);
-    expect(check('cross-feature-internal', graph)).toEqual(['lib/features/leads/audit.ts']);
+    expect(check('cross-feature-internal', graph)).toEqual([
+      'deals -> lib/features/leads/audit.ts',
+      'forecast -> lib/features/leads/audit.ts',
+    ]);
+  });
+
+  it('cross-feature-internal: a listed file read by one more feature is a new violation', () => {
+    const before = graphOf({}, [['lib/features/deals/service.ts', 'lib/features/leads/audit.ts']]);
+    const after = graphOf({}, [
+      ['lib/features/deals/service.ts', 'lib/features/leads/audit.ts'],
+      ['lib/features/forecast/service.ts', 'lib/features/leads/audit.ts'],
+    ]);
+    const rule = RULES.filter((r) => r.id === 'cross-feature-internal');
+    const allowlist = parseAllowlist(
+      formatAllowlist(rule, new Map([[rule[0].id, rule[0].check(before)]]))
+    );
+    const [outcome] = compareWithAllowlist(
+      rule,
+      new Map([[rule[0].id, rule[0].check(after)]]),
+      allowlist
+    );
+    expect(outcome.added).toEqual(['forecast -> lib/features/leads/audit.ts']);
+  });
+
+  it('ax-boundary: lists who reads the AX diagnosis, types included, but not AX itself or ax-*', () => {
+    const graph = graphOf({}, [
+      ['lib/features/leads/service.ts', 'lib/features/diagnostics/ax-migration/mql.ts'],
+      [
+        'lib/features/leads/api/router.ts',
+        'lib/features/diagnostics/ax-migration/mql.ts',
+        { typeOnly: true },
+      ],
+      ['lib/features/diagnostics/engine.ts', 'lib/features/diagnostics/ax-migration/definition.ts'],
+      [
+        'lib/features/diagnostics/ax-migration/notify.ts',
+        'lib/features/diagnostics/ax-migration/config.ts',
+      ],
+      ['lib/features/ax-site/columns.ts', 'lib/features/diagnostics/ax-migration/definition.ts'],
+      ['components/features/ax-diagnosis/flow.tsx', 'lib/features/diagnostics/ax-migration/mql.ts'],
+      ['lib/features/leads/service.ts', 'lib/features/diagnostics/service.ts'],
+    ]);
+    expect(check('ax-boundary', graph)).toEqual([
+      'lib/features/diagnostics/engine.ts -> lib/features/diagnostics/ax-migration/definition.ts',
+      'lib/features/leads/api/router.ts -> lib/features/diagnostics/ax-migration/mql.ts',
+      'lib/features/leads/service.ts -> lib/features/diagnostics/ax-migration/mql.ts',
+    ]);
   });
 
   it('features-use-global-db: importing db or the whole module counts, the types do not', () => {

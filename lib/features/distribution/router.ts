@@ -1,13 +1,38 @@
 import { db } from '@/lib/db';
-import { diagnosticTemplates, qrCampaigns, qrScans } from '@/lib/db/schema';
+import { diagnosticTemplates, qrCampaigns } from '@/lib/db/schema';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { buildTrackingUrl, generateQRCode, generateShortCode } from './qr-code';
-import { createQRCampaignSchema, generateQRCodeSchema } from './types';
+import {
+  type CampaignUrlFields,
+  campaignTrackingUrl,
+  generateQRCode,
+  generateShortCode,
+} from './qr-code';
+import { campaignScanStats } from './scans';
+import { createQRCampaignSchema } from './types';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+
+/**
+ * A campaign as the settings page gets it: the tracking URL is built from the short code
+ * (/q/<code>, #503), not read from qr_campaigns.tracking_url, which holds /d/<code> for the
+ * campaigns created before
+ */
+function withTrackingUrl<T extends CampaignUrlFields>(campaign: T): T & { trackingUrl: string } {
+  return { ...campaign, trackingUrl: campaignTrackingUrl(APP_URL, campaign) };
+}
+
+/**
+ * The expiry an update writes (#610): none when expiresAt is not sent, so pausing and resuming
+ * from the settings page (which sends { isActive } alone) keeps the expiry the /q/ entry checks.
+ * null clears it
+ */
+function expiryUpdate(expiresAt: string | null | undefined): { expiresAt?: Date | null } {
+  if (expiresAt === undefined) return {};
+  return { expiresAt: expiresAt === null ? null : new Date(expiresAt) };
+}
 
 /**
  * Who may use this router (#356): anyone who can read leads may see the QR campaigns; creating,
@@ -54,7 +79,7 @@ export const distributionRouter = router({
       },
     });
 
-    return campaigns;
+    return campaigns.map((campaign) => withTrackingUrl(campaign));
   }),
 
   /**
@@ -78,13 +103,14 @@ export const distributionRouter = router({
       }
 
       // Generate fresh QR code
-      const qrCodeDataUrl = await generateQRCode(campaign.trackingUrl, {
+      const current = withTrackingUrl(campaign);
+      const qrCodeDataUrl = await generateQRCode(current.trackingUrl, {
         size: 'large',
         format: 'dataUrl',
       });
 
       return {
-        ...campaign,
+        ...current,
         qrCodeDataUrl,
       };
     }),
@@ -119,12 +145,13 @@ export const distributionRouter = router({
         attempts++;
       }
 
-      // Build tracking URL
-      const trackingUrl = buildTrackingUrl(APP_URL, shortCode, {
+      // Build tracking URL: the entry of the short code (/q/<code>, #503)
+      const trackingUrl = campaignTrackingUrl(APP_URL, {
+        shortCode,
         utmSource: input.utmSource,
         utmMedium: input.utmMedium,
-        utmCampaign: input.utmCampaign,
-        utmContent: input.utmContent,
+        utmCampaign: input.utmCampaign ?? null,
+        utmContent: input.utmContent ?? null,
       });
 
       const [campaign] = await db
@@ -183,11 +210,13 @@ export const distributionRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'QR campaign not found' });
       }
 
+      // Only the fields sent change
+      const { expiresAt, ...fields } = input.data;
       const [updated] = await db
         .update(qrCampaigns)
         .set({
-          ...input.data,
-          expiresAt: input.data.expiresAt ? new Date(input.data.expiresAt) : null,
+          ...fields,
+          ...expiryUpdate(expiresAt),
           updatedAt: new Date(),
         })
         .where(
@@ -195,7 +224,12 @@ export const distributionRouter = router({
         )
         .returning();
 
-      return updated;
+      // Deleted between the read and the write
+      if (!updated) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'QR campaign not found' });
+      }
+
+      return withTrackingUrl(updated);
     }),
 
   /**
@@ -246,7 +280,9 @@ export const distributionRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'QR campaign not found' });
       }
 
-      const qrCode = await generateQRCode(campaign.trackingUrl, {
+      // From the short code, so the campaigns saved with /d/<code> download a working QR code
+      const trackingUrl = campaignTrackingUrl(APP_URL, campaign);
+      const qrCode = await generateQRCode(trackingUrl, {
         size: input.size,
         format: 'dataUrl',
       });
@@ -254,52 +290,13 @@ export const distributionRouter = router({
       return {
         qrCode: typeof qrCode === 'string' ? qrCode : qrCode.toString('base64'),
         shortCode: campaign.shortCode,
-        trackingUrl: campaign.trackingUrl,
-      };
-    }),
-
-  /**
-   * Generate a QR code (on-demand, not stored)
-   */
-  generateQRCode: campaignViewProcedure
-    .input(generateQRCodeSchema)
-    .mutation(async ({ ctx, input }) => {
-      // Verify template exists
-      const template = await db.query.diagnosticTemplates.findFirst({
-        where: and(
-          eq(diagnosticTemplates.id, input.diagnosticTemplateId),
-          eq(diagnosticTemplates.organizationId, ctx.organization.id)
-        ),
-      });
-
-      if (!template) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Diagnostic template not found' });
-      }
-
-      // Build tracking URL
-      const trackingUrl = buildTrackingUrl(APP_URL, template.id, {
-        utmSource: input.utmSource,
-        utmMedium: input.utmMedium,
-        utmCampaign: input.utmCampaign,
-        utmContent: input.utmContent,
-      });
-
-      // Generate QR code
-      const qrCode = await generateQRCode(trackingUrl, {
-        size: input.size,
-        format: input.format,
-        color: input.color,
-      });
-
-      return {
-        qrCode: typeof qrCode === 'string' ? qrCode : qrCode.toString('base64'),
         trackingUrl,
-        format: input.format,
       };
     }),
 
   /**
-   * Get scan statistics for a campaign
+   * Scan statistics of a campaign (#41): the scans the /q/ entry recorded. The total is the
+   * campaign's scan_count, which the entry counts in the same statement as each qr_scans row
    */
   getCampaignStats: campaignViewProcedure
     .input(z.object({ campaignId: z.string().uuid() }))
@@ -315,29 +312,15 @@ export const distributionRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'QR campaign not found' });
       }
 
-      const scans = await db.query.qrScans.findMany({
-        where: eq(qrScans.campaignId, input.campaignId),
-        orderBy: [desc(qrScans.scannedAt)],
+      const stats = await campaignScanStats(ctx.db, {
+        organizationId: ctx.organization.id,
+        campaignId: campaign.id,
       });
-
-      const deviceBreakdown = scans.reduce(
-        (acc, scan) => {
-          const type = scan.deviceType || 'unknown';
-          acc[type] = (acc[type] || 0) + 1;
-          return acc;
-        },
-        {} as Record<string, number>
-      );
-
-      const conversionRate =
-        scans.length > 0 ? (scans.filter((s) => s.converted).length / scans.length) * 100 : 0;
 
       return {
         totalScans: campaign.scanCount,
         totalConversions: campaign.completionCount,
-        conversionRate: Math.round(conversionRate * 100) / 100,
-        deviceBreakdown,
-        recentScans: scans.slice(0, 10),
+        ...stats,
       };
     }),
 });
