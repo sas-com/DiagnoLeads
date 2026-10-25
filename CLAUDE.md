@@ -40,7 +40,7 @@ Issue → 決定を読む → ブランチ → 実装 → 速い検証 → 全�
    - 関係するテストだけ流す：`bunx vitest run <path>`（1ファイル約2秒）
    - 型チェック：`bun run typecheck`（2回目以降は約8秒）
 6. 全体の検証（コミット前に必須）
-   - `bun run test:run && bun run typecheck && bun run lint`（全テストは約6分）
+   - `bun run test:run && bun run typecheck && bun run lint && bun run arch:check`（全テストは約6分。`arch:check` は import の向きの検査で約1秒）
    - 全部通るまでコミットしない
 7. PR：push して PR を作り、CI（約4分）が緑になるまで見届ける。手順とマージの条件はスキル `ship`
    - CI が緑であること
@@ -83,6 +83,7 @@ Issue → 決定を読む → ブランチ → 実装 → 速い検証 → 全�
 
 ## 置き場所
 
+- 層と依存の向き・機能の型・機能を足すときに触る場所の正本は `docs/ARCHITECTURE.md`（`bun run arch:check` で検査する）
 - 機能：`lib/features/{feature}/`。tRPC のルーターは `api/` に置き、`server/routers/_app.ts` に登録する。型と zod のスキーマは `types/` に置く
 - 画面の部品：`components/features/{feature}/` に置く。共通の部品は `components/ui/`（shadcn/ui）
 - テスト：vitest が実行する名前だけを使う

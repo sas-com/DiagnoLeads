@@ -186,23 +186,28 @@ describe('semantic-search', () => {
       expect(update.params).toEqual(['[0.1,0.2]', 'lead-1', 'org-1']);
     });
 
-    it('should not throw on embedding failure', async () => {
-      (generateEmbedding as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('API Error'));
+    it('fails when the embedding fails, without writing, and logs the cause (#598)', async () => {
+      const cause = new Error('API Error');
+      (generateEmbedding as ReturnType<typeof vi.fn>).mockRejectedValue(cause);
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      // Should not throw - errors are caught internally
-      await updateLeadEmbedding('lead-1', 'org-1', 'text');
-      // If we reach here, no error was thrown
-      expect(true).toBe(true);
+      await expect(updateLeadEmbedding('lead-1', 'org-1', 'text')).rejects.toThrow(
+        'Updating lead embedding failed'
+      );
+      expect(db.execute).not.toHaveBeenCalled();
+      expect(consoleError).toHaveBeenCalledWith('Error updating lead embedding:', cause);
+      consoleError.mockRestore();
     });
 
-    it('should not throw on database failure', async () => {
+    it('fails when the update fails (#598)', async () => {
       (generateEmbedding as ReturnType<typeof vi.fn>).mockResolvedValue(new Array(1536).fill(0.1));
       (db.execute as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('DB Error'));
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      // Should not throw - errors are caught internally
-      await updateLeadEmbedding('lead-1', 'org-1', 'text');
-      // If we reach here, no error was thrown
-      expect(true).toBe(true);
+      await expect(updateLeadEmbedding('lead-1', 'org-1', 'text')).rejects.toThrow(
+        'Updating lead embedding failed'
+      );
+      consoleError.mockRestore();
     });
   });
 
