@@ -47,7 +47,7 @@
 | `file-cycles` | ファイル単位の import の循環を作らない | 例外なし |
 | `test-paths-resolve` | テストが import するパスと、`vi.mock`・`vi.doMock`・`vi.unmock`・`vi.doUnmock`・`vi.importActual`・`vi.importMock`（`vitest.mock` などの書き方も含む）に渡すパスが実在する（パッケージ名は見ない。テストの `@payload-config` は vitest の別名どおり `test/mocks/payload-config.ts`）。存在しないパスへの `vi.mock` はエラーにならず、黙って効かなくなる（本物のモジュールが動き、原因の分かりにくい失敗か、副作用を伴う素通りになる）ので、ファイルを消す・移したときに、古いパスを指したまま残ったテストをこの検査が見つける | 例外なし |
 | `features-in-cycles` | 互いに依存し合う機能（間接も含む）を増やさない | 許可リスト 20 |
-| `cross-feature-internal` | 他の機能から読むのは公開面（`types/**`・`types.ts`・`service.ts`。ほかに `email/index.ts`・`respondent-email/index.ts`）だけ。項目は「読む機能 -> 読まれる側のファイル」（43ファイル。#623） | 許可リスト 78 |
+| `cross-feature-internal` | 他の機能から読むのは公開面（`types/**`・`types.ts`・`service.ts`。ほかに `email/index.ts`・`respondent-email/index.ts`）だけ。項目は「読む機能 -> 読まれる側のファイル」（#623） | 許可リスト 78 |
 | `ax-boundary` | AX 診断（`diagnostics/ax-migration/`）を読むのは、AX 診断の中と、AX のための機能（`ax-*`）だけ。型だけの import も数える。項目は「読む側 -> AX のファイル」。リードの最新の AX 回答は `ax-migration/lead-submissions.ts`、営業の手引きは `ax-playbook/service.ts` から読む（#480） | 許可リスト 15 |
 | `features-use-global-db` | 機能のコードはグローバルの `db` を使わず、`ctx.db` か引数の executor を使う（RLS で接続を差し替えるため） | 許可リスト 12 |
 | `feature-index-files` | lib/features に `index.ts`（barrel）を作らない | 許可リスト 18 |
@@ -123,7 +123,7 @@ components/features/<feature>/
 違反を減らしたときも `--update` を流し、許可リストから消えた行を同じ PR に入れる。マージの前に main を取り込み、もう一度流す（並行の PR が同じ行を消している・足していることがある）。
 
 - `allowlist.txt` が衝突したら（隣り合う行を別々の PR が消すと起きる）、main の側を取り、`--update` を流し直す
-- マージの順番しだいで main が落ちることがある。例：PR A が最後の importer を消して行を削り、その前の main から分かれた PR B が同じファイルを新しく読む。main で落ちたら、最初に気づいた人が `--update` と理由1行の PR を出す
+- マージの順番しだいで main が落ちることがある。例：PR A が最後の importer を消して行を削り、その前の main から分かれた PR B が同じ行を新しく作る（`cross-feature-internal` なら、同じ機能から同じファイルを読む。`features-in-cycles` なら、同じ機能を循環に入れる）。main で落ちたら、最初に気づいた人が `--update` と理由1行の PR を出す
 
 ## 6. ファイルを移す・分ける PR の条件
 
