@@ -2,8 +2,9 @@
  * The short code of a QR campaign in a diagnosis answer (#700, owner decision of 2026-10-25): the
  * /q/ entry adds it to the address of the diagnosis, the answer keeps it in tracking like the UTM
  * values when it can be a code (dropped otherwise, never rejected), and countQrCompletion counts
- * a lead the submission created for the campaign of its organization. The counting on
- * PostgreSQL is in test/unit/integration/qr-campaign-completions.db.test.ts.
+ * a lead the submission created for the campaign of its organization, in a savepoint whose
+ * failure keeps the submission going. The counting on PostgreSQL (the savepoint, the lock
+ * timeout) is in test/unit/integration/qr-campaign-completions.db.test.ts.
  */
 import type { db as defaultDb } from '@/lib/db/client';
 import { axMigrationSubmissionSchema } from '@/lib/features/diagnostics/ax-migration/submission-service';
@@ -64,7 +65,12 @@ describe('trackingSchema: qr (#700)', () => {
 });
 
 describe('countQrCompletion (#700)', () => {
-  const tx = {} as unknown as Transaction;
+  // The submission's transaction runs the count in a savepoint (tx.transaction)
+  const savepoint = { execute: vi.fn() };
+  const tx = {
+    transaction: vi.fn(async (work: (sp: typeof savepoint) => unknown) => work(savepoint)),
+  };
+  const transaction = tx as unknown as Transaction;
   const NEW_LEAD: QrCompletionSubmission = {
     organizationId: 'org-a',
     leadCreated: true,
@@ -75,36 +81,74 @@ describe('countQrCompletion (#700)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.countCampaignCompletion.mockResolvedValue(true);
+    savepoint.execute.mockResolvedValue([{ previous: '0' }]);
   });
 
   it("counts a lead the submission created for the campaign of the submission's organization", async () => {
-    expect(await countQrCompletion(tx, NEW_LEAD)).toBe(true);
+    expect(await countQrCompletion(transaction, NEW_LEAD)).toEqual({ counted: true, failure: null });
+    expect(tx.transaction).toHaveBeenCalledTimes(1);
     expect(mocks.countCampaignCompletion).toHaveBeenCalledTimes(1);
-    expect(mocks.countCampaignCompletion).toHaveBeenCalledWith(tx, {
+    // In the savepoint, between setting the lock timeout and setting the previous one again
+    expect(mocks.countCampaignCompletion).toHaveBeenCalledWith(savepoint, {
       organizationId: 'org-a',
       shortCode: 'AbCd2345',
     });
+    expect(savepoint.execute).toHaveBeenCalledTimes(2);
+    const [setLockTimeout, setPrevious] = savepoint.execute.mock.invocationCallOrder;
+    const [count] = mocks.countCampaignCompletion.mock.invocationCallOrder;
+    expect(setLockTimeout).toBeLessThan(count);
+    expect(setPrevious).toBeGreaterThan(count);
   });
 
-  it('answers false when no campaign of the organization has the code', async () => {
+  it('answers not counted when no campaign of the organization has the code', async () => {
     mocks.countCampaignCompletion.mockResolvedValue(false);
-    expect(await countQrCompletion(tx, NEW_LEAD)).toBe(false);
+    expect(await countQrCompletion(transaction, NEW_LEAD)).toEqual({ counted: false, failure: null });
+  });
+
+  it('keeps the submission going when the count fails, and logs the name and code only', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    // What a policy of RLS without a grant would throw (the message holds the query's values)
+    const refused = Object.assign(
+      new Error('permission denied for table qr_campaigns: update ... params: org-a,AbCd2345'),
+      { name: 'PostgresError', code: '42501' }
+    );
+    mocks.countCampaignCompletion.mockRejectedValue(refused);
+
+    expect(await countQrCompletion(transaction, NEW_LEAD)).toEqual({
+      counted: false,
+      failure: { error: refused },
+    });
+    expect(consoleError).toHaveBeenCalledWith('QR completion not counted:', 'PostgresError', '42501');
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain('AbCd2345');
+    consoleError.mockRestore();
   });
 
   it('does not count a submission linked to a lead that was already there', async () => {
-    expect(await countQrCompletion(tx, { ...NEW_LEAD, leadCreated: false })).toBe(false);
+    expect(await countQrCompletion(transaction, { ...NEW_LEAD, leadCreated: false })).toEqual({
+      counted: false,
+      failure: null,
+    });
+    expect(tx.transaction).not.toHaveBeenCalled();
     expect(mocks.countCampaignCompletion).not.toHaveBeenCalled();
   });
 
   it('does not count a test answer', async () => {
-    expect(await countQrCompletion(tx, { ...NEW_LEAD, isTest: true })).toBe(false);
+    expect(await countQrCompletion(transaction, { ...NEW_LEAD, isTest: true })).toEqual({
+      counted: false,
+      failure: null,
+    });
+    expect(tx.transaction).not.toHaveBeenCalled();
     expect(mocks.countCampaignCompletion).not.toHaveBeenCalled();
   });
 
   it('asks nothing of the database for an answer without a code', async () => {
     for (const tracking of [{}, { qr: undefined }, { qr: '' }]) {
-      expect(await countQrCompletion(tx, { ...NEW_LEAD, tracking })).toBe(false);
+      expect(await countQrCompletion(transaction, { ...NEW_LEAD, tracking })).toEqual({
+        counted: false,
+        failure: null,
+      });
     }
+    expect(tx.transaction).not.toHaveBeenCalled();
     expect(mocks.countCampaignCompletion).not.toHaveBeenCalled();
   });
 });

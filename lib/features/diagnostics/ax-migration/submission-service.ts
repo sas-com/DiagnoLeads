@@ -6,7 +6,12 @@ import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateAnswers } from '../engine';
 import { upsertLeadFromSubmission } from '../lead-upsert';
-import { claimConsultation, countQrCompletion, resolveInflow } from '../service';
+import {
+  type QrCompletionFailure,
+  claimConsultation,
+  countQrCompletion,
+  resolveInflow,
+} from '../service';
 import { type Tracking, compactTracking, trackingSchema } from '../tracking';
 import type { AnswerValidationIssue, DiagnosticAnswers } from '../types';
 import { contactSchema, plainText } from '../types/contact';
@@ -59,6 +64,8 @@ export type SubmitOutcome =
        * recorded on the lead, and not an unverified identity
        */
       continued: boolean;
+      /** The QR campaign's count failed and the lead was kept (#700): report it after the response */
+      qrCompletionFailure: QrCompletionFailure | null;
       referralMemberUserId: string | null;
       result: AxMigrationResult;
       answers: DiagnosticAnswers;
@@ -320,7 +327,8 @@ export async function submitAxMigrationDiagnosis(
     }
 
     // A new lead from a scan of the organization's QR campaign counts for it, with the lead (#700)
-    await countQrCompletion(tx, {
+    // A count that fails keeps the lead; the route reports it after the response
+    const qrCompletion = await countQrCompletion(tx, {
       organizationId,
       leadCreated: !existing,
       isTest: submission.isTest,
@@ -335,6 +343,7 @@ export async function submitAxMigrationDiagnosis(
       existingLead: existing
         ? { name: existing.name, company: existing.company, email: existing.email }
         : null,
+      qrCompletionFailure: qrCompletion.failure,
       continued: continuedFrom !== null,
       // The employee whose link brought a new lead, to tell them (#265)
       referralMemberUserId: !existing ? inflow.referralMemberUserId : null,

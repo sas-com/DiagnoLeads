@@ -116,6 +116,15 @@ describe('GET /q/[code]', () => {
     expect(mocks.findOpenQrCampaign).toHaveBeenCalledWith({ name: 'app-db' }, 'AbCd2345');
   });
 
+  it("passes on the code of the campaign's row, not the code of the path (#700)", async () => {
+    // The database compares the codes exactly, so they are the same in practice; a row with
+    // another code shows which of the two the address carries
+    mocks.findOpenQrCampaign.mockResolvedValue({ ...CAMPAIGN, shortCode: 'RowCode9' });
+    const res = await scan('AbCd2345');
+    expect(res.status).toBe(307);
+    expect(res.headers.get('location')).toBe(AX.replace('qr=AbCd2345', 'qr=RowCode9'));
+  });
+
   it('is never cached or indexed', async () => {
     for (const res of [await scan('AbCd2345'), await scan('bad-code')]) {
       expect(res.headers.get('cache-control')).toBe('no-store');

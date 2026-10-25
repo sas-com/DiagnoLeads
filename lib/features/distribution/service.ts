@@ -26,8 +26,9 @@ type Executor = Database | Transaction;
  * (qr_scans.converted and lead_id stay unused), so a scan never points at a person.
  *
  * One statement; the row lock of the update counts submissions at the same moment exactly. The
- * diagnoses run it in the transaction that creates the lead, so the count commits and rolls back
- * with the lead (countQrCompletion, lib/features/diagnostics/service.ts).
+ * diagnoses run it in a savepoint of the transaction that creates the lead, so the count commits
+ * and rolls back with the lead, and a failure of the count never fails the submission
+ * (countQrCompletion, lib/features/diagnostics/service.ts).
  */
 export async function countCampaignCompletion(
   db: Executor,

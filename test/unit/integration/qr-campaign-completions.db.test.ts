@@ -5,8 +5,10 @@
  * adds one to completion_count of the campaign of the lead's organization with that code, in the
  * transaction that creates the lead. Not counted: an answer sent again, a lead that was already
  * there, a code of another organization's campaign, an unknown or malformed code, a test answer.
- * Answers at the same moment count exactly. getCampaignStats answers the count and the rate from
- * the campaign row.
+ * Answers at the same moment count exactly. A count that fails (refused, or the campaign row held
+ * past the lock timeout) keeps the submission and its lead, uncounted, and hands the failure to
+ * the route (2026-10-25 read-only review of PR #774). getCampaignStats answers the count and the
+ * rate from the campaign row.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/dl_test \
@@ -44,9 +46,10 @@ import {
   axMigrationSubmissionSchema,
   submitAxMigrationDiagnosis,
 } from '@/lib/features/diagnostics/ax-migration/submission-service';
-import { countQrCompletion } from '@/lib/features/diagnostics/service';
+import { QR_COMPLETION_LOCK_TIMEOUT, countQrCompletion } from '@/lib/features/diagnostics/service';
 import type { Tracking } from '@/lib/features/diagnostics/tracking';
 import { QR_ENTRY_RATE_LIMITS, QR_SCAN_DAILY_CAP } from '@/lib/features/distribution/limits';
+import { summarizeServerError } from '@/lib/ops/alert';
 import { appRouter } from '@/server/routers/_app';
 import { as400Answers } from '@/test/fixtures/ax-migration';
 import { eq, inArray, sql } from 'drizzle-orm';
@@ -177,6 +180,45 @@ describe.skipIf(!url)('QR campaign completions (PostgreSQL)', () => {
     return row?.completionCount;
   }
 
+  /**
+   * Run `work` with a trigger of this test on `table`: before an update of qr_campaigns, or before
+   * an insert into diagnostic_submissions, for the rows `when` picks. DDL takes no parameters; the
+   * names and the codes in `when` and `body` come from randomPart (letters and digits only)
+   */
+  async function withTrigger(
+    table: 'qr_campaigns' | 'diagnostic_submissions',
+    when: string,
+    body: string,
+    work: () => Promise<void>
+  ) {
+    const name = `qr_done_test_${randomPart(8)}`;
+    const event = table === 'qr_campaigns' ? 'update' : 'insert';
+    await pg.execute(
+      sql.raw(`create function ${name}() returns trigger language plpgsql as $$ begin ${body} end $$`)
+    );
+    await pg.execute(
+      sql.raw(
+        `create trigger ${name} before ${event} on ${table} for each row when (${when}) execute function ${name}()`
+      )
+    );
+    try {
+      await work();
+    } finally {
+      await pg.execute(sql.raw(`drop trigger if exists ${name} on ${table}`));
+      await pg.execute(sql.raw(`drop function if exists ${name}()`));
+    }
+  }
+
+  /** The lead and the submission an outcome names are in the database */
+  async function saved(outcome: { leadId: string; submissionId: string }) {
+    const [lead] = await pg.select({ id: leads.id }).from(leads).where(eq(leads.id, outcome.leadId));
+    const [submission] = await pg
+      .select({ leadId: diagnosticSubmissions.leadId })
+      .from(diagnosticSubmissions)
+      .where(eq(diagnosticSubmissions.id, outcome.submissionId));
+    return lead !== undefined && submission?.leadId === outcome.leadId;
+  }
+
   const email = () => `Qr-${unique()}@Example.co.jp`;
 
   const axInput = (
@@ -272,6 +314,7 @@ describe.skipIf(!url)('QR campaign completions (PostgreSQL)', () => {
 
       const outcome = await submitAx(orgA, axInput(tracking));
       expect(outcome.leadCreated).toBe(true);
+      expect(outcome.qrCompletionFailure).toBeNull();
       expect(await completionsOf(campaign.id)).toBe(1);
       // The answer keeps the code with the UTM values; the scan row stays as it was
       const [submission] = await pg
@@ -297,6 +340,7 @@ describe.skipIf(!url)('QR campaign completions (PostgreSQL)', () => {
 
       const outcome = await submitBuilder(parsed);
       expect(outcome.leadCreated).toBe(true);
+      expect(outcome.qrCompletionFailure).toBeNull();
       expect(await completionsOf(campaign.id)).toBe(1);
     });
 
@@ -319,7 +363,7 @@ describe.skipIf(!url)('QR campaign completions (PostgreSQL)', () => {
             isTest: false,
             tracking: { qr: campaign.code },
           })
-        ).toBe(true);
+        ).toEqual({ counted: true, failure: null });
         throw new Error('the submission failed after the count');
       });
       await expect(failed).rejects.toThrow('the submission failed after the count');
@@ -414,18 +458,115 @@ describe.skipIf(!url)('QR campaign completions (PostgreSQL)', () => {
       expect(after).toHaveLength(before.length);
     });
 
-    it('a test answer', async () => {
+    it('a test answer, as the submissions read it back from the row they saved', async () => {
+      const campaign = await createCampaign(orgA, { diagnosisId: diagnosisOfA.id });
+      // No public path writes is_test yet (the builder's preview will, #117-#121): the trigger
+      // marks the answers with this code as the preview would
+      await withTrigger(
+        'diagnostic_submissions',
+        `NEW.tracking->>'qr' = '${campaign.code}'`,
+        'NEW.is_test := true; return NEW;',
+        async () => {
+          const ax = await submitAx(orgA, axInput({ qr: campaign.code }));
+          const builder = await submitBuilder(builderInput({ qr: campaign.code }));
+          expect([ax.leadCreated, builder.leadCreated]).toEqual([true, true]);
+          const stored = await pg
+            .select({ isTest: diagnosticSubmissions.isTest })
+            .from(diagnosticSubmissions)
+            .where(inArray(diagnosticSubmissions.id, [ax.submissionId, builder.submissionId]));
+          expect(stored).toEqual([{ isTest: true }, { isTest: true }]);
+        }
+      );
+      expect(await completionsOf(campaign.id)).toBe(0);
+    });
+  });
+
+  describe('a count that fails keeps the submission and its lead (the lead comes first)', () => {
+    it('a refused update (as a policy or a grant of RLS would refuse it, #51)', async () => {
+      const campaign = await createCampaign(orgA, { diagnosisId: diagnosisOfA.id });
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        await withTrigger(
+          'qr_campaigns',
+          `NEW.short_code = '${campaign.code}'`,
+          "raise exception 'the count is refused'; return NEW;",
+          async () => {
+            const ax = await submitAx(orgA, axInput({ qr: campaign.code }));
+            const builder = await submitBuilder(builderInput({ qr: campaign.code }));
+            for (const outcome of [ax, builder]) {
+              expect(outcome.leadCreated).toBe(true);
+              expect(await saved(outcome)).toBe(true);
+              // Handed to the route, which reports it after the response
+              expect(summarizeServerError(outcome.qrCompletionFailure?.error)).toMatchObject({
+                name: 'PostgresError',
+                code: 'P0001',
+              });
+            }
+          }
+        );
+        // Logged by the name and the code, never the message with the query's values
+        expect(consoleError).toHaveBeenCalledWith('QR completion not counted:', 'PostgresError', 'P0001');
+        expect(JSON.stringify(consoleError.mock.calls)).not.toContain(campaign.code);
+      } finally {
+        consoleError.mockRestore();
+      }
+      expect(await completionsOf(campaign.id)).toBe(0);
+    });
+
+    // The wait is the lock timeout itself, so the test runs for a few seconds
+    const heldPast = `a campaign row held past the lock timeout (${QR_COMPLETION_LOCK_TIMEOUT}), as a long deletion holds it (#702)`;
+    it(heldPast, { timeout: 30_000 }, async () => {
       const campaign = await createCampaign(orgA);
-      const counted = await pg.transaction((tx) =>
-        countQrCompletion(tx, {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      let release = () => {};
+      const held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let locked = () => {};
+      const isLocked = new Promise<void>((resolve) => {
+        locked = resolve;
+      });
+      const holder = pg.transaction(async (tx) => {
+        await tx.execute(sql`select id from qr_campaigns where id = ${campaign.id} for update`);
+        locked();
+        await held;
+      });
+      try {
+        await isLocked;
+        const started = Date.now();
+        const outcome = await submitAx(orgA, axInput({ qr: campaign.code }));
+        const waited = Date.now() - started;
+        expect(outcome.leadCreated).toBe(true);
+        expect(summarizeServerError(outcome.qrCompletionFailure?.error).code).toBe('55P03');
+        // It waited for the lock timeout, not for the holder
+        expect(waited).toBeGreaterThanOrEqual(2_500);
+        expect(await saved(outcome)).toBe(true);
+      } finally {
+        release();
+        await holder;
+        consoleError.mockRestore();
+      }
+      expect(await completionsOf(campaign.id)).toBe(0);
+      // Once the row is free again, the next new lead counts
+      await submitAx(orgA, axInput({ qr: campaign.code }));
+      expect(await completionsOf(campaign.id)).toBe(1);
+    });
+
+    it('the lock timeout holds for the count only: the transaction gets its own back', async () => {
+      const campaign = await createCampaign(orgA);
+      const result = await pg.transaction(async (tx) => {
+        await tx.execute(sql`set local lock_timeout = '7s'`);
+        const completion = await countQrCompletion(tx, {
           organizationId: orgA,
           leadCreated: true,
-          isTest: true,
+          isTest: false,
           tracking: { qr: campaign.code },
-        })
-      );
-      expect(counted).toBe(false);
-      expect(await completionsOf(campaign.id)).toBe(0);
+        });
+        const [setting] = await tx.execute<{ lock_timeout: string }>(sql`show lock_timeout`);
+        return { completion, lockTimeout: setting.lock_timeout };
+      });
+      expect(result).toEqual({ completion: { counted: true, failure: null }, lockTimeout: '7s' });
+      expect(await completionsOf(campaign.id)).toBe(1);
     });
   });
 

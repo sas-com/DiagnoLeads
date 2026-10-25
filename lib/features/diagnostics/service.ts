@@ -29,7 +29,8 @@ import {
 } from '@/lib/features/leads/assignment';
 import { notifyOrganizationMembers } from '@/lib/features/notifications/notification-service';
 import { isDiagnosisOrganization } from '@/lib/multi-tenant/helpers/diagnosis-organization';
-import { and, eq, gte, isNull } from 'drizzle-orm';
+import { summarizeServerError } from '@/lib/ops/alert';
+import { and, eq, gte, isNull, sql } from 'drizzle-orm';
 import { resolveDiagnosisOrganizationId } from './organization';
 import { type RateLimitRule, consumeRateLimit } from './rate-limit';
 import { type InferredInflow, type Tracking, inferInflowSource } from './tracking';
@@ -97,6 +98,25 @@ export interface QrCompletionSubmission {
 }
 
 /**
+ * The longest the count waits for the row of the campaign (held for a moment by a scan being
+ * recorded or by an answer with the same code, and for as long as a deletion of the campaign
+ * takes, #702). Past it the lead is kept without the count.
+ */
+export const QR_COMPLETION_LOCK_TIMEOUT = '3s';
+
+/** A count that failed: the caller reports `error` after the response (the lead was kept) */
+export interface QrCompletionFailure {
+  error: unknown;
+}
+
+/** What countQrCompletion did. The submission goes on in every case */
+export type QrCompletion =
+  | { counted: boolean; failure: null }
+  | { counted: false; failure: QrCompletionFailure };
+
+const NOT_COUNTED: QrCompletion = { counted: false, failure: null };
+
+/**
  * Count a new lead for the QR campaign whose code the answer carries (#700, owner decision of
  * 2026-10-25): the /q/ entry adds the campaign's short code to the address of the diagnosis, and
  * the answer keeps it in tracking like the UTM values (`qr`). Only a submission that created its
@@ -107,15 +127,43 @@ export interface QrCompletionSubmission {
  * Run it in the transaction that creates the lead, after the lead and the submission are
  * written: the count commits and rolls back with them, so an answer sent again (it finds the
  * lead) and a submission that failed and is sent once more count once in all. Exactly once per
- * lead, also for answers at the same moment. Answers false when nothing was counted.
+ * lead, also for answers at the same moment.
+ *
+ * The lead comes first (2026-10-25 read-only review of PR #774): the count runs in a savepoint of
+ * that transaction and waits at most QR_COMPLETION_LOCK_TIMEOUT for the campaign row. When it
+ * fails (a policy or a grant of RLS, #51, the wait, ...) only the savepoint is rolled back, the
+ * submission and its lead are saved, and the failure is logged by its name and code (never the
+ * message, which holds the query and its values) and handed back for the caller to report. The
+ * lock timeout holds for the count only: the previous value is set again before the savepoint
+ * is released.
  */
 export async function countQrCompletion(
   tx: Transaction,
   submission: QrCompletionSubmission
-): Promise<boolean> {
+): Promise<QrCompletion> {
   const shortCode = submission.tracking.qr;
-  if (!submission.leadCreated || submission.isTest || !shortCode) return false;
-  return countCampaignCompletion(tx, { organizationId: submission.organizationId, shortCode });
+  if (!submission.leadCreated || submission.isTest || !shortCode) return NOT_COUNTED;
+  try {
+    const counted = await tx.transaction(async (savepoint) => {
+      // The value before, read before it is changed (the materialized CTE is evaluated first)
+      const [timeout] = await savepoint.execute<{ previous: string }>(sql`
+        with setting as materialized (select current_setting('lock_timeout') as previous)
+        select previous, set_config('lock_timeout', ${QR_COMPLETION_LOCK_TIMEOUT}, true)
+        from setting
+      `);
+      const done = await countCampaignCompletion(savepoint, {
+        organizationId: submission.organizationId,
+        shortCode,
+      });
+      await savepoint.execute(sql`select set_config('lock_timeout', ${timeout.previous}, true)`);
+      return done;
+    });
+    return { counted, failure: null };
+  } catch (error) {
+    const { name, code } = summarizeServerError(error);
+    console.error('QR completion not counted:', name, code ?? '');
+    return { counted: false, failure: { error } };
+  }
 }
 
 // ---------------------------------------------------------------------------------------------
