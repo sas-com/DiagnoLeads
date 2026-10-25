@@ -1,4 +1,5 @@
 import type { LeadStatus } from '@/lib/features/leads/types/pipeline';
+import type { MqlLevelFilter } from '@/lib/features/leads/types/schemas';
 import { z } from 'zod';
 
 /**
@@ -65,15 +66,6 @@ export const getConversionFunnelSchema = z.object({
 export type GetConversionFunnelInput = z.infer<typeof getConversionFunnelSchema>;
 
 /**
- * Get Score Distribution Schema
- */
-export const getScoreDistributionSchema = z.object({
-  organizationId: z.string().uuid(),
-  dateRange: dateRangeSchema.default('30d'),
-});
-export type GetScoreDistributionInput = z.infer<typeof getScoreDistributionSchema>;
-
-/**
  * Get Response Time Schema
  */
 export const getResponseTimeSchema = z.object({
@@ -89,7 +81,13 @@ export interface OverviewStats {
   totalLeads: number;
   newLeadsThisMonth: number;
   conversionRate: number;
-  averageScore: number;
+  /**
+   * Leads per MQL level (#605), counted like the list's MQL level filter: 'interest' includes
+   * leads with an MQL date, 'unknown' has neither a diagnosis nor an MQL date
+   */
+  mqlLevels: Record<MqlLevelFilter, number>;
+  /** 関心あり（MQL） out of all leads, in percent with 2 decimals */
+  mqlRate: number;
   leadsByStatus: Record<LeadStatus, number>;
 }
 
@@ -126,12 +124,6 @@ export interface ConversionFunnelData {
   totalLeads: number;
   overallConversionRate: number;
   averageConversionDays: number;
-}
-
-export interface ScoreDistributionData {
-  range: string; // e.g., "0-25", "26-50", "51-75", "76-100"
-  count: number;
-  percentage: number;
 }
 
 /**
@@ -201,48 +193,4 @@ export interface AgencyPerformanceRow {
   totalCost: number;
   /** totalCost / sqlCount, null without SQL */
   costPerSql: number | null;
-}
-
-/**
- * Comparison Analysis Schema
- */
-export const getComparisonSchema = z.object({
-  organizationId: z.string().uuid(),
-  /** Compare two date ranges */
-  currentPeriod: z.object({
-    start: z.string().datetime(),
-    end: z.string().datetime(),
-  }),
-  previousPeriod: z.object({
-    start: z.string().datetime(),
-    end: z.string().datetime(),
-  }),
-});
-export type GetComparisonInput = z.infer<typeof getComparisonSchema>;
-
-/**
- * Period Metrics for Comparison
- */
-export interface PeriodMetrics {
-  totalLeads: number;
-  convertedLeads: number;
-  conversionRate: number;
-  averageScore: number;
-  bySource: Record<string, number>;
-  byStatus: Record<string, number>;
-}
-
-/**
- * Comparison Result
- */
-export interface ComparisonResult {
-  currentPeriod: PeriodMetrics;
-  previousPeriod: PeriodMetrics;
-  changes: {
-    totalLeads: number; // percentage change
-    convertedLeads: number;
-    conversionRate: number;
-    averageScore: number;
-  };
-  insights: string[];
 }

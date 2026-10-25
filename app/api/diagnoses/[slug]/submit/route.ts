@@ -21,7 +21,8 @@ import {
 } from '@/lib/features/diagnostics/request-guard';
 import { turnstileSiteKey, verifyTurnstile } from '@/lib/features/diagnostics/turnstile';
 import { DIAGNOSIS_TURNSTILE_ACTION } from '@/lib/features/diagnostics/turnstile-action';
-import { reportRejectedRequest } from '@/lib/ops/alert';
+import { notifyReferralDiagnosed } from '@/lib/features/prospects/referrals';
+import { reportRejectedRequest, reportServerError } from '@/lib/ops/alert';
 import { type NextRequest, NextResponse, after } from 'next/server';
 
 /** Upper bound for the request body (answers incl. free text + contact + tracking) */
@@ -194,8 +195,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
         leadCreated: outcome.leadCreated,
         identityUnverified: outcome.existingLead !== null,
         requestedAt: now,
-      }).catch((error) => console.error('Diagnosis notification error:', error))
+      }).catch((error) => {
+        console.error('Diagnosis notification error:', error);
+        return reportServerError('diagnosis/notify', error);
+      })
     );
+
+    // The employee whose own link brought the new lead is told, as in the AX diagnosis (#265)
+    const referralMemberUserId = outcome.referralMemberUserId;
+    if (referralMemberUserId) {
+      after(() =>
+        notifyReferralDiagnosed(db, {
+          organizationId: diagnosis.organizationId,
+          memberUserId: referralMemberUserId,
+          leadId: outcome.leadId,
+          company: identity.company ?? '',
+          diagnosisTitle: definition.title,
+        })
+      );
+    }
 
     return NextResponse.json({
       submissionId: outcome.submissionId,
@@ -204,6 +222,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     });
   } catch (error) {
     console.error('Diagnosis submission error:', error);
+    after(() => reportServerError('diagnosis/submit', error));
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

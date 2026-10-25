@@ -24,10 +24,10 @@ describe('CMS on or off', () => {
   });
 
   it("treats every /api path that is not the app's own as the CMS's, and the CMS tools too", () => {
-    for (const path of ['/api/chat', '/api/cms/subscribe', '/api/cms-users', '/api/cms-users/me', '/api/blog-posts', '/api/graphql', '/api/anything', '/api/TRPC/x', '/api/', '/api/health%2Fx', '/api/tr%70c%2fx']) {
+    for (const path of ['/api/chat', '/api/cms/subscribe', '/api/cms-users', '/api/cms-users/me', '/api/blog-posts', '/api/graphql', '/api/anything', '/api/TRPC/x', '/api/', '/api/health%2Fx', '/api/tr%70c%2fx', '/api/embed/v1/x']) {
       expect(isCmsApiPath(path), path).toBe(true);
     }
-    for (const path of ['/api/trpc/leads.list', '/api/tr%70c/x', '/api/auth/sign-in/email', '/api/health', '/api/cron/cleanup-webhook-deliveries', '/api/embed/v1/x', '/api/email/unsubscribe', '/api/email/unsubscribe/one-click', '/ja/blog', '/apix']) {
+    for (const path of ['/api/trpc/leads.list', '/api/tr%70c/x', '/api/auth/sign-in/email', '/api/health', '/api/cron/cleanup-webhook-deliveries', '/api/email/unsubscribe', '/api/email/unsubscribe/one-click', '/ja/blog', '/apix']) {
       expect(isCmsApiPath(path), path).toBe(false);
     }
   });

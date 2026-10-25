@@ -20,8 +20,10 @@ import {
   organizations,
   users,
 } from '@/lib/db/schema';
+import { requestAxMigrationConsultation } from '@/lib/features/diagnostics/ax-migration/submission-service';
 import { getWeekMeetings } from '@/lib/features/leads/meetings';
 import {
+  MEETING_PREFERENCES_WINDOW_MS,
   acceptMeetingPreferences,
   confirmMeeting,
   saveMeetingPreferences,
@@ -124,13 +126,17 @@ describe.skipIf(!url)('meeting requests (PostgreSQL)', () => {
     return row.id as string;
   }
 
-  /** The preferences sent with a consultation request, as the routes pass them */
+  /**
+   * The preferences sent with a consultation request, as the routes pass them; the consultation
+   * was requested at NOW unless said otherwise
+   */
   const accept = (
     leadId: string,
     submissionId: string,
     identityVerified: boolean,
     candidates: { date: string; time: string }[],
-    later: (task: () => Promise<void>) => void = vi.fn()
+    later: (task: () => Promise<void>) => void = vi.fn(),
+    { requestedAt = NOW, now = NOW }: { requestedAt?: Date; now?: Date } = {}
   ) =>
     acceptMeetingPreferences(
       pg,
@@ -139,6 +145,7 @@ describe.skipIf(!url)('meeting requests (PostgreSQL)', () => {
         leadId,
         submissionId,
         identityVerified,
+        requestedAt,
         preferences: {
           candidates,
           attendeeRoles: [],
@@ -148,7 +155,7 @@ describe.skipIf(!url)('meeting requests (PostgreSQL)', () => {
         },
       },
       later,
-      NOW
+      now
     );
 
   /** What sales see on the lead page */
@@ -230,6 +237,7 @@ describe.skipIf(!url)('meeting requests (PostgreSQL)', () => {
           leadId: null,
           submissionId: '00000000-0000-4000-8000-000000000000',
           identityVerified: true,
+          requestedAt: NOW,
           preferences: {
             candidates: OPTIONS,
             attendeeRoles: [],
@@ -254,6 +262,7 @@ describe.skipIf(!url)('meeting requests (PostgreSQL)', () => {
           leadId,
           submissionId: emailOnly,
           identityVerified: false,
+          requestedAt: NOW,
           preferences: {
             candidates: [{ date: '2026-10-30', time: '16:00' }],
             attendeeRoles: [],
@@ -270,6 +279,98 @@ describe.skipIf(!url)('meeting requests (PostgreSQL)', () => {
     expect(after.request.candidates).toEqual([{ date: '2026-10-22', time: '11:00' }]);
     expect(after.request).toMatchObject({ topics: [], topicNote: null, identityVerified: true });
     expect(later).not.toHaveBeenCalled();
+  });
+
+  it('takes preferences for a day after the consultation request, then keeps them (#241)', async () => {
+    const leadId = await createLead();
+    const submissionId = await createSubmission(leadId, 'created');
+    const later = vi.fn();
+    const endOfWindow = new Date(NOW.getTime() + MEETING_PREFERENCES_WINDOW_MS);
+    // Sent again at the very end of the day after the request: replaced
+    expect(await accept(leadId, submissionId, true, OPTIONS, later)).toBe('saved');
+    expect(
+      await accept(leadId, submissionId, true, [OPTIONS[0]], later, { now: endOfWindow })
+    ).toBe('saved');
+    // A moment later the same answer changes nothing, before a confirmation as well
+    expect(
+      await accept(leadId, submissionId, true, [{ date: '2026-10-22', time: '11:00' }], later, {
+        now: new Date(endOfWindow.getTime() + 1),
+      })
+    ).toBe('unavailable');
+    expect((await requestOf(leadId)).candidates).toEqual([OPTIONS[0]]);
+    // Only the first preferences told sales
+    expect(later).toHaveBeenCalledTimes(1);
+
+    // A week later the person answers again. Only one answer creates a lead, so this one is tied
+    // to it by the email address only (unverified). Its consultation request opens a new day,
+    // but the verified preferences above are kept (#274)
+    const nextWeek = new Date(NOW.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const again = await createSubmission(leadId, 'email');
+    expect(
+      await accept(leadId, again, false, [{ date: '2026-10-29', time: '11:00' }], later, {
+        requestedAt: nextWeek,
+        now: nextWeek,
+      })
+    ).toBe('unavailable');
+    expect((await requestOf(leadId)).candidates).toEqual([OPTIONS[0]]);
+    expect(later).toHaveBeenCalledTimes(1);
+
+    // A lead without preferences takes those of the new day
+    const quietLead = await createLead();
+    await createSubmission(quietLead, 'created');
+    const answeredAgain = await createSubmission(quietLead, 'email');
+    expect(
+      await accept(quietLead, answeredAgain, false, [{ date: '2026-10-29', time: '11:00' }], later, {
+        requestedAt: nextWeek,
+        now: nextWeek,
+      })
+    ).toBe('saved');
+    expect(await requestOf(quietLead)).toMatchObject({
+      candidates: [{ date: '2026-10-29', time: '11:00' }],
+      identityVerified: false,
+    });
+    expect(later).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses preferences sent again a day after the request, as the AX route calls it (#241)', async () => {
+    const leadId = await createLead();
+    const submissionId = await createSubmission(leadId, 'created');
+    await pg
+      .update(diagnosticSubmissions)
+      .set({ createdAt: NOW })
+      .where(eq(diagnosticSubmissions.id, submissionId));
+    const later = vi.fn();
+    // The route takes the time of the request from the service, then passes it on
+    const send = async (at: Date, candidates: { date: string; time: string }[]) => {
+      const outcome = await requestAxMigrationConsultation(pg, submissionId, at);
+      if (!outcome.ok) throw new Error(`consultation request failed: ${outcome.reason}`);
+      return acceptMeetingPreferences(
+        pg,
+        {
+          organizationId: outcome.organizationId,
+          leadId: outcome.leadId,
+          submissionId,
+          identityVerified: outcome.leadCreated || outcome.continued,
+          requestedAt: outcome.requestedAt,
+          preferences: {
+            candidates,
+            attendeeRoles: [],
+            meetingFormat: null,
+            topics: [],
+            topicNote: null,
+          },
+        },
+        later,
+        at
+      );
+    };
+
+    expect(await send(new Date(NOW.getTime() + 60_000), OPTIONS)).toBe('saved');
+    // Sent again from the same answer once the day after the request is over: nothing changes
+    const dayLater = new Date(NOW.getTime() + MEETING_PREFERENCES_WINDOW_MS + 60 * 60 * 1000);
+    expect(await send(dayLater, [{ date: '2026-10-22', time: '11:00' }])).toBe('unavailable');
+    expect((await requestOf(leadId)).candidates).toEqual(STORED);
+    expect(later).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the preferences of an unverified answer, replaced only by later ones (#274)', async () => {

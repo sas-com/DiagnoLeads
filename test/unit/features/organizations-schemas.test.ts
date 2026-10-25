@@ -108,9 +108,11 @@ describe('updateOrganizationSchema', () => {
     expect(result.slug).toBe('new-org-slug');
   });
 
-  it('should accept settings update', () => {
+  // #483: features keep their own keys in organizations.settings; the update never replaces it
+  it('should strip settings so the update cannot replace them', () => {
     const input = {
       id: '123e4567-e89b-12d3-a456-426614174000',
+      name: 'Updated Organization Name',
       settings: {
         theme: 'dark',
         notifications: true,
@@ -118,10 +120,11 @@ describe('updateOrganizationSchema', () => {
     };
 
     const result = updateOrganizationSchema.parse(input);
-    expect(result.settings).toEqual({
-      theme: 'dark',
-      notifications: true,
+    expect(result).toEqual({
+      id: '123e4567-e89b-12d3-a456-426614174000',
+      name: 'Updated Organization Name',
     });
+    expect(result).not.toHaveProperty('settings');
   });
 
   it('should validate slug format', () => {
@@ -185,23 +188,19 @@ describe('createOrganizationSchema', () => {
     expect(result.slug).toBe('my-organization');
   });
 
-  it('should accept full input with settings', () => {
+  // #483: each feature writes its own key in organizations.settings through its own checks
+  it('should strip settings so the create cannot place keys', () => {
     const input = {
       name: 'Enterprise Corp',
       slug: 'enterprise-corp',
       settings: {
-        plan: 'enterprise',
-        maxUsers: 100,
-        features: ['sso', 'audit-logs'],
+        leadIntakeUserIds: ['123e4567-e89b-12d3-a456-426614174000'],
       },
     };
 
     const result = createOrganizationSchema.parse(input);
-    expect(result.settings).toEqual({
-      plan: 'enterprise',
-      maxUsers: 100,
-      features: ['sso', 'audit-logs'],
-    });
+    expect(result).toEqual({ name: 'Enterprise Corp', slug: 'enterprise-corp' });
+    expect(result).not.toHaveProperty('settings');
   });
 
   it('should require name', () => {

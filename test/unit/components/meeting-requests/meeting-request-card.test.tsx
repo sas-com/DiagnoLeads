@@ -285,6 +285,30 @@ describe('MeetingRequestCard', () => {
     expect(screen.getByRole('button', { name: 'この日時で確定する' })).toBeDisabled();
   });
 
+  it.each([
+    ['ja', 'sent', 'success', '日程を確定しました。回答者に確定の連絡を送りました'],
+    ['ja', 'failed', 'warning', '日程を確定しました。確定の連絡を送れませんでした。電話などでお伝えください'],
+    ['en', 'sent', 'success', 'Meeting confirmed. Confirmation sent to the respondent'],
+  ] as const)('tells the confirmation and the email in one sentence (%s, %s, #434)', (locale, email, kind, text) => {
+    toast.success.mockReset();
+    render(
+      <NextIntlClientProvider locale={locale} messages={locale === 'ja' ? messages : enMessages} timeZone="Asia/Tokyo">
+        <MeetingRequestCard organizationId={ORG_ID} leadId={LEAD_ID} />
+      </NextIntlClientProvider>
+    );
+    act(() => mocks.confirmOptions.onSuccess?.({ ok: true, email }));
+    expect(toast[kind]).toHaveBeenCalledWith(text);
+  });
+
+  it('lists the attendees the English way', () => {
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages} timeZone="Asia/Tokyo">
+        <MeetingRequestCard organizationId={ORG_ID} leadId={LEAD_ID} />
+      </NextIntlClientProvider>
+    );
+    expect(screen.getByText('Executive / decision maker and IT staff')).toBeInTheDocument();
+  });
+
   it('shows nothing for a lead without preferences', () => {
     mocks.result = { data: { request: null, canEdit: true, emailConfigured: true }, isError: false };
     const { container } = renderCard();

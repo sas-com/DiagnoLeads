@@ -42,9 +42,10 @@ const full: LeadListQuery = {
     consultation: true,
     mql: false,
     sql: 'qualified',
+    mqlLevel: ['interest', 'fit'],
     search: '山田 商事',
   },
-  sort: { by: 'score', order: 'asc' },
+  sort: { by: 'mqlLevel', order: 'asc' },
   page: 3,
 };
 
@@ -62,7 +63,7 @@ describe('parse / serialize', () => {
 
   it('uses short, readable names', () => {
     expect(serializeLeadListQuery(full).toString()).toBe(
-      'status=new%2Cnegotiating&phase=proposal&inflow=seminar%2Cadvertising&system=as400&scoreMin=40&scoreMax=80&from=2026-10-01&to=2026-10-16&consult=1&mql=0&sql=qualified&q=%E5%B1%B1%E7%94%B0+%E5%95%86%E4%BA%8B&sort=score&order=asc&page=3'
+      'status=new%2Cnegotiating&phase=proposal&inflow=seminar%2Cadvertising&system=as400&scoreMin=40&scoreMax=80&from=2026-10-01&to=2026-10-16&consult=1&mql=0&sql=qualified&level=interest%2Cfit&q=%E5%B1%B1%E7%94%B0+%E5%95%86%E4%BA%8B&sort=mqlLevel&order=asc&page=3'
     );
   });
 
@@ -118,7 +119,11 @@ describe('parse / serialize', () => {
 
   it('gives a sort column its natural order when the order is missing', () => {
     expect(parse('sort=name').sort).toEqual({ by: 'name', order: 'asc' });
-    expect(parse('sort=score').sort).toEqual({ by: 'score', order: 'desc' });
+    expect(parse('sort=mqlLevel').sort).toEqual({ by: 'mqlLevel', order: 'asc' });
+  });
+
+  it('reads an old link sorted by the score as the default order (#447)', () => {
+    expect(parse('sort=score&order=asc').sort).toEqual(DEFAULT_LEAD_LIST_QUERY.sort);
   });
 
   it('keeps search params that are not the list’s', () => {
@@ -137,7 +142,7 @@ describe('list input', () => {
       organizationId: ORG,
       limit: 20,
       offset: 40,
-      sortBy: 'score',
+      sortBy: 'mqlLevel',
       sortOrder: 'asc',
       status: ['new', 'negotiating'],
       dealPhase: ['proposal'],
@@ -150,6 +155,7 @@ describe('list input', () => {
       consultationRequested: true,
       mql: false,
       sqlDecision: 'qualified',
+      mqlLevel: ['interest', 'fit'],
       search: '山田 商事',
     });
     expect(listLeadsSchema.safeParse(input).success).toBe(true);
@@ -232,6 +238,8 @@ describe('chips', () => {
       'consultation',
       'mql',
       'sql',
+      'mqlLevel',
+      'mqlLevel',
     ]);
     expect(filterChips(EMPTY_LEAD_FILTERS)).toEqual([]);
   });
@@ -239,7 +247,7 @@ describe('chips', () => {
   it('removes one chip at a time until nothing is left', () => {
     let filters = full.filters;
     let chips = filterChips(filters);
-    expect(chips).toHaveLength(12);
+    expect(chips).toHaveLength(14);
     while (chips.length > 0) {
       const [first] = chips;
       filters = removeChip(filters, first);

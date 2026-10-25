@@ -15,10 +15,13 @@
 
 import type { db as defaultDb } from '@/lib/db/client';
 import { type Lead, auditLogs, dealHistory, deals, leadTasks, leads, users } from '@/lib/db/schema';
-import { isFirstHandoff } from '@/lib/features/lead-handoff/handoff';
-import { notifyLeadHandoff } from '@/lib/features/lead-handoff/notify';
-import { findAssignableMember } from '@/lib/features/leads/assignment';
-import { diffLeadAudit, leadAuditSnapshot, writeLeadAuditLogs } from '@/lib/features/leads/audit';
+import { isFirstHandoff, notifyLeadHandoff } from '@/lib/features/lead-handoff/service';
+import {
+  diffLeadAudit,
+  findAssignableMember,
+  leadAuditSnapshot,
+  writeLeadAuditLogs,
+} from '@/lib/features/leads/service';
 import {
   type LostReason,
   type TargetSystem,
@@ -27,7 +30,7 @@ import {
   statusUpdateFields,
   targetSystemEnum,
 } from '@/lib/features/leads/types/pipeline';
-import { emitLeadEvents, leadChangeEvents } from '@/lib/features/webhooks/services/lead-events';
+import { emitLeadEvents, leadChangeEvents } from '@/lib/features/webhooks/service';
 import { TRPCError } from '@trpc/server';
 import {
   type SQL,

@@ -1,4 +1,4 @@
-import { type Locator, type Page, expect } from '@playwright/test';
+import { type Locator, type Page, type Request, type Route, expect } from '@playwright/test';
 
 /**
  * Helpers for the AX migration diagnosis (v2) E2E tests.
@@ -89,18 +89,80 @@ export async function waitForBotCheck(page: Page) {
   });
 }
 
-/** Submit and return the request body sent and the JSON the API answered */
-export async function submitWithRequest(page: Page) {
+type Json = Record<string, unknown>;
+
+interface Submission {
+  /** The request body the page sent */
+  sent: Json;
+  /** The JSON the API answered */
+  body: Json;
+}
+
+/** The answer as copied on its way to the page, or why it could not be */
+type Answer = { sent: Json; status: number; text: string } | Error;
+
+const isSubmissionUrl = (url: URL) => url.pathname === '/api/diagnostics/ax-migration';
+const isSubmission = (request: Request) =>
+  request.method() === 'POST' && isSubmissionUrl(new URL(request.url()));
+
+/** The API answers JSON, so a 200 with anything else is a failure of its own */
+function parseAnswer(text: string): Json {
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`The API answered 200 with a body that is not JSON: ${text.slice(0, 200)}`);
+  }
+}
+
+/**
+ * Submit and return the request body sent and the JSON the API answered.
+ *
+ * The answer is copied in Node on its way to the page, so its body is never read back from the
+ * browser (#572). Read from the browser after the click (`response.json()`), the body was once
+ * gone in CI ("No resource with given identifier found"). What dropped it there is not known.
+ */
+export async function submitWithRequest(page: Page): Promise<Submission> {
   await waitForBotCheck(page);
-  const responsePromise = page.waitForResponse(
-    (response) =>
-      response.url().endsWith('/api/diagnostics/ax-migration') &&
-      response.request().method() === 'POST'
-  );
-  await page.getByRole('button', { name: /診断結果を見る/ }).click();
-  const response = await responsePromise;
-  expect(response.status()).toBe(200);
-  return { sent: response.request().postDataJSON(), body: await response.json() };
+  let settle: (answer: Answer) => void = () => {};
+  const answered = new Promise<Answer>((resolve) => {
+    settle = resolve;
+  });
+  const handler = async (route: Route) => {
+    if (!isSubmission(route.request())) {
+      await route.fallback();
+      return;
+    }
+    try {
+      const sent = route.request().postDataJSON();
+      const response = await route.fetch();
+      const text = await response.text();
+      // The page gets the same answer, as if the request had gone straight through
+      await route.fulfill({ response });
+      settle({ sent, status: response.status(), text });
+    } catch (error) {
+      settle(error instanceof Error ? error : new Error(String(error)));
+      await route.abort().catch(() => {});
+    }
+  };
+  // Made here, so its stack points at the test that submitted
+  const closed = new Error('The page closed before the API answered the submission');
+  const onClose = () => settle(closed);
+  await page.route(isSubmissionUrl, handler);
+  page.once('close', onClose);
+  try {
+    // Waiting for the request names the wait in the report when the click sends nothing
+    await Promise.all([
+      page.waitForRequest(isSubmission),
+      page.getByRole('button', { name: /診断結果を見る/ }).click(),
+    ]);
+    const answer = await answered;
+    if (answer instanceof Error) throw answer;
+    expect(answer.status, answer.text).toBe(200);
+    return { sent: answer.sent, body: parseAnswer(answer.text) };
+  } finally {
+    page.off('close', onClose);
+    if (!page.isClosed()) await page.unroute(isSubmissionUrl, handler);
+  }
 }
 
 /** Submit and return the JSON the API answered */

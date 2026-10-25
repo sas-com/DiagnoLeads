@@ -13,6 +13,7 @@
       "Bash(bun run test:coverage)",
       "Bash(bun run typecheck)",
       "Bash(bun run lint)",
+      "Bash(bun run arch:check)",
       "Bash(bun run format)",
       "Bash(bun run build)",
       "Bash(bun run i18n:check)",

@@ -7,7 +7,7 @@ description: 変更を PR にしてマージできる状態まで持っていく
 
 ## 1. コミットの前
 
-1. 全体の検証：`bun run test:run && bun run typecheck && bun run lint`。全部通るまでコミットしない
+1. 全体の検証：`bun run test:run && bun run typecheck && bun run lint && bun run arch:check`。全部通るまでコミットしない
 2. 差分を自分で読み直す（`git diff`）。次のものが紛れていないか確かめる
    - CI が落ちる原因
    - 範囲外の変更
@@ -55,6 +55,7 @@ description: 変更を PR にしてマージできる状態まで持っていく
 - main は PR 経由でのみマージできる（直接 push は不可。承認は0でよく、管理者にも適用される）
 - CI が緑で、main と衝突していない
   - GitHub が必須にしている検査は7つ（Lint & Type Check・Unit Tests ×4・DB Integration Tests・Build）。E2E と Security Scan は必須ではないので、緑を自分で確かめる
+- マージの直前に最新の main を取り込み、`bun run arch:check` を流す（ブランチ保護は strict:false なので、別々に緑だった PR が main で arch:check を落とすことがある。落ちたら `--update` か直してから push し直す。決定 `2026-10-24-architecture-guardrails`・docs/ARCHITECTURE.md の5節）
 - 3 のレビューが要る変更に、blocker が残っていない
 - スキーマの変更（`drizzle/`）が、本番 DB に適用済みである
   - 適用はオーナーの承認を得て行い、接続文字列を会話に出さない
