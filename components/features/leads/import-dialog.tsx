@@ -69,6 +69,14 @@ export function ImportDialog({ open, onOpenChange, organizationId, onSuccess }: 
     onOpenChange(false);
   };
 
+  // The parts go one after another, and closing would not stop the ones not sent yet: the
+  // dialog stays open until the import ends (Cancel, Escape, the close button, #604)
+  const importing = step === 'importing';
+  const handleOpenChange = () => {
+    if (importing) return;
+    handleClose();
+  };
+
   const processFile = useCallback(
     async (file: File) => {
       setFileName(file.name);
@@ -172,8 +180,10 @@ export function ImportDialog({ open, onOpenChange, organizationId, onSuccess }: 
         importedRows += leads.length;
       }
     } catch {
-      // The parts before the failed one are created: list them, and keep only the rows not
-      // created yet, so that importing again does not create a lead twice
+      // The parts before the failed one are created: list them, and keep the failed part and
+      // the parts after it (with the error rows) in the preview. Importing again does not send
+      // the created parts again; but when only the failed part's response was lost (a timeout,
+      // a connection cut before the answer), that part was created and is created twice (#689)
       if (createdCount > 0) {
         toast.success(t('importSuccess', { count: createdCount }));
         onSuccess();
@@ -189,7 +199,7 @@ export function ImportDialog({ open, onOpenChange, organizationId, onSuccess }: 
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>{t('title')}</DialogTitle>
@@ -333,7 +343,7 @@ export function ImportDialog({ open, onOpenChange, organizationId, onSuccess }: 
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleClose}>
+          <Button variant="outline" onClick={handleClose} disabled={importing}>
             {tCommon('cancel')}
           </Button>
           {step === 'preview' && summary && (

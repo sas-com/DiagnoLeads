@@ -51,16 +51,22 @@ async function previewCsv(locale: 'ja' | 'en', csv = CSV) {
   const messages = locale === 'ja' ? jaMessages : enMessages;
   const user = userEvent.setup();
   const onSuccess = vi.fn();
+  const onOpenChange = vi.fn();
   render(
     <NextIntlClientProvider locale={locale} messages={messages} timeZone="Asia/Tokyo">
-      <ImportDialog open onOpenChange={vi.fn()} organizationId={ORG_ID} onSuccess={onSuccess} />
+      <ImportDialog
+        open
+        onOpenChange={onOpenChange}
+        organizationId={ORG_ID}
+        onSuccess={onSuccess}
+      />
     </NextIntlClientProvider>
   );
   const file = new File([csv], 'leads.csv', { type: 'text/csv' });
   // jsdom's File has no text()
   Object.defineProperty(file, 'text', { value: async () => csv });
   await user.upload(screen.getByLabelText(messages.leads.import.selectFile), file);
-  return { user, messages, onSuccess, rows: await screen.findAllByRole('row') };
+  return { user, messages, onSuccess, onOpenChange, rows: await screen.findAllByRole('row') };
 }
 
 /** The import button's name for `count` leads on the Japanese page */
@@ -127,7 +133,8 @@ describe('ImportDialog with a file larger than one request (#604)', () => {
   });
 
   it('keeps only the rows not created when a part fails, and imports them again without the others', async () => {
-    // The second part fails (a dropped connection, the rate limit): the first is created
+    // The second part fails before it is created (the rate limit, a request that never
+    // reached the server): the first is created
     mutateAsync
       .mockImplementationOnce(async ({ leads }: { leads: unknown[] }) => ({
         success: true,
@@ -157,5 +164,38 @@ describe('ImportDialog with a file larger than one request (#604)', () => {
     expect(sent.map((emails) => emails.length)).toEqual([1_000, 500]);
     expect(sent.flat()[0]).toBe('lead1000@example.jp');
     expect(sent.flat()).not.toContain('lead999@example.jp');
+  });
+
+  it('stays open while the parts are sent, so closing cannot leave the rest being sent', async () => {
+    // The first part is answered only when the test lets it
+    let answerFirstPart = () => {};
+    mutateAsync.mockImplementationOnce(async ({ leads }: { leads: unknown[] }) => {
+      await new Promise<void>((resolve) => {
+        answerFirstPart = () => resolve();
+      });
+      return { success: true, createdCount: leads.length };
+    });
+    const { user, messages, onSuccess, onOpenChange } = await previewCsv('ja', largeCsv(COUNT));
+
+    await user.click(screen.getByRole('button', { name: importButtonName(COUNT) }));
+    expect(await screen.findByText(messages.leads.import.importing)).toBeInTheDocument();
+
+    // Cancel, Escape and the close button do not close the dialog while a part is on its way
+    const cancel = screen.getByRole('button', { name: messages.common.cancel });
+    expect(cancel).toBeDisabled();
+    await user.click(cancel);
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByRole('button', { name: '閉じる' }));
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(screen.getByText(messages.leads.import.importing)).toBeInTheDocument();
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+
+    answerFirstPart();
+
+    // Every part is sent once, then the dialog closes itself
+    await vi.waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
+    expect(sentEmails().map((emails) => emails.length)).toEqual([1_000, 1_000, 500]);
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 });

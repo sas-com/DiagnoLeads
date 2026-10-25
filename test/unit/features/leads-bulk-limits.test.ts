@@ -336,42 +336,51 @@ describe('the import of a file larger than one request', () => {
   });
 });
 
+/** A db whose query builders chain and resolve to nothing; the transaction runs on it */
+function mockDb() {
+  const db = {
+    query: {
+      organizationMembers: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'member-1',
+          organizationId: ORG_ID,
+          userId: USER_ID,
+          role: 'admin',
+          organization: { id: ORG_ID, name: 'Org', slug: 'org', settings: {} },
+        }),
+      },
+      leads: { findFirst: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
+    },
+    insert: vi.fn().mockReturnThis(),
+    values: vi.fn().mockReturnThis(),
+    returning: vi.fn().mockResolvedValue([]),
+    select: vi.fn().mockReturnThis(),
+    from: vi.fn().mockReturnThis(),
+    where: vi.fn().mockReturnThis(),
+    update: vi.fn().mockReturnThis(),
+    delete: vi.fn().mockReturnThis(),
+    set: vi.fn().mockReturnThis(),
+    execute: vi.fn().mockResolvedValue([]),
+    transaction: vi.fn(),
+  };
+  db.transaction.mockImplementation((fn: (tx: unknown) => unknown) => fn(db));
+  return db;
+}
+
+type CallerContext = Parameters<typeof appRouter.createCaller>[0];
+
 describe('tRPC procedures', () => {
-  let db: any;
-  let ctx: any;
+  let db: ReturnType<typeof mockDb>;
+  let ctx: CallerContext;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    db = {
-      query: {
-        organizationMembers: {
-          findFirst: vi.fn().mockResolvedValue({
-            id: 'member-1',
-            organizationId: ORG_ID,
-            userId: USER_ID,
-            role: 'admin',
-            organization: { id: ORG_ID, name: 'Org', slug: 'org', settings: {} },
-          }),
-        },
-        leads: { findFirst: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
-      },
-      insert: vi.fn().mockReturnThis(),
-      values: vi.fn().mockReturnThis(),
-      returning: vi.fn().mockResolvedValue([]),
-      select: vi.fn().mockReturnThis(),
-      from: vi.fn().mockReturnThis(),
-      where: vi.fn().mockReturnThis(),
-      update: vi.fn().mockReturnThis(),
-      delete: vi.fn().mockReturnThis(),
-      set: vi.fn().mockReturnThis(),
-      execute: vi.fn().mockResolvedValue([]),
-    };
-    db.transaction = vi.fn((fn: (tx: unknown) => unknown) => fn(db));
+    db = mockDb();
     ctx = {
       db,
       session: { id: 'session-1' },
       user: { id: USER_ID, email: 'member@example.jp', name: 'Member' },
-    };
+    } as unknown as CallerContext;
   });
 
   /** The procedure's refusal: BAD_REQUEST carrying the zod issues of the input */
