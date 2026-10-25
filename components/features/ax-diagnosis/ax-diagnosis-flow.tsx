@@ -43,7 +43,6 @@ import { VerificationFieldset } from '@/components/features/diagnosis-runner/tur
 import { useProgressAutosave } from '@/components/features/diagnosis-runner/use-progress-autosave';
 import { useStepHistory } from '@/components/features/diagnosis-runner/use-step-history';
 import { isAllowedEmail } from '@/lib/email/allowed-recipients';
-import { PHONE_PATTERN, normalizePhone } from '@/lib/features/diagnostics/ax-migration/contact';
 import { axMigrationDefinition } from '@/lib/features/diagnostics/ax-migration/definition';
 import type { AxMigrationPublicResult } from '@/lib/features/diagnostics/ax-migration/evaluate';
 import { pruneAnswers, shownSections } from '@/lib/features/diagnostics/engine';
@@ -55,6 +54,7 @@ import type {
   DiagnosticQuestion,
   DiagnosticSection,
 } from '@/lib/features/diagnostics/types';
+import { PHONE_PATTERN, normalizePhone } from '@/lib/features/diagnostics/types/contact';
 import type { PublicInfoOffers } from '@/lib/features/info-offers/types/schemas';
 import { formatEmailDomains } from '@/lib/i18n/format-domains';
 import { cn } from '@/lib/utils';

@@ -1,16 +1,19 @@
 import { db } from '@/lib/db/client';
 import { filterAllowedRecipients } from '@/lib/email/allowed-recipients';
 import { type EmailBlock, type EmailFact, renderEmail } from '@/lib/email/templates/render';
-import { env } from '@/lib/env';
 import { challengeEffectLine } from '@/lib/features/challenge-guide/service';
 import { isEmailConfigured, sendEmail } from '@/lib/features/email';
-import { consultationRecipients } from '@/lib/features/leads/assignment';
 import { notifyUsersInApp } from '@/lib/features/leads/assignment-notify';
 import { notifyOrganizationMembers } from '@/lib/features/notifications/notification-service';
 import { sendLeadCreatedById } from '@/lib/features/webhooks/services/lead-events';
 import { triggerWebhooks } from '@/lib/features/webhooks/services/webhook-service';
-import { addBusinessDays } from 'date-fns';
-import { consumeRateLimit } from '../rate-limit';
+import {
+  type DiagnosisNotificationLimits,
+  checkNotificationLimits,
+  diagnosisConsultationRecipients,
+  withinSalesEmailQuota,
+} from '../service';
+import { consultationDeadline } from '../types/consultation';
 import { type AxAccessPath, readAccessPath } from './access-path';
 import { AX_MIGRATION_CONFIG } from './config';
 import type { AxMigrationResult } from './evaluate';
@@ -125,29 +128,6 @@ export interface AxMigrationNotification {
    */
   additionalSystem?: boolean;
   requestedAt: Date;
-}
-
-/**
- * 相談申込への連絡期限（土日を除く営業日。祝日は考慮しない）
- * Counted on the Japan calendar regardless of the server time zone (Vercel runs in UTC).
- * Returns the deadline as a JST calendar date in yyyy/MM/dd.
- */
-export function consultationDeadline(
-  requestedAt: Date,
-  businessDays = AX_MIGRATION_CONFIG.consultationResponseBusinessDays
-): string {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Tokyo',
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-  }).formatToParts(requestedAt);
-  const part = (type: string) => Number(parts.find((p) => p.type === type)?.value);
-  // Build a UTC-noon date for the JST calendar day so weekday math is time-zone independent
-  const jstDay = new Date(Date.UTC(part('year'), part('month') - 1, part('day'), 12));
-  const deadline = addBusinessDays(jstDay, businessDays);
-  const pad = (value: number) => String(value).padStart(2, '0');
-  return `${deadline.getUTCFullYear()}/${pad(deadline.getUTCMonth() + 1)}/${pad(deadline.getUTCDate())}`;
 }
 
 /**
@@ -342,22 +322,13 @@ export function buildSalesEmail(
  * separate hourly cap: a flood of submissions must not hide a real request (#232).
  */
 export async function notifyAxMigrationSubmission(n: AxMigrationNotification): Promise<void> {
-  const withinLimit = await withinNotificationLimit(
-    AX_RATE_LIMITS.notificationsPerOrganization,
-    n.organizationId
+  const { notify, withinLimit } = await checkNotificationLimits(
+    db,
+    n.organizationId,
+    n.consultationRequested,
+    AX_NOTIFICATION_LIMITS
   );
-  if (
-    !withinLimit &&
-    !(
-      n.consultationRequested &&
-      (await withinNotificationLimit(
-        AX_RATE_LIMITS.consultationNotificationsPerOrganization,
-        n.organizationId
-      ))
-    )
-  ) {
-    return;
-  }
+  if (!notify) return;
   const effect = await challengeEffectLine(n.organizationId, n.result.challenges.primary);
   const { title, message } = buildSalesMessage(n, effect);
   const mql = salesMql(n);
@@ -399,11 +370,11 @@ export async function notifyAxMigrationSubmission(n: AxMigrationNotification): P
     );
   }
 
-  const salesEmail = env.AX_DIAGNOSIS_SALES_EMAIL;
   // Consultation requests go to the organization's intake members (窓口) when set, in-app and
-  // by email; otherwise to every member in-app and to the sales addresses by email (#135)
+  // by email; otherwise to every member in-app and to the sales addresses by email (#135). The
+  // same rule as the builder's diagnoses (#481)
   const consultation = n.consultationRequested
-    ? await consultationRecipients(db, n.organizationId, salesEmail)
+    ? await diagnosisConsultationRecipients(db, n.organizationId)
     : null;
 
   // In-app: consultation requests, new leads and another system recorded on a lead. A repeat
@@ -453,7 +424,7 @@ export async function notifyAxMigrationSubmission(n: AxMigrationNotification): P
     n.consultationRequested &&
     salesRecipients.length > 0 &&
     isEmailConfigured() &&
-    (await withinSalesEmailQuota(n.organizationId))
+    (await withinSalesEmailQuota(db, n.organizationId, AX_NOTIFICATION_LIMITS))
   ) {
     const leadUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/ja/leads/${n.leadId}`;
     tasks.push(sendEmail({ to: salesRecipients, ...buildSalesEmail(n, effect, leadUrl) }));
@@ -467,115 +438,10 @@ export async function notifyAxMigrationSubmission(n: AxMigrationNotification): P
   }
 }
 
-type OrganizationLimit =
-  | typeof AX_RATE_LIMITS.notificationsPerOrganization
-  | typeof AX_RATE_LIMITS.consultationNotificationsPerOrganization
-  | typeof AX_RATE_LIMITS.salesEmailPerOrganizationHourly
-  | typeof AX_RATE_LIMITS.salesEmailPerOrganization;
-
-const CHECK_THE_LIST =
-  'この間に届いた相談申込は、リード一覧（コンバージョンポイント：相談申込）で確認してください。';
-
-const LIMIT_NOTICES: Record<OrganizationLimit['name'], { title: string; message: string }> = {
-  [AX_RATE_LIMITS.notificationsPerOrganization.name]: {
-    title: '【AX診断】通知を一時停止しました',
-    message: `AX診断の通知が1時間に${AX_RATE_LIMITS.notificationsPerOrganization.limit}件を超えたため、この1時間の残りの送信は通知しません（リードとしては保存しています）。相談申込は引き続き通知します（Webhook は除く）。いたずらによる大量の送信の可能性があります。`,
-  },
-  [AX_RATE_LIMITS.consultationNotificationsPerOrganization.name]: {
-    title: '【AX診断】相談申込の通知を一時停止しました',
-    message: `相談申込の通知が1時間に${AX_RATE_LIMITS.consultationNotificationsPerOrganization.limit}件を超えたため、この1時間の残りの相談申込は通知しません（リードとしては保存しています）。${CHECK_THE_LIST}いたずらによる大量の送信の可能性があります。`,
-  },
-  [AX_RATE_LIMITS.salesEmailPerOrganizationHourly.name]: {
-    title: '【AX診断】営業宛てメールを一時停止しました',
-    message: `相談申込のメールが1時間に${AX_RATE_LIMITS.salesEmailPerOrganizationHourly.limit}通を超えたため、この1時間の残りの相談申込はアプリ内通知だけでお知らせします。${CHECK_THE_LIST}`,
-  },
-  [AX_RATE_LIMITS.salesEmailPerOrganization.name]: {
-    title: '【AX診断】営業宛てメールを一時停止しました',
-    message: `相談申込のメールが1日${AX_RATE_LIMITS.salesEmailPerOrganization.limit}通を超えたため、今日のこれ以降の相談申込はアプリ内通知だけでお知らせします。${CHECK_THE_LIST}`,
-  },
+/** The notification limits of the AX diagnosis (the rules are shared, #481) */
+const AX_NOTIFICATION_LIMITS: DiagnosisNotificationLimits = {
+  label: 'AX診断',
+  notifications: AX_RATE_LIMITS.notificationsPerOrganization,
+  consultationNotifications: AX_RATE_LIMITS.consultationNotificationsPerOrganization,
+  data: { diagnosticKey: 'ax-migration' },
 };
-
-/**
- * Tell the members (in-app) and sales (one email, outside the email caps: it is sent once per
- * limit and window) that a limit has stopped some notifications
- */
-async function noticeLimitReached(organizationId: string, rule: OrganizationLimit): Promise<void> {
-  const notice = LIMIT_NOTICES[rule.name];
-  const salesEmail = env.AX_DIAGNOSIS_SALES_EMAIL;
-  const results = await Promise.allSettled([
-    notifyOrganizationMembers(organizationId, 'system', notice.title, notice.message, {
-      diagnosticKey: 'ax-migration',
-      limit: rule.name,
-    }),
-    ...(salesEmail && isEmailConfigured()
-      ? [
-          sendEmail({
-            to: salesEmail.split(',').map((address) => address.trim()),
-            subject: notice.title,
-            ...renderEmail({
-              theme: 'internal',
-              preheader: notice.message,
-              blocks: [
-                { type: 'badges', items: [{ label: '通知の上限', tone: 'warning' }] },
-                { type: 'heading', text: notice.title },
-                { type: 'paragraph', text: notice.message },
-              ],
-              footer: ['このメールは DiagnoLeads から自動で送信しています。'],
-            }),
-          }),
-        ]
-      : []),
-  ]);
-  for (const result of results) {
-    if (result.status === 'rejected') {
-      console.error('AX diagnosis: limit notice failed:', result.reason);
-    }
-  }
-}
-
-/** Count one against a limit of the organization; the first time it is over, say so */
-async function withinOrganizationLimit(
-  rule: OrganizationLimit,
-  organizationId: string
-): Promise<boolean> {
-  const quota = await consumeRateLimit(db, rule, organizationId);
-  if (quota.allowed) return true;
-  console.warn(`AX diagnosis: limit ${rule.name} reached`);
-  if (quota.count === rule.limit + 1) await noticeLimitReached(organizationId, rule);
-  return false;
-}
-
-/** Hourly limit on notifications; when it cannot be checked, sales are notified as usual */
-async function withinNotificationLimit(
-  rule:
-    | typeof AX_RATE_LIMITS.notificationsPerOrganization
-    | typeof AX_RATE_LIMITS.consultationNotificationsPerOrganization,
-  organizationId: string
-): Promise<boolean> {
-  try {
-    return await withinOrganizationLimit(rule, organizationId);
-  } catch (error) {
-    console.error('AX diagnosis: notification limit check failed:', error);
-    return true;
-  }
-}
-
-/**
- * Hourly and daily caps on sales emails (the daily one is not used up by emails the hourly one
- * refused); when they cannot be checked, no email (the sending quota is shared with the password
- * reset emails)
- */
-async function withinSalesEmailQuota(organizationId: string): Promise<boolean> {
-  try {
-    return (
-      (await withinOrganizationLimit(
-        AX_RATE_LIMITS.salesEmailPerOrganizationHourly,
-        organizationId
-      )) &&
-      (await withinOrganizationLimit(AX_RATE_LIMITS.salesEmailPerOrganization, organizationId))
-    );
-  } catch (error) {
-    console.error('AX diagnosis: sales email limit check failed:', error);
-    return false;
-  }
-}

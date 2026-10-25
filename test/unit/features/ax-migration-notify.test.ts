@@ -13,6 +13,10 @@ const env: { AX_DIAGNOSIS_SALES_EMAIL?: string } = {};
 
 vi.mock('@/lib/env', () => ({ env }));
 vi.mock('@/lib/db/client', () => ({ db: {} }));
+// The AX diagnosis's organization is the operator's: its sales addresses are mailed (#481)
+vi.mock('@/lib/features/diagnostics/organization', () => ({
+  resolveDiagnosisOrganizationId: () => 'org-1',
+}));
 vi.mock('@/lib/features/diagnostics/rate-limit', () => ({
   consumeRateLimit: (...args: unknown[]) => quotaMock(...args),
 }));

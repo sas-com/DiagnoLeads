@@ -853,7 +853,8 @@
         "body": "Based on your result, we explain the issues and how to proceed. After you apply, we will contact you.",
         "button": "Apply for a consultation",
         "done": "Your consultation request was received. We will contact you.",
-        "failed": "Your request could not be sent. Please try again later."
+        "failed": "Your request could not be sent. Please try again later.",
+        "closed": "The 24 hours after the diagnosis have passed, so you can no longer apply from this page. Please take the diagnosis again and apply from its result."
       }
     }
   },
