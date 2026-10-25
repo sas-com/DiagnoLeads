@@ -6,7 +6,7 @@
     "dev": "next dev",
     "dev:turbo": "next dev --turbopack",
     "build": "NODE_ENV=production next build",
-    "build:analyze": "ANALYZE=true next build",
+    "build:analyze": "next analyze",
     "start": "next start",
     "lint": "biome check .",
     "format": "biome check --write .",

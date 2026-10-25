@@ -191,6 +191,14 @@ describe('Access landing page', () => {
     for (const button of buttons) expect(button).toHaveAttribute('href', '#diagnosis');
   });
 
+  it('keeps the phone bar to the short label of the main page, on one line (#672)', async () => {
+    await renderPage();
+    // With "（Access版）" it took two lines from 375px wide; the page says it is the Access check
+    const bar = screen.getByTestId('ax-floating-cta');
+    expect(bar).toHaveTextContent(/^無料Web診断をはじめる$/);
+    expect(within(bar).getByRole('link', { hidden: true })).toHaveAttribute('href', '#diagnosis');
+  });
+
   it('names what brings an Access tool up for review, above the hero buttons (#425)', async () => {
     await renderPage();
     const hero = screen.getByRole('heading', { level: 1 }).closest('section') as HTMLElement;

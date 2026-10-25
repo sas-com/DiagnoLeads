@@ -47,6 +47,26 @@
 | /faq | 112 kB | ✅ 良好 |
 | /landing | 107 kB | ✅ 良好 |
 
+### 1.4 バンドルの再分析（next analyze）
+
+上の 1.1〜1.3 は 2026-02 の webpack ビルドの値で、今の Turbopack ビルドとは比べられない（先頭の注意）。今の値を見るには Turbopack の Bundle Analyzer を使う（決定 [2026-10-24-performance-targets](../.factory/memory/decisions/2026-10-24-performance-targets.md)、#569・#611）。
+
+- 対話的に見る：`bun run build:analyze`（＝ `next analyze`）。ビルドしてブラウザでモジュールのツリーマップを開く。ルート・環境（client/server）・種類（JS/CSS/JSON）で絞り込み、モジュールをクリックすると import の経路と使われている場所が見える
+- 前後を比べる（#53・#469 で依存やコードを外す前後など）：
+  - 保存する：`bunx next analyze --output`。ブラウザを開かず、結果を `.next/diagnostics/analyze` に書き出す。別名で控える例：`cp -r .next/diagnostics/analyze ./analyze-before`
+  - スナップショットにして JSON で出す（next 16.4 以降）：
+
+    ```bash
+    bunx next analyze --output --snapshot before
+    # 変更後に、もう一度
+    bunx next analyze --output --snapshot after
+    bunx next analyze export --snapshot before > before.jsonl
+    bunx next analyze export --snapshot after  > after.jsonl
+    ```
+
+    `export` は再ビルドせずに保存済みのスナップショットを JSON Lines で流すので、スクリプトや diff で比べやすい
+- `@next/bundle-analyzer`（webpack 専用）は使わない。本番は Turbopack でビルドするため、Turbopack の Bundle Analyzer（`next analyze`、v16.1 以降）に寄せる（#611）。出典：`node_modules/next/dist/docs/01-app/02-guides/package-bundling.md`
+
 ---
 
 ## 2. 既存の最適化
