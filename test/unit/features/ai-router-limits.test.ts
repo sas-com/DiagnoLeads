@@ -329,6 +329,20 @@ describe('AI router: rate limits of the OpenAI embeddings', () => {
     expect(update.params.slice(-2)).toEqual([LEAD_1, ORG_ID]);
   });
 
+  it('fails, after counting, when OpenAI fails: never reports success with nothing stored (#598)', async () => {
+    const { caller, db } = createCaller();
+    db.query.leads.findFirst.mockResolvedValue(leadRow(LEAD_1));
+    openai.create.mockRejectedValue(new Error('429 Rate limit reached'));
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(caller.ai.updateEmbedding(one)).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+    expect(countedChecks()).toEqual(embeddingChecksFor(1));
+    expect(globalDb.execute).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
   it('never calls OpenAI once a limit refuses, and names the limit', async () => {
     const { caller, db } = createCaller();
     db.query.leads.findFirst.mockResolvedValue(leadRow(LEAD_1));

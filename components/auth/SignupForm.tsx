@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { authClient } from '@/lib/auth/client';
 import { safeCallbackPath } from '@/lib/auth/safe-callback';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { CircleAlert } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
@@ -37,6 +38,9 @@ export function SignupForm() {
   const t = useTranslations('settings.auth.signup');
   const tv = useTranslations('settings.auth.validation');
   const [isLoading, setIsLoading] = useState(false);
+  // Refusals are shown in the form, not as a toast: the toaster loads after the page, and a toast
+  // raised before it mounts is lost (#597)
+  const [formError, setFormError] = useState<string | null>(null);
 
   const signupSchema = z
     .object({
@@ -65,6 +69,7 @@ export function SignupForm() {
 
   async function onSubmit(data: SignupFormValues) {
     setIsLoading(true);
+    setFormError(null);
     try {
       const result = await authClient.signUp.email({
         email: data.email,
@@ -81,17 +86,17 @@ export function SignupForm() {
         const errorMessage = result.error.message?.toLowerCase() || '';
 
         if (errorCode === 'INVITATION_REQUIRED') {
-          toast.error(t('invitationRequired'));
+          setFormError(t('invitationRequired'));
         } else if (errorCode === 'EMAIL_DOMAIN_NOT_ALLOWED') {
           // Test mode: the server's message names the allowed domains
-          toast.error(result.error.message || t('errorToast'));
+          setFormError(result.error.message || t('errorToast'));
         } else if (
           errorCode === 'USER_ALREADY_EXISTS' ||
           errorMessage.includes('user already exists')
         ) {
-          toast.error(t('emailAlreadyExists'));
+          setFormError(t('emailAlreadyExists'));
         } else {
-          toast.error(t('errorToast'));
+          setFormError(t('errorToast'));
         }
         return;
       }
@@ -100,7 +105,7 @@ export function SignupForm() {
       router.push(callbackUrl);
     } catch (error) {
       console.error('Signup error:', error);
-      toast.error(t('errorToast'));
+      setFormError(t('errorToast'));
     } finally {
       setIsLoading(false);
     }
@@ -194,6 +199,17 @@ export function SignupForm() {
             </FormItem>
           )}
         />
+
+        {formError && (
+          // DADS: the error colour and an icon, so the error is not shown by colour alone
+          <p
+            role="alert"
+            className="flex items-start gap-1.5 text-sm text-[var(--color-semantic-error-1)] dark:text-red-300"
+          >
+            <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>{formError}</span>
+          </p>
+        )}
 
         <Button type="submit" className="w-full" disabled={isLoading}>
           {isLoading ? t('submittingButton') : t('submitButton')}

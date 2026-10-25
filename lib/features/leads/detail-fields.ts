@@ -18,7 +18,8 @@ export type LeadCardId = (typeof LEAD_CARDS)[number];
 export const LEAD_CARD_FIELDS = {
   contact: ['name', 'company', 'email', 'phone'],
   inflow: ['inflowSource', 'agencyName', 'acquisitionCost', 'referrerName', 'conversionPoint'],
-  pipeline: ['dealPhase', 'targetSystem', 'score', 'mqlQualified', 'sqlDecision', 'lostReason'],
+  // The score is the reason of the MQL level, shown on the diagnosis card (#447)
+  pipeline: ['dealPhase', 'targetSystem', 'mqlQualified', 'sqlDecision', 'lostReason'],
 } as const satisfies Record<LeadCardId, readonly string[]>;
 
 export type LeadCardField = (typeof LEAD_CARD_FIELDS)[LeadCardId][number];
@@ -37,7 +38,6 @@ export interface LeadFieldValues {
   conversionPoint: string | null;
   dealPhase: string | null;
   targetSystem: string | null;
-  score: number | null;
   mqlQualifiedAt: Date | string | null;
   sqlDecision: string | null;
   lostReason: string | null;
@@ -73,7 +73,6 @@ export function hasFieldValue(lead: LeadFieldValues, field: LeadCardField): bool
   switch (field) {
     case 'mqlQualified':
       return lead.mqlQualifiedAt !== null && lead.mqlQualifiedAt !== undefined;
-    case 'score':
     case 'acquisitionCost':
       return typeof lead[field] === 'number';
     default: {

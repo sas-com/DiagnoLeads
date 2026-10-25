@@ -204,7 +204,6 @@ const lead = (overrides: Partial<LeadFieldValues> = {}): LeadFieldValues => ({
   conversionPoint: 'web_diagnosis',
   dealPhase: null,
   targetSystem: null,
-  score: null,
   mqlQualifiedAt: null,
   sqlDecision: null,
   lostReason: 'budget',
@@ -230,9 +229,11 @@ describe('splitCardFields', () => {
     );
   });
 
-  it('counts a score of 0 and an MQL date as values', () => {
-    const { filled } = splitCardFields('pipeline', lead({ score: 0, mqlQualifiedAt: new Date() }));
-    expect(filled).toEqual(['score', 'mqlQualified']);
+  it('counts an acquisition cost of 0 and an MQL date as values, and has no score (#447)', () => {
+    expect(splitCardFields('inflow', lead({ acquisitionCost: 0 })).filled).toContain('acquisitionCost');
+    const { filled, empty } = splitCardFields('pipeline', lead({ mqlQualifiedAt: new Date() }));
+    expect(filled).toEqual(['mqlQualified']);
+    expect([...filled, ...empty]).not.toContain('score');
   });
 });
 

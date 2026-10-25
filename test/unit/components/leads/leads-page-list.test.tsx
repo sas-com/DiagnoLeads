@@ -130,7 +130,6 @@ vi.mock('@/hooks/use-leads', () => ({
     data: {
       total: 120,
       byStatus: { new: 40, nurturing: 30, negotiating: 20, won: 18, lost: 12 },
-      averageScore: 61.4,
     },
     refetch: vi.fn(),
   }),
@@ -218,13 +217,13 @@ const headerOf = async (name: string) =>
 
 describe('LeadsPage list (server-driven)', () => {
   it('asks the server for what the URL says', async () => {
-    renderPage('status=new,won&inflow=seminar&sort=score&order=asc&page=2&q=山田');
+    renderPage('status=new,won&inflow=seminar&sort=company&order=asc&page=2&q=山田');
     await table();
     expect(lastInput()).toEqual({
       organizationId: ORG_ID,
       limit: 20,
       offset: 20,
-      sortBy: 'score',
+      sortBy: 'company',
       sortOrder: 'asc',
       status: ['new', 'won'],
       inflowSource: ['seminar'],
@@ -311,12 +310,12 @@ describe('LeadsPage list (server-driven)', () => {
       '/ja/leads',
       '/ja/leads?status=nurturing%2Cnegotiating',
       '/ja/leads?status=won',
-      '/ja/leads?sort=score&order=desc',
     ]);
     expect(within(cards[0]).getByText('120')).toBeInTheDocument();
     expect(within(cards[1]).getByText('50')).toBeInTheDocument();
     expect(within(cards[2]).getByText('15.0%')).toBeInTheDocument();
-    expect(within(cards[3]).getByText('61')).toBeInTheDocument();
+    // No average score card: the MQL level says how promising leads are (#447)
+    expect(screen.queryByText('61')).not.toBeInTheDocument();
   });
 
   it('shows the source translated', async () => {
@@ -456,7 +455,7 @@ describe('LeadsPage list (server-driven)', () => {
       capped: true,
       maxRows: 5000,
     });
-    renderPage('status=new&next=thisWeek&sort=score&order=asc&page=2');
+    renderPage('status=new&next=thisWeek&sort=company&order=asc&page=2');
     await table();
 
     await user.click(screen.getByRole('button', { name: messages.common.export }));
@@ -469,7 +468,7 @@ describe('LeadsPage list (server-driven)', () => {
       organizationId: ORG_ID,
       status: ['new'],
       nextMeeting: 'thisWeek',
-      sortBy: 'score',
+      sortBy: 'company',
       sortOrder: 'asc',
       format: 'csv',
       locale: 'ja',

@@ -18,6 +18,7 @@ vi.mock('openai', () => ({
 }));
 
 import {
+  EMBEDDING_MAX_INPUT_TOKENS,
   MAX_EMBEDDING_FIELD_CHARS,
   MAX_EMBEDDING_TEXT_CHARS,
   prepareLeadText,
@@ -197,16 +198,36 @@ describe('prepareLeadText', () => {
     const name = `${'a'.repeat(MAX_EMBEDDING_FIELD_CHARS - 1)}😀`;
     expect(prepareLeadText({ name })).toBe('a'.repeat(MAX_EMBEDDING_FIELD_CHARS - 1));
   });
+
+  it("keeps the longest lead within the model's input limit, whatever its characters (#598)", () => {
+    // The tokenizer (cl100k_base) is a byte-level BPE: never more tokens than UTF-8 bytes. The
+    // costliest characters per UTF-16 unit are 3-byte ones (kanji, rare kanji); an emoji is 4
+    // bytes for 2 units
+    const bytes = (text: string) => new TextEncoder().encode(text).length;
+    const filled = (char: string) => {
+      const field = char.repeat(MAX_EMBEDDING_FIELD_CHARS);
+      return prepareLeadText({
+        name: field,
+        email: field,
+        company: field,
+        industry: field,
+        position: field,
+        notes: field,
+      });
+    };
+
+    for (const char of ['𠮷', '鬱', '😀', 'a']) {
+      const text = filled(char);
+      expect(text.length).toBeLessThanOrEqual(MAX_EMBEDDING_TEXT_CHARS);
+      expect(bytes(text)).toBeLessThanOrEqual(EMBEDDING_MAX_INPUT_TOKENS);
+    }
+    expect(bytes(filled('鬱'))).toBe(3 * MAX_EMBEDDING_TEXT_CHARS - 2);
+  });
 });
 
 describe('generateEmbedding type validation', () => {
   it('should export generateEmbedding function', async () => {
     const { generateEmbedding } = await import('@/lib/features/ai/embeddings/openai');
     expect(typeof generateEmbedding).toBe('function');
-  });
-
-  it('should export generateEmbeddingsBatch function', async () => {
-    const { generateEmbeddingsBatch } = await import('@/lib/features/ai/embeddings/openai');
-    expect(typeof generateEmbeddingsBatch).toBe('function');
   });
 });

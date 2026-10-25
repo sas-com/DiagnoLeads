@@ -154,10 +154,17 @@ async function activeMembers(db: Database, organizationId: string, userIds: stri
     );
 }
 
-/** Tell the employee that their link brought a diagnosis */
+/** Tell the employee that their link brought a diagnosis (the AX diagnosis unless named) */
 export async function notifyReferralDiagnosed(
   db: Database,
-  input: { organizationId: string; memberUserId: string; leadId: string; company: string }
+  input: {
+    organizationId: string;
+    memberUserId: string;
+    leadId: string;
+    company: string;
+    /** The title of a builder diagnosis (#481) */
+    diagnosisTitle?: string;
+  }
 ): Promise<void> {
   try {
     const [member] = await activeMembers(db, input.organizationId, [input.memberUserId]);
@@ -167,7 +174,7 @@ export async function notifyReferralDiagnosed(
       organizationId: input.organizationId,
       type: 'referral_diagnosed',
       title: 'あなたの紹介から診断がありました',
-      message: `${input.company || '会社名なし'} が、あなたの紹介リンクから AX 診断に回答しました。`,
+      message: `${input.company || '会社名なし'} が、あなたの紹介リンクから${input.diagnosisTitle ? `「${input.diagnosisTitle}」` : ' AX 診断'}に回答しました。`,
       data: { leadId: input.leadId },
     });
   } catch (error) {

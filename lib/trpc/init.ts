@@ -6,6 +6,7 @@ import { TRPCError, initTRPC } from '@trpc/server';
 import superjson from 'superjson';
 import { ZodError } from 'zod';
 import type { Context } from './context';
+import { NUL_INPUT_MESSAGE, containsNul } from './reject-nul';
 
 export const INTERNAL_ERROR_MESSAGE =
   'サーバーでエラーが発生しました。時間をおいてもう一度お試しください';
@@ -42,12 +43,24 @@ const t = initTRPC.context<Context>().create({
  * Export reusable router and procedure builders
  */
 export const router = t.router;
-export const publicProcedure = t.procedure;
+
+/**
+ * Every procedure refuses input containing NUL before it runs (#621): the database cannot store
+ * it, and the failed write would surface as an internal error that alerts whoever is on call
+ */
+const baseProcedure = t.procedure.use(async ({ getRawInput, next }) => {
+  if (containsNul(await getRawInput())) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: NUL_INPUT_MESSAGE });
+  }
+  return next();
+});
+
+export const publicProcedure = baseProcedure;
 
 /**
  * Protected procedure - requires authentication
  */
-export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
+export const protectedProcedure = baseProcedure.use(({ ctx, next }) => {
   if (!ctx.session || !ctx.user) {
     throw new TRPCError({ code: 'UNAUTHORIZED' });
   }

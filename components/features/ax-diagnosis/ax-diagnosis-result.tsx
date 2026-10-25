@@ -154,6 +154,8 @@ export function AxDiagnosisResult({
       : result.recommendation === 'consultation'
         ? 'consultation'
         : 'information';
+  // Access is the 30-minute online consultation of its landing page, whatever the result (#538)
+  const ctaNamespace = platform === 'access' ? 'accessCta' : 'cta';
 
   const requestConsultation = async (location: 'top' | 'bottom') => {
     if (sending) return;
@@ -231,7 +233,7 @@ export function AxDiagnosisResult({
         </>
       ) : (
         <>
-          {t('cta.button')}
+          {t(`${ctaNamespace}.button`)}
           <ArrowRight className="h-5 w-5" aria-hidden="true" />
         </>
       )}
@@ -333,7 +335,7 @@ export function AxDiagnosisResult({
       {!requested && (
         <div className="space-y-2 rounded-2xl border-2 border-ax-teal/30 p-4 print:hidden">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm font-bold">{t(`cta.${ctaKey}.lead`)}</p>
+            <p className="text-sm font-bold">{t(`${ctaNamespace}.${ctaKey}.lead`)}</p>
             {consultationButton('top', 'shrink-0 px-5 text-sm')}
           </div>
           {failedMessage('top')}
@@ -497,7 +499,7 @@ export function AxDiagnosisResult({
             <output ref={acceptedRef} tabIndex={-1} className="flex items-start gap-3 outline-none">
               <CheckCircle2 className="mt-0.5 h-6 w-6 shrink-0 text-ax-yellow" aria-hidden="true" />
               <span className="block">
-                <span className="block text-lg font-bold">{t('cta.accepted')}</span>
+                <span className="block text-lg font-bold">{t(`${ctaNamespace}.accepted`)}</span>
                 <span className="block text-sm text-white/90">{t('cta.acceptedBody')}</span>
               </span>
             </output>
@@ -516,7 +518,7 @@ export function AxDiagnosisResult({
             {createElement(
               subTag,
               { className: 'text-lg font-bold sm:text-xl' },
-              t(`cta.${ctaKey}.title`)
+              t(`${ctaNamespace}.${ctaKey}.title`)
             )}
             <p className="text-sm leading-relaxed text-white/90">{t('cta.body')}</p>
             {consultationButton('bottom')}
