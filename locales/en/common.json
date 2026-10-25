@@ -653,6 +653,7 @@
       "difficulty": "Migration difficulty (estimate)",
       "urgency": "Urgency to modernize",
       "primaryChallenge": "The challenge to tackle first",
+      "answeredChallenges": "Challenges you chose: {items}",
       "selectedChallenges": "Challenges you selected",
       "stepsTitle": "Start small, then go beyond migration to AX",
       "disclaimer": "This result is an estimate based on your answers. The exact approach, schedule and cost are determined in the current-system survey.",
