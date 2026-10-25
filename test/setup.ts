@@ -12,19 +12,26 @@ import '@testing-library/jest-dom';
 import { cleanup } from '@testing-library/react';
 import { afterEach, vi } from 'vitest';
 
+// The default Next.js router: one object for every render, like Next's useRouter. A new one per
+// render would re-run each effect that depends on the router, and hide an effect that misses a
+// dependency (#636)
+const router = vi.hoisted(() => ({
+  push: vi.fn(),
+  replace: vi.fn(),
+  prefetch: vi.fn(),
+  back: vi.fn(),
+}));
+
 // Cleanup after each test
 afterEach(() => {
   cleanup();
+  // The router lives for the whole file, so drop the calls and implementations a test gave it
+  for (const fn of Object.values(router)) fn.mockReset();
 });
 
 // Mock Next.js router
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: vi.fn(),
-    replace: vi.fn(),
-    prefetch: vi.fn(),
-    back: vi.fn(),
-  }),
+  useRouter: () => router,
   usePathname: () => '/',
   useSearchParams: () => new URLSearchParams(),
 }));

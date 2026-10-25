@@ -80,6 +80,10 @@ export function BulkActions({
   const bulkUpdateStatus = trpc.leads.bulkUpdateStatus.useMutation({
     onSuccess: (data) => {
       toast.success(t('updateSuccess', { count: data.updatedCount }));
+      // Leads with deals take their status from the deals (#444)
+      if (data.skippedWithDeals > 0) {
+        toast.info(t('skippedWithDeals', { count: data.skippedWithDeals }));
+      }
       onClearSelection();
       onActionComplete();
       setShowStatusDialog(false);

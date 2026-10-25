@@ -6,15 +6,15 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock next/navigation
-const mockPush = vi.fn();
-const mockRefresh = vi.fn();
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: mockPush,
-    refresh: mockRefresh,
-  }),
-  usePathname: () => '/ja/dashboard',
-}));
+const { mockPush, mockRefresh } = vi.hoisted(() => ({ mockPush: vi.fn(), mockRefresh: vi.fn() }));
+vi.mock('next/navigation', () => {
+  // One object for every render, like Next's useRouter (#636)
+  const router = { push: mockPush, refresh: mockRefresh };
+  return {
+    useRouter: () => router,
+    usePathname: () => '/ja/dashboard',
+  };
+});
 
 // Mock i18n config
 vi.mock('@/lib/i18n/config', () => ({

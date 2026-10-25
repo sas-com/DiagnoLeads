@@ -59,11 +59,15 @@ vi.mock('@/lib/trpc/client', () => {
 vi.mock('@/hooks/use-organization', () => ({
   useOrganization: () => ({ organizationId: ORG_ID }),
 }));
-vi.mock('next/navigation', () => ({
-  useSearchParams: () => new URLSearchParams(mocks.search),
-  usePathname: () => '/ja/deals',
-  useRouter: () => ({ replace: mocks.replace, push: vi.fn() }),
-}));
+vi.mock('next/navigation', () => {
+  // One object for every render, like Next's useRouter (#636)
+  const router = { replace: mocks.replace, push: vi.fn() };
+  return {
+    useSearchParams: () => new URLSearchParams(mocks.search),
+    usePathname: () => '/ja/deals',
+    useRouter: () => router,
+  };
+});
 vi.mock('sonner', () => ({ toast: mocks.toast }));
 
 beforeAll(() => {
