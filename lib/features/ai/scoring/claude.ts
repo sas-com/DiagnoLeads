@@ -14,6 +14,7 @@ import { reportClaudeFailure } from '../failures';
 import type { LeadForClaude } from '../prompt-input';
 import { LEAD_DATA_TAG, UNTRUSTED_LEAD_DATA_POLICY, leadDataBlock } from '../prompt-safety';
 import { AI_BATCH_MAX } from '../types/schemas';
+import { type AiCallScope, logAiUsage } from '../usage';
 
 // Lead score response schema
 const LeadScoreSchema = z.object({
@@ -90,10 +91,15 @@ Consider factors like:
  * Score a lead using Claude AI
  * @param lead - Lead information to analyze (its id is only logged, with the fields that look
  *   like a prompt injection)
+ * @param scope - The organization the call is made for, logged with the tokens used (#47)
  * @returns AI-generated lead score and recommendations
  */
-export async function scoreLeadWithAI(lead: LeadForScoring): Promise<LeadScoreResult> {
+export async function scoreLeadWithAI(
+  lead: LeadForScoring,
+  scope: AiCallScope
+): Promise<LeadScoreResult> {
   try {
+    const startedAt = performance.now();
     const message = await anthropic.messages.parse({
       model: CLAUDE_MODEL,
       max_tokens: CLAUDE_MAX_TOKENS,
@@ -106,6 +112,7 @@ export async function scoreLeadWithAI(lead: LeadForScoring): Promise<LeadScoreRe
       ],
       output_config: { effort: 'low', format: leadScoreOutputFormat },
     });
+    logAiUsage({ operation: 'score-lead', ...scope, model: CLAUDE_MODEL, startedAt }, message);
 
     if (!message.parsed_output) {
       throw new Error(`No structured output from Claude (stop_reason: ${message.stop_reason})`);
@@ -131,10 +138,12 @@ export async function scoreLeadWithAI(lead: LeadForScoring): Promise<LeadScoreRe
 /**
  * Batch score multiple leads
  * @param leads - Array of leads to score
+ * @param scope - The organization the calls are made for (one usage line per lead)
  * @returns Array of scores
  */
 export async function scoreLeadsBatch(
-  leads: Array<LeadForScoring & { id: string }>
+  leads: Array<LeadForScoring & { id: string }>,
+  scope: AiCallScope
 ): Promise<Map<string, LeadScoreResult>> {
   const scores = new Map<string, LeadScoreResult>();
 
@@ -144,7 +153,7 @@ export async function scoreLeadsBatch(
     const results = await Promise.all(
       batch.map(async (lead) => ({
         id: lead.id,
-        score: await scoreLeadWithAI(lead),
+        score: await scoreLeadWithAI(lead, scope),
       }))
     );
 

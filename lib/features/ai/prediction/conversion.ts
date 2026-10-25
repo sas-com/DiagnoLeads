@@ -9,6 +9,7 @@ import { reportClaudeFailure } from '../failures';
 import type { ContactCompleteness, LeadForClaude } from '../prompt-input';
 import { LEAD_DATA_TAG, UNTRUSTED_LEAD_DATA_POLICY, leadDataBlock } from '../prompt-safety';
 import { AI_BATCH_MAX } from '../types/schemas';
+import { type AiCallScope, logAiUsage } from '../usage';
 
 /** The lead as the prediction reads it: nothing that points at a person (#406) */
 export type LeadForPrediction = LeadForClaude;
@@ -71,14 +72,17 @@ export interface ConversionFactor {
 
 /**
  * Predict conversion probability for a single lead
+ * @param scope - The organization the call is made for, logged with the tokens used (#47)
  */
 export async function predictConversion(
   lead: LeadForPrediction,
-  contact: ContactCompleteness
+  contact: ContactCompleteness,
+  scope: AiCallScope
 ): Promise<ConversionPrediction> {
   const prompt = buildPredictionPrompt(lead);
 
   try {
+    const startedAt = performance.now();
     const message = await anthropic.messages.parse({
       model: CLAUDE_MODEL,
       max_tokens: CLAUDE_MAX_TOKENS,
@@ -91,6 +95,10 @@ export async function predictConversion(
       ],
       output_config: { effort: 'low', format: predictionOutputFormat },
     });
+    logAiUsage(
+      { operation: 'predict-conversion', ...scope, model: CLAUDE_MODEL, startedAt },
+      message
+    );
 
     if (!message.parsed_output) {
       console.error('Conversion prediction: no structured output', message.stop_reason);
@@ -108,9 +116,11 @@ export async function predictConversion(
 
 /**
  * Batch predict conversion for multiple leads
+ * @param scope - The organization the calls are made for (one usage line per lead)
  */
 export async function predictConversionBatch(
-  leads: Array<{ lead: LeadForPrediction; contact: ContactCompleteness }>
+  leads: Array<{ lead: LeadForPrediction; contact: ContactCompleteness }>,
+  scope: AiCallScope
 ): Promise<Map<string, ConversionPrediction>> {
   const results = new Map<string, ConversionPrediction>();
 
@@ -118,7 +128,7 @@ export async function predictConversionBatch(
   for (let i = 0; i < leads.length; i += AI_BATCH_MAX) {
     const batch = leads.slice(i, i + AI_BATCH_MAX);
     const predictions = await Promise.all(
-      batch.map(({ lead, contact }) => predictConversion(lead, contact))
+      batch.map(({ lead, contact }) => predictConversion(lead, contact, scope))
     );
     batch.forEach(({ lead }, index) => {
       results.set(lead.id, predictions[index]);
