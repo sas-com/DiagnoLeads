@@ -76,8 +76,8 @@ vi.mock('@/hooks/use-analytics', () => ({
     totalLeads: 14,
     newLeadsThisMonth: 7,
     conversionRate: 14.3,
-    mqlLevels: { interest: 3, fit: 2, none: 4, unknown: 1 },
-    mqlRate: 30,
+    mqlLevels: { interest: 3, fit: 2, none: 4, unknown: 5 },
+    mqlRate: 21.43,
     leadsByStatus: { new: 5, nurturing: 2, negotiating: 3, won: 2, lost: 2 },
   }),
   useLeadTrend: query([]),
@@ -159,6 +159,25 @@ describe('AnalyticsPage', () => {
     expect(screen.queryByText(/平均スコア/)).not.toBeInTheDocument();
     expect(screen.queryByText(/スコア分布/)).not.toBeInTheDocument();
     expect(screen.queryByText(/リードの質/)).not.toBeInTheDocument();
+  });
+
+  it('shows the MQL (interested) count and rate at the top, and the leads per MQL level (#605)', () => {
+    renderPage();
+    const kpi = screen.getByText('MQL（関心あり）').closest('div.p-6') as HTMLElement;
+    expect(within(kpi).getByText('3')).toBeInTheDocument();
+    expect(within(kpi).getByText('全リードの 21.4%')).toBeInTheDocument();
+
+    const breakdown = screen.getByText('MQL段階の内訳').closest('div.p-6') as HTMLElement;
+    for (const [label, count, rate] of [
+      ['関心あり（MQL）', '3件', '21.4%'],
+      ['適合', '2件', '14.3%'],
+      ['対象外', '4件', '28.6%'],
+      ['診断なし', '5件', '35.7%'],
+    ]) {
+      const row = within(breakdown).getByText(label).closest('div.space-y-3') as HTMLElement;
+      expect(within(row).getByText(count)).toBeInTheDocument();
+      expect(within(row).getByText(rate)).toBeInTheDocument();
+    }
   });
 
   it('shows the status donut without its overlapping legend, colored per status', () => {
@@ -257,5 +276,7 @@ describe('AnalyticsPage', () => {
     renderPage();
     await userEvent.click(screen.getByRole('tab', { name: 'パフォーマンス' }));
     expect(screen.getByText('準備中（初回連絡の記録の追加後に表示）')).toBeInTheDocument();
+    // The KPIs are at the top of the page, not repeated in the tab (#605)
+    expect(screen.queryByText('パフォーマンスの概要')).not.toBeInTheDocument();
   });
 });

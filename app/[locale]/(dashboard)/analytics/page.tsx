@@ -26,6 +26,7 @@ import { ProgressBar } from '@/components/ui/progress-bar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { LeadStatus } from '@/lib/features/leads/types';
 import { LEAD_STATUSES } from '@/lib/features/leads/types/pipeline';
+import { MQL_LEVEL_FILTERS, type MqlLevelFilter } from '@/lib/features/leads/types/schemas';
 import { AgencyContractReportCard } from './_components/agency-contract-report-card';
 import { DeliveryReportCards } from './_components/delivery-report-cards';
 import { AcquisitionCostCard, AgencyPerformanceCard } from './_components/source-cost-cards';
@@ -48,6 +49,7 @@ import {
 import type { DateRange, TrendGranularity } from '@/lib/features/analytics/types/schemas';
 import {
   Activity,
+  BadgeCheck,
   BarChart3,
   Calendar,
   Download,
@@ -84,6 +86,14 @@ const ResponseTimeChart = dynamic(
   }
 );
 
+/** Bar colors of the MQL levels: 関心あり in emerald like the list's MQL badge */
+const MQL_LEVEL_COLORS: Record<MqlLevelFilter, 'emerald' | 'blue' | 'gray' | 'amber'> = {
+  interest: 'emerald',
+  fit: 'blue',
+  none: 'gray',
+  unknown: 'amber',
+};
+
 /** Leads without a recorded 流入元 */
 const UNSET_INFLOW_SOURCE = 'unset';
 
@@ -114,6 +124,7 @@ export default function AnalyticsPage() {
   const tCommon = useTranslations('common');
   const tInflowSource = useTranslations('pipeline.inflowSource');
   const tLeads = useTranslations('leads');
+  const tMqlLevel = useTranslations('leadList.mqlLevelOptions');
   const locale = useLocale();
   const format = useFormatter();
   const { organizationId: contextOrgId, isLoading: contextLoading } = useOrganization();
@@ -326,7 +337,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Total Leads */}
         <Card className="p-6" decoration="top" decorationColor="blue">
           <div className="flex items-start justify-between">
@@ -378,6 +389,29 @@ export default function AnalyticsPage() {
           </div>
           <div className="mt-4">
             <ProgressBar value={overview?.conversionRate || 0} color="violet" />
+          </div>
+        </Card>
+
+        {/* MQL (interested): the sign of how promising leads are (#447, #605) */}
+        <Card className="p-6" decoration="top" decorationColor="emerald">
+          <div className="flex items-start justify-between">
+            <div>
+              <Text>{t('stats.mqlInterest')}</Text>
+              {overviewLoading ? (
+                <div className="h-9 w-20 bg-gray-200 animate-pulse rounded mt-2" />
+              ) : (
+                <Metric className="mt-2">{format.number(overview?.mqlLevels.interest || 0)}</Metric>
+              )}
+            </div>
+            <div className="p-3 bg-emerald-50 rounded-xl">
+              <BadgeCheck className="h-6 w-6 text-emerald-600" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <ProgressBar value={overview?.mqlRate || 0} color="emerald" />
+            <Text className="mt-2">
+              {t('stats.mqlRate', { rate: (overview?.mqlRate || 0).toFixed(1) })}
+            </Text>
           </div>
         </Card>
       </div>
@@ -457,6 +491,31 @@ export default function AnalyticsPage() {
               )}
             </Card>
           </div>
+
+          {/* Leads per MQL level, counted as the list's MQL level filter (#605) */}
+          {overview && !overviewLoading && (
+            <Card className="mt-6 p-6">
+              <Title>{t('charts.mqlLevels')}</Title>
+              <Text>{t('charts.mqlLevelsDescription')}</Text>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-4">
+                {MQL_LEVEL_FILTERS.map((level) => {
+                  const value = overview.mqlLevels[level];
+                  const percentage =
+                    overview.totalLeads > 0 ? (value / overview.totalLeads) * 100 : 0;
+                  return (
+                    <div key={level} className="space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <Text className="font-medium">{tMqlLevel(level)}</Text>
+                        <Text className="font-semibold">{t('leadCount', { count: value })}</Text>
+                      </div>
+                      <ProgressBar value={percentage} color={MQL_LEVEL_COLORS[level]} />
+                      <Text className="text-right">{percentage.toFixed(1)}%</Text>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
 
           {/* Status Progress Cards */}
           {overview && !overviewLoading && (
@@ -635,24 +694,6 @@ export default function AnalyticsPage() {
               )}
             </Card>
           </div>
-
-          {/* Performance Summary */}
-          {overview && !overviewLoading && (
-            <Card className="mt-6 p-6">
-              <Title>{t('performanceSummary.title')}</Title>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-4">
-                <div>
-                  <Text>{t('stats.conversionRate')}</Text>
-                  <Metric className="mt-2">{overview.conversionRate.toFixed(1)}%</Metric>
-                  <ProgressBar value={overview.conversionRate} color="violet" className="mt-3" />
-                </div>
-                <div>
-                  <Text>{t('stats.newLeadsThisMonth')}</Text>
-                  <Metric className="mt-2">{overview.newLeadsThisMonth}</Metric>
-                </div>
-              </div>
-            </Card>
-          )}
         </TabsContent>
       </Tabs>
     </div>
