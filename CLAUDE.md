@@ -99,6 +99,7 @@ Issue → 決定を読む → ブランチ → 実装 → 速い検証 → 全�
 ## UI
 
 - その時点のモダンな UI 部品を採用する。今の標準は shadcn/ui（Radix UI + Tailwind CSS v4）。部品は `bunx shadcn@latest add <component>` で `components/ui/` に足す
+- 管理者サイト（管理画面とログインなどの認証画面）の見た目は、デジタル庁デザインシステム（DADS）に従う。部品は shadcn/ui のまま、色・文字・角丸・影・ボタンの使い分けを DADS の値とルールに合わせる（キーカラーは Green、値は `@digital-go-jp/design-tokens`、色は `app/globals.css` の `html:has(.dl-admin)` で当てる）。14px 未満の文字・グラデーション・装飾の影を使わず、テキストは背景と 4.5:1 以上、塗りのボタンは1画面に原則1つ。画面の中身と配置は STUDIO を参考にする。AX の公開サイトには当てない（決定 `2026-10-24-admin-dads`）
 - グラフは ApexCharts（`components/charts/`）に寄せる（決定 `2026-10-24-chart-library-apexcharts`）。新しいグラフ用のライブラリは入れない（shadcn/ui の Chart も入れない）。使っていない recharts は #53 で依存から外す
 - 新しい UI ライブラリを入れるときは、Issue に理由を残し、決定を記録する
 
