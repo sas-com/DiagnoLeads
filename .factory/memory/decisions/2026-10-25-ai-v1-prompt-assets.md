@@ -33,7 +33,7 @@ paths: ["lib/features/ai/usage.ts", "lib/features/ai/client.ts", "lib/features/a
   - モデル ID を環境変数にする（この決定を書いた側の理由で、オーナーが却下したものではない）：替えるときにコードの確認（提供終了・パラメータの互換）が要るので、コードの1か所にしておく
 - **ルール**:
   - Claude と OpenAI を呼ぶ関数を足すときは、応答を受け取った直後に `logAiUsage` を呼ぶ（呼び出しの直前に取った `performance.now()` を `startedAt` に渡す）。`operation` を `AiOperation` に足し、組織は呼び出し元（ルーター）から `AiCallScope` で受け取る。#48 の AI 分析と #712 の生成・言い換えも同じ
-  - 構造化出力を受け取る呼び出しは `messages.parse` を使わず、`messages.create` に同じ `output_config` を渡し、`logAiUsage` のあとで `readStructuredOutput` に通す。出力が長く切れやすい #48 の分析と #712 の生成も同じ
+  - 構造化出力を受け取る呼び出しは `messages.parse` を使わず、`messages.create` に同じ `output_config` を渡し、`logAiUsage` のあとで `readStructuredOutput` に通す（決定 `2026-10-24-ai-calls-via-anthropic-sdk` の構造化出力の受け取り方を、こう細かくした）。出力が長く切れやすい #48 の分析と #712 の生成も同じ
   - 使用量のログに項目を足すときは、数と名前だけにする。リードの ID・プロンプト・答えの文・個人を指す項目を入れない。`logAiUsage` は例外を投げず、呼び出しの結果を変えない形を保つ
   - 失敗の扱い（`reportClaudeFailure`・代わりの値）は使用量のログと分けたままにする
 - **確かめた公式ドキュメント**（2026-10-25）:
