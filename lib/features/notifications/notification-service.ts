@@ -199,8 +199,9 @@ export type NotificationPreferenceUpdates = Partial<Record<NotificationPreferenc
 /**
  * The preference switches of `source`, read by name (#743). A procedure's input still carries
  * keys its schema does not declare (organizationInputSchema passes them through and tRPC merges
- * the parsed inputs), and drizzle writes every key that names a column: spreading the input let
- * a member set user_id, id or created_at of their row.
+ * the parsed inputs), and drizzle writes every key that is a column property of the table
+ * (userId, id, createdAt): spreading the input let a member set user_id, id or created_at of
+ * their row.
  */
 export function pickPreferenceUpdates(
   source: Partial<Record<NotificationPreferenceKey, unknown>>

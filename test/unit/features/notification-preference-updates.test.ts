@@ -1,8 +1,9 @@
 /**
  * Only the preference switches reach the update of notification_preferences (#743). The
  * resolver's input still carries keys its schema does not declare (organizationInputSchema
- * passes them through and tRPC merges the parsed inputs), and drizzle writes every key that
- * names a column. The same through the router on a real PostgreSQL:
+ * passes them through and tRPC merges the parsed inputs), and drizzle writes every key that is
+ * a column property of the table (userId, not user_id). The same through the router on a real
+ * PostgreSQL:
  * test/unit/integration/notification-preferences-unknown-keys.db.test.ts
  */
 import { describe, expect, it, vi } from 'vitest';

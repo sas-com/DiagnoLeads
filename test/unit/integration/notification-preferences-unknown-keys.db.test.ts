@@ -2,10 +2,15 @@
  * Keys notifications.updatePreferences does not declare (#743), on a real PostgreSQL through the
  * tRPC router. organizationInputSchema passes unknown keys through and tRPC merges the parsed
  * inputs, so the resolver's input still carries keys that the procedure's own schema drops. Only
- * the preference switches may reach the update: a member who adds another member's userId, a
- * new id or an organization_id keeps the row their own (user_id, organization_id, id and
- * created_at unchanged, and the other member's row untouched), a value of the wrong type for a
- * column is not an internal error, and the switches sent still change. All values are fictional.
+ * the preference switches may reach the update: a member who adds another member's userId or a
+ * new id keeps the row their own (user_id, organization_id, id and created_at unchanged, and the
+ * other member's row untouched), a value of the wrong type for a column is not an internal error,
+ * and the switches sent still change. All values are fictional.
+ *
+ * The keys sent are the table's property names (userId, id, createdAt): drizzle's .set() writes
+ * only those and ignores database column names such as organization_id. organizationId is
+ * declared by the procedure (it picks the organization whose membership is checked), so it does
+ * not arrive as an unknown key.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/dl_test \
@@ -49,7 +54,6 @@ describe.skipIf(!url)('notifications.updatePreferences: keys it does not declare
     : (null as unknown as ReturnType<typeof drizzle<typeof schema>>);
   const unique = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   let orgA: string;
-  let orgB: string;
   let senderId: string;
   let otherMemberId: string;
   const userIds: string[] = [];
@@ -57,8 +61,7 @@ describe.skipIf(!url)('notifications.updatePreferences: keys it does not declare
 
   /** Ids shown by name, so a failure reads "other member" rather than a uuid */
   const who = (id: string) =>
-    ({ [senderId]: 'sender', [otherMemberId]: 'other member', [orgA]: 'A', [orgB]: 'B' })[id] ??
-    id;
+    ({ [senderId]: 'sender', [otherMemberId]: 'other member', [orgA]: 'A' })[id] ?? id;
 
   const rowsOf = (userId: string, organizationId: string) =>
     pg
@@ -78,15 +81,11 @@ describe.skipIf(!url)('notifications.updatePreferences: keys it does not declare
   const senderRow = () => asSender.notifications.getPreferences({ organizationId: orgA });
 
   beforeAll(async () => {
-    const created = await pg
+    const [created] = await pg
       .insert(organizations)
-      .values([
-        { name: '通知の設定A', slug: `prefs-keys-a-${unique()}` },
-        { name: '通知の設定B', slug: `prefs-keys-b-${unique()}` },
-      ])
+      .values({ name: '通知の設定A', slug: `prefs-keys-a-${unique()}` })
       .returning({ id: organizations.id });
-    orgA = created[0].id;
-    orgB = created[1].id;
+    orgA = created.id;
     const [sender, other] = await pg
       .insert(users)
       .values([
@@ -100,7 +99,6 @@ describe.skipIf(!url)('notifications.updatePreferences: keys it does not declare
     await pg.insert(organizationMembers).values([
       { organizationId: orgA, userId: sender.id, role: 'member' },
       { organizationId: orgA, userId: other.id, role: 'member' },
-      { organizationId: orgB, userId: sender.id, role: 'member' },
     ]);
     // The other member already has settings in A: the daily digest off, the weekly report on
     await pg.insert(notificationPreferences).values({
@@ -117,20 +115,17 @@ describe.skipIf(!url)('notifications.updatePreferences: keys it does not declare
   });
 
   afterAll(async () => {
-    if (orgA) await pg.delete(organizations).where(inArray(organizations.id, [orgA, orgB]));
+    if (orgA) await pg.delete(organizations).where(eq(organizations.id, orgA));
     if (userIds.length > 0) await pg.delete(users).where(inArray(users.id, userIds));
     await client?.end();
   });
 
-  it("keeps the row the sender's when another member's userId and an organization_id are sent", async () => {
+  it("keeps the row the sender's when another member's userId is sent", async () => {
     const before = await senderRow();
 
     const result = await outcome(
       asSender.notifications.updatePreferences(
-        withUnknownKeys(
-          { organizationId: orgA, emailDailyDigest: true },
-          { userId: otherMemberId, organization_id: orgB }
-        )
+        withUnknownKeys({ organizationId: orgA, emailDailyDigest: true }, { userId: otherMemberId })
       )
     );
 
@@ -146,12 +141,10 @@ describe.skipIf(!url)('notifications.updatePreferences: keys it does not declare
       // One row each: the sender's row did not become a second row of the other member
       senderRowsInA: (await rowsOf(senderId, orgA)).length,
       otherMemberDigestInA: (await rowsOf(otherMemberId, orgA)).map((row) => row.emailDailyDigest),
-      senderRowsInB: (await rowsOf(senderId, orgB)).length,
     }).toEqual({
       row: { user: 'sender', organization: 'A', emailDailyDigest: true, createdAt: before.createdAt },
       senderRowsInA: 1,
       otherMemberDigestInA: [false],
-      senderRowsInB: 0,
     });
   });
 
