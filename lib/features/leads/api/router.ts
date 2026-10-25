@@ -999,7 +999,10 @@ export const leadsRouter = router({
           response: {
             success: true,
             updatedCount: result.length,
-            skippedWithDeals: withDeals.size,
+            // Leads with deals that would have changed; one already at the status is not counted
+            skippedWithDeals: before.filter(
+              (row) => withDeals.has(row.id) && row.status !== input.status
+            ).length,
           },
           events,
         };

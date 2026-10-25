@@ -23,6 +23,9 @@ const db = {
   update: vi.fn(() => chain),
   insert: vi.fn(() => chain),
   delete: vi.fn(() => chain),
+  // PATCH locks the lead in a transaction (#444); the fake runs it on the same mock
+  execute: vi.fn(async () => []),
+  transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(db)),
 };
 chain.set.mockReturnValue(chain);
 chain.values.mockReturnValue(chain);

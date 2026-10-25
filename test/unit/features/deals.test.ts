@@ -12,6 +12,7 @@ import {
   leadChangesFromDeals,
   leadPhaseOfDeal,
   phaseFromDeals,
+  wonWithoutWonDeal,
   statusFromDeals,
 } from '@/lib/features/deals/lead-sync';
 import {
@@ -137,6 +138,21 @@ describe('statusFromDeals', () => {
   it('goes back when the won deal is reopened or only open deals are left', () => {
     expect(statusFromDeals([deal({ stage: 'negotiation' })])).toBe('negotiating');
     expect(statusFromDeals([deal({ stage: 'lost' }), deal()])).toBe('negotiating');
+  });
+});
+
+describe('wonWithoutWonDeal', () => {
+  it('is a lead won by hand whose deals hold no win (#444)', () => {
+    expect(wonWithoutWonDeal({ status: 'won', dealPhase: null }, [])).toBe(true);
+    expect(wonWithoutWonDeal({ status: 'negotiating', dealPhase: 'migration_won' }, [])).toBe(true);
+    expect(wonWithoutWonDeal({ status: 'won', dealPhase: 'survey_won' }, [deal()])).toBe(true);
+  });
+
+  it('is false once a deal is won, or for a lead not won', () => {
+    expect(wonWithoutWonDeal({ status: 'won', dealPhase: null }, [deal({ stage: 'won' })])).toBe(
+      false
+    );
+    expect(wonWithoutWonDeal({ status: 'negotiating', dealPhase: 'proposal' }, [])).toBe(false);
   });
 });
 

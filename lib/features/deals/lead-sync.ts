@@ -91,6 +91,22 @@ export function statusFromDeals(deals: SyncDeal[]): LeadStatus | null {
   return 'lost';
 }
 
+/** Deal phases of a won deal (現行調査受注 / 移行受注 / AX化) */
+const WON_PHASES: readonly string[] = ['survey_won', 'migration_won', 'ax'];
+
+/**
+ * A lead won by hand before it had deals (成約, or a won phase) whose deals hold no win. Its
+ * status would be computed back to 商談中 by an open deal, so the win is recorded first as a won
+ * deal (createDeal refuses an open or lost one until then, #444).
+ */
+export function wonWithoutWonDeal(
+  lead: Pick<SyncLead, 'status' | 'dealPhase'>,
+  deals: Pick<SyncDeal, 'stage'>[]
+): boolean {
+  const won = lead.status === 'won' || WON_PHASES.includes(lead.dealPhase ?? '');
+  return won && !deals.some((deal) => deal.stage === 'won');
+}
+
 /** Lost reason of the deal lost last (by close day, then by update) */
 export function latestLostReason(deals: SyncDeal[]): LostReason | null {
   const lost = deals

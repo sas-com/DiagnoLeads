@@ -47,7 +47,7 @@ import {
   sql,
 } from 'drizzle-orm';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
-import { leadChangesFromDeals } from './lead-sync';
+import { leadChangesFromDeals, wonWithoutWonDeal } from './lead-sync';
 import {
   CLOSED_DEAL_STAGES,
   DEAL_KINDS,
@@ -570,6 +570,17 @@ export async function createDeal(
     const stage = input.stage;
     const lost = stage === 'lost';
     if (lost && !input.lostReason) throw badRequest('A lost deal needs a lost reason');
+    // A lead won by hand keeps its win only once the win is a deal: an open deal first would
+    // compute it back to 商談中 (#444)
+    if (stage !== 'won') {
+      const leadDeals = await tx
+        .select({ stage: deals.stage })
+        .from(deals)
+        .where(and(eq(deals.organizationId, input.organizationId), eq(deals.leadId, lead.id)));
+      if (wonWithoutWonDeal(lead, leadDeals)) {
+        throw badRequest('The lead is won: create its won deal with the stage won first');
+      }
+    }
     const targetSystem =
       input.targetSystem !== undefined
         ? input.targetSystem

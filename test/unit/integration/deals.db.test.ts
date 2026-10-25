@@ -36,12 +36,25 @@ vi.mock('@/lib/features/lead-handoff/notify', () => ({
   notifyLeadHandoff: sent.notifyLeadHandoff.mockResolvedValue({ notified: 0 }),
 }));
 
+// REST API v2 reads the module's db and its own auth (#444): the test's database and organization
+const v2 = vi.hoisted(() => ({
+  db: null as unknown,
+  auth: vi.fn(),
+}));
+vi.mock('@/lib/db', () => ({
+  get db() {
+    return v2.db;
+  },
+}));
+vi.mock('@/lib/api/v2-auth', () => ({ getAuthenticatedOrganization: v2.auth }));
+
 const url = process.env.TEST_DATABASE_URL;
 
 describe.skipIf(!url)('deals (PostgreSQL)', () => {
   const client = url ? postgres(url, { max: 6 }) : null;
   // biome-ignore lint/style/noNonNullAssertion: guarded by skipIf
   const pg = (client ? drizzle(client, { schema }) : null)!;
+  v2.db = pg;
   const unique = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const organizationIds: string[] = [];
   const userIds: string[] = [];
@@ -518,13 +531,81 @@ describe.skipIf(!url)('deals (PostgreSQL)', () => {
       expect((await leadOf(without.id)).status).toBe('nurturing');
     });
 
-    it('does not count the deals of another organization', async () => {
+    it('lets a lead without deals be changed by hand, as before', async () => {
       const lead = await createLead(orgA);
       expect(await memberA.leads.get({ organizationId: orgA, id: lead.id })).toMatchObject({
         hasDeals: false,
       });
       await memberA.leads.update({ organizationId: orgA, id: lead.id, status: 'nurturing' });
       expect((await leadOf(lead.id)).status).toBe('nurturing');
+    });
+
+    it('keeps the lead when its last deal is deleted, and lets it be changed by hand again', async () => {
+      const lead = await createLead(orgA);
+      const deal = await adminA.deals.create({
+        organizationId: orgA,
+        leadId: lead.id,
+        name: '調査',
+        stage: 'proposal',
+      });
+      await adminA.deals.delete({ organizationId: orgA, dealId: deal.id });
+      expect(await leadOf(lead.id)).toMatchObject({ status: 'negotiating', dealPhase: 'proposal' });
+
+      await memberA.leads.update({ organizationId: orgA, id: lead.id, status: 'nurturing' });
+      expect((await leadOf(lead.id)).status).toBe('nurturing');
+      const listed = await memberA.leads.list({ organizationId: orgA, search: lead.email });
+      expect(listed.items.find((item: { id: string }) => item.id === lead.id)).toMatchObject({
+        hasDeals: false,
+      });
+    });
+
+    it('asks for the win as a won deal before an open deal of a lead won by hand', async () => {
+      const lead = await createLead(orgA, {
+        status: 'won',
+        hasNegotiated: true,
+        dealPhase: 'survey_won',
+      });
+      await expect(
+        adminA.deals.create({ organizationId: orgA, leadId: lead.id, name: '移行', kind: 'migration' })
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(await pg.select().from(deals).where(eq(deals.leadId, lead.id))).toHaveLength(0);
+
+      // Once the win is a deal, the next deal keeps the lead won
+      await adminA.deals.create({ organizationId: orgA, leadId: lead.id, name: '調査', stage: 'won' });
+      await adminA.deals.create({
+        organizationId: orgA,
+        leadId: lead.id,
+        name: '移行',
+        kind: 'migration',
+      });
+      expect(await leadOf(lead.id)).toMatchObject({ status: 'won', dealPhase: 'survey_won' });
+    });
+
+    it('refuses the status of a lead with deals through REST API v2 too', async () => {
+      const { PATCH } = await import('@/app/api/v2/leads/[id]/route');
+      const { NextRequest } = await import('next/server');
+      const patch = (leadId: string, body: unknown) =>
+        PATCH(
+          new NextRequest(`http://localhost/api/v2/leads/${leadId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(body),
+            headers: { 'content-type': 'application/json' },
+          }),
+          { params: Promise.resolve({ id: leadId }) }
+        );
+      v2.auth.mockResolvedValue({ organizationId: orgA, userId: memberAId });
+
+      const lead = await createLead(orgA);
+      await adminA.deals.create({ organizationId: orgA, leadId: lead.id, name: '調査' });
+      expect((await patch(lead.id, { status: 'won' })).status).toBe(409);
+      expect((await leadOf(lead.id)).status).toBe('negotiating');
+      // The same status and the other fields still save
+      expect((await patch(lead.id, { status: 'negotiating', company: '新社名' })).status).toBe(200);
+      expect((await leadOf(lead.id)).company).toBe('新社名');
+
+      // A lead of another organization is not found, whatever its deals
+      v2.auth.mockResolvedValue({ organizationId: orgB, userId: adminBId });
+      expect((await patch(lead.id, { status: 'won' })).status).toBe(404);
     });
   });
 
