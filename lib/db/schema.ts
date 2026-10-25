@@ -1186,24 +1186,6 @@ export const leadTasks = pgTable(
 
 export type LeadTask = typeof leadTasks.$inferSelect;
 
-/**
- * Content Editors
- * Users who may edit FAQs and blog posts, granted from the settings screen by an owner / admin
- * of the operating organization. A grant only counts while the user is still a member of that
- * organization (#91).
- *
- * Unused since #413; dropped in P2 (#339)
- */
-export const contentEditors = pgTable('content_editors', {
-  userId: uuid('user_id')
-    .primaryKey()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  grantedBy: uuid('granted_by').references(() => users.id, { onDelete: 'set null' }),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
-
-export type ContentEditor = typeof contentEditors.$inferSelect;
-
 // Note: OrganizationType and DataSharingPolicy are already exported above at definition
 
 /**
