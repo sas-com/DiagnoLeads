@@ -351,17 +351,18 @@ export const RULES: Rule[] = [
   {
     id: 'cross-feature-internal',
     description:
-      "a feature imports another feature's types/ or service.ts, not its other files (listed: the file read)",
+      "a feature imports another feature's types/ or service.ts, not its other files (listed: the reading feature -> the file read)",
     mode: 'allowlist',
+    // One item per reading feature, so a listed file does not become open to every feature (#623)
     check: (graph) =>
       unique(
-        graph.edges
-          .filter((edge) => {
-            const from = featureOf(edge.from);
-            const to = featureOf(edge.to);
-            return from !== null && to !== null && from !== to && !isPublicSurface(edge.to);
-          })
-          .map((edge) => edge.to)
+        graph.edges.flatMap((edge) => {
+          const from = featureOf(edge.from);
+          const to = featureOf(edge.to);
+          return from !== null && to !== null && from !== to && !isPublicSurface(edge.to)
+            ? [`${from} -> ${edge.to}`]
+            : [];
+        })
       ),
   },
   {
