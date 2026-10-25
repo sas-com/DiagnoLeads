@@ -24,6 +24,16 @@ function withTrackingUrl<T extends CampaignUrlFields>(campaign: T): T & { tracki
 }
 
 /**
+ * The expiry an update writes (#610): none when expiresAt is not sent, so pausing and resuming
+ * from the settings page (which sends { isActive } alone) keeps the expiry the /q/ entry checks.
+ * null clears it
+ */
+function expiryUpdate(expiresAt: string | null | undefined): { expiresAt?: Date | null } {
+  if (expiresAt === undefined) return {};
+  return { expiresAt: expiresAt === null ? null : new Date(expiresAt) };
+}
+
+/**
  * Who may use this router (#356): anyone who can read leads may see the QR campaigns; creating,
  * changing and deleting them is for those who can update settings
  */
@@ -199,11 +209,13 @@ export const distributionRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'QR campaign not found' });
       }
 
+      // Only the fields sent change
+      const { expiresAt, ...fields } = input.data;
       const [updated] = await db
         .update(qrCampaigns)
         .set({
-          ...input.data,
-          expiresAt: input.data.expiresAt ? new Date(input.data.expiresAt) : null,
+          ...fields,
+          ...expiryUpdate(expiresAt),
           updatedAt: new Date(),
         })
         .where(
