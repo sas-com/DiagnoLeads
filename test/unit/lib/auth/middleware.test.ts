@@ -126,7 +126,10 @@ describe('verifyOrganizationAccess', () => {
   });
 
   it('should return false when user has no membership', async () => {
-    vi.mocked(db.query.organizationMembers.findFirst).mockResolvedValueOnce(null);
+    // findFirst is typed to resolve undefined when nothing matches; null pins the same guard
+    vi.mocked(db.query.organizationMembers.findFirst).mockResolvedValueOnce(
+      null as unknown as undefined
+    );
 
     const result = await verifyOrganizationAccess('user-123', 'org-456');
 
@@ -179,12 +182,13 @@ describe('getUserMembership', () => {
     expect(result).toEqual(mockMembership);
   });
 
-  it('should return null when membership not found', async () => {
-    vi.mocked(db.query.organizationMembers.findFirst).mockResolvedValueOnce(null);
+  it('should return undefined when membership not found', async () => {
+    // findFirst resolves undefined when nothing matches, and getUserMembership passes it through
+    vi.mocked(db.query.organizationMembers.findFirst).mockResolvedValueOnce(undefined);
 
     const result = await getUserMembership('user-123', 'org-999');
 
-    expect(result).toBeNull();
+    expect(result).toBeUndefined();
   });
 
   it('should return null and log error when query throws', async () => {

@@ -300,7 +300,7 @@ describe("Workflows Router", () => {
 		it("should update actions", async () => {
 			mockDb.query.workflows.findFirst.mockResolvedValue(mockWorkflow);
 			const newActions = [
-				{ type: "send_notification", params: { channel: "#leads" } },
+				{ type: "send_notification" as const, params: { channel: "#leads" } },
 			];
 			const updatedWorkflow = { ...mockWorkflow, actions: newActions };
 			mockDb.returning.mockResolvedValue([updatedWorkflow]);

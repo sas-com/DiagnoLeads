@@ -40,7 +40,8 @@ describe('OrganizationProvider', () => {
   });
 
   it('should provide context to children', () => {
-    let contextValue: OrganizationContextType | null = null;
+    // Asserted, not annotated, so TypeScript does not narrow it to null (the assignment is in the component)
+    let contextValue = null as OrganizationContextType | null;
     
     function TestComponent() {
       contextValue = useOrganizationContext();

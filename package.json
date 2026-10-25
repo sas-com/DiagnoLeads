@@ -10,7 +10,7 @@
     "start": "next start",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "arch:check": "bun scripts/check-architecture.ts",
     "test": "vitest",
     "test:run": "vitest --run",

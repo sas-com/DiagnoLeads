@@ -135,8 +135,7 @@ const SETTINGS_WRITES: Record<string, Call> = {
     c.embed.create({ ...org, name: 'x', diagnosticTemplateId: ID } as Parameters<
       Caller['embed']['create']
     >[0]),
-  'embed.update': (c) =>
-    c.embed.update({ ...org, id: ID, name: 'x' } as Parameters<Caller['embed']['update']>[0]),
+  'embed.update': (c) => c.embed.update({ ...org, id: ID, data: { name: 'x' } }),
   'embed.regenerateApiKey': (c) => c.embed.regenerateApiKey({ ...org, id: ID }),
   'embed.delete': (c) => c.embed.delete({ ...org, id: ID }),
   'distribution.createCampaign': (c) =>
@@ -144,9 +143,7 @@ const SETTINGS_WRITES: Record<string, Call> = {
       Caller['distribution']['createCampaign']
     >[0]),
   'distribution.updateCampaign': (c) =>
-    c.distribution.updateCampaign({ ...org, id: ID, name: 'x' } as Parameters<
-      Caller['distribution']['updateCampaign']
-    >[0]),
+    c.distribution.updateCampaign({ ...org, id: ID, data: { name: 'x' } }),
   'distribution.deleteCampaign': (c) => c.distribution.deleteCampaign({ ...org, id: ID }),
 };
 

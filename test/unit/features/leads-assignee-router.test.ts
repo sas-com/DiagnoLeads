@@ -38,26 +38,26 @@ const render = (fragments: SQL[]) => fragments.map((f) => dialect.sqlToQuery(f))
 
 describe('assignee filter and sort (list SQL)', () => {
   it("'me' is the member asking", () => {
-    const [where] = render(leadListConditions({ organizationId: ORG_ID, limit: 20, offset: 0, assignee: 'me' }, USER_ID));
+    const [where] = render(leadListConditions({ organizationId: ORG_ID, assignee: 'me' }, USER_ID));
     expect(where.sql).toBe('"leads"."assignee_user_id" = $1');
     expect(where.params).toEqual([USER_ID]);
   });
 
   it("'me' without a member matches nothing", () => {
-    const [where] = render(leadListConditions({ organizationId: ORG_ID, limit: 20, offset: 0, assignee: 'me' }));
+    const [where] = render(leadListConditions({ organizationId: ORG_ID, assignee: 'me' }));
     expect(where.sql).toBe('false');
   });
 
   it("'unassigned' is the leads nobody holds", () => {
     const [where] = render(
-      leadListConditions({ organizationId: ORG_ID, limit: 20, offset: 0, assignee: 'unassigned' }, USER_ID)
+      leadListConditions({ organizationId: ORG_ID, assignee: 'unassigned' }, USER_ID)
     );
     expect(where.sql).toBe('"leads"."assignee_user_id" is null');
   });
 
   it('a user id is that member', () => {
     const [where] = render(
-      leadListConditions({ organizationId: ORG_ID, limit: 20, offset: 0, assignee: OTHER_USER }, USER_ID)
+      leadListConditions({ organizationId: ORG_ID, assignee: OTHER_USER }, USER_ID)
     );
     expect(where.params).toEqual([OTHER_USER]);
   });

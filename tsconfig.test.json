@@ -1,0 +1,34 @@
+{
+  // `bun run typecheck` (CI): the app plus test/. tsconfig.json leaves test/ out because
+  // `next build` type-checks with it (#482)
+  "extends": "./tsconfig.json",
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".claude/**/*.ts",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    ".next/dev/dev/types/**/*.ts",
+    "test/**/*.ts",
+    "test/**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    // Tests of code that #469 and #470 delete: they go with it
+    "test/unit/features/feature-flags-router.test.ts",
+    "test/unit/lib/multi-tenant.test.ts",
+    "test/unit/lib/messages/error-mapper.test.ts",
+    "test/unit/lib/messages/validation.test.ts",
+    "test/unit/lib/validation-messages.test.ts",
+    // Imports no app code (#469, empty tests)
+    "test/unit/features/diagnostic-submit.test.ts",
+    // lib/features/integrations is not reached from any entry (#469)
+    "test/unit/features/crm-client.test.ts",
+    // Open PRs change these files: remove the line once that PR is merged (#482)
+    "test/unit/features/ai-semantic-search.test.ts",
+    "test/unit/features/ai-chat-assistant.test.ts",
+    "test/unit/integration/ai-org-isolation.db.test.ts",
+    "test/unit/integration/objection-card.db.test.ts"
+  ]
+}

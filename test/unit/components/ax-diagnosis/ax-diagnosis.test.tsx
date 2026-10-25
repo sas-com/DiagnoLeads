@@ -404,9 +404,10 @@ describe('AxDiagnosisFlow: another system and the bot check', () => {
   const installTurnstile = (onRender: (options: RenderOptions) => void = () => {}) => {
     let count = 0;
     const turnstile = {
-      render: vi.fn((_container: HTMLElement, options: RenderOptions) => {
+      render: vi.fn((_container: HTMLElement, options: Record<string, unknown>) => {
         count += 1;
-        onRender(options);
+        // The widget's options include these callbacks; the others are read from the calls
+        onRender(options as RenderOptions);
         return `widget-${count}`;
       }),
       remove: vi.fn(),

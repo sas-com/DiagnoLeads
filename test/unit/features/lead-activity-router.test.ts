@@ -21,7 +21,11 @@ const { dbState } = vi.hoisted(() => ({
 function query() {
   dbState.queries += 1;
   const promise = Promise.resolve().then(() => dbState.results.shift() ?? []);
-  const builder: Promise<unknown[]> & Record<string, (arg?: unknown) => unknown> = Object.assign(
+  // Typed arguments: the object literal alone has no index signature
+  const builder: Promise<unknown[]> & Record<string, (arg?: unknown) => unknown> = Object.assign<
+    Promise<unknown[]>,
+    Record<string, (arg?: unknown) => unknown>
+  >(
     promise,
     {
       from: () => builder,
