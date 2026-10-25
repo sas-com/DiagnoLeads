@@ -1,8 +1,9 @@
 /**
  * The options the real auth configuration (lib/auth/config.ts) passes to better-auth. The
  * behaviour behind them is checked elsewhere: on PostgreSQL, the password reset that ends the
- * user's sessions in test/unit/integration/password-reset-sessions.db.test.ts, and copied cookies
- * that stop signing in once the session ends in session-revocation.db.test.ts; the auth emails in
+ * user's sessions in test/unit/integration/password-reset-sessions.db.test.ts, copied cookies
+ * that stop signing in once the session ends in session-revocation.db.test.ts, and sessions that
+ * are not extended in session-absolute-expiry.db.test.ts; the auth emails in
  * auth-email-background.test.ts.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -70,13 +71,17 @@ describe('auth configuration', () => {
     expect(line).not.toContain('reset-594@example.com');
   });
 
-  it('keeps sessions 7 days, refreshes them daily and never caches them in a cookie (#578)', async () => {
+  it('ends sessions 7 days after sign-in and never extends them (#647)', async () => {
     const { session } = await loadAuth();
 
-    expect(session).toMatchObject({
-      expiresIn: 60 * 60 * 24 * 7,
-      updateAge: 60 * 60 * 24,
-    });
+    expect(session?.expiresIn).toBe(60 * 60 * 24 * 7);
+    // Without this, a session read moves the expiry to "now + 7 days" once a day (updateAge)
+    expect(session?.disableSessionRefresh).toBe(true);
+  });
+
+  it('never caches sessions in a cookie (#578)', async () => {
+    const { session } = await loadAuth();
+
     // Each session read goes to the database, so an ended session ends on the next request
     expect(session?.cookieCache).toEqual({ enabled: false });
   });

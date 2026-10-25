@@ -1,6 +1,7 @@
 'use client';
 
 import { DeleteAccountCard } from '@/components/features/account/delete-account-card';
+import { SignOutOtherDevicesCard } from '@/components/features/account/sign-out-other-devices-card';
 import { NotificationSettings } from '@/components/features/notifications/notification-settings';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -23,8 +24,8 @@ import { toast } from 'sonner';
 const WRONG_CURRENT_PASSWORD = 'INVALID_PASSWORD' satisfies keyof typeof authClient.$ERROR_CODES;
 
 /**
- * Personal settings: profile, password, notifications of the current organization and account
- * deletion (#164)
+ * Personal settings: profile, password, signing out the other devices (#647), notifications of the
+ * current organization and account deletion (#164)
  */
 export default function SettingsPage() {
   const t = useTranslations('settings.profile');
@@ -343,6 +344,8 @@ export default function SettingsPage() {
             </div>
           </div>
         </Card>
+
+        <SignOutOtherDevicesCard />
 
         {/* Notification Settings */}
         <NotificationSettings />

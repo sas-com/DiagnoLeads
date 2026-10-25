@@ -9,6 +9,7 @@
  */
 import SettingsPage from '@/app/[locale]/(dashboard)/settings/page';
 import { authClient } from '@/lib/auth/client';
+import en from '@/locales/en/common.json';
 import messages from '@/locales/ja/common.json';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
@@ -215,5 +216,10 @@ describe('password change in the personal settings', () => {
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith(p.passwordChangeError));
     expect(mocks.toastError).not.toHaveBeenCalledWith(p.currentPasswordIncorrect);
     expect(mocks.toastSuccess).not.toHaveBeenCalled();
+  });
+
+  it('says in the success message that the other devices were signed out (#599)', () => {
+    expect(p.passwordChangeSuccess).toMatch(/ほかの端末.*ログアウトしました/);
+    expect(en.settings.profile.passwordChangeSuccess).toMatch(/signed out on your other devices/);
   });
 });
