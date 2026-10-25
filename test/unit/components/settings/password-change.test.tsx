@@ -11,9 +11,10 @@ import SettingsPage from '@/app/[locale]/(dashboard)/settings/page';
 import { authClient } from '@/lib/auth/client';
 import en from '@/locales/en/common.json';
 import messages from '@/locales/ja/common.json';
+import { keepAuthSessionStoreMounted } from '@/test/mocks/auth-session-store';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const ORG_ID = '660e8400-e29b-41d4-a716-446655440000';
 const OLD_PASSWORD = 'Password123';
@@ -146,15 +147,8 @@ function changePassword(currentPassword: string) {
   fireEvent.click(screen.getByRole('button', { name: p.changePassword }));
 }
 
-// The session store runs while it has a listener. nanostores stops it 1 s after the last one
-// goes, and stopping removes better-auth's listeners from `window`. Keep it running for the whole
-// file, like an open tab, so that timer never runs after jsdom is gone (a worker on a busy machine
-// can outlive jsdom by more than 1 s, #706), and stop it in afterAll on a fake clock
-let stopSessionStore = () => {};
-
-beforeAll(() => {
-  stopSessionStore = sessionStore.listen(() => {});
-});
+// The session store runs for the whole file, like an open tab, and stops before jsdom goes (#706)
+keepAuthSessionStoreMounted(sessionStore);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -169,14 +163,6 @@ beforeEach(() => {
 });
 
 afterAll(() => {
-  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-  try {
-    stopSessionStore();
-    // nanostores' 1 s stop timer, run now: better-auth removes its listeners while `window` exists
-    vi.runOnlyPendingTimers();
-  } finally {
-    vi.useRealTimers();
-  }
   vi.unstubAllGlobals();
 });
 
