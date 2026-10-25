@@ -401,6 +401,7 @@
       },
       "checkpointsTitle": "What to check when moving from {platform} to a web system",
       "checkpointsTitleGeneric": "What to check when moving to a web system",
+      "accessReplaceInventory": "First take stock of the tools and drop unused or duplicate ones to narrow what to replace",
       "accessCheckpointsTitle": {
         "fix": "What to check when fixing {platform} and keeping it in use",
         "replace": "What to check when replacing {platform} with a ready-made service"
@@ -658,8 +659,10 @@
       "answersTitle": "Your answers",
       "answersJoiner": ", ",
       "needsHearing": "Many answers were \"I don't know\", so this estimate is rough. A consultation lets us give you a more accurate outlook.",
+      "accessNeedsHearing": "Many answers were \"I don't know\", so this estimate is rough. A 30-minute online consultation lets us give you a more accurate outlook.",
       "unknownsTitle": "Checking these in-house will sharpen the result",
       "unknownsHint": "Notices from the maintenance company, asset lists and contracts often have the answers. We can also show you how to find them in a consultation.",
+      "accessUnknownsHint": "Notices from the maintenance company, asset lists and contracts often have the answers. We can also show you how to find them in a 30-minute online consultation.",
       "offers": {
         "title": "Start by gathering information",
         "titlePrimary": "Start by gathering information",
