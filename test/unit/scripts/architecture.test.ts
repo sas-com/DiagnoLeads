@@ -371,17 +371,39 @@ describe('rules', () => {
 });
 
 describe('rules for feature modules', () => {
-  it("cross-feature-internal: lists the other feature's file that is read, not its types or service", () => {
+  it("cross-feature-internal: lists each feature that reads another feature's file, not its types or service", () => {
     const graph = graphOf({}, [
       ['lib/features/deals/service.ts', 'lib/features/leads/types/pipeline.ts'],
       ['lib/features/deals/service.ts', 'lib/features/leads/service.ts'],
       ['lib/features/deals/service.ts', 'lib/features/leads/audit.ts'],
       ['lib/features/deals/sync.ts', 'lib/features/leads/audit.ts'],
+      ['lib/features/forecast/service.ts', 'lib/features/leads/audit.ts'],
       ['lib/features/deals/service.ts', 'lib/features/email/index.ts'],
       ['lib/features/deals/service.ts', 'lib/features/deals/sync.ts'],
       ['components/features/deals/board.tsx', 'lib/features/leads/list-query.ts'],
     ]);
-    expect(check('cross-feature-internal', graph)).toEqual(['lib/features/leads/audit.ts']);
+    expect(check('cross-feature-internal', graph)).toEqual([
+      'deals -> lib/features/leads/audit.ts',
+      'forecast -> lib/features/leads/audit.ts',
+    ]);
+  });
+
+  it('cross-feature-internal: a listed file read by one more feature is a new violation', () => {
+    const before = graphOf({}, [['lib/features/deals/service.ts', 'lib/features/leads/audit.ts']]);
+    const after = graphOf({}, [
+      ['lib/features/deals/service.ts', 'lib/features/leads/audit.ts'],
+      ['lib/features/forecast/service.ts', 'lib/features/leads/audit.ts'],
+    ]);
+    const rule = RULES.filter((r) => r.id === 'cross-feature-internal');
+    const allowlist = parseAllowlist(
+      formatAllowlist(rule, new Map([[rule[0].id, rule[0].check(before)]]))
+    );
+    const [outcome] = compareWithAllowlist(
+      rule,
+      new Map([[rule[0].id, rule[0].check(after)]]),
+      allowlist
+    );
+    expect(outcome.added).toEqual(['forecast -> lib/features/leads/audit.ts']);
   });
 
   it('features-use-global-db: importing db or the whole module counts, the types do not', () => {
