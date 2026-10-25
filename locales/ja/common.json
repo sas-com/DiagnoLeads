@@ -199,6 +199,7 @@
     "management": "管理",
     "dashboard": "ダッシュボード",
     "leads": "リード管理",
+    "deals": "商談",
     "prospects": "顧客探し（AX）",
     "analytics": "分析",
     "settings": "設定",
@@ -1373,6 +1374,195 @@
       "name": "山田 太郎",
       "company": "株式会社サンプル",
       "phone": "03-1234-5678"
+    }
+  },
+  "deals": {
+    "title": "商談",
+    "description": "商談をステージごとに並べ、金額と受注予定日で進み具合を見ます",
+    "create": "商談を作る",
+    "views": {
+      "label": "表示",
+      "board": "ボード",
+      "list": "一覧"
+    },
+    "kinds": {
+      "survey": "現行調査",
+      "migration": "移行",
+      "ax": "AX 化",
+      "maintenance": "保守・運用",
+      "other": "その他"
+    },
+    "stages": {
+      "qualification": "見極め",
+      "discovery": "課題の確認",
+      "proposal": "提案",
+      "negotiation": "条件の調整",
+      "won": "受注",
+      "lost": "失注"
+    },
+    "forecast": {
+      "pipeline": "パイプライン",
+      "best_case": "ベストケース",
+      "commit": "コミット",
+      "omitted": "予測に入れない",
+      "closed": "受注済み",
+      "lost": "失注",
+      "auto": "確度から自動（{category}）"
+    },
+    "fields": {
+      "name": "商談名",
+      "kind": "種類",
+      "stage": "ステージ",
+      "amount": "金額（税抜）",
+      "probability": "確度",
+      "weightedAmount": "加重金額",
+      "forecastCategory": "予測の区分",
+      "expectedCloseOn": "受注予定日",
+      "closedOn": "受注・失注の日",
+      "owner": "担当",
+      "nextStep": "次の一手",
+      "lostReason": "失注理由",
+      "lostNote": "失注の詳細",
+      "competitor": "競合",
+      "targetSystem": "対象システム",
+      "lead": "リード",
+      "company": "会社",
+      "updatedAt": "更新日"
+    },
+    "column": {
+      "summary": "{count}件・{amount}",
+      "weighted": "加重 {amount}",
+      "empty": "商談はありません",
+      "dropHere": "ここに移す",
+      "closedTitle": "{stage}（直近{days}日）"
+    },
+    "card": {
+      "daysInStage": "このステージで{days}日",
+      "overdue": "受注予定日を過ぎています",
+      "noNextAction": "リードに次の行動（タスク）がありません",
+      "noCloseDate": "受注予定日なし",
+      "noAmount": "金額未定",
+      "unassigned": "担当未定",
+      "move": "「{name}」のステージを移動",
+      "moveTo": "「{stage}」へ移す"
+    },
+    "filters": {
+      "label": "絞り込み",
+      "owner": "担当",
+      "mine": "自分の商談",
+      "all": "全員",
+      "kind": "種類",
+      "allKinds": "すべての種類",
+      "period": "受注予定",
+      "periods": {
+        "all": "すべて",
+        "thisMonth": "今月",
+        "nextMonth": "来月",
+        "thisQuarter": "今四半期"
+      }
+    },
+    "lostDialog": {
+      "title": "「{name}」を失注にする",
+      "description": "失注理由は、勝ち負けの分析に使います",
+      "fromWon": "リードは成約のままです。",
+      "reason": "失注理由",
+      "reasonPlaceholder": "選んでください",
+      "reasonRequired": "失注理由を選んでください",
+      "note": "詳細（任意）",
+      "competitor": "競合（任意）",
+      "confirm": "失注にする"
+    },
+    "wonDialog": {
+      "title": "「{name}」を受注にする",
+      "impact": "リード「{lead}」は成約になります。商談を開き直しても、リードは成約のままです。",
+      "impactUnnamed": "このリードは成約になります。商談を開き直しても、リードは成約のままです。",
+      "fromLost": "失注理由と詳細は消えます。",
+      "closedOn": "受注日",
+      "closedOnInvalid": "受注日は2000〜2100年の日付で入力してください",
+      "confirm": "受注にする"
+    },
+    "reopenDialog": {
+      "title": "「{name}」を開き直しますか？",
+      "lost": "失注理由（{reason}）と詳細は消えます。",
+      "lostNoReason": "失注理由と詳細は消えます。",
+      "probability": "確度は「{stage}」の既定値 {probability}% になり、予測の区分の上書きも消えます。",
+      "won": "リードは成約のままです。",
+      "confirm": "開き直す"
+    },
+    "form": {
+      "createTitle": "商談を作る",
+      "editTitle": "商談を編集",
+      "lead": "リード",
+      "leadPlaceholder": "会社名・氏名・メールで探す",
+      "leadRequired": "リードを選んでください",
+      "leadSearching": "探しています…",
+      "leadNotFound": "見つかりません",
+      "leadChange": "選び直す",
+      "required": "必須",
+      "namePlaceholder": "例：AS/400 現行調査",
+      "nameRequired": "商談名を入力してください",
+      "closeDateInvalid": "受注予定日は2000〜2100年の日付で入力してください",
+      "amountHelp": "税抜の円。未定なら空欄",
+      "amountInvalid": "0以上の整数で入力してください",
+      "probabilityHelp": "空欄ならステージの既定値（{value}%）",
+      "probabilityInvalid": "0〜100の整数で入力してください",
+      "ownerNone": "担当未定",
+      "ownerFromLead": "リードの担当者（いなければ自分）",
+      "forecastAuto": "確度から自動",
+      "wonToday": "受注日は今日になります。",
+      "submitCreate": "作成",
+      "submitEdit": "保存"
+    },
+    "list": {
+      "caption": "商談の一覧",
+      "empty": "条件に合う商談はありません"
+    },
+    "detail": {
+      "back": "商談へ戻る",
+      "stagePath": "ステージ",
+      "moveTo": "「{stage}」に移す",
+      "previousDeal": "前の商談",
+      "nextDeals": "続く商談",
+      "history": "履歴",
+      "historyEmpty": "履歴はありません",
+      "historyCreated": "作成",
+      "historyChanged": "{fields}を変更",
+      "notFound": "商談が見つかりません",
+      "deleteTitle": "商談を削除しますか？",
+      "deleteDescription": "「{name}」を削除します。元に戻せません。リードの状態は変わりません。"
+    },
+    "leadCard": {
+      "title": "商談",
+      "empty": "このリードの商談はまだありません",
+      "summary": "{count}件・開いている商談 {amount}"
+    },
+    "state": {
+      "loadError": "商談を読み込めませんでした",
+      "retry": "再読み込み",
+      "empty": "まだ商談はありません",
+      "emptyHint": "商談は、リードの詳細か、この画面の「商談を作る」から作ります",
+      "truncated": "表示は{limit}件までです。条件で絞り込んでください",
+      "readOnly": "閲覧のみです",
+      "forbiddenTitle": "商談を見る権限がありません",
+      "forbiddenBody": "商談と金額・予測・目標は、リードを閲覧できるメンバーだけが見られます（親組織からの閲覧者は除く）。"
+    },
+    "toasts": {
+      "created": "商談を作りました",
+      "saved": "保存しました",
+      "moved": "「{name}」を「{stage}」に移しました",
+      "deleted": "商談を削除しました",
+      "deleteError": "削除できませんでした。もう一度お試しください",
+      "error": "保存できませんでした。もう一度お試しください"
+    },
+    "historyFields": {
+      "created": "作成",
+      "kind": "種類",
+      "stage": "ステージ",
+      "amount": "金額",
+      "probability": "確度",
+      "forecastOverride": "予測の区分",
+      "expectedCloseOn": "受注予定日",
+      "ownerUserId": "担当"
     }
   },
   "settings": {
