@@ -154,7 +154,8 @@ describe('LeadTable on a phone (cards, #110)', () => {
     expect(
       within(card).getByRole('combobox', { name: '担当者を変更（現在：佐藤 花子）' })
     ).toBeInTheDocument();
-    expect(within(card).getByTestId('lead-card-score')).toHaveTextContent('スコア 72/100');
+    // The MQL level, not the score, says how promising the lead is (#447)
+    expect(within(card).queryByTestId('lead-card-score')).not.toBeInTheDocument();
     expect(within(card).getByText('2020/01/10')).toBeInTheDocument();
     expect(within(card).getByTestId('next-meeting-overdue')).toHaveTextContent(t.overdue);
     expect(within(card).getByText(t.mql)).toHaveAttribute('title', 'MQL判定日：2026/10/01');
@@ -163,7 +164,6 @@ describe('LeadTable on a phone (cards, #110)', () => {
     // No company and no name: the email leads; empty facts are left out
     const bare = screen.getByRole('listitem', { name: 'hanako@example.jp' });
     expect(within(bare).getByRole('link', { name: 'hanako@example.jp' })).toBeInTheDocument();
-    expect(within(bare).queryByTestId('lead-card-score')).not.toBeInTheDocument();
     expect(within(bare).queryByText(t.mql)).not.toBeInTheDocument();
     expect(within(bare).queryByText(t.consultation)).not.toBeInTheDocument();
     expect(
@@ -220,8 +220,10 @@ describe('LeadTable on a phone (cards, #110)', () => {
     const sortBy = screen.getByRole('combobox', { name: '並び替え（今は作成日）' });
 
     await user.click(sortBy);
-    await user.click(await screen.findByRole('option', { name: 'スコア' }));
-    expect(props.onSort).toHaveBeenLastCalledWith('score');
+    // No score to sort by (#447)
+    expect(screen.queryByRole('option', { name: 'スコア' })).not.toBeInTheDocument();
+    await user.click(await screen.findByRole('option', { name: '会社名' }));
+    expect(props.onSort).toHaveBeenLastCalledWith('company');
 
     await user.click(screen.getByRole('button', { name: '並び順を反対にする（今は降順）' }));
     expect(props.onSort).toHaveBeenLastCalledWith('createdAt');

@@ -4,6 +4,10 @@
  * charts, thin bar rows and insight cards. Almost black and white with the brand colour as the
  * only accent; thin borders instead of shadows. Shared so other screens (analytics, the content
  * admin) can follow the same look.
+ *
+ * Values follow DADS (#423, #635): no text under 14px, grey text no lighter than gray-500
+ * (4.5:1), DADS semantic colours for changes, and the site-wide DADS focus (no focus colours
+ * of their own here).
  */
 import { cn } from '@/lib/utils';
 import { ArrowDown, ArrowUp, ChevronRight } from 'lucide-react';
@@ -27,7 +31,7 @@ export function StudioPageHeader({
   return (
     <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 border-b border-gray-200 pb-5 sm:pb-6 dark:border-gray-800">
       <div className="min-w-0">
-        <h1 className="text-2xl font-bold tracking-wide text-gray-900 sm:text-[2rem] dark:text-gray-50">
+        <h1 className="text-2xl font-bold tracking-[0.01em] text-gray-900 sm:text-[2rem] dark:text-gray-50">
           {title}
         </h1>
         {description && (
@@ -44,10 +48,10 @@ export function StudioLinkButton({ href, children }: { href: string; children: R
   return (
     <Link
       href={href}
-      className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3.5 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:hover:bg-gray-800"
+      className="inline-flex shrink-0 items-center gap-1.5 min-h-11 rounded-md border border-gray-400 bg-white px-4 py-2 text-sm font-bold text-gray-900 hover:bg-gray-50 hover:underline dark:border-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:hover:bg-gray-800"
     >
       {children}
-      <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+      <ChevronRight className="h-4 w-4" aria-hidden="true" />
     </Link>
   );
 }
@@ -71,13 +75,11 @@ export function StudioSection({
     <section className={cn('space-y-4 sm:space-y-5', className)} {...rest}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-lg font-bold tracking-wide text-gray-900 sm:text-xl dark:text-gray-50">
+          <h2 className="text-lg font-bold tracking-[0.02em] text-gray-900 sm:text-xl dark:text-gray-50">
             {title}
           </h2>
           {description && (
-            <p className="mt-1 text-xs text-gray-500 sm:text-sm dark:text-gray-400">
-              {description}
-            </p>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{description}</p>
           )}
         </div>
         {action}
@@ -125,20 +127,20 @@ export function StudioStat({
           className={cn(
             'text-2xl font-semibold tabular-nums',
             tone === 'alert'
-              ? 'text-rose-600 dark:text-rose-400'
+              ? 'text-[var(--color-semantic-error-1)] dark:text-red-300'
               : 'text-gray-900 dark:text-gray-50'
           )}
         >
           {value}
         </span>
-        {note && <span className="text-xs text-gray-500 dark:text-gray-400">{note}</span>}
+        {note && <span className="text-sm text-gray-500 dark:text-gray-400">{note}</span>}
       </div>
     </>
   );
   return href ? (
     <Link
       href={href}
-      className="-m-2 block rounded-md p-2 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:hover:bg-gray-800/60"
+      className="-m-2 block rounded-md p-2 hover:bg-gray-50 dark:hover:bg-gray-800/60"
     >
       {body}
     </Link>
@@ -171,7 +173,7 @@ export function StudioBarRow({
       <div className="flex items-baseline justify-between gap-3">
         <span className="min-w-0 text-sm">
           <span className="font-semibold text-gray-900 dark:text-gray-50">{label}</span>
-          {sub && <span className="ml-1.5 text-xs text-gray-400 dark:text-gray-500">{sub}</span>}
+          {sub && <span className="ml-1.5 text-sm text-gray-500 dark:text-gray-400">{sub}</span>}
         </span>
         <span className="text-base font-semibold tabular-nums text-gray-900 dark:text-gray-50">
           {value}
@@ -193,7 +195,7 @@ export function StudioBarRow({
       {href ? (
         <Link
           href={href}
-          className="-mx-2 block rounded-md px-2 py-2.5 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:hover:bg-gray-800/60"
+          className="-mx-2 block rounded-md px-2 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800/60"
         >
           {body}
         </Link>
@@ -241,8 +243,8 @@ export function StudioInsightCard({
             <span
               className={cn(
                 'inline-flex items-center gap-0.5 text-sm font-semibold tabular-nums',
-                good && 'text-emerald-600 dark:text-emerald-400',
-                bad && 'text-rose-600 dark:text-rose-400',
+                good && 'text-[var(--color-semantic-success-2)] dark:text-green-300',
+                bad && 'text-[var(--color-semantic-error-1)] dark:text-red-300',
                 !good && !bad && 'text-gray-500 dark:text-gray-400'
               )}
             >
@@ -253,7 +255,7 @@ export function StudioInsightCard({
             </span>
           )}
         </p>
-        {footnote && <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{footnote}</p>}
+        {footnote && <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{footnote}</p>}
       </div>
     </div>
   );

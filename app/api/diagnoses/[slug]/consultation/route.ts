@@ -20,7 +20,7 @@ import {
 } from '@/lib/features/diagnostics/request-guard';
 import { acceptMeetingPreferences } from '@/lib/features/meeting-requests/service';
 import { meetingPreferencesSchema } from '@/lib/features/meeting-requests/types/schemas';
-import { reportRejectedRequest } from '@/lib/ops/alert';
+import { reportRejectedRequest, reportServerError } from '@/lib/ops/alert';
 import { eq } from 'drizzle-orm';
 import { type NextRequest, NextResponse, after } from 'next/server';
 import { z } from 'zod';
@@ -76,7 +76,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
       parsed.data.submissionId,
       requestedAt
     );
-    if (!outcome.ok) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (!outcome.ok) {
+      // A day after the answer the request is closed, as in the AX diagnosis (#481)
+      return outcome.reason === 'closed'
+        ? NextResponse.json({ error: 'Closed', code: 'closed' }, { status: 409 })
+        : NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
 
     const { leadId } = outcome;
     if (!outcome.alreadyRequested && leadId) {
@@ -112,6 +117,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
           });
         } catch (error) {
           console.error('Diagnosis consultation notification error:', error);
+          await reportServerError('diagnosis/consultation-notify', error);
         }
       });
     }
@@ -126,6 +132,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
             // An answer tied to an existing lead only by email never replaces a verified request.
             // Builder answers never have continued_from_submission_id: this matches requestVerified
             identityVerified: outcome.leadCreated,
+            // Accepted for a day after the request, not for as long as the id is kept (#241)
+            requestedAt: outcome.requestedAt,
             preferences: parsed.data.preferences,
           },
           (task) => after(task)
@@ -139,6 +147,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     });
   } catch (error) {
     console.error('Diagnosis consultation request error:', error);
+    after(() => reportServerError('diagnosis/consultation', error));
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

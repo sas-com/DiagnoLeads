@@ -1,4 +1,5 @@
-import { consultationDeadline, buildSalesMessage } from '@/lib/features/diagnostics/ax-migration/notify';
+import { buildSalesMessage } from '@/lib/features/diagnostics/ax-migration/notify';
+import { consultationDeadline } from '@/lib/features/diagnostics/types/consultation';
 import { as400Answers } from '@/test/fixtures/ax-migration';
 import { evaluateAxMigration } from '@/lib/features/diagnostics/ax-migration/evaluate';
 import { multiple, single, toPercent, validateAnswers } from '@/lib/features/diagnostics/engine';

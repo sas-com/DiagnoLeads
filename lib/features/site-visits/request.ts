@@ -43,10 +43,15 @@ export interface SiteVisitParams {
   fromRef: string | null;
 }
 
-/** A value that looks like an email address is dropped: a mailing tool may put one in utm_* */
+/**
+ * A value that looks like an email address is dropped: a mailing tool may put one in utm_*. So is
+ * one with NUL ("%00" in the query string), which PostgreSQL cannot store (#648).
+ */
 const clip = (value: string | null) => {
   const trimmed = value?.trim();
-  return trimmed && !trimmed.includes('@') ? trimmed.slice(0, 200) : null;
+  return trimmed && !trimmed.includes('@') && !trimmed.includes('\u0000')
+    ? trimmed.slice(0, 200)
+    : null;
 };
 
 /** The utm_* and `from` of the page's query string ("?utm_source=x&from=ax-lp-header") */

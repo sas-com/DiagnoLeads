@@ -119,6 +119,13 @@ const builderMqlLevel = sql`(case when jsonb_typeof(${builderSummary}) = 'object
 export const leadMqlLevel = sql<AxMqlLevel | null>`(select case when 'interest' in (s.ax, s.builder) then 'interest' when 'fit' in (s.ax, s.builder) then 'fit' when 'none' in (s.ax, s.builder) then 'none' end from (select ${axMqlLevel} as ax, ${builderMqlLevel} as builder) s)`;
 
 /**
+ * The level the list sorts and filters by (#447): a lead judged MQL (an MQL date, also set by
+ * hand without a diagnosis) counts as 関心あり, as its green badge says (LeadMqlBadges). The
+ * analytics count leads by it too (#605), so the numbers match the list's filter
+ */
+export const listMqlLevel = sql<AxMqlLevel | null>`(case when ${leads.mqlQualifiedAt} is not null then 'interest' else ${leadMqlLevel} end)`;
+
+/**
  * Position in a fixed order (pipeline order instead of alphabetical). Empty and unknown values
  * give NULL, so they go last with the "nulls last" of the ORDER BY.
  */
@@ -147,6 +154,8 @@ const SORT_EXPRESSIONS: Record<LeadSortKey, AnyColumn | SQL> = {
   dealRating: leadDealRating,
   // "When to act" (#151): a date column
   actBy: leads.actBy,
+  // 関心あり, 適合, 対象外 when ascending; leads without a diagnosis last (#447)
+  mqlLevel: sql`(case ${listMqlLevel} when 'interest' then 0 when 'fit' then 1 when 'none' then 2 end)`,
 };
 
 /**
@@ -239,6 +248,22 @@ export function leadListConditions(
         sql`, `
       )})`
     );
+  }
+
+  // MQL level (#447): a lead with an MQL date is 関心あり; 'unknown' has no diagnosis and no MQL date
+  const levels = oneOrMany(input.mqlLevel);
+  if (levels.length > 0) {
+    const known = levels.filter((level) => level !== 'unknown');
+    const matches = [
+      known.length > 0
+        ? sql`${listMqlLevel} in (${sql.join(
+            known.map((level) => sql`${level}`),
+            sql`, `
+          )})`
+        : undefined,
+      levels.includes('unknown') ? sql`${listMqlLevel} is null` : undefined,
+    ].filter((c): c is SQL => c !== undefined);
+    conditions.push(matches.length === 1 ? matches[0] : (or(...matches) as SQL));
   }
 
   // "When to act" (#151): set, or within the next months (past ones included)

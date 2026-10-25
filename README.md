@@ -65,7 +65,6 @@ AI-Powered B2B Diagnostic Platform for **Holdings, Group Companies & Enterprise 
 | 死活確認 | [/api/health](https://diagnoleads-v2.vercel.app/api/health) | `{"status":"ok"}` を返す（DB は見ない） |
 | 死活監視 | GitHub Actions「Uptime」（`.github/workflows/uptime.yml`） | 10分ごとに本番を確かめ、落ちたら `uptime` ラベルの Issue を立てる（#364） |
 | エラー通知 | `lib/ops/alert.ts` | サーバーエラーと、公開フォームでボットを断った回数が多いときに `OPS_ALERT_EMAIL` へメール（#227・#351） |
-| 埋め込み API | `/api/embed/v1/*` | 停止中（404）。`EMBED_API_ENABLED=true` で有効になる（#293） |
 | 招待のメール確認 | `/[locale]/invite/[token]` | 停止中。`INVITE_REQUIRE_VERIFIED_EMAIL=true` で、招待の承認に確認済みのメールアドレスが要るようになる。自社ドメインの送信元ができてからオンにする（#128） |
 | ホスティング | Vercel（プロジェクト `diagnoleads-v2`） | 環境変数は Vercel で管理。閲覧には権限が必要 |
 | データベース | Supabase（PostgreSQL） | 本番へのマイグレーションの適用はオーナーが行う |

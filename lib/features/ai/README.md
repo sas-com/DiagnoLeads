@@ -4,6 +4,8 @@ AI-powered features for DiagnoLeads using Claude Sonnet 5.5 and OpenAI Embedding
 
 ## Features
 
+> **有料 API（Claude・OpenAI）を呼ぶ関数の呼び方**：tRPC のルーター（`api/router.ts`）から、組織の所属・権限の確認と組織での読み込みの後、回数を数えてから呼ぶ。Claude は `consumeAiCalls`（`limits.ts`）で数え、リードを `leadForClaude`（`prompt-input.ts`）で切ってから渡す。埋め込み（`semanticSearch`・`updateLeadEmbedding`・`generateEmbedding`）は `consumeEmbeddingCalls`（`limits.ts`）で数える（決定 `2026-10-24-ai-call-rate-limits`）。下の例は関数の使い方だけを示す。ほかの場所から直接呼ぶと、回数制限を通らない。
+
 ### 1. Lead Scoring (`scoring/claude.ts`)
 - AI-powered lead quality assessment
 - Scores from 0-100 with confidence levels
@@ -33,7 +35,7 @@ console.log(score.recommendedActions); // ['Schedule demo call', ...]
 ```typescript
 import { semanticSearch, findSimilarLeads } from '@/lib/features/ai';
 
-// Natural language search
+// Natural language search (from the router, after consumeEmbeddingCalls)
 const results = await semanticSearch(
   'tech companies in San Francisco',
   organizationId
@@ -62,6 +64,7 @@ const summary = await generateLeadSummary(lead);
 import { generateEmbedding, prepareLeadText } from '@/lib/features/ai';
 
 const text = prepareLeadText(lead);
+// A paid OpenAI call: count it with consumeEmbeddingCalls first
 const embedding = await generateEmbedding(text);
 ```
 

@@ -3,18 +3,23 @@
  * diagnosis (lib/features/diagnostics/ax-migration/notify.ts): a consultation request gets the
  * company, the contact deadline (2 business days, JST) and the MQL reasons in the title / body,
  * and an email with a link to the lead page. Respondents of a diagnosis are never mailed here.
+ * A consultation request reaches only people of the diagnosis's organization (#481).
  */
 import { db } from '@/lib/db/client';
 import { filterAllowedRecipients } from '@/lib/email/allowed-recipients';
 import { type EmailBlock, type EmailFact, renderEmail } from '@/lib/email/templates/render';
-import { env } from '@/lib/env';
 import { isEmailConfigured, sendEmail } from '@/lib/features/email';
+import { notifyUsersInApp } from '@/lib/features/leads/assignment-notify';
 import { notifyOrganizationMembers } from '@/lib/features/notifications/notification-service';
 import { sendLeadCreatedById } from '@/lib/features/webhooks/services/lead-events';
 import { triggerWebhooks } from '@/lib/features/webhooks/services/webhook-service';
-import { AX_RATE_LIMITS } from '../diagnostics/ax-migration/limits';
-import { consultationDeadline } from '../diagnostics/ax-migration/notify';
-import { consumeRateLimit } from '../diagnostics/rate-limit';
+import {
+  type DiagnosisNotificationLimits,
+  checkNotificationLimits,
+  diagnosisConsultationRecipients,
+  withinSalesEmailQuota,
+} from '../diagnostics/service';
+import { consultationDeadline } from '../diagnostics/types/consultation';
 import type { DiagnosisMqlLevel } from './evaluate';
 import { DIAGNOSIS_RATE_LIMITS } from './limits';
 
@@ -190,16 +195,22 @@ export function buildDiagnosisSalesEmail(n: DiagnosisNotification): {
 }
 
 /**
- * Notify sales after a submission or a consultation request. Failures are logged and never
- * break the respondent's flow. Past the hourly limit of the organization nothing is sent (the
- * submission is saved all the same).
+ * Notify sales after a submission or a consultation request, by the same rules as the AX
+ * diagnosis (#481). Failures are logged and never break the respondent's flow. Past the hourly
+ * limit of the organization nothing is sent (the submission is saved all the same), except that
+ * a consultation request still reaches the members in the app (and by email within its own
+ * quota), up to a separate hourly cap: a flood of submissions must not hide a real request.
+ * A consultation request reaches only people of the diagnosis's organization.
  */
 export async function notifyDiagnosisSubmission(n: DiagnosisNotification): Promise<void> {
-  if (
-    !(await withinLimit(DIAGNOSIS_RATE_LIMITS.notificationsPerOrganization, n.organizationId, true))
-  ) {
-    return;
-  }
+  const limits = builderLimits(n.diagnosisId);
+  const { notify, withinLimit } = await checkNotificationLimits(
+    db,
+    n.organizationId,
+    n.consultationRequested,
+    limits
+  );
+  if (!notify) return;
   const { title, message } = buildDiagnosisSalesMessage(n);
   const data = {
     leadId: n.leadId,
@@ -209,24 +220,43 @@ export async function notifyDiagnosisSubmission(n: DiagnosisNotification): Promi
     identityUnverified: n.identityUnverified,
   };
 
-  const tasks: Promise<unknown>[] = [
-    triggerWebhooks(n.organizationId, 'diagnostic.submitted', {
-      ...data,
-      email: n.email,
-      company: n.company,
-      name: n.name,
-      score: n.leadScore,
-      // mql = 関心あり（MQL）, mqlLevel as in the AX webhook (#139)
-      mql: n.mqlQualified,
-      mqlLevel: n.mqlLevel,
-      resultType: n.resultTypeName,
-    }),
-  ];
-  // A new lead is a lead.created too (#308), within the same limit as diagnostic.submitted
-  if (n.leadCreated) tasks.push(sendLeadCreatedById(n.organizationId, n.leadId));
+  const tasks: Promise<unknown>[] = [];
+  if (withinLimit) {
+    tasks.push(
+      triggerWebhooks(n.organizationId, 'diagnostic.submitted', {
+        ...data,
+        email: n.email,
+        company: n.company,
+        name: n.name,
+        score: n.leadScore,
+        // mql = 関心あり（MQL）, mqlLevel as in the AX webhook (#139)
+        mql: n.mqlQualified,
+        mqlLevel: n.mqlLevel,
+        resultType: n.resultTypeName,
+      })
+    );
+    // A new lead is a lead.created too (#308), within the same limit as diagnostic.submitted
+    if (n.leadCreated) tasks.push(sendLeadCreatedById(n.organizationId, n.leadId));
+  }
 
-  // In-app: consultation requests and new leads (a repeat answer changes nothing on the lead)
-  if (n.consultationRequested || n.leadCreated) {
+  const consultation = n.consultationRequested
+    ? await diagnosisConsultationRecipients(db, n.organizationId)
+    : null;
+
+  // In-app: consultation requests (to the intake members when set) and new leads (a repeat
+  // answer changes nothing on the lead)
+  if (consultation && consultation.intakeUserIds.length > 0) {
+    tasks.push(
+      notifyUsersInApp(
+        consultation.intakeUserIds,
+        n.organizationId,
+        'consultation_requested',
+        title,
+        message,
+        data
+      )
+    );
+  } else if (n.consultationRequested || n.leadCreated) {
     tasks.push(
       notifyOrganizationMembers(
         n.organizationId,
@@ -238,21 +268,26 @@ export async function notifyDiagnosisSubmission(n: DiagnosisNotification): Promi
     );
   }
 
-  // Sales email for consultation requests, to the same address and within the same caps as the
-  // AX diagnosis (the sending quota is shared with the sign-in emails)
-  const salesEmail = env.AX_DIAGNOSIS_SALES_EMAIL;
-  const salesRecipients = filterAllowedRecipients(
-    salesEmail ? salesEmail.split(',').map((address) => address.trim()) : []
-  );
-  if (n.consultationRequested && salesRecipients.length === 0) {
-    console.warn('Diagnosis consultation: no sales email sent (no allowed sales address is set)');
+  // Sales email for consultation requests, within the same caps as the AX diagnosis (the
+  // sending quota is shared with the sign-in emails)
+  const salesAddresses = consultation?.emails ?? [];
+  // In test mode only company addresses are mailed; decide that before using the quota
+  const salesRecipients = filterAllowedRecipients(salesAddresses);
+  if (n.consultationRequested && salesAddresses.length === 0) {
+    // Visible in the runtime logs: a missing setting, not a failed send
+    console.warn(
+      'Diagnosis consultation: no sales email sent (no intake member, and no sales address for this organization)'
+    );
+  } else if (n.consultationRequested && salesRecipients.length === 0) {
+    console.warn(
+      'Diagnosis consultation: no sales email sent (no recipient is allowed in test mode)'
+    );
   }
   if (
     n.consultationRequested &&
     salesRecipients.length > 0 &&
     isEmailConfigured() &&
-    (await withinLimit(AX_RATE_LIMITS.salesEmailPerOrganizationHourly, n.organizationId, false)) &&
-    (await withinLimit(AX_RATE_LIMITS.salesEmailPerOrganization, n.organizationId, false))
+    (await withinSalesEmailQuota(db, n.organizationId, limits))
   ) {
     tasks.push(sendEmail({ to: salesRecipients, ...buildDiagnosisSalesEmail(n) }));
   }
@@ -263,32 +298,12 @@ export async function notifyDiagnosisSubmission(n: DiagnosisNotification): Promi
   }
 }
 
-/**
- * Count one against an organization limit. The first time it is exceeded, members get one
- * in-app notice. When the limit cannot be checked, `onError` decides (notifications go out,
- * emails do not).
- */
-async function withinLimit(
-  rule: { name: string; limit: number; windowMs: number },
-  organizationId: string,
-  onError: boolean
-): Promise<boolean> {
-  try {
-    const quota = await consumeRateLimit(db, rule, organizationId);
-    if (quota.allowed) return true;
-    console.warn(`Diagnosis: limit ${rule.name} reached`);
-    if (quota.count === rule.limit + 1) {
-      await notifyOrganizationMembers(
-        organizationId,
-        'system',
-        '【診断】通知を一時停止しました',
-        `診断の通知が上限（${rule.limit}件）を超えたため、しばらく通知を止めています（リードとしては保存しています）。この間に届いた相談申込は、リード一覧（コンバージョンポイント：相談申込）で確認してください。`,
-        { limit: rule.name }
-      ).catch((error) => console.error('Diagnosis: limit notice failed:', error));
-    }
-    return false;
-  } catch (error) {
-    console.error(`Diagnosis: limit ${rule.name} check failed:`, error);
-    return onError;
-  }
+/** The notification limits of the builder's diagnoses (the rules are shared, #481) */
+function builderLimits(diagnosisId: string): DiagnosisNotificationLimits {
+  return {
+    label: '診断',
+    notifications: DIAGNOSIS_RATE_LIMITS.notificationsPerOrganization,
+    consultationNotifications: DIAGNOSIS_RATE_LIMITS.consultationNotificationsPerOrganization,
+    data: { diagnosisId },
+  };
 }

@@ -7,13 +7,12 @@ import {
   useLeadTrend,
   useOverview,
   useResponseTime,
-  useScoreDistribution,
   useSourceBreakdown,
   useStatusBreakdown,
 } from '@/hooks/use-analytics';
 import { useExport } from '@/hooks/use-export';
 import { useOrganization } from '@/hooks/use-organization';
-import { useLocale, useTranslations } from 'next-intl';
+import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import dynamic from 'next/dynamic';
 import { useState } from 'react';
 
@@ -23,7 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { BarList } from '@/components/ui/bar-list';
 import { Card } from '@/components/ui/card';
 import { Divider, Metric, Text, Title } from '@/components/ui/metric';
-import { CategoryBar, ProgressBar } from '@/components/ui/progress-bar';
+import { ProgressBar } from '@/components/ui/progress-bar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { LeadStatus } from '@/lib/features/leads/types';
 import { LEAD_STATUSES } from '@/lib/features/leads/types/pipeline';
@@ -49,7 +48,6 @@ import {
 import type { DateRange, TrendGranularity } from '@/lib/features/analytics/types/schemas';
 import {
   Activity,
-  Award,
   BarChart3,
   Calendar,
   Download,
@@ -68,17 +66,6 @@ const ConversionFunnel = dynamic(
   () =>
     import('@/components/analytics/conversion-funnel').then((mod) => ({
       default: mod.ConversionFunnel,
-    })),
-  {
-    loading: () => <ChartSkeleton />,
-    ssr: false,
-  }
-);
-
-const ScoreDistributionChart = dynamic(
-  () =>
-    import('@/components/analytics/score-distribution-chart').then((mod) => ({
-      default: mod.ScoreDistributionChart,
     })),
   {
     loading: () => <ChartSkeleton />,
@@ -128,6 +115,7 @@ export default function AnalyticsPage() {
   const tInflowSource = useTranslations('pipeline.inflowSource');
   const tLeads = useTranslations('leads');
   const locale = useLocale();
+  const format = useFormatter();
   const { organizationId: contextOrgId, isLoading: contextLoading } = useOrganization();
 
   // Only use organization ID if it's a valid UUID
@@ -152,10 +140,6 @@ export default function AnalyticsPage() {
     dateRange
   );
   const { data: funnelData, isLoading: funnelLoading } = useConversionFunnel(
-    organizationId,
-    dateRange
-  );
-  const { data: scoreDistribution, isLoading: scoreDistLoading } = useScoreDistribution(
     organizationId,
     dateRange
   );
@@ -244,22 +228,14 @@ export default function AnalyticsPage() {
   // No period-over-period change is shown until it is computed from real data (#138)
 
   // Value formatter for charts
-  const valueFormatter = (value: number) => {
-    if (locale === 'ja') {
-      return `${value.toLocaleString('ja-JP')}件`;
-    }
-    return value.toLocaleString('en-US');
-  };
+  const valueFormatter = (value: number) => t('leadCount', { count: value });
 
   // Transform lead trend data for chart
   const chartData = (leadTrend || [])
     .map((item) => ({
-      date: new Date(item.date).toLocaleDateString(locale === 'ja' ? 'ja-JP' : 'en-US', {
-        month: 'short',
-        day: 'numeric',
-      }),
-      [t('charts.totalLeads') || 'Total']: item.count,
-      [t('charts.convertedLeads') || 'Converted']: item.converted,
+      date: format.dateTime(new Date(item.date), { month: 'short', day: 'numeric' }),
+      [t('charts.totalLeads')]: item.count,
+      [t('charts.convertedLeads')]: item.converted,
     }))
     .reverse();
 
@@ -350,7 +326,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
         {/* Total Leads */}
         <Card className="p-6" decoration="top" decorationColor="blue">
           <div className="flex items-start justify-between">
@@ -359,9 +335,7 @@ export default function AnalyticsPage() {
               {overviewLoading ? (
                 <div className="h-9 w-24 bg-gray-200 animate-pulse rounded mt-2" />
               ) : (
-                <Metric className="mt-2">
-                  {(overview?.totalLeads || 0).toLocaleString(locale === 'ja' ? 'ja-JP' : 'en-US')}
-                </Metric>
+                <Metric className="mt-2">{format.number(overview?.totalLeads || 0)}</Metric>
               )}
             </div>
             <div className="p-3 bg-blue-50 rounded-xl">
@@ -378,11 +352,7 @@ export default function AnalyticsPage() {
               {overviewLoading ? (
                 <div className="h-9 w-20 bg-gray-200 animate-pulse rounded mt-2" />
               ) : (
-                <Metric className="mt-2">
-                  {(overview?.newLeadsThisMonth || 0).toLocaleString(
-                    locale === 'ja' ? 'ja-JP' : 'en-US'
-                  )}
-                </Metric>
+                <Metric className="mt-2">{format.number(overview?.newLeadsThisMonth || 0)}</Metric>
               )}
             </div>
             <div className="p-3 bg-emerald-50 rounded-xl">
@@ -408,29 +378,6 @@ export default function AnalyticsPage() {
           </div>
           <div className="mt-4">
             <ProgressBar value={overview?.conversionRate || 0} color="violet" />
-          </div>
-        </Card>
-
-        {/* Average Score */}
-        <Card className="p-6" decoration="top" decorationColor="amber">
-          <div className="flex items-start justify-between">
-            <div>
-              <Text>{t('stats.averageScore')}</Text>
-              {overviewLoading ? (
-                <div className="h-9 w-16 bg-gray-200 animate-pulse rounded mt-2" />
-              ) : (
-                <Metric className="mt-2">
-                  {overview?.averageScore || 0}
-                  <span className="text-lg font-normal text-gray-500">/100</span>
-                </Metric>
-              )}
-            </div>
-            <div className="p-3 bg-amber-50 rounded-xl">
-              <Award className="h-6 w-6 text-amber-600" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <ProgressBar value={overview?.averageScore || 0} color="amber" />
           </div>
         </Card>
       </div>
@@ -470,10 +417,7 @@ export default function AnalyticsPage() {
                   className="h-80 mt-4"
                   data={chartData}
                   index="date"
-                  categories={[
-                    t('charts.totalLeads') || 'Total',
-                    t('charts.convertedLeads') || 'Converted',
-                  ]}
+                  categories={[t('charts.totalLeads'), t('charts.convertedLeads')]}
                   colors={['blue', 'violet']}
                   valueFormatter={valueFormatter}
                   showLegend={true}
@@ -499,6 +443,7 @@ export default function AnalyticsPage() {
                     data={statusData}
                     colors={statusColors}
                     valueFormatter={valueFormatter}
+                    totalLabel={t('charts.total')}
                     showLabel={true}
                     showLegend={false}
                     showAnimation={true}
@@ -532,8 +477,7 @@ export default function AnalyticsPage() {
                           {tStatus(status.key)}
                         </Badge>
                         <Text className="font-semibold">
-                          {status.value}
-                          {locale === 'ja' ? '件' : ''}
+                          {t('leadCount', { count: status.value })}
                         </Text>
                       </div>
                       <ProgressBar value={percentage} color={status.color} />
@@ -565,6 +509,7 @@ export default function AnalyticsPage() {
                     data={sourceBarData}
                     colors={['blue', 'emerald', 'violet', 'amber', 'rose', 'cyan', 'pink']}
                     valueFormatter={valueFormatter}
+                    totalLabel={t('charts.total')}
                     showLabel={true}
                     showLegend={false}
                     showAnimation={true}
@@ -674,13 +619,7 @@ export default function AnalyticsPage() {
 
         {/* Performance Tab */}
         <TabsContent value="performance">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-            {/* Score Distribution */}
-            <Card className="p-6">
-              <Title>{t('charts.scoreDistribution')}</Title>
-              <ScoreDistributionChart data={scoreDistribution || []} isLoading={scoreDistLoading} />
-            </Card>
-
+          <div className="grid grid-cols-1 gap-6 mt-6">
             {/* Response Time */}
             <Card className="p-6">
               <Title>{t('charts.responseTime')}</Title>
@@ -701,17 +640,7 @@ export default function AnalyticsPage() {
           {overview && !overviewLoading && (
             <Card className="mt-6 p-6">
               <Title>{t('performanceSummary.title')}</Title>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-4">
-                <div>
-                  <Text>{t('performanceSummary.quality')}</Text>
-                  <Metric className="mt-2">{overview.averageScore}</Metric>
-                  <CategoryBar
-                    values={[25, 25, 25, 25]}
-                    colors={['red', 'yellow', 'emerald', 'blue']}
-                    markerValue={overview.averageScore}
-                    className="mt-3"
-                  />
-                </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-4">
                 <div>
                   <Text>{t('stats.conversionRate')}</Text>
                   <Metric className="mt-2">{overview.conversionRate.toFixed(1)}%</Metric>
