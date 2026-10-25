@@ -113,7 +113,7 @@ export const INJECTION_PATTERNS: readonly InjectionPattern[] = [
  * Characters that do not show (zero-width, soft hyphen, bidirectional controls, invisible
  * operators, byte-order mark), which could split a phrase so that no pattern matches it
  */
-const INVISIBLE = /[­᠎​-‏‪-‮⁠-⁤⁦-⁩﻿]/g;
+const INVISIBLE = /[\u00ad\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/g;
 
 /** The ids of the patterns `text` matches; none for ordinary text */
 export function detectInjection(text: string): string[] {
@@ -168,7 +168,7 @@ export function findInjectionAttempts(data: Record<string, unknown>): InjectionF
 }
 
 /**
- * `data` as indented JSON with `<` and `>` written as the escapes < and >. It parses
+ * `data` as indented JSON with `<` and `>` written as the escapes \u003c and \u003e. It parses
  * to the same value, but no value can write a tag, so none can close the block it is put in.
  * JSON has `<` and `>` only inside strings, where these escapes are valid. Each escape takes 6
  * characters, as JSON already writes control characters, so it does not raise the most a
