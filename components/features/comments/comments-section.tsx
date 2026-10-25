@@ -1,12 +1,23 @@
 'use client';
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 import { Card } from '@/components/ui/card';
 import type { CommentType } from '@/lib/db/schema';
 import { trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
-import { MessageSquare, StickyNote, Zap } from 'lucide-react';
+import { AlertTriangle, MessageSquare, RefreshCw, StickyNote, Zap } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -16,36 +27,43 @@ import { CommentItem, type CommentWithUser } from './comment-item';
 interface CommentsSectionProps {
   organizationId: string;
   leadId: string;
-  currentUserId: string;
-  isAdmin?: boolean;
 }
 
 type FilterType = 'all' | 'comment' | 'note' | 'activity';
 
-export function CommentsSection({
-  organizationId,
-  leadId,
-  currentUserId,
-  isAdmin = false,
-}: CommentsSectionProps) {
+/**
+ * The lead's comments and notes (#555). Who may write, and edit or delete others' comments,
+ * comes with the list from the server (the same checks as the writes).
+ */
+export function CommentsSection({ organizationId, leadId }: CommentsSectionProps) {
   const t = useTranslations('comments');
+  const tCommon = useTranslations('common');
   const [filter, setFilter] = useState<FilterType>('all');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const utils = trpc.useUtils();
 
-  const { data, isLoading, refetch } = trpc.comments.list.useQuery(
+  // All types at once: the filter only narrows what is shown, so each tab keeps its count
+  const { data, isLoading, error, refetch } = trpc.comments.list.useQuery(
     {
       organizationId,
       leadId,
-      type: filter,
+      type: 'all',
     },
-    { enabled: !!organizationId && !!leadId }
+    { enabled: !!organizationId && !!leadId, retry: false }
   );
+
+  // A written comment also shows in the lead's activity (its first 200 characters)
+  const refresh = () => {
+    void utils.comments.list.invalidate({ organizationId, leadId });
+    void utils.comments.getCount.invalidate({ organizationId, leadId });
+    void utils.leadActivity.list.invalidate();
+  };
 
   const createComment = trpc.comments.create.useMutation({
     onSuccess: () => {
       toast.success(t('createSuccess'));
-      utils.comments.list.invalidate({ organizationId, leadId });
+      refresh();
     },
     onError: () => {
       toast.error(t('createError'));
@@ -55,7 +73,7 @@ export function CommentsSection({
   const updateComment = trpc.comments.update.useMutation({
     onSuccess: () => {
       toast.success(t('updateSuccess'));
-      utils.comments.list.invalidate({ organizationId, leadId });
+      refresh();
     },
     onError: () => {
       toast.error(t('updateError'));
@@ -65,34 +83,37 @@ export function CommentsSection({
   const deleteComment = trpc.comments.delete.useMutation({
     onSuccess: () => {
       toast.success(t('deleteSuccess'));
-      utils.comments.list.invalidate({ organizationId, leadId });
+      setDeletingId(null);
+      refresh();
     },
-    onError: () => {
-      toast.error(t('deleteError'));
+    onError: (error) => {
+      // Others' replies go with a comment only for those who may delete anyone's comment
+      toast.error(error.data?.code === 'FORBIDDEN' ? t('deleteForbidden') : t('deleteError'));
     },
   });
 
   const togglePin = trpc.comments.togglePin.useMutation({
     onSuccess: (data) => {
       toast.success(data.isPinned ? t('pinSuccess') : t('unpinSuccess'));
-      utils.comments.list.invalidate({ organizationId, leadId });
+      refresh();
     },
     onError: () => {
       toast.error(t('pinError'));
     },
   });
 
-  const handleSubmit = (content: string, type?: CommentType) => {
-    createComment.mutate({
+  // The writes resolve once saved: the forms clear only then, and keep the text on a failure
+  const handleSubmit = async (content: string, type?: CommentType) => {
+    await createComment.mutateAsync({
       organizationId,
       leadId,
       content,
-      type: type || 'comment',
+      type: type === 'note' ? 'note' : 'comment',
     });
   };
 
-  const handleReply = (parentId: string, content: string) => {
-    createComment.mutate({
+  const handleReply = async (parentId: string, content: string) => {
+    await createComment.mutateAsync({
       organizationId,
       leadId,
       content,
@@ -101,22 +122,15 @@ export function CommentsSection({
     });
   };
 
-  const handleEdit = (id: string, content: string) => {
-    updateComment.mutate({
+  const handleEdit = async (id: string, content: string) => {
+    await updateComment.mutateAsync({
       organizationId,
       id,
       content,
     });
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm(t('deleteConfirm'))) {
-      deleteComment.mutate({
-        organizationId,
-        id,
-      });
-    }
-  };
+  const handleDelete = (id: string) => setDeletingId(id);
 
   const handleTogglePin = (id: string) => {
     togglePin.mutate({
@@ -126,6 +140,30 @@ export function CommentsSection({
   };
 
   const comments = data?.items ?? [];
+  const viewer = data?.viewer;
+  // Deleting a comment takes its replies
+  const deletingReplies =
+    comments.find((comment) => comment.id === deletingId)?.replies.length ?? 0;
+
+  // The parent organization does not read the team's comments (#555)
+  if (error?.data?.code === 'FORBIDDEN') {
+    return (
+      <Card className="p-4">
+        <p className="text-sm text-muted-foreground">{t('forbidden')}</p>
+      </Card>
+    );
+  }
+  // Not read is not "no comments yet"
+  if (error) {
+    return (
+      <Callout title={t('loadError')} icon={AlertTriangle} color="red">
+        <Button variant="outline" size="sm" className="mt-3" onClick={() => void refetch()}>
+          <RefreshCw className="h-4 w-4" />
+          {tCommon('retry')}
+        </Button>
+      </Callout>
+    );
+  }
   const filterCounts = {
     all: comments.length,
     comment: comments.filter((c) => c.type === 'comment').length,
@@ -142,13 +180,15 @@ export function CommentsSection({
           <Badge color="gray">{data?.total ?? 0}</Badge>
         </div>
 
-        {/* Add new comment/note */}
-        <CommentForm
-          organizationId={organizationId}
-          leadId={leadId}
-          onSubmit={handleSubmit}
-          isLoading={createComment.isPending}
-        />
+        {/* Add new comment/note: not for read-only members */}
+        {viewer?.canWrite && (
+          <CommentForm
+            organizationId={organizationId}
+            leadId={leadId}
+            onSubmit={handleSubmit}
+            isLoading={createComment.isPending}
+          />
+        )}
 
         {/* Filter tabs */}
         <div className="flex gap-2 border-b border-gray-200 dark:border-gray-700 pb-2">
@@ -209,19 +249,49 @@ export function CommentsSection({
                 <CommentItem
                   key={comment.id}
                   comment={comment as CommentWithUser}
-                  currentUserId={currentUserId}
+                  currentUserId={viewer?.userId ?? ''}
                   organizationId={organizationId}
                   leadId={leadId}
-                  isAdmin={isAdmin}
-                  onEdit={handleEdit}
-                  onDelete={handleDelete}
-                  onTogglePin={handleTogglePin}
-                  onReply={handleReply}
+                  isAdmin={viewer?.canModerate ?? false}
+                  // Read-only members change nothing, not even what they wrote before
+                  onEdit={viewer?.canWrite ? handleEdit : undefined}
+                  onDelete={viewer?.canWrite ? handleDelete : undefined}
+                  onTogglePin={viewer?.canWrite ? handleTogglePin : undefined}
+                  onReply={viewer?.canWrite ? handleReply : undefined}
                 />
               ))
           )}
         </div>
       </div>
+
+      <AlertDialog open={deletingId !== null} onOpenChange={(open) => !open && setDeletingId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('deleteTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deletingReplies > 0
+                ? t('deleteConfirmWithReplies', { count: deletingReplies })
+                : t('deleteConfirm')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteComment.isPending}>
+              {tCommon('cancel')}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                // Stays open until the delete is done (closed on success)
+                event.preventDefault();
+                if (deletingId) deleteComment.mutate({ organizationId, id: deletingId });
+              }}
+              disabled={deleteComment.isPending}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {tCommon('delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
@@ -239,6 +309,7 @@ function FilterButton({ active, onClick, count, icon, children }: FilterButtonPr
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={active}
       className={cn(
         'flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-t-md transition-colors border-b-2 -mb-[2px]',
         active

@@ -467,8 +467,8 @@
           },
           "replace": {
             "title": "Replace it with an off-the-shelf service",
-            "body": "You switch to a commercial cloud service or similar. For a tool with little custom work, nothing may need to be built.",
-            "short": "You switch to a commercial cloud service or similar."
+            "body": "We help you switch to a commercial cloud service or similar. For a tool with little custom work, nothing may need to be built.",
+            "short": "We help you switch to a commercial cloud service or similar."
           }
         },
         "reasons": {
@@ -490,7 +490,7 @@
           "check_unknowns": "Some answers were \"I don't know\", so we decide after checking the tool in the consultation"
         }
       },
-      "nowHere": "You are here: the free web check is complete. Next is a quick assessment (asset inventory) by our staff.",
+      "nowHere": "You are here: the free web check is complete. Next is a free consultation.",
       "nextStepLabel": "NEXT STEP",
       "cta": {
         "hearing": {
@@ -569,19 +569,28 @@
         "body": "Organizing the current specification now makes future decisions easier when staff change or support ends."
       },
       "steps": {
+        "consult": {
+          "label": "NEXT STEP",
+          "title": "Free consultation",
+          "body": "Based on your result, we explain how to proceed and what to check next."
+        },
         "simple": {
+          "label": "THEN",
           "title": "Quick assessment",
-          "body": "An inventory of your assets gives a detailed estimate of migration difficulty."
+          "body": "An inventory of your assets by our staff gives a more detailed estimate of the migration difficulty."
         },
         "survey": {
+          "label": "Phase 1",
           "title": "Current-system survey",
           "body": "AI analyzes source code, forms and data structures to make the specification visible."
         },
         "migration": {
+          "label": "Phase 2",
           "title": "Migration",
           "body": "Move to a modern web system while preserving the current specification."
         },
         "ax": {
+          "label": "Phase 3",
           "title": "AX",
           "body": "Extend features with AI agents and put your data to work."
         }
@@ -608,7 +617,7 @@
           },
           "replace": {
             "title": "Replace it with an off-the-shelf service",
-            "body": "You switch to a commercial cloud service or similar. How to move the data and the switch-over date are decided in advance."
+            "body": "We help you switch to a commercial cloud service or similar. How to move the data and the switch-over date are decided in advance."
           },
           "ax": {
             "title": "AX",
@@ -2339,25 +2348,34 @@
     "filterNotes": "Notes",
     "filterActivity": "Activity",
     "commentPlaceholder": "Add a comment...",
-    "notePlaceholder": "Add a private note...",
+    "notePlaceholder": "Add a note...",
     "replyPlaceholder": "Write a reply...",
+    "visibleToTeam": "Visible to your organization's members",
     "noComments": "No comments yet",
     "noCommentsHint": "Be the first to add a comment or note",
+    "forbidden": "You don't have permission to see the notes",
+    "loadError": "The notes could not be loaded",
     "reply": "Reply",
     "edit": "Edit",
     "delete": "Delete",
+    "actions": "Comment actions",
     "pin": "Pin",
     "unpin": "Unpin",
     "save": "Save",
     "cancel": "Cancel",
+    "send": "Send",
     "edited": "edited",
+    "editLabel": "Edit the comment",
     "createSuccess": "Comment added successfully",
     "createError": "Failed to add comment",
     "updateSuccess": "Comment updated successfully",
     "updateError": "Failed to update comment",
     "deleteSuccess": "Comment deleted successfully",
     "deleteError": "Failed to delete comment",
+    "deleteForbidden": "Only an owner can delete a comment with replies from others",
+    "deleteTitle": "Delete this comment?",
     "deleteConfirm": "Are you sure you want to delete this comment? This action cannot be undone.",
+    "deleteConfirmWithReplies": "This deletes the comment and its {count, plural, one {# reply} other {# replies}}. This action cannot be undone.",
     "pinSuccess": "Comment pinned",
     "unpinSuccess": "Comment unpinned",
     "pinError": "Failed to update pin status"
@@ -2749,6 +2767,7 @@
         "reasons": "Features",
         "demo": "Demo",
         "steps": "Approach",
+        "paths": "Approach",
         "targets": "Systems",
         "faq": "FAQ",
         "column": "Columns"
@@ -3124,13 +3143,13 @@
   "axAccess": {
     "meta": {
       "title": "Access business tools: fix them or move them to the web? | Free web check (Access) | Software Agency System Co., Ltd.",
-      "description": "Fix your Access tool and keep using it, or move it to the web? Choose the version, VBA, number of users and more, and see a guide to the way forward that suits your tool. We tell you which fits: fixing it, moving it to the web, or replacing it. Free, multiple choice, about 3 minutes."
+      "description": "Fix your Access tool and keep using it, or move it to the web? Choose the version, VBA, the number of screens and reports and more, and see a guide to the way forward that suits your tool. We tell you which fits: fixing it, moving it to the web, or replacing it. Free, multiple choice, about 3 minutes."
     },
     "floatingCta": "Start the free web check",
     "hero": {
       "eyebrow": "For teams using Microsoft Access business tools",
       "title": "Your Access tool: fix it and keep using it, or move it to the web?",
-      "lead": "Choose the version, VBA, number of users and more, and see a guide to the way forward that suits your tool. We tell you which fits: fixing it and keeping it, moving it to the web, or replacing it.",
+      "lead": "Choose the version, VBA, the number of screens and reports and more, and see a guide to the way forward that suits your tool. We tell you which fits: fixing it and keeping it, moving it to the web, or replacing it.",
       "triggersLabel": "Does one of these apply?",
       "triggers": {
         "support": "End of support for Access 2016, 2019 and 2021",
@@ -3222,7 +3241,7 @@
         },
         "replace": {
           "title": "Replace it with an off-the-shelf service",
-          "body": "You switch to a commercial cloud service or similar.",
+          "body": "We help you switch to a commercial cloud service or similar.",
           "fits": {
             "a": "Standard work that every company has",
             "b": "The functions of an off-the-shelf service are enough"
@@ -3314,6 +3333,10 @@
         "department": {
           "q": "Can a single department of a large company consult you?",
           "a": "Yes. We take on a single tool of a single department."
+        },
+        "who": {
+          "q": "Can I answer if I am not in IT?",
+          "a": "Yes. All questions are multiple choice and you can choose \"I don't know\". Detailed questions are optional."
         },
         "consult": {
           "q": "How does the consultation work?",
@@ -3930,6 +3953,7 @@
       "overview": "Overview",
       "hearings": "Hearings",
       "activity": "Activity",
+      "memos": "Notes",
       "diagnosis": "Diagnosis answers"
     },
     "score": "Score",
