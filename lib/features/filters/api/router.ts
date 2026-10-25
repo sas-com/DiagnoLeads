@@ -3,6 +3,7 @@
  * Handles CRUD operations for saved filters with advanced filtering support
  */
 import { type FilterGroup, type FilterOperator, savedFilters } from '@/lib/db/schema';
+import { savedFilterGroupSchema } from '@/lib/features/filters/types/schemas';
 import { LEAD_STATUSES } from '@/lib/features/leads/types/pipeline';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
@@ -13,51 +14,11 @@ import { z } from 'zod';
 // Zod Schemas
 // ============================================================================
 
-const filterOperatorSchema = z.enum([
-  'equals',
-  'not_equals',
-  'contains',
-  'not_contains',
-  'starts_with',
-  'ends_with',
-  'greater_than',
-  'less_than',
-  'greater_or_equal',
-  'less_or_equal',
-  'between',
-  'is_empty',
-  'is_not_empty',
-  'in',
-  'not_in',
-]);
-
-const filterConditionSchema = z.object({
-  field: z.string().min(1),
-  operator: filterOperatorSchema,
-  value: z.unknown(),
-  value2: z.unknown().optional(),
-});
-
-type FilterGroupInput = {
-  logic: 'and' | 'or';
-  conditions: z.infer<typeof filterConditionSchema>[];
-  groups?: FilterGroupInput[];
-};
-
-// Recursive schema: z.lazy needs an explicit type annotation
-const filterGroupSchema: z.ZodType<FilterGroupInput, z.ZodTypeDef, unknown> = z.lazy(() =>
-  z.object({
-    logic: z.enum(['and', 'or']),
-    conditions: z.array(filterConditionSchema).default([]),
-    groups: z.array(filterGroupSchema).optional(),
-  })
-);
-
 const createFilterSchema = z.object({
   organizationId: z.string().uuid(),
   name: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
-  filters: filterGroupSchema,
+  filters: savedFilterGroupSchema,
   isPublic: z.boolean().default(false),
   color: z.string().max(20).optional(),
   icon: z.string().max(50).optional(),
@@ -68,7 +29,7 @@ const updateFilterSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(100).optional(),
   description: z.string().max(500).optional().nullable(),
-  filters: filterGroupSchema.optional(),
+  filters: savedFilterGroupSchema.optional(),
   isPublic: z.boolean().optional(),
   color: z.string().max(20).optional().nullable(),
   icon: z.string().max(50).optional().nullable(),
@@ -212,7 +173,7 @@ export const filtersRouter = router({
         userId: ctx.user?.id,
         name: input.name,
         description: input.description,
-        // Same shape; zod only types the unknown `value` key as optional
+        // Same shape; zod types `value` as optional (is_empty and is_not_empty take none)
         filters: input.filters as FilterGroup,
         isPublic: input.isPublic,
         color: input.color,

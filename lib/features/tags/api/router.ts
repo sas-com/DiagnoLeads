@@ -3,6 +3,7 @@
  * Handles CRUD operations for tags and lead-tag associations
  */
 import { leadTags, tags } from '@/lib/db/schema';
+import { bulkTagLeadIdsSchema, leadTagIdsSchema } from '@/lib/features/tags/types/schemas';
 import { assertInOrganization } from '@/lib/multi-tenant/helpers/scope';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
@@ -55,7 +56,7 @@ const removeTagFromLeadSchema = z.object({
 const setLeadTagsSchema = z.object({
   organizationId: z.string().uuid(),
   leadId: z.string().uuid(),
-  tagIds: z.array(z.string().uuid()),
+  tagIds: leadTagIdsSchema,
 });
 
 const getLeadTagsSchema = z.object({
@@ -321,8 +322,8 @@ export const tagsRouter = router({
     .input(
       z.object({
         organizationId: z.string().uuid(),
-        leadIds: z.array(z.string().uuid()),
-        tagIds: z.array(z.string().uuid()),
+        leadIds: bulkTagLeadIdsSchema,
+        tagIds: leadTagIdsSchema,
       })
     )
     .mutation(async ({ ctx, input }) => {

@@ -199,6 +199,8 @@
     "management": "Management",
     "dashboard": "Dashboard",
     "leads": "Lead Management",
+    "deals": "Deals",
+    "forecast": "Forecast",
     "prospects": "Customer search (AX)",
     "analytics": "Analytics",
     "settings": "Settings",
@@ -1374,6 +1376,297 @@
       "name": "Jane Smith",
       "company": "Example Inc.",
       "phone": "+1 555 123 4567"
+    }
+  },
+  "deals": {
+    "title": "Deals",
+    "description": "Deals by stage, with their amounts and expected close dates",
+    "create": "New deal",
+    "views": {
+      "label": "View",
+      "board": "Board",
+      "list": "List"
+    },
+    "kinds": {
+      "survey": "Current system survey",
+      "migration": "Migration",
+      "ax": "AX",
+      "maintenance": "Maintenance",
+      "other": "Other"
+    },
+    "stages": {
+      "qualification": "Qualification",
+      "discovery": "Discovery",
+      "proposal": "Proposal",
+      "negotiation": "Negotiation",
+      "won": "Won",
+      "lost": "Lost"
+    },
+    "forecast": {
+      "pipeline": "Pipeline",
+      "best_case": "Best case",
+      "commit": "Commit",
+      "omitted": "Omitted",
+      "closed": "Closed won",
+      "lost": "Lost",
+      "auto": "From the probability ({category})"
+    },
+    "fields": {
+      "name": "Deal name",
+      "kind": "Kind",
+      "stage": "Stage",
+      "amount": "Amount (excl. tax)",
+      "probability": "Probability",
+      "weightedAmount": "Weighted amount",
+      "forecastCategory": "Forecast category",
+      "expectedCloseOn": "Expected close",
+      "closedOn": "Closed on",
+      "owner": "Owner",
+      "nextStep": "Next step",
+      "lostReason": "Lost reason",
+      "lostNote": "Lost details",
+      "competitor": "Competitor",
+      "targetSystem": "Target system",
+      "lead": "Lead",
+      "company": "Company",
+      "updatedAt": "Updated"
+    },
+    "column": {
+      "summary": "{count} · {amount}",
+      "weighted": "Weighted {amount}",
+      "empty": "No deals",
+      "dropHere": "Move here",
+      "closedTitle": "{stage} (last {days} days)"
+    },
+    "card": {
+      "daysInStage": "{days} days in this stage",
+      "overdue": "Past the expected close date",
+      "noNextAction": "The lead has no next action (task)",
+      "noCloseDate": "No close date",
+      "noAmount": "No amount yet",
+      "unassigned": "No owner",
+      "move": "Move \"{name}\" to another stage",
+      "moveTo": "Move to {stage}"
+    },
+    "filters": {
+      "label": "Filters",
+      "owner": "Owner",
+      "mine": "My deals",
+      "all": "Everyone",
+      "kind": "Kind",
+      "allKinds": "All kinds",
+      "period": "Expected close",
+      "periods": {
+        "all": "Any time",
+        "thisMonth": "This month",
+        "nextMonth": "Next month",
+        "thisQuarter": "This quarter"
+      }
+    },
+    "lostDialog": {
+      "title": "Mark \"{name}\" as lost",
+      "description": "Lost reasons feed the win/loss analysis",
+      "fromWon": "The lead stays won.",
+      "reason": "Lost reason",
+      "reasonPlaceholder": "Choose one",
+      "reasonRequired": "Choose a lost reason",
+      "note": "Details (optional)",
+      "competitor": "Competitor (optional)",
+      "confirm": "Mark as lost"
+    },
+    "wonDialog": {
+      "title": "Mark \"{name}\" as won",
+      "impact": "The lead \"{lead}\" becomes won. It stays won even if the deal is reopened.",
+      "impactUnnamed": "This lead becomes won. It stays won even if the deal is reopened.",
+      "fromLost": "The lost reason and details are cleared.",
+      "closedOn": "Won on",
+      "closedOnInvalid": "Enter the won date as a day from 2000 to 2100",
+      "confirm": "Mark as won"
+    },
+    "reopenDialog": {
+      "title": "Reopen \"{name}\"?",
+      "lost": "The lost reason ({reason}) and the details will be cleared.",
+      "lostNoReason": "The lost reason and the details will be cleared.",
+      "probability": "The probability becomes the {stage} default of {probability}%, and the forecast category override is cleared.",
+      "won": "The lead stays won.",
+      "confirm": "Reopen"
+    },
+    "form": {
+      "createTitle": "New deal",
+      "editTitle": "Edit deal",
+      "lead": "Lead",
+      "leadPlaceholder": "Search by company, name or email",
+      "leadRequired": "Choose a lead",
+      "leadSearching": "Searching…",
+      "leadNotFound": "No match",
+      "leadChange": "Change",
+      "required": "Required",
+      "namePlaceholder": "e.g. AS/400 current system survey",
+      "nameRequired": "Enter a deal name",
+      "closeDateInvalid": "Enter an expected close date from 2000 to 2100",
+      "amountHelp": "Yen, excluding tax. Leave empty while unknown",
+      "amountInvalid": "Enter a whole number of 0 or more",
+      "probabilityHelp": "Empty uses the stage default ({value}%)",
+      "probabilityInvalid": "Enter a whole number from 0 to 100",
+      "ownerNone": "No owner",
+      "ownerFromLead": "The lead's assignee (else you)",
+      "forecastAuto": "From the probability",
+      "wonToday": "The won date will be today.",
+      "submitCreate": "Create",
+      "submitEdit": "Save"
+    },
+    "list": {
+      "caption": "Deals",
+      "empty": "No deals match"
+    },
+    "detail": {
+      "back": "Back to deals",
+      "stagePath": "Stage",
+      "moveTo": "Move to {stage}",
+      "previousDeal": "Previous deal",
+      "nextDeals": "Following deals",
+      "history": "History",
+      "historyEmpty": "No history",
+      "historyCreated": "Created",
+      "historyChanged": "Changed {fields}",
+      "notFound": "Deal not found",
+      "deleteTitle": "Delete this deal?",
+      "deleteDescription": "\"{name}\" will be deleted. This cannot be undone. The lead's status does not change."
+    },
+    "leadCard": {
+      "title": "Deals",
+      "empty": "This lead has no deals yet",
+      "summary": "{count} · open {amount}"
+    },
+    "state": {
+      "loadError": "Could not load the deals",
+      "retry": "Retry",
+      "empty": "No deals yet",
+      "emptyHint": "Create deals from a lead's page or with \"New deal\" here",
+      "truncated": "Showing up to {limit} deals. Narrow them down with the filters",
+      "readOnly": "Read only",
+      "forbiddenTitle": "You cannot see the deals",
+      "forbiddenBody": "Deals, their amounts, the forecast and the targets are shown to members who can view leads, except viewers from a parent organization."
+    },
+    "toasts": {
+      "created": "Deal created",
+      "saved": "Saved",
+      "moved": "Moved \"{name}\" to {stage}",
+      "deleted": "Deal deleted",
+      "deleteError": "Could not delete. Please try again",
+      "error": "Could not save. Please try again"
+    },
+    "historyFields": {
+      "created": "Created",
+      "kind": "Kind",
+      "stage": "Stage",
+      "amount": "Amount",
+      "probability": "Probability",
+      "forecastOverride": "Forecast category",
+      "expectedCloseOn": "Expected close",
+      "ownerUserId": "Owner"
+    }
+  },
+  "salesForecast": {
+    "title": "Forecast",
+    "description": "Won and expected amounts against the targets, by period and owner",
+    "periodLabel": "Period",
+    "periods": {
+      "thisMonth": "This month",
+      "thisQuarter": "This quarter",
+      "thisFiscalYear": "This fiscal year"
+    },
+    "range": "{from} – {to}",
+    "fiscalYearNote": "Fiscal year starts in month {month}",
+    "setTargets": "Set targets",
+    "tiles": {
+      "target": "Target",
+      "won": "Won",
+      "forecast": "Forecast (won + commit)",
+      "bestCase": "Best case",
+      "gap": "Gap to target",
+      "weighted": "Pipeline (weighted)",
+      "achievement": "{rate} achieved",
+      "forecastAchievement": "{rate} forecast",
+      "noTarget": "No target",
+      "above": "{amount} above the target"
+    },
+    "table": {
+      "caption": "Forecast by owner",
+      "owner": "Owner",
+      "target": "Target",
+      "won": "Won",
+      "commit": "Commit",
+      "bestCase": "Best case",
+      "pipeline": "Pipeline",
+      "weighted": "Weighted",
+      "achievement": "Achieved",
+      "gap": "Gap",
+      "total": "Total",
+      "unassigned": "No owner",
+      "noTarget": "—",
+      "hidden": "Hidden",
+      "hiddenNote": "Each rep's target, achievement and gap are shown only to those who set the targets and to the rep"
+    },
+    "notes": {
+      "overdue": "{count} open deals ({amount}) still have an expected close date before this period and are not counted. Review their dates",
+      "undated": "{count} open deals ({amount}) have no expected close date and are not in the forecast",
+      "noAmount": "{count} deals have no amount yet",
+      "toBoard": "Open the deals board",
+      "toList": "Open the deals list"
+    },
+    "changes": {
+      "title": "This week",
+      "description": "How the deals changed against a week ago",
+      "amountDelta": "Change of the open amounts {amount}",
+      "empty": "No deal changed this week",
+      "groups": {
+        "created": "New deals",
+        "advanced": "Moved forward",
+        "movedBack": "Moved back",
+        "won": "Won",
+        "lost": "Lost",
+        "reopened": "Reopened",
+        "slipped": "Close date pushed out"
+      },
+      "summary": "{count} · {amount}",
+      "stageChange": "{from} → {to}",
+      "dateChange": "Expected close {from} → {to}",
+      "noDate": "none"
+    },
+    "targets": {
+      "title": "Set targets",
+      "description": "Monthly won amount targets (excl. tax). Leave empty for no target",
+      "fiscalYear": "Fiscal year",
+      "fiscalYearOption": "FY{year} (from {from})",
+      "startMonth": "Fiscal year starts in",
+      "startMonthOption": "Month {month}",
+      "startMonthHelp": "A setting of the whole organization. A change applies at once, apart from saving the targets",
+      "startConfirmTitle": "Start the fiscal year in month {month}?",
+      "startConfirmDescription": "The quarters and the fiscal year change for the whole organization.",
+      "startConfirm": "Change",
+      "organizationSettings": "Organization setting",
+      "month": "Month",
+      "organization": "Whole organization",
+      "organizationHelp": "In a month without an organization target, the members' targets are summed",
+      "amountInvalid": "Enter a whole number of 0 or more",
+      "save": "Save",
+      "saving": "Saving…",
+      "saved": "Targets saved",
+      "startSaved": "Fiscal year start changed",
+      "error": "Could not save. Please try again",
+      "loadError": "Could not load the targets",
+      "discardTitle": "You have unsaved targets",
+      "discardDescription": "Switching drops what you entered for this month.",
+      "discardConfirm": "Switch",
+      "readOnly": "Only owners and admins can change the targets",
+      "formerMember": "Someone who left",
+      "formerMemberHelp": "The target of someone no longer in the organization. It can only be removed (empty the box and save)",
+      "formerMemberInvalid": "The target of someone who left can only be removed by emptying the box"
+    },
+    "state": {
+      "loadError": "Could not load the forecast",
+      "retry": "Retry"
     }
   },
   "settings": {

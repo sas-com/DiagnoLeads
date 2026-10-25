@@ -7,8 +7,9 @@ import { and, count, eq, inArray, sql } from 'drizzle-orm';
 import { listMqlLevel } from './api/list-sql';
 import { MQL_LEVEL_FILTERS, type MqlLevelFilter } from './types/schemas';
 
-// A deal moves its lead forward and assigns it like the lead page does (#435)
-export { findAssignableMember } from './assignment';
+// A deal moves its lead forward and assigns it like the lead page does (#435); the forecast and
+// the targets name and check the same members (#437)
+export { findAssignableMember, listAssignableMembers, memberDisplayName } from './assignment';
 export { diffLeadAudit, leadAuditSnapshot, writeLeadAuditLogs } from './audit';
 
 type Database = typeof defaultDb;
