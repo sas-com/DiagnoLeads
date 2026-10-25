@@ -105,6 +105,17 @@ describe('POST /api/collect', () => {
     expect(recordSiteVisit).not.toHaveBeenCalled();
   });
 
+  it('judges a long User-Agent from its head, and passes all of it on for the visitor hash (#705)', async () => {
+    const userAgent = `${'Android '.repeat(20_000)}Mobile`;
+    // A bot named in the head is dropped however long the rest is
+    expect((await post(beacon(VIEW, { 'user-agent': `Googlebot/2.1 ${userAgent}` }))).status).toBe(204);
+    expect(recordSiteVisit).not.toHaveBeenCalled();
+
+    expect((await post(beacon(VIEW, { 'user-agent': userAgent }))).status).toBe(204);
+    expect(recordSiteVisit).toHaveBeenCalledTimes(1);
+    expect(recordSiteVisit.mock.calls[0][1].userAgent).toBe(userAgent);
+  });
+
   it.each([
     ['an admin page', { ...VIEW, path: '/ja/dashboard' }],
     ['no path', { search: '' }],

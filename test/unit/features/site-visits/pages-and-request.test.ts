@@ -20,6 +20,8 @@ const IPAD =
   'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 const ANDROID_TABLET =
   'Mozilla/5.0 (Linux; Android 14; SM-X710) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36';
+const ANDROID_PHONE =
+  'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36';
 
 describe('sitePageOf', () => {
   it.each([
@@ -98,6 +100,7 @@ describe('request details', () => {
     expect(deviceOf(IPHONE)).toBe('mobile');
     expect(deviceOf(IPAD)).toBe('tablet');
     expect(deviceOf(ANDROID_TABLET)).toBe('tablet');
+    expect(deviceOf(ANDROID_PHONE)).toBe('mobile');
   });
 
   it('keeps only the host of the referrer', () => {
@@ -133,6 +136,47 @@ describe('request details', () => {
       utmMedium: null,
       utmCampaign: 'ok',
     });
+  });
+});
+
+describe('a long User-Agent (#705)', () => {
+  // 「Android 」 20,000 times and then 「Mobile」, about 160,000 characters. Read whole, the
+  // tablet pattern of deviceOf (an Android not followed by Mobile) takes about a second
+  const LONG = `${'Android '.repeat(20_000)}Mobile`;
+  const BOT_FIRST = `Googlebot/2.1 ${LONG}`;
+  const BOT_PAST_THE_HEAD = `${LONG} Googlebot/2.1`;
+
+  it('tells the device from the first 512 characters only, and fast', () => {
+    const started = performance.now();
+    // 「Mobile」 past the head is not read, so this is a tablet (read whole, it would be mobile)
+    expect(deviceOf(LONG)).toBe('tablet');
+    expect(performance.now() - started).toBeLessThan(50);
+  });
+
+  it('judges a bot from the first 512 characters only, and fast', () => {
+    const started = performance.now();
+    expect(isBot(LONG)).toBe(false);
+    expect(isBot(BOT_FIRST)).toBe(true);
+    // A name past the head is not read
+    expect(isBot(BOT_PAST_THE_HEAD)).toBe(false);
+    expect(performance.now() - started).toBeLessThan(50);
+  });
+
+  it('reads exactly the first 512 characters', () => {
+    const pad = (length: number) => 'x'.repeat(length);
+    expect(deviceOf(`${pad(506)}iPhone`)).toBe('mobile');
+    expect(deviceOf(`${pad(507)}iPhone`)).toBe('desktop');
+    expect(isBot(`${pad(509)}bot`)).toBe(true);
+    expect(isBot(`${pad(510)}bot`)).toBe(false);
+    // 「Mobile」 ending at the 512th character still makes an Android a phone
+    expect(deviceOf(`Android ${pad(498)}Mobile`)).toBe('mobile');
+    expect(deviceOf(`Android ${pad(499)}Mobile`)).toBe('tablet');
+  });
+
+  it('tells ordinary browsers as before: they are shorter than the head', () => {
+    for (const userAgent of [CHROME, IPHONE, IPAD, ANDROID_TABLET, ANDROID_PHONE]) {
+      expect(userAgent.length, userAgent).toBeLessThan(512);
+    }
   });
 });
 
