@@ -7,7 +7,9 @@
  * - lostReason: why the lead was lost or put on hold (budget → budget, timing / on hold →
  *   priority, internal structure → staffing, competitor → vendor)
  * - diagnosis: the challenges chosen in the AX diagnosis (cost → budget, people → staffing,
- *   nobody knows how it works → risk)
+ *   nobody knows how it works → risk), read from the lead's answers as well as from its summary:
+ *   the summary keeps only the four result categories, where "nobody knows" counts as people
+ *   (#484)
  * Objections are shown only when one of their tags has a signal; NG phrases without tags are
  * general and always shown.
  */
@@ -37,6 +39,14 @@ export interface ObjectionSignal {
 
 const isReason = (value: unknown): value is ObjectionReason =>
   typeof value === 'string' && (OBJECTION_REASONS as readonly string[]).includes(value);
+
+/** The challenges answered in one AX diagnosis submission, as the respondent chose them */
+export function challengesFromAnswers(answers: unknown): string[] {
+  if (typeof answers !== 'object' || answers === null) return [];
+  const value = (answers as Record<string, unknown>).challenges;
+  const values = Array.isArray(value) ? value : [value];
+  return values.filter((item): item is string => typeof item === 'string');
+}
 
 /** The reasons the lead shows, in the tags' order, each with where it came from */
 export function collectSignals(input: {
