@@ -197,7 +197,25 @@ export type NotificationPreferenceKey = (typeof NOTIFICATION_PREFERENCE_KEYS)[nu
 export type NotificationPreferenceUpdates = Partial<Record<NotificationPreferenceKey, boolean>>;
 
 /**
- * Update notification preferences
+ * The preference switches of `source`, read by name (#743). A procedure's input still carries
+ * keys its schema does not declare (organizationInputSchema passes them through and tRPC merges
+ * the parsed inputs), and drizzle writes every key that names a column: spreading the input let
+ * a member set user_id, id or created_at of their row.
+ */
+export function pickPreferenceUpdates(
+  source: Partial<Record<NotificationPreferenceKey, unknown>>
+): NotificationPreferenceUpdates {
+  const updates: NotificationPreferenceUpdates = {};
+  for (const key of NOTIFICATION_PREFERENCE_KEYS) {
+    const value = source[key];
+    if (typeof value === 'boolean') updates[key] = value;
+  }
+  return updates;
+}
+
+/**
+ * Update notification preferences. Only the switches are written, whatever else `updates`
+ * carries (see pickPreferenceUpdates)
  */
 export async function updatePreferences(
   userId: string,
@@ -210,7 +228,7 @@ export async function updatePreferences(
   const [updated] = await database
     .update(notificationPreferences)
     .set({
-      ...updates,
+      ...pickPreferenceUpdates(updates),
       updatedAt: new Date(),
     })
     .where(
