@@ -5,6 +5,8 @@ AI-powered features for DiagnoLeads using Claude Sonnet 5.5 and OpenAI Embedding
 ## Features
 
 > **有料 API（Claude・OpenAI）を呼ぶ関数の呼び方**：tRPC のルーター（`api/router.ts`）から、組織の所属・権限の確認と組織での読み込みの後、回数を数えてから呼ぶ。Claude は `consumeAiCalls`（`limits.ts`）で数え、リードを `leadForClaude`（`prompt-input.ts`）で切ってから渡す。埋め込み（`semanticSearch`・`updateLeadEmbedding`・`generateEmbedding`）は `consumeEmbeddingCalls`（`limits.ts`）で数える（決定 `2026-10-24-ai-call-rate-limits`）。下の例は関数の使い方だけを示す。ほかの場所から直接呼ぶと、回数制限を通らない。
+>
+> 組織（`{ organizationId }`）は必須の引数で、応答ごとにトークン使用量のログ（`usage.ts` の `logAiUsage`。数と名前だけ）に出る（決定 `2026-10-25-ai-v1-prompt-assets`）。
 
 ### 1. Lead Scoring (`scoring/claude.ts`)
 - AI-powered lead quality assessment
@@ -14,13 +16,10 @@ AI-powered features for DiagnoLeads using Claude Sonnet 5.5 and OpenAI Embedding
 
 ```typescript
 import { scoreLeadWithAI } from '@/lib/features/ai';
+import { leadForClaude } from '@/lib/features/ai/prompt-input';
 
-const score = await scoreLeadWithAI({
-  name: 'John Doe',
-  company: 'Acme Corp',
-  industry: 'Technology',
-  position: 'CTO',
-});
+// leadForClaude drops what points at a person (decision 2026-10-25-ai-no-personal-data)
+const score = await scoreLeadWithAI(leadForClaude(lead), { organizationId });
 
 console.log(score.score); // 85
 console.log(score.priority); // 'high'
@@ -52,9 +51,10 @@ const similar = await findSimilarLeads({ db: ctx.db, leadId, organizationId });
 
 ```typescript
 import { generateLeadSummary } from '@/lib/features/ai';
+import { leadForClaude } from '@/lib/features/ai/prompt-input';
 
 // Generate lead summary
-const summary = await generateLeadSummary(lead);
+const summary = await generateLeadSummary(leadForClaude(lead), { organizationId });
 ```
 
 ### 4. Embeddings (`embeddings/openai.ts`)
@@ -67,7 +67,7 @@ import { generateEmbedding, prepareLeadText } from '@/lib/features/ai';
 
 const text = prepareLeadText(lead);
 // A paid OpenAI call: count it with consumeEmbeddingCalls first
-const embedding = await generateEmbedding(text);
+const embedding = await generateEmbedding(text, { operation: 'embed-lead', organizationId });
 ```
 
 ## Database Setup
