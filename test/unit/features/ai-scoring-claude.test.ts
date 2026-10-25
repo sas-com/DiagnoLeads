@@ -191,9 +191,19 @@ describe('scoreLeadWithAI', () => {
         stop_reason: 'max_tokens',
       });
 
+      const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+
       const score = await scoreLeadWithAI({ email: 'cut@example.com' });
 
       expect(score).toMatchObject({ score: 50, isFallback: true });
+      // The fallback comes from parsing the cut-off text, not from a call that never happened
+      expect(errorLog).toHaveBeenCalledWith(
+        'Error scoring lead with AI:',
+        expect.objectContaining({
+          message: expect.stringContaining('Failed to parse structured output'),
+        })
+      );
+      errorLog.mockRestore();
       // A parse error has no HTTP status: nobody on call is alerted
       expect(reportServerError).not.toHaveBeenCalled();
     });

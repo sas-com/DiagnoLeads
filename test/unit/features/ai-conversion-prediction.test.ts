@@ -367,10 +367,19 @@ describe('predictConversion', () => {
       content: [{ type: 'text', text: '{"probability": 75, "confid' }],
       stop_reason: 'max_tokens',
     });
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const prediction = await predictConversion(lead, { hasName: true, hasPhone: false });
 
     expect(prediction.probability).not.toBe(75);
     expect(prediction.factors.length).toBeGreaterThan(0);
+    // The heuristics come from parsing the cut-off text, not from a call that never happened
+    expect(errorLog).toHaveBeenCalledWith(
+      'Conversion prediction error:',
+      expect.objectContaining({
+        message: expect.stringContaining('Failed to parse structured output'),
+      })
+    );
+    errorLog.mockRestore();
   });
 });
