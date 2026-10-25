@@ -130,6 +130,11 @@ describe('request details', () => {
     expect(visitParamsOf(undefined)).toMatchObject({ utmSource: null, fromRef: null });
   });
 
+  it('cuts a long utm_* value without splitting a character (#754)', () => {
+    const campaign = encodeURIComponent(`${'a'.repeat(199)}😀`);
+    expect(visitParamsOf(`?utm_campaign=${campaign}`).utmCampaign).toBe('a'.repeat(199));
+  });
+
   it('drops a utm_* value with NUL, which the database cannot store (#648)', () => {
     expect(visitParamsOf('?utm_source=%00&utm_medium=a%00b&utm_campaign=ok')).toMatchObject({
       utmSource: null,

@@ -44,10 +44,14 @@ vi.mock('@/hooks/use-organization', () => ({
   useOrganization: () => ({ organizationId: mocks.organizationId }),
 }));
 
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mocks.push, replace: vi.fn() }),
-  usePathname: () => '/ja/dashboard',
-}));
+vi.mock('next/navigation', () => {
+  // One object for every render, like Next's useRouter (#636)
+  const router = { push: mocks.push, replace: vi.fn() };
+  return {
+    useRouter: () => router,
+    usePathname: () => '/ja/dashboard',
+  };
+});
 
 beforeAll(() => {
   // cmdk and Radix use these browser APIs that jsdom lacks

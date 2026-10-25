@@ -1,9 +1,10 @@
 /**
- * Count, nesting and length limits of the lead inputs (#604): leads.bulkCreate takes up to
+ * Count limits of the lead inputs (#604): leads.bulkCreate takes up to
  * LEAD_BULK_CREATE_MAX leads (the import sends a larger file in parts of that size), the bulk
- * actions up to a page of the list, the tag filter as many ids as the other filters take, and
- * the advanced filter LEAD_FILTER_LIMITS. A count at its limit passes, one over it is refused
- * with BAD_REQUEST before anything is read or written. Values are made up.
+ * actions up to a page of the list, and the tag filter as many ids as the other filters take.
+ * A count at its limit passes, one over it is refused with BAD_REQUEST before anything is read
+ * or written. The advanced filter is gone (#699): leads.list and leads.export ignore it.
+ * Values are made up.
  */
 import {
   importBatches,
@@ -12,20 +13,25 @@ import {
 } from '@/lib/features/leads/import-service';
 import { LEAD_PAGE_SIZES } from '@/lib/features/leads/list-query';
 import {
-  type FilterGroup,
+  DEAL_PHASES,
+  INFLOW_SOURCES,
+  LEAD_STATUSES,
+  TARGET_SYSTEMS,
+} from '@/lib/features/leads/types/pipeline';
+import {
   LEAD_BULK_CREATE_MAX,
-  LEAD_FILTER_LIMITS,
   LEAD_FILTER_MAX_VALUES,
   LEAD_LIST_PAGE_MAX,
   bulkCreateSchema,
   bulkDeleteSchema,
   bulkUpdateStatusSchema,
   exportLeadsSchema,
-  filterGroupSchema,
   listLeadsSchema,
 } from '@/lib/features/leads/types/schemas';
 import { appRouter } from '@/server/routers/_app';
 import { TRPCError } from '@trpc/server';
+import type { SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import type { ZodError } from 'zod';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -45,17 +51,27 @@ const idsOf = (count: number) =>
 const leadsOf = (count: number) =>
   Array.from({ length: count }, (_, i) => ({ email: `lead${i}@example.jp` }));
 
-/** A condition of the advanced filter */
-const condition = (value: unknown = '三田') => ({ field: 'company', operator: 'contains', value });
-
-/** A filter of `levels` levels of groups: each group holds one condition and the next group */
-function nestedFilter(levels: number): Record<string, unknown> {
-  let group: Record<string, unknown> = { logic: 'and', conditions: [condition()] };
+/**
+ * An advanced filter as the removed input took it (#699): a value the column cannot take (a
+ * text for a date, which made drizzle throw and leads.list answer 500, #688) and groups
+ * nested far deeper than the old limit of 3 levels
+ */
+function oldAdvancedFilter(levels = 10_000): Record<string, unknown> {
+  let group: Record<string, unknown> = {
+    logic: 'and',
+    conditions: [{ field: 'createdAt', operator: 'equals', value: 'x' }],
+  };
   for (let level = 1; level < levels; level++) {
-    group = { logic: 'or', conditions: [condition()], groups: [group] };
+    group = {
+      logic: 'or',
+      conditions: [{ field: 'company', operator: 'contains', value: '三田' }],
+      groups: [group],
+    };
   }
   return group;
 }
+
+const dialect = new PgDialect();
 
 /** The issues of a refused parse */
 function issuesOf(result: { success: boolean; error?: ZodError }) {
@@ -151,149 +167,46 @@ describe('the tag filter of the list and the export', () => {
   });
 });
 
-describe('the advanced filter', () => {
-  describe('nesting', () => {
-    it(`takes groups ${LEAD_FILTER_LIMITS.depth} levels deep`, () => {
-      const filter = nestedFilter(LEAD_FILTER_LIMITS.depth);
-      expect(filterGroupSchema.parse(filter)).toEqual(filter);
-    });
+describe('the filters given several values (status and the others) of the list and the export', () => {
+  const fields = [
+    ['status', LEAD_STATUSES[0]],
+    ['dealPhase', DEAL_PHASES[0]],
+    ['inflowSource', INFLOW_SOURCES[0]],
+    ['targetSystem', TARGET_SYSTEMS[0]],
+  ] as const;
 
-    it('refuses a group one level deeper, where the limit is reached', () => {
-      const issues = issuesOf(
-        filterGroupSchema.safeParse(nestedFilter(LEAD_FILTER_LIMITS.depth + 1))
-      );
-      expect(issues).toContainEqual(
-        expect.objectContaining({
-          path: ['groups', 0, 'groups', 0, 'groups'],
-          message: `条件のグループは${LEAD_FILTER_LIMITS.depth}段までです`,
-        })
-      );
-    });
-
-    it('refuses a filter nested 100,000 levels deep without overflowing the stack', () => {
-      // The recursive schema threw a RangeError at about 800 levels
-      const result = filterGroupSchema.safeParse(nestedFilter(100_000));
-      expect(result.success).toBe(false);
-    });
-
-    it(`takes ${LEAD_FILTER_LIMITS.groups} groups in one group and refuses one more`, () => {
-      const withGroups = (count: number) => ({
-        logic: 'or',
-        conditions: [],
-        groups: Array.from({ length: count }, () => ({ logic: 'and', conditions: [condition()] })),
-      });
-      expect(filterGroupSchema.safeParse(withGroups(LEAD_FILTER_LIMITS.groups)).success).toBe(true);
-      expect(
-        issuesOf(filterGroupSchema.safeParse(withGroups(LEAD_FILTER_LIMITS.groups + 1)))
-      ).toContainEqual(expect.objectContaining({ path: ['groups'], code: 'too_big' }));
-    });
+  it.each(fields)(`%s takes ${LEAD_FILTER_MAX_VALUES} values`, (field, value) => {
+    const values = Array(LEAD_FILTER_MAX_VALUES).fill(value);
+    expect(listLeadsSchema.parse({ organizationId: ORG_ID, [field]: values })[field]).toEqual(
+      values
+    );
   });
 
-  describe('conditions', () => {
-    /** `count` conditions spread over the top group and two nested levels */
-    function spread(count: number): FilterGroup {
-      const third = Math.floor(count / 3);
-      const conditions = (n: number) =>
-        Array.from({ length: n }, () => condition() as FilterGroup['conditions'][number]);
-      return {
-        logic: 'and',
-        conditions: conditions(count - 2 * third),
-        groups: [
-          {
-            logic: 'or',
-            conditions: conditions(third),
-            groups: [{ logic: 'and', conditions: conditions(third) }],
-          },
-        ],
-      };
-    }
-
-    it(`takes ${LEAD_FILTER_LIMITS.conditions} conditions over the whole filter`, () => {
-      expect(filterGroupSchema.safeParse(spread(LEAD_FILTER_LIMITS.conditions)).success).toBe(true);
-    });
-
-    it('refuses one condition more, counting every group', () => {
-      const issues = issuesOf(
-        filterGroupSchema.safeParse(spread(LEAD_FILTER_LIMITS.conditions + 1))
-      );
-      expect(issues).toContainEqual(
-        expect.objectContaining({
-          message: `条件は全体で${LEAD_FILTER_LIMITS.conditions}個までです`,
-        })
-      );
-    });
-
-    it('refuses one group holding more conditions than the whole filter takes', () => {
-      const issues = issuesOf(
-        filterGroupSchema.safeParse({
-          logic: 'and',
-          conditions: Array.from({ length: LEAD_FILTER_LIMITS.conditions + 1 }, () => condition()),
-        })
-      );
-      expect(issues).toContainEqual(
-        expect.objectContaining({ path: ['conditions'], code: 'too_big' })
-      );
-    });
+  it.each(fields)('%s refuses one value more, on the list and on the export', (field, value) => {
+    const values = Array(LEAD_FILTER_MAX_VALUES + 1).fill(value);
+    expect(
+      issuesOf(listLeadsSchema.safeParse({ organizationId: ORG_ID, [field]: values }))
+    ).toContainEqual(expect.objectContaining({ path: [field], code: 'too_big' }));
+    expect(
+      exportLeadsSchema.safeParse({ organizationId: ORG_ID, format: 'csv', [field]: values })
+        .success
+    ).toBe(false);
   });
+});
 
-  describe('fields and values', () => {
-    const parse = (overrides: Record<string, unknown>) =>
-      filterGroupSchema.safeParse({ logic: 'and', conditions: [{ ...condition(), ...overrides }] });
-
-    it(`takes a field name of ${LEAD_FILTER_LIMITS.fieldLength} characters and refuses one more`, () => {
-      expect(parse({ field: 'f'.repeat(LEAD_FILTER_LIMITS.fieldLength) }).success).toBe(true);
-      expect(
-        issuesOf(parse({ field: 'f'.repeat(LEAD_FILTER_LIMITS.fieldLength + 1) }))[0]
-      ).toMatchObject({
-        path: ['conditions', 0, 'field'],
-        code: 'too_big',
-      });
-    });
-
-    it(`takes a text value of ${LEAD_FILTER_LIMITS.valueLength} characters and refuses one more`, () => {
-      expect(parse({ value: '株'.repeat(LEAD_FILTER_LIMITS.valueLength) }).success).toBe(true);
-      expect(parse({ value: '株'.repeat(LEAD_FILTER_LIMITS.valueLength + 1) }).success).toBe(false);
-      expect(
-        parse({
-          operator: 'between',
-          value: 1,
-          value2: 'x'.repeat(LEAD_FILTER_LIMITS.valueLength + 1),
-        }).success
-      ).toBe(false);
-    });
-
-    it(`takes a list of ${LEAD_FILTER_LIMITS.values} values and refuses one more`, () => {
-      const list = (count: number) => Array.from({ length: count }, (_, i) => `会社${i}`);
-      expect(parse({ operator: 'in', value: list(LEAD_FILTER_LIMITS.values) }).success).toBe(true);
-      expect(parse({ operator: 'in', value: list(LEAD_FILTER_LIMITS.values + 1) }).success).toBe(
-        false
-      );
-    });
-
-    it('refuses values that are neither text, a number, a boolean, a date nor a list of them', () => {
-      expect(parse({ operator: 'in', value: [['nested']] }).success).toBe(false);
-      expect(parse({ value: { company: '三田' } }).success).toBe(false);
-      expect(parse({ value: Number.POSITIVE_INFINITY }).success).toBe(false);
-    });
-
-    it('still takes the shapes the operators use', () => {
-      const filter = {
-        logic: 'and' as const,
-        conditions: [
-          { field: 'status', operator: 'equals' as const, value: 'new' },
-          { field: 'score', operator: 'between' as const, value: 10, value2: 90 },
-          {
-            field: 'createdAt',
-            operator: 'greater_than' as const,
-            value: new Date('2026-10-01T00:00:00Z'),
-          },
-          { field: 'source', operator: 'in' as const, value: ['website', 'embed'] },
-          { field: 'phone', operator: 'is_empty' as const },
-          { field: 'company', operator: 'not_equals' as const, value: null },
-        ],
-      };
-      expect(filterGroupSchema.parse(filter)).toEqual(filter);
-    });
+describe('an advanced filter an older client still sends (#699)', () => {
+  // The schema alone drops it, but a procedure's input still carries it: organizationInputSchema
+  // passes unknown keys through and tRPC merges the parsed inputs (#743). What keeps it out of
+  // the WHERE and the audit row is that they read only named fields, which the leads.list and
+  // leads.export tests below check through the procedures.
+  it('is dropped by the list and the export schemas, not refused', () => {
+    const advancedFilter = oldAdvancedFilter();
+    expect(listLeadsSchema.parse({ organizationId: ORG_ID, advancedFilter })).not.toHaveProperty(
+      'advancedFilter'
+    );
+    expect(
+      exportLeadsSchema.parse({ organizationId: ORG_ID, format: 'csv', advancedFilter })
+    ).not.toHaveProperty('advancedFilter');
   });
 });
 
@@ -361,6 +274,8 @@ function mockDb() {
     delete: vi.fn().mockReturnThis(),
     set: vi.fn().mockReturnThis(),
     execute: vi.fn().mockResolvedValue([]),
+    // No lead has a deal (leadIdsWithDeals, #444)
+    selectDistinct: vi.fn(() => ({ from: () => ({ where: () => Promise.resolve([]) }) })),
     transaction: vi.fn(),
   };
   db.transaction.mockImplementation((fn: (tx: unknown) => unknown) => fn(db));
@@ -454,15 +369,50 @@ describe('tRPC procedures', () => {
     expect(db.delete).not.toHaveBeenCalled();
   });
 
-  it('leads.list refuses a deeply nested advanced filter with the zod issue, not a stack overflow', async () => {
-    const issues = await refusal(
-      appRouter.createCaller(ctx).leads.list({
-        organizationId: ORG_ID,
-        advancedFilter: nestedFilter(10_000) as FilterGroup,
-      })
+  // createCaller skips superjson. Over HTTP, a nesting of 1,000 to 2,000 levels (Node 22)
+  // overflows the stack in superjson's deserialize before zod runs: BAD_REQUEST, not 500
+  it('leads.list ignores an advanced filter: the WHERE is the one without it (#699)', async () => {
+    const caller = appRouter.createCaller(ctx);
+    const input = { organizationId: ORG_ID, status: 'new' as const };
+    await caller.leads.list(input);
+    // Not an object literal at the call, so the removed key type-checks like an old client's
+    const oldInput = { ...input, advancedFilter: oldAdvancedFilter() };
+    await expect(caller.leads.list(oldInput)).resolves.toMatchObject({ items: [], total: 0 });
+
+    const wheres = db.query.leads.findMany.mock.calls.map(([args]) =>
+      dialect.sqlToQuery(args.where as SQL)
     );
-    expect(issues[0]?.path.slice(0, 1)).toEqual(['advancedFilter']);
-    expect(db.select).not.toHaveBeenCalled();
+    expect(wheres).toHaveLength(2);
+    expect(wheres[0]?.sql).toContain('"leads"."organization_id" = $1');
+    expect(wheres[1]).toEqual(wheres[0]);
+    // The count reads the same WHERE
+    expect(db.where.mock.calls.map(([where]) => dialect.sqlToQuery(where as SQL))).toEqual([
+      wheres[0],
+      wheres[0],
+    ]);
+  });
+
+  it('leads.export ignores it too, in the WHERE and in the audit row (#699)', async () => {
+    Object.assign(db, {
+      leftJoin: vi.fn().mockReturnThis(),
+      orderBy: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue([]),
+    });
+    const caller = appRouter.createCaller(ctx);
+    const input = { organizationId: ORG_ID, format: 'csv' as const, status: 'new' as const };
+    await caller.leads.export(input);
+    const oldInput = { ...input, advancedFilter: oldAdvancedFilter() };
+    await expect(caller.leads.export(oldInput)).resolves.toMatchObject({ rowCount: 0 });
+
+    // The count and the rows of each export
+    const wheres = db.where.mock.calls.map(([where]) => dialect.sqlToQuery(where as SQL));
+    expect(wheres).toHaveLength(4);
+    expect(wheres[0]?.sql).toContain('"leads"."organization_id" = $1');
+    for (const where of wheres) expect(where).toEqual(wheres[0]);
+    expect(db.values.mock.calls.map(([row]) => row.metadata.filters)).toEqual([
+      { status: 'new' },
+      { status: 'new' },
+    ]);
   });
 
   it('leads.list refuses one tag id more before reading the tags', async () => {

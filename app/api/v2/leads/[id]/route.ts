@@ -1,7 +1,9 @@
 import { getAuthenticatedOrganization } from '@/lib/api/v2-auth';
 import { db } from '@/lib/db';
 import { leads } from '@/lib/db/schema';
+import { leadIdsWithDeals } from '@/lib/features/leads/service';
 import {
+  changesDealDrivenFields,
   dropsOnHoldReason,
   leadStatusEnum,
   normalizeLeadStatus,
@@ -15,7 +17,7 @@ import {
  * DELETE /api/v2/leads/[id] - Delete a lead
  */
 import { emitLeadEvents, leadChangeEvents } from '@/lib/features/webhooks/services/lead-events';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { type NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -151,34 +153,58 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       );
     }
 
-    // Build update data
-    const updateData: Record<string, unknown> = {
-      updatedAt: new Date(),
-    };
-
     const { email, name, company, phone, source, status, score, responses, customFields } =
       parsedBody.data;
 
-    if (email !== undefined) updateData.email = email;
-    if (name !== undefined) updateData.name = name;
-    if (company !== undefined) updateData.company = company;
-    if (phone !== undefined) updateData.phone = phone;
-    if (source !== undefined) updateData.source = source;
-    if (status !== undefined) Object.assign(updateData, statusUpdateFields(status));
-    // A lead on hold that is now lost drops the reason 保留 (#445)
-    if (dropsOnHoldReason(existing, { status })) updateData.lostReason = null;
-    if (score !== undefined) updateData.score = score;
-    if (responses !== undefined) updateData.responses = responses;
-    if (customFields !== undefined) updateData.customFields = customFields;
+    const scope = and(eq(leads.id, id), eq(leads.organizationId, authResult.organizationId));
+    // The lead row is locked first, as leads.update and the deals do, so a deal created at the
+    // same time is seen before the status is written (#444)
+    const outcome = await db.transaction(async (tx) => {
+      await tx.execute(sql`select 1 from ${leads} where ${scope} for no key update`);
+      const current = (await tx.query.leads.findFirst({ where: scope })) ?? existing;
 
-    // Update lead
-    const [updated] = await db
-      .update(leads)
-      .set(updateData)
-      .where(and(eq(leads.id, id), eq(leads.organizationId, authResult.organizationId)))
-      .returning();
+      // A lead with deals takes its status from the deals (#444)
+      if (
+        changesDealDrivenFields(current, { status }) &&
+        (await leadIdsWithDeals(tx, authResult.organizationId, [id])).size > 0
+      ) {
+        return { conflict: true as const };
+      }
+
+      // Build update data
+      const updateData: Record<string, unknown> = {
+        updatedAt: new Date(),
+      };
+
+      if (email !== undefined) updateData.email = email;
+      if (name !== undefined) updateData.name = name;
+      if (company !== undefined) updateData.company = company;
+      if (phone !== undefined) updateData.phone = phone;
+      if (source !== undefined) updateData.source = source;
+      if (status !== undefined) Object.assign(updateData, statusUpdateFields(status));
+      // A lead on hold that is now lost drops the reason 保留 (#445)
+      if (dropsOnHoldReason(current, { status })) updateData.lostReason = null;
+      if (score !== undefined) updateData.score = score;
+      if (responses !== undefined) updateData.responses = responses;
+      if (customFields !== undefined) updateData.customFields = customFields;
+
+      // Update lead
+      const [updated] = await tx.update(leads).set(updateData).where(scope).returning();
+      return { conflict: false as const, current, updated };
+    });
+
+    if (outcome.conflict) {
+      return NextResponse.json(
+        {
+          error: 'Conflict',
+          message: 'The status of a lead with deals is set by its deals; change the deal stage',
+        },
+        { status: 409 }
+      );
+    }
+    const { current, updated } = outcome;
     if (updated) {
-      emitLeadEvents(authResult.organizationId, leadChangeEvents(existing, updated));
+      emitLeadEvents(authResult.organizationId, leadChangeEvents(current, updated));
     }
 
     return NextResponse.json({

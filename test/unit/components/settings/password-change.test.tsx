@@ -96,11 +96,15 @@ vi.mock('@/hooks/use-organization', () => ({
   }),
 }));
 
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
-  usePathname: () => '/ja/settings',
-  useParams: () => ({}),
-}));
+vi.mock('next/navigation', () => {
+  // One object for every render, like Next's useRouter (#636)
+  const router = { push: vi.fn(), replace: vi.fn() };
+  return {
+    useRouter: () => router,
+    usePathname: () => '/ja/settings',
+    useParams: () => ({}),
+  };
+});
 
 vi.mock('sonner', () => ({ toast: { success: mocks.toastSuccess, error: mocks.toastError } }));
 

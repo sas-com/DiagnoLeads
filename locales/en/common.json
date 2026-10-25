@@ -1341,7 +1341,8 @@
       "updateSuccess": "{count} leads updated successfully",
       "deleteSuccess": "{count} leads deleted successfully",
       "updateError": "Failed to update leads",
-      "deleteError": "Failed to delete leads"
+      "deleteError": "Failed to delete leads",
+      "skippedWithDeals": "{count} leads with deals were left as they are (their status comes from the deals)"
     },
     "import": {
       "title": "Import Leads",
@@ -1941,7 +1942,49 @@
       "copied": "Copied to clipboard",
       "confirmDelete": "Are you sure you want to delete this QR campaign?",
       "noCampaigns": "No QR campaigns",
-      "noCampaignsDescription": "Create a QR code campaign for offline distribution."
+      "noCampaignsDescription": "Create a QR code campaign for offline distribution.",
+      "destination": {
+        "label": "A scan opens",
+        "axDiagnosis": "the AX diagnosis",
+        "diagnosis": "the public page of the diagnosis ({path})",
+        "none": "A scan opens nothing (it shows Not Found)",
+        "reasons": {
+          "paused": {
+            "title": "Paused",
+            "action": "Turn the switch on to open it."
+          },
+          "expired": {
+            "title": "Expired",
+            "action": "Extend or clear the expiry to open it. It stays closed while the switch is on."
+          },
+          "not_ax_organization": {
+            "title": "No diagnosis chosen",
+            "action": "A campaign without a diagnosis opens only for the organization that receives the AX diagnosis. Choose a diagnosis for the campaign once that becomes possible."
+          },
+          "diagnosis_not_published": {
+            "title": "The chosen diagnosis is not published",
+            "action": "Publish the diagnosis in the diagnosis builder. A paused, archived or draft diagnosis, and one another organization publishes at the same URL, do not open."
+          }
+        }
+      },
+      "expiry": {
+        "label": "Expiry",
+        "none": "No expiry",
+        "until": "Until {date} (Japan time)",
+        "expired": "Expired",
+        "edit": "Change expiry",
+        "dayLabel": "Open until the end of this day (Japan time)",
+        "save": "Save",
+        "clear": "Clear expiry",
+        "cancel": "Cancel",
+        "saved": "Expiry changed",
+        "cleared": "Expiry cleared",
+        "invalidDay": "Choose a date",
+        "pastDay": "Choose today or a later day. A past day would stop the QR code as soon as you save. To pause the campaign, turn its switch off.",
+        "failed": "Could not change the expiry",
+        "createLabel": "Expiry (optional)",
+        "createHint": "Open until the end of the chosen day (Japan time). Leave it empty for no expiry. You can change it later."
+      }
     },
     "axPlaybook": {
       "title": "Sales playbook (AX Migration)",
@@ -2579,7 +2622,8 @@
         "costNotRegistered": "Cost not registered (no contract for this period)",
         "appointmentQuality": "Appointments meeting the conditions",
         "appointmentQualityValue": "{met} / {reviewed} ({rate}%)"
-      }
+      },
+      "siteVisits": "Site visits"
     }
   },
   "header": {
@@ -4388,7 +4432,8 @@
     "sheet": {
       "keyFacts": "Key facts"
     },
-    "nextMeetingOverdue": "Next meeting {date} has passed"
+    "nextMeetingOverdue": "Next meeting {date} has passed",
+    "fromDeals": "Set by the deals (changes with the deal stage)"
   },
   "leadList": {
     "searchLabel": "Search leads",
@@ -5474,6 +5519,43 @@
         "unknown": "Unknown"
       },
       "footer": "Imported by {name} on {date}"
+    }
+  },
+  "siteAnalytics": {
+    "title": "Site visits",
+    "description": "Visitors and page views of the public pages (own measurement, no cookies)",
+    "periodLabel": "Period",
+    "period": "Last {days} days",
+    "periodRange": "Last {days} days",
+    "overview": "Overview",
+    "toAnalytics": "Lead analytics",
+    "metricLabel": "Metric",
+    "metric": {
+      "visitors": "Visitors, whole site",
+      "pageviews": "Page views, whole site"
+    },
+    "change": {
+      "increase": "{rate}% more than the previous period",
+      "decrease": "{rate}% less than the previous period",
+      "unchanged": "Same as the previous period"
+    },
+    "updatedOn": "Recorded up to {day}",
+    "chartLabel": "{metric} per day (last {days} days, total {total})",
+    "visitorsNote": "Visitors are counted per day: someone who comes back on another day counts on each day.",
+    "pagesTitle": "{metric} per page",
+    "empty": "No views recorded in this period",
+    "notMeasured": "No visits have been recorded yet. The measurement is turned on once the privacy policy describes it.",
+    "error": "Could not load. Please reload later.",
+    "pageType": {
+      "ax-lp": "AX migration (main landing page)",
+      "ax-access-lp": "Access landing page",
+      "ax-column-index": "Columns",
+      "ax-column": "Column",
+      "ax-diagnosis": "AX diagnosis",
+      "diagnosis": "Diagnosis",
+      "legacy-diagnostic": "Diagnostic form (legacy)",
+      "home": "Top page",
+      "landing": "Landing page"
     }
   }
 }
