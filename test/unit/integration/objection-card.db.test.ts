@@ -1,7 +1,8 @@
 /**
  * Objection card (#157) on a real PostgreSQL: the signals from the latest hearing, the lost
- * reason and the diagnosis, the playbook rows picked for them, no playbook, and who may read it
- * (not viewers from a parent organization). Playbook rows are made up.
+ * reason and the diagnosis (the lead's summary and its AX answers, #484), the playbook rows
+ * picked for them, no playbook, and who may read it (not viewers from a parent organization).
+ * Playbook rows are made up.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/dl_test \
@@ -11,6 +12,7 @@ import type { Database } from '@/lib/db/client';
 import * as schema from '@/lib/db/schema';
 import {
   axSalesPlaybooks,
+  diagnosticSubmissions,
   leadHearings,
   leads,
   organizationMembers,
@@ -122,6 +124,47 @@ describe.skipIf(!url)('objection card (PostgreSQL)', () => {
       scheduleTemplate: '{date}までにご連絡します',
       canAddTakeaway: true,
     });
+  });
+
+  it('reads the risk from the AX answers, which the summary keeps as people (#484)', async () => {
+    const [lead] = await pg
+      .insert(leads)
+      .values({
+        organizationId: orgIds[0],
+        email: `objection-${unique()}@example.co.jp`,
+        // What the AX diagnosis saves when only "nobody knows how it works" was chosen
+        responses: { axMigration: { challenges: ['people'] } },
+      })
+      .returning();
+    const submission = {
+      leadId: lead.id,
+      diagnosticVersion: 1,
+      answers: { platform: 'as400', challenges: ['blackbox'] },
+      result: {},
+    };
+    await pg.insert(diagnosticSubmissions).values([
+      { ...submission, organizationId: orgIds[0], diagnosticKey: 'ax-migration', leadCreated: true },
+      // Not read: another diagnosis, and another organization's row
+      {
+        ...submission,
+        organizationId: orgIds[0],
+        diagnosticKey: 'builder-diagnosis',
+        answers: { challenges: ['cost'] },
+      },
+      {
+        ...submission,
+        organizationId: orgIds[1],
+        diagnosticKey: 'ax-migration',
+        answers: { challenges: ['cost'] },
+      },
+    ]);
+
+    const card = await callers.member.objectionCard.get({ organizationId: orgIds[0], leadId: lead.id });
+    expect(card.signals).toEqual([
+      { reason: 'staffing', sources: ['diagnosis'] },
+      { reason: 'risk', sources: ['diagnosis'] },
+    ]);
+    expect(card.objections.map((row: { customer: string }) => row.customer)).toEqual(['怖い']);
   });
 
   it('says there is no playbook, and keeps it from viewers of a parent organization', async () => {
