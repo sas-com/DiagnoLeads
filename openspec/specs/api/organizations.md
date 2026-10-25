@@ -1,6 +1,6 @@
 # Organizations & Members API 仕様書
 
-> **Source of Truth**: DiagnoLeads v2 組織・メンバー管理API仕様
+> **仕様**: DiagnoLeads v2 組織・メンバー管理API仕様（コードや決定 `.factory/memory/decisions/` と食い違ったら、そちらが正。構成は docs/ARCHITECTURE.md）
 >
 > **最終更新**: 2025-11-28
 > **ステータス**: Phase 2 実装完了

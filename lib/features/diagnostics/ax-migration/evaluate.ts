@@ -4,6 +4,11 @@ import type { DiagnosticAnswers } from '../types';
 import { type AxAccessPathResult, judgeAccessPath } from './access-path';
 import { accessSupport } from './access-support';
 import {
+  ACCESS_CHALLENGE_CATEGORY,
+  type ChallengeType,
+  SERVER_CHALLENGE_CATEGORY,
+} from './challenge-categories';
+import {
   type AxCompanySizeResult,
   type AxTargetCompany,
   evaluateCompanySize,
@@ -14,7 +19,7 @@ import { type AxMqlJudgement, judgeAxMql, waivedConditions } from './mql';
 import { technicalQuestions, unknownTechnicalQuestions } from './technical';
 
 export type Level = 'low' | 'medium' | 'high';
-export type ChallengeType = 'people' | 'cost' | 'agility' | 'data';
+export type { ChallengeType } from './challenge-categories';
 
 /** Keys of axDiagnosis.result.reasons (every key needs a message in each locale) */
 export const AX_REASON_KEYS = [
@@ -332,30 +337,8 @@ const LEAD_SCORE_POINTS = {
   },
 } as const;
 
-/** Challenge answers of the server-based paths map onto the four result categories */
-const SERVER_CHALLENGE_CATEGORY: Record<string, ChallengeType> = {
-  people: 'people',
-  blackbox: 'people',
-  cost: 'cost',
-  deadline: 'agility',
-  agility: 'agility',
-  remote: 'agility',
-  data: 'data',
-};
-
-/** Access challenge answers map onto the four result categories */
-const ACCESS_CHALLENGE_CATEGORY: Record<string, ChallengeType> = {
-  people: 'people',
-  manual: 'cost',
-  stability: 'agility',
-  remote: 'agility',
-  support: 'agility',
-  data: 'data',
-  // Records and permissions: how the data is managed
-  audit: 'data',
-};
-
 const CHALLENGE_ORDER: ChallengeType[] = ['people', 'cost', 'agility', 'data'];
+
 /** Share of "I don't know" among the technical required answers that triggers needsHearing */
 const NEEDS_HEARING_RATIO = 0.5;
 /** A reason is shown when its answer contributed at least this many points */
