@@ -12,7 +12,7 @@ import {
 } from '@/hooks/use-analytics';
 import { useExport } from '@/hooks/use-export';
 import { useOrganization } from '@/hooks/use-organization';
-import { useLocale, useTranslations } from 'next-intl';
+import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import dynamic from 'next/dynamic';
 import { useState } from 'react';
 
@@ -115,6 +115,7 @@ export default function AnalyticsPage() {
   const tInflowSource = useTranslations('pipeline.inflowSource');
   const tLeads = useTranslations('leads');
   const locale = useLocale();
+  const format = useFormatter();
   const { organizationId: contextOrgId, isLoading: contextLoading } = useOrganization();
 
   // Only use organization ID if it's a valid UUID
@@ -227,22 +228,14 @@ export default function AnalyticsPage() {
   // No period-over-period change is shown until it is computed from real data (#138)
 
   // Value formatter for charts
-  const valueFormatter = (value: number) => {
-    if (locale === 'ja') {
-      return `${value.toLocaleString('ja-JP')}件`;
-    }
-    return value.toLocaleString('en-US');
-  };
+  const valueFormatter = (value: number) => t('leadCount', { count: value });
 
   // Transform lead trend data for chart
   const chartData = (leadTrend || [])
     .map((item) => ({
-      date: new Date(item.date).toLocaleDateString(locale === 'ja' ? 'ja-JP' : 'en-US', {
-        month: 'short',
-        day: 'numeric',
-      }),
-      [t('charts.totalLeads') || 'Total']: item.count,
-      [t('charts.convertedLeads') || 'Converted']: item.converted,
+      date: format.dateTime(new Date(item.date), { month: 'short', day: 'numeric' }),
+      [t('charts.totalLeads')]: item.count,
+      [t('charts.convertedLeads')]: item.converted,
     }))
     .reverse();
 
@@ -342,9 +335,7 @@ export default function AnalyticsPage() {
               {overviewLoading ? (
                 <div className="h-9 w-24 bg-gray-200 animate-pulse rounded mt-2" />
               ) : (
-                <Metric className="mt-2">
-                  {(overview?.totalLeads || 0).toLocaleString(locale === 'ja' ? 'ja-JP' : 'en-US')}
-                </Metric>
+                <Metric className="mt-2">{format.number(overview?.totalLeads || 0)}</Metric>
               )}
             </div>
             <div className="p-3 bg-blue-50 rounded-xl">
@@ -361,11 +352,7 @@ export default function AnalyticsPage() {
               {overviewLoading ? (
                 <div className="h-9 w-20 bg-gray-200 animate-pulse rounded mt-2" />
               ) : (
-                <Metric className="mt-2">
-                  {(overview?.newLeadsThisMonth || 0).toLocaleString(
-                    locale === 'ja' ? 'ja-JP' : 'en-US'
-                  )}
-                </Metric>
+                <Metric className="mt-2">{format.number(overview?.newLeadsThisMonth || 0)}</Metric>
               )}
             </div>
             <div className="p-3 bg-emerald-50 rounded-xl">
@@ -430,10 +417,7 @@ export default function AnalyticsPage() {
                   className="h-80 mt-4"
                   data={chartData}
                   index="date"
-                  categories={[
-                    t('charts.totalLeads') || 'Total',
-                    t('charts.convertedLeads') || 'Converted',
-                  ]}
+                  categories={[t('charts.totalLeads'), t('charts.convertedLeads')]}
                   colors={['blue', 'violet']}
                   valueFormatter={valueFormatter}
                   showLegend={true}
@@ -459,6 +443,7 @@ export default function AnalyticsPage() {
                     data={statusData}
                     colors={statusColors}
                     valueFormatter={valueFormatter}
+                    totalLabel={t('charts.total')}
                     showLabel={true}
                     showLegend={false}
                     showAnimation={true}
@@ -492,8 +477,7 @@ export default function AnalyticsPage() {
                           {tStatus(status.key)}
                         </Badge>
                         <Text className="font-semibold">
-                          {status.value}
-                          {locale === 'ja' ? '件' : ''}
+                          {t('leadCount', { count: status.value })}
                         </Text>
                       </div>
                       <ProgressBar value={percentage} color={status.color} />
@@ -525,6 +509,7 @@ export default function AnalyticsPage() {
                     data={sourceBarData}
                     colors={['blue', 'emerald', 'violet', 'amber', 'rose', 'cyan', 'pink']}
                     valueFormatter={valueFormatter}
+                    totalLabel={t('charts.total')}
                     showLabel={true}
                     showLegend={false}
                     showAnimation={true}

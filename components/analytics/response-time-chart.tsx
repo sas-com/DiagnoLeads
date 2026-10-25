@@ -2,7 +2,15 @@
 
 import { BarChart } from '@/components/charts/bar-chart';
 import type { ResponseTimeData } from '@/lib/features/analytics/types/schemas';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
+
+/** Message keys of the buckets the server names (HOUR_BUCKETS, lib/features/analytics) */
+const PERIOD_KEYS: Record<string, string> = {
+  '< 1 hour': 'withinHour',
+  '1-24 hours': 'withinDay',
+  '1-3 days': 'withinThreeDays',
+  '3+ days': 'overThreeDays',
+};
 
 interface ResponseTimeChartProps {
   data: ResponseTimeData[];
@@ -15,7 +23,6 @@ interface ResponseTimeChartProps {
  */
 export function ResponseTimeChart({ data, isLoading = false }: ResponseTimeChartProps) {
   const t = useTranslations('settings.analytics');
-  const locale = useLocale();
 
   if (isLoading) {
     return (
@@ -41,37 +48,20 @@ export function ResponseTimeChart({ data, isLoading = false }: ResponseTimeChart
 
   // Localize period labels
   const localizeLabel = (period: string): string => {
-    if (locale === 'ja') {
-      switch (period) {
-        case '< 1 hour':
-          return '1時間以内';
-        case '1-24 hours':
-          return '1-24時間';
-        case '1-3 days':
-          return '1-3日';
-        case '3+ days':
-          return '3日以上';
-        default:
-          return period;
-      }
-    }
-    return period;
+    const key = PERIOD_KEYS[period];
+    return key ? t(`responseTimePeriods.${key}`) : period;
   };
 
-  // Map data for chart with localized labels
+  // Map data for chart with localized labels; the series name shows in the tooltip
+  const series = t('charts.leads');
   const chartData = data.map((item) => ({
     period: localizeLabel(item.period),
-    count: item.count,
+    [series]: item.count,
     percentage: item.percentage,
     averageHours: item.averageHours,
   }));
 
-  const valueFormatter = (value: number) => {
-    if (locale === 'ja') {
-      return `${value.toLocaleString('ja-JP')}件`;
-    }
-    return value.toLocaleString('en-US');
-  };
+  const valueFormatter = (value: number) => t('leadCount', { count: value });
 
   return (
     <div className="h-64">
@@ -79,7 +69,7 @@ export function ResponseTimeChart({ data, isLoading = false }: ResponseTimeChart
         className="h-full"
         data={chartData}
         index="period"
-        categories={['count']}
+        categories={[series]}
         colors={['emerald']}
         valueFormatter={valueFormatter}
         showLegend={false}

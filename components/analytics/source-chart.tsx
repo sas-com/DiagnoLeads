@@ -2,7 +2,7 @@
 
 import { ChartLegend, DonutChart } from '@/components/charts/donut-chart';
 import type { SourceBreakdown } from '@/lib/features/analytics/types/schemas';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 
 interface SourceChartProps {
   data: SourceBreakdown[];
@@ -16,7 +16,6 @@ interface SourceChartProps {
 export function SourceChart({ data, isLoading = false }: SourceChartProps) {
   const t = useTranslations('leadSource');
   const tAnalytics = useTranslations('settings.analytics');
-  const locale = useLocale();
 
   // Localized source name mapping
   const getSourceName = (source: string): string => {
@@ -66,12 +65,7 @@ export function SourceChart({ data, isLoading = false }: SourceChartProps) {
   }));
 
   // Locale-aware value formatter
-  const valueFormatter = (value: number) => {
-    if (locale === 'ja') {
-      return `${value.toLocaleString('ja-JP')}件`;
-    }
-    return value.toLocaleString('en-US');
-  };
+  const valueFormatter = (value: number) => tAnalytics('leadCount', { count: value });
 
   const colors: ('blue' | 'green' | 'violet' | 'amber' | 'pink' | 'cyan' | 'yellow')[] = [
     'blue',
@@ -90,6 +84,7 @@ export function SourceChart({ data, isLoading = false }: SourceChartProps) {
         data={chartData}
         colors={colors}
         valueFormatter={valueFormatter}
+        totalLabel={tAnalytics('charts.total')}
         showLabel={true}
         showAnimation={true}
       />

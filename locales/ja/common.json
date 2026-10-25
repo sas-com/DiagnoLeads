@@ -1231,6 +1231,7 @@
   "leads": {
     "pipeline": "営業パイプライン",
     "inflowSource": "流入元",
+    "tags": "タグ",
     "conversionPoint": "コンバージョンポイント",
     "dealPhase": "商談フェーズ",
     "targetSystem": "対象システム",
@@ -1295,6 +1296,17 @@
     "deleteConfirmTitle": "リードを削除しますか？",
     "deleteConfirmMessage": "この操作は取り消せません。{name}のすべてのデータが完全に削除されます。",
     "deleting": "削除中...",
+    "toast": {
+      "creating": "リードを作成中...",
+      "created": "リードを作成しました",
+      "createFailed": "リードの作成に失敗しました",
+      "updating": "リードを更新中...",
+      "updated": "リードを更新しました",
+      "updateFailed": "リードの更新に失敗しました",
+      "deleting": "リードを削除中...",
+      "deleted": "リードを削除しました",
+      "deleteFailed": "リードの削除に失敗しました"
+    },
     "rowsPerPage": "表示件数",
     "addFirstLead": "最初のリードを追加",
     "bulk": {
@@ -2161,6 +2173,8 @@
       "charts": {
         "leadTrend": "リード推移",
         "totalLeads": "総リード数",
+        "total": "合計",
+        "leads": "リード数",
         "convertedLeads": "成約数",
         "statusBreakdown": "ステータス分布",
         "statusBreakdownPeriod": "{period}に登録されたリード",
@@ -2175,9 +2189,17 @@
         "total": "総計",
         "conversionRate": "コンバージョン率",
         "overallConversion": "全体コンバージョン率",
-        "fromInitial": "初回リードからの変換率"
+        "fromInitial": "初回リードからの変換率",
+        "averageDays": "成約までの平均：{days}日"
+      },
+      "responseTimePeriods": {
+        "withinHour": "1時間以内",
+        "withinDay": "1-24時間",
+        "withinThreeDays": "1-3日",
+        "overThreeDays": "3日以上"
       },
       "noData": "データがありません",
+      "leadCount": "{count, number}件",
       "comingSoon": "近日公開予定",
       "performanceSummary": {
         "title": "パフォーマンスの概要"
@@ -4475,6 +4497,7 @@
     "change": "別の候補に変更する",
     "pick": "候補を選んでください",
     "confirmDone": "日程を確定しました",
+    "confirmToast": "{done}。{email}",
     "emailResult": {
       "sent": "回答者に確定の連絡を送りました",
       "not_requested": "メールは送っていません",
@@ -5001,6 +5024,7 @@
     },
     "agency": {
       "section": "営業代行の架電",
+      "inParens": "（{name}）",
       "hint": "担当者名と直通電話は、営業と、この行を作った人だけに見えます。次の連絡可能時期は「次回アクション日」に入れます。断られた行は、次回アクション日の30日前から「再アプローチ」に並びます。"
     },
     "calls": {

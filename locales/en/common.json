@@ -1231,6 +1231,7 @@
   "leads": {
     "pipeline": "Sales Pipeline",
     "inflowSource": "Inflow Source",
+    "tags": "Tags",
     "conversionPoint": "Conversion Point",
     "dealPhase": "Deal Phase",
     "targetSystem": "Target System",
@@ -1295,6 +1296,17 @@
     "deleteConfirmTitle": "Delete this lead?",
     "deleteConfirmMessage": "This action cannot be undone. All data for {name} will be permanently deleted.",
     "deleting": "Deleting...",
+    "toast": {
+      "creating": "Creating the lead...",
+      "created": "Lead created",
+      "createFailed": "Failed to create the lead",
+      "updating": "Updating the lead...",
+      "updated": "Lead updated",
+      "updateFailed": "Failed to update the lead",
+      "deleting": "Deleting the lead...",
+      "deleted": "Lead deleted",
+      "deleteFailed": "Failed to delete the lead"
+    },
     "rowsPerPage": "Rows per page",
     "addFirstLead": "Add your first lead",
     "bulk": {
@@ -2161,6 +2173,8 @@
       "charts": {
         "leadTrend": "Lead Trend",
         "totalLeads": "Total Leads",
+        "total": "Total",
+        "leads": "Leads",
         "convertedLeads": "Converted",
         "statusBreakdown": "Status Breakdown",
         "statusBreakdownPeriod": "Leads registered: {period}",
@@ -2175,9 +2189,17 @@
         "total": "Total",
         "conversionRate": "Conversion Rate",
         "overallConversion": "Overall Conversion Rate",
-        "fromInitial": "From initial lead to conversion"
+        "fromInitial": "From initial lead to conversion",
+        "averageDays": "Average conversion time: {days} days"
+      },
+      "responseTimePeriods": {
+        "withinHour": "< 1 hour",
+        "withinDay": "1-24 hours",
+        "withinThreeDays": "1-3 days",
+        "overThreeDays": "3+ days"
       },
       "noData": "No data available",
+      "leadCount": "{count, number}",
       "comingSoon": "Coming soon",
       "performanceSummary": {
         "title": "Performance summary"
@@ -4475,6 +4497,7 @@
     "change": "Change to another option",
     "pick": "Pick an option",
     "confirmDone": "Meeting confirmed",
+    "confirmToast": "{done}. {email}",
     "emailResult": {
       "sent": "Confirmation sent to the respondent",
       "not_requested": "No email was sent",
@@ -5001,6 +5024,7 @@
     },
     "agency": {
       "section": "Sales agency's call",
+      "inParens": "({name})",
       "hint": "The contact and direct phone are shown only to sales and to whoever added the row. Put the next possible contact in \"Next action date\": turned-down rows appear under \"Re-approach\" 30 days before it."
     },
     "calls": {

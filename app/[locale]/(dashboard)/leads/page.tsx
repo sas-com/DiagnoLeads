@@ -18,7 +18,7 @@ import {
 } from '@/hooks/use-leads';
 import { useOrganization } from '@/hooks/use-organization';
 import { leadListHref, toLeadFilterInput } from '@/lib/features/leads/list-query';
-import { useLocale, useTranslations } from 'next-intl';
+import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -134,6 +134,7 @@ function LeadsPageContent() {
   const tCommon = useTranslations('common');
   const tHandover = useTranslations('agencyHandovers.menu');
   const locale = useLocale();
+  const format = useFormatter();
   const router = useRouter();
   const { organizationId: contextOrgId, isLoading: contextLoading } = useOrganization();
 
@@ -316,9 +317,7 @@ function LeadsPageContent() {
             <div className="flex items-start justify-between">
               <div>
                 <Text>{t('totalLeads')}</Text>
-                <Metric className="mt-2">
-                  {totalLeads.toLocaleString(locale === 'ja' ? 'ja-JP' : 'en-US')}
-                </Metric>
+                <Metric className="mt-2">{format.number(totalLeads)}</Metric>
               </div>
               <div className="p-3 bg-blue-50 rounded-xl">
                 <Users className="h-6 w-6 text-blue-600" />
@@ -336,12 +335,8 @@ function LeadsPageContent() {
           <Card className="p-6 h-full" decoration="top" decorationColor="yellow">
             <div className="flex items-start justify-between">
               <div>
-                <Text>{t('activeLeads') || 'Active Leads'}</Text>
-                <Metric className="mt-2">
-                  {(nurturingLeads + negotiatingLeads).toLocaleString(
-                    locale === 'ja' ? 'ja-JP' : 'en-US'
-                  )}
-                </Metric>
+                <Text>{t('activeLeads')}</Text>
+                <Metric className="mt-2">{format.number(nurturingLeads + negotiatingLeads)}</Metric>
               </div>
               <div className="p-3 bg-yellow-50 rounded-xl">
                 <Target className="h-6 w-6 text-yellow-600" />
@@ -365,7 +360,7 @@ function LeadsPageContent() {
           <Card className="p-6 h-full" decoration="top" decorationColor="violet">
             <div className="flex items-start justify-between">
               <div>
-                <Text>{t('conversionRate') || 'Conversion Rate'}</Text>
+                <Text>{t('conversionRate')}</Text>
                 <Metric className="mt-2">{conversionRate.toFixed(1)}%</Metric>
               </div>
               <div className="p-3 bg-violet-50 rounded-xl">
