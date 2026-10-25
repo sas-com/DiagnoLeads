@@ -679,6 +679,17 @@ span.flatpickr-weekday,
 }
 
 /*
+ * The same on the html element of the site's pages, for the parts drawn outside the site in a
+ * portal (the calendar of the meeting form, #537). A rule of its own: a browser without :has()
+ * drops only this one, not the greens of the site.
+ */
+html:has(.ax-site) {
+  --color-ax-teal: #258a2f;
+  --color-ax-teal-dark: var(--color-ax-leaf);
+  --color-ax-deep: var(--color-ax-forest);
+}
+
+/*
  * Admin site in DADS (#423, #548): while an admin screen is shown (the dashboard shell or the
  * sign-in screens carry .dl-admin), the brand scale becomes DADS Green (key color, owner's
  * choice 2026-10-24) and the gray scale DADS Solid Gray. Set on html so dialogs and menus,
