@@ -8,8 +8,6 @@ import { describe, expect, it } from 'vitest';
 import {
   leadStatusEnum,
   leadSourceEnum,
-  filterOperatorEnum,
-  filterConditionSchema,
   createLeadSchema,
   updateLeadSchema,
   getLeadSchema,
@@ -18,7 +16,6 @@ import {
   bulkUpdateStatusSchema,
   type LeadStatus,
   type LeadSource,
-  type FilterOperator,
   type CreateLeadInput,
 } from '@/lib/features/leads/types/schemas';
 
@@ -48,68 +45,6 @@ describe('leadSourceEnum', () => {
 
   it('should reject invalid source', () => {
     expect(() => leadSourceEnum.parse('invalid')).toThrow();
-  });
-});
-
-describe('filterOperatorEnum', () => {
-  it('should accept all filter operators', () => {
-    const operators: FilterOperator[] = [
-      'equals',
-      'not_equals',
-      'contains',
-      'not_contains',
-      'starts_with',
-      'ends_with',
-      'greater_than',
-      'less_than',
-      'greater_or_equal',
-      'less_or_equal',
-      'between',
-      'is_empty',
-      'is_not_empty',
-      'in',
-      'not_in',
-    ];
-
-    for (const op of operators) {
-      expect(filterOperatorEnum.parse(op)).toBe(op);
-    }
-  });
-});
-
-describe('filterConditionSchema', () => {
-  it('should accept valid condition', () => {
-    const condition = {
-      field: 'email',
-      operator: 'contains',
-      value: '@example.com',
-    };
-
-    const result = filterConditionSchema.parse(condition);
-    expect(result.field).toBe('email');
-    expect(result.operator).toBe('contains');
-  });
-
-  it('should accept condition with value2 for between', () => {
-    const condition = {
-      field: 'score',
-      operator: 'between',
-      value: 50,
-      value2: 100,
-    };
-
-    const result = filterConditionSchema.parse(condition);
-    expect(result.value2).toBe(100);
-  });
-
-  it('should reject empty field', () => {
-    expect(() =>
-      filterConditionSchema.parse({
-        field: '',
-        operator: 'equals',
-        value: 'test',
-      })
-    ).toThrow();
   });
 });
 

@@ -19,122 +19,10 @@ export const leadSourceEnum = z.enum(['website', 'embed', 'api']);
 export type LeadSource = z.infer<typeof leadSourceEnum>;
 
 /**
- * Advanced filter operator enum
- */
-export const filterOperatorEnum = z.enum([
-  'equals',
-  'not_equals',
-  'contains',
-  'not_contains',
-  'starts_with',
-  'ends_with',
-  'greater_than',
-  'less_than',
-  'greater_or_equal',
-  'less_or_equal',
-  'between',
-  'is_empty',
-  'is_not_empty',
-  'in',
-  'not_in',
-]);
-export type FilterOperator = z.infer<typeof filterOperatorEnum>;
-
-/**
- * Most values one filter of the list takes: the ids of tagIds, the values of a filter given
- * several (status, dealPhase and the others, oneOrMany) and a list of the advanced filter (#604)
+ * Most values one filter of the list takes: the ids of tagIds and the values of a filter given
+ * several (status, dealPhase and the others, oneOrMany) (#604)
  */
 export const LEAD_FILTER_MAX_VALUES = 50;
-
-/**
- * Limits of the advanced filter of leads.list and leads.export (#604). No screen sends one yet
- * (the list has its own filters), so these only bound what one request makes the server parse
- * and turn into SQL. A field name is a column of the lead; a text value is as long as the
- * list's search takes.
- */
-export const LEAD_FILTER_LIMITS = {
-  /** Levels of groups, the top group included */
-  depth: 3,
-  /** Groups directly in one group */
-  groups: 10,
-  /** Conditions of the whole filter, every group counted */
-  conditions: 50,
-  /** Characters of a field name */
-  fieldLength: 50,
-  /** Characters of a text value */
-  valueLength: 200,
-  /** Values of a list (in, not_in) */
-  values: LEAD_FILTER_MAX_VALUES,
-} as const;
-
-/** One value a condition compares with: text, a number, a boolean or a date (superjson) */
-const filterScalarSchema = z.union([
-  z.string().max(LEAD_FILTER_LIMITS.valueLength),
-  z.number().finite(),
-  z.boolean(),
-  z.date(),
-]);
-
-/** The value of a condition: one value, none (null), or a list for in and not_in */
-const filterValueSchema = z.union([
-  filterScalarSchema,
-  z.null(),
-  z.array(filterScalarSchema).max(LEAD_FILTER_LIMITS.values),
-]);
-
-/**
- * Advanced filter condition schema
- */
-export const filterConditionSchema = z.object({
-  field: z.string().min(1).max(LEAD_FILTER_LIMITS.fieldLength),
-  operator: filterOperatorEnum,
-  value: filterValueSchema.optional(),
-  value2: filterValueSchema.optional(),
-});
-export type FilterCondition = z.infer<typeof filterConditionSchema>;
-
-export type FilterGroup = {
-  logic: 'and' | 'or';
-  conditions: FilterCondition[];
-  groups?: FilterGroup[];
-};
-
-/**
- * A group of `levels` levels of groups, itself included. Built level by level rather than with
- * z.lazy, so a group nested past the limit is refused with a zod issue where the limit is
- * reached and nothing below it is parsed: a recursive schema walks down every level until the
- * stack runs out (about 800 levels in the tests), and safeParse throws a RangeError.
- */
-function filterGroupLevels(levels: number): z.ZodType<FilterGroup, z.ZodTypeDef, unknown> {
-  const groups =
-    levels > 1
-      ? z.array(filterGroupLevels(levels - 1)).max(LEAD_FILTER_LIMITS.groups)
-      : z.array(z.never()).max(0, `条件のグループは${LEAD_FILTER_LIMITS.depth}段までです`);
-  return z.object({
-    logic: z.enum(['and', 'or']),
-    conditions: z.array(filterConditionSchema).max(LEAD_FILTER_LIMITS.conditions).default([]),
-    groups: groups.optional(),
-  });
-}
-
-/** Conditions of a group and of the groups in it (as deep as the schema lets them be) */
-function countFilterConditions(group: FilterGroup): number {
-  return (group.groups ?? []).reduce(
-    (count, nested) => count + countFilterConditions(nested),
-    group.conditions.length
-  );
-}
-
-/**
- * Advanced filter group schema: groups nested up to LEAD_FILTER_LIMITS.depth levels, with
- * LEAD_FILTER_LIMITS.conditions conditions in all
- */
-export const filterGroupSchema: z.ZodType<FilterGroup, z.ZodTypeDef, unknown> = filterGroupLevels(
-  LEAD_FILTER_LIMITS.depth
-).refine(
-  (group) => countFilterConditions(group) <= LEAD_FILTER_LIMITS.conditions,
-  `条件は全体で${LEAD_FILTER_LIMITS.conditions}個までです`
-);
 
 /**
  * Longest contact values a lead takes (#575), the same as the public diagnosis forms (AX
@@ -316,7 +204,9 @@ const oneOrMany = <T extends z.ZodTypeAny>(item: T) =>
 export const LEAD_LIST_PAGE_MAX = 100;
 
 /**
- * List leads schema (#131: sorting and filtering run on the server)
+ * List leads schema (#131: sorting and filtering run on the server). The nested group of
+ * conditions no screen sent was removed (#699); z.object strips unknown keys, so an older
+ * client that still sends it gets the list filtered by the other fields only, not an error.
  */
 export const listLeadsSchema = z.object({
   organizationId: z.string().uuid(),
@@ -328,8 +218,6 @@ export const listLeadsSchema = z.object({
   dealPhase: oneOrMany(dealPhaseEnum),
   targetSystem: oneOrMany(targetSystemEnum),
   search: z.string().trim().max(200).optional(), // Search in name, email, company
-  // Advanced filtering
-  advancedFilter: filterGroupSchema.optional(),
   // Sort options
   sortBy: leadSortKeyEnum.optional(),
   sortOrder: z.enum(['asc', 'desc']).optional(),

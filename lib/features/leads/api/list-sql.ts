@@ -176,8 +176,8 @@ export function leadListOrderBy(
 }
 
 /**
- * WHERE conditions of the list filters (without the organization condition, tags and the
- * advanced filter, which the procedure adds). Multi-value filters match any of the values.
+ * WHERE conditions of the list filters (without the organization condition and tags, which
+ * the procedure adds). Multi-value filters match any of the values.
  */
 export function leadListConditions(
   input: Omit<ListLeadsInput, 'limit' | 'offset'>,
