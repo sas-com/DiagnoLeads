@@ -6,7 +6,7 @@ title: "リードの一括操作と絞り込みの件数の上限、取り込み
 status: active
 superseded_by: []
 issues: [604, 575, 669, 688, 689]
-paths: ["lib/features/leads/types/schemas.ts", "lib/features/leads/import-service.ts", "components/features/leads/import-dialog.tsx"]
+paths: ["lib/features/leads/types/schemas.ts", "lib/features/leads/import-service.ts", "components/features/leads/import-dialog.tsx", "lib/features/filters/types/schemas.ts", "lib/features/tags/types/schemas.ts"]
 ---
 
 ### [Leads] リードの一括操作と絞り込みの件数の上限、取り込みは1,000件ずつ送る（#604）
@@ -33,5 +33,9 @@ paths: ["lib/features/leads/types/schemas.ts", "lib/features/leads/import-servic
   - 一括の手続きの配列には、画面が送る最大に合わせた `.max()` を付ける。画面が上限を超えうるときは、画面の側で分けて送るか、送る前に知らせる
   - 分けて送るときは、1回を1つの transaction にし、順に送る。失敗したら、作れた分を知らせて、残りだけをやり直せるようにする（作れた回を送り直さない）。送っている間は画面を閉じさせない
   - 入れ子を受けるスキーマは `z.lazy` で再帰させず、段ごとに組み立てて、上限の段より下を読まない（上限を超えた入力を、スタックを使い切る前に zod の検査で断るため）
+    - これは zod の層での話。HTTP 経由では、zod より前に superjson の `deserialize` が入力を再帰で写すので、それより深い入力（手元の Node 22 で約1,000〜2,000段から。入力の形とスタックの大きさで変わる）は superjson でスタックが溢れ、tRPC が BAD_REQUEST（Maximum call stack size exceeded）で断る。書き込みも当番への通知もない（#669 の読み取り専用のレビューで確かめた）
+    - 上限は保存する内容を縛るもので、検査の量は縛らない。zod v3 は `.max()` を超えた配列でも要素をすべて検査するので、1回の検査の量の上限は本文の上限（約4.5MB）になる。zod より前で深さと大きさを確かめるかは #742 で決める
   - 取り込みの回数は middleware の回数制限（`leads.bulkCreate` は1分に10回、パスごと・IP ごと・インスタンスごと）にも数えられる。1分に約10,000件を超える取り込みは途中で 429 になりうる。そのときも残りの行がプレビューに残る（待てば続けられると知らせる文言は #689）
-  - 保存したフィルター（`filters` ルーター）とタグの一括付与（`tags` ルーター）の同じ種類の上限は #669 で付ける
+  - 保存したフィルター（`filters.create`・`filters.update`）とタグの付与（`tags.setLeadTags`・`tags.bulkSetLeadTags`）の上限は #669 で付けた
+    - 保存したフィルターは、リードのスキーマを読まず、`lib/features/filters/types/schemas.ts` の `SAVED_FILTER_LIMITS`（`LEAD_FILTER_LIMITS` と同じ数）と、段ごとに組み立てたスキーマを持つ。#699 でリードの `advancedFilter`・`filterGroupSchema`・`LEAD_FILTER_LIMITS` を消しても、保存したフィルターは変わらない
+    - タグの付与の `tagIds` は20個（`LEAD_TAGS_MAX`、`lib/features/tags/types/schemas.ts`）。タグは手で選ぶ印で、一覧はリードのタグを2つ（`TagBadgeList` の既定は3つ）と残りの数で見せる。1回の呼び出しの上限で、1つのリードが持てる数ではない（`addToLead` で1つずつ足すと20個を超えうる。リードごとの上限にするかは、タグを付ける画面（Epic #430）を作る前に決める）。`bulkSetLeadTags` の `leadIds` は1ページ分（`LEAD_LIST_PAGE_MAX`）で、1回の insert は最大 100 × 20 = 2,000 行。重なった id は数に入れ、書くのは1回（前と同じ）

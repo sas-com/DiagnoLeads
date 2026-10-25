@@ -200,6 +200,7 @@
     "dashboard": "Dashboard",
     "leads": "Lead Management",
     "deals": "Deals",
+    "forecast": "Forecast",
     "prospects": "Customer search (AX)",
     "analytics": "Analytics",
     "settings": "Settings",
@@ -1563,6 +1564,108 @@
       "forecastOverride": "Forecast category",
       "expectedCloseOn": "Expected close",
       "ownerUserId": "Owner"
+    }
+  },
+  "salesForecast": {
+    "title": "Forecast",
+    "description": "Won and expected amounts against the targets, by period and owner",
+    "periodLabel": "Period",
+    "periods": {
+      "thisMonth": "This month",
+      "thisQuarter": "This quarter",
+      "thisFiscalYear": "This fiscal year"
+    },
+    "range": "{from} – {to}",
+    "fiscalYearNote": "Fiscal year starts in month {month}",
+    "setTargets": "Set targets",
+    "tiles": {
+      "target": "Target",
+      "won": "Won",
+      "forecast": "Forecast (won + commit)",
+      "bestCase": "Best case",
+      "gap": "Gap to target",
+      "weighted": "Pipeline (weighted)",
+      "achievement": "{rate} achieved",
+      "forecastAchievement": "{rate} forecast",
+      "noTarget": "No target",
+      "above": "{amount} above the target"
+    },
+    "table": {
+      "caption": "Forecast by owner",
+      "owner": "Owner",
+      "target": "Target",
+      "won": "Won",
+      "commit": "Commit",
+      "bestCase": "Best case",
+      "pipeline": "Pipeline",
+      "weighted": "Weighted",
+      "achievement": "Achieved",
+      "gap": "Gap",
+      "total": "Total",
+      "unassigned": "No owner",
+      "noTarget": "—",
+      "hidden": "Hidden",
+      "hiddenNote": "Each rep's target, achievement and gap are shown only to those who set the targets and to the rep"
+    },
+    "notes": {
+      "overdue": "{count} open deals ({amount}) still have an expected close date before this period and are not counted. Review their dates",
+      "undated": "{count} open deals ({amount}) have no expected close date and are not in the forecast",
+      "noAmount": "{count} deals have no amount yet",
+      "toBoard": "Open the deals board",
+      "toList": "Open the deals list"
+    },
+    "changes": {
+      "title": "This week",
+      "description": "How the deals changed against a week ago",
+      "amountDelta": "Change of the open amounts {amount}",
+      "empty": "No deal changed this week",
+      "groups": {
+        "created": "New deals",
+        "advanced": "Moved forward",
+        "movedBack": "Moved back",
+        "won": "Won",
+        "lost": "Lost",
+        "reopened": "Reopened",
+        "slipped": "Close date pushed out"
+      },
+      "summary": "{count} · {amount}",
+      "stageChange": "{from} → {to}",
+      "dateChange": "Expected close {from} → {to}",
+      "noDate": "none"
+    },
+    "targets": {
+      "title": "Set targets",
+      "description": "Monthly won amount targets (excl. tax). Leave empty for no target",
+      "fiscalYear": "Fiscal year",
+      "fiscalYearOption": "FY{year} (from {from})",
+      "startMonth": "Fiscal year starts in",
+      "startMonthOption": "Month {month}",
+      "startMonthHelp": "A setting of the whole organization. A change applies at once, apart from saving the targets",
+      "startConfirmTitle": "Start the fiscal year in month {month}?",
+      "startConfirmDescription": "The quarters and the fiscal year change for the whole organization.",
+      "startConfirm": "Change",
+      "organizationSettings": "Organization setting",
+      "month": "Month",
+      "organization": "Whole organization",
+      "organizationHelp": "In a month without an organization target, the members' targets are summed",
+      "amountInvalid": "Enter a whole number of 0 or more",
+      "save": "Save",
+      "saving": "Saving…",
+      "saved": "Targets saved",
+      "startSaved": "Fiscal year start changed",
+      "error": "Could not save. Please try again",
+      "loadError": "Could not load the targets",
+      "discardTitle": "You have unsaved targets",
+      "discardDescription": "Switching drops what you entered for this month.",
+      "discardConfirm": "Switch",
+      "readOnly": "Only owners and admins can change the targets",
+      "formerMember": "Someone who left",
+      "formerMemberHelp": "The target of someone no longer in the organization. It can only be removed (empty the box and save)",
+      "formerMemberInvalid": "The target of someone who left can only be removed by emptying the box"
+    },
+    "state": {
+      "loadError": "Could not load the forecast",
+      "retry": "Retry"
     }
   },
   "settings": {

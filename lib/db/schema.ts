@@ -3367,3 +3367,46 @@ export const dealHistory = pgTable(
 );
 
 export type DealHistoryRow = typeof dealHistory.$inferSelect;
+
+// ---- SFA: sales targets (Refs #437, Epic #430) ----
+
+/**
+ * Sales Targets (Refs #437)
+ * The won amount aimed at in a month, for a member or (user_id null) for the organization as a
+ * whole. Set by owners and admins; the forecast compares it with the won and expected deals.
+ * When a month has no organization-wide target, the members' targets are summed.
+ */
+export const salesTargets = pgTable(
+  'sales_targets',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    /** The member the target is for; null for the organization as a whole */
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    /** First day of the month */
+    month: date('month', { mode: 'string' }).notNull(),
+    /** Yen, excluding tax */
+    amount: bigint('amount', { mode: 'number' }).notNull(),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // One target per member and month, and one for the organization (partial indexes, so
+    // they work on any PostgreSQL version without NULLS NOT DISTINCT)
+    uniqueIndex('sales_targets_member_month_unique')
+      .on(table.organizationId, table.userId, table.month)
+      .where(sql`${table.userId} is not null`),
+    uniqueIndex('sales_targets_organization_month_unique')
+      .on(table.organizationId, table.month)
+      .where(sql`${table.userId} is null`),
+    // For the ON DELETE CASCADE of the user
+    index('sales_targets_user_idx').on(table.userId),
+    check('sales_targets_amount_check', sql`${table.amount} >= 0`),
+    check('sales_targets_month_check', sql`extract(day from ${table.month}) = 1`),
+  ]
+);
+
+export type SalesTarget = typeof salesTargets.$inferSelect;
