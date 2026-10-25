@@ -1,8 +1,9 @@
 /**
  * Inputs of the saved filters (filters.create and filters.update, #669). A saved filter is
  * stored as it is sent (saved_filters.filters, jsonb): nothing turns it into SQL yet and no
- * screen calls the router, so these limits only bound what one request makes the server parse
- * and store.
+ * screen calls the router, so these limits bound what is stored. They do not bound the work of
+ * checking one request: zod v3 still checks every element of an array past its .max(), so that
+ * work is bounded by the size of the request body (about 4.5MB on Vercel).
  *
  * The saved filters keep their own schema rather than reading the lead list's advanced filter
  * (lib/features/leads/types/schemas.ts), which #699 deletes.
@@ -83,6 +84,8 @@ export type SavedFilterGroup = {
  * z.lazy (as #604 did for the lead list), so a group nested past the limit is refused with a zod
  * issue where the limit is reached and nothing below it is parsed: the recursive schema walked
  * down every level until the stack ran out (about 800 levels), and safeParse threw a RangeError.
+ * Through HTTP, superjson copies the input recursively before zod runs, so a group nested deeper
+ * than about a thousand levels is refused there first, with tRPC's own BAD_REQUEST.
  */
 function savedFilterGroupLevels(
   levels: number

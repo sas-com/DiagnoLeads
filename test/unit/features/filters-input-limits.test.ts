@@ -2,8 +2,10 @@
  * Nesting, count and length limits of the saved filters (#669): filters.create and
  * filters.update take a filter within SAVED_FILTER_LIMITS (the numbers of #604). A filter at a
  * limit is stored; one over it is refused with BAD_REQUEST carrying the zod issues, before
- * anything is written. A filter nested thousands of levels deep is refused the same way, not
- * with the RangeError of the recursive schema it replaced. Values are made up.
+ * anything is written. A filter nested thousands of levels deep is refused the same way by zod,
+ * not with the RangeError of the recursive schema it replaced. The procedures are called with
+ * createCaller, so the input skips the superjson transformer of an HTTP request. Values are made
+ * up.
  */
 import { SAVED_FILTER_LIMITS } from '@/lib/features/filters/types/schemas';
 import { appRouter } from '@/server/routers/_app';
@@ -181,7 +183,11 @@ describe('saved filters: nesting', () => {
   });
 
   it('refuses a filter nested 5,000 levels deep with the zod issue, not a stack overflow', async () => {
-    // The recursive schema (z.lazy) threw a RangeError at about 800 levels
+    // The recursive schema (z.lazy) threw a RangeError at about 800 levels. This checks the zod
+    // layer: through HTTP, superjson.deserialize copies the input recursively before zod runs
+    // and runs out of stack on a filter this deep (from about 1,000 to 2,000 levels on Node 22),
+    // which tRPC returns as its own BAD_REQUEST (Maximum call stack size exceeded), nothing
+    // written
     await expectRefused(nestedFilter(5_000), {
       path: ['filters', 'groups', 0, 'groups', 0, 'groups'],
       message: `条件のグループは${SAVED_FILTER_LIMITS.depth}段までです`,

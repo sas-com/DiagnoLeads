@@ -6,10 +6,15 @@ import { LEAD_LIST_PAGE_MAX } from '@/lib/features/leads/types/schemas';
 import { z } from 'zod';
 
 /**
- * Most tags one call gives a lead. Tags are labels picked by hand, and the lead list shows three
- * of a lead's tags and a count of the rest (TagBadgeList); twenty is well past that. It also
- * bounds the one insert of bulkSetLeadTags (leads × tags rows) to LEAD_LIST_PAGE_MAX × 20 = 2,000
- * rows.
+ * Most tags one call gives a lead. Tags are labels picked by hand, and the lead list shows two of
+ * a lead's tags and a count of the rest (TagBadgeList with maxVisible={2} in lead-table.tsx; three
+ * by default); twenty is well past that. It also bounds the one insert of bulkSetLeadTags
+ * (leads × tags rows) to LEAD_LIST_PAGE_MAX × 20 = 2,000 rows.
+ *
+ * It bounds one call of setLeadTags and bulkSetLeadTags, not the tags a lead holds: addToLead
+ * adds one tag at a time with no total, so a lead can hold more than twenty, and sending them all
+ * back through setLeadTags is then refused. Whether to bound the tags of a lead is decided before
+ * the tagging screen is built (Epic #430).
  */
 export const LEAD_TAGS_MAX = 20;
 
