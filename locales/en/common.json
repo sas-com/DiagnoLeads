@@ -4282,7 +4282,7 @@
       "totalLeads": "Total Leads",
       "newThisMonth": "New This Month",
       "conversionRate": "Conversion Rate",
-      "averageScore": "Avg Score",
+      "mqlRate": "MQL rate (interested)",
       "statusDistribution": "Status Distribution",
       "sourceDistribution": "Source Distribution",
       "funnel": "Conversion Funnel",

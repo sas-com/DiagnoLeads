@@ -90,7 +90,12 @@ export function overviewToCSV(overview: OverviewStats, dateRange: string): strin
     ['Total Leads', overview.totalLeads.toString()],
     ['New Leads This Month', overview.newLeadsThisMonth.toString()],
     ['Conversion Rate (%)', overview.conversionRate.toFixed(2)],
-    ['Average Score', overview.averageScore.toString()],
+    // The MQL level, not the average score, as on the analytics page (#447, #605)
+    ['MQL Rate (%)', overview.mqlRate.toFixed(2)],
+    ['MQL Interested', overview.mqlLevels.interest.toString()],
+    ['MQL Fit', overview.mqlLevels.fit.toString()],
+    ['MQL Not a Target', overview.mqlLevels.none.toString()],
+    ['MQL No Diagnosis', overview.mqlLevels.unknown.toString()],
     ['New Status', overview.leadsByStatus.new.toString()],
     ['Nurturing Status', overview.leadsByStatus.nurturing.toString()],
     ['Negotiating Status', overview.leadsByStatus.negotiating.toString()],
