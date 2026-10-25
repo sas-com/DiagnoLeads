@@ -132,9 +132,12 @@ const COUNTERS: Record<string, Call> = {
 /** Changes to embed configs (API keys) and QR campaigns: those who can update settings */
 const SETTINGS_WRITES: Record<string, Call> = {
   'embed.create': (c) =>
-    c.embed.create({ ...org, name: 'x', diagnosticTemplateId: ID } as Parameters<
-      Caller['embed']['create']
-    >[0]),
+    c.embed.create({
+      ...org,
+      name: 'x',
+      diagnosticTemplateId: ID,
+      allowedOrigins: ['https://example.com'],
+    }),
   'embed.update': (c) => c.embed.update({ ...org, id: ID, data: { name: 'x' } }),
   'embed.regenerateApiKey': (c) => c.embed.regenerateApiKey({ ...org, id: ID }),
   'embed.delete': (c) => c.embed.delete({ ...org, id: ID }),
