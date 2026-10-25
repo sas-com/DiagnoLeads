@@ -29,6 +29,7 @@ paths: ["app/q/**", "lib/features/distribution/short-code-entry.ts", "lib/featur
   - `/q/` は `lib/i18n/middleware.ts` のロケールの振り分けから外す。`lib/middleware/cache-headers.ts` も `no-store` にする
   - スキャンの記録（`qr_scans`・`scan_count`）は #41 でこの入口に足す。数える前に回数制限を掛けたまま、DB の書き込みを1回の要求で増やしすぎない
   - `distribution` の機能は、ほかの機能を import しない（`limits.ts` は `RateLimitRule` の形を書き写している）。診断ビルダーの公開の判定は入口（app）で組み合わせる。機能の import の循環（`features-in-cycles`）に入れないため
+  - キャンペーンの更新（`updateCampaign`）は、送られた項目だけを書く。`expiresAt` のない更新（名前の変更・停止と再開）は期限を変えず、`null` を送ったときだけ消す（#610）。入口が期限を見るので、期限を消してしまうと、期限の切れた QR がまた転送する
 - **却下案**:
   - `/d/[slug]` で slug が見つからないときに短縮コードを探す（ぶつかりが残り、どちらを開くかが行の有無で変わる）
   - 保存済みの `tracking_url` を本番で書き換える（読み取りで作れば要らない。本番の書き込みに承認が要る）
@@ -37,5 +38,4 @@ paths: ["app/q/**", "lib/features/distribution/short-code-entry.ts", "lib/featur
 - **既知の限界**:
   - #503 より前にダウンロードした QR の画像（`/d/<コード>`）は 404 のまま。画面から Download QR で作り直す。停止中・期限切れのコードを読んだ人への案内のページはない（本文は `Not Found`）
   - オーナーの判断待ち（#663）：`diagnosis_id` のないキャンペーンは、どの組織のものでも AX 診断へ送る（回答は AX の組織のリードになる）。`diagnosis_id` の診断が公開されていないときも AX 診断へ送る。回数制限の数値（10分120回・1分60回）が会場の Wi-Fi からの一斉の読み取りに足りるか
-  - `updateCampaign` は `expiresAt` を送らない更新（名前の変更・停止と再開）で期限を消す（#610）。入口が期限を見るので、期限の切れたキャンペーンを再開すると、また転送する
   - RLS（#51）：入口はログインなしで、グローバルの `db` から `qr_campaigns`・`diagnoses`（`findPublicDiagnosis` と同じ）・`public_rate_limits` を組織で絞らずに読む。組織は行から取る。`qr_campaigns` の RLS は無効のまま。RLS を掛けるときは、この入口を公開の読み取りとして扱う（ポリシーか専用の接続）。掛けただけだと、すべての QR が 404 になる（閉じる側に倒れる）
