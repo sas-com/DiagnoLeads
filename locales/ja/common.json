@@ -401,6 +401,7 @@
       },
       "checkpointsTitle": "{platform}からWebシステムへ移行するときに確認すること",
       "checkpointsTitleGeneric": "Webシステムへ移行するときに確認すること",
+      "accessReplaceInventory": "まずツールを棚卸しし、使われていないツールや重複を整理してから置き換えの対象を絞ります",
       "accessCheckpointsTitle": {
         "fix": "{platform}を直して使い続けるときに確認すること",
         "replace": "{platform}から既製サービスに置き換えるときに確認すること"
@@ -667,8 +668,10 @@
       "answersTitle": "回答の内容",
       "answersJoiner": "、",
       "needsHearing": "「わからない」の回答が多いため、目安の精度は高くありません。個別相談で現状を伺うと、より正確な見通しをお伝えできます。",
+      "accessNeedsHearing": "「わからない」の回答が多いため、目安の精度は高くありません。30分のオンライン相談で現状を伺うと、より正確な見通しをお伝えできます。",
       "unknownsTitle": "社内で確認すると、結果の精度が上がる項目",
       "unknownsHint": "保守会社からの案内や資産一覧、契約書で確認できることが多いです。個別相談で、調べ方からご案内することもできます。",
+      "accessUnknownsHint": "保守会社からの案内や資産一覧、契約書で確認できることが多いです。30分のオンライン相談で、調べ方からご案内することもできます。",
       "offers": {
         "title": "情報収集から始める",
         "titlePrimary": "まずは情報収集から",
@@ -3132,7 +3135,7 @@
       "title": "Access の業務ツール、直すか Web に移すか｜無料Web診断（Access版）｜エス・エー・エス株式会社",
       "description": "その Access、直して使うか、Web に移すか。版や VBA、画面・帳票の数などを選ぶと、ツールに合った進め方の目安が分かります。直して使うか、Web に移すか、置き換えるか、合うものをお伝えします。無料・選択式・約3分。"
     },
-    "floatingCta": "無料Web診断（Access版）をはじめる",
+    "floatingCta": "無料Web診断をはじめる",
     "hero": {
       "eyebrow": "Microsoft Access の業務ツールをお使いの方へ",
       "title": "その Access、直して使うか、Web に移すか。",

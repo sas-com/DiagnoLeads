@@ -6,8 +6,7 @@
 
 ## 概要
 
-OpenSpecは、DiagnoLeads v2の**Source of Truth**（唯一の真実の情報源）として機能します。
-すべての機能実装はこの仕様に基づいて行われ、AI支援開発の精度を最大化します。
+OpenSpecは、DiagnoLeads v2 の機能の仕様を置く場所です。構成と依存の向きの正本は [docs/ARCHITECTURE.md](/docs/ARCHITECTURE.md)、判断の正本は決定（`.factory/memory/decisions/`）です。仕様がコードや決定と食い違ったら、コードと決定に合わせて直します。
 
 ---
 
@@ -16,7 +15,7 @@ OpenSpecは、DiagnoLeads v2の**Source of Truth**（唯一の真実の情報源
 ```
 openspec/
 ├── README.md              # このファイル
-├── specs/                 # 確定済み仕様（Source of Truth）
+├── specs/                 # 機能の仕様
 │   ├── architecture.md    # 全体アーキテクチャ
 │   ├── phase2-plan.md     # Phase 2実装計画
 │   ├── api/               # API仕様詳細
@@ -102,7 +101,7 @@ AI支援で仕様に基づいた実装を実行。
 ```markdown
 # {機能名}仕様書
 
-> **Source of Truth**: {説明}
+> **仕様**: {説明}
 >
 > **最終更新**: YYYY-MM-DD
 > **ステータス**: Phase X 実装完了
