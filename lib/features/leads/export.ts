@@ -123,6 +123,5 @@ export function exportAuditFilters(input: Omit<ListLeadsInput, 'limit' | 'offset
     filters[key] = value;
   }
   if (input.search?.trim()) filters.search = true;
-  if (input.advancedFilter) filters.advancedFilter = true;
   return filters;
 }
