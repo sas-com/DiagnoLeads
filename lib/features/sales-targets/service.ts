@@ -39,7 +39,8 @@ export async function getFiscalYearStartMonth(
 
 /**
  * Store the start month; only this key of the settings is replaced (merged in SQL). A change
- * leaves an audit row with the month before and after.
+ * leaves an audit row with the month before and after; the month already in effect is not
+ * written again.
  */
 export async function setFiscalYearStartMonth(
   db: Database,
@@ -51,8 +52,9 @@ export async function setFiscalYearStartMonth(
       .select({ settings: organizations.settings })
       .from(organizations)
       .where(eq(organizations.id, input.organizationId))
-      .for('update');
+      .for('no key update');
     const before = readFiscalYearStartMonth(row?.settings);
+    if (before === input.month) return;
     // The whole salesForecast object is replaced: merge inside it once it holds a second key
     await tx
       .update(organizations)
@@ -61,7 +63,6 @@ export async function setFiscalYearStartMonth(
         updatedAt: new Date(),
       })
       .where(eq(organizations.id, input.organizationId));
-    if (before === input.month) return;
     await tx.insert(auditLogs).values({
       organizationId: input.organizationId,
       userId: input.userId,

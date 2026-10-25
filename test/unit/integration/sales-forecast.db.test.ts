@@ -1,8 +1,8 @@
 /**
  * Sales targets and the forecast (#437) through the routers on a real PostgreSQL: who may set
  * targets and for whom, the fiscal year setting, the figures per owner by forecast category,
- * the targets against them, the open deals left before the period, the week's changes from the
- * deal history, and organization isolation.
+ * the targets against them, the open deals left before the period or without a close date, the
+ * week's changes from the deal history, and organization isolation.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/diagnoleads_test \
@@ -338,6 +338,39 @@ describe.skipIf(!url)('sales targets and forecast (PostgreSQL)', () => {
       });
     });
 
+    it('writes nothing when the fiscal year start sent is the one in effect', async () => {
+      const org = await createOrganization('期の始まりの据え置き');
+      const { caller } = await callerFor(org, 'owner', '据置 一郎');
+      const longAgo = new Date('2020-01-01T00:00:00Z');
+      const age = () =>
+        pg.update(organizations).set({ updatedAt: longAgo }).where(eq(organizations.id, org));
+      const read = async () =>
+        (await pg.select().from(organizations).where(eq(organizations.id, org)))[0];
+
+      // April is in effect without a setting: sending it stores nothing
+      await age();
+      await caller.salesTargets.setFiscalYearStart({ organizationId: org, month: 4 });
+      const untouched = await read();
+      expect(untouched.settings).toEqual({});
+      expect(untouched.updatedAt).toEqual(longAgo);
+
+      await caller.salesTargets.setFiscalYearStart({ organizationId: org, month: 1 });
+      await age();
+      await caller.salesTargets.setFiscalYearStart({ organizationId: org, month: 1 });
+      const kept = await read();
+      expect(kept.settings).toEqual({ salesForecast: { fiscalYearStartMonth: 1 } });
+      expect(kept.updatedAt).toEqual(longAgo);
+
+      // Only the change from April to January is audited
+      const audit = await pg
+        .select()
+        .from(auditLogs)
+        .where(and(eq(auditLogs.organizationId, org), eq(auditLogs.resource, 'organization')));
+      expect(audit.map((row) => row.changes)).toEqual([
+        { before: { fiscalYearStartMonth: 4 }, after: { fiscalYearStartMonth: 1 } },
+      ]);
+    });
+
     it('moves the fiscal year to the month the owner sets', async () => {
       await expect(
         memberA.salesTargets.setFiscalYearStart({ organizationId: orgA, month: 1 })
@@ -392,6 +425,9 @@ describe.skipIf(!url)('sales targets and forecast (PostgreSQL)', () => {
       });
       await add({ name: '担当なし', stage: 'proposal', amount: 400_000, expectedCloseOn: today, ownerUserId: null });
       await add({ name: '去年のまま', stage: 'proposal', amount: 600_000, expectedCloseOn: '2020-01-31' });
+      // The expected close date is optional: these are in no period
+      await add({ name: '日付未定', stage: 'proposal', amount: 800_000 });
+      await add({ name: '日付も金額も未定', stage: 'qualification' });
       await owner.salesTargets.save({
         organizationId: forecastOrg,
         entries: [{ userId: repId, month: thisMonth, amount: 10_000_000 }],
@@ -423,19 +459,32 @@ describe.skipIf(!url)('sales targets and forecast (PostgreSQL)', () => {
       // No organization-wide target: the members' targets are summed
       expect(forecast.total.target).toBe(10_000_000);
       expect(forecast.overdue).toEqual({ count: 1, amount: 600_000 });
+      // Open deals without a close date are counted apart; the won one without a date is not
+      expect(forecast.undated).toEqual({ count: 2, amount: 800_000 });
       expect(forecast.canEditTargets).toBe(true);
     });
 
-    it('lets read-only viewers read and keeps other organizations out', async () => {
+    it('lets members read and keeps other organizations out', async () => {
+      await adminB.deals.create({
+        organizationId: orgB,
+        leadId: await createLead(orgB),
+        name: '別組織の日付未定',
+        stage: 'proposal',
+        amount: 300_000,
+      });
       const mine = await rep.salesForecast.get({ organizationId: forecastOrg });
       expect(mine.canEditTargets).toBe(false);
       expect(mine.period).toBe('thisQuarter');
+      // The deals outside the figures are the organization's, as the owner sees them
+      expect(mine.overdue).toEqual({ count: 1, amount: 600_000 });
+      expect(mine.undated).toEqual({ count: 2, amount: 800_000 });
       await expect(
         adminB.salesForecast.get({ organizationId: forecastOrg })
       ).rejects.toMatchObject({ code: 'FORBIDDEN' });
       const outside = await adminB.salesForecast.get({ organizationId: orgB, period: 'thisMonth' });
       expect(outside.owners).toEqual([]);
       expect(outside.total.won).toBe(0);
+      expect(outside.undated).toEqual({ count: 1, amount: 300_000 });
     });
 
     it("compares the week's deals with how they stood a week ago", async () => {
