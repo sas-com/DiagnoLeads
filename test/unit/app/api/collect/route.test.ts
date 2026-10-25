@@ -111,9 +111,12 @@ describe('POST /api/collect', () => {
     expect((await post(beacon(VIEW, { 'user-agent': `Googlebot/2.1 ${userAgent}` }))).status).toBe(204);
     expect(recordSiteVisit).not.toHaveBeenCalled();
 
-    expect((await post(beacon(VIEW, { 'user-agent': userAgent }))).status).toBe(204);
+    // A name past the first 512 characters is not read, so the view is recorded (read whole,
+    // it would be dropped as a bot), with all of the header
+    const botPastTheHead = `${userAgent} Googlebot/2.1`;
+    expect((await post(beacon(VIEW, { 'user-agent': botPastTheHead }))).status).toBe(204);
     expect(recordSiteVisit).toHaveBeenCalledTimes(1);
-    expect(recordSiteVisit.mock.calls[0][1].userAgent).toBe(userAgent);
+    expect(recordSiteVisit.mock.calls[0][1].userAgent).toBe(botPastTheHead);
   });
 
   it.each([

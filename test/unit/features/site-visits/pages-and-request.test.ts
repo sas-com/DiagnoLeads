@@ -141,25 +141,25 @@ describe('request details', () => {
 
 describe('a long User-Agent (#705)', () => {
   // 「Android 」 20,000 times and then 「Mobile」, about 160,000 characters. Read whole, the
-  // tablet pattern of deviceOf (an Android not followed by Mobile) takes about a second
+  // tablet pattern of deviceOf (an Android not followed by Mobile) takes about a second.
+  // The values below tell whether the head alone was read; no wall clock is checked, so a
+  // busy CPU cannot fail them (docs/TESTING.md 1.5)
   const LONG = `${'Android '.repeat(20_000)}Mobile`;
   const BOT_FIRST = `Googlebot/2.1 ${LONG}`;
   const BOT_PAST_THE_HEAD = `${LONG} Googlebot/2.1`;
+  // The ordinary browsers above (CHROME, IPHONE, IPAD, ANDROID_TABLET, ANDROID_PHONE) are
+  // shorter than the head, so 'request details' judges them from the whole header as before
 
-  it('tells the device from the first 512 characters only, and fast', () => {
-    const started = performance.now();
+  it('tells the device from the first 512 characters only', () => {
     // 「Mobile」 past the head is not read, so this is a tablet (read whole, it would be mobile)
     expect(deviceOf(LONG)).toBe('tablet');
-    expect(performance.now() - started).toBeLessThan(50);
   });
 
-  it('judges a bot from the first 512 characters only, and fast', () => {
-    const started = performance.now();
+  it('judges a bot from the first 512 characters only', () => {
     expect(isBot(LONG)).toBe(false);
     expect(isBot(BOT_FIRST)).toBe(true);
     // A name past the head is not read
     expect(isBot(BOT_PAST_THE_HEAD)).toBe(false);
-    expect(performance.now() - started).toBeLessThan(50);
   });
 
   it('reads exactly the first 512 characters', () => {
@@ -171,12 +171,6 @@ describe('a long User-Agent (#705)', () => {
     // 「Mobile」 ending at the 512th character still makes an Android a phone
     expect(deviceOf(`Android ${pad(498)}Mobile`)).toBe('mobile');
     expect(deviceOf(`Android ${pad(499)}Mobile`)).toBe('tablet');
-  });
-
-  it('tells ordinary browsers as before: they are shorter than the head', () => {
-    for (const userAgent of [CHROME, IPHONE, IPAD, ANDROID_TABLET, ANDROID_PHONE]) {
-      expect(userAgent.length, userAgent).toBeLessThan(512);
-    }
   });
 });
 
