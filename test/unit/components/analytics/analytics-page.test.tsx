@@ -6,6 +6,7 @@
  * the cost / agency recorded on leads, and the response time waits for first contacts (#136).
  */
 import AnalyticsPage from '@/app/[locale]/(dashboard)/analytics/page';
+import en from '@/locales/en/common.json';
 import messages from '@/locales/ja/common.json';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -75,7 +76,8 @@ vi.mock('@/hooks/use-analytics', () => ({
     totalLeads: 14,
     newLeadsThisMonth: 7,
     conversionRate: 14.3,
-    averageScore: 65,
+    mqlLevels: { interest: 3, fit: 2, none: 4, unknown: 1 },
+    mqlRate: 30,
     leadsByStatus: { new: 5, nurturing: 2, negotiating: 3, won: 2, lost: 2 },
   }),
   useLeadTrend: query([]),
@@ -89,7 +91,6 @@ vi.mock('@/hooks/use-analytics', () => ({
     { status: 'lost', count: 3, percentage: 30 },
   ]),
   useConversionFunnel: query(undefined),
-  useScoreDistribution: query([]),
   useResponseTime: live('responseTime', () => ({
     status: 'pending',
     reason: 'first_contact_not_recorded',
@@ -124,9 +125,13 @@ vi.mock('@/components/charts', () => ({
   },
 }));
 
-const renderPage = () =>
+const renderPage = (locale: 'ja' | 'en' = 'ja') =>
   render(
-    <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
+    <NextIntlClientProvider
+      locale={locale}
+      messages={locale === 'ja' ? messages : en}
+      timeZone="Asia/Tokyo"
+    >
       <AnalyticsPage />
     </NextIntlClientProvider>
   );
@@ -149,6 +154,13 @@ describe('AnalyticsPage', () => {
     expect(document.body.textContent).not.toMatch(/[+-]\d+(\.\d+)?%/);
   });
 
+  it('shows no average score and no score distribution: the MQL level is the sign (#447)', () => {
+    renderPage();
+    expect(screen.queryByText(/平均スコア/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/スコア分布/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/リードの質/)).not.toBeInTheDocument();
+  });
+
   it('shows the status donut without its overlapping legend, colored per status', () => {
     renderPage();
     const statusDonut = mocks.donuts[0];
@@ -161,6 +173,22 @@ describe('AnalyticsPage', () => {
     expect(statusDonut.colors).toEqual(['blue', 'violet', 'gray']);
     // Says which leads the ring counts (it follows the period, the cards below do not)
     expect(screen.getByText('過去30日に登録されたリード')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['ja', '合計', '1,234件', '5件'],
+    ['en', 'Total', '1,234', '5'],
+  ] as const)('counts leads in the page language (%s, #434)', (locale, total, formatted, newLeads) => {
+    renderPage(locale);
+    const statusDonut = mocks.donuts[0] as {
+      totalLabel: string;
+      valueFormatter: (value: number) => string;
+    };
+    expect(statusDonut.totalLabel).toBe(total);
+    expect(statusDonut.valueFormatter(1234)).toBe(formatted);
+    // The status list of the overview
+    expect(screen.getAllByText(newLeads).length).toBeGreaterThan(0);
+    if (locale === 'en') expect(document.body.textContent).not.toMatch(/件/);
   });
 
   it('labels the 流入元 in Japanese, 未設定 last', async () => {

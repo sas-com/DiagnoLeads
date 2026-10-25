@@ -159,9 +159,10 @@ z.object({
 z.object({
   name: z.string().min(1).max(255),
   slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/),
-  settings: z.record(z.unknown()).optional(),
 })
 ```
+
+`settings` は受けない（#483）。新しい組織は `settings: {}` で作り、キーを持つ機能がキーごとにマージで書く（`decisions/2026-10-24-organization-settings-per-key`）。
 
 **出力スキーマ**:
 ```typescript
@@ -199,9 +200,10 @@ z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(255).optional(),
   slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/).optional(),
-  settings: z.record(z.unknown()).optional(),
 })
 ```
+
+`settings` は受けない（#483）。キーを持つ機能がキーごとにマージで書く（`decisions/2026-10-24-organization-settings-per-key`）。
 
 **出力スキーマ**:
 ```typescript

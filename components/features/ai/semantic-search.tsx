@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useSemanticSearch } from '@/hooks/use-ai';
+import { MAX_SEMANTIC_SEARCH_QUERY_CHARS } from '@/lib/features/ai/types/schemas';
 import { ExternalLink, Loader2, Search, Sparkles } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
@@ -65,6 +66,7 @@ export function SemanticSearch({ organizationId }: SemanticSearchProps) {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t('semanticSearchPlaceholder')}
+              maxLength={MAX_SEMANTIC_SEARCH_QUERY_CHARS}
               className="pl-10"
             />
           </div>

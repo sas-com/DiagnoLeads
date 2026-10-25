@@ -8,7 +8,7 @@
 
 import { db } from '@/lib/db';
 import { leads } from '@/lib/db/schema';
-import { sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { generateEmbedding } from '../embeddings/openai';
 
 export interface SemanticSearchResult {
@@ -74,7 +74,8 @@ export async function semanticSearch(
 /**
  * Find similar leads based on a reference lead
  * @param leadId - Reference lead ID
- * @param organizationId - Organization to search within
+ * @param organizationId - Organization to search within; the reference lead is read in it only,
+ *   so a lead of another organization is never the base of the search (#583)
  * @param limit - Maximum number of results
  * @returns Array of similar leads
  */
@@ -84,11 +85,11 @@ export async function findSimilarLeads(
   limit = 5
 ): Promise<SemanticSearchResult[]> {
   try {
-    // Get the reference lead's embedding
+    // Get the reference lead's embedding, in the organization searched only
     const [refLead] = await db
       .select({ embedding: leads.embedding })
       .from(leads)
-      .where(sql`${leads.id} = ${leadId}`);
+      .where(and(eq(leads.id, leadId), eq(leads.organizationId, organizationId)));
 
     if (!refLead || !refLead.embedding) {
       throw new Error('Reference lead not found or has no embedding');
@@ -123,9 +124,18 @@ export async function findSimilarLeads(
 
 /**
  * Update lead embedding
- * Used when a lead is created or updated
+ * Called by ai.updateEmbedding once the call has been counted (not when a lead is saved).
+ * Throws when the embedding or the update fails
+ * @param leadId - Lead to store the embedding on
+ * @param organizationId - Organization of the lead; a lead of another organization is not
+ *   written, even when the caller has already read the lead in its organization (#583)
+ * @param text - Text to embed (bounded by prepareLeadText)
  */
-export async function updateLeadEmbedding(leadId: string, text: string): Promise<void> {
+export async function updateLeadEmbedding(
+  leadId: string,
+  organizationId: string,
+  text: string
+): Promise<void> {
   try {
     const embedding = await generateEmbedding(text);
     const embeddingString = `[${embedding.join(',')}]`;
@@ -133,10 +143,12 @@ export async function updateLeadEmbedding(leadId: string, text: string): Promise
     await db.execute(sql`
       UPDATE ${leads}
       SET embedding = ${embeddingString}::vector
-      WHERE id = ${leadId}
+      WHERE id = ${leadId} AND organization_id = ${organizationId}
     `);
   } catch (error) {
+    // Thrown, not swallowed: the caller has counted a paid call and must not report success
+    // when nothing was stored (#598)
     console.error('Error updating lead embedding:', error);
-    // Don't throw - embedding update failures shouldn't block lead operations
+    throw new Error('Updating lead embedding failed');
   }
 }

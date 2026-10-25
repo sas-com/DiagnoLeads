@@ -20,6 +20,11 @@ const TIME_ZONE = 'Asia/Tokyo';
 interface LeadDiagnosisCardProps {
   responses: unknown;
   customFields?: unknown;
+  /**
+   * The lead's score out of 100 (leads.score). Shown with the AX diagnosis as a reason of the MQL
+   * level, the only place the score is shown (#447); the builder summary carries its own score
+   */
+  score?: number | null;
   /** Smaller version for the list's side panel: no "other data" and no other systems */
   compact?: boolean;
   /** Where "回答を見る" goes for a submission (a link) ... */
@@ -74,6 +79,7 @@ const MQL_LEVEL_KEYS = { interest: 'mqlInterest', fit: 'mqlFit', none: 'mqlNone'
 export function LeadDiagnosisCard({
   responses,
   customFields,
+  score = null,
   compact = false,
   answersHref,
   onShowAnswers,
@@ -182,6 +188,11 @@ export function LeadDiagnosisCard({
             <p className="text-sm text-muted-foreground">
               {t('primaryChallenge')}：{labels.challenge(ax.primaryChallenge)}
             </p>
+            {score !== null && (
+              <p className="text-sm text-muted-foreground" data-testid="lead-ax-score">
+                {t('builderLeadScore')}：{t('builderLeadScoreValue', { score })}
+              </p>
+            )}
           </section>
         )}
         {builderBlock}
@@ -245,6 +256,14 @@ export function LeadDiagnosisCard({
         </span>
       ),
     });
+    // The score is a reason of the MQL level (one of its signals), so it sits right under it
+    if (score !== null) {
+      rows.push({
+        key: 'leadScore',
+        label: t('builderLeadScore'),
+        value: <span data-testid="lead-ax-score">{t('builderLeadScoreValue', { score })}</span>,
+      });
+    }
     if (ax.department)
       rows.push({ key: 'department', label: t('department'), value: ax.department });
     if (ax.diagnosedAt)

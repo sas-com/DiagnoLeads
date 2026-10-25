@@ -3,7 +3,7 @@
 import type { ConversionFunnelData } from '@/lib/features/analytics/types/schemas';
 import { LEAD_STATUSES, type LeadStatus } from '@/lib/features/leads/types/pipeline';
 import { cn } from '@/lib/utils';
-import { useTranslations } from 'next-intl';
+import { useFormatter, useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 
 const STAGE_COLORS: Record<string, { color: string; bgColor: string; textColor: string }> = {
@@ -37,7 +37,9 @@ export function ConversionFunnel({
   funnelData: apiFunnelData,
   isLoading = false,
 }: ConversionFunnelProps) {
+  const t = useTranslations('settings.analytics');
   const tStatus = useTranslations('status');
+  const format = useFormatter();
 
   const displayData = useMemo((): FunnelStageDisplay[] => {
     // Prefer API funnel data if available
@@ -96,7 +98,7 @@ export function ConversionFunnel({
   if (displayData.length === 0) {
     return (
       <div className="h-64 flex items-center justify-center">
-        <p className="text-gray-500">No data available</p>
+        <p className="text-gray-500">{t('noData')}</p>
       </div>
     );
   }
@@ -126,9 +128,7 @@ export function ConversionFunnel({
               <div className="absolute inset-0 flex items-center justify-between px-4">
                 <span className="font-medium text-gray-900">{stage.label}</span>
                 <div className="flex items-center gap-3 text-sm">
-                  <span className="font-semibold text-gray-900">
-                    {stage.value.toLocaleString()}
-                  </span>
+                  <span className="font-semibold text-gray-900">{format.number(stage.value)}</span>
                   <span className="text-gray-600">({stage.percentage.toFixed(1)}%)</span>
                 </div>
               </div>
@@ -186,7 +186,7 @@ export function ConversionFunnel({
       {/* Overall Conversion Rate */}
       <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-4 rounded-lg border border-gray-200">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-gray-700">Overall Conversion Rate</span>
+          <span className="text-sm font-medium text-gray-700">{t('funnel.overallConversion')}</span>
           <span className="text-2xl font-bold text-purple-600">
             {apiFunnelData
               ? apiFunnelData.overallConversionRate.toFixed(1)
@@ -198,11 +198,16 @@ export function ConversionFunnel({
         </div>
         {apiFunnelData && apiFunnelData.averageConversionDays > 0 && (
           <p className="text-xs text-gray-500 mt-1">
-            Average conversion time: {apiFunnelData.averageConversionDays.toFixed(1)} days
+            {t('funnel.averageDays', {
+              days: format.number(apiFunnelData.averageConversionDays, {
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 1,
+              }),
+            })}
           </p>
         )}
         {(!apiFunnelData || apiFunnelData.averageConversionDays === 0) && (
-          <p className="text-xs text-gray-500 mt-1">From initial lead to converted customer</p>
+          <p className="text-xs text-gray-500 mt-1">{t('funnel.fromInitial')}</p>
         )}
       </div>
     </div>

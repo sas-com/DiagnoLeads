@@ -13,10 +13,8 @@ import {
   getSourceBreakdownSchema,
   getStatusBreakdownSchema,
   getConversionFunnelSchema,
-  getScoreDistributionSchema,
   getResponseTimeSchema,
   getAcquisitionCostSchema,
-  getComparisonSchema,
   type DateRange,
   type TrendGranularity,
   type OverviewStats,
@@ -25,7 +23,6 @@ import {
   type StatusBreakdown,
   type FunnelStage,
   type ConversionFunnelData,
-  type ScoreDistributionData,
   type ResponseTimeData,
   type AcquisitionCostSummary,
   type PeriodMetrics,
@@ -145,16 +142,6 @@ describe('getConversionFunnelSchema', () => {
   });
 });
 
-describe('getScoreDistributionSchema', () => {
-  it('should accept valid input', () => {
-    const input = {
-      organizationId: '123e4567-e89b-12d3-a456-426614174000',
-    };
-
-    const result = getScoreDistributionSchema.parse(input);
-    expect(result.organizationId).toBeDefined();
-  });
-});
 
 describe('getResponseTimeSchema', () => {
   it('should accept valid input', () => {
@@ -183,42 +170,6 @@ describe('getAcquisitionCostSchema', () => {
     });
     expect(result).not.toHaveProperty('costPerLead');
     expect(result).not.toHaveProperty('averageDealValue');
-  });
-});
-
-describe('getComparisonSchema', () => {
-  it('should accept valid input', () => {
-    const input = {
-      organizationId: '123e4567-e89b-12d3-a456-426614174000',
-      currentPeriod: {
-        start: '2024-02-01T00:00:00Z',
-        end: '2024-02-29T23:59:59Z',
-      },
-      previousPeriod: {
-        start: '2024-01-01T00:00:00Z',
-        end: '2024-01-31T23:59:59Z',
-      },
-    };
-
-    const result = getComparisonSchema.parse(input);
-    expect(result.currentPeriod.start).toBe('2024-02-01T00:00:00Z');
-    expect(result.previousPeriod.end).toBe('2024-01-31T23:59:59Z');
-  });
-
-  it('should reject invalid datetime format', () => {
-    expect(() =>
-      getComparisonSchema.parse({
-        organizationId: '123e4567-e89b-12d3-a456-426614174000',
-        currentPeriod: {
-          start: 'invalid-date',
-          end: '2024-02-29T23:59:59Z',
-        },
-        previousPeriod: {
-          start: '2024-01-01T00:00:00Z',
-          end: '2024-01-31T23:59:59Z',
-        },
-      })
-    ).toThrow();
   });
 });
 
@@ -310,17 +261,6 @@ describe('Analytics response types', () => {
     });
   });
 
-  describe('ScoreDistributionData', () => {
-    it('should create valid score distribution', () => {
-      const distribution: ScoreDistributionData = {
-        range: '76-100',
-        count: 250,
-        percentage: 25,
-      };
-
-      expect(distribution.range).toBe('76-100');
-    });
-  });
 
   describe('ResponseTimeData', () => {
     it('should create valid response time data', () => {

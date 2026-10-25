@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { type Browser, expect, test } from '@playwright/test';
 import { answerAs400, canSubmit, fillContact, submit } from './helpers/ax-diagnosis';
 
 /**
@@ -98,7 +98,32 @@ test.describe('AX migration landing page', () => {
     await expect(bar).toHaveAttribute('aria-hidden', 'true');
     await context.close();
   });
+
+  test('offers the diagnosis on the first screen of a short phone (#536)', async ({ browser }) => {
+    await expectDiagnosisOnFirstScreen(browser, '/ja/ax-migration');
+  });
 });
+
+/**
+ * On a phone whose browser bars leave about 664px, the first screen has one diagnosis button:
+ * the hero's when it is on screen, otherwise the bottom bar (#536)
+ */
+async function expectDiagnosisOnFirstScreen(browser: Browser, path: string) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 664 } });
+  const page = await context.newPage();
+  await page.goto(path);
+  const bar = page.getByTestId('ax-floating-cta');
+  // The button itself: the caption above it can be on screen while the button is not
+  const heroButton = page.locator('#ax-hero-cta').getByRole('link').first();
+  const heroOnScreen = await heroButton.evaluate(
+    (element) => element.getBoundingClientRect().top < window.innerHeight
+  );
+  await expect(bar).toHaveAttribute('aria-hidden', heroOnScreen ? 'true' : 'false');
+  // Once the hero buttons come into view, the bar steps aside
+  await page.locator('#ax-hero-cta').scrollIntoViewIfNeeded();
+  await expect(bar).toHaveAttribute('aria-hidden', 'true');
+  await context.close();
+}
 
 /**
  * E2E Test: Access landing page (/ax-migration/access, #296)
@@ -148,6 +173,10 @@ test.describe('Access landing page', () => {
     await page.locator('#diagnosis').scrollIntoViewIfNeeded();
     await expect(bar).toHaveAttribute('aria-hidden', 'true');
     await context.close();
+  });
+
+  test('offers the diagnosis on the first screen of a short phone (#536)', async ({ browser }) => {
+    await expectDiagnosisOnFirstScreen(browser, '/ja/ax-migration/access');
   });
 
   test('shows the first question right after the hero button on phones (#425)', async ({

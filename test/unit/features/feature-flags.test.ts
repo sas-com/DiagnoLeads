@@ -345,8 +345,10 @@ describe('Feature Flags Service', () => {
     });
 
     it('should have integration feature flags', () => {
-      expect(PREDEFINED_FLAGS.SLACK_INTEGRATION).toBe('slack_integration');
-      expect(PREDEFINED_FLAGS.ZAPIER_INTEGRATION).toBe('zapier_integration');
+      expect(PREDEFINED_FLAGS.CRM_SYNC).toBe('crm_sync');
+      // The unused Slack and Zapier send functions were removed (#408)
+      expect(PREDEFINED_FLAGS).not.toHaveProperty('SLACK_INTEGRATION');
+      expect(PREDEFINED_FLAGS).not.toHaveProperty('ZAPIER_INTEGRATION');
     });
 
     it('should have beta feature flags', () => {

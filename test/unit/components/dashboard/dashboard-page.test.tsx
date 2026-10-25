@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   refetch: vi.fn(),
   data: undefined as unknown,
+  dataUpdatedAt: 0,
   isError: false,
   organizationId: '660e8400-e29b-41d4-a716-446655440000' as string | null,
   canEdit: false,
@@ -31,6 +32,7 @@ vi.mock('@/lib/trpc/client', () => ({
           mocks.query(input);
           return {
             data: mocks.data,
+            dataUpdatedAt: mocks.dataUpdatedAt,
             isLoading: !mocks.data && !mocks.isError,
             isError: mocks.isError,
             isPlaceholderData: false,
@@ -95,7 +97,6 @@ const lead = (overrides: Record<string, unknown>) => ({
   name: '担当 太郎',
   company: '会社',
   platform: 'as400',
-  score: 50,
   status: 'new',
   mql: false,
   consultation: false,
@@ -112,8 +113,6 @@ const summary = {
   mql: 4,
   previousMql: 5,
   fitOnly: 2,
-  averageScore: 77,
-  previousAverageScore: 70,
   daily: [
     { date: '2026-10-15', leads: 1, consultations: 1 },
     { date: '2026-10-16', leads: 3, consultations: 1 },
@@ -190,7 +189,6 @@ const summary = {
       name: '渡辺 恵',
       company: '大成化学',
       platform: 'other',
-      score: 58,
       status: 'nurturing',
       createdAt: new Date(),
     }),
@@ -198,7 +196,6 @@ const summary = {
       id: 'lead-1',
       name: '山田 太郎',
       company: '三田製作所',
-      score: 88,
       consultation: true,
       mql: true,
       createdAt: new Date('2026-09-12T02:00:00Z'),
@@ -246,14 +243,12 @@ describe('DashboardPage', () => {
     // Consultations 3 vs 1, MQL 4 vs 5 (関心あり only, 適合のみ beside it, #139)
     const consultations = insights.getByText('相談申込が前の30日間より増えました')
       .parentElement as HTMLElement;
-    expect(within(consultations).getByText(/200\.0%/)).toHaveClass('text-emerald-600');
+    expect(within(consultations).getByText(/200\.0%/)).toHaveClass('text-[var(--color-semantic-success-2)]');
     const mql = insights.getByText('MQL（関心あり）が前の30日間より減りました').parentElement as HTMLElement;
-    expect(within(mql).getByText(/20\.0%/)).toHaveClass('text-rose-600');
+    expect(within(mql).getByText(/20\.0%/)).toHaveClass('text-[var(--color-semantic-error-1)]');
     expect(within(mql).getByText('前の30日間 5件 / ほかに適合のみ 2件')).toBeInTheDocument();
-    // Average score: points, its change in percent
-    const score = insights.getByText('新規リードの平均スコアが上がりました').parentElement as HTMLElement;
-    expect(within(score).getByText('77')).toBeInTheDocument();
-    expect(within(score).getByText(/10\.0%/)).toBeInTheDocument();
+    // No average score: the MQL level is the sign of how promising leads are (#447)
+    expect(insights.queryByText(/平均スコア/)).not.toBeInTheDocument();
     expect(screen.queryByText(/前月比/)).not.toBeInTheDocument();
   });
 
@@ -327,7 +322,7 @@ describe('DashboardPage', () => {
     expect(panel.getByText('4')).toBeInTheDocument();
     expect(chartProps()).toEqual({
       categories: ['新規リード数'],
-      colors: ['teal'],
+      colors: ['key'],
       data: [
         { date: '10/15', 新規リード数: 1 },
         { date: '10/16', 新規リード数: 3 },
@@ -361,7 +356,15 @@ describe('DashboardPage', () => {
     expect(screen.getByText('直近90日・週ごと（日本時間）')).toBeInTheDocument();
   });
 
-  it('lists recent leads by company with status, received time and highlighted scores', () => {
+  it('dates the figures with the time they were fetched (DADS guidebook, #635)', () => {
+    // 2026-10-25 05:07 UTC = 14:07 in Japan
+    mocks.dataUpdatedAt = Date.UTC(2026, 9, 25, 5, 7);
+    renderPage();
+    expect(screen.getByText(/10\/25 14:07時点/)).toBeInTheDocument();
+    mocks.dataUpdatedAt = 0;
+  });
+
+  it('lists recent leads by company with status, received time and the MQL tag, without scores', () => {
     renderPage();
 
     const table = screen.getByRole('table');
@@ -372,8 +375,8 @@ describe('DashboardPage', () => {
     expect(within(rows[1]).getByText(/^今日 \d{2}:\d{2}$/)).toBeInTheDocument();
     expect(within(rows[2]).getByText('9/12')).toBeInTheDocument();
     expect(within(rows[2]).getByText('MQL')).toBeInTheDocument();
-    expect(within(rows[2]).getByText('88')).toHaveAttribute('title', '注目（スコア70以上またはMQL）');
-    expect(within(rows[1]).getByText('58')).not.toHaveAttribute('title');
+    // The score column is gone (#447)
+    expect(within(table).queryByRole('columnheader', { name: /スコア/ })).not.toBeInTheDocument();
   });
 
   it('renders recent leads as a two-line list for phones', () => {
@@ -401,8 +404,6 @@ describe('DashboardPage', () => {
     mocks.data = {
       ...summary,
       newLeads: 0,
-      averageScore: null,
-      previousAverageScore: null,
       trend: { unit: 'day', points: summary.trend.points.map((p) => ({ ...p, leads: 0, consultations: 0 })) },
       platforms: [],
       pendingConsultations: [],
@@ -414,8 +415,7 @@ describe('DashboardPage', () => {
     expect(screen.getByText('連絡待ちの相談申込はありません')).toBeInTheDocument();
     expect(screen.getAllByText('この期間のリードはありません')).toHaveLength(2);
     expect(screen.getByText('まだリードがありません')).toBeInTheDocument();
-    expect(screen.getByText('新規リードの平均スコア')).toBeInTheDocument();
-    expect(screen.getByText('前の30日間は値なし')).toBeInTheDocument();
+    expect(screen.queryByText(/平均スコア/)).not.toBeInTheDocument();
     expect(screen.queryByTestId('area-chart')).not.toBeInTheDocument();
   });
 

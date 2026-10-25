@@ -317,7 +317,7 @@ const renderPage = (props: Partial<ComponentProps<typeof LeadDetailView>> = {}) 
 const card = (name: string) => screen.getByRole('region', { name });
 
 describe('LeadDetailView header', () => {
-  it('shows the name, company, status, deal phase and score, with a link back to the list', () => {
+  it('shows the name, company, status, deal phase and MQL level, with a link back to the list', () => {
     renderPage();
     expect(screen.getByRole('heading', { level: 1, name: 'Taro Example' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1 }).nextElementSibling).toHaveTextContent(
@@ -325,7 +325,9 @@ describe('LeadDetailView header', () => {
     );
     expect(screen.getByRole('combobox', { name: /ステータスを変更（現在：新規）/ })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: /商談フェーズを変更（現在：フェーズ未設定）/ })).toBeInTheDocument();
-    expect(screen.getByTestId('lead-score')).toHaveTextContent('スコア 70');
+    // The MQL level, not the score (#447): judged before #139, so the legacy 適合
+    expect(screen.getByTestId('lead-mql-fit-badge')).toBeInTheDocument();
+    expect(screen.queryByTestId('lead-score')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'リード一覧' })).toHaveAttribute('href', '/ja/leads');
     // First contact and the one-tap buttons under the header, next actions in the overview
     expect(screen.getByText('contact bar: Example Works')).toBeInTheDocument();
@@ -620,24 +622,13 @@ describe('LeadDetailView editing in place', () => {
     expect(store.updateMutate).not.toHaveBeenCalled();
   });
 
-  it('edits the score by hand within 0-100', async () => {
+  it('does not offer the score to edit: it is the reason of the MQL level (#447)', async () => {
     const user = userEvent.setup();
     renderPage();
     await user.click(screen.getByRole('button', { name: '営業パイプラインを編集' }));
-    const score = within(card('営業パイプライン')).getByRole('spinbutton', { name: /スコア/ });
-    await user.clear(score);
-    await user.type(score, '150');
-    await user.click(within(card('営業パイプライン')).getByRole('button', { name: '保存' }));
-    expect(await within(card('営業パイプライン')).findByText('最大値は100です')).toBeInTheDocument();
-    expect(store.updateMutate).not.toHaveBeenCalled();
-
-    await user.clear(score);
-    await user.type(score, '85');
-    await user.click(within(card('営業パイプライン')).getByRole('button', { name: '保存' }));
-    await waitFor(() =>
-      expect(store.updateMutate).toHaveBeenCalledWith({ score: 85, id: LEAD_ID, organizationId: ORG_ID })
-    );
-    expect(await screen.findByTestId('lead-score')).toHaveTextContent('スコア 85');
+    expect(
+      within(card('営業パイプライン')).queryByRole('spinbutton', { name: /スコア/ })
+    ).not.toBeInTheDocument();
   });
 
   it('asks before dropping unsaved changes when another card is opened', async () => {

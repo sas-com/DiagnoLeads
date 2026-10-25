@@ -225,13 +225,12 @@ describe('SignupForm', () => {
     await user.type(screen.getByLabelText(/confirmPasswordLabel/i), 'Password123');
     await user.click(screen.getByRole('button', { name: /submitButton/i }));
 
-    await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/invitationRequired/))
-    );
+    expect(await screen.findByRole('alert')).toHaveTextContent('settings.auth.signup.invitationRequired');
+    expect(toast.error).not.toHaveBeenCalled();
     expect(mockPush).not.toHaveBeenCalled();
   });
 
-  it('should show error toast for existing user', async () => {
+  it('shows in the form the error for existing user', async () => {
     mockSignUp.mockResolvedValueOnce({
       error: { code: 'USER_ALREADY_EXISTS', message: 'User already exists' },
     });
@@ -244,12 +243,11 @@ describe('SignupForm', () => {
     await user.type(screen.getByLabelText(/confirmPasswordLabel/i), 'Password123');
     await user.click(screen.getByRole('button', { name: /submitButton/i }));
 
-    await waitFor(() => {
-      expect(toast.error).toHaveBeenCalled();
-    });
+    expect(await screen.findByRole('alert')).toHaveTextContent('settings.auth.signup.emailAlreadyExists');
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
-  it('should show error toast for generic error', async () => {
+  it('shows in the form the error for generic error', async () => {
     mockSignUp.mockResolvedValueOnce({
       error: { code: 'UNKNOWN_ERROR', message: 'Something went wrong' },
     });
@@ -262,9 +260,8 @@ describe('SignupForm', () => {
     await user.type(screen.getByLabelText(/confirmPasswordLabel/i), 'Password123');
     await user.click(screen.getByRole('button', { name: /submitButton/i }));
 
-    await waitFor(() => {
-      expect(toast.error).toHaveBeenCalled();
-    });
+    expect(await screen.findByRole('alert')).toHaveTextContent('settings.auth.signup.errorToast');
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it('should handle network error gracefully', async () => {
@@ -278,9 +275,8 @@ describe('SignupForm', () => {
     await user.type(screen.getByLabelText(/confirmPasswordLabel/i), 'Password123');
     await user.click(screen.getByRole('button', { name: /submitButton/i }));
 
-    await waitFor(() => {
-      expect(toast.error).toHaveBeenCalled();
-    });
+    expect(await screen.findByRole('alert')).toHaveTextContent('settings.auth.signup.errorToast');
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it('should disable form while loading', async () => {

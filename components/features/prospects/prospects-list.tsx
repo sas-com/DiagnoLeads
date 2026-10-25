@@ -95,7 +95,7 @@ export function ProspectsList({ organizationId }: { organizationId: string }) {
           {row.refusalReason && (
             <span>{t(`refusalReason.${row.refusalReason}` as 'refusalReason.other')}</span>
           )}
-          {row.agencyName && <span>（{row.agencyName}）</span>}
+          {row.agencyName && <span>{t('agency.inParens', { name: row.agencyName })}</span>}
         </div>
         {row.refusalNote && <p className="line-clamp-2">{row.refusalNote}</p>}
         {(row.contactName || row.contactPhone) && (

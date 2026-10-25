@@ -183,7 +183,6 @@ bun run build
 |--------------|------|-----------|
 | /api/diagnostic | 10/min | ✅ |
 | /api/v2/* | 100/min | ✅ |
-| /api/embed/* | 設定による | ✅ |
 | 認証エンドポイント | Better Auth内蔵 | ✅ |
 
 ---
