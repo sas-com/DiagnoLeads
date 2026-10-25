@@ -21,5 +21,5 @@ paths: ["app/[locale]/(dashboard)/settings/page.tsx", "lib/auth/config.ts"]
 - **ルール**:
   - 変更は `authClient.changePassword` で送る。`authClient.$fetch('/change-password')` だと、better-auth のクライアントがセッションを読み直さず、画面が消えた古いセッションを持ったままになる（better-auth 1.6.33 の `client/config.mjs` の atomListeners）
   - 現在のパスワードが違うことは、エラーの `code`（`INVALID_PASSWORD`）で見分ける。`message` の部分一致（'invalid' など）にしない。better-auth はほかの失敗（信頼していない Origin の `INVALID_ORIGIN`「Invalid origin」など）でも 'invalid' を含む文を返すので、原因を取り違える（PR #601 のレビュー）
-  - 切られたブラウザも、`session.cookieCache` が有効なあいだは session_data クッキーの期限（最大5分）まで残る。cookieCache は #578 で切る方針
+  - 切られたブラウザは、次の要求からログインしていない扱いになる。`session.cookieCache` は #578 で切った（決定 `2026-10-24-session-cookie-cache-off`）ので、session_data クッキーで残る時間はない
   - 確かめるテスト：実 DB の `test/unit/integration/password-change-sessions.db.test.ts`（変更）と `password-reset-sessions.db.test.ts`（再設定）、画面の `test/unit/components/settings/password-change.test.tsx`

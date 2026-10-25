@@ -4,9 +4,9 @@
  * sends (revokeOtherSessions: true). The browser that changes the password is signed in again
  * with a new session; every other session of the user is deleted. Other users are left alone.
  *
- * The browsers that lose their session can still hold a signed session_data cookie
- * (session.cookieCache); better-auth answers from it without the database until it expires
- * (#578), so these checks read the session from the database.
+ * These checks read the session from the database (disableCookieCache), so they hold whether or
+ * not session.cookieCache is on; it is off since #578, so the browsers that lose their session
+ * are signed out at their next request.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/dl_test \
