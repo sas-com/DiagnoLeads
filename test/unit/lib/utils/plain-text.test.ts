@@ -13,7 +13,7 @@ describe('PLAIN_TEXT', () => {
   });
 
   it('refuses line breaks, tabs, NUL and format characters such as a bidi override', () => {
-    for (const value of ['a\nb', 'a\rb', 'a\tb', 'a\u0000b', 'a‮b', 'a​b', 'a﻿b']) {
+    for (const value of ['a\nb', 'a\rb', 'a\tb', 'a\u0000b', 'a\u202Eb', 'a\u200Bb', 'a\uFEFFb']) {
       expect(PLAIN_TEXT.test(value)).toBe(false);
     }
   });
