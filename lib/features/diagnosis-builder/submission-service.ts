@@ -16,6 +16,7 @@ import {
   diagnosticSubmissions,
   leads,
 } from '@/lib/db/schema';
+import { hasLoneSurrogate } from '@/lib/utils/clip-text';
 import { and, eq, like } from 'drizzle-orm';
 import { z } from 'zod';
 import { upsertLeadFromSubmission } from '../diagnostics/lead-upsert';
@@ -52,7 +53,13 @@ export const diagnosisSubmissionSchema = z.object({
   contact: contactSchema,
   privacyConsent: z.literal(true),
   /** consent.version of the definition shown to the respondent */
-  consentVersion: z.string().trim().min(1).max(40),
+  // Stored in the jsonb consent when the definition has none: no lone surrogate (#754)
+  consentVersion: z
+    .string()
+    .trim()
+    .min(1)
+    .max(40)
+    .refine((value) => !hasLoneSurrogate(value)),
   consultationRequested: z.boolean().default(false),
   tracking: trackingSchema,
   locale: z.enum(['ja', 'en']).default('ja'),

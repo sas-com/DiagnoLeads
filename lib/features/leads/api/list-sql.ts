@@ -87,6 +87,13 @@ function latestHearingValue(fieldKey: string, valid: SQL): SQL<string | null> {
  * Next meeting date, 'YYYY-MM-DD': the one the latest hearing records, else the first meeting
  * sales confirmed from the respondent's preferred dates (#155). NULL when neither exists.
  */
+/**
+ * Whether the lead has a deal (#435): its status and deal phase then come from the deals and are
+ * not changed by hand (#444). Raw table name: drizzle aliases a joined table in the relational
+ * queries
+ */
+export const leadHasDeals = sql<boolean>`exists (select 1 from deals d where d.lead_id = ${leads.id} and d.organization_id = ${leads.organizationId})`;
+
 export const leadNextMeetingDate = sql<string | null>`coalesce(${latestHearingValue(
   'nextMeetingDate',
   sql.raw(`(h.fields -> 'nextMeetingDate' ->> 'value') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'`)

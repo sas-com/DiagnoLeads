@@ -12,12 +12,16 @@ vi.mock('next-intl', () => ({
 }));
 
 // Mock next/navigation
-const mockPush = vi.fn();
+const mockPush = vi.hoisted(() => vi.fn());
 let mockSearchParams = new URLSearchParams();
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush }),
-  useSearchParams: () => mockSearchParams,
-}));
+vi.mock('next/navigation', () => {
+  // One object for every render, like Next's useRouter (#636)
+  const router = { push: mockPush };
+  return {
+    useRouter: () => router,
+    useSearchParams: () => mockSearchParams,
+  };
+});
 
 // Mock sonner toast
 vi.mock('sonner', () => ({

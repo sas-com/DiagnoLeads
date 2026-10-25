@@ -81,6 +81,10 @@ describe('validateDiagnosisAnswers', () => {
     expect(issuesOf(def, { ...cloudAnswers, confidence: 6 })[0].code).toBe('out_of_range');
     expect(issuesOf(def, { ...cloudAnswers, confidence: 4.5 })[0].code).toBe('invalid_type');
     expect(issuesOf(def, { ...cloudAnswers, notes: 'x'.repeat(201) })[0].code).toBe('too_long');
+    // A lone surrogate would fail the jsonb save of the whole submission (#754)
+    expect(issuesOf(def, { ...cloudAnswers, notes: 'a\ud800b' })[0].code).toBe('invalid_type');
+    expect(issuesOf(def, { ...cloudAnswers, notes: 'a\udc00' })[0].code).toBe('invalid_type');
+    expect(issuesOf(def, { ...cloudAnswers, notes: '絵文字😀も' })).toEqual([]);
   });
 
   it('rejects an exclusive option combined with others', () => {

@@ -1,4 +1,5 @@
 import { isAxFrom } from '@/lib/features/ax-site/cross-links';
+import { clipText } from '@/lib/utils/clip-text';
 
 /**
  * What a page view records besides the page (#412): only the referrer's host, the utm_*
@@ -64,7 +65,7 @@ export interface SiteVisitParams {
 const clip = (value: string | null) => {
   const trimmed = value?.trim();
   return trimmed && !trimmed.includes('@') && !trimmed.includes('\u0000')
-    ? trimmed.slice(0, 200)
+    ? clipText(trimmed, 200)
     : null;
 };
 

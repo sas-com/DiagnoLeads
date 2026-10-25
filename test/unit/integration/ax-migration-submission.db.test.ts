@@ -11,6 +11,7 @@ import { emptyAxPlaybookContent } from '@/lib/features/ax-playbook/types/schemas
 import {
   type AxMigrationSubmissionInput,
   addAxMigrationDetails,
+  axMigrationSubmissionSchema,
   RESULT_SCREEN_WINDOW_MS,
   requestAxMigrationConsultation,
   submitAxMigrationDiagnosis,
@@ -641,5 +642,38 @@ describe.skipIf(!url)('AX migration submission (PostgreSQL)', () => {
         await addAxMigrationDetails(db, '00000000-0000-0000-0000-000000000000', { gaiji: 'none' })
       ).toEqual({ ok: false, reason: 'not_found' });
     });
+  });
+
+  it('saves a UTM cut inside an emoji: the cut keeps whole characters and jsonb takes it (#754)', async () => {
+    const campaign = `${'a'.repeat(199)}😀`;
+    const lone = 'x\udc00y';
+    // What the API does with the request body before saving
+    const parsed = axMigrationSubmissionSchema.parse({
+      ...input(),
+      tracking: { utmCampaign: campaign, utmTerm: lone },
+    });
+    expect(parsed.tracking.utmCampaign).toBe('a'.repeat(199));
+    expect(parsed.tracking.utmTerm).toBe('x\ufffdy');
+
+    const outcome = await submitAxMigrationDiagnosis(db, organizationId, parsed, now);
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    const [row] = await pg
+      .select({ tracking: diagnosticSubmissions.tracking })
+      .from(diagnosticSubmissions)
+      .where(eq(diagnosticSubmissions.id, outcome.submissionId));
+    expect(row.tracking).toMatchObject({ utmCampaign: 'a'.repeat(199), utmTerm: 'x\ufffdy' });
+  });
+
+  it('would lose the whole submission if a lone surrogate reached the jsonb column (#754)', async () => {
+    // Bypasses the schema on purpose: this is the failure the clipping prevents
+    await expect(
+      submitAxMigrationDiagnosis(
+        db,
+        organizationId,
+        input({ tracking: { utmCampaign: `${'a'.repeat(199)}\ud83d` } }),
+        now
+      )
+    ).rejects.toThrow();
   });
 });

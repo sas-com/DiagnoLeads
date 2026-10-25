@@ -197,6 +197,15 @@ describe('hearingValueFromAnswer', () => {
     expect(hearingValueFromAnswer(question(def, 'notes'), undefined)).toBeNull();
   });
 
+  it('never cuts a character in half when trimming text to the field length (#754)', () => {
+    // challengeNotes holds 1,000 UTF-16 units; the emoji would straddle the limit
+    const answer = `${'あ'.repeat(999)}😀`;
+    expect(hearingValueFromAnswer(question(def, 'notes'), answer)).toEqual({
+      key: 'challengeNotes',
+      value: 'あ'.repeat(999),
+    });
+  });
+
   it('ignores mappings that validation rejects', () => {
     const q: Question = { ...question(def, 'notes'), hearingField: { key: 'targetSystem' } };
     expect(mappedHearingField(q)).toBeNull();

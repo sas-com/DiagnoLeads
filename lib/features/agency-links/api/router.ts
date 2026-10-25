@@ -10,6 +10,7 @@
 
 import { agencyLinks, leads } from '@/lib/db/schema';
 import { resolveDiagnosisOrganizationId } from '@/lib/features/diagnostics/organization';
+import { isDiagnosisOrganization } from '@/lib/multi-tenant/helpers/diagnosis-organization';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { and, count, desc, eq, ne } from 'drizzle-orm';
@@ -68,8 +69,12 @@ export const agencyLinksRouter = router({
       links: rows.map((row) => ({ ...row, kind: row.kind as AgencyLinkKind })),
       canManage: ctx.ability.can('update', 'Settings'),
       // The public diagnosis saves answers into one organization only; links of any other
-      // organization never match, so the screen warns about it
-      receivesDiagnoses: resolveDiagnosisOrganizationId() === ctx.organization.id,
+      // organization never match, so the screen warns about it. The same comparison as the QR
+      // entry and the sales notice (#698)
+      receivesDiagnoses: isDiagnosisOrganization(
+        ctx.organization.id,
+        resolveDiagnosisOrganizationId()
+      ),
     };
   }),
 

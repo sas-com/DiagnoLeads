@@ -122,6 +122,25 @@ export function makesLostOnHold(
   return before?.status !== 'lost' || before.lostReason !== 'on_hold';
 }
 
+/** Message for a change of the status or deal phase of a lead with deals (#444) */
+export const DEAL_DRIVEN_MESSAGE =
+  'このリードには商談があるため、状態と商談フェーズは商談から決まります。商談のステージを変えてください';
+
+/**
+ * A lead with deals takes its status and deal phase from them (#444,
+ * lib/features/deals/lead-sync.ts). True when the write changes either; sending the values the
+ * lead already has (a form saving every field) is not a change.
+ */
+export function changesDealDrivenFields(
+  before: { status: string; dealPhase: string | null },
+  input: { status?: string; dealPhase?: string | null }
+): boolean {
+  return (
+    (input.status !== undefined && input.status !== before.status) ||
+    (input.dealPhase !== undefined && input.dealPhase !== before.dealPhase)
+  );
+}
+
 /** Whether moving the lead to lost drops its reason 保留 (#445): it held, it did not lose */
 export function dropsOnHoldReason(
   before: { status: string; lostReason: string | null } | null | undefined,
