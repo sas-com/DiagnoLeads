@@ -12,7 +12,7 @@ DiagnoLeads は、AX マイグレーション（レガシー基幹システム�
 4. テストが通らなければコミットしない。main に直接 push しない
 5. 依存は `bun add` / `bun remove` / `bun patch <name>@<version>` で変える。node_modules は `bun patch` で取り出したコピーだけを編集し、bun.lock は手で編集しない
 6. Claude の設定と Claude API は、Anthropic の公式ドキュメントで確かめてから変える。対象は CLAUDE.md・`.claude/`（設定・フック・スキル・エージェント・ルール）・MemoryBank の仕組み・`lib/features/ai/` のモデルと SDK。記憶で書かず、今の公式のページを読み、PR に URL を書く（スキル `official-check`）
-7. Issue を閉じる前に、エビデンスを Issue に書く（テスト結果と、受け入れ基準を満たしたこと）
+7. Issue を閉じる前に、エビデンスを Issue に書く（テスト結果と、受け入れ基準を満たしたこと）。本文に `Closes #N` がある PR はマージで Issue が閉じるので、マージの前に書く
 8. 範囲外の作業は別の Issue に切り出す。「ついでに」を同じ PR に入れない
 9. 原則に違反したら `.factory/memory/violations.md` に記録し、再発防止策を仕組み（フックかこのファイル）に入れる
 
