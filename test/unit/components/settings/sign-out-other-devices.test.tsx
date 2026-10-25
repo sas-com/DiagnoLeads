@@ -8,6 +8,7 @@
 import SettingsPage from '@/app/[locale]/(dashboard)/settings/page';
 import { authClient } from '@/lib/auth/client';
 import messages from '@/locales/ja/common.json';
+import { keepAuthSessionStoreMounted } from '@/test/mocks/auth-session-store';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -127,6 +128,9 @@ async function openConfirmation() {
   fireEvent.click(within(section()).getByRole('button', { name: o.open }));
   return screen.findByRole('alertdialog', { name: o.dialogTitle });
 }
+
+// The session store runs for the whole file, like an open tab, and stops before jsdom goes (#706)
+keepAuthSessionStoreMounted(sessionStore);
 
 beforeEach(() => {
   vi.clearAllMocks();

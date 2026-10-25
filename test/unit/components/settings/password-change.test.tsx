@@ -11,6 +11,7 @@ import SettingsPage from '@/app/[locale]/(dashboard)/settings/page';
 import { authClient } from '@/lib/auth/client';
 import en from '@/locales/en/common.json';
 import messages from '@/locales/ja/common.json';
+import { keepAuthSessionStoreMounted } from '@/test/mocks/auth-session-store';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -146,14 +147,17 @@ function changePassword(currentPassword: string) {
   fireEvent.click(screen.getByRole('button', { name: p.changePassword }));
 }
 
+// The session store runs for the whole file, like an open tab, and stops before jsdom goes (#706)
+keepAuthSessionStoreMounted(sessionStore);
+
 beforeEach(() => {
   vi.clearAllMocks();
   network.state.requests = [];
   network.state.sessionId = 'session-before';
   network.state.changePassword = { status: 200, body: {} };
-  // Each test starts like a fresh page load. The session store outlives a test (nanostores keeps
-  // it mounted for a second after the page unmounts, and its value stays), so empty it and mark it
-  // stale: the page then reads the session from the stub, never the one the last test left
+  // Each test starts like a fresh page load. The session store outlives a test (it runs for the
+  // whole file, above, and its value stays), so empty it and mark it stale: the page then reads
+  // the session from the stub, never the one the last test left
   sessionStore.set({ ...sessionStore.get(), data: null, isPending: true });
   authClient.$store.notify('$sessionSignal');
 });
