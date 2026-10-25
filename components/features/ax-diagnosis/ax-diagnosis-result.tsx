@@ -51,6 +51,16 @@ const CHALLENGE_KEYS: ChallengeType[] = ['people', 'cost', 'agility', 'data'];
  * consultation next, then the quick assessment and Phase 1-3
  */
 const STEP_KEYS = ['consult', 'simple', 'survey', 'migration', 'ax'] as const;
+/**
+ * Columns of the steps from sm up, by their number: three in a row, four in two or four
+ * columns, five as the next one across the row and the rest two by two below (four in a row
+ * are too narrow for their text, #537)
+ */
+const STEP_COLUMNS: Record<number, string> = {
+  3: 'sm:grid-cols-3',
+  4: 'sm:grid-cols-2 lg:grid-cols-4',
+  5: 'sm:grid-cols-2',
+};
 
 /**
  * Steps after an Access check (#457): the flow of the Access page (#158), with the work of the
@@ -473,12 +483,7 @@ export function AxDiagnosisResult({
           <MapPin className="h-4 w-4" aria-hidden="true" />
           {accessPath ? t('accessSteps.nowHere') : t('nowHere')}
         </p>
-        <ol
-          className={cn(
-            'grid gap-3',
-            stepKeys.length === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2 lg:grid-cols-4'
-          )}
-        >
+        <ol className={cn('grid gap-3', STEP_COLUMNS[stepKeys.length])}>
           {stepKeys.map((key, index) => (
             <li
               key={key}
@@ -486,7 +491,7 @@ export function AxDiagnosisResult({
                 'rounded-xl border-2 p-4',
                 index === 0 ? 'border-ax-teal-dark bg-ax-teal/5' : 'border-gray-200 bg-white',
                 // Five steps: the next one across the row, the four after it below
-                index === 0 && stepKeys.length === 5 && 'sm:col-span-2 lg:col-span-4'
+                index === 0 && stepKeys.length === 5 && 'sm:col-span-2'
               )}
             >
               <p className="font-ax-latin text-xs font-bold tracking-widest text-ax-teal-dark">

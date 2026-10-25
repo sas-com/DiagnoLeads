@@ -978,6 +978,11 @@ describe('AxDiagnosisResult', () => {
       expect(steps).toHaveTextContent('いまここ：無料Web診断が完了しました。次は無料の個別相談です。');
       expect(stepTitles()).toEqual(['無料の個別相談', '簡易診断', '現行仕様調査', 'マイグレーション', 'AX化']);
       expect(stepLabels()).toEqual(['NEXT STEP', 'その次に', 'Phase 1', 'Phase 2', 'Phase 3']);
+      // The next one across the row, two by two below: four in a row are too narrow here
+      const list = within(steps).getByRole('list');
+      expect(list).toHaveClass('sm:grid-cols-2');
+      expect(list).not.toHaveClass('lg:grid-cols-4');
+      expect(within(list).getAllByRole('listitem')[0]).toHaveClass('sm:col-span-2');
       expect(screen.getByText(/現行仕様調査で確定します/)).toBeInTheDocument();
     });
 
