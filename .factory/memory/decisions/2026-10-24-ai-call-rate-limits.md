@@ -5,7 +5,7 @@ category: Security
 title: "AI の呼び出しの回数制限と、tRPC のバッチの件数の上限（#405）"
 status: active
 superseded_by: []
-issues: [405, 443, 576, 598, 575]
+issues: [405, 443, 576, 598, 575, 619]
 paths: ["lib/features/ai/limits.ts", "lib/features/ai/prompt-input.ts", "lib/features/ai/embeddings/openai.ts", "lib/features/ai/api/router.ts", "lib/trpc/batch-limit.ts"]
 ---
 
@@ -25,4 +25,4 @@ paths: ["lib/features/ai/limits.ts", "lib/features/ai/prompt-input.ts", "lib/fea
   - 断るときの文言は、Claude が「AI の利用の上限…」、埋め込みが「AI 検索・埋め込みの利用の上限…」（`ai.updateEmbedding` も同じ枠で断られるため）
   - `ai.findSimilar` は保存済みの埋め込みを pgvector で比べるだけで OpenAI を呼ばないので、数えない。OpenAI を呼ぶように変えるときは `consumeEmbeddingCalls` を足す
   - `/api/chat`（`app/api/chat/route.ts`）も対象外で、#432 で消すまでの扱い。ログインだけで組織を確かめず、回数も数えない。いまは `ai` 4.x が temperature 0 を送り、Claude Sonnet 5.5 に断られて動かない。`ai` を上げる前に消すか、同じ回数制限と `leadForClaude` 相当の上限を付ける
-  - リードの入力の長さの上限（#575）：tRPC の `leads.create`・`leads.update`・`leads.bulkCreate` と CSV・Excel の取り込みの行は、氏名100・会社名200・メール254・電話30文字（`LEAD_TEXT_MAX_LENGTH`、`lib/features/leads/types/schemas.ts`）。公開の診断フォームの氏名・会社名・メールと同じく、前後の空白を除いてから UTF-16 の単位で数える（公開フォームの電話は正規化の前に数える。#619 で見直す）。`responses` は JSON で20,000文字まで（`LEAD_RESPONSES_MAX_CHARS`）。REST v2 と旧汎用フォームには付けていない（#470 で消す。残すことになったら同じ上限を付ける）。上限より前に入った長い値とほかの経路のために、`leadForClaude` と `prepareLeadText` の切り詰めは残す
+  - リードの入力の長さの上限（#575）：tRPC の `leads.create`・`leads.update`・`leads.bulkCreate` と CSV・Excel の取り込みの行は、氏名100・会社名200・メール254・電話30文字（`LEAD_TEXT_MAX_LENGTH`、`lib/features/leads/types/schemas.ts`）。公開の診断フォームの氏名・会社名・メールと同じく、前後の空白を除いてから UTF-16 の単位で数える（公開フォームの電話は正規化（NFKC）の後に30文字、正規化の前に100文字の上限（#619））。`responses` は JSON で20,000文字まで（`LEAD_RESPONSES_MAX_CHARS`）。REST v2 と旧汎用フォームには付けていない（#470 で消す。残すことになったら同じ上限を付ける）。上限より前に入った長い値とほかの経路のために、`leadForClaude` と `prepareLeadText` の切り詰めは残す
