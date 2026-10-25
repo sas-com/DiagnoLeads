@@ -6,7 +6,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateAnswers } from '../engine';
 import { upsertLeadFromSubmission } from '../lead-upsert';
-import { claimConsultation, resolveInflow } from '../service';
+import { claimConsultation, countQrCompletion, resolveInflow } from '../service';
 import { type Tracking, compactTracking, trackingSchema } from '../tracking';
 import type { AnswerValidationIssue, DiagnosticAnswers } from '../types';
 import { contactSchema, plainText } from '../types/contact';
@@ -229,6 +229,8 @@ function buildLeadSummary(
  *   created the lead is added to its list of other systems (see findContinuationOrigin).
  * - Leads are matched and created by upsertLeadFromSubmission (shared with the builder's
  *   diagnoses), which serializes concurrent submissions for the same address.
+ * - A lead it creates from a scan of a QR campaign counts for the campaign, in the same
+ *   transaction (countQrCompletion, #700).
  */
 export async function submitAxMigrationDiagnosis(
   database: Database,
@@ -306,7 +308,7 @@ export async function submitAxMigrationDiagnosis(
         continuedFromSubmissionId: continuedFrom,
         createdAt: now,
       })
-      .returning({ id: diagnosticSubmissions.id });
+      .returning({ id: diagnosticSubmissions.id, isTest: diagnosticSubmissions.isTest });
 
     if (!existing) {
       await tx
@@ -316,6 +318,14 @@ export async function submitAxMigrationDiagnosis(
     } else if (continuedFrom) {
       await recordOtherSystem(tx, leadId, submission.id, result, input.consultationRequested, now);
     }
+
+    // A new lead from a scan of the organization's QR campaign counts for it, with the lead (#700)
+    await countQrCompletion(tx, {
+      organizationId,
+      leadCreated: !existing,
+      isTest: submission.isTest,
+      tracking,
+    });
 
     return {
       ok: true as const,

@@ -70,11 +70,12 @@ async function scan(
 const CAMPAIGN: QrEntryCampaign = {
   campaignId: 'c1',
   organizationId: 'org-ax',
+  shortCode: 'AbCd2345',
   diagnosisId: null,
   diagnosis: null,
   utm: { source: 'qrcode', medium: 'offline', campaign: 'fair-2026', content: null },
 };
-const AX = '/ja/ax-diagnosis?utm_source=qrcode&utm_medium=offline&utm_campaign=fair-2026';
+const AX = '/ja/ax-diagnosis?utm_source=qrcode&utm_medium=offline&utm_campaign=fair-2026&qr=AbCd2345';
 /** A campaign that names a builder diagnosis of its organization */
 const WITH_DIAGNOSIS: QrEntryCampaign = {
   ...CAMPAIGN,
@@ -105,9 +106,9 @@ describe('GET /q/[code]', () => {
     vi.useRealTimers();
   });
 
-  it("redirects the AX organization's campaign to the AX diagnosis with the campaign's UTM parameters, not the request's", async () => {
+  it("redirects the AX organization's campaign to the AX diagnosis with the campaign's UTM parameters and short code, not the request's", async () => {
     const res = await scan('AbCd2345', {
-      url: 'https://evil.example/q/AbCd2345?utm_source=other&next=https://evil.example',
+      url: 'https://evil.example/q/AbCd2345?utm_source=other&qr=Other123&next=https://evil.example',
       headers: { host: 'evil.example', 'x-forwarded-host': 'evil.example' },
     });
     expect(res.status).toBe(307);
@@ -159,7 +160,7 @@ describe('GET /q/[code]', () => {
     const res = await scan('AbCd2345');
     expect(res.status).toBe(307);
     expect(res.headers.get('location')).toBe(
-      '/ja/d/cloud-readiness?utm_source=qrcode&utm_medium=offline&utm_campaign=fair-2026'
+      '/ja/d/cloud-readiness?utm_source=qrcode&utm_medium=offline&utm_campaign=fair-2026&qr=AbCd2345'
     );
     expect(mocks.findPublicDiagnosis).toHaveBeenCalledWith({ name: 'app-db' }, 'cloud-readiness');
   });

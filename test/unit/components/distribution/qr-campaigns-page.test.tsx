@@ -2,7 +2,8 @@
  * The settings page of QR campaigns (#692, #695): each campaign shows where a scan goes, as the
  * list gets it from the server, and its expiry; an expired campaign is marked expired while its
  * switch is on. The create form takes an optional expiry day, sent as the end of that day in
- * Japan (not a day already over there), and sends no expiry when it is left empty.
+ * Japan (not a day already over there), and sends no expiry when it is left empty. The leads and
+ * the rate are the campaign's own counts (completion_count over scan_count, #700).
  */
 import QRCampaignsPage from '@/app/[locale]/(dashboard)/settings/qr-campaigns/page';
 import ja from '@/locales/ja/common.json';
@@ -125,6 +126,20 @@ describe('QR campaigns page', () => {
     const partner = within(cardOf('Partner'));
     expect(partner.getByText('診断を選んでいない')).toBeInTheDocument();
     expect(partner.queryByText('期限切れ')).toBeNull();
+  });
+
+  it('shows the leads counted on each campaign and their share of its scans, both from the list (#700)', () => {
+    mocks.campaigns = [
+      campaign('1', { name: 'Fair', scanCount: 8, completionCount: 2 }),
+      campaign('2', { name: 'Seminar', scanCount: 0, completionCount: 0 }),
+    ];
+    renderPage();
+
+    const fair = within(cardOf('Fair'));
+    expect(fair.getByText('8 scans')).toBeInTheDocument();
+    expect(fair.getByText('2 conversions')).toBeInTheDocument();
+    expect(fair.getByText('25.0%')).toBeInTheDocument();
+    expect(within(cardOf('Seminar')).getByText('0%')).toBeInTheDocument();
   });
 
   describe('the create form', () => {

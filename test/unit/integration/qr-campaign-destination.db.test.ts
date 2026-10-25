@@ -347,7 +347,9 @@ describe.skipIf(!url)('where a scan of a QR campaign goes (PostgreSQL)', () => {
           content: campaign.utmContent,
         };
         const slug = destination.kind === 'diagnosis' ? destination.slug : null;
-        expect(res.headers.get('location'), shortCode).toBe(qrEntryRedirectPath(utm, slug));
+        expect(res.headers.get('location'), shortCode).toBe(
+          qrEntryRedirectPath({ shortCode, utm }, slug)
+        );
       }
     }
   });

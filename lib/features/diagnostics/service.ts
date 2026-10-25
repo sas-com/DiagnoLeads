@@ -10,6 +10,8 @@
  *   addresses (AX_DIAGNOSIS_SALES_EMAIL) only for the operator's organization
  * - Notification limits per organization: past the hourly one, consultation requests are still
  *   notified up to their own cap, and sales emails have hourly and daily caps (#232)
+ * - A new lead from a scan of a QR campaign counts for the campaign of its organization, once
+ *   (#700)
  */
 import type { db as defaultDb } from '@/lib/db/client';
 import { diagnosticSubmissions } from '@/lib/db/schema';
@@ -17,6 +19,7 @@ import { renderEmail } from '@/lib/email/templates/render';
 import { env } from '@/lib/env';
 import { findActiveAgencyLink } from '@/lib/features/agency-links/service';
 import { MEMBER_REFERRAL_KIND } from '@/lib/features/agency-links/types/schemas';
+import { countCampaignCompletion } from '@/lib/features/distribution/service';
 import { isEmailConfigured, sendEmail } from '@/lib/features/email';
 import {
   type AssignmentExecutor,
@@ -78,6 +81,41 @@ export async function resolveInflow(
         agencyLinkId: link.id,
         referralMemberUserId: null,
       };
+}
+
+// ---------------------------------------------------------------------------------------------
+// QR campaigns
+
+/** What countQrCompletion reads of a submission, as it is stored */
+export interface QrCompletionSubmission {
+  organizationId: string;
+  /** The submission created its lead (upsertLeadFromSubmission found none to link to) */
+  leadCreated: boolean;
+  /** A test answer of the builder's preview */
+  isTest: boolean;
+  tracking: Pick<Tracking, 'qr'>;
+}
+
+/**
+ * Count a new lead for the QR campaign whose code the answer carries (#700, owner decision of
+ * 2026-10-25): the /q/ entry adds the campaign's short code to the address of the diagnosis, and
+ * the answer keeps it in tracking like the UTM values (`qr`). Only a submission that created its
+ * lead counts, never a test answer, and only for a campaign of the submission's organization
+ * (countCampaignCompletion: another organization's code, or a code no campaign has, counts
+ * nothing). Nothing is asked of the database for an answer without a code.
+ *
+ * Run it in the transaction that creates the lead, after the lead and the submission are
+ * written: the count commits and rolls back with them, so an answer sent again (it finds the
+ * lead) and a submission that failed and is sent once more count once in all. Exactly once per
+ * lead, also for answers at the same moment. Answers false when nothing was counted.
+ */
+export async function countQrCompletion(
+  tx: Transaction,
+  submission: QrCompletionSubmission
+): Promise<boolean> {
+  const shortCode = submission.tracking.qr;
+  if (!submission.leadCreated || submission.isTest || !shortCode) return false;
+  return countCampaignCompletion(tx, { organizationId: submission.organizationId, shortCode });
 }
 
 // ---------------------------------------------------------------------------------------------

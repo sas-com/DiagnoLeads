@@ -5,7 +5,9 @@
  * A scan keeps the campaign, its organization, the kind of device and the day in Japan, nothing
  * else (decision 2026-10-23-site-visit-measurement, as for the page views): no IP address or hash
  * of it, no User-Agent, no location and no time of day, so a scan cannot be matched with the
- * answer of the diagnosis sent the same minute. The columns qr_scans has for them stay empty.
+ * answer of the diagnosis sent the same minute. The columns qr_scans has for them stay empty, and
+ * so do converted and lead_id: a lead made from a scan is counted on the campaign by the short
+ * code the answer carries (completion_count, #700), never linked to a scan row.
  */
 import type { db as defaultDb } from '@/lib/db/client';
 import { qrCampaigns, qrScans } from '@/lib/db/schema';
@@ -62,22 +64,37 @@ export async function recordQrScan(
   return rows.length > 0;
 }
 
+/**
+ * The share of a campaign's scans that became leads, in percent with two decimals: both counts
+ * from the campaign row (#700), completion_count (the leads the diagnoses counted by the short
+ * code) over scan_count (the scans the entry recorded), so the total and the rate never come
+ * from different places. 0 for a campaign without scans. Can pass 100: a lead counts by the code
+ * in the address of the diagnosis, also when that scan was not recorded (past the daily cap) or
+ * the address was passed on
+ */
+export function campaignConversionRate(campaign: {
+  scanCount: number;
+  completionCount: number;
+}): number {
+  const { scanCount, completionCount } = campaign;
+  return scanCount > 0 ? Math.round((completionCount / scanCount) * 10_000) / 100 : 0;
+}
+
 export interface CampaignScanStats {
   /** Scans per kind of device; 'unknown' for rows without one */
   deviceBreakdown: Record<string, number>;
-  /** Share of the recorded scans that became a lead, in percent with two decimals */
-  conversionRate: number;
   /**
    * The latest scans, without the columns that could hold who scanned. scannedOn is the day in
    * Japan ('YYYY-MM-DD'): a scan keeps no time of day, and the column has no time zone, so it is
    * never handed out as a time
    */
-  recentScans: { id: string; deviceType: string | null; scannedOn: string; converted: boolean }[];
+  recentScans: { id: string; deviceType: string | null; scannedOn: string }[];
 }
 
 /**
  * The recorded scans of one campaign of the organization, counted in the database: the scans of
- * a campaign are never all read
+ * a campaign are never all read. How many became leads is not a property of a scan (#700): see
+ * campaignConversionRate
  */
 export async function campaignScanStats(
   db: Executor,
@@ -88,11 +105,7 @@ export async function campaignScanStats(
     eq(qrScans.campaignId, campaignId)
   );
   const devices = await db
-    .select({
-      deviceType: qrScans.deviceType,
-      scans: count(),
-      converted: sql<number>`count(*) filter (where ${qrScans.converted})`.mapWith(Number),
-    })
+    .select({ deviceType: qrScans.deviceType, scans: count() })
     .from(qrScans)
     .where(ofCampaign)
     .groupBy(qrScans.deviceType);
@@ -101,7 +114,6 @@ export async function campaignScanStats(
       id: qrScans.id,
       deviceType: qrScans.deviceType,
       scannedOn: sql<string>`to_char(${qrScans.scannedAt}, 'YYYY-MM-DD')`,
-      converted: qrScans.converted,
     })
     .from(qrScans)
     .where(ofCampaign)
@@ -109,14 +121,9 @@ export async function campaignScanStats(
     .limit(RECENT_SCANS);
 
   const deviceBreakdown: Record<string, number> = {};
-  let scans = 0;
-  let converted = 0;
   for (const row of devices) {
     const type = row.deviceType || 'unknown';
     deviceBreakdown[type] = (deviceBreakdown[type] ?? 0) + row.scans;
-    scans += row.scans;
-    converted += row.converted;
   }
-  const conversionRate = scans > 0 ? Math.round((converted / scans) * 10_000) / 100 : 0;
-  return { deviceBreakdown, conversionRate, recentScans };
+  return { deviceBreakdown, recentScans };
 }

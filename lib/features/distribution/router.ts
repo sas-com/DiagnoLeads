@@ -11,7 +11,7 @@ import {
   generateQRCode,
   generateShortCode,
 } from './qr-code';
-import { campaignScanStats } from './scans';
+import { campaignConversionRate, campaignScanStats } from './scans';
 import { destinationsOfCampaigns } from './short-code-entry';
 import { createQRCampaignSchema } from './types';
 
@@ -309,7 +309,9 @@ export const distributionRouter = router({
 
   /**
    * Scan statistics of a campaign (#41): the scans the /q/ entry recorded. The total is the
-   * campaign's scan_count, which the entry counts in the same statement as each qr_scans row
+   * campaign's scan_count, which the entry counts in the same statement as each qr_scans row.
+   * The leads and the rate come from the same row (#700): completion_count, which a submission
+   * that creates a lead counts by the short code its answer carries, over scan_count
    */
   getCampaignStats: campaignViewProcedure
     .input(z.object({ campaignId: z.string().uuid() }))
@@ -333,6 +335,7 @@ export const distributionRouter = router({
       return {
         totalScans: campaign.scanCount,
         totalConversions: campaign.completionCount,
+        conversionRate: campaignConversionRate(campaign),
         ...stats,
       };
     }),
