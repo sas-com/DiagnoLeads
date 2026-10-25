@@ -58,6 +58,8 @@ Issue → 決定を読む → ブランチ → 実装 → 速い検証 → 全�
   - クラウドでは claude-code-remote の `list_sessions`・`list_events` で読み、`send_message` で自分の範囲（Issue・ブランチ・触るファイル）を知らせる
   - 着手する Issue は最新のコメントまで読む。担当の決定（オーナーの判断・ほかのセッションの「着手しました」）が書かれていれば従う。その Issue を参照する open な PR も探す（`search_pull_requests` で `repo:yusuke-kurosawa/DiagnoLeads <番号>`）
   - 着手の連絡（`send_message`・Issue のコメント）に、この2つ（最新のコメントと参照する PR）を確かめたことを書く
+  - PR を作る（push する）直前にも、その Issue を参照する open な PR と、着手のあとにマージされた PR を探し直す（着手から PR までの間に、ほかのセッションが同じ項目を出していることがある）
+  - 項目が複数ある Issue は、着手する項目を Issue のコメントか着手の連絡に書く（ほかのセッションが重複に気づけるように）
 - ほかのセッションが担当しているファイルは編集しない。変えてほしいことは `send_message` か Issue で頼む
 - 衝突しやすいファイルは、触る直前に最新の main を取り込む：`locales/*/common.json`、`lib/db/schema.ts` と `drizzle/`（マイグレーションがぶつかったら、番号を付け替えずに作り直す。手順は `.claude/rules/db-schema.md`）、`server/routers/_app.ts`、`components/features/leads/detail/lead-detail-view.tsx`、`package.json`
 - 順番にマージする必要がある PR は、本文に関係する PR とマージの順番を書く
