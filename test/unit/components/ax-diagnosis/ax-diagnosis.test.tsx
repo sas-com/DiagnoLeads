@@ -850,6 +850,35 @@ describe('AxDiagnosisResult', () => {
       expect(screen.getByTestId('ax-result-checkpoints')).toHaveTextContent('ブラウザから使えるWebシステムにし');
     });
 
+    it('names the consultation once on an Access result with many unknowns (#674)', () => {
+      const answers = { access_tools: 'unknown', access_screens_forms: 'unknown' };
+      renderAccess(answers, { result: { ...accessResult(answers), needsHearing: true } });
+      expect(screen.getByTestId('ax-result-unknowns')).toHaveTextContent(
+        '30分のオンライン相談で、調べ方からご案内することもできます。'
+      );
+      expect(screen.getByText(/30分のオンライン相談で現状を伺うと/)).toBeInTheDocument();
+      expect(screen.queryByText(/個別相談/)).not.toBeInTheDocument();
+    });
+
+    it('narrows what to replace, not what to migrate, on the replace path (#674)', () => {
+      // Many tools lead to the web path by default; an organization's rules can still replace
+      const answers = { access_features: ['none'], access_screens_forms: 'lt20' };
+      const replace = accessResult(answers);
+      renderAccess(answers, {
+        result: { ...replace, checkpoints: ['access_replace_fit', 'access_inventory'] },
+      });
+      expect(screen.getByTestId('ax-result-access-path')).toHaveAttribute('data-path', 'replace');
+      const checkpoints = screen.getByTestId('ax-result-checkpoints');
+      expect(checkpoints).toHaveTextContent('置き換えの対象を絞ります');
+      expect(checkpoints).not.toHaveTextContent('移行の対象');
+      cleanup();
+
+      // The web path still narrows what to migrate
+      renderAccess({ access_challenges: ['remote'], access_tools: '21_50' });
+      expect(screen.getByTestId('ax-result-access-path')).toHaveAttribute('data-path', 'web');
+      expect(screen.getByTestId('ax-result-checkpoints')).toHaveTextContent('移行の対象を絞ります');
+    });
+
     it.each([
       ['fix', {}, 'Microsoft Accessを直して使い続けるときに確認すること'],
       ['web', { access_challenges: ['remote'] }, 'Microsoft AccessからWebシステムへ移行するときに確認すること'],
@@ -969,6 +998,8 @@ describe('AxDiagnosisResult', () => {
     renderResult({ answers: { ...as400Answers, integrations: 'unknown', as400_languages: ['unknown'] } });
     const unknowns = screen.getByTestId('ax-result-unknowns');
     expect(unknowns).toHaveTextContent('社内で確認すると、結果の精度が上がる項目');
+    // Only Access names its 30-minute online consultation (#674)
+    expect(unknowns).toHaveTextContent('個別相談で、調べ方からご案内することもできます。');
     expect(within(unknowns).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
       '他のシステムや取引先とのデータのやり取りは、いくつありますか？',
       'どんな言語・方法で作られていますか？',
