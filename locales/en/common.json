@@ -343,6 +343,7 @@
       "phone": "Phone",
       "consultation": "I would like a free consultation about the result",
       "consultationHint": "We will contact you. Enter your phone number if you prefer a call.",
+      "accessConsultation": "I would like a free 30-minute online consultation about the result",
       "consent": "I agree to the handling of personal information",
       "consentAgain": "Your contact details from the previous diagnosis are used. Please check the consent to the handling of personal information again.",
       "consentNotice": "Your information is used only to follow up on your result and to contact you about AX Migration.",
@@ -586,7 +587,7 @@
         "items": {
           "inventory": {
             "title": "Inventory",
-            "body": "In a 30-minute online consultation, we ask about the number of tools and how they are used. Where needed, we take the files and check what is in them."
+            "body": "In a 30-minute online consultation, we ask about the number of tools and how they are used. Where needed, we take the files and check what is in them. If checking the files costs anything, we tell you beforehand."
           },
           "decide": {
             "title": "Deciding the approach",
@@ -612,6 +613,30 @@
       },
       "accessMeetingDuration": "About 30 minutes (online)",
       "accessDisclaimer": "This result is an estimate based on your answers. We tell you the exact approach, schedule and cost after checking the contents of the tool.",
+      "accessCta": {
+        "hearing": {
+          "title": "Shall we check the unknown items together?",
+          "lead": "We can check the items you did not know together in a 30-minute online consultation (and show you how to find them)."
+        },
+        "urgent": {
+          "title": "Shall we plan the steps to the deadline together?",
+          "lead": "A deadline is close. Shall we plan the steps in a 30-minute online consultation?"
+        },
+        "overdue": {
+          "title": "Shall we sort out the order of the switch together?",
+          "lead": "The support or maintenance has already ended. Shall we check the order of the switch in a 30-minute online consultation?"
+        },
+        "consultation": {
+          "title": "We explain your result and how to proceed",
+          "lead": "We explain your result and how to proceed in a 30-minute online consultation."
+        },
+        "information": {
+          "title": "Why not start by gathering information?",
+          "lead": "Feel free to ask even if you are only gathering information."
+        },
+        "button": "Request a free 30-minute online consultation",
+        "accepted": "Your request for a 30-minute online consultation has been received"
+      },
       "stepLabel": "STEP {number}",
       "title": "Your result",
       "subtitle": "An estimate based on the answers from {company}",
@@ -3199,7 +3224,7 @@
         "inventory": {
           "label": "STEP 1",
           "title": "Inventory",
-          "body": "In a 30-minute online consultation, we ask about the number of tools and how they are used. Where needed, we take the files and check the screens and reports, the VBA, and what they connect to."
+          "body": "In a 30-minute online consultation, we ask about the number of tools and how they are used. Where needed, we take the files and check the screens and reports, the VBA, and what they connect to. If checking the files costs anything, we tell you beforehand."
         },
         "decide": {
           "label": "STEP 2",
