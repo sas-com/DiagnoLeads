@@ -3,8 +3,9 @@
  * (revokeOtherSessions: true) and this tab stays signed in. The real auth client runs against a
  * stubbed network: better-auth answers the change with a new session cookie for this browser,
  * and the client reads the session again, so the page keeps the user and holds the new session.
- * What the server does with the sessions is checked on PostgreSQL in
- * test/unit/integration/password-change-sessions.db.test.ts.
+ * A failed change keeps the form and the session, and only better-auth's INVALID_PASSWORD code
+ * says the current password is wrong. What the server does with the sessions is checked on
+ * PostgreSQL in test/unit/integration/password-change-sessions.db.test.ts.
  */
 import SettingsPage from '@/app/[locale]/(dashboard)/settings/page';
 import { authClient } from '@/lib/auth/client';
@@ -110,10 +111,26 @@ const renderPage = () =>
     </NextIntlClientProvider>
   );
 
-/** Renders the page and waits until it shows the signed-in user */
+const sessionStore = authClient.$store.atoms.session;
+
+/** Paths requested after the password change was sent */
+function pathsAfterChange() {
+  const changedAt = network.state.requests.findIndex(
+    (request) => request.path === '/api/auth/change-password'
+  );
+  return network.state.requests.slice(changedAt + 1).map((request) => request.path);
+}
+
+/** Renders the page and waits until it shows the user, read from the stub in this test */
 async function renderSignedIn() {
   renderPage();
   expect(await screen.findByDisplayValue(network.user.name)).toBeInTheDocument();
+  await waitFor(() =>
+    expect(sessionStore.get()).toMatchObject({
+      isRefetching: false,
+      data: { session: { id: 'session-before' } },
+    })
+  );
 }
 
 /** Fills the password form and sends it */
@@ -133,6 +150,11 @@ beforeEach(() => {
   network.state.requests = [];
   network.state.sessionId = 'session-before';
   network.state.changePassword = { status: 200, body: {} };
+  // Each test starts like a fresh page load. The session store outlives a test (nanostores keeps
+  // it mounted for a second after the page unmounts, and its value stays), so empty it and mark it
+  // stale: the page then reads the session from the stub, never the one the last test left
+  sessionStore.set({ ...sessionStore.get(), data: null, isPending: true });
+  authClient.$store.notify('$sessionSignal');
 });
 
 afterAll(() => {
@@ -151,15 +173,8 @@ describe('password change in the personal settings', () => {
       body: { currentPassword: OLD_PASSWORD, newPassword: NEW_PASSWORD, revokeOtherSessions: true },
     });
     // The client reads the session again after the change and now holds the new one
-    await waitFor(() =>
-      expect(authClient.$store.atoms.session.get().data?.session.id).toBe('session-after')
-    );
-    const changedAt = network.state.requests.findIndex(
-      (request) => request.path === '/api/auth/change-password'
-    );
-    expect(network.state.requests.slice(changedAt + 1).map((request) => request.path)).toContain(
-      '/api/auth/get-session'
-    );
+    await waitFor(() => expect(sessionStore.get().data?.session.id).toBe('session-after'));
+    expect(pathsAfterChange()).toContain('/api/auth/get-session');
     // Still the signed-in page: the profile and an emptied password form, no sign-out
     expect(screen.getByDisplayValue(network.user.name)).toBeInTheDocument();
     expect(screen.getByLabelText(p.currentPasswordLabel)).toHaveValue('');
@@ -176,12 +191,29 @@ describe('password change in the personal settings', () => {
       body: { code: 'INVALID_PASSWORD', message: 'Invalid password' },
     };
     await renderSignedIn();
-    const sessionBefore = authClient.$store.atoms.session.get().data?.session.id;
     changePassword('WrongPassword789');
 
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith(p.currentPasswordIncorrect));
     expect(mocks.toastSuccess).not.toHaveBeenCalled();
     expect(screen.getByLabelText(p.currentPasswordLabel)).toHaveValue('WrongPassword789');
-    expect(authClient.$store.atoms.session.get().data?.session.id).toBe(sessionBefore);
+    // After a success the client reloads the session from a 10 ms timer (better-auth
+    // client/proxy.mjs); wait past it, then check that a failed change reloaded nothing
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(pathsAfterChange()).not.toContain('/api/auth/get-session');
+    expect(sessionStore.get().data?.session.id).toBe('session-before');
+  });
+
+  it('does not blame the current password for other failures that say "invalid"', async () => {
+    // e.g. a preview domain missing from trustedOrigins: better-auth answers 403 INVALID_ORIGIN
+    network.state.changePassword = {
+      status: 403,
+      body: { code: 'INVALID_ORIGIN', message: 'Invalid origin' },
+    };
+    await renderSignedIn();
+    changePassword(OLD_PASSWORD);
+
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith(p.passwordChangeError));
+    expect(mocks.toastError).not.toHaveBeenCalledWith(p.currentPasswordIncorrect);
+    expect(mocks.toastSuccess).not.toHaveBeenCalled();
   });
 });
