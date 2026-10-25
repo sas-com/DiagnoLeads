@@ -3,14 +3,11 @@
  * useRouter keeps one per page, and still starts each test with clean mocks (#636).
  */
 import { useRouter } from 'next/navigation';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 
 describe('default useRouter mock (test/setup.ts)', () => {
   it('returns the same router and the same functions on every call', () => {
     const router = useRouter();
-    vi.mocked(router.back).mockImplementation(() => {
-      throw new Error('left over from the previous test');
-    });
 
     router.push('/ja/leads');
 
@@ -19,11 +16,18 @@ describe('default useRouter mock (test/setup.ts)', () => {
     expect(useRouter().push).toHaveBeenCalledWith('/ja/leads');
   });
 
-  // Runs after the test above, which left a call and an implementation on the shared router
-  it('drops the calls and implementations of the previous test', () => {
+  it('drops the calls and implementations a test left once the test ends', () => {
     const router = useRouter();
+    router.push('/ja/leads');
+    vi.mocked(router.back).mockImplementation(() => {
+      throw new Error('left over from this test');
+    });
 
-    expect(router.push).not.toHaveBeenCalled();
-    expect(() => router.back()).not.toThrow();
+    // Vitest runs onTestFinished after the afterEach hooks, so this checks the router as the
+    // next test gets it, whatever order the tests run in
+    onTestFinished(() => {
+      expect(router.push).not.toHaveBeenCalled();
+      expect(() => router.back()).not.toThrow();
+    });
   });
 });
