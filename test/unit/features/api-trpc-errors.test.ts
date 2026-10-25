@@ -23,10 +23,15 @@ vi.mock('next/server', async (importOriginal) => ({
   },
 }));
 
+/** Runs the work kept with after(), as Next.js does once the response is back */
+async function runAfterTasks() {
+  for (const task of afterTasks.splice(0)) await task();
+}
+
 /** health.testMode is public; ai.generateSummary needs a signed-in member */
 async function call(path: string) {
   const res = await GET(new Request(`http://localhost/api/trpc/${path}`));
-  for (const task of afterTasks.splice(0)) await task();
+  await runAfterTasks();
   return res;
 }
 
@@ -43,12 +48,12 @@ describe('tRPC handler: errors', () => {
     vi.unstubAllEnvs();
   });
 
-  it('logs an unexpected failure with its details and reports it in production', async () => {
+  it('logs an unexpected failure with its details and reports it in production after the response', async () => {
     vi.stubEnv('NODE_ENV', 'production');
     const failure = new Error('connection terminated');
     createContext.mockRejectedValue(failure);
 
-    const res = await call('health.testMode');
+    const res = await GET(new Request('http://localhost/api/trpc/health.testMode'));
 
     expect(res.status).toBe(500);
     expect(errorSpy).toHaveBeenCalledWith(
@@ -56,7 +61,39 @@ describe('tRPC handler: errors', () => {
       'connection terminated',
       expect.objectContaining({ name: 'Error', stack: expect.any(String) })
     );
+    // Not while the response waits: only once it is back
+    expect(reportServerError).not.toHaveBeenCalled();
+    await runAfterTasks();
     expect(reportServerError).toHaveBeenCalledWith('trpc/health.testMode', failure);
+  });
+
+  it('never logs or reports the input of a call that failed', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const token = 'invitation-token-that-stays-out-of-logs-0123456789';
+    const failure = new Error('connection terminated');
+    createContext.mockResolvedValue({
+      db: {
+        select: () => {
+          throw failure;
+        },
+      },
+      session: null,
+      user: null,
+    });
+
+    // invitations.preview is public and reads the database with its input
+    const input = encodeURIComponent(JSON.stringify({ json: { token } }));
+    const res = await call(`invitations.preview?input=${input}`);
+
+    expect(res.status).toBe(500);
+    expect(errorSpy).toHaveBeenCalledWith(
+      'tRPC failed on invitations.preview:',
+      'connection terminated',
+      expect.objectContaining({ name: 'Error' })
+    );
+    expect(reportServerError).toHaveBeenCalledWith('trpc/invitations.preview', failure);
+    expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(token);
+    expect(JSON.stringify(reportServerError.mock.calls)).not.toContain(token);
   });
 
   it('logs an unexpected failure but does not page anyone outside production', async () => {

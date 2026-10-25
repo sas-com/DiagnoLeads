@@ -82,19 +82,25 @@ describe('GET /api/v2/leads', () => {
     expect(query).toMatchObject({ limit: 20, offset: 0 });
   });
 
-  it('never reads the columns that stay inside DiagnoLeads', async () => {
+  it('reads only the columns the API hands out, never those that stay inside DiagnoLeads', async () => {
     await list();
 
-    const { columns } = db.query.leads.findMany.mock.calls[0][0];
-    for (const hidden of [
-      'embedding',
-      'searchVector',
-      'assigneeUserId',
-      'acquisitionCost',
-      'agencyName',
-    ]) {
-      expect(columns).not.toHaveProperty(hidden);
-    }
+    // Listed in full, so that handing out one more column (internal notes, deals, embeddings)
+    // has to change this test
+    expect(db.query.leads.findMany.mock.calls[0][0].columns).toEqual({
+      id: true,
+      email: true,
+      name: true,
+      company: true,
+      phone: true,
+      status: true,
+      score: true,
+      source: true,
+      responses: true,
+      customFields: true,
+      createdAt: true,
+      updatedAt: true,
+    });
   });
 
   it('applies every filter on top of the organization, accepting a legacy status', async () => {
@@ -273,7 +279,10 @@ describe('POST /api/v2/leads', () => {
     const res = await create({ email: 'new@example.com' });
 
     expect(res.status).toBe(500);
-    expect((await res.json()).message).toBe('Failed to create lead');
+    expect(await res.json()).toEqual({
+      error: 'Internal Server Error',
+      message: 'Failed to create lead',
+    });
     expect(emitLeadEvents).not.toHaveBeenCalled();
     errorSpy.mockRestore();
   });

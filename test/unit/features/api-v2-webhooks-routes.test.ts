@@ -48,6 +48,7 @@ const jsonRequest = (method: string, path: string, body?: unknown) =>
   });
 
 const params = (id: string) => ({ params: Promise.resolve({ id }) });
+const WEBHOOK_IN_ORG = '("webhooks"."id" = $1 and "webhooks"."organization_id" = $2)';
 
 const STORED = {
   id: WEBHOOK_ID,
@@ -222,7 +223,7 @@ describe('GET /api/v2/webhooks/[id]', () => {
 
     expect(res.status).toBe(404);
     const where = toQuery(db.query.webhooks.findFirst.mock.calls[0][0].where);
-    expect(where.sql).toBe('("webhooks"."id" = $1 and "webhooks"."organization_id" = $2)');
+    expect(where.sql).toBe(WEBHOOK_IN_ORG);
     expect(where.params).toEqual([WEBHOOK_ID, ORG_ID]);
     expect(db.query.webhookDeliveries.findMany).not.toHaveBeenCalled();
   });
@@ -241,14 +242,17 @@ describe('GET /api/v2/webhooks/[id]', () => {
     expect(toQuery(deliveryQuery.where).params).toEqual([WEBHOOK_ID]);
   });
 
-  it('answers 500 when the database fails', async () => {
+  it('answers 500 without details when the database fails', async () => {
     db.query.webhooks.findFirst.mockRejectedValue(new Error('db down'));
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const res = await get();
 
     expect(res.status).toBe(500);
-    expect((await res.json()).message).toBe('Failed to fetch webhook');
+    expect(await res.json()).toEqual({
+      error: 'Internal Server Error',
+      message: 'Failed to fetch webhook',
+    });
     errorSpy.mockRestore();
   });
 });
@@ -273,16 +277,15 @@ describe('PATCH /api/v2/webhooks/[id]', () => {
     expect(db.update).not.toHaveBeenCalled();
   });
 
-  it("answers 404 for another organization's webhook and writes nothing", async () => {
+  it("answers 404 for another organization's webhook, looked up within the organization only, and writes nothing", async () => {
     db.query.webhooks.findFirst.mockResolvedValue(undefined);
 
     const res = await patch({ name: 'Renamed' });
 
     expect(res.status).toBe(404);
-    expect(toQuery(db.query.webhooks.findFirst.mock.calls[0][0].where).params).toEqual([
-      WEBHOOK_ID,
-      ORG_ID,
-    ]);
+    const where = toQuery(db.query.webhooks.findFirst.mock.calls[0][0].where);
+    expect(where.sql).toBe(WEBHOOK_IN_ORG);
+    expect(where.params).toEqual([WEBHOOK_ID, ORG_ID]);
     expect(db.update).not.toHaveBeenCalled();
   });
 
@@ -297,7 +300,7 @@ describe('PATCH /api/v2/webhooks/[id]', () => {
     const set = chain.set.mock.calls[0][0];
     expect(set).toEqual({ name: 'Renamed', status: 'inactive', updatedAt: expect.any(Date) });
     const where = toQuery(chain.where.mock.calls[0][0]);
-    expect(where.sql).toBe('("webhooks"."id" = $1 and "webhooks"."organization_id" = $2)');
+    expect(where.sql).toBe(WEBHOOK_IN_ORG);
     expect(where.params).toEqual([WEBHOOK_ID, ORG_ID]);
   });
 
@@ -343,14 +346,17 @@ describe('PATCH /api/v2/webhooks/[id]', () => {
     expect(db.update).not.toHaveBeenCalled();
   });
 
-  it('answers 500 when the update fails', async () => {
+  it('answers 500 without details when the update fails', async () => {
     chain.returning.mockRejectedValue(new Error('db down'));
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const res = await patch({ name: 'Renamed' });
 
     expect(res.status).toBe(500);
-    expect((await res.json()).message).toBe('Failed to update webhook');
+    expect(await res.json()).toEqual({
+      error: 'Internal Server Error',
+      message: 'Failed to update webhook',
+    });
     errorSpy.mockRestore();
   });
 });
@@ -375,10 +381,13 @@ describe('DELETE /api/v2/webhooks/[id]', () => {
     expect(db.delete).not.toHaveBeenCalled();
   });
 
-  it("answers 404 for another organization's webhook and deletes nothing", async () => {
+  it("answers 404 for another organization's webhook, looked up within the organization only, and deletes nothing", async () => {
     db.query.webhooks.findFirst.mockResolvedValue(undefined);
 
     expect((await remove()).status).toBe(404);
+    const where = toQuery(db.query.webhooks.findFirst.mock.calls[0][0].where);
+    expect(where.sql).toBe(WEBHOOK_IN_ORG);
+    expect(where.params).toEqual([WEBHOOK_ID, ORG_ID]);
     expect(db.delete).not.toHaveBeenCalled();
   });
 
@@ -388,18 +397,21 @@ describe('DELETE /api/v2/webhooks/[id]', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ message: 'Webhook deleted successfully' });
     const where = toQuery(chain.where.mock.calls[0][0]);
-    expect(where.sql).toBe('("webhooks"."id" = $1 and "webhooks"."organization_id" = $2)');
+    expect(where.sql).toBe(WEBHOOK_IN_ORG);
     expect(where.params).toEqual([WEBHOOK_ID, ORG_ID]);
   });
 
-  it('answers 500 when the delete fails', async () => {
+  it('answers 500 without details when the delete fails', async () => {
     chain.where.mockRejectedValue(new Error('db down'));
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const res = await remove();
 
     expect(res.status).toBe(500);
-    expect((await res.json()).message).toBe('Failed to delete webhook');
+    expect(await res.json()).toEqual({
+      error: 'Internal Server Error',
+      message: 'Failed to delete webhook',
+    });
     errorSpy.mockRestore();
   });
 });

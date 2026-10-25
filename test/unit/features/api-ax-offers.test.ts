@@ -39,9 +39,14 @@ const request = (body: unknown, headers: Record<string, string> = {}) =>
     headers: { 'content-type': 'application/json', ...headers },
   });
 
+/** Runs the work kept with after(), as Next.js does once the response is back */
+async function runAfterTasks() {
+  for (const task of afterTasks.splice(0)) await task();
+}
+
 async function post(req: NextRequest) {
   const res = await POST(req);
-  for (const task of afterTasks.splice(0)) await task();
+  await runAfterTasks();
   return res;
 }
 
@@ -155,15 +160,29 @@ describe('POST /api/diagnostics/ax-migration/offers', () => {
     );
   });
 
+  it('counts an IPv6 address by its /64, so rotating within it does not reset the count', async () => {
+    vi.stubEnv('VERCEL', '1');
+
+    await post(request(BODY, { 'x-real-ip': '2001:db8:abcd:12:aaaa:bbbb:cccc:dddd' }));
+
+    expect(consumeRateLimit).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ name: 'ax-offers-ip' }),
+      '2001:0db8:abcd:0012::/64'
+    );
+  });
+
   it('answers 429 with Retry-After over the per-address limit and reports the rejection', async () => {
     vi.stubEnv('VERCEL', '1');
     consumeRateLimit.mockResolvedValue({ allowed: false, count: 31, retryAfterSeconds: 120 });
 
-    const res = await post(request(BODY, { 'x-real-ip': '203.0.113.5' }));
+    const res = await POST(request(BODY, { 'x-real-ip': '203.0.113.5' }));
 
     expect(res.status).toBe(429);
     expect(res.headers.get('Retry-After')).toBe('120');
     expect(requestInfoOffer).not.toHaveBeenCalled();
+    expect(reportRejectedRequest).not.toHaveBeenCalled();
+    await runAfterTasks();
     expect(reportRejectedRequest).toHaveBeenCalledWith('ax-diagnosis/offers', 'rate_limited');
   });
 
@@ -181,10 +200,13 @@ describe('POST /api/diagnostics/ax-migration/offers', () => {
     requestInfoOffer.mockRejectedValue(error);
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    const res = await post(request(BODY));
+    const res = await POST(request(BODY));
 
     expect(res.status).toBe(500);
     expect(await res.json()).toEqual({ error: 'Internal server error' });
+    // Not while the response waits: only once it is back
+    expect(reportServerError).not.toHaveBeenCalled();
+    await runAfterTasks();
     expect(reportServerError).toHaveBeenCalledWith('ax-diagnosis/offers', error);
     errorSpy.mockRestore();
   });

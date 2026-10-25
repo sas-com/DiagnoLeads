@@ -190,7 +190,10 @@ describe('PATCH /api/v2/leads/[id] guards', () => {
     const res = await patchId(LEAD_ID, { name: 'A' });
 
     expect(res.status).toBe(500);
-    expect((await res.json()).message).toBe('Failed to update lead');
+    expect(await res.json()).toEqual({
+      error: 'Internal Server Error',
+      message: 'Failed to update lead',
+    });
     expect(emitLeadEvents).not.toHaveBeenCalled();
     errorSpy.mockRestore();
   });
@@ -231,6 +234,7 @@ describe('GET /api/v2/leads/[id]', () => {
     expect(where.params).toEqual([LEAD_ID, ORG_ID]);
   });
 
+  // Which lead columns this returns (all of them, unlike the list) is left to #667
   it('returns the lead with its tags and latest comments, showing only the commenter name and email', async () => {
     const lead = { id: LEAD_ID, leadTags: [], comments: [] };
     db.query.leads.findFirst.mockResolvedValue(lead);
@@ -287,10 +291,13 @@ describe('DELETE /api/v2/leads/[id]', () => {
     expect(db.delete).not.toHaveBeenCalled();
   });
 
-  it("answers 404 for another organization's lead and deletes nothing", async () => {
+  it("answers 404 for another organization's lead, looked up within the organization only, and deletes nothing", async () => {
     db.query.leads.findFirst.mockResolvedValue(undefined);
 
     expect((await remove()).status).toBe(404);
+    const where = toQuery(db.query.leads.findFirst.mock.calls[0][0].where);
+    expect(where.sql).toBe(LEAD_IN_ORG);
+    expect(where.params).toEqual([LEAD_ID, ORG_ID]);
     expect(db.delete).not.toHaveBeenCalled();
     expect(emitLeadEvents).not.toHaveBeenCalled();
   });
@@ -322,7 +329,10 @@ describe('DELETE /api/v2/leads/[id]', () => {
     const res = await remove();
 
     expect(res.status).toBe(500);
-    expect((await res.json()).message).toBe('Failed to delete lead');
+    expect(await res.json()).toEqual({
+      error: 'Internal Server Error',
+      message: 'Failed to delete lead',
+    });
     errorSpy.mockRestore();
   });
 });
