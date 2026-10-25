@@ -1,4 +1,5 @@
 import { LiveRegion, useAnnouncer } from '@/components/features/diagnosis-runner/announcer';
+import { ConsultationRequest } from '@/components/features/diagnosis-runner/consultation-request';
 import { focusFirstError, scrollToStart } from '@/components/features/diagnosis-runner/focus';
 import { usePrintTitle } from '@/components/features/diagnosis-runner/print';
 import { QuestionField } from '@/components/features/diagnosis-runner/question-field';
@@ -25,6 +26,10 @@ const messages = {
     next: 'Next',
     submit: 'Send',
     submitting: 'Sending',
+    contact: {
+      consultation: 'I would like a consultation',
+      consultationHint: 'We will contact you.',
+    },
   },
 };
 
@@ -126,6 +131,21 @@ describe('QuestionField', () => {
         </NextIntlClientProvider>
       )
     ).toThrow(/DiagnosisRunnerProvider/);
+  });
+});
+
+describe('ConsultationRequest', () => {
+  it('names the usual consultation, or the one the diagnosis passes (#538)', () => {
+    const props = { checked: false, phone: '', onChange: vi.fn(), onPhone: vi.fn() };
+    const { unmount } = render(wrap(<ConsultationRequest {...props} />));
+    expect(screen.getByRole('checkbox', { name: /I would like a consultation/ })).toBeInTheDocument();
+    unmount();
+
+    render(wrap(<ConsultationRequest {...props} label="I would like a 30-minute online consultation" />));
+    expect(
+      screen.getByRole('checkbox', { name: /I would like a 30-minute online consultation/ })
+    ).toBeInTheDocument();
+    expect(screen.queryByText('I would like a consultation')).not.toBeInTheDocument();
   });
 });
 

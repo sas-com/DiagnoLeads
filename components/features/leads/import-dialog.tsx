@@ -45,6 +45,7 @@ type ImportStep = 'upload' | 'preview' | 'importing';
 export function ImportDialog({ open, onOpenChange, organizationId, onSuccess }: ImportDialogProps) {
   const t = useTranslations('leads.import');
   const tCommon = useTranslations('common');
+  const tValidation = useTranslations('validation');
 
   const [step, setStep] = useState<ImportStep>('upload');
   const [fileName, setFileName] = useState<string>('');
@@ -278,7 +279,16 @@ export function ImportDialog({ open, onOpenChange, organizationId, onSuccess }: 
                           ) : (
                             <div className="flex items-center gap-1">
                               <AlertCircle className="h-4 w-4 text-red-500" />
-                              <span className="text-xs text-red-600">{result.error}</span>
+                              {/* A value over its limit (#575): the file's column, and the
+                                  limit in the page's language */}
+                              {result.tooLong ? (
+                                <span className="text-xs text-red-600">
+                                  <span className="font-medium">{result.tooLong.column}</span>{' '}
+                                  {tValidation('maxLength', { max: result.tooLong.max })}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-red-600">{result.error}</span>
+                              )}
                             </div>
                           )}
                         </TableCell>
