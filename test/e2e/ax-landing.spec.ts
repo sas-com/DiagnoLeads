@@ -123,16 +123,17 @@ async function expectDiagnosisOnFirstScreen(browser: Browser, path: string) {
   await expect(heroButton).not.toBeInViewport({ ratio: 0.75 });
   await expect(barButton).toBeInViewport();
 
-  // A 10px strip of the hero button at the bottom edge cannot be read: the bar stays
+  // Once the hero button is on screen, the bar steps aside
+  await heroButton.scrollIntoViewIfNeeded();
+  await expect(bar).toHaveAttribute('aria-hidden', 'true');
+
+  // Back to a 10px strip of the hero button at the bottom edge: it cannot be read, so the bar
+  // comes back (waited for from hidden, so a bar that only stays put does not pass)
   await heroButton.evaluate((element) => {
     const top = element.getBoundingClientRect().top + window.scrollY;
     window.scrollTo(0, top - window.innerHeight + 10);
   });
   await expect(barButton).toBeInViewport();
-
-  // Once the hero button is on screen, the bar steps aside
-  await heroButton.scrollIntoViewIfNeeded();
-  await expect(bar).toHaveAttribute('aria-hidden', 'true');
   await context.close();
 }
 
