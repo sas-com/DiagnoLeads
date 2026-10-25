@@ -406,6 +406,30 @@ describe('rules for feature modules', () => {
     expect(outcome.added).toEqual(['forecast -> lib/features/leads/audit.ts']);
   });
 
+  it('ax-boundary: lists who reads the AX diagnosis, types included, but not AX itself or ax-*', () => {
+    const graph = graphOf({}, [
+      ['lib/features/leads/service.ts', 'lib/features/diagnostics/ax-migration/mql.ts'],
+      [
+        'lib/features/leads/api/router.ts',
+        'lib/features/diagnostics/ax-migration/mql.ts',
+        { typeOnly: true },
+      ],
+      ['lib/features/diagnostics/engine.ts', 'lib/features/diagnostics/ax-migration/definition.ts'],
+      [
+        'lib/features/diagnostics/ax-migration/notify.ts',
+        'lib/features/diagnostics/ax-migration/config.ts',
+      ],
+      ['lib/features/ax-site/columns.ts', 'lib/features/diagnostics/ax-migration/definition.ts'],
+      ['components/features/ax-diagnosis/flow.tsx', 'lib/features/diagnostics/ax-migration/mql.ts'],
+      ['lib/features/leads/service.ts', 'lib/features/diagnostics/service.ts'],
+    ]);
+    expect(check('ax-boundary', graph)).toEqual([
+      'lib/features/diagnostics/engine.ts -> lib/features/diagnostics/ax-migration/definition.ts',
+      'lib/features/leads/api/router.ts -> lib/features/diagnostics/ax-migration/mql.ts',
+      'lib/features/leads/service.ts -> lib/features/diagnostics/ax-migration/mql.ts',
+    ]);
+  });
+
   it('features-use-global-db: importing db or the whole module counts, the types do not', () => {
     const graph = graphOf({}, [
       ['lib/features/a/service.ts', 'lib/db/client.ts', { values: ['db'] }],

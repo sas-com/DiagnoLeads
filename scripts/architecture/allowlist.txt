@@ -1,7 +1,22 @@
 # Import boundary violations that existed before the rule (docs/ARCHITECTURE.md).
 # One "<rule> <item>" per line, sorted. Only remove lines: bun run arch:check --update rewrites
 # this file after a change takes debt away. A new line needs a reason in the PR.
-cross-feature-internal act-timing -> lib/features/diagnostics/ax-migration/definition.ts
+ax-boundary lib/features/act-timing/service.ts -> lib/features/diagnostics/ax-migration/lead-submissions.ts
+ax-boundary lib/features/delivery-reviews/service.ts -> lib/features/diagnostics/ax-migration/lead-submissions.ts
+ax-boundary lib/features/delivery-reviews/types/schemas.ts -> lib/features/diagnostics/ax-migration/evaluate.ts
+ax-boundary lib/features/info-offers/service.ts -> lib/features/diagnostics/ax-migration/definition.ts
+ax-boundary lib/features/info-offers/service.ts -> lib/features/diagnostics/ax-migration/submission-service.ts
+ax-boundary lib/features/lead-activity/service.ts -> lib/features/diagnostics/ax-migration/definition.ts
+ax-boundary lib/features/lead-hearings/catalog.ts -> lib/features/diagnostics/ax-migration/definition.ts
+ax-boundary lib/features/lead-hearings/form.ts -> lib/features/diagnostics/ax-migration/definition.ts
+ax-boundary lib/features/lead-hearings/service.ts -> lib/features/diagnostics/ax-migration/definition.ts
+ax-boundary lib/features/lead-prep/service.ts -> lib/features/diagnostics/ax-migration/lead-submissions.ts
+ax-boundary lib/features/leads/api/list-sql.ts -> lib/features/diagnostics/ax-migration/mql.ts
+ax-boundary lib/features/leads/api/router.ts -> lib/features/diagnostics/ax-migration/mql.ts
+ax-boundary lib/features/leads/diagnosis-view.ts -> lib/features/diagnostics/ax-migration/access-path.ts
+ax-boundary lib/features/leads/diagnosis-view.ts -> lib/features/diagnostics/ax-migration/mql.ts
+ax-boundary lib/features/leads/mql-level.ts -> lib/features/diagnostics/ax-migration/mql.ts
+cross-feature-internal act-timing -> lib/features/diagnostics/ax-migration/lead-submissions.ts
 cross-feature-internal agency-links -> lib/features/diagnostics/organization.ts
 cross-feature-internal ai -> lib/features/diagnostics/rate-limit.ts
 cross-feature-internal ai -> lib/features/webhooks/services/lead-events.ts
@@ -12,8 +27,8 @@ cross-feature-internal ax-site -> lib/features/diagnostics/ax-migration/access-s
 cross-feature-internal ax-site -> lib/features/diagnostics/engine.ts
 cross-feature-internal challenge-guide -> lib/features/ax-playbook/access.ts
 cross-feature-internal challenge-guide -> lib/features/leads/diagnosis-view.ts
-cross-feature-internal delivery-reviews -> lib/features/diagnostics/ax-migration/definition.ts
 cross-feature-internal delivery-reviews -> lib/features/diagnostics/ax-migration/evaluate.ts
+cross-feature-internal delivery-reviews -> lib/features/diagnostics/ax-migration/lead-submissions.ts
 cross-feature-internal diagnosis-builder -> lib/features/diagnostics/engine.ts
 cross-feature-internal diagnosis-builder -> lib/features/diagnostics/lead-upsert.ts
 cross-feature-internal diagnosis-builder -> lib/features/diagnostics/rate-limit.ts
@@ -46,7 +61,7 @@ cross-feature-internal lead-hearings -> lib/features/diagnosis-builder/hearing-m
 cross-feature-internal lead-hearings -> lib/features/diagnosis-builder/public-diagnosis.ts
 cross-feature-internal lead-hearings -> lib/features/diagnostics/ax-migration/definition.ts
 cross-feature-internal lead-hearings -> lib/features/prospects/hearing-prefill.ts
-cross-feature-internal lead-prep -> lib/features/diagnostics/ax-migration/definition.ts
+cross-feature-internal lead-prep -> lib/features/diagnostics/ax-migration/lead-submissions.ts
 cross-feature-internal lead-prep -> lib/features/leads/diagnosis-view.ts
 cross-feature-internal leads -> lib/features/analytics/dashboard.ts
 cross-feature-internal leads -> lib/features/diagnostics/ax-migration/access-path.ts

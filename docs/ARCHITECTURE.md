@@ -47,7 +47,8 @@
 | `file-cycles` | ファイル単位の import の循環を作らない | 例外なし |
 | `test-paths-resolve` | テストが import するパスと、`vi.mock`・`vi.doMock`・`vi.unmock`・`vi.doUnmock`・`vi.importActual`・`vi.importMock`（`vitest.mock` などの書き方も含む）に渡すパスが実在する（パッケージ名は見ない。テストの `@payload-config` は vitest の別名どおり `test/mocks/payload-config.ts`）。存在しないパスへの `vi.mock` はエラーにならず、黙って効かなくなる（本物のモジュールが動き、原因の分かりにくい失敗か、副作用を伴う素通りになる）ので、ファイルを消す・移したときに、古いパスを指したまま残ったテストをこの検査が見つける | 例外なし |
 | `features-in-cycles` | 互いに依存し合う機能（間接も含む）を増やさない | 許可リスト 20 |
-| `cross-feature-internal` | 他の機能から読むのは公開面（`types/**`・`types.ts`・`service.ts`。ほかに `email/index.ts`・`respondent-email/index.ts`）だけ。項目は「読む機能 -> 読まれる側のファイル」（42ファイル。#623） | 許可リスト 78 |
+| `cross-feature-internal` | 他の機能から読むのは公開面（`types/**`・`types.ts`・`service.ts`。ほかに `email/index.ts`・`respondent-email/index.ts`）だけ。項目は「読む機能 -> 読まれる側のファイル」（43ファイル。#623） | 許可リスト 78 |
+| `ax-boundary` | AX 診断（`diagnostics/ax-migration/`）を読むのは、AX 診断の中と、AX のための機能（`ax-*`）だけ。型だけの import も数える。項目は「読む側 -> AX のファイル」。リードの最新の AX 回答は `ax-migration/lead-submissions.ts`、営業の手引きは `ax-playbook/service.ts` から読む（#480） | 許可リスト 15 |
 | `features-use-global-db` | 機能のコードはグローバルの `db` を使わず、`ctx.db` か引数の executor を使う（RLS で接続を差し替えるため） | 許可リスト 12 |
 | `feature-index-files` | lib/features に `index.ts`（barrel）を作らない | 許可リスト 18 |
 | `unregistered-routers` | 機能のルーターはすべて `server/routers/_app.ts` に登録する | 許可リスト 2 |
@@ -109,7 +110,7 @@ components/features/<feature>/
 - ワークフローのランナー（#298〜）：`lib/workflow/`（`lib/cron`・`lib/ops` と同じ基盤の層）。機能を import せず、フローの定義は引数で受ける。定義の一覧は定期実行のルートの直下に置く（`docs/WORKFLOW_ENGINE_EVALUATION.md` 7.8）
 - 営業代行の外部アカウント（#276）：役割は `lib/auth/permissions.ts`（CASL）の1か所で決め、各ルーターに `role` の比較を足さない。見せる範囲は各機能の `service.ts` の絞り込みで守る（RLS は #51 で入れる予定）
 - AI の呼び出し（#48）：Anthropic のクライアントとモデル ID は `lib/features/ai/` の1か所に置き、他の機能はその関数を呼ぶ
-- 2つ目の診断：方式の決定（`decisions/2026-10-18-second-diagnosis-timing`）を読んでから。汎用の部品（`diagnostics/` 直下・`diagnosis-builder/`）から `diagnostics/ax-migration/` を新しく読まない
+- 2つ目の診断：ビルダーで作る（`decisions/2026-10-24-diagnosis-shared-rules`）。公開の診断の規則は `diagnostics/service.ts` と `types/` にあり、汎用の部品（`diagnostics/` 直下・`diagnosis-builder/`）は `diagnostics/ax-migration/` を読まない。ほかの機能から AX を新しく読むと `ax-boundary` で落ちる（`decisions/2026-10-25-ax-boundary`）
 
 ## 5. `arch:check` が落ちたときの直し方
 
