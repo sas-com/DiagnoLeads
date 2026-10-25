@@ -3,10 +3,10 @@
  *
  * The lead's fields and diagnosis summaries come from public forms, imports and the API, so they
  * are untrusted. They reach Claude only as JSON inside one <lead_data> block that no value can
- * close (`<` and `>` are written as JSON escapes), the task is written outside the block, and the
- * system prompt (UNTRUSTED_LEAD_DATA_POLICY) tells Claude that the block is data, never
- * instructions. The structured outputs bound what the reply of the scoring and the prediction
- * can be.
+ * close (`<` `>`, the characters that look like them and the line separators are written as JSON
+ * escapes), the task is written outside the block, and the system prompt
+ * (UNTRUSTED_LEAD_DATA_POLICY) tells Claude that the block is data, never instructions. The
+ * structured outputs bound what the reply of the scoring and the prediction can be.
  *
  * The patterns of v1's prompt_sanitizer.py, with Japanese ones added, only flag a value for the
  * logs: a lead is never refused for its text, since a stored lead would then fail every time it
@@ -54,8 +54,13 @@ const JA_END = '(?=$|[\\s、。,.!?:;」』】)\\]])';
 /** The ways of saying "you" that address the reader (not 君, as in 「田中君はこれから」) */
 const JA_YOU = '(?:あなた|貴方|あんた|お前)';
 const JA_FROM_NOW = '(?:今から|いまから|これから|今日から|本日から)';
-/** Spaces within one line */
-const SL = '[^\\S\\n]{0,3}';
+/**
+ * What ends a line: \n and \r, and NEL, U+2028 and U+2029, which the public forms (\p{Cc}\p{Cf})
+ * do not refuse in the company name
+ */
+const LINE_BREAK = '[\\n\\r\\u0085\\u2028\\u2029]';
+/** Spaces within one line (NEL is not a space in \s) */
+const SL = '[^\\S\\n\\r\\u2028\\u2029]{0,3}';
 
 /**
  * Text that looks like an attempt to give Claude instructions. The first ten are v1's
@@ -104,16 +109,18 @@ export const INJECTION_PATTERNS: readonly InjectionPattern[] = [
   {
     id: 'ja-system-role',
     pattern: new RegExp(
-      `(?:^|\\n)${SL}[\\[【<(「]?${SL}システム(?:メッセージ|プロンプト)?${SL}[\\]】>)」]?${SL}:`
+      `(?:^|${LINE_BREAK})${SL}[\\[【<(「]?${SL}システム(?:メッセージ|プロンプト)?${SL}[\\]】>)」]?${SL}:`
     ),
   },
 ];
 
 /**
- * Characters that do not show (zero-width, soft hyphen, bidirectional controls, invisible
- * operators, byte-order mark), which could split a phrase so that no pattern matches it
+ * Characters that do not show, which could split a phrase so that no pattern matches it: the
+ * format characters (zero-width, soft hyphen, bidirectional controls, byte-order mark, the tag
+ * characters U+E0000-E007F of "ASCII smuggling") and the other default-ignorable ones (variation
+ * selectors, the combining grapheme joiner U+034F, the Hangul fillers such as U+3164)
  */
-const INVISIBLE = /[\u00ad\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/g;
+const INVISIBLE = /[\p{Cf}\p{Default_Ignorable_Code_Point}]/gu;
 
 /** The ids of the patterns `text` matches; none for ordinary text */
 export function detectInjection(text: string): string[] {
@@ -168,16 +175,39 @@ export function findInjectionAttempts(data: Record<string, unknown>): InjectionF
 }
 
 /**
- * `data` as indented JSON with `<` and `>` written as the escapes \u003c and \u003e. It parses
- * to the same value, but no value can write a tag, so none can close the block it is put in.
- * JSON has `<` and `>` only inside strings, where these escapes are valid. Each escape takes 6
- * characters, as JSON already writes control characters, so it does not raise the most a
- * bounded lead (leadForClaude) can take.
+ * What the block writes as \uXXXX escapes, besides what JSON escapes itself (`"`, `\\` and
+ * U+0000-U+001F, \n and \r among them):
+ * - `<` and `>`, and what looks like them or NFKC turns into them: full-width ＜＞, small ﹤﹥,
+ *   ≮≯≪≫, the angle brackets 〈〉 (U+2329-232A and U+3008-3009) ⟨⟩⟪⟫《》, the bracket ornaments
+ *   ❬❭❮❯❰❱ and ⦑⦒⦓⦔⦕⦖⧼⧽, the angle quotation marks ‹›«», and the arrowheads ˂˃ with their
+ *   look-alikes ᐸᐳᚲ and U+1D236-1D237
+ * - the line breaks JSON leaves as they are: NEL (U+0085), U+2028 and U+2029, with which a value
+ *   could look like it starts a new line
+ */
+const ESCAPED_IN_BLOCK =
+  /[<>\u0085\u00ab\u00bb\u02c2\u02c3\u1433\u1438\u16b2\u2028\u2029\u2039\u203a\u226a\u226b\u226e\u226f\u2329\u232a\u276c-\u2771\u27e8-\u27eb\u2991-\u2996\u29fc\u29fd\u3008-\u300b\ufe64\ufe65\uff1c\uff1e\u{1d236}\u{1d237}]/gu;
+
+/** `char` as JSON escapes, one \uXXXX per UTF-16 code unit (two for U+1D236) */
+function jsonEscape(char: string): string {
+  let escaped = '';
+  for (let i = 0; i < char.length; i++) {
+    escaped += `\\u${char.charCodeAt(i).toString(16).padStart(4, '0')}`;
+  }
+  return escaped;
+}
+
+/**
+ * `data` as indented JSON with ESCAPED_IN_BLOCK written as escapes (`<` as \u003c, `>` as
+ * \u003e). It parses to the same value, but no value can write a tag, nor anything that looks
+ * like one or like a new line, so none can close the block it is put in. JSON has these
+ * characters only inside strings, where the escapes are valid. Each escape takes 6 characters
+ * (12 for U+1D236), as JSON already writes control characters. In the diagnosis summaries, which
+ * the prediction prompt already wrote as JSON, this does not raise the most a bounded lead
+ * (leadForClaude) can take. The company, status and source were written into the prompt's text
+ * as they were, so as JSON one of them can now take up to 6 times its 1,000 characters.
  */
 export function escapeUntrustedJson(data: unknown): string {
-  return JSON.stringify(data, null, 2).replace(/[<>]/g, (char) =>
-    char === '<' ? '\\u003c' : '\\u003e'
-  );
+  return JSON.stringify(data, null, 2).replace(ESCAPED_IN_BLOCK, jsonEscape);
 }
 
 /** `data` as the one block of untrusted data in a prompt */
