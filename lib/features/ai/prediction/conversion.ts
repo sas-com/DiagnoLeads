@@ -4,7 +4,7 @@
  */
 
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema';
-import { CLAUDE_MAX_TOKENS, CLAUDE_MODEL, anthropic } from '../client';
+import { CLAUDE_MAX_TOKENS, CLAUDE_MODEL, anthropic, readStructuredOutput } from '../client';
 import { reportClaudeFailure } from '../failures';
 import type { ContactCompleteness, LeadForClaude } from '../prompt-input';
 import { LEAD_DATA_TAG, UNTRUSTED_LEAD_DATA_POLICY, leadDataBlock } from '../prompt-safety';
@@ -83,7 +83,9 @@ export async function predictConversion(
 
   try {
     const startedAt = performance.now();
-    const message = await anthropic.messages.parse({
+    // messages.create, not messages.parse: the usage is logged before the output is parsed, so
+    // an answer cut off inside the JSON is logged too (readStructuredOutput)
+    const message = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: CLAUDE_MAX_TOKENS,
       system: PREDICTION_SYSTEM_PROMPT,
@@ -100,12 +102,13 @@ export async function predictConversion(
       message
     );
 
-    if (!message.parsed_output) {
+    const output = readStructuredOutput(message, predictionOutputFormat);
+    if (!output) {
       console.error('Conversion prediction: no structured output', message.stop_reason);
       return generateFallbackPrediction(lead, contact);
     }
 
-    return normalizePrediction(message.parsed_output);
+    return normalizePrediction(output);
   } catch (error) {
     console.error('Conversion prediction error:', error);
     await reportClaudeFailure('predict-conversion', error);

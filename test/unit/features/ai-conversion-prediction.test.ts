@@ -12,14 +12,21 @@ import type {
 } from '@/lib/features/ai/prediction/conversion';
 import { contactCompleteness } from '@/lib/features/ai/prompt-input';
 
-const { mockParse } = vi.hoisted(() => ({ mockParse: vi.fn() }));
+const { mockCreate, reply } = vi.hoisted(() => ({
+  mockCreate: vi.fn(),
+  /** The structured output as messages.create returns it: JSON in the text block */
+  reply: (output: unknown, stop_reason = 'end_turn') => ({
+    content: [{ type: 'text', text: JSON.stringify(output) }],
+    stop_reason,
+  }),
+}));
 
 // Mock Anthropic SDK
 vi.mock('@anthropic-ai/sdk', () => ({
   default: class MockAnthropic {
     messages = {
-      parse: mockParse.mockResolvedValue({
-        parsed_output: {
+      create: mockCreate.mockResolvedValue(
+        reply({
           probability: 75,
           confidence: 'medium',
           estimatedDaysToConversion: 14,
@@ -33,8 +40,8 @@ vi.mock('@anthropic-ai/sdk', () => ({
           ],
           recommendations: ['Schedule demo', 'Send case study'],
           risks: ['Budget concerns'],
-        },
-      }),
+        })
+      ),
     };
   },
 }));
@@ -307,26 +314,26 @@ describe('predictConversion', () => {
     expect(prediction.probability).toBe(75);
     expect(prediction.factors[0].impact).toBe('positive');
     // Nothing that points at a person goes to Claude (#406)
-    const prompt = mockParse.mock.calls.at(-1)?.[0].messages[0].content as string;
+    const prompt = mockCreate.mock.calls.at(-1)?.[0].messages[0].content as string;
     expect(prompt).toContain('Acme');
     expect(prompt).not.toMatch(/Email|Name:|Phone/);
-    const request = mockParse.mock.calls.at(-1)?.[0];
+    const request = mockCreate.mock.calls.at(-1)?.[0];
     expect(request.model).toBe('claude-sonnet-5-5');
     expect(request.output_config.effort).toBe('low');
   });
 
   it('should clamp probability and weight into range', async () => {
     const { predictConversion } = await import('@/lib/features/ai/prediction/conversion');
-    mockParse.mockResolvedValueOnce({
-      parsed_output: {
+    mockCreate.mockResolvedValueOnce(
+      reply({
         probability: 140,
         confidence: 'high',
         estimatedDaysToConversion: null,
         factors: [{ name: 'f', impact: 'neutral', weight: 25, description: 'd' }],
         recommendations: [],
         risks: [],
-      },
-    });
+      })
+    );
 
     const prediction = await predictConversion(lead, { hasName: true, hasPhone: false });
 
@@ -336,7 +343,7 @@ describe('predictConversion', () => {
 
   it('should fall back to heuristics when the API fails', async () => {
     const { predictConversion } = await import('@/lib/features/ai/prediction/conversion');
-    mockParse.mockRejectedValueOnce(new Error('529 overloaded'));
+    mockCreate.mockRejectedValueOnce(new Error('529 overloaded'));
 
     const prediction = await predictConversion(lead, { hasName: true, hasPhone: false });
 
@@ -344,13 +351,26 @@ describe('predictConversion', () => {
     expect(prediction.factors.length).toBeGreaterThan(0);
   });
 
-  it('should fall back to heuristics when there is no parsed output', async () => {
+  it('should fall back to heuristics when there is no text block', async () => {
     const { predictConversion } = await import('@/lib/features/ai/prediction/conversion');
-    mockParse.mockResolvedValueOnce({ parsed_output: null, stop_reason: 'max_tokens' });
+    mockCreate.mockResolvedValueOnce({ content: [], stop_reason: 'max_tokens' });
 
     const prediction = await predictConversion(lead, { hasName: true, hasPhone: false });
 
     expect(prediction.probability).toBeGreaterThan(0);
+    expect(prediction.factors.length).toBeGreaterThan(0);
+  });
+
+  it('should fall back to heuristics when the text is cut off inside the JSON', async () => {
+    const { predictConversion } = await import('@/lib/features/ai/prediction/conversion');
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: '{"probability": 75, "confid' }],
+      stop_reason: 'max_tokens',
+    });
+
+    const prediction = await predictConversion(lead, { hasName: true, hasPhone: false });
+
+    expect(prediction.probability).not.toBe(75);
     expect(prediction.factors.length).toBeGreaterThan(0);
   });
 });

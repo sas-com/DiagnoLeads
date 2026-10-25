@@ -17,3 +17,20 @@ export const anthropic = new Anthropic({
   timeout: 20_000,
   maxRetries: 0,
 });
+
+/**
+ * The structured output of a message asked for with `output_config.format`, read after the
+ * response is in hand. messages.parse parses inside the SDK and rejects when the text is not JSON
+ * (an answer cut off at max_tokens, a refusal), so the caller never sees that billed response and
+ * cannot log its usage (#47). The calls use messages.create, log the usage, then read the output
+ * here: the first text block, as messages.parse reads it.
+ * @returns null when the message has no text block (it stopped while thinking)
+ * @throws AnthropicError from `format.parse` when the text is not JSON, as messages.parse does
+ */
+export function readStructuredOutput<T>(
+  message: Anthropic.Message,
+  format: { parse(content: string): T }
+): T | null {
+  const text = message.content.find((block): block is Anthropic.TextBlock => block.type === 'text');
+  return text ? format.parse(text.text) : null;
+}

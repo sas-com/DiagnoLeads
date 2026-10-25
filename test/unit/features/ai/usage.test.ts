@@ -4,7 +4,9 @@
  * the tokens and the time taken, and nothing that points at a person or at the lead (no lead id,
  * no name, no prompt or output text). The procedures run through the tRPC router with the
  * Anthropic and OpenAI SDKs replaced, as in ai-router-limits.test.ts; a failed call logs no usage
- * and still reaches reportClaudeFailure.
+ * and still reaches reportClaudeFailure. The structured outputs come back as text, as
+ * messages.create returns them, and are parsed by the SDK's own jsonSchemaOutputFormat, so an
+ * answer that is not JSON fails the way it does in production.
  */
 import type { Organization, OrganizationMember, User } from '@/lib/db/schema';
 import { CLAUDE_MODEL } from '@/lib/features/ai/client';
@@ -17,7 +19,6 @@ import { appRouter } from '@/server/routers/_app';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const sdk = vi.hoisted(() => ({
-  parse: vi.fn(),
   create: vi.fn(),
   embed: vi.fn(),
   reportServerError: vi.fn(),
@@ -26,7 +27,7 @@ const sdk = vi.hoisted(() => ({
 
 vi.mock('@anthropic-ai/sdk', () => ({
   default: class MockAnthropic {
-    messages = { parse: sdk.parse, create: sdk.create };
+    messages = { create: sdk.create };
   },
 }));
 vi.mock('openai', () => ({
@@ -76,41 +77,47 @@ const leadRow = (id: string) => ({
 const REASONING = '移行の時期が近く、決裁者が関わっているため優先度が高い';
 const SUMMARY = '架空精機は Access の基幹システムを移行したいリードです。';
 
-const usage = { input_tokens: 812, output_tokens: 95 };
-const scoreResponse = {
+/** A Claude message as messages.create returns it: the thinking, then the text */
+const claudeMessage = (text: string, usage: object, stopReason = 'end_turn') => ({
   model: CLAUDE_MODEL,
-  stop_reason: 'end_turn',
-  usage: { ...usage, cache_read_input_tokens: null, cache_creation_input_tokens: null },
-  parsed_output: {
-    score: 82,
-    confidence: 'high',
-    reasoning: REASONING,
-    recommendedActions: ['初回の商談を設定する'],
-    priority: 'high',
-  },
-};
-const predictionResponse = {
-  model: CLAUDE_MODEL,
-  stop_reason: 'end_turn',
-  usage: { input_tokens: 1430, output_tokens: 210 },
-  parsed_output: {
-    probability: 64,
-    confidence: 'medium',
-    estimatedDaysToConversion: 30,
-    factors: [{ name: '移行の時期', impact: 'positive', weight: 7, description: REASONING }],
-    recommendations: ['事例を送る'],
-    risks: [],
-  },
-};
-const summaryResponse = {
-  model: CLAUDE_MODEL,
-  stop_reason: 'end_turn',
-  usage: { input_tokens: 640, output_tokens: 120, cache_read_input_tokens: 0 },
+  stop_reason: stopReason,
+  usage,
   content: [
     { type: 'thinking', thinking: '', signature: 'sig' },
-    { type: 'text', text: SUMMARY },
+    { type: 'text', text },
   ],
+});
+
+const usage = { input_tokens: 812, output_tokens: 95 };
+const scoreOutput = {
+  score: 82,
+  confidence: 'high',
+  reasoning: REASONING,
+  recommendedActions: ['初回の商談を設定する'],
+  priority: 'high',
 };
+const scoreResponse = claudeMessage(JSON.stringify(scoreOutput), {
+  ...usage,
+  cache_read_input_tokens: null,
+  cache_creation_input_tokens: null,
+});
+const predictionOutput = {
+  probability: 64,
+  confidence: 'medium',
+  estimatedDaysToConversion: 30,
+  factors: [{ name: '移行の時期', impact: 'positive', weight: 7, description: REASONING }],
+  recommendations: ['事例を送る'],
+  risks: [],
+};
+const predictionResponse = claudeMessage(JSON.stringify(predictionOutput), {
+  input_tokens: 1430,
+  output_tokens: 210,
+});
+const summaryResponse = claudeMessage(SUMMARY, {
+  input_tokens: 640,
+  output_tokens: 120,
+  cache_read_input_tokens: 0,
+});
 const embeddingResponse = {
   model: 'text-embedding-3-small',
   data: [{ embedding: [0.1, 0.2, 0.3] }],
@@ -304,7 +311,7 @@ describe('logAiUsage', () => {
 
 describe('usage line of each AI call', () => {
   it('scoring a lead logs one line', async () => {
-    sdk.parse.mockResolvedValue(scoreResponse);
+    sdk.create.mockResolvedValue(scoreResponse);
 
     const result = await createCaller().ai.scoreLead({ organizationId: ORG_ID, leadId: LEAD_1 });
 
@@ -325,11 +332,11 @@ describe('usage line of each AI call', () => {
   });
 
   it('a batch of scores logs one line for each lead', async () => {
-    sdk.parse.mockResolvedValue(scoreResponse);
+    sdk.create.mockResolvedValue(scoreResponse);
 
     await createCaller().ai.batchScoreLeads({ organizationId: ORG_ID, leadIds: [LEAD_1, LEAD_2] });
 
-    expect(sdk.parse).toHaveBeenCalledTimes(2);
+    expect(sdk.create).toHaveBeenCalledTimes(2);
     expect(usageLines()).toHaveLength(2);
     for (const line of usageLines()) {
       expect(line).toMatchObject({
@@ -343,7 +350,7 @@ describe('usage line of each AI call', () => {
   });
 
   it('a prediction logs one line, and a batch one line for each lead', async () => {
-    sdk.parse.mockResolvedValue(predictionResponse);
+    sdk.create.mockResolvedValue(predictionResponse);
     const caller = createCaller();
 
     const { prediction } = await caller.ai.predictConversion({
@@ -414,7 +421,7 @@ describe('usage line of each AI call', () => {
   });
 
   it('logs no person or lead content even when a caller hands the whole lead row over', async () => {
-    sdk.parse.mockResolvedValueOnce(scoreResponse).mockResolvedValueOnce(predictionResponse);
+    sdk.create.mockResolvedValueOnce(scoreResponse).mockResolvedValueOnce(predictionResponse);
     const row = leadRow(LEAD_1);
     const scope = { organizationId: ORG_ID };
 
@@ -432,19 +439,70 @@ describe('usage line of each AI call', () => {
     expectNothingPersonal();
   });
 
-  it('a response without the structured output still logs its tokens', async () => {
-    sdk.parse.mockResolvedValue({ ...scoreResponse, parsed_output: null, stop_reason: 'max_tokens' });
+  // Billed answers without a usable structured output (structured outputs docs: a refusal or a
+  // reply cut off at max_tokens may not match the schema). The SDK's parse of the text throws for
+  // the first two, as messages.parse would have before the usage line was written.
+  it.each([
+    {
+      answer: 'cut off inside the JSON at max_tokens',
+      text: (output: object) => JSON.stringify(output).slice(0, 30),
+      stopReason: 'max_tokens',
+    },
+    {
+      answer: 'a refusal in plain text',
+      text: () => 'I cannot help with that request.',
+      stopReason: 'refusal',
+    },
+  ])('an answer $answer still logs its tokens, and falls back as before', async ({
+    text,
+    stopReason,
+  }) => {
+    const billed = { input_tokens: 812, output_tokens: 3_990 };
+    sdk.create
+      .mockResolvedValueOnce(claudeMessage(text(scoreOutput), billed, stopReason))
+      .mockResolvedValueOnce(claudeMessage(text(predictionOutput), billed, stopReason));
+    const caller = createCaller();
+    const one = { organizationId: ORG_ID, leadId: LEAD_1 };
 
-    await expect(
-      createCaller().ai.scoreLead({ organizationId: ORG_ID, leadId: LEAD_1 })
-    ).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE' });
+    await expect(caller.ai.scoreLead(one)).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE' });
+    const { prediction } = await caller.ai.predictConversion(one);
 
-    expect(usageLines()).toHaveLength(1);
+    // The heuristic fallback, not the answer
+    expect(prediction.probability).not.toBe(predictionOutput.probability);
+    expect(usageLines()).toEqual([
+      expect.objectContaining({ operation: 'score-lead', inputTokens: 812, outputTokens: 3_990 }),
+      expect.objectContaining({
+        operation: 'predict-conversion',
+        inputTokens: 812,
+        outputTokens: 3_990,
+      }),
+    ]);
+    // Not a misconfiguration: nobody on call is alerted
+    expect(sdk.reportServerError).not.toHaveBeenCalled();
+    expectNothingPersonal();
+  });
+
+  it('an answer that stopped while thinking (no text block) still logs its tokens', async () => {
+    sdk.create.mockResolvedValue({
+      ...scoreResponse,
+      stop_reason: 'max_tokens',
+      usage: { input_tokens: 812, output_tokens: 4_000 },
+      content: [{ type: 'thinking', thinking: '', signature: 'sig' }],
+    });
+    const caller = createCaller();
+    const one = { organizationId: ORG_ID, leadId: LEAD_1 };
+
+    await expect(caller.ai.scoreLead(one)).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE' });
+    await caller.ai.predictConversion(one);
+
+    expect(usageLines().map(({ operation, outputTokens }) => [operation, outputTokens])).toEqual([
+      ['score-lead', 4_000],
+      ['predict-conversion', 4_000],
+    ]);
   });
 
   it('a failed call logs no usage and still reaches reportClaudeFailure', async () => {
     const unauthorized = Object.assign(new Error('invalid x-api-key'), { status: 401 });
-    sdk.parse.mockRejectedValue(unauthorized);
     sdk.create.mockRejectedValue(unauthorized);
     const caller = createCaller();
     const one = { organizationId: ORG_ID, leadId: LEAD_1 };

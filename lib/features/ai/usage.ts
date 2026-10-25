@@ -2,12 +2,14 @@
  * Token usage of the AI calls (#47, owner decision of 2026-10-25; decision
  * 2026-10-25-ai-v1-prompt-assets): one structured log line for each response of Claude or of the
  * OpenAI embeddings, so the cost can be followed by operation and organization in the logs. No
- * table: the monthly totals are read in the Anthropic console.
+ * table: the monthly totals are read in the Anthropic console (Claude) and the OpenAI dashboard
+ * (embeddings).
  *
  * The line holds names and counts only: the operation, the organization, the model, the tokens
  * and the time taken. Never the lead's id, a person's name, the prompt or the output (#406).
- * Only a response that arrived is logged; a failed call goes through reportClaudeFailure
- * (failures.ts) as before.
+ * Only a response that arrived is logged, and it is logged before its output is parsed (an answer
+ * cut off inside the JSON counts too; client.ts readStructuredOutput). A call that failed with no
+ * response goes through reportClaudeFailure (failures.ts) as before.
  */
 
 /** The places that call a model. The Claude ones are named as in the failure alerts. */
