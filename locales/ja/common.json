@@ -1341,7 +1341,8 @@
       "updateSuccess": "{count}件のリードを更新しました",
       "deleteSuccess": "{count}件のリードを削除しました",
       "updateError": "リードの更新に失敗しました",
-      "deleteError": "リードの削除に失敗しました"
+      "deleteError": "リードの削除に失敗しました",
+      "skippedWithDeals": "商談のある {count} 件は変えていません（状態は商談から決まります）"
     },
     "import": {
       "title": "リードをインポート",
@@ -4421,7 +4422,8 @@
     "sheet": {
       "keyFacts": "要点"
     },
-    "nextMeetingOverdue": "次回日程 {date} が過ぎています"
+    "nextMeetingOverdue": "次回日程 {date} が過ぎています",
+    "fromDeals": "商談から反映（商談のステージで変わります）"
   },
   "leadList": {
     "searchLabel": "リードを検索",

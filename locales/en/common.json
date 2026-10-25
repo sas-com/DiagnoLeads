@@ -1341,7 +1341,8 @@
       "updateSuccess": "{count} leads updated successfully",
       "deleteSuccess": "{count} leads deleted successfully",
       "updateError": "Failed to update leads",
-      "deleteError": "Failed to delete leads"
+      "deleteError": "Failed to delete leads",
+      "skippedWithDeals": "{count} leads with deals were left as they are (their status comes from the deals)"
     },
     "import": {
       "title": "Import Leads",
@@ -4421,7 +4422,8 @@
     "sheet": {
       "keyFacts": "Key facts"
     },
-    "nextMeetingOverdue": "Next meeting {date} has passed"
+    "nextMeetingOverdue": "Next meeting {date} has passed",
+    "fromDeals": "Set by the deals (changes with the deal stage)"
   },
   "leadList": {
     "searchLabel": "Search leads",

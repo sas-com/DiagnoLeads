@@ -27,6 +27,8 @@ interface QuickLead {
   id: string;
   status: string;
   dealPhase: string | null;
+  /** The deals set the status and deal phase of a lead with deals (#444) */
+  hasDeals?: boolean;
 }
 
 interface LeadQuickSelectProps {
@@ -86,9 +88,9 @@ export function LeadQuickSelect({
         ? 'amber'
         : 'gray';
 
-  if (!canEdit) {
+  if (!canEdit || lead.hasDeals) {
     return (
-      <Badge color={color} className={className}>
+      <Badge color={color} className={className} title={canEdit ? t('fromDeals') : undefined}>
         {label(shown)}
       </Badge>
     );

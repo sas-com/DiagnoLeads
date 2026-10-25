@@ -102,10 +102,9 @@ export const dealsRouter = router({
 
   delete: organizationProcedure.input(dealScopeSchema).mutation(async ({ ctx, input }) => {
     assertCan(ctx, 'delete');
-    return deleteDeal(ctx.db, {
-      organizationId: ctx.organization.id,
-      dealId: input.dealId,
-      userId: ctx.user.id,
-    });
+    const context = { organizationId: ctx.organization.id, userId: ctx.user.id };
+    const { lead, ...deleted } = await deleteDeal(ctx.db, { ...context, dealId: input.dealId });
+    await afterDealChange(ctx.db, context, { lead });
+    return deleted;
   }),
 });
