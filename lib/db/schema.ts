@@ -342,6 +342,9 @@ export const leads = pgTable(
     index('leads_assignee_user_id_idx').on(table.assigneeUserId),
     // The list's "when to act" sort and filter (#151)
     index('leads_org_act_by_idx').on(table.organizationId, table.actBy),
+    // The morning recompute reads the leads updated lately across organizations, newest first,
+    // and counts the ones left (act-timing/service.ts, #574)
+    index('leads_updated_at_id_idx').on(table.updatedAt, table.id),
   ]
 );
 
