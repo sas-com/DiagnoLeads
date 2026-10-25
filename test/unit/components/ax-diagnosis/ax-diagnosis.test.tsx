@@ -756,6 +756,7 @@ describe('AxDiagnosisResult', () => {
   });
 
   it('describes the agility challenge as the brochure ver01 and the landing page do (#76)', () => {
+    // The fixture answers no deadline or remote, so the brochure wording shows (#658)
     renderResult({
       result: { ...publicResult, challenges: { ...publicResult.challenges, primary: 'agility' } },
     });
@@ -782,6 +783,16 @@ describe('AxDiagnosisResult', () => {
     });
     expect(screen.getByTestId('ax-result-challenge')).toHaveTextContent('64bit 化・PC の入れ替えで');
     expect(screen.getByTestId('ax-result-challenge')).not.toHaveTextContent('新商品・新サービス');
+    cleanup();
+
+    renderResult({
+      platform: 'access',
+      answers: { ...accessAnswers, access_challenges: ['remote'] },
+      result: agility,
+    });
+    expect(screen.getByTestId('ax-result-challenge')).toHaveTextContent('社外や在宅などから使えず');
+    // Not in the brochure (#76)
+    expect(screen.getByTestId('ax-result-challenge')).not.toHaveTextContent(/働き方の変化/);
   });
 
   it('shows no documents or seminars unless the organization offers them (#153)', () => {

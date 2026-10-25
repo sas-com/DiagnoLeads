@@ -560,19 +560,19 @@
           "byAnswer": {
             "deadline": {
               "problem": "Support for the server, OS or software is ending soon, and the current system is getting hard to keep using.",
-              "solution": "Aim to switch in stages to a supported platform before the support ends."
+              "solution": "With the support end in view, aim to switch in stages to a supported platform."
             },
             "remote": {
-              "problem": "It cannot be used from outside the office, from home or from other sites, so it is hard to keep up with new ways of working.",
+              "problem": "It cannot be used from outside the office, from home and the like, so where it can be used is limited.",
               "solution": "Aim for a web system used in a browser that is easier to use from outside the office and from home."
             },
             "stability": {
               "problem": "It cannot be shared at the same time, is slow or files get corrupted, and this holds back daily work.",
-              "solution": "We suggest a form that fits the number of users and how they work, together with the recommended approach."
+              "solution": "We will suggest an approach that fits the number of users and how they work, along with the recommended way forward."
             },
             "support": {
               "problem": "The current tool does not work (or may stop working) after moving to Microsoft 365, 64-bit or a new PC.",
-              "solution": "We suggest a form you can keep using with a new Office or PC, together with the recommended approach."
+              "solution": "We will suggest an approach that keeps your work going after moving to a new Office or PC, along with the recommended way forward."
             }
           }
         },
