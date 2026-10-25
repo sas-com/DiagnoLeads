@@ -9,11 +9,12 @@
 
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema';
 import { z } from 'zod';
-import { CLAUDE_MAX_TOKENS, CLAUDE_MODEL, anthropic } from '../client';
+import { CLAUDE_MAX_TOKENS, CLAUDE_MODEL, anthropic, readStructuredOutput } from '../client';
 import { reportClaudeFailure } from '../failures';
 import type { LeadForClaude } from '../prompt-input';
 import { LEAD_DATA_TAG, UNTRUSTED_LEAD_DATA_POLICY, leadDataBlock } from '../prompt-safety';
 import { AI_BATCH_MAX } from '../types/schemas';
+import { type AiCallScope, logAiUsage } from '../usage';
 
 // Lead score response schema
 const LeadScoreSchema = z.object({
@@ -90,11 +91,18 @@ Consider factors like:
  * Score a lead using Claude AI
  * @param lead - Lead information to analyze (its id is only logged, with the fields that look
  *   like a prompt injection)
+ * @param scope - The organization the call is made for, logged with the tokens used (#47)
  * @returns AI-generated lead score and recommendations
  */
-export async function scoreLeadWithAI(lead: LeadForScoring): Promise<LeadScoreResult> {
+export async function scoreLeadWithAI(
+  lead: LeadForScoring,
+  scope: AiCallScope
+): Promise<LeadScoreResult> {
   try {
-    const message = await anthropic.messages.parse({
+    const startedAt = performance.now();
+    // messages.create, not messages.parse: the usage is logged before the output is parsed, so
+    // an answer cut off inside the JSON is logged too (readStructuredOutput)
+    const message = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: CLAUDE_MAX_TOKENS,
       system: SCORING_SYSTEM_PROMPT,
@@ -106,12 +114,14 @@ export async function scoreLeadWithAI(lead: LeadForScoring): Promise<LeadScoreRe
       ],
       output_config: { effort: 'low', format: leadScoreOutputFormat },
     });
+    logAiUsage({ operation: 'score-lead', ...scope, model: CLAUDE_MODEL, startedAt }, message);
 
-    if (!message.parsed_output) {
+    const output = readStructuredOutput(message, leadScoreOutputFormat);
+    if (!output) {
       throw new Error(`No structured output from Claude (stop_reason: ${message.stop_reason})`);
     }
 
-    return { ...LeadScoreSchema.parse(message.parsed_output), isFallback: false };
+    return { ...LeadScoreSchema.parse(output), isFallback: false };
   } catch (error) {
     console.error('Error scoring lead with AI:', error);
     await reportClaudeFailure('score-lead', error);
@@ -131,10 +141,12 @@ export async function scoreLeadWithAI(lead: LeadForScoring): Promise<LeadScoreRe
 /**
  * Batch score multiple leads
  * @param leads - Array of leads to score
+ * @param scope - The organization the calls are made for (one usage line per lead)
  * @returns Array of scores
  */
 export async function scoreLeadsBatch(
-  leads: Array<LeadForScoring & { id: string }>
+  leads: Array<LeadForScoring & { id: string }>,
+  scope: AiCallScope
 ): Promise<Map<string, LeadScoreResult>> {
   const scores = new Map<string, LeadScoreResult>();
 
@@ -144,7 +156,7 @@ export async function scoreLeadsBatch(
     const results = await Promise.all(
       batch.map(async (lead) => ({
         id: lead.id,
-        score: await scoreLeadWithAI(lead),
+        score: await scoreLeadWithAI(lead, scope),
       }))
     );
 

@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { diagnosticTemplates, qrCampaigns } from '@/lib/db/schema';
+import { resolveDiagnosisOrganizationId } from '@/lib/multi-tenant/helpers/diagnosis-organization';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { and, desc, eq } from 'drizzle-orm';
@@ -11,6 +12,7 @@ import {
   generateShortCode,
 } from './qr-code';
 import { campaignScanStats } from './scans';
+import { destinationsOfCampaigns } from './short-code-entry';
 import { createQRCampaignSchema } from './types';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
@@ -62,7 +64,9 @@ export const distributionRouter = router({
   canManage: campaignViewProcedure.query(({ ctx }) => ctx.ability.can('update', 'Settings')),
 
   /**
-   * List all QR campaigns for the organization
+   * List all QR campaigns for the organization, each with where a scan of it goes
+   * (destination, #692, #695): the /q/ entry's own rule (campaignDestination), decided here on
+   * the server with one more query for the diagnoses the campaigns name
    */
   listCampaigns: campaignViewProcedure.query(async ({ ctx }) => {
     const campaigns = await db.query.qrCampaigns.findMany({
@@ -79,7 +83,16 @@ export const distributionRouter = router({
       },
     });
 
-    return campaigns.map((campaign) => withTrackingUrl(campaign));
+    const destinations = await destinationsOfCampaigns(
+      ctx.db,
+      ctx.organization.id,
+      campaigns,
+      resolveDiagnosisOrganizationId()
+    );
+    return campaigns.map((campaign, index) => ({
+      ...withTrackingUrl(campaign),
+      destination: destinations[index],
+    }));
   }),
 
   /**

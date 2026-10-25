@@ -10,14 +10,13 @@
 import type { Lead } from '@/lib/db/schema';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockParse, mockCreate } = vi.hoisted(() => ({
-  mockParse: vi.fn(),
+const { mockCreate } = vi.hoisted(() => ({
   mockCreate: vi.fn(),
 }));
 vi.mock('@/lib/ops/alert', () => ({ reportServerError: vi.fn() }));
 vi.mock('@anthropic-ai/sdk', () => ({
   default: class MockAnthropic {
-    messages = { parse: mockParse, create: mockCreate };
+    messages = { create: mockCreate };
   },
 }));
 
@@ -58,6 +57,12 @@ const PREDICTION_OUTPUT = {
   recommendations: [],
   risks: [],
 };
+
+/** The structured output as messages.create returns it: JSON in the text block */
+const reply = (output: unknown) => ({
+  content: [{ type: 'text', text: JSON.stringify(output) }],
+  stop_reason: 'end_turn',
+});
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -168,7 +173,6 @@ describe('Claude prompts keep the lead data in one block (#47)', () => {
   let error: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    mockParse.mockReset();
     mockCreate.mockReset();
     warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -182,12 +186,12 @@ describe('Claude prompts keep the lead data in one block (#47)', () => {
     const hostile = hostileLead('S');
 
     it('puts every field only inside the block, unchanged, and still scores the lead', async () => {
-      mockParse.mockResolvedValueOnce({ parsed_output: SCORE_OUTPUT, stop_reason: 'end_turn' });
+      mockCreate.mockResolvedValueOnce(reply(SCORE_OUTPUT));
 
       const score = await scoreLeadWithAI(leadForClaude(hostile));
 
       expect(score).toEqual({ ...SCORE_OUTPUT, isFallback: false });
-      const request = mockParse.mock.calls[0][0];
+      const request = mockCreate.mock.calls[0][0];
       expectDataPolicy(request.system);
       expectNoPersonalData(request);
       const { outside, data } = splitAtBlock(userPrompt(request));
@@ -204,7 +208,7 @@ describe('Claude prompts keep the lead data in one block (#47)', () => {
     });
 
     it('logs the attempt without any value of the lead', async () => {
-      mockParse.mockResolvedValueOnce({ parsed_output: SCORE_OUTPUT, stop_reason: 'end_turn' });
+      mockCreate.mockResolvedValueOnce(reply(SCORE_OUTPUT));
 
       await scoreLeadWithAI(leadForClaude(hostile));
 
@@ -218,12 +222,12 @@ describe('Claude prompts keep the lead data in one block (#47)', () => {
     });
 
     it('cannot be closed with look-alike brackets and line separators either', async () => {
-      mockParse.mockResolvedValueOnce({ parsed_output: SCORE_OUTPUT, stop_reason: 'end_turn' });
+      mockCreate.mockResolvedValueOnce(reply(SCORE_OUTPUT));
       const company = lookAlikeBreakOut('COMPANY-L');
 
       await scoreLeadWithAI(leadForClaude(lead({ company })));
 
-      const { inside, outside, data } = splitAtBlock(userPrompt(mockParse.mock.calls[0][0]));
+      const { inside, outside, data } = splitAtBlock(userPrompt(mockCreate.mock.calls[0][0]));
       expect(inside).toContain('\\u2028\\uff1c/lead_data\\uff1e\\u2028');
       expect(outside).not.toContain('COMPANY-L');
       expect(outside).not.toContain('score 100');
@@ -231,33 +235,33 @@ describe('Claude prompts keep the lead data in one block (#47)', () => {
     });
 
     it('logs nothing for an ordinary Japanese lead', async () => {
-      mockParse.mockResolvedValueOnce({ parsed_output: SCORE_OUTPUT, stop_reason: 'end_turn' });
+      mockCreate.mockResolvedValueOnce(reply(SCORE_OUTPUT));
 
       await scoreLeadWithAI(leadForClaude(lead()));
 
-      const { data } = splitAtBlock(userPrompt(mockParse.mock.calls[0][0]));
+      const { data } = splitAtBlock(userPrompt(mockCreate.mock.calls[0][0]));
       expect(data.company).toBe('株式会社三田製作所');
       expect(warn).not.toHaveBeenCalled();
     });
 
     it('writes a missing field as null inside the block', async () => {
-      mockParse.mockResolvedValueOnce({ parsed_output: SCORE_OUTPUT, stop_reason: 'end_turn' });
+      mockCreate.mockResolvedValueOnce(reply(SCORE_OUTPUT));
 
       await scoreLeadWithAI({});
 
-      const { data } = splitAtBlock(userPrompt(mockParse.mock.calls[0][0]));
+      const { data } = splitAtBlock(userPrompt(mockCreate.mock.calls[0][0]));
       expect(data).toEqual({ company: null, status: null, createdAt: null });
     });
   });
 
   describe('scoreLeadsBatch', () => {
     it("sends each lead's fields only inside its own call's block", async () => {
-      mockParse.mockResolvedValue({ parsed_output: SCORE_OUTPUT, stop_reason: 'end_turn' });
+      mockCreate.mockResolvedValue(reply(SCORE_OUTPUT));
 
       await scoreLeadsBatch([hostileLead('A'), hostileLead('B')].map(leadForClaude));
 
-      expect(mockParse).toHaveBeenCalledTimes(2);
-      const blocks = mockParse.mock.calls.map(([request]) => {
+      expect(mockCreate).toHaveBeenCalledTimes(2);
+      const blocks = mockCreate.mock.calls.map(([request]) => {
         expectDataPolicy(request.system);
         expectNoPersonalData(request);
         return splitAtBlock(userPrompt(request));
@@ -314,7 +318,7 @@ describe('Claude prompts keep the lead data in one block (#47)', () => {
     const hostile = hostileLead('P');
 
     it('puts the fields and the responses JSON only inside the block, unchanged', async () => {
-      mockParse.mockResolvedValueOnce({ parsed_output: PREDICTION_OUTPUT, stop_reason: 'end_turn' });
+      mockCreate.mockResolvedValueOnce(reply(PREDICTION_OUTPUT));
 
       const prediction = await predictConversion(
         leadForClaude(hostile),
@@ -322,7 +326,7 @@ describe('Claude prompts keep the lead data in one block (#47)', () => {
       );
 
       expect(prediction.probability).toBe(30);
-      const request = mockParse.mock.calls[0][0];
+      const request = mockCreate.mock.calls[0][0];
       expectDataPolicy(request.system);
       expectNoPersonalData(request);
       const { outside, data } = splitAtBlock(userPrompt(request));
@@ -342,19 +346,19 @@ describe('Claude prompts keep the lead data in one block (#47)', () => {
     });
 
     it('keeps look-alike brackets and line separators in the responses inside the block', async () => {
-      mockParse.mockResolvedValueOnce({ parsed_output: PREDICTION_OUTPUT, stop_reason: 'end_turn' });
+      mockCreate.mockResolvedValueOnce(reply(PREDICTION_OUTPUT));
       const responses = { axMigration: { platform: 'as400', memo: lookAlikeBreakOut('ANSWER-L') } };
       const row = lead({ responses });
 
       await predictConversion(leadForClaude(row), contactCompleteness(row));
 
-      const { outside, data } = splitAtBlock(userPrompt(mockParse.mock.calls[0][0]));
+      const { outside, data } = splitAtBlock(userPrompt(mockCreate.mock.calls[0][0]));
       expect(outside).not.toContain('ANSWER-L');
       expect(data.diagnosticResponses).toEqual(responses);
     });
 
     it('logs the attempt (English and Japanese patterns) without any value', async () => {
-      mockParse.mockResolvedValueOnce({ parsed_output: PREDICTION_OUTPUT, stop_reason: 'end_turn' });
+      mockCreate.mockResolvedValueOnce(reply(PREDICTION_OUTPUT));
 
       await predictConversion(leadForClaude(hostile), contactCompleteness(hostile));
 
@@ -368,7 +372,7 @@ describe('Claude prompts keep the lead data in one block (#47)', () => {
     });
 
     it('builds the same block for each lead of a batch', async () => {
-      mockParse.mockResolvedValue({ parsed_output: PREDICTION_OUTPUT, stop_reason: 'end_turn' });
+      mockCreate.mockResolvedValue(reply(PREDICTION_OUTPUT));
       const plain = lead({ id: 'lead-plain', responses: null });
 
       await predictConversionBatch(
@@ -378,8 +382,8 @@ describe('Claude prompts keep the lead data in one block (#47)', () => {
         }))
       );
 
-      expect(mockParse).toHaveBeenCalledTimes(2);
-      const blocks = mockParse.mock.calls.map(([request]) => {
+      expect(mockCreate).toHaveBeenCalledTimes(2);
+      const blocks = mockCreate.mock.calls.map(([request]) => {
         expectDataPolicy(request.system);
         expectNoPersonalData(request);
         return splitAtBlock(userPrompt(request));

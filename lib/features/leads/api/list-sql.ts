@@ -55,8 +55,8 @@ function oneOrMany<T>(value: T | T[] | null | undefined): T[] {
 /**
  * Last activity of a lead: the later of the lead's own last update (staff edits, status
  * changes, diagnoses and consultation requests all write `leads.updated_at`) and the last
- * saved hearing. Comments are not counted: `lead_comments` has no index on `lead_id`, and
- * adding one is a schema change (#131 keeps the schema as is).
+ * saved hearing. Comments are not counted: #131 left them out while `lead_comments` had no index
+ * on `lead_id` (#433 adds one on (lead_id, created_at), so counting them is a choice for later).
  *
  * `lead_hearings.updated_at` is timestamptz while `leads.updated_at` is a UTC timestamp
  * without time zone, so the hearing time is converted to UTC wall time before comparing.
@@ -176,8 +176,8 @@ export function leadListOrderBy(
 }
 
 /**
- * WHERE conditions of the list filters (without the organization condition, tags and the
- * advanced filter, which the procedure adds). Multi-value filters match any of the values.
+ * WHERE conditions of the list filters (without the organization condition and tags, which
+ * the procedure adds). Multi-value filters match any of the values.
  */
 export function leadListConditions(
   input: Omit<ListLeadsInput, 'limit' | 'offset'>,

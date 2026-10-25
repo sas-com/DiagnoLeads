@@ -90,7 +90,10 @@ export async function semanticSearch({
 }): Promise<SemanticSearchResult[]> {
   try {
     // Generate embedding for search query
-    const queryEmbedding = await generateEmbedding(query);
+    const queryEmbedding = await generateEmbedding(query, {
+      operation: 'embed-search-query',
+      organizationId,
+    });
 
     // Perform vector similarity search using cosine distance
     // Note: We use 1 - cosine_distance to get similarity (higher is better)
@@ -199,7 +202,7 @@ export async function updateLeadEmbedding({
   text: string;
 }): Promise<boolean> {
   try {
-    const embedding = await generateEmbedding(text);
+    const embedding = await generateEmbedding(text, { operation: 'embed-lead', organizationId });
     const embeddingString = vectorLiteral(embedding);
 
     const updated = await db.execute(sql`

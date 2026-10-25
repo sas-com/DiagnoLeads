@@ -12,6 +12,7 @@ import { type QrScanDevice, recordQrScan, scanDayOf } from '@/lib/features/distr
 import {
   type QrEntryCampaign,
   findOpenQrCampaign,
+  openCampaignDestination,
   qrEntryRedirectPath,
 } from '@/lib/features/distribution/short-code-entry';
 import { SHORT_CODE_PATTERN } from '@/lib/features/distribution/types';
@@ -43,23 +44,16 @@ const notFound = () => new NextResponse('Not Found', { status: 404, headers: TEX
 let reportedNoAxOrganization = false;
 
 /**
- * Whether the AX diagnosis makes its leads in this organization. The ids are compared in one
- * case: PostgreSQL returns a uuid in lower case, the environment may hold it in either.
- * With no such organization every campaign without a diagnosis answers 404; that is logged once
- * an instance, so QR codes handed out at an event do not all stop unnoticed
+ * With no organization that receives the AX diagnosis, every campaign without a diagnosis
+ * answers 404; that is logged once an instance, so QR codes handed out at an event do not all
+ * stop unnoticed
  */
-function receivesAxDiagnosis(organizationId: string): boolean {
-  const axOrganizationId = resolveDiagnosisOrganizationId();
-  if (axOrganizationId === null) {
-    if (!reportedNoAxOrganization) {
-      reportedNoAxOrganization = true;
-      console.error(
-        'QR entry: AX_DIAGNOSIS_ORGANIZATION_ID / DEFAULT_ORGANIZATION_ID is not set, so campaigns without a diagnosis answer 404'
-      );
-    }
-    return false;
-  }
-  return axOrganizationId.toLowerCase() === organizationId.toLowerCase();
+function reportNoAxOrganization(): void {
+  if (reportedNoAxOrganization) return;
+  reportedNoAxOrganization = true;
+  console.error(
+    'QR entry: AX_DIAGNOSIS_ORGANIZATION_ID / DEFAULT_ORGANIZATION_ID is not set, so campaigns without a diagnosis answer 404'
+  );
 }
 
 /**
@@ -119,7 +113,8 @@ async function recordScan(campaign: QrEntryCampaign, device: QrScanDevice): Prom
  * GET /q/<short code>
  *
  * The QR code of a campaign (#503). Sends the visitor to the campaign's diagnosis with the
- * campaign's UTM parameters (owner decisions in #663):
+ * campaign's UTM parameters (owner decisions in #663, openCampaignDestination, which the settings
+ * page of the campaigns shows too, #692):
  * - a campaign that names a builder diagnosis (diagnosis_id): to /d/<slug> while that page
  *   serves this diagnosis; 404 while it does not (paused, archived, a slug two organizations
  *   publish, a diagnosis of another organization), never to another diagnosis
@@ -158,17 +153,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
     const campaign = await findOpenQrCampaign(db, code);
     if (!campaign) return notFound();
 
-    let publishedSlug: string | null = null;
-    if (campaign.diagnosisId) {
-      // The diagnosis the campaign names, or nowhere: /d/<slug> serves a slug only while exactly
-      // one organization publishes it, so send there only when it serves this very diagnosis
-      const published = campaign.diagnosis
+    // What /d/<slug> serves for the diagnosis the campaign names (one of its own organization)
+    const served =
+      campaign.diagnosisId && campaign.diagnosis
         ? await findPublicDiagnosis(db, campaign.diagnosis.slug)
         : null;
-      if (!published || published.id !== campaign.diagnosisId) return notFound();
-      publishedSlug = published.slug;
-    } else if (!receivesAxDiagnosis(campaign.organizationId)) {
-      // The AX diagnosis makes leads of the AX organization only (also 404 while it has none)
+    const diagnosisOrganizationId = resolveDiagnosisOrganizationId();
+    const destination = openCampaignDestination(campaign, {
+      diagnosisOrganizationId,
+      servedDiagnosis: served,
+    });
+    if (destination.kind === 'none') {
+      if (diagnosisOrganizationId === null && destination.reasons.includes('not_ax_organization')) {
+        reportNoAxOrganization();
+      }
       return notFound();
     }
 
@@ -176,6 +174,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
     if (device) after(() => recordScan(campaign, device));
 
     // A relative Location: the visitor stays on the host they scanned
+    const publishedSlug = destination.kind === 'diagnosis' ? destination.slug : null;
     return new NextResponse(null, {
       status: 307,
       headers: { ...HEADERS, Location: qrEntryRedirectPath(campaign.utm, publishedSlug) },
