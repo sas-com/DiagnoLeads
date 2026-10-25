@@ -2579,7 +2579,8 @@
         "costNotRegistered": "費用未登録（この期間の契約がありません）",
         "appointmentQuality": "条件を満たしたアポ",
         "appointmentQualityValue": "{met}／{reviewed}件（{rate}%）"
-      }
+      },
+      "siteVisits": "サイトの訪問を見る"
     }
   },
   "header": {
@@ -5438,6 +5439,43 @@
         "unknown": "不明"
       },
       "footer": "{name}・{date} に取り込み"
+    }
+  },
+  "siteAnalytics": {
+    "title": "サイトの訪問",
+    "description": "公開ページの訪問者数とページビュー（自前の計測。クッキーは使いません）",
+    "periodLabel": "期間",
+    "period": "過去{days}日間",
+    "periodRange": "過去{days}日間",
+    "overview": "概要",
+    "toAnalytics": "リードの分析",
+    "metricLabel": "指標",
+    "metric": {
+      "visitors": "サイト全体の訪問者数",
+      "pageviews": "サイト全体のページビュー"
+    },
+    "change": {
+      "increase": "前の期間より{rate}%増",
+      "decrease": "前の期間より{rate}%減",
+      "unchanged": "前の期間と同じ"
+    },
+    "updatedOn": "{day}まで記録",
+    "chartLabel": "{metric}の日ごとの推移（過去{days}日間、合計{total}）",
+    "visitorsNote": "訪問者数は日ごとに数えています。同じ人が別の日に来ると、それぞれの日に数えます。",
+    "pagesTitle": "ページごとの{metric}",
+    "empty": "この期間の記録はありません",
+    "notMeasured": "まだ訪問の記録がありません。計測は、プライバシーポリシーに記載してから有効にします。",
+    "error": "読み込めませんでした。時間をおいて開き直してください。",
+    "pageType": {
+      "ax-lp": "AX マイグレーション（メイン LP）",
+      "ax-access-lp": "Access LP",
+      "ax-column-index": "コラム一覧",
+      "ax-column": "コラム",
+      "ax-diagnosis": "AX 診断",
+      "diagnosis": "診断",
+      "legacy-diagnostic": "診断フォーム（旧）",
+      "home": "トップページ",
+      "landing": "紹介ページ"
     }
   }
 }
