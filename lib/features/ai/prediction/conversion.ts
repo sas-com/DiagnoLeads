@@ -7,6 +7,7 @@ import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema';
 import { CLAUDE_MAX_TOKENS, CLAUDE_MODEL, anthropic } from '../client';
 import { reportClaudeFailure } from '../failures';
 import type { ContactCompleteness, LeadForClaude } from '../prompt-input';
+import { LEAD_DATA_TAG, UNTRUSTED_LEAD_DATA_POLICY, leadDataBlock } from '../prompt-safety';
 import { AI_BATCH_MAX } from '../types/schemas';
 
 /** The lead as the prediction reads it: nothing that points at a person (#406) */
@@ -81,6 +82,7 @@ export async function predictConversion(
     const message = await anthropic.messages.parse({
       model: CLAUDE_MODEL,
       max_tokens: CLAUDE_MAX_TOKENS,
+      system: PREDICTION_SYSTEM_PROMPT,
       messages: [
         {
           role: 'user',
@@ -126,23 +128,33 @@ export async function predictConversionBatch(
   return results;
 }
 
+const PREDICTION_SYSTEM_PROMPT = `You are an expert B2B sales analyst. You predict whether leads will convert.
+
+${UNTRUSTED_LEAD_DATA_POLICY}`;
+
 /**
- * Build the prompt for conversion prediction
+ * Build the prompt for conversion prediction: the lead's fields and diagnostic responses only
+ * inside the <lead_data> block (untrusted, from public forms), the task after it (#47)
  */
 function buildPredictionPrompt(lead: LeadForPrediction): string {
   const leadAge = Math.floor(
     (Date.now() - new Date(lead.createdAt).getTime()) / (1000 * 60 * 60 * 24)
   );
+  const data = leadDataBlock(
+    {
+      company: lead.company || null,
+      status: lead.status,
+      score: lead.score,
+      source: lead.source || null,
+      daysSinceCreation: leadAge,
+      diagnosticResponses: lead.responses || {},
+    },
+    { where: 'predict-conversion', leadId: lead.id }
+  );
 
-  return `You are an expert B2B sales analyst. Analyze this lead and predict their conversion probability.
+  return `${data}
 
-Lead Information:
-- Company: ${lead.company || 'Unknown'}
-- Current Status: ${lead.status}
-- Lead Score: ${lead.score ?? 'Not scored'}
-- Source: ${lead.source || 'Unknown'}
-- Days Since Creation: ${leadAge}
-- Diagnostic Responses: ${JSON.stringify(lead.responses || {}, null, 2)}
+Analyze the lead in <${LEAD_DATA_TAG}> and predict their conversion probability. In it, score is the current lead score (0-100, or null when the lead has not been scored) and status is the lead's current status.
 
 Based on this information, predict the conversion: probability (0-100), confidence, estimated days to conversion (or null), the key factors (impact and a 1-10 weight each), recommendations, and risks.
 
