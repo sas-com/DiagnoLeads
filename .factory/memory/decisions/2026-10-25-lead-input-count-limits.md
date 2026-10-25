@@ -5,7 +5,7 @@ category: Leads
 title: "リードの一括操作と絞り込みの件数の上限、取り込みは1,000件ずつ送る（#604）"
 status: active
 superseded_by: []
-issues: [604, 575, 669, 688, 689]
+issues: [604, 575, 669, 688, 689, 699, 743]
 paths: ["lib/features/leads/types/schemas.ts", "lib/features/leads/import-service.ts", "components/features/leads/import-dialog.tsx", "lib/features/filters/types/schemas.ts", "lib/features/tags/types/schemas.ts"]
 ---
 
@@ -22,7 +22,7 @@ paths: ["lib/features/leads/types/schemas.ts", "lib/features/leads/import-servic
       - `listLeadsSchema` 自体は知らない項目を落とす。ただ、`organizationProcedure` の `organizationInputSchema` が `.passthrough()` で、tRPC は複数の `.input()` の結果を重ねてつなぐので、手続きの `input`（エクスポートの `filterInput` も）には、送られた `advancedFilter` が検査されないまま残る
       - 条件（`listWhere`・`leadListConditions`）と監査（`exportAuditFilters`）が決まった項目だけを読むので効かない。保証は手続きを通したテスト（`test/unit/features/leads-bulk-limits.test.ts`。WHERE を SQL にして比べ、監査の `filters` も比べる）で、スキーマ単体のテストではない
       - `...input` や `...filterInput` を、監査の metadata や外への送信にそのまま広げない（送られた値がそのまま流れる）。passthrough の扱いは #743
-    - HTTP では、入れ子がとても深い値は、zod の前に superjson の `deserialize` でスタックが溢れる（手元の Node 22 で1,000〜2,000段の間）。tRPC はこれを BAD_REQUEST で返す（`resolveResponse` の入力の読み込み）ので、500 にも当番への通知にもならない。テストの `createCaller` は superjson を通らないので、10,000段でも無視される
+    - HTTP では、入れ子がとても深い値は zod の前に superjson で BAD_REQUEST になる（下のルールの superjson の項）。500 にも当番への通知にもならない。テストの `createCaller` は superjson を通らないので、10,000段でも無視される
 - **理由**: どれも件数に上限がなく、1回のリクエストで何件でも送れた。実質の上限は Vercel の関数の本文の上限（約4.5MB）だけだった。`bulkCreate` は1件あたり最大9個の bind パラメータを使い、PostgreSQL のドライバー（postgres-js）が1文に送れる数（65,534 未満）を、約7,000件を超える1回の取り込みで超えていた（#604 の作業で、drizzle の `toSQL` で数えた）。`advancedFilter` は `z.lazy` の再帰のスキーマで、入れ子を最後の段まで読み、約800段でスタックが溢れていた（`RangeError`。手元の vitest で測った。tRPC は入力のエラーとして BAD_REQUEST の「Maximum call stack size exceeded」で返すが、`safeParse` を直接呼ぶと例外が出る）
 - **却下案**:
   - 取り込みの上限を超えたら、プレビューで知らせて取り込ませない：今は1回で通る1,001〜約7,000件のファイルが通らなくなる（受け入れ基準「今の使い方で通る」に合わない）
@@ -37,5 +37,5 @@ paths: ["lib/features/leads/types/schemas.ts", "lib/features/leads/import-servic
     - 上限は保存する内容を縛るもので、検査の量は縛らない。zod v3 は `.max()` を超えた配列でも要素をすべて検査するので、1回の検査の量の上限は本文の上限（約4.5MB）になる。zod より前で深さと大きさを確かめるかは #742 で決める
   - 取り込みの回数は middleware の回数制限（`leads.bulkCreate` は1分に10回、パスごと・IP ごと・インスタンスごと）にも数えられる。1分に約10,000件を超える取り込みは途中で 429 になりうる。そのときも残りの行がプレビューに残る（待てば続けられると知らせる文言は #689）
   - 保存したフィルター（`filters.create`・`filters.update`）とタグの付与（`tags.setLeadTags`・`tags.bulkSetLeadTags`）の上限は #669 で付けた
-    - 保存したフィルターは、リードのスキーマを読まず、`lib/features/filters/types/schemas.ts` の `SAVED_FILTER_LIMITS`（`LEAD_FILTER_LIMITS` と同じ数）と、段ごとに組み立てたスキーマを持つ。#699 でリードの `advancedFilter`・`filterGroupSchema`・`LEAD_FILTER_LIMITS` を消しても、保存したフィルターは変わらない
+    - 保存したフィルターは、リードのスキーマを読まず、`lib/features/filters/types/schemas.ts` の `SAVED_FILTER_LIMITS`（#604 の `LEAD_FILTER_LIMITS`（#699 で削除）と同じ数）と、段ごとに組み立てたスキーマを持つ。#699 でリードの `advancedFilter`・`filterGroupSchema`・`LEAD_FILTER_LIMITS` を消したが、保存したフィルターは変わらない
     - タグの付与の `tagIds` は20個（`LEAD_TAGS_MAX`、`lib/features/tags/types/schemas.ts`）。タグは手で選ぶ印で、一覧はリードのタグを2つ（`TagBadgeList` の既定は3つ）と残りの数で見せる。1回の呼び出しの上限で、1つのリードが持てる数ではない（`addToLead` で1つずつ足すと20個を超えうる。リードごとの上限にするかは、タグを付ける画面（Epic #430）を作る前に決める）。`bulkSetLeadTags` の `leadIds` は1ページ分（`LEAD_LIST_PAGE_MAX`）で、1回の insert は最大 100 × 20 = 2,000 行。重なった id は数に入れ、書くのは1回（前と同じ）
