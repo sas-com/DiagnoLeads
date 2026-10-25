@@ -6,7 +6,8 @@ import type { ChoiceQuestionView } from '@/components/features/diagnosis-runner/
 import { DiagnosisRunnerProvider } from '@/components/features/diagnosis-runner/runner-context';
 import { StepNavigation, SubmitErrorAlert } from '@/components/features/diagnosis-runner/step-layout';
 import { StepProgress } from '@/components/features/diagnosis-runner/step-progress';
-import { act, render, renderHook, screen, within } from '@testing-library/react';
+import { TurnstileWidget } from '@/components/features/diagnosis-runner/turnstile-widget';
+import { act, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import { type ReactNode, createRef } from 'react';
@@ -25,6 +26,13 @@ const messages = {
     next: 'Next',
     submit: 'Send',
     submitting: 'Sending',
+    verification: {
+      slow: 'The check is taking a while.',
+      unavailable: 'The check could not be shown.',
+      retry: 'Try again',
+      alternative: 'Contact us through <link>the booking page</link>.',
+      alternativeContact: 'Call <phone></phone> or write to <email></email>.',
+    },
   },
 };
 
@@ -126,6 +134,93 @@ describe('QuestionField', () => {
         </NextIntlClientProvider>
       )
     ).toThrow(/DiagnosisRunnerProvider/);
+  });
+});
+
+describe('TurnstileWidget', () => {
+  type Options = {
+    callback: (token: string) => void;
+    'error-callback': () => void;
+    'before-interactive-callback': () => void;
+  };
+  const mockTurnstile = () => {
+    const rendered: { options?: Options } = {};
+    window.turnstile = {
+      render: vi.fn((_container: HTMLElement, options: Record<string, unknown>) => {
+        rendered.options = options as unknown as Options;
+        return 'widget-1';
+      }),
+      remove: vi.fn(),
+    };
+    return rendered;
+  };
+  const contact = { phone: '03-0000-0000', phoneE164: '+81300000000', email: 'help@example.com' };
+  const widget = (onToken = vi.fn()) => (
+    <TurnstileWidget
+      siteKey="site-key"
+      action="demo"
+      locale="en"
+      onToken={onToken}
+      onRetry={vi.fn()}
+      alternativeContact={contact}
+    />
+  );
+
+  afterEach(() => {
+    vi.useRealTimers();
+    window.turnstile = undefined;
+    for (const script of document.head.querySelectorAll('script[src^="https://challenges.cloudflare.com/"]')) {
+      script.remove();
+    }
+  });
+
+  // A network that drops Cloudflare's requests: the script neither loads nor fails (#537)
+  it('offers the other ways while the check is still loading after a while', async () => {
+    vi.useFakeTimers();
+    render(wrap(widget()));
+    expect(screen.getByTestId('demo-turnstile-slow')).toBeEmptyDOMElement();
+    await act(async () => {
+      vi.advanceTimersByTime(10_000);
+    });
+    const help = screen.getByRole('status');
+    expect(help).toHaveTextContent('The check is taking a while.');
+    expect(within(help).getByRole('link', { name: '03-0000-0000' })).toHaveAttribute(
+      'href',
+      'tel:+81300000000'
+    );
+    // The check stays: it may still come
+    expect(screen.getByTestId('demo-turnstile')).toBeInTheDocument();
+  });
+
+  it('offers them after two failed checks, and takes them back once one passes', async () => {
+    const rendered = mockTurnstile();
+    const onToken = vi.fn();
+    render(wrap(widget(onToken)));
+    await waitFor(() => expect(rendered.options).toBeDefined());
+    // Turnstile retries on its own: one failure is not enough
+    act(() => rendered.options?.['error-callback']());
+    expect(screen.getByTestId('demo-turnstile-slow')).toBeEmptyDOMElement();
+    act(() => rendered.options?.['error-callback']());
+    expect(screen.getByRole('status')).toHaveTextContent('The check is taking a while.');
+
+    act(() => rendered.options?.callback('token-1'));
+    expect(screen.getByTestId('demo-turnstile-slow')).toBeEmptyDOMElement();
+    expect(onToken).toHaveBeenLastCalledWith('token-1');
+  });
+
+  it('does not count the time a check box waits for the visitor', async () => {
+    vi.useFakeTimers();
+    const rendered = mockTurnstile();
+    render(wrap(widget()));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(rendered.options).toBeDefined();
+    act(() => rendered.options?.['before-interactive-callback']());
+    await act(async () => {
+      vi.advanceTimersByTime(10_000);
+    });
+    expect(screen.getByTestId('demo-turnstile-slow')).toBeEmptyDOMElement();
   });
 });
 

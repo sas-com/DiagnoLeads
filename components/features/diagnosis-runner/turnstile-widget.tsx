@@ -8,6 +8,13 @@ import { useRunnerConfig, useRunnerTranslations } from './runner-context';
 const SCRIPT_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
 /** Width of the normal widget; narrower containers (small phones) get the compact one */
 const NORMAL_WIDTH = 300;
+/**
+ * A network that drops Cloudflare's requests leaves the check loading, or failing again and
+ * again while Turnstile retries on its own (every 8 seconds by default): after this long, or
+ * this many failures, the other ways to reach the operator are offered below the check (#537)
+ */
+const SLOW_AFTER_MS = 10_000;
+const FAILURES_BEFORE_HELP = 2;
 
 interface TurnstileApi {
   render: (container: HTMLElement, options: Record<string, unknown>) => string;
@@ -87,11 +94,17 @@ export function TurnstileWidget({
   const containerRef = useRef<HTMLDivElement>(null);
   const [compact, setCompact] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
+  /** Still no token after a while, or failed again and again: the check stays, help is added */
+  const [slow, setSlow] = useState(false);
 
   useEffect(() => {
     let widgetId: string | undefined;
     let cancelled = false;
+    let failures = 0;
     onToken(null);
+    const slowTimer = window.setTimeout(() => {
+      if (!cancelled) setSlow(true);
+    }, SLOW_AFTER_MS);
     loadTurnstile()
       .then((turnstile) => {
         const container = containerRef.current;
@@ -105,23 +118,70 @@ export function TurnstileWidget({
           size: narrow ? 'compact' : 'normal',
           // The site has no dark theme
           theme: 'light',
-          callback: (token: string) => onToken(token),
+          callback: (token: string) => {
+            window.clearTimeout(slowTimer);
+            setSlow(false);
+            onToken(token);
+          },
+          // A check box is shown: from here the wait is the visitor's, not the network's
+          'before-interactive-callback': () => window.clearTimeout(slowTimer),
           // Turnstile shows its own message (and tries again) inside the widget
           'expired-callback': () => onToken(null),
-          'error-callback': () => onToken(null),
+          'error-callback': () => {
+            onToken(null);
+            failures += 1;
+            if (failures >= FAILURES_BEFORE_HELP) setSlow(true);
+          },
           'refresh-expired': 'auto',
         });
       })
       .catch(() => {
         if (cancelled) return;
+        window.clearTimeout(slowTimer);
         onToken(null);
         setUnavailable(true);
       });
     return () => {
       cancelled = true;
+      window.clearTimeout(slowTimer);
       if (widgetId) window.turnstile?.remove(widgetId);
     };
   }, [siteKey, action, locale, onToken]);
+
+  // The booking page if there is one, otherwise the phone and email (#420)
+  const otherWays = alternativeUrl ? (
+    <span className="block">
+      {t.rich('alternative', {
+        link: (chunks) => (
+          <a
+            href={alternativeUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={ALTERNATIVE_LINK}
+          >
+            {chunks}
+          </a>
+        ),
+      })}
+    </span>
+  ) : (
+    alternativeContact && (
+      <span className="block">
+        {t.rich('alternativeContact', {
+          phone: () => (
+            <a href={`tel:${alternativeContact.phoneE164}`} className={ALTERNATIVE_LINK}>
+              {alternativeContact.phone}
+            </a>
+          ),
+          email: () => (
+            <a href={`mailto:${alternativeContact.email}`} className={ALTERNATIVE_LINK}>
+              {alternativeContact.email}
+            </a>
+          ),
+        })}
+      </span>
+    )
+  );
 
   if (unavailable) {
     return (
@@ -138,50 +198,35 @@ export function TurnstileWidget({
           <RefreshCw className="h-4 w-4" aria-hidden="true" />
           {t('retry')}
         </button>
-        {alternativeUrl ? (
-          <p>
-            {t.rich('alternative', {
-              link: (chunks) => (
-                <a
-                  href={alternativeUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={ALTERNATIVE_LINK}
-                >
-                  {chunks}
-                </a>
-              ),
-            })}
-          </p>
-        ) : (
-          alternativeContact && (
-            <p>
-              {t.rich('alternativeContact', {
-                phone: () => (
-                  <a href={`tel:${alternativeContact.phoneE164}`} className={ALTERNATIVE_LINK}>
-                    {alternativeContact.phone}
-                  </a>
-                ),
-                email: () => (
-                  <a href={`mailto:${alternativeContact.email}`} className={ALTERNATIVE_LINK}>
-                    {alternativeContact.email}
-                  </a>
-                ),
-              })}
-            </p>
-          )
-        )}
+        {otherWays}
       </div>
     );
   }
 
   // Reserves the widget's height so the buttons below do not jump when it appears
   return (
-    <div
-      ref={containerRef}
-      className={cn('w-full', compact ? 'min-h-[140px]' : 'min-h-[65px]')}
-      data-testid={`${idPrefix}-turnstile`}
-    />
+    <div>
+      <div
+        ref={containerRef}
+        className={cn('w-full', compact ? 'min-h-[140px]' : 'min-h-[65px]')}
+        data-testid={`${idPrefix}-turnstile`}
+      />
+      {/* Always there and filled in later, so screen readers announce the help */}
+      <output
+        className={cn(
+          'block text-sm leading-relaxed',
+          slow && 'mt-2 space-y-1 rounded-xl border border-ax-yellow-dark bg-ax-yellow/10 p-3'
+        )}
+        data-testid={`${idPrefix}-turnstile-slow`}
+      >
+        {slow && (
+          <>
+            <span className="block font-bold">{t('slow')}</span>
+            {otherWays}
+          </>
+        )}
+      </output>
+    </div>
   );
 }
 
