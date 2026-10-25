@@ -765,6 +765,25 @@ describe('AxDiagnosisResult', () => {
     expect(screen.queryByText(/働き方の変化|社外からの利用/)).not.toBeInTheDocument();
   });
 
+  it('speaks to the answer behind the agility challenge (#658)', () => {
+    const agility = { ...publicResult, challenges: { ...publicResult.challenges, primary: 'agility' as const } };
+    renderResult({ answers: { ...as400Answers, challenges: ['deadline'] }, result: agility });
+    const challenge = screen.getByTestId('ax-result-challenge');
+    expect(challenge).toHaveTextContent('モノ：市場の変化に対応できないシステム');
+    expect(challenge).toHaveTextContent('保守期限が迫り');
+    expect(challenge).toHaveTextContent('サポートの続く基盤へ段階的に切り替えることをめざします');
+    expect(challenge).not.toHaveTextContent('新商品・新サービス');
+    cleanup();
+
+    renderResult({
+      platform: 'access',
+      answers: { ...accessAnswers, access_challenges: ['support'] },
+      result: agility,
+    });
+    expect(screen.getByTestId('ax-result-challenge')).toHaveTextContent('64bit 化・PC の入れ替えで');
+    expect(screen.getByTestId('ax-result-challenge')).not.toHaveTextContent('新商品・新サービス');
+  });
+
   it('shows no documents or seminars unless the organization offers them (#153)', () => {
     renderResult();
     expect(screen.queryByTestId('ax-info-offers')).not.toBeInTheDocument();

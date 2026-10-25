@@ -546,7 +546,7 @@
         "people": {
           "title": "People: a system that depends on a few individuals",
           "problem": "Years of changes have turned the specification into a black box, and fewer engineers can maintain it.",
-          "solution": "Move to a web system the next generation can work with and reduce the continuity risk."
+          "solution": "Move to a web system the next generation can work with and aim to reduce the continuity risk."
         },
         "cost": {
           "title": "Cost: maintenance that limits growth",
@@ -556,12 +556,30 @@
         "agility": {
           "title": "Agility: a system that cannot keep up with the market",
           "problem": "Every time you try to respond to new customers or market changes, the limits of the existing system hold back new products and services.",
-          "solution": "Aim for a system that makes it easier to add features in short cycles and adapts more easily to market changes."
+          "solution": "Aim for a system that makes it easier to add features in short cycles and adapts more easily to market changes.",
+          "byAnswer": {
+            "deadline": {
+              "problem": "Support for the server, OS or software is ending soon, and the current system is getting hard to keep using.",
+              "solution": "Aim to switch in stages to a supported platform before the support ends."
+            },
+            "remote": {
+              "problem": "It cannot be used from outside the office, from home or from other sites, so it is hard to keep up with new ways of working.",
+              "solution": "Aim for a web system used in a browser that is easier to use from outside the office and from home."
+            },
+            "stability": {
+              "problem": "It cannot be shared at the same time, is slow or files get corrupted, and this holds back daily work.",
+              "solution": "We suggest a form that fits the number of users and how they work, together with the recommended approach."
+            },
+            "support": {
+              "problem": "The current tool does not work (or may stop working) after moving to Microsoft 365, 64-bit or a new PC.",
+              "solution": "We suggest a form you can keep using with a new Office or PC, together with the recommended approach."
+            }
+          }
         },
         "data": {
           "title": "Data: data that cannot support decisions",
           "problem": "Data is locked in proprietary formats, so management metrics are not available in real time.",
-          "solution": "Use AI agents to organize data and make it easier to get the information needed for proactive decisions."
+          "solution": "Use AI agents to organize data and aim to make it easier to get the information needed for proactive decisions."
         }
       },
       "noPrimaryChallenge": {

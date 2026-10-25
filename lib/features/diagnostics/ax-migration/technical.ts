@@ -40,3 +40,23 @@ export function unknownTechnicalQuestions(answers: DiagnosticAnswers): Diagnosti
       : value === 'unknown';
   });
 }
+
+/** Answers that put a result under the agility challenge, other than agility itself (#658) */
+export const AGILITY_ANSWER_KEYS = ['deadline', 'remote', 'stability', 'support'] as const;
+export type AgilityAnswerKey = (typeof AGILITY_ANSWER_KEYS)[number];
+
+/**
+ * Which answer the agility challenge of the result should speak to. Null when the respondent
+ * chose agility itself ("partners and new features take a long time"): the brochure wording
+ * fits that one. Otherwise the first of deadline, remote, stability and support (#658)
+ */
+export function agilityAnswer(answers: DiagnosticAnswers): AgilityAnswerKey | null {
+  const chosen = (id: string): string[] => {
+    const value = answers[id];
+    return Array.isArray(value) ? value : [];
+  };
+  const server = chosen('challenges');
+  if (server.includes('agility')) return null;
+  const all = new Set([...server, ...chosen('access_challenges')]);
+  return AGILITY_ANSWER_KEYS.find((key) => all.has(key)) ?? null;
+}

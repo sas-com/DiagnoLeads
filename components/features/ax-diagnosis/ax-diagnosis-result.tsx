@@ -15,7 +15,10 @@ import type {
   ChallengeType,
   Level,
 } from '@/lib/features/diagnostics/ax-migration/evaluate';
-import { unknownTechnicalQuestions } from '@/lib/features/diagnostics/ax-migration/technical';
+import {
+  agilityAnswer,
+  unknownTechnicalQuestions,
+} from '@/lib/features/diagnostics/ax-migration/technical';
 import { applicableQuestions } from '@/lib/features/diagnostics/engine';
 import type { DiagnosticAnswers, DiagnosticLocale } from '@/lib/features/diagnostics/types';
 import type { PublicInfoOffers } from '@/lib/features/info-offers/types/schemas';
@@ -141,6 +144,9 @@ export function AxDiagnosisResult({
   const stepsPrefix = accessPath ? 'accessSteps.items' : 'steps';
   const reasons = [...result.reasons.difficulty, ...result.reasons.urgency];
   const unknownQuestions = unknownTechnicalQuestions(answers);
+  // The agility challenge speaks to the answer behind it, not always to new products (#658)
+  const agility = primary === 'agility' ? agilityAnswer(answers) : null;
+  const challengeKey = agility ? `challenges.agility.byAnswer.${agility}` : `challenges.${primary}`;
 
   // Encourage the next step in words that fit the result; a deadline already passed is not
   // "close" (#288)
@@ -354,13 +360,13 @@ export function AxDiagnosisResult({
               { className: 'text-xl font-bold' },
               t(`challenges.${primary}.title`)
             )}
-            <p className="leading-relaxed text-gray-700">{t(`challenges.${primary}.problem`)}</p>
+            <p className="leading-relaxed text-gray-700">{t(`${challengeKey}.problem`)}</p>
             <p className="flex items-start gap-2 rounded-xl bg-ax-teal/5 p-3 text-sm leading-relaxed">
               <CheckCircle2
                 className="mt-0.5 h-4 w-4 shrink-0 text-ax-teal-dark"
                 aria-hidden="true"
               />
-              <span>{t(`challenges.${primary}.solution`)}</span>
+              <span>{t(`${challengeKey}.solution`)}</span>
             </p>
           </>
         ) : (

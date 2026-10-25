@@ -1,4 +1,7 @@
-import { unknownTechnicalQuestions } from '@/lib/features/diagnostics/ax-migration/technical';
+import {
+  agilityAnswer,
+  unknownTechnicalQuestions,
+} from '@/lib/features/diagnostics/ax-migration/technical';
 import { accessAnswers, as400Answers } from '@/test/fixtures/ax-migration';
 import { describe, expect, it } from 'vitest';
 
@@ -28,5 +31,27 @@ describe('unknownTechnicalQuestions', () => {
       access_features: ['unknown'],
     }).map((q) => q.id);
     expect(ids).toEqual(['access_features']);
+  });
+});
+
+describe('agilityAnswer (#658)', () => {
+  it('keeps the brochure wording when agility itself was chosen', () => {
+    expect(agilityAnswer({ ...as400Answers, challenges: ['agility', 'deadline'] })).toBeNull();
+  });
+
+  it('speaks to the other answers that count as agility, in a fixed order', () => {
+    expect(agilityAnswer({ ...as400Answers, challenges: ['remote', 'deadline'] })).toBe('deadline');
+    expect(agilityAnswer({ ...as400Answers, challenges: ['remote'] })).toBe('remote');
+    expect(agilityAnswer({ ...accessAnswers, access_challenges: ['support', 'stability'] })).toBe(
+      'stability'
+    );
+    expect(agilityAnswer({ ...accessAnswers, access_challenges: ['support'] })).toBe('support');
+    expect(agilityAnswer({ ...accessAnswers, access_challenges: ['remote'] })).toBe('remote');
+  });
+
+  it('is null when no answer counts as agility', () => {
+    expect(agilityAnswer({ ...as400Answers, challenges: ['people'] })).toBeNull();
+    expect(agilityAnswer({ ...accessAnswers, access_challenges: ['people'] })).toBeNull();
+    expect(agilityAnswer({})).toBeNull();
   });
 });
