@@ -5,29 +5,32 @@
  */
 
 import { CLAUDE_MAX_TOKENS, CLAUDE_MODEL, anthropic as claude } from '../client';
+import { reportClaudeFailure } from '../failures';
+import type { LeadForClaude } from '../prompt-input';
+import { LEAD_DATA_TAG, UNTRUSTED_LEAD_DATA_POLICY, leadDataBlock } from '../prompt-safety';
+
+const SUMMARY_SYSTEM_PROMPT = `You are an expert B2B sales analyst. You summarize leads for the sales team.
+
+${UNTRUSTED_LEAD_DATA_POLICY}`;
 
 /**
  * Generate lead summary
- * @param lead - Lead data to summarize
+ * @param lead - Lead data to summarize (its id is only logged, with the fields that look like a
+ *   prompt injection)
  * @returns AI-generated summary
  */
-export async function generateLeadSummary(lead: {
-  name?: string | null;
-  email?: string | null;
-  company?: string | null;
-  industry?: string | null;
-  position?: string | null;
-  notes?: string | null;
-  status?: string | null;
-}): Promise<string> {
-  const prompt = `Provide a concise 2-3 sentence summary of this lead:
+export async function generateLeadSummary(
+  lead: Partial<Pick<LeadForClaude, 'id' | 'company' | 'status'>>
+): Promise<string> {
+  // The lead's fields only inside the <lead_data> block (untrusted, from public forms), the
+  // task after it (#47)
+  const data = leadDataBlock(
+    { company: lead.company || null, status: lead.status || null },
+    { where: 'lead-summary', leadId: lead.id }
+  );
+  const prompt = `${data}
 
-Name: ${lead.name || 'N/A'}
-Company: ${lead.company || 'N/A'}
-Industry: ${lead.industry || 'N/A'}
-Position: ${lead.position || 'N/A'}
-Status: ${lead.status || 'N/A'}
-Notes: ${lead.notes || 'N/A'}
+Provide a concise 2-3 sentence summary of the lead in <${LEAD_DATA_TAG}>.
 
 Focus on key business value and next steps.`;
 
@@ -36,6 +39,7 @@ Focus on key business value and next steps.`;
       model: CLAUDE_MODEL,
       max_tokens: CLAUDE_MAX_TOKENS,
       output_config: { effort: 'low' },
+      system: SUMMARY_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: prompt }],
     });
 
@@ -55,6 +59,7 @@ Focus on key business value and next steps.`;
     return summary.trim();
   } catch (error) {
     console.error('Error generating lead summary:', error);
+    await reportClaudeFailure('lead-summary', error);
     return 'Unable to generate summary';
   }
 }

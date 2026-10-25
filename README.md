@@ -64,6 +64,7 @@ AI-Powered B2B Diagnostic Platform for **Holdings, Group Companies & Enterprise 
 |---|---|---|
 | 死活確認 | [/api/health](https://diagnoleads-v2.vercel.app/api/health) | `{"status":"ok"}` を返す（DB は見ない） |
 | 死活監視 | GitHub Actions「Uptime」（`.github/workflows/uptime.yml`） | 10分ごとに本番を確かめ、落ちたら `uptime` ラベルの Issue を立てる（#364） |
+| 性能の計測 | GitHub Actions「Lighthouse」（`.github/workflows/lighthouse.yml`） | 毎日1回、本番の公開5ページをモバイル・デスクトップで3回ずつ測り、中央値を実行の Summary に出す。今は測るだけ（目標と判定は決定 `2026-10-24-performance-targets`、#569・#612） |
 | エラー通知 | `lib/ops/alert.ts` | サーバーエラーと、公開フォームでボットを断った回数が多いときに `OPS_ALERT_EMAIL` へメール（#227・#351） |
 | 招待のメール確認 | `/[locale]/invite/[token]` | 停止中。`INVITE_REQUIRE_VERIFIED_EMAIL=true` で、招待の承認に確認済みのメールアドレスが要るようになる。自社ドメインの送信元ができてからオンにする（#128） |
 | ホスティング | Vercel（プロジェクト `diagnoleads-v2`） | 環境変数は Vercel で管理。閲覧には権限が必要 |

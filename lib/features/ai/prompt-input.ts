@@ -42,7 +42,8 @@ const entryCost = (depth: number) => 2 * (depth + 1) + 2;
 /**
  * A copy of `value` whose indented JSON takes about `budget.left` characters at most: strings
  * are clipped, and array items and object entries are left out once the budget runs out.
- * Escapes are not counted, so text full of quotes or control characters can take more.
+ * Escapes are not counted, so text full of quotes, control characters, `<` `>` or what looks
+ * like them (which the prompt's data block escapes, prompt-safety.ts) can take more.
  */
 function boundValue(value: unknown, budget: { left: number }, depth: number): unknown {
   if (typeof value === 'string') {
@@ -91,6 +92,33 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
+/** Same as AX_RESPONSES_KEY in lib/features/leads/mql-level.ts: the AX diagnosis summary */
+const AX_RESPONSES_KEY = 'axMigration';
+/** Same as DIAGNOSIS_LEAD_RESPONSES_KEY in diagnosis-builder/submission-service.ts */
+const DIAGNOSIS_RESPONSES_KEY = 'diagnosis';
+/** Entries of a diagnosis summary that come from the contact form, not from the answers */
+const CONTACT_SUMMARY_KEYS = new Set(['department']);
+
+/**
+ * The diagnosis summaries of the responses and nothing else (#406). The summaries hold the
+ * result of choices made in the diagnosis; anything else in `responses` can be any JSON a member,
+ * an API client or an old form wrote, names and email addresses included. The department typed
+ * in the AX contact form is left out too.
+ */
+function diagnosisSummaries(responses: Lead['responses']): Record<string, unknown> | null {
+  if (!isRecord(responses) || Array.isArray(responses)) return null;
+  const summaries: Record<string, unknown> = {};
+  for (const key of [AX_RESPONSES_KEY, DIAGNOSIS_RESPONSES_KEY]) {
+    const summary = responses[key];
+    if (isRecord(summary) && !Array.isArray(summary)) {
+      summaries[key] = Object.fromEntries(
+        Object.entries(summary).filter(([entry]) => !CONTACT_SUMMARY_KEYS.has(entry))
+      );
+    }
+  }
+  return Object.keys(summaries).length > 0 ? summaries : null;
+}
+
 function boundResponses(responses: Record<string, unknown> | null): Record<string, unknown> | null {
   // Measured as the prediction prompt writes them (indented)
   if (!responses || JSON.stringify(responses, null, 2).length <= MAX_PROMPT_RESPONSES_CHARS) {
@@ -101,19 +129,39 @@ function boundResponses(responses: Record<string, unknown> | null): Record<strin
 }
 
 /**
- * The lead as handed to Claude (scoring, prediction, summary): every text that goes into a
- * prompt is cut to MAX_PROMPT_FIELD_CHARS and the responses to about
- * MAX_PROMPT_RESPONSES_CHARS of JSON, so each counted call has a bounded size. Only the copy
- * handed to Claude is cut; the lead itself (and what is written back) is unchanged.
+ * The lead as handed to Claude (scoring, prediction, summary). Nothing that points at a person
+ * goes to Claude: no name, email address, phone number or free-text notes, only the company, how
+ * far the lead has come and the diagnosis summaries without the contact department (#406). Every text that goes into a prompt is cut to
+ * MAX_PROMPT_FIELD_CHARS and the responses to about MAX_PROMPT_RESPONSES_CHARS of JSON, so each
+ * counted call has a bounded size (#405). Only the copy handed to Claude is cut; the lead itself
+ * (and what is written back) is unchanged.
  */
-export function leadForClaude(lead: Lead): Lead {
+export type LeadForClaude = Pick<
+  Lead,
+  'id' | 'company' | 'status' | 'source' | 'score' | 'responses' | 'createdAt'
+>;
+
+export function leadForClaude(lead: Lead): LeadForClaude {
   return {
-    ...lead,
-    email: clipField(lead.email),
-    name: clipField(lead.name),
+    id: lead.id,
     company: clipField(lead.company),
     status: clipField(lead.status),
     source: clipField(lead.source),
-    responses: boundResponses(lead.responses),
+    score: lead.score,
+    responses: boundResponses(diagnosisSummaries(lead.responses)),
+    createdAt: lead.createdAt,
   };
+}
+
+/**
+ * Whether the lead left a name and a phone number. Only the prediction's fallback heuristics read
+ * it, here in the app; it never goes into a prompt (#406)
+ */
+export interface ContactCompleteness {
+  hasName: boolean;
+  hasPhone: boolean;
+}
+
+export function contactCompleteness(lead: Pick<Lead, 'name' | 'phone'>): ContactCompleteness {
+  return { hasName: Boolean(lead.name), hasPhone: Boolean(lead.phone) };
 }

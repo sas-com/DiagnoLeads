@@ -32,7 +32,7 @@ describe('DonutChart', () => {
   afterEach(() => setDarkMode(false));
 
   it('draws one slice per item with its name', () => {
-    const { container } = render(<DonutChart data={data} className="max-w-sm" />);
+    const { container } = render(<DonutChart totalLabel="合計" data={data} className="max-w-sm" />);
 
     const chart = lastChart();
     expect(chart.type).toBe('donut');
@@ -43,34 +43,34 @@ describe('DonutChart', () => {
   });
 
   it('takes as many default colors as there are slices', () => {
-    render(<DonutChart data={data} />);
+    render(<DonutChart totalLabel="合計" data={data} />);
     expect(lastChart().options.colors).toEqual(['#3b82f6', '#eab308', '#10b981']);
   });
 
   it('uses the colors it is given', () => {
-    render(<DonutChart data={data.slice(0, 2)} colors={['rose', 'cyan', 'pink']} />);
+    render(<DonutChart totalLabel="合計" data={data.slice(0, 2)} colors={['rose', 'cyan', 'pink']} />);
     expect(lastChart().options.colors).toEqual(['#f43f5e', '#06b6d4']);
   });
 
-  it('shows the total in the middle and formats each value', () => {
-    render(<DonutChart data={data} valueFormatter={(v) => `${v}件`} />);
+  it('shows the total in the middle, named by the caller, and formats each value', () => {
+    render(<DonutChart totalLabel="Total" data={data} valueFormatter={(v) => `${v}件`} />);
 
     const labels = donutLabelsOf(lastChart().options);
     expect(labels.show).toBe(true);
-    expect(labels.total?.label).toBe('合計');
+    expect(labels.total?.label).toBe('Total');
     expect(labels.total?.formatter?.()).toBe('50件');
     expect(labels.value?.formatter?.('15')).toBe('15件');
   });
 
   it('gives each slice its share of the total in the tooltip', () => {
-    render(<DonutChart data={data} valueFormatter={(v) => `${v}件`} />);
+    render(<DonutChart totalLabel="合計" data={data} valueFormatter={(v) => `${v}件`} />);
 
     expect(tooltipFormatterOf(lastChart().options)(15)).toBe('15件 (30.0%)');
   });
 
   it('shows 0% when every value is zero', () => {
     render(
-      <DonutChart
+      <DonutChart totalLabel="合計"
         data={[
           { name: 'a', value: 0 },
           { name: 'b', value: 0 },
@@ -83,7 +83,7 @@ describe('DonutChart', () => {
 
   it('can hide the labels, the legend and the animation', () => {
     render(
-      <DonutChart
+      <DonutChart totalLabel="合計"
         data={data}
         showLabel={false}
         showLegend={false}
@@ -102,7 +102,7 @@ describe('DonutChart', () => {
 
   it('follows the dark class on <html>', async () => {
     setDarkMode(true);
-    render(<DonutChart data={data} />);
+    render(<DonutChart totalLabel="合計" data={data} />);
 
     const { options } = lastChart();
     expect(options.chart?.foreColor).toBe('#d1d5db');

@@ -23,7 +23,7 @@ import { generateLeadSummary } from '../chat/assistant';
 import { prepareLeadText } from '../embeddings/openai';
 import { consumeAiCalls, consumeEmbeddingCalls } from '../limits';
 import { predictConversion, predictConversionBatch } from '../prediction/conversion';
-import { leadForClaude } from '../prompt-input';
+import { contactCompleteness, leadForClaude } from '../prompt-input';
 import { scoreLeadWithAI, scoreLeadsBatch } from '../scoring/claude';
 import { findSimilarLeads, semanticSearch, updateLeadEmbedding } from '../search/semantic';
 import {
@@ -203,7 +203,10 @@ export const aiRouter = router({
         organizationId: input.organizationId,
         calls: 1,
       });
-      const results = await semanticSearch(input.query, input.organizationId, {
+      const results = await semanticSearch({
+        db: ctx.db,
+        query: input.query,
+        organizationId: input.organizationId,
         limit: input.limit,
         minSimilarity: input.minSimilarity,
       });
@@ -235,7 +238,12 @@ export const aiRouter = router({
       });
     }
 
-    const similar = await findSimilarLeads(input.leadId, input.organizationId, input.limit);
+    const similar = await findSimilarLeads({
+      db: ctx.db,
+      leadId: input.leadId,
+      organizationId: input.organizationId,
+      limit: input.limit,
+    });
 
     return similar;
   }),
@@ -309,7 +317,21 @@ export const aiRouter = router({
         organizationId: input.organizationId,
         calls: 1,
       });
-      await updateLeadEmbedding(input.leadId, input.organizationId, text);
+      // A failed embedding or update throws (INTERNAL_SERVER_ERROR), never reported as success
+      const stored = await updateLeadEmbedding({
+        db: ctx.db,
+        leadId: input.leadId,
+        organizationId: input.organizationId,
+        text,
+      });
+      if (!stored) {
+        // The lead was read in the organization just above, so only a lead deleted in between
+        // gets here: nothing was written, so it is not reported as success (#590)
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'リードが見つかりません',
+        });
+      }
 
       return { success: true };
     }),
@@ -346,7 +368,7 @@ export const aiRouter = router({
         organizationId: input.organizationId,
         calls: 1,
       });
-      const prediction = await predictConversion(leadForClaude(lead));
+      const prediction = await predictConversion(leadForClaude(lead), contactCompleteness(lead));
 
       return {
         leadId: lead.id,
@@ -389,7 +411,12 @@ export const aiRouter = router({
         organizationId: input.organizationId,
         calls: leadsToPredict.length,
       });
-      const predictionsMap = await predictConversionBatch(leadsToPredict.map(leadForClaude));
+      const predictionsMap = await predictConversionBatch(
+        leadsToPredict.map((lead) => ({
+          lead: leadForClaude(lead),
+          contact: contactCompleteness(lead),
+        }))
+      );
 
       return {
         predictions: Array.from(predictionsMap.entries()).map(([leadId, prediction]) => ({

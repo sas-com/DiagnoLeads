@@ -53,11 +53,14 @@ import { type AbstractIntlMessages, createTranslator } from 'next-intl';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-/** Colours of the AX site (app/globals.css) */
+/**
+ * Colours of the AX site (app/globals.css), in the greens the site uses since #420: the teal
+ * names keep their roles (deep for dark bands, tealDark for white text) as in `.ax-site` (#537)
+ */
 const AX = {
-  deep: '#033b3a',
-  tealDark: '#087270',
-  teal: '#06908f',
+  deep: '#002005',
+  tealDark: '#18730e',
+  teal: '#258a2f',
   yellow: '#ecda5a',
   mist: '#f3f3f3',
 } as const;
@@ -115,9 +118,9 @@ function iconSvg(icon: ColumnThumbnailIcon, color: string): string {
  */
 function patternSvg(accent: string): string {
   const discs = [
-    { r: 372, fill: '#04403f' },
-    { r: 300, fill: '#054746' },
-    { r: 228, fill: '#064f4e' },
+    { r: 372, fill: '#03290a' },
+    { r: 300, fill: '#05330e' },
+    { r: 228, fill: '#073d13' },
   ]
     .map(({ r, fill }) => `<circle cx="960" cy="300" r="${r}" fill="${fill}"/>`)
     .join('');

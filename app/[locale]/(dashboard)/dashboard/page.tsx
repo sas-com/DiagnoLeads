@@ -139,15 +139,16 @@ export default function DashboardPage() {
   const narrow = useNarrowScreen();
   const access = useLeadAccess(organizationId);
 
-  const { data, isError, isPlaceholderData, refetch } = trpc.analytics.getDashboard.useQuery(
-    { organizationId, days },
-    {
-      enabled: Boolean(organizationId),
-      staleTime: 60 * 1000,
-      // Keep the figures on screen while another period loads
-      placeholderData: (previous) => previous,
-    }
-  );
+  const { data, dataUpdatedAt, isError, isPlaceholderData, refetch } =
+    trpc.analytics.getDashboard.useQuery(
+      { organizationId, days },
+      {
+        enabled: Boolean(organizationId),
+        staleTime: 60 * 1000,
+        // Keep the figures on screen while another period loads
+        placeholderData: (previous) => previous,
+      }
+    );
   const state: CardState = data ? 'ready' : isError ? 'error' : 'loading';
   const retry = () => {
     void refetch();
@@ -206,7 +207,14 @@ export default function DashboardPage() {
     meetingRate: <NextMeetingRateSection organizationId={organizationId} days={days} />,
     recent: <RecentSection state={state} data={data} onRetry={retry} />,
     analytics: (
-      <AnalyticsPanel state={state} data={data} onRetry={retry} days={days} narrow={narrow} />
+      <AnalyticsPanel
+        state={state}
+        data={data}
+        onRetry={retry}
+        days={days}
+        narrow={narrow}
+        updatedAt={dataUpdatedAt || undefined}
+      />
     ),
     pipeline: <PipelineSection state={state} data={data} onRetry={retry} />,
   };

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { type Browser, expect, test } from '@playwright/test';
 import { answerAs400, canSubmit, fillContact, submit } from './helpers/ax-diagnosis';
 
 /**
@@ -91,14 +91,51 @@ test.describe('AX migration landing page', () => {
     const page = await context.newPage();
     await page.goto('/ja/ax-migration');
     const bar = page.getByTestId('ax-floating-cta');
-    await expect(bar).toHaveAttribute('aria-hidden', 'true');
     await page.getByRole('heading', { name: 'AX化の進め方' }).scrollIntoViewIfNeeded();
     await expect(bar).toHaveAttribute('aria-hidden', 'false');
+    // Back at the top, the hero button is on screen: checked after the bar was shown, so not
+    // the page before it is ready
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect(bar).toHaveAttribute('aria-hidden', 'true');
     await page.locator('#diagnosis').scrollIntoViewIfNeeded();
     await expect(bar).toHaveAttribute('aria-hidden', 'true');
     await context.close();
   });
+
+  test('offers the diagnosis on the first screen of a short phone (#536)', async ({ browser }) => {
+    await expectDiagnosisOnFirstScreen(browser, '/ja/ax-migration');
+  });
 });
+
+/**
+ * On a phone whose browser bars leave about 664px, the first screen has one diagnosis button
+ * that can be read: the hero's once most of it is on screen, otherwise the bottom bar (#536).
+ * Checked at the edge too, as the test-mode banner of this run moves the hero 44px down.
+ */
+async function expectDiagnosisOnFirstScreen(browser: Browser, path: string) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 664 } });
+  const page = await context.newPage();
+  await page.goto(path);
+  const bar = page.getByTestId('ax-floating-cta');
+  // Named only while shown (aria-hidden), so this also waits for the page to be ready
+  const barButton = bar.getByRole('link');
+  const heroButton = page.locator('#ax-hero-cta').getByRole('link').first();
+  await expect(heroButton).not.toBeInViewport({ ratio: 0.75 });
+  await expect(barButton).toBeInViewport();
+
+  // Once the hero button is on screen, the bar steps aside
+  await heroButton.scrollIntoViewIfNeeded();
+  await expect(bar).toHaveAttribute('aria-hidden', 'true');
+
+  // Back to a 10px strip of the hero button at the bottom edge: it cannot be read, so the bar
+  // comes back (waited for from hidden, so a bar that only stays put does not pass)
+  await heroButton.evaluate((element) => {
+    const top = element.getBoundingClientRect().top + window.scrollY;
+    window.scrollTo(0, top - window.innerHeight + 10);
+  });
+  await expect(barButton).toBeInViewport();
+  await context.close();
+}
 
 /**
  * E2E Test: Access landing page (/ax-migration/access, #296)
@@ -133,7 +170,9 @@ test.describe('Access landing page', () => {
     const page = await context.newPage();
     await page.goto('/ja/ax-migration/access');
     const bar = page.getByTestId('ax-floating-cta');
-    await expect(bar).toHaveAttribute('aria-hidden', 'true');
+    // Shown first, so the checks that it is hidden below are not the page before it is ready
+    await page.getByRole('heading', { name: 'そのままにしたときのリスク' }).scrollIntoViewIfNeeded();
+    await expect(bar).toHaveAttribute('aria-hidden', 'false');
     // The heading has scrolled away, the hero buttons are still on screen
     await page.evaluate(() => {
       const heading = document.getElementById('ax-hero-heading') as HTMLElement;
@@ -141,13 +180,18 @@ test.describe('Access landing page', () => {
     });
     await expect(page.locator('#ax-hero-cta')).toBeInViewport();
     await expect(bar).toHaveAttribute('aria-hidden', 'true');
-    await page.getByRole('heading', { name: 'そのままにしたときのリスク' }).scrollIntoViewIfNeeded();
-    await expect(bar).toHaveAttribute('aria-hidden', 'false');
     await page.locator('#ax-consult').scrollIntoViewIfNeeded();
     await expect(bar).toHaveAttribute('aria-hidden', 'true');
     await page.locator('#diagnosis').scrollIntoViewIfNeeded();
     await expect(bar).toHaveAttribute('aria-hidden', 'true');
     await context.close();
+  });
+
+  // The page closest to the edge on a short phone (its hero button is the lowest)
+  test('offers the diagnosis on the first screen of a short phone (#536) @smoke', async ({
+    browser,
+  }) => {
+    await expectDiagnosisOnFirstScreen(browser, '/ja/ax-migration/access');
   });
 
   test('shows the first question right after the hero button on phones (#425)', async ({

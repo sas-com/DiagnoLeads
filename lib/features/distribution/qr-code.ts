@@ -1,4 +1,5 @@
 import QRCode from 'qrcode';
+import { QR_ENTRY_PATH } from './types';
 
 export interface QRCodeOptions {
   size?: 'small' | 'medium' | 'large' | 'xlarge';
@@ -55,11 +56,13 @@ export async function generateQRCode(
 }
 
 /**
- * Build a tracking URL with UTM parameters
+ * Build the tracking URL of a QR campaign: the entry of its short code, with UTM parameters.
+ * The entry sends the visitor on with the UTM parameters stored on the campaign, not with the
+ * ones in this URL (the address it sends to is never taken from the request)
  */
 export function buildTrackingUrl(
   baseUrl: string,
-  assessmentId: string,
+  shortCode: string,
   options: {
     utmSource?: string;
     utmMedium?: string;
@@ -68,7 +71,9 @@ export function buildTrackingUrl(
     customParams?: Record<string, string>;
   } = {}
 ): string {
-  const url = new URL(`${baseUrl}/d/${assessmentId}`);
+  const url = new URL(
+    `${baseUrl.replace(/\/+$/, '')}${QR_ENTRY_PATH}/${encodeURIComponent(shortCode)}`
+  );
 
   const {
     utmSource = 'qrcode',
@@ -94,6 +99,30 @@ export function buildTrackingUrl(
   }
 
   return url.toString();
+}
+
+/** The columns of a QR campaign its tracking URL is built from */
+export interface CampaignUrlFields {
+  shortCode: string;
+  utmSource: string;
+  utmMedium: string;
+  utmCampaign: string | null;
+  utmContent: string | null;
+}
+
+/**
+ * The tracking URL of a saved campaign, built from its short code and UTM columns each time it
+ * is read. qr_campaigns.tracking_url of the campaigns created before #503 still holds /d/<code>,
+ * which never opened; building the URL here makes their QR codes and Copy URL work without
+ * rewriting the stored rows
+ */
+export function campaignTrackingUrl(baseUrl: string, campaign: CampaignUrlFields): string {
+  return buildTrackingUrl(baseUrl, campaign.shortCode, {
+    utmSource: campaign.utmSource,
+    utmMedium: campaign.utmMedium,
+    utmCampaign: campaign.utmCampaign ?? undefined,
+    utmContent: campaign.utmContent ?? undefined,
+  });
 }
 
 /**

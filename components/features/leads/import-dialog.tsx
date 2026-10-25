@@ -23,9 +23,11 @@ import {
   type ImportSummary,
   detectColumnMappings,
   downloadTemplate,
+  importBatches,
   parseCSV,
   parseExcel,
   processImport,
+  withoutImportedRows,
 } from '@/lib/features/leads/import-service';
 import { trpc } from '@/lib/trpc/client';
 import { AlertCircle, CheckCircle, Download, FileSpreadsheet, Upload } from 'lucide-react';
@@ -45,6 +47,7 @@ type ImportStep = 'upload' | 'preview' | 'importing';
 export function ImportDialog({ open, onOpenChange, organizationId, onSuccess }: ImportDialogProps) {
   const t = useTranslations('leads.import');
   const tCommon = useTranslations('common');
+  const tValidation = useTranslations('validation');
 
   const [step, setStep] = useState<ImportStep>('upload');
   const [fileName, setFileName] = useState<string>('');
@@ -54,17 +57,7 @@ export function ImportDialog({ open, onOpenChange, organizationId, onSuccess }: 
   const [summary, setSummary] = useState<ImportSummary | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  const bulkCreate = trpc.leads.bulkCreate.useMutation({
-    onSuccess: (data) => {
-      toast.success(t('importSuccess', { count: data.createdCount }));
-      onSuccess();
-      handleClose();
-    },
-    onError: () => {
-      toast.error(t('importError'));
-      setStep('preview');
-    },
-  });
+  const bulkCreate = trpc.leads.bulkCreate.useMutation();
 
   const handleClose = () => {
     setStep('upload');
@@ -74,6 +67,14 @@ export function ImportDialog({ open, onOpenChange, organizationId, onSuccess }: 
     setMapping(null);
     setSummary(null);
     onOpenChange(false);
+  };
+
+  // The parts go one after another, and closing would not stop the ones not sent yet: the
+  // dialog stays open until the import ends (Cancel, Escape, the close button, #604)
+  const importing = step === 'importing';
+  const handleOpenChange = () => {
+    if (importing) return;
+    handleClose();
   };
 
   const processFile = useCallback(
@@ -157,25 +158,48 @@ export function ImportDialog({ open, onOpenChange, organizationId, onSuccess }: 
     setIsDragging(false);
   };
 
-  const handleImport = () => {
+  const handleImport = async () => {
     if (!summary || !mapping) return;
 
-    const validLeads = summary.results.flatMap((r) => (r.success && r.data ? [r.data] : []));
+    // A larger file goes in parts that leads.bulkCreate takes (LEAD_BULK_CREATE_MAX, #604)
+    const batches = importBatches(summary);
 
-    if (validLeads.length === 0) {
+    if (batches.length === 0) {
       toast.error(t('noData'));
       return;
     }
 
     setStep('importing');
-    bulkCreate.mutate({
-      organizationId,
-      leads: validLeads,
-    });
+    let createdCount = 0;
+    let importedRows = 0;
+    try {
+      // One part after another: each part is created whole or not at all
+      for (const leads of batches) {
+        const data = await bulkCreate.mutateAsync({ organizationId, leads });
+        createdCount += data.createdCount;
+        importedRows += leads.length;
+      }
+    } catch {
+      // The parts before the failed one are created: list them, and keep the failed part and
+      // the parts after it (with the error rows) in the preview. Importing again does not send
+      // the created parts again; but when only the failed part's response was lost (a timeout,
+      // a connection cut before the answer), that part was created and is created twice (#689)
+      if (createdCount > 0) {
+        toast.success(t('importSuccess', { count: createdCount }));
+        onSuccess();
+      }
+      toast.error(t('importError'));
+      setSummary(withoutImportedRows(summary, importedRows));
+      setStep('preview');
+      return;
+    }
+    toast.success(t('importSuccess', { count: createdCount }));
+    onSuccess();
+    handleClose();
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>{t('title')}</DialogTitle>
@@ -278,7 +302,16 @@ export function ImportDialog({ open, onOpenChange, organizationId, onSuccess }: 
                           ) : (
                             <div className="flex items-center gap-1">
                               <AlertCircle className="h-4 w-4 text-red-500" />
-                              <span className="text-xs text-red-600">{result.error}</span>
+                              {/* A value over its limit (#575): the file's column, and the
+                                  limit in the page's language */}
+                              {result.tooLong ? (
+                                <span className="text-xs text-red-600">
+                                  <span className="font-medium">{result.tooLong.column}</span>{' '}
+                                  {tValidation('maxLength', { max: result.tooLong.max })}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-red-600">{result.error}</span>
+                              )}
                             </div>
                           )}
                         </TableCell>
@@ -310,7 +343,7 @@ export function ImportDialog({ open, onOpenChange, organizationId, onSuccess }: 
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleClose}>
+          <Button variant="outline" onClick={handleClose} disabled={importing}>
             {tCommon('cancel')}
           </Button>
           {step === 'preview' && summary && (

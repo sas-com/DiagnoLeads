@@ -1,10 +1,10 @@
 'use client';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useSemanticSearch } from '@/hooks/use-ai';
+import { MAX_SEMANTIC_SEARCH_QUERY_CHARS } from '@/lib/features/ai/types/schemas';
 import { ExternalLink, Loader2, Search, Sparkles } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
@@ -65,6 +65,7 @@ export function SemanticSearch({ organizationId }: SemanticSearchProps) {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t('semanticSearchPlaceholder')}
+              maxLength={MAX_SEMANTIC_SEARCH_QUERY_CHARS}
               className="pl-10"
             />
           </div>
@@ -116,7 +117,6 @@ export function SemanticSearch({ organizationId }: SemanticSearchProps) {
                         <div className="text-sm text-gray-600 truncate mt-1">{lead.company}</div>
                       )}
                       <div className="flex items-center gap-2 mt-2">
-                        {lead.industry && <Badge variant="secondary">{lead.industry}</Badge>}
                         <span className="text-xs text-gray-500">{lead.email}</span>
                       </div>
                     </div>

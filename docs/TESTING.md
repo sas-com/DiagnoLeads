@@ -37,6 +37,12 @@
 *.test.ts
 ```
 
+### 置き場所
+- ユニットテストは `test/unit/**` に置く（ソースと同じ場所には置かない。決定 `base-test-directory`）
+- 機能（`lib/features/{feature}`）のテストが複数あるときは、`test/unit/features/{feature}/` のサブディレクトリに置いてよい（`{feature}` は `lib/features/` のディレクトリ名と同じ）。1つだけなら従来どおりフラットに置く（`test/unit/features/{feature}.test.ts` か `{feature}-<対象>.test.ts`）。決定 `2026-10-24-test-feature-subdirectories`（`base-test-directory` の補足）
+- 実 DB のテストは `test/unit/integration/*.db.test.ts`（下の「実 DB テスト」。決定 `2026-10-24-test-file-naming`）
+- 既存のテストを移すためだけの PR は作らない（決定のルール）
+
 ### 対象
 - 純粋関数（入力→出力が決定的）
 - バリデーション・スキーマ

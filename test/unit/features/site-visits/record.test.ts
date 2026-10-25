@@ -9,7 +9,7 @@ import {
   recordSiteVisit,
 } from '@/lib/features/site-visits/record';
 import { visitParamsOf } from '@/lib/features/site-visits/request';
-import { forgetDaySaltForTests } from '@/lib/features/site-visits/visitor';
+import { forgetDaySaltForTests, visitorHashOf } from '@/lib/features/site-visits/visitor';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // The order of the refusals of one view and the salt kept by the server (#412). The rules
@@ -59,7 +59,7 @@ function fakeDb() {
 const view = (
   db: Database,
   path: string,
-  overrides: Partial<{ ip: string; now: Date }> = {}
+  overrides: Partial<{ ip: string; userAgent: string; now: Date }> = {}
 ) => {
   const page = sitePageOf(path);
   if (!page) throw new Error(`not measured: ${path}`);
@@ -68,7 +68,7 @@ const view = (
     params: visitParamsOf(''),
     referrerHost: null,
     ip: overrides.ip ?? '203.0.113.5',
-    userAgent: CHROME,
+    userAgent: overrides.userAgent ?? CHROME,
     now: overrides.now ?? new Date('2026-10-23T03:00:00Z'),
   });
 };
@@ -123,6 +123,19 @@ describe('recordSiteVisit', () => {
       'org-operator:2026-10-23',
       expect.any(Date)
     );
+  });
+
+  it('tells the device of a long User-Agent from its head, and hashes the visitor from all of it (#705)', async () => {
+    const { db, asked } = fakeDb();
+    // 「Mobile」 past the first 512 characters is not read for the device
+    const userAgent = `${'Android '.repeat(20_000)}Mobile`;
+    const hashOf = (ua: string) =>
+      visitorHashOf({ salt: 'salt-of-the-day', organizationId: 'org-operator', ip: '203.0.113.5', userAgent: ua });
+    expect(await view(db, '/ja/ax-migration', { userAgent })).toBe('recorded');
+    expect(asked.views).toEqual([
+      expect.objectContaining({ device: 'tablet', visitorHash: hashOf(userAgent) }),
+    ]);
+    expect(asked.views[0]).not.toMatchObject({ visitorHash: hashOf(userAgent.slice(0, 512)) });
   });
 
   it('refuses past the address limits before looking up the diagnosis or counting the cap', async () => {

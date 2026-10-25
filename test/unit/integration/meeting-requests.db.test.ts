@@ -20,6 +20,7 @@ import {
   organizations,
   users,
 } from '@/lib/db/schema';
+import { requestAxMigrationConsultation } from '@/lib/features/diagnostics/ax-migration/submission-service';
 import { getWeekMeetings } from '@/lib/features/leads/meetings';
 import {
   MEETING_PREFERENCES_WINDOW_MS,
@@ -329,6 +330,47 @@ describe.skipIf(!url)('meeting requests (PostgreSQL)', () => {
       identityVerified: false,
     });
     expect(later).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses preferences sent again a day after the request, as the AX route calls it (#241)', async () => {
+    const leadId = await createLead();
+    const submissionId = await createSubmission(leadId, 'created');
+    await pg
+      .update(diagnosticSubmissions)
+      .set({ createdAt: NOW })
+      .where(eq(diagnosticSubmissions.id, submissionId));
+    const later = vi.fn();
+    // The route takes the time of the request from the service, then passes it on
+    const send = async (at: Date, candidates: { date: string; time: string }[]) => {
+      const outcome = await requestAxMigrationConsultation(pg, submissionId, at);
+      if (!outcome.ok) throw new Error(`consultation request failed: ${outcome.reason}`);
+      return acceptMeetingPreferences(
+        pg,
+        {
+          organizationId: outcome.organizationId,
+          leadId: outcome.leadId,
+          submissionId,
+          identityVerified: outcome.leadCreated || outcome.continued,
+          requestedAt: outcome.requestedAt,
+          preferences: {
+            candidates,
+            attendeeRoles: [],
+            meetingFormat: null,
+            topics: [],
+            topicNote: null,
+          },
+        },
+        later,
+        at
+      );
+    };
+
+    expect(await send(new Date(NOW.getTime() + 60_000), OPTIONS)).toBe('saved');
+    // Sent again from the same answer once the day after the request is over: nothing changes
+    const dayLater = new Date(NOW.getTime() + MEETING_PREFERENCES_WINDOW_MS + 60 * 60 * 1000);
+    expect(await send(dayLater, [{ date: '2026-10-22', time: '11:00' }])).toBe('unavailable');
+    expect((await requestOf(leadId)).candidates).toEqual(STORED);
+    expect(later).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the preferences of an unverified answer, replaced only by later ones (#274)', async () => {

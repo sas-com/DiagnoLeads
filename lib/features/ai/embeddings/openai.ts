@@ -52,37 +52,23 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 }
 
 /**
- * Generate embeddings for multiple texts in batch
- * Not called anywhere yet. Each text is a paid embedding: a caller counts them all with
- * consumeEmbeddingCalls (`calls: texts.length`) first and bounds each text (#576)
- * @param texts - Array of texts to generate embeddings for
- * @returns Array of vector embeddings
- */
-export async function generateEmbeddingsBatch(texts: string[]): Promise<number[][]> {
-  try {
-    const response = await getOpenAI().embeddings.create({
-      model: 'text-embedding-3-small',
-      input: texts,
-      encoding_format: 'float',
-    });
-
-    return response.data.map((item) => item.embedding);
-  } catch (error) {
-    console.error('Error generating embeddings batch:', error);
-    throw new Error('Failed to generate embeddings batch');
-  }
-}
-
-/**
  * Longest text of one lead field that is embedded. The lead inputs have no length limit, so
  * without it one lead could cost far more than the one call EMBEDDING_CALL_LIMITS counts (#576).
  */
 export const MAX_EMBEDDING_FIELD_CHARS = 1_000;
 
 /**
- * Longest text embedded for one lead, all its fields together. Kept well under the model's
- * input limit even for text that takes several tokens per character (rare kanji, emoji): a
- * text over it is refused by OpenAI after the call has been counted
+ * Input limit of text-embedding-3-small in tokens
+ * (https://developers.openai.com/api/docs/guides/embeddings)
+ */
+export const EMBEDDING_MAX_INPUT_TOKENS = 8_192;
+
+/**
+ * Longest text embedded for one lead, all its fields together. Always within the model's input
+ * limit (EMBEDDING_MAX_INPUT_TOKENS), whatever the characters: one UTF-16 unit is at most 3
+ * UTF-8 bytes, and the model's tokenizer (cl100k_base, byte-level BPE) never makes more tokens
+ * than bytes, so 2,000 units are at most 6,000 tokens. A text over the limit would be refused
+ * by OpenAI after the call has been counted
  */
 export const MAX_EMBEDDING_TEXT_CHARS = 2_000;
 
@@ -94,19 +80,12 @@ function clipText(text: string, max: number): string {
 }
 
 /**
- * Prepare lead text for embedding
- * Combines relevant lead fields into a searchable text, each field cut to
- * MAX_EMBEDDING_FIELD_CHARS and the whole to MAX_EMBEDDING_TEXT_CHARS
+ * Prepare lead text for embedding: the company name only, cut to MAX_EMBEDDING_FIELD_CHARS.
+ * Nothing that points at a person (name, email address, notes) goes to OpenAI (#406); callers may
+ * pass the whole lead row, so only the fields read here are sent
  */
-export function prepareLeadText(lead: {
-  name?: string | null;
-  email?: string | null;
-  company?: string | null;
-  notes?: string | null;
-  industry?: string | null;
-  position?: string | null;
-}): string {
-  const parts = [lead.name, lead.email, lead.company, lead.industry, lead.position, lead.notes]
+export function prepareLeadText(lead: { company?: string | null }): string {
+  const parts = [lead.company]
     .filter((part): part is string => Boolean(part))
     .map((part) => clipText(part, MAX_EMBEDDING_FIELD_CHARS));
 
