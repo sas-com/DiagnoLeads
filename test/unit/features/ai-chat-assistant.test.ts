@@ -9,6 +9,10 @@ vi.mock('@anthropic-ai/sdk', () => ({
 }));
 
 import { generateLeadSummary } from '@/lib/features/ai/chat/assistant';
+import type { AiCallScope } from '@/lib/features/ai/usage';
+
+/** The organization the call is made for, logged with the tokens (#47) */
+const scope: AiCallScope = { organizationId: 'org-1' };
 
 describe('ai-chat-assistant', () => {
   beforeEach(() => {
@@ -36,7 +40,7 @@ describe('ai-chat-assistant', () => {
         status: 'nurturing',
       };
 
-      const result = await generateLeadSummary(lead);
+      const result = await generateLeadSummary(lead, scope);
 
       const request = mockCreate.mock.calls[0][0];
       expect(request.model).toBe('claude-sonnet-5-5');
@@ -53,6 +57,7 @@ describe('ai-chat-assistant', () => {
     it('should handle lead with null fields', async () => {
       mockCreate.mockResolvedValue(textResponse('Summary for unknown lead.'));
 
+      // Every field null, status too (never null in the table)
       const lead = {
         name: null,
         email: null,
@@ -61,9 +66,9 @@ describe('ai-chat-assistant', () => {
         position: null,
         notes: null,
         status: null,
-      };
+      } as unknown as Parameters<typeof generateLeadSummary>[0];
 
-      const result = await generateLeadSummary(lead);
+      const result = await generateLeadSummary(lead, scope);
 
       // Missing fields are null in the lead's data block (#47)
       expect(mockCreate.mock.calls[0][0].messages[0].content).toContain('"company": null');
@@ -73,7 +78,7 @@ describe('ai-chat-assistant', () => {
     it('should handle partial lead data', async () => {
       mockCreate.mockResolvedValue(textResponse('Partial summary.'));
 
-      const result = await generateLeadSummary({ name: 'Jane', company: 'Acme' });
+      const result = await generateLeadSummary({ company: 'Acme' }, scope);
 
       expect(result).toBe('Partial summary.');
     });
@@ -81,7 +86,7 @@ describe('ai-chat-assistant', () => {
     it('should return error message on API failure', async () => {
       mockCreate.mockRejectedValue(new Error('API Error'));
 
-      const result = await generateLeadSummary({ name: 'Test Lead' });
+      const result = await generateLeadSummary({ company: 'Test Lead' }, scope);
 
       expect(result).toBe('Unable to generate summary');
     });
@@ -89,7 +94,7 @@ describe('ai-chat-assistant', () => {
     it('should return error message when there is no text', async () => {
       mockCreate.mockResolvedValue(textResponse());
 
-      const result = await generateLeadSummary({ name: 'Test Lead' });
+      const result = await generateLeadSummary({ company: 'Test Lead' }, scope);
 
       expect(result).toBe('Unable to generate summary');
     });
@@ -97,7 +102,7 @@ describe('ai-chat-assistant', () => {
     it('should trim whitespace from summary', async () => {
       mockCreate.mockResolvedValue(textResponse('  Summary with spaces  '));
 
-      const result = await generateLeadSummary({ name: 'Test' });
+      const result = await generateLeadSummary({ company: 'Test' }, scope);
 
       expect(result).toBe('Summary with spaces');
     });

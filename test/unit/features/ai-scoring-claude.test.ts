@@ -5,6 +5,8 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import type { Lead } from '@/lib/db/schema';
+import type { AiCallScope } from '@/lib/features/ai/usage';
 
 const { mockCreate, reportServerError } = vi.hoisted(() => ({
   mockCreate: vi.fn(),
@@ -30,6 +32,15 @@ const reply = (output: unknown, stop_reason = 'end_turn') => ({
 // Import after mocking
 import { scoreLeadWithAI, scoreLeadsBatch, type LeadScore } from '@/lib/features/ai/scoring/claude';
 
+/** The organization the calls are made for, logged with the tokens used */
+const scope: AiCallScope = { organizationId: 'org-1' };
+
+/**
+ * A lead row with only the given fields. The scoring reads none of the fields that point at a
+ * person (#406), so the email address only tells the cases apart
+ */
+const leadRow = (fields: Partial<Lead>): Partial<Lead> => fields;
+
 describe('scoreLeadWithAI', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -48,7 +59,7 @@ describe('scoreLeadWithAI', () => {
         createdAt: new Date(),
       };
 
-      const score = await scoreLeadWithAI(lead);
+      const score = await scoreLeadWithAI(lead, scope);
 
       expect(score).toHaveProperty('score');
       expect(score).toHaveProperty('confidence');
@@ -58,11 +69,11 @@ describe('scoreLeadWithAI', () => {
     });
 
     it('should handle minimal lead data', async () => {
-      const lead = {
+      const lead = leadRow({
         email: 'minimal@example.com',
-      };
+      });
 
-      const score = await scoreLeadWithAI(lead);
+      const score = await scoreLeadWithAI(lead, scope);
 
       expect(score.score).toBeGreaterThanOrEqual(0);
       expect(score.score).toBeLessThanOrEqual(100);
@@ -80,7 +91,8 @@ describe('scoreLeadWithAI', () => {
         createdAt: undefined,
       };
 
-      const score = await scoreLeadWithAI(lead);
+      // @ts-expect-error leads.status is NOT NULL; the null status is passed on purpose
+      const score = await scoreLeadWithAI(lead, scope);
 
       expect(score).toBeDefined();
       expect(typeof score.score).toBe('number');
@@ -89,38 +101,38 @@ describe('scoreLeadWithAI', () => {
 
   describe('score validation', () => {
     it('should return score between 0 and 100', async () => {
-      const lead = { email: 'test@example.com' };
-      const score = await scoreLeadWithAI(lead);
+      const lead = leadRow({ email: 'test@example.com' });
+      const score = await scoreLeadWithAI(lead, scope);
 
       expect(score.score).toBeGreaterThanOrEqual(0);
       expect(score.score).toBeLessThanOrEqual(100);
     });
 
     it('should return valid confidence level', async () => {
-      const lead = { email: 'test@example.com' };
-      const score = await scoreLeadWithAI(lead);
+      const lead = leadRow({ email: 'test@example.com' });
+      const score = await scoreLeadWithAI(lead, scope);
 
       expect(['low', 'medium', 'high']).toContain(score.confidence);
     });
 
     it('should return valid priority', async () => {
-      const lead = { email: 'test@example.com' };
-      const score = await scoreLeadWithAI(lead);
+      const lead = leadRow({ email: 'test@example.com' });
+      const score = await scoreLeadWithAI(lead, scope);
 
       expect(['low', 'medium', 'high', 'urgent']).toContain(score.priority);
     });
 
     it('should return reasoning string', async () => {
-      const lead = { email: 'test@example.com' };
-      const score = await scoreLeadWithAI(lead);
+      const lead = leadRow({ email: 'test@example.com' });
+      const score = await scoreLeadWithAI(lead, scope);
 
       expect(typeof score.reasoning).toBe('string');
       expect(score.reasoning.length).toBeGreaterThan(0);
     });
 
     it('should return recommended actions array', async () => {
-      const lead = { email: 'test@example.com' };
-      const score = await scoreLeadWithAI(lead);
+      const lead = leadRow({ email: 'test@example.com' });
+      const score = await scoreLeadWithAI(lead, scope);
 
       expect(Array.isArray(score.recommendedActions)).toBe(true);
     });
@@ -137,7 +149,7 @@ describe('scoreLeadWithAI', () => {
       };
       mockCreate.mockResolvedValueOnce(reply(parsed));
 
-      const score = await scoreLeadWithAI({ email: 'cto@example.com', position: 'CTO' });
+      const score = await scoreLeadWithAI(leadRow({ email: 'cto@example.com' }), scope);
 
       expect(score).toEqual({ ...parsed, isFallback: false });
       const request = mockCreate.mock.calls[0][0];
@@ -159,7 +171,7 @@ describe('scoreLeadWithAI', () => {
         })
       );
 
-      const score = await scoreLeadWithAI({ email: 'range@example.com' });
+      const score = await scoreLeadWithAI(leadRow({ email: 'range@example.com' }), scope);
 
       expect(score.score).toBe(50);
       expect(score.confidence).toBe('low');
@@ -168,7 +180,7 @@ describe('scoreLeadWithAI', () => {
     it('should request every LeadScore field in the output schema', async () => {
       mockCreate.mockResolvedValueOnce({ content: [], stop_reason: 'end_turn' });
 
-      await scoreLeadWithAI({ email: 'schema@example.com' });
+      await scoreLeadWithAI(leadRow({ email: 'schema@example.com' }), scope);
 
       const schema = mockCreate.mock.calls[0][0].output_config.format.schema;
       expect([...schema.required].sort()).toEqual(
@@ -180,7 +192,7 @@ describe('scoreLeadWithAI', () => {
     it('should fall back when there is no text block', async () => {
       mockCreate.mockResolvedValueOnce({ content: [], stop_reason: 'max_tokens' });
 
-      const score = await scoreLeadWithAI({ email: 'cut@example.com' });
+      const score = await scoreLeadWithAI(leadRow({ email: 'cut@example.com' }), scope);
 
       expect(score.score).toBe(50);
     });
@@ -193,7 +205,7 @@ describe('scoreLeadWithAI', () => {
 
       const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      const score = await scoreLeadWithAI({ email: 'cut@example.com' });
+      const score = await scoreLeadWithAI(leadRow({ email: 'cut@example.com' }), scope);
 
       expect(score).toMatchObject({ score: 50, isFallback: true });
       // The fallback comes from parsing the cut-off text, not from a call that never happened
@@ -213,7 +225,7 @@ describe('scoreLeadWithAI', () => {
     it('alerts the people on call when the model is gone (404), and still falls back', async () => {
       mockCreate.mockRejectedValueOnce(Object.assign(new Error('model not found'), { status: 404 }));
 
-      const score = await scoreLeadWithAI({ email: 'gone@example.com' });
+      const score = await scoreLeadWithAI(leadRow({ email: 'gone@example.com' }), scope);
 
       expect(score.isFallback).toBe(true);
       expect(reportServerError).toHaveBeenCalledWith('ai/score-lead', expect.any(Error));
@@ -223,7 +235,7 @@ describe('scoreLeadWithAI', () => {
       reportServerError.mockClear();
       mockCreate.mockRejectedValueOnce(Object.assign(new Error('overloaded'), { status: 529 }));
 
-      await scoreLeadWithAI({ email: 'busy@example.com' });
+      await scoreLeadWithAI(leadRow({ email: 'busy@example.com' }), scope);
 
       expect(reportServerError).not.toHaveBeenCalled();
     });
@@ -232,8 +244,8 @@ describe('scoreLeadWithAI', () => {
   describe('error handling', () => {
     it('should return fallback score on error', async () => {
       mockCreate.mockRejectedValueOnce(new Error('529 overloaded'));
-      const lead = { email: 'error@example.com' };
-      const score = await scoreLeadWithAI(lead);
+      const lead = leadRow({ email: 'error@example.com' });
+      const score = await scoreLeadWithAI(lead, scope);
 
       // Fallback score should be returned, marked so that callers do not store it
       expect(score.isFallback).toBe(true);
@@ -256,7 +268,7 @@ describe('scoreLeadsBatch', () => {
       { id: 'lead-3', email: 'lead3@example.com', company: 'Company C' },
     ];
 
-    const scores = await scoreLeadsBatch(leads);
+    const scores = await scoreLeadsBatch(leads, scope);
 
     expect(scores).toBeInstanceOf(Map);
     expect(scores.size).toBe(3);
@@ -266,7 +278,7 @@ describe('scoreLeadsBatch', () => {
   });
 
   it('should handle empty array', async () => {
-    const scores = await scoreLeadsBatch([]);
+    const scores = await scoreLeadsBatch([], scope);
 
     expect(scores).toBeInstanceOf(Map);
     expect(scores.size).toBe(0);
@@ -275,7 +287,7 @@ describe('scoreLeadsBatch', () => {
   it('should handle single lead', async () => {
     const leads = [{ id: 'single-lead', email: 'single@example.com' }];
 
-    const scores = await scoreLeadsBatch(leads);
+    const scores = await scoreLeadsBatch(leads, scope);
 
     expect(scores.size).toBe(1);
     expect(scores.has('single-lead')).toBe(true);
@@ -287,7 +299,7 @@ describe('scoreLeadsBatch', () => {
       { id: 'lead-2', email: 'lead2@example.com' },
     ];
 
-    const scores = await scoreLeadsBatch(leads);
+    const scores = await scoreLeadsBatch(leads, scope);
 
     for (const [id, score] of scores) {
       expect(score.score).toBeGreaterThanOrEqual(0);
@@ -303,7 +315,7 @@ describe('scoreLeadsBatch', () => {
       email: `lead${i}@example.com`,
     }));
 
-    const scores = await scoreLeadsBatch(leads);
+    const scores = await scoreLeadsBatch(leads, scope);
 
     expect(scores.size).toBe(12);
   });

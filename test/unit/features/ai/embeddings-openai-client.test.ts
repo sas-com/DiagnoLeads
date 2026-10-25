@@ -3,6 +3,7 @@
  * request sent, the vectors returned, the client made once, and the errors when the call fails
  * or the API key is missing. prepareLeadText is tested in embeddings-openai.test.ts.
  */
+import type { EmbeddingCall } from '@/lib/features/ai/embeddings/openai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const openai = vi.hoisted(() => ({
@@ -27,6 +28,9 @@ async function loadModule() {
 
 const vector = (seed: number) => Array.from({ length: 4 }, (_, i) => seed + i / 10);
 
+/** What the embedding is for and the organization, logged with the tokens (#47) */
+const call: EmbeddingCall = { operation: 'embed-search-query', organizationId: 'org-1' };
+
 describe('OpenAI embeddings', () => {
   let consoleError: ReturnType<typeof vi.spyOn>;
 
@@ -45,7 +49,7 @@ describe('OpenAI embeddings', () => {
       const { generateEmbedding } = await loadModule();
       openai.create.mockResolvedValue({ data: [{ embedding: vector(1) }] });
 
-      expect(await generateEmbedding('製造業 基幹システム 移行')).toEqual(vector(1));
+      expect(await generateEmbedding('製造業 基幹システム 移行', call)).toEqual(vector(1));
       expect(openai.create).toHaveBeenCalledWith({
         model: 'text-embedding-3-small',
         input: '製造業 基幹システム 移行',
@@ -58,9 +62,9 @@ describe('OpenAI embeddings', () => {
       const { generateEmbedding } = await loadModule();
       openai.create.mockResolvedValue({ data: [{ embedding: vector(1) }] });
 
-      await generateEmbedding('a');
-      await generateEmbedding('b');
-      await generateEmbedding('c');
+      await generateEmbedding('a', call);
+      await generateEmbedding('b', call);
+      await generateEmbedding('c', call);
 
       // One 20-second attempt, no retries: the one call counted is one request, within the
       // 30 seconds of a Vercel function (as the Claude client)
@@ -75,7 +79,7 @@ describe('OpenAI embeddings', () => {
       const cause = new Error('429 Rate limit reached');
       openai.create.mockRejectedValue(cause);
 
-      await expect(generateEmbedding('a')).rejects.toThrow('Failed to generate embedding');
+      await expect(generateEmbedding('a', call)).rejects.toThrow('Failed to generate embedding');
       expect(consoleError).toHaveBeenCalledWith('Error generating embedding:', cause);
     });
 
@@ -83,7 +87,7 @@ describe('OpenAI embeddings', () => {
       vi.stubEnv('OPENAI_API_KEY', '');
       const { generateEmbedding } = await loadModule();
 
-      await expect(generateEmbedding('a')).rejects.toThrow('Failed to generate embedding');
+      await expect(generateEmbedding('a', call)).rejects.toThrow('Failed to generate embedding');
       expect(openai.clients).toHaveLength(0);
       expect(openai.create).not.toHaveBeenCalled();
       expect(consoleError).toHaveBeenCalledWith(
