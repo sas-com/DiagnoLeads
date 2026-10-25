@@ -603,7 +603,11 @@ describe.skipIf(!url)('AI features: organization isolation (PostgreSQL)', () => 
         found('base', 1),
         found('near', NEAR),
       ]);
-      expect(openai.generateEmbedding).toHaveBeenCalledWith('基幹システム');
+      // The usage line of the embedding names the organization (#47)
+      expect(openai.generateEmbedding).toHaveBeenCalledWith('基幹システム', {
+        operation: 'embed-search-query',
+        organizationId: orgC,
+      });
     });
 
     it('runs the procedures with the real functions on ctx.db (findSimilar, semanticSearch)', async () => {
