@@ -86,22 +86,23 @@ describe('semantic-search', () => {
       expect(Object.keys(results)).toEqual(['0']);
       const text = flat(queryOf(db.execute).sql);
       expect(text).toMatch(
-        /^SELECT id, name, email, company, 1 - \(embedding <=> \$1::vector\) as similarity FROM "leads"/
+        /SELECT id, name, email, company, 1 - \(embedding <=> q\.v\) as similarity FROM "leads", q /
       );
       expect(text).not.toContain('industry');
     });
 
-    it('passes the query embedding as one pgvector literal, in the organization, with the limit and threshold', async () => {
+    it('passes the query embedding once, as one pgvector literal, in the organization, with the limit and threshold', async () => {
       (generateEmbedding as ReturnType<typeof vi.fn>).mockResolvedValue([0.1, -0.2, 3e-7]);
       db.execute.mockResolvedValue([]);
 
       await semanticSearch({ ...search, query: 'startups', limit: 5, minSimilarity: 0.8 });
 
       const { sql: text, params } = queryOf(db.execute);
-      const literal = '[0.1,-0.2,3e-7]';
-      expect(params).toEqual([literal, 'org-1', literal, 0.8, literal, 5]);
-      expect(flat(text)).toContain('WHERE organization_id = $2 AND embedding IS NOT NULL');
-      expect(flat(text)).toContain('LIMIT $6');
+      // Bound once and compared through q.v: a 1536-number literal is not sent three times
+      expect(params).toEqual(['[0.1,-0.2,3e-7]', 'org-1', 0.8, 5]);
+      expect(flat(text)).toBe(
+        'WITH q AS (SELECT $1::vector AS v) SELECT id, name, email, company, 1 - (embedding <=> q.v) as similarity FROM "leads", q WHERE organization_id = $2 AND embedding IS NOT NULL AND 1 - (embedding <=> q.v) >= $3 ORDER BY embedding <=> q.v LIMIT $4'
+      );
     });
 
     it('uses a limit of 10 and a threshold of 0.7 by default', async () => {
@@ -110,7 +111,7 @@ describe('semantic-search', () => {
 
       await semanticSearch({ ...search, query: 'enterprise software' });
 
-      expect(queryOf(db.execute).params).toEqual(['[0.5]', 'org-1', '[0.5]', 0.7, '[0.5]', 10]);
+      expect(queryOf(db.execute).params).toEqual(['[0.5]', 'org-1', 0.7, 10]);
     });
 
     it('should handle empty results', async () => {
@@ -158,19 +159,16 @@ describe('semantic-search', () => {
       expect(results).toEqual(mockSimilarLeads);
     });
 
-    it('passes the stored embedding as one pgvector literal, not one parameter per number (#590)', async () => {
+    it('passes the stored embedding once, as one pgvector literal, not one parameter per number (#590)', async () => {
       db.where.mockResolvedValue([reference]);
       db.execute.mockResolvedValue([]);
 
       await findSimilarLeads({ ...similar, limit: 10 });
 
       const { sql: text, params } = queryOf(db.execute);
-      expect(params).toEqual(['[0.1,0.2,0.3]', 'org-1', 'lead-1', '[0.1,0.2,0.3]', 10]);
-      expect(flat(text)).toMatch(
-        /^SELECT id, name, email, company, 1 - \(embedding <=> \$1::vector\) as similarity FROM "leads"/
-      );
-      expect(flat(text)).toContain(
-        'WHERE organization_id = $2 AND embedding IS NOT NULL AND id != $3 ORDER BY embedding <=> $4::vector LIMIT $5'
+      expect(params).toEqual(['[0.1,0.2,0.3]', 'org-1', 'lead-1', 10]);
+      expect(flat(text)).toBe(
+        'WITH q AS (SELECT $1::vector AS v) SELECT id, name, email, company, 1 - (embedding <=> q.v) as similarity FROM "leads", q WHERE organization_id = $2 AND embedding IS NOT NULL AND id != $3 ORDER BY embedding <=> q.v LIMIT $4'
       );
       expect(text).not.toContain('industry');
     });
@@ -292,35 +290,6 @@ describe('semantic-search', () => {
         'Updating lead embedding failed'
       );
       consoleError.mockRestore();
-    });
-  });
-
-  describe('SemanticSearchResult type', () => {
-    it('should have correct structure', () => {
-      const result = {
-        id: 'lead-1',
-        name: 'John Doe',
-        email: 'john@example.com',
-        company: 'Acme Corp',
-        similarity: 0.85,
-      };
-
-      expect(result.id).toBeDefined();
-      expect(result.similarity).toBeGreaterThanOrEqual(0);
-      expect(result.similarity).toBeLessThanOrEqual(1);
-    });
-
-    it('should allow null fields', () => {
-      const result = {
-        id: 'lead-1',
-        name: null,
-        email: null,
-        company: null,
-        similarity: 0.7,
-      };
-
-      expect(result.name).toBeNull();
-      expect(result.email).toBeNull();
     });
   });
 });

@@ -58,6 +58,15 @@ function vectorLiteral(embedding: readonly number[]): string {
 }
 
 /**
+ * Binds the embedding once, as `q.v`, for a query that compares it several times (a 1536-number
+ * literal is about 20 KB). PostgreSQL inlines the CTE, so the plan is the same as with the
+ * literal written out each time, and a vector index on the ORDER BY stays usable
+ */
+function withEmbedding(embedding: readonly number[]) {
+  return sql`WITH q AS (SELECT ${vectorLiteral(embedding)}::vector AS v)`;
+}
+
+/**
  * Perform semantic search on leads
  * @param db - Database to search with (ctx.db)
  * @param query - Natural language search query
@@ -83,24 +92,22 @@ export async function semanticSearch({
     // Generate embedding for search query
     const queryEmbedding = await generateEmbedding(query);
 
-    // Convert embedding array to pgvector format string
-    const embeddingString = vectorLiteral(queryEmbedding);
-
     // Perform vector similarity search using cosine distance
     // Note: We use 1 - cosine_distance to get similarity (higher is better)
     const rows = await db.execute<SimilarityRow>(sql`
+      ${withEmbedding(queryEmbedding)}
       SELECT
         id,
         name,
         email,
         company,
-        1 - (embedding <=> ${embeddingString}::vector) as similarity
-      FROM ${leads}
+        1 - (embedding <=> q.v) as similarity
+      FROM ${leads}, q
       WHERE
         organization_id = ${organizationId}
         AND embedding IS NOT NULL
-        AND 1 - (embedding <=> ${embeddingString}::vector) >= ${minSimilarity}
-      ORDER BY embedding <=> ${embeddingString}::vector
+        AND 1 - (embedding <=> q.v) >= ${minSimilarity}
+      ORDER BY embedding <=> q.v
       LIMIT ${limit}
     `);
 
@@ -142,23 +149,22 @@ export async function findSimilarLeads({
       throw new Error('Reference lead not found or has no embedding');
     }
 
-    // Read back as number[] (the vector column type): passed again as one pgvector literal
-    const embeddingString = vectorLiteral(refLead.embedding);
-
-    // Find similar leads (excluding the reference lead)
+    // Find similar leads (excluding the reference lead). The embedding is read back as number[]
+    // (the vector column type) and passed again as one pgvector literal
     const rows = await db.execute<SimilarityRow>(sql`
+      ${withEmbedding(refLead.embedding)}
       SELECT
         id,
         name,
         email,
         company,
-        1 - (embedding <=> ${embeddingString}::vector) as similarity
-      FROM ${leads}
+        1 - (embedding <=> q.v) as similarity
+      FROM ${leads}, q
       WHERE
         organization_id = ${organizationId}
         AND embedding IS NOT NULL
         AND id != ${leadId}
-      ORDER BY embedding <=> ${embeddingString}::vector
+      ORDER BY embedding <=> q.v
       LIMIT ${limit}
     `);
 
