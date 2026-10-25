@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { WHEN_OUT_OF_ORDER } from '@/scripts/db-migration-ledger';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -28,9 +29,8 @@ interface Exceptions {
 }
 
 const EXCEPTIONS: Exceptions = {
-  // Generated before 0013/0014 were merged and already applied in production. Generating it again
-  // would give it a newer `when`, and the migrator would run its DDL a second time
-  whenOutOfOrder: ['0015_agency_links'],
+  // Shared with the check that db:migrate runs against the database (#620)
+  whenOutOfOrder: [...WHEN_OUT_OF_ORDER],
   // Never journaled. #433 decides whether its indexes become a real migration
   sqlOutsideJournal: ['0001_performance_optimization'],
 };
