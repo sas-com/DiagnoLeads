@@ -400,9 +400,12 @@ export function AxDiagnosisResult({
               className="h-5 w-5 shrink-0 text-ax-teal-dark"
               aria-hidden="true"
             />,
-            platformLabel
-              ? t('checkpointsTitle', { platform: platformLabel })
-              : t('checkpointsTitleGeneric')
+            // Only the web path of Access moves to a web system (#507)
+            accessPath && accessPath !== 'web'
+              ? t(`accessCheckpointsTitle.${accessPath}`, { platform: platformLabel })
+              : platformLabel
+                ? t('checkpointsTitle', { platform: platformLabel })
+                : t('checkpointsTitleGeneric')
           )}
           <ul className="space-y-3">
             {result.checkpoints.map((key) => (

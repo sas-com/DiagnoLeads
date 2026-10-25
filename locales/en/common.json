@@ -401,6 +401,10 @@
       },
       "checkpointsTitle": "What to check when moving from {platform} to a web system",
       "checkpointsTitleGeneric": "What to check when moving to a web system",
+      "accessCheckpointsTitle": {
+        "fix": "What to check when fixing {platform} and keeping it in use",
+        "replace": "What to check when replacing {platform} with a ready-made service"
+      },
       "checkpoints": {
         "source_missing": "First decide how to handle the missing source code (for example analyzing the running programs)",
         "source_vendor_held": "First confirm whether the maintenance company or the vendor will hand over the source code for the survey (contract and cost)",
@@ -712,6 +716,8 @@
         "rediagnoseHint": "Many answers were \"I don't know\", so this guide is not very precise. If you can check some of them within your company, taking the diagnosis again gives a more reliable guide. If you are not sure how to check them, we can show you in an individual consultation.",
         "consultationLead": "In an individual consultation, we explain the result and how a migration could proceed. Our staff explain an approach that fits your situation, based on the result. We will not push a sale.",
         "consultationButton": "Request a free consultation",
+        "accessConsultationLead": "In a 30-minute online consultation, we explain the result and how to proceed. Our staff explain an approach that fits your situation, based on the result. We will not push a sale.",
+        "accessConsultationButton": "Request a free 30-minute online consultation",
         "rediagnoseLead": "To review your answers or diagnose another system, start here.",
         "rediagnoseButton": "Take the diagnosis again",
         "footer": "You receive this email because you asked for the result of the free AX migration web diagnosis and pressed the confirmation button."
