@@ -8,7 +8,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import type { Lead } from '@/lib/db/schema';
 import { leadMqlLevel } from '@/lib/features/leads/mql-level';
 import { ClipboardList, ExternalLink } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
@@ -17,6 +16,7 @@ import { LeadDiagnosisCard } from './detail/lead-diagnosis-card';
 import { LeadHearingOverview } from './detail/lead-hearing-overview';
 import { LeadRecentActivity } from './detail/lead-recent-activity';
 import { LeadAssigneeSelect } from './lead-assignee-select';
+import type { ListedLead } from './lead-card';
 import { LeadMqlBadges } from './lead-mql-badge';
 import { LeadQuickSelect } from './lead-quick-select';
 
@@ -24,13 +24,13 @@ import { LeadQuickSelect } from './lead-quick-select';
 const KEY_FACTS = ['phone', 'inflowSource', 'targetSystem', 'conversionPoint'] as const;
 
 interface LeadSummarySheetProps {
-  lead: Lead | null;
+  lead: ListedLead | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   organizationId: string;
   canEdit: boolean;
   /** Called after the status was changed to lost here */
-  onLost?: (lead: Lead) => void;
+  onLost?: (lead: ListedLead) => void;
 }
 
 /**

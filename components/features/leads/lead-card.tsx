@@ -12,8 +12,11 @@ import { LeadMqlBadges } from './lead-mql-badge';
 import { LeadQuickSelect } from './lead-quick-select';
 import { NextMeetingCell } from './next-meeting';
 
+/** A lead as the list sends it: without the search vectors, which no screen shows (#433) */
+export type ListedLead = Omit<Lead, 'embedding' | 'searchVector'>;
+
 /** A row of leads.list: the lead with its tags, last activity, assignee and latest hearing */
-export type LeadListRow = Lead & {
+export type LeadListRow = ListedLead & {
   tags?: Tag[];
   lastActivityAt?: Date | string | null;
   /** The assignee (#135) */
