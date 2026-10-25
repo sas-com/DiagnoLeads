@@ -330,6 +330,7 @@
       "help": "A check against automated submissions (provided by Cloudflare). It usually finishes by itself in a few seconds. If a check box appears, click it.",
       "done": "The check before sending is complete",
       "unavailable": "The check before sending could not be shown.",
+      "failed": "The check before sending could not be completed.",
       "retry": "Try the check again",
       "alternative": "Some company networks block it. In that case, please contact us through the <link>consultation booking page</link>.",
       "alternativeContact": "Some company networks block it. In that case, please contact us by phone (<phone></phone>) or email (<email></email>)."
@@ -825,6 +826,7 @@
       "help": "This check prevents automated submissions (it uses Cloudflare). It usually finishes by itself in a few seconds. If a checkbox appears, click it.",
       "done": "The check before sending is complete",
       "unavailable": "The check before sending could not be shown.",
+      "failed": "The check before sending could not be completed.",
       "retry": "Try the check again",
       "alternative": "Some company networks block it. In that case, please contact us through <link>the contact page</link>."
     },
