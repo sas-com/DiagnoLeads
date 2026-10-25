@@ -416,14 +416,14 @@ describe('AxFloatingCta', () => {
     expect(bar).toHaveAttribute('aria-hidden', 'true');
   });
 
-  it('watches the hero buttons, not the hero heading (#536)', () => {
+  it('watches the hero diagnosis button, not the hero heading (#536)', () => {
     // Below the heading, the deadline tags put the hero buttons under a phone's first screen
-    const observed: string[] = [];
+    const observed: Element[] = [];
     vi.stubGlobal(
       'IntersectionObserver',
       class {
         observe(target: Element) {
-          observed.push(target.id);
+          observed.push(target);
         }
         disconnect() {}
       }
@@ -432,12 +432,56 @@ describe('AxFloatingCta', () => {
       withIntl(
         <>
           <h1 id="ax-hero-heading">見出し</h1>
-          <div id="ax-hero-cta" />
+          <div id="ax-hero-cta">
+            <a href="#diagnosis">無料Web診断をはじめる</a>
+            <a href="https://example.com/booking">無料相談を予約する</a>
+          </div>
           <AxFloatingCta label="かんたん無料診断をはじめる" />
         </>
       )
     );
-    expect(observed).toEqual(['ax-hero-cta']);
+    expect(observed).toEqual([screen.getByRole('link', { name: '無料Web診断をはじめる' })]);
+  });
+
+  it('counts the hero button only once most of it is on screen (#536)', () => {
+    let callback: IntersectionObserverCallback = () => {};
+    let options: IntersectionObserverInit | undefined;
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(cb: IntersectionObserverCallback, init?: IntersectionObserverInit) {
+          callback = cb;
+          options = init;
+        }
+        observe() {}
+        disconnect() {}
+      }
+    );
+    render(
+      withIntl(
+        <>
+          <div id="ax-hero-cta">
+            <a href="#diagnosis">無料Web診断をはじめる</a>
+          </div>
+          <AxFloatingCta label="かんたん無料診断をはじめる" />
+        </>
+      )
+    );
+    const bar = screen.getByText('かんたん無料診断をはじめる').closest('div') as HTMLElement;
+    const target = screen.getByRole('link', { name: '無料Web診断をはじめる' });
+    const show = (intersectionRatio: number) =>
+      act(() =>
+        callback(
+          [{ target, isIntersecting: intersectionRatio > 0, intersectionRatio } as unknown as IntersectionObserverEntry],
+          {} as IntersectionObserver
+        )
+      );
+    expect(options?.threshold).toEqual([0, 0.75]);
+    // 10px of an 84px button at the bottom edge: it cannot be read, the bar stays
+    show(0.12);
+    expect(bar).toHaveAttribute('aria-hidden', 'false');
+    show(0.8);
+    expect(bar).toHaveAttribute('aria-hidden', 'true');
   });
 });
 
