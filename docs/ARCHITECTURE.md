@@ -70,7 +70,7 @@
 lib/features/<feature>/
 ├── api/router.ts      tRPC の入口。organizationProcedure・ctx.ability の確認・入出力の zod・service の呼び出しだけ
 ├── service.ts         業務ロジック。第1引数に db か transaction（executor）を受け、すべてのクエリを organizationId で絞る
-├── types/schemas.ts   zod の入力スキーマと上限の定数。画面と共有する（zod と他の types/ だけを import）
+├── types/schemas.ts   zod の入力スキーマと上限の定数。画面と共有する（zod・他の types/・純粋な `lib/utils/*`（例：`plain-text.ts`）だけを import）
 ├── types/<name>.ts    列挙・定数・純粋な型（例：leads/types/pipeline.ts）
 └── <name>.ts          その機能の中の補助（純粋な関数・SQL の組み立て・通知の文面など）。内部扱い
 
