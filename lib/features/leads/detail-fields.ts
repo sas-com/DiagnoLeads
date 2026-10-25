@@ -7,7 +7,7 @@
 import type { LeadStatus } from './types/pipeline';
 
 /** Tabs of the lead page, kept in the URL (?tab=) */
-export const LEAD_TABS = ['overview', 'hearings', 'activity', 'diagnosis'] as const;
+export const LEAD_TABS = ['overview', 'hearings', 'activity', 'memos', 'diagnosis'] as const;
 export type LeadTab = (typeof LEAD_TABS)[number];
 export const isLeadTab = (value: unknown): value is LeadTab =>
   typeof value === 'string' && (LEAD_TABS as readonly string[]).includes(value);
