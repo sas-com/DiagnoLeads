@@ -25,7 +25,8 @@ describe('AX site colours', () => {
   });
 
   it('give the favicons of the site the same green', () => {
-    for (const page of ['ax-migration', 'ax-diagnosis']) {
+    // The unsubscribe page of the site's emails is a page of the site too
+    for (const page of ['ax-migration', 'ax-diagnosis', 'email']) {
       const svg = readFileSync(join(process.cwd(), 'app', '[locale]', '(ax)', page, 'icon.svg'), 'utf8');
       expect(svg).toContain('fill="#18730e"');
       expect(svg).not.toContain('#087270');
