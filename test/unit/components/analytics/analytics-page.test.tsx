@@ -165,18 +165,21 @@ describe('AnalyticsPage', () => {
     renderPage();
     const kpi = screen.getByText('MQL（関心あり）').closest('div.p-6') as HTMLElement;
     expect(within(kpi).getByText('3')).toBeInTheDocument();
-    expect(within(kpi).getByText('全リードの 21.4%')).toBeInTheDocument();
+    expect(within(kpi).getByText('すべての期間のリードの 21.4%')).toBeInTheDocument();
 
-    const breakdown = screen.getByText('MQL段階の内訳').closest('div.p-6') as HTMLElement;
-    for (const [label, count, rate] of [
-      ['関心あり（MQL）', '3件', '21.4%'],
-      ['適合', '2件', '14.3%'],
-      ['対象外', '4件', '28.6%'],
-      ['診断なし', '5件', '35.7%'],
+    expect(screen.getByTestId('mql-levels')).toHaveTextContent('MQL段階の内訳');
+    for (const [level, label, count, rate] of [
+      ['interest', '関心あり（MQL）', '3件', '21.4%'],
+      ['fit', '適合', '2件', '14.3%'],
+      ['none', '対象外', '4件', '28.6%'],
+      ['unknown', '診断なし', '5件', '35.7%'],
     ]) {
-      const row = within(breakdown).getByText(label).closest('div.space-y-3') as HTMLElement;
-      expect(within(row).getByText(count)).toBeInTheDocument();
-      expect(within(row).getByText(rate)).toBeInTheDocument();
+      const row = screen.getByTestId(`mql-level-${level}`);
+      expect(row).toHaveTextContent(label);
+      expect(row).toHaveTextContent(count);
+      expect(row).toHaveTextContent(rate);
+      // Opens the lead list filtered by the level
+      expect(row).toHaveAttribute('href', `/ja/leads?level=${level}`);
     }
   });
 

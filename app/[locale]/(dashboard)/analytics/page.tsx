@@ -14,6 +14,7 @@ import { useExport } from '@/hooks/use-export';
 import { useOrganization } from '@/hooks/use-organization';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { useState } from 'react';
 
 import { AreaChart, ChartLegend, DonutChart } from '@/components/charts';
@@ -24,6 +25,7 @@ import { Card } from '@/components/ui/card';
 import { Divider, Metric, Text, Title } from '@/components/ui/metric';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { leadListHref } from '@/lib/features/leads/list-query';
 import type { LeadStatus } from '@/lib/features/leads/types';
 import { LEAD_STATUSES } from '@/lib/features/leads/types/pipeline';
 import { MQL_LEVEL_FILTERS, type MqlLevelFilter } from '@/lib/features/leads/types/schemas';
@@ -86,12 +88,15 @@ const ResponseTimeChart = dynamic(
   }
 );
 
-/** Bar colors of the MQL levels: 関心あり in emerald like the list's MQL badge */
-const MQL_LEVEL_COLORS: Record<MqlLevelFilter, 'emerald' | 'blue' | 'gray' | 'amber'> = {
+/**
+ * Bar colors of the MQL levels, as the list's MQL badges: 関心あり emerald, 適合 gray, and the
+ * levels without a badge in light gray
+ */
+const MQL_LEVEL_COLORS: Record<MqlLevelFilter, 'emerald' | 'gray' | 'lightGray'> = {
   interest: 'emerald',
-  fit: 'blue',
-  none: 'gray',
-  unknown: 'amber',
+  fit: 'gray',
+  none: 'lightGray',
+  unknown: 'lightGray',
 };
 
 /** Leads without a recorded 流入元 */
@@ -337,11 +342,11 @@ export default function AnalyticsPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
         {/* Total Leads */}
         <Card className="p-6" decoration="top" decorationColor="blue">
-          <div className="flex items-start justify-between">
-            <div>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
               <Text>{t('stats.totalLeads')}</Text>
               {overviewLoading ? (
                 <div className="h-9 w-24 bg-gray-200 animate-pulse rounded mt-2" />
@@ -356,9 +361,9 @@ export default function AnalyticsPage() {
         </Card>
 
         {/* New Leads */}
-        <Card className="p-6" decoration="top" decorationColor="emerald">
-          <div className="flex items-start justify-between">
-            <div>
+        <Card className="p-6" decoration="top" decorationColor="cyan">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
               <Text>{t('stats.newLeadsThisMonth')}</Text>
               {overviewLoading ? (
                 <div className="h-9 w-20 bg-gray-200 animate-pulse rounded mt-2" />
@@ -366,16 +371,16 @@ export default function AnalyticsPage() {
                 <Metric className="mt-2">{format.number(overview?.newLeadsThisMonth || 0)}</Metric>
               )}
             </div>
-            <div className="p-3 bg-emerald-50 rounded-xl">
-              <TrendingUp className="h-6 w-6 text-emerald-600" />
+            <div className="p-3 bg-cyan-50 rounded-xl">
+              <TrendingUp className="h-6 w-6 text-cyan-600" />
             </div>
           </div>
         </Card>
 
         {/* Conversion Rate */}
         <Card className="p-6" decoration="top" decorationColor="violet">
-          <div className="flex items-start justify-between">
-            <div>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
               <Text>{t('stats.conversionRate')}</Text>
               {overviewLoading ? (
                 <div className="h-9 w-20 bg-gray-200 animate-pulse rounded mt-2" />
@@ -394,8 +399,8 @@ export default function AnalyticsPage() {
 
         {/* MQL (interested): the sign of how promising leads are (#447, #605) */}
         <Card className="p-6" decoration="top" decorationColor="emerald">
-          <div className="flex items-start justify-between">
-            <div>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
               <Text>{t('stats.mqlInterest')}</Text>
               {overviewLoading ? (
                 <div className="h-9 w-20 bg-gray-200 animate-pulse rounded mt-2" />
@@ -494,7 +499,7 @@ export default function AnalyticsPage() {
 
           {/* Leads per MQL level, counted as the list's MQL level filter (#605) */}
           {overview && !overviewLoading && (
-            <Card className="mt-6 p-6">
+            <Card className="mt-6 p-6" data-testid="mql-levels">
               <Title>{t('charts.mqlLevels')}</Title>
               <Text>{t('charts.mqlLevelsDescription')}</Text>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-4">
@@ -503,14 +508,20 @@ export default function AnalyticsPage() {
                   const percentage =
                     overview.totalLeads > 0 ? (value / overview.totalLeads) * 100 : 0;
                   return (
-                    <div key={level} className="space-y-3">
+                    // Opens the lead list filtered by this level (URL `level`, #447)
+                    <Link
+                      key={level}
+                      href={leadListHref({ mqlLevel: [level] }, undefined, `/${locale}/leads`)}
+                      data-testid={`mql-level-${level}`}
+                      className="block space-y-3 rounded-lg p-2 -m-2 hover:bg-gray-50 dark:hover:bg-gray-800/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    >
                       <div className="flex items-center justify-between gap-2">
                         <Text className="font-medium">{tMqlLevel(level)}</Text>
                         <Text className="font-semibold">{t('leadCount', { count: value })}</Text>
                       </div>
                       <ProgressBar value={percentage} color={MQL_LEVEL_COLORS[level]} />
                       <Text className="text-right">{percentage.toFixed(1)}%</Text>
-                    </div>
+                    </Link>
                   );
                 })}
               </div>

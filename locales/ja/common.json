@@ -2158,7 +2158,7 @@
         "conversionRate": "コンバージョン率",
         "vsLastPeriod": "前期間比",
         "mqlInterest": "MQL（関心あり）",
-        "mqlRate": "全リードの {rate}%"
+        "mqlRate": "すべての期間のリードの {rate}%"
       },
       "tabs": {
         "overview": "概要",
@@ -2181,7 +2181,7 @@
         "sourceBreakdownPeriod": "{period}に登録されたリードの流入元",
         "responseTimePending": "準備中（初回連絡の記録の追加後に表示）",
         "mqlLevels": "MQL段階の内訳",
-        "mqlLevelsDescription": "すべてのリード。数え方はリード一覧の「MQL段階」の絞り込みと同じ（MQL判定日のあるリードは関心あり）"
+        "mqlLevelsDescription": "すべての期間のリード。MQL判定日のあるリード（手で MQL にしたものを含む）は関心ありに数えます。段階を押すと一覧で開きます"
       },
       "funnel": {
         "total": "総計",

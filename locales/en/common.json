@@ -2158,7 +2158,7 @@
         "conversionRate": "Conversion Rate",
         "vsLastPeriod": "vs. last period",
         "mqlInterest": "MQL (interested)",
-        "mqlRate": "{rate}% of all leads"
+        "mqlRate": "{rate}% of leads of all time"
       },
       "tabs": {
         "overview": "Overview",
@@ -2181,7 +2181,7 @@
         "sourceBreakdownPeriod": "Inflow source of leads registered: {period}",
         "responseTimePending": "Coming soon (shown once first contacts are recorded)",
         "mqlLevels": "Leads by MQL level",
-        "mqlLevelsDescription": "All leads, counted as the MQL level filter of the lead list (a lead with an MQL date is interested)"
+        "mqlLevelsDescription": "Leads of all time. A lead with an MQL date (also one set by hand) counts as interested. Click a level to open the list"
       },
       "funnel": {
         "total": "Total",
