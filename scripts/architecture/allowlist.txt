@@ -16,6 +16,7 @@ ax-boundary lib/features/leads/api/router.ts -> lib/features/diagnostics/ax-migr
 ax-boundary lib/features/leads/diagnosis-view.ts -> lib/features/diagnostics/ax-migration/access-path.ts
 ax-boundary lib/features/leads/diagnosis-view.ts -> lib/features/diagnostics/ax-migration/mql.ts
 ax-boundary lib/features/leads/mql-level.ts -> lib/features/diagnostics/ax-migration/mql.ts
+ax-boundary lib/features/objection-card/service.ts -> lib/features/diagnostics/ax-migration/definition.ts
 cross-feature-internal lib/features/agency-contracts/report.ts
 cross-feature-internal lib/features/agency-handovers/columns.ts
 cross-feature-internal lib/features/analytics/dashboard.ts
