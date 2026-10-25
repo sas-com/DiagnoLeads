@@ -740,7 +740,7 @@ describe('Leads Router', () => {
 
   });
 
-  describe('list with advanced filters', () => {
+  describe('list with filters', () => {
     it('should filter by score range', async () => {
       mockDb.offset.mockResolvedValue([mockLead]);
 
@@ -780,41 +780,6 @@ describe('Leads Router', () => {
 
       expect(result.items).toEqual([]);
       expect(result.total).toBe(0);
-    });
-
-    it('should apply advanced filter with equals operator', async () => {
-      mockDb.offset.mockResolvedValue([mockLead]);
-
-      const caller = appRouter.createCaller(mockContext);
-      await caller.leads.list({
-        organizationId: TEST_ORG_ID,
-        advancedFilter: {
-          logic: 'and',
-          conditions: [
-            { field: 'status', operator: 'equals', value: 'new' },
-          ],
-        },
-      });
-
-      expect(mockDb.select).toHaveBeenCalled();
-    });
-
-    it('should apply advanced filter with contains operator', async () => {
-      mockDb.offset.mockResolvedValue([mockLead]);
-
-      const caller = appRouter.createCaller(mockContext);
-      await caller.leads.list({
-        organizationId: TEST_ORG_ID,
-        advancedFilter: {
-          logic: 'or',
-          conditions: [
-            { field: 'name', operator: 'contains', value: 'Test' },
-            { field: 'company', operator: 'contains', value: 'Corp' },
-          ],
-        },
-      });
-
-      expect(mockDb.select).toHaveBeenCalled();
     });
   });
   describe('audit log (Refs #101)', () => {

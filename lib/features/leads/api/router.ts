@@ -11,27 +11,7 @@ import {
 } from '@/lib/features/webhooks/services/lead-events';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
-import {
-  type Column,
-  type SQL,
-  and,
-  between,
-  count,
-  eq,
-  gt,
-  gte,
-  ilike,
-  inArray,
-  isNotNull,
-  isNull,
-  lt,
-  lte,
-  ne,
-  notIlike,
-  notInArray,
-  or,
-  sql,
-} from 'drizzle-orm';
+import { type SQL, and, count, eq, inArray, sql } from 'drizzle-orm';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 import {
@@ -73,8 +53,6 @@ import {
   statusUpdateFields,
 } from '../types/pipeline';
 import {
-  type FilterCondition,
-  type FilterGroup,
   assignLeadSchema,
   bulkCreateSchema,
   bulkDeleteSchema,
@@ -118,110 +96,11 @@ function pickPipelineFields(input: LeadPipelineFields): LeadPipelineFields {
   return picked as LeadPipelineFields;
 }
 
-/**
- * Build SQL condition from a filter condition
- */
-function buildCondition(condition: FilterCondition): SQL | undefined {
-  const { field, operator, value, value2 } = condition;
-
-  // Map field names to lead columns
-  const columnMap: Record<string, Column> = {
-    name: leads.name,
-    email: leads.email,
-    company: leads.company,
-    phone: leads.phone,
-    status: leads.status,
-    source: leads.source,
-    inflowSource: leads.inflowSource,
-    conversionPoint: leads.conversionPoint,
-    dealPhase: leads.dealPhase,
-    targetSystem: leads.targetSystem,
-    lostReason: leads.lostReason,
-    referrerName: leads.referrerName,
-    agencyName: leads.agencyName,
-    acquisitionCost: leads.acquisitionCost,
-    score: leads.score,
-    createdAt: leads.createdAt,
-    updatedAt: leads.updatedAt,
-  };
-
-  const column = columnMap[field];
-  if (!column) return undefined;
-
-  switch (operator) {
-    case 'equals':
-      return eq(column, value as string);
-    case 'not_equals':
-      return ne(column, value as string);
-    case 'contains':
-      return ilike(column, `%${value}%`);
-    case 'not_contains':
-      return notIlike(column, `%${value}%`);
-    case 'starts_with':
-      return ilike(column, `${value}%`);
-    case 'ends_with':
-      return ilike(column, `%${value}`);
-    case 'greater_than':
-      return gt(column, value as number | Date);
-    case 'less_than':
-      return lt(column, value as number | Date);
-    case 'greater_or_equal':
-      return gte(column, value as number | Date);
-    case 'less_or_equal':
-      return lte(column, value as number | Date);
-    case 'between':
-      return between(column, value as number | Date, value2 as number | Date);
-    case 'is_empty':
-      return or(isNull(column), eq(column, ''));
-    case 'is_not_empty':
-      return and(isNotNull(column), ne(column, ''));
-    case 'in':
-      return inArray(column, value as string[]);
-    case 'not_in':
-      return notInArray(column, value as string[]);
-    default:
-      return undefined;
-  }
-}
-
-/**
- * Build SQL conditions from a filter group (recursive)
- */
-function buildFilterGroup(group: FilterGroup): SQL | undefined {
-  const conditions: (SQL | undefined)[] = [];
-
-  // Build conditions from this group
-  for (const condition of group.conditions) {
-    const sqlCondition = buildCondition(condition);
-    if (sqlCondition) {
-      conditions.push(sqlCondition);
-    }
-  }
-
-  // Build nested groups
-  if (group.groups) {
-    for (const nestedGroup of group.groups) {
-      const nestedCondition = buildFilterGroup(nestedGroup as FilterGroup);
-      if (nestedCondition) {
-        conditions.push(nestedCondition);
-      }
-    }
-  }
-
-  // Filter out undefined
-  const validConditions = conditions.filter((c): c is SQL => c !== undefined);
-
-  if (validConditions.length === 0) return undefined;
-  if (validConditions.length === 1) return validConditions[0];
-
-  return group.logic === 'and' ? and(...validConditions) : or(...validConditions);
-}
-
 type ListFilterInput = Omit<z.infer<typeof listLeadsSchema>, 'limit' | 'offset'>;
 
 /**
  * WHERE of the list and the export: always scoped to the organization (#131), with the list
- * filters, the tag filter and the advanced filter. null when the tag filter matches no lead.
+ * filters and the tag filter. null when the tag filter matches no lead.
  */
 async function listWhere(
   ctx: { db: typeof defaultDb; user: { id: string } },
@@ -246,12 +125,6 @@ async function listWhere(
         leadsWithTags.map((lt) => lt.leadId)
       )
     );
-  }
-
-  // Advanced filter
-  if (input.advancedFilter) {
-    const advancedCondition = buildFilterGroup(input.advancedFilter);
-    if (advancedCondition) conditions.push(advancedCondition);
   }
 
   return and(...conditions) ?? null;
