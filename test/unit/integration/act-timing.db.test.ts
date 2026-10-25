@@ -474,6 +474,34 @@ describe.skipIf(!url)('when to act (PostgreSQL)', () => {
     }
   });
 
+  it('reads the window and counts the leads left through the index on (updated_at, id), not a scan (#574)', async () => {
+    // The same shapes as recomputeRecentlyUpdated (notReached, the page read and cutShort in
+    // lib/features/act-timing/service.ts; change both together): a page after the last lead
+    // reached, newest first, and the count when cut short. Sequential scans are turned off because the test
+    // database holds too few leads for the planner to prefer the index on its own
+    const window = sql`updated_at >= now() - interval '2 days'
+      and (updated_at, id) < ('2026-10-25 00:00:00.123456'::timestamp, '00000000-0000-0000-0000-000000000000'::uuid)`;
+    const plans = await pg.transaction(async (tx) => {
+      await tx.execute(sql`set local enable_seqscan = off`);
+      const plan = async (query: ReturnType<typeof sql>) =>
+        (await tx.execute(sql`explain ${query}`))
+          .map((row) => String((row as Record<string, unknown>)['QUERY PLAN']))
+          .join('\n');
+      return [
+        await plan(sql`select id, organization_id from leads where ${window}
+          order by updated_at desc, id desc limit ${RECOMPUTE_BATCH}`),
+        await plan(sql`select count(*)::int,
+          (count(*) filter (where updated_at >= now() - interval '1 day'))::int
+          from leads where ${window}`),
+      ];
+    });
+
+    for (const plan of plans) {
+      expect(plan).toContain('leads_updated_at_id_idx');
+      expect(plan).not.toMatch(/Seq Scan on leads/);
+    }
+  });
+
   it('lets owners and admins change the settings, recomputing the leads', async () => {
     await expect(
       callers.member.actTiming.updateSettings({ organizationId: org, settings: { migrationMonths: 24, noticeMonths: 1 } })

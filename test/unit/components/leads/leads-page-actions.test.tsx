@@ -69,11 +69,15 @@ const store = vi.hoisted(() => {
   };
 });
 
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: store.push, replace: store.replace, prefetch: vi.fn(), back: vi.fn() }),
-  usePathname: () => '/ja/leads',
-  useSearchParams: () => new URLSearchParams(),
-}));
+vi.mock('next/navigation', () => {
+  // One object for every render, like Next's useRouter (#636)
+  const router = { push: store.push, replace: store.replace, prefetch: vi.fn(), back: vi.fn() };
+  return {
+    useRouter: () => router,
+    usePathname: () => '/ja/leads',
+    useSearchParams: () => new URLSearchParams(),
+  };
+});
 
 // Like next/dynamic, each component loads behind its own boundary
 vi.mock('next/dynamic', async () => {

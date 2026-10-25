@@ -287,6 +287,13 @@ export default function AnalyticsPage() {
 
         {/* Controls */}
         <div className="flex flex-wrap items-center gap-3">
+          {/* Visitors of the public pages (#755) */}
+          <Link
+            href={`/${locale}/analytics/site`}
+            className="text-sm font-medium text-brand-700 underline-offset-4 hover:underline dark:text-brand-300"
+          >
+            {t('siteVisits')}
+          </Link>
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4 text-gray-500" />
             <Select value={dateRange} onValueChange={(v) => setDateRange(v as DateRange)}>

@@ -1341,7 +1341,8 @@
       "updateSuccess": "{count} leads updated successfully",
       "deleteSuccess": "{count} leads deleted successfully",
       "updateError": "Failed to update leads",
-      "deleteError": "Failed to delete leads"
+      "deleteError": "Failed to delete leads",
+      "skippedWithDeals": "{count} leads with deals were left as they are (their status comes from the deals)"
     },
     "import": {
       "title": "Import Leads",
@@ -2621,7 +2622,8 @@
         "costNotRegistered": "Cost not registered (no contract for this period)",
         "appointmentQuality": "Appointments meeting the conditions",
         "appointmentQualityValue": "{met} / {reviewed} ({rate}%)"
-      }
+      },
+      "siteVisits": "Site visits"
     }
   },
   "header": {
@@ -4420,7 +4422,8 @@
     "sheet": {
       "keyFacts": "Key facts"
     },
-    "nextMeetingOverdue": "Next meeting {date} has passed"
+    "nextMeetingOverdue": "Next meeting {date} has passed",
+    "fromDeals": "Set by the deals (changes with the deal stage)"
   },
   "leadList": {
     "searchLabel": "Search leads",
@@ -5480,6 +5483,43 @@
         "unknown": "Unknown"
       },
       "footer": "Imported by {name} on {date}"
+    }
+  },
+  "siteAnalytics": {
+    "title": "Site visits",
+    "description": "Visitors and page views of the public pages (own measurement, no cookies)",
+    "periodLabel": "Period",
+    "period": "Last {days} days",
+    "periodRange": "Last {days} days",
+    "overview": "Overview",
+    "toAnalytics": "Lead analytics",
+    "metricLabel": "Metric",
+    "metric": {
+      "visitors": "Visitors, whole site",
+      "pageviews": "Page views, whole site"
+    },
+    "change": {
+      "increase": "{rate}% more than the previous period",
+      "decrease": "{rate}% less than the previous period",
+      "unchanged": "Same as the previous period"
+    },
+    "updatedOn": "Recorded up to {day}",
+    "chartLabel": "{metric} per day (last {days} days, total {total})",
+    "visitorsNote": "Visitors are counted per day: someone who comes back on another day counts on each day.",
+    "pagesTitle": "{metric} per page",
+    "empty": "No views recorded in this period",
+    "notMeasured": "No visits have been recorded yet. The measurement is turned on once the privacy policy describes it.",
+    "error": "Could not load. Please reload later.",
+    "pageType": {
+      "ax-lp": "AX migration (main landing page)",
+      "ax-access-lp": "Access landing page",
+      "ax-column-index": "Columns",
+      "ax-column": "Column",
+      "ax-diagnosis": "AX diagnosis",
+      "diagnosis": "Diagnosis",
+      "legacy-diagnostic": "Diagnostic form (legacy)",
+      "home": "Top page",
+      "landing": "Landing page"
     }
   }
 }

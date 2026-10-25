@@ -274,6 +274,8 @@ function mockDb() {
     delete: vi.fn().mockReturnThis(),
     set: vi.fn().mockReturnThis(),
     execute: vi.fn().mockResolvedValue([]),
+    // No lead has a deal (leadIdsWithDeals, #444)
+    selectDistinct: vi.fn(() => ({ from: () => ({ where: () => Promise.resolve([]) }) })),
     transaction: vi.fn(),
   };
   db.transaction.mockImplementation((fn: (tx: unknown) => unknown) => fn(db));

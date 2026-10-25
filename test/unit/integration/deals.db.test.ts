@@ -1,7 +1,7 @@
 /**
  * Deals (#435) through the routers on a real PostgreSQL: defaults, the history and audit rows,
- * how a deal moves its lead forward (with the lead's audit row, webhooks and the handoff
- * notice), the board's totals and filters, permissions and organization isolation, and two deals
+ * how deals set their lead's status and deal phase (with the lead's audit row, webhooks and the
+ * handoff notice), computed again on every change and deletion, and refused by hand (#444), the board's totals and filters, permissions and organization isolation, and two deals
  * of one lead changed at the same time.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
@@ -36,12 +36,25 @@ vi.mock('@/lib/features/lead-handoff/notify', () => ({
   notifyLeadHandoff: sent.notifyLeadHandoff.mockResolvedValue({ notified: 0 }),
 }));
 
+// REST API v2 reads the module's db and its own auth (#444): the test's database and organization
+const v2 = vi.hoisted(() => ({
+  db: null as unknown,
+  auth: vi.fn(),
+}));
+vi.mock('@/lib/db', () => ({
+  get db() {
+    return v2.db;
+  },
+}));
+vi.mock('@/lib/api/v2-auth', () => ({ getAuthenticatedOrganization: v2.auth }));
+
 const url = process.env.TEST_DATABASE_URL;
 
 describe.skipIf(!url)('deals (PostgreSQL)', () => {
   const client = url ? postgres(url, { max: 6 }) : null;
   // biome-ignore lint/style/noNonNullAssertion: guarded by skipIf
   const pg = (client ? drizzle(client, { schema }) : null)!;
+  v2.db = pg;
   const unique = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const organizationIds: string[] = [];
   const userIds: string[] = [];
@@ -301,8 +314,8 @@ describe.skipIf(!url)('deals (PostgreSQL)', () => {
         stage: 'proposal',
       });
       expect(reopened).toMatchObject({ stage: 'proposal', closedOn: null, probability: 40 });
-      // The lead never moves back
-      expect(await leadOf(lead.id)).toMatchObject({ status: 'won', dealPhase: 'survey_won' });
+      // The lead follows its deal back (#444)
+      expect(await leadOf(lead.id)).toMatchObject({ status: 'negotiating', dealPhase: 'proposal' });
     });
 
     it('needs a lost reason, gives it to the lead, and clears it on reopening', async () => {
@@ -430,6 +443,169 @@ describe.skipIf(!url)('deals (PostgreSQL)', () => {
       const after = await leadOf(lead.id);
       expect(after.status).toBe('lost');
       expect(['timing', 'budget']).toContain(after.lostReason);
+    });
+  });
+
+  // A lead with deals takes its status and deal phase from them, both ways (#444)
+  describe('lead set from its deals', () => {
+    it('moves the lead back when its won deal is reopened or deleted', async () => {
+      const lead = await createLead(orgA);
+      const survey = await adminA.deals.create({
+        organizationId: orgA,
+        leadId: lead.id,
+        name: '調査',
+        stage: 'won',
+      });
+      const migration = await adminA.deals.create({
+        organizationId: orgA,
+        leadId: lead.id,
+        name: '移行',
+        kind: 'migration',
+        stage: 'proposal',
+        previousDealId: survey.id,
+      });
+      expect(await leadOf(lead.id)).toMatchObject({ status: 'won', dealPhase: 'survey_won' });
+
+      await adminA.deals.update({ organizationId: orgA, dealId: survey.id, stage: 'negotiation' });
+      expect(await leadOf(lead.id)).toMatchObject({ status: 'negotiating', dealPhase: 'proposal' });
+
+      await adminA.deals.update({ organizationId: orgA, dealId: survey.id, stage: 'won' });
+      sent.emitLeadEvents.mockClear();
+      await adminA.deals.delete({ organizationId: orgA, dealId: survey.id });
+      const after = await leadOf(lead.id);
+      expect(after).toMatchObject({ status: 'negotiating', dealPhase: 'proposal' });
+      // The first day of each phase stays
+      expect(after.dealPhaseReachedAt).toHaveProperty('survey_won');
+      // The lead's own audit row and webhooks, as for a change
+      const leadAudit = await auditOf('lead', lead.id);
+      expect(leadAudit.at(-1)?.metadata).toMatchObject({ dealId: survey.id });
+      expect(sent.emitLeadEvents).toHaveBeenCalled();
+      expect(migration.id).toBeTruthy();
+    });
+
+    it('refuses to change the status or phase of a lead with deals by hand', async () => {
+      const lead = await createLead(orgA);
+      await adminA.deals.create({ organizationId: orgA, leadId: lead.id, name: '調査' });
+      const before = await leadOf(lead.id);
+      expect(before).toMatchObject({ status: 'negotiating', dealPhase: 'initial_hearing' });
+
+      await expect(
+        memberA.leads.update({ organizationId: orgA, id: lead.id, status: 'won' })
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      await expect(
+        memberA.leads.update({ organizationId: orgA, id: lead.id, dealPhase: 'proposal' })
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(await leadOf(lead.id)).toMatchObject({
+        status: 'negotiating',
+        dealPhase: 'initial_hearing',
+      });
+
+      // The other fields, and the values it already has, still save
+      await memberA.leads.update({
+        organizationId: orgA,
+        id: lead.id,
+        company: '架空商事（新社名）',
+        status: 'negotiating',
+        dealPhase: 'initial_hearing',
+      });
+      expect((await leadOf(lead.id)).company).toBe('架空商事（新社名）');
+
+      // The lead page and the list say the lead has deals
+      expect(await memberA.leads.get({ organizationId: orgA, id: lead.id })).toMatchObject({
+        hasDeals: true,
+      });
+    });
+
+    it('changes the status in bulk only of the leads without deals', async () => {
+      const withDeal = await createLead(orgA);
+      await adminA.deals.create({ organizationId: orgA, leadId: withDeal.id, name: '調査' });
+      const without = await createLead(orgA);
+
+      const result = await memberA.leads.bulkUpdateStatus({
+        organizationId: orgA,
+        ids: [withDeal.id, without.id],
+        status: 'nurturing',
+      });
+      expect(result).toEqual({ success: true, updatedCount: 1, skippedWithDeals: 1 });
+      expect((await leadOf(withDeal.id)).status).toBe('negotiating');
+      expect((await leadOf(without.id)).status).toBe('nurturing');
+    });
+
+    it('lets a lead without deals be changed by hand, as before', async () => {
+      const lead = await createLead(orgA);
+      expect(await memberA.leads.get({ organizationId: orgA, id: lead.id })).toMatchObject({
+        hasDeals: false,
+      });
+      await memberA.leads.update({ organizationId: orgA, id: lead.id, status: 'nurturing' });
+      expect((await leadOf(lead.id)).status).toBe('nurturing');
+    });
+
+    it('keeps the lead when its last deal is deleted, and lets it be changed by hand again', async () => {
+      const lead = await createLead(orgA);
+      const deal = await adminA.deals.create({
+        organizationId: orgA,
+        leadId: lead.id,
+        name: '調査',
+        stage: 'proposal',
+      });
+      await adminA.deals.delete({ organizationId: orgA, dealId: deal.id });
+      expect(await leadOf(lead.id)).toMatchObject({ status: 'negotiating', dealPhase: 'proposal' });
+
+      await memberA.leads.update({ organizationId: orgA, id: lead.id, status: 'nurturing' });
+      expect((await leadOf(lead.id)).status).toBe('nurturing');
+      const listed = await memberA.leads.list({ organizationId: orgA, search: lead.email });
+      expect(listed.items.find((item: { id: string }) => item.id === lead.id)).toMatchObject({
+        hasDeals: false,
+      });
+    });
+
+    it('asks for the win as a won deal before an open deal of a lead won by hand', async () => {
+      const lead = await createLead(orgA, {
+        status: 'won',
+        hasNegotiated: true,
+        dealPhase: 'survey_won',
+      });
+      await expect(
+        adminA.deals.create({ organizationId: orgA, leadId: lead.id, name: '移行', kind: 'migration' })
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(await pg.select().from(deals).where(eq(deals.leadId, lead.id))).toHaveLength(0);
+
+      // Once the win is a deal, the next deal keeps the lead won
+      await adminA.deals.create({ organizationId: orgA, leadId: lead.id, name: '調査', stage: 'won' });
+      await adminA.deals.create({
+        organizationId: orgA,
+        leadId: lead.id,
+        name: '移行',
+        kind: 'migration',
+      });
+      expect(await leadOf(lead.id)).toMatchObject({ status: 'won', dealPhase: 'survey_won' });
+    });
+
+    it('refuses the status of a lead with deals through REST API v2 too', async () => {
+      const { PATCH } = await import('@/app/api/v2/leads/[id]/route');
+      const { NextRequest } = await import('next/server');
+      const patch = (leadId: string, body: unknown) =>
+        PATCH(
+          new NextRequest(`http://localhost/api/v2/leads/${leadId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(body),
+            headers: { 'content-type': 'application/json' },
+          }),
+          { params: Promise.resolve({ id: leadId }) }
+        );
+      v2.auth.mockResolvedValue({ organizationId: orgA, userId: memberAId });
+
+      const lead = await createLead(orgA);
+      await adminA.deals.create({ organizationId: orgA, leadId: lead.id, name: '調査' });
+      expect((await patch(lead.id, { status: 'won' })).status).toBe(409);
+      expect((await leadOf(lead.id)).status).toBe('negotiating');
+      // The same status and the other fields still save
+      expect((await patch(lead.id, { status: 'negotiating', company: '新社名' })).status).toBe(200);
+      expect((await leadOf(lead.id)).company).toBe('新社名');
+
+      // A lead of another organization is not found, whatever its deals
+      v2.auth.mockResolvedValue({ organizationId: orgB, userId: adminBId });
+      expect((await patch(lead.id, { status: 'won' })).status).toBe(404);
     });
   });
 
@@ -579,6 +755,7 @@ describe.skipIf(!url)('deals (PostgreSQL)', () => {
     });
 
     it('lets owners and admins delete, records it and leaves the lead as it is', async () => {
+      // The last deal of the lead: nothing is left to set the lead from
       const lead = await createLead(orgA);
       const deal = await adminA.deals.create({
         organizationId: orgA,
