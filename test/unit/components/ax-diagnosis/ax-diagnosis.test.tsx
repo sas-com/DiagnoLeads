@@ -755,6 +755,16 @@ describe('AxDiagnosisResult', () => {
     expect(screen.getByText('期限までの段取りを、一緒に確認しませんか')).toBeInTheDocument();
   });
 
+  it('describes the agility challenge as the brochure ver01 and the landing page do (#76)', () => {
+    renderResult({
+      result: { ...publicResult, challenges: { ...publicResult.challenges, primary: 'agility' } },
+    });
+    expect(screen.getByText(/新商品・新サービスの展開を妨げています/)).toBeInTheDocument();
+    expect(screen.getByText(/短いサイクルで機能を追加しやすく、市場の変化に対応しやすい仕組みへ/)).toBeInTheDocument();
+    // Not in the brochure: ways of working, the support deadline, use from outside the office
+    expect(screen.queryByText(/働き方の変化|社外からの利用/)).not.toBeInTheDocument();
+  });
+
   it('shows no documents or seminars unless the organization offers them (#153)', () => {
     renderResult();
     expect(screen.queryByTestId('ax-info-offers')).not.toBeInTheDocument();
@@ -841,13 +851,31 @@ describe('AxDiagnosisResult', () => {
     });
 
     it.each([
+      ['fix', {}, 'Microsoft Accessを直して使い続けるときに確認すること'],
+      ['web', { access_challenges: ['remote'] }, 'Microsoft AccessからWebシステムへ移行するときに確認すること'],
+      [
+        'replace',
+        { access_features: ['none'], access_screens_forms: 'lt20' },
+        'Microsoft Accessから既製サービスに置き換えるときに確認すること',
+      ],
+    ])('titles the checkpoints after the %s path (#507)', (path, answers, title) => {
+      renderAccess(answers);
+      expect(screen.getByTestId('ax-result-access-path')).toHaveAttribute('data-path', path);
+      expect(
+        within(screen.getByTestId('ax-result-checkpoints')).getByRole('heading', { name: title })
+      ).toBeInTheDocument();
+    });
+
+    it.each([
       ['fix', {}],
       ['web', { access_challenges: ['remote'] }],
       ['replace', { access_features: ['none'], access_screens_forms: 'lt20' }],
     ])('keeps the next step for the %s path', (path, answers) => {
       renderAccess(answers);
       expect(screen.getByTestId('ax-result-access-path')).toHaveAttribute('data-path', path);
-      expect(screen.getAllByRole('button', { name: /無料の個別相談を申し込む/ })).toHaveLength(2);
+      // The consultation of the Access page, by the same name everywhere on the result (#538)
+      expect(screen.getAllByRole('button', { name: /30分の無料オンライン相談を申し込む/ })).toHaveLength(2);
+      expect(screen.queryByText(/個別相談|移行の進め方/)).not.toBeInTheDocument();
     });
 
     /** Titles of the next steps, in order */
@@ -895,6 +923,8 @@ describe('AxDiagnosisResult', () => {
       const steps = screen.getByTestId('ax-result-steps');
       expect(within(steps).getByRole('heading', { name: 'このあとの流れ' })).toBeInTheDocument();
       expect(steps).toHaveTextContent('次は、30分のオンライン相談で棚卸しを始めます。');
+      // Whether checking the files costs anything is said before, never left to guess (#538)
+      expect(steps).toHaveTextContent('ファイルを確かめる作業に費用がかかる場合は、前もってお伝えします。');
       expect(stepTitles()).toEqual(titles);
       // Never the migration to a web system of the other paths' steps
       expect(steps).not.toHaveTextContent('最新のWebシステムへ移行します');
@@ -916,8 +946,9 @@ describe('AxDiagnosisResult', () => {
       fetchMock.mockResolvedValue(jsonResponse(200, { ok: true, alreadyRequested: false }));
       const user = userEvent.setup();
       renderAccess();
-      await user.click(screen.getAllByRole('button', { name: /無料の個別相談を申し込む/ })[0]);
-      expect(await screen.findByText('所要時間の目安：30分程度（オンライン）')).toBeInTheDocument();
+      await user.click(screen.getAllByRole('button', { name: /30分の無料オンライン相談を申し込む/ })[0]);
+      expect(await screen.findByText('30分のオンライン相談のお申し込みを受け付けました')).toBeInTheDocument();
+      expect(screen.getByText('所要時間の目安：30分程度（オンライン）')).toBeInTheDocument();
       expect(screen.queryByText('所要時間の目安：60分程度')).not.toBeInTheDocument();
       expect(screen.queryByRole('group', { name: 'ご希望の形式' })).not.toBeInTheDocument();
     });

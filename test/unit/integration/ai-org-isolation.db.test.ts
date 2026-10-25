@@ -47,8 +47,11 @@ const ai = vi.hoisted(() => {
     scoreLeadWithAI: vi.fn(async () => ({ score: 99 })),
     scoreLeadsBatch: vi.fn(async (rows: { id: string }[]) => byId(rows, { score: 99 })),
     predictConversion: vi.fn(async () => ({ probability: 0.5 })),
-    predictConversionBatch: vi.fn(async (rows: { id: string }[]) =>
-      byId(rows, { probability: 0.5 })
+    predictConversionBatch: vi.fn(async (rows: { lead: { id: string } }[]) =>
+      byId(
+        rows.map(({ lead }) => lead),
+        { probability: 0.5 }
+      )
     ),
     generateLeadSummary: vi.fn(async () => 'まとめ'),
     semanticSearch: vi.fn<typeof Semantic.semanticSearch>(async () => []),
@@ -124,8 +127,10 @@ describe.skipIf(!url)('AI features: organization isolation (PostgreSQL)', () => 
       .flatMap((arg) => (Array.isArray(arg) ? arg : [arg]))
       .map((arg) => {
         if (typeof arg === 'string') return arg;
-        const named = arg as { id?: string; leadId?: string } | null;
-        return named?.id ?? named?.leadId;
+        // The semantic functions take named arguments (#590); the batch prediction is handed
+        // { lead, contact } pairs (#406)
+        const item = arg as { id?: string; leadId?: string; lead?: { id?: string } } | null;
+        return item?.id ?? item?.leadId ?? item?.lead?.id;
       })
       .filter(Boolean);
   /** The real semantic.ts (the router tests use the stubs above) */

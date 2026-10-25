@@ -265,9 +265,33 @@ describe('AI router: rate limits of the Claude calls', () => {
     for (const stub of [ai.scoreLeadWithAI, ai.generateLeadSummary, ai.predictConversion]) {
       expect(stub.mock.calls[0][0]).toMatchObject({ id: LEAD_1, company: cut });
     }
-    for (const stub of [ai.scoreLeadsBatch, ai.predictConversionBatch]) {
-      expect(stub.mock.calls[0][0]).toMatchObject([{ id: LEAD_1, company: cut }, { id: LEAD_2 }]);
+    expect(ai.scoreLeadsBatch.mock.calls[0][0]).toMatchObject([
+      { id: LEAD_1, company: cut },
+      { id: LEAD_2 },
+    ]);
+    expect(ai.predictConversionBatch.mock.calls[0][0]).toMatchObject([
+      { lead: { id: LEAD_1, company: cut } },
+      { lead: { id: LEAD_2 } },
+    ]);
+
+    // Nothing that points at a person reaches Claude (#406): the prediction gets only whether
+    // a name and a phone number are there, for its fallback heuristics
+    const handed = [
+      ai.scoreLeadWithAI.mock.calls[0][0],
+      ai.generateLeadSummary.mock.calls[0][0],
+      ai.predictConversion.mock.calls[0][0],
+      ...ai.scoreLeadsBatch.mock.calls[0][0],
+      ...ai.predictConversionBatch.mock.calls[0][0].map((item: { lead: unknown }) => item.lead),
+    ];
+    for (const lead of handed) {
+      for (const field of ['name', 'email', 'phone']) {
+        expect(lead).not.toHaveProperty(field);
+      }
     }
+    expect(ai.predictConversion.mock.calls[0][1]).toEqual({
+      hasName: expect.any(Boolean),
+      hasPhone: expect.any(Boolean),
+    });
     // The change events compare the stored lead, not the copy handed to Claude
     expect(vi.mocked(leadChangeEvents).mock.calls[0][0]).toBe(huge);
   });
@@ -440,7 +464,9 @@ describe('AI router: rate limits of the OpenAI embeddings', () => {
     await caller.ai.updateEmbedding(one);
     const embedded = openai.create.mock.calls[1][0].input as string;
     expect(embedded.length).toBeLessThanOrEqual(MAX_EMBEDDING_TEXT_CHARS);
-    expect(embedded).toContain(`${LEAD_1}@example.co.jp`);
+    // Nothing that points at a person goes to OpenAI (#406)
+    expect(embedded).not.toContain(`${LEAD_1}@example.co.jp`);
+    expect(embedded).not.toContain('nnnn');
   });
 
   it('counts nothing for similar leads: they compare the stored embeddings without OpenAI', async () => {

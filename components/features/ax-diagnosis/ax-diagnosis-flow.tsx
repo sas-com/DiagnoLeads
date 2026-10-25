@@ -656,6 +656,8 @@ function AxDiagnosisSteps({
             extra={
               <ConsultationRequest
                 checked={consultation}
+                // Access is the 30-minute online consultation of its landing page (#538)
+                {...(platform === 'access' ? { label: t('contact.accessConsultation') } : {})}
                 phone={contact.phone}
                 phoneError={errors.phone}
                 onChange={setConsultation}
