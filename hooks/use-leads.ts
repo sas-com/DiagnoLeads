@@ -5,29 +5,59 @@ import type {
   ListLeadsInput,
   UpdateLeadInput,
 } from '@/lib/features/leads/types';
+import { LOST_ON_HOLD_MESSAGE } from '@/lib/features/leads/types/pipeline';
 import { trpc } from '@/lib/trpc/client';
 import { keepPreviousData } from '@tanstack/react-query';
+import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
+
+/** A failed tRPC call as the client sees it */
+interface LeadWriteError {
+  message: string;
+  data?: { code?: string } | null;
+}
+
+/**
+ * Message key (from the root of the catalog) for a failed create, update or delete of a lead.
+ * The server's own text is Japanese only, so the message comes from the error's code (#434).
+ * Only the refusal of 保留 as the reason of a lost lead (#445) keeps its explanation: it is the
+ * one the user can fix, and the server sends the same shared constant.
+ */
+export function leadWriteErrorKey(error: LeadWriteError, write: 'create' | 'update' | 'delete') {
+  switch (error.data?.code) {
+    case 'UNAUTHORIZED':
+      return 'errors.sessionExpired';
+    case 'FORBIDDEN':
+      return 'errors.insufficientPermissions';
+    case 'NOT_FOUND':
+      return 'errors.leadNotFound';
+    case 'BAD_REQUEST':
+      return error.message === LOST_ON_HOLD_MESSAGE ? 'leads.lostOnHold' : 'errors.validation';
+    default:
+      return `leads.toast.${write}Failed`;
+  }
+}
 
 /**
  * Hook to create a new lead with optimistic updates
  */
 export function useCreateLead() {
+  const t = useTranslations();
   const utils = trpc.useContext();
 
   return trpc.leads.create.useMutation({
     onMutate: async () => {
-      toast.loading('リードを作成中...', { id: 'create-lead' });
+      toast.loading(t('leads.toast.creating'), { id: 'create-lead' });
     },
     onSuccess: () => {
       // Invalidate leads list to refresh data
       utils.leads.list.invalidate();
       // The list page's cards count the whole organization
       utils.leads.statusCounts.invalidate();
-      toast.success('リードを作成しました', { id: 'create-lead' });
+      toast.success(t('leads.toast.created'), { id: 'create-lead' });
     },
     onError: (error) => {
-      toast.error(`エラー: ${error.message}`, { id: 'create-lead' });
+      toast.error(t(leadWriteErrorKey(error, 'create')), { id: 'create-lead' });
     },
   });
 }
@@ -97,11 +127,12 @@ export function useLeadAccess(organizationId: string): LeadAccess {
  * Hook to update a lead with optimistic updates
  */
 export function useUpdateLead() {
+  const t = useTranslations();
   const utils = trpc.useContext();
 
   return trpc.leads.update.useMutation({
     onMutate: async () => {
-      toast.loading('リードを更新中...', { id: 'update-lead' });
+      toast.loading(t('leads.toast.updating'), { id: 'update-lead' });
     },
     onSuccess: (_, variables) => {
       // Invalidate the specific lead and the list
@@ -112,10 +143,10 @@ export function useUpdateLead() {
       utils.leads.list.invalidate();
       // The list page's cards count the whole organization
       utils.leads.statusCounts.invalidate();
-      toast.success('リードを更新しました', { id: 'update-lead' });
+      toast.success(t('leads.toast.updated'), { id: 'update-lead' });
     },
     onError: (error) => {
-      toast.error(`エラー: ${error.message}`, { id: 'update-lead' });
+      toast.error(t(leadWriteErrorKey(error, 'update')), { id: 'update-lead' });
     },
   });
 }
@@ -124,21 +155,22 @@ export function useUpdateLead() {
  * Hook to delete a lead with optimistic updates
  */
 export function useDeleteLead() {
+  const t = useTranslations();
   const utils = trpc.useContext();
 
   return trpc.leads.delete.useMutation({
     onMutate: async () => {
-      toast.loading('リードを削除中...', { id: 'delete-lead' });
+      toast.loading(t('leads.toast.deleting'), { id: 'delete-lead' });
     },
     onSuccess: () => {
       // Invalidate leads list to refresh data
       utils.leads.list.invalidate();
       // The list page's cards count the whole organization
       utils.leads.statusCounts.invalidate();
-      toast.success('リードを削除しました', { id: 'delete-lead' });
+      toast.success(t('leads.toast.deleted'), { id: 'delete-lead' });
     },
     onError: (error) => {
-      toast.error(`エラー: ${error.message}`, { id: 'delete-lead' });
+      toast.error(t(leadWriteErrorKey(error, 'delete')), { id: 'delete-lead' });
     },
   });
 }

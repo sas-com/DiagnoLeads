@@ -44,10 +44,24 @@ const renderCard = () =>
   );
 
 const saved = () => mocks.mutate.mock.calls.at(-1)?.[0].settings;
+
+// The card lists every catalog field with two checkboxes and two buttons. A query over the whole
+// card computes the name of ~130 buttons (getByLabelText reads the labels of every control), which
+// took seconds per query on a loaded machine and timed the tests out (#573). So controls are
+// looked up inside their row, their section or the own-field editor.
+const row = (key: string) => within(screen.getByTestId(`hearing-setting-${key}`));
+const section = (name: string) => within(screen.getByRole('group', { name }));
+const ownFields = () => within(screen.getByRole('region', { name: '独自の項目' }));
+// The save and reset buttons below the lists, found by their text for the same reason. The
+// read-only test looks for them the same way, from the same texts, so the tests that press them
+// and the one that expects none cannot drift apart
+type FormButtonText = '保存' | '初期の設定に戻す';
+const formButton = (text: FormButtonText) => screen.getByText(text, { selector: 'button' });
+const queryFormButton = (text: FormButtonText) => screen.queryByText(text, { selector: 'button' });
 const meetingRows = () =>
-  within(screen.getByRole('group', { name: '実施情報' }))
+  section('実施情報')
     .getAllByRole('listitem')
-    .map((row) => row.getAttribute('data-testid'));
+    .map((item) => item.getAttribute('data-testid'));
 
 // The checkboxes (Radix) measure themselves
 beforeAll(() => {
@@ -66,14 +80,16 @@ beforeEach(() => {
 describe('HearingSettingsCard', () => {
   it('saves a field not asked, which is then not required either', () => {
     renderCard();
-    const required = screen.getByRole('checkbox', { name: '対象システム を必須にする' });
+    const required = row('targetSystem').getByRole('checkbox', {
+      name: '対象システム を必須にする',
+    });
     expect(required).toBeChecked();
-    fireEvent.click(screen.getByRole('checkbox', { name: '対象システム を聞く' }));
+    fireEvent.click(row('targetSystem').getByRole('checkbox', { name: '対象システム を聞く' }));
     expect(required).not.toBeChecked();
     expect(required).toBeDisabled();
 
-    fireEvent.click(screen.getByRole('checkbox', { name: '予算の状態 を必須にする' }));
-    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    fireEvent.click(row('budgetStatus').getByRole('checkbox', { name: '予算の状態 を必須にする' }));
+    fireEvent.click(formButton('保存'));
     expect(saved().hidden).toEqual(['targetSystem']);
     expect(saved().required).toContain('budgetStatus');
     expect(saved().required).not.toContain('targetSystem');
@@ -81,8 +97,8 @@ describe('HearingSettingsCard', () => {
 
   it('saves only what differs from the base, so later base changes still apply', () => {
     renderCard();
-    fireEvent.click(screen.getByRole('checkbox', { name: '機種・バージョン を聞く' }));
-    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    fireEvent.click(row('machineModel').getByRole('checkbox', { name: '機種・バージョン を聞く' }));
+    fireEvent.click(formButton('保存'));
     expect(saved()).toEqual({
       hidden: ['machineModel'],
       required: null,
@@ -94,12 +110,14 @@ describe('HearingSettingsCard', () => {
   it('moves a field within its section', () => {
     renderCard();
     expect(meetingRows()[0]).toBe('hearing-setting-meetingFormat');
-    fireEvent.click(screen.getByRole('button', { name: '先方の出席者の立場 を上へ' }));
+    fireEvent.click(
+      row('attendeeRoles').getByRole('button', { name: '先方の出席者の立場 を上へ' })
+    );
     expect(meetingRows().slice(0, 2)).toEqual([
       'hearing-setting-attendeeRoles',
       'hearing-setting-meetingFormat',
     ]);
-    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    fireEvent.click(formButton('保存'));
     expect(saved().order).toEqual({
       meeting: ['attendeeRoles', 'meetingFormat', 'decisionMakerPresent'],
     });
@@ -114,26 +132,30 @@ describe('HearingSettingsCard', () => {
       isError: false,
     };
     renderCard();
-    expect(screen.getByRole('checkbox', { name: '機種・バージョン を聞く' })).not.toBeChecked();
+    expect(
+      row('machineModel').getByRole('checkbox', { name: '機種・バージョン を聞く' })
+    ).not.toBeChecked();
     expect(meetingRows()[0]).toBe('hearing-setting-decisionMakerPresent');
 
-    fireEvent.click(screen.getByRole('button', { name: '初期の設定に戻す' }));
-    expect(screen.getByRole('checkbox', { name: '機種・バージョン を聞く' })).toBeChecked();
+    fireEvent.click(formButton('初期の設定に戻す'));
+    expect(
+      row('machineModel').getByRole('checkbox', { name: '機種・バージョン を聞く' })
+    ).toBeChecked();
     expect(meetingRows()[0]).toBe('hearing-setting-meetingFormat');
   });
 
   it('adds an own choice field, asked and required like the others', () => {
     renderCard();
-    fireEvent.click(screen.getByRole('button', { name: '独自の項目を追加' }));
-    fireEvent.change(screen.getByLabelText('項目名'), { target: { value: '導入時期の希望' } });
-    fireEvent.change(screen.getByLabelText('答え方'), { target: { value: 'single' } });
-    fireEvent.change(screen.getByLabelText('導入時期の希望 の選択肢 1'), {
+    fireEvent.click(ownFields().getByRole('button', { name: '独自の項目を追加' }));
+    fireEvent.change(ownFields().getByLabelText('項目名'), { target: { value: '導入時期の希望' } });
+    fireEvent.change(ownFields().getByLabelText('答え方'), { target: { value: 'single' } });
+    fireEvent.change(ownFields().getByLabelText('導入時期の希望 の選択肢 1'), {
       target: { value: '今期' },
     });
-    fireEvent.click(screen.getByRole('button', { name: '選択肢を追加' }));
-    // A choice left empty is dropped on save
-    fireEvent.click(screen.getByRole('checkbox', { name: '導入時期の希望 を必須にする' }));
-    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    fireEvent.click(ownFields().getByRole('button', { name: '選択肢を追加' }));
+    // A choice left empty is dropped on save. A new field goes to the requirements section
+    fireEvent.click(section('要件').getByRole('checkbox', { name: '導入時期の希望 を必須にする' }));
+    fireEvent.click(formButton('保存'));
 
     const [field] = saved().customFields;
     expect(field).toMatchObject({
@@ -148,8 +170,8 @@ describe('HearingSettingsCard', () => {
 
   it('refuses an own field without a name', () => {
     renderCard();
-    fireEvent.click(screen.getByRole('button', { name: '独自の項目を追加' }));
-    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    fireEvent.click(ownFields().getByRole('button', { name: '独自の項目を追加' }));
+    fireEvent.click(formButton('保存'));
     expect(mocks.mutate).not.toHaveBeenCalled();
   });
 
@@ -177,11 +199,11 @@ describe('HearingSettingsCard', () => {
     expect(screen.getByTestId('hearing-setting-custom:note0001')).toBeInTheDocument();
     // An archived field is not in the lists, only among the removed ones to bring back
     expect(screen.queryByTestId('hearing-setting-custom:gone0001')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '昔の項目 を戻す' })).toBeInTheDocument();
-    expect(screen.getByLabelText('答え方')).toBeDisabled();
+    expect(ownFields().getByRole('button', { name: '昔の項目 を戻す' })).toBeInTheDocument();
+    expect(ownFields().getByLabelText('答え方')).toBeDisabled();
 
-    fireEvent.click(screen.getByRole('button', { name: '社内の呼び名 を削除' }));
-    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    fireEvent.click(ownFields().getByRole('button', { name: '社内の呼び名 を削除' }));
+    fireEvent.click(formButton('保存'));
     expect(saved()).toEqual({
       hidden: ['custom:gone0001'],
       required: null,
@@ -191,15 +213,18 @@ describe('HearingSettingsCard', () => {
     });
     expect(mocks.mutate.mock.calls.at(-1)?.[0].expectedVersion).toBe(0);
     // A removed field can be brought back
-    fireEvent.click(screen.getByRole('button', { name: '社内の呼び名 を戻す' }));
+    fireEvent.click(ownFields().getByRole('button', { name: '社内の呼び名 を戻す' }));
     expect(screen.getByTestId('hearing-setting-custom:note0001')).toBeInTheDocument();
   });
 
   it('lets members only read them', () => {
     mocks.result = { data: { settings: settings(), canEdit: false }, isError: false };
     renderCard();
-    expect(screen.getByRole('checkbox', { name: '対象システム を聞く' })).toBeDisabled();
-    expect(screen.queryByRole('button', { name: '保存' })).not.toBeInTheDocument();
+    expect(
+      row('targetSystem').getByRole('checkbox', { name: '対象システム を聞く' })
+    ).toBeDisabled();
+    expect(queryFormButton('保存')).not.toBeInTheDocument();
+    expect(queryFormButton('初期の設定に戻す')).not.toBeInTheDocument();
     expect(screen.getByText('変更できるのはオーナーと管理者です。')).toBeInTheDocument();
   });
 });

@@ -332,6 +332,7 @@
       "help": "A check against automated submissions (provided by Cloudflare). It usually finishes by itself in a few seconds. If a check box appears, click it.",
       "done": "The check before sending is complete",
       "unavailable": "The check before sending could not be shown.",
+      "failed": "The check before sending could not be completed.",
       "retry": "Try the check again",
       "alternative": "Some company networks block it. In that case, please contact us through the <link>consultation booking page</link>.",
       "alternativeContact": "Some company networks block it. In that case, please contact us by phone (<phone></phone>) or email (<email></email>)."
@@ -344,6 +345,7 @@
       "phone": "Phone",
       "consultation": "I would like a free consultation about the result",
       "consultationHint": "We will contact you. Enter your phone number if you prefer a call.",
+      "accessConsultation": "I would like a free 30-minute online consultation about the result",
       "consent": "I agree to the handling of personal information",
       "consentAgain": "Your contact details from the previous diagnosis are used. Please check the consent to the handling of personal information again.",
       "consentNotice": "Your information is used only to follow up on your result and to contact you about AX Migration.",
@@ -401,6 +403,10 @@
       },
       "checkpointsTitle": "What to check when moving from {platform} to a web system",
       "checkpointsTitleGeneric": "What to check when moving to a web system",
+      "accessCheckpointsTitle": {
+        "fix": "What to check when fixing {platform} and keeping it in use",
+        "replace": "What to check when replacing {platform} with a ready-made service"
+      },
       "checkpoints": {
         "source_missing": "First decide how to handle the missing source code (for example analyzing the running programs)",
         "source_vendor_held": "First confirm whether the maintenance company or the vendor will hand over the source code for the survey (contract and cost)",
@@ -550,8 +556,8 @@
         },
         "agility": {
           "title": "Agility: a system that cannot keep up with the market",
-          "problem": "Every time you try to keep up with partners, markets or new ways of working, the limits of the current system or its support deadline hold you back.",
-          "solution": "Move to a supported web platform that makes it easier to add features and use the system from outside the office."
+          "problem": "Every time you try to respond to new customers or market changes, the limits of the existing system hold back new products and services.",
+          "solution": "Aim for a system that makes it easier to add features in short cycles and adapts more easily to market changes."
         },
         "data": {
           "title": "Data: data that cannot support decisions",
@@ -587,7 +593,7 @@
         "items": {
           "inventory": {
             "title": "Inventory",
-            "body": "In a 30-minute online consultation, we ask about the number of tools and how they are used. Where needed, we take the files and check what is in them."
+            "body": "In a 30-minute online consultation, we ask about the number of tools and how they are used. Where needed, we take the files and check what is in them. If checking the files costs anything, we tell you beforehand."
           },
           "decide": {
             "title": "Deciding the approach",
@@ -613,6 +619,30 @@
       },
       "accessMeetingDuration": "About 30 minutes (online)",
       "accessDisclaimer": "This result is an estimate based on your answers. We tell you the exact approach, schedule and cost after checking the contents of the tool.",
+      "accessCta": {
+        "hearing": {
+          "title": "Shall we check the unknown items together?",
+          "lead": "We can check the items you did not know together in a 30-minute online consultation (and show you how to find them)."
+        },
+        "urgent": {
+          "title": "Shall we plan the steps to the deadline together?",
+          "lead": "A deadline is close. Shall we plan the steps in a 30-minute online consultation?"
+        },
+        "overdue": {
+          "title": "Shall we sort out the order of the switch together?",
+          "lead": "The support or maintenance has already ended. Shall we check the order of the switch in a 30-minute online consultation?"
+        },
+        "consultation": {
+          "title": "We explain your result and how to proceed",
+          "lead": "We explain your result and how to proceed in a 30-minute online consultation."
+        },
+        "information": {
+          "title": "Why not start by gathering information?",
+          "lead": "Feel free to ask even if you are only gathering information."
+        },
+        "button": "Request a free 30-minute online consultation",
+        "accepted": "Your request for a 30-minute online consultation has been received"
+      },
       "stepLabel": "STEP {number}",
       "title": "Your result",
       "subtitle": "An estimate based on the answers from {company}",
@@ -686,8 +716,11 @@
         "platform": "Current platform",
         "note": "This result is a guide based on your answers. We can give a closer outlook after looking at the current system.",
         "rediagnoseHint": "Many answers were \"I don't know\", so this guide is not very precise. If you can check some of them within your company, taking the diagnosis again gives a more reliable guide. If you are not sure how to check them, we can show you in an individual consultation.",
+        "accessRediagnoseHint": "Many answers were \"I don't know\", so this guide is not very precise. If you can check some of them within your company, taking the diagnosis again gives a more reliable guide. If you are not sure how to check them, we can show you in a 30-minute online consultation.",
         "consultationLead": "In an individual consultation, we explain the result and how a migration could proceed. Our staff explain an approach that fits your situation, based on the result. We will not push a sale.",
         "consultationButton": "Request a free consultation",
+        "accessConsultationLead": "In a 30-minute online consultation, we explain the result and how to proceed. Our staff explain an approach that fits your situation, based on the result. We will not push a sale.",
+        "accessConsultationButton": "Request a free 30-minute online consultation",
         "rediagnoseLead": "To review your answers or diagnose another system, start here.",
         "rediagnoseButton": "Take the diagnosis again",
         "footer": "You receive this email because you asked for the result of the free AX migration web diagnosis and pressed the confirmation button."
@@ -827,6 +860,7 @@
       "help": "This check prevents automated submissions (it uses Cloudflare). It usually finishes by itself in a few seconds. If a checkbox appears, click it.",
       "done": "The check before sending is complete",
       "unavailable": "The check before sending could not be shown.",
+      "failed": "The check before sending could not be completed.",
       "retry": "Try the check again",
       "alternative": "Some company networks block it. In that case, please contact us through <link>the contact page</link>."
     },
@@ -855,7 +889,8 @@
         "body": "Based on your result, we explain the issues and how to proceed. After you apply, we will contact you.",
         "button": "Apply for a consultation",
         "done": "Your consultation request was received. We will contact you.",
-        "failed": "Your request could not be sent. Please try again later."
+        "failed": "Your request could not be sent. Please try again later.",
+        "closed": "The 24 hours after the diagnosis have passed, so you can no longer apply from this page. Please take the diagnosis again and apply from its result."
       }
     }
   },
@@ -1008,7 +1043,6 @@
     "convertedLeads": "Converted",
     "newLeadsThisMonth": "New Leads This Month",
     "conversionRate": "Conversion Rate",
-    "averageScore": "Average Score",
     "leadTrend": "Lead Trend",
     "leadStatusBreakdown": "Lead Status Breakdown",
     "count": "",
@@ -1065,13 +1099,9 @@
         "mql": "MQL",
         "mqlInterest": "MQL (interested)",
         "fitOnly": "Also {value} fit only",
-        "averageScore": "Average score",
-        "noScore": "—",
-        "scoreSuffix": "/100",
         "count": "{value}",
         "previous": "Previous {days} days: {value}",
         "previousWithRate": "Previous {days} days: {value} → {rate}",
-        "noPreviousScore": "Previous {days} days: no score",
         "deltaLabel": "Change from the previous {days} days"
       },
       "pending": {
@@ -1117,7 +1147,6 @@
       "recent": {
         "title": "Recent leads",
         "platform": "Source",
-        "score": "Score",
         "received": "Received",
         "consultation": "Consultation",
         "empty": "No leads yet",
@@ -1127,8 +1156,7 @@
         "mql": "MQL",
         "today": "Today {time}",
         "yesterday": "Yesterday",
-        "noCompany": "(no company)",
-        "highlight": "Worth a look (score 70+ or MQL)"
+        "noCompany": "(no company)"
       },
       "noOrganization": "Choose an organization to see its leads here",
       "periodTag": "Last {days} days",
@@ -1172,6 +1200,7 @@
         },
         "period": "Last {days} days, per day (Japan time)",
         "periodWeekly": "Last {days} days, per week (Japan time)",
+        "updatedAt": "As of {time}",
         "chartLabel": "{metric} in the last {days} days: {total}",
         "platforms": "By source system"
       },
@@ -1198,12 +1227,6 @@
           "same": "MQL (interested) is the same as in the previous {days} days",
           "none": "MQL (interested)"
         },
-        "score": {
-          "increase": "The average score of new leads went up",
-          "decrease": "The average score of new leads went down",
-          "same": "The average score of new leads is unchanged",
-          "none": "Average score of new leads"
-        },
         "previous": "Previous {days} days: {value}",
         "noPrevious": "Nothing in the previous {days} days"
       }
@@ -1212,6 +1235,7 @@
   "leads": {
     "pipeline": "Sales Pipeline",
     "inflowSource": "Inflow Source",
+    "tags": "Tags",
     "conversionPoint": "Conversion Point",
     "dealPhase": "Deal Phase",
     "targetSystem": "Target System",
@@ -1220,6 +1244,7 @@
     "lostOnHold": "A lead on hold cannot be lost. To lose it, change the reason from \"On hold\"; to keep it on hold, set the status to nurturing",
     "hasNegotiated": "Negotiated",
     "mqlQualifiedAt": "MQL Date",
+    "mqlLevel": "MQL level",
     "sqlDecision": "SQL Decision",
     "sqlDecidedAt": "SQL Decision Date",
     "sqlUndecided": "Undecided",
@@ -1232,7 +1257,6 @@
     "totalLeads": "Total Leads",
     "activeLeads": "Active Leads",
     "conversionRate": "Conversion Rate",
-    "averageScore": "Average Score",
     "createLead": "Add New Lead",
     "createLeadTitle": "Create New Lead",
     "createLeadDescription": "Enter information for the new lead.",
@@ -1275,6 +1299,17 @@
     "deleteConfirmTitle": "Delete this lead?",
     "deleteConfirmMessage": "This action cannot be undone. All data for {name} will be permanently deleted.",
     "deleting": "Deleting...",
+    "toast": {
+      "creating": "Creating the lead...",
+      "created": "Lead created",
+      "createFailed": "Failed to create the lead",
+      "updating": "Updating the lead...",
+      "updated": "Lead updated",
+      "updateFailed": "Failed to update the lead",
+      "deleting": "Deleting the lead...",
+      "deleted": "Lead deleted",
+      "deleteFailed": "Failed to delete the lead"
+    },
     "rowsPerPage": "Rows per page",
     "addFirstLead": "Add your first lead",
     "bulk": {
@@ -2385,8 +2420,9 @@
         "totalLeads": "Total Leads",
         "newLeadsThisMonth": "New Leads This Month",
         "conversionRate": "Conversion Rate",
-        "averageScore": "Average Score",
-        "vsLastPeriod": "vs. last period"
+        "vsLastPeriod": "vs. last period",
+        "mqlInterest": "MQL (interested)",
+        "mqlRate": "{rate}% of leads of all time"
       },
       "tabs": {
         "overview": "Overview",
@@ -2397,29 +2433,35 @@
       "charts": {
         "leadTrend": "Lead Trend",
         "totalLeads": "Total Leads",
+        "total": "Total",
+        "leads": "Leads",
         "convertedLeads": "Converted",
         "statusBreakdown": "Status Breakdown",
         "statusBreakdownPeriod": "Leads registered: {period}",
         "sourceBreakdown": "Source Breakdown",
         "sourceTable": "Source Details",
         "conversionFunnel": "Conversion Funnel",
-        "scoreDistribution": "Score Distribution",
         "responseTime": "Response Time",
         "sourceBreakdownPeriod": "Inflow source of leads registered: {period}",
-        "responseTimePending": "Coming soon (shown once first contacts are recorded)"
+        "responseTimePending": "Coming soon (shown once first contacts are recorded)",
+        "mqlLevels": "Leads by MQL level",
+        "mqlLevelsDescription": "Leads of all time. A lead with an MQL date (also one set by hand) counts as interested. Click a level to open the list"
       },
       "funnel": {
         "total": "Total",
         "conversionRate": "Conversion Rate",
         "overallConversion": "Overall Conversion Rate",
-        "fromInitial": "From initial lead to conversion"
+        "fromInitial": "From initial lead to conversion",
+        "averageDays": "Average conversion time: {days} days"
+      },
+      "responseTimePeriods": {
+        "withinHour": "< 1 hour",
+        "withinDay": "1-24 hours",
+        "withinThreeDays": "1-3 days",
+        "overThreeDays": "3+ days"
       },
       "noData": "No data available",
-      "comingSoon": "Coming soon",
-      "performanceSummary": {
-        "title": "Performance summary",
-        "quality": "Lead quality (average score)"
-      },
+      "leadCount": "{count, number}",
       "acquisitionCost": {
         "title": "Acquisition cost by inflow source",
         "description": "Sum of the acquisition cost (excl. tax) recorded on leads. Leads without a recorded cost count as leads only.",
@@ -2923,28 +2965,6 @@
     "costPerLeadBySource": "Cost per Lead by Source",
     "averageDealValue": "Average Deal Value",
     "calculate": "Calculate ROI"
-  },
-  "comparison": {
-    "title": "Comparison Analysis",
-    "description": "Compare metrics between time periods",
-    "currentPeriod": "Current Period",
-    "previousPeriod": "Previous Period",
-    "startDate": "Start Date",
-    "endDate": "End Date",
-    "compare": "Compare",
-    "changes": "Changes",
-    "insights": "Insights",
-    "noInsights": "No significant changes detected",
-    "increase": "increase",
-    "decrease": "decrease",
-    "metrics": {
-      "totalLeads": "Total Leads",
-      "convertedLeads": "Converted Leads",
-      "conversionRate": "Conversion Rate",
-      "averageScore": "Average Score"
-    },
-    "bySource": "By Source",
-    "byStatus": "By Status"
   },
   "axSite": {
     "meta": {
@@ -3462,7 +3482,7 @@
         "inventory": {
           "label": "STEP 1",
           "title": "Inventory",
-          "body": "In a 30-minute online consultation, we ask about the number of tools and how they are used. Where needed, we take the files and check the screens and reports, the VBA, and what they connect to."
+          "body": "In a 30-minute online consultation, we ask about the number of tools and how they are used. Where needed, we take the files and check the screens and reports, the VBA, and what they connect to. If checking the files costs anything, we tell you beforehand."
         },
         "decide": {
           "label": "STEP 2",
@@ -4152,7 +4172,6 @@
     },
     "score": "Score",
     "scoreValue": "Score {score}",
-    "noScore": "No score",
     "noDealPhase": "No phase",
     "cards": {
       "contact": "Contact",
@@ -4395,6 +4414,13 @@
       "soon": "Within 6 months (past ones included)",
       "has": "Worked out",
       "none": "No next action and no month to act (use with a status)"
+    },
+    "mqlLevel": "MQL level",
+    "mqlLevelOptions": {
+      "interest": "Interested (MQL)",
+      "fit": "Fit",
+      "none": "Not a target",
+      "unknown": "No diagnosis"
     }
   },
   "leadFollowUp": {
@@ -4540,7 +4566,7 @@
       "totalLeads": "Total Leads",
       "newThisMonth": "New This Month",
       "conversionRate": "Conversion Rate",
-      "averageScore": "Avg Score",
+      "mqlRate": "MQL rate (interested)",
       "statusDistribution": "Status Distribution",
       "sourceDistribution": "Source Distribution",
       "funnel": "Conversion Funnel",
@@ -4706,6 +4732,7 @@
     "change": "Change to another option",
     "pick": "Pick an option",
     "confirmDone": "Meeting confirmed",
+    "confirmToast": "{done}. {email}",
     "emailResult": {
       "sent": "Confirmation sent to the respondent",
       "not_requested": "No email was sent",
@@ -5232,6 +5259,7 @@
     },
     "agency": {
       "section": "Sales agency's call",
+      "inParens": "({name})",
       "hint": "The contact and direct phone are shown only to sales and to whoever added the row. Put the next possible contact in \"Next action date\": turned-down rows appear under \"Re-approach\" 30 days before it."
     },
     "calls": {

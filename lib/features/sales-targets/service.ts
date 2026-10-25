@@ -7,7 +7,7 @@
 
 import type { db as defaultDb } from '@/lib/db/client';
 import { auditLogs, organizations, salesTargets, users } from '@/lib/db/schema';
-import { findAssignableMember } from '@/lib/features/leads/assignment';
+import { findAssignableMember } from '@/lib/features/leads/service';
 import { TRPCError } from '@trpc/server';
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { SALES_FORECAST_SETTINGS_KEY, readFiscalYearStartMonth } from './types/fiscal-year';

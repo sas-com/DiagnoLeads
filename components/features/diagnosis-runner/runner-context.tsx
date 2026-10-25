@@ -10,7 +10,7 @@ import { type ReactNode, createContext, useContext } from 'react';
  * multipleHint, multipleHintExclusive, progress, back, next, submit, submitting,
  * restore.{prompt,continue,startOver}, contact.{company,name,email,phone,description,sendNote,
  * consentAgain,consentNotice,privacyPolicy,consent},
- * verification.{label,help,unavailable,retry,alternative}; and, for diagnoses with those
+ * verification.{label,help,unavailable,failed,retry,alternative}; and, for diagnoses with those
  * question types, scaleHint, numberHint and textCount.
  */
 export interface DiagnosisRunnerConfig {

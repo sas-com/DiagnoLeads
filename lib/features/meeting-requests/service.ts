@@ -3,7 +3,8 @@
  *
  * - The respondent sends up to three preferred dates and times, who will attend, onsite or
  *   online, and what they want to talk about (topics and a short note, #244), from the result page after asking for a consultation. They can send them again
- *   until sales confirm one; after that the request is locked.
+ *   until sales confirm one, and only for a day after the consultation request
+ *   (MEETING_PREFERENCES_WINDOW_MS, #241); after that the request is locked.
  * - Sales are told in-app when preferences arrive: the lead's assignee, else the intake members
  *   (#135), else every member (as for the consultation request itself).
  * - Sales confirm one candidate: it becomes the lead's next meeting (read by leadNextMeetingDate
@@ -391,7 +392,8 @@ export type ConfirmOutcome =
 /**
  * Confirm one of the candidates (or switch to another): the lead's next meeting, a next action
  * on that day, and the confirmation email when asked. The candidate at the index must still be
- * the one sales saw: the respondent can replace unconfirmed preferences at any time (#274).
+ * the one sales saw: the respondent can replace unconfirmed preferences (#274) for
+ * MEETING_PREFERENCES_WINDOW_MS after the consultation request (#241).
  */
 export async function confirmMeeting(
   db: Database,
@@ -519,13 +521,22 @@ function sameCandidate(a: MeetingCandidate, b: MeetingCandidate): boolean {
 export type AcceptPreferencesStatus = 'saved' | 'confirmed' | 'out_of_range' | 'unavailable';
 
 /**
+ * How long after the consultation request the respondent may send (or change) preferences: the
+ * day the result screen holds the form. Later, a submission id kept in a browser (or leaked)
+ * no longer changes what sales see; the date is then arranged when sales get in touch (#241).
+ */
+export const MEETING_PREFERENCES_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
  * The preferences sent with a consultation request from a result page. `later` runs work after
  * the response (the route passes next/server's after): sales are told about the first ones, and
  * again when a verified answer replaces those of an unverified one (normal notice). An answer
  * tied to an existing lead by its email address only (unverified) has its preferences kept,
  * marked for sales, but they never replace those of a verified answer (#274, changing #233).
- * 'unavailable' when the request has no lead (the answer could not be tied to one), or
- * when an unverified answer met preferences from a verified one: the lead keeps them.
+ * 'unavailable' when the request has no lead (the answer could not be tied to one), when an
+ * unverified answer met preferences from a verified one (the lead keeps them), or when the
+ * consultation was requested more than MEETING_PREFERENCES_WINDOW_MS ago (#241): nothing is
+ * saved, and the form tells the respondent that sales will ask about the dates.
  */
 export async function acceptMeetingPreferences(
   db: Database,
@@ -535,6 +546,8 @@ export async function acceptMeetingPreferences(
     submissionId: string;
     /** The answer created the lead, or continues an answer that did (not just the same email) */
     identityVerified: boolean;
+    /** When the consultation of this answer was requested (consultation_requested_at) */
+    requestedAt: Date;
     preferences: MeetingPreferences;
   },
   later: (task: () => Promise<void>) => void,
@@ -542,6 +555,9 @@ export async function acceptMeetingPreferences(
 ): Promise<AcceptPreferencesStatus> {
   const { leadId } = input;
   if (!leadId) return 'unavailable';
+  if (now.getTime() - input.requestedAt.getTime() > MEETING_PREFERENCES_WINDOW_MS) {
+    return 'unavailable';
+  }
   const outcome = await saveMeetingPreferences(
     db,
     {

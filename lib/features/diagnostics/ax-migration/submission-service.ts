@@ -1,18 +1,17 @@
 import type { db as defaultDb } from '@/lib/db/client';
 import { axSalesPlaybooks, diagnosticSubmissions, leads } from '@/lib/db/schema';
-import { findActiveAgencyLink } from '@/lib/features/agency-links/service';
-import { MEMBER_REFERRAL_KIND } from '@/lib/features/agency-links/types/schemas';
 import { axTargetCompanySchema } from '@/lib/features/ax-playbook/types/schemas';
-import { and, eq, gte, isNull, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateAnswers } from '../engine';
 import { upsertLeadFromSubmission } from '../lead-upsert';
-import { type Tracking, compactTracking, inferInflowSource, trackingSchema } from '../tracking';
+import { claimConsultation, resolveInflow } from '../service';
+import { type Tracking, compactTracking, trackingSchema } from '../tracking';
 import type { AnswerValidationIssue, DiagnosticAnswers } from '../types';
+import { contactSchema, plainText } from '../types/contact';
 import type { AxAccessPath } from './access-path';
 import type { AxTargetCompany } from './company-size';
 import { AX_MIGRATION_CONFIG } from './config';
-import { PHONE_PATTERN, normalizePhone } from './contact';
 import { AX_MIGRATION_DIAGNOSTIC_KEY, axMigrationDefinition } from './definition';
 import { type AxMigrationResult, evaluateAxMigration } from './evaluate';
 import { type AxLeadMql, mergeLeadMql, toLeadMql, withConsultationSignal } from './mql';
@@ -20,24 +19,9 @@ import { type AxLeadMql, mergeLeadMql, toLeadMql, withConsultationSignal } from 
 type Database = typeof defaultDb;
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
-/** No control or format characters (line breaks, bidi overrides) in names shown to sales */
-const PLAIN_TEXT = /^[^\p{Cc}\p{Cf}]*$/u;
-const plainText = (max: number) => z.string().trim().max(max).regex(PLAIN_TEXT);
-
 export const axMigrationSubmissionSchema = z.object({
   answers: z.record(z.unknown()),
-  contact: z.object({
-    company: plainText(200).pipe(z.string().min(1)),
-    name: plainText(100).pipe(z.string().min(1)),
-    email: z.string().trim().email().max(254),
-    phone: z
-      .string()
-      .max(30)
-      .transform(normalizePhone)
-      .pipe(z.string().regex(PHONE_PATTERN))
-      .optional(),
-    department: plainText(100).optional(),
-  }),
+  contact: contactSchema.extend({ department: plainText(100).optional() }),
   privacyConsent: z.literal(true),
   consultationRequested: z.boolean().default(false),
   tracking: trackingSchema,
@@ -274,14 +258,7 @@ export async function submitAxMigrationDiagnosis(
   return database.transaction(async (tx) => {
     // An issued agency link decides the inflow source over the UTM parameters (#147). Like every
     // value of newLead, it is used only when the submission creates the lead
-    const agencyLink = await findActiveAgencyLink(tx, organizationId, tracking.agency);
-    // An employee's own link (#265) names the employee as the referrer, not as an agency: agency
-    // contracts and appointment reviews must not pick the lead up
-    const inflow = !agencyLink
-      ? inferInflowSource(tracking)
-      : agencyLink.kind === MEMBER_REFERRAL_KIND
-        ? { inflowSource: agencyLink.kind, referrerName: agencyLink.agencyName, agencyName: null }
-        : { inflowSource: agencyLink.kind, referrerName: null, agencyName: agencyLink.agencyName };
+    const inflow = await resolveInflow(tx, organizationId, tracking);
 
     const { leadId, existing } = await upsertLeadFromSubmission(tx, {
       organizationId,
@@ -296,7 +273,7 @@ export async function submitAxMigrationDiagnosis(
         inflowSource: inflow.inflowSource,
         referrerName: inflow.referrerName,
         agencyName: inflow.agencyName,
-        agencyLinkId: agencyLink?.id ?? null,
+        agencyLinkId: inflow.agencyLinkId,
         conversionPoint: input.consultationRequested ? 'consultation' : 'web_diagnosis',
         targetSystem: result.targetSystem,
         // MQL date: only 関心あり (#139). 適合 alone leaves it empty
@@ -353,8 +330,7 @@ export async function submitAxMigrationDiagnosis(
         : null,
       continued: continuedFrom !== null,
       // The employee whose link brought a new lead, to tell them (#265)
-      referralMemberUserId:
-        !existing && agencyLink?.kind === MEMBER_REFERRAL_KIND ? agencyLink.memberUserId : null,
+      referralMemberUserId: !existing ? inflow.referralMemberUserId : null,
       result,
       answers,
     };
@@ -454,44 +430,24 @@ export async function requestAxMigrationConsultation(
       leadCreated: boolean;
       /** A "diagnose another system" submission of the respondent who created the lead */
       continued: boolean;
+      /** When the consultation was requested: now, or the earlier request (#241) */
+      requestedAt: Date;
     }
   | { ok: false; reason: 'not_found' | 'closed' }
 > {
-  // Only while the result screen can still be open, like the follow-up answers: a submission id
-  // seen later (or leaked) cannot place a request (#232)
-  const openedAfter = new Date(now.getTime() - RESULT_SCREEN_WINDOW_MS);
   return database.transaction(async (tx) => {
-    const [claimed] = await tx
-      .update(diagnosticSubmissions)
-      .set({ consultationRequestedAt: now })
-      .where(
-        and(
-          eq(diagnosticSubmissions.id, submissionId),
-          eq(diagnosticSubmissions.diagnosticKey, AX_MIGRATION_DIAGNOSTIC_KEY),
-          isNull(diagnosticSubmissions.consultationRequestedAt),
-          gte(diagnosticSubmissions.createdAt, openedAfter)
-        )
-      )
-      .returning({
-        organizationId: diagnosticSubmissions.organizationId,
-        leadId: diagnosticSubmissions.leadId,
-        leadCreated: diagnosticSubmissions.leadCreated,
-        continuedFrom: diagnosticSubmissions.continuedFromSubmissionId,
-        result: diagnosticSubmissions.result,
-      });
-
-    if (!claimed) {
-      const submission = await tx.query.diagnosticSubmissions.findFirst({
-        where: and(
-          eq(diagnosticSubmissions.id, submissionId),
-          eq(diagnosticSubmissions.diagnosticKey, AX_MIGRATION_DIAGNOSTIC_KEY)
-        ),
-      });
-      if (!submission) return { ok: false as const, reason: 'not_found' as const };
-      // Not claimed and not requested yet: the window has closed
-      if (submission.consultationRequestedAt === null) {
-        return { ok: false as const, reason: 'closed' as const };
-      }
+    // Only while the result screen can still be open (a day, the same rule as the builder's
+    // diagnoses): a submission id seen later (or leaked) cannot place a request (#232, #481)
+    const claim = await claimConsultation(tx, {
+      submissionId,
+      diagnosticKey: AX_MIGRATION_DIAGNOSTIC_KEY,
+      now,
+    });
+    if (claim.status === 'not_found' || claim.status === 'closed') {
+      return { ok: false as const, reason: claim.status };
+    }
+    const { submission } = claim;
+    if (claim.status === 'already_requested') {
       return {
         ok: true as const,
         alreadyRequested: true,
@@ -499,8 +455,10 @@ export async function requestAxMigrationConsultation(
         leadId: submission.leadId,
         leadCreated: submission.leadCreated,
         continued: submission.continuedFromSubmissionId !== null,
+        requestedAt: claim.requestedAt,
       };
     }
+    const claimed = submission;
 
     // The request is a strong signal: the submission's judgement is redone with it (#139), so the
     // notification read from the stored result shows it
@@ -515,7 +473,7 @@ export async function requestAxMigrationConsultation(
         .where(eq(diagnosticSubmissions.id, submissionId));
     }
 
-    const continued = claimed.continuedFrom !== null;
+    const continued = claimed.continuedFromSubmissionId !== null;
     if (claimed.leadId && (claimed.leadCreated || continued)) {
       const [lead] = await tx
         .select({ responses: leads.responses, mqlQualifiedAt: leads.mqlQualifiedAt })
@@ -543,6 +501,7 @@ export async function requestAxMigrationConsultation(
       leadId: claimed.leadId,
       leadCreated: claimed.leadCreated,
       continued,
+      requestedAt: now,
     };
   });
 }

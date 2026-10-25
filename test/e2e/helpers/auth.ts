@@ -56,6 +56,10 @@ export function uniqueClientAddress(): string {
 
 /**
  * Submit the sign-in or sign-up form on the page and return better-auth's answer
+ *
+ * The forms report a refusal inside the form (role="alert"), not with a toast, so the form can
+ * be sent right after the page loads: the toaster is loaded later and a toast raised before it
+ * mounts is lost (#597)
  */
 export async function submitAuthForm(
   page: Page,

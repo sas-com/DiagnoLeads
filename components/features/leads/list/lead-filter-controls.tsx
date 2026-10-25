@@ -13,14 +13,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 /**
  * Filter controls of the lead list (#131), shared by the desktop toolbar (a row of buttons)
  * and the mobile Sheet (stacked, full width):
  * - status / deal phase / inflow source / target system: multi-select (DropdownMenu checkboxes)
- * - score range: Popover with two number boxes
  * - created date range: Popover with the shadcn Calendar in range mode (Japan days)
  * - more conditions: consultation requested, MQL, SQL (qualified)
  * - next meeting (single choice) and deal rating (multi-select) of the latest hearing (#137)
@@ -35,6 +32,7 @@ import {
 } from '@/lib/features/leads/types/pipeline';
 import {
   DEAL_RATINGS,
+  MQL_LEVEL_FILTERS,
   NEXT_MEETING_FILTERS,
   type NextMeetingFilter,
 } from '@/lib/features/leads/types/schemas';
@@ -43,7 +41,7 @@ import { format as formatDate } from 'date-fns';
 import { enUS, ja } from 'date-fns/locale';
 import { CalendarDays, ChevronDown } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
-import { useId, useState } from 'react';
+import { useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { AssigneeFilterControl } from './assignee-filter';
 import { formatDay } from './lead-filter-chips';
@@ -139,128 +137,6 @@ export function MultiSelectFilter<T extends string>({
         )}
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Score range
-// ---------------------------------------------------------------------------
-
-/** '' -> undefined; otherwise an integer clamped to 0..100 */
-export function parseScore(text: string): number | undefined {
-  const trimmed = text.trim();
-  if (trimmed === '') return undefined;
-  const n = Math.round(Number(trimmed));
-  if (Number.isNaN(n)) return undefined;
-  return Math.min(100, Math.max(0, n));
-}
-
-export interface ScoreRangeFilterProps {
-  min?: number;
-  max?: number;
-  onChange: (range: { scoreMin?: number; scoreMax?: number }) => void;
-  layout?: FilterLayout;
-}
-
-export function ScoreRangeFilter({ min, max, onChange, layout = 'inline' }: ScoreRangeFilterProps) {
-  const t = useTranslations('leadList');
-  const id = useId();
-  const [open, setOpen] = useState(false);
-  const [minText, setMinText] = useState('');
-  const [maxText, setMaxText] = useState('');
-  const active = min !== undefined || max !== undefined;
-
-  const openChange = (next: boolean) => {
-    if (next) {
-      setMinText(min === undefined ? '' : String(min));
-      setMaxText(max === undefined ? '' : String(max));
-    }
-    setOpen(next);
-  };
-  const apply = () => {
-    let scoreMin = parseScore(minText);
-    let scoreMax = parseScore(maxText);
-    if (scoreMin !== undefined && scoreMax !== undefined && scoreMin > scoreMax) {
-      [scoreMin, scoreMax] = [scoreMax, scoreMin];
-    }
-    onChange({ scoreMin, scoreMax });
-    setOpen(false);
-  };
-
-  return (
-    <Popover open={open} onOpenChange={openChange}>
-      <PopoverTrigger asChild>
-        <Button type="button" variant="outline" size="sm" className={triggerClass(layout, active)}>
-          <span>{t('score')}</span>
-          <span className="flex items-center gap-1">
-            {active && (
-              <span className="text-xs text-gray-600 dark:text-gray-300">
-                {min ?? 0}–{max ?? 100}
-              </span>
-            )}
-            <ChevronDown className="h-4 w-4 opacity-60" aria-hidden="true" />
-          </span>
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-64 space-y-3">
-        <form
-          className="space-y-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            apply();
-          }}
-        >
-          <div className="flex items-end gap-2">
-            <div className="flex-1 space-y-1">
-              <Label htmlFor={`${id}-min`}>{t('scoreMin')}</Label>
-              <Input
-                id={`${id}-min`}
-                type="number"
-                inputMode="numeric"
-                min={0}
-                max={100}
-                value={minText}
-                onChange={(event) => setMinText(event.target.value)}
-                className="h-10"
-              />
-            </div>
-            <span className="pb-2 text-gray-500" aria-hidden="true">
-              –
-            </span>
-            <div className="flex-1 space-y-1">
-              <Label htmlFor={`${id}-max`}>{t('scoreMax')}</Label>
-              <Input
-                id={`${id}-max`}
-                type="number"
-                inputMode="numeric"
-                min={0}
-                max={100}
-                value={maxText}
-                onChange={(event) => setMaxText(event.target.value)}
-                className="h-10"
-              />
-            </div>
-          </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400">{t('scoreHint')}</p>
-          <div className="flex justify-between gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                onChange({ scoreMin: undefined, scoreMax: undefined });
-                setOpen(false);
-              }}
-            >
-              {t('clear')}
-            </Button>
-            <Button type="submit" size="sm">
-              {t('apply')}
-            </Button>
-          </div>
-        </form>
-      </PopoverContent>
-    </Popover>
   );
 }
 
@@ -618,6 +494,14 @@ export function LeadFilterControls({
         layout={layout}
       />
       <MultiSelectFilter
+        label={t('mqlLevel')}
+        options={MQL_LEVEL_FILTERS}
+        optionLabel={(v) => t(`mqlLevelOptions.${v}`)}
+        selected={filters.mqlLevel ?? []}
+        onChange={(mqlLevel) => onChange({ mqlLevel })}
+        layout={layout}
+      />
+      <MultiSelectFilter
         label={t('inflowSource')}
         options={INFLOW_SOURCES}
         optionLabel={(v) => tPipeline(`inflowSource.${v}`)}
@@ -631,12 +515,6 @@ export function LeadFilterControls({
         optionLabel={(v) => tPipeline(`targetSystem.${v}`)}
         selected={filters.targetSystem}
         onChange={(targetSystem) => onChange({ targetSystem })}
-        layout={layout}
-      />
-      <ScoreRangeFilter
-        min={filters.scoreMin}
-        max={filters.scoreMax}
-        onChange={onChange}
         layout={layout}
       />
       <CreatedRangeFilter

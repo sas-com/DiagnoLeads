@@ -100,7 +100,8 @@ describe('Export Service', () => {
       totalLeads: 100,
       newLeadsThisMonth: 25,
       conversionRate: 15.5,
-      averageScore: 72,
+      mqlLevels: { interest: 3, fit: 2, none: 4, unknown: 1 },
+      mqlRate: 30,
       leadsByStatus: {
         new: 40,
         nurturing: 30,
@@ -118,6 +119,16 @@ describe('Export Service', () => {
       expect(csv).toContain('New Status,40');
       expect(csv).toContain('Nurturing Status,30');
       expect(csv).toContain('Lost Status,0');
+    });
+
+    it('exports the MQL level instead of the average score, as on the page (#605)', () => {
+      const csv = overviewToCSV(mockOverview, '2024-01');
+      expect(csv).toContain('MQL Rate (%),30.00');
+      expect(csv).toContain('MQL Interested,3');
+      expect(csv).toContain('MQL Fit,2');
+      expect(csv).toContain('MQL Not a Target,4');
+      expect(csv).toContain('MQL No Diagnosis,1');
+      expect(csv).not.toContain('Average Score');
     });
   });
 
@@ -194,7 +205,8 @@ describe('Export Service', () => {
         totalLeads: 100,
         newLeadsThisMonth: 25,
         conversionRate: 15.5,
-        averageScore: 72,
+        mqlLevels: { interest: 3, fit: 2, none: 4, unknown: 1 },
+        mqlRate: 30,
         leadsByStatus: {
           new: 40,
           nurturing: 30,

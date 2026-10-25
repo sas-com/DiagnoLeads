@@ -7,11 +7,11 @@ import { LeadFilterToolbar } from '@/components/features/leads/list/lead-filter-
 import { SortableHeader, ariaSortFor } from '@/components/features/leads/list/sortable-header';
 import { useLeadListQuery } from '@/hooks/use-lead-list-query';
 import messages from '@/locales/ja/common.json';
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import type { ReactNode } from 'react';
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Menus and popovers render slowly on a cold CI coverage run
 vi.setConfig({ testTimeout: 20000 });
@@ -43,8 +43,11 @@ vi.mock('@/hooks/use-lead-assignee', () => import('@/test/mocks/lead-assignee'))
 
 vi.mock('next/navigation', async () => {
   const { useSyncExternalStore } = await import('react');
+  // One object for every render, like Next's useRouter. A new one per render would re-run each
+  // effect that depends on the router, and hide an effect that misses a dependency
+  const router = { push: nav.push, replace: nav.replace, prefetch: vi.fn(), back: vi.fn() };
   return {
-    useRouter: () => ({ push: nav.push, replace: nav.replace, prefetch: vi.fn(), back: vi.fn() }),
+    useRouter: () => router,
     usePathname: () => '/ja/leads',
     useSearchParams: () => new URLSearchParams(useSyncExternalStore(nav.subscribe, nav.get)),
   };
@@ -71,6 +74,10 @@ beforeEach(() => {
   nav.replace.mockClear();
 });
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 function withIntl(children: ReactNode) {
   return (
     <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
@@ -79,8 +86,10 @@ function withIntl(children: ReactNode) {
   );
 }
 
+const SEARCH_PAUSE_MS = 30;
+
 function Toolbar({ total = 12 }: { total?: number }) {
-  const controller = useLeadListQuery({ searchDebounceMs: 30, now: () => NOW });
+  const controller = useLeadListQuery({ searchDebounceMs: SEARCH_PAUSE_MS, now: () => NOW });
   return (
     <>
       <LeadFilterToolbar controller={controller} total={total} />
@@ -193,13 +202,9 @@ describe('LeadFilterToolbar', () => {
     expect(screen.getByRole('button', { name: `${t.inflowSource} (2件選択)` })).toBeInTheDocument();
   });
 
-  it('sets a score range', async () => {
-    const user = userEvent.setup();
-    renderAt('');
-    await user.click(screen.getByRole('button', { name: t.score }));
-    await user.type(await screen.findByLabelText(t.scoreMin), '40');
-    await user.click(screen.getByRole('button', { name: t.apply }));
-    expect(lastHref()).toBe('/ja/leads?scoreMin=40');
+  it('offers no score range, but a shared link with one still shows a removable chip (#447)', () => {
+    renderAt('scoreMin=40');
+    expect(screen.queryByRole('button', { name: t.score })).not.toBeInTheDocument();
     expect(within(chipGroup()).getByText('スコア 40 以上')).toBeInTheDocument();
   });
 
@@ -211,12 +216,23 @@ describe('LeadFilterToolbar', () => {
     expect(lastHref()).toBe('/ja/leads?mql=1');
   });
 
-  it('sends the search after a pause, replacing the history entry', async () => {
-    const user = userEvent.setup();
+  it('sends the search after a pause, replacing the history entry', () => {
+    // The pause runs on a fake clock. On the real one, a busy machine let the pause pass between
+    // two keys or before the first check, and the search went out early (#573). user-event waits
+    // on setTimeout itself, so the keys are sent with fireEvent and only the test moves the clock
+    // (docs/TESTING.md 1.5), rather than userEvent.setup({ advanceTimers })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     renderAt('status=new&page=2');
-    await user.type(screen.getByRole('searchbox', { name: t.searchLabel }), '山田');
+    const box = screen.getByRole('searchbox', { name: t.searchLabel });
+    fireEvent.change(box, { target: { value: '山' } });
+    act(() => vi.advanceTimersByTime(SEARCH_PAUSE_MS - 1));
+    fireEvent.change(box, { target: { value: '山田' } });
+    act(() => vi.advanceTimersByTime(SEARCH_PAUSE_MS - 1));
+    // Past the pause since the first key, but the second key started it again
     expect(nav.replace).not.toHaveBeenCalled();
-    await waitFor(() => expect(nav.replace).toHaveBeenCalledTimes(1));
+
+    act(() => vi.advanceTimersByTime(1));
+    expect(nav.replace).toHaveBeenCalledTimes(1);
     expect(nav.replace).toHaveBeenLastCalledWith('/ja/leads?status=new&q=%E5%B1%B1%E7%94%B0', {
       scroll: false,
     });

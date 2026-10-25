@@ -45,6 +45,8 @@ interface DonutChartProps {
   category?: string;
   colors?: (keyof typeof COLORS)[];
   valueFormatter?: (value: number) => string;
+  /** Name of the total in the middle, in the page's language */
+  totalLabel: string;
   showLabel?: boolean;
   /** The chart's own legend; turn it off when the page shows a ChartLegend instead */
   showLegend?: boolean;
@@ -57,6 +59,7 @@ export function DonutChart({
   data,
   colors = ['blue', 'yellow', 'emerald', 'violet', 'amber', 'rose', 'cyan', 'pink'],
   valueFormatter = (v) => v.toLocaleString(),
+  totalLabel,
   showLabel = true,
   showLegend = true,
   showAnimation = true,
@@ -112,7 +115,7 @@ export function DonutChart({
             show: showLabel,
             total: {
               show: showLabel,
-              label: '合計',
+              label: totalLabel,
               fontSize: '14px',
               color: labelColor,
               formatter: () => valueFormatter(total),

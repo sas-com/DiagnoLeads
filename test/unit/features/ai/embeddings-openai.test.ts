@@ -17,7 +17,12 @@ vi.mock('openai', () => ({
   })),
 }));
 
-import { prepareLeadText } from '@/lib/features/ai/embeddings/openai';
+import {
+  EMBEDDING_MAX_INPUT_TOKENS,
+  MAX_EMBEDDING_FIELD_CHARS,
+  MAX_EMBEDDING_TEXT_CHARS,
+  prepareLeadText,
+} from '@/lib/features/ai/embeddings/openai';
 
 describe('prepareLeadText', () => {
   it('should combine all lead fields', () => {
@@ -158,16 +163,71 @@ describe('prepareLeadText', () => {
     // Empty strings are filtered out
     expect(result).toBe('test@example.com');
   });
+
+  it('cuts each field and the whole text, so one embedding has a bounded size (#576)', () => {
+    const long = (char: string) => char.repeat(2_000_000);
+    const result = prepareLeadText({
+      name: long('n'),
+      email: 'x@example.com',
+      company: long('c'),
+      industry: long('i'),
+      position: long('p'),
+      notes: long('m'),
+    });
+
+    expect(result.length).toBe(MAX_EMBEDDING_TEXT_CHARS);
+    const [name, email, company, ...rest] = result.split(' ');
+    expect(name).toBe('n'.repeat(MAX_EMBEDDING_FIELD_CHARS));
+    expect(email).toBe('x@example.com');
+    // The whole is cut inside the company; the later fields are left out
+    expect(company).toBe(
+      'c'.repeat(MAX_EMBEDDING_TEXT_CHARS - MAX_EMBEDDING_FIELD_CHARS - email.length - 2)
+    );
+    expect(rest).toEqual([]);
+
+    // One long field alone is cut to the field limit
+    expect(prepareLeadText({ company: long('c') })).toBe('c'.repeat(MAX_EMBEDDING_FIELD_CHARS));
+  });
+
+  it('keeps a short lead as it is, and never cuts inside a surrogate pair', () => {
+    expect(prepareLeadText({ name: '山田 太郎', company: '株式会社テスト' })).toBe(
+      '山田 太郎 株式会社テスト'
+    );
+
+    // An emoji is two UTF-16 code units: the field ends before the one it would split
+    const name = `${'a'.repeat(MAX_EMBEDDING_FIELD_CHARS - 1)}😀`;
+    expect(prepareLeadText({ name })).toBe('a'.repeat(MAX_EMBEDDING_FIELD_CHARS - 1));
+  });
+
+  it("keeps the longest lead within the model's input limit, whatever its characters (#598)", () => {
+    // The tokenizer (cl100k_base) is a byte-level BPE: never more tokens than UTF-8 bytes. The
+    // costliest characters per UTF-16 unit are 3-byte ones (kanji, rare kanji); an emoji is 4
+    // bytes for 2 units
+    const bytes = (text: string) => new TextEncoder().encode(text).length;
+    const filled = (char: string) => {
+      const field = char.repeat(MAX_EMBEDDING_FIELD_CHARS);
+      return prepareLeadText({
+        name: field,
+        email: field,
+        company: field,
+        industry: field,
+        position: field,
+        notes: field,
+      });
+    };
+
+    for (const char of ['𠮷', '鬱', '😀', 'a']) {
+      const text = filled(char);
+      expect(text.length).toBeLessThanOrEqual(MAX_EMBEDDING_TEXT_CHARS);
+      expect(bytes(text)).toBeLessThanOrEqual(EMBEDDING_MAX_INPUT_TOKENS);
+    }
+    expect(bytes(filled('鬱'))).toBe(3 * MAX_EMBEDDING_TEXT_CHARS - 2);
+  });
 });
 
 describe('generateEmbedding type validation', () => {
   it('should export generateEmbedding function', async () => {
     const { generateEmbedding } = await import('@/lib/features/ai/embeddings/openai');
     expect(typeof generateEmbedding).toBe('function');
-  });
-
-  it('should export generateEmbeddingsBatch function', async () => {
-    const { generateEmbeddingsBatch } = await import('@/lib/features/ai/embeddings/openai');
-    expect(typeof generateEmbeddingsBatch).toBe('function');
   });
 });

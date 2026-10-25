@@ -193,15 +193,27 @@ export function buildAxResultEmail(input: {
       { type: 'facts', title: m.result.factsTitle, rows },
       { type: 'paragraph', muted: true, text: m.result.note },
       ...(result.needsHearing
-        ? [{ type: 'notice' as const, tone: 'info' as const, text: m.result.rediagnoseHint }]
+        ? [
+            {
+              type: 'notice' as const,
+              tone: 'info' as const,
+              text: result.accessPath ? m.result.accessRediagnoseHint : m.result.rediagnoseHint,
+            },
+          ]
         : []),
       // Left out entirely when no consultation link is given: legal can switch it off
       ...(consultationUrl
         ? [
-            { type: 'paragraph' as const, text: m.result.consultationLead },
+            // Access is the 30-minute online consultation, whatever path it recommends (#507)
+            {
+              type: 'paragraph' as const,
+              text: result.accessPath ? m.result.accessConsultationLead : m.result.consultationLead,
+            },
             {
               type: 'button' as const,
-              label: m.result.consultationButton,
+              label: result.accessPath
+                ? m.result.accessConsultationButton
+                : m.result.consultationButton,
               url: withResultEmailUtm(consultationUrl, 'consultation'),
             },
           ]

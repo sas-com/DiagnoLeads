@@ -146,7 +146,9 @@ describe('AX result mail', () => {
         r.urgencyText.high,
         r.challenges.people.title,
         r.accessPath.paths.web.title,
-        messages.axDiagnosis.resultEmail.result.rediagnoseHint,
+        messages.axDiagnosis.resultEmail.result.accessRediagnoseHint,
+        messages.axDiagnosis.resultEmail.result.accessConsultationLead,
+        messages.axDiagnosis.resultEmail.result.accessConsultationButton,
         messages.axDiagnosis.resultEmail.sender.greeting,
       ]) {
         expect(mail.text).toContain(value);
@@ -156,6 +158,32 @@ describe('AX result mail', () => {
     it('writes the date with digits and slashes in Japanese', () => {
       expect(result('ja').text).toContain('診断日：2026/10/22');
       expect(result('en').text).toContain('October 22, 2026');
+    });
+
+    it('offers the 30-minute online consultation for every Access path, and nothing else changes (#507)', () => {
+      const build = (overrides: Partial<AxMigrationPublicResult>) =>
+        buildAxResultEmail({
+          locale: 'ja',
+          result: { ...RESULT, ...overrides },
+          links: { consultationUrl: CONSULTATION_URL, rediagnoseUrl: REDIAGNOSE_URL },
+          unsubscribeUrl: UNSUBSCRIBE_URL,
+          diagnosedAt: DIAGNOSED_AT,
+        });
+      const m = ja.axDiagnosis.resultEmail.result;
+      for (const path of ['fix', 'web', 'replace'] as const) {
+        const mail = build({ accessPath: { path, reasons: [] } });
+        expect(mail.text).toContain(m.accessConsultationLead);
+        expect(mail.text).toContain(m.accessConsultationButton);
+        // Never a migration for the fix and replace paths
+        expect(mail.text).not.toContain('移行の進め方');
+      }
+      // One name for the consultation in the whole Access mail, the hint included
+      expect(build({ accessPath: { path: 'fix', reasons: [] } }).text).not.toContain('個別相談');
+      const as400 = build({ platform: 'as400', accessPath: null });
+      expect(as400.text).toContain(m.rediagnoseHint);
+      expect(as400.text).toContain(m.consultationLead);
+      expect(as400.text).toContain(m.consultationButton);
+      expect(as400.text).not.toContain(m.accessConsultationLead);
     });
 
     it('leaves out the hint, the path and the challenge title when they do not apply', () => {
