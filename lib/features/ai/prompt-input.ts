@@ -91,6 +91,33 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
+/** Same as AX_RESPONSES_KEY in lib/features/leads/mql-level.ts: the AX diagnosis summary */
+const AX_RESPONSES_KEY = 'axMigration';
+/** Same as DIAGNOSIS_LEAD_RESPONSES_KEY in diagnosis-builder/submission-service.ts */
+const DIAGNOSIS_RESPONSES_KEY = 'diagnosis';
+/** Entries of a diagnosis summary that come from the contact form, not from the answers */
+const CONTACT_SUMMARY_KEYS = new Set(['department']);
+
+/**
+ * The diagnosis summaries of the responses and nothing else (#406). The summaries hold the
+ * result of choices made in the diagnosis; anything else in `responses` can be any JSON a member,
+ * an API client or an old form wrote, names and email addresses included. The department typed
+ * in the AX contact form is left out too.
+ */
+function diagnosisSummaries(responses: Lead['responses']): Record<string, unknown> | null {
+  if (!isRecord(responses) || Array.isArray(responses)) return null;
+  const summaries: Record<string, unknown> = {};
+  for (const key of [AX_RESPONSES_KEY, DIAGNOSIS_RESPONSES_KEY]) {
+    const summary = responses[key];
+    if (isRecord(summary) && !Array.isArray(summary)) {
+      summaries[key] = Object.fromEntries(
+        Object.entries(summary).filter(([entry]) => !CONTACT_SUMMARY_KEYS.has(entry))
+      );
+    }
+  }
+  return Object.keys(summaries).length > 0 ? summaries : null;
+}
+
 function boundResponses(responses: Record<string, unknown> | null): Record<string, unknown> | null {
   // Measured as the prediction prompt writes them (indented)
   if (!responses || JSON.stringify(responses, null, 2).length <= MAX_PROMPT_RESPONSES_CHARS) {
@@ -102,8 +129,8 @@ function boundResponses(responses: Record<string, unknown> | null): Record<strin
 
 /**
  * The lead as handed to Claude (scoring, prediction, summary). Nothing that points at a person
- * goes to Claude: no name, email address, phone number or free-text notes, only the company and
- * how far the lead has come (#406). Every text that goes into a prompt is cut to
+ * goes to Claude: no name, email address, phone number or free-text notes, only the company, how
+ * far the lead has come and the diagnosis summaries without the contact department (#406). Every text that goes into a prompt is cut to
  * MAX_PROMPT_FIELD_CHARS and the responses to about MAX_PROMPT_RESPONSES_CHARS of JSON, so each
  * counted call has a bounded size (#405). Only the copy handed to Claude is cut; the lead itself
  * (and what is written back) is unchanged.
@@ -120,7 +147,7 @@ export function leadForClaude(lead: Lead): LeadForClaude {
     status: clipField(lead.status),
     source: clipField(lead.source),
     score: lead.score,
-    responses: boundResponses(lead.responses),
+    responses: boundResponses(diagnosisSummaries(lead.responses)),
     createdAt: lead.createdAt,
   };
 }

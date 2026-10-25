@@ -6,23 +6,19 @@
 
 import { CLAUDE_MAX_TOKENS, CLAUDE_MODEL, anthropic as claude } from '../client';
 import { reportClaudeFailure } from '../failures';
+import type { LeadForClaude } from '../prompt-input';
 
 /**
  * Generate lead summary
  * @param lead - Lead data to summarize
  * @returns AI-generated summary
  */
-export async function generateLeadSummary(lead: {
-  company?: string | null;
-  industry?: string | null;
-  position?: string | null;
-  status?: string | null;
-}): Promise<string> {
+export async function generateLeadSummary(
+  lead: Partial<Pick<LeadForClaude, 'company' | 'status'>>
+): Promise<string> {
   const prompt = `Provide a concise 2-3 sentence summary of this lead:
 
 Company: ${lead.company || 'N/A'}
-Industry: ${lead.industry || 'N/A'}
-Position: ${lead.position || 'N/A'}
 Status: ${lead.status || 'N/A'}
 
 Focus on key business value and next steps.`;

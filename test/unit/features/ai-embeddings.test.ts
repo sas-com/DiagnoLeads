@@ -1,7 +1,7 @@
 /**
  * AI Embeddings Service Tests
  *
- * Tests for prepareLeadText utility function: only the fields that describe the company
+ * Tests for prepareLeadText utility function: the company name only
  */
 
 import { describe, expect, it } from 'vitest';
@@ -9,16 +9,8 @@ import { prepareLeadText } from '@/lib/features/ai/embeddings/openai';
 
 describe('AI Embeddings Service', () => {
   describe('prepareLeadText', () => {
-    it('should combine the company fields into searchable text', () => {
-      const lead = {
-        company: 'Acme Corp',
-        industry: 'Technology',
-        position: 'CEO',
-      };
-
-      const result = prepareLeadText(lead);
-
-      expect(result).toBe('Acme Corp Technology CEO');
+    it('should use the company name', () => {
+      expect(prepareLeadText({ company: 'Acme Corp' })).toBe('Acme Corp');
     });
 
     it('should leave out everything that points at a person (#406)', () => {
@@ -35,7 +27,7 @@ describe('AI Embeddings Service', () => {
     });
 
     it('should handle null and undefined fields', () => {
-      const result = prepareLeadText({ company: 'Acme Corp', industry: null, position: undefined });
+      const result = prepareLeadText({ company: 'Acme Corp' });
 
       expect(result).toBe('Acme Corp');
       expect(result).not.toContain('null');
@@ -43,7 +35,8 @@ describe('AI Embeddings Service', () => {
     });
 
     it('should return empty string for empty lead', () => {
-      expect(prepareLeadText({ company: null, industry: null, position: null })).toBe('');
+      expect(prepareLeadText({ company: null })).toBe('');
+      expect(prepareLeadText({ company: undefined })).toBe('');
     });
   });
 });

@@ -11,6 +11,7 @@ import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema';
 import { z } from 'zod';
 import { CLAUDE_MAX_TOKENS, CLAUDE_MODEL, anthropic } from '../client';
 import { reportClaudeFailure } from '../failures';
+import type { LeadForClaude } from '../prompt-input';
 import { AI_BATCH_MAX } from '../types/schemas';
 
 // Lead score response schema
@@ -50,20 +51,14 @@ const leadScoreOutputFormat = jsonSchemaOutputFormat({
  * @param lead - Lead information to analyze
  * @returns AI-generated lead score and recommendations
  */
-export async function scoreLeadWithAI(lead: {
-  company?: string | null;
-  industry?: string | null;
-  position?: string | null;
-  status?: string | null;
-  createdAt?: Date;
-}): Promise<LeadScoreResult> {
+export async function scoreLeadWithAI(
+  lead: Partial<Pick<LeadForClaude, 'company' | 'status' | 'createdAt'>>
+): Promise<LeadScoreResult> {
   try {
     const prompt = `You are an expert B2B sales analyst. Analyze the following lead and provide a comprehensive score.
 
 Lead Information:
 - Company: ${lead.company || 'N/A'}
-- Industry: ${lead.industry || 'N/A'}
-- Position: ${lead.position || 'N/A'}
 - Status: ${lead.status || 'N/A'}
 - Created: ${lead.createdAt ? lead.createdAt.toISOString() : 'N/A'}
 
@@ -76,7 +71,6 @@ Return:
 
 Consider factors like:
 - Company size and reputation
-- Decision-maker position
 - Industry fit
 - Lead engagement level
 - Timing and urgency signals`;
@@ -120,14 +114,7 @@ Consider factors like:
  * @returns Array of scores
  */
 export async function scoreLeadsBatch(
-  leads: Array<{
-    id: string;
-    company?: string | null;
-    industry?: string | null;
-    position?: string | null;
-    status?: string | null;
-    createdAt?: Date;
-  }>
+  leads: Array<Partial<Pick<LeadForClaude, 'company' | 'status' | 'createdAt'>> & { id: string }>
 ): Promise<Map<string, LeadScoreResult>> {
   const scores = new Map<string, LeadScoreResult>();
 

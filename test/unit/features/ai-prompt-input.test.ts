@@ -72,10 +72,9 @@ describe('leadForClaude', () => {
       status: ordinary.status,
       source: ordinary.source,
       score: ordinary.score,
-      responses: ordinary.responses,
+      responses: { axMigration: { systems: ['販売管理'] } },
       createdAt,
     });
-    expect(leadForClaude(ordinary).responses).toBe(ordinary.responses);
   });
 
   it('cuts every text field that goes into a prompt', () => {
@@ -105,9 +104,31 @@ describe('leadForClaude', () => {
     expect(original.company).toHaveLength(5_000);
   });
 
-  it('keeps responses that fit untouched, long answers included', () => {
-    const responses = { freeText: 'z'.repeat(5_000), budget: '100k+' };
-    expect(leadForClaude(lead({ responses })).responses).toBe(responses);
+  it('keeps the diagnosis summaries that fit, long answers included', () => {
+    const responses = {
+      axMigration: { systems: ['販売管理'], reason: 'z'.repeat(900) },
+      diagnosis: { resultTypeName: '移行の準備が必要', leadScoreReasons: ['規模が合う'] },
+    };
+    expect(leadForClaude(lead({ responses })).responses).toEqual(responses);
+  });
+
+  it('hands over only the diagnosis summaries, without the contact department (#406)', () => {
+    const responses = {
+      axMigration: { difficulty: 'high', department: '情報システム部 山田' },
+      diagnosis: { mqlLevel: 'fit' },
+      name: '山田 太郎',
+      email: 'taro@example.co.jp',
+      additionalInfo: '電話は午後に',
+    };
+    expect(leadForClaude(lead({ responses })).responses).toEqual({
+      axMigration: { difficulty: 'high' },
+      diagnosis: { mqlLevel: 'fit' },
+    });
+    // Nothing else, or nothing at all, becomes no responses
+    expect(leadForClaude(lead({ responses: { budget: '100k+' } })).responses).toBeNull();
+    expect(
+      leadForClaude(lead({ responses: ['a'] as unknown as Lead['responses'] })).responses
+    ).toBeNull();
   });
 
   it('bounds large responses: long strings, many entries, long arrays', () => {
@@ -119,8 +140,8 @@ describe('leadForClaude', () => {
       { systems: Array.from({ length: 5_000 }, () => ({ answers: Array(50).fill('x'.repeat(90)) })) },
     ];
 
-    for (const responses of cases) {
-      const bounded = leadForClaude(lead({ responses })).responses;
+    for (const summary of cases) {
+      const bounded = leadForClaude(lead({ responses: { axMigration: summary } })).responses;
       expect(JSON.stringify(bounded)).toContain(PROMPT_TRUNCATED);
       // At most the last entry and the mark over the budget
       expect(promptJsonLength(bounded)).toBeLessThanOrEqual(MAX_PROMPT_RESPONSES_CHARS + 200);
@@ -130,19 +151,19 @@ describe('leadForClaude', () => {
   it('keeps the start of large responses in their shape', () => {
     const responses = {
       axMigration: { systems: ['販売管理', '会計'], consultationRequested: true },
-      notes: 'n'.repeat(100_000),
+      diagnosis: { mqlReasons: 'n'.repeat(100_000) },
     };
     const bounded = leadForClaude(lead({ responses })).responses;
     expect(bounded).toEqual({
       axMigration: { systems: ['販売管理', '会計'], consultationRequested: true },
-      notes: `${'n'.repeat(MAX_PROMPT_FIELD_CHARS)} ${PROMPT_TRUNCATED}`,
+      diagnosis: { mqlReasons: `${'n'.repeat(MAX_PROMPT_FIELD_CHARS)} ${PROMPT_TRUNCATED}` },
     });
   });
 
   it('cuts deep nesting', () => {
     let deep: Record<string, unknown> = { leaf: 'x'.repeat(30_000) };
     for (let i = 0; i < 50; i++) deep = { next: deep };
-    const bounded = leadForClaude(lead({ responses: deep })).responses;
+    const bounded = leadForClaude(lead({ responses: { axMigration: deep } })).responses;
     expect(JSON.stringify(bounded)).toContain(PROMPT_TRUNCATED);
     expect(promptJsonLength(bounded)).toBeLessThan(MAX_PROMPT_RESPONSES_CHARS);
   });
