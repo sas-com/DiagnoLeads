@@ -6,14 +6,16 @@ import { z } from 'zod';
  * Based on the AX migration sales & marketing flow (2026-10-08).
  * Labels live in locales/{ja,en}/common.json under the matching namespace.
  *
- * One lifecycle over the stage axes (#444): リード → MQL → 商談（見極め） → SQL → 商談 → 受注 / 失注,
- * and 再育成 (nurturing) from any open stage. How each axis maps onto it, and which axis each
- * report counts, is in docs/PIPELINE_LIFECYCLE.md:
+ * One lifecycle over the stage axes (#444): リード → MQL → 商談（見極め） → [SQL判定] → 商談 →
+ * 受注 / 失注, and 再育成 (nurturing) for leads before a deal. How each axis maps onto it, and
+ * which axis each report counts, is in docs/PIPELINE_LIFECYCLE.md:
  * - status (LEAD_STATUSES): new = リード・MQL, negotiating = 商談, nurturing = 再育成, won, lost
+ *   (a won lead stays won while its next deal, e.g. the migration, is open)
  * - deal phase (DEAL_PHASES): initial_hearing = 見極め, simple_diagnosis = 課題の確認,
  *   proposal = 提案, survey_won → migration_won → ax = 受注 in steps
- * - SQL decision (SQL_DECISIONS): qualified = SQL, the exit of 見極め
- * - MQL level (../mql-level.ts): interest or an MQL date = MQL, fit = MQL候補
+ * - SQL decision (SQL_DECISIONS): the exit of 見極め; qualified goes on, not_qualified is lost
+ * - MQL level (../mql-level.ts, from the answers): interest = MQL, fit = MQL候補; the list and
+ *   analytics also count a lead with an MQL date as interest (listMqlLevel in ../api/list-sql.ts)
  */
 
 /** 5-stage lead status: 新規 / ナーチャリング / 商談中 / 成約 / 失注 */
