@@ -31,7 +31,11 @@ describe('PLAIN_TEXT', () => {
     for (const value of ['a\uD800b', 'a\uDC00b', '\uD83D']) {
       expect(PLAIN_TEXT.test(value)).toBe(false);
     }
+    // A pair in the wrong order is two lone surrogates
+    expect(PLAIN_TEXT.test('a\uDC4D\uD83Db')).toBe(false);
     expect(PLAIN_TEXT.test('a\uD83D\uDC4Db')).toBe(true);
+    // A kanji outside the BMP (U+20BB7) is a pair too
+    expect(PLAIN_TEXT.test('\uD842\uDFB7田')).toBe(true);
   });
 
   it('makes the public diagnosis form refuse a company name with a lone surrogate (#747)', () => {
