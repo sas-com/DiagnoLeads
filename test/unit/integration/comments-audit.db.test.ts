@@ -212,7 +212,7 @@ describe.skipIf(!url)('lead comments: audit, counts and readers (PostgreSQL)', (
     });
   });
 
-  it("lets only the author or an owner edit and delete someone's comment", async () => {
+  it("lets only the author or an owner edit, pin and delete someone's comment", async () => {
     const created = await as.member.comments.create({ ...scope(), content: '見積の前提' });
 
     await expect(
@@ -221,11 +221,19 @@ describe.skipIf(!url)('lead comments: audit, counts and readers (PostgreSQL)', (
     await expect(as.other.comments.delete({ organizationId, id: created.id })).rejects.toMatchObject({
       code: 'FORBIDDEN',
     });
+    // Pinning too, as the screen offers it
+    await expect(
+      as.other.comments.togglePin({ organizationId, id: created.id })
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     expect((await row(created.id)).content).toBe('見積の前提');
+    expect((await row(created.id)).isPinned).toBe(false);
     expect(await auditOf(created.id)).toHaveLength(1);
 
     await as.owner.comments.update({ organizationId, id: created.id, content: '見積の前提（確認済み）' });
     expect((await row(created.id)).content).toBe('見積の前提（確認済み）');
+    expect((await as.owner.comments.togglePin({ organizationId, id: created.id })).isPinned).toBe(
+      true
+    );
   });
 
   it('counts with SQL and says what each member may do', async () => {
@@ -249,16 +257,24 @@ describe.skipIf(!url)('lead comments: audit, counts and readers (PostgreSQL)', (
     });
   });
 
-  /** Until another session waits for a row lock (or 3 seconds pass, when nothing waits) */
-  async function untilLockWait() {
+  /**
+   * Until a session waits for a lock the given backend holds (or 3 seconds pass, when nothing
+   * waits): only waits on this test's own connection count, not those of other test files
+   */
+  async function untilBlockedBy(pid: number) {
     for (let i = 0; i < 60; i++) {
       const [row] = await pg.execute<{ waiting: number }>(
-        sql`select count(*)::int as waiting from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'`
+        sql`select count(*)::int as waiting from pg_stat_activity where ${pid} = any(pg_blocking_pids(pid))`
       );
       if (row && row.waiting > 0) return;
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
   }
+
+  const backendPid = async (tx: postgres.TransactionSql) => {
+    const [row] = await tx<{ pid: number }[]>`select pg_backend_pid() as pid`;
+    return row.pid;
+  };
 
   const outcome = (promise: Promise<unknown>) =>
     promise.then(
@@ -278,7 +294,7 @@ describe.skipIf(!url)('lead comments: audit, counts and readers (PostgreSQL)', (
         reply = outcome(
           as.other.comments.create({ ...scope(), content: '間に合わない返信', parentId: parent.id })
         );
-        await untilLockWait();
+        await untilBlockedBy(await backendPid(tx));
         await tx`delete from lead_comments where id = ${parent.id}`;
       });
     } finally {
@@ -305,7 +321,7 @@ describe.skipIf(!url)('lead comments: audit, counts and readers (PostgreSQL)', (
         await tx`insert into lead_comments (lead_id, organization_id, user_id, content, type, parent_id)
           values (${leadId}, ${organizationId}, ${ids['別の営業']}, '同時の返信', 'comment', ${parent.id})`;
         removal = outcome(as.member.comments.delete({ organizationId, id: parent.id }));
-        await untilLockWait();
+        await untilBlockedBy(await backendPid(tx));
       });
     } finally {
       await other.end();
@@ -315,6 +331,30 @@ describe.skipIf(!url)('lead comments: audit, counts and readers (PostgreSQL)', (
     expect(await removal).toBe('FORBIDDEN');
     expect(await row(parent.id)).toBeDefined();
     expect(await auditOf(parent.id)).toHaveLength(1);
+  });
+
+  it('finds no lead deleted while a comment is written, rather than a database error', async () => {
+    const [doomed] = await pg
+      .insert(leads)
+      .values({ organizationId, email: `lead-${unique()}@example.com`, status: 'new' })
+      .returning();
+    // biome-ignore lint/style/noNonNullAssertion: guarded by skipIf
+    const other = postgres(url!, { max: 1 });
+    let written: Promise<unknown> = Promise.resolve();
+    try {
+      await other.begin(async (tx) => {
+        // Deleting the lead holds it, and then its comments
+        await tx`delete from leads where id = ${doomed.id}`;
+        written = outcome(
+          as.member.comments.create({ organizationId, leadId: doomed.id, content: '消えるリード' })
+        );
+        await untilBlockedBy(await backendPid(tx));
+      });
+    } finally {
+      await other.end();
+    }
+
+    expect(await written).toBe('NOT_FOUND');
   });
 
   it('shows the parent organization no comment, in the comments or in the activity', async () => {

@@ -8,8 +8,13 @@
  * prospect brings to the lead made from it is written by the prospects router, outside this.
  */
 import type { db as defaultDb } from '@/lib/db/client';
-import { type AuditAction, type LeadComment, auditLogs, leadComments } from '@/lib/db/schema';
-import { assertInOrganization } from '@/lib/multi-tenant/helpers/scope';
+import {
+  type AuditAction,
+  type LeadComment,
+  auditLogs,
+  leadComments,
+  leads,
+} from '@/lib/db/schema';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { and, count, desc, eq, isNull, sql } from 'drizzle-orm';
@@ -41,6 +46,20 @@ function auditComment(
     changes: input.changes,
     metadata: { leadId: input.comment.leadId, ...input.metadata },
   });
+}
+
+/**
+ * Hold the lead for a new comment, before anything else, as deleting a lead does (it takes its
+ * comments after it): a lead deleted meanwhile is not found, rather than a deadlock with a
+ * reply or a failed foreign key
+ */
+async function holdLead(tx: Transaction, organizationId: string, leadId: string) {
+  const [lead] = await tx
+    .select({ id: leads.id })
+    .from(leads)
+    .where(and(eq(leads.id, leadId), eq(leads.organizationId, organizationId)))
+    .for('key share');
+  if (!lead) throw new TRPCError({ code: 'NOT_FOUND', message: 'The lead was not found' });
 }
 
 // Schemas
@@ -124,7 +143,7 @@ export const commentsRouter = router({
         },
         replies: {
           // Replies of the same organization only, however the row was written (the lead too,
-          // for the index on (lead_id, created_at))
+          // for the index of #433 on (lead_id, created_at))
           where: and(
             eq(leadComments.organizationId, input.organizationId),
             eq(leadComments.leadId, input.leadId)
@@ -175,9 +194,8 @@ export const commentsRouter = router({
       });
     }
 
-    await assertInOrganization(ctx.db, 'lead', input.organizationId, input.leadId);
-
     const comment = await ctx.db.transaction(async (tx) => {
+      await holdLead(tx, input.organizationId, input.leadId);
       if (input.parentId) {
         // A reply stays in the thread of the same lead, one level deep (a reply to a reply
         // would never be listed, nor deleted with its thread). The parent is held until the
@@ -344,9 +362,16 @@ export const commentsRouter = router({
         eq(leadComments.organizationId, input.organizationId)
       );
       // Held before its replies are read, so a reply being written meanwhile is either among
-      // them or finds no comment to answer. Deleted meanwhile: nothing to record
+      // them or finds no comment to answer. Deleted meanwhile: nothing to record. What is
+      // recorded comes from the held row
       const [held] = await tx
-        .select({ id: leadComments.id })
+        .select({
+          id: leadComments.id,
+          leadId: leadComments.leadId,
+          userId: leadComments.userId,
+          type: leadComments.type,
+          isPinned: leadComments.isPinned,
+        })
         .from(leadComments)
         .where(scope)
         .for('update');
@@ -366,9 +391,9 @@ export const commentsRouter = router({
         .from(leadComments)
         .where(
           and(
-            eq(leadComments.parentId, existing.id),
+            eq(leadComments.parentId, held.id),
             eq(leadComments.organizationId, input.organizationId),
-            eq(leadComments.leadId, existing.leadId)
+            eq(leadComments.leadId, held.leadId)
           )
         )
         .for('update');
@@ -395,20 +420,20 @@ export const commentsRouter = router({
           organizationId: input.organizationId,
           userId: ctx.session.user.id,
           action: 'delete',
-          comment: { id: reply.id, leadId: existing.leadId },
+          comment: { id: reply.id, leadId: held.leadId },
           changes: {
             before: { type: reply.type, isPinned: reply.isPinned, authorId: reply.userId },
           },
-          metadata: { parentId: existing.id },
+          metadata: { parentId: held.id },
         });
       }
       await auditComment(tx, {
         organizationId: input.organizationId,
         userId: ctx.session.user.id,
         action: 'delete',
-        comment: existing,
+        comment: held,
         changes: {
-          before: { type: existing.type, isPinned: existing.isPinned, authorId: existing.userId },
+          before: { type: held.type, isPinned: held.isPinned, authorId: held.userId },
         },
         metadata: replies.length > 0 ? { replies: replies.length } : undefined,
       });
@@ -439,6 +464,14 @@ export const commentsRouter = router({
       throw new TRPCError({
         code: 'NOT_FOUND',
         message: 'コメントが見つかりません',
+      });
+    }
+
+    // Like an edit: the author's own comment, or anyone's for an owner (what the screen offers)
+    if (existing.userId !== ctx.session.user.id && !ctx.ability.can('manage', 'all')) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: '自分のコメントのみピン留めできます',
       });
     }
 
@@ -484,9 +517,8 @@ export const commentsRouter = router({
         });
       }
 
-      await assertInOrganization(ctx.db, 'lead', input.organizationId, input.leadId);
-
       return ctx.db.transaction(async (tx) => {
+        await holdLead(tx, input.organizationId, input.leadId);
         const [activity] = await tx
           .insert(leadComments)
           .values({
