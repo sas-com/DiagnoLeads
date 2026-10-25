@@ -398,7 +398,7 @@ function LeadDetailContent({
           <div className="-mx-1 overflow-x-auto px-1 pb-1">
             {/* 44px tabs on phones; the bar scrolls sideways when the tabs do not fit */}
             <TabsList className="h-auto sm:h-10">
-              {LEAD_TABS.map((key) => (
+              {LEAD_TABS.filter((key) => key !== 'memos' || access.canReadComments).map((key) => (
                 <TabsTrigger key={key} value={key} className="min-h-11 sm:min-h-0">
                   {t(`tabs.${key}`)}
                 </TabsTrigger>

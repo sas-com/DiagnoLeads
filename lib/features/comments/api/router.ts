@@ -11,8 +11,9 @@ import { type AuditAction, type LeadComment, auditLogs, leadComments } from '@/l
 import { assertInOrganization } from '@/lib/multi-tenant/helpers/scope';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
-import { and, count, desc, eq, isNull } from 'drizzle-orm';
+import { and, count, desc, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { canReadComments } from '../access';
 
 type Transaction = Parameters<Parameters<(typeof defaultDb)['transaction']>[0]>[0];
 
@@ -42,13 +43,22 @@ function auditComment(
 }
 
 // Schemas
+/** Metadata stays small: it is stored with the comment and nothing reads it yet */
+const METADATA_MAX_LENGTH = 2000;
+const metadataSchema = z
+  .record(z.unknown())
+  .refine((value) => JSON.stringify(value).length <= METADATA_MAX_LENGTH, {
+    message: 'metadata is too large',
+  });
+
 const createCommentSchema = z.object({
   organizationId: z.string().uuid(),
   leadId: z.string().uuid(),
   content: z.string().min(1).max(5000),
-  type: z.enum(['comment', 'note', 'activity']).default('comment'),
+  // Activity entries are written by addActivity; the screen offers comments and notes only
+  type: z.enum(['comment', 'note']).default('comment'),
   parentId: z.string().uuid().optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: metadataSchema.optional(),
 });
 
 const updateCommentSchema = z.object({
@@ -80,7 +90,7 @@ export const commentsRouter = router({
    * List comments for a lead
    */
   list: organizationProcedure.input(listCommentsSchema).query(async ({ ctx, input }) => {
-    if (!ctx.ability.can('read', 'Lead')) {
+    if (!canReadComments(ctx)) {
       throw new TRPCError({
         code: 'FORBIDDEN',
         message: 'コメントを閲覧する権限がありません',
@@ -162,7 +172,8 @@ export const commentsRouter = router({
 
     await assertInOrganization(ctx.db, 'lead', input.organizationId, input.leadId);
     if (input.parentId) {
-      // A reply stays in the thread of the same lead
+      // A reply stays in the thread of the same lead, one level deep (a reply to a reply would
+      // never be listed, nor deleted with its thread)
       const [parent] = await ctx.db
         .select({ id: leadComments.id })
         .from(leadComments)
@@ -170,7 +181,8 @@ export const commentsRouter = router({
           and(
             eq(leadComments.id, input.parentId),
             eq(leadComments.organizationId, input.organizationId),
-            eq(leadComments.leadId, input.leadId)
+            eq(leadComments.leadId, input.leadId),
+            isNull(leadComments.parentId)
           )
         )
         .limit(1);
@@ -204,7 +216,10 @@ export const commentsRouter = router({
 
     // Fetch with user info
     const result = await ctx.db.query.leadComments.findFirst({
-      where: eq(leadComments.id, comment.id),
+      where: and(
+        eq(leadComments.id, comment.id),
+        eq(leadComments.organizationId, input.organizationId)
+      ),
       with: {
         user: {
           columns: {
@@ -268,6 +283,8 @@ export const commentsRouter = router({
           and(eq(leadComments.id, input.id), eq(leadComments.organizationId, input.organizationId))
         )
         .returning();
+      // Deleted meanwhile: nothing changed, nothing is recorded
+      if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'コメントが見つかりません' });
       await auditComment(tx, {
         organizationId: input.organizationId,
         userId: ctx.session.user.id,
@@ -315,21 +332,62 @@ export const commentsRouter = router({
 
     await ctx.db.transaction(async (tx) => {
       // Replies answer their comment and would stay in the lead's activity on their own
-      // (parent_id has no foreign key): they go with it
+      // (parent_id has no foreign key): they go with it. Others' replies are deleted only by
+      // those who may delete anyone's comment, as one by one
       const replies = await tx
-        .delete(leadComments)
+        .select({
+          id: leadComments.id,
+          userId: leadComments.userId,
+          type: leadComments.type,
+          isPinned: leadComments.isPinned,
+        })
+        .from(leadComments)
         .where(
           and(
             eq(leadComments.parentId, existing.id),
             eq(leadComments.organizationId, input.organizationId)
           )
         )
-        .returning({ id: leadComments.id });
-      await tx
+        .for('update');
+      if (
+        replies.some((reply) => reply.userId !== ctx.session.user.id) &&
+        !ctx.ability.can('manage', 'all')
+      ) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'ほかの人の返信があるコメントは削除できません',
+        });
+      }
+      const deleted = await tx
         .delete(leadComments)
         .where(
           and(eq(leadComments.id, input.id), eq(leadComments.organizationId, input.organizationId))
-        );
+        )
+        .returning({ id: leadComments.id });
+      // Deleted meanwhile: nothing to record
+      if (deleted.length === 0) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'コメントが見つかりません' });
+      }
+      for (const reply of replies) {
+        await tx
+          .delete(leadComments)
+          .where(
+            and(
+              eq(leadComments.id, reply.id),
+              eq(leadComments.organizationId, input.organizationId)
+            )
+          );
+        await auditComment(tx, {
+          organizationId: input.organizationId,
+          userId: ctx.session.user.id,
+          action: 'delete',
+          comment: { id: reply.id, leadId: existing.leadId },
+          changes: {
+            before: { type: reply.type, isPinned: reply.isPinned, authorId: reply.userId },
+          },
+          metadata: { parentId: existing.id },
+        });
+      }
       await auditComment(tx, {
         organizationId: input.organizationId,
         userId: ctx.session.user.id,
@@ -371,20 +429,22 @@ export const commentsRouter = router({
     }
 
     return ctx.db.transaction(async (tx) => {
-      // Not an edit of the text: updatedAt stays, so the comment does not read as edited
+      // Not an edit of the text: updatedAt stays, so the comment does not read as edited.
+      // Flipped in SQL, so two pins at once record what each one did
       const [updated] = await tx
         .update(leadComments)
-        .set({ isPinned: !existing.isPinned })
+        .set({ isPinned: sql`not ${leadComments.isPinned}` })
         .where(
           and(eq(leadComments.id, input.id), eq(leadComments.organizationId, input.organizationId))
         )
         .returning();
+      if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'コメントが見つかりません' });
       await auditComment(tx, {
         organizationId: input.organizationId,
         userId: ctx.session.user.id,
         action: 'update',
         comment: existing,
-        changes: { before: { isPinned: existing.isPinned }, after: { isPinned: updated.isPinned } },
+        changes: { before: { isPinned: !updated.isPinned }, after: { isPinned: updated.isPinned } },
       });
       return updated;
     });
@@ -399,7 +459,7 @@ export const commentsRouter = router({
         organizationId: z.string().uuid(),
         leadId: z.string().uuid(),
         content: z.string().min(1).max(1000),
-        metadata: z.record(z.unknown()).optional(),
+        metadata: metadataSchema.optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -446,7 +506,7 @@ export const commentsRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      if (!ctx.ability.can('read', 'Lead')) {
+      if (!canReadComments(ctx)) {
         throw new TRPCError({
           code: 'FORBIDDEN',
           message: 'コメントを閲覧する権限がありません',

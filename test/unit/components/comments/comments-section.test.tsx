@@ -17,6 +17,7 @@ const ME = '880e8400-e29b-41d4-a716-446655440001';
 type Options = { onSuccess?: (data: { isPinned: boolean }) => void };
 const mocks = vi.hoisted(() => ({
   data: undefined as unknown,
+  error: null as unknown,
   queryInput: undefined as unknown,
   options: {} as Record<string, { onSuccess?: (data: { isPinned: boolean }) => void }>,
   mutate: {} as Record<string, ReturnType<typeof vi.fn>>,
@@ -48,7 +49,7 @@ vi.mock('@/lib/trpc/client', () => {
         list: {
           useQuery: (input: unknown) => {
             mocks.queryInput = input;
-            return { data: mocks.data, isLoading: false };
+            return { data: mocks.data, isLoading: false, error: mocks.error };
           },
         },
         create: mutation('create'),
@@ -98,6 +99,7 @@ const renderSection = () =>
 
 beforeEach(() => {
   mocks.data = page({ canWrite: true, canModerate: false });
+  mocks.error = null;
   for (const fn of Object.values(mocks.mutate)) fn.mockReset();
   for (const fn of Object.values(mocks.invalidate)) fn.mockReset();
 });
@@ -119,13 +121,22 @@ describe('CommentsSection', () => {
     expect(screen.getByRole('button', { name: 'すべて3' })).toBeInTheDocument();
   });
 
-  it('gives no form and no reply to a read-only member', () => {
+  it('gives no form, no reply and no menu to a read-only member, even on their own comment', () => {
     mocks.data = page({ canWrite: false, canModerate: false });
     renderSection();
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '送信' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '返信' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'コメントの操作' })).not.toBeInTheDocument();
     expect(screen.getByText('先方は来月に決裁')).toBeInTheDocument();
+  });
+
+  it('says so when the comments may not be read (the parent organization)', () => {
+    mocks.data = undefined;
+    mocks.error = { data: { code: 'FORBIDDEN' } };
+    renderSection();
+    expect(screen.getByText('メモを見る権限がありません')).toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
   it('writes a note and refreshes the lead activity', async () => {

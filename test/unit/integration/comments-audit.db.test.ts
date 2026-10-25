@@ -1,7 +1,8 @@
 /**
  * Comments of a lead on a real PostgreSQL (#555): every write leaves one audit row without the
- * text, the counts come from SQL, deleting a comment takes its replies, pinning is no edit, and
- * the list says what the viewer may do (the same checks as the writes).
+ * text, the counts come from SQL, deleting a comment takes its replies (others' replies only
+ * for an owner), pinning is no edit, the list says what the viewer may do, and the parent
+ * organization reads no comment, in the comments or in the lead's activity.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/diagnoleads_test \
@@ -26,7 +27,7 @@ vi.mock('@/lib/db/rls', () => ({ setCurrentUser: vi.fn().mockResolvedValue(undef
 
 const url = process.env.TEST_DATABASE_URL;
 
-describe.skipIf(!url)('lead comments: audit and counts (PostgreSQL)', () => {
+describe.skipIf(!url)('lead comments: audit, counts and readers (PostgreSQL)', () => {
   const client = url ? postgres(url, { max: 2 }) : null;
   // biome-ignore lint/style/noNonNullAssertion: guarded by skipIf
   const pg = (client ? drizzle(client, { schema }) : null)!;
@@ -114,6 +115,22 @@ describe.skipIf(!url)('lead comments: audit and counts (PostgreSQL)', () => {
     expect(JSON.stringify(audit[0])).not.toContain('架空 太郎');
   });
 
+  it('takes comments and notes only, with a small metadata, and replies one level deep', async () => {
+    await expect(
+      as.member.comments.create({ ...scope(), content: '活動', type: 'activity' })
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(
+      as.member.comments.create({ ...scope(), content: '大きい', metadata: { note: 'x'.repeat(3000) } })
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+    const parent = await as.member.comments.create({ ...scope(), content: '進め方' });
+    const reply = await as.other.comments.create({ ...scope(), content: '賛成', parentId: parent.id });
+    // A reply to a reply would never be listed, nor deleted with its thread
+    await expect(
+      as.member.comments.create({ ...scope(), content: '返信の返信', parentId: reply.id })
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
   it('records that the text changed, not the text; the same text writes nothing', async () => {
     const created = await as.member.comments.create({ ...scope(), content: '初回の連絡は電話で' });
     const before = await row(created.id);
@@ -133,7 +150,7 @@ describe.skipIf(!url)('lead comments: audit and counts (PostgreSQL)', () => {
     expect(JSON.stringify(audit[1])).not.toContain('メール');
   });
 
-  it('pins without marking the comment edited, and records the pin', async () => {
+  it('pins without marking the comment edited, and records each pin', async () => {
     const created = await as.member.comments.create({ ...scope(), content: '予算は来期' });
     const before = await row(created.id);
 
@@ -144,26 +161,53 @@ describe.skipIf(!url)('lead comments: audit and counts (PostgreSQL)', () => {
       action: 'update',
       changes: { before: { isPinned: false }, after: { isPinned: true } },
     });
+
+    await as.member.comments.togglePin({ organizationId, id: created.id });
+    expect((await auditOf(created.id)).at(-1)).toMatchObject({
+      changes: { before: { isPinned: true }, after: { isPinned: false } },
+    });
   });
 
-  it('deletes the replies with their comment and records how many', async () => {
+  it('deletes the replies with their comment, one audit row each', async () => {
     const parent = await as.member.comments.create({ ...scope(), content: '提案の進め方' });
-    await as.other.comments.create({ ...scope(), content: '来週に相談', parentId: parent.id });
-    await as.owner.comments.create({ ...scope(), content: '了解', parentId: parent.id });
+    const reply = await as.member.comments.create({ ...scope(), content: '補足', parentId: parent.id });
 
     await as.member.comments.delete({ organizationId, id: parent.id });
 
-    const left = await pg
-      .select({ id: leadComments.id })
-      .from(leadComments)
-      .where(inArray(leadComments.parentId, [parent.id]));
-    expect(left).toEqual([]);
     expect(await row(parent.id)).toBeUndefined();
+    expect(await row(reply.id)).toBeUndefined();
+    expect((await auditOf(reply.id)).at(-1)).toMatchObject({
+      action: 'delete',
+      changes: { before: { type: 'comment', isPinned: false, authorId: ids['営業'] } },
+      metadata: { leadId, parentId: parent.id },
+    });
     expect((await auditOf(parent.id)).at(-1)).toMatchObject({
       action: 'delete',
       userId: ids['営業'],
       changes: { before: { type: 'comment', isPinned: false, authorId: ids['営業'] } },
-      metadata: { leadId, replies: 2 },
+      metadata: { leadId, replies: 1 },
+    });
+  });
+
+  it("leaves others' replies to an owner: the author alone cannot delete the thread", async () => {
+    const parent = await as.member.comments.create({ ...scope(), content: '次の打ち合わせ' });
+    const reply = await as.other.comments.create({ ...scope(), content: '日程を調整', parentId: parent.id });
+
+    await expect(as.member.comments.delete({ organizationId, id: parent.id })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    // Nothing was deleted, nothing was recorded
+    expect(await row(parent.id)).toBeDefined();
+    expect(await row(reply.id)).toBeDefined();
+    expect(await auditOf(parent.id)).toHaveLength(1);
+
+    await as.owner.comments.delete({ organizationId, id: parent.id });
+    expect(await row(reply.id)).toBeUndefined();
+    expect((await auditOf(reply.id)).at(-1)).toMatchObject({
+      action: 'delete',
+      userId: ids['オーナー'],
+      changes: { before: { authorId: ids['別の営業'] } },
+      metadata: { parentId: parent.id },
     });
   });
 
@@ -176,7 +220,6 @@ describe.skipIf(!url)('lead comments: audit and counts (PostgreSQL)', () => {
     await expect(as.other.comments.delete({ organizationId, id: created.id })).rejects.toMatchObject({
       code: 'FORBIDDEN',
     });
-    // Nothing was written, nothing was recorded
     expect((await row(created.id)).content).toBe('見積の前提');
     expect(await auditOf(created.id)).toHaveLength(1);
 
@@ -184,7 +227,7 @@ describe.skipIf(!url)('lead comments: audit and counts (PostgreSQL)', () => {
     expect((await row(created.id)).content).toBe('見積の前提（確認済み）');
   });
 
-  it('counts with SQL and says what each viewer may do', async () => {
+  it('counts with SQL and says what each member may do', async () => {
     const parent = await as.member.comments.create({ ...scope(), content: '次回の議題' });
     await as.other.comments.create({ ...scope(), content: '承知', parentId: parent.id });
     const stored = await pg
@@ -199,18 +242,28 @@ describe.skipIf(!url)('lead comments: audit and counts (PostgreSQL)', () => {
     expect(page.total).toBe(stored.filter((comment) => comment.parentId === null).length);
     expect(page.total).toBe(page.items.length);
     expect(page.viewer).toEqual({ userId: ids['営業'], canWrite: true, canModerate: false });
-
     expect((await as.owner.comments.list(scope())).viewer).toMatchObject({
       canWrite: true,
       canModerate: true,
     });
-    // Read-only: the screen shows no form, and a write is refused
-    expect((await as.viewer.comments.list(scope())).viewer).toMatchObject({
-      canWrite: false,
-      canModerate: false,
-    });
+  });
+
+  it('shows the parent organization no comment, in the comments or in the activity', async () => {
+    await as.member.comments.create({ ...scope(), content: '親会社に見せないメモ' });
+
+    await expect(as.viewer.comments.list(scope())).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(as.viewer.comments.getCount(scope())).rejects.toMatchObject({ code: 'FORBIDDEN' });
     await expect(as.viewer.comments.create({ ...scope(), content: '書けない' })).rejects.toMatchObject({
       code: 'FORBIDDEN',
     });
+    expect((await as.viewer.leads.access({ organizationId })).canReadComments).toBe(false);
+
+    // The activity still shows the rest of the lead, without the comments
+    const theirs = await as.viewer.leadActivity.list({ organizationId, leadId, limit: 50 });
+    expect(theirs.items.some((item: { kind: string }) => item.kind === 'comment')).toBe(false);
+    expect(JSON.stringify(theirs)).not.toContain('親会社に見せないメモ');
+    const ours = await as.member.leadActivity.list({ organizationId, leadId, limit: 50 });
+    expect(ours.items.some((item: { kind: string }) => item.kind === 'comment')).toBe(true);
+    expect((await as.member.leads.access({ organizationId })).canReadComments).toBe(true);
   });
 });

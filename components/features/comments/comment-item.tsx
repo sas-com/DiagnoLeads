@@ -80,6 +80,10 @@ export function CommentItem({
 
   const isOwner = comment.userId !== null && comment.userId === currentUserId;
   const canModify = isOwner || isAdmin;
+  // What the menu offers: only the actions the section passed (none for read-only members)
+  const canPin = canModify && Boolean(onTogglePin);
+  const canEdit = isOwner && Boolean(onEdit);
+  const canDelete = canModify && Boolean(onDelete);
 
   const handleSaveEdit = () => {
     if (editContent.trim() && onEdit) {
@@ -137,7 +141,7 @@ export function CommentItem({
           </div>
 
           {/* Actions */}
-          {canModify && comment.type !== 'activity' && (
+          {(canPin || canEdit || canDelete) && comment.type !== 'activity' && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={t('actions')}>
@@ -145,7 +149,7 @@ export function CommentItem({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {onTogglePin && (
+                {canPin && onTogglePin && (
                   <DropdownMenuItem onClick={() => onTogglePin(comment.id)}>
                     {comment.isPinned ? (
                       <>
@@ -160,13 +164,13 @@ export function CommentItem({
                     )}
                   </DropdownMenuItem>
                 )}
-                {isOwner && (
+                {canEdit && (
                   <DropdownMenuItem onClick={() => setIsEditing(true)}>
                     <Pencil className="mr-2 h-4 w-4" />
                     {t('edit')}
                   </DropdownMenuItem>
                 )}
-                {canModify && onDelete && (
+                {canDelete && onDelete && (
                   <DropdownMenuItem
                     onClick={() => onDelete(comment.id)}
                     className="text-red-600 focus:text-red-600"

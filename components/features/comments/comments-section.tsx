@@ -42,13 +42,13 @@ export function CommentsSection({ organizationId, leadId }: CommentsSectionProps
   const utils = trpc.useUtils();
 
   // All types at once: the filter only narrows what is shown, so each tab keeps its count
-  const { data, isLoading } = trpc.comments.list.useQuery(
+  const { data, isLoading, error } = trpc.comments.list.useQuery(
     {
       organizationId,
       leadId,
       type: 'all',
     },
-    { enabled: !!organizationId && !!leadId }
+    { enabled: !!organizationId && !!leadId, retry: false }
   );
 
   // A written comment also shows in the lead's activity (its first 200 characters)
@@ -84,8 +84,9 @@ export function CommentsSection({ organizationId, leadId }: CommentsSectionProps
       setDeletingId(null);
       refresh();
     },
-    onError: () => {
-      toast.error(t('deleteError'));
+    onError: (error) => {
+      // Others' replies go with a comment only for those who may delete anyone's comment
+      toast.error(error.data?.code === 'FORBIDDEN' ? t('deleteForbidden') : t('deleteError'));
     },
   });
 
@@ -104,7 +105,7 @@ export function CommentsSection({ organizationId, leadId }: CommentsSectionProps
       organizationId,
       leadId,
       content,
-      type: type || 'comment',
+      type: type === 'note' ? 'note' : 'comment',
     });
   };
 
@@ -137,6 +138,15 @@ export function CommentsSection({ organizationId, leadId }: CommentsSectionProps
 
   const comments = data?.items ?? [];
   const viewer = data?.viewer;
+
+  // The parent organization does not read the team's comments (#555)
+  if (error?.data?.code === 'FORBIDDEN') {
+    return (
+      <Card className="p-4">
+        <p className="text-sm text-muted-foreground">{t('forbidden')}</p>
+      </Card>
+    );
+  }
   const filterCounts = {
     all: comments.length,
     comment: comments.filter((c) => c.type === 'comment').length,
@@ -226,9 +236,10 @@ export function CommentsSection({ organizationId, leadId }: CommentsSectionProps
                   organizationId={organizationId}
                   leadId={leadId}
                   isAdmin={viewer?.canModerate ?? false}
-                  onEdit={handleEdit}
-                  onDelete={handleDelete}
-                  onTogglePin={handleTogglePin}
+                  // Read-only members change nothing, not even what they wrote before
+                  onEdit={viewer?.canWrite ? handleEdit : undefined}
+                  onDelete={viewer?.canWrite ? handleDelete : undefined}
+                  onTogglePin={viewer?.canWrite ? handleTogglePin : undefined}
                   onReply={viewer?.canWrite ? handleReply : undefined}
                 />
               ))
