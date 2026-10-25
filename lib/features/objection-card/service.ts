@@ -3,12 +3,13 @@
  * the organization's playbook. Scoped by organizationId; the router checks permissions.
  */
 import type { db as defaultDb } from '@/lib/db/client';
-import { axSalesPlaybooks, leadHearings, leads } from '@/lib/db/schema';
+import { axSalesPlaybooks, diagnosticSubmissions, leadHearings, leads } from '@/lib/db/schema';
 import { axPlaybookContentSchema } from '@/lib/features/ax-playbook/types/schemas';
+import { AX_MIGRATION_DIAGNOSTIC_KEY } from '@/lib/features/diagnostics/ax-migration/definition';
 import { parseStoredHearingFields } from '@/lib/features/lead-hearings/types/schemas';
 import { readLeadDiagnosis } from '@/lib/features/leads/diagnosis-view';
 import { and, desc, eq } from 'drizzle-orm';
-import { collectSignals, pickNgPhrases, pickObjections } from './match';
+import { challengesFromAnswers, collectSignals, pickNgPhrases, pickObjections } from './match';
 
 type Database = typeof defaultDb;
 
@@ -17,7 +18,7 @@ export async function getObjectionCard(
   db: Database,
   input: { organizationId: string; leadId: string }
 ) {
-  const [[lead], [hearing], [playbook]] = await Promise.all([
+  const [[lead], [hearing], [playbook], submissions] = await Promise.all([
     db
       .select({
         lostReason: leads.lostReason,
@@ -41,6 +42,17 @@ export async function getObjectionCard(
       .select({ content: axSalesPlaybooks.content })
       .from(axSalesPlaybooks)
       .where(eq(axSalesPlaybooks.organizationId, input.organizationId)),
+    // The answers keep the challenges as chosen; the lead's summary only has their categories
+    db
+      .select({ answers: diagnosticSubmissions.answers })
+      .from(diagnosticSubmissions)
+      .where(
+        and(
+          eq(diagnosticSubmissions.leadId, input.leadId),
+          eq(diagnosticSubmissions.organizationId, input.organizationId),
+          eq(diagnosticSubmissions.diagnosticKey, AX_MIGRATION_DIAGNOSTIC_KEY)
+        )
+      ),
   ]);
   if (!lead) return null;
 
@@ -49,7 +61,10 @@ export async function getObjectionCard(
   const signals = collectSignals({
     pastBlockers: Array.isArray(blockers) ? blockers : [],
     lostReason: lead.lostReason,
-    challenges: readLeadDiagnosis(lead.responses, lead.customFields).ax?.challenges ?? [],
+    challenges: [
+      ...(readLeadDiagnosis(lead.responses, lead.customFields).ax?.challenges ?? []),
+      ...submissions.flatMap((submission) => challengesFromAnswers(submission.answers)),
+    ],
   });
   // A stored playbook that no longer fits the schema reads as none (as on the settings screen)
   const parsed = playbook ? axPlaybookContentSchema.safeParse(playbook.content) : null;

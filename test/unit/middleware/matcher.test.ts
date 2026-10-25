@@ -31,6 +31,9 @@ describe('middleware matcher', () => {
     expect(runsOn('/ax-diagnosis')).toBe(true);
     expect(runsOn('/')).toBe(true);
     expect(runsOn('/robots.txt')).toBe(true);
+    // The QR entry of campaigns (#503) needs the proxy's rate limit and headers. A guard: the
+    // matcher already ran on /q/ before #503
+    expect(runsOn('/q/AbCd2345')).toBe(true);
     expect(runsOn('/_next/static/chunks/main.js')).toBe(false);
   });
 

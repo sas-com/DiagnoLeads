@@ -110,6 +110,11 @@ describe('MeetingPreferencesForm', () => {
     const dialog = await screen.findByRole('dialog', { name: '第2希望の日付を選ぶ' });
     expect(dayButton(dialog, 16).className).toContain('border-ax-teal-dark');
     expect(dayButton(dialog, 15).className).not.toContain('border-ax-teal-dark');
+    // The keyboard focus ring follows the site's colour too, not the button's brand ring (#537)
+    for (const button of [dayButton(dialog, 20), within(dialog).getByRole('button', { name: '次の月' })]) {
+      expect(button).toHaveClass('focus-visible:ring-ax-teal-dark');
+      expect(button).not.toHaveClass('focus-visible:ring-brand-500');
+    }
     // 7 x 40px + 2 x 8px padding + 2px border = 298px below sm (320px - 2 x 8px = 304px);
     // 44px days from sm
     expect(dayButton(dialog, 20)).toHaveClass('h-10', 'w-10', 'sm:h-11', 'sm:w-11');

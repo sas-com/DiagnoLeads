@@ -13,6 +13,11 @@ export function getCacheHeaders(pathname: string): Record<string, string> {
     };
   }
 
+  // The QR entry of campaigns (#503): a redirect that must follow a paused campaign at once
+  if (pathname.startsWith('/q/')) {
+    return { 'Cache-Control': 'no-store' };
+  }
+
   // Files - left to Next.js. The proxy does not run on the build files nor on the folders of
   // public/ (proxy.ts); what reaches it is an icon of the app (Next.js caches it itself) or a
   // missing file, whose 404 must not be kept for a year (#68)

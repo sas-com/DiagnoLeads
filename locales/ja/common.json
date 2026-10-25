@@ -401,6 +401,10 @@
       },
       "checkpointsTitle": "{platform}からWebシステムへ移行するときに確認すること",
       "checkpointsTitleGeneric": "Webシステムへ移行するときに確認すること",
+      "accessCheckpointsTitle": {
+        "fix": "{platform}を直して使い続けるときに確認すること",
+        "replace": "{platform}から既製サービスに置き換えるときに確認すること"
+      },
       "checkpoints": {
         "source_missing": "見つからないソースの扱い（実行中のプログラムからの解析など）を、最初に確認します",
         "source_vendor_held": "保守会社や提供元が持っているソースを、調査のために出してもらえるか（契約・費用）を最初に確認します",
@@ -710,8 +714,11 @@
         "platform": "移行元",
         "note": "この結果は、ご回答の内容にもとづく目安です。詳しい見通しは、現行のシステムを確認したうえでご案内します。",
         "rediagnoseHint": "「わからない」とご回答いただいた項目が多いため、目安の精度は高くありません。社内で確認できた項目があれば、もう一度診断していただくと、より確かな目安をご覧いただけます。確かめ方がわからない場合は、個別相談で調べ方からご案内します。",
+        "accessRediagnoseHint": "「わからない」とご回答いただいた項目が多いため、目安の精度は高くありません。社内で確認できた項目があれば、もう一度診断していただくと、より確かな目安をご覧いただけます。確かめ方がわからない場合は、30分のオンライン相談で調べ方からご案内します。",
         "consultationLead": "結果の解説と移行の進め方を、個別相談でご案内します。担当者が診断結果をもとに、貴社の状況に合った進め方をご説明します。無理な営業はいたしません。",
         "consultationButton": "無料の個別相談を申し込む",
+        "accessConsultationLead": "結果の解説と進め方を、30分のオンライン相談でご案内します。担当者が診断結果をもとに、貴社の状況に合った進め方をご説明します。無理な営業はいたしません。",
+        "accessConsultationButton": "30分の無料オンライン相談を申し込む",
         "rediagnoseLead": "回答を見直す場合や、別のシステムを診断する場合は、こちらからどうぞ。",
         "rediagnoseButton": "もう一度診断する",
         "footer": "このメールは、AXマイグレーション 無料Web診断で診断結果の送付をお申し込みいただき、確認のボタンを押された方にお送りしています。"
@@ -1034,7 +1041,6 @@
     "convertedLeads": "成約数",
     "newLeadsThisMonth": "今月の新規リード",
     "conversionRate": "コンバージョン率",
-    "averageScore": "平均スコア",
     "leadTrend": "リードトレンド",
     "leadStatusBreakdown": "リードステータス内訳",
     "count": "件",
@@ -1091,13 +1097,9 @@
         "mql": "MQL",
         "mqlInterest": "MQL（関心あり）",
         "fitOnly": "ほかに適合のみ {value}件",
-        "averageScore": "平均スコア",
-        "noScore": "—",
-        "scoreSuffix": "/100",
         "count": "{value}件",
         "previous": "前の{days}日間 {value}",
         "previousWithRate": "前の{days}日間 {value} → {rate}",
-        "noPreviousScore": "前の{days}日間 スコアなし",
         "deltaLabel": "前の{days}日間との差"
       },
       "pending": {
@@ -1253,7 +1255,6 @@
     "totalLeads": "総リード数",
     "activeLeads": "アクティブリード",
     "conversionRate": "コンバージョン率",
-    "averageScore": "平均スコア",
     "createLead": "新規リード追加",
     "createLeadTitle": "新しいリードを作成",
     "createLeadDescription": "新しいリードの情報を入力してください。",
@@ -1423,6 +1424,21 @@
         "errorSoleOwner": "オーナーがあなただけの組織があるため、削除できません",
         "errorFailed": "アカウントを削除できませんでした。時間をおいてもう一度お試しください"
       },
+      "otherDevices": {
+        "title": "ほかの端末のログイン",
+        "description": "このブラウザ以外でログインしている端末やブラウザを、まとめてログアウトさせます。このブラウザはログインしたままです。なくした端末や、身に覚えのないログインがあるときに使ってください。",
+        "expiry": "ログインは、ログインした時から7日で切れます。使い続けても延びないので、7日ごとにログインし直してください。",
+        "copiedHere": "このブラウザのログインが写された心配があるときは、ここではなくパスワードを変えてください。変えると、このブラウザも新しいログインになり、ほかのログインはすべて切れます。",
+        "open": "ほかの端末からログアウト...",
+        "dialogTitle": "ほかの端末とブラウザからログアウトしますか？",
+        "dialogDescription": "このブラウザ以外のログインを、すべて終わらせます。ほかの端末やブラウザで使うときは、もう一度ログインしてください。",
+        "cancel": "キャンセル",
+        "confirm": "ログアウトさせる",
+        "signingOut": "ログアウト中...",
+        "success": "ほかの端末とブラウザからログアウトしました",
+        "error": "ほかの端末からログアウトできませんでした。時間をおいてもう一度お試しください",
+        "sessionEnded": "このブラウザのログインが切れています。ログインし直してから、もう一度お試しください"
+      },
       "profileSection": "プロフィール",
       "nameLabel": "氏名",
       "namePlaceholder": "山田 太郎",
@@ -1450,7 +1466,7 @@
       "passwordMinLength": "パスワードは8文字以上で入力してください",
       "passwordMismatch": "新しいパスワードが一致しません",
       "currentPasswordIncorrect": "現在のパスワードが正しくありません",
-      "passwordChangeSuccess": "パスワードを変更しました",
+      "passwordChangeSuccess": "パスワードを変更しました。ほかの端末やブラウザではログアウトしました",
       "passwordChangeError": "パスワードの変更に失敗しました",
       "deleteAccountSection": "アカウント削除",
       "deleteAccountWarning": "アカウントを削除すると、すべてのデータが削除されます。この操作は取り消せません。",
@@ -2162,7 +2178,9 @@
         "totalLeads": "総リード数",
         "newLeadsThisMonth": "今月の新規リード",
         "conversionRate": "コンバージョン率",
-        "vsLastPeriod": "前期間比"
+        "vsLastPeriod": "前期間比",
+        "mqlInterest": "MQL（関心あり）",
+        "mqlRate": "すべての期間のリードの {rate}%"
       },
       "tabs": {
         "overview": "概要",
@@ -2183,7 +2201,9 @@
         "conversionFunnel": "コンバージョンファネル",
         "responseTime": "応答時間",
         "sourceBreakdownPeriod": "{period}に登録されたリードの流入元",
-        "responseTimePending": "準備中（初回連絡の記録の追加後に表示）"
+        "responseTimePending": "準備中（初回連絡の記録の追加後に表示）",
+        "mqlLevels": "MQL段階の内訳",
+        "mqlLevelsDescription": "すべての期間のリード。MQL判定日のあるリード（手で MQL にしたものを含む）は関心ありに数えます。段階を押すと一覧で開きます"
       },
       "funnel": {
         "total": "総計",
@@ -2200,10 +2220,6 @@
       },
       "noData": "データがありません",
       "leadCount": "{count, number}件",
-      "comingSoon": "近日公開予定",
-      "performanceSummary": {
-        "title": "パフォーマンスの概要"
-      },
       "acquisitionCost": {
         "title": "流入元別の獲得費用",
         "description": "リードに記録した獲得費用（税抜）の合計です。費用が未記録のリードは件数にだけ含めています。",
@@ -2707,28 +2723,6 @@
     "costPerLeadBySource": "ソース別リード単価",
     "averageDealValue": "平均取引額",
     "calculate": "ROIを計算"
-  },
-  "comparison": {
-    "title": "比較分析",
-    "description": "期間間の指標を比較",
-    "currentPeriod": "現在の期間",
-    "previousPeriod": "前の期間",
-    "startDate": "開始日",
-    "endDate": "終了日",
-    "compare": "比較する",
-    "changes": "変化",
-    "insights": "インサイト",
-    "noInsights": "重要な変化は検出されませんでした",
-    "increase": "増加",
-    "decrease": "減少",
-    "metrics": {
-      "totalLeads": "総リード数",
-      "convertedLeads": "コンバージョン数",
-      "conversionRate": "コンバージョン率",
-      "averageScore": "平均スコア"
-    },
-    "bySource": "ソース別",
-    "byStatus": "ステータス別"
   },
   "axSite": {
     "meta": {
@@ -3936,7 +3930,6 @@
     },
     "score": "スコア",
     "scoreValue": "スコア {score}",
-    "noScore": "スコアなし",
     "noDealPhase": "フェーズ未設定",
     "cards": {
       "contact": "連絡先",
