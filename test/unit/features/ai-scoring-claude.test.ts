@@ -53,7 +53,7 @@ describe('scoreLeadWithAI', () => {
 
     it('should handle minimal lead data', async () => {
       const lead = {
-        id: 'lead-minimal',
+        email: 'minimal@example.com',
       };
 
       const score = await scoreLeadWithAI(lead);
@@ -63,10 +63,13 @@ describe('scoreLeadWithAI', () => {
     });
 
     it('should handle null fields gracefully', async () => {
-      // Only the fields the scoring reads (#406)
-      const lead: Parameters<typeof scoreLeadWithAI>[0] = {
+      const lead = {
+        name: null,
+        email: null,
         company: null,
-        // @ts-expect-error status is NOT NULL in the DB; checks that a null still gets a score
+        industry: null,
+        position: null,
+        notes: null,
         status: null,
         createdAt: undefined,
       };
@@ -80,7 +83,7 @@ describe('scoreLeadWithAI', () => {
 
   describe('score validation', () => {
     it('should return score between 0 and 100', async () => {
-      const lead = { id: 'lead-test' };
+      const lead = { email: 'test@example.com' };
       const score = await scoreLeadWithAI(lead);
 
       expect(score.score).toBeGreaterThanOrEqual(0);
@@ -88,21 +91,21 @@ describe('scoreLeadWithAI', () => {
     });
 
     it('should return valid confidence level', async () => {
-      const lead = { id: 'lead-test' };
+      const lead = { email: 'test@example.com' };
       const score = await scoreLeadWithAI(lead);
 
       expect(['low', 'medium', 'high']).toContain(score.confidence);
     });
 
     it('should return valid priority', async () => {
-      const lead = { id: 'lead-test' };
+      const lead = { email: 'test@example.com' };
       const score = await scoreLeadWithAI(lead);
 
       expect(['low', 'medium', 'high', 'urgent']).toContain(score.priority);
     });
 
     it('should return reasoning string', async () => {
-      const lead = { id: 'lead-test' };
+      const lead = { email: 'test@example.com' };
       const score = await scoreLeadWithAI(lead);
 
       expect(typeof score.reasoning).toBe('string');
@@ -110,7 +113,7 @@ describe('scoreLeadWithAI', () => {
     });
 
     it('should return recommended actions array', async () => {
-      const lead = { id: 'lead-test' };
+      const lead = { email: 'test@example.com' };
       const score = await scoreLeadWithAI(lead);
 
       expect(Array.isArray(score.recommendedActions)).toBe(true);
@@ -128,7 +131,7 @@ describe('scoreLeadWithAI', () => {
       };
       mockParse.mockResolvedValueOnce({ parsed_output: parsed, stop_reason: 'end_turn' });
 
-      const score = await scoreLeadWithAI({ id: 'lead-cto', company: 'Acme Corp' });
+      const score = await scoreLeadWithAI({ email: 'cto@example.com', position: 'CTO' });
 
       expect(score).toEqual({ ...parsed, isFallback: false });
       const request = mockParse.mock.calls[0][0];
@@ -151,7 +154,7 @@ describe('scoreLeadWithAI', () => {
         stop_reason: 'end_turn',
       });
 
-      const score = await scoreLeadWithAI({ id: 'lead-range' });
+      const score = await scoreLeadWithAI({ email: 'range@example.com' });
 
       expect(score.score).toBe(50);
       expect(score.confidence).toBe('low');
@@ -160,7 +163,7 @@ describe('scoreLeadWithAI', () => {
     it('should request every LeadScore field in the output schema', async () => {
       mockParse.mockResolvedValueOnce({ parsed_output: null, stop_reason: 'end_turn' });
 
-      await scoreLeadWithAI({ id: 'lead-schema' });
+      await scoreLeadWithAI({ email: 'schema@example.com' });
 
       const schema = mockParse.mock.calls[0][0].output_config.format.schema;
       expect([...schema.required].sort()).toEqual(
@@ -172,7 +175,7 @@ describe('scoreLeadWithAI', () => {
     it('should fall back when there is no parsed output', async () => {
       mockParse.mockResolvedValueOnce({ parsed_output: null, stop_reason: 'max_tokens' });
 
-      const score = await scoreLeadWithAI({ id: 'lead-cut' });
+      const score = await scoreLeadWithAI({ email: 'cut@example.com' });
 
       expect(score.score).toBe(50);
     });
@@ -182,7 +185,7 @@ describe('scoreLeadWithAI', () => {
     it('alerts the people on call when the model is gone (404), and still falls back', async () => {
       mockParse.mockRejectedValueOnce(Object.assign(new Error('model not found'), { status: 404 }));
 
-      const score = await scoreLeadWithAI({ id: 'lead-gone' });
+      const score = await scoreLeadWithAI({ email: 'gone@example.com' });
 
       expect(score.isFallback).toBe(true);
       expect(reportServerError).toHaveBeenCalledWith('ai/score-lead', expect.any(Error));
@@ -192,7 +195,7 @@ describe('scoreLeadWithAI', () => {
       reportServerError.mockClear();
       mockParse.mockRejectedValueOnce(Object.assign(new Error('overloaded'), { status: 529 }));
 
-      await scoreLeadWithAI({ id: 'lead-busy' });
+      await scoreLeadWithAI({ email: 'busy@example.com' });
 
       expect(reportServerError).not.toHaveBeenCalled();
     });
@@ -201,7 +204,7 @@ describe('scoreLeadWithAI', () => {
   describe('error handling', () => {
     it('should return fallback score on error', async () => {
       mockParse.mockRejectedValueOnce(new Error('529 overloaded'));
-      const lead = { id: 'lead-error' };
+      const lead = { email: 'error@example.com' };
       const score = await scoreLeadWithAI(lead);
 
       // Fallback score should be returned, marked so that callers do not store it

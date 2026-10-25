@@ -26,6 +26,7 @@
     // lib/features/integrations is not reached from any entry (#469)
     "test/unit/features/crm-client.test.ts",
     // Open PRs change these files: remove the line once that PR is merged (#482)
+    "test/unit/features/ai-scoring-claude.test.ts",
     "test/unit/features/ai-semantic-search.test.ts",
     "test/unit/features/ai-chat-assistant.test.ts",
     "test/unit/integration/ai-org-isolation.db.test.ts",

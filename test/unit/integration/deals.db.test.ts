@@ -69,7 +69,7 @@ describe.skipIf(!url)('deals (PostgreSQL)', () => {
     return org.id;
   }
 
-  async function callerFor(organizationId: string, role: string, name: string) {
+  async function callerFor(organizationId: string, role: schema.OrganizationRole, name: string) {
     const [user] = await pg
       .insert(users)
       .values({ email: `deals-${unique()}@example.com`, name })

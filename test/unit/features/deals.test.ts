@@ -341,7 +341,7 @@ describe('canReadDeals and canWriteDeals', () => {
       userId: user.id,
       role: name as OrganizationMember['role'],
       createdAt: new Date(),
-      updatedAt: null,
+      updatedAt: new Date(),
     });
     return {
       ability: defineAbilitiesFor(user, membershipOf(abilityRole)),
