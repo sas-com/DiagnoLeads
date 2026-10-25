@@ -12,10 +12,14 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/auth/client', () => ({ useSession: () => mocks.session }));
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: mocks.replace }),
-  usePathname: () => '/en/leads',
-}));
+vi.mock('next/navigation', () => {
+  // One object for every render, like Next's useRouter (#636)
+  const router = { replace: mocks.replace };
+  return {
+    useRouter: () => router,
+    usePathname: () => '/en/leads',
+  };
+});
 
 const renderGuard = () =>
   render(
