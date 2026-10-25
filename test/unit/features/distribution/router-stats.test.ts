@@ -4,6 +4,8 @@
  * database for the campaign of the organization. Runs the real router on a fake database; the
  * counting itself is checked against PostgreSQL in test/unit/integration/qr-scan-recording.db.test.ts.
  */
+import type { SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/db/rls', () => ({ setCurrentUser: vi.fn().mockResolvedValue(undefined) }));
@@ -47,7 +49,7 @@ const STATS = {
   deviceBreakdown: { mobile: 2, desktop: 1 },
   conversionRate: 0,
   recentScans: [
-    { id: 's1', deviceType: 'mobile', scannedAt: new Date('2026-10-29T00:00:00Z'), converted: false },
+    { id: 's1', deviceType: 'mobile', scannedOn: '2026-10-29', converted: false },
   ],
 };
 
@@ -82,5 +84,10 @@ describe('distribution.getCampaignStats (#41)', () => {
       caller().distribution.getCampaignStats({ organizationId: ORG_ID, campaignId: CAMPAIGN_ID })
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     expect(mocks.campaignScanStats).not.toHaveBeenCalled();
+    // The campaign is looked up within the organization: the id of another organization's
+    // campaign finds nothing
+    const { sql, params } = new PgDialect().sqlToQuery(mocks.findFirst.mock.calls[0][0].where as SQL);
+    expect(sql).toBe('("qr_campaigns"."id" = $1 and "qr_campaigns"."organization_id" = $2)');
+    expect(params).toEqual([CAMPAIGN_ID, ORG_ID]);
   });
 });

@@ -2,6 +2,7 @@ import { GET, maxDuration } from '@/app/q/[code]/route';
 import {
   QR_ENTRY_RATE_LIMITS,
   QR_ENTRY_TOO_MANY_REQUESTS_TEXT,
+  QR_SCAN_DAILY_CAP,
 } from '@/lib/features/distribution/limits';
 import type { QrEntryCampaign } from '@/lib/features/distribution/short-code-entry';
 import { NextRequest } from 'next/server';
@@ -25,7 +26,8 @@ vi.mock('@/lib/features/distribution/short-code-entry', async (importOriginal) =
   ...(await importOriginal<typeof import('@/lib/features/distribution/short-code-entry')>()),
   findOpenQrCampaign: mocks.findOpenQrCampaign,
 }));
-vi.mock('@/lib/features/distribution/scans', () => ({
+vi.mock('@/lib/features/distribution/scans', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/features/distribution/scans')>()),
   recordQrScan: mocks.recordQrScan,
 }));
 vi.mock('@/lib/features/diagnosis-builder/public-diagnosis', () => ({
@@ -98,7 +100,10 @@ describe('GET /q/[code]', () => {
     mocks.consumeRateLimit.mockResolvedValue({ allowed: true, count: 1, retryAfterSeconds: 600 });
     mocks.recordQrScan.mockResolvedValue(true);
   });
-  afterEach(() => vi.unstubAllEnvs());
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.useRealTimers();
+  });
 
   it("redirects the AX organization's campaign to the AX diagnosis with the campaign's UTM parameters, not the request's", async () => {
     const res = await scan('AbCd2345', {
@@ -271,7 +276,12 @@ describe('GET /q/[code]', () => {
       const res = await scan('AbCd2345', { headers: phone });
       expect(res.status).toBe(307);
       expect(mocks.recordQrScan).toHaveBeenCalledTimes(1);
-      expect(mocks.recordQrScan).toHaveBeenCalledWith({ name: 'app-db' }, CAMPAIGN, 'mobile');
+      expect(mocks.recordQrScan).toHaveBeenCalledWith(
+        { name: 'app-db' },
+        CAMPAIGN,
+        'mobile',
+        expect.any(Date)
+      );
 
       await scan('AbCd2345', { headers: phone });
       expect(mocks.recordQrScan).toHaveBeenCalledTimes(2);
@@ -367,6 +377,75 @@ describe('GET /q/[code]', () => {
       const res = await scan('AbCd2345', { headers: phone, method: 'HEAD' });
       expect(res.status).toBe(307);
       expect(mocks.recordQrScan).not.toHaveBeenCalled();
+    });
+
+    it('tells the device from the first 512 characters of the User-Agent only', async () => {
+      // deviceOf's tablet pattern takes time in the square of the length: a long header sent on
+      // purpose is cut first. 「Mobile」 past the cut is not read, so this counts as a tablet
+      const userAgent = `${'Android '.repeat(20_000)}Mobile`;
+      expect((await scan('AbCd2345', { headers: { 'user-agent': userAgent } })).status).toBe(307);
+      expect(mocks.recordQrScan.mock.calls[0][2]).toBe('tablet');
+    });
+
+    describe("the campaign's daily cap", () => {
+      it('counts each scan against the cap of its campaign and day in Japan before recording it', async () => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        // 00:30 on 29 October in Japan
+        vi.setSystemTime(new Date('2026-10-28T15:30:00Z'));
+        expect((await scan('AbCd2345', { headers: phone })).status).toBe(307);
+        expect(mocks.consumeRateLimit).toHaveBeenCalledTimes(1);
+        const [database, rule, identifier, now] = mocks.consumeRateLimit.mock.calls[0];
+        expect(database).toEqual({ name: 'app-db' });
+        expect(rule).toBe(QR_SCAN_DAILY_CAP);
+        expect(identifier).toBe('c1:2026-10-29');
+        // The scan is written for the same moment the cap counted
+        expect(mocks.recordQrScan.mock.calls[0][3]).toBe(now);
+      });
+
+      it('lets a campaign record 2,000 scans a day: twenty times an event of 100 people (#663)', () => {
+        expect(QR_SCAN_DAILY_CAP).toMatchObject({ limit: 2_000, windowMs: 24 * 60 * 60 * 1000 });
+      });
+
+      it('past the cap still sends the visitor on, records nothing, and tells the people on call once', async () => {
+        const warnLog = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        mocks.consumeRateLimit.mockResolvedValue({
+          allowed: false,
+          count: QR_SCAN_DAILY_CAP.limit + 1,
+          retryAfterSeconds: 3600,
+        });
+        const res = await scan('AbCd2345', { headers: phone });
+        expect(res.status).toBe(307);
+        expect(res.headers.get('location')).toBe(AX);
+        expect(mocks.recordQrScan).not.toHaveBeenCalled();
+        expect(mocks.reportServerError).toHaveBeenCalledTimes(1);
+        const [where, error] = mocks.reportServerError.mock.calls[0];
+        expect(where).toBe('qr-entry/scan-daily-cap');
+        expect((error as Error).name).toBe('QrScanDailyCapReached');
+        expect(warnLog).toHaveBeenCalledTimes(1);
+        expect(warnLog.mock.calls[0][1]).toEqual({ campaignId: 'c1', day: expect.any(String) });
+
+        // The scans after it: still sent on, neither recorded nor reported again
+        mocks.consumeRateLimit.mockResolvedValue({
+          allowed: false,
+          count: QR_SCAN_DAILY_CAP.limit + 2,
+          retryAfterSeconds: 3600,
+        });
+        expect((await scan('AbCd2345', { headers: phone })).status).toBe(307);
+        expect(mocks.recordQrScan).not.toHaveBeenCalled();
+        expect(mocks.reportServerError).toHaveBeenCalledTimes(1);
+        expect(warnLog).toHaveBeenCalledTimes(1);
+        warnLog.mockRestore();
+      });
+
+      it('still sends the visitor on when the cap cannot be counted, and reports it as a failed write', async () => {
+        mocks.consumeRateLimit.mockRejectedValue(new Error('connection refused'));
+        const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+        expect((await scan('AbCd2345', { headers: phone })).status).toBe(307);
+        expect(mocks.recordQrScan).not.toHaveBeenCalled();
+        expect(errorLog).toHaveBeenCalledWith('QR scan record error:', 'Error');
+        expect(mocks.reportServerError).toHaveBeenCalledWith('qr-entry/scan', expect.any(Error));
+        errorLog.mockRestore();
+      });
     });
   });
 });

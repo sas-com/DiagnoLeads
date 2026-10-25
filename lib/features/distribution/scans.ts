@@ -67,8 +67,12 @@ export interface CampaignScanStats {
   deviceBreakdown: Record<string, number>;
   /** Share of the recorded scans that became a lead, in percent with two decimals */
   conversionRate: number;
-  /** The latest scans, without the columns that could hold who scanned */
-  recentScans: { id: string; deviceType: string | null; scannedAt: Date; converted: boolean }[];
+  /**
+   * The latest scans, without the columns that could hold who scanned. scannedOn is the day in
+   * Japan ('YYYY-MM-DD'): a scan keeps no time of day, and the column has no time zone, so it is
+   * never handed out as a time
+   */
+  recentScans: { id: string; deviceType: string | null; scannedOn: string; converted: boolean }[];
 }
 
 /**
@@ -96,7 +100,7 @@ export async function campaignScanStats(
     .select({
       id: qrScans.id,
       deviceType: qrScans.deviceType,
-      scannedAt: qrScans.scannedAt,
+      scannedOn: sql<string>`to_char(${qrScans.scannedAt}, 'YYYY-MM-DD')`,
       converted: qrScans.converted,
     })
     .from(qrScans)

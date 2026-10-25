@@ -6,8 +6,9 @@ import { clientIp, ipBlock } from '@/lib/features/diagnostics/request-guard';
 import {
   QR_ENTRY_RATE_LIMITS,
   QR_ENTRY_TOO_MANY_REQUESTS_TEXT,
+  QR_SCAN_DAILY_CAP,
 } from '@/lib/features/distribution/limits';
-import { type QrScanDevice, recordQrScan } from '@/lib/features/distribution/scans';
+import { type QrScanDevice, recordQrScan, scanDayOf } from '@/lib/features/distribution/scans';
 import {
   type QrEntryCampaign,
   findOpenQrCampaign,
@@ -62,6 +63,13 @@ function receivesAxDiagnosis(organizationId: string): boolean {
 }
 
 /**
+ * The part of a User-Agent the device is told from. A browser's is a few hundred characters; the
+ * tablet pattern of deviceOf takes time in the square of the length, so a long header sent on
+ * purpose is cut before the patterns run (they run before the redirect is answered)
+ */
+const USER_AGENT_CHARS = 512;
+
+/**
  * The kind of device a scan is recorded with, or null when the request is not a scan:
  * - a bot (link previews, crawlers, monitors, no User-Agent), excluded as /api/collect excludes
  *   them from the page views
@@ -70,18 +78,41 @@ function receivesAxDiagnosis(organizationId: string): boolean {
  */
 function scannedDevice(req: NextRequest): QrScanDevice | null {
   if (req.method !== 'GET') return null;
-  const userAgent = req.headers.get('user-agent');
+  const userAgent = req.headers.get('user-agent')?.slice(0, USER_AGENT_CHARS);
   if (!userAgent || isBot(userAgent)) return null;
   return deviceOf(userAgent);
 }
 
+/** What the alert holds when a campaign's scans pass the daily cap: only this name */
+function dailyCapReached(): Error {
+  const error = new Error('QR scans of a campaign reached the daily cap');
+  error.name = 'QrScanDailyCapReached';
+  return error;
+}
+
 /**
  * Record a scan the entry has sent on (#41). Run after the response: the visitor never waits
- * for the write, and a failed write is reported like the entry's other errors, never answered
+ * for the write, and a failed write is reported like the entry's other errors, never answered.
+ * Counted against the campaign's daily cap first (QR_SCAN_DAILY_CAP): past it the scan is not
+ * written, and the one scan that goes past it tells the people on call
  */
 async function recordScan(campaign: QrEntryCampaign, device: QrScanDevice): Promise<void> {
   try {
-    await recordQrScan(db, campaign, device);
+    const now = new Date();
+    const day = scanDayOf(now);
+    // Counted atomically, so exactly one scan sees limit + 1 and the alert goes out once a day
+    const cap = await consumeRateLimit(db, QR_SCAN_DAILY_CAP, `${campaign.campaignId}:${day}`, now);
+    if (!cap.allowed) {
+      if (cap.count === QR_SCAN_DAILY_CAP.limit + 1) {
+        console.warn('QR scans reached the daily cap of the campaign; no more are recorded today', {
+          campaignId: campaign.campaignId,
+          day,
+        });
+        await reportServerError('qr-entry/scan-daily-cap', dailyCapReached());
+      }
+      return;
+    }
+    await recordQrScan(db, campaign, device, now);
   } catch (error) {
     // The error of the database, never the campaign
     console.error('QR scan record error:', error instanceof Error ? error.name : 'unknown');
@@ -106,7 +137,8 @@ async function recordScan(campaign: QrEntryCampaign, device: QrScanDevice): Prom
  * locale routing would otherwise redirect it first.
  *
  * Each scan sent on is recorded after the response (#41, recordScan): counted after the rate
- * limit, one statement per scan, never a 404 or a 429.
+ * limit and against the campaign's daily cap, the row and the count in one statement, never a
+ * 404 or a 429.
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;

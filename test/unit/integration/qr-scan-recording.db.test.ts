@@ -2,8 +2,9 @@
  * Recording the scans of a QR campaign at its public entry (GET /q/<code>, #41) against
  * PostgreSQL: each scan the entry sends on adds one qr_scans row of the campaign's organization
  * and counts it in qr_campaigns.scan_count, also when many arrive at once; a 404, a 429, a bot
- * and a HEAD request record nothing. A scan keeps the kind of device and the day only (decision
- * 2026-10-23-site-visit-measurement), and getCampaignStats counts what was recorded.
+ * and a HEAD request record nothing, nor a scan past the campaign's daily cap. A scan keeps the
+ * kind of device and the day only (decision 2026-10-23-site-visit-measurement), and
+ * getCampaignStats counts what was recorded.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/dl_test \
@@ -24,7 +25,7 @@ import {
 } from '@/lib/db/schema';
 import { hashDefinition } from '@/lib/features/diagnosis-builder/versions';
 import { consumeRateLimit } from '@/lib/features/diagnostics/rate-limit';
-import { QR_ENTRY_RATE_LIMITS } from '@/lib/features/distribution/limits';
+import { QR_ENTRY_RATE_LIMITS, QR_SCAN_DAILY_CAP } from '@/lib/features/distribution/limits';
 import { recordQrScan, scanDayOf } from '@/lib/features/distribution/scans';
 import { appRouter } from '@/server/routers/_app';
 import { eq, inArray, sql } from 'drizzle-orm';
@@ -185,7 +186,9 @@ describe.skipIf(!url)('QR scan recording (PostgreSQL)', () => {
   });
 
   afterAll(async () => {
-    await pg.execute(sql`delete from public_rate_limits where key like ${`${QR_ENTRY_RATE_LIMITS.perIp.name}:%`}`);
+    for (const rule of [QR_ENTRY_RATE_LIMITS.perIp, QR_SCAN_DAILY_CAP]) {
+      await pg.execute(sql`delete from public_rate_limits where key like ${`${rule.name}:%`}`);
+    }
     if (organizationIds.length > 0) {
       await pg.delete(organizations).where(inArray(organizations.id, organizationIds));
     }
@@ -280,6 +283,35 @@ describe.skipIf(!url)('QR scan recording (PostgreSQL)', () => {
     await expectNothingRecorded(campaign.id);
   });
 
+  it("stops recording a campaign's scans past its daily cap, still sending them on, and warns once", async () => {
+    const campaign = await createCampaign(orgA);
+    const other = await createCampaign(orgA);
+    // The campaign has recorded its 2,000 of the day (counted as the entry counts them)
+    await consumeRateLimit(
+      pg,
+      QR_SCAN_DAILY_CAP,
+      `${campaign.id}:${scanDayOf()}`,
+      new Date(),
+      QR_SCAN_DAILY_CAP.limit
+    );
+    const warnLog = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    for (let i = 0; i < 3; i++) {
+      const res = await scan(campaign.code);
+      expect(res.status).toBe(307);
+      expect(res.headers.get('location')).toMatch(/^\/ja\/ax-diagnosis\?/);
+    }
+    await expectNothingRecorded(campaign.id);
+    // Only the scan that went past the cap is reported
+    expect(warnLog).toHaveBeenCalledTimes(1);
+    expect(warnLog.mock.calls[0][1]).toMatchObject({ campaignId: campaign.id });
+    warnLog.mockRestore();
+
+    // The cap is the campaign's: another campaign of the organization still records
+    expect((await scan(other.code)).status).toBe(307);
+    expect(await scansOf(other.id)).toHaveLength(1);
+    expect(await scanCountOf(other.id)).toBe(1);
+  });
+
   it('counts every scan when many arrive at once: the count and the rows agree', async () => {
     const campaign = await createCampaign(orgA);
     const scans = 40;
@@ -327,6 +359,7 @@ describe.skipIf(!url)('QR scan recording (PostgreSQL)', () => {
   });
 
   it('getCampaignStats counts the scans the entry recorded, of that campaign only', async () => {
+    const day = scanDayOf();
     const campaign = await createCampaign(orgA);
     const other = await createCampaign(orgA);
     await scan(campaign.code);
@@ -358,9 +391,11 @@ describe.skipIf(!url)('QR scan recording (PostgreSQL)', () => {
       deviceBreakdown: { mobile: 2, desktop: 1 },
     });
     expect(stats.recentScans).toHaveLength(3);
-    // The latest scans carry no column that could hold who scanned
+    // The latest scans carry no column that could hold who scanned, and the day as a day
     for (const recent of stats.recentScans) {
-      expect(Object.keys(recent).sort()).toEqual(['converted', 'deviceType', 'id', 'scannedAt']);
+      expect(Object.keys(recent).sort()).toEqual(['converted', 'deviceType', 'id', 'scannedOn']);
+      expect(recent.scannedOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect([day, scanDayOf()]).toContain(recent.scannedOn);
     }
   });
 });

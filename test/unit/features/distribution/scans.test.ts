@@ -52,10 +52,10 @@ describe('recordQrScan', () => {
   it('scopes the count to the campaign of the organization', async () => {
     const { db, execute } = executeDb([{ id: 's1' }]);
     await recordQrScan(db, CAMPAIGN, 'desktop');
-    const { sql } = compiled(execute.mock.calls[0][0]);
-    expect(sql).toContain(
-      'where "qr_campaigns"."id" = $1\n        and "qr_campaigns"."organization_id" = $2'
-    );
+    const { sql, params } = compiled(execute.mock.calls[0][0]);
+    // The update is of the campaign's row only when both the id and the organization match
+    expect(sql).toMatch(/where "qr_campaigns"\."id" = \$1\s+and "qr_campaigns"\."organization_id" = \$2/);
+    expect(params.slice(0, 2)).toEqual([CAMPAIGN.campaignId, CAMPAIGN.organizationId]);
   });
 
   it('keeps nothing of who scanned: no address, User-Agent, location or session', async () => {
@@ -90,7 +90,7 @@ describe('campaignScanStats', () => {
     recent: unknown[] = []
   ) {
     const calls = { where: [] as unknown[], limit: [] as number[] };
-    const select = vi.fn(() => ({
+    const select = vi.fn((_fields: Record<string, unknown>) => ({
       from: () => ({
         where: (condition: unknown) => {
           calls.where.push(condition);
@@ -106,7 +106,7 @@ describe('campaignScanStats', () => {
         },
       }),
     }));
-    return { db: { select } as unknown as Database, calls };
+    return { db: { select } as unknown as Database, calls, select };
   }
 
   const SCOPE = { organizationId: 'org-a', campaignId: 'c1' };
@@ -145,10 +145,17 @@ describe('campaignScanStats', () => {
   });
 
   it('lists only the latest 10 scans, both reads scoped to the campaign of the organization', async () => {
-    const recent = [{ id: 's1', deviceType: 'mobile', scannedAt: new Date(), converted: false }];
-    const { db, calls } = statsDb([{ deviceType: 'mobile', scans: 1, converted: 0 }], recent);
+    const recent = [{ id: 's1', deviceType: 'mobile', scannedOn: '2026-10-29', converted: false }];
+    const { db, calls, select } = statsDb([{ deviceType: 'mobile', scans: 1, converted: 0 }], recent);
     expect((await campaignScanStats(db, SCOPE)).recentScans).toBe(recent);
     expect(calls.limit).toEqual([10]);
+    // Four columns, the day as 'YYYY-MM-DD' (the column holds the day in Japan at midnight with no
+    // time zone, which a Date would show as 09:00 in Japan)
+    const fields = select.mock.calls[1][0];
+    expect(Object.keys(fields)).toEqual(['id', 'deviceType', 'scannedOn', 'converted']);
+    expect(compiled(fields.scannedOn as SQL).sql).toBe(
+      `to_char("qr_scans"."scanned_at", 'YYYY-MM-DD')`
+    );
     expect(calls.where).toHaveLength(2);
     for (const condition of calls.where) {
       const { sql, params } = compiled(condition as SQL);
