@@ -1034,7 +1034,6 @@
     "convertedLeads": "Converted",
     "newLeadsThisMonth": "New Leads This Month",
     "conversionRate": "Conversion Rate",
-    "averageScore": "Average Score",
     "leadTrend": "Lead Trend",
     "leadStatusBreakdown": "Lead Status Breakdown",
     "count": "",
@@ -1091,13 +1090,9 @@
         "mql": "MQL",
         "mqlInterest": "MQL (interested)",
         "fitOnly": "Also {value} fit only",
-        "averageScore": "Average score",
-        "noScore": "—",
-        "scoreSuffix": "/100",
         "count": "{value}",
         "previous": "Previous {days} days: {value}",
         "previousWithRate": "Previous {days} days: {value} → {rate}",
-        "noPreviousScore": "Previous {days} days: no score",
         "deltaLabel": "Change from the previous {days} days"
       },
       "pending": {
@@ -1231,6 +1226,7 @@
   "leads": {
     "pipeline": "Sales Pipeline",
     "inflowSource": "Inflow Source",
+    "tags": "Tags",
     "conversionPoint": "Conversion Point",
     "dealPhase": "Deal Phase",
     "targetSystem": "Target System",
@@ -1252,7 +1248,6 @@
     "totalLeads": "Total Leads",
     "activeLeads": "Active Leads",
     "conversionRate": "Conversion Rate",
-    "averageScore": "Average Score",
     "createLead": "Add New Lead",
     "createLeadTitle": "Create New Lead",
     "createLeadDescription": "Enter information for the new lead.",
@@ -1295,6 +1290,17 @@
     "deleteConfirmTitle": "Delete this lead?",
     "deleteConfirmMessage": "This action cannot be undone. All data for {name} will be permanently deleted.",
     "deleting": "Deleting...",
+    "toast": {
+      "creating": "Creating the lead...",
+      "created": "Lead created",
+      "createFailed": "Failed to create the lead",
+      "updating": "Updating the lead...",
+      "updated": "Lead updated",
+      "updateFailed": "Failed to update the lead",
+      "deleting": "Deleting the lead...",
+      "deleted": "Lead deleted",
+      "deleteFailed": "Failed to delete the lead"
+    },
     "rowsPerPage": "Rows per page",
     "addFirstLead": "Add your first lead",
     "bulk": {
@@ -2150,7 +2156,9 @@
         "totalLeads": "Total Leads",
         "newLeadsThisMonth": "New Leads This Month",
         "conversionRate": "Conversion Rate",
-        "vsLastPeriod": "vs. last period"
+        "vsLastPeriod": "vs. last period",
+        "mqlInterest": "MQL (interested)",
+        "mqlRate": "{rate}% of leads of all time"
       },
       "tabs": {
         "overview": "Overview",
@@ -2161,6 +2169,8 @@
       "charts": {
         "leadTrend": "Lead Trend",
         "totalLeads": "Total Leads",
+        "total": "Total",
+        "leads": "Leads",
         "convertedLeads": "Converted",
         "statusBreakdown": "Status Breakdown",
         "statusBreakdownPeriod": "Leads registered: {period}",
@@ -2169,19 +2179,25 @@
         "conversionFunnel": "Conversion Funnel",
         "responseTime": "Response Time",
         "sourceBreakdownPeriod": "Inflow source of leads registered: {period}",
-        "responseTimePending": "Coming soon (shown once first contacts are recorded)"
+        "responseTimePending": "Coming soon (shown once first contacts are recorded)",
+        "mqlLevels": "Leads by MQL level",
+        "mqlLevelsDescription": "Leads of all time. A lead with an MQL date (also one set by hand) counts as interested. Click a level to open the list"
       },
       "funnel": {
         "total": "Total",
         "conversionRate": "Conversion Rate",
         "overallConversion": "Overall Conversion Rate",
-        "fromInitial": "From initial lead to conversion"
+        "fromInitial": "From initial lead to conversion",
+        "averageDays": "Average conversion time: {days} days"
+      },
+      "responseTimePeriods": {
+        "withinHour": "< 1 hour",
+        "withinDay": "1-24 hours",
+        "withinThreeDays": "1-3 days",
+        "overThreeDays": "3+ days"
       },
       "noData": "No data available",
-      "comingSoon": "Coming soon",
-      "performanceSummary": {
-        "title": "Performance summary"
-      },
+      "leadCount": "{count, number}",
       "acquisitionCost": {
         "title": "Acquisition cost by inflow source",
         "description": "Sum of the acquisition cost (excl. tax) recorded on leads. Leads without a recorded cost count as leads only.",
@@ -2685,28 +2701,6 @@
     "costPerLeadBySource": "Cost per Lead by Source",
     "averageDealValue": "Average Deal Value",
     "calculate": "Calculate ROI"
-  },
-  "comparison": {
-    "title": "Comparison Analysis",
-    "description": "Compare metrics between time periods",
-    "currentPeriod": "Current Period",
-    "previousPeriod": "Previous Period",
-    "startDate": "Start Date",
-    "endDate": "End Date",
-    "compare": "Compare",
-    "changes": "Changes",
-    "insights": "Insights",
-    "noInsights": "No significant changes detected",
-    "increase": "increase",
-    "decrease": "decrease",
-    "metrics": {
-      "totalLeads": "Total Leads",
-      "convertedLeads": "Converted Leads",
-      "conversionRate": "Conversion Rate",
-      "averageScore": "Average Score"
-    },
-    "bySource": "By Source",
-    "byStatus": "By Status"
   },
   "axSite": {
     "meta": {
@@ -3914,7 +3908,6 @@
     },
     "score": "Score",
     "scoreValue": "Score {score}",
-    "noScore": "No score",
     "noDealPhase": "No phase",
     "cards": {
       "contact": "Contact",
@@ -4475,6 +4468,7 @@
     "change": "Change to another option",
     "pick": "Pick an option",
     "confirmDone": "Meeting confirmed",
+    "confirmToast": "{done}. {email}",
     "emailResult": {
       "sent": "Confirmation sent to the respondent",
       "not_requested": "No email was sent",
@@ -5001,6 +4995,7 @@
     },
     "agency": {
       "section": "Sales agency's call",
+      "inParens": "({name})",
       "hint": "The contact and direct phone are shown only to sales and to whoever added the row. Put the next possible contact in \"Next action date\": turned-down rows appear under \"Re-approach\" 30 days before it."
     },
     "calls": {

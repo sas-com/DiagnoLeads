@@ -3,7 +3,8 @@
  * INTERNAL_SERVER_ERROR the database write would raise (which alerts whoever is on call)
  */
 import { organizationProcedure, protectedProcedure, publicProcedure, router } from '@/lib/trpc/init';
-import { NUL_INPUT_MESSAGE, containsNul } from '@/lib/trpc/reject-nul';
+import { NUL_INPUT_MESSAGE } from '@/lib/trpc/reject-nul';
+import { containsNul } from '@/lib/utils/contains-nul';
 import { appRouter } from '@/server/routers/_app';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';

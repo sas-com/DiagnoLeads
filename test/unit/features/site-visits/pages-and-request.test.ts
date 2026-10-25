@@ -126,6 +126,14 @@ describe('request details', () => {
     expect(visitParamsOf(`?utm_source=${'y'.repeat(500)}`).utmSource).toHaveLength(200);
     expect(visitParamsOf(undefined)).toMatchObject({ utmSource: null, fromRef: null });
   });
+
+  it('drops a utm_* value with NUL, which the database cannot store (#648)', () => {
+    expect(visitParamsOf('?utm_source=%00&utm_medium=a%00b&utm_campaign=ok')).toMatchObject({
+      utmSource: null,
+      utmMedium: null,
+      utmCampaign: 'ok',
+    });
+  });
 });
 
 describe('visitor hash', () => {
