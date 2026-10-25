@@ -95,6 +95,14 @@ describe('crossLinkHref', () => {
 });
 
 describe('readTrackingParams', () => {
+  it('cuts long values without splitting a character (#754)', () => {
+    const campaign = encodeURIComponent(`${'a'.repeat(199)}😀`);
+    window.history.replaceState(null, '', `/ja/ax-diagnosis?utm_campaign=${campaign}&ref=${'r'.repeat(99)}😀`);
+    const tracking = readTrackingParams();
+    expect(tracking.utmCampaign).toBe('a'.repeat(199));
+    expect(tracking.ref).toBe('r'.repeat(99));
+  });
+
   it('reads a from of the site with the utm_*', () => {
     window.history.replaceState(null, '', '/ja/ax-migration/access?from=ax-lp-targets-access&utm_source=google');
     expect(readTrackingParams()).toMatchObject({

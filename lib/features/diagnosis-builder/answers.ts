@@ -1,3 +1,4 @@
+import { hasLoneSurrogate } from '@/lib/utils/clip-text';
 import { type AnswerCheck, checkChoiceAnswer, validateAnswersWith } from '../diagnostics/engine';
 import type { AnswerValidationIssue } from '../diagnostics/types';
 import type { DiagnosisAnswerValue, DiagnosisDefinition, DiagnosisQuestion } from './definition';
@@ -51,6 +52,9 @@ function checkAnswer(
     case 'text':
       if (typeof value !== 'string') return { ok: false, code: 'invalid_type' };
       if (value.length > question.maxLength) return { ok: false, code: 'too_long' };
+      // Answers are stored as jsonb, which rejects a lone surrogate and would fail the whole
+      // submission; a browser never sends one, so it is refused rather than repaired (#754)
+      if (hasLoneSurrogate(value)) return { ok: false, code: 'invalid_type' };
       return { ok: true, value };
   }
 }
