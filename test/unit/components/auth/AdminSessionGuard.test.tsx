@@ -79,6 +79,10 @@ describe('AdminSessionGuard', () => {
     expect(mocks.replace).toHaveBeenCalledExactlyOnceWith(
       `/en/login?callbackUrl=${encodeURIComponent('/en/leads?leadId=1')}`
     );
+
+    // Another render with the same signed-out session must not send the visitor again
+    rerender(guard());
+    expect(mocks.replace).toHaveBeenCalledOnce();
   });
 
   it('stays on the page when the check ends with a session', () => {
