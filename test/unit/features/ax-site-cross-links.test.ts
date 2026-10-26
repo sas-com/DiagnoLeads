@@ -39,6 +39,8 @@ describe('isAxFrom', () => {
   it('accepts a page and a link placement of the site only', () => {
     expect(isAxFrom('ax-lp-targets-access')).toBe(true);
     expect(isAxFrom('ax-access-lp-targets')).toBe(true);
+    // The support end column under its section of the Access page (#458)
+    expect(isAxFrom('ax-access-lp-support-end')).toBe(true);
     expect(isAxFrom('ax-access-lp-footer')).toBe(true);
     expect(isAxFrom('ax-column-body')).toBe(true);
     // The column under the diagnosis result, on each page the diagnosis is shown (#363)

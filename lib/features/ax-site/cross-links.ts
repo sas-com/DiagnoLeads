@@ -30,6 +30,8 @@ export const AX_LINK_PLACEMENTS = [
   'targets',
   'hosts',
   'paths',
+  // The Access page's link to the column on the end of Office support, under that section (#458)
+  'support-end',
   'related',
   'body',
   'end',
