@@ -1,8 +1,9 @@
 /**
  * Deals (#435) through the routers on a real PostgreSQL: defaults, the history and audit rows,
  * how deals set their lead's status and deal phase (with the lead's audit row, webhooks and the
- * handoff notice), computed again on every change and deletion, and refused by hand (#444), the board's totals and filters, permissions and organization isolation, and two deals
- * of one lead changed at the same time.
+ * handoff notice, and whether a change handed the lead off, #720), computed again on every change
+ * and deletion, and refused by hand (#444), the board's totals and filters, permissions and
+ * organization isolation, and two deals of one lead changed at the same time.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/diagnoleads_test \
@@ -19,6 +20,7 @@ import {
   organizations,
   users,
 } from '@/lib/db/schema';
+import { handedOffOn } from '@/lib/features/lead-handoff/handoff';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { appRouter } from '@/server/routers/_app';
 import { and, asc, eq } from 'drizzle-orm';
@@ -298,6 +300,44 @@ describe.skipIf(!url)('deals (PostgreSQL)', () => {
       expect(audits[2].metadata).toEqual({ leadId: lead.id, changedText: ['nextStep'] });
       expect(audits[3].changes).toEqual({ before: {}, after: {} });
       expect(JSON.stringify(audits)).not.toContain('見積を送る');
+    });
+
+    it('answers whether it handed the lead off: only the first time it leaves the initial hearing (#720)', async () => {
+      const lead = await createLead(orgA);
+      const deal = await adminA.deals.create({ organizationId: orgA, leadId: lead.id, name: '調査' });
+      expect(sent.notifyLeadHandoff).not.toHaveBeenCalled();
+
+      const first = await memberA.deals.update({
+        organizationId: orgA,
+        dealId: deal.id,
+        stage: 'discovery',
+      });
+      // The screens offer no undo then: moving back takes back neither the sheet nor the day
+      expect(first).toMatchObject({ stage: 'discovery', probability: 20, handedOff: true });
+      expect(sent.notifyLeadHandoff).toHaveBeenCalledTimes(1);
+      expect(handedOffOn((await leadOf(lead.id)).dealPhaseReachedAt)).toBe(jstDate());
+
+      const back = await memberA.deals.update({
+        organizationId: orgA,
+        dealId: deal.id,
+        stage: 'qualification',
+      });
+      expect(back.handedOff).toBe(false);
+      expect(await leadOf(lead.id)).toMatchObject({ dealPhase: 'initial_hearing' });
+      const again = await memberA.deals.update({
+        organizationId: orgA,
+        dealId: deal.id,
+        stage: 'discovery',
+      });
+      expect(again.handedOff).toBe(false);
+      // A change that leaves the lead as it is
+      const tuned = await memberA.deals.update({
+        organizationId: orgA,
+        dealId: deal.id,
+        nextStep: '見積を送る',
+      });
+      expect(tuned.handedOff).toBe(false);
+      expect(sent.notifyLeadHandoff).toHaveBeenCalledTimes(1);
     });
 
     it('closes won deals on today and reopens them without the close day', async () => {

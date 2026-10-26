@@ -151,51 +151,7 @@ bash scripts/prod-dump.sh      # Dump production as the read-only role
 
 ## Project Structure
 
-```
-diagnoleads-v2/
-├── app/                    # Next.js App Router
-│   ├── (auth)/            # Authentication pages
-│   ├── (marketing)/       # Marketing pages
-│   ├── (app)/             # Main application
-│   ├── api/               # API routes
-│   └── actions/           # Server Actions
-├── components/            # React components
-│   ├── ui/               # UI components (shadcn/ui)
-│   └── features/         # Feature components
-│       └── leads/        # Lead management components
-├── hooks/                 # 🆕 React hooks
-│   ├── use-leads.ts      # Lead data hooks
-│   └── use-organization.ts # Organization context
-├── lib/                   # Utilities & configs
-│   ├── db/               # Database schema & client
-│   ├── multi-tenant/     # 🆕 Multi-tenant logic
-│   │   ├── middleware/   # Organization middleware
-│   │   ├── helpers/      # Membership helpers
-│   │   └── types.ts      # Multi-tenant types
-│   ├── features/         # 🆕 Feature-based modules
-│   │   └── leads/        # Lead management
-│   │       ├── api/      # tRPC router
-│   │       └── types/    # Schemas & types
-│   ├── trpc/             # tRPC configuration
-│   ├── validation/       # Zod schemas
-│   ├── types/            # TypeScript types
-│   └── utils/            # Helper functions
-├── server/                # tRPC server
-│   └── routers/          # API routers
-├── docs/                  # 📚 Documentation
-│   ├── MULTI_TENANT_STRATEGY.md  # 🆕 Holdings/Group strategy
-│   └── DIRECTORY_IMPROVEMENT_PLAN.md
-├── openspec/              # 📋 OpenSpec-driven development
-│   ├── specs/            # Architecture specs (Source of Truth)
-│   └── changes/          # Change proposals
-├── test/                  # Tests
-│   ├── unit/             # Unit tests
-│   │   ├── trpc/         # tRPC middleware tests
-│   │   └── features/     # Feature tests
-│   ├── integration/      # Integration tests
-│   └── e2e/              # E2E tests
-└── public/                # Static assets
-```
+ディレクトリの構成・層と依存の向き・機能を1つ足すときに触る場所は、[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) にまとめています。import の向きは `bun run arch:check`（CI の Lint & Type Check）で確かめています。
 
 ## 🌐 Internationalization (i18n)
 

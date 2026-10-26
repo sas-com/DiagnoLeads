@@ -86,17 +86,10 @@ describe('Analytics Router', () => {
       mockDb.where.mockResolvedValueOnce([counts]);
     };
 
-    it('uses nested "reached" counts so stage rates stay within 100%', async () => {
+    // The stages of the lead lifecycle (#802); 再育成 is counted beside them
+    it('uses nested "reached" counts of the lifecycle stages so rates stay within 100%', async () => {
       mockDb.query.organizationMembers.findFirst.mockResolvedValue(mockMembership);
-      mockCounts({
-        total: 100,
-        new: 40,
-        nurturing: 30,
-        negotiating: 10,
-        won: 10,
-        reachedNurturing: 55, // nurturing + negotiating + won + 5 lost after negotiation
-        reachedNegotiation: 25, // negotiating + won + 5 lost after negotiation
-      });
+      mockCounts({ total: 100, mql: 40, deal: 25, sql: 15, won: 10, nurturing: 12 });
 
       const caller = appRouter.createCaller(mockContext);
       const result = await caller.analytics.getConversionFunnel({
@@ -105,15 +98,17 @@ describe('Analytics Router', () => {
       });
 
       expect(result.totalLeads).toBe(100);
-      expect(result.stages.map((stage) => [stage.name, stage.cumulativeCount])).toEqual([
-        ['new', 100],
-        ['nurturing', 55],
-        ['negotiating', 25],
-        ['won', 10],
+      expect(result.stages.map((stage) => [stage.name, stage.cumulativeCount, stage.count])).toEqual([
+        ['lead', 100, 60],
+        ['mql', 40, 15],
+        ['deal', 25, 10],
+        ['sql', 15, 5],
+        ['won', 10, 10],
       ]);
-      expect(result.stages[2].conversionRate).toBeCloseTo(45.45, 1); // 25 / 55
-      expect(result.stages[3].conversionRate).toBe(40); // 10 / 25
+      expect(result.stages[2].conversionRate).toBe(62.5); // 25 / 40
+      expect(result.stages[4].conversionRate).toBeCloseTo(66.67, 1); // 10 / 15
       expect(result.overallConversionRate).toBe(10);
+      expect(result.nurturingCount).toBe(12);
       // Not computed from updatedAt - createdAt any more (grew with every edit)
       expect(result.averageConversionDays).toBe(0);
       expect(mockDb.select).toHaveBeenCalledTimes(1);
@@ -124,7 +119,7 @@ describe('Analytics Router', () => {
 
     it('returns zero rates without NaN when there are no leads', async () => {
       mockDb.query.organizationMembers.findFirst.mockResolvedValue(mockMembership);
-      mockCounts({ total: 0, new: 0, nurturing: 0, negotiating: 0, won: 0, reachedNurturing: 0, reachedNegotiation: 0 });
+      mockCounts({ total: 0, mql: 0, deal: 0, sql: 0, won: 0, nurturing: 0 });
 
       const caller = appRouter.createCaller(mockContext);
       const result = await caller.analytics.getConversionFunnel({

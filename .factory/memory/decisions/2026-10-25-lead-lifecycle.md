@@ -5,8 +5,8 @@ category: Sales
 title: "リードの段階を1本のライフサイクルで定義し、各軸の対応表を docs に置く（#444）"
 status: active
 superseded_by: []
-issues: [444, 430, 435]
-paths: ["lib/features/leads/types/pipeline.ts", "docs/PIPELINE_LIFECYCLE.md", "lib/features/prospects/types/schemas.ts"]
+issues: [444, 430, 435, 802]
+paths: ["lib/features/leads/types/pipeline.ts", "docs/PIPELINE_LIFECYCLE.md", "lib/features/prospects/types/schemas.ts", "lib/features/analytics/api/router.ts", "components/analytics/conversion-funnel.tsx"]
 ---
 
 ### [Sales] リードの段階を1本のライフサイクルで定義し、各軸の対応表を docs に置く（#444）
@@ -20,6 +20,7 @@ paths: ["lib/features/leads/types/pipeline.ts", "docs/PIPELINE_LIFECYCLE.md", "l
   - 一度受注したリードは、次の商談（移行・AX 化）を進めている間も状態は成約のまま。次の商談の進み具合は商談のステージと商談フェーズで見る（#435 の反映の規則）
   - 商談を持つリードは再育成（ナーチャリング）にしない。止まった商談は時期を理由に失注にし、動くべき時期で再接触を追う（決定 `2026-10-25-deals-set-lead-stage`）
   - 顧客探しの段階はリードにする前の記録で、リードに引き継いだ後はリードの側が正。引き継いだ後は顧客探しの段階を更新しない（仮の運用）。両者は自動では連動しない。対応は目安として docs に書き、「3 現行仕様調査」「5 契約」の当てはめは営業に確認する
+  - 分析のファネルは、この段（リード → MQL → 商談 → SQL → 受注）で数える。後の段に進んだリードは前の段にも数え、再育成は段にせず、今ナーチャリング中のリードの数として別に出す（#802、2026-10-26 オーナーが推奨案で承認）
   - 値を足す・変えるときは、`lib/features/leads/types/pipeline.ts` の冒頭のコメントと `docs/PIPELINE_LIFECYCLE.md` の表も直す
   - 商談を持つリードの状態・商談フェーズは読み取り専用で、商談から毎回計算する（決定 `2026-10-25-deals-set-lead-stage`、#444 の2つ目の PR）
 - **見直しの条件**: 顧客探しの段階とリードの状態の食い違いが運用で問題になったら、引き継いだ後の顧客探しの段階を読み取り専用にするか、リードから反映するかを決める

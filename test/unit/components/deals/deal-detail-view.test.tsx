@@ -16,7 +16,10 @@ const ORG_ID = '660e8400-e29b-41d4-a716-446655440000';
 const LEAD_ID = '770e8400-e29b-41d4-a716-446655440001';
 const DEAL_ID = '880e8400-e29b-41d4-a716-446655440002';
 
-type MutationOptions = { onSuccess?: (result: unknown) => void; onError?: (error: Error) => void };
+type MutationOptions = {
+  onSuccess?: (result: unknown) => void;
+  onError?: (error: Error, input: unknown) => void;
+};
 
 const mocks = vi.hoisted(() => ({
   get: { data: undefined as unknown, isError: false, error: null as unknown, refetch: vi.fn() },
@@ -33,7 +36,7 @@ vi.mock('@/lib/trpc/client', () => {
     mutate: (input: unknown, call?: MutationOptions) => {
       sent.push(input);
       if (mocks.fail) {
-        options.onError?.(new Error('failed'));
+        options.onError?.(new Error('failed'), input);
         return;
       }
       options.onSuccess?.(input);
@@ -126,9 +129,7 @@ describe('DealDetailView', () => {
     await user.click(screen.getByRole('button', { name: '「受注」に移す' }));
     expect(
       screen.getByRole('dialog', { name: '「AS/400 現行調査」を受注にする' })
-    ).toHaveAccessibleDescription(
-      'リード「架空商事」は成約になります。商談を開き直しても、リードは成約のままです。'
-    );
+    ).toHaveAccessibleDescription('リード「架空商事」は成約になります。');
     expect(mocks.updates).toEqual([]);
 
     await user.click(screen.getByRole('button', { name: '受注にする' }));
@@ -151,7 +152,7 @@ describe('DealDetailView', () => {
     expect(
       screen.getByRole('alertdialog', { name: '「AS/400 現行調査」を開き直しますか？' })
     ).toHaveAccessibleDescription(
-      '確度は「提案」の既定値 40% になり、予測の区分の上書きも消えます。 リードは成約のままです。'
+      '確度は「提案」の既定値 40% になり、予測の区分の上書きも消えます。 ほかに受注の商談がなければ、リードは「商談中」に戻ります。'
     );
     expect(mocks.updates).toEqual([]);
 
@@ -162,12 +163,12 @@ describe('DealDetailView', () => {
   it('tells those who cannot change deals that the page is read only', () => {
     mocks.get.data = detail({ canEdit: false, canDelete: false });
     renderView();
-    expect(screen.getByText('閲覧のみです')).toBeInTheDocument();
+    expect(screen.getByText('閲覧のみ')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '編集' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '「受注」に移す' })).not.toBeInTheDocument();
   });
 
-  it('says a deletion failed as a deletion, and a move as a save', async () => {
+  it('says a deletion failed as a deletion, and a move as a move', async () => {
     const user = userEvent.setup();
     mocks.fail = true;
     renderView();
@@ -178,6 +179,8 @@ describe('DealDetailView', () => {
     );
 
     await user.click(screen.getByRole('button', { name: '「条件の調整」に移す' }));
-    expect(mocks.toast.error).toHaveBeenLastCalledWith('保存できませんでした。もう一度お試しください');
+    expect(mocks.toast.error).toHaveBeenLastCalledWith(
+      '「AS/400 現行調査」を「条件の調整」に移せませんでした。「提案」に戻しました'
+    );
   });
 });

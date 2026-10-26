@@ -1,5 +1,5 @@
 {
-  "id": "a73d89b8-9f66-43a9-985d-6c2bc1302cfb",
+  "id": "13999891-d37a-467a-954e-79a5aebcf27b",
   "prevId": "edf9ff77-518b-4c5a-a629-ae34ef81b212",
   "version": "7",
   "dialect": "postgresql",
@@ -3213,6 +3213,143 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.field_glossary": {
+      "name": "field_glossary",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "field_key": {
+          "name": "field_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "label_ja": {
+          "name": "label_ja",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "label_en": {
+          "name": "label_en",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description_ja": {
+          "name": "description_ja",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description_en": {
+          "name": "description_en",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "field_glossary_field_value_unique": {
+          "name": "field_glossary_field_value_unique",
+          "columns": [
+            {
+              "expression": "field_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "value",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"field_glossary\".\"value\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "field_glossary_field_unique": {
+          "name": "field_glossary_field_unique",
+          "columns": [
+            {
+              "expression": "field_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"field_glossary\".\"value\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "field_glossary_updated_by_users_id_fk": {
+          "name": "field_glossary_updated_by_users_id_fk",
+          "tableFrom": "field_glossary",
+          "tableTo": "users",
+          "columnsFrom": ["updated_by"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "field_glossary_value_check": {
+          "name": "field_glossary_value_check",
+          "value": "\"field_glossary\".\"value\" is null or btrim(\"field_glossary\".\"value\") <> ''"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.lead_comments": {
       "name": "lead_comments",
       "schema": "",
@@ -5272,29 +5409,7 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "notification_preferences_user_org_unique": {
-          "name": "notification_preferences_user_org_unique",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "notification_preferences_user_id_users_id_fk": {
           "name": "notification_preferences_user_id_users_id_fk",
