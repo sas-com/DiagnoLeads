@@ -1,10 +1,11 @@
 /**
  * Formatting for the deals screens (Refs #436): yen amounts, days in a stage, the close date
- * periods of the board's filter and the checks of typed values. Dates are Japan calendar days
- * (YYYY-MM-DD).
+ * periods of the board's filter, the marks of a card and the checks of typed values. Dates are
+ * Japan calendar days (YYYY-MM-DD).
  */
 
-import { updateDealSchema } from '@/lib/features/deals/types/schemas';
+import { isOpenStage } from '@/lib/features/deals/types/pipeline';
+import { DEAL_LIMITS, updateDealSchema } from '@/lib/features/deals/types/schemas';
 
 const intlLocale = (locale: string) => (locale === 'ja' ? 'ja-JP' : 'en-US');
 
@@ -17,9 +18,53 @@ export function parseWhole(text: string, max: number): number | null | 'invalid'
   return value <= max ? value : 'invalid';
 }
 
+/**
+ * A typed yen amount (Refs #720): a leading ¥ or ￥ and a trailing 円 are dropped, so are commas
+ * and spaces, and full-width digits and commas (typed with a Japanese input method) are read as
+ * such, so "１２,０００,０００", "12 000 000", "¥12,000,000" and "12,000,000円" are 12000000.
+ * Null when empty, 'invalid' when it is not a whole number of yen up to `max`.
+ */
+export function parseAmount(
+  text: string,
+  max: number = DEAL_LIMITS.amount
+): number | null | 'invalid' {
+  const digits = text
+    .trim()
+    .replace(/^[¥￥]/, '')
+    .replace(/円$/, '')
+    .replace(/[０-９]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xfee0))
+    .replace(/[,，\s]/g, '');
+  return parseWhole(digits, max);
+}
+
 /** Whether the API takes the day as a deal's date (from 2000 to 2100, like the close date) */
 export const isDealDate = (value: string): boolean =>
   updateDealSchema.shape.closedOn.safeParse(value).success;
+
+/**
+ * A deal's day as the screens show it (Refs #720): "2026/10/25", like the date boxes and the
+ * lead pages
+ */
+export const formatDealDate = (day: string): string => day.replaceAll('-', '/');
+
+/** What a card and a list row warn about (Refs #436): only open deals are marked */
+export interface DealMarkFlags {
+  /** The expected close date has passed */
+  overdue: boolean;
+  /** The lead has no open next action (task) */
+  noNextAction: boolean;
+}
+
+export function dealMarks(
+  deal: { stage: string; expectedCloseOn: string | null; hasOpenTask: boolean },
+  today: string
+): DealMarkFlags {
+  const open = isOpenStage(deal.stage);
+  return {
+    overdue: open && !!deal.expectedCloseOn && deal.expectedCloseOn < today,
+    noNextAction: open && !deal.hasOpenTask,
+  };
+}
 
 /** "¥3,000,000"; null when there is no amount */
 export function formatYen(amount: number | null, locale: string): string | null {

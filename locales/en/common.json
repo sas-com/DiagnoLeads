@@ -1423,6 +1423,8 @@
       "forecastCategory": "Forecast category",
       "expectedCloseOn": "Expected close",
       "closedOn": "Closed on",
+      "wonOn": "Won on",
+      "lostOn": "Lost on",
       "owner": "Owner",
       "nextStep": "Next step",
       "lostReason": "Lost reason",
@@ -1434,20 +1436,20 @@
       "updatedAt": "Updated"
     },
     "column": {
-      "summary": "{count} · {amount}",
+      "summary": "{count, plural, one {# deal} other {# deals}} · {amount}",
       "weighted": "Weighted {amount}",
       "empty": "No deals",
       "dropHere": "Move here",
-      "closedTitle": "{stage} (last {days} days)"
+      "closedTitle": "{stage} (last {days, plural, one {day} other {# days}})"
     },
     "card": {
-      "daysInStage": "{days} days in this stage",
+      "daysInStage": "{days, plural, one {# day} other {# days}} in this stage",
       "overdue": "Past the expected close date",
       "noNextAction": "The lead has no next action (task)",
       "noCloseDate": "No close date",
       "noAmount": "No amount yet",
       "unassigned": "No owner",
-      "move": "Move \"{name}\" to another stage",
+      "move": "Move \"{name}\" to another stage (now {stage})",
       "moveTo": "Move to {stage}"
     },
     "filters": {
@@ -1468,7 +1470,7 @@
     "lostDialog": {
       "title": "Mark \"{name}\" as lost",
       "description": "Lost reasons feed the win/loss analysis",
-      "fromWon": "The lead stays won.",
+      "fromWon": "Unless another deal of the lead is won, the lead is no longer won (Negotiating while a deal is open, else Lost).",
       "reason": "Lost reason",
       "reasonPlaceholder": "Choose one",
       "reasonRequired": "Choose a lost reason",
@@ -1478,8 +1480,8 @@
     },
     "wonDialog": {
       "title": "Mark \"{name}\" as won",
-      "impact": "The lead \"{lead}\" becomes won. It stays won even if the deal is reopened.",
-      "impactUnnamed": "This lead becomes won. It stays won even if the deal is reopened.",
+      "impact": "The lead \"{lead}\" becomes won.",
+      "impactUnnamed": "This lead becomes won.",
       "fromLost": "The lost reason and details are cleared.",
       "closedOn": "Won on",
       "closedOnInvalid": "Enter the won date as a day from 2000 to 2100",
@@ -1490,23 +1492,36 @@
       "lost": "The lost reason ({reason}) and the details will be cleared.",
       "lostNoReason": "The lost reason and the details will be cleared.",
       "probability": "The probability becomes the {stage} default of {probability}%, and the forecast category override is cleared.",
-      "won": "The lead stays won.",
+      "won": "Unless another deal of the lead is won, the lead goes back to Negotiating.",
       "confirm": "Reopen"
     },
     "form": {
       "createTitle": "New deal",
       "editTitle": "Edit deal",
+      "requiredHelp": {
+        "lead": "The lead and the deal name are required. The rest can be filled in later",
+        "name": "The deal name is required. The rest can be filled in later",
+        "won": "The deal name and the won date are required. The rest can be filled in later",
+        "lost": "The deal name, the lost date and the lost reason are required. The rest can be filled in later"
+      },
       "lead": "Lead",
+      "leadChoose": "Choose a lead",
+      "leadSearchLabel": "Search leads",
       "leadPlaceholder": "Search by company, name or email",
+      "leadTypeToSearch": "Type part of a company, name or email",
       "leadRequired": "Choose a lead",
       "leadSearching": "Searching…",
       "leadNotFound": "No match",
-      "leadChange": "Change",
+      "leadCount": "{count, plural, one {# suggestion} other {# suggestions}}",
       "required": "Required",
       "namePlaceholder": "e.g. AS/400 current system survey",
       "nameRequired": "Enter a deal name",
       "closeDateInvalid": "Enter an expected close date from 2000 to 2100",
-      "amountHelp": "Yen, excluding tax. Leave empty while unknown",
+      "wonOnInvalid": "Enter the won date as a day from 2000 to 2100",
+      "lostOnInvalid": "Enter the lost date as a day from 2000 to 2100",
+      "amountHelp": "Yen, excluding tax. Commas and full-width digits are fine. Leave empty while unknown",
+      "amountUnit": "JPY",
+      "amountPreview": "= {amount}",
       "amountInvalid": "Enter a whole number of 0 or more",
       "probabilityHelp": "Empty uses the stage default ({value}%)",
       "probabilityInvalid": "Enter a whole number from 0 to 100",
@@ -1514,12 +1529,32 @@
       "ownerFromLead": "The lead's assignee (else you)",
       "forecastAuto": "From the probability",
       "wonToday": "The won date will be today.",
+      "wonPast": "For a past win, correct the won date by editing the deal once it is created.",
+      "onHoldReason": "\"{reason}\" cannot be the lost reason of a deal. Choose another one",
       "submitCreate": "Create",
-      "submitEdit": "Save"
+      "submitEdit": "Save",
+      "saving": "Saving…",
+      "saveError": "Could not save. Please try again"
     },
     "list": {
-      "caption": "Deals",
-      "empty": "No deals match"
+      "caption": "Deals ({order})",
+      "closedNote": "Won and lost deals are shown for the last {days, plural, one {day} other {# days}}",
+      "lead": "Company and contact",
+      "marks": "Alerts",
+      "orders": {
+        "stage": {
+          "asc": "stage order",
+          "desc": "reverse stage order"
+        },
+        "amount": {
+          "asc": "smallest amount first",
+          "desc": "largest amount first"
+        },
+        "expectedCloseOn": {
+          "asc": "earliest expected close first",
+          "desc": "latest expected close first"
+        }
+      }
     },
     "detail": {
       "back": "Back to deals",
@@ -1538,15 +1573,19 @@
     "leadCard": {
       "title": "Deals",
       "empty": "This lead has no deals yet",
-      "summary": "{count} · open {amount}"
+      "summary": "{count, plural, one {# deal} other {# deals}} · open {amount}"
     },
     "state": {
       "loadError": "Could not load the deals",
       "retry": "Retry",
       "empty": "No deals yet",
       "emptyHint": "Create deals from a lead's page or with \"New deal\" here",
-      "truncated": "Showing up to {limit} deals. Narrow them down with the filters",
+      "emptyHintReadOnly": "Deals will show here once they are created",
+      "noMatch": "No deals match the filters",
+      "clearFilters": "Clear filters",
+      "truncated": "Showing up to {limit, plural, one {# deal} other {# deals}}. Narrow them down with the filters",
       "readOnly": "Read only",
+      "readOnlyHint": "Only members who can edit leads can create, change or move deals. To make changes, ask an admin of the organization",
       "forbiddenTitle": "You cannot see the deals",
       "forbiddenBody": "Deals, their amounts, the forecast and the targets are shown to members who can view leads, except viewers from a parent organization."
     },
@@ -1554,6 +1593,13 @@
       "created": "Deal created",
       "saved": "Saved",
       "moved": "Moved \"{name}\" to {stage}",
+      "movedTo": "Moved \"{name}\" to {stage} ({probability}% probability)",
+      "movedHandedOff": "Moved \"{name}\" to {stage} and sent the handoff sheet to the technical team",
+      "movedToHandedOff": "Moved \"{name}\" to {stage} ({probability}% probability) and sent the handoff sheet to the technical team",
+      "moveFailed": "Could not move \"{name}\" to {stage}. It is back in {from}",
+      "undo": "Undo",
+      "moveUndone": "Moved \"{name}\" back to {stage}",
+      "undoFailed": "Could not undo the move of \"{name}\". It is in {stage} now",
       "deleted": "Deal deleted",
       "deleteError": "Could not delete. Please try again",
       "error": "Could not save. Please try again"
@@ -2598,7 +2644,16 @@
         "conversionRate": "Conversion Rate",
         "overallConversion": "Overall Conversion Rate",
         "fromInitial": "From initial lead to conversion",
-        "averageDays": "Average conversion time: {days} days"
+        "averageDays": "Average conversion time: {days} days",
+        "stages": {
+          "lead": "Leads",
+          "mql": "MQL (interested)",
+          "deal": "Deals",
+          "sql": "SQL (qualified)",
+          "won": "Won"
+        },
+        "nurturingNow": "Leads being nurtured: {count, number} (not a stage of the funnel)",
+        "reachedNote": "A lead counts for every stage before the one it reached (a lead that went to a deal without MQL, such as an agency appointment, counts as MQL too)"
       },
       "responseTimePeriods": {
         "withinHour": "< 1 hour",
@@ -2733,41 +2788,52 @@
     "typeComment": "Comment",
     "typeNote": "Note",
     "typeActivity": "Activity",
+    "typeLabel": "Type",
+    "typeHint": "Comments can be replied to. Notes cannot.",
+    "filterLabel": "Filter",
     "filterAll": "All",
     "filterComments": "Comments",
     "filterNotes": "Notes",
     "filterActivity": "Activity",
-    "commentPlaceholder": "Add a comment...",
-    "notePlaceholder": "Add a note...",
-    "replyPlaceholder": "Write a reply...",
-    "visibleToTeam": "Visible to your organization's members",
-    "noComments": "No comments yet",
+    "commentPlaceholder": "Add a comment…",
+    "notePlaceholder": "Add a note…",
+    "replyPlaceholder": "Write a reply…",
+    "replyLabel": "Reply to {name}",
+    "visibleToTeam": "Comments and notes are visible to your organization's members",
+    "sendShortcut": "Press Ctrl+Enter (⌘+Enter on a Mac) to send",
+    "noComments": "No comments or notes yet",
     "noCommentsHint": "Be the first to add a comment or note",
-    "forbidden": "You don't have permission to see the notes",
-    "loadError": "The notes could not be loaded",
+    "readOnly": "You have read-only access and cannot write here",
+    "noMatches": "{type, select, comment {No comments yet} note {No notes yet} activity {No activity yet} other {Nothing matches}}",
+    "forbiddenTitle": "You cannot see comments and notes",
+    "forbiddenBody": "Comments and notes are shown to members who can view leads, except viewers from a parent organization.",
+    "loadError": "Comments and notes could not be loaded",
+    "loadMore": "Show more ({count, plural, one {# item left} other {# items left}})",
+    "loadMoreError": "Could not load more",
     "reply": "Reply",
     "edit": "Edit",
     "delete": "Delete",
-    "actions": "Comment actions",
+    "actions": "{type, select, note {Note} other {Comment}} actions",
     "pin": "Pin",
     "unpin": "Unpin",
+    "pinned": "Pinned",
     "save": "Save",
     "cancel": "Cancel",
     "send": "Send",
-    "edited": "edited",
-    "editLabel": "Edit the comment",
-    "createSuccess": "Comment added successfully",
-    "createError": "Failed to add comment",
-    "updateSuccess": "Comment updated successfully",
-    "updateError": "Failed to update comment",
-    "deleteSuccess": "Comment deleted successfully",
-    "deleteError": "Failed to delete comment",
-    "deleteForbidden": "Only an owner can delete a comment with replies from others",
-    "deleteTitle": "Delete this comment?",
-    "deleteConfirm": "Are you sure you want to delete this comment? This action cannot be undone.",
+    "edited": " (edited)",
+    "editLabel": "Edit the {type, select, note {note} other {comment}}",
+    "createSuccess": "{type, select, note {Note} other {Comment}} added successfully",
+    "createError": "Failed to add the {type, select, note {note} other {comment}}",
+    "updateSuccess": "{type, select, note {Note} other {Comment}} updated successfully",
+    "updateError": "Failed to update the {type, select, note {note} other {comment}}",
+    "deleteSuccess": "{type, select, note {Note} other {Comment}} deleted successfully",
+    "deleteError": "Failed to delete the {type, select, note {note} other {comment}}",
+    "deleteForbidden": "Only an owner of the organization can delete a comment with replies from others",
+    "deleteTitle": "Delete this {type, select, note {note} other {comment}}?",
+    "deleteConfirm": "Are you sure you want to delete this {type, select, note {note} other {comment}}? This action cannot be undone.",
     "deleteConfirmWithReplies": "This deletes the comment and its {count, plural, one {# reply} other {# replies}}. This action cannot be undone.",
-    "pinSuccess": "Comment pinned",
-    "unpinSuccess": "Comment unpinned",
+    "pinSuccess": "{type, select, note {Note} other {Comment}} pinned",
+    "unpinSuccess": "Unpinned",
     "pinError": "Failed to update pin status"
   },
   "reports": {
@@ -4755,7 +4821,13 @@
       "cumulative": "Cumulative",
       "stageConversionRate": "Conversion Rate",
       "overallConversionRate": "Overall Conversion Rate: {rate}%",
-      "averageConversionDays": "Average Conversion Time: {days} days"
+      "averageConversionDays": "Average Conversion Time: {days} days",
+      "stageLead": "Leads",
+      "stageMql": "MQL (interested)",
+      "stageDeal": "Deals",
+      "stageSql": "SQL (qualified)",
+      "stageWon": "Won",
+      "nurturingNow": "Leads being nurtured: {count}"
     },
     "diagnostic": {
       "leadScore": "Lead Score",

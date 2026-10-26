@@ -8,6 +8,7 @@ import {
   exportLeadsToPDF,
   generatePDFFilename,
 } from '@/lib/features/reports/pdf-export-service';
+import type { PdfReportLabels } from '@/lib/features/reports/pdf-labels';
 import { describe, expect, it, vi } from 'vitest';
 
 describe('PDF Export Service', () => {
@@ -127,23 +128,23 @@ describe('PDF Export Service', () => {
       ],
       funnel: {
         stages: [
-          { name: 'new', count: 100, cumulativeCount: 100, percentage: 100, conversionRate: 100 },
+          { name: 'lead' as const, count: 100, cumulativeCount: 100, percentage: 100, conversionRate: 100 },
           {
-            name: 'nurturing',
+            name: 'mql' as const,
             count: 60,
             cumulativeCount: 60,
             percentage: 60,
             conversionRate: 60,
           },
           {
-            name: 'negotiating',
+            name: 'deal' as const,
             count: 30,
             cumulativeCount: 30,
             percentage: 30,
             conversionRate: 50,
           },
           {
-            name: 'won',
+            name: 'won' as const,
             count: 10,
             cumulativeCount: 10,
             percentage: 10,
@@ -151,7 +152,7 @@ describe('PDF Export Service', () => {
           },
         ],
         totalLeads: 100,
-        overallConversionRate: 10,
+        overallConversionRate: 10, nurturingCount: 0,
         averageConversionDays: 14.5,
       },
     };
@@ -160,6 +161,25 @@ describe('PDF Export Service', () => {
       const doc = exportAnalyticsToPDF(mockAnalyticsData);
       expect(doc).toBeDefined();
       expect(doc.getNumberOfPages()).toBeGreaterThanOrEqual(1);
+    });
+
+    // 再育成 beside the stages of the funnel (#802)
+    it('writes the nurtured leads under the funnel', () => {
+      const asked: { key: string; values?: Record<string, string | number> }[] = [];
+      const labels: PdfReportLabels = {
+        text: (key, values) => {
+          asked.push({ key, values });
+          return key;
+        },
+        status: (value) => value,
+        source: (value) => value,
+      };
+      exportAnalyticsToPDF(
+        { ...mockAnalyticsData, funnel: { ...mockAnalyticsData.funnel, nurturingCount: 7 } },
+        { labels }
+      );
+      expect(asked).toContainEqual({ key: 'analytics.nurturingNow', values: { count: 7 } });
+      expect(asked.map((entry) => entry.key)).toContain('analytics.stageMql');
     });
 
     it('should create analytics PDF with partial data', () => {

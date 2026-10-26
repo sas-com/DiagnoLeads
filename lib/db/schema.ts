@@ -1208,6 +1208,53 @@ export const contentEditors = pgTable('content_editors', {
 
 export type ContentEditor = typeof contentEditors.$inferSelect;
 
+/**
+ * Field Glossary
+ * Site-wide help text and value candidates for admin input fields (Epic #780).
+ * No organization_id: the dictionary is shared by every organization, like CMS
+ * content (decision 2026-10-21-cms-site-wide); only operator content editors write
+ * it (enforced by the API, #780 P0). A row is either the help for a field (value is
+ * null) or the help/candidate for one of a field's values (value set), e.g. field_key
+ * 'leads.status' with value 'negotiating'.
+ */
+export const fieldGlossary = pgTable(
+  'field_glossary',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    /** Stable field identifier, e.g. 'leads.status' or 'deals.probability' */
+    fieldKey: text('field_key').notNull(),
+    /** A value of the field (e.g. 'negotiating'); null for the field-level entry */
+    value: text('value'),
+    // Display label for a free-text value candidate (one not backed by a code enum).
+    // Enum value labels stay in locales/ (e.g. 'negotiating' -> '商談中') and are not
+    // duplicated here; the glossary keeps the description and the value candidates.
+    labelJa: text('label_ja'),
+    labelEn: text('label_en'),
+    descriptionJa: text('description_ja'),
+    descriptionEn: text('description_en'),
+    /** Order among a field's value entries */
+    sortOrder: integer('sort_order').default(0).notNull(),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // One entry per field+value, and one field-level entry per field (partial indexes,
+    // so null values do not collide on any PostgreSQL version)
+    uniqueIndex('field_glossary_field_value_unique')
+      .on(table.fieldKey, table.value)
+      .where(sql`${table.value} is not null`),
+    uniqueIndex('field_glossary_field_unique')
+      .on(table.fieldKey)
+      .where(sql`${table.value} is null`),
+    // A value is either absent (the field-level entry) or non-empty; '' and whitespace-only
+    // would slip past the partial unique index and sit confusingly next to the field-level entry
+    check('field_glossary_value_check', sql`${table.value} is null or btrim(${table.value}) <> ''`),
+  ]
+);
+
+export type FieldGlossaryEntry = typeof fieldGlossary.$inferSelect;
+
 // Note: OrganizationType and DataSharingPolicy are already exported above at definition
 
 /**

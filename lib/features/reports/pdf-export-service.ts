@@ -13,6 +13,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type {
   ConversionFunnelData,
+  FunnelStageName,
   OverviewStats,
   SourceBreakdown,
   StatusBreakdown,
@@ -20,7 +21,20 @@ import type {
 } from '../analytics/types/schemas';
 import type { ExportLead } from './export-service';
 import { PDF_FONT_FAMILY, type PdfFont, registerPdfFont } from './pdf-font';
-import { DEFAULT_PDF_REPORT_LABELS, type PdfReportLabels } from './pdf-labels';
+import {
+  DEFAULT_PDF_REPORT_LABELS,
+  type PdfReportLabels,
+  type PdfReportTextKey,
+} from './pdf-labels';
+
+/** Labels of the funnel stages (#802) */
+const FUNNEL_STAGE_LABELS: Record<FunnelStageName, PdfReportTextKey> = {
+  lead: 'analytics.stageLead',
+  mql: 'analytics.stageMql',
+  deal: 'analytics.stageDeal',
+  sql: 'analytics.stageSql',
+  won: 'analytics.stageWon',
+};
 
 /**
  * PDF export options
@@ -406,7 +420,7 @@ export function exportAnalyticsToPDF(
         ),
       ],
       body: data.funnel.stages.map((s) => [
-        labels.status(s.name),
+        labels.text(FUNNEL_STAGE_LABELS[s.name]),
         s.count,
         s.cumulativeCount,
         `${s.percentage.toFixed(1)}%`,
@@ -438,6 +452,13 @@ export function exportAnalyticsToPDF(
       labels.text('analytics.overallConversionRate', {
         rate: data.funnel.overallConversionRate.toFixed(1),
       }),
+      20,
+      yPos
+    );
+    yPos += 6;
+    // 再育成: beside the stages, not one of them (#802)
+    doc.text(
+      labels.text('analytics.nurturingNow', { count: data.funnel.nurturingCount }),
       20,
       yPos
     );

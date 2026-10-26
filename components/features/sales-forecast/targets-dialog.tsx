@@ -1,7 +1,7 @@
 'use client';
 
 import { TAP_TARGET } from '@/components/common/tap-target';
-import { formatYen } from '@/components/features/deals/deal-format';
+import { formatYen, parseAmount } from '@/components/features/deals/deal-format';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,7 +30,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { DEAL_LIMITS } from '@/lib/features/deals/types/schemas';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { fiscalYearOf } from '@/lib/features/sales-targets/types/fiscal-year';
 import { trpc } from '@/lib/trpc/client';
@@ -56,14 +55,6 @@ interface Selection {
   fiscalYear: number | undefined;
   month: string | null;
 }
-
-const parseAmount = (text: string): number | null | 'invalid' => {
-  const trimmed = text.trim().replaceAll(',', '');
-  if (trimmed === '') return null;
-  if (!/^\d+$/.test(trimmed)) return 'invalid';
-  const value = Number(trimmed);
-  return value <= DEAL_LIMITS.amount ? value : 'invalid';
-};
 
 /**
  * Set the month's won amount targets for the whole organization and each member (Refs #437),
