@@ -25,9 +25,12 @@ import {
 } from '@/lib/features/leads/service';
 import {
   type LostReason,
+  type SqlDecision,
   type TargetSystem,
   jstDate,
   lostReasonEnum,
+  qualificationUpdateFields,
+  sqlDecisionEnum,
   statusUpdateFields,
   targetSystemEnum,
 } from '@/lib/features/leads/types/pipeline';
@@ -61,6 +64,7 @@ import {
   STAGE_PROBABILITY,
   forecastCategory,
   isOpenStage,
+  skipsSqlDecision,
   weightedAmount,
 } from './types/pipeline';
 import {
@@ -141,6 +145,8 @@ export interface DealCard extends DealView {
   company: string | null;
   /** Whether the lead has an open next action (a deal without one needs attention) */
   hasOpenTask: boolean;
+  /** The lead's SQL decision: moving out of 見極め asks for one first (#801) */
+  leadSqlDecision: SqlDecision | null;
 }
 
 export interface BoardColumn {
@@ -182,7 +188,13 @@ export interface LinkedDeal {
 }
 
 export interface DealDetail extends DealView {
-  lead: { id: string; name: string | null; company: string | null; status: string };
+  lead: {
+    id: string;
+    name: string | null;
+    company: string | null;
+    status: string;
+    sqlDecision: SqlDecision | null;
+  };
   previousDeal: LinkedDeal | null;
   nextDeals: LinkedDeal[];
   history: DealHistoryView[];
@@ -247,6 +259,9 @@ function toDealView(row: DealRow & { ownerName: string | null }): DealView {
 
 const dealColumns = { ...getTableColumns(deals), ownerName: nameOf(users) };
 
+const toSqlDecision = (value: string | null): SqlDecision | null =>
+  sqlDecisionEnum.safeParse(value).success ? (value as SqlDecision) : null;
+
 const notFound = (what: 'lead' | 'deal') =>
   new TRPCError({
     code: 'NOT_FOUND',
@@ -292,6 +307,7 @@ export async function getBoard(
         ...dealColumns,
         leadName: leads.name,
         company: leads.company,
+        leadSqlDecision: leads.sqlDecision,
         hasOpenTask: sql<boolean>`exists (select 1 from ${leadTasks} where ${leadTasks.organizationId} = ${deals.organizationId} and ${leadTasks.leadId} = ${deals.leadId} and ${leadTasks.completedAt} is null)`,
       })
       .from(deals)
@@ -317,6 +333,7 @@ export async function getBoard(
     leadName: row.leadName ?? null,
     company: row.company ?? null,
     hasOpenTask: row.hasOpenTask,
+    leadSqlDecision: toSqlDecision(row.leadSqlDecision),
   }));
   return {
     columns: DEAL_STAGES.map((stage) => {
@@ -372,6 +389,7 @@ export async function getDeal(
       leadName: leads.name,
       company: leads.company,
       leadStatus: leads.status,
+      leadSqlDecision: leads.sqlDecision,
     })
     .from(deals)
     .innerJoin(
@@ -416,7 +434,13 @@ export async function getDeal(
 
   return {
     ...toDealView(row),
-    lead: { id: row.leadId, name: row.leadName, company: row.company, status: row.leadStatus },
+    lead: {
+      id: row.leadId,
+      name: row.leadName,
+      company: row.company,
+      status: row.leadStatus,
+      sqlDecision: toSqlDecision(row.leadSqlDecision),
+    },
     previousDeal: previous[0] ? toLinked(previous[0]) : null,
     nextDeals: next.map(toLinked),
     history: history.map((h) => ({
@@ -498,7 +522,9 @@ function auditValues(deal: DealRow): AuditValues {
 async function syncLeadWithDeals(
   tx: Transaction,
   lead: Lead,
-  context: { organizationId: string; userId: string; dealId: string; at: Date }
+  context: { organizationId: string; userId: string; dealId: string; at: Date },
+  /** The lead's SQL decision written with the deal's change (#801) */
+  fields: ReturnType<typeof qualificationUpdateFields> = {}
 ): Promise<LeadMove | null> {
   const leadDeals = await tx
     .select({
@@ -511,9 +537,9 @@ async function syncLeadWithDeals(
     .from(deals)
     .where(and(eq(deals.organizationId, context.organizationId), eq(deals.leadId, lead.id)));
   const changes = leadChangesFromDeals(lead, leadDeals);
-  if (Object.keys(changes).length === 0) return null;
+  if (Object.keys(changes).length === 0 && Object.keys(fields).length === 0) return null;
 
-  const set: PgUpdateSetSource<typeof leads> = { updatedAt: context.at };
+  const set: PgUpdateSetSource<typeof leads> = { ...fields, updatedAt: context.at };
   if (changes.status) Object.assign(set, statusUpdateFields(changes.status));
   if (changes.hasNegotiated) set.hasNegotiated = true;
   if (changes.lostReason !== undefined) set.lostReason = changes.lostReason;
@@ -652,7 +678,7 @@ export async function updateDeal(
   db: Database,
   input: UpdateDealInput & { userId: string },
   now: Date = new Date()
-): Promise<DealChangeResult> {
+): Promise<DealChangeResult & { sqlUndecided: boolean }> {
   return db.transaction(async (tx) => {
     const scope = and(eq(deals.id, input.dealId), eq(deals.organizationId, input.organizationId));
     // The lead before the deal (the lock order of the header); a deal never moves to another lead
@@ -756,22 +782,48 @@ export async function updateDeal(
       });
     }
 
+    // The SQL decision sent with the move is recorded only on a lead without one (read under the
+    // lock): a screen that asked from an older board does not rewrite a decision made meanwhile,
+    // which is changed on the lead's page
+    const sqlFields =
+      input.sqlDecision && !lead.sqlDecision
+        ? qualificationUpdateFields({ sqlDecision: input.sqlDecision }, lead, now)
+        : {};
     const movesLead =
-      stageChanged || existing.kind !== updated.kind || existing.lostReason !== updated.lostReason;
+      stageChanged ||
+      existing.kind !== updated.kind ||
+      existing.lostReason !== updated.lostReason ||
+      Object.keys(sqlFields).length > 0;
     const leadMove = movesLead
-      ? await syncLeadWithDeals(tx, lead, {
-          organizationId: input.organizationId,
-          userId: input.userId,
-          dealId: existing.id,
-          at: now,
-        })
+      ? await syncLeadWithDeals(
+          tx,
+          lead,
+          {
+            organizationId: input.organizationId,
+            userId: input.userId,
+            dealId: existing.id,
+            at: now,
+          },
+          sqlFields
+        )
       : null;
+    const sqlDecision = leadMove ? leadMove.after.sqlDecision : lead.sqlDecision;
     const [withOwner] = await tx
       .select(dealColumns)
       .from(deals)
       .leftJoin(users, eq(users.id, deals.ownerUserId))
       .where(scope);
-    return { deal: toDealView(withOwner), lead: leadMove };
+    return {
+      deal: toDealView(withOwner),
+      lead: leadMove,
+      sqlUndecided:
+        stageChanged &&
+        skipsSqlDecision(
+          oneOf(DEAL_STAGES, existing.stage, 'qualification'),
+          stage,
+          toSqlDecision(sqlDecision)
+        ),
+    };
   });
 }
 

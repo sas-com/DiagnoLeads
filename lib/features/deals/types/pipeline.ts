@@ -1,4 +1,4 @@
-import { lostReasonEnum } from '@/lib/features/leads/types/pipeline';
+import { type SqlDecision, lostReasonEnum } from '@/lib/features/leads/types/pipeline';
 import { z } from 'zod';
 
 /**
@@ -28,6 +28,18 @@ export const CLOSED_DEAL_STAGES = ['won', 'lost'] as const satisfies readonly De
 
 export const isOpenStage = (stage: string): stage is OpenDealStage =>
   (OPEN_DEAL_STAGES as readonly string[]).includes(stage);
+
+/**
+ * A move that takes the deal out of 見極め to a later stage (open or won) while the lead's SQL
+ * decision is not made (#801): the SQL decision is the exit of 見極め (decision
+ * `2026-10-25-lead-lifecycle`). The screen asks for it first; the API lets the move through and
+ * says so, so that imports and integrations are not stopped. Losing the deal needs no decision.
+ */
+export const skipsSqlDecision = (
+  from: DealStage,
+  to: DealStage,
+  sqlDecision: SqlDecision | null
+): boolean => from === 'qualification' && to !== 'qualification' && to !== 'lost' && !sqlDecision;
 
 /**
  * Lost reasons of a deal: those of the leads without 保留, which is not a loss (#445). A stalled

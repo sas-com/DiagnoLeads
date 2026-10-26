@@ -152,6 +152,7 @@ const deal: DealCard = {
   leadName: null,
   company: '架空商事',
   hasOpenTask: true,
+  leadSqlDecision: null,
 };
 
 const lostDeal: DealCard = {
@@ -338,9 +339,55 @@ describe('DealsScreen', () => {
       });
     });
 
-    it('offers no undo when the move handed the lead off, and says the handoff sheet went out', async () => {
+    it('asks for the SQL decision out of 見極め, sends it with the move and keeps it on an undo (#801)', async () => {
       const user = userEvent.setup();
       showBoard(boardData([{ ...deal, stage: 'qualification', probability: 10 }]));
+      // The board read again holds the decision the move recorded on the lead
+      mocks.refetched = boardData([
+        { ...deal, stage: 'discovery', probability: 20, leadSqlDecision: 'qualified' },
+      ]);
+      renderScreen();
+      await user.click(moveButton('AS/400 現行調査', '見極め'));
+      await user.click(moveTo('課題の確認'));
+      const question = screen.getByRole('alertdialog', { name: '「AS/400 現行調査」の SQL判定' });
+      expect(mocks.updates).toEqual([]);
+      await user.click(within(question).getByRole('button', { name: '適格：「課題の確認」へ進める' }));
+      expect(mocks.updates).toEqual([
+        { organizationId: ORG_ID, dealId: 'deal-1', stage: 'discovery', sqlDecision: 'qualified' },
+      ]);
+      await waitFor(() => expect(undoOfLastToast()).toBeDefined());
+
+      // The undo puts back the stage only; moving on again does not ask again
+      mocks.refetched = boardData([
+        { ...deal, stage: 'qualification', probability: 10, leadSqlDecision: 'qualified' },
+      ]);
+      act(() => undoOfLastToast()?.onClick());
+      expect(mocks.updates.at(-1)).toEqual({
+        organizationId: ORG_ID,
+        dealId: 'deal-1',
+        stage: 'qualification',
+        probability: 10,
+      });
+      await waitFor(() =>
+        expect(moveButton('AS/400 現行調査', '見極め')).toBeInTheDocument()
+      );
+      await user.click(moveButton('AS/400 現行調査', '見極め'));
+      await user.click(moveTo('課題の確認'));
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(mocks.updates.at(-1)).toEqual({
+        organizationId: ORG_ID,
+        dealId: 'deal-1',
+        stage: 'discovery',
+      });
+    });
+
+    it('offers no undo when the move handed the lead off, and says the handoff sheet went out', async () => {
+      const user = userEvent.setup();
+      showBoard(
+        boardData([
+          { ...deal, stage: 'qualification', probability: 10, leadSqlDecision: 'qualified' },
+        ])
+      );
       mocks.refetched = boardData([{ ...deal, stage: 'discovery', probability: 20 }]);
       mocks.handedOff = true;
       renderScreen();
@@ -357,7 +404,11 @@ describe('DealsScreen', () => {
 
     it('says a handoff even when a newer move of the deal overtook the move that made it', async () => {
       const user = userEvent.setup();
-      showBoard(boardData([{ ...deal, stage: 'qualification', probability: 10 }]));
+      showBoard(
+        boardData([
+          { ...deal, stage: 'qualification', probability: 10, leadSqlDecision: 'qualified' },
+        ])
+      );
       mocks.hold = true;
       renderScreen();
       await user.click(moveButton('AS/400 現行調査', '見極め'));

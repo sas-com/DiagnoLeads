@@ -53,6 +53,7 @@ const card = (overrides: Partial<DealCard>): DealCard => ({
   leadName: '山田 太郎',
   company: '架空商事',
   hasOpenTask: true,
+  leadSqlDecision: null,
   ...overrides,
 });
 

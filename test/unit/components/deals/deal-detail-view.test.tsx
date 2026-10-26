@@ -106,7 +106,13 @@ const detail = (
   stageChangedAt: new Date('2026-10-20T00:00:00Z'),
   createdAt: new Date('2026-10-01T00:00:00Z'),
   updatedAt: new Date('2026-10-20T00:00:00Z'),
-  lead: { id: LEAD_ID, name: '山田 太郎', company: '架空商事', status: 'negotiating' },
+  lead: {
+    id: LEAD_ID,
+    name: '山田 太郎',
+    company: '架空商事',
+    status: 'negotiating',
+    sqlDecision: null,
+  },
   previousDeal: null,
   nextDeals: [],
   history: [],
@@ -174,6 +180,124 @@ describe('DealDetailView', () => {
     expect(card).toHaveAttribute('data-deal', DEAL_ID);
     expect(card).toHaveAttribute('data-lead', LEAD_ID);
     expect(card).toHaveTextContent('架空商事');
+  });
+
+  describe('moving out of 見極め without an SQL decision (#801)', () => {
+    const qualification = () => detail({ stage: 'qualification', probability: 10 });
+
+    it('asks for the SQL decision and sends 適格 with the move', async () => {
+      const user = userEvent.setup();
+      mocks.get.data = qualification();
+      renderView();
+      await user.click(screen.getByRole('button', { name: '「課題の確認」に移す' }));
+      const question = screen.getByRole('alertdialog', { name: '「AS/400 現行調査」の SQL判定' });
+      expect(question).toHaveAccessibleDescription(
+        '「課題の確認」に進める前に、初回ヒアリングの結果からリード「架空商事」の SQL判定を記録してください。 適格にすると、リードの SQL判定に記録します。商談を元に戻しても、判定は残ります。 不適格なら、失注の理由を付けて商談を閉じます。'
+      );
+      expect(mocks.updates).toEqual([]);
+
+      await user.click(within(question).getByRole('button', { name: '適格：「課題の確認」へ進める' }));
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(mocks.updates).toEqual([
+        { organizationId: ORG_ID, dealId: DEAL_ID, stage: 'discovery', sqlDecision: 'qualified' },
+      ]);
+    });
+
+    it('goes on to the won dialog after 適格, and sends the decision with the win', async () => {
+      const user = userEvent.setup();
+      mocks.get.data = qualification();
+      renderView();
+      await user.click(screen.getByRole('button', { name: '「受注」に移す' }));
+      await user.click(screen.getByRole('button', { name: '適格：「受注」へ進める' }));
+      const won = screen.getByRole('dialog', { name: '「AS/400 現行調査」を受注にする' });
+      expect(mocks.updates).toEqual([]);
+
+      await user.click(within(won).getByRole('button', { name: '受注にする' }));
+      expect(mocks.updates).toEqual([
+        {
+          organizationId: ORG_ID,
+          dealId: DEAL_ID,
+          stage: 'won',
+          closedOn: jstDate(),
+          amount: 3_000_000,
+          sqlDecision: 'qualified',
+        },
+      ]);
+    });
+
+    it('closes the deal as lost with a reason after 不適格', async () => {
+      const user = userEvent.setup();
+      mocks.get.data = qualification();
+      renderView();
+      await user.click(screen.getByRole('button', { name: '「提案」に移す' }));
+      await user.click(screen.getByRole('button', { name: '不適格：失注にする' }));
+      const lost = screen.getByRole('dialog', { name: '「AS/400 現行調査」を失注にする' });
+      expect(lost).toHaveAccessibleDescription(
+        '失注理由は、勝ち負けの分析に使います リードの SQL判定も「不適格」として一緒に記録します。'
+      );
+      await user.click(within(lost).getByRole('combobox', { name: '失注理由 必須' }));
+      await user.click(screen.getByRole('option', { name: 'ニーズなし' }));
+      await user.click(within(lost).getByRole('button', { name: '失注にする' }));
+      expect(mocks.updates).toEqual([
+        {
+          organizationId: ORG_ID,
+          dealId: DEAL_ID,
+          stage: 'lost',
+          lostReason: 'no_need',
+          lostNote: null,
+          competitor: null,
+          sqlDecision: 'not_qualified',
+        },
+      ]);
+    });
+
+    it('gives the focus back to the stage after two questions in a row', async () => {
+      const user = userEvent.setup();
+      mocks.get.data = qualification();
+      renderView();
+      const toWon = screen.getByRole('button', { name: '「受注」に移す' });
+      await user.click(toWon);
+      await user.click(screen.getByRole('button', { name: '適格：「受注」へ進める' }));
+      const won = screen.getByRole('dialog', { name: '「AS/400 現行調査」を受注にする' });
+      await user.click(within(won).getByRole('button', { name: 'キャンセル' }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(toWon).toHaveFocus();
+      expect(mocks.updates).toEqual([]);
+    });
+
+    it('leaves the deal where it is when the question is cancelled', async () => {
+      const user = userEvent.setup();
+      mocks.get.data = qualification();
+      renderView();
+      await user.click(screen.getByRole('button', { name: '「課題の確認」に移す' }));
+      await user.click(screen.getByRole('button', { name: 'キャンセル' }));
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(mocks.updates).toEqual([]);
+    });
+
+    it('does not ask when the lead has a decision, or when the deal is moved to lost', async () => {
+      const user = userEvent.setup();
+      mocks.get.data = detail({
+        stage: 'qualification',
+        probability: 10,
+        lead: { ...qualification().lead, sqlDecision: 'qualified' },
+      });
+      const { unmount } = renderView();
+      await user.click(screen.getByRole('button', { name: '「課題の確認」に移す' }));
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(mocks.updates).toEqual([
+        { organizationId: ORG_ID, dealId: DEAL_ID, stage: 'discovery' },
+      ]);
+      unmount();
+
+      mocks.get.data = qualification();
+      renderView();
+      await user.click(screen.getByRole('button', { name: '「失注」に移す' }));
+      expect(
+        screen.getByRole('dialog', { name: '「AS/400 現行調査」を失注にする' })
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    });
   });
 
   it('tells those who cannot change deals that the page is read only', () => {

@@ -1471,6 +1471,7 @@
       "title": "Mark \"{name}\" as lost",
       "description": "Lost reasons feed the win/loss analysis",
       "fromWon": "Unless another deal of the lead is won, the lead is no longer won (Negotiating while a deal is open, else Lost).",
+      "notQualified": "The lead's SQL decision is recorded as not qualified with it.",
       "reason": "Lost reason",
       "reasonPlaceholder": "Choose one",
       "reasonRequired": "Choose a lost reason",
@@ -1494,6 +1495,15 @@
       "probability": "The probability becomes the {stage} default of {probability}%, and the forecast category override is cleared.",
       "won": "Unless another deal of the lead is won, the lead goes back to Negotiating.",
       "confirm": "Reopen"
+    },
+    "sqlDialog": {
+      "title": "SQL decision for \"{name}\"",
+      "description": "Before moving to {stage}, record the SQL decision of the lead \"{lead}\" from the initial hearing.",
+      "descriptionUnnamed": "Before moving to {stage}, record the SQL decision of this lead from the initial hearing.",
+      "qualifiedHint": "Qualified is recorded on the lead and stays if you undo the move.",
+      "notQualifiedHint": "If it is not qualified, the deal is closed as lost with a reason.",
+      "qualified": "Qualified: go to {stage}",
+      "notQualified": "Not qualified: close as lost"
     },
     "form": {
       "createTitle": "New deal",
