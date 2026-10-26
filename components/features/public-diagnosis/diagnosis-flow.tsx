@@ -49,7 +49,11 @@ import type {
 } from '@/lib/features/diagnosis-builder/evaluate';
 import { pruneAnswers, shownSections } from '@/lib/features/diagnostics/engine';
 import { DIAGNOSIS_TURNSTILE_ACTION } from '@/lib/features/diagnostics/turnstile-action';
-import { PHONE_PATTERN, normalizePhone } from '@/lib/features/diagnostics/types/contact';
+import {
+  PHONE_PATTERN,
+  contactOverLimit,
+  normalizePhone,
+} from '@/lib/features/diagnostics/types/contact';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DiagnosisResult } from './diagnosis-result';
@@ -304,6 +308,15 @@ function DiagnosisSteps({
       !PHONE_PATTERN.test(normalizePhone(contact.phone))
     ) {
       nextErrors.phone = t('errors.phone');
+    }
+    // Over the API's limits: named under the field, not left to fail the send (#714). An empty
+    // field is never over, and the phone is sent with a consultation only
+    for (const field of ['company', 'name', 'email', 'phone'] as const) {
+      if (field === 'phone' && !consultation) continue;
+      const max = contactOverLimit(field, contact[field]);
+      if (max !== null) {
+        nextErrors[field] = t('errors.contactTooLong', { field: t(`contact.${field}`), max });
+      }
     }
     if (!consent) nextErrors.consent = t('errors.consent');
     setErrors(nextErrors);
