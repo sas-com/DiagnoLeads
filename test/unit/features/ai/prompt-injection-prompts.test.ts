@@ -24,6 +24,7 @@ import { generateLeadSummary } from '@/lib/features/ai/chat/assistant';
 import { predictConversion, predictConversionBatch } from '@/lib/features/ai/prediction/conversion';
 import { contactCompleteness, leadForClaude } from '@/lib/features/ai/prompt-input';
 import { scoreLeadWithAI, scoreLeadsBatch } from '@/lib/features/ai/scoring/claude';
+import type { AiCallScope } from '@/lib/features/ai/usage';
 
 const OPEN = '<lead_data>';
 const CLOSE = '</lead_data>';
@@ -65,6 +66,9 @@ const reply = (output: unknown) => ({
 });
 
 const DAY = 24 * 60 * 60 * 1000;
+
+/** The organization the calls are made for, logged with the tokens (#47) */
+const scope: AiCallScope = { organizationId: 'org-1' };
 
 function lead(overrides: Partial<Lead> = {}): Lead {
   const createdAt = new Date(Date.now() - 3 * DAY);
@@ -188,7 +192,7 @@ describe('Claude prompts keep the lead data in one block (#47)', () => {
     it('puts every field only inside the block, unchanged, and still scores the lead', async () => {
       mockCreate.mockResolvedValueOnce(reply(SCORE_OUTPUT));
 
-      const score = await scoreLeadWithAI(leadForClaude(hostile));
+      const score = await scoreLeadWithAI(leadForClaude(hostile), scope);
 
       expect(score).toEqual({ ...SCORE_OUTPUT, isFallback: false });
       const request = mockCreate.mock.calls[0][0];
@@ -210,7 +214,7 @@ describe('Claude prompts keep the lead data in one block (#47)', () => {
     it('logs the attempt without any value of the lead', async () => {
       mockCreate.mockResolvedValueOnce(reply(SCORE_OUTPUT));
 
-      await scoreLeadWithAI(leadForClaude(hostile));
+      await scoreLeadWithAI(leadForClaude(hostile), scope);
 
       expectWarningWithoutValues(warn, 'score-lead', markersOf('S'));
       expect(warn).toHaveBeenCalledWith(expect.any(String), {
@@ -225,7 +229,7 @@ describe('Claude prompts keep the lead data in one block (#47)', () => {
       mockCreate.mockResolvedValueOnce(reply(SCORE_OUTPUT));
       const company = lookAlikeBreakOut('COMPANY-L');
 
-      await scoreLeadWithAI(leadForClaude(lead({ company })));
+      await scoreLeadWithAI(leadForClaude(lead({ company })), scope);
 
       const { inside, outside, data } = splitAtBlock(userPrompt(mockCreate.mock.calls[0][0]));
       expect(inside).toContain('\\u2028\\uff1c/lead_data\\uff1e\\u2028');
@@ -237,7 +241,7 @@ describe('Claude prompts keep the lead data in one block (#47)', () => {
     it('logs nothing for an ordinary Japanese lead', async () => {
       mockCreate.mockResolvedValueOnce(reply(SCORE_OUTPUT));
 
-      await scoreLeadWithAI(leadForClaude(lead()));
+      await scoreLeadWithAI(leadForClaude(lead()), scope);
 
       const { data } = splitAtBlock(userPrompt(mockCreate.mock.calls[0][0]));
       expect(data.company).toBe('株式会社三田製作所');
@@ -247,7 +251,7 @@ describe('Claude prompts keep the lead data in one block (#47)', () => {
     it('writes a missing field as null inside the block', async () => {
       mockCreate.mockResolvedValueOnce(reply(SCORE_OUTPUT));
 
-      await scoreLeadWithAI({});
+      await scoreLeadWithAI({}, scope);
 
       const { data } = splitAtBlock(userPrompt(mockCreate.mock.calls[0][0]));
       expect(data).toEqual({ company: null, status: null, createdAt: null });
@@ -258,7 +262,7 @@ describe('Claude prompts keep the lead data in one block (#47)', () => {
     it("sends each lead's fields only inside its own call's block", async () => {
       mockCreate.mockResolvedValue(reply(SCORE_OUTPUT));
 
-      await scoreLeadsBatch([hostileLead('A'), hostileLead('B')].map(leadForClaude));
+      await scoreLeadsBatch([hostileLead('A'), hostileLead('B')].map(leadForClaude), scope);
 
       expect(mockCreate).toHaveBeenCalledTimes(2);
       const blocks = mockCreate.mock.calls.map(([request]) => {
@@ -294,7 +298,7 @@ describe('Claude prompts keep the lead data in one block (#47)', () => {
         stop_reason: 'end_turn',
       });
 
-      const summary = await generateLeadSummary(leadForClaude(hostile));
+      const summary = await generateLeadSummary(leadForClaude(hostile), scope);
 
       expect(summary).toBe('A manufacturer looking at migration.');
       const request = mockCreate.mock.calls[0][0];
@@ -322,7 +326,8 @@ describe('Claude prompts keep the lead data in one block (#47)', () => {
 
       const prediction = await predictConversion(
         leadForClaude(hostile),
-        contactCompleteness(hostile)
+        contactCompleteness(hostile),
+        scope
       );
 
       expect(prediction.probability).toBe(30);
@@ -350,7 +355,7 @@ describe('Claude prompts keep the lead data in one block (#47)', () => {
       const responses = { axMigration: { platform: 'as400', memo: lookAlikeBreakOut('ANSWER-L') } };
       const row = lead({ responses });
 
-      await predictConversion(leadForClaude(row), contactCompleteness(row));
+      await predictConversion(leadForClaude(row), contactCompleteness(row), scope);
 
       const { outside, data } = splitAtBlock(userPrompt(mockCreate.mock.calls[0][0]));
       expect(outside).not.toContain('ANSWER-L');
@@ -360,7 +365,7 @@ describe('Claude prompts keep the lead data in one block (#47)', () => {
     it('logs the attempt (English and Japanese patterns) without any value', async () => {
       mockCreate.mockResolvedValueOnce(reply(PREDICTION_OUTPUT));
 
-      await predictConversion(leadForClaude(hostile), contactCompleteness(hostile));
+      await predictConversion(leadForClaude(hostile), contactCompleteness(hostile), scope);
 
       expectWarningWithoutValues(warn, 'predict-conversion', markersOf('P'));
       expect(warn).toHaveBeenCalledWith(expect.any(String), {
@@ -379,7 +384,8 @@ describe('Claude prompts keep the lead data in one block (#47)', () => {
         [hostile, plain].map((row) => ({
           lead: leadForClaude(row),
           contact: contactCompleteness(row),
-        }))
+        })),
+        scope
       );
 
       expect(mockCreate).toHaveBeenCalledTimes(2);

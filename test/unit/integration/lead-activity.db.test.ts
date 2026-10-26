@@ -21,6 +21,7 @@ import {
   respondentEmailSends,
   users,
 } from '@/lib/db/schema';
+import type { LeadActivityCursor } from '@/lib/features/lead-activity/types/schemas';
 import { appRouter } from '@/server/routers/_app';
 import { and, eq, inArray } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
@@ -68,7 +69,7 @@ describe.skipIf(!url)('lead activity (PostgreSQL)', () => {
     } as any);
   }
 
-  async function callerFor(organizationId: string, role: string, name: string) {
+  async function callerFor(organizationId: string, role: schema.OrganizationRole, name: string) {
     const [user] = await pg
       .insert(users)
       .values({ email: `activity-${unique()}@example.com`, name })
@@ -382,9 +383,10 @@ describe.skipIf(!url)('lead activity (PostgreSQL)', () => {
     it('pages without overlap or gaps', async () => {
       const all = await listAll();
       const paged: { id: string }[] = [];
-      let cursor = null;
+      let cursor: LeadActivityCursor | null = null;
       for (let i = 0; i < 20; i += 1) {
-        const page = await adminA.leadActivity.list({ organizationId: orgA, leadId, limit: 4, cursor });
+        const page: Awaited<ReturnType<typeof adminA.leadActivity.list>> =
+          await adminA.leadActivity.list({ organizationId: orgA, leadId, limit: 4, cursor });
         paged.push(...page.items);
         cursor = page.nextCursor;
         if (!cursor) break;

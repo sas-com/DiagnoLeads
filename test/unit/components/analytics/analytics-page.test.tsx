@@ -255,6 +255,74 @@ describe('AnalyticsPage', () => {
     expect(screen.queryByText(/ROI/)).not.toBeInTheDocument();
   });
 
+  // What the deals brought in (#448): only when the figures carry the deals (canReadDeals)
+  it('shows the won amount and ROI per 流入元, with a dash when nothing was spent', async () => {
+    const returns = (wonAmount: number, roi: number | null) => ({
+      dealCount: 2,
+      wonDealCount: 1,
+      wonAmount,
+      costPerWonDeal: roi === null ? 0 : 120000,
+      roi,
+      medianDaysToWin: 21,
+    });
+    mocks.data.cost = {
+      ...COST,
+      deals: returns(600000, 5),
+      bySource: [
+        { ...COST.bySource[0], deals: returns(600000, 5) },
+        { ...COST.bySource[1], deals: returns(0, null) },
+      ],
+    };
+    renderPage();
+    await userEvent.click(screen.getByRole('tab', { name: '流入元' }));
+    const table = screen.getByTestId('deal-returns');
+    expect(table).toHaveTextContent('受注と費用対効果');
+    const rows = within(table).getAllByRole('row');
+    const cells = (row: HTMLElement) =>
+      within(row)
+        .getAllByRole('cell')
+        .map((cell) => cell.textContent);
+    expect(cells(rows[1])).toEqual([
+      '営業代行（テレアポ）',
+      '2',
+      '1',
+      '￥600,000',
+      '￥120,000',
+      '5倍',
+      '21日',
+    ]);
+    // No acquisition cost: no ROI to show
+    expect(cells(rows[2])[5]).toBe('—');
+    expect(cells(rows[3])[0]).toBe('合計');
+  });
+
+  it('shows the won amount per agency too', async () => {
+    mocks.data.agencies = AGENCIES.map((row) => ({
+      ...row,
+      deals: {
+        dealCount: 1,
+        wonDealCount: 1,
+        wonAmount: 450000,
+        costPerWonDeal: 120000,
+        roi: 3.75,
+        medianDaysToWin: 14,
+      },
+    }));
+    renderPage();
+    await userEvent.click(screen.getByRole('tab', { name: '流入元' }));
+    const tables = screen.getAllByTestId('deal-returns');
+    const agencyTable = tables.at(-1) as HTMLElement;
+    expect(agencyTable).toHaveTextContent('テレアポ株式会社');
+    expect(agencyTable).toHaveTextContent('￥450,000');
+    expect(agencyTable).toHaveTextContent('3.75倍');
+  });
+
+  it('hides the won amounts from those who may not read deals', async () => {
+    renderPage();
+    await userEvent.click(screen.getByRole('tab', { name: '流入元' }));
+    expect(screen.queryByTestId('deal-returns')).not.toBeInTheDocument();
+  });
+
   it('shows agency SQL rate and cost per SQL, or says there is no agency data', async () => {
     const { unmount } = renderPage();
     await userEvent.click(screen.getByRole('tab', { name: '流入元' }));

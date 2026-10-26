@@ -5,7 +5,7 @@
  * LEAD_BULK_CREATE_MAX (#604). Values are made up.
  */
 import { ImportDialog } from '@/components/features/leads/import-dialog';
-import { LEAD_BULK_CREATE_MAX } from '@/lib/features/leads/types/schemas';
+import { type BulkCreateInput, LEAD_BULK_CREATE_MAX } from '@/lib/features/leads/types/schemas';
 import enMessages from '@/locales/en/common.json';
 import jaMessages from '@/locales/ja/common.json';
 import { render, screen, within } from '@testing-library/react';
@@ -14,7 +14,9 @@ import { NextIntlClientProvider } from 'next-intl';
 import { toast } from 'sonner';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mutateAsync = vi.hoisted(() => vi.fn());
+const mutateAsync = vi.hoisted(() =>
+  vi.fn<(input: BulkCreateInput) => Promise<{ success: boolean; createdCount: number }>>()
+);
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
     leads: {
@@ -81,7 +83,7 @@ function largeCsv(count: number) {
 
 /** The addresses sent in each call of leads.bulkCreate */
 const sentEmails = () =>
-  mutateAsync.mock.calls.map(([input]: [{ leads: { email: string }[] }]) =>
+  mutateAsync.mock.calls.map(([input]) =>
     input.leads.map((lead) => lead.email)
   );
 

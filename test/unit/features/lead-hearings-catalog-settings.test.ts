@@ -158,6 +158,7 @@ describe('hearing settings', () => {
       hidden: ['machineModel'],
       required: ['targetSystem'],
       order: { meeting: ['attendeeRoles'] },
+      customFields: [],
     });
     const view = resolveHearingCatalog(HEARING_BASE_CATALOG, overrides);
     expect(view.requiredItems.map((item) => item.id)).toEqual(['system']);

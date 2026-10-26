@@ -24,6 +24,7 @@ import {
   users,
 } from '@/lib/db/schema';
 import { AI_CALL_LIMITS, EMBEDDING_CALL_LIMITS } from '@/lib/features/ai/limits';
+import type { LeadScoreResult } from '@/lib/features/ai/scoring/claude';
 import type * as Semantic from '@/lib/features/ai/search/semantic';
 import { consumeRateLimit, rateLimitKey } from '@/lib/features/diagnostics/rate-limit';
 import { appRouter } from '@/server/routers/_app';
@@ -44,7 +45,7 @@ const ai = vi.hoisted(() => {
   const byId = (rows: { id: string }[], value: unknown) =>
     new Map(rows.map((row) => [row.id, value]));
   return {
-    scoreLeadWithAI: vi.fn(async () => ({ score: 99 })),
+    scoreLeadWithAI: vi.fn(async (): Promise<Partial<LeadScoreResult>> => ({ score: 99 })),
     scoreLeadsBatch: vi.fn(async (rows: { id: string }[]) => byId(rows, { score: 99 })),
     predictConversion: vi.fn(async () => ({ probability: 0.5 })),
     predictConversionBatch: vi.fn(async (rows: { lead: { id: string } }[]) =>

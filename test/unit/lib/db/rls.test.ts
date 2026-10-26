@@ -737,14 +737,8 @@ describe('Integration: withoutRLS (actual)', () => {
 });
 
 // Integration tests with actual RLS functions
-import {
-  setCurrentUser,
-  setRLSContext,
-  clearRLSContext,
-  withRLS,
-  withHierarchicalRLS,
-  withoutRLS as actualWithoutRLS,
-} from '@/lib/db/rls';
+// (setCurrentUser, setRLSContext, clearRLSContext, withRLS and withHierarchicalRLS come from the import above)
+import { withoutRLS as actualWithoutRLS } from '@/lib/db/rls';
 
 describe('Integration: setCurrentUser (actual)', () => {
   it('should execute SQL to set user ID', async () => {
@@ -818,9 +812,10 @@ describe('Integration: withRLS (actual)', () => {
       }),
     };
 
+    // withRLS takes the user ID; the organization goes through withHierarchicalRLS
     const result = await withRLS(
       mockDb as any,
-      { userId: 'user-123', organizationId: 'org-456' },
+      'user-123',
       async (tx) => {
         executionOrder.push('callback');
         return 'result';
@@ -852,7 +847,7 @@ describe('Integration: withRLS (actual)', () => {
     await expect(
       withRLS(
         mockDb as any,
-        { userId: 'user-123' },
+        'user-123',
         async () => {
           throw new Error('Query failed');
         }
@@ -864,7 +859,7 @@ describe('Integration: withRLS (actual)', () => {
 });
 
 describe('Integration: withHierarchicalRLS (actual)', () => {
-  it('should set hierarchical context with parent organization', async () => {
+  it('should set the full context for a child organization and run the callback', async () => {
     const executedCalls: number[] = [];
     const mockDb = {
       transaction: vi.fn().mockImplementation(async (callback) => {
@@ -880,11 +875,11 @@ describe('Integration: withHierarchicalRLS (actual)', () => {
 
     const result = await withHierarchicalRLS(
       mockDb as any,
+      // RLSContext has no parent organization field; the child organization is the one passed
       {
         userId: 'user-123',
         organizationId: 'org-child',
         role: 'member',
-        parentOrganizationId: 'org-parent',
       },
       async (tx) => 'hierarchical-result'
     );

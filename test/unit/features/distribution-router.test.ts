@@ -1,4 +1,5 @@
 import { TRPCError } from '@trpc/server';
+import { and, eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock the database
@@ -33,6 +34,7 @@ vi.mock('@/lib/features/distribution/qr-code', () => ({
 }));
 
 import { db } from '@/lib/db';
+import { diagnosticTemplates, qrCampaigns, qrScans } from '@/lib/db/schema';
 import { generateQRCode } from '@/lib/features/distribution/qr-code';
 
 describe('distribution-router', () => {
@@ -60,7 +62,7 @@ describe('distribution-router', () => {
       (db.query.qrCampaigns.findMany as ReturnType<typeof vi.fn>).mockResolvedValue(mockCampaigns);
 
       const result = await db.query.qrCampaigns.findMany({
-        where: { organizationId: 'org-1' },
+        where: eq(qrCampaigns.organizationId, 'org-1'),
       });
 
       expect(result).toEqual(mockCampaigns);
@@ -71,7 +73,7 @@ describe('distribution-router', () => {
       (db.query.qrCampaigns.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 
       const result = await db.query.qrCampaigns.findMany({
-        where: { organizationId: 'org-1' },
+        where: eq(qrCampaigns.organizationId, 'org-1'),
       });
 
       expect(result).toEqual([]);
@@ -90,7 +92,7 @@ describe('distribution-router', () => {
       (db.query.qrCampaigns.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(mockCampaign);
 
       const campaign = await db.query.qrCampaigns.findFirst({
-        where: { id: 'campaign-1', organizationId: 'org-1' },
+        where: and(eq(qrCampaigns.id, 'campaign-1'), eq(qrCampaigns.organizationId, 'org-1')),
       });
 
       expect(campaign).toEqual(mockCampaign);
@@ -107,7 +109,7 @@ describe('distribution-router', () => {
       (db.query.qrCampaigns.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
 
       const campaign = await db.query.qrCampaigns.findFirst({
-        where: { id: 'non-existent', organizationId: 'org-1' },
+        where: and(eq(qrCampaigns.id, 'non-existent'), eq(qrCampaigns.organizationId, 'org-1')),
       });
 
       expect(campaign).toBeNull();
@@ -119,7 +121,10 @@ describe('distribution-router', () => {
       (db.query.diagnosticTemplates.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
 
       const template = await db.query.diagnosticTemplates.findFirst({
-        where: { id: 'non-existent', organizationId: 'org-1' },
+        where: and(
+          eq(diagnosticTemplates.id, 'non-existent'),
+          eq(diagnosticTemplates.organizationId, 'org-1')
+        ),
       });
 
       expect(template).toBeNull();
@@ -132,12 +137,12 @@ describe('distribution-router', () => {
         .mockResolvedValueOnce(null);
 
       const existingCampaign = await db.query.qrCampaigns.findFirst({
-        where: { shortCode: 'ABC12345' },
+        where: eq(qrCampaigns.shortCode, 'ABC12345'),
       });
       expect(existingCampaign).toEqual({ id: 'existing' });
 
       const secondCheck = await db.query.qrCampaigns.findFirst({
-        where: { shortCode: 'NEW12345' },
+        where: eq(qrCampaigns.shortCode, 'NEW12345'),
       });
       expect(secondCheck).toBeNull();
     });
@@ -154,7 +159,7 @@ describe('distribution-router', () => {
       (db.query.qrCampaigns.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(mockCampaign);
 
       const campaign = await db.query.qrCampaigns.findFirst({
-        where: { id: 'campaign-1', organizationId: 'org-1' },
+        where: and(eq(qrCampaigns.id, 'campaign-1'), eq(qrCampaigns.organizationId, 'org-1')),
       });
 
       expect(campaign).toEqual(mockCampaign);
@@ -164,7 +169,7 @@ describe('distribution-router', () => {
       (db.query.qrCampaigns.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
 
       const campaign = await db.query.qrCampaigns.findFirst({
-        where: { id: 'non-existent', organizationId: 'org-1' },
+        where: and(eq(qrCampaigns.id, 'non-existent'), eq(qrCampaigns.organizationId, 'org-1')),
       });
 
       expect(campaign).toBeNull();
@@ -181,7 +186,7 @@ describe('distribution-router', () => {
       (db.query.qrCampaigns.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(mockCampaign);
 
       const campaign = await db.query.qrCampaigns.findFirst({
-        where: { id: 'campaign-1', organizationId: 'org-1' },
+        where: and(eq(qrCampaigns.id, 'campaign-1'), eq(qrCampaigns.organizationId, 'org-1')),
       });
 
       expect(campaign).toEqual(mockCampaign);
@@ -191,7 +196,7 @@ describe('distribution-router', () => {
       (db.query.qrCampaigns.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
 
       const campaign = await db.query.qrCampaigns.findFirst({
-        where: { id: 'non-existent', organizationId: 'org-1' },
+        where: and(eq(qrCampaigns.id, 'non-existent'), eq(qrCampaigns.organizationId, 'org-1')),
       });
 
       expect(campaign).toBeNull();
@@ -210,7 +215,7 @@ describe('distribution-router', () => {
       (db.query.qrCampaigns.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(mockCampaign);
 
       const campaign = await db.query.qrCampaigns.findFirst({
-        where: { id: 'campaign-1', organizationId: 'org-1' },
+        where: and(eq(qrCampaigns.id, 'campaign-1'), eq(qrCampaigns.organizationId, 'org-1')),
       });
 
       const qrCode = await generateQRCode(campaign!.trackingUrl, {
@@ -256,11 +261,11 @@ describe('distribution-router', () => {
       (db.query.qrScans.findMany as ReturnType<typeof vi.fn>).mockResolvedValue(mockScans);
 
       const campaign = await db.query.qrCampaigns.findFirst({
-        where: { id: 'campaign-1', organizationId: 'org-1' },
+        where: and(eq(qrCampaigns.id, 'campaign-1'), eq(qrCampaigns.organizationId, 'org-1')),
       });
 
       const scans = await db.query.qrScans.findMany({
-        where: { campaignId: 'campaign-1' },
+        where: eq(qrScans.campaignId, 'campaign-1'),
       });
 
       expect(campaign?.scanCount).toBe(100);
@@ -301,7 +306,7 @@ describe('distribution-router', () => {
       (db.query.qrScans.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 
       const scans = await db.query.qrScans.findMany({
-        where: { campaignId: 'campaign-1' },
+        where: eq(qrScans.campaignId, 'campaign-1'),
       });
 
       expect(scans.length).toBe(0);
@@ -320,7 +325,7 @@ describe('distribution-router', () => {
       (db.query.qrScans.findMany as ReturnType<typeof vi.fn>).mockResolvedValue(mockScans);
 
       const scans = await db.query.qrScans.findMany({
-        where: { campaignId: 'campaign-1' },
+        where: eq(qrScans.campaignId, 'campaign-1'),
       });
 
       const deviceBreakdown = scans.reduce(

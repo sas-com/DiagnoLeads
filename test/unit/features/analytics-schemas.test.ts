@@ -25,8 +25,6 @@ import {
   type ConversionFunnelData,
   type ResponseTimeData,
   type AcquisitionCostSummary,
-  type PeriodMetrics,
-  type ComparisonResult,
 } from '@/lib/features/analytics/types/schemas';
 
 describe('dateRangeSchema', () => {
@@ -180,7 +178,8 @@ describe('Analytics response types', () => {
         totalLeads: 1000,
         newLeadsThisMonth: 150,
         conversionRate: 15.5,
-        averageScore: 72.3,
+        mqlLevels: { interest: 300, fit: 250, none: 350, unknown: 100 },
+        mqlRate: 30,
         leadsByStatus: {
           new: 300,
           nurturing: 400,
@@ -286,43 +285,12 @@ describe('Analytics response types', () => {
         totalCost: 200000,
         costPerSql: 100000,
         costPerWon: 200000,
+        // The deals' figures (#448); null for those who may not read deals
+        deals: null,
         bySource: [],
       };
 
       expect(summary.costPerSql).toBe(100000);
-    });
-  });
-
-  describe('ComparisonResult', () => {
-    it('should create valid comparison result', () => {
-      const result: ComparisonResult = {
-        currentPeriod: {
-          totalLeads: 500,
-          convertedLeads: 75,
-          conversionRate: 15,
-          averageScore: 72,
-          bySource: { website: 300, embed: 200 },
-          byStatus: { new: 200, nurturing: 150, negotiating: 75, won: 75 },
-        },
-        previousPeriod: {
-          totalLeads: 400,
-          convertedLeads: 50,
-          conversionRate: 12.5,
-          averageScore: 68,
-          bySource: { website: 250, embed: 150 },
-          byStatus: { new: 180, nurturing: 120, negotiating: 50, won: 50 },
-        },
-        changes: {
-          totalLeads: 25,
-          convertedLeads: 50,
-          conversionRate: 20,
-          averageScore: 5.88,
-        },
-        insights: ['Lead volume increased by 25%', 'Conversion rate improved by 20%'],
-      };
-
-      expect(result.changes.totalLeads).toBe(25);
-      expect(result.insights).toHaveLength(2);
     });
   });
 });
