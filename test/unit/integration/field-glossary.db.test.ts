@@ -12,6 +12,7 @@
 import type { Database } from '@/lib/db/client';
 import * as schema from '@/lib/db/schema';
 import { fieldGlossary } from '@/lib/db/schema';
+import { getFieldGlossaryEntries } from '@/lib/features/field-glossary/service';
 import { and, eq, isNull, like } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
@@ -114,5 +115,30 @@ describe.skipIf(!url)('field glossary (PostgreSQL)', () => {
       .from(fieldGlossary)
       .where(and(eq(fieldGlossary.fieldKey, key), isNull(fieldGlossary.value)));
     expect(rows).toHaveLength(0);
+  });
+
+  it('getFieldGlossaryEntries returns each field with its values first, by sort order, for the asked keys only', async () => {
+    const status = `${ns}.svc-status`;
+    const owner = `${ns}.svc-owner`;
+    const other = `${ns}.svc-other`;
+    await pg.insert(fieldGlossary).values([
+      { fieldKey: status, value: 'b', descriptionJa: 'B', sortOrder: 2 },
+      { fieldKey: status, value: null, descriptionJa: 'ステータス' },
+      { fieldKey: status, value: 'a', descriptionJa: 'A', sortOrder: 1 },
+      { fieldKey: owner, value: null, descriptionJa: '担当' },
+      { fieldKey: other, value: null, descriptionJa: '対象外' },
+    ]);
+
+    const entries = await getFieldGlossaryEntries(pg, [status, owner]);
+    // Only the asked keys are returned
+    expect(entries.every((e) => e.fieldKey === status || e.fieldKey === owner)).toBe(true);
+    expect(entries.some((e) => e.fieldKey === other)).toBe(false);
+
+    // Within a field: the field-level entry (value null) first, then values by sort order
+    const statusValues = entries.filter((e) => e.fieldKey === status).map((e) => e.value);
+    expect(statusValues).toEqual([null, 'a', 'b']);
+
+    // An unknown key yields nothing
+    expect(await getFieldGlossaryEntries(pg, [`${ns}.svc-missing`])).toEqual([]);
   });
 });
