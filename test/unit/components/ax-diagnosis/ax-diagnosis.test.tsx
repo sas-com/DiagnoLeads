@@ -264,6 +264,50 @@ describe('AxDiagnosisFlow', () => {
     expect(JSON.parse(fetchMock.mock.calls[0][1].body).contact.phone).toBe('０３ー１２３４ー５６７８');
   });
 
+  it('names the contact fields over the limits of the API under them, before sending (#714)', async () => {
+    const user = userEvent.setup();
+    render(withIntl(<AxDiagnosisFlow locale="ja" />));
+    await answerAs400(user);
+    await fillContact(user);
+    await user.click(screen.getByRole('checkbox', { name: /無料の個別相談を希望する/ }));
+    const replace = async (name: RegExp, value: string) => {
+      const field = screen.getByRole('textbox', { name });
+      await user.clear(field);
+      await user.click(field);
+      await user.paste(value);
+    };
+    await replace(/会社名/, 'あ'.repeat(201));
+    await replace(/お名前/, 'あ'.repeat(101));
+    await replace(/会社のメールアドレス/, `${'a'.repeat(244)}@example.jp`);
+    await replace(/電話番号/, '0'.repeat(31));
+    await user.click(screen.getByRole('button', { name: '診断結果を見る' }));
+
+    expect(document.getElementById('contact-company-error')).toHaveTextContent(
+      '会社名は200文字以内で入力してください'
+    );
+    expect(document.getElementById('contact-name-error')).toHaveTextContent(
+      'お名前は100文字以内で入力してください'
+    );
+    expect(document.getElementById('contact-email-error')).toHaveTextContent(
+      '会社のメールアドレスは254文字以内で入力してください'
+    );
+    expect(document.getElementById('contact-phone-error')).toHaveTextContent(
+      '電話番号は30文字以内で入力してください'
+    );
+    expect(screen.getByRole('textbox', { name: /会社名/ })).toHaveFocus();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    // Within the limits but the email, the focus goes to the email
+    await replace(/会社名/, 'あ'.repeat(200));
+    await replace(/お名前/, 'あ'.repeat(100));
+    await replace(/電話番号/, '0'.repeat(30));
+    await user.click(screen.getByRole('button', { name: '診断結果を見る' }));
+    expect(document.getElementById('contact-company-error')).not.toBeInTheDocument();
+    expect(document.getElementById('contact-phone-error')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /会社のメールアドレス/ })).toHaveFocus();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('in test mode, asks for a company address on the contact step', { timeout: 30000 }, async () => {
     fetchMock.mockResolvedValue(
       jsonResponse(201, { submissionId: 'sub-1', consultationRequested: false, result: publicResult })

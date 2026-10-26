@@ -31,11 +31,14 @@ export const PHONE_MAX_LENGTH = 30;
  */
 export const PHONE_INPUT_MAX_LENGTH = 100;
 
+/** Longest company, name and email, counted after trim */
+export const CONTACT_MAX_LENGTH = { company: 200, name: 100, email: 254 } as const;
+
 /** The contact a respondent sends with a diagnosis */
 export const contactSchema = z.object({
-  company: plainText(200).pipe(z.string().min(1)),
-  name: plainText(100).pipe(z.string().min(1)),
-  email: z.string().trim().email().max(254),
+  company: plainText(CONTACT_MAX_LENGTH.company).pipe(z.string().min(1)),
+  name: plainText(CONTACT_MAX_LENGTH.name).pipe(z.string().min(1)),
+  email: z.string().trim().email().max(CONTACT_MAX_LENGTH.email),
   phone: z
     .string()
     .max(PHONE_INPUT_MAX_LENGTH)
@@ -43,3 +46,21 @@ export const contactSchema = z.object({
     .pipe(z.string().max(PHONE_MAX_LENGTH).regex(PHONE_PATTERN))
     .optional(),
 });
+
+/**
+ * The limit a contact field goes over, counted as contactSchema counts it (after trim, the phone
+ * also after normalizePhone), or null within it. The forms name it under the field before
+ * sending: the API's 400 for it cannot be tied to a field (#714)
+ */
+export function contactOverLimit(
+  field: keyof typeof CONTACT_MAX_LENGTH | 'phone',
+  value: string
+): number | null {
+  const trimmed = value.trim();
+  if (field === 'phone') {
+    const over =
+      trimmed.length > PHONE_INPUT_MAX_LENGTH || normalizePhone(trimmed).length > PHONE_MAX_LENGTH;
+    return over ? PHONE_MAX_LENGTH : null;
+  }
+  return trimmed.length > CONTACT_MAX_LENGTH[field] ? CONTACT_MAX_LENGTH[field] : null;
+}
