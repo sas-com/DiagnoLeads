@@ -35,8 +35,9 @@ AX マイグレーションのサイト（`/ja/ax-migration` と、その下の 
 | `from` | ほかの AX ページから来たときの、元のページと置き場所：`<ページ>-<置き場所>`（例：`ax-lp-targets-access`、`ax-column-end`）。許可した値だけ（`lib/features/ax-site/cross-links.ts`） |
 
 - ページ：`ax-lp`／`ax-access-lp`／`ax-column-index`／`ax-column`／`ax-diagnosis`
-- 置き場所：`header`／`footer`／`breadcrumb`／`targets-access`／`targets`／`hosts`／`paths`／`related`／`body`／`end`／`result`
+- 置き場所：`header`／`footer`／`breadcrumb`／`targets-access`／`targets`／`hosts`／`paths`／`support-end`／`related`／`body`／`end`／`result`
 - `targets` は、Access LP の「対象になる Access」の下にある、拡張子での見分け方のコラムへのリンク（#367、`ax-access-lp-targets`）。メイン LP の Access 欄からの `targets-access` とは別
+- `support-end` は、Access LP の「Access のサポート終了」の下にある、サポート終了のコラムへのリンク（#458、`ax-access-lp-support-end`）
 - `result` は、Access の診断結果の下に出す、回答に合うコラム1本へのリンク（#363）。ページは診断を表示しているページなので、`entry` と同じく `ax-diagnosis-result`（単独の診断ページ）／`ax-access-lp-result`（Access LP）／`ax-lp-result`（メイン LP）のどれかになる
 
 ### イベントの一覧
@@ -55,7 +56,12 @@ AX マイグレーションのサイト（`/ja/ax-migration` と、その下の 
 | `ax_document_request`／`ax_seminar_request` | 資料・勉強会を申し込んだ | `platform` |
 | `ax_result_email_request` | 結果をメールで受け取るボタンを押し、受け付けられた（`AX_RESULT_EMAIL_ENABLED` が有効のときだけ表示。#154） | `platform`、`status`（常に `accepted`。同じ診断からの2回目の申込も同じ値） |
 
-`ax_lp_cta_click` の `location` の主な値：`hero`、`final`、`header`、`floating`、`as400`、`acos`、`targets-access`、`access-hero`、`access-paths`、`access-final`、`column-end-<slug>`。
+`ax_lp_cta_click` の `location` の値：
+
+- メイン LP：`hero`、`problems`、`demo`、`targets-access`、`as400`、`acos`、`consult-band`（相談帯）、`final`
+- Access LP：`access-hero`、`access-paths`、`access-consult-band`（相談帯）、`access-final`
+- 共通：`header`（ヘッダーのボタン）、`floating`（スマホの下のバー）
+- コラム：`column-end-<slug>`（記事の最後のボタン）
 
 ### 注意
 

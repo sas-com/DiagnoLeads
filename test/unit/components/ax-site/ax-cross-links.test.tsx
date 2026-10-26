@@ -231,6 +231,32 @@ describe('Access landing page links', () => {
     ]);
   });
 
+  it('measures the support end column under its section as a move between pages (#458)', async () => {
+    window.history.replaceState(null, '', '/ja/ax-migration/access');
+    const user = userEvent.setup();
+    await renderAccess();
+
+    const supportEnd = within(screen.getByRole('region', { name: 'Access のサポート終了' }));
+    const link = supportEnd.getByRole('link', {
+      name: 'Access 2016・2019・2021 のサポート終了：使い続けるとどうなり、何をすればよいか',
+    });
+    expect(link).toHaveAttribute('href', '/ja/ax-migration/column/access-office-support-end');
+
+    await user.click(link);
+    expect(link).toHaveAttribute(
+      'href',
+      '/ja/ax-migration/column/access-office-support-end?from=ax-access-lp-support-end'
+    );
+    expect(events('ax_cross_link_click')).toEqual([
+      {
+        event: 'ax_cross_link_click',
+        from_page: 'ax-access-lp',
+        to_page: 'ax-column',
+        location: 'support-end',
+      },
+    ]);
+  });
+
   it('links the table of the three ways after their section', async () => {
     await renderAccess();
     const pathsHeading = screen.getByRole('heading', { level: 2, name: '進め方は、3つあります' });

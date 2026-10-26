@@ -219,10 +219,14 @@ export async function AxAccessSupportEnd({ locale }: SectionProps) {
               <ul className="mt-2 space-y-2">
                 {columns.map((column) => (
                   <li key={column.slug}>
-                    <a href={`/${column.locale}${columnPath(column.slug)}`} className={CROSS_LINK}>
+                    <AxCrossLink
+                      href={`/${column.locale}${columnPath(column.slug)}`}
+                      placement="support-end"
+                      className={CROSS_LINK}
+                    >
                       {column.title}
                       <ArrowRight className="mt-1.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                    </a>
+                    </AxCrossLink>
                   </li>
                 ))}
               </ul>
