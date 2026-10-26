@@ -21,9 +21,10 @@ import type { MoveOptions } from './use-stage-move';
 
 const DRAG_TYPE = 'application/x-deal-id';
 
+/** The toasts, whose undo moves a card back */
+const TOASTER = '[data-sonner-toaster]';
 /** Where the focus may follow a moved card: its menu and the questions a move asks (and toasts) */
-const FOLLOW_KEEPERS =
-  '[role="menu"], [role="dialog"], [role="alertdialog"], [data-sonner-toaster]';
+const FOLLOW_KEEPERS = `[role="menu"], [role="dialog"], [role="alertdialog"], ${TOASTER}`;
 
 type OnMove = (deal: DealCard, stage: DealStage, options?: MoveOptions) => void;
 /** Keeps a card's move button known while it is shown; returns its cleanup */
@@ -39,7 +40,14 @@ interface DealBoardProps {
   onMove: OnMove;
 }
 
-const focusLost = () => !document.activeElement || document.activeElement === document.body;
+/**
+ * Whether the followed card's new move button should take the focus: nothing has it, or a toast
+ * has it. An undo pressed from the keyboard leaves the focus on the toast, which goes away (#720).
+ */
+const focusLost = () => {
+  const active = document.activeElement;
+  return !active || active === document.body || active.closest(TOASTER) !== null;
+};
 
 /**
  * The pipeline board (Refs #436): one column per stage with its count, amount and weighted
@@ -84,7 +92,15 @@ export function DealBoard({ columns, today, closedWithinDays, canEdit, onMove }:
 
   const moveFromMenu = (deal: DealCard, stage: DealStage) => {
     followed.current = deal.id;
-    onMove(deal, stage, { returnFocus: () => moveButtons.current.get(deal.id)?.focus() });
+    onMove(deal, stage, {
+      // False when the card is no longer on the board (a filter leaves it out): the question
+      // then puts the focus back as it does on its own
+      returnFocus: () => {
+        const button = moveButtons.current.get(deal.id);
+        button?.focus();
+        return button !== undefined;
+      },
+    });
   };
 
   const drop = (stage: DealStage) => (event: DragEvent) => {
@@ -318,7 +334,7 @@ function MoveMenu({
           size="icon"
           // 44px on phones (TAP_TARGET), the compact size from md
           className="h-11 w-11 shrink-0 md:h-8 md:w-8"
-          aria-label={t('card.move', { name: deal.name })}
+          aria-label={t('card.move', { name: deal.name, stage: t(`stages.${deal.stage}`) })}
         >
           <ArrowRightLeft className="h-4 w-4" aria-hidden="true" />
         </Button>

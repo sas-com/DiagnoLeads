@@ -25,6 +25,8 @@ interface DealTableProps {
   deals: DealCard[];
   /** Japan calendar day the board was read on (overdue close dates) */
   today: string;
+  /** Days after closing that won and lost deals are listed, as on the board */
+  closedWithinDays: number;
   sort: DealSort;
   onSort: (column: DealSortKey) => void;
 }
@@ -33,15 +35,21 @@ const LINK = cn('inline-flex items-center underline-offset-2 hover:underline', T
 
 /**
  * The board's deals as one table (Refs #436), sortable by stage (the board's order), amount and
- * expected close date (#720). Each row has the deal's next step and the marks of its board card;
- * a passed close date is said with an icon and words, not only in red.
+ * expected close date (#720). Each row has the deal's lead (company and name, as on the board's
+ * cards), its next step and the marks of its board card; a passed close date is said with an icon
+ * and words, not only in red. The caption says the order, the headers' aria-sort too, and a line
+ * above the table says how long won and lost deals stay listed.
  */
-export function DealTable({ deals, today, sort, onSort }: DealTableProps) {
+export function DealTable({ deals, today, closedWithinDays, sort, onSort }: DealTableProps) {
   const t = useTranslations('deals');
   const locale = useLocale();
 
   if (deals.length === 0) {
-    return <p className="py-8 text-center text-sm text-gray-600">{t('state.noMatch')}</p>;
+    return (
+      <p className="py-8 text-center text-sm text-gray-600 dark:text-gray-300">
+        {t('state.noMatch')}
+      </p>
+    );
   }
 
   const sortable = (column: DealSortKey, label: string, className?: string) => (
@@ -54,91 +62,112 @@ export function DealTable({ deals, today, sort, onSort }: DealTableProps) {
   );
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-      <Table>
-        <TableCaption className="sr-only">{t('list.caption')}</TableCaption>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="text-gray-700 dark:text-gray-300">{t('fields.name')}</TableHead>
-            <TableHead className="text-gray-700 dark:text-gray-300">
-              {t('fields.company')}
-            </TableHead>
-            {sortable('stage', t('fields.stage'))}
-            {sortable('amount', t('fields.amount'), 'text-right')}
-            <TableHead className="text-right text-gray-700 dark:text-gray-300">
-              {t('fields.probability')}
-            </TableHead>
-            {sortable('expectedCloseOn', t('fields.expectedCloseOn'))}
-            <TableHead className="text-gray-700 dark:text-gray-300">{t('list.marks')}</TableHead>
-            <TableHead className="text-gray-700 dark:text-gray-300">{t('fields.owner')}</TableHead>
-            <TableHead className="text-gray-700 dark:text-gray-300">
-              {t('fields.nextStep')}
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {deals.map((deal) => {
-            const marks = dealMarks(deal, today);
-            return (
-              <TableRow key={deal.id}>
-                <TableCell className="font-medium">
-                  <Link href={`/${locale}/deals/${deal.id}`} className={LINK}>
-                    {deal.name}
-                  </Link>
-                </TableCell>
-                <TableCell>
-                  <Link href={`/${locale}/leads/${deal.leadId}`} className={LINK}>
-                    {deal.company || deal.leadName || '—'}
-                  </Link>
-                </TableCell>
-                <TableCell>
-                  <DealStageBadge stage={deal.stage} />
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {formatYen(deal.amount, locale) ?? '—'}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">{deal.probability}%</TableCell>
-                <TableCell className="whitespace-nowrap tabular-nums">
-                  {deal.expectedCloseOn ? (
-                    <span
-                      className={cn(
-                        'inline-flex items-center gap-1',
-                        marks.overdue && 'font-medium text-red-700 dark:text-red-400'
-                      )}
-                    >
-                      {/* The marks' column says it in words */}
-                      {marks.overdue && (
-                        <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
-                      )}
-                      {formatDealDate(deal.expectedCloseOn)}
-                    </span>
-                  ) : (
-                    '—'
-                  )}
-                </TableCell>
-                <TableCell className="min-w-48">
-                  <DealMarks flags={marks} />
-                </TableCell>
-                <TableCell className="whitespace-nowrap">
-                  {deal.ownerName ?? t('card.unassigned')}
-                </TableCell>
-                <TableCell className="min-w-48 max-w-80">
-                  {deal.nextStep ? (
-                    <span className="line-clamp-2">{deal.nextStep}</span>
-                  ) : (
-                    <span className="text-gray-600 dark:text-gray-300">—</span>
-                  )}
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+    <div className="space-y-2">
+      <p className="text-sm text-gray-600 dark:text-gray-300">
+        {t('list.closedNote', { days: closedWithinDays })}
+      </p>
+      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+        <Table>
+          <TableCaption className="sr-only">
+            {t('list.caption', { order: t(`list.orders.${sort.by}.${sort.order}`) })}
+          </TableCaption>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-gray-700 dark:text-gray-300">{t('fields.name')}</TableHead>
+              <TableHead className="text-gray-700 dark:text-gray-300">{t('list.lead')}</TableHead>
+              {sortable('stage', t('fields.stage'))}
+              {sortable('amount', t('fields.amount'), 'text-right')}
+              <TableHead className="text-right text-gray-700 dark:text-gray-300">
+                {t('fields.probability')}
+              </TableHead>
+              {sortable('expectedCloseOn', t('fields.expectedCloseOn'))}
+              <TableHead className="text-gray-700 dark:text-gray-300">{t('list.marks')}</TableHead>
+              <TableHead className="text-gray-700 dark:text-gray-300">
+                {t('fields.owner')}
+              </TableHead>
+              <TableHead className="text-gray-700 dark:text-gray-300">
+                {t('fields.nextStep')}
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {deals.map((deal) => {
+              const marks = dealMarks(deal, today);
+              return (
+                <TableRow key={deal.id}>
+                  <TableCell className="font-medium">
+                    <Link href={`/${locale}/deals/${deal.id}`} className={LINK}>
+                      {deal.name}
+                    </Link>
+                  </TableCell>
+                  <TableCell>
+                    {deal.company || deal.leadName ? (
+                      <Link
+                        href={`/${locale}/leads/${deal.leadId}`}
+                        className={cn(LINK, 'flex-col items-start justify-center')}
+                      >
+                        {/* Two lines, as on the board's cards; the space keeps the name apart */}
+                        {deal.company && <span>{deal.company}</span>}{' '}
+                        {deal.leadName && (
+                          <span className="text-gray-600 dark:text-gray-300">{deal.leadName}</span>
+                        )}
+                      </Link>
+                    ) : (
+                      '—'
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <DealStageBadge stage={deal.stage} />
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatYen(deal.amount, locale) ?? '—'}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{deal.probability}%</TableCell>
+                  <TableCell className="whitespace-nowrap tabular-nums">
+                    {deal.expectedCloseOn ? (
+                      <span
+                        className={cn(
+                          'inline-flex items-center gap-1',
+                          marks.overdue && 'font-medium text-red-700 dark:text-red-400'
+                        )}
+                      >
+                        {/* The alerts' column says it in words */}
+                        {marks.overdue && (
+                          <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        )}
+                        {formatDealDate(deal.expectedCloseOn)}
+                      </span>
+                    ) : (
+                      '—'
+                    )}
+                  </TableCell>
+                  <TableCell className="min-w-48">
+                    <DealMarks flags={marks} />
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {deal.ownerName ?? t('card.unassigned')}
+                  </TableCell>
+                  <TableCell className="min-w-48 max-w-80">
+                    {deal.nextStep ? (
+                      <span className="line-clamp-2">{deal.nextStep}</span>
+                    ) : (
+                      <span className="text-gray-600 dark:text-gray-300">—</span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }
 
-/** A column header that sorts the list: the same column flips, another starts in its order */
+/**
+ * A column header that sorts the list: the same column flips, another starts in its order. Its
+ * name is the column's alone (WCAG 2.5.3); the header's aria-sort and the caption say the order.
+ */
 function SortButton({
   column,
   label,
@@ -150,19 +179,12 @@ function SortButton({
   sort: DealSort;
   onSort: (column: DealSortKey) => void;
 }) {
-  const t = useTranslations('deals.list');
   const active = sort.by === column;
   const Icon = !active ? ArrowUpDown : sort.order === 'asc' ? ArrowUp : ArrowDown;
   return (
     <button
       type="button"
       onClick={() => onSort(column)}
-      // The name keeps the visible label (WCAG 2.5.3); the header's aria-sort says the order too
-      aria-label={
-        active
-          ? t('sorted', { column: label, order: t(`orders.${column}.${sort.order}`) })
-          : t('sortBy', { column: label })
-      }
       className={cn(
         '-mx-2 inline-flex h-11 items-center gap-1 rounded-md px-2 font-medium text-gray-700 hover:bg-gray-100 md:h-8 dark:text-gray-300 dark:hover:bg-gray-800',
         active && 'text-gray-900 dark:text-gray-50'

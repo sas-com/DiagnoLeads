@@ -2,10 +2,11 @@
  * The deal form (#436, #720): editing sends only the fields changed in the dialog, a close date
  * box holding text that is not a date, or a date outside 2000-2100, holds the save, a new deal
  * created as won says what it does to the lead, the amount box reads commas, spaces and
- * full-width digits and shows what it read, the lead is chosen from suggestions, a failed save
- * is said in the dialog, a send with errors takes the focus to the first one, and a won or lost
- * deal is edited with its day, reason and competitor instead of its probability (real next-intl
- * messages and UI components; tRPC mocked)
+ * full-width digits and shows what it read, the lead is chosen from suggestions whose count is
+ * read out, a failed save is said in the dialog, which does not close while it saves, a send with
+ * errors takes the focus to the first one, the description says what is required, and a won or
+ * lost deal is edited with its day, reason and competitor instead of its probability (real
+ * next-intl messages and UI components; tRPC mocked)
  */
 import { DealFormDialog } from '@/components/features/deals/deal-form-dialog';
 import type { DealView } from '@/lib/features/deals/service';
@@ -25,6 +26,8 @@ const mocks = vi.hoisted(() => ({
   creates: [] as unknown[],
   updates: [] as unknown[],
   fail: false,
+  // The mutations are on their way (isPending)
+  pending: false,
   searches: [] as { query: string; enabled: boolean }[],
   toast: { success: vi.fn(), error: vi.fn() },
 }));
@@ -33,7 +36,7 @@ vi.mock('@/lib/trpc/client', () => {
   const invalidate = { invalidate: vi.fn() };
   // Like TanStack Query: the hook's callbacks, then the call's
   const mutation = (hook: Callbacks = {}, sent: unknown[] = []) => ({
-    isPending: false,
+    isPending: mocks.pending,
     mutate: (input: unknown, call: Callbacks = {}) => {
       sent.push(input);
       if (mocks.fail) {
@@ -162,6 +165,7 @@ beforeEach(() => {
   mocks.creates = [];
   mocks.updates = [];
   mocks.fail = false;
+  mocks.pending = false;
   mocks.searches = [];
 });
 
@@ -252,8 +256,9 @@ describe('DealFormDialog', () => {
     await user.type(screen.getByLabelText('商談名 必須'), 'AS/400 移行');
     await user.click(screen.getByRole('combobox', { name: 'ステージ' }));
     await user.click(screen.getByRole('option', { name: '受注' }));
+    // The lead's status follows its deals (#444); a past win's day is corrected afterwards
     expect(screen.getByRole('combobox', { name: 'ステージ' })).toHaveAccessibleDescription(
-      'このリードは成約になります。商談を開き直しても、リードは成約のままです。 受注日は今日になります。'
+      'このリードは成約になります。 受注日は今日になります。 過去の受注は、作成のあとに編集で受注日を直せます。'
     );
     await user.click(screen.getByRole('button', { name: '作成' }));
     expect(mocks.creates).toEqual([
@@ -317,11 +322,14 @@ describe('DealFormDialog', () => {
       await user.click(lead);
       const search = screen.getByRole('combobox', { name: 'リードを探す' });
       expect(search).toHaveFocus();
-      expect(screen.getByText('会社名・氏名・メールの一部を入れてください')).toBeInTheDocument();
+      // Said in a status line that is always there, so the changes are read out (#720)
+      const status = screen.getByRole('status');
+      expect(status).toHaveTextContent('会社名・氏名・メールの一部を入れてください');
 
       await user.type(search, '架空');
       const option = await screen.findByRole('option', { name: /架空商事 山田 太郎/ });
       expect(mocks.searches.at(-1)).toEqual({ query: '架空', enabled: true });
+      expect(status).toHaveTextContent('1件の候補');
       expect(within(option).getByText('taro@example.com')).toBeInTheDocument();
       await user.click(option);
 
@@ -401,7 +409,7 @@ describe('DealFormDialog', () => {
       await user.click(screen.getByRole('option', { name: '失注' }));
       await user.click(screen.getByRole('button', { name: '作成' }));
       const lost = screen.getByRole('dialog', { name: '「AS/400 移行」を失注にする' });
-      await user.click(within(lost).getByRole('combobox', { name: '失注理由' }));
+      await user.click(within(lost).getByRole('combobox', { name: '失注理由 必須' }));
       await user.click(screen.getByRole('option', { name: '時期' }));
       await user.click(within(lost).getByRole('button', { name: '失注にする' }));
       expect(within(lost).getByRole('alert')).toHaveTextContent(
@@ -416,13 +424,14 @@ describe('DealFormDialog', () => {
       renderForm({ deal: wonDeal });
       expect(screen.queryByLabelText('確度')).not.toBeInTheDocument();
       expect(screen.queryByRole('combobox', { name: '予測の区分' })).not.toBeInTheDocument();
-      expect(screen.queryByLabelText('失注日')).not.toBeInTheDocument();
-      const day = screen.getByLabelText('受注日');
+      expect(screen.queryByLabelText('失注日 必須')).not.toBeInTheDocument();
+      const day = screen.getByLabelText('受注日 必須');
       expect(day).toHaveValue('2026/10/20');
 
       await user.clear(day);
       await user.type(day, '2026/10/18');
-      await user.type(screen.getByLabelText('競合（任意）'), '架空システムズ');
+      // Labelled like the deal page; only the required fields are marked (#720)
+      await user.type(screen.getByLabelText('競合'), '架空システムズ');
       await user.click(screen.getByRole('button', { name: '保存' }));
       expect(mocks.updates).toEqual([
         {
@@ -437,7 +446,7 @@ describe('DealFormDialog', () => {
     it('does not save a won day the deals do not take', async () => {
       const user = userEvent.setup();
       renderForm({ deal: wonDeal });
-      const day = screen.getByLabelText('受注日');
+      const day = screen.getByLabelText('受注日 必須');
       await user.clear(day);
       await user.type(day, '1999/12/31');
       await user.click(screen.getByRole('button', { name: '保存' }));
@@ -450,31 +459,96 @@ describe('DealFormDialog', () => {
       const user = userEvent.setup();
       renderForm({ deal: lostDeal });
       expect(screen.queryByLabelText('確度')).not.toBeInTheDocument();
-      expect(screen.getByLabelText('失注日')).toHaveValue('2026/10/21');
+      expect(screen.getByLabelText('失注日 必須')).toHaveValue('2026/10/21');
       expect(screen.getByRole('combobox', { name: '失注理由 必須' })).toHaveTextContent('他社選定');
-      expect(screen.getByLabelText('詳細（任意）')).toHaveValue('架空システムズに決定');
-      expect(screen.getByLabelText('競合（任意）')).toHaveValue('架空システムズ');
+      expect(screen.getByLabelText('失注の詳細')).toHaveValue('架空システムズに決定');
+      expect(screen.getByLabelText('競合')).toHaveValue('架空システムズ');
+      // Nothing says 保留 is not a deal's reason when it is not the one saved
+      expect(screen.queryByText(/商談の失注理由に使えません/)).not.toBeInTheDocument();
 
       await user.click(screen.getByRole('combobox', { name: '失注理由 必須' }));
       await user.click(screen.getByRole('option', { name: '予算' }));
-      await user.clear(screen.getByLabelText('詳細（任意）'));
+      await user.clear(screen.getByLabelText('失注の詳細'));
       await user.click(screen.getByRole('button', { name: '保存' }));
       expect(mocks.updates).toEqual([
         { organizationId: ORG_ID, dealId: DEAL_ID, lostReason: 'budget', lostNote: null },
       ]);
     });
 
-    it('asks for a lost reason a deal can take', async () => {
+    it('asks for a lost reason a deal can take, and says why', async () => {
       const user = userEvent.setup();
       // 保留 is a lead's reason, not a deal's (#445)
       renderForm({ deal: { ...lostDeal, lostReason: 'on_hold' } });
       const reason = screen.getByRole('combobox', { name: '失注理由 必須' });
       expect(reason).toHaveTextContent('選んでください');
+      expect(reason).toHaveAccessibleDescription(
+        '「保留」は商談の失注理由に使えません。選び直してください'
+      );
       await user.click(screen.getByRole('button', { name: '保存' }));
       expect(mocks.updates).toEqual([]);
       expect(reason).toHaveFocus();
-      expect(reason).toHaveAccessibleDescription('失注理由を選んでください');
+      expect(reason).toHaveAccessibleDescription(
+        '「保留」は商談の失注理由に使えません。選び直してください 失注理由を選んでください'
+      );
+
+      await user.click(reason);
+      await user.click(screen.getByRole('option', { name: '時期' }));
+      expect(screen.queryByText(/商談の失注理由に使えません/)).not.toBeInTheDocument();
     });
+  });
+
+  describe('while it saves (#720)', () => {
+    it('does not close, so a failure can still be said in it', async () => {
+      const user = userEvent.setup();
+      mocks.pending = true;
+      const { onOpenChange } = renderForm({ deal });
+      const dialog = screen.getByRole('dialog', { name: '商談を編集' });
+      const save = within(dialog).getByRole('button', { name: '保存しています…' });
+      expect(save).toBeDisabled();
+      expect(save.querySelector('svg')).toHaveClass('animate-spin');
+      expect(within(dialog).getByRole('button', { name: 'キャンセル' })).toBeDisabled();
+
+      await user.keyboard('{Escape}');
+      await user.click(within(dialog).getByRole('button', { name: '閉じる' }));
+      expect(onOpenChange).not.toHaveBeenCalled();
+      expect(screen.getByRole('dialog', { name: '商談を編集' })).toBeInTheDocument();
+    });
+
+    it('closes as before once it is saved', async () => {
+      const user = userEvent.setup();
+      const { onOpenChange } = renderForm({ deal });
+      await user.keyboard('{Escape}');
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+  });
+
+  it.each([
+    [{}, 'リードと商談名は必須です。ほかはあとから入力できます'],
+    [{ leadId: LEAD_ID }, '商談名は必須です。ほかはあとから入力できます'],
+    [{ deal }, '商談名は必須です。ほかはあとから入力できます'],
+    [{ deal: wonDeal }, '商談名と受注日は必須です。ほかはあとから入力できます'],
+    [{ deal: lostDeal }, '商談名・失注日・失注理由は必須です。ほかはあとから入力できます'],
+  ])('describes what is required (#720): %#', (props, description) => {
+    renderForm(props);
+    expect(screen.getByRole('dialog')).toHaveAccessibleDescription(description);
+  });
+
+  it('scrolls the fields and keeps the buttons in view under them (#720)', () => {
+    renderForm({ deal: lostDeal });
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveClass('max-h-[90dvh]');
+    const fields = screen.getByLabelText('商談名 必須').closest('.overflow-y-auto');
+    expect(fields).not.toBeNull();
+    expect(fields).not.toContainElement(screen.getByRole('button', { name: '保存' }));
+  });
+
+  it('keeps the dialog behind the list of leads while it is open (a modal list, #720)', async () => {
+    const user = userEvent.setup();
+    renderForm({});
+    await user.click(screen.getByRole('combobox', { name: 'リード 必須' }));
+    expect(screen.getByRole('combobox', { name: 'リードを探す' })).toBeInTheDocument();
+    // The modal list hides the rest, which also lets it scroll inside the dialog
+    expect(screen.queryByRole('textbox', { name: '商談名 必須' })).not.toBeInTheDocument();
   });
 
   it('writes no text under 14px (#720)', () => {

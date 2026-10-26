@@ -87,6 +87,11 @@ describe('parseAmount', () => {
     ['１２，０００，０００', 12_000_000],
     ['１２\u3000０００\u3000０００', 12_000_000],
     ['0', 0],
+    // A yen sign before or 円 after, as amounts are written (#720)
+    ['¥3,000,000', 3_000_000],
+    ['￥3,000,000', 3_000_000],
+    ['3,000,000円', 3_000_000],
+    [' ￥ ３，０００，０００ 円 ', 3_000_000],
   ])('reads %s as yen', (typed, amount) => {
     expect(parseAmount(typed)).toBe(amount);
   });
@@ -94,11 +99,15 @@ describe('parseAmount', () => {
   it('reads an empty box as no amount', () => {
     expect(parseAmount('')).toBeNull();
     expect(parseAmount(' , ')).toBeNull();
+    expect(parseAmount('¥')).toBeNull();
   });
 
-  it.each(['1200万', '¥3,000,000', '3.5', '-1', '1e6'])('does not read %s', (typed) => {
-    expect(parseAmount(typed)).toBe('invalid');
-  });
+  it.each(['1200万', '3.5', '-1', '1e6', '¥¥3,000', '3,000円円', '円3,000', '3,000¥', '$3,000'])(
+    'does not read %s',
+    (typed) => {
+      expect(parseAmount(typed)).toBe('invalid');
+    }
+  );
 
   it('stops at the amount the API takes', () => {
     expect(parseAmount(String(DEAL_LIMITS.amount))).toBe(DEAL_LIMITS.amount);

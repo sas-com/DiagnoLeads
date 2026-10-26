@@ -1449,7 +1449,7 @@
       "noCloseDate": "No close date",
       "noAmount": "No amount yet",
       "unassigned": "No owner",
-      "move": "Move \"{name}\" to another stage",
+      "move": "Move \"{name}\" to another stage (now {stage})",
       "moveTo": "Move to {stage}"
     },
     "filters": {
@@ -1470,7 +1470,7 @@
     "lostDialog": {
       "title": "Mark \"{name}\" as lost",
       "description": "Lost reasons feed the win/loss analysis",
-      "fromWon": "The lead stays won.",
+      "fromWon": "Unless another deal of the lead is won, the lead is no longer won (Negotiating while a deal is open, else Lost).",
       "reason": "Lost reason",
       "reasonPlaceholder": "Choose one",
       "reasonRequired": "Choose a lost reason",
@@ -1480,8 +1480,8 @@
     },
     "wonDialog": {
       "title": "Mark \"{name}\" as won",
-      "impact": "The lead \"{lead}\" becomes won. It stays won even if the deal is reopened.",
-      "impactUnnamed": "This lead becomes won. It stays won even if the deal is reopened.",
+      "impact": "The lead \"{lead}\" becomes won.",
+      "impactUnnamed": "This lead becomes won.",
       "fromLost": "The lost reason and details are cleared.",
       "closedOn": "Won on",
       "closedOnInvalid": "Enter the won date as a day from 2000 to 2100",
@@ -1492,12 +1492,18 @@
       "lost": "The lost reason ({reason}) and the details will be cleared.",
       "lostNoReason": "The lost reason and the details will be cleared.",
       "probability": "The probability becomes the {stage} default of {probability}%, and the forecast category override is cleared.",
-      "won": "The lead stays won.",
+      "won": "Unless another deal of the lead is won, the lead goes back to Negotiating.",
       "confirm": "Reopen"
     },
     "form": {
       "createTitle": "New deal",
       "editTitle": "Edit deal",
+      "requiredHelp": {
+        "lead": "The lead and the deal name are required. The rest can be filled in later",
+        "name": "The deal name is required. The rest can be filled in later",
+        "won": "The deal name and the won date are required. The rest can be filled in later",
+        "lost": "The deal name, the lost date and the lost reason are required. The rest can be filled in later"
+      },
       "lead": "Lead",
       "leadChoose": "Choose a lead",
       "leadSearchLabel": "Search leads",
@@ -1506,6 +1512,7 @@
       "leadRequired": "Choose a lead",
       "leadSearching": "Searching…",
       "leadNotFound": "No match",
+      "leadCount": "{count, plural, one {# suggestion} other {# suggestions}}",
       "required": "Required",
       "namePlaceholder": "e.g. AS/400 current system survey",
       "nameRequired": "Enter a deal name",
@@ -1522,27 +1529,30 @@
       "ownerFromLead": "The lead's assignee (else you)",
       "forecastAuto": "From the probability",
       "wonToday": "The won date will be today.",
+      "wonPast": "For a past win, correct the won date by editing the deal once it is created.",
+      "onHoldReason": "\"{reason}\" cannot be the lost reason of a deal. Choose another one",
       "submitCreate": "Create",
       "submitEdit": "Save",
+      "saving": "Saving…",
       "saveError": "Could not save. Please try again"
     },
     "list": {
-      "caption": "Deals",
-      "marks": "Flags",
-      "sortBy": "Sort by {column}",
-      "sorted": "{column} ({order})",
+      "caption": "Deals ({order})",
+      "closedNote": "Won and lost deals are shown for the last {days, plural, one {day} other {# days}}",
+      "lead": "Company and contact",
+      "marks": "Alerts",
       "orders": {
         "stage": {
           "asc": "stage order",
           "desc": "reverse stage order"
         },
         "amount": {
-          "asc": "smallest first",
-          "desc": "largest first"
+          "asc": "smallest amount first",
+          "desc": "largest amount first"
         },
         "expectedCloseOn": {
-          "asc": "earliest first",
-          "desc": "latest first"
+          "asc": "earliest expected close first",
+          "desc": "latest expected close first"
         }
       }
     },
@@ -1570,12 +1580,12 @@
       "retry": "Retry",
       "empty": "No deals yet",
       "emptyHint": "Create deals from a lead's page or with \"New deal\" here",
-      "emptyHintReadOnly": "Only members who can edit leads can create deals",
+      "emptyHintReadOnly": "Deals will show here once they are created",
       "noMatch": "No deals match the filters",
       "clearFilters": "Clear filters",
       "truncated": "Showing up to {limit, plural, one {# deal} other {# deals}}. Narrow them down with the filters",
       "readOnly": "Read only",
-      "readOnlyHint": "Only members who can edit leads can create, change or move deals",
+      "readOnlyHint": "Only members who can edit leads can create, change or move deals. To make changes, ask an admin of the organization",
       "forbiddenTitle": "You cannot see the deals",
       "forbiddenBody": "Deals, their amounts, the forecast and the targets are shown to members who can view leads, except viewers from a parent organization."
     },
@@ -1584,8 +1594,12 @@
       "saved": "Saved",
       "moved": "Moved \"{name}\" to {stage}",
       "movedTo": "Moved \"{name}\" to {stage} ({probability}% probability)",
+      "movedHandedOff": "Moved \"{name}\" to {stage} and sent the handoff sheet to the technical team",
+      "movedToHandedOff": "Moved \"{name}\" to {stage} ({probability}% probability) and sent the handoff sheet to the technical team",
+      "moveFailed": "Could not move \"{name}\" to {stage}. It is back in {from}",
       "undo": "Undo",
       "moveUndone": "Moved \"{name}\" back to {stage}",
+      "undoFailed": "Could not undo the move of \"{name}\". It is in {stage} now",
       "deleted": "Deal deleted",
       "deleteError": "Could not delete. Please try again",
       "error": "Could not save. Please try again"

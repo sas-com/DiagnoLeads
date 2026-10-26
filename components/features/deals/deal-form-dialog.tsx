@@ -14,7 +14,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -47,12 +46,13 @@ import {
 import { DEAL_LIMITS } from '@/lib/features/deals/types/schemas';
 import { trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
-import { ChevronsUpDown } from 'lucide-react';
+import { ChevronsUpDown, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { type FormEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react';
+import { type FormEvent, useEffect, useId, useRef, useState } from 'react';
 import { DealAmountInput } from './deal-amount-input';
 import { isDealDate, parseAmount, parseWhole } from './deal-format';
 import { LostReasonDialog, type LostValues } from './lost-reason-dialog';
+import { RequiredMark } from './required-mark';
 import { useDealMutations } from './use-deal-mutations';
 
 /** Select value for "nobody" / "automatic" (Radix needs non-empty values) */
@@ -194,8 +194,9 @@ type ErrorField = (typeof ERROR_FIELDS)[number][0];
  * on the board or the deal page; creating one directly as lost asks for the lost reason, and as
  * won says what it does to the lead. Editing sends only the fields changed in the dialog, so it
  * does not write back a value changed elsewhere meanwhile (a stage move resets the probability).
- * A save that fails says so in the dialog, and a send with errors takes the focus to the first
- * field to fix (#720).
+ * A save that fails says so in the dialog, which does not close while it saves, and a send with
+ * errors takes the focus to the first field to fix (#720). The fields scroll, and the buttons
+ * stay in view under them.
  */
 export function DealFormDialog({
   open,
@@ -264,6 +265,10 @@ export function DealFormDialog({
   };
   const firstError = ERROR_FIELDS.find(([field]) => errors[field]);
   const pending = create.isPending || update.isPending;
+  // What must be filled in this dialog, for its description
+  const requiredHelp = t(`form.requiredHelp.${closed ?? (!editing && !leadId ? 'lead' : 'name')}`);
+  // A lost deal saved with 保留 before it was no deal's reason (#445) asks for another one
+  const onHold = closed === 'lost' && deal?.lostReason === 'on_hold' && state.lostReason === '';
   const autoCategory = forecastCategory({
     stage: state.stage,
     probability: typeof probability === 'number' ? probability : STAGE_PROBABILITY[state.stage],
@@ -335,335 +340,373 @@ export function DealFormDialog({
 
   return (
     <>
-      <Dialog open={open && !lostOpen} onOpenChange={onOpenChange}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-          <form onSubmit={submit} className="space-y-4" noValidate>
-            <DialogHeader>
-              <DialogTitle>{editing ? t('form.editTitle') : t('form.createTitle')}</DialogTitle>
-              <DialogDescription className="sr-only">{t('description')}</DialogDescription>
-            </DialogHeader>
-
-            {!editing && !leadId && (
-              <div className="space-y-1.5">
-                <Label htmlFor={`${id}-lead`}>
-                  {t('form.lead')} <RequiredMark />
-                </Label>
-                <LeadCombobox
-                  organizationId={organizationId}
-                  triggerId={`${id}-lead`}
-                  value={lead}
-                  onChange={setLead}
-                  onPicked={() => nameRef.current?.focus()}
-                  invalid={submitted && errors.lead}
-                  describedBy={describedBy(errors.lead, 'lead')}
-                />
-                {fieldError(errors.lead, 'lead', t('form.leadRequired'))}
-              </div>
-            )}
-
-            <div className="space-y-1.5">
-              <Label htmlFor={`${id}-name`}>
-                {t('fields.name')} <RequiredMark />
-              </Label>
-              <Input
-                ref={nameRef}
-                id={`${id}-name`}
-                value={state.name}
-                maxLength={DEAL_LIMITS.name}
-                placeholder={t('form.namePlaceholder')}
-                aria-invalid={submitted && errors.name}
-                aria-describedby={describedBy(errors.name, 'name')}
-                className={TAP_TARGET}
-                onChange={(event) => set('name', event.target.value)}
-              />
-              {fieldError(errors.name, 'name', t('form.nameRequired'))}
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor={`${id}-kind`}>{t('fields.kind')}</Label>
-                <Select
-                  value={state.kind}
-                  onValueChange={(value) => {
-                    // A form's reset or autofill clears Radix's hidden select: keep the choice
-                    if (!value) return;
-                    set('kind', value as DealKind);
-                  }}
-                >
-                  <SelectTrigger id={`${id}-kind`} className={TAP_TARGET}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DEAL_KINDS.map((kind) => (
-                      <SelectItem key={kind} value={kind}>
-                        {t(`kinds.${kind}`)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {!editing && (
+      <Dialog
+        open={open && !lostOpen}
+        onOpenChange={(next) => {
+          // Not closed while it is saved, so a failure can still be told
+          if (!next && pending) return;
+          onOpenChange(next);
+        }}
+      >
+        <DialogContent
+          className="flex max-h-[90dvh] flex-col gap-0 p-0 sm:max-w-lg"
+          onInteractOutside={(event) => {
+            if (pending) event.preventDefault();
+          }}
+        >
+          <DialogHeader className="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+            <DialogTitle>{editing ? t('form.editTitle') : t('form.createTitle')}</DialogTitle>
+            <DialogDescription className="sr-only">{requiredHelp}</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col" noValidate>
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
+              {!editing && !leadId && (
                 <div className="space-y-1.5">
-                  <Label htmlFor={`${id}-stage`}>{t('fields.stage')}</Label>
+                  <Label htmlFor={`${id}-lead`}>
+                    {t('form.lead')} <RequiredMark />
+                  </Label>
+                  <LeadCombobox
+                    organizationId={organizationId}
+                    triggerId={`${id}-lead`}
+                    value={lead}
+                    onChange={setLead}
+                    onPicked={() => nameRef.current?.focus()}
+                    invalid={submitted && errors.lead}
+                    describedBy={describedBy(errors.lead, 'lead')}
+                  />
+                  {fieldError(errors.lead, 'lead', t('form.leadRequired'))}
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <Label htmlFor={`${id}-name`}>
+                  {t('fields.name')} <RequiredMark />
+                </Label>
+                <Input
+                  ref={nameRef}
+                  id={`${id}-name`}
+                  value={state.name}
+                  maxLength={DEAL_LIMITS.name}
+                  placeholder={t('form.namePlaceholder')}
+                  aria-invalid={submitted && errors.name}
+                  aria-describedby={describedBy(errors.name, 'name')}
+                  className={TAP_TARGET}
+                  onChange={(event) => set('name', event.target.value)}
+                />
+                {fieldError(errors.name, 'name', t('form.nameRequired'))}
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor={`${id}-kind`}>{t('fields.kind')}</Label>
                   <Select
-                    value={state.stage}
+                    value={state.kind}
                     onValueChange={(value) => {
+                      // A form's reset or autofill clears Radix's hidden select: keep the choice
                       if (!value) return;
-                      set('stage', value as DealStage);
+                      set('kind', value as DealKind);
                     }}
                   >
-                    <SelectTrigger
-                      id={`${id}-stage`}
-                      className={TAP_TARGET}
-                      aria-describedby={state.stage === 'won' ? `${id}-won-note` : undefined}
-                    >
+                    <SelectTrigger id={`${id}-kind`} className={TAP_TARGET}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {DEAL_STAGES.map((stage) => (
-                        <SelectItem key={stage} value={stage}>
-                          {t(`stages.${stage}`)}
+                      {DEAL_KINDS.map((kind) => (
+                        <SelectItem key={kind} value={kind}>
+                          {t(`kinds.${kind}`)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {!editing && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor={`${id}-stage`}>{t('fields.stage')}</Label>
+                    <Select
+                      value={state.stage}
+                      onValueChange={(value) => {
+                        if (!value) return;
+                        set('stage', value as DealStage);
+                      }}
+                    >
+                      <SelectTrigger
+                        id={`${id}-stage`}
+                        className={TAP_TARGET}
+                        aria-describedby={state.stage === 'won' ? `${id}-won-note` : undefined}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DEAL_STAGES.map((stage) => (
+                          <SelectItem key={stage} value={stage}>
+                            {t(`stages.${stage}`)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+
+              {!editing && state.stage === 'won' && (
+                <div
+                  id={`${id}-won-note`}
+                  className="space-y-1 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-500/10 dark:text-amber-200"
+                >
+                  <p>
+                    {lead
+                      ? t('wonDialog.impact', { lead: lead.label })
+                      : t('wonDialog.impactUnnamed')}
+                  </p>
+                  <p>{t('form.wonToday')}</p>
+                  <p>{t('form.wonPast')}</p>
+                </div>
+              )}
+
+              {closed && (
+                <>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label htmlFor={`${id}-closed`}>
+                        {closedOnLabel} <RequiredMark />
+                      </Label>
+                      <HearingDateInput
+                        id={`${id}-closed`}
+                        label={closedOnLabel}
+                        value={state.closedOn}
+                        onChange={(value) => set('closedOn', value)}
+                        readOnly={false}
+                        clearable={false}
+                        onInvalidChange={setClosedOnUnreadable}
+                        error={
+                          submitted && errors.closedOn && !closedOnUnreadable
+                            ? t(closed === 'lost' ? 'form.lostOnInvalid' : 'form.wonOnInvalid')
+                            : undefined
+                        }
+                      />
+                    </div>
+                    {closed === 'lost' && (
+                      <div className="space-y-1.5">
+                        <Label htmlFor={`${id}-lost-reason`}>
+                          {t('fields.lostReason')} <RequiredMark />
+                        </Label>
+                        <Select
+                          value={state.lostReason}
+                          onValueChange={(value) => {
+                            if (!value) return;
+                            set('lostReason', value as DealLostReason);
+                          }}
+                        >
+                          <SelectTrigger
+                            id={`${id}-lost-reason`}
+                            className={TAP_TARGET}
+                            aria-invalid={submitted && errors.lostReason}
+                            aria-describedby={
+                              [
+                                onHold ? `${id}-on-hold` : null,
+                                describedBy(errors.lostReason, 'lost-reason'),
+                              ]
+                                .filter(Boolean)
+                                .join(' ') || undefined
+                            }
+                          >
+                            <SelectValue placeholder={t('lostDialog.reasonPlaceholder')} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {DEAL_LOST_REASONS.map((reason) => (
+                              <SelectItem key={reason} value={reason}>
+                                {tReason(reason)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {onHold && (
+                          <p
+                            id={`${id}-on-hold`}
+                            className="text-sm text-amber-800 dark:text-amber-300"
+                          >
+                            {t('form.onHoldReason', { reason: tReason('on_hold') })}
+                          </p>
+                        )}
+                        {fieldError(
+                          errors.lostReason,
+                          'lost-reason',
+                          t('lostDialog.reasonRequired')
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {closed === 'lost' && (
+                    <div className="space-y-1.5">
+                      <Label htmlFor={`${id}-lost-note`}>{t('fields.lostNote')}</Label>
+                      <Textarea
+                        id={`${id}-lost-note`}
+                        value={state.lostNote}
+                        maxLength={DEAL_LIMITS.lostNote}
+                        rows={3}
+                        onChange={(event) => set('lostNote', event.target.value)}
+                      />
+                    </div>
+                  )}
+                  <div className="space-y-1.5">
+                    <Label htmlFor={`${id}-competitor`}>{t('fields.competitor')}</Label>
+                    <Input
+                      id={`${id}-competitor`}
+                      value={state.competitor}
+                      maxLength={DEAL_LIMITS.competitor}
+                      className={TAP_TARGET}
+                      onChange={(event) => set('competitor', event.target.value)}
+                    />
+                  </div>
+                </>
+              )}
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor={`${id}-amount`}>{t('fields.amount')}</Label>
+                  <DealAmountInput
+                    id={`${id}-amount`}
+                    value={state.amount}
+                    onChange={(value) => set('amount', value)}
+                    showError={submitted}
+                  />
+                </div>
+                {!closed && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor={`${id}-probability`}>{t('fields.probability')}</Label>
+                    <Input
+                      id={`${id}-probability`}
+                      inputMode="numeric"
+                      value={state.probability}
+                      aria-invalid={submitted && errors.probability}
+                      aria-describedby={`${id}-probability-help ${describedBy(errors.probability, 'probability') ?? ''}`.trim()}
+                      className={TAP_TARGET}
+                      onChange={(event) => set('probability', event.target.value)}
+                    />
+                    <p
+                      id={`${id}-probability-help`}
+                      className="text-sm text-gray-600 dark:text-gray-300"
+                    >
+                      {t('form.probabilityHelp', { value: STAGE_PROBABILITY[state.stage] })}
+                    </p>
+                    {fieldError(errors.probability, 'probability', t('form.probabilityInvalid'))}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor={`${id}-close`}>{t('fields.expectedCloseOn')}</Label>
+                  <HearingDateInput
+                    id={`${id}-close`}
+                    label={t('fields.expectedCloseOn')}
+                    value={state.expectedCloseOn}
+                    onChange={(value) => set('expectedCloseOn', value)}
+                    readOnly={false}
+                    onInvalidChange={setCloseUnreadable}
+                    error={
+                      submitted && errors.expectedCloseOn && !closeUnreadable
+                        ? t('form.closeDateInvalid')
+                        : undefined
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor={`${id}-owner`}>{t('fields.owner')}</Label>
+                  <Select
+                    value={
+                      state.ownerUserId === undefined ? LEAD_ASSIGNEE : (state.ownerUserId ?? NONE)
+                    }
+                    onValueChange={(value) => {
+                      if (!value) return;
+                      set(
+                        'ownerUserId',
+                        value === LEAD_ASSIGNEE ? undefined : value === NONE ? null : value
+                      );
+                    }}
+                  >
+                    <SelectTrigger id={`${id}-owner`} className={TAP_TARGET}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {!editing && (
+                        <SelectItem value={LEAD_ASSIGNEE}>{t('form.ownerFromLead')}</SelectItem>
+                      )}
+                      <SelectItem value={NONE}>{t('form.ownerNone')}</SelectItem>
+                      {(members.data ?? []).map((member) => (
+                        <SelectItem key={member.userId} value={member.userId}>
+                          {member.displayName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {!closed && (
+                <div className="space-y-1.5">
+                  <Label htmlFor={`${id}-forecast`}>{t('fields.forecastCategory')}</Label>
+                  <Select
+                    value={state.forecastOverride ?? NONE}
+                    onValueChange={(value) => {
+                      if (!value) return;
+                      set('forecastOverride', value === NONE ? null : (value as ForecastOverride));
+                    }}
+                  >
+                    <SelectTrigger id={`${id}-forecast`} className={TAP_TARGET}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NONE}>
+                        {t('forecast.auto', { category: t(`forecast.${autoCategory}`) })}
+                      </SelectItem>
+                      {FORECAST_OVERRIDES.map((category) => (
+                        <SelectItem key={category} value={category}>
+                          {t(`forecast.${category}`)}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
               )}
+
+              <div className="space-y-1.5">
+                <Label htmlFor={`${id}-next`}>{t('fields.nextStep')}</Label>
+                <Input
+                  id={`${id}-next`}
+                  value={state.nextStep}
+                  maxLength={DEAL_LIMITS.nextStep}
+                  className={TAP_TARGET}
+                  onChange={(event) => set('nextStep', event.target.value)}
+                />
+              </div>
             </div>
 
-            {!editing && state.stage === 'won' && (
-              <div
-                id={`${id}-won-note`}
-                className="space-y-1 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-500/10 dark:text-amber-200"
-              >
-                <p>
-                  {lead
-                    ? t('wonDialog.impact', { lead: lead.label })
-                    : t('wonDialog.impactUnnamed')}
+            {/* Always in view, so a long form on a phone never hides the buttons or a failure */}
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 px-6 py-3 dark:border-gray-700">
+              {saveFailed && (
+                <p role="alert" className="mr-auto text-sm text-red-700 dark:text-red-400">
+                  {t('form.saveError')}
                 </p>
-                <p>{t('form.wonToday')}</p>
-              </div>
-            )}
-
-            {closed && (
-              <>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor={`${id}-closed`}>{closedOnLabel}</Label>
-                    <HearingDateInput
-                      id={`${id}-closed`}
-                      label={closedOnLabel}
-                      value={state.closedOn}
-                      onChange={(value) => set('closedOn', value)}
-                      readOnly={false}
-                      clearable={false}
-                      onInvalidChange={setClosedOnUnreadable}
-                      error={
-                        submitted && errors.closedOn && !closedOnUnreadable
-                          ? t(closed === 'lost' ? 'form.lostOnInvalid' : 'form.wonOnInvalid')
-                          : undefined
-                      }
-                    />
-                  </div>
-                  {closed === 'lost' && (
-                    <div className="space-y-1.5">
-                      <Label htmlFor={`${id}-lost-reason`}>
-                        {t('fields.lostReason')} <RequiredMark />
-                      </Label>
-                      <Select
-                        value={state.lostReason}
-                        onValueChange={(value) => {
-                          if (!value) return;
-                          set('lostReason', value as DealLostReason);
-                        }}
-                      >
-                        <SelectTrigger
-                          id={`${id}-lost-reason`}
-                          className={TAP_TARGET}
-                          aria-invalid={submitted && errors.lostReason}
-                          aria-describedby={describedBy(errors.lostReason, 'lost-reason')}
-                        >
-                          <SelectValue placeholder={t('lostDialog.reasonPlaceholder')} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {DEAL_LOST_REASONS.map((reason) => (
-                            <SelectItem key={reason} value={reason}>
-                              {tReason(reason)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {fieldError(errors.lostReason, 'lost-reason', t('lostDialog.reasonRequired'))}
-                    </div>
-                  )}
-                </div>
-                {closed === 'lost' && (
-                  <div className="space-y-1.5">
-                    <Label htmlFor={`${id}-lost-note`}>{t('lostDialog.note')}</Label>
-                    <Textarea
-                      id={`${id}-lost-note`}
-                      value={state.lostNote}
-                      maxLength={DEAL_LIMITS.lostNote}
-                      rows={3}
-                      onChange={(event) => set('lostNote', event.target.value)}
-                    />
-                  </div>
-                )}
-                <div className="space-y-1.5">
-                  <Label htmlFor={`${id}-competitor`}>{t('lostDialog.competitor')}</Label>
-                  <Input
-                    id={`${id}-competitor`}
-                    value={state.competitor}
-                    maxLength={DEAL_LIMITS.competitor}
-                    className={TAP_TARGET}
-                    onChange={(event) => set('competitor', event.target.value)}
-                  />
-                </div>
-              </>
-            )}
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor={`${id}-amount`}>{t('fields.amount')}</Label>
-                <DealAmountInput
-                  id={`${id}-amount`}
-                  value={state.amount}
-                  onChange={(value) => set('amount', value)}
-                  showError={submitted}
-                />
-              </div>
-              {!closed && (
-                <div className="space-y-1.5">
-                  <Label htmlFor={`${id}-probability`}>{t('fields.probability')}</Label>
-                  <Input
-                    id={`${id}-probability`}
-                    inputMode="numeric"
-                    value={state.probability}
-                    aria-invalid={submitted && errors.probability}
-                    aria-describedby={`${id}-probability-help ${describedBy(errors.probability, 'probability') ?? ''}`.trim()}
-                    className={TAP_TARGET}
-                    onChange={(event) => set('probability', event.target.value)}
-                  />
-                  <p
-                    id={`${id}-probability-help`}
-                    className="text-sm text-gray-600 dark:text-gray-300"
-                  >
-                    {t('form.probabilityHelp', { value: STAGE_PROBABILITY[state.stage] })}
-                  </p>
-                  {fieldError(errors.probability, 'probability', t('form.probabilityInvalid'))}
-                </div>
               )}
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor={`${id}-close`}>{t('fields.expectedCloseOn')}</Label>
-                <HearingDateInput
-                  id={`${id}-close`}
-                  label={t('fields.expectedCloseOn')}
-                  value={state.expectedCloseOn}
-                  onChange={(value) => set('expectedCloseOn', value)}
-                  readOnly={false}
-                  onInvalidChange={setCloseUnreadable}
-                  error={
-                    submitted && errors.expectedCloseOn && !closeUnreadable
-                      ? t('form.closeDateInvalid')
-                      : undefined
-                  }
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor={`${id}-owner`}>{t('fields.owner')}</Label>
-                <Select
-                  value={
-                    state.ownerUserId === undefined ? LEAD_ASSIGNEE : (state.ownerUserId ?? NONE)
-                  }
-                  onValueChange={(value) => {
-                    if (!value) return;
-                    set(
-                      'ownerUserId',
-                      value === LEAD_ASSIGNEE ? undefined : value === NONE ? null : value
-                    );
-                  }}
-                >
-                  <SelectTrigger id={`${id}-owner`} className={TAP_TARGET}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {!editing && (
-                      <SelectItem value={LEAD_ASSIGNEE}>{t('form.ownerFromLead')}</SelectItem>
-                    )}
-                    <SelectItem value={NONE}>{t('form.ownerNone')}</SelectItem>
-                    {(members.data ?? []).map((member) => (
-                      <SelectItem key={member.userId} value={member.userId}>
-                        {member.displayName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {!closed && (
-              <div className="space-y-1.5">
-                <Label htmlFor={`${id}-forecast`}>{t('fields.forecastCategory')}</Label>
-                <Select
-                  value={state.forecastOverride ?? NONE}
-                  onValueChange={(value) => {
-                    if (!value) return;
-                    set('forecastOverride', value === NONE ? null : (value as ForecastOverride));
-                  }}
-                >
-                  <SelectTrigger id={`${id}-forecast`} className={TAP_TARGET}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NONE}>
-                      {t('forecast.auto', { category: t(`forecast.${autoCategory}`) })}
-                    </SelectItem>
-                    {FORECAST_OVERRIDES.map((category) => (
-                      <SelectItem key={category} value={category}>
-                        {t(`forecast.${category}`)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            <div className="space-y-1.5">
-              <Label htmlFor={`${id}-next`}>{t('fields.nextStep')}</Label>
-              <Input
-                id={`${id}-next`}
-                value={state.nextStep}
-                maxLength={DEAL_LIMITS.nextStep}
-                className={TAP_TARGET}
-                onChange={(event) => set('nextStep', event.target.value)}
-              />
-            </div>
-
-            {saveFailed && (
-              <p
-                role="alert"
-                className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-500/10 dark:text-red-300"
-              >
-                {t('form.saveError')}
-              </p>
-            )}
-
-            <DialogFooter className="gap-2">
               <Button
                 type="button"
                 variant="outline"
                 className={TAP_TARGET}
+                disabled={pending}
                 onClick={() => onOpenChange(false)}
               >
                 {tCommon('cancel')}
               </Button>
-              <Button type="submit" className={TAP_TARGET} disabled={pending}>
-                {editing ? t('form.submitEdit') : t('form.submitCreate')}
+              <Button type="submit" className={cn(TAP_TARGET, 'min-w-24')} disabled={pending}>
+                {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+                {pending
+                  ? t('form.saving')
+                  : editing
+                    ? t('form.submitEdit')
+                    : t('form.submitCreate')}
               </Button>
-            </DialogFooter>
+            </div>
           </form>
         </DialogContent>
       </Dialog>
@@ -695,7 +738,9 @@ function useDebounced(value: string, delay: number): string {
 /**
  * The lead of a new deal (Refs #720): a combobox that searches the organization's leads by
  * company, name or email (the header search's suggestions). Choosing one takes the focus to the
- * deal's name, the next thing to fill in.
+ * deal's name, the next thing to fill in. A status line, always there, reads out what the list
+ * shows (how many suggestions, or why none). The list is modal, so it scrolls inside the dialog
+ * (the shadcn Popover in a Dialog).
  */
 function LeadCombobox({
   organizationId,
@@ -728,13 +773,19 @@ function LeadCombobox({
   );
   const items = query.length > 0 ? (suggestions.data ?? []) : [];
   const searching = typed !== query || suggestions.isFetching;
-
-  const status = (message: ReactNode) => (
-    <p className="px-3 py-2 text-sm text-gray-600 dark:text-gray-300">{message}</p>
-  );
+  // Why the list has no suggestions, shown in it; null while it has some
+  const empty =
+    typed.length === 0
+      ? t('leadTypeToSearch')
+      : items.length > 0
+        ? null
+        : searching
+          ? t('leadSearching')
+          : t('leadNotFound');
 
   return (
     <Popover
+      modal
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
@@ -769,15 +820,18 @@ function LeadCombobox({
           onPicked();
         }}
       >
+        {/* biome-ignore lint/a11y/useSemanticElements: live-region notice, not a form output */}
+        <p role="status" className="sr-only">
+          {empty ?? t('leadCount', { count: items.length })}
+        </p>
         <Command shouldFilter={false} label={t('leadSearchLabel')}>
           <CommandInput value={text} onValueChange={setText} placeholder={t('leadPlaceholder')} />
           <CommandList>
-            {typed.length === 0 ? (
-              status(t('leadTypeToSearch'))
-            ) : searching && items.length === 0 ? (
-              status(t('leadSearching'))
-            ) : items.length === 0 ? (
-              status(t('leadNotFound'))
+            {empty !== null ? (
+              // Read out by the status line
+              <p aria-hidden="true" className="px-3 py-2 text-sm text-gray-600 dark:text-gray-300">
+                {empty}
+              </p>
             ) : (
               <CommandGroup>
                 {items.map((item) => {
@@ -805,13 +859,5 @@ function LeadCombobox({
         </Command>
       </PopoverContent>
     </Popover>
-  );
-}
-
-/** Marks a field that must be filled; part of its label, so it is read with the field's name */
-function RequiredMark() {
-  const t = useTranslations('deals.form');
-  return (
-    <span className="text-sm font-semibold text-red-600 dark:text-red-400">{t('required')}</span>
   );
 }

@@ -30,7 +30,8 @@ interface ReopenDialogProps {
 /**
  * Reopening a won or lost deal asks first (Refs #436): it clears the lost reason and details,
  * which the audit log does not keep, resets the probability to the stage's default and drops the
- * forecast category override; the lead of a won deal stays 成約.
+ * forecast category override; the lead of a won deal goes back to 商談中 unless another of its
+ * deals is won (its status is computed from its deals, #444).
  */
 export function ReopenDialog({
   open,

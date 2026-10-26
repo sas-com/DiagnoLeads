@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils';
 import { Loader2, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { type ReactNode, useId, useMemo, useState } from 'react';
+import { type ReactNode, useId, useMemo, useRef, useState } from 'react';
 import { DealBoard } from './deal-board';
 import { DealFormDialog } from './deal-form-dialog';
 import { DEAL_PERIODS, type DealPeriod, isDealPeriod, periodRange } from './deal-format';
@@ -84,7 +84,8 @@ function EmptyState({
 }: { title: string; hint?: string; children?: ReactNode }) {
   return (
     <div className="space-y-3 rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-900">
-      <p className="font-semibold text-gray-900 dark:text-gray-50">{title}</p>
+      {/* A heading, like the board's columns it stands for */}
+      <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">{title}</h2>
       {hint && <p className="text-sm text-gray-600 dark:text-gray-300">{hint}</p>}
       {children}
     </div>
@@ -95,7 +96,9 @@ function EmptyState({
  * The deals screen (Refs #436): the pipeline board or the same deals as a list, filtered by
  * owner, kind and expected close period; deals are created here (choosing the lead) or from a
  * lead's page. A move between open stages shows at once (#720); the list sorts by amount or
- * expected close date (in the URL), and the board's order otherwise.
+ * expected close date (in the URL), and the board's order otherwise. While the deals of other
+ * filters are read, the previous ones stay in view, unless there were none: then it says it is
+ * loading rather than that there are no deals (#720).
  */
 export function DealsScreen() {
   const t = useTranslations('deals');
@@ -106,6 +109,8 @@ export function DealsScreen() {
   const { view, owner, kind, period, sort, set, update } = useBoardQuery();
   const today = jstDate();
   const [createOpen, setCreateOpen] = useState(false);
+  // Clearing the filters takes away its button: the focus goes to the first filter
+  const ownerTrigger = useRef<HTMLButtonElement>(null);
   const stageMove = useStageMove(organizationId);
 
   const board = trpc.deals.board.useQuery(
@@ -127,6 +132,8 @@ export function DealsScreen() {
   );
   const total = columns.reduce((sum, column) => sum + column.count, 0);
   const filtered = owner !== ALL || kind !== ALL || period !== 'all';
+  // The previous filters' empty board would say there are no deals while the new ones are read
+  const readingOthers = board.isPlaceholderData && total === 0;
 
   if (board.error?.data?.code === 'FORBIDDEN') {
     return (
@@ -191,7 +198,11 @@ export function DealsScreen() {
             <div className="space-y-1">
               <Label htmlFor={`${filterId}-owner`}>{t('filters.owner')}</Label>
               <Select value={owner} onValueChange={(value) => set('owner', value, ALL)}>
-                <SelectTrigger id={`${filterId}-owner`} className={cn('w-44', TAP_TARGET)}>
+                <SelectTrigger
+                  ref={ownerTrigger}
+                  id={`${filterId}-owner`}
+                  className={cn('w-44', TAP_TARGET)}
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -257,7 +268,7 @@ export function DealsScreen() {
                 {t('state.retry')}
               </Button>
             </div>
-          ) : !data ? (
+          ) : !data || readingOthers ? (
             <div
               className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300"
               aria-busy="true"
@@ -282,7 +293,10 @@ export function DealsScreen() {
                     type="button"
                     variant="outline"
                     className={TAP_TARGET}
-                    onClick={() => update({ owner: null, kind: null, period: null })}
+                    onClick={() => {
+                      update({ owner: null, kind: null, period: null });
+                      ownerTrigger.current?.focus();
+                    }}
                   >
                     {t('state.clearFilters')}
                   </Button>
@@ -327,6 +341,7 @@ export function DealsScreen() {
                     sort
                   )}
                   today={data.today}
+                  closedWithinDays={BOARD_CLOSED_DAYS_DEFAULT}
                   sort={sort}
                   onSort={(column) => update(dealSortParams(nextDealSort(sort, column)))}
                 />

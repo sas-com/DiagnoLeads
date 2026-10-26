@@ -19,15 +19,19 @@ export function parseWhole(text: string, max: number): number | null | 'invalid'
 }
 
 /**
- * A typed yen amount (Refs #720): commas and spaces are dropped and full-width digits and commas
- * (typed with a Japanese input method) are read as such, so "１２,０００,０００" and "12 000 000"
- * are 12000000. Null when empty, 'invalid' when it is not a whole number of yen up to `max`.
+ * A typed yen amount (Refs #720): a leading ¥ or ￥ and a trailing 円 are dropped, so are commas
+ * and spaces, and full-width digits and commas (typed with a Japanese input method) are read as
+ * such, so "１２,０００,０００", "12 000 000", "¥12,000,000" and "12,000,000円" are 12000000.
+ * Null when empty, 'invalid' when it is not a whole number of yen up to `max`.
  */
 export function parseAmount(
   text: string,
   max: number = DEAL_LIMITS.amount
 ): number | null | 'invalid' {
   const digits = text
+    .trim()
+    .replace(/^[¥￥]/, '')
+    .replace(/円$/, '')
     .replace(/[０-９]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xfee0))
     .replace(/[,，\s]/g, '');
   return parseWhole(digits, max);

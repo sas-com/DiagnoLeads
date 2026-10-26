@@ -1,7 +1,8 @@
 /**
  * The pipeline board (#436, #720): columns with their totals, the cards' warnings and dates,
- * moving a card with its menu (the keyboard and phone way) or by dragging it, and the focus that
- * follows a card moved from its menu. Real next-intl messages and UI components.
+ * moving a card with its menu (the keyboard and phone way, named with the card's stage) or by
+ * dragging it, and the focus that follows a card moved from its menu. Real next-intl messages and
+ * UI components.
  */
 import { DealBoard } from '@/components/features/deals/deal-board';
 import type { BoardColumn, DealCard } from '@/lib/features/deals/service';
@@ -102,9 +103,10 @@ function MovingBoard({ deals }: { deals: DealCard[] }) {
   );
 }
 
+/** The card's move button in an open stage's column, which is named with that stage */
 const moveButtonIn = (column: string) =>
   within(screen.getByRole('region', { name: column })).getByRole('button', {
-    name: '「AS/400 現行調査」のステージを移動',
+    name: `「AS/400 現行調査」のステージを移動（今：${column}）`,
   });
 
 describe('DealBoard', () => {
@@ -150,7 +152,7 @@ describe('DealBoard', () => {
   it('writes no text under 14px and gives the move button 44px on phones (#720)', () => {
     const { container } = renderBoard([card({ expectedCloseOn: '2026-10-01', hasOpenTask: false })]);
     expect(container.querySelector('.text-xs')).toBeNull();
-    expect(screen.getByRole('button', { name: '「AS/400 現行調査」のステージを移動' })).toHaveClass(
+    expect(moveButtonIn('提案')).toHaveClass(
       'h-11',
       'w-11',
       'md:h-8',
@@ -173,13 +175,20 @@ describe('DealBoard', () => {
     expect(screen.queryByText('リードに次の行動（タスク）がありません')).not.toBeInTheDocument();
   });
 
-  it('moves a card with its menu', async () => {
+  it('moves a card with its menu, whose button says where the card is now', async () => {
     const user = userEvent.setup();
-    const { onMove } = renderBoard([card({})]);
-    await user.click(screen.getByRole('button', { name: '「AS/400 現行調査」のステージを移動' }));
+    const { onMove } = renderBoard([
+      card({}),
+      card({ id: 'deal-2', name: '移行', stage: 'won', closedOn: TODAY }),
+    ]);
+    // The stage in the name, so the move is chosen knowing where from (#720)
+    expect(
+      screen.getByRole('button', { name: '「移行」のステージを移動（今：受注）' })
+    ).toBeInTheDocument();
+    await user.click(moveButtonIn('提案'));
     const items = screen.getAllByRole('menuitem');
-    expect(items.map((item) => item.textContent)).not.toContain('「提案」へ移す');
-    await user.click(screen.getByRole('menuitem', { name: '「条件の調整」へ移す' }));
+    expect(items.map((item) => item.textContent)).not.toContain('「提案」に移す');
+    await user.click(screen.getByRole('menuitem', { name: '「条件の調整」に移す' }));
     expect(onMove).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'deal-1' }),
       'negotiation',
@@ -191,25 +200,53 @@ describe('DealBoard', () => {
     const user = userEvent.setup();
     render(<MovingBoard deals={[card({})]} />);
     await user.click(moveButtonIn('提案'));
-    await user.click(screen.getByRole('menuitem', { name: '「条件の調整」へ移す' }));
+    await user.click(screen.getByRole('menuitem', { name: '「条件の調整」に移す' }));
     expect(moveButtonIn('条件の調整')).toHaveFocus();
 
     // Again with the keyboard, from its new column
     await user.keyboard('{Enter}');
-    await user.click(screen.getByRole('menuitem', { name: '「見極め」へ移す' }));
+    await user.click(screen.getByRole('menuitem', { name: '「見極め」に移す' }));
     expect(moveButtonIn('見極め')).toHaveFocus();
   });
 
   it('gives the focus back to the card when the question of its move closes', async () => {
     const user = userEvent.setup();
     const { onMove } = renderBoard([card({})]);
-    await user.click(screen.getByRole('button', { name: '「AS/400 現行調査」のステージを移動' }));
-    await user.click(screen.getByRole('menuitem', { name: '「受注」へ移す' }));
-    const options = onMove.mock.lastCall?.[2] as { returnFocus: () => void };
+    await user.click(moveButtonIn('提案'));
+    await user.click(screen.getByRole('menuitem', { name: '「受注」に移す' }));
+    const options = onMove.mock.lastCall?.[2] as { returnFocus: () => boolean };
     (document.activeElement as HTMLElement | null)?.blur();
 
-    act(() => options.returnFocus());
+    let returned = false;
+    act(() => {
+      returned = options.returnFocus();
+    });
+    expect(returned).toBe(true);
     expect(moveButtonIn('提案')).toHaveFocus();
+  });
+
+  it('says when the card is no longer on the board to give the focus back to (#720)', async () => {
+    const user = userEvent.setup();
+    const onMove = vi.fn();
+    const board = (deals: DealCard[]) => (
+      <NextIntlClientProvider locale="ja" messages={messages}>
+        <DealBoard
+          columns={columnsWith(deals)}
+          today={TODAY}
+          closedWithinDays={30}
+          canEdit
+          onMove={onMove}
+        />
+      </NextIntlClientProvider>
+    );
+    const { rerender } = render(board([card({})]));
+    await user.click(moveButtonIn('提案'));
+    await user.click(screen.getByRole('menuitem', { name: '「受注」に移す' }));
+    const options = onMove.mock.lastCall?.[2] as { returnFocus: () => boolean };
+
+    // A filter left the card out: the question puts the focus back as it would on its own
+    rerender(board([]));
+    expect(options.returnFocus()).toBe(false);
   });
 
   it('moves a card dragged to another column', () => {
@@ -231,7 +268,7 @@ describe('DealBoard', () => {
   it('offers no moves to read-only viewers', () => {
     renderBoard([card({})], false);
     expect(
-      screen.queryByRole('button', { name: '「AS/400 現行調査」のステージを移動' })
+      screen.queryByRole('button', { name: /^「AS\/400 現行調査」のステージを移動/ })
     ).not.toBeInTheDocument();
     expect(screen.getAllByRole('listitem')[0]).toHaveAttribute('draggable', 'false');
   });
