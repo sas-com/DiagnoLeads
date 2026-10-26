@@ -269,6 +269,10 @@ describe.skipIf(!url)('QR campaign breakdown (PostgreSQL)', () => {
     // B's own campaign, answered in B
     await newLeadFrom(orgB, partner.code, { responses: ax('interest'), conversionPoint: 'consultation' });
     await answer(orgB, { leadId: existingOfB, leadCreated: false, qr: partner.code });
+    // An answer of A with B's code (B's printed code typed into A's public diagnosis): B's
+    // campaign must not come back to A even though A's answer joins it (2026-10-26 security
+    // review: without it, dropping the campaigns' organization condition went unseen here)
+    await answer(orgA, { leadId: existing, leadCreated: false, qr: partner.code });
   });
 
   afterAll(async () => {
@@ -289,7 +293,7 @@ describe.skipIf(!url)('QR campaign breakdown (PostgreSQL)', () => {
     });
   });
 
-  it("answers only the organization's own campaigns, without B's answers with A's code", async () => {
+  it("answers only the organization's own campaigns, not B's campaign that A's answer has the code of", async () => {
     const rows = await callerOfA.analytics.getQrCampaignBreakdown({ organizationId: orgA });
     const campaignsOfA = await pg
       .select({ id: qrCampaigns.id })

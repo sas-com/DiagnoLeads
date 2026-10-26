@@ -4,8 +4,9 @@
  * switch is on. The create form takes an optional expiry day, sent as the end of that day in
  * Japan (not a day already over there), and sends no expiry when it is left empty. The new leads
  * and their rate are the campaign's own counts (completion_count over scan_count, #700), beside
- * the breakdown analytics counts for every campaign in one query; the notes of the marketing
- * review (2026-10-26) are on the create form and next to the URL.
+ * the breakdown analytics counts for every campaign in one query (or what it says while that
+ * loads or could not be read); the notes of the marketing review (2026-10-26) are on the create
+ * form and next to the URL. A paused campaign is marked, not faded (2026-10-26 UI review).
  */
 import QRCampaignsPage from '@/app/[locale]/(dashboard)/settings/qr-campaigns/page';
 import ja from '@/locales/ja/common.json';
@@ -19,8 +20,9 @@ const TEMPLATE = '770e8400-e29b-41d4-a716-446655440002';
 
 const mocks = vi.hoisted(() => ({
   campaigns: [] as unknown[],
-  /** analytics.getQrCampaignBreakdown: undefined while it loads */
+  /** analytics.getQrCampaignBreakdown: undefined while it loads or when it failed */
   breakdowns: undefined as unknown[] | undefined,
+  breakdownFailed: false,
   breakdownInput: vi.fn(),
   createMutate: vi.fn(),
   updateMutate: vi.fn(),
@@ -41,7 +43,7 @@ vi.mock('@/lib/trpc/client', () => {
         getQrCampaignBreakdown: {
           useQuery: (input: unknown) => {
             mocks.breakdownInput(input);
-            return { data: mocks.breakdowns };
+            return { data: mocks.breakdowns, isError: mocks.breakdownFailed };
           },
         },
       },
@@ -104,6 +106,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.campaigns = [];
   mocks.breakdowns = undefined;
+  mocks.breakdownFailed = false;
   // 25 October 2026, 21:00 in Japan; the date only, so user-event's own waits keep the real clock
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-10-25T12:00:00.000Z'));
@@ -194,16 +197,59 @@ describe('QR campaigns page', () => {
     const fair = cardOf('Fair');
     expect(valueIn(fair, '新規リード')).toBe('2');
     expect(within(fair).queryByText('既存リードの再回答')).toBeNull();
+    expect(within(fair).queryByText(ja.settings.qrCampaigns.results.breakdownUnavailable)).toBeNull();
   });
 
-  it('says next to the URL to make a campaign per channel for email and the web', () => {
+  it('says on each card that the breakdown could not be read when the query failed', () => {
+    mocks.campaigns = [campaign('1', { name: 'Fair', scanCount: 8, completionCount: 2 })];
+    mocks.breakdownFailed = true;
+    renderPage();
+    const fair = cardOf('Fair');
+    expect(valueIn(fair, '新規リード')).toBe('2');
+    expect(
+      within(fair).getByText(ja.settings.qrCampaigns.results.breakdownUnavailable)
+    ).toBeInTheDocument();
+  });
+
+  it('says next to the URL that opening it counts as a scan, and to make a campaign per channel', () => {
     mocks.campaigns = [campaign('1', { name: 'Fair' })];
     renderPage();
     const fair = within(cardOf('Fair'));
-    expect(fair.getByRole('button', { name: 'URL をコピー' })).toBeInTheDocument();
-    expect(
-      fair.getByText('メールや Web で配るときは、媒体ごとに別のキャンペーンを作ってください。')
-    ).toBeInTheDocument();
+    const hint = ja.settings.qrCampaigns.copyUrlHint;
+    expect(hint).toContain('この URL を開いた回数も読み取り回数に数えます');
+    expect(fair.getByText(hint)).toBeInTheDocument();
+    // Both buttons that copy it (the icon next to the code and the labelled one) say so
+    const copyButtons = fair.getAllByRole('button', { name: 'URL をコピー' });
+    expect(copyButtons).toHaveLength(2);
+    for (const button of copyButtons) expect(button).toHaveAccessibleDescription(hint);
+  });
+
+  it('names the download in Japanese and the switch by what it turns on', () => {
+    mocks.campaigns = [campaign('1', { name: 'Fair' })];
+    renderPage();
+    const fair = within(cardOf('Fair'));
+    expect(fair.getByRole('button', { name: 'QRコードをダウンロード' })).toBeInTheDocument();
+    expect(fair.queryByText('Download QR')).toBeNull();
+    expect(fair.getByRole('switch', { name: '有効' })).toBeChecked();
+  });
+
+  it('marks a paused campaign instead of fading its card, whose counts still grow', () => {
+    mocks.campaigns = [
+      campaign('1', {
+        name: 'Fair',
+        isActive: false,
+        scanCount: 8,
+        completionCount: 2,
+        destination: { kind: 'none', reasons: ['paused'] },
+      }),
+    ];
+    renderPage();
+    const card = cardOf('Fair');
+    expect(card.className).not.toMatch(/opacity/);
+    // The badge in the header, and the reason why a scan opens nothing
+    expect(within(card).getAllByText('停止中')).toHaveLength(2);
+    expect(within(card).getByRole('switch', { name: '有効' })).not.toBeChecked();
+    expect(valueIn(card, '新規リード')).toBe('2');
   });
 
   describe('the create form', () => {
@@ -222,13 +268,16 @@ describe('QR campaigns page', () => {
     it('says to check with a campaign of its own and to make one campaign per event or handout', () => {
       renderPage();
       fireEvent.click(screen.getByRole('button', { name: 'Create Campaign' }));
-      const dialog = within(screen.getByRole('dialog'));
-      expect(
-        dialog.getByText(
-          '動作の確認は確認用のキャンペーンで行い、配るものは確認のあとに新しく作ってください。確認の読み取りと回答も、使ったキャンペーンの数に入ります。'
-        )
-      ).toBeInTheDocument();
-      const name = dialog.getByLabelText('Campaign Name *');
+      const dialog = screen.getByRole('dialog');
+      const { testFirst, testFirstTitle } = ja.settings.qrCampaigns;
+      expect(within(dialog).getByText(testFirstTitle)).toBeInTheDocument();
+      expect(within(dialog).getByText(testFirst)).toBeInTheDocument();
+      expect(testFirst).toContain('確認で作ったリードはリード一覧に残ります。');
+      // Part of the dialog's description, so it is read when the dialog opens
+      expect(dialog).toHaveAccessibleDescription(expect.stringContaining(testFirst));
+      // The form scrolls inside the window on a small screen
+      expect(dialog).toHaveClass('max-h-[90vh]', 'overflow-y-auto');
+      const name = within(dialog).getByLabelText('Campaign Name *');
       expect(name).toHaveAttribute('placeholder', '例：2026-11 製造業DX展 ブース');
       expect(name).toHaveAccessibleDescription(ja.settings.qrCampaigns.nameHint);
     });

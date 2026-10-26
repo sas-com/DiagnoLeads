@@ -2,9 +2,10 @@
  * The numbers of a QR campaign on the settings page (#700, owner decisions of 2026-10-26): 読み取り
  * 回数・新規リード・新規リード率（新規リード ÷ 読み取り回数）from the campaign row, "—" when the rate
  * cannot be computed (no scans), a note when there are more new leads than scans, the breakdown
- * of the answers with the campaign's code, and one line on what the counts hold, from the day
- * the campaign was created in Japan. Both languages have every label, and none says
- * コンバージョン (the lead list's word for won deals).
+ * of the new leads with the answers of existing leads outside it (2026-10-26 specialist reviews:
+ * they are not new leads), what it says while the breakdown loads or could not be read, and one
+ * line on what the counts hold, from the day the campaign was created in Japan. Both languages
+ * have every label, and none says コンバージョン (the lead list's word for won deals).
  */
 import {
   QrCampaignResults,
@@ -12,7 +13,7 @@ import {
 } from '@/components/features/distribution/qr-campaign-results';
 import en from '@/locales/en/common.json';
 import ja from '@/locales/ja/common.json';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 import { describe, expect, it } from 'vitest';
 
@@ -28,15 +29,20 @@ const BREAKDOWN: QrCampaignResultsBreakdown = {
 interface Counts {
   scanCount: number;
   completionCount: number;
-  breakdown?: QrCampaignResultsBreakdown;
+  breakdown?: QrCampaignResultsBreakdown | 'loading' | 'unavailable';
+  /** The time zone of the page (the app's is Asia/Tokyo, app/[locale]/layout.tsx) */
+  timeZone?: string;
 }
 
-function renderIn(locale: 'ja' | 'en', { scanCount, completionCount, breakdown }: Counts) {
+function renderIn(
+  locale: 'ja' | 'en',
+  { scanCount, completionCount, breakdown = 'loading', timeZone = 'Asia/Tokyo' }: Counts
+) {
   return render(
     <NextIntlClientProvider
       locale={locale}
       messages={locale === 'ja' ? ja : en}
-      timeZone="Asia/Tokyo"
+      timeZone={timeZone}
       onError={(error) => {
         throw error;
       }}
@@ -104,6 +110,17 @@ describe('QrCampaignResults', () => {
       expect(screen.getByText(results.ja.moreNewLeadsThanScans)).toBeInTheDocument();
     });
 
+    it('groups the digits of a rate past 1,000% like the counts', () => {
+      renderIn('en', { scanCount: 4, completionCount: 50 });
+      expect(valueOf('New-lead rate (new leads ÷ scans)')).toBe('1,250.0%');
+    });
+
+    it('hides "—" from screen readers, which read the reason next to it', () => {
+      renderIn('ja', { scanCount: 0, completionCount: 0 });
+      expect(screen.getByText('—')).toHaveAttribute('aria-hidden', 'true');
+      expect(screen.getByText(results.ja.rateNotComputable)).not.toHaveAttribute('aria-hidden');
+    });
+
     it('notes it in English too, also next to "—" when new leads came without a scan', () => {
       renderIn('en', { scanCount: 0, completionCount: 2 });
       expect(screen.getByText(results.en.moreNewLeadsThanScans)).toBeInTheDocument();
@@ -129,6 +146,12 @@ describe('QrCampaignResults', () => {
       ).toBeInTheDocument();
     });
 
+    it('takes the creation day in Japan also on a page in another time zone', () => {
+      // 00:30 on the 20th in Japan is the 19th in UTC
+      renderIn('ja', { scanCount: 8, completionCount: 2, timeZone: 'UTC' });
+      expect(screen.getByText(/^2026\/10\/20（作成日）からの累計です。/)).toBeInTheDocument();
+    });
+
     it('says it in English', () => {
       renderIn('en', { scanCount: 8, completionCount: 2 });
       expect(
@@ -140,13 +163,22 @@ describe('QrCampaignResults', () => {
   });
 
   describe('the breakdown', () => {
-    it('shows the new leads that are 関心あり and that asked for a consultation, and the answers of existing leads apart (ja)', () => {
+    it('shows the new leads that are 関心あり and that asked for a consultation, counted as the leads are now (ja)', () => {
       renderIn('ja', { scanCount: 8, completionCount: 2, breakdown: BREAKDOWN });
-      expect(screen.getByText('新規リードのうち')).toBeInTheDocument();
-      expect(valueOf('関心あり（MQL）')).toBe('2');
-      expect(valueOf('相談申込')).toBe('1');
+      const newLeads = within(screen.getByRole('group', { name: '新規リードのうち' }));
+      expect(newLeads.getByText('関心あり（MQL）').nextElementSibling?.textContent).toBe('2');
+      expect(newLeads.getByText('相談申込').nextElementSibling?.textContent).toBe('1');
+      expect(newLeads.getByText(results.ja.breakdownHint)).toBeInTheDocument();
+    });
+
+    it('shows the answers of existing leads outside the new leads, with what they hold (ja)', () => {
+      renderIn('ja', { scanCount: 8, completionCount: 2, breakdown: BREAKDOWN });
+      const newLeads = within(screen.getByRole('group', { name: '新規リードのうち' }));
+      expect(newLeads.queryByText('既存リードの再回答')).toBeNull();
+      expect(newLeads.queryByText(results.ja.existingLeadAnswersHint)).toBeNull();
       expect(valueOf('既存リードの再回答')).toBe('3');
-      expect(screen.getByText('新規リードと新規リード率には含みません')).toBeInTheDocument();
+      expect(screen.getByText(results.ja.existingLeadAnswersHint)).toBeInTheDocument();
+      expect(results.ja.existingLeadAnswersHint).toContain('取り込んだリードの初めての回答');
       // The answers of existing leads are not in the new leads or the rate
       expect(valueOf('新規リード')).toBe('2');
       expect(valueOf('新規リード率（新規リード ÷ 読み取り回数）')).toBe('25.0%');
@@ -154,18 +186,54 @@ describe('QrCampaignResults', () => {
 
     it('shows it in English', () => {
       renderIn('en', { scanCount: 8, completionCount: 2, breakdown: BREAKDOWN });
-      expect(screen.getByText('Of the new leads')).toBeInTheDocument();
-      expect(valueOf('Interested (MQL)')).toBe('2');
-      expect(valueOf('Consultation requests')).toBe('1');
+      const newLeads = within(screen.getByRole('group', { name: 'Of the new leads' }));
+      expect(newLeads.getByText('Interested (MQL)').nextElementSibling?.textContent).toBe('2');
+      expect(newLeads.getByText('Consultation requests').nextElementSibling?.textContent).toBe(
+        '1'
+      );
+      expect(newLeads.queryByText('Answers from existing leads')).toBeNull();
       expect(valueOf('Answers from existing leads')).toBe('3');
-      expect(screen.getByText('Not in the new leads or the new-lead rate')).toBeInTheDocument();
+      expect(screen.getByText(results.en.existingLeadAnswersHint)).toBeInTheDocument();
     });
 
-    it('shows the counts without it while it is not there (loading, or not read)', () => {
-      renderIn('ja', { scanCount: 8, completionCount: 2 });
+    it.each(['ja', 'en'] as const)(
+      'says why when more new leads are 関心あり than were counted (%s)',
+      (locale) => {
+        // A new lead whose count failed (the savepoint) is in the breakdown, not in the count
+        renderIn(locale, {
+          scanCount: 8,
+          completionCount: 1,
+          breakdown: { existingLeadAnswers: 0, interestedNewLeads: 2, consultationNewLeads: 0 },
+        });
+        expect(screen.getByText(results[locale].breakdownOverNewLeads)).toBeInTheDocument();
+      }
+    );
+
+    it('has no such note while the breakdown is within the new leads', () => {
+      renderIn('ja', { scanCount: 8, completionCount: 2, breakdown: BREAKDOWN });
+      expect(screen.queryByText(results.ja.breakdownOverNewLeads)).toBeNull();
+    });
+
+    it('shows the counts with a placeholder while it loads', () => {
+      const { container } = renderIn('ja', { scanCount: 8, completionCount: 2 });
       expect(screen.queryByText('新規リードのうち')).toBeNull();
       expect(screen.queryByText('既存リードの再回答')).toBeNull();
+      expect(container.querySelector('[data-slot="skeleton"]')).not.toBeNull();
       expect(valueOf('新規リード')).toBe('2');
     });
+
+    it.each(['ja', 'en'] as const)(
+      'says the breakdown could not be read, with the counts (%s)',
+      (locale) => {
+        const { container } = renderIn(locale, {
+          scanCount: 8,
+          completionCount: 2,
+          breakdown: 'unavailable',
+        });
+        expect(screen.getByText(results[locale].breakdownUnavailable)).toBeInTheDocument();
+        expect(screen.queryByRole('group')).toBeNull();
+        expect(container.querySelector('[data-slot="skeleton"]')).toBeNull();
+      }
+    );
   });
 });

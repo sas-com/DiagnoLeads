@@ -140,9 +140,11 @@ const NOT_COUNTED: QrCompletion = { counted: false, failure: null };
  * postgres-js (sql.savepoint, which drizzle's nested transaction uses) sends no RELEASE
  * SAVEPOINT: a savepoint that succeeds stays open and commits with the outer transaction, whose
  * last statement this is. A counted submission costs 4 more round trips (SAVEPOINT, setting the
- * lock timeout, the UPDATE, setting it back), 5 when the count fails (ROLLBACK TO SAVEPOINT);
- * the campaign row is locked from the UPDATE to the COMMIT (setting the timeout back, then the
- * COMMIT: 2 round trips).
+ * lock timeout, the UPDATE, setting it back). A failed count costs 4 too, as it nearly always
+ * fails in the UPDATE (a policy or a grant, the wait): ROLLBACK TO SAVEPOINT takes the place of
+ * setting the timeout back; 5 only when setting it back is what fails. The campaign row is
+ * locked from the UPDATE to the COMMIT (setting the timeout back, then the COMMIT: 2 round
+ * trips).
  */
 export async function countQrCompletion(
   tx: Transaction,

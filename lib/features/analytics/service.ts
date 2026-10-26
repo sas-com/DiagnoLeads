@@ -4,7 +4,7 @@
  */
 import type { db as defaultDb } from '@/lib/db/client';
 import { diagnosticSubmissions, leads, qrCampaigns } from '@/lib/db/schema';
-import { leadRequestedConsultation, listMqlLevel } from '@/lib/features/leads/service';
+import { leadIsInterested, leadRequestedConsultation } from '@/lib/features/leads/service';
 import { and, eq, gte, sql } from 'drizzle-orm';
 import type { QrCampaignBreakdown } from './types/schemas';
 
@@ -18,7 +18,7 @@ type Database = typeof defaultDb;
  * - existingLeadAnswers: the answers that matched a lead already there (lead_created false).
  *   Counted by the answers, so deleting the lead later does not lower it
  * - interestedNewLeads / consultationNewLeads: the leads those answers created, by the lead
- *   list's own rules (listMqlLevel, leadRequestedConsultation from leads' public surface), as
+ *   list's own rules (leadIsInterested, leadRequestedConsultation from leads' public surface), as
  *   the leads are now. A deleted lead is not there to count
  *
  * The campaign row's counts (scan_count, completion_count) stay distribution's; the settings
@@ -32,7 +32,7 @@ export async function qrCampaignBreakdown(
 ): Promise<QrCampaignBreakdown[]> {
   const newLead = diagnosticSubmissions.leadCreated;
   // The lead list's own rules over the joined lead (leads' public surface)
-  const interested = sql`${newLead} and ${listMqlLevel} = 'interest'`;
+  const interested = sql`${newLead} and ${leadIsInterested}`;
   const consulted = sql`${newLead} and ${leadRequestedConsultation}`;
   return database
     .select({
