@@ -140,6 +140,14 @@ it('test 1', () => {
   - 例：`taskset -c 0 timeout 600 sh -c 'while :; do :; done' &` を3本起こして PID を控え、`taskset -c 0 bunx vitest run <ファイル> --reporter=verbose` で各テストの時間を見る。各テストが3〜6倍遅くなり、確かめるには足りる。終わったら、起こしたプロセスを PID で止める
 - 手元で全体（`bun run test:run`）を流すときは、型チェック・ビルド・E2E と並べない。ほかのセッションも重い処理をしているときは、`bun run test:run --maxWorkers=2` のように並列数を抑える（既定はコアの数 − 1。4コアなら3）
 
+#### 1.6 テストも型チェックの対象にする
+
+`bun run typecheck` は `tsconfig.test.json`（アプリと test/ の両方）を見る（#745）。`tsconfig.json` は `next build` が使うので test/ を含めない。
+
+- 部分的なモックは `as unknown as <本物の型>` でキャストする。`any`・`@ts-ignore` は使わない
+- わざと型の外の値を渡すテストだけ、`@ts-expect-error <理由>` を付ける
+- 型チェックから一時的に外しているファイルは、`tsconfig.test.json` の `exclude` に理由つきで書く
+
 ### カバレッジ目標
 - **ビジネスロジック**: 80%+
 - **バリデーション**: 100%
