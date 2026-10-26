@@ -1,6 +1,7 @@
+import type * as Email from '@/lib/features/email';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const sendEmail = vi.fn(async () => ({ id: 'mail-1' }));
+const sendEmail = vi.fn<typeof Email.sendEmail>(async () => ({ id: 'mail-1' }));
 const isEmailConfigured = vi.fn(() => true);
 vi.mock('@/lib/features/email', () => ({ sendEmail, isEmailConfigured }));
 

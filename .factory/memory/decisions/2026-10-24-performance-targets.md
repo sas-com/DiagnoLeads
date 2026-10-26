@@ -10,7 +10,7 @@ paths: [".github/workflows/lighthouse.yml", "scripts/lighthouse-*"]
 ---
 
 ### [Performance] 公開5ページの性能の目標と測り方を決め、本番を毎日 Lighthouse で測る（#569）
-- **日付**: 2026-10-24（オーナー判断：#569 のコメント「分析とオーナーの判断（2026-10-24）」で、読み取り専用の分析の推奨どおりに決めた）
+- **日付**: 2026-10-24（オーナー判断：#569 のコメント「分析とオーナーの判断（2026-10-24）」で、読み取り専用の分析の推奨どおりに決めた）。2026-10-26 に、目標との比較を Summary に出すことを足した（オーナー判断、#612 の一部）
 - **決定**:
   - D1 対象のページ：公開の5ページ
     - `/ja/ax-migration`・`/ja/ax-migration/access`・`/ja/ax-diagnosis`・コラム一覧 `/ja/ax-migration/column`・最新のコラム1本
@@ -29,7 +29,7 @@ paths: [".github/workflows/lighthouse.yml", "scripts/lighthouse-*"]
     | TBT | 200 ms 以下 | 目標なし |
 
     - 判定は3回の中央値で行う。値ごとに中央値を取る（中央の1回の値ではない）
-    - 判定は公開後の値から始める（公開前はテストモードの noindex で SEO が 69）
+    - Issue を開く判定は、公開後の値から始める（公開前はテストモードの noindex で SEO が 69）。目標との比較は、公開前から Summary に出す（D3）
   - D3 測り方
     - 本番を毎日1回（03:17 JST、`cron: '17 18 * * *'`）と手動で測る。PR の CI とは別のワークフロー `.github/workflows/lighthouse.yml`（`uptime.yml` と同じ形）
     - 道具は Lighthouse 13.5.0 の CLI（`npx lighthouse@13.5.0`、版を固定）。Chrome は GitHub のランナーに入っているものを headless で使い、版は Summary に出す。モバイルは既定（シミュレートしたスロットリング）、デスクトップは `--preset=desktop`
@@ -37,10 +37,13 @@ paths: [".github/workflows/lighthouse.yml", "scripts/lighthouse-*"]
     - 記録は2か所：実行の Summary（中央値の表、`scripts/lighthouse-summary.ts`）と、JSON のレポートの artifact（30日）
     - 必須の検査にしない。PR の CI に入れない。LHCI は使わない
     - 臨時の確認は、Actions の手動実行か、手元の `bash scripts/lighthouse-run.sh` で行う（Node 22.19 以上。Lighthouse 13.5.0 の要件）
-  - 最初は測るだけにする：点数でワークフローを落とさず、Issue も開かない
+  - 最初は、測って目標との比較を Summary に出すだけにする：点数でワークフローを落とさず、Issue も開かない
+    - 目標との比較（2026-10-26 のオーナー判断。#612 の一部）：表の下に、目標を割ったページ×端末と、その値・目標を出す（`scripts/lighthouse-summary.ts` の `TARGETS`・`checkTargets`）
+      - 値は表に出す精度で比べる（点数は整数、LCP は 0.1 s、CLS は 0.001、TBT は 1 ms）。表の値と比較の結果が食い違わないようにするため
+      - どの回にも値が無い項目は比べず、「値なし」と出す。割れには数えない
     - ワークフローが落ちるのは、あるページ×端末の3回すべてで Lighthouse の結果が出なかったとき（と、ページの一覧を作れなかったとき）だけ
     - 1回だけ結果が出なかったときは、残りの回で中央値を出し、Summary の「結果のない実行」と警告（`::warning::`）に出す。落とさない（実装の細部。2026-10-25 に PR #641 のレビューの指摘で決めた。定期の実行の失敗の通知を、測れなかったページ×端末があるときだけに絞る）
-    - 目標割れで Issue を開き、戻ったら閉じる判定（`uptime.yml` と同じ形）は、公開後の基準の値が数日分そろってから足す（#612）
+    - 目標割れで Issue を開き、戻ったら閉じる判定（`uptime.yml` と同じ形）は、公開後の基準の値が数日分そろってから足す（#612）。何日続けて割れたら開くかは、公開後7日分ほどの Summary の比較を見て決める
   - D4 バンドルの予算
     - 同じ実行の resource-summary（Lighthouse の audit）で、ページごとの JS（script）と CSS（stylesheet）の転送量（圧縮後）を取る。最初の一歩では Summary に出すだけ
     - 上限は公開後の最初の値＋10%。超えたら警告だけで、止めない。基準の値がそろってから足す（#613）
@@ -53,7 +56,8 @@ paths: [".github/workflows/lighthouse.yml", "scripts/lighthouse-*"]
   - 本番の値（#497、Lighthouse 13.5.0）はモバイル 89〜93、デスクトップ 97〜100。モバイル 90・デスクトップ 95 は今の値のすぐ下なので、悪くなればすぐ分かる
   - 1回の計測は数点ぶれる（#497）ので、3回の中央値で見る
   - CI を重くしない方針（`2026-10-18-ci-light-and-audit-gate`）。main へのマージのたびに本番が更新されるので、本番を毎日測れば、どの日のマージで変わったかを追える
-  - 判定を先に入れると、公開前のテストモードの SEO や、基準の無い値で Issue が開き続ける
+  - Issue を開く判定を先に入れると、公開前のテストモードの SEO や、基準の無い値で Issue が開き続ける
+  - 目標との比較を Issue より先に出すのは、公開の直後から、毎日の割れ方（何日続くか、どのくらいぶれるか）を Summary で読めるようにするため。Issue を開く条件は、それを見て決める（2026-10-26 のオーナー判断）
 - **却下案**:
   - PR ごとに Lighthouse を流す（CI が重くなる。プレビューと本番では配信の条件が違う）
   - LHCI（`@lhci/cli`。結果の置き場所と設定が増える。今は CLI と集計のスクリプトで足りる）
@@ -71,4 +75,4 @@ paths: [".github/workflows/lighthouse.yml", "scripts/lighthouse-*"]
     - 送信先も同じハッシュの下（`/<ハッシュ>/view`・`event`・`session`）で、Vercel の都合で変わりうるので、パターンで止めない
     - headless を外して手元で流すと、この前提が崩れうる。`LIGHTHOUSE_CHROME_FLAGS` から `--headless=new` を外さない
   - 集計（`scripts/lighthouse-*.ts`）は依存を足さない。Node 22.18 以上（型の除去）と Bun の両方で動く TypeScript にする。ワークフローは Node だけを入れ、`sparse-checkout` で `scripts/lighthouse-*` だけを取り出す
-  - ワークフローの権限は `contents: read` だけにする。判定を足すとき（#612）に `issues: write` を足す
+  - ワークフローの権限は `contents: read` だけにする。Issue を開く判定を足すとき（#612 の残り）に、そのジョブにだけ `issues: write` を足す。Summary の目標との比較には要らない

@@ -92,7 +92,7 @@ describe.skipIf(!url)('notifications: isolation (PostgreSQL)', () => {
         ['相談の申込がありました', 'リードの点数が変わりました'].map((title) => ({
           userId: a.id,
           organizationId: orgA,
-          type: 'consultation_requested',
+          type: 'consultation_requested' as const,
           title,
           message: '架空商事',
           data: {},

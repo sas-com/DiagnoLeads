@@ -112,6 +112,7 @@ async function answersFor(organizationId: string) {
   const entryCampaign: QrEntryCampaign = {
     campaignId: campaign.id,
     organizationId,
+    shortCode: campaign.shortCode,
     diagnosisId: null,
     diagnosis: null,
     utm: { source: 'qrcode', medium: 'offline', campaign: null, content: null },

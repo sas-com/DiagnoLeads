@@ -34,6 +34,12 @@
   "files": {
     "ignore": ["node_modules", ".next", "dist", "*.generated.ts", "test/**"]
   },
+  "overrides": [
+    {
+      "include": ["tsconfig.test.json"],
+      "json": { "parser": { "allowComments": true } }
+    }
+  ],
   "css": {
     "parser": {
       "cssModules": false

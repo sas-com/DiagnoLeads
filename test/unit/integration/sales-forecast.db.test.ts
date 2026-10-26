@@ -70,7 +70,7 @@ describe.skipIf(!url)('sales targets and forecast (PostgreSQL)', () => {
     return org.id;
   }
 
-  async function callerFor(organizationId: string, role: string, name: string) {
+  async function callerFor(organizationId: string, role: schema.OrganizationRole, name: string) {
     const [user] = await pg
       .insert(users)
       .values({ email: `forecast-${unique()}@example.com`, name })
@@ -271,14 +271,14 @@ describe.skipIf(!url)('sales targets and forecast (PostgreSQL)', () => {
 
       const forecast = await rep.salesForecast.get({ organizationId: org, period: 'thisMonth' });
       const rowOf = (id: string) =>
-        forecast.owners.find((row: { ownerUserId: string }) => row.ownerUserId === id);
+        forecast.owners.find((row) => row.ownerUserId === id);
       expect(rowOf(repId)).toMatchObject({ target: 5_000_000, targetHidden: false });
       expect(rowOf(otherId)).toMatchObject({ target: null, gap: null, targetHidden: true });
       expect(forecast.total.target).toBe(20_000_000);
 
       const managed = await manager.salesForecast.get({ organizationId: org, period: 'thisMonth' });
       expect(
-        managed.owners.find((row: { ownerUserId: string }) => row.ownerUserId === otherId)
+        managed.owners.find((row) => row.ownerUserId === otherId)
       ).toMatchObject({ target: 7_000_000, targetHidden: false });
     });
 

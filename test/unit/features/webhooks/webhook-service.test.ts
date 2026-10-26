@@ -4,7 +4,7 @@
  * Tests for webhook signature generation, verification, and secret generation
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import crypto from 'node:crypto';
 
 // Mock the database module

@@ -25,7 +25,10 @@ vi.mock('next-intl/server', () => ({
 // The real notFound() (test/setup.ts mocks the hooks of next/navigation only)
 vi.mock('next/navigation', async () => {
   const { notFound } = await vi.importActual<typeof import('next/navigation')>('next/navigation');
-  return { notFound, usePathname: () => '/', useSearchParams: () => new URLSearchParams() };
+  const { ReadonlySearchParams } = await import('@/test/mocks/next-navigation');
+  // One object for every render, like Next's useSearchParams while the URL stays the same (#719)
+  const searchParams = new ReadonlySearchParams();
+  return { notFound, usePathname: () => '/', useSearchParams: () => searchParams };
 });
 vi.mock('next/font/google', () => ({
   Noto_Sans_JP: () => ({ variable: 'font-noto' }),
@@ -227,6 +230,32 @@ describe('Access landing page links', () => {
         from_page: 'ax-access-lp',
         to_page: 'ax-column',
         location: 'targets',
+      },
+    ]);
+  });
+
+  it('measures the support end column under its section as a move between pages (#458)', async () => {
+    window.history.replaceState(null, '', '/ja/ax-migration/access');
+    const user = userEvent.setup();
+    await renderAccess();
+
+    const supportEnd = within(screen.getByRole('region', { name: 'Access のサポート終了' }));
+    const link = supportEnd.getByRole('link', {
+      name: 'Access 2016・2019・2021 のサポート終了：使い続けるとどうなり、何をすればよいか',
+    });
+    expect(link).toHaveAttribute('href', '/ja/ax-migration/column/access-office-support-end');
+
+    await user.click(link);
+    expect(link).toHaveAttribute(
+      'href',
+      '/ja/ax-migration/column/access-office-support-end?from=ax-access-lp-support-end'
+    );
+    expect(events('ax_cross_link_click')).toEqual([
+      {
+        event: 'ax_cross_link_click',
+        from_page: 'ax-access-lp',
+        to_page: 'ax-column',
+        location: 'support-end',
       },
     ]);
   });
@@ -504,7 +533,7 @@ describe('Header menu on phones', () => {
     await user.click(menuButton());
     return within(screen.getByRole('navigation', { name: 'サイト内のメニュー' }));
   };
-  const items = (menu: ReturnType<typeof within>) =>
+  const items = (menu: Awaited<ReturnType<typeof openMenu>>) =>
     menu.getAllByRole('link').map((link) => [link.textContent, link.getAttribute('href')]);
   const SECTIONS_HERE = [
     ['お悩み', '#problems'],

@@ -76,11 +76,14 @@ vi.mock('@/lib/trpc/client', () => {
 vi.mock('@/hooks/use-organization', () => ({
   useOrganization: () => ({ organizationId: ORG_ID }),
 }));
-vi.mock('next/navigation', () => {
+vi.mock('next/navigation', async () => {
+  const { searchParamsCache } = await import('@/test/mocks/next-navigation');
   // One object for every render, like Next's useRouter (#636)
   const router = { replace: mocks.replace, push: vi.fn() };
+  // A new object only when mocks.search changes, like Next's useSearchParams (#719)
+  const searchParamsFor = searchParamsCache();
   return {
-    useSearchParams: () => new URLSearchParams(mocks.search),
+    useSearchParams: () => searchParamsFor(mocks.search),
     usePathname: () => '/ja/forecast',
     useRouter: () => router,
   };

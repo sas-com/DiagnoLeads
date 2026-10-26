@@ -32,6 +32,7 @@ vi.mock('@/hooks/use-pdf-report-labels', () => ({
 // Import after mocks
 import { useExport } from '@/hooks/use-export';
 import {
+  type ExportLead,
   createDownloadBlob,
   generateExportFilename,
   generateFullReportCSV,
@@ -45,31 +46,36 @@ import {
   generatePDFFilename,
 } from '@/lib/features/reports/pdf-export-service';
 
-const mockLeads = [
+const mockLeads: ExportLead[] = [
   {
     id: '1',
     email: 'test@example.com',
     name: 'Test Lead',
+    company: null,
+    phone: null,
+    position: null,
     status: 'new' as const,
     score: 80,
     source: 'web',
+    notes: null,
     createdAt: new Date(),
+    updatedAt: new Date(),
   },
 ];
 
-const mockAnalyticsData = {
+const mockAnalyticsData: Parameters<ReturnType<typeof useExport>['exportAnalyticsReport']>[0] = {
   overview: {
     totalLeads: 100,
-    newLeads: 10,
-    convertedLeads: 5,
+    newLeadsThisMonth: 10,
+    leadsByStatus: { new: 30, nurturing: 40, negotiating: 20, won: 5, lost: 5 },
     mqlLevels: { interest: 3, fit: 2, none: 4, unknown: 1 },
     mqlRate: 30,
     conversionRate: 5,
   },
-  trend: [{ date: '2024-01-01', count: 5 }],
+  trend: [{ date: '2024-01-01', count: 5, converted: 1 }],
   sourceBreakdown: [{ source: 'web', count: 50, percentage: 50 }],
   statusBreakdown: [{ status: 'new', count: 30, percentage: 30 }],
-  funnel: { stages: [], totalConversionRate: 5 },
+  funnel: { stages: [], totalLeads: 100, overallConversionRate: 5, averageConversionDays: 0 },
   dateRange: '30d',
 };
 

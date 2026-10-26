@@ -11,6 +11,7 @@ import type {
   ConversionFactor,
 } from '@/lib/features/ai/prediction/conversion';
 import { contactCompleteness } from '@/lib/features/ai/prompt-input';
+import type { AiCallScope } from '@/lib/features/ai/usage';
 
 const { mockCreate, reply } = vi.hoisted(() => ({
   mockCreate: vi.fn(),
@@ -305,11 +306,13 @@ describe('predictConversion', () => {
     responses: null,
     createdAt: new Date(),
   };
+  /** The organization the calls are made for, logged with the tokens used */
+  const scope: AiCallScope = { organizationId: 'org-1' };
 
   it('should return the structured output from claude-sonnet-5-5', async () => {
     const { predictConversion } = await import('@/lib/features/ai/prediction/conversion');
 
-    const prediction = await predictConversion(lead, { hasName: true, hasPhone: false });
+    const prediction = await predictConversion(lead, { hasName: true, hasPhone: false }, scope);
 
     expect(prediction.probability).toBe(75);
     expect(prediction.factors[0].impact).toBe('positive');
@@ -335,7 +338,7 @@ describe('predictConversion', () => {
       })
     );
 
-    const prediction = await predictConversion(lead, { hasName: true, hasPhone: false });
+    const prediction = await predictConversion(lead, { hasName: true, hasPhone: false }, scope);
 
     expect(prediction.probability).toBe(100);
     expect(prediction.factors[0].weight).toBe(10);
@@ -345,7 +348,7 @@ describe('predictConversion', () => {
     const { predictConversion } = await import('@/lib/features/ai/prediction/conversion');
     mockCreate.mockRejectedValueOnce(new Error('529 overloaded'));
 
-    const prediction = await predictConversion(lead, { hasName: true, hasPhone: false });
+    const prediction = await predictConversion(lead, { hasName: true, hasPhone: false }, scope);
 
     expect(prediction.probability).toBeGreaterThan(0);
     expect(prediction.factors.length).toBeGreaterThan(0);
@@ -355,7 +358,7 @@ describe('predictConversion', () => {
     const { predictConversion } = await import('@/lib/features/ai/prediction/conversion');
     mockCreate.mockResolvedValueOnce({ content: [], stop_reason: 'max_tokens' });
 
-    const prediction = await predictConversion(lead, { hasName: true, hasPhone: false });
+    const prediction = await predictConversion(lead, { hasName: true, hasPhone: false }, scope);
 
     expect(prediction.probability).toBeGreaterThan(0);
     expect(prediction.factors.length).toBeGreaterThan(0);
@@ -369,7 +372,7 @@ describe('predictConversion', () => {
     });
     const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    const prediction = await predictConversion(lead, { hasName: true, hasPhone: false });
+    const prediction = await predictConversion(lead, { hasName: true, hasPhone: false }, scope);
 
     expect(prediction.probability).not.toBe(75);
     expect(prediction.factors.length).toBeGreaterThan(0);

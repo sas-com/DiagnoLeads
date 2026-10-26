@@ -6,7 +6,12 @@ import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateAnswers } from '../engine';
 import { upsertLeadFromSubmission } from '../lead-upsert';
-import { claimConsultation, resolveInflow } from '../service';
+import {
+  type QrCompletionFailure,
+  claimConsultation,
+  countQrCompletion,
+  resolveInflow,
+} from '../service';
 import { type Tracking, compactTracking, trackingSchema } from '../tracking';
 import type { AnswerValidationIssue, DiagnosticAnswers } from '../types';
 import { contactSchema, plainText } from '../types/contact';
@@ -59,6 +64,8 @@ export type SubmitOutcome =
        * recorded on the lead, and not an unverified identity
        */
       continued: boolean;
+      /** The QR campaign's count failed and the lead was kept (#700): report it after the response */
+      qrCompletionFailure: QrCompletionFailure | null;
       referralMemberUserId: string | null;
       result: AxMigrationResult;
       answers: DiagnosticAnswers;
@@ -229,6 +236,8 @@ function buildLeadSummary(
  *   created the lead is added to its list of other systems (see findContinuationOrigin).
  * - Leads are matched and created by upsertLeadFromSubmission (shared with the builder's
  *   diagnoses), which serializes concurrent submissions for the same address.
+ * - A lead it creates from a scan of a QR campaign counts for the campaign, in the same
+ *   transaction (countQrCompletion, #700).
  */
 export async function submitAxMigrationDiagnosis(
   database: Database,
@@ -306,7 +315,7 @@ export async function submitAxMigrationDiagnosis(
         continuedFromSubmissionId: continuedFrom,
         createdAt: now,
       })
-      .returning({ id: diagnosticSubmissions.id });
+      .returning({ id: diagnosticSubmissions.id, isTest: diagnosticSubmissions.isTest });
 
     if (!existing) {
       await tx
@@ -317,6 +326,15 @@ export async function submitAxMigrationDiagnosis(
       await recordOtherSystem(tx, leadId, submission.id, result, input.consultationRequested, now);
     }
 
+    // A new lead from a scan of the organization's QR campaign counts for it, with the lead (#700)
+    // A count that fails keeps the lead; the route reports it after the response
+    const qrCompletion = await countQrCompletion(tx, {
+      organizationId,
+      leadCreated: !existing,
+      isTest: submission.isTest,
+      tracking,
+    });
+
     return {
       ok: true as const,
       submissionId: submission.id,
@@ -325,6 +343,7 @@ export async function submitAxMigrationDiagnosis(
       existingLead: existing
         ? { name: existing.name, company: existing.company, email: existing.email }
         : null,
+      qrCompletionFailure: qrCompletion.failure,
       continued: continuedFrom !== null,
       // The employee whose link brought a new lead, to tell them (#265)
       referralMemberUserId: !existing ? inflow.referralMemberUserId : null,

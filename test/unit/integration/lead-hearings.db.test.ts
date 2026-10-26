@@ -52,7 +52,7 @@ describe.skipIf(!url)('lead hearings (PostgreSQL)', () => {
     return org.id;
   }
 
-  async function callerFor(organizationId: string, role: string) {
+  async function callerFor(organizationId: string, role: schema.OrganizationRole) {
     const [user] = await pg
       .insert(users)
       .values({ email: `hearing-${unique()}@example.com`, name: 'テスト 太郎' })
