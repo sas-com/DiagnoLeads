@@ -3,7 +3,9 @@
  * 流入元 (inflow_source), acquisition_cost, agency_name; response time pending until #136.
  */
 import {
+  type DealOfLead,
   UNSET_INFLOW_SOURCE,
+  dealReturns,
   summarizeAcquisitionCost,
   summarizeAgencies,
   summarizeInflowSources,
@@ -93,6 +95,7 @@ describe('summarizeAcquisitionCost', () => {
       totalCost: 0,
       costPerSql: null,
       costPerWon: null,
+      deals: null,
       bySource: [],
     });
   });
@@ -128,6 +131,7 @@ describe('summarizeAgencies', () => {
         costedLeadCount: 3,
         totalCost: 90_000,
         costPerSql: 90_000,
+        deals: null,
       },
       {
         agencyName: 'B社',
@@ -138,8 +142,108 @@ describe('summarizeAgencies', () => {
         costedLeadCount: 2,
         totalCost: 60_000,
         costPerSql: null,
+        deals: null,
       },
     ]);
+  });
+});
+
+// What the deals of the leads brought in (#448)
+describe('dealReturns', () => {
+  let nextLead = 0;
+  const deal = (overrides: Partial<DealOfLead> = {}): DealOfLead => ({
+    leadId: `lead-${(nextLead += 1)}`,
+    source: 'lp_organic',
+    agencyName: null,
+    stage: 'proposal',
+    amount: null,
+    daysToClose: null,
+    ...overrides,
+  });
+
+  it('adds up the won deals, the cost per win, the ROI and the median days to win', () => {
+    const result = dealReturns(
+      [
+        deal({ stage: 'won', amount: 500_000, daysToClose: 30 }),
+        deal({ stage: 'won', amount: 1_000_000, daysToClose: 10 }),
+        deal({ stage: 'won', amount: null, daysToClose: 20 }),
+        deal({ stage: 'lost', amount: 2_000_000, daysToClose: 5 }),
+        deal(),
+      ],
+      300_000
+    );
+    expect(result).toEqual({
+      dealCount: 5,
+      wonDealCount: 3,
+      wonAmount: 1_500_000,
+      costPerWonDeal: 100_000,
+      roi: 5,
+      medianDaysToWin: 20,
+    });
+  });
+
+  it('has no ROI when nothing was spent, and no cost per win or median without a win', () => {
+    expect(dealReturns([deal({ stage: 'won', amount: 100, daysToClose: 3 })], 0)).toMatchObject({
+      roi: null,
+      costPerWonDeal: 0,
+    });
+    expect(dealReturns([deal()], 50_000)).toMatchObject({
+      wonDealCount: 0,
+      costPerWonDeal: null,
+      roi: 0,
+      medianDaysToWin: null,
+    });
+    // An even number of wins takes the middle two
+    expect(
+      dealReturns(
+        [deal({ stage: 'won', daysToClose: 4 }), deal({ stage: 'won', daysToClose: 9 })],
+        1
+      ).medianDaysToWin
+    ).toBe(6.5);
+  });
+
+  it("takes each lead's first win for the days to win", () => {
+    // One lead won a survey on day 10 and a migration on day 200; another won on day 30
+    const result = dealReturns(
+      [
+        deal({ leadId: 'a', stage: 'won', daysToClose: 200 }),
+        deal({ leadId: 'a', stage: 'won', daysToClose: 10 }),
+        deal({ leadId: 'b', stage: 'won', daysToClose: 30 }),
+      ],
+      1
+    );
+    expect(result.wonDealCount).toBe(3);
+    expect(result.medianDaysToWin).toBe(20);
+  });
+
+  it('splits the deals by 流入元 and by agency, and leaves them out when not given', () => {
+    const summary = summarizeAcquisitionCost(
+      [
+        { source: 'lp_organic', leadCount: 2, costedLeadCount: 0, sqlCount: 1, wonCount: 1, totalCost: 0 },
+        {
+          source: 'telemarketing_agency',
+          leadCount: 3,
+          costedLeadCount: 3,
+          sqlCount: 1,
+          wonCount: 1,
+          totalCost: 90_000,
+        },
+      ],
+      [
+        deal({ stage: 'won', amount: 200_000, daysToClose: 7 }),
+        deal({ source: 'telemarketing_agency', agencyName: 'A社', stage: 'won', amount: 450_000 }),
+      ]
+    );
+    const bySource = Object.fromEntries(summary.bySource.map((row) => [row.source, row.deals]));
+    expect(bySource.lp_organic).toMatchObject({ wonAmount: 200_000, roi: null });
+    expect(bySource.telemarketing_agency).toMatchObject({ wonAmount: 450_000, roi: 5 });
+    expect(summary.deals).toMatchObject({ dealCount: 2, wonAmount: 650_000 });
+
+    const agencies = summarizeAgencies(
+      [{ agencyName: 'A社', leadCount: 3, sqlCount: 1, wonCount: 1, costedLeadCount: 3, totalCost: 90_000 }],
+      [deal({ agencyName: 'A社', stage: 'won', amount: 450_000 }), deal({ agencyName: 'B社' })]
+    );
+    expect(agencies[0].deals).toMatchObject({ dealCount: 1, wonAmount: 450_000 });
   });
 });
 

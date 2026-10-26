@@ -530,7 +530,7 @@ describe('Header menu on phones', () => {
     await user.click(menuButton());
     return within(screen.getByRole('navigation', { name: 'サイト内のメニュー' }));
   };
-  const items = (menu: ReturnType<typeof within>) =>
+  const items = (menu: Awaited<ReturnType<typeof openMenu>>) =>
     menu.getAllByRole('link').map((link) => [link.textContent, link.getAttribute('href')]);
   const SECTIONS_HERE = [
     ['お悩み', '#problems'],

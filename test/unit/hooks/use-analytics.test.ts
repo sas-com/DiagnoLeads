@@ -90,7 +90,7 @@ describe('useLeadTrend', () => {
   });
 
   it('should accept granularity parameter', () => {
-    const { result } = renderHook(() => useLeadTrend(validOrgId, '30d', 'weekly'));
+    const { result } = renderHook(() => useLeadTrend(validOrgId, '30d', 'monthly'));
 
     expect(result.current).toBeDefined();
   });

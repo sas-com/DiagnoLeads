@@ -16,7 +16,7 @@ import { generateLeadSummary } from '@/lib/features/ai/chat/assistant';
 import { scoreLeadWithAI } from '@/lib/features/ai/scoring/claude';
 import { AI_USAGE_EVENT, logAiUsage } from '@/lib/features/ai/usage';
 import { appRouter } from '@/server/routers/_app';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { type MockInstance, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const sdk = vi.hoisted(() => ({
   create: vi.fn(),
@@ -181,8 +181,9 @@ function createCaller() {
   } as unknown as Parameters<typeof appRouter.createCaller>[0]);
 }
 
-let info: ReturnType<typeof vi.spyOn>;
-let consoleSpies: ReturnType<typeof vi.spyOn>[];
+/** The console methods spied on: console.info, log, warn and error share one signature */
+let info: MockInstance<typeof console.info>;
+let consoleSpies: MockInstance<typeof console.info>[];
 
 /** The usage lines written so far, parsed */
 const usageLines = () =>

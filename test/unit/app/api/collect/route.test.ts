@@ -152,7 +152,7 @@ describe('POST /api/collect', () => {
       body,
       duplex: 'half',
       headers: { origin: 'https://app.example', 'user-agent': CHROME },
-    } as RequestInit & { duplex: 'half' });
+    });
     expect(req.headers.get('content-length')).toBeNull();
     expect((await post(req)).status).toBe(204);
     expect(pulled).toBeLessThan(16);

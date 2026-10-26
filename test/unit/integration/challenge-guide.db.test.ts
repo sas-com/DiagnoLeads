@@ -32,7 +32,7 @@ describe.skipIf(!url)('challenge guide (PostgreSQL)', () => {
   // biome-ignore lint/suspicious/noExplicitAny: tRPC callers
   const callers: Record<string, any> = {};
 
-  async function member(organizationId: string, role: string) {
+  async function member(organizationId: string, role: schema.OrganizationRole) {
     const [user] = await pg
       .insert(users)
       .values({ email: `guide-${role}-${unique()}@example.com`, name: role })

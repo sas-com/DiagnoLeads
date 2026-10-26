@@ -166,10 +166,34 @@ export interface AcquisitionCostRow {
   costPerSql: number | null;
   /** totalCost / wonCount, null without a win */
   costPerWon: number | null;
+  /** Deals of these leads (#448); null for those who may not read deals */
+  deals: DealReturns | null;
 }
 
 export interface AcquisitionCostSummary extends Omit<AcquisitionCostRow, 'source'> {
   bySource: AcquisitionCostRow[];
+}
+
+/**
+ * What the deals of the leads brought in (#448), next to the acquisition cost of those leads.
+ * Null for those who may not read deals (canReadDeals: a parent organization's viewers and the
+ * agency accounts of #276 see no amounts).
+ */
+export interface DealReturns {
+  /** Deals of the leads, any stage */
+  dealCount: number;
+  wonDealCount: number;
+  /** Sum of the amounts of the won deals, yen excluding tax (a won deal without an amount adds 0) */
+  wonAmount: number;
+  /** Acquisition cost / won deals, null without a won deal */
+  costPerWonDeal: number | null;
+  /** Won amount / acquisition cost (2.5 = 2.5 times the cost), null when nothing was spent */
+  roi: number | null;
+  /**
+   * Median days from the lead's creation (Japan day) to the close day of its first won deal,
+   * null without a win
+   */
+  medianDaysToWin: number | null;
 }
 
 /**
@@ -193,4 +217,6 @@ export interface AgencyPerformanceRow {
   totalCost: number;
   /** totalCost / sqlCount, null without SQL */
   costPerSql: number | null;
+  /** Deals of these leads (#448); null for those who may not read deals */
+  deals: DealReturns | null;
 }

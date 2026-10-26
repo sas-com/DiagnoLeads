@@ -38,6 +38,9 @@ import {
   updatePreferences,
 } from '@/lib/features/notifications/notification-service';
 
+/** The query-builder steps the mock above puts straight on db (the real db has none of them) */
+const dbChain = db as unknown as Record<'limit' | 'where', ReturnType<typeof vi.fn>>;
+
 describe('notification-service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -196,7 +199,7 @@ describe('notification-service', () => {
         { id: 'notif-2', title: 'Notification 2' },
       ];
 
-      (db.limit as ReturnType<typeof vi.fn>).mockResolvedValue(mockNotifications);
+      dbChain.limit.mockResolvedValue(mockNotifications);
 
       const result = await getUserNotifications('user-1');
 
@@ -205,7 +208,7 @@ describe('notification-service', () => {
     });
 
     it('should filter by organization', async () => {
-      (db.limit as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+      dbChain.limit.mockResolvedValue([]);
 
       await getUserNotifications('user-1', 'org-1');
 
@@ -213,7 +216,7 @@ describe('notification-service', () => {
     });
 
     it('should filter unread only', async () => {
-      (db.limit as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+      dbChain.limit.mockResolvedValue([]);
 
       await getUserNotifications('user-1', undefined, { unreadOnly: true });
 
@@ -221,18 +224,18 @@ describe('notification-service', () => {
     });
 
     it('should respect limit option', async () => {
-      (db.limit as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+      dbChain.limit.mockResolvedValue([]);
 
       await getUserNotifications('user-1', undefined, { limit: 10 });
 
-      expect(db.limit).toHaveBeenCalledWith(10);
+      expect(dbChain.limit).toHaveBeenCalledWith(10);
     });
   });
 
   describe('getUnreadCount', () => {
     it('should return unread notification count', async () => {
       const mockResult = [{ id: '1' }, { id: '2' }, { id: '3' }];
-      (db.where as ReturnType<typeof vi.fn>).mockResolvedValue(mockResult);
+      dbChain.where.mockResolvedValue(mockResult);
 
       const count = await getUnreadCount('user-1');
 
@@ -240,7 +243,7 @@ describe('notification-service', () => {
     });
 
     it('should filter by organization', async () => {
-      (db.where as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+      dbChain.where.mockResolvedValue([]);
 
       const count = await getUnreadCount('user-1', 'org-1');
 

@@ -241,11 +241,12 @@ interface MutationOptions {
 const wrapper =
   (locale: 'ja' | 'en') =>
   ({ children }: { children: ReactNode }) =>
-    createElement(
-      NextIntlClientProvider,
-      { locale, messages: locale === 'ja' ? ja : en, timeZone: 'Asia/Tokyo' },
-      children
-    );
+    createElement(NextIntlClientProvider, {
+      locale,
+      messages: locale === 'ja' ? ja : en,
+      timeZone: 'Asia/Tokyo',
+      children,
+    });
 
 /** The options the hook gave to useMutation, after rendering it in the locale */
 function renderWrite(write: 'create' | 'update' | 'delete', locale: 'ja' | 'en') {

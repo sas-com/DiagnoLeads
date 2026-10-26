@@ -101,12 +101,15 @@ describe('useBatchScoreLeads', () => {
   });
 });
 
+// limit and minSimilarity (limit for similar leads) are the schemas' defaults
 describe('useSemanticSearch', () => {
   it('should return query object', () => {
     const { result } = renderHook(() =>
       useSemanticSearch({
         organizationId: '550e8400-e29b-41d4-a716-446655440000',
         query: 'test query',
+        limit: 10,
+        minSimilarity: 0.7,
       })
     );
 
@@ -119,6 +122,8 @@ describe('useSemanticSearch', () => {
       useSemanticSearch({
         organizationId: '550e8400-e29b-41d4-a716-446655440000',
         query: '',
+        limit: 10,
+        minSimilarity: 0.7,
       })
     );
 
@@ -130,6 +135,8 @@ describe('useSemanticSearch', () => {
       useSemanticSearch({
         organizationId: 'invalid-id',
         query: 'test',
+        limit: 10,
+        minSimilarity: 0.7,
       })
     );
 
@@ -143,6 +150,7 @@ describe('useFindSimilarLeads', () => {
       useFindSimilarLeads({
         organizationId: '550e8400-e29b-41d4-a716-446655440000',
         leadId: '550e8400-e29b-41d4-a716-446655440001',
+        limit: 5,
       })
     );
 
