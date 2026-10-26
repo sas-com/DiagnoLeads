@@ -285,6 +285,8 @@ describe('Analytics response types', () => {
         totalCost: 200000,
         costPerSql: 100000,
         costPerWon: 200000,
+        // The deals' figures (#448); null for those who may not read deals
+        deals: null,
         bySource: [],
       };
 

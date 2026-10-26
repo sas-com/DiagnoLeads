@@ -108,7 +108,7 @@ it('should format user name', () => {
 });
 ```
 
-モックは本物と同じく参照を保つ（Next の `useRouter` のように本物が描画のたびに同じオブジェクトを返すものは、`const router = { push: mocks.push }; useRouter: () => router` と1つだけ作って返す。描画ごとに新しいオブジェクトを返すと、それに依存する effect が毎回やり直され、依存の漏れた effect を見逃す。#636）。1つだけ作ったモックの関数はファイルの全テストで同じものが使われ、呼び出しが次のテストに残るので、テストで確かめる関数は `mocks` に出して `beforeEach` でリセットする（`test/setup.ts` の既定の router は `afterEach` でリセットしている）。
+モックは本物と同じく参照を保つ（Next の `useRouter` のように本物が描画のたびに同じオブジェクトを返すものは、`const router = { push: mocks.push }; useRouter: () => router` と1つだけ作って返す。描画ごとに新しいオブジェクトを返すと、それに依存する effect が毎回やり直され、依存の漏れた effect を見逃す。#636）。1つだけ作ったモックの関数はファイルの全テストで同じものが使われ、呼び出しが次のテストに残るので、テストで確かめる関数は `mocks` に出して `beforeEach` でリセットする（`test/setup.ts` の既定の router は `afterEach` でリセットしている）。`useSearchParams` と `useParams` も同じで、URL が同じあいだは同じオブジェクトを返す。固定の値はファクトリの中で1回だけ作る。テストごとに URL を決めるものは、render の前に新しいオブジェクトへ入れ替える（`test/unit/components/auth/LoginForm.test.tsx`）。描画のあいだに URL が変わるものは、`test/mocks/next-navigation.ts` の `searchParamsCache()` で文字列が変わったときだけ作り直す。検索パラメーターは本物（`ReadonlyURLSearchParams`）と同じく変更できない `ReadonlySearchParams` で作る（#719）。
 
 #### 1.4 テストデータの独立性
 ```typescript
@@ -139,6 +139,14 @@ it('test 1', () => {
 - 負荷の下で確かめるときは、CPU を回すだけのプロセスと vitest を `taskset -c 0` で1つのコアにまとめる。手元のマシンはほかのセッションと共用しているので、全部のコアに負荷をかける形（プロセスを何本も起こし、複数の vitest を同時に流す）は使わない。ほかのセッションのテストを時間切れにして、同じ問題をよそに起こす
   - 例：`taskset -c 0 timeout 600 sh -c 'while :; do :; done' &` を3本起こして PID を控え、`taskset -c 0 bunx vitest run <ファイル> --reporter=verbose` で各テストの時間を見る。各テストが3〜6倍遅くなり、確かめるには足りる。終わったら、起こしたプロセスを PID で止める
 - 手元で全体（`bun run test:run`）を流すときは、型チェック・ビルド・E2E と並べない。ほかのセッションも重い処理をしているときは、`bun run test:run --maxWorkers=2` のように並列数を抑える（既定はコアの数 − 1。4コアなら3）
+
+#### 1.6 テストも型チェックの対象にする
+
+`bun run typecheck` は `tsconfig.test.json`（アプリと test/ の両方）を見る（#745）。`tsconfig.json` は `next build` が使うので test/ を含めない。
+
+- 部分的なモックは `as unknown as <本物の型>` でキャストする。`any`・`@ts-ignore` は使わない
+- わざと型の外の値を渡すテストだけ、`@ts-expect-error <理由>` を付ける
+- 型チェックから一時的に外しているファイルは、`tsconfig.test.json` の `exclude` に理由つきで書く
 
 ### カバレッジ目標
 - **ビジネスロジック**: 80%+

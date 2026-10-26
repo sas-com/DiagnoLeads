@@ -29,6 +29,13 @@ const { afterTasks, calls, inserted, updated, fakeDb } = vi.hoisted(() => {
         return { where: async () => undefined };
       },
     }),
+    // The savepoint of a QR campaign's count (#700): refused, as RLS without a grant would refuse it
+    transaction: async () => {
+      throw Object.assign(new Error('permission denied for table qr_campaigns'), {
+        name: 'PostgresError',
+        code: '42501',
+      });
+    },
   };
   return {
     afterTasks: [] as Array<() => unknown>,
@@ -54,11 +61,15 @@ vi.mock('next/server', async (importOriginal) => ({
   },
 }));
 
-// Refusals are reported after the response (#351)
-const { reportRejectedRequest } = vi.hoisted(() => ({ reportRejectedRequest: vi.fn() }));
+// Refusals (#351) and a QR campaign's count that failed (#700) are reported after the response
+const { reportRejectedRequest, reportServerError } = vi.hoisted(() => ({
+  reportRejectedRequest: vi.fn(),
+  reportServerError: vi.fn(),
+}));
 vi.mock('@/lib/ops/alert', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/ops/alert')>()),
   reportRejectedRequest,
+  reportServerError,
 }));
 vi.mock('@/lib/db/client', () => ({ db: fakeDb }));
 vi.mock('@/lib/features/diagnosis-builder/public-diagnosis', async (importOriginal) => ({
@@ -375,5 +386,27 @@ describe('POST /api/diagnoses/[slug]/submit', () => {
     expect(notifyMock).toHaveBeenCalledWith(
       expect.objectContaining({ company: '既存社', name: '既存 花子', identityUnverified: true })
     );
+  });
+
+  it("keeps the lead when the QR campaign's count fails, and reports it after the response (#700)", async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const response = await post({ ...validBody, tracking: { utmMedium: 'offline', qr: 'AbCd2345' } });
+    expect(response.status).toBe(200);
+    expect(inserted[0]).toMatchObject({ leadId: 'lead-1', leadCreated: true, tracking: { qr: 'AbCd2345' } });
+    expect(consoleError).toHaveBeenCalledWith('QR completion not counted:', 'PostgresError', '42501');
+    expect(reportServerError).not.toHaveBeenCalled();
+    await runAfterTasks();
+    expect(reportServerError).toHaveBeenCalledWith(
+      'diagnosis/qr-completion',
+      expect.objectContaining({ code: '42501' })
+    );
+    expect(notifyMock).toHaveBeenCalledWith(expect.objectContaining({ leadId: 'lead-1', leadCreated: true }));
+    consoleError.mockRestore();
+  });
+
+  it('asks nothing about the QR campaigns for an answer without a code', async () => {
+    expect((await post(validBody)).status).toBe(200);
+    await runAfterTasks();
+    expect(reportServerError).not.toHaveBeenCalled();
   });
 });

@@ -2,6 +2,7 @@
  * LoginForm Component Tests
  */
 
+import { ReadonlySearchParams } from '@/test/mocks/next-navigation';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -13,7 +14,8 @@ vi.mock('next-intl', () => ({
 
 // Mock next/navigation
 const mockPush = vi.hoisted(() => vi.fn());
-const mockSearchParams = new URLSearchParams();
+// Read-only like Next's, and a new object only when a test changes the URL (#719)
+let mockSearchParams = new ReadonlySearchParams();
 vi.mock('next/navigation', () => {
   // One object for every render, like Next's useRouter (#636)
   const router = { push: mockPush };
@@ -47,8 +49,7 @@ import { toast } from 'sonner';
 describe('LoginForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockSearchParams.delete('callbackUrl');
-    mockSearchParams.delete('redirect');
+    mockSearchParams = new ReadonlySearchParams();
   });
 
   afterEach(() => {
@@ -199,7 +200,7 @@ describe('LoginForm', () => {
   });
 
   it('should use callbackUrl from query params', async () => {
-    mockSearchParams.set('callbackUrl', '/settings');
+    mockSearchParams = new ReadonlySearchParams({ callbackUrl: '/settings' });
     mockSignIn.mockResolvedValueOnce({ data: { user: { id: '1' } } });
 
     const user = userEvent.setup();
@@ -218,7 +219,7 @@ describe('LoginForm', () => {
   });
 
   it('should use redirect from query params as fallback', async () => {
-    mockSearchParams.set('redirect', '/leads');
+    mockSearchParams = new ReadonlySearchParams({ redirect: '/leads' });
     mockSignIn.mockResolvedValueOnce({ data: { user: { id: '1' } } });
 
     const user = userEvent.setup();

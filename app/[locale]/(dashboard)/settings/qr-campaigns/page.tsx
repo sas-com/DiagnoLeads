@@ -2,8 +2,13 @@
 
 import { QrCampaignDestinationNotice } from '@/components/features/distribution/qr-campaign-destination';
 import { QrCampaignExpiry } from '@/components/features/distribution/qr-campaign-expiry';
+import {
+  QrCampaignResults,
+  type QrCampaignResultsBreakdown,
+} from '@/components/features/distribution/qr-campaign-results';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
@@ -33,16 +38,15 @@ import {
   Check,
   Copy,
   Download,
+  Info,
   Loader2,
   MoreVertical,
   Plus,
   QrCode,
-  ScanLine,
-  Target,
   Trash2,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { toast } from 'sonner';
 
 interface QRCampaignFormData {
@@ -57,6 +61,13 @@ interface QRCampaignFormData {
   expiresOn: string;
 }
 
+/** The breakdown of a campaign no answer with its code has reached yet */
+const NO_ANSWERS: QrCampaignResultsBreakdown = {
+  existingLeadAnswers: 0,
+  interestedNewLeads: 0,
+  consultationNewLeads: 0,
+};
+
 const DEFAULT_FORM_DATA: QRCampaignFormData = {
   name: '',
   description: '',
@@ -69,10 +80,13 @@ const DEFAULT_FORM_DATA: QRCampaignFormData = {
 };
 
 export default function QRCampaignsPage() {
+  const t = useTranslations('settings.qrCampaigns');
   const tExpiry = useTranslations('settings.qrCampaigns.expiry');
   const { organization } = useOrganization();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [formData, setFormData] = useState<QRCampaignFormData>(DEFAULT_FORM_DATA);
+  const nameHintId = useId();
+  const copyUrlHintId = useId();
 
   const utils = trpc.useUtils();
 
@@ -81,6 +95,24 @@ export default function QRCampaignsPage() {
     { organizationId: organization?.id ?? '' },
     { enabled: !!organization?.id }
   );
+
+  // What the answers with each campaign's code add (#700): counted by analytics over the answers
+  // and the leads, for every campaign of the organization in one query, and shown beside the
+  // campaign's own counts (distribution imports no other feature)
+  const { data: breakdowns, isError: breakdownFailed } =
+    trpc.analytics.getQrCampaignBreakdown.useQuery(
+      { organizationId: organization?.id ?? '' },
+      { enabled: !!organization?.id }
+    );
+  const breakdownById = new Map(breakdowns?.map((row) => [row.campaignId, row]));
+  // Said while it loads and when it could not be read; a campaign no answer with its code has
+  // reached has zeros
+  const breakdownOf = (
+    campaignId: string
+  ): QrCampaignResultsBreakdown | 'loading' | 'unavailable' => {
+    if (breakdowns) return breakdownById.get(campaignId) ?? NO_ANSWERS;
+    return breakdownFailed ? 'unavailable' : 'loading';
+  };
 
   // Only those who can update settings may change campaigns (#356)
   const { data: canManage = false } = trpc.distribution.canManage.useQuery(
@@ -224,11 +256,24 @@ export default function QRCampaignsPage() {
               </Button>
             </DialogTrigger>
           )}
-          <DialogContent className="max-w-2xl">
+          {/* Scrolls inside the window: the form is taller than a phone's screen */}
+          <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Create QR Campaign</DialogTitle>
-              <DialogDescription>
-                Create a new QR code campaign for offline distribution
+              {/* The note is part of the description, so it is read when the dialog opens */}
+              <DialogDescription asChild>
+                <div className="space-y-3">
+                  <p>Create a new QR code campaign for offline distribution</p>
+                  {/* Checks count too (#700, marketing review): check with a campaign of its own */}
+                  <Callout
+                    title={t('testFirstTitle')}
+                    icon={Info}
+                    color="blue"
+                    className="text-left"
+                  >
+                    {t('testFirst')}
+                  </Callout>
+                </div>
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -239,8 +284,12 @@ export default function QRCampaignsPage() {
                   id="name"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g., Trade Show 2024"
+                  placeholder={t('namePlaceholder')}
+                  aria-describedby={nameHintId}
                 />
+                <p id={nameHintId} className="text-xs text-muted-foreground">
+                  {t('nameHint')}
+                </p>
               </div>
 
               {/* Description */}
@@ -310,7 +359,7 @@ export default function QRCampaignsPage() {
                       id="utmCampaign"
                       value={formData.utmCampaign}
                       onChange={(e) => setFormData({ ...formData, utmCampaign: e.target.value })}
-                      placeholder="trade-show-2024"
+                      placeholder="2026-11-dx-expo"
                     />
                   </div>
                   <div className="grid gap-1">
@@ -360,17 +409,23 @@ export default function QRCampaignsPage() {
 
       {/* Campaigns Grid */}
       {campaigns && campaigns.length > 0 ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        // Three columns only from xl: with the sidebar, a card at lg is too narrow for its notes
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {campaigns.map((campaign) => (
-            <Card key={campaign.id} className={!campaign.isActive ? 'opacity-60' : ''}>
+            // A paused campaign is marked, not faded: its counts still grow and are read
+            <Card key={campaign.id} className="flex flex-col">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <QrCode className="h-5 w-5 text-primary" />
                     <CardTitle className="text-lg">{campaign.name}</CardTitle>
+                    {!campaign.isActive && (
+                      <Badge variant="secondary">{t('destination.reasons.paused.title')}</Badge>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <Switch
+                      aria-label={t('active')}
                       checked={campaign.isActive}
                       disabled={!canManage}
                       onCheckedChange={() => handleToggleActive(campaign.id, campaign.isActive)}
@@ -390,7 +445,7 @@ export default function QRCampaignsPage() {
                   <CardDescription className="mt-1">{campaign.description}</CardDescription>
                 )}
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="flex flex-1 flex-col space-y-4">
                 {/* Where a scan goes and the expiry, decided on the server by the entry's rule (#692, #695) */}
                 <QrCampaignDestinationNotice destination={campaign.destination} />
                 <QrCampaignExpiry
@@ -404,68 +459,69 @@ export default function QRCampaignsPage() {
                   canManage={canManage}
                 />
 
-                {/* Stats */}
-                <div className="flex gap-4">
-                  <div className="flex items-center gap-2 text-sm">
-                    <ScanLine className="h-4 w-4 text-muted-foreground" />
-                    <span>{campaign.scanCount} scans</span>
+                {/* Scans, new leads and their rate from the campaign row; the breakdown from the answers (#700) */}
+                <QrCampaignResults
+                  scanCount={campaign.scanCount}
+                  completionCount={campaign.completionCount}
+                  createdAt={campaign.createdAt}
+                  breakdown={breakdownOf(campaign.id)}
+                />
+
+                {/* The code and the actions at the bottom, lined up across the cards of a row */}
+                <div className="mt-auto space-y-4">
+                  {/* Short Code */}
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 rounded bg-muted px-2 py-1 text-xs">
+                      {campaign.shortCode}
+                    </code>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      aria-label={t('copyUrl')}
+                      aria-describedby={`${copyUrlHintId}-${campaign.id}`}
+                      onClick={() => copyToClipboard(campaign.trackingUrl)}
+                    >
+                      <Copy className="h-3 w-3" aria-hidden="true" />
+                    </Button>
                   </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <Target className="h-4 w-4 text-muted-foreground" />
-                    <span>{campaign.completionCount} conversions</span>
+
+                  {/* Actions */}
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => handleDownloadQR(campaign.id)}
+                        disabled={generateQRMutation.isPending}
+                      >
+                        {generateQRMutation.isPending ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Download className="mr-2 h-4 w-4" />
+                        )}
+                        {t('downloadQR')}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        aria-describedby={`${copyUrlHintId}-${campaign.id}`}
+                        onClick={() => copyToClipboard(campaign.trackingUrl)}
+                      >
+                        <Copy className="mr-2 h-4 w-4" />
+                        {t('copyUrl')}
+                      </Button>
+                    </div>
+                    {/* Opening the URL counts as a scan; one campaign per channel, so each one's
+                        counts stay its own (#700, marketing review) */}
+                    <p
+                      id={`${copyUrlHintId}-${campaign.id}`}
+                      className="text-xs text-muted-foreground"
+                    >
+                      {t('copyUrlHint')}
+                    </p>
                   </div>
-                </div>
-
-                {/* Conversion Rate */}
-                <div className="text-sm">
-                  <span className="text-muted-foreground">Conversion Rate: </span>
-                  <span className="font-medium">
-                    {campaign.scanCount > 0
-                      ? ((campaign.completionCount / campaign.scanCount) * 100).toFixed(1)
-                      : 0}
-                    %
-                  </span>
-                </div>
-
-                {/* Short Code */}
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 rounded bg-muted px-2 py-1 text-xs">
-                    {campaign.shortCode}
-                  </code>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => copyToClipboard(campaign.trackingUrl)}
-                  >
-                    <Copy className="h-3 w-3" />
-                  </Button>
-                </div>
-
-                {/* Actions */}
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => handleDownloadQR(campaign.id)}
-                    disabled={generateQRMutation.isPending}
-                  >
-                    {generateQRMutation.isPending ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Download className="mr-2 h-4 w-4" />
-                    )}
-                    Download QR
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => copyToClipboard(campaign.trackingUrl)}
-                  >
-                    <Copy className="mr-2 h-4 w-4" />
-                    Copy URL
-                  </Button>
                 </div>
               </CardContent>
             </Card>

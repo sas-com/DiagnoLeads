@@ -169,6 +169,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
       );
     }
 
+    // The QR campaign's count failed and the lead was kept (#700): told after the response
+    const qrCompletionFailure = outcome.qrCompletionFailure;
+    if (qrCompletionFailure) {
+      after(() => reportServerError('diagnosis/qr-completion', qrCompletionFailure.error));
+    }
+
     // For an existing lead, show sales the stored identity, not what an anonymous visitor typed
     const identity = outcome.existingLead ?? {
       company: input.contact.company,

@@ -115,7 +115,7 @@ SQL は段ではなく、見極めの出口の判定（関門）。SQL判定が�
 | ダッシュボードの MQL | 同上 | MQL判定日が期間内のリード（関心ありでも判定日がなければ数えない。判定日を自動で入れるのは AX 診断の送信だけ）。適合は MQL に足さず、期間内の AX 診断の適合（判定日なし）を注記で出す |
 | 分析の上部の KPI・MQL段階の内訳 | `lib/features/analytics/api/router.ts`（`getOverview`） | 全期間。`leads.status`（成約率）、MQL段階と MQL判定日（`listMqlLevel`）。ダッシュボードの MQL（期間内の流れ）とは数が合わない |
 | 分析のファネル | 同上（`getConversionFunnel`） | `leads.status` と `leads.has_negotiated`。新規 → ナーチャリング → 商談中 → 成約を順の段として数え、後の段に進んだリードは前の段にも数える。このナーチャリングは旧来の段の意味で、1章の再育成とは違う |
-| 獲得元・代行会社別の費用 | `lib/features/analytics/lead-sources.ts` | `leads.sql_decision`（SQL）、`leads.status`（成約） |
+| 獲得元・代行会社別の費用 | `lib/features/analytics/lead-sources.ts` | `leads.sql_decision`（SQL）、`leads.status`（成約）。受注と費用対効果は、期間のリードの商談の `deals.stage`・`deals.amount`・`deals.closed_on`（#448、商談を読める人だけ） |
 | 代行の契約別ファネル | `lib/features/agency-contracts/report.ts` | アポ（リード）→ 商談の実施（`has_negotiated` か商談フェーズの日付）→ SQL（`sql_decision`）→ 現行調査受注 → 移行受注（`deal_phase_reached_at`） |
 | 段階的な納品の集計 | `lib/features/delivery-reviews/report.ts` | `deal_phase_reached_at`（現行調査受注 → 移行受注 → AX化） |
 | 売上予測（#437） | `lib/features/deals/`（#437 のマージ後） | `deals.stage` と確度・金額 |

@@ -10,6 +10,8 @@
  *   addresses (AX_DIAGNOSIS_SALES_EMAIL) only for the operator's organization
  * - Notification limits per organization: past the hourly one, consultation requests are still
  *   notified up to their own cap, and sales emails have hourly and daily caps (#232)
+ * - A new lead from a scan of a QR campaign counts for the campaign of its organization, once
+ *   (#700)
  */
 import type { db as defaultDb } from '@/lib/db/client';
 import { diagnosticSubmissions } from '@/lib/db/schema';
@@ -17,6 +19,7 @@ import { renderEmail } from '@/lib/email/templates/render';
 import { env } from '@/lib/env';
 import { findActiveAgencyLink } from '@/lib/features/agency-links/service';
 import { MEMBER_REFERRAL_KIND } from '@/lib/features/agency-links/types/schemas';
+import { countCampaignCompletion } from '@/lib/features/distribution/service';
 import { isEmailConfigured, sendEmail } from '@/lib/features/email';
 import {
   type AssignmentExecutor,
@@ -26,7 +29,8 @@ import {
 } from '@/lib/features/leads/assignment';
 import { notifyOrganizationMembers } from '@/lib/features/notifications/notification-service';
 import { isDiagnosisOrganization } from '@/lib/multi-tenant/helpers/diagnosis-organization';
-import { and, eq, gte, isNull } from 'drizzle-orm';
+import { summarizeServerError } from '@/lib/ops/alert';
+import { and, eq, gte, isNull, sql } from 'drizzle-orm';
 import { resolveDiagnosisOrganizationId } from './organization';
 import { type RateLimitRule, consumeRateLimit } from './rate-limit';
 import { type InferredInflow, type Tracking, inferInflowSource } from './tracking';
@@ -78,6 +82,97 @@ export async function resolveInflow(
         agencyLinkId: link.id,
         referralMemberUserId: null,
       };
+}
+
+// ---------------------------------------------------------------------------------------------
+// QR campaigns
+
+/** What countQrCompletion reads of a submission, as it is stored */
+export interface QrCompletionSubmission {
+  organizationId: string;
+  /** The submission created its lead (upsertLeadFromSubmission found none to link to) */
+  leadCreated: boolean;
+  /** A test answer of the builder's preview */
+  isTest: boolean;
+  tracking: Pick<Tracking, 'qr'>;
+}
+
+/**
+ * The longest the count waits for the row of the campaign (held for a moment by a scan being
+ * recorded or by an answer with the same code, and for as long as a deletion of the campaign
+ * takes, #702). Past it the lead is kept without the count.
+ */
+export const QR_COMPLETION_LOCK_TIMEOUT = '3s';
+
+/** A count that failed: the caller reports `error` after the response (the lead was kept) */
+export interface QrCompletionFailure {
+  error: unknown;
+}
+
+/** What countQrCompletion did. The submission goes on in every case */
+export type QrCompletion =
+  | { counted: boolean; failure: null }
+  | { counted: false; failure: QrCompletionFailure };
+
+const NOT_COUNTED: QrCompletion = { counted: false, failure: null };
+
+/**
+ * Count a new lead for the QR campaign whose code the answer carries (#700, owner decision of
+ * 2026-10-25): the /q/ entry adds the campaign's short code to the address of the diagnosis, and
+ * the answer keeps it in tracking like the UTM values (`qr`). Only a submission that created its
+ * lead counts, never a test answer, and only for a campaign of the submission's organization
+ * (countCampaignCompletion: another organization's code, or a code no campaign has, counts
+ * nothing). Nothing is asked of the database for an answer without a code.
+ *
+ * Run it in the transaction that creates the lead, after the lead and the submission are
+ * written: the count commits and rolls back with them, so an answer sent again (it finds the
+ * lead) and a submission that failed and is sent once more count once in all. Exactly once per
+ * lead, also for answers at the same moment.
+ *
+ * The lead comes first (2026-10-25 read-only review of PR #774): the count runs in a savepoint of
+ * that transaction and waits at most QR_COMPLETION_LOCK_TIMEOUT for the campaign row. When it
+ * fails (a policy or a grant of RLS, #51, the wait, ...) only the savepoint is rolled back
+ * (ROLLBACK TO SAVEPOINT, which also undoes the lock timeout set in it), the submission and its
+ * lead are saved, and the failure is logged by its name and code (never the message, which holds
+ * the query and its values) and handed back for the caller to report. The lock timeout holds for
+ * the count only: the previous value is set again as the savepoint's last statement.
+ *
+ * postgres-js (sql.savepoint, which drizzle's nested transaction uses) sends no RELEASE
+ * SAVEPOINT: a savepoint that succeeds stays open and commits with the outer transaction, whose
+ * last statement this is. A counted submission costs 4 more round trips (SAVEPOINT, setting the
+ * lock timeout, the UPDATE, setting it back). A failed count costs 4 too, as it nearly always
+ * fails in the UPDATE (a policy or a grant, the wait): ROLLBACK TO SAVEPOINT takes the place of
+ * setting the timeout back; 5 only when setting it back is what fails. The campaign row is
+ * locked from the UPDATE to the COMMIT (setting the timeout back, then the COMMIT: 2 round
+ * trips).
+ */
+export async function countQrCompletion(
+  tx: Transaction,
+  submission: QrCompletionSubmission
+): Promise<QrCompletion> {
+  const shortCode = submission.tracking.qr;
+  if (!submission.leadCreated || submission.isTest || !shortCode) return NOT_COUNTED;
+  try {
+    const counted = await tx.transaction(async (savepoint) => {
+      // The value before, read before it is changed (the materialized CTE is evaluated first)
+      const [timeout] = await savepoint.execute<{ previous: string }>(sql`
+        with setting as materialized (select current_setting('lock_timeout') as previous)
+        select previous, set_config('lock_timeout', ${QR_COMPLETION_LOCK_TIMEOUT}, true)
+        from setting
+      `);
+      const done = await countCampaignCompletion(savepoint, {
+        organizationId: submission.organizationId,
+        shortCode,
+      });
+      await savepoint.execute(sql`select set_config('lock_timeout', ${timeout.previous}, true)`);
+      return done;
+    });
+    return { counted, failure: null };
+  } catch (error) {
+    const { name, code } = summarizeServerError(error);
+    console.error('QR completion not counted:', name, code ?? '');
+    return { counted: false, failure: { error } };
+  }
 }
 
 // ---------------------------------------------------------------------------------------------

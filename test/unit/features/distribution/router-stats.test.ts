@@ -1,8 +1,11 @@
 /**
  * distribution.getCampaignStats (#41): the total is the campaign's scan_count, which the /q/
  * entry counts with each qr_scans row; the breakdown comes from campaignScanStats, counted in the
- * database for the campaign of the organization. Runs the real router on a fake database; the
- * counting itself is checked against PostgreSQL in test/unit/integration/qr-scan-recording.db.test.ts.
+ * database for the campaign of the organization. The new leads and their rate come from the
+ * same campaign row (#700): completion_count over scan_count, by campaignNewLeadRate (null
+ * without scans). Runs the real router on a fake database; the counting itself is checked
+ * against PostgreSQL in test/unit/integration/qr-scan-recording.db.test.ts and
+ * qr-campaign-completions.db.test.ts.
  */
 import type { SQL } from 'drizzle-orm';
 import { PgDialect } from 'drizzle-orm/pg-core';
@@ -22,7 +25,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/db', () => ({
   db: { query: { qrCampaigns: { findFirst: mocks.findFirst } } },
 }));
-vi.mock('@/lib/features/distribution/scans', () => ({
+vi.mock('@/lib/features/distribution/scans', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/features/distribution/scans')>()),
   campaignScanStats: mocks.campaignScanStats,
 }));
 
@@ -41,16 +45,17 @@ const ctxDb = {
 
 function caller() {
   const user = { id: USER_ID, email: 'admin@example.com', name: 'Admin' };
-  // biome-ignore lint/suspicious/noExplicitAny: test context
-  return appRouter.createCaller({ db: ctxDb, session: { session: { id: 's', userId: USER_ID }, user }, user } as any);
+  // The parts of the context the router reads; the rest of a session is not used here
+  return appRouter.createCaller({
+    db: ctxDb,
+    session: { session: { id: 's', userId: USER_ID }, user },
+    user,
+  } as unknown as Parameters<typeof appRouter.createCaller>[0]);
 }
 
 const STATS = {
   deviceBreakdown: { mobile: 2, desktop: 1 },
-  conversionRate: 0,
-  recentScans: [
-    { id: 's1', deviceType: 'mobile', scannedOn: '2026-10-29', converted: false },
-  ],
+  recentScans: [{ id: 's1', deviceType: 'mobile', scannedOn: '2026-10-29' }],
 };
 
 describe('distribution.getCampaignStats (#41)', () => {
@@ -70,12 +75,40 @@ describe('distribution.getCampaignStats (#41)', () => {
       organizationId: ORG_ID,
       campaignId: CAMPAIGN_ID,
     });
-    expect(stats).toEqual({ totalScans: 3, totalConversions: 0, ...STATS });
+    expect(stats).toEqual({ totalScans: 3, totalConversions: 0, conversionRate: 0, ...STATS });
+  });
+
+  it('answers no rate for a campaign without scans, as the page shows "—" (#700)', async () => {
+    mocks.findFirst.mockResolvedValue({
+      id: CAMPAIGN_ID,
+      organizationId: ORG_ID,
+      scanCount: 0,
+      completionCount: 2,
+    });
+    const stats = await caller().distribution.getCampaignStats({
+      organizationId: ORG_ID,
+      campaignId: CAMPAIGN_ID,
+    });
+    expect(stats).toMatchObject({ totalScans: 0, totalConversions: 2, conversionRate: null });
     // Counted on the request's database, for the campaign of the organization
     expect(mocks.campaignScanStats).toHaveBeenCalledWith(ctxDb, {
       organizationId: ORG_ID,
       campaignId: CAMPAIGN_ID,
     });
+  });
+
+  it("answers the leads and the rate from the campaign's own counts, which cannot disagree (#700)", async () => {
+    mocks.findFirst.mockResolvedValue({
+      id: CAMPAIGN_ID,
+      organizationId: ORG_ID,
+      scanCount: 8,
+      completionCount: 2,
+    });
+    const stats = await caller().distribution.getCampaignStats({
+      organizationId: ORG_ID,
+      campaignId: CAMPAIGN_ID,
+    });
+    expect(stats).toMatchObject({ totalScans: 8, totalConversions: 2, conversionRate: 25 });
   });
 
   it('answers NOT_FOUND without counting for a campaign the organization does not have', async () => {

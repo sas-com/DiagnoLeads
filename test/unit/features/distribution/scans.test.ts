@@ -2,13 +2,11 @@
  * The scans of a QR campaign (#41): what one scan writes and how a campaign's scans are counted.
  * The statement itself (one row and one count per scan, the campaign's organization, scans at the
  * same moment) is checked against PostgreSQL in test/unit/integration/qr-scan-recording.db.test.ts.
+ * The share that became new leads comes from the campaign row (#700, campaignNewLeadRate in
+ * new-lead-rate.test.ts), not from the scans.
  */
 import type { db as defaultDb } from '@/lib/db/client';
-import {
-  campaignScanStats,
-  recordQrScan,
-  scanDayOf,
-} from '@/lib/features/distribution/scans';
+import { campaignScanStats, recordQrScan, scanDayOf } from '@/lib/features/distribution/scans';
 import type { SQL } from 'drizzle-orm';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { describe, expect, it, vi } from 'vitest';
@@ -85,10 +83,7 @@ describe('campaignScanStats', () => {
    * A database answering the two selects of campaignScanStats in turn: the counts per device
    * (…where().groupBy()) and the latest scans (…where().orderBy().limit())
    */
-  function statsDb(
-    devices: { deviceType: string | null; scans: number; converted: number }[],
-    recent: unknown[] = []
-  ) {
+  function statsDb(devices: { deviceType: string | null; scans: number }[], recent: unknown[] = []) {
     const calls = { where: [] as unknown[], limit: [] as number[] };
     const select = vi.fn((_fields: Record<string, unknown>) => ({
       from: () => ({
@@ -111,48 +106,46 @@ describe('campaignScanStats', () => {
 
   const SCOPE = { organizationId: 'org-a', campaignId: 'c1' };
 
-  it('breaks the scans down by device and computes the share that became leads', async () => {
+  it('breaks the scans down by device', async () => {
     const { db } = statsDb([
-      { deviceType: 'mobile', scans: 6, converted: 2 },
-      { deviceType: 'desktop', scans: 1, converted: 0 },
-      { deviceType: 'tablet', scans: 1, converted: 1 },
+      { deviceType: 'mobile', scans: 6 },
+      { deviceType: 'desktop', scans: 1 },
+      { deviceType: 'tablet', scans: 1 },
     ]);
-    const stats = await campaignScanStats(db, SCOPE);
-    expect(stats.deviceBreakdown).toEqual({ mobile: 6, desktop: 1, tablet: 1 });
-    expect(stats.conversionRate).toBe(37.5);
-  });
-
-  it("counts the rows without a device as 'unknown'", async () => {
-    const { db } = statsDb([
-      { deviceType: null, scans: 2, converted: 0 },
-      { deviceType: '', scans: 1, converted: 0 },
-    ]);
-    expect((await campaignScanStats(db, SCOPE)).deviceBreakdown).toEqual({ unknown: 3 });
-  });
-
-  it('rounds the share to two decimals', async () => {
-    const { db } = statsDb([{ deviceType: 'mobile', scans: 3, converted: 1 }]);
-    expect((await campaignScanStats(db, SCOPE)).conversionRate).toBe(33.33);
-  });
-
-  it('answers zeros for a campaign without scans', async () => {
-    const { db } = statsDb([]);
     expect(await campaignScanStats(db, SCOPE)).toEqual({
-      deviceBreakdown: {},
-      conversionRate: 0,
+      deviceBreakdown: { mobile: 6, desktop: 1, tablet: 1 },
       recentScans: [],
     });
   });
 
+  it('never reads converted of the scans: a lead is not linked to a scan (#700)', async () => {
+    const { db, select } = statsDb([{ deviceType: 'mobile', scans: 1 }]);
+    await campaignScanStats(db, SCOPE);
+    expect(Object.keys(select.mock.calls[0][0])).toEqual(['deviceType', 'scans']);
+  });
+
+  it("counts the rows without a device as 'unknown'", async () => {
+    const { db } = statsDb([
+      { deviceType: null, scans: 2 },
+      { deviceType: '', scans: 1 },
+    ]);
+    expect((await campaignScanStats(db, SCOPE)).deviceBreakdown).toEqual({ unknown: 3 });
+  });
+
+  it('answers nothing for a campaign without scans', async () => {
+    const { db } = statsDb([]);
+    expect(await campaignScanStats(db, SCOPE)).toEqual({ deviceBreakdown: {}, recentScans: [] });
+  });
+
   it('lists only the latest 10 scans, both reads scoped to the campaign of the organization', async () => {
-    const recent = [{ id: 's1', deviceType: 'mobile', scannedOn: '2026-10-29', converted: false }];
-    const { db, calls, select } = statsDb([{ deviceType: 'mobile', scans: 1, converted: 0 }], recent);
+    const recent = [{ id: 's1', deviceType: 'mobile', scannedOn: '2026-10-29' }];
+    const { db, calls, select } = statsDb([{ deviceType: 'mobile', scans: 1 }], recent);
     expect((await campaignScanStats(db, SCOPE)).recentScans).toBe(recent);
     expect(calls.limit).toEqual([10]);
-    // Four columns, the day as 'YYYY-MM-DD' (the column holds the day in Japan at midnight with no
+    // Three columns, the day as 'YYYY-MM-DD' (the column holds the day in Japan at midnight with no
     // time zone, which a Date would show as 09:00 in Japan)
     const fields = select.mock.calls[1][0];
-    expect(Object.keys(fields)).toEqual(['id', 'deviceType', 'scannedOn', 'converted']);
+    expect(Object.keys(fields)).toEqual(['id', 'deviceType', 'scannedOn']);
     expect(compiled(fields.scannedOn as SQL).sql).toBe(
       `to_char("qr_scans"."scanned_at", 'YYYY-MM-DD')`
     );
