@@ -1,5 +1,7 @@
 'use client';
 
+import { TAP_TARGET } from '@/components/common/tap-target';
+import { formatYen } from '@/components/features/deals/deal-format';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,9 +35,10 @@ import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { fiscalYearOf } from '@/lib/features/sales-targets/types/fiscal-year';
 import { trpc } from '@/lib/trpc/client';
 import { Loader2 } from 'lucide-react';
-import { useTranslations } from 'next-intl';
-import { type FormEvent, useEffect, useId, useState } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
+import { type FormEvent, useEffect, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { formatYearMonth } from './forecast-format';
 
 /** Key of the organization-wide row among the members' user ids */
 const ORGANIZATION = '__organization__';
@@ -67,11 +70,14 @@ const parseAmount = (text: string): number | null | 'invalid' => {
  * Only the boxes that changed are sent, so two people editing other boxes do not undo each
  * other. Someone who left keeps their row while they hold a target, which can only be removed.
  * The fiscal year start is the organization's setting: it is saved on its own, after a question.
+ * "Save and next month" keeps the dialog open on the month after (#721).
  */
 export function TargetsDialog({ open, onOpenChange, organizationId }: TargetsDialogProps) {
   const t = useTranslations('salesForecast.targets');
   const tCommon = useTranslations('common');
+  const locale = useLocale();
   const id = useId();
+  const boxRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const utils = trpc.useUtils();
   const [fiscalYear, setFiscalYear] = useState<number | undefined>(undefined);
   const [month, setMonth] = useState<string | null>(null);
@@ -95,7 +101,6 @@ export function TargetsDialog({ open, onOpenChange, organizationId }: TargetsDia
     onSuccess: () => {
       refresh();
       toast.success(t('saved'));
-      onOpenChange(false);
     },
     onError: () => toast.error(t('error')),
   });
@@ -162,7 +167,17 @@ export function TargetsDialog({ open, onOpenChange, organizationId }: TargetsDia
       return [row.key, refused ? 'former' : value];
     })
   );
-  const invalid = rows.some((row) => parsed[row.key] === 'invalid' || parsed[row.key] === 'former');
+  const invalidRow = rows.find(
+    (row) => parsed[row.key] === 'invalid' || parsed[row.key] === 'former'
+  );
+  const invalid = invalidRow !== undefined;
+  // What the members' boxes add up to, shown under the organization's box
+  const membersTotal = rows
+    .filter((row) => row.userId !== null)
+    .reduce((sum, row) => {
+      const value = parsed[row.key];
+      return typeof value === 'number' ? sum + value : sum;
+    }, 0);
   // A box that differs from the stored target: to save, or not valid yet
   const unsaved = rows.some((row) => parsed[row.key] !== storedAmount(row.userId));
 
@@ -195,10 +210,31 @@ export function TargetsDialog({ open, onOpenChange, organizationId }: TargetsDia
     );
   };
 
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
+  // The month after the one shown, in the next fiscal year after the last month
+  const goToNextMonth = () => {
+    if (!data || !selectedMonth) return;
+    const index = data.months.indexOf(selectedMonth);
+    if (index >= 0 && index < data.months.length - 1) {
+      applySwitch({ fiscalYear, month: data.months[index + 1] });
+      return;
+    }
+    const [year, monthOfYear] = selectedMonth.split('-').map(Number);
+    const next =
+      monthOfYear === 12
+        ? `${year + 1}-01-01`
+        : `${year}-${String(monthOfYear + 1).padStart(2, '0')}-01`;
+    applySwitch({ fiscalYear: data.fiscalYear + 1, month: next });
+  };
+
+  /** Save the boxes that changed, then close or show the month after */
+  const saveBoxes = (then: 'close' | 'next') => {
     setSubmitted(true);
-    if (!selectedMonth || invalid) return;
+    if (!selectedMonth) return;
+    if (invalidRow) {
+      boxRefs.current[invalidRow.key]?.focus();
+      return;
+    }
+    const done = then === 'close' ? () => onOpenChange(false) : goToNextMonth;
     const entries = rows
       .filter((row) => parsed[row.key] !== storedAmount(row.userId))
       .map((row) => ({
@@ -207,10 +243,15 @@ export function TargetsDialog({ open, onOpenChange, organizationId }: TargetsDia
         amount: parsed[row.key] as number | null,
       }));
     if (entries.length === 0) {
-      onOpenChange(false);
+      done();
       return;
     }
-    save.mutate({ organizationId, entries });
+    save.mutate({ organizationId, entries }, { onSuccess: done });
+  };
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    saveBoxes('close');
   };
 
   return (
@@ -261,7 +302,7 @@ export function TargetsDialog({ open, onOpenChange, organizationId }: TargetsDia
                     <SelectContent>
                       {data.months.map((value) => (
                         <SelectItem key={value} value={value}>
-                          {value.slice(0, 7)}
+                          {formatYearMonth(value, locale)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -289,6 +330,9 @@ export function TargetsDialog({ open, onOpenChange, organizationId }: TargetsDia
                       <Label htmlFor={inputId}>{row.label}</Label>
                       <div>
                         <Input
+                          ref={(element) => {
+                            boxRefs.current[row.key] = element;
+                          }}
                           id={inputId}
                           inputMode="numeric"
                           value={boxText(row)}
@@ -315,9 +359,11 @@ export function TargetsDialog({ open, onOpenChange, organizationId }: TargetsDia
                       {helpId && (
                         <p
                           id={helpId}
-                          className="text-xs text-gray-500 sm:col-span-2 dark:text-gray-400"
+                          className="text-sm text-gray-600 sm:col-span-2 dark:text-gray-300"
                         >
                           {t(row.former ? 'formerMemberHelp' : 'organizationHelp')}
+                          {row.userId === null &&
+                            ` ${t('membersTotal', { amount: formatYen(membersTotal, locale) ?? '' })}`}
                         </p>
                       )}
                     </div>
@@ -355,7 +401,7 @@ export function TargetsDialog({ open, onOpenChange, organizationId }: TargetsDia
                   </Select>
                   <p
                     id={`${id}-start-help`}
-                    className="text-xs text-gray-500 sm:col-span-2 dark:text-gray-400"
+                    className="text-sm text-gray-600 sm:col-span-2 dark:text-gray-300"
                   >
                     {t('startMonthHelp')}
                   </p>
@@ -373,14 +419,31 @@ export function TargetsDialog({ open, onOpenChange, organizationId }: TargetsDia
               </Button>
             </div>
           ) : (
-            <Loader2 className="h-5 w-5 animate-spin text-gray-400" aria-hidden="true" />
+            <output className="flex items-center gap-2 text-sm text-gray-600">
+              <Loader2 className="h-5 w-5 animate-spin text-gray-400" aria-hidden="true" />
+              {tCommon('loading')}
+            </output>
           )}
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className={TAP_TARGET}
+              onClick={() => onOpenChange(false)}
+            >
               {tCommon('cancel')}
             </Button>
-            <Button type="submit" disabled={!data || save.isPending}>
+            <Button
+              type="button"
+              variant="outline"
+              className={TAP_TARGET}
+              disabled={!data || save.isPending}
+              onClick={() => saveBoxes('next')}
+            >
+              {t('saveAndNext')}
+            </Button>
+            <Button type="submit" className={TAP_TARGET} disabled={!data || save.isPending}>
               {save.isPending ? t('saving') : t('save')}
             </Button>
           </DialogFooter>

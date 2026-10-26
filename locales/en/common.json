@@ -200,7 +200,7 @@
     "dashboard": "Dashboard",
     "leads": "Lead Management",
     "deals": "Deals",
-    "forecast": "Forecast",
+    "forecast": "Sales forecast",
     "prospects": "Customer search (AX)",
     "analytics": "Analytics",
     "settings": "Settings",
@@ -1568,7 +1568,7 @@
     }
   },
   "salesForecast": {
-    "title": "Forecast",
+    "title": "Sales forecast",
     "description": "Won and expected amounts against the targets, by period and owner",
     "periodLabel": "Period",
     "periods": {
@@ -1577,21 +1577,24 @@
       "thisFiscalYear": "This fiscal year"
     },
     "range": "{from} – {to}",
-    "fiscalYearNote": "Fiscal year starts in month {month}",
+    "fiscalYearNote": "Fiscal year starts in {month}",
+    "updatedAt": "Updated {time}",
     "setTargets": "Set targets",
+    "noTargetSet": "No target is set.",
     "tiles": {
       "target": "Target",
       "won": "Won",
       "forecast": "Forecast (won + commit)",
       "bestCase": "Best case",
       "gap": "Gap to target",
-      "weighted": "Pipeline (weighted)",
+      "weighted": "Weighted (open deals)",
       "achievement": "{rate} achieved",
       "forecastAchievement": "{rate} forecast",
       "noTarget": "No target",
       "above": "{amount} above the target"
     },
     "table": {
+      "title": "By owner",
       "caption": "Forecast by owner",
       "owner": "Owner",
       "target": "Target",
@@ -1601,19 +1604,22 @@
       "pipeline": "Pipeline",
       "weighted": "Weighted",
       "achievement": "Achieved",
-      "gap": "Gap",
+      "gap": "Forecast vs target",
       "total": "Total",
       "unassigned": "No owner",
       "noTarget": "—",
       "hidden": "Hidden",
-      "hiddenNote": "Each rep's target, achievement and gap are shown only to those who set the targets and to the rep"
+      "hiddenNote": "Each rep's target, achievement and gap are shown only to those who set the targets and to the rep",
+      "forecast": "Forecast (won + commit)",
+      "above": "+{amount} above",
+      "you": "(you)"
     },
     "notes": {
       "overdue": "{count} open deals ({amount}) still have an expected close date before this period and are not counted. Review their dates",
       "undated": "{count} open deals ({amount}) have no expected close date and are not in the forecast",
       "noAmount": "{count} deals have no amount yet",
-      "toBoard": "Open the deals board",
-      "toList": "Open the deals list"
+      "toList": "Open the deals list",
+      "toOverdueList": "Open the list by expected close date"
     },
     "changes": {
       "title": "This week",
@@ -1632,7 +1638,11 @@
       "summary": "{count} · {amount}",
       "stageChange": "{from} → {to}",
       "dateChange": "Expected close {from} → {to}",
-      "noDate": "none"
+      "noDate": "none",
+      "amountChange": "{from} → {to}",
+      "noAmount": "No amount",
+      "more": "{count} more",
+      "toBoard": "See them on the board"
     },
     "targets": {
       "title": "Set targets",
@@ -1649,8 +1659,10 @@
       "month": "Month",
       "organization": "Whole organization",
       "organizationHelp": "In a month without an organization target, the members' targets are summed",
+      "membersTotal": "(The members add up to {amount}.)",
       "amountInvalid": "Enter a whole number of 0 or more",
       "save": "Save",
+      "saveAndNext": "Save and go to the next month",
       "saving": "Saving…",
       "saved": "Targets saved",
       "startSaved": "Fiscal year start changed",
@@ -1666,7 +1678,9 @@
     },
     "state": {
       "loadError": "Could not load the forecast",
-      "retry": "Retry"
+      "retry": "Retry",
+      "forbiddenTitle": "You cannot see the sales forecast",
+      "forbiddenBody": "The sales forecast and the targets are shown to members who can view leads, except viewers from a parent organization."
     }
   },
   "settings": {
