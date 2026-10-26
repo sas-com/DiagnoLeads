@@ -108,7 +108,7 @@ it('should format user name', () => {
 });
 ```
 
-モックは本物と同じく参照を保つ（Next の `useRouter` のように本物が描画のたびに同じオブジェクトを返すものは、`const router = { push: mocks.push }; useRouter: () => router` と1つだけ作って返す。描画ごとに新しいオブジェクトを返すと、それに依存する effect が毎回やり直され、依存の漏れた effect を見逃す。#636）。1つだけ作ったモックの関数はファイルの全テストで同じものが使われ、呼び出しが次のテストに残るので、テストで確かめる関数は `mocks` に出して `beforeEach` でリセットする（`test/setup.ts` の既定の router は `afterEach` でリセットしている）。
+モックは本物と同じく参照を保つ（Next の `useRouter` のように本物が描画のたびに同じオブジェクトを返すものは、`const router = { push: mocks.push }; useRouter: () => router` と1つだけ作って返す。描画ごとに新しいオブジェクトを返すと、それに依存する effect が毎回やり直され、依存の漏れた effect を見逃す。#636）。1つだけ作ったモックの関数はファイルの全テストで同じものが使われ、呼び出しが次のテストに残るので、テストで確かめる関数は `mocks` に出して `beforeEach` でリセットする（`test/setup.ts` の既定の router は `afterEach` でリセットしている）。`useSearchParams` と `useParams` も同じで、URL が同じあいだは同じオブジェクトを返す。固定の値はファクトリの中で1回だけ作り、テストで URL が変わるものは `test/mocks/next-navigation.ts` の `searchParamsCache()` で文字列が変わったときだけ作り直す。検索パラメーターは本物（`ReadonlyURLSearchParams`）と同じく変更できない `ReadonlySearchParams` で作る（#719）。
 
 #### 1.4 テストデータの独立性
 ```typescript
