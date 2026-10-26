@@ -8,6 +8,7 @@
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/dl_test \
  *     bunx vitest --run test/unit/integration/lead-contact-activities.db.test.ts
  */
+import { canReadDeals } from '@/lib/auth/deal-access';
 import * as schema from '@/lib/db/schema';
 import {
   auditLogs,
@@ -25,6 +26,11 @@ import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/db/rls', () => ({ setCurrentUser: vi.fn().mockResolvedValue(undefined) }));
+// The rule itself, but replaceable for a role kept out of the deals (none exists before #276)
+vi.mock('@/lib/auth/deal-access', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/auth/deal-access')>();
+  return { ...actual, canReadDeals: vi.fn(actual.canReadDeals) };
+});
 
 const url = process.env.TEST_DATABASE_URL;
 
@@ -248,6 +254,25 @@ describe.skipIf(!url)('visits and online meetings in the contact records (Postgr
     await expect(
       pg.insert(leadContactLogs).values({ organizationId: orgA, leadId, kind: 'meeting' })
     ).rejects.toThrow();
+  });
+
+  it('lets a role that may change leads but not read deals record a contact without a deal only', async () => {
+    const leadId = await createLead(orgA);
+    const deal = await createDeal(orgA, leadId, '移行の商談');
+    const base = { organizationId: orgA, leadId, kind: 'visit' as const };
+
+    // An admin's abilities kept out of the deals, as the agency accounts of #276 will be
+    vi.mocked(canReadDeals).mockReturnValueOnce(false);
+    await expect(
+      adminA.leadFollowUp.recordContact({ ...base, dealId: deal.id })
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(
+      await pg.select().from(leadContactLogs).where(eq(leadContactLogs.leadId, leadId))
+    ).toHaveLength(0);
+
+    // Without a deal there is nothing of the deals to read
+    const recorded = await adminA.leadFollowUp.recordContact(base);
+    expect((await contactRow(recorded.id)).dealId).toBeNull();
   });
 
   it('keeps the records of a deleted deal without the deal, and ends the wait for the first contact', async () => {

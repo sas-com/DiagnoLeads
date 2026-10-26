@@ -6,7 +6,7 @@ title: "連絡の記録に訪問・オンライン商談を足し、日時・所
 status: active
 superseded_by: []
 issues: [554, 430]
-paths: ["lib/features/lead-follow-up/types/schemas.ts", "lib/features/lead-follow-up/service.ts", "lib/features/lead-follow-up/api/router.ts", "components/features/lead-follow-up/record-activity-dialog.tsx", "components/features/lead-follow-up/contact-quick-actions.tsx", "lib/features/lead-activity/api/router.ts", "lib/features/deals/access.ts", "lib/features/deals/types/schemas.ts", "lib/auth/permissions.ts"]
+paths: ["lib/features/lead-follow-up/types/schemas.ts", "lib/features/lead-follow-up/service.ts", "lib/features/lead-follow-up/api/router.ts", "components/features/lead-follow-up/record-activity-dialog.tsx", "components/features/lead-follow-up/contact-quick-actions.tsx", "lib/features/lead-activity/api/router.ts", "lib/auth/deal-access.ts", "lib/features/deals/access.ts", "lib/features/deals/types/schemas.ts", "lib/auth/permissions.ts"]
 ---
 
 ### [Sales] 連絡の記録に訪問・オンライン商談を足し、日時・所要時間・結果・商談を残す（#554）
@@ -22,7 +22,7 @@ paths: ["lib/features/lead-follow-up/types/schemas.ts", "lib/features/lead-follo
 - **理由**: 訪問・オンライン商談は初回のヒアリングとしてしか残らず、過去の連絡、かかった時間、結果、どの商談の活動かが分からなかった（#554 の背景）。商談が複数あるリードでは、活動を商談に結び付けないと商談ごとの動きが追えない
 - **ルール**:
   - 種類・結果を変えるときは、`lib/features/lead-follow-up/types/schemas.ts` の定数と、`lib/db/schema.ts` の `lead_contact_logs` の CHECK を一緒に変える
-  - 商談を読めないのにリードを更新できる役割（#276 の営業代行のアカウント）を作るときは、`recordContact` で商談の id を拒む（今はリードを更新できる役割は、すべて商談を読める）。lead-follow-up は機能の循環に入っているので、`canReadDeals` を lead-follow-up から読むと deals も循環に入る（arch:check の features-in-cycles）。拒む判断の置き場所は、そのときに決める（この決定の paths に `lib/features/deals/access.ts` を入れ、除外する役割を足す人にフックが知らせる）
+  - 商談を指定した記録は、商談を読める人（`canReadDeals`）だけが付けられる。リードを更新できても商談を読めない役割（#276 の営業代行のアカウント）が商談の id を送ると、`recordContact` が FORBIDDEN を返す（商談なしの記録はできる）。今はリードを更新できる役割はすべて商談を読めるので、テストは `canReadDeals` を差し替えて確かめている（`lead-contact-activities.db.test.ts`）。判断は `lib/auth/deal-access.ts` から読む（lead-follow-up は機能の循環に入っているので、`lib/features/deals` は読まない。#448 で置き場所を移した）
   - 「同じリードの商談だけ」は、商談のリード（`deals.lead_id`）を変えられないこと（`updateDealSchema` に leadId がない）に乗っている。商談を別のリードへ付け替える機能を作るときは、付いている記録の扱いを先に決める（`test/unit/features/lead-follow-up.test.ts` が、updateDealSchema に leadId がないことを確かめている）
   - 過去の日時を記録できるので、初回連絡（最初の記録の日時）がリードの作成より前になることがある。応答時間（#138）を出すときに扱いを決める
 - **却下案**: 訪問・オンライン商談も1タップにする（日時と所要時間を入れる場面なので、画面を通す）。結果を必須にする（入力の手間で記録されなくなる）。商談を DB の外部キーで同じリードに縛る（`deals` に (id, lead_id) の一意の索引が要る。商談のリードは変えられないので、記録するときの確認とロックで足りる）

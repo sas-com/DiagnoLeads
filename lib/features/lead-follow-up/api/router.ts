@@ -6,6 +6,7 @@
  * organizationId (see ../service.ts).
  */
 
+import { canReadDeals } from '@/lib/auth/deal-access';
 import type { AppAbility } from '@/lib/auth/permissions';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { organizationProcedure, router } from '@/lib/trpc/init';
@@ -61,14 +62,19 @@ export const leadFollowUpRouter = router({
 
   /**
    * One tap: "called", "emailed" or "could not reach", now; or a contact with its time,
-   * duration, outcome and deal (#554). Everyone who may change leads may read deals today; a
-   * role that may change leads but not read deals (the agency accounts of #276) must not be
-   * able to name a deal here
+   * duration, outcome and deal (#554). Naming a deal needs the right to read deals: a role that
+   * may change leads but not read deals (the agency accounts of #276) records without one
    */
   recordContact: organizationProcedure
     .input(recordContactSchema)
     .mutation(async ({ ctx, input }) => {
       assertCanWrite(ctx.ability);
+      if (input.dealId && !canReadDeals(ctx)) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'You do not have permission to read the deals of leads',
+        });
+      }
       return recordContact(ctx.db, {
         ...input,
         organizationId: ctx.organization.id,
