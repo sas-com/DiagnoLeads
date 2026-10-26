@@ -1,5 +1,5 @@
 {
-  "id": "67e06103-de91-4776-ad98-da04f43dee40",
+  "id": "13999891-d37a-467a-954e-79a5aebcf27b",
   "prevId": "edf9ff77-518b-4c5a-a629-ae34ef81b212",
   "version": "7",
   "dialect": "postgresql",
@@ -3342,7 +3342,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "field_glossary_value_check": {
+          "name": "field_glossary_value_check",
+          "value": "\"field_glossary\".\"value\" is null or btrim(\"field_glossary\".\"value\") <> ''"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.lead_comments": {

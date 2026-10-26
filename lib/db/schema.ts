@@ -1225,6 +1225,9 @@ export const fieldGlossary = pgTable(
     fieldKey: text('field_key').notNull(),
     /** A value of the field (e.g. 'negotiating'); null for the field-level entry */
     value: text('value'),
+    // Display label for a free-text value candidate (one not backed by a code enum).
+    // Enum value labels stay in locales/ (e.g. 'negotiating' -> '商談中') and are not
+    // duplicated here; the glossary keeps the description and the value candidates.
     labelJa: text('label_ja'),
     labelEn: text('label_en'),
     descriptionJa: text('description_ja'),
@@ -1244,6 +1247,9 @@ export const fieldGlossary = pgTable(
     uniqueIndex('field_glossary_field_unique')
       .on(table.fieldKey)
       .where(sql`${table.value} is null`),
+    // A value is either absent (the field-level entry) or non-empty; '' and whitespace-only
+    // would slip past the partial unique index and sit confusingly next to the field-level entry
+    check('field_glossary_value_check', sql`${table.value} is null or btrim(${table.value}) <> ''`),
   ]
 );
 

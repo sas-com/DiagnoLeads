@@ -35,15 +35,15 @@ describe.skipIf(!url)('field glossary (PostgreSQL)', () => {
   it('round-trips a field-level entry and its value entries for the same field', async () => {
     const key = `${ns}.status`;
     await pg.insert(fieldGlossary).values([
-      { fieldKey: key, value: null, labelJa: '商談ステータス', descriptionJa: 'リードの営業段階' },
+      // Enum labels (e.g. '商談中') live in locales/, not here; the glossary keeps descriptions
+      { fieldKey: key, value: null, descriptionJa: 'リードの営業段階' },
       {
         fieldKey: key,
         value: 'negotiating',
-        labelJa: '交渉中',
         descriptionJa: '商談を進めている段階',
         sortOrder: 1,
       },
-      { fieldKey: key, value: 'won', labelJa: '成約', descriptionJa: '受注した', sortOrder: 2 },
+      { fieldKey: key, value: 'won', descriptionJa: '受注した', sortOrder: 2 },
     ]);
 
     const all = await pg.select().from(fieldGlossary).where(eq(fieldGlossary.fieldKey, key));
@@ -58,8 +58,37 @@ describe.skipIf(!url)('field glossary (PostgreSQL)', () => {
       .from(fieldGlossary)
       .where(and(eq(fieldGlossary.fieldKey, key), eq(fieldGlossary.value, 'negotiating')));
     expect(negotiating).toHaveLength(1);
-    expect(negotiating[0].labelJa).toBe('交渉中');
+    expect(negotiating[0].descriptionJa).toBe('商談を進めている段階');
     expect(negotiating[0].sortOrder).toBe(1);
+  });
+
+  it('stores label candidates for a free-text value not backed by a locale enum', async () => {
+    const key = `${ns}.industry`;
+    await pg.insert(fieldGlossary).values({
+      fieldKey: key,
+      value: 'manufacturing',
+      labelJa: '製造業',
+      labelEn: 'Manufacturing',
+      descriptionJa: '製造・加工を主とする業種',
+    });
+
+    const rows = await pg
+      .select()
+      .from(fieldGlossary)
+      .where(and(eq(fieldGlossary.fieldKey, key), eq(fieldGlossary.value, 'manufacturing')));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].labelJa).toBe('製造業');
+    expect(rows[0].labelEn).toBe('Manufacturing');
+  });
+
+  it('rejects an empty or whitespace-only value', async () => {
+    const key = `${ns}.empty`;
+    await expect(
+      pg.insert(fieldGlossary).values({ fieldKey: key, value: '', descriptionJa: 'empty' })
+    ).rejects.toThrow();
+    await expect(
+      pg.insert(fieldGlossary).values({ fieldKey: key, value: '   ', descriptionJa: 'spaces' })
+    ).rejects.toThrow();
   });
 
   it('keeps at most one field-level entry per field', async () => {
