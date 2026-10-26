@@ -104,7 +104,14 @@ export function DealDetailView({ dealId }: { dealId: string }) {
   }
 
   const moveTo = (stage: DealStage) =>
-    stageMove.move({ ...deal, leadLabel: deal.lead.company || deal.lead.name || '' }, stage);
+    stageMove.move(
+      {
+        ...deal,
+        leadLabel: deal.lead.company || deal.lead.name || '',
+        leadSqlDecision: deal.lead.sqlDecision,
+      },
+      stage
+    );
 
   const open = isOpenStage(deal.stage);
   const facts: { label: string; value: ReactNode }[] = [

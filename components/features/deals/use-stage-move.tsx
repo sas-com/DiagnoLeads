@@ -6,7 +6,9 @@ import {
   type OpenDealStage,
   STAGE_PROBABILITY,
   isOpenStage,
+  skipsSqlDecision,
 } from '@/lib/features/deals/types/pipeline';
+import type { SqlDecision } from '@/lib/features/leads/types/pipeline';
 import { trpc } from '@/lib/trpc/client';
 import { useTranslations } from 'next-intl';
 import { type ReactNode, useRef, useState } from 'react';
@@ -14,17 +16,21 @@ import { toast } from 'sonner';
 import { LostReasonDialog, type LostValues } from './lost-reason-dialog';
 import type { PendingMove } from './pending-moves';
 import { ReopenDialog } from './reopen-dialog';
+import { SqlDecisionDialog } from './sql-decision-dialog';
 import { useDealMutations } from './use-deal-mutations';
 import { WonDialog, type WonValues } from './won-dialog';
 
 /** How long a toast with an undo stays: time to reach its button from the keyboard (#720) */
 const UNDO_TOAST_MS = 10_000;
 
-/** A deal to move, with its lead's company or name (empty when it has neither) */
+/**
+ * A deal to move, with its lead's company or name (empty when it has neither) and the lead's SQL
+ * decision (moving out of 見極め asks for one first, #801)
+ */
 export type MovingDeal = Pick<
   DealView,
   'id' | 'name' | 'stage' | 'amount' | 'probability' | 'lostReason' | 'lostNote' | 'competitor'
-> & { leadLabel: string };
+> & { leadLabel: string; leadSqlDecision: SqlDecision | null };
 
 export interface MoveOptions {
   /**
@@ -35,6 +41,17 @@ export interface MoveOptions {
 }
 
 type OpenDeal = MovingDeal & { stage: OpenDealStage };
+
+/**
+ * A question of a move: `sql` asks for the lead's SQL decision first (#801); `stage` asks what the
+ * stage needs, with the SQL decision chosen in the first question
+ */
+interface Asking {
+  deal: MovingDeal;
+  stage: DealStage;
+  step: 'sql' | 'stage';
+  sqlDecision?: SqlDecision;
+}
 
 /** A move between open stages on its way: the deal as it was, and whether it undoes a move */
 interface QuickMove {
@@ -55,6 +72,11 @@ interface QuickMove {
  * of the same deal says nothing, as the newer one tells where the deal is. The screen renders
  * `dialogs`.
  *
+ * Moving a deal out of 見極め (to a later open stage or to won) while its lead has no SQL decision
+ * asks for it first (#801). 適格 is sent with the move, which records it on the lead in the same
+ * transaction; 不適格 goes to the lost question and is sent with the loss. An undo puts back the
+ * stage, not the SQL decision: that is the hearing's outcome, which the move only came after.
+ *
  * The moves between open stages run as a mutation of their own, whose callbacks get every result:
  * the callbacks given to `mutate` only hear of the latest call, and moves can overlap.
  */
@@ -65,7 +87,7 @@ export function useStageMove(organizationId: string): {
 } {
   const t = useTranslations('deals');
   const { update, refresh } = useDealMutations({ toastErrors: false });
-  const [asking, setAsking] = useState<{ deal: MovingDeal; stage: DealStage } | null>(null);
+  const [asking, setAsking] = useState<Asking | null>(null);
   // The won or lost question could not be saved: it says so and stays open
   const [failed, setFailed] = useState(false);
   const [pending, setPending] = useState<ReadonlyMap<string, PendingMove & { seq: number }>>(
@@ -82,6 +104,8 @@ export function useStageMove(organizationId: string): {
   // The toast of each deal's last move: a newer move of the deal replaces it and its undo
   const undoToasts = useRef(new Map<string, string | number>());
   const returnFocus = useRef<(() => boolean) | undefined>(undefined);
+  // The SQL question closes for the next question: the focus goes on to it, not back
+  const goingOn = useRef(false);
 
   const stageName = (stage: DealStage) => t(`stages.${stage}`);
 
@@ -154,7 +178,12 @@ export function useStageMove(organizationId: string): {
         toast.success(message);
         return;
       }
-      const moved = { ...sent.deal, stage: sent.to, probability: saved.probability };
+      const moved = {
+        ...sent.deal,
+        stage: sent.to,
+        probability: saved.probability,
+        leadSqlDecision: input.sqlDecision ?? sent.deal.leadSqlDecision,
+      };
       const before = { stage: sent.deal.stage, probability: sent.deal.probability };
       const id = toast.success(message, {
         action: { label: t('toasts.undo'), onClick: () => sendQuick(moved, before, true) },
@@ -187,7 +216,7 @@ export function useStageMove(organizationId: string): {
   /** Show the move at once and send it; an undo also puts back the probability the move reset */
   const sendQuick = (
     deal: OpenDeal,
-    to: { stage: OpenDealStage; probability?: number },
+    to: { stage: OpenDealStage; probability?: number; sqlDecision?: SqlDecision },
     undo: boolean
   ) => {
     const seq = startMove(deal.id);
@@ -205,16 +234,28 @@ export function useStageMove(organizationId: string): {
       dealId: deal.id,
       stage: to.stage,
       ...(to.probability === undefined ? {} : { probability: to.probability }),
+      ...(to.sqlDecision ? { sqlDecision: to.sqlDecision } : {}),
     };
     quickMoves.current.set(input, { deal, to: to.stage, seq, undo });
     quick.mutate(input);
   };
 
-  const send = (deal: MovingDeal, stage: DealStage, values?: LostValues | WonValues) => {
+  const send = (
+    deal: MovingDeal,
+    stage: DealStage,
+    values?: LostValues | WonValues,
+    sqlDecision?: SqlDecision
+  ) => {
     startMove(deal.id);
     setFailed(false);
     update.mutate(
-      { organizationId, dealId: deal.id, stage, ...values },
+      {
+        organizationId,
+        dealId: deal.id,
+        stage,
+        ...values,
+        ...(sqlDecision ? { sqlDecision } : {}),
+      },
       {
         onSuccess: (saved) => {
           setAsking(null);
@@ -242,32 +283,76 @@ export function useStageMove(organizationId: string): {
   const move = (deal: MovingDeal, stage: DealStage, options?: MoveOptions) => {
     if (stage === deal.stage) return;
     const from = deal.stage;
-    if (isOpenStage(stage) && isOpenStage(from)) {
+    const askSql = skipsSqlDecision(from, stage, deal.leadSqlDecision);
+    if (!askSql && isOpenStage(stage) && isOpenStage(from)) {
       sendQuick({ ...deal, stage: from }, { stage }, false);
       return;
     }
-    returnFocus.current = options?.returnFocus;
+    // Without a place given, the focus goes back to where the move was chosen: after two
+    // questions in a row, the one the second question opened from is gone
+    const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    returnFocus.current =
+      options?.returnFocus ??
+      (() => {
+        if (!trigger?.isConnected) return false;
+        trigger.focus();
+        return true;
+      });
+    goingOn.current = false;
     setFailed(false);
-    setAsking({ deal, stage });
+    setAsking({ deal, stage, step: askSql ? 'sql' : 'stage' });
+  };
+
+  /** The SQL decision is made: 適格 goes on with the move, 不適格 to losing the deal */
+  const decideSql = (sqlDecision: SqlDecision) => {
+    if (!asking) return;
+    const { deal: decided, stage } = asking;
+    const to: DealStage = sqlDecision === 'qualified' ? stage : 'lost';
+    if (isOpenStage(to) && isOpenStage(decided.stage)) {
+      sendQuick({ ...decided, stage: decided.stage }, { stage: to, sqlDecision }, false);
+      setAsking(null);
+      return;
+    }
+    goingOn.current = true;
+    setAsking({ deal: decided, stage: to, step: 'stage', sqlDecision });
   };
 
   const close = (open: boolean) => {
     if (!open) setAsking(null);
   };
+  // The SQL question closes after its answer was taken: the next question stays
+  const closeSql = (open: boolean) => {
+    if (!open && !goingOn.current) setAsking(null);
+  };
   // The questions have no trigger to give the focus back to: the screen says where it goes, and
   // when that place is gone the question puts the focus back as it does on its own
   const restoreFocus = (event: Event) => {
+    if (goingOn.current) {
+      goingOn.current = false;
+      event.preventDefault();
+      return;
+    }
     const back = returnFocus.current;
     returnFocus.current = undefined;
     if (back?.()) event.preventDefault();
   };
   const deal = asking?.deal;
+  const asked = asking?.step === 'stage' ? asking : null;
   const saveError = failed ? t('form.saveError') : null;
 
   const dialogs = (
     <>
+      <SqlDecisionDialog
+        open={asking?.step === 'sql'}
+        onOpenChange={closeSql}
+        dealName={deal?.name ?? ''}
+        leadLabel={deal?.leadLabel ?? ''}
+        stage={asking?.stage ?? 'discovery'}
+        onDecide={decideSql}
+        onCloseAutoFocus={restoreFocus}
+      />
       <LostReasonDialog
-        open={asking?.stage === 'lost'}
+        open={asked?.stage === 'lost'}
         onOpenChange={close}
         dealName={deal?.name ?? ''}
         initial={{
@@ -276,13 +361,14 @@ export function useStageMove(organizationId: string): {
           competitor: deal?.competitor,
         }}
         fromWon={deal?.stage === 'won'}
+        notQualified={asked?.sqlDecision === 'not_qualified'}
         pending={update.isPending}
         error={saveError}
-        onConfirm={(values) => deal && send(deal, 'lost', values)}
+        onConfirm={(values) => asked && send(asked.deal, 'lost', values, asked.sqlDecision)}
         onCloseAutoFocus={restoreFocus}
       />
       <WonDialog
-        open={asking?.stage === 'won'}
+        open={asked?.stage === 'won'}
         onOpenChange={close}
         dealName={deal?.name ?? ''}
         leadLabel={deal?.leadLabel ?? ''}
@@ -290,16 +376,16 @@ export function useStageMove(organizationId: string): {
         fromLost={deal?.stage === 'lost'}
         pending={update.isPending}
         error={saveError}
-        onConfirm={(values) => deal && send(deal, 'won', values)}
+        onConfirm={(values) => asked && send(asked.deal, 'won', values, asked.sqlDecision)}
         onCloseAutoFocus={restoreFocus}
       />
-      {asking && isOpenStage(asking.stage) && (
+      {asked && isOpenStage(asked.stage) && (
         <ReopenDialog
           open
           onOpenChange={close}
-          deal={asking.deal}
-          stage={asking.stage}
-          onConfirm={() => send(asking.deal, asking.stage)}
+          deal={asked.deal}
+          stage={asked.stage}
+          onConfirm={() => send(asked.deal, asked.stage)}
           onCloseAutoFocus={restoreFocus}
         />
       )}

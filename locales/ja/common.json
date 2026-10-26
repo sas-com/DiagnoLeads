@@ -1471,6 +1471,7 @@
       "title": "「{name}」を失注にする",
       "description": "失注理由は、勝ち負けの分析に使います",
       "fromWon": "ほかに受注の商談がなければ、リードは成約でなくなります（開いている商談があれば商談中、なければ失注）。",
+      "notQualified": "リードの SQL判定も「不適格」として一緒に記録します。",
       "reason": "失注理由",
       "reasonPlaceholder": "選んでください",
       "reasonRequired": "失注理由を選んでください",
@@ -1494,6 +1495,15 @@
       "probability": "確度は「{stage}」の既定値 {probability}% になり、予測の区分の上書きも消えます。",
       "won": "ほかに受注の商談がなければ、リードは「商談中」に戻ります。",
       "confirm": "開き直す"
+    },
+    "sqlDialog": {
+      "title": "「{name}」の SQL判定",
+      "description": "「{stage}」に進める前に、初回ヒアリングの結果からリード「{lead}」の SQL判定を記録してください。",
+      "descriptionUnnamed": "「{stage}」に進める前に、初回ヒアリングの結果からこのリードの SQL判定を記録してください。",
+      "qualifiedHint": "適格にすると、リードの SQL判定に記録します。商談を元に戻しても、判定は残ります。",
+      "notQualifiedHint": "不適格なら、失注の理由を付けて商談を閉じます。",
+      "qualified": "適格：「{stage}」へ進める",
+      "notQualified": "不適格：失注にする"
     },
     "form": {
       "createTitle": "商談を作成",

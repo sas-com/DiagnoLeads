@@ -1,5 +1,5 @@
 import { isoDateSchema } from '@/lib/features/lead-hearings/types/schemas';
-import { targetSystemEnum } from '@/lib/features/leads/types/pipeline';
+import { sqlDecisionEnum, targetSystemEnum } from '@/lib/features/leads/types/pipeline';
 import { z } from 'zod';
 import { dealKindEnum, dealLostReasonEnum, dealStageEnum, forecastOverrideEnum } from './pipeline';
 
@@ -90,6 +90,8 @@ export const updateDealSchema = z.object({
   nextStep: dealFields.nextStep,
   ownerUserId: dealFields.ownerUserId,
   previousDealId: dealFields.previousDealId,
+  /** The lead's SQL decision, recorded with the move out of 見極め (#801) */
+  sqlDecision: sqlDecisionEnum.optional(),
 });
 export type UpdateDealInput = z.infer<typeof updateDealSchema>;
 
