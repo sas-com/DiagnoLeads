@@ -145,34 +145,47 @@ export async function deleteNotification(notificationId: string, userId: string)
 }
 
 /**
- * Get or create notification preferences
+ * Get or create notification preferences: the one row of the user in the organization, made with
+ * the defaults on the first read. Two first reads at once (the settings screen and a notification
+ * being sent) both miss the row; the unique index on (user_id, organization_id) keeps the second
+ * insert out, and that caller reads the row the first one made (#768).
  */
 export async function getOrCreatePreferences(
   userId: string,
   organizationId: string,
   database: Database = db
 ) {
-  const existing = await database.query.notificationPreferences.findFirst({
-    where: and(
-      eq(notificationPreferences.userId, userId),
-      eq(notificationPreferences.organizationId, organizationId)
-    ),
-  });
+  const read = () =>
+    database.query.notificationPreferences.findFirst({
+      where: and(
+        eq(notificationPreferences.userId, userId),
+        eq(notificationPreferences.organizationId, organizationId)
+      ),
+    });
 
+  const existing = await read();
   if (existing) {
     return existing;
   }
 
-  // Create default preferences
+  // No conflict target: the id is random, so the unique index is the only one that can conflict,
+  // and the insert still runs on a database that does not have the index yet
   const [created] = await database
     .insert(notificationPreferences)
-    .values({
-      userId,
-      organizationId,
-    })
+    .values({ userId, organizationId })
+    .onConflictDoNothing()
     .returning();
+  if (created) {
+    return created;
+  }
 
-  return created;
+  // Another caller made the row between the read and the insert. The insert waited for that
+  // caller to commit, so a new read sees the row
+  const made = await read();
+  if (!made) {
+    throw new Error('Notification preferences were neither found nor created');
+  }
+  return made;
 }
 
 /** The preference switches a user can change */
