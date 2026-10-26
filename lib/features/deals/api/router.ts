@@ -4,7 +4,8 @@
  * Those who can read leads may read deals, except viewers from a parent organization (see
  * ../access.ts); creating and changing them needs permission to update leads, and deleting needs
  * permission to delete leads (not members), both for those who may read deals. Every query is
- * scoped by organizationId (see ../service.ts).
+ * scoped by organizationId (see ../service.ts). A change answers whether it handed the lead off
+ * (the screens offer no undo then, #720).
  */
 
 import { organizationProcedure, router } from '@/lib/trpc/init';
@@ -97,7 +98,9 @@ export const dealsRouter = router({
     const context = { organizationId: ctx.organization.id, userId: ctx.user.id };
     const result = await updateDeal(ctx.db, { ...input, ...context });
     await afterDealChange(ctx.db, context, result);
-    return result.deal;
+    // handedOff: the lead moved on from the initial hearing for the first time, so the handoff
+    // sheet went out and the lead keeps the day; moving the deal back undoes neither (#720)
+    return { ...result.deal, handedOff: result.lead?.handedOff ?? false };
   }),
 
   delete: organizationProcedure.input(dealScopeSchema).mutation(async ({ ctx, input }) => {

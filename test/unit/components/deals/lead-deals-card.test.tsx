@@ -68,7 +68,7 @@ describe('LeadDealsCard', () => {
     expect(screen.getByRole('link', { name: '現行調査' })).toHaveAttribute('href', '/ja/deals/deal-1');
     expect(screen.getByText(/3件・開いている商談/)).toHaveTextContent('3,000,000');
     expect(screen.getByText('金額未定')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '商談を作る' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '商談を作成' })).not.toBeInTheDocument();
   });
 
   it('creates a deal for this lead', async () => {
@@ -76,7 +76,7 @@ describe('LeadDealsCard', () => {
     mocks.forLead.data = { items: [], canEdit: true, canDelete: false };
     renderCard();
     expect(screen.getByText('このリードの商談はまだありません')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '商談を作る' }));
+    await user.click(screen.getByRole('button', { name: '商談を作成' }));
     expect(screen.getByText(`create dialog for ${LEAD_ID}`)).toBeInTheDocument();
   });
 

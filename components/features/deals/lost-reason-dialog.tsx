@@ -1,5 +1,6 @@
 'use client';
 
+import { TAP_TARGET } from '@/components/common/tap-target';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -26,8 +27,10 @@ import {
 } from '@/lib/features/deals/types/pipeline';
 import { DEAL_LIMITS } from '@/lib/features/deals/types/schemas';
 import type { LostReason } from '@/lib/features/leads/types/pipeline';
+import { Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { type FormEvent, useEffect, useId, useState } from 'react';
+import { type FormEvent, useEffect, useId, useRef, useState } from 'react';
+import { RequiredMark } from './required-mark';
 
 export interface LostValues {
   lostReason: DealLostReason;
@@ -41,13 +44,22 @@ interface LostReasonDialogProps {
   dealName: string;
   /** Values already on the deal; a reason a deal can no longer take is not preselected */
   initial?: Partial<Omit<LostValues, 'lostReason'>> & { lostReason?: LostReason };
-  /** The deal is won now: its lead stays 成約 */
+  /** The deal is won now: its lead stays won only while another of its deals is (#444) */
   fromWon?: boolean;
+  /** The loss is being saved: the dialog stays open until it is, so a failure is told in it */
   pending?: boolean;
+  /** Why the loss could not be saved, said in the dialog (Refs #720) */
+  error?: string | null;
   onConfirm: (values: LostValues) => void;
+  /** Where the focus goes when the dialog closes (it has no trigger to go back to) */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
-/** Losing a deal asks for the reason (required), the details and the competitor (Refs #436) */
+/**
+ * Losing a deal asks for the reason (required), the details and the competitor (Refs #436). A
+ * send without a reason takes the focus to it, and the dialog does not close while the loss is
+ * saved, so a failure is told in it (#720).
+ */
 export function LostReasonDialog({
   open,
   onOpenChange,
@@ -55,16 +67,22 @@ export function LostReasonDialog({
   initial,
   fromWon = false,
   pending = false,
+  error,
   onConfirm,
+  onCloseAutoFocus,
 }: LostReasonDialogProps) {
   const t = useTranslations('deals.lostDialog');
+  const tForm = useTranslations('deals.form');
   const tReason = useTranslations('pipeline.lostReason');
   const tCommon = useTranslations('common');
   const id = useId();
+  const reasonRef = useRef<HTMLButtonElement>(null);
   const [reason, setReason] = useState<DealLostReason | ''>('');
   const [note, setNote] = useState('');
   const [competitor, setCompetitor] = useState('');
   const [showError, setShowError] = useState(false);
+  // A send without a reason: the focus goes to it once its error is on the page
+  const [focusRequest, setFocusRequest] = useState(0);
 
   useEffect(() => {
     if (!open) return;
@@ -75,10 +93,16 @@ export function LostReasonDialog({
     setShowError(false);
   }, [open, initial?.lostReason, initial?.lostNote, initial?.competitor]);
 
+  useEffect(() => {
+    if (focusRequest > 0) reasonRef.current?.focus();
+  }, [focusRequest]);
+
   const submit = (event: FormEvent) => {
     event.preventDefault();
+    if (pending) return;
     if (!reason) {
       setShowError(true);
+      setFocusRequest((count) => count + 1);
       return;
     }
     onConfirm({
@@ -89,8 +113,20 @@ export function LostReasonDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        // Not closed while the loss is saved, so a failure can still be told
+        if (!next && pending) return;
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent
+        onCloseAutoFocus={onCloseAutoFocus}
+        onInteractOutside={(event) => {
+          if (pending) event.preventDefault();
+        }}
+      >
         <form onSubmit={submit} className="space-y-4" noValidate>
           <DialogHeader>
             <DialogTitle>{t('title', { name: dealName })}</DialogTitle>
@@ -101,16 +137,22 @@ export function LostReasonDialog({
           </DialogHeader>
 
           <div className="space-y-1.5">
-            <Label htmlFor={`${id}-reason`}>{t('reason')}</Label>
+            <Label htmlFor={`${id}-reason`}>
+              {t('reason')} <RequiredMark />
+            </Label>
             <Select
               value={reason}
               onValueChange={(value) => {
+                // A form's reset or autofill clears Radix's hidden select: keep the choice
+                if (!value) return;
                 setReason(value as DealLostReason);
                 setShowError(false);
               }}
             >
               <SelectTrigger
+                ref={reasonRef}
                 id={`${id}-reason`}
+                className={TAP_TARGET}
                 aria-invalid={showError}
                 aria-describedby={showError ? `${id}-reason-error` : undefined}
               >
@@ -149,15 +191,32 @@ export function LostReasonDialog({
               value={competitor}
               maxLength={DEAL_LIMITS.competitor}
               onChange={(event) => setCompetitor(event.target.value)}
+              className={TAP_TARGET}
             />
           </div>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          {error && (
+            <p
+              role="alert"
+              className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-500/10 dark:text-red-300"
+            >
+              {error}
+            </p>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className={TAP_TARGET}
+              disabled={pending}
+              onClick={() => onOpenChange(false)}
+            >
               {tCommon('cancel')}
             </Button>
-            <Button type="submit" disabled={pending}>
-              {t('confirm')}
+            <Button type="submit" className={TAP_TARGET} disabled={pending}>
+              {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+              {pending ? tForm('saving') : t('confirm')}
             </Button>
           </DialogFooter>
         </form>
