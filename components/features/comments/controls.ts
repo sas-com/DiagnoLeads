@@ -11,9 +11,20 @@ export const TOGGLE_ITEM = cn(
   'data-[state=on]:border-gray-900 data-[state=on]:font-bold dark:data-[state=on]:border-gray-50'
 );
 
-/** Ctrl+Enter (⌘+Enter on a Mac) sends what is written; not while a conversion is open (IME) */
+/**
+ * A key of a conversion (IME): one open, or the Enter or Esc that confirms or cancels it, which
+ * Safari sends after compositionend, with isComposing false and keyCode 229
+ */
+export const isComposing = (event: KeyboardEvent<HTMLTextAreaElement>) =>
+  event.nativeEvent.isComposing || event.keyCode === 229;
+
+/** Ctrl+Enter (⌘+Enter on a Mac) sends what is written; not the Enter of a conversion */
 export const isSendShortcut = (event: KeyboardEvent<HTMLTextAreaElement>) =>
-  event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.nativeEvent.isComposing;
+  event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !isComposing(event);
+
+/** Esc closes the field; not the Esc that cancels a conversion */
+export const isCloseShortcut = (event: KeyboardEvent<HTMLTextAreaElement>) =>
+  event.key === 'Escape' && !isComposing(event);
 
 /** What a field with the shortcut announces (aria-keyshortcuts) */
 export const SEND_SHORTCUTS = 'Control+Enter Meta+Enter';
