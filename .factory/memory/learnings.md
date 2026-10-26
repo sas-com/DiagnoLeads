@@ -323,6 +323,13 @@
 - **解決策**: 記録の前に `req.method !== 'GET'` なら記録しないようにし、ユニットテストで HEAD を流して確かめた
 - **教訓**: GET の Route Handler で書き込む（数える・記録する）ときは、HEAD でも同じ関数が動くことを前提にし、書き込みを `req.method` で分ける
 
+### [API] organizationProcedure の input には、手続きのスキーマにない項目も残る
+- **日付**: 2026-10-25
+- **状況**: #743（#740 のレビューで見つかった）。`notifications.updatePreferences` が `const { organizationId, ...updates } = input` を `.set({ ...updates })` に渡していた。組織のメンバーが `userId`（同じ組織のほかのメンバーの id）や `id` を足して送ると、自分の通知の設定の行の `user_id`・`id` が書き換わり、ほかのメンバーの (user, org) の行が2つになった。`createdAt` に文字を送ると INTERNAL_SERVER_ERROR になった（実 DB のテストで再現した）
+- **原因**: `organizationInputSchema` が `.passthrough()` で、tRPC 11 は `.input()` ごとに生の入力を検査し、結果を `{ ...前の結果, ...次の結果 }` でつなぐ。手続きの `z.object` が落とした項目も、最初の結果から resolver の `input` に残る。drizzle の `.set()`・`.values()` は、テーブル定義のプロパティ名（camelCase。例：`userId`）と同じキーをすべて書く（DB の列名の `user_id` では書かれない）
+- **解決策**: スイッチを名前（`NOTIFICATION_PREFERENCE_KEYS`）で1つずつ取り出す `pickPreferenceUpdates` を足し、ルーターと service の両方で使った。ほかの手続きを見回し、`...input` や残りの項目を受け取る service は、どれも項目を名前で読むか、`.strict()` のスキーマが知らない項目を断ることを確かめた（表は #743）
+- **教訓**: resolver の `input`（と `...rest`）は、検査を通った項目だけとは限らない。DB の書き込み・監査・外への送信・ログには、項目を名前で取り出して渡し、`input` やその残りを広げない。型チェックはこれを守らない。passthrough の出力の型に `[k: string]: unknown` が付くので、resolver で宣言していない `input.<名前>` を直接読んでも型エラーにならない（打ち間違いも通る）。スキーマにない optional の項目を引数の型に持つ関数に `input`・`...input`・`...rest` を渡しても、TS はエラーにせず、呼び出し先ではその項目が型付きで読める（#773 のレビュー）。今ある32か所の受け渡しも、実行時には宣言していない項目が呼び出し先まで届く。安全なのは、呼び出し先の引数の型にある項目がどれもスキーマで宣言されていて、ほかの項目を読まないからにすぎない（2026-10-26 の再レビューで確かめた）。オーナーの判断（2026-10-26、#743）：ルール（`.claude/rules/api-routers.md`）に1行足すのは今、passthrough を外す（strip。`.strict()` にはしない）のは 10/29 の公開の後（#743 は #773 では閉じない）
+
 ---
 
 ## パフォーマンス関連

@@ -12,6 +12,7 @@ import {
   getUserNotifications,
   markAllAsRead,
   markAsRead,
+  pickPreferenceUpdates,
   updatePreferences,
 } from '../notification-service';
 
@@ -115,8 +116,14 @@ export const notificationsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { organizationId, ...updates } = input;
-      const prefs = await updatePreferences(ctx.session.user.id, organizationId, updates, ctx.db);
+      // The switches by name: input also carries keys the schema does not declare (#743)
+      const updates = pickPreferenceUpdates(input);
+      const prefs = await updatePreferences(
+        ctx.session.user.id,
+        input.organizationId,
+        updates,
+        ctx.db
+      );
       return prefs;
     }),
 });
