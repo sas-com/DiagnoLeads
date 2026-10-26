@@ -1,16 +1,20 @@
 /**
- * Formatting of the deals screens (#436): yen amounts, days in a stage, the close periods and the
- * checks of typed values
+ * Formatting of the deals screens (#436, #720): yen amounts, days in a stage, the close periods,
+ * the days as the screens write them, a card's marks and the checks of typed values
  */
 import {
   daysSince,
+  dealMarks,
+  formatDealDate,
   formatYen,
   formatYenCompact,
   isDealDate,
   isDealPeriod,
+  parseAmount,
   parseWhole,
   periodRange,
 } from '@/components/features/deals/deal-format';
+import { DEAL_LIMITS } from '@/lib/features/deals/types/schemas';
 import { describe, expect, it } from 'vitest';
 
 describe('formatYen', () => {
@@ -72,5 +76,59 @@ describe('isDealDate', () => {
     expect(isDealDate('1999-12-31')).toBe(false);
     expect(isDealDate('2101-01-01')).toBe(false);
     expect(isDealDate('2026-02-30')).toBe(false);
+  });
+});
+
+describe('parseAmount', () => {
+  it.each([
+    ['12000000', 12_000_000],
+    ['12,000,000', 12_000_000],
+    [' 12 000 000 ', 12_000_000],
+    ['１２，０００，０００', 12_000_000],
+    ['１２\u3000０００\u3000０００', 12_000_000],
+    ['0', 0],
+  ])('reads %s as yen', (typed, amount) => {
+    expect(parseAmount(typed)).toBe(amount);
+  });
+
+  it('reads an empty box as no amount', () => {
+    expect(parseAmount('')).toBeNull();
+    expect(parseAmount(' , ')).toBeNull();
+  });
+
+  it.each(['1200万', '¥3,000,000', '3.5', '-1', '1e6'])('does not read %s', (typed) => {
+    expect(parseAmount(typed)).toBe('invalid');
+  });
+
+  it('stops at the amount the API takes', () => {
+    expect(parseAmount(String(DEAL_LIMITS.amount))).toBe(DEAL_LIMITS.amount);
+    expect(parseAmount(String(DEAL_LIMITS.amount + 1))).toBe('invalid');
+  });
+});
+
+describe('formatDealDate', () => {
+  it('writes a day as the date boxes and the lead pages do', () => {
+    expect(formatDealDate('2026-10-25')).toBe('2026/10/25');
+  });
+});
+
+describe('dealMarks', () => {
+  const deal = { stage: 'proposal', expectedCloseOn: '2026-11-30', hasOpenTask: true };
+
+  it('marks an open deal past its close date or whose lead has no next action', () => {
+    expect(dealMarks(deal, '2026-10-24')).toEqual({ overdue: false, noNextAction: false });
+    expect(dealMarks({ ...deal, expectedCloseOn: '2026-10-23' }, '2026-10-24').overdue).toBe(true);
+    // Due today is not overdue yet
+    expect(dealMarks({ ...deal, expectedCloseOn: '2026-10-24' }, '2026-10-24').overdue).toBe(false);
+    expect(dealMarks({ ...deal, hasOpenTask: false }, '2026-10-24').noNextAction).toBe(true);
+    expect(dealMarks({ ...deal, expectedCloseOn: null }, '2026-10-24').overdue).toBe(false);
+  });
+
+  it('does not mark won or lost deals', () => {
+    for (const stage of ['won', 'lost']) {
+      expect(
+        dealMarks({ stage, expectedCloseOn: '2026-01-01', hasOpenTask: false }, '2026-10-24')
+      ).toEqual({ overdue: false, noNextAction: false });
+    }
   });
 });

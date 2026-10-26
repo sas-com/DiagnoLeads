@@ -1383,7 +1383,7 @@
   "deals": {
     "title": "商談",
     "description": "商談をステージごとに並べ、金額と受注予定日で進み具合を見ます",
-    "create": "商談を作る",
+    "create": "商談を作成",
     "views": {
       "label": "表示",
       "board": "ボード",
@@ -1423,6 +1423,8 @@
       "forecastCategory": "予測の区分",
       "expectedCloseOn": "受注予定日",
       "closedOn": "受注・失注の日",
+      "wonOn": "受注日",
+      "lostOn": "失注日",
       "owner": "担当",
       "nextStep": "次の一手",
       "lostReason": "失注理由",
@@ -1494,19 +1496,25 @@
       "confirm": "開き直す"
     },
     "form": {
-      "createTitle": "商談を作る",
+      "createTitle": "商談を作成",
       "editTitle": "商談を編集",
       "lead": "リード",
+      "leadChoose": "リードを選ぶ",
+      "leadSearchLabel": "リードを探す",
       "leadPlaceholder": "会社名・氏名・メールで探す",
+      "leadTypeToSearch": "会社名・氏名・メールの一部を入れてください",
       "leadRequired": "リードを選んでください",
       "leadSearching": "探しています…",
       "leadNotFound": "見つかりません",
-      "leadChange": "選び直す",
       "required": "必須",
       "namePlaceholder": "例：AS/400 現行調査",
       "nameRequired": "商談名を入力してください",
       "closeDateInvalid": "受注予定日は2000〜2100年の日付で入力してください",
-      "amountHelp": "税抜の円。未定なら空欄",
+      "wonOnInvalid": "受注日は2000〜2100年の日付で入力してください",
+      "lostOnInvalid": "失注日は2000〜2100年の日付で入力してください",
+      "amountHelp": "税抜の円。カンマや全角の数字でも入力できます。未定なら空欄",
+      "amountUnit": "円",
+      "amountPreview": "＝ {amount}",
       "amountInvalid": "0以上の整数で入力してください",
       "probabilityHelp": "空欄ならステージの既定値（{value}%）",
       "probabilityInvalid": "0〜100の整数で入力してください",
@@ -1515,11 +1523,28 @@
       "forecastAuto": "確度から自動",
       "wonToday": "受注日は今日になります。",
       "submitCreate": "作成",
-      "submitEdit": "保存"
+      "submitEdit": "保存",
+      "saveError": "保存できませんでした。もう一度お試しください"
     },
     "list": {
       "caption": "商談の一覧",
-      "empty": "条件に合う商談はありません"
+      "marks": "印",
+      "sortBy": "{column}で並べ替える",
+      "sorted": "{column}（{order}）",
+      "orders": {
+        "stage": {
+          "asc": "ステージの順",
+          "desc": "ステージの逆順"
+        },
+        "amount": {
+          "asc": "小さい順",
+          "desc": "大きい順"
+        },
+        "expectedCloseOn": {
+          "asc": "早い順",
+          "desc": "遅い順"
+        }
+      }
     },
     "detail": {
       "back": "商談へ戻る",
@@ -1544,16 +1569,23 @@
       "loadError": "商談を読み込めませんでした",
       "retry": "再読み込み",
       "empty": "まだ商談はありません",
-      "emptyHint": "商談は、リードの詳細か、この画面の「商談を作る」から作ります",
+      "emptyHint": "商談は、リードの詳細か、この画面の「商談を作成」から作成します",
+      "emptyHintReadOnly": "商談を作成できるのは、リードを編集できるメンバーです",
+      "noMatch": "条件に合う商談はありません",
+      "clearFilters": "絞り込みを解除",
       "truncated": "表示は{limit}件までです。条件で絞り込んでください",
       "readOnly": "閲覧のみです",
+      "readOnlyHint": "商談の作成・変更・ステージの移動は、リードを編集できるメンバーができます",
       "forbiddenTitle": "商談を見る権限がありません",
       "forbiddenBody": "商談と金額・予測・目標は、リードを閲覧できるメンバーだけが見られます（親組織からの閲覧者は除く）。"
     },
     "toasts": {
-      "created": "商談を作りました",
+      "created": "商談を作成しました",
       "saved": "保存しました",
       "moved": "「{name}」を「{stage}」に移しました",
+      "movedTo": "「{name}」を「{stage}」に移しました（確度 {probability}%）",
+      "undo": "元に戻す",
+      "moveUndone": "「{name}」を「{stage}」に戻しました",
       "deleted": "商談を削除しました",
       "deleteError": "削除できませんでした。もう一度お試しください",
       "error": "保存できませんでした。もう一度お試しください"

@@ -1,5 +1,6 @@
 'use client';
 
+import { TAP_TARGET } from '@/components/common/tap-target';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -16,15 +17,24 @@ import { DEAL_KINDS, type DealKind } from '@/lib/features/deals/types/pipeline';
 import { BOARD_CLOSED_DAYS_DEFAULT, BOARD_DEALS_LIMIT } from '@/lib/features/deals/types/schemas';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { trpc } from '@/lib/trpc/client';
+import { cn } from '@/lib/utils';
 import { Loader2, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useId, useState } from 'react';
+import { type ReactNode, useId, useMemo, useState } from 'react';
 import { DealBoard } from './deal-board';
 import { DealFormDialog } from './deal-form-dialog';
 import { DEAL_PERIODS, type DealPeriod, isDealPeriod, periodRange } from './deal-format';
+import {
+  DEAL_SORT_PARAMS,
+  dealSortParams,
+  nextDealSort,
+  parseDealSort,
+  sortDeals,
+} from './deal-list-sort';
 import { DealTable } from './deal-table';
 import { DealsForbidden } from './deals-forbidden';
+import { applyPendingMoves } from './pending-moves';
 import { useStageMove } from './use-stage-move';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -32,7 +42,10 @@ const VIEWS = ['board', 'list'] as const;
 type View = (typeof VIEWS)[number];
 const ALL = 'all' as const;
 
-/** The board's state lives in the URL, so a filtered board can be shared or reopened */
+/**
+ * The board's state lives in the URL, so a filtered board or a sorted list can be shared or
+ * reopened (the forecast links its overdue deals to the list sorted by close date)
+ */
 function useBoardQuery() {
   const params = useSearchParams();
   const router = useRouter();
@@ -46,21 +59,43 @@ function useBoardQuery() {
     : ALL;
   const periodParam = params.get('period');
   const period: DealPeriod = isDealPeriod(periodParam) ? periodParam : 'all';
+  const sort = parseDealSort(params.get(DEAL_SORT_PARAMS.by), params.get(DEAL_SORT_PARAMS.order));
 
-  const set = (key: string, value: string, fallback: string) => {
+  /** Set the params given, removing those given as null, and keep the others */
+  const update = (changes: Record<string, string | null>) => {
     const next = new URLSearchParams(params.toString());
-    if (value === fallback) next.delete(key);
-    else next.set(key, value);
+    for (const [key, value] of Object.entries(changes)) {
+      if (value === null) next.delete(key);
+      else next.set(key, value);
+    }
     const search = next.toString();
     router.replace(search ? `${pathname}?${search}` : pathname, { scroll: false });
   };
-  return { view, owner, kind, period, set };
+  const set = (key: string, value: string, fallback: string) =>
+    update({ [key]: value === fallback ? null : value });
+  return { view, owner, kind, period, sort, set, update };
+}
+
+/** The place of the board when it has nothing to show, with what to do next */
+function EmptyState({
+  title,
+  hint,
+  children,
+}: { title: string; hint?: string; children?: ReactNode }) {
+  return (
+    <div className="space-y-3 rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-900">
+      <p className="font-semibold text-gray-900 dark:text-gray-50">{title}</p>
+      {hint && <p className="text-sm text-gray-600 dark:text-gray-300">{hint}</p>}
+      {children}
+    </div>
+  );
 }
 
 /**
  * The deals screen (Refs #436): the pipeline board or the same deals as a list, filtered by
  * owner, kind and expected close period; deals are created here (choosing the lead) or from a
- * lead's page.
+ * lead's page. A move between open stages shows at once (#720); the list sorts by amount or
+ * expected close date (in the URL), and the board's order otherwise.
  */
 export function DealsScreen() {
   const t = useTranslations('deals');
@@ -68,7 +103,7 @@ export function DealsScreen() {
   const filterId = useId();
   const { organizationId: contextOrgId } = useOrganization();
   const organizationId = contextOrgId && UUID.test(contextOrgId) ? contextOrgId : '';
-  const { view, owner, kind, period, set } = useBoardQuery();
+  const { view, owner, kind, period, sort, set, update } = useBoardQuery();
   const today = jstDate();
   const [createOpen, setCreateOpen] = useState(false);
   const stageMove = useStageMove(organizationId);
@@ -84,8 +119,14 @@ export function DealsScreen() {
   );
   const members = trpc.leads.assignees.useQuery({ organizationId }, { enabled: !!organizationId });
   const data = board.data;
-  const total = data?.columns.reduce((sum, column) => sum + column.count, 0) ?? 0;
-  const cards = data?.columns.flatMap((column) => column.deals) ?? [];
+  // The moves on their way to the server are shown already
+  const pending = stageMove.pending;
+  const columns = useMemo(
+    () => (data ? applyPendingMoves(data.columns, pending) : []),
+    [data, pending]
+  );
+  const total = columns.reduce((sum, column) => sum + column.count, 0);
+  const filtered = owner !== ALL || kind !== ALL || period !== 'all';
 
   if (board.error?.data?.code === 'FORBIDDEN') {
     return (
@@ -105,7 +146,12 @@ export function DealsScreen() {
           <h1 className="text-2xl font-bold tracking-wide text-gray-900 sm:text-[2rem] dark:text-gray-50">
             {t('title')}
           </h1>
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">{t('description')}</p>
+          <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{t('description')}</p>
+          {data && !data.canEdit && (
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+              {t('state.readOnlyHint')}
+            </p>
+          )}
         </div>
         {organizationId && (
           <div className="flex flex-wrap items-center gap-2">
@@ -118,14 +164,18 @@ export function DealsScreen() {
               className="rounded-md border border-gray-200 bg-white p-0.5 dark:border-gray-700 dark:bg-gray-900"
             >
               {VIEWS.map((value) => (
-                <ToggleGroupItem key={value} value={value}>
+                <ToggleGroupItem key={value} value={value} className={TAP_TARGET}>
                   {t(`views.${value}`)}
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
-            {data && !data.canEdit && <Badge color="gray">{t('state.readOnly')}</Badge>}
+            {data && !data.canEdit && (
+              <Badge color="gray" className="text-sm">
+                {t('state.readOnly')}
+              </Badge>
+            )}
             {data?.canEdit && (
-              <Button type="button" onClick={() => setCreateOpen(true)}>
+              <Button type="button" className={TAP_TARGET} onClick={() => setCreateOpen(true)}>
                 <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
                 {t('create')}
               </Button>
@@ -141,7 +191,7 @@ export function DealsScreen() {
             <div className="space-y-1">
               <Label htmlFor={`${filterId}-owner`}>{t('filters.owner')}</Label>
               <Select value={owner} onValueChange={(value) => set('owner', value, ALL)}>
-                <SelectTrigger id={`${filterId}-owner`} className="w-44">
+                <SelectTrigger id={`${filterId}-owner`} className={cn('w-44', TAP_TARGET)}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -158,7 +208,7 @@ export function DealsScreen() {
             <div className="space-y-1">
               <Label htmlFor={`${filterId}-kind`}>{t('filters.kind')}</Label>
               <Select value={kind} onValueChange={(value) => set('kind', value, ALL)}>
-                <SelectTrigger id={`${filterId}-kind`} className="w-44">
+                <SelectTrigger id={`${filterId}-kind`} className={cn('w-44', TAP_TARGET)}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -184,7 +234,7 @@ export function DealsScreen() {
                 className="rounded-md border border-gray-200 bg-white p-0.5 dark:border-gray-700 dark:bg-gray-900"
               >
                 {DEAL_PERIODS.map((value) => (
-                  <ToggleGroupItem key={value} value={value}>
+                  <ToggleGroupItem key={value} value={value} className={TAP_TARGET}>
                     {t(`filters.periods.${value}`)}
                   </ToggleGroupItem>
                 ))}
@@ -195,15 +245,23 @@ export function DealsScreen() {
           {board.isError ? (
             <div
               role="alert"
-              className="space-y-2 rounded-lg border border-red-200 p-4 dark:border-red-900"
+              className="space-y-2 rounded-lg border border-red-200 bg-white p-4 dark:border-red-900 dark:bg-gray-900"
             >
               <p className="text-sm text-red-700 dark:text-red-400">{t('state.loadError')}</p>
-              <Button type="button" variant="outline" onClick={() => void board.refetch()}>
+              <Button
+                type="button"
+                variant="outline"
+                className={TAP_TARGET}
+                onClick={() => void board.refetch()}
+              >
                 {t('state.retry')}
               </Button>
             </div>
           ) : !data ? (
-            <div className="flex items-center gap-2 text-sm text-gray-500" aria-busy="true">
+            <div
+              className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300"
+              aria-busy="true"
+            >
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
               {tCommon('loading')}
             </div>
@@ -214,35 +272,64 @@ export function DealsScreen() {
             >
               {data.truncated && (
                 // biome-ignore lint/a11y/useSemanticElements: live-region notice, not a form output
-                <p role="status" className="mb-3 text-sm text-amber-700 dark:text-amber-400">
+                <p role="status" className="mb-3 text-sm text-amber-800 dark:text-amber-400">
                   {t('state.truncated', { limit: BOARD_DEALS_LIMIT })}
                 </p>
               )}
-              {total === 0 && owner === ALL && kind === ALL && period === 'all' ? (
-                <div className="rounded-lg border border-dashed border-gray-300 p-8 text-center dark:border-gray-700">
-                  <p className="font-semibold text-gray-900 dark:text-gray-50">
-                    {t('state.empty')}
-                  </p>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    {t('state.emptyHint')}
-                  </p>
-                </div>
+              {total === 0 && filtered ? (
+                <EmptyState title={t('state.noMatch')}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={TAP_TARGET}
+                    onClick={() => update({ owner: null, kind: null, period: null })}
+                  >
+                    {t('state.clearFilters')}
+                  </Button>
+                </EmptyState>
+              ) : total === 0 ? (
+                <EmptyState
+                  title={t('state.empty')}
+                  hint={data.canEdit ? t('state.emptyHint') : t('state.emptyHintReadOnly')}
+                >
+                  {data.canEdit && (
+                    // Outlined: the header's button is the screen's filled one
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className={TAP_TARGET}
+                      onClick={() => setCreateOpen(true)}
+                    >
+                      <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                      {t('create')}
+                    </Button>
+                  )}
+                </EmptyState>
               ) : view === 'board' ? (
                 <DealBoard
-                  columns={data.columns}
+                  columns={columns}
                   today={data.today}
                   // The board is read with the API's default (closedWithinDays is not sent)
                   closedWithinDays={BOARD_CLOSED_DAYS_DEFAULT}
                   canEdit={data.canEdit}
-                  onMove={(deal, stage) =>
+                  onMove={(deal, stage, options) =>
                     stageMove.move(
                       { ...deal, leadLabel: deal.company || deal.leadName || '' },
-                      stage
+                      stage,
+                      options
                     )
                   }
                 />
               ) : (
-                <DealTable deals={cards} today={data.today} />
+                <DealTable
+                  deals={sortDeals(
+                    columns.flatMap((column) => column.deals),
+                    sort
+                  )}
+                  today={data.today}
+                  sort={sort}
+                  onSort={(column) => update(dealSortParams(nextDealSort(sort, column)))}
+                />
               )}
             </div>
           )}

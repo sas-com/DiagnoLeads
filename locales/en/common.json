@@ -1423,6 +1423,8 @@
       "forecastCategory": "Forecast category",
       "expectedCloseOn": "Expected close",
       "closedOn": "Closed on",
+      "wonOn": "Won on",
+      "lostOn": "Lost on",
       "owner": "Owner",
       "nextStep": "Next step",
       "lostReason": "Lost reason",
@@ -1434,14 +1436,14 @@
       "updatedAt": "Updated"
     },
     "column": {
-      "summary": "{count} · {amount}",
+      "summary": "{count, plural, one {# deal} other {# deals}} · {amount}",
       "weighted": "Weighted {amount}",
       "empty": "No deals",
       "dropHere": "Move here",
-      "closedTitle": "{stage} (last {days} days)"
+      "closedTitle": "{stage} (last {days, plural, one {day} other {# days}})"
     },
     "card": {
-      "daysInStage": "{days} days in this stage",
+      "daysInStage": "{days, plural, one {# day} other {# days}} in this stage",
       "overdue": "Past the expected close date",
       "noNextAction": "The lead has no next action (task)",
       "noCloseDate": "No close date",
@@ -1497,16 +1499,22 @@
       "createTitle": "New deal",
       "editTitle": "Edit deal",
       "lead": "Lead",
+      "leadChoose": "Choose a lead",
+      "leadSearchLabel": "Search leads",
       "leadPlaceholder": "Search by company, name or email",
+      "leadTypeToSearch": "Type part of a company, name or email",
       "leadRequired": "Choose a lead",
       "leadSearching": "Searching…",
       "leadNotFound": "No match",
-      "leadChange": "Change",
       "required": "Required",
       "namePlaceholder": "e.g. AS/400 current system survey",
       "nameRequired": "Enter a deal name",
       "closeDateInvalid": "Enter an expected close date from 2000 to 2100",
-      "amountHelp": "Yen, excluding tax. Leave empty while unknown",
+      "wonOnInvalid": "Enter the won date as a day from 2000 to 2100",
+      "lostOnInvalid": "Enter the lost date as a day from 2000 to 2100",
+      "amountHelp": "Yen, excluding tax. Commas and full-width digits are fine. Leave empty while unknown",
+      "amountUnit": "JPY",
+      "amountPreview": "= {amount}",
       "amountInvalid": "Enter a whole number of 0 or more",
       "probabilityHelp": "Empty uses the stage default ({value}%)",
       "probabilityInvalid": "Enter a whole number from 0 to 100",
@@ -1515,11 +1523,28 @@
       "forecastAuto": "From the probability",
       "wonToday": "The won date will be today.",
       "submitCreate": "Create",
-      "submitEdit": "Save"
+      "submitEdit": "Save",
+      "saveError": "Could not save. Please try again"
     },
     "list": {
       "caption": "Deals",
-      "empty": "No deals match"
+      "marks": "Flags",
+      "sortBy": "Sort by {column}",
+      "sorted": "{column} ({order})",
+      "orders": {
+        "stage": {
+          "asc": "stage order",
+          "desc": "reverse stage order"
+        },
+        "amount": {
+          "asc": "smallest first",
+          "desc": "largest first"
+        },
+        "expectedCloseOn": {
+          "asc": "earliest first",
+          "desc": "latest first"
+        }
+      }
     },
     "detail": {
       "back": "Back to deals",
@@ -1538,15 +1563,19 @@
     "leadCard": {
       "title": "Deals",
       "empty": "This lead has no deals yet",
-      "summary": "{count} · open {amount}"
+      "summary": "{count, plural, one {# deal} other {# deals}} · open {amount}"
     },
     "state": {
       "loadError": "Could not load the deals",
       "retry": "Retry",
       "empty": "No deals yet",
       "emptyHint": "Create deals from a lead's page or with \"New deal\" here",
-      "truncated": "Showing up to {limit} deals. Narrow them down with the filters",
+      "emptyHintReadOnly": "Only members who can edit leads can create deals",
+      "noMatch": "No deals match the filters",
+      "clearFilters": "Clear filters",
+      "truncated": "Showing up to {limit, plural, one {# deal} other {# deals}}. Narrow them down with the filters",
       "readOnly": "Read only",
+      "readOnlyHint": "Only members who can edit leads can create, change or move deals",
       "forbiddenTitle": "You cannot see the deals",
       "forbiddenBody": "Deals, their amounts, the forecast and the targets are shown to members who can view leads, except viewers from a parent organization."
     },
@@ -1554,6 +1583,9 @@
       "created": "Deal created",
       "saved": "Saved",
       "moved": "Moved \"{name}\" to {stage}",
+      "movedTo": "Moved \"{name}\" to {stage} ({probability}% probability)",
+      "undo": "Undo",
+      "moveUndone": "Moved \"{name}\" back to {stage}",
       "deleted": "Deal deleted",
       "deleteError": "Could not delete. Please try again",
       "error": "Could not save. Please try again"

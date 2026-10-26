@@ -1,5 +1,6 @@
 'use client';
 
+import { TAP_TARGET } from '@/components/common/tap-target';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -10,13 +11,23 @@ import {
 import type { BoardColumn, DealCard } from '@/lib/features/deals/service';
 import { DEAL_STAGES, type DealStage, isOpenStage } from '@/lib/features/deals/types/pipeline';
 import { cn } from '@/lib/utils';
-import { AlertTriangle, ArrowRightLeft, ListX } from 'lucide-react';
+import { ArrowRightLeft } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
-import { type DragEvent, useId, useState } from 'react';
-import { daysSince, formatYen, formatYenCompact } from './deal-format';
+import { type DragEvent, useCallback, useEffect, useId, useRef, useState } from 'react';
+import { daysSince, dealMarks, formatDealDate, formatYen, formatYenCompact } from './deal-format';
+import { DealMarks } from './deal-marks';
+import type { MoveOptions } from './use-stage-move';
 
 const DRAG_TYPE = 'application/x-deal-id';
+
+/** Where the focus may follow a moved card: its menu and the questions a move asks (and toasts) */
+const FOLLOW_KEEPERS =
+  '[role="menu"], [role="dialog"], [role="alertdialog"], [data-sonner-toaster]';
+
+type OnMove = (deal: DealCard, stage: DealStage, options?: MoveOptions) => void;
+/** Keeps a card's move button known while it is shown; returns its cleanup */
+type TrackMoveButton = (dealId: string, button: HTMLButtonElement) => () => void;
 
 interface DealBoardProps {
   columns: BoardColumn[];
@@ -25,17 +36,56 @@ interface DealBoardProps {
   /** Days after closing that won and lost deals stay on the board, whatever the period filter */
   closedWithinDays: number;
   canEdit: boolean;
-  onMove: (deal: DealCard, stage: DealStage) => void;
+  onMove: OnMove;
 }
+
+const focusLost = () => !document.activeElement || document.activeElement === document.body;
 
 /**
  * The pipeline board (Refs #436): one column per stage with its count, amount and weighted
  * amount. A card moves by dragging it to another column or, from the keyboard and on phones,
- * with its "move" menu (WCAG 2.5.7).
+ * with its "move" menu (WCAG 2.5.7). After a move from the menu the focus is on the card's move
+ * button in its new column (#720): the card is drawn anew there, so its new button takes the
+ * focus the old one lost, and a question (won, lost, reopen) gives it back when it closes.
  */
 export function DealBoard({ columns, today, closedWithinDays, canEdit, onMove }: DealBoardProps) {
   const [dragged, setDragged] = useState<DealCard | null>(null);
   const [over, setOver] = useState<DealStage | null>(null);
+  // The deal moved from its menu, whose move button keeps the focus wherever its card goes
+  const followed = useRef<string | null>(null);
+  const moveButtons = useRef(new Map<string, HTMLButtonElement>());
+
+  const trackMoveButton = useCallback<TrackMoveButton>((dealId, button) => {
+    moveButtons.current.set(dealId, button);
+    if (followed.current === dealId && focusLost()) button.focus();
+    return () => {
+      if (moveButtons.current.get(dealId) === button) moveButtons.current.delete(dealId);
+    };
+  }, []);
+
+  // The focus left for something else: stop following the card
+  useEffect(() => {
+    const leave = (event: Event) => {
+      const id = followed.current;
+      if (!id) return;
+      const target = event.target;
+      const kept =
+        target instanceof Element &&
+        (target === moveButtons.current.get(id) || target.closest(FOLLOW_KEEPERS) !== null);
+      if (!kept) followed.current = null;
+    };
+    document.addEventListener('focusin', leave);
+    document.addEventListener('pointerdown', leave);
+    return () => {
+      document.removeEventListener('focusin', leave);
+      document.removeEventListener('pointerdown', leave);
+    };
+  }, []);
+
+  const moveFromMenu = (deal: DealCard, stage: DealStage) => {
+    followed.current = deal.id;
+    onMove(deal, stage, { returnFocus: () => moveButtons.current.get(deal.id)?.focus() });
+  };
 
   const drop = (stage: DealStage) => (event: DragEvent) => {
     event.preventDefault();
@@ -57,9 +107,13 @@ export function DealBoard({ columns, today, closedWithinDays, canEdit, onMove }:
             today={today}
             closedWithinDays={closedWithinDays}
             canEdit={canEdit}
-            onMove={onMove}
+            onMove={moveFromMenu}
+            trackMoveButton={trackMoveButton}
             highlighted={over === column.stage && dragged?.stage !== column.stage}
-            onDragStart={setDragged}
+            onDragStart={(deal) => {
+              followed.current = null;
+              setDragged(deal);
+            }}
             onDragOver={(event) => {
               if (!canEdit || !dragged) return;
               event.preventDefault();
@@ -81,6 +135,7 @@ function StageColumn({
   closedWithinDays,
   canEdit,
   onMove,
+  trackMoveButton,
   highlighted,
   onDragStart,
   onDragOver,
@@ -92,6 +147,7 @@ function StageColumn({
   closedWithinDays: number;
   canEdit: boolean;
   onMove: (deal: DealCard, stage: DealStage) => void;
+  trackMoveButton: TrackMoveButton;
   highlighted: boolean;
   onDragStart: (deal: DealCard) => void;
   onDragOver: (event: DragEvent) => void;
@@ -128,13 +184,13 @@ function StageColumn({
           })}
         </p>
         {isOpenStage(column.stage) && (
-          <p className="text-xs text-gray-500 dark:text-gray-400">
+          <p className="text-sm text-gray-600 dark:text-gray-300">
             {t('column.weighted', { amount: formatYenCompact(column.weightedAmount, locale) })}
           </p>
         )}
       </header>
       {column.deals.length === 0 ? (
-        <p className="px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+        <p className="px-3 py-4 text-sm text-gray-600 dark:text-gray-300">
           {highlighted ? t('column.dropHere') : t('column.empty')}
         </p>
       ) : (
@@ -146,6 +202,7 @@ function StageColumn({
               today={today}
               canEdit={canEdit}
               onMove={onMove}
+              trackMoveButton={trackMoveButton}
               onDragStart={onDragStart}
             />
           ))}
@@ -160,19 +217,19 @@ function DealCardItem({
   today,
   canEdit,
   onMove,
+  trackMoveButton,
   onDragStart,
 }: {
   deal: DealCard;
   today: string;
   canEdit: boolean;
   onMove: (deal: DealCard, stage: DealStage) => void;
+  trackMoveButton: TrackMoveButton;
   onDragStart: (deal: DealCard) => void;
 }) {
   const t = useTranslations('deals');
   const locale = useLocale();
   const open = isOpenStage(deal.stage);
-  const overdue = open && !!deal.expectedCloseOn && deal.expectedCloseOn < today;
-  const noNextAction = open && !deal.hasOpenTask;
 
   return (
     <li
@@ -191,58 +248,44 @@ function DealCardItem({
         <div className="min-w-0">
           <Link
             href={`/${locale}/deals/${deal.id}`}
-            className="font-semibold text-gray-900 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-gray-50"
+            className={cn(
+              'inline-flex items-center font-semibold text-gray-900 underline-offset-2 hover:underline dark:text-gray-50',
+              TAP_TARGET
+            )}
           >
             {deal.name}
           </Link>
-          <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+          <p className="truncate text-gray-600 dark:text-gray-300">
             {[deal.company, deal.leadName].filter(Boolean).join(' ')}
           </p>
         </div>
-        {canEdit && <MoveMenu deal={deal} onMove={onMove} />}
+        {canEdit && <MoveMenu deal={deal} onMove={onMove} trackMoveButton={trackMoveButton} />}
       </div>
 
       <p className="mt-2 font-semibold text-gray-900 tabular-nums dark:text-gray-50">
         {formatYen(deal.amount, locale) ?? (
-          <span className="font-normal text-gray-500 dark:text-gray-400">{t('card.noAmount')}</span>
+          <span className="font-normal text-gray-600 dark:text-gray-300">{t('card.noAmount')}</span>
         )}
         {deal.amount !== null && open && (
-          <span className="ml-1 text-xs font-normal text-gray-500 dark:text-gray-400">
+          <span className="ml-1 font-normal text-gray-600 dark:text-gray-300">
             {deal.probability}%
           </span>
         )}
       </p>
-      <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">
-        {deal.expectedCloseOn ?? t('card.noCloseDate')}
+      <p className="mt-1 text-gray-600 dark:text-gray-300">
+        {deal.expectedCloseOn ? formatDealDate(deal.expectedCloseOn) : t('card.noCloseDate')}
         {' · '}
         {deal.ownerName ?? t('card.unassigned')}
       </p>
       {open && (
-        <p className="text-xs text-gray-500 dark:text-gray-400">
+        <p className="text-gray-600 dark:text-gray-300">
           {t('card.daysInStage', { days: daysSince(deal.stageChangedAt) })}
         </p>
       )}
       {deal.nextStep && (
-        <p className="mt-1 line-clamp-2 text-xs text-gray-700 dark:text-gray-300">
-          {deal.nextStep}
-        </p>
+        <p className="mt-1 line-clamp-2 text-gray-700 dark:text-gray-300">{deal.nextStep}</p>
       )}
-      {(overdue || noNextAction) && (
-        <ul className="mt-2 space-y-0.5 text-xs">
-          {overdue && (
-            <li className="flex items-center gap-1 text-red-700 dark:text-red-400">
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              {t('card.overdue')}
-            </li>
-          )}
-          {noNextAction && (
-            <li className="flex items-center gap-1 text-amber-700 dark:text-amber-400">
-              <ListX className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              {t('card.noNextAction')}
-            </li>
-          )}
-        </ul>
-      )}
+      <DealMarks flags={dealMarks(deal, today)} className="mt-2" />
     </li>
   );
 }
@@ -250,19 +293,31 @@ function DealCardItem({
 function MoveMenu({
   deal,
   onMove,
+  trackMoveButton,
 }: {
   deal: DealCard;
   onMove: (deal: DealCard, stage: DealStage) => void;
+  trackMoveButton: TrackMoveButton;
 }) {
   const t = useTranslations('deals');
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const dealId = deal.id;
+  // Once per drawn card: a card moved to another column is drawn anew, with a new button
+  useEffect(() => {
+    const button = buttonRef.current;
+    return button ? trackMoveButton(dealId, button) : undefined;
+  }, [dealId, trackMoveButton]);
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
+          ref={buttonRef}
           type="button"
           variant="ghost"
           size="icon"
-          className="h-11 w-11 shrink-0 sm:h-8 sm:w-8"
+          // 44px on phones (TAP_TARGET), the compact size from md
+          className="h-11 w-11 shrink-0 md:h-8 md:w-8"
           aria-label={t('card.move', { name: deal.name })}
         >
           <ArrowRightLeft className="h-4 w-4" aria-hidden="true" />
@@ -270,7 +325,7 @@ function MoveMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {DEAL_STAGES.filter((stage) => stage !== deal.stage).map((stage) => (
-          <DropdownMenuItem key={stage} onSelect={() => onMove(deal, stage)}>
+          <DropdownMenuItem key={stage} className={TAP_TARGET} onSelect={() => onMove(deal, stage)}>
             {t('card.moveTo', { stage: t(`stages.${stage}`) })}
           </DropdownMenuItem>
         ))}

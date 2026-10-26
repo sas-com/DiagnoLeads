@@ -1,15 +1,16 @@
 /**
- * The pipeline board (#436): columns with their totals, the cards' warnings, and moving a card
- * with its menu (the keyboard and phone way) or by dragging it. Real next-intl messages and UI
- * components.
+ * The pipeline board (#436, #720): columns with their totals, the cards' warnings and dates,
+ * moving a card with its menu (the keyboard and phone way) or by dragging it, and the focus that
+ * follows a card moved from its menu. Real next-intl messages and UI components.
  */
 import { DealBoard } from '@/components/features/deals/deal-board';
 import type { BoardColumn, DealCard } from '@/lib/features/deals/service';
-import { DEAL_STAGES } from '@/lib/features/deals/types/pipeline';
+import { DEAL_STAGES, type DealStage } from '@/lib/features/deals/types/pipeline';
 import messages from '@/locales/ja/common.json';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
+import { useState } from 'react';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 beforeAll(() => {
@@ -69,7 +70,7 @@ function columnsWith(deals: DealCard[]): BoardColumn[] {
 
 function renderBoard(deals: DealCard[], canEdit = true) {
   const onMove = vi.fn();
-  render(
+  const view = render(
     <NextIntlClientProvider locale="ja" messages={messages}>
       <DealBoard
         columns={columnsWith(deals)}
@@ -80,8 +81,31 @@ function renderBoard(deals: DealCard[], canEdit = true) {
       />
     </NextIntlClientProvider>
   );
-  return { onMove };
+  return { onMove, container: view.container };
 }
+
+/** A board whose cards move when asked, as the screen shows a move between open stages */
+function MovingBoard({ deals }: { deals: DealCard[] }) {
+  const [shown, setShown] = useState(deals);
+  const move = (deal: DealCard, stage: DealStage) =>
+    setShown((all) => all.map((each) => (each.id === deal.id ? { ...each, stage } : each)));
+  return (
+    <NextIntlClientProvider locale="ja" messages={messages}>
+      <DealBoard
+        columns={columnsWith(shown)}
+        today={TODAY}
+        closedWithinDays={30}
+        canEdit
+        onMove={move}
+      />
+    </NextIntlClientProvider>
+  );
+}
+
+const moveButtonIn = (column: string) =>
+  within(screen.getByRole('region', { name: column })).getByRole('button', {
+    name: '「AS/400 現行調査」のステージを移動',
+  });
 
 describe('DealBoard', () => {
   it('shows one column per stage with its count and amount', () => {
@@ -111,15 +135,27 @@ describe('DealBoard', () => {
     ]);
   });
 
-  it('links each card to the deal and shows its company, owner and next step', () => {
+  it('links each card to the deal and shows its company, close date, owner and next step', () => {
     renderBoard([card({})]);
     expect(screen.getByRole('link', { name: 'AS/400 現行調査' })).toHaveAttribute(
       'href',
       '/ja/deals/deal-1'
     );
     expect(screen.getByText('架空商事 山田 太郎')).toBeInTheDocument();
-    expect(screen.getByText(/営業 花子/)).toBeInTheDocument();
+    // The day as the date boxes write it (#720)
+    expect(screen.getByText('2026/11/30 · 営業 花子')).toBeInTheDocument();
     expect(screen.getByText('見積を送る')).toBeInTheDocument();
+  });
+
+  it('writes no text under 14px and gives the move button 44px on phones (#720)', () => {
+    const { container } = renderBoard([card({ expectedCloseOn: '2026-10-01', hasOpenTask: false })]);
+    expect(container.querySelector('.text-xs')).toBeNull();
+    expect(screen.getByRole('button', { name: '「AS/400 現行調査」のステージを移動' })).toHaveClass(
+      'h-11',
+      'w-11',
+      'md:h-8',
+      'md:w-8'
+    );
   });
 
   it('warns about a passed close date and a deal without a next action', () => {
@@ -144,7 +180,36 @@ describe('DealBoard', () => {
     const items = screen.getAllByRole('menuitem');
     expect(items.map((item) => item.textContent)).not.toContain('「提案」へ移す');
     await user.click(screen.getByRole('menuitem', { name: '「条件の調整」へ移す' }));
-    expect(onMove).toHaveBeenCalledWith(expect.objectContaining({ id: 'deal-1' }), 'negotiation');
+    expect(onMove).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'deal-1' }),
+      'negotiation',
+      { returnFocus: expect.any(Function) }
+    );
+  });
+
+  it('keeps the focus on the move button of a card moved from its menu (#720)', async () => {
+    const user = userEvent.setup();
+    render(<MovingBoard deals={[card({})]} />);
+    await user.click(moveButtonIn('提案'));
+    await user.click(screen.getByRole('menuitem', { name: '「条件の調整」へ移す' }));
+    expect(moveButtonIn('条件の調整')).toHaveFocus();
+
+    // Again with the keyboard, from its new column
+    await user.keyboard('{Enter}');
+    await user.click(screen.getByRole('menuitem', { name: '「見極め」へ移す' }));
+    expect(moveButtonIn('見極め')).toHaveFocus();
+  });
+
+  it('gives the focus back to the card when the question of its move closes', async () => {
+    const user = userEvent.setup();
+    const { onMove } = renderBoard([card({})]);
+    await user.click(screen.getByRole('button', { name: '「AS/400 現行調査」のステージを移動' }));
+    await user.click(screen.getByRole('menuitem', { name: '「受注」へ移す' }));
+    const options = onMove.mock.lastCall?.[2] as { returnFocus: () => void };
+    (document.activeElement as HTMLElement | null)?.blur();
+
+    act(() => options.returnFocus());
+    expect(moveButtonIn('提案')).toHaveFocus();
   });
 
   it('moves a card dragged to another column', () => {

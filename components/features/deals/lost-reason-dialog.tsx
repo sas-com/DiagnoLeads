@@ -1,5 +1,6 @@
 'use client';
 
+import { TAP_TARGET } from '@/components/common/tap-target';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -44,7 +45,11 @@ interface LostReasonDialogProps {
   /** The deal is won now: its lead stays 成約 */
   fromWon?: boolean;
   pending?: boolean;
+  /** Why the loss could not be saved, said in the dialog (Refs #720) */
+  error?: string | null;
   onConfirm: (values: LostValues) => void;
+  /** Where the focus goes when the dialog closes (it has no trigger to go back to) */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 /** Losing a deal asks for the reason (required), the details and the competitor (Refs #436) */
@@ -55,7 +60,9 @@ export function LostReasonDialog({
   initial,
   fromWon = false,
   pending = false,
+  error,
   onConfirm,
+  onCloseAutoFocus,
 }: LostReasonDialogProps) {
   const t = useTranslations('deals.lostDialog');
   const tReason = useTranslations('pipeline.lostReason');
@@ -90,7 +97,7 @@ export function LostReasonDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent onCloseAutoFocus={onCloseAutoFocus}>
         <form onSubmit={submit} className="space-y-4" noValidate>
           <DialogHeader>
             <DialogTitle>{t('title', { name: dealName })}</DialogTitle>
@@ -105,12 +112,15 @@ export function LostReasonDialog({
             <Select
               value={reason}
               onValueChange={(value) => {
+                // A form's reset or autofill clears Radix's hidden select: keep the choice
+                if (!value) return;
                 setReason(value as DealLostReason);
                 setShowError(false);
               }}
             >
               <SelectTrigger
                 id={`${id}-reason`}
+                className={TAP_TARGET}
                 aria-invalid={showError}
                 aria-describedby={showError ? `${id}-reason-error` : undefined}
               >
@@ -149,14 +159,29 @@ export function LostReasonDialog({
               value={competitor}
               maxLength={DEAL_LIMITS.competitor}
               onChange={(event) => setCompetitor(event.target.value)}
+              className={TAP_TARGET}
             />
           </div>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          {error && (
+            <p
+              role="alert"
+              className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-500/10 dark:text-red-300"
+            >
+              {error}
+            </p>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className={TAP_TARGET}
+              onClick={() => onOpenChange(false)}
+            >
               {tCommon('cancel')}
             </Button>
-            <Button type="submit" disabled={pending}>
+            <Button type="submit" className={TAP_TARGET} disabled={pending}>
               {t('confirm')}
             </Button>
           </DialogFooter>

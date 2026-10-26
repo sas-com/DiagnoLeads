@@ -1,5 +1,6 @@
 'use client';
 
+import { TAP_TARGET } from '@/components/common/tap-target';
 import { HearingDateInput } from '@/components/features/lead-hearings/hearing-date-inputs';
 import { Button } from '@/components/ui/button';
 import {
@@ -10,13 +11,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { DEAL_LIMITS } from '@/lib/features/deals/types/schemas';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { useTranslations } from 'next-intl';
 import { type FormEvent, useEffect, useId, useState } from 'react';
-import { isDealDate, parseWhole } from './deal-format';
+import { DealAmountInput } from './deal-amount-input';
+import { isDealDate, parseAmount } from './deal-format';
 
 export interface WonValues {
   /** Day the deal was won (YYYY-MM-DD, Japan) */
@@ -36,6 +36,8 @@ interface WonDialogProps {
   fromLost?: boolean;
   pending?: boolean;
   onConfirm: (values: WonValues) => void;
+  /** Where the focus goes when the dialog closes (it has no trigger to go back to) */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 /**
@@ -51,6 +53,7 @@ export function WonDialog({
   fromLost = false,
   pending = false,
   onConfirm,
+  onCloseAutoFocus,
 }: WonDialogProps) {
   const t = useTranslations('deals');
   const tCommon = useTranslations('common');
@@ -69,7 +72,7 @@ export function WonDialog({
     setSubmitted(false);
   }, [open, amount]);
 
-  const parsedAmount = parseWhole(amountText, DEAL_LIMITS.amount);
+  const parsedAmount = parseAmount(amountText);
   const dateError = !closedOn || !isDealDate(closedOn);
   const amountError = parsedAmount === 'invalid';
 
@@ -82,7 +85,7 @@ export function WonDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent onCloseAutoFocus={onCloseAutoFocus}>
         <form onSubmit={submit} className="space-y-4" noValidate>
           <DialogHeader>
             <DialogTitle>{t('wonDialog.title', { name: dealName })}</DialogTitle>
@@ -110,29 +113,24 @@ export function WonDialog({
 
           <div className="space-y-1.5">
             <Label htmlFor={`${id}-amount`}>{t('fields.amount')}</Label>
-            <Input
+            <DealAmountInput
               id={`${id}-amount`}
-              inputMode="numeric"
               value={amountText}
-              aria-invalid={submitted && amountError}
-              aria-describedby={`${id}-amount-help${submitted && amountError ? ` ${id}-amount-error` : ''}`}
-              onChange={(event) => setAmountText(event.target.value)}
+              onChange={setAmountText}
+              showError={submitted}
             />
-            <p id={`${id}-amount-help`} className="text-xs text-gray-500 dark:text-gray-400">
-              {t('form.amountHelp')}
-            </p>
-            {submitted && amountError && (
-              <p id={`${id}-amount-error`} className="text-sm text-red-600 dark:text-red-400">
-                {t('form.amountInvalid')}
-              </p>
-            )}
           </div>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className={TAP_TARGET}
+              onClick={() => onOpenChange(false)}
+            >
               {tCommon('cancel')}
             </Button>
-            <Button type="submit" disabled={pending}>
+            <Button type="submit" className={TAP_TARGET} disabled={pending}>
               {t('wonDialog.confirm')}
             </Button>
           </DialogFooter>
