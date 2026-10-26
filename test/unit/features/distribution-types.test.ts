@@ -61,6 +61,9 @@ describe('createQRCampaignSchema', () => {
   });
 
   it('lists the media of the form, the default first (#788)', () => {
+    // Pins the stored values, not only the order: each is kept in the campaigns' utm_medium and
+    // in the answers' tracking, so renaming one (direct_mail → dm) would split the data and send
+    // the new leads of the renamed value to another 流入元
     expect(QR_CAMPAIGN_MEDIUMS).toEqual(['seminar', 'exhibition', 'direct_mail']);
     expect(QR_CAMPAIGN_MEDIUMS[0]).toBe(DEFAULT_QR_CAMPAIGN_MEDIUM);
   });

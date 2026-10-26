@@ -8,7 +8,9 @@
  * loads or could not be read); the notes of the marketing review (2026-10-26) are on the create
  * form and next to the URL. A paused campaign is marked, not faded (2026-10-26 UI review). The
  * create form takes the campaign's utm_medium from a list, labelled in ja and en, says the inflow
- * source the new leads of each get and sends the one chosen (#788).
+ * source the new leads of each get (why an exhibition counts as a seminar, and that it is fixed
+ * once created) and sends the one chosen (#788). The note next to the URL sends email and the web
+ * to the diagnosis URL, as the list has no choice for them (2026-10-26 reviews of #808).
  */
 import QRCampaignsPage from '@/app/[locale]/(dashboard)/settings/qr-campaigns/page';
 import { QR_CAMPAIGN_MEDIUMS } from '@/lib/features/distribution/types';
@@ -219,12 +221,17 @@ describe('QR campaigns page', () => {
     ).toBeInTheDocument();
   });
 
-  it('says next to the URL that opening it counts as a scan, and to make a campaign per channel', () => {
+  it('says next to the URL that opening it counts as a scan, and that email and the web use the diagnosis URL', () => {
     mocks.campaigns = [campaign('1', { name: 'Fair' })];
     renderPage();
     const fair = within(cardOf('Fair'));
     const hint = ja.settings.qrCampaigns.copyUrlHint;
     expect(hint).toContain('この URL を開いた回数も読み取り回数に数えます');
+    // The list has no email or web choice (#788), so a campaign per channel would give their new
+    // leads the inflow source of a seminar or a direct mail (2026-10-26 reviews of #808)
+    expect(hint).not.toContain('別のキャンペーンを作って');
+    expect(hint).toContain('この URL ではなく、媒体の UTM（utm_medium=email など）を付けた診断の URL');
+    expect(en.settings.qrCampaigns.copyUrlHint).toContain('use the diagnosis URL with that channel');
     expect(fair.getByText(hint)).toBeInTheDocument();
     // Both buttons that copy it (the icon next to the code and the labelled one) say so
     const copyButtons = fair.getAllByRole('button', { name: 'URL をコピー' });
@@ -279,8 +286,13 @@ describe('QR campaigns page', () => {
       fireEvent.click(dialog.getByRole('button', { name: 'Create Campaign' }));
     }
 
-    const MEDIUM_LABEL = '配る場面（utm_medium）';
-    const inflowHint = (source: string) => `読み取りから来た新規リードの流入元：${source}`;
+    const MEDIUM_LABEL = '配布する場・媒体（utm_medium）';
+    const { hint: MEDIUM_HINT, inflowNote } = ja.settings.qrCampaigns.medium;
+    /** What the list is described by: its inflow source, the note of an exhibition, the hint */
+    const mediumDescription = (source: string, note?: string) =>
+      [`読み取りから来た新規リードの流入元：${source}`, note, MEDIUM_HINT]
+        .filter((part) => part !== undefined)
+        .join(' ');
     /** The names of the options of the open list */
     const optionNames = () => screen.getAllByRole('option').map((option) => option.textContent);
 
@@ -290,27 +302,33 @@ describe('QR campaigns page', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Create Campaign' }));
       const dialog = within(screen.getByRole('dialog'));
       const medium = dialog.getByRole('combobox', { name: MEDIUM_LABEL });
-      expect(medium).toHaveTextContent('セミナー・ウェビナー');
-      // The inflow source the new leads of its scans get, read with the list
-      expect(medium).toHaveAccessibleDescription(inflowHint('勉強会・セミナー'));
+      expect(medium).toHaveTextContent('セミナー・勉強会・ウェビナー');
+      // The inflow source the new leads of its scans get, and that it is fixed once created, read
+      // with the list
+      expect(medium).toHaveAccessibleDescription(mediumDescription('勉強会・セミナー'));
+      expect(MEDIUM_HINT).toContain('作成のあとは変えられません');
       // The typed medium (placeholder 'offline') is gone
       expect(dialog.queryByLabelText('Medium')).toBeNull();
       expect(dialog.queryByPlaceholderText('offline')).toBeNull();
 
       await user.click(medium);
-      expect(optionNames()).toEqual(['セミナー・ウェビナー', '展示会', 'DM（郵送・個別の配布物）']);
+      expect(optionNames()).toEqual([
+        'セミナー・勉強会・ウェビナー',
+        '展示会',
+        'DM（郵送・個別の配布物）',
+      ]);
     });
 
     it.each([
-      ['展示会', 'exhibition', '勉強会・セミナー'],
-      ['DM（郵送・個別の配布物）', 'direct_mail', '広告'],
-    ])('sends the medium chosen (%s as %s) and says its inflow source, %s', async (label, value, inflow) => {
+      ['展示会', 'exhibition', '勉強会・セミナー', inflowNote.exhibition],
+      ['DM（郵送・個別の配布物）', 'direct_mail', '広告', undefined],
+    ])('sends the medium chosen (%s as %s) and says its inflow source, %s', async (label, value, inflow, note) => {
       const { user, dialog } = await openAndFill();
       const medium = dialog.getByRole('combobox', { name: MEDIUM_LABEL });
       await user.click(medium);
       await user.click(screen.getByRole('option', { name: label }));
       expect(medium).toHaveTextContent(label);
-      expect(medium).toHaveAccessibleDescription(inflowHint(inflow));
+      expect(medium).toHaveAccessibleDescription(mediumDescription(inflow, note));
 
       fireEvent.click(dialog.getByRole('button', { name: 'Create Campaign' }));
       expect(mocks.createMutate).toHaveBeenCalledTimes(1);
@@ -329,30 +347,43 @@ describe('QR campaigns page', () => {
 
     it('labels every medium in Japanese and English, and says the inflow source in English (#788)', async () => {
       for (const medium of QR_CAMPAIGN_MEDIUMS) {
-        expect(ja.settings.qrCampaigns.medium.options[medium], `ja ${medium}`).not.toBe('');
-        expect(en.settings.qrCampaigns.medium.options[medium], `en ${medium}`).not.toBe('');
+        for (const [locale, messages] of [
+          ['ja', ja],
+          ['en', en],
+        ] as const) {
+          const option: unknown = messages.settings.qrCampaigns.medium.options[medium];
+          expect(typeof option, `${locale} ${medium}`).toBe('string');
+          expect(String(option).trim(), `${locale} ${medium}`).not.toBe('');
+        }
       }
 
       const user = userEvent.setup();
       renderPage('en');
       fireEvent.click(screen.getByRole('button', { name: 'Create Campaign' }));
       const dialog = within(screen.getByRole('dialog'));
-      const medium = dialog.getByRole('combobox', { name: 'Where it is handed out (utm_medium)' });
+      const medium = dialog.getByRole('combobox', { name: 'Distribution channel (utm_medium)' });
+      const { hint, inflowNote: enNote } = en.settings.qrCampaigns.medium;
       expect(medium).toHaveTextContent('Seminar or webinar');
       expect(medium).toHaveAccessibleDescription(
-        'Inflow source of the new leads from its scans: Seminar'
+        `New leads from scans get the inflow source: Seminar ${hint}`
       );
+      expect(hint).toContain('It cannot be changed after the campaign is created.');
       await user.click(medium);
       expect(optionNames()).toEqual([
         'Seminar or webinar',
         'Exhibition or trade show',
         'Direct mail (posted or handed out one by one)',
       ]);
+      await user.click(screen.getByRole('option', { name: 'Exhibition or trade show' }));
+      expect(medium).toHaveAccessibleDescription(
+        `New leads from scans get the inflow source: Seminar ${enNote.exhibition} ${hint}`
+      );
+      await user.click(medium);
       await user.click(
         screen.getByRole('option', { name: 'Direct mail (posted or handed out one by one)' })
       );
       expect(medium).toHaveAccessibleDescription(
-        'Inflow source of the new leads from its scans: Advertising'
+        `New leads from scans get the inflow source: Advertising ${hint}`
       );
     });
 
@@ -363,7 +394,8 @@ describe('QR campaigns page', () => {
       const { testFirst, testFirstTitle } = ja.settings.qrCampaigns;
       expect(within(dialog).getByText(testFirstTitle)).toBeInTheDocument();
       expect(within(dialog).getByText(testFirst)).toBeInTheDocument();
-      expect(testFirst).toContain('確認で作ったリードはリード一覧に残ります。');
+      // The check's leads get the inflow source of the medium chosen too (#788 review)
+      expect(testFirst).toContain('確認で作ったリードはリード一覧に残り、流入元の数にも入ります。');
       // Part of the dialog's description, so it is read when the dialog opens
       expect(dialog).toHaveAccessibleDescription(expect.stringContaining(testFirst));
       // The form scrolls inside the window on a small screen

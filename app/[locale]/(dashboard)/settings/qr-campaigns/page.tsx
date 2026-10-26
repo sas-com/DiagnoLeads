@@ -95,6 +95,8 @@ export default function QRCampaignsPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [formData, setFormData] = useState<QRCampaignFormData>(DEFAULT_FORM_DATA);
   const nameHintId = useId();
+  const mediumInflowId = useId();
+  const mediumNoteId = useId();
   const mediumHintId = useId();
   const copyUrlHintId = useId();
 
@@ -188,6 +190,16 @@ export default function QRCampaignsPage() {
 
   // The 流入元 the new leads of the chosen medium get, by the rule of the answers (#788)
   const mediumInflow = inferInflowSource({ utmMedium: formData.utmMedium }).inflowSource;
+  // An exhibition is counted as a seminar, which is said under the list (2026-10-26 marketing review)
+  const isExhibition = formData.utmMedium === 'exhibition';
+  // The list is described by the notes shown under it, in the order they are shown
+  const mediumDescribedBy = [
+    mediumInflow ? mediumInflowId : null,
+    isExhibition ? mediumNoteId : null,
+    mediumHintId,
+  ]
+    .filter((id) => id !== null)
+    .join(' ');
 
   const handleCreate = () => {
     if (!organization?.id || !formData.name || !formData.diagnosticTemplateId) {
@@ -277,7 +289,8 @@ export default function QRCampaignsPage() {
               <DialogDescription asChild>
                 <div className="space-y-3">
                   <p>Create a new QR code campaign for offline distribution</p>
-                  {/* Checks count too (#700, marketing review): check with a campaign of its own */}
+                  {/* Checks count too (#700, marketing review): check with a campaign of its own.
+                      Its leads get the 流入元 of its medium as well (#788 review) */}
                   <Callout
                     title={t('testFirstTitle')}
                     icon={Info}
@@ -349,10 +362,7 @@ export default function QRCampaignsPage() {
                     if (medium) setFormData({ ...formData, utmMedium: medium });
                   }}
                 >
-                  <SelectTrigger
-                    id="utmMedium"
-                    aria-describedby={mediumInflow ? mediumHintId : undefined}
-                  >
+                  <SelectTrigger id="utmMedium" aria-describedby={mediumDescribedBy}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -364,16 +374,27 @@ export default function QRCampaignsPage() {
                   </SelectContent>
                 </Select>
                 {mediumInflow && (
-                  <p id={mediumHintId} className="text-xs text-muted-foreground">
+                  <p id={mediumInflowId} className="text-xs text-muted-foreground">
                     {tMedium('inflow', { source: tPipeline(`inflowSource.${mediumInflow}`) })}
                   </p>
                 )}
+                {isExhibition && (
+                  <p id={mediumNoteId} className="text-xs text-muted-foreground">
+                    {tMedium('inflowNote.exhibition')}
+                  </p>
+                )}
+                {/* Flyers go with the event they are handed out at. No screen or API changes the
+                    medium once created, so neither its 流入元 (2026-10-26 reviews) */}
+                <p id={mediumHintId} className="text-xs text-muted-foreground">
+                  {tMedium('hint')}
+                </p>
               </div>
 
               {/* UTM Parameters */}
               <div className="space-y-3">
                 <Label>UTM Parameters</Label>
-                <div className="grid grid-cols-2 gap-3">
+                {/* Three fields since the medium left them (#788): one row from sm */}
+                <div className="grid gap-3 sm:grid-cols-3">
                   <div className="grid gap-1">
                     <Label htmlFor="utmSource" className="text-xs text-muted-foreground">
                       Source
@@ -547,8 +568,9 @@ export default function QRCampaignsPage() {
                         {t('copyUrl')}
                       </Button>
                     </div>
-                    {/* Opening the URL counts as a scan; one campaign per channel, so each one's
-                        counts stay its own (#700, marketing review) */}
+                    {/* Opening the URL counts as a scan (#700, marketing review). Its new leads get
+                        the 流入元 of the campaign's medium, which has no email or web choice, so
+                        those channels use the diagnosis URL with their own UTM (#788 review) */}
                     <p
                       id={`${copyUrlHintId}-${campaign.id}`}
                       className="text-xs text-muted-foreground"
