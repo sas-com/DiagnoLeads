@@ -214,7 +214,7 @@ export function DealDetailView({ dealId }: { dealId: string }) {
         organizationId={organizationId}
         dealId={deal.id}
         leadId={deal.lead.id}
-        leadLabel={deal.lead.company || deal.lead.name || ''}
+        leadLabel={deal.lead.company || deal.lead.name || t('fields.lead')}
       />
 
       <Card className="p-5">

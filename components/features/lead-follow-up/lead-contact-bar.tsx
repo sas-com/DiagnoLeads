@@ -4,6 +4,7 @@ import { trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
 import { PhoneCall } from 'lucide-react';
 import { useFormatter, useTranslations } from 'next-intl';
+import { durationParts } from './contact-format';
 import { ContactQuickActions } from './contact-quick-actions';
 
 const TIME_ZONE = 'Asia/Tokyo';
@@ -69,14 +70,18 @@ export function LeadContactBar({ organizationId, leadId, leadLabel }: LeadContac
               <p className="truncate text-xs text-muted-foreground">
                 {t('latest', {
                   kind: t(`kinds.${latest.kind}`),
-                  date: when(latest.contactedAt),
-                  count: data.total,
+                  details: [
+                    when(latest.contactedAt),
+                    latest.durationMinutes !== null &&
+                      tFollowUp('duration', durationParts(latest.durationMinutes)),
+                    latest.outcome && tFollowUp(`outcomes.${latest.outcome}`),
+                  ]
+                    .filter(Boolean)
+                    .join('・'),
                 })}
-                {latest.durationMinutes !== null &&
-                  ` · ${tFollowUp('durationMinutes', { minutes: latest.durationMinutes })}`}
-                {latest.outcome && ` · ${tFollowUp(`outcomes.${latest.outcome}`)}`}
                 {latest.createdBy && ` · ${latest.createdBy.name}`}
                 {latest.note && ` · ${latest.note}`}
+                {` · ${t('total', { count: data.total })}`}
               </p>
             )}
           </div>

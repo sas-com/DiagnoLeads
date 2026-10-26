@@ -1,11 +1,12 @@
 'use client';
 
+import { TAP_TARGET } from '@/components/common/tap-target';
+import { parseWhole } from '@/components/features/deals/deal-format';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -32,14 +33,24 @@ import {
   type ContactOutcome,
 } from '@/lib/features/lead-follow-up/types/schemas';
 import { trpc } from '@/lib/trpc/client';
-import { useTranslations } from 'next-intl';
-import { type FormEvent, useEffect, useId, useMemo, useState } from 'react';
+import { cn } from '@/lib/utils';
+import { Loader2 } from 'lucide-react';
+import { useNow, useTranslations } from 'next-intl';
+import { type FormEvent, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { CONTACT_KIND_ICONS } from './contact-kinds';
 import { fromJstInputValue, toJstInputValue } from './contact-time';
 import { useRecordContact } from './use-record-contact';
 
 /** Radix Select does not take an empty value: "no deal" is this one */
 const NO_DEAL = 'none';
+
+/** A chosen toggle reads by its border and weight, not by color alone */
+const TOGGLE_ITEM = cn(
+  TAP_TARGET,
+  'data-[state=on]:border-gray-900 data-[state=on]:font-bold dark:data-[state=on]:border-gray-50'
+);
+/** Inputs are 44px tall on phones (#196), like the hearing date inputs */
+const FIELD_HEIGHT = 'h-11 sm:h-10';
 
 export interface RecordActivityDialogProps {
   open: boolean;
@@ -52,13 +63,14 @@ export interface RecordActivityDialogProps {
   defaultDealId?: string;
 }
 
-type Errors = Partial<Record<'when' | 'duration', string>>;
+type Field = 'kind' | 'when' | 'duration';
 
 /**
- * Records a contact with its details (Refs #554): what it was (a call, an email, no answer, a
- * visit or an online meeting), when (now by default, never in the future), how long it took,
- * how it left the sale, the deal it was about and a note. A "no answer" takes no duration or
- * outcome. The deal list is the lead's deals; it is left out for those who may not read deals.
+ * Records a contact with its details (Refs #554): what it was (a call, an email, a visit, an
+ * online meeting or no answer; chosen each time, as a record cannot be corrected later), when
+ * (now by default, never in the future), how long it took, how it left the sale, the deal it
+ * was about and a note. A "no answer" takes no duration or outcome. The deal list is the lead's
+ * deals; it is left out for those who may not read deals.
  */
 export function RecordActivityDialog({
   open,
@@ -69,27 +81,88 @@ export function RecordActivityDialog({
   defaultDealId,
 }: RecordActivityDialogProps) {
   const t = useTranslations('leadFollowUp.activity');
+  const recorder = useRecordContact({ organizationId, leadId, toastOnError: false });
+  const dirty = useRef(false);
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        // Not closed while it is being saved, so a failure can still be told
+        if (!next && recorder.pending) return;
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent
+        className="flex max-h-[90dvh] flex-col gap-0 p-0 sm:max-w-lg"
+        onInteractOutside={(event) => {
+          // A tap outside does not throw away what was entered
+          if (dirty.current || recorder.pending) event.preventDefault();
+        }}
+      >
+        <DialogHeader className="border-b px-6 py-4">
+          <DialogTitle>{t('title')}</DialogTitle>
+          <DialogDescription>{t('description', { lead: leadLabel })}</DialogDescription>
+        </DialogHeader>
+        {/* Mounted only while open, so every opening starts empty at the current time */}
+        <RecordActivityForm
+          organizationId={organizationId}
+          leadId={leadId}
+          defaultDealId={defaultDealId}
+          recorder={recorder}
+          onDirtyChange={(value) => {
+            dirty.current = value;
+          }}
+          onDone={() => onOpenChange(false)}
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RecordActivityForm({
+  organizationId,
+  leadId,
+  defaultDealId,
+  recorder: { record, pending },
+  onDirtyChange,
+  onDone,
+}: {
+  organizationId: string;
+  leadId: string;
+  defaultDealId?: string;
+  recorder: ReturnType<typeof useRecordContact>;
+  onDirtyChange: (dirty: boolean) => void;
+  onDone: () => void;
+}) {
+  const t = useTranslations('leadFollowUp.activity');
   const tContact = useTranslations('leadFollowUp.contact');
   const tOutcome = useTranslations('leadFollowUp.outcomes');
   const tStage = useTranslations('deals.stages');
   const tCommon = useTranslations('common');
   const id = useId();
-  const { record, pending } = useRecordContact({ organizationId, leadId });
+  // The shown time follows the clock until it is changed, so what is saved is what was shown
+  const now = useNow({ updateInterval: 30_000 });
 
-  const [kind, setKind] = useState<ContactKind>('call');
+  const [kind, setKind] = useState<ContactKind | null>(null);
   const [when, setWhen] = useState('');
   const [whenTouched, setWhenTouched] = useState(false);
   const [duration, setDuration] = useState('');
   const [outcome, setOutcome] = useState<ContactOutcome | ''>('');
-  const [dealId, setDealId] = useState<string>(NO_DEAL);
+  const [dealId, setDealId] = useState<string>(defaultDealId ?? NO_DEAL);
   const [dealTouched, setDealTouched] = useState(false);
   const [note, setNote] = useState('');
-  const [errors, setErrors] = useState<Errors>({});
+  const [submitted, setSubmitted] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
+  const kindRef = useRef<HTMLDivElement>(null);
+  const whenRef = useRef<HTMLInputElement>(null);
+  const durationRef = useRef<HTMLInputElement>(null);
 
   const dealsQuery = trpc.deals.forLead.useQuery(
     { organizationId, leadId },
-    { enabled: open && !!organizationId, retry: false }
+    { enabled: !!organizationId, retry: false }
   );
+  const dealsForbidden = dealsQuery.error?.data?.code === 'FORBIDDEN';
   // Open deals first; a closed one can still be named (a meeting after the order)
   const deals = useMemo(
     () =>
@@ -99,54 +172,58 @@ export function RecordActivityDialog({
     [dealsQuery.data]
   );
 
-  useEffect(() => {
-    if (!open) return;
-    setKind('call');
-    setWhen(toJstInputValue(new Date()));
-    setWhenTouched(false);
-    setDuration('');
-    setOutcome('');
-    setDealId(defaultDealId ?? NO_DEAL);
-    setDealTouched(false);
-    setNote('');
-    setErrors({});
-  }, [open, defaultDealId]);
-
   // Without a deal to start with, the lead's only open deal is the likely one
   useEffect(() => {
-    if (!open || dealTouched || defaultDealId || !dealsQuery.data) return;
+    if (dealTouched || defaultDealId || !dealsQuery.data) return;
     const openDeals = dealsQuery.data.items.filter((deal) => isOpenStage(deal.stage));
     setDealId(openDeals.length === 1 ? openDeals[0].id : NO_DEAL);
-  }, [open, dealTouched, defaultDealId, dealsQuery.data]);
+  }, [dealTouched, defaultDealId, dealsQuery.data]);
 
   const reached = kind !== 'no_answer';
+  const shownWhen = whenTouched ? when : toJstInputValue(now);
 
-  const validate = (): { errors: Errors; contactedAt?: Date; durationMinutes: number | null } => {
-    const found: Errors = {};
+  const check = () => {
+    const errors: Partial<Record<Field, string>> = {};
+    if (!kind) errors.kind = t('kindRequired');
     let contactedAt: Date | undefined;
     if (whenTouched) {
       const parsed = fromJstInputValue(when);
-      if (!parsed) found.when = t('whenInvalid');
+      if (!parsed) errors.when = t('whenInvalid');
       else if (parsed.getTime() > Date.now() + CONTACT_FUTURE_TOLERANCE_MS) {
-        found.when = t('whenFuture');
-      } else if (parsed.getTime() < CONTACT_EARLIEST_AT.getTime()) found.when = t('whenTooEarly');
+        errors.when = t('whenFuture');
+      } else if (parsed.getTime() < CONTACT_EARLIEST_AT.getTime()) errors.when = t('whenTooEarly');
       else contactedAt = parsed;
     }
     let durationMinutes: number | null = null;
-    if (reached && duration.trim() !== '') {
-      const minutes = Number(duration);
-      if (!Number.isInteger(minutes) || minutes < 1 || minutes > CONTACT_DURATION_MAX_MINUTES) {
-        found.duration = t('durationInvalid', { max: CONTACT_DURATION_MAX_MINUTES });
+    if (reached) {
+      const minutes = parseWhole(duration.normalize('NFKC'), CONTACT_DURATION_MAX_MINUTES);
+      if (minutes === 'invalid' || minutes === 0) {
+        errors.duration = t('durationInvalid', { max: CONTACT_DURATION_MAX_MINUTES });
       } else durationMinutes = minutes;
     }
-    return { errors: found, contactedAt, durationMinutes };
+    return { errors, contactedAt, durationMinutes };
   };
+  // Once sent, the fields are checked again as they change
+  const errors = submitted ? check().errors : {};
 
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    const checked = validate();
-    setErrors(checked.errors);
-    if (Object.keys(checked.errors).length > 0) return;
+  const dirty =
+    kind !== null || whenTouched || duration.trim() !== '' || outcome !== '' || note.trim() !== '';
+  useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
+
+  const submit = (event?: FormEvent) => {
+    event?.preventDefault();
+    if (pending || !kind) {
+      if (!kind) {
+        setSubmitted(true);
+        kindRef.current?.querySelector('button')?.focus();
+      }
+      return;
+    }
+    setSubmitted(true);
+    setSaveFailed(false);
+    const checked = check();
+    if (checked.errors.when) return whenRef.current?.focus();
+    if (checked.errors.duration) return durationRef.current?.focus();
     record({
       kind,
       contactedAt: checked.contactedAt,
@@ -155,137 +232,148 @@ export function RecordActivityDialog({
       dealId: dealId === NO_DEAL ? null : dealId,
       note: note.trim() ? note : null,
     }).then(
-      () => onOpenChange(false),
-      // The hook has shown the error; the form keeps what was entered
-      () => undefined
+      () => onDone(),
+      // The form keeps what was entered and says so in place
+      () => setSaveFailed(true)
     );
   };
 
-  const errorId = (field: keyof Errors) => (errors[field] ? `${id}-${field}-error` : undefined);
+  const describedBy = (...ids: (string | false | undefined)[]) =>
+    ids.filter(Boolean).join(' ') || undefined;
+  const errorText = (field: Field) =>
+    errors[field] ? (
+      <p id={`${id}-${field}-error`} className="text-sm text-red-700 dark:text-red-400">
+        {errors[field]}
+      </p>
+    ) : null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto">
-        <form onSubmit={submit} className="space-y-4" noValidate>
-          <DialogHeader>
-            <DialogTitle>{t('title')}</DialogTitle>
-            <DialogDescription>{t('description', { lead: leadLabel })}</DialogDescription>
-          </DialogHeader>
+    <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col" noValidate>
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
+        <fieldset
+          className="space-y-1.5"
+          aria-describedby={describedBy(errors.kind && `${id}-kind-error`)}
+        >
+          <legend className="flex items-center gap-2 text-sm font-medium">
+            {t('kind')}
+            <span className="text-xs font-semibold text-red-600 dark:text-red-400">
+              {t('required')}
+            </span>
+          </legend>
+          <ToggleGroup
+            ref={kindRef}
+            type="single"
+            size="sm"
+            variant="outline"
+            value={kind ?? ''}
+            onValueChange={(value) => {
+              if (value) setKind(value as ContactKind);
+            }}
+            className="flex-wrap justify-start"
+          >
+            {CONTACT_KINDS.map((value) => {
+              const Icon = CONTACT_KIND_ICONS[value];
+              return (
+                <ToggleGroupItem key={value} value={value} className={TOGGLE_ITEM}>
+                  <Icon className="h-4 w-4" aria-hidden="true" />
+                  {t(`kinds.${value}`)}
+                </ToggleGroupItem>
+              );
+            })}
+          </ToggleGroup>
+          {errorText('kind')}
+        </fieldset>
 
-          <fieldset className="space-y-1.5">
-            <legend className="text-sm font-medium">{t('kind')}</legend>
-            <ToggleGroup
-              type="single"
-              size="sm"
-              value={kind}
-              onValueChange={(value) => {
-                if (value) setKind(value as ContactKind);
-              }}
-              aria-label={t('kind')}
-              className="flex-wrap justify-start"
-            >
-              {CONTACT_KINDS.map((value) => {
-                const Icon = CONTACT_KIND_ICONS[value];
-                return (
-                  <ToggleGroupItem key={value} value={value} className="gap-1">
-                    <Icon className="h-4 w-4" aria-hidden="true" />
-                    {tContact(`kinds.${value}`)}
-                  </ToggleGroupItem>
-                );
-              })}
-            </ToggleGroup>
-          </fieldset>
-
+        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto]">
           <div className="space-y-1.5">
             <Label htmlFor={`${id}-when`}>{t('when')}</Label>
             <Input
+              ref={whenRef}
               id={`${id}-when`}
               type="datetime-local"
-              value={when}
-              max={toJstInputValue(new Date())}
+              className={FIELD_HEIGHT}
+              value={shownWhen}
+              min={toJstInputValue(CONTACT_EARLIEST_AT)}
+              max={toJstInputValue(now)}
               aria-invalid={!!errors.when}
-              aria-describedby={errorId('when') ?? `${id}-when-help`}
+              aria-describedby={describedBy(`${id}-when-help`, errors.when && `${id}-when-error`)}
               onChange={(event) => {
                 setWhen(event.target.value);
                 setWhenTouched(true);
-                setErrors((current) => ({ ...current, when: undefined }));
               }}
             />
-            {errors.when ? (
-              <p id={errorId('when')} className="text-sm text-red-600 dark:text-red-400">
-                {errors.when}
-              </p>
-            ) : (
-              <p id={`${id}-when-help`} className="text-xs text-muted-foreground">
-                {t('whenHelp')}
-              </p>
-            )}
+            <p id={`${id}-when-help`} className="text-sm text-muted-foreground">
+              {t('whenHelp')}
+            </p>
+            {errorText('when')}
           </div>
 
-          {reached ? (
-            <>
-              <div className="space-y-1.5">
-                <Label htmlFor={`${id}-duration`}>{t('duration')}</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    id={`${id}-duration`}
-                    type="number"
-                    inputMode="numeric"
-                    min={1}
-                    max={CONTACT_DURATION_MAX_MINUTES}
-                    step={1}
-                    value={duration}
-                    className="w-28"
-                    aria-invalid={!!errors.duration}
-                    aria-describedby={errorId('duration')}
-                    onChange={(event) => {
-                      setDuration(event.target.value);
-                      setErrors((current) => ({ ...current, duration: undefined }));
-                    }}
-                  />
-                  <span className="text-sm text-muted-foreground">{t('minutes')}</span>
-                </div>
-                {errors.duration && (
-                  <p id={errorId('duration')} className="text-sm text-red-600 dark:text-red-400">
-                    {errors.duration}
-                  </p>
-                )}
-              </div>
-
-              <fieldset className="space-y-1.5">
-                <legend className="text-sm font-medium">{t('outcome')}</legend>
-                <ToggleGroup
-                  type="single"
-                  size="sm"
-                  value={outcome}
-                  onValueChange={(value) => setOutcome(value as ContactOutcome | '')}
-                  aria-label={t('outcome')}
-                  className="flex-wrap justify-start"
-                >
-                  {CONTACT_OUTCOMES.map((value) => (
-                    <ToggleGroupItem key={value} value={value}>
-                      {tOutcome(value)}
-                    </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
-              </fieldset>
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground">{t('noAnswerHelp')}</p>
-          )}
-
-          {deals.length > 0 && (
+          {reached && (
             <div className="space-y-1.5">
-              <Label htmlFor={`${id}-deal`}>{t('deal')}</Label>
+              <Label htmlFor={`${id}-duration`}>{t('duration')}</Label>
+              <Input
+                ref={durationRef}
+                id={`${id}-duration`}
+                inputMode="numeric"
+                autoComplete="off"
+                value={duration}
+                className={cn(FIELD_HEIGHT, 'sm:w-32')}
+                aria-invalid={!!errors.duration}
+                aria-describedby={describedBy(errors.duration && `${id}-duration-error`)}
+                onChange={(event) => setDuration(event.target.value)}
+              />
+              {errorText('duration')}
+            </div>
+          )}
+        </div>
+
+        {reached ? (
+          <fieldset className="space-y-1.5">
+            <legend className="text-sm font-medium">{t('outcome')}</legend>
+            <ToggleGroup
+              type="single"
+              size="sm"
+              variant="outline"
+              value={outcome}
+              onValueChange={(value) => setOutcome(value as ContactOutcome | '')}
+              className="flex-wrap justify-start"
+            >
+              {CONTACT_OUTCOMES.map((value) => (
+                <ToggleGroupItem key={value} value={value} className={TOGGLE_ITEM}>
+                  {tOutcome(value)}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </fieldset>
+        ) : (
+          <p className="text-sm text-muted-foreground">{t('noAnswerHelp')}</p>
+        )}
+
+        {!dealsForbidden && (
+          <div className="space-y-1.5">
+            <Label htmlFor={`${id}-deal`}>{t('deal')}</Label>
+            {dealsQuery.isError ? (
+              <p className="text-sm text-muted-foreground">{t('dealLoadError')}</p>
+            ) : (
               <Select
                 value={dealId}
+                disabled={!dealsQuery.data || deals.length === 0}
                 onValueChange={(value) => {
+                  // Radix's hidden native select of a form can report '' while the options
+                  // register; "no deal" is NO_DEAL, never ''
+                  if (!value) return;
                   setDealId(value);
                   setDealTouched(true);
                 }}
               >
-                <SelectTrigger id={`${id}-deal`}>
-                  <SelectValue />
+                <SelectTrigger id={`${id}-deal`} className={FIELD_HEIGHT}>
+                  {!dealsQuery.data ? (
+                    <span className="text-muted-foreground">{t('dealLoading')}</span>
+                  ) : deals.length === 0 ? (
+                    <span className="text-muted-foreground">{t('dealNoDeals')}</span>
+                  ) : (
+                    <SelectValue />
+                  )}
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NO_DEAL}>{t('dealNone')}</SelectItem>
@@ -296,31 +384,51 @@ export function RecordActivityDialog({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-          )}
-
-          <div className="space-y-1.5">
-            <Label htmlFor={`${id}-note`}>{tContact('note')}</Label>
-            <Textarea
-              id={`${id}-note`}
-              value={note}
-              maxLength={CONTACT_NOTE_MAX}
-              rows={3}
-              placeholder={t('notePlaceholder')}
-              onChange={(event) => setNote(event.target.value)}
-            />
+            )}
           </div>
+        )}
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              {tCommon('cancel')}
-            </Button>
-            <Button type="submit" disabled={pending}>
-              {pending ? t('saving') : tContact('save')}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        <div className="space-y-1.5">
+          <Label htmlFor={`${id}-note`}>{tContact('note')}</Label>
+          <Textarea
+            id={`${id}-note`}
+            value={note}
+            maxLength={CONTACT_NOTE_MAX}
+            rows={3}
+            placeholder={t('notePlaceholder')}
+            onChange={(event) => setNote(event.target.value)}
+            onKeyDown={(event) => {
+              // Ctrl/⌘ + Enter records from the note
+              if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                event.preventDefault();
+                submit();
+              }
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Always visible, so a long form on a phone never hides the button */}
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t bg-background px-6 py-3">
+        {saveFailed && (
+          <p role="alert" className="mr-auto text-sm text-red-700 dark:text-red-400">
+            {tContact('error')}
+          </p>
+        )}
+        <Button
+          type="button"
+          variant="outline"
+          className={TAP_TARGET}
+          disabled={pending}
+          onClick={onDone}
+        >
+          {tCommon('cancel')}
+        </Button>
+        <Button type="submit" className={cn(TAP_TARGET, 'min-w-24')} disabled={pending}>
+          {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+          {pending ? t('saving') : tContact('save')}
+        </Button>
+      </div>
+    </form>
   );
 }

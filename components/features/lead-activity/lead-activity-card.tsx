@@ -175,10 +175,10 @@ export function ActivityItem({
   const t = useTranslations('leadActivity');
   const format = useFormatter();
   const locale = useLocale();
+  // A kind this screen does not know yet (a newer server) falls back to the contact icon
   const Icon =
-    event.kind === 'contact_recorded'
-      ? CONTACT_KIND_ICONS[event.contactKind]
-      : KIND_ICONS[event.kind];
+    (event.kind === 'contact_recorded' && CONTACT_KIND_ICONS[event.contactKind]) ||
+    KIND_ICONS[event.kind];
   const at = new Date(event.at);
   const dateOnly = event.kind === 'phase_reached';
 

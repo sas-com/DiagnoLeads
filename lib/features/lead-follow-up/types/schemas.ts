@@ -6,10 +6,11 @@ import { isoDateSchema } from '@/lib/features/lead-hearings/types/schemas';
 import { z } from 'zod';
 
 /**
- * What a contact record says happened: called and talked, emailed, called and nobody answered,
- * visited, met online (#554). Kept in step with lead_contact_logs_kind_check (lib/db/schema.ts)
+ * What a contact record says happened: called and talked, emailed, visited, met online (#554),
+ * called and nobody answered; in the order the screens list them ("no answer", which takes no
+ * details, last). Kept in step with lead_contact_logs_kind_check (lib/db/schema.ts)
  */
-export const CONTACT_KINDS = ['call', 'email', 'no_answer', 'visit', 'online_meeting'] as const;
+export const CONTACT_KINDS = ['call', 'email', 'visit', 'online_meeting', 'no_answer'] as const;
 export type ContactKind = (typeof CONTACT_KINDS)[number];
 /** The kinds the one-tap buttons record, now and without details (#136) */
 export const QUICK_CONTACT_KINDS = [

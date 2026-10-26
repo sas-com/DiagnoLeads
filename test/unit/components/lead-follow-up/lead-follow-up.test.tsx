@@ -16,7 +16,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 const ORG_ID = '660e8400-e29b-41d4-a716-446655440000';
 const LEAD_ID = '770e8400-e29b-41d4-a716-446655440001';
 
-type MutationOptions = { onSuccess?: (result: unknown) => void };
+type MutationOptions = { onSuccess?: (result: unknown, input: unknown) => void };
 
 const mocks = vi.hoisted(() => ({
   contacts: undefined as unknown,
@@ -37,11 +37,11 @@ vi.mock('@/lib/trpc/client', () => {
       isPending: false,
       mutate: (input: unknown) => {
         mocks.calls[name] = [...(mocks.calls[name] ?? []), input];
-        options.onSuccess?.(mocks.results[name]);
+        options.onSuccess?.(mocks.results[name], input);
       },
       mutateAsync: async (input: unknown) => {
         mocks.calls[name] = [...(mocks.calls[name] ?? []), input];
-        options.onSuccess?.(mocks.results[name]);
+        options.onSuccess?.(mocks.results[name], input);
         return mocks.results[name];
       },
     }),
@@ -168,7 +168,7 @@ describe('LeadContactBar', () => {
     const group = screen.getByRole('group', { name: '架空商事への連絡を記録' });
     expect(within(group).queryByRole('button', { name: '訪問した' })).not.toBeInTheDocument();
     await user.click(within(group).getByRole('button', { name: '活動を記録' }));
-    await user.click(screen.getByRole('radio', { name: 'つながらなかった' }));
+    await user.click(screen.getByRole('radio', { name: '不通' }));
     await user.type(screen.getByLabelText('メモ（任意）'), '午後にかけ直す');
     await user.click(screen.getByRole('button', { name: '記録する' }));
 
@@ -210,7 +210,9 @@ describe('LeadContactBar', () => {
     expect(screen.getByTestId('first-contact')).toHaveTextContent('初回連絡 2026/10/14 10:30');
     expect(screen.getByTestId('first-contact')).toHaveTextContent('不通 1回');
     expect(
-      screen.getByText(/最新：訪問した（2026\/10\/15 14:00）・全2件 · 90分 · 前進 · 担当 一郎 · 資料を送付/)
+      screen.getByText(
+        /最新：訪問した（2026\/10\/15 14:00・1時間30分・前進） · 担当 一郎 · 資料を送付 · 全2件/
+      )
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '電話した' })).not.toBeInTheDocument();
   });

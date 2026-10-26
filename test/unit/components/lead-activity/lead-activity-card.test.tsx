@@ -348,7 +348,7 @@ describe('contact records with their details (#554)', () => {
 
     expect(screen.getByText('オンライン商談')).toBeInTheDocument();
     expect(screen.getByText('45分')).toBeInTheDocument();
-    expect(screen.getByText('後退')).toBeInTheDocument();
+    expect(screen.getByText('結果：後退')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '商談：現行システムの調査' })).toHaveAttribute(
       'href',
       '/ja/deals/deal-1'

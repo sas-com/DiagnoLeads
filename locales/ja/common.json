@@ -4274,8 +4274,10 @@
       "record": "活動を記録",
       "loading": "活動を読み込み中…",
       "loadError": "活動を読み込めませんでした",
-      "empty": "この商談の活動はまだありません。リードの連絡のバーか、ここから記録できます。",
-      "more": "新しい{shown}件を表示しています（全{total}件）"
+      "empty": "この商談の活動はまだありません。",
+      "emptyCanEdit": "この商談の活動はまだありません。「活動を記録」から記録できます。",
+      "more": "新しい{shown}件を表示しています（全{total}件）。",
+      "seeAll": "リードの活動履歴で、すべて見る"
     }
   },
   "sidebarWidget": {
@@ -4571,6 +4573,7 @@
       "note": "メモ（任意）",
       "save": "記録する",
       "recorded": "「{kind}」を記録しました",
+      "recordedAt": "「{kind}」（{date}）を記録しました",
       "undo": "取り消す",
       "undone": "記録を取り消しました",
       "error": "記録できませんでした。もう一度お試しください",
@@ -4578,7 +4581,8 @@
       "loadError": "連絡の記録を読み込めませんでした",
       "firstContact": "初回連絡 {date}",
       "notContacted": "まだ連絡の記録がありません",
-      "latest": "最新：{kind}（{date}）・全{count}件",
+      "latest": "最新：{kind}（{details}）",
+      "total": "全{count}件",
       "noAnswerCount": "不通 {count}回"
     },
     "activity": {
@@ -4587,18 +4591,29 @@
       "title": "活動を記録",
       "description": "{lead}への連絡・訪問・オンライン商談を、日時と結果つきで記録します。",
       "kind": "種類",
-      "when": "日時",
-      "whenHelp": "日本時間。今より後の日時は記録できません",
+      "required": "必須",
+      "kindRequired": "種類を選んでください",
+      "kinds": {
+        "call": "電話",
+        "email": "メール",
+        "visit": "訪問",
+        "online_meeting": "オンライン商談",
+        "no_answer": "不通"
+      },
+      "when": "日時（日本時間）",
+      "whenHelp": "既定は今です。未来の日時は記録できません",
       "whenInvalid": "日付と時刻を入れてください",
       "whenFuture": "今より後の日時は記録できません",
       "whenTooEarly": "2000年より前の日時は記録できません",
-      "duration": "所要時間（任意）",
-      "minutes": "分",
-      "durationInvalid": "1〜{max}の整数（分）で入れてください",
+      "duration": "所要時間（分・任意）",
+      "durationInvalid": "1分〜24時間（{max}分）の間で、分を整数で入れてください",
       "outcome": "結果（任意）",
       "noAnswerHelp": "つながらなかったときは、所要時間と結果は記録しません",
       "deal": "商談（任意）",
-      "dealNone": "商談を選ばない",
+      "dealNone": "指定しない",
+      "dealLoading": "商談を読み込み中…",
+      "dealNoDeals": "このリードに商談はありません",
+      "dealLoadError": "商談を読み込めませんでした。商談を指定せずに記録できます",
       "dealOption": "{name}（{stage}）",
       "notePlaceholder": "例：現行の帳票を見せてもらった。次回は移行の範囲を相談する",
       "saving": "記録しています…"
@@ -4608,7 +4623,8 @@
       "no_change": "変化なし",
       "setback": "後退"
     },
-    "durationMinutes": "{minutes}分",
+    "outcomeLabel": "結果：{outcome}",
+    "duration": "{hours, plural, =0 {{minutes}分} other {{minutes, plural, =0 {{hours}時間} other {{hours}時間{minutes}分}}}}",
     "dealLink": "商談：{name}",
     "tasks": {
       "title": "次の行動",

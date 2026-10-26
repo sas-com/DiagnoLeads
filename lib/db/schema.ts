@@ -1118,8 +1118,11 @@ export const leadContactLogs = pgTable(
     ),
     // For the ON DELETE CASCADE of the lead
     index('lead_contact_logs_lead_idx').on(table.leadId),
-    // The activities of a deal, newest first (the deal page), and the ON DELETE SET NULL
-    index('lead_contact_logs_deal_contacted_idx').on(table.dealId, table.contactedAt),
+    // The activities of a deal, newest first (the deal page), and the ON DELETE SET NULL. Most
+    // records (the one-tap ones) have no deal, so only those with one are indexed
+    index('lead_contact_logs_deal_contacted_idx')
+      .on(table.dealId, table.contactedAt)
+      .where(sql`${table.dealId} is not null`),
     check(
       'lead_contact_logs_kind_check',
       sql`${table.kind} in ('call', 'email', 'no_answer', 'visit', 'online_meeting')`

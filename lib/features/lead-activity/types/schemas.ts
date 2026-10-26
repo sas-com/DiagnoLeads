@@ -233,7 +233,6 @@ export type ContactRecordedEvent = Extract<LeadActivityEvent, { kind: 'contact_r
 
 /** The contact records of a deal (#554): the latest DEAL_ACTIVITIES_LIMIT of total */
 export interface DealActivityPage {
-  leadId: string;
   items: ContactRecordedEvent[];
   total: number;
 }

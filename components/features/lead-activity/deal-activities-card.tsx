@@ -1,12 +1,15 @@
 'use client';
 
+import { TAP_TARGET } from '@/components/common/tap-target';
 import { RecordActivityDialog } from '@/components/features/lead-follow-up/record-activity-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { trpc } from '@/lib/trpc/client';
+import { cn } from '@/lib/utils';
 import { Loader2, NotebookPen } from 'lucide-react';
-import { useNow, useTranslations } from 'next-intl';
+import { useLocale, useNow, useTranslations } from 'next-intl';
+import Link from 'next/link';
 import { useState } from 'react';
 import { ActivityItem } from './lead-activity-card';
 
@@ -30,6 +33,7 @@ export function DealActivitiesCard({
 }: DealActivitiesCardProps) {
   const t = useTranslations('leadActivity.dealActivities');
   const tCommon = useTranslations('common');
+  const locale = useLocale();
   const now = useNow({ updateInterval: 60_000 });
   const [recordOpen, setRecordOpen] = useState(false);
   const query = trpc.leadActivity.forDeal.useQuery(
@@ -48,7 +52,7 @@ export function DealActivitiesCard({
             type="button"
             variant="outline"
             size="sm"
-            className="ml-auto"
+            className={cn('ml-auto', TAP_TARGET)}
             onClick={() => setRecordOpen(true)}
           >
             <NotebookPen className="mr-1 h-4 w-4" aria-hidden="true" />
@@ -70,7 +74,7 @@ export function DealActivitiesCard({
           {t('loading')}
         </p>
       ) : data.items.length === 0 ? (
-        <p className="text-sm text-gray-500">{t('empty')}</p>
+        <p className="text-sm text-gray-500">{data.canEdit ? t('emptyCanEdit') : t('empty')}</p>
       ) : (
         <>
           <ol className="space-y-4">
@@ -79,8 +83,14 @@ export function DealActivitiesCard({
             ))}
           </ol>
           {data.total > data.items.length && (
-            <p className="mt-3 text-xs text-gray-500">
-              {t('more', { shown: data.items.length, total: data.total })}
+            <p className="mt-3 text-sm text-gray-500">
+              {t('more', { shown: data.items.length, total: data.total })}{' '}
+              <Link
+                href={`/${locale}/leads/${leadId}?tab=activity`}
+                className="text-blue-600 underline underline-offset-2 hover:text-blue-800 dark:text-blue-400"
+              >
+                {t('seeAll')}
+              </Link>
             </p>
           )}
         </>

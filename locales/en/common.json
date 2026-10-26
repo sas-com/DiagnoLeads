@@ -4274,8 +4274,10 @@
       "record": "Record an activity",
       "loading": "Loading the activity…",
       "loadError": "The activity could not be loaded",
-      "empty": "No activity on this deal yet. Record one here or from the lead's contact bar.",
-      "more": "Showing the latest {shown} of {total}"
+      "empty": "No activity on this deal yet.",
+      "emptyCanEdit": "No activity on this deal yet. Record one with \"Record an activity\".",
+      "more": "Showing the latest {shown} of {total}.",
+      "seeAll": "See all in the lead's activity"
     }
   },
   "sidebarWidget": {
@@ -4571,6 +4573,7 @@
       "note": "Note (optional)",
       "save": "Record",
       "recorded": "Recorded \"{kind}\"",
+      "recordedAt": "Recorded \"{kind}\" ({date})",
       "undo": "Undo",
       "undone": "The record was removed",
       "error": "Could not record it. Please try again",
@@ -4578,7 +4581,8 @@
       "loadError": "Could not load the contact log",
       "firstContact": "First contact {date}",
       "notContacted": "No contact recorded yet",
-      "latest": "Latest: {kind} ({date}) · {count} in total",
+      "latest": "Latest: {kind} ({details})",
+      "total": "{count} in total",
       "noAnswerCount": "No answer ×{count}"
     },
     "activity": {
@@ -4587,18 +4591,29 @@
       "title": "Record an activity",
       "description": "Record a contact, a visit or an online meeting with {lead}, with its time and outcome.",
       "kind": "What happened",
-      "when": "When",
-      "whenHelp": "Japan time. A time later than now cannot be recorded",
+      "required": "Required",
+      "kindRequired": "Choose what happened",
+      "kinds": {
+        "call": "Call",
+        "email": "Email",
+        "visit": "Visit",
+        "online_meeting": "Online meeting",
+        "no_answer": "No answer"
+      },
+      "when": "When (Japan time)",
+      "whenHelp": "Now by default. A time later than now cannot be recorded",
       "whenInvalid": "Enter a date and a time",
       "whenFuture": "A time later than now cannot be recorded",
       "whenTooEarly": "A time before 2000 cannot be recorded",
-      "duration": "Duration (optional)",
-      "minutes": "minutes",
-      "durationInvalid": "Enter whole minutes from 1 to {max}",
+      "duration": "Duration in minutes (optional)",
+      "durationInvalid": "Enter whole minutes from 1 to {max} (24 hours)",
       "outcome": "Outcome (optional)",
       "noAnswerHelp": "Nobody was reached, so no duration or outcome is recorded",
       "deal": "Deal (optional)",
-      "dealNone": "No deal",
+      "dealNone": "None",
+      "dealLoading": "Loading the deals…",
+      "dealNoDeals": "This lead has no deals",
+      "dealLoadError": "The deals could not be loaded. You can record without a deal",
       "dealOption": "{name} ({stage})",
       "notePlaceholder": "e.g. They showed us their current forms. Next time we discuss the scope",
       "saving": "Recording…"
@@ -4608,7 +4623,8 @@
       "no_change": "No change",
       "setback": "Set back"
     },
-    "durationMinutes": "{minutes} min",
+    "outcomeLabel": "Outcome: {outcome}",
+    "duration": "{hours, plural, =0 {{minutes} min} other {{minutes, plural, =0 {{hours} hr} other {{hours} hr {minutes} min}}}}",
     "dealLink": "Deal: {name}",
     "tasks": {
       "title": "Next actions",

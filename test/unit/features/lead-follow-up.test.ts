@@ -3,6 +3,7 @@
  * a hearing and the input schemas. The DB behaviour is covered by
  * test/unit/integration/lead-follow-up.db.test.ts and lead-contact-activities.db.test.ts.
  */
+import { updateDealSchema } from '@/lib/features/deals/types/schemas';
 import { nextMeetingDateOf, sortTasks, taskDue } from '@/lib/features/lead-follow-up/due';
 import {
   CONTACT_KINDS,
@@ -114,6 +115,12 @@ describe('input schemas', () => {
     );
     expect(recordContactSchema.safeParse({ ...base, durationMinutes: 3 }).success).toBe(false);
     expect(recordContactSchema.safeParse({ ...base, outcome: 'no_change' }).success).toBe(false);
+  });
+
+  it("relies on a deal never moving to another lead (a record's deal is one of its lead's)", () => {
+    // Moving a deal to another lead would leave its records on the old lead (decision
+    // 2026-10-25-contact-visits-and-meetings): decide what happens to them first
+    expect(updateDealSchema.shape).not.toHaveProperty('leadId');
   });
 
   it('keeps the one-tap kinds and the kinds that end the wait for the first contact apart', () => {

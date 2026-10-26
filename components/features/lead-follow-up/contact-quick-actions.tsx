@@ -67,12 +67,16 @@ export function ContactQuickActions({
           </Button>
         );
       })}
+      {!compact && (
+        <span aria-hidden="true" className="mx-0.5 hidden h-6 w-px bg-gray-300 sm:block" />
+      )}
       <Button
         type="button"
-        variant="ghost"
+        variant="outline"
         size="sm"
         className={size}
         aria-label={compact ? tActivity('openFor', { lead: leadLabel }) : undefined}
+        title={compact ? tActivity('open') : undefined}
         disabled={pending}
         onClick={() => setDialogOpen(true)}
       >

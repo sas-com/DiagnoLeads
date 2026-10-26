@@ -51,7 +51,8 @@ const visit = {
   note: '現行の帳票を見せてもらった',
   durationMinutes: 90,
   outcome: 'advanced',
-  deal: { id: DEAL_ID, name: 'Access の移行' },
+  // Every record of the deal page is of that deal, so the server names none
+  deal: null,
   first: false,
 };
 
@@ -75,17 +76,14 @@ beforeEach(() => {
 });
 
 describe('DealActivitiesCard', () => {
-  it("lists the deal's records with their duration, outcome and deal", () => {
+  it("lists the deal's records with their duration and outcome", () => {
     renderCard();
 
     expect(screen.getByRole('heading', { name: 'この商談の活動' })).toBeInTheDocument();
     expect(screen.getByText('訪問')).toBeInTheDocument();
-    expect(screen.getByText('90分')).toBeInTheDocument();
-    expect(screen.getByText('前進')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '商談：Access の移行' })).toHaveAttribute(
-      'href',
-      `/ja/deals/${DEAL_ID}`
-    );
+    expect(screen.getByText('1時間30分')).toBeInTheDocument();
+    expect(screen.getByText('結果：前進')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /^商談：/ })).not.toBeInTheDocument();
     expect(screen.getByText('現行の帳票を見せてもらった')).toBeInTheDocument();
     expect(screen.getByText(/営業 一郎/)).toBeInTheDocument();
     expect(screen.queryByText(/新しい.*件を表示/)).not.toBeInTheDocument();
@@ -94,7 +92,11 @@ describe('DealActivitiesCard', () => {
   it('says how many there are when only the latest are shown', () => {
     mocks.forDeal = { data: { leadId: LEAD_ID, items: [visit], total: 51, canEdit: true } };
     renderCard();
-    expect(screen.getByText('新しい1件を表示しています（全51件）')).toBeInTheDocument();
+    expect(screen.getByText(/新しい1件を表示しています（全51件）。/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'リードの活動履歴で、すべて見る' })).toHaveAttribute(
+      'href',
+      `/ja/leads/${LEAD_ID}?tab=activity`
+    );
   });
 
   it('records an activity for this deal of its lead', async () => {
@@ -114,7 +116,8 @@ describe('DealActivitiesCard', () => {
   it('offers no recording to read-only roles, and says when there is nothing yet', () => {
     mocks.forDeal = { data: { leadId: LEAD_ID, items: [], total: 0, canEdit: false } };
     renderCard();
-    expect(screen.getByText(/この商談の活動はまだありません/)).toBeInTheDocument();
+    // Nothing to record from here for a read-only role
+    expect(screen.getByText('この商談の活動はまだありません。')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '活動を記録' })).not.toBeInTheDocument();
   });
 

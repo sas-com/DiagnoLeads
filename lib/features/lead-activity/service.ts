@@ -2,8 +2,9 @@
  * Lead activity timeline (Refs #101)
  *
  * Built from records that already exist; there is no table of its own. Every query is scoped by
- * organizationId AND leadId, and the lead must belong to the organization (NOT_FOUND
- * otherwise). Permission checks are done by the router.
+ * organizationId AND leadId (the deal page's list, by organizationId and the deal's lead and
+ * id), and the lead or deal must belong to the organization (NOT_FOUND otherwise). Permission
+ * checks are done by the router.
  *
  * Where each kind comes from:
  * - lead_created: leads.created_at. Source "web_diagnosis" when a diagnosis submission created
@@ -20,8 +21,9 @@
  *   update is known)
  * - comment: lead_comments of every type
  * - lead_updated: audit_logs 'update' rows of the lead (changed fields only, with the actor)
- * - contact_recorded: lead_contact_logs ("called", "emailed", "could not reach", #136); the
- *   earliest one is marked as the first contact
+ * - contact_recorded: lead_contact_logs ("called", "emailed", "could not reach", "visited", "met
+ *   online", #136, #554) with the duration, outcome and deal; the earliest one is marked as the
+ *   first contact
  * - mql_qualified / sql_decided / phase_reached: from the lead's own date columns, unless an
  *   audit row records the same change (MQL / SQL: an audit row with that value at exactly that
  *   time; phase: an audit row setting that phase on that day in Japan). Those are shown as
@@ -374,7 +376,7 @@ async function actorsOf(
   return (id) => (id && names.has(id) ? { id, name: names.get(id) as string } : null);
 }
 
-/** What the timeline shows of a contact record, with the name of its deal (#554) */
+/** What the timeline shows of a contact record (#136, #554) */
 const contactColumns = {
   id: leadContactLogs.id,
   kind: leadContactLogs.kind,
@@ -383,8 +385,6 @@ const contactColumns = {
   contactedAt: leadContactLogs.contactedAt,
   durationMinutes: leadContactLogs.durationMinutes,
   outcome: leadContactLogs.outcome,
-  dealId: deals.id,
-  dealName: deals.name,
 };
 
 /** The deal of a contact record, of the same organization */
@@ -399,14 +399,15 @@ interface ContactRow {
   contactedAt: Date;
   durationMinutes: number | null;
   outcome: string | null;
-  dealId: string | null;
-  dealName: string | null;
+  /** The deal it was about, joined on the lead's timeline only */
+  dealId?: string | null;
+  dealName?: string | null;
 }
 
 function contactEventOf(
   row: ContactRow,
   actor: LeadActivityActor | null,
-  options: { first: boolean; hideDeals: boolean }
+  options: { first: boolean; hideDeals?: boolean }
 ): ContactRecordedEvent {
   return {
     id: `contact:${row.id}`,
@@ -419,7 +420,7 @@ function contactEventOf(
     durationMinutes: row.durationMinutes,
     outcome: row.outcome as ContactOutcome | null,
     deal:
-      !options.hideDeals && row.dealId && row.dealName !== null
+      !options.hideDeals && row.dealId && typeof row.dealName === 'string'
         ? { id: row.dealId, name: row.dealName }
         : null,
     first: options.first,
@@ -428,8 +429,9 @@ function contactEventOf(
 
 /**
  * The contact records of one deal, newest first (the deal page, #554): the latest
- * DEAL_ACTIVITIES_LIMIT and how many there are. The deal must belong to the organization
- * (NOT_FOUND otherwise); who may read deals is checked by the router
+ * DEAL_ACTIVITIES_LIMIT and how many there are. Each is of this deal, so it names no deal. The
+ * deal must belong to the organization (NOT_FOUND otherwise); who may read deals is checked by
+ * the router
  */
 export async function listDealActivities(
   db: Executor,
@@ -452,7 +454,6 @@ export async function listDealActivities(
     db
       .select(contactColumns)
       .from(leadContactLogs)
-      .leftJoin(deals, contactDealJoin(organizationId))
       .where(scope)
       .orderBy(desc(leadContactLogs.contactedAt), desc(leadContactLogs.id))
       .limit(DEAL_ACTIVITIES_LIMIT),
@@ -462,11 +463,8 @@ export async function listDealActivities(
     rows.flatMap((row) => (row.createdBy ? [row.createdBy] : []))
   );
   return {
-    leadId: deal.leadId,
     total: Number(totals?.total ?? 0),
-    items: rows.map((row) =>
-      contactEventOf(row, actor(row.createdBy), { first: false, hideDeals: false })
-    ),
+    items: rows.map((row) => contactEventOf(row, actor(row.createdBy), { first: false })),
   };
 }
 
@@ -573,7 +571,7 @@ export async function listLeadActivities(
         .orderBy(desc(auditLogs.createdAt))
         .limit(PER_SOURCE_LIMIT),
       db
-        .select(contactColumns)
+        .select({ ...contactColumns, dealId: deals.id, dealName: deals.name })
         .from(leadContactLogs)
         .leftJoin(deals, contactDealJoin(organizationId))
         .where(
