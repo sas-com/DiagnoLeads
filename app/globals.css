@@ -330,13 +330,42 @@
 /*
  * AX migration site, styled after maru2-dx.com (fonts come from next/font in ax-site/fonts.ts).
  * Inline: next/font defines --font-noto-sans-jp / --font-lato on the site's root element, not on
- * :root, so the utilities must reference them directly. A theme variable would be computed on
- * :root, where they are undefined, and make the whole font-family invalid. The var() fallbacks
- * keep it valid where the next/font class is absent (step-progress also renders outside the site).
+ * :root, so the utilities and --ax-font-ja (set on that element, .ax-site) must reference them
+ * directly. A theme variable would be computed on :root, where they are undefined, and make the
+ * whole font-family invalid. The var() fallbacks keep it valid where the next/font class is
+ * absent (step-progress also renders outside the site).
+ *
+ * The Japanese font depends on the device (#510, decision 2026-10-26-ax-device-font-on-mobile):
+ * phones and touch tablets below 1024px take their own; from 1024px, or with a mouse (so a
+ * desktop keeps it in a narrow window and in print), Noto Sans JP as on maru2-dx.com. Noto Sans
+ * JP comes in 27 to 40 unicode-range files (571 to 849 KiB) a page; Lighthouse's mobile estimate
+ * counts them as render-blocking once they finish before the first paint, and their swap shifted
+ * the hero (CLS 0.219). --ax-font-device holds names only, so it can live on :root. It must not
+ * name 'Noto Sans JP' or 'Lato': next/font defines its @font-face rules under those names, so
+ * naming them downloads the web fonts. Hiragino Kaku Gothic ProN comes first: it has W3 and W6
+ * only, so bold is W6 like the Bold of Noto Sans JP, where Hiragino Sans may pick a heavier one.
+ * Android takes its font from sans-serif and lang="ja" (Noto Sans CJK JP on most phones).
  */
+:root {
+  --ax-font-device:
+    'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Noto Sans CJK JP', 'Yu Gothic UI', 'Yu Gothic',
+    Meiryo;
+}
+
+.ax-site {
+  --ax-font-ja: var(--ax-font-device);
+}
+
+/* 1024px is --breakpoint-lg (lg:) */
+@media (min-width: 1024px), (hover: hover) and (pointer: fine) {
+  .ax-site {
+    --ax-font-ja: var(--font-noto-sans-jp, 'Noto Sans JP'), 'Noto Sans JP';
+  }
+}
+
 @theme inline {
-  --font-ax: var(--font-noto-sans-jp, 'Noto Sans JP'), 'Noto Sans JP', sans-serif;
-  --font-ax-latin: var(--font-lato, 'Lato'), 'Lato', var(--font-noto-sans-jp, 'Noto Sans JP'), sans-serif;
+  --font-ax: var(--ax-font-ja, var(--ax-font-device)), sans-serif;
+  --font-ax-latin: var(--font-lato, 'Lato'), 'Lato', var(--ax-font-ja, var(--ax-font-device)), sans-serif;
 }
 
 /* shadcn/ui text tokens (text-foreground, text-muted-foreground, ring-ring), switched for dark
