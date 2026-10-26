@@ -257,8 +257,15 @@
     {
       "idx": 36,
       "version": "7",
-      "when": 1792972682221,
-      "tag": "0036_activity_visits",
+      "when": 1792977992968,
+      "tag": "0036_purple_sasquatch",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1793027265524,
+      "tag": "0037_activity_visits",
       "breakpoints": true
     }
   ]

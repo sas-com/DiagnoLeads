@@ -1,5 +1,5 @@
 {
-  "id": "e2af029c-d9ee-4179-ba64-68b55f0e67cc",
+  "id": "13999891-d37a-467a-954e-79a5aebcf27b",
   "prevId": "edf9ff77-518b-4c5a-a629-ae34ef81b212",
   "version": "7",
   "dialect": "postgresql",
@@ -3213,6 +3213,143 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.field_glossary": {
+      "name": "field_glossary",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "field_key": {
+          "name": "field_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "label_ja": {
+          "name": "label_ja",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "label_en": {
+          "name": "label_en",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description_ja": {
+          "name": "description_ja",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description_en": {
+          "name": "description_en",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "field_glossary_field_value_unique": {
+          "name": "field_glossary_field_value_unique",
+          "columns": [
+            {
+              "expression": "field_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "value",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"field_glossary\".\"value\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "field_glossary_field_unique": {
+          "name": "field_glossary_field_unique",
+          "columns": [
+            {
+              "expression": "field_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"field_glossary\".\"value\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "field_glossary_updated_by_users_id_fk": {
+          "name": "field_glossary_updated_by_users_id_fk",
+          "tableFrom": "field_glossary",
+          "tableTo": "users",
+          "columnsFrom": ["updated_by"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "field_glossary_value_check": {
+          "name": "field_glossary_value_check",
+          "value": "\"field_glossary\".\"value\" is null or btrim(\"field_glossary\".\"value\") <> ''"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.lead_comments": {
       "name": "lead_comments",
       "schema": "",
@@ -3389,24 +3526,6 @@
           "notNull": true,
           "default": "now()"
         },
-        "duration_minutes": {
-          "name": "duration_minutes",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "outcome": {
-          "name": "outcome",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deal_id": {
-          "name": "deal_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_by": {
           "name": "created_by",
           "type": "uuid",
@@ -3463,28 +3582,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "lead_contact_logs_deal_contacted_idx": {
-          "name": "lead_contact_logs_deal_contacted_idx",
-          "columns": [
-            {
-              "expression": "deal_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "contacted_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"lead_contact_logs\".\"deal_id\" is not null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -3506,15 +3603,6 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "lead_contact_logs_deal_id_deals_id_fk": {
-          "name": "lead_contact_logs_deal_id_deals_id_fk",
-          "tableFrom": "lead_contact_logs",
-          "tableTo": "deals",
-          "columnsFrom": ["deal_id"],
-          "columnsTo": ["id"],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
         "lead_contact_logs_created_by_users_id_fk": {
           "name": "lead_contact_logs_created_by_users_id_fk",
           "tableFrom": "lead_contact_logs",
@@ -3531,19 +3619,7 @@
       "checkConstraints": {
         "lead_contact_logs_kind_check": {
           "name": "lead_contact_logs_kind_check",
-          "value": "\"lead_contact_logs\".\"kind\" in ('call', 'email', 'no_answer', 'visit', 'online_meeting')"
-        },
-        "lead_contact_logs_outcome_check": {
-          "name": "lead_contact_logs_outcome_check",
-          "value": "\"lead_contact_logs\".\"outcome\" in ('advanced', 'no_change', 'setback')"
-        },
-        "lead_contact_logs_duration_check": {
-          "name": "lead_contact_logs_duration_check",
-          "value": "\"lead_contact_logs\".\"duration_minutes\" between 1 and 1440"
-        },
-        "lead_contact_logs_no_answer_check": {
-          "name": "lead_contact_logs_no_answer_check",
-          "value": "\"lead_contact_logs\".\"kind\" <> 'no_answer' or (\"lead_contact_logs\".\"duration_minutes\" is null and \"lead_contact_logs\".\"outcome\" is null)"
+          "value": "\"lead_contact_logs\".\"kind\" in ('call', 'email', 'no_answer')"
         }
       },
       "isRLSEnabled": false
