@@ -2774,31 +2774,44 @@ export const qrCampaigns = pgTable('qr_campaigns', {
 /**
  * QR Scans Table
  * Tracks individual QR code scans for analytics
+ *
+ * Read and write it with the columns named (select({ ... }), an insert's own column list),
+ * never select() or a relational query of all columns: session_id, converted and lead_id are
+ * dropped in stage 2 of #702, and the code that runs between that migration and its merge must
+ * not name them.
  */
-export const qrScans = pgTable('qr_scans', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  campaignId: uuid('campaign_id')
-    .notNull()
-    .references(() => qrCampaigns.id, { onDelete: 'cascade' }),
-  organizationId: uuid('organization_id')
-    .notNull()
-    .references(() => organizations.id, { onDelete: 'cascade' }),
-  /** Hashed IP address for privacy */
-  ipAddressHash: text('ip_address_hash'),
-  /** User agent string */
-  userAgent: text('user_agent'),
-  /** Device type */
-  deviceType: text('device_type'), // mobile, tablet, desktop
-  /** Location data (from IP geolocation) */
-  location: jsonb('location').$type<{ country?: string; city?: string }>(),
-  /** Session ID to track conversions */
-  sessionId: uuid('session_id'),
-  /** Did this scan result in a lead? */
-  converted: boolean('converted').default(false).notNull(),
-  /** Lead ID if converted */
-  leadId: uuid('lead_id').references(() => leads.id, { onDelete: 'set null' }),
-  scannedAt: timestamp('scanned_at').defaultNow().notNull(),
-});
+export const qrScans = pgTable(
+  'qr_scans',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => qrCampaigns.id, { onDelete: 'cascade' }),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    /** Hashed IP address for privacy */
+    ipAddressHash: text('ip_address_hash'),
+    /** User agent string */
+    userAgent: text('user_agent'),
+    /** Device type */
+    deviceType: text('device_type'), // mobile, tablet, desktop
+    /** Location data (from IP geolocation) */
+    location: jsonb('location').$type<{ country?: string; city?: string }>(),
+    // Unused (a lead made from a scan is counted by its short code, #700) and dropped in stage 2
+    // of #702. Kept here until then, so db:generate does not emit the drop early
+    sessionId: uuid('session_id'),
+    converted: boolean('converted').default(false).notNull(),
+    leadId: uuid('lead_id').references(() => leads.id, { onDelete: 'set null' }),
+    scannedAt: timestamp('scanned_at').defaultNow().notNull(),
+  },
+  (table) => [
+    // The scans of a campaign: getCampaignStats (campaignScanStats) and the cascade of a campaign
+    // delete. The organization's own scans need none (#702): the stats name the campaign too, and
+    // an organization delete, rare, reads the table once
+    index('qr_scans_campaign_id_idx').on(table.campaignId),
+  ]
+);
 
 /**
  * QR Campaigns Relations
@@ -2826,10 +2839,6 @@ export const qrScansRelations = relations(qrScans, ({ one }) => ({
   organization: one(organizations, {
     fields: [qrScans.organizationId],
     references: [organizations.id],
-  }),
-  lead: one(leads, {
-    fields: [qrScans.leadId],
-    references: [leads.id],
   }),
 }));
 
