@@ -243,8 +243,8 @@ export interface MorningRunResult {
  * not stop the others.
  *
  * The time is checked before each lead and before each further page. The page reads and the
- * count of the leads left are not bounded by it: leads.updated_at has no index (adding one
- * needs a migration), so they scan the table. At today's number of leads they take little.
+ * count of the leads left are not bounded by it; they read the index on leads (updated_at, id)
+ * (leads_updated_at_id_idx, #574), backwards for newest first, rather than scan the table.
  */
 export async function recomputeRecentlyUpdated(
   db: Database,

@@ -5,7 +5,12 @@
  */
 import { diagnosisSubmissionSchema } from '@/lib/features/diagnosis-builder/submission-service';
 import { axMigrationSubmissionSchema } from '@/lib/features/diagnostics/ax-migration/submission-service';
-import { PHONE_INPUT_MAX_LENGTH, PHONE_MAX_LENGTH } from '@/lib/features/diagnostics/types/contact';
+import {
+  PHONE_INPUT_MAX_LENGTH,
+  PHONE_MAX_LENGTH,
+  contactOverLimit,
+  contactSchema,
+} from '@/lib/features/diagnostics/types/contact';
 import { LEAD_TEXT_MAX_LENGTH } from '@/lib/features/leads/types/schemas';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { z } from 'zod';
@@ -143,5 +148,30 @@ describe('the builder consent version (#754)', () => {
     expect(parse('\ud800').success).toBe(false);
     expect(parse('v1\udc00').success).toBe(false);
     expect(parse('2026-10-01').success).toBe(true);
+  });
+});
+
+describe('contactOverLimit, the check of the forms (#714)', () => {
+  const cases = [
+    { field: 'company', at: 'あ'.repeat(200), over: 'あ'.repeat(201), max: 200 },
+    { field: 'name', at: 'あ'.repeat(100), over: 'あ'.repeat(101), max: 100 },
+    { field: 'email', at: `${'a'.repeat(243)}@example.jp`, over: `${'a'.repeat(244)}@example.jp`, max: 254 },
+    { field: 'phone', at: '0'.repeat(30), over: '0'.repeat(31), max: PHONE_MAX_LENGTH },
+  ] as const;
+
+  it.each(cases)('agrees with contactSchema at the limit of the $field', ({ field, at, over, max }) => {
+    expect(contactOverLimit(field, at)).toBeNull();
+    expect(contactSchema.safeParse({ ...contact, [field]: at }).success).toBe(true);
+    expect(contactOverLimit(field, over)).toBe(max);
+    expect(contactSchema.safeParse({ ...contact, [field]: over }).success).toBe(false);
+  });
+
+  it('counts after trim, and the phone after normalizePhone, as the API does', () => {
+    expect(contactOverLimit('company', ` ${'あ'.repeat(200)} `)).toBeNull();
+    // Ten "⑴" are 30 characters as "(1)" under NFKC, eleven are 33
+    expect(contactOverLimit('phone', PARENTHESIZED_ONE.repeat(10))).toBeNull();
+    expect(contactOverLimit('phone', PARENTHESIZED_ONE.repeat(11))).toBe(PHONE_MAX_LENGTH);
+    // Spaces only: the form leaves the phone out of the send, so nothing is over
+    expect(contactOverLimit('phone', ' '.repeat(PHONE_INPUT_MAX_LENGTH + 1))).toBeNull();
   });
 });
