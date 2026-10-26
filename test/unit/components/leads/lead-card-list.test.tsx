@@ -7,7 +7,7 @@ import { LeadTable } from '@/components/features/leads/lead-table';
 import type { Lead } from '@/lib/db/schema';
 import type { LeadListSort } from '@/lib/features/leads/list-query';
 import messages from '@/locales/ja/common.json';
-import { act, configure, render, screen, within } from '@testing-library/react';
+import { act, cleanup, configure, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import type { ComponentProps } from 'react';
@@ -64,7 +64,13 @@ beforeEach(() => {
   setWidth(390);
 });
 
-afterEach(() => setWidth(1024));
+// Unmount first: this hook runs before the cleanup of test/setup.ts, and a resize with the list
+// still mounted rendered it again as the desktop table, outside act (up to ~1,200 act warnings
+// per test, #711)
+afterEach(() => {
+  cleanup();
+  setWidth(1024);
+});
 
 const makeLead = (id: string, overrides: Record<string, unknown> = {}) =>
   ({
@@ -339,9 +345,10 @@ describe('MQL level badges in the list (#196)', () => {
     setWidth(1440);
     renderList({ leads, columnPreferences: { mqlQualifiedAt: true } });
     const row = (name: string) => {
-      // The company's own cell (the row's checkbox is named after the company too, #431)
-      const cell = screen.getByRole('cell', { name });
-      const tr = cell.closest('tr');
+      // The row of the company's own cell, found by its text (the row's checkbox is named after
+      // the company too, #431). Not getByRole('cell', { name }): it names every cell of the
+      // table, 1 to 2.5 s a call on a loaded machine (#711)
+      const tr = screen.getByText(name).closest('tr');
       if (!tr) throw new Error('no row');
       return within(tr);
     };

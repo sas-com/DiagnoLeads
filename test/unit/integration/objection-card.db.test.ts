@@ -12,6 +12,7 @@
 import type { Database } from '@/lib/db/client';
 import * as schema from '@/lib/db/schema';
 import {
+  type OrganizationRole,
   axSalesPlaybooks,
   diagnosticSubmissions,
   leadHearings,
@@ -44,7 +45,7 @@ describe.skipIf(!url)('objection card (PostgreSQL)', () => {
   // biome-ignore lint/suspicious/noExplicitAny: tRPC callers
   const callers: Record<string, any> = {};
 
-  async function member(organizationId: string, role: string) {
+  async function member(organizationId: string, role: OrganizationRole) {
     const [user] = await pg
       .insert(users)
       .values({ email: `objection-${role}-${unique()}@example.com`, name: role })

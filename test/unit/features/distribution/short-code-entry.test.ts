@@ -9,11 +9,13 @@ import {
   isCampaignOpen,
   qrEntryRedirectPath,
 } from '@/lib/features/distribution/short-code-entry';
-import { SHORT_CODE_PATTERN } from '@/lib/features/distribution/types';
+import { QR_CODE_PARAM, SHORT_CODE_PATTERN } from '@/lib/features/distribution/types';
 import { describe, expect, it, vi } from 'vitest';
 
 const NOW = new Date('2026-10-24T10:00:00Z');
 const UTM = { source: 'qrcode', medium: 'offline', campaign: 'fair-2026', content: 'booth' };
+/** The campaign as the entry passes it on: its own short code and UTM parameters */
+const CAMPAIGN = { shortCode: 'AbCd2345', utm: UTM };
 
 describe('isCampaignOpen', () => {
   it('answers while the campaign is active and has no end', () => {
@@ -39,27 +41,33 @@ describe('isCampaignOpen', () => {
 });
 
 describe('qrEntryRedirectPath', () => {
-  it("sends to the AX diagnosis with the campaign's UTM parameters when there is no published diagnosis", () => {
-    expect(qrEntryRedirectPath(UTM, null)).toBe(
-      '/ja/ax-diagnosis?utm_source=qrcode&utm_medium=offline&utm_campaign=fair-2026&utm_content=booth'
+  it("sends to the AX diagnosis with the campaign's UTM parameters and short code when there is no published diagnosis", () => {
+    expect(qrEntryRedirectPath(CAMPAIGN, null)).toBe(
+      '/ja/ax-diagnosis?utm_source=qrcode&utm_medium=offline&utm_campaign=fair-2026&utm_content=booth&qr=AbCd2345'
     );
   });
 
-  it('sends to the public page of the published builder diagnosis', () => {
-    expect(qrEntryRedirectPath(UTM, 'cloud-readiness')).toBe(
-      '/ja/d/cloud-readiness?utm_source=qrcode&utm_medium=offline&utm_campaign=fair-2026&utm_content=booth'
+  it('sends to the public page of the published builder diagnosis, with the short code too (#700)', () => {
+    expect(qrEntryRedirectPath(CAMPAIGN, 'cloud-readiness')).toBe(
+      '/ja/d/cloud-readiness?utm_source=qrcode&utm_medium=offline&utm_campaign=fair-2026&utm_content=booth&qr=AbCd2345'
     );
+  });
+
+  it("passes on the campaign's own short code as it is stored, case and all (#700)", () => {
+    const path = qrEntryRedirectPath({ ...CAMPAIGN, shortCode: 'zZ9yX8wV' }, null);
+    expect(new URL(path, 'https://app.example').searchParams.get(QR_CODE_PARAM)).toBe('zZ9yX8wV');
+    expect(QR_CODE_PARAM).toBe('qr');
   });
 
   it('leaves out the empty UTM parameters', () => {
-    expect(qrEntryRedirectPath({ ...UTM, campaign: null, content: '' }, null)).toBe(
-      '/ja/ax-diagnosis?utm_source=qrcode&utm_medium=offline'
+    expect(qrEntryRedirectPath({ ...CAMPAIGN, utm: { ...UTM, campaign: null, content: '' } }, null)).toBe(
+      '/ja/ax-diagnosis?utm_source=qrcode&utm_medium=offline&qr=AbCd2345'
     );
   });
 
   it('keeps the parameters in the query, whatever they contain', () => {
     const path = qrEntryRedirectPath(
-      { ...UTM, campaign: '展示会 2026&ref=x', content: '/../admin?' },
+      { ...CAMPAIGN, utm: { ...UTM, campaign: '展示会 2026&ref=x', content: '/../admin?' } },
       null
     );
     const url = new URL(path, 'https://app.example');
@@ -67,20 +75,22 @@ describe('qrEntryRedirectPath', () => {
     expect(url.searchParams.get('utm_campaign')).toBe('展示会 2026&ref=x');
     expect(url.searchParams.get('utm_content')).toBe('/../admin?');
     expect(url.searchParams.has('ref')).toBe(false);
+    // A UTM value cannot set the short code either
+    expect(url.searchParams.getAll(QR_CODE_PARAM)).toEqual(['AbCd2345']);
   });
 
   it('is always a path of this app, so the visitor stays on the host', () => {
     for (const slug of [null, 'cloud-readiness']) {
-      const path = qrEntryRedirectPath(UTM, slug);
+      const path = qrEntryRedirectPath(CAMPAIGN, slug);
       expect(path.startsWith('/ja/')).toBe(true);
       expect(new URL(path, 'https://app.example').host).toBe('app.example');
     }
     // A slug is a path segment, never more
-    expect(qrEntryRedirectPath(UTM, '/evil.example')).toMatch(/^\/ja\/d\/%2Fevil\.example\?/);
+    expect(qrEntryRedirectPath(CAMPAIGN, '/evil.example')).toMatch(/^\/ja\/d\/%2Fevil\.example\?/);
   });
 
   it('uses the language it is given', () => {
-    expect(qrEntryRedirectPath(UTM, null, 'en')).toMatch(/^\/en\/ax-diagnosis\?/);
+    expect(qrEntryRedirectPath(CAMPAIGN, null, 'en')).toMatch(/^\/en\/ax-diagnosis\?/);
   });
 });
 
@@ -111,6 +121,7 @@ describe('findOpenQrCampaign', () => {
   const ROW = {
     id: 'c1',
     organizationId: 'org-a',
+    shortCode: 'AbCd2345',
     isActive: true,
     expiresAt: null,
     utmSource: 'qrcode',
@@ -129,7 +140,7 @@ describe('findOpenQrCampaign', () => {
     expect(db.select).not.toHaveBeenCalled();
   });
 
-  it("returns the campaign's organization, UTM parameters and diagnosis", async () => {
+  it("returns the campaign's organization, short code, UTM parameters and diagnosis", async () => {
     const db = dbAnswering([
       { ...ROW, namedDiagnosisId: 'd1', diagnosisId: 'd1', diagnosisSlug: 'cloud-readiness' },
     ]);
@@ -137,6 +148,7 @@ describe('findOpenQrCampaign', () => {
     expect(await findOpenQrCampaign(db as any, 'AbCd2345', NOW)).toEqual({
       campaignId: 'c1',
       organizationId: 'org-a',
+      shortCode: 'AbCd2345',
       diagnosisId: 'd1',
       diagnosis: { id: 'd1', slug: 'cloud-readiness' },
       utm: { source: 'qrcode', medium: 'offline', campaign: 'fair-2026', content: null },

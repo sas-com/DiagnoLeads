@@ -60,13 +60,14 @@ describe('axPlaybookContentSchema', () => {
     content.ngPhrases = Array.from({ length: AX_PLAYBOOK_LIMITS.itemsMax + 1 }, () => ({
       ng: 'x',
       alternative: 'y',
+      reasons: [],
     }));
     expect(axPlaybookContentSchema.safeParse(content).success).toBe(false);
   });
 
   it('requires both sides of an objection', () => {
     const content = emptyAxPlaybookContent();
-    content.objections = [{ customer: 'C', response: '', note: '' }];
+    content.objections = [{ customer: 'C', response: '', note: '', reasons: [] }];
     expect(axPlaybookContentSchema.safeParse(content).success).toBe(false);
   });
 

@@ -60,12 +60,15 @@ describe('Multi-tenant types', () => {
         id: 'org-123',
         name: 'Test Org',
         slug: 'test-org',
-        parentId: null,
+        parentOrganizationId: null,
+        hierarchyPath: null,
+        hierarchyLevel: 0,
+        dataSharingPolicy: null,
         groupId: null,
         organizationType: 'independent',
         settings: {},
         createdAt: new Date(),
-        updatedAt: null,
+        updatedAt: new Date(),
       };
 
       const mockMembership: OrganizationMember = {
@@ -74,7 +77,7 @@ describe('Multi-tenant types', () => {
         userId: 'user-123',
         role: 'admin',
         createdAt: new Date(),
-        updatedAt: null,
+        updatedAt: new Date(),
       };
 
       const context: Partial<OrganizationContext> = {
@@ -96,17 +99,20 @@ describe('Multi-tenant types', () => {
         userId: 'user-123',
         role: 'member',
         createdAt: new Date(),
-        updatedAt: null,
+        updatedAt: new Date(),
         organization: {
           id: 'org-123',
           name: 'Test Organization',
           slug: 'test-organization',
-          parentId: null,
+          parentOrganizationId: null,
+          hierarchyPath: null,
+          hierarchyLevel: 0,
+          dataSharingPolicy: null,
           groupId: null,
           organizationType: 'independent',
           settings: { theme: 'dark' },
           createdAt: new Date(),
-          updatedAt: null,
+          updatedAt: new Date(),
         },
       };
 
@@ -128,17 +134,20 @@ describe('Multi-tenant types', () => {
           userId: 'user-123',
           role: 'owner',
           createdAt: new Date(),
-          updatedAt: null,
+          updatedAt: new Date(),
           organization: {
             id: 'org-123',
             name: 'Test',
             slug: 'test',
-            parentId: null,
+            parentOrganizationId: null,
+            hierarchyPath: null,
+            hierarchyLevel: 0,
+            dataSharingPolicy: null,
             groupId: null,
             organizationType: orgType,
             settings: {},
             createdAt: new Date(),
-            updatedAt: null,
+            updatedAt: new Date(),
           },
         };
 
@@ -153,21 +162,24 @@ describe('Multi-tenant types', () => {
         userId: 'user-123',
         role: 'admin',
         createdAt: new Date(),
-        updatedAt: null,
+        updatedAt: new Date(),
         organization: {
           id: 'child-org',
           name: 'Child Organization',
           slug: 'child-org',
-          parentId: 'parent-org',
+          parentOrganizationId: 'parent-org',
+          hierarchyPath: null,
+          hierarchyLevel: 0,
+          dataSharingPolicy: null,
           groupId: 'group-123',
           organizationType: 'subsidiary',
           settings: {},
           createdAt: new Date(),
-          updatedAt: null,
+          updatedAt: new Date(),
         },
       };
 
-      expect(childMembership.organization.parentId).toBe('parent-org');
+      expect(childMembership.organization.parentOrganizationId).toBe('parent-org');
       expect(childMembership.organization.groupId).toBe('group-123');
     });
 
@@ -188,17 +200,20 @@ describe('Multi-tenant types', () => {
           userId: 'user-123',
           role,
           createdAt: new Date(),
-          updatedAt: null,
+          updatedAt: new Date(),
           organization: {
             id: 'org-123',
             name: 'Test',
             slug: 'test',
-            parentId: null,
+            parentOrganizationId: null,
+            hierarchyPath: null,
+            hierarchyLevel: 0,
+            dataSharingPolicy: null,
             groupId: null,
             organizationType: 'independent',
             settings: {},
             createdAt: new Date(),
-            updatedAt: null,
+            updatedAt: new Date(),
           },
         };
 

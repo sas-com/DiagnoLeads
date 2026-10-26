@@ -2,10 +2,12 @@
  * The public entry of a QR campaign: /q/<short code> (app/q/[code]/route.ts, #503)
  *
  * The QR code of a campaign holds /q/<code>. The entry finds the campaign by its code and sends
- * the visitor to the campaign's diagnosis with the campaign's UTM parameters. Where it sends is
- * built from the campaign row and the app's own routes only, never from the request, and the
- * organization is the campaign's. A paused, expired or unknown code is not found, and so is a
- * campaign with nowhere of its own to send to (#663: openCampaignDestination).
+ * the visitor to the campaign's diagnosis with the campaign's UTM parameters and its own short
+ * code (QR_CODE_PARAM in types.ts, #700: the diagnosis keeps it with the answer, and a new lead
+ * counts for the campaign). Where it sends is built from the campaign row and the app's own
+ * routes only, never from the request, and the organization is the campaign's. A paused,
+ * expired or unknown code is not found, and so is a campaign with nowhere of its own to send to
+ * (#663: openCampaignDestination).
  *
  * The settings page shows where a scan of each campaign goes with the same functions
  * (campaignDestination, #692, #695), so the page and the entry cannot disagree.
@@ -21,6 +23,7 @@ import { isDiagnosisOrganization } from '@/lib/multi-tenant/helpers/diagnosis-or
 import { and, eq, inArray, isNotNull, ne, notExists, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
+  QR_CODE_PARAM,
   type QrCampaignClosedReason,
   type QrCampaignDestination,
   SHORT_CODE_PATTERN,
@@ -42,6 +45,8 @@ export interface CampaignUtm {
 export interface QrEntryCampaign {
   campaignId: string;
   organizationId: string;
+  /** The campaign's short code as stored, which the entry passes on to the diagnosis (#700) */
+  shortCode: string;
   /**
    * qr_campaigns.diagnosis_id as stored: set when the campaign names a builder diagnosis, also
    * one that `diagnosis` leaves out. A campaign that names one is sent there or nowhere (#663)
@@ -246,6 +251,7 @@ export async function findOpenQrCampaign(
     .select({
       id: qrCampaigns.id,
       organizationId: qrCampaigns.organizationId,
+      shortCode: qrCampaigns.shortCode,
       isActive: qrCampaigns.isActive,
       expiresAt: qrCampaigns.expiresAt,
       utmSource: qrCampaigns.utmSource,
@@ -272,6 +278,7 @@ export async function findOpenQrCampaign(
   return {
     campaignId: row.id,
     organizationId: row.organizationId,
+    shortCode: row.shortCode,
     diagnosisId: row.namedDiagnosisId,
     diagnosis:
       row.diagnosisId && row.diagnosisSlug
@@ -291,20 +298,23 @@ export async function findOpenQrCampaign(
  * builder diagnosis when `publishedSlug` is given (openCampaignDestination has checked that
  * /d/<slug> serves that diagnosis), otherwise the AX diagnosis, where /diagnostic/[slug] sends
  * too (only a campaign of the AX organization that names no diagnosis, #663). With the
- * campaign's UTM parameters; empty ones are left out.
+ * campaign's UTM parameters (empty ones are left out) and its short code (QR_CODE_PARAM, #700),
+ * both from the campaign row: a code or a UTM value sent with the scan never gets in.
  */
 export function qrEntryRedirectPath(
-  utm: CampaignUtm,
+  campaign: { shortCode: string; utm: CampaignUtm },
   publishedSlug: string | null,
   locale: Locale = defaultLocale
 ): string {
   const page = publishedSlug ? `d/${encodeURIComponent(publishedSlug)}` : 'ax-diagnosis';
+  const { utm } = campaign;
   const query = new URLSearchParams();
   const params: [string, string | null][] = [
     ['utm_source', utm.source],
     ['utm_medium', utm.medium],
     ['utm_campaign', utm.campaign],
     ['utm_content', utm.content],
+    [QR_CODE_PARAM, campaign.shortCode],
   ];
   for (const [key, value] of params) {
     if (value) query.set(key, value);

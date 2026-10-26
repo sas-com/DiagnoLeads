@@ -76,7 +76,12 @@ describe.skipIf(!url)('lead follow-up takeaways and due notices (PostgreSQL)', (
     return row.id;
   }
 
-  async function createMember(organizationId: string, name: string, domain: string, role = 'member') {
+  async function createMember(
+    organizationId: string,
+    name: string,
+    domain: string,
+    role: schema.OrganizationRole = 'member'
+  ) {
     const [user] = await pg
       .insert(users)
       .values({ email: `takeaway-${unique()}@${domain}`, name })

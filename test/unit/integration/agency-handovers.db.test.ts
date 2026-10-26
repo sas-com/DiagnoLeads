@@ -31,7 +31,7 @@ describe.skipIf(!url)('agency handovers (PostgreSQL)', () => {
   // biome-ignore lint/suspicious/noExplicitAny: tRPC callers
   const callers: Record<'member' | 'viewer' | 'other', any> = {} as never;
 
-  async function caller(organizationId: string, role: string) {
+  async function caller(organizationId: string, role: schema.OrganizationRole) {
     const [user] = await pg
       .insert(users)
       .values({ email: `handover-${role}-${unique()}@example.com`, name: '営業 花子' })

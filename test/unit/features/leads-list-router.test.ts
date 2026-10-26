@@ -196,7 +196,7 @@ describe('leads.list (sorting and filtering)', () => {
       [
         'no consultation',
         { consultationRequested: false },
-        '("leads"."conversion_point" is null or "leads"."conversion_point" <> $2)',
+        '("leads"."conversion_point" is null or not "leads"."conversion_point" = $2)',
         ['consultation'],
       ],
       ['MQL', { mql: true }, '"leads"."mql_qualified_at" is not null', []],

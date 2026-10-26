@@ -191,7 +191,7 @@ describe.skipIf(!url)('personal settings (PostgreSQL)', () => {
       });
       await pg
         .insert(workflows)
-        .values({ organizationId: orgId, createdById: owner.id, name: 'Flow', trigger: 'manual' });
+        .values({ organizationId: orgId, createdById: owner.id, name: 'Flow', trigger: 'lead_created' });
       await pg.insert(scheduledReports).values({
         organizationId: orgId,
         createdById: owner.id,

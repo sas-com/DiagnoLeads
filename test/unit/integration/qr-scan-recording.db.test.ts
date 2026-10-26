@@ -393,7 +393,7 @@ describe.skipIf(!url)('QR scan recording (PostgreSQL)', () => {
     expect(stats.recentScans).toHaveLength(3);
     // The latest scans carry no column that could hold who scanned, and the day as a day
     for (const recent of stats.recentScans) {
-      expect(Object.keys(recent).sort()).toEqual(['converted', 'deviceType', 'id', 'scannedOn']);
+      expect(Object.keys(recent).sort()).toEqual(['deviceType', 'id', 'scannedOn']);
       expect(recent.scannedOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect([day, scanDayOf()]).toContain(recent.scannedOn);
     }

@@ -30,11 +30,17 @@ afterEach(() => {
 });
 
 // Mock Next.js router
-vi.mock('next/navigation', () => ({
-  useRouter: () => router,
-  usePathname: () => '/',
-  useSearchParams: () => new URLSearchParams(),
-}));
+vi.mock('next/navigation', async () => {
+  const { ReadonlySearchParams } = await import('@/test/mocks/next-navigation');
+  // One object while the URL stays the same, like Next's useSearchParams (#719). It cannot be
+  // changed, so a test cannot leave values in it for the next one
+  const searchParams = new ReadonlySearchParams();
+  return {
+    useRouter: () => router,
+    usePathname: () => '/',
+    useSearchParams: () => searchParams,
+  };
+});
 
 // Mock Anthropic SDK to avoid browser environment check
 vi.mock('@anthropic-ai/sdk', () => ({

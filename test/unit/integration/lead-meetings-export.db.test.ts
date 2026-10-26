@@ -205,7 +205,10 @@ describe.skipIf(!url)('lead meetings and export (PostgreSQL)', () => {
     it('reads the latest hearing (held_on, then created_at) of the same organization', async () => {
       const result = await callerFor(adminA).leads.list({ organizationId: orgA, limit: 100 });
       const byId = new Map(
-        result.items.map((lead: { id: string }) => [lead.id, lead] as const)
+        result.items.map(
+          (lead: { id: string; nextMeetingDate: string | null; dealRating: string | null }) =>
+            [lead.id, lead] as const
+        )
       ) as Map<string, { nextMeetingDate: string | null; dealRating: string | null }>;
       expect(byId.get(ids.latest)).toMatchObject({ nextMeetingDate: '2026-10-30', dealRating: 'c' });
       expect(byId.get(ids.replaced)).toMatchObject({ nextMeetingDate: null, dealRating: null });

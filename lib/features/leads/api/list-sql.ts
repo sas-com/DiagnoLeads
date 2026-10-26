@@ -20,7 +20,7 @@ import {
   isNull,
   lt,
   lte,
-  ne,
+  not,
   notInArray,
   or,
   sql,
@@ -133,6 +133,19 @@ export const leadMqlLevel = sql<AxMqlLevel | null>`(select case when 'interest' 
 export const listMqlLevel = sql<AxMqlLevel | null>`(case when ${leads.mqlQualifiedAt} is not null then 'interest' else ${leadMqlLevel} end)`;
 
 /**
+ * The lead is 関心あり (MQL) by the list's MQL level, the whole rule here so a count elsewhere
+ * (#700: the QR campaigns' new leads) never names the level itself
+ */
+export const leadIsInterested = sql`${listMqlLevel} = ${'interest' satisfies AxMqlLevel}`;
+
+/**
+ * The lead asked for a consultation (相談申込): its conversion point is 'consultation', which the
+ * diagnoses set with the request. The list's consultation filter; the QR campaigns count their
+ * new leads by it too (#700)
+ */
+export const leadRequestedConsultation = eq(leads.conversionPoint, 'consultation');
+
+/**
  * Position in a fixed order (pipeline order instead of alphabetical). Empty and unknown values
  * give NULL, so they go last with the "nulls last" of the ORDER BY.
  */
@@ -227,9 +240,9 @@ export function leadListConditions(
   if (input.scoreMax !== undefined) conditions.push(lte(leads.score, input.scoreMax));
 
   if (input.consultationRequested === true) {
-    conditions.push(eq(leads.conversionPoint, 'consultation'));
+    conditions.push(leadRequestedConsultation);
   } else if (input.consultationRequested === false) {
-    conditions.push(or(isNull(leads.conversionPoint), ne(leads.conversionPoint, 'consultation')));
+    conditions.push(or(isNull(leads.conversionPoint), not(leadRequestedConsultation)));
   }
 
   if (input.mql === true) conditions.push(isNotNull(leads.mqlQualifiedAt));

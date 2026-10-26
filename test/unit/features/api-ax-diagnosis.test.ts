@@ -23,11 +23,15 @@ vi.mock('next/server', async (importOriginal) => ({
   },
 }));
 
-// Refusals are reported after the response (#351)
-const { reportRejectedRequest } = vi.hoisted(() => ({ reportRejectedRequest: vi.fn() }));
+// Refusals (#351) and a QR campaign's count that failed (#700) are reported after the response
+const { reportRejectedRequest, reportServerError } = vi.hoisted(() => ({
+  reportRejectedRequest: vi.fn(),
+  reportServerError: vi.fn(),
+}));
 vi.mock('@/lib/ops/alert', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/ops/alert')>()),
   reportRejectedRequest,
+  reportServerError,
 }));
 vi.mock('@/lib/db/client', () => ({ db: {} }));
 vi.mock('@/lib/features/diagnostics/ax-migration/notify', () => ({
@@ -316,6 +320,46 @@ describe('POST /api/diagnostics/ax-migration', () => {
     });
     const response = await POST(request(validBody));
     expect((await response.json()).issues).toHaveLength(20);
+  });
+
+  it("answers as usual when the QR campaign's count failed, and reports it after the response (#700)", async () => {
+    const error = Object.assign(new Error('permission denied for table qr_campaigns'), { code: '42501' });
+    submitMock.mockResolvedValue({
+      ok: true,
+      submissionId: 'sub-1',
+      leadId: 'lead-1',
+      leadCreated: true,
+      existingLead: null,
+      qrCompletionFailure: { error },
+      result,
+      answers: {},
+    });
+
+    const response = await POST(request(validBody));
+    expect(response.status).toBe(200);
+    expect((await response.json()).submissionId).toBe('sub-1');
+    expect(reportServerError).not.toHaveBeenCalled();
+    await runAfterTasks();
+    expect(reportServerError).toHaveBeenCalledWith('ax-diagnosis/qr-completion', error);
+    // Sales hear about the lead all the same
+    expect(notifyMock).toHaveBeenCalledWith(expect.objectContaining({ leadId: 'lead-1' }));
+  });
+
+  it('reports nothing about the QR campaigns when the count did not fail', async () => {
+    submitMock.mockResolvedValue({
+      ok: true,
+      submissionId: 'sub-1',
+      leadId: 'lead-1',
+      leadCreated: true,
+      existingLead: null,
+      qrCompletionFailure: null,
+      result,
+      answers: {},
+    });
+
+    expect((await POST(request(validBody))).status).toBe(200);
+    await runAfterTasks();
+    expect(reportServerError).not.toHaveBeenCalled();
   });
 
   it('returns 500 when saving fails', async () => {

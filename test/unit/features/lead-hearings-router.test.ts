@@ -4,6 +4,7 @@
  * query with the next queued result. The DB behaviour itself is covered by
  * test/unit/integration/lead-hearings.db.test.ts.
  */
+import type { HearingFields } from '@/lib/features/lead-hearings/types/schemas';
 import type { SQL } from 'drizzle-orm';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -32,7 +33,11 @@ const { dbState } = vi.hoisted(() => ({
 function query() {
   dbState.queries += 1;
   const promise = Promise.resolve().then(() => dbState.results.shift() ?? []);
-  const builder: Promise<unknown[]> & Record<string, (arg?: unknown) => unknown> = Object.assign(
+  // Typed arguments: the object literal alone has no index signature
+  const builder: Promise<unknown[]> & Record<string, (arg?: unknown) => unknown> = Object.assign<
+    Promise<unknown[]>,
+    Record<string, (arg?: unknown) => unknown>
+  >(
     promise,
     {
       from: () => builder,
@@ -127,7 +132,7 @@ const hearingRow = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const updateInput = (fields: Record<string, unknown> = {}) => ({
+const updateInput = (fields: HearingFields = {}) => ({
   organizationId: ORG_ID,
   id: HEARING_ID,
   heldOn: '2026-10-16',
@@ -333,7 +338,9 @@ describe('leadHearings.update', () => {
   it('saves when the row has not changed since it was read', async () => {
     // The fields before the save (#160), then the saved row
     dbState.results = [[{ fields: {} }], [hearingRow({ updatedAt: new Date() })]];
-    const fields = { dealRating: { value: 'a', status: 'done', source: null } };
+    const fields = {
+      dealRating: { value: 'a', status: 'done', source: null },
+    } satisfies HearingFields;
 
     await callerAs('member').leadHearings.update(updateInput(fields));
 
@@ -361,6 +368,7 @@ describe('leadHearings.update', () => {
   it('rejects fields outside the catalog before touching the database', async () => {
     await expect(
       callerAs('admin').leadHearings.update(
+        // @ts-expect-error unknownKey is not a catalog field: the router must reject it
         updateInput({ unknownKey: { value: 'x', status: 'done', source: null } })
       )
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });

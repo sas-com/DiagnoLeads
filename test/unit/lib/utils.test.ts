@@ -47,7 +47,8 @@ describe('formatDate', () => {
   });
 
   it('should format date string', () => {
-    const formatted = formatDate('2024-06-20');
+    // formatDate is typed for Date; date-fns also parses an ISO string, which this pins
+    const formatted = formatDate('2024-06-20' as unknown as Date);
     expect(formatted).toContain('2024');
     // June may be formatted as "June" or "6月"
     expect(formatted).toMatch(/June|6/);
@@ -120,7 +121,8 @@ describe('formatRelativeTime', () => {
   });
 
   it('should accept string date', () => {
-    const formatted = formatRelativeTime('2024-06-15T11:55:00Z');
+    // formatRelativeTime is typed for Date; date-fns also parses an ISO string, which this pins
+    const formatted = formatRelativeTime('2024-06-15T11:55:00Z' as unknown as Date);
     expect(typeof formatted).toBe('string');
   });
 });
