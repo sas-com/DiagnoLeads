@@ -7,6 +7,7 @@ import { ForecastScreen } from '@/components/features/sales-forecast/forecast-sc
 import { TargetsDialog } from '@/components/features/sales-forecast/targets-dialog';
 import { forecastRow } from '@/lib/features/sales-forecast/report';
 import { CHANGE_KINDS } from '@/lib/features/sales-forecast/report';
+import enMessages from '@/locales/en/common.json';
 import messages from '@/locales/ja/common.json';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -49,22 +50,23 @@ vi.mock('@/lib/trpc/client', () => {
             return mocks.targets;
           },
         },
+        // onSuccess gets the input as its second argument, as in TanStack Query
         save: {
-          useMutation: (options: { onSuccess?: () => void } = {}) => ({
+          useMutation: (options: { onSuccess?: (data: unknown, input: unknown) => void } = {}) => ({
             isPending: mocks.savePending,
             mutate: (input: unknown, call: { onSuccess?: () => void } = {}) => {
               mocks.saves.push(input);
-              options.onSuccess?.();
+              options.onSuccess?.(undefined, input);
               call.onSuccess?.();
             },
           }),
         },
         setFiscalYearStart: {
-          useMutation: (options: { onSuccess?: () => void } = {}) => ({
+          useMutation: (options: { onSuccess?: (data: unknown, input: unknown) => void } = {}) => ({
             isPending: false,
             mutate: (input: unknown, call: { onSuccess?: () => void } = {}) => {
               mocks.startChanges.push(input);
-              options.onSuccess?.();
+              options.onSuccess?.(undefined, input);
               call.onSuccess?.();
             },
           }),
@@ -219,8 +221,8 @@ describe('ForecastScreen', () => {
       '予測には入っていません'
     );
     expect(screen.getByText('金額が未定の商談が1件あります')).toBeInTheDocument();
-    // The list is in order of the expected close date, the oldest first
-    expect(screen.getByRole('link', { name: '受注予定日の早い順の一覧を開く' })).toHaveAttribute(
+    // The list keeps the board's order of the stages: the dates are reviewed there
+    expect(screen.getByRole('link', { name: '商談の一覧で日付を見直す' })).toHaveAttribute(
       'href',
       '/ja/deals?view=list'
     );
@@ -280,7 +282,7 @@ describe('ForecastScreen', () => {
     expect(within(other).getAllByText('非公開')).toHaveLength(3);
     expect(
       screen.getByText(
-        '担当者ごとの目標・達成率・目標との差は、目標を設定する人と本人の分だけを表示します'
+        '担当者ごとの目標・達成率・見込みと目標の差は、目標を設定する人と本人の分だけを表示します'
       )
     ).toBeInTheDocument();
   });
@@ -367,8 +369,50 @@ describe('ForecastScreen (#721)', () => {
 
     mocks.forecast.data = forecastData({ total: forecastRow(figures, null), canEditTargets: false });
     renderWithIntl(<ForecastScreen />);
-    expect(screen.getByText('目標を変更できるのはオーナーと管理者です')).toBeInTheDocument();
+    expect(
+      screen.getByText('目標が未設定です。目標はオーナーと管理者が設定します。')
+    ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '目標を設定' })).not.toBeInTheDocument();
+  });
+
+  it('shows the same best case and the same gap in the tiles and the table (#721)', () => {
+    renderWithIntl(<ForecastScreen />);
+    // Won 2,000,000 + commit 3,000,000 + best case 1,000,000; 5,000,000 short of 10,000,000
+    const tiles = screen.getByRole('heading', { name: '組織全体' }).closest('section') as HTMLElement;
+    expect(within(tiles).getByText('ベストケース').parentElement).toHaveTextContent(
+      /[￥¥]6,000,000/
+    );
+    expect(within(tiles).getByText('見込みと目標の差').parentElement).toHaveTextContent(
+      /あと [￥¥]5,000,000/
+    );
+    const table = screen.getByRole('table', { name: '担当者ごとの予測' });
+    const cells = (name: RegExp) =>
+      within(within(table).getByRole('row', { name })).getAllByRole('cell').map((cell) => cell.textContent);
+    // target, won, rate, forecast, gap, best case, pipeline, weighted
+    expect(cells(/営業 花子/)[4]).toMatch(/^あと [￥¥]5,000,000$/);
+    expect(cells(/営業 花子/)[5]).toMatch(/^[￥¥]6,000,000$/);
+    expect(cells(/合計/)[5]).toMatch(/^[￥¥]\d/);
+    // The owner names the row for a screen reader
+    expect(within(table).getByRole('rowheader', { name: /営業 花子/ })).toBeInTheDocument();
+    expect(within(table).getByRole('rowheader', { name: '合計' })).toBeInTheDocument();
+    expect(screen.getByText(/合計の行の目標は、組織全体の目標です/)).toBeInTheDocument();
+  });
+
+  it('words the notes for one deal and for several in English (#721)', () => {
+    mocks.forecast.data = forecastData({
+      overdue: { count: 1, amount: 500_000 },
+      total: forecastRow({ ...figures, noAmountCount: 1 }, 10_000_000),
+    });
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <ForecastScreen />
+      </NextIntlClientProvider>
+    );
+    expect(
+      screen.getByText(/^1 open deal \(.+\) still has an expected close date before this period/)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/^3 open deals \(.+\) have no expected close date/)).toBeInTheDocument();
+    expect(screen.getByText('1 deal has no amount yet')).toBeInTheDocument();
   });
 
   it('says how many more deals changed, and opens only the small groups', () => {
@@ -398,7 +442,7 @@ describe('ForecastScreen (#721)', () => {
     renderWithIntl(<ForecastScreen />);
 
     expect(screen.getByText(/ほか5件/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '商談のボードで見る' })).toHaveAttribute('href', '/ja/deals');
+    expect(screen.getByRole('link', { name: '商談のボードを開く' })).toHaveAttribute('href', '/ja/deals');
     const created = screen.getByText('新しい商談').closest('details');
     const won = screen.getByText('受注', { selector: 'summary' }).closest('details');
     expect(created).not.toHaveAttribute('open');
@@ -608,7 +652,11 @@ describe('TargetsDialog', () => {
       },
     ]);
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    expect(mocks.toast.success).toHaveBeenCalledWith('2026年10月の目標を保存しました');
     expect(screen.getByRole('combobox', { name: '月' })).toHaveTextContent('2026年11月');
+    expect(screen.getByRole('group', { name: '2026年11月の目標（円・税抜）' })).toBeInTheDocument();
+    // Typing goes on in the month after, from its first box
+    await waitFor(() => expect(screen.getByLabelText('組織全体')).toHaveFocus());
     // Nothing typed in November: the next month comes without a call
     await user.click(screen.getByRole('button', { name: '保存して次の月へ' }));
     expect(mocks.saves).toHaveLength(1);
@@ -620,10 +668,10 @@ describe('TargetsDialog', () => {
     mocks.targets = { data: targetsData };
     renderWithIntl(<TargetsDialog open onOpenChange={vi.fn()} organizationId={ORG_ID} />);
     await pickOctober(user);
-    expect(screen.getByText(/（担当者の合計 [￥¥]8,000,000）/)).toBeInTheDocument();
+    expect(screen.getByText(/^担当者の目標の合計：[￥¥]8,000,000$/)).toBeInTheDocument();
     await user.clear(screen.getByLabelText('営業 花子'));
     await user.type(screen.getByLabelText('営業 花子'), '9000000');
-    expect(screen.getByText(/（担当者の合計 [￥¥]9,000,000）/)).toBeInTheDocument();
+    expect(screen.getByText(/^担当者の目標の合計：[￥¥]9,000,000$/)).toBeInTheDocument();
   });
 
   it('moves the focus to the first box that cannot be saved (#721)', async () => {
@@ -635,6 +683,50 @@ describe('TargetsDialog', () => {
     await user.click(screen.getByRole('button', { name: '保存' }));
     expect(screen.getByLabelText('組織全体')).toHaveFocus();
     expect(mocks.saves).toEqual([]);
+  });
+
+  it('asks before closing with boxes not saved (#721)', async () => {
+    const user = userEvent.setup();
+    mocks.targets = { data: targetsData };
+    const onOpenChange = vi.fn();
+    renderWithIntl(<TargetsDialog open onOpenChange={onOpenChange} organizationId={ORG_ID} />);
+    await pickOctober(user);
+    await user.type(screen.getByLabelText('組織全体'), '20000000');
+
+    await user.click(screen.getByRole('button', { name: 'キャンセル' }));
+    const ask = await screen.findByRole('alertdialog', { name: '保存していない入力があります' });
+    expect(ask).toHaveTextContent('閉じると、この月の入力は消えます。');
+    await user.click(within(ask).getByRole('button', { name: 'キャンセル' }));
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('組織全体')).toHaveValue('20000000');
+
+    // Esc asks the same
+    await user.keyboard('{Escape}');
+    await user.click(
+      within(
+        await screen.findByRole('alertdialog', { name: '保存していない入力があります' })
+      ).getByRole('button', { name: '閉じる' })
+    );
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('closes at once with nothing typed (#721)', async () => {
+    const user = userEvent.setup();
+    mocks.targets = { data: targetsData };
+    const onOpenChange = vi.fn();
+    renderWithIntl(<TargetsDialog open onOpenChange={onOpenChange} organizationId={ORG_ID} />);
+    await user.click(screen.getByRole('button', { name: 'キャンセル' }));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('says only on the pressed button that it is saving (#721)', () => {
+    mocks.targets = { data: targetsData };
+    mocks.savePending = true;
+    renderWithIntl(<TargetsDialog open onOpenChange={vi.fn()} organizationId={ORG_ID} />);
+    // Nothing pressed yet: the save button is the one of the submit
+    expect(screen.getByRole('button', { name: '保存して次の月へ' })).toBeDisabled();
+    expect(screen.getAllByRole('button', { name: '保存しています…' })).toHaveLength(1);
   });
 
   it('says the targets are being saved', () => {

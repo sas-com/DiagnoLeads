@@ -46,6 +46,27 @@ const SMALL_GROUP = 3;
 /** The frame of the tiles and the table */
 const FRAME = 'rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900';
 
+/** The forecast against the target, in words both ways: "¥X short" or "+¥X above" */
+function useGapText() {
+  const t = useTranslations('salesForecast.gapValue');
+  const locale = useLocale();
+  return (gap: number) => {
+    const amount = formatYen(Math.abs(gap), locale) ?? '';
+    return gap < 0 ? t('above', { amount }) : t('short', { amount });
+  };
+}
+
+/** No target: a dash on the screen, words for a screen reader */
+function NoTarget() {
+  const t = useTranslations('salesForecast.tiles');
+  return (
+    <>
+      <span aria-hidden="true">—</span>
+      <span className="sr-only">{t('noTarget')}</span>
+    </>
+  );
+}
+
 function usePercent() {
   const locale = useLocale();
   return (rate: number) =>
@@ -108,7 +129,7 @@ export function ForecastScreen() {
                   className="rounded-md border border-gray-200 bg-white p-0.5 dark:border-gray-700 dark:bg-gray-900"
                 >
                   {FORECAST_PERIODS.map((value) => (
-                    <ToggleGroupItem key={value} value={value} className="h-11 sm:h-8">
+                    <ToggleGroupItem key={value} value={value} className={cn('h-8', TAP_TARGET)}>
                       {t(`periods.${value}`)}
                     </ToggleGroupItem>
                   ))}
@@ -129,7 +150,7 @@ export function ForecastScreen() {
           }
         />
         {data && (
-          <p className="text-sm text-gray-700 dark:text-gray-300">
+          <p className="text-sm text-gray-700 dark:text-gray-300" aria-live="polite">
             {t('range', {
               from: formatPlainDay(data.range.from, locale),
               to: formatPlainDay(data.range.to, locale),
@@ -174,62 +195,65 @@ export function ForecastScreen() {
           className={query.isPlaceholderData ? 'space-y-8 opacity-60' : 'space-y-8'}
           aria-busy={query.isPlaceholderData}
         >
-          <SummaryTiles total={data.total} />
+          <StudioSection title={t('summaryTitle')}>
+            <SummaryTiles total={data.total} />
 
-          {data.total.target === null &&
-            (data.canEditTargets ? (
-              <div className="flex flex-wrap items-center gap-3 text-sm text-gray-700 dark:text-gray-300">
-                <p>{t('noTargetSet')}</p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className={TAP_TARGET}
-                  onClick={() => setTargetsOpen(true)}
-                >
-                  {t('setTargets')}
-                </Button>
-              </div>
-            ) : (
-              <p className="text-sm text-gray-700 dark:text-gray-300">{t('targets.readOnly')}</p>
-            ))}
+            {data.total.target === null &&
+              (data.canEditTargets ? (
+                <div className="flex flex-wrap items-center gap-3 text-sm text-gray-700 dark:text-gray-300">
+                  <p>{t('noTargetSet')}</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className={TAP_TARGET}
+                    onClick={() => setTargetsOpen(true)}
+                  >
+                    {t('setTargets')}
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-700 dark:text-gray-300">
+                  {t('noTargetSetReadOnly')}
+                </p>
+              ))}
 
-          {(data.overdue.count > 0 || data.undated.count > 0 || data.total.noAmountCount > 0) && (
-            <ul className="space-y-1 text-sm text-amber-800 dark:text-amber-300">
-              {data.overdue.count > 0 && (
-                <li>
-                  {t('notes.overdue', {
-                    count: data.overdue.count,
-                    amount: yen(data.overdue.amount),
-                  })}{' '}
-                  {/* The list is in order of the expected close date, the oldest first */}
-                  <Link
-                    href={`/${locale}/deals?view=list`}
-                    className="underline underline-offset-2"
-                  >
-                    {t('notes.toOverdueList')}
-                  </Link>
-                </li>
-              )}
-              {data.undated.count > 0 && (
-                <li>
-                  {t('notes.undated', {
-                    count: data.undated.count,
-                    amount: yen(data.undated.amount),
-                  })}{' '}
-                  <Link
-                    href={`/${locale}/deals?view=list`}
-                    className="underline underline-offset-2"
-                  >
-                    {t('notes.toList')}
-                  </Link>
-                </li>
-              )}
-              {data.total.noAmountCount > 0 && (
-                <li>{t('notes.noAmount', { count: data.total.noAmountCount })}</li>
-              )}
-            </ul>
-          )}
+            {(data.overdue.count > 0 || data.undated.count > 0 || data.total.noAmountCount > 0) && (
+              <ul className="space-y-1 text-sm text-amber-800 dark:text-amber-300">
+                {data.overdue.count > 0 && (
+                  <li>
+                    {t('notes.overdue', {
+                      count: data.overdue.count,
+                      amount: yen(data.overdue.amount),
+                    })}{' '}
+                    <Link
+                      href={`/${locale}/deals?view=list`}
+                      className="underline underline-offset-2"
+                    >
+                      {t('notes.toOverdueList')}
+                    </Link>
+                  </li>
+                )}
+                {data.undated.count > 0 && (
+                  <li>
+                    {t('notes.undated', {
+                      count: data.undated.count,
+                      amount: yen(data.undated.amount),
+                    })}{' '}
+                    <Link
+                      href={`/${locale}/deals?view=list`}
+                      className="underline underline-offset-2"
+                    >
+                      {t('notes.toList')}
+                    </Link>
+                  </li>
+                )}
+                {data.total.noAmountCount > 0 && (
+                  <li>{t('notes.noAmount', { count: data.total.noAmountCount })}</li>
+                )}
+              </ul>
+            )}
+          </StudioSection>
 
           <StudioSection title={t('table.title')}>
             <OwnerTable
@@ -259,8 +283,10 @@ function SummaryTiles({ total }: { total: ForecastRow }) {
   const t = useTranslations('salesForecast.tiles');
   const locale = useLocale();
   const percent = usePercent();
+  const gapText = useGapText();
   const yen = (amount: number) => formatYen(amount, locale) ?? '';
-  const tiles: { label: string; value: string; note?: ReactNode }[] = [
+  // The order and the figures of the table's columns
+  const tiles: { label: string; value: ReactNode; note?: ReactNode }[] = [
     { label: t('target'), value: total.target === null ? t('noTarget') : yen(total.target) },
     {
       label: t('won'),
@@ -274,16 +300,13 @@ function SummaryTiles({ total }: { total: ForecastRow }) {
         total.forecastAchievement !== null &&
         t('forecastAchievement', { rate: percent(total.forecastAchievement) }),
     },
+    { label: t('gap'), value: total.gap === null ? <NoTarget /> : gapText(total.gap) },
     { label: t('bestCase'), value: yen(total.bestCaseTotal) },
-    {
-      label: t('gap'),
-      value: total.gap === null ? '—' : yen(Math.max(total.gap, 0)),
-      note: total.gap !== null && total.gap < 0 && t('above', { amount: yen(-total.gap) }),
-    },
     { label: t('weighted'), value: yen(total.weighted) },
   ];
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+    // One tile a row on phones: the amounts do not fit two abreast
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {tiles.map((tile) => (
         <div key={tile.label} className={cn(FRAME, 'p-4')}>
           <StudioStat label={tile.label} value={tile.value} note={tile.note || undefined} />
@@ -312,10 +335,12 @@ function OwnerTable({
   viewerUserId: string;
 }) {
   const t = useTranslations('salesForecast.table');
+  const tTargets = useTranslations('salesForecast.targets');
   const locale = useLocale();
   const percent = usePercent();
-  const yen = (amount: number | null) =>
-    amount === null ? t('noTarget') : (formatYen(amount, locale) ?? '');
+  const gapText = useGapText();
+  const yen = (amount: number) => formatYen(amount, locale) ?? '';
+  const targetText = (amount: number | null) => (amount === null ? <NoTarget /> : yen(amount));
   const hiddenCell = (className: string) => (
     <TableCell className={className}>
       <span className="text-gray-600 dark:text-gray-300">{t('hidden')}</span>
@@ -327,7 +352,7 @@ function OwnerTable({
       {targetHidden ? (
         hiddenCell('text-right')
       ) : (
-        <TableCell className="text-right tabular-nums">{yen(row.target)}</TableCell>
+        <TableCell className="text-right tabular-nums">{targetText(row.target)}</TableCell>
       )}
       <TableCell className="text-right tabular-nums">{yen(row.won)}</TableCell>
       {targetHidden ? (
@@ -335,7 +360,7 @@ function OwnerTable({
       ) : (
         <TableCell className="min-w-32">
           {row.achievement === null ? (
-            t('noTarget')
+            <NoTarget />
           ) : (
             <div className="space-y-1">
               <span className="tabular-nums">{percent(row.achievement)}</span>
@@ -349,16 +374,18 @@ function OwnerTable({
         hiddenCell('text-right')
       ) : (
         <TableCell className="text-right tabular-nums">
-          {row.gap !== null && row.gap < 0 ? t('above', { amount: yen(-row.gap) }) : yen(row.gap)}
+          {row.gap === null ? <NoTarget /> : gapText(row.gap)}
         </TableCell>
       )}
-      <TableCell className="text-right tabular-nums">{yen(row.bestCase)}</TableCell>
+      <TableCell className="text-right tabular-nums">{yen(row.bestCaseTotal)}</TableCell>
       <TableCell className="text-right tabular-nums">{yen(row.pipeline)}</TableCell>
       <TableCell className="text-right tabular-nums">{yen(row.weighted)}</TableCell>
     </>
   );
-  // The owner's column stays in sight while the figures scroll sideways
-  const ownerCell = 'sticky left-0 bg-white dark:bg-gray-900';
+  // The owner's column stays in sight while the figures scroll sideways: opaque, above the
+  // figures, with the row's hover
+  const ownerCell =
+    'sticky left-0 z-10 border-r border-gray-200 bg-white group-hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:group-hover:bg-gray-800';
 
   return (
     <div className={cn(FRAME, 'overflow-x-auto')}>
@@ -379,14 +406,15 @@ function OwnerTable({
         </TableHeader>
         <TableBody>
           {owners.map((row) => (
-            <TableRow key={row.ownerUserId ?? 'unassigned'}>
-              <TableCell className={cn(ownerCell, 'font-medium')}>
+            <TableRow key={row.ownerUserId ?? 'unassigned'} className="group">
+              <th scope="row" className={cn(ownerCell, 'p-4 text-left align-middle font-medium')}>
                 {row.ownerUserId ? (
                   <Link
                     href={`/${locale}/deals?owner=${row.ownerUserId}`}
                     className="underline-offset-2 hover:underline"
                   >
-                    {row.ownerName ?? t('unassigned')}
+                    {/* An owner without a name has left the organization */}
+                    {row.ownerName ?? tTargets('formerMember')}
                   </Link>
                 ) : (
                   t('unassigned')
@@ -396,23 +424,30 @@ function OwnerTable({
                     {t('you')}
                   </span>
                 )}
-              </TableCell>
+              </th>
               {cells(row, row.targetHidden)}
             </TableRow>
           ))}
         </TableBody>
-        <TableFooter>
-          <TableRow>
-            <TableCell className={cn(ownerCell, 'font-bold')}>{t('total')}</TableCell>
+        <TableFooter className="bg-gray-50 dark:bg-gray-800">
+          <TableRow className="group">
+            <th
+              scope="row"
+              className={cn(
+                ownerCell,
+                'bg-gray-50 p-4 text-left align-middle font-bold group-hover:bg-gray-50 dark:bg-gray-800 dark:group-hover:bg-gray-800'
+              )}
+            >
+              {t('total')}
+            </th>
             {cells(total)}
           </TableRow>
         </TableFooter>
       </Table>
-      {!seesEveryTarget && (
-        <p className="border-t px-4 py-2 text-sm text-gray-600 dark:text-gray-300">
-          {t('hiddenNote')}
-        </p>
-      )}
+      <div className="space-y-1 border-t px-4 py-2 text-sm text-gray-600 dark:border-gray-700 dark:text-gray-300">
+        <p>{t('totalNote')}</p>
+        {!seesEveryTarget && <p>{t('hiddenNote')}</p>}
+      </div>
     </div>
   );
 }
@@ -444,7 +479,7 @@ function ChangesSection({
           <p className="text-sm text-gray-700 dark:text-gray-300">
             {t('amountDelta', { amount: `${delta > 0 ? '+' : ''}${yen(delta)}` })}
           </p>
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid items-start gap-3 md:grid-cols-2">
             {visible.map((kind) => {
               const group = changes.groups[kind];
               const more = group.count - group.deals.length;
