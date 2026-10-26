@@ -8,7 +8,11 @@
  *   const { ReadonlySearchParams } = await import('@/test/mocks/next-navigation');
  *   const searchParams = new ReadonlySearchParams();
  *   return { useSearchParams: () => searchParams };
- * A URL a test changes: rebuild only when the string changes.
+ * A URL each test sets: put a new object in before the render.
+ *   let mockSearchParams = new ReadonlySearchParams();
+ *   vi.mock('next/navigation', () => ({ useSearchParams: () => mockSearchParams }));
+ *   mockSearchParams = new ReadonlySearchParams({ callbackUrl: '/settings' }); // in the test
+ * A URL that changes while a test renders: rebuild only when the string changes.
  *   const searchParamsFor = searchParamsCache();
  *   return { useSearchParams: () => searchParamsFor(useSyncExternalStore(nav.subscribe, nav.get)) };
  *
