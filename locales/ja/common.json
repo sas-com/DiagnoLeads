@@ -200,7 +200,7 @@
     "dashboard": "ダッシュボード",
     "leads": "リード管理",
     "deals": "商談",
-    "forecast": "予測",
+    "forecast": "売上予測",
     "prospects": "顧客探し（AX）",
     "analytics": "分析",
     "settings": "設定",
@@ -1570,7 +1570,7 @@
     }
   },
   "salesForecast": {
-    "title": "予測",
+    "title": "売上予測",
     "description": "目標に対する受注と見込みを、期間ごと・担当者ごとに見ます",
     "periodLabel": "期間",
     "periods": {
@@ -1579,21 +1579,29 @@
       "thisFiscalYear": "今期"
     },
     "range": "{from}〜{to}",
-    "fiscalYearNote": "期の始まり：{month}月",
+    "fiscalYearNote": "期の始まり：{month}",
+    "updatedAt": "{time}時点",
     "setTargets": "目標を設定",
+    "noTargetSet": "目標が未設定です。",
+    "noTargetSetReadOnly": "目標が未設定です。目標はオーナーと管理者が設定します。",
+    "summaryTitle": "組織全体",
+    "gapValue": {
+      "short": "あと {amount}",
+      "above": "+{amount} 上回る"
+    },
     "tiles": {
       "target": "目標",
       "won": "受注済み",
       "forecast": "見込み（受注＋コミット）",
       "bestCase": "ベストケース",
-      "gap": "目標との差",
-      "weighted": "パイプライン（加重）",
+      "gap": "見込みと目標の差",
+      "weighted": "加重金額（開いている商談）",
       "achievement": "達成率 {rate}",
       "forecastAchievement": "見込みの達成率 {rate}",
-      "noTarget": "目標なし",
-      "above": "目標を {amount} 上回る見込み"
+      "noTarget": "目標なし"
     },
     "table": {
+      "title": "担当者ごと",
       "caption": "担当者ごとの予測",
       "owner": "担当",
       "target": "目標",
@@ -1603,19 +1611,21 @@
       "pipeline": "パイプライン",
       "weighted": "加重",
       "achievement": "達成率",
-      "gap": "目標との差",
+      "gap": "見込みと目標の差",
       "total": "合計",
       "unassigned": "担当未定",
-      "noTarget": "—",
       "hidden": "非公開",
-      "hiddenNote": "担当者ごとの目標・達成率・目標との差は、目標を設定する人と本人の分だけを表示します"
+      "hiddenNote": "担当者ごとの目標・達成率・見込みと目標の差は、目標を設定する人と本人の分だけを表示します",
+      "totalNote": "合計の行の目標は、組織全体の目標です（組織全体の目標がない月は、担当者の目標の合計）。",
+      "forecast": "見込み（受注＋コミット）",
+      "you": "（自分）"
     },
     "notes": {
       "overdue": "受注予定日が期間より前のまま開いている商談が{count}件（{amount}）あります。数字には入りません。日付を見直してください",
       "undated": "受注予定日が未定のまま開いている商談が{count}件（{amount}）あります。予測には入っていません",
       "noAmount": "金額が未定の商談が{count}件あります",
-      "toBoard": "商談のボードを開く",
-      "toList": "商談の一覧を開く"
+      "toList": "商談の一覧を開く",
+      "toOverdueList": "商談の一覧で日付を見直す"
     },
     "changes": {
       "title": "この1週間の動き",
@@ -1634,7 +1644,11 @@
       "summary": "{count}件・{amount}",
       "stageChange": "{from} → {to}",
       "dateChange": "受注予定日 {from} → {to}",
-      "noDate": "未定"
+      "noDate": "未定",
+      "amountChange": "{from} → {to}",
+      "noAmount": "金額未定",
+      "more": "ほか{count}件",
+      "toBoard": "商談のボードを開く"
     },
     "targets": {
       "title": "目標を設定",
@@ -1642,25 +1656,29 @@
       "fiscalYear": "年度",
       "fiscalYearOption": "{year}年度（{from}〜）",
       "startMonth": "期の始まり",
-      "startMonthOption": "{month}月",
       "startMonthHelp": "組織全体の設定です。変えると、目標の保存とは別にすぐ反映されます",
-      "startConfirmTitle": "{month}月始まりに変えますか？",
+      "startConfirmTitle": "{month}始まりに変えますか？",
       "startConfirmDescription": "四半期と今期の範囲が組織全体で変わります。",
       "startConfirm": "変更する",
       "organizationSettings": "組織の設定",
       "month": "月",
+      "monthLegend": "{month}の目標（円・税抜）",
       "organization": "組織全体",
       "organizationHelp": "組織全体の目標がない月は、担当者の目標の合計を使います",
+      "membersTotal": "担当者の目標の合計：{amount}",
       "amountInvalid": "0以上の整数で入力してください",
       "save": "保存",
+      "saveAndNext": "保存して次の月へ",
       "saving": "保存しています…",
-      "saved": "目標を保存しました",
+      "saved": "{month}の目標を保存しました",
       "startSaved": "期の始まりを変更しました",
       "error": "保存できませんでした。もう一度お試しください",
       "loadError": "目標を読み込めませんでした",
       "discardTitle": "保存していない入力があります",
       "discardDescription": "切り替えると、この月の入力は消えます。",
       "discardConfirm": "切り替える",
+      "closeDescription": "閉じると、この月の入力は消えます。",
+      "closeConfirm": "閉じる",
       "readOnly": "目標を変更できるのはオーナーと管理者です",
       "formerMember": "組織にいない人",
       "formerMemberHelp": "組織にいない人の目標です。消すことだけができます（欄を空にして保存）",
@@ -1668,7 +1686,9 @@
     },
     "state": {
       "loadError": "予測を読み込めませんでした",
-      "retry": "再読み込み"
+      "retry": "再読み込み",
+      "forbiddenTitle": "売上予測を見る権限がありません",
+      "forbiddenBody": "売上予測と目標は、リードを閲覧できるメンバーだけが見られます（親組織からの閲覧者は除く）。"
     }
   },
   "settings": {
