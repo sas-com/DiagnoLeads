@@ -5656,5 +5656,8 @@
       "home": "Top page",
       "landing": "Landing page"
     }
+  },
+  "fieldGlossary": {
+    "help": "Field help"
   }
 }

@@ -16,6 +16,7 @@ import { diagnosesRouter } from '@/lib/features/diagnosis-builder/api/router';
 import { diagnosticTemplatesRouter } from '@/lib/features/diagnostic-templates/api/router';
 import { distributionRouter } from '@/lib/features/distribution/router';
 import { embedRouter } from '@/lib/features/embed/router';
+import { fieldGlossaryRouter } from '@/lib/features/field-glossary/api/router';
 import { filtersRouter } from '@/lib/features/filters/api/router';
 import { hierarchyRouter } from '@/lib/features/hierarchy/api/router';
 import { infoOffersRouter } from '@/lib/features/info-offers/api/router';
@@ -89,6 +90,7 @@ export const appRouter = router({
   deals: dealsRouter, // SFA deals: board, amounts, close dates and history (Refs #435)
   salesTargets: salesTargetsRouter, // Monthly targets per member and organization (Refs #437)
   salesForecast: salesForecastRouter, // Forecast against the targets and the week's changes (Refs #437)
+  fieldGlossary: fieldGlossaryRouter, // Site-wide help text and value candidates for input fields (Epic #780)
 });
 
 export type AppRouter = typeof appRouter;

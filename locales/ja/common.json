@@ -5656,5 +5656,8 @@
       "home": "トップページ",
       "landing": "紹介ページ"
     }
+  },
+  "fieldGlossary": {
+    "help": "項目の説明"
   }
 }
