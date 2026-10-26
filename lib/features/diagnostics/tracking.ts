@@ -1,6 +1,7 @@
 import { clipText, toWellFormed } from '@/lib/utils/clip-text';
 import { z } from 'zod';
 import { isAxFrom } from '../ax-site/cross-links';
+import { SHORT_CODE_PATTERN } from '../distribution/types';
 import type { InflowSource } from '../leads/types/pipeline';
 import { AX_ENTRY_PAGES } from './entry-pages';
 
@@ -12,6 +13,10 @@ import { AX_ENTRY_PAGES } from './entry-pages';
  * `entry` is the page the diagnosis was started from (#296); a value outside the list is dropped.
  * `from` is the link of another AX page that led to it (#332, "ax-lp-targets-access"); likewise
  * only the values the site writes are kept.
+ * `qr` is the short code of the QR campaign whose code was scanned: the /q/ entry adds it to the
+ * address of the diagnosis (#700). Only what can be a code is kept (SHORT_CODE_PATTERN, as the
+ * entry checks it); a submission that creates a lead counts for the campaign of the lead's
+ * organization with that code (countQrCompletion, service.ts).
  */
 /**
  * Long values are cut instead of rejected so a long UTM never blocks a submission. The cut never
@@ -37,6 +42,7 @@ export const trackingSchema = z
     landingPath: clipped(500),
     entry: z.enum(AX_ENTRY_PAGES).optional().catch(undefined),
     from: z.string().refine(isAxFrom).optional().catch(undefined),
+    qr: z.string().regex(SHORT_CODE_PATTERN).optional().catch(undefined),
   })
   .default({});
 export type Tracking = z.infer<typeof trackingSchema>;

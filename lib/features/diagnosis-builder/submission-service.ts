@@ -7,7 +7,8 @@
  *   results sent by the respondent are not part of the schema and never read.
  * - The endpoint is unauthenticated: a lead with the same email address is never changed, the
  *   submission is only linked to it (upsertLeadFromSubmission). Only a lead created by this
- *   submission gets the diagnosis values (score, MQL, summary).
+ *   submission gets the diagnosis values (score, MQL, summary), and only such a lead counts for
+ *   the QR campaign whose code the answer carries (countQrCompletion, #700).
  */
 import type { db as defaultDb } from '@/lib/db/client';
 import {
@@ -20,7 +21,12 @@ import { hasLoneSurrogate } from '@/lib/utils/clip-text';
 import { and, eq, like } from 'drizzle-orm';
 import { z } from 'zod';
 import { upsertLeadFromSubmission } from '../diagnostics/lead-upsert';
-import { claimConsultation, resolveInflow } from '../diagnostics/service';
+import {
+  type QrCompletionFailure,
+  claimConsultation,
+  countQrCompletion,
+  resolveInflow,
+} from '../diagnostics/service';
 import { type Tracking, compactTracking, trackingSchema } from '../diagnostics/tracking';
 import type { AnswerValidationIssue } from '../diagnostics/types';
 import { contactSchema } from '../diagnostics/types/contact';
@@ -84,6 +90,8 @@ export type DiagnosisSubmitOutcome =
       leadId: string;
       leadCreated: boolean;
       existingLead: ExistingLeadSnapshot | null;
+      /** The QR campaign's count failed and the lead was kept (#700): report it after the response */
+      qrCompletionFailure: QrCompletionFailure | null;
       /** The employee whose own link brought the new lead, to tell them (#265) */
       referralMemberUserId: string | null;
       evaluation: DiagnosisEvaluation;
@@ -247,7 +255,7 @@ export async function submitBuilderDiagnosis(
         consultationRequestedAt: input.consultationRequested ? now : null,
         createdAt: now,
       })
-      .returning({ id: diagnosticSubmissions.id });
+      .returning({ id: diagnosticSubmissions.id, isTest: diagnosticSubmissions.isTest });
 
     if (!existing) {
       const summary = buildLeadSummary(
@@ -264,6 +272,16 @@ export async function submitBuilderDiagnosis(
         .where(eq(leads.id, leadId));
     }
 
+    // A new lead from a scan of the organization's QR campaign counts for it, with the lead
+    // (#700, the same rule as the AX diagnosis)
+    // A count that fails keeps the lead; the route reports it after the response
+    const qrCompletion = await countQrCompletion(tx, {
+      organizationId,
+      leadCreated: !existing,
+      isTest: submission.isTest,
+      tracking,
+    });
+
     return {
       ok: true as const,
       submissionId: submission.id,
@@ -272,6 +290,7 @@ export async function submitBuilderDiagnosis(
       existingLead: existing
         ? { name: existing.name, company: existing.company, email: existing.email }
         : null,
+      qrCompletionFailure: qrCompletion.failure,
       referralMemberUserId: !existing ? inflow.referralMemberUserId : null,
       evaluation,
     };

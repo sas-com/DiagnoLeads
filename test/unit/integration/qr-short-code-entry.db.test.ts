@@ -164,11 +164,11 @@ describe.skipIf(!url)('QR short code entry (PostgreSQL)', () => {
     await client?.end();
   });
 
-  it("sends the AX organization's open campaign without a diagnosis to the AX diagnosis with the campaign's UTM", async () => {
+  it("sends the AX organization's open campaign without a diagnosis to the AX diagnosis with the campaign's UTM and short code", async () => {
     const code = await createCampaign(orgA, `Ax${randomPart(6)}`);
     const res = await scan(code);
     expect(res.status).toBe(307);
-    expect(res.headers.get('location')).toBe(`/ja/ax-diagnosis?${AX_UTM}`);
+    expect(res.headers.get('location')).toBe(`/ja/ax-diagnosis?${AX_UTM}&qr=${code}`);
   });
 
   it("answers 404 for another organization's campaign without a diagnosis, so its visitors never reach the AX diagnosis (#663)", async () => {
@@ -204,7 +204,7 @@ describe.skipIf(!url)('QR short code entry (PostgreSQL)', () => {
     const res = await scan(code);
     expect(res.status).toBe(307);
     expect(res.headers.get('location')).toBe(
-      `/ja/d/${slug}?utm_source=poster&utm_medium=print&utm_content=hall-b`
+      `/ja/d/${slug}?utm_source=poster&utm_medium=print&utm_content=hall-b&qr=${code}`
     );
   });
 
@@ -268,7 +268,7 @@ describe.skipIf(!url)('QR short code entry (PostgreSQL)', () => {
       const lower = randomPart(8);
       await createDiagnosis(orgB, lower);
       const code = await createCampaign(orgA, lower);
-      expect((await scan(code)).headers.get('location')).toBe(`/ja/ax-diagnosis?${AX_UTM}`);
+      expect((await scan(code)).headers.get('location')).toBe(`/ja/ax-diagnosis?${AX_UTM}&qr=${code}`);
     });
 
     it("never follows a campaign's diagnosis id into another organization, nor to the AX diagnosis (#663)", async () => {

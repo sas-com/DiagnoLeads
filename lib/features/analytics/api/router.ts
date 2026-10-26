@@ -15,6 +15,7 @@ import {
 } from '../lead-sources';
 import { analyticsPeriodStart, jstMonthStart } from '../period';
 import { getResponseTimeDistribution } from '../response-time';
+import { qrCampaignBreakdown } from '../service';
 import {
   type AcquisitionCostSummary,
   type AgencyPerformanceRow,
@@ -22,6 +23,7 @@ import {
   type DateRange,
   type FunnelStage,
   type OverviewStats,
+  type QrCampaignBreakdown,
   type ResponseTimeResult,
   type SourceBreakdown,
   type StatusBreakdown,
@@ -31,6 +33,7 @@ import {
   getConversionFunnelSchema,
   getLeadTrendSchema,
   getOverviewSchema,
+  getQrCampaignBreakdownSchema,
   getResponseTimeSchema,
   getSourceBreakdownSchema,
   getStatusBreakdownSchema,
@@ -63,6 +66,21 @@ export const analyticsRouter = router({
       // Names and companies of leads are shown: same rule as the leads list
       assertCanReadLeads(ctx.ability);
       return getDashboardSummary(ctx.db, input.organizationId, input.days);
+    }),
+
+  /**
+   * What the answers carrying each QR campaign's code add to the campaign's counts (#700, owner
+   * decision of 2026-10-26): the answers of leads already there, and the new leads that are
+   * 関心あり or asked for a consultation. Every campaign of the organization (the settings page
+   * lists them all) in one query; the page shows them beside each campaign's own counts, which
+   * come from distribution (it imports no other feature)
+   */
+  getQrCampaignBreakdown: organizationProcedure
+    .input(getQrCampaignBreakdownSchema)
+    .query(({ ctx }): Promise<QrCampaignBreakdown[]> => {
+      // Who may see the campaigns (read Lead, #356); counts only, no lead is named
+      assertCanReadLeads(ctx.ability);
+      return qrCampaignBreakdown(ctx.db, ctx.organization.id);
     }),
 
   /**

@@ -305,6 +305,7 @@ function arrange(c: Case) {
   const entryCampaign: QrEntryCampaign = {
     campaignId: row.id,
     organizationId: row.organizationId,
+    shortCode: row.shortCode,
     diagnosisId: row.diagnosisId,
     diagnosis: c.ownDiagnosis ?? null,
     utm: UTM,
@@ -352,7 +353,9 @@ describe('where a scan goes: the settings page and the /q/ entry (#692, #695)', 
     } else {
       expect(res.status).toBe(307);
       const slug = c.expected.kind === 'diagnosis' ? c.expected.slug : null;
-      expect(res.headers.get('location')).toBe(qrEntryRedirectPath(UTM, slug));
+      expect(res.headers.get('location')).toBe(
+        qrEntryRedirectPath({ shortCode: 'AbCd2345', utm: UTM }, slug)
+      );
     }
   });
 

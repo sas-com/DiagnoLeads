@@ -113,8 +113,9 @@ async function recordScan(campaign: QrEntryCampaign, device: QrScanDevice): Prom
  * GET /q/<short code>
  *
  * The QR code of a campaign (#503). Sends the visitor to the campaign's diagnosis with the
- * campaign's UTM parameters (owner decisions in #663, openCampaignDestination, which the settings
- * page of the campaigns shows too, #692):
+ * campaign's UTM parameters and its short code (qr, #700: a lead the diagnosis creates counts
+ * for the campaign) (owner decisions in #663, openCampaignDestination, which the settings page
+ * of the campaigns shows too, #692):
  * - a campaign that names a builder diagnosis (diagnosis_id): to /d/<slug> while that page
  *   serves this diagnosis; 404 while it does not (paused, archived, a slug two organizations
  *   publish, a diagnosis of another organization), never to another diagnosis
@@ -122,7 +123,8 @@ async function recordScan(campaign: QrEntryCampaign, device: QrScanDevice): Prom
  *   organization's (resolveDiagnosisOrganizationId), whose leads the AX diagnosis makes; 404
  *   for another organization's, so its visitors never become the AX organization's leads
  * The address is a path of this app built from the campaign row; nothing of the request (host,
- * query, headers) goes into it. A paused, expired or unknown code is 404.
+ * query, headers) goes into it, nor the code of the path (the row's own code is passed on). A
+ * paused, expired or unknown code is 404.
  * Outside [locale] (lib/i18n/middleware.ts skips /q/): the code is case-sensitive and the
  * locale routing would otherwise redirect it first.
  *
@@ -177,7 +179,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
     const publishedSlug = destination.kind === 'diagnosis' ? destination.slug : null;
     return new NextResponse(null, {
       status: 307,
-      headers: { ...HEADERS, Location: qrEntryRedirectPath(campaign.utm, publishedSlug) },
+      headers: { ...HEADERS, Location: qrEntryRedirectPath(campaign, publishedSlug) },
     });
   } catch (error) {
     // The error of the database, never the code
