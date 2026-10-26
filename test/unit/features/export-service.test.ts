@@ -196,6 +196,8 @@ describe('Export Service', () => {
       expect(csv).toContain('lead,100,100,100.00,100.00');
       expect(csv).toContain('Overall Conversion Rate');
       expect(csv).toContain('Average Conversion Days');
+      // 再育成 beside the stages (#802)
+      expect(csv).toContain('Nurturing Now,0');
     });
   });
 

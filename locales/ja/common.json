@@ -4749,7 +4749,8 @@
       "stageMql": "MQL（関心あり）",
       "stageDeal": "商談",
       "stageSql": "SQL（適格）",
-      "stageWon": "受注"
+      "stageWon": "受注",
+      "nurturingNow": "再育成（ナーチャリング）中のリード: {count}件"
     },
     "diagnostic": {
       "leadScore": "リードスコア",

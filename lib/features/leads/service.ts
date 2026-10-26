@@ -26,12 +26,6 @@ export { diffLeadAudit, leadAuditSnapshot, writeLeadAuditLogs } from './audit';
 type Database = typeof defaultDb;
 
 /**
- * The lead is MQL (関心あり, or an MQL date), as the list's MQL level filter counts it (#447):
- * for the analytics funnel (#802)
- */
-export const isMqlLead = sql<boolean>`(${listMqlLevel} = 'interest')`;
-
-/**
  * Leads of the organization per MQL level, counted like the list's MQL level filter (#447, #605):
  * a lead with an MQL date is 'interest', a lead with neither a diagnosis nor an MQL date 'unknown'
  */

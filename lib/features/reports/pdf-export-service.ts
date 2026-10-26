@@ -456,6 +456,13 @@ export function exportAnalyticsToPDF(
       yPos
     );
     yPos += 6;
+    // 再育成: beside the stages, not one of them (#802)
+    doc.text(
+      labels.text('analytics.nurturingNow', { count: data.funnel.nurturingCount }),
+      20,
+      yPos
+    );
+    yPos += 6;
     doc.text(
       labels.text('analytics.averageConversionDays', {
         days: data.funnel.averageConversionDays.toFixed(1),

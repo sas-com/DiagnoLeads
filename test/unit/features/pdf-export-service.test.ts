@@ -8,6 +8,7 @@ import {
   exportLeadsToPDF,
   generatePDFFilename,
 } from '@/lib/features/reports/pdf-export-service';
+import type { PdfReportLabels } from '@/lib/features/reports/pdf-labels';
 import { describe, expect, it, vi } from 'vitest';
 
 describe('PDF Export Service', () => {
@@ -160,6 +161,25 @@ describe('PDF Export Service', () => {
       const doc = exportAnalyticsToPDF(mockAnalyticsData);
       expect(doc).toBeDefined();
       expect(doc.getNumberOfPages()).toBeGreaterThanOrEqual(1);
+    });
+
+    // 再育成 beside the stages of the funnel (#802)
+    it('writes the nurtured leads under the funnel', () => {
+      const asked: { key: string; values?: Record<string, string | number> }[] = [];
+      const labels: PdfReportLabels = {
+        text: (key, values) => {
+          asked.push({ key, values });
+          return key;
+        },
+        status: (value) => value,
+        source: (value) => value,
+      };
+      exportAnalyticsToPDF(
+        { ...mockAnalyticsData, funnel: { ...mockAnalyticsData.funnel, nurturingCount: 7 } },
+        { labels }
+      );
+      expect(asked).toContainEqual({ key: 'analytics.nurturingNow', values: { count: 7 } });
+      expect(asked.map((entry) => entry.key)).toContain('analytics.stageMql');
     });
 
     it('should create analytics PDF with partial data', () => {

@@ -1,8 +1,8 @@
 import { canReadDeals } from '@/lib/auth/deal-access';
 import type { AppAbility } from '@/lib/auth/permissions';
 import { leads } from '@/lib/db/schema';
-import { countLeadsByMqlLevel, isMqlLead } from '@/lib/features/leads/service';
-import { LEAD_STATUSES, type LeadStatus } from '@/lib/features/leads/types/pipeline';
+import { countLeadsByMqlLevel, leadIsInterested } from '@/lib/features/leads/service';
+import { DEAL_PHASES, LEAD_STATUSES, type LeadStatus } from '@/lib/features/leads/types/pipeline';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { and, count, desc, eq, gte, sql } from 'drizzle-orm';
@@ -266,8 +266,10 @@ export const analyticsRouter = router({
       // deal (has_negotiated), SQL once judged qualified; a won lead counts for all.
       const isWon = sql`${leads.status} = 'won'`;
       const isSql = sql`(${leads.sqlDecision} = 'qualified' or ${isWon})`;
-      const isDeal = sql`(${leads.hasNegotiated} or ${leads.status} in ('negotiating', 'won') or ${isSql})`;
-      const isMql = sql`(${isMqlLead} or ${isDeal})`;
+      // A deal phase reached counts too, as in the agency funnel (lib/features/agency-contracts):
+      // a lead without deals may have its phase set by hand without has_negotiated
+      const isDeal = sql`(${leads.hasNegotiated} or ${leads.status} in ('negotiating', 'won') or coalesce(${leads.dealPhaseReachedAt}, '{}'::jsonb) ?| array[${sql.raw(DEAL_PHASES.map((phase) => `'${phase}'`).join(', '))}] or ${isSql})`;
+      const isMql = sql`(${leadIsInterested} or ${isDeal})`;
       const [counts] = await ctx.db
         .select({
           total: count(),

@@ -73,6 +73,17 @@ describe.skipIf(!url)('analytics funnel by lifecycle stage (PostgreSQL)', () => 
       sqlDecision: 'qualified',
     });
     await insertLead(orgA, { status: 'won', hasNegotiated: true, sqlDecision: 'qualified' });
+    // MQL from the diagnosis alone (関心あり, no MQL date); 適合 is not MQL
+    await insertLead(orgA, { responses: { axMigration: { mql: { level: 'interest' } } } });
+    await insertLead(orgA, { responses: { axMigration: { mql: { level: 'fit' } } } });
+    // Lost after a deal: reached 商談
+    await insertLead(orgA, { status: 'lost', lostReason: 'budget', hasNegotiated: true });
+    // A deal phase set by hand without a deal: 商談, as in the agency funnel
+    await insertLead(orgA, { dealPhase: 'proposal', dealPhaseReachedAt: { proposal: '2026-10-20' } });
+    // Won by hand long ago (no negotiated flag, no SQL): every stage
+    await insertLead(orgA, { status: 'won' });
+    // Before the 7-day period: only for all time
+    await insertLead(orgA, { status: 'won', createdAt: new Date('2020-01-01T00:00:00Z') });
     // Another organization's lead is never counted
     await insertLead(orgB, { status: 'won', hasNegotiated: true, sqlDecision: 'qualified' });
   });
@@ -88,15 +99,24 @@ describe.skipIf(!url)('analytics funnel by lifecycle stage (PostgreSQL)', () => 
       organizationId: orgA,
       dateRange: 'all',
     });
-    expect(funnel.totalLeads).toBe(6);
+    expect(funnel.totalLeads).toBe(12);
     expect(funnel.stages.map((stage) => [stage.name, stage.cumulativeCount])).toEqual([
-      ['lead', 6],
-      ['mql', 5],
-      ['deal', 3],
-      ['sql', 2],
-      ['won', 1],
+      ['lead', 12],
+      ['mql', 10], // not the plain lead nor the 適合 one
+      ['deal', 7], // + lost after a deal, the phase set by hand, the two won by hand
+      ['sql', 4], // qualified, and every won lead
+      ['won', 3],
     ]);
     expect(funnel.nurturingCount).toBe(1);
-    expect(funnel.overallConversionRate).toBe(16.67);
+    expect(funnel.overallConversionRate).toBe(25);
+  });
+
+  it('counts only the leads created in the period', async () => {
+    const funnel = await caller.analytics.getConversionFunnel({
+      organizationId: orgA,
+      dateRange: '7d',
+    });
+    expect(funnel.totalLeads).toBe(11);
+    expect(funnel.stages.at(-1)?.cumulativeCount).toBe(2);
   });
 });

@@ -4749,7 +4749,8 @@
       "stageMql": "MQL (interested)",
       "stageDeal": "Deals",
       "stageSql": "SQL (qualified)",
-      "stageWon": "Won"
+      "stageWon": "Won",
+      "nurturingNow": "Leads being nurtured: {count}"
     },
     "diagnostic": {
       "leadScore": "Lead Score",

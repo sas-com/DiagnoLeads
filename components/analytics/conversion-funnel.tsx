@@ -1,7 +1,6 @@
 'use client';
 
 import type { ConversionFunnelData, FunnelStageName } from '@/lib/features/analytics/types/schemas';
-import { LEAD_STATUSES, type LeadStatus } from '@/lib/features/leads/types/pipeline';
 import { cn } from '@/lib/utils';
 import { useFormatter, useTranslations } from 'next-intl';
 import { useMemo } from 'react';
@@ -13,16 +12,7 @@ const STAGE_COLORS: Record<FunnelStageName, { color: string; bgColor: string }> 
   sql: { color: 'bg-green-500', bgColor: 'bg-green-100' },
   won: { color: 'bg-purple-500', bgColor: 'bg-purple-100' },
 };
-const STATUS_TEXT_COLORS: Record<LeadStatus, string> = {
-  new: 'text-blue-600',
-  nurturing: 'text-yellow-600',
-  negotiating: 'text-green-600',
-  won: 'text-purple-600',
-  lost: 'text-gray-600',
-};
-
 interface ConversionFunnelProps {
-  leadsByStatus?: Record<LeadStatus, number>;
   funnelData?: ConversionFunnelData;
   isLoading?: boolean;
 }
@@ -42,12 +32,10 @@ interface FunnelStageDisplay {
  * way, shown under the funnel, not as a stage.
  */
 export function ConversionFunnel({
-  leadsByStatus,
   funnelData: apiFunnelData,
   isLoading = false,
 }: ConversionFunnelProps) {
   const t = useTranslations('settings.analytics');
-  const tStatus = useTranslations('status');
   const format = useFormatter();
 
   const displayData = useMemo((): FunnelStageDisplay[] => {
@@ -155,20 +143,6 @@ export function ConversionFunnel({
         </p>
       )}
       <p className="text-xs text-gray-500">{t('funnel.reachedNote')}</p>
-
-      {/* Summary Stats */}
-      {leadsByStatus && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 pt-4 border-t border-gray-200">
-          {LEAD_STATUSES.map((status) => (
-            <div key={status} className="text-center">
-              <p className={cn('text-2xl font-bold', STATUS_TEXT_COLORS[status])}>
-                {leadsByStatus[status]}
-              </p>
-              <p className="text-xs text-gray-500">{tStatus(status)}</p>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Overall Conversion Rate */}
       <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-4 rounded-lg border border-gray-200">
