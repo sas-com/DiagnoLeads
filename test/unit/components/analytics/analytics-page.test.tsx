@@ -296,6 +296,27 @@ describe('AnalyticsPage', () => {
     expect(cells(rows[3])[0]).toBe('合計');
   });
 
+  it('shows the won amount per agency too', async () => {
+    mocks.data.agencies = AGENCIES.map((row) => ({
+      ...row,
+      deals: {
+        dealCount: 1,
+        wonDealCount: 1,
+        wonAmount: 450000,
+        costPerWonDeal: 120000,
+        roi: 3.75,
+        medianDaysToWin: 14,
+      },
+    }));
+    renderPage();
+    await userEvent.click(screen.getByRole('tab', { name: '流入元' }));
+    const tables = screen.getAllByTestId('deal-returns');
+    const agencyTable = tables.at(-1) as HTMLElement;
+    expect(agencyTable).toHaveTextContent('テレアポ株式会社');
+    expect(agencyTable).toHaveTextContent('￥450,000');
+    expect(agencyTable).toHaveTextContent('3.75倍');
+  });
+
   it('hides the won amounts from those who may not read deals', async () => {
     renderPage();
     await userEvent.click(screen.getByRole('tab', { name: '流入元' }));

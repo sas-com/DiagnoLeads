@@ -189,7 +189,10 @@ export interface DealReturns {
   costPerWonDeal: number | null;
   /** Won amount / acquisition cost (2.5 = 2.5 times the cost), null when nothing was spent */
   roi: number | null;
-  /** Median days from the lead's creation (Japan day) to the deal's close day, null without a win */
+  /**
+   * Median days from the lead's creation (Japan day) to the close day of its first won deal,
+   * null without a win
+   */
   medianDaysToWin: number | null;
 }
 

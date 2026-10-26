@@ -182,7 +182,7 @@ export function AcquisitionCostCard({
               </TableFooter>
             </Table>
           </div>
-          {data.deals && (
+          {data.deals && data.deals.dealCount > 0 && (
             <DealReturnsTable
               rows={withDeals(data.bySource).map((row) => ({
                 key: row.source,
@@ -254,7 +254,7 @@ export function AgencyPerformanceCard({
               ))}
             </TableBody>
           </Table>
-          {withDeals(data).length > 0 && (
+          {withDeals(data).some((row) => row.deals.dealCount > 0) && (
             <DealReturnsTable
               rows={withDeals(data).map((row) => ({
                 key: row.agencyName,

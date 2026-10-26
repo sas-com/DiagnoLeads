@@ -82,6 +82,7 @@ export async function getInflowSourceBreakdown(
 
 /** One deal of a lead of the period, with the lead's 流入元 and agency */
 export type DealOfLead = {
+  leadId: string;
   source: string;
   agencyName: string | null;
   stage: string;
@@ -97,9 +98,21 @@ function median(values: number[]): number | null {
   return sorted.length % 2 === 1 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
-/** What the deals brought in, next to what their leads cost (yen) */
+/**
+ * What the deals brought in, next to what their leads cost (yen). The days to win are those of
+ * each lead's first win: a lead won in steps (survey, then migration) counts once.
+ */
 export function dealReturns(dealsOfLeads: DealOfLead[], totalCost: number): DealReturns {
+  // The stage names of lib/features/deals/types/pipeline.ts; not imported, as analytics does not
+  // read the deals feature (it would join the features' cycle, decision 2026-10-26-source-roi)
   const won = dealsOfLeads.filter((deal) => deal.stage === 'won');
+  const firstWinDays = new Map<string, number>();
+  for (const deal of won) {
+    if (deal.daysToClose === null) continue;
+    const first = firstWinDays.get(deal.leadId);
+    if (first === undefined || deal.daysToClose < first)
+      firstWinDays.set(deal.leadId, deal.daysToClose);
+  }
   const wonAmount = won.reduce((sum, deal) => sum + (deal.amount ?? 0), 0);
   return {
     dealCount: dealsOfLeads.length,
@@ -107,9 +120,7 @@ export function dealReturns(dealsOfLeads: DealOfLead[], totalCost: number): Deal
     wonAmount,
     costPerWonDeal: perUnit(totalCost, won.length),
     roi: totalCost > 0 ? Math.round((wonAmount / totalCost) * 100) / 100 : null,
-    medianDaysToWin: median(
-      won.map((deal) => deal.daysToClose).filter((days): days is number => days !== null)
-    ),
+    medianDaysToWin: median([...firstWinDays.values()]),
   };
 }
 
@@ -124,11 +135,13 @@ async function readDealsOfLeads(
 ): Promise<DealOfLead[]> {
   const rows = await db
     .select({
+      leadId: leads.id,
       source: inflowKey,
       agencyName: agencyKey,
       stage: deals.stage,
       amount: deals.amount,
-      daysToClose: sql<number | null>`(${deals.closedOn} - ${leadCreatedOn})`,
+      // A close day before the lead's creation (a date fixed by hand) counts as the same day
+      daysToClose: sql<number | null>`greatest(${deals.closedOn} - ${leadCreatedOn}, 0)`,
     })
     .from(deals)
     .innerJoin(
@@ -137,6 +150,7 @@ async function readDealsOfLeads(
     )
     .where(and(eq(deals.organizationId, organizationId), leadsInPeriod(organizationId, from)));
   return rows.map((row) => ({
+    leadId: row.leadId,
     source: row.source,
     agencyName: row.agencyName ? row.agencyName : null,
     stage: row.stage,

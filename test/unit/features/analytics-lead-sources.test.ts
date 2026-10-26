@@ -150,7 +150,9 @@ describe('summarizeAgencies', () => {
 
 // What the deals of the leads brought in (#448)
 describe('dealReturns', () => {
+  let nextLead = 0;
   const deal = (overrides: Partial<DealOfLead> = {}): DealOfLead => ({
+    leadId: `lead-${(nextLead += 1)}`,
     source: 'lp_organic',
     agencyName: null,
     stage: 'proposal',
@@ -198,6 +200,20 @@ describe('dealReturns', () => {
         1
       ).medianDaysToWin
     ).toBe(6.5);
+  });
+
+  it("takes each lead's first win for the days to win", () => {
+    // One lead won a survey on day 10 and a migration on day 200; another won on day 30
+    const result = dealReturns(
+      [
+        deal({ leadId: 'a', stage: 'won', daysToClose: 200 }),
+        deal({ leadId: 'a', stage: 'won', daysToClose: 10 }),
+        deal({ leadId: 'b', stage: 'won', daysToClose: 30 }),
+      ],
+      1
+    );
+    expect(result.wonDealCount).toBe(3);
+    expect(result.medianDaysToWin).toBe(20);
   });
 
   it('splits the deals by 流入元 and by agency, and leaves them out when not given', () => {

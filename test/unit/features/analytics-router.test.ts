@@ -406,6 +406,31 @@ describe('Analytics Router', () => {
     });
   });
 
+  // A parent organization's viewer reads the costs, not the deals' amounts (#448)
+  describe('getAcquisitionCost', () => {
+    it('leaves the deals out for those who may not read deals', async () => {
+      mockDb.query.organizationMembers.findFirst.mockResolvedValue({
+        ...mockMembership,
+        role: 'parent_viewer',
+      });
+      mockDb.select.mockReturnValueOnce(mockDb);
+      mockDb.from.mockReturnValueOnce(mockDb);
+      mockDb.where.mockReturnValueOnce(mockDb);
+      mockDb.groupBy.mockResolvedValueOnce([
+        { source: 'lp_organic', leadCount: 2, costedLeadCount: 1, sqlCount: '1', wonCount: '1', totalCost: '50000' },
+      ]);
+
+      const caller = appRouter.createCaller(mockContext);
+      const result = await caller.analytics.getAcquisitionCost({
+        organizationId: TEST_ORG_ID,
+        dateRange: '30d',
+      });
+      expect(result.deals).toBeNull();
+      expect(result.bySource[0].deals).toBeNull();
+      expect(mockDb.innerJoin).not.toHaveBeenCalled();
+    });
+  });
+
   describe('getAgencyPerformance', () => {
     it('returns SQL rate and cost per SQL per agency', async () => {
       mockDb.query.organizationMembers.findFirst.mockResolvedValue(mockMembership);
