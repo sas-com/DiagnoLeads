@@ -157,6 +157,10 @@ describe('Public procedure', () => {
 
 // Integration tests with actual router
 import { healthRouter } from '@/server/routers/health';
+import type { Context } from '@/lib/trpc/context';
+
+// The health procedures never read the context, so an empty one is enough
+const emptyContext = {} as unknown as Context;
 
 describe('Integration: healthRouter (actual)', () => {
   it('should export healthRouter', () => {
@@ -175,12 +179,12 @@ describe('Integration: healthRouter (actual)', () => {
 
 describe('Integration: health.check (actual)', () => {
   it('should create caller for health router', () => {
-    const caller = healthRouter.createCaller({});
+    const caller = healthRouter.createCaller(emptyContext);
     expect(caller).toBeDefined();
   });
 
   it('should call check procedure and return ok status', async () => {
-    const caller = healthRouter.createCaller({});
+    const caller = healthRouter.createCaller(emptyContext);
     const result = await caller.check();
 
     expect(result.status).toBe('ok');
@@ -191,7 +195,7 @@ describe('Integration: health.check (actual)', () => {
 
 describe('Integration: health.echo (actual)', () => {
   it('should call echo procedure with message', async () => {
-    const caller = healthRouter.createCaller({});
+    const caller = healthRouter.createCaller(emptyContext);
     const result = await caller.echo({ message: 'Hello' });
 
     expect(result.message).toBe('Hello');
@@ -199,14 +203,14 @@ describe('Integration: health.echo (actual)', () => {
   });
 
   it('should echo Japanese message', async () => {
-    const caller = healthRouter.createCaller({});
+    const caller = healthRouter.createCaller(emptyContext);
     const result = await caller.echo({ message: 'こんにちは' });
 
     expect(result.message).toBe('こんにちは');
   });
 
   it('should echo empty message', async () => {
-    const caller = healthRouter.createCaller({});
+    const caller = healthRouter.createCaller(emptyContext);
     const result = await caller.echo({ message: '' });
 
     expect(result.message).toBe('');

@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock database
-vi.mock('@/lib/db/client', () => ({
+// Mock database: one chainable object whose builder steps return itself. Hoisted so the
+// tests can reach each step (where, values, set, returning) with its mock type
+const { db } = vi.hoisted(() => ({
   db: {
     select: vi.fn().mockReturnThis(),
     from: vi.fn().mockReturnThis(),
@@ -16,6 +17,7 @@ vi.mock('@/lib/db/client', () => ({
     delete: vi.fn().mockReturnThis(),
   },
 }));
+vi.mock('@/lib/db/client', () => ({ db }));
 
 // Mock fetch: deliveries go through the pinned transport, which is replaced by one that calls
 // this stub (#330)
@@ -32,7 +34,6 @@ vi.mock('node:dns/promises', () => ({
 }));
 const PUBLIC_ADDRESS = [{ address: '93.184.215.14', family: 4 }];
 
-import { db } from '@/lib/db/client';
 import * as pinnedRequest from '@/lib/features/webhooks/services/pinned-request';
 import { sendThroughFetchStub } from '@/test/mocks/webhook-transport';
 import { EventEmitter } from 'node:events';

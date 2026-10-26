@@ -33,7 +33,11 @@ function query() {
     if (next instanceof Error) throw next;
     return next as unknown[];
   });
-  const builder: Promise<unknown[]> & Record<string, (arg?: unknown) => unknown> = Object.assign(
+  // Typed arguments: the object literal alone has no index signature
+  const builder: Promise<unknown[]> & Record<string, (arg?: unknown) => unknown> = Object.assign<
+    Promise<unknown[]>,
+    Record<string, (arg?: unknown) => unknown>
+  >(
     promise,
     {
       from: () => builder,

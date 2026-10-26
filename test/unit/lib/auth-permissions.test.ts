@@ -35,7 +35,7 @@ function createMembership(role: string): OrganizationMember {
     userId: 'user-123',
     role: role as OrganizationMember['role'],
     createdAt: new Date(),
-    updatedAt: null,
+    updatedAt: new Date(),
   };
 }
 

@@ -41,7 +41,7 @@ describe.skipIf(!url)('lead comments: audit, counts and readers (PostgreSQL)', (
   const as: Record<'owner' | 'member' | 'other' | 'viewer', any> = {} as never;
   const ids: Record<string, string> = {};
 
-  async function callerFor(role: string, name: string) {
+  async function callerFor(role: schema.OrganizationRole, name: string) {
     const [user] = await pg
       .insert(users)
       .values({ email: `comments-audit-${unique()}@example.com`, name })

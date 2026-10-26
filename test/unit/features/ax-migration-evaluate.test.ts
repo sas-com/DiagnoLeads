@@ -207,14 +207,14 @@ describe('evaluateAxMigration', () => {
         expect(evaluate(low).mql.level).toBe('fit');
       });
 
-      it.each([
+      it.each<[string, DiagnosticAnswers]>([
         ['the main task of the department', { access_importance: 'main' }],
         ['the whole company or customers', { access_importance: 'company' }],
         ['11-30 users', { access_users: '11_30' }],
         ['31 users or more', { access_users: 'gte31' }],
         ['data outside Access', { access_features: ['vba', 'external_data'] }],
         ['data in a database', { access_location: 'database' }],
-      ] as const)('with %s is interest (MQL)', (_, change) => {
+      ])('with %s is interest (MQL)', (_, change) => {
         expect(evaluate({ ...ended, ...change }).mql).toMatchObject({
           level: 'interest',
           qualified: true,

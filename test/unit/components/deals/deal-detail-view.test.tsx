@@ -70,7 +70,7 @@ beforeAll(() => {
 });
 
 const detail = (
-  overrides: Partial<DealDetail> = {}
+  overrides: Partial<DealDetail & { canEdit: boolean; canDelete: boolean }> = {}
 ): DealDetail & { canEdit: boolean; canDelete: boolean } => ({
   id: DEAL_ID,
   leadId: LEAD_ID,

@@ -9,7 +9,7 @@ vi.mock('next/navigation', () => ({ usePathname: () => pathname.current }));
 const OUTSIDE = 'https://www.google.com/';
 
 describe('SiteVisitBeacon', () => {
-  const sendBeacon = vi.fn(() => true);
+  const sendBeacon = vi.fn<Navigator['sendBeacon']>(() => true);
   // A fresh module for each test: it remembers per document whether the loaded page was seen
   let SiteVisitBeacon: typeof import('@/components/features/site-visits/site-visit-beacon').SiteVisitBeacon;
 
