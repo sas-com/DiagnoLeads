@@ -66,8 +66,9 @@ describe('ai-chat-assistant', () => {
         position: null,
         notes: null,
         status: null,
-      } as unknown as Parameters<typeof generateLeadSummary>[0];
+      };
 
+      // @ts-expect-error leads.status is NOT NULL; the null status is passed on purpose
       const result = await generateLeadSummary(lead, scope);
 
       // Missing fields are null in the lead's data block (#47)
