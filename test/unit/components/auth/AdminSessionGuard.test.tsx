@@ -21,14 +21,16 @@ vi.mock('next/navigation', () => {
   };
 });
 
-const renderGuard = () =>
-  render(
-    <NextIntlClientProvider locale="en" messages={{}} timeZone="Asia/Tokyo">
-      <AdminSessionGuard>
-        <p>admin page</p>
-      </AdminSessionGuard>
-    </NextIntlClientProvider>
-  );
+// A new element each time, so rerender() really renders again
+const guard = () => (
+  <NextIntlClientProvider locale="en" messages={{}} timeZone="Asia/Tokyo">
+    <AdminSessionGuard>
+      <p>admin page</p>
+    </AdminSessionGuard>
+  </NextIntlClientProvider>
+);
+
+const renderGuard = () => render(guard());
 
 describe('AdminSessionGuard', () => {
   beforeEach(() => {
@@ -60,6 +62,33 @@ describe('AdminSessionGuard', () => {
   it('does not send anyone to sign-in on a network error', () => {
     mocks.session = { data: null, isPending: false, error: new Error('offline') };
     renderGuard();
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  // Most stale cookies take this path: the first render is still checking, and the answer comes
+  // in a later render. Nothing else the effect depends on changes then (the router is one object,
+  // #636), so only signedOut can make it run again (#753)
+  it('sends the visitor to sign-in once, when the check ends without a session', () => {
+    mocks.session = { data: null, isPending: true, error: null };
+    const { rerender } = renderGuard();
+    expect(mocks.replace).not.toHaveBeenCalled();
+
+    mocks.session = { data: null, isPending: false, error: null };
+    rerender(guard());
+
+    expect(mocks.replace).toHaveBeenCalledExactlyOnceWith(
+      `/en/login?callbackUrl=${encodeURIComponent('/en/leads?leadId=1')}`
+    );
+  });
+
+  it('stays on the page when the check ends with a session', () => {
+    mocks.session = { data: null, isPending: true, error: null };
+    const { rerender } = renderGuard();
+
+    mocks.session = { data: { user: { id: 'u1' } }, isPending: false, error: null };
+    rerender(guard());
+
+    expect(screen.getByText('admin page')).toBeInTheDocument();
     expect(mocks.replace).not.toHaveBeenCalled();
   });
 });
