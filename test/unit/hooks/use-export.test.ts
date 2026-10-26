@@ -75,7 +75,7 @@ const mockAnalyticsData: Parameters<ReturnType<typeof useExport>['exportAnalytic
   trend: [{ date: '2024-01-01', count: 5, converted: 1 }],
   sourceBreakdown: [{ source: 'web', count: 50, percentage: 50 }],
   statusBreakdown: [{ status: 'new', count: 30, percentage: 30 }],
-  funnel: { stages: [], totalLeads: 100, overallConversionRate: 5, averageConversionDays: 0 },
+  funnel: { stages: [], totalLeads: 100, overallConversionRate: 5, nurturingCount: 0, averageConversionDays: 0 },
   dateRange: '30d',
 };
 

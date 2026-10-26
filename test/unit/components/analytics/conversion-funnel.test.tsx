@@ -13,10 +13,14 @@ import { describe, expect, it } from 'vitest';
 
 const funnel = (averageConversionDays: number): ConversionFunnelData => ({
   stages: [
-    { name: 'new', count: 1200, cumulativeCount: 1200, percentage: 100, conversionRate: 100 },
-    { name: 'won', count: 30, cumulativeCount: 30, percentage: 2.5, conversionRate: 2.5 },
+    { name: 'lead', count: 900, cumulativeCount: 1200, percentage: 100, conversionRate: 100 },
+    { name: 'mql', count: 200, cumulativeCount: 300, percentage: 25, conversionRate: 25 },
+    { name: 'deal', count: 40, cumulativeCount: 100, percentage: 8.33, conversionRate: 33.33 },
+    { name: 'sql', count: 30, cumulativeCount: 60, percentage: 5, conversionRate: 60 },
+    { name: 'won', count: 30, cumulativeCount: 30, percentage: 2.5, conversionRate: 50 },
   ],
   totalLeads: 1200,
+  nurturingCount: 45,
   overallConversionRate: 2.5,
   averageConversionDays,
 });
@@ -47,6 +51,19 @@ describe('ConversionFunnel', () => {
     renderIn(locale, <ConversionFunnel funnelData={funnel(0)} />);
 
     expect(screen.getByText(text)).toBeInTheDocument();
+  });
+
+  // The stages of the lead lifecycle, 再育成 beside them (#802)
+  it('shows the lifecycle stages and the nurtured leads apart', () => {
+    renderIn('ja', <ConversionFunnel funnelData={funnel(0)} />);
+
+    for (const label of ['リード', 'MQL（関心あり）', '商談', 'SQL（適格）', '受注']) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    }
+    expect(screen.getByTestId('funnel-nurturing')).toHaveTextContent(
+      '再育成（ナーチャリング）中のリード：45件'
+    );
+    expect(screen.queryByText('ナーチャリング')).not.toBeInTheDocument();
   });
 
   it.each([

@@ -111,8 +111,16 @@ export interface StatusBreakdown {
   percentage: number;
 }
 
+/**
+ * Stages of the conversion funnel, in the order of the lead lifecycle (#802,
+ * docs/PIPELINE_LIFECYCLE.md): リード → MQL → 商談 → SQL → 受注. 再育成 (nurturing) is a side way,
+ * not a stage, and is counted apart (ConversionFunnelData.nurturingCount).
+ */
+export const FUNNEL_STAGES = ['lead', 'mql', 'deal', 'sql', 'won'] as const;
+export type FunnelStageName = (typeof FUNNEL_STAGES)[number];
+
 export interface FunnelStage {
-  name: string;
+  name: FunnelStageName;
   count: number;
   cumulativeCount: number;
   percentage: number;
@@ -122,6 +130,8 @@ export interface FunnelStage {
 export interface ConversionFunnelData {
   stages: FunnelStage[];
   totalLeads: number;
+  /** Leads of the period nurtured now (再育成): beside the funnel, not one of its stages */
+  nurturingCount: number;
   overallConversionRate: number;
   averageConversionDays: number;
 }

@@ -1383,7 +1383,7 @@
   "deals": {
     "title": "商談",
     "description": "商談をステージごとに並べ、金額と受注予定日で進み具合を見ます",
-    "create": "商談を作る",
+    "create": "商談を作成",
     "views": {
       "label": "表示",
       "board": "ボード",
@@ -1423,6 +1423,8 @@
       "forecastCategory": "予測の区分",
       "expectedCloseOn": "受注予定日",
       "closedOn": "受注・失注の日",
+      "wonOn": "受注日",
+      "lostOn": "失注日",
       "owner": "担当",
       "nextStep": "次の一手",
       "lostReason": "失注理由",
@@ -1447,8 +1449,8 @@
       "noCloseDate": "受注予定日なし",
       "noAmount": "金額未定",
       "unassigned": "担当未定",
-      "move": "「{name}」のステージを移動",
-      "moveTo": "「{stage}」へ移す"
+      "move": "「{name}」のステージを移動（今：{stage}）",
+      "moveTo": "「{stage}」に移す"
     },
     "filters": {
       "label": "絞り込み",
@@ -1468,7 +1470,7 @@
     "lostDialog": {
       "title": "「{name}」を失注にする",
       "description": "失注理由は、勝ち負けの分析に使います",
-      "fromWon": "リードは成約のままです。",
+      "fromWon": "ほかに受注の商談がなければ、リードは成約でなくなります（開いている商談があれば商談中、なければ失注）。",
       "reason": "失注理由",
       "reasonPlaceholder": "選んでください",
       "reasonRequired": "失注理由を選んでください",
@@ -1478,8 +1480,8 @@
     },
     "wonDialog": {
       "title": "「{name}」を受注にする",
-      "impact": "リード「{lead}」は成約になります。商談を開き直しても、リードは成約のままです。",
-      "impactUnnamed": "このリードは成約になります。商談を開き直しても、リードは成約のままです。",
+      "impact": "リード「{lead}」は成約になります。",
+      "impactUnnamed": "このリードは成約になります。",
       "fromLost": "失注理由と詳細は消えます。",
       "closedOn": "受注日",
       "closedOnInvalid": "受注日は2000〜2100年の日付で入力してください",
@@ -1490,23 +1492,36 @@
       "lost": "失注理由（{reason}）と詳細は消えます。",
       "lostNoReason": "失注理由と詳細は消えます。",
       "probability": "確度は「{stage}」の既定値 {probability}% になり、予測の区分の上書きも消えます。",
-      "won": "リードは成約のままです。",
+      "won": "ほかに受注の商談がなければ、リードは「商談中」に戻ります。",
       "confirm": "開き直す"
     },
     "form": {
-      "createTitle": "商談を作る",
+      "createTitle": "商談を作成",
       "editTitle": "商談を編集",
+      "requiredHelp": {
+        "lead": "リードと商談名は必須です。ほかはあとから入力できます",
+        "name": "商談名は必須です。ほかはあとから入力できます",
+        "won": "商談名と受注日は必須です。ほかはあとから入力できます",
+        "lost": "商談名・失注日・失注理由は必須です。ほかはあとから入力できます"
+      },
       "lead": "リード",
+      "leadChoose": "リードを選ぶ",
+      "leadSearchLabel": "リードを探す",
       "leadPlaceholder": "会社名・氏名・メールで探す",
+      "leadTypeToSearch": "会社名・氏名・メールの一部を入れてください",
       "leadRequired": "リードを選んでください",
       "leadSearching": "探しています…",
       "leadNotFound": "見つかりません",
-      "leadChange": "選び直す",
+      "leadCount": "{count}件の候補",
       "required": "必須",
       "namePlaceholder": "例：AS/400 現行調査",
       "nameRequired": "商談名を入力してください",
       "closeDateInvalid": "受注予定日は2000〜2100年の日付で入力してください",
-      "amountHelp": "税抜の円。未定なら空欄",
+      "wonOnInvalid": "受注日は2000〜2100年の日付で入力してください",
+      "lostOnInvalid": "失注日は2000〜2100年の日付で入力してください",
+      "amountHelp": "税抜の円。カンマや全角の数字でも入力できます。未定なら空欄",
+      "amountUnit": "円",
+      "amountPreview": "＝ {amount}",
       "amountInvalid": "0以上の整数で入力してください",
       "probabilityHelp": "空欄ならステージの既定値（{value}%）",
       "probabilityInvalid": "0〜100の整数で入力してください",
@@ -1514,12 +1529,32 @@
       "ownerFromLead": "リードの担当者（いなければ自分）",
       "forecastAuto": "確度から自動",
       "wonToday": "受注日は今日になります。",
+      "wonPast": "過去の受注は、作成のあとに編集で受注日を直せます。",
+      "onHoldReason": "「{reason}」は商談の失注理由に使えません。選び直してください",
       "submitCreate": "作成",
-      "submitEdit": "保存"
+      "submitEdit": "保存",
+      "saving": "保存しています…",
+      "saveError": "保存できませんでした。もう一度お試しください"
     },
     "list": {
-      "caption": "商談の一覧",
-      "empty": "条件に合う商談はありません"
+      "caption": "商談の一覧（{order}）",
+      "closedNote": "受注・失注は直近{days}日の商談を表示しています",
+      "lead": "会社・氏名",
+      "marks": "注意",
+      "orders": {
+        "stage": {
+          "asc": "ステージの順",
+          "desc": "ステージの逆順"
+        },
+        "amount": {
+          "asc": "金額の小さい順",
+          "desc": "金額の大きい順"
+        },
+        "expectedCloseOn": {
+          "asc": "受注予定日の早い順",
+          "desc": "受注予定日の遅い順"
+        }
+      }
     },
     "detail": {
       "back": "商談へ戻る",
@@ -1544,16 +1579,27 @@
       "loadError": "商談を読み込めませんでした",
       "retry": "再読み込み",
       "empty": "まだ商談はありません",
-      "emptyHint": "商談は、リードの詳細か、この画面の「商談を作る」から作ります",
+      "emptyHint": "商談は、リードの詳細か、この画面の「商談を作成」から作成します",
+      "emptyHintReadOnly": "商談が作成されると、ここに表示されます",
+      "noMatch": "条件に合う商談はありません",
+      "clearFilters": "絞り込みを解除",
       "truncated": "表示は{limit}件までです。条件で絞り込んでください",
-      "readOnly": "閲覧のみです",
+      "readOnly": "閲覧のみ",
+      "readOnlyHint": "商談の作成・変更・ステージの移動は、リードを編集できるメンバーができます。変えるには組織の管理者に依頼してください",
       "forbiddenTitle": "商談を見る権限がありません",
       "forbiddenBody": "商談と金額・予測・目標は、リードを閲覧できるメンバーだけが見られます（親組織からの閲覧者は除く）。"
     },
     "toasts": {
-      "created": "商談を作りました",
+      "created": "商談を作成しました",
       "saved": "保存しました",
       "moved": "「{name}」を「{stage}」に移しました",
+      "movedTo": "「{name}」を「{stage}」に移しました（確度 {probability}%）",
+      "movedHandedOff": "「{name}」を「{stage}」に移しました。技術担当に引き継ぎ書を送りました",
+      "movedToHandedOff": "「{name}」を「{stage}」に移しました（確度 {probability}%）。技術担当に引き継ぎ書を送りました",
+      "moveFailed": "「{name}」を「{stage}」に移せませんでした。「{from}」に戻しました",
+      "undo": "元に戻す",
+      "moveUndone": "「{name}」を「{stage}」に戻しました",
+      "undoFailed": "「{name}」を元に戻せませんでした。今は「{stage}」です",
       "deleted": "商談を削除しました",
       "deleteError": "削除できませんでした。もう一度お試しください",
       "error": "保存できませんでした。もう一度お試しください"
@@ -2598,7 +2644,16 @@
         "conversionRate": "コンバージョン率",
         "overallConversion": "全体コンバージョン率",
         "fromInitial": "初回リードからの変換率",
-        "averageDays": "成約までの平均：{days}日"
+        "averageDays": "成約までの平均：{days}日",
+        "stages": {
+          "lead": "リード",
+          "mql": "MQL（関心あり）",
+          "deal": "商談",
+          "sql": "SQL（適格）",
+          "won": "受注"
+        },
+        "nurturingNow": "再育成（ナーチャリング）中のリード：{count, number}件（ファネルの段には数えない）",
+        "reachedNote": "後の段に進んだリードは前の段にも数えます（代行のアポなど、MQL を経ずに商談に入ったリードも MQL に数えます）"
       },
       "responseTimePeriods": {
         "withinHour": "1時間以内",
@@ -4818,7 +4873,13 @@
       "cumulative": "累計",
       "stageConversionRate": "移行率",
       "overallConversionRate": "全体の成約率: {rate}%",
-      "averageConversionDays": "成約までの平均日数: {days}日"
+      "averageConversionDays": "成約までの平均日数: {days}日",
+      "stageLead": "リード",
+      "stageMql": "MQL（関心あり）",
+      "stageDeal": "商談",
+      "stageSql": "SQL（適格）",
+      "stageWon": "受注",
+      "nurturingNow": "再育成（ナーチャリング）中のリード: {count}件"
     },
     "diagnostic": {
       "leadScore": "リードスコア",

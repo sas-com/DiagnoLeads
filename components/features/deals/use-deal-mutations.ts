@@ -6,36 +6,41 @@ import { toast } from 'sonner';
 
 /**
  * Deal changes (Refs #436) with the queries they refresh: the deals, and the lead, whose status
- * and deal phase a deal moves forward (and its activity).
+ * and deal phase are computed from its deals (#444), and its activity. Creating and changing a
+ * deal succeed once the shown queries are read again (#720), so what follows (closing a dialog,
+ * settling a move shown ahead) does not show the old values for a moment; a deletion does not
+ * wait, as the deal's page leaves at once. A form or a question that says a failure itself
+ * passes `toastErrors: false`.
  */
-export function useDealMutations() {
+export function useDealMutations({ toastErrors = true }: { toastErrors?: boolean } = {}) {
   const utils = trpc.useUtils();
   const t = useTranslations('deals.toasts');
-  const refresh = () => {
-    void utils.deals.invalidate();
-    void utils.leads.invalidate();
-    void utils.leadActivity.invalidate();
-  };
+  const refresh = () =>
+    Promise.all([
+      utils.deals.invalidate(),
+      utils.leads.invalidate(),
+      utils.leadActivity.invalidate(),
+    ]);
   const onError = () => {
-    toast.error(t('error'));
+    if (toastErrors) toast.error(t('error'));
   };
 
   const create = trpc.deals.create.useMutation({
     onSuccess: () => {
-      refresh();
       toast.success(t('created'));
+      return refresh();
     },
     onError,
   });
-  const update = trpc.deals.update.useMutation({ onSuccess: refresh, onError });
+  const update = trpc.deals.update.useMutation({ onSuccess: () => refresh(), onError });
   const remove = trpc.deals.delete.useMutation({
     onSuccess: () => {
-      refresh();
+      void refresh();
       toast.success(t('deleted'));
     },
     onError: () => {
       toast.error(t('deleteError'));
     },
   });
-  return { create, update, remove };
+  return { create, update, remove, refresh };
 }
