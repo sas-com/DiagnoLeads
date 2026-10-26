@@ -340,6 +340,108 @@ describe.skipIf(!url)('deals (PostgreSQL)', () => {
       expect(sent.notifyLeadHandoff).toHaveBeenCalledTimes(1);
     });
 
+    it('records the SQL decision sent with the move, and warns of a move out of 見極め without one (#801)', async () => {
+      const lead = await createLead(orgA);
+      const deal = await adminA.deals.create({ organizationId: orgA, leadId: lead.id, name: '調査' });
+
+      // Let through without a decision (imports and integrations go on), with a warning
+      const skipped = await memberA.deals.update({
+        organizationId: orgA,
+        dealId: deal.id,
+        stage: 'discovery',
+      });
+      expect(skipped).toMatchObject({ stage: 'discovery', sqlUndecided: true });
+      expect((await leadOf(lead.id)).sqlDecision).toBeNull();
+      // Not warned again for a move between the later stages
+      const later = await memberA.deals.update({
+        organizationId: orgA,
+        dealId: deal.id,
+        stage: 'proposal',
+      });
+      expect(later.sqlUndecided).toBe(false);
+
+      await memberA.deals.update({ organizationId: orgA, dealId: deal.id, stage: 'qualification' });
+      sent.emitLeadEvents.mockClear();
+      const decided = await memberA.deals.update({
+        organizationId: orgA,
+        dealId: deal.id,
+        stage: 'discovery',
+        sqlDecision: 'qualified',
+      });
+      expect(decided.sqlUndecided).toBe(false);
+      const after = await leadOf(lead.id);
+      expect(after).toMatchObject({ sqlDecision: 'qualified' });
+      expect(after.sqlDecidedAt).toBeInstanceOf(Date);
+      const leadAudits = await auditOf('lead', lead.id);
+      expect(leadAudits.at(-1)).toMatchObject({
+        userId: memberAId,
+        changes: { before: { sqlDecision: null }, after: { sqlDecision: 'qualified' } },
+        metadata: { dealId: deal.id },
+      });
+      expect(sent.emitLeadEvents).toHaveBeenCalledTimes(1);
+
+      // A decision the lead has is not rewritten: the same one, or another one sent from a board
+      // read before it was made (it is changed on the lead's page)
+      const decidedAt = after.sqlDecidedAt;
+      await memberA.deals.update({ organizationId: orgA, dealId: deal.id, sqlDecision: 'qualified' });
+      await memberA.deals.update({
+        organizationId: orgA,
+        dealId: deal.id,
+        sqlDecision: 'not_qualified',
+      });
+      expect(await leadOf(lead.id)).toMatchObject({ sqlDecision: 'qualified', sqlDecidedAt: decidedAt });
+    });
+
+    it('warns of a win out of 見極め without a decision, not of a reopening, and records one without a move (#801)', async () => {
+      const lead = await createLead(orgA);
+      const deal = await adminA.deals.create({ organizationId: orgA, leadId: lead.id, name: '調査' });
+      const won = await memberA.deals.update({ organizationId: orgA, dealId: deal.id, stage: 'won' });
+      expect(won.sqlUndecided).toBe(true);
+
+      await memberA.deals.update({
+        organizationId: orgA,
+        dealId: deal.id,
+        stage: 'lost',
+        lostReason: 'timing',
+      });
+      const reopened = await memberA.deals.update({
+        organizationId: orgA,
+        dealId: deal.id,
+        stage: 'discovery',
+      });
+      expect(reopened.sqlUndecided).toBe(false);
+
+      const recorded = await memberA.deals.update({
+        organizationId: orgA,
+        dealId: deal.id,
+        sqlDecision: 'qualified',
+      });
+      expect(recorded).toMatchObject({ stage: 'discovery', sqlUndecided: false });
+      expect((await leadOf(lead.id)).sqlDecision).toBe('qualified');
+    });
+
+    it('records 不適格 with the loss out of 見極め (#801)', async () => {
+      const lead = await createLead(orgA);
+      const deal = await adminA.deals.create({ organizationId: orgA, leadId: lead.id, name: '調査' });
+      const lost = await memberA.deals.update({
+        organizationId: orgA,
+        dealId: deal.id,
+        stage: 'lost',
+        lostReason: 'no_need',
+        sqlDecision: 'not_qualified',
+      });
+      expect(lost.sqlUndecided).toBe(false);
+      expect(await leadOf(lead.id)).toMatchObject({
+        sqlDecision: 'not_qualified',
+        status: 'lost',
+        lostReason: 'no_need',
+      });
+      await expect(
+        adminB.deals.update({ organizationId: orgB, dealId: deal.id, sqlDecision: 'qualified' })
+      ).rejects.toThrow();
+      expect((await leadOf(lead.id)).sqlDecision).toBe('not_qualified');
+    });
+
     it('closes won deals on today and reopens them without the close day', async () => {
       const lead = await createLead(orgA);
       const deal = await adminA.deals.create({ organizationId: orgA, leadId: lead.id, name: '調査' });
