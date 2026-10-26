@@ -1,22 +1,32 @@
 'use client';
 
+import { TAP_TARGET } from '@/components/common/tap-target';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import type { CommentType } from '@/lib/db/schema';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
 import { MessageSquare, Send, StickyNote } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useState } from 'react';
+import { useId, useState } from 'react';
+import { SEND_SHORTCUTS, TOGGLE_ITEM, isSendShortcut } from './controls';
+
+/** What the screen writes: activity entries come from addActivity only */
+export type WritableCommentType = 'comment' | 'note';
+
+const isWritableType = (value: string): value is WritableCommentType =>
+  value === 'comment' || value === 'note';
 
 interface CommentFormProps {
   organizationId: string;
   leadId: string;
   /** Rejects when the write failed: the text is kept for another try */
-  onSubmit: (content: string, type?: CommentType) => Promise<void>;
+  onSubmit: (content: string, type: WritableCommentType) => Promise<void>;
   onCancel?: () => void;
   placeholder?: string;
   isReply?: boolean;
   isLoading?: boolean;
+  /** Takes the focus when shown (a reply just opened) */
+  autoFocus?: boolean;
 }
 
 export function CommentForm({
@@ -27,56 +37,69 @@ export function CommentForm({
   placeholder,
   isReply = false,
   isLoading = false,
+  autoFocus = false,
 }: CommentFormProps) {
   const t = useTranslations('comments');
   const [content, setContent] = useState('');
-  const [type, setType] = useState<CommentType>('comment');
+  const [type, setType] = useState<WritableCommentType>('comment');
+  // A reply has no isLoading of its own: the form holds back a second send itself
+  const [sending, setSending] = useState(false);
+  // The type of a write that failed, told under the field (with the section's toast)
+  const [failed, setFailed] = useState<WritableCommentType | null>(null);
+  const id = useId();
+  const busy = isLoading || sending;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submit = async () => {
     const text = content.trim();
-    if (!text) return;
+    if (!text || busy) return;
+    const written = isReply ? 'comment' : type;
+    setSending(true);
+    setFailed(null);
     try {
-      await onSubmit(text, type);
+      await onSubmit(text, written);
       setContent('');
     } catch {
-      // Kept for another try; the section says what went wrong
+      // Kept for another try
+      setFailed(written);
+    } finally {
+      setSending(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        void submit();
+      }}
+      className="space-y-3"
+    >
       {/* Type selector (only for non-reply) */}
       {!isReply && (
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setType('comment')}
-            aria-pressed={type === 'comment'}
-            className={cn(
-              'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-colors',
-              type === 'comment'
-                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700'
-            )}
+        <div className="space-y-1.5">
+          <ToggleGroup
+            type="single"
+            size="sm"
+            variant="outline"
+            value={type}
+            onValueChange={(value) => isWritableType(value) && setType(value)}
+            aria-label={t('typeLabel')}
+            aria-describedby={`${id}-type-hint`}
+            className="flex-wrap justify-start"
           >
-            <MessageSquare className="h-3.5 w-3.5" />
-            {t('typeComment')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setType('note')}
-            aria-pressed={type === 'note'}
-            className={cn(
-              'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-colors',
-              type === 'note'
-                ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700'
-            )}
-          >
-            <StickyNote className="h-3.5 w-3.5" />
-            {t('typeNote')}
-          </button>
+            <ToggleGroupItem value="comment" className={TOGGLE_ITEM}>
+              <MessageSquare aria-hidden="true" />
+              {t('typeComment')}
+            </ToggleGroupItem>
+            <ToggleGroupItem value="note" className={TOGGLE_ITEM}>
+              <StickyNote aria-hidden="true" />
+              {t('typeNote')}
+            </ToggleGroupItem>
+          </ToggleGroup>
+          {/* What the two types differ in (#722): only comments take replies */}
+          <p id={`${id}-type-hint`} className="text-sm text-gray-600 dark:text-gray-400">
+            {t('typeHint')}
+          </p>
         </div>
       )}
 
@@ -85,32 +108,53 @@ export function CommentForm({
         <Textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
+          onKeyDown={(event) => {
+            if (!isSendShortcut(event)) return;
+            event.preventDefault();
+            void submit();
+          }}
           placeholder={
             placeholder || (type === 'note' ? t('notePlaceholder') : t('commentPlaceholder'))
           }
-          className="min-h-[80px] resize-none pr-12"
-          disabled={isLoading}
+          className="min-h-[80px] resize-none pr-14"
+          // Read-only, not disabled, while sending: the focus stays for the next one
+          readOnly={busy}
+          // A reply the member just opened: they write there next
+          autoFocus={autoFocus}
           aria-label={
             isReply ? t('replyPlaceholder') : type === 'note' ? t('typeNote') : t('typeComment')
           }
+          aria-keyshortcuts={SEND_SHORTCUTS}
+          aria-describedby={failed ? `${id}-error` : isReply ? undefined : `${id}-hints`}
         />
         <Button
           type="submit"
           size="sm"
-          className="absolute bottom-2 right-2"
-          disabled={!content.trim() || isLoading}
+          variant="outline"
+          className={cn('absolute bottom-2 right-2', TAP_TARGET, 'min-w-11 md:min-w-0')}
+          disabled={!content.trim() || busy}
           aria-label={t('send')}
         >
           <Send className="h-4 w-4" aria-hidden="true" />
         </Button>
       </div>
+      {failed && (
+        <p id={`${id}-error`} role="alert" className="text-sm text-red-700 dark:text-red-400">
+          {t('createError', { type: failed })}
+        </p>
+      )}
       {/* Everyone who reads the lead's comments reads it, not only its author */}
-      {!isReply && <p className="text-sm text-muted-foreground">{t('visibleToTeam')}</p>}
+      {!isReply && (
+        <div id={`${id}-hints`} className="space-y-0.5 text-sm text-gray-600 dark:text-gray-400">
+          <p>{t('visibleToTeam')}</p>
+          <p>{t('sendShortcut')}</p>
+        </div>
+      )}
 
       {/* Cancel button for replies */}
       {isReply && onCancel && (
         <div className="flex justify-end">
-          <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+          <Button type="button" variant="ghost" size="sm" className={TAP_TARGET} onClick={onCancel}>
             {t('cancel')}
           </Button>
         </div>

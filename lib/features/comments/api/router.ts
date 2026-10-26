@@ -20,6 +20,7 @@ import { TRPCError } from '@trpc/server';
 import { and, count, desc, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { canReadComments, canWriteComments } from '../access';
+import { countLeadComments } from '../service';
 
 type Transaction = Parameters<Parameters<(typeof defaultDb)['transaction']>[0]>[0];
 
@@ -97,7 +98,8 @@ const listCommentsSchema = z.object({
   leadId: z.string().uuid(),
   type: z.enum(['comment', 'note', 'activity', 'all']).default('all'),
   limit: z.number().min(1).max(100).default(50),
-  offset: z.number().min(0).default(0),
+  /** Where the page starts: the nextCursor of the page before (the screen reads more, #722) */
+  cursor: z.number().int().min(0).nullish(),
 });
 
 const togglePinSchema = z.object({
@@ -107,7 +109,7 @@ const togglePinSchema = z.object({
 
 export const commentsRouter = router({
   /**
-   * List comments for a lead
+   * A page of a lead's comments (replies inside their comment), with the counts of every type
    */
   list: organizationProcedure.input(listCommentsSchema).query(async ({ ctx, input }) => {
     if (!canReadComments(ctx)) {
@@ -127,11 +129,13 @@ export const commentsRouter = router({
       conditions.push(eq(leadComments.type, input.type));
     }
 
-    const results = await ctx.db.query.leadComments.findMany({
+    const offset = input.cursor ?? 0;
+    const page = ctx.db.query.leadComments.findMany({
       where: and(...conditions),
-      orderBy: [desc(leadComments.isPinned), desc(leadComments.createdAt)],
+      // The id last: the same order on every page, so no comment shows twice or not at all
+      orderBy: [desc(leadComments.isPinned), desc(leadComments.createdAt), desc(leadComments.id)],
       limit: input.limit,
-      offset: input.offset,
+      offset,
       with: {
         user: {
           columns: {
@@ -163,16 +167,20 @@ export const commentsRouter = router({
       },
     });
 
-    const [total] = await ctx.db
-      .select({ value: count() })
-      .from(leadComments)
-      .where(and(...conditions));
+    // Every type is counted whatever the page shows: the heading and each filter say how many
+    const [results, counts] = await Promise.all([
+      page,
+      countLeadComments(ctx.db, { organizationId: input.organizationId, leadId: input.leadId }),
+    ]);
+    const total = counts[input.type];
+    const end = offset + results.length;
 
     return {
       items: results,
-      total: total?.value ?? 0,
-      limit: input.limit,
-      offset: input.offset,
+      total,
+      counts,
+      // null on the last page
+      nextCursor: results.length > 0 && end < total ? end : null,
       // What the screen offers: the checks of the writes below (others' comments are edited and
       // deleted by their author or an owner only)
       viewer: {

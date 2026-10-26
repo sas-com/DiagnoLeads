@@ -1,5 +1,7 @@
 'use client';
 
+import { TAP_TARGET } from '@/components/common/tap-target';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -7,10 +9,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Textarea } from '@/components/ui/textarea';
 import type { CommentType, LeadComment, User } from '@/lib/db/schema';
 import { cn } from '@/lib/utils';
-import { formatDistance } from 'date-fns';
-import { enUS, ja } from 'date-fns/locale';
 import {
   MessageSquare,
   MoreHorizontal,
@@ -22,9 +23,10 @@ import {
   Trash2,
   Zap,
 } from 'lucide-react';
-import { useLocale, useTranslations } from 'next-intl';
-import { useState } from 'react';
+import { useFormatter, useTranslations } from 'next-intl';
+import { type ComponentType, useId, useRef, useState } from 'react';
 import { CommentForm } from './comment-form';
+import { SEND_SHORTCUTS, isSendShortcut } from './controls';
 
 // Extended comment type with user info and replies
 export type CommentWithUser = LeadComment & {
@@ -35,24 +37,42 @@ export type CommentWithUser = LeadComment & {
 
 interface CommentItemProps {
   comment: CommentWithUser;
+  /** The section's clock, for the relative time shown as the title of the date */
+  now: Date;
   currentUserId: string;
   organizationId: string;
   leadId: string;
   isAdmin?: boolean;
   /** Rejects when the write failed: the edit stays open */
   onEdit?: (id: string, content: string) => Promise<void>;
-  onDelete?: (id: string) => void;
+  onDelete?: (comment: CommentWithUser) => void;
   onTogglePin?: (id: string) => void;
   /** Rejects when the write failed: the reply stays open */
   onReply?: (parentId: string, content: string) => Promise<void>;
   isNested?: boolean;
 }
 
-const typeIcons: Record<CommentType, React.ReactNode> = {
-  comment: <MessageSquare className="h-4 w-4" />,
-  note: <StickyNote className="h-4 w-4" />,
-  activity: <Zap className="h-4 w-4" />,
+/** 2026/10/22 14:30 in Japan time, as the lead's activity shows it */
+const DATE_TIME = { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Tokyo' } as const;
+
+// The type in words, not by its icon and color alone (#722)
+const typeLabels = {
+  comment: 'typeComment',
+  note: 'typeNote',
+  activity: 'typeActivity',
+} as const satisfies Record<CommentType, string>;
+
+const typeIcons: Record<CommentType, ComponentType<{ className?: string }>> = {
+  comment: MessageSquare,
+  note: StickyNote,
+  activity: Zap,
 };
+
+const typeBadges = {
+  comment: 'blue',
+  note: 'yellow',
+  activity: 'gray',
+} as const satisfies Record<CommentType, string>;
 
 const typeColors: Record<CommentType, string> = {
   comment: 'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800',
@@ -62,6 +82,7 @@ const typeColors: Record<CommentType, string> = {
 
 export function CommentItem({
   comment,
+  now,
   currentUserId,
   organizationId,
   leadId,
@@ -73,12 +94,19 @@ export function CommentItem({
   isNested = false,
 }: CommentItemProps) {
   const t = useTranslations('comments');
-  const locale = useLocale();
-  const dateLocale = locale === 'ja' ? ja : enUS;
+  const format = useFormatter();
+  const id = useId();
 
   const [isEditing, setIsEditing] = useState(false);
   const [isReplying, setIsReplying] = useState(false);
   const [editContent, setEditContent] = useState(comment.content);
+  const [saving, setSaving] = useState(false);
+  const [editFailed, setEditFailed] = useState(false);
+  const editRef = useRef<HTMLTextAreaElement>(null);
+  const menuRef = useRef<HTMLButtonElement>(null);
+  const replyRef = useRef<HTMLButtonElement>(null);
+  // The edit opens from the menu, which gives the focus back to its button as it closes
+  const editOpening = useRef(false);
 
   const isOwner = comment.userId !== null && comment.userId === currentUserId;
   const canModify = isOwner || isAdmin;
@@ -90,26 +118,65 @@ export function CommentItem({
   const deleteBlocked =
     !isAdmin && (comment.replies ?? []).some((reply) => reply.userId !== currentUserId);
 
+  // Into the edit, the caret after the text
+  const focusEdit = () => {
+    const field = editRef.current;
+    if (!field) return;
+    field.focus();
+    field.setSelectionRange(field.value.length, field.value.length);
+  };
+
+  const startEdit = () => {
+    editOpening.current = true;
+    // Chosen again while open: what was written stays
+    if (isEditing) return;
+    setEditContent(comment.content);
+    setEditFailed(false);
+    setIsEditing(true);
+  };
+
+  // Back to the menu the edit came from
+  const closeEdit = () => {
+    editOpening.current = false;
+    setIsEditing(false);
+    setEditFailed(false);
+    menuRef.current?.focus();
+  };
+
   const handleSaveEdit = async () => {
-    if (!editContent.trim() || !onEdit) return;
+    const text = editContent.trim();
+    if (!text || !onEdit || saving) return;
+    setSaving(true);
+    setEditFailed(false);
     try {
-      await onEdit(comment.id, editContent.trim());
-      setIsEditing(false);
+      await onEdit(comment.id, text);
+      closeEdit();
     } catch {
-      // Kept open with the text; the section says what went wrong
+      // Kept open with the text, and told under the field
+      setEditFailed(true);
+    } finally {
+      setSaving(false);
     }
+  };
+
+  // Back to the reply button
+  const closeReply = () => {
+    setIsReplying(false);
+    replyRef.current?.focus();
   };
 
   // A failed reply rejects to its form, which keeps the text
   const handleReply = async (content: string) => {
     if (!onReply) return;
     await onReply(comment.id, content);
-    setIsReplying(false);
+    closeReply();
   };
 
   const author = comment.user;
   const authorName = author ? author.name || author.email : t('deletedUser');
   const userInitial = author ? authorName.charAt(0).toUpperCase() : '?';
+  const TypeIcon = typeIcons[comment.type];
+  const createdAt = new Date(comment.createdAt);
 
   return (
     <div className={cn('space-y-2', isNested && 'ml-8 mt-2')}>
@@ -123,26 +190,39 @@ export function CommentItem({
         {/* Header */}
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-3">
-            {/* Avatar */}
+            {/* Avatar: the name comes next to it */}
             {author?.image ? (
-              <img src={author.image} alt={author.name || ''} className="h-8 w-8 rounded-full" />
+              <img src={author.image} alt="" className="h-8 w-8 rounded-full" />
             ) : (
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-200 dark:bg-gray-700 text-sm font-medium">
+              <div
+                aria-hidden="true"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-200 dark:bg-gray-700 text-sm font-medium"
+              >
                 {userInitial}
               </div>
             )}
 
             <div className="flex flex-col">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="font-medium text-gray-900 dark:text-gray-100">{authorName}</span>
-                <span className="text-gray-400">{typeIcons[comment.type]}</span>
-                {comment.isPinned && <Pin className="h-3 w-3 text-amber-500 fill-amber-500" />}
+                <Badge color={typeBadges[comment.type]} className="gap-1">
+                  <TypeIcon className="h-3 w-3" aria-hidden="true" />
+                  {t(typeLabels[comment.type])}
+                </Badge>
+                {comment.isPinned && (
+                  <Badge color="amber" className="gap-1">
+                    <Pin className="h-3 w-3" aria-hidden="true" />
+                    {t('pinned')}
+                  </Badge>
+                )}
               </div>
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                {formatDistance(new Date(comment.createdAt), new Date(), {
-                  addSuffix: true,
-                  locale: dateLocale,
-                })}
+              <span className="text-xs text-gray-600 dark:text-gray-400">
+                <time
+                  dateTime={createdAt.toISOString()}
+                  title={format.relativeTime(createdAt, now)}
+                >
+                  {format.dateTime(createdAt, DATE_TIME)}
+                </time>
                 {comment.updatedAt > comment.createdAt && ` (${t('edited')})`}
               </span>
             </div>
@@ -152,13 +232,28 @@ export function CommentItem({
           {(canPin || canEdit || canDelete) && comment.type !== 'activity' && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={t('actions')}>
+                <Button
+                  ref={menuRef}
+                  variant="ghost"
+                  size="sm"
+                  className={cn('h-8 w-8 p-0', TAP_TARGET, 'min-w-11 md:min-w-0')}
+                  aria-label={t('actions', { type: comment.type })}
+                >
                   <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent
+                align="end"
+                onCloseAutoFocus={(event) => {
+                  // The edit just opened takes the focus, once the menu has let it go
+                  if (!editOpening.current) return;
+                  editOpening.current = false;
+                  event.preventDefault();
+                  focusEdit();
+                }}
+              >
                 {canPin && onTogglePin && (
-                  <DropdownMenuItem onClick={() => onTogglePin(comment.id)}>
+                  <DropdownMenuItem className={TAP_TARGET} onClick={() => onTogglePin(comment.id)}>
                     {comment.isPinned ? (
                       <>
                         <PinOff className="mr-2 h-4 w-4" />
@@ -173,23 +268,23 @@ export function CommentItem({
                   </DropdownMenuItem>
                 )}
                 {canEdit && (
-                  <DropdownMenuItem onClick={() => setIsEditing(true)}>
+                  <DropdownMenuItem className={TAP_TARGET} onClick={startEdit}>
                     <Pencil className="mr-2 h-4 w-4" />
                     {t('edit')}
                   </DropdownMenuItem>
                 )}
                 {canDelete && onDelete && (
                   <DropdownMenuItem
-                    onClick={() => onDelete(comment.id)}
+                    onClick={() => onDelete(comment)}
                     disabled={deleteBlocked}
-                    className="text-red-600 focus:text-red-600"
+                    className={cn(TAP_TARGET, 'text-red-600 focus:text-red-600')}
                   >
                     <Trash2 className="mr-2 h-4 w-4" />
                     {t('delete')}
                   </DropdownMenuItem>
                 )}
                 {canDelete && deleteBlocked && (
-                  <p className="max-w-60 px-2 pb-1.5 text-sm text-muted-foreground">
+                  <p className="max-w-60 px-2 pb-1.5 text-sm text-gray-600 dark:text-gray-400">
                     {t('deleteForbidden')}
                   </p>
                 )}
@@ -202,25 +297,46 @@ export function CommentItem({
         <div className="mt-3">
           {isEditing ? (
             <div className="space-y-2">
-              <textarea
+              <Textarea
+                ref={editRef}
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
-                aria-label={t('editLabel')}
-                className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2 text-sm resize-none"
+                onKeyDown={(event) => {
+                  // Esc gives up the edit; Ctrl or ⌘ + Enter saves it
+                  if (event.key === 'Escape' && !event.nativeEvent.isComposing) {
+                    event.preventDefault();
+                    closeEdit();
+                  } else if (isSendShortcut(event)) {
+                    event.preventDefault();
+                    void handleSaveEdit();
+                  }
+                }}
+                readOnly={saving}
+                aria-label={t('editLabel', { type: comment.type })}
+                aria-keyshortcuts={`${SEND_SHORTCUTS} Escape`}
+                aria-describedby={editFailed ? `${id}-edit-error` : undefined}
+                className="resize-none"
                 rows={3}
               />
+              {editFailed && (
+                <p
+                  id={`${id}-edit-error`}
+                  role="alert"
+                  className="text-sm text-red-700 dark:text-red-400"
+                >
+                  {t('updateError', { type: comment.type })}
+                </p>
+              )}
               <div className="flex gap-2">
-                <Button size="sm" onClick={handleSaveEdit}>
-                  {t('save')}
-                </Button>
                 <Button
                   size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setIsEditing(false);
-                    setEditContent(comment.content);
-                  }}
+                  className={TAP_TARGET}
+                  onClick={() => void handleSaveEdit()}
+                  disabled={!editContent.trim() || saving}
                 >
+                  {t('save')}
+                </Button>
+                <Button size="sm" variant="outline" className={TAP_TARGET} onClick={closeEdit}>
                   {t('cancel')}
                 </Button>
               </div>
@@ -236,28 +352,34 @@ export function CommentItem({
         {!isNested && comment.type === 'comment' && onReply && (
           <div className="mt-3 pt-2 border-t border-gray-200 dark:border-gray-700">
             <Button
+              ref={replyRef}
               variant="ghost"
               size="sm"
               onClick={() => setIsReplying(!isReplying)}
-              className="text-gray-500 hover:text-gray-700"
+              aria-expanded={isReplying}
+              className={cn(
+                TAP_TARGET,
+                'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100'
+              )}
             >
-              <Reply className="mr-1 h-4 w-4" />
+              <Reply className="mr-1 h-4 w-4" aria-hidden="true" />
               {t('reply')}
             </Button>
           </div>
         )}
       </div>
 
-      {/* Reply form */}
+      {/* Reply form: the member writes there next */}
       {isReplying && (
         <div className="ml-8">
           <CommentForm
             organizationId={organizationId}
             leadId={leadId}
             onSubmit={handleReply}
-            onCancel={() => setIsReplying(false)}
+            onCancel={closeReply}
             placeholder={t('replyPlaceholder')}
             isReply
+            autoFocus
           />
         </div>
       )}
@@ -269,6 +391,7 @@ export function CommentItem({
             <CommentItem
               key={reply.id}
               comment={reply}
+              now={now}
               currentUserId={currentUserId}
               organizationId={organizationId}
               leadId={leadId}
