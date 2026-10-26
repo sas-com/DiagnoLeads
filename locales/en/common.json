@@ -2625,7 +2625,21 @@
         "appointmentQuality": "Appointments meeting the conditions",
         "appointmentQualityValue": "{met} / {reviewed} ({rate}%)"
       },
-      "siteVisits": "Site visits"
+      "siteVisits": "Site visits",
+      "returns": {
+        "title": "Wins and return on cost",
+        "description": "The won amount of these leads' deals and its ratio to the acquisition cost (ROI = won amount / acquisition cost). Wins are deals (a lead winning a survey and a migration counts twice); a win without a deal is not included. Days to win run from the lead's creation to the close of its first won deal",
+        "row": "Group",
+        "deals": "Deals",
+        "wonDeals": "Won",
+        "wonAmount": "Won amount",
+        "costPerWonDeal": "Acquisition cost per won deal",
+        "roi": "ROI",
+        "medianDays": "Days to win (median)",
+        "roiValue": "{value, number}x",
+        "daysValue": "{days, number} days",
+        "total": "Total"
+      }
     }
   },
   "header": {
