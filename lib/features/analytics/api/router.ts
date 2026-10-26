@@ -1,7 +1,7 @@
 import { canReadDeals } from '@/lib/auth/deal-access';
 import type { AppAbility } from '@/lib/auth/permissions';
 import { leads } from '@/lib/db/schema';
-import { countLeadsByMqlLevel } from '@/lib/features/leads/service';
+import { countLeadsByMqlLevel, isMqlLead } from '@/lib/features/leads/service';
 import { LEAD_STATUSES, type LeadStatus } from '@/lib/features/leads/types/pipeline';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
@@ -21,7 +21,9 @@ import {
   type AgencyPerformanceRow,
   type ConversionFunnelData,
   type DateRange,
+  FUNNEL_STAGES,
   type FunnelStage,
+  type FunnelStageName,
   type OverviewStats,
   type QrCampaignBreakdown,
   type ResponseTimeResult,
@@ -257,69 +259,52 @@ export const analyticsRouter = router({
 
       const period = inPeriod(organizationId, dateRange);
 
-      // One aggregate query. "Reached" counts are nested by construction
-      // (won ⊆ negotiation ⊆ nurturing ⊆ total), so stage rates never exceed 100%.
-      // Lost leads count toward negotiation only when has_negotiated is set; a lost
-      // lead that never negotiated is not counted as nurtured (it cannot be told apart
-      // from a lead lost straight from "new").
+      // One aggregate query over the stages of the lead lifecycle (#802). "Reached" counts are
+      // nested by construction (won ⊆ sql ⊆ deal ⊆ mql ⊆ total): a lead counts for every
+      // stage before the one it reached, so a lead of an agency appointment that skipped MQL
+      // counts as MQL too, and stage rates never exceed 100%. A lead reached 商談 once it had a
+      // deal (has_negotiated), SQL once judged qualified; a won lead counts for all.
+      const isWon = sql`${leads.status} = 'won'`;
+      const isSql = sql`(${leads.sqlDecision} = 'qualified' or ${isWon})`;
+      const isDeal = sql`(${leads.hasNegotiated} or ${leads.status} in ('negotiating', 'won') or ${isSql})`;
+      const isMql = sql`(${isMqlLead} or ${isDeal})`;
       const [counts] = await ctx.db
         .select({
           total: count(),
-          new: sql<number>`count(*) FILTER (WHERE ${leads.status} = 'new')`,
+          mql: sql<number>`count(*) FILTER (WHERE ${isMql})`,
+          deal: sql<number>`count(*) FILTER (WHERE ${isDeal})`,
+          sql: sql<number>`count(*) FILTER (WHERE ${isSql})`,
+          won: sql<number>`count(*) FILTER (WHERE ${isWon})`,
           nurturing: sql<number>`count(*) FILTER (WHERE ${leads.status} = 'nurturing')`,
-          negotiating: sql<number>`count(*) FILTER (WHERE ${leads.status} = 'negotiating')`,
-          won: sql<number>`count(*) FILTER (WHERE ${leads.status} = 'won')`,
-          reachedNurturing: sql<number>`count(*) FILTER (WHERE ${leads.status} IN ('nurturing', 'negotiating', 'won') OR ${leads.hasNegotiated})`,
-          reachedNegotiation: sql<number>`count(*) FILTER (WHERE ${leads.status} IN ('negotiating', 'won') OR ${leads.hasNegotiated})`,
         })
         .from(leads)
         .where(period);
 
       const totalLeads = Number(counts?.total) || 0;
-      const newCount = Number(counts?.new) || 0;
-      const nurturingCount = Number(counts?.nurturing) || 0;
-      const negotiatingCount = Number(counts?.negotiating) || 0;
-      const wonCount = Number(counts?.won) || 0;
-
-      const newTotal = totalLeads;
-      const nurturingTotal = Number(counts?.reachedNurturing) || 0;
-      const negotiatingTotal = Number(counts?.reachedNegotiation) || 0;
-      const wonTotal = wonCount;
+      const reached: Record<FunnelStageName, number> = {
+        lead: totalLeads,
+        mql: Number(counts?.mql) || 0,
+        deal: Number(counts?.deal) || 0,
+        sql: Number(counts?.sql) || 0,
+        won: Number(counts?.won) || 0,
+      };
 
       const rate = (numerator: number, denominator: number) =>
         denominator > 0 ? Math.round((numerator / denominator) * 10000) / 100 : 0;
 
-      // Build funnel stages
-      const stages: FunnelStage[] = [
-        {
-          name: 'new',
-          count: newCount,
-          cumulativeCount: newTotal,
-          percentage: 100,
-          conversionRate: 100, // First stage always 100%
-        },
-        {
-          name: 'nurturing',
-          count: nurturingCount,
-          cumulativeCount: nurturingTotal,
-          percentage: rate(nurturingTotal, totalLeads),
-          conversionRate: rate(nurturingTotal, newTotal),
-        },
-        {
-          name: 'negotiating',
-          count: negotiatingCount,
-          cumulativeCount: negotiatingTotal,
-          percentage: rate(negotiatingTotal, totalLeads),
-          conversionRate: rate(negotiatingTotal, nurturingTotal),
-        },
-        {
-          name: 'won',
-          count: wonCount,
-          cumulativeCount: wonTotal,
-          percentage: rate(wonTotal, totalLeads),
-          conversionRate: rate(wonTotal, negotiatingTotal),
-        },
-      ];
+      // Each stage: the leads that reached it, and those that stopped there (did not reach the
+      // next one)
+      const stages: FunnelStage[] = FUNNEL_STAGES.map((name, index) => {
+        const next = FUNNEL_STAGES[index + 1];
+        const previous = FUNNEL_STAGES[index - 1];
+        return {
+          name,
+          count: reached[name] - (next ? reached[next] : 0),
+          cumulativeCount: reached[name],
+          percentage: index === 0 ? 100 : rate(reached[name], totalLeads),
+          conversionRate: previous ? rate(reached[name], reached[previous]) : 100,
+        };
+      });
 
       // No average conversion time: it was `updatedAt - createdAt`, which grows with every later
       // edit. Leads do not record when they were won; 0 hides the figure on the page.
@@ -328,7 +313,8 @@ export const analyticsRouter = router({
       return {
         stages,
         totalLeads,
-        overallConversionRate: rate(wonTotal, totalLeads),
+        nurturingCount: Number(counts?.nurturing) || 0,
+        overallConversionRate: rate(reached.won, totalLeads),
         averageConversionDays,
       };
     }),

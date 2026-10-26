@@ -2578,7 +2578,16 @@
         "conversionRate": "コンバージョン率",
         "overallConversion": "全体コンバージョン率",
         "fromInitial": "初回リードからの変換率",
-        "averageDays": "成約までの平均：{days}日"
+        "averageDays": "成約までの平均：{days}日",
+        "stages": {
+          "lead": "リード",
+          "mql": "MQL（関心あり）",
+          "deal": "商談",
+          "sql": "SQL（適格）",
+          "won": "受注"
+        },
+        "nurturingNow": "再育成（ナーチャリング）中のリード：{count, number}件（ファネルの段には数えない）",
+        "reachedNote": "後の段に進んだリードは前の段にも数えます（代行のアポなど、MQL を経ずに商談に入ったリードも MQL に数えます）"
       },
       "responseTimePeriods": {
         "withinHour": "1時間以内",
@@ -4735,7 +4744,12 @@
       "cumulative": "累計",
       "stageConversionRate": "移行率",
       "overallConversionRate": "全体の成約率: {rate}%",
-      "averageConversionDays": "成約までの平均日数: {days}日"
+      "averageConversionDays": "成約までの平均日数: {days}日",
+      "stageLead": "リード",
+      "stageMql": "MQL（関心あり）",
+      "stageDeal": "商談",
+      "stageSql": "SQL（適格）",
+      "stageWon": "受注"
     },
     "diagnostic": {
       "leadScore": "リードスコア",

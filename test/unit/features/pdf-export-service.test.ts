@@ -127,23 +127,23 @@ describe('PDF Export Service', () => {
       ],
       funnel: {
         stages: [
-          { name: 'new', count: 100, cumulativeCount: 100, percentage: 100, conversionRate: 100 },
+          { name: 'lead' as const, count: 100, cumulativeCount: 100, percentage: 100, conversionRate: 100 },
           {
-            name: 'nurturing',
+            name: 'mql' as const,
             count: 60,
             cumulativeCount: 60,
             percentage: 60,
             conversionRate: 60,
           },
           {
-            name: 'negotiating',
+            name: 'deal' as const,
             count: 30,
             cumulativeCount: 30,
             percentage: 30,
             conversionRate: 50,
           },
           {
-            name: 'won',
+            name: 'won' as const,
             count: 10,
             cumulativeCount: 10,
             percentage: 10,
@@ -151,7 +151,7 @@ describe('PDF Export Service', () => {
           },
         ],
         totalLeads: 100,
-        overallConversionRate: 10,
+        overallConversionRate: 10, nurturingCount: 0,
         averageConversionDays: 14.5,
       },
     };

@@ -2578,7 +2578,16 @@
         "conversionRate": "Conversion Rate",
         "overallConversion": "Overall Conversion Rate",
         "fromInitial": "From initial lead to conversion",
-        "averageDays": "Average conversion time: {days} days"
+        "averageDays": "Average conversion time: {days} days",
+        "stages": {
+          "lead": "Leads",
+          "mql": "MQL (interested)",
+          "deal": "Deals",
+          "sql": "SQL (qualified)",
+          "won": "Won"
+        },
+        "nurturingNow": "Leads being nurtured: {count, number} (not a stage of the funnel)",
+        "reachedNote": "A lead counts for every stage before the one it reached (a lead that went to a deal without MQL, such as an agency appointment, counts as MQL too)"
       },
       "responseTimePeriods": {
         "withinHour": "< 1 hour",
@@ -4735,7 +4744,12 @@
       "cumulative": "Cumulative",
       "stageConversionRate": "Conversion Rate",
       "overallConversionRate": "Overall Conversion Rate: {rate}%",
-      "averageConversionDays": "Average Conversion Time: {days} days"
+      "averageConversionDays": "Average Conversion Time: {days} days",
+      "stageLead": "Leads",
+      "stageMql": "MQL (interested)",
+      "stageDeal": "Deals",
+      "stageSql": "SQL (qualified)",
+      "stageWon": "Won"
     },
     "diagnostic": {
       "leadScore": "Lead Score",
