@@ -158,8 +158,20 @@ describe.skipIf(!url)('QR scan recording (PostgreSQL)', () => {
     return GET(req, { params: Promise.resolve({ code }) });
   }
 
+  // Columns named, never select(): session_id, converted and lead_id are dropped in stage 2 of #702
   const scansOf = (campaignId: string) =>
-    pg.select().from(qrScans).where(eq(qrScans.campaignId, campaignId));
+    pg
+      .select({
+        campaignId: qrScans.campaignId,
+        organizationId: qrScans.organizationId,
+        deviceType: qrScans.deviceType,
+        ipAddressHash: qrScans.ipAddressHash,
+        userAgent: qrScans.userAgent,
+        location: qrScans.location,
+        scannedAt: qrScans.scannedAt,
+      })
+      .from(qrScans)
+      .where(eq(qrScans.campaignId, campaignId));
 
   async function scanCountOf(campaignId: string) {
     const [row] = await pg
@@ -210,9 +222,6 @@ describe.skipIf(!url)('QR scan recording (PostgreSQL)', () => {
       ipAddressHash: null,
       userAgent: null,
       location: null,
-      sessionId: null,
-      converted: false,
-      leadId: null,
     });
     // The day in Japan at midnight, never the time of the scan (the column has no time zone)
     expect([day, scanDayOf()]).toContain(row.scannedAt.toISOString().slice(0, 10));

@@ -56,11 +56,13 @@ describe('recordQrScan', () => {
     expect(params.slice(0, 2)).toEqual([CAMPAIGN.campaignId, CAMPAIGN.organizationId]);
   });
 
-  it('keeps nothing of who scanned: no address, User-Agent, location or session', async () => {
+  it('keeps nothing of who scanned: no address, User-Agent, location, session or lead', async () => {
     const { db, execute } = executeDb([{ id: 's1' }]);
     await recordQrScan(db, CAMPAIGN, 'tablet');
     const { sql } = compiled(execute.mock.calls[0][0]);
-    for (const column of ['ip_address_hash', 'user_agent', 'location', 'session_id', 'lead_id']) {
+    // session_id, converted and lead_id are also dropped in stage 2 of #702
+    const columns = ['ip_address_hash', 'user_agent', 'location', 'session_id', 'converted', 'lead_id'];
+    for (const column of columns) {
       expect(sql).not.toContain(column);
     }
   });

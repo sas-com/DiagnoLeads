@@ -1,0 +1,1 @@
+CREATE INDEX "qr_scans_campaign_id_idx" ON "qr_scans" USING btree ("campaign_id");

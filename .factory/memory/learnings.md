@@ -207,6 +207,13 @@
   - 複数のマイグレーションや、データを書き換えるマイグレーションは、この経路でなく `db:migrate`（Session pooler か直接の接続）で流す。この経路は、短い DDL を1本流すときに限る
   - Supabase の `apply_migration` は Supabase 自身の台帳に記録するもので、drizzle の台帳には書かないので使わない
 
+### [DB] drizzle の select() は、スキーマの全列を名指しする（列を落とす前に、名指しの select に直す）
+- **日付**: 2026-10-26
+- **状況**: #702 で `qr_scans` の使わない3列を段階に分けて落とすとき、2段目のマイグレーション（本番にはマージの前に当てる）からマージまで動く1段目のコードが、3列を読まないことを確かめる必要があった
+- **原因**: drizzle の `select()`（列を渡さない）は `select *` ではなく、`lib/db/schema.ts` にある全列を名前で並べる。関係クエリ（`db.query.x.findMany`、`with: { y: true }`）も同じ。コードがその列を使っていなくても、DB から列が消えると `column "..." does not exist` で落ちる。drizzle の `insert().values()` も、渡さない列を `default` として名指しする
+- **解決策**: 本番のコードで `qr_scans` を読み書きする `lib/features/distribution/scans.ts` は、もともと `select({ ... })` と生の SQL の列の並びで列を名指ししていた（直したのは、`select()` を使っていた QR の実 DB テストと、使われていない関係 `qrScansRelations.lead`・`qrCampaignsRelations.scans` を外したこと）。実 DB のテストでは、共有の表の列を落とさず（並行して走るほかのファイルの下で表をロックする）、自分のスキーマに `LIKE ... INCLUDING ALL` で写した表から列を落とし、`search_path` をそのスキーマにした接続で本物のコードを流した（`test/unit/integration/qr-scans-without-unused-columns.db.test.ts`）
+- **教訓**: 列を落とす1段目では、その表の `select()`・関係クエリ・`insert().values()`・`returning()`（列なし）を全部探し、列を名指しする形に直す。スキーマから列を消すのは2段目
+
 ---
 
 ## Git関連
