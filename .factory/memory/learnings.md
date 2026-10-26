@@ -190,6 +190,22 @@
 - **解決策**: diagnoleads-v2-ab が、`site_visit_salts` をバックアップの対象から外した（復元のときは空の表を作り直す）
 - **教訓**: マイグレーションで、表を `dl_readonly` から外す・読めないスキーマを足すときは、SQL を流す前にバックアップの担当（docs/runbooks/database-restore.md）に伝える。流したあとに `prod-dump.sh --now` を1回実行して、通ることを確かめる
 
+### [DB] 本番の接続先を持たないクラウドのセッションから、Supabase のコネクタでマイグレーションを適用する
+- **日付**: 2026-10-25
+- **状況**: #574（PR #662）の 0035（索引1つ）を本番に適用するとき、クラウドのセッションには本番の接続先がなく、`bun run db:migrate` を流せなかった。オーナーの承認を得て、Supabase のコネクタ（`execute_sql`、プロジェクト `diagnoleads-v2`）で適用した
+- **原因**: 本番の接続文字列は手元の `.env.local` と Vercel にだけ置く（秘密情報を書かない）。コネクタはそれを使わずに本番の SQL を流せる
+- **解決策**: 次の順で行った
+  1. オーナーの承認を、その回ごとに得る（`.claude/rules/db-schema.md`。コネクタで流すことも含めて頼む）
+  2. 流すマイグレーションのハッシュと `when` を、drizzle と同じ方法で出す：`readMigrationFiles({ migrationsFolder: './drizzle' })` の最後の要素の `hash`・`folderMillis`・`sql`（scratchpad の小さなスクリプトを `bun` で流す）
+  3. 流す前に読み取りで確かめる（1つのクエリで）：`drizzle.__drizzle_migrations` の `max(created_at)` が、流すものの `when` より小さい／そのハッシュが未記録／作るもの（索引など）がまだ無い／変える表の大きさ／`pg_stat_activity` で長いトランザクションが無い
+  4. 1つのトランザクションで流す：`begin; set local lock_timeout = '5s'; <マイグレーションの SQL>; insert into drizzle.__drizzle_migrations ("hash", "created_at") values ('<hash>', <when>); commit;`。台帳に記録しないと、あとで `db:migrate` が同じ SQL をもう一度流して失敗する
+  5. 流したあとに読み取りで確かめる：`pg_indexes`（など）にできたこと、台帳の最新がそのマイグレーションになったこと
+- **教訓**:
+  - コネクタの経路は `db:migrate` を通らないので、#620 の台帳の検査と #723 の lock_timeout が効かない。上の 3 と 4 の `set local lock_timeout` で代わりをする
+  - 本番に流すのは、PR の CI が緑で、main を取り込んだ後のマイグレーションだけ。ほかの PR と番号が重なるときは、先に作り直してから流す（今回は 0032 を 0035 に作り直した）
+  - 複数のマイグレーションや、データを書き換えるマイグレーションは、この経路でなく `db:migrate`（Session pooler か直接の接続）で流す。この経路は、短い DDL を1本流すときに限る
+  - Supabase の `apply_migration` は Supabase 自身の台帳に記録するもので、drizzle の台帳には書かないので使わない
+
 ---
 
 ## Git関連
