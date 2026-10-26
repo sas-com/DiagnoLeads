@@ -41,7 +41,7 @@ paths: ["app/q/**", "lib/features/distribution/short-code-entry.ts", "lib/featur
   - `qr_scans` の使わない列（`lead_id`・`converted`・`session_id`）は #702 で落とす（#774 のマージの後、本番に当ててから）
 - **オーナーの判断（2026-10-26、#702 のコメント）**: `qr_scans` の使わない列（`lead_id` とその外部キー・`converted`・`session_id`）を落とし、`campaign_id` に索引を張る。`organization_id` の索引は、要るかを確かめてから決める
   - 段階に分ける（`.claude/rules/db-schema.md`。本番にはマージの前に当てるので、2段目の列の削除からマージまで、1段目のコードが動く）
-    - 1段目：コードが3列を名指ししないようにする。`qr_scans` は列を名指しして読み書きし、`select()`（スキーマの全列を名指しする）と全列の関係クエリを使わない。`qrScansRelations` の `lead` を外した。3列は `lib/db/schema.ts` に残す（残さないと `db:generate` が削除を出す）。`campaign_id` の索引（`qr_scans_campaign_id_idx`）を足す
+    - 1段目：コードが3列を名指ししないようにする。`qr_scans` は列を名指しして読み書きし、`select()`（スキーマの全列を名指しする）と全列の関係クエリを使わない。本番のコード（`lib/features/distribution/scans.ts`）は #702 の前から列を名指ししていたので、直したのは QR の実 DB テストの `select()` と関係：`qrScansRelations` の `lead` と `qrCampaignsRelations` の `scans` を外した（使う箇所はなく、外すと全列の関係クエリを型チェックが止める）。3列は `lib/db/schema.ts` に残す（残さないと `db:generate` が削除を出す）。`campaign_id` の索引（`qr_scans_campaign_id_idx`）を足す
     - 2段目：列（と `lead_id` の外部キー）を落とすマイグレーション。1段目が本番にデプロイされてから
   - `organization_id` の索引は足さない（1段目の PR の EXPLAIN）。集計（`campaignScanStats`）はキャンペーンも名指しするので、`campaign_id` の索引で足りる（キャンペーンの行はどれも同じ組織）。1日の上限は `public_rate_limits` を数え、`qr_scans` を読まない。組織の削除はアプリにない（手で消すときに表を1回読む）。足すと、公開の入口からの書き込みのたびに索引の更新が1つ増える
 - **理由**:

@@ -6,6 +6,11 @@
  * all columns. Checked here: the entry (/q/<code>) records the scans, getCampaignStats counts them,
  * deleteCampaign deletes the campaign and, by the cascade, its scans.
  *
+ * The production code already named the columns before stage 1, so this file passes on that code
+ * too: it is the proof that stage 2 is safe, and until stage 2 it fails when a change makes this
+ * code name a dropped column (select(), a relational query of all columns, recordQrScan writing
+ * converted or lead_id).
+ *
  * The columns of the shared qr_scans are not dropped: the integration files run in parallel on one
  * database, and the drop (with the lead_id foreign key) would lock qr_scans and leads under them.
  * The stage-2 shape is built in a schema of this file's own instead: qr_campaigns and qr_scans

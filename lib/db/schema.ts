@@ -2816,7 +2816,7 @@ export const qrScans = pgTable(
 /**
  * QR Campaigns Relations
  */
-export const qrCampaignsRelations = relations(qrCampaigns, ({ one, many }) => ({
+export const qrCampaignsRelations = relations(qrCampaigns, ({ one }) => ({
   organization: one(organizations, {
     fields: [qrCampaigns.organizationId],
     references: [organizations.id],
@@ -2825,7 +2825,8 @@ export const qrCampaignsRelations = relations(qrCampaigns, ({ one, many }) => ({
     fields: [qrCampaigns.diagnosticTemplateId],
     references: [diagnosticTemplates.id],
   }),
-  scans: many(qrScans),
+  // No scans: many(qrScans) (#702): a relational query of the scans names every column of
+  // qr_scans, the ones stage 2 drops too. Without it, typecheck stops such a query
 }));
 
 /**
