@@ -286,6 +286,8 @@ describe('Analytics response types', () => {
         costPerSql: 100000,
         costPerWon: 200000,
         bySource: [],
+        // Null for those who may not read deals (#448)
+        deals: null,
       };
 
       expect(summary.costPerSql).toBe(100000);
