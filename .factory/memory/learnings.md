@@ -361,6 +361,17 @@
 
 ---
 
+## UI関連
+
+### [UI] 日本語入力の確定・取り消しの Enter と Esc を、送信や閉じる操作に取られないようにする
+- **日付**: 2026-10-26
+- **状況**: リード詳細のメモ（#722、PR #807）と連絡の記録（#554、PR #769）で、Ctrl/⌘＋Enter で送り、Esc で編集を閉じるようにした。読み取り専用の UI/UX のレビューで、変換を確定する Enter や、変換を取り消す Esc が、送信や閉じる操作に取られるおそれを指摘された
+- **原因**: Chrome は変換中の keydown に `isComposing: true` を付ける。Safari は、変換を確定・取り消す keydown を compositionend の後に送り、そのとき `isComposing` は false で、`keyCode` は 229 になる。`isComposing` だけを見ると、Safari では確定の Enter で送信され、取り消しの Esc で書いた文が消える
+- **解決策**: `components/common/form-controls.ts` の `isComposing`（`isComposing || keyCode === 229`）を変換中とみなし、`isSendShortcut`・`isCloseShortcut` で使う。テストは `fireEvent.keyDown` に `isComposing: true` と `keyCode: 229` の両方を渡して確かめる
+- **教訓**: キーで送る・閉じる欄を作るときは、`components/common/form-controls.ts` の判定を使う。自分で `event.key === 'Enter'` を見ない
+
+---
+
 ## 成功パターン
 
 ### [Success] 段階的なテスト追加

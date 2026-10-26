@@ -1,5 +1,6 @@
 'use client';
 
+import { SEND_SHORTCUTS, TOGGLE_ITEM, isSendShortcut } from '@/components/common/form-controls';
 import { TAP_TARGET } from '@/components/common/tap-target';
 import { parseWhole } from '@/components/features/deals/deal-format';
 import { Button } from '@/components/ui/button';
@@ -44,11 +45,6 @@ import { useRecordContact } from './use-record-contact';
 /** Radix Select does not take an empty value: "no deal" is this one */
 const NO_DEAL = 'none';
 
-/** A chosen toggle reads by its border and weight, not by color alone */
-const TOGGLE_ITEM = cn(
-  TAP_TARGET,
-  'data-[state=on]:border-gray-900 data-[state=on]:font-bold dark:data-[state=on]:border-gray-50'
-);
 /** Inputs are 44px tall on phones (#196), like the hearing date inputs */
 const FIELD_HEIGHT = 'h-11 sm:h-10';
 
@@ -398,12 +394,13 @@ function RecordActivityForm({
             placeholder={t('notePlaceholder')}
             onChange={(event) => setNote(event.target.value)}
             onKeyDown={(event) => {
-              // Ctrl/⌘ + Enter records from the note
-              if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+              // Ctrl/⌘ + Enter records from the note; not the Enter of a conversion
+              if (isSendShortcut(event)) {
                 event.preventDefault();
                 submit();
               }
             }}
+            aria-keyshortcuts={SEND_SHORTCUTS}
           />
         </div>
       </div>

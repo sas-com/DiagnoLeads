@@ -182,6 +182,22 @@ describe('RecordActivityDialog', () => {
     expect(mocks.toast.success).toHaveBeenCalledWith('「電話した」を記録しました', expect.anything());
   });
 
+  it('does not record on the Enter of a Japanese conversion', async () => {
+    const user = userEvent.setup();
+    renderDialog();
+    await user.click(screen.getByRole('radio', { name: '電話' }));
+    const note = screen.getByLabelText('メモ（任意）');
+    expect(note).toHaveAttribute('aria-keyshortcuts', 'Control+Enter Meta+Enter');
+
+    fireEvent.keyDown(note, { key: 'Enter', ctrlKey: true, isComposing: true });
+    // Safari sends the Enter that confirms a conversion after compositionend, as keyCode 229
+    fireEvent.keyDown(note, { key: 'Enter', ctrlKey: true, keyCode: 229 });
+    expect(mocks.calls).toEqual([]);
+
+    fireEvent.keyDown(note, { key: 'Enter', ctrlKey: true });
+    expect(mocks.calls).toEqual([expect.objectContaining({ kind: 'call' })]);
+  });
+
   it('refuses a time in the future and a duration out of range, and sends nothing', async () => {
     const user = userEvent.setup();
     renderDialog();
