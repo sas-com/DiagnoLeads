@@ -220,3 +220,27 @@ export interface AgencyPerformanceRow {
   /** Deals of these leads (#448); null for those who may not read deals */
   deals: DealReturns | null;
 }
+
+/** Input of analytics.getQrCampaignBreakdown: every campaign of the organization (#700) */
+export const getQrCampaignBreakdownSchema = z.object({
+  organizationId: z.string().uuid(),
+});
+
+/**
+ * What the answers carrying a QR campaign's short code (tracking.qr) add to the campaign's own
+ * counts (#700, owner decision of 2026-10-26), from the campaign's creation, test answers left
+ * out. The campaign row keeps the scans and the new leads (distribution); these come from the
+ * answers and the leads, so they are counted here and shown beside them
+ */
+export interface QrCampaignBreakdown {
+  campaignId: string;
+  /**
+   * Answers that matched a lead already there (既存リードの再回答: the submission did not create
+   * its lead). Never new leads, never in the new-lead rate
+   */
+  existingLeadAnswers: number;
+  /** New leads from the code whose MQL level is 関心あり, by the lead list's own rule */
+  interestedNewLeads: number;
+  /** New leads from the code that asked for a consultation (相談申込), by the list's filter */
+  consultationNewLeads: number;
+}

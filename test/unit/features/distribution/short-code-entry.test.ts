@@ -5,12 +5,11 @@
  */
 import { generateShortCode } from '@/lib/features/distribution/qr-code';
 import {
-  QR_CODE_PARAM,
   findOpenQrCampaign,
   isCampaignOpen,
   qrEntryRedirectPath,
 } from '@/lib/features/distribution/short-code-entry';
-import { SHORT_CODE_PATTERN } from '@/lib/features/distribution/types';
+import { QR_CODE_PARAM, SHORT_CODE_PATTERN } from '@/lib/features/distribution/types';
 import { describe, expect, it, vi } from 'vitest';
 
 const NOW = new Date('2026-10-24T10:00:00Z');

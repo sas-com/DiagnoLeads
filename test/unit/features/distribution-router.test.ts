@@ -13,9 +13,6 @@ vi.mock('@/lib/db', () => ({
       diagnosticTemplates: {
         findFirst: vi.fn(),
       },
-      qrScans: {
-        findMany: vi.fn(),
-      },
     },
     insert: vi.fn().mockReturnThis(),
     values: vi.fn().mockReturnThis(),
@@ -28,13 +25,14 @@ vi.mock('@/lib/db', () => ({
 }));
 
 // Mock QR code generation. The tracking URL the router builds (/q/<code>, #503) is checked on
-// the real router in distribution/router-tracking-url.test.ts
+// the real router in distribution/router-tracking-url.test.ts, and getCampaignStats (the scans
+// and the new-lead rate from the campaign row, #41, #700) in distribution/router-stats.test.ts
 vi.mock('@/lib/features/distribution/qr-code', () => ({
   generateQRCode: vi.fn().mockResolvedValue('data:image/png;base64,mockQRCode'),
 }));
 
 import { db } from '@/lib/db';
-import { diagnosticTemplates, qrCampaigns, qrScans } from '@/lib/db/schema';
+import { diagnosticTemplates, qrCampaigns } from '@/lib/db/schema';
 import { generateQRCode } from '@/lib/features/distribution/qr-code';
 
 describe('distribution-router', () => {
@@ -238,106 +236,6 @@ describe('distribution-router', () => {
       }
 
       expect(generateQRCode).toHaveBeenCalledTimes(4);
-    });
-  });
-
-  describe('getCampaignStats', () => {
-    it('should return campaign statistics', async () => {
-      const mockCampaign = {
-        id: 'campaign-1',
-        organizationId: 'org-1',
-        scanCount: 100,
-        completionCount: 25,
-      };
-
-      const mockScans = [
-        { id: 'scan-1', deviceType: 'mobile', converted: true, scannedAt: new Date() },
-        { id: 'scan-2', deviceType: 'mobile', converted: false, scannedAt: new Date() },
-        { id: 'scan-3', deviceType: 'desktop', converted: true, scannedAt: new Date() },
-        { id: 'scan-4', deviceType: 'tablet', converted: false, scannedAt: new Date() },
-      ];
-
-      (db.query.qrCampaigns.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(mockCampaign);
-      (db.query.qrScans.findMany as ReturnType<typeof vi.fn>).mockResolvedValue(mockScans);
-
-      const campaign = await db.query.qrCampaigns.findFirst({
-        where: and(eq(qrCampaigns.id, 'campaign-1'), eq(qrCampaigns.organizationId, 'org-1')),
-      });
-
-      const scans = await db.query.qrScans.findMany({
-        where: eq(qrScans.campaignId, 'campaign-1'),
-      });
-
-      expect(campaign?.scanCount).toBe(100);
-      expect(scans.length).toBe(4);
-
-      // Calculate device breakdown
-      const deviceBreakdown = scans.reduce(
-        (acc, scan) => {
-          const type = scan.deviceType || 'unknown';
-          acc[type] = (acc[type] || 0) + 1;
-          return acc;
-        },
-        {} as Record<string, number>
-      );
-
-      expect(deviceBreakdown).toEqual({
-        mobile: 2,
-        desktop: 1,
-        tablet: 1,
-      });
-
-      // Calculate conversion rate
-      const conversionRate =
-        scans.length > 0 ? (scans.filter((s) => s.converted).length / scans.length) * 100 : 0;
-
-      expect(conversionRate).toBe(50);
-    });
-
-    it('should handle campaigns with no scans', async () => {
-      const mockCampaign = {
-        id: 'campaign-1',
-        organizationId: 'org-1',
-        scanCount: 0,
-        completionCount: 0,
-      };
-
-      (db.query.qrCampaigns.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(mockCampaign);
-      (db.query.qrScans.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-
-      const scans = await db.query.qrScans.findMany({
-        where: eq(qrScans.campaignId, 'campaign-1'),
-      });
-
-      expect(scans.length).toBe(0);
-
-      const conversionRate = scans.length > 0 ? (scans.filter((s: any) => s.converted).length / scans.length) * 100 : 0;
-
-      expect(conversionRate).toBe(0);
-    });
-
-    it('should handle scans with unknown device type', async () => {
-      const mockScans = [
-        { id: 'scan-1', deviceType: null, converted: false, scannedAt: new Date() },
-        { id: 'scan-2', deviceType: undefined, converted: false, scannedAt: new Date() },
-      ];
-
-      (db.query.qrScans.findMany as ReturnType<typeof vi.fn>).mockResolvedValue(mockScans);
-
-      const scans = await db.query.qrScans.findMany({
-        where: eq(qrScans.campaignId, 'campaign-1'),
-      });
-
-      const deviceBreakdown = scans.reduce(
-        (acc, scan) => {
-          const type = scan.deviceType || 'unknown';
-          acc[type] = (acc[type] || 0) + 1;
-          return acc;
-        },
-        {} as Record<string, number>
-      );
-
-      expect(deviceBreakdown).toEqual({ unknown: 2 });
     });
   });
 });

@@ -519,8 +519,13 @@ describe.skipIf(!url)('QR campaign completions (PostgreSQL)', () => {
       const campaign = await createCampaign(orgA);
       const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
       let release = () => {};
+      // The holder also lets go by itself after 10 seconds: should the lock timeout ever be gone,
+      // the submission waits for the holder and the test fails on what it gets, never hanging CI
+      // with the transaction left open
+      let letGo: ReturnType<typeof setTimeout> | undefined;
       const held = new Promise<void>((resolve) => {
         release = resolve;
+        letGo = setTimeout(resolve, 10_000);
       });
       let locked = () => {};
       const isLocked = new Promise<void>((resolve) => {
@@ -540,9 +545,11 @@ describe.skipIf(!url)('QR campaign completions (PostgreSQL)', () => {
         expect(summarizeServerError(outcome.qrCompletionFailure?.error).code).toBe('55P03');
         // It waited for the lock timeout, not for the holder
         expect(waited).toBeGreaterThanOrEqual(2_500);
+        expect(waited).toBeLessThan(10_000);
         expect(await saved(outcome)).toBe(true);
       } finally {
         release();
+        clearTimeout(letGo);
         await holder;
         consoleError.mockRestore();
       }

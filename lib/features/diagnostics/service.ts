@@ -131,11 +131,18 @@ const NOT_COUNTED: QrCompletion = { counted: false, failure: null };
  *
  * The lead comes first (2026-10-25 read-only review of PR #774): the count runs in a savepoint of
  * that transaction and waits at most QR_COMPLETION_LOCK_TIMEOUT for the campaign row. When it
- * fails (a policy or a grant of RLS, #51, the wait, ...) only the savepoint is rolled back, the
- * submission and its lead are saved, and the failure is logged by its name and code (never the
- * message, which holds the query and its values) and handed back for the caller to report. The
- * lock timeout holds for the count only: the previous value is set again before the savepoint
- * is released.
+ * fails (a policy or a grant of RLS, #51, the wait, ...) only the savepoint is rolled back
+ * (ROLLBACK TO SAVEPOINT, which also undoes the lock timeout set in it), the submission and its
+ * lead are saved, and the failure is logged by its name and code (never the message, which holds
+ * the query and its values) and handed back for the caller to report. The lock timeout holds for
+ * the count only: the previous value is set again as the savepoint's last statement.
+ *
+ * postgres-js (sql.savepoint, which drizzle's nested transaction uses) sends no RELEASE
+ * SAVEPOINT: a savepoint that succeeds stays open and commits with the outer transaction, whose
+ * last statement this is. A counted submission costs 4 more round trips (SAVEPOINT, setting the
+ * lock timeout, the UPDATE, setting it back), 5 when the count fails (ROLLBACK TO SAVEPOINT);
+ * the campaign row is locked from the UPDATE to the COMMIT (setting the timeout back, then the
+ * COMMIT: 2 round trips).
  */
 export async function countQrCompletion(
   tx: Transaction,

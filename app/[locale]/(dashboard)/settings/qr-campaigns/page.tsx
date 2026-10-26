@@ -2,6 +2,10 @@
 
 import { QrCampaignDestinationNotice } from '@/components/features/distribution/qr-campaign-destination';
 import { QrCampaignExpiry } from '@/components/features/distribution/qr-campaign-expiry';
+import {
+  QrCampaignResults,
+  type QrCampaignResultsBreakdown,
+} from '@/components/features/distribution/qr-campaign-results';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,8 +41,6 @@ import {
   MoreVertical,
   Plus,
   QrCode,
-  ScanLine,
-  Target,
   Trash2,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -57,6 +59,13 @@ interface QRCampaignFormData {
   expiresOn: string;
 }
 
+/** The breakdown of a campaign no answer with its code has reached yet */
+const NO_ANSWERS: QrCampaignResultsBreakdown = {
+  existingLeadAnswers: 0,
+  interestedNewLeads: 0,
+  consultationNewLeads: 0,
+};
+
 const DEFAULT_FORM_DATA: QRCampaignFormData = {
   name: '',
   description: '',
@@ -69,6 +78,7 @@ const DEFAULT_FORM_DATA: QRCampaignFormData = {
 };
 
 export default function QRCampaignsPage() {
+  const t = useTranslations('settings.qrCampaigns');
   const tExpiry = useTranslations('settings.qrCampaigns.expiry');
   const { organization } = useOrganization();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -81,6 +91,18 @@ export default function QRCampaignsPage() {
     { organizationId: organization?.id ?? '' },
     { enabled: !!organization?.id }
   );
+
+  // What the answers with each campaign's code add (#700): counted by analytics over the answers
+  // and the leads, for every campaign of the organization in one query, and shown beside the
+  // campaign's own counts (distribution imports no other feature)
+  const { data: breakdowns } = trpc.analytics.getQrCampaignBreakdown.useQuery(
+    { organizationId: organization?.id ?? '' },
+    { enabled: !!organization?.id }
+  );
+  const breakdownById = new Map(breakdowns?.map((row) => [row.campaignId, row]));
+  // Left out while it loads; a campaign no answer with its code has reached has zeros
+  const breakdownOf = (campaignId: string): QrCampaignResultsBreakdown | undefined =>
+    breakdowns ? (breakdownById.get(campaignId) ?? NO_ANSWERS) : undefined;
 
   // Only those who can update settings may change campaigns (#356)
   const { data: canManage = false } = trpc.distribution.canManage.useQuery(
@@ -231,6 +253,10 @@ export default function QRCampaignsPage() {
                 Create a new QR code campaign for offline distribution
               </DialogDescription>
             </DialogHeader>
+            {/* Checks count too (#700, marketing review): check with a campaign of its own */}
+            <p className="rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+              {t('testFirst')}
+            </p>
             <div className="grid gap-4 py-4">
               {/* Campaign Name */}
               <div className="grid gap-2">
@@ -239,8 +265,12 @@ export default function QRCampaignsPage() {
                   id="name"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g., Trade Show 2024"
+                  placeholder={t('namePlaceholder')}
+                  aria-describedby="name-hint"
                 />
+                <p id="name-hint" className="text-xs text-muted-foreground">
+                  {t('nameHint')}
+                </p>
               </div>
 
               {/* Description */}
@@ -404,28 +434,13 @@ export default function QRCampaignsPage() {
                   canManage={canManage}
                 />
 
-                {/* Stats */}
-                <div className="flex gap-4">
-                  <div className="flex items-center gap-2 text-sm">
-                    <ScanLine className="h-4 w-4 text-muted-foreground" />
-                    <span>{campaign.scanCount} scans</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <Target className="h-4 w-4 text-muted-foreground" />
-                    <span>{campaign.completionCount} conversions</span>
-                  </div>
-                </div>
-
-                {/* Conversion Rate */}
-                <div className="text-sm">
-                  <span className="text-muted-foreground">Conversion Rate: </span>
-                  <span className="font-medium">
-                    {campaign.scanCount > 0
-                      ? ((campaign.completionCount / campaign.scanCount) * 100).toFixed(1)
-                      : 0}
-                    %
-                  </span>
-                </div>
+                {/* Scans, new leads and their rate from the campaign row; the breakdown from the answers (#700) */}
+                <QrCampaignResults
+                  scanCount={campaign.scanCount}
+                  completionCount={campaign.completionCount}
+                  createdAt={campaign.createdAt}
+                  breakdown={breakdownOf(campaign.id)}
+                />
 
                 {/* Short Code */}
                 <div className="flex items-center gap-2">
@@ -443,7 +458,7 @@ export default function QRCampaignsPage() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button
                     variant="outline"
                     size="sm"
@@ -464,9 +479,11 @@ export default function QRCampaignsPage() {
                     onClick={() => copyToClipboard(campaign.trackingUrl)}
                   >
                     <Copy className="mr-2 h-4 w-4" />
-                    Copy URL
+                    {t('copyUrl')}
                   </Button>
                 </div>
+                {/* One campaign per channel, so each one's counts stay its own (#700, marketing review) */}
+                <p className="text-xs text-muted-foreground">{t('copyUrlHint')}</p>
               </CardContent>
             </Card>
           ))}

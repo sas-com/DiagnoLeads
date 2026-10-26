@@ -3,11 +3,11 @@
  *
  * The QR code of a campaign holds /q/<code>. The entry finds the campaign by its code and sends
  * the visitor to the campaign's diagnosis with the campaign's UTM parameters and its own short
- * code (QR_CODE_PARAM, #700: the diagnosis keeps it with the answer, and a new lead counts for
- * the campaign). Where it sends is built from the campaign row and the app's own routes only,
- * never from the request, and the organization is the campaign's. A paused, expired or unknown
- * code is not found, and so is a campaign with nowhere of its own to send to (#663:
- * openCampaignDestination).
+ * code (QR_CODE_PARAM in types.ts, #700: the diagnosis keeps it with the answer, and a new lead
+ * counts for the campaign). Where it sends is built from the campaign row and the app's own
+ * routes only, never from the request, and the organization is the campaign's. A paused,
+ * expired or unknown code is not found, and so is a campaign with nowhere of its own to send to
+ * (#663: openCampaignDestination).
  *
  * The settings page shows where a scan of each campaign goes with the same functions
  * (campaignDestination, #692, #695), so the page and the entry cannot disagree.
@@ -23,6 +23,7 @@ import { isDiagnosisOrganization } from '@/lib/multi-tenant/helpers/diagnosis-or
 import { and, eq, inArray, isNotNull, ne, notExists, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
+  QR_CODE_PARAM,
   type QrCampaignClosedReason,
   type QrCampaignDestination,
   SHORT_CODE_PATTERN,
@@ -39,14 +40,6 @@ export interface CampaignUtm {
   campaign: string | null;
   content: string | null;
 }
-
-/**
- * The query parameter the entry adds to the address of the diagnosis: the campaign's own short
- * code (#700, owner decision of 2026-10-25). The diagnosis keeps it in tracking like the UTM
- * values (readTrackingParams, trackingSchema), and a submission that creates a lead counts for
- * the campaign of the lead's organization with that code (countCampaignCompletion, service.ts)
- */
-export const QR_CODE_PARAM = 'qr';
 
 /** An open campaign as the entry needs it */
 export interface QrEntryCampaign {

@@ -25,12 +25,25 @@ describe('readTrackingParams: qr (#700)', () => {
     expect(readTrackingParams()).not.toHaveProperty('qr');
   });
 
-  it('cuts a value to the longest a code can be, which the server then drops', () => {
-    window.history.replaceState(null, '', `/ja/ax-diagnosis?qr=${'a'.repeat(70)}-`);
+  it('keeps a code as long as a code can be', () => {
+    window.history.replaceState(null, '', `/ja/ax-diagnosis?qr=${'a'.repeat(64)}`);
+    expect(readTrackingParams().qr).toBe('a'.repeat(64));
+  });
+
+  it.each([
+    ['one character longer than a code can be', 'a'.repeat(65)],
+    ['longer, with a character no code has', `${'a'.repeat(70)}-`],
+  ])('drops a value %s, never cutting it into what could be another code', (_name, value) => {
+    window.history.replaceState(null, '', `/ja/ax-diagnosis?utm_source=qrcode&qr=${value}`);
     const tracking = readTrackingParams();
-    expect(tracking.qr).toBe('a'.repeat(64));
+    expect(tracking).not.toHaveProperty('qr');
+    expect(tracking).toMatchObject({ utmSource: 'qrcode' });
+  });
+
+  it('drops a value that cannot be a code, as the server would', () => {
     window.history.replaceState(null, '', '/ja/ax-diagnosis?qr=ab-cd');
-    expect(trackingSchema.parse(readTrackingParams()).qr).toBeUndefined();
+    expect(readTrackingParams()).not.toHaveProperty('qr');
+    expect(trackingSchema.parse({ qr: 'ab-cd' }).qr).toBeUndefined();
   });
 
   it.each([

@@ -1,12 +1,14 @@
 import { isAxFrom } from '@/lib/features/ax-site/cross-links';
+import { QR_CODE_PARAM, SHORT_CODE_PATTERN } from '@/lib/features/distribution/types';
 import { clipText } from '@/lib/utils/clip-text';
 
 /**
  * UTM / referral / agency link parameters of the landing page, read once when the diagnosis starts.
  * `from` names the link of another AX page that led here (#332); only the site's own values are kept.
  * `qr` is the short code of the QR campaign the visitor scanned, which the /q/ entry adds
- * (QR_CODE_PARAM, lib/features/distribution/short-code-entry.ts, #700); the server keeps only
- * what can be a code.
+ * (QR_CODE_PARAM, lib/features/distribution/types.ts, #700). Only what can be a code is kept
+ * (SHORT_CODE_PATTERN, as the server checks it again): a longer value is dropped, never cut,
+ * since its first 64 characters could be the code of another campaign.
  */
 export function readTrackingParams(): Record<string, string> {
   if (typeof window === 'undefined') return {};
@@ -15,6 +17,7 @@ export function readTrackingParams(): Record<string, string> {
   const clip = (value: string | null | undefined, max: number) =>
     value ? clipText(value, max) || undefined : undefined;
   const pick = (key: string) => clip(params.get(key), 200);
+  const qr = params.get(QR_CODE_PARAM);
   const tracking: Record<string, string | undefined> = {
     utmSource: pick('utm_source'),
     utmMedium: pick('utm_medium'),
@@ -23,8 +26,7 @@ export function readTrackingParams(): Record<string, string> {
     utmTerm: pick('utm_term'),
     ref: clip(params.get('ref'), 100),
     agency: clip(params.get('agency'), 40),
-    // The longest a short code can be (SHORT_CODE_PATTERN)
-    qr: clip(params.get('qr'), 64),
+    qr: qr && SHORT_CODE_PATTERN.test(qr) ? qr : undefined,
     referrer: clip(document.referrer, 500),
     landingPath: clip(window.location.pathname, 500),
     from: isAxFrom(params.get('from')) ? (params.get('from') ?? undefined) : undefined,

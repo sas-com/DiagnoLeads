@@ -64,22 +64,6 @@ export async function recordQrScan(
   return rows.length > 0;
 }
 
-/**
- * The share of a campaign's scans that became leads, in percent with two decimals: both counts
- * from the campaign row (#700), completion_count (the leads the diagnoses counted by the short
- * code) over scan_count (the scans the entry recorded), so the total and the rate never come
- * from different places. 0 for a campaign without scans. Can pass 100: a lead counts by the code
- * in the address of the diagnosis, also when that scan was not recorded (past the daily cap) or
- * the address was passed on
- */
-export function campaignConversionRate(campaign: {
-  scanCount: number;
-  completionCount: number;
-}): number {
-  const { scanCount, completionCount } = campaign;
-  return scanCount > 0 ? Math.round((completionCount / scanCount) * 10_000) / 100 : 0;
-}
-
 export interface CampaignScanStats {
   /** Scans per kind of device; 'unknown' for rows without one */
   deviceBreakdown: Record<string, number>;
@@ -94,7 +78,7 @@ export interface CampaignScanStats {
 /**
  * The recorded scans of one campaign of the organization, counted in the database: the scans of
  * a campaign are never all read. How many became leads is not a property of a scan (#700): see
- * campaignConversionRate
+ * campaignNewLeadRate (types.ts)
  */
 export async function campaignScanStats(
   db: Executor,

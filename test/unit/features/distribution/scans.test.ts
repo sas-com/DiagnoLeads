@@ -2,15 +2,11 @@
  * The scans of a QR campaign (#41): what one scan writes and how a campaign's scans are counted.
  * The statement itself (one row and one count per scan, the campaign's organization, scans at the
  * same moment) is checked against PostgreSQL in test/unit/integration/qr-scan-recording.db.test.ts.
- * The share that became leads comes from the campaign row (#700), not from the scans.
+ * The share that became new leads comes from the campaign row (#700, campaignNewLeadRate in
+ * new-lead-rate.test.ts), not from the scans.
  */
 import type { db as defaultDb } from '@/lib/db/client';
-import {
-  campaignConversionRate,
-  campaignScanStats,
-  recordQrScan,
-  scanDayOf,
-} from '@/lib/features/distribution/scans';
+import { campaignScanStats, recordQrScan, scanDayOf } from '@/lib/features/distribution/scans';
 import type { SQL } from 'drizzle-orm';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { describe, expect, it, vi } from 'vitest';
@@ -159,24 +155,5 @@ describe('campaignScanStats', () => {
       expect(sql).toBe('("qr_scans"."organization_id" = $1 and "qr_scans"."campaign_id" = $2)');
       expect(params).toEqual(['org-a', 'c1']);
     }
-  });
-});
-
-describe('campaignConversionRate (#700)', () => {
-  it('is the leads counted on the campaign over its scans, in percent', () => {
-    expect(campaignConversionRate({ scanCount: 8, completionCount: 3 })).toBe(37.5);
-  });
-
-  it('rounds to two decimals', () => {
-    expect(campaignConversionRate({ scanCount: 3, completionCount: 1 })).toBe(33.33);
-  });
-
-  it('is 0 for a campaign without scans, also with leads', () => {
-    expect(campaignConversionRate({ scanCount: 0, completionCount: 0 })).toBe(0);
-    expect(campaignConversionRate({ scanCount: 0, completionCount: 2 })).toBe(0);
-  });
-
-  it('is not capped: more leads than recorded scans show as over 100', () => {
-    expect(campaignConversionRate({ scanCount: 4, completionCount: 5 })).toBe(125);
   });
 });
