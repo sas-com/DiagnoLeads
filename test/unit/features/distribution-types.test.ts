@@ -7,6 +7,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   createQRCampaignSchema,
+  DEFAULT_QR_CAMPAIGN_MEDIUM,
+  QR_CAMPAIGN_MEDIUMS,
   type CreateQRCampaignInput,
   type QRCampaign,
   type QRScanEvent,
@@ -35,7 +37,32 @@ describe('createQRCampaignSchema', () => {
     const result = createQRCampaignSchema.parse(input);
     expect(result.name).toBe('Test Campaign');
     expect(result.utmSource).toBe('qrcode'); // default
-    expect(result.utmMedium).toBe('offline'); // default
+    // A medium that maps to a 流入元 (#788); 'offline' before, which maps to none
+    expect(result.utmMedium).toBe('seminar'); // default
+    expect(result.utmMedium).toBe(DEFAULT_QR_CAMPAIGN_MEDIUM);
+  });
+
+  it('still takes a medium outside the form\'s list, as the campaigns created before have (#788)', () => {
+    for (const utmMedium of ['offline', 'outdoor', 'セミナー', 'x'.repeat(50)]) {
+      const result = createQRCampaignSchema.parse({
+        name: 'Test Campaign',
+        diagnosticTemplateId: '123e4567-e89b-12d3-a456-426614174000',
+        utmMedium,
+      });
+      expect(result.utmMedium).toBe(utmMedium);
+    }
+    expect(
+      createQRCampaignSchema.safeParse({
+        name: 'Test Campaign',
+        diagnosticTemplateId: '123e4567-e89b-12d3-a456-426614174000',
+        utmMedium: 'x'.repeat(51),
+      }).success
+    ).toBe(false);
+  });
+
+  it('lists the media of the form, the default first (#788)', () => {
+    expect(QR_CAMPAIGN_MEDIUMS).toEqual(['seminar', 'exhibition', 'direct_mail']);
+    expect(QR_CAMPAIGN_MEDIUMS[0]).toBe(DEFAULT_QR_CAMPAIGN_MEDIUM);
   });
 
   it('should accept full input', () => {

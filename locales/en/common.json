@@ -1932,6 +1932,15 @@
       "utmMedium": "Medium",
       "utmCampaign": "Campaign",
       "utmContent": "Content",
+      "medium": {
+        "label": "Where it is handed out (utm_medium)",
+        "inflow": "Inflow source of the new leads from its scans: {source}",
+        "options": {
+          "seminar": "Seminar or webinar",
+          "exhibition": "Exhibition or trade show",
+          "direct_mail": "Direct mail (posted or handed out one by one)"
+        }
+      },
       "shortCode": "Short Code",
       "trackingUrl": "Tracking URL",
       "downloadQR": "Download QR Code",

@@ -31,7 +31,13 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { useOrganization } from '@/hooks/use-organization';
+import { inferInflowSource } from '@/lib/features/diagnostics/tracking';
 import { expiryOfChosenDay, jstDayOf } from '@/lib/features/distribution/campaign-expiry';
+import {
+  DEFAULT_QR_CAMPAIGN_MEDIUM,
+  QR_CAMPAIGN_MEDIUMS,
+  type QrCampaignMedium,
+} from '@/lib/features/distribution/types';
 import { trpc } from '@/lib/trpc/client';
 import {
   AlertCircle,
@@ -54,7 +60,8 @@ interface QRCampaignFormData {
   description: string;
   diagnosticTemplateId: string;
   utmSource: string;
-  utmMedium: string;
+  /** Where the code is handed out: one of the list, never typed (#788) */
+  utmMedium: QrCampaignMedium;
   utmCampaign: string;
   utmContent: string;
   /** The last day in Japan the campaign is open ('YYYY-MM-DD'), or '' for no expiry (#695) */
@@ -73,7 +80,7 @@ const DEFAULT_FORM_DATA: QRCampaignFormData = {
   description: '',
   diagnosticTemplateId: '',
   utmSource: 'qrcode',
-  utmMedium: 'offline',
+  utmMedium: DEFAULT_QR_CAMPAIGN_MEDIUM,
   utmCampaign: '',
   utmContent: '',
   expiresOn: '',
@@ -82,10 +89,13 @@ const DEFAULT_FORM_DATA: QRCampaignFormData = {
 export default function QRCampaignsPage() {
   const t = useTranslations('settings.qrCampaigns');
   const tExpiry = useTranslations('settings.qrCampaigns.expiry');
+  const tMedium = useTranslations('settings.qrCampaigns.medium');
+  const tPipeline = useTranslations('pipeline');
   const { organization } = useOrganization();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [formData, setFormData] = useState<QRCampaignFormData>(DEFAULT_FORM_DATA);
   const nameHintId = useId();
+  const mediumHintId = useId();
   const copyUrlHintId = useId();
 
   const utils = trpc.useUtils();
@@ -175,6 +185,9 @@ export default function QRCampaignsPage() {
       toast.error(error.message || 'Failed to generate QR code');
     },
   });
+
+  // The 流入元 the new leads of the chosen medium get, by the rule of the answers (#788)
+  const mediumInflow = inferInflowSource({ utmMedium: formData.utmMedium }).inflowSource;
 
   const handleCreate = () => {
     if (!organization?.id || !formData.name || !formData.diagnosticTemplateId) {
@@ -312,7 +325,7 @@ export default function QRCampaignsPage() {
                     setFormData({ ...formData, diagnosticTemplateId: value })
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="template">
                     <SelectValue placeholder="Select a template" />
                   </SelectTrigger>
                   <SelectContent>
@@ -323,6 +336,38 @@ export default function QRCampaignsPage() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              {/* Where the code is handed out: the campaign's utm_medium, chosen from the media
+                  that map to a 流入元, which is said under it (#788) */}
+              <div className="grid gap-2">
+                <Label htmlFor="utmMedium">{tMedium('label')}</Label>
+                <Select
+                  value={formData.utmMedium}
+                  onValueChange={(value) => {
+                    const medium = QR_CAMPAIGN_MEDIUMS.find((option) => option === value);
+                    if (medium) setFormData({ ...formData, utmMedium: medium });
+                  }}
+                >
+                  <SelectTrigger
+                    id="utmMedium"
+                    aria-describedby={mediumInflow ? mediumHintId : undefined}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {QR_CAMPAIGN_MEDIUMS.map((medium) => (
+                      <SelectItem key={medium} value={medium}>
+                        {tMedium(`options.${medium}`)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {mediumInflow && (
+                  <p id={mediumHintId} className="text-xs text-muted-foreground">
+                    {tMedium('inflow', { source: tPipeline(`inflowSource.${mediumInflow}`) })}
+                  </p>
+                )}
               </div>
 
               {/* UTM Parameters */}
@@ -338,17 +383,6 @@ export default function QRCampaignsPage() {
                       value={formData.utmSource}
                       onChange={(e) => setFormData({ ...formData, utmSource: e.target.value })}
                       placeholder="qrcode"
-                    />
-                  </div>
-                  <div className="grid gap-1">
-                    <Label htmlFor="utmMedium" className="text-xs text-muted-foreground">
-                      Medium
-                    </Label>
-                    <Input
-                      id="utmMedium"
-                      value={formData.utmMedium}
-                      onChange={(e) => setFormData({ ...formData, utmMedium: e.target.value })}
-                      placeholder="offline"
                     />
                   </div>
                   <div className="grid gap-1">

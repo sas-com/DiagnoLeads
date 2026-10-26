@@ -1932,6 +1932,15 @@
       "utmMedium": "メディア",
       "utmCampaign": "キャンペーン",
       "utmContent": "コンテンツ",
+      "medium": {
+        "label": "配る場面（utm_medium）",
+        "inflow": "読み取りから来た新規リードの流入元：{source}",
+        "options": {
+          "seminar": "セミナー・ウェビナー",
+          "exhibition": "展示会",
+          "direct_mail": "DM（郵送・個別の配布物）"
+        }
+      },
       "shortCode": "ショートコード",
       "trackingUrl": "トラッキングURL",
       "downloadQR": "QRコードをダウンロード",

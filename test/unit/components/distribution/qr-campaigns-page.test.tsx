@@ -6,9 +6,13 @@
  * and their rate are the campaign's own counts (completion_count over scan_count, #700), beside
  * the breakdown analytics counts for every campaign in one query (or what it says while that
  * loads or could not be read); the notes of the marketing review (2026-10-26) are on the create
- * form and next to the URL. A paused campaign is marked, not faded (2026-10-26 UI review).
+ * form and next to the URL. A paused campaign is marked, not faded (2026-10-26 UI review). The
+ * create form takes the campaign's utm_medium from a list, labelled in ja and en, says the inflow
+ * source the new leads of each get and sends the one chosen (#788).
  */
 import QRCampaignsPage from '@/app/[locale]/(dashboard)/settings/qr-campaigns/page';
+import { QR_CAMPAIGN_MEDIUMS } from '@/lib/features/distribution/types';
+import en from '@/locales/en/common.json';
 import ja from '@/locales/ja/common.json';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -84,9 +88,13 @@ function campaign(id: string, values: Record<string, unknown>) {
   };
 }
 
-function renderPage() {
+function renderPage(locale: 'ja' | 'en' = 'ja') {
   return render(
-    <NextIntlClientProvider locale="ja" messages={ja} timeZone="Asia/Tokyo">
+    <NextIntlClientProvider
+      locale={locale}
+      messages={locale === 'ja' ? ja : en}
+      timeZone="Asia/Tokyo"
+    >
       <QRCampaignsPage />
     </NextIntlClientProvider>
   );
@@ -253,17 +261,100 @@ describe('QR campaigns page', () => {
   });
 
   describe('the create form', () => {
-    async function fillIn(expiresOn: string) {
+    /** Open the form and fill in the required fields */
+    async function openAndFill() {
       const user = userEvent.setup();
       renderPage();
       fireEvent.click(screen.getByRole('button', { name: 'Create Campaign' }));
       const dialog = within(screen.getByRole('dialog'));
       fireEvent.change(dialog.getByLabelText('Campaign Name *'), { target: { value: 'Fair' } });
-      await user.click(dialog.getByRole('combobox'));
+      await user.click(dialog.getByRole('combobox', { name: 'Diagnostic Template *' }));
       await user.click(screen.getByRole('option', { name: 'Template' }));
+      return { user, dialog };
+    }
+
+    async function fillIn(expiresOn: string) {
+      const { dialog } = await openAndFill();
       fireEvent.change(dialog.getByLabelText('期限（任意）'), { target: { value: expiresOn } });
       fireEvent.click(dialog.getByRole('button', { name: 'Create Campaign' }));
     }
+
+    const MEDIUM_LABEL = '配る場面（utm_medium）';
+    const inflowHint = (source: string) => `読み取りから来た新規リードの流入元：${source}`;
+    /** The names of the options of the open list */
+    const optionNames = () => screen.getAllByRole('option').map((option) => option.textContent);
+
+    it('takes where the code is handed out from a list, seminars first, instead of a typed medium (#788)', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      fireEvent.click(screen.getByRole('button', { name: 'Create Campaign' }));
+      const dialog = within(screen.getByRole('dialog'));
+      const medium = dialog.getByRole('combobox', { name: MEDIUM_LABEL });
+      expect(medium).toHaveTextContent('セミナー・ウェビナー');
+      // The inflow source the new leads of its scans get, read with the list
+      expect(medium).toHaveAccessibleDescription(inflowHint('勉強会・セミナー'));
+      // The typed medium (placeholder 'offline') is gone
+      expect(dialog.queryByLabelText('Medium')).toBeNull();
+      expect(dialog.queryByPlaceholderText('offline')).toBeNull();
+
+      await user.click(medium);
+      expect(optionNames()).toEqual(['セミナー・ウェビナー', '展示会', 'DM（郵送・個別の配布物）']);
+    });
+
+    it.each([
+      ['展示会', 'exhibition', '勉強会・セミナー'],
+      ['DM（郵送・個別の配布物）', 'direct_mail', '広告'],
+    ])('sends the medium chosen (%s as %s) and says its inflow source, %s', async (label, value, inflow) => {
+      const { user, dialog } = await openAndFill();
+      const medium = dialog.getByRole('combobox', { name: MEDIUM_LABEL });
+      await user.click(medium);
+      await user.click(screen.getByRole('option', { name: label }));
+      expect(medium).toHaveTextContent(label);
+      expect(medium).toHaveAccessibleDescription(inflowHint(inflow));
+
+      fireEvent.click(dialog.getByRole('button', { name: 'Create Campaign' }));
+      expect(mocks.createMutate).toHaveBeenCalledTimes(1);
+      expect(mocks.createMutate).toHaveBeenCalledWith(
+        expect.objectContaining({ utmSource: 'qrcode', utmMedium: value })
+      );
+    });
+
+    it('sends seminar, the default medium, when the list is left as it is (#788)', async () => {
+      const { dialog } = await openAndFill();
+      fireEvent.click(dialog.getByRole('button', { name: 'Create Campaign' }));
+      expect(mocks.createMutate).toHaveBeenCalledWith(
+        expect.objectContaining({ utmMedium: 'seminar' })
+      );
+    });
+
+    it('labels every medium in Japanese and English, and says the inflow source in English (#788)', async () => {
+      for (const medium of QR_CAMPAIGN_MEDIUMS) {
+        expect(ja.settings.qrCampaigns.medium.options[medium], `ja ${medium}`).not.toBe('');
+        expect(en.settings.qrCampaigns.medium.options[medium], `en ${medium}`).not.toBe('');
+      }
+
+      const user = userEvent.setup();
+      renderPage('en');
+      fireEvent.click(screen.getByRole('button', { name: 'Create Campaign' }));
+      const dialog = within(screen.getByRole('dialog'));
+      const medium = dialog.getByRole('combobox', { name: 'Where it is handed out (utm_medium)' });
+      expect(medium).toHaveTextContent('Seminar or webinar');
+      expect(medium).toHaveAccessibleDescription(
+        'Inflow source of the new leads from its scans: Seminar'
+      );
+      await user.click(medium);
+      expect(optionNames()).toEqual([
+        'Seminar or webinar',
+        'Exhibition or trade show',
+        'Direct mail (posted or handed out one by one)',
+      ]);
+      await user.click(
+        screen.getByRole('option', { name: 'Direct mail (posted or handed out one by one)' })
+      );
+      expect(medium).toHaveAccessibleDescription(
+        'Inflow source of the new leads from its scans: Advertising'
+      );
+    });
 
     it('says to check with a campaign of its own and to make one campaign per event or handout', () => {
       renderPage();

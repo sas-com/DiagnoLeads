@@ -105,7 +105,7 @@ describe('QR Code Distribution Schemas', () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.data.utmSource).toBe('qrcode');
-        expect(result.data.utmMedium).toBe('offline');
+        expect(result.data.utmMedium).toBe('seminar');
       }
     });
 
