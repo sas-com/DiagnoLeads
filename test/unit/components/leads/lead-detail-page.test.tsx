@@ -87,13 +87,15 @@ const store = vi.hoisted(() => {
   };
 });
 
-vi.mock('next/navigation', () => {
-  // One object for every render, like Next's useRouter (#636)
+vi.mock('next/navigation', async () => {
+  const { ReadonlySearchParams } = await import('@/test/mocks/next-navigation');
+  // One object for every render, like Next's useRouter (#636) and useSearchParams (#719)
   const router = { push: store.push, replace: vi.fn(), prefetch: vi.fn(), back: vi.fn() };
+  const searchParams = new ReadonlySearchParams();
   return {
     useRouter: () => router,
     usePathname: () => `/ja/leads/${LEAD_ID}`,
-    useSearchParams: () => new URLSearchParams(),
+    useSearchParams: () => searchParams,
   };
 });
 
