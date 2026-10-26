@@ -182,20 +182,22 @@ describe('Export Service', () => {
   describe('funnelToCSV', () => {
     const mockFunnel = {
       stages: [
-        { name: 'new', count: 100, cumulativeCount: 100, percentage: 100, conversionRate: 100 },
-        { name: 'nurturing', count: 60, cumulativeCount: 60, percentage: 60, conversionRate: 60 },
+        { name: 'lead' as const, count: 100, cumulativeCount: 100, percentage: 100, conversionRate: 100 },
+        { name: 'mql' as const, count: 60, cumulativeCount: 60, percentage: 60, conversionRate: 60 },
       ],
       totalLeads: 100,
-      overallConversionRate: 10,
+      overallConversionRate: 10, nurturingCount: 0,
       averageConversionDays: 14.5,
     };
 
     it('should convert funnel data to CSV', () => {
       const csv = funnelToCSV(mockFunnel);
       expect(csv).toContain('Stage,Count,Cumulative Count,Percentage (%),Conversion Rate (%)');
-      expect(csv).toContain('new,100,100,100.00,100.00');
+      expect(csv).toContain('lead,100,100,100.00,100.00');
       expect(csv).toContain('Overall Conversion Rate');
       expect(csv).toContain('Average Conversion Days');
+      // 再育成 beside the stages (#802)
+      expect(csv).toContain('Nurturing Now,0');
     });
   });
 
@@ -220,10 +222,10 @@ describe('Export Service', () => {
       statusBreakdown: [{ status: 'new', count: 40, percentage: 40 }],
       funnel: {
         stages: [
-          { name: 'new', count: 100, cumulativeCount: 100, percentage: 100, conversionRate: 100 },
+          { name: 'lead' as const, count: 100, cumulativeCount: 100, percentage: 100, conversionRate: 100 },
         ],
         totalLeads: 100,
-        overallConversionRate: 10,
+        overallConversionRate: 10, nurturingCount: 0,
         averageConversionDays: 14.5,
       },
       dateRange: '2024-01',

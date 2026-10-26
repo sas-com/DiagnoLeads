@@ -114,7 +114,7 @@ SQL は段ではなく、見極めの出口の判定（関門）。SQL判定が�
 | ダッシュボードのパイプライン（状態ごとの件数） | `lib/features/analytics/dashboard.ts` | `leads.status` |
 | ダッシュボードの MQL | 同上 | MQL判定日が期間内のリード（関心ありでも判定日がなければ数えない。判定日を自動で入れるのは AX 診断の送信だけ）。適合は MQL に足さず、期間内の AX 診断の適合（判定日なし）を注記で出す |
 | 分析の上部の KPI・MQL段階の内訳 | `lib/features/analytics/api/router.ts`（`getOverview`） | 全期間。`leads.status`（成約率）、MQL段階と MQL判定日（`listMqlLevel`）。ダッシュボードの MQL（期間内の流れ）とは数が合わない |
-| 分析のファネル | 同上（`getConversionFunnel`） | `leads.status` と `leads.has_negotiated`。新規 → ナーチャリング → 商談中 → 成約を順の段として数え、後の段に進んだリードは前の段にも数える。このナーチャリングは旧来の段の意味で、1章の再育成とは違う |
+| 分析のファネル | 同上（`getConversionFunnel`） | ライフサイクルの段（#802）：リード → MQL（`listMqlLevel` が関心あり）→ 商談（`has_negotiated` か商談フェーズの日付。代行のファネルと同じ）→ SQL（`sql_decision` が適格。成約も含む）→ 受注（`leads.status` が成約）。後の段に進んだリードは前の段にも数える（MQL を経ずに商談に入ったリードも MQL に数える）。再育成（ナーチャリング中のリード）は段にせず、別の数として出す（画面・CSV・PDF）。MQL は商談以降のリードも含むので、上部の KPI の「関心あり」より多くなる |
 | 獲得元・代行会社別の費用 | `lib/features/analytics/lead-sources.ts` | `leads.sql_decision`（SQL）、`leads.status`（成約）。受注と費用対効果は、期間のリードの商談の `deals.stage`・`deals.amount`・`deals.closed_on`（#448、商談を読める人だけ） |
 | 代行の契約別ファネル | `lib/features/agency-contracts/report.ts` | アポ（リード）→ 商談の実施（`has_negotiated` か商談フェーズの日付）→ SQL（`sql_decision`）→ 現行調査受注 → 移行受注（`deal_phase_reached_at`） |
 | 段階的な納品の集計 | `lib/features/delivery-reviews/report.ts` | `deal_phase_reached_at`（現行調査受注 → 移行受注 → AX化） |
@@ -124,7 +124,6 @@ SQL は段ではなく、見極めの出口の判定（関門）。SQL判定が�
 ## 4. 未決の点
 
 - SQL判定の記録を、商談のステージを課題の確認へ進める条件にするか（今は強制しない）
-- 分析のファネルのナーチャリングを、1章の再育成に合わせて数え直すか
 - 営業部門に確認する：顧客探しの「3 現行仕様調査」「5 契約」が受注のどの段に当たるか、確度の初期値（10・20・40・70）
 
 ## 関連
