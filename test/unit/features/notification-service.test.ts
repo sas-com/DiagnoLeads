@@ -331,7 +331,8 @@ describe('notification-service', () => {
       );
 
       const mockReturning = vi.fn().mockResolvedValue([{ id: 'new-pref-1' }]);
-      const mockValues = vi.fn().mockReturnValue({ returning: mockReturning });
+      const mockOnConflictDoNothing = vi.fn().mockReturnValue({ returning: mockReturning });
+      const mockValues = vi.fn().mockReturnValue({ onConflictDoNothing: mockOnConflictDoNothing });
       (db.insert as ReturnType<typeof vi.fn>).mockReturnValue({
         values: mockValues,
       });
@@ -339,7 +340,35 @@ describe('notification-service', () => {
       const result = await getOrCreatePreferences('user-1', 'org-1');
 
       expect(db.insert).toHaveBeenCalled();
+      expect(mockOnConflictDoNothing).toHaveBeenCalledTimes(1);
       expect(result).toEqual({ id: 'new-pref-1' });
+    });
+
+    // Another caller inserted the row between the read and the insert (#768)
+    it('should read the row again when the insert does nothing on the conflict', async () => {
+      const madeByOther = { id: 'pref-other', userId: 'user-1', organizationId: 'org-1' };
+      const findFirst = db.query.notificationPreferences.findFirst as ReturnType<typeof vi.fn>;
+      findFirst.mockResolvedValueOnce(undefined).mockResolvedValueOnce(madeByOther);
+      (db.insert as ReturnType<typeof vi.fn>).mockReturnValue({
+        values: () => ({ onConflictDoNothing: () => ({ returning: async () => [] }) }),
+      });
+
+      const result = await getOrCreatePreferences('user-1', 'org-1');
+
+      expect(findFirst).toHaveBeenCalledTimes(2);
+      expect(result).toEqual(madeByOther);
+    });
+
+    it('should throw when the row is neither inserted nor found again', async () => {
+      const findFirst = db.query.notificationPreferences.findFirst as ReturnType<typeof vi.fn>;
+      findFirst.mockResolvedValueOnce(undefined).mockResolvedValueOnce(undefined);
+      (db.insert as ReturnType<typeof vi.fn>).mockReturnValue({
+        values: () => ({ onConflictDoNothing: () => ({ returning: async () => [] }) }),
+      });
+
+      await expect(getOrCreatePreferences('user-1', 'org-1')).rejects.toThrow(
+        'Notification preferences were neither found nor created'
+      );
     });
   });
 

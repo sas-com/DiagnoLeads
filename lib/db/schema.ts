@@ -1387,37 +1387,45 @@ export const notifications = pgTable(
 
 /**
  * Notification Preferences Table
- * User preferences for notification channels and types
+ * User preferences for notification channels and types. One row per user and organization
+ * (#768): readers take a single row, so a second row would leave it undecided which settings
+ * apply, and getOrCreatePreferences relies on the unique index when two first reads insert at once.
  */
-export const notificationPreferences = pgTable('notification_preferences', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  userId: uuid('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  organizationId: uuid('organization_id')
-    .notNull()
-    .references(() => organizations.id, { onDelete: 'cascade' }),
-  // In-app notifications
-  inAppLeadCreated: boolean('in_app_lead_created').default(true).notNull(),
-  inAppLeadStatusChanged: boolean('in_app_lead_status_changed').default(true).notNull(),
-  inAppLeadScored: boolean('in_app_lead_scored').default(true).notNull(),
-  inAppImportExport: boolean('in_app_import_export').default(true).notNull(),
-  inAppMemberChanges: boolean('in_app_member_changes').default(true).notNull(),
-  // Email notifications
-  emailLeadCreated: boolean('email_lead_created').default(false).notNull(),
-  emailLeadStatusChanged: boolean('email_lead_status_changed').default(false).notNull(),
-  emailLeadScored: boolean('email_lead_scored').default(false).notNull(),
-  emailDailyDigest: boolean('email_daily_digest').default(false).notNull(),
-  emailWeeklyReport: boolean('email_weekly_report').default(true).notNull(),
-  // In-app notifications for the current sales work (#164). Only the consultation request is
-  // sent today; the others are stored now and used when their notifications are built (#135).
-  inAppConsultationRequested: boolean('in_app_consultation_requested').default(true).notNull(),
-  inAppAssignedToMe: boolean('in_app_assigned_to_me').default(true).notNull(),
-  inAppNextActionDue: boolean('in_app_next_action_due').default(true).notNull(),
-  inAppHearingNextMeeting: boolean('in_app_hearing_next_meeting').default(true).notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+export const notificationPreferences = pgTable(
+  'notification_preferences',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    // In-app notifications
+    inAppLeadCreated: boolean('in_app_lead_created').default(true).notNull(),
+    inAppLeadStatusChanged: boolean('in_app_lead_status_changed').default(true).notNull(),
+    inAppLeadScored: boolean('in_app_lead_scored').default(true).notNull(),
+    inAppImportExport: boolean('in_app_import_export').default(true).notNull(),
+    inAppMemberChanges: boolean('in_app_member_changes').default(true).notNull(),
+    // Email notifications
+    emailLeadCreated: boolean('email_lead_created').default(false).notNull(),
+    emailLeadStatusChanged: boolean('email_lead_status_changed').default(false).notNull(),
+    emailLeadScored: boolean('email_lead_scored').default(false).notNull(),
+    emailDailyDigest: boolean('email_daily_digest').default(false).notNull(),
+    emailWeeklyReport: boolean('email_weekly_report').default(true).notNull(),
+    // In-app notifications for the current sales work (#164). Only the consultation request is
+    // sent today; the others are stored now and used when their notifications are built (#135).
+    inAppConsultationRequested: boolean('in_app_consultation_requested').default(true).notNull(),
+    inAppAssignedToMe: boolean('in_app_assigned_to_me').default(true).notNull(),
+    inAppNextActionDue: boolean('in_app_next_action_due').default(true).notNull(),
+    inAppHearingNextMeeting: boolean('in_app_hearing_next_meeting').default(true).notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('notification_preferences_user_org_unique').on(table.userId, table.organizationId),
+  ]
+);
 
 /**
  * Notification Relations
