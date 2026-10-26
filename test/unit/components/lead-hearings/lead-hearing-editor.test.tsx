@@ -22,6 +22,7 @@ const HEARING_ID = '880e8400-e29b-41d4-a716-446655440000';
 const UPDATED_AT = new Date('2026-10-15T01:00:00Z');
 const USER_ID = 'user-1';
 const MODE_KEY = hearingModeStorageKey(USER_ID);
+type AutosaveModule = typeof import('@/components/features/lead-hearings/use-hearing-autosave');
 
 interface MutationOptions {
   onSuccess: (result: unknown) => void;
@@ -40,6 +41,8 @@ const mocks = vi.hoisted(() => ({
   invalidateList: vi.fn(),
   invalidateSummary: vi.fn(),
   summary: undefined as unknown,
+  /** Autosave runs only where a describe turns it on (see the mock below) */
+  autosave: false,
 }));
 
 vi.mock('@/lib/trpc/client', () => ({
@@ -91,6 +94,19 @@ vi.mock('@/hooks/use-organization', () => ({
   useOrganization: () => ({ organizationId: ORG_ID }),
 }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+// Autosave is off unless a describe turns it on with mocks.autosave: it saves 3 s after the last
+// change on the real clock, and on a loaded machine 3 s can pass between two steps of a test, so
+// a save of half the input goes out before the save button is pressed (#573, #711). The
+// describes that turn it on run on fake timers. The editor still decides when autosave is
+// allowed (loaded, not read-only); the mock only adds the switch.
+vi.mock('@/components/features/lead-hearings/use-hearing-autosave', async (importOriginal) => {
+  const actual = await importOriginal<AutosaveModule>();
+  return {
+    ...actual,
+    useHearingAutosave: (options: Parameters<AutosaveModule['useHearingAutosave']>[0]) =>
+      actual.useHearingAutosave({ ...options, enabled: options.enabled && mocks.autosave }),
+  };
+});
 
 beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
@@ -143,6 +159,10 @@ const summaryOf = (fields: HearingFields) =>
   );
 
 const savedFields = () => mocks.mutate.mock.calls[0][0].fields;
+// The save button, looked up in the save bar: a query over the whole editor names every button
+// (over 100 in the meeting mode), which takes seconds on a loaded machine (#711)
+const saveButton = () =>
+  within(screen.getByTestId('hearing-save-bar')).getByRole('button', { name: '保存' });
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -150,6 +170,7 @@ beforeEach(() => {
   mocks.error = null;
   mocks.summary = undefined;
   mocks.catalogSettings = undefined;
+  mocks.autosave = false;
   window.localStorage.clear();
 });
 
@@ -174,7 +195,7 @@ describe('LeadHearingEditor', () => {
     render(editor());
 
     await user.click(screen.getByRole('button', { name: '先方の出席者の立場を確認済みにする' }));
-    await user.click(screen.getByRole('button', { name: '保存' }));
+    await user.click(saveButton());
 
     expect(savedFields().attendeeRoles).toEqual({
       value: ['executive'],
@@ -189,7 +210,7 @@ describe('LeadHearingEditor', () => {
 
     await user.click(screen.getByRole('checkbox', { name: '情報システム部門の責任者' }));
     expect(screen.getByText('修正あり')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '保存' }));
+    await user.click(saveButton());
 
     expect(savedFields().attendeeRoles).toEqual({
       value: ['executive', 'it_manager'],
@@ -220,7 +241,7 @@ describe('LeadHearingEditor', () => {
       'true'
     );
 
-    await user.click(screen.getByRole('button', { name: '保存' }));
+    await user.click(saveButton());
     expect(mocks.mutate).toHaveBeenCalledTimes(1);
     expect(mocks.mutate.mock.calls[0][0]).toMatchObject({
       organizationId: ORG_ID,
@@ -235,7 +256,7 @@ describe('LeadHearingEditor', () => {
     render(editor());
 
     await user.click(screen.getByRole('checkbox', { name: '業務部門の担当者' }));
-    await user.click(screen.getByRole('button', { name: '保存' }));
+    await user.click(saveButton());
     act(() => mocks.update?.onError({ data: { code: 'CONFLICT' } }));
 
     expect(screen.getByText('ほかの人が先に保存しました')).toBeInTheDocument();
@@ -247,7 +268,7 @@ describe('LeadHearingEditor', () => {
     const user = userEvent.setup();
     render(editor());
 
-    await user.click(screen.getByRole('button', { name: '保存' }));
+    await user.click(saveButton());
     const saved = hearing({
       fields: { attendeeRoles: { value: ['it_manager'], status: 'done', source: 'corrected' } },
       updatedAt: new Date('2026-10-15T03:00:00Z'),
@@ -264,7 +285,7 @@ describe('LeadHearingEditor', () => {
     expect(mocks.invalidateList).toHaveBeenCalledWith({ organizationId: ORG_ID, leadId: LEAD_ID });
 
     // The next save guards against the saved row
-    await user.click(screen.getByRole('button', { name: '保存' }));
+    await user.click(saveButton());
     expect(mocks.mutate.mock.calls[1][0].expectedUpdatedAt).toEqual(
       new Date('2026-10-15T03:00:00Z')
     );
@@ -296,7 +317,7 @@ describe('LeadHearingEditor', () => {
     expect(screen.getByRole('checkbox', { name: '業務部門の担当者' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: '経営層・決裁者' })).toBeChecked();
     // Saving still guards against the newer row that was not loaded into the form
-    await user.click(screen.getByRole('button', { name: '保存' }));
+    await user.click(saveButton());
     expect(mocks.mutate.mock.calls[0][0].expectedUpdatedAt).toEqual(UPDATED_AT);
   });
 
@@ -351,7 +372,7 @@ describe('LeadHearingEditor', () => {
     expect(screen.queryByText('使わない項目')).not.toBeInTheDocument();
 
     await user.click(within(group).getByLabelText('今期'));
-    await user.click(screen.getByRole('button', { name: '保存' }));
+    await user.click(saveButton());
     expect(savedFields()['custom:wish0001']).toEqual({
       value: ['this0001', 'next0001'],
       status: 'done',
@@ -382,6 +403,17 @@ describe('LeadHearingEditor', () => {
 
 const fieldRow = (key: string) => screen.getByTestId(`hearing-field-${key}`);
 const chip = (key: string, name: string) => within(fieldRow(key)).getByRole('button', { name });
+// The "next time" / "not applicable" buttons of a required item, looked up in its card
+const itemButton = (id: string, name: string) =>
+  within(screen.getByTestId(`hearing-item-${id}`)).getByRole('button', { name });
+// The fold of the fields outside the required items, found by its text: a role query over the
+// meeting mode names its 100+ buttons, 2 to 3.5 s a call on a loaded machine (#711)
+const othersToggle = () => {
+  const toggle = screen.getByText('その他の項目').closest('button');
+  if (!toggle) throw new Error('no fold for the other fields');
+  expect(toggle).toHaveAccessibleName(/その他の項目/);
+  return toggle;
+};
 const mutateCalls = () => mocks.mutate.mock.calls.map((call) => call[0]);
 
 describe('LeadHearingEditor meeting mode', () => {
@@ -401,7 +433,7 @@ describe('LeadHearingEditor meeting mode', () => {
     expect(screen.queryByTestId('hearing-field-meetingFormat')).not.toBeInTheDocument();
     expect(screen.getByText('必須 0/13')).toBeInTheDocument();
 
-    const others = screen.getByRole('button', { name: /その他の項目/ });
+    const others = othersToggle();
     expect(others).toHaveAttribute('aria-expanded', 'false');
     await user.click(others);
     expect(others).toHaveAttribute('aria-expanded', 'true');
@@ -433,7 +465,7 @@ describe('LeadHearingEditor meeting mode', () => {
     // Several choices on a multiple field
     await user.click(chip('competitorTypes', '自社開発'));
     await user.click(chip('competitorTypes', '現在の保守会社'));
-    await user.click(screen.getByRole('button', { name: '保存' }));
+    await user.click(saveButton());
 
     expect(savedFields().decisionMakerPresent).toEqual({
       value: 'yes',
@@ -453,17 +485,17 @@ describe('LeadHearingEditor meeting mode', () => {
     const user = userEvent.setup();
     render(editor());
 
-    const next = screen.getByRole('button', { name: '次回の日程と出席者を次回にする' });
+    const next = itemButton('nextMeeting', '次回の日程と出席者を次回にする');
     await user.click(next);
     expect(next).toHaveAttribute('aria-pressed', 'true');
     // A status the user picked is kept when a value is chosen afterwards
     await user.click(chip('nextMeetingAttendees', '先方の経営層'));
 
-    const notApplicable = screen.getByRole('button', { name: '競合を対象外にする' });
+    const notApplicable = itemButton('competitors', '競合を対象外にする');
     await user.click(notApplicable);
     expect(screen.getByText('必須 1/13')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: '保存' }));
+    await user.click(saveButton());
     expect(savedFields().nextMeetingDate).toEqual({ status: 'next', source: null });
     expect(savedFields().nextMeetingAttendees).toEqual({
       value: ['customer_executive'],
@@ -525,6 +557,7 @@ describe('LeadHearingEditor autosave', () => {
   const SECOND_SAVED_AT = new Date('2026-10-15T01:06:00Z');
 
   beforeEach(() => {
+    mocks.autosave = true;
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
     vi.setSystemTime(SAVED_AT);
   });
@@ -654,7 +687,7 @@ describe('LeadHearingEditor autosave', () => {
     const { unmount } = render(editor());
 
     expect(chip('decisionMakerPresent', 'はい')).toBeDisabled();
-    expect(screen.getByRole('button', { name: '競合を対象外にする' })).toBeDisabled();
+    expect(itemButton('competitors', '競合を対象外にする')).toBeDisabled();
     expect(screen.queryByTestId('hearing-autosave-status')).not.toBeInTheDocument();
     act(() => {
       Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
@@ -710,24 +743,38 @@ describe('LeadHearingEditor summary view', () => {
 
     expect(screen.getByTestId('hearing-meeting-mode')).toBeInTheDocument();
     expect(screen.getByTestId('hearing-field-budgetStatus')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /その他の項目/ })).toHaveAttribute(
-      'aria-expanded',
-      'true'
-    );
+    expect(othersToggle()).toHaveAttribute('aria-expanded', 'true');
   });
 
-  it('saves pending edits before showing the summary', async () => {
-    window.localStorage.setItem(MODE_KEY, 'detail');
-    const user = userEvent.setup();
-    render(editor());
+  // Saving before the summary is autosave's job: on here, on fake timers, so the 3 s debounce
+  // cannot save first on a loaded machine. Input goes through fireEvent (user-event waits on
+  // setTimeout); the tabs switch on mousedown.
+  describe('with autosave', () => {
+    beforeEach(() => {
+      mocks.autosave = true;
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
 
-    await user.click(screen.getByRole('checkbox', { name: '業務部門の担当者' }));
-    await user.click(screen.getByRole('tab', { name: 'まとめ' }));
+    it('saves pending edits before showing the summary', () => {
+      window.localStorage.setItem(MODE_KEY, 'detail');
+      render(editor());
 
-    expect(mocks.mutate).toHaveBeenCalledTimes(1);
-    expect(screen.getByText('保存されていない変更は、まとめに入っていません。')).toBeVisible();
-    act(() => mocks.update?.onSuccess({ ...hearing(), updatedAt: new Date() }));
-    expect(mocks.invalidateSummary).toHaveBeenCalledWith({ organizationId: ORG_ID, id: HEARING_ID });
+      fireEvent.click(screen.getByRole('checkbox', { name: '業務部門の担当者' }));
+      expect(mocks.mutate).not.toHaveBeenCalled();
+      fireEvent.mouseDown(screen.getByRole('tab', { name: 'まとめ' }));
+
+      // Saved by the switch itself, before the debounce
+      expect(mocks.mutate).toHaveBeenCalledTimes(1);
+      expect(screen.getByText('保存されていない変更は、まとめに入っていません。')).toBeVisible();
+      act(() => mocks.update?.onSuccess({ ...hearing(), updatedAt: new Date() }));
+      expect(mocks.invalidateSummary).toHaveBeenCalledWith({
+        organizationId: ORG_ID,
+        id: HEARING_ID,
+      });
+    });
   });
 
   it('hides the meeting mode switch and the save bar while the summary is shown (Refs #163)', async () => {
@@ -737,7 +784,7 @@ describe('LeadHearingEditor summary view', () => {
 
     expect(screen.getByRole('switch', { name: '商談モード' })).toBeInTheDocument();
     expect(screen.getByTestId('hearing-save-bar')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '保存' })).toBeInTheDocument();
+    expect(saveButton()).toBeInTheDocument();
 
     await user.click(screen.getByRole('tab', { name: 'まとめ' }));
     expect(screen.getByTestId('hearing-summary')).toBeInTheDocument();
