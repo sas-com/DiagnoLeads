@@ -66,6 +66,7 @@ describe('Analytics Router', () => {
       from: vi.fn().mockReturnThis(),
       where: vi.fn().mockReturnThis(),
       groupBy: vi.fn().mockReturnThis(),
+      innerJoin: vi.fn().mockReturnThis(),
       orderBy: vi.fn().mockReturnThis(),
     };
 
@@ -414,6 +415,12 @@ describe('Analytics Router', () => {
       mockDb.groupBy.mockResolvedValueOnce([
         { agencyName: 'A社', leadCount: 4, sqlCount: '1', wonCount: '0', costedLeadCount: 4, totalCost: '100000' },
       ]);
+      // The deals of the leads (#448): one won deal of the agency
+      mockDb.where.mockReturnValueOnce(
+        Promise.resolve([
+          { source: 'telemarketing_agency', agencyName: 'A社', stage: 'won', amount: '300000', daysToClose: 12 },
+        ])
+      );
 
       const caller = appRouter.createCaller(mockContext);
       const result = await caller.analytics.getAgencyPerformance({
@@ -431,8 +438,38 @@ describe('Analytics Router', () => {
           costedLeadCount: 4,
           totalCost: 100000,
           costPerSql: 100000,
+          deals: {
+            dealCount: 1,
+            wonDealCount: 1,
+            wonAmount: 300000,
+            costPerWonDeal: 100000,
+            roi: 3,
+            medianDaysToWin: 12,
+          },
         },
       ]);
+    });
+
+    // A parent organization's viewer reads the leads, not the deals' amounts (#448)
+    it('leaves the deals out for those who may not read deals', async () => {
+      mockDb.query.organizationMembers.findFirst.mockResolvedValue({
+        ...mockMembership,
+        role: 'parent_viewer',
+      });
+      mockDb.select.mockReturnValueOnce(mockDb);
+      mockDb.from.mockReturnValueOnce(mockDb);
+      mockDb.where.mockReturnValueOnce(mockDb);
+      mockDb.groupBy.mockResolvedValueOnce([
+        { agencyName: 'A社', leadCount: 4, sqlCount: '1', wonCount: '0', costedLeadCount: 4, totalCost: '100000' },
+      ]);
+
+      const caller = appRouter.createCaller(mockContext);
+      const result = await caller.analytics.getAgencyPerformance({
+        organizationId: TEST_ORG_ID,
+        dateRange: '30d',
+      });
+      expect(result[0].deals).toBeNull();
+      expect(mockDb.innerJoin).not.toHaveBeenCalled();
     });
 
     it('rejects a non-member', async () => {

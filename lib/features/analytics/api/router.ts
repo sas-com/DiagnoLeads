@@ -1,3 +1,4 @@
+import { canReadDeals } from '@/lib/auth/deal-access';
 import type { AppAbility } from '@/lib/auth/permissions';
 import { leads } from '@/lib/db/schema';
 import { countLeadsByMqlLevel } from '@/lib/features/leads/service';
@@ -335,19 +336,25 @@ export const analyticsRouter = router({
     .query(({ ctx, input }): Promise<AcquisitionCostSummary> => {
       assertCanReadLeads(ctx.ability);
       const { organizationId, dateRange } = input;
-      return getAcquisitionCost(ctx.db, organizationId, analyticsPeriodStart(dateRange));
+      // Amounts of the deals only for those who may read deals (#448)
+      return getAcquisitionCost(ctx.db, organizationId, analyticsPeriodStart(dateRange), {
+        withDeals: canReadDeals(ctx),
+      });
     }),
 
   /**
    * Get Agency Performance
-   * Leads, SQL, wins and cost per sales agency (agency_name)
+   * Leads, SQL, wins and cost per sales agency (agency_name), and what their deals brought in
+   * for those who may read deals (#448)
    */
   getAgencyPerformance: organizationProcedure
     .input(getAgencyPerformanceSchema)
     .query(({ ctx, input }): Promise<AgencyPerformanceRow[]> => {
       assertCanReadLeads(ctx.ability);
       const { organizationId, dateRange } = input;
-      return getAgencyPerformance(ctx.db, organizationId, analyticsPeriodStart(dateRange));
+      return getAgencyPerformance(ctx.db, organizationId, analyticsPeriodStart(dateRange), {
+        withDeals: canReadDeals(ctx),
+      });
     }),
 });
 

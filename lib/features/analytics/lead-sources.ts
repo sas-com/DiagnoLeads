@@ -1,10 +1,11 @@
 import type { db as defaultDb } from '@/lib/db/client';
-import { leads } from '@/lib/db/schema';
+import { deals, leads } from '@/lib/db/schema';
 import { and, count, eq, gte, sql } from 'drizzle-orm';
 import type {
   AcquisitionCostRow,
   AcquisitionCostSummary,
   AgencyPerformanceRow,
+  DealReturns,
   SourceBreakdown,
 } from './types/schemas';
 
@@ -40,6 +41,7 @@ function leadsInPeriod(organizationId: string, from: Date | null) {
  * would reject the grouping.
  */
 const inflowKey = sql<string>`coalesce(nullif(btrim(${leads.inflowSource}), ''), ${sql.raw(`'${UNSET_INFLOW_SOURCE}'`)})`;
+const agencyKey = sql<string>`btrim(${leads.agencyName})`;
 const isSql = sql`${leads.sqlDecision} = 'qualified'`;
 const isWon = sql`${leads.status} = 'won'`;
 
@@ -75,6 +77,75 @@ export async function getInflowSourceBreakdown(
 }
 
 // ---------------------------------------------------------------------------
+// 商談の受注額と費用対効果（#448）
+// ---------------------------------------------------------------------------
+
+/** One deal of a lead of the period, with the lead's 流入元 and agency */
+export type DealOfLead = {
+  source: string;
+  agencyName: string | null;
+  stage: string;
+  amount: number | null;
+  /** Days from the lead's creation (Japan day) to the deal's close day; null while open */
+  daysToClose: number | null;
+};
+
+function median(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+/** What the deals brought in, next to what their leads cost (yen) */
+export function dealReturns(dealsOfLeads: DealOfLead[], totalCost: number): DealReturns {
+  const won = dealsOfLeads.filter((deal) => deal.stage === 'won');
+  const wonAmount = won.reduce((sum, deal) => sum + (deal.amount ?? 0), 0);
+  return {
+    dealCount: dealsOfLeads.length,
+    wonDealCount: won.length,
+    wonAmount,
+    costPerWonDeal: perUnit(totalCost, won.length),
+    roi: totalCost > 0 ? Math.round((wonAmount / totalCost) * 100) / 100 : null,
+    medianDaysToWin: median(
+      won.map((deal) => deal.daysToClose).filter((days): days is number => days !== null)
+    ),
+  };
+}
+
+/** Japan day a lead was created; created_at is a UTC timestamp without time zone */
+const leadCreatedOn = sql`((${leads.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Tokyo')::date`;
+
+/** Every deal of the leads of the period, with the lead's 流入元 and agency (#448) */
+async function readDealsOfLeads(
+  db: Database,
+  organizationId: string,
+  from: Date | null
+): Promise<DealOfLead[]> {
+  const rows = await db
+    .select({
+      source: inflowKey,
+      agencyName: agencyKey,
+      stage: deals.stage,
+      amount: deals.amount,
+      daysToClose: sql<number | null>`(${deals.closedOn} - ${leadCreatedOn})`,
+    })
+    .from(deals)
+    .innerJoin(
+      leads,
+      and(eq(leads.id, deals.leadId), eq(leads.organizationId, deals.organizationId))
+    )
+    .where(and(eq(deals.organizationId, organizationId), leadsInPeriod(organizationId, from)));
+  return rows.map((row) => ({
+    source: row.source,
+    agencyName: row.agencyName ? row.agencyName : null,
+    stage: row.stage,
+    amount: row.amount === null ? null : Number(row.amount),
+    daysToClose: row.daysToClose === null ? null : Number(row.daysToClose),
+  }));
+}
+
+// ---------------------------------------------------------------------------
 // 獲得費用（ROI の代わり：リードに記録した acquisition_cost から）
 // ---------------------------------------------------------------------------
 
@@ -93,22 +164,40 @@ const withUnitCosts = <T extends Omit<AcquisitionCostInput, 'source'>>(row: T) =
   costPerWon: perUnit(row.totalCost, row.wonCount),
 });
 
-export function summarizeAcquisitionCost(rows: AcquisitionCostInput[]): AcquisitionCostSummary {
+/**
+ * The cost by 流入元 and in total. `dealsOfLeads` adds what the deals brought in (#448); null
+ * leaves it out (for those who may not read deals).
+ */
+export function summarizeAcquisitionCost(
+  rows: AcquisitionCostInput[],
+  dealsOfLeads: DealOfLead[] | null = null
+): AcquisitionCostSummary {
   const sum = (pick: (row: AcquisitionCostInput) => number) =>
     rows.reduce((total, row) => total + pick(row), 0);
+  const returnsOf = (totalCost: number, source?: string) =>
+    dealsOfLeads
+      ? dealReturns(
+          source === undefined
+            ? dealsOfLeads
+            : dealsOfLeads.filter((deal) => deal.source === source),
+          totalCost
+        )
+      : null;
   const bySource: AcquisitionCostRow[] = bySizeUnsetLast(
     rows,
     (row) => row.source,
     (row) => row.leadCount
-  ).map(withUnitCosts);
+  ).map((row) => ({ ...withUnitCosts(row), deals: returnsOf(row.totalCost, row.source) }));
+  const totalCost = sum((row) => row.totalCost);
   return {
     ...withUnitCosts({
       leadCount: sum((row) => row.leadCount),
       costedLeadCount: sum((row) => row.costedLeadCount),
       sqlCount: sum((row) => row.sqlCount),
       wonCount: sum((row) => row.wonCount),
-      totalCost: sum((row) => row.totalCost),
+      totalCost,
     }),
+    deals: returnsOf(totalCost),
     bySource,
   };
 }
@@ -120,7 +209,8 @@ export function summarizeAcquisitionCost(rows: AcquisitionCostInput[]): Acquisit
 export async function getAcquisitionCost(
   db: Database,
   organizationId: string,
-  from: Date | null
+  from: Date | null,
+  options: { withDeals: boolean } = { withDeals: false }
 ): Promise<AcquisitionCostSummary> {
   const rows = await db
     .select({
@@ -142,7 +232,8 @@ export async function getAcquisitionCost(
       sqlCount: Number(row.sqlCount),
       wonCount: Number(row.wonCount),
       totalCost: Number(row.totalCost),
-    }))
+    })),
+    options.withDeals ? await readDealsOfLeads(db, organizationId, from) : null
   );
 }
 
@@ -150,25 +241,34 @@ export async function getAcquisitionCost(
 // 代行会社別の成績
 // ---------------------------------------------------------------------------
 
-export type AgencyInput = Omit<AgencyPerformanceRow, 'sqlRate' | 'costPerSql'>;
+export type AgencyInput = Omit<AgencyPerformanceRow, 'sqlRate' | 'costPerSql' | 'deals'>;
 
-export function summarizeAgencies(rows: AgencyInput[]): AgencyPerformanceRow[] {
+/** The agencies, most leads first. `dealsOfLeads` adds what the deals brought in (#448) */
+export function summarizeAgencies(
+  rows: AgencyInput[],
+  dealsOfLeads: DealOfLead[] | null = null
+): AgencyPerformanceRow[] {
   return [...rows]
     .sort((a, b) => b.leadCount - a.leadCount || a.agencyName.localeCompare(b.agencyName, 'ja'))
     .map((row) => ({
       ...row,
       sqlRate: percent(row.sqlCount, row.leadCount),
       costPerSql: perUnit(row.totalCost, row.sqlCount),
+      deals: dealsOfLeads
+        ? dealReturns(
+            dealsOfLeads.filter((deal) => deal.agencyName === row.agencyName),
+            row.totalCost
+          )
+        : null,
     }));
 }
-
-const agencyKey = sql<string>`btrim(${leads.agencyName})`;
 
 /** Leads of the period set up by each sales agency (agency_name), with SQL count and cost */
 export async function getAgencyPerformance(
   db: Database,
   organizationId: string,
-  from: Date | null
+  from: Date | null,
+  options: { withDeals: boolean } = { withDeals: false }
 ): Promise<AgencyPerformanceRow[]> {
   const rows = await db
     .select({
@@ -190,6 +290,7 @@ export async function getAgencyPerformance(
       wonCount: Number(row.wonCount),
       costedLeadCount: Number(row.costedLeadCount),
       totalCost: Number(row.totalCost),
-    }))
+    })),
+    options.withDeals ? await readDealsOfLeads(db, organizationId, from) : null
   );
 }

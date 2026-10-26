@@ -2623,7 +2623,21 @@
         "appointmentQuality": "条件を満たしたアポ",
         "appointmentQualityValue": "{met}／{reviewed}件（{rate}%）"
       },
-      "siteVisits": "サイトの訪問を見る"
+      "siteVisits": "サイトの訪問を見る",
+      "returns": {
+        "title": "受注と費用対効果",
+        "description": "これらのリードの商談の受注額と、獲得費用に対する倍率（ROI = 受注額 ÷ 獲得費用）。受注までの日数は、リードの登録日から商談を閉じた日まで",
+        "row": "区分",
+        "deals": "商談",
+        "wonDeals": "受注",
+        "wonAmount": "受注額",
+        "costPerWonDeal": "受注単価",
+        "roi": "ROI",
+        "medianDays": "受注までの日数（中央値）",
+        "roiValue": "{value, number}倍",
+        "daysValue": "{days, number}日",
+        "total": "合計"
+      }
     }
   },
   "header": {

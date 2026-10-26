@@ -14,6 +14,7 @@ import {
 import type {
   AcquisitionCostSummary,
   AgencyPerformanceRow,
+  DealReturns,
 } from '@/lib/features/analytics/types/schemas';
 import { useLocale, useTranslations } from 'next-intl';
 
@@ -36,6 +37,76 @@ function TableSkeleton() {
 }
 
 const num = 'text-right tabular-nums';
+
+/**
+ * What the deals of the leads brought in, per row and in total (#448). Shown only to those who
+ * may read deals: the rows then carry `deals`.
+ */
+function DealReturnsTable({
+  rows,
+  total,
+}: {
+  rows: { key: string; label: string; deals: DealReturns }[];
+  total?: DealReturns;
+}) {
+  const t = useTranslations('settings.analytics.returns');
+  const locale = useLocale();
+  const roi = (value: number | null) => (value === null ? '—' : t('roiValue', { value }));
+  const days = (value: number | null) => (value === null ? '—' : t('daysValue', { days: value }));
+  const cells = (deals: DealReturns) => (
+    <>
+      <TableCell className={num}>{deals.dealCount}</TableCell>
+      <TableCell className={num}>{deals.wonDealCount}</TableCell>
+      <TableCell className={num}>{yen(locale, deals.wonAmount)}</TableCell>
+      <TableCell className={num}>{yen(locale, deals.costPerWonDeal)}</TableCell>
+      <TableCell className={num}>{roi(deals.roi)}</TableCell>
+      <TableCell className={num}>{days(deals.medianDaysToWin)}</TableCell>
+    </>
+  );
+
+  return (
+    <div className="mt-6" data-testid="deal-returns">
+      <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">{t('title')}</h4>
+      <Text>{t('description')}</Text>
+      <div className="mt-2 overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t('row')}</TableHead>
+              <TableHead className="text-right">{t('deals')}</TableHead>
+              <TableHead className="text-right">{t('wonDeals')}</TableHead>
+              <TableHead className="text-right">{t('wonAmount')}</TableHead>
+              <TableHead className="text-right">{t('costPerWonDeal')}</TableHead>
+              <TableHead className="text-right">{t('roi')}</TableHead>
+              <TableHead className="text-right">{t('medianDays')}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row) => (
+              <TableRow key={row.key}>
+                <TableCell className="whitespace-nowrap">{row.label}</TableCell>
+                {cells(row.deals)}
+              </TableRow>
+            ))}
+          </TableBody>
+          {total && (
+            <TableFooter>
+              <TableRow>
+                <TableCell>{t('total')}</TableCell>
+                {cells(total)}
+              </TableRow>
+            </TableFooter>
+          )}
+        </Table>
+      </div>
+    </div>
+  );
+}
+
+/** Rows that carry their deals (all of them, or none for those who may not read deals) */
+function withDeals<T extends { deals: DealReturns | null }>(rows: T[]) {
+  return rows.filter((row): row is T & { deals: DealReturns } => row.deals != null);
+}
 
 /** Acquisition cost by 流入元, from the cost recorded on each lead */
 export function AcquisitionCostCard({
@@ -111,6 +182,16 @@ export function AcquisitionCostCard({
               </TableFooter>
             </Table>
           </div>
+          {data.deals && (
+            <DealReturnsTable
+              rows={withDeals(data.bySource).map((row) => ({
+                key: row.source,
+                label: sourceLabel(row.source),
+                deals: row.deals,
+              }))}
+              total={data.deals}
+            />
+          )}
         </>
       )}
     </Card>
@@ -173,6 +254,15 @@ export function AgencyPerformanceCard({
               ))}
             </TableBody>
           </Table>
+          {withDeals(data).length > 0 && (
+            <DealReturnsTable
+              rows={withDeals(data).map((row) => ({
+                key: row.agencyName,
+                label: row.agencyName,
+                deals: row.deals,
+              }))}
+            />
+          )}
         </div>
       )}
     </Card>

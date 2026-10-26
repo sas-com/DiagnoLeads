@@ -1,12 +1,13 @@
 /**
- * Analytics by 流入元 / acquisition cost / agency on a real PostgreSQL (#138).
+ * Analytics by 流入元 / acquisition cost / agency on a real PostgreSQL (#138), with what the
+ * deals of the leads brought in (#448).
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/dl_analytics138 \
  *     bunx vitest --run test/unit/integration/analytics-lead-sources.db.test.ts
  */
 import * as schema from '@/lib/db/schema';
-import { leads, organizations } from '@/lib/db/schema';
+import { deals, leads, organizations } from '@/lib/db/schema';
 import {
   getAcquisitionCost,
   getAgencyPerformance,
@@ -139,6 +140,7 @@ describe.skipIf(!url)('analytics by inflow source, cost and agency (PostgreSQL)'
         costedLeadCount: 3,
         totalCost: 90000,
         costPerSql: 90000,
+        deals: null,
       },
       {
         agencyName: 'B社',
@@ -149,6 +151,7 @@ describe.skipIf(!url)('analytics by inflow source, cost and agency (PostgreSQL)'
         costedLeadCount: 1,
         totalCost: 50000,
         costPerSql: 25000,
+        deals: null,
       },
       {
         agencyName: 'C社',
@@ -159,6 +162,7 @@ describe.skipIf(!url)('analytics by inflow source, cost and agency (PostgreSQL)'
         costedLeadCount: 1,
         totalCost: 20000,
         costPerSql: null,
+        deals: null,
       },
     ]);
   });
@@ -189,5 +193,66 @@ describe.skipIf(!url)('analytics by inflow source, cost and agency (PostgreSQL)'
       { source: 'advertising', count: 1, percentage: 50 },
       { source: 'telemarketing_agency', count: 1, percentage: 50 },
     ]);
+  });
+
+  // What the deals of the period's leads brought in (#448)
+  it('adds the won amount, ROI and days to win of the deals, only when asked', async () => {
+    const [agencyLead] = await lead({
+      inflowSource: 'telemarketing_agency',
+      agencyName: 'A社',
+      createdAt: new Date('2026-10-12T03:00:00Z'), // 10/12 JST
+    }).returning();
+    const [organicLead] = await lead({ inflowSource: 'lp_organic' }).returning();
+    const [oldLead] = await lead({
+      inflowSource: 'telemarketing_agency',
+      agencyName: 'A社',
+      createdAt: new Date('2026-10-01T03:00:00Z'), // before the period
+    }).returning();
+    const [otherLead] = await lead(
+      { inflowSource: 'telemarketing_agency', agencyName: 'A社' },
+      otherOrganizationId
+    ).returning();
+    const deal = (leadId: string, values: Partial<typeof deals.$inferInsert>, orgId = organizationId) =>
+      pg.insert(deals).values({ organizationId: orgId, leadId, name: '調査', ...values });
+    await deal(agencyLead.id, { stage: 'won', amount: 450000, closedOn: '2026-10-26' });
+    await deal(agencyLead.id, { kind: 'migration', stage: 'proposal', amount: 3000000 });
+    await deal(organicLead.id, { stage: 'won', amount: 200000, closedOn: '2026-10-20' });
+    await deal(oldLead.id, { stage: 'won', amount: 9_000_000, closedOn: '2026-10-05' });
+    await deal(otherLead.id, { stage: 'won', amount: 8_000_000, closedOn: '2026-10-20' }, otherOrganizationId);
+
+    // Not asked for (those who may not read deals): no amounts at all
+    expect((await getAcquisitionCost(db, organizationId, from)).deals).toBeNull();
+
+    const summary = await getAcquisitionCost(db, organizationId, from, { withDeals: true });
+    const tele = summary.bySource.find((row) => row.source === 'telemarketing_agency');
+    // 10/12 → 10/26 JST: 14 days; the open migration deal adds no amount; 90,000 yen spent
+    expect(tele?.deals).toEqual({
+      dealCount: 2,
+      wonDealCount: 1,
+      wonAmount: 450000,
+      costPerWonDeal: 90000,
+      roi: 5,
+      medianDaysToWin: 14,
+    });
+    // Nothing spent on the organic lead: no ROI
+    expect(summary.bySource.find((row) => row.source === 'lp_organic')?.deals).toMatchObject({
+      wonAmount: 200000,
+      roi: null,
+    });
+    // The lead before the period and the other organization's deal are not counted
+    expect(summary.deals).toMatchObject({ dealCount: 3, wonDealCount: 2, wonAmount: 650000 });
+
+    const agencies = await getAgencyPerformance(db, organizationId, from, { withDeals: true });
+    expect(agencies.find((row) => row.agencyName === 'A社')?.deals).toMatchObject({
+      dealCount: 2,
+      wonAmount: 450000,
+    });
+    expect(agencies.find((row) => row.agencyName === 'B社')?.deals).toMatchObject({
+      dealCount: 0,
+      wonAmount: 0,
+      roi: 0,
+    });
+    const other = await getAgencyPerformance(db, otherOrganizationId, from, { withDeals: true });
+    expect(other[0].deals).toMatchObject({ dealCount: 1, wonAmount: 8_000_000 });
   });
 });
