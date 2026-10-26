@@ -16,6 +16,11 @@ paths:
 - 最初に権限を確かめる：`if (!ctx.ability.can('<action>', '<Subject>')) throw new TRPCError({ code: 'FORBIDDEN', message: '<メッセージ>' })`。閲覧は `read Lead`、設定の変更は `update Settings` のように、アクション・対象・メッセージの言語を同じルーターのほかの手続きに合わせる
 - 読み込みも書き込みも `eq(<table>.organizationId, input.organizationId)` を条件に入れる。直前に組織で絞って読んだ行を書くときも入れる（`decisions/2026-10-23-admin-api-role-checks`）。id だけで更新・削除しない
 - 入力で受け取ったほかの行の id（リード・タグ・テンプレートなど）は、使う前に `assertInOrganization`（`lib/multi-tenant/helpers/scope.ts`）で同じ組織のものか確かめる。別の組織の行は NOT_FOUND（存在しない id と同じ答え）にする
+- resolver の `input`・`...input`・`...rest` を、DB の書き込み（`.set()`・`.values()`）・監査・外への送信・ログに広げず、項目を名前で取り出す
+  - service に `input`・`...input`・`...rest` を渡すときも同じ。受け取った側で広げず、引数の型にスキーマに無い optional の項目を置かない。取り出し方の例は `pickPreferenceUpdates`（`lib/features/notifications/notification-service.ts`）
+  - 今の `organizationProcedure` の最初の `.input()`（`organizationInputSchema`）は `.passthrough()` なので、手続きのスキーマに無い最上位の項目も `input` に残る。`notifications.updatePreferences` では、router が残りを service に渡し、service が `.set({ ...updates })` に広げていて、送られた `userId` で行を書き換えられた（#743）
+  - 名前で取り出した入れ子の `z.object`（`input.contract`・`input.data` など）は、手続きのスキーマが知らない項目を落とすので広げてよい（`z.record` は知らない項目も通すので当たらない）
+  - 型チェックでは止まらない。`input` の型が `[k: string]: unknown` を持つので、宣言していない項目を読んでも、広げても、スキーマに無い optional の項目を持つ引数の型に渡しても型エラーにならない。passthrough を外したあとも名前で取り出す（#743 の 2026-10-26 のオーナーの判断）
 - 誰が読めて誰が変えられるかは、関係する決定に合わせる。parent_viewer（親組織の閲覧者）はリードを読めるが、営業の手引きなど読めないものがある
 - 新しい手続きには、組織の分離の DB テストを足す：`test/unit/integration/*-org-isolation.db.test.ts`（別の組織の id を渡すと NOT_FOUND になり、相手の行が変わらないこと）
 - 新しいルーターは `server/routers/_app.ts` に登録する（登録しないと外から呼べない）
