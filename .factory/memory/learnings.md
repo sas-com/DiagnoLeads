@@ -207,6 +207,15 @@
   - 複数のマイグレーションや、データを書き換えるマイグレーションは、この経路でなく `db:migrate`（Session pooler か直接の接続）で流す。この経路は、短い DDL を1本流すときに限る
   - Supabase の `apply_migration` は Supabase 自身の台帳に記録するもので、drizzle の台帳には書かないので使わない
 
+### [DB] join のない select で選ぶ SQL の値は、その一番上の列が表名なしで書かれ、相関サブクエリの中で別の表の列になる
+- **日付**: 2026-10-28
+- **状況**: #556（「今日」の画面）の `getMyMeetings` で、`leads` だけの select に list-sql.ts のサブクエリ（`(select mr.confirmed_time from meeting_requests mr where mr.lead_id = ${leads.id} ...)`）を値として選ぶと、時刻と評価が空になった。実 DB のテストで見つかった
+- **原因**: drizzle は、join のない select の選ぶ値（`select({ x: <sql のテンプレート> })`）の一番上にある列を、表名なしで書く（`mr.lead_id = "id"`）。相関サブクエリの中では、`"id"` はサブクエリ自身の表の列（`meeting_requests.id`）を指すので、エラーにならずに条件が別のものになる。値を1段入れ子にする（sql のテンプレートで `${sub}` を包み直す）か、select に join があるか、WHERE の中なら `"leads"."id"` と書かれる（2026-10-28 に `QueryBuilder` の `toSQL()` で確かめた）
+- **解決策**: 選ぶ値を1段入れ子にする `nested()`（sql のテンプレートで包み直すだけの関数）を `lib/features/leads/api/list-sql.ts` に置き、join のない select で list-sql.ts の値を選ぶときはこれを通すとコメントに書いた。`getMyMeetings`（`lib/features/leads/meetings.ts`）は、選ぶ値をすべてこれで包む
+- **教訓**:
+  - 相関サブクエリを持つ SQL の値を、join のない select で選ぶときは、1段入れ子にするか、`toSQL()` で表名が付いているかを確かめる。サブクエリの中で外の列を、表名なしで指す書き方をしない
+  - list-sql.ts の値（`leadDealRating`・`leadNextMeetingDate` など）は、リード一覧（join あり）と WHERE では正しく書かれるので、一覧のテストでは気づかない。新しい場所で選ぶときは、実 DB のテストで値まで確かめる
+
 ---
 
 ## 性能関連
