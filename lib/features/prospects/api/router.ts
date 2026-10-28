@@ -31,6 +31,8 @@ import { leadNoteFromProspect, sameCompany } from '../lead-link';
 import { getOrCreateMemberLink, notifyProspectHandedOver } from '../referrals';
 import { summarizeProspects } from '../summary';
 import {
+  CLOSED_PROSPECT_NEXT_STEPS,
+  CLOSED_PROSPECT_STAGES,
   PROSPECT_TEXT_MAX,
   type ProspectAgencyFields,
   type ProspectEntry,
@@ -80,15 +82,21 @@ const INFLOW_BY_ENTRY: Partial<Record<ProspectEntry, InflowSource>> = {
   sales_agency: 'telemarketing_agency',
 };
 
-/** Rows still followed: not passed, dropped, contracted, or already a lead */
+/**
+ * Rows still followed: not passed, dropped, contracted, or already a lead. The summary's checks
+ * count the same rows with isFollowed (../summary.ts); change both together (#852)
+ */
 const notClosed = () =>
   and(
     isNull(prospects.leadId),
-    or(isNull(prospects.nextStep), ne(prospects.nextStep, 'pass')),
-    or(isNull(prospects.stage), notInArray(prospects.stage, ['dropped', 'contract']))
+    or(isNull(prospects.nextStep), notInArray(prospects.nextStep, [...CLOSED_PROSPECT_NEXT_STEPS])),
+    or(isNull(prospects.stage), notInArray(prospects.stage, [...CLOSED_PROSPECT_STAGES]))
   );
 
-/** Open rows for "overdue": calls turned down are followed in the re-approach list instead (#161) */
+/**
+ * Open rows for "overdue": calls turned down are followed in the re-approach list instead (#161).
+ * The summary's overdue check counts the same rows with isOpenRow (../summary.ts)
+ */
 const openRow = () =>
   and(notClosed(), or(isNull(prospects.callResult), ne(prospects.callResult, 'refused')));
 
@@ -115,6 +123,7 @@ export const prospectsRouter = router({
       if (open) filters.push(open);
     }
     if (input.filter === 'handed_over') {
+      // The summary's handOverWithoutStage counts these rows that have no stage (../summary.ts)
       filters.push(eq(prospects.nextStep, 'hand_over'), isNull(prospects.leadId));
     }
     if (input.filter === 'reapproach') {
@@ -475,6 +484,7 @@ export const prospectsRouter = router({
           nextActionNote: prospects.nextActionNote,
           stage: prospects.stage,
           meetingOn: prospects.meetingOn,
+          leadId: prospects.leadId,
           callResult: prospects.callResult,
           refusalReason: prospects.refusalReason,
         })

@@ -1,5 +1,7 @@
 import {
   CALL_RESULTS,
+  CLOSED_PROSPECT_NEXT_STEPS,
+  CLOSED_PROSPECT_STAGES,
   type CallResult,
   PROSPECT_ENTRIES,
   PROSPECT_FUNNEL_STAGES,
@@ -14,6 +16,13 @@ import {
 /**
  * The summary of the prospect list (#265), with the same definitions as the spreadsheet's
  * "summary for management" sheet so the numbers do not change when the list moves here.
+ *
+ * A row that became a lead keeps the stage it had, and nobody changes it any more: the lead and
+ * its deals are followed from then on. So what is counted by stage leaves those rows out and
+ * counts them apart as converted, while what was done (rows written, reactions, next steps,
+ * meetings, calls) counts every row. The checks leave out the rows the list's filters leave out,
+ * so "overdue" counts what the list's filter of that name shows (decision
+ * 2026-10-28-consolidate-input-places, #852).
  */
 
 export interface SummaryProspect {
@@ -26,6 +35,8 @@ export interface SummaryProspect {
   nextActionNote: string | null;
   stage: string | null;
   meetingOn: string | null;
+  /** The lead the row became. Required, so that a query that does not read it fails to compile */
+  leadId: string | null;
   /** A sales agency's call (#161) */
   callResult?: string | null;
   refusalReason?: string | null;
@@ -44,6 +55,9 @@ interface EntryRow {
   hasIssue: number;
   handOver: number;
   meetings: number;
+  /** Rows that became a lead */
+  converted: number;
+  /** contracts and byStage leave out the rows that became a lead */
   contracts: number;
   byStage: Record<ProspectStage, number>;
 }
@@ -55,10 +69,14 @@ export interface ProspectSummary {
     handOver: number;
     keepChecking: number;
     meetings: number;
+    /** Rows that became a lead: followed as the lead and its deals from then on */
+    converted: number;
+    /** contracts and nurturing leave out the rows that became a lead */
     contracts: number;
     nurturing: number;
     passed: number;
   };
+  /** stages and withStage leave out the rows that became a lead */
   stages: {
     stage: ProspectStage;
     current: number;
@@ -80,6 +98,7 @@ export interface ProspectSummary {
     /** meetingsToDate - target */
     gap: number | null;
   }[];
+  /** Without the rows the list's filters leave out: overdue is what the "overdue" filter shows */
   checks: {
     stageWithoutNextAction: number;
     overdue: number;
@@ -101,6 +120,27 @@ const funnelIndex = (stage: string | null) =>
 
 const ratio = (part: number, whole: number) => (whole === 0 ? 0 : part / whole);
 
+const isOneOf = (values: readonly string[], value: string | null) =>
+  value !== null && values.includes(value);
+
+/** A row that became a lead (#852) */
+const isConverted = (row: SummaryProspect) => row.leadId !== null;
+
+/**
+ * A row still followed: not a lead yet, not passed, not dropped or contracted. The same rows as
+ * notClosed in api/router.ts, which filters the list in SQL; change both together
+ */
+const isFollowed = (row: SummaryProspect) =>
+  !isConverted(row) &&
+  !isOneOf(CLOSED_PROSPECT_NEXT_STEPS, row.nextStep) &&
+  !isOneOf(CLOSED_PROSPECT_STAGES, row.stage);
+
+/**
+ * A followed row whose next action can be overdue: calls turned down are followed in the
+ * re-approach list instead (#161). The same rows as openRow in api/router.ts
+ */
+const isOpenRow = (row: SummaryProspect) => isFollowed(row) && row.callResult !== 'refused';
+
 const emptyStages = () =>
   Object.fromEntries(PROSPECT_STAGES.map((stage) => [stage, 0])) as Record<ProspectStage, number>;
 
@@ -121,23 +161,28 @@ export function summarizeProspects(
   today: string
 ): ProspectSummary {
   const count = (test: (row: SummaryProspect) => boolean) => rows.filter(test).length;
+  // What is counted by stage: the rows that became a lead keep a stage nobody changes any more
+  const staged = rows.filter((row) => !isConverted(row));
+  const countStaged = (test: (row: SummaryProspect) => boolean) => staged.filter(test).length;
 
   const overall = {
     total: rows.length,
     hasIssue: count((row) => row.reaction === 'has_issue'),
     handOver: count((row) => row.nextStep === 'hand_over'),
     keepChecking: count((row) => row.nextStep === 'keep_checking'),
+    // A meeting held is one held, whether or not the row became a lead later
     meetings: count((row) => row.meetingOn !== null),
-    contracts: count((row) => row.stage === 'contract'),
-    nurturing: count((row) => row.stage === 'nurturing'),
+    converted: count(isConverted),
+    contracts: countStaged((row) => row.stage === 'contract'),
+    nurturing: countStaged((row) => row.stage === 'nurturing'),
     // As in the spreadsheet: rows whose next step is to pass, whatever their stage
     passed: count((row) => row.nextStep === 'pass'),
   };
 
-  const withStage = count((row) => row.stage !== null);
+  const withStage = countStaged((row) => row.stage !== null);
   let previousReached: number | null = null;
   const stages = PROSPECT_STAGES.map((stage) => {
-    const current = count((row) => row.stage === stage);
+    const current = countStaged((row) => row.stage === stage);
     if (!isFunnelStage(stage)) {
       return {
         stage,
@@ -148,7 +193,7 @@ export function summarizeProspects(
       };
     }
     const index = PROSPECT_FUNNEL_STAGES.indexOf(stage);
-    const reached = count((row) => funnelIndex(row.stage) >= index);
+    const reached = countStaged((row) => funnelIndex(row.stage) >= index);
     const progressRate = previousReached === null ? null : ratio(reached, previousReached);
     previousReached = reached;
     return { stage, current, share: ratio(current, withStage), reached, progressRate };
@@ -156,8 +201,9 @@ export function summarizeProspects(
 
   const entries = PROSPECT_ENTRIES.map((entry): EntryRow => {
     const own = rows.filter((row) => row.entry === entry);
+    const ownStaged = staged.filter((row) => row.entry === entry);
     const byStage = emptyStages();
-    for (const row of own) {
+    for (const row of ownStaged) {
       if (row.stage && row.stage in byStage) byStage[row.stage as ProspectStage] += 1;
     }
     return {
@@ -166,7 +212,8 @@ export function summarizeProspects(
       hasIssue: own.filter((row) => row.reaction === 'has_issue').length,
       handOver: own.filter((row) => row.nextStep === 'hand_over').length,
       meetings: own.filter((row) => row.meetingOn !== null).length,
-      contracts: own.filter((row) => row.stage === 'contract').length,
+      converted: own.filter(isConverted).length,
+      contracts: ownStaged.filter((row) => row.stage === 'contract').length,
       byStage,
     };
   });
@@ -214,16 +261,23 @@ export function summarizeProspects(
     withStage,
     entries,
     months,
+    // With the conditions of the list's filters (api/router.ts), so that the counts match the list
     checks: {
       stageWithoutNextAction: count(
-        (row) => row.stage !== null && row.nextActionOn === null && row.nextActionNote === null
-      ),
-      // Calls turned down are followed in the re-approach list, not as overdue (#161)
-      overdue: count(
         (row) =>
-          row.nextActionOn !== null && row.nextActionOn < today && row.callResult !== 'refused'
+          isFollowed(row) &&
+          row.stage !== null &&
+          row.nextActionOn === null &&
+          row.nextActionNote === null
       ),
-      handOverWithoutStage: count((row) => row.nextStep === 'hand_over' && row.stage === null),
+      // As the "overdue" filter: calls turned down are followed in the re-approach list (#161)
+      overdue: count(
+        (row) => isOpenRow(row) && row.nextActionOn !== null && row.nextActionOn < today
+      ),
+      // As the "handed over" filter (handed over, not a lead yet), for the rows without a stage
+      handOverWithoutStage: count(
+        (row) => row.nextStep === 'hand_over' && !isConverted(row) && row.stage === null
+      ),
     },
     calls: {
       total: count((row) => row.callResult != null),

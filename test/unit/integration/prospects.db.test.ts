@@ -19,6 +19,7 @@ import {
   users,
 } from '@/lib/db/schema';
 import { submitAxMigrationDiagnosis } from '@/lib/features/diagnostics/ax-migration/submission-service';
+import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { as400Answers } from '@/test/fixtures/ax-migration';
 import type { OrganizationRole } from '@/lib/db/schema';
 import { appRouter } from '@/server/routers/_app';
@@ -38,6 +39,8 @@ describe.skipIf(!url)('prospects (PostgreSQL)', () => {
   const unique = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   let organizationId: string;
   let otherOrganizationId: string;
+  /** Rows of every kind for the summary against the list, apart from the counts of the others */
+  let summaryOrganizationId: string;
   const ids: Record<string, string> = {};
   // biome-ignore lint/suspicious/noExplicitAny: tRPC callers
   const callers: Record<string, any> = {};
@@ -78,21 +81,25 @@ describe.skipIf(!url)('prospects (PostgreSQL)', () => {
       .values([
         { name: '顧客探しテスト', slug: `prospects-${unique()}` },
         { name: '顧客探し別組織', slug: `prospects-other-${unique()}` },
+        { name: '顧客探し集計テスト', slug: `prospects-summary-${unique()}` },
       ])
       .returning({ id: organizations.id });
     organizationId = created[0].id;
     otherOrganizationId = created[1].id;
+    summaryOrganizationId = created[2].id;
     await addUser('sales', organizationId, 'admin');
     await addUser('memberA', organizationId, 'member');
     await addUser('memberB', organizationId, 'member');
     await addUser('viewer', organizationId, 'parent_viewer');
     await addUser('outsider', otherOrganizationId, 'owner');
+    await addUser('summarySales', summaryOrganizationId, 'admin');
   });
 
   afterAll(async () => {
     if (organizationId) {
       await pg.delete(organizations).where(eq(organizations.id, organizationId));
       await pg.delete(organizations).where(eq(organizations.id, otherOrganizationId));
+      await pg.delete(organizations).where(eq(organizations.id, summaryOrganizationId));
     }
     await client?.end();
   });
@@ -305,6 +312,71 @@ describe.skipIf(!url)('prospects (PostgreSQL)', () => {
       target: 10,
       meetingsToDate: 1,
       gap: -9,
+    });
+  });
+
+  it('counts the checks as the list filters them, and leaves the leads out of the stages (#852)', async () => {
+    const orgId = summaryOrganizationId;
+    const today = jstDate();
+    const past = '2020-01-01';
+    const [lead] = await pg
+      .insert(leads)
+      .values({ organizationId: orgId, email: `summary-${unique()}@example.co.jp`, company: '架空集計工業' })
+      .returning();
+    const prospect = (company: string, values: Partial<typeof prospects.$inferInsert>) => ({
+      organizationId: orgId,
+      contactedOn: '2026-10-14',
+      entry: 'member_network',
+      company,
+      createdBy: ids.summarySales,
+      ...values,
+    });
+    await pg.insert(prospects).values([
+      // Still followed: counted in the checks, and shown by the list's filters
+      prospect('架空A', { nextActionOn: past }),
+      prospect('架空B', { nextStep: 'hand_over' }),
+      prospect('架空C', { stage: 'interest' }),
+      // Waiting for sales, with a stage
+      prospect('架空D', { nextStep: 'hand_over', stage: 'interest', nextActionNote: '11月中旬' }),
+      // A next action today is not overdue
+      prospect('架空E', { nextActionOn: today, stage: 'quick_diagnosis' }),
+      // No longer followed, each for one reason only
+      prospect('架空F', { nextActionOn: past, stage: 'quick_diagnosis', leadId: lead.id }),
+      prospect('架空G', { nextStep: 'hand_over', leadId: lead.id }),
+      prospect('架空H', { stage: 'proposal', leadId: lead.id }),
+      prospect('架空I', { nextActionOn: past, stage: 'interest', nextStep: 'pass' }),
+      prospect('架空J', { nextActionOn: past, stage: 'dropped' }),
+      prospect('架空K', { nextActionOn: past, stage: 'contract', meetingOn: '2026-10-20' }),
+      // Followed in the re-approach list, not as overdue (#161)
+      prospect('架空L', { entry: 'sales_agency', nextActionOn: past, callResult: 'refused', refusalReason: 'budget' }),
+      // A lead whose stage stays at contract: counted apart, its meeting still counts
+      prospect('架空M', { stage: 'contract', meetingOn: '2026-10-21', leadId: lead.id }),
+    ]);
+
+    const { summary } = await callers.summarySales.prospects.summary({ organizationId: orgId });
+    const overdue = await callers.summarySales.prospects.list({ organizationId: orgId, filter: 'overdue' });
+    const waiting = await callers.summarySales.prospects.list({ organizationId: orgId, filter: 'handed_over' });
+    const companies = (rows: { company: string }[]) => rows.map((row) => row.company).sort();
+
+    expect(companies(overdue.prospects)).toEqual(['架空A']);
+    expect(summary.checks.overdue).toBe(overdue.prospects.length);
+    const waitingWithoutStage = waiting.prospects.filter((row: { stage: string | null }) => row.stage === null);
+    expect(companies(waiting.prospects)).toEqual(['架空B', '架空D']);
+    expect(companies(waitingWithoutStage)).toEqual(['架空B']);
+    expect(summary.checks.handOverWithoutStage).toBe(waitingWithoutStage.length);
+    expect(summary.checks.stageWithoutNextAction).toBe(1);
+
+    // What was done counts every row; the stages only the rows that are not leads
+    expect(summary.overall).toMatchObject({ total: 13, handOver: 3, meetings: 2, converted: 4, contracts: 1 });
+    expect(summary.withStage).toBe(6);
+    const byStage = Object.fromEntries(
+      summary.stages.map((row: { stage: string; current: number }) => [row.stage, row.current])
+    );
+    expect(byStage).toMatchObject({ quick_diagnosis: 1, proposal: 0, contract: 1 });
+    expect(summary.entries.find((e: { entry: string }) => e.entry === 'member_network')).toMatchObject({
+      total: 12,
+      converted: 4,
+      contracts: 1,
     });
   });
 
