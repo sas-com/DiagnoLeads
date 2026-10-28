@@ -158,6 +158,8 @@ function TaskRow({
     onSuccess: () => {
       void utils.leadFollowUp.tasks.invalidate();
       void utils.leadFollowUp.dueTasks.invalidate({ organizationId });
+      // The deals' cards show the lead's next action, or mark it missing (#853)
+      void utils.deals.board.invalidate({ organizationId });
     },
     onError: () => toast.error(t('saveError')),
   });
@@ -266,6 +268,8 @@ function AddTaskForm({
       setCheckWithText('');
       void utils.leadFollowUp.tasks.invalidate({ organizationId, leadId });
       void utils.leadFollowUp.dueTasks.invalidate({ organizationId });
+      // The deals' cards show the lead's next action, or mark it missing (#853)
+      void utils.deals.board.invalidate({ organizationId });
     },
     onError: () => toast.error(t('saveError')),
   });

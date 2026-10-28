@@ -84,7 +84,6 @@ interface FormState {
   forecastOverride: ForecastOverride | null;
   expectedCloseOn: string | undefined;
   ownerUserId: string | null | undefined;
-  nextStep: string;
   /** A won or lost deal's day, reason, details and competitor (Refs #720) */
   closedOn: string | undefined;
   lostReason: DealLostReason | '';
@@ -105,7 +104,6 @@ const emptyState = (deal?: DealView): FormState => {
     expectedCloseOn: deal?.expectedCloseOn ?? undefined,
     // undefined: the server picks the lead's assignee, else the creator (new deals only)
     ownerUserId: deal ? deal.ownerUserId : undefined,
-    nextStep: deal?.nextStep ?? '',
     closedOn: deal?.closedOn ?? undefined,
     lostReason: lostReason.success ? lostReason.data : '',
     lostNote: deal?.lostNote ?? '',
@@ -121,7 +119,6 @@ interface SentFields {
   probability: number;
   forecastOverride: ForecastOverride | null;
   expectedCloseOn: string | null;
-  nextStep: string | null;
   ownerUserId: string | null;
   closedOn: string;
   lostReason: DealLostReason;
@@ -129,7 +126,7 @@ interface SentFields {
   competitor: string | null;
 }
 /** Every deal sends these; the others depend on the deal */
-type FormValues = Pick<SentFields, 'name' | 'kind' | 'amount' | 'expectedCloseOn' | 'nextStep'> &
+type FormValues = Pick<SentFields, 'name' | 'kind' | 'amount' | 'expectedCloseOn'> &
   Partial<SentFields>;
 
 /**
@@ -145,7 +142,6 @@ function formValues(form: FormState, closed: 'won' | 'lost' | null): FormValues 
     kind: form.kind,
     amount: amount === 'invalid' ? null : amount,
     expectedCloseOn: form.expectedCloseOn ?? null,
-    nextStep: form.nextStep.trim() || null,
     ...(form.ownerUserId !== undefined ? { ownerUserId: form.ownerUserId } : {}),
   };
   if (closed) {
@@ -198,7 +194,7 @@ type ErrorField = (typeof ERROR_FIELDS)[number][0];
  * does not write back a value changed elsewhere meanwhile (a stage move resets the probability).
  * A save that fails says so in the dialog, which does not close while it saves, and a send with
  * errors takes the focus to the first field to fix (#720). The fields scroll, and the buttons
- * stay in view under them.
+ * stay in view under them. What to do next is not asked: it is the lead's next actions (#853).
  */
 export function DealFormDialog({
   open,
@@ -673,17 +669,6 @@ export function DealFormDialog({
                   </Select>
                 </div>
               )}
-
-              <div className="space-y-1.5">
-                <Label htmlFor={`${id}-next`}>{t('fields.nextStep')}</Label>
-                <Input
-                  id={`${id}-next`}
-                  value={state.nextStep}
-                  maxLength={DEAL_LIMITS.nextStep}
-                  className={TAP_TARGET}
-                  onChange={(event) => set('nextStep', event.target.value)}
-                />
-              </div>
             </div>
 
             {/* Always in view, so a long form on a phone never hides the buttons or a failure */}

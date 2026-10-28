@@ -1,11 +1,11 @@
 /**
- * The pipeline board (#436, #720): columns with their totals, the cards' warnings and dates,
- * moving a card with its menu (the keyboard and phone way, named with the card's stage) or by
- * dragging it, and the focus that follows a card moved from its menu. Real next-intl messages and
- * UI components.
+ * The pipeline board (#436, #720): columns with their totals, the cards' warnings and dates, the
+ * lead's next action of an open deal instead of the deal's old next step (#853), moving a card
+ * with its menu (the keyboard and phone way, named with the card's stage) or by dragging it, and
+ * the focus that follows a card moved from its menu. Real next-intl messages and UI components.
  */
 import { DealBoard } from '@/components/features/deals/deal-board';
-import type { BoardColumn, DealCard } from '@/lib/features/deals/service';
+import type { BoardColumn, DealCard, DealNextTask } from '@/lib/features/deals/service';
 import { DEAL_STAGES, type DealStage } from '@/lib/features/deals/types/pipeline';
 import messages from '@/locales/ja/common.json';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
@@ -26,6 +26,16 @@ beforeAll(() => {
 
 const TODAY = '2026-10-24';
 
+const NEXT_TASK: DealNextTask = {
+  id: 'task-1',
+  title: '稟議の確認',
+  dueOn: '2026-10-30',
+  kind: 'next_action',
+  source: 'manual',
+};
+/** A lead without an open task, as the board reads it: hasOpenTask follows nextTask */
+const NO_TASK = { nextTask: null, hasOpenTask: false } as const;
+
 const card = (overrides: Partial<DealCard>): DealCard => ({
   id: 'deal-1',
   leadId: 'lead-1',
@@ -43,6 +53,7 @@ const card = (overrides: Partial<DealCard>): DealCard => ({
   lostNote: null,
   competitor: null,
   targetSystem: 'as400',
+  // Written before #853: no longer shown on the board
   nextStep: '見積を送る',
   ownerUserId: 'user-1',
   ownerName: '営業 花子',
@@ -52,10 +63,15 @@ const card = (overrides: Partial<DealCard>): DealCard => ({
   updatedAt: new Date('2026-10-20T00:00:00Z'),
   leadName: '山田 太郎',
   company: '架空商事',
+  nextTask: NEXT_TASK,
   hasOpenTask: true,
   leadSqlDecision: null,
   ...overrides,
 });
+
+/** The card of a deal, found by its link */
+const cardOf = (name: string) =>
+  screen.getByRole('link', { name }).closest('li') as HTMLLIElement;
 
 function columnsWith(deals: DealCard[]): BoardColumn[] {
   return DEAL_STAGES.map((stage) => {
@@ -138,7 +154,7 @@ describe('DealBoard', () => {
     ]);
   });
 
-  it('links each card to the deal and shows its company, close date, owner and next step', () => {
+  it("links each card to the deal and shows its company, close date, owner and lead's next action", () => {
     renderBoard([card({})]);
     expect(screen.getByRole('link', { name: 'AS/400 現行調査' })).toHaveAttribute(
       'href',
@@ -147,11 +163,53 @@ describe('DealBoard', () => {
     expect(screen.getByText('架空商事 山田 太郎')).toBeInTheDocument();
     // The day as the date boxes write it (#720)
     expect(screen.getByText('2026/11/30 · 営業 花子')).toBeInTheDocument();
-    expect(screen.getByText('見積を送る')).toBeInTheDocument();
+    expect(screen.getByText('10/30まで')).toBeInTheDocument();
+    expect(screen.getByText('稟議の確認')).toBeInTheDocument();
   });
 
-  it('writes no text under 14px and gives the move button 44px on phones (#720)', () => {
-    const { container } = renderBoard([card({ expectedCloseOn: '2026-10-01', hasOpenTask: false })]);
+  it("shows the lead's next action instead of the deal's old next step, without a warning (#853)", () => {
+    renderBoard([
+      card({
+        nextTask: { ...NEXT_TASK, title: '保守費用の内訳を回答する', kind: 'takeaway', dueOn: '2026-10-22' },
+      }),
+      card({ id: 'deal-2', name: '移行', nextTask: { ...NEXT_TASK, title: null, source: 'hearing' } }),
+    ]);
+    const first = cardOf('AS/400 現行調査');
+    // Named for screen readers, with the due date, the takeaway's mark and the title
+    expect(within(first).getByText('次の行動')).toHaveClass('sr-only');
+    expect(within(first).getByText('期限切れ 10/22')).toBeInTheDocument();
+    expect(within(first).getByText('持ち帰り')).toBeInTheDocument();
+    expect(within(first).getByText('保守費用の内訳を回答する')).toBeInTheDocument();
+    // The deal's next step written before is a note of the deal page only
+    expect(within(first).queryByText('見積を送る')).not.toBeInTheDocument();
+    expect(
+      within(first).queryByText('リードに次の行動（タスク）がありません')
+    ).not.toBeInTheDocument();
+    // A next action from a hearing that kept the default title is named as on the lead page
+    expect(within(cardOf('移行')).getByText('次回の打ち合わせ')).toBeInTheDocument();
+    expect(within(cardOf('移行')).queryByText('持ち帰り')).not.toBeInTheDocument();
+  });
+
+  it('shows only the warning for a lead without an open task, even with an old next step (#853)', () => {
+    renderBoard([card({ ...NO_TASK })]);
+    const item = cardOf('AS/400 現行調査');
+    expect(within(item).getByText('リードに次の行動（タスク）がありません')).toBeInTheDocument();
+    expect(within(item).queryByText('次の行動')).not.toBeInTheDocument();
+    expect(within(item).queryByText('見積を送る')).not.toBeInTheDocument();
+  });
+
+  it('writes no text under 14px and gives the move button 44px on phones (#720, #853)', () => {
+    const { container } = renderBoard([
+      card({
+        expectedCloseOn: '2026-10-01',
+        nextTask: { ...NEXT_TASK, kind: 'takeaway', dueOn: '2026-10-01' },
+      }),
+      card({ id: 'deal-2', name: '移行', ...NO_TASK }),
+    ]);
+    // The next action's due date and mark, and the warnings, are all there
+    expect(screen.getByText('期限切れ 10/1')).toBeInTheDocument();
+    expect(screen.getByText('持ち帰り')).toBeInTheDocument();
+    expect(screen.getByText('リードに次の行動（タスク）がありません')).toBeInTheDocument();
     expect(container.querySelector('.text-xs')).toBeNull();
     expect(moveButtonIn('提案')).toHaveClass(
       'h-11',
@@ -162,18 +220,21 @@ describe('DealBoard', () => {
   });
 
   it('warns about a passed close date and a deal without a next action', () => {
-    renderBoard([card({ expectedCloseOn: '2026-10-01', hasOpenTask: false })]);
+    renderBoard([card({ expectedCloseOn: '2026-10-01', ...NO_TASK })]);
     expect(screen.getByText('受注予定日を過ぎています')).toBeInTheDocument();
     // The lead's open tasks, not the deal's next step
     expect(screen.getByText('リードに次の行動（タスク）がありません')).toBeInTheDocument();
   });
 
-  it('does not warn about won deals', () => {
+  it('shows neither a warning nor a next action on won and lost deals', () => {
     renderBoard([
-      card({ stage: 'won', expectedCloseOn: '2026-10-01', hasOpenTask: false, closedOn: TODAY }),
+      card({ stage: 'won', expectedCloseOn: '2026-10-01', ...NO_TASK, closedOn: TODAY }),
+      card({ id: 'deal-2', name: '移行', stage: 'lost', closedOn: TODAY }),
     ]);
     expect(screen.queryByText('受注予定日を過ぎています')).not.toBeInTheDocument();
     expect(screen.queryByText('リードに次の行動（タスク）がありません')).not.toBeInTheDocument();
+    expect(screen.queryByText('稟議の確認')).not.toBeInTheDocument();
+    expect(screen.queryByText('次の行動')).not.toBeInTheDocument();
   });
 
   it('moves a card with its menu, whose button says where the card is now', async () => {

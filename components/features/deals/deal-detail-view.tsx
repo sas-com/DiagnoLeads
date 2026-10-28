@@ -282,7 +282,7 @@ export function DealDetailView({ dealId }: { dealId: string }) {
             </div>
             <DealFacts deal={deal} />
           </Card>
-          {/* The lead's next actions, where the deal's next step is followed up (#720) */}
+          {/* The lead's next actions: what to do next for the deal (#720, #853) */}
           <LeadNextActionsCard
             organizationId={organizationId}
             leadId={deal.lead.id}
@@ -403,9 +403,9 @@ export function DealDetailView({ dealId }: { dealId: string }) {
 /**
  * The deal's values (Refs #720): by when first, then the money and who. A closed deal shows the
  * day it was won or lost and why, instead of the forecast. What to do next is the lead's next
- * actions, the card under this one (the owner's decision of 2026-10-28, Epic #856): the deal's
- * next step, no longer the place for it (#853), is shown last as a note when it has a text. Long
- * texts take the whole width and keep their line breaks.
+ * actions, the card under this one (the owner's decision of 2026-10-28, Epic #856): a next step
+ * written before #853, which stopped taking it, is shown last as an earlier note. Long texts take
+ * the whole width and keep their line breaks.
  */
 function DealFacts({ deal }: { deal: DealDetail }) {
   const t = useTranslations('deals');
@@ -464,7 +464,7 @@ function DealFacts({ deal }: { deal: DealDetail }) {
     }
   }
   if (deal.competitor) add(t('fields.competitor'), deal.competitor);
-  if (deal.nextStep) add(t('fields.nextStep'), deal.nextStep, true);
+  if (deal.nextStep) add(t('detail.legacyNextStep'), deal.nextStep, true);
 
   return (
     <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">

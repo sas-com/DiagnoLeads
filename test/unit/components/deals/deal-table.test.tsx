@@ -1,13 +1,13 @@
 /**
  * The deals list (#436, #720): a passed close date said with an icon and words (not only in red),
- * the lead's company and name, the next step and the board card's marks on each row, the days
- * written like the date boxes, a lost deal's badge with an icon, the headers that sort the list
- * (named by their column, the order in aria-sort and the caption), and how long won and lost
- * deals stay listed (real next-intl messages)
+ * the lead's company and name, the lead's next action of an open deal (#853) and the board card's
+ * marks on each row, the days written like the date boxes, a lost deal's badge with an icon, the
+ * headers that sort the list (named by their column, the order in aria-sort and the caption), and
+ * how long won and lost deals stay listed (real next-intl messages)
  */
 import { DealTable } from '@/components/features/deals/deal-table';
 import type { DealSort } from '@/components/features/deals/deal-list-sort';
-import type { DealCard } from '@/lib/features/deals/service';
+import type { DealCard, DealNextTask } from '@/lib/features/deals/service';
 import messages from '@/locales/ja/common.json';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -15,6 +15,16 @@ import { NextIntlClientProvider } from 'next-intl';
 import { describe, expect, it, vi } from 'vitest';
 
 const TODAY = '2026-10-24';
+
+const NEXT_TASK: DealNextTask = {
+  id: 'task-1',
+  title: '稟議の確認',
+  dueOn: TODAY,
+  kind: 'next_action',
+  source: 'manual',
+};
+/** A lead without an open task, as the board reads it: hasOpenTask follows nextTask */
+const NO_TASK = { nextTask: null, hasOpenTask: false } as const;
 
 const card = (overrides: Partial<DealCard>): DealCard => ({
   id: 'deal-1',
@@ -33,6 +43,7 @@ const card = (overrides: Partial<DealCard>): DealCard => ({
   lostNote: null,
   competitor: null,
   targetSystem: null,
+  // Written before #853: no longer listed
   nextStep: '見積を送る',
   ownerUserId: 'user-1',
   ownerName: '営業 花子',
@@ -42,6 +53,7 @@ const card = (overrides: Partial<DealCard>): DealCard => ({
   updatedAt: new Date('2026-10-20T00:00:00Z'),
   leadName: '山田 太郎',
   company: '架空商事',
+  nextTask: NEXT_TASK,
   hasOpenTask: true,
   leadSqlDecision: null,
   ...overrides,
@@ -61,10 +73,10 @@ const rowOf = (name: string) =>
   screen.getByRole('link', { name }).closest('tr') as HTMLTableRowElement;
 
 describe('DealTable', () => {
-  it('shows each deal with its next step and the marks of its board card', () => {
+  it("shows each deal with its lead's next action and the marks of its board card (#853)", () => {
     renderTable([
       card({}),
-      card({ id: 'deal-2', name: '移行', nextStep: null, hasOpenTask: false, amount: null }),
+      card({ id: 'deal-2', name: '移行', ...NO_TASK, amount: null }),
     ]);
     const headers = screen.getAllByRole('columnheader').map((header) => header.textContent);
     expect(headers).toEqual([
@@ -76,10 +88,16 @@ describe('DealTable', () => {
       '受注予定日',
       '注意',
       '担当',
-      '次の一手',
+      '次の行動',
     ]);
     const first = rowOf('AS/400 現行調査');
-    expect(within(first).getByText('見積を送る')).toBeInTheDocument();
+    // The lead's open task due first, not the deal's old next step, and no warning with it
+    expect(within(first).getByText('今日まで')).toBeInTheDocument();
+    expect(within(first).getByText('稟議の確認')).toBeInTheDocument();
+    expect(within(first).queryByText('見積を送る')).not.toBeInTheDocument();
+    expect(
+      within(first).queryByText('リードに次の行動（タスク）がありません')
+    ).not.toBeInTheDocument();
     expect(within(first).getByText('2026/11/30')).toBeInTheDocument();
     // The company and the name on two lines, as on the board's cards
     const lead = within(first).getByRole('link', { name: '架空商事 山田 太郎' });
@@ -89,7 +107,22 @@ describe('DealTable', () => {
 
     const second = rowOf('移行');
     expect(within(second).getByText('リードに次の行動（タスク）がありません')).toBeInTheDocument();
+    // No amount, and no next action
     expect(within(second).getAllByText('—')).toHaveLength(2);
+    expect(within(second).queryByText('見積を送る')).not.toBeInTheDocument();
+  });
+
+  it('marks a takeaway and lists no next action for a closed deal (#853)', () => {
+    renderTable([
+      card({ nextTask: { ...NEXT_TASK, kind: 'takeaway', dueOn: '2026-10-22' } }),
+      card({ id: 'deal-2', name: '移行', stage: 'won', closedOn: TODAY, amount: null }),
+    ]);
+    const first = rowOf('AS/400 現行調査');
+    expect(within(first).getByText('期限切れ 10/22')).toBeInTheDocument();
+    expect(within(first).getByText('持ち帰り')).toBeInTheDocument();
+    const won = rowOf('移行');
+    expect(within(won).queryByText('稟議の確認')).not.toBeInTheDocument();
+    expect(within(won).getAllByRole('cell').at(-1)).toHaveTextContent(/^—$/);
   });
 
   it('says a passed close date with an icon and words, not only in red', () => {
@@ -104,7 +137,7 @@ describe('DealTable', () => {
 
   it('does not mark closed deals, and gives a lost deal an icon besides its grey', () => {
     renderTable([
-      card({ stage: 'lost', probability: 0, expectedCloseOn: '2026-10-01', hasOpenTask: false }),
+      card({ stage: 'lost', probability: 0, expectedCloseOn: '2026-10-01', ...NO_TASK }),
     ]);
     const row = rowOf('AS/400 現行調査');
     expect(within(row).queryByText('受注予定日を過ぎています')).not.toBeInTheDocument();
@@ -165,7 +198,17 @@ describe('DealTable', () => {
   });
 
   it('writes no text under 14px and gives its links and buttons 44px on phones', () => {
-    const { container } = renderTable([card({ expectedCloseOn: '2026-10-01', hasOpenTask: false })]);
+    const { container } = renderTable([
+      card({ expectedCloseOn: '2026-10-01', ...NO_TASK }),
+      card({
+        id: 'deal-2',
+        name: '移行',
+        company: '架空工業',
+        nextTask: { ...NEXT_TASK, kind: 'takeaway', dueOn: '2026-10-01' },
+      }),
+    ]);
+    expect(screen.getByText('期限切れ 10/1')).toBeInTheDocument();
+    expect(screen.getByText('持ち帰り')).toBeInTheDocument();
     expect(container.querySelector('.text-xs')).toBeNull();
     expect(screen.getByRole('link', { name: 'AS/400 現行調査' })).toHaveClass('min-h-11');
     expect(screen.getByRole('link', { name: '架空商事 山田 太郎' })).toHaveClass('min-h-11');

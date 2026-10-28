@@ -506,7 +506,8 @@ describe('DealDetailView', () => {
     it('puts by when first, marks a passed close date and keeps a next step as a last note', () => {
       mocks.get.data = detail({ nextStep: '見積もりを送る', expectedCloseOn: '2026-01-31' });
       renderView();
-      // What to do next is the lead's next actions (Epic #856); the deal's next step is a note
+      // What to do next is the lead's next actions (Epic #856); a next step written before #853
+      // is an earlier note
       expect(labels()).toEqual([
         '受注予定日',
         '金額（税抜）',
@@ -515,7 +516,7 @@ describe('DealDetailView', () => {
         '種類',
         '加重金額',
         '予測の区分',
-        '次の一手',
+        '以前の次の一手（メモ）',
       ]);
       expect(screen.getByText('2026/01/31').closest('dd')).toHaveTextContent('2026/01/31受注予定日を過ぎています');
       expect(screen.getByText('見積もりを送る')).toBeInTheDocument();
@@ -533,7 +534,7 @@ describe('DealDetailView', () => {
     it('does not mark a close date still ahead, and has no weighted amount without an amount', () => {
       mocks.get.data = detail({ expectedCloseOn: '2099-12-31', amount: null, weightedAmount: 0 });
       renderView();
-      expect(screen.queryByText('次の一手')).not.toBeInTheDocument();
+      expect(screen.queryByText('以前の次の一手（メモ）')).not.toBeInTheDocument();
       expect(screen.getByText('2099/12/31').closest('dd')).toHaveTextContent(/^2099\/12\/31$/);
       expect(screen.getByText('加重金額').nextElementSibling).toHaveTextContent(/^—$/);
       expect(screen.queryByText('受注予定日を過ぎています')).not.toBeInTheDocument();

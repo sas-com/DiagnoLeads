@@ -1427,7 +1427,6 @@
       "wonOn": "Won on",
       "lostOn": "Lost on",
       "owner": "Owner",
-      "nextStep": "Next step",
       "lostReason": "Lost reason",
       "lostNote": "Lost details",
       "competitor": "Competitor",
@@ -1447,6 +1446,7 @@
       "daysInStage": "{days, plural, one {# day} other {# days}} in this stage",
       "overdue": "Past the expected close date",
       "noNextAction": "The lead has no next action (task)",
+      "nextAction": "Next action",
       "noCloseDate": "No close date",
       "noAmount": "No amount yet",
       "unassigned": "No owner",
@@ -1552,6 +1552,7 @@
       "closedNote": "Won and lost deals are shown for the last {days, plural, one {day} other {# days}}",
       "lead": "Company and contact",
       "marks": "Alerts",
+      "nextAction": "Next action",
       "orders": {
         "stage": {
           "asc": "stage order",
@@ -1588,7 +1589,8 @@
       "historyForecastAuto": "Auto ({category})",
       "historyOther": "Changed other fields",
       "leadNextActionsNoName": "Next actions and takeaways of this lead, the same list as on the lead's page",
-      "factsTitle": "Deal details"
+      "factsTitle": "Deal details",
+      "legacyNextStep": "Earlier next step (note)"
     },
     "leadCard": {
       "title": "Deals",

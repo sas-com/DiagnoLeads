@@ -1427,7 +1427,6 @@
       "wonOn": "受注日",
       "lostOn": "失注日",
       "owner": "担当",
-      "nextStep": "次の一手",
       "lostReason": "失注理由",
       "lostNote": "失注の詳細",
       "competitor": "競合",
@@ -1447,6 +1446,7 @@
       "daysInStage": "このステージで{days}日",
       "overdue": "受注予定日を過ぎています",
       "noNextAction": "リードに次の行動（タスク）がありません",
+      "nextAction": "次の行動",
       "noCloseDate": "受注予定日なし",
       "noAmount": "金額未定",
       "unassigned": "担当未定",
@@ -1552,6 +1552,7 @@
       "closedNote": "受注・失注は直近{days}日の商談を表示しています",
       "lead": "会社・氏名",
       "marks": "注意",
+      "nextAction": "次の行動",
       "orders": {
         "stage": {
           "asc": "ステージの順",
@@ -1588,7 +1589,8 @@
       "historyForecastAuto": "自動（{category}）",
       "historyOther": "ほかの項目を変更",
       "leadNextActionsNoName": "このリードの次の行動・持ち帰り事項です。リードの画面と同じものです",
-      "factsTitle": "商談の内容"
+      "factsTitle": "商談の内容",
+      "legacyNextStep": "以前の次の一手（メモ）"
     },
     "leadCard": {
       "title": "商談",

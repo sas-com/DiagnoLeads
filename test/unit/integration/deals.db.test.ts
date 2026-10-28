@@ -2,8 +2,9 @@
  * Deals (#435) through the routers on a real PostgreSQL: defaults, the history and audit rows,
  * how deals set their lead's status and deal phase (with the lead's audit row, webhooks and the
  * handoff notice, and whether a change handed the lead off, #720), computed again on every change
- * and deletion, and refused by hand (#444), the board's totals and filters, permissions and
- * organization isolation, and two deals of one lead changed at the same time.
+ * and deletion, and refused by hand (#444), the board's totals and filters, the lead's next
+ * action on the board and the next step no longer written (#853), permissions and organization
+ * isolation, and two deals of one lead changed at the same time.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/diagnoleads_test \
@@ -20,6 +21,7 @@ import {
   organizations,
   users,
 } from '@/lib/db/schema';
+import type { DealCard } from '@/lib/features/deals/service';
 import { handedOffOn } from '@/lib/features/lead-handoff/handoff';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { appRouter } from '@/server/routers/_app';
@@ -281,12 +283,15 @@ describe.skipIf(!url)('deals (PostgreSQL)', () => {
         organizationId: orgA,
         dealId: created.id,
         probability: 55,
-        nextStep: '見積を送る',
       });
       expect(tuned).toMatchObject({ probability: 55, forecastCategory: 'best_case' });
 
-      // The next step alone is not a forecast value: no history row, but an audit row
-      await adminA.deals.update({ organizationId: orgA, dealId: created.id, nextStep: '電話' });
+      // The competitor alone is not a forecast value: no history row, but an audit row
+      await adminA.deals.update({
+        organizationId: orgA,
+        dealId: created.id,
+        competitor: '架空システムズ',
+      });
       const history = await historyOf(created.id);
       expect(history.map((row) => row.changedFields)).toEqual([
         ['created'],
@@ -295,11 +300,85 @@ describe.skipIf(!url)('deals (PostgreSQL)', () => {
       ]);
       const audits = await auditOf('deal', created.id);
       expect(audits.map((row) => row.action)).toEqual(['create', 'update', 'update', 'update']);
-      // Free text is recorded as changed, never as text (it may name people)
       expect(audits[2].changes).toEqual({ before: { probability: 70 }, after: { probability: 55 } });
-      expect(audits[2].metadata).toEqual({ leadId: lead.id, changedText: ['nextStep'] });
-      expect(audits[3].changes).toEqual({ before: {}, after: {} });
-      expect(JSON.stringify(audits)).not.toContain('見積を送る');
+      expect(audits[2].metadata).toEqual({ leadId: lead.id });
+      expect(audits[3].changes).toEqual({
+        before: { competitor: null },
+        after: { competitor: '架空システムズ' },
+      });
+    });
+
+    it('records the details of a loss as changed, never as text (they may name people)', async () => {
+      const lead = await createLead(orgA);
+      const created = await adminA.deals.create({ organizationId: orgA, leadId: lead.id, name: '調査' });
+      await adminA.deals.update({
+        organizationId: orgA,
+        dealId: created.id,
+        stage: 'lost',
+        lostReason: 'budget',
+        lostNote: '山田様の稟議が通らなかった',
+      });
+      // The details alone: no history row, but an audit row saying only that they changed
+      await adminA.deals.update({ organizationId: orgA, dealId: created.id, lostNote: '来期に再提案' });
+      expect((await historyOf(created.id)).map((row) => row.changedFields)).toEqual([
+        ['created'],
+        ['stage', 'probability'],
+      ]);
+      const audits = await auditOf('deal', created.id);
+      expect(audits.map((row) => row.action)).toEqual(['create', 'update', 'update']);
+      expect(audits[1].metadata).toEqual({ leadId: lead.id, changedText: ['lostNote'] });
+      expect(audits[2].changes).toEqual({ before: {}, after: {} });
+      expect(audits[2].metadata).toEqual({ leadId: lead.id, changedText: ['lostNote'] });
+      expect(JSON.stringify(audits)).not.toContain('山田様');
+      expect(JSON.stringify(audits)).not.toContain('来期');
+    });
+
+    it('takes a next step sent but never writes it, and keeps one written before (#853)', async () => {
+      const rowOf = async (id: string) => (await pg.select().from(deals).where(eq(deals.id, id)))[0];
+      const lead = await createLead(orgA);
+      // A screen opened before the change sends one with each new deal: not refused
+      const created = await adminA.deals.create({
+        organizationId: orgA,
+        leadId: lead.id,
+        name: '調査',
+        nextStep: '見積を送る',
+      });
+      expect(created.nextStep).toBeNull();
+      expect((await rowOf(created.id)).nextStep).toBeNull();
+      const old = await memberA.deals.create({
+        organizationId: orgA,
+        leadId: lead.id,
+        name: '移行',
+        nextStep: null,
+      });
+      expect((await rowOf(old.id)).nextStep).toBeNull();
+
+      // One written before #853 is neither overwritten nor cleared by a change
+      await pg.update(deals).set({ nextStep: '稟議を待つ' }).where(eq(deals.id, created.id));
+      const changed = await adminA.deals.update({
+        organizationId: orgA,
+        dealId: created.id,
+        amount: 1_000_000,
+        nextStep: '電話',
+      });
+      expect(changed).toMatchObject({ amount: 1_000_000, nextStep: '稟議を待つ' });
+      const cleared = await memberA.deals.update({
+        organizationId: orgA,
+        dealId: created.id,
+        nextStep: null,
+      });
+      expect(cleared.nextStep).toBe('稟議を待つ');
+      expect((await rowOf(created.id)).nextStep).toBe('稟議を待つ');
+      // The deal page still reads it, as a note
+      const detail = await adminA.deals.get({ organizationId: orgA, dealId: created.id });
+      expect(detail.nextStep).toBe('稟議を待つ');
+
+      // The audit has the amount alone: no changed text, no row for the next step alone
+      const audits = await auditOf('deal', created.id);
+      expect(audits.map((row) => row.action)).toEqual(['create', 'update']);
+      expect(audits[1].changes).toEqual({ before: { amount: null }, after: { amount: 1_000_000 } });
+      expect(audits[1].metadata).toEqual({ leadId: lead.id });
+      expect(JSON.stringify(audits)).not.toMatch(/見積を送る|電話/);
     });
 
     it('answers whether it handed the lead off: only the first time it leaves the initial hearing (#720)', async () => {
@@ -334,7 +413,7 @@ describe.skipIf(!url)('deals (PostgreSQL)', () => {
       const tuned = await memberA.deals.update({
         organizationId: orgA,
         dealId: deal.id,
-        nextStep: '見積を送る',
+        competitor: '架空システムズ',
       });
       expect(tuned.handedOff).toBe(false);
       expect(sent.notifyLeadHandoff).toHaveBeenCalledTimes(1);
@@ -858,6 +937,125 @@ describe.skipIf(!url)('deals (PostgreSQL)', () => {
       });
       const memberBoard = await memberA.deals.board({ organizationId: orgA });
       expect(memberBoard).toMatchObject({ canEdit: true, canDelete: false });
+    });
+  });
+
+  describe("board: the lead's next action (#853)", () => {
+    let org: string;
+    // biome-ignore lint/suspicious/noExplicitAny: tRPC callers
+    let admin: any;
+
+    beforeAll(async () => {
+      org = await createOrganization('商談ボードの次の行動');
+      ({ caller: admin } = await callerFor(org, 'admin', '次の行動 一郎'));
+    });
+
+    const addTasks = (
+      leadId: string,
+      tasks: Partial<typeof leadTasks.$inferInsert>[],
+      organizationId = org
+    ) =>
+      pg
+        .insert(leadTasks)
+        .values(tasks.map((task) => ({ organizationId, leadId, dueOn: '2026-11-01', ...task })))
+        .returning();
+    const addDeal = (leadId: string, name: string, stage = 'proposal') =>
+      admin.deals.create({ organizationId: org, leadId, name, stage });
+    const cardsOf = async (): Promise<Record<string, DealCard>> => {
+      const board = await admin.deals.board({ organizationId: org });
+      const cards: DealCard[] = board.columns.flatMap((column: { deals: DealCard[] }) => column.deals);
+      return Object.fromEntries(cards.map((card) => [card.name, card]));
+    };
+    /** The first open task of the lead's list on the lead and deal pages */
+    const firstOfList = async (leadId: string) => {
+      const list = await admin.leadFollowUp.tasks({ organizationId: org, leadId });
+      return list.items.find((task: { done: boolean }) => !task.done)?.id ?? null;
+    };
+
+    it("shows the lead's open task due first, takeaways too, from the value that marks a lead without one", async () => {
+      const mixed = await createLead(org, { company: '架空工業' });
+      const [, takeaway, first] = await addTasks(mixed.id, [
+        // Done: never the next action, even when due first
+        { title: '済んだ電話', dueOn: '2026-10-01', completedAt: new Date('2026-10-02T00:00:00Z') },
+        {
+          title: '持ち帰りの回答',
+          kind: 'takeaway',
+          dueOn: '2026-10-20',
+          createdAt: new Date('2026-10-10T02:00:00Z'),
+        },
+        // Due the same day and created first
+        { title: '見積を送る', dueOn: '2026-10-20', createdAt: new Date('2026-10-10T01:00:00Z') },
+        { title: '定例', dueOn: '2026-11-15' },
+      ]);
+      const takeawayOnly = await createLead(org, { company: '架空製作所' });
+      await addTasks(takeawayOnly.id, [
+        { title: '保守費用の内訳', kind: 'takeaway', dueOn: '2026-12-01' },
+      ]);
+      const doneOnly = await createLead(org, { company: '架空商会' });
+      await addTasks(doneOnly.id, [{ title: '済んだ訪問', completedAt: new Date() }]);
+      const none = await createLead(org, { company: '架空物産' });
+      // A row naming the lead with another organization's id (the foreign keys let it be)
+      const foreign = await createLead(org, { company: '架空電機' });
+      await addTasks(foreign.id, [{ title: '別の組織の行', dueOn: '2026-10-01' }], orgB);
+      const fromHearing = await createLead(org, { company: '架空通信' });
+      await addTasks(fromHearing.id, [{ title: null, source: 'hearing', dueOn: '2026-10-25' }]);
+      const tied = await createLead(org, { company: '架空化学' });
+      const ties = await addTasks(
+        tied.id,
+        ['同時の一', '同時の二'].map((title) => ({
+          title,
+          dueOn: '2026-10-22',
+          createdAt: new Date('2026-10-10T00:00:00Z'),
+        }))
+      );
+
+      await addDeal(mixed.id, 'mixed');
+      await addDeal(mixed.id, 'mixed-won', 'won');
+      await addDeal(takeawayOnly.id, 'takeaway');
+      await addDeal(doneOnly.id, 'done');
+      await addDeal(none.id, 'none');
+      await addDeal(foreign.id, 'foreign');
+      await addDeal(fromHearing.id, 'hearing');
+      await addDeal(tied.id, 'tied');
+
+      const cards = await cardsOf();
+      // The day itself as a string, as the lead's tasks are read
+      expect(cards.mixed.nextTask).toEqual({
+        id: first.id,
+        title: '見積を送る',
+        dueOn: '2026-10-20',
+        kind: 'next_action',
+        source: 'manual',
+      });
+      // The first open task of the lead's list, and the same for every deal of the lead
+      expect(await firstOfList(mixed.id)).toBe(first.id);
+      expect(cards['mixed-won'].nextTask?.id).toBe(first.id);
+      expect(cards.takeaway.nextTask).toMatchObject({
+        title: '保守費用の内訳',
+        kind: 'takeaway',
+        dueOn: '2026-12-01',
+      });
+      expect(cards.hearing.nextTask).toMatchObject({
+        title: null,
+        source: 'hearing',
+        kind: 'next_action',
+      });
+      expect(await firstOfList(fromHearing.id)).toBe(cards.hearing.nextTask?.id);
+      // The same due day and creation: always the same one
+      expect(cards.tied.nextTask?.id).toBe(ties.map((task) => task.id).sort()[0]);
+      for (const name of ['done', 'none', 'foreign']) {
+        expect(cards[name]).toMatchObject({ nextTask: null, hasOpenTask: false });
+      }
+      // The mark for having none and the next action shown come from one value
+      for (const card of Object.values(cards)) {
+        expect(card.hasOpenTask).toBe(card.nextTask !== null);
+      }
+
+      // Done, the next one in the list takes its place: the takeaway due the same day
+      await admin.leadFollowUp.updateTask({ organizationId: org, id: first.id, done: true });
+      const after = await cardsOf();
+      expect(after.mixed.nextTask).toMatchObject({ id: takeaway.id, kind: 'takeaway' });
+      expect(await firstOfList(mixed.id)).toBe(takeaway.id);
     });
   });
 

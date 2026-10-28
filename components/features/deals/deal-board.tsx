@@ -17,6 +17,7 @@ import Link from 'next/link';
 import { type DragEvent, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { daysSince, dealMarks, formatDealDate, formatYen, formatYenCompact } from './deal-format';
 import { DealMarks } from './deal-marks';
+import { DealNextTaskSummary } from './deal-next-task';
 import type { MoveOptions } from './use-stage-move';
 
 const DRAG_TYPE = 'application/x-deal-id';
@@ -298,8 +299,14 @@ function DealCardItem({
           {t('card.daysInStage', { days: daysSince(deal.stageChangedAt) })}
         </p>
       )}
-      {deal.nextStep && (
-        <p className="mt-1 line-clamp-2 text-gray-700 dark:text-gray-300">{deal.nextStep}</p>
+      {/* The lead's next action, or (from the same value) the mark for having none (#853) */}
+      {open && deal.nextTask && (
+        <DealNextTaskSummary
+          task={deal.nextTask}
+          today={today}
+          label={t('card.nextAction')}
+          className="mt-2"
+        />
       )}
       <DealMarks flags={dealMarks(deal, today)} className="mt-2" />
     </li>

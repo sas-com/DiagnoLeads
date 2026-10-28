@@ -307,9 +307,18 @@ describe('createDealSchema', () => {
   });
 
   it('turns empty optional text into null', () => {
-    const parsed = createDealSchema.parse({ ...base, nextStep: '  ', competitor: '' });
-    expect(parsed.nextStep).toBeNull();
+    const parsed = createDealSchema.parse({ ...base, lostNote: '  ', competitor: '' });
+    expect(parsed.lostNote).toBeNull();
     expect(parsed.competitor).toBeNull();
+  });
+
+  it('drops a next step sent, which is no longer an input, without refusing it (#853)', () => {
+    // A screen opened before the change sends nextStep: null with each new deal
+    for (const nextStep of [null, '見積を送る', 'x'.repeat(1000)]) {
+      const parsed = createDealSchema.safeParse({ ...base, nextStep });
+      expect(parsed.success).toBe(true);
+      expect(parsed.data).not.toHaveProperty('nextStep');
+    }
   });
 
   it.each([
@@ -355,6 +364,11 @@ describe('updateDealSchema', () => {
       stage: 'proposal',
     });
     expect(parsed).toEqual({ organizationId: ORG, dealId: DEAL, amount: null, stage: 'proposal' });
+  });
+
+  it('drops a next step sent (#853)', () => {
+    const parsed = updateDealSchema.parse({ organizationId: ORG, dealId: DEAL, nextStep: '電話' });
+    expect(parsed).toEqual({ organizationId: ORG, dealId: DEAL });
   });
 
   it('bounds the closing date like the close date', () => {
