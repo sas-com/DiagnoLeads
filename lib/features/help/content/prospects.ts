@@ -67,6 +67,29 @@ export const prospectsArticle: HelpArticle = {
         },
       ],
     },
+    {
+      type: 'ul',
+      items: [
+        [
+          {
+            type: 'text',
+            text: 'リードにした行は、段階の集計（段階別の進捗・契約・育成など）に含めず、',
+          },
+          { type: 'ui', text: 'リード化済み' },
+          {
+            type: 'text',
+            text: 'として別に数えます。リードにしたあとの進み具合は、リードと商談で見ます。記入件数と商談の数には、リードにした行も含めます。',
+          },
+        ],
+        [
+          { type: 'ui', text: '営業が確認する件数' },
+          {
+            type: 'text',
+            text: 'は、一覧の絞り込みと同じ行を数えます。リード化済み・見送り・契約の行は数えません。',
+          },
+        ],
+      ],
+    },
     { type: 'h2', id: 'import', text: 'Excel やレポートから取り込む' },
     {
       type: 'ul',

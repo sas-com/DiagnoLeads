@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
   Table,
@@ -58,6 +58,7 @@ export function ProspectsSummary({ organizationId }: { organizationId: string })
             [t('summary.handOver'), overall.handOver],
             [t('summary.keepChecking'), overall.keepChecking],
             [t('summary.meetings'), overall.meetings],
+            [t('summary.converted'), overall.converted],
             [t('summary.contracts'), overall.contracts],
             [t('summary.nurturing'), overall.nurturing],
             [t('summary.passed'), overall.passed],
@@ -65,7 +66,7 @@ export function ProspectsSummary({ organizationId }: { organizationId: string })
         />
       </Section>
 
-      <Section title={t('summary.checks')}>
+      <Section title={t('summary.checks')} description={t('summary.checksNote')}>
         <CountTable
           head={[t('summary.item'), t('summary.count')]}
           rows={[
@@ -131,6 +132,9 @@ export function ProspectsSummary({ organizationId }: { organizationId: string })
             </TableBody>
           </Table>
         </div>
+        <p className="mt-3 text-sm text-muted-foreground">
+          {t('summary.stagesNote', { count: overall.converted })}
+        </p>
       </Section>
 
       <Section title={t('summary.entries')} wide>
@@ -143,32 +147,38 @@ export function ProspectsSummary({ organizationId }: { organizationId: string })
                 <TableHead className="text-right">{t('reaction.has_issue')}</TableHead>
                 <TableHead className="text-right">{t('nextStep.hand_over')}</TableHead>
                 <TableHead className="text-right">{t('summary.monthMeetings')}</TableHead>
-                <TableHead className="text-right">{t('stage.contract')}</TableHead>
+                <TableHead className="text-right">{t('summary.entryConverted')}</TableHead>
+                <TableHead className="text-right">{t('summary.entryContracts')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {summary.entries.map((row) => (
                 <TableRow key={row.entry}>
                   <TableCell className="whitespace-nowrap">{t(`entry.${row.entry}`)}</TableCell>
-                  {[row.total, row.hasIssue, row.handOver, row.meetings, row.contracts].map(
-                    (value, index) => (
-                      // biome-ignore lint/suspicious/noArrayIndexKey: fixed columns
-                      <TableCell key={index} className="text-right tabular-nums">
-                        {value}
-                      </TableCell>
-                    )
-                  )}
+                  {[
+                    row.total,
+                    row.hasIssue,
+                    row.handOver,
+                    row.meetings,
+                    row.converted,
+                    row.contracts,
+                  ].map((value, index) => (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: fixed columns
+                    <TableCell key={index} className="text-right tabular-nums">
+                      {value}
+                    </TableCell>
+                  ))}
                 </TableRow>
               ))}
               <TableRow className="font-medium">
                 <TableCell>{t('summary.sum')}</TableCell>
-                {(['total', 'hasIssue', 'handOver', 'meetings', 'contracts'] as const).map(
-                  (key) => (
-                    <TableCell key={key} className="text-right tabular-nums">
-                      {summary.entries.reduce((sum, row) => sum + row[key], 0)}
-                    </TableCell>
-                  )
-                )}
+                {(
+                  ['total', 'hasIssue', 'handOver', 'meetings', 'converted', 'contracts'] as const
+                ).map((key) => (
+                  <TableCell key={key} className="text-right tabular-nums">
+                    {summary.entries.reduce((sum, row) => sum + row[key], 0)}
+                  </TableCell>
+                ))}
               </TableRow>
             </TableBody>
           </Table>
@@ -219,10 +229,13 @@ export function ProspectsSummary({ organizationId }: { organizationId: string })
 
 function Section({
   title,
+  description,
   wide = false,
   children,
 }: {
   title: string;
+  /** A short note under the title: how the section counts */
+  description?: string;
   wide?: boolean;
   children: React.ReactNode;
 }) {
@@ -230,6 +243,7 @@ function Section({
     <Card className={wide ? 'lg:col-span-2' : undefined}>
       <CardHeader>
         <CardTitle className="text-base">{title}</CardTitle>
+        {description && <CardDescription>{description}</CardDescription>}
       </CardHeader>
       <CardContent>{children}</CardContent>
     </Card>
