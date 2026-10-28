@@ -16,7 +16,7 @@ export const accessWebSecurity: Column = {
   description:
     'Access のツールを Web に移すとき、何を決めておけばよいか。2026年10月に公表された PHP の脆弱性（通称 PHP2shell）を例に、何が危ないのかを整理し、外からつながる範囲、誰がどう直し続けるか、ログイン・権限・記録・バックアップ、使い始める前の確認をまとめました。',
   publishedAt: '2026-10-24',
-  updatedAt: '2026-10-24',
+  updatedAt: '2026-10-28',
   related: 'access',
   cta: 'access-diagnosis',
   thumbnail: {
@@ -164,6 +164,12 @@ export const accessWebSecurity: Column = {
       type: 'p',
       content:
         'IPA も、システムの担当者だけでなく、事業の責任者や経営層も含めて、更新や移行と、そのあとの維持管理に必要な人員・予算・保守体制を確保できるかを検討するよう勧めています。',
+    },
+    // Our own offer, not a fact from the sources (owner, 2026-10-27, #840)
+    {
+      type: 'p',
+      content:
+        '当社では、作ったシステムについて、移したあとも、弱点が見つかったときに直し続ける体制まで用意しています。どこまでお任せいただくかは、進め方とあわせてご相談します。',
     },
     { type: 'h3', id: 'limit', text: '3. 入られても、広げない' },
     {
