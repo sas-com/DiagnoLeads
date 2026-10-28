@@ -2,6 +2,7 @@ import {
   ACCESS_FAQ_KEYS,
   AxAccessBreadcrumbs,
   AxAccessColumns,
+  AxAccessCompare,
   AxAccessDiagnosisSection,
   AxAccessHero,
   AxAccessHostSystems,
@@ -23,6 +24,7 @@ import {
   AxFinalCta,
   AxTrust,
 } from '@/components/features/ax-site/landing-sections';
+import { AxWebScope } from '@/components/features/ax-site/web-scope-section';
 import { axShareImage } from '@/lib/features/ax-site/share-images';
 import { robotsFor } from '@/lib/seo/indexing';
 import type { Metadata } from 'next';
@@ -97,6 +99,14 @@ export default async function AxAccessPage({ params }: AxAccessPageProps) {
           <AxAccessRisks locale={locale} />
           <AxAccessPaths locale={locale} />
           <AxAccessPathsColumn locale={locale} />
+          {/* After the three ways: what choosing the web means for protecting the tool (#839, #838) */}
+          <AxAccessCompare locale={locale} />
+          <AxWebScope
+            locale={locale}
+            namespace="axAccess.webScope"
+            location="access-web-scope"
+            columnSlug="access-web-security"
+          />
           <AxAccessSteps locale={locale} />
           {/* The phone and the diagnosis halfway down the page, as on the main page (#425) */}
           <AxConsultBand

@@ -271,20 +271,80 @@ describe('AX migration landing page', () => {
     }
   });
 
-  it('answers the worry about moving to the web, before the data questions (#466)', async () => {
+  it('answers the worry about moving to the web near the top, in the reader\'s words (#466, #841)', async () => {
     await renderPage();
     const faq = document.getElementById('faq') as HTMLElement;
     const questions = [...faq.querySelectorAll('summary')].map((summary) =>
       summary.textContent?.replace(/^Q/, '')
     );
-    expect(questions.indexOf('Webシステムにすると、脆弱性やサイバー攻撃が心配です。')).toBe(
-      questions.indexOf('お預けした仕様書やソースコードは、AIの学習に使われますか？') - 1
+    const targets = questions.indexOf('どのようなシステムが対象ですか？');
+    expect(questions.slice(targets + 1, targets + 4)).toEqual([
+      '社内だけで使っていたシステムをWebにして、セキュリティは大丈夫ですか？',
+      '社外から使えるようにしなくても、Webに移せますか？',
+      '情報システム部門の審査に向けて、説明してもらえますか？',
+    ]);
+    // Next to the other question about the data
+    expect(questions.indexOf('個人情報が入っていても、相談できますか？')).toBe(
+      questions.indexOf('お預けした仕様書やソースコードは、AIの学習に使われますか？') + 1
     );
     const answer = within(faq).getByText(/^ご心配はもっともです。/);
     expect(answer).toHaveTextContent('移行の進め方を決めるときに一緒に決めます。');
+    // We keep fixing it after the move, and how much is left to us is agreed (owner, 2026-10-27)
+    expect(answer).toHaveTextContent('直し続ける体制まで、作った当社が用意します。');
+    expect(answer).toHaveTextContent('どこまでお任せいただくかは、進め方とあわせてご相談します。');
     expect(answer).toHaveTextContent(
       'OSや製品の保守が終わると、今お使いのシステムでも、見つかった弱点は直されなくなります。'
     );
+    // Never a menu to pick from on the first contact (#464)
+    expect(
+      within(faq).getByText(/^社内のネットワークからだけ使う形もあります。/)
+    ).toHaveTextContent('お客様の社内の決まりを伺ってから決めます。');
+  });
+
+  it('says a web system need not be open to the internet, after the host systems (#838, #840)', async () => {
+    await renderPage();
+    const heading = screen.getByRole('heading', {
+      level: 2,
+      name: 'Webシステムにしても、インターネットに公開するとは限りません',
+    });
+    const hosts = document.getElementById('acos-migration') as HTMLElement;
+    const trust = screen.getByRole('heading', { level: 2, name: '安心して任せられる理由' });
+    expect(hosts.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(heading.compareDocumentPosition(trust) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    const section = within(heading.closest('section') as HTMLElement);
+    expect(section.getByText('閉じて守る、から、決めて守るへ')).toBeInTheDocument();
+    for (const name of [
+      '社内だけで使っている',
+      '社内のネットワークからだけ使う',
+      '社外（在宅・ほかの拠点）からも使う',
+      'Webに移すときに、決めておく4つのこと',
+    ]) {
+      expect(section.getByRole('heading', { level: 3, name })).toBeInTheDocument();
+    }
+    expect(section.getAllByText('移したあとの形の例')).toHaveLength(2);
+    expect(
+      section.getByText('作った当社が、直し続ける体制まで用意します。どこまでお任せいただくかを、一緒に決めます。')
+    ).toBeInTheDocument();
+    expect(section.getByText(/^情報システム部門の方へ：/)).toBeInTheDocument();
+    expect(section.getByText('守り方の進め方も、無料の個別相談でご相談いただけます。')).toBeInTheDocument();
+    expect(section.getByRole('link', { name: '無料Web診断をはじめる' })).toHaveAttribute(
+      'href',
+      '#diagnosis'
+    );
+    // The column is about Access and PHP: not for readers of the host systems
+    expect(section.queryByRole('link', { name: /PHP2shell/ })).toBeNull();
+  });
+
+  it('tells in the trust section that we keep fixing it after the move (#840)', async () => {
+    await renderPage();
+    const trust = within(
+      screen.getByRole('heading', { level: 2, name: '安心して任せられる理由' }).closest('section') as HTMLElement
+    );
+    expect(trust.getByRole('heading', { level: 3, name: '移したあとも' })).toBeInTheDocument();
+    expect(
+      trust.getByText('作った当社が、弱点が見つかったときに直し続ける体制まで用意します。')
+    ).toBeInTheDocument();
   });
 
   it('shows the booking button only when a booking URL is configured', async () => {

@@ -32,6 +32,9 @@ export const AX_LINK_PLACEMENTS = [
   'paths',
   // The Access page's link to the column on the end of Office support, under that section (#458)
   'support-end',
+  // The Access page's link to the column on protecting a web system, under where it is reached
+  // from (#840)
+  'web-scope',
   'related',
   'body',
   'end',

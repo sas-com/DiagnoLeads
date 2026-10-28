@@ -21,6 +21,7 @@ import {
   Mail,
   MonitorSmartphone,
   Phone,
+  RefreshCw,
   Server,
   ShieldCheck,
   Timer,
@@ -550,6 +551,8 @@ const TRUST = [
   { key: 'security', icon: Lock },
   { key: 'scope', icon: Boxes },
   { key: 'certified', icon: BadgeCheck },
+  // We who build it keep fixing it after the move (owner, 2026-10-27, #840)
+  { key: 'upkeep', icon: RefreshCw },
 ] as const;
 
 interface TrustProps extends SectionProps {
@@ -571,7 +574,7 @@ export async function AxTrust({ locale, scopeNamespace }: TrustProps) {
         <h2 id="ax-trust-heading" className={SECTION_HEADING}>
           {t('title')}
         </h2>
-        <ul className="mt-12 grid gap-8 md:grid-cols-3">
+        <ul className="mt-12 grid gap-8 md:grid-cols-2">
           {TRUST.map(({ key, icon: Icon }) => (
             <li key={key} className="flex gap-4">
               <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md bg-ax-cloud text-ax-forest">
@@ -634,14 +637,18 @@ const FAQ_KEYS: readonly string[] = [
   'cost',
   'who',
   'targets',
+  // The worry about the web near the top, in the reader's words (#841)
+  'webSecurity',
+  'internalOnly',
+  'itReview',
   'costTime',
   'partial',
   'prepare',
   'vendorSource',
   'result',
   'ax',
-  'webSecurity',
   'data',
+  'personalData',
   'privacy',
 ];
 

@@ -3455,6 +3455,54 @@
         "cta": "Start the free web diagnosis with the ACOS questions"
       }
     },
+    "webScope": {
+      "eyebrow": "From closing it off to deciding how to protect it",
+      "title": "A web system does not have to be open to the internet",
+      "lead": "A web system is one you use in a browser. Where it can be reached from is decided separately from how it is built.",
+      "cards": {
+        "now": {
+          "label": "Today",
+          "title": "Used only inside the company",
+          "body": "It is usually used from dedicated terminals or the company network."
+        },
+        "inside": {
+          "label": "One possible setup after the move",
+          "title": "Used only from the company network",
+          "body": "As today, it can be reached only from the company network. The screens open in a browser."
+        },
+        "outside": {
+          "label": "One possible setup after the move",
+          "title": "Also used from outside (home or other sites)",
+          "body": "Only people who pass sign-in with a company account and a second check of who they are (multi-factor authentication) reach the system."
+        }
+      },
+      "cardsNote": "Which setup to use is decided with you, after we hear your company's rules.",
+      "decide": {
+        "title": "Four things to decide when moving to the web",
+        "lead": "We decide how to protect it together with how to build it.",
+        "items": {
+          "reach": {
+            "title": "Where it can be reached from",
+            "body": "Only from the company network, or from outside as well."
+          },
+          "login": {
+            "title": "How people sign in",
+            "body": "Whether to use company accounts and multi-factor authentication."
+          },
+          "control": {
+            "title": "Permissions, records and backups",
+            "body": "Who may do what, what is recorded and how to restore."
+          },
+          "upkeep": {
+            "title": "Who keeps fixing it when a weakness is found, and how",
+            "body": "We who build it also provide the upkeep to keep fixing it. We decide with you how much you leave to us."
+          }
+        }
+      },
+      "itNote": "For IT departments: we explain where it can be reached from, sign-in, permissions, records, backups and how it is fixed after the move, along the items your review checks.",
+      "closing": "You can also talk about how to protect it in the free individual consultation.",
+      "cta": "Start the free web check"
+    },
     "trust": {
       "title": "Why you can rely on us",
       "items": {
@@ -3469,6 +3517,10 @@
         "certified": {
           "title": "DX-certified company",
           "body": "Software Agency System Co., Ltd. is certified under the DX Certification program of the Ministry of Economy, Trade and Industry."
+        },
+        "upkeep": {
+          "title": "After the move",
+          "body": "We who build it also provide the upkeep to keep fixing weaknesses when they are found."
         }
       }
     },
@@ -3535,6 +3587,14 @@
           "q": "Which systems are covered?",
           "a": "AS/400 (IBM i), NEC ACOS and Microsoft Access. Please also ask about Visual Basic systems, low-code products such as WebPerformer, and other office computers and mainframes."
         },
+        "internalOnly": {
+          "q": "Can we move to the web without making it usable from outside?",
+          "a": "A setup used only from the company network is also possible. Where it can be reached from is decided after we hear your company's rules."
+        },
+        "itReview": {
+          "q": "Can you explain things for our IT department's review?",
+          "a": "Yes. We ask what your review checks (where it can be reached from, sign-in, permissions, records, backups, how it is fixed after the move and so on) and explain along those items. Engineers join when needed."
+        },
         "costTime": {
           "q": "How much does it cost and how long does it take?",
           "a": "It depends greatly on the number of programs, screens and forms, and on the integrations, so it is settled in the current-system survey (Phase 1). The free web check and the consultation cost nothing."
@@ -3560,12 +3620,16 @@
           "a": "AI transformation: business transformation that makes use of AI. After the migration, AI agents are added to the new web system to analyze the system and its data, streamline operations and extend features step by step."
         },
         "webSecurity": {
-          "q": "We are worried about vulnerabilities and cyberattacks if we move to a web system.",
-          "a": "That is a fair concern. A web system also carries a risk: when a weakness (vulnerability) is found in software it uses, that weakness can be exploited until it is fixed. So when we decide how to migrate, we decide with you how widely the system can be reached (for example, only on your internal network, or from outside the office as well), who keeps fixing weaknesses as they are found and how, and how logins, permissions, records and backups are managed. Note also that once maintenance of the OS or a product ends, weaknesses found in it are no longer fixed, and this applies to your current system too."
+          "q": "Is it secure to move a system we used only inside the company to the web?",
+          "a": "That is a fair concern. A web system also carries a risk: when a weakness (vulnerability) is found in software it uses, that weakness can be exploited until it is fixed. So when we decide how to migrate, we decide with you where the system can be reached from (only on your internal network, or from outside the office as well), how people sign in, and how permissions, records and backups are managed. After the move, we who build it also provide the upkeep to keep fixing weaknesses when they are found; how much you leave to us is discussed with the approach. Note also that once maintenance of the OS or a product ends, weaknesses found in it are no longer fixed, and this applies to your current system too."
         },
         "data": {
           "q": "Are the specifications and source code we provide used to train AI?",
           "a": "No. Specifications, source code and other materials you entrust to us are processed in a secure environment where they are not used as training data."
+        },
+        "personalData": {
+          "q": "Can we consult you if the system holds personal data?",
+          "a": "Yes. We first ask what kind of data it holds and decide with you how the data is handled."
         },
         "privacy": {
           "q": "How is my information used?",
@@ -3780,9 +3844,21 @@
           "q": "Can we move only part of it to the web?",
           "a": "Yes. You can move the most used functions first and keep using the rest in your current Access tool."
         },
+        "internalOnly": {
+          "q": "Can we move to the web without making it usable from outside?",
+          "a": "A setup used only from the company network is also possible. Where it can be reached from is decided after we hear your company's rules."
+        },
+        "itReview": {
+          "q": "Can you explain things for our IT department's review?",
+          "a": "Yes. We ask what your review checks (where it can be reached from, sign-in, permissions, records, backups, how it is fixed after the move and so on) and explain along those items. Engineers join when needed."
+        },
+        "personalData": {
+          "q": "Can we consult you if the tool holds personal data?",
+          "a": "Yes. We first ask what kind of data it holds and decide with you how the data is handled. The detailed questions of the free web check also let you choose the kinds of data it holds."
+        },
         "webSecurity": {
-          "q": "We are worried about vulnerabilities and cyberattacks if we move to the web.",
-          "a": "That is a fair concern. A web system also carries a risk: when a weakness (vulnerability) is found in software it uses, that weakness can be exploited until it is fixed. So when we decide the approach, we decide with you how widely the system can be reached (for example, only on your internal network, or from outside the office as well), who keeps fixing weaknesses as they are found and how, and how logins, permissions, records and backups are managed. Note also that versions of Access whose support has ended get no fixes when weaknesses are found."
+          "q": "Is it secure to move a tool we used only inside the company to the web?",
+          "a": "That is a fair concern. A web system also carries a risk: when a weakness (vulnerability) is found in software it uses, that weakness can be exploited until it is fixed. So when we decide the approach, we decide with you where the system can be reached from (only on your internal network, or from outside the office as well), how people sign in, and how permissions, records and backups are managed. After the move, we who build it also provide the upkeep to keep fixing weaknesses when they are found; how much you leave to us is discussed with the approach. Note also that versions of Access whose support has ended get no fixes when weaknesses are found."
         },
         "cost": {
           "q": "What does the cost depend on?",
@@ -3831,6 +3907,98 @@
     "breadcrumb": "Microsoft Access migration",
     "pathsColumn": {
       "lead": "An article compares the three ways in a table, to help you choose."
+    },
+    "compare": {
+      "eyebrow": "From relying on one person to being supported by a team",
+      "title": "Your Access today, and what can be built when moving to the web",
+      "lead": "Some things are easy to miss even when a tool is used only inside the company. They come from how Access tools are built, not from how people use them.",
+      "headers": {
+        "item": "Item",
+        "now": "Access today",
+        "web": "What can be built when moving to the web"
+      },
+      "rows": {
+        "maintainer": {
+          "item": "Who can fix it",
+          "now": "When the author moves or leaves, nobody may be able to fix it.",
+          "web": "We who build it also provide the upkeep to keep fixing it."
+        },
+        "copy": {
+          "item": "Taking data out",
+          "now": "Copying the file takes all the data with it.",
+          "web": "What each person can see on screen can be set per person."
+        },
+        "records": {
+          "item": "Records",
+          "now": "Who saw or changed what is not kept unless it is built in.",
+          "web": "Who saw or changed what, and when, can be recorded."
+        },
+        "leavers": {
+          "item": "People who left or moved",
+          "now": "It depends on the shared folder's permissions. Copies already taken cannot be stopped.",
+          "web": "Their accounts can be stopped."
+        },
+        "backup": {
+          "item": "Backups",
+          "now": "Copying by hand can miss some.",
+          "web": "It can be built to back up automatically at set intervals."
+        },
+        "fixes": {
+          "item": "When a weakness is found",
+          "now": "Versions whose support has ended (2021 and earlier) get no fixes. Access in Microsoft 365 keeps getting updates.",
+          "web": "It needs to keep being fixed."
+        }
+      },
+      "note": "Moving to the web does not by itself make it better protected. We set the rules for permissions, records and backups with you during the move. The same things are decided when fixing the tool to keep using it, or when replacing it with a ready-made service."
+    },
+    "webScope": {
+      "eyebrow": "From closing it off to deciding how to protect it",
+      "title": "A web system does not have to be open to the internet",
+      "lead": "A web system is one you use in a browser. Where it can be reached from is decided separately from how it is built.",
+      "cards": {
+        "now": {
+          "label": "Today",
+          "title": "Used only inside the company",
+          "body": "It is used from a shared folder in the office or from certain PCs."
+        },
+        "inside": {
+          "label": "One possible setup after the move",
+          "title": "Used only from the company network",
+          "body": "As today, it can be reached only from the company network. The screens open in a browser."
+        },
+        "outside": {
+          "label": "One possible setup after the move",
+          "title": "Also used from outside (home or other sites)",
+          "body": "Only people who pass sign-in with a company account and a second check of who they are (multi-factor authentication) reach the system."
+        }
+      },
+      "cardsNote": "Which setup to use is decided with you, after we hear your company's rules.",
+      "decide": {
+        "title": "Four things to decide when moving to the web",
+        "lead": "We decide how to protect it together with how to build it.",
+        "items": {
+          "reach": {
+            "title": "Where it can be reached from",
+            "body": "Only from the company network, or from outside as well."
+          },
+          "login": {
+            "title": "How people sign in",
+            "body": "Whether to use company accounts and multi-factor authentication."
+          },
+          "control": {
+            "title": "Permissions, records and backups",
+            "body": "Who may do what, what is recorded and how to restore."
+          },
+          "upkeep": {
+            "title": "Who keeps fixing it when a weakness is found, and how",
+            "body": "We who build it also provide the upkeep to keep fixing it. We decide with you how much you leave to us."
+          }
+        }
+      },
+      "itNote": "For IT departments: we explain where it can be reached from, sign-in, permissions, records, backups and how it is fixed after the move, along the items your review checks.",
+      "closing": "You can also talk about how to protect it in the free 30-minute online consultation.",
+      "cta": "Start the free web check (Access)",
+      "columnLead": "A column explains an example for Access in detail."
     },
     "hosts": {
       "title": "Migrating a core system such as AS/400 or ACOS?",
