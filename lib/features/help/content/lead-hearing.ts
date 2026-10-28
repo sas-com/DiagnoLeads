@@ -8,6 +8,7 @@ export const leadHearingArticle: HelpArticle = {
     '初回商談で聞いたことを、決まった項目に沿って記録します。記録は技術部門への引き継ぎ書と、次回日程の管理に使われます。',
   routes: ['/leads/[leadId]/hearings/[hearingId]'],
   reviewedAt: '2026-10-28',
+  related: ['workflow-lifecycle'],
   blocks: [
     { type: 'h2', id: 'sections', text: '入力する項目' },
     {

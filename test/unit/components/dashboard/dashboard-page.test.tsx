@@ -53,6 +53,10 @@ vi.mock('@/lib/trpc/client', () => ({
 vi.mock('@/hooks/use-leads', () => ({
   useLeadAccess: () => ({ canEdit: mocks.canEdit, canDelete: false }),
 }));
+// The first-day checklist has its own test (test/unit/components/help/onboarding-checklist.test.tsx)
+vi.mock('@/components/features/help/onboarding-checklist', () => ({
+  OnboardingChecklist: () => <div data-testid="onboarding-checklist" />,
+}));
 // The follow-up parts have their own tests (test/unit/components/lead-follow-up)
 vi.mock('@/components/features/lead-follow-up/due-tasks-section', () => ({
   DueTasksSection: () => <div data-testid="due-tasks" />,
@@ -308,7 +312,8 @@ describe('DashboardPage', () => {
     const pending = screen.getByRole('heading', { name: /連絡待ちの相談申込/ });
     const analytics = screen.getByTestId('analytics-panel');
     expect(follows(screen.getByRole('heading', { level: 1, name: 'ダッシュボード' }), period)).toBe(true);
-    expect(follows(period, status)).toBe(true);
+    expect(follows(period, screen.getByTestId('onboarding-checklist'))).toBe(true);
+    expect(follows(screen.getByTestId('onboarding-checklist'), status)).toBe(true);
     expect(follows(status, pending)).toBe(true);
     expect(follows(pending, analytics)).toBe(true);
     expect(within(analytics).getByRole('link', { name: /分析/ })).toHaveAttribute('href', '/ja/analytics');

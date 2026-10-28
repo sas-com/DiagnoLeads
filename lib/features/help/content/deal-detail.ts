@@ -8,6 +8,7 @@ export const dealDetailArticle: HelpArticle = {
     '1件の商談の内容・ステージ・変更の履歴を見て、直します。リードの次の行動もここで確かめられます。',
   routes: ['/deals/[dealId]'],
   reviewedAt: '2026-10-28',
+  related: ['glossary'],
   blocks: [
     { type: 'h2', id: 'parts', text: '画面にあるもの' },
     {

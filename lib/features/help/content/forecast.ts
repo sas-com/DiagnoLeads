@@ -8,6 +8,7 @@ export const forecastArticle: HelpArticle = {
     '目標に対する受注と見込みを、今月・今四半期・今期ごと、担当者ごとに見ます。数字は商談の金額・確度・受注予定日から計算します。',
   routes: ['/forecast'],
   reviewedAt: '2026-10-28',
+  related: ['glossary'],
   blocks: [
     { type: 'h2', id: 'figures', text: '数字の意味' },
     {

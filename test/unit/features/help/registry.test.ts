@@ -7,10 +7,11 @@ import { join, relative, sep } from 'node:path';
 import {
   HELP_ARTICLES,
   HELP_EXCLUDED_ROUTES,
+  HELP_TABLE_OF_CONTENTS,
   helpArticleById,
   helpArticleForRoute,
 } from '@/lib/features/help/articles';
-import { helpArticleLinks, validateHelpArticle } from '@/lib/features/help/types';
+import { HELP_SECTIONS, helpArticleLinks, validateHelpArticle } from '@/lib/features/help/types';
 import { describe, expect, it } from 'vitest';
 
 const DASHBOARD_DIR = join(process.cwd(), 'app/[locale]/(dashboard)');
@@ -82,6 +83,22 @@ describe('help articles and admin pages', () => {
       validateHelpArticle(article).map((problem) => `${article.id}: ${problem}`)
     );
     expect(problems).toEqual([]);
+  });
+
+  it('lists every article once in the table of contents', () => {
+    const listed = HELP_SECTIONS.flatMap((section) =>
+      HELP_TABLE_OF_CONTENTS[section].map((article) => article.id)
+    );
+    expect([...listed].sort()).toEqual(HELP_ARTICLES.map((article) => article.id).sort());
+  });
+
+  it('names only related articles that exist', () => {
+    const unknown = HELP_ARTICLES.flatMap((article) =>
+      (article.related ?? [])
+        .filter((id) => !helpArticleById(id))
+        .map((id) => `${article.id}: ${id}`)
+    );
+    expect(unknown).toEqual([]);
   });
 
   it('links only to admin pages and articles that exist', () => {

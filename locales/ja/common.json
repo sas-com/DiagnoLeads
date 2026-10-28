@@ -2818,7 +2818,8 @@
       "profile": "個人設定",
       "settings": "組織設定",
       "logout": "ログアウト",
-      "logoutError": "ログアウトに失敗しました。"
+      "logoutError": "ログアウトに失敗しました。",
+      "help": "ヘルプ"
     },
     "search": {
       "label": "リードを検索",
@@ -5971,6 +5972,83 @@
       "group_admin": "グループの管理者",
       "parent_viewer": "親組織の閲覧者"
     },
-    "reviewedAt": "この説明は {date} の画面に合わせています"
+    "reviewedAt": "この説明は {date} の画面に合わせています",
+    "menu": "ヘルプ",
+    "openCenter": "ヘルプセンターを開く",
+    "related": "あわせて読む",
+    "center": {
+      "title": "ヘルプ",
+      "description": "画面の使い方・業務の流れ・用語をまとめています。",
+      "searchLabel": "ヘルプを検索",
+      "searchPlaceholder": "例：SQL判定、目標、招待",
+      "resultCount": "{count}件の記事",
+      "noResults": "「{query}」に合う記事はありません。言葉を短くするか、目次から探してください。",
+      "tocLabel": "目次",
+      "sections": {
+        "workflows": "業務の流れ",
+        "screens": "画面の使い方",
+        "settings": "設定の使い方",
+        "terms": "用語集"
+      },
+      "back": "ヘルプの目次へ",
+      "openScreen": "この画面を開く",
+      "articleNotFound": "記事が見つかりません"
+    },
+    "checklist": {
+      "title": {
+        "manager": "はじめに設定すること",
+        "member": "はじめにやること"
+      },
+      "progress": "{total}件のうち{done}件が済みました",
+      "allDone": "すべて済みました。このリストは閉じてかまいません。",
+      "close": "このリストを閉じる",
+      "open": "開く",
+      "guide": "使い方",
+      "guideOf": "「{title}」の使い方",
+      "markDone": "済みにする",
+      "markUndone": "未完了に戻す",
+      "markDoneOf": "「{title}」を済みにする",
+      "markUndoneOf": "「{title}」を未完了に戻す",
+      "doneMark": "（済み）",
+      "notDoneMark": "（未完了）",
+      "items": {
+        "organization": {
+          "title": "組織の基本情報を確かめる",
+          "description": "組織名と組織スラッグが合っているかを確かめます。"
+        },
+        "intake": {
+          "title": "相談申込の窓口を決める",
+          "description": "相談申込の通知を受け取り、担当を割り当てるメンバーを選びます。"
+        },
+        "members": {
+          "title": "メンバーを招待する",
+          "description": "一緒に使う人を招待し、役割を決めます。"
+        },
+        "playbook": {
+          "title": "営業の手引きを登録する",
+          "description": "課題別の聞き方などを登録すると、リードの画面に出ます。"
+        },
+        "agencyLinks": {
+          "title": "営業代行リンクを発行する",
+          "description": "営業代行を使うときは、代行会社ごとに診断のリンクを発行します。使わなければ済みにしてください。"
+        },
+        "today": {
+          "title": "今日の画面を見る",
+          "description": "期限の来た次の行動と、今週の商談予定をまとめて見ます。"
+        },
+        "leads": {
+          "title": "リードの探し方を知る",
+          "description": "検索とよく使う絞り込みで、対応するリードを探します。"
+        },
+        "nextActions": {
+          "title": "次の行動を記録する",
+          "description": "リードの詳細で、やることと期限を入れます。期限が来ると今日の画面に出ます。"
+        },
+        "deals": {
+          "title": "商談を動かす",
+          "description": "商談のボードで、ステージを進めます。"
+        }
+      }
+    }
   }
 }

@@ -8,6 +8,7 @@ export const dashboardArticle: HelpArticle = {
     '診断から届いたリードと、対応が必要な相談申込を1画面で確かめます。ログインしたら、まずここで連絡待ちの相談申込がないかを見ます。',
   routes: ['/dashboard'],
   reviewedAt: '2026-10-28',
+  related: ['workflow-lifecycle'],
   blocks: [
     { type: 'h2', id: 'first', text: '最初に見るところ' },
     {
@@ -33,6 +34,19 @@ export const dashboardArticle: HelpArticle = {
         { type: 'text', text: '自分の予定とやることだけを見たいときは、' },
         { type: 'link', text: '今日', href: '/today' },
         { type: 'text', text: 'の画面が向いています。' },
+      ],
+    },
+    { type: 'h2', id: 'checklist', text: 'はじめにやること' },
+    {
+      type: 'p',
+      content:
+        '使い始めの間は、画面の上に役割に合ったチェックリストが出ます。オーナー・管理者には組織の設定（窓口・メンバーの招待・営業の手引きなど）、メンバーには使い方の最初の一歩が並びます。',
+    },
+    {
+      type: 'ul',
+      items: [
+        '窓口・招待・営業の手引き・営業代行リンクは、設定が済むと自動で「済み」になります。ほかの項目は「済みにする」を押します。',
+        '×で閉じると、そのブラウザでは次から出ません。',
       ],
     },
     { type: 'h2', id: 'pending', text: '連絡待ちの相談申込' },
