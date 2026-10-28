@@ -4473,7 +4473,9 @@
       "contact_recorded": {
         "call": "Contacted by phone",
         "email": "Contacted by email",
-        "no_answer": "Called, no answer"
+        "no_answer": "Called, no answer",
+        "visit": "Visit",
+        "online_meeting": "Online meeting"
       },
       "result_email_requested": "Result by email requested",
       "result_email_sent": "Result sent by email",
@@ -4563,6 +4565,16 @@
       "confirm_page": "Via: confirm page",
       "resend_webhook": "Via: notice from the email provider",
       "staff": "Via: admin screen"
+    },
+    "dealActivities": {
+      "title": "Activity on this deal",
+      "record": "Record an activity",
+      "loading": "Loading the activity…",
+      "loadError": "The activity could not be loaded",
+      "empty": "No activity on this deal yet.",
+      "emptyCanEdit": "No activity on this deal yet. Record one with \"Record an activity\".",
+      "more": "Showing the latest {shown} of {total}.",
+      "seeAll": "See all in the lead's activity"
     }
   },
   "sidebarWidget": {
@@ -4850,17 +4862,15 @@
       "kinds": {
         "call": "Called",
         "email": "Emailed",
-        "no_answer": "No answer"
+        "no_answer": "No answer",
+        "visit": "Visited",
+        "online_meeting": "Met online"
       },
       "recordFor": "Record a contact with {lead}",
-      "withNote": "Record with a note",
-      "withNoteShort": "With note",
-      "kind": "What happened",
       "note": "Note (optional)",
-      "notePlaceholder": "e.g. Not available; call again tomorrow morning",
       "save": "Record",
-      "cancel": "Cancel",
       "recorded": "Recorded \"{kind}\"",
+      "recordedAt": "Recorded \"{kind}\" ({date})",
       "undo": "Undo",
       "undone": "The record was removed",
       "error": "Could not record it. Please try again",
@@ -4868,9 +4878,51 @@
       "loadError": "Could not load the contact log",
       "firstContact": "First contact {date}",
       "notContacted": "No contact recorded yet",
-      "latest": "Latest: {kind} ({date}) · {count} in total",
+      "latest": "Latest: {kind} ({details})",
+      "total": "{count} in total",
       "noAnswerCount": "No answer ×{count}"
     },
+    "activity": {
+      "open": "Record an activity",
+      "openFor": "Record an activity for {lead}",
+      "title": "Record an activity",
+      "description": "Record a contact, a visit or an online meeting with {lead}, with its time and outcome.",
+      "kind": "What happened",
+      "required": "Required",
+      "kindRequired": "Choose what happened",
+      "kinds": {
+        "call": "Call",
+        "email": "Email",
+        "visit": "Visit",
+        "online_meeting": "Online meeting",
+        "no_answer": "No answer"
+      },
+      "when": "When (Japan time)",
+      "whenHelp": "Now by default. A time later than now cannot be recorded",
+      "whenInvalid": "Enter a date and a time",
+      "whenFuture": "A time later than now cannot be recorded",
+      "whenTooEarly": "A time before 2000 cannot be recorded",
+      "duration": "Duration in minutes (optional)",
+      "durationInvalid": "Enter whole minutes from 1 to {max} (24 hours)",
+      "outcome": "Outcome (optional)",
+      "noAnswerHelp": "Nobody was reached, so no duration or outcome is recorded",
+      "deal": "Deal (optional)",
+      "dealNone": "None",
+      "dealLoading": "Loading the deals…",
+      "dealNoDeals": "This lead has no deals",
+      "dealLoadError": "The deals could not be loaded. You can record without a deal",
+      "dealOption": "{name} ({stage})",
+      "notePlaceholder": "e.g. They showed us their current forms. Next time we discuss the scope",
+      "saving": "Recording…"
+    },
+    "outcomes": {
+      "advanced": "Moved forward",
+      "no_change": "No change",
+      "setback": "Set back"
+    },
+    "outcomeLabel": "Outcome: {outcome}",
+    "duration": "{hours, plural, =0 {{minutes} min} other {{minutes, plural, =0 {{hours} hr} other {{hours} hr {minutes} min}}}}",
+    "dealLink": "Deal: {name}",
     "tasks": {
       "title": "Next actions",
       "empty": "No next actions yet",

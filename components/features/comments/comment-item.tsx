@@ -1,5 +1,6 @@
 'use client';
 
+import { SEND_SHORTCUTS, isCloseShortcut, isSendShortcut } from '@/components/common/form-controls';
 import { TAP_TARGET } from '@/components/common/tap-target';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -27,7 +28,6 @@ import {
 import { useFormatter, useTranslations } from 'next-intl';
 import { type ComponentType, useId, useRef, useState } from 'react';
 import { CommentForm } from './comment-form';
-import { SEND_SHORTCUTS, isCloseShortcut, isSendShortcut } from './controls';
 
 // Extended comment type with user info and replies
 export type CommentWithUser = LeadComment & {

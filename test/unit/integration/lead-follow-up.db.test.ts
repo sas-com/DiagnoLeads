@@ -149,9 +149,20 @@ describe.skipIf(!url)('lead follow-up (PostgreSQL)', () => {
         organizationId: orgA,
         userId: userA,
         action: 'create',
-        changes: { after: { kind: 'call', note: '日程の候補を伺った' } },
+        changes: {
+          after: {
+            kind: 'call',
+            contactedAt: second.contactedAt.toISOString(),
+            durationMinutes: null,
+            outcome: null,
+            dealId: null,
+            hasNote: true,
+          },
+        },
         metadata: { leadId },
       });
+      // The audit log keeps that there was a note, not its text (#554)
+      expect(JSON.stringify(audit.changes)).not.toContain('日程の候補');
 
       // The timeline shows them, the earliest marked as the first contact
       const timeline = await viewerA.leadActivity.list({
