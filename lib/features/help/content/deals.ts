@@ -8,6 +8,7 @@ export const dealsArticle: HelpArticle = {
     '商談をステージごとに並べ、金額と受注予定日で進み具合を見ます。1つのリードに、現行調査・移行など複数の商談を持てます。',
   routes: ['/deals'],
   reviewedAt: '2026-10-28',
+  related: ['workflow-lifecycle', 'glossary'],
   blocks: [
     { type: 'h2', id: 'stages', text: 'ステージ' },
     {

@@ -8,6 +8,7 @@ export const leadHandoffArticle: HelpArticle = {
     '営業から技術部門へ渡す内容を1枚にまとめた画面です。商談が初回ヒアリングから次の段階へ進むとでき、そのまま印刷できます。',
   routes: ['/leads/[leadId]/handoff'],
   reviewedAt: '2026-10-28',
+  related: ['workflow-lifecycle'],
   blocks: [
     { type: 'h2', id: 'contents', text: '載っているもの' },
     {

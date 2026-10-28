@@ -8,6 +8,7 @@ export const todayArticle: HelpArticle = {
     '自分の今日の予定と、やることをまとめて見ます。朝に開いて、上から順に片付けていく使い方を想定しています。',
   routes: ['/today'],
   reviewedAt: '2026-10-28',
+  related: ['workflow-lifecycle'],
   blocks: [
     { type: 'h2', id: 'sections', text: '並んでいるもの' },
     {

@@ -2816,7 +2816,8 @@
       "profile": "個人設定",
       "settings": "組織設定",
       "logout": "ログアウト",
-      "logoutError": "ログアウトに失敗しました。"
+      "logoutError": "ログアウトに失敗しました。",
+      "help": "ヘルプ"
     },
     "search": {
       "label": "リードを検索",
@@ -5969,6 +5970,27 @@
       "group_admin": "グループの管理者",
       "parent_viewer": "親組織の閲覧者"
     },
-    "reviewedAt": "この説明は {date} の画面に合わせています"
+    "reviewedAt": "この説明は {date} の画面に合わせています",
+    "menu": "ヘルプ",
+    "openCenter": "ヘルプセンターを開く",
+    "related": "あわせて読む",
+    "center": {
+      "title": "ヘルプ",
+      "description": "画面の使い方・業務の流れ・用語をまとめています。",
+      "searchLabel": "ヘルプを検索",
+      "searchPlaceholder": "例：SQL判定、目標、招待",
+      "resultCount": "{count}件の記事",
+      "noResults": "「{query}」に合う記事はありません。言葉を短くするか、目次から探してください。",
+      "tocLabel": "目次",
+      "sections": {
+        "workflows": "業務の流れ",
+        "screens": "画面の使い方",
+        "settings": "設定の使い方",
+        "terms": "用語集"
+      },
+      "back": "ヘルプの目次へ",
+      "openScreen": "この画面を開く",
+      "articleNotFound": "記事が見つかりません"
+    }
   }
 }

@@ -8,6 +8,7 @@ export const settingsAgencyLinksArticle: HelpArticle = {
     '営業代行会社ごとに AX 診断のリンクを発行します。リンクから回答されたリードには、流入元と代行会社名が付きます。',
   routes: ['/settings/agency-links'],
   reviewedAt: '2026-10-28',
+  related: ['workflow-agency-appointments'],
   blocks: [
     { type: 'h2', id: 'create', text: 'リンクを発行する' },
     {

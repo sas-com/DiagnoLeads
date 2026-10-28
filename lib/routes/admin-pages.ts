@@ -13,4 +13,5 @@ export const ADMIN_PAGE_PREFIXES = [
   '/settings',
   '/organizations',
   '/prospects',
+  '/help',
 ] as const;
