@@ -198,6 +198,7 @@
     "menu": "Menu",
     "management": "Management",
     "dashboard": "Dashboard",
+    "today": "Today",
     "leads": "Lead Management",
     "deals": "Deals",
     "forecast": "Sales forecast",
@@ -1745,6 +1746,55 @@
       "retry": "Retry",
       "forbiddenTitle": "You cannot see the sales forecast",
       "forbiddenBody": "The sales forecast and the targets are shown to members who can view leads, except viewers from a parent organization."
+    }
+  },
+  "today": {
+    "title": "Today",
+    "description": "Your next actions, this week's meetings, the contacts you recorded today and your deals that need attention, on one screen",
+    "dateLine": "{date} (Japan time)",
+    "section": {
+      "count": "{count}",
+      "loading": "Loading",
+      "loadError": "Could not load",
+      "retry": "Reload"
+    },
+    "meetings": {
+      "title": "Meetings",
+      "description": "From today to Sunday: leads assigned to you, and leads without an owner whose meeting date you set",
+      "viewAll": "View in the list",
+      "todayHeading": "Today",
+      "laterHeading": "Rest of the week (tomorrow to Sunday)",
+      "empty": "No meetings from today to Sunday",
+      "emptyToday": "No meetings today",
+      "emptyLater": "No meetings from tomorrow to Sunday",
+      "more": "{count, plural, one {# more meeting} other {# more meetings}} (the first {shown} are shown)",
+      "noTime": "No time set",
+      "noCompany": "No company name",
+      "firstMeeting": "First meeting",
+      "unassigned": "No owner"
+    },
+    "activities": {
+      "title": "Today's activity",
+      "description": "Contacts you recorded with today's date, no answers included (hearings are not counted)",
+      "empty": "You have not recorded any activity today yet",
+      "kinds": {
+        "call": "Calls",
+        "email": "Emails",
+        "visit": "Visits",
+        "online_meeting": "Online meetings",
+        "no_answer": "No answers"
+      },
+      "kindCount": "{count}",
+      "durationLabel": "Time spent in total",
+      "noLeadName": "Lead without a name",
+      "more": "Showing the latest {shown} of {total, plural, one {# record} other {# records}}"
+    },
+    "deals": {
+      "title": "Deals that need attention",
+      "description": "Your deals past their expected close date, and those whose lead has no next action",
+      "viewAll": "Your deals",
+      "empty": "No deals need attention",
+      "closeOn": "Expected close {date}"
     }
   },
   "settings": {

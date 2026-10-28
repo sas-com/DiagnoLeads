@@ -23,15 +23,23 @@ import { CheckWithText, DueLabel, TaskKindBadge, useTaskTitle, useUpdateTask } f
  * oldest due first, each with its lead. Shows the user's own first ("mine only", the default);
  * "everyone" lists all with the user's own on top. Ticking one completes it.
  * The first DUE_TASKS_SHOWN are listed; "N more" opens the rest, fetched then (#431).
+ * With mineOnly (the 今日 screen, #556) only the user's own are listed, without the switch.
  */
-export function DueTasksSection({ organizationId }: { organizationId: string }) {
+export function DueTasksSection({
+  organizationId,
+  mineOnly = false,
+}: {
+  organizationId: string;
+  mineOnly?: boolean;
+}) {
   const t = useTranslations('leadFollowUp.today');
   const tTasks = useTranslations('leadFollowUp.tasks');
   const locale = useLocale();
   const listId = useId();
   const titleOf = useTaskTitle();
   const update = useUpdateTask(organizationId);
-  const [scope, setScope] = useState<DueTaskScope>('mine');
+  const [chosenScope, setScope] = useState<DueTaskScope>('mine');
+  const scope: DueTaskScope = mineOnly ? 'mine' : chosenScope;
   const [expanded, setExpanded] = useState(false);
   const query = trpc.leadFollowUp.dueTasks.useQuery(
     expanded ? { organizationId, scope, limit: DUE_TASKS_MAX } : { organizationId, scope },
@@ -66,26 +74,28 @@ export function DueTasksSection({ organizationId }: { organizationId: string }) 
             {t('descriptionAll')}
           </p>
         </div>
-        <ToggleGroup
-          type="single"
-          size="sm"
-          variant="outline"
-          value={scope}
-          onValueChange={(value) => {
-            if (!value) return;
-            setScope(value as DueTaskScope);
-            setExpanded(false);
-          }}
-          aria-label={t('scopeLabel')}
-        >
-          {DUE_TASK_SCOPES.map((value) => (
-            <ToggleGroupItem key={value} value={value}>
-              {data?.counts
-                ? t('scopeCount', { label: scopeLabels[value], count: data.counts[value] })
-                : scopeLabels[value]}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
+        {!mineOnly && (
+          <ToggleGroup
+            type="single"
+            size="sm"
+            variant="outline"
+            value={scope}
+            onValueChange={(value) => {
+              if (!value) return;
+              setScope(value as DueTaskScope);
+              setExpanded(false);
+            }}
+            aria-label={t('scopeLabel')}
+          >
+            {DUE_TASK_SCOPES.map((value) => (
+              <ToggleGroupItem key={value} value={value}>
+                {data?.counts
+                  ? t('scopeCount', { label: scopeLabels[value], count: data.counts[value] })
+                  : scopeLabels[value]}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        )}
       </div>
       {query.isError ? (
         <div

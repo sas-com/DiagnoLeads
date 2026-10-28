@@ -32,7 +32,7 @@ vi.mock('@/lib/trpc/client', () => {
     trpc: {
       useUtils: () => ({
         leadFollowUp: { contacts: invalidate },
-        leadActivity: { list: invalidate, forDeal: invalidate },
+        leadActivity: { list: invalidate, forDeal: invalidate, myDay: invalidate },
         analytics: { getDashboard: invalidate },
       }),
       deals: {

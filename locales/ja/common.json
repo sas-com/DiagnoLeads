@@ -198,6 +198,7 @@
     "menu": "メニュー",
     "management": "管理",
     "dashboard": "ダッシュボード",
+    "today": "今日",
     "leads": "リード管理",
     "deals": "商談",
     "forecast": "売上予測",
@@ -1745,6 +1746,55 @@
       "retry": "再読み込み",
       "forbiddenTitle": "売上予測を見る権限がありません",
       "forbiddenBody": "売上予測と目標は、リードを閲覧できるメンバーだけが見られます（親組織からの閲覧者は除く）。"
+    }
+  },
+  "today": {
+    "title": "今日",
+    "description": "自分の次の行動・今週の商談予定・今日記録した活動と、注意が必要な商談をまとめて見る画面です",
+    "dateLine": "{date}（日本時間）",
+    "section": {
+      "count": "{count}件",
+      "loading": "読み込み中",
+      "loadError": "読み込めませんでした",
+      "retry": "再読み込み"
+    },
+    "meetings": {
+      "title": "商談予定",
+      "description": "担当のリードと、担当がいないリードのうち自分が日程を入れたものの、今日から日曜までの予定です",
+      "viewAll": "一覧で見る",
+      "todayHeading": "今日",
+      "laterHeading": "今週の残り（明日〜日曜）",
+      "empty": "今日から日曜までの商談予定はありません",
+      "emptyToday": "今日の商談予定はありません",
+      "emptyLater": "明日から日曜までの商談予定はありません",
+      "more": "ほか {count} 件あります（表示は早い順に{shown}件まで）",
+      "noTime": "時刻未定",
+      "noCompany": "会社名なし",
+      "firstMeeting": "初回",
+      "unassigned": "担当未定"
+    },
+    "activities": {
+      "title": "今日の活動",
+      "description": "今日の日時で自分が記録した連絡です（不通を含み、ヒアリングは含みません）",
+      "empty": "今日記録した活動はまだありません",
+      "kinds": {
+        "call": "電話",
+        "email": "メール",
+        "visit": "訪問",
+        "online_meeting": "オンライン商談",
+        "no_answer": "不通"
+      },
+      "kindCount": "{count}件",
+      "durationLabel": "所要時間の合計",
+      "noLeadName": "名前未設定のリード",
+      "more": "新しい{shown}件を表示しています（全{total}件）"
+    },
+    "deals": {
+      "title": "注意が必要な商談",
+      "description": "自分の商談のうち、受注予定日を過ぎたものと、リードに次の行動がないものです",
+      "viewAll": "自分の商談の一覧",
+      "empty": "注意が必要な商談はありません",
+      "closeOn": "受注予定日 {date}"
     }
   },
   "settings": {

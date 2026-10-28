@@ -115,7 +115,10 @@ export function DueDatePicker({
   );
 }
 
-/** Change a task and refresh the lead's list and the dashboard */
+/**
+ * Change a task and refresh the lead's list, the dashboard, and the deals' marks: a deal is
+ * marked when its lead has no open next action (#556 shows them next to the tasks)
+ */
 export function useUpdateTask(organizationId: string) {
   const t = useTranslations('leadFollowUp.tasks');
   const utils = trpc.useUtils();
@@ -123,6 +126,7 @@ export function useUpdateTask(organizationId: string) {
     onSuccess: () => {
       void utils.leadFollowUp.tasks.invalidate();
       void utils.leadFollowUp.dueTasks.invalidate({ organizationId });
+      void utils.deals.board.invalidate({ organizationId });
     },
     onError: () => toast.error(t('saveError')),
   });

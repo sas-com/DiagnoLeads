@@ -51,8 +51,9 @@ vi.mock('@/lib/trpc/client', () => {
     trpc: {
       useUtils: () => ({
         leadFollowUp: { contacts: invalidate, tasks: invalidate, dueTasks: invalidate },
-        leadActivity: { list: invalidate, forDeal: invalidate },
+        leadActivity: { list: invalidate, forDeal: invalidate, myDay: invalidate },
         analytics: { getDashboard: invalidate },
+        deals: { board: invalidate },
       }),
       leadFollowUp: {
         contacts: { useQuery: () => ({ data: mocks.contacts, isError: false }) },
