@@ -27,11 +27,14 @@ const sameCandidate = (a: MeetingCandidate, b: MeetingCandidate) =>
  * talk about (#244; the note is shown as text, never as HTML): pick one and confirm it.
  * The confirmed date becomes the lead's next meeting and a next action, and the respondent gets
  * a confirmation email when asked. Shown only when preferences were sent.
+ * The first confirmation (or one on another day) also creates the lead's deal in 見極め, unless
+ * it has an open deal or is won (#854): the card says so and reloads what the deal changes.
  * Preferences from an unverified answer (matched an existing lead by email only) carry a warning,
  * and the confirmation email starts unticked (#274).
  */
 export function MeetingRequestCard({ organizationId, leadId }: MeetingRequestCardProps) {
   const t = useTranslations('meetingRequest');
+  const tDeals = useTranslations('deals');
   const format = useFormatter();
   const utils = trpc.useUtils();
   const id = useId();
@@ -54,12 +57,21 @@ export function MeetingRequestCard({ organizationId, leadId }: MeetingRequestCar
       }
       setChanging(false);
       utils.leadFollowUp.tasks.invalidate();
+      // The lead's next meeting (the lead page, the lists, the week's meetings)
+      utils.leads.invalidate();
+      if (outcome.dealCreated) {
+        // The deal (the lead's deals, the board, today's deals), and its lead's status and deal
+        // phase, recorded in the lead's activity (#854)
+        utils.deals.invalidate();
+        utils.leadActivity.invalidate();
+      }
       const message = t('confirmToast', {
         done: t('confirmDone'),
         email: t(`emailResult.${outcome.email}`),
       });
       if (outcome.email === 'failed') toast.warning(message);
       else toast.success(message);
+      if (outcome.dealCreated) toast.info(tDeals('autoCreated', { count: 1 }));
     },
     onError: () => toast.error(t('confirmError')),
   });

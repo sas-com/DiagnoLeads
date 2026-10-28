@@ -17,6 +17,9 @@
  *   the one of its latest lost deal; without one, its 保留 is dropped, as leads.update does (#459).
  *   The lost reason stays when the lead is negotiated again (the objection card reads it).
  * - When the last deal is deleted, the lead keeps what it has and can be changed by hand again.
+ * - When the first meeting of a lead is set, it gets a deal in 見極め unless it has an open deal,
+ *   is won, or has no deal and a phase set by hand past the initial hearing
+ *   (qualificationDealSkip, #854).
  */
 import {
   DEAL_PHASES,
@@ -24,7 +27,7 @@ import {
   type LeadStatus,
   type LostReason,
 } from '@/lib/features/leads/types/pipeline';
-import { dealLostReasonEnum } from './types/pipeline';
+import { dealLostReasonEnum, isOpenStage } from './types/pipeline';
 
 export interface SyncDeal {
   kind: string;
@@ -105,6 +108,31 @@ export function wonWithoutWonDeal(
 ): boolean {
   const won = lead.status === 'won' || WON_PHASES.includes(lead.dealPhase ?? '');
   return won && !deals.some((deal) => deal.stage === 'won');
+}
+
+/** Why a lead whose first meeting was set gets no deal in 見極め (#854) */
+export type QualificationDealSkip = 'open_deal' | 'won' | 'phase_ahead';
+
+/**
+ * Whether the first meeting of a lead creates its deal in 見極め (#854, decision
+ * `2026-10-28-auto-qualification-deal`); null to create one. Not created for a lead with an open
+ * deal (one deal whatever the entry point), nor for a won lead (a won deal, or won by hand, see
+ * wonWithoutWonDeal): its next deal (the migration, AX) is created by sales, who choose its kind
+ * and the deal it follows. Nor for a lead without deals whose deal phase was set by hand past the
+ * initial hearing: the deal would take it back to the initial hearing. A lead whose deals are all
+ * lost gets one (its time has come again, decision `2026-10-25-deals-set-lead-stage`), whatever
+ * its phase.
+ */
+export function qualificationDealSkip(
+  lead: Pick<SyncLead, 'status' | 'dealPhase'>,
+  deals: Pick<SyncDeal, 'stage'>[]
+): QualificationDealSkip | null {
+  if (deals.some((deal) => isOpenStage(deal.stage))) return 'open_deal';
+  if (deals.some((deal) => deal.stage === 'won') || wonWithoutWonDeal(lead, deals)) return 'won';
+  if (deals.length === 0 && phaseIndex(lead.dealPhase) > phaseIndex('initial_hearing')) {
+    return 'phase_ahead';
+  }
+  return null;
 }
 
 /** Lost reason of the deal lost last (by close day, then by update) */
