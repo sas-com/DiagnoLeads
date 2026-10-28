@@ -404,14 +404,14 @@ export function DealDetailView({ dealId }: { dealId: string }) {
  * The deal's values (Refs #720): by when first, then the money and who. A closed deal shows the
  * day it was won or lost and why, instead of the forecast. What to do next is the lead's next
  * actions, the card under this one (the owner's decision of 2026-10-28, Epic #856): a next step
- * written before #853, which stopped taking it, is shown last as an earlier note. Long texts take
- * the whole width and keep their line breaks.
+ * written before #853, which stopped taking it, is shown last as an earlier note, in lighter text
+ * than the deal's values. Long texts take the whole width and keep their line breaks.
  */
 function DealFacts({ deal }: { deal: DealDetail }) {
   const t = useTranslations('deals');
   const locale = useLocale();
   const open = isOpenStage(deal.stage);
-  const facts: { label: string; value: ReactNode; wide?: boolean }[] = [];
+  const facts: { label: string; value: ReactNode; wide?: boolean; note?: boolean }[] = [];
   const add = (label: string, value: ReactNode, wide = false) => facts.push({ label, value, wide });
   const amount = formatYen(deal.amount, locale) ?? t('card.noAmount');
   const owner = deal.ownerName ?? t('card.unassigned');
@@ -464,7 +464,9 @@ function DealFacts({ deal }: { deal: DealDetail }) {
     }
   }
   if (deal.competitor) add(t('fields.competitor'), deal.competitor);
-  if (deal.nextStep) add(t('detail.legacyNextStep'), deal.nextStep, true);
+  if (deal.nextStep) {
+    facts.push({ label: t('detail.legacyNextStep'), value: deal.nextStep, wide: true, note: true });
+  }
 
   return (
     <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
@@ -473,7 +475,10 @@ function DealFacts({ deal }: { deal: DealDetail }) {
           <dt className="text-sm text-gray-600 dark:text-gray-300">{fact.label}</dt>
           <dd
             className={cn(
-              'font-medium break-words text-gray-900 dark:text-gray-50',
+              'break-words',
+              fact.note
+                ? 'font-normal text-gray-700 dark:text-gray-300'
+                : 'font-medium text-gray-900 dark:text-gray-50',
               fact.wide && 'whitespace-pre-line'
             )}
           >

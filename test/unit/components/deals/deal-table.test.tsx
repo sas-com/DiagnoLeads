@@ -72,6 +72,14 @@ function renderTable(deals: DealCard[], sort: DealSort = { by: 'stage', order: '
 const rowOf = (name: string) =>
   screen.getByRole('link', { name }).closest('tr') as HTMLTableRowElement;
 
+/** A row's cell under the column with this header */
+const cellUnder = (row: HTMLTableRowElement, header: string) => {
+  const index = screen
+    .getAllByRole('columnheader')
+    .findIndex((column) => column.textContent === header);
+  return within(row).getAllByRole('cell')[index];
+};
+
 describe('DealTable', () => {
   it("shows each deal with its lead's next action and the marks of its board card (#853)", () => {
     renderTable([
@@ -86,14 +94,16 @@ describe('DealTable', () => {
       '金額（税抜）',
       '確度',
       '受注予定日',
+      // The alerts and the next action side by side, the owner last
       '注意',
-      '担当',
       '次の行動',
+      '担当',
     ]);
     const first = rowOf('AS/400 現行調査');
     // The lead's open task due first, not the deal's old next step, and no warning with it
-    expect(within(first).getByText('今日まで')).toBeInTheDocument();
-    expect(within(first).getByText('稟議の確認')).toBeInTheDocument();
+    expect(within(cellUnder(first, '次の行動')).getByText('今日まで')).toBeInTheDocument();
+    expect(within(cellUnder(first, '次の行動')).getByText('稟議の確認')).toBeInTheDocument();
+    expect(cellUnder(first, '担当')).toHaveTextContent(/^営業 花子$/);
     expect(within(first).queryByText('見積を送る')).not.toBeInTheDocument();
     expect(
       within(first).queryByText('リードに次の行動（タスク）がありません')
@@ -106,7 +116,8 @@ describe('DealTable', () => {
     expect(within(lead).getByText('山田 太郎')).toBeInTheDocument();
 
     const second = rowOf('移行');
-    expect(within(second).getByText('リードに次の行動（タスク）がありません')).toBeInTheDocument();
+    expect(cellUnder(second, '注意')).toHaveTextContent('リードに次の行動（タスク）がありません');
+    expect(cellUnder(second, '次の行動')).toHaveTextContent(/^—$/);
     // No amount, and no next action
     expect(within(second).getAllByText('—')).toHaveLength(2);
     expect(within(second).queryByText('見積を送る')).not.toBeInTheDocument();
@@ -122,7 +133,7 @@ describe('DealTable', () => {
     expect(within(first).getByText('持ち帰り')).toBeInTheDocument();
     const won = rowOf('移行');
     expect(within(won).queryByText('稟議の確認')).not.toBeInTheDocument();
-    expect(within(won).getAllByRole('cell').at(-1)).toHaveTextContent(/^—$/);
+    expect(cellUnder(won, '次の行動')).toHaveTextContent(/^—$/);
   });
 
   it('says a passed close date with an icon and words, not only in red', () => {

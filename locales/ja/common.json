@@ -1590,7 +1590,7 @@
       "historyOther": "ほかの項目を変更",
       "leadNextActionsNoName": "このリードの次の行動・持ち帰り事項です。リードの画面と同じものです",
       "factsTitle": "商談の内容",
-      "legacyNextStep": "以前の次の一手（メモ）"
+      "legacyNextStep": "次の一手（以前のメモ）"
     },
     "leadCard": {
       "title": "商談",

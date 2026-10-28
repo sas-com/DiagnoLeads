@@ -190,6 +190,27 @@ describe('DealBoard', () => {
     expect(within(cardOf('移行')).queryByText('持ち帰り')).not.toBeInTheDocument();
   });
 
+  it('ends each card with what to do next, after the mark of a passed close date (#853)', () => {
+    renderBoard([
+      card({ expectedCloseOn: '2026-10-01' }),
+      card({ id: 'deal-2', name: '移行', expectedCloseOn: '2026-10-01', ...NO_TASK }),
+    ]);
+    const withTask = cardOf('AS/400 現行調査');
+    const overdue = within(withTask).getByText('受注予定日を過ぎています');
+    const title = within(withTask).getByText('稟議の確認');
+    expect(overdue.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(withTask.lastElementChild).toHaveTextContent(/稟議の確認$/);
+    // Headed by the icon of the lead's next actions card, which screen readers skip
+    const row = within(withTask).getByText('次の行動').parentElement as HTMLElement;
+    expect(row.firstElementChild).toHaveClass('lucide-list-todo');
+    expect(row.firstElementChild).toHaveAttribute('aria-hidden', 'true');
+
+    const withoutTask = cardOf('移行');
+    expect(withoutTask.lastElementChild?.lastElementChild).toHaveTextContent(
+      'リードに次の行動（タスク）がありません'
+    );
+  });
+
   it('shows only the warning for a lead without an open task, even with an old next step (#853)', () => {
     renderBoard([card({ ...NO_TASK })]);
     const item = cardOf('AS/400 現行調査');

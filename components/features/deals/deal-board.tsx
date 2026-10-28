@@ -299,7 +299,9 @@ function DealCardItem({
           {t('card.daysInStage', { days: daysSince(deal.stageChangedAt) })}
         </p>
       )}
-      {/* The lead's next action, or (from the same value) the mark for having none (#853) */}
+      {/* What to do next always ends the card (#853): the lead's next action, or the mark for
+          having none (from the same value), which comes after the mark of a passed close date */}
+      <DealMarks flags={dealMarks(deal, today)} className="mt-2" />
       {open && deal.nextTask && (
         <DealNextTaskSummary
           task={deal.nextTask}
@@ -308,7 +310,6 @@ function DealCardItem({
           className="mt-2"
         />
       )}
-      <DealMarks flags={dealMarks(deal, today)} className="mt-2" />
     </li>
   );
 }

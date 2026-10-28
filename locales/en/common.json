@@ -1590,7 +1590,7 @@
       "historyOther": "Changed other fields",
       "leadNextActionsNoName": "Next actions and takeaways of this lead, the same list as on the lead's page",
       "factsTitle": "Deal details",
-      "legacyNextStep": "Earlier next step (note)"
+      "legacyNextStep": "Next step (earlier note)"
     },
     "leadCard": {
       "title": "Deals",
