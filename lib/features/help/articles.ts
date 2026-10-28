@@ -7,7 +7,15 @@ import { leadDetailArticle } from './content/lead-detail';
 import { leadHandoffArticle } from './content/lead-handoff';
 import { leadHearingArticle } from './content/lead-hearing';
 import { leadsArticle } from './content/leads';
+import { organizationsNewArticle } from './content/organizations-new';
 import { prospectsArticle } from './content/prospects';
+import { settingsAgencyLinksArticle } from './content/settings-agency-links';
+import { settingsAxPlaybookArticle } from './content/settings-ax-playbook';
+import { settingsMembersArticle } from './content/settings-members';
+import { settingsOrganizationArticle } from './content/settings-organization';
+import { settingsProfileArticle } from './content/settings-profile';
+import { settingsQrCampaignsArticle } from './content/settings-qr-campaigns';
+import { settingsWebhooksArticle } from './content/settings-webhooks';
 import { siteAnalyticsArticle } from './content/site-analytics';
 import { todayArticle } from './content/today';
 import type { HelpArticle, HelpExclusionReason } from './types';
@@ -31,6 +39,14 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
   prospectsArticle,
   analyticsArticle,
   siteAnalyticsArticle,
+  settingsProfileArticle,
+  settingsOrganizationArticle,
+  settingsMembersArticle,
+  settingsWebhooksArticle,
+  settingsQrCampaignsArticle,
+  settingsAxPlaybookArticle,
+  settingsAgencyLinksArticle,
+  organizationsNewArticle,
 ];
 
 /**
@@ -38,15 +54,6 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
  * adds its article; the test fails when a page here has an article or no longer exists.
  */
 export const HELP_EXCLUDED_ROUTES: Readonly<Record<string, HelpExclusionReason>> = {
-  // The settings screens (#873)
-  '/settings': { kind: 'pending', issue: 873 },
-  '/settings/organization': { kind: 'pending', issue: 873 },
-  '/settings/members': { kind: 'pending', issue: 873 },
-  '/settings/webhooks': { kind: 'pending', issue: 873 },
-  '/settings/qr-campaigns': { kind: 'pending', issue: 873 },
-  '/settings/ax-playbook': { kind: 'pending', issue: 873 },
-  '/settings/agency-links': { kind: 'pending', issue: 873 },
-  '/organizations/new': { kind: 'pending', issue: 873 },
   // Redirects to the organization settings (#164)
   '/organizations': { kind: 'redirect', to: '/settings/organization' },
   // The embed widget was abolished (decision 2026-10-24-embed-widget-abolished); #564 removes it
