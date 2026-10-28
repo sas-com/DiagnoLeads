@@ -1084,9 +1084,10 @@ export const agencyHandovers = pgTable(
 export type AgencyHandover = typeof agencyHandovers.$inferSelect;
 
 /**
- * Lead Contact Logs (Refs #136)
- * One row per contact a staff member recorded on a lead ("called", "emailed", "could not reach").
- * The earliest row of a lead is its first contact; the dashboard's waiting consultation
+ * Lead Contact Logs (Refs #136, #554)
+ * One row per contact a staff member recorded on a lead ("called", "emailed", "could not reach",
+ * "visited", "met online"), at the time it happened (now, or a past time given by the staff
+ * member). The earliest row of a lead is its first contact; the dashboard's waiting consultation
  * requests are the ones without any row here (not the lead status).
  */
 export const leadContactLogs = pgTable(
@@ -1099,10 +1100,16 @@ export const leadContactLogs = pgTable(
     leadId: uuid('lead_id')
       .notNull()
       .references(() => leads.id, { onDelete: 'cascade' }),
-    /** 'call' | 'email' | 'no_answer' (lib/features/lead-follow-up/types/schemas.ts) */
+    /** CONTACT_KINDS (lib/features/lead-follow-up/types/schemas.ts) */
     kind: text('kind').notNull(),
     note: text('note'),
     contactedAt: timestamp('contacted_at', { withTimezone: true }).defaultNow().notNull(),
+    /** How long it took, in minutes; null when not given (never for "could not reach") */
+    durationMinutes: integer('duration_minutes'),
+    /** CONTACT_OUTCOMES: how it left the sale; null when not given (never for "could not reach") */
+    outcome: text('outcome'),
+    /** The deal it was about: a deal of the same lead (checked when recorded) */
+    dealId: uuid('deal_id').references((): AnyPgColumn => deals.id, { onDelete: 'set null' }),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
@@ -1114,7 +1121,25 @@ export const leadContactLogs = pgTable(
     ),
     // For the ON DELETE CASCADE of the lead
     index('lead_contact_logs_lead_idx').on(table.leadId),
-    check('lead_contact_logs_kind_check', sql`${table.kind} in ('call', 'email', 'no_answer')`),
+    // The activities of a deal, newest first (the deal page), and the ON DELETE SET NULL. Most
+    // records (the one-tap ones) have no deal, so only those with one are indexed
+    index('lead_contact_logs_deal_contacted_idx')
+      .on(table.dealId, table.contactedAt)
+      .where(sql`${table.dealId} is not null`),
+    check(
+      'lead_contact_logs_kind_check',
+      sql`${table.kind} in ('call', 'email', 'no_answer', 'visit', 'online_meeting')`
+    ),
+    check(
+      'lead_contact_logs_outcome_check',
+      sql`${table.outcome} in ('advanced', 'no_change', 'setback')`
+    ),
+    check('lead_contact_logs_duration_check', sql`${table.durationMinutes} between 1 and 1440`),
+    // Nobody was reached, so nothing took time and nothing moved
+    check(
+      'lead_contact_logs_no_answer_check',
+      sql`${table.kind} <> 'no_answer' or (${table.durationMinutes} is null and ${table.outcome} is null)`
+    ),
   ]
 );
 

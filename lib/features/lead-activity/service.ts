@@ -2,8 +2,9 @@
  * Lead activity timeline (Refs #101)
  *
  * Built from records that already exist; there is no table of its own. Every query is scoped by
- * organizationId AND leadId, and the lead must belong to the organization (NOT_FOUND
- * otherwise). Permission checks are done by the router.
+ * organizationId AND leadId (the deal page's list, by organizationId and the deal's lead and
+ * id), and the lead or deal must belong to the organization (NOT_FOUND otherwise). Permission
+ * checks are done by the router.
  *
  * Where each kind comes from:
  * - lead_created: leads.created_at. Source "web_diagnosis" when a diagnosis submission created
@@ -20,8 +21,9 @@
  *   update is known)
  * - comment: lead_comments of every type
  * - lead_updated: audit_logs 'update' rows of the lead (changed fields only, with the actor)
- * - contact_recorded: lead_contact_logs ("called", "emailed", "could not reach", #136); the
- *   earliest one is marked as the first contact
+ * - contact_recorded: lead_contact_logs ("called", "emailed", "could not reach", "visited", "met
+ *   online", #136, #554) with the duration, outcome and deal; the earliest one is marked as the
+ *   first contact
  * - mql_qualified / sql_decided / phase_reached: from the lead's own date columns, unless an
  *   audit row records the same change (MQL / SQL: an audit row with that value at exactly that
  *   time; phase: an audit row setting that phase on that day in Japan). Those are shown as
@@ -50,6 +52,7 @@
 import type { db as defaultDb } from '@/lib/db/client';
 import {
   auditLogs,
+  deals,
   diagnosisVersions,
   diagnosticSubmissions,
   emailSuppressions,
@@ -68,6 +71,7 @@ import {
   axMigrationDefinition,
 } from '@/lib/features/diagnostics/ax-migration/definition';
 import type { LocalizedText } from '@/lib/features/diagnostics/types';
+import type { ContactKind, ContactOutcome } from '@/lib/features/lead-follow-up/types/schemas';
 import {
   AUDITED_LEAD_FIELDS,
   LEAD_AUDIT_RESOURCE,
@@ -77,9 +81,11 @@ import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { normaliseEmail } from '@/lib/features/respondent-email/normalize';
 import { IDEMPOTENT_REPLAY } from '@/lib/features/respondent-email/send';
 import { TRPCError } from '@trpc/server';
-import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import type {
   BuilderDiagnosisSummary,
+  ContactRecordedEvent,
+  DealActivityPage,
   DiagnosisIdentity,
   DiagnosisMqlLevelView,
   DiagnosisSummary,
@@ -94,7 +100,11 @@ import type {
   ResultEmailRequestState,
   SubmissionAnswerView,
 } from './types/schemas';
-import { EMAIL_SUPPRESSION_REASONS, EMAIL_SUPPRESSION_SOURCES } from './types/schemas';
+import {
+  DEAL_ACTIVITIES_LIMIT,
+  EMAIL_SUPPRESSION_REASONS,
+  EMAIL_SUPPRESSION_SOURCES,
+} from './types/schemas';
 
 type Database = typeof defaultDb;
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
@@ -104,7 +114,7 @@ type Executor = Database | Transaction;
 export const PER_SOURCE_LIMIT = 1000;
 const COMMENT_EXCERPT_LENGTH = 200;
 
-const notFound = (what: 'lead' | 'submission') =>
+const notFound = (what: 'lead' | 'submission' | 'deal') =>
   new TRPCError({ code: 'NOT_FOUND', message: `The ${what} was not found` });
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -349,6 +359,115 @@ const suppressionSourceOf = (value: string): EmailSuppressionSourceView | null =
 /** Midnight in Japan of a 'YYYY-MM-DD' date */
 const jstMidnight = (date: string) => new Date(`${date}T00:00:00+09:00`);
 
+/** Names of the staff members who did something, looked up once for a list of events */
+async function actorsOf(
+  db: Executor,
+  ids: Iterable<string>
+): Promise<(id: string | null) => LeadActivityActor | null> {
+  const unique = [...new Set(ids)];
+  const people =
+    unique.length === 0
+      ? []
+      : await db
+          .select({ id: users.id, name: users.name, email: users.email })
+          .from(users)
+          .where(inArray(users.id, unique));
+  const names = new Map(people.map((p) => [p.id, p.name?.trim() || p.email]));
+  return (id) => (id && names.has(id) ? { id, name: names.get(id) as string } : null);
+}
+
+/** What the timeline shows of a contact record (#136, #554) */
+const contactColumns = {
+  id: leadContactLogs.id,
+  kind: leadContactLogs.kind,
+  note: leadContactLogs.note,
+  createdBy: leadContactLogs.createdBy,
+  contactedAt: leadContactLogs.contactedAt,
+  durationMinutes: leadContactLogs.durationMinutes,
+  outcome: leadContactLogs.outcome,
+};
+
+/** The deal of a contact record, of the same organization */
+const contactDealJoin = (organizationId: string) =>
+  and(eq(deals.id, leadContactLogs.dealId), eq(deals.organizationId, organizationId));
+
+interface ContactRow {
+  id: string;
+  kind: string;
+  note: string | null;
+  createdBy: string | null;
+  contactedAt: Date;
+  durationMinutes: number | null;
+  outcome: string | null;
+  /** The deal it was about, joined on the lead's timeline only */
+  dealId?: string | null;
+  dealName?: string | null;
+}
+
+function contactEventOf(
+  row: ContactRow,
+  actor: LeadActivityActor | null,
+  options: { first: boolean; hideDeals?: boolean }
+): ContactRecordedEvent {
+  return {
+    id: `contact:${row.id}`,
+    kind: 'contact_recorded',
+    at: row.contactedAt,
+    actor,
+    contactId: row.id,
+    contactKind: row.kind as ContactKind,
+    note: row.note,
+    durationMinutes: row.durationMinutes,
+    outcome: row.outcome as ContactOutcome | null,
+    deal:
+      !options.hideDeals && row.dealId && typeof row.dealName === 'string'
+        ? { id: row.dealId, name: row.dealName }
+        : null,
+    first: options.first,
+  };
+}
+
+/**
+ * The contact records of one deal, newest first (the deal page, #554): the latest
+ * DEAL_ACTIVITIES_LIMIT and how many there are. Each is of this deal, so it names no deal. The
+ * deal must belong to the organization (NOT_FOUND otherwise); who may read deals is checked by
+ * the router
+ */
+export async function listDealActivities(
+  db: Executor,
+  input: { organizationId: string; dealId: string }
+): Promise<DealActivityPage> {
+  const { organizationId } = input;
+  const [deal] = await db
+    .select({ id: deals.id, leadId: deals.leadId })
+    .from(deals)
+    .where(and(eq(deals.id, input.dealId), eq(deals.organizationId, organizationId)))
+    .limit(1);
+  if (!deal) throw notFound('deal');
+  const scope = and(
+    eq(leadContactLogs.organizationId, organizationId),
+    eq(leadContactLogs.leadId, deal.leadId),
+    eq(leadContactLogs.dealId, deal.id)
+  );
+  const [[totals], rows] = await Promise.all([
+    db.select({ total: count() }).from(leadContactLogs).where(scope),
+    db
+      .select(contactColumns)
+      .from(leadContactLogs)
+      .where(scope)
+      .orderBy(desc(leadContactLogs.contactedAt), desc(leadContactLogs.id))
+      .limit(DEAL_ACTIVITIES_LIMIT),
+  ]);
+  const actor = await actorsOf(
+    db,
+    rows.flatMap((row) => (row.createdBy ? [row.createdBy] : []))
+  );
+  return {
+    total: Number(totals?.total ?? 0),
+    items: rows.map((row) => contactEventOf(row, actor(row.createdBy), { first: false })),
+  };
+}
+
 export async function listLeadActivities(
   db: Executor,
   input: {
@@ -363,6 +482,8 @@ export async function listLeadActivities(
     showSuppressionReasons?: boolean;
     /** Leave the comments out (#555): for those who may not read them */
     hideComments?: boolean;
+    /** Leave out which deal a contact was about (#554): for those who may not read deals */
+    hideDeals?: boolean;
   }
 ): Promise<LeadActivityPage> {
   const { organizationId, leadId } = input;
@@ -450,14 +571,9 @@ export async function listLeadActivities(
         .orderBy(desc(auditLogs.createdAt))
         .limit(PER_SOURCE_LIMIT),
       db
-        .select({
-          id: leadContactLogs.id,
-          kind: leadContactLogs.kind,
-          note: leadContactLogs.note,
-          createdBy: leadContactLogs.createdBy,
-          contactedAt: leadContactLogs.contactedAt,
-        })
+        .select({ ...contactColumns, dealId: deals.id, dealName: deals.name })
         .from(leadContactLogs)
+        .leftJoin(deals, contactDealJoin(organizationId))
         .where(
           and(
             eq(leadContactLogs.organizationId, organizationId),
@@ -554,16 +670,7 @@ export async function listLeadActivities(
   for (const row of audits) if (row.userId) userIds.add(row.userId);
   for (const row of contacts) if (row.createdBy) userIds.add(row.createdBy);
   if (showReasons) for (const row of suppressions) if (row.createdBy) userIds.add(row.createdBy);
-  const people =
-    userIds.size === 0
-      ? []
-      : await db
-          .select({ id: users.id, name: users.name, email: users.email })
-          .from(users)
-          .where(inArray(users.id, [...userIds]));
-  const names = new Map(people.map((p) => [p.id, p.name?.trim() || p.email]));
-  const actor = (id: string | null): LeadActivityActor | null =>
-    id && names.has(id) ? { id, name: names.get(id) as string } : null;
+  const actor = await actorsOf(db, userIds);
   // Comments, hearings and lead audit rows are only written with the signed-in user's id, so a
   // null author there means the account was deleted (#164)
   const staffActor = (id: string | null): LeadActivityActor | null =>
@@ -680,16 +787,12 @@ export async function listLeadActivities(
 
   // Contact records (newest first, so the last one read is the first contact)
   contacts.forEach((row, index) => {
-    events.push({
-      id: `contact:${row.id}`,
-      kind: 'contact_recorded',
-      at: row.contactedAt,
-      actor: actor(row.createdBy),
-      contactId: row.id,
-      contactKind: row.kind as 'call' | 'email' | 'no_answer',
-      note: row.note,
-      first: index === contacts.length - 1 && contacts.length < PER_SOURCE_LIMIT,
-    });
+    events.push(
+      contactEventOf(row, actor(row.createdBy), {
+        first: index === contacts.length - 1 && contacts.length < PER_SOURCE_LIMIT,
+        hideDeals: input.hideDeals === true,
+      })
+    );
   });
 
   // Respondent mail (#154)

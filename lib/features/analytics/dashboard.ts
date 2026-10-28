@@ -177,8 +177,9 @@ const sqlList = (kinds: readonly string[]) =>
   );
 
 /**
- * A consultation request still waiting for its first contact (#136): nobody has recorded a call
- * or an email on the lead (lead_contact_logs), whatever its status, unless the deal is closed.
+ * A consultation request still waiting for its first contact (#136): nobody has recorded a
+ * contact that reached the person on the lead (lead_contact_logs: a call, an email, a visit or
+ * an online meeting, REACHED_CONTACT_KINDS), whatever its status, unless the deal is closed.
  * "No answer" records do not end the wait (owner decision); the row shows how many there are.
  */
 const waitingForFirstContact = (organizationId: string) =>
