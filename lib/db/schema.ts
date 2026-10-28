@@ -227,6 +227,9 @@ export const accounts = pgTable('accounts', {
   providerId: text('provider_id').notNull(), // 'credential', 'google', 'github', etc.
   accessToken: text('access_token'),
   refreshToken: text('refresh_token'),
+  // OAuth providers' ID token. Unused with email and password, but better-auth 1.7 checks that
+  // every account column it knows exists before each call (#849, #836)
+  idToken: text('id_token'),
   accessTokenExpiresAt: timestamp('access_token_expires_at'),
   refreshTokenExpiresAt: timestamp('refresh_token_expires_at'),
   scope: text('scope'),

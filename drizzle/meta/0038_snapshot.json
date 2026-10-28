@@ -1,5 +1,5 @@
 {
-  "id": "2c1950ae-447e-4662-b29d-c4e7011a484b",
+  "id": "268771c6-3fc7-40d6-87c5-0a54cb96f5d7",
   "prevId": "046cc906-97ce-4608-adf4-f6f74f922988",
   "version": "7",
   "dialect": "postgresql",
@@ -41,6 +41,12 @@
         },
         "refresh_token": {
           "name": "refresh_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "id_token": {
+          "name": "id_token",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -5088,54 +5094,6 @@
               "expression": "id",
               "isExpression": false,
               "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "leads_org_created_at_id_idx": {
-          "name": "leads_org_created_at_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": false,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": false,
-              "nulls": "first"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "leads_org_email_lower_idx": {
-          "name": "leads_org_email_lower_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "lower(\"email\")",
-              "asc": true,
-              "isExpression": true,
               "nulls": "last"
             }
           ],

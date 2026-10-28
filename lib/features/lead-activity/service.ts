@@ -3,8 +3,8 @@
  *
  * Built from records that already exist; there is no table of its own. Every query is scoped by
  * organizationId AND leadId (the deal page's list, by organizationId and the deal's lead and
- * id), and the lead or deal must belong to the organization (NOT_FOUND otherwise). Permission
- * checks are done by the router.
+ * id; a member's day, by organizationId and the member), and the lead or deal must belong to the
+ * organization (NOT_FOUND otherwise). Permission checks are done by the router.
  *
  * Where each kind comes from:
  * - lead_created: leads.created_at. Source "web_diagnosis" when a diagnosis submission created
@@ -71,7 +71,11 @@ import {
   axMigrationDefinition,
 } from '@/lib/features/diagnostics/ax-migration/definition';
 import type { LocalizedText } from '@/lib/features/diagnostics/types';
-import type { ContactKind, ContactOutcome } from '@/lib/features/lead-follow-up/types/schemas';
+import {
+  CONTACT_KINDS,
+  type ContactKind,
+  type ContactOutcome,
+} from '@/lib/features/lead-follow-up/types/schemas';
 import {
   AUDITED_LEAD_FIELDS,
   LEAD_AUDIT_RESOURCE,
@@ -81,10 +85,11 @@ import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { normaliseEmail } from '@/lib/features/respondent-email/normalize';
 import { IDEMPOTENT_REPLAY } from '@/lib/features/respondent-email/send';
 import { TRPCError } from '@trpc/server';
-import { and, count, desc, eq, inArray, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, lt, or, sql } from 'drizzle-orm';
 import type {
   BuilderDiagnosisSummary,
   ContactRecordedEvent,
+  DayContactsSummary,
   DealActivityPage,
   DiagnosisIdentity,
   DiagnosisMqlLevelView,
@@ -104,6 +109,7 @@ import {
   DEAL_ACTIVITIES_LIMIT,
   EMAIL_SUPPRESSION_REASONS,
   EMAIL_SUPPRESSION_SOURCES,
+  MY_DAY_CONTACTS_LIMIT,
 } from './types/schemas';
 
 type Database = typeof defaultDb;
@@ -465,6 +471,85 @@ export async function listDealActivities(
   return {
     total: Number(totals?.total ?? 0),
     items: rows.map((row) => contactEventOf(row, actor(row.createdBy), { first: false })),
+  };
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The contact records a member made on a Japan day ('YYYY-MM-DD'; 今日 #556, and the daily
+ * report of #558): those the member recorded (created_by) whose time (contacted_at, which can be
+ * set in the past) falls on that day, [0:00, the next 0:00) in Japan. Counted by kind, "no answer"
+ * included and every kind present, with the minutes summed; the latest MY_DAY_CONTACTS_LIMIT are
+ * listed newest first with their leads. Only this organization's, also for a member of several.
+ * Each is the member's own, so no actor is named, and none is marked as the lead's first contact.
+ * The deals stay hidden with hideDeals (those who may not read deals)
+ */
+export async function listMyContactsOfDay(
+  db: Executor,
+  input: { organizationId: string; userId: string; day: string; hideDeals: boolean }
+): Promise<DayContactsSummary> {
+  const { organizationId } = input;
+  const from = jstMidnight(input.day);
+  const scope = and(
+    eq(leadContactLogs.organizationId, organizationId),
+    eq(leadContactLogs.createdBy, input.userId),
+    gte(leadContactLogs.contactedAt, from),
+    lt(leadContactLogs.contactedAt, new Date(from.getTime() + DAY_MS))
+  );
+  const leadJoin = and(
+    eq(leads.id, leadContactLogs.leadId),
+    eq(leads.organizationId, organizationId)
+  );
+  const [rows, kinds] = await Promise.all([
+    db
+      .select({
+        ...contactColumns,
+        dealId: deals.id,
+        dealName: deals.name,
+        leadId: leads.id,
+        leadName: leads.name,
+        company: leads.company,
+      })
+      .from(leadContactLogs)
+      .innerJoin(leads, leadJoin)
+      .leftJoin(deals, contactDealJoin(organizationId))
+      .where(scope)
+      .orderBy(desc(leadContactLogs.contactedAt), desc(leadContactLogs.id))
+      .limit(MY_DAY_CONTACTS_LIMIT),
+    db
+      .select({
+        kind: leadContactLogs.kind,
+        count: count(),
+        minutes: sql<number>`coalesce(sum(${leadContactLogs.durationMinutes}), 0)::int`,
+      })
+      .from(leadContactLogs)
+      .innerJoin(leads, leadJoin)
+      .where(scope)
+      .groupBy(leadContactLogs.kind),
+  ]);
+  const byKind = Object.fromEntries(CONTACT_KINDS.map((kind) => [kind, 0])) as Record<
+    ContactKind,
+    number
+  >;
+  let total = 0;
+  let durationMinutes = 0;
+  for (const row of kinds) {
+    const records = Number(row.count ?? 0);
+    total += records;
+    durationMinutes += Number(row.minutes ?? 0);
+    const kind = CONTACT_KINDS.find((known) => known === row.kind);
+    if (kind) byKind[kind] = records;
+  }
+  return {
+    day: input.day,
+    total,
+    byKind,
+    durationMinutes,
+    items: rows.map((row) => ({
+      lead: { id: row.leadId, name: row.leadName, company: row.company },
+      event: contactEventOf(row, null, { first: false, hideDeals: input.hideDeals }),
+    })),
   };
 }
 

@@ -49,6 +49,8 @@ export type LeadActivityFilter = keyof typeof LEAD_ACTIVITY_FILTERS;
 export const LEAD_ACTIVITY_MAX_LIMIT = 100;
 /** Contact records listed on the deal page (#554) */
 export const DEAL_ACTIVITIES_LIMIT = 50;
+/** The user's contact records of the day listed on 今日 (#556); all of them are counted */
+export const MY_DAY_CONTACTS_LIMIT = 100;
 
 const organizationId = z.string().uuid();
 
@@ -75,6 +77,9 @@ export type ListLeadActivitiesInput = z.infer<typeof listLeadActivitiesSchema>;
 export const listDealActivitiesSchema = z
   .object({ organizationId, dealId: z.string().uuid() })
   .strict();
+
+/** The user's own contact records of today (今日, #556): whose they are comes from the session */
+export const myDayActivitiesSchema = z.object({ organizationId }).strict();
 
 export const getSubmissionAnswersSchema = z
   .object({ organizationId, leadId: z.string().uuid(), submissionId: z.string().uuid() })
@@ -235,6 +240,26 @@ export type ContactRecordedEvent = Extract<LeadActivityEvent, { kind: 'contact_r
 export interface DealActivityPage {
   items: ContactRecordedEvent[];
   total: number;
+}
+
+/** A contact record of a member's day, with its lead (#556) */
+export interface DayContact {
+  lead: { id: string; name: string | null; company: string | null };
+  event: ContactRecordedEvent;
+}
+
+/**
+ * The contact records a member made on a Japan day (今日, #556): how many of each kind ("no
+ * answer" included, every kind present), the minutes they took together, and the latest
+ * MY_DAY_CONTACTS_LIMIT with their leads, newest first
+ */
+export interface DayContactsSummary {
+  /** 'YYYY-MM-DD' (Japan) */
+  day: string;
+  total: number;
+  byKind: Record<ContactKind, number>;
+  durationMinutes: number;
+  items: DayContact[];
 }
 
 export interface SubmissionAnswerView {

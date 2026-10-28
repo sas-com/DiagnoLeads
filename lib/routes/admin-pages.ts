@@ -5,6 +5,7 @@
  */
 export const ADMIN_PAGE_PREFIXES = [
   '/dashboard',
+  '/today',
   '/leads',
   '/deals',
   '/forecast',

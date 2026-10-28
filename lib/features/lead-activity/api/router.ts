@@ -6,19 +6,26 @@
  * (#365), the comments only to those who may read them (#555: not the parent organization),
  * and which deal a contact was about only to those who may read deals (#554, #435). The
  * contact records of a deal (the deal page) need both. Every query is scoped by organizationId
- * and leadId or dealId (see ../service.ts).
+ * and leadId or dealId, or by the user signed in (今日, #556) (see ../service.ts).
  */
 
 import type { AppAbility } from '@/lib/auth/permissions';
 import { canReadComments } from '@/lib/features/comments/service';
 import { canReadDeals } from '@/lib/features/deals/service';
+import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
-import { getSubmissionAnswers, listDealActivities, listLeadActivities } from '../service';
+import {
+  getSubmissionAnswers,
+  listDealActivities,
+  listLeadActivities,
+  listMyContactsOfDay,
+} from '../service';
 import {
   getSubmissionAnswersSchema,
   listDealActivitiesSchema,
   listLeadActivitiesSchema,
+  myDayActivitiesSchema,
 } from '../types/schemas';
 
 function assertCanRead(ability: AppAbility) {
@@ -60,6 +67,21 @@ export const leadActivityRouter = router({
       dealId: input.dealId,
     });
     return { ...page, canEdit: ctx.ability.can('update', 'Lead') };
+  }),
+
+  /**
+   * 今日 (#556): the contact records the user made today (Japan day), counted by kind with the
+   * minutes they took. The user is the one signed in: the input names only the organization.
+   * Which deal each was about stays hidden from those who may not read deals
+   */
+  myDay: organizationProcedure.input(myDayActivitiesSchema).query(async ({ ctx }) => {
+    assertCanRead(ctx.ability);
+    return listMyContactsOfDay(ctx.db, {
+      organizationId: ctx.organization.id,
+      userId: ctx.user.id,
+      day: jstDate(),
+      hideDeals: !canReadDeals(ctx),
+    });
   }),
 
   /** One diagnosis submission of the lead, with its answers and result */
