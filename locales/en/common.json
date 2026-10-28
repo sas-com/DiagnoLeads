@@ -4946,6 +4946,7 @@
         "online_meeting": "Met online"
       },
       "recordFor": "Record a contact with {lead}",
+      "recordMenu": "Record a contact",
       "note": "Note (optional)",
       "save": "Record",
       "recorded": "Recorded \"{kind}\"",

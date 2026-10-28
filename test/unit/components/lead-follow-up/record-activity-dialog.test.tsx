@@ -154,10 +154,13 @@ describe('RecordActivityDialog', () => {
       },
     ]);
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
-    // The toast says when, as the time was given
+    // The toast says when, as the time was given, and for whom (#863)
     expect(mocks.toast.success).toHaveBeenCalledWith(
       expect.stringMatching(/^「オンラインで商談した」（.+）を記録しました$/),
-      expect.objectContaining({ action: expect.objectContaining({ label: '取り消す' }) })
+      expect.objectContaining({
+        description: '架空商事',
+        action: expect.objectContaining({ label: '取り消す' }),
+      })
     );
   });
 

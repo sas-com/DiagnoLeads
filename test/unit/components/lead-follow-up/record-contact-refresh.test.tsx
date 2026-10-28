@@ -1,7 +1,7 @@
 /**
  * Recording a contact, and undoing it, refreshes the 今日 screen's activity of the day (#556)
- * with the lead's contacts, its activity and the dashboard (real next-intl messages; tRPC and
- * the toast mocked)
+ * with the lead's contacts, its activity and the dashboard, and its toasts name the lead when it
+ * is given (#863) (real next-intl messages; tRPC and the toast mocked)
  */
 import { useRecordContact } from '@/components/features/lead-follow-up/use-record-contact';
 import messages from '@/locales/ja/common.json';
@@ -13,12 +13,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const ORG_ID = '660e8400-e29b-41d4-a716-446655440000';
 const LEAD_ID = '770e8400-e29b-41d4-a716-446655440001';
 
-type MutationOptions = { onSuccess?: (result: unknown, input: unknown) => void };
-type ToastOptions = { action?: { onClick: () => void } };
+type MutationOptions = {
+  onSuccess?: (result: unknown, input: unknown) => void;
+  onError?: () => void;
+};
+type ToastOptions = { description?: string; action?: { onClick: () => void } };
 
 const mocks = vi.hoisted(() => ({
   invalidated: [] as { path: string; input: unknown }[],
   toast: { success: vi.fn(), error: vi.fn() },
+  /** The next call fails */
+  fail: false,
 }));
 
 vi.mock('@/lib/trpc/client', () => {
@@ -40,8 +45,13 @@ vi.mock('@/lib/trpc/client', () => {
   const mutation = () => ({
     useMutation: (options: MutationOptions = {}) => ({
       isPending: false,
-      mutate: (input: unknown) => options.onSuccess?.(saved, input),
+      mutate: (input: unknown) =>
+        mocks.fail ? options.onError?.() : options.onSuccess?.(saved, input),
       mutateAsync: async (input: unknown) => {
+        if (mocks.fail) {
+          options.onError?.();
+          throw new Error('failed');
+        }
         options.onSuccess?.(saved, input);
         return saved;
       },
@@ -72,6 +82,7 @@ const wrapper = ({ children }: { children: ReactNode }) => (
 
 beforeEach(() => {
   mocks.invalidated = [];
+  mocks.fail = false;
   vi.clearAllMocks();
 });
 
@@ -106,5 +117,46 @@ describe('useRecordContact', () => {
     act(() => options.action?.onClick());
 
     expect(myDayRefreshes()).toHaveLength(2);
+  });
+});
+
+describe('the toasts of a record', () => {
+  const t = messages.leadFollowUp.contact;
+  const recorder = (leadLabel?: string) =>
+    renderHook(() => useRecordContact({ organizationId: ORG_ID, leadId: LEAD_ID, leadLabel }), {
+      wrapper,
+    });
+
+  it('name the lead under the record and under its undo, when it is given (#863)', async () => {
+    const { result } = recorder('架空商事');
+    await act(() => result.current.record({ kind: 'call' }));
+    const [message, options] = mocks.toast.success.mock.calls[0] as [string, ToastOptions];
+
+    expect(message).toBe('「電話した」を記録しました');
+    expect(options.description).toBe('架空商事');
+    act(() => options.action?.onClick());
+    expect(mocks.toast.success).toHaveBeenLastCalledWith(t.undone, { description: '架空商事' });
+  });
+
+  it('name the lead under a failure, and under a failed undo', async () => {
+    const { result } = recorder('架空商事');
+    await act(() => result.current.record({ kind: 'call' }));
+    const [, options] = mocks.toast.success.mock.calls[0] as [string, ToastOptions];
+
+    mocks.fail = true;
+    act(() => options.action?.onClick());
+    expect(mocks.toast.error).toHaveBeenLastCalledWith(t.error, { description: '架空商事' });
+    mocks.toast.error.mockClear();
+    await act(() => result.current.record({ kind: 'email' }).catch(() => undefined));
+    expect(mocks.toast.error).toHaveBeenCalledWith(t.error, { description: '架空商事' });
+  });
+
+  it('say no more than before without one', async () => {
+    const { result } = recorder();
+    await act(() => result.current.record({ kind: 'call' }));
+    const [message, options] = mocks.toast.success.mock.calls[0] as [string, ToastOptions];
+
+    expect(message).toBe('「電話した」を記録しました');
+    expect(options.description).toBeUndefined();
   });
 });
