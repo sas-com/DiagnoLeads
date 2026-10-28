@@ -116,8 +116,9 @@ describe('ProspectsList', () => {
     const marked = (company: string) =>
       within(within(table).getByText(company).closest('tr') as HTMLElement).queryByText('期限切れ') !==
       null;
-    // Still followed, and its next action has passed
+    // Still followed, and its next action has passed: marked in its phone card and in the table
     expect(marked('架空一商事')).toBe(true);
+    expect(screen.getAllByText('期限切れ')).toHaveLength(2);
     // A lead, passed, dropped, contracted, a turned-down call, a next action still to come
     for (const company of ['架空二商事', '架空三商事', '架空四商事', '架空五商事', '架空六商事', '架空七商事']) {
       expect(marked(company), company).toBe(false);

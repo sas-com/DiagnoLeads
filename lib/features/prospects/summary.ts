@@ -37,8 +37,11 @@ export interface SummaryProspect {
   meetingOn: string | null;
   /** The lead the row became. Required, so that a query that does not read it fails to compile */
   leadId: string | null;
-  /** A sales agency's call (#161) */
-  callResult?: string | null;
+  /**
+   * A sales agency's call (#161). Required like leadId: isOverdue reads it, and a row without it
+   * would mark a turned-down call overdue
+   */
+  callResult: string | null;
   refusalReason?: string | null;
 }
 
