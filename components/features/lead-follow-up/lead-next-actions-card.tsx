@@ -45,6 +45,8 @@ const CHECK_WITH_OTHER = '__other__';
 interface LeadNextActionsCardProps {
   organizationId: string;
   leadId: string;
+  /** A line under the title, e.g. whose next actions they are on a deal's page (#720) */
+  description?: string;
 }
 
 /**
@@ -52,7 +54,11 @@ interface LeadNextActionsCardProps {
  * done, move its due date. A takeaway is marked and can say whom to check with. A hearing that
  * records the next meeting date adds a next action by itself.
  */
-export function LeadNextActionsCard({ organizationId, leadId }: LeadNextActionsCardProps) {
+export function LeadNextActionsCard({
+  organizationId,
+  leadId,
+  description,
+}: LeadNextActionsCardProps) {
   const t = useTranslations('leadFollowUp.tasks');
   const [showDone, setShowDone] = useState(false);
   const query = trpc.leadFollowUp.tasks.useQuery(
@@ -65,10 +71,13 @@ export function LeadNextActionsCard({ organizationId, leadId }: LeadNextActionsC
 
   return (
     <Card className="p-5">
-      <div className="mb-3 flex items-center gap-2">
-        <ListTodo className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-        <h2 className="text-sm font-semibold text-foreground">{t('cardTitle')}</h2>
-        {open.length > 0 && <Badge color="gray">{open.length}</Badge>}
+      <div className="mb-3 space-y-1">
+        <div className="flex items-center gap-2">
+          <ListTodo className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          <h2 className="text-sm font-semibold text-foreground">{t('cardTitle')}</h2>
+          {open.length > 0 && <Badge color="gray">{open.length}</Badge>}
+        </div>
+        {description && <p className="text-sm text-muted-foreground">{description}</p>}
       </div>
 
       {query.isError ? (
