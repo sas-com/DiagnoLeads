@@ -359,7 +359,7 @@ test.describe('Authentication', () => {
 
         // The link in the email, as better-auth builds it (the url given to sendResetPassword in
         // lib/auth/config.ts): its token and the page the form asked to come back to.
-        // The test rebuilds the link from better-auth's own shape (1.6.33: the verification
+        // The test rebuilds the link from better-auth's own shape (1.7.14: the verification
         // identifier `reset-password:<token>`, the route `/reset-password/:token?callbackURL=`)
         // rather than reading the email, which CI does not send: a wrong url in the email would
         // not fail it (the database test of #592 checks that the email carries the token).
