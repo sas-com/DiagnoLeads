@@ -10,6 +10,7 @@ const row = (values: Partial<SummaryProspect>): SummaryProspect => ({
   nextActionNote: null,
   stage: null,
   meetingOn: null,
+  leadId: null,
   ...values,
 });
 
@@ -33,10 +34,61 @@ describe('summarizeProspects', () => {
       handOver: 1,
       keepChecking: 1,
       meetings: 1,
+      converted: 0,
       contracts: 1,
       nurturing: 1,
       passed: 2,
     });
+  });
+
+  it('leaves the rows that became a lead out of what is counted by stage, and counts them apart (#852)', () => {
+    const summary = summarizeProspects(
+      [
+        // Became leads: their stages stay as they were, followed as the lead and its deals
+        row({ entry: 'bp_company', stage: 'contract', meetingOn: '2026-10-10', leadId: 'lead-1' }),
+        row({ entry: 'bp_company', stage: 'nurturing', leadId: 'lead-2' }),
+        row({
+          entry: 'bp_company',
+          stage: 'quick_diagnosis',
+          reaction: 'has_issue',
+          nextStep: 'hand_over',
+          leadId: 'lead-3',
+        }),
+        // Still followed here
+        row({ entry: 'bp_company', stage: 'contract' }),
+        row({ entry: 'other', stage: 'interest' }),
+        row({ entry: 'other', stage: 'nurturing' }),
+      ],
+      [],
+      '2026-10-21'
+    );
+    // What was done counts every row; the stages only the rows still followed here
+    expect(summary.overall).toEqual({
+      total: 6,
+      hasIssue: 1,
+      handOver: 1,
+      keepChecking: 0,
+      meetings: 1,
+      converted: 3,
+      contracts: 1,
+      nurturing: 1,
+      passed: 0,
+    });
+    expect(summary.withStage).toBe(3);
+    const byStage = Object.fromEntries(summary.stages.map((s) => [s.stage, s]));
+    expect(byStage.interest).toMatchObject({ current: 1, reached: 2 });
+    expect(byStage.quick_diagnosis).toMatchObject({ current: 0, reached: 1, progressRate: 0.5 });
+    expect(byStage.contract).toMatchObject({ current: 1, share: 1 / 3, reached: 1, progressRate: 1 });
+    expect(byStage.nurturing).toMatchObject({ current: 1, share: 1 / 3 });
+
+    const bp = summary.entries.find((e) => e.entry === 'bp_company');
+    expect(bp).toMatchObject({ total: 4, hasIssue: 1, handOver: 1, meetings: 1, converted: 3, contracts: 1 });
+    expect(bp?.byStage).toMatchObject({ contract: 1, nurturing: 0, quick_diagnosis: 0 });
+    expect(summary.entries.find((e) => e.entry === 'other')).toMatchObject({ total: 2, converted: 0 });
+    // The meeting of a row that became a lead still counts towards the target
+    expect(summary.months).toEqual([
+      { month: '2026-10-01', recorded: 6, meetings: 1, meetingsToDate: 1, target: null, gap: null },
+    ]);
   });
 
   it('gives the share, the cumulative reach and the progress from the previous stage', () => {
@@ -116,5 +168,59 @@ describe('summarizeProspects', () => {
 
   it('has no months without rows or targets', () => {
     expect(summarizeProspects([], [], '2026-10-21').months).toEqual([]);
+  });
+});
+
+describe('summarizeProspects: the checks count the rows the list shows (#852)', () => {
+  const today = '2026-10-21';
+  const past = '2026-10-01';
+  // One followed row for each check
+  const followed = [
+    row({ stage: 'interest' }),
+    row({ nextActionOn: past }),
+    row({ nextStep: 'hand_over' }),
+  ];
+  const checksOf = (rows: SummaryProspect[]) => summarizeProspects(rows, [], today).checks;
+
+  it('counts the rows still followed', () => {
+    expect(checksOf(followed)).toEqual({
+      stageWithoutNextAction: 1,
+      overdue: 1,
+      handOverWithoutStage: 1,
+    });
+  });
+
+  const closed: [string, Partial<SummaryProspect>][] = [
+    ['already a lead', { leadId: 'lead-1' }],
+    ['passed', { nextStep: 'pass' }],
+    ['dropped', { stage: 'dropped' }],
+    ['contracted', { stage: 'contract' }],
+  ];
+  it.each(closed)('leaves out a row no longer followed: %s', (_, values) => {
+    const rows = [
+      ...followed,
+      // Each would be counted in a check if it were still followed
+      row({ stage: 'interest', ...values }),
+      row({ nextActionOn: past, ...values }),
+      row({ nextStep: 'hand_over', ...values }),
+    ];
+    expect(checksOf(rows)).toEqual({
+      stageWithoutNextAction: 1,
+      overdue: 1,
+      handOverWithoutStage: 1,
+    });
+  });
+
+  it('leaves a call turned down out of overdue only: it is in the re-approach list (#161)', () => {
+    const rows = [
+      ...followed,
+      row({ nextActionOn: past, callResult: 'refused' }),
+      row({ stage: 'interest', callResult: 'refused' }),
+    ];
+    expect(checksOf(rows)).toEqual({
+      stageWithoutNextAction: 2,
+      overdue: 1,
+      handOverWithoutStage: 1,
+    });
   });
 });

@@ -141,7 +141,7 @@ SQL は段ではなく、見極めの出口の判定（関門）。SQL判定が�
 
 ### 2.6 顧客探しの段階（`prospects.stage`、#265）
 
-定義は `lib/features/prospects/types/schemas.ts` の `PROSPECT_STAGES`。顧客探しは、SAS のメンバーが話した相手をリードにする前に書く一覧で、値は表計算の選択肢に合わせてある。リードに引き継いだ（`prospects.lead_id` が入った）後はリードと商談の側が正で、顧客探しの段階は変えられない（画面と API で止めている）。#852 のマージ後は、リード化した行を集計の段階から外し、「リード化済み N 件」として分ける（決定 `2026-10-28-consolidate-input-places`）。
+定義は `lib/features/prospects/types/schemas.ts` の `PROSPECT_STAGES`。顧客探しは、SAS のメンバーが話した相手をリードにする前に書く一覧で、値は表計算の選択肢に合わせてある。リードに引き継いだ（`prospects.lead_id` が入った）後はリードと商談の側が正で、顧客探しの段階は変えられない（画面と API で止めている）。顧客探しの集計は、リード化した行を段階の集計から外し、「リード化済み N 件」として分けて数える（3 を参照。決定 `2026-10-28-consolidate-input-places`、#852）。
 
 | 値・項目 | 表示 | 当たる段（目安） |
 |---|---|---|
@@ -168,7 +168,7 @@ SQL は段ではなく、見極めの出口の判定（関門）。SQL判定が�
 | 代行の契約別ファネル | `lib/features/agency-contracts/report.ts` | アポ（リード）→ 商談の実施（`has_negotiated` か商談フェーズの日付）→ SQL（`sql_decision`）→ 現行調査受注 → 移行受注（`deal_phase_reached_at`） |
 | 段階的な納品の集計 | `lib/features/delivery-reviews/report.ts` | `deal_phase_reached_at`（現行調査受注 → 移行受注 → AX化） |
 | 売上予測（#437） | `lib/features/deals/`（#437 のマージ後） | `deals.stage` と確度・金額 |
-| 顧客探しの集計 | `lib/features/prospects/summary.ts` | `prospects.stage`、商談日（`meeting_on`）、次の行動（`next_step`。見送りの数はこちらで数える）。#852 のマージ後は、リード化した行を段階から外して「リード化済み N 件」に分ける |
+| 顧客探しの集計 | `lib/features/prospects/summary.ts` | `prospects.stage`、商談日（`meeting_on`）、次の行動（`next_step`。見送りの数はこちらで数える）。リード化した行（`lead_id` あり）は、段階の集計から外して「リード化済み N 件」として別に数え、記入件数・反応・商談・次の行動の数には含める（#852）。営業が確認する件数は、一覧の絞り込みと同じ条件で、リード化済み・見送り・契約の行を数えない。「次回アクション日を過ぎた」は断られた架電も除き、一覧の同じ名前の絞り込みと同じ件数になる |
 
 ## 4. 未決の点
 
