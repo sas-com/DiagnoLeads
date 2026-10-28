@@ -21,6 +21,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { isOverdue } from '@/lib/features/prospects/summary';
 import { PROSPECT_FILTERS } from '@/lib/features/prospects/types/schemas';
 import { trpc } from '@/lib/trpc/client';
 import { ExternalLink, FileUp, Loader2, Pencil, Plus, Trash2, UserPlus } from 'lucide-react';
@@ -105,9 +106,9 @@ export function ProspectsList({ organizationId }: { organizationId: string }) {
     ) : null;
 
   const nextAction = (row: ProspectRow) => {
-    // A turned-down call is followed in the re-approach list, not as overdue (#161)
-    const overdue =
-      row.nextActionOn !== null && row.nextActionOn < today && row.callResult !== 'refused';
+    // The rows the "overdue" filter and the summary count (#892): not a lead, passed, dropped or
+    // contracted, nor a turned-down call, which the re-approach list follows instead (#161)
+    const overdue = isOverdue(row, today);
     return (
       <>
         <span className={overdue ? 'font-semibold text-red-600 dark:text-red-400' : ''}>
