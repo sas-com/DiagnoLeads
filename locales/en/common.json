@@ -5955,5 +5955,20 @@
   },
   "fieldGlossary": {
     "help": "Field help"
+  },
+  "help": {
+    "open": "How to use this screen",
+    "tip": "Tip",
+    "caution": "Caution",
+    "rolesTitle": "For {roles}",
+    "roles": {
+      "owner": "owners",
+      "admin": "admins",
+      "member": "members",
+      "group_owner": "group owners",
+      "group_admin": "group admins",
+      "parent_viewer": "parent organization viewers"
+    },
+    "reviewedAt": "This guide matches the screen as of {date} (written in Japanese for now)"
   }
 }
