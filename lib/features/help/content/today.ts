@@ -39,11 +39,14 @@ export const todayArticle: HelpArticle = {
       type: 'steps',
       items: [
         '今日までの次の行動を済ませたら、チェックを付けて完了にします。',
-        '商談予定を見て、打ち合わせの前にリードの詳細で事前調査カードと前回のヒアリングを読み返します。',
+        '商談予定を見て、打ち合わせの前にリードの詳細で事前調査カードと前回のヒアリングを読み返します。打ち合わせで聞いたことは、リードの画面でヒアリングとして記録します（次回の日程もそこで入れます）。',
         [
-          { type: 'text', text: '電話・メール・打ち合わせをしたら、次の行動や商談予定の行の' },
-          { type: 'ui', text: '記録' },
-          { type: 'text', text: 'から、リードの画面に移らずに連絡を記録します。' },
+          { type: 'text', text: '電話やメールをしたら、次の行動や商談予定の行の' },
+          { type: 'ui', text: '連絡を記録' },
+          {
+            type: 'text',
+            text: 'から、リードの画面に移らずに記録します。記録しても次の行動は完了にならないので、済んだらチェックを付けます。',
+          },
         ],
         [
           {
@@ -69,7 +72,7 @@ export const todayArticle: HelpArticle = {
       roles: ['parent_viewer'],
       content: [
         { type: 'text', text: '親組織の閲覧者は見るだけで、行に' },
-        { type: 'ui', text: '記録' },
+        { type: 'ui', text: '連絡を記録' },
         { type: 'text', text: 'は出ません。' },
       ],
     },
@@ -85,7 +88,7 @@ export const todayArticle: HelpArticle = {
           question: '電話したのに今日の活動に出ません',
           answer: [
             { type: 'text', text: '連絡を記録したときだけ出ます。この画面の行の' },
-            { type: 'ui', text: '記録' },
+            { type: 'ui', text: '連絡を記録' },
             {
               type: 'text',
               text: 'か、リードの画面で記録してください。連絡の日時を昨日以前にした記録も、今日の活動には出ません。',

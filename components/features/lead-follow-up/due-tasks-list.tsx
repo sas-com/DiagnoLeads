@@ -12,6 +12,10 @@ import { ContactRecordMenu } from './contact-record-menu';
 import { CheckWithText, DueLabel, TaskKindBadge, useTaskTitle, useUpdateTask } from './task-parts';
 import type { DueTasks } from './use-due-tasks';
 
+/** The lead of a row: an underlined link */
+const LEAD_LINK_CLASS =
+  'text-sm text-brand-700 underline underline-offset-4 hover:text-brand-800 dark:text-brand-300';
+
 /**
  * The due next actions and takeaways (Refs #85), each with its due date and lead; ticking one
  * completes it. Shared by the dashboard's card and the 今日 screen (#556), which show their own
@@ -50,19 +54,14 @@ export function DueTasksList({
           const company = task.lead.company?.trim();
           const name = task.lead.name?.trim();
           const leadName = company || name || t('noLeadName');
-          const leadLink = (className: string) => (
-            <Link
-              href={`/${locale}/leads/${task.leadId}`}
-              className={cn(
-                'truncate text-sm text-brand-700 underline underline-offset-4 hover:text-brand-800 dark:text-brand-300',
-                className
-              )}
-            >
+          const leadHref = `/${locale}/leads/${task.leadId}`;
+          const leadText = (
+            <>
               {leadName}
               {company && name && (
                 <span className="ml-1 text-gray-600 dark:text-gray-300">{name}</span>
               )}
-            </Link>
+            </>
           );
           return (
             <li key={task.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
@@ -86,10 +85,18 @@ export function DueTasksList({
                 </span>
               )}
               {/* On its own line on phones, indented past the box's tap area like the line below;
-                  the menu to record a contact goes with it, at the end of the line */}
+                  the menu to record a contact goes with it, at the end of the line. From sm the
+                  two take at most 45% of the row, the lead's name cut first, so the title keeps
+                  its room and the menu stays at the end */}
               {canRecordContact ? (
-                <div className="flex min-w-0 basis-full items-center gap-2 pl-8 sm:basis-auto sm:pl-0">
-                  {leadLink('min-w-0')}
+                <div className="flex min-w-0 basis-full items-center gap-2 pl-8 sm:max-w-[45%] sm:basis-auto sm:pl-0">
+                  {/* 44px to tap on phones, like the menu beside it */}
+                  <Link
+                    href={leadHref}
+                    className={cn('flex min-w-0 items-center', LEAD_LINK_CLASS, TAP_TARGET)}
+                  >
+                    <span className="block truncate">{leadText}</span>
+                  </Link>
                   <ContactRecordMenu
                     organizationId={organizationId}
                     leadId={task.leadId}
@@ -98,7 +105,12 @@ export function DueTasksList({
                   />
                 </div>
               ) : (
-                leadLink('basis-full pl-8 sm:basis-auto sm:pl-0')
+                <Link
+                  href={leadHref}
+                  className={cn('basis-full truncate pl-8 sm:basis-auto sm:pl-0', LEAD_LINK_CLASS)}
+                >
+                  {leadText}
+                </Link>
               )}
               <CheckWithText task={task} className="basis-full pl-8 text-sm" />
             </li>

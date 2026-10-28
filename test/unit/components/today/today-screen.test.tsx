@@ -12,7 +12,7 @@ import { TODAY_NEXT_ACTIONS_SHOWN } from '@/components/features/today/today-next
 import { TodayScreen } from '@/components/features/today/today-screen';
 import enMessages from '@/locales/en/common.json';
 import messages from '@/locales/ja/common.json';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -44,6 +44,7 @@ const mocks = vi.hoisted(() => ({
   /** A record on its way */
   recordPending: false,
   invalidated: [] as { path: string; input: unknown }[],
+  toast: { success: vi.fn(), error: vi.fn() },
 }));
 
 vi.mock('@/lib/trpc/client', () => {
@@ -106,7 +107,7 @@ vi.mock('@/lib/trpc/client', () => {
 vi.mock('@/hooks/use-organization', () => ({
   useOrganization: () => ({ organizationId: mocks.organizationId }),
 }));
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('sonner', () => ({ toast: mocks.toast }));
 
 // The menus and the dialog (Radix) in jsdom
 beforeAll(() => {
@@ -308,6 +309,8 @@ beforeEach(() => {
   mocks.recorded = [];
   mocks.recordPending = false;
   mocks.invalidated = [];
+  mocks.toast.success.mockClear();
+  mocks.toast.error.mockClear();
 });
 
 describe('TodayScreen', () => {
@@ -717,6 +720,57 @@ describe('TodayScreen', () => {
         input: { organizationId: ORG_ID },
       });
       expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      // The toast names the lead, as records from the rows follow one another
+      expect(mocks.toast.success).toHaveBeenCalledWith(
+        '「電話した」を記録しました',
+        expect.objectContaining({ description: '佐藤 花子' })
+      );
+    });
+
+    it('opens on the tap of a touch screen, not where a scroll starts', async () => {
+      loadAll();
+      const user = userEvent.setup();
+      renderScreen();
+      const [button] = recordButtons(region(/^商談予定/));
+
+      // A finger down may start a scroll: the menu waits for the tap
+      await user.pointer({ keys: '[TouchA>]', target: button });
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      await user.pointer({ keys: '[/TouchA]', target: button });
+      expect(screen.getByRole('menu', { name: '架空商事への連絡を記録' })).toBeInTheDocument();
+    });
+
+    it('stays closed when a touch on it becomes a scroll', () => {
+      loadAll();
+      renderScreen();
+      const [button] = recordButtons(region(/^商談予定/));
+
+      for (const pointerType of ['touch', 'pen']) {
+        fireEvent.pointerDown(button, { pointerType, button: 0, isPrimary: true });
+        fireEvent.pointerCancel(button, { pointerType });
+        expect(screen.queryByRole('menu'), pointerType).not.toBeInTheDocument();
+      }
+    });
+
+    it('opens on the press of a mouse and on the keyboard as before', async () => {
+      loadAll();
+      // The release goes to the button although the open menu leaves the page without pointer
+      // events, so that the click after the press is seen
+      const user = userEvent.setup({ pointerEventsCheck: 0 });
+      renderScreen();
+      const [button] = recordButtons(region(/^商談予定/));
+
+      // Radix opens it on the press, and the click after it leaves it open
+      await user.pointer({ keys: '[MouseLeft>]', target: button });
+      expect(screen.getByRole('menu')).toBeInTheDocument();
+      await user.pointer({ keys: '[/MouseLeft]', target: button });
+      expect(screen.getByRole('menu')).toBeInTheDocument();
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+
+      button.focus();
+      await user.keyboard(' ');
+      expect(screen.getByRole('menu')).toBeInTheDocument();
     });
 
     it('records a contact from a next action’s row for its lead', async () => {
@@ -792,19 +846,20 @@ describe('TodayScreen', () => {
       }
     });
 
-    it('keeps a next action’s lead and its button past the box’s tap area on phones', () => {
+    it('keeps a next action’s lead and its button past the box’s tap area, the lead 44px to tap', () => {
       loadAll();
       renderScreen();
       const row = within(region(/^今日までの次の行動/)).getByRole('listitem');
       const [button] = recordButtons(row);
       const line = button.parentElement as HTMLElement;
 
-      // The lead and the button share the line under the title, indented like the lead alone
-      expect(line).toHaveClass('basis-full', 'pl-8', 'sm:pl-0');
-      expect(within(line).getByRole('link', { name: /架空商事/ })).toHaveAttribute(
-        'href',
-        `/ja/leads/${LEAD_1}`
-      );
+      // The lead and the button share the line under the title, indented like the lead alone;
+      // from sm they take at most 45% of the row, the lead's name cut first
+      expect(line).toHaveClass('basis-full', 'pl-8', 'sm:pl-0', 'sm:max-w-[45%]');
+      const lead = within(line).getByRole('link', { name: /架空商事/ });
+      expect(lead).toHaveAttribute('href', `/ja/leads/${LEAD_1}`);
+      expect(lead).toHaveClass('flex', 'min-w-0', 'min-h-11', 'underline');
+      expect(within(lead).getByText('架空商事', { exact: false })).toHaveClass('block', 'truncate');
       expect(within(row).getByRole('checkbox')).toHaveClass('after:-inset-[13px]');
     });
 
@@ -815,6 +870,7 @@ describe('TodayScreen', () => {
       const [button] = recordButtons(region(/^商談予定/));
 
       expect(button).toHaveClass('min-h-11', 'text-sm');
+      expect(button.querySelector('.animate-spin')).toBeNull();
       await user.click(button);
       for (const item of screen.getAllByRole('menuitem')) {
         expect(item, item.textContent ?? '').toHaveClass('min-h-11', 'text-sm');
@@ -831,7 +887,16 @@ describe('TodayScreen', () => {
 
       expect(button).toHaveAttribute('aria-disabled', 'true');
       expect(button).toBeEnabled();
+      // A spinner in place of the icon (still under reduced motion), and no hover colour
+      expect(button.querySelector('svg')).toHaveClass('animate-spin', 'motion-reduce:animate-none');
+      expect(button).toHaveClass(
+        'aria-disabled:hover:bg-white',
+        'dark:aria-disabled:hover:bg-gray-800'
+      );
       await user.click(button);
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      // Nor on a tap
+      await user.pointer([{ keys: '[TouchA]', target: button }]);
       expect(screen.queryByRole('menu')).not.toBeInTheDocument();
       expect(mocks.recorded).toEqual([]);
     });
@@ -858,14 +923,20 @@ describe('TodayScreen', () => {
       expect(mocks.calls.access.at(-1)?.input).toEqual({ organizationId: ORG_ID });
     });
 
-    it('names the button in English with the lead', () => {
-      loadAll();
-      renderScreen('en');
+    it('says its words in its name with the lead, for voice control, in Japanese and English', () => {
+      for (const [locale, name, words] of [
+        ['ja', '架空商事への連絡を記録', contactText.recordMenu],
+        ['en', 'Record a contact with 架空商事', enMessages.leadFollowUp.contact.recordMenu],
+      ] as const) {
+        loadAll();
+        const view = renderScreen(locale);
 
-      const [button] = within(region(/^Meetings this week/)).getAllByRole('button', {
-        name: 'Record a contact with 架空商事',
-      });
-      expect(button).toHaveTextContent(enMessages.leadFollowUp.contact.recordMenu);
+        const [button] = within(document.body).getAllByRole('button', { name });
+        expect(button, locale).toHaveTextContent(words);
+        // The words shown are in the name (WCAG 2.5.3 Label in Name)
+        expect(name, locale).toContain(words);
+        view.unmount();
+      }
     });
   });
 

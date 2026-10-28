@@ -36,7 +36,7 @@ export function ContactQuickActions({
   const t = useTranslations('leadFollowUp.contact');
   const tActivity = useTranslations('leadFollowUp.activity');
   const [dialogOpen, setDialogOpen] = useState(false);
-  const { record, pending } = useRecordContact({ organizationId, leadId });
+  const { record, pending } = useRecordContact({ organizationId, leadId, leadLabel });
 
   const submit = (kind: ContactKind) => {
     // The hook shows the error

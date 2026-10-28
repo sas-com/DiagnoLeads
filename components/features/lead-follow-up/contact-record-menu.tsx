@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { QUICK_CONTACT_KINDS } from '@/lib/features/lead-follow-up/types/schemas';
 import { cn } from '@/lib/utils';
-import { NotebookPen } from 'lucide-react';
+import { Loader2, NotebookPen } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useRef, useState } from 'react';
 import { CONTACT_KIND_ICONS } from './contact-kinds';
@@ -35,8 +35,8 @@ export interface ContactRecordMenuProps {
  * one-tap "called", "emailed" and "could not reach" (Refs #136) and "Record an activity" for the
  * details (Refs #554). Sized for DADS (decision 2026-10-24-admin-dads): 44px to tap on phones and
  * no text under 14px. While it records, the button stays focusable but does not open
- * (aria-disabled), so the focus the menu gives back on closing is not lost; the toast of the
- * record has its undo.
+ * (aria-disabled) and turns its icon into a spinner, so the focus the menu gives back on closing
+ * is not lost; the toasts of the record name the lead and have its undo.
  */
 export function ContactRecordMenu({
   organizationId,
@@ -49,7 +49,9 @@ export function ContactRecordMenu({
   const [menuOpen, setMenuOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const { record, pending } = useRecordContact({ organizationId, leadId });
+  /** The press began with a touch or a pen: the menu opens on its click */
+  const touchPress = useRef(false);
+  const { record, pending } = useRecordContact({ organizationId, leadId, leadLabel });
 
   return (
     <>
@@ -61,14 +63,37 @@ export function ContactRecordMenu({
             variant="outline"
             size="sm"
             className={cn(
-              'aria-disabled:cursor-wait aria-disabled:opacity-50',
+              // While it records: dimmed, and no hover colour as it does not open
+              'aria-disabled:cursor-wait aria-disabled:opacity-50 aria-disabled:hover:bg-white dark:aria-disabled:hover:bg-gray-800',
               TAP_TARGET,
               className
             )}
             aria-label={t('recordFor', { lead: leadLabel })}
             aria-disabled={pending || undefined}
+            onPointerDown={(event) => {
+              // Radix opens the menu on pointerdown, which on a touch screen is also where a
+              // scroll starts: a touch or a pen opens it on its click instead. The Slot calls
+              // this before Radix's handler, which preventDefault makes it skip; a mouse is left
+              // to Radix as it was
+              touchPress.current = event.pointerType !== 'mouse';
+              if (touchPress.current) event.preventDefault();
+            }}
+            onPointerCancel={() => {
+              // The touch became a scroll: no click comes
+              touchPress.current = false;
+            }}
+            onClick={() => {
+              // A mouse and the keyboard: Radix has opened it already
+              if (!touchPress.current) return;
+              touchPress.current = false;
+              setMenuOpen((open) => !open && !pending);
+            }}
           >
-            <NotebookPen aria-hidden="true" />
+            {pending ? (
+              <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" />
+            ) : (
+              <NotebookPen aria-hidden="true" />
+            )}
             {t('recordMenu')}
           </Button>
         </DropdownMenuTrigger>

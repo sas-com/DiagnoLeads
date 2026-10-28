@@ -4945,7 +4945,7 @@
         "online_meeting": "オンラインで商談した"
       },
       "recordFor": "{lead}への連絡を記録",
-      "recordMenu": "記録",
+      "recordMenu": "連絡を記録",
       "note": "メモ（任意）",
       "save": "記録する",
       "recorded": "「{kind}」を記録しました",

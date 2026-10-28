@@ -80,7 +80,7 @@ export function RecordActivityDialog({
   onCloseAutoFocus,
 }: RecordActivityDialogProps) {
   const t = useTranslations('leadFollowUp.activity');
-  const recorder = useRecordContact({ organizationId, leadId, toastOnError: false });
+  const recorder = useRecordContact({ organizationId, leadId, leadLabel, toastOnError: false });
   const dirty = useRef(false);
 
   return (
