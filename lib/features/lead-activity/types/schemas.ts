@@ -6,6 +6,7 @@
  */
 
 import type { LocalizedText } from '@/lib/features/diagnostics/types';
+import type { ContactKind, ContactOutcome } from '@/lib/features/lead-follow-up/types/schemas';
 import type { LeadAuditValue } from '@/lib/features/leads/audit';
 import { z } from 'zod';
 
@@ -46,6 +47,8 @@ export const LEAD_ACTIVITY_FILTERS = {
 export type LeadActivityFilter = keyof typeof LEAD_ACTIVITY_FILTERS;
 
 export const LEAD_ACTIVITY_MAX_LIMIT = 100;
+/** Contact records listed on the deal page (#554) */
+export const DEAL_ACTIVITIES_LIMIT = 50;
 
 const organizationId = z.string().uuid();
 
@@ -67,6 +70,11 @@ export const listLeadActivitiesSchema = z
   })
   .strict();
 export type ListLeadActivitiesInput = z.infer<typeof listLeadActivitiesSchema>;
+
+/** The contact records of one deal (the deal page, #554) */
+export const listDealActivitiesSchema = z
+  .object({ organizationId, dealId: z.string().uuid() })
+  .strict();
 
 export const getSubmissionAnswersSchema = z
   .object({ organizationId, leadId: z.string().uuid(), submissionId: z.string().uuid() })
@@ -196,8 +204,13 @@ export type LeadActivityEvent = EventBase &
     | {
         kind: 'contact_recorded';
         contactId: string;
-        contactKind: 'call' | 'email' | 'no_answer';
+        contactKind: ContactKind;
         note: string | null;
+        /** How long it took and how it left the sale (#554); null when not given */
+        durationMinutes: number | null;
+        outcome: ContactOutcome | null;
+        /** The deal it was about (#554); null when none, and for those who may not read deals */
+        deal: { id: string; name: string } | null;
         /** The earliest contact record of the lead (its first contact) */
         first: boolean;
       }
@@ -214,6 +227,14 @@ export type LeadActivityEvent = EventBase &
 export interface LeadActivityPage {
   items: LeadActivityEvent[];
   nextCursor: LeadActivityCursor | null;
+}
+
+export type ContactRecordedEvent = Extract<LeadActivityEvent, { kind: 'contact_recorded' }>;
+
+/** The contact records of a deal (#554): the latest DEAL_ACTIVITIES_LIMIT of total */
+export interface DealActivityPage {
+  items: ContactRecordedEvent[];
+  total: number;
 }
 
 export interface SubmissionAnswerView {

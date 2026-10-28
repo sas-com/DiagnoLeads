@@ -1,5 +1,5 @@
 {
-  "id": "6a3c9728-b4ec-45e4-9bf2-9c8f73069f5a",
+  "id": "046cc906-97ce-4608-adf4-f6f74f922988",
   "prevId": "13999891-d37a-467a-954e-79a5aebcf27b",
   "version": "7",
   "dialect": "postgresql",
@@ -41,12 +41,6 @@
         },
         "refresh_token": {
           "name": "refresh_token",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "id_token": {
-          "name": "id_token",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -3532,6 +3526,24 @@
           "notNull": true,
           "default": "now()"
         },
+        "duration_minutes": {
+          "name": "duration_minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deal_id": {
+          "name": "deal_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_by": {
           "name": "created_by",
           "type": "uuid",
@@ -3588,6 +3600,28 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "lead_contact_logs_deal_contacted_idx": {
+          "name": "lead_contact_logs_deal_contacted_idx",
+          "columns": [
+            {
+              "expression": "deal_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "contacted_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"lead_contact_logs\".\"deal_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -3609,6 +3643,15 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
+        "lead_contact_logs_deal_id_deals_id_fk": {
+          "name": "lead_contact_logs_deal_id_deals_id_fk",
+          "tableFrom": "lead_contact_logs",
+          "tableTo": "deals",
+          "columnsFrom": ["deal_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
         "lead_contact_logs_created_by_users_id_fk": {
           "name": "lead_contact_logs_created_by_users_id_fk",
           "tableFrom": "lead_contact_logs",
@@ -3625,7 +3668,19 @@
       "checkConstraints": {
         "lead_contact_logs_kind_check": {
           "name": "lead_contact_logs_kind_check",
-          "value": "\"lead_contact_logs\".\"kind\" in ('call', 'email', 'no_answer')"
+          "value": "\"lead_contact_logs\".\"kind\" in ('call', 'email', 'no_answer', 'visit', 'online_meeting')"
+        },
+        "lead_contact_logs_outcome_check": {
+          "name": "lead_contact_logs_outcome_check",
+          "value": "\"lead_contact_logs\".\"outcome\" in ('advanced', 'no_change', 'setback')"
+        },
+        "lead_contact_logs_duration_check": {
+          "name": "lead_contact_logs_duration_check",
+          "value": "\"lead_contact_logs\".\"duration_minutes\" between 1 and 1440"
+        },
+        "lead_contact_logs_no_answer_check": {
+          "name": "lead_contact_logs_no_answer_check",
+          "value": "\"lead_contact_logs\".\"kind\" <> 'no_answer' or (\"lead_contact_logs\".\"duration_minutes\" is null and \"lead_contact_logs\".\"outcome\" is null)"
         }
       },
       "isRLSEnabled": false

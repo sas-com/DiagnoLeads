@@ -1,5 +1,11 @@
 'use client';
 
+import {
+  SEND_SHORTCUTS,
+  TOGGLE_ITEM,
+  isCloseShortcut,
+  isSendShortcut,
+} from '@/components/common/form-controls';
 import { TAP_TARGET } from '@/components/common/tap-target';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -8,7 +14,6 @@ import { cn } from '@/lib/utils';
 import { Loader2, MessageSquare, Send, StickyNote } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useId, useState } from 'react';
-import { SEND_SHORTCUTS, TOGGLE_ITEM, isCloseShortcut, isSendShortcut } from './controls';
 
 /** What the screen writes: activity entries come from addActivity only */
 export type WritableCommentType = 'comment' | 'note';

@@ -1,6 +1,7 @@
 /**
  * Follow-up parts (#136, #85): the contact bar with its one-tap buttons, the next actions card
- * of the lead page and the dashboard's "today" card (real next-intl messages; tRPC mocked)
+ * of the lead page and the dashboard's "today" card (real next-intl messages; tRPC mocked). The
+ * dialog that records an activity with its details (#554) is in record-activity-dialog.test.tsx
  */
 import { DueTasksSection } from '@/components/features/lead-follow-up/due-tasks-section';
 import { LeadContactBar } from '@/components/features/lead-follow-up/lead-contact-bar';
@@ -15,7 +16,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 const ORG_ID = '660e8400-e29b-41d4-a716-446655440000';
 const LEAD_ID = '770e8400-e29b-41d4-a716-446655440001';
 
-type MutationOptions = { onSuccess?: (result: unknown) => void };
+type MutationOptions = { onSuccess?: (result: unknown, input: unknown) => void };
 
 const mocks = vi.hoisted(() => ({
   contacts: undefined as unknown,
@@ -36,7 +37,12 @@ vi.mock('@/lib/trpc/client', () => {
       isPending: false,
       mutate: (input: unknown) => {
         mocks.calls[name] = [...(mocks.calls[name] ?? []), input];
-        options.onSuccess?.(mocks.results[name]);
+        options.onSuccess?.(mocks.results[name], input);
+      },
+      mutateAsync: async (input: unknown) => {
+        mocks.calls[name] = [...(mocks.calls[name] ?? []), input];
+        options.onSuccess?.(mocks.results[name], input);
+        return mocks.results[name];
       },
     }),
   });
@@ -45,7 +51,7 @@ vi.mock('@/lib/trpc/client', () => {
     trpc: {
       useUtils: () => ({
         leadFollowUp: { contacts: invalidate, tasks: invalidate, dueTasks: invalidate },
-        leadActivity: { list: invalidate },
+        leadActivity: { list: invalidate, forDeal: invalidate },
         analytics: { getDashboard: invalidate },
       }),
       leadFollowUp: {
@@ -65,6 +71,9 @@ vi.mock('@/lib/trpc/client', () => {
       },
       leads: {
         assignees: { useQuery: () => ({ data: mocks.members }) },
+      },
+      deals: {
+        forLead: { useQuery: () => ({ data: { items: [] } }) },
       },
     },
   };
@@ -136,7 +145,7 @@ describe('LeadContactBar', () => {
     await user.click(within(group).getByRole('button', { name: '電話した' }));
 
     expect(mocks.calls.recordContact).toEqual([
-      { organizationId: ORG_ID, leadId: LEAD_ID, kind: 'call', note: null },
+      { organizationId: ORG_ID, leadId: LEAD_ID, kind: 'call' },
     ]);
     // The toast offers to undo a wrong tap
     const [message, options] = mocks.toast.success.mock.calls[0] as [
@@ -149,19 +158,31 @@ describe('LeadContactBar', () => {
     expect(mocks.calls.deleteContact).toEqual([{ organizationId: ORG_ID, id: 'c1' }]);
   });
 
-  it('records with a note from the note button', async () => {
+  it('records with a note from "record an activity", now when the time is left as it is', async () => {
     mocks.contacts = { firstContactAt: null, total: 0, recent: [], canEdit: true };
     mocks.results.recordContact = { id: 'c2', kind: 'no_answer' };
     const user = userEvent.setup();
     renderBar();
 
-    await user.click(screen.getByRole('button', { name: 'メモを付けて記録' }));
-    await user.click(screen.getByRole('radio', { name: 'つながらなかった' }));
+    // A visit or an online meeting is not a one-tap button: it is recorded with its details
+    const group = screen.getByRole('group', { name: '架空商事への連絡を記録' });
+    expect(within(group).queryByRole('button', { name: '訪問した' })).not.toBeInTheDocument();
+    await user.click(within(group).getByRole('button', { name: '活動を記録' }));
+    await user.click(screen.getByRole('radio', { name: '不通' }));
     await user.type(screen.getByLabelText('メモ（任意）'), '午後にかけ直す');
     await user.click(screen.getByRole('button', { name: '記録する' }));
 
     expect(mocks.calls.recordContact).toEqual([
-      { organizationId: ORG_ID, leadId: LEAD_ID, kind: 'no_answer', note: '午後にかけ直す' },
+      {
+        organizationId: ORG_ID,
+        leadId: LEAD_ID,
+        kind: 'no_answer',
+        contactedAt: undefined,
+        durationMinutes: null,
+        outcome: null,
+        dealId: null,
+        note: '午後にかけ直す',
+      },
     ]);
   });
 
@@ -174,9 +195,11 @@ describe('LeadContactBar', () => {
         {
           id: 'c2',
           leadId: LEAD_ID,
-          kind: 'email',
+          kind: 'visit',
           note: '資料を送付',
           contactedAt: new Date('2026-10-15T05:00:00Z'),
+          durationMinutes: 90,
+          outcome: 'advanced',
           createdBy: { id: 'u1', name: '担当 一郎' },
         },
       ],
@@ -186,7 +209,11 @@ describe('LeadContactBar', () => {
 
     expect(screen.getByTestId('first-contact')).toHaveTextContent('初回連絡 2026/10/14 10:30');
     expect(screen.getByTestId('first-contact')).toHaveTextContent('不通 1回');
-    expect(screen.getByText(/最新：メールした（2026\/10\/15 14:00）・全2件 · 担当 一郎 · 資料を送付/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /最新：訪問した（2026\/10\/15 14:00・1時間30分・前進） · 担当 一郎 · 資料を送付 · 全2件/
+      )
+    ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '電話した' })).not.toBeInTheDocument();
   });
 });
