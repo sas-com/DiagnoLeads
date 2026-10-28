@@ -151,6 +151,13 @@ const deal: DealCard = {
   updatedAt: new Date('2026-10-20T00:00:00Z'),
   leadName: null,
   company: '架空商事',
+  nextTask: {
+    id: 'task-1',
+    title: '稟議の確認',
+    dueOn: '2026-10-30',
+    kind: 'next_action',
+    source: 'manual',
+  },
   hasOpenTask: true,
   leadSqlDecision: null,
 };

@@ -16,6 +16,12 @@
 
 import type { db as defaultDb } from '@/lib/db/client';
 import { type Lead, auditLogs, dealHistory, deals, leadTasks, leads, users } from '@/lib/db/schema';
+import {
+  TASK_KINDS,
+  TASK_SOURCES,
+  type TaskKind,
+  type TaskSource,
+} from '@/lib/features/lead-follow-up/types/schemas';
 import { isFirstHandoff, notifyLeadHandoff } from '@/lib/features/lead-handoff/service';
 import {
   diffLeadAudit,
@@ -108,11 +114,11 @@ const AUDITED_FIELDS = [
 ] as const satisfies readonly (keyof DealRow)[];
 
 /**
- * Free text that may name people (the next step, the details of a loss): the audit log records
- * only that it changed (metadata.changedText), never the text, as the lead audit keeps no
- * contact details (#101). The text stays on the deal itself.
+ * Free text that may name people (the details of a loss): the audit log records only that it
+ * changed (metadata.changedText), never the text, as the lead audit keeps no contact details
+ * (#101). The text stays on the deal itself. The next step is no longer written (#853).
  */
-const TEXT_FIELDS = ['nextStep', 'lostNote'] as const satisfies readonly (keyof DealRow)[];
+const TEXT_FIELDS = ['lostNote'] as const satisfies readonly (keyof DealRow)[];
 
 export interface DealView {
   id: string;
@@ -131,6 +137,7 @@ export interface DealView {
   lostNote: string | null;
   competitor: string | null;
   targetSystem: TargetSystem | null;
+  /** Written before #853, which stopped taking it; the deal page shows it as a note */
   nextStep: string | null;
   ownerUserId: string | null;
   ownerName: string | null;
@@ -140,10 +147,30 @@ export interface DealView {
   updatedAt: Date;
 }
 
+/** The lead's open task that a deal's card and list row show as its next action (#853) */
+export interface DealNextTask {
+  id: string;
+  /** Null for a task from a hearing that kept the default title (the screens name it) */
+  title: string | null;
+  /** Due date (Japan calendar day, YYYY-MM-DD) */
+  dueOn: string;
+  kind: TaskKind;
+  source: TaskSource;
+}
+
 export interface DealCard extends DealView {
   leadName: string | null;
   company: string | null;
-  /** Whether the lead has an open next action (a deal without one needs attention) */
+  /**
+   * The lead's open task due first, next actions and takeaways alike (decision
+   * 2026-10-24-nurturing-follow-up), in the order of the lead's list on the deal page; null when
+   * it has none
+   */
+  nextTask: DealNextTask | null;
+  /**
+   * Whether the lead has an open next action (a deal without one needs attention): nextTask is
+   * not null, so a card never shows a next action and the mark for having none together (#853)
+   */
   hasOpenTask: boolean;
   /** The lead's SQL decision: moving out of 見極め asks for one first (#801) */
   leadSqlDecision: SqlDecision | null;
@@ -262,6 +289,43 @@ const dealColumns = { ...getTableColumns(deals), ownerName: nameOf(users) };
 const toSqlDecision = (value: string | null): SqlDecision | null =>
   sqlDecisionEnum.safeParse(value).success ? (value as SqlDecision) : null;
 
+/**
+ * The lead's open task due first, as one json value: due date, then creation, as the lead's list
+ * orders them (listTasks and sortTasks in lead-follow-up), and the id last so that ties always
+ * give the same task. Scoped by the deal's organization; read with the lead_tasks index on
+ * (organization_id, lead_id).
+ */
+const nextTaskOfDeal = sql<unknown>`(
+  select json_build_object(
+    'id', ${leadTasks.id},
+    'title', ${leadTasks.title},
+    'dueOn', ${leadTasks.dueOn},
+    'kind', ${leadTasks.kind},
+    'source', ${leadTasks.source}
+  )
+  from ${leadTasks}
+  where ${leadTasks.organizationId} = ${deals.organizationId}
+    and ${leadTasks.leadId} = ${deals.leadId}
+    and ${leadTasks.completedAt} is null
+  order by ${leadTasks.dueOn} asc, ${leadTasks.createdAt} asc, ${leadTasks.id} asc
+  limit 1
+)`;
+
+/** The task read by nextTaskOfDeal (parsed by the driver), with its kind and source checked */
+function toNextTask(value: unknown): DealNextTask | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const task = value as Record<string, unknown>;
+  if (typeof task.id !== 'string' || typeof task.dueOn !== 'string') return null;
+  const text = (field: unknown) => (typeof field === 'string' ? field : null);
+  return {
+    id: task.id,
+    title: text(task.title),
+    dueOn: task.dueOn,
+    kind: oneOf(TASK_KINDS, text(task.kind), 'next_action'),
+    source: oneOf(TASK_SOURCES, text(task.source), 'manual'),
+  };
+}
+
 const notFound = (what: 'lead' | 'deal') =>
   new TRPCError({
     code: 'NOT_FOUND',
@@ -308,7 +372,7 @@ export async function getBoard(
         leadName: leads.name,
         company: leads.company,
         leadSqlDecision: leads.sqlDecision,
-        hasOpenTask: sql<boolean>`exists (select 1 from ${leadTasks} where ${leadTasks.organizationId} = ${deals.organizationId} and ${leadTasks.leadId} = ${deals.leadId} and ${leadTasks.completedAt} is null)`,
+        nextTask: nextTaskOfDeal,
       })
       .from(deals)
       .innerJoin(leads, sameLead)
@@ -328,13 +392,18 @@ export async function getBoard(
       .groupBy(deals.stage),
   ]);
 
-  const cards: DealCard[] = rows.slice(0, BOARD_DEALS_LIMIT).map((row) => ({
-    ...toDealView(row),
-    leadName: row.leadName ?? null,
-    company: row.company ?? null,
-    hasOpenTask: row.hasOpenTask,
-    leadSqlDecision: toSqlDecision(row.leadSqlDecision),
-  }));
+  const cards: DealCard[] = rows.slice(0, BOARD_DEALS_LIMIT).map((row) => {
+    const nextTask = toNextTask(row.nextTask);
+    return {
+      ...toDealView(row),
+      leadName: row.leadName ?? null,
+      company: row.company ?? null,
+      nextTask,
+      // From the same value as the next action shown, so the two always agree (#853)
+      hasOpenTask: nextTask !== null,
+      leadSqlDecision: toSqlDecision(row.leadSqlDecision),
+    };
+  });
   return {
     columns: DEAL_STAGES.map((stage) => {
       const total = totals.find((t) => t.stage === stage);
@@ -631,7 +700,7 @@ export async function createDeal(
         lostNote: lost ? (input.lostNote ?? null) : null,
         competitor: input.competitor ?? null,
         targetSystem,
-        nextStep: input.nextStep ?? null,
+        // No next step: no longer an input (#853), the column stays null
         ownerUserId,
         previousDealId: input.previousDealId ?? null,
         stageChangedAt: now,
@@ -745,7 +814,7 @@ export async function updateDeal(
         lostNote: lost ? (pick('lostNote') ?? null) : null,
         competitor: pick('competitor') ?? null,
         targetSystem: pick('targetSystem') ?? null,
-        nextStep: pick('nextStep') ?? null,
+        // The next step is kept as it is: no longer an input (#853)
         ownerUserId,
         previousDealId,
         stageChangedAt: stageChanged ? now : existing.stageChangedAt,

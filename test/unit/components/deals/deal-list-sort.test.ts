@@ -39,7 +39,8 @@ const card = (id: string, overrides: Partial<DealCard>): DealCard => ({
   updatedAt: new Date('2026-10-20T00:00:00Z'),
   leadName: null,
   company: '架空商事',
-  hasOpenTask: true,
+  nextTask: null,
+  hasOpenTask: false,
   leadSqlDecision: null,
   ...overrides,
 });

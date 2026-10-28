@@ -3,11 +3,19 @@ import { sqlDecisionEnum, targetSystemEnum } from '@/lib/features/leads/types/pi
 import { z } from 'zod';
 import { dealKindEnum, dealLostReasonEnum, dealStageEnum, forecastOverrideEnum } from './pipeline';
 
-/** Input of the deals API (Refs #435) */
+/**
+ * Input of the deals API (Refs #435)
+ *
+ * The next step (deals.next_step) is no longer an input (#853): what to do next is the lead's
+ * tasks (decision 2026-10-28-consolidate-input-places). One sent anyway is not refused, since a
+ * screen opened before the change sends `nextStep: null` with each new deal, and it is never
+ * written: these schemas leave it out and the service writes the fields it names (the
+ * organization's input schema lets unknown fields reach it). The column, whose old texts the deal
+ * page shows as a note, is dropped in a later PR.
+ */
 
 export const DEAL_LIMITS = {
   name: 200,
-  nextStep: 300,
   lostNote: 2000,
   competitor: 200,
   /** One trillion yen: far above any deal, low enough to stay exact in JavaScript */
@@ -56,7 +64,6 @@ const dealFields = {
   lostNote: optionalText(DEAL_LIMITS.lostNote),
   competitor: optionalText(DEAL_LIMITS.competitor),
   targetSystem: targetSystemEnum.nullish(),
-  nextStep: optionalText(DEAL_LIMITS.nextStep),
   ownerUserId: id.nullish(),
   previousDealId: id.nullish(),
 };
@@ -87,7 +94,6 @@ export const updateDealSchema = z.object({
   lostNote: dealFields.lostNote,
   competitor: dealFields.competitor,
   targetSystem: dealFields.targetSystem,
-  nextStep: dealFields.nextStep,
   ownerUserId: dealFields.ownerUserId,
   previousDealId: dealFields.previousDealId,
   /** The lead's SQL decision, recorded with the move out of 見極め (#801) */

@@ -29,6 +29,8 @@ const mocks = vi.hoisted(() => ({
   /** What each mutation resolves with (onSuccess is called with it) */
   results: {} as Record<string, unknown>,
   toast: { success: vi.fn(), error: vi.fn() },
+  /** The deals' board, apart from the other queries: its cards show the next action (#853) */
+  boardInvalidate: vi.fn(),
 }));
 
 vi.mock('@/lib/trpc/client', () => {
@@ -53,7 +55,7 @@ vi.mock('@/lib/trpc/client', () => {
         leadFollowUp: { contacts: invalidate, tasks: invalidate, dueTasks: invalidate },
         leadActivity: { list: invalidate, forDeal: invalidate, myDay: invalidate },
         analytics: { getDashboard: invalidate },
-        deals: { board: invalidate },
+        deals: { board: { invalidate: mocks.boardInvalidate } },
       }),
       leadFollowUp: {
         contacts: { useQuery: () => ({ data: mocks.contacts, isError: false }) },
@@ -361,6 +363,27 @@ describe('LeadNextActionsCard', () => {
         checkWith: '広報部',
       },
     ]);
+  });
+
+  it("reads the deals' board again when a next action is added, done or deleted (#853)", async () => {
+    mocks.tasks = { today: '2026-10-16', canEdit: true, items: [task()] };
+    const user = userEvent.setup();
+    renderCard();
+
+    // The deals' cards show the lead's next action, or mark a lead without one
+    await user.type(screen.getByLabelText('やること'), '見積もりを送る');
+    await user.click(screen.getByRole('button', { name: '追加' }));
+    expect(mocks.calls.createTask).toHaveLength(1);
+    expect(mocks.boardInvalidate).toHaveBeenCalledTimes(1);
+    expect(mocks.boardInvalidate).toHaveBeenLastCalledWith({ organizationId: ORG_ID });
+
+    await user.click(screen.getByRole('checkbox', { name: '「資料を送る」を完了にする' }));
+    expect(mocks.boardInvalidate).toHaveBeenCalledTimes(2);
+
+    await user.click(screen.getByRole('button', { name: '「資料を送る」を削除' }));
+    expect(mocks.calls.deleteTask).toEqual([{ organizationId: ORG_ID, id: 'task-1' }]);
+    expect(mocks.boardInvalidate).toHaveBeenCalledTimes(3);
+    expect(mocks.boardInvalidate).toHaveBeenLastCalledWith({ organizationId: ORG_ID });
   });
 
   it('moves the due date from the calendar', async () => {
