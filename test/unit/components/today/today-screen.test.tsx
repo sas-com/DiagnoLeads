@@ -1,11 +1,14 @@
 /**
- * The 今日 screen (#556): the member's next actions (theirs only, no switch), meetings of today and
- * the rest of the week, today's contacts with their counts, and deals that need attention, each
- * with its own loading, failure and empty states (one failing leaves the others), the deals left
- * out for those who may not read them, and the day the server read in the heading (real next-intl
- * messages; tRPC mocked)
+ * The 今日 screen (#556): the member's next actions (theirs only), meetings of today and the rest
+ * of the week, deals that need attention and today's contacts with their counts, in that order,
+ * each in the same frame with its own loading, failure and empty states (one failing leaves the
+ * others), the deals left out for those who may not read them, a notice without an
+ * organization, the day the server read in the heading, and every query read again when the
+ * window comes back. Rendered with the Japanese and the English messages (tRPC mocked)
  */
+import { TODAY_CONTACTS_SHOWN } from '@/components/features/today/today-activities';
 import { TodayScreen } from '@/components/features/today/today-screen';
+import enMessages from '@/locales/en/common.json';
 import messages from '@/locales/ja/common.json';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -25,9 +28,11 @@ type QueryState = {
   isError?: boolean;
   error?: { data: { code: string } } | null;
 };
-type QueryCall = { input: unknown; options: { staleTime?: number; enabled?: boolean } };
+type QueryOptions = { staleTime?: number; enabled?: boolean; refetchOnWindowFocus?: boolean };
+type QueryCall = { input: unknown; options: QueryOptions };
 
 const mocks = vi.hoisted(() => ({
+  organizationId: '' as string | null,
   queries: {} as Record<string, QueryState>,
   calls: {} as Record<string, QueryCall[]>,
   refetch: {} as Record<string, () => void>,
@@ -35,7 +40,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/trpc/client', () => {
   const query = (name: string) => ({
-    useQuery: (input: unknown, options: QueryCall['options'] = {}) => {
+    useQuery: (input: unknown, options: QueryOptions = {}) => {
       mocks.calls[name] = [...(mocks.calls[name] ?? []), { input, options }];
       mocks.refetch[name] ??= vi.fn();
       return {
@@ -65,18 +70,25 @@ vi.mock('@/lib/trpc/client', () => {
   };
 });
 vi.mock('@/hooks/use-organization', () => ({
-  useOrganization: () => ({ organizationId: ORG_ID }),
+  useOrganization: () => ({ organizationId: mocks.organizationId }),
 }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
-const renderScreen = () =>
+const renderScreen = (locale: 'ja' | 'en' = 'ja') =>
   render(
-    <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
+    <NextIntlClientProvider
+      locale={locale}
+      messages={locale === 'ja' ? messages : enMessages}
+      timeZone="Asia/Tokyo"
+    >
       <TodayScreen />
     </NextIntlClientProvider>
   );
 
 const region = (name: RegExp) => screen.getByRole('region', { name });
+/** A group of the meetings: its heading and what follows it */
+const group = (section: HTMLElement, name: string) =>
+  within(section).getByRole('heading', { level: 3, name }).parentElement as HTMLElement;
 
 const meeting = (values: Record<string, unknown>) => ({
   leadId: LEAD_1,
@@ -104,19 +116,20 @@ const meetings = {
       firstMeeting: true,
       unassigned: true,
     }),
-    meeting({ leadId: LEAD_2, company: '架空工業', dealRating: 'a' }),
+    // No company: named by the person
+    meeting({ leadId: LEAD_2, name: '佐藤 花子', dealRating: 'a' }),
     meeting({ leadId: LEAD_3, company: '架空物産', nextMeetingDate: '2026-11-01', status: 'won' }),
   ],
 };
 
-const contact = (values: Record<string, unknown>) => ({
+const contact = (id: string, values: Record<string, unknown> = {}) => ({
   lead: { id: LEAD_1, name: '山田 太郎', company: '架空商事' },
   event: {
-    id: 'contact:c1',
+    id: `contact:${id}`,
     kind: 'contact_recorded',
     at: new Date('2026-10-29T01:00:00Z'),
     actor: null,
-    contactId: 'c1',
+    contactId: id,
     contactKind: 'online_meeting',
     note: '移行の範囲を確認した',
     durationMinutes: 90,
@@ -133,11 +146,13 @@ const day = {
   byKind: { call: 2, email: 0, visit: 0, online_meeting: 1, no_answer: 0 },
   durationMinutes: 90,
   items: [
-    contact({}),
+    contact('c1'),
     {
-      ...contact({ id: 'contact:c2', contactId: 'c2', contactKind: 'call', note: null }),
-      lead: { id: LEAD_2, name: null, company: '架空工業' },
+      ...contact('c2', { contactKind: 'call', note: null, durationMinutes: null, outcome: null }),
+      // Neither a company nor a person
+      lead: { id: LEAD_2, name: null, company: null },
     },
+    contact('c3', { contactKind: 'call', note: null, durationMinutes: null, outcome: null }),
   ],
 };
 
@@ -146,6 +161,7 @@ const dealCard = (values: Record<string, unknown>) => ({
   leadId: LEAD_1,
   name: '基幹システム移行',
   stage: 'proposal',
+  amount: 3_000_000,
   expectedCloseOn: null,
   hasOpenTask: true,
   leadName: '山田 太郎',
@@ -165,7 +181,14 @@ const board = {
       amount: 0,
       weightedAmount: 0,
       deals: [
-        dealCard({ id: DEAL_2, name: '帳票の移行', expectedCloseOn: '2026-11-30', hasOpenTask: false }),
+        dealCard({
+          id: DEAL_2,
+          name: '帳票の移行',
+          stage: 'discovery',
+          amount: null,
+          expectedCloseOn: '2026-11-30',
+          hasOpenTask: false,
+        }),
         dealCard({ id: 'on-track', name: '順調な商談', expectedCloseOn: '2026-12-01' }),
       ],
     },
@@ -179,13 +202,34 @@ const board = {
   ],
 };
 
+const dueTask = {
+  id: 'task-1',
+  leadId: LEAD_1,
+  title: '見積もりを送る',
+  note: null,
+  dueOn: '2026-10-28',
+  done: false,
+  completedAt: null,
+  source: 'manual',
+  sourceHearingId: null,
+  kind: 'next_action',
+  checkWith: null,
+  checkWithUser: null,
+  assigneeId: null,
+  createdBy: null,
+  createdAt: new Date('2026-10-20T00:00:00Z'),
+  updatedAt: new Date('2026-10-20T00:00:00Z'),
+  lead: { name: '山田 太郎', company: '架空商事' },
+  mine: true,
+};
+
 const due = {
   today: '2026-10-29',
   canEdit: true,
   scope: 'mine',
-  total: 0,
-  counts: { mine: 0, all: 4 },
-  items: [],
+  total: 1,
+  counts: { mine: 1, all: 4 },
+  items: [dueTask],
 };
 
 const loadAll = () => {
@@ -198,6 +242,7 @@ const loadAll = () => {
 };
 
 beforeEach(() => {
+  mocks.organizationId = ORG_ID;
   mocks.queries = {};
   mocks.calls = {};
   mocks.refetch = {};
@@ -209,19 +254,22 @@ describe('TodayScreen', () => {
     renderScreen();
 
     expect(screen.getByRole('heading', { level: 1, name: t.title })).toBeInTheDocument();
-    expect(screen.getByText('2026年10月29日(木)（日本時間）')).toBeInTheDocument();
+    expect(screen.getByText('2026年10月29日(木)・日本時間')).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([
-      expect.stringMatching(/^今日やること/),
-      expect.stringMatching(/^商談予定/),
-      expect.stringMatching(/^今日の活動/),
-      expect.stringMatching(/^注意が必要な商談/),
+      '今日までの次の行動 1件',
+      '商談予定 3件',
+      '注意が必要な商談 2件',
+      '今日の活動 3件',
     ]);
+    // The four sections, and no landmark within them
+    expect(screen.getAllByRole('region')).toHaveLength(4);
   });
 
-  it('reads each section for the organization, today’s with a short cache', () => {
+  it('reads each section for the organization, and again when the window comes back', () => {
     loadAll();
     renderScreen();
 
+    expect(mocks.calls.dueTasks.at(-1)?.input).toEqual({ organizationId: ORG_ID, scope: 'mine' });
     expect(mocks.calls.myMeetings.at(-1)?.input).toEqual({ organizationId: ORG_ID });
     expect(mocks.calls.myDay.at(-1)?.input).toEqual({ organizationId: ORG_ID });
     expect(mocks.calls.board.at(-1)?.input).toEqual({
@@ -229,18 +277,49 @@ describe('TodayScreen', () => {
       owner: 'mine',
       closedWithinDays: 0,
     });
-    for (const name of ['myMeetings', 'myDay', 'board', 'dueTasks']) {
-      expect(mocks.calls[name].at(-1)?.options.staleTime, name).toBeLessThanOrEqual(60_000);
+    for (const name of ['dueTasks', 'myMeetings', 'myDay', 'board']) {
+      const options = mocks.calls[name].at(-1)?.options;
+      expect(options?.refetchOnWindowFocus, name).toBe(true);
+      expect(options?.staleTime, name).toBeLessThanOrEqual(60_000);
     }
   });
 
-  it('shows only the member’s own next actions, without the switch', () => {
-    loadAll();
+  it('says to choose an organization, and reads nothing, without one', () => {
+    mocks.organizationId = null;
     renderScreen();
 
-    expect(mocks.calls.dueTasks.at(-1)?.input).toEqual({ organizationId: ORG_ID, scope: 'mine' });
-    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
-    expect(screen.getByText(messages.leadFollowUp.today.emptyMine)).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(t.noOrganization);
+    expect(screen.queryByRole('region')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('day-loading')).not.toBeInTheDocument();
+    for (const name of ['dueTasks', 'myMeetings', 'myDay', 'board']) {
+      expect(mocks.calls[name].at(-1)?.options.enabled, name).toBe(false);
+    }
+  });
+
+  describe('next actions', () => {
+    it('frames the member’s own like the other sections, without the switch', () => {
+      loadAll();
+      renderScreen();
+      const section = region(/^今日までの次の行動/);
+
+      expect(within(section).getByText(messages.leadFollowUp.today.descriptionAll)).toBeInTheDocument();
+      expect(within(section).getByRole('checkbox', { name: '「見積もりを送る」を完了にする' })).toBeInTheDocument();
+      expect(within(section).getByRole('link', { name: /架空商事/ })).toHaveAttribute(
+        'href',
+        `/ja/leads/${LEAD_1}`
+      );
+      expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+    });
+
+    it('says so when nothing of the member’s is due', () => {
+      loadAll();
+      mocks.queries.dueTasks = { data: { ...due, total: 0, items: [] } };
+      renderScreen();
+
+      expect(
+        within(region(/^今日までの次の行動/)).getByText(messages.leadFollowUp.today.emptyMine)
+      ).toBeInTheDocument();
+    });
   });
 
   describe('meetings', () => {
@@ -249,35 +328,36 @@ describe('TodayScreen', () => {
       renderScreen();
       const section = region(/^商談予定/);
 
-      expect(within(section).getByRole('heading', { level: 2 })).toHaveTextContent('3件');
-      const todays = within(within(section).getByRole('region', { name: t.meetings.todayHeading }))
-        .getAllByRole('listitem');
+      const todays = within(group(section, t.meetings.todayHeading)).getAllByRole('listitem');
       expect(todays).toHaveLength(2);
       const first = within(todays[0]);
       expect(first.getByRole('link')).toHaveAttribute('href', `/ja/leads/${LEAD_1}`);
-      expect(first.getByText('09:00')).toBeInTheDocument();
+      expect(first.getByText('09:00')).toHaveAttribute('datetime', '2026-10-29T09:00+09:00');
       expect(first.getByText('架空商事')).toBeInTheDocument();
       expect(first.getByText('山田 太郎')).toBeInTheDocument();
       expect(first.getByText(t.meetings.firstMeeting)).toBeInTheDocument();
       expect(first.getByText(t.meetings.unassigned)).toBeInTheDocument();
       const second = within(todays[1]);
       expect(second.getByText(t.meetings.noTime)).toBeInTheDocument();
+      // Without a company, the person names the lead
+      expect(second.getByText('佐藤 花子')).toBeInTheDocument();
+      expect(second.queryByText(t.noLeadName)).not.toBeInTheDocument();
       expect(second.getByText('評価 A')).toBeInTheDocument();
 
-      const later = within(within(section).getByRole('region', { name: t.meetings.laterHeading }))
-        .getAllByRole('listitem');
+      const later = within(group(section, t.meetings.laterHeading)).getAllByRole('listitem');
       expect(later).toHaveLength(1);
-      expect(within(later[0]).getByText('11/1(日)')).toBeInTheDocument();
+      expect(within(later[0]).getByText('11/1(日)')).toHaveAttribute('datetime', '2026-11-01');
       // A won lead keeps its meeting, said in words
       expect(within(later[0]).getByText(messages.status.won)).toBeInTheDocument();
     });
 
-    it('links to the list of the member’s meetings this week', () => {
+    it('says what the list link opens: the member’s leads’ meetings this week', () => {
       loadAll();
       renderScreen();
 
+      // The list has the week's passed days and not the unassigned leads: the label says whose
       expect(
-        within(region(/^商談予定/)).getByRole('link', { name: t.meetings.viewAll })
+        within(region(/^商談予定/)).getByRole('link', { name: '担当リードの今週の予定を一覧で見る' })
       ).toHaveAttribute('href', '/ja/leads?assignee=me&next=thisWeek&sort=nextMeetingDate&order=asc');
     });
 
@@ -286,7 +366,9 @@ describe('TodayScreen', () => {
       mocks.queries.myMeetings = { data: { ...meetings, total: 1, items: [meetings.items[2]] } };
       renderScreen();
 
-      expect(within(region(/^商談予定/)).getByText(t.meetings.emptyToday)).toBeInTheDocument();
+      expect(
+        within(group(region(/^商談予定/), t.meetings.todayHeading)).getByText(t.meetings.emptyToday)
+      ).toBeInTheDocument();
     });
 
     it('has no rest of the week on Sunday', () => {
@@ -297,9 +379,9 @@ describe('TodayScreen', () => {
       renderScreen();
       const section = region(/^商談予定/);
 
-      expect(within(section).getByRole('region', { name: t.meetings.todayHeading })).toBeInTheDocument();
+      expect(within(section).getByRole('heading', { level: 3, name: t.meetings.todayHeading })).toBeInTheDocument();
       expect(
-        within(section).queryByRole('region', { name: t.meetings.laterHeading })
+        within(section).queryByRole('heading', { level: 3, name: t.meetings.laterHeading })
       ).not.toBeInTheDocument();
     });
 
@@ -309,8 +391,79 @@ describe('TodayScreen', () => {
       renderScreen();
 
       expect(
-        within(region(/^商談予定/)).getByText('ほか 50 件あります（表示は早い順に3件まで）')
+        within(region(/^商談予定/)).getByText('ほか50件あります（早い順に3件を表示）')
       ).toBeInTheDocument();
+    });
+
+    it('says so when there is no meeting from today to Sunday', () => {
+      loadAll();
+      mocks.queries.myMeetings = { data: { ...meetings, total: 0, items: [] } };
+      renderScreen();
+
+      expect(within(region(/^商談予定/)).getByText(t.meetings.empty)).toBeInTheDocument();
+    });
+  });
+
+  describe('deals that need attention', () => {
+    it('lists the marked deals as links, past the close date first, with the marks in words', () => {
+      loadAll();
+      renderScreen();
+      const section = region(/^注意が必要な商談/);
+      // The deals, not the marks listed in each
+      const items = Array.from(within(section).getAllByRole('list')[0].children) as HTMLElement[];
+
+      expect(items).toHaveLength(2);
+      const overdue = within(items[0]).getByRole('link');
+      expect(overdue).toHaveAttribute('href', `/ja/deals/${DEAL_1}`);
+      expect(overdue).toHaveTextContent('基幹システム移行');
+      expect(overdue).toHaveTextContent(messages.deals.card.overdue);
+      expect(overdue).toHaveTextContent('受注予定日 2026/10/20');
+      expect(overdue).toHaveTextContent(/3,000,000/);
+      const noTask = within(items[1]).getByRole('link');
+      expect(noTask).toHaveAttribute('href', `/ja/deals/${DEAL_2}`);
+      expect(noTask).toHaveTextContent(messages.deals.card.noNextAction);
+      expect(noTask).toHaveTextContent(messages.deals.card.noAmount);
+      expect(within(section).queryByText('順調な商談')).not.toBeInTheDocument();
+    });
+
+    it('opens the member’s deals by close date', () => {
+      loadAll();
+      renderScreen();
+
+      expect(
+        within(region(/^注意が必要な商談/)).getByRole('link', { name: t.deals.viewAll })
+      ).toHaveAttribute('href', '/ja/deals?owner=mine&view=list&sort=expectedCloseOn');
+    });
+
+    it('says so when no deal needs attention', () => {
+      loadAll();
+      // Only the deal on track
+      const onTrack = { ...board.columns[0], deals: [board.columns[0].deals[1]] };
+      mocks.queries.board = { data: { ...board, columns: [onTrack] } };
+      renderScreen();
+
+      expect(within(region(/^注意が必要な商談/)).getByText(t.deals.empty)).toBeInTheDocument();
+    });
+
+    it('is left out for those who may not read deals, the other sections staying', () => {
+      loadAll();
+      mocks.queries.board = { isError: true, error: { data: { code: 'FORBIDDEN' } } };
+      renderScreen();
+
+      expect(screen.queryByRole('region', { name: /^注意が必要な商談/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.getAllByRole('region')).toHaveLength(3);
+    });
+
+    it('says another failure with a retry, as the other sections do', async () => {
+      loadAll();
+      mocks.queries.board = { isError: true, error: { data: { code: 'INTERNAL_SERVER_ERROR' } } };
+      const user = userEvent.setup();
+      renderScreen();
+
+      const failed = within(region(/^注意が必要な商談/)).getByRole('alert');
+      await user.click(within(failed).getByRole('button', { name: t.section.retry }));
+      expect(mocks.refetch.board).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -331,7 +484,16 @@ describe('TodayScreen', () => {
       expect(within(section).getAllByRole('definition').map((value) => value.textContent)).toEqual(
         ['2件', '0件', '0件', '1件', '0件', '1時間30分']
       );
-      expect(within(section).getByRole('heading', { level: 2 })).toHaveTextContent('3件');
+    });
+
+    it('leaves the time out when none was recorded', () => {
+      loadAll();
+      mocks.queries.myDay = { data: { ...day, durationMinutes: 0 } };
+      renderScreen();
+
+      expect(
+        within(region(/^今日の活動/)).queryByText(t.activities.durationLabel)
+      ).not.toBeInTheDocument();
     });
 
     it('lists each record with its time, what it was, the lead’s activity and the details', () => {
@@ -339,7 +501,7 @@ describe('TodayScreen', () => {
       renderScreen();
       const items = within(region(/^今日の活動/)).getAllByRole('listitem');
 
-      expect(items).toHaveLength(2);
+      expect(items).toHaveLength(3);
       const first = within(items[0]);
       expect(first.getByText('10:00')).toBeInTheDocument();
       expect(first.getByText('オンライン商談')).toBeInTheDocument();
@@ -353,6 +515,33 @@ describe('TodayScreen', () => {
       );
       expect(first.getByText('移行の範囲を確認した')).toBeInTheDocument();
       expect(within(items[1]).getByText('電話で連絡')).toBeInTheDocument();
+      expect(within(items[1]).getByText(t.noLeadName)).toBeInTheDocument();
+    });
+
+    it('lists the newest ones first and opens the rest with "show all"', async () => {
+      loadAll();
+      const items = Array.from({ length: TODAY_CONTACTS_SHOWN + 2 }, (_, index) =>
+        contact(`c${index}`, { contactKind: 'call', note: null })
+      );
+      mocks.queries.myDay = { data: { ...day, total: items.length, items } };
+      const user = userEvent.setup();
+      renderScreen();
+      const section = region(/^今日の活動/);
+
+      expect(within(section).getAllByRole('listitem')).toHaveLength(TODAY_CONTACTS_SHOWN);
+      const showAll = within(section).getByRole('button', { name: 'すべて表示（7件）' });
+      expect(showAll).toHaveAttribute('aria-expanded', 'false');
+      expect(showAll).toHaveAttribute('aria-controls', within(section).getByRole('list').id);
+      expect(showAll).toHaveClass('min-h-11');
+
+      await user.click(showAll);
+      expect(within(section).getAllByRole('listitem')).toHaveLength(7);
+      expect(within(section).getByRole('button', { name: t.activities.showLess })).toHaveAttribute(
+        'aria-expanded',
+        'true'
+      );
+      // The counts stay above the list either way
+      expect(within(section).getAllByRole('term')).toHaveLength(6);
     });
 
     it('says so when nothing was recorded today', () => {
@@ -366,63 +555,16 @@ describe('TodayScreen', () => {
     });
   });
 
-  describe('deals that need attention', () => {
-    it('lists the marked deals, past the close date first, with the marks in words', () => {
-      loadAll();
-      renderScreen();
-      const section = region(/^注意が必要な商談/);
-      // The deals, not the marks listed in each
-      const items = Array.from(within(section).getAllByRole('list')[0].children) as HTMLElement[];
-
-      expect(items).toHaveLength(2);
-      expect(within(items[0]).getByRole('link', { name: '基幹システム移行' })).toHaveAttribute(
-        'href',
-        `/ja/deals/${DEAL_1}`
-      );
-      expect(within(items[0]).getByText(messages.deals.card.overdue)).toBeInTheDocument();
-      expect(within(items[0]).getByText('受注予定日 2026/10/20')).toBeInTheDocument();
-      expect(within(items[1]).getByRole('link', { name: '帳票の移行' })).toBeInTheDocument();
-      expect(within(items[1]).getByText(messages.deals.card.noNextAction)).toBeInTheDocument();
-      expect(within(section).queryByText('順調な商談')).not.toBeInTheDocument();
-      expect(within(section).getByRole('heading', { level: 2 })).toHaveTextContent('2件');
-      expect(within(section).getByRole('link', { name: t.deals.viewAll })).toHaveAttribute(
-        'href',
-        '/ja/deals?owner=mine&view=list'
-      );
-    });
-
-    it('says so when no deal needs attention', () => {
-      loadAll();
-      // Only the deal on track
-      const onTrack = { ...board.columns[0], deals: [board.columns[0].deals[1]] };
-      mocks.queries.board = { data: { ...board, columns: [onTrack] } };
-      renderScreen();
-
-      expect(within(region(/^注意が必要な商談/)).getByText(t.deals.empty)).toBeInTheDocument();
-    });
-
-    it('is left out for those who may not read deals, the other sections staying', () => {
-      loadAll();
-      mocks.queries.board = { isError: true, error: { data: { code: 'FORBIDDEN' } } };
-      renderScreen();
-
-      expect(screen.queryByRole('region', { name: /^注意が必要な商談/ })).not.toBeInTheDocument();
-      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-      expect(region(/^商談予定/)).toBeInTheDocument();
-      expect(region(/^今日の活動/)).toBeInTheDocument();
-    });
-  });
-
-  it('shows each section loading on its own while its data comes', () => {
+  it('shows each section loading on its own while its data comes, and keeps the day’s place', () => {
     renderScreen();
 
-    for (const name of [/^商談予定/, /^今日の活動/, /^注意が必要な商談/]) {
+    for (const name of [/^今日までの次の行動/, /^商談予定/, /^注意が必要な商談/, /^今日の活動/]) {
       const section = region(name);
       expect(within(section).getByText(t.section.loading)).toBeInTheDocument();
       expect(section.querySelector('[aria-busy="true"]')).not.toBeNull();
     }
-    // No day before the server answered
-    expect(screen.queryByText(/（日本時間）/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/日本時間/)).not.toBeInTheDocument();
+    expect(screen.getByTestId('day-loading')).toBeInTheDocument();
   });
 
   it('says a section failed with a retry, and shows the others', async () => {
@@ -437,16 +579,55 @@ describe('TodayScreen', () => {
     expect(mocks.refetch.myMeetings).toHaveBeenCalledTimes(1);
 
     expect(screen.getAllByRole('alert')).toHaveLength(1);
-    expect(within(region(/^今日の活動/)).getAllByRole('listitem')).toHaveLength(2);
+    expect(within(region(/^今日の活動/)).getAllByRole('listitem')).toHaveLength(3);
     expect(within(region(/^注意が必要な商談/)).getByText('帳票の移行')).toBeInTheDocument();
     // The day still comes from the sections that loaded
-    expect(screen.getByText('2026年10月29日(木)（日本時間）')).toBeInTheDocument();
+    expect(screen.getByText('2026年10月29日(木)・日本時間')).toBeInTheDocument();
   });
 
   it('takes the day from the meetings when the activity has not loaded', () => {
     mocks.queries = { myMeetings: { data: { ...meetings, today: '2026-10-30' } } };
     renderScreen();
 
-    expect(screen.getByText('2026年10月30日(金)（日本時間）')).toBeInTheDocument();
+    expect(screen.getByText('2026年10月30日(金)・日本時間')).toBeInTheDocument();
+  });
+
+  it('gives up the day’s place when every section failed', () => {
+    mocks.queries = {
+      dueTasks: { isError: true },
+      myMeetings: { isError: true },
+      myDay: { isError: true },
+      board: { isError: true },
+    };
+    renderScreen();
+
+    expect(screen.getAllByRole('alert')).toHaveLength(4);
+    expect(screen.queryByTestId('day-loading')).not.toBeInTheDocument();
+  });
+
+  it('reads in English with its headings and counts', () => {
+    loadAll();
+    mocks.queries.myMeetings = { data: { ...meetings, total: 53 } };
+    renderScreen('en');
+    const en = enMessages.today;
+
+    expect(screen.getByRole('heading', { level: 1, name: en.title })).toBeInTheDocument();
+    expect(screen.getByText(/· Japan time$/)).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([
+      'Next actions due 1',
+      'Meetings this week 53',
+      'Deals that need attention 2',
+      "Today's activity 3",
+    ]);
+    expect(screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual([
+      en.meetings.todayHeading,
+      en.meetings.laterHeading,
+    ]);
+    expect(
+      within(region(/^Meetings this week/)).getByText('50 more meetings (the earliest 3 are shown)')
+    ).toBeInTheDocument();
+    expect(
+      within(region(/^Meetings this week/)).getByRole('link', { name: en.meetings.viewAll })
+    ).toBeInTheDocument();
   });
 });

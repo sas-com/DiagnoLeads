@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useId } from 'react';
-import { splitMeetings } from './today-format';
+import { leadLabel, splitMeetings } from './today-format';
 import { type TodayQuery, TodaySection, sectionState } from './today-section';
 
 type MyMeetings = RouterOutputs['leads']['myMeetings'];
@@ -27,14 +27,30 @@ function useMeetingDay() {
     });
 }
 
-/** One meeting: when, the lead (a link to its page) and what to know before going */
+/** When a meeting is: its time today, or its day (and time) later in the week; Japan time */
+function MeetingWhen({ meeting, withDay }: { meeting: Meeting; withDay: boolean }) {
+  const t = useTranslations('today.meetings');
+  const meetingDay = useMeetingDay();
+  const { nextMeetingDate: date, nextMeetingTime: time } = meeting;
+  const day = withDay ? `${meetingDay(date)}${time ? ' ' : ''}` : '';
+  if (time) {
+    return <time dateTime={`${date}T${time}+09:00`}>{`${day}${time}`}</time>;
+  }
+  return withDay ? (
+    <time dateTime={date}>{day}</time>
+  ) : (
+    <span className="font-normal text-gray-600 dark:text-gray-300">{t('noTime')}</span>
+  );
+}
+
+/** One meeting, all of it a link to the lead: when, the lead, and what to know before going */
 function MeetingItem({ meeting, withDay }: { meeting: Meeting; withDay: boolean }) {
   const t = useTranslations('today.meetings');
+  const tToday = useTranslations('today');
   const tStatus = useTranslations('status');
   const locale = useLocale();
-  const meetingDay = useMeetingDay();
   const closed = (NEXT_MEETING_CLOSED_STATUSES as readonly string[]).includes(meeting.status);
-  const time = meeting.nextMeetingTime ?? (withDay ? null : t('noTime'));
+  const lead = leadLabel(meeting);
   return (
     <li>
       <Link
@@ -44,24 +60,27 @@ function MeetingItem({ meeting, withDay }: { meeting: Meeting; withDay: boolean 
           TAP_TARGET
         )}
       >
-        <span className="w-36 shrink-0 text-sm font-semibold tabular-nums text-gray-900 dark:text-gray-50">
-          {withDay && (
-            <time dateTime={meeting.nextMeetingDate}>{meetingDay(meeting.nextMeetingDate)}</time>
+        <span
+          className={cn(
+            'shrink-0 text-sm font-semibold tabular-nums text-gray-900 dark:text-gray-50',
+            // A time is short; "no time recorded" keeps to one line
+            withDay ? 'w-36' : 'min-w-14 whitespace-nowrap'
           )}
-          {withDay && time && ' '}
-          {time}
+        >
+          <MeetingWhen meeting={meeting} withDay={withDay} />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium text-gray-900 underline underline-offset-4 dark:text-gray-50">
-            {meeting.company || t('noCompany')}
+            {lead.primary ?? tToday('noLeadName')}
           </span>
-          {meeting.name && (
+          {lead.secondary && (
             <span className="block truncate text-sm text-gray-600 dark:text-gray-300">
-              {meeting.name}
+              {lead.secondary}
             </span>
           )}
         </span>
-        <span className="flex shrink-0 flex-wrap items-center gap-2">
+        {/* A block, not a span: the badges are <div>s */}
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           {meeting.firstMeeting && (
             <Badge color="blue" className="text-sm">
               {t('firstMeeting')}
@@ -78,12 +97,13 @@ function MeetingItem({ meeting, withDay }: { meeting: Meeting; withDay: boolean 
           {meeting.unassigned && (
             <span className="text-sm text-gray-700 dark:text-gray-300">{t('unassigned')}</span>
           )}
-        </span>
+        </div>
       </Link>
     </li>
   );
 }
 
+/** Today's or the rest of the week's meetings, under a heading of the section (no landmark) */
 function MeetingGroup({
   title,
   items,
@@ -97,27 +117,28 @@ function MeetingGroup({
 }) {
   const headingId = useId();
   return (
-    <section aria-labelledby={headingId} className="space-y-1">
+    <div className="space-y-1">
       <h3 id={headingId} className="text-sm font-bold text-gray-900 dark:text-gray-50">
         {title}
       </h3>
       {items.length === 0 ? (
         <p className="py-2 text-sm text-gray-600 dark:text-gray-300">{emptyText}</p>
       ) : (
-        <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+        <ul aria-labelledby={headingId} className="divide-y divide-gray-100 dark:divide-gray-800">
           {items.map((meeting) => (
             <MeetingItem key={meeting.leadId} meeting={meeting} withDay={withDay} />
           ))}
         </ul>
       )}
-    </section>
+    </div>
   );
 }
 
 /**
  * The user's meetings (今日, #556): those of today, then the rest of the week (tomorrow to
  * Sunday), from the latest hearing's next meeting date or the confirmed first meeting, with its
- * time when one was confirmed. The link opens the lead list of the user's meetings this week.
+ * time when one was confirmed. The link opens the lead list of the user's leads' meetings this
+ * week, which its label says: the list has the week's passed days and not the unassigned leads.
  */
 export function TodayMeetings({ query }: { query: TodayQuery<MyMeetings> }) {
   const t = useTranslations('today.meetings');

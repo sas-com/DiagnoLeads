@@ -5,29 +5,40 @@ import { ContactDetails } from '@/components/features/lead-activity/contact-deta
 import { EventTitle } from '@/components/features/lead-activity/lead-activity-card';
 import { durationParts } from '@/components/features/lead-follow-up/contact-format';
 import { CONTACT_KIND_ICONS } from '@/components/features/lead-follow-up/contact-kinds';
+import { Button } from '@/components/ui/button';
 import type { RouterOutputs } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
-import { contactCounts } from './today-format';
+import { useId, useState } from 'react';
+import { contactCounts, leadLabel } from './today-format';
 import { type TodayQuery, TodaySection, sectionState } from './today-section';
 
 type MyDay = RouterOutputs['leadActivity']['myDay'];
 
 const TIME_ZONE = 'Asia/Tokyo';
+/** Records listed before "show all": the counts above say how the day went */
+export const TODAY_CONTACTS_SHOWN = 5;
 
 /**
  * What the user recorded today (今日, #556): how many contacts of each kind ("no answer"
- * included, every kind shown) and the minutes they took, then each record newest first with its
- * time, what it was, the lead (a link to its activity), the details and the note. Counted by the
- * time of the contact in Japan, so a record entered later for today counts today.
+ * included, every kind shown) and the minutes they took, then the newest records with their
+ * time, what it was, the lead (a link to its activity), the details and the note; "show all"
+ * opens the rest. Counted by the time of the contact in Japan, so a record entered later for
+ * today counts today.
  */
 export function TodayActivities({ query }: { query: TodayQuery<MyDay> }) {
   const t = useTranslations('today.activities');
+  const tToday = useTranslations('today');
   const tFollowUp = useTranslations('leadFollowUp');
   const locale = useLocale();
   const format = useFormatter();
+  const listId = useId();
+  const [expanded, setExpanded] = useState(false);
   const data = query.data;
+  const items = data ? (expanded ? data.items : data.items.slice(0, TODAY_CONTACTS_SHOWN)) : [];
+  const folds = !!data && data.items.length > TODAY_CONTACTS_SHOWN;
 
   return (
     <TodaySection
@@ -54,17 +65,21 @@ export function TodayActivities({ query }: { query: TodayQuery<MyDay> }) {
                 </div>
               );
             })}
-            <div className="flex items-center gap-1.5 text-sm">
-              <dt className="text-gray-700 dark:text-gray-300">{t('durationLabel')}</dt>
-              <dd className="font-semibold tabular-nums text-gray-900 dark:text-gray-50">
-                {tFollowUp('duration', durationParts(data.durationMinutes))}
-              </dd>
-            </div>
+            {/* No time recorded today: nothing to add up */}
+            {data.durationMinutes > 0 && (
+              <div className="flex items-center gap-1.5 text-sm">
+                <dt className="text-gray-700 dark:text-gray-300">{t('durationLabel')}</dt>
+                <dd className="font-semibold tabular-nums text-gray-900 dark:text-gray-50">
+                  {tFollowUp('duration', durationParts(data.durationMinutes))}
+                </dd>
+              </div>
+            )}
           </dl>
-          <ol className="divide-y divide-gray-100 dark:divide-gray-800">
-            {data.items.map(({ lead, event }) => {
+          <ol id={listId} className="divide-y divide-gray-100 dark:divide-gray-800">
+            {items.map(({ lead, event }) => {
               const Icon = CONTACT_KIND_ICONS[event.contactKind];
               const at = new Date(event.at);
+              const name = leadLabel(lead);
               return (
                 <li key={event.id} className="flex gap-3 py-3">
                   <Icon
@@ -95,9 +110,11 @@ export function TodayActivities({ query }: { query: TodayQuery<MyDay> }) {
                       )}
                     >
                       <span className="truncate">
-                        {lead.company || lead.name || t('noLeadName')}
-                        {lead.company && lead.name && (
-                          <span className="ml-1 text-gray-600 dark:text-gray-300">{lead.name}</span>
+                        {name.primary ?? tToday('noLeadName')}
+                        {name.secondary && (
+                          <span className="ml-1 text-gray-600 dark:text-gray-300">
+                            {name.secondary}
+                          </span>
                         )}
                       </span>
                     </Link>
@@ -112,10 +129,29 @@ export function TodayActivities({ query }: { query: TodayQuery<MyDay> }) {
               );
             })}
           </ol>
-          {data.total > data.items.length && (
+          {expanded && data.total > data.items.length && (
             <p className="text-sm text-gray-600 dark:text-gray-300">
               {t('more', { shown: data.items.length, total: data.total })}
             </p>
+          )}
+          {folds && (
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  'h-auto px-1 py-0.5 text-sm text-gray-600 dark:text-gray-300',
+                  TAP_TARGET
+                )}
+                aria-expanded={expanded}
+                aria-controls={listId}
+                onClick={() => setExpanded((value) => !value)}
+              >
+                {expanded ? t('showLess') : t('showAll', { count: data.items.length })}
+                {expanded ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
+              </Button>
+            </div>
           )}
         </div>
       )}

@@ -500,12 +500,14 @@ describe.skipIf(!url)('今日: the member’s own day, one organization at a tim
       expect(result).toMatchObject({ total: 0, items: [] });
     });
 
-    it('ignores a userId added to the input', async () => {
-      const result = await meInA.leads.myMeetings(
-        withUnknownKeys<MeetingsInput>({ organizationId: orgA }, { userId: colleague })
+    it('refuses a userId added to the input', async () => {
+      const result = await outcome(
+        meInA.leads.myMeetings(
+          withUnknownKeys<MeetingsInput>({ organizationId: orgA }, { userId: colleague })
+        )
       );
 
-      expect(summary(result.items)).toEqual(['L7', 'L1', 'L14', 'L5', 'L9', 'L2', 'L10']);
+      expect(result).toBe('BAD_REQUEST');
     });
   });
 

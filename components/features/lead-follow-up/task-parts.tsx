@@ -31,7 +31,16 @@ const DUE_CLASSES: Record<TaskDue, string> = {
 };
 
 /** Due date of a task, coloured by how it stands today (overdue / today / later / done) */
-export function DueLabel({ task, today }: { task: TaskLike; today: string }) {
+export function DueLabel({
+  task,
+  today,
+  className,
+}: {
+  task: TaskLike;
+  today: string;
+  /** e.g. text-sm where no text may be under 14px (#556) */
+  className?: string;
+}) {
   const t = useTranslations('leadFollowUp.tasks');
   const format = useFormatter();
   const due = taskDue(task, today);
@@ -44,7 +53,8 @@ export function DueLabel({ task, today }: { task: TaskLike; today: string }) {
     <span
       className={cn(
         'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium',
-        DUE_CLASSES[due]
+        DUE_CLASSES[due],
+        className
       )}
       data-due={due}
     >
@@ -133,12 +143,22 @@ export function useUpdateTask(organizationId: string) {
 }
 
 /** Marks a takeaway (持ち帰り事項) so it stands apart from next actions; nothing for those */
-export function TaskKindBadge({ task }: { task: Pick<LeadTaskView, 'kind'> }) {
+export function TaskKindBadge({
+  task,
+  className,
+}: {
+  task: Pick<LeadTaskView, 'kind'>;
+  /** e.g. text-sm where no text may be under 14px (#556) */
+  className?: string;
+}) {
   const t = useTranslations('leadFollowUp.tasks');
   if (task.kind !== 'takeaway') return null;
   return (
     <span
-      className="inline-flex shrink-0 items-center rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-800 dark:bg-violet-900/30 dark:text-violet-300"
+      className={cn(
+        'inline-flex shrink-0 items-center rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-800 dark:bg-violet-900/30 dark:text-violet-300',
+        className
+      )}
       data-kind={task.kind}
     >
       {t('takeawayBadge')}

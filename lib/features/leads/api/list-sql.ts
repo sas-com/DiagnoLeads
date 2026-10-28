@@ -84,6 +84,16 @@ function latestHearingValue(fieldKey: string, valid: SQL): SQL<string | null> {
 }
 
 /**
+ * A value of this file nested one level, for a select from leads without a join: pass every
+ * value of this file through it there. Without a join drizzle writes the columns at the top of a
+ * selected SQL without their table ("id"), and inside a correlated subquery "id" is the
+ * subquery's own column (meeting_requests.id, lead_hearings.id): no error, another condition, and
+ * the organization condition can become always true. Nested, they keep "leads"."id". WHERE,
+ * ORDER BY and selects with a join write the table already (#556)
+ */
+export const nested = <T>(expression: SQL<T>): SQL<T> => sql<T>`${expression}`;
+
+/**
  * Who recorded the lead's latest hearing (the same "latest" as latestHearingValue); NULL without a
  * hearing or when the account is gone (#556)
  */

@@ -1762,26 +1762,30 @@
   },
   "today": {
     "title": "今日",
-    "description": "自分の次の行動・今週の商談予定・今日記録した活動と、注意が必要な商談をまとめて見る画面です",
-    "dateLine": "{date}（日本時間）",
+    "description": "今日の予定と、やることをまとめて見られます",
+    "dateLine": "{date}・日本時間",
+    "noOrganization": "組織を選ぶと、ここに今日の予定とやることが表示されます",
+    "noLeadName": "名前未設定のリード",
     "section": {
       "count": "{count}件",
       "loading": "読み込み中",
       "loadError": "読み込めませんでした",
       "retry": "再読み込み"
     },
+    "nextActions": {
+      "title": "今日までの次の行動"
+    },
     "meetings": {
       "title": "商談予定",
-      "description": "担当のリードと、担当がいないリードのうち自分が日程を入れたものの、今日から日曜までの予定です",
-      "viewAll": "一覧で見る",
-      "todayHeading": "今日",
-      "laterHeading": "今週の残り（明日〜日曜）",
+      "description": "今日から日曜までの、担当リードの予定です（担当がいないリードは、日程を入れた人に出ます）",
+      "viewAll": "担当リードの今週の予定を一覧で見る",
+      "todayHeading": "今日の予定",
+      "laterHeading": "今週の残りの予定（明日〜日曜）",
       "empty": "今日から日曜までの商談予定はありません",
       "emptyToday": "今日の商談予定はありません",
       "emptyLater": "明日から日曜までの商談予定はありません",
-      "more": "ほか {count} 件あります（表示は早い順に{shown}件まで）",
-      "noTime": "時刻未定",
-      "noCompany": "会社名なし",
+      "more": "ほか{count}件あります（早い順に{shown}件を表示）",
+      "noTime": "時刻の記録なし",
       "firstMeeting": "初回",
       "unassigned": "担当未定"
     },
@@ -1798,8 +1802,9 @@
       },
       "kindCount": "{count}件",
       "durationLabel": "所要時間の合計",
-      "noLeadName": "名前未設定のリード",
-      "more": "新しい{shown}件を表示しています（全{total}件）"
+      "more": "新しい{shown}件を表示しています（全{total}件）",
+      "showAll": "すべて表示（{count}件）",
+      "showLess": "折りたたむ"
     },
     "deals": {
       "title": "注意が必要な商談",

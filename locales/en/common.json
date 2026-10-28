@@ -1762,33 +1762,37 @@
   },
   "today": {
     "title": "Today",
-    "description": "Your next actions, this week's meetings, the contacts you recorded today and your deals that need attention, on one screen",
-    "dateLine": "{date} (Japan time)",
+    "description": "Your meetings and what to do today, on one screen",
+    "dateLine": "{date} · Japan time",
+    "noOrganization": "Choose an organization to see your day here",
+    "noLeadName": "Lead without a name",
     "section": {
       "count": "{count}",
-      "loading": "Loading",
+      "loading": "Loading…",
       "loadError": "Could not load",
       "retry": "Reload"
     },
+    "nextActions": {
+      "title": "Next actions due"
+    },
     "meetings": {
-      "title": "Meetings",
-      "description": "From today to Sunday: leads assigned to you, and leads without an owner whose meeting date you set",
-      "viewAll": "View in the list",
-      "todayHeading": "Today",
-      "laterHeading": "Rest of the week (tomorrow to Sunday)",
+      "title": "Meetings this week",
+      "description": "Today through Sunday: your leads, and unassigned leads whose meeting date you set",
+      "viewAll": "Your leads' meetings this week",
+      "todayHeading": "Today's meetings",
+      "laterHeading": "Meetings later this week (tomorrow to Sunday)",
       "empty": "No meetings from today to Sunday",
       "emptyToday": "No meetings today",
       "emptyLater": "No meetings from tomorrow to Sunday",
-      "more": "{count, plural, one {# more meeting} other {# more meetings}} (the first {shown} are shown)",
-      "noTime": "No time set",
-      "noCompany": "No company name",
+      "more": "{count, plural, one {# more meeting} other {# more meetings}} (the earliest {shown} are shown)",
+      "noTime": "No time recorded",
       "firstMeeting": "First meeting",
-      "unassigned": "No owner"
+      "unassigned": "Unassigned"
     },
     "activities": {
       "title": "Today's activity",
-      "description": "Contacts you recorded with today's date, no answers included (hearings are not counted)",
-      "empty": "You have not recorded any activity today yet",
+      "description": "Contacts you logged for today, including no-answers (hearings aren't counted)",
+      "empty": "No contacts logged today yet",
       "kinds": {
         "call": "Calls",
         "email": "Emails",
@@ -1797,16 +1801,17 @@
         "no_answer": "No answers"
       },
       "kindCount": "{count}",
-      "durationLabel": "Time spent in total",
-      "noLeadName": "Lead without a name",
-      "more": "Showing the latest {shown} of {total, plural, one {# record} other {# records}}"
+      "durationLabel": "Total time",
+      "more": "Showing the latest {shown} of {total, plural, one {# record} other {# records}}",
+      "showAll": "Show all ({count})",
+      "showLess": "Show less"
     },
     "deals": {
       "title": "Deals that need attention",
       "description": "Your deals past their expected close date, and those whose lead has no next action",
-      "viewAll": "Your deals",
+      "viewAll": "All your deals",
       "empty": "No deals need attention",
-      "closeOn": "Expected close {date}"
+      "closeOn": "Expected close: {date}"
     }
   },
   "settings": {

@@ -10,7 +10,7 @@
  */
 import type { db as defaultDb } from '@/lib/db/client';
 import { leads, users } from '@/lib/db/schema';
-import { type SQL, and, asc, eq, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, or, sql } from 'drizzle-orm';
 import { dashboardPeriod, jstDay } from '../analytics/dashboard';
 import {
   leadDealRating,
@@ -18,6 +18,7 @@ import {
   leadNextMeetingIsFirst,
   leadNextMeetingSetBy,
   leadNextMeetingTime,
+  nested,
   nextMeetingCondition,
 } from './api/list-sql';
 import { addDays, jstWeekStart } from './list-query';
@@ -98,13 +99,6 @@ export async function getWeekMeetings(
   };
 }
 
-/**
- * A value selected from leads alone (no join): drizzle then writes the columns at the top of a
- * selected SQL without their table ("id"), which inside the subqueries of list-sql.ts would name
- * the subquery's own columns (meeting_requests.id). Nested one level, they keep "leads"."id".
- */
-const nested = <T>(expression: SQL<T>): SQL<T> => sql<T>`${expression}`;
-
 export interface MyMeeting {
   leadId: string;
   name: string | null;
@@ -147,6 +141,7 @@ export async function getMyMeetings(
   const [countRows, rows] = await Promise.all([
     db.select({ total: sql<number>`count(*)::int` }).from(leads).where(where),
     db
+      // From leads alone: each value of list-sql.ts goes through nested()
       .select({
         leadId: leads.id,
         name: leads.name,

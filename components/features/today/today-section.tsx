@@ -36,8 +36,8 @@ const SECTION_LINK_CLASS = cn(
 /**
  * A section of 今日 (#556): a heading with how many there are, a link to the whole list, and the
  * section's own loading, failure (with a retry) and empty states, so one that fails to load
- * leaves the others shown. Framed like the next actions card next to it, without a shadow and
- * with no text under 14px (DADS, decision 2026-10-24-admin-dads).
+ * leaves the others shown. Bordered without a shadow and with no text under 14px (DADS, decision
+ * 2026-10-24-admin-dads).
  */
 export function TodaySection({
   title,
@@ -47,6 +47,7 @@ export function TodaySection({
   state,
   emptyText,
   children,
+  footer,
 }: {
   title: string;
   description: string;
@@ -57,6 +58,8 @@ export function TodaySection({
   state: SectionState;
   emptyText: string;
   children: ReactNode;
+  /** Under the content in every state: a way back from a list opened in full also when it failed */
+  footer?: ReactNode;
 }) {
   const t = useTranslations('today.section');
   const headingId = useId();
@@ -74,9 +77,12 @@ export function TodaySection({
           >
             {title}
             {state.loaded && !state.isError && count !== undefined && count > 0 && (
-              <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-sm font-bold text-gray-800 dark:bg-gray-800 dark:text-gray-200">
-                {t('count', { count })}
-              </span>
+              <>
+                {/* Read "Meetings 3", not "Meetings3" (the space and ml-1 make the gap) */}{' '}
+                <span className="ml-1 rounded-full bg-gray-100 px-2 py-0.5 text-sm font-bold text-gray-800 dark:bg-gray-800 dark:text-gray-200">
+                  {t('count', { count })}
+                </span>
+              </>
             )}
           </h2>
           <p className="text-sm text-gray-600 dark:text-gray-300">{description}</p>
@@ -118,6 +124,7 @@ export function TodaySection({
       ) : (
         children
       )}
+      {footer}
     </section>
   );
 }

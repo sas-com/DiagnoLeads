@@ -21,6 +21,19 @@ export function splitMeetings<T extends { nextMeetingDate: string }>(
   };
 }
 
+/**
+ * How a lead is named in a row, the same in every section: its company, else its person (null
+ * when it has neither: the screen says it has no name), with the person under a company
+ */
+export function leadLabel(lead: { company: string | null; name: string | null }): {
+  primary: string | null;
+  secondary: string | null;
+} {
+  const company = lead.company?.trim() || null;
+  const name = lead.name?.trim() || null;
+  return { primary: company ?? name, secondary: company && name ? name : null };
+}
+
 /** How many contacts of each kind, every kind in the order the screens list them */
 export function contactCounts(
   byKind: Partial<Record<ContactKind, number>>

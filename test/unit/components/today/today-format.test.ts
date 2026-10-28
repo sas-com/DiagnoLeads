@@ -6,6 +6,7 @@
 import {
   contactCounts,
   dealsNeedingAttention,
+  leadLabel,
   splitMeetings,
 } from '@/components/features/today/today-format';
 import { describe, expect, it } from 'vitest';
@@ -31,6 +32,26 @@ describe('splitMeetings', () => {
     const { today, later } = splitMeetings([{ nextMeetingDate: '2026-10-28' }], TODAY);
 
     expect([...today, ...later]).toEqual([]);
+  });
+});
+
+describe('leadLabel', () => {
+  it('names a lead by its company, with the person under it', () => {
+    expect(leadLabel({ company: '架空商事', name: '山田 太郎' })).toEqual({
+      primary: '架空商事',
+      secondary: '山田 太郎',
+    });
+  });
+
+  it('names a lead without a company by its person', () => {
+    expect(leadLabel({ company: null, name: '山田 太郎' })).toEqual({
+      primary: '山田 太郎',
+      secondary: null,
+    });
+  });
+
+  it('gives no name for a lead with neither, blank values included', () => {
+    expect(leadLabel({ company: ' ', name: null })).toEqual({ primary: null, secondary: null });
   });
 });
 

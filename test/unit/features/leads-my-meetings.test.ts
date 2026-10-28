@@ -7,8 +7,10 @@
  * 2026-10-29 is a Thursday; its Japan week runs from Monday 2026-10-26 to Sunday 2026-11-01.
  */
 import { leads } from '@/lib/db/schema';
+import { leadNextMeetingTime, nested } from '@/lib/features/leads/api/list-sql';
 import { MY_MEETINGS_SHOWN, getMyMeetings } from '@/lib/features/leads/meetings';
 import { type QueryCall, type RecordingDb, recordingDb, sqlOf } from '@/test/mocks/recording-db';
+import { QueryBuilder } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 type Database = Parameters<typeof getMyMeetings>[0];
@@ -136,5 +138,23 @@ describe('getMyMeetings', () => {
         unassigned: false,
       },
     ]);
+  });
+});
+
+describe('nested', () => {
+  const selectedFromLeads = (time: typeof leadNextMeetingTime) =>
+    new QueryBuilder().select({ time }).from(leads).toSQL().sql;
+
+  it('keeps the lead’s table in a value selected from leads alone', () => {
+    expect(selectedFromLeads(nested(leadNextMeetingTime))).toContain(
+      'select mr.confirmed_time from meeting_requests mr where mr.lead_id = "leads"."id" and mr.organization_id = "leads"."organization_id"'
+    );
+  });
+
+  it('is needed: without it the subquery compares with its own columns', () => {
+    // "id" inside the subquery is meeting_requests.id, and "organization_id" its own
+    expect(selectedFromLeads(leadNextMeetingTime)).toContain(
+      'select mr.confirmed_time from meeting_requests mr where mr.lead_id = "id" and mr.organization_id = "organization_id"'
+    );
   });
 });
