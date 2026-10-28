@@ -33,20 +33,24 @@ export function helpArticleText(article: HelpArticle): string {
 }
 
 /**
- * Articles that contain every word of the query (words split by spaces), titles that match
- * first, then in the order given. An empty query finds nothing: the table of contents is shown
- * instead.
+ * Articles that contain every word of the query (words split by spaces): those whose title has a
+ * word first, then those whose summary has one, then the rest, each in the order given. An empty
+ * query finds nothing: the table of contents is shown instead.
  */
 export function searchHelpArticles(query: string, articles: readonly HelpArticle[]): HelpArticle[] {
   const words = normalize(query).split(/\s+/).filter(Boolean);
   if (words.length === 0) return [];
-  const matches = articles.filter((article) => {
-    const text = normalize(helpArticleText(article));
-    return words.every((word) => text.includes(word));
-  });
-  const inTitle = (article: HelpArticle) => {
-    const title = normalize(article.title);
-    return words.some((word) => title.includes(word));
+  const has = (text: string) => {
+    const normalized = normalize(text);
+    return words.some((word) => normalized.includes(word));
   };
-  return [...matches.filter(inTitle), ...matches.filter((article) => !inTitle(article))];
+  const rank = (article: HelpArticle) => (has(article.title) ? 0 : has(article.summary) ? 1 : 2);
+  return articles
+    .filter((article) => {
+      const text = normalize(helpArticleText(article));
+      return words.every((word) => text.includes(word));
+    })
+    .map((article, index) => ({ article, index, rank: rank(article) }))
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .map(({ article }) => article);
 }
