@@ -49,6 +49,15 @@ describe('searchHelpArticles', () => {
     ]);
   });
 
+  it('puts summary matches before body matches', () => {
+    const inBody = article('a', '見出しの記事', '招待の手順');
+    const inSummary = { ...article('b', '別の記事', '本文'), summary: 'メンバーを招待する' };
+    expect(searchHelpArticles('招待', [inBody, inSummary]).map((each) => each.id)).toEqual([
+      'b',
+      'a',
+    ]);
+  });
+
   it('needs every word', () => {
     expect(searchHelpArticles('確度 見込み', articles).map((each) => each.id)).toEqual([
       'forecast',

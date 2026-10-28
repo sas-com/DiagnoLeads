@@ -5991,6 +5991,62 @@
       "back": "Back to the help contents",
       "openScreen": "Open this screen",
       "articleNotFound": "Article not found"
+    },
+    "checklist": {
+      "title": {
+        "manager": "Set up your organization",
+        "member": "Get started"
+      },
+      "progress": "{done} of {total} done",
+      "allDone": "All done. You can close this list.",
+      "close": "Close this list",
+      "open": "Open",
+      "guide": "How to",
+      "guideOf": "How to: {title}",
+      "markDone": "Mark as done",
+      "markUndone": "Mark as not done",
+      "markDoneOf": "Mark \"{title}\" as done",
+      "markUndoneOf": "Mark \"{title}\" as not done",
+      "doneMark": " (done)",
+      "notDoneMark": " (not done)",
+      "items": {
+        "organization": {
+          "title": "Check the organization details",
+          "description": "Make sure the organization name and slug are right."
+        },
+        "intake": {
+          "title": "Choose the consultation contacts",
+          "description": "Pick the members who get consultation requests and assign them."
+        },
+        "members": {
+          "title": "Invite your team",
+          "description": "Invite the people who work with you and choose their roles."
+        },
+        "playbook": {
+          "title": "Fill in the sales playbook",
+          "description": "Questions per challenge show up on the lead page."
+        },
+        "agencyLinks": {
+          "title": "Issue sales agency links",
+          "description": "If you work with sales agencies, issue a diagnosis link for each. Otherwise mark this as done."
+        },
+        "today": {
+          "title": "Look at Today",
+          "description": "See your due next actions and this week's meetings in one place."
+        },
+        "leads": {
+          "title": "Find leads",
+          "description": "Use search and the common filters to find the leads to work on."
+        },
+        "nextActions": {
+          "title": "Record a next action",
+          "description": "Add what to do and by when on a lead. Due ones show up on Today."
+        },
+        "deals": {
+          "title": "Move a deal",
+          "description": "Move deals through the stages on the deal board."
+        }
+      }
     }
   }
 }
