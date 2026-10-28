@@ -20,7 +20,8 @@ import {
  * A row that became a lead keeps the stage it had, and nobody changes it any more: the lead and
  * its deals are followed from then on. So what is counted by stage leaves those rows out and
  * counts them apart as converted, while what was done (rows written, reactions, next steps,
- * meetings, calls) counts every row. The checks count the rows the list's filters show (decision
+ * meetings, calls) counts every row. The checks leave out the rows the list's filters leave out,
+ * so "overdue" counts what the list's filter of that name shows (decision
  * 2026-10-28-consolidate-input-places, #852).
  */
 
@@ -97,7 +98,7 @@ export interface ProspectSummary {
     /** meetingsToDate - target */
     gap: number | null;
   }[];
-  /** The rows the list's filters show, so that both give the same counts */
+  /** Without the rows the list's filters leave out: overdue is what the "overdue" filter shows */
   checks: {
     stageWithoutNextAction: number;
     overdue: number;
@@ -260,7 +261,7 @@ export function summarizeProspects(
     withStage,
     entries,
     months,
-    // The rows the list's filters show (api/router.ts), so that the counts match the list
+    // With the conditions of the list's filters (api/router.ts), so that the counts match the list
     checks: {
       stageWithoutNextAction: count(
         (row) =>
