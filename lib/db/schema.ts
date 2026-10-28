@@ -348,7 +348,8 @@ export const leads = pgTable(
     // The list's default order exactly as leadListOrderBy writes it (created_at desc nulls last,
     // id desc), so a page is read in index order instead of sorting every lead of the
     // organization; also the created_at periods of the dashboard and the analytics (#433).
-    // drizzle's desc() means nulls last, while id desc in the list is nulls first
+    // The index builder's .desc() writes DESC NULLS LAST, while desc() in a query writes plain
+    // DESC (nulls first), as the list's id desc does
     index('leads_org_created_at_id_idx').on(
       table.organizationId,
       table.createdAt.desc(),

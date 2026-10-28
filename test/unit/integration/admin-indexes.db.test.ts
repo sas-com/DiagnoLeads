@@ -9,9 +9,10 @@
  *     bunx vitest --run test/unit/integration/admin-indexes.db.test.ts
  */
 import { leads } from '@/lib/db/schema';
+import { leadEmailMatch } from '@/lib/features/diagnostics/lead-upsert';
 import { leadListOrderBy } from '@/lib/features/leads/api/list-sql';
-import { and, asc, eq, sql } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/postgres-js';
+import { asc, eq } from 'drizzle-orm';
+import { QueryBuilder } from 'drizzle-orm/pg-core';
 import postgres from 'postgres';
 import { afterAll, describe, expect, it } from 'vitest';
 
@@ -22,9 +23,10 @@ const ORG = '00000000-0000-4000-8000-000000000433';
 const OTHER_ORG = '00000000-0000-4000-8000-000000000434';
 
 describe.skipIf(!url)('admin indexes (PostgreSQL)', () => {
-  const client = url ? postgres(url, { max: 1 }) : null;
-  // biome-ignore lint/style/noNonNullAssertion: guarded by skipIf
-  const pg = drizzle(client!);
+  // The NOTICEs of drop schema ... cascade stay out of the test output
+  const client = url ? postgres(url, { max: 1, onnotice: () => {} }) : null;
+  // Builds the queries' SQL without a database (the suite is collected even when skipped)
+  const qb = new QueryBuilder();
 
   afterAll(async () => {
     await client?.end();
@@ -53,19 +55,19 @@ describe.skipIf(!url)('admin indexes (PostgreSQL)', () => {
     // The list's default page: the organization, leadListOrderBy as the list uses it and a page
     // of 20 (lib/features/leads/api/router.ts). The tags, the assignee and the extras of the list
     // are read for the rows of the page only, so they do not change how the page is found.
-    // The match of a public diagnosis submission: lib/features/diagnostics/lead-upsert.ts (change
-    // both together)
-    const listPage = pg
+    // The match of a public diagnosis submission: leadEmailMatch, the condition
+    // upsertLeadFromSubmission uses, with its order
+    const listPage = qb
       .select({ id: leads.id })
       .from(leads)
       .where(eq(leads.organizationId, ORG))
       .orderBy(...leadListOrderBy())
       .limit(20)
       .toSQL();
-    const byEmail = pg
+    const byEmail = qb
       .select({ id: leads.id })
       .from(leads)
-      .where(and(eq(leads.organizationId, ORG), sql`lower(${leads.email}) = ${'lead42@example.com'}`))
+      .where(leadEmailMatch(ORG, 'lead42@example.com'))
       .orderBy(asc(leads.createdAt))
       .limit(1)
       .toSQL();
@@ -114,7 +116,8 @@ describe.skipIf(!url)('admin indexes (PostgreSQL)', () => {
       expect(listPlan).not.toMatch(/Sort/);
       const byEmailIndex = copyOf('(organization_id, lower(email))');
       expect(byEmailIndex).toBeDefined();
-      expect(emailPlan).toContain(`using ${byEmailIndex} on leads`);
+      // An index scan or a bitmap scan of the index, whichever the planner takes
+      expect(emailPlan).toContain(byEmailIndex);
     } finally {
       await db.unsafe(`drop schema if exists ${copy} cascade`);
     }
