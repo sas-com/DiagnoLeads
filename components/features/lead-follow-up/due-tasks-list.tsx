@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
+import { ContactRecordMenu } from './contact-record-menu';
 import { CheckWithText, DueLabel, TaskKindBadge, useTaskTitle, useUpdateTask } from './task-parts';
 import type { DueTasks } from './use-due-tasks';
 
@@ -21,11 +22,17 @@ export function DueTasksList({
   due,
   organizationId,
   showMineBadge,
+  canRecordContact = false,
 }: {
   due: DueTasks;
   organizationId: string;
   /** Mark the user's own ones (when everyone's are listed) */
   showMineBadge: boolean;
+  /**
+   * With permission to edit leads, each row gets the menu to record a contact with its lead
+   * (今日, #863); without it the rows are as the dashboard's card shows them
+   */
+  canRecordContact?: boolean;
 }) {
   const t = useTranslations('leadFollowUp.today');
   const tTasks = useTranslations('leadFollowUp.tasks');
@@ -42,6 +49,21 @@ export function DueTasksList({
           const title = titleOf(task);
           const company = task.lead.company?.trim();
           const name = task.lead.name?.trim();
+          const leadName = company || name || t('noLeadName');
+          const leadLink = (className: string) => (
+            <Link
+              href={`/${locale}/leads/${task.leadId}`}
+              className={cn(
+                'truncate text-sm text-brand-700 underline underline-offset-4 hover:text-brand-800 dark:text-brand-300',
+                className
+              )}
+            >
+              {leadName}
+              {company && name && (
+                <span className="ml-1 text-gray-600 dark:text-gray-300">{name}</span>
+              )}
+            </Link>
+          );
           return (
             <li key={task.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
               <Checkbox
@@ -63,16 +85,21 @@ export function DueTasksList({
                   {t('mineBadge')}
                 </span>
               )}
-              {/* On its own line on phones, indented past the box's tap area like the line below */}
-              <Link
-                href={`/${locale}/leads/${task.leadId}`}
-                className="basis-full truncate pl-8 text-sm text-brand-700 underline underline-offset-4 hover:text-brand-800 sm:basis-auto sm:pl-0 dark:text-brand-300"
-              >
-                {company || name || t('noLeadName')}
-                {company && name && (
-                  <span className="ml-1 text-gray-600 dark:text-gray-300">{name}</span>
-                )}
-              </Link>
+              {/* On its own line on phones, indented past the box's tap area like the line below;
+                  the menu to record a contact goes with it, at the end of the line */}
+              {canRecordContact ? (
+                <div className="flex min-w-0 basis-full items-center gap-2 pl-8 sm:basis-auto sm:pl-0">
+                  {leadLink('min-w-0')}
+                  <ContactRecordMenu
+                    organizationId={organizationId}
+                    leadId={task.leadId}
+                    leadLabel={leadName}
+                    className="ml-auto shrink-0"
+                  />
+                </div>
+              ) : (
+                leadLink('basis-full pl-8 sm:basis-auto sm:pl-0')
+              )}
               <CheckWithText task={task} className="basis-full pl-8 text-sm" />
             </li>
           );

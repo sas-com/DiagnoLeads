@@ -4,17 +4,18 @@
  * each in the same frame with its own loading, failure and empty states (one failing leaves the
  * others), the deals left out for those who may not read them, a notice without an
  * organization, the day the server read in the heading, and every query read again when the
- * window comes back. Rendered with the Japanese and the English messages (tRPC mocked)
+ * window comes back. Those who may edit leads record a contact from a next action's or a
+ * meeting's row (#863). Rendered with the Japanese and the English messages (tRPC mocked)
  */
 import { TODAY_CONTACTS_SHOWN } from '@/components/features/today/today-activities';
 import { TODAY_NEXT_ACTIONS_SHOWN } from '@/components/features/today/today-next-actions';
 import { TodayScreen } from '@/components/features/today/today-screen';
 import enMessages from '@/locales/en/common.json';
 import messages from '@/locales/ja/common.json';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const ORG_ID = '660e8400-e29b-41d4-a716-446655440000';
 const LEAD_1 = '11111111-1111-4111-8111-111111111111';
@@ -31,12 +32,18 @@ type QueryState = {
 };
 type QueryOptions = { staleTime?: number; enabled?: boolean; refetchOnWindowFocus?: boolean };
 type QueryCall = { input: unknown; options: QueryOptions };
+type MutationOptions = { onSuccess?: (result: unknown, input: unknown) => void };
 
 const mocks = vi.hoisted(() => ({
   organizationId: '' as string | null,
   queries: {} as Record<string, QueryState>,
   calls: {} as Record<string, QueryCall[]>,
   refetch: {} as Record<string, () => void>,
+  /** What leadFollowUp.recordContact was called with */
+  recorded: [] as unknown[],
+  /** A record on its way */
+  recordPending: false,
+  invalidated: [] as { path: string; input: unknown }[],
 }));
 
 vi.mock('@/lib/trpc/client', () => {
@@ -53,20 +60,46 @@ vi.mock('@/lib/trpc/client', () => {
       };
     },
   });
-  const invalidate = { invalidate: vi.fn() };
+  const invalidate = (path: string) => ({
+    invalidate: (input?: unknown) => {
+      mocks.invalidated.push({ path, input });
+    },
+  });
   return {
     trpc: {
       useUtils: () => ({
-        leadFollowUp: { tasks: invalidate, dueTasks: invalidate },
-        deals: { board: invalidate },
+        leadFollowUp: {
+          tasks: invalidate('leadFollowUp.tasks'),
+          dueTasks: invalidate('leadFollowUp.dueTasks'),
+          contacts: invalidate('leadFollowUp.contacts'),
+        },
+        leadActivity: {
+          list: invalidate('leadActivity.list'),
+          forDeal: invalidate('leadActivity.forDeal'),
+          myDay: invalidate('leadActivity.myDay'),
+        },
+        analytics: { getDashboard: invalidate('analytics.getDashboard') },
+        deals: { board: invalidate('deals.board') },
       }),
       leadFollowUp: {
         dueTasks: query('dueTasks'),
         updateTask: { useMutation: () => ({ isPending: false, mutate: vi.fn() }) },
+        recordContact: {
+          useMutation: (options: MutationOptions = {}) => ({
+            isPending: mocks.recordPending,
+            mutateAsync: async (input: { kind: string }) => {
+              mocks.recorded.push(input);
+              const saved = { id: 'contact-1', kind: input.kind, contactedAt: new Date() };
+              options.onSuccess?.(saved, input);
+              return saved;
+            },
+          }),
+        },
+        deleteContact: { useMutation: () => ({ mutate: vi.fn() }) },
       },
-      leads: { myMeetings: query('myMeetings') },
+      leads: { myMeetings: query('myMeetings'), access: query('access') },
       leadActivity: { myDay: query('myDay') },
-      deals: { board: query('board') },
+      deals: { board: query('board'), forLead: query('forLead') },
     },
   };
 });
@@ -74,6 +107,17 @@ vi.mock('@/hooks/use-organization', () => ({
   useOrganization: () => ({ organizationId: mocks.organizationId }),
 }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+
+// The menus and the dialog (Radix) in jsdom
+beforeAll(() => {
+  Element.prototype.scrollIntoView = vi.fn();
+  Element.prototype.hasPointerCapture ??= () => false;
+  globalThis.ResizeObserver ??= class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+});
 
 const renderScreen = (locale: 'ja' | 'en' = 'ja') =>
   render(
@@ -243,12 +287,16 @@ const manyDue = (total: number) => {
   return { ...due, total, counts: { mine: total, all: total }, items };
 };
 
+/** What a member who may edit leads may do with them (leads.access) */
+const access = { canCreate: true, canEdit: true, canDelete: false, canReadComments: true };
+
 const loadAll = () => {
   mocks.queries = {
     dueTasks: { data: due },
     myMeetings: { data: meetings },
     myDay: { data: day },
     board: { data: board },
+    access: { data: access },
   };
 };
 
@@ -257,6 +305,9 @@ beforeEach(() => {
   mocks.queries = {};
   mocks.calls = {};
   mocks.refetch = {};
+  mocks.recorded = [];
+  mocks.recordPending = false;
+  mocks.invalidated = [];
 });
 
 describe('TodayScreen', () => {
@@ -302,7 +353,7 @@ describe('TodayScreen', () => {
     expect(screen.getByRole('status')).toHaveTextContent(t.noOrganization);
     expect(screen.queryByRole('region')).not.toBeInTheDocument();
     expect(screen.queryByTestId('day-loading')).not.toBeInTheDocument();
-    for (const name of ['dueTasks', 'myMeetings', 'myDay', 'board']) {
+    for (const name of ['dueTasks', 'myMeetings', 'myDay', 'board', 'access']) {
       expect(mocks.calls[name].at(-1)?.options.enabled, name).toBe(false);
     }
   });
@@ -631,6 +682,190 @@ describe('TodayScreen', () => {
       renderScreen();
 
       expect(within(region(/^今日の活動/)).getByText(t.activities.empty)).toBeInTheDocument();
+    });
+  });
+
+  describe('recording a contact from a row (#863)', () => {
+    const contactText = messages.leadFollowUp.contact;
+    /** The buttons that open a row's menu, named with the row's lead */
+    const recordButtons = (within_: HTMLElement = document.body) =>
+      within(within_).queryAllByRole('button', { name: /への連絡を記録$/ });
+
+    it('records a contact from a meeting’s row for its lead, and reads today’s activity again', async () => {
+      loadAll();
+      const user = userEvent.setup();
+      renderScreen();
+      const [, second] = within(group(region(/^商談予定/), t.meetings.todayHeading)).getAllByRole(
+        'listitem'
+      );
+
+      const button = within(second).getByRole('button', { name: '佐藤 花子への連絡を記録' });
+      expect(button).toHaveTextContent(contactText.recordMenu);
+      await user.click(button);
+      const menu = screen.getByRole('menu', { name: '佐藤 花子への連絡を記録' });
+      expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+        contactText.kinds.call,
+        contactText.kinds.email,
+        contactText.kinds.no_answer,
+        messages.leadFollowUp.activity.open,
+      ]);
+      await user.click(within(menu).getByRole('menuitem', { name: contactText.kinds.call }));
+
+      expect(mocks.recorded).toEqual([{ organizationId: ORG_ID, leadId: LEAD_2, kind: 'call' }]);
+      expect(mocks.invalidated).toContainEqual({
+        path: 'leadActivity.myDay',
+        input: { organizationId: ORG_ID },
+      });
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    });
+
+    it('records a contact from a next action’s row for its lead', async () => {
+      loadAll();
+      mocks.queries.dueTasks = {
+        data: { ...due, items: [{ ...dueTask, leadId: LEAD_3, lead: { name: null, company: '架空物産' } }] },
+      };
+      const user = userEvent.setup();
+      renderScreen();
+      const row = within(region(/^今日までの次の行動/)).getByRole('listitem');
+
+      await user.click(within(row).getByRole('button', { name: '架空物産への連絡を記録' }));
+      await user.click(screen.getByRole('menuitem', { name: contactText.kinds.call }));
+
+      expect(mocks.recorded).toEqual([{ organizationId: ORG_ID, leadId: LEAD_3, kind: 'call' }]);
+      expect(mocks.invalidated).toContainEqual({
+        path: 'leadActivity.myDay',
+        input: { organizationId: ORG_ID },
+      });
+    });
+
+    it('opens the menu and chooses from it with the keyboard, the focus coming back to the button', async () => {
+      loadAll();
+      const user = userEvent.setup();
+      renderScreen();
+      const button = within(region(/^今日までの次の行動/)).getByRole('button', {
+        name: '架空商事への連絡を記録',
+      });
+
+      button.focus();
+      await user.keyboard('{Enter}');
+      expect(screen.getByRole('menuitem', { name: contactText.kinds.call })).toHaveFocus();
+      await user.keyboard('{ArrowDown}{Enter}');
+
+      expect(mocks.recorded).toEqual([{ organizationId: ORG_ID, leadId: LEAD_1, kind: 'email' }]);
+      await waitFor(() => expect(button).toHaveFocus());
+    });
+
+    it('opens the activity dialog for the row’s lead, and gives the focus back when it closes', async () => {
+      loadAll();
+      const user = userEvent.setup();
+      renderScreen();
+      const button = within(group(region(/^商談予定/), t.meetings.laterHeading)).getByRole(
+        'button',
+        { name: '架空物産への連絡を記録' }
+      );
+
+      await user.click(button);
+      await user.click(
+        screen.getByRole('menuitem', { name: messages.leadFollowUp.activity.open })
+      );
+
+      const dialog = screen.getByRole('dialog', { name: messages.leadFollowUp.activity.title });
+      expect(dialog).toHaveTextContent('架空物産への連絡・訪問・オンライン商談');
+      expect(mocks.recorded).toEqual([]);
+      await user.click(within(dialog).getByRole('button', { name: messages.common.cancel }));
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      await waitFor(() => expect(button).toHaveFocus());
+    });
+
+    it('puts the button beside the meeting’s link in the row, never inside it', () => {
+      loadAll();
+      renderScreen();
+      const items = within(region(/^商談予定/)).getAllByRole('listitem');
+
+      expect(items).toHaveLength(3);
+      for (const item of items) {
+        const link = within(item).getByRole('link');
+        const [button] = recordButtons(item);
+        expect(link.querySelector('button')).toBeNull();
+        expect(button.parentElement).toBe(item);
+      }
+    });
+
+    it('keeps a next action’s lead and its button past the box’s tap area on phones', () => {
+      loadAll();
+      renderScreen();
+      const row = within(region(/^今日までの次の行動/)).getByRole('listitem');
+      const [button] = recordButtons(row);
+      const line = button.parentElement as HTMLElement;
+
+      // The lead and the button share the line under the title, indented like the lead alone
+      expect(line).toHaveClass('basis-full', 'pl-8', 'sm:pl-0');
+      expect(within(line).getByRole('link', { name: /架空商事/ })).toHaveAttribute(
+        'href',
+        `/ja/leads/${LEAD_1}`
+      );
+      expect(within(row).getByRole('checkbox')).toHaveClass('after:-inset-[13px]');
+    });
+
+    it('sizes the button and the menu for DADS: 44px to tap on phones and no text under 14px', async () => {
+      loadAll();
+      const user = userEvent.setup();
+      renderScreen();
+      const [button] = recordButtons(region(/^商談予定/));
+
+      expect(button).toHaveClass('min-h-11', 'text-sm');
+      await user.click(button);
+      for (const item of screen.getAllByRole('menuitem')) {
+        expect(item, item.textContent ?? '').toHaveClass('min-h-11', 'text-sm');
+        expect(item, item.textContent ?? '').not.toHaveClass('text-xs');
+      }
+    });
+
+    it('does not open while a record is on its way, the button keeping the focus', async () => {
+      loadAll();
+      mocks.recordPending = true;
+      const user = userEvent.setup();
+      renderScreen();
+      const [button] = recordButtons(region(/^今日までの次の行動/));
+
+      expect(button).toHaveAttribute('aria-disabled', 'true');
+      expect(button).toBeEnabled();
+      await user.click(button);
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      expect(mocks.recorded).toEqual([]);
+    });
+
+    it('shows no way to record to those who may not edit leads, the rows staying', () => {
+      loadAll();
+      mocks.queries.access = { data: { ...access, canEdit: false } };
+      renderScreen();
+
+      expect(recordButtons()).toEqual([]);
+      expect(within(region(/^商談予定/)).getAllByRole('listitem')).toHaveLength(3);
+      expect(within(region(/^今日までの次の行動/)).getByRole('link', { name: /架空商事/ })).toHaveClass(
+        'basis-full',
+        'pl-8'
+      );
+    });
+
+    it('shows none until the server said what the member may do', () => {
+      loadAll();
+      mocks.queries.access = {};
+      renderScreen();
+
+      expect(recordButtons()).toEqual([]);
+      expect(mocks.calls.access.at(-1)?.input).toEqual({ organizationId: ORG_ID });
+    });
+
+    it('names the button in English with the lead', () => {
+      loadAll();
+      renderScreen('en');
+
+      const [button] = within(region(/^Meetings this week/)).getAllByRole('button', {
+        name: 'Record a contact with 架空商事',
+      });
+      expect(button).toHaveTextContent(enMessages.leadFollowUp.contact.recordMenu);
     });
   });
 

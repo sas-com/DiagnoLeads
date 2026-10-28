@@ -57,6 +57,8 @@ export interface RecordActivityDialogProps {
   leadLabel: string;
   /** The deal to start with (the deal page); otherwise the lead's only open deal, if any */
   defaultDealId?: string;
+  /** Where the focus goes when it closes, when it was not opened by a dialog trigger (#863) */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 type Field = 'kind' | 'when' | 'duration';
@@ -75,6 +77,7 @@ export function RecordActivityDialog({
   leadId,
   leadLabel,
   defaultDealId,
+  onCloseAutoFocus,
 }: RecordActivityDialogProps) {
   const t = useTranslations('leadFollowUp.activity');
   const recorder = useRecordContact({ organizationId, leadId, toastOnError: false });
@@ -95,6 +98,7 @@ export function RecordActivityDialog({
           // A tap outside does not throw away what was entered
           if (dirty.current || recorder.pending) event.preventDefault();
         }}
+        onCloseAutoFocus={onCloseAutoFocus}
       >
         <DialogHeader className="border-b px-6 py-4">
           <DialogTitle>{t('title')}</DialogTitle>

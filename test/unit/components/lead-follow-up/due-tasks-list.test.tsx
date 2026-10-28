@@ -132,6 +132,13 @@ describe('DueTasksList', () => {
     expect(screen.getByRole('link', { name: /架空商事/ })).toHaveClass('basis-full', 'pl-8', 'sm:pl-0');
   });
 
+  it('has no menu to record a contact unless the screen asks for one (今日 does, #863)', () => {
+    mocks.due = due([task('t1')]);
+    wrap(<MineList />);
+
+    expect(within(screen.getByRole('listitem')).queryByRole('button')).not.toBeInTheDocument();
+  });
+
   it('names a lead with a blank company by its person, and one with neither as nameless', () => {
     mocks.due = due([
       task('t1', { lead: { company: ' ', name: '山田 花子' } }),

@@ -3,6 +3,7 @@
 import { useDueTasks } from '@/components/features/lead-follow-up/use-due-tasks';
 import { STUDIO_PAGE_CLASS, StudioPageHeader } from '@/components/studio';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useLeadAccess } from '@/hooks/use-leads';
 import { useOrganization } from '@/hooks/use-organization';
 import { trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
@@ -24,13 +25,16 @@ const TODAY_QUERY_OPTIONS = { staleTime: 30 * 1000, refetchOnWindowFocus: true }
  * next actions due today or earlier, their meetings this week from today, their deals that need
  * attention, and the contacts they recorded today. Each section reads on its own, so one that
  * fails leaves the others shown. The heading says which day (Japan) the server read them for,
- * so a screen left open past midnight shows it is of the day before.
+ * so a screen left open past midnight shows it is of the day before. Those who may edit leads
+ * record a contact from a next action's or a meeting's row without leaving the screen (#863),
+ * as the dashboard's requests do; nothing until the server said so.
  */
 export function TodayScreen() {
   const t = useTranslations('today');
   const format = useFormatter();
   const { organizationId: contextOrgId } = useOrganization();
   const organizationId = contextOrgId && UUID.test(contextOrgId) ? contextOrgId : '';
+  const access = useLeadAccess(organizationId);
   const options = { enabled: !!organizationId, ...TODAY_QUERY_OPTIONS };
   const due = useDueTasks(organizationId, 'mine', {
     ...TODAY_QUERY_OPTIONS,
@@ -79,8 +83,16 @@ export function TodayScreen() {
         </p>
       ) : (
         <>
-          <TodayNextActions due={due} organizationId={organizationId} />
-          <TodayMeetings query={meetings} />
+          <TodayNextActions
+            due={due}
+            organizationId={organizationId}
+            canRecordContact={access.canEdit}
+          />
+          <TodayMeetings
+            query={meetings}
+            organizationId={organizationId}
+            canRecordContact={access.canEdit}
+          />
           <TodayDeals query={deals} />
           <TodayActivities query={activities} />
         </>
