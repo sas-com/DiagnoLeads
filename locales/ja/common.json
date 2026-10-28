@@ -1575,15 +1575,27 @@
       "history": "履歴",
       "historyEmpty": "履歴はありません",
       "historyCreated": "作成",
-      "historyChanged": "{fields}を変更",
+      "historyDiff": "{field}：{before} <arrow>→</arrow> {after}",
+      "historyArrowSpoken": "から",
+      "historyValue": "{field}：{after}",
       "notFound": "商談が見つかりません",
       "deleteTitle": "商談を削除しますか？",
-      "deleteDescription": "「{name}」を削除します。元に戻せません。リードの状態は変わりません。"
+      "deleteDescription": "「{name}」を削除します。元に戻せません。この商談の活動は、リード「{lead}」の活動履歴に残ります。リードの状態と商談フェーズは、残りの商談から計算し直します。最後の商談なら、リードは今の値のまま残り、手で変えられるようになります。",
+      "deleting": "削除しています…",
+      "moreActions": "その他の操作",
+      "leadNextActions": "リード「{lead}」の次の行動・持ち帰り事項です。リードの画面と同じものです",
+      "historyForecastAuto": "自動（{category}）",
+      "historyOther": "ほかの項目を変更",
+      "leadNextActionsNoName": "このリードの次の行動・持ち帰り事項です。リードの画面と同じものです",
+      "factsTitle": "商談の内容"
     },
     "leadCard": {
       "title": "商談",
       "empty": "このリードの商談はまだありません",
-      "summary": "{count}件・開いている商談 {amount}"
+      "summary": "{count}件・開いている商談 {amount}",
+      "expectedClose": "受注予定 {date}",
+      "wonOn": "受注 {date}",
+      "lostOn": "失注 {date}"
     },
     "state": {
       "loadError": "商談を読み込めませんでした",

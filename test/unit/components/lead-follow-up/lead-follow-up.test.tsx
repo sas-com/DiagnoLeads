@@ -221,6 +221,20 @@ describe('LeadContactBar', () => {
 describe('LeadNextActionsCard', () => {
   const renderCard = () => wrap(<LeadNextActionsCard organizationId={ORG_ID} leadId={LEAD_ID} />);
 
+  it("says whose next actions they are when the page is not the lead's (#720)", () => {
+    mocks.tasks = { today: '2026-10-16', canEdit: true, items: [] };
+    wrap(
+      <LeadNextActionsCard
+        organizationId={ORG_ID}
+        leadId={LEAD_ID}
+        description="リード「架空商事」の次の行動です"
+      />
+    );
+    expect(screen.getByRole('heading', { name: '次の行動・持ち帰り事項' }).parentElement?.nextElementSibling).toHaveTextContent(
+      'リード「架空商事」の次の行動です'
+    );
+  });
+
   it('lists open next actions with their due status and ticks one done', async () => {
     mocks.tasks = {
       today: '2026-10-16',
