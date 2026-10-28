@@ -198,6 +198,7 @@
     "menu": "メニュー",
     "management": "管理",
     "dashboard": "ダッシュボード",
+    "today": "今日",
     "leads": "リード管理",
     "deals": "商談",
     "forecast": "売上予測",
@@ -1575,15 +1576,27 @@
       "history": "履歴",
       "historyEmpty": "履歴はありません",
       "historyCreated": "作成",
-      "historyChanged": "{fields}を変更",
+      "historyDiff": "{field}：{before} <arrow>→</arrow> {after}",
+      "historyArrowSpoken": "から",
+      "historyValue": "{field}：{after}",
       "notFound": "商談が見つかりません",
       "deleteTitle": "商談を削除しますか？",
-      "deleteDescription": "「{name}」を削除します。元に戻せません。リードの状態は変わりません。"
+      "deleteDescription": "「{name}」を削除します。元に戻せません。この商談の活動は、リード「{lead}」の活動履歴に残ります。リードの状態と商談フェーズは、残りの商談から計算し直します。最後の商談なら、リードは今の値のまま残り、手で変えられるようになります。",
+      "deleting": "削除しています…",
+      "moreActions": "その他の操作",
+      "leadNextActions": "リード「{lead}」の次の行動・持ち帰り事項です。リードの画面と同じものです",
+      "historyForecastAuto": "自動（{category}）",
+      "historyOther": "ほかの項目を変更",
+      "leadNextActionsNoName": "このリードの次の行動・持ち帰り事項です。リードの画面と同じものです",
+      "factsTitle": "商談の内容"
     },
     "leadCard": {
       "title": "商談",
       "empty": "このリードの商談はまだありません",
-      "summary": "{count}件・開いている商談 {amount}"
+      "summary": "{count}件・開いている商談 {amount}",
+      "expectedClose": "受注予定 {date}",
+      "wonOn": "受注 {date}",
+      "lostOn": "失注 {date}"
     },
     "state": {
       "loadError": "商談を読み込めませんでした",
@@ -1745,6 +1758,60 @@
       "retry": "再読み込み",
       "forbiddenTitle": "売上予測を見る権限がありません",
       "forbiddenBody": "売上予測と目標は、リードを閲覧できるメンバーだけが見られます（親組織からの閲覧者は除く）。"
+    }
+  },
+  "today": {
+    "title": "今日",
+    "description": "今日の予定と、やることをまとめて見られます",
+    "dateLine": "{date}・日本時間",
+    "noOrganization": "組織を選ぶと、ここに今日の予定とやることが表示されます",
+    "noLeadName": "名前未設定のリード",
+    "section": {
+      "count": "{count}件",
+      "loading": "読み込み中",
+      "loadError": "読み込めませんでした",
+      "retry": "再読み込み"
+    },
+    "nextActions": {
+      "title": "今日までの次の行動"
+    },
+    "meetings": {
+      "title": "商談予定",
+      "description": "今日から日曜までの、担当リードの予定です（担当がいないリードは、日程を入れた人に出ます）",
+      "viewAll": "担当リードの今週の予定を一覧で見る",
+      "todayHeading": "今日の予定",
+      "laterHeading": "今週の残りの予定（明日〜日曜）",
+      "empty": "今日から日曜までの商談予定はありません",
+      "emptyToday": "今日の商談予定はありません",
+      "emptyLater": "明日から日曜までの商談予定はありません",
+      "more": "ほか{count}件あります（早い順に{shown}件を表示）",
+      "noTime": "時刻の記録なし",
+      "firstMeeting": "初回",
+      "unassigned": "担当未定"
+    },
+    "activities": {
+      "title": "今日の活動",
+      "description": "今日の日時で自分が記録した連絡です（不通を含み、ヒアリングは含みません）",
+      "empty": "今日記録した活動はまだありません",
+      "kinds": {
+        "call": "電話",
+        "email": "メール",
+        "visit": "訪問",
+        "online_meeting": "オンライン商談",
+        "no_answer": "不通"
+      },
+      "kindCount": "{count}件",
+      "durationLabel": "所要時間の合計",
+      "more": "新しい{shown}件を表示しています（全{total}件）",
+      "showAll": "すべて表示（{count}件）",
+      "showLess": "折りたたむ"
+    },
+    "deals": {
+      "title": "注意が必要な商談",
+      "description": "自分の商談のうち、受注予定日を過ぎたものと、リードに次の行動がないものです",
+      "viewAll": "自分の商談の一覧",
+      "empty": "注意が必要な商談はありません",
+      "closeOn": "受注予定日 {date}"
     }
   },
   "settings": {
@@ -4970,6 +5037,7 @@
     },
     "today": {
       "title": "今日やること",
+      "count": "{count}件",
       "description": "期限が今日まで、または期限を過ぎた次の行動です。チェックすると完了になります。",
       "empty": "今日までの次の行動はありません",
       "loadError": "読み込めませんでした",

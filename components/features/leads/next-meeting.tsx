@@ -74,9 +74,20 @@ export function NextMeetingCell({
   );
 }
 
-export function DealRatingBadge({ rating }: { rating: string | null | undefined }) {
+export function DealRatingBadge({
+  rating,
+  className,
+}: {
+  rating: string | null | undefined;
+  /** e.g. text-sm where no text may be under 14px (今日, #556) */
+  className?: string;
+}) {
   const t = useTranslations('leadList');
   if (!rating) return <span className="text-gray-400">-</span>;
   const color = DEAL_RATING_COLORS[rating as keyof typeof DEAL_RATING_COLORS] ?? 'gray';
-  return <Badge color={color}>{t('ratingOption', { rating: rating.toUpperCase() })}</Badge>;
+  return (
+    <Badge color={color} className={className}>
+      {t('ratingOption', { rating: rating.toUpperCase() })}
+    </Badge>
+  );
 }

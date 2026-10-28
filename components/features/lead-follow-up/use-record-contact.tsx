@@ -12,9 +12,9 @@ const TIME_ZONE = 'Asia/Tokyo';
 
 /**
  * Records a contact of a lead and refreshes what shows it: the lead's contact bar, its activity,
- * the deal page and the dashboard. Each record is announced with an undo, for a wrong tap, and
- * with its time when one was given (Refs #136, #554). A failure is a toast unless the caller
- * shows it itself (toastOnError false: a dialog says it in place).
+ * the deal page, the dashboard and 今日 (#556). Each record is announced with an undo, for a
+ * wrong tap, and with its time when one was given (Refs #136, #554). A failure is a toast unless
+ * the caller shows it itself (toastOnError false: a dialog says it in place).
  */
 export function useRecordContact({
   organizationId,
@@ -33,6 +33,7 @@ export function useRecordContact({
     void utils.leadFollowUp.contacts.invalidate({ organizationId, leadId });
     void utils.leadActivity.list.invalidate();
     void utils.leadActivity.forDeal.invalidate();
+    void utils.leadActivity.myDay.invalidate({ organizationId });
     void utils.analytics.getDashboard.invalidate();
   };
   const remove = trpc.leadFollowUp.deleteContact.useMutation({

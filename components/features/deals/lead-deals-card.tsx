@@ -1,5 +1,6 @@
 'use client';
 
+import { TAP_TARGET } from '@/components/common/tap-target';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -10,8 +11,22 @@ import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useState } from 'react';
 import { DealFormDialog } from './deal-form-dialog';
-import { formatYen } from './deal-format';
+import { formatDealDate, formatYen } from './deal-format';
 import { DealStageBadge } from './deal-stage-badge';
+
+/** The day that matters for the deal, named: when it should close, or when it closed (#720) */
+function DealDay({
+  deal,
+}: { deal: { stage: string; expectedCloseOn: string | null; closedOn: string | null } }) {
+  const t = useTranslations('deals');
+  if (isOpenStage(deal.stage)) {
+    return deal.expectedCloseOn
+      ? t('leadCard.expectedClose', { date: formatDealDate(deal.expectedCloseOn) })
+      : t('card.noCloseDate');
+  }
+  const date = deal.closedOn ? formatDealDate(deal.closedOn) : '—';
+  return deal.stage === 'won' ? t('leadCard.wonOn', { date }) : t('leadCard.lostOn', { date });
+}
 
 /**
  * The deals of a lead on its page (Refs #436): each with its stage, amount and expected close
@@ -42,13 +57,17 @@ export function LeadDealsCard({
       <div className="mb-3 flex items-center gap-2">
         <Briefcase className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         <h2 className="text-sm font-semibold text-foreground">{t('leadCard.title')}</h2>
-        {data && data.items.length > 0 && <Badge color="gray">{data.items.length}</Badge>}
+        {data && data.items.length > 0 && (
+          <Badge color="gray" className="text-sm">
+            {data.items.length}
+          </Badge>
+        )}
         {data?.canEdit && (
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className="ml-auto"
+            className={`ml-auto ${TAP_TARGET}`}
             onClick={() => setCreateOpen(true)}
           >
             <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
@@ -59,8 +78,16 @@ export function LeadDealsCard({
 
       {query.isError ? (
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm text-red-600 dark:text-red-400">{t('state.loadError')}</p>
-          <Button type="button" variant="ghost" size="sm" onClick={() => void query.refetch()}>
+          <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+            {t('state.loadError')}
+          </p>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className={TAP_TARGET}
+            onClick={() => void query.refetch()}
+          >
             {t('state.retry')}
           </Button>
         </div>
@@ -70,7 +97,7 @@ export function LeadDealsCard({
         <p className="text-sm text-muted-foreground">{t('leadCard.empty')}</p>
       ) : (
         <>
-          <p className="mb-2 text-xs text-muted-foreground">
+          <p className="mb-2 text-sm text-muted-foreground">
             {t('leadCard.summary', {
               count: data.items.length,
               amount: formatYen(openAmount, locale) ?? '',
@@ -79,9 +106,10 @@ export function LeadDealsCard({
           <ul className="divide-y">
             {data.items.map((deal) => (
               <li key={deal.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
+                {/* 44px on phones by its padding; underlined, so a touch screen shows it is a link */}
                 <Link
                   href={`/${locale}/deals/${deal.id}`}
-                  className="min-w-0 flex-1 truncate text-sm font-medium underline-offset-2 hover:underline"
+                  className="block min-w-0 flex-1 truncate py-3 text-sm font-medium underline underline-offset-2 md:py-0"
                 >
                   {deal.name}
                 </Link>
@@ -89,8 +117,8 @@ export function LeadDealsCard({
                 <span className="text-sm tabular-nums text-foreground">
                   {formatYen(deal.amount, locale) ?? t('card.noAmount')}
                 </span>
-                <span className="text-xs text-muted-foreground">
-                  {deal.expectedCloseOn ?? t('card.noCloseDate')}
+                <span className="text-sm text-muted-foreground">
+                  <DealDay deal={deal} />
                 </span>
               </li>
             ))}

@@ -1,6 +1,7 @@
 'use client';
 
 import { TAP_TARGET } from '@/components/common/tap-target';
+import { StudioPageHeader } from '@/components/studio';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -138,9 +139,7 @@ export function DealsScreen() {
   if (board.error?.data?.code === 'FORBIDDEN') {
     return (
       <div className="mx-auto w-full max-w-7xl space-y-6 py-1 sm:px-2 sm:py-6">
-        <h1 className="text-2xl font-bold tracking-wide text-gray-900 sm:text-[2rem] dark:text-gray-50">
-          {t('title')}
-        </h1>
+        <StudioPageHeader title={t('title')} />
         <DealsForbidden />
       </div>
     );
@@ -148,48 +147,51 @@ export function DealsScreen() {
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 py-1 sm:px-2 sm:py-6">
-      <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 border-b border-gray-200 pb-5 dark:border-gray-800">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-wide text-gray-900 sm:text-[2rem] dark:text-gray-50">
-            {t('title')}
-          </h1>
-          <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{t('description')}</p>
-          {data && !data.canEdit && (
-            <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
-              {t('state.readOnlyHint')}
-            </p>
-          )}
-        </div>
-        {organizationId && (
-          <div className="flex flex-wrap items-center gap-2">
-            <ToggleGroup
-              type="single"
-              size="sm"
-              value={view}
-              onValueChange={(value) => value && set('view', value, 'board')}
-              aria-label={t('views.label')}
-              className="rounded-md border border-gray-200 bg-white p-0.5 dark:border-gray-700 dark:bg-gray-900"
-            >
-              {VIEWS.map((value) => (
-                <ToggleGroupItem key={value} value={value} className={TAP_TARGET}>
-                  {t(`views.${value}`)}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
-            {data && !data.canEdit && (
-              <Badge color="gray" className="text-sm">
-                {t('state.readOnly')}
-              </Badge>
-            )}
-            {data?.canEdit && (
-              <Button type="button" className={TAP_TARGET} onClick={() => setCreateOpen(true)}>
-                <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                {t('create')}
-              </Button>
-            )}
-          </div>
-        )}
-      </header>
+      <StudioPageHeader
+        title={t('title')}
+        description={
+          data && !data.canEdit ? (
+            <>
+              {t('description')}
+              {/* Those who cannot change deals are told why, under what the screen is for */}
+              <span className="mt-1 block">{t('state.readOnlyHint')}</span>
+            </>
+          ) : (
+            t('description')
+          )
+        }
+        actions={
+          organizationId && (
+            <>
+              <ToggleGroup
+                type="single"
+                size="sm"
+                value={view}
+                onValueChange={(value) => value && set('view', value, 'board')}
+                aria-label={t('views.label')}
+                className="rounded-md border border-gray-200 bg-white p-0.5 dark:border-gray-700 dark:bg-gray-900"
+              >
+                {VIEWS.map((value) => (
+                  <ToggleGroupItem key={value} value={value} className={TAP_TARGET}>
+                    {t(`views.${value}`)}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+              {data && !data.canEdit && (
+                <Badge color="gray" className="text-sm">
+                  {t('state.readOnly')}
+                </Badge>
+              )}
+              {data?.canEdit && (
+                <Button type="button" className={TAP_TARGET} onClick={() => setCreateOpen(true)}>
+                  <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                  {t('create')}
+                </Button>
+              )}
+            </>
+          )
+        }
+      />
 
       {!organizationId ? null : (
         <>
