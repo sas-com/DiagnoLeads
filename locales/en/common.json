@@ -3518,6 +3518,14 @@
           "title": "DX-certified company",
           "body": "Software Agency System Co., Ltd. is certified under the DX Certification program of the Ministry of Economy, Trade and Industry."
         },
+        "privacyMark": {
+          "title": "PrivacyMark",
+          "body": "Software Agency System Co., Ltd. holds the PrivacyMark (certification number 10822550, conforming to JIS Q 15001:2023)."
+        },
+        "isms": {
+          "title": "ISMS (ISO/IEC 27001)",
+          "body": "We hold information security management system certification (certificate number IS609954). Its scope is business system development at the head office, training services and HR consulting."
+        },
         "upkeep": {
           "title": "After the move",
           "body": "We who build it also provide the upkeep to keep fixing weaknesses when they are found."
