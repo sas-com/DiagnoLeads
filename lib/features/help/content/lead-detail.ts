@@ -8,6 +8,7 @@ export const leadDetailArticle: HelpArticle = {
     '1件のリードについて、連絡・ヒアリング・次の行動・商談をここで記録します。診断の結果や商談前の準備もこの画面で確かめます。',
   routes: ['/leads/[leadId]'],
   reviewedAt: '2026-10-28',
+  related: ['workflow-lifecycle', 'glossary'],
   blocks: [
     { type: 'h2', id: 'header', text: '画面の上の部分' },
     {

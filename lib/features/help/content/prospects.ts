@@ -8,6 +8,7 @@ export const prospectsArticle: HelpArticle = {
     'メンバーがつてや交流会で話したお客様を1行ずつ記録し、営業が次の一手を進めます。連絡先を得たお客様は、ここからリードにします。',
   routes: ['/prospects'],
   reviewedAt: '2026-10-28',
+  related: ['workflow-prospects-to-lead'],
   blocks: [
     { type: 'h2', id: 'write', text: '書くこと・書かないこと' },
     {

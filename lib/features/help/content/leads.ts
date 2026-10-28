@@ -8,6 +8,7 @@ export const leadsArticle: HelpArticle = {
     '診断や取り込みで集まったリードを探し、絞り込み、まとめて扱います。行を押すと要点が横に開き、詳しく見るときはリードの詳細ページへ進みます。',
   routes: ['/leads'],
   reviewedAt: '2026-10-28',
+  related: ['workflow-lifecycle', 'glossary'],
   blocks: [
     { type: 'h2', id: 'find', text: 'リードを探す' },
     {

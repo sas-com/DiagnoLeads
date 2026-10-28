@@ -65,7 +65,13 @@ export interface HelpArticle {
   /** Date the content was last checked against the screen, YYYY-MM-DD (Japan time) */
   reviewedAt: string;
   blocks: HelpBlock[];
+  /** Ids of other articles to read next (a workflow, the glossary), shown under the article */
+  related?: string[];
 }
+
+/** The groups of the help center's table of contents, in their order */
+export const HELP_SECTIONS = ['workflows', 'screens', 'settings', 'terms'] as const;
+export type HelpSection = (typeof HELP_SECTIONS)[number];
 
 /** Why an admin page has no article yet (checked by test/unit/features/help/registry.test.ts) */
 export type HelpExclusionReason =
@@ -74,7 +80,9 @@ export type HelpExclusionReason =
   /** The page only redirects to another page that has an article */
   | { kind: 'redirect'; to: string }
   /** The page is being removed (the issue that removes it) */
-  | { kind: 'removed'; issue: number };
+  | { kind: 'removed'; issue: number }
+  /** A page of the help center itself */
+  | { kind: 'help' };
 
 export function helpInlineRuns(content: HelpInline): HelpInlineRun[] {
   return typeof content === 'string' ? [{ type: 'text', text: content }] : content;
@@ -143,6 +151,10 @@ export function validateHelpArticle(article: HelpArticle): string[] {
     if (!isRoute(route)) problems.push(`route "${route}" is not a route without the locale`);
   }
   if (article.blocks.length === 0) problems.push('the article has no blocks');
+  for (const id of article.related ?? []) {
+    if (id === article.id) problems.push('the article names itself as related');
+    if (!ID.test(id)) problems.push(`related id "${id}" is not lowercase-hyphenated`);
+  }
 
   const ids = new Set<string>();
   for (const block of article.blocks) {

@@ -2816,7 +2816,8 @@
       "profile": "Personal settings",
       "settings": "Organization settings",
       "logout": "Logout",
-      "logoutError": "Failed to log out."
+      "logoutError": "Failed to log out.",
+      "help": "Help"
     },
     "search": {
       "label": "Search leads",
@@ -5969,6 +5970,27 @@
       "group_admin": "group admins",
       "parent_viewer": "parent organization viewers"
     },
-    "reviewedAt": "This guide matches the screen as of {date} (written in Japanese for now)"
+    "reviewedAt": "This guide matches the screen as of {date} (written in Japanese for now)",
+    "menu": "Help",
+    "openCenter": "Open the help center",
+    "related": "Read next",
+    "center": {
+      "title": "Help",
+      "description": "How to use each screen, the sales workflow and the terms. The articles are in Japanese.",
+      "searchLabel": "Search the help",
+      "searchPlaceholder": "e.g. SQL, targets, invite",
+      "resultCount": "{count, plural, one {# article} other {# articles}}",
+      "noResults": "No article matches \"{query}\". Try a shorter word or browse the contents.",
+      "tocLabel": "Contents",
+      "sections": {
+        "workflows": "Workflows",
+        "screens": "Screens",
+        "settings": "Settings",
+        "terms": "Glossary"
+      },
+      "back": "Back to the help contents",
+      "openScreen": "Open this screen",
+      "articleNotFound": "Article not found"
+    }
   }
 }
