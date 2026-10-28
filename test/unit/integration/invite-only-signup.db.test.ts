@@ -154,7 +154,12 @@ describe.skipIf(!url)('invitation-only sign-up (better-auth + PostgreSQL)', () =
     const email = `internal-${unique()}@example.com`;
 
     await expect(
-      context.internalAdapter.createUser({ email, name: '経路外', emailVerified: false })
+      // better-auth 1.7 asks every creation for its provisioning source; any path other than
+      // /sign-up/email must be refused by the hook
+      context.internalAdapter.createUser(
+        { email, name: '経路外', emailVerified: false },
+        { method: 'admin' }
+      )
     ).rejects.toMatchObject({ body: { code: 'INVITATION_REQUIRED' } });
     expect(await userCount(email)).toBe(0);
   });
