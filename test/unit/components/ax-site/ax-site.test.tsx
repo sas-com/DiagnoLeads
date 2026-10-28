@@ -347,6 +347,28 @@ describe('AX migration landing page', () => {
     ).toBeInTheDocument();
   });
 
+  it('names the PrivacyMark and the ISMS certification with their numbers and scope (#842)', async () => {
+    await renderPage();
+    const trust = within(
+      screen.getByRole('heading', { level: 2, name: '安心して任せられる理由' }).closest('section') as HTMLElement
+    );
+    expect(trust.getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual([
+      'セキュリティ',
+      '対応範囲',
+      'DX認定事業者',
+      'プライバシーマーク',
+      'ISMS（ISO/IEC 27001）',
+      '移したあとも',
+    ]);
+    expect(trust.getByText(/認定番号：10822550、JIS Q 15001:2023 準拠/)).toBeInTheDocument();
+    // The scope as the company profile states it, not tied to this migration work
+    expect(
+      trust.getByText(
+        '情報セキュリティマネジメントシステムの認証（認証番号：IS609954）を取得しています。対象は、本社における業務系システム開発、教育研修サービス、HRコンサルティングです。'
+      )
+    ).toBeInTheDocument();
+  });
+
   it('shows the booking button only when a booking URL is configured', async () => {
     render(withIntl(await resolveServerTree(await AxFinalCta({ locale: 'ja' }))));
     expect(screen.queryByRole('link', { name: /無料相談を予約する/ })).not.toBeInTheDocument();

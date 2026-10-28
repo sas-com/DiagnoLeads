@@ -15,6 +15,7 @@ import {
   CircleCheck,
   Cpu,
   Database,
+  FileLock,
   HandCoins,
   Layers,
   Lock,
@@ -551,6 +552,10 @@ const TRUST = [
   { key: 'security', icon: Lock },
   { key: 'scope', icon: Boxes },
   { key: 'certified', icon: BadgeCheck },
+  // As the company profile states them, the ISMS scope word for word (#842): it does not say
+  // that this migration work is in that scope
+  { key: 'privacyMark', icon: FileLock },
+  { key: 'isms', icon: ShieldCheck },
   // We who build it keep fixing it after the move (owner, 2026-10-27, #840)
   { key: 'upkeep', icon: RefreshCw },
 ] as const;
