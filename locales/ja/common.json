@@ -5955,5 +5955,20 @@
   },
   "fieldGlossary": {
     "help": "項目の説明"
+  },
+  "help": {
+    "open": "この画面の使い方",
+    "tip": "ヒント",
+    "caution": "注意",
+    "rolesTitle": "{roles}の場合",
+    "roles": {
+      "owner": "オーナー",
+      "admin": "管理者",
+      "member": "メンバー",
+      "group_owner": "グループのオーナー",
+      "group_admin": "グループの管理者",
+      "parent_viewer": "親組織の閲覧者"
+    },
+    "reviewedAt": "この説明は {date} の画面に合わせています"
   }
 }

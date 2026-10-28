@@ -1,3 +1,9 @@
+import { dashboardArticle } from './content/dashboard';
+import { leadDetailArticle } from './content/lead-detail';
+import { leadHandoffArticle } from './content/lead-handoff';
+import { leadHearingArticle } from './content/lead-hearing';
+import { leadsArticle } from './content/leads';
+import { todayArticle } from './content/today';
 import type { HelpArticle, HelpExclusionReason } from './types';
 
 /**
@@ -6,7 +12,14 @@ import type { HelpArticle, HelpExclusionReason } from './types';
  * test/unit/features/help/registry.test.ts fails otherwise, so a new page needs its article in
  * the same pull request (.claude/rules/help.md).
  */
-export const HELP_ARTICLES: readonly HelpArticle[] = [];
+export const HELP_ARTICLES: readonly HelpArticle[] = [
+  dashboardArticle,
+  todayArticle,
+  leadsArticle,
+  leadDetailArticle,
+  leadHearingArticle,
+  leadHandoffArticle,
+];
 
 /**
  * Admin pages without an article, and why. Remove a page from here in the pull request that
@@ -14,12 +27,6 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [];
  */
 export const HELP_EXCLUDED_ROUTES: Readonly<Record<string, HelpExclusionReason>> = {
   // The main screens (#872)
-  '/dashboard': { kind: 'pending', issue: 872 },
-  '/today': { kind: 'pending', issue: 872 },
-  '/leads': { kind: 'pending', issue: 872 },
-  '/leads/[leadId]': { kind: 'pending', issue: 872 },
-  '/leads/[leadId]/hearings/[hearingId]': { kind: 'pending', issue: 872 },
-  '/leads/[leadId]/handoff': { kind: 'pending', issue: 872 },
   '/deals': { kind: 'pending', issue: 872 },
   '/deals/[dealId]': { kind: 'pending', issue: 872 },
   '/forecast': { kind: 'pending', issue: 872 },
