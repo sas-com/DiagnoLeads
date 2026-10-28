@@ -71,6 +71,8 @@ interface DealFormDialogProps {
   /** The deal to edit; without it the dialog creates one */
   deal?: DealView;
   onSaved?: (deal: DealView) => void;
+  /** Where the focus goes when the dialog closes, when it was not opened by a dialog trigger */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 interface FormState {
@@ -205,6 +207,7 @@ export function DealFormDialog({
   leadId,
   deal,
   onSaved,
+  onCloseAutoFocus,
 }: DealFormDialogProps) {
   const t = useTranslations('deals');
   const tCommon = useTranslations('common');
@@ -350,6 +353,7 @@ export function DealFormDialog({
       >
         <DialogContent
           className="flex max-h-[90dvh] flex-col gap-0 p-0 sm:max-w-lg"
+          onCloseAutoFocus={onCloseAutoFocus}
           onInteractOutside={(event) => {
             if (pending) event.preventDefault();
           }}

@@ -1575,15 +1575,27 @@
       "history": "History",
       "historyEmpty": "No history",
       "historyCreated": "Created",
-      "historyChanged": "Changed {fields}",
+      "historyDiff": "{field}: {before} <arrow>→</arrow> {after}",
+      "historyArrowSpoken": "to",
+      "historyValue": "{field}: {after}",
       "notFound": "Deal not found",
       "deleteTitle": "Delete this deal?",
-      "deleteDescription": "\"{name}\" will be deleted. This cannot be undone. The lead's status does not change."
+      "deleteDescription": "\"{name}\" will be deleted. This cannot be undone. The deal's activity stays in the activity history of the lead \"{lead}\". The lead's status and deal phase will be recalculated from its remaining deals. If this is the lead's last deal, the lead keeps its current values, which can then be changed by hand.",
+      "deleting": "Deleting…",
+      "moreActions": "More actions",
+      "leadNextActions": "Next actions and takeaways of the lead \"{lead}\", the same list as on the lead's page",
+      "historyForecastAuto": "Auto ({category})",
+      "historyOther": "Changed other fields",
+      "leadNextActionsNoName": "Next actions and takeaways of this lead, the same list as on the lead's page",
+      "factsTitle": "Deal details"
     },
     "leadCard": {
       "title": "Deals",
       "empty": "This lead has no deals yet",
-      "summary": "{count, plural, one {# deal} other {# deals}} · open {amount}"
+      "summary": "{count, plural, one {# deal} other {# deals}} · open {amount}",
+      "expectedClose": "Expected {date}",
+      "wonOn": "Won {date}",
+      "lostOn": "Lost {date}"
     },
     "state": {
       "loadError": "Could not load the deals",

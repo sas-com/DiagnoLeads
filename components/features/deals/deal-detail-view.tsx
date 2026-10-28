@@ -1,6 +1,9 @@
 'use client';
 
+import { PageHeader } from '@/components/common/page-header';
+import { TAP_TARGET } from '@/components/common/tap-target';
 import { DealActivitiesCard } from '@/components/features/lead-activity/deal-activities-card';
+import { LeadNextActionsCard } from '@/components/features/lead-follow-up/lead-next-actions-card';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,19 +17,33 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useOrganization } from '@/hooks/use-organization';
-import type { DealHistoryView } from '@/lib/features/deals/service';
-import { DEAL_STAGES, type DealStage, isOpenStage } from '@/lib/features/deals/types/pipeline';
+import type { DealDetail, DealHistoryView } from '@/lib/features/deals/service';
+import {
+  DEAL_STAGES,
+  type DealStage,
+  forecastCategory,
+  isOpenStage,
+} from '@/lib/features/deals/types/pipeline';
+import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, Loader2, Pencil, Trash2 } from 'lucide-react';
+import { ChevronLeft, Loader2, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { DealFormDialog } from './deal-form-dialog';
-import { formatYen } from './deal-format';
+import { dealMarks, formatDealDate, formatYen } from './deal-format';
+import { DealMarks } from './deal-marks';
 import { DealStageBadge } from './deal-stage-badge';
 import { DealsForbidden } from './deals-forbidden';
 import { useDealMutations } from './use-deal-mutations';
@@ -34,12 +51,34 @@ import { useStageMove } from './use-stage-move';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** The heading of the page's cards, all alike (#720) */
+const CARD_TITLE = 'text-base font-bold text-gray-900 dark:text-gray-50';
+
 function dateTime(value: Date, locale: string): string {
   return new Intl.DateTimeFormat(locale === 'ja' ? 'ja-JP' : 'en-US', {
     timeZone: 'Asia/Tokyo',
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(value);
+}
+
+/**
+ * Gives the focus back to the control that opened a dialog. The edit and delete dialogs are
+ * opened from the ⋯ menu or a card's button, not from a dialog trigger, so Radix has nowhere to
+ * return the focus to and would leave it on the page (#720)
+ */
+function useReturnFocus() {
+  const opener = useRef<HTMLElement | null>(null);
+  return {
+    remember: (element: HTMLElement | null) => {
+      opener.current = element;
+    },
+    onCloseAutoFocus: (event: Event) => {
+      if (!opener.current?.isConnected) return;
+      event.preventDefault();
+      opener.current.focus();
+    },
+  };
 }
 
 /** One deal (Refs #436): where it stands on the stage path, its values and its history */
@@ -54,34 +93,42 @@ export function DealDetailView({ dealId }: { dealId: string }) {
     { organizationId, dealId },
     { enabled: !!organizationId, retry: false }
   );
-  const { remove } = useDealMutations();
+  // The delete question says a failure itself and stays open for another try (#720)
+  const { remove } = useDealMutations({ toastErrors: false });
   const stageMove = useStageMove(organizationId);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteFailed, setDeleteFailed] = useState(false);
+  // Deleted, on the way to the deals: the deal read again is not found, which is not news
+  const [leaving, setLeaving] = useState(false);
+  const moreRef = useRef<HTMLButtonElement>(null);
+  const focus = useReturnFocus();
 
-  const back = (
+  const back = { href: `/${locale}/deals`, label: t('detail.back') };
+  // The same link as the one PageHeader shows once the deal is read
+  const backLink = (
     <Link
-      href={`/${locale}/deals`}
-      className="inline-flex min-h-11 items-center gap-1 text-sm text-gray-600 underline-offset-2 hover:underline dark:text-gray-300"
+      href={back.href}
+      className="inline-flex min-h-11 items-center gap-1 rounded-md text-sm text-muted-foreground hover:text-foreground sm:min-h-9"
     >
-      <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-      {t('detail.back')}
+      <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+      {back.label}
     </Link>
   );
 
-  if (query.error?.data?.code === 'FORBIDDEN') {
+  if (!leaving && query.error?.data?.code === 'FORBIDDEN') {
     return (
       <div className="mx-auto max-w-5xl space-y-4">
-        {back}
+        {backLink}
         <DealsForbidden />
       </div>
     );
   }
-  if (query.isError) {
+  if (!leaving && query.isError) {
     const missing = query.error.data?.code === 'NOT_FOUND';
     return (
       <div className="mx-auto max-w-5xl space-y-4">
-        {back}
+        {backLink}
         <p role="alert" className="text-sm text-red-700 dark:text-red-400">
           {missing ? t('detail.notFound') : t('state.loadError')}
         </p>
@@ -97,13 +144,15 @@ export function DealDetailView({ dealId }: { dealId: string }) {
   if (!deal) {
     return (
       <div className="mx-auto max-w-5xl space-y-4" aria-busy="true">
-        {back}
+        {backLink}
         <Loader2 className="h-5 w-5 animate-spin text-gray-400" aria-hidden="true" />
         <span className="sr-only">{tCommon('loading')}</span>
       </div>
     );
   }
 
+  const leadName = deal.lead.company || deal.lead.name;
+  const leadLabel = leadName || t('fields.lead');
   const moveTo = (stage: DealStage) =>
     stageMove.move(
       {
@@ -114,126 +163,178 @@ export function DealDetailView({ dealId }: { dealId: string }) {
       stage
     );
 
-  const open = isOpenStage(deal.stage);
-  const facts: { label: string; value: ReactNode }[] = [
-    { label: t('fields.amount'), value: formatYen(deal.amount, locale) ?? t('card.noAmount') },
-    { label: t('fields.probability'), value: `${deal.probability}%` },
-    {
-      label: t('fields.weightedAmount'),
-      value: formatYen(deal.weightedAmount, locale),
-    },
-    { label: t('fields.forecastCategory'), value: t(`forecast.${deal.forecastCategory}`) },
-    { label: t('fields.expectedCloseOn'), value: deal.expectedCloseOn ?? t('card.noCloseDate') },
-    { label: t('fields.owner'), value: deal.ownerName ?? t('card.unassigned') },
-    { label: t('fields.kind'), value: t(`kinds.${deal.kind}`) },
-    { label: t('fields.nextStep'), value: deal.nextStep ?? '—' },
-  ];
-  if (!open) facts.push({ label: t('fields.closedOn'), value: deal.closedOn ?? '—' });
-  if (deal.stage === 'lost') {
-    facts.push(
+  const deleting = remove.isPending || leaving;
+  const confirmDelete = () => {
+    setDeleteFailed(false);
+    remove.mutate(
+      { organizationId, dealId: deal.id },
       {
-        label: t('fields.lostReason'),
-        value: deal.lostReason ? <LostReasonLabel reason={deal.lostReason} /> : '—',
-      },
-      { label: t('fields.lostNote'), value: deal.lostNote ?? '—' }
+        onSuccess: () => {
+          // The question stays, saying it is deleting, until the deals are shown; replace, so
+          // going back does not open the deleted deal
+          setLeaving(true);
+          router.replace(back.href);
+        },
+        onError: () => setDeleteFailed(true),
+      }
     );
-  }
-  if (deal.competitor) facts.push({ label: t('fields.competitor'), value: deal.competitor });
+  };
+  const openEdit = (opener: HTMLElement | null) => {
+    focus.remember(opener);
+    setEditOpen(true);
+  };
+
+  const hasLinkedDeals = !!deal.previousDeal || deal.nextDeals.length > 0;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      {back}
-
-      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-200 pb-5 dark:border-gray-800">
-        <div className="min-w-0 space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-50">{deal.name}</h1>
-            <DealStageBadge stage={deal.stage} />
-          </div>
-          <p className="text-sm text-gray-600 dark:text-gray-300">
+      <div className="space-y-2">
+        <PageHeader
+          back={back}
+          title={deal.name}
+          description={
             <Link
               href={`/${locale}/leads/${deal.lead.id}`}
-              className="underline underline-offset-2"
+              className={cn('inline-flex items-center underline underline-offset-2', TAP_TARGET)}
             >
               {[deal.lead.company, deal.lead.name].filter(Boolean).join(' ') || t('fields.lead')}
             </Link>
-          </p>
-        </div>
-        {!deal.canEdit && <Badge color="gray">{t('state.readOnly')}</Badge>}
-        {(deal.canEdit || deal.canDelete) && (
-          <div className="flex gap-2">
-            {deal.canEdit && (
-              <Button type="button" variant="outline" onClick={() => setEditOpen(true)}>
-                <Pencil className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                {tCommon('edit')}
-              </Button>
-            )}
-            {deal.canDelete && (
-              <Button type="button" variant="outline" onClick={() => setDeleteOpen(true)}>
-                <Trash2 className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                {tCommon('delete')}
-              </Button>
-            )}
-          </div>
+          }
+          meta={
+            <>
+              <DealStageBadge stage={deal.stage} />
+              {!deal.canEdit && (
+                <Badge color="gray" className="text-sm">
+                  {t('state.readOnly')}
+                </Badge>
+              )}
+            </>
+          }
+          actions={
+            (deal.canEdit || deal.canDelete) && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    ref={moreRef}
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-11 w-11 md:h-10 md:w-10"
+                    aria-label={t('detail.moreActions')}
+                  >
+                    <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {deal.canEdit && (
+                    <DropdownMenuItem
+                      className="min-h-11 md:min-h-8"
+                      onSelect={() => openEdit(moreRef.current)}
+                    >
+                      <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
+                      {tCommon('edit')}
+                    </DropdownMenuItem>
+                  )}
+                  {deal.canEdit && deal.canDelete && <DropdownMenuSeparator />}
+                  {deal.canDelete && (
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        focus.remember(moreRef.current);
+                        setDeleteFailed(false);
+                        setDeleteOpen(true);
+                      }}
+                      className="min-h-11 text-red-700 focus:bg-red-50 focus:text-red-700 md:min-h-8 dark:text-red-400 dark:focus:bg-red-950 dark:focus:text-red-400"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                      {tCommon('delete')}
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )
+          }
+        />
+        {/* Why there is nothing to change here, for those who came straight from a lead */}
+        {!deal.canEdit && (
+          <p className="text-sm text-gray-600 dark:text-gray-300">{t('state.readOnlyHint')}</p>
         )}
-      </header>
+      </div>
 
       <StagePath stage={deal.stage} canEdit={deal.canEdit} onMove={moveTo} />
 
-      <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_18rem]">
-        <Card className="p-5">
-          <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
-            {facts.map((fact) => (
-              <div key={fact.label}>
-                <dt className="text-sm text-gray-500 dark:text-gray-400">{fact.label}</dt>
-                <dd className="font-medium text-gray-900 dark:text-gray-50">{fact.value}</dd>
-              </div>
-            ))}
-          </dl>
-        </Card>
-        <aside className="space-y-4">
-          {deal.previousDeal && (
-            <Card className="p-4">
-              <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-50">
-                {t('detail.previousDeal')}
-              </h2>
-              <LinkedDealItem deal={deal.previousDeal} />
-            </Card>
-          )}
-          {deal.nextDeals.length > 0 && (
-            <Card className="p-4">
-              <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-50">
-                {t('detail.nextDeals')}
-              </h2>
-              <ul>
-                {deal.nextDeals.map((next) => (
-                  <li key={next.id}>
-                    <LinkedDealItem deal={next} />
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
-        </aside>
+      <div className={cn('grid gap-6', hasLinkedDeals && 'md:grid-cols-[minmax(0,1fr)_18rem]')}>
+        <div className="min-w-0 space-y-6">
+          <Card className="p-5">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className={CARD_TITLE}>{t('detail.factsTitle')}</h2>
+              {deal.canEdit && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className={TAP_TARGET}
+                  onClick={(event) => openEdit(event.currentTarget)}
+                >
+                  <Pencil className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                  {tCommon('edit')}
+                </Button>
+              )}
+            </div>
+            <DealFacts deal={deal} />
+          </Card>
+          {/* The lead's next actions, where the deal's next step is followed up (#720) */}
+          <LeadNextActionsCard
+            organizationId={organizationId}
+            leadId={deal.lead.id}
+            description={
+              leadName
+                ? t('detail.leadNextActions', { lead: leadName })
+                : t('detail.leadNextActionsNoName')
+            }
+          />
+        </div>
+        {hasLinkedDeals && (
+          <aside className="space-y-4">
+            {deal.previousDeal && (
+              <Card className="p-4">
+                <h2 className={CARD_TITLE}>{t('detail.previousDeal')}</h2>
+                <LinkedDealItem deal={deal.previousDeal} />
+              </Card>
+            )}
+            {deal.nextDeals.length > 0 && (
+              <Card className="p-4">
+                <h2 className={CARD_TITLE}>{t('detail.nextDeals')}</h2>
+                <ul>
+                  {deal.nextDeals.map((next) => (
+                    <li key={next.id}>
+                      <LinkedDealItem deal={next} />
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            )}
+          </aside>
+        )}
       </div>
 
       <DealActivitiesCard
         organizationId={organizationId}
         dealId={deal.id}
         leadId={deal.lead.id}
-        leadLabel={deal.lead.company || deal.lead.name || t('fields.lead')}
+        leadLabel={leadLabel}
       />
 
       <Card className="p-5">
-        <h2 className="text-base font-bold text-gray-900 dark:text-gray-50">
-          {t('detail.history')}
-        </h2>
+        <h2 className={CARD_TITLE}>{t('detail.history')}</h2>
         {deal.history.length === 0 ? (
-          <p className="mt-2 text-sm text-gray-500">{t('detail.historyEmpty')}</p>
+          <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+            {t('detail.historyEmpty')}
+          </p>
         ) : (
           <ol className="mt-3 divide-y divide-gray-100 dark:divide-gray-800">
-            {deal.history.map((row) => (
-              <HistoryRow key={row.id} row={row} />
+            {deal.history.map((row, index) => (
+              // The rows come newest first: the next one holds the values before this change
+              <HistoryRow key={row.id} row={row} before={deal.history[index + 1]} />
             ))}
           </ol>
         )}
@@ -245,32 +346,142 @@ export function DealDetailView({ dealId }: { dealId: string }) {
         organizationId={organizationId}
         deal={deal}
         onSaved={() => toast.success(t('toasts.saved'))}
+        onCloseAutoFocus={focus.onCloseAutoFocus}
       />
       {stageMove.dialogs}
-      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <AlertDialogContent>
+      <AlertDialog
+        open={deleteOpen}
+        onOpenChange={(open) => {
+          // Open until the deletion is done: the page leaves when it succeeds
+          if (!deleting) setDeleteOpen(open);
+        }}
+      >
+        <AlertDialogContent onCloseAutoFocus={focus.onCloseAutoFocus}>
           <AlertDialogHeader>
             <AlertDialogTitle>{t('detail.deleteTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              {t('detail.deleteDescription', { name: deal.name })}
+              {t('detail.deleteDescription', { name: deal.name, lead: leadLabel })}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {deleteFailed && (
+            <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+              {t('toasts.deleteError')}
+            </p>
+          )}
+          {/* The button's new name alone may not be read out */}
+          <output className="sr-only">{deleting ? t('detail.deleting') : ''}</output>
           <AlertDialogFooter>
-            <AlertDialogCancel>{tCommon('cancel')}</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleting} className="min-h-11 md:min-h-10">
+              {tCommon('cancel')}
+            </AlertDialogCancel>
             <AlertDialogAction
-              onClick={() =>
-                remove.mutate(
-                  { organizationId, dealId: deal.id },
-                  { onSuccess: () => router.push(`/${locale}/deals`) }
-                )
-              }
+              // aria-disabled, not disabled: the focus stays on the button while it deletes
+              aria-disabled={deleting}
+              className="min-h-11 bg-red-700 text-white hover:bg-red-800 md:min-h-10 dark:bg-red-700 dark:hover:bg-red-800"
+              onClick={(event) => {
+                // Stays open, saying it is deleting, until the deletion is done
+                event.preventDefault();
+                if (!deleting) confirmDelete();
+              }}
             >
-              {tCommon('delete')}
+              {deleting ? (
+                <>
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" />
+                  {t('detail.deleting')}
+                </>
+              ) : (
+                tCommon('delete')
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+/**
+ * The deal's values (Refs #720): by when first, then the money and who. A closed deal shows the
+ * day it was won or lost and why, instead of the forecast. What to do next is the lead's next
+ * actions, the card under this one (the owner's decision of 2026-10-28, Epic #856): the deal's
+ * next step, no longer the place for it (#853), is shown last as a note when it has a text. Long
+ * texts take the whole width and keep their line breaks.
+ */
+function DealFacts({ deal }: { deal: DealDetail }) {
+  const t = useTranslations('deals');
+  const locale = useLocale();
+  const open = isOpenStage(deal.stage);
+  const facts: { label: string; value: ReactNode; wide?: boolean }[] = [];
+  const add = (label: string, value: ReactNode, wide = false) => facts.push({ label, value, wide });
+  const amount = formatYen(deal.amount, locale) ?? t('card.noAmount');
+  const owner = deal.ownerName ?? t('card.unassigned');
+  const kind = t(`kinds.${deal.kind}`);
+
+  if (open) {
+    // The lead's next actions are on this page, so only the passed close date is marked here
+    const { overdue } = dealMarks({ ...deal, hasOpenTask: true }, jstDate());
+    add(
+      t('fields.expectedCloseOn'),
+      deal.expectedCloseOn ? (
+        <>
+          {formatDealDate(deal.expectedCloseOn)}
+          <DealMarks flags={{ overdue, noNextAction: false }} className="mt-0.5 font-normal" />
+        </>
+      ) : (
+        t('card.noCloseDate')
+      )
+    );
+    add(t('fields.amount'), amount);
+    add(t('fields.probability'), `${deal.probability}%`);
+    add(t('fields.owner'), owner);
+    add(t('fields.kind'), kind);
+    // No amount yet, no weighted amount either (it counts as 0 in the totals)
+    add(
+      t('fields.weightedAmount'),
+      deal.amount === null ? '—' : formatYen(deal.weightedAmount, locale)
+    );
+    const category = t(`forecast.${deal.forecastCategory}`);
+    // Said whether it follows the probability or was set by hand
+    add(
+      t('fields.forecastCategory'),
+      deal.forecastOverride ? category : t('forecast.auto', { category })
+    );
+  } else {
+    const won = deal.stage === 'won';
+    add(
+      won ? t('fields.wonOn') : t('fields.lostOn'),
+      deal.closedOn ? formatDealDate(deal.closedOn) : '—'
+    );
+    add(t('fields.amount'), amount);
+    add(t('fields.owner'), owner);
+    add(t('fields.kind'), kind);
+    if (!won) {
+      add(
+        t('fields.lostReason'),
+        deal.lostReason ? <LostReasonLabel reason={deal.lostReason} /> : '—'
+      );
+      add(t('fields.lostNote'), deal.lostNote ?? '—', true);
+    }
+  }
+  if (deal.competitor) add(t('fields.competitor'), deal.competitor);
+  if (deal.nextStep) add(t('fields.nextStep'), deal.nextStep, true);
+
+  return (
+    <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+      {facts.map((fact) => (
+        <div key={fact.label} className={cn(fact.wide && 'sm:col-span-2')}>
+          <dt className="text-sm text-gray-600 dark:text-gray-300">{fact.label}</dt>
+          <dd
+            className={cn(
+              'font-medium break-words text-gray-900 dark:text-gray-50',
+              fact.wide && 'whitespace-pre-line'
+            )}
+          >
+            {fact.value}
+          </dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -292,7 +503,9 @@ function StagePath({
   const t = useTranslations('deals');
   const currentIndex = DEAL_STAGES.indexOf(stage);
   return (
-    <nav aria-label={t('detail.stagePath')}>
+    // A group of steps and buttons, not a navigation: nothing here leaves the page (#720)
+    <fieldset className="min-w-0">
+      <legend className="sr-only">{t('detail.stagePath')}</legend>
       <ol className="flex flex-wrap gap-2">
         {DEAL_STAGES.map((step, index) => {
           const current = step === stage;
@@ -325,7 +538,7 @@ function StagePath({
           );
         })}
       </ol>
-    </nav>
+    </fieldset>
   );
 }
 
@@ -333,9 +546,10 @@ function LinkedDealItem({ deal }: { deal: { id: string; name: string; stage: Dea
   const locale = useLocale();
   return (
     <div className="mt-2 flex items-center justify-between gap-2">
+      {/* 44px on phones by its padding, so the name can still be cut with an ellipsis */}
       <Link
         href={`/${locale}/deals/${deal.id}`}
-        className="truncate text-sm underline underline-offset-2"
+        className="block min-w-0 truncate py-3 text-sm underline underline-offset-2 md:py-0"
       >
         {deal.name}
       </Link>
@@ -344,35 +558,105 @@ function LinkedDealItem({ deal }: { deal: { id: string; name: string; stage: Dea
   );
 }
 
-function HistoryRow({ row }: { row: DealHistoryView }) {
+type HistoryField = Exclude<
+  keyof DealHistoryView,
+  'id' | 'changedFields' | 'changedByName' | 'changedAt' | 'ownerName'
+>;
+/** In the order of the deal's values on this page */
+const HISTORY_FIELDS: readonly HistoryField[] = [
+  'stage',
+  'expectedCloseOn',
+  'amount',
+  'probability',
+  'ownerUserId',
+  'kind',
+  'forecastOverride',
+];
+const isHistoryField = (field: string): field is HistoryField =>
+  (HISTORY_FIELDS as readonly string[]).includes(field);
+
+/**
+ * One change of the deal (Refs #720): what changed, from what to what ("確度：40% → 70%"). The
+ * row holds the values after the change; `before` is the row before it. The oldest row shown
+ * may have none (the history is cut), and then only the new value is shown. A deal's first row
+ * names its values.
+ */
+function HistoryRow({ row, before }: { row: DealHistoryView; before?: DealHistoryView }) {
   const t = useTranslations('deals');
   const locale = useLocale();
   const created = row.changedFields.includes('created');
-  const fields = row.changedFields
-    .filter((field) => field !== 'created')
-    .map((field) => (t.has(`historyFields.${field}`) ? t(`historyFields.${field}`) : field));
-  const summary = created
-    ? t('detail.historyCreated')
-    : t('detail.historyChanged', {
-        fields: new Intl.ListFormat(locale, { style: 'narrow', type: 'conjunction' }).format(
-          fields
-        ),
-      });
-  const values = [
-    t(`stages.${row.stage}`),
-    formatYen(row.amount, locale) ?? t('card.noAmount'),
-    `${row.probability}%`,
-    row.expectedCloseOn ?? t('card.noCloseDate'),
-    row.ownerName ?? t('card.unassigned'),
-  ];
+
+  const textOf = (field: HistoryField, values: DealHistoryView): string => {
+    switch (field) {
+      case 'stage':
+        return t(`stages.${values.stage}`);
+      case 'probability':
+        return `${values.probability}%`;
+      case 'amount':
+        return formatYen(values.amount, locale) ?? t('card.noAmount');
+      case 'expectedCloseOn':
+        return values.expectedCloseOn
+          ? formatDealDate(values.expectedCloseOn)
+          : t('card.noCloseDate');
+      case 'forecastOverride':
+        // "Auto (best case)", never "from the probability", which would read like a range
+        return values.forecastOverride
+          ? t(`forecast.${values.forecastOverride}`)
+          : t('detail.historyForecastAuto', {
+              category: t(`forecast.${forecastCategory(values)}`),
+            });
+      case 'ownerUserId':
+        return values.ownerName ?? t('card.unassigned');
+      case 'kind':
+        return t(`kinds.${values.kind}`);
+    }
+  };
+  const label = (field: HistoryField) => t(`historyFields.${field}`);
+  const valueLine = (field: HistoryField) =>
+    t('detail.historyValue', { field: label(field), after: textOf(field, row) });
+
+  const lines: { key: string; text: ReactNode }[] = created
+    ? (['stage', 'expectedCloseOn', 'amount', 'probability', 'ownerUserId'] as const).map(
+        (field) => ({ key: field, text: valueLine(field) })
+      )
+    : HISTORY_FIELDS.filter((field) => row.changedFields.includes(field)).map((field) => ({
+        key: field,
+        text: before
+          ? t.rich('detail.historyDiff', {
+              field: label(field),
+              before: textOf(field, before),
+              after: textOf(field, row),
+              arrow: (chunks) => (
+                <>
+                  <span aria-hidden="true">{chunks}</span>
+                  <span className="sr-only">{t('detail.historyArrowSpoken')}</span>
+                </>
+              ),
+            })
+          : valueLine(field),
+      }));
+  // Fields this screen does not know (written by a newer version)
+  if (
+    !created &&
+    row.changedFields.some((field) => field !== 'created' && !isHistoryField(field))
+  ) {
+    lines.push({ key: 'other', text: t('detail.historyOther') });
+  }
+
   return (
     <li className="py-2.5 text-sm">
-      <p className="text-gray-500 dark:text-gray-400">
+      <p className="text-gray-600 dark:text-gray-300">
         <time dateTime={row.changedAt.toISOString()}>{dateTime(row.changedAt, locale)}</time>
         {row.changedByName && ` · ${row.changedByName}`}
       </p>
-      <p className="font-medium text-gray-900 dark:text-gray-50">{summary}</p>
-      <p className="text-gray-700 dark:text-gray-300">{values.join(' · ')}</p>
+      {created && (
+        <p className="font-medium text-gray-900 dark:text-gray-50">{t('detail.historyCreated')}</p>
+      )}
+      <ul className="text-gray-900 dark:text-gray-50">
+        {lines.map((line) => (
+          <li key={line.key}>{line.text}</li>
+        ))}
+      </ul>
     </li>
   );
 }
