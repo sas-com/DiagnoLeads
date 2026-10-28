@@ -1,8 +1,14 @@
+import { analyticsArticle } from './content/analytics';
 import { dashboardArticle } from './content/dashboard';
+import { dealDetailArticle } from './content/deal-detail';
+import { dealsArticle } from './content/deals';
+import { forecastArticle } from './content/forecast';
 import { leadDetailArticle } from './content/lead-detail';
 import { leadHandoffArticle } from './content/lead-handoff';
 import { leadHearingArticle } from './content/lead-hearing';
 import { leadsArticle } from './content/leads';
+import { prospectsArticle } from './content/prospects';
+import { siteAnalyticsArticle } from './content/site-analytics';
 import { todayArticle } from './content/today';
 import type { HelpArticle, HelpExclusionReason } from './types';
 
@@ -19,6 +25,12 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
   leadDetailArticle,
   leadHearingArticle,
   leadHandoffArticle,
+  dealsArticle,
+  dealDetailArticle,
+  forecastArticle,
+  prospectsArticle,
+  analyticsArticle,
+  siteAnalyticsArticle,
 ];
 
 /**
@@ -26,13 +38,6 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
  * adds its article; the test fails when a page here has an article or no longer exists.
  */
 export const HELP_EXCLUDED_ROUTES: Readonly<Record<string, HelpExclusionReason>> = {
-  // The main screens (#872)
-  '/deals': { kind: 'pending', issue: 872 },
-  '/deals/[dealId]': { kind: 'pending', issue: 872 },
-  '/forecast': { kind: 'pending', issue: 872 },
-  '/prospects': { kind: 'pending', issue: 872 },
-  '/analytics': { kind: 'pending', issue: 872 },
-  '/analytics/site': { kind: 'pending', issue: 872 },
   // The settings screens (#873)
   '/settings': { kind: 'pending', issue: 873 },
   '/settings/organization': { kind: 'pending', issue: 873 },
