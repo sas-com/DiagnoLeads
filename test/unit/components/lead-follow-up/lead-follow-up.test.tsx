@@ -150,12 +150,13 @@ describe('LeadContactBar', () => {
     expect(mocks.calls.recordContact).toEqual([
       { organizationId: ORG_ID, leadId: LEAD_ID, kind: 'call' },
     ]);
-    // The toast offers to undo a wrong tap
+    // The toast offers to undo a wrong tap, and names the lead as on the other screens (#863)
     const [message, options] = mocks.toast.success.mock.calls[0] as [
       string,
-      { action: { label: string; onClick: () => void } },
+      { description?: string; action: { label: string; onClick: () => void } },
     ];
     expect(message).toBe('「電話した」を記録しました');
+    expect(options.description).toBe('架空商事');
     expect(options.action.label).toBe('取り消す');
     options.action.onClick();
     expect(mocks.calls.deleteContact).toEqual([{ organizationId: ORG_ID, id: 'c1' }]);

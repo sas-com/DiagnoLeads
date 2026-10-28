@@ -1,6 +1,7 @@
 'use client';
 
 import { TAP_TARGET } from '@/components/common/tap-target';
+import { ContactRecordMenu } from '@/components/features/lead-follow-up/contact-record-menu';
 import { DealRatingBadge } from '@/components/features/leads/next-meeting';
 import { Badge } from '@/components/ui/badge';
 import { NEXT_MEETING_CLOSED_STATUSES, leadListHref } from '@/lib/features/leads/list-query';
@@ -43,20 +44,41 @@ function MeetingWhen({ meeting, withDay }: { meeting: Meeting; withDay: boolean 
   );
 }
 
-/** One meeting, all of it a link to the lead: when, the lead, and what to know before going */
-function MeetingItem({ meeting, withDay }: { meeting: Meeting; withDay: boolean }) {
+/** Who may record a contact from the rows, and in which organization (#863) */
+interface RecordContactProps {
+  organizationId: string;
+  canRecordContact: boolean;
+}
+
+/**
+ * One meeting: a link to the lead (when, the lead, and what to know before going) and, for those
+ * who may edit leads, the menu to record a contact beside it, never inside the link (#863). The
+ * menu goes under the link on phones and at the end of the row from sm
+ */
+function MeetingItem({
+  meeting,
+  withDay,
+  organizationId,
+  canRecordContact,
+}: { meeting: Meeting; withDay: boolean } & RecordContactProps) {
   const t = useTranslations('today.meetings');
   const tToday = useTranslations('today');
   const tStatus = useTranslations('status');
   const locale = useLocale();
   const closed = (NEXT_MEETING_CLOSED_STATUSES as readonly string[]).includes(meeting.status);
   const lead = leadLabel(meeting);
+  const leadName = lead.primary ?? tToday('noLeadName');
   return (
-    <li>
+    <li
+      className={cn(
+        'flex flex-wrap items-center gap-x-2 gap-y-1 sm:flex-nowrap',
+        canRecordContact && 'pb-2 sm:pb-0'
+      )}
+    >
       <Link
         href={`/${locale}/leads/${meeting.leadId}`}
         className={cn(
-          'flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md px-1 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800/50',
+          'flex min-w-0 flex-1 basis-full flex-wrap items-center gap-x-3 gap-y-1 rounded-md px-1 py-2.5 hover:bg-gray-50 sm:basis-auto dark:hover:bg-gray-800/50',
           TAP_TARGET
         )}
       >
@@ -71,7 +93,7 @@ function MeetingItem({ meeting, withDay }: { meeting: Meeting; withDay: boolean 
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium text-gray-900 underline underline-offset-4 dark:text-gray-50">
-            {lead.primary ?? tToday('noLeadName')}
+            {leadName}
           </span>
           {lead.secondary && (
             <span className="block truncate text-sm text-gray-600 dark:text-gray-300">
@@ -99,6 +121,14 @@ function MeetingItem({ meeting, withDay }: { meeting: Meeting; withDay: boolean 
           )}
         </div>
       </Link>
+      {canRecordContact && (
+        <ContactRecordMenu
+          organizationId={organizationId}
+          leadId={meeting.leadId}
+          leadLabel={leadName}
+          className="ml-auto shrink-0"
+        />
+      )}
     </li>
   );
 }
@@ -109,12 +139,13 @@ function MeetingGroup({
   items,
   emptyText,
   withDay,
+  ...recordContact
 }: {
   title: string;
   items: Meeting[];
   emptyText: string;
   withDay: boolean;
-}) {
+} & RecordContactProps) {
   const headingId = useId();
   return (
     <div className="space-y-1">
@@ -126,7 +157,12 @@ function MeetingGroup({
       ) : (
         <ul aria-labelledby={headingId} className="divide-y divide-gray-100 dark:divide-gray-800">
           {items.map((meeting) => (
-            <MeetingItem key={meeting.leadId} meeting={meeting} withDay={withDay} />
+            <MeetingItem
+              key={meeting.leadId}
+              meeting={meeting}
+              withDay={withDay}
+              {...recordContact}
+            />
           ))}
         </ul>
       )}
@@ -139,8 +175,12 @@ function MeetingGroup({
  * Sunday), from the latest hearing's next meeting date or the confirmed first meeting, with its
  * time when one was confirmed. The link opens the lead list of the user's leads' meetings this
  * week, which its label says: the list has the week's passed days and not the unassigned leads.
+ * Those who may edit leads record a contact from a row (#863).
  */
-export function TodayMeetings({ query }: { query: TodayQuery<MyMeetings> }) {
+export function TodayMeetings({
+  query,
+  ...recordContact
+}: { query: TodayQuery<MyMeetings> } & RecordContactProps) {
   const t = useTranslations('today.meetings');
   const locale = useLocale();
   const data = query.data;
@@ -167,6 +207,7 @@ export function TodayMeetings({ query }: { query: TodayQuery<MyMeetings> }) {
           items={groups.today}
           emptyText={t('emptyToday')}
           withDay={false}
+          {...recordContact}
         />
         {/* On Sunday the week has no rest */}
         {data && data.today < data.weekEnd && (
@@ -175,6 +216,7 @@ export function TodayMeetings({ query }: { query: TodayQuery<MyMeetings> }) {
             items={groups.later}
             emptyText={t('emptyLater')}
             withDay
+            {...recordContact}
           />
         )}
         {rest > 0 && data && (

@@ -15,14 +15,17 @@ export const TODAY_NEXT_ACTIONS_SHOWN = 5;
  * The user's next actions and takeaways due today or earlier (今日, #556): only their own (the
  * one responsible, see responsibleUserSql), in the same frame and states as the other sections.
  * Ticking one completes it; "N more" opens the rest, and stays to go back when they fail to load.
+ * Those who may edit leads record a contact from a row (#863).
  * The screen reads them (useDueTasks with TODAY_NEXT_ACTIONS_SHOWN): its heading needs their day
  */
 export function TodayNextActions({
   due,
   organizationId,
+  canRecordContact,
 }: {
   due: DueTasks;
   organizationId: string;
+  canRecordContact: boolean;
 }) {
   const t = useTranslations('today.nextActions');
   const tDue = useTranslations('leadFollowUp.today');
@@ -36,7 +39,12 @@ export function TodayNextActions({
       emptyText={tDue('emptyMine')}
       footer={<DueTasksMore due={due} />}
     >
-      <DueTasksList due={due} organizationId={organizationId} showMineBadge={false} />
+      <DueTasksList
+        due={due}
+        organizationId={organizationId}
+        showMineBadge={false}
+        canRecordContact={canRecordContact}
+      />
     </TodaySection>
   );
 }
