@@ -36,14 +36,15 @@ export function DueTasksSection({ organizationId }: { organizationId: string }) 
           <h2 className="text-base font-semibold text-gray-900 sm:text-lg dark:text-gray-50">
             {t('title')}
             {data && data.total > 0 && (
-              <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-sm font-bold text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
-                {data.total}
-              </span>
+              <>
+                {/* Read "今日やること 3件", not "今日やること3" (the space and ml-1 make the gap) */}{' '}
+                <span className="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-sm font-bold text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
+                  {t('count', { count: data.total })}
+                </span>
+              </>
             )}
           </h2>
-          <p className="text-xs text-gray-500 sm:text-sm dark:text-gray-400">
-            {t('descriptionAll')}
-          </p>
+          <p className="text-sm text-gray-600 dark:text-gray-300">{t('descriptionAll')}</p>
         </div>
         <ToggleGroup
           type="single"

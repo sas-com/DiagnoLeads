@@ -5037,6 +5037,7 @@
     },
     "today": {
       "title": "Today",
+      "count": "{count}",
       "description": "Next actions due today or overdue. Tick one to mark it done.",
       "empty": "Nothing due today",
       "loadError": "Could not load",

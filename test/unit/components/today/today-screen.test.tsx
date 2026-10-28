@@ -7,6 +7,7 @@
  * window comes back. Rendered with the Japanese and the English messages (tRPC mocked)
  */
 import { TODAY_CONTACTS_SHOWN } from '@/components/features/today/today-activities';
+import { TODAY_NEXT_ACTIONS_SHOWN } from '@/components/features/today/today-next-actions';
 import { TodayScreen } from '@/components/features/today/today-screen';
 import enMessages from '@/locales/en/common.json';
 import messages from '@/locales/ja/common.json';
@@ -232,6 +233,16 @@ const due = {
   items: [dueTask],
 };
 
+/** As many due next actions as the server lists at first (20), of `total` */
+const manyDue = (total: number) => {
+  const items = Array.from({ length: Math.min(total, 20) }, (_, index) => ({
+    ...dueTask,
+    id: `task-${index}`,
+    title: `タスク${index + 1}`,
+  }));
+  return { ...due, total, counts: { mine: total, all: total }, items };
+};
+
 const loadAll = () => {
   mocks.queries = {
     dueTasks: { data: due },
@@ -309,6 +320,45 @@ describe('TodayScreen', () => {
         `/ja/leads/${LEAD_1}`
       );
       expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+      // Every one listed is the member's: no "mine" badge
+      expect(within(section).queryByText(messages.leadFollowUp.today.mineBadge)).toBeNull();
+    });
+
+    it('lists five, and the rest when "N more" is opened', async () => {
+      loadAll();
+      mocks.queries.dueTasks = { data: manyDue(22) };
+      const user = userEvent.setup();
+      renderScreen();
+      const section = region(/^今日までの次の行動/);
+
+      expect(within(section).getAllByRole('listitem')).toHaveLength(TODAY_NEXT_ACTIONS_SHOWN);
+      await user.click(within(section).getByRole('button', { name: 'ほか17件' }));
+
+      // The rest is read (up to 200) and listed
+      expect(mocks.calls.dueTasks.at(-1)?.input).toEqual({
+        organizationId: ORG_ID,
+        scope: 'mine',
+        limit: 200,
+      });
+      expect(within(section).getAllByRole('listitem')).toHaveLength(20);
+      expect(within(section).getByRole('button', { name: messages.leadFollowUp.today.showLess })).toBeInTheDocument();
+    });
+
+    it('keeps the way back when the rest fails to load', async () => {
+      loadAll();
+      mocks.queries.dueTasks = { data: manyDue(22) };
+      const user = userEvent.setup();
+      renderScreen();
+      const section = region(/^今日までの次の行動/);
+
+      // The rest fails when it is opened
+      mocks.queries.dueTasks = { isError: true };
+      await user.click(within(section).getByRole('button', { name: 'ほか17件' }));
+
+      expect(within(section).getByRole('alert')).toHaveTextContent(t.section.loadError);
+      expect(
+        within(section).getByRole('button', { name: messages.leadFollowUp.today.showLess })
+      ).toHaveAttribute('aria-expanded', 'true');
     });
 
     it('says so when nothing of the member’s is due', () => {
@@ -424,6 +474,19 @@ describe('TodayScreen', () => {
       expect(noTask).toHaveTextContent(messages.deals.card.noNextAction);
       expect(noTask).toHaveTextContent(messages.deals.card.noAmount);
       expect(within(section).queryByText('順調な商談')).not.toBeInTheDocument();
+    });
+
+    it('names a deal’s lead without a company or a person as the other sections do', () => {
+      loadAll();
+      const nameless = dealCard({ expectedCloseOn: '2026-10-20', company: null, leadName: null });
+      mocks.queries.board = {
+        data: { ...board, columns: [{ ...board.columns[1], deals: [nameless] }] },
+      };
+      renderScreen();
+
+      expect(
+        within(region(/^注意が必要な商談/)).getByRole('link', { name: /基幹システム移行/ })
+      ).toHaveTextContent(t.noLeadName);
     });
 
     it('opens the member’s deals by close date', () => {
@@ -542,6 +605,22 @@ describe('TodayScreen', () => {
       );
       // The counts stay above the list either way
       expect(within(section).getAllByRole('term')).toHaveLength(6);
+    });
+
+    it('says how many there are when the day has more than it lists', async () => {
+      loadAll();
+      const items = Array.from({ length: TODAY_CONTACTS_SHOWN + 2 }, (_, index) =>
+        contact(`c${index}`, { contactKind: 'call', note: null })
+      );
+      // The server lists the latest 100 of the day; here 7 of 120 stand for them
+      mocks.queries.myDay = { data: { ...day, total: 120, items } };
+      const user = userEvent.setup();
+      renderScreen();
+      const section = region(/^今日の活動/);
+
+      expect(within(section).queryByText(/全120件/)).not.toBeInTheDocument();
+      await user.click(within(section).getByRole('button', { name: 'すべて表示（7件）' }));
+      expect(within(section).getByText('新しい7件を表示しています（全120件）')).toBeInTheDocument();
     });
 
     it('says so when nothing was recorded today', () => {

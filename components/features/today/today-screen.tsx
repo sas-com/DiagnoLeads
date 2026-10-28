@@ -10,7 +10,7 @@ import { useFormatter, useTranslations } from 'next-intl';
 import { TodayActivities } from './today-activities';
 import { TodayDeals } from './today-deals';
 import { TodayMeetings } from './today-meetings';
-import { TodayNextActions } from './today-next-actions';
+import { TODAY_NEXT_ACTIONS_SHOWN, TodayNextActions } from './today-next-actions';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /**
@@ -32,7 +32,10 @@ export function TodayScreen() {
   const { organizationId: contextOrgId } = useOrganization();
   const organizationId = contextOrgId && UUID.test(contextOrgId) ? contextOrgId : '';
   const options = { enabled: !!organizationId, ...TODAY_QUERY_OPTIONS };
-  const due = useDueTasks(organizationId, 'mine', TODAY_QUERY_OPTIONS);
+  const due = useDueTasks(organizationId, 'mine', {
+    ...TODAY_QUERY_OPTIONS,
+    shown: TODAY_NEXT_ACTIONS_SHOWN,
+  });
   const meetings = trpc.leads.myMeetings.useQuery({ organizationId }, options);
   const deals = trpc.deals.board.useQuery(
     // Closed deals are never marked: only those closed today come along

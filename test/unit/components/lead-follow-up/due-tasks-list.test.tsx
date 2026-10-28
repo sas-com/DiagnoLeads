@@ -117,12 +117,34 @@ beforeEach(() => {
 });
 
 describe('DueTasksList', () => {
-  it('gives the 20px box a 44px tap area', () => {
+  it('gives the 20px box a 44px tap area: 13px around its 18px inside the border', () => {
     mocks.due = due([task('t1')]);
     wrap(<MineList />);
 
     const box = screen.getByRole('checkbox', { name: '「見積もりを送る」を完了にする' });
-    expect(box).toHaveClass('h-5', 'w-5', 'relative', 'after:absolute', 'after:-inset-3');
+    expect(box).toHaveClass('h-5', 'w-5', 'border', 'relative', 'after:absolute', 'after:-inset-[13px]');
+  });
+
+  it('indents the lead link on phones past the box’s tap area, like the line under it', () => {
+    mocks.due = due([task('t1')]);
+    wrap(<MineList />);
+
+    expect(screen.getByRole('link', { name: /架空商事/ })).toHaveClass('basis-full', 'pl-8', 'sm:pl-0');
+  });
+
+  it('names a lead with a blank company by its person, and one with neither as nameless', () => {
+    mocks.due = due([
+      task('t1', { lead: { company: ' ', name: '山田 花子' } }),
+      task('t2', { lead: { company: '  ', name: null } }),
+    ]);
+    wrap(<MineList />);
+
+    const [first, second] = screen.getAllByRole('listitem');
+    const person = within(first).getByRole('link');
+    expect(person).toHaveTextContent(/^山田 花子$/);
+    // The person names the lead, not a grey second name after a blank company
+    expect(person.querySelector('span')).toBeNull();
+    expect(within(second).getByRole('link', { name: t.noLeadName })).toBeInTheDocument();
   });
 
   it('underlines the lead link and writes no text under 14px', () => {
@@ -185,6 +207,27 @@ describe('DueTasksList', () => {
 });
 
 describe('DueTasksSection (the dashboard)', () => {
+  it('reads its heading with the count as words, and its description at 14px', () => {
+    mocks.due = due([task('t1'), task('t2'), task('t3')]);
+    wrap(<DueTasksSection organizationId={ORG_ID} />);
+
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(/^今日やること 3件$/);
+    const description = screen.getByText(t.descriptionAll);
+    expect(description).toHaveClass('text-sm', 'text-gray-600');
+    expect(description).not.toHaveClass('text-xs');
+  });
+
+  it('still lists 20 before "N more"', () => {
+    mocks.due = due(
+      Array.from({ length: 20 }, (_, index) => task(`t${index}`)),
+      22
+    );
+    wrap(<DueTasksSection organizationId={ORG_ID} />);
+
+    expect(screen.getAllByRole('listitem')).toHaveLength(20);
+    expect(screen.getByRole('button', { name: 'ほか2件' })).toBeInTheDocument();
+  });
+
   it('keeps its switch, its frame and its own options', () => {
     mocks.due = due([task('t1')]);
     wrap(<DueTasksSection organizationId={ORG_ID} />);

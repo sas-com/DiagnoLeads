@@ -21,6 +21,7 @@ type Board = RouterOutputs['deals']['board'];
  */
 export function TodayDeals({ query }: { query: TodayQuery<Board> }) {
   const t = useTranslations('today.deals');
+  const tToday = useTranslations('today');
   const tDeals = useTranslations('deals');
   const locale = useLocale();
   const data = query.data;
@@ -48,7 +49,10 @@ export function TodayDeals({ query }: { query: TodayQuery<Board> }) {
     >
       <ul className="divide-y divide-gray-100 dark:divide-gray-800">
         {marked.map(({ deal, flags }) => {
-          const lead = leadLabel({ company: deal.company, name: deal.leadName }).primary;
+          // Named like the leads of the other sections, also without a company or a person
+          const lead =
+            leadLabel({ company: deal.company, name: deal.leadName }).primary ??
+            tToday('noLeadName');
           return (
             <li key={deal.id}>
               <Link
@@ -66,7 +70,7 @@ export function TodayDeals({ query }: { query: TodayQuery<Board> }) {
                   <DealStageBadge stage={deal.stage} />
                 </div>
                 <div className="flex flex-wrap gap-x-3 text-sm text-gray-700 dark:text-gray-300">
-                  {lead && <span>{lead}</span>}
+                  <span>{lead}</span>
                   <span>{formatYen(deal.amount, locale) ?? tDeals('card.noAmount')}</span>
                   <span>
                     {deal.expectedCloseOn

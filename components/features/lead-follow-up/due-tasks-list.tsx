@@ -40,11 +40,14 @@ export function DueTasksList({
       <ul id={due.listId} className="divide-y divide-gray-100 dark:divide-gray-800">
         {due.items.map((task) => {
           const title = titleOf(task);
+          const company = task.lead.company?.trim();
+          const name = task.lead.name?.trim();
           return (
             <li key={task.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
               <Checkbox
-                // The box's ::after reaches 12px around it: 44px to tap, 20px to see
-                className="relative h-5 w-5 after:absolute after:-inset-3 after:content-['']"
+                // 20px to see and 44px to tap: the ::after reaches 13px around the 18px inside
+                // the 1px border
+                className="relative h-5 w-5 after:absolute after:-inset-[13px] after:content-['']"
                 checked={false}
                 disabled={!data.canEdit || update.isPending}
                 aria-label={tTasks('markDone', { title })}
@@ -60,13 +63,14 @@ export function DueTasksList({
                   {t('mineBadge')}
                 </span>
               )}
+              {/* On its own line on phones, indented past the box's tap area like the line below */}
               <Link
                 href={`/${locale}/leads/${task.leadId}`}
-                className="basis-full truncate text-sm text-brand-700 underline underline-offset-4 hover:text-brand-800 sm:basis-auto dark:text-brand-300"
+                className="basis-full truncate pl-8 text-sm text-brand-700 underline underline-offset-4 hover:text-brand-800 sm:basis-auto sm:pl-0 dark:text-brand-300"
               >
-                {task.lead.company || task.lead.name || t('noLeadName')}
-                {task.lead.company && task.lead.name && (
-                  <span className="ml-1 text-gray-600 dark:text-gray-300">{task.lead.name}</span>
+                {company || name || t('noLeadName')}
+                {company && name && (
+                  <span className="ml-1 text-gray-600 dark:text-gray-300">{name}</span>
                 )}
               </Link>
               <CheckWithText task={task} className="basis-full pl-8 text-sm" />

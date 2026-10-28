@@ -7,7 +7,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   return { title: `${t('title')} - DiagnoLeads` };
 }
 
-/** The signed-in member's day: next actions, meetings, today's contacts and deals (Refs #556) */
+/** The signed-in member's day: next actions, meetings, deals, then today's contacts (Refs #556) */
 export default function TodayPage() {
   return <TodayScreen />;
 }
