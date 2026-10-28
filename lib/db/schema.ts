@@ -348,6 +348,21 @@ export const leads = pgTable(
     // The morning recompute reads the leads updated lately across organizations, newest first,
     // and counts the ones left (act-timing/service.ts, #574)
     index('leads_updated_at_id_idx').on(table.updatedAt, table.id),
+    // The list's default order exactly as leadListOrderBy writes it (created_at desc nulls last,
+    // id desc), so a page is read in index order instead of sorting every lead of the
+    // organization; also the created_at periods of the dashboard and the analytics (#433).
+    // The index builder's .desc() writes DESC NULLS LAST, while desc() in a query writes plain
+    // DESC (nulls first), as the list's id desc does
+    index('leads_org_created_at_id_idx').on(
+      table.organizationId,
+      table.createdAt.desc(),
+      table.id.desc().nullsFirst()
+    ),
+    // A lead by its email address in lower case: each public diagnosis submission
+    // (diagnostics/lead-upsert.ts), prospects turned into leads and agency report imports (#433).
+    // Not unique: an advisory lock keeps a submission from making a second lead, and leads made
+    // by hand or by an import may share an address
+    index('leads_org_email_lower_idx').on(table.organizationId, sql`lower(${table.email})`),
   ]
 );
 
