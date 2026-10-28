@@ -351,6 +351,8 @@ docs(readme): update setup instructions
 
 ## Documentation
 
+- User guide: the in-app help is the source (the header's "この画面の使い方" and the help center at `/[locale]/help`); see [docs/USER_GUIDE.md](./docs/USER_GUIDE.md) for how to open and edit it
+- [Admin Guide](./docs/ADMIN_GUIDE.md) - Where the developer and operator documents are
 - [Deployment Guide](./docs/deployment-guide.md) - Production deployment instructions
 - [Backup Strategy](./docs/backup-strategy.md) - Database backup and recovery (general, 2026-01)
 - [Database Restore Runbook](./docs/runbooks/database-restore.md) - Restoring the production database (Supabase)
