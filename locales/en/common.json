@@ -2064,7 +2064,7 @@
       "createTitle": "Create QR Campaign",
       "createDescription": "Create a new QR code campaign for offline distribution",
       "testFirstTitle": "Try it with a campaign for checking",
-      "testFirst": "Check how it works with a campaign made for checking, and create the one you hand out after the check. The scans and answers of the check count for the campaign they use. The leads the check creates stay in the lead list.",
+      "testFirst": "Check how it works with a campaign made for checking, and create the one you hand out after the check. The scans and answers of the check count for the campaign they use. The leads the check creates stay in the lead list and count in their inflow source.",
       "name": "Campaign Name",
       "namePlaceholder": "e.g., 2026-11 Manufacturing DX Expo booth",
       "nameHint": "Create one campaign per event or handout. Scans and new leads are counted per campaign.",
@@ -2077,11 +2077,24 @@
       "utmMedium": "Medium",
       "utmCampaign": "Campaign",
       "utmContent": "Content",
+      "medium": {
+        "label": "Distribution channel (utm_medium)",
+        "inflow": "New leads from scans get the inflow source: {source}",
+        "inflowNote": {
+          "exhibition": "Exhibitions count under this inflow source. The scans and new leads of each campaign show the exhibitions alone."
+        },
+        "hint": "For flyers and brochures handed out at a seminar or an exhibition, choose that event. It cannot be changed after the campaign is created.",
+        "options": {
+          "seminar": "Seminar or webinar",
+          "exhibition": "Exhibition or trade show",
+          "direct_mail": "Direct mail (posted or handed out one by one)"
+        }
+      },
       "shortCode": "Short Code",
       "trackingUrl": "Tracking URL",
       "downloadQR": "Download QR Code",
       "copyUrl": "Copy URL",
-      "copyUrlHint": "Opening this URL counts as a scan too. To share it by email or on the web, create a separate campaign for each channel.",
+      "copyUrlHint": "Opening this URL counts as a scan too. New leads get the inflow source of the distribution channel chosen at creation. To share by email or on the web, use the diagnosis URL with that channel's UTM (such as utm_medium=email) instead of this URL.",
       "active": "Active",
       "inactive": "Inactive",
       "created": "QR campaign created",

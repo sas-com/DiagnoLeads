@@ -5,6 +5,11 @@ import { evaluateAxMigration } from '@/lib/features/diagnostics/ax-migration/eva
 import { multiple, single, toPercent, validateAnswers } from '@/lib/features/diagnostics/engine';
 import { compactTracking, inferInflowSource, trackingSchema } from '@/lib/features/diagnostics/tracking';
 import type { DiagnosticDefinition } from '@/lib/features/diagnostics/types';
+import {
+  DEFAULT_QR_CAMPAIGN_MEDIUM,
+  QR_CAMPAIGN_MEDIUMS,
+} from '@/lib/features/distribution/types';
+import { INFLOW_SOURCES } from '@/lib/features/leads/types/pipeline';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/features/notifications/notification-service', () => ({
@@ -164,6 +169,35 @@ describe('inferInflowSource（流入元の推定）', () => {
   it('leaves unknown campaign media (email, dm, form) blank instead of calling them organic', () => {
     expect(inferInflowSource({ utmMedium: 'email' }).inflowSource).toBeNull();
     expect(inferInflowSource({ utmMedium: 'dm' }).inflowSource).toBeNull();
+  });
+
+  // #788 (owner decision of 2026-10-26): the media of the QR campaign form map to the existing
+  // inflow sources, so the new leads of a campaign's scans are never left 未設定
+  it('maps an exhibition to seminar and a direct mail to advertising (QR campaigns, #788)', () => {
+    expect(inferInflowSource({ utmMedium: 'exhibition' })).toEqual({
+      inflowSource: 'seminar',
+      referrerName: null,
+      agencyName: null,
+    });
+    expect(inferInflowSource({ utmMedium: 'direct_mail' })).toEqual({
+      inflowSource: 'advertising',
+      referrerName: null,
+      agencyName: null,
+    });
+    expect(inferInflowSource({ utmMedium: 'seminar' }).inflowSource).toBe('seminar');
+    // The address of the diagnosis carries the campaign's medium as stored, in any case
+    expect(inferInflowSource({ utmMedium: ' Direct_Mail ' }).inflowSource).toBe('advertising');
+  });
+
+  it('maps every medium of the QR campaign form, the default too, to an existing inflow source', () => {
+    for (const medium of QR_CAMPAIGN_MEDIUMS) {
+      expect(INFLOW_SOURCES, medium).toContain(inferInflowSource({ utmMedium: medium }).inflowSource);
+    }
+    expect(inferInflowSource({ utmMedium: DEFAULT_QR_CAMPAIGN_MEDIUM }).inflowSource).toBe('seminar');
+  });
+
+  it("leaves 'offline', the default of the campaigns created before #788, blank as before", () => {
+    expect(inferInflowSource({ utmSource: 'qrcode', utmMedium: 'offline' }).inflowSource).toBeNull();
   });
 
   it('cuts long tracking values instead of rejecting the submission', () => {
