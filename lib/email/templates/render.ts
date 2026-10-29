@@ -68,11 +68,13 @@ const FONT =
   "-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic UI',Meiryo,'Segoe UI',sans-serif";
 const MONO = "ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace";
 
-interface Palette {
+export interface EmailPalette {
   header: string;
   headerText: string;
   accent: string;
   accentText: string;
+  /** Text links on the card */
+  link: string;
   page: string;
   card: string;
   border: string;
@@ -82,44 +84,161 @@ interface Palette {
   factBg: string;
 }
 
-const PALETTES: Record<EmailTheme, Palette> = {
+export interface EmailToneColors {
+  bg: string;
+  text: string;
+  border: string;
+}
+
+/**
+ * Colors of each theme in light and dark mode (#900). Every text color keeps 4.5:1 against the
+ * background it sits on, in both modes (checked by the tests). The light colors are the inline
+ * styles, so a mail client that ignores the dark rules shows them; clients that follow
+ * prefers-color-scheme (Apple Mail, Outlook for Mac and mobile) or Outlook.com's dark mode
+ * switch to the dark ones. Clients that invert colors on their own (the Gmail apps) cannot be
+ * steered: the header and the button keep white text on a color dark enough either way.
+ */
+export const EMAIL_PALETTES: Record<EmailTheme, { light: EmailPalette; dark: EmailPalette }> = {
   // DiagnoLeads (teal-700 on white keeps 4.5:1 for the button text)
   internal: {
-    header: '#0f766e',
-    headerText: '#ffffff',
-    accent: '#0f766e',
-    accentText: '#ffffff',
-    page: '#f1f5f9',
-    card: '#ffffff',
-    border: '#e2e8f0',
-    ink: '#0f172a',
-    muted: '#64748b',
-    factLabel: '#475569',
-    factBg: '#f8fafc',
+    light: {
+      header: '#0f766e',
+      headerText: '#ffffff',
+      accent: '#0f766e',
+      accentText: '#ffffff',
+      link: '#0f766e',
+      page: '#f1f5f9',
+      card: '#ffffff',
+      border: '#e2e8f0',
+      ink: '#0f172a',
+      muted: '#56657a',
+      factLabel: '#475569',
+      factBg: '#f8fafc',
+    },
+    dark: {
+      header: '#0f766e',
+      headerText: '#ffffff',
+      accent: '#0f766e',
+      accentText: '#ffffff',
+      link: '#5eead4',
+      page: '#0b1120',
+      card: '#162032',
+      border: '#2b3a52',
+      ink: '#e5edf6',
+      muted: '#9fb0c6',
+      factLabel: '#cbd6e3',
+      factBg: '#101a2b',
+    },
   },
   // AX migration site (app/globals.css): white text only on ax-teal-dark or darker
   customer: {
-    header: '#033b3a',
-    headerText: '#ffffff',
-    accent: '#087270',
-    accentText: '#ffffff',
-    page: '#f3f3f3',
-    card: '#ffffff',
-    border: '#e5e7eb',
-    ink: '#1f2937',
-    muted: '#6b7280',
-    factLabel: '#4b5563',
-    factBg: '#f7faf9',
+    light: {
+      header: '#033b3a',
+      headerText: '#ffffff',
+      accent: '#087270',
+      accentText: '#ffffff',
+      link: '#087270',
+      page: '#f3f3f3',
+      card: '#ffffff',
+      border: '#e5e7eb',
+      ink: '#1f2937',
+      muted: '#5b626c',
+      factLabel: '#4b5563',
+      factBg: '#f7faf9',
+    },
+    dark: {
+      header: '#0c4a47',
+      headerText: '#ffffff',
+      accent: '#087270',
+      accentText: '#ffffff',
+      link: '#6fd6cf',
+      page: '#0a1110',
+      card: '#141e1c',
+      border: '#2a3b38',
+      ink: '#e6ebea',
+      muted: '#a3b0ad',
+      factLabel: '#d0d9d7',
+      factBg: '#0f1817',
+    },
   },
 };
 
-const TONES: Record<EmailTone, { bg: string; text: string; border: string }> = {
-  neutral: { bg: '#f1f5f9', text: '#334155', border: '#cbd5e1' },
-  info: { bg: '#eff6ff', text: '#1e40af', border: '#bfdbfe' },
-  success: { bg: '#ecfdf5', text: '#065f46', border: '#a7f3d0' },
-  warning: { bg: '#fffbeb', text: '#92400e', border: '#fde68a' },
-  danger: { bg: '#fef2f2', text: '#991b1b', border: '#fecaca' },
+export const EMAIL_TONES: Record<EmailTone, { light: EmailToneColors; dark: EmailToneColors }> = {
+  neutral: {
+    light: { bg: '#f1f5f9', text: '#334155', border: '#cbd5e1' },
+    dark: { bg: '#1e293b', text: '#d5dee9', border: '#64748b' },
+  },
+  info: {
+    light: { bg: '#eff6ff', text: '#1e40af', border: '#bfdbfe' },
+    dark: { bg: '#14244a', text: '#c7dbff', border: '#3b6fd8' },
+  },
+  success: {
+    light: { bg: '#ecfdf5', text: '#065f46', border: '#a7f3d0' },
+    dark: { bg: '#0c2a20', text: '#a7f3d0', border: '#2f9e75' },
+  },
+  warning: {
+    light: { bg: '#fffbeb', text: '#92400e', border: '#fde68a' },
+    dark: { bg: '#2e2108', text: '#fde68a', border: '#b7791f' },
+  },
+  danger: {
+    light: { bg: '#fef2f2', text: '#991b1b', border: '#fecaca' },
+    dark: { bg: '#3a1111', text: '#fecaca', border: '#d14343' },
+  },
 };
+
+type Palette = EmailPalette;
+
+/** Class names the dark rules address; the inline styles carry the light colors */
+const C = {
+  page: 'dl-page',
+  card: 'dl-card',
+  header: 'dl-header',
+  ink: 'dl-ink',
+  muted: 'dl-muted',
+  link: 'dl-link',
+  border: 'dl-border',
+  fact: 'dl-fact',
+  factLabel: 'dl-fact-label',
+  tone: (tone: EmailTone) => `dl-tone-${tone}`,
+} as const;
+
+/**
+ * The dark rules: under prefers-color-scheme: dark, and again for Outlook.com, which marks the
+ * elements it recolors with data-ogsc (text) and data-ogsb (backgrounds)
+ */
+function darkStyles(theme: EmailTheme): string {
+  const d = EMAIL_PALETTES[theme].dark;
+  const rules = [
+    [`.${C.page}`, `background:${d.page}!important;`],
+    [`.${C.card}`, `background:${d.card}!important;border-color:${d.border}!important;`],
+    [`.${C.header}`, `background:${d.header}!important;color:${d.headerText}!important;`],
+    [`.${C.ink}`, `color:${d.ink}!important;`],
+    [`.${C.muted}`, `color:${d.muted}!important;`],
+    [`.${C.link}`, `color:${d.link}!important;`],
+    [`.${C.border}`, `border-color:${d.border}!important;`],
+    [`.${C.fact}`, `background:${d.factBg}!important;border-color:${d.border}!important;`],
+    [`.${C.factLabel}`, `color:${d.factLabel}!important;`],
+    ...(Object.keys(EMAIL_TONES) as EmailTone[]).map((tone) => {
+      const t = EMAIL_TONES[tone].dark;
+      return [
+        `.${C.tone(tone)}`,
+        `background:${t.bg}!important;color:${t.text}!important;border-color:${t.border}!important;`,
+      ];
+    }),
+  ];
+  const css = (prefix: string) =>
+    rules.map(([selector, body]) => `${prefix}${selector}{${body}}`).join('');
+  return `<style>
+:root{color-scheme:light dark;supported-color-schemes:light dark;}
+@media (prefers-color-scheme: dark){${css('')}}
+${css('[data-ogsc] ')}
+${css('[data-ogsb] ')}
+</style>`;
+}
+
+const TONES: Record<EmailTone, EmailToneColors> = Object.fromEntries(
+  (Object.keys(EMAIL_TONES) as EmailTone[]).map((tone) => [tone, EMAIL_TONES[tone].light])
+) as Record<EmailTone, EmailToneColors>;
 
 /** Escape a value for HTML text and double-quoted attributes */
 const ENTITIES: Record<string, string> = {
@@ -194,15 +313,15 @@ const text = (value: string) => escapeHtml(value).replace(/\r?\n/g, '<br>');
 function renderBlock(block: EmailBlock, p: Palette): string {
   switch (block.type) {
     case 'heading':
-      return `<h1 style="margin:0 0 16px;font-size:20px;line-height:1.5;font-weight:700;color:${p.ink};">${text(block.text)}</h1>`;
+      return `<h1 class="${C.ink}" style="margin:0 0 16px;font-size:20px;line-height:1.5;font-weight:700;color:${p.ink};">${text(block.text)}</h1>`;
     case 'paragraph':
-      return `<p style="margin:0 0 16px;font-size:${block.muted ? '13px' : '15px'};line-height:1.8;color:${block.muted ? p.muted : p.ink};">${text(block.text)}</p>`;
+      return `<p class="${block.muted ? C.muted : C.ink}" style="margin:0 0 16px;font-size:${block.muted ? '13px' : '15px'};line-height:1.8;color:${block.muted ? p.muted : p.ink};">${text(block.text)}</p>`;
     case 'badges': {
       if (block.items.length === 0) return '';
       const badges = block.items
         .map((item) => {
           const tone = TONES[item.tone];
-          return `<span style="display:inline-block;margin:0 6px 6px 0;padding:3px 10px;border:1px solid ${tone.border};border-radius:999px;background:${tone.bg};color:${tone.text};font-size:12px;line-height:1.6;font-weight:700;white-space:nowrap;">${escapeHtml(item.label)}</span>`;
+          return `<span class="${C.tone(item.tone)}" style="display:inline-block;margin:0 6px 6px 0;padding:3px 10px;border:1px solid ${tone.border};border-radius:999px;background:${tone.bg};color:${tone.text};font-size:12px;line-height:1.6;font-weight:700;white-space:nowrap;">${escapeHtml(item.label)}</span>`;
         })
         .join('');
       return `<div style="margin:0 0 12px;">${badges}</div>`;
@@ -210,54 +329,54 @@ function renderBlock(block: EmailBlock, p: Palette): string {
     case 'facts': {
       if (block.rows.length === 0) return '';
       const title = block.title
-        ? `<p style="margin:0 0 8px;font-size:13px;font-weight:700;color:${p.factLabel};">${escapeHtml(block.title)}</p>`
+        ? `<p class="${C.factLabel}" style="margin:0 0 8px;font-size:13px;font-weight:700;color:${p.factLabel};">${escapeHtml(block.title)}</p>`
         : '';
       const rows = block.rows
         .map(
           (row, index) =>
-            `<tr><th scope="row" align="left" valign="top" style="width:34%;padding:10px 12px;${index > 0 ? `border-top:1px solid ${p.border};` : ''}background:${p.factBg};font-size:13px;line-height:1.6;font-weight:700;color:${p.factLabel};">${escapeHtml(row.label)}</th><td valign="top" style="padding:10px 12px;${index > 0 ? `border-top:1px solid ${p.border};` : ''}font-size:14px;line-height:1.6;color:${p.ink};word-break:break-word;">${text(row.value)}</td></tr>`
+            `<tr><th scope="row" align="left" valign="top" class="${C.fact} ${C.factLabel}" style="width:34%;padding:10px 12px;${index > 0 ? `border-top:1px solid ${p.border};` : ''}background:${p.factBg};font-size:13px;line-height:1.6;font-weight:700;color:${p.factLabel};">${escapeHtml(row.label)}</th><td valign="top" class="${C.ink} ${C.border}" style="padding:10px 12px;${index > 0 ? `border-top:1px solid ${p.border};` : ''}font-size:14px;line-height:1.6;color:${p.ink};word-break:break-word;">${text(row.value)}</td></tr>`
         )
         .join('');
-      return `${title}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;border:1px solid ${p.border};border-radius:8px;border-collapse:separate;overflow:hidden;">${rows}</table>`;
+      return `${title}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="${C.border}" style="margin:0 0 20px;border:1px solid ${p.border};border-radius:8px;border-collapse:separate;overflow:hidden;">${rows}</table>`;
     }
     case 'notice': {
       const tone = TONES[block.tone];
       const title = block.title
-        ? `<p style="margin:0 0 4px;font-size:14px;font-weight:700;color:${tone.text};">${escapeHtml(block.title)}</p>`
+        ? `<p class="${C.tone(block.tone)}" style="margin:0 0 4px;font-size:14px;font-weight:700;color:${tone.text};">${escapeHtml(block.title)}</p>`
         : '';
-      return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;"><tr><td style="padding:12px 16px;border-left:4px solid ${tone.border};background:${tone.bg};border-radius:4px;">${title}<p style="margin:0;font-size:14px;line-height:1.7;color:${tone.text};">${text(block.text)}</p></td></tr></table>`;
+      return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;"><tr><td class="${C.tone(block.tone)}" style="padding:12px 16px;border-left:4px solid ${tone.border};background:${tone.bg};border-radius:4px;">${title}<p class="${C.tone(block.tone)}" style="margin:0;font-size:14px;line-height:1.7;color:${tone.text};">${text(block.text)}</p></td></tr></table>`;
     }
     case 'button': {
       const url = linkUrl(block.url);
       // An unsafe link is left out entirely: the label alone, never the address
       if (!url) {
-        return `<p style="margin:0 0 20px;font-size:14px;color:${p.ink};">${escapeHtml(block.label)}</p>`;
+        return `<p class="${C.ink}" style="margin:0 0 20px;font-size:14px;color:${p.ink};">${escapeHtml(block.label)}</p>`;
       }
       return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:4px 0 24px;"><tr><td style="border-radius:8px;background:${p.accent};"><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:700;line-height:1.4;color:${p.accentText};text-decoration:none;border-radius:8px;">${escapeHtml(block.label)}</a></td></tr></table>`;
     }
     case 'links': {
       if (block.items.length === 0) return '';
       const title = block.title
-        ? `<p style="margin:0 0 8px;font-size:13px;font-weight:700;color:${p.factLabel};">${escapeHtml(block.title)}</p>`
+        ? `<p class="${C.factLabel}" style="margin:0 0 8px;font-size:13px;font-weight:700;color:${p.factLabel};">${escapeHtml(block.title)}</p>`
         : '';
       const items = block.items
         .map((item, index) => {
           const url = item.url ? linkUrl(item.url) : null;
           const label = url
-            ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="color:${p.accent};font-weight:700;text-decoration:underline;">${escapeHtml(item.text)}</a>`
+            ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="${C.link}" style="color:${p.link};font-weight:700;text-decoration:underline;">${escapeHtml(item.text)}</a>`
             : escapeHtml(item.text);
           const note = item.note
-            ? `<br><span style="font-size:12px;color:${p.muted};">${escapeHtml(item.note)}</span>`
+            ? `<br><span class="${C.muted}" style="font-size:12px;color:${p.muted};">${escapeHtml(item.note)}</span>`
             : '';
-          return `<tr><td style="padding:10px 12px;${index > 0 ? `border-top:1px solid ${p.border};` : ''}font-size:14px;line-height:1.6;color:${p.ink};">${label}${note}</td></tr>`;
+          return `<tr><td class="${C.ink} ${C.border}" style="padding:10px 12px;${index > 0 ? `border-top:1px solid ${p.border};` : ''}font-size:14px;line-height:1.6;color:${p.ink};">${label}${note}</td></tr>`;
         })
         .join('');
-      return `${title}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;border:1px solid ${p.border};border-radius:8px;border-collapse:separate;">${items}</table>`;
+      return `${title}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="${C.border}" style="margin:0 0 20px;border:1px solid ${p.border};border-radius:8px;border-collapse:separate;">${items}</table>`;
     }
     case 'code':
-      return `<pre style="margin:0 0 20px;padding:12px 16px;background:${p.factBg};border:1px solid ${p.border};border-radius:6px;font-family:${MONO};font-size:12px;line-height:1.6;color:${p.ink};white-space:pre-wrap;word-break:break-all;">${escapeHtml(block.text)}</pre>`;
+      return `<pre class="${C.fact} ${C.ink}" style="margin:0 0 20px;padding:12px 16px;background:${p.factBg};border:1px solid ${p.border};border-radius:6px;font-family:${MONO};font-size:12px;line-height:1.6;color:${p.ink};white-space:pre-wrap;word-break:break-all;">${escapeHtml(block.text)}</pre>`;
     case 'divider':
-      return `<hr style="margin:4px 0 20px;border:0;border-top:1px solid ${p.border};">`;
+      return `<hr class="${C.border}" style="margin:4px 0 20px;border:0;border-top:1px solid ${p.border};">`;
   }
 }
 
@@ -305,11 +424,11 @@ function renderFooterLinks(links: EmailFooterLink[], p: Palette): string {
     .map((link) => {
       const url = linkUrl(link.url);
       return url
-        ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="color:${p.muted};text-decoration:underline;">${escapeHtml(link.label)}</a>`
+        ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="${C.muted}" style="color:${p.muted};text-decoration:underline;">${escapeHtml(link.label)}</a>`
         : escapeHtml(link.label);
     })
-    .join(`<span style="color:${p.border};">&nbsp;|&nbsp;</span>`);
-  return `<p style="margin:8px 0 4px;font-size:12px;line-height:1.7;color:${p.muted};">${items}</p>`;
+    .join(`<span class="${C.muted}" style="color:${p.muted};">&nbsp;|&nbsp;</span>`);
+  return `<p class="${C.muted}" style="margin:8px 0 4px;font-size:12px;line-height:1.7;color:${p.muted};">${items}</p>`;
 }
 
 /** One line per footer link: "label: url" (the label alone when the link is refused) */
@@ -323,13 +442,13 @@ function footerLinksText(links: EmailFooterLink[], theme: EmailTheme): string[] 
 
 /** Render the HTML and the plain-text part of a mail */
 export function renderEmail(content: EmailContent): RenderedEmail {
-  const p = PALETTES[content.theme];
+  const p = EMAIL_PALETTES[content.theme].light;
   const brand = content.brand ?? 'DiagnoLeads';
   const body = content.blocks.map((block) => renderBlock(block, p)).join('');
   const footer = (content.footer ?? [])
     .map(
       (line) =>
-        `<p style="margin:0 0 4px;font-size:12px;line-height:1.7;color:${p.muted};">${text(line)}</p>`
+        `<p class="${C.muted}" style="margin:0 0 4px;font-size:12px;line-height:1.7;color:${p.muted};">${text(line)}</p>`
     )
     .join('');
   const footerLinks = renderFooterLinks(content.footerLinks ?? [], p);
@@ -340,17 +459,18 @@ export function renderEmail(content: EmailContent): RenderedEmail {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light">
-<meta name="supported-color-schemes" content="light">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
 <title>${escapeHtml(brand)}</title>
+${darkStyles(content.theme)}
 </head>
-<body style="margin:0;padding:0;background:${p.page};-webkit-text-size-adjust:100%;">
+<body class="${C.page}" style="margin:0;padding:0;background:${p.page};-webkit-text-size-adjust:100%;">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${escapeHtml(content.preheader)}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${p.page};">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="${C.page}" style="background:${p.page};">
 <tr><td align="center" style="padding:24px 12px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;font-family:${FONT};">
-<tr><td style="padding:16px 24px;background:${p.header};border-radius:12px 12px 0 0;font-size:16px;font-weight:700;letter-spacing:0.02em;color:${p.headerText};">${escapeHtml(brand)}</td></tr>
-<tr><td style="padding:28px 24px 8px;background:${p.card};border:1px solid ${p.border};border-top:0;border-radius:0 0 12px 12px;">${body}</td></tr>
+<tr><td class="${C.header}" style="padding:16px 24px;background:${p.header};border-radius:12px 12px 0 0;font-size:16px;font-weight:700;letter-spacing:0.02em;color:${p.headerText};">${escapeHtml(brand)}</td></tr>
+<tr><td class="${C.card}" style="padding:28px 24px 8px;background:${p.card};border:1px solid ${p.border};border-top:0;border-radius:0 0 12px 12px;">${body}</td></tr>
 ${small ? `<tr><td style="padding:16px 24px 0;font-family:${FONT};">${small}</td></tr>` : ''}
 </table>
 </td></tr>

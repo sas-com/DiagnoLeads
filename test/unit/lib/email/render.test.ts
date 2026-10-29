@@ -1,4 +1,6 @@
 import {
+  EMAIL_PALETTES,
+  EMAIL_TONES,
   type EmailBlock,
   type EmailFooterLink,
   escapeHtml,
@@ -155,6 +157,81 @@ describe('renderEmail', () => {
     expect(html).not.toMatch(/<img|<link|<script|url\(/i);
   });
 
+  it('declares light and dark, with dark rules for prefers-color-scheme and Outlook.com (#900)', () => {
+    for (const theme of ['internal', 'customer'] as const) {
+      const { html } = renderEmail({ theme, preheader: 'p', blocks });
+      expect(html).toContain('<meta name="color-scheme" content="light dark">');
+      expect(html).toContain('@media (prefers-color-scheme: dark)');
+      expect(html).toContain('[data-ogsc] .dl-ink');
+      expect(html).toContain('[data-ogsb] .dl-page');
+      const dark = EMAIL_PALETTES[theme].dark;
+      expect(html).toContain(`.dl-card{background:${dark.card}!important;`);
+      // The inline styles stay the light colors, for clients that ignore the rules
+      expect(html).toContain(`background:${EMAIL_PALETTES[theme].light.card};`);
+    }
+  });
+
+  it('gives every colored element a class the dark rules reach', () => {
+    const { html } = render([
+      ...blocks,
+      { type: 'notice', tone: 'warning', title: 'T', text: 'x' },
+      { type: 'badges', items: [{ label: 'b', tone: 'danger' }] },
+      { type: 'code', text: 'c' },
+      { type: 'divider' },
+    ]);
+    // An element with a color in its inline style but no class would stay light in dark mode
+    const tags = html.match(/<[a-z0-9]+ [^>]*style="[^"]*(?:color|background|border)[^"]*"[^>]*>/g) ?? [];
+    const unclassed = tags.filter(
+      (tag) => !/class="/.test(tag) && !/color:transparent/.test(tag) && !/background:#(?:0f766e|087270);/.test(tag) && !/color:#ffffff;text-decoration:none/.test(tag)
+    );
+    expect(unclassed).toEqual([]);
+  });
+});
+
+/** WCAG relative luminance and contrast ratio */
+function luminance(hex: string): number {
+  const [r, g, b] = [1, 3, 5].map((i) => {
+    const v = Number.parseInt(hex.slice(i, i + 2), 16) / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+function contrast(a: string, b: string): number {
+  const [x, y] = [luminance(a), luminance(b)].sort((m, n) => n - m);
+  return (x + 0.05) / (y + 0.05);
+}
+
+describe('email colors (#900)', () => {
+  const modes = ['light', 'dark'] as const;
+
+  it.each(
+    (['internal', 'customer'] as const).flatMap((theme) => modes.map((mode) => [theme, mode] as const))
+  )('keeps 4.5:1 for every text in the %s theme, %s mode', (theme, mode) => {
+    const p = EMAIL_PALETTES[theme][mode];
+    const pairs: [string, string, string][] = [
+      ['ink on card', p.ink, p.card],
+      ['muted on card', p.muted, p.card],
+      ['muted on page (footer)', p.muted, p.page],
+      ['table label on its cell', p.factLabel, p.factBg],
+      ['block title on card', p.factLabel, p.card],
+      ['code on its box', p.ink, p.factBg],
+      ['link on card', p.link, p.card],
+      ['button text', p.accentText, p.accent],
+      ['header text', p.headerText, p.header],
+    ];
+    for (const [name, fg, bg] of pairs) {
+      expect(contrast(fg, bg), `${theme} ${mode}: ${name}`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it.each(modes)('keeps 4.5:1 for notices and badges in %s mode', (mode) => {
+    for (const [tone, colors] of Object.entries(EMAIL_TONES)) {
+      expect(contrast(colors[mode].text, colors[mode].bg), `${tone} ${mode}`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});
+
+describe('renderEmail (continued)', () => {
   it('logs a refused link with its scheme and host only, never the token', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
