@@ -17,7 +17,8 @@ import { normaliseEmail } from './normalize';
 import { isSuppressed } from './suppression';
 import { newToken } from './tokens';
 
-export type RespondentEmailKind = 'confirmation' | 'result';
+/** 'document_link': the link to a document requested from the AX landing pages (#899) */
+export type RespondentEmailKind = 'confirmation' | 'result' | 'document_link';
 
 /** What the caller's builder returns (the shape of the AX BuiltEmail) */
 export interface RespondentEmailContent {
@@ -39,6 +40,8 @@ export interface SendRespondentEmailInput {
   consentId?: string | null;
   leadId?: string | null;
   submissionId?: string | null;
+  /** The document request the mail is for (kind 'document_link') */
+  offerRequestId?: string | null;
   /**
    * The https URL of the unsubscribe page for this mail's token, linked from the footer (see
    * unsubscribeUrls: the token is in the fragment)
@@ -101,6 +104,7 @@ export async function sendRespondentEmail(
     consentId: input.consentId ?? null,
     leadId: input.leadId ?? null,
     submissionId: input.submissionId ?? null,
+    offerRequestId: input.offerRequestId ?? null,
     kind: input.kind,
     email,
   };

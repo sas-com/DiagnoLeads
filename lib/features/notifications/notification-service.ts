@@ -252,6 +252,8 @@ export function shouldSendInAppNotification(
 ): boolean {
   switch (type) {
     case 'lead_created':
+    // A document requested from the landing pages (#899) is a new inquiry, like a new lead
+    case 'document_requested':
       return prefs.inAppLeadCreated;
     case 'lead_status_changed':
       return prefs.inAppLeadStatusChanged;

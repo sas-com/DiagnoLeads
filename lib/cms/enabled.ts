@@ -16,6 +16,8 @@ export function isCmsEnabled(): boolean {
  */
 export const APP_API_SEGMENTS = [
   'auth',
+  // The document requests of the AX landing pages and their mailed link (#899)
+  'ax-migration',
   'cms',
   // The site's own visit measurement (#412)
   'collect',

@@ -274,6 +274,13 @@
       "when": 1793188121620,
       "tag": "0038_common_forge",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1793235468530,
+      "tag": "0039_serious_celestials",
+      "breakpoints": true
     }
   ]
 }

@@ -445,3 +445,68 @@ const AX_NOTIFICATION_LIMITS: DiagnosisNotificationLimits = {
   consultationNotifications: AX_RATE_LIMITS.consultationNotificationsPerOrganization,
   data: { diagnosticKey: 'ax-migration' },
 };
+
+// ---------------------------------------------------------------------------------------------
+// Document requests from the landing pages (#899)
+// ---------------------------------------------------------------------------------------------
+
+export interface AxDocumentRequestNotification {
+  organizationId: string;
+  leadId: string;
+  requestId: string;
+  documentTitle: string;
+  leadCreated: boolean;
+  /** What the form was given; for an existing lead it is shown as typed, not as stored */
+  company: string;
+  name: string;
+  department?: string;
+  title?: string;
+  systems?: string[];
+}
+
+/** Title and message of the in-app notice (no address or phone: they are on the lead page) */
+export function buildDocumentRequestMessage(n: AxDocumentRequestNotification): {
+  title: string;
+  message: string;
+} {
+  const who = [n.company, n.department, n.name, n.title].filter(Boolean).join(' ');
+  const systems = (n.systems ?? []).map((system) => PLATFORM_LABELS[system] ?? system);
+  const lines = [
+    `資料：${n.documentTitle}`,
+    ...(systems.length > 0 ? [`気になるシステム：${systems.join('・')}`] : []),
+    n.leadCreated
+      ? '新しいリードとして登録しました。'
+      : '同じメールアドレスの既存リードに記録しました（本人未確認。会社名・氏名はフォームの入力のままです）。',
+  ];
+  return { title: `【AX LP】資料請求：${who}`, message: lines.join('\n') };
+}
+
+/**
+ * Tell the organization's members about a document request, within the same hourly limit as the
+ * diagnosis notices. A new lead is also a lead.created webhook.
+ */
+export async function notifyAxDocumentRequest(n: AxDocumentRequestNotification): Promise<void> {
+  const { notify, withinLimit } = await checkNotificationLimits(
+    db,
+    n.organizationId,
+    false,
+    AX_NOTIFICATION_LIMITS
+  );
+  if (!notify) return;
+  const { title, message } = buildDocumentRequestMessage(n);
+  const data = {
+    leadId: n.leadId,
+    offerRequestId: n.requestId,
+    source: 'ax-landing-document',
+    identityUnverified: !n.leadCreated,
+  };
+  const tasks: Promise<unknown>[] = [
+    notifyOrganizationMembers(n.organizationId, 'document_requested', title, message, data),
+  ];
+  if (withinLimit && n.leadCreated) tasks.push(sendLeadCreatedById(n.organizationId, n.leadId));
+  for (const r of await Promise.allSettled(tasks)) {
+    if (r.status === 'rejected') {
+      console.error('AX document request notification failed:', r.reason);
+    }
+  }
+}

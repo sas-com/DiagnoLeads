@@ -45,6 +45,7 @@ describe.skipIf(!url)('info offers (PostgreSQL)', () => {
       { id: 'next', title: '移行の進め方', description: '', date: '2026-11-10', time: '', format: '' },
       { id: 'past', title: '過去の会', description: '', date: '2026-10-01', time: '', format: '' },
     ],
+    landingDocumentId: null,
   };
 
   beforeAll(async () => {

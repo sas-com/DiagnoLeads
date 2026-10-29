@@ -35,6 +35,15 @@ export const AX_RATE_LIMITS = {
   detailsPerIp: { name: 'ax-details-ip', limit: 20, windowMs: HOUR },
   /** Documents and seminars requested from the result (#153) */
   offersPerIp: { name: 'ax-offers-ip', limit: 30, windowMs: HOUR },
+  /**
+   * The document request form of the landing pages (#899). Each request may mail a link, so
+   * tighter than the diagnosis; per address of the requester and per address typed in
+   */
+  documentRequestPerIp: { name: 'ax-document-request-ip', limit: 10, windowMs: HOUR },
+  documentRequestPerIpDaily: { name: 'ax-document-request-ip-day', limit: 30, windowMs: DAY },
+  documentRequestPerEmail: { name: 'ax-document-request-email', limit: 3, windowMs: HOUR },
+  /** Opening the mailed link (#899): a few opens are normal, a sweep of tokens is not */
+  documentOpenPerIp: { name: 'ax-document-open-ip', limit: 60, windowMs: HOUR },
   // Sales emails share SALES_EMAIL_LIMITS (lib/features/diagnostics/service.ts) with the
   // builder's diagnoses (#481)
   /** The "receive the result by email" button of the result screen (#154) */

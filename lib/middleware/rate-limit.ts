@@ -94,6 +94,10 @@ export const ENDPOINT_RATE_LIMITS: Record<string, RateLimitConfig> = {
   // The result by email (#154): the result screen's button and the confirm page's buttons
   '/api/diagnostics/ax-migration/result-email': { max: 5, windowMs: 60 * 1000 },
   '/api/diagnostics/ax-migration/result-email/confirm': { max: 10, windowMs: 60 * 1000 },
+  // The document request form of the landing pages and the mailed link (#899); the DB limits
+  // (AX_RATE_LIMITS.documentRequest* / documentOpenPerIp) hold across instances
+  '/api/ax-migration/document-requests': { max: 5, windowMs: 60 * 1000 },
+  '/api/ax-migration/documents/': { max: 20, windowMs: 60 * 1000 },
   // Diagnoses made in the builder: /api/diagnoses/[slug]/submit and /consultation (prefix)
   '/api/diagnoses/': { max: 10, windowMs: 60 * 1000 },
   '/api/diagnostic': { max: 30, windowMs: 60 * 1000 },
