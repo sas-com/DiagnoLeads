@@ -361,12 +361,12 @@ describe('AX migration landing page', () => {
       '移したあとも',
     ]);
     expect(trust.getByText(/認定番号：10822550、JIS Q 15001:2023 準拠/)).toBeInTheDocument();
-    // The scope as the company profile states it, not tied to this migration work
-    expect(
-      trust.getByText(
-        '情報セキュリティマネジメントシステムの認証（認証番号：IS609954）を取得しています。対象は、本社における業務系システム開発、教育研修サービス、HRコンサルティングです。'
-      )
-    ).toBeInTheDocument();
+    // Design and development at the head office are in scope (#870); upkeep is not claimed
+    const isms = trust.getByText(/ISMS（認証番号：IS609954）の認証範囲/);
+    expect(isms).toHaveTextContent(
+      '当社の本社で行うAXマイグレーションの設計・開発は、ISMS（認証番号：IS609954）の認証範囲「本社における業務系システム開発」に含まれます。'
+    );
+    expect(isms).not.toHaveTextContent(/保守/);
   });
 
   it('shows the booking button only when a booking URL is configured', async () => {
