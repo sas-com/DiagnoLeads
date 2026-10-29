@@ -7,7 +7,7 @@ export const settingsWebhooksArticle: HelpArticle = {
   summary:
     'リードの作成や更新などが起きたときに、ほかのシステムへ知らせる送信先（Webhook）を設定します。社内のシステムとつなぐ担当者向けの画面です。',
   routes: ['/settings/webhooks'],
-  reviewedAt: '2026-10-28',
+  reviewedAt: '2026-10-29',
   blocks: [
     { type: 'h2', id: 'create', text: '送信先を作る' },
     {
@@ -35,7 +35,20 @@ export const settingsWebhooksArticle: HelpArticle = {
     {
       type: 'p',
       content:
-        '送信には署名が付きます（X-Webhook-Signature ヘッダー）。受け取る側で、画面の署名シークレットを使って署名を確かめ、偽の送信を受け付けないようにしてください。',
+        '送信には署名が付きます（X-Webhook-Signature ヘッダー。t=送った時刻,v1=署名 の形）。受け取る側では、次の2つを確かめてください。',
+    },
+    {
+      type: 'steps',
+      items: [
+        '署名：「時刻.受け取った本文そのまま」を、画面の署名シークレットで HMAC-SHA256 にかけた値が v1 と同じか。違えば偽の送信として捨てます。',
+        '時刻：t が今から5分より古いか、5分より先なら捨てます。盗み見た送信をあとから送り直されても、受け付けないためです。',
+      ],
+    },
+    {
+      type: 'note',
+      tone: 'tip',
+      content:
+        '再送のときも、署名と時刻は送るたびに付け直します。5分の幅で確かめても、正しい再送は捨てられません。',
     },
     { type: 'h2', id: 'operate', text: '止める・直す' },
     {
