@@ -5,7 +5,7 @@ category: Process
 title: "Claude の守りは、文章ではなくフックと権限で掛ける（#427）"
 status: active
 superseded_by: []
-issues: [426, 427]
+issues: [426, 427, 886]
 paths: [".claude/settings.json", ".claude/hooks/**"]
 ---
 
@@ -23,6 +23,7 @@ paths: [".claude/settings.json", ".claude/hooks/**"]
       - 秘密情報の書き込みと送信：本番の接続文字列・API キー・秘密鍵、`NAME=値` の形の秘密の値
     - テストの架空の値は、文字列を組み立てて書くか、ファイルのその行に `gitleaks:allow` を付ける（Issue・PR・コマンドには効かない）
     - 読み取り・編集の後：そのファイルに関係する決定を知らせる
+    - コマンドで作業のブランチ（`<type>/<issue>-<説明>`）を作った後（`post-tool-branch-claim.ts`）：同じコマンドで Issue にコメントしていなければ、着手の連絡を促す。止めない。サブエージェントの中では黙る（#886、違反の記録は #887）
   - 権限
     - 禁止：`.env*` の読み取りと編集、bun.lock の編集、main への push。フックが動かないときの備えも兼ねる
     - 毎回確認：DB を変えるスクリプト、E2E、node_modules の編集

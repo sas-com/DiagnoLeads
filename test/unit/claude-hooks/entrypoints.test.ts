@@ -173,6 +173,46 @@ describe('post-tool-decisions', () => {
   });
 });
 
+describe('post-tool-branch-claim', () => {
+  it('reminds Claude to claim the issue of a new work branch', () => {
+    const result = run('post-tool-branch-claim.ts', {
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Bash',
+      tool_input: { command: 'git checkout -q -b feat/886-branch-claim-hook origin/main' },
+      tool_response: { stdout: '', stderr: '', interrupted: false, isImage: false },
+    });
+    expect(result.status).toBe(0);
+    expect(result.context).toContain('Issue #886');
+  });
+
+  it('says nothing inside a subagent', () => {
+    const result = run('post-tool-branch-claim.ts', {
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Bash',
+      agent_id: 'agent-1',
+      agent_type: 'general-purpose',
+      tool_input: { command: 'git checkout -b feat/886-a origin/main' },
+    });
+    expect(result.status).toBe(0);
+    expect(result.context).toBe('');
+  });
+
+  it('says nothing when the claim went with the branch, or for other commands', () => {
+    for (const command of [
+      'git checkout -b feat/886-a origin/main && gh api repos/o/r/issues/886/comments -X POST -f body=x',
+      'git status --short',
+    ]) {
+      const result = run('post-tool-branch-claim.ts', {
+        hook_event_name: 'PostToolUse',
+        tool_name: 'Bash',
+        tool_input: { command },
+      });
+      expect(result.status).toBe(0);
+      expect(result.context).toBe('');
+    }
+  });
+});
+
 describe('session-start', () => {
   it('prints the decision index (and installs nothing outside the cloud)', () => {
     const result = run('session-start.ts', { hook_event_name: 'SessionStart', source: 'startup' });
