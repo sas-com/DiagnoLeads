@@ -24,3 +24,16 @@ export function normaliseEmail(value: string): string | null {
   if (!ADDRESS.test(email)) return null;
   return email;
 }
+
+/**
+ * The mailbox a normalised address reaches: the "+tag" of the local part dropped, since most
+ * mail servers deliver name+1@ and name+2@ to name@ (#899 review). Used only to count and to
+ * limit mail per person; the mail itself goes to the address as typed.
+ */
+export function mailboxKey(email: string): string {
+  const at = email.lastIndexOf('@');
+  if (at <= 0) return email;
+  const local = email.slice(0, at);
+  const plus = local.indexOf('+');
+  return plus > 0 ? `${local.slice(0, plus)}${email.slice(at)}` : email;
+}

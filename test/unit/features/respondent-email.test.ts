@@ -9,6 +9,7 @@ import {
   hashToken,
   isSuppressed,
   newToken,
+  mailboxKey,
   normaliseEmail,
   sendRespondentEmail,
   suppress,
@@ -17,6 +18,16 @@ import {
 } from '@/lib/features/respondent-email';
 import { createHash } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+describe('mailboxKey', () => {
+  it('drops the +tag of the local part only', () => {
+    expect(mailboxKey('taro+1@example.co.jp')).toBe('taro@example.co.jp');
+    expect(mailboxKey('taro+a+b@example.co.jp')).toBe('taro@example.co.jp');
+    expect(mailboxKey('taro@example.co.jp')).toBe('taro@example.co.jp');
+    // Nothing to keep before the tag: left as it is
+    expect(mailboxKey('+tag@example.co.jp')).toBe('+tag@example.co.jp');
+  });
+});
 
 describe('normaliseEmail', () => {
   it('trims and lowercases one plain address', () => {

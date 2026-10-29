@@ -73,7 +73,7 @@ function baseUrlOf(deps: AxResultEmailDeps): string {
  * A send that went out or may have: 'sent', 'pending' (the outcome was never recorded), or an
  * attempt Resend refused as the replay of one that went out (see IDEMPOTENT_REPLAY)
  */
-const wentOut = () =>
+export const wentOut = () =>
   or(
     inArray(respondentEmailSends.status, ['sent', 'pending']),
     eq(respondentEmailSends.errorCode, IDEMPOTENT_REPLAY)
@@ -87,7 +87,7 @@ const wentOut = () =>
  */
 const confirmationWentOut = () => or(wentOut(), eq(respondentEmailSends.errorCode, SEND_TIMEOUT));
 
-const BUSY = Symbol('busy');
+export const BUSY = Symbol('busy');
 
 /**
  * Lock-holding operations running at once in this server instance. Each holds one connection
@@ -107,7 +107,7 @@ let inFlight = 0;
  * intends). 'try' gives up at once when another request holds the lock; 'wait' waits up to 10
  * seconds.
  */
-async function holdingLock<T>(
+export async function holdingLock<T>(
   db: Database,
   key: string,
   mode: 'wait' | 'try',

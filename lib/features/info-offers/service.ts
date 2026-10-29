@@ -5,6 +5,7 @@
  */
 import type { db as defaultDb } from '@/lib/db/client';
 import {
+  type LandingRequestContact,
   diagnosticSubmissions,
   leadOfferRequests,
   leads,
@@ -13,12 +14,15 @@ import {
 } from '@/lib/db/schema';
 import { AX_MIGRATION_DIAGNOSTIC_KEY } from '@/lib/features/diagnostics/ax-migration/definition';
 import { RESULT_SCREEN_WINDOW_MS } from '@/lib/features/diagnostics/ax-migration/submission-service';
-import { and, desc, eq, gte, ne, sql } from 'drizzle-orm';
+import { hashToken } from '@/lib/features/respondent-email';
+import { and, desc, eq, gte, isNull, ne, sql } from 'drizzle-orm';
 import {
   INFO_OFFERS_SETTINGS_KEY,
+  type InfoDocument,
   type InfoOffersSettings,
   OFFER_SCORE,
   type OfferKind,
+  landingDocument,
   readInfoOffers,
 } from './types/schemas';
 
@@ -182,11 +186,129 @@ export async function requestInfoOffer(
   });
 }
 
+// ---------------------------------------------------------------------------------------------
+// Requests from the landing pages' form (#899)
+// ---------------------------------------------------------------------------------------------
+
+/** How long the mailed link opens the document */
+export const LANDING_DOCUMENT_LINK_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** The organization's landing document with its location, or null when the form is closed */
+export async function getLandingDocument(
+  db: Executor,
+  organizationId: string
+): Promise<InfoDocument | null> {
+  return landingDocument(await getInfoOffers(db, organizationId));
+}
+
+/**
+ * Record a request of the landing form, inside the caller's transaction (the one that matched
+ * or created the lead). A lead created by the request gets OFFER_SCORE.document as its score
+ * from the caller, recorded here as the request's points; a lead matched by email alone is not
+ * changed (identityVerified false), as on the diagnosis (#233).
+ */
+export async function recordLandingOfferRequest(
+  tx: Pick<Database, 'insert'>,
+  input: {
+    organizationId: string;
+    leadId: string;
+    leadCreated: boolean;
+    document: Pick<InfoDocument, 'id' | 'title'>;
+    email: string;
+    contact: LandingRequestContact;
+    downloadTokenHash: string;
+    now: Date;
+  }
+): Promise<{ id: string }> {
+  const [row] = await tx
+    .insert(leadOfferRequests)
+    .values({
+      organizationId: input.organizationId,
+      leadId: input.leadId,
+      submissionId: null,
+      kind: 'document',
+      offerId: input.document.id,
+      title: input.document.title,
+      source: 'landing',
+      email: input.email,
+      contact: input.contact,
+      identityVerified: input.leadCreated,
+      scorePoints: input.leadCreated ? OFFER_SCORE.document : 0,
+      downloadTokenHash: input.downloadTokenHash,
+      downloadExpiresAt: new Date(input.now.getTime() + LANDING_DOCUMENT_LINK_TTL_MS),
+      createdAt: input.now,
+    })
+    .returning({ id: leadOfferRequests.id });
+  return row;
+}
+
+/** Tokens of the mailed links are 32 random bytes in base64url (43 characters) */
+const LINK_TOKEN = /^[A-Za-z0-9_-]{16,128}$/;
+
+export type OpenLandingDocumentOutcome =
+  | { outcome: 'open'; url: string }
+  | { outcome: 'expired' | 'not_found' | 'unavailable' };
+
+/**
+ * Open the document of a mailed link: the first opening is recorded, then the caller redirects
+ * to the document's current location. The token is looked up by its hash; everything after is
+ * scoped by the organization of the request it belongs to. A document removed from the settings
+ * since the mail is 'unavailable'.
+ */
+export async function openLandingDocument(
+  db: Database,
+  token: string,
+  now: Date = new Date()
+): Promise<OpenLandingDocumentOutcome> {
+  if (!LINK_TOKEN.test(token)) return { outcome: 'not_found' };
+  const hash = hashToken(token);
+  const [request] = await db
+    .select({
+      id: leadOfferRequests.id,
+      organizationId: leadOfferRequests.organizationId,
+      offerId: leadOfferRequests.offerId,
+      expiresAt: leadOfferRequests.downloadExpiresAt,
+    })
+    .from(leadOfferRequests)
+    .where(
+      and(
+        eq(leadOfferRequests.downloadTokenHash, hash),
+        eq(leadOfferRequests.source, 'landing'),
+        eq(leadOfferRequests.kind, 'document')
+      )
+    )
+    .limit(1);
+  if (!request) return { outcome: 'not_found' };
+  if (!request.expiresAt || request.expiresAt.getTime() <= now.getTime()) {
+    return { outcome: 'expired' };
+  }
+
+  const settings = await getInfoOffers(db, request.organizationId);
+  const document = settings.documents.find((item) => item.id === request.offerId);
+  if (!document) return { outcome: 'unavailable' };
+
+  await db
+    .update(leadOfferRequests)
+    .set({ openedAt: now })
+    .where(
+      and(
+        eq(leadOfferRequests.id, request.id),
+        eq(leadOfferRequests.organizationId, request.organizationId),
+        isNull(leadOfferRequests.openedAt)
+      )
+    );
+  return { outcome: 'open', url: document.url };
+}
+
 export interface LeadOfferRequestView {
   id: string;
   kind: OfferKind;
   title: string;
   scheduledOn: string | null;
+  /** 'result' (the diagnosis result) or 'landing' (the landing pages' form, #899) */
+  source: 'result' | 'landing';
+  /** First opening of the mailed link (landing requests) */
+  openedAt: Date | null;
   identityVerified: boolean;
   attendedAt: Date | null;
   attendanceRecordedByName: string | null;
@@ -209,6 +331,8 @@ export async function listLeadOfferRequests(
       kind: leadOfferRequests.kind,
       title: leadOfferRequests.title,
       scheduledOn: leadOfferRequests.scheduledOn,
+      source: leadOfferRequests.source,
+      openedAt: leadOfferRequests.openedAt,
       identityVerified: leadOfferRequests.identityVerified,
       attendedAt: leadOfferRequests.attendedAt,
       attendanceRecordedByName: sql<
@@ -225,7 +349,11 @@ export async function listLeadOfferRequests(
       )
     )
     .orderBy(desc(leadOfferRequests.createdAt));
-  return rows.map((row) => ({ ...row, kind: row.kind as OfferKind }));
+  return rows.map((row) => ({
+    ...row,
+    kind: row.kind as OfferKind,
+    source: row.source === 'landing' ? 'landing' : 'result',
+  }));
 }
 
 /**

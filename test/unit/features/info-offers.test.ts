@@ -4,7 +4,9 @@
  */
 import {
   infoOffersSettingsSchema,
+  landingDocument,
   publicInfoOffers,
+  publicLandingDocument,
   readInfoOffers,
 } from '@/lib/features/info-offers/types/schemas';
 import { describe, expect, it } from 'vitest';
@@ -30,7 +32,7 @@ describe('publicInfoOffers', () => {
 
   it('shows nothing while switched off or empty', () => {
     expect(publicInfoOffers({ ...settings, enabled: false }, '2026-10-21')).toBeNull();
-    expect(publicInfoOffers({ enabled: true, documents: [], seminars: [] }, '2026-10-21')).toBeNull();
+    expect(publicInfoOffers({ enabled: true, documents: [], seminars: [], landingDocumentId: null }, '2026-10-21')).toBeNull();
     expect(publicInfoOffers({ ...settings, documents: [] }, '2026-12-01')).toBeNull();
   });
 });
@@ -48,7 +50,27 @@ describe('infoOffersSettingsSchema', () => {
 
   it('reads stored settings, and broken ones as switched off', () => {
     expect(readInfoOffers({ axInfoOffers: settings })).toEqual(settings);
-    expect(readInfoOffers({ axInfoOffers: { enabled: 'yes' } })).toEqual({ enabled: false, documents: [], seminars: [] });
+    expect(readInfoOffers({ axInfoOffers: { enabled: 'yes' } })).toEqual({ enabled: false, documents: [], seminars: [], landingDocumentId: null });
     expect(readInfoOffers(null).enabled).toBe(false);
+  });
+});
+
+describe('landing document (#899)', () => {
+  it('is the chosen document, without its location for the public pages', () => {
+    const chosen = { ...settings, landingDocumentId: 'checklist' };
+    expect(landingDocument(chosen)?.url).toBe('https://files.example.com/a.pdf');
+    expect(publicLandingDocument(chosen)).toEqual({ id: 'checklist', title: 'チェックリスト', description: '' });
+  });
+
+  it('closes the form when none is chosen or the id is not among the documents', () => {
+    expect(publicLandingDocument(settings)).toBeNull();
+    expect(publicLandingDocument({ ...settings, landingDocumentId: 'gone' })).toBeNull();
+    // Independent of the result screen's switch
+    expect(publicLandingDocument({ ...settings, enabled: false, landingDocumentId: 'checklist' })?.id).toBe('checklist');
+  });
+
+  it('keeps settings saved before the field (read as none)', () => {
+    expect(readInfoOffers({ axInfoOffers: { enabled: true, documents: [], seminars: [] } }).landingDocumentId).toBeNull();
+    expect(infoOffersSettingsSchema.safeParse({ landingDocumentId: 'bad id' }).success).toBe(false);
   });
 });

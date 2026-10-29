@@ -1022,9 +1022,29 @@ export const leadOfferRequests = pgTable(
     attendanceRecordedBy: uuid('attendance_recorded_by').references(() => users.id, {
       onDelete: 'set null',
     }),
+    /**
+     * Where the request was made: 'result' (the diagnosis result) or 'landing' (the document
+     * request form of the landing pages, #899, with no submission)
+     */
+    source: text('source').default('result').notNull(),
+    /** The address the document link was sent to (landing requests; normalised) */
+    email: text('email'),
+    /**
+     * What the landing form was given (company, name, phone, department, title, systems), kept
+     * on the request: an existing lead matched by email is never changed by an anonymous form
+     */
+    contact: jsonb('contact').$type<LandingRequestContact>(),
+    /** SHA-256 of the token in the mailed link; the token itself is never stored */
+    downloadTokenHash: text('download_token_hash').unique(
+      'lead_offer_requests_download_token_hash_unique'
+    ),
+    downloadExpiresAt: timestamp('download_expires_at', { withTimezone: true }),
+    /** First time the mailed link was opened (mail scanners may open it too) */
+    openedAt: timestamp('opened_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
+    check('lead_offer_requests_source_check', sql`${table.source} in ('result', 'landing')`),
     uniqueIndex('lead_offer_requests_submission_offer_unique').on(
       table.submissionId,
       table.kind,
@@ -1035,6 +1055,16 @@ export const leadOfferRequests = pgTable(
 );
 
 export type LeadOfferRequest = typeof leadOfferRequests.$inferSelect;
+
+/** Contact typed into the landing pages' document request form (#899) */
+export interface LandingRequestContact {
+  company: string;
+  name: string;
+  phone: string;
+  department?: string;
+  title?: string;
+  systems?: string[];
+}
 
 /**
  * Agency Handovers (Refs #152)
@@ -1426,6 +1456,7 @@ export type NotificationType =
   | 'lead_handoff'
   | 'prospect_handed_over' // A customer search row was handed over to sales (#265)
   | 'referral_diagnosed' // Someone answered the diagnosis through an employee's link (#265)
+  | 'document_requested' // A document requested from the AX landing pages (#899)
   | 'system';
 
 /**
@@ -3220,7 +3251,9 @@ export const respondentEmailSends = pgTable(
     consentId: uuid('consent_id'),
     leadId: uuid('lead_id').references(() => leads.id, { onDelete: 'set null' }),
     submissionId: uuid('submission_id'),
-    /** 'confirmation' | 'result' */
+    /** The document request the link was mailed for (kind 'document_link', #899) */
+    offerRequestId: uuid('offer_request_id'),
+    /** 'confirmation' | 'result' | 'document_link' */
     kind: text('kind').notNull(),
     /** Normalised (trimmed, lowercase) */
     email: text('email').notNull(),
@@ -3254,7 +3287,15 @@ export const respondentEmailSends = pgTable(
       columns: [table.submissionId],
       foreignColumns: [diagnosticSubmissions.id],
     }).onDelete('set null'),
-    check('respondent_email_sends_kind_check', sql`${table.kind} in ('confirmation', 'result')`),
+    foreignKey({
+      name: 'respondent_email_sends_offer_request_fk',
+      columns: [table.offerRequestId],
+      foreignColumns: [leadOfferRequests.id],
+    }).onDelete('set null'),
+    check(
+      'respondent_email_sends_kind_check',
+      sql`${table.kind} in ('confirmation', 'result', 'document_link')`
+    ),
     check(
       'respondent_email_sends_status_check',
       sql`${table.status} in ('pending', 'sent', 'failed', 'suppressed', 'quota')`

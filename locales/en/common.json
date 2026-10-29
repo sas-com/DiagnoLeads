@@ -752,6 +752,16 @@
         "privacy": "Privacy policy"
       }
     },
+    "documentEmail": {
+      "subject": "[AX Migration] The document you requested",
+      "preheader": "Open the document you requested with the button below.",
+      "intro": "We received a request for a document through the AX Migration document request form.\nYou can open the document with the button below.",
+      "documentLabel": "Document",
+      "button": "Open the document",
+      "expiry": "This button works for {days} days after this email was sent.",
+      "notRequested": "If you did not request this, please discard this email.\nTo stop receiving email from us, use the Unsubscribe link below.",
+      "footer": "This email was sent to the address entered in the AX Migration document request form."
+    },
     "emailUnsubscribe": {
       "meta": {
         "title": "Unsubscribe | AX Migration"

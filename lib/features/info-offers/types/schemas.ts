@@ -72,6 +72,11 @@ export const infoOffersSettingsSchema = z.object({
     .max(INFO_OFFER_LIMITS.items)
     .default([])
     .refine(uniqueIds, { message: 'Duplicate id' }),
+  /**
+   * The document the landing pages' request form mails a link to (#899). Independent of
+   * `enabled` (the result screen); none, or an id not among `documents`, hides the form
+   */
+  landingDocumentId: offerId.nullable().default(null),
 });
 export type InfoOffersSettings = z.infer<typeof infoOffersSettingsSchema>;
 
@@ -108,6 +113,26 @@ export function publicInfoOffers(
   const seminars = settings.seminars.filter((seminar) => seminar.date >= today);
   if (documents.length === 0 && seminars.length === 0) return null;
   return { documents, seminars };
+}
+
+/** The document of the landing pages' request form (#899), with its location; null when none */
+export function landingDocument(settings: InfoOffersSettings): InfoDocument | null {
+  if (!settings.landingDocumentId) return null;
+  return settings.documents.find((item) => item.id === settings.landingDocumentId) ?? null;
+}
+
+/** What the landing pages may know: whether the form is open, and the title (no location) */
+export interface PublicLandingDocument {
+  id: string;
+  title: string;
+  description: string;
+}
+
+export function publicLandingDocument(settings: InfoOffersSettings): PublicLandingDocument | null {
+  const document = landingDocument(settings);
+  return document
+    ? { id: document.id, title: document.title, description: document.description }
+    : null;
 }
 
 /** Lead score added for each request, and for attending a seminar (capped at 100) */
