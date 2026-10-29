@@ -2,7 +2,7 @@
  * Respondent email (#154): consent records, one row per send, the suppression list and the
  * one-time tokens. Generic: it knows nothing of a particular diagnosis.
  */
-export { normaliseEmail } from './normalize';
+export { mailboxKey, normaliseEmail } from './normalize';
 export { hashToken, newToken } from './tokens';
 export {
   isSuppressed,

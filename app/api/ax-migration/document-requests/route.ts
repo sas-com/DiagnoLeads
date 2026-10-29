@@ -4,6 +4,7 @@ import {
   axDocumentRequestSchema,
   requestAxDocument,
 } from '@/lib/features/diagnostics/ax-migration/document-request';
+import { axDocumentRequestEnabled } from '@/lib/features/diagnostics/ax-migration/document-request-config';
 import { AX_RATE_LIMITS } from '@/lib/features/diagnostics/ax-migration/limits';
 import { notifyAxDocumentRequest } from '@/lib/features/diagnostics/ax-migration/notify';
 import { resolveDiagnosisOrganizationId } from '@/lib/features/diagnostics/organization';
@@ -23,6 +24,7 @@ import {
   recordLandingOfferRequest,
 } from '@/lib/features/info-offers/service';
 import { OFFER_SCORE } from '@/lib/features/info-offers/types/schemas';
+import { mailboxKey } from '@/lib/features/respondent-email';
 import { reportRejectedRequest, reportServerError } from '@/lib/ops/alert';
 import { type NextRequest, NextResponse, after } from 'next/server';
 
@@ -55,6 +57,10 @@ const offers = {
  * test mode, honeypot, Turnstile and rate limits per address and per email.
  */
 export async function POST(req: NextRequest) {
+  // Closed until the owner turns it on after the internal review of respondent mail (#899)
+  if (!axDocumentRequestEnabled()) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
   const guard = checkPublicJsonRequest(req, MAX_BODY_BYTES);
   if (guard) return guard;
 
@@ -121,6 +127,7 @@ export async function POST(req: NextRequest) {
         );
   }
 
+  const mailbox = mailboxKey(parsed.data.contact.email.trim().toLowerCase());
   try {
     const limit = await consumeRateLimits(db, [
       ...(ip
@@ -129,10 +136,9 @@ export async function POST(req: NextRequest) {
             { rule: AX_RATE_LIMITS.documentRequestPerIpDaily, identifier: ipBlock(ip) },
           ]
         : []),
-      {
-        rule: AX_RATE_LIMITS.documentRequestPerEmail,
-        identifier: parsed.data.contact.email.trim().toLowerCase(),
-      },
+      // Per mailbox, so name+1@ and name+2@ share the limits of name@ (#899 review)
+      { rule: AX_RATE_LIMITS.documentRequestPerEmail, identifier: mailbox },
+      { rule: AX_RATE_LIMITS.documentRequestPerMailboxDaily, identifier: mailbox },
     ]);
     after(() =>
       pruneRateLimits(db).catch((error) => console.error('Rate limit cleanup error:', error))

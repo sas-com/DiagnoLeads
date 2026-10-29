@@ -206,6 +206,12 @@ describe.skipIf(!url)('AX document requests (PostgreSQL)', () => {
       .where(and(eq(leadOfferRequests.organizationId, org), eq(leadOfferRequests.email, email)));
     expect(rows).toHaveLength(2);
 
+    // A +tag of the same mailbox gets no second link either (#899 review)
+    const [local, domain] = email.split('@');
+    const tagged = await requestAxDocument(pg, deps(), org, input(`${local}+1@${domain}`), now);
+    expect(tagged).toMatchObject({ outcome: 'accepted', delivery: 'recent_link' });
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+
     const stopped = `stop-${unique()}@example.co.jp`;
     await suppress(pg, { organizationId: org, email: stopped, reason: 'unsubscribed', source: 'staff' });
     const result = await requestAxDocument(pg, deps(), org, input(stopped), now);

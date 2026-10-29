@@ -42,6 +42,12 @@ export const AX_RATE_LIMITS = {
   documentRequestPerIp: { name: 'ax-document-request-ip', limit: 10, windowMs: HOUR },
   documentRequestPerIpDaily: { name: 'ax-document-request-ip-day', limit: 30, windowMs: DAY },
   documentRequestPerEmail: { name: 'ax-document-request-email', limit: 3, windowMs: HOUR },
+  /** Per mailbox: name+1@ and name+2@ count as name@ (#899 review) */
+  documentRequestPerMailboxDaily: {
+    name: 'ax-document-request-mailbox-day',
+    limit: 3,
+    windowMs: DAY,
+  },
   /** Opening the mailed link (#899): a few opens are normal, a sweep of tokens is not */
   documentOpenPerIp: { name: 'ax-document-open-ip', limit: 60, windowMs: HOUR },
   // Sales emails share SALES_EMAIL_LIMITS (lib/features/diagnostics/service.ts) with the

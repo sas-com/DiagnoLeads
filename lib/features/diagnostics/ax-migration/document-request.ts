@@ -23,12 +23,13 @@ import type { AxMailLocale } from '@/lib/features/ax-site/sender-identity';
 import {
   type RespondentEmailDeps,
   SEND_TIMEOUT,
+  mailboxKey,
   newToken,
   normaliseEmail,
   sendRespondentEmail,
   unsubscribeUrls,
 } from '@/lib/features/respondent-email';
-import { and, eq, gte, or } from 'drizzle-orm';
+import { and, eq, gte, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { upsertLeadFromSubmission } from '../lead-upsert';
 import { consumeRateLimits } from '../rate-limit';
@@ -174,7 +175,7 @@ export async function requestAxDocument(
   const result = await holdingLock(
     db,
     // The same lock as the result mail: one respondent mail at a time per address
-    `respondent-email:${organizationId}:${email}`,
+    `respondent-email:${organizationId}:${mailboxKey(email)}`,
     'wait',
     async (): Promise<RequestAxDocumentResult> => {
       // One link per address in 24 hours, whichever request asked for it. A timed-out attempt
@@ -186,7 +187,8 @@ export async function requestAxDocument(
         .where(
           and(
             eq(respondentEmailSends.organizationId, organizationId),
-            eq(respondentEmailSends.email, email),
+            // The same mailbox: name+1@ and name+2@ count as name@ (#899 review)
+            sql`regexp_replace(${respondentEmailSends.email}, '\\+[^@]*@', '@') = ${mailboxKey(email)}`,
             eq(respondentEmailSends.kind, 'document_link'),
             or(wentOut(), eq(respondentEmailSends.errorCode, SEND_TIMEOUT)),
             gte(respondentEmailSends.createdAt, new Date(now.getTime() - DOCUMENT_LINK_INTERVAL_MS))

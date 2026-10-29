@@ -84,6 +84,7 @@ const recorded = {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv('APP_TEST_MODE', 'false');
+  vi.stubEnv('AX_DOCUMENT_REQUEST_ENABLED', 'true');
   limitsMock.mockResolvedValue({ allowed: true });
   turnstileMock.mockResolvedValue({ ok: true });
   requestMock.mockResolvedValue({ outcome: 'accepted', delivery: 'sent', request: recorded });
@@ -158,6 +159,21 @@ describe('POST /api/ax-migration/document-requests', () => {
     limitsMock.mockResolvedValue({ allowed: false, retryAfterSeconds: 60, rule: 'x' });
     expect((await requestRoute.POST(post(body))).status).toBe(429);
     expect(requestMock).not.toHaveBeenCalled();
+  });
+
+  it('stays closed until AX_DOCUMENT_REQUEST_ENABLED is turned on', async () => {
+    vi.stubEnv('AX_DOCUMENT_REQUEST_ENABLED', '');
+    expect((await requestRoute.POST(post(body))).status).toBe(404);
+    expect(limitsMock).not.toHaveBeenCalled();
+    expect(requestMock).not.toHaveBeenCalled();
+  });
+
+  it('limits per mailbox, so +tags of one address share the limits (#899 review)', async () => {
+    const tagged = { ...body, contact: { ...body.contact, email: 'Someone+7@Example.co.jp' } };
+    await requestRoute.POST(post(tagged));
+    const identifiers = limitsMock.mock.calls[0][1].map((rule: { identifier: string }) => rule.identifier);
+    expect(identifiers).toContain('someone@example.co.jp');
+    expect(identifiers).not.toContain('someone+7@example.co.jp');
   });
 });
 
