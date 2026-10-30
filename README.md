@@ -93,7 +93,7 @@ For production deployment instructions, see [docs/deployment-guide.md](./docs/de
 
 ### Quick Deploy to Vercel
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/yusuke-kurosawa/DiagnoLeads)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/sas-com/DiagnoLeads)
 
 ```bash
 # Using Vercel CLI
