@@ -18,4 +18,4 @@
 
 ## 以前の内容
 
-2025年頃に書いた以前のユーザーガイドは、今の画面と合っていないため消しました。読む必要があるときは、git の履歴にある [消す前の版](https://github.com/yusuke-kurosawa/DiagnoLeads/blob/d1b3788e0dd737cea54c13f2667db97b443ee56a/docs/USER_GUIDE.md) を見てください。
+2025年頃に書いた以前のユーザーガイドは、今の画面と合っていないため消しました。読む必要があるときは、git の履歴にある [消す前の版](https://github.com/sas-com/DiagnoLeads/blob/d1b3788e0dd737cea54c13f2667db97b443ee56a/docs/USER_GUIDE.md) を見てください。

@@ -15,4 +15,4 @@
 | 役割ごとの権限 | `lib/auth/permissions.ts`（CASL の定義が正本） |
 | Webhook の送信と署名 | `lib/features/webhooks/services/webhook-service.ts` |
 
-以前の内容が要るときは、git の履歴にある [消す前の版](https://github.com/yusuke-kurosawa/DiagnoLeads/blob/d1b3788e0dd737cea54c13f2667db97b443ee56a/docs/ADMIN_GUIDE.md) を見てください。
+以前の内容が要るときは、git の履歴にある [消す前の版](https://github.com/sas-com/DiagnoLeads/blob/d1b3788e0dd737cea54c13f2667db97b443ee56a/docs/ADMIN_GUIDE.md) を見てください。
