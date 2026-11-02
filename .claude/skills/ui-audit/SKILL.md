@@ -32,7 +32,7 @@ unslop（Damir Sokolovsky、[@heydamir](https://x.com/heydamir)、[heydamir/unsl
 | ビルダーの診断・埋め込み・QR | `app/[locale]/(public)/`・`app/q/`・`components/features/public-diagnosis/`・`components/features/diagnosis-runner/` | `2026-10-24-admin-dads`（色は変えない） | 絵文字と根拠のない主張を除くだけ。直すのはコードの中の文字列（`locales/` を含む）だけで、組織が作った設問・結果の文言（DB のデータ）には触らない。色と書体、組織の設定で決まる見た目は変えない。社外に出る文言なので、変える前にオーナーに確かめる |
 | Payload の CMS 管理画面 | `app/(payload)/` | （DADS を当てるか未定） | 対象外 |
 | 部品 | ― | `2026-10-09-ui-modern-components` | shadcn/ui（`components/ui/`）。アイコンは lucide-react |
-| グラフ | `components/charts/` | `2026-10-24-chart-library-apexcharts`・`2026-10-24-admin-dads` | dads.md の「グラフ」。管理画面に限らず、どの画面のグラフにも当てる |
+| グラフ | `components/charts/` | `2026-10-24-chart-library-apexcharts`・`2026-10-24-admin-dads` | どの画面でも：ApexCharts だけを使い、設定は `components/charts/` の部品を通して変える（画面で `react-apexcharts` を直接使わない）。管理画面：dads.md の「グラフ」 |
 | 文言 | ― | CLAUDE.md | 画面の文字列は `locales/`（ja・en）に置き、両方を直す |
 | ヘルプ | ― | `2026-10-28-in-app-help` | 画面の見た目や名前を変えたら、`lib/features/help/` の記事を直し、記事の `reviewedAt` を突き合わせた日にする（`.claude/rules/help.md`） |
 
@@ -84,7 +84,7 @@ unslop から**持ち込まないもの**：
 - [ ] 英語の大文字のラベル（略語を除く）・広い字間・斜体の強調が無い（signs.md の「5. 文字」）
 - [ ] 数字の書式がそろい、`tabular-nums`
 - [ ] 内側と外側の角丸が合う（signs.md の「7. 細部」）
-- [ ] グラフ（どの画面でも）：グラデーションが無く、色は1〜5色で強調は1つ。色以外でも区別でき、更新日がある（dads.md の「グラフ」）
+- [ ] 管理画面のグラフ：グラデーションが無く、色は1〜5色で強調は1つ。色以外でも区別でき、更新日がある（dads.md の「グラフ」）
 - [ ] 飾りの繰り返す動き・はねる動き・`transition-all` が無い。読み込み中の表示は残り、`motion-reduce:` で止まる
 - [ ] 文言は `locales/` の ja と en の両方にある。画面の名前や見た目を変えたら、ヘルプの記事と `reviewedAt` も直した
 - [ ] 共通部品の兆候は、直さずに Issue に切り出した

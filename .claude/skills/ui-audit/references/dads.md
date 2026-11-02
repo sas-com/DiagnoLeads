@@ -1,6 +1,6 @@
 # DADS の値（管理画面）
 
-管理画面（`.dl-admin` の中）で、直し方の値はここに従う（決定 `2026-10-24-admin-dads`）。色の置き換えは `app/globals.css` の `html:has(.dl-admin)` にある。公開サイトとビルダーの診断には当てない（SKILL.md の「対象と優先順位」）。ただし「グラフ」の節は、どの画面のグラフにも当てる。
+管理画面（`.dl-admin` の中）で、直し方の値はここに従う（決定 `2026-10-24-admin-dads`）。色の置き換えは `app/globals.css` の `html:has(.dl-admin)` にある。公開サイトとビルダーの診断には当てない（SKILL.md の「対象と優先順位」）。
 
 ## 色
 
@@ -35,7 +35,7 @@
 
 ## グラフ
 
-決定 `2026-10-24-chart-library-apexcharts` と、DADS の「ダッシュボードデザインの実践ガイドブック」による。管理画面に限らず、どの画面のグラフにも当てる。ただし、灰色の値（`gray-400`・`--color-gray-400`）は管理画面の値。
+決定 `2026-10-24-chart-library-apexcharts` と、DADS の「ダッシュボードデザインの実践ガイドブック」による。ApexCharts だけを使う決まり（下の1つ目）は、どの画面のグラフにも当てる（SKILL.md の「対象と優先順位」）。
 
 - ApexCharts だけを使う。設定は `components/charts/` の部品を通して変え、画面で `react-apexcharts` を直接使わない
 - グラデーション・3D・影を使わない
