@@ -23,4 +23,7 @@ paths: [".claude/skills/ui-audit/**"]
   - CC BY 4.0 の表記（作者・元のリポジトリと SHA・ライセンス・変更点）を `SKILL.md` と `references/signs.md` に残す。消さない
   - unslop の更新を取り込むときは、SHA を新しくし、DADS とぶつかる所を同じように直す
   - スキルは点検の結果と注目させる所を見せてから編集する（「そのまま直して」と言われたときを除く）
+  - 対象（PR #911 の ui-ux-specialist・security-specialist のレビューで決めた）：管理画面は `.dl-admin` の中かで見分け、全部の層を当てる。AX の公開サイトとビルダーの診断は、色・書体・配置を変えず、兆候の除去だけ。Payload の `/admin` は、DADS を当てるか未定のため対象外
+  - 共通部品（`components/ui/`・`components/studio/`・`components/charts/`・`components/layout/`）の兆候はその場で直さず、#423 の子 Issue に切り出す
+  - 見た目の確認は手元の開発サーバーで、シードの架空のデータの画面だけ。本番・プレビューの URL は開かず、本物の個人情報をスクリーンショットや報告に入れない
 - **参照**: https://github.com/heydamir/unslop 、https://code.claude.com/docs/en/skills
