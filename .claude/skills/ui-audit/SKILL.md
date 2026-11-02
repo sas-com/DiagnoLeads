@@ -27,12 +27,12 @@ unslop（Damir Sokolovsky、[@heydamir](https://x.com/heydamir)、[heydamir/unsl
 
 | 対象 | 見分け方 | 従う決定 | 当てること |
 |---|---|---|---|
-| 管理画面と認証画面 | `.dl-admin` の中（`components/layout/DashboardShell.tsx`・`app/[locale]/(auth)/layout.tsx`） | `2026-10-24-admin-dads` | signs.md の全部の節。値は dads.md |
+| 管理画面と認証画面 | `.dl-admin` の中（`components/layout/DashboardShell.tsx`・`app/[locale]/(auth)/layout.tsx`） | `2026-10-24-admin-dads` | signs.md の1〜8の節と「ひな形の見た目」。値は dads.md |
 | AX の公開サイト | `components/features/ax-site/`・`components/features/ax-diagnosis/`・`app/[locale]/(ax)/` | `2026-10-11-ax-diagnosis-v2`・`2026-10-26-ax-device-font-on-mobile` | 絵文字・根拠のない主張・宣伝の言葉を除くだけ。`ax-*` の色・書体・`rounded-full` のボタン・見出しの上の小さなラベル・ヒーローの配置はそのまま。文言は社外への発信なので、変える前にオーナーに確かめる（`marketing-strategy-specialist` に相談してよい） |
 | ビルダーの診断・埋め込み・QR | `app/[locale]/(public)/`・`app/q/`・`components/features/public-diagnosis/`・`components/features/diagnosis-runner/` | `2026-10-24-admin-dads`（色は変えない） | 絵文字と根拠のない主張を除くだけ。直すのはコードの中の文字列（`locales/` を含む）だけで、組織が作った設問・結果の文言（DB のデータ）には触らない。色と書体、組織の設定で決まる見た目は変えない。社外に出る文言なので、変える前にオーナーに確かめる |
 | Payload の CMS 管理画面 | `app/(payload)/` | （DADS を当てるか未定） | 対象外 |
 | 部品 | ― | `2026-10-09-ui-modern-components` | shadcn/ui（`components/ui/`）。アイコンは lucide-react |
-| グラフ | `components/charts/` | `2026-10-24-chart-library-apexcharts`・`2026-10-24-admin-dads` | dads.md の「グラフ」 |
+| グラフ | `components/charts/` | `2026-10-24-chart-library-apexcharts`・`2026-10-24-admin-dads` | dads.md の「グラフ」。管理画面に限らず、どの画面のグラフにも当てる |
 | 文言 | ― | CLAUDE.md | 画面の文字列は `locales/`（ja・en）に置き、両方を直す |
 | ヘルプ | ― | `2026-10-28-in-app-help` | 画面の見た目や名前を変えたら、`lib/features/help/` の記事を直し、記事の `reviewedAt` を突き合わせた日にする（`.claude/rules/help.md`） |
 
@@ -55,7 +55,7 @@ unslop から**持ち込まないもの**：
    - 少ない（ほぼ整っていて、数か所だけ）：見つけた所だけ直す。大きな案は報告の「提案」に回す
    - 無い：そう伝え、直す候補を値つきで2〜3個まで出し、頼まれたときだけ当てる。良い画面を、違いを出すために変えない
 4. **確認して止まる**：点検の結果と、注目させる所（1〜2か所）をオーナーに見せ、返事を待ってから編集する。「そのまま直して」と言われていれば待たない
-5. **層ごとに直す**：signs.md の1〜8の節（余白 → 色 → アイコン → 文言 → 文字 → 配置 → 細部 → 動き）を、この順に1つずつ画面全体へ当ててから次へ進む。直すのはその画面のファイルだけ
+5. **層ごとに直す**：signs.md の1〜8の節（余白 → 面と色 → アイコン → 文言 → 文字 → 配置 → 細部 → 動き）を、この順に1つずつ画面全体へ当ててから次へ進む。直すのはその画面のファイルだけ
    - 共通部品（`components/ui/`・`components/studio/`・`components/charts/`・`components/layout/`）で見つけた兆候は、その場で直さない
    - 理由：全部の画面に効き、DADS の作業（Epic #423 と #495）やほかのセッションとぶつかるため
    - 報告の「提案」に回し、#423 の子 Issue に切り出す
@@ -69,16 +69,22 @@ unslop から**持ち込まないもの**：
 - 機能・主張・データを作らない
 - dads.md の値（文字の色・コントラスト・本文の大きさ・太さ・フォーカス・押せる範囲）を、見た目のために崩さない
 - 本番・プレビューの画面を開かない。本物の個人情報を、スクリーンショットや報告に入れない
+- 見本のデータに、実在の会社名・人名・個人を指すデータを使わない（リポジトリは公開）
 
 ## チェックリスト
 
 - [ ] 点検の一覧の兆候が、直したか、理由つきで残したかのどちらかになっている
+- [ ] 任意値の余白が無く、同じものが同じ大きさ（signs.md の「1. 余白」）
+- [ ] アイコン・ラベル・数字が、それぞれ1本の列にそろう
 - [ ] 管理画面：[references/dads.md](references/dads.md) の値をすべて満たす（文字の色とコントラスト・太さ・本文の大きさ・押せる範囲・フォーカス・影・角丸・グラフ）
 - [ ] 公開サイトとビルダーの診断：色・書体・配置を変えていない
 - [ ] 色相をまたぐグラデーション・グラデーションの文字・発光・色つきの影・ぼかしの塊・絵文字が残っていない
 - [ ] アクセントは1〜2か所。アイコンは lucide-react で、大きさと線の太さが1種類
 - [ ] 感嘆符・挨拶の見出し・比べる相手の無い増減・確かめていない主張が無い
+- [ ] 英語の大文字のラベル（略語を除く）・広い字間・斜体の強調が無い（signs.md の「5. 文字」）
 - [ ] 数字の書式がそろい、`tabular-nums`
+- [ ] 内側と外側の角丸が合う（signs.md の「7. 細部」）
+- [ ] グラフ（どの画面でも）：グラデーションが無く、色は1〜5色で強調は1つ。色以外でも区別でき、更新日がある（dads.md の「グラフ」）
 - [ ] 飾りの繰り返す動き・はねる動き・`transition-all` が無い。読み込み中の表示は残り、`motion-reduce:` で止まる
 - [ ] 文言は `locales/` の ja と en の両方にある。画面の名前や見た目を変えたら、ヘルプの記事と `reviewedAt` も直した
 - [ ] 共通部品の兆候は、直さずに Issue に切り出した
