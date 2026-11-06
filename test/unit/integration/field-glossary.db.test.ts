@@ -12,7 +12,11 @@
 import type { Database } from '@/lib/db/client';
 import * as schema from '@/lib/db/schema';
 import { fieldGlossary } from '@/lib/db/schema';
-import { getFieldGlossaryEntries } from '@/lib/features/field-glossary/service';
+import {
+  deleteFieldGlossaryEntry,
+  getFieldGlossaryEntries,
+  upsertFieldGlossaryEntry,
+} from '@/lib/features/field-glossary/service';
 import { and, eq, isNull, like } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
@@ -140,5 +144,44 @@ describe.skipIf(!url)('field glossary (PostgreSQL)', () => {
 
     // An unknown key yields nothing
     expect(await getFieldGlossaryEntries(pg, [`${ns}.svc-missing`])).toEqual([]);
+  });
+
+  it('upsertFieldGlossaryEntry replaces the same field-level entry and the same value entry in place', async () => {
+    const key = `${ns}.upsert`;
+    const [editor] = await pg
+      .insert(schema.users)
+      .values({ email: `${ns}@example.com`, name: 'Editor', emailVerified: true })
+      .returning({ id: schema.users.id });
+    const write = (value: string | null, descriptionJa: string, sortOrder: number) =>
+      upsertFieldGlossaryEntry(pg, {
+        fieldKey: key,
+        value,
+        descriptionJa,
+        descriptionEn: null,
+        sortOrder,
+        updatedBy: editor.id,
+      });
+
+    try {
+      const first = await write(null, '項目の説明', 0);
+      const again = await write(null, '書き直した説明', 0);
+      expect(again.id).toBe(first.id);
+      expect(again.descriptionJa).toBe('書き直した説明');
+
+      const value = await write('negotiating', '値の説明', 3);
+      const valueAgain = await write('negotiating', '値の説明（改）', 3);
+      expect(valueAgain.id).toBe(value.id);
+      expect(valueAgain.id).not.toBe(first.id);
+
+      const rows = await pg.select().from(fieldGlossary).where(eq(fieldGlossary.fieldKey, key));
+      expect(rows).toHaveLength(2);
+      expect(rows.every((row) => row.updatedBy === editor.id)).toBe(true);
+
+      expect(await deleteFieldGlossaryEntry(pg, value.id)).toBe(true);
+      expect(await deleteFieldGlossaryEntry(pg, value.id)).toBe(false);
+    } finally {
+      await pg.delete(fieldGlossary).where(eq(fieldGlossary.fieldKey, key));
+      await pg.delete(schema.users).where(eq(schema.users.id, editor.id));
+    }
   });
 });

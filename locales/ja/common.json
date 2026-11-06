@@ -213,6 +213,7 @@
     "qrCampaigns": "QRコードキャンペーン",
     "axPlaybook": "営業の手引き（AX）",
     "agencyLinks": "営業代行リンク",
+    "fieldGlossary": "項目の説明",
     "profile": "プロフィール",
     "logout": "ログアウト"
   },
@@ -2811,6 +2812,35 @@
         "daysValue": "{days, number}日",
         "total": "合計"
       }
+    },
+    "fieldGlossary": {
+      "title": "項目の説明",
+      "description": "入力欄の横の「i」で出す、項目と値の説明を書きます。すべての組織に同じ説明が出ます。",
+      "pickTitle": "項目を選ぶ",
+      "pickDescription": "説明を書く項目を選びます。項目そのものの説明と、選べる値ごとの説明を書けます。",
+      "field": "項目",
+      "fieldOption": "{name}（{written}/{total} 件 入力済み）",
+      "fieldEntryTitle": "「{name}」の説明",
+      "fieldEntryDescription": "項目の名前の横に出す説明です。何を入れる欄か、いつ変えるかを書きます。",
+      "written": "入力済み",
+      "notWritten": "未入力",
+      "descriptionJa": "説明（日本語）",
+      "descriptionEn": "説明（英語）",
+      "descriptionEnHint": "空のままにすると、英語の画面でも日本語の説明を出します。",
+      "save": "保存",
+      "saved": "説明を保存しました",
+      "saveError": "説明を保存できませんでした",
+      "delete": "削除",
+      "deleted": "説明を削除しました",
+      "deleteError": "説明を削除できませんでした",
+      "deleteTitle": "「{name}」の説明を削除しますか？",
+      "deleteBody": "すべての組織の画面から、この説明が消えます。",
+      "cancel": "キャンセル",
+      "forbiddenTitle": "この画面は編集できません",
+      "forbiddenBody": "項目の説明はすべての組織で共通のため、運営の組織のオーナーと管理者だけが編集できます。",
+      "loadErrorTitle": "読み込めませんでした",
+      "loadErrorBody": "時間をおいて、もう一度お試しください。",
+      "retry": "再読み込み"
     }
   },
   "header": {
@@ -5964,7 +5994,20 @@
     }
   },
   "fieldGlossary": {
-    "help": "項目の説明"
+    "help": "項目の説明",
+    "fields": {
+      "leadsStatus": "リードの状態",
+      "leadsDealPhase": "商談フェーズ",
+      "leadsMqlLevel": "MQL段階",
+      "leadsSqlDecision": "SQL判定",
+      "leadsInflowSource": "流入元",
+      "leadsLostReason": "リードの失注・保留理由",
+      "dealsStage": "商談のステージ",
+      "dealsProbability": "確度",
+      "dealsAmount": "金額（税抜）",
+      "dealsForecastOverride": "予測の区分",
+      "dealsLostReason": "商談の失注理由"
+    }
   },
   "help": {
     "open": "この画面の使い方",

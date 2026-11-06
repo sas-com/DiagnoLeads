@@ -213,6 +213,7 @@
     "qrCampaigns": "QR Campaigns",
     "axPlaybook": "Sales playbook (AX)",
     "agencyLinks": "Agency links",
+    "fieldGlossary": "Field help",
     "profile": "Profile",
     "logout": "Logout"
   },
@@ -2811,6 +2812,35 @@
         "daysValue": "{days, number} days",
         "total": "Total"
       }
+    },
+    "fieldGlossary": {
+      "title": "Field help",
+      "description": "Write the help shown by the \"i\" next to input fields. Every organization sees the same help.",
+      "pickTitle": "Choose a field",
+      "pickDescription": "Choose the field to describe. You can write help for the field itself and for each value it offers.",
+      "field": "Field",
+      "fieldOption": "{name} ({written}/{total} written)",
+      "fieldEntryTitle": "Help for \"{name}\"",
+      "fieldEntryDescription": "Shown next to the field name: what goes in the field and when to change it.",
+      "written": "Written",
+      "notWritten": "Not written",
+      "descriptionJa": "Description (Japanese)",
+      "descriptionEn": "Description (English)",
+      "descriptionEnHint": "Left empty, English screens show the Japanese description.",
+      "save": "Save",
+      "saved": "Help saved",
+      "saveError": "Could not save the help",
+      "delete": "Delete",
+      "deleted": "Help deleted",
+      "deleteError": "Could not delete the help",
+      "deleteTitle": "Delete the help for \"{name}\"?",
+      "deleteBody": "The help disappears from the screens of every organization.",
+      "cancel": "Cancel",
+      "forbiddenTitle": "You cannot edit this page",
+      "forbiddenBody": "Field help is shared by every organization, so only owners and admins of the operating organization can edit it.",
+      "loadErrorTitle": "Could not load",
+      "loadErrorBody": "Please try again later.",
+      "retry": "Reload"
     }
   },
   "header": {
@@ -5964,7 +5994,20 @@
     }
   },
   "fieldGlossary": {
-    "help": "Field help"
+    "help": "Field help",
+    "fields": {
+      "leadsStatus": "Lead status",
+      "leadsDealPhase": "Deal phase",
+      "leadsMqlLevel": "MQL level",
+      "leadsSqlDecision": "SQL decision",
+      "leadsInflowSource": "Inflow source",
+      "leadsLostReason": "Lead lost / on-hold reason",
+      "dealsStage": "Deal stage",
+      "dealsProbability": "Probability",
+      "dealsAmount": "Amount (excl. tax)",
+      "dealsForecastOverride": "Forecast category",
+      "dealsLostReason": "Deal lost reason"
+    }
   },
   "help": {
     "open": "How to use this screen",
