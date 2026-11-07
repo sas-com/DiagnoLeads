@@ -16,7 +16,11 @@ import {
  * PATCH /api/v2/leads/[id] - Update a lead
  * DELETE /api/v2/leads/[id] - Delete a lead
  */
-import { emitLeadEvents, leadChangeEvents } from '@/lib/features/webhooks/services/lead-events';
+import {
+  emitLeadEvents,
+  forgetLeadsInDeliveries,
+  leadChangeEvents,
+} from '@/lib/features/webhooks/services/lead-events';
 import { and, eq, sql } from 'drizzle-orm';
 import { type NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -258,10 +262,19 @@ export async function DELETE(
     }
 
     // Delete lead
-    const deleted = await db
-      .delete(leads)
-      .where(and(eq(leads.id, id), eq(leads.organizationId, authResult.organizationId)))
-      .returning({ id: leads.id });
+    const deleted = await db.transaction(async (tx) => {
+      const rows = await tx
+        .delete(leads)
+        .where(and(eq(leads.id, id), eq(leads.organizationId, authResult.organizationId)))
+        .returning({ id: leads.id });
+      // The deleted lead's personal data leaves the webhook deliveries too (#918)
+      await forgetLeadsInDeliveries(
+        tx,
+        authResult.organizationId,
+        rows.map((row) => row.id)
+      );
+      return rows;
+    });
     // Only when this request deleted it (a concurrent delete sends its own event)
     if (deleted.length > 0) {
       emitLeadEvents(authResult.organizationId, [
