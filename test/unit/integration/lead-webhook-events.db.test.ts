@@ -164,9 +164,16 @@ describe.skipIf(!url)('lead webhook events (PostgreSQL)', () => {
     expect(rest).toEqual([]);
     expect(delivery.eventType).toBe('lead.created');
     expect(delivery.status).toBe('success');
-    expect(Object.keys(dataOf(delivery)).sort()).toEqual([...LEAD_WEBHOOK_FIELDS].sort());
-    expect(dataOf(delivery).id).toBe(lead.id);
-    expect(JSON.stringify(delivery.payload)).not.toContain('社外に出さない回答');
+    // The receiver got the allowlisted columns
+    const [, init] = fetchMock.mock.calls[0] as [string, { body: string }];
+    const sent = JSON.parse(init.body).data as Record<string, unknown>;
+    expect(Object.keys(sent).sort()).toEqual([...LEAD_WEBHOOK_FIELDS].sort());
+    expect(sent.id).toBe(lead.id);
+    expect(init.body).not.toContain('社外に出さない回答');
+    // The finished delivery keeps them without the personal data (#918)
+    expect(Object.keys(dataOf(delivery)).sort()).toEqual(
+      LEAD_WEBHOOK_FIELDS.filter((f) => !['email', 'name', 'company', 'phone'].includes(f)).sort()
+    );
     expect(await deliveriesOf(webhookB)).toEqual([]);
   });
 

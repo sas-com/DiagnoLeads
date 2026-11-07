@@ -496,8 +496,10 @@ describe('webhook-service', () => {
         error: 'Destination not allowed (resolved_address)',
         nextRetryAt: null,
       });
+      // The payload is an SQL expression redacting the personal data (#918), not a stored text
+      const { payload: _redacted, ...written } = stored as Record<string, unknown>;
       for (const { address } of addresses) {
-        expect(JSON.stringify(stored)).not.toContain(address);
+        expect(JSON.stringify(written)).not.toContain(address);
       }
     });
 
