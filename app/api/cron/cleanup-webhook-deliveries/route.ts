@@ -24,14 +24,11 @@ export async function GET(request: Request) {
   if (!isCronRequest(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const [retries, cleanup, siteVisits] = await Promise.allSettled([
-    // Then the personal data left in finished deliveries goes (#918)
-    processWebhookRetries()
-      .then(async (retries) => ({ ...retries, redacted: await redactFinishedDeliveries() }))
-      .catch(async (error: unknown) => {
-        await reportServerError('cron/webhook-retries', error);
-        throw error;
-      }),
+  const [retries, cleanup, siteVisits, redaction] = await Promise.allSettled([
+    processWebhookRetries().catch(async (error: unknown) => {
+      await reportServerError('cron/webhook-retries', error);
+      throw error;
+    }),
     cleanupOldDeliveries(DAYS_TO_KEEP).catch(async (error: unknown) => {
       await reportServerError('cron/cleanup-webhook-deliveries', error);
       throw error;
@@ -40,13 +37,21 @@ export async function GET(request: Request) {
       await reportServerError('cron/site-visits', error);
       throw error;
     }),
+    // The personal data left in finished deliveries (#918); each delivery is redacted when it
+    // finishes, so this only picks up what was missed
+    redactFinishedDeliveries().catch(async (error: unknown) => {
+      await reportServerError('cron/redact-webhook-deliveries', error);
+      throw error;
+    }),
   ]);
   if (retries.status === 'rejected') throw retries.reason;
   if (cleanup.status === 'rejected') throw cleanup.reason;
   if (siteVisits.status === 'rejected') throw siteVisits.reason;
+  if (redaction.status === 'rejected') throw redaction.reason;
   return NextResponse.json({
     deleted: cleanup.value,
     retries: retries.value,
     siteVisits: siteVisits.value,
+    redacted: redaction.value,
   });
 }

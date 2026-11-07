@@ -48,11 +48,12 @@ describe('daily clean-up of webhook deliveries', () => {
   it('sends due retries and deletes deliveries older than 30 days when Vercel Cron calls it', async () => {
     const res = await call('Bearer cron-secret-value');
     expect(res.status).toBe(200);
-    // The personal data left in finished deliveries goes after the retries (#918)
+    // The personal data left in finished deliveries goes too (#918)
     expect(await res.json()).toEqual({
       deleted: 3,
-      retries: { ...RETRIES, redacted: 5 },
+      retries: RETRIES,
       siteVisits: SITE_VISITS,
+      redacted: 5,
     });
     expect(processWebhookRetries).toHaveBeenCalledTimes(1);
     expect(cleanupOldDeliveries).toHaveBeenCalledWith(30);
@@ -64,6 +65,17 @@ describe('daily clean-up of webhook deliveries', () => {
     processWebhookRetries.mockRejectedValue(error);
     await expect(call('Bearer cron-secret-value')).rejects.toBe(error);
     expect(reportServerError).toHaveBeenCalledWith('cron/webhook-retries', error);
+    expect(cleanupOldDeliveries).toHaveBeenCalledWith(30);
+    // The personal data is swept all the same (#918)
+    expect(redactFinishedDeliveries).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a failed sweep of personal data, still does the rest, and fails the run (#918)', async () => {
+    const error = new Error('db down');
+    redactFinishedDeliveries.mockRejectedValue(error);
+    await expect(call('Bearer cron-secret-value')).rejects.toBe(error);
+    expect(reportServerError).toHaveBeenCalledWith('cron/redact-webhook-deliveries', error);
+    expect(processWebhookRetries).toHaveBeenCalledTimes(1);
     expect(cleanupOldDeliveries).toHaveBeenCalledWith(30);
   });
 
