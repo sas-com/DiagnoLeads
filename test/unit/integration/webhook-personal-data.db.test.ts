@@ -9,7 +9,14 @@
  *     bunx vitest --run test/unit/integration/webhook-personal-data.db.test.ts
  */
 import * as schema from '@/lib/db/schema';
-import { auditLogs, organizationMembers, organizations, users, webhooks } from '@/lib/db/schema';
+import {
+  auditLogs,
+  organizationMembers,
+  organizations,
+  users,
+  webhookDeliveries,
+  webhooks,
+} from '@/lib/db/schema';
 import { appRouter } from '@/server/routers/_app';
 import { and, eq, inArray } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
@@ -120,6 +127,16 @@ describe.skipIf(!url)('webhook personal data confirmation (PostgreSQL)', () => {
     const [stored] = await pg.select().from(webhooks).where(eq(webhooks.id, created.id));
     expect(stored.url).toBe('https://crm.example.com/hook');
 
+    // A retry stored for the old URL is not sent to the new one (#927 review)
+    await pg.insert(webhookDeliveries).values({
+      webhookId: created.id,
+      eventType: 'lead.created',
+      payload: { event: 'lead.created', data: { email: 'made-up@example.com' } },
+      status: 'pending',
+      attempts: 1,
+      nextRetryAt: new Date(),
+    });
+
     await caller.webhooks.update({
       organizationId: orgId,
       id: created.id,
@@ -128,5 +145,11 @@ describe.skipIf(!url)('webhook personal data confirmation (PostgreSQL)', () => {
     });
     const rows = await confirmations();
     expect(rows.map((row) => row.action).sort()).toEqual(['create', 'update']);
+    const deliveries = await pg
+      .select()
+      .from(webhookDeliveries)
+      .where(eq(webhookDeliveries.webhookId, created.id));
+    expect(deliveries.map((d) => [d.status, d.nextRetryAt])).toEqual([['failed', null]]);
+    expect(deliveries[0].error).toMatch(/^url_changed:/);
   });
 });

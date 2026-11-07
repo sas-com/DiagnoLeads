@@ -9,6 +9,7 @@ import { getAuthenticatedOrganization } from '@/lib/api/v2-auth';
 import { db } from '@/lib/db';
 import { auditLogs, webhookDeliveries, webhooks } from '@/lib/db/schema';
 import { isUrlChanged } from '@/lib/features/webhooks/services/webhook-headers';
+import { cancelPendingDeliveries } from '@/lib/features/webhooks/services/webhook-service';
 import {
   PERSONAL_DATA_CONFIRMATION_REQUIRED,
   personalDataConfirmationAudit,
@@ -202,10 +203,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     } = parsedBody.data;
 
     const nextEvents = events ?? existing.events;
+    const urlChanged = url !== undefined && isUrlChanged(existing.url, url);
     const confirmationRequired = personalDataConfirmationRequired({
       events: nextEvents,
       savedEvents: existing.events,
-      urlChanged: url !== undefined && isUrlChanged(existing.url, url),
+      urlChanged,
     });
     if (confirmationRequired && personalDataConfirmed !== true) {
       return NextResponse.json(
@@ -246,6 +248,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           retryConfig: webhooks.retryConfig,
           updatedAt: webhooks.updatedAt,
         });
+      if (row && urlChanged) await cancelPendingDeliveries(tx, row.id);
       if (row && confirmationRequired) {
         await tx.insert(auditLogs).values(
           personalDataConfirmationAudit({

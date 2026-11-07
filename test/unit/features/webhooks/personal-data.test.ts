@@ -17,9 +17,15 @@ describe('personalDataConfirmationRequired', () => {
     }
   });
 
-  it('is not required for events that send no lead columns', () => {
+  it('is required for diagnostic.submitted, which sends the respondent\'s email, name and company', () => {
+    expect(personalDataConfirmationRequired({ events: ['diagnostic.submitted'] })).toBe(true);
+  });
+
+  it('is not required for events that send no personal data', () => {
     expect(
-      personalDataConfirmationRequired({ events: ['lead.deleted', 'diagnostic.submitted'] })
+      personalDataConfirmationRequired({
+        events: ['lead.deleted', 'organization.member_added', 'blog.published'],
+      })
     ).toBe(false);
   });
 
@@ -76,7 +82,7 @@ describe('personalDataConfirmationAudit', () => {
       resourceId: 'webhook',
       metadata: {
         personalDataConfirmation: {
-          events: ['lead.created'],
+          events: ['lead.created', 'diagnostic.submitted'],
           fields: ['email', 'name', 'company', 'phone'],
         },
       },

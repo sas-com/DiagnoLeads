@@ -1981,11 +1981,11 @@
       "conflict": "This change overlapped with another one. Reload the page and save again.",
       "personalData": {
         "title": "Lead personal data is sent to this URL",
-        "description": "The lead events you selected (created, updated, status changed, scored) send the following personal data of the lead to this URL.",
+        "description": "The events you selected (lead created, updated, status changed or scored, and diagnostic submitted) send the following personal data of the lead to this URL.",
         "fields": "Email address, name, company and phone number",
-        "otherFields": "The lead's ID, status, score, source, creation time and similar fields are sent too. Answers and internal notes are not sent.",
+        "otherFields": "The lead's ID, status, score, source, creation time and the diagnostic result (score and interest level) are sent too. Answers and internal notes are not sent.",
         "confirm": "I confirm that lead personal data is sent to this URL",
-        "required": "Confirm before saving when you select an event that sends lead personal data, or change the URL it is sent to."
+        "required": "Confirm before saving when you select an event that sends lead personal data, or change the URL it is sent to. Changing the URL cancels the retries waiting for the old URL."
       },
       "destinationNotAllowed": "Webhooks cannot be sent to this URL. Enter a public https URL without a port number. Internal addresses, localhost and URLs with a user name or password are not allowed.",
       "destinationBlocked": "Destination not allowed",

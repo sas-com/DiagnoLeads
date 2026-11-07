@@ -21,6 +21,7 @@ import {
 } from '../services/webhook-headers';
 import {
   WEBHOOK_TEST_SEND_LIMITS,
+  cancelPendingDeliveries,
   generateWebhookSecret,
   sendTestDelivery,
 } from '../services/webhook-service';
@@ -332,6 +333,7 @@ export const webhooksRouter = router({
           message: 'conflict: the webhook was changed meanwhile; reload it and save again',
         });
       }
+      if (urlChanged) await cancelPendingDeliveries(tx, row.id);
       if (confirmationRequired) {
         await tx.insert(auditLogs).values(
           personalDataConfirmationAudit({

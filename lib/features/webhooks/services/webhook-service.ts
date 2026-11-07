@@ -591,6 +591,32 @@ export async function triggerWebhooks(
   return { triggered, failed };
 }
 
+/** The error of deliveries failed because their webhook's URL changed (#927 review) */
+export const WEBHOOK_URL_CHANGED_ERROR =
+  'url_changed: the webhook was moved to another URL before this delivery was retried';
+
+/**
+ * Deliveries still waiting for a retry were stored for the old URL: when the URL changes they are
+ * failed rather than sent to the new one, which nobody confirmed them for (#927 review). Call it
+ * with a webhook already read within the organization, in the transaction that moves it.
+ */
+export async function cancelPendingDeliveries(
+  database: Database | DatabaseTransaction,
+  webhookId: string
+): Promise<number> {
+  const rows = await database
+    .update(webhookDeliveries)
+    .set({
+      status: 'failed',
+      nextRetryAt: null,
+      completedAt: new Date(),
+      error: WEBHOOK_URL_CHANGED_ERROR,
+    })
+    .where(and(eq(webhookDeliveries.webhookId, webhookId), eq(webhookDeliveries.status, 'pending')))
+    .returning({ id: webhookDeliveries.id });
+  return rows.length;
+}
+
 /** How long one call of triggerWebhookBatch sends before it only queues the rest */
 export const WEBHOOK_BATCH_TIME_BUDGET_MS = 15_000;
 

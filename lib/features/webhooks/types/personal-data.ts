@@ -27,15 +27,20 @@ export const LEAD_WEBHOOK_FIELDS = [
 /** The personal data among LEAD_WEBHOOK_FIELDS, as shown on the confirmation */
 export const LEAD_WEBHOOK_PERSONAL_FIELDS = ['email', 'name', 'company', 'phone'] as const;
 
-/** Events that send the lead's columns; lead.deleted sends the id and time only */
-export const LEAD_PERSONAL_DATA_EVENTS = [
+/**
+ * Events that send a lead's personal data: the lead events with the lead's columns (lead.deleted
+ * sends the id and time only), and diagnostic.submitted with the respondent's email, name and
+ * company, score and interest level (#927 review)
+ */
+export const PERSONAL_DATA_EVENTS = [
   'lead.created',
   'lead.updated',
   'lead.status_changed',
   'lead.scored',
+  'diagnostic.submitted',
 ] as const;
 
-const personalDataEvents: ReadonlySet<string> = new Set(LEAD_PERSONAL_DATA_EVENTS);
+const personalDataEvents: ReadonlySet<string> = new Set(PERSONAL_DATA_EVENTS);
 
 export function personalDataEventsOf(events: readonly string[]): string[] {
   return events.filter((event) => personalDataEvents.has(event));

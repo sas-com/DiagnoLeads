@@ -19,6 +19,7 @@ vi.mock("@/lib/features/webhooks/services/webhook-service", async () => ({
 			"@/lib/features/webhooks/services/test-send-limits",
 		)
 	).WEBHOOK_TEST_SEND_LIMITS,
+	cancelPendingDeliveries: vi.fn().mockResolvedValue(0),
 	generateWebhookSecret: vi.fn(() => "test-secret-12345678901234567890"),
 	triggerWebhooks: vi.fn().mockResolvedValue({ triggered: 1, failed: 0 }),
 	sendTestDelivery: vi.fn().mockResolvedValue({ allowed: true, success: true }),
@@ -1196,7 +1197,7 @@ describe("Webhooks Router", () => {
 				organizationId: TEST_ORG_ID,
 				name: "Deletions",
 				url: "https://crm.example.com/hook",
-				events: ["lead.deleted", "diagnostic.submitted"],
+				events: ["lead.deleted", "organization.member_added"],
 			});
 			expect(values).toHaveBeenCalledTimes(1);
 		});

@@ -76,7 +76,8 @@ describe.skipIf(!url)('webhook headers and test send (PostgreSQL)', () => {
         name,
         url: `https://hooks.example.com/${unique()}`,
         secret: 'whsec_test',
-        events: ['diagnostic.submitted'],
+        // An event without personal data: moving the URL needs no confirmation here (#917)
+        events: ['organization.member_added'],
         headers,
       })
       .returning();
@@ -202,7 +203,7 @@ describe.skipIf(!url)('webhook headers and test send (PostgreSQL)', () => {
     expect(deliveries).toHaveLength(1);
     expect(deliveries[0]).toMatchObject({
       webhookId: chosen,
-      eventType: 'diagnostic.submitted',
+      eventType: 'organization.member_added',
       status: 'success',
       response: '{"made-up":"receiver answer"}',
     });
@@ -497,7 +498,7 @@ describe.skipIf(!url)('webhook headers and test send (PostgreSQL)', () => {
         racingDatabase(() =>
           pg
             .update(webhooks)
-            .set({ events: ['diagnostic.submitted'], updatedAt: new Date() })
+            .set({ events: ['organization.member_added'], updatedAt: new Date() })
             .where(eq(webhooks.id, id))
         )
       );
@@ -506,7 +507,7 @@ describe.skipIf(!url)('webhook headers and test send (PostgreSQL)', () => {
         caller.webhooks.update({ organizationId: org, id, events: ['lead.created'] })
       ).rejects.toMatchObject({ code: 'CONFLICT' });
 
-      expect((await rowOf(id)).events).toEqual(['diagnostic.submitted']);
+      expect((await rowOf(id)).events).toEqual(['organization.member_added']);
     });
 
     it('answers CONFLICT when only the headers changed meanwhile', async () => {
