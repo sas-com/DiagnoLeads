@@ -45,7 +45,7 @@ const { createMockWebhook, createMockDbClient, mockDbClientRef } = vi.hoisted(()
 
 	type MockWebhook = ReturnType<typeof createMockWebhookFn>;
 
-	const createMockDbClientFn = (mockWebhook: MockWebhook) => ({
+	const createMockDbClientBase = (mockWebhook: MockWebhook) => ({
 		select: vi.fn().mockReturnValue({
 			from: vi.fn().mockReturnValue({
 				where: vi.fn().mockReturnValue({
@@ -87,6 +87,14 @@ const { createMockWebhook, createMockDbClient, mockDbClientRef } = vi.hoisted(()
 			},
 		},
 	});
+
+	// A transaction runs on the same client, so a test that swaps insert or update sees it used
+	const createMockDbClientFn = (mockWebhook: MockWebhook) => {
+		const client = createMockDbClientBase(mockWebhook);
+		return Object.assign(client, {
+			transaction: vi.fn(async (fn: (tx: typeof client) => unknown) => fn(client)),
+		});
+	};
 
 	// Use an object ref so we can swap the value from tests
 	const ref: { current: ReturnType<typeof createMockDbClientFn> | undefined } = { current: undefined };
@@ -306,6 +314,7 @@ describe("Webhooks Router", () => {
 				name: "New Webhook",
 				url: "https://example.com/new-webhook",
 				events: ["lead.created"],
+				personalDataConfirmed: true,
 			});
 
 			expect(result).toBeDefined();
@@ -319,6 +328,7 @@ describe("Webhooks Router", () => {
 				name: "New Webhook",
 				url: "https://example.com/webhook",
 				events: ["lead.created"],
+				personalDataConfirmed: true,
 			});
 
 			expect(result.secret).toBeDefined();
@@ -584,6 +594,7 @@ describe("Webhooks Router", () => {
 				name: "New Webhook",
 				url: "https://example.com/new-webhook",
 				events: ["lead.created"],
+				personalDataConfirmed: true,
 				headers: [{ name: "X-Custom-Header", value: HEADER_VALUE }],
 			});
 			const updated = await caller.webhooks.update({
@@ -711,6 +722,7 @@ describe("Webhooks Router", () => {
 						name: "New Webhook",
 						url: "https://example.com/new-webhook",
 						events: ["lead.created"],
+						personalDataConfirmed: true,
 						headers: [
 							{ name: "Authorization", value: "a" },
 							{ name: "AUTHORIZATION", value: "b" },
@@ -755,6 +767,7 @@ describe("Webhooks Router", () => {
 						callerAs("admin").webhooks.update({
 							organizationId: TEST_ORG_ID,
 							id: TEST_WEBHOOK_ID,
+							personalDataConfirmed: true,
 							url: "https://attacker.example.net/collect",
 						}),
 					).rejects.toMatchObject({
@@ -774,6 +787,7 @@ describe("Webhooks Router", () => {
 							callerAs("admin").webhooks.update({
 								organizationId: TEST_ORG_ID,
 								id: TEST_WEBHOOK_ID,
+								personalDataConfirmed: true,
 								url: "https://example.com/webhook/v2",
 								headers: [kept],
 							}),
@@ -790,6 +804,7 @@ describe("Webhooks Router", () => {
 					await callerAs("admin").webhooks.update({
 						organizationId: TEST_ORG_ID,
 						id: TEST_WEBHOOK_ID,
+						personalDataConfirmed: true,
 						url: "https://other.example.org/hook",
 						headers: [{ name: "Authorization", value: "Bearer made-up-for-other" }],
 					});
@@ -804,6 +819,7 @@ describe("Webhooks Router", () => {
 					await callerAs("admin").webhooks.update({
 						organizationId: TEST_ORG_ID,
 						id: TEST_WEBHOOK_ID,
+						personalDataConfirmed: true,
 						url: "https://other.example.org/hook",
 						headers: [],
 					});
@@ -822,6 +838,7 @@ describe("Webhooks Router", () => {
 								callerAs("admin").webhooks.update({
 									organizationId: TEST_ORG_ID,
 									id: TEST_WEBHOOK_ID,
+									personalDataConfirmed: true,
 									url,
 									headers,
 								}),
@@ -844,6 +861,7 @@ describe("Webhooks Router", () => {
 						await callerAs("admin").webhooks.update({
 							organizationId: TEST_ORG_ID,
 							id: TEST_WEBHOOK_ID,
+							personalDataConfirmed: true,
 							url,
 							headers: [{ name: "Authorization" }],
 						});
@@ -1080,6 +1098,169 @@ describe("Webhooks Router", () => {
 				});
 				expect(asMember.webhooks.map((w) => w.urlRefusal)).toEqual([null, null]);
 			});
+		});
+	});
+
+	describe("confirming that lead personal data is sent (#917)", () => {
+		const callerAs = (role: string) => {
+			mockDb.query.organizationMembers.findFirst.mockResolvedValue({
+				...mockMembership,
+				role,
+			});
+			return appRouter.createCaller(
+				mockContext as unknown as Parameters<typeof appRouter.createCaller>[0],
+			);
+		};
+
+		/** The rows each insert writes, in order */
+		function captureInserts() {
+			const values = vi.fn().mockReturnValue({
+				returning: vi.fn().mockResolvedValue([mockWebhook]),
+			});
+			mockDb.insert.mockReturnValue({ values } as unknown as ReturnType<
+				typeof mockDb.insert
+			>);
+			return values;
+		}
+
+		/** The stored webhook the update reads, and the values it writes */
+		function captureUpdate(stored: { url: string; events: string[] }) {
+			const storedWebhook = { ...mockWebhook, ...stored, headers: null };
+			mockDb.select.mockReturnValue({
+				from: vi.fn().mockReturnValue({
+					where: vi.fn().mockReturnValue({
+						limit: vi.fn().mockResolvedValue([storedWebhook]),
+					}),
+				}),
+			} as unknown as ReturnType<typeof mockDb.select>);
+			const set = vi.fn().mockReturnValue({
+				where: vi.fn().mockReturnValue({
+					returning: vi.fn().mockResolvedValue([storedWebhook]),
+				}),
+			});
+			mockDb.update.mockReturnValue({ set } as unknown as ReturnType<
+				typeof mockDb.update
+			>);
+			return set;
+		}
+
+		const confirmationRefused = {
+			code: "BAD_REQUEST",
+			message: expect.stringMatching(/^personal_data_confirmation_required:/),
+		};
+
+		it("refuses to create a webhook that sends lead personal data without it", async () => {
+			const values = captureInserts();
+			await expect(
+				callerAs("admin").webhooks.create({
+					organizationId: TEST_ORG_ID,
+					name: "CRM",
+					url: "https://crm.example.com/hook",
+					events: ["lead.created", "diagnostic.submitted"],
+				}),
+			).rejects.toMatchObject(confirmationRefused);
+			expect(values).not.toHaveBeenCalled();
+		});
+
+		it("creates it with the confirmation and records who confirmed, without the URL", async () => {
+			const values = captureInserts();
+			await callerAs("admin").webhooks.create({
+				organizationId: TEST_ORG_ID,
+				name: "CRM",
+				url: "https://crm.example.com/hook?token=made-up",
+				events: ["lead.created", "lead.deleted"],
+				personalDataConfirmed: true,
+			});
+
+			expect(values).toHaveBeenCalledTimes(2);
+			const audit = values.mock.calls[1][0];
+			expect(audit).toEqual({
+				organizationId: TEST_ORG_ID,
+				userId: TEST_USER_ID,
+				action: "create",
+				resource: "webhook",
+				resourceId: mockWebhook.id,
+				metadata: {
+					personalDataConfirmation: {
+						events: ["lead.created"],
+						fields: ["email", "name", "company", "phone"],
+					},
+				},
+			});
+			expect(JSON.stringify(audit)).not.toContain("made-up");
+		});
+
+		it("needs no confirmation and records nothing for events without lead columns", async () => {
+			const values = captureInserts();
+			await callerAs("admin").webhooks.create({
+				organizationId: TEST_ORG_ID,
+				name: "Deletions",
+				url: "https://crm.example.com/hook",
+				events: ["lead.deleted", "diagnostic.submitted"],
+			});
+			expect(values).toHaveBeenCalledTimes(1);
+		});
+
+		it("refuses an update that adds such an event, or moves it to another URL, without it", async () => {
+			for (const change of [
+				{ events: ["lead.created", "lead.scored"] as const },
+				{ url: "https://other.example.com/hook" },
+			]) {
+				const set = captureUpdate({
+					url: "https://crm.example.com/hook",
+					events: ["lead.created"],
+				});
+				const values = captureInserts();
+				await expect(
+					callerAs("admin").webhooks.update({
+						organizationId: TEST_ORG_ID,
+						id: TEST_WEBHOOK_ID,
+						...change,
+						events: change.events ? [...change.events] : undefined,
+					}),
+				).rejects.toMatchObject(confirmationRefused);
+				expect(set).not.toHaveBeenCalled();
+				expect(values).not.toHaveBeenCalled();
+			}
+		});
+
+		it("records the confirmation of an update that moves it to another URL", async () => {
+			const set = captureUpdate({
+				url: "https://crm.example.com/hook",
+				events: ["lead.created"],
+			});
+			const values = captureInserts();
+			await callerAs("admin").webhooks.update({
+				organizationId: TEST_ORG_ID,
+				id: TEST_WEBHOOK_ID,
+				url: "https://other.example.com/hook",
+				personalDataConfirmed: true,
+			});
+			expect(set).toHaveBeenCalled();
+			expect(values).toHaveBeenCalledWith(
+				expect.objectContaining({ action: "update", resource: "webhook" }),
+			);
+		});
+
+		it("lets a confirmed webhook be renamed, paused or narrowed without it", async () => {
+			for (const change of [
+				{ name: "Renamed" },
+				{ status: "inactive" as const },
+				{ events: ["lead.created" as const] },
+			]) {
+				const set = captureUpdate({
+					url: "https://crm.example.com/hook",
+					events: ["lead.created", "lead.scored"],
+				});
+				const values = captureInserts();
+				await callerAs("admin").webhooks.update({
+					organizationId: TEST_ORG_ID,
+					id: TEST_WEBHOOK_ID,
+					...change,
+				});
+				expect(set).toHaveBeenCalled();
+				expect(values).not.toHaveBeenCalled();
+			}
 		});
 	});
 });

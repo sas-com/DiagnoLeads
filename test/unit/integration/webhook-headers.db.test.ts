@@ -429,21 +429,32 @@ describe.skipIf(!url)('webhook headers and test send (PostgreSQL)', () => {
      * change lands after the router has read the row and before it writes
      */
     function racingDatabase(beforeWrite: () => Promise<unknown>): typeof pg {
-      return new Proxy(pg, {
-        get(target, prop, receiver) {
-          if (prop !== 'update') return Reflect.get(target, prop, receiver);
-          return (table: typeof webhooks) => ({
-            set: (values: Partial<typeof webhooks.$inferInsert>) => ({
-              where: (condition: SQL | undefined) => ({
-                returning: async () => {
-                  await beforeWrite();
-                  return target.update(table).set(values).where(condition).returning();
-                },
+      // The router writes in a transaction (#917): its UPDATE is caught there too
+      const racing = <T extends object>(database: T): T =>
+        new Proxy(database, {
+          get(target, prop, receiver) {
+            if (prop === 'transaction') {
+              return (run: (tx: unknown) => Promise<unknown>) =>
+                (target as unknown as typeof pg).transaction((tx) => run(racing(tx)));
+            }
+            if (prop !== 'update') return Reflect.get(target, prop, receiver);
+            return (table: typeof webhooks) => ({
+              set: (values: Partial<typeof webhooks.$inferInsert>) => ({
+                where: (condition: SQL | undefined) => ({
+                  returning: async () => {
+                    await beforeWrite();
+                    return (target as unknown as typeof pg)
+                      .update(table)
+                      .set(values)
+                      .where(condition)
+                      .returning();
+                  },
+                }),
               }),
-            }),
-          });
-        },
-      });
+            });
+          },
+        });
+      return racing(pg);
     }
 
     const rowOf = async (id: string) =>
@@ -474,6 +485,28 @@ describe.skipIf(!url)('webhook headers and test send (PostgreSQL)', () => {
       expect(after.name).toBe('競合する連携');
       expect(after.url).toBe('https://moved.example.org/hook');
       expect(after.headers).toEqual({});
+    });
+
+    it('answers CONFLICT when the events changed meanwhile (#917)', async () => {
+      // The personal data confirmation is judged against the events read: a save from an old
+      // screen must not bring back lead events another tab removed
+      const id = await createWebhook('イベントが変わる連携', {});
+      await pg.update(webhooks).set({ events: ['lead.created'] }).where(eq(webhooks.id, id));
+      const caller = await callerAs(
+        'admin',
+        racingDatabase(() =>
+          pg
+            .update(webhooks)
+            .set({ events: ['diagnostic.submitted'], updatedAt: new Date() })
+            .where(eq(webhooks.id, id))
+        )
+      );
+
+      await expect(
+        caller.webhooks.update({ organizationId: org, id, events: ['lead.created'] })
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+
+      expect((await rowOf(id)).events).toEqual(['diagnostic.submitted']);
     });
 
     it('answers CONFLICT when only the headers changed meanwhile', async () => {

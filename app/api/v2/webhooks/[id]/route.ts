@@ -7,7 +7,13 @@ import { getAuthenticatedOrganization } from '@/lib/api/v2-auth';
  * DELETE /api/v2/webhooks/[id] - Delete a webhook
  */
 import { db } from '@/lib/db';
-import { webhookDeliveries, webhooks } from '@/lib/db/schema';
+import { auditLogs, webhookDeliveries, webhooks } from '@/lib/db/schema';
+import { isUrlChanged } from '@/lib/features/webhooks/services/webhook-headers';
+import {
+  PERSONAL_DATA_CONFIRMATION_REQUIRED,
+  personalDataConfirmationAudit,
+  personalDataConfirmationRequired,
+} from '@/lib/features/webhooks/types/personal-data';
 import { and, desc, eq } from 'drizzle-orm';
 import { type NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -43,6 +49,8 @@ const updateWebhookSchema = z.object({
   headers: z.record(z.string()).optional(),
   maxRetries: z.number().int().min(0).max(10).optional(),
   retryDelayMs: z.number().int().min(1000).max(30000).optional(),
+  // The caller confirms that lead personal data is sent to this URL (#917)
+  personalDataConfirmed: z.boolean().optional(),
 });
 
 // ============================================================================
@@ -190,7 +198,21 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       headers: customHeaders,
       maxRetries,
       retryDelayMs,
+      personalDataConfirmed,
     } = parsedBody.data;
+
+    const nextEvents = events ?? existing.events;
+    const confirmationRequired = personalDataConfirmationRequired({
+      events: nextEvents,
+      savedEvents: existing.events,
+      urlChanged: url !== undefined && isUrlChanged(existing.url, url),
+    });
+    if (confirmationRequired && personalDataConfirmed !== true) {
+      return NextResponse.json(
+        { error: 'Bad Request', message: PERSONAL_DATA_CONFIRMATION_REQUIRED },
+        { status: 400 }
+      );
+    }
 
     if (name !== undefined) updateData.name = name;
     if (url !== undefined) updateData.url = url;
@@ -209,20 +231,34 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       };
     }
 
-    const [updated] = await db
-      .update(webhooks)
-      .set(updateData)
-      .where(and(eq(webhooks.id, id), eq(webhooks.organizationId, authResult.organizationId)))
-      .returning({
-        id: webhooks.id,
-        name: webhooks.name,
-        url: webhooks.url,
-        events: webhooks.events,
-        status: webhooks.status,
-        headers: webhooks.headers,
-        retryConfig: webhooks.retryConfig,
-        updatedAt: webhooks.updatedAt,
-      });
+    const updated = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(webhooks)
+        .set(updateData)
+        .where(and(eq(webhooks.id, id), eq(webhooks.organizationId, authResult.organizationId)))
+        .returning({
+          id: webhooks.id,
+          name: webhooks.name,
+          url: webhooks.url,
+          events: webhooks.events,
+          status: webhooks.status,
+          headers: webhooks.headers,
+          retryConfig: webhooks.retryConfig,
+          updatedAt: webhooks.updatedAt,
+        });
+      if (row && confirmationRequired) {
+        await tx.insert(auditLogs).values(
+          personalDataConfirmationAudit({
+            organizationId: authResult.organizationId,
+            userId: authResult.userId,
+            action: 'update',
+            webhookId: row.id,
+            events: nextEvents,
+          })
+        );
+      }
+      return row;
+    });
 
     return NextResponse.json({
       data: updated,
