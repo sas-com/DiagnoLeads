@@ -19,7 +19,7 @@ unslop（Damir Sokolovsky、[@heydamir](https://x.com/heydamir)、[heydamir/unsl
 | 資料 | 中身 |
 |---|---|
 | [references/signs.md](references/signs.md) | 兆候と直し方。直す層の順に並ぶ。兆候ではないものの一覧もある |
-| [references/dads.md](references/dads.md) | 管理画面の値（文字の色・コントラスト・太さ・大きさ・ボタン・フォーカス・影・角丸・グラフ） |
+| [references/dads.md](references/dads.md) | 管理画面の値（ライトとダークの文字の色・コントラスト・太さ・大きさ・ボタン・フォーカス・影・角丸・グラフ） |
 
 ## 対象と優先順位
 
@@ -30,8 +30,9 @@ unslop（Damir Sokolovsky、[@heydamir](https://x.com/heydamir)、[heydamir/unsl
 | 管理画面と認証画面 | `.dl-admin` の中（`components/layout/DashboardShell.tsx`・`app/[locale]/(auth)/layout.tsx`） | `2026-10-24-admin-dads` | signs.md の1〜8の節と「ひな形の見た目」。値は dads.md |
 | AX の公開サイト | `components/features/ax-site/`・`components/features/ax-diagnosis/`・`app/[locale]/(ax)/` | `2026-10-11-ax-diagnosis-v2`・`2026-10-26-ax-device-font-on-mobile` | 絵文字・根拠のない主張・宣伝の言葉を除くだけ。`ax-*` の色・書体・`rounded-full` のボタン・見出しの上の小さなラベル・ヒーローの配置はそのまま。文言は社外への発信なので、変える前にオーナーに確かめる（`marketing-strategy-specialist` に相談してよい） |
 | ビルダーの診断・埋め込み・QR | `app/[locale]/(public)/`・`app/q/`・`components/features/public-diagnosis/`・`components/features/diagnosis-runner/` | `2026-10-24-admin-dads`（色は変えない） | 絵文字と根拠のない主張を除くだけ。直すのはコードの中の文字列（`locales/` を含む）だけで、組織が作った設問・結果の文言（DB のデータ）には触らない。色と書体、組織の設定で決まる見た目は変えない。社外に出る文言なので、変える前にオーナーに確かめる |
-| Payload の CMS 管理画面 | `app/(payload)/` | （DADS を当てるか未定） | 対象外 |
+| Payload の CMS 管理画面 | `app/(payload)/` | （DADS を当てるか未定） | 対象外（下の「画像」の行だけ当てる） |
 | 部品 | ― | `2026-10-09-ui-modern-components` | shadcn/ui（`components/ui/`）。アイコンは lucide-react |
+| 画像 | すべての画面 | `2026-11-07-ui-audit-owner-decisions` | signs.md の「画像」の節を、すべての画面に当てる。既存の AX の公開サイトの画像（コラムの題の画像など、SNS で共有するためのものを含む）は、上の AX の公開サイトの行（配置はそのまま）とぶつかるので、変える前に毎回オーナーに確かめる。組織が作った・設定した画像（DB のデータ）には触らない。画像の生成は、どの画面でもしない（下の「持ち込まないもの」） |
 | グラフ | `components/charts/` | `2026-10-24-chart-library-apexcharts`・`2026-10-24-admin-dads` | どの画面でも：ApexCharts だけを使い、設定は `components/charts/` の部品を通して変える（画面で `react-apexcharts` を直接使わない）。管理画面：dads.md の「グラフ」 |
 | 文言 | ― | CLAUDE.md | 画面の文字列は `locales/`（ja・en）に置き、両方を直す |
 | ヘルプ | ― | `2026-10-28-in-app-help` | 画面の見た目や名前を変えたら、`lib/features/help/` の記事を直し、記事の `reviewedAt` を突き合わせた日にする（`.claude/rules/help.md`） |
