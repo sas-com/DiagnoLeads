@@ -5,7 +5,7 @@
  */
 
 import type { AppAbility } from '@/lib/auth/permissions';
-import { type Webhook, webhookDeliveries, webhooks } from '@/lib/db/schema';
+import { type Webhook, auditLogs, webhookDeliveries, webhooks } from '@/lib/db/schema';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { and, desc, eq, isNull } from 'drizzle-orm';
@@ -21,9 +21,15 @@ import {
 } from '../services/webhook-headers';
 import {
   WEBHOOK_TEST_SEND_LIMITS,
+  cancelPendingDeliveries,
   generateWebhookSecret,
   sendTestDelivery,
 } from '../services/webhook-service';
+import {
+  PERSONAL_DATA_CONFIRMATION_REQUIRED,
+  personalDataConfirmationAudit,
+  personalDataConfirmationRequired,
+} from '../types/personal-data';
 import {
   createWebhookSchema,
   listDeliveriesSchema,
@@ -77,6 +83,16 @@ function assertDestinationAllowed(url: string): void {
       code: 'BAD_REQUEST',
       message: `destination_not_allowed (${checked.reason}): webhooks can only be sent to public https URLs on the default port`,
     });
+  }
+}
+
+/**
+ * Refuse a save that sends lead personal data without the user's confirmation (#917):
+ * BAD_REQUEST with a message that starts with `personal_data_confirmation_required`
+ */
+function assertPersonalDataConfirmed(required: boolean, confirmed: boolean | undefined): void {
+  if (required && confirmed !== true) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: PERSONAL_DATA_CONFIRMATION_REQUIRED });
   }
 }
 
@@ -193,21 +209,37 @@ export const webhooksRouter = router({
     }
 
     assertDestinationAllowed(input.url);
+    const confirmationRequired = personalDataConfirmationRequired({ events: input.events });
+    assertPersonalDataConfirmed(confirmationRequired, input.personalDataConfirmed);
     const headers = headersOrThrow(buildWebhookHeaders(input.headers ?? []));
     const secret = generateWebhookSecret();
 
-    const [webhook] = await ctx.db
-      .insert(webhooks)
-      .values({
-        organizationId: ctx.organization.id,
-        name: input.name,
-        url: input.url,
-        secret,
-        events: input.events,
-        headers,
-        retryConfig: input.retryConfig || { maxRetries: 3, retryDelayMs: 5000 },
-      })
-      .returning();
+    const webhook = await ctx.db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(webhooks)
+        .values({
+          organizationId: ctx.organization.id,
+          name: input.name,
+          url: input.url,
+          secret,
+          events: input.events,
+          headers,
+          retryConfig: input.retryConfig || { maxRetries: 3, retryDelayMs: 5000 },
+        })
+        .returning();
+      if (confirmationRequired) {
+        await tx.insert(auditLogs).values(
+          personalDataConfirmationAudit({
+            organizationId: ctx.organization.id,
+            userId: ctx.user.id,
+            action: 'create',
+            webhookId: created.id,
+            events: input.events,
+          })
+        );
+      }
+      return created;
+    });
 
     // Return the full secret only on creation
     return toClientWebhook(webhook, { fullSecret: true });
@@ -254,6 +286,13 @@ export const webhooksRouter = router({
     // Checked only when the URL changes: a webhook saved before the check can still be renamed,
     // paused or deleted (its deliveries are refused anyway)
     if (input.url !== undefined && urlChanged) assertDestinationAllowed(input.url);
+    const events = input.events ?? existing[0].events;
+    const confirmationRequired = personalDataConfirmationRequired({
+      events,
+      savedEvents: existing[0].events,
+      urlChanged,
+    });
+    assertPersonalDataConfirmed(confirmationRequired, input.personalDataConfirmed);
     if (input.headers) {
       updateData.headers = headersOrThrow(
         mergeWebhookHeaders(existing[0].headers, input.headers, {
@@ -265,32 +304,49 @@ export const webhooksRouter = router({
     }
     if (input.retryConfig) updateData.retryConfig = input.retryConfig;
 
-    // Written only if the URL and headers are still those read above: the checks and the merge
-    // were made against them, so a change in between (e.g. another tab moving the URL) must not
-    // be overwritten with values kept for the old URL. Compared on these columns rather than
+    // Written only if the URL, events and headers are still those read above: the checks, the
+    // merge and the personal data confirmation were made against them, so a change in between
+    // (e.g. another tab moving the URL) must not be overwritten with values kept for the old URL. Compared on these columns rather than
     // updated_at, which deliveries also move and which is stored with more precision than a
     // JavaScript Date holds.
-    const [updated] = await ctx.db
-      .update(webhooks)
-      .set(updateData)
-      .where(
-        and(
-          eq(webhooks.id, input.id),
-          eq(webhooks.organizationId, ctx.organization.id),
-          eq(webhooks.url, existing[0].url),
-          existing[0].headers === null
-            ? isNull(webhooks.headers)
-            : eq(webhooks.headers, existing[0].headers)
+    const updated = await ctx.db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(webhooks)
+        .set(updateData)
+        .where(
+          and(
+            eq(webhooks.id, input.id),
+            eq(webhooks.organizationId, ctx.organization.id),
+            eq(webhooks.url, existing[0].url),
+            // The confirmation was judged against these events (#917)
+            eq(webhooks.events, existing[0].events),
+            existing[0].headers === null
+              ? isNull(webhooks.headers)
+              : eq(webhooks.headers, existing[0].headers)
+          )
         )
-      )
-      .returning();
+        .returning();
 
-    if (!updated) {
-      throw new TRPCError({
-        code: 'CONFLICT',
-        message: 'conflict: the webhook was changed meanwhile; reload it and save again',
-      });
-    }
+      if (!row) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'conflict: the webhook was changed meanwhile; reload it and save again',
+        });
+      }
+      if (urlChanged) await cancelPendingDeliveries(tx, row.id);
+      if (confirmationRequired) {
+        await tx.insert(auditLogs).values(
+          personalDataConfirmationAudit({
+            organizationId: ctx.organization.id,
+            userId: ctx.user.id,
+            action: 'update',
+            webhookId: row.id,
+            events,
+          })
+        );
+      }
+      return row;
+    });
 
     return toClientWebhook(updated);
   }),

@@ -7,7 +7,7 @@ export const settingsWebhooksArticle: HelpArticle = {
   summary:
     'リードの作成や更新などが起きたときに、ほかのシステムへ知らせる送信先（Webhook）を設定します。社内のシステムとつなぐ担当者向けの画面です。',
   routes: ['/settings/webhooks'],
-  reviewedAt: '2026-10-29',
+  reviewedAt: '2026-11-07',
   blocks: [
     { type: 'h2', id: 'create', text: '送信先を作る' },
     {
@@ -18,7 +18,15 @@ export const settingsWebhooksArticle: HelpArticle = {
           { type: 'text', text: 'を押します。' },
         ],
         '名前と、送信先の URL（インターネットに公開されている https の URL）を入れます。',
-        '受け取りたいイベント（リードの作成・更新など）を選び、必要ならカスタムヘッダーを足して保存します。',
+        '受け取りたいイベント（リードの作成・更新など）を選び、必要ならカスタムヘッダーを足します。',
+        [
+          {
+            type: 'text',
+            text: 'リードの作成・更新・ステータス変更・スコア、または診断の送信のイベントを選んだときは、送る個人情報が表示されます。内容を確かめて',
+          },
+          { type: 'ui', text: 'リードの個人情報をこの URL へ送ることを確認しました' },
+          { type: 'text', text: 'にチェックを入れ、保存します。' },
+        ],
         [
           { type: 'ui', text: 'テスト送信' },
           { type: 'text', text: 'で、送信先に届くかを確かめます。' },
@@ -30,6 +38,12 @@ export const settingsWebhooksArticle: HelpArticle = {
       tone: 'caution',
       content:
         '社内のアドレスや localhost、ポート番号やユーザー名・パスワード入りの URL には送れません。',
+    },
+    {
+      type: 'note',
+      tone: 'caution',
+      content:
+        'リードのイベントと診断の送信のイベントは、メールアドレス・氏名・会社名・電話番号などを送信先へ送ります。送るのは貴社の指示によるもので、送信先での取り扱いも貴社の管理になります。確認のチェックは、これらのイベントを足したときと送信先の URL を変えたときに必要で、誰がいつ確認したかは監査ログに残ります。URL を変えると、元の URL への再送待ちの送信は取りやめます。リードの削除のイベントは、ID と日時だけを送ります。',
     },
     { type: 'h2', id: 'verify', text: '受け取る側で確かめること' },
     {

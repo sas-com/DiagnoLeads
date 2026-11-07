@@ -7,7 +7,13 @@ import { getAuthenticatedOrganization } from '@/lib/api/v2-auth';
  * POST /api/v2/webhooks - Create a webhook
  */
 import { db } from '@/lib/db';
-import { type WebhookEventType, webhooks } from '@/lib/db/schema';
+import { type WebhookEventType, auditLogs, webhooks } from '@/lib/db/schema';
+import {
+  PERSONAL_DATA_CONFIRMATION_REQUIRED,
+  personalDataConfirmationAudit,
+  personalDataConfirmationRequired,
+} from '@/lib/features/webhooks/types/personal-data';
+
 import { and, desc, eq } from 'drizzle-orm';
 import { type NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -43,6 +49,8 @@ const createWebhookSchema = z.object({
   headers: z.record(z.string()).optional(),
   maxRetries: z.number().int().min(0).max(10).default(3),
   retryDelayMs: z.number().int().min(1000).max(30000).default(5000),
+  // The caller confirms that lead personal data is sent to this URL (#917)
+  personalDataConfirmed: z.boolean().optional(),
 });
 
 // ============================================================================
@@ -133,27 +141,50 @@ export async function POST(request: NextRequest) {
       headers: customHeaders,
       maxRetries,
       retryDelayMs,
+      personalDataConfirmed,
     } = parsedBody.data;
+
+    const confirmationRequired = personalDataConfirmationRequired({ events });
+    if (confirmationRequired && personalDataConfirmed !== true) {
+      return NextResponse.json(
+        { error: 'Bad Request', message: PERSONAL_DATA_CONFIRMATION_REQUIRED },
+        { status: 400 }
+      );
+    }
 
     // Generate secret if not provided
     const webhookSecret = secret ?? crypto.randomBytes(32).toString('hex');
 
-    const [webhook] = await db
-      .insert(webhooks)
-      .values({
-        organizationId: authResult.organizationId,
-        name,
-        url,
-        events: events as WebhookEventType[],
-        secret: webhookSecret,
-        status,
-        headers: customHeaders ?? {},
-        retryConfig: {
-          maxRetries,
-          retryDelayMs,
-        },
-      })
-      .returning();
+    const webhook = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(webhooks)
+        .values({
+          organizationId: authResult.organizationId,
+          name,
+          url,
+          events: events as WebhookEventType[],
+          secret: webhookSecret,
+          status,
+          headers: customHeaders ?? {},
+          retryConfig: {
+            maxRetries,
+            retryDelayMs,
+          },
+        })
+        .returning();
+      if (confirmationRequired) {
+        await tx.insert(auditLogs).values(
+          personalDataConfirmationAudit({
+            organizationId: authResult.organizationId,
+            userId: authResult.userId,
+            action: 'create',
+            webhookId: created.id,
+            events,
+          })
+        );
+      }
+      return created;
+    });
 
     return NextResponse.json(
       {

@@ -94,6 +94,9 @@ export const createWebhookSchema = z.object({
       retryDelayMs: z.number().int().min(1000).max(60000).default(5000),
     })
     .optional(),
+  // The user confirmed that lead personal data is sent to this URL (#917); required when
+  // personalDataConfirmationRequired says so
+  personalDataConfirmed: z.boolean().optional(),
 });
 
 export type CreateWebhookInput = z.infer<typeof createWebhookSchema>;
@@ -123,6 +126,7 @@ export const updateWebhookSchema = z.object({
       retryDelayMs: z.number().int().min(1000).max(60000),
     })
     .optional(),
+  personalDataConfirmed: z.boolean().optional(),
 });
 
 export type UpdateWebhookInput = z.infer<typeof updateWebhookSchema>;
