@@ -7,6 +7,7 @@ import { notifyLeadHandoff } from '@/lib/features/lead-handoff/notify';
 import {
   type LeadEvent,
   emitLeadEvents,
+  forgetLeadsInDeliveries,
   leadChangeEvents,
 } from '@/lib/features/webhooks/services/lead-events';
 import { organizationProcedure, router } from '@/lib/trpc/init';
@@ -775,6 +776,7 @@ export const leadsRouter = router({
 
       // Delete lead (the audit row keeps only the name and company)
       await tx.delete(leads).where(leadScope);
+      await forgetLeadsInDeliveries(tx, input.organizationId, [existing.id]);
       deletedAt = new Date();
       await writeLeadAuditLogs(
         tx,
@@ -919,6 +921,11 @@ export const leadsRouter = router({
         .delete(leads)
         .where(and(inArray(leads.id, input.ids), eq(leads.organizationId, input.organizationId)))
         .returning({ id: leads.id, name: leads.name, company: leads.company });
+      await forgetLeadsInDeliveries(
+        tx,
+        input.organizationId,
+        result.map((row) => row.id)
+      );
 
       await writeLeadAuditLogs(
         tx,

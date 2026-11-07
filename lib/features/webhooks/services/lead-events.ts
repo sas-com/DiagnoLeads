@@ -24,7 +24,10 @@ import { reportServerError } from '@/lib/ops/alert';
 import { and, eq } from 'drizzle-orm';
 import { LEAD_WEBHOOK_FIELDS as SHARED_LEAD_WEBHOOK_FIELDS } from '../types/personal-data';
 import type { WebhookEventType } from '../types/schemas';
-import { triggerWebhookBatch } from './webhook-service';
+import { forgetLeadsInDeliveries, triggerWebhookBatch } from './webhook-service';
+
+/** Deleted leads lose their personal data in the deliveries (#918); for the leads feature */
+export { forgetLeadsInDeliveries };
 
 type LeadRow = typeof leads.$inferSelect;
 

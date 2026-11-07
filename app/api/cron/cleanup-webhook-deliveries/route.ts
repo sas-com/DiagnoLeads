@@ -4,6 +4,7 @@ import { maintainSiteVisits } from '@/lib/features/site-visits/maintenance';
 import {
   cleanupOldDeliveries,
   processWebhookRetries,
+  redactFinishedDeliveries,
 } from '@/lib/features/webhooks/services/webhook-service';
 import { reportServerError } from '@/lib/ops/alert';
 import { NextResponse } from 'next/server';
@@ -13,7 +14,8 @@ const DAYS_TO_KEEP = 30;
 
 /**
  * Daily webhook maintenance (vercel.json, 03:00 UTC): sends the deliveries due for retry
- * (failed attempts and attempts cut off mid-way), then deletes old finished deliveries.
+ * (failed attempts and attempts cut off mid-way) and removes the personal data left in finished
+ * ones (#918), then deletes old finished deliveries.
  * Retries share this cron instead of having their own, as the plan may allow daily crons only.
  * The daily totals and retention of the site visits (#412) share it for the same reason.
  * Each step runs even if the others fail; a failure is reported and the response is a 500.
@@ -23,10 +25,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   const [retries, cleanup, siteVisits] = await Promise.allSettled([
-    processWebhookRetries().catch(async (error: unknown) => {
-      await reportServerError('cron/webhook-retries', error);
-      throw error;
-    }),
+    // Then the personal data left in finished deliveries goes (#918)
+    processWebhookRetries()
+      .then(async (retries) => ({ ...retries, redacted: await redactFinishedDeliveries() }))
+      .catch(async (error: unknown) => {
+        await reportServerError('cron/webhook-retries', error);
+        throw error;
+      }),
     cleanupOldDeliveries(DAYS_TO_KEEP).catch(async (error: unknown) => {
       await reportServerError('cron/cleanup-webhook-deliveries', error);
       throw error;
