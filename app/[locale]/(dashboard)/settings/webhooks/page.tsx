@@ -202,6 +202,7 @@ function WebhookFormFields({
             </div>
           ))}
         </div>
+        <p className="text-xs text-muted-foreground">{t('deliveryNote')}</p>
       </div>
 
       {isPersonalDataConfirmationRequired(form) && (
