@@ -4,6 +4,7 @@ import { maintainSiteVisits } from '@/lib/features/site-visits/maintenance';
 import {
   cleanupOldDeliveries,
   processWebhookRetries,
+  redactFinishedDeliveries,
 } from '@/lib/features/webhooks/services/webhook-service';
 import { reportServerError } from '@/lib/ops/alert';
 import { NextResponse } from 'next/server';
@@ -13,7 +14,8 @@ const DAYS_TO_KEEP = 30;
 
 /**
  * Daily webhook maintenance (vercel.json, 03:00 UTC): sends the deliveries due for retry
- * (failed attempts and attempts cut off mid-way), then deletes old finished deliveries.
+ * (failed attempts and attempts cut off mid-way) and removes the personal data left in finished
+ * ones (#918), then deletes old finished deliveries.
  * Retries share this cron instead of having their own, as the plan may allow daily crons only.
  * The daily totals and retention of the site visits (#412) share it for the same reason.
  * Each step runs even if the others fail; a failure is reported and the response is a 500.
@@ -22,7 +24,7 @@ export async function GET(request: Request) {
   if (!isCronRequest(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const [retries, cleanup, siteVisits] = await Promise.allSettled([
+  const [retries, cleanup, siteVisits, redaction] = await Promise.allSettled([
     processWebhookRetries().catch(async (error: unknown) => {
       await reportServerError('cron/webhook-retries', error);
       throw error;
@@ -35,13 +37,21 @@ export async function GET(request: Request) {
       await reportServerError('cron/site-visits', error);
       throw error;
     }),
+    // The personal data left in finished deliveries (#918); each delivery is redacted when it
+    // finishes, so this only picks up what was missed
+    redactFinishedDeliveries().catch(async (error: unknown) => {
+      await reportServerError('cron/redact-webhook-deliveries', error);
+      throw error;
+    }),
   ]);
   if (retries.status === 'rejected') throw retries.reason;
   if (cleanup.status === 'rejected') throw cleanup.reason;
   if (siteVisits.status === 'rejected') throw siteVisits.reason;
+  if (redaction.status === 'rejected') throw redaction.reason;
   return NextResponse.json({
     deleted: cleanup.value,
     retries: retries.value,
     siteVisits: siteVisits.value,
+    redacted: redaction.value,
   });
 }
