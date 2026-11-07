@@ -361,6 +361,9 @@ describe('WebhooksSettingsPage', () => {
     await fill(within(dialog).getByLabelText('Webhook名'), 'CRM');
     await fill(within(dialog).getByLabelText('エンドポイントURL'), 'https://hooks.example.com/new');
 
+    // Late and out-of-order deliveries are explained by the events (#919)
+    expect(within(dialog).getByText(/最大で約24時間遅れて届くことがあります/)).toBeInTheDocument();
+
     // A deletion sends the id and time only: nothing to confirm
     await userEvent.click(within(dialog).getByText('Lead Deleted'));
     expect(within(dialog).queryByText('リードの個人情報をこの URL へ送ることを確認しました')).not.toBeInTheDocument();
