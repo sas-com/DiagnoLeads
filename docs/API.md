@@ -471,6 +471,17 @@ function verifySignature(payload, signature, secret) {
 
 ---
 
+## Webhook Delivery: Timing, Order and Retries
+
+- **Timing**: an event is sent right after the change, after the response to the user. When one change makes many events (a bulk status change, a bulk delete), those that do not fit in about 15 seconds are queued and sent by the daily retry run (03:00 UTC). Such a delivery can arrive **up to about 24 hours later**.
+- **Retries**: a delivery that fails (any answer other than 2xx, a network error or a timeout) is retried by the same daily run, up to the webhook's `maxRetries` (3 by default). A delivery not sent within 3 days is given up. Changing the webhook's URL cancels the deliveries still waiting for a retry.
+- **Order is not guaranteed**: retried and queued deliveries can arrive after newer ones. For lead events, keep the version with the newest `data.updatedAt` and ignore an older one.
+- **The same delivery can arrive twice** (for example when your answer was lost on the way). `X-Webhook-ID` stays the same across the retries of one delivery: use it to ignore a delivery you already handled.
+- **Answer quickly**: answer with a 2xx status within 8 seconds and do the work afterwards. A slower answer counts as a failure.
+- **Personal data**: the lead events (except `lead.deleted`) and `diagnostic.submitted` send the lead's email address, name, company and phone number. Saving a webhook that sends them needs a confirmation. Once a delivery is finished, they are removed from the delivery history in DiagnoLeads.
+
+---
+
 ## SDK Support
 
 SDKs for popular languages are planned:

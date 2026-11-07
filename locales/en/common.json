@@ -1979,6 +1979,7 @@
       "headerNameDuplicate": "The same header name is given more than once (case does not matter).",
       "headerValueInvalid": "Values may contain only ASCII letters, digits, symbols and spaces (no other characters or line breaks), up to 2,000 characters.",
       "conflict": "This change overlapped with another one. Reload the page and save again.",
+      "deliveryNote": "When many events are sent at once, some can arrive up to about 24 hours later. The order is not guaranteed (for lead events, keep the one with the newest updatedAt).",
       "personalData": {
         "title": "Lead personal data is sent to this URL",
         "description": "The events you selected (lead created, updated, status changed or scored, and diagnostic submitted) send the following personal data of the lead to this URL.",
