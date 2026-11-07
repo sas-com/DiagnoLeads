@@ -381,7 +381,9 @@ async function recordAttempt(
         : new Date(Date.now() + retryConfig.retryDelayMs * 2 ** Math.max(attempts - 1, 0)),
       completedAt: exhausted ? new Date() : null,
     })
-    .where(eq(webhookDeliveries.id, deliveryId));
+    // Only while still pending: a delivery failed meanwhile because the URL changed must not be
+    // put back in the retry queue for the new URL (#927 review)
+    .where(and(eq(webhookDeliveries.id, deliveryId), eq(webhookDeliveries.status, 'pending')));
 
   // The first attempt of each event counts towards the webhook's failure count
   const failureCount = isRetry ? webhook.failureCount : webhook.failureCount + 1;
