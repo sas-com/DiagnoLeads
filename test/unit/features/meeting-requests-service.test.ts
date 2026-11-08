@@ -4,7 +4,8 @@
  * written and under which condition (a confirmed meeting, or verified preferences met by an
  * unverified answer, are never replaced), that every read and write is limited to the
  * organization, who is told, and each outcome of a confirmation (not found, stale, the next
- * action moved or added, the email, and when it creates the lead's deal in 見極め, #854). The
+ * action moved or added, the email, and when it creates the lead's deal in 見極め, #854), and that
+ * the preferences notice skips an assignee no longer a member who holds leads (#974). The
  * database is test/mocks/recording-db.ts and the deals feature is mocked; the same functions on a
  * real PostgreSQL (the conflict condition, the snapshot read of the replaced row, the locks, the
  * deal) are covered by test/unit/integration/meeting-requests.db.test.ts and
@@ -13,6 +14,7 @@
  */
 import { leadTasks, leads, meetingRequests, organizations, users } from '@/lib/db/schema';
 import type { QualificationDealOutcome } from '@/lib/features/deals/service';
+import { ASSIGNABLE_ROLES } from '@/lib/features/leads/assignment';
 import {
   type ConfirmDeps,
   MEETING_PREFERENCES_WINDOW_MS,
@@ -221,7 +223,10 @@ describe('notifyPreferencesReceived', () => {
   });
 
   it("tells the lead's assignee", async () => {
-    fake.results.push([{ name: '山田 太郎', company: '架空商事', assigneeId: ASSIGNEE_ID }]);
+    fake.results.push(
+      [{ name: '山田 太郎', company: '架空商事', assigneeId: ASSIGNEE_ID }],
+      [{ userId: ASSIGNEE_ID, name: '担当', email: 'assignee@example.com', role: 'member' }]
+    );
 
     await notifyPreferencesReceived(db(), input);
 
@@ -235,8 +240,31 @@ describe('notifyPreferencesReceived', () => {
       ),
       { leadId: LEAD_ID, meetingRequest: true }
     );
-    // The intake members are not read when the lead has an assignee
-    expect(fake.calls).toHaveLength(1);
+    // Only once they are found to be a member who may hold leads (#974); the intake members are
+    // not read then
+    expect(fake.calls).toHaveLength(2);
+    expect(sqlOf(fake.calls[1].where).params).toEqual([ORG_ID, ASSIGNEE_ID, ...ASSIGNABLE_ROLES]);
+  });
+
+  it('tells the intake members instead of an assignee no longer a member who holds leads (#974)', async () => {
+    fake.results.push(
+      [{ name: '山田 太郎', company: '架空商事', assigneeId: ASSIGNEE_ID }],
+      [],
+      [{ settings: { leadIntakeUserIds: [INTAKE_ID] } }],
+      [{ userId: INTAKE_ID, name: '窓口', email: 'intake@example.com', role: 'member' }]
+    );
+
+    await notifyPreferencesReceived(db(), input);
+
+    expect(notices.notifyUsersInApp).toHaveBeenCalledTimes(1);
+    expect(notices.notifyUsersInApp).toHaveBeenCalledWith(
+      [INTAKE_ID],
+      ORG_ID,
+      'consultation_requested',
+      expect.any(String),
+      expect.any(String),
+      { leadId: LEAD_ID, meetingRequest: true }
+    );
   });
 
   it('tells the intake members of the organization when the lead has no assignee', async () => {
@@ -783,7 +811,10 @@ describe('acceptMeetingPreferences', () => {
     // Nothing is told until the task runs after the response
     expect(notices.notifyUsersInApp).not.toHaveBeenCalled();
 
-    fake.results.push([{ name: null, company: '架空商事', assigneeId: ASSIGNEE_ID }]);
+    fake.results.push(
+      [{ name: null, company: '架空商事', assigneeId: ASSIGNEE_ID }],
+      [{ userId: ASSIGNEE_ID, name: '担当', email: 'assignee@example.com', role: 'member' }]
+    );
     await tasks[0]();
     expect(notices.notifyUsersInApp).toHaveBeenCalledWith(
       [ASSIGNEE_ID],
