@@ -6,14 +6,14 @@ title: "初回の打ち合わせが確定したら、商談（見極め）を en
 status: active
 superseded_by: []
 issues: [854, 856, 276]
-paths: ["lib/features/deals/service.ts", "lib/features/deals/lead-sync.ts", "lib/features/meeting-requests/service.ts", "components/features/meeting-requests/meeting-request-card.tsx"]
+paths: ["lib/features/deals/service.ts", "lib/features/deals/lead-sync.ts", "lib/features/meeting-requests/service.ts", "components/features/meeting-requests/meeting-request-card.tsx", "lib/features/agency-handovers/service.ts", "lib/features/prospects/api/router.ts", "components/features/agency-handovers/handover-import-dialog.tsx", "components/features/prospects/prospect-form-dialog.tsx", "components/features/prospects/prospect-convert-dialog.tsx"]
 ---
 
 ### [Sales] 初回の打ち合わせが確定したら、商談（見極め）を ensureQualificationDeal の1か所で自動で作る。どの入口でも商談は1件（#854）
 - **日付**: 2026-10-28
 - **決定**: オーナーの判断「初回の打ち合わせが確定したら、商談（見極め）を自動で作る」（2026-10-28、決定 `2026-10-28-consolidate-input-places`）を実装する。作る・作らない条件、作る商談の値、副作用、入口の条件、権限、重複の防ぎ方は、architecture-specialist の読み取り専用の設計（2026-10-28）に沿って Claude が決めた
   - 作成は `lib/features/deals/service.ts` の `ensureQualificationDeal` の1か所にまとめ、3つの入口（打ち合わせの確定・顧客探しの商談日・代行のアポ）が、それぞれのトランザクションの中から呼ぶ
-  - #854 の PR の分け方：1つ目で作成の共通化と打ち合わせの確定（`confirmMeeting`）、2つ目で顧客探しの商談日と代行のアポ、3つ目で商談の無い商談中のリードの件数
+  - #854 の PR の分け方：1つ目で作成の共通化と打ち合わせの確定（`confirmMeeting`）、2つ目で顧客探しの商談日と代行のアポ、3つ目で商談の無い商談中のリードの件数。2つ目の PR で3つの入口がそろった（2026-11-08）
 - **理由**: 商談を手で作り忘れると、そのリードは予測とボードから漏れる（決定 `2026-10-28-consolidate-input-places` の評価）。入口ごとに作成の処理を書くと、条件と副作用がずれ、同じリードに商談が2件できる
 - **ルール**:
   - 作る・作らない（判定は `lib/features/deals/lead-sync.ts` の `qualificationDealSkip`）
@@ -26,12 +26,20 @@ paths: ["lib/features/deals/service.ts", "lib/features/deals/lead-sync.ts", "lib
   - 副作用：deal_history（`['created']`）、商談の監査ログ、リードへの反映（商談中・初回ヒアリング・商談済み・到達日）とリードの監査ログ（metadata に `{ dealId, source }`。手で作った商談では今までどおり `{ dealId }`）は、入口と同じトランザクションで書く。Webhook はコミットの後に `afterDealChanges` で1回だけ出す（複数の商談を作る入口は、結果を集めて1回）。引き継ぎのメール・通知は出ない（見極めで作るので `isFirstHandoff` が偽）。新しい通知・メールは足さない
   - 入口の条件：日付が新しく入ったとき、前と違う日付に変わったときだけ呼ぶ。同じ日付の保存し直し（同じ日の別の時刻・取り込み直し）では呼ばない（失注にした商談が、また作られないため）。過去の日付でも作る
     - 打ち合わせの確定（`lib/features/meeting-requests/service.ts` の `confirmMeeting`）：ロックする select で `confirmed_on` を読み、新しく確定したとき・別の日に確定し直したときだけ呼ぶ。応答には `dealCreated` だけを足す。画面（`meeting-request-card.tsx`）は、確定でリードの表示（次回日程）を、作ったときは商談と活動履歴も読み直し、トースト（`deals.autoCreated`。3つの入口で共有し、件数を受ける）で知らせる
+    - 代行のアポの取り込み（`lib/features/agency-handovers/service.ts` の `importHandovers`。最大500行・1トランザクション）：保存する行のリードを id の順に1文でロックし（`for no key update`）、ロックの後に前の `appointment_on` を読み、引き継ぎを upsert してから、アポ日が新しく入った・前と違う日に変わったリードだけを `ensureQualificationDeals` にまとめて渡す（source `agency_handover`、meetingOn はアポ日）。マッチングの後に消えたリードの行は「見つからなかった行」にする。応答には作った件数（`dealsCreated`）だけを足し、Webhook はコミットの後に `afterDealChanges` で1回にまとめる。画面（`handover-import-dialog.tsx`）は、作ったときにリード・商談・活動履歴を読み直し、件数入りのトーストを出す
+      - `ensureQualificationDeals` は `ensureQualificationDeal` の一括版（`ensureQualificationDeal` はこれを1件で呼ぶので、判定・値・副作用は1か所）：リードのロックと読み込みが1文（id の順）、商談の読み込み・担当の候補の読み込み・商談の insert・履歴の insert・商談の監査の insert・リードの監査の insert がそれぞれ1文で、リードの更新だけが1件ずつ。手で作る `createDeal` も同じ insert の処理（`insertDeals` を1件で）を通る
+      - 500行（500件の商談）の取り込みを手元の PostgreSQL で測ると、行ごとに `ensureQualificationDeal` を呼ぶ形は 5,505 文・約2.5秒、一括版は 1,013 文・約1.0秒（商談を作らない取り込みは 505 文・約0.4秒）。本番（Vercel hnd1 から Supabase）は1文ごとの往復が加わるので、行ごとの形では 1文 1〜3 ミリ秒として約8〜19秒（関数の上限は30秒、`vercel.json`）になり、その間500件のリードをロックし続けるため、一括版にした
+      - Webhook の1回の上限（`LEAD_WEBHOOK_EVENT_LIMIT`、500件のイベント）は、リードの CSV の取り込みと同じく今の仕組みのままにする：1件の商談でリードのイベントが2件（`lead.updated`・`lead.status_changed`）出るので、約250件を超える商談の分のイベントは `lib/features/webhooks/services/lead-events.ts` の `sendLeadEvents` で送らずに件数だけを報告する（`webhooks/lead-events-limit`。上限の中でも、時間内に送れずキューに回る配信が `WEBHOOK_BATCH_QUEUE_LIMIT` を超えた分は `webhooks/lead-events-queue-limit` で報告）。本番の Webhook は0件（決定 `2026-11-05-lead-webhook-personal-data`）。購読者が出てきて大きな取り込みが続くなら、上限の扱いを見直す
+    - 顧客探しの商談日（`lib/features/prospects/api/router.ts`）
+      - `update`：営業がリード化済みの行（`lead_id` あり）で商談日を新しく入れた・別の日に変えたときだけ、トランザクションの中で、リード（`for no key update`）→ 行（`for update`）の順にロックし、行の `lead_id` が読んだときと同じか確かめ（リードが消された・つなぎ直されたなら CONFLICT。もう一度保存すれば今の行で判定する）、ロックの下で日付をもう一度比べてから更新と `ensureQualificationDeal`（source `prospect`）を行う。リード化していない行・同じ日の保存し直し・日付を消したときは今までどおりトランザクションなしで保存する
+      - `convertToLead`：行に商談日があれば、リードにつないだ後に呼ぶ。ここだけ行 → リードの順にロックするが、つなぐまで行の `lead_id` はほかから見て空なので、リードの削除が行を待つことはなく、すれ違わない
+      - 応答には `dealCreated` だけを足す。画面（`prospect-form-dialog.tsx`・`prospect-convert-dialog.tsx`）は、作ったときにリード・商談・活動履歴を読み直し、トーストを出す（リード化では、作らなくてもリードを読み直す）
   - 重複の防ぎ方：リードの行ロック（FOR NO KEY UPDATE）。商談の書き込みはすべてリードの行で待ち合わせている（決定 `2026-10-24-deals-beside-leads`）。`ensureQualificationDeal` はリードをロックしてから、そのリードの商談を読む。READ COMMITTED なので、待った後の読み込みは先にコミットされた商談を見る
     - 入口はトランザクションの最初にリードをロックする（ロックの順：リード → 子の行。商談の変更・リードの削除と同じ順にして、デッドロックを避ける）。`confirmMeeting` は、リード → 希望日時の行（FOR UPDATE）の順に取る。複数のリードをロックする入口（代行の取り込み）は、id の順に取る
     - 手で作る商談（`createDeal`）は止めない。同じリードに開いた商談が並ぶことは決定が許している（自動の作成が先なら、手で作る商談は2件目になる）
-  - 権限：自動の作成は入口の権限（打ち合わせの確定はリードの更新）で行い、`canWriteDeals` は見ない。応答は作ったかどうか（取り込みは件数）だけで、商談の中身は返さない（商談を読めない役割、#276 の代行のアカウントを見越して）。この形は「リードを更新できる役割は、どれも商談を書ける」ことが前提で、`test/unit/features/deals.test.ts` がすべての役割で確かめる（役割を足すと型の検査かそのテストで落ちる。商談を読めないのにリードを変えられる役割を足すときは、入口で商談を作るかを先に決める）
+  - 権限：自動の作成は入口の権限（打ち合わせの確定・代行のアポの取り込みはリードの更新で、親組織の閲覧者を除く）で行い、`canWriteDeals` は見ない。顧客探しは、行を変えられる権限（営業＝設定の更新）とは別に、`ensureQualificationDeal` を呼ぶ前に `update Lead` と親組織の閲覧者でないことを確かめる（今は営業の役割はどれもリードを更新できるが、#276 の代行のアカウントを見越す。security-specialist の指摘）。持たない人の保存・リード化は、行だけを変えて商談を作らない（`dealCreated: false`。入口の操作を失敗させない）。応答は作ったかどうか（取り込みは件数）だけで、商談の中身は返さない（商談を読めない役割、#276 の代行のアカウントを見越して）。この形は「リードを更新できる役割は、どれも商談を書ける」ことが前提で、`test/unit/features/deals.test.ts` がすべての役割で確かめる（役割を足すと型の検査かそのテストで落ちる。商談を読めないのにリードを変えられる役割を足すときは、入口で商談を作るかを先に決める）
   - 打ち合わせが流れたら、営業が商談を失注（理由付き）にする。自動で消す・失注にすることはしない
-  - 依存の向き：meeting-requests → deals は循環にならない。agency-handovers・prospects → deals は、deals → lead-hearings → それら があるので循環になる。2つ目の PR で許可リストに1行足し、PR に理由を書く（循環をなくす案は別の tech-debt の Issue）
+  - 依存の向き：meeting-requests → deals は循環にならない。agency-handovers・prospects → deals は、deals → lead-hearings → それら があるので循環になる。2つ目の PR で許可リスト（`scripts/architecture/allowlist.txt`）に `features-in-cycles deals` の1行を足した。循環をなくす移動（ヒアリングの下書きを lead-hearings に移す）は #959 で行い、そのときにこの行を消す。ファイルの移動になるので、RLS の作業中（11/4〜11/14）は移さない
   - 既存のデータ（この変更の前に確定済みで、商談の無いリード）には自動では作らない。本番の件数を読み取りだけの SQL で出してから（オーナーの承認が要る）、少なければ営業が手で作り、多ければ `ensureQualificationDeal` を呼ぶ一度だけのスクリプト（既定は dry-run）を別の PR で出す
 - **却下案**:
   - advisory lock（`pg_advisory_xact_lock`）で重複を防ぐ：商談の削除・変更はリードの行で待ち合わせていて、advisory lock とは待ち合わせない。削除と自動の作成がすれ違い、読んだ商談の状態と書く時の状態が食い違う。リードの行ロックなら、今の商談の書き込みと同じ順で待ち合わせる
