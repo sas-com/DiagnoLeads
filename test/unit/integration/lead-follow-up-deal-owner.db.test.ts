@@ -1,7 +1,8 @@
 /**
  * Next actions added for a deal (#853) on a real PostgreSQL through the routers: whom one is given
- * to (the deal's owner when the lead's assignee is someone else or nobody; nobody when they are
- * the same person, when the deal has no owner, or when its owner may no longer hold leads), where
+ * to (the owner of an open deal when the lead's assignee is someone else or nobody; nobody when
+ * the deal is won or lost, when they are the same person, when the deal has no owner, or when its
+ * owner may no longer hold leads), where
  * it then shows (the "mine" of 今日 and the dashboard, the due notices), what its audit row keeps,
  * and what is refused: a deal of another lead, of another organization (also one pointing at the
  * lead) or no deal at all, all with one answer, and naming a deal without the right to read
@@ -24,6 +25,7 @@ import {
   organizations,
   users,
 } from '@/lib/db/schema';
+import { CLOSED_DEAL_STAGES } from '@/lib/features/deals/types/pipeline';
 import { runDueTaskNotifications } from '@/lib/features/lead-follow-up/due-notifications';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { appRouter } from '@/server/routers/_app';
@@ -110,11 +112,22 @@ describe.skipIf(!url)('next actions added for a deal (PostgreSQL)', () => {
     return lead.id;
   }
 
-  /** A deal as the database holds it: its owner may have left since it was set */
-  async function createDeal(organizationId: string, leadId: string, ownerUserId: string | null) {
+  /** A deal as the database holds it (open unless a stage is given): its owner may have left */
+  async function createDeal(
+    organizationId: string,
+    leadId: string,
+    ownerUserId: string | null,
+    stage?: string
+  ) {
     const [deal] = await pg
       .insert(deals)
-      .values({ organizationId, leadId, name: '現行調査', ownerUserId })
+      .values({
+        organizationId,
+        leadId,
+        name: '現行調査',
+        ownerUserId,
+        ...(stage ? { stage, closedOn: jstDate() } : {}),
+      })
       .returning({ id: deals.id });
     return deal.id;
   }
@@ -243,6 +256,21 @@ describe.skipIf(!url)('next actions added for a deal (PostgreSQL)', () => {
       after: { title: '見積もりを送る', dueOn: jstDate(), note: null },
     });
     expect((await createAuditOf(withoutDeal.id)).metadata).toEqual({ leadId });
+  });
+
+  it("leaves it to the lead's assignee when the deal is won or lost, and names the deal", async () => {
+    const leadId = await createLead(orgA, ids.leadOwner);
+    // Every closed stage of the deals, so that one added there is not given to anyone either
+    for (const stage of CLOSED_DEAL_STAGES) {
+      const dealId = await createDeal(orgA, leadId, ids.dealOwner, stage);
+      const task = await add(leadId, dealId);
+      expect(task).toMatchObject({ assigneeId: null, assignee: null });
+      expect((await taskRow(task.id)).assigneeId).toBeNull();
+      expect(await mineOf(leadOwner)).toContain(task.id);
+      expect(await mineOf(dealOwner)).not.toContain(task.id);
+      // The deal page it was added from is still named
+      expect((await createAuditOf(task.id)).metadata).toEqual({ leadId, dealId });
+    }
   });
 
   it("leaves it to the lead's assignee when the deal's owner may no longer hold leads", async () => {

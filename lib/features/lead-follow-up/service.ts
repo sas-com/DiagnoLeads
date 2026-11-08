@@ -7,10 +7,10 @@
  * 'lead_contact' / 'lead_task', metadata.leadId), like staff updates of leads (#101). A contact's
  * audit row keeps what was recorded but not the note's text (like the deals, #435).
  *
- * A next action added for a deal (its page, or the deals board and list, #853) goes to the deal's
- * owner when they are not the lead's assignee: it is given to them (assignee_id), so the one the
- * deal's warning is for sees it under "mine" and gets its due notices. Otherwise it follows the
- * lead's assignee, as every other task does (dealOwnerAssignee, decision
+ * A next action added for an open deal (its page, or the deals board and list, #853) goes to the
+ * deal's owner when they are not the lead's assignee: it is given to them (assignee_id), so the
+ * one the deal's warning is for sees it under "mine" and gets its due notices. Otherwise it
+ * follows the lead's assignee, as every other task does (dealOwnerAssignee, decision
  * 2026-11-08-deal-next-action-assignee). A later change of either owner does not move it.
  */
 
@@ -417,12 +417,20 @@ async function assigneeNamesOf(db: Executor, userId: string | null): Promise<Tas
 }
 
 /**
+ * Stages of a won or lost deal: CLOSED_DEAL_STAGES of lib/features/deals/types/pipeline.ts, not
+ * imported, as this feature does not read the deals feature (deals reads it: the two would make a
+ * cycle of features). lead-follow-up-deal-owner.db.test.ts checks every closed stage
+ */
+const CLOSED_DEAL_STAGES: readonly string[] = ['won', 'lost'];
+
+/**
  * Whom a next action added for a deal is given to (#853, decision
- * 2026-11-08-deal-next-action-assignee): the deal's owner when they are not the lead's assignee
- * (a lead without one counts as another), so that the one the deal's warning is for (the deals
- * board's "mine" and the 今日 screen go by the deal's owner) also sees it under "mine" and gets
- * its due notices. Null leaves it to the lead's assignee, else whoever adds it
+ * 2026-11-08-deal-next-action-assignee): the owner of an open deal when they are not the lead's
+ * assignee (a lead without one counts as another), so that the one the deal's warning is for (the
+ * deals board's "mine" and the 今日 screen go by the deal's owner) also sees it under "mine" and
+ * gets its due notices. Null leaves it to the lead's assignee, else whoever adds it
  * (responsibleUserSql):
+ * - the deal is won or lost: only an open deal is warned about (its page still adds for it)
  * - the owner is the lead's assignee, as by default (a deal's owner defaults to the lead's)
  * - the deal has no owner
  * - the owner may no longer hold leads: no longer a member, or a read-only role
@@ -430,14 +438,14 @@ async function assigneeNamesOf(db: Executor, userId: string | null): Promise<Tas
  *
  * The deal must be one of the lead's in the organization (notADealOfTheLead otherwise). Called
  * with the lead locked: a deal is changed or deleted with its lead locked first
- * (lib/features/deals/service.ts), so its owner stays as read until the task is in.
+ * (lib/features/deals/service.ts), so its stage and owner stay as read until the task is in.
  */
 async function dealOwnerAssignee(
   tx: Transaction,
   input: { organizationId: string; leadId: string; dealId: string; leadAssigneeId: string | null }
 ): Promise<ContactActor | null> {
   const [deal] = await tx
-    .select({ ownerUserId: deals.ownerUserId })
+    .select({ stage: deals.stage, ownerUserId: deals.ownerUserId })
     .from(deals)
     .where(
       and(
@@ -447,6 +455,7 @@ async function dealOwnerAssignee(
       )
     );
   if (!deal) throw notADealOfTheLead();
+  if (CLOSED_DEAL_STAGES.includes(deal.stage)) return null;
   if (!deal.ownerUserId || deal.ownerUserId === input.leadAssigneeId) return null;
   const member = await findAssignableMember(tx, input.organizationId, deal.ownerUserId);
   return member ? { id: member.userId, name: memberDisplayName(member) } : null;
@@ -504,9 +513,9 @@ export async function listTasks(
 }
 
 /**
- * Add a next action or takeaway. Added for a deal (dealId), it is given to the deal's owner when
- * they are not the lead's assignee (dealOwnerAssignee); its audit row names the deal
- * (metadata.dealId) and, when it was given, the assignee
+ * Add a next action or takeaway. Added for a deal (dealId), it is given to the owner of an open
+ * deal when they are not the lead's assignee (dealOwnerAssignee); its audit row names the deal
+ * (metadata.dealId, a closed one too) and, when it was given, the assignee
  */
 export async function createTask(
   db: Database,
