@@ -82,6 +82,7 @@ import {
   type ForecastCategory,
   type ForecastOverride,
   OPEN_DEAL_STAGES,
+  QUALIFICATION_DEALS_MAX,
   type QualificationDealSource,
   STAGE_PROBABILITY,
   forecastCategory,
@@ -778,9 +779,9 @@ type NewDealValues = Required<
  * Insert one deal for each of the locked leads, of one organization, with their first history
  * rows and their audit rows, and set the leads from their deals (createDeal, one lead;
  * ensureQualificationDeals, the leads of an import, #854): each kind of row in one insert. The
- * deals and the leads' moves in the order given. A deal takes some 20 parameters of its insert
- * and PostgreSQL takes 65,535 a statement, so a few thousand deals at most (an import has up to
- * 500 rows)
+ * deals and the leads' moves in the order given. A deal takes 21 parameters of its insert and
+ * PostgreSQL takes 65,535 a statement: ensureQualificationDeals passes at most
+ * QUALIFICATION_DEALS_MAX
  */
 async function insertDeals(
   tx: Transaction,
@@ -990,7 +991,10 @@ export async function ensureQualificationDeal(
  * deals read in one, the owners in one, the deals with their history and audit rows inserted in
  * one each, and the leads' audit rows in one; only the leads themselves are updated one by one.
  * The rules, values and side effects are those of ensureQualificationDeal, which runs through
- * here. One meeting per lead; the outcomes in the order of the meetings.
+ * here. One meeting per lead, at most QUALIFICATION_DEALS_MAX (500) a call: their deals are
+ * inserted in one statement, 21 parameters a deal, and PostgreSQL takes 65,535 parameters a
+ * statement. More, like a day that is not one, is a mistake of the caller and throws before
+ * anything is read or written. The outcomes in the order of the meetings.
  */
 export async function ensureQualificationDeals(
   tx: Transaction,
@@ -1003,6 +1007,11 @@ export async function ensureQualificationDeals(
   },
   now: Date = new Date()
 ): Promise<QualificationDealOutcome[]> {
+  if (input.meetings.length > QUALIFICATION_DEALS_MAX) {
+    throw new Error(
+      `ensureQualificationDeals: at most ${QUALIFICATION_DEALS_MAX} meetings a call (one insert of their deals)`
+    );
+  }
   if (input.meetings.some(({ meetingOn }) => !isoDateSchema.safeParse(meetingOn).success)) {
     throw new Error('ensureQualificationDeals: meetingOn must be a calendar day (YYYY-MM-DD)');
   }

@@ -6,8 +6,9 @@
  *   are mocked
  * - ensureQualificationDeal takes only a calendar day as the meeting day (#854): another value is
  *   a mistake of its caller and throws before anything is read or written. ensureQualificationDeals
- *   (an import's leads at once) refuses two meetings of one lead the same way, and locks the leads
- *   in one statement in the order of their ids, in the organization
+ *   (an import's leads at once) refuses two meetings of one lead, and more than one insert of
+ *   their deals takes (500), the same way, and locks the leads in one statement in the order of
+ *   their ids, in the organization
  * How real changes get there is covered by test/unit/integration/deals.db.test.ts and
  * deals-auto-qualification.db.test.ts.
  */
@@ -19,6 +20,7 @@ import {
   ensureQualificationDeal,
   ensureQualificationDeals,
 } from '@/lib/features/deals/service';
+import { QUALIFICATION_DEALS_MAX } from '@/lib/features/deals/types/pipeline';
 import { recordingDb, sqlOf } from '@/test/mocks/recording-db';
 import type { SQL } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -174,6 +176,26 @@ describe('ensureQualificationDeals: the leads of an import', () => {
     source: 'agency_handover' as const,
     meetings,
   });
+  /** Meetings of as many made-up leads */
+  function meetingsOf(count: number) {
+    return Array.from({ length: count }, (_, i) => ({
+      leadId: `770e8400-e29b-41d4-a716-${String(i).padStart(12, '0')}`,
+      meetingOn: '2026-11-10',
+    }));
+  }
+
+  it('takes as many meetings as an agency report has rows (500)', async () => {
+    // None of the leads is found
+    const fake = recordingDb();
+
+    const outcomes = await ensureQualificationDeals(
+      fake.db as unknown as Transaction,
+      input(meetingsOf(QUALIFICATION_DEALS_MAX))
+    );
+    expect(QUALIFICATION_DEALS_MAX).toBe(500);
+    expect(outcomes).toHaveLength(500);
+    expect(fake.calls).toHaveLength(1);
+  });
 
   it('reads nothing for no meetings', async () => {
     const fake = recordingDb();
@@ -200,6 +222,11 @@ describe('ensureQualificationDeals: the leads of an import', () => {
         { leadId: LEAD_ID, meetingOn: '2026-11-12' },
       ],
       'one meeting per lead',
+    ],
+    [
+      'more meetings than one insert of their deals takes',
+      meetingsOf(QUALIFICATION_DEALS_MAX + 1),
+      `at most ${QUALIFICATION_DEALS_MAX} meetings a call`,
     ],
   ])('refuses %s before it reads or writes anything', async (_label, meetings, message) => {
     const fake = recordingDb();

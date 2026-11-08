@@ -28,7 +28,8 @@ export interface HandoverImportResult {
 
 /**
  * Save the rows of a report. Each row finds its lead by email address, or else by company name
- * when exactly one lead of the organization has it; a later import replaces the lead's handover.
+ * when exactly one lead of the organization has it; a later import replaces the lead's handover,
+ * except an appointment day the later row leaves empty: the day saved before stays (#854).
  * Rows without a lead are reported, not saved (no lead is created from an agency report).
  *
  * A row whose appointment day is new for its lead, or another day than the one saved before,
@@ -88,8 +89,8 @@ export async function importHandovers(
   const results: HandoverImportResult[] = parsed.map((result, index) =>
     result.success ? { index, status: 'unmatched' } : { index, status: 'invalid' }
   );
-  // The last row wins when a report lists a lead twice
-  const toSave = new Map<string, { index: number; row: HandoverRow }>();
+  // The last row wins when a report lists a lead twice; the earlier rows are kept to report them
+  const toSave = new Map<string, { index: number; row: HandoverRow; replaced: number[] }>();
   for (const { index, row } of valid) {
     const candidates = row.email
       ? (byEmail.get(row.email) ?? [])
@@ -99,17 +100,27 @@ export async function importHandovers(
     } else if (candidates.length === 1) {
       const earlier = toSave.get(candidates[0]);
       if (earlier) results[earlier.index] = { index: earlier.index, status: 'replaced' };
-      toSave.set(candidates[0], { index, row });
+      const replaced = earlier ? [...earlier.replaced, earlier.index] : [];
+      toSave.set(candidates[0], { index, row, replaced });
       results[index] = { index, status: 'saved', leadId: candidates[0] };
     }
   }
+  /** None of a lead's rows was saved: none of them was replaced by a saved row either */
+  const unmatched = (rows: { index: number; replaced: number[] }) => {
+    for (const index of [...rows.replaced, rows.index]) {
+      results[index] = { index, status: 'unmatched' };
+    }
+  };
 
   // All or nothing: a row the database rejects leaves the report unsaved, not half of it
   const outcomes = await db.transaction(async (tx) => {
     const leadIds = [...toSave.keys()];
-    // The leads first, in the order of their ids, in one statement; then their handovers. Deals
-    // take the lead before their own rows, deleting a lead locks it before the cascade, and two
-    // imports of the same leads take them in the same order, so none of them can deadlock
+    // The leads first, in the order of their ids, in one statement; then their handovers. Two
+    // imports of the same leads take them in the same order, and the paths that lock one lead
+    // (deals, a confirmed meeting, a customer search row, a lead's update, a diagnosis answer)
+    // take it before its rows, so none of them deadlocks with an import. The bulk status change
+    // and the bulk deletion of leads lock theirs without an order, so they are not covered (#967
+    // takes them in the order of the ids)
     const locked =
       leadIds.length === 0
         ? []
@@ -140,31 +151,36 @@ export async function importHandovers(
     const appointedBefore = new Map(before.map((handover) => [handover.leadId, handover]));
 
     const meetings: { leadId: string; meetingOn: string }[] = [];
-    for (const [leadId, { index, row }] of toSave) {
+    for (const [leadId, rows] of toSave) {
       // Deleted since the report was matched
       if (!found.has(leadId)) {
-        results[index] = { index, status: 'unmatched' };
+        unmatched(rows);
         continue;
       }
-      const { email: _email, company: _company, ...values } = row;
+      const { email: _email, company: _company, ...values } = rows.row;
       const record = { ...values, importedBy: input.userId, updatedAt: now };
       const [saved] = await tx
         .insert(agencyHandovers)
         .values({ ...record, organizationId: input.organizationId, leadId, createdAt: now })
         .onConflictDoUpdate({
           target: agencyHandovers.leadId,
-          set: record,
+          set: {
+            ...record,
+            // An empty appointment day (a column not mapped, a day not read) keeps the one saved
+            // before: the next report of that day is then no new first meeting (#854)
+            appointmentOn: rows.row.appointmentOn ?? sql`${agencyHandovers.appointmentOn}`,
+          },
           // Never across organizations
           setWhere: eq(agencyHandovers.organizationId, input.organizationId),
         })
         .returning({ id: agencyHandovers.id });
       if (!saved) {
-        results[index] = { index, status: 'unmatched' };
+        unmatched(rows);
         continue;
       }
       // The first meeting is set: a new appointment day, or another day than before (#854). The
       // same day again keeps the deal as it is, even one lost meanwhile
-      const appointmentOn = row.appointmentOn;
+      const appointmentOn = rows.row.appointmentOn;
       if (appointmentOn && appointmentOn !== appointedBefore.get(leadId)?.appointmentOn) {
         meetings.push({ leadId, meetingOn: appointmentOn });
       }

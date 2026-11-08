@@ -5,14 +5,18 @@
  * and the handovers written; which rows set a lead's first meeting and create its deal in 見極め
  * (#854: a new appointment day or another day than before, not the same day again nor a row
  * without one), all of them in one call in the import's transaction, the webhooks after the
- * commit, and the deals counted in the answer. The database is test/mocks/recording-db.ts and the
+ * commit, and the deals counted in the answer; a row without an appointment day keeps the day
+ * saved before, and every row of a lead deleted meanwhile is reported. The database is
+ * test/mocks/recording-db.ts and the
  * deals feature is mocked; the same on a real PostgreSQL is covered by
  * test/unit/integration/agency-handovers.db.test.ts and deals-auto-qualification.db.test.ts.
  * Made-up values.
  */
 import { agencyHandovers, leads } from '@/lib/db/schema';
-import type { QualificationDealOutcome } from '@/lib/features/deals/service';
 import { importHandovers } from '@/lib/features/agency-handovers/service';
+import { HANDOVER_LIMITS } from '@/lib/features/agency-handovers/types/schemas';
+import type { QualificationDealOutcome } from '@/lib/features/deals/service';
+import { QUALIFICATION_DEALS_MAX } from '@/lib/features/deals/types/pipeline';
 import {
   type RecordingDb,
   type RecordingExecutor,
@@ -156,7 +160,48 @@ describe('importHandovers: the deals of the first meetings (#854)', () => {
     );
   });
 
-  it('reports a lead deleted since the report was matched, and neither saves nor creates anything for it', async () => {
+  it('keeps the appointment day saved before when a later row leaves it empty, and replaces it with a day', async () => {
+    fake.results.push(
+      [
+        { id: LEAD_A, email: 'a@example.co.jp' },
+        { id: LEAD_B, email: 'b@example.co.jp' },
+      ],
+      [{ id: LEAD_A }, { id: LEAD_B }],
+      [
+        { leadId: LEAD_A, appointmentOn: '2026-11-05' },
+        { leadId: LEAD_B, appointmentOn: '2026-11-05' },
+      ],
+      [{ id: 'handover-a' }],
+      [{ id: 'handover-b' }]
+    );
+
+    await importHandovers(
+      db(),
+      input([
+        // A column not mapped, or a day not read
+        { email: 'a@example.co.jp', machineModel: 'IBM Power 10' },
+        { email: 'b@example.co.jp', appointmentOn: '2026-11-19' },
+      ]),
+      NOW
+    );
+
+    const [keep, replace] = writes();
+    // A new handover takes the row as it is
+    expect(keep.values).toMatchObject({ leadId: LEAD_A, appointmentOn: null });
+    const keepSet = keep.onConflict?.config?.set as Record<string, unknown>;
+    expect(keepSet).toMatchObject({ machineModel: 'IBM Power 10' });
+    // The handover saved before keeps its day: the column set to itself
+    expect(sqlOf(keepSet.appointmentOn as SQL).sql).toBe('"agency_handovers"."appointment_on"');
+    expect((replace.onConflict?.config?.set as Record<string, unknown>).appointmentOn).toBe(
+      '2026-11-19'
+    );
+    // The same day is no new first meeting; another day is
+    expect(deals.ensureQualificationDeals.mock.calls[0][1].meetings).toEqual([
+      { leadId: LEAD_B, meetingOn: '2026-11-19' },
+    ]);
+  });
+
+  it('reports every row of a lead deleted since the report was matched, and neither saves nor creates anything for it', async () => {
     fake.results.push(
       [
         { id: LEAD_A, email: 'a@example.co.jp' },
@@ -172,14 +217,17 @@ describe('importHandovers: the deals of the first meetings (#854)', () => {
       db(),
       input([
         { email: 'a@example.co.jp', appointmentOn: '2026-11-05' },
+        { email: 'b@example.co.jp', appointmentOn: '2026-11-04' },
         { email: 'b@example.co.jp', appointmentOn: '2026-11-05' },
       ]),
       NOW
     );
 
+    // B's earlier row was replaced by none: no row of B was saved
     expect(outcome.results).toEqual([
       { index: 0, status: 'saved', leadId: LEAD_A },
       { index: 1, status: 'unmatched' },
+      { index: 2, status: 'unmatched' },
     ]);
     expect(writes()).toHaveLength(1);
     expect(sqlOf(fake.calls[2].where).params).toEqual([ORG_ID, LEAD_A]);
@@ -188,16 +236,25 @@ describe('importHandovers: the deals of the first meetings (#854)', () => {
     ]);
   });
 
-  it('reports a handover of another organization as unmatched, without a deal', async () => {
+  it('reports a handover of another organization as unmatched, every row of it, without a deal', async () => {
     fake.results.push([{ id: LEAD_A, email: 'a@example.co.jp' }], [{ id: LEAD_A }], [], []);
 
     const outcome = await importHandovers(
       db(),
-      input([{ email: 'a@example.co.jp', appointmentOn: '2026-11-05' }]),
+      input([
+        { email: 'a@example.co.jp', appointmentOn: '2026-11-04' },
+        { email: 'a@example.co.jp', appointmentOn: '2026-11-05' },
+      ]),
       NOW
     );
 
-    expect(outcome).toEqual({ results: [{ index: 0, status: 'unmatched' }], dealsCreated: 0 });
+    expect(outcome).toEqual({
+      results: [
+        { index: 0, status: 'unmatched' },
+        { index: 1, status: 'unmatched' },
+      ],
+      dealsCreated: 0,
+    });
     expect(deals.ensureQualificationDeals.mock.calls[0][1].meetings).toEqual([]);
     expect(deals.afterDealChanges).not.toHaveBeenCalled();
   });
@@ -232,5 +289,11 @@ describe('importHandovers: the deals of the first meetings (#854)', () => {
     });
     expect(fake.calls).toHaveLength(1);
     expect(deals.ensureQualificationDeals.mock.calls[0][1].meetings).toEqual([]);
+  });
+});
+
+describe('importHandovers: the size of a report', () => {
+  it('has no more rows than one call creates deals for', () => {
+    expect(HANDOVER_LIMITS.rows).toBeLessThanOrEqual(QUALIFICATION_DEALS_MAX);
   });
 });

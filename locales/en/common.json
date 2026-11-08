@@ -5956,7 +5956,7 @@
     },
     "import": {
       "title": "Import an agency's appointment report",
-      "description": "Read the agency's report (CSV or Excel) and attach each row to a lead by email address (or company name). New hearings are prefilled as \"Sales agency\". No lead is created. A row with an appointment date creates a deal in Qualification for its lead, except for leads such as those with an open deal or already won, and importing the same date again creates none.",
+      "description": "Read the agency's report (CSV or Excel) and attach each row to a lead by email address (or company name). New hearings are prefilled as \"Sales agency\". No lead is created. A row with an appointment date creates a deal in Qualification for its lead, except for leads such as those with an open deal or already won, and importing the same date again creates none. A row without an appointment date keeps the date saved before.",
       "chooseFile": "Choose a file",
       "template": "Download the format (CSV)",
       "rows": "{count} rows read",

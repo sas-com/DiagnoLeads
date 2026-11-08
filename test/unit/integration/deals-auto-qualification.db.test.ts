@@ -11,10 +11,11 @@
  *
  * The other two entry points the same way: the agency's appointment report (one deal per lead
  * with a new appointment day, counted in the answer, webhooks in one call, the same day again,
- * the leads locked before their handovers, 500 rows in one import) and the meeting day of a
- * customer search row (a lead's row saved by sales, a row turned into a lead, the lead locked
- * before the row). Every row belongs to this file's own organizations; names and addresses are
- * made up.
+ * a row without a day keeping the one saved, the leads locked before their handovers, the
+ * answers of ensureQualificationDeals in the order given, 500 rows in one import) and the
+ * meeting day of a customer search row (a lead's row saved by sales, a row turned into a lead,
+ * the lead locked before the row). Every row belongs to this file's own organizations; names
+ * and addresses are made up.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/diagnoleads_test \
@@ -39,6 +40,7 @@ import {
   QUALIFICATION_DEAL_NAME,
   type QualificationDealOutcome,
   ensureQualificationDeal,
+  ensureQualificationDeals,
 } from '@/lib/features/deals/service';
 import type { QualificationDealSource } from '@/lib/features/deals/types/pipeline';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
@@ -739,6 +741,37 @@ describe.skipIf(!url)('deals created by the first meeting (PostgreSQL)', () => {
       expect(handover.appointmentOn).toBe('2026-11-19');
     });
 
+    it('keeps the appointment day when a report leaves it empty, so the same day later creates none after the deal was lost', async () => {
+      const lead = await createLead(orgA);
+      const handoverOf = async () => {
+        const [handover] = await pg
+          .select()
+          .from(agencyHandovers)
+          .where(eq(agencyHandovers.leadId, lead.id));
+        return handover;
+      };
+      expect(await importReport(rep, [{ email: lead.email, appointmentOn: '2026-11-05' }])).toMatchObject({
+        dealsCreated: 1,
+      });
+      const [first] = await dealsOf(lead.id);
+      await rep.deals.update({ organizationId: orgA, dealId: first.id, stage: 'lost', lostReason: 'timing' });
+
+      // A report without the day (its column not mapped, or the day not read): the rest is replaced
+      expect(await importReport(rep, [{ email: lead.email, machineModel: 'IBM Power 10' }])).toMatchObject({
+        results: [{ status: 'saved' }],
+        dealsCreated: 0,
+      });
+      expect(await handoverOf()).toMatchObject({ appointmentOn: '2026-11-05', machineModel: 'IBM Power 10' });
+
+      // The same day again is no new first meeting: the lost deal stays the only one
+      expect(await importReport(rep, [{ email: lead.email, appointmentOn: '2026-11-05' }])).toMatchObject({
+        results: [{ status: 'saved' }],
+        dealsCreated: 0,
+      });
+      expect((await dealsOf(lead.id)).map((deal) => deal.stage)).toEqual(['lost']);
+      expect(await handoverOf()).toMatchObject({ appointmentOn: '2026-11-05', machineModel: null });
+    });
+
     it('creates none in another organization, nor for those who cannot import', async () => {
       const lead = await createLead(orgA);
 
@@ -752,6 +785,46 @@ describe.skipIf(!url)('deals created by the first meeting (PostgreSQL)', () => {
       ).rejects.toMatchObject({ code: 'FORBIDDEN' });
       expect(await dealsOf(lead.id)).toHaveLength(0);
       expect(await leadOf(lead.id)).toMatchObject({ status: 'new', dealPhase: null });
+    });
+
+    it('answers each lead of one call in the order given, created, skipped or not found', async () => {
+      const first = await createLead(orgA);
+      const second = await createLead(orgA);
+      // The lead locked last is given first, so the order of the answers is not that of the lock
+      const [low, high] = [first, second].sort((a, b) => a.id.localeCompare(b.id));
+      await admin.deals.create({ organizationId: orgA, leadId: low.id, name: '移行の相談', stage: 'discovery' });
+      const foreign = await createLead(orgB);
+
+      const outcomes = await pg.transaction((tx) =>
+        ensureQualificationDeals(tx, {
+          organizationId: orgA,
+          userId: repId,
+          source: 'agency_handover',
+          meetings: [
+            { leadId: high.id, meetingOn: '2026-11-05' },
+            { leadId: foreign.id, meetingOn: '2026-11-05' },
+            { leadId: low.id, meetingOn: '2026-11-05' },
+          ],
+        })
+      );
+
+      const [created] = await dealsOf(high.id);
+      expect(outcomes).toEqual([
+        {
+          created: true,
+          dealId: created.id,
+          lead: expect.objectContaining({ after: expect.objectContaining({ id: high.id }) }),
+        },
+        { created: false, skipped: 'lead_not_found' },
+        { created: false, skipped: 'open_deal' },
+      ]);
+      expect((await auditOf('deal', created.id))[0].metadata).toEqual({
+        leadId: high.id,
+        source: 'agency_handover',
+        meetingOn: '2026-11-05',
+      });
+      expect(await dealsOf(foreign.id)).toHaveLength(0);
+      expect((await dealsOf(low.id)).map((deal) => deal.stage)).toEqual(['discovery']);
     });
 
     it('imports 500 rows with a deal each in one transaction, within the time of a function', async () => {
@@ -971,7 +1044,7 @@ describe.skipIf(!url)('deals created by the first meeting (PostgreSQL)', () => {
       expect(await dealsOf(high.id)).toHaveLength(1);
     });
 
-    it('a lead deleted while a report is imported is not found, without a deadlock', async () => {
+    it('a lead deleted while a report is imported is not found, every row of it, without a deadlock', async () => {
       const lead = await createLead(orgA);
       // biome-ignore lint/style/noNonNullAssertion: guarded by skipIf
       const other = postgres(url!, { max: 1 });
@@ -980,7 +1053,11 @@ describe.skipIf(!url)('deals created by the first meeting (PostgreSQL)', () => {
         await other.begin(async (tx) => {
           // A deletion holds the lead, then deletes its handover through the cascade
           await tx`select id from leads where id = ${lead.id} for update`;
-          importing = importReport(rep, [{ email: lead.email, appointmentOn: '2026-11-05' }]);
+          // The lead twice: the earlier row is replaced by the later one, which is not saved
+          importing = importReport(rep, [
+            { email: lead.email, appointmentOn: '2026-11-04' },
+            { email: lead.email, appointmentOn: '2026-11-05' },
+          ]);
           importing.catch(() => {});
           await untilBlockedBy(await backendPid(tx));
           await tx`delete from leads where id = ${lead.id}`;
@@ -990,7 +1067,10 @@ describe.skipIf(!url)('deals created by the first meeting (PostgreSQL)', () => {
       }
 
       expect(await importing).toEqual({
-        results: [{ index: 0, status: 'unmatched' }],
+        results: [
+          { index: 0, status: 'unmatched' },
+          { index: 1, status: 'unmatched' },
+        ],
         dealsCreated: 0,
       });
       expect(await dealsOf(lead.id)).toHaveLength(0);
