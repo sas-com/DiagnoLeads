@@ -297,8 +297,9 @@ export const membersRouter = router({
     }
 
     // Delete membership, then give back the open next actions given to them (#968) in the same
-    // transaction: deleting first waits for a next action being added for a deal of theirs, so
-    // that it is given back too. Their leads and deals keep their assignee
+    // transaction: deleting first waits for a next action being added for a deal of theirs or
+    // reopened (holdAssignableMember), so that it is given back too. Their leads and deals keep
+    // their assignee
     await ctx.db.transaction(async (tx) => {
       const [removed] = await tx
         .delete(organizationMembers)

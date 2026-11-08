@@ -32,7 +32,10 @@ import {
 } from '@/lib/db/schema';
 import { CLOSED_DEAL_STAGES } from '@/lib/features/deals/types/pipeline';
 import { runDueTaskNotifications } from '@/lib/features/lead-follow-up/due-notifications';
-import { RELEASED_TASK_AUDIT_BATCH } from '@/lib/features/lead-follow-up/service';
+import {
+  RELEASED_TASK_AUDIT_BATCH,
+  releaseTaskAssignments,
+} from '@/lib/features/lead-follow-up/service';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { appRouter } from '@/server/routers/_app';
 import { and, eq, inArray, sql } from 'drizzle-orm';
@@ -694,15 +697,32 @@ describe.skipIf(!url)('next actions added for a deal (PostgreSQL)', () => {
       const task = await add(leadId, await createDeal(orgA, leadId, leaving.id));
       await rep.leadFollowUp.updateTask({ organizationId: orgA, id: task.id, done: true });
       const other = postgres(url as string, { max: 1 });
+      const removing = drizzle(other, { schema }) as unknown as Database;
       let reopening: Promise<Awaited<ReturnType<typeof reopen>> | Error> = Promise.resolve(
         new Error('not reopened')
       );
       try {
-        await other.begin(async (tx) => {
-          // Their removal holds the membership until it is done
-          await tx`delete from organization_members where organization_id = ${orgA} and user_id = ${leaving.id}`;
+        // Their removal as members.remove does it: the membership deleted first, held until the
+        // removal is done...
+        await removing.transaction(async (tx) => {
+          await tx
+            .delete(organizationMembers)
+            .where(
+              and(
+                eq(organizationMembers.organizationId, orgA),
+                eq(organizationMembers.userId, leaving.id)
+              )
+            );
           reopening = settled(reopen(task.id));
-          await untilBlockedBy(await backendPid(tx));
+          const [row] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+          await untilBlockedBy(row.pid);
+          // ...then their open ones given back: the one being reopened is still done, so this
+          // does not wait for it (a deadlock with the reopen otherwise)
+          await releaseTaskAssignments(tx, {
+            organizationId: orgA,
+            userId: leaving.id,
+            actorUserId: ids.rep,
+          });
         });
       } finally {
         await other.end();
