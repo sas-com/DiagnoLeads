@@ -7,7 +7,7 @@ export const leadsArticle: HelpArticle = {
   summary:
     '診断や取り込みで集まったリードを探し、絞り込み、まとめて扱います。行を押すと要点が横に開き、詳しく見るときはリードの詳細ページへ進みます。',
   routes: ['/leads'],
-  reviewedAt: '2026-10-28',
+  reviewedAt: '2026-11-08',
   related: ['workflow-lifecycle', 'glossary'],
   blocks: [
     { type: 'h2', id: 'find', text: 'リードを探す' },
@@ -45,6 +45,21 @@ export const leadsArticle: HelpArticle = {
       type: 'p',
       content:
         'かけている条件は一覧の上に並びます。×で1つずつ外すか、「すべて解除」でまとめて外します。条件は画面のアドレスに入るので、アドレスを共有すると同じ絞り込みを見てもらえます。',
+    },
+    {
+      type: 'p',
+      content: [
+        { type: 'ui', text: '商談の記録がないリード' },
+        {
+          type: 'text',
+          text: '：商談が1件もないのに、状態が「商談中」「成約」か、商談フェーズの付いた「新規」のリードの件数です（商談を見られる人に、1件以上あるときだけ出ます）。押して絞り込み、リードの詳細ページの',
+        },
+        { type: 'ui', text: '商談を作成' },
+        {
+          type: 'text',
+          text: 'で商談を作るか、状態を直します。成約や受注のフェーズのリードは、ステージ「受注」の商談を先に作ります。',
+        },
+      ],
     },
     { type: 'h2', id: 'add', text: 'リードを足す' },
     {

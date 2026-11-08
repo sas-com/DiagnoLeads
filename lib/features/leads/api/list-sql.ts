@@ -27,7 +27,7 @@ import {
 } from 'drizzle-orm';
 import { NEXT_MEETING_CLOSED_STATUSES, addDays, jstWeekStart } from '../list-query';
 import { AX_RESPONSES_KEY, BUILDER_RESPONSES_KEY } from '../mql-level';
-import { DEAL_PHASES, LEAD_STATUSES, jstDate } from '../types/pipeline';
+import { DEAL_PHASES, LEAD_STATUSES, type LeadStatus, jstDate } from '../types/pipeline';
 import { DEAL_RATINGS, type LeadSortKey, type ListLeadsInput } from '../types/schemas';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -107,6 +107,19 @@ const latestHearingAuthor = sql<
  * queries
  */
 export const leadHasDeals = sql<boolean>`exists (select 1 from deals d where d.lead_id = ${leads.id} and d.organization_id = ${leads.organizationId})`;
+
+/** Statuses that say a deal is open or won (#854). 失注 is closed and ナーチャリング nurtured */
+const DEAL_STATUSES = ['negotiating', 'won'] as const satisfies readonly LeadStatus[];
+
+/**
+ * A lead without a deal record that is in a deal by hand (#854): no deal at all, and the status
+ * 商談中 or 成約, or 新規 with a deal phase. A lead with deals takes its status and phase from them
+ * (#444), so these were set by hand and the deal never created: the forecast and the board miss
+ * it. The one condition of the list page's count (leads.statusCounts) and the list filter
+ * (missingDeal), so the two agree. The deals are matched on the lead's organization, as
+ * leadHasDeals does; the caller adds the organization condition of the leads
+ */
+export const leadMissingDeal = sql<boolean>`(not ${leadHasDeals} and (${inArray(leads.status, [...DEAL_STATUSES])} or (${eq(leads.status, 'new' satisfies LeadStatus)} and ${isNotNull(leads.dealPhase)})))`;
 
 /** The next meeting date the latest hearing records ('YYYY-MM-DD'; NULL when it records none) */
 const hearingNextMeetingDate = latestHearingValue(
@@ -294,6 +307,10 @@ export function leadListConditions(
 
   if (input.mql === true) conditions.push(isNotNull(leads.mqlQualifiedAt));
   else if (input.mql === false) conditions.push(isNull(leads.mqlQualifiedAt));
+
+  // In a deal without a deal record (#854); false filters nothing. The procedure lets only those
+  // who may read deals filter by it
+  if (input.missingDeal) conditions.push(leadMissingDeal);
 
   if (input.sqlDecision === 'undecided') conditions.push(isNull(leads.sqlDecision));
   else if (input.sqlDecision) conditions.push(eq(leads.sqlDecision, input.sqlDecision));

@@ -1273,6 +1273,10 @@
     "totalLeads": "総リード数",
     "activeLeads": "アクティブリード",
     "conversionRate": "コンバージョン率",
+    "missingDeal": {
+      "title": "商談の記録がないリード {count, number}件",
+      "description": "状態が「商談中」「成約」か、商談フェーズの付いた「新規」なのに、商談がありません。商談を作るか、状態を直してください。"
+    },
     "createLead": "新規リード追加",
     "createLeadTitle": "新しいリードを作成",
     "createLeadDescription": "新しいリードの情報を入力してください。",
@@ -4881,6 +4885,7 @@
       "notMql": "MQL ではない",
       "sqlNotQualified": "SQL外",
       "sqlUndecided": "SQL 未判定",
+      "missingDeal": "商談の記録がない",
       "remove": "条件「{label}」を外す",
       "clearAll": "すべて解除"
     },

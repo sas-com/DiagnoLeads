@@ -67,6 +67,8 @@ export interface LeadListFilters {
   dealRating?: DealRating[];
   /** MQL level of the diagnosis, any of them (#447); left out when none is chosen */
   mqlLevel?: MqlLevelFilter[];
+  /** In a deal without a deal record (#854); left out when not filtered */
+  missingDeal?: true;
   /** Name, email or company */
   search?: string;
 }
@@ -145,6 +147,7 @@ export const LEAD_LIST_PARAMS = {
   actTiming: 'act',
   dealRating: 'rating',
   mqlLevel: 'level',
+  missingDeal: 'nodeal',
   search: 'q',
   sortBy: 'sort',
   sortOrder: 'order',
@@ -196,6 +199,12 @@ export const leadListUrlSchema = z.object({
   [LEAD_LIST_PARAMS.actTiming]: z.enum(ACT_TIMING_FILTERS).optional().catch(undefined),
   [LEAD_LIST_PARAMS.dealRating]: csvOf(DEAL_RATINGS),
   [LEAD_LIST_PARAMS.mqlLevel]: csvOf(MQL_LEVEL_FILTERS),
+  // Only '1' filters (#854): there is no "leads with a deal record" filter
+  [LEAD_LIST_PARAMS.missingDeal]: z
+    .literal('1')
+    .optional()
+    .catch(undefined)
+    .transform((v) => (v === '1' ? (true as const) : undefined)),
   [LEAD_LIST_PARAMS.search]: z
     .string()
     .optional()
@@ -255,6 +264,7 @@ export function parseLeadListQuery(params: SearchParamsLike): LeadListQuery {
       actTiming: p[LEAD_LIST_PARAMS.actTiming],
       dealRating: p[LEAD_LIST_PARAMS.dealRating],
       mqlLevel: p[LEAD_LIST_PARAMS.mqlLevel],
+      missingDeal: p[LEAD_LIST_PARAMS.missingDeal],
       search: p[LEAD_LIST_PARAMS.search],
     }),
     sort: {
@@ -295,6 +305,7 @@ export function serializeLeadListQuery(query: LeadListQuery): URLSearchParams {
   if (f.actTiming) params.set(LEAD_LIST_PARAMS.actTiming, f.actTiming);
   list(LEAD_LIST_PARAMS.dealRating, f.dealRating ?? []);
   list(LEAD_LIST_PARAMS.mqlLevel, f.mqlLevel ?? []);
+  if (f.missingDeal) params.set(LEAD_LIST_PARAMS.missingDeal, '1');
   if (f.search) params.set(LEAD_LIST_PARAMS.search, f.search);
   if (query.sort.by !== DEFAULT_LEAD_SORT.by || query.sort.order !== DEFAULT_LEAD_SORT.order) {
     params.set(LEAD_LIST_PARAMS.sortBy, query.sort.by);
@@ -345,6 +356,7 @@ export function normalizeFilters(filters: Partial<LeadListFilters>): LeadListFil
   if (dealRating.length > 0) result.dealRating = dealRating;
   const mqlLevel = pick(MQL_LEVEL_FILTERS, filters.mqlLevel);
   if (mqlLevel.length > 0) result.mqlLevel = mqlLevel;
+  if (filters.missingDeal) result.missingDeal = true;
   if (search) result.search = search;
   return result;
 }
@@ -390,6 +402,7 @@ export function toLeadFilterInput(
   if (f.actTiming) input.actTiming = f.actTiming;
   if (f.dealRating && f.dealRating.length > 0) input.dealRating = f.dealRating;
   if (f.mqlLevel && f.mqlLevel.length > 0) input.mqlLevel = f.mqlLevel;
+  if (f.missingDeal) input.missingDeal = true;
   if (f.search) input.search = f.search;
   return input;
 }
@@ -547,6 +560,7 @@ export type LeadFilterChip =
   | { kind: 'actTiming'; value: ActTimingFilter }
   | { kind: 'dealRating'; value: DealRating }
   | { kind: 'mqlLevel'; value: MqlLevelFilter }
+  | { kind: 'missingDeal'; value: true }
   | { kind: 'search'; value: string };
 
 /** One chip per condition (one per selected value for the multi-selects) */
@@ -573,6 +587,7 @@ export function filterChips(filters: LeadListFilters): LeadFilterChip[] {
   if (filters.actTiming) chips.push({ kind: 'actTiming', value: filters.actTiming });
   for (const value of filters.dealRating ?? []) chips.push({ kind: 'dealRating', value });
   for (const value of filters.mqlLevel ?? []) chips.push({ kind: 'mqlLevel', value });
+  if (filters.missingDeal) chips.push({ kind: 'missingDeal', value: true });
   return chips;
 }
 
@@ -634,6 +649,9 @@ export function removeChip(filters: LeadListFilters, chip: LeadFilterChip): Lead
       break;
     case 'mqlLevel':
       next.mqlLevel = (filters.mqlLevel ?? []).filter((v) => v !== chip.value);
+      break;
+    case 'missingDeal':
+      next.missingDeal = undefined;
       break;
     case 'search':
       next.search = undefined;

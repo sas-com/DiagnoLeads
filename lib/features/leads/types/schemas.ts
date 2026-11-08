@@ -248,6 +248,9 @@ export const listLeadsSchema = z.object({
   mqlLevel: oneOrMany(mqlLevelFilterEnum),
   // "When to act" (#151): within the next months (or past), or set at all
   actTiming: actTimingFilterEnum.optional(),
+  // In a deal without a deal record (#854, leadMissingDeal): true lists only those leads, false
+  // filters nothing. Refused (FORBIDDEN) to those who may not read deals
+  missingDeal: z.boolean().optional(),
   // Tag filter
   tagIds: z.array(z.string().uuid()).max(LEAD_FILTER_MAX_VALUES).optional(),
 });

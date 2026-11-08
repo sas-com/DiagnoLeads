@@ -57,6 +57,8 @@ const server = vi.hoisted(() => ({
   failed: false,
   refetch: vi.fn(),
   access: { canCreate: true, canEdit: false, canDelete: false },
+  /** missingDeal of leads.statusCounts (#854): null for those who may not read deals */
+  missingDeal: undefined as number | null | undefined,
 }));
 
 const exporter = vi.hoisted(() => ({
@@ -135,6 +137,7 @@ vi.mock('@/hooks/use-leads', () => ({
     data: {
       total: 120,
       byStatus: { new: 40, nurturing: 30, negotiating: 20, won: 18, lost: 12 },
+      missingDeal: server.missingDeal,
     },
     refetch: vi.fn(),
   }),
@@ -198,6 +201,7 @@ beforeEach(() => {
   server.failed = false;
   server.refetch.mockClear();
   server.access = { canCreate: true, canEdit: false, canDelete: false };
+  server.missingDeal = undefined;
   exporter.mutateAsync.mockReset();
   for (const fn of Object.values(exporter.toast)) fn.mockClear();
 });
@@ -321,6 +325,34 @@ describe('LeadsPage list (server-driven)', () => {
     expect(within(cards[2]).getByText('15.0%')).toBeInTheDocument();
     // No average score card: the MQL level says how promising leads are (#447)
     expect(screen.queryByText('61')).not.toBeInTheDocument();
+  });
+
+  it('links the leads in a deal without a deal record to the filtered list (#854)', async () => {
+    server.missingDeal = 4;
+    const { unmount } = renderPage();
+    await table();
+    const link = screen.getByRole('link', { name: /商談の記録がないリード 4件/ });
+    expect(link).toHaveAttribute('href', '/ja/leads?nodeal=1');
+    unmount();
+
+    // Withheld from those who may not read deals
+    server.missingDeal = null;
+    renderPage();
+    await table();
+    expect(screen.queryByRole('link', { name: /商談の記録がないリード/ })).not.toBeInTheDocument();
+  });
+
+  it('filters the list by it from the URL, with a chip that removes it (#854)', async () => {
+    const user = userEvent.setup();
+    renderPage('nodeal=1');
+    await table();
+    expect(lastInput()).toMatchObject({ missingDeal: true, offset: 0 });
+    const chips = within(screen.getByRole('group', { name: t.chips.label }));
+    await user.click(
+      chips.getByRole('button', { name: `条件「${t.chips.missingDeal}」を外す` })
+    );
+    await waitFor(() => expect(lastInput()?.missingDeal).toBeUndefined());
+    expect(nav.get()).toBe('');
   });
 
   it('shows the source translated', async () => {

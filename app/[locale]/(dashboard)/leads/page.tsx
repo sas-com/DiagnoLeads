@@ -1,6 +1,7 @@
 'use client';
 
 import { LeadFilterToolbar } from '@/components/features/leads/list/lead-filter-toolbar';
+import { MissingDealNotice } from '@/components/features/leads/list/missing-deal-notice';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -377,6 +378,14 @@ function LeadsPageContent() {
             </div>
           </Card>
         </StatCardLink>
+
+        {/* Leads in a deal without a deal record (#854), under the cards: none when there are
+            none, or for those who may not read deals (null) */}
+        <MissingDealNotice
+          count={counts?.missingDeal}
+          href={listHref({ missingDeal: true })}
+          className="md:col-span-3"
+        />
       </div>
 
       {/* Lead Table */}

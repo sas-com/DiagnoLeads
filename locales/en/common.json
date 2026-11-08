@@ -1273,6 +1273,10 @@
     "totalLeads": "Total Leads",
     "activeLeads": "Active Leads",
     "conversionRate": "Conversion Rate",
+    "missingDeal": {
+      "title": "Leads without a deal record: {count, number}",
+      "description": "Their status is Negotiating or Won, or New with a deal phase, but they have no deal. Create the deal, or correct the status."
+    },
     "createLead": "Add New Lead",
     "createLeadTitle": "Create New Lead",
     "createLeadDescription": "Enter information for the new lead.",
@@ -4881,6 +4885,7 @@
       "notMql": "Not MQL",
       "sqlNotQualified": "Not SQL",
       "sqlUndecided": "SQL undecided",
+      "missingDeal": "No deal record",
       "remove": "Remove the filter \"{label}\"",
       "clearAll": "Clear all"
     },
