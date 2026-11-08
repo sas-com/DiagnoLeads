@@ -60,7 +60,19 @@ const PERSON = {
 };
 
 describe.skipIf(!url)('webhook payload redaction (PostgreSQL)', () => {
-  const client = url ? postgres(url, { max: 4 }) : null;
+  /**
+   * This file's copies of webhooks and webhook_deliveries, first on the search path: the retry
+   * run looks at every pending delivery, so it must not meet those of the files running alongside
+   * (nor they these). The organizations and leads stay shared. As in webhook-retries.db.test.ts
+   */
+  const ownSchema = `webhook_redaction_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const client = url
+    ? postgres(url, {
+        max: 4,
+        onnotice: () => {},
+        connection: { search_path: `${ownSchema}, public` },
+      })
+    : null;
   // biome-ignore lint/style/noNonNullAssertion: guarded by skipIf
   const pg = (client ? drizzle(client, { schema }) : null)!;
   const unique = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -130,6 +142,17 @@ describe.skipIf(!url)('webhook payload redaction (PostgreSQL)', () => {
     (row.payload as { data: Record<string, unknown> }).data;
 
   beforeAll(async () => {
+    // biome-ignore lint/style/noNonNullAssertion: guarded by skipIf
+    const sql = client!;
+    await sql.unsafe(`create schema ${ownSchema}`);
+    await sql.unsafe(`create table ${ownSchema}.webhooks (like public.webhooks including all)`);
+    await sql.unsafe(
+      `create table ${ownSchema}.webhook_deliveries (like public.webhook_deliveries including all)`
+    );
+    await sql.unsafe(
+      `alter table ${ownSchema}.webhook_deliveries add foreign key (webhook_id)
+        references ${ownSchema}.webhooks (id) on delete cascade`
+    );
     orgA = await createOrganization('消去テストA株式会社');
     orgB = await createOrganization('消去テストB株式会社');
     webhookA = await createWebhook(orgA);
@@ -159,6 +182,7 @@ describe.skipIf(!url)('webhook payload redaction (PostgreSQL)', () => {
 
   afterAll(async () => {
     vi.unstubAllGlobals();
+    await client?.unsafe(`drop schema if exists ${ownSchema} cascade`);
     await pg.delete(organizations).where(inArray(organizations.id, organizationIds));
     await pg.delete(users).where(eq(users.id, userId));
     await client?.end();
@@ -226,6 +250,24 @@ describe.skipIf(!url)('webhook payload redaction (PostgreSQL)', () => {
     const byEvent = Object.fromEntries(rows.map((row) => [row.eventType, row]));
     expect(byEvent['diagnostic.submitted']).toMatchObject({ status: 'success', statusCode: 200, response: null });
     expect(byEvent['organization.member_added'].response).toContain('m@example.com');
+  });
+
+  it('keeps the answer to a test send, whose data is a fixed sample (#936)', async () => {
+    const [row] = await pg
+      .insert(webhookDeliveries)
+      .values({
+        webhookId: webhookA,
+        eventType: 'lead.created',
+        payload: { id: unique(), event: 'lead.created', test: true, data: { test: true } },
+        status: 'success',
+        attempts: 1,
+        response: 'sample answer',
+      })
+      .returning();
+
+    await redactFinishedDeliveries(pg);
+
+    expect((await load(row.id)).response).toBe('sample answer');
   });
 
   it('sends no change of a lead deleted meanwhile, and fails a retry made for one (#936)', async () => {

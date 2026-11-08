@@ -108,7 +108,8 @@ function toWebhookEvent(event: LeadEvent): {
 /**
  * The events whose lead still exists (#936): a change sent after the response can come after the
  * lead was deleted, and must not leave its personal data in a new delivery. lead.deleted is kept.
- * A lead deleted between this read and the delivery is failed by the retry run instead.
+ * A lead deleted between this read and the delivery: a delivery sent right away still goes to the
+ * organization's endpoint (and is redacted once finished); a queued one is failed by the retry run.
  */
 async function withExistingLeads(
   organizationId: string,

@@ -991,7 +991,8 @@ export async function redactFinishedDeliveries(database: Database = db): Promise
         inArray(webhookDeliveries.status, ['success', 'failed']),
         or(
           holdsPersonalDataSql(),
-          sql`(${webhookDeliveries.eventType} in (${personalDataEventsSql()}) and ${webhookDeliveries.response} is not null)`
+          // A test send's answer is kept: its data is a fixed sample, not a lead
+          sql`(${webhookDeliveries.eventType} in (${personalDataEventsSql()}) and ${webhookDeliveries.response} is not null and not ${isTestDeliverySql})`
         )
       )
     )
