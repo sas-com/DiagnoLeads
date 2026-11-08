@@ -19,6 +19,7 @@ import {
   WEBHOOK_DELIVERY_LEASE_MS,
   WEBHOOK_DELIVERY_TIMEOUT_MS,
   WEBHOOK_RETRY_MAX_AGE_MS,
+  cancelPendingDeliveries,
   processWebhookRetries,
   triggerWebhooks,
 } from '@/lib/features/webhooks/services/webhook-service';
@@ -232,6 +233,20 @@ describe.skipIf(!url)('webhook retries (PostgreSQL)', () => {
     expect(failed).toMatchObject({ status: 'pending', attempts: 1, statusCode: 500 });
     const [hook] = await pg.select().from(webhooks).where(eq(webhooks.id, second));
     expect(hook.failureCount).toBe(1);
+  });
+
+  it('keeps a delivery failed when the URL changed while its retry was being sent (#927)', async () => {
+    const id = await createDelivery({ attempts: 1 });
+    fetchMock.mockImplementation(async () => {
+      // The webhook moves to another URL while the old one is being tried
+      await cancelPendingDeliveries(pg, webhookId);
+      return answer(500);
+    });
+
+    await processWebhookRetries({ database: pg });
+
+    expect(await load(id)).toMatchObject({ status: 'failed', nextRetryAt: null });
+    expect((await load(id)).error).toMatch(/^url_changed:/);
   });
 
   it('sends only due deliveries below the attempt limit', async () => {

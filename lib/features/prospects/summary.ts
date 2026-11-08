@@ -37,8 +37,11 @@ export interface SummaryProspect {
   meetingOn: string | null;
   /** The lead the row became. Required, so that a query that does not read it fails to compile */
   leadId: string | null;
-  /** A sales agency's call (#161) */
-  callResult?: string | null;
+  /**
+   * A sales agency's call (#161). Required like leadId: isOverdue reads it, and a row without it
+   * would mark a turned-down call overdue
+   */
+  callResult: string | null;
   refusalReason?: string | null;
 }
 
@@ -123,14 +126,17 @@ const ratio = (part: number, whole: number) => (whole === 0 ? 0 : part / whole);
 const isOneOf = (values: readonly string[], value: string | null) =>
   value !== null && values.includes(value);
 
+/** What says whether a row is still followed: the summary's rows and the list's rows have it */
+type FollowedFields = Pick<SummaryProspect, 'leadId' | 'nextStep' | 'stage' | 'callResult'>;
+
 /** A row that became a lead (#852) */
-const isConverted = (row: SummaryProspect) => row.leadId !== null;
+const isConverted = (row: Pick<SummaryProspect, 'leadId'>) => row.leadId !== null;
 
 /**
  * A row still followed: not a lead yet, not passed, not dropped or contracted. The same rows as
  * notClosed in api/router.ts, which filters the list in SQL; change both together
  */
-const isFollowed = (row: SummaryProspect) =>
+const isFollowed = (row: FollowedFields) =>
   !isConverted(row) &&
   !isOneOf(CLOSED_PROSPECT_NEXT_STEPS, row.nextStep) &&
   !isOneOf(CLOSED_PROSPECT_STAGES, row.stage);
@@ -139,7 +145,17 @@ const isFollowed = (row: SummaryProspect) =>
  * A followed row whose next action can be overdue: calls turned down are followed in the
  * re-approach list instead (#161). The same rows as openRow in api/router.ts
  */
-const isOpenRow = (row: SummaryProspect) => isFollowed(row) && row.callResult !== 'refused';
+const isOpenRow = (row: FollowedFields) => isFollowed(row) && row.callResult !== 'refused';
+
+/**
+ * A next action overdue, as the list's "overdue" filter shows it: counted by the summary and
+ * marked on the list's rows, so that both agree with the filter (#852, #892)
+ * @param today ISO date in Japan time
+ */
+export const isOverdue = (
+  row: FollowedFields & Pick<SummaryProspect, 'nextActionOn'>,
+  today: string
+) => isOpenRow(row) && row.nextActionOn !== null && row.nextActionOn < today;
 
 const emptyStages = () =>
   Object.fromEntries(PROSPECT_STAGES.map((stage) => [stage, 0])) as Record<ProspectStage, number>;
@@ -271,9 +287,7 @@ export function summarizeProspects(
           row.nextActionNote === null
       ),
       // As the "overdue" filter: calls turned down are followed in the re-approach list (#161)
-      overdue: count(
-        (row) => isOpenRow(row) && row.nextActionOn !== null && row.nextActionOn < today
-      ),
+      overdue: count((row) => isOverdue(row, today)),
       // As the "handed over" filter (handed over, not a lead yet), for the rows without a stage
       handOverWithoutStage: count(
         (row) => row.nextStep === 'hand_over' && !isConverted(row) && row.stage === null

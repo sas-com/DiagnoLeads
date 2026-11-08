@@ -34,6 +34,7 @@ const row = (values: Partial<SummaryProspect>): SummaryProspect => ({
   stage: null,
   meetingOn: null,
   leadId: null,
+  callResult: null,
   ...values,
 });
 

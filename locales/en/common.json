@@ -1980,6 +1980,15 @@
       "headerNameDuplicate": "The same header name is given more than once (case does not matter).",
       "headerValueInvalid": "Values may contain only ASCII letters, digits, symbols and spaces (no other characters or line breaks), up to 2,000 characters.",
       "conflict": "This change overlapped with another one. Reload the page and save again.",
+      "deliveryNote": "When many events are sent at once, some can arrive up to about 24 hours later. The order is not guaranteed (for lead events, keep the one with the newest updatedAt).",
+      "personalData": {
+        "title": "Lead personal data is sent to this URL",
+        "description": "The events you selected (lead created, updated, status changed or scored, and diagnostic submitted) send the following personal data of the lead to this URL.",
+        "fields": "Email address, name, company and phone number",
+        "otherFields": "The lead's ID, status, score, source, creation time and the diagnostic result (score, interest level, and the challenge or platform judged from the answers) are sent too. Free-text answers and internal notes are not sent.",
+        "confirm": "I confirm that lead personal data is sent to this URL",
+        "required": "Confirm before saving when you select an event that sends lead personal data, or change the URL it is sent to. Changing the URL cancels the retries waiting for the old URL."
+      },
       "destinationNotAllowed": "Webhooks cannot be sent to this URL. Enter a public https URL without a port number. Internal addresses, localhost and URLs with a user name or password are not allowed.",
       "destinationBlocked": "Destination not allowed",
       "destinationBlockedDescription": "Nothing is sent to this URL ({reason}). Change the URL.",
@@ -3595,7 +3604,7 @@
         },
         "isms": {
           "title": "ISMS (ISO/IEC 27001)",
-          "body": "We hold information security management system certification (certificate number IS609954). Its scope is business system development at the head office, training services and HR consulting."
+          "body": "Design and development of AX migration carried out at our head office are within the scope of our ISMS certification (certificate number IS609954): business system development at the head office."
         },
         "upkeep": {
           "title": "After the move",

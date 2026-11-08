@@ -118,6 +118,7 @@ export const prospectsRouter = router({
 
     const filters = [eq(prospects.organizationId, ctx.organization.id)];
     if (input.filter === 'overdue') {
+      // The rows isOverdue (../summary.ts) counts in the summary and marks on the list (#892)
       filters.push(lt(prospects.nextActionOn, today));
       const open = openRow();
       if (open) filters.push(open);

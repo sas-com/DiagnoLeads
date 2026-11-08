@@ -22,28 +22,17 @@ import { leads } from '@/lib/db/schema';
 import { type RateLimitRule, consumeRateLimit } from '@/lib/features/diagnostics/rate-limit';
 import { reportServerError } from '@/lib/ops/alert';
 import { and, eq } from 'drizzle-orm';
+import { LEAD_WEBHOOK_FIELDS as SHARED_LEAD_WEBHOOK_FIELDS } from '../types/personal-data';
 import type { WebhookEventType } from '../types/schemas';
-import { triggerWebhookBatch } from './webhook-service';
+import { forgetLeadsInDeliveries, triggerWebhookBatch } from './webhook-service';
+
+/** Deleted leads lose their personal data in the deliveries (#918); for the leads feature */
+export { forgetLeadsInDeliveries };
 
 type LeadRow = typeof leads.$inferSelect;
 
-/** The lead columns a webhook receives; everything else stays inside DiagnoLeads */
-export const LEAD_WEBHOOK_FIELDS = [
-  'id',
-  'email',
-  'name',
-  'company',
-  'phone',
-  'status',
-  'score',
-  'source',
-  'inflowSource',
-  'conversionPoint',
-  'dealPhase',
-  'targetSystem',
-  'createdAt',
-  'updatedAt',
-] as const satisfies readonly (keyof LeadRow)[];
+/** The lead columns a webhook receives; everything else stays inside DiagnoLeads (#917 shows them) */
+export const LEAD_WEBHOOK_FIELDS = SHARED_LEAD_WEBHOOK_FIELDS satisfies readonly (keyof LeadRow)[];
 
 export type LeadWebhookSource = Pick<LeadRow, (typeof LEAD_WEBHOOK_FIELDS)[number]>;
 

@@ -96,7 +96,7 @@
     "nuqs": "^2.8.1",
     "openai": "^4.77.3",
     "payload": "^3.91.0",
-    "postgres": "^3.4.0",
+    "postgres": "^3.4.9",
     "qrcode": "^1.5.4",
     "react": "^19.2.0",
     "react-apexcharts": "^1.8.0",

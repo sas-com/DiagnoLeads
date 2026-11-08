@@ -163,20 +163,28 @@ describe.skipIf(!url)('site analytics (PostgreSQL)', () => {
   });
 
   it('lets members read their own organization only, and not parent organization viewers', async () => {
-    const member = await callerFor(orgA, 'member');
-    const result = await member.siteAnalytics.overview({ organizationId: orgA, days: 7 });
-    expect(result.totals.visitors).toBeGreaterThan(0);
-    expect(JSON.stringify(result)).not.toContain('hash-');
+    // The router takes no "now": fix Date to NOW so the 7 days hold the views above (#924). Only
+    // Date is faked, so the database client's timers keep running.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
+    try {
+      const member = await callerFor(orgA, 'member');
+      const result = await member.siteAnalytics.overview({ organizationId: orgA, days: 7 });
+      expect(result.totals.visitors).toBeGreaterThan(0);
+      expect(JSON.stringify(result)).not.toContain('hash-');
 
-    const viewer = await callerFor(orgA, 'parent_viewer');
-    await expect(viewer.siteAnalytics.overview({ organizationId: orgA, days: 7 })).rejects.toMatchObject({
-      code: 'FORBIDDEN',
-    });
+      const viewer = await callerFor(orgA, 'parent_viewer');
+      await expect(viewer.siteAnalytics.overview({ organizationId: orgA, days: 7 })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
 
-    const memberB = await callerFor(orgB, 'admin');
-    await expect(memberB.siteAnalytics.overview({ organizationId: orgA, days: 7 })).rejects.toMatchObject({
-      code: 'FORBIDDEN',
-    });
+      const memberB = await callerFor(orgB, 'admin');
+      await expect(memberB.siteAnalytics.overview({ organizationId: orgA, days: 7 })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('reports nothing recorded for an organization without views', async () => {

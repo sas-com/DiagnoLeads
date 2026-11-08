@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: 💬 Discussions
-    url: https://github.com/yusuke-kurosawa/diagnoleads-v2/discussions
+    url: https://github.com/sas-com/DiagnoLeads/discussions
     about: Ask questions and share ideas
   - name: 📖 Documentation
-    url: https://github.com/yusuke-kurosawa/diagnoleads-v2/tree/main/docs
+    url: https://github.com/sas-com/DiagnoLeads/tree/main/docs
     about: Check the documentation first
