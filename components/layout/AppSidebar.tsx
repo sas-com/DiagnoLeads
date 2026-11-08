@@ -118,6 +118,11 @@ const AppSidebar: React.FC = () => {
             nameKey: 'agencyLinks',
             path: `/${locale}/settings/agency-links`,
           },
+          {
+            name: t('fieldGlossary'),
+            nameKey: 'fieldGlossary',
+            path: `/${locale}/settings/field-glossary`,
+          },
         ],
       },
     ],
