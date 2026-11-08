@@ -43,6 +43,10 @@ jobs:
       - name: Run TypeScript type check
         run: bun run typecheck
 
+      # ja and en have the same keys in each locales/ file (#472)
+      - name: Check translations
+        run: bun run i18n:check
+
       - name: Check import boundaries (docs/ARCHITECTURE.md)
         run: bun run arch:check
 

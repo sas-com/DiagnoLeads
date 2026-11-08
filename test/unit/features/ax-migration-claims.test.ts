@@ -3,6 +3,7 @@
  * page is advertising. Restore a claim only together with the figures that back it.
  */
 import { COLUMNS, columnStrings } from '@/lib/features/ax-site/columns';
+import { webChecklistStrings } from '@/lib/features/ax-site/web-checklist';
 import { axMigrationDefinition } from '@/lib/features/diagnostics/ax-migration/definition';
 import en from '@/locales/en/common.json';
 import ja from '@/locales/ja/common.json';
@@ -16,7 +17,7 @@ function strings(value: unknown): string[] {
 
 describe('AX migration copy', () => {
   it.each([
-    ['ja', [...strings(ja.axSite), ...strings(ja.axAccess), ...strings(ja.axColumn), ...strings(ja.axDiagnosis), ...COLUMNS.flatMap(columnStrings)], /大幅に(短縮|圧縮)|素早く正確|リスクを解消|高成長を実現|事業変革を実現|短納期|安全かつ短期|短期に実現|即応|すぐ対応|安全な移行|混乱を回避|担保/],
+    ['ja', [...strings(ja.axSite), ...strings(ja.axAccess), ...strings(ja.axColumn), ...strings(ja.axDiagnosis), ...COLUMNS.flatMap(columnStrings), ...webChecklistStrings()],/大幅に(短縮|圧縮)|素早く正確|リスクを解消|高成長を実現|事業変革を実現|短納期|安全かつ短期|短期に実現|即応|すぐ対応|安全な移行|混乱を回避|担保/],
     ['en', [...strings(en.axSite), ...strings(en.axAccess), ...strings(en.axColumn), ...strings(en.axDiagnosis)], /greatly (shortens|reduces)|quickly and accurately|remove the (continuity )?risk|eliminat|prevents? misreading|avoids? confusion|achieve high growth|High growth with|Short delivery/i],
   ])('makes no unbacked claims in %s', (_, texts, claims) => {
     expect(texts.filter((text) => claims.test(text))).toEqual([]);
