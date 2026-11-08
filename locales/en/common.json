@@ -5792,7 +5792,7 @@
     },
     "convert": {
       "title": "Make a lead",
-      "description": "Move a customer you now have a contact for to the leads. The company and the sales person come from this row.",
+      "description": "Move a customer you now have a contact for to the leads. The company and the sales person come from this row. A row with a meeting date also creates a deal in Qualification for the lead, except for leads such as those with an open deal or already won.",
       "email": "Email",
       "name": "Name (optional)",
       "phone": "Phone (optional)",
@@ -5886,7 +5886,7 @@
     },
     "handedOverDays": "Handed over {days} days ago",
     "leadBadge": "Lead: {status}",
-    "leadLocked": "Rows that became leads are followed on the lead page",
+    "leadLocked": "Rows that became leads are followed on the lead page. A meeting date entered here creates a deal in Qualification for the lead, except for leads such as those with an open deal or already won",
     "leadCard": {
       "title": "Customer search records",
       "description": "What employees heard when they talked to this customer.",
@@ -5972,7 +5972,7 @@
     },
     "import": {
       "title": "Import an agency's appointment report",
-      "description": "Read the agency's report (CSV or Excel) and attach each row to a lead by email address (or company name). New hearings are prefilled as \"Sales agency\". No lead is created.",
+      "description": "Read the agency's report (CSV or Excel) and attach each row to a lead by email address (or company name). New hearings are prefilled as \"Sales agency\". No lead is created. A row with an appointment date creates a deal in Qualification for its lead, except for leads such as those with an open deal or already won, and importing the same date again creates none. A row without an appointment date keeps the date saved before.",
       "chooseFile": "Choose a file",
       "template": "Download the format (CSV)",
       "rows": "{count} rows read",
