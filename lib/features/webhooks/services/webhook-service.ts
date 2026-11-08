@@ -924,9 +924,29 @@ export async function processWebhookRetries({
       .from(webhooks)
       .where(inArray(webhooks.id, webhookIds));
     const webhookById = new Map(webhookRows.map((w) => [w.id, w]));
+    // Read after the webhooks (#928): a URL change cancels the webhook's pending deliveries in the
+    // same transaction, so a delivery claimed before the change and read with the new URL is seen
+    // as cancelled here and not sent there. One read with the old URL still goes to the old URL.
+    const stillPending = new Set(
+      (
+        await database
+          .select({ id: webhookDeliveries.id })
+          .from(webhookDeliveries)
+          .where(
+            and(
+              inArray(
+                webhookDeliveries.id,
+                claimed.map((d) => d.id)
+              ),
+              eq(webhookDeliveries.status, 'pending')
+            )
+          )
+      ).map((row) => row.id)
+    );
+    const sendable = claimed.filter((delivery) => stillPending.has(delivery.id));
 
     const results = await Promise.allSettled(
-      claimed.map(async (delivery) => {
+      sendable.map(async (delivery) => {
         const webhook = webhookById.get(delivery.webhookId);
         if (!webhook) return false; // deleted meanwhile (its deliveries go with it)
         const payload = delivery.payload as unknown as WebhookPayload;

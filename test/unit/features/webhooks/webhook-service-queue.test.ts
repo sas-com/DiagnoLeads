@@ -558,6 +558,10 @@ describe('processWebhookRetries', () => {
         claimed = pending.shift() ?? [];
         return claimed.map(({ id }) => ({ id }));
       }
+      // The claimed deliveries are still pending when read after the webhooks (#928)
+      if (call.op === 'select' && call.table === 'webhook_deliveries') {
+        return claimed.map(({ id }) => ({ id }));
+      }
       if (call.op === 'select' && call.table === 'webhooks') return hooks;
       return [];
     };
@@ -724,6 +728,27 @@ describe('processWebhookRetries', () => {
     });
     // Two rounds with deliveries and a third that found none
     expect(calls('select', 'webhook_deliveries').filter((c) => c.lock)).toHaveLength(3);
+  });
+
+  it('sends only the claimed deliveries still pending once the webhooks are read (#928)', async () => {
+    withRetryState({
+      rounds: [[delivery('d1', 'wh-1', 2), delivery('d2', 'wh-1', 2)]],
+      hooks: [webhook()],
+    });
+    // d2 was cancelled by a URL change between the claim and the read of the webhooks
+    const base = dbState.answer;
+    dbState.answer = (call) => {
+      if (call.op === 'select' && call.table === 'webhook_deliveries' && !call.lock) {
+        return [{ id: 'd1' }];
+      }
+      return base(call);
+    };
+
+    expect(await processWebhookRetries({ database })).toMatchObject({
+      processed: 1,
+      succeeded: 1,
+    });
+    expect(mocks.sendRequest).toHaveBeenCalledTimes(1);
   });
 
   it('starts no round that could not finish within the time budget', async () => {
