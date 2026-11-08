@@ -99,12 +99,64 @@ describe('warnings that do not stop the run', () => {
   });
 
   it('names each migration that needs a look, including the allowed skips', () => {
+    // 0014 is in the journal, as in production: a row the journal lacks gets a note of its own
+    const earlier = migration('0014_settings_account', 3000);
     const late = migration('0015_agency_links', 1500);
-    const recorded = [row(base), { hash: 'h-0014', createdAt: 3000 }];
-    expect(describeNotes([base, late], recorded, ['0015_agency_links'])).toEqual([
+    const recorded = [row(base), row(earlier)];
+    expect(describeNotes([base, earlier, late], recorded, ['0015_agency_links'])).toEqual([
       '0015_agency_links: not recorded and older than the newest row; passed because it is in WHEN_OUT_OF_ORDER (applied by hand).',
     ]);
     expect(describeNotes([base], [row(base)], [])).toEqual([]);
+  });
+
+  const unknownNote = (createdAt: string, hash: string) =>
+    `created_at ${createdAt}  hash ${hash}: 台帳にあるが、このジャーナルに無い。ほかのブランチがマージの前に当てたものかもしれない。流す人は、そのスキーマが main に入る（当てたブランチの PR がマージされる）ことを確かめる。すでに main に入っていれば、main を取り込むとこの警告は消える。`;
+
+  it('names a row that is not in this journal even when nothing would be skipped (#799)', () => {
+    // Another branch applied its migration (when 3000) before merging; mine came later (4000)
+    const other: RecordedMigration = { hash: 'abcdef0123456789', createdAt: 3000 };
+    const mine = migration('0001_site_visits', 4000);
+    const recorded = [row(base), other];
+    expect(findSkipped([base, mine], recorded)).toEqual([]);
+    expect(findPending([base, mine], recorded)).toEqual([mine]);
+    expect(describeNotes([base, mine], recorded, [])).toEqual([
+      unknownNote('3000 (1970-01-01T00:00:03.000Z)', 'abcdef012345'),
+    ]);
+  });
+
+  it('names those rows oldest first, after the other notes', () => {
+    const edited = migration('0001_x', 2000);
+    const recorded = [
+      row(base),
+      { hash: 'hash-before-the-edit', createdAt: 2000 },
+      { hash: 'ffff00001111aaaa', createdAt: 5000 },
+      { hash: 'eeee00001111aaaa', createdAt: 4000 },
+    ];
+    expect(describeNotes([base, edited], recorded, [])).toEqual([
+      '0001_x: its SQL changed after it was applied, and the change will not run. Put the change in a new migration.',
+      unknownNote('4000 (1970-01-01T00:00:04.000Z)', 'eeee00001111'),
+      unknownNote('5000 (1970-01-01T00:00:05.000Z)', 'ffff00001111'),
+    ]);
+  });
+
+  it('does not name a row again that an edited or generated-again note already names', () => {
+    // Recorded under its own when with another hash (edited), and under another when (again)
+    const edited = migration('0001_x', 2000);
+    const again: JournalMigration = { tag: '0002_y', when: 3000, hash: 'h-applied-y' };
+    const recorded = [
+      row(base),
+      { hash: 'hash-before-the-edit', createdAt: 2000 },
+      { hash: 'h-applied-y', createdAt: 2500 },
+    ];
+    expect(findUnknown([base, edited, again], recorded)).toEqual([]);
+    expect(describeNotes([base, edited, again], recorded, [])).toEqual([
+      '0001_x: its SQL changed after it was applied, and the change will not run. Put the change in a new migration.',
+      '0002_y: this SQL is already recorded under another `when`, so running it again fails. Do not generate an applied migration again: ask the owner.',
+    ]);
+  });
+
+  it('adds nothing on a database where the migrator has never run', () => {
+    expect(describeNotes([base, migration('0001_x', 2000)], [], [])).toEqual([]);
   });
 });
 

@@ -14,7 +14,11 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { assertNoSkippedMigrations, type LedgerTable } from '@/scripts/db-migration-ledger';
+import {
+  assertNoSkippedMigrations,
+  type LedgerTable,
+  readJournal,
+} from '@/scripts/db-migration-ledger';
 
 const url = process.env.TEST_DATABASE_URL;
 
@@ -127,6 +131,29 @@ describe.skipIf(!url)('db:migrate pre-flight check (PostgreSQL)', () => {
         '0002_by_hand: not recorded and older than the newest row; passed because it is in WHEN_OUT_OF_ORDER (applied by hand).',
       ],
     });
+  });
+
+  it('warns about a row another branch applied before merge, even when nothing would be skipped (#799)', async () => {
+    const ledger = newLedger();
+    // PR X (0001_deals, when 3000) is applied to production before it is merged
+    const x = folder(ledger, 'x', [['0000_base', 1000], ['0001_deals', 3000]]);
+    await run(x, ledger);
+    const deals = readJournal(x)[1];
+    // PR Y generated its 0001 later (when 4000) and does not have X in its journal
+    const y = folder(ledger, 'y', [['0000_base', 1000], ['0001_site_visits', 4000]]);
+
+    await expect(assertNoSkippedMigrations(sql, y, ledger, [])).resolves.toEqual({
+      recorded: 2,
+      pending: ['0001_site_visits'],
+      notes: [
+        `created_at 3000 (1970-01-01T00:00:03.000Z)  hash ${deals.hash.slice(0, 12)}: 台帳にあるが、このジャーナルに無い。ほかのブランチがマージの前に当てたものかもしれない。流す人は、そのスキーマが main に入る（当てたブランチの PR がマージされる）ことを確かめる。すでに main に入っていれば、main を取り込むとこの警告は消える。`,
+      ],
+    });
+
+    // drizzle runs Y, and the database keeps X's table, which main does not carry until X merges
+    await run(y, ledger);
+    expect(await exists(ledger, 'site_visits')).toBe(true);
+    expect(await exists(ledger, 'deals')).toBe(true);
   });
 
   it('warns about a migration whose SQL was edited after it was applied, which drizzle never runs', async () => {

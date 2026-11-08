@@ -109,6 +109,10 @@ export function findUnknown(
 
 const stamp = (millis: number): string => `${millis} (${new Date(millis).toISOString()})`;
 
+/** A ledger row as the messages name it: its `created_at` and the start of its hash. */
+const describeRow = (row: RecordedMigration): string =>
+  `created_at ${stamp(row.createdAt)}  hash ${row.hash.slice(0, 12)}`;
+
 export function describeSkipped(
   skipped: JournalMigration[],
   recorded: RecordedMigration[],
@@ -122,9 +126,7 @@ export function describeSkipped(
     ...(unknown.length > 0
       ? [
           'Recorded in the database but not in this journal (another branch applied before merge?):',
-          ...unknown.map(
-            (row) => `  created_at ${stamp(row.createdAt)}  hash ${row.hash.slice(0, 12)}`
-          ),
+          ...unknown.map((row) => `  ${describeRow(row)}`),
         ]
       : []),
     'Nothing was applied. Wait until the PR whose migration is already in the database is merged,',
@@ -164,7 +166,13 @@ export function findReapplied(
   return findPending(journal, recorded).filter((entry) => hashes.has(entry.hash));
 }
 
-/** Warnings that do not stop the run: each one names a migration that needs a look. */
+/**
+ * Warnings that do not stop the run: each one names a migration or a ledger row that needs a
+ * look. A row no journal entry matches (findUnknown) is listed even when nothing would be skipped
+ * (#799): when another branch's migration is applied before its PR is merged and this journal's
+ * pending entries are newer, drizzle runs them, and the database then holds a schema that main
+ * may not carry yet.
+ */
 export function describeNotes(
   journal: JournalMigration[],
   recorded: RecordedMigration[],
@@ -173,6 +181,8 @@ export function describeNotes(
   const allowedSkips = findSkipped(journal, recorded, []).filter((entry) =>
     allowed.includes(entry.tag)
   );
+  // The ledger is read without an order, so name the rows oldest first
+  const unknown = findUnknown(journal, recorded).sort((a, b) => a.createdAt - b.createdAt);
   return [
     ...findEdited(journal, recorded).map(
       (entry) =>
@@ -185,6 +195,10 @@ export function describeNotes(
     ...allowedSkips.map(
       (entry) =>
         `${entry.tag}: not recorded and older than the newest row; passed because it is in WHEN_OUT_OF_ORDER (applied by hand).`
+    ),
+    ...unknown.map(
+      (row) =>
+        `${describeRow(row)}: 台帳にあるが、このジャーナルに無い。ほかのブランチがマージの前に当てたものかもしれない。流す人は、そのスキーマが main に入る（当てたブランチの PR がマージされる）ことを確かめる。すでに main に入っていれば、main を取り込むとこの警告は消える。`
     ),
   ];
 }
