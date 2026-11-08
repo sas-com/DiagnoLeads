@@ -5,9 +5,10 @@
  * audit row and one webhook call, no handoff notice); the leads that get none (an open deal, won,
  * a phase set past the initial hearing) and are confirmed all the same; a lead whose deals are all
  * lost; another time of the same day and another day; one deal when confirmations or entry points
- * run at the same time; the lead locked before the request (no deadlock with a deletion); and
- * other organizations kept out. Every row belongs to this file's own organizations; names and
- * addresses are made up.
+ * run at the same time (started while another session holds the lead, so that all of them wait
+ * before any goes on, whatever the timing); the lead locked before the request (no deadlock with
+ * a deletion); and other organizations kept out. Every row belongs to this file's own
+ * organizations; names and addresses are made up.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/diagnoleads_test \
@@ -270,7 +271,8 @@ describe.skipIf(!url)('deals created by the first meeting (PostgreSQL)', () => {
       before: { status: 'new', dealPhase: null },
       after: { status: 'negotiating', dealPhase: 'initial_hearing' },
     });
-    expect(leadAudits[0].metadata).toEqual({ dealId: deal.id });
+    // The lead's audit row says where the deal came from too; one created by hand has no source
+    expect(leadAudits[0].metadata).toEqual({ dealId: deal.id, source: 'meeting_request' });
 
     // The lead's webhooks in one call after the commit; still the initial hearing: no handoff
     expect(sent.emitLeadEvents).toHaveBeenCalledTimes(1);
@@ -420,52 +422,115 @@ describe.skipIf(!url)('deals created by the first meeting (PostgreSQL)', () => {
     expect(await dealsOf(lead.id)).toHaveLength(2);
   });
 
-  it('creates one deal when two confirmations of one lead run at the same time', async () => {
-    const lead = await leadWithRequest(orgA);
+  /**
+   * Until `count` sessions wait for a lock the given backend holds, directly or behind another
+   * waiting session: the second session waiting for one row waits behind the first, and
+   * pg_blocking_pids names the first. Only sessions waiting behind this test's own connection
+   * count, not those of other test files. Throws after 5 seconds, when the test could no longer
+   * show what it means to.
+   */
+  async function untilBlockedBy(pid: number, count = 1) {
+    for (let i = 0; i < 100; i++) {
+      const [row] = await pg.execute<{ waiting: number }>(sql`
+        with recursive behind(pid) as (
+          select pid from pg_stat_activity where ${pid} = any(pg_blocking_pids(pid))
+          union
+          select s.pid from pg_stat_activity s join behind on behind.pid = any(pg_blocking_pids(s.pid))
+        )
+        select count(*)::int as waiting from behind`);
+      if (row && row.waiting >= count) return;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    throw new Error(`Fewer than ${count} sessions waited for the lock`);
+  }
 
-    const outcomes = await Promise.all([confirm(rep, lead.id, 0), confirm(admin, lead.id, 2)]);
+  const backendPid = async (tx: postgres.TransactionSql) => {
+    const [row] = await tx<{ pid: number }[]>`select pg_backend_pid() as pid`;
+    return row.pid;
+  };
 
-    expect(outcomes.map((outcome: { ok: boolean }) => outcome.ok)).toEqual([true, true]);
-    expect(
-      outcomes.filter((outcome: { dealCreated: boolean }) => outcome.dealCreated)
-    ).toHaveLength(1);
-    expect(await dealsOf(lead.id)).toHaveLength(1);
-  });
+  /**
+   * Starts the steps while another session holds the lead (FOR NO KEY UPDATE, as an entry point
+   * takes it), each once the steps before it wait for that lock, and lets the lead go when all
+   * of them wait. So every step has started and waits before any goes on, whatever the timing.
+   */
+  async function whileLeadIsHeld<T>(leadId: string, steps: (() => Promise<T>)[]): Promise<T[]> {
+    // biome-ignore lint/style/noNonNullAssertion: guarded by skipIf
+    const holder = postgres(url!, { max: 1 });
+    const started: Promise<T>[] = [];
+    try {
+      await holder.begin(async (tx) => {
+        await tx`select id from leads where id = ${leadId} for no key update`;
+        const pid = await backendPid(tx);
+        for (const step of steps) {
+          const running = step();
+          // Read with the others below; never left unhandled while the lead is held
+          running.catch(() => {});
+          started.push(running);
+          await untilBlockedBy(pid, started.length);
+        }
+      });
+    } finally {
+      await holder.end();
+    }
+    return Promise.all(started);
+  }
 
-  it('creates one deal when two entry points of one lead run at the same time: the lead is locked', async () => {
-    const raced = await Promise.all([1, 2, 3, 4, 5].map(() => createLead(orgA)));
+  // One deal for one lead, whatever runs at the same time. Each test starts its sessions while
+  // the lead is held, so that all of them wait before any goes on
+  describe('at the same time, one deal', () => {
+    it('two confirmations of one lead: the second sees the first one and its deal', async () => {
+      const lead = await leadWithRequest(orgA);
 
-    const outcomes = await Promise.all(
-      raced.flatMap((lead) => [ensure(lead.id, 'meeting_request'), ensure(lead.id, 'agency_handover')])
-    );
+      // biome-ignore lint/suspicious/noExplicitAny: tRPC outcomes
+      const outcomes: any[] = await whileLeadIsHeld(lead.id, [
+        () => confirm(rep, lead.id, 0),
+        () => confirm(admin, lead.id, 2),
+      ]);
 
-    for (const lead of raced) expect(await dealsOf(lead.id)).toHaveLength(1);
-    expect(outcomes.filter((outcome) => outcome.created)).toHaveLength(raced.length);
-    expect(outcomes.filter((outcome) => !outcome.created)).toEqual(
-      raced.map(() => ({ created: false, skipped: 'open_deal' }))
-    );
+      expect(outcomes.map((outcome) => outcome.ok)).toEqual([true, true]);
+      expect(outcomes.filter((outcome) => outcome.dealCreated)).toHaveLength(1);
+      expect(await dealsOf(lead.id)).toHaveLength(1);
+    });
+
+    it('a confirmation and another entry point: the lead is locked before its deals are read', async () => {
+      const lead = await leadWithRequest(orgA);
+
+      // biome-ignore lint/suspicious/noExplicitAny: tRPC outcomes
+      const [confirmed, ensured]: any[] = await whileLeadIsHeld<unknown>(lead.id, [
+        () => confirm(rep, lead.id, 0),
+        () => ensure(lead.id, 'agency_handover'),
+      ]);
+
+      expect(confirmed).toMatchObject({ ok: true });
+      // Whichever goes first creates it; the other sees it open
+      expect([confirmed.dealCreated, ensured.created].filter(Boolean)).toHaveLength(1);
+      expect(await dealsOf(lead.id)).toHaveLength(1);
+    });
+
+    it('two entry points: the lead is locked before its deals are read', async () => {
+      const lead = await createLead(orgA);
+
+      const outcomes = await whileLeadIsHeld(lead.id, [
+        () => ensure(lead.id, 'meeting_request'),
+        () => ensure(lead.id, 'agency_handover'),
+      ]);
+
+      expect(outcomes.filter((outcome) => outcome.created)).toHaveLength(1);
+      expect(outcomes.filter((outcome) => !outcome.created)).toEqual([
+        { created: false, skipped: 'open_deal' },
+      ]);
+      const rows = await dealsOf(lead.id);
+      expect(rows).toHaveLength(1);
+      // Both audit rows name the entry point that created it
+      const [dealAudit] = await auditOf('deal', rows[0].id);
+      const [leadAudit] = await auditOf('lead', lead.id);
+      expect(['meeting_request', 'agency_handover']).toContain(dealAudit.metadata?.source);
+      expect(leadAudit.metadata).toEqual({ dealId: rows[0].id, source: dealAudit.metadata?.source });
+    });
   });
 
   describe('the lead is locked before the request', () => {
-    /**
-     * Until a session waits for a lock the given backend holds (or 3 seconds pass, when nothing
-     * waits): only waits on this test's own connection count, not those of other test files
-     */
-    async function untilBlockedBy(pid: number) {
-      for (let i = 0; i < 60; i++) {
-        const [row] = await pg.execute<{ waiting: number }>(
-          sql`select count(*)::int as waiting from pg_stat_activity where ${pid} = any(pg_blocking_pids(pid))`
-        );
-        if (row && row.waiting > 0) return;
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      }
-    }
-
-    const backendPid = async (tx: postgres.TransactionSql) => {
-      const [row] = await tx<{ pid: number }[]>`select pg_backend_pid() as pid`;
-      return row.pid;
-    };
-
     const outcome = (promise: Promise<unknown>) =>
       promise.then(
         () => 'done',

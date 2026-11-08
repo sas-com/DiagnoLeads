@@ -12,8 +12,9 @@
  *   due notices of #85 cover it). The respondent gets a confirmation email when asked and email
  *   is available (test mode sends only to the allowed domains).
  * - Confirming the first meeting, or moving it to another day, creates the lead's deal in 見極め
- *   in the same transaction, unless the lead has an open deal or is won (#854, decision
- *   2026-10-28-auto-qualification-deal; see ensureQualificationDeal in the deals feature).
+ *   in the same transaction, unless the lead has an open deal, is won, or has no deal and a phase
+ *   set past the initial hearing (#854, decision 2026-10-28-auto-qualification-deal; see
+ *   ensureQualificationDeal and qualificationDealSkip in the deals feature).
  * - Preferences sent with an answer tied to an existing lead by its email address only (an
  *   unverified answer, #233) are kept too, marked for sales, but never replace preferences sent
  *   with a verified answer (#274). Whether a request is verified is derived from its answer
@@ -402,7 +403,8 @@ export type ConfirmOutcome =
  * MEETING_PREFERENCES_WINDOW_MS after the consultation request (#241).
  * A first confirmation, or one on another day, also creates the lead's deal in 見極め (#854);
  * confirming another time of the same day does not, so a deal sales lost is not created again.
- * A lead that gets no deal (an open deal, won) is confirmed all the same.
+ * A lead that gets no deal (an open deal, won, and the other cases of qualificationDealSkip) is
+ * confirmed all the same.
  */
 export async function confirmMeeting(
   db: Database,

@@ -1,12 +1,22 @@
 /**
- * After the commit of deal changes (lib/features/deals/service.ts): the webhooks of every lead
- * that changed go out in one call, as an import that creates several deals needs (#854), and each
- * lead handed off for the first time gets its handoff notice (#86). Without a database: the lead
- * moves are made up, the webhooks and the notice are mocked. How a real change gets there is
- * covered by test/unit/integration/deals.db.test.ts and deals-auto-qualification.db.test.ts.
+ * The deals service without a database (lib/features/deals/service.ts):
+ * - after the commit of deal changes, the webhooks of every lead that changed go out in one call,
+ *   as an import that creates several deals needs (#854), and each lead handed off for the first
+ *   time gets its handoff notice (#86). The lead moves are made up, the webhooks and the notice
+ *   are mocked
+ * - ensureQualificationDeal takes only a calendar day as the meeting day (#854): another value is
+ *   a mistake of its caller and throws before anything is read or written
+ * How real changes get there is covered by test/unit/integration/deals.db.test.ts and
+ * deals-auto-qualification.db.test.ts.
  */
 import type { Lead } from '@/lib/db/schema';
-import { afterDealChange, afterDealChanges } from '@/lib/features/deals/service';
+import {
+  afterDealChange,
+  afterDealChanges,
+  ensureQualificationDeal,
+} from '@/lib/features/deals/service';
+import { sqlOf } from '@/test/mocks/recording-db';
+import type { SQL } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const sent = vi.hoisted(() => ({ emitLeadEvents: vi.fn(), notifyLeadHandoff: vi.fn() }));
@@ -22,6 +32,7 @@ type Database = Parameters<typeof afterDealChanges>[0];
 
 const ORG_ID = '660e8400-e29b-41d4-a716-446655440000';
 const USER_ID = '550e8400-e29b-41d4-a716-446655440000';
+const LEAD_ID = '770e8400-e29b-41d4-a716-446655440000';
 const db = { name: 'database' } as unknown as Database;
 const context = { organizationId: ORG_ID, userId: USER_ID };
 
@@ -107,5 +118,47 @@ describe('afterDealChange', () => {
 
     await afterDealChange(db, context, { lead: null });
     expect(sent.emitLeadEvents).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ensureQualificationDeal: the meeting day', () => {
+  type Transaction = Parameters<typeof ensureQualificationDeal>[0];
+  /** A transaction that finds no lead: enough to see whether the lead is locked and read */
+  const transaction = () => ({
+    execute: vi.fn(async (_statement: SQL) => []),
+    query: { leads: { findFirst: vi.fn(async () => undefined) } },
+  });
+  const input = (meetingOn: string) => ({
+    organizationId: ORG_ID,
+    leadId: LEAD_ID,
+    userId: USER_ID,
+    source: 'agency_handover' as const,
+    meetingOn,
+  });
+
+  it.each(['2026-02-30', '2026-13-01', '2026/11/10', '2026-11-10T10:00', '20261110', ''])(
+    'refuses %j before it reads or writes anything',
+    async (meetingOn) => {
+      const tx = transaction();
+
+      await expect(
+        ensureQualificationDeal(tx as unknown as Transaction, input(meetingOn))
+      ).rejects.toThrow('meetingOn must be a calendar day (YYYY-MM-DD)');
+      expect(tx.execute).not.toHaveBeenCalled();
+      expect(tx.query.leads.findFirst).not.toHaveBeenCalled();
+    }
+  );
+
+  it('takes a calendar day and locks the lead first', async () => {
+    const tx = transaction();
+
+    expect(await ensureQualificationDeal(tx as unknown as Transaction, input('2028-02-29'))).toEqual(
+      { created: false, skipped: 'lead_not_found' }
+    );
+    expect(tx.execute).toHaveBeenCalledTimes(1);
+    const lock = sqlOf(tx.execute.mock.calls[0][0]);
+    expect(lock.sql).toMatch(/ for no key update$/);
+    expect(lock.params).toEqual([LEAD_ID, ORG_ID]);
+    expect(tx.query.leads.findFirst).toHaveBeenCalledTimes(1);
   });
 });

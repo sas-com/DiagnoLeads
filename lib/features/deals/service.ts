@@ -28,6 +28,7 @@ import {
   type TaskSource,
 } from '@/lib/features/lead-follow-up/types/schemas';
 import { isFirstHandoff, notifyLeadHandoff } from '@/lib/features/lead-handoff/service';
+import { isoDateSchema } from '@/lib/features/lead-hearings/types/schemas';
 import {
   diffLeadAudit,
   findAssignableMember,
@@ -108,7 +109,7 @@ export const DEAL_AUDIT_RESOURCE = 'deal';
  * more. Stored as the name itself, like the title of the meeting's next action: the name is free
  * text, required, and read as it is by the forecast, the activity and the screens, and an
  * organization has no language of its own. The board and the list show the company and the
- * person beside it.
+ * person beside it; the forecast's changes of the week show only the name and the owner.
  */
 export const QUALIFICATION_DEAL_NAME = '現行調査';
 
@@ -653,7 +654,14 @@ function auditValues(deal: DealRow): AuditValues {
 async function syncLeadWithDeals(
   tx: Transaction,
   lead: Lead,
-  context: { organizationId: string; userId: string; dealId: string; at: Date },
+  context: {
+    organizationId: string;
+    userId: string;
+    dealId: string;
+    at: Date;
+    /** Where a deal created automatically came from, kept in the lead's audit row (#854) */
+    source?: QualificationDealSource;
+  },
   /** The lead's SQL decision written with the deal's change (#801) */
   fields: ReturnType<typeof qualificationUpdateFields> = {}
 ): Promise<LeadMove | null> {
@@ -691,29 +699,45 @@ async function syncLeadWithDeals(
     await writeLeadAuditLogs(
       tx,
       { organizationId: context.organizationId, userId: context.userId, at: context.at },
-      [{ action: 'update', leadId: lead.id, changes: audit, metadata: { dealId: context.dealId } }]
+      [
+        {
+          action: 'update',
+          leadId: lead.id,
+          changes: audit,
+          metadata: {
+            dealId: context.dealId,
+            ...(context.source ? { source: context.source } : {}),
+          },
+        },
+      ]
     );
   }
   return { before: lead, after, handedOff: isFirstHandoff(lead, after.dealPhaseReachedAt) };
 }
 
-/** The values of a new deal that its creation decides (the rest come from the lead and the time) */
-type NewDealValues = Pick<
-  typeof deals.$inferInsert,
-  | 'name'
-  | 'kind'
-  | 'stage'
-  | 'amount'
-  | 'probability'
-  | 'forecastOverride'
-  | 'expectedCloseOn'
-  | 'closedOn'
-  | 'lostReason'
-  | 'lostNote'
-  | 'competitor'
-  | 'targetSystem'
-  | 'ownerUserId'
-  | 'previousDealId'
+/**
+ * The values of a new deal that its creation decides (the rest come from the lead and the time).
+ * Every one is required, null included, so that a creation cannot leave one to the column's
+ * default by mistake
+ */
+type NewDealValues = Required<
+  Pick<
+    typeof deals.$inferInsert,
+    | 'name'
+    | 'kind'
+    | 'stage'
+    | 'amount'
+    | 'probability'
+    | 'forecastOverride'
+    | 'expectedCloseOn'
+    | 'closedOn'
+    | 'lostReason'
+    | 'lostNote'
+    | 'competitor'
+    | 'targetSystem'
+    | 'ownerUserId'
+    | 'previousDealId'
+  >
 >;
 
 /**
@@ -726,8 +750,11 @@ async function insertDeal(
   values: NewDealValues,
   userId: string,
   now: Date,
-  /** Added to the audit row's metadata (where an automatic creation came from, #854) */
-  auditMetadata: Record<string, unknown> = {}
+  /**
+   * Where an automatic creation came from (#854): the deal's audit row keeps the source and the
+   * meeting day, the lead's audit row the source. None for a deal created by hand
+   */
+  origin?: { source: QualificationDealSource; meetingOn: string }
 ): Promise<{ deal: DealRow; lead: LeadMove | null }> {
   const [deal] = await tx
     .insert(deals)
@@ -765,7 +792,10 @@ async function insertDeal(
     resource: DEAL_AUDIT_RESOURCE,
     resourceId: deal.id,
     changes: { after: auditValues(deal) },
-    metadata: { leadId: lead.id, ...auditMetadata },
+    metadata: {
+      leadId: lead.id,
+      ...(origin ? { source: origin.source, meetingOn: origin.meetingOn } : {}),
+    },
     createdAt: now,
   });
 
@@ -774,6 +804,7 @@ async function insertDeal(
     userId,
     dealId: deal.id,
     at: now,
+    source: origin?.source,
   });
   return { deal, lead: leadMove };
 }
@@ -849,7 +880,10 @@ export async function createDeal(
  * where it came from and the day of the meeting. No deal is created for a lead with an open deal,
  * a won lead, or a lead without deals whose phase was set past the initial hearing
  * (qualificationDealSkip), nor for a lead not found: none of them is an error, so the entry
- * point's own change goes through.
+ * point's own change goes through. The lead's audit row keeps the source too.
+ *
+ * The meeting day must be a calendar day (YYYY-MM-DD): the entry points pass a day they checked,
+ * so another value is a mistake of the caller and throws before anything is read or written.
  *
  * Runs in the transaction of the entry point, which locks the lead before its own rows (see the
  * header), and is called by it only when the meeting day is new or changed, so that saving the
@@ -872,6 +906,9 @@ export async function ensureQualificationDeal(
   },
   now: Date = new Date()
 ): Promise<QualificationDealOutcome> {
+  if (!isoDateSchema.safeParse(input.meetingOn).success) {
+    throw new Error('ensureQualificationDeal: meetingOn must be a calendar day (YYYY-MM-DD)');
+  }
   const lead = await lockLeadIfFound(tx, input.organizationId, input.leadId);
   if (!lead) return { created: false, skipped: 'lead_not_found' };
   // Read under the lock: a deal created meanwhile by another entry point is seen

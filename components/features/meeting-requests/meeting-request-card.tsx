@@ -28,7 +28,8 @@ const sameCandidate = (a: MeetingCandidate, b: MeetingCandidate) =>
  * The confirmed date becomes the lead's next meeting and a next action, and the respondent gets
  * a confirmation email when asked. Shown only when preferences were sent.
  * The first confirmation (or one on another day) also creates the lead's deal in 見極め, unless
- * it has an open deal or is won (#854): the card says so and reloads what the deal changes.
+ * it has an open deal, is won, or has no deal and a phase set past the initial hearing (#854): the
+ * card says so and reloads what the deal changes.
  * Preferences from an unverified answer (matched an existing lead by email only) carry a warning,
  * and the confirmation email starts unticked (#274).
  */

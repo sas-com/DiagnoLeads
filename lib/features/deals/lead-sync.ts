@@ -120,8 +120,8 @@ export type QualificationDealSkip = 'open_deal' | 'won' | 'phase_ahead';
  * wonWithoutWonDeal): its next deal (the migration, AX) is created by sales, who choose its kind
  * and the deal it follows. Nor for a lead without deals whose deal phase was set by hand past the
  * initial hearing: the deal would take it back to the initial hearing. A lead whose deals are all
- * lost gets one (its time has come again, decision `2026-10-25-deals-set-lead-stage`), whatever
- * its phase.
+ * lost gets one (its time has come again, decision `2026-10-25-deals-set-lead-stage`), even with
+ * a phase past the initial hearing, unless it is won by hand (成約, or a won phase left on it).
  */
 export function qualificationDealSkip(
   lead: Pick<SyncLead, 'status' | 'dealPhase'>,
