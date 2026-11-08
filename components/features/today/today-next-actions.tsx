@@ -3,6 +3,7 @@
 import { DueTasksList, DueTasksMore } from '@/components/features/lead-follow-up/due-tasks-list';
 import type { DueTasks } from '@/components/features/lead-follow-up/use-due-tasks';
 import { useTranslations } from 'next-intl';
+import { useId } from 'react';
 import { TodaySection, sectionState } from './today-section';
 
 /**
@@ -29,9 +30,11 @@ export function TodayNextActions({
 }) {
   const t = useTranslations('today.nextActions');
   const tDue = useTranslations('leadFollowUp.today');
+  const headingId = useId();
 
   return (
     <TodaySection
+      headingId={headingId}
       title={t('title')}
       description={tDue('descriptionAll')}
       count={due.data?.total}
@@ -44,6 +47,7 @@ export function TodayNextActions({
         organizationId={organizationId}
         showMineBadge={false}
         canRecordContact={canRecordContact}
+        headingId={headingId}
       />
     </TodaySection>
   );

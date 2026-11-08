@@ -77,6 +77,29 @@ vi.mock('@/lib/trpc/client', () => {
     },
   };
 });
+// Recording a contact is its own dialog (#554), tested in record-activity-dialog.test.tsx
+vi.mock('@/components/features/lead-follow-up/record-activity-dialog', () => ({
+  RecordActivityDialog: (props: {
+    open: boolean;
+    defaultDealId?: string;
+    leadId: string;
+    onOpenChange: (open: boolean) => void;
+    onCloseAutoFocus?: (event: Event) => void;
+  }) =>
+    props.open ? (
+      <div role="dialog" aria-label="活動を記録" data-deal={props.defaultDealId} data-lead={props.leadId}>
+        <button
+          type="button"
+          onClick={() => {
+            props.onOpenChange(false);
+            props.onCloseAutoFocus?.(new Event('focus'));
+          }}
+        >
+          閉じる
+        </button>
+      </div>
+    ) : null,
+}));
 vi.mock('@/hooks/use-organization', () => ({
   useOrganization: () => ({ organizationId: ORG_ID }),
 }));
@@ -342,6 +365,31 @@ describe('DealDetailView', () => {
       ).toBeInTheDocument();
       expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     });
+  });
+
+  it('records a contact for the deal from the header too (#776)', async () => {
+    const user = userEvent.setup();
+    renderView();
+
+    // In the page's header, beside its menu
+    const header = screen.getByRole('heading', { level: 1 }).closest('header');
+    expect(header).not.toBeNull();
+    await user.click(within(header as HTMLElement).getByRole('button', { name: '活動を記録' }));
+    const dialog = screen.getByRole('dialog', { name: '活動を記録' });
+    expect(dialog).toHaveAttribute('data-deal', DEAL_ID);
+    expect(dialog).toHaveAttribute('data-lead', LEAD_ID);
+
+    // Opened by state, not by a dialog trigger: the focus goes back to the button
+    await user.click(within(dialog).getByRole('button', { name: '閉じる' }));
+    expect(within(header as HTMLElement).getByRole('button', { name: '活動を記録' })).toHaveFocus();
+  });
+
+  it('has no button to record a contact for those who may not record one (#776)', () => {
+    // Who may edit the deal may record for it (update Lead with deals readable)
+    mocks.get.data = detail({ canEdit: false, canDelete: false });
+    renderView();
+
+    expect(screen.queryByRole('button', { name: '活動を記録' })).not.toBeInTheDocument();
   });
 
   it('tells those who cannot change deals that the page is read only', () => {

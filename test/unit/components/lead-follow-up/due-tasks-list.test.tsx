@@ -9,7 +9,7 @@ import { DueTasksList, DueTasksMore } from '@/components/features/lead-follow-up
 import { DueTasksSection } from '@/components/features/lead-follow-up/due-tasks-section';
 import { useDueTasks } from '@/components/features/lead-follow-up/use-due-tasks';
 import messages from '@/locales/ja/common.json';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import type { ReactNode } from 'react';
@@ -24,6 +24,8 @@ const mocks = vi.hoisted(() => ({
   dueCalls: [] as { input: unknown; options: Record<string, unknown> }[],
   updates: [] as unknown[],
   invalidated: [] as { path: string; input: unknown }[],
+  // What each completion's save answers, in order (resolved when none is queued)
+  results: [] as Promise<unknown>[],
 }));
 
 vi.mock('@/lib/trpc/client', () => {
@@ -46,11 +48,18 @@ vi.mock('@/lib/trpc/client', () => {
           },
         },
         updateTask: {
-          useMutation: (options: { onSuccess?: () => void } = {}) => ({
+          // Like TanStack Query: each call's own promise, after the hook's callbacks
+          useMutation: (options: { onSuccess?: () => void; onError?: () => void } = {}) => ({
             isPending: false,
-            mutate: (input: unknown) => {
+            mutateAsync: (input: unknown) => {
               mocks.updates.push(input);
-              options.onSuccess?.();
+              return (mocks.results.shift() ?? Promise.resolve()).then(
+                () => options.onSuccess?.(),
+                (error: unknown) => {
+                  options.onError?.();
+                  throw error;
+                }
+              );
             },
           }),
         },
@@ -74,6 +83,19 @@ function MineList() {
     <>
       <DueTasksList due={due} organizationId={ORG_ID} showMineBadge={false} />
       <DueTasksMore due={due} />
+    </>
+  );
+}
+
+/** The list under its section's heading, which takes the focus when the list empties (#776) */
+function HeadedList() {
+  const due = useDueTasks(ORG_ID, 'mine');
+  return (
+    <>
+      <h2 id="due-heading" tabIndex={-1}>
+        今日やること
+      </h2>
+      <DueTasksList due={due} organizationId={ORG_ID} showMineBadge={false} headingId="due-heading" />
     </>
   );
 }
@@ -114,6 +136,7 @@ beforeEach(() => {
   mocks.dueCalls = [];
   mocks.updates = [];
   mocks.invalidated = [];
+  mocks.results = [];
 });
 
 describe('DueTasksList', () => {
@@ -194,12 +217,78 @@ describe('DueTasksList', () => {
     await user.click(screen.getByRole('checkbox', { name: '「見積もりを送る」を完了にする' }));
 
     expect(mocks.updates).toEqual([{ organizationId: ORG_ID, id: 't1', done: true }]);
-    expect(mocks.invalidated).toEqual(
-      expect.arrayContaining([
-        { path: 'dueTasks', input: { organizationId: ORG_ID } },
-        { path: 'deals.board', input: { organizationId: ORG_ID } },
-      ])
+    await waitFor(() =>
+      expect(mocks.invalidated).toEqual(
+        expect.arrayContaining([
+          { path: 'dueTasks', input: { organizationId: ORG_ID } },
+          { path: 'deals.board', input: { organizationId: ORG_ID } },
+        ])
+      )
     );
+  });
+
+  describe('the focus when a row is completed (#776)', () => {
+    const box = (title: string) => screen.getByRole('checkbox', { name: `「${title}」を完了にする` });
+
+    it('goes on to the next row’s box, else the previous one’s', async () => {
+      mocks.due = due([
+        task('t1', { title: '見積もりを送る' }),
+        task('t2', { title: '日程を決める' }),
+        task('t3', { title: '資料を送る' }),
+      ]);
+      const user = userEvent.setup();
+      wrap(<HeadedList />);
+
+      await user.click(box('見積もりを送る'));
+      expect(box('日程を決める')).toHaveFocus();
+      await user.click(box('資料を送る'));
+      expect(box('日程を決める')).toHaveFocus();
+    });
+
+    it('goes to the heading when the list empties', async () => {
+      mocks.due = due([task('t1')]);
+      const user = userEvent.setup();
+      wrap(<HeadedList />);
+
+      await user.click(box('見積もりを送る'));
+      expect(screen.getByRole('heading', { name: '今日やること' })).toHaveFocus();
+    });
+
+    it('shows the row ticked and disables only it, so the next one keeps the focus', async () => {
+      mocks.results = [new Promise(() => {})];
+      mocks.due = due([task('t1', { title: '見積もりを送る' }), task('t2', { title: '日程を決める' })]);
+      const user = userEvent.setup();
+      wrap(<HeadedList />);
+
+      await user.click(box('見積もりを送る'));
+      expect(box('見積もりを送る')).toBeDisabled();
+      expect(box('見積もりを送る')).toBeChecked();
+      expect(box('日程を決める')).toBeEnabled();
+      expect(box('日程を決める')).toHaveFocus();
+    });
+
+    it('lets a row be ticked again when its save fails, also after another was ticked', async () => {
+      let fail: (error: Error) => void = () => {};
+      mocks.results = [
+        new Promise((_resolve, reject) => {
+          fail = reject;
+        }),
+        new Promise(() => {}),
+      ];
+      mocks.due = due([task('t1', { title: '見積もりを送る' }), task('t2', { title: '日程を決める' })]);
+      const user = userEvent.setup();
+      wrap(<HeadedList />);
+
+      await user.click(box('見積もりを送る'));
+      await user.click(box('日程を決める'));
+      // Both on their way: the heading has the focus
+      expect(screen.getByRole('heading', { name: '今日やること' })).toHaveFocus();
+      fail(new Error('failed'));
+
+      await waitFor(() => expect(box('見積もりを送る')).toBeEnabled());
+      expect(box('見積もりを送る')).not.toBeChecked();
+      expect(box('日程を決める')).toBeDisabled();
+    });
   });
 
   it('passes the screen’s query options through', () => {

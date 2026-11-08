@@ -4589,9 +4589,10 @@
       "all": "All",
       "diagnosis": "Diagnoses & consultations",
       "hearing": "Hearings",
+      "contact": "Contacts & visits",
       "comment": "Comments",
       "sales": "Sales actions",
-      "email": "Email"
+      "email": "Result emails"
     },
     "empty": "No activity yet.",
     "loadError": "Could not load the activity.",

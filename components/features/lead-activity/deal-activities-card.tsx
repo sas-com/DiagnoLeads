@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 import { Loader2, NotebookPen } from 'lucide-react';
 import { useLocale, useNow, useTranslations } from 'next-intl';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ActivityItem } from './lead-activity-card';
 
 interface DealActivitiesCardProps {
@@ -36,6 +36,7 @@ export function DealActivitiesCard({
   const locale = useLocale();
   const now = useNow({ updateInterval: 60_000 });
   const [recordOpen, setRecordOpen] = useState(false);
+  const recordRef = useRef<HTMLButtonElement>(null);
   const query = trpc.leadActivity.forDeal.useQuery(
     { organizationId, dealId },
     { enabled: !!organizationId }
@@ -46,9 +47,14 @@ export function DealActivitiesCard({
     <Card className="p-5">
       <div className="mb-3 flex items-center gap-2">
         <h2 className="text-base font-bold text-gray-900 dark:text-gray-50">{t('title')}</h2>
-        {data && data.total > 0 && <Badge color="gray">{data.total}</Badge>}
+        {data && data.total > 0 && (
+          <Badge color="gray" className="text-sm">
+            {data.total}
+          </Badge>
+        )}
         {data?.canEdit && (
           <Button
+            ref={recordRef}
             type="button"
             variant="outline"
             size="sm"
@@ -104,6 +110,11 @@ export function DealActivitiesCard({
           leadId={leadId}
           leadLabel={leadLabel}
           defaultDealId={dealId}
+          onCloseAutoFocus={(event) => {
+            // Opened by state, not by a dialog trigger: Radix would leave the focus nowhere
+            event.preventDefault();
+            recordRef.current?.focus();
+          }}
         />
       )}
     </Card>
