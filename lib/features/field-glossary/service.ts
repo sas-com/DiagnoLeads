@@ -30,13 +30,41 @@ const OPERATOR_EDITOR_ROLES: readonly OrganizationRole[] = ['owner', 'admin'];
  * Read the glossary entries for the given field keys. Returns each field's own entry first, then
  * its value entries by sort_order, so the caller can group them without another sort.
  */
+/**
+ * The columns the help popovers need. getByKeys is open to every authenticated user, so it must
+ * not leak the editor's user id or the timestamps (#800 security review); those stay in list,
+ * which only operator editors may call.
+ */
+export type FieldGlossaryHelp = Pick<
+  FieldGlossaryEntry,
+  | 'id'
+  | 'fieldKey'
+  | 'value'
+  | 'labelJa'
+  | 'labelEn'
+  | 'descriptionJa'
+  | 'descriptionEn'
+  | 'sortOrder'
+>;
+
+const HELP_COLUMNS = {
+  id: fieldGlossary.id,
+  fieldKey: fieldGlossary.fieldKey,
+  value: fieldGlossary.value,
+  labelJa: fieldGlossary.labelJa,
+  labelEn: fieldGlossary.labelEn,
+  descriptionJa: fieldGlossary.descriptionJa,
+  descriptionEn: fieldGlossary.descriptionEn,
+  sortOrder: fieldGlossary.sortOrder,
+} as const;
+
 export async function getFieldGlossaryEntries(
   executor: Database,
   keys: string[]
-): Promise<FieldGlossaryEntry[]> {
+): Promise<FieldGlossaryHelp[]> {
   if (keys.length === 0) return [];
   return executor
-    .select()
+    .select(HELP_COLUMNS)
     .from(fieldGlossary)
     .where(inArray(fieldGlossary.fieldKey, keys))
     .orderBy(
