@@ -42,11 +42,22 @@ describe('admin site dark text', () => {
   });
 
   it('gives that gray 4.5:1 on the dark cards and page', () => {
-    const text = solidGray('300');
     // gray-800 and gray-900 of the admin site are Solid Gray 800 and 900
+    const light = css.match(/\nhtml:has\(\.dl-admin\)\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(light).toContain('--color-gray-800: var(--color-neutral-solid-gray-800);');
+    expect(light).toContain('--color-gray-900: var(--color-neutral-solid-gray-900);');
+    const text = solidGray('300');
     expect(contrast(text, solidGray('800'))).toBeGreaterThanOrEqual(4.5);
     expect(contrast(text, solidGray('900'))).toBeGreaterThanOrEqual(4.5);
     // Solid Gray 420 did not reach it on gray-800
     expect(contrast(solidGray('420'), solidGray('800'))).toBeLessThan(4.5);
+  });
+
+  it('still lights the sidebar icons on hover, now that gray-400 and gray-300 match', () => {
+    for (const utility of ['menu-item-icon-inactive', 'menu-item-arrow-inactive']) {
+      const body = css.match(new RegExp(`@utility ${utility}\\s*\\{([^}]*)\\}`))?.[1] ?? '';
+      expect(body).toContain('dark:text-gray-400');
+      expect(body).toContain('dark:group-hover:text-gray-100');
+    }
   });
 });
