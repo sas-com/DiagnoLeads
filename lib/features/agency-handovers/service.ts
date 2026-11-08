@@ -2,12 +2,17 @@
  * Agency handovers (Refs #152): importing the agency's appointment reports, reading a lead's
  * handover, and the hearing prefill from it. Every query is scoped by organizationId; the router
  * checks permissions.
+ *
+ * An appointment day that a report sets for a lead, new or another day than before, is the lead's
+ * first meeting: the import creates its deal in 見極め in the same transaction (#854, decision
+ * 2026-10-28-auto-qualification-deal; see ensureQualificationDeals in the deals feature).
  */
 import type { db as defaultDb } from '@/lib/db/client';
 import { agencyHandovers, leads, users } from '@/lib/db/schema';
+import { afterDealChanges, ensureQualificationDeals } from '@/lib/features/deals/service';
 import type { HearingFieldEntry, HearingFields } from '@/lib/features/lead-hearings/types/schemas';
 import { parseStoredHearingFields } from '@/lib/features/lead-hearings/types/schemas';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { type HandoverRow, handoverRowSchema } from './types/schemas';
 
 type Database = typeof defaultDb;
@@ -25,12 +30,19 @@ export interface HandoverImportResult {
  * Save the rows of a report. Each row finds its lead by email address, or else by company name
  * when exactly one lead of the organization has it; a later import replaces the lead's handover.
  * Rows without a lead are reported, not saved (no lead is created from an agency report).
+ *
+ * A row whose appointment day is new for its lead, or another day than the one saved before,
+ * creates the lead's deal in 見極め (#854), unless the lead has an open deal, is won, or the other
+ * cases of qualificationDealSkip; importing the same day again creates none, even after sales
+ * lost the deal. The answer counts the deals created, never shows them (#276). Their webhooks
+ * go out in one call after the commit, within the limit of one call (LEAD_WEBHOOK_EVENT_LIMIT:
+ * the events past it are dropped and reported, as for an import of leads).
  */
 export async function importHandovers(
   db: Database,
   input: { organizationId: string; userId: string; rows: unknown[] },
   now: Date = new Date()
-): Promise<{ results: HandoverImportResult[] }> {
+): Promise<{ results: HandoverImportResult[]; dealsCreated: number }> {
   const parsed = input.rows.map((raw) => handoverRowSchema.safeParse(raw));
   const valid = parsed.flatMap((result, index) =>
     result.success ? [{ index, row: result.data }] : []
@@ -93,8 +105,47 @@ export async function importHandovers(
   }
 
   // All or nothing: a row the database rejects leaves the report unsaved, not half of it
-  await db.transaction(async (tx) => {
+  const outcomes = await db.transaction(async (tx) => {
+    const leadIds = [...toSave.keys()];
+    // The leads first, in the order of their ids, in one statement; then their handovers. Deals
+    // take the lead before their own rows, deleting a lead locks it before the cascade, and two
+    // imports of the same leads take them in the same order, so none of them can deadlock
+    const locked =
+      leadIds.length === 0
+        ? []
+        : await tx
+            .select({ id: leads.id })
+            .from(leads)
+            .where(and(eq(leads.organizationId, input.organizationId), inArray(leads.id, leadIds)))
+            .orderBy(asc(leads.id))
+            .for('no key update');
+    const found = new Set(locked.map((lead) => lead.id));
+    // The appointment days saved before, read under the lock: an import that saved the same
+    // leads a moment before is seen
+    const before =
+      found.size === 0
+        ? []
+        : await tx
+            .select({
+              leadId: agencyHandovers.leadId,
+              appointmentOn: agencyHandovers.appointmentOn,
+            })
+            .from(agencyHandovers)
+            .where(
+              and(
+                eq(agencyHandovers.organizationId, input.organizationId),
+                inArray(agencyHandovers.leadId, [...found])
+              )
+            );
+    const appointedBefore = new Map(before.map((handover) => [handover.leadId, handover]));
+
+    const meetings: { leadId: string; meetingOn: string }[] = [];
     for (const [leadId, { index, row }] of toSave) {
+      // Deleted since the report was matched
+      if (!found.has(leadId)) {
+        results[index] = { index, status: 'unmatched' };
+        continue;
+      }
       const { email: _email, company: _company, ...values } = row;
       const record = { ...values, importedBy: input.userId, updatedAt: now };
       const [saved] = await tx
@@ -107,10 +158,41 @@ export async function importHandovers(
           setWhere: eq(agencyHandovers.organizationId, input.organizationId),
         })
         .returning({ id: agencyHandovers.id });
-      if (!saved) results[index] = { index, status: 'unmatched' };
+      if (!saved) {
+        results[index] = { index, status: 'unmatched' };
+        continue;
+      }
+      // The first meeting is set: a new appointment day, or another day than before (#854). The
+      // same day again keeps the deal as it is, even one lost meanwhile
+      const appointmentOn = row.appointmentOn;
+      if (appointmentOn && appointmentOn !== appointedBefore.get(leadId)?.appointmentOn) {
+        meetings.push({ leadId, meetingOn: appointmentOn });
+      }
     }
+    // The deals of all of them at once: a report of 500 appointments stays within the time of a
+    // function and holds its leads briefly
+    return ensureQualificationDeals(
+      tx,
+      {
+        organizationId: input.organizationId,
+        userId: input.userId,
+        source: 'agency_handover',
+        meetings,
+      },
+      now
+    );
   });
-  return { results };
+
+  // The webhooks of the leads the deals moved, in one call after the commit
+  const created = outcomes.flatMap((outcome) => (outcome.created ? [outcome] : []));
+  if (created.length > 0) {
+    await afterDealChanges(
+      db,
+      { organizationId: input.organizationId, userId: input.userId },
+      created
+    );
+  }
+  return { results, dealsCreated: created.length };
 }
 
 export interface AgencyHandoverView extends Omit<HandoverRow, 'email' | 'company'> {

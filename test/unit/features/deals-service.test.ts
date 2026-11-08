@@ -5,17 +5,21 @@
  *   time gets its handoff notice (#86). The lead moves are made up, the webhooks and the notice
  *   are mocked
  * - ensureQualificationDeal takes only a calendar day as the meeting day (#854): another value is
- *   a mistake of its caller and throws before anything is read or written
+ *   a mistake of its caller and throws before anything is read or written. ensureQualificationDeals
+ *   (an import's leads at once) refuses two meetings of one lead the same way, and locks the leads
+ *   in one statement in the order of their ids, in the organization
  * How real changes get there is covered by test/unit/integration/deals.db.test.ts and
  * deals-auto-qualification.db.test.ts.
  */
 import type { Lead } from '@/lib/db/schema';
+import { leads } from '@/lib/db/schema';
 import {
   afterDealChange,
   afterDealChanges,
   ensureQualificationDeal,
+  ensureQualificationDeals,
 } from '@/lib/features/deals/service';
-import { sqlOf } from '@/test/mocks/recording-db';
+import { recordingDb, sqlOf } from '@/test/mocks/recording-db';
 import type { SQL } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -123,11 +127,6 @@ describe('afterDealChange', () => {
 
 describe('ensureQualificationDeal: the meeting day', () => {
   type Transaction = Parameters<typeof ensureQualificationDeal>[0];
-  /** A transaction that finds no lead: enough to see whether the lead is locked and read */
-  const transaction = () => ({
-    execute: vi.fn(async (_statement: SQL) => []),
-    query: { leads: { findFirst: vi.fn(async () => undefined) } },
-  });
   const input = (meetingOn: string) => ({
     organizationId: ORG_ID,
     leadId: LEAD_ID,
@@ -139,26 +138,102 @@ describe('ensureQualificationDeal: the meeting day', () => {
   it.each(['2026-02-30', '2026-13-01', '2026/11/10', '2026-11-10T10:00', '20261110', ''])(
     'refuses %j before it reads or writes anything',
     async (meetingOn) => {
-      const tx = transaction();
+      const fake = recordingDb();
 
       await expect(
-        ensureQualificationDeal(tx as unknown as Transaction, input(meetingOn))
+        ensureQualificationDeal(fake.db as unknown as Transaction, input(meetingOn))
       ).rejects.toThrow('meetingOn must be a calendar day (YYYY-MM-DD)');
-      expect(tx.execute).not.toHaveBeenCalled();
-      expect(tx.query.leads.findFirst).not.toHaveBeenCalled();
+      expect(fake.calls).toHaveLength(0);
     }
   );
 
-  it('takes a calendar day and locks the lead first', async () => {
-    const tx = transaction();
+  it('takes a calendar day and locks the lead first, in the organization', async () => {
+    // The lead is not found
+    const fake = recordingDb();
 
-    expect(await ensureQualificationDeal(tx as unknown as Transaction, input('2028-02-29'))).toEqual(
-      { created: false, skipped: 'lead_not_found' }
+    expect(
+      await ensureQualificationDeal(fake.db as unknown as Transaction, input('2028-02-29'))
+    ).toEqual({ created: false, skipped: 'lead_not_found' });
+    expect(fake.calls).toHaveLength(1);
+    const [lock] = fake.calls;
+    expect(lock).toMatchObject({ op: 'select', table: leads });
+    expect(lock.lock).toEqual({ strength: 'no key update', config: undefined });
+    expect(sqlOf(lock.where)).toEqual({
+      sql: '("leads"."organization_id" = $1 and "leads"."id" in ($2))',
+      params: [ORG_ID, LEAD_ID],
+    });
+  });
+});
+
+describe('ensureQualificationDeals: the leads of an import', () => {
+  type Transaction = Parameters<typeof ensureQualificationDeals>[0];
+  const OTHER_LEAD = '770e8400-e29b-41d4-a716-446655440001';
+  const input = (meetings: { leadId: string; meetingOn: string }[]) => ({
+    organizationId: ORG_ID,
+    userId: USER_ID,
+    source: 'agency_handover' as const,
+    meetings,
+  });
+
+  it('reads nothing for no meetings', async () => {
+    const fake = recordingDb();
+
+    expect(await ensureQualificationDeals(fake.db as unknown as Transaction, input([]))).toEqual(
+      []
     );
-    expect(tx.execute).toHaveBeenCalledTimes(1);
-    const lock = sqlOf(tx.execute.mock.calls[0][0]);
-    expect(lock.sql).toMatch(/ for no key update$/);
-    expect(lock.params).toEqual([LEAD_ID, ORG_ID]);
-    expect(tx.query.leads.findFirst).toHaveBeenCalledTimes(1);
+    expect(fake.calls).toHaveLength(0);
+  });
+
+  it.each([
+    [
+      'a day that is not one',
+      [
+        { leadId: LEAD_ID, meetingOn: '2026-11-10' },
+        { leadId: OTHER_LEAD, meetingOn: '2026-11-31' },
+      ],
+      'meetingOn must be a calendar day (YYYY-MM-DD)',
+    ],
+    [
+      'two meetings of one lead',
+      [
+        { leadId: LEAD_ID, meetingOn: '2026-11-10' },
+        { leadId: LEAD_ID, meetingOn: '2026-11-12' },
+      ],
+      'one meeting per lead',
+    ],
+  ])('refuses %s before it reads or writes anything', async (_label, meetings, message) => {
+    const fake = recordingDb();
+
+    await expect(
+      ensureQualificationDeals(fake.db as unknown as Transaction, input(meetings))
+    ).rejects.toThrow(message);
+    expect(fake.calls).toHaveLength(0);
+  });
+
+  it('locks the leads in one statement in the order of their ids, and answers in the order of the meetings', async () => {
+    // Neither lead is found
+    const fake = recordingDb();
+
+    expect(
+      await ensureQualificationDeals(
+        fake.db as unknown as Transaction,
+        input([
+          { leadId: OTHER_LEAD, meetingOn: '2026-11-10' },
+          { leadId: LEAD_ID, meetingOn: '2026-11-12' },
+        ])
+      )
+    ).toEqual([
+      { created: false, skipped: 'lead_not_found' },
+      { created: false, skipped: 'lead_not_found' },
+    ]);
+    expect(fake.calls).toHaveLength(1);
+    const [lock] = fake.calls;
+    expect(lock.lock).toEqual({ strength: 'no key update', config: undefined });
+    expect(sqlOf(lock.where)).toEqual({
+      sql: '("leads"."organization_id" = $1 and "leads"."id" in ($2, $3))',
+      params: [ORG_ID, OTHER_LEAD, LEAD_ID],
+    });
+    // Two imports of the same leads take them in the same order: no deadlock
+    expect(lock.orderBy?.map((order) => sqlOf(order as SQL).sql)).toEqual(['"leads"."id" asc']);
   });
 });
