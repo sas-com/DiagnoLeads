@@ -10,7 +10,8 @@
  * (#968): their open ones of that organization, to the lead's assignee (else whoever added them)
  * for 今日 and the due notices, with an audit row each, also when a next action is being added for
  * their deal at the same time; not the done ones, another member's, or theirs of another
- * organization. All values are fictional.
+ * organization. A done one is given back when it is reopened, unless its member may still hold
+ * it, also while they are being removed. All values are fictional.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/dl_test \
@@ -614,6 +615,102 @@ describe.skipIf(!url)('next actions added for a deal (PostgreSQL)', () => {
       const task = await adding;
       if (task instanceof Error) throw task;
       expect(task).toMatchObject({ assigneeId: null, assignee: null });
+      expect((await taskRow(task.id)).assigneeId).toBeNull();
+      expect(await mineOf(leadOwner)).toContain(task.id);
+    });
+
+    const reopen = (id: string) =>
+      rep.leadFollowUp.updateTask({ organizationId: orgA, id, done: false });
+    /** What the audit row of a task's reopening changed */
+    const reopeningOf = async (taskId: string) =>
+      (
+        await pg
+          .select({ changes: auditLogs.changes })
+          .from(auditLogs)
+          .where(
+            and(
+              eq(auditLogs.resource, 'lead_task'),
+              eq(auditLogs.action, 'update'),
+              eq(auditLogs.resourceId, taskId)
+            )
+          )
+      ).find((row) => (row.changes?.after as { done?: boolean } | undefined)?.done === false)
+        ?.changes;
+
+    it('gives back a done one when it is reopened, unless its member may still hold it', async () => {
+      const leaving = await createUser('異動 六郎', [{ organizationId: orgA, role: 'member' }]);
+      const madeViewer = await createUser('閲覧 七子', [{ organizationId: orgA, role: 'member' }]);
+      const leadId = await createLead(orgA, ids.leadOwner);
+      const leavers = await add(leadId, await createDeal(orgA, leadId, leaving.id));
+      const viewers = await add(leadId, await createDeal(orgA, leadId, madeViewer.id));
+      const members = await add(leadId, await createDeal(orgA, leadId, ids.dealOwner));
+      for (const task of [leavers, viewers, members]) {
+        await rep.leadFollowUp.updateTask({ organizationId: orgA, id: task.id, done: true });
+      }
+      await rep.members.remove({
+        organizationId: orgA,
+        membershipId: await membershipIdOf(orgA, leaving.id),
+      });
+      // One who became read-only may no longer hold it either
+      await pg
+        .update(organizationMembers)
+        .set({ role: 'parent_viewer' })
+        .where(
+          and(
+            eq(organizationMembers.organizationId, orgA),
+            eq(organizationMembers.userId, madeViewer.id)
+          )
+        );
+      // Kept while done
+      expect((await taskRow(leavers.id)).assigneeId).toBe(leaving.id);
+
+      // Reopened, it follows the lead's assignee, and its audit row says whom it was given to
+      expect(await reopen(leavers.id)).toMatchObject({ done: false, assigneeId: null, assignee: null });
+      expect((await taskRow(leavers.id)).assigneeId).toBeNull();
+      expect(await mineOf(leadOwner)).toContain(leavers.id);
+      expect(await reopeningOf(leavers.id)).toEqual({
+        before: { done: true, assigneeId: leaving.id },
+        after: { done: false, assigneeId: null },
+      });
+      await reopen(viewers.id);
+      expect((await taskRow(viewers.id)).assigneeId).toBeNull();
+
+      // One given to a member who may still hold it stays with them
+      expect(await reopen(members.id)).toMatchObject({
+        done: false,
+        assigneeId: ids.dealOwner,
+        assignee: { id: ids.dealOwner, name: '商談 担当' },
+      });
+      expect((await taskRow(members.id)).assigneeId).toBe(ids.dealOwner);
+      expect(await reopeningOf(members.id)).toEqual({
+        before: { done: true },
+        after: { done: false },
+      });
+    });
+
+    it('gives back a done one reopened while the member it is given to is being removed', async () => {
+      const leaving = await createUser('同時 八郎', [{ organizationId: orgA, role: 'member' }]);
+      const leadId = await createLead(orgA, ids.leadOwner);
+      const task = await add(leadId, await createDeal(orgA, leadId, leaving.id));
+      await rep.leadFollowUp.updateTask({ organizationId: orgA, id: task.id, done: true });
+      const other = postgres(url as string, { max: 1 });
+      let reopening: Promise<Awaited<ReturnType<typeof reopen>> | Error> = Promise.resolve(
+        new Error('not reopened')
+      );
+      try {
+        await other.begin(async (tx) => {
+          // Their removal holds the membership until it is done
+          await tx`delete from organization_members where organization_id = ${orgA} and user_id = ${leaving.id}`;
+          reopening = settled(reopen(task.id));
+          await untilBlockedBy(await backendPid(tx));
+        });
+      } finally {
+        await other.end();
+      }
+
+      const reopened = await reopening;
+      if (reopened instanceof Error) throw reopened;
+      expect(reopened).toMatchObject({ done: false, assigneeId: null, assignee: null });
       expect((await taskRow(task.id)).assigneeId).toBeNull();
       expect(await mineOf(leadOwner)).toContain(task.id);
     });

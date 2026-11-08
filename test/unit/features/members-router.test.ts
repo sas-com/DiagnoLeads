@@ -156,7 +156,8 @@ describe('Members Router', () => {
       where: vi.fn().mockReturnThis(),
       delete: vi.fn().mockReturnThis(),
     };
-    // The same query mocks under another object, to tell what runs inside the transaction
+    // The same query mocks under another object: the object a query is called on (its mock's
+    // contexts) tells whether it ran inside the transaction
     mockTx = { ...mockDb };
     mockDb.transaction = vi.fn(async (run: (tx: unknown) => Promise<unknown>) => run(mockTx));
 
@@ -606,7 +607,8 @@ describe('Members Router', () => {
       expect(result.message).toContain('メンバーを削除しました');
       // The membership is deleted, then the next actions given to them go back, in one transaction
       expect(mockDb.transaction).toHaveBeenCalledTimes(1);
-      expect(mockTx.delete).toHaveBeenCalledTimes(1);
+      expect(mockDb.delete.mock.contexts).toHaveLength(1);
+      expect(mockDb.delete.mock.contexts[0]).toBe(mockTx);
       expect(followUpMock.releaseTaskAssignments).toHaveBeenCalledTimes(1);
       const [executor, release] = followUpMock.releaseTaskAssignments.mock.calls[0];
       expect(executor).toBe(mockTx);
