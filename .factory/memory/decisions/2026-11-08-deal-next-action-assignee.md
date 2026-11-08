@@ -5,8 +5,8 @@ category: Sales
 title: "開いた商談の画面で入れた次の行動は、商談の担当とリードの担当が違うときだけ商談の担当に割り当てる（#853）"
 status: active
 superseded_by: []
-issues: [853, 856]
-paths: ["lib/features/lead-follow-up/service.ts", "lib/features/lead-follow-up/api/router.ts", "lib/features/lead-follow-up/types/schemas.ts", "components/features/lead-follow-up/add-next-action-dialog.tsx", "components/features/lead-follow-up/use-deal-next-action-recipient.ts"]
+issues: [853, 856, 968]
+paths: ["lib/features/lead-follow-up/service.ts", "lib/features/lead-follow-up/api/router.ts", "lib/features/lead-follow-up/types/schemas.ts", "components/features/lead-follow-up/add-next-action-dialog.tsx", "components/features/lead-follow-up/use-deal-next-action-recipient.ts", "lib/features/members/api/router.ts"]
 ---
 
 ### [Sales] 開いた商談の画面で入れた次の行動は、商談の担当とリードの担当が違うときだけ商談の担当に割り当てる（#853）
@@ -26,6 +26,8 @@ paths: ["lib/features/lead-follow-up/service.ts", "lib/features/lead-follow-up/a
   - `dealId` を送るには商談を読める必要がある（ルーターの `canReadDeals`。読めない役割は FORBIDDEN。連絡の記録の商談と同じ）
   - サービスは、リードを FOR NO KEY UPDATE でロックしてから商談を読む（商談の変更・削除もリードを先にロックするので、読んだステージと担当は追加が終わるまで変わらない）。商談は id・組織・リードの3つで読み、無ければ BAD_REQUEST。別のリードの商談・別の組織の商談・存在しない id に同じ答えを返し、存在を漏らさない
   - 監査の行は `metadata.dealId` を持ち（受注・失注の商談でも）、割り当てたときだけ `changes.after.assigneeId` を持つ
+  - 割り当てた人を組織から外すと（`lib/features/members/api/router.ts` の remove）、同じトランザクションで、その組織の未完了の次の行動・持ち帰り事項のうち、その人に割り当てたものの割り当てを戻す（`releaseTaskAssignments`。#968）。戻したものは、リードの担当 → 追加した人に出る。完了したもの（記録として割り当てを残す）・ほかの組織のもの・ほかの人に割り当てたものは変えない。完了したものを未完了に戻すとき、割り当てた人が担当を持てない（メンバーでない・閲覧だけの役割）なら割り当てを外す（`updateTask`。監査の行の before/after に `assigneeId`。security-specialist のレビュー、2026-11-08）。送った期限の通知は送り直さない。監査の行はタスクごとに1行（`action: 'update'`、`changes` は `assigneeId` の前後、`metadata` は `leadId` と `via: 'member_removed'`、`userId` は外した人）
+  - 追加・未完了に戻すと外すが重なっても戻し損ねない：追加するときは割り当てる人の、未完了に戻すときは割り当てた人の、メンバーの行を FOR KEY SHARE でロックしてから、担当を持てるかを確かめる（`holdAssignableMember`。役割の変更は待たせない）。外す処理は、メンバーの行を消してから戻す（消すのがそれらの終わりを待ち、そのあとの UPDATE がそれらも戻す。消した後の追加はその人に割り当てず、未完了に戻すと割り当てを外す）。アカウントの削除（`lib/features/account/deletion.ts`）は、組織の全メンバーの行を FOR UPDATE でロックしてから users を消すので、ロックの順が逆になる。重なると、まれに片方がデッドロックで失敗する（やり直せば通り、データは壊れない。直し方は #975）
   - 割り当てた次の行動には、リードの画面と商談の詳細のカードに「割り当て：名前」を出す（辞めた人でも名前を出す）。ダイアログと商談の詳細の追加フォームは、送信ボタンの上に、知らせが誰に出るかを言い切る（開いた商談で、商談の担当が担当を持てるメンバーのときはその人。自分なら「あなた」。ほかは「リードの担当（いなければあなた）」）
   - ボードのカードと一覧の行の「次の行動を追加」は、警告が出る開いた商談にだけ、商談を書ける人（`canEdit`）に出す。追加したらボードを読み直し、フォーカスは商談名のリンクへ移す（ボタンは消えるため）。追加せずに閉じたら、ボタンに戻す
   - 商談の「次の一手」（`deals.next_step`）の API は、送られても受け付けて捨てる（#888 で済み）。列を消すのは別の Issue
@@ -37,4 +39,4 @@ paths: ["lib/features/lead-follow-up/service.ts", "lib/features/lead-follow-up/a
 - **見直しの条件**:
   - 割り当てた後で商談の担当を変えても次の行動が移らないことが問題になったら、B-3 にするか、画面で割り当てを変えられるようにするかを決める（別の Issue）
   - リードの担当がリードの画面で入れた次の行動は、商談の担当の「今日」には出ない（リード単位の次の行動の性質）。同じリードに開いた商談が並ぶ運用が出たら、案 C を検討する（決定 `2026-10-28-consolidate-input-places` の見直しの条件）
-  - 割り当てた次の行動は、リードや商談の担当を付け替えても戻らない。割り当てた人を組織から外すと、誰の「今日」にも通知にも出なくなる（メンバーを外すときに戻す処理は #968）
+  - 割り当てた次の行動は、リードや商談の担当を付け替えても戻らない。メンバーを外すと戻る（#968）

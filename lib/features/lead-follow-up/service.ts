@@ -11,7 +11,9 @@
  * deal's owner when they are not the lead's assignee: it is given to them (assignee_id), so the
  * one the deal's warning is for sees it under "mine" and gets its due notices. Otherwise it
  * follows the lead's assignee, as every other task does (dealOwnerAssignee, decision
- * 2026-11-08-deal-next-action-assignee). A later change of either owner does not move it.
+ * 2026-11-08-deal-next-action-assignee). A later change of either owner does not move it; removing
+ * the member it is given to from the organization gives it back while it is open
+ * (releaseTaskAssignments, #968).
  */
 
 import type { db as defaultDb } from '@/lib/db/client';
@@ -83,23 +85,24 @@ async function assertLeadInOrganization(
   return lead;
 }
 
-async function writeAudit(
-  db: Executor,
-  entry: {
-    organizationId: string;
-    userId: string;
-    at: Date;
-    action: Extract<AuditAction, 'create' | 'update' | 'delete'>;
-    resource: typeof CONTACT_AUDIT_RESOURCE | typeof TASK_AUDIT_RESOURCE;
-    resourceId: string;
-    leadId: string;
-    changes: { before?: Record<string, unknown>; after?: Record<string, unknown> };
-    via?: 'hearing';
-    /** The deal a next action was added for (#853) */
-    dealId?: string | null;
-  }
-) {
-  await db.insert(auditLogs).values({
+interface AuditEntry {
+  organizationId: string;
+  userId: string;
+  at: Date;
+  action: Extract<AuditAction, 'create' | 'update' | 'delete'>;
+  resource: typeof CONTACT_AUDIT_RESOURCE | typeof TASK_AUDIT_RESOURCE;
+  resourceId: string;
+  leadId: string;
+  changes: { before?: Record<string, unknown>; after?: Record<string, unknown> };
+  /** What the change came from, when not from the task itself: its hearing, a member's removal */
+  via?: 'hearing' | 'member_removed';
+  /** The deal a next action was added for (#853) */
+  dealId?: string | null;
+}
+
+/** The audit_logs row of one change */
+function auditRowOf(entry: AuditEntry): typeof auditLogs.$inferInsert {
+  return {
     organizationId: entry.organizationId,
     userId: entry.userId,
     action: entry.action,
@@ -112,7 +115,11 @@ async function writeAudit(
       ...(entry.dealId ? { dealId: entry.dealId } : {}),
     },
     createdAt: entry.at,
-  });
+  };
+}
+
+async function writeAudit(db: Executor, entry: AuditEntry) {
+  await db.insert(auditLogs).values(auditRowOf(entry));
 }
 
 /* ------------------------------------------------------------- Contacts */
@@ -378,7 +385,8 @@ function actorOf(
 /**
  * The member responsible for a task, who sees it under "mine" and gets its due notices: its
  * assignee (given only to a next action added for a deal whose owner is not the lead's assignee,
- * #853), else the lead's assignee (#135), else whoever created it. Needs leads joined.
+ * #853, and given back while open when they are removed from the organization, #968), else the
+ * lead's assignee (#135), else whoever created it. Needs leads joined.
  */
 export const responsibleUserSql: SQL<string | null> =
   sql`coalesce(${leadTasks.assigneeId}, ${leads.assigneeUserId}, ${leadTasks.createdBy})`;
@@ -424,6 +432,26 @@ async function assigneeNamesOf(db: Executor, userId: string | null): Promise<Tas
 const CLOSED_DEAL_STAGES: readonly string[] = ['won', 'lost'];
 
 /**
+ * The member when the user may hold the organization's tasks (findAssignableMember: a member, not
+ * a read-only role), with their membership held until the transaction ends (FOR KEY SHARE, which
+ * a change of role does not wait for): their removal from the organization waits for it, and then
+ * gives back what this transaction gave them (releaseTaskAssignments); once removed, none
+ */
+async function holdAssignableMember(tx: Transaction, organizationId: string, userId: string) {
+  await tx
+    .select({ id: organizationMembers.id })
+    .from(organizationMembers)
+    .where(
+      and(
+        eq(organizationMembers.organizationId, organizationId),
+        eq(organizationMembers.userId, userId)
+      )
+    )
+    .for('key share');
+  return findAssignableMember(tx, organizationId, userId);
+}
+
+/**
  * Whom a next action added for a deal is given to (#853, decision
  * 2026-11-08-deal-next-action-assignee): the owner of an open deal when they are not the lead's
  * assignee (a lead without one counts as another), so that the one the deal's warning is for (the
@@ -439,6 +467,8 @@ const CLOSED_DEAL_STAGES: readonly string[] = ['won', 'lost'];
  * The deal must be one of the lead's in the organization (notADealOfTheLead otherwise). Called
  * with the lead locked: a deal is changed or deleted with its lead locked first
  * (lib/features/deals/service.ts), so its stage and owner stay as read until the task is in.
+ * The owner's membership is held too (holdAssignableMember), so that removing them at the same
+ * time gives the task back.
  */
 async function dealOwnerAssignee(
   tx: Transaction,
@@ -457,7 +487,7 @@ async function dealOwnerAssignee(
   if (!deal) throw notADealOfTheLead();
   if (CLOSED_DEAL_STAGES.includes(deal.stage)) return null;
   if (!deal.ownerUserId || deal.ownerUserId === input.leadAssigneeId) return null;
-  const member = await findAssignableMember(tx, input.organizationId, deal.ownerUserId);
+  const member = await holdAssignableMember(tx, input.organizationId, deal.ownerUserId);
   return member ? { id: member.userId, name: memberDisplayName(member) } : null;
 }
 
@@ -605,12 +635,15 @@ type TaskAuditValues = {
   kind?: string;
   checkWith?: string | null;
   checkWithUserId?: string | null;
+  assigneeId?: string | null;
 };
 
 /**
  * Change the title, due date, note, kind or whom to check with, or tick it done / reopen it.
  * Only changed fields count. Moving the due date clears the due notices so the new date gets
- * its own (see due-notifications.ts).
+ * its own (see due-notifications.ts). Reopening one given to someone who may no longer hold it
+ * (removed from the organization, or a read-only role) gives it back, as their removal gave back
+ * their open ones (#968): it follows the lead's assignee again, else whoever added it.
  */
 export async function updateTask(
   db: Database,
@@ -646,11 +679,24 @@ export async function updateTask(
       set.note = input.note;
     }
     const wasDone = current.completedAt !== null;
+    let assigneeId = current.assigneeId;
     if (input.done !== undefined && input.done !== wasDone) {
       before.done = wasDone;
       after.done = input.done;
       set.completedAt = input.done ? now : null;
       set.completedBy = input.done ? input.userId : null;
+      // Reopened while given to someone who may no longer hold it: given back. Their membership
+      // is held while it is checked, as when a task is given to them (holdAssignableMember)
+      if (
+        !input.done &&
+        assigneeId &&
+        !(await holdAssignableMember(tx, input.organizationId, assigneeId))
+      ) {
+        before.assigneeId = assigneeId;
+        after.assigneeId = null;
+        set.assigneeId = null;
+        assigneeId = null;
+      }
     }
     const kind = input.kind ?? (current.kind as TaskKind);
     if (kind !== current.kind) {
@@ -694,8 +740,9 @@ export async function updateTask(
     const member = checkWithUserId
       ? await checkWithMember(tx, input.organizationId, checkWithUserId).catch(() => null)
       : null;
-    // A change never gives the task to someone else: the assignee stays as it is
-    const names = { ...member, ...(await assigneeNamesOf(tx, current.assigneeId)) };
+    // A change never gives the task to someone else: the assignee stays, unless a reopen gave it
+    // back above
+    const names = { ...member, ...(await assigneeNamesOf(tx, assigneeId)) };
     if (Object.keys(set).length === 0) return toTaskView(current, names);
 
     const [row] = await tx
@@ -740,6 +787,62 @@ export async function deleteTask(
     });
     return { id: row.id, leadId: row.leadId };
   });
+}
+
+/**
+ * Audit rows of releaseTaskAssignments inserted per statement: 8 parameters each, and PostgreSQL
+ * takes 65,535 parameters a statement
+ */
+export const RELEASED_TASK_AUDIT_BATCH = 1000;
+
+/**
+ * When a member is removed from the organization (#968): give back the open next actions and
+ * takeaways given to them (assignee_id), which then follow the lead's assignee, else whoever added
+ * them (responsibleUserSql), so that someone sees them on 今日 and gets their due notices again (a
+ * notice already sent is not sent again). Done ones keep their assignee as a record until one is
+ * reopened (updateTask gives it back then), and the user's tasks of other organizations keep it
+ * too. Each task given back gets an audit row of its own: an update of its assignee, via
+ * 'member_removed', by the member who removed them.
+ *
+ * Runs in the removal's transaction, after the membership is deleted: a next action being added
+ * for a deal of theirs or reopened holds the membership while it checks them
+ * (holdAssignableMember), so the deletion waits for it and this update, a later statement, gives
+ * it back too. Returns the ids of the tasks given back.
+ */
+export async function releaseTaskAssignments(
+  tx: Transaction,
+  input: { organizationId: string; userId: string; actorUserId: string },
+  now: Date = new Date()
+): Promise<string[]> {
+  const released = await tx
+    .update(leadTasks)
+    .set({ assigneeId: null, updatedBy: input.actorUserId, updatedAt: now })
+    .where(
+      and(
+        eq(leadTasks.organizationId, input.organizationId),
+        eq(leadTasks.assigneeId, input.userId),
+        isNull(leadTasks.completedAt)
+      )
+    )
+    .returning({ id: leadTasks.id, leadId: leadTasks.leadId });
+  for (let start = 0; start < released.length; start += RELEASED_TASK_AUDIT_BATCH) {
+    await tx.insert(auditLogs).values(
+      released.slice(start, start + RELEASED_TASK_AUDIT_BATCH).map((task) =>
+        auditRowOf({
+          organizationId: input.organizationId,
+          userId: input.actorUserId,
+          at: now,
+          action: 'update',
+          resource: TASK_AUDIT_RESOURCE,
+          resourceId: task.id,
+          leadId: task.leadId,
+          changes: { before: { assigneeId: input.userId }, after: { assigneeId: null } },
+          via: 'member_removed',
+        })
+      )
+    );
+  }
+  return released.map((task) => task.id);
 }
 
 /**
