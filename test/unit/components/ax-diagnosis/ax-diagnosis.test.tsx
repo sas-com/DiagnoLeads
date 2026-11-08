@@ -1009,6 +1009,47 @@ describe('AxDiagnosisResult', () => {
       expect(stepTitles()).toEqual(['棚卸し', '進め方の決定', 'Web に移す', 'AX化']);
     });
 
+    describe('the handling of the data in the tool (#844)', () => {
+      /** Opens the follow-ups, chooses the given kinds of data and sends them */
+      const sendDataKinds = async (labels: RegExp[]) => {
+        fetchMock.mockResolvedValue(jsonResponse(200, { result: accessResult() }));
+        const user = userEvent.setup();
+        renderAccess();
+        const followUp = within(screen.getByTestId('ax-follow-up'));
+        await user.click(followUp.getByRole('button', { name: /追加質問/ }));
+        const kinds = within(followUp.getByRole('group', { name: /このツールのデータに入っているもの/ }));
+        for (const label of labels) await user.click(kinds.getByLabelText(label));
+        await user.click(followUp.getByRole('button', { name: '回答して結果を更新する' }));
+        return screen.findByText(/結果を更新しました/);
+      };
+      const note = () => screen.queryByTestId('ax-follow-up-data-handling');
+
+      it('says it is decided in the consultation once personal or confidential data is sent', async () => {
+        const done = await sendDataKinds([/社員の個人情報/, /わからない/]);
+        expect(note()).toHaveTextContent(
+          '個人情報や社外秘のデータの扱い方も、ご相談のなかで一緒に決めます。'
+        );
+        // In the confirmation the focus moves to, so it is announced with it
+        expect(done.closest('output')).toContainElement(note());
+        // No new promise about the data (#296)
+        expect(note()).not.toHaveTextContent(/預か|伏せ|無料|安全/);
+      });
+
+      it('says it for confidential data that is not personal too', async () => {
+        await sendDataKinds([/個人情報ではない社外秘の情報/]);
+        expect(note()).toBeInTheDocument();
+      });
+
+      it('says nothing without personal or confidential data', async () => {
+        await sendDataKinds([/個人情報も社外秘の情報も入っていない/]);
+        expect(note()).not.toBeInTheDocument();
+        cleanup();
+
+        await sendDataKinds([/わからない/]);
+        expect(note()).not.toBeInTheDocument();
+      });
+    });
+
     it('shows no path for the other systems', () => {
       renderResult();
       expect(screen.queryByTestId('ax-result-access-path')).not.toBeInTheDocument();
