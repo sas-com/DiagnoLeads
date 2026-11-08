@@ -1,191 +1,185 @@
 /**
- * useNotifications Hook Tests
+ * The notification hooks, called through renderHook with only tRPC mocked (#797)
  */
+import { renderHook } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { describe, expect, it, vi } from 'vitest';
+type ListInput = { organizationId?: string; limit: number; unreadOnly: boolean };
+type OrganizationInput = { organizationId?: string };
+type PollOptions = { refetchInterval: number };
+type EnabledOptions = { enabled: boolean };
+type MutationOptions = { onSuccess: () => void };
 
-// Mock tRPC
-vi.mock('@/lib/trpc/client', () => ({
-  trpc: {
-    useContext: () => ({
-      notifications: {
-        list: { invalidate: vi.fn() },
-        unreadCount: { invalidate: vi.fn() },
-      },
-    }),
+const mocks = vi.hoisted(() => {
+  // One result per query and mutation for every render, like tRPC's hooks while nothing changes
+  const results = {
+    list: { data: [{ id: 'notification-1' }], isLoading: false },
+    unreadCount: { data: 3, isLoading: false },
+    getPreferences: { data: { emailEnabled: true }, isLoading: false },
+    markAsRead: { mutate: vi.fn(), isPending: false },
+    markAllAsRead: { mutate: vi.fn(), isPending: false },
+    delete: { mutate: vi.fn(), isPending: false },
+    updatePreferences: { mutate: vi.fn(), isPending: false },
+  };
+  return {
+    results,
+    listUseQuery: vi.fn((_input: ListInput, _options: PollOptions) => results.list),
+    unreadCountUseQuery: vi.fn(
+      (_input: OrganizationInput, _options: PollOptions) => results.unreadCount
+    ),
+    getPreferencesUseQuery: vi.fn(
+      (_input: OrganizationInput, _options: EnabledOptions) => results.getPreferences
+    ),
+    markAsReadUseMutation: vi.fn((_options: MutationOptions) => results.markAsRead),
+    markAllAsReadUseMutation: vi.fn((_options: MutationOptions) => results.markAllAsRead),
+    deleteUseMutation: vi.fn((_options: MutationOptions) => results.delete),
+    updatePreferencesUseMutation: vi.fn((_options: MutationOptions) => results.updatePreferences),
+    invalidateList: vi.fn(),
+    invalidateUnreadCount: vi.fn(),
+    invalidatePreferences: vi.fn(),
+  };
+});
+
+vi.mock('@/lib/trpc/client', () => {
+  // One utils object for every render, like trpc.useUtils inside the same provider
+  const utils = {
     notifications: {
-      list: {
-        useQuery: vi.fn(() => ({
-          data: { notifications: [], total: 0 },
-          isLoading: false,
-        })),
-      },
-      unreadCount: {
-        useQuery: vi.fn(() => ({
-          data: { count: 0 },
-          isLoading: false,
-        })),
-      },
-      markAsRead: {
-        useMutation: vi.fn(() => ({
-          mutate: vi.fn(),
-          mutateAsync: vi.fn(),
-        })),
-      },
-      markAllAsRead: {
-        useMutation: vi.fn(() => ({
-          mutate: vi.fn(),
-          mutateAsync: vi.fn(),
-        })),
+      list: { invalidate: mocks.invalidateList },
+      unreadCount: { invalidate: mocks.invalidateUnreadCount },
+      getPreferences: { invalidate: mocks.invalidatePreferences },
+    },
+  };
+  return {
+    trpc: {
+      useUtils: () => utils,
+      notifications: {
+        list: { useQuery: mocks.listUseQuery },
+        unreadCount: { useQuery: mocks.unreadCountUseQuery },
+        getPreferences: { useQuery: mocks.getPreferencesUseQuery },
+        markAsRead: { useMutation: mocks.markAsReadUseMutation },
+        markAllAsRead: { useMutation: mocks.markAllAsReadUseMutation },
+        delete: { useMutation: mocks.deleteUseMutation },
+        updatePreferences: { useMutation: mocks.updatePreferencesUseMutation },
       },
     },
-  },
-}));
+  };
+});
 
-describe('Notification types', () => {
-  it('should define notification structure', () => {
-    type Notification = {
-      id: string;
-      type: string;
-      title: string;
-      message: string;
-      read: boolean;
-      createdAt: Date;
-      link?: string;
-      data?: Record<string, unknown>;
-    };
+// Import after mocks
+import {
+  useDeleteNotification,
+  useMarkAllAsRead,
+  useMarkAsRead,
+  useNotificationPreferences,
+  useNotifications,
+  useUnreadCount,
+  useUpdateNotificationPreferences,
+} from '@/hooks/use-notifications';
 
-    const notification: Notification = {
-      id: 'notif-123',
-      type: 'new_lead',
-      title: '新しいリード',
-      message: '新しいリードが追加されました',
-      read: false,
-      createdAt: new Date(),
-      link: '/leads/lead-456',
-    };
+const ORG_ID = 'org-1';
 
-    expect(notification.read).toBe(false);
-    expect(notification.type).toBe('new_lead');
+/** The onSuccess the hook gave to useMutation on its last render */
+function onSuccessOf(useMutation: { mock: { lastCall?: [MutationOptions] } }): () => void {
+  const options = useMutation.mock.lastCall?.[0];
+  if (!options) throw new Error('useMutation was not called');
+  return options.onSuccess;
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+describe('useNotifications', () => {
+  it('lists the first 20 notifications, read or not, and polls every 30 seconds', () => {
+    const { result } = renderHook(() => useNotifications(ORG_ID));
+    expect(mocks.listUseQuery).toHaveBeenLastCalledWith(
+      { organizationId: ORG_ID, limit: 20, unreadOnly: false },
+      { refetchInterval: 30000 }
+    );
+    expect(result.current).toBe(mocks.results.list);
+  });
+
+  it('passes the limit and the unread filter it is given', () => {
+    renderHook(() => useNotifications(ORG_ID, { limit: 5, unreadOnly: true }));
+    expect(mocks.listUseQuery).toHaveBeenLastCalledWith(
+      { organizationId: ORG_ID, limit: 5, unreadOnly: true },
+      { refetchInterval: 30000 }
+    );
   });
 });
 
-describe('Notification list response', () => {
-  it('should define list response structure', () => {
-    type ListNotificationsResponse = {
-      notifications: Array<{ id: string; title: string; read: boolean }>;
-      total: number;
-      page: number;
-      perPage: number;
-    };
-
-    const response: ListNotificationsResponse = {
-      notifications: [
-        { id: '1', title: 'Notification 1', read: false },
-        { id: '2', title: 'Notification 2', read: true },
-      ],
-      total: 50,
-      page: 1,
-      perPage: 20,
-    };
-
-    expect(response.notifications).toHaveLength(2);
-    expect(response.total).toBe(50);
+describe('useUnreadCount', () => {
+  it('counts the unread notifications of the organization and polls every 30 seconds', () => {
+    const { result } = renderHook(() => useUnreadCount(ORG_ID));
+    expect(mocks.unreadCountUseQuery).toHaveBeenLastCalledWith(
+      { organizationId: ORG_ID },
+      { refetchInterval: 30000 }
+    );
+    expect(result.current).toBe(mocks.results.unreadCount);
   });
 });
 
-describe('Unread count', () => {
-  it('should define unread count response', () => {
-    type UnreadCountResponse = {
-      count: number;
-    };
+describe.each([
+  ['useMarkAsRead', useMarkAsRead, mocks.markAsReadUseMutation, mocks.results.markAsRead],
+  [
+    'useMarkAllAsRead',
+    useMarkAllAsRead,
+    mocks.markAllAsReadUseMutation,
+    mocks.results.markAllAsRead,
+  ],
+  ['useDeleteNotification', useDeleteNotification, mocks.deleteUseMutation, mocks.results.delete],
+] as const)('%s', (_name, hook, useMutation, mutation) => {
+  it('returns the mutation', () => {
+    const { result } = renderHook(() => hook());
+    expect(result.current).toBe(mutation);
+  });
 
-    const response: UnreadCountResponse = {
-      count: 5,
-    };
+  it('refreshes the list and the unread count once the change succeeds', () => {
+    renderHook(() => hook());
+    expect(mocks.invalidateList).not.toHaveBeenCalled();
+    expect(mocks.invalidateUnreadCount).not.toHaveBeenCalled();
 
-    expect(response.count).toBe(5);
+    onSuccessOf(useMutation)();
+
+    expect(mocks.invalidateList).toHaveBeenCalledTimes(1);
+    expect(mocks.invalidateUnreadCount).toHaveBeenCalledTimes(1);
+    expect(mocks.invalidatePreferences).not.toHaveBeenCalled();
   });
 });
 
-describe('Mark as read', () => {
-  it('should define mark as read input', () => {
-    type MarkAsReadInput = {
-      notificationId: string;
-      organizationId: string;
-    };
-
-    const input: MarkAsReadInput = {
-      notificationId: 'notif-123',
-      organizationId: 'org-123',
-    };
-
-    expect(input.notificationId).toBe('notif-123');
+describe('useNotificationPreferences', () => {
+  it('fetches the preferences of the organization', () => {
+    const { result } = renderHook(() => useNotificationPreferences(ORG_ID));
+    expect(mocks.getPreferencesUseQuery).toHaveBeenLastCalledWith(
+      { organizationId: ORG_ID },
+      { enabled: true }
+    );
+    expect(result.current).toBe(mocks.results.getPreferences);
   });
 
-  it('should define mark all as read input', () => {
-    type MarkAllAsReadInput = {
-      organizationId: string;
-    };
-
-    const input: MarkAllAsReadInput = {
-      organizationId: 'org-123',
-    };
-
-    expect(input.organizationId).toBe('org-123');
+  it('waits while there is no organization id', () => {
+    renderHook(() => useNotificationPreferences(''));
+    expect(mocks.getPreferencesUseQuery).toHaveBeenLastCalledWith(
+      { organizationId: '' },
+      { enabled: false }
+    );
   });
 });
 
-describe('Notification types enum', () => {
-  it('should define notification types', () => {
-    const NOTIFICATION_TYPES = {
-      NEW_LEAD: 'new_lead',
-      LEAD_SCORED: 'lead_scored',
-      LEAD_STATUS_CHANGED: 'lead_status_changed',
-      WEBHOOK_FAILED: 'webhook_failed',
-      EXPORT_READY: 'export_ready',
-      MEMBER_INVITED: 'member_invited',
-      SYSTEM_ALERT: 'system_alert',
-    } as const;
-
-    expect(NOTIFICATION_TYPES.NEW_LEAD).toBe('new_lead');
-    expect(NOTIFICATION_TYPES.WEBHOOK_FAILED).toBe('webhook_failed');
+describe('useUpdateNotificationPreferences', () => {
+  it('returns the mutation', () => {
+    const { result } = renderHook(() => useUpdateNotificationPreferences());
+    expect(result.current).toBe(mocks.results.updatePreferences);
   });
-});
 
-describe('useNotifications hook return', () => {
-  it('should return notification data and actions', () => {
-    type UseNotificationsReturn = {
-      notifications: Array<{ id: string; title: string }>;
-      unreadCount: number;
-      isLoading: boolean;
-      markAsRead: (id: string) => void;
-      markAllAsRead: () => void;
-      refresh: () => void;
-    };
+  it('refreshes only the preferences once the change succeeds', () => {
+    renderHook(() => useUpdateNotificationPreferences());
+    expect(mocks.invalidatePreferences).not.toHaveBeenCalled();
 
-    const result: UseNotificationsReturn = {
-      notifications: [],
-      unreadCount: 0,
-      isLoading: false,
-      markAsRead: vi.fn(),
-      markAllAsRead: vi.fn(),
-      refresh: vi.fn(),
-    };
+    onSuccessOf(mocks.updatePreferencesUseMutation)();
 
-    expect(result.unreadCount).toBe(0);
-    expect(typeof result.markAsRead).toBe('function');
-  });
-});
-
-describe('Toast messages', () => {
-  it('should define notification toast messages', () => {
-    const messages = {
-      markedAsRead: '既読にしました',
-      markedAllAsRead: 'すべて既読にしました',
-      error: 'エラーが発生しました',
-    };
-
-    expect(messages.markedAllAsRead).toContain('既読');
+    expect(mocks.invalidatePreferences).toHaveBeenCalledTimes(1);
+    expect(mocks.invalidateList).not.toHaveBeenCalled();
+    expect(mocks.invalidateUnreadCount).not.toHaveBeenCalled();
   });
 });
