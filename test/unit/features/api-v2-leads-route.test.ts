@@ -33,7 +33,10 @@ chain.where.mockReturnValue(chain);
 
 const getAuthenticatedOrganization = vi.fn();
 
-const { emitLeadEvents } = vi.hoisted(() => ({ emitLeadEvents: vi.fn() }));
+const { emitLeadEvents, forgetLeadsInDeliveries } = vi.hoisted(() => ({
+  emitLeadEvents: vi.fn(),
+  forgetLeadsInDeliveries: vi.fn().mockResolvedValue(0),
+}));
 
 vi.mock('@/lib/db', () => ({ db }));
 vi.mock('@/lib/api/v2-auth', () => ({ getAuthenticatedOrganization }));
@@ -42,6 +45,7 @@ vi.mock('@/lib/api/v2-auth', () => ({ getAuthenticatedOrganization }));
 vi.mock('@/lib/features/webhooks/services/lead-events', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/features/webhooks/services/lead-events')>()),
   emitLeadEvents,
+  forgetLeadsInDeliveries,
 }));
 
 const { GET, PATCH, DELETE } = await import('@/app/api/v2/leads/[id]/route');
@@ -346,6 +350,8 @@ describe('DELETE /api/v2/leads/[id]', () => {
     expect(emitLeadEvents).toHaveBeenCalledWith(ORG_ID, [
       { type: 'lead.deleted', leadId: LEAD_ID, deletedAt: expect.any(Date) },
     ]);
+    // Its personal data leaves the webhook deliveries, in the same transaction (#918)
+    expect(forgetLeadsInDeliveries).toHaveBeenCalledWith(expect.anything(), ORG_ID, [LEAD_ID]);
   });
 
   it('sends no event when a concurrent request deleted the lead first', async () => {

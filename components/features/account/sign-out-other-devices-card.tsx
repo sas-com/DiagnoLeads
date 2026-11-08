@@ -20,7 +20,7 @@ import { toast } from 'sonner';
 
 /**
  * Sign out every other device and browser of the signed-in person, after a confirmation (#647).
- * better-auth (1.6.33) deletes the user's other sessions (POST /revoke-other-sessions) and keeps
+ * better-auth (1.7.14) deletes the user's other sessions (POST /revoke-other-sessions) and keeps
  * the session of this browser as it is, so this tab stays signed in; the client then reads the
  * session again. A signed-out device, or a copy of its cookie, is refused from its next request
  * (session.cookieCache is off, #578). Sessions also end 7 days after sign-in without being

@@ -1,7 +1,13 @@
 'use client';
 
 import { authClient } from '@/lib/auth/client';
-import { RiArrowDownSLine, RiLogoutBoxRLine, RiSettings4Line, RiUserLine } from '@remixicon/react';
+import {
+  RiArrowDownSLine,
+  RiLogoutBoxRLine,
+  RiQuestionLine,
+  RiSettings4Line,
+  RiUserLine,
+} from '@remixicon/react';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -124,6 +130,15 @@ export default function UserDropdown() {
             >
               <RiSettings4Line className="w-4 h-4 text-gray-400 dark:text-gray-500" />
               {t('settings')}
+            </Link>
+            {/* The help center (#874) */}
+            <Link
+              href={`/${locale}/help`}
+              className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-700 transition-colors"
+              onClick={() => setIsOpen(false)}
+            >
+              <RiQuestionLine className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+              {t('help')}
             </Link>
           </div>
 

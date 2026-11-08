@@ -84,7 +84,7 @@ describe('column content', () => {
       '/ax-migration/column/access-accde-only',
       '/ax-migration/column/access-2gb-limit',
     ]);
-    expect(columnUpdatedAt('/ax-migration/column')).toBe('2026-10-24');
+    expect(columnUpdatedAt('/ax-migration/column')).toBe('2026-10-28');
     expect(columnUpdatedAt('/ax-migration/access')).toBeUndefined();
   });
 });
@@ -94,6 +94,11 @@ describe('the Access series', () => {
   const PUBLISHED_ON: Record<string, string> = {
     'access-file-types': '2026-10-23',
     'access-web-security': '2026-10-24',
+  };
+  /** Articles changed after they came out */
+  const UPDATED_ON: Record<string, string> = {
+    // The upkeep we provide after the move (#840)
+    'access-web-security': '2026-10-28',
   };
   const MICROSOFT_HOSTS = /^(learn|support)\.microsoft\.com$/;
   /**
@@ -126,7 +131,7 @@ describe('the Access series', () => {
       expect(column).toMatchObject({
         locale: 'ja',
         publishedAt: date,
-        updatedAt: date,
+        updatedAt: UPDATED_ON[column.slug] ?? date,
         related: 'access',
         cta: 'access-diagnosis',
       });

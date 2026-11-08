@@ -18,10 +18,33 @@ import {
 } from '@/lib/db/schema';
 import { and, asc, eq, gte, inArray, lt, lte, not, sql } from 'drizzle-orm';
 import { consumeRateLimits } from '../../diagnostics/rate-limit';
+import { LEAD_WEBHOOK_PERSONAL_FIELDS, PERSONAL_DATA_EVENTS } from '../types/personal-data';
 import { sendPinnedRequest } from './pinned-request';
 import { WEBHOOK_TEST_SEND_LIMITS, type WebhookTestSendLimit } from './test-send-limits';
 import { checkWebhookDestination, destinationErrorFor } from './url-guard';
 import { isReservedWebhookHeaderName } from './webhook-headers';
+
+// Constants of this file only (never user input), written into the SQL as literals. Built when
+// first used, not when the module loads
+const personalDataEventsSql = () => sql.raw(PERSONAL_DATA_EVENTS.map((e) => `'${e}'`).join(', '));
+const personalDataKeysSql = () =>
+  sql.raw(`ARRAY[${LEAD_WEBHOOK_PERSONAL_FIELDS.map((k) => `'${k}'`).join(', ')}]::text[]`);
+
+/**
+ * The stored payload without the lead's personal data (#918, decision
+ * 2026-11-05-lead-webhook-personal-data): once a delivery is finished its payload is only needed
+ * for its result, not for the person. Events without personal data keep their payload.
+ */
+const redactedPayloadSql =
+  () => sql`case when ${webhookDeliveries.eventType} in (${personalDataEventsSql()})
+  then jsonb_set(${webhookDeliveries.payload}, '{data}',
+    coalesce(${webhookDeliveries.payload} -> 'data', '{}'::jsonb) - ${personalDataKeysSql()})
+  else ${webhookDeliveries.payload} end`;
+
+/** The payload of a delivery still holds a lead's personal data */
+const holdsPersonalDataSql =
+  () => sql`(${webhookDeliveries.eventType} in (${personalDataEventsSql()})
+  and coalesce(${webhookDeliveries.payload} -> 'data', '{}'::jsonb) ?| ${personalDataKeysSql()})`;
 
 /**
  * Generate HMAC signature for webhook payload
@@ -348,6 +371,7 @@ async function recordAttempt(
         completedAt: new Date(),
         error: null,
         nextRetryAt: null,
+        payload: redactedPayloadSql(),
       })
       .where(eq(webhookDeliveries.id, deliveryId));
 
@@ -380,8 +404,12 @@ async function recordAttempt(
         ? null
         : new Date(Date.now() + retryConfig.retryDelayMs * 2 ** Math.max(attempts - 1, 0)),
       completedAt: exhausted ? new Date() : null,
+      // Kept while it may be retried, the personal data goes once it is finished (#918)
+      ...(exhausted ? { payload: redactedPayloadSql() } : {}),
     })
-    .where(eq(webhookDeliveries.id, deliveryId));
+    // Only while still pending: a delivery failed meanwhile because the URL changed must not be
+    // put back in the retry queue for the new URL (#927 review)
+    .where(and(eq(webhookDeliveries.id, deliveryId), eq(webhookDeliveries.status, 'pending')));
 
   // The first attempt of each event counts towards the webhook's failure count
   const failureCount = isRetry ? webhook.failureCount : webhook.failureCount + 1;
@@ -591,6 +619,33 @@ export async function triggerWebhooks(
   return { triggered, failed };
 }
 
+/** The error of deliveries failed because their webhook's URL changed (#927 review) */
+export const WEBHOOK_URL_CHANGED_ERROR =
+  'url_changed: the webhook was moved to another URL before this delivery was retried';
+
+/**
+ * Deliveries still waiting for a retry were stored for the old URL: when the URL changes they are
+ * failed rather than sent to the new one, which nobody confirmed them for (#927 review). Call it
+ * with a webhook already read within the organization, in the transaction that moves it.
+ */
+export async function cancelPendingDeliveries(
+  database: Database | DatabaseTransaction,
+  webhookId: string
+): Promise<number> {
+  const rows = await database
+    .update(webhookDeliveries)
+    .set({
+      status: 'failed',
+      nextRetryAt: null,
+      completedAt: new Date(),
+      error: WEBHOOK_URL_CHANGED_ERROR,
+      payload: redactedPayloadSql(),
+    })
+    .where(and(eq(webhookDeliveries.webhookId, webhookId), eq(webhookDeliveries.status, 'pending')))
+    .returning({ id: webhookDeliveries.id });
+  return rows.length;
+}
+
 /** How long one call of triggerWebhookBatch sends before it only queues the rest */
 export const WEBHOOK_BATCH_TIME_BUDGET_MS = 15_000;
 
@@ -667,7 +722,7 @@ export async function triggerWebhookBatch(
 async function failExpiredDeliveries(database: Database, now: Date): Promise<number> {
   const rows = await database
     .update(webhookDeliveries)
-    .set({ status: 'failed', nextRetryAt: null, completedAt: now })
+    .set({ status: 'failed', nextRetryAt: null, completedAt: now, payload: redactedPayloadSql() })
     .where(
       and(
         eq(webhookDeliveries.status, 'pending'),
@@ -685,7 +740,7 @@ async function failExpiredDeliveries(database: Database, now: Date): Promise<num
 async function failDueTestDeliveries(database: Database, now: Date): Promise<number> {
   const rows = await database
     .update(webhookDeliveries)
-    .set({ status: 'failed', nextRetryAt: null, completedAt: now })
+    .set({ status: 'failed', nextRetryAt: null, completedAt: now, payload: redactedPayloadSql() })
     .where(
       and(
         eq(webhookDeliveries.status, 'pending'),
@@ -717,7 +772,7 @@ async function failExhaustedDeliveries(database: Database, now: Date): Promise<n
 
   const rows = await database
     .update(webhookDeliveries)
-    .set({ status: 'failed', nextRetryAt: null, completedAt: now })
+    .set({ status: 'failed', nextRetryAt: null, completedAt: now, payload: redactedPayloadSql() })
     .where(and(inArray(webhookDeliveries.id, exhausted), eq(webhookDeliveries.status, 'pending')))
     .returning({ id: webhookDeliveries.id });
   return rows.length;
@@ -856,4 +911,62 @@ export async function cleanupOldDeliveries(daysToKeep = 30): Promise<number> {
     .returning({ id: webhookDeliveries.id });
 
   return deletedRows.length;
+}
+
+/**
+ * Remove the lead's personal data from finished deliveries that still hold it (#918): those
+ * finished before #918, or by a path that did not redact. Run daily by the webhook cron; each
+ * delivery is redacted when it finishes anyway.
+ */
+export async function redactFinishedDeliveries(database: Database = db): Promise<number> {
+  const rows = await database
+    .update(webhookDeliveries)
+    .set({ payload: redactedPayloadSql() })
+    .where(and(inArray(webhookDeliveries.status, ['success', 'failed']), holdsPersonalDataSql()))
+    .returning({ id: webhookDeliveries.id });
+  return rows.length;
+}
+
+/** The error of deliveries failed because their lead was deleted (#918) */
+export const WEBHOOK_LEAD_DELETED_ERROR =
+  'lead_deleted: the lead was deleted before this delivery was retried';
+
+/**
+ * Forget deleted leads in the organization's deliveries (#918): a delivery still waiting for a
+ * retry is failed (the lead is gone), and every delivery about them loses the personal data.
+ * Call it in the transaction that deletes the leads. Lead events carry the lead's id as `id`,
+ * diagnostic.submitted as `leadId`.
+ */
+export async function forgetLeadsInDeliveries(
+  database: Database | DatabaseTransaction,
+  organizationId: string,
+  leadIds: string[]
+): Promise<number> {
+  if (leadIds.length === 0) return 0;
+  const organizationWebhooks = database
+    .select({ id: webhooks.id })
+    .from(webhooks)
+    .where(eq(webhooks.organizationId, organizationId));
+  const pending = sql`${webhookDeliveries.status} = 'pending'`;
+  const rows = await database
+    .update(webhookDeliveries)
+    .set({
+      status: sql`case when ${pending} then 'failed' else ${webhookDeliveries.status} end`,
+      nextRetryAt: sql`case when ${pending} then null else ${webhookDeliveries.nextRetryAt} end`,
+      completedAt: sql`case when ${pending} then now() else ${webhookDeliveries.completedAt} end`,
+      error: sql`case when ${pending} then ${WEBHOOK_LEAD_DELETED_ERROR} else ${webhookDeliveries.error} end`,
+      payload: redactedPayloadSql(),
+    })
+    .where(
+      and(
+        inArray(webhookDeliveries.webhookId, organizationWebhooks),
+        sql`${webhookDeliveries.eventType} in (${personalDataEventsSql()})`,
+        sql`coalesce(${webhookDeliveries.payload} -> 'data' ->> 'id', ${webhookDeliveries.payload} -> 'data' ->> 'leadId') in (${sql.join(
+          leadIds.map((id) => sql`${id}`),
+          sql`, `
+        )})`
+      )
+    )
+    .returning({ id: webhookDeliveries.id });
+  return rows.length;
 }

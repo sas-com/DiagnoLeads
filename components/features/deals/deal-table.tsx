@@ -11,6 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import type { DealCard } from '@/lib/features/deals/service';
+import { isOpenStage } from '@/lib/features/deals/types/pipeline';
 import { cn } from '@/lib/utils';
 import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
@@ -18,6 +19,7 @@ import Link from 'next/link';
 import { dealMarks, formatDealDate, formatYen } from './deal-format';
 import type { DealSort, DealSortKey } from './deal-list-sort';
 import { DealMarks } from './deal-marks';
+import { DealNextTaskSummary } from './deal-next-task';
 import { DealStageBadge } from './deal-stage-badge';
 
 interface DealTableProps {
@@ -36,9 +38,10 @@ const LINK = cn('inline-flex items-center underline-offset-2 hover:underline', T
 /**
  * The board's deals as one table (Refs #436), sortable by stage (the board's order), amount and
  * expected close date (#720). Each row has the deal's lead (company and name, as on the board's
- * cards), its next step and the marks of its board card; a passed close date is said with an icon
- * and words, not only in red. The caption says the order, the headers' aria-sort too, and a line
- * above the table says how long won and lost deals stay listed.
+ * cards), the marks of its board card and next to them, as on the card, the lead's next action of
+ * an open deal (#853); a passed close date is said with an icon and words, not only in red. The
+ * caption says the order, the headers' aria-sort too, and a line above the table says how long
+ * won and lost deals stay listed.
  */
 export function DealTable({ deals, today, closedWithinDays, sort, onSort }: DealTableProps) {
   const t = useTranslations('deals');
@@ -81,12 +84,13 @@ export function DealTable({ deals, today, closedWithinDays, sort, onSort }: Deal
                 {t('fields.probability')}
               </TableHead>
               {sortable('expectedCloseOn', t('fields.expectedCloseOn'))}
+              {/* The alerts and the next action side by side: a missing one is marked next to it */}
               <TableHead className="text-gray-700 dark:text-gray-300">{t('list.marks')}</TableHead>
               <TableHead className="text-gray-700 dark:text-gray-300">
-                {t('fields.owner')}
+                {t('list.nextAction')}
               </TableHead>
               <TableHead className="text-gray-700 dark:text-gray-300">
-                {t('fields.nextStep')}
+                {t('fields.owner')}
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -144,15 +148,16 @@ export function DealTable({ deals, today, closedWithinDays, sort, onSort }: Deal
                   <TableCell className="min-w-48">
                     <DealMarks flags={marks} />
                   </TableCell>
-                  <TableCell className="whitespace-nowrap">
-                    {deal.ownerName ?? t('card.unassigned')}
-                  </TableCell>
                   <TableCell className="min-w-48 max-w-80">
-                    {deal.nextStep ? (
-                      <span className="line-clamp-2">{deal.nextStep}</span>
+                    {/* Not for closed deals; an open one without it is marked in the alerts */}
+                    {isOpenStage(deal.stage) && deal.nextTask ? (
+                      <DealNextTaskSummary task={deal.nextTask} today={today} />
                     ) : (
                       <span className="text-gray-600 dark:text-gray-300">—</span>
                     )}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {deal.ownerName ?? t('card.unassigned')}
                   </TableCell>
                 </TableRow>
               );

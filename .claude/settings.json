@@ -107,6 +107,18 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git *)",
+            "command": "bun",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/post-tool-branch-claim.ts"],
+            "timeout": 10
+          }
+        ]
       }
     ]
   }

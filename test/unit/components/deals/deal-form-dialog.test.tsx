@@ -175,15 +175,21 @@ describe('DealFormDialog', () => {
     const { onOpenChange, onSaved } = renderForm({ deal });
     await user.clear(screen.getByLabelText('金額（税抜）'));
     await user.type(screen.getByLabelText('金額（税抜）'), '3500000');
-    await user.clear(screen.getByLabelText('次の一手'));
     await user.click(screen.getByRole('button', { name: '保存' }));
     // Not the probability, kind or owner it was opened with: a stage move made elsewhere
-    // meanwhile resets the probability, and this save must not write the old one back
-    expect(mocks.updates).toEqual([
-      { organizationId: ORG_ID, dealId: DEAL_ID, amount: 3_500_000, nextStep: null },
-    ]);
+    // meanwhile resets the probability, and this save must not write the old one back. Nor the
+    // next step the deal has (#853)
+    expect(mocks.updates).toEqual([{ organizationId: ORG_ID, dealId: DEAL_ID, amount: 3_500_000 }]);
     expect(onSaved).toHaveBeenCalled();
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("asks nothing about a next step: it is the lead's next actions (#853)", () => {
+    renderForm({ deal });
+    expect(screen.getByLabelText('金額（税抜）')).toBeInTheDocument();
+    expect(screen.queryByLabelText('次の一手')).not.toBeInTheDocument();
+    expect(screen.queryByText('次の一手')).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue('見積を送る')).not.toBeInTheDocument();
   });
 
   it('closes without a request when nothing was changed', async () => {
@@ -261,6 +267,7 @@ describe('DealFormDialog', () => {
       'このリードは成約になります。 受注日は今日になります。 過去の受注は、作成のあとに編集で受注日を直せます。'
     );
     await user.click(screen.getByRole('button', { name: '作成' }));
+    // No next step either (#853)
     expect(mocks.creates).toEqual([
       {
         organizationId: ORG_ID,
@@ -270,7 +277,6 @@ describe('DealFormDialog', () => {
         kind: 'survey',
         amount: null,
         expectedCloseOn: null,
-        nextStep: null,
         forecastOverride: null,
       },
     ]);
@@ -382,14 +388,14 @@ describe('DealFormDialog', () => {
       const user = userEvent.setup();
       mocks.fail = true;
       const { onOpenChange } = renderForm({ deal });
-      await user.clear(screen.getByLabelText('次の一手'));
-      await user.type(screen.getByLabelText('次の一手'), '稟議を待つ');
+      await user.clear(screen.getByLabelText('商談名 必須'));
+      await user.type(screen.getByLabelText('商談名 必須'), 'AS/400 現行調査（第2期）');
       await user.click(screen.getByRole('button', { name: '保存' }));
       const dialog = screen.getByRole('dialog', { name: '商談を編集' });
       expect(within(dialog).getByRole('alert')).toHaveTextContent(
         '保存できませんでした。もう一度お試しください'
       );
-      expect(screen.getByLabelText('次の一手')).toHaveValue('稟議を待つ');
+      expect(screen.getByLabelText('商談名 必須')).toHaveValue('AS/400 現行調査（第2期）');
       expect(onOpenChange).not.toHaveBeenCalled();
       // The dialog says it; no toast behind the dialog's overlay
       expect(mocks.toast.error).not.toHaveBeenCalled();

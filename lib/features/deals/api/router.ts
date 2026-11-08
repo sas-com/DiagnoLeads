@@ -99,8 +99,14 @@ export const dealsRouter = router({
     const result = await updateDeal(ctx.db, { ...input, ...context });
     await afterDealChange(ctx.db, context, result);
     // handedOff: the lead moved on from the initial hearing for the first time, so the handoff
-    // sheet went out and the lead keeps the day; moving the deal back undoes neither (#720)
-    return { ...result.deal, handedOff: result.lead?.handedOff ?? false };
+    // sheet went out and the lead keeps the day; moving the deal back undoes neither (#720).
+    // sqlUndecided: the deal left 見極め while the lead has no SQL decision (#801), which is let
+    // through so that imports and integrations go on
+    return {
+      ...result.deal,
+      handedOff: result.lead?.handedOff ?? false,
+      sqlUndecided: result.sqlUndecided,
+    };
   }),
 
   delete: organizationProcedure.input(dealScopeSchema).mutation(async ({ ctx, input }) => {

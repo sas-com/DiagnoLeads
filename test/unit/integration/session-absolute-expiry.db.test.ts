@@ -5,7 +5,7 @@
  * updated_at, expires_at shifted into the past, as if signed in that many days ago and never
  * refreshed), not by waiting.
  *
- * With refresh on, better-auth (1.6.33) moves expires_at to "now + 7 days" on a session read once
+ * With refresh on, better-auth (1.7.14) moves expires_at to "now + 7 days" on a session read once
  * updated_at is more than updateAge (1 day) old (api/routes/session.mjs), and re-issues the
  * session cookie; then these tests fail.
  *

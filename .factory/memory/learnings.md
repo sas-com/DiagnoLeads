@@ -90,6 +90,23 @@
 - **解決策**: `beforeAll` で空のリスナーを付けて store をファイルの間ずっと動かし（開いたままのタブと同じ）、`afterAll` で偽のタイマー（`setTimeout`・`clearTimeout`）の下でリスナーを外し、`vi.runOnlyPendingTimers()` で jsdom があるうちに止めた。この形は `test/mocks/auth-session-store.ts` の `keepAuthSessionStoreMounted()` にまとめ、止めるときにタイマーが1つ積まれたことも確かめる（ほかの購読が残っていると、黙って何も止まらないため）。nanostores の `cleanStores` は、nanostores が直接の依存でないので使わない。直ったことは、組み込みの jsdom を包み、片付けの後に1.5秒待つ環境のファイル（コミットしていない）を `--environment <そのファイルの絶対パス>` で渡し、対象のファイルともう1つ時間のかかるファイルを `--maxWorkers=2` で流して確かめた。main では毎回出て、直した後は出ない（ほかのファイルが流れている間は、終わりかけのワーカーの例外も拾われる）。vitest 4.1 では `vitest/environments` は非推奨（読み込むと警告が出る）なので、`vitest/runtime` の `builtinEnvironments.jsdom` を包む
 - **教訓**: 本物の auth client（nanostores の store）を購読するテストを足すときは、describe の外（ファイルの最上位）で `keepAuthSessionStoreMounted(authClient.$store.atoms.session)` を呼ぶ。`@/lib/auth/client` をモックするテストには要らない。全体の実行だけで出る未処理の例外は、報告されたファイルの片付けの後に残るタイマーを疑い、上の片付けの後に待つ環境で再現させてから直す
 
+### [Test] 固定の日付のデータを、「今」を受け取らない関数で確かめるテストは、日付が進むと必ず落ちる
+- **日付**: 2026-11-07
+- **状況**: #924。CI の必須の検査「DB Integration Tests」が、2026-11-06 を過ぎてから、どのブランチでも落ちるようになった。落ちたのは `test/unit/integration/site-analytics.db.test.ts` の権限のテストで、`expected 0 to be greater than 0` だった。PR #922（変更はフックのテストだけ）の CI で見つかり、その PR は直るまでマージできなかった
+- **原因**:
+  - テストは、訪問のデータを「日本の今日 = 2026-10-30」（`NOW`）の日付で入れていた
+  - ほかのテストは `getSiteOverview(..., { now: NOW })` で今日を渡していた
+  - 権限のテストだけが、tRPC のルーター `siteAnalytics.overview` を呼んでいた。このルーターは「今」を受け取らず、実際の今日から7日分を数える
+  - そのため、実際の日付が 10/30 から7日を過ぎると、期間にデータが無くなった
+- **解決策**:
+  - そのテストの間だけ、`vi.useFakeTimers({ toFake: ['Date'] })` と `vi.setSystemTime(NOW)` で Date を固定し、`finally` で `vi.useRealTimers()` に戻した（PR #926）
+  - 偽物にするのは `Date` だけにした。postgres.js は待ち時間を `setTimeout` と `performance.now()` で測るので、接続には影響しない
+  - 同じ書き方は `lead-meetings-export.db.test.ts` と `today-org-isolation.db.test.ts` にもある
+  - 直す前の失敗は、手元の実 DB で再現させてから直した。クラウドのセッションでは Docker が使えないので、PostgreSQL 16 に `postgresql-16-pgvector` を入れて、127.0.0.1:55432 に立てた
+- **教訓**:
+  - 固定の日付でデータを入れるテストでは、「今」を引数で渡すか、Date を固定する。ルーターのように「今」を受け取らない入口を呼ぶなら、Date を固定する
+  - 必須の検査が、変更と関係のないテストで落ちたら、まず main でも落ちるか（日付・外部の状態に依存していないか）を確かめる。直す作業は別の Issue に切り出し、それをマージしてから main を取り込む
+
 ---
 
 ## 設定関連
@@ -206,6 +223,15 @@
   - 本番に流すのは、PR の CI が緑で、main を取り込んだ後のマイグレーションだけ。ほかの PR と番号が重なるときは、先に作り直してから流す（今回は 0032 を 0035 に作り直した）
   - 複数のマイグレーションや、データを書き換えるマイグレーションは、この経路でなく `db:migrate`（Session pooler か直接の接続）で流す。この経路は、短い DDL を1本流すときに限る
   - Supabase の `apply_migration` は Supabase 自身の台帳に記録するもので、drizzle の台帳には書かないので使わない
+
+### [DB] join のない select で選ぶ SQL の値は、その一番上の列が表名なしで書かれ、相関サブクエリの中で別の表の列になる
+- **日付**: 2026-10-28
+- **状況**: #556（「今日」の画面）の `getMyMeetings` で、`leads` だけの select に list-sql.ts のサブクエリ（`(select mr.confirmed_time from meeting_requests mr where mr.lead_id = ${leads.id} ...)`）を値として選ぶと、時刻と評価が空になった。実 DB のテストで見つかった
+- **原因**: drizzle は、join のない select の選ぶ値（`select({ x: <sql のテンプレート> })`）の一番上にある列を、表名なしで書く（`mr.lead_id = "id"`）。相関サブクエリの中では、`"id"` はサブクエリ自身の表の列（`meeting_requests.id`）を指すので、エラーにならずに条件が別のものになる。値を1段入れ子にする（sql のテンプレートで `${sub}` を包み直す）か、select に join があるか、WHERE の中なら `"leads"."id"` と書かれる（2026-10-28 に `QueryBuilder` の `toSQL()` で確かめた）
+- **解決策**: 選ぶ値を1段入れ子にする `nested()`（sql のテンプレートで包み直すだけの関数）を `lib/features/leads/api/list-sql.ts` に置き、join のない select で list-sql.ts の値を選ぶときはこれを通すとコメントに書いた。`getMyMeetings`（`lib/features/leads/meetings.ts`）は、選ぶ値をすべてこれで包む
+- **教訓**:
+  - 相関サブクエリを持つ SQL の値を、join のない select で選ぶときは、1段入れ子にするか、`toSQL()` で表名が付いているかを確かめる。サブクエリの中で外の列を、表名なしで指す書き方をしない
+  - list-sql.ts の値（`leadDealRating`・`leadNextMeetingDate` など）は、リード一覧（join あり）と WHERE では正しく書かれるので、一覧のテストでは気づかない。新しい場所で選ぶときは、実 DB のテストで値まで確かめる
 
 ---
 
@@ -327,6 +353,17 @@
   - Issue を候補として勧める前に、本文の前提（着手の条件）と、関係する決定を読む。前提を満たしていない Issue を勧めるときは、そのことも書く
   - 公開日などの日取りは、本文でなく最新のコメントまで読んで確かめる
 
+### [Process] リファクタリングで決まりが変わっていないかは、言葉の機械的な突き合わせでは確かめられない
+- **日付**: 2026-11-07
+- **状況**: #912（PR #913）。スキル `ui-audit` の重複を整理するリファクタリングで、「決まりを足さない・消さない・変えない」ことを、旧版のコードの表記すべてと、目印の言葉80個を新版と突き合わせて確かめた。抜けは0件だった。ところが、ui-ux-specialist に旧版と1行ずつ突き合わせてもらうと、範囲が狭まった所が中3件・低8件見つかった。それを直したときには、逆に範囲を広げ過ぎた所が出た
+- **原因**:
+  - 言い換えたり、まとめたりすると、同じ言葉は残っていても、当てはまる範囲が変わる。例：「グラフの決まり」を管理画面の値の節に移したことで、管理画面だけの決まりに読めるようになった。「ラベルは短く」を「長いプレースホルダー → 検索」にまとめたことで、ボタンや見出しが外れた
+  - 言葉が残っているかどうかを見る突き合わせでは、この変化は拾えない
+- **解決策**: 旧版の決まりを1行ずつ、値・条件・例外・対象の範囲の4つの観点で、新版の対応する所と突き合わせた。読み取り専用のレビューを、直すたびにもう一度通した
+- **教訓**:
+  - 文書やルールのリファクタリングでは、機械的な突き合わせは抜けを見つける最初の段にとどめる。範囲が変わっていないかは、1行ずつ突き合わせて確かめる
+  - 指摘を直すときは、旧版の範囲に戻す。「広げる」ほうに直していないかも確かめる
+
 ---
 
 ## 命名関連
@@ -391,6 +428,17 @@
 - **原因**: 複数ファイルからの参照を一括更新し忘れ
 - **解決策**: grepで参照を検索し、全て更新
 - **教訓**: 名称変更時は`grep -r "旧名称" .`で参照を全て確認
+
+---
+
+## UI関連
+
+### [UI] 日本語入力の確定・取り消しの Enter と Esc を、送信や閉じる操作に取られないようにする
+- **日付**: 2026-10-26
+- **状況**: リード詳細のメモ（#722、PR #807）と連絡の記録（#554、PR #769）で、Ctrl/⌘＋Enter で送り、Esc で編集を閉じるようにした。読み取り専用の UI/UX のレビューで、変換を確定する Enter や、変換を取り消す Esc が、送信や閉じる操作に取られるおそれを指摘された
+- **原因**: Chrome は変換中の keydown に `isComposing: true` を付ける。Safari は、変換を確定・取り消す keydown を compositionend の後に送り、そのとき `isComposing` は false で、`keyCode` は 229 になる。`isComposing` だけを見ると、Safari では確定の Enter で送信され、取り消しの Esc で書いた文が消える
+- **解決策**: `components/common/form-controls.ts` の `isComposing`（`isComposing || keyCode === 229`）を変換中とみなし、`isSendShortcut`・`isCloseShortcut` で使う。テストは `fireEvent.keyDown` に `isComposing: true` と `keyCode: 229` の両方を渡して確かめる
+- **教訓**: キーで送る・閉じる欄を作るときは、`components/common/form-controls.ts` の判定を使う。自分で `event.key === 'Enter'` を見ない
 
 ---
 

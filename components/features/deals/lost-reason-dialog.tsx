@@ -46,6 +46,8 @@ interface LostReasonDialogProps {
   initial?: Partial<Omit<LostValues, 'lostReason'>> & { lostReason?: LostReason };
   /** The deal is won now: its lead stays won only while another of its deals is (#444) */
   fromWon?: boolean;
+  /** The lead's SQL decision is recorded as 不適格 with the loss (#801) */
+  notQualified?: boolean;
   /** The loss is being saved: the dialog stays open until it is, so a failure is told in it */
   pending?: boolean;
   /** Why the loss could not be saved, said in the dialog (Refs #720) */
@@ -66,6 +68,7 @@ export function LostReasonDialog({
   dealName,
   initial,
   fromWon = false,
+  notQualified = false,
   pending = false,
   error,
   onConfirm,
@@ -133,6 +136,7 @@ export function LostReasonDialog({
             <DialogDescription>
               {t('description')}
               {fromWon && ` ${t('fromWon')}`}
+              {notQualified && ` ${t('notQualified')}`}
             </DialogDescription>
           </DialogHeader>
 

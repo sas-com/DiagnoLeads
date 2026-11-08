@@ -71,6 +71,26 @@ describe('LeadDealsCard', () => {
     expect(screen.queryByRole('button', { name: '商談を作成' })).not.toBeInTheDocument();
   });
 
+  it('names the day of each deal and writes it like the deal pages (#720)', () => {
+    mocks.forLead.data = {
+      items: [
+        deal({}),
+        deal({ id: 'deal-2', name: '移行', expectedCloseOn: null }),
+        deal({ id: 'deal-3', name: 'AX 化', stage: 'won', closedOn: '2026-10-20' }),
+        deal({ id: 'deal-4', name: '保守', stage: 'lost', closedOn: '2026-10-21' }),
+      ],
+      canEdit: false,
+      canDelete: false,
+    };
+    renderCard();
+    expect(screen.getByText('受注予定 2026/11/30')).toBeInTheDocument();
+    expect(screen.queryByText(/2026-11-30/)).not.toBeInTheDocument();
+    expect(screen.getByText('受注予定日なし')).toBeInTheDocument();
+    // A closed deal: the day it was won or lost, not the day it was expected
+    expect(screen.getByText('受注 2026/10/20')).toBeInTheDocument();
+    expect(screen.getByText('失注 2026/10/21')).toBeInTheDocument();
+  });
+
   it('creates a deal for this lead', async () => {
     const user = userEvent.setup();
     mocks.forLead.data = { items: [], canEdit: true, canDelete: false };
@@ -84,7 +104,7 @@ describe('LeadDealsCard', () => {
     const user = userEvent.setup();
     mocks.forLead.isError = true;
     renderCard();
-    expect(screen.getByText('商談を読み込めませんでした')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('商談を読み込めませんでした');
     await user.click(screen.getByRole('button', { name: '再読み込み' }));
     expect(mocks.forLead.refetch).toHaveBeenCalled();
   });
