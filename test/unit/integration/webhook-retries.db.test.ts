@@ -261,7 +261,15 @@ describe.skipIf(!url)('webhook retries (PostgreSQL)', () => {
     const result = await processWebhookRetries({ database: pg });
 
     expect(sentIds().sort()).toEqual([due, cutOff].sort());
-    expect(result).toEqual({ processed: 2, succeeded: 2, failed: 0, exhausted: 1, expired: 0, testsFailed: 0 });
+    expect(result).toEqual({
+      processed: 2,
+      succeeded: 2,
+      failed: 0,
+      exhausted: 1,
+      expired: 0,
+      testsFailed: 0,
+      orphaned: 0,
+    });
     expect(await load(due)).toMatchObject({ status: 'success', attempts: 2, nextRetryAt: null });
     expect(await load(usedUp)).toMatchObject({ status: 'failed', attempts: 3, nextRetryAt: null });
     for (const id of [notYet, noRetryTime]) {
