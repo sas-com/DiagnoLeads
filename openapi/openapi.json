@@ -740,7 +740,7 @@
             "items": {
               "type": "object",
               "properties": {
-                "name": { "type": "string" },
+                "name": { "type": "string", "enum": ["lead", "mql", "deal", "sql", "won"] },
                 "count": { "type": "integer" },
                 "cumulativeCount": { "type": "integer" },
                 "percentage": { "type": "number" },
@@ -749,10 +749,14 @@
             }
           },
           "totalLeads": { "type": "integer" },
+          "nurturingCount": {
+            "type": "integer",
+            "description": "Leads being nurtured now, beside the stages (not a stage)"
+          },
           "overallConversionRate": { "type": "number" },
           "averageConversionDays": { "type": "number", "nullable": true }
         },
-        "required": ["stages", "totalLeads", "overallConversionRate"]
+        "required": ["stages", "totalLeads", "nurturingCount", "overallConversionRate"]
       },
       "AIScoreResult": {
         "type": "object",

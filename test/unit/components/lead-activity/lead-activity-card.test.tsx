@@ -300,3 +300,60 @@ describe('LeadActivityCard', () => {
     expect(refetch).toHaveBeenCalled();
   });
 });
+
+describe('contact records with their details (#554)', () => {
+  it('shows a visit with its duration, outcome and deal, and a call without them', () => {
+    mocks.list = {
+      data: {
+        pages: [
+          {
+            items: [
+              {
+                id: 'contact:c2',
+                kind: 'contact_recorded',
+                at: new Date('2026-10-21T05:00:00Z'),
+                actor: { id: 'u1', name: '営業 一郎' },
+                contactId: 'c2',
+                contactKind: 'online_meeting',
+                note: null,
+                durationMinutes: 45,
+                outcome: 'setback',
+                deal: { id: 'deal-1', name: '現行システムの調査' },
+                first: false,
+              },
+              {
+                id: 'contact:c1',
+                kind: 'contact_recorded',
+                at: new Date('2026-10-20T05:00:00Z'),
+                actor: null,
+                contactId: 'c1',
+                contactKind: 'call',
+                note: null,
+                durationMinutes: null,
+                outcome: null,
+                deal: null,
+                first: true,
+              },
+            ],
+            nextCursor: null,
+          },
+        ],
+      },
+    };
+    render(
+      <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
+        <LeadActivityCard leadId={LEAD_ID} />
+      </NextIntlClientProvider>
+    );
+
+    expect(screen.getByText('オンライン商談')).toBeInTheDocument();
+    expect(screen.getByText('45分')).toBeInTheDocument();
+    expect(screen.getByText('結果：後退')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '商談：現行システムの調査' })).toHaveAttribute(
+      'href',
+      '/ja/deals/deal-1'
+    );
+    expect(screen.getByText('電話で連絡')).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /^商談：/ })).toHaveLength(1);
+  });
+});

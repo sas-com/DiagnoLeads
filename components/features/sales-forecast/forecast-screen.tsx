@@ -1,7 +1,7 @@
 'use client';
 
 import { TAP_TARGET } from '@/components/common/tap-target';
-import { formatYen } from '@/components/features/deals/deal-format';
+import { formatDealDate, formatYen } from '@/components/features/deals/deal-format';
 import { StudioPageHeader, StudioSection, StudioStat } from '@/components/studio';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
@@ -36,7 +36,7 @@ import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useState } from 'react';
-import { formatMonthName, formatPlainDay } from './forecast-format';
+import { formatMonthName } from './forecast-format';
 import { TargetsDialog } from './targets-dialog';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -152,8 +152,8 @@ export function ForecastScreen() {
         {data && (
           <p className="text-sm text-gray-700 dark:text-gray-300" aria-live="polite">
             {t('range', {
-              from: formatPlainDay(data.range.from, locale),
-              to: formatPlainDay(data.range.to, locale),
+              from: formatDealDate(data.range.from),
+              to: formatDealDate(data.range.to),
             })}
             {' · '}
             {t('fiscalYearNote', { month: formatMonthName(data.fiscalYearStartMonth, locale) })}
@@ -226,8 +226,9 @@ export function ForecastScreen() {
                       count: data.overdue.count,
                       amount: yen(data.overdue.amount),
                     })}{' '}
+                    {/* The list by close date, the earliest first: the overdue deals lead it */}
                     <Link
-                      href={`/${locale}/deals?view=list`}
+                      href={`/${locale}/deals?view=list&sort=expectedCloseOn`}
                       className="underline underline-offset-2"
                     >
                       {t('notes.toOverdueList')}
@@ -536,10 +537,10 @@ function ChangesSection({
                           {kind === 'slipped' &&
                             ` · ${t('dateChange', {
                               from: deal.before?.expectedCloseOn
-                                ? formatPlainDay(deal.before.expectedCloseOn, locale)
+                                ? formatDealDate(deal.before.expectedCloseOn)
                                 : t('noDate'),
                               to: deal.expectedCloseOn
-                                ? formatPlainDay(deal.expectedCloseOn, locale)
+                                ? formatDealDate(deal.expectedCloseOn)
                                 : t('noDate'),
                             })}`}
                         </p>

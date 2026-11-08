@@ -164,6 +164,8 @@ export function funnelToCSV(funnel: ConversionFunnelData): string {
   // Add summary row
   rows.push(['', '', '', '', '']);
   rows.push(['Overall Conversion Rate', '', '', '', funnel.overallConversionRate.toFixed(2)]);
+  // 再育成: beside the stages, not one of them (#802)
+  rows.push(['Nurturing Now', funnel.nurturingCount.toString(), '', '', '']);
   rows.push(['Average Conversion Days', '', '', '', funnel.averageConversionDays.toFixed(1)]);
 
   return [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');

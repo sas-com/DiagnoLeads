@@ -1,30 +1,34 @@
 /**
- * Lead follow-up data access: contact records (Refs #136) and next actions (Refs #85)
+ * Lead follow-up data access: contact records (Refs #136, #554) and next actions (Refs #85)
  *
  * Every query is scoped by organizationId; the lead must belong to the organization and a
  * record of another organization is reported as not found. Permission checks are done by the
  * router. Each change writes one audit_logs row in the same transaction (resource
- * 'lead_contact' / 'lead_task', metadata.leadId), like staff updates of leads (#101).
+ * 'lead_contact' / 'lead_task', metadata.leadId), like staff updates of leads (#101). A contact's
+ * audit row keeps what was recorded but not the note's text (like the deals, #435).
  */
 
 import type { db as defaultDb } from '@/lib/db/client';
 import {
   auditLogs,
+  deals,
   leadContactLogs,
   leadTasks,
   leads,
   organizationMembers,
   users,
 } from '@/lib/db/schema';
-import type { AuditAction } from '@/lib/db/schema';
+import type { AuditAction, LeadContactLog } from '@/lib/db/schema';
 import { TRPCError } from '@trpc/server';
 import { type SQL, and, asc, count, desc, eq, inArray, isNull, lte, min, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { nextMeetingDateOf, sortTasks } from './due';
 import {
+  CONTACT_FUTURE_TOLERANCE_MS,
   type ContactActor,
   type ContactKind,
   type ContactLogView,
+  type ContactOutcome,
   type CreateTaskInput,
   DUE_TASKS_SHOWN,
   type DueTaskScope,
@@ -91,14 +95,76 @@ async function writeAudit(
 
 /* ------------------------------------------------------------- Contacts */
 
-/** Record a contact made now ("called", "emailed", "could not reach"), with an optional note */
+/**
+ * When a contact is recorded at: now when no time is given. A time in the future is refused; one
+ * within CONTACT_FUTURE_TOLERANCE_MS of now (the screen's clock running ahead) is recorded as now
+ */
+function contactTimeOf(requested: Date | undefined, now: Date): Date {
+  if (!requested) return now;
+  if (requested.getTime() > now.getTime() + CONTACT_FUTURE_TOLERANCE_MS) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'A contact cannot be recorded in the future',
+    });
+  }
+  return requested.getTime() > now.getTime() ? now : requested;
+}
+
+/**
+ * Hold the lead, and the deal when one is given, until the contact is in: a lead or deal deleted
+ * meanwhile waits for it (FOR KEY SHARE does not block updates of the lead or the deal). The deal
+ * must be one of the lead's (BAD_REQUEST otherwise, also for a deal of another organization).
+ * Lead first, then the deal, as the deletion of a lead cascades in that order
+ */
+async function holdContactTargets(
+  tx: Transaction,
+  input: { organizationId: string; leadId: string; dealId?: string | null }
+) {
+  const [lead] = await tx
+    .select({ id: leads.id })
+    .from(leads)
+    .where(and(eq(leads.id, input.leadId), eq(leads.organizationId, input.organizationId)))
+    .for('key share');
+  if (!lead) throw notFound('lead');
+  if (!input.dealId) return;
+  const [deal] = await tx
+    .select({ id: deals.id })
+    .from(deals)
+    .where(
+      and(
+        eq(deals.id, input.dealId),
+        eq(deals.organizationId, input.organizationId),
+        eq(deals.leadId, input.leadId)
+      )
+    )
+    .for('key share');
+  if (!deal) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'The deal is not a deal of the lead' });
+  }
+}
+
+/** What an audit row keeps of a contact: all of it but the note's text */
+const contactAuditOf = (row: LeadContactLog) => ({
+  kind: row.kind,
+  contactedAt: row.contactedAt.toISOString(),
+  durationMinutes: row.durationMinutes,
+  outcome: row.outcome,
+  dealId: row.dealId,
+  hasNote: row.note !== null,
+});
+
+/**
+ * Record a contact: a tap made now ("called", "emailed", "could not reach"), or one with its
+ * time, how long it took, its outcome and the deal it was about (#554). The note is optional
+ */
 export async function recordContact(
   db: Database,
   input: RecordContactInput & { userId: string },
   now: Date = new Date()
 ): Promise<ContactLogView> {
+  const contactedAt = contactTimeOf(input.contactedAt, now);
   return db.transaction(async (tx) => {
-    await assertLeadInOrganization(tx, input.organizationId, input.leadId);
+    await holdContactTargets(tx, input);
     const [row] = await tx
       .insert(leadContactLogs)
       .values({
@@ -106,7 +172,10 @@ export async function recordContact(
         leadId: input.leadId,
         kind: input.kind,
         note: input.note ?? null,
-        contactedAt: now,
+        contactedAt,
+        durationMinutes: input.durationMinutes ?? null,
+        outcome: input.outcome ?? null,
+        dealId: input.dealId ?? null,
         createdBy: input.userId,
         createdAt: now,
       })
@@ -119,7 +188,7 @@ export async function recordContact(
       resource: CONTACT_AUDIT_RESOURCE,
       resourceId: row.id,
       leadId: input.leadId,
-      changes: { after: { kind: row.kind, note: row.note } },
+      changes: { after: contactAuditOf(row) },
     });
     return {
       id: row.id,
@@ -127,6 +196,8 @@ export async function recordContact(
       kind: row.kind as ContactKind,
       note: row.note,
       contactedAt: row.contactedAt,
+      durationMinutes: row.durationMinutes,
+      outcome: row.outcome as ContactOutcome | null,
       createdBy: null,
     };
   });
@@ -157,9 +228,7 @@ export async function deleteContact(
       resource: CONTACT_AUDIT_RESOURCE,
       resourceId: row.id,
       leadId: row.leadId,
-      changes: {
-        before: { kind: row.kind, note: row.note, contactedAt: row.contactedAt.toISOString() },
-      },
+      changes: { before: contactAuditOf(row) },
     });
     return { id: row.id, leadId: row.leadId };
   });
@@ -191,6 +260,8 @@ export async function getContactSummary(
         kind: leadContactLogs.kind,
         note: leadContactLogs.note,
         contactedAt: leadContactLogs.contactedAt,
+        durationMinutes: leadContactLogs.durationMinutes,
+        outcome: leadContactLogs.outcome,
         createdBy: leadContactLogs.createdBy,
         userName: users.name,
         userEmail: users.email,
@@ -211,6 +282,8 @@ export async function getContactSummary(
       kind: row.kind as ContactKind,
       note: row.note,
       contactedAt: row.contactedAt,
+      durationMinutes: row.durationMinutes,
+      outcome: row.outcome as ContactOutcome | null,
       createdBy:
         row.createdBy && (row.userName || row.userEmail)
           ? { id: row.createdBy, name: row.userName?.trim() || (row.userEmail ?? '') }

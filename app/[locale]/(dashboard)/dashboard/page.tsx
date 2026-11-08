@@ -21,6 +21,7 @@ import {
   useWidgetConfig,
   visibleWidgetIds,
 } from '@/components/dashboard/widget-settings';
+import { OnboardingChecklist } from '@/components/features/help/onboarding-checklist';
 import { DueTasksSection } from '@/components/features/lead-follow-up/due-tasks-section';
 import { STUDIO_PAGE_CLASS, StudioPageHeader } from '@/components/studio';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -238,6 +239,8 @@ export default function DashboardPage() {
           </p>
         ) : (
           <>
+            {/* The first-day checklist until it is closed (#875) */}
+            <OnboardingChecklist organizationId={organizationId} />
             {order.map((id) => (
               <DashboardWidget key={id} id={id} config={widgetConfig}>
                 <div

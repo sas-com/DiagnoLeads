@@ -37,6 +37,7 @@ import {
   WEBHOOK_HEADER_MASK,
   isUrlChanged,
 } from '@/lib/features/webhooks/services/webhook-headers';
+import { personalDataConfirmationRequired } from '@/lib/features/webhooks/types/personal-data';
 import { trpc } from '@/lib/trpc/client';
 import {
   Activity,
@@ -86,9 +87,27 @@ interface WebhookFormData {
   headers: WebhookHeaderRow[];
   /** The URL as saved (edit only) */
   savedUrl?: string;
+  /** The events as saved (edit only) */
+  savedEvents?: WebhookEvent[];
+  /** The user confirmed that lead personal data is sent to this URL (#917) */
+  personalDataConfirmed: boolean;
 }
 
-const EMPTY_FORM: WebhookFormData = { name: '', url: '', events: [], headers: [] };
+const EMPTY_FORM: WebhookFormData = {
+  name: '',
+  url: '',
+  events: [],
+  headers: [],
+  personalDataConfirmed: false,
+};
+
+/** Saving sends lead personal data somewhere it was not confirmed for: the server checks too */
+const isPersonalDataConfirmationRequired = (form: WebhookFormData) =>
+  personalDataConfirmationRequired({
+    events: form.events,
+    savedEvents: form.savedEvents,
+    urlChanged: form.savedUrl !== undefined && isUrlChanged(form.savedUrl, form.url),
+  });
 
 /**
  * The URL changes (host, path or anything else) while a stored header value would be kept: the
@@ -106,7 +125,8 @@ const isFormComplete = (form: WebhookFormData) =>
   form.events.length > 0 &&
   form.headers.every(isRowComplete) &&
   !hasDuplicateNames(form.headers) &&
-  !isReentryRequired(form);
+  !isReentryRequired(form) &&
+  (form.personalDataConfirmed || !isPersonalDataConfirmationRequired(form));
 
 const EVENTS_BY_CATEGORY = Object.entries(
   WEBHOOK_EVENTS.reduce(
@@ -182,7 +202,27 @@ function WebhookFormFields({
             </div>
           ))}
         </div>
+        <p className="text-xs text-muted-foreground">{t('deliveryNote')}</p>
       </div>
+
+      {isPersonalDataConfirmationRequired(form) && (
+        <div className="grid gap-2 rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/30">
+          <p className="text-sm font-medium">{t('personalData.title')}</p>
+          <p className="text-sm">{t('personalData.description')}</p>
+          <p className="text-sm font-medium">{t('personalData.fields')}</p>
+          <p className="text-sm text-muted-foreground">{t('personalData.otherFields')}</p>
+          {/* biome-ignore lint/a11y/noLabelWithoutControl: wraps the shadcn Checkbox (a Radix button), which Biome cannot detect as a control */}
+          <label className="flex items-start gap-2 cursor-pointer pt-1">
+            <Checkbox
+              checked={form.personalDataConfirmed}
+              onCheckedChange={(checked) =>
+                onChange((prev) => ({ ...prev, personalDataConfirmed: checked === true }))
+              }
+            />
+            <span className="text-sm">{t('personalData.confirm')}</span>
+          </label>
+        </div>
+      )}
 
       <WebhookHeadersEditor
         rows={form.headers}
@@ -219,10 +259,13 @@ export default function WebhooksSettingsPage() {
   const canDelete = webhooks?.permissions.canDelete ?? false;
 
   /** A URL our servers do not send to (#321) gets a message saying which URLs are allowed */
-  const saveErrorMessage = (error: { message: string }) =>
-    error.message.startsWith('destination_not_allowed')
-      ? t('destinationNotAllowed')
-      : error.message;
+  const saveErrorMessage = (error: { message: string }) => {
+    if (error.message.startsWith('destination_not_allowed')) return t('destinationNotAllowed');
+    if (error.message.startsWith('personal_data_confirmation_required')) {
+      return t('personalData.required');
+    }
+    return error.message;
+  };
 
   // Mutations
   const createWebhook = trpc.webhooks.create.useMutation({
@@ -305,6 +348,7 @@ export default function WebhooksSettingsPage() {
       url: formData.url,
       events: formData.events,
       headers: rowsToNewHeaders(formData.headers),
+      personalDataConfirmed: formData.personalDataConfirmed,
     });
   };
 
@@ -315,6 +359,8 @@ export default function WebhooksSettingsPage() {
       events: webhook.events as WebhookEvent[],
       headers: rowsFromMaskedHeaders(webhook.headers),
       savedUrl: webhook.url,
+      savedEvents: webhook.events as WebhookEvent[],
+      personalDataConfirmed: false,
     });
     setEditingWebhook(webhook.id);
   };
@@ -329,6 +375,7 @@ export default function WebhooksSettingsPage() {
       url: editForm.url,
       events: editForm.events,
       headers: rowsToHeaderInput(editForm.headers),
+      personalDataConfirmed: editForm.personalDataConfirmed,
     });
   };
 

@@ -24,7 +24,8 @@ export function StudioPageHeader({
   actions,
 }: {
   title: string;
-  description?: string;
+  /** One or two lines under the title (phrasing content: it is put in a <p>) */
+  description?: ReactNode;
   /** Controls at the right of the title (e.g. the period switch) */
   actions?: ReactNode;
 }) {

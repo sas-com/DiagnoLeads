@@ -221,10 +221,10 @@ describe('ForecastScreen', () => {
       '予測には入っていません'
     );
     expect(screen.getByText('金額が未定の商談が1件あります')).toBeInTheDocument();
-    // The list keeps the board's order of the stages: the dates are reviewed there
+    // The list by close date, the earliest first (#720): the overdue deals lead it
     expect(screen.getByRole('link', { name: '商談の一覧で日付を見直す' })).toHaveAttribute(
       'href',
-      '/ja/deals?view=list'
+      '/ja/deals?view=list&sort=expectedCloseOn'
     );
     expect(screen.getByRole('link', { name: '商談の一覧を開く' })).toHaveAttribute(
       'href',
@@ -413,6 +413,8 @@ describe('ForecastScreen (#721)', () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/^3 open deals \(.+\) have no expected close date/)).toBeInTheDocument();
     expect(screen.getByText('1 deal has no amount yet')).toBeInTheDocument();
+    // Days are written as the deals write them, in either language
+    expect(screen.getByText(/^2026\/10\/01 – 2026\/12\/31/)).toBeInTheDocument();
   });
 
   it('says how many more deals changed, and opens only the small groups', () => {
@@ -672,6 +674,21 @@ describe('TargetsDialog', () => {
     await user.clear(screen.getByLabelText('営業 花子'));
     await user.type(screen.getByLabelText('営業 花子'), '9000000');
     expect(screen.getByText(/^担当者の目標の合計：[￥¥]9,000,000$/)).toBeInTheDocument();
+  });
+
+  it('reads a target typed with full-width digits and spaces, as the deals do (#720)', async () => {
+    const user = userEvent.setup();
+    mocks.targets = { data: targetsData };
+    renderWithIntl(<TargetsDialog open onOpenChange={vi.fn()} organizationId={ORG_ID} />);
+    await pickOctober(user);
+    await user.type(screen.getByLabelText('組織全体'), '２０，０００ ０００');
+    await user.click(screen.getByRole('button', { name: '保存' }));
+    expect(mocks.saves).toEqual([
+      {
+        organizationId: ORG_ID,
+        entries: [{ userId: null, month: '2026-10-01', amount: 20_000_000 }],
+      },
+    ]);
   });
 
   it('moves the focus to the first box that cannot be saved (#721)', async () => {

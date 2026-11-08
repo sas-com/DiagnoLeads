@@ -54,10 +54,11 @@ export const auth = betterAuth({
       return sendAuthEmail({ to: user.email, subject, text, html });
     },
     /**
-     * Callback after password reset is complete. Never throw here: better-auth (1.6.33) calls it
-     * after the token is used and the new password is stored, but before it deletes the user's
-     * sessions, so a throw leaves them signed in elsewhere and returns 500 (#529). The log names
-     * the user by id: email addresses stay out of the logs (#594)
+     * Callback after password reset is complete. Never throw here: better-auth (1.7.14) calls it
+     * after the token is used, the user's sessions are deleted and the new password is stored, in
+     * that order (utils/password.mjs; not atomic, as the adapter runs without a transaction), so a
+     * throw returns 500 for a reset that already happened (#529). The log names the user by id:
+     * email addresses stay out of the logs (#594)
      */
     onPasswordReset: async ({ user }) => {
       console.log(`Password reset completed for user ${user.id}`);
@@ -91,7 +92,7 @@ export const auth = betterAuth({
     updateAge: 60 * 60 * 24, // 1 day; not used while disableSessionRefresh is on
     /**
      * A session ends 7 days after sign-in, however often it is used (#647, decision
-     * 2026-10-25-session-absolute-expiry). Without this, better-auth (1.6.33) moves the expiry
+     * 2026-10-25-session-absolute-expiry). Without this, better-auth (1.7.14) moves the expiry
      * to "now + expiresIn" when a session read finds it last refreshed more than updateAge ago
      * (api/routes/session.mjs), so a copied session cookie used once a day never expires. A
      * session read then does not re-issue the session_token cookie either. Saving the profile

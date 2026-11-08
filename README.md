@@ -93,7 +93,7 @@ For production deployment instructions, see [docs/deployment-guide.md](./docs/de
 
 ### Quick Deploy to Vercel
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/yusuke-kurosawa/DiagnoLeads)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/sas-com/DiagnoLeads)
 
 ```bash
 # Using Vercel CLI
@@ -151,51 +151,7 @@ bash scripts/prod-dump.sh      # Dump production as the read-only role
 
 ## Project Structure
 
-```
-diagnoleads-v2/
-├── app/                    # Next.js App Router
-│   ├── (auth)/            # Authentication pages
-│   ├── (marketing)/       # Marketing pages
-│   ├── (app)/             # Main application
-│   ├── api/               # API routes
-│   └── actions/           # Server Actions
-├── components/            # React components
-│   ├── ui/               # UI components (shadcn/ui)
-│   └── features/         # Feature components
-│       └── leads/        # Lead management components
-├── hooks/                 # 🆕 React hooks
-│   ├── use-leads.ts      # Lead data hooks
-│   └── use-organization.ts # Organization context
-├── lib/                   # Utilities & configs
-│   ├── db/               # Database schema & client
-│   ├── multi-tenant/     # 🆕 Multi-tenant logic
-│   │   ├── middleware/   # Organization middleware
-│   │   ├── helpers/      # Membership helpers
-│   │   └── types.ts      # Multi-tenant types
-│   ├── features/         # 🆕 Feature-based modules
-│   │   └── leads/        # Lead management
-│   │       ├── api/      # tRPC router
-│   │       └── types/    # Schemas & types
-│   ├── trpc/             # tRPC configuration
-│   ├── validation/       # Zod schemas
-│   ├── types/            # TypeScript types
-│   └── utils/            # Helper functions
-├── server/                # tRPC server
-│   └── routers/          # API routers
-├── docs/                  # 📚 Documentation
-│   ├── MULTI_TENANT_STRATEGY.md  # 🆕 Holdings/Group strategy
-│   └── DIRECTORY_IMPROVEMENT_PLAN.md
-├── openspec/              # 📋 OpenSpec-driven development
-│   ├── specs/            # Architecture specs (Source of Truth)
-│   └── changes/          # Change proposals
-├── test/                  # Tests
-│   ├── unit/             # Unit tests
-│   │   ├── trpc/         # tRPC middleware tests
-│   │   └── features/     # Feature tests
-│   ├── integration/      # Integration tests
-│   └── e2e/              # E2E tests
-└── public/                # Static assets
-```
+ディレクトリの構成・層と依存の向き・機能を1つ足すときに触る場所は、[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) にまとめています。import の向きは `bun run arch:check`（CI の Lint & Type Check）で確かめています。
 
 ## 🌐 Internationalization (i18n)
 
@@ -395,6 +351,8 @@ docs(readme): update setup instructions
 
 ## Documentation
 
+- User guide: the in-app help is the source (the header's "この画面の使い方" and the help center at `/[locale]/help`); see [docs/USER_GUIDE.md](./docs/USER_GUIDE.md) for how to open and edit it
+- [Admin Guide](./docs/ADMIN_GUIDE.md) - Where the developer and operator documents are
 - [Deployment Guide](./docs/deployment-guide.md) - Production deployment instructions
 - [Backup Strategy](./docs/backup-strategy.md) - Database backup and recovery (general, 2026-01)
 - [Database Restore Runbook](./docs/runbooks/database-restore.md) - Restoring the production database (Supabase)

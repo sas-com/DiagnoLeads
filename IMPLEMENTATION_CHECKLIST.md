@@ -17,7 +17,7 @@
 > - 📦 **パッケージマネージャ**: Bun
 > - 🔧 **バージョン管理**: mise
 >
-> 👉 **詳細**: [マルチテナント戦略](./docs/MULTI_TENANT_STRATEGY.md) | [開発ルール（CLAUDE.md）](./CLAUDE.md) | [技術スタック](https://github.com/yusuke-kurosawa/DiagnoLeads/blob/main/docs/DIAGNOLEADS_V2_TECH_STACK_SUMMARY.md)
+> 👉 **詳細**: [マルチテナント戦略](./docs/MULTI_TENANT_STRATEGY.md) | [開発ルール（CLAUDE.md）](./CLAUDE.md) | [技術スタック](https://github.com/sas-com/DiagnoLeads/blob/main/docs/DIAGNOLEADS_V2_TECH_STACK_SUMMARY.md)
 
 ---
 
@@ -1341,7 +1341,7 @@
 ### 主要ドキュメント
 
 - [マルチテナント戦略](./docs/MULTI_TENANT_STRATEGY.md)
-- [技術スタック詳細](https://github.com/yusuke-kurosawa/DiagnoLeads/blob/main/docs/DIAGNOLEADS_V2_TECH_STACK_SUMMARY.md)
+- [技術スタック詳細](https://github.com/sas-com/DiagnoLeads/blob/main/docs/DIAGNOLEADS_V2_TECH_STACK_SUMMARY.md)
 - [開発ルール（CLAUDE.md）](./CLAUDE.md)
 - [i18nテストレポート](./docs/i18n-test-report.md)
 - [i18n翻訳ガイド](./docs/i18n-translation-guide.md)

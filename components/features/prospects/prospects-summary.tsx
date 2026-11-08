@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
   Table,
@@ -57,15 +57,17 @@ export function ProspectsSummary({ organizationId }: { organizationId: string })
             [t('summary.hasIssue'), overall.hasIssue],
             [t('summary.handOver'), overall.handOver],
             [t('summary.keepChecking'), overall.keepChecking],
+            [t('summary.passed'), overall.passed],
             [t('summary.meetings'), overall.meetings],
+            // Last, together: the rows that became a lead, and the stages counted without them
+            [t('summary.converted'), overall.converted],
             [t('summary.contracts'), overall.contracts],
             [t('summary.nurturing'), overall.nurturing],
-            [t('summary.passed'), overall.passed],
           ]}
         />
       </Section>
 
-      <Section title={t('summary.checks')}>
+      <Section title={t('summary.checks')} description={t('summary.checksNote')}>
         <CountTable
           head={[t('summary.item'), t('summary.count')]}
           rows={[
@@ -95,7 +97,11 @@ export function ProspectsSummary({ organizationId }: { organizationId: string })
         </Section>
       )}
 
-      <Section title={t('summary.stages')} wide>
+      <Section
+        title={t('summary.stages')}
+        description={t('summary.stagesNote', { count: overall.converted })}
+        wide
+      >
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -133,49 +139,62 @@ export function ProspectsSummary({ organizationId }: { organizationId: string })
         </div>
       </Section>
 
-      <Section title={t('summary.entries')} wide>
+      <Section title={t('summary.entries')} description={t('summary.entriesNote')} wide>
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>{t('summary.entry')}</TableHead>
-                <TableHead className="text-right">{t('summary.recorded')}</TableHead>
-                <TableHead className="text-right">{t('reaction.has_issue')}</TableHead>
-                <TableHead className="text-right">{t('nextStep.hand_over')}</TableHead>
-                <TableHead className="text-right">{t('summary.monthMeetings')}</TableHead>
-                <TableHead className="text-right">{t('stage.contract')}</TableHead>
+                {/* Short names on one line each, so the header does not grow tall on a phone */}
+                {[
+                  t('summary.recorded'),
+                  t('reaction.has_issue'),
+                  t('nextStep.hand_over'),
+                  t('summary.monthMeetings'),
+                  t('summary.entryConverted'),
+                  t('stage.contract'),
+                ].map((label) => (
+                  <TableHead key={label} className="whitespace-nowrap text-right">
+                    {label}
+                  </TableHead>
+                ))}
               </TableRow>
             </TableHeader>
             <TableBody>
               {summary.entries.map((row) => (
                 <TableRow key={row.entry}>
                   <TableCell className="whitespace-nowrap">{t(`entry.${row.entry}`)}</TableCell>
-                  {[row.total, row.hasIssue, row.handOver, row.meetings, row.contracts].map(
-                    (value, index) => (
-                      // biome-ignore lint/suspicious/noArrayIndexKey: fixed columns
-                      <TableCell key={index} className="text-right tabular-nums">
-                        {value}
-                      </TableCell>
-                    )
-                  )}
+                  {[
+                    row.total,
+                    row.hasIssue,
+                    row.handOver,
+                    row.meetings,
+                    row.converted,
+                    row.contracts,
+                  ].map((value, index) => (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: fixed columns
+                    <TableCell key={index} className="text-right tabular-nums">
+                      {value}
+                    </TableCell>
+                  ))}
                 </TableRow>
               ))}
               <TableRow className="font-medium">
                 <TableCell>{t('summary.sum')}</TableCell>
-                {(['total', 'hasIssue', 'handOver', 'meetings', 'contracts'] as const).map(
-                  (key) => (
-                    <TableCell key={key} className="text-right tabular-nums">
-                      {summary.entries.reduce((sum, row) => sum + row[key], 0)}
-                    </TableCell>
-                  )
-                )}
+                {(
+                  ['total', 'hasIssue', 'handOver', 'meetings', 'converted', 'contracts'] as const
+                ).map((key) => (
+                  <TableCell key={key} className="text-right tabular-nums">
+                    {summary.entries.reduce((sum, row) => sum + row[key], 0)}
+                  </TableCell>
+                ))}
               </TableRow>
             </TableBody>
           </Table>
         </div>
       </Section>
 
-      <Section title={t('summary.entryStage')} wide>
+      <Section title={t('summary.entryStage')} description={t('summary.entryStageNote')} wide>
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -219,10 +238,13 @@ export function ProspectsSummary({ organizationId }: { organizationId: string })
 
 function Section({
   title,
+  description,
   wide = false,
   children,
 }: {
   title: string;
+  /** A short note under the title, read before the table: how the section counts */
+  description?: string;
   wide?: boolean;
   children: React.ReactNode;
 }) {
@@ -230,6 +252,9 @@ function Section({
     <Card className={wide ? 'lg:col-span-2' : undefined}>
       <CardHeader>
         <CardTitle className="text-base">{title}</CardTitle>
+        {description && (
+          <CardDescription className="leading-relaxed">{description}</CardDescription>
+        )}
       </CardHeader>
       <CardContent>{children}</CardContent>
     </Card>

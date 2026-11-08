@@ -662,7 +662,6 @@ export default function AnalyticsPage() {
             <Title>{t('charts.conversionFunnel')}</Title>
             <Text className="mb-4">{t('description')}</Text>
             <ConversionFunnel
-              leadsByStatus={overview?.leadsByStatus}
               funnelData={funnelData}
               isLoading={overviewLoading || funnelLoading}
             />

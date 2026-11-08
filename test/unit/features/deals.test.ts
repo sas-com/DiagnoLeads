@@ -22,6 +22,7 @@ import {
   STAGE_PROBABILITY,
   forecastCategory,
   isOpenStage,
+  skipsSqlDecision,
   weightedAmount,
 } from '@/lib/features/deals/types/pipeline';
 import {
@@ -86,6 +87,22 @@ describe('weightedAmount', () => {
     expect(weightedAmount({ amount: 1_000_001, probability: 40 })).toBe(400_000);
     expect(weightedAmount({ amount: null, probability: 70 })).toBe(0);
     expect(weightedAmount({ amount: 500_000, probability: 0 })).toBe(0);
+  });
+});
+
+describe('skipsSqlDecision', () => {
+  it('is a move out of 見極め to a later stage or a win while the lead has no decision (#801)', () => {
+    for (const to of ['discovery', 'proposal', 'negotiation', 'won'] as const) {
+      expect(skipsSqlDecision('qualification', to, null)).toBe(true);
+      expect(skipsSqlDecision('qualification', to, 'qualified')).toBe(false);
+    }
+  });
+
+  it('is false for a loss, a move within the later stages and a move back to 見極め', () => {
+    expect(skipsSqlDecision('qualification', 'lost', null)).toBe(false);
+    expect(skipsSqlDecision('discovery', 'proposal', null)).toBe(false);
+    expect(skipsSqlDecision('discovery', 'qualification', null)).toBe(false);
+    expect(skipsSqlDecision('lost', 'discovery', null)).toBe(false);
   });
 });
 
@@ -290,9 +307,18 @@ describe('createDealSchema', () => {
   });
 
   it('turns empty optional text into null', () => {
-    const parsed = createDealSchema.parse({ ...base, nextStep: '  ', competitor: '' });
-    expect(parsed.nextStep).toBeNull();
+    const parsed = createDealSchema.parse({ ...base, lostNote: '  ', competitor: '' });
+    expect(parsed.lostNote).toBeNull();
     expect(parsed.competitor).toBeNull();
+  });
+
+  it('drops a next step sent, which is no longer an input, without refusing it (#853)', () => {
+    // A screen opened before the change sends nextStep: null with each new deal
+    for (const nextStep of [null, '見積を送る', 'x'.repeat(1000)]) {
+      const parsed = createDealSchema.safeParse({ ...base, nextStep });
+      expect(parsed.success).toBe(true);
+      expect(parsed.data).not.toHaveProperty('nextStep');
+    }
   });
 
   it.each([
@@ -338,6 +364,11 @@ describe('updateDealSchema', () => {
       stage: 'proposal',
     });
     expect(parsed).toEqual({ organizationId: ORG, dealId: DEAL, amount: null, stage: 'proposal' });
+  });
+
+  it('drops a next step sent (#853)', () => {
+    const parsed = updateDealSchema.parse({ organizationId: ORG, dealId: DEAL, nextStep: '電話' });
+    expect(parsed).toEqual({ organizationId: ORG, dealId: DEAL });
   });
 
   it('bounds the closing date like the close date', () => {

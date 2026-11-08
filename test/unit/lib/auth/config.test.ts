@@ -86,6 +86,18 @@ describe('auth configuration', () => {
     expect(session?.cookieCache).toEqual({ enabled: false });
   });
 
+  it('passes better-auth the columns it checks before every call (#836, #849)', async () => {
+    // better-auth 1.7 compares the drizzle tables it is given with the columns it reads and
+    // writes before each call, and throws "Drizzle schema mismatch" when one is missing: then
+    // every sign-in, session read and tRPC request fails. A request without a session cookie
+    // needs no database, so this runs on the schema check alone
+    vi.resetModules();
+    vi.doMock('@/lib/env', () => ({ env: productionEnv }));
+    const { auth } = await import('@/lib/auth/config');
+
+    await expect(auth.api.getSession({ headers: new Headers() })).resolves.toBeNull();
+  });
+
   it('generates UUIDs and passes only the app URL as trustedOrigins', async () => {
     const options = await loadAuth();
 

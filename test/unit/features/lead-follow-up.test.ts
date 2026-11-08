@@ -1,10 +1,14 @@
 /**
- * Lead follow-up (#136, #85): due status, order of next actions, the next meeting date of a
- * hearing and the input schemas. The DB behaviour is covered by
- * test/unit/integration/lead-follow-up.db.test.ts.
+ * Lead follow-up (#136, #85, #554): due status, order of next actions, the next meeting date of
+ * a hearing and the input schemas. The DB behaviour is covered by
+ * test/unit/integration/lead-follow-up.db.test.ts and lead-contact-activities.db.test.ts.
  */
+import { updateDealSchema } from '@/lib/features/deals/types/schemas';
 import { nextMeetingDateOf, sortTasks, taskDue } from '@/lib/features/lead-follow-up/due';
 import {
+  CONTACT_KINDS,
+  QUICK_CONTACT_KINDS,
+  REACHED_CONTACT_KINDS,
   createTaskSchema,
   recordContactSchema,
   updateTaskSchema,
@@ -73,8 +77,57 @@ describe('input schemas', () => {
       recordContactSchema.parse({ organizationId: ORG, leadId: LEAD, kind: 'email', note: '   ' }).note
     ).toBeNull();
     expect(
-      recordContactSchema.safeParse({ organizationId: ORG, leadId: LEAD, kind: 'visit' }).success
+      recordContactSchema.safeParse({ organizationId: ORG, leadId: LEAD, kind: 'meeting' }).success
     ).toBe(false);
+  });
+
+  it('takes a visit or an online meeting with its time, duration, outcome and deal (#554)', () => {
+    const base = { organizationId: ORG, leadId: LEAD, kind: 'visit' as const };
+    const at = new Date('2026-10-20T14:00:00+09:00');
+    expect(
+      recordContactSchema.parse({
+        ...base,
+        contactedAt: at,
+        durationMinutes: 90,
+        outcome: 'advanced',
+        dealId: LEAD,
+      })
+    ).toMatchObject({ contactedAt: at, durationMinutes: 90, outcome: 'advanced', dealId: LEAD });
+    expect(recordContactSchema.parse({ ...base, kind: 'online_meeting' }).kind).toBe('online_meeting');
+
+    const refused = (values: Record<string, unknown>) =>
+      recordContactSchema.safeParse({ ...base, ...values }).success === false;
+    expect(refused({ contactedAt: new Date('1999-12-31T23:59:00+09:00') })).toBe(true);
+    expect(refused({ contactedAt: '2026-10-20T14:00:00+09:00' })).toBe(true);
+    expect(refused({ durationMinutes: 0 })).toBe(true);
+    expect(refused({ durationMinutes: 24 * 60 + 1 })).toBe(true);
+    expect(refused({ durationMinutes: 1.5 })).toBe(true);
+    expect(refused({ outcome: 'lost' })).toBe(true);
+    expect(refused({ dealId: 'deal-1' })).toBe(true);
+    expect(refused({ durationMinutes: 24 * 60, outcome: 'setback' })).toBe(false);
+  });
+
+  it('takes no duration or outcome for a "no answer"', () => {
+    const base = { organizationId: ORG, leadId: LEAD, kind: 'no_answer' as const };
+    expect(recordContactSchema.safeParse(base).success).toBe(true);
+    expect(recordContactSchema.safeParse({ ...base, durationMinutes: null, outcome: null }).success).toBe(
+      true
+    );
+    expect(recordContactSchema.safeParse({ ...base, durationMinutes: 3 }).success).toBe(false);
+    expect(recordContactSchema.safeParse({ ...base, outcome: 'no_change' }).success).toBe(false);
+  });
+
+  it("relies on a deal never moving to another lead (a record's deal is one of its lead's)", () => {
+    // Moving a deal to another lead would leave its records on the old lead (decision
+    // 2026-10-25-contact-visits-and-meetings): decide what happens to them first
+    expect(updateDealSchema.shape).not.toHaveProperty('leadId');
+  });
+
+  it('keeps the one-tap kinds and the kinds that end the wait for the first contact apart', () => {
+    expect(QUICK_CONTACT_KINDS).toEqual(['call', 'email', 'no_answer']);
+    expect(CONTACT_KINDS).toEqual(expect.arrayContaining([...QUICK_CONTACT_KINDS, ...REACHED_CONTACT_KINDS]));
+    // "No answer" never ends the wait (#136); a visit or an online meeting does (#554)
+    expect(REACHED_CONTACT_KINDS).toEqual(['call', 'email', 'visit', 'online_meeting']);
   });
 
   it('needs a title and a real due date for a next action', () => {

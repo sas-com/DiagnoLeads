@@ -5,19 +5,31 @@
  *
  * - getWeekMeetings: leads whose latest hearing's next meeting date is in the current Japan
  *   week (Monday to Sunday), earliest first.
+ * - getMyMeetings: the user's own meetings from today to Sunday, for 今日 (#556).
  * - getNextMeetingRate: KPI 「初回商談から次回日程が決まった率」, see nextMeetingRate below.
  */
 import type { db as defaultDb } from '@/lib/db/client';
 import { leads, users } from '@/lib/db/schema';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, or, sql } from 'drizzle-orm';
 import { dashboardPeriod, jstDay } from '../analytics/dashboard';
-import { leadDealRating, leadNextMeetingDate, nextMeetingCondition } from './api/list-sql';
+import {
+  leadDealRating,
+  leadNextMeetingDate,
+  leadNextMeetingIsFirst,
+  leadNextMeetingSetBy,
+  leadNextMeetingTime,
+  nested,
+  nextMeetingCondition,
+} from './api/list-sql';
 import { addDays, jstWeekStart } from './list-query';
+import { jstDate } from './types/pipeline';
 
 type Database = typeof defaultDb;
 
 /** Meetings listed on the dashboard card; the rest are in the list (preset 今週の商談) */
 export const WEEK_MEETINGS_SHOWN = 10;
+/** The user's meetings listed on 今日 (#556); those past it are only counted */
+export const MY_MEETINGS_SHOWN = 50;
 
 export interface WeekMeeting {
   leadId: string;
@@ -83,6 +95,88 @@ export async function getWeekMeetings(
         row.assigneeId && row.assigneeEmail
           ? { id: row.assigneeId, name: row.assigneeName, email: row.assigneeEmail }
           : null,
+    })),
+  };
+}
+
+export interface MyMeeting {
+  leadId: string;
+  name: string | null;
+  company: string | null;
+  /** Lead status: won and lost leads keep their meetings, as on the dashboard */
+  status: string;
+  /** 'YYYY-MM-DD' */
+  nextMeetingDate: string;
+  /** 'HH:MM' in Japan: only a confirmed first meeting has a time (hearings record dates) */
+  nextMeetingTime: string | null;
+  /** The first meeting confirmed from the respondent's preferred dates (#155) */
+  firstMeeting: boolean;
+  dealRating: string | null;
+  /** Nobody is assigned to the lead: the meeting is the user's because they set the date */
+  unassigned: boolean;
+}
+
+/**
+ * The user's meetings for 今日 (#556): leads whose next meeting date is from today to Sunday of
+ * the current Japan week (the passed days of the week are left out; won and lost leads stay, as on
+ * the dashboard). The user's are the leads assigned to them, and the leads nobody is assigned to
+ * whose date they set (leadNextMeetingSetBy). Soonest first; within a day, the meetings with a
+ * time first in time order, then by company. The first MY_MEETINGS_SHOWN, and how many there are.
+ */
+export async function getMyMeetings(
+  db: Database,
+  input: { organizationId: string; userId: string },
+  now: Date = new Date()
+): Promise<{ today: string; weekEnd: string; total: number; items: MyMeeting[] }> {
+  const today = jstDate(now);
+  const weekEnd = addDays(jstWeekStart(now), 6);
+  const where = and(
+    eq(leads.organizationId, input.organizationId),
+    sql`${leadNextMeetingDate} between ${today} and ${weekEnd}`,
+    or(
+      eq(leads.assigneeUserId, input.userId),
+      and(isNull(leads.assigneeUserId), sql`${leadNextMeetingSetBy} = ${input.userId}`)
+    )
+  );
+  const [countRows, rows] = await Promise.all([
+    db.select({ total: sql<number>`count(*)::int` }).from(leads).where(where),
+    db
+      // From leads alone: each value of list-sql.ts goes through nested()
+      .select({
+        leadId: leads.id,
+        name: leads.name,
+        company: leads.company,
+        status: leads.status,
+        assigneeUserId: leads.assigneeUserId,
+        nextMeetingDate: nested(leadNextMeetingDate),
+        nextMeetingTime: nested(leadNextMeetingTime),
+        firstMeeting: nested(leadNextMeetingIsFirst),
+        dealRating: nested(leadDealRating),
+      })
+      .from(leads)
+      .where(where)
+      .orderBy(
+        asc(leadNextMeetingDate),
+        sql`${leadNextMeetingTime} asc nulls last`,
+        asc(leads.company),
+        asc(leads.id)
+      )
+      .limit(MY_MEETINGS_SHOWN),
+  ]);
+  return {
+    today,
+    weekEnd,
+    total: Number(countRows[0]?.total ?? 0),
+    items: rows.map((row) => ({
+      leadId: row.leadId,
+      name: row.name,
+      company: row.company,
+      status: row.status,
+      nextMeetingDate: row.nextMeetingDate ?? '',
+      nextMeetingTime: row.nextMeetingTime,
+      firstMeeting: Boolean(row.firstMeeting),
+      dealRating: row.dealRating,
+      unassigned: row.assigneeUserId === null,
     })),
   };
 }

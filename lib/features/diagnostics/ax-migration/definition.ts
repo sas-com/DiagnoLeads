@@ -907,6 +907,68 @@ const questions: DiagnosticQuestion[] = [
       ),
     }
   ),
+  // What kind of data the tool holds, to plan how the data is handled in the migration
+  // (contracts, masking, permissions and records). Not scored (#826)
+  multiple(
+    'access_data_kinds',
+    text(
+      'このツールのデータに入っているものを、すべて選んでください',
+      'Choose everything the data in the tool contains'
+    ),
+    [
+      option(
+        'customer',
+        'お客様や取引先の担当者の個人情報',
+        'Personal data of customers or contacts at business partners',
+        text('氏名・住所・電話番号・メールアドレスなど', 'Names, addresses, phone numbers, email')
+      ),
+      option(
+        'employee',
+        '社員の個人情報',
+        'Personal data of employees',
+        text('氏名・連絡先・人事評価・給与など', 'Names, contact details, appraisals, pay')
+      ),
+      option(
+        'sensitive',
+        '健康・病歴など、特に配慮が要る個人情報',
+        'Personal data that needs special care, such as health or medical history',
+        text(
+          '健康診断の結果・病歴・障害・犯罪の経歴など（要配慮個人情報）',
+          'Health check results, medical history, disabilities, criminal records'
+        )
+      ),
+      option('my_number', 'マイナンバー', 'My Number (individual number)'),
+      option('payment', 'クレジットカードの番号や銀行口座', 'Credit card numbers or bank accounts'),
+      option(
+        'confidential',
+        '個人情報ではない社外秘の情報',
+        'Confidential business information other than personal data',
+        text(
+          '取引の単価・契約の内容・図面・製造のノウハウなど',
+          'Prices, contract terms, drawings, manufacturing know-how'
+        )
+      ),
+      option(
+        'none',
+        '個人情報も社外秘の情報も入っていない',
+        'Neither personal data nor confidential information'
+      ),
+      option(
+        'unknown',
+        'わからない',
+        "I don't know",
+        text('わかる範囲で選んだものと一緒に選べます', 'Can be combined with what you know')
+      ),
+    ],
+    ['none'],
+    {
+      ...detail,
+      description: text(
+        '移行のときのデータの扱い方を決めるために伺います。種類だけをお選びください。ツールが複数ある場合は、すべてのツールについて。',
+        'We ask this to plan how the data is handled in the migration. Choose the kinds only. For several tools, answer for all of them.'
+      ),
+    }
+  ),
   multiple(
     'access_challenges',
     text('いま感じている課題は？', 'Which challenges do you face today?'),
@@ -1168,6 +1230,7 @@ export const axMigrationDefinition: DiagnosticDefinition = {
         'access_vba_amount',
         'access_sources',
         'access_size',
+        'access_data_kinds',
       ],
       showWhen: onPath('access'),
     },
