@@ -8,7 +8,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { DUE_TASK_SCOPES, type DueTaskScope } from '@/lib/features/lead-follow-up/types/schemas';
 import { RotateCw } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { DueTasksList, DueTasksMore } from './due-tasks-list';
 import { useDueTasks } from './use-due-tasks';
 
@@ -23,6 +23,7 @@ export function DueTasksSection({ organizationId }: { organizationId: string }) 
   const t = useTranslations('leadFollowUp.today');
   const [scope, setScope] = useState<DueTaskScope>('mine');
   const due = useDueTasks(organizationId, scope);
+  const headingId = useId();
   const { query, data } = due;
   const scopeLabels: Record<DueTaskScope, string> = {
     mine: t('scopeMine'),
@@ -33,7 +34,12 @@ export function DueTasksSection({ organizationId }: { organizationId: string }) 
     <Card className="p-4 shadow-none sm:p-6 dark:border-gray-800">
       <div className="mb-2 flex flex-wrap items-start justify-between gap-2 sm:mb-3">
         <div className="min-w-0">
-          <h2 className="text-base font-semibold text-gray-900 sm:text-lg dark:text-gray-50">
+          {/* Focusable by script (not by Tab): where the focus goes when the list empties */}
+          <h2
+            id={headingId}
+            tabIndex={-1}
+            className="text-base font-semibold text-gray-900 sm:text-lg dark:text-gray-50"
+          >
             {t('title')}
             {data && data.total > 0 && (
               <>
@@ -97,6 +103,7 @@ export function DueTasksSection({ organizationId }: { organizationId: string }) 
           due={due}
           organizationId={organizationId}
           showMineBadge={data.scope === 'all'}
+          headingId={headingId}
         />
       )}
       <DueTasksMore due={due} />

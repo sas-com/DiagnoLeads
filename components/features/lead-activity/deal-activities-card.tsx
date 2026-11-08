@@ -46,7 +46,11 @@ export function DealActivitiesCard({
     <Card className="p-5">
       <div className="mb-3 flex items-center gap-2">
         <h2 className="text-base font-bold text-gray-900 dark:text-gray-50">{t('title')}</h2>
-        {data && data.total > 0 && <Badge color="gray">{data.total}</Badge>}
+        {data && data.total > 0 && (
+          <Badge color="gray" className="text-sm">
+            {data.total}
+          </Badge>
+        )}
         {data?.canEdit && (
           <Button
             type="button"

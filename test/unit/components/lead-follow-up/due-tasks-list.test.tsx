@@ -24,6 +24,8 @@ const mocks = vi.hoisted(() => ({
   dueCalls: [] as { input: unknown; options: Record<string, unknown> }[],
   updates: [] as unknown[],
   invalidated: [] as { path: string; input: unknown }[],
+  // The completion is still on its way (its onSettled not called yet)
+  holdSettle: false,
 }));
 
 vi.mock('@/lib/trpc/client', () => {
@@ -48,9 +50,10 @@ vi.mock('@/lib/trpc/client', () => {
         updateTask: {
           useMutation: (options: { onSuccess?: () => void } = {}) => ({
             isPending: false,
-            mutate: (input: unknown) => {
+            mutate: (input: unknown, call: { onSettled?: () => void } = {}) => {
               mocks.updates.push(input);
               options.onSuccess?.();
+              if (!mocks.holdSettle) call.onSettled?.();
             },
           }),
         },
@@ -74,6 +77,19 @@ function MineList() {
     <>
       <DueTasksList due={due} organizationId={ORG_ID} showMineBadge={false} />
       <DueTasksMore due={due} />
+    </>
+  );
+}
+
+/** The list under its section's heading, which takes the focus when the list empties (#776) */
+function HeadedList() {
+  const due = useDueTasks(ORG_ID, 'mine');
+  return (
+    <>
+      <h2 id="due-heading" tabIndex={-1}>
+        今日やること
+      </h2>
+      <DueTasksList due={due} organizationId={ORG_ID} showMineBadge={false} headingId="due-heading" />
     </>
   );
 }
@@ -114,6 +130,7 @@ beforeEach(() => {
   mocks.dueCalls = [];
   mocks.updates = [];
   mocks.invalidated = [];
+  mocks.holdSettle = false;
 });
 
 describe('DueTasksList', () => {
@@ -200,6 +217,46 @@ describe('DueTasksList', () => {
         { path: 'deals.board', input: { organizationId: ORG_ID } },
       ])
     );
+  });
+
+  describe('the focus when a row is completed (#776)', () => {
+    const box = (title: string) => screen.getByRole('checkbox', { name: `「${title}」を完了にする` });
+
+    it('goes on to the next row’s box, else the previous one’s', async () => {
+      mocks.due = due([
+        task('t1', { title: '見積もりを送る' }),
+        task('t2', { title: '日程を決める' }),
+        task('t3', { title: '資料を送る' }),
+      ]);
+      const user = userEvent.setup();
+      wrap(<HeadedList />);
+
+      await user.click(box('見積もりを送る'));
+      expect(box('日程を決める')).toHaveFocus();
+      await user.click(box('資料を送る'));
+      expect(box('日程を決める')).toHaveFocus();
+    });
+
+    it('goes to the heading when the list empties', async () => {
+      mocks.due = due([task('t1')]);
+      const user = userEvent.setup();
+      wrap(<HeadedList />);
+
+      await user.click(box('見積もりを送る'));
+      expect(screen.getByRole('heading', { name: '今日やること' })).toHaveFocus();
+    });
+
+    it('disables only the row being completed, so the next one keeps the focus', async () => {
+      mocks.holdSettle = true;
+      mocks.due = due([task('t1', { title: '見積もりを送る' }), task('t2', { title: '日程を決める' })]);
+      const user = userEvent.setup();
+      wrap(<HeadedList />);
+
+      await user.click(box('見積もりを送る'));
+      expect(box('見積もりを送る')).toBeDisabled();
+      expect(box('日程を決める')).toBeEnabled();
+      expect(box('日程を決める')).toHaveFocus();
+    });
   });
 
   it('passes the screen’s query options through', () => {

@@ -190,22 +190,30 @@ export function ActivityItem({
           <span className="font-medium">
             <EventTitle event={event} />
           </span>
-          {'verified' in event && !event.verified && <Badge color="amber">{t('unverified')}</Badge>}
+          {'verified' in event && !event.verified && (
+            <Badge color="amber" className="text-sm">
+              {t('unverified')}
+            </Badge>
+          )}
           {'continuation' in event && event.continuation && (
-            <Badge color="blue">{t('continuation')}</Badge>
+            <Badge color="blue" className="text-sm">
+              {t('continuation')}
+            </Badge>
           )}
           {event.kind === 'contact_recorded' && event.first && (
-            <Badge color="emerald">{t('firstContact')}</Badge>
+            <Badge color="emerald" className="text-sm">
+              {t('firstContact')}
+            </Badge>
           )}
           {event.kind === 'result_email_requested' && (
-            <Badge color={EMAIL_REQUEST_BADGE_COLORS[event.request.state]}>
+            <Badge color={EMAIL_REQUEST_BADGE_COLORS[event.request.state]} className="text-sm">
               {event.request.state === 'declined' && event.request.notRequested
                 ? t('emailRequest.notRequested')
                 : t(`emailRequest.${event.request.state}`)}
             </Badge>
           )}
         </div>
-        <p className="text-xs text-gray-500">
+        <p className="text-sm text-gray-600 dark:text-gray-300">
           {dateOnly ? (
             <time dateTime={at.toISOString()}>
               {format.dateTime(at, { dateStyle: 'medium', timeZone: TIME_ZONE })}
@@ -226,7 +234,7 @@ export function ActivityItem({
           )}
         </p>
         {'verified' in event && !event.verified && (
-          <p className="text-xs text-amber-700 dark:text-amber-400">{t('unverifiedHelp')}</p>
+          <p className="text-sm text-amber-700 dark:text-amber-400">{t('unverifiedHelp')}</p>
         )}
 
         {event.kind === 'diagnosis_submitted' && <DiagnosisDetails event={event} leadId={leadId} />}
@@ -362,13 +370,21 @@ function DiagnosisDetails({
       <p className="text-sm text-gray-700">{parts.join(' / ')}</p>
       <div className="flex flex-wrap gap-2">
         <DiagnosisMqlBadge level={summary.mqlLevel} />
-        {summary.needsHearing && <Badge color="yellow">{t('summary.needsHearing')}</Badge>}
+        {summary.needsHearing && (
+          <Badge color="yellow" className="text-sm">
+            {t('summary.needsHearing')}
+          </Badge>
+        )}
         {summary.companySizeFit && summary.companySizeFit !== 'not_configured' && (
-          <Badge color={COMPANY_SIZE_BADGE_COLORS[summary.companySizeFit]}>
+          <Badge color={COMPANY_SIZE_BADGE_COLORS[summary.companySizeFit]} className="text-sm">
             {t(`summary.companySize.${summary.companySizeFit}`)}
           </Badge>
         )}
-        {summary.detailsAnswered && <Badge color="gray">{t('summary.detailsAnswered')}</Badge>}
+        {summary.detailsAnswered && (
+          <Badge color="gray" className="text-sm">
+            {t('summary.detailsAnswered')}
+          </Badge>
+        )}
       </div>
       <Button
         size="sm"
@@ -389,8 +405,18 @@ type SummaryTranslate = ReturnType<typeof useTranslations<'leadActivity'>>;
 /** 関心あり（MQL） / 適合 of a submission, the same badges as the lead page (#121) */
 export function DiagnosisMqlBadge({ level }: { level: DiagnosisSummary['mqlLevel'] }) {
   const t = useTranslations('leadActivity');
-  if (level === 'interest') return <Badge color="emerald">{t('summary.mqlLevels.interest')}</Badge>;
-  if (level === 'fit') return <Badge color="gray">{t('summary.mqlLevels.fit')}</Badge>;
+  if (level === 'interest')
+    return (
+      <Badge color="emerald" className="text-sm">
+        {t('summary.mqlLevels.interest')}
+      </Badge>
+    );
+  if (level === 'fit')
+    return (
+      <Badge color="gray" className="text-sm">
+        {t('summary.mqlLevels.fit')}
+      </Badge>
+    );
   return null;
 }
 
@@ -449,7 +475,7 @@ export function SubmissionAnswers({
         <div key={answer.questionId}>
           <dt className="text-gray-500">
             {answer.question[locale]}
-            {answer.detail && <span className="ml-1 text-xs">（{t('detailQuestion')}）</span>}
+            {answer.detail && <span className="ml-1">（{t('detailQuestion')}）</span>}
           </dt>
           <dd className="font-medium">
             {answer.values.map((value) => value.label[locale]).join(locale === 'ja' ? '、' : ', ')}

@@ -4,6 +4,7 @@ import { PageHeader } from '@/components/common/page-header';
 import { TAP_TARGET } from '@/components/common/tap-target';
 import { DealActivitiesCard } from '@/components/features/lead-activity/deal-activities-card';
 import { LeadNextActionsCard } from '@/components/features/lead-follow-up/lead-next-actions-card';
+import { RecordActivityDialog } from '@/components/features/lead-follow-up/record-activity-dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,7 +36,7 @@ import {
 import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
-import { ChevronLeft, Loader2, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { ChevronLeft, Loader2, MoreHorizontal, NotebookPen, Pencil, Trash2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -93,6 +94,15 @@ export function DealDetailView({ dealId }: { dealId: string }) {
     { organizationId, dealId },
     { enabled: !!organizationId, retry: false }
   );
+  // A contact is recorded from the header too, not only from the activity card far down on a
+  // phone (#776); who may record is read as the card reads it (the same query)
+  const activities = trpc.leadActivity.forDeal.useQuery(
+    { organizationId, dealId },
+    { enabled: !!organizationId }
+  );
+  const canRecord = !!activities.data?.canEdit;
+  const [recordOpen, setRecordOpen] = useState(false);
+  const tActivity = useTranslations('leadActivity.dealActivities');
   // The delete question says a failure itself and stays open for another try (#720)
   const { remove } = useDealMutations({ toastErrors: false });
   const stageMove = useStageMove(organizationId);
@@ -211,46 +221,61 @@ export function DealDetailView({ dealId }: { dealId: string }) {
             </>
           }
           actions={
-            (deal.canEdit || deal.canDelete) && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
+            (canRecord || deal.canEdit || deal.canDelete) && (
+              <>
+                {canRecord && (
                   <Button
-                    ref={moreRef}
                     type="button"
                     variant="outline"
-                    size="icon"
-                    className="h-11 w-11 md:h-10 md:w-10"
-                    aria-label={t('detail.moreActions')}
+                    className={TAP_TARGET}
+                    onClick={() => setRecordOpen(true)}
                   >
-                    <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                    <NotebookPen className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                    {tActivity('record')}
                   </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {deal.canEdit && (
-                    <DropdownMenuItem
-                      className="min-h-11 md:min-h-8"
-                      onSelect={() => openEdit(moreRef.current)}
-                    >
-                      <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
-                      {tCommon('edit')}
-                    </DropdownMenuItem>
-                  )}
-                  {deal.canEdit && deal.canDelete && <DropdownMenuSeparator />}
-                  {deal.canDelete && (
-                    <DropdownMenuItem
-                      onSelect={() => {
-                        focus.remember(moreRef.current);
-                        setDeleteFailed(false);
-                        setDeleteOpen(true);
-                      }}
-                      className="min-h-11 text-red-700 focus:bg-red-50 focus:text-red-700 md:min-h-8 dark:text-red-400 dark:focus:bg-red-950 dark:focus:text-red-400"
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
-                      {tCommon('delete')}
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                )}
+                {(deal.canEdit || deal.canDelete) && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        ref={moreRef}
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-11 w-11 md:h-10 md:w-10"
+                        aria-label={t('detail.moreActions')}
+                      >
+                        <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {deal.canEdit && (
+                        <DropdownMenuItem
+                          className="min-h-11 md:min-h-8"
+                          onSelect={() => openEdit(moreRef.current)}
+                        >
+                          <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
+                          {tCommon('edit')}
+                        </DropdownMenuItem>
+                      )}
+                      {deal.canEdit && deal.canDelete && <DropdownMenuSeparator />}
+                      {deal.canDelete && (
+                        <DropdownMenuItem
+                          onSelect={() => {
+                            focus.remember(moreRef.current);
+                            setDeleteFailed(false);
+                            setDeleteOpen(true);
+                          }}
+                          className="min-h-11 text-red-700 focus:bg-red-50 focus:text-red-700 md:min-h-8 dark:text-red-400 dark:focus:bg-red-950 dark:focus:text-red-400"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                          {tCommon('delete')}
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </>
             )
           }
         />
@@ -348,6 +373,16 @@ export function DealDetailView({ dealId }: { dealId: string }) {
         )}
       </Card>
 
+      {canRecord && (
+        <RecordActivityDialog
+          open={recordOpen}
+          onOpenChange={setRecordOpen}
+          organizationId={organizationId}
+          leadId={deal.lead.id}
+          leadLabel={leadLabel}
+          defaultDealId={deal.id}
+        />
+      )}
       <DealFormDialog
         open={editOpen}
         onOpenChange={setEditOpen}

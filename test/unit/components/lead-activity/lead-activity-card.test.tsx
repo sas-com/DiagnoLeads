@@ -286,6 +286,26 @@ describe('LeadActivityCard', () => {
     });
   });
 
+  it('filters the contacts apart from the changes sales made (#776)', async () => {
+    mocks.list = { data: pages(update) };
+    renderCard();
+
+    await userEvent.click(screen.getByRole('button', { name: '連絡・商談' }));
+    expect(mocks.listInputs.at(-1)).toMatchObject({ types: ['contact_recorded'] });
+    await userEvent.click(screen.getByRole('button', { name: '営業の操作' }));
+    expect(mocks.listInputs.at(-1)).toMatchObject({
+      types: ['lead_created', 'lead_updated', 'mql_qualified', 'sql_decided', 'phase_reached'],
+    });
+  });
+
+  it('writes no text under 14px (#776)', () => {
+    mocks.list = { data: pages(diagnosis(), update) };
+    const { container } = renderCard();
+
+    expect(screen.getByText('本人未確認')).toBeInTheDocument();
+    expect(container.querySelector('.text-xs')).toBeNull();
+  });
+
   it('shows empty, loading and error states', async () => {
     mocks.list = { data: pages() };
     const { unmount } = renderCard();
