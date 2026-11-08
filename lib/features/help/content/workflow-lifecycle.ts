@@ -7,7 +7,7 @@ export const workflowLifecycleArticle: HelpArticle = {
   summary:
     '診断などで届いたリードが、MQL・商談（見極め）・SQL判定を経て受注か失注になるまでの流れと、それぞれの段で使う画面です。',
   routes: [],
-  reviewedAt: '2026-10-28',
+  reviewedAt: '2026-11-08',
   related: ['glossary', 'workflow-prospects-to-lead', 'workflow-agency-appointments'],
   blocks: [
     { type: 'h2', id: 'overview', text: '全体の流れ' },
@@ -32,7 +32,7 @@ export const workflowLifecycleArticle: HelpArticle = {
           { type: 'strong', text: '商談（見極め）' },
           {
             type: 'text',
-            text: '：初回商談の日時が決まったら、商談を作ります。相談申込の希望日時をリードの詳細で確定すると、自動で作られます（開いている商談があるリード・受注したリードには作りません）。それ以外は手で作ります。代行のアポや紹介など、診断のないリードは MQL を経ずにここから始めてよいです。',
+            text: '：初回商談の日時が決まったら、商談を作ります。相談申込の希望日時をリードの詳細で確定すると、自動で作られます（開いている商談があるリード・受注したリードなどには作りません）。それ以外は手で作ります。代行のアポや紹介など、診断のないリードは MQL を経ずにここから始めてよいです。',
           },
         ],
         [

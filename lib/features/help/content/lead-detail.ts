@@ -7,7 +7,7 @@ export const leadDetailArticle: HelpArticle = {
   summary:
     '1件のリードについて、連絡・ヒアリング・次の行動・商談をここで記録します。診断の結果や商談前の準備もこの画面で確かめます。',
   routes: ['/leads/[leadId]'],
-  reviewedAt: '2026-10-28',
+  reviewedAt: '2026-11-08',
   related: ['workflow-lifecycle', 'glossary'],
   blocks: [
     { type: 'h2', id: 'header', text: '画面の上の部分' },
@@ -94,10 +94,10 @@ export const leadDetailArticle: HelpArticle = {
         [
           {
             type: 'text',
-            text: '開いている商談がなく、受注もしていないリードには、商談（見極め）が自動で作られ、商談のカードに出ます。リードの状態は商談中、商談フェーズは初回ヒアリングになります。作られない場合は',
+            text: '商談（見極め）が自動で作られ、商談のカードに出ます。リードの状態は商談中、商談フェーズは初回ヒアリングになります。開いている商談があるリード・受注したリードなどには作られません（条件は',
           },
           { type: 'link', text: '商談の使い方', href: '/help/deals#create' },
-          { type: 'text', text: 'を見てください。' },
+          { type: 'text', text: 'にあります）。' },
         ],
       ],
     },
@@ -105,7 +105,7 @@ export const leadDetailArticle: HelpArticle = {
       type: 'note',
       tone: 'tip',
       content:
-        '打ち合わせが流れたら、商談を失注にして理由を入れます。同じ日の別の時刻に変えても、商談は作り直されません。別の日に確定し直すと、開いている商談がなければ新しい商談（見極め）が作られます。',
+        '打ち合わせが流れたら、商談を失注にして理由を入れます。同じ日の別の時刻に変えても、商談は作り直されません。別の日に確定し直すと、新しい商談（見極め）が作られます（開いている商談があるときなどは作られません）。',
     },
     { type: 'h2', id: 'next-actions', text: '次の行動を入れる' },
     {
