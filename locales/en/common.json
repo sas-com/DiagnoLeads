@@ -367,6 +367,7 @@
       "close": "Close",
       "submit": "Answer and update the result",
       "done": "The result has been updated. Thank you.",
+      "dataHandling": "We also decide with you in the consultation how the personal or confidential data is handled.",
       "failed": "Could not send. Please try again later."
     },
     "result": {
