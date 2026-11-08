@@ -27,6 +27,8 @@ const { db, chain, getAuthenticatedOrganization } = vi.hoisted(() => {
     insert: vi.fn(() => chain),
     update: vi.fn(() => chain),
     delete: vi.fn(() => chain),
+    // A transaction runs on the same mock, so its writes are checked like the others
+    transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(db)),
   };
   return { db, chain, getAuthenticatedOrganization: vi.fn() };
 });
@@ -116,7 +118,12 @@ describe('GET /api/v2/webhooks', () => {
 
 describe('POST /api/v2/webhooks', () => {
   const create = (body: unknown) => listRoute.POST(jsonRequest('POST', '/api/v2/webhooks', body));
-  const VALID = { name: 'CRM sync', url: 'https://crm.example/hooks', events: ['lead.created'] };
+  const VALID = {
+    name: 'CRM sync',
+    url: 'https://crm.example/hooks',
+    events: ['lead.created'],
+    personalDataConfirmed: true,
+  };
 
   beforeEach(() => {
     chain.returning.mockImplementation(async () => [
@@ -156,6 +163,26 @@ describe('POST /api/v2/webhooks', () => {
     expect(json.message).toBe('Webhook created successfully');
     expect(json.data.secret).toMatch(/^[0-9a-f]{64}$/);
     expect(chain.values.mock.calls[0][0].secret).toBe(json.data.secret);
+  });
+
+  it('refuses lead personal data events without the confirmation, and writes nothing (#917)', async () => {
+    const res = await create({ ...VALID, personalDataConfirmed: undefined });
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).message).toMatch(/^personal_data_confirmation_required:/);
+    expect(db.insert).not.toHaveBeenCalled();
+  });
+
+  it('records who confirmed sending lead personal data (#917)', async () => {
+    await create(VALID);
+
+    expect(chain.values.mock.calls[1][0]).toMatchObject({
+      organizationId: ORG_ID,
+      userId: 'user-1',
+      action: 'create',
+      resource: 'webhook',
+      resourceId: WEBHOOK_ID,
+    });
   });
 
   it('keeps a secret given by the caller', async () => {
@@ -318,12 +345,20 @@ describe('PATCH /api/v2/webhooks/[id]', () => {
     expect(chain.set.mock.calls[0][0].retryConfig).toEqual({ maxRetries: 3, retryDelayMs: 10000 });
   });
 
+  it('refuses moving lead personal data events to another URL without the confirmation (#917)', async () => {
+    const res = await patch({ url: 'https://other.example/hooks' });
+
+    expect(res.status).toBe(400);
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
   it('writes every field it accepts', async () => {
     await patch({
       url: 'https://crm.example/v2',
       events: ['lead.updated', 'lead.deleted'],
       secret: 'a-new-secret-1234567',
       headers: { 'x-team': 'sales' },
+      personalDataConfirmed: true,
     });
 
     expect(chain.set.mock.calls[0][0]).toMatchObject({

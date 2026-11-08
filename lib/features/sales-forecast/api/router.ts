@@ -53,6 +53,8 @@ export const salesForecastRouter = router({
       }),
       changes,
       canEditTargets,
+      /** To mark the viewer's own row (#721) */
+      viewerUserId: ctx.user.id,
     };
   }),
 });

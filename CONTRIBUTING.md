@@ -19,7 +19,7 @@ DiagnoLeads v2への貢献を検討いただきありがとうございます。
 
 ```bash
 # リポジトリのクローン
-git clone https://github.com/yusuke-kurosawa/diagnoleads-v2.git
+git clone https://github.com/sas-com/DiagnoLeads.git
 cd diagnoleads-v2
 
 # 依存関係のインストール
@@ -351,8 +351,8 @@ bun run test -- --run test/unit/features/specific.test.ts
 
 ## コンタクト
 
-- Issue: [GitHub Issues](https://github.com/yusuke-kurosawa/diagnoleads-v2/issues)
-- Discussion: [GitHub Discussions](https://github.com/yusuke-kurosawa/diagnoleads-v2/discussions)
+- Issue: [GitHub Issues](https://github.com/sas-com/DiagnoLeads/issues)
+- Discussion: [GitHub Discussions](https://github.com/sas-com/DiagnoLeads/discussions)
 
 ---
 

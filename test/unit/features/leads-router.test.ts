@@ -11,6 +11,15 @@ vi.mock('@/lib/db/rls', () => ({
   setCurrentUser: vi.fn().mockResolvedValue(undefined),
 }));
 
+// Deleting a lead redacts its webhook deliveries (#918); that query is tested on a real DB
+const { forgetLeadsInDeliveries } = vi.hoisted(() => ({
+  forgetLeadsInDeliveries: vi.fn().mockResolvedValue(0),
+}));
+vi.mock('@/lib/features/webhooks/services/lead-events', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/features/webhooks/services/lead-events')>()),
+  forgetLeadsInDeliveries,
+}));
+
 vi.mock('@/lib/auth/permissions', () => ({
   defineAbilitiesFor: vi.fn((user, membership) => ({
     can: vi.fn((action: string) => {
@@ -554,6 +563,8 @@ describe('Leads Router', () => {
 
       expect(result.success).toBe(true);
       expect(mockDb.delete).toHaveBeenCalled();
+      // In the same transaction, its webhook deliveries lose its personal data (#918)
+      expect(forgetLeadsInDeliveries).toHaveBeenCalledWith(mockDb, TEST_ORG_ID, [mockLead.id]);
     });
 
     it('should throw NOT_FOUND if lead does not exist', async () => {

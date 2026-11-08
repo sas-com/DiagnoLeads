@@ -236,14 +236,14 @@ describe('Analytics response types', () => {
       const funnel: ConversionFunnelData = {
         stages: [
           {
-            name: 'New',
+            name: 'lead',
             count: 1000,
             cumulativeCount: 1000,
             percentage: 100,
             conversionRate: 100,
           },
           {
-            name: 'Contacted',
+            name: 'mql',
             count: 800,
             cumulativeCount: 800,
             percentage: 80,
@@ -251,7 +251,7 @@ describe('Analytics response types', () => {
           },
         ],
         totalLeads: 1000,
-        overallConversionRate: 15,
+        overallConversionRate: 15, nurturingCount: 0,
         averageConversionDays: 14,
       };
 

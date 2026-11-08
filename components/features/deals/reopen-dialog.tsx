@@ -1,5 +1,6 @@
 'use client';
 
+import { TAP_TARGET } from '@/components/common/tap-target';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,14 +23,24 @@ interface ReopenDialogProps {
   /** The open stage it moves to */
   stage: DealStage;
   onConfirm: () => void;
+  /** Where the focus goes when the question closes (it has no trigger to go back to) */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 /**
  * Reopening a won or lost deal asks first (Refs #436): it clears the lost reason and details,
  * which the audit log does not keep, resets the probability to the stage's default and drops the
- * forecast category override; the lead of a won deal stays 成約.
+ * forecast category override; the lead of a won deal goes back to 商談中 unless another of its
+ * deals is won (its status is computed from its deals, #444).
  */
-export function ReopenDialog({ open, onOpenChange, deal, stage, onConfirm }: ReopenDialogProps) {
+export function ReopenDialog({
+  open,
+  onOpenChange,
+  deal,
+  stage,
+  onConfirm,
+  onCloseAutoFocus,
+}: ReopenDialogProps) {
   const t = useTranslations('deals');
   const tReason = useTranslations('pipeline.lostReason');
   const tCommon = useTranslations('common');
@@ -51,7 +62,7 @@ export function ReopenDialog({ open, onOpenChange, deal, stage, onConfirm }: Reo
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
+      <AlertDialogContent onCloseAutoFocus={onCloseAutoFocus}>
         <AlertDialogHeader>
           <AlertDialogTitle>{t('reopenDialog.title', { name: deal.name })}</AlertDialogTitle>
           <AlertDialogDescription asChild>
@@ -63,8 +74,10 @@ export function ReopenDialog({ open, onOpenChange, deal, stage, onConfirm }: Reo
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>{tCommon('cancel')}</AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm}>{t('reopenDialog.confirm')}</AlertDialogAction>
+          <AlertDialogCancel className={TAP_TARGET}>{tCommon('cancel')}</AlertDialogCancel>
+          <AlertDialogAction className={TAP_TARGET} onClick={onConfirm}>
+            {t('reopenDialog.confirm')}
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

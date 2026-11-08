@@ -1,5 +1,6 @@
 'use client';
 
+import { TAP_TARGET } from '@/components/common/tap-target';
 import { HearingDateInput } from '@/components/features/lead-hearings/hearing-date-inputs';
 import { Button } from '@/components/ui/button';
 import {
@@ -10,13 +11,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { DEAL_LIMITS } from '@/lib/features/deals/types/schemas';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
+import { Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { type FormEvent, useEffect, useId, useState } from 'react';
-import { isDealDate, parseWhole } from './deal-format';
+import { DealAmountInput } from './deal-amount-input';
+import { isDealDate, parseAmount } from './deal-format';
+import { RequiredMark } from './required-mark';
 
 export interface WonValues {
   /** Day the deal was won (YYYY-MM-DD, Japan) */
@@ -34,13 +36,20 @@ interface WonDialogProps {
   amount: number | null;
   /** The deal is lost now: winning it clears the lost reason and details */
   fromLost?: boolean;
+  /** The win is being saved: the dialog stays open until it is, so a failure is told in it */
   pending?: boolean;
+  /** Why the win could not be saved, said in the dialog (Refs #720) */
+  error?: string | null;
   onConfirm: (values: WonValues) => void;
+  /** Where the focus goes when the dialog closes (it has no trigger to go back to) */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 /**
  * Winning a deal asks for the day it was won (today by default) and the amount, and says what it
- * does to the lead: it becomes 成約 and stays so even if the deal is reopened (Refs #436)
+ * does to the lead: it becomes 成約 (Refs #436), for as long as one of its deals is won (#444). A
+ * send with errors takes the focus to the first one, and the dialog does not close while the win
+ * is saved, so a failure is told in it (#720).
  */
 export function WonDialog({
   open,
@@ -50,7 +59,9 @@ export function WonDialog({
   amount,
   fromLost = false,
   pending = false,
+  error,
   onConfirm,
+  onCloseAutoFocus,
 }: WonDialogProps) {
   const t = useTranslations('deals');
   const tCommon = useTranslations('common');
@@ -60,6 +71,8 @@ export function WonDialog({
   // The date box holds text that is not a date (it shows its own error)
   const [dateUnreadable, setDateUnreadable] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  // A send with errors: the focus goes to the first one once they are shown
+  const [focusRequest, setFocusRequest] = useState(0);
 
   useEffect(() => {
     if (!open) return;
@@ -69,20 +82,44 @@ export function WonDialog({
     setSubmitted(false);
   }, [open, amount]);
 
-  const parsedAmount = parseWhole(amountText, DEAL_LIMITS.amount);
+  const parsedAmount = parseAmount(amountText);
   const dateError = !closedOn || !isDealDate(closedOn);
   const amountError = parsedAmount === 'invalid';
 
+  // After the errors are on the page, so the field is read with its error
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs for each send with errors
+  useEffect(() => {
+    if (focusRequest === 0) return;
+    const field = dateUnreadable || dateError ? 'closed' : amountError ? 'amount' : null;
+    if (field) document.getElementById(`${id}-${field}`)?.focus();
+  }, [focusRequest]);
+
   const submit = (event: FormEvent) => {
     event.preventDefault();
+    if (pending) return;
     setSubmitted(true);
-    if (dateUnreadable || dateError || amountError || !closedOn) return;
+    if (dateUnreadable || dateError || amountError || !closedOn) {
+      setFocusRequest((count) => count + 1);
+      return;
+    }
     onConfirm({ closedOn, amount: parsedAmount });
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        // Not closed while the win is saved, so a failure can still be told
+        if (!next && pending) return;
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent
+        onCloseAutoFocus={onCloseAutoFocus}
+        onInteractOutside={(event) => {
+          if (pending) event.preventDefault();
+        }}
+      >
         <form onSubmit={submit} className="space-y-4" noValidate>
           <DialogHeader>
             <DialogTitle>{t('wonDialog.title', { name: dealName })}</DialogTitle>
@@ -95,7 +132,9 @@ export function WonDialog({
           </DialogHeader>
 
           <div className="space-y-1.5">
-            <Label htmlFor={`${id}-closed`}>{t('wonDialog.closedOn')}</Label>
+            <Label htmlFor={`${id}-closed`}>
+              {t('wonDialog.closedOn')} <RequiredMark />
+            </Label>
             <HearingDateInput
               id={`${id}-closed`}
               label={t('wonDialog.closedOn')}
@@ -110,30 +149,36 @@ export function WonDialog({
 
           <div className="space-y-1.5">
             <Label htmlFor={`${id}-amount`}>{t('fields.amount')}</Label>
-            <Input
+            <DealAmountInput
               id={`${id}-amount`}
-              inputMode="numeric"
               value={amountText}
-              aria-invalid={submitted && amountError}
-              aria-describedby={`${id}-amount-help${submitted && amountError ? ` ${id}-amount-error` : ''}`}
-              onChange={(event) => setAmountText(event.target.value)}
+              onChange={setAmountText}
+              showError={submitted}
             />
-            <p id={`${id}-amount-help`} className="text-xs text-gray-500 dark:text-gray-400">
-              {t('form.amountHelp')}
-            </p>
-            {submitted && amountError && (
-              <p id={`${id}-amount-error`} className="text-sm text-red-600 dark:text-red-400">
-                {t('form.amountInvalid')}
-              </p>
-            )}
           </div>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          {error && (
+            <p
+              role="alert"
+              className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-500/10 dark:text-red-300"
+            >
+              {error}
+            </p>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className={TAP_TARGET}
+              disabled={pending}
+              onClick={() => onOpenChange(false)}
+            >
               {tCommon('cancel')}
             </Button>
-            <Button type="submit" disabled={pending}>
-              {t('wonDialog.confirm')}
+            <Button type="submit" className={TAP_TARGET} disabled={pending}>
+              {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+              {pending ? t('form.saving') : t('wonDialog.confirm')}
             </Button>
           </DialogFooter>
         </form>

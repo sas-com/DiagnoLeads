@@ -84,12 +84,13 @@ vi.mock('@/hooks/use-organization', () => ({
 }));
 
 vi.mock('next/navigation', () => {
-  // One object for every render, like Next's useRouter (#636)
+  // One object for every render, like Next's useRouter (#636) and useParams (#719)
   const router = { push: vi.fn(), replace: mocks.replace };
+  const params = {};
   return {
     useRouter: () => router,
     usePathname: () => '/ja/settings',
-    useParams: () => ({}),
+    useParams: () => params,
   };
 });
 

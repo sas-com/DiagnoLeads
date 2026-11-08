@@ -82,6 +82,19 @@ describe('axMigrationDefinition (v2)', () => {
     for (const question of details) expect(question.required).toBe(false);
   });
 
+  it.each(AX_PLATFORMS)('asks the kinds of data only as a follow-up on the Access path (%s)', (platform) => {
+    const question = applicableQuestions(axMigrationDefinition, { platform }).find(
+      (q) => q.id === 'access_data_kinds'
+    );
+    if (platform !== 'access') {
+      expect(question).toBeUndefined();
+      return;
+    }
+    expect(question).toMatchObject({ type: 'multiple', required: false, detail: true });
+    // "I don't know" can go with what the respondent knows; "none" cannot
+    expect(question?.exclusiveOptions).toEqual(['none']);
+  });
+
   it('gives every option of a scored question a weight, and names the unscored questions', () => {
     // Asked for the lead, the size estimate or sales, not weighed option by option
     const unscored = [
@@ -92,6 +105,8 @@ describe('axMigrationDefinition (v2)', () => {
       'acos_vendor',
       'access_version',
       'access_users',
+      // Kinds of data in the tool (#826): for planning how the data is handled
+      'access_data_kinds',
       // Company size (#150): checked against the organization's target ranges, not scored
       'annual_revenue',
       'employees',

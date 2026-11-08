@@ -56,7 +56,7 @@ Issue → 決定を読む → ブランチ → 実装 → 速い検証 → 全�
 
 - 着手する前に、open な PR とほかのセッションの作業範囲を確かめ、触るファイルが重ならないようにする。Epic に「他のセッションとの分担」があれば従う
   - クラウドでは claude-code-remote の `list_sessions`・`list_events` で読み、`send_message` で自分の範囲（Issue・ブランチ・触るファイル）を知らせる
-  - 着手する Issue は最新のコメントまで読む。担当の決定（オーナーの判断・ほかのセッションの「着手しました」）が書かれていれば従う。その Issue を参照する open な PR も探す（`search_pull_requests` で `repo:yusuke-kurosawa/DiagnoLeads <番号>`）
+  - 着手する Issue は最新のコメントまで読む。担当の決定（オーナーの判断・ほかのセッションの「着手しました」）が書かれていれば従う。その Issue を参照する open な PR も探す（`search_pull_requests` で `repo:sas-com/DiagnoLeads <番号>`）
   - 着手の連絡（`send_message`・Issue のコメント）に、この2つ（最新のコメントと参照する PR）を確かめたことを書く。項目が複数ある Issue は、着手する項目も書く
   - PR を作る直前（push の前）にも、その Issue を参照する PR を探し直す（open なものと、着手のあとにマージされたもの）。着手から PR までの間に、ほかのセッションが同じ作業を出していることがある
 - ほかのセッションが担当しているファイルは編集しない。変えてほしいことは `send_message` か Issue で頼む
@@ -130,7 +130,7 @@ Issue → 決定を読む → ブランチ → 実装 → 速い検証 → 全�
   - オーナーの好み：`preferences.md`
 - 優先度とタスクの正は GitHub の Issue。`docs/ROADMAP.md`・`docs/SPRINT_BACKLOG.md`・`IMPLEMENTATION_CHECKLIST.md` などは 2026-02 以前の記録で、今の優先度を表していない
 - テスト：`docs/TESTING.md`。開発者向けの手引き：`CONTRIBUTING.md`
-- v1（FastAPI + React）は `yusuke-kurosawa/DiagnoLeads-v1-legacy` としてアーカイブ済みで、移植は Epic #31。v1 のコードへのリンクは `DiagnoLeads-v1-legacy` とコミット SHA を固定して書く（`github.com/yusuke-kurosawa/DiagnoLeads` は本リポジトリ）
+- v1（FastAPI + React）は `yusuke-kurosawa/DiagnoLeads-v1-legacy` としてアーカイブ済みで、移植は Epic #31。v1 のコードへのリンクは `DiagnoLeads-v1-legacy` とコミット SHA を固定して書く（`github.com/sas-com/DiagnoLeads` は本リポジトリ。v1-legacy は `yusuke-kurosawa` 配下に残す）
 
 ## オーナーの好み
 

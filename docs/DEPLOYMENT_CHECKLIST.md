@@ -264,7 +264,7 @@ Sentry.init({
 
 対象のページ・目標・測り方は決定 [2026-10-24-performance-targets](../.factory/memory/decisions/2026-10-24-performance-targets.md)（#569）に従う。
 
-- 本番は GitHub Actions「Lighthouse」（`.github/workflows/lighthouse.yml`）が毎日1回測る。結果は実行の Summary（3回の中央値の表）と artifact（JSON、30日）にある。今は測るだけで、目標との判定はしない（#612）
+- 本番は GitHub Actions「Lighthouse」（`.github/workflows/lighthouse.yml`）が毎日1回測る。結果は実行の Summary（3回の中央値の表と、その下の目標との比較）と artifact（JSON、30日）にある。目標を割っても、ワークフローは落とさず Issue も開かない（Issue を開く判定は #612 の残り）
 - デプロイの直後に確かめたいときは、Actions の「Lighthouse」を手動で実行するか、手元で流す
 
 ```bash

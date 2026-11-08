@@ -16,6 +16,7 @@ import {
   AxTargets,
   AxTrust,
 } from '@/components/features/ax-site/landing-sections';
+import { AxWebScope } from '@/components/features/ax-site/web-scope-section';
 import { axShareImage } from '@/lib/features/ax-site/share-images';
 import { robotsFor } from '@/lib/seo/indexing';
 import type { Metadata } from 'next';
@@ -86,6 +87,8 @@ export default async function AxMigrationPage({ params }: AxMigrationPageProps) 
           <AxTargets locale={locale} />
           {/* AS/400 and ACOS, each with its own heading (#311) */}
           <AxHostPlatforms locale={locale} />
+          {/* Right after the host systems: the worry about opening them to the web (#838) */}
+          <AxWebScope locale={locale} namespace="axSite.webScope" location="web-scope" />
           {/* Reassurance right before the diagnosis asks for contact details */}
           <AxTrust locale={locale} />
         </AxLandingOnly>

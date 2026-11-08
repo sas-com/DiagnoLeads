@@ -2,6 +2,7 @@
  * SignupForm Component Tests
  */
 
+import { ReadonlySearchParams } from '@/test/mocks/next-navigation';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -13,7 +14,8 @@ vi.mock('next-intl', () => ({
 
 // Mock next/navigation
 const mockPush = vi.hoisted(() => vi.fn());
-let mockSearchParams = new URLSearchParams();
+// Read-only like Next's, and a new object only when a test changes the URL (#719)
+let mockSearchParams = new ReadonlySearchParams();
 vi.mock('next/navigation', () => {
   // One object for every render, like Next's useRouter (#636)
   const router = { push: mockPush };
@@ -47,7 +49,7 @@ import { toast } from 'sonner';
 describe('SignupForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockSearchParams = new URLSearchParams({ invitation: 'invite-token' });
+    mockSearchParams = new ReadonlySearchParams({ invitation: 'invite-token' });
   });
 
   afterEach(() => {
@@ -163,7 +165,7 @@ describe('SignupForm', () => {
   });
 
   it('comes from an invitation: fills in the invited address and returns to the invite page', async () => {
-    mockSearchParams = new URLSearchParams({
+    mockSearchParams = new ReadonlySearchParams({
       email: 'invited@example.com',
       callbackUrl: '/ja/invite/abc',
       invitation: 'invite-token',
@@ -191,7 +193,7 @@ describe('SignupForm', () => {
   });
 
   it('ignores a callback to another site', async () => {
-    mockSearchParams = new URLSearchParams({
+    mockSearchParams = new ReadonlySearchParams({
       callbackUrl: 'https://evil.example',
       invitation: 'invite-token',
     });
@@ -209,7 +211,7 @@ describe('SignupForm', () => {
   });
 
   it('explains that sign-up is by invitation when opened without an invitation', () => {
-    mockSearchParams = new URLSearchParams();
+    mockSearchParams = new ReadonlySearchParams();
     render(<SignupForm />);
 
     expect(screen.getByRole('status')).toHaveTextContent(/inviteOnlyTitle/);

@@ -580,7 +580,13 @@ describe('processWebhookRetries', () => {
     const cleanups = calls('update', 'webhook_deliveries');
     expect(cleanups).toHaveLength(3);
     for (const cleanup of cleanups) {
-      expect(cleanup.set).toEqual({ status: 'failed', nextRetryAt: null, completedAt: NOW });
+      // The payload is redacted as the delivery finishes (#918)
+      expect(cleanup.set).toEqual({
+        status: 'failed',
+        nextRetryAt: null,
+        completedAt: NOW,
+        payload: expect.anything(),
+      });
     }
     // Only pending deliveries created before the cut-off age out
     expect(render(cleanups[0].where).params).toEqual([

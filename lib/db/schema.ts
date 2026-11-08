@@ -227,6 +227,9 @@ export const accounts = pgTable('accounts', {
   providerId: text('provider_id').notNull(), // 'credential', 'google', 'github', etc.
   accessToken: text('access_token'),
   refreshToken: text('refresh_token'),
+  // OAuth providers' ID token. Unused with email and password, but better-auth 1.7 checks that
+  // every account column it knows exists before each call (#849, #836)
+  idToken: text('id_token'),
   accessTokenExpiresAt: timestamp('access_token_expires_at'),
   refreshTokenExpiresAt: timestamp('refresh_token_expires_at'),
   scope: text('scope'),
@@ -1081,9 +1084,10 @@ export const agencyHandovers = pgTable(
 export type AgencyHandover = typeof agencyHandovers.$inferSelect;
 
 /**
- * Lead Contact Logs (Refs #136)
- * One row per contact a staff member recorded on a lead ("called", "emailed", "could not reach").
- * The earliest row of a lead is its first contact; the dashboard's waiting consultation
+ * Lead Contact Logs (Refs #136, #554)
+ * One row per contact a staff member recorded on a lead ("called", "emailed", "could not reach",
+ * "visited", "met online"), at the time it happened (now, or a past time given by the staff
+ * member). The earliest row of a lead is its first contact; the dashboard's waiting consultation
  * requests are the ones without any row here (not the lead status).
  */
 export const leadContactLogs = pgTable(
@@ -1096,10 +1100,16 @@ export const leadContactLogs = pgTable(
     leadId: uuid('lead_id')
       .notNull()
       .references(() => leads.id, { onDelete: 'cascade' }),
-    /** 'call' | 'email' | 'no_answer' (lib/features/lead-follow-up/types/schemas.ts) */
+    /** CONTACT_KINDS (lib/features/lead-follow-up/types/schemas.ts) */
     kind: text('kind').notNull(),
     note: text('note'),
     contactedAt: timestamp('contacted_at', { withTimezone: true }).defaultNow().notNull(),
+    /** How long it took, in minutes; null when not given (never for "could not reach") */
+    durationMinutes: integer('duration_minutes'),
+    /** CONTACT_OUTCOMES: how it left the sale; null when not given (never for "could not reach") */
+    outcome: text('outcome'),
+    /** The deal it was about: a deal of the same lead (checked when recorded) */
+    dealId: uuid('deal_id').references((): AnyPgColumn => deals.id, { onDelete: 'set null' }),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
@@ -1111,7 +1121,25 @@ export const leadContactLogs = pgTable(
     ),
     // For the ON DELETE CASCADE of the lead
     index('lead_contact_logs_lead_idx').on(table.leadId),
-    check('lead_contact_logs_kind_check', sql`${table.kind} in ('call', 'email', 'no_answer')`),
+    // The activities of a deal, newest first (the deal page), and the ON DELETE SET NULL. Most
+    // records (the one-tap ones) have no deal, so only those with one are indexed
+    index('lead_contact_logs_deal_contacted_idx')
+      .on(table.dealId, table.contactedAt)
+      .where(sql`${table.dealId} is not null`),
+    check(
+      'lead_contact_logs_kind_check',
+      sql`${table.kind} in ('call', 'email', 'no_answer', 'visit', 'online_meeting')`
+    ),
+    check(
+      'lead_contact_logs_outcome_check',
+      sql`${table.outcome} in ('advanced', 'no_change', 'setback')`
+    ),
+    check('lead_contact_logs_duration_check', sql`${table.durationMinutes} between 1 and 1440`),
+    // Nobody was reached, so nothing took time and nothing moved
+    check(
+      'lead_contact_logs_no_answer_check',
+      sql`${table.kind} <> 'no_answer' or (${table.durationMinutes} is null and ${table.outcome} is null)`
+    ),
   ]
 );
 
@@ -1207,6 +1235,53 @@ export const contentEditors = pgTable('content_editors', {
 });
 
 export type ContentEditor = typeof contentEditors.$inferSelect;
+
+/**
+ * Field Glossary
+ * Site-wide help text and value candidates for admin input fields (Epic #780).
+ * No organization_id: the dictionary is shared by every organization, like CMS
+ * content (decision 2026-10-21-cms-site-wide); only operator content editors write
+ * it (enforced by the API, #780 P0). A row is either the help for a field (value is
+ * null) or the help/candidate for one of a field's values (value set), e.g. field_key
+ * 'leads.status' with value 'negotiating'.
+ */
+export const fieldGlossary = pgTable(
+  'field_glossary',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    /** Stable field identifier, e.g. 'leads.status' or 'deals.probability' */
+    fieldKey: text('field_key').notNull(),
+    /** A value of the field (e.g. 'negotiating'); null for the field-level entry */
+    value: text('value'),
+    // Display label for a free-text value candidate (one not backed by a code enum).
+    // Enum value labels stay in locales/ (e.g. 'negotiating' -> '商談中') and are not
+    // duplicated here; the glossary keeps the description and the value candidates.
+    labelJa: text('label_ja'),
+    labelEn: text('label_en'),
+    descriptionJa: text('description_ja'),
+    descriptionEn: text('description_en'),
+    /** Order among a field's value entries */
+    sortOrder: integer('sort_order').default(0).notNull(),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // One entry per field+value, and one field-level entry per field (partial indexes,
+    // so null values do not collide on any PostgreSQL version)
+    uniqueIndex('field_glossary_field_value_unique')
+      .on(table.fieldKey, table.value)
+      .where(sql`${table.value} is not null`),
+    uniqueIndex('field_glossary_field_unique')
+      .on(table.fieldKey)
+      .where(sql`${table.value} is null`),
+    // A value is either absent (the field-level entry) or non-empty; '' and whitespace-only
+    // would slip past the partial unique index and sit confusingly next to the field-level entry
+    check('field_glossary_value_check', sql`${table.value} is null or btrim(${table.value}) <> ''`),
+  ]
+);
+
+export type FieldGlossaryEntry = typeof fieldGlossary.$inferSelect;
 
 // Note: OrganizationType and DataSharingPolicy are already exported above at definition
 

@@ -43,13 +43,16 @@ vi.mock('@/hooks/use-lead-assignee', () => import('@/test/mocks/lead-assignee'))
 
 vi.mock('next/navigation', async () => {
   const { useSyncExternalStore } = await import('react');
+  const { searchParamsCache } = await import('@/test/mocks/next-navigation');
   // One object for every render, like Next's useRouter. A new one per render would re-run each
   // effect that depends on the router, and hide an effect that misses a dependency
   const router = { push: nav.push, replace: nav.replace, prefetch: vi.fn(), back: vi.fn() };
+  // A new object only when the URL changes, like Next's useSearchParams (#719)
+  const searchParamsFor = searchParamsCache();
   return {
     useRouter: () => router,
     usePathname: () => '/ja/leads',
-    useSearchParams: () => new URLSearchParams(useSyncExternalStore(nav.subscribe, nav.get)),
+    useSearchParams: () => searchParamsFor(useSyncExternalStore(nav.subscribe, nav.get)),
   };
 });
 

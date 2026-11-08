@@ -4,6 +4,8 @@ import { cn } from '@/lib/utils';
 import * as React from 'react';
 
 const COLORS = {
+  /** The key colour of the site (DADS), lighter on the dark track (as StudioBarRow) */
+  brand: 'bg-brand-500 dark:bg-brand-400',
   blue: 'bg-blue-500',
   violet: 'bg-violet-500',
   green: 'bg-green-500',

@@ -16,6 +16,12 @@
 
 import type { db as defaultDb } from '@/lib/db/client';
 import { type Lead, auditLogs, dealHistory, deals, leadTasks, leads, users } from '@/lib/db/schema';
+import {
+  TASK_KINDS,
+  TASK_SOURCES,
+  type TaskKind,
+  type TaskSource,
+} from '@/lib/features/lead-follow-up/types/schemas';
 import { isFirstHandoff, notifyLeadHandoff } from '@/lib/features/lead-handoff/service';
 import {
   diffLeadAudit,
@@ -25,9 +31,12 @@ import {
 } from '@/lib/features/leads/service';
 import {
   type LostReason,
+  type SqlDecision,
   type TargetSystem,
   jstDate,
   lostReasonEnum,
+  qualificationUpdateFields,
+  sqlDecisionEnum,
   statusUpdateFields,
   targetSystemEnum,
 } from '@/lib/features/leads/types/pipeline';
@@ -61,6 +70,7 @@ import {
   STAGE_PROBABILITY,
   forecastCategory,
   isOpenStage,
+  skipsSqlDecision,
   weightedAmount,
 } from './types/pipeline';
 import {
@@ -104,11 +114,11 @@ const AUDITED_FIELDS = [
 ] as const satisfies readonly (keyof DealRow)[];
 
 /**
- * Free text that may name people (the next step, the details of a loss): the audit log records
- * only that it changed (metadata.changedText), never the text, as the lead audit keeps no
- * contact details (#101). The text stays on the deal itself.
+ * Free text that may name people (the details of a loss): the audit log records only that it
+ * changed (metadata.changedText), never the text, as the lead audit keeps no contact details
+ * (#101). The text stays on the deal itself. The next step is no longer written (#853).
  */
-const TEXT_FIELDS = ['nextStep', 'lostNote'] as const satisfies readonly (keyof DealRow)[];
+const TEXT_FIELDS = ['lostNote'] as const satisfies readonly (keyof DealRow)[];
 
 export interface DealView {
   id: string;
@@ -127,6 +137,7 @@ export interface DealView {
   lostNote: string | null;
   competitor: string | null;
   targetSystem: TargetSystem | null;
+  /** Written before #853, which stopped taking it; the deal page shows it as a note */
   nextStep: string | null;
   ownerUserId: string | null;
   ownerName: string | null;
@@ -136,11 +147,33 @@ export interface DealView {
   updatedAt: Date;
 }
 
+/** The lead's open task that a deal's card and list row show as its next action (#853) */
+export interface DealNextTask {
+  id: string;
+  /** Null for a task from a hearing that kept the default title (the screens name it) */
+  title: string | null;
+  /** Due date (Japan calendar day, YYYY-MM-DD) */
+  dueOn: string;
+  kind: TaskKind;
+  source: TaskSource;
+}
+
 export interface DealCard extends DealView {
   leadName: string | null;
   company: string | null;
-  /** Whether the lead has an open next action (a deal without one needs attention) */
+  /**
+   * The lead's open task due first, next actions and takeaways alike (decision
+   * 2026-10-24-nurturing-follow-up), in the order of the lead's list on the deal page; null when
+   * it has none
+   */
+  nextTask: DealNextTask | null;
+  /**
+   * Whether the lead has an open next action (a deal without one needs attention): nextTask is
+   * not null, so a card never shows a next action and the mark for having none together (#853)
+   */
   hasOpenTask: boolean;
+  /** The lead's SQL decision: moving out of 見極め asks for one first (#801) */
+  leadSqlDecision: SqlDecision | null;
 }
 
 export interface BoardColumn {
@@ -182,7 +215,13 @@ export interface LinkedDeal {
 }
 
 export interface DealDetail extends DealView {
-  lead: { id: string; name: string | null; company: string | null; status: string };
+  lead: {
+    id: string;
+    name: string | null;
+    company: string | null;
+    status: string;
+    sqlDecision: SqlDecision | null;
+  };
   previousDeal: LinkedDeal | null;
   nextDeals: LinkedDeal[];
   history: DealHistoryView[];
@@ -247,6 +286,46 @@ function toDealView(row: DealRow & { ownerName: string | null }): DealView {
 
 const dealColumns = { ...getTableColumns(deals), ownerName: nameOf(users) };
 
+const toSqlDecision = (value: string | null): SqlDecision | null =>
+  sqlDecisionEnum.safeParse(value).success ? (value as SqlDecision) : null;
+
+/**
+ * The lead's open task due first, as one json value: due date, then creation, as the lead's list
+ * orders them (listTasks and sortTasks in lead-follow-up), and the id last so that ties always
+ * give the same task. Scoped by the deal's organization; read with the lead_tasks index on
+ * (organization_id, lead_id).
+ */
+const nextTaskOfDeal = sql<unknown>`(
+  select json_build_object(
+    'id', ${leadTasks.id},
+    'title', ${leadTasks.title},
+    'dueOn', ${leadTasks.dueOn},
+    'kind', ${leadTasks.kind},
+    'source', ${leadTasks.source}
+  )
+  from ${leadTasks}
+  where ${leadTasks.organizationId} = ${deals.organizationId}
+    and ${leadTasks.leadId} = ${deals.leadId}
+    and ${leadTasks.completedAt} is null
+  order by ${leadTasks.dueOn} asc, ${leadTasks.createdAt} asc, ${leadTasks.id} asc
+  limit 1
+)`;
+
+/** The task read by nextTaskOfDeal (parsed by the driver), with its kind and source checked */
+function toNextTask(value: unknown): DealNextTask | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const task = value as Record<string, unknown>;
+  if (typeof task.id !== 'string' || typeof task.dueOn !== 'string') return null;
+  const text = (field: unknown) => (typeof field === 'string' ? field : null);
+  return {
+    id: task.id,
+    title: text(task.title),
+    dueOn: task.dueOn,
+    kind: oneOf(TASK_KINDS, text(task.kind), 'next_action'),
+    source: oneOf(TASK_SOURCES, text(task.source), 'manual'),
+  };
+}
+
 const notFound = (what: 'lead' | 'deal') =>
   new TRPCError({
     code: 'NOT_FOUND',
@@ -292,7 +371,8 @@ export async function getBoard(
         ...dealColumns,
         leadName: leads.name,
         company: leads.company,
-        hasOpenTask: sql<boolean>`exists (select 1 from ${leadTasks} where ${leadTasks.organizationId} = ${deals.organizationId} and ${leadTasks.leadId} = ${deals.leadId} and ${leadTasks.completedAt} is null)`,
+        leadSqlDecision: leads.sqlDecision,
+        nextTask: nextTaskOfDeal,
       })
       .from(deals)
       .innerJoin(leads, sameLead)
@@ -312,12 +392,18 @@ export async function getBoard(
       .groupBy(deals.stage),
   ]);
 
-  const cards: DealCard[] = rows.slice(0, BOARD_DEALS_LIMIT).map((row) => ({
-    ...toDealView(row),
-    leadName: row.leadName ?? null,
-    company: row.company ?? null,
-    hasOpenTask: row.hasOpenTask,
-  }));
+  const cards: DealCard[] = rows.slice(0, BOARD_DEALS_LIMIT).map((row) => {
+    const nextTask = toNextTask(row.nextTask);
+    return {
+      ...toDealView(row),
+      leadName: row.leadName ?? null,
+      company: row.company ?? null,
+      nextTask,
+      // From the same value as the next action shown, so the two always agree (#853)
+      hasOpenTask: nextTask !== null,
+      leadSqlDecision: toSqlDecision(row.leadSqlDecision),
+    };
+  });
   return {
     columns: DEAL_STAGES.map((stage) => {
       const total = totals.find((t) => t.stage === stage);
@@ -372,6 +458,7 @@ export async function getDeal(
       leadName: leads.name,
       company: leads.company,
       leadStatus: leads.status,
+      leadSqlDecision: leads.sqlDecision,
     })
     .from(deals)
     .innerJoin(
@@ -416,7 +503,13 @@ export async function getDeal(
 
   return {
     ...toDealView(row),
-    lead: { id: row.leadId, name: row.leadName, company: row.company, status: row.leadStatus },
+    lead: {
+      id: row.leadId,
+      name: row.leadName,
+      company: row.company,
+      status: row.leadStatus,
+      sqlDecision: toSqlDecision(row.leadSqlDecision),
+    },
     previousDeal: previous[0] ? toLinked(previous[0]) : null,
     nextDeals: next.map(toLinked),
     history: history.map((h) => ({
@@ -498,7 +591,9 @@ function auditValues(deal: DealRow): AuditValues {
 async function syncLeadWithDeals(
   tx: Transaction,
   lead: Lead,
-  context: { organizationId: string; userId: string; dealId: string; at: Date }
+  context: { organizationId: string; userId: string; dealId: string; at: Date },
+  /** The lead's SQL decision written with the deal's change (#801) */
+  fields: ReturnType<typeof qualificationUpdateFields> = {}
 ): Promise<LeadMove | null> {
   const leadDeals = await tx
     .select({
@@ -511,9 +606,9 @@ async function syncLeadWithDeals(
     .from(deals)
     .where(and(eq(deals.organizationId, context.organizationId), eq(deals.leadId, lead.id)));
   const changes = leadChangesFromDeals(lead, leadDeals);
-  if (Object.keys(changes).length === 0) return null;
+  if (Object.keys(changes).length === 0 && Object.keys(fields).length === 0) return null;
 
-  const set: PgUpdateSetSource<typeof leads> = { updatedAt: context.at };
+  const set: PgUpdateSetSource<typeof leads> = { ...fields, updatedAt: context.at };
   if (changes.status) Object.assign(set, statusUpdateFields(changes.status));
   if (changes.hasNegotiated) set.hasNegotiated = true;
   if (changes.lostReason !== undefined) set.lostReason = changes.lostReason;
@@ -605,7 +700,7 @@ export async function createDeal(
         lostNote: lost ? (input.lostNote ?? null) : null,
         competitor: input.competitor ?? null,
         targetSystem,
-        nextStep: input.nextStep ?? null,
+        // No next step: no longer an input (#853), the column stays null
         ownerUserId,
         previousDealId: input.previousDealId ?? null,
         stageChangedAt: now,
@@ -652,7 +747,7 @@ export async function updateDeal(
   db: Database,
   input: UpdateDealInput & { userId: string },
   now: Date = new Date()
-): Promise<DealChangeResult> {
+): Promise<DealChangeResult & { sqlUndecided: boolean }> {
   return db.transaction(async (tx) => {
     const scope = and(eq(deals.id, input.dealId), eq(deals.organizationId, input.organizationId));
     // The lead before the deal (the lock order of the header); a deal never moves to another lead
@@ -719,7 +814,7 @@ export async function updateDeal(
         lostNote: lost ? (pick('lostNote') ?? null) : null,
         competitor: pick('competitor') ?? null,
         targetSystem: pick('targetSystem') ?? null,
-        nextStep: pick('nextStep') ?? null,
+        // The next step is kept as it is: no longer an input (#853)
         ownerUserId,
         previousDealId,
         stageChangedAt: stageChanged ? now : existing.stageChangedAt,
@@ -756,22 +851,48 @@ export async function updateDeal(
       });
     }
 
+    // The SQL decision sent with the move is recorded only on a lead without one (read under the
+    // lock): a screen that asked from an older board does not rewrite a decision made meanwhile,
+    // which is changed on the lead's page
+    const sqlFields =
+      input.sqlDecision && !lead.sqlDecision
+        ? qualificationUpdateFields({ sqlDecision: input.sqlDecision }, lead, now)
+        : {};
     const movesLead =
-      stageChanged || existing.kind !== updated.kind || existing.lostReason !== updated.lostReason;
+      stageChanged ||
+      existing.kind !== updated.kind ||
+      existing.lostReason !== updated.lostReason ||
+      Object.keys(sqlFields).length > 0;
     const leadMove = movesLead
-      ? await syncLeadWithDeals(tx, lead, {
-          organizationId: input.organizationId,
-          userId: input.userId,
-          dealId: existing.id,
-          at: now,
-        })
+      ? await syncLeadWithDeals(
+          tx,
+          lead,
+          {
+            organizationId: input.organizationId,
+            userId: input.userId,
+            dealId: existing.id,
+            at: now,
+          },
+          sqlFields
+        )
       : null;
+    const sqlDecision = leadMove ? leadMove.after.sqlDecision : lead.sqlDecision;
     const [withOwner] = await tx
       .select(dealColumns)
       .from(deals)
       .leftJoin(users, eq(users.id, deals.ownerUserId))
       .where(scope);
-    return { deal: toDealView(withOwner), lead: leadMove };
+    return {
+      deal: toDealView(withOwner),
+      lead: leadMove,
+      sqlUndecided:
+        stageChanged &&
+        skipsSqlDecision(
+          oneOf(DEAL_STAGES, existing.stage, 'qualification'),
+          stage,
+          toSqlDecision(sqlDecision)
+        ),
+    };
   });
 }
 

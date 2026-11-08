@@ -34,7 +34,8 @@ const DEFAULT_HIDE_WHEN_VISIBLE = [
 /**
  * The hero counts by its diagnosis button (the first link of its buttons), and only once most
  * of it is on screen: a strip at the bottom edge cannot be read. Without the test-mode banner,
- * 10-13px of the Access page's button reach the bottom of a 664px phone (#536).
+ * 10-13px of the Access page's button reach the bottom of a 664px phone (#536), measured with
+ * Noto Sans JP as the E2E draws it; phones draw the device's font (#510), so it varies a little.
  */
 const HERO_BUTTON_VISIBLE_RATIO = 0.75;
 

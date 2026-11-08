@@ -198,9 +198,10 @@
     "menu": "Menu",
     "management": "Management",
     "dashboard": "Dashboard",
+    "today": "Today",
     "leads": "Lead Management",
     "deals": "Deals",
-    "forecast": "Forecast",
+    "forecast": "Sales forecast",
     "prospects": "Customer search (AX)",
     "analytics": "Analytics",
     "settings": "Settings",
@@ -1423,8 +1424,9 @@
       "forecastCategory": "Forecast category",
       "expectedCloseOn": "Expected close",
       "closedOn": "Closed on",
+      "wonOn": "Won on",
+      "lostOn": "Lost on",
       "owner": "Owner",
-      "nextStep": "Next step",
       "lostReason": "Lost reason",
       "lostNote": "Lost details",
       "competitor": "Competitor",
@@ -1434,20 +1436,21 @@
       "updatedAt": "Updated"
     },
     "column": {
-      "summary": "{count} · {amount}",
+      "summary": "{count, plural, one {# deal} other {# deals}} · {amount}",
       "weighted": "Weighted {amount}",
       "empty": "No deals",
       "dropHere": "Move here",
-      "closedTitle": "{stage} (last {days} days)"
+      "closedTitle": "{stage} (last {days, plural, one {day} other {# days}})"
     },
     "card": {
-      "daysInStage": "{days} days in this stage",
+      "daysInStage": "{days, plural, one {# day} other {# days}} in this stage",
       "overdue": "Past the expected close date",
       "noNextAction": "The lead has no next action (task)",
+      "nextAction": "Next action",
       "noCloseDate": "No close date",
       "noAmount": "No amount yet",
       "unassigned": "No owner",
-      "move": "Move \"{name}\" to another stage",
+      "move": "Move \"{name}\" to another stage (now {stage})",
       "moveTo": "Move to {stage}"
     },
     "filters": {
@@ -1468,7 +1471,8 @@
     "lostDialog": {
       "title": "Mark \"{name}\" as lost",
       "description": "Lost reasons feed the win/loss analysis",
-      "fromWon": "The lead stays won.",
+      "fromWon": "Unless another deal of the lead is won, the lead is no longer won (Negotiating while a deal is open, else Lost).",
+      "notQualified": "The lead's SQL decision is recorded as not qualified with it.",
       "reason": "Lost reason",
       "reasonPlaceholder": "Choose one",
       "reasonRequired": "Choose a lost reason",
@@ -1478,8 +1482,8 @@
     },
     "wonDialog": {
       "title": "Mark \"{name}\" as won",
-      "impact": "The lead \"{lead}\" becomes won. It stays won even if the deal is reopened.",
-      "impactUnnamed": "This lead becomes won. It stays won even if the deal is reopened.",
+      "impact": "The lead \"{lead}\" becomes won.",
+      "impactUnnamed": "This lead becomes won.",
       "fromLost": "The lost reason and details are cleared.",
       "closedOn": "Won on",
       "closedOnInvalid": "Enter the won date as a day from 2000 to 2100",
@@ -1490,23 +1494,45 @@
       "lost": "The lost reason ({reason}) and the details will be cleared.",
       "lostNoReason": "The lost reason and the details will be cleared.",
       "probability": "The probability becomes the {stage} default of {probability}%, and the forecast category override is cleared.",
-      "won": "The lead stays won.",
+      "won": "Unless another deal of the lead is won, the lead goes back to Negotiating.",
       "confirm": "Reopen"
+    },
+    "sqlDialog": {
+      "title": "SQL decision for \"{name}\"",
+      "description": "Before moving to {stage}, record the SQL decision of the lead \"{lead}\" from the initial hearing.",
+      "descriptionUnnamed": "Before moving to {stage}, record the SQL decision of this lead from the initial hearing.",
+      "qualifiedHint": "Qualified is recorded on the lead and stays if you undo the move.",
+      "notQualifiedHint": "If it is not qualified, the deal is closed as lost with a reason.",
+      "qualified": "Qualified: go to {stage}",
+      "notQualified": "Not qualified: close as lost"
     },
     "form": {
       "createTitle": "New deal",
       "editTitle": "Edit deal",
+      "requiredHelp": {
+        "lead": "The lead and the deal name are required. The rest can be filled in later",
+        "name": "The deal name is required. The rest can be filled in later",
+        "won": "The deal name and the won date are required. The rest can be filled in later",
+        "lost": "The deal name, the lost date and the lost reason are required. The rest can be filled in later"
+      },
       "lead": "Lead",
+      "leadChoose": "Choose a lead",
+      "leadSearchLabel": "Search leads",
       "leadPlaceholder": "Search by company, name or email",
+      "leadTypeToSearch": "Type part of a company, name or email",
       "leadRequired": "Choose a lead",
       "leadSearching": "Searching…",
       "leadNotFound": "No match",
-      "leadChange": "Change",
+      "leadCount": "{count, plural, one {# suggestion} other {# suggestions}}",
       "required": "Required",
       "namePlaceholder": "e.g. AS/400 current system survey",
       "nameRequired": "Enter a deal name",
       "closeDateInvalid": "Enter an expected close date from 2000 to 2100",
-      "amountHelp": "Yen, excluding tax. Leave empty while unknown",
+      "wonOnInvalid": "Enter the won date as a day from 2000 to 2100",
+      "lostOnInvalid": "Enter the lost date as a day from 2000 to 2100",
+      "amountHelp": "Yen, excluding tax. Commas and full-width digits are fine. Leave empty while unknown",
+      "amountUnit": "JPY",
+      "amountPreview": "= {amount}",
       "amountInvalid": "Enter a whole number of 0 or more",
       "probabilityHelp": "Empty uses the stage default ({value}%)",
       "probabilityInvalid": "Enter a whole number from 0 to 100",
@@ -1514,12 +1540,33 @@
       "ownerFromLead": "The lead's assignee (else you)",
       "forecastAuto": "From the probability",
       "wonToday": "The won date will be today.",
+      "wonPast": "For a past win, correct the won date by editing the deal once it is created.",
+      "onHoldReason": "\"{reason}\" cannot be the lost reason of a deal. Choose another one",
       "submitCreate": "Create",
-      "submitEdit": "Save"
+      "submitEdit": "Save",
+      "saving": "Saving…",
+      "saveError": "Could not save. Please try again"
     },
     "list": {
-      "caption": "Deals",
-      "empty": "No deals match"
+      "caption": "Deals ({order})",
+      "closedNote": "Won and lost deals are shown for the last {days, plural, one {day} other {# days}}",
+      "lead": "Company and contact",
+      "marks": "Alerts",
+      "nextAction": "Next action",
+      "orders": {
+        "stage": {
+          "asc": "stage order",
+          "desc": "reverse stage order"
+        },
+        "amount": {
+          "asc": "smallest amount first",
+          "desc": "largest amount first"
+        },
+        "expectedCloseOn": {
+          "asc": "earliest expected close first",
+          "desc": "latest expected close first"
+        }
+      }
     },
     "detail": {
       "back": "Back to deals",
@@ -1530,23 +1577,40 @@
       "history": "History",
       "historyEmpty": "No history",
       "historyCreated": "Created",
-      "historyChanged": "Changed {fields}",
+      "historyDiff": "{field}: {before} <arrow>→</arrow> {after}",
+      "historyArrowSpoken": "to",
+      "historyValue": "{field}: {after}",
       "notFound": "Deal not found",
       "deleteTitle": "Delete this deal?",
-      "deleteDescription": "\"{name}\" will be deleted. This cannot be undone. The lead's status does not change."
+      "deleteDescription": "\"{name}\" will be deleted. This cannot be undone. The deal's activity stays in the activity history of the lead \"{lead}\". The lead's status and deal phase will be recalculated from its remaining deals. If this is the lead's last deal, the lead keeps its current values, which can then be changed by hand.",
+      "deleting": "Deleting…",
+      "moreActions": "More actions",
+      "leadNextActions": "Next actions and takeaways of the lead \"{lead}\", the same list as on the lead's page",
+      "historyForecastAuto": "Auto ({category})",
+      "historyOther": "Changed other fields",
+      "leadNextActionsNoName": "Next actions and takeaways of this lead, the same list as on the lead's page",
+      "factsTitle": "Deal details",
+      "legacyNextStep": "Next step (earlier note)"
     },
     "leadCard": {
       "title": "Deals",
       "empty": "This lead has no deals yet",
-      "summary": "{count} · open {amount}"
+      "summary": "{count, plural, one {# deal} other {# deals}} · open {amount}",
+      "expectedClose": "Expected {date}",
+      "wonOn": "Won {date}",
+      "lostOn": "Lost {date}"
     },
     "state": {
       "loadError": "Could not load the deals",
       "retry": "Retry",
       "empty": "No deals yet",
       "emptyHint": "Create deals from a lead's page or with \"New deal\" here",
-      "truncated": "Showing up to {limit} deals. Narrow them down with the filters",
+      "emptyHintReadOnly": "Deals will show here once they are created",
+      "noMatch": "No deals match the filters",
+      "clearFilters": "Clear filters",
+      "truncated": "Showing up to {limit, plural, one {# deal} other {# deals}}. Narrow them down with the filters",
       "readOnly": "Read only",
+      "readOnlyHint": "Only members who can edit leads can create, change or move deals. To make changes, ask an admin of the organization",
       "forbiddenTitle": "You cannot see the deals",
       "forbiddenBody": "Deals, their amounts, the forecast and the targets are shown to members who can view leads, except viewers from a parent organization."
     },
@@ -1554,6 +1618,13 @@
       "created": "Deal created",
       "saved": "Saved",
       "moved": "Moved \"{name}\" to {stage}",
+      "movedTo": "Moved \"{name}\" to {stage} ({probability}% probability)",
+      "movedHandedOff": "Moved \"{name}\" to {stage} and sent the handoff sheet to the technical team",
+      "movedToHandedOff": "Moved \"{name}\" to {stage} ({probability}% probability) and sent the handoff sheet to the technical team",
+      "moveFailed": "Could not move \"{name}\" to {stage}. It is back in {from}",
+      "undo": "Undo",
+      "moveUndone": "Moved \"{name}\" back to {stage}",
+      "undoFailed": "Could not undo the move of \"{name}\". It is in {stage} now",
       "deleted": "Deal deleted",
       "deleteError": "Could not delete. Please try again",
       "error": "Could not save. Please try again"
@@ -1570,7 +1641,7 @@
     }
   },
   "salesForecast": {
-    "title": "Forecast",
+    "title": "Sales forecast",
     "description": "Won and expected amounts against the targets, by period and owner",
     "periodLabel": "Period",
     "periods": {
@@ -1579,21 +1650,29 @@
       "thisFiscalYear": "This fiscal year"
     },
     "range": "{from} – {to}",
-    "fiscalYearNote": "Fiscal year starts in month {month}",
+    "fiscalYearNote": "Fiscal year starts in {month}",
+    "updatedAt": "As of {time}",
     "setTargets": "Set targets",
+    "noTargetSet": "No target is set.",
+    "noTargetSetReadOnly": "No target is set. Owners and admins set the targets.",
+    "summaryTitle": "Whole organization",
+    "gapValue": {
+      "short": "{amount} short",
+      "above": "+{amount} above"
+    },
     "tiles": {
       "target": "Target",
       "won": "Won",
       "forecast": "Forecast (won + commit)",
       "bestCase": "Best case",
-      "gap": "Gap to target",
-      "weighted": "Pipeline (weighted)",
+      "gap": "Forecast vs target",
+      "weighted": "Weighted (open deals)",
       "achievement": "{rate} achieved",
       "forecastAchievement": "{rate} forecast",
-      "noTarget": "No target",
-      "above": "{amount} above the target"
+      "noTarget": "No target"
     },
     "table": {
+      "title": "By owner",
       "caption": "Forecast by owner",
       "owner": "Owner",
       "target": "Target",
@@ -1603,19 +1682,21 @@
       "pipeline": "Pipeline",
       "weighted": "Weighted",
       "achievement": "Achieved",
-      "gap": "Gap",
+      "gap": "Forecast vs target",
       "total": "Total",
       "unassigned": "No owner",
-      "noTarget": "—",
       "hidden": "Hidden",
-      "hiddenNote": "Each rep's target, achievement and gap are shown only to those who set the targets and to the rep"
+      "hiddenNote": "Each rep's target, achievement and forecast vs target are shown only to those who set the targets and to the rep",
+      "totalNote": "The total's target is the organization's target (in a month without one, the sum of the members' targets).",
+      "forecast": "Forecast (won + commit)",
+      "you": "(you)"
     },
     "notes": {
-      "overdue": "{count} open deals ({amount}) still have an expected close date before this period and are not counted. Review their dates",
-      "undated": "{count} open deals ({amount}) have no expected close date and are not in the forecast",
-      "noAmount": "{count} deals have no amount yet",
-      "toBoard": "Open the deals board",
-      "toList": "Open the deals list"
+      "overdue": "{count, plural, one {# open deal ({amount}) still has an expected close date before this period and is not counted. Review its date} other {# open deals ({amount}) still have an expected close date before this period and are not counted. Review their dates}}",
+      "undated": "{count, plural, one {# open deal ({amount}) has no expected close date and is not in the forecast} other {# open deals ({amount}) have no expected close date and are not in the forecast}}",
+      "noAmount": "{count, plural, one {# deal has no amount yet} other {# deals have no amount yet}}",
+      "toList": "Open the deals list",
+      "toOverdueList": "Review the dates in the deals list"
     },
     "changes": {
       "title": "This week",
@@ -1631,10 +1712,14 @@
         "reopened": "Reopened",
         "slipped": "Close date pushed out"
       },
-      "summary": "{count} · {amount}",
+      "summary": "{count, plural, one {# deal} other {# deals}} · {amount}",
       "stageChange": "{from} → {to}",
       "dateChange": "Expected close {from} → {to}",
-      "noDate": "none"
+      "noDate": "none",
+      "amountChange": "{from} → {to}",
+      "noAmount": "No amount",
+      "more": "{count} more",
+      "toBoard": "Open the deals board"
     },
     "targets": {
       "title": "Set targets",
@@ -1642,25 +1727,29 @@
       "fiscalYear": "Fiscal year",
       "fiscalYearOption": "FY{year} (from {from})",
       "startMonth": "Fiscal year starts in",
-      "startMonthOption": "Month {month}",
       "startMonthHelp": "A setting of the whole organization. A change applies at once, apart from saving the targets",
-      "startConfirmTitle": "Start the fiscal year in month {month}?",
+      "startConfirmTitle": "Start the fiscal year in {month}?",
       "startConfirmDescription": "The quarters and the fiscal year change for the whole organization.",
       "startConfirm": "Change",
       "organizationSettings": "Organization setting",
       "month": "Month",
+      "monthLegend": "Targets for {month} (yen, excl. tax)",
       "organization": "Whole organization",
       "organizationHelp": "In a month without an organization target, the members' targets are summed",
+      "membersTotal": "The members' targets add up to {amount}",
       "amountInvalid": "Enter a whole number of 0 or more",
       "save": "Save",
+      "saveAndNext": "Save and next month",
       "saving": "Saving…",
-      "saved": "Targets saved",
+      "saved": "Saved the targets for {month}",
       "startSaved": "Fiscal year start changed",
       "error": "Could not save. Please try again",
       "loadError": "Could not load the targets",
       "discardTitle": "You have unsaved targets",
       "discardDescription": "Switching drops what you entered for this month.",
       "discardConfirm": "Switch",
+      "closeDescription": "Closing drops what you entered for this month.",
+      "closeConfirm": "Close",
       "readOnly": "Only owners and admins can change the targets",
       "formerMember": "Someone who left",
       "formerMemberHelp": "The target of someone no longer in the organization. It can only be removed (empty the box and save)",
@@ -1668,7 +1757,63 @@
     },
     "state": {
       "loadError": "Could not load the forecast",
-      "retry": "Retry"
+      "retry": "Retry",
+      "forbiddenTitle": "You cannot see the sales forecast",
+      "forbiddenBody": "The sales forecast and the targets are shown to members who can view leads, except viewers from a parent organization."
+    }
+  },
+  "today": {
+    "title": "Today",
+    "description": "Your meetings and what to do today, on one screen",
+    "dateLine": "{date} · Japan time",
+    "noOrganization": "Choose an organization to see your day here",
+    "noLeadName": "Lead without a name",
+    "section": {
+      "count": "{count}",
+      "loading": "Loading…",
+      "loadError": "Could not load",
+      "retry": "Reload"
+    },
+    "nextActions": {
+      "title": "Next actions due"
+    },
+    "meetings": {
+      "title": "Meetings this week",
+      "description": "Today through Sunday: your leads, and unassigned leads whose meeting date you set",
+      "viewAll": "Your leads' meetings this week",
+      "todayHeading": "Today's meetings",
+      "laterHeading": "Meetings later this week (tomorrow to Sunday)",
+      "empty": "No meetings from today to Sunday",
+      "emptyToday": "No meetings today",
+      "emptyLater": "No meetings from tomorrow to Sunday",
+      "more": "{count, plural, one {# more meeting} other {# more meetings}} (the earliest {shown} are shown)",
+      "noTime": "No time recorded",
+      "firstMeeting": "First meeting",
+      "unassigned": "Unassigned"
+    },
+    "activities": {
+      "title": "Today's activity",
+      "description": "Contacts you logged for today, including no-answers (hearings aren't counted)",
+      "empty": "No contacts logged today yet",
+      "kinds": {
+        "call": "Calls",
+        "email": "Emails",
+        "visit": "Visits",
+        "online_meeting": "Online meetings",
+        "no_answer": "No answers"
+      },
+      "kindCount": "{count}",
+      "durationLabel": "Total time",
+      "more": "Showing the latest {shown} of {total, plural, one {# record} other {# records}}",
+      "showAll": "Show all ({count})",
+      "showLess": "Show less"
+    },
+    "deals": {
+      "title": "Deals that need attention",
+      "description": "Your deals past their expected close date, and those whose lead has no next action",
+      "viewAll": "All your deals",
+      "empty": "No deals need attention",
+      "closeOn": "Expected close: {date}"
     }
   },
   "settings": {
@@ -1834,6 +1979,15 @@
       "headerNameDuplicate": "The same header name is given more than once (case does not matter).",
       "headerValueInvalid": "Values may contain only ASCII letters, digits, symbols and spaces (no other characters or line breaks), up to 2,000 characters.",
       "conflict": "This change overlapped with another one. Reload the page and save again.",
+      "deliveryNote": "When many events are sent at once, some can arrive up to about 24 hours later. The order is not guaranteed (for lead events, keep the one with the newest updatedAt).",
+      "personalData": {
+        "title": "Lead personal data is sent to this URL",
+        "description": "The events you selected (lead created, updated, status changed or scored, and diagnostic submitted) send the following personal data of the lead to this URL.",
+        "fields": "Email address, name, company and phone number",
+        "otherFields": "The lead's ID, status, score, source, creation time and the diagnostic result (score, interest level, and the challenge or platform judged from the answers) are sent too. Free-text answers and internal notes are not sent.",
+        "confirm": "I confirm that lead personal data is sent to this URL",
+        "required": "Confirm before saving when you select an event that sends lead personal data, or change the URL it is sent to. Changing the URL cancels the retries waiting for the old URL."
+      },
       "destinationNotAllowed": "Webhooks cannot be sent to this URL. Enter a public https URL without a port number. Internal addresses, localhost and URLs with a user name or password are not allowed.",
       "destinationBlocked": "Destination not allowed",
       "destinationBlockedDescription": "Nothing is sent to this URL ({reason}). Change the URL.",
@@ -2578,7 +2732,16 @@
         "conversionRate": "Conversion Rate",
         "overallConversion": "Overall Conversion Rate",
         "fromInitial": "From initial lead to conversion",
-        "averageDays": "Average conversion time: {days} days"
+        "averageDays": "Average conversion time: {days} days",
+        "stages": {
+          "lead": "Leads",
+          "mql": "MQL (interested)",
+          "deal": "Deals",
+          "sql": "SQL (qualified)",
+          "won": "Won"
+        },
+        "nurturingNow": "Leads being nurtured: {count, number} (not a stage of the funnel)",
+        "reachedNote": "A lead counts for every stage before the one it reached (a lead that went to a deal without MQL, such as an agency appointment, counts as MQL too)"
       },
       "responseTimePeriods": {
         "withinHour": "< 1 hour",
@@ -2664,7 +2827,8 @@
       "profile": "Personal settings",
       "settings": "Organization settings",
       "logout": "Logout",
-      "logoutError": "Failed to log out."
+      "logoutError": "Failed to log out.",
+      "help": "Help"
     },
     "search": {
       "label": "Search leads",
@@ -2713,41 +2877,52 @@
     "typeComment": "Comment",
     "typeNote": "Note",
     "typeActivity": "Activity",
+    "typeLabel": "Type",
+    "typeHint": "Comments can be replied to. Notes cannot.",
+    "filterLabel": "Filter",
     "filterAll": "All",
     "filterComments": "Comments",
     "filterNotes": "Notes",
     "filterActivity": "Activity",
-    "commentPlaceholder": "Add a comment...",
-    "notePlaceholder": "Add a note...",
-    "replyPlaceholder": "Write a reply...",
-    "visibleToTeam": "Visible to your organization's members",
-    "noComments": "No comments yet",
+    "commentPlaceholder": "Add a comment…",
+    "notePlaceholder": "Add a note…",
+    "replyPlaceholder": "Write a reply…",
+    "replyLabel": "Reply to {name}",
+    "visibleToTeam": "Comments and notes are visible to your organization's members",
+    "sendShortcut": "Press Ctrl+Enter (⌘+Enter on a Mac) to send",
+    "noComments": "No comments or notes yet",
     "noCommentsHint": "Be the first to add a comment or note",
-    "forbidden": "You don't have permission to see the notes",
-    "loadError": "The notes could not be loaded",
+    "readOnly": "You have read-only access and cannot write here",
+    "noMatches": "{type, select, comment {No comments yet} note {No notes yet} activity {No activity yet} other {Nothing matches}}",
+    "forbiddenTitle": "You cannot see comments and notes",
+    "forbiddenBody": "Comments and notes are shown to members who can view leads, except viewers from a parent organization.",
+    "loadError": "Comments and notes could not be loaded",
+    "loadMore": "Show more ({count, plural, one {# item left} other {# items left}})",
+    "loadMoreError": "Could not load more",
     "reply": "Reply",
     "edit": "Edit",
     "delete": "Delete",
-    "actions": "Comment actions",
+    "actions": "{type, select, note {Note} other {Comment}} actions",
     "pin": "Pin",
     "unpin": "Unpin",
+    "pinned": "Pinned",
     "save": "Save",
     "cancel": "Cancel",
     "send": "Send",
-    "edited": "edited",
-    "editLabel": "Edit the comment",
-    "createSuccess": "Comment added successfully",
-    "createError": "Failed to add comment",
-    "updateSuccess": "Comment updated successfully",
-    "updateError": "Failed to update comment",
-    "deleteSuccess": "Comment deleted successfully",
-    "deleteError": "Failed to delete comment",
-    "deleteForbidden": "Only an owner can delete a comment with replies from others",
-    "deleteTitle": "Delete this comment?",
-    "deleteConfirm": "Are you sure you want to delete this comment? This action cannot be undone.",
+    "edited": " (edited)",
+    "editLabel": "Edit the {type, select, note {note} other {comment}}",
+    "createSuccess": "{type, select, note {Note} other {Comment}} added successfully",
+    "createError": "Failed to add the {type, select, note {note} other {comment}}",
+    "updateSuccess": "{type, select, note {Note} other {Comment}} updated successfully",
+    "updateError": "Failed to update the {type, select, note {note} other {comment}}",
+    "deleteSuccess": "{type, select, note {Note} other {Comment}} deleted successfully",
+    "deleteError": "Failed to delete the {type, select, note {note} other {comment}}",
+    "deleteForbidden": "Only an owner of the organization can delete a comment with replies from others",
+    "deleteTitle": "Delete this {type, select, note {note} other {comment}}?",
+    "deleteConfirm": "Are you sure you want to delete this {type, select, note {note} other {comment}}? This action cannot be undone.",
     "deleteConfirmWithReplies": "This deletes the comment and its {count, plural, one {# reply} other {# replies}}. This action cannot be undone.",
-    "pinSuccess": "Comment pinned",
-    "unpinSuccess": "Comment unpinned",
+    "pinSuccess": "{type, select, note {Note} other {Comment}} pinned",
+    "unpinSuccess": "Unpinned",
     "pinError": "Failed to update pin status"
   },
   "reports": {
@@ -3359,6 +3534,54 @@
         "cta": "Start the free web diagnosis with the ACOS questions"
       }
     },
+    "webScope": {
+      "eyebrow": "From closing it off to deciding how to protect it",
+      "title": "A web system does not have to be open to the internet",
+      "lead": "A web system is one you use in a browser. Where it can be reached from is decided separately from how it is built.",
+      "cards": {
+        "now": {
+          "label": "Today",
+          "title": "Used only inside the company",
+          "body": "It is usually used from dedicated terminals or the company network."
+        },
+        "inside": {
+          "label": "One possible setup after the move",
+          "title": "Used only from the company network",
+          "body": "As today, it can be reached only from the company network. The screens open in a browser."
+        },
+        "outside": {
+          "label": "One possible setup after the move",
+          "title": "Also used from outside (home or other sites)",
+          "body": "Only people who pass sign-in with a company account and a second check of who they are (multi-factor authentication) reach the system."
+        }
+      },
+      "cardsNote": "Which setup to use is decided with you, after we hear your company's rules.",
+      "decide": {
+        "title": "Four things to decide when moving to the web",
+        "lead": "We decide how to protect it together with how to build it.",
+        "items": {
+          "reach": {
+            "title": "Where it can be reached from",
+            "body": "Only from the company network, or from outside as well."
+          },
+          "login": {
+            "title": "How people sign in",
+            "body": "Whether to use company accounts and multi-factor authentication."
+          },
+          "control": {
+            "title": "Permissions, records and backups",
+            "body": "Who may do what, what is recorded and how to restore."
+          },
+          "upkeep": {
+            "title": "Who keeps fixing it when a weakness is found, and how",
+            "body": "We who build it also provide the upkeep to keep fixing it. We decide with you how much you leave to us."
+          }
+        }
+      },
+      "itNote": "For IT departments: we explain where it can be reached from, sign-in, permissions, records, backups and how it is fixed after the move, along the items your review checks.",
+      "closing": "You can also talk about how to protect it in the free individual consultation.",
+      "cta": "Start the free web check"
+    },
     "trust": {
       "title": "Why you can rely on us",
       "items": {
@@ -3373,6 +3596,18 @@
         "certified": {
           "title": "DX-certified company",
           "body": "Software Agency System Co., Ltd. is certified under the DX Certification program of the Ministry of Economy, Trade and Industry."
+        },
+        "privacyMark": {
+          "title": "PrivacyMark",
+          "body": "Software Agency System Co., Ltd. holds the PrivacyMark (certification number 10822550, conforming to JIS Q 15001:2023)."
+        },
+        "isms": {
+          "title": "ISMS (ISO/IEC 27001)",
+          "body": "Design and development of AX migration carried out at our head office are within the scope of our ISMS certification (certificate number IS609954): business system development at the head office."
+        },
+        "upkeep": {
+          "title": "After the move",
+          "body": "We who build it also provide the upkeep to keep fixing weaknesses when they are found."
         }
       }
     },
@@ -3439,6 +3674,14 @@
           "q": "Which systems are covered?",
           "a": "AS/400 (IBM i), NEC ACOS and Microsoft Access. Please also ask about Visual Basic systems, low-code products such as WebPerformer, and other office computers and mainframes."
         },
+        "internalOnly": {
+          "q": "Can we move to the web without making it usable from outside?",
+          "a": "A setup used only from the company network is also possible. Where it can be reached from is decided after we hear your company's rules."
+        },
+        "itReview": {
+          "q": "Can you explain things for our IT department's review?",
+          "a": "Yes. We ask what your review checks (where it can be reached from, sign-in, permissions, records, backups, how it is fixed after the move and so on) and explain along those items. Engineers join when needed."
+        },
         "costTime": {
           "q": "How much does it cost and how long does it take?",
           "a": "It depends greatly on the number of programs, screens and forms, and on the integrations, so it is settled in the current-system survey (Phase 1). The free web check and the consultation cost nothing."
@@ -3464,12 +3707,16 @@
           "a": "AI transformation: business transformation that makes use of AI. After the migration, AI agents are added to the new web system to analyze the system and its data, streamline operations and extend features step by step."
         },
         "webSecurity": {
-          "q": "We are worried about vulnerabilities and cyberattacks if we move to a web system.",
-          "a": "That is a fair concern. A web system also carries a risk: when a weakness (vulnerability) is found in software it uses, that weakness can be exploited until it is fixed. So when we decide how to migrate, we decide with you how widely the system can be reached (for example, only on your internal network, or from outside the office as well), who keeps fixing weaknesses as they are found and how, and how logins, permissions, records and backups are managed. Note also that once maintenance of the OS or a product ends, weaknesses found in it are no longer fixed, and this applies to your current system too."
+          "q": "Is it secure to move a system we used only inside the company to the web?",
+          "a": "That is a fair concern. A web system also carries a risk: when a weakness (vulnerability) is found in software it uses, that weakness can be exploited until it is fixed. So when we decide how to migrate, we decide with you where the system can be reached from (only on your internal network, or from outside the office as well), how people sign in, and how permissions, records and backups are managed. After the move, we who build it also provide the upkeep to keep fixing weaknesses when they are found; how much you leave to us is discussed with the approach. Note also that once maintenance of the OS or a product ends, weaknesses found in it are no longer fixed, and this applies to your current system too."
         },
         "data": {
           "q": "Are the specifications and source code we provide used to train AI?",
           "a": "No. Specifications, source code and other materials you entrust to us are processed in a secure environment where they are not used as training data."
+        },
+        "personalData": {
+          "q": "Can we consult you if the system holds personal data?",
+          "a": "Yes. We first ask what kind of data it holds and decide with you how the data is handled."
         },
         "privacy": {
           "q": "How is my information used?",
@@ -3684,9 +3931,21 @@
           "q": "Can we move only part of it to the web?",
           "a": "Yes. You can move the most used functions first and keep using the rest in your current Access tool."
         },
+        "internalOnly": {
+          "q": "Can we move to the web without making it usable from outside?",
+          "a": "A setup used only from the company network is also possible. Where it can be reached from is decided after we hear your company's rules."
+        },
+        "itReview": {
+          "q": "Can you explain things for our IT department's review?",
+          "a": "Yes. We ask what your review checks (where it can be reached from, sign-in, permissions, records, backups, how it is fixed after the move and so on) and explain along those items. Engineers join when needed."
+        },
+        "personalData": {
+          "q": "Can we consult you if the tool holds personal data?",
+          "a": "Yes. We first ask what kind of data it holds and decide with you how the data is handled. The detailed questions of the free web check also let you choose the kinds of data it holds."
+        },
         "webSecurity": {
-          "q": "We are worried about vulnerabilities and cyberattacks if we move to the web.",
-          "a": "That is a fair concern. A web system also carries a risk: when a weakness (vulnerability) is found in software it uses, that weakness can be exploited until it is fixed. So when we decide the approach, we decide with you how widely the system can be reached (for example, only on your internal network, or from outside the office as well), who keeps fixing weaknesses as they are found and how, and how logins, permissions, records and backups are managed. Note also that versions of Access whose support has ended get no fixes when weaknesses are found."
+          "q": "Is it secure to move a tool we used only inside the company to the web?",
+          "a": "That is a fair concern. A web system also carries a risk: when a weakness (vulnerability) is found in software it uses, that weakness can be exploited until it is fixed. So when we decide the approach, we decide with you where the system can be reached from (only on your internal network, or from outside the office as well), how people sign in, and how permissions, records and backups are managed. After the move, we who build it also provide the upkeep to keep fixing weaknesses when they are found; how much you leave to us is discussed with the approach. Note also that versions of Access whose support has ended get no fixes when weaknesses are found."
         },
         "cost": {
           "q": "What does the cost depend on?",
@@ -3735,6 +3994,98 @@
     "breadcrumb": "Microsoft Access migration",
     "pathsColumn": {
       "lead": "An article compares the three ways in a table, to help you choose."
+    },
+    "compare": {
+      "eyebrow": "From relying on one person to being supported by a team",
+      "title": "Your Access today, and what can be built when moving to the web",
+      "lead": "Some things are easy to miss even when a tool is used only inside the company. They come from how Access tools are built, not from how people use them.",
+      "headers": {
+        "item": "Item",
+        "now": "Access today",
+        "web": "What can be built when moving to the web"
+      },
+      "rows": {
+        "maintainer": {
+          "item": "Who can fix it",
+          "now": "When the author moves or leaves, nobody may be able to fix it.",
+          "web": "We who build it also provide the upkeep to keep fixing it."
+        },
+        "copy": {
+          "item": "Taking data out",
+          "now": "Copying the file takes all the data with it.",
+          "web": "What each person can see on screen can be set per person."
+        },
+        "records": {
+          "item": "Records",
+          "now": "Who saw or changed what is not kept unless it is built in.",
+          "web": "Who saw or changed what, and when, can be recorded."
+        },
+        "leavers": {
+          "item": "People who left or moved",
+          "now": "It depends on the shared folder's permissions. Copies already taken cannot be stopped.",
+          "web": "Their accounts can be stopped."
+        },
+        "backup": {
+          "item": "Backups",
+          "now": "Copying by hand can miss some.",
+          "web": "It can be built to back up automatically at set intervals."
+        },
+        "fixes": {
+          "item": "When a weakness is found",
+          "now": "Versions whose support has ended (2021 and earlier) get no fixes. Access in Microsoft 365 keeps getting updates.",
+          "web": "It needs to keep being fixed."
+        }
+      },
+      "note": "Moving to the web does not by itself make it better protected. We set the rules for permissions, records and backups with you during the move. The same things are decided when fixing the tool to keep using it, or when replacing it with a ready-made service."
+    },
+    "webScope": {
+      "eyebrow": "From closing it off to deciding how to protect it",
+      "title": "A web system does not have to be open to the internet",
+      "lead": "A web system is one you use in a browser. Where it can be reached from is decided separately from how it is built.",
+      "cards": {
+        "now": {
+          "label": "Today",
+          "title": "Used only inside the company",
+          "body": "It is used from a shared folder in the office or from certain PCs."
+        },
+        "inside": {
+          "label": "One possible setup after the move",
+          "title": "Used only from the company network",
+          "body": "As today, it can be reached only from the company network. The screens open in a browser."
+        },
+        "outside": {
+          "label": "One possible setup after the move",
+          "title": "Also used from outside (home or other sites)",
+          "body": "Only people who pass sign-in with a company account and a second check of who they are (multi-factor authentication) reach the system."
+        }
+      },
+      "cardsNote": "Which setup to use is decided with you, after we hear your company's rules.",
+      "decide": {
+        "title": "Four things to decide when moving to the web",
+        "lead": "We decide how to protect it together with how to build it.",
+        "items": {
+          "reach": {
+            "title": "Where it can be reached from",
+            "body": "Only from the company network, or from outside as well."
+          },
+          "login": {
+            "title": "How people sign in",
+            "body": "Whether to use company accounts and multi-factor authentication."
+          },
+          "control": {
+            "title": "Permissions, records and backups",
+            "body": "Who may do what, what is recorded and how to restore."
+          },
+          "upkeep": {
+            "title": "Who keeps fixing it when a weakness is found, and how",
+            "body": "We who build it also provide the upkeep to keep fixing it. We decide with you how much you leave to us."
+          }
+        }
+      },
+      "itNote": "For IT departments: we explain where it can be reached from, sign-in, permissions, records, backups and how it is fixed after the move, along the items your review checks.",
+      "closing": "You can also talk about how to protect it in the free 30-minute online consultation.",
+      "cta": "Start the free web check (Access)",
+      "columnLead": "A column explains an example for Access in detail."
     },
     "hosts": {
       "title": "Migrating a core system such as AS/400 or ACOS?",
@@ -4209,7 +4560,9 @@
       "contact_recorded": {
         "call": "Contacted by phone",
         "email": "Contacted by email",
-        "no_answer": "Called, no answer"
+        "no_answer": "Called, no answer",
+        "visit": "Visit",
+        "online_meeting": "Online meeting"
       },
       "result_email_requested": "Result by email requested",
       "result_email_sent": "Result sent by email",
@@ -4299,6 +4652,16 @@
       "confirm_page": "Via: confirm page",
       "resend_webhook": "Via: notice from the email provider",
       "staff": "Via: admin screen"
+    },
+    "dealActivities": {
+      "title": "Activity on this deal",
+      "record": "Record an activity",
+      "loading": "Loading the activity…",
+      "loadError": "The activity could not be loaded",
+      "empty": "No activity on this deal yet.",
+      "emptyCanEdit": "No activity on this deal yet. Record one with \"Record an activity\".",
+      "more": "Showing the latest {shown} of {total}.",
+      "seeAll": "See all in the lead's activity"
     }
   },
   "sidebarWidget": {
@@ -4586,17 +4949,16 @@
       "kinds": {
         "call": "Called",
         "email": "Emailed",
-        "no_answer": "No answer"
+        "no_answer": "No answer",
+        "visit": "Visited",
+        "online_meeting": "Met online"
       },
       "recordFor": "Record a contact with {lead}",
-      "withNote": "Record with a note",
-      "withNoteShort": "With note",
-      "kind": "What happened",
+      "recordMenu": "Record a contact",
       "note": "Note (optional)",
-      "notePlaceholder": "e.g. Not available; call again tomorrow morning",
       "save": "Record",
-      "cancel": "Cancel",
       "recorded": "Recorded \"{kind}\"",
+      "recordedAt": "Recorded \"{kind}\" ({date})",
       "undo": "Undo",
       "undone": "The record was removed",
       "error": "Could not record it. Please try again",
@@ -4604,9 +4966,51 @@
       "loadError": "Could not load the contact log",
       "firstContact": "First contact {date}",
       "notContacted": "No contact recorded yet",
-      "latest": "Latest: {kind} ({date}) · {count} in total",
+      "latest": "Latest: {kind} ({details})",
+      "total": "{count} in total",
       "noAnswerCount": "No answer ×{count}"
     },
+    "activity": {
+      "open": "Record an activity",
+      "openFor": "Record an activity for {lead}",
+      "title": "Record an activity",
+      "description": "Record a contact, a visit or an online meeting with {lead}, with its time and outcome.",
+      "kind": "What happened",
+      "required": "Required",
+      "kindRequired": "Choose what happened",
+      "kinds": {
+        "call": "Call",
+        "email": "Email",
+        "visit": "Visit",
+        "online_meeting": "Online meeting",
+        "no_answer": "No answer"
+      },
+      "when": "When (Japan time)",
+      "whenHelp": "Now by default. A time later than now cannot be recorded",
+      "whenInvalid": "Enter a date and a time",
+      "whenFuture": "A time later than now cannot be recorded",
+      "whenTooEarly": "A time before 2000 cannot be recorded",
+      "duration": "Duration in minutes (optional)",
+      "durationInvalid": "Enter whole minutes from 1 to {max} (24 hours)",
+      "outcome": "Outcome (optional)",
+      "noAnswerHelp": "Nobody was reached, so no duration or outcome is recorded",
+      "deal": "Deal (optional)",
+      "dealNone": "None",
+      "dealLoading": "Loading the deals…",
+      "dealNoDeals": "This lead has no deals",
+      "dealLoadError": "The deals could not be loaded. You can record without a deal",
+      "dealOption": "{name} ({stage})",
+      "notePlaceholder": "e.g. They showed us their current forms. Next time we discuss the scope",
+      "saving": "Recording…"
+    },
+    "outcomes": {
+      "advanced": "Moved forward",
+      "no_change": "No change",
+      "setback": "Set back"
+    },
+    "outcomeLabel": "Outcome: {outcome}",
+    "duration": "{hours, plural, =0 {{minutes} min} other {{minutes, plural, =0 {{hours} hr} other {{hours} hr {minutes} min}}}}",
+    "dealLink": "Deal: {name}",
     "tasks": {
       "title": "Next actions",
       "empty": "No next actions yet",
@@ -4654,6 +5058,7 @@
     },
     "today": {
       "title": "Today",
+      "count": "{count}",
       "description": "Next actions due today or overdue. Tick one to mark it done.",
       "empty": "Nothing due today",
       "loadError": "Could not load",
@@ -4735,7 +5140,13 @@
       "cumulative": "Cumulative",
       "stageConversionRate": "Conversion Rate",
       "overallConversionRate": "Overall Conversion Rate: {rate}%",
-      "averageConversionDays": "Average Conversion Time: {days} days"
+      "averageConversionDays": "Average Conversion Time: {days} days",
+      "stageLead": "Leads",
+      "stageMql": "MQL (interested)",
+      "stageDeal": "Deals",
+      "stageSql": "SQL (qualified)",
+      "stageWon": "Won",
+      "nurturingNow": "Leads being nurtured: {count}"
     },
     "diagnostic": {
       "leadScore": "Lead Score",
@@ -5324,8 +5735,9 @@
       "handOver": "Next step: hand over to sales",
       "keepChecking": "Next step: keep checking",
       "meetings": "Meetings held (meeting date entered)",
-      "contracts": "Contracts (stage 5)",
-      "nurturing": "Nurturing",
+      "converted": "Converted to leads",
+      "contracts": "Contracts (stage 5, excluding converted rows)",
+      "nurturing": "Nurturing (excluding converted rows)",
       "passed": "Passed (next step)",
       "stages": "Progress by stage",
       "stage": "Stage",
@@ -5334,10 +5746,14 @@
       "reached": "Reached this stage",
       "progressRate": "From the previous stage",
       "withStage": "Rows with a stage",
+      "stagesNote": "{count, plural, one {# row converted to a lead is} other {# rows converted to leads are}} not counted here. From then on, they are tracked as leads and deals.",
       "entries": "Progress by entry",
+      "entriesNote": "\"5 Contract\" excludes rows converted to leads.",
       "entry": "Entry",
       "recorded": "Rows",
+      "entryConverted": "Converted to leads",
       "entryStage": "Entry × stage",
+      "entryStageNote": "Rows converted to leads are not counted.",
       "sum": "Total",
       "months": "By month, against the meeting target",
       "month": "Month",
@@ -5350,9 +5766,10 @@
       "targetsSaved": "Targets saved",
       "targetsHint": "For each month, the running total of meetings aimed at by the end of the month. Leave it empty for no target.",
       "checks": "For sales to check",
+      "checksNote": "Rows converted to leads, passed, dropped or at the contract stage are not counted. \"Next action overdue\" matches the list filter of the same name.",
       "stageWithoutNextAction": "No next action date (stage entered)",
-      "overdue": "Next action date passed",
-      "handOverWithoutStage": "Handed over without a stage",
+      "overdue": "Next action overdue",
+      "handOverWithoutStage": "Waiting for sales, no stage",
       "monthFormat": "{month}/{year}",
       "calls": "Sales agencies' calls",
       "refusedFor": "Turned down: {reason}"
@@ -5553,6 +5970,101 @@
       "legacy-diagnostic": "Diagnostic form (legacy)",
       "home": "Top page",
       "landing": "Landing page"
+    }
+  },
+  "fieldGlossary": {
+    "help": "Field help"
+  },
+  "help": {
+    "open": "How to use this screen",
+    "tip": "Tip",
+    "caution": "Caution",
+    "rolesTitle": "For {roles}",
+    "roles": {
+      "owner": "owners",
+      "admin": "admins",
+      "member": "members",
+      "group_owner": "group owners",
+      "group_admin": "group admins",
+      "parent_viewer": "parent organization viewers"
+    },
+    "reviewedAt": "This guide matches the screen as of {date} (written in Japanese for now)",
+    "menu": "Help",
+    "openCenter": "Open the help center",
+    "related": "Read next",
+    "center": {
+      "title": "Help",
+      "description": "How to use each screen, the sales workflow and the terms. The articles are in Japanese.",
+      "searchLabel": "Search the help",
+      "searchPlaceholder": "e.g. SQL, targets, invite",
+      "resultCount": "{count, plural, one {# article} other {# articles}}",
+      "noResults": "No article matches \"{query}\". Try a shorter word or browse the contents.",
+      "tocLabel": "Contents",
+      "sections": {
+        "workflows": "Workflows",
+        "screens": "Screens",
+        "settings": "Settings",
+        "terms": "Glossary"
+      },
+      "back": "Back to the help contents",
+      "openScreen": "Open this screen",
+      "articleNotFound": "Article not found"
+    },
+    "checklist": {
+      "title": {
+        "manager": "Set up your organization",
+        "member": "Get started"
+      },
+      "progress": "{done} of {total} done",
+      "allDone": "All done. You can close this list.",
+      "close": "Close this list",
+      "open": "Open",
+      "guide": "How to",
+      "guideOf": "How to: {title}",
+      "markDone": "Mark as done",
+      "markUndone": "Mark as not done",
+      "markDoneOf": "Mark \"{title}\" as done",
+      "markUndoneOf": "Mark \"{title}\" as not done",
+      "doneMark": " (done)",
+      "notDoneMark": " (not done)",
+      "items": {
+        "organization": {
+          "title": "Check the organization details",
+          "description": "Make sure the organization name and slug are right."
+        },
+        "intake": {
+          "title": "Choose the consultation contacts",
+          "description": "Pick the members who get consultation requests and assign them."
+        },
+        "members": {
+          "title": "Invite your team",
+          "description": "Invite the people who work with you and choose their roles."
+        },
+        "playbook": {
+          "title": "Fill in the sales playbook",
+          "description": "Questions per challenge show up on the lead page."
+        },
+        "agencyLinks": {
+          "title": "Issue sales agency links",
+          "description": "If you work with sales agencies, issue a diagnosis link for each. Otherwise mark this as done."
+        },
+        "today": {
+          "title": "Look at Today",
+          "description": "See your due next actions and this week's meetings in one place."
+        },
+        "leads": {
+          "title": "Find leads",
+          "description": "Use search and the common filters to find the leads to work on."
+        },
+        "nextActions": {
+          "title": "Record a next action",
+          "description": "Add what to do and by when on a lead. Due ones show up on Today."
+        },
+        "deals": {
+          "title": "Move a deal",
+          "description": "Move deals through the stages on the deal board."
+        }
+      }
     }
   }
 }

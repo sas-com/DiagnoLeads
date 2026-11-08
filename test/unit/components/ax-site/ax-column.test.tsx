@@ -17,7 +17,10 @@ vi.mock('next-intl/server', () => ({
 // The real notFound() (test/setup.ts mocks the hooks of next/navigation only)
 vi.mock('next/navigation', async () => {
   const { notFound } = await vi.importActual<typeof import('next/navigation')>('next/navigation');
-  return { notFound, usePathname: () => '/', useSearchParams: () => new URLSearchParams() };
+  const { ReadonlySearchParams } = await import('@/test/mocks/next-navigation');
+  // One object for every render, like Next's useSearchParams while the URL stays the same (#719)
+  const searchParams = new ReadonlySearchParams();
+  return { notFound, usePathname: () => '/', useSearchParams: () => searchParams };
 });
 vi.mock('next/font/google', () => ({
   Noto_Sans_JP: () => ({ variable: 'font-noto' }),

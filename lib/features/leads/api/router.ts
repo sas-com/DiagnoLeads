@@ -7,6 +7,7 @@ import { notifyLeadHandoff } from '@/lib/features/lead-handoff/notify';
 import {
   type LeadEvent,
   emitLeadEvents,
+  forgetLeadsInDeliveries,
   leadChangeEvents,
 } from '@/lib/features/webhooks/services/lead-events';
 import { organizationProcedure, router } from '@/lib/trpc/init';
@@ -40,7 +41,7 @@ import {
   leadExportJson,
 } from '../export';
 import { leadExportPdfBase64 } from '../export-pdf';
-import { getNextMeetingRate, getWeekMeetings } from '../meetings';
+import { getMyMeetings, getNextMeetingRate, getWeekMeetings } from '../meetings';
 import { leadIdsWithDeals } from '../service';
 import {
   DEAL_DRIVEN_MESSAGE,
@@ -422,6 +423,23 @@ export const leadsRouter = router({
     return getWeekMeetings(ctx.db, input.organizationId);
   }),
 
+  /**
+   * 今日 (#556): the user's own meetings from today to Sunday of the current Japan week, with
+   * the confirmed time of a first meeting (see meetings.ts). The user is the one signed in: the
+   * input names only the organization (any other key is refused, as leadActivity.myDay does)
+   */
+  myMeetings: organizationProcedure
+    .input(z.object({ organizationId: z.string().uuid() }).strict())
+    .query(async ({ ctx }) => {
+      if (!ctx.ability.can('read', 'Lead')) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'リードを閲覧する権限がありません',
+        });
+      }
+      return getMyMeetings(ctx.db, { organizationId: ctx.organization.id, userId: ctx.user.id });
+    }),
+
   /** Dashboard KPI 初回商談から次回日程が決まった率 for the period (#137, see meetings.ts) */
   nextMeetingRate: organizationProcedure
     .input(
@@ -758,6 +776,7 @@ export const leadsRouter = router({
 
       // Delete lead (the audit row keeps only the name and company)
       await tx.delete(leads).where(leadScope);
+      await forgetLeadsInDeliveries(tx, input.organizationId, [existing.id]);
       deletedAt = new Date();
       await writeLeadAuditLogs(
         tx,
@@ -902,6 +921,11 @@ export const leadsRouter = router({
         .delete(leads)
         .where(and(inArray(leads.id, input.ids), eq(leads.organizationId, input.organizationId)))
         .returning({ id: leads.id, name: leads.name, company: leads.company });
+      await forgetLeadsInDeliveries(
+        tx,
+        input.organizationId,
+        result.map((row) => row.id)
+      );
 
       await writeLeadAuditLogs(
         tx,

@@ -27,6 +27,7 @@ import { ColumnBreadcrumbs } from './column-article';
 import {
   CtaCaption,
   DiagnosisIntro,
+  EYEBROW,
   SECTION_HEADING,
   SECTION_LEAD,
   type SectionProps,
@@ -391,6 +392,64 @@ export async function AxAccessPathsColumn({ locale }: SectionProps) {
   );
 }
 
+const COMPARE_ROWS = ['maintainer', 'copy', 'records', 'leavers', 'backup', 'fixes'] as const;
+
+/**
+ * Today's Access next to what can be built when moving to the web (#839), after the three ways
+ * so that it reads as part of choosing the web. The left column speaks of how Access tools are
+ * built, not of how people use them; the same things are decided on every way (owner, 2026-10-28)
+ */
+export async function AxAccessCompare({ locale }: SectionProps) {
+  const t = await getTranslations({ locale, namespace: 'axAccess.compare' });
+  return (
+    <section aria-labelledby="ax-access-compare-heading" className="bg-white py-16 sm:py-24">
+      <div className="mx-auto max-w-5xl px-4 sm:px-6">
+        <p className={EYEBROW}>{t('eyebrow')}</p>
+        <h2 id="ax-access-compare-heading" className={`mt-3 ${SECTION_HEADING}`}>
+          {t('title')}
+        </h2>
+        <p className={SECTION_LEAD}>{t('lead')}</p>
+        {/* A table on wide screens; each row stacks into a card on phones */}
+        <table className="mt-12 w-full border-collapse text-left text-sm leading-relaxed">
+          <thead className="sr-only sm:not-sr-only">
+            <tr>
+              <th scope="col" className="w-1/5 py-3 pr-4 font-bold">
+                {t('headers.item')}
+              </th>
+              <th scope="col" className="w-2/5 bg-gray-100 px-4 py-3 font-bold">
+                {t('headers.now')}
+              </th>
+              <th scope="col" className="w-2/5 bg-ax-forest px-4 py-3 font-bold text-white">
+                {t('headers.web')}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {COMPARE_ROWS.map((key) => (
+              <tr key={key} className="block border-t border-gray-300 py-4 sm:table-row sm:py-0">
+                <th scope="row" className="block py-1 pr-4 font-bold sm:table-cell sm:py-4">
+                  {t(`rows.${key}.item`)}
+                </th>
+                <td className="block bg-gray-100 px-4 py-3 text-gray-700 sm:table-cell sm:py-4">
+                  <span className="block text-xs font-bold sm:hidden">{t('headers.now')}</span>
+                  {t(`rows.${key}.now`)}
+                </td>
+                <td className="block bg-ax-leaf/10 px-4 py-3 sm:table-cell sm:py-4">
+                  <span className="block text-xs font-bold text-ax-leaf sm:hidden">
+                    {t('headers.web')}
+                  </span>
+                  {t(`rows.${key}.web`)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="mt-10 text-center font-bold leading-relaxed">{t('note')}</p>
+      </div>
+    </section>
+  );
+}
+
 /** The free check first, as on the main page, then the steps of an Access project */
 const STEPS = ['web', 'inventory', 'decide', 'migrate', 'ax'] as const;
 
@@ -585,13 +644,17 @@ export async function AxAccessColumns({ locale }: SectionProps) {
 
 export const ACCESS_FAQ_KEYS = [
   'noDocs',
+  // The worry about the web near the top, in the respondent's words (#841)
+  'webSecurity',
+  'internalOnly',
+  'itReview',
   'accde',
   'partial',
-  'webSecurity',
   'cost',
   'period',
   'useDuring',
   'department',
+  'personalData',
   // As on the main page: the diagnosis right below asks about the tool
   'who',
   'consult',

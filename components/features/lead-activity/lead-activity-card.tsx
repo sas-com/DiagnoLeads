@@ -1,5 +1,6 @@
 'use client';
 
+import { CONTACT_KIND_ICONS } from '@/components/features/lead-follow-up/contact-kinds';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -35,6 +36,7 @@ import {
 import { useFormatter, useLocale, useNow, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { type ComponentType, useState } from 'react';
+import { ContactDetails } from './contact-details';
 
 const PAGE_SIZE = 20;
 const TIME_ZONE = 'Asia/Tokyo';
@@ -160,7 +162,8 @@ export function LeadActivityCard({ leadId }: LeadActivityCardProps) {
   );
 }
 
-function ActivityItem({
+/** One event of the timeline; also the deal page's contact records (#554) */
+export function ActivityItem({
   event,
   leadId,
   now,
@@ -172,7 +175,10 @@ function ActivityItem({
   const t = useTranslations('leadActivity');
   const format = useFormatter();
   const locale = useLocale();
-  const Icon = KIND_ICONS[event.kind];
+  // A kind this screen does not know yet (a newer server) falls back to the contact icon
+  const Icon =
+    (event.kind === 'contact_recorded' && CONTACT_KIND_ICONS[event.contactKind]) ||
+    KIND_ICONS[event.kind];
   const at = new Date(event.at);
   const dateOnly = event.kind === 'phase_reached';
 
@@ -240,6 +246,7 @@ function ActivityItem({
               {t('emailSuppressedNotice')}
             </p>
           ))}
+        {event.kind === 'contact_recorded' && <ContactDetails event={event} />}
         {event.kind === 'contact_recorded' && event.note && (
           <p className="line-clamp-3 whitespace-pre-wrap break-words text-sm text-gray-700">
             {event.note}

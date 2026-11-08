@@ -4,6 +4,7 @@ import { trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
 import { PhoneCall } from 'lucide-react';
 import { useFormatter, useTranslations } from 'next-intl';
+import { durationParts } from './contact-format';
 import { ContactQuickActions } from './contact-quick-actions';
 
 const TIME_ZONE = 'Asia/Tokyo';
@@ -16,10 +17,12 @@ interface LeadContactBarProps {
 
 /**
  * Under the lead page header (Refs #136): when the lead was first contacted (or that nobody
- * has yet), the latest contact, and the one-tap buttons for staff who can edit leads.
+ * has yet), the latest contact (with its duration and outcome, #554), and the one-tap buttons
+ * and "record an activity" for staff who can edit leads.
  */
 export function LeadContactBar({ organizationId, leadId, leadLabel }: LeadContactBarProps) {
   const t = useTranslations('leadFollowUp.contact');
+  const tFollowUp = useTranslations('leadFollowUp');
   const format = useFormatter();
   const query = trpc.leadFollowUp.contacts.useQuery(
     { organizationId, leadId },
@@ -67,11 +70,18 @@ export function LeadContactBar({ organizationId, leadId, leadLabel }: LeadContac
               <p className="truncate text-xs text-muted-foreground">
                 {t('latest', {
                   kind: t(`kinds.${latest.kind}`),
-                  date: when(latest.contactedAt),
-                  count: data.total,
+                  details: [
+                    when(latest.contactedAt),
+                    latest.durationMinutes !== null &&
+                      tFollowUp('duration', durationParts(latest.durationMinutes)),
+                    latest.outcome && tFollowUp(`outcomes.${latest.outcome}`),
+                  ]
+                    .filter(Boolean)
+                    .join('・'),
                 })}
                 {latest.createdBy && ` · ${latest.createdBy.name}`}
                 {latest.note && ` · ${latest.note}`}
+                {` · ${t('total', { count: data.total })}`}
               </p>
             )}
           </div>

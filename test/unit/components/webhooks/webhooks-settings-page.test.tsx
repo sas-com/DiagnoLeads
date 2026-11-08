@@ -234,6 +234,7 @@ describe('WebhooksSettingsPage', () => {
         { name: 'Authorization', value: 'Bearer made-up-new' },
         { name: 'X-Trace', value: 'trace-made-up' },
       ],
+      personalDataConfirmed: false,
     });
   });
 
@@ -284,12 +285,16 @@ describe('WebhooksSettingsPage', () => {
 
     await fill(within(dialog).getByLabelText('Authorization の値'), 'Bearer made-up-a');
     await fill(within(dialog).getByLabelText('X-Tenant の値'), 'tenant-made-up');
+    // Lead personal data now goes to another URL: confirmed again (#917)
+    expect(save).toBeDisabled();
+    await userEvent.click(within(dialog).getByText('リードの個人情報をこの URL へ送ることを確認しました'));
     expect(save).toBeEnabled();
     await userEvent.click(save);
 
     expect(mocks.update).toHaveBeenCalledWith(
       expect.objectContaining({
         url: 'https://elsewhere.example.net/hook',
+        personalDataConfirmed: true,
         headers: [
           { name: 'Authorization', value: 'Bearer made-up-a' },
           { name: 'X-Tenant', value: 'tenant-made-up' },
@@ -333,6 +338,7 @@ describe('WebhooksSettingsPage', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'ヘッダーを追加' }));
     await fill(within(dialog).getByLabelText('ヘッダー名'), ' Authorization ');
     await fill(within(dialog).getByLabelText(/の値$/), 'Bearer made-up-new');
+    await userEvent.click(within(dialog).getByText('リードの個人情報をこの URL へ送ることを確認しました'));
     await userEvent.click(within(dialog).getByRole('button', { name: 'Webhookを作成' }));
 
     expect(mocks.create).toHaveBeenCalledWith({
@@ -341,7 +347,34 @@ describe('WebhooksSettingsPage', () => {
       url: 'https://hooks.example.com/new',
       events: ['lead.created'],
       headers: [{ name: 'Authorization', value: 'Bearer made-up-new' }],
+      personalDataConfirmed: true,
     });
+  });
+
+  it('shows the personal data sent and blocks creating until it is confirmed (#917)', async () => {
+    mocks.list = listed(ALL, []);
+    renderPage();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Webhookを作成' }));
+    const dialog = await screen.findByRole('dialog');
+    const create = within(dialog).getByRole('button', { name: 'Webhookを作成' });
+    await fill(within(dialog).getByLabelText('Webhook名'), 'CRM');
+    await fill(within(dialog).getByLabelText('エンドポイントURL'), 'https://hooks.example.com/new');
+
+    // Late and out-of-order deliveries are explained by the events (#919)
+    expect(within(dialog).getByText(/最大で約24時間遅れて届くことがあります/)).toBeInTheDocument();
+
+    // A deletion sends the id and time only: nothing to confirm
+    await userEvent.click(within(dialog).getByText('Lead Deleted'));
+    expect(within(dialog).queryByText('リードの個人情報をこの URL へ送ることを確認しました')).not.toBeInTheDocument();
+    expect(create).toBeEnabled();
+
+    await userEvent.click(within(dialog).getByText('Lead Status Changed'));
+    expect(within(dialog).getByText('メールアドレス・氏名・会社名・電話番号')).toBeInTheDocument();
+    expect(create).toBeDisabled();
+
+    await userEvent.click(within(dialog).getByText('リードの個人情報をこの URL へ送ることを確認しました'));
+    expect(create).toBeEnabled();
   });
 
   it('explains a CONFLICT instead of showing the server message', async () => {

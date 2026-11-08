@@ -4,10 +4,11 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-// Mock next/navigation
-vi.mock('next/navigation', () => ({
-  useParams: () => ({ organizationId: 'org-123' }),
-}));
+// Mock next/navigation: one params object for every render, like Next's useParams (#719)
+vi.mock('next/navigation', () => {
+  const params = { organizationId: 'org-123' };
+  return { useParams: () => params };
+});
 
 // Mock organization context
 vi.mock('@/lib/context/organization-context', () => ({

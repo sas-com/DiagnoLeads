@@ -139,6 +139,9 @@ describe.skipIf(!url)('comments organization isolation (PostgreSQL)', () => {
     const page = await adminB.comments.list({ ...asB(), leadId: leadA });
     expect(JSON.stringify(page)).not.toContain('Comment of A');
     expect(JSON.stringify(page)).not.toContain(commentA);
+    // A's comments are not counted either (#722)
+    expect(page.counts).toEqual({ all: 0, comment: 0, note: 0, activity: 0 });
+    expect(page.nextCursor).toBeNull();
   });
 
   it('getCount of a lead of another organization answers 0', async () => {

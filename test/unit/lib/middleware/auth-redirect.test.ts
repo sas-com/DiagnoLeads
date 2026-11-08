@@ -9,10 +9,10 @@ const request = (path: string, cookie?: string) =>
 
 describe('sign-in redirect for admin pages', () => {
   it('knows the admin pages, and nothing public', () => {
-    for (const path of ['/dashboard', '/leads', '/leads/abc', '/settings/members', '/analytics', '/organizations/new']) {
+    for (const path of ['/dashboard', '/leads', '/leads/abc', '/settings/members', '/analytics', '/organizations/new', '/help', '/help/glossary']) {
       expect(isProtectedPage(path)).toBe(true);
     }
-    for (const path of ['/', '/login', '/signup', '/invite/tok', '/ax-diagnosis', '/ax-migration', '/dashboards', '/leadsx', '/api/trpc/leads.list']) {
+    for (const path of ['/', '/login', '/signup', '/invite/tok', '/ax-diagnosis', '/ax-migration', '/dashboards', '/leadsx', '/helpdesk', '/api/trpc/leads.list']) {
       expect(isProtectedPage(path)).toBe(false);
     }
   });
