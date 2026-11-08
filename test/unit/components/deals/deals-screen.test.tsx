@@ -777,7 +777,7 @@ describe('DealsScreen', () => {
     await user.click(moveButton('保守', '受注'));
     await user.click(moveTo('失注'));
     expect(screen.getByRole('dialog', { name: '「保守」を失注にする' })).toHaveAccessibleDescription(
-      '失注理由は、勝ち負けの分析に使います ほかに受注の商談がなければ、リードは成約でなくなります（開いている商談があれば商談中、なければ失注）。'
+      '失注理由は、勝ち負けの分析に使います。 ほかに受注の商談がなければ、リードは成約でなくなります（開いている商談があれば商談中、なければ失注）。'
     );
     expect(mocks.updates).toEqual([]);
   });

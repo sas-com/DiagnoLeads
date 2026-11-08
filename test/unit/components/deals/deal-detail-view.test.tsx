@@ -264,7 +264,7 @@ describe('DealDetailView', () => {
       await user.click(screen.getByRole('button', { name: '不適格：失注にする' }));
       const lost = screen.getByRole('dialog', { name: '「AS/400 現行調査」を失注にする' });
       expect(lost).toHaveAccessibleDescription(
-        '失注理由は、勝ち負けの分析に使います リードの SQL判定も「不適格」として一緒に記録します。'
+        '失注理由は、勝ち負けの分析に使います。 リードの SQL判定も「不適格」として一緒に記録します。'
       );
       await user.click(within(lost).getByRole('combobox', { name: '失注理由 必須' }));
       await user.click(screen.getByRole('option', { name: 'ニーズなし' }));
