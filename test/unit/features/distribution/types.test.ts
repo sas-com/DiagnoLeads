@@ -25,7 +25,8 @@ describe('createQRCampaignSchema', () => {
     if (result.success) {
       expect(result.data.name).toBe('Test Campaign');
       expect(result.data.utmSource).toBe('qrcode');
-      expect(result.data.utmMedium).toBe('offline');
+      // The default medium of the form (#788), which maps to a 流入元; 'offline' before
+      expect(result.data.utmMedium).toBe('seminar');
     }
   });
 

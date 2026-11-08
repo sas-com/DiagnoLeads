@@ -166,7 +166,9 @@ describe('tracking URL of QR campaigns (#503)', () => {
     const [values] = store.inserted;
     const code = values.shortCode as string;
     expect(code).toMatch(/^[A-Za-z0-9]{8}$/);
-    const url = `http://localhost:3000/q/${code}?utm_source=qrcode&utm_medium=offline&utm_campaign=seminar-11`;
+    // No medium sent: the default, which maps to a 流入元 (#788)
+    const url = `http://localhost:3000/q/${code}?utm_source=qrcode&utm_medium=seminar&utm_campaign=seminar-11`;
+    expect(values.utmMedium).toBe('seminar');
     expect(values.trackingUrl).toBe(url);
     expect(created.qrCodeDataUrl).toBe(`qr:${url}`);
     expect(db.insert).toHaveBeenCalledTimes(1);
