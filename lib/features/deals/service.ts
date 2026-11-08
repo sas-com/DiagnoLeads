@@ -7,11 +7,16 @@
  * when a value the forecast reads changed, an audit_logs row (resource 'deal', metadata.leadId),
  * and sets the lead's status and deal phase from its deals (./lead-sync.ts, #444) with the lead's
  * own audit row (#101); deleting a deal does too. The lead's webhooks and the handoff notice (#86)
- * go out after the commit (afterDealChange).
+ * go out after the commit (afterDealChange, afterDealChanges).
  *
  * Locks are taken lead first, then deal, on every path (deleting a lead locks it and then its
  * deals through the cascade), so changes of two deals of one lead wait for each other on the lead
- * and the second one sees the first when it moves the lead.
+ * and the second one sees the first when it moves the lead. ensureQualificationDeal, which creates
+ * the deal in 見極め when the first meeting of a lead is set (#854), runs in the transaction of
+ * its entry point (a confirmed meeting request), which locks the lead before its own rows. It
+ * locks the lead again before it reads the lead's deals, so entry points of one lead that run at
+ * the same time create one deal: the second sees the first one's deal once it has the lock (read
+ * committed: each statement reads what was committed before it).
  */
 
 import type { db as defaultDb } from '@/lib/db/client';
@@ -23,6 +28,7 @@ import {
   type TaskSource,
 } from '@/lib/features/lead-follow-up/types/schemas';
 import { isFirstHandoff, notifyLeadHandoff } from '@/lib/features/lead-handoff/service';
+import { isoDateSchema } from '@/lib/features/lead-hearings/types/schemas';
 import {
   diffLeadAudit,
   findAssignableMember,
@@ -56,7 +62,12 @@ import {
   sql,
 } from 'drizzle-orm';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
-import { leadChangesFromDeals, wonWithoutWonDeal } from './lead-sync';
+import {
+  type QualificationDealSkip,
+  leadChangesFromDeals,
+  qualificationDealSkip,
+  wonWithoutWonDeal,
+} from './lead-sync';
 import {
   CLOSED_DEAL_STAGES,
   DEAL_KINDS,
@@ -67,6 +78,7 @@ import {
   type ForecastCategory,
   type ForecastOverride,
   OPEN_DEAL_STAGES,
+  type QualificationDealSource,
   STAGE_PROBABILITY,
   forecastCategory,
   isOpenStage,
@@ -90,6 +102,16 @@ type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 type DealRow = typeof deals.$inferSelect;
 
 export const DEAL_AUDIT_RESOURCE = 'deal';
+
+/**
+ * Name of the deal created when the first meeting of a lead is set (#854): a survey of the
+ * current system (現行調査), the first deal of an AX migration, which sales rename as they learn
+ * more. Stored as the name itself, like the title of the meeting's next action: the name is free
+ * text, required, and read as it is by the forecast, the activity and the screens, and an
+ * organization has no language of its own. The board and the list show the company and the
+ * person beside it; the forecast's changes of the week show only the name and the owner.
+ */
+export const QUALIFICATION_DEAL_NAME = '現行調査';
 
 /** Values the forecast reads: a change of one of them writes a deal_history row */
 export const HISTORY_FIELDS = [
@@ -240,6 +262,14 @@ export interface DealChangeResult {
   /** Null when the lead did not change */
   lead: LeadMove | null;
 }
+
+/**
+ * What ensureQualificationDeal did. The entry point answers only whether a deal was created,
+ * never the deal: it may be used by someone who cannot read deals (#276)
+ */
+export type QualificationDealOutcome =
+  | { created: true; dealId: string; lead: LeadMove | null }
+  | { created: false; skipped: QualificationDealSkip | 'lead_not_found' };
 
 const nameOf = (table: typeof users) =>
   sql<string | null>`coalesce(nullif(trim(${table.name}), ''), ${table.email})`;
@@ -529,14 +559,47 @@ export async function getDeal(
   };
 }
 
-/** Lock the lead (taken before the deal, see the header) and read it */
-async function lockLead(tx: Transaction, organizationId: string, leadId: string): Promise<Lead> {
+/** Lock the lead (taken before the deal, see the header) and read it; undefined when not found */
+async function lockLeadIfFound(
+  tx: Transaction,
+  organizationId: string,
+  leadId: string
+): Promise<Lead | undefined> {
   const scope = and(eq(leads.id, leadId), eq(leads.organizationId, organizationId));
   await tx.execute(sql`select 1 from ${leads} where ${scope} for no key update`);
-  const lead = await tx.query.leads.findFirst({ where: scope });
+  return tx.query.leads.findFirst({ where: scope });
+}
+
+/** Lock the lead (taken before the deal, see the header) and read it */
+async function lockLead(tx: Transaction, organizationId: string, leadId: string): Promise<Lead> {
+  const lead = await lockLeadIfFound(tx, organizationId, leadId);
   if (!lead) throw notFound('lead');
   return lead;
 }
+
+/**
+ * The owner of a new deal when none is chosen: the lead's assignee, else the one creating it,
+ * when they can hold leads of the organization; else nobody
+ */
+async function defaultOwner(
+  tx: Transaction,
+  organizationId: string,
+  lead: Lead,
+  userId: string
+): Promise<string | null> {
+  for (const candidate of [lead.assigneeUserId, userId]) {
+    if (!candidate) continue;
+    const member = await findAssignableMember(tx, organizationId, candidate);
+    if (member) return member.userId;
+  }
+  return null;
+}
+
+/** The lead's target system, the default of a new deal's */
+const leadTargetSystem = (lead: Lead): TargetSystem | null =>
+  targetSystemEnum.safeParse(lead.targetSystem).success
+    ? (lead.targetSystem as TargetSystem)
+    : null;
 
 /** The owner to store: a member who can hold leads of the organization, or nobody */
 async function resolveOwner(
@@ -591,7 +654,14 @@ function auditValues(deal: DealRow): AuditValues {
 async function syncLeadWithDeals(
   tx: Transaction,
   lead: Lead,
-  context: { organizationId: string; userId: string; dealId: string; at: Date },
+  context: {
+    organizationId: string;
+    userId: string;
+    dealId: string;
+    at: Date;
+    /** Where a deal created automatically came from, kept in the lead's audit row (#854) */
+    source?: QualificationDealSource;
+  },
   /** The lead's SQL decision written with the deal's change (#801) */
   fields: ReturnType<typeof qualificationUpdateFields> = {}
 ): Promise<LeadMove | null> {
@@ -629,10 +699,114 @@ async function syncLeadWithDeals(
     await writeLeadAuditLogs(
       tx,
       { organizationId: context.organizationId, userId: context.userId, at: context.at },
-      [{ action: 'update', leadId: lead.id, changes: audit, metadata: { dealId: context.dealId } }]
+      [
+        {
+          action: 'update',
+          leadId: lead.id,
+          changes: audit,
+          metadata: {
+            dealId: context.dealId,
+            ...(context.source ? { source: context.source } : {}),
+          },
+        },
+      ]
     );
   }
   return { before: lead, after, handedOff: isFirstHandoff(lead, after.dealPhaseReachedAt) };
+}
+
+/**
+ * The values of a new deal that its creation decides (the rest come from the lead and the time).
+ * Every one is required, null included, so that a creation cannot leave one to the column's
+ * default by mistake
+ */
+type NewDealValues = Required<
+  Pick<
+    typeof deals.$inferInsert,
+    | 'name'
+    | 'kind'
+    | 'stage'
+    | 'amount'
+    | 'probability'
+    | 'forecastOverride'
+    | 'expectedCloseOn'
+    | 'closedOn'
+    | 'lostReason'
+    | 'lostNote'
+    | 'competitor'
+    | 'targetSystem'
+    | 'ownerUserId'
+    | 'previousDealId'
+  >
+>;
+
+/**
+ * Insert a deal for the locked lead with its first history row and its audit row, and set the
+ * lead from its deals (createDeal, ensureQualificationDeal)
+ */
+async function insertDeal(
+  tx: Transaction,
+  lead: Lead,
+  values: NewDealValues,
+  userId: string,
+  now: Date,
+  /**
+   * Where an automatic creation came from (#854): the deal's audit row keeps the source and the
+   * meeting day, the lead's audit row the source. None for a deal created by hand
+   */
+  origin?: { source: QualificationDealSource; meetingOn: string }
+): Promise<{ deal: DealRow; lead: LeadMove | null }> {
+  const [deal] = await tx
+    .insert(deals)
+    .values({
+      organizationId: lead.organizationId,
+      leadId: lead.id,
+      name: values.name,
+      kind: values.kind,
+      stage: values.stage,
+      amount: values.amount,
+      probability: values.probability,
+      forecastOverride: values.forecastOverride,
+      expectedCloseOn: values.expectedCloseOn,
+      closedOn: values.closedOn,
+      lostReason: values.lostReason,
+      lostNote: values.lostNote,
+      competitor: values.competitor,
+      targetSystem: values.targetSystem,
+      // No next step: no longer an input (#853), the column stays null
+      ownerUserId: values.ownerUserId,
+      previousDealId: values.previousDealId,
+      stageChangedAt: now,
+      createdBy: userId,
+      updatedBy: userId,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning();
+
+  await tx.insert(dealHistory).values(historyRow(deal, ['created'], userId, now));
+  await tx.insert(auditLogs).values({
+    organizationId: lead.organizationId,
+    userId,
+    action: 'create',
+    resource: DEAL_AUDIT_RESOURCE,
+    resourceId: deal.id,
+    changes: { after: auditValues(deal) },
+    metadata: {
+      leadId: lead.id,
+      ...(origin ? { source: origin.source, meetingOn: origin.meetingOn } : {}),
+    },
+    createdAt: now,
+  });
+
+  const leadMove = await syncLeadWithDeals(tx, lead, {
+    organizationId: lead.organizationId,
+    userId,
+    dealId: deal.id,
+    at: now,
+    source: origin?.source,
+  });
+  return { deal, lead: leadMove };
 }
 
 /** Create a deal for a lead; the owner defaults to the lead's assignee, then to the creator */
@@ -644,20 +818,10 @@ export async function createDeal(
   return db.transaction(async (tx) => {
     const lead = await lockLead(tx, input.organizationId, input.leadId);
 
-    let ownerUserId: string | null;
-    if (input.ownerUserId === undefined) {
-      const candidates = [lead.assigneeUserId, input.userId].filter((id): id is string => !!id);
-      ownerUserId = null;
-      for (const candidate of candidates) {
-        const member = await findAssignableMember(tx, input.organizationId, candidate);
-        if (member) {
-          ownerUserId = member.userId;
-          break;
-        }
-      }
-    } else {
-      ownerUserId = await resolveOwner(tx, input.organizationId, input.ownerUserId);
-    }
+    const ownerUserId =
+      input.ownerUserId === undefined
+        ? await defaultOwner(tx, input.organizationId, lead, input.userId)
+        : await resolveOwner(tx, input.organizationId, input.ownerUserId);
     if (input.previousDealId) {
       await assertPreviousDeal(tx, input.organizationId, input.previousDealId);
     }
@@ -676,18 +840,11 @@ export async function createDeal(
         throw badRequest('The lead is won: create its won deal with the stage won first');
       }
     }
-    const targetSystem =
-      input.targetSystem !== undefined
-        ? input.targetSystem
-        : targetSystemEnum.safeParse(lead.targetSystem).success
-          ? (lead.targetSystem as TargetSystem)
-          : null;
 
-    const [deal] = await tx
-      .insert(deals)
-      .values({
-        organizationId: input.organizationId,
-        leadId: lead.id,
+    const { deal, lead: leadMove } = await insertDeal(
+      tx,
+      lead,
+      {
         name: input.name,
         kind: input.kind,
         stage,
@@ -699,36 +856,14 @@ export async function createDeal(
         lostReason: lost ? (input.lostReason ?? null) : null,
         lostNote: lost ? (input.lostNote ?? null) : null,
         competitor: input.competitor ?? null,
-        targetSystem,
-        // No next step: no longer an input (#853), the column stays null
+        targetSystem:
+          input.targetSystem !== undefined ? input.targetSystem : leadTargetSystem(lead),
         ownerUserId,
         previousDealId: input.previousDealId ?? null,
-        stageChangedAt: now,
-        createdBy: input.userId,
-        updatedBy: input.userId,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .returning();
-
-    await tx.insert(dealHistory).values(historyRow(deal, ['created'], input.userId, now));
-    await tx.insert(auditLogs).values({
-      organizationId: input.organizationId,
-      userId: input.userId,
-      action: 'create',
-      resource: DEAL_AUDIT_RESOURCE,
-      resourceId: deal.id,
-      changes: { after: auditValues(deal) },
-      metadata: { leadId: lead.id },
-      createdAt: now,
-    });
-
-    const leadMove = await syncLeadWithDeals(tx, lead, {
-      organizationId: input.organizationId,
-      userId: input.userId,
-      dealId: deal.id,
-      at: now,
-    });
+      },
+      input.userId,
+      now
+    );
     const [withOwner] = await tx
       .select(dealColumns)
       .from(deals)
@@ -736,6 +871,80 @@ export async function createDeal(
       .where(and(eq(deals.id, deal.id), eq(deals.organizationId, input.organizationId)));
     return { deal: toDealView(withOwner), lead: leadMove };
   });
+}
+
+/**
+ * Create the deal in 見極め of a lead whose first meeting was set (#854, decision
+ * `2026-10-28-auto-qualification-deal`): a survey at 10%, owned by the lead's assignee, else by
+ * the one who set the meeting (as createDeal), with the lead's target system; the audit row says
+ * where it came from and the day of the meeting. No deal is created for a lead with an open deal,
+ * a won lead, or a lead without deals whose phase was set past the initial hearing
+ * (qualificationDealSkip), nor for a lead not found: none of them is an error, so the entry
+ * point's own change goes through. The lead's audit row keeps the source too.
+ *
+ * The meeting day must be a calendar day (YYYY-MM-DD): the entry points pass a day they checked,
+ * so another value is a mistake of the caller and throws before anything is read or written.
+ *
+ * Runs in the transaction of the entry point, which locks the lead before its own rows (see the
+ * header), and is called by it only when the meeting day is new or changed, so that saving the
+ * same day again never creates a deal again after sales lost the first one. The entry point's
+ * permission is the one checked (it does not check canWriteDeals), and it answers only whether a
+ * deal was created. It runs afterDealChanges with the outcome after the commit.
+ */
+export async function ensureQualificationDeal(
+  tx: Transaction,
+  input: {
+    organizationId: string;
+    leadId: string;
+    userId: string;
+    source: QualificationDealSource;
+    /**
+     * Day of the first meeting (YYYY-MM-DD, Japan), kept in the audit row: the deal has no column
+     * for it
+     */
+    meetingOn: string;
+  },
+  now: Date = new Date()
+): Promise<QualificationDealOutcome> {
+  if (!isoDateSchema.safeParse(input.meetingOn).success) {
+    throw new Error('ensureQualificationDeal: meetingOn must be a calendar day (YYYY-MM-DD)');
+  }
+  const lead = await lockLeadIfFound(tx, input.organizationId, input.leadId);
+  if (!lead) return { created: false, skipped: 'lead_not_found' };
+  // Read under the lock: a deal created meanwhile by another entry point is seen
+  const leadDeals = await tx
+    .select({ stage: deals.stage })
+    .from(deals)
+    .where(and(eq(deals.organizationId, input.organizationId), eq(deals.leadId, lead.id)));
+  const skipped = qualificationDealSkip(lead, leadDeals);
+  if (skipped) return { created: false, skipped };
+
+  const stage = 'qualification';
+  const created = await insertDeal(
+    tx,
+    lead,
+    {
+      name: QUALIFICATION_DEAL_NAME,
+      // The default kind of a new deal (createDealSchema)
+      kind: 'survey',
+      stage,
+      amount: null,
+      probability: STAGE_PROBABILITY[stage],
+      forecastOverride: null,
+      expectedCloseOn: null,
+      closedOn: null,
+      lostReason: null,
+      lostNote: null,
+      competitor: null,
+      targetSystem: leadTargetSystem(lead),
+      ownerUserId: await defaultOwner(tx, input.organizationId, lead, input.userId),
+      previousDealId: null,
+    },
+    input.userId,
+    now,
+    { source: input.source, meetingOn: input.meetingOn }
+  );
+  return { created: true, dealId: created.deal.id, lead: created.lead };
 }
 
 /**
@@ -942,24 +1151,38 @@ export async function deleteDeal(
 }
 
 /**
- * After the commit of a deal change: the lead's webhooks and, when the lead moved on from the
- * initial hearing for the first time, the handoff notice. Failures never undo the change.
+ * After the commit of deal changes: the webhooks of the leads that changed, in one call (an
+ * import that creates several deals sends them together, #854), then the handoff notice of each
+ * lead that moved on from the initial hearing for the first time. Failures never undo the
+ * changes.
  */
-export async function afterDealChange(
+export async function afterDealChanges(
   db: Database,
   context: { organizationId: string; userId: string },
-  result: Pick<DealChangeResult, 'lead'>
+  results: Pick<DealChangeResult, 'lead'>[]
 ): Promise<void> {
-  const move = result.lead;
-  if (!move) return;
-  emitLeadEvents(context.organizationId, leadChangeEvents(move.before, move.after), {
-    database: db,
-  });
-  if (move.handedOff) {
+  const moves = results.flatMap((result) => (result.lead ? [result.lead] : []));
+  if (moves.length === 0) return;
+  emitLeadEvents(
+    context.organizationId,
+    moves.flatMap((move) => leadChangeEvents(move.before, move.after)),
+    { database: db }
+  );
+  for (const move of moves) {
+    if (!move.handedOff) continue;
     await notifyLeadHandoff(db, {
       organizationId: context.organizationId,
       leadId: move.after.id,
       userId: context.userId,
     });
   }
+}
+
+/** afterDealChanges for one change */
+export async function afterDealChange(
+  db: Database,
+  context: { organizationId: string; userId: string },
+  result: Pick<DealChangeResult, 'lead'>
+): Promise<void> {
+  await afterDealChanges(db, context, [result]);
 }

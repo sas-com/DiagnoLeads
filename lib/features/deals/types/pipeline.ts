@@ -30,6 +30,18 @@ export const isOpenStage = (stage: string): stage is OpenDealStage =>
   (OPEN_DEAL_STAGES as readonly string[]).includes(stage);
 
 /**
+ * Where the first meeting of a lead was set, which creates its deal in 見極め (#854, decision
+ * `2026-10-28-auto-qualification-deal`): a confirmed meeting request, the meeting date of a
+ * customer search row, an agency appointment. Recorded in the audit row of the deal created.
+ */
+export const QUALIFICATION_DEAL_SOURCES = [
+  'meeting_request',
+  'prospect',
+  'agency_handover',
+] as const;
+export type QualificationDealSource = (typeof QUALIFICATION_DEAL_SOURCES)[number];
+
+/**
  * A move that takes the deal out of 見極め to a later stage (open or won) while the lead's SQL
  * decision is not made (#801): the SQL decision is the exit of 見極め (decision
  * `2026-10-25-lead-lifecycle`). The screen asks for it first; the API lets the move through and
