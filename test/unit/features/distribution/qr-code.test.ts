@@ -144,7 +144,8 @@ describe('buildTrackingUrl', () => {
     // The QR entry of the short code, not /d/ (the public page of builder diagnoses, #503)
     expect(result).toContain('https://app.example.com/q/AbCd2345?');
     expect(result).toContain('utm_source=qrcode');
-    expect(result).toContain('utm_medium=offline');
+    // The default medium of a campaign (#788), not 'offline'
+    expect(result).toContain('utm_medium=seminar');
   });
 
   it('should include custom UTM source', () => {

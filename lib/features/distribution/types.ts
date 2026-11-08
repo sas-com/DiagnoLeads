@@ -76,6 +76,25 @@ export type QrCampaignDestination =
   | { kind: 'none'; reasons: QrCampaignClosedReason[] };
 
 /**
+ * The utm_medium a QR campaign is created with: where its code is handed out, in the order the
+ * create form lists them (#788, owner decision of 2026-10-26 on #788). Each maps to an existing
+ * 流入元 in MEDIUM_TO_INFLOW (diagnostics/tracking.ts, whose type requires every one of them), so
+ * the new leads from the scans are never left 未設定; INFLOW_SOURCES gets no new value.
+ * - seminar: a seminar or a webinar → seminar
+ * - exhibition: an exhibition (trade show) → seminar
+ * - direct_mail: a direct mail, posted or handed out one by one → advertising. Not `dm`: other
+ *   campaigns use dm for an email or a message, which stays an unknown medium
+ */
+export const QR_CAMPAIGN_MEDIUMS = ['seminar', 'exhibition', 'direct_mail'] as const;
+export type QrCampaignMedium = (typeof QR_CAMPAIGN_MEDIUMS)[number];
+
+/**
+ * The medium of a campaign created without one, on the form and in the API. It replaced
+ * 'offline' (#788), which maps to no 流入元
+ */
+export const DEFAULT_QR_CAMPAIGN_MEDIUM: QrCampaignMedium = 'seminar';
+
+/**
  * QR Code Campaign Schema (for tracking)
  */
 export const createQRCampaignSchema = z.object({
@@ -83,7 +102,9 @@ export const createQRCampaignSchema = z.object({
   description: z.string().max(500).optional(),
   diagnosticTemplateId: z.string().uuid(),
   utmSource: z.string().max(50).default('qrcode'),
-  utmMedium: z.string().max(50).default('offline'),
+  // Any medium, as before #788: the form offers QR_CAMPAIGN_MEDIUMS only, and the campaigns
+  // created before keep theirs ('offline', or what was typed), which the entry passes on as is
+  utmMedium: z.string().max(50).default(DEFAULT_QR_CAMPAIGN_MEDIUM),
   utmCampaign: z.string().max(100).optional(),
   utmContent: z.string().max(100).optional(),
   expiresAt: z.string().datetime().optional(),
