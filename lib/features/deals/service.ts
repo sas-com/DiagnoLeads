@@ -67,8 +67,10 @@ import {
 } from 'drizzle-orm';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import {
+  type NewDealStart,
   type QualificationDealSkip,
   leadChangesFromDeals,
+  newDealStart,
   qualificationDealSkip,
   wonWithoutWonDeal,
 } from './lead-sync';
@@ -455,13 +457,16 @@ export async function getBoard(
   };
 }
 
-/** Deals of a lead, oldest first; undefined when the lead is not found */
+/**
+ * Deals of a lead, oldest first, and where a new one starts in the deal form (#951); undefined
+ * when the lead is not found
+ */
 export async function listLeadDeals(
   db: Database,
   input: { organizationId: string; leadId: string }
-): Promise<DealView[] | undefined> {
+): Promise<{ items: DealView[]; newDeal: NewDealStart } | undefined> {
   const [lead] = await db
-    .select({ id: leads.id })
+    .select({ status: leads.status, dealPhase: leads.dealPhase })
     .from(leads)
     .where(and(eq(leads.id, input.leadId), eq(leads.organizationId, input.organizationId)));
   if (!lead) return undefined;
@@ -471,7 +476,8 @@ export async function listLeadDeals(
     .leftJoin(users, eq(users.id, deals.ownerUserId))
     .where(and(eq(deals.organizationId, input.organizationId), eq(deals.leadId, input.leadId)))
     .orderBy(asc(deals.createdAt), asc(deals.id));
-  return rows.map(toDealView);
+  const items = rows.map(toDealView);
+  return { items, newDeal: newDealStart(lead, items) };
 }
 
 const linkedColumns = { id: deals.id, name: deals.name, kind: deals.kind, stage: deals.stage };

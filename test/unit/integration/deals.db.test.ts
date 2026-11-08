@@ -3,8 +3,9 @@
  * how deals set their lead's status and deal phase (with the lead's audit row, webhooks and the
  * handoff notice, and whether a change handed the lead off, #720), computed again on every change
  * and deletion, and refused by hand (#444), the board's totals and filters, the lead's next
- * action on the board and the next step no longer written (#853), permissions and organization
- * isolation, and two deals of one lead changed at the same time.
+ * action on the board and the next step no longer written (#853), where a new deal starts in the
+ * deal form (#951), permissions and organization isolation, and two deals of one lead changed at
+ * the same time.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/diagnoleads_test \
@@ -1056,6 +1057,65 @@ describe.skipIf(!url)('deals (PostgreSQL)', () => {
       const after = await cardsOf();
       expect(after.mixed.nextTask).toMatchObject({ id: takeaway.id, kind: 'takeaway' });
       expect(await firstOfList(mixed.id)).toBe(takeaway.id);
+    });
+  });
+
+  // The deal form opens a new deal where its lead stands (#951): saved as it opens, it is
+  // accepted and takes nothing back from the lead
+  describe('where a new deal starts (#951)', () => {
+    const startOf = async (leadId: string) =>
+      (await memberA.deals.forLead({ organizationId: orgA, leadId })).newDeal;
+    // What the form sends when its stage and kind are left as they open
+    const createAsOpened = async (leadId: string, name: string) => {
+      const start = await startOf(leadId);
+      return memberA.deals.create({
+        organizationId: orgA,
+        leadId,
+        name,
+        stage: start.stage,
+        ...(start.kind ? { kind: start.kind } : {}),
+      });
+    };
+    const inQualification = { stage: 'qualification', kind: null, wonFirst: false };
+
+    it('opens a lead won by hand with its win, which is created and keeps the lead won', async () => {
+      const lead = await createLead(orgA, {
+        status: 'won',
+        hasNegotiated: true,
+        dealPhase: 'migration_won',
+      });
+      expect(await startOf(lead.id)).toEqual({ stage: 'won', kind: 'migration', wonFirst: true });
+      expect(await createAsOpened(lead.id, '移行')).toMatchObject({ stage: 'won', kind: 'migration' });
+      expect(await leadOf(lead.id)).toMatchObject({ status: 'won', dealPhase: 'migration_won' });
+      // Once the win is a deal, the next one starts in 見極め and keeps the lead won
+      expect(await startOf(lead.id)).toEqual(inQualification);
+      await createAsOpened(lead.id, 'AX 化');
+      expect(await leadOf(lead.id)).toMatchObject({ status: 'won', dealPhase: 'migration_won' });
+    });
+
+    it('opens a lead without deals at its phase, which the deal keeps', async () => {
+      const proposed = await createLead(orgA, { status: 'negotiating', dealPhase: 'proposal' });
+      expect(await startOf(proposed.id)).toEqual({ stage: 'proposal', kind: null, wonFirst: false });
+      await createAsOpened(proposed.id, '移行の提案');
+      expect(await leadOf(proposed.id)).toMatchObject({
+        status: 'negotiating',
+        dealPhase: 'proposal',
+      });
+
+      const diagnosed = await createLead(orgA, { dealPhase: 'simple_diagnosis' });
+      expect((await startOf(diagnosed.id)).stage).toBe('discovery');
+      await createAsOpened(diagnosed.id, '課題の確認');
+      expect(await leadOf(diagnosed.id)).toMatchObject({
+        status: 'negotiating',
+        dealPhase: 'simple_diagnosis',
+      });
+    });
+
+    it('opens a lead without a phase, or one with deals, in 見極め', async () => {
+      const lead = await createLead(orgA);
+      expect(await startOf(lead.id)).toEqual(inQualification);
+      await adminA.deals.create({ organizationId: orgA, leadId: lead.id, name: '一', stage: 'proposal' });
+      expect(await startOf(lead.id)).toEqual(inQualification);
     });
   });
 

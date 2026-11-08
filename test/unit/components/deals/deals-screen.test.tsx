@@ -101,6 +101,8 @@ vi.mock('@/lib/trpc/client', async () => {
         create: { useMutation: (hook?: Callbacks) => mutation(hook) },
         update: { useMutation: (hook?: Callbacks) => mutation(hook, mocks.updates) },
         delete: { useMutation: (hook?: Callbacks) => mutation(hook) },
+        // Where a new deal of the lead chosen starts (the deal form, #951)
+        forLead: { useQuery: () => ({ data: undefined }) },
       },
       leads: { assignees: { useQuery: () => ({ data: mocks.members }) } },
       leadSearch: { suggest: { useQuery: () => ({ data: [], isFetching: false }) } },

@@ -69,6 +69,8 @@ vi.mock('@/lib/trpc/client', () => {
           useMutation: (options?: MutationOptions) =>
             mutation(options, mocks.deletes, mocks.deleting),
         },
+        // Read by the deal form for a new deal only (#951); this page edits one
+        forLead: { useQuery: () => ({ data: undefined }) },
       },
       leads: { assignees: { useQuery: () => ({ data: [] }) } },
       leadSearch: { suggest: { useQuery: () => ({ data: [], isFetching: false }) } },
