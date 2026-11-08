@@ -1,24 +1,11 @@
 'use client';
 
 import { PageHeader } from '@/components/common/page-header';
-import { ActTimingCard } from '@/components/features/act-timing/act-timing-card';
-import { AgencyHandoverCard } from '@/components/features/agency-handovers/agency-handover-card';
-import { AppointmentReviewCard } from '@/components/features/appointment-reviews/appointment-review-card';
-import { ChallengeGuideCard } from '@/components/features/challenge-guide/challenge-guide-card';
 import { CommentsSection } from '@/components/features/comments/comments-section';
-import { LeadDealsCard } from '@/components/features/deals/lead-deals-card';
-import { DeliveryReviewCard } from '@/components/features/delivery-reviews/delivery-review-card';
-import { InfoOfferRequestsCard } from '@/components/features/info-offers/info-offer-requests-card';
 import { LeadActivityCard } from '@/components/features/lead-activity/lead-activity-card';
 import { LeadContactBar } from '@/components/features/lead-follow-up/lead-contact-bar';
-import { LeadNextActionsCard } from '@/components/features/lead-follow-up/lead-next-actions-card';
-import { LeadHandoffLink } from '@/components/features/lead-handoff/lead-handoff-link';
 import { LeadHearingsCard } from '@/components/features/lead-hearings/lead-hearings-card';
-import { LeadPrepCard } from '@/components/features/lead-prep/lead-prep-card';
 import { LeadMqlBadges } from '@/components/features/leads/lead-mql-badge';
-import { MeetingRequestCard } from '@/components/features/meeting-requests/meeting-request-card';
-import { ObjectionCard } from '@/components/features/objection-card/objection-card';
-import { LeadProspectCard } from '@/components/features/prospects/lead-prospect-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
@@ -33,8 +20,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useDeleteLead, useLeadAccess } from '@/hooks/use-leads';
 import { useOrganization } from '@/hooks/use-organization';
 import type { Lead } from '@/lib/db/schema';
-import { isDeliveryPhase } from '@/lib/features/delivery-reviews/report';
-import { handedOffOn } from '@/lib/features/lead-handoff/handoff';
 import {
   LEAD_TABS,
   type LeadCardField,
@@ -69,9 +54,8 @@ import { LeadQuickSelect } from '../lead-quick-select';
 import { NextMeetingOverdueBadge } from '../next-meeting';
 import { EditSessionProvider, useEditSession } from './edit-session';
 import { LeadDiagnosisAnswers } from './lead-diagnosis-answers';
-import { LeadDiagnosisCard } from './lead-diagnosis-card';
 import { LeadFieldsCard } from './lead-fields-card';
-import { LeadHearingOverview } from './lead-hearing-overview';
+import { LeadOverviewCards } from './lead-overview-cards';
 import { LeadRecentActivity } from './lead-recent-activity';
 
 // The status and phase in the header are 44px pills on phones, badges from sm up (#110)
@@ -284,7 +268,6 @@ function LeadDetailContent({
       timeZone: TIME_ZONE,
     });
   const reachedPhases = DEAL_PHASES.filter((phase) => lead.dealPhaseReachedAt?.[phase]);
-  const handoffOn = handedOffOn(lead.dealPhaseReachedAt);
 
   return (
     <div className="space-y-6">
@@ -408,30 +391,11 @@ function LeadDetailContent({
           </div>
 
           <TabsContent value="overview" className="mt-4 space-y-4">
-            <MeetingRequestCard organizationId={organizationId} leadId={lead.id} />
-            <LeadProspectCard organizationId={organizationId} leadId={lead.id} />
-            <AgencyHandoverCard organizationId={organizationId} leadId={lead.id} />
-            <LeadDealsCard organizationId={organizationId} leadId={lead.id} />
-            <LeadPrepCard organizationId={organizationId} leadId={lead.id} />
-            <ObjectionCard organizationId={organizationId} leadId={lead.id} />
-            <ActTimingCard organizationId={organizationId} leadId={lead.id} />
-            <LeadNextActionsCard organizationId={organizationId} leadId={lead.id} />
-            {lead.agencyName?.trim() && (
-              <AppointmentReviewCard organizationId={organizationId} leadId={lead.id} />
-            )}
-            {reachedPhases.some(isDeliveryPhase) && (
-              <DeliveryReviewCard organizationId={organizationId} leadId={lead.id} />
-            )}
-            <LeadHearingOverview organizationId={organizationId} leadId={lead.id} />
-            {handoffOn && <LeadHandoffLink leadId={lead.id} handedOffOn={handoffOn} />}
-            <LeadDiagnosisCard
-              responses={lead.responses}
-              customFields={lead.customFields}
-              score={lead.score}
+            <LeadOverviewCards
+              organizationId={organizationId}
+              lead={lead}
               onShowAnswers={showAnswers}
             />
-            <ChallengeGuideCard organizationId={organizationId} leadId={lead.id} />
-            <InfoOfferRequestsCard organizationId={organizationId} leadId={lead.id} />
             <LeadFieldsCard
               card="pipeline"
               icon={Target}
