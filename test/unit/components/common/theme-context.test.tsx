@@ -82,4 +82,23 @@ describe('ThemeProvider', () => {
     unmount();
     expect(document.documentElement).not.toHaveClass('dark');
   });
+
+  it('stays dark when sign-in hands over to the dashboard, one provider for another (#987)', () => {
+    mockOs(true);
+    // The sign-in layout and the dashboard shell each have their own provider
+    const { rerender } = render(
+      <ThemeProvider key="auth">
+        <Probe />
+      </ThemeProvider>
+    );
+    expect(document.documentElement).toHaveClass('dark');
+
+    rerender(
+      <ThemeProvider key="dashboard">
+        <Probe />
+      </ThemeProvider>
+    );
+    expect(document.documentElement).toHaveClass('dark');
+    expect(screen.getByRole('button')).toHaveTextContent('dark');
+  });
 });
