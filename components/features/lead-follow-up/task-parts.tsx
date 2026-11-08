@@ -96,7 +96,9 @@ export function DueDatePicker({
           disabled={disabled}
           className="inline-flex items-center gap-1 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-60"
         >
-          <DueLabel task={task} today={today} />
+          {/* No text under 14px in the lead's next actions card (decision
+              2026-10-24-admin-dads) */}
+          <DueLabel task={task} today={today} className="text-sm" />
           <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
         </button>
       </PopoverTrigger>

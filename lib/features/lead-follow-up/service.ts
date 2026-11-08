@@ -6,6 +6,12 @@
  * router. Each change writes one audit_logs row in the same transaction (resource
  * 'lead_contact' / 'lead_task', metadata.leadId), like staff updates of leads (#101). A contact's
  * audit row keeps what was recorded but not the note's text (like the deals, #435).
+ *
+ * A next action added for an open deal (its page, or the deals board and list, #853) goes to the
+ * deal's owner when they are not the lead's assignee: it is given to them (assignee_id), so the
+ * one the deal's warning is for sees it under "mine" and gets its due notices. Otherwise it
+ * follows the lead's assignee, as every other task does (dealOwnerAssignee, decision
+ * 2026-11-08-deal-next-action-assignee). A later change of either owner does not move it.
  */
 
 import type { db as defaultDb } from '@/lib/db/client';
@@ -19,6 +25,7 @@ import {
   users,
 } from '@/lib/db/schema';
 import type { AuditAction, LeadContactLog } from '@/lib/db/schema';
+import { findAssignableMember, memberDisplayName } from '@/lib/features/leads/service';
 import { TRPCError } from '@trpc/server';
 import { type SQL, and, asc, count, desc, eq, inArray, isNull, lte, min, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
@@ -53,18 +60,27 @@ export const TASK_AUDIT_RESOURCE = 'lead_task';
 const notFound = (what: 'lead' | 'contact' | 'task') =>
   new TRPCError({ code: 'NOT_FOUND', message: `The ${what} was not found` });
 
+/**
+ * A deal that is not one of the lead's in the organization: the same answer for a deal of another
+ * lead, of another organization and an id that is no deal at all, so that none is told apart
+ */
+const notADealOfTheLead = () =>
+  new TRPCError({ code: 'BAD_REQUEST', message: 'The deal is not a deal of the lead' });
+
+/** The lead of the organization, with its assignee (NOT_FOUND otherwise); `lock` holds it */
 async function assertLeadInOrganization(
   db: Executor,
   organizationId: string,
   leadId: string,
   lock = false
-) {
+): Promise<{ assigneeUserId: string | null }> {
   const query = db
-    .select({ id: leads.id })
+    .select({ id: leads.id, assigneeUserId: leads.assigneeUserId })
     .from(leads)
     .where(and(eq(leads.id, leadId), eq(leads.organizationId, organizationId)));
   const [lead] = await (lock ? query.for('no key update') : query.limit(1));
   if (!lead) throw notFound('lead');
+  return lead;
 }
 
 async function writeAudit(
@@ -79,6 +95,8 @@ async function writeAudit(
     leadId: string;
     changes: { before?: Record<string, unknown>; after?: Record<string, unknown> };
     via?: 'hearing';
+    /** The deal a next action was added for (#853) */
+    dealId?: string | null;
   }
 ) {
   await db.insert(auditLogs).values({
@@ -88,7 +106,11 @@ async function writeAudit(
     resource: entry.resource,
     resourceId: entry.resourceId,
     changes: entry.changes,
-    metadata: { leadId: entry.leadId, ...(entry.via ? { via: entry.via } : {}) },
+    metadata: {
+      leadId: entry.leadId,
+      ...(entry.via ? { via: entry.via } : {}),
+      ...(entry.dealId ? { dealId: entry.dealId } : {}),
+    },
     createdAt: entry.at,
   });
 }
@@ -138,9 +160,7 @@ async function holdContactTargets(
       )
     )
     .for('key share');
-  if (!deal) {
-    throw new TRPCError({ code: 'BAD_REQUEST', message: 'The deal is not a deal of the lead' });
-  }
+  if (!deal) throw notADealOfTheLead();
 }
 
 /** What an audit row keeps of a contact: all of it but the note's text */
@@ -328,6 +348,24 @@ const checkWithColumns = {
   checkWithUserEmail: checkWithUsers.email,
 };
 
+/**
+ * Member a task is given to (#853), joined under its own name. Any user: one who left the
+ * organization is still named, so that a task left with them can be seen
+ */
+const assigneeUsers = alias(users, 'assignee_users');
+const assigneeColumns = {
+  assigneeName: assigneeUsers.name,
+  assigneeEmail: assigneeUsers.email,
+};
+
+/** Names read with a task: the member to check with (a takeaway's) and its assignee */
+interface TaskNames {
+  checkWithUserName?: string | null;
+  checkWithUserEmail?: string | null;
+  assigneeName?: string | null;
+  assigneeEmail?: string | null;
+}
+
 function actorOf(
   id: string | null,
   name: string | null | undefined,
@@ -339,18 +377,13 @@ function actorOf(
 
 /**
  * The member responsible for a task, who sees it under "mine" and gets its due notices: its
- * assignee, else the lead's assignee (#135), else whoever created it. Needs leads joined.
+ * assignee (given only to a next action added for a deal whose owner is not the lead's assignee,
+ * #853), else the lead's assignee (#135), else whoever created it. Needs leads joined.
  */
 export const responsibleUserSql: SQL<string | null> =
   sql`coalesce(${leadTasks.assigneeId}, ${leads.assigneeUserId}, ${leadTasks.createdBy})`;
 
-function toTaskView(
-  row: TaskRow,
-  checkWithUser: {
-    checkWithUserName: string | null;
-    checkWithUserEmail: string | null;
-  } | null = null
-): LeadTaskView {
+function toTaskView(row: TaskRow, names: TaskNames = {}): LeadTaskView {
   return {
     id: row.id,
     leadId: row.leadId,
@@ -363,16 +396,69 @@ function toTaskView(
     sourceHearingId: row.sourceHearingId,
     kind: row.kind as TaskKind,
     checkWith: row.checkWith,
-    checkWithUser: actorOf(
-      row.checkWithUserId,
-      checkWithUser?.checkWithUserName,
-      checkWithUser?.checkWithUserEmail
-    ),
+    checkWithUser: actorOf(row.checkWithUserId, names.checkWithUserName, names.checkWithUserEmail),
     assigneeId: row.assigneeId,
+    assignee: actorOf(row.assigneeId, names.assigneeName, names.assigneeEmail),
     createdBy: row.createdBy,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+}
+
+/** Name of a task's assignee, for a task read without the join */
+async function assigneeNamesOf(db: Executor, userId: string | null): Promise<TaskNames> {
+  if (!userId) return {};
+  const [user] = await db
+    .select({ assigneeName: users.name, assigneeEmail: users.email })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return user ?? {};
+}
+
+/**
+ * Stages of a won or lost deal: CLOSED_DEAL_STAGES of lib/features/deals/types/pipeline.ts, not
+ * imported, as this feature does not read the deals feature (deals reads it: the two would make a
+ * cycle of features). lead-follow-up-deal-owner.db.test.ts checks every closed stage
+ */
+const CLOSED_DEAL_STAGES: readonly string[] = ['won', 'lost'];
+
+/**
+ * Whom a next action added for a deal is given to (#853, decision
+ * 2026-11-08-deal-next-action-assignee): the owner of an open deal when they are not the lead's
+ * assignee (a lead without one counts as another), so that the one the deal's warning is for (the
+ * deals board's "mine" and the 今日 screen go by the deal's owner) also sees it under "mine" and
+ * gets its due notices. Null leaves it to the lead's assignee, else whoever adds it
+ * (responsibleUserSql):
+ * - the deal is won or lost: only an open deal is warned about (its page still adds for it)
+ * - the owner is the lead's assignee, as by default (a deal's owner defaults to the lead's)
+ * - the deal has no owner
+ * - the owner may no longer hold leads: no longer a member, or a read-only role
+ *   (findAssignableMember, as for a lead's assignee)
+ *
+ * The deal must be one of the lead's in the organization (notADealOfTheLead otherwise). Called
+ * with the lead locked: a deal is changed or deleted with its lead locked first
+ * (lib/features/deals/service.ts), so its stage and owner stay as read until the task is in.
+ */
+async function dealOwnerAssignee(
+  tx: Transaction,
+  input: { organizationId: string; leadId: string; dealId: string; leadAssigneeId: string | null }
+): Promise<ContactActor | null> {
+  const [deal] = await tx
+    .select({ stage: deals.stage, ownerUserId: deals.ownerUserId })
+    .from(deals)
+    .where(
+      and(
+        eq(deals.id, input.dealId),
+        eq(deals.organizationId, input.organizationId),
+        eq(deals.leadId, input.leadId)
+      )
+    );
+  if (!deal) throw notADealOfTheLead();
+  if (CLOSED_DEAL_STAGES.includes(deal.stage)) return null;
+  if (!deal.ownerUserId || deal.ownerUserId === input.leadAssigneeId) return null;
+  const member = await findAssignableMember(tx, input.organizationId, deal.ownerUserId);
+  return member ? { id: member.userId, name: memberDisplayName(member) } : null;
 }
 
 const taskScope = (organizationId: string, id: string) =>
@@ -414,9 +500,10 @@ export async function listTasks(
 ): Promise<LeadTaskView[]> {
   await assertLeadInOrganization(db, input.organizationId, input.leadId);
   const rows = await db
-    .select({ task: leadTasks, ...checkWithColumns })
+    .select({ task: leadTasks, ...checkWithColumns, ...assigneeColumns })
     .from(leadTasks)
     .leftJoin(checkWithUsers, eq(checkWithUsers.id, leadTasks.checkWithUserId))
+    .leftJoin(assigneeUsers, eq(assigneeUsers.id, leadTasks.assigneeId))
     .where(
       and(eq(leadTasks.organizationId, input.organizationId), eq(leadTasks.leadId, input.leadId))
     )
@@ -425,6 +512,11 @@ export async function listTasks(
   return sortTasks(rows.map((row) => toTaskView(row.task, row)));
 }
 
+/**
+ * Add a next action or takeaway. Added for a deal (dealId), it is given to the owner of an open
+ * deal when they are not the lead's assignee (dealOwnerAssignee); its audit row names the deal
+ * (metadata.dealId, a closed one too) and, when it was given, the assignee
+ */
 export async function createTask(
   db: Database,
   input: Omit<CreateTaskInput, 'kind'> & { kind?: TaskKind; userId: string },
@@ -433,9 +525,19 @@ export async function createTask(
   const kind = input.kind ?? 'next_action';
   const checkWith = kind === 'takeaway' ? (input.checkWith ?? null) : null;
   const checkWithUserId = kind === 'takeaway' ? (input.checkWithUserId ?? null) : null;
+  const dealId = input.dealId ?? null;
   return db.transaction(async (tx) => {
-    // Locks the lead so concurrent creates cannot pass the limit together
-    await assertLeadInOrganization(tx, input.organizationId, input.leadId, true);
+    // Locks the lead so concurrent creates cannot pass the limit together, and so that neither
+    // its assignee nor its deals change before the task is in
+    const lead = await assertLeadInOrganization(tx, input.organizationId, input.leadId, true);
+    const assignee = dealId
+      ? await dealOwnerAssignee(tx, {
+          organizationId: input.organizationId,
+          leadId: input.leadId,
+          dealId,
+          leadAssigneeId: lead.assigneeUserId,
+        })
+      : null;
     const [{ total }] = await tx
       .select({ total: count() })
       .from(leadTasks)
@@ -463,6 +565,7 @@ export async function createTask(
         kind,
         checkWith,
         checkWithUserId,
+        assigneeId: assignee?.id ?? null,
         createdBy: input.userId,
         updatedBy: input.userId,
         createdAt: now,
@@ -485,10 +588,12 @@ export async function createTask(
           ...(kind === 'takeaway'
             ? { kind, checkWith: row.checkWith, checkWithUserId: row.checkWithUserId }
             : {}),
+          ...(row.assigneeId ? { assigneeId: row.assigneeId } : {}),
         },
       },
+      dealId,
     });
-    return toTaskView(row, member);
+    return toTaskView(row, { ...member, assigneeName: assignee?.name });
   });
 }
 
@@ -589,7 +694,9 @@ export async function updateTask(
     const member = checkWithUserId
       ? await checkWithMember(tx, input.organizationId, checkWithUserId).catch(() => null)
       : null;
-    if (Object.keys(set).length === 0) return toTaskView(current, member);
+    // A change never gives the task to someone else: the assignee stays as it is
+    const names = { ...member, ...(await assigneeNamesOf(tx, current.assigneeId)) };
+    if (Object.keys(set).length === 0) return toTaskView(current, names);
 
     const [row] = await tx
       .update(leadTasks)
@@ -606,7 +713,7 @@ export async function updateTask(
       leadId: row.leadId,
       changes: { before, after },
     });
-    return toTaskView(row, member);
+    return toTaskView(row, names);
   });
 }
 
@@ -671,10 +778,12 @@ export async function listDueTasks(
         company: leads.company,
         mine,
         ...checkWithColumns,
+        ...assigneeColumns,
       })
       .from(leadTasks)
       .innerJoin(leads, leadJoin)
       .leftJoin(checkWithUsers, eq(checkWithUsers.id, leadTasks.checkWithUserId))
+      .leftJoin(assigneeUsers, eq(assigneeUsers.id, leadTasks.assigneeId))
       .where(scope === 'mine' ? and(due, mine) : due)
       .orderBy(
         ...(scope === 'all' ? [desc(mine)] : []),

@@ -1460,7 +1460,9 @@
       "noAmount": "No amount yet",
       "unassigned": "No owner",
       "move": "Move \"{name}\" to another stage (now {stage})",
-      "moveTo": "Move to {stage}"
+      "moveTo": "Move to {stage}",
+      "addNextAction": "Add a next action",
+      "addNextActionFor": "Add a next action for \"{name}\""
     },
     "filters": {
       "label": "Filters",
@@ -5113,7 +5115,21 @@
       "checkWithOtherPlaceholder": "e.g. The customer's IT department",
       "checkWith": "Check with: {name}",
       "fromMeetingRequest": "First meeting confirmed from the respondent's preferred dates",
-      "fromActTiming": "Contact again before \"when to act\" (created from the support end and retirement)"
+      "fromActTiming": "Contact again before \"when to act\" (created from the support end and retirement)",
+      "assignee": "Assigned to {name}",
+      "added": "Added \"{title}\"",
+      "adding": "Adding…",
+      "dueInvalid": "Enter the due date as year-month-day, e.g. 2026-11-15",
+      "recipient": {
+        "dealOwner": "When it is due, {name} (the deal's owner) is notified and sees it on Today.",
+        "you": "When it is due, you are notified and see it on Today.",
+        "leadAssignee": "When it is due, the lead's assignee (or you, if it has none) is notified and sees it on Today."
+      },
+      "dialog": {
+        "title": "Add a next action for \"{deal}\"",
+        "description": "It is added to the next actions and takeaways of the lead \"{lead}\".",
+        "descriptionNoName": "It is added to the next actions and takeaways of this deal's lead."
+      }
     },
     "today": {
       "title": "Today",

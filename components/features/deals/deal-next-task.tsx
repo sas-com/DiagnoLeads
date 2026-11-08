@@ -1,13 +1,16 @@
 'use client';
 
+import { TAP_TARGET } from '@/components/common/tap-target';
 import {
   DueLabel,
   TaskKindBadge,
   useTaskTitle,
 } from '@/components/features/lead-follow-up/task-parts';
+import { Button } from '@/components/ui/button';
 import type { DealNextTask } from '@/lib/features/deals/service';
 import { cn } from '@/lib/utils';
-import { ListTodo } from 'lucide-react';
+import { ListTodo, Plus } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 /**
  * A deal's next action on its board card and list row (#853): the lead's open task due first,
@@ -46,5 +49,38 @@ export function DealNextTaskSummary({
       </div>
       <p className="line-clamp-2 break-words text-gray-700 dark:text-gray-300">{titleOf(task)}</p>
     </div>
+  );
+}
+
+/**
+ * "Add a next action" on a board card and a list row (#853), for an open deal marked for its lead
+ * having none, to those who may change deals: it opens the screen's dialog. Outlined (the
+ * screen's filled button is "create a deal"), 44px tall on phones, and named with the deal so
+ * that a list of them can be told apart (its words are in its name, WCAG 2.5.3).
+ */
+export function AddNextActionButton({
+  dealName,
+  onAdd,
+  className,
+}: {
+  dealName: string;
+  /** With the button, which the focus goes back to when the dialog closes without adding */
+  onAdd: (opener: HTMLElement) => void;
+  className?: string;
+}) {
+  const t = useTranslations('deals.card');
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      // 44px on phones; from md, as compact as the card's move button
+      className={cn(TAP_TARGET, 'md:h-8 md:px-2.5', className)}
+      aria-label={t('addNextActionFor', { name: dealName })}
+      onClick={(event) => onAdd(event.currentTarget)}
+    >
+      <Plus className="h-4 w-4" aria-hidden="true" />
+      {t('addNextAction')}
+    </Button>
   );
 }

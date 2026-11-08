@@ -88,8 +88,19 @@ vi.mock('@/components/features/lead-activity/deal-activities-card', () => ({
 }));
 // The lead's next actions are their own card (#85), tested in lead-next-actions-card.test.tsx
 vi.mock('@/components/features/lead-follow-up/lead-next-actions-card', () => ({
-  LeadNextActionsCard: (props: { leadId: string; description?: string }) => (
-    <div data-testid="lead-next-actions" data-lead={props.leadId}>
+  LeadNextActionsCard: (props: {
+    leadId: string;
+    description?: string;
+    deal?: { id: string; stage: string; ownerUserId: string | null; ownerName: string | null };
+  }) => (
+    <div
+      data-testid="lead-next-actions"
+      data-lead={props.leadId}
+      data-deal={props.deal?.id}
+      data-stage={props.deal?.stage}
+      data-owner={props.deal?.ownerUserId ?? ''}
+      data-owner-name={props.deal?.ownerName ?? ''}
+    >
       {props.description}
     </div>
   ),
@@ -583,6 +594,16 @@ describe('DealDetailView', () => {
       expect(screen.getByTestId('lead-next-actions')).toHaveTextContent(
         'リード「架空商事」の次の行動・持ち帰り事項です。リードの画面と同じものです'
       );
+    });
+
+    it("adds the lead's next actions for the deal, which goes to the owner of an open one (#853)", () => {
+      mocks.get.data = detail({ ownerUserId: 'user-1', ownerName: '営業 花子' });
+      renderView();
+      const card = screen.getByTestId('lead-next-actions');
+      expect(card).toHaveAttribute('data-deal', DEAL_ID);
+      expect(card).toHaveAttribute('data-stage', 'proposal');
+      expect(card).toHaveAttribute('data-owner', 'user-1');
+      expect(card).toHaveAttribute('data-owner-name', '営業 花子');
     });
 
     it('does not name a lead without a company or a name', () => {

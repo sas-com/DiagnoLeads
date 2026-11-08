@@ -1,6 +1,7 @@
 'use client';
 
 import { TAP_TARGET } from '@/components/common/tap-target';
+import { AddNextActionDialog } from '@/components/features/lead-follow-up/add-next-action-dialog';
 import { StudioPageHeader } from '@/components/studio';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,6 +15,7 @@ import {
 } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useOrganization } from '@/hooks/use-organization';
+import type { DealCard } from '@/lib/features/deals/service';
 import { DEAL_KINDS, type DealKind } from '@/lib/features/deals/types/pipeline';
 import { BOARD_CLOSED_DAYS_DEFAULT, BOARD_DEALS_LIMIT } from '@/lib/features/deals/types/schemas';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
@@ -77,6 +79,48 @@ function useBoardQuery() {
   return { view, owner, kind, period, sort, set, update };
 }
 
+/** The name of a deal on its board card or list row (data-deal-link), which takes the focus */
+function dealLinkOf(dealId: string): HTMLElement | undefined {
+  return Array.from(document.querySelectorAll<HTMLElement>('[data-deal-link]')).find(
+    (link) => link.dataset.dealLink === dealId
+  );
+}
+
+/**
+ * The dialog that adds a deal's next action from its card or row (#853): one, for the deal chosen.
+ * It has no trigger to give the focus back to: the button that opened it gets it back, but once
+ * a next action is added the button goes away with the board read again, so the focus goes to
+ * the deal's name on its card or row, under which the next action then shows.
+ */
+function useAddNextAction() {
+  const [deal, setDeal] = useState<DealCard | null>(null);
+  const [open, setOpen] = useState(false);
+  const opener = useRef<HTMLElement | null>(null);
+  const added = useRef(false);
+  return {
+    deal,
+    open,
+    setOpen,
+    start: (chosen: DealCard, from: HTMLElement) => {
+      opener.current = from;
+      added.current = false;
+      setDeal(chosen);
+      setOpen(true);
+    },
+    markAdded: () => {
+      added.current = true;
+    },
+    returnFocus: (event: Event) => {
+      const button = opener.current;
+      const target =
+        !added.current && button?.isConnected ? button : deal ? dealLinkOf(deal.id) : undefined;
+      if (!target) return;
+      event.preventDefault();
+      target.focus();
+    },
+  };
+}
+
 /** The place of the board when it has nothing to show, with what to do next */
 function EmptyState({
   title,
@@ -99,7 +143,8 @@ function EmptyState({
  * lead's page. A move between open stages shows at once (#720); the list sorts by amount or
  * expected close date (in the URL), and the board's order otherwise. While the deals of other
  * filters are read, the previous ones stay in view, unless there were none: then it says it is
- * loading rather than that there are no deals (#720).
+ * loading rather than that there are no deals (#720). An open deal whose lead has no next action
+ * offers to add one in a dialog, to those who may change deals (#853).
  */
 export function DealsScreen() {
   const t = useTranslations('deals');
@@ -113,6 +158,7 @@ export function DealsScreen() {
   // Clearing the filters takes away its button: the focus goes to the first filter
   const ownerTrigger = useRef<HTMLButtonElement>(null);
   const stageMove = useStageMove(organizationId);
+  const nextAction = useAddNextAction();
 
   const board = trpc.deals.board.useQuery(
     {
@@ -335,6 +381,7 @@ export function DealsScreen() {
                       options
                     )
                   }
+                  onAddNextAction={nextAction.start}
                 />
               ) : (
                 <DealTable
@@ -346,6 +393,8 @@ export function DealsScreen() {
                   closedWithinDays={BOARD_CLOSED_DAYS_DEFAULT}
                   sort={sort}
                   onSort={(column) => update(dealSortParams(nextDealSort(sort, column)))}
+                  canEdit={data.canEdit}
+                  onAddNextAction={nextAction.start}
                 />
               )}
             </div>
@@ -356,6 +405,18 @@ export function DealsScreen() {
               open={createOpen}
               onOpenChange={setCreateOpen}
               organizationId={organizationId}
+            />
+          )}
+          {data?.canEdit && nextAction.deal && (
+            <AddNextActionDialog
+              open={nextAction.open}
+              onOpenChange={nextAction.setOpen}
+              organizationId={organizationId}
+              deal={nextAction.deal}
+              leadLabel={nextAction.deal.company || nextAction.deal.leadName || ''}
+              today={data.today}
+              onAdded={nextAction.markAdded}
+              onCloseAutoFocus={nextAction.returnFocus}
             />
           )}
           {stageMove.dialogs}
