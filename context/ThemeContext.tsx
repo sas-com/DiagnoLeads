@@ -74,6 +74,10 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [theme, isInitialized]);
 
+  // The class sits on <html>, outside this tree: take it off when the admin or sign-in screens go,
+  // so a public page reached by client-side navigation (e.g. Back from sign-in) is not dark (#987)
+  useEffect(() => () => document.documentElement.classList.remove('dark'), []);
+
   const toggleTheme = () => {
     setTheme((prevTheme) => {
       const next = prevTheme === 'light' ? 'dark' : 'light';

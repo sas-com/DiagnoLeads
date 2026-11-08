@@ -69,4 +69,17 @@ describe('ThemeProvider', () => {
     expect(screen.getByRole('button')).toHaveTextContent('dark');
     expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark');
   });
+
+  it('takes dark off the page when it goes, so a public page reached by Back stays light (#987)', () => {
+    mockOs(true);
+    const { unmount } = render(
+      <ThemeProvider>
+        <Probe />
+      </ThemeProvider>
+    );
+    expect(document.documentElement).toHaveClass('dark');
+
+    unmount();
+    expect(document.documentElement).not.toHaveClass('dark');
+  });
 });
