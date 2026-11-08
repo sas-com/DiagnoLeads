@@ -102,7 +102,7 @@ components/features/<feature>/
 |---|---|---|
 | `server/routers/_app.ts` | import 1行とキー1行 | 登録しないと外から呼べない（`unregistered-routers` で落ちる） |
 | `lib/db/schema.ts` と `drizzle/` | 表の定義と `bun run db:generate` の出力 | 新しい表は関連する表の近くに足す（末尾に足すと並行の PR とぶつかる。今までテキストの衝突が0件だったのは、追加の位置が散っていたから）。main を取り込んで番号がぶつかったら、自分の SQL・snapshot・ジャーナルの行を消して生成し直す。手順は `.claude/rules/db-schema.md`。番号の重複と `when` の逆転は `test/unit/lib/db/migrations-journal.test.ts`（#453 で追加）が検出する |
-| `locales/{ja,en}/<名前空間>.json` と `lib/i18n/messages.ts` | 新しい名前空間（ファイルの最上位のキーが名前空間）と、その import・登録の1行ずつ（ja と en の両方、名前順） | common.json の末尾に足さない（並行の PR がぶつかる）。common.json の既存の名前空間は動かさない。登録の漏れ・2つのファイルにある名前空間・ja と en の食い違いは `test/unit/lib/i18n/messages.test.ts` と CI の `i18n:check` で落ちる（#472）。next-intl を通さずに文言を読むサーバーのコードは、common.json ではなく `lib/i18n/messages.ts` の `messages` を読む |
+| `locales/{ja,en}/<名前空間>.json` と `lib/i18n/messages.ts` | 新しい名前空間（ファイルの最上位のキーが名前空間）と、その import・登録の1行ずつ（ja と en の両方、名前順） | common.json の末尾に足さない（並行の PR がぶつかる）。common.json の既存の名前空間は動かさない。登録の漏れ・2つのファイルにある名前空間・ja と en の食い違いは `test/unit/lib/i18n/messages.test.tsx` と CI の `i18n:check` で落ちる（#472）。React の外で文言を読むコードとテストは、新しい名前空間を common.json から読まない：`createTranslator` に渡す・カタログ全体を走査するなら `messages[locale]`、プロパティで型付きに読むならその名前空間のファイルを直接 import する（`messages` は `AbstractIntlMessages` なので、プロパティで読むと型が落ちる） |
 | `components/features/leads/detail/lead-detail-view.tsx` とそのテスト | リード詳細のカード | カードの列の切り出しは #450 で行う予定 |
 | `components/layout/AppSidebar.tsx`・`lib/routes/admin-pages.ts` | メニューとページの接頭辞 | 足し忘れはテストで落ちる |
 
