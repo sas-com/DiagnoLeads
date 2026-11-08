@@ -1,7 +1,7 @@
 import { clipText, toWellFormed } from '@/lib/utils/clip-text';
 import { z } from 'zod';
 import { isAxFrom } from '../ax-site/cross-links';
-import { SHORT_CODE_PATTERN } from '../distribution/types';
+import { type QrCampaignMedium, SHORT_CODE_PATTERN } from '../distribution/types';
 import type { InflowSource } from '../leads/types/pipeline';
 import { AX_ENTRY_PAGES } from './entry-pages';
 
@@ -47,7 +47,12 @@ export const trackingSchema = z
   .default({});
 export type Tracking = z.infer<typeof trackingSchema>;
 
-const MEDIUM_TO_INFLOW: Record<string, InflowSource> = {
+/**
+ * utm_medium → 流入元. Every medium a QR campaign is created with (QR_CAMPAIGN_MEDIUMS,
+ * distribution/types.ts) must be here: the type fails without one, so a choice added to the form
+ * cannot leave the new leads of its scans 未設定 (#788)
+ */
+const MEDIUM_TO_INFLOW: Record<string, InflowSource> & Record<QrCampaignMedium, InflowSource> = {
   cpc: 'advertising',
   ppc: 'advertising',
   paid: 'advertising',
@@ -59,6 +64,10 @@ const MEDIUM_TO_INFLOW: Record<string, InflowSource> = {
   seminar: 'seminar',
   webinar: 'seminar',
   event: 'seminar',
+  // QR campaigns (#788, owner decision of 2026-10-26): an exhibition counts as a seminar and a
+  // direct mail as advertising, so INFLOW_SOURCES gets no new value
+  exhibition: 'seminar',
+  direct_mail: 'advertising',
   referral: 'referral_partner',
   partner: 'referral_partner',
   customer: 'existing_customer',
