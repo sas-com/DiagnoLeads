@@ -15,6 +15,11 @@ export interface LeadListEmptyProps {
   /** Filters are applied: an empty page means "no match", not "no leads yet" */
   hasFilters: boolean;
   onClearFilters?: () => void;
+  /**
+   * What to say when nothing matches, in place of the generic text: the list filtered to the
+   * leads missing a deal only says there are none left (#854)
+   */
+  noMatchesTitle?: string;
   /** The list request failed: an error, not "no leads yet" */
   loadFailed?: boolean;
   onRetry?: () => void;
@@ -25,6 +30,7 @@ export interface LeadListEmptyProps {
 export function LeadListEmpty({
   hasFilters,
   onClearFilters,
+  noMatchesTitle,
   loadFailed = false,
   onRetry,
   onCreate,
@@ -40,9 +46,9 @@ export function LeadListEmpty({
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-8 text-center text-gray-500 dark:text-gray-400">
         <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-          {tList('noMatches')}
+          {noMatchesTitle ?? tList('noMatches')}
         </p>
-        <p className="text-sm">{tList('noMatchesDescription')}</p>
+        {!noMatchesTitle && <p className="text-sm">{tList('noMatchesDescription')}</p>}
         {onClearFilters && (
           <Button variant="outline" className="h-11 md:h-10" onClick={onClearFilters}>
             {tList('chips.clearAll')}

@@ -86,6 +86,8 @@ export function useFilterChipLabel(): (chip: LeadFilterChip) => string {
             field: t('mqlLevel'),
             value: t(`mqlLevelOptions.${chip.value}`),
           });
+        case 'missingDeal':
+          return t('missingDeal');
       }
     },
     [t, tStatus, tPipeline, assigneeLabel]

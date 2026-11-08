@@ -4,12 +4,15 @@
  * written and under which condition (a confirmed meeting, or verified preferences met by an
  * unverified answer, are never replaced), that every read and write is limited to the
  * organization, who is told, and each outcome of a confirmation (not found, stale, the next
- * action moved or added, the email). The database is test/mocks/recording-db.ts; the same
- * functions on a real PostgreSQL (the conflict condition, the snapshot read of the replaced row,
- * the lock) are covered by test/unit/integration/meeting-requests.db.test.ts.
+ * action moved or added, the email, and when it creates the lead's deal in 見極め, #854). The
+ * database is test/mocks/recording-db.ts and the deals feature is mocked; the same functions on a
+ * real PostgreSQL (the conflict condition, the snapshot read of the replaced row, the locks, the
+ * deal) are covered by test/unit/integration/meeting-requests.db.test.ts and
+ * deals-auto-qualification.db.test.ts.
  * Made-up names. 2026-10-16 is a Friday.
  */
 import { leadTasks, leads, meetingRequests, organizations, users } from '@/lib/db/schema';
+import type { QualificationDealOutcome } from '@/lib/features/deals/service';
 import {
   type ConfirmDeps,
   MEETING_PREFERENCES_WINDOW_MS,
@@ -20,7 +23,13 @@ import {
   saveMeetingPreferences,
 } from '@/lib/features/meeting-requests/service';
 import type { MeetingPreferences } from '@/lib/features/meeting-requests/types/schemas';
-import { type QueryCall, type RecordingDb, recordingDb, sqlOf } from '@/test/mocks/recording-db';
+import {
+  type QueryCall,
+  type RecordingDb,
+  type RecordingExecutor,
+  recordingDb,
+  sqlOf,
+} from '@/test/mocks/recording-db';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const notices = vi.hoisted(() => ({
@@ -33,6 +42,11 @@ vi.mock('@/lib/features/leads/assignment-notify', () => ({
 vi.mock('@/lib/features/notifications/notification-service', () => ({
   notifyOrganizationMembers: notices.notifyOrganizationMembers,
 }));
+const deals = vi.hoisted(() => ({
+  ensureQualificationDeal: vi.fn(),
+  afterDealChanges: vi.fn(),
+}));
+vi.mock('@/lib/features/deals/service', () => deals);
 
 type Database = Parameters<typeof saveMeetingPreferences>[0];
 
@@ -44,6 +58,7 @@ const INTAKE_ID = '550e8400-e29b-41d4-a716-446655440002';
 const SUBMISSION_ID = '33333333-3333-4333-8333-333333333333';
 const REQUEST_ID = '880e8400-e29b-41d4-a716-446655440000';
 const TASK_ID = '990e8400-e29b-41d4-a716-446655440000';
+const DEAL_ID = 'aa0e8400-e29b-41d4-a716-446655440000';
 // Friday 2026-10-16, 12:00 in Japan: candidates may run from 10-17 to 12-15
 const NOW = new Date('2026-10-16T03:00:00Z');
 
@@ -61,10 +76,16 @@ const preferences: MeetingPreferences = {
 let fake: RecordingDb;
 const db = () => fake.db as unknown as Database;
 
+const created: QualificationDealOutcome = { created: true, dealId: DEAL_ID, lead: null };
+
 beforeEach(() => {
   fake = recordingDb();
   notices.notifyUsersInApp.mockClear();
   notices.notifyOrganizationMembers.mockClear();
+  deals.ensureQualificationDeal.mockReset();
+  deals.ensureQualificationDeal.mockResolvedValue(created);
+  deals.afterDealChanges.mockReset();
+  deals.afterDealChanges.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -341,12 +362,15 @@ describe('confirmMeeting', () => {
     candidates: [candidate, { date: '2026-10-22', time: '14:00' }],
     meetingFormat: 'online',
     taskId: null,
+    confirmedOn: null,
     email: 'yamada@example.com',
     leadName: '山田 太郎',
     company: '架空商事',
     organizationName: '架空システム',
     ...overrides,
   });
+  /** The lead, locked first */
+  const lead = [{ id: LEAD_ID }];
   const input = (overrides: Record<string, unknown> = {}) => ({
     organizationId: ORG_ID,
     leadId: LEAD_ID,
@@ -363,15 +387,22 @@ describe('confirmMeeting', () => {
   });
   const writes = () => fake.calls.filter((call) => call.op !== 'select');
 
-  it("locks the organization's request and confirms nothing when there is none", async () => {
-    fake.results.push([]);
+  it("locks the organization's lead, then its request, and confirms nothing when there is none", async () => {
+    fake.results.push(lead, []);
 
     expect(await confirmMeeting(db(), input(), { now: NOW })).toEqual({
       ok: false,
       reason: 'not_found',
     });
 
-    const [read] = fake.calls;
+    const [lock, read] = fake.calls;
+    // The lead before its rows, as the deals take it (no deadlock with them or a deletion)
+    expect(lock).toMatchObject({ op: 'select', table: leads, inTransaction: true });
+    expect(lock.lock).toEqual({ strength: 'no key update', config: undefined });
+    expect(sqlOf(lock.where)).toEqual({
+      sql: '("leads"."id" = $1 and "leads"."organization_id" = $2)',
+      params: [LEAD_ID, ORG_ID],
+    });
     expect(read).toMatchObject({ table: meetingRequests, inTransaction: true });
     expect(read.lock).toEqual({ strength: 'update', config: { of: meetingRequests } });
     expect(read.joins.map((join) => join.table)).toEqual([leads, organizations]);
@@ -380,35 +411,51 @@ describe('confirmMeeting', () => {
       params: [LEAD_ID, ORG_ID],
     });
     expect(writes()).toHaveLength(0);
+    expect(deals.ensureQualificationDeal).not.toHaveBeenCalled();
+  });
+
+  it('confirms nothing for a lead the organization does not have', async () => {
+    fake.results.push([]);
+
+    expect(await confirmMeeting(db(), input(), { now: NOW })).toEqual({
+      ok: false,
+      reason: 'not_found',
+    });
+    expect(fake.calls).toHaveLength(1);
+    expect(deals.ensureQualificationDeal).not.toHaveBeenCalled();
   });
 
   it('confirms nothing for a candidate the request does not have', async () => {
-    fake.results.push([row()]);
+    fake.results.push(lead, [row()]);
 
     expect(await confirmMeeting(db(), input({ candidateIndex: 4 }), { now: NOW })).toEqual({
       ok: false,
       reason: 'not_found',
     });
     expect(writes()).toHaveLength(0);
+    expect(deals.ensureQualificationDeal).not.toHaveBeenCalled();
   });
 
   it('confirms nothing when the candidate is no longer the one sales saw (#274)', async () => {
-    fake.results.push([row({ candidates: [{ date: '2026-10-21', time: '15:00' }] })]);
+    fake.results.push(lead, [row({ candidates: [{ date: '2026-10-21', time: '15:00' }] })]);
 
     expect(await confirmMeeting(db(), input(), { now: NOW })).toEqual({
       ok: false,
       reason: 'stale',
     });
     expect(writes()).toHaveLength(0);
+    expect(deals.ensureQualificationDeal).not.toHaveBeenCalled();
+    expect(deals.afterDealChanges).not.toHaveBeenCalled();
   });
 
   it('adds a next action on the day and records the confirmation', async () => {
-    fake.results.push([row()], [{ id: TASK_ID }], []);
+    fake.results.push(lead, [row()], [{ id: TASK_ID }], []);
 
     expect(await confirmMeeting(db(), input(), { now: NOW, deps: deps() })).toEqual({
       ok: true,
       candidate,
       email: 'not_requested',
+      dealCreated: true,
     });
 
     const [task, confirmation] = writes();
@@ -444,7 +491,12 @@ describe('confirmMeeting', () => {
   });
 
   it('moves the next action of an earlier confirmation to the other candidate', async () => {
-    fake.results.push([row({ taskId: TASK_ID, meetingFormat: null })], [{ id: TASK_ID }], []);
+    fake.results.push(
+      lead,
+      [row({ taskId: TASK_ID, meetingFormat: null, confirmedOn: '2026-10-21' })],
+      [{ id: TASK_ID }],
+      []
+    );
 
     await confirmMeeting(
       db(),
@@ -472,7 +524,7 @@ describe('confirmMeeting', () => {
 
   it('adds a next action again when the earlier one was deleted', async () => {
     const newTask = '990e8400-e29b-41d4-a716-446655440001';
-    fake.results.push([row({ taskId: TASK_ID })], [], [{ id: newTask }], []);
+    fake.results.push(lead, [row({ taskId: TASK_ID })], [], [{ id: newTask }], []);
 
     await confirmMeeting(db(), input(), { now: NOW });
 
@@ -484,8 +536,131 @@ describe('confirmMeeting', () => {
     expect(writes()[2].set).toMatchObject({ taskId: newTask });
   });
 
+  // The deal in 見極め of the first meeting (#854)
+  describe('the deal', () => {
+    it('is created on the first confirmation, in the transaction, with its webhooks after the commit and before the email', async () => {
+      fake.results.push(lead, [row()], [{ id: TASK_ID }], [], [{ name: '青木' }], []);
+      const order: string[] = [];
+      const transaction = fake.db.transaction;
+      fake.db.transaction = async <T>(fn: (tx: RecordingExecutor) => Promise<T>) => {
+        const result = await transaction(fn);
+        order.push('commit');
+        return result;
+      };
+      deals.ensureQualificationDeal.mockImplementation(async () => {
+        order.push('ensure');
+        return created;
+      });
+      deals.afterDealChanges.mockImplementation(async () => {
+        order.push('webhooks');
+      });
+      const send = vi.fn(async () => {
+        order.push('email');
+        return {};
+      });
+
+      const outcome = await confirmMeeting(db(), input({ sendEmail: true }), {
+        now: NOW,
+        deps: deps({ sendEmail: send }),
+      });
+
+      expect(outcome).toEqual({ ok: true, candidate, email: 'sent', dealCreated: true });
+      expect(order).toEqual(['ensure', 'commit', 'webhooks', 'email']);
+      expect(deals.ensureQualificationDeal).toHaveBeenCalledTimes(1);
+      const [tx, values, at] = deals.ensureQualificationDeal.mock.calls[0];
+      // The confirmation's transaction, not the database
+      expect(tx).not.toBe(fake.db);
+      expect(values).toEqual({
+        organizationId: ORG_ID,
+        leadId: LEAD_ID,
+        userId: USER_ID,
+        source: 'meeting_request',
+        meetingOn: '2026-10-21',
+      });
+      expect(at).toBe(NOW);
+      expect(deals.afterDealChanges).toHaveBeenCalledWith(
+        fake.db,
+        { organizationId: ORG_ID, userId: USER_ID },
+        [created]
+      );
+    });
+
+    it('is created when the meeting moves to another day', async () => {
+      fake.results.push(lead, [row({ taskId: TASK_ID, confirmedOn: '2026-10-22' })], [{ id: TASK_ID }], []);
+
+      expect(await confirmMeeting(db(), input(), { now: NOW })).toMatchObject({
+        ok: true,
+        dealCreated: true,
+      });
+      expect(deals.ensureQualificationDeal).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ meetingOn: '2026-10-21' }),
+        NOW
+      );
+    });
+
+    it('is never created for another time of the same day, even after the deal was lost', async () => {
+      fake.results.push(
+        lead,
+        [
+          row({
+            candidates: [candidate, { date: '2026-10-21', time: '15:00' }],
+            taskId: TASK_ID,
+            confirmedOn: '2026-10-21',
+          }),
+        ],
+        [{ id: TASK_ID }],
+        []
+      );
+
+      expect(
+        await confirmMeeting(
+          db(),
+          input({ candidateIndex: 1, candidate: { date: '2026-10-21', time: '15:00' } }),
+          { now: NOW }
+        )
+      ).toEqual({
+        ok: true,
+        candidate: { date: '2026-10-21', time: '15:00' },
+        email: 'not_requested',
+        dealCreated: false,
+      });
+      expect(deals.ensureQualificationDeal).not.toHaveBeenCalled();
+      expect(deals.afterDealChanges).not.toHaveBeenCalled();
+      // The meeting itself is confirmed
+      expect(writes().at(-1)?.set).toMatchObject({ confirmedTime: '15:00' });
+    });
+
+    it.each(['open_deal', 'won', 'phase_ahead', 'lead_not_found'] as const)(
+      'is not created for a lead it skips (%s), and the meeting is confirmed all the same',
+      async (skipped) => {
+        fake.results.push(lead, [row()], [{ id: TASK_ID }], []);
+        deals.ensureQualificationDeal.mockResolvedValue({ created: false, skipped });
+
+        expect(await confirmMeeting(db(), input(), { now: NOW })).toEqual({
+          ok: true,
+          candidate,
+          email: 'not_requested',
+          dealCreated: false,
+        });
+        expect(deals.ensureQualificationDeal).toHaveBeenCalledTimes(1);
+        expect(deals.afterDealChanges).not.toHaveBeenCalled();
+        expect(writes().at(-1)?.set).toMatchObject({ confirmedOn: '2026-10-21' });
+      }
+    );
+
+    it('is answered as whether one was created, never as the deal (#276)', async () => {
+      fake.results.push(lead, [row()], [{ id: TASK_ID }], []);
+
+      const outcome = await confirmMeeting(db(), input(), { now: NOW });
+
+      expect(Object.keys(outcome).sort()).toEqual(['candidate', 'dealCreated', 'email', 'ok']);
+      expect(JSON.stringify(outcome)).not.toContain(DEAL_ID);
+    });
+  });
+
   it('sends no email when email is not configured', async () => {
-    fake.results.push([row()], [{ id: TASK_ID }], []);
+    fake.results.push(lead, [row()], [{ id: TASK_ID }], []);
     const send = vi.fn();
 
     expect(
@@ -493,14 +668,14 @@ describe('confirmMeeting', () => {
         now: NOW,
         deps: deps({ sendEmail: send, emailEnabled: () => false }),
       })
-    ).toMatchObject({ ok: true, email: 'not_configured' });
+    ).toMatchObject({ ok: true, email: 'not_configured', dealCreated: true });
     expect(send).not.toHaveBeenCalled();
   });
 
   it('mails only the allowed domains in test mode', async () => {
     vi.stubEnv('APP_TEST_MODE', 'true');
     vi.stubEnv('APP_TEST_MODE_EMAIL_DOMAINS', 'sas-com.com');
-    fake.results.push([row()], [{ id: TASK_ID }], []);
+    fake.results.push(lead, [row()], [{ id: TASK_ID }], []);
     const send = vi.fn();
 
     expect(
@@ -508,12 +683,12 @@ describe('confirmMeeting', () => {
         now: NOW,
         deps: deps({ sendEmail: send }),
       })
-    ).toMatchObject({ ok: true, email: 'not_allowed' });
+    ).toMatchObject({ ok: true, email: 'not_allowed', dealCreated: true });
     expect(send).not.toHaveBeenCalled();
   });
 
   it('mails the respondent with who confirmed it and records when', async () => {
-    fake.results.push([row()], [{ id: TASK_ID }], [], [{ name: '青木' }], []);
+    fake.results.push(lead, [row()], [{ id: TASK_ID }], [], [{ name: '青木' }], []);
     const send = vi.fn(async () => ({}));
 
     expect(
@@ -521,7 +696,7 @@ describe('confirmMeeting', () => {
         now: NOW,
         deps: deps({ sendEmail: send }),
       })
-    ).toEqual({ ok: true, candidate, email: 'sent' });
+    ).toEqual({ ok: true, candidate, email: 'sent', dealCreated: true });
 
     expect(send).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -540,7 +715,7 @@ describe('confirmMeeting', () => {
   });
 
   it('keeps the confirmation and reports a failed email', async () => {
-    fake.results.push([row()], [{ id: TASK_ID }], [], []);
+    fake.results.push(lead, [row()], [{ id: TASK_ID }], []);
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     const error = new Error('Resend is down');
 
@@ -553,7 +728,7 @@ describe('confirmMeeting', () => {
           },
         }),
       })
-    ).toEqual({ ok: true, candidate, email: 'failed' });
+    ).toEqual({ ok: true, candidate, email: 'failed', dealCreated: true });
     expect(logged).toHaveBeenCalledWith('Meeting confirmation email failed:', error);
     // The confirmation stays; no time of an email is recorded
     expect(writes().filter((call) => call.set && 'confirmationEmailedAt' in call.set)).toHaveLength(

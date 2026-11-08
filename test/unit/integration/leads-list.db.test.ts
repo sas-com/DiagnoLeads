@@ -331,11 +331,15 @@ describe.skipIf(!url)('lead list (PostgreSQL)', () => {
       expect(a).toEqual({
         total: 5,
         byStatus: { new: 1, nurturing: 1, negotiating: 1, won: 1, lost: 1 },
+        // L3 (商談中) and L4 (成約) have no deal (#854, leads-missing-deal.db.test.ts)
+        missingDeal: 2,
       });
       const b = await callerB.leads.statusCounts({ organizationId: orgB });
       expect(b).toEqual({
         total: 1,
         byStatus: { new: 1, nurturing: 0, negotiating: 0, won: 0, lost: 0 },
+        // 新規 with a deal phase and no deal
+        missingDeal: 1,
       });
       await expect(callerA.leads.statusCounts({ organizationId: orgB })).rejects.toMatchObject({
         code: 'FORBIDDEN',
