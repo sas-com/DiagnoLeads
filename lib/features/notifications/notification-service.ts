@@ -14,9 +14,13 @@ import {
 import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
 
 /**
- * Create a notification for a user
+ * Create a notification for a user, always of an organization: one of no organization stays
+ * readable after the user leaves (ofCurrentMembership), so it must not name an organization's
+ * leads (#974)
  */
-export async function createNotification(data: NewNotification): Promise<void> {
+export async function createNotification(
+  data: NewNotification & { organizationId: string }
+): Promise<void> {
   await db.insert(notifications).values(data);
 }
 

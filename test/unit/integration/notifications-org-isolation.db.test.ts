@@ -148,8 +148,8 @@ describe.skipIf(!url)('notifications: isolation (PostgreSQL)', () => {
     let intake: string;
     // biome-ignore lint/suspicious/noExplicitAny: tRPC callers
     let asLeaving: any;
-    // biome-ignore lint/suspicious/noExplicitAny: tRPC callers
-    let asIntake: any;
+    // What they read while still a member
+    let readBefore: string[];
     const titles = (rows: { title: string }[]) => rows.map((row) => row.title).sort();
     const caller = (user: typeof users.$inferSelect) =>
       appRouter.createCaller({
@@ -184,7 +184,6 @@ describe.skipIf(!url)('notifications: isolation (PostgreSQL)', () => {
         { organizationId: orgLeft, userId: intake, role: 'admin' },
       ]);
       asLeaving = caller(leavingUser);
-      asIntake = caller(intakeUser);
       await pg.insert(notifications).values([
         ...['退出元の割り当て', '退出元の期限'].map((title) => ({
           userId: leaving,
@@ -203,6 +202,16 @@ describe.skipIf(!url)('notifications: isolation (PostgreSQL)', () => {
         // Of no organization: still theirs
         { userId: leaving, type: 'system' as const, title: '組織のない通知', message: 'お知らせ' },
       ]);
+
+      // Then they are removed by an admin of the organization
+      readBefore = titles(await asLeaving.notifications.list({}));
+      const [membership] = await pg
+        .select({ id: organizationMembers.id })
+        .from(organizationMembers)
+        .where(
+          and(eq(organizationMembers.organizationId, orgLeft), eq(organizationMembers.userId, leaving))
+        );
+      await caller(intakeUser).members.remove({ organizationId: orgLeft, membershipId: membership.id });
     });
 
     afterAll(async () => {
@@ -210,22 +219,18 @@ describe.skipIf(!url)('notifications: isolation (PostgreSQL)', () => {
     });
 
     it('no longer reads, counts or marks its notifications, but keeps the others', async () => {
-      expect(titles(await asLeaving.notifications.list({}))).toHaveLength(4);
-      const [membership] = await pg
-        .select({ id: organizationMembers.id })
-        .from(organizationMembers)
-        .where(
-          and(eq(organizationMembers.organizationId, orgLeft), eq(organizationMembers.userId, leaving))
-        );
-      await asIntake.members.remove({ organizationId: orgLeft, membershipId: membership.id });
+      expect(readBefore).toHaveLength(4);
 
-      expect(titles(await asLeaving.notifications.list({}))).toEqual(['残る先の割り当て', '組織のない通知']);
+      const kept = ['残る先の割り当て', '組織のない通知'];
+      expect(titles(await asLeaving.notifications.list({}))).toEqual(kept);
+      expect(titles(await asLeaving.notifications.list({ unreadOnly: true }))).toEqual(kept);
       expect(await asLeaving.notifications.list({ organizationId: orgLeft })).toEqual([]);
       expect(await asLeaving.notifications.unreadCount({})).toEqual({ count: 2 });
       expect(await asLeaving.notifications.unreadCount({ organizationId: orgLeft })).toEqual({
         count: 0,
       });
 
+      await asLeaving.notifications.markAllAsRead({ organizationId: orgLeft });
       await asLeaving.notifications.markAllAsRead({});
       const rows = await pg
         .select({ organizationId: notifications.organizationId, read: notifications.read })
@@ -239,7 +244,6 @@ describe.skipIf(!url)('notifications: isolation (PostgreSQL)', () => {
     });
 
     it('is not told of the first meeting preferences of a lead still assigned to them', async () => {
-      // Run after the removal above
       await pg
         .update(organizations)
         .set({ settings: { [INTAKE_SETTINGS_KEY]: [intake] } })

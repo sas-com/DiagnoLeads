@@ -5,7 +5,8 @@
  *   online, and what they want to talk about (topics and a short note, #244), from the result page after asking for a consultation. They can send them again
  *   until sales confirm one, and only for a day after the consultation request
  *   (MEETING_PREFERENCES_WINDOW_MS, #241); after that the request is locked.
- * - Sales are told in-app when preferences arrive: the lead's assignee, else the intake members
+ * - Sales are told in-app when preferences arrive: the lead's assignee while they may still
+ *   hold leads (a member of the organization, not read-only, #974), else the intake members
  *   (#135), else every member (as for the consultation request itself).
  * - Sales confirm one candidate: it becomes the lead's next meeting (read by leadNextMeetingDate
  *   when no hearing records one) and a next action on that day (source 'meeting_request', so the
