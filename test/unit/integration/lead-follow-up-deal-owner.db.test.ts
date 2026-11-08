@@ -6,7 +6,11 @@
  * it then shows (the "mine" of 今日 and the dashboard, the due notices), what its audit row keeps,
  * and what is refused: a deal of another lead, of another organization (also one pointing at the
  * lead) or no deal at all, all with one answer, and naming a deal without the right to read
- * deals. All values are fictional.
+ * deals. Then what removing the member they are given to from the organization gives back
+ * (#968): their open ones of that organization, to the lead's assignee (else whoever added them)
+ * for 今日 and the due notices, with an audit row each, also when a next action is being added for
+ * their deal at the same time; not the done ones, another member's, or theirs of another
+ * organization. All values are fictional.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/dl_test \
@@ -27,9 +31,10 @@ import {
 } from '@/lib/db/schema';
 import { CLOSED_DEAL_STAGES } from '@/lib/features/deals/types/pipeline';
 import { runDueTaskNotifications } from '@/lib/features/lead-follow-up/due-notifications';
+import { RELEASED_TASK_AUDIT_BATCH } from '@/lib/features/lead-follow-up/service';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { appRouter } from '@/server/routers/_app';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -69,6 +74,7 @@ describe.skipIf(!url)('next actions added for a deal (PostgreSQL)', () => {
   let leadOwner: Caller;
   let dealOwner: Caller;
   let viewer: Caller;
+  let outsider: Caller;
 
   async function createOrganization(name: string) {
     const [org] = await pg
@@ -184,6 +190,7 @@ describe.skipIf(!url)('next actions added for a deal (PostgreSQL)', () => {
     leadOwner = callerFor(leadOwnerUser);
     dealOwner = callerFor(dealOwnerUser);
     viewer = callerFor(viewerUser);
+    outsider = callerFor(outsiderUser);
   });
 
   afterAll(async () => {
@@ -371,5 +378,244 @@ describe.skipIf(!url)('next actions added for a deal (PostgreSQL)', () => {
         .map((row) => row.userId);
     expect(recipientOf(toDealOwner.id)).toEqual([ids.dealOwner]);
     expect(recipientOf(toLeadOwner.id)).toEqual([ids.leadOwner]);
+  });
+
+  describe('when the member they are given to is removed (#968)', () => {
+    /** The due notices after a removal run on a day of their own: 08:00 JST on 2033-09-15 */
+    const REMOVAL_RUN_AT = new Date('2033-09-14T23:00:00Z');
+    const REMOVAL_DUE_TOMORROW = '2033-09-16';
+
+    const membershipIdOf = async (organizationId: string, userId: string) =>
+      (
+        await pg
+          .select({ id: organizationMembers.id })
+          .from(organizationMembers)
+          .where(
+            and(
+              eq(organizationMembers.organizationId, organizationId),
+              eq(organizationMembers.userId, userId)
+            )
+          )
+      )[0].id;
+
+    /** The audit rows of the tasks a removal gave back, among the given ones */
+    const releaseAuditsOf = async (taskIds: string[]) =>
+      (
+        await pg
+          .select()
+          .from(auditLogs)
+          .where(
+            and(
+              eq(auditLogs.resource, 'lead_task'),
+              eq(auditLogs.action, 'update'),
+              inArray(auditLogs.resourceId, taskIds)
+            )
+          )
+      ).filter((row) => row.metadata?.via === 'member_removed');
+
+    const noticeRecipientsOf = async (taskId: string) =>
+      (
+        await pg
+          .select({ userId: notifications.userId, data: notifications.data })
+          .from(notifications)
+          .where(
+            and(
+              inArray(notifications.organizationId, [orgA, orgB]),
+              eq(notifications.type, 'next_action_due')
+            )
+          )
+      )
+        .filter((row) => (row.data as { taskId: string }).taskId === taskId)
+        .map((row) => row.userId);
+
+    /** The result, or the error it ended with (so that it is no unhandled rejection meanwhile) */
+    const settled = <T>(promise: Promise<T>): Promise<T | Error> =>
+      promise.catch((error: unknown) => (error instanceof Error ? error : new Error(String(error))));
+
+    /**
+     * Until a session waits for a lock the given backend holds (or 3 seconds pass, when nothing
+     * waits): only waits on this test's own connection count, not those of other test files
+     */
+    async function untilBlockedBy(pid: number) {
+      for (let i = 0; i < 60; i++) {
+        const [row] = await pg.execute<{ waiting: number }>(
+          sql`select count(*)::int as waiting from pg_stat_activity where ${pid} = any(pg_blocking_pids(pid))`
+        );
+        if (row && row.waiting > 0) return;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+    }
+
+    const backendPid = async (tx: postgres.TransactionSql) => {
+      const [row] = await tx<{ pid: number }[]>`select pg_backend_pid() as pid`;
+      return row.pid;
+    };
+
+    it("gives back their open ones, to the lead's assignee's 今日 and due notices", async () => {
+      const leaving = await createUser('異動 一郎', [
+        { organizationId: orgA, role: 'member' },
+        { organizationId: orgB, role: 'member' },
+      ]);
+      const leadId = await createLead(orgA, ids.leadOwner);
+      const theirDeal = await createDeal(orgA, leadId, leaving.id);
+      const dueToday = await add(leadId, theirDeal);
+      const dueTomorrow = await add(leadId, theirDeal, REMOVAL_DUE_TOMORROW);
+      // A lead without an assignee: whoever added it gets it then
+      const leadWithoutAssignee = await createLead(orgA, null);
+      const ofLeadWithoutAssignee = await add(
+        leadWithoutAssignee,
+        await createDeal(orgA, leadWithoutAssignee, leaving.id)
+      );
+      const done = await add(leadId, theirDeal);
+      await rep.leadFollowUp.updateTask({ organizationId: orgA, id: done.id, done: true });
+      // Another member's, and the same user's in organization B
+      const anotherMembers = await add(leadId, await createDeal(orgA, leadId, ids.dealOwner));
+      const leadOfB = await createLead(orgB, ids.outsider);
+      const ofB = await outsider.leadFollowUp.createTask({
+        organizationId: orgB,
+        leadId: leadOfB,
+        title: '見積もりを送る',
+        dueOn: REMOVAL_DUE_TOMORROW,
+        dealId: await createDeal(orgB, leadOfB, leaving.id),
+      });
+      const givenBack = [dueToday.id, dueTomorrow.id, ofLeadWithoutAssignee.id];
+      for (const id of [...givenBack, done.id, ofB.id]) {
+        expect((await taskRow(id)).assigneeId).toBe(leaving.id);
+      }
+      const doneBefore = await taskRow(done.id);
+      expect(await mineOf(callerFor(leaving))).toEqual(
+        expect.arrayContaining([dueToday.id, ofLeadWithoutAssignee.id])
+      );
+
+      await rep.members.remove({
+        organizationId: orgA,
+        membershipId: await membershipIdOf(orgA, leaving.id),
+      });
+
+      for (const id of givenBack) {
+        expect((await taskRow(id)).assigneeId).toBeNull();
+      }
+      // The lead's assignee sees it under "mine", whoever added it when the lead has none
+      expect(await mineOf(leadOwner)).toContain(dueToday.id);
+      expect(await mineOf(rep)).toContain(ofLeadWithoutAssignee.id);
+      const list = await rep.leadFollowUp.tasks({ organizationId: orgA, leadId });
+      expect(list.items.find((item) => item.id === dueToday.id)?.assignee).toBeNull();
+      // A done one stays as it was recorded, and so do another member's and the user's in B
+      expect(await taskRow(done.id)).toEqual(doneBefore);
+      expect((await taskRow(anotherMembers.id)).assigneeId).toBe(ids.dealOwner);
+      expect((await taskRow(ofB.id)).assigneeId).toBe(leaving.id);
+
+      // An audit row for each task given back, by the member who removed them, at one time
+      const audits = await releaseAuditsOf([...givenBack, done.id, anotherMembers.id, ofB.id]);
+      expect(audits.map((row) => row.resourceId).sort()).toEqual([...givenBack].sort());
+      for (const row of audits) {
+        expect(row).toMatchObject({ organizationId: orgA, userId: ids.rep });
+        expect(row.changes).toEqual({
+          before: { assigneeId: leaving.id },
+          after: { assigneeId: null },
+        });
+        expect(row.metadata).toEqual({
+          leadId: row.resourceId === ofLeadWithoutAssignee.id ? leadWithoutAssignee : leadId,
+          via: 'member_removed',
+        });
+      }
+      expect(new Set(audits.map((row) => row.createdAt.getTime())).size).toBe(1);
+
+      // The one due tomorrow is noticed to the lead's assignee, and B's still to the user
+      await runDueTaskNotifications(pg, {
+        now: REMOVAL_RUN_AT,
+        deps: { sendEmail: vi.fn(), emailEnabled: () => false, appUrl: '' },
+      });
+      expect(await noticeRecipientsOf(dueTomorrow.id)).toEqual([ids.leadOwner]);
+      expect(await noticeRecipientsOf(ofB.id)).toEqual([leaving.id]);
+    });
+
+    it('gives back more of them than one statement of audit rows takes', async () => {
+      const leaving = await createUser('異動 二郎', [{ organizationId: orgA, role: 'member' }]);
+      // A lead of its own assignee, so that the others' "mine" is not filled with these
+      const successor = await createUser('後任 五郎', [{ organizationId: orgA, role: 'member' }]);
+      const leadId = await createLead(orgA, successor.id);
+      // Put in directly: more than the screens add to one lead
+      const tasks = await pg
+        .insert(leadTasks)
+        .values(
+          Array.from({ length: RELEASED_TASK_AUDIT_BATCH + 1 }, (_, index) => ({
+            organizationId: orgA,
+            leadId,
+            title: `見積もりを送る ${index + 1}`,
+            dueOn: jstDate(),
+            assigneeId: leaving.id,
+            createdBy: ids.rep,
+            updatedBy: ids.rep,
+          }))
+        )
+        .returning({ id: leadTasks.id });
+      const taskIds = tasks.map((task) => task.id);
+
+      await rep.members.remove({
+        organizationId: orgA,
+        membershipId: await membershipIdOf(orgA, leaving.id),
+      });
+
+      const stillGiven = await pg
+        .select({ id: leadTasks.id })
+        .from(leadTasks)
+        .where(and(inArray(leadTasks.id, taskIds), eq(leadTasks.assigneeId, leaving.id)));
+      expect(stillGiven).toHaveLength(0);
+      expect((await releaseAuditsOf(taskIds)).map((row) => row.resourceId).sort()).toEqual(
+        [...taskIds].sort()
+      );
+    });
+
+    it('gives back one added for their deal while they are being removed', async () => {
+      const leaving = await createUser('同時 三郎', [{ organizationId: orgA, role: 'member' }]);
+      const leadId = await createLead(orgA, ids.leadOwner);
+      const membershipId = await membershipIdOf(orgA, leaving.id);
+      const taskId = crypto.randomUUID();
+      const other = postgres(url as string, { max: 1 });
+      let removal: Promise<unknown> = Promise.resolve();
+      try {
+        await other.begin(async (tx) => {
+          // A next action being added for their deal holds their membership (dealOwnerAssignee)
+          await tx`select id from organization_members where id = ${membershipId} for key share`;
+          await tx`insert into lead_tasks (id, organization_id, lead_id, title, due_on, assignee_id, created_by, updated_by)
+            values (${taskId}, ${orgA}, ${leadId}, '見積もりを送る', ${jstDate()}, ${leaving.id}, ${ids.rep}, ${ids.rep})`;
+          removal = settled(rep.members.remove({ organizationId: orgA, membershipId }));
+          await untilBlockedBy(await backendPid(tx));
+        });
+      } finally {
+        await other.end();
+      }
+
+      expect(await removal).toMatchObject({ success: true });
+      expect((await taskRow(taskId)).assigneeId).toBeNull();
+      expect(await releaseAuditsOf([taskId])).toHaveLength(1);
+    });
+
+    it('gives no one a next action added for the deal of a member being removed', async () => {
+      const leaving = await createUser('同時 四郎', [{ organizationId: orgA, role: 'member' }]);
+      const leadId = await createLead(orgA, ids.leadOwner);
+      const dealId = await createDeal(orgA, leadId, leaving.id);
+      const other = postgres(url as string, { max: 1 });
+      let adding: Promise<Awaited<ReturnType<typeof add>> | Error> = Promise.resolve(
+        new Error('not added')
+      );
+      try {
+        await other.begin(async (tx) => {
+          // Their removal holds the membership until it is done
+          await tx`delete from organization_members where organization_id = ${orgA} and user_id = ${leaving.id}`;
+          adding = settled(add(leadId, dealId));
+          await untilBlockedBy(await backendPid(tx));
+        });
+      } finally {
+        await other.end();
+      }
+
+      const task = await adding;
+      if (task instanceof Error) throw task;
+      expect(task).toMatchObject({ assigneeId: null, assignee: null });
+      expect((await taskRow(task.id)).assigneeId).toBeNull();
+      expect(await mineOf(leadOwner)).toContain(task.id);
+    });
   });
 });
