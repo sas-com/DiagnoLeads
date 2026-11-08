@@ -1,5 +1,5 @@
 import QRCode from 'qrcode';
-import { QR_ENTRY_PATH } from './types';
+import { DEFAULT_QR_CAMPAIGN_MEDIUM, QR_ENTRY_PATH } from './types';
 
 export interface QRCodeOptions {
   size?: 'small' | 'medium' | 'large' | 'xlarge';
@@ -77,7 +77,7 @@ export function buildTrackingUrl(
 
   const {
     utmSource = 'qrcode',
-    utmMedium = 'offline',
+    utmMedium = DEFAULT_QR_CAMPAIGN_MEDIUM,
     utmCampaign,
     utmContent,
     customParams = {},
