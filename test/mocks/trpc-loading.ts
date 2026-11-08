@@ -7,8 +7,10 @@
  *     const { loadingTrpc } = await import('@/test/mocks/trpc-loading');
  *     return { trpc: loadingTrpc({ 'leadHearings.listByLead': { items: [], canEdit: true } }) };
  *   });
- * Each procedure returns the same result object on every render, and useUtils() the same
- * helpers, like the real client (docs/TESTING.md, #636).
+ * Like the real client, data, refetch, mutate, mutateAsync and the useUtils() helpers keep their
+ * references across renders (docs/TESTING.md, #636). Unlike it, each procedure also returns the
+ * same result object on every render (the real hooks build a new one per render), so an effect
+ * that depends on the whole result object is not re-run here.
  */
 import { vi } from 'vitest';
 

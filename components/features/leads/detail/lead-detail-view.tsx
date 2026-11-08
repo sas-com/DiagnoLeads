@@ -394,7 +394,6 @@ function LeadDetailContent({
             <LeadOverviewCards
               organizationId={organizationId}
               lead={lead}
-              reachedPhases={reachedPhases}
               onShowAnswers={showAnswers}
             />
             <LeadFieldsCard

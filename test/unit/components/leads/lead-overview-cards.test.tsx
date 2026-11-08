@@ -1,11 +1,11 @@
 /**
  * The cards of the lead page's overview tab (#473). Real cards over a tRPC client where every
  * query is still loading, so a card added to the list needs no change here; only the relative
- * order and the conditions of the existing cards are fixed. Each card's content has its own tests.
+ * order of the cards that show a heading while loading, and the conditions, are fixed. Each
+ * card's content has its own tests.
  */
 import { LeadOverviewCards } from '@/components/features/leads/detail/lead-overview-cards';
 import type { Lead } from '@/lib/db/schema';
-import { DEAL_PHASES } from '@/lib/features/leads/types';
 import messages from '@/locales/ja/common.json';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -20,12 +20,9 @@ const { ORG_ID, HEARING_ID } = vi.hoisted(() => ({
 const LEAD_ID = '22222222-2222-4222-8222-222222222222';
 const SUBMISSION_ID = '44444444-4444-4444-8444-444444444444';
 
-// The page renders inside the organization provider; cards may read it or the lead access
+// The page renders inside the organization provider, which a card may read with useOrganization()
 vi.mock('@/hooks/use-organization', () => ({
   useOrganization: () => ({ organizationId: ORG_ID, isLoading: false }),
-}));
-vi.mock('@/hooks/use-leads', () => ({
-  useLeadAccess: () => ({ canCreate: true, canEdit: true, canDelete: true, canReadComments: true }),
 }));
 vi.mock('@/lib/trpc/client', async () => {
   const { loadingTrpc } = await import('@/test/mocks/trpc-loading');
@@ -83,7 +80,6 @@ const renderCards = (lead: Lead = makeLead(), onShowAnswers = vi.fn()) =>
       <LeadOverviewCards
         organizationId={ORG_ID}
         lead={lead}
-        reachedPhases={DEAL_PHASES.filter((phase) => lead.dealPhaseReachedAt?.[phase])}
         onShowAnswers={onShowAnswers}
       />
     </NextIntlClientProvider>
@@ -94,7 +90,7 @@ const isBefore = (first: Element, second: Element) =>
   Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING);
 
 describe('LeadOverviewCards', () => {
-  it('keeps the deals, the next actions and the reviews ahead of the hearing summary, the handoff and the diagnosis', () => {
+  it('keeps the cards in the order of the page', () => {
     renderCards(
       makeLead({
         agencyName: 'Agency A',
@@ -105,14 +101,21 @@ describe('LeadOverviewCards', () => {
         },
       })
     );
+    // Every card with a heading while loading; the customer search, the agency handover and the
+    // document requests show nothing until their data comes, so their places are not fixed here
     const order = [
+      heading('初回商談の希望日時'),
       heading('商談'),
+      heading('事前調査カード'),
+      heading('切り返しカード'),
+      heading('動くべき時期'),
       heading('次の行動・持ち帰り事項'),
       heading('アポの条件の確認'),
       heading('案件の振り返り'),
       screen.getByRole('region', { name: '商談のまとめ' }),
       heading('引き継ぎ書'),
       screen.getByTestId('lead-diagnosis-card'),
+      heading('次に聞くこと'),
     ];
     for (let index = 1; index < order.length; index += 1) {
       expect(isBefore(order[index - 1], order[index])).toBe(true);

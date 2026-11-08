@@ -16,15 +16,13 @@ import { LeadProspectCard } from '@/components/features/prospects/lead-prospect-
 import type { Lead } from '@/lib/db/schema';
 import { isDeliveryPhase } from '@/lib/features/delivery-reviews/report';
 import { handedOffOn } from '@/lib/features/lead-handoff/handoff';
-import type { DealPhase } from '@/lib/features/leads/types';
+import { DEAL_PHASES } from '@/lib/features/leads/types';
 import { LeadDiagnosisCard } from './lead-diagnosis-card';
 import { LeadHearingOverview } from './lead-hearing-overview';
 
 interface LeadOverviewCardsProps {
   organizationId: string;
   lead: Lead;
-  /** Deal phases the lead has reached, in pipeline order */
-  reachedPhases: DealPhase[];
   /** Opens the diagnosis tab at one submission's answers */
   onShowAnswers: (submissionId: string) => void;
 }
@@ -32,14 +30,11 @@ interface LeadOverviewCardsProps {
 /**
  * The cards of the lead page's overview tab, above the pipeline fields and the recent activity
  * (#473). A new card is one import and one line here; the page test mocks this list once and
- * lead-overview-cards.test.tsx fixes only the relative order and the conditions.
+ * lead-overview-cards.test.tsx fixes only the relative order of the cards that show a heading
+ * while loading, and the conditions.
  */
-export function LeadOverviewCards({
-  organizationId,
-  lead,
-  reachedPhases,
-  onShowAnswers,
-}: LeadOverviewCardsProps) {
+export function LeadOverviewCards({ organizationId, lead, onShowAnswers }: LeadOverviewCardsProps) {
+  const reachedPhases = DEAL_PHASES.filter((phase) => lead.dealPhaseReachedAt?.[phase]);
   const handoffOn = handedOffOn(lead.dealPhaseReachedAt);
   return (
     <>
