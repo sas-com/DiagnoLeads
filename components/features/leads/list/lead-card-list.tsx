@@ -19,6 +19,8 @@ export interface LeadCardListProps {
   onLost?: (lead: LeadListRow) => void;
   hasFilters?: boolean;
   onClearFilters?: () => void;
+  /** What an empty filtered page says instead of the generic text (LeadListEmpty) */
+  noMatchesTitle?: string;
   /** The list request failed: the empty state says so, with a retry (#431) */
   loadFailed?: boolean;
   onRetry?: () => void;
@@ -35,6 +37,7 @@ export function LeadCardList({
   onLost,
   hasFilters = false,
   onClearFilters,
+  noMatchesTitle,
   loadFailed = false,
   onRetry,
   onCreate,
@@ -47,6 +50,7 @@ export function LeadCardList({
         <LeadListEmpty
           hasFilters={hasFilters}
           onClearFilters={onClearFilters}
+          noMatchesTitle={noMatchesTitle}
           loadFailed={loadFailed}
           onRetry={onRetry}
           onCreate={onCreate}

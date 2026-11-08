@@ -1,5 +1,5 @@
 /**
- * 商談の記録がないリード (#854) on a real PostgreSQL: the count of the list page's cards
+ * 商談が未作成のリード (#854) on a real PostgreSQL: the count of the list page's cards
  * (leads.statusCounts' missingDeal) and the list filter missingDeal (and the export with it) find
  * the same leads: no deal at all, and 商談中 or 成約, or 新規 with a deal phase. 失注 and
  * ナーチャリング are left out, and so is a lead with any deal of its organization. Never another
@@ -23,10 +23,10 @@ vi.mock('@/lib/db/rls', () => ({ setCurrentUser: vi.fn().mockResolvedValue(undef
 
 const url = process.env.TEST_DATABASE_URL;
 
-/** The leads of organization A that have no deal record while in a deal by hand */
+/** The leads of organization A in a deal by hand that have no deal */
 const MISSING = ['negotiating', 'won', 'new-phase', 'new-won-phase', 'other-org-deal'];
 
-describe.skipIf(!url)('leads in a deal without a deal record (PostgreSQL)', () => {
+describe.skipIf(!url)('leads missing a deal (PostgreSQL)', () => {
   const client = url ? postgres(url, { max: 2 }) : null;
   // biome-ignore lint/style/noNonNullAssertion: guarded by skipIf
   const pg = (client ? drizzle(client, { schema }) : null)!;
@@ -132,7 +132,7 @@ describe.skipIf(!url)('leads in a deal without a deal record (PostgreSQL)', () =
     await insertDeal(orgA, withWonDeal.id, 'won');
     const withLostDeal = await insertLead(orgA, 'lost-deal', { status: 'new', dealPhase: 'proposal' });
     await insertDeal(orgA, withLostDeal.id, 'lost');
-    // A deal row of another organization is not this lead's deal record: counted
+    // A deal row of another organization is not this lead's deal: counted
     const otherOrgDeal = await insertLead(orgA, 'other-org-deal', { status: 'negotiating' });
     await insertDeal(orgB, otherOrgDeal.id, 'qualification');
 

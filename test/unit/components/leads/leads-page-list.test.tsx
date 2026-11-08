@@ -327,32 +327,88 @@ describe('LeadsPage list (server-driven)', () => {
     expect(screen.queryByText('61')).not.toBeInTheDocument();
   });
 
-  it('links the leads in a deal without a deal record to the filtered list (#854)', async () => {
-    server.missingDeal = 4;
-    const { unmount } = renderPage();
-    await table();
-    const link = screen.getByRole('link', { name: /商談の記録がないリード 4件/ });
-    expect(link).toHaveAttribute('href', '/ja/leads?nodeal=1');
-    unmount();
+  describe('leads missing a deal (#854)', () => {
+    const m = messages.leads.missingDeal;
+    const notice = /^商談が未作成のリード 4件/;
 
-    // Withheld from those who may not read deals
-    server.missingDeal = null;
-    renderPage();
-    await table();
-    expect(screen.queryByRole('link', { name: /商談の記録がないリード/ })).not.toBeInTheDocument();
-  });
+    it('links the count under the cards to the filtered list', async () => {
+      server.missingDeal = 4;
+      const { unmount } = renderPage();
+      await table();
+      expect(screen.getByRole('link', { name: notice })).toHaveAttribute(
+        'href',
+        '/ja/leads?nodeal=1'
+      );
+      unmount();
 
-  it('filters the list by it from the URL, with a chip that removes it (#854)', async () => {
-    const user = userEvent.setup();
-    renderPage('nodeal=1');
-    await table();
-    expect(lastInput()).toMatchObject({ missingDeal: true, offset: 0 });
-    const chips = within(screen.getByRole('group', { name: t.chips.label }));
-    await user.click(
-      chips.getByRole('button', { name: `条件「${t.chips.missingDeal}」を外す` })
-    );
-    await waitFor(() => expect(lastInput()?.missingDeal).toBeUndefined());
-    expect(nav.get()).toBe('');
+      // Withheld from those who may not read deals
+      server.missingDeal = null;
+      renderPage();
+      await table();
+      expect(screen.queryByText(/商談が未作成のリード/)).not.toBeInTheDocument();
+    });
+
+    it('filters the list from the URL, keeps the notice as text and has a chip that removes it', async () => {
+      const user = userEvent.setup();
+      server.missingDeal = 4;
+      renderPage('nodeal=1');
+      await table();
+      expect(lastInput()).toMatchObject({ missingDeal: true, offset: 0 });
+      // The list shows these leads already: the notice explains it, without the link
+      expect(screen.queryByRole('link', { name: notice })).not.toBeInTheDocument();
+      expect(screen.getByText('商談が未作成のリード 4件')).toBeInTheDocument();
+      expect(screen.queryByText(m.action)).not.toBeInTheDocument();
+
+      const chips = within(screen.getByRole('group', { name: t.chips.label }));
+      await user.click(chips.getByRole('button', { name: `条件「${t.missingDeal}」を外す` }));
+      await waitFor(() => expect(lastInput()?.missingDeal).toBeUndefined());
+      expect(nav.get()).toBe('');
+      expect(screen.getByRole('link', { name: notice })).toBeInTheDocument();
+    });
+
+    it('takes the filter off with a word why for those who may not read deals', async () => {
+      server.missingDeal = null;
+      renderPage('nodeal=1&status=won');
+      await waitFor(() => expect(nav.get()).toBe('status=won'));
+      // Replaced, so the back button does not return to the condition and take it off again
+      expect(nav.replace).toHaveBeenCalledWith('/ja/leads?status=won', { scroll: false });
+      expect(nav.push).not.toHaveBeenCalled();
+      expect(lastInput()).not.toHaveProperty('missingDeal');
+      expect(exporter.toast.info).toHaveBeenCalledWith(m.forbidden, {
+        id: 'missing-deal-forbidden',
+      });
+    });
+
+    it('keeps the filter while the count is loading', async () => {
+      server.missingDeal = undefined;
+      renderPage('nodeal=1');
+      await table();
+      expect(lastInput()).toMatchObject({ missingDeal: true });
+      expect(nav.get()).toBe('nodeal=1');
+      expect(exporter.toast.info).not.toHaveBeenCalled();
+    });
+
+    it('says none are left once they are all fixed, with a way to clear the filter', async () => {
+      const user = userEvent.setup();
+      server.items = [];
+      server.total = 0;
+      server.missingDeal = 0;
+      renderPage('nodeal=1');
+      expect(await screen.findByText(m.none)).toBeInTheDocument();
+      expect(screen.queryByText(t.noMatchesDescription)).not.toBeInTheDocument();
+      const cell = screen.getByText(m.none).closest('td') as HTMLElement;
+      await user.click(within(cell).getByRole('button', { name: t.chips.clearAll }));
+      expect(nav.get()).toBe('');
+    });
+
+    it('says nothing matches as usual when another filter is on too', async () => {
+      server.items = [];
+      server.total = 0;
+      server.missingDeal = 0;
+      renderPage('nodeal=1&status=won');
+      expect(await screen.findByText(t.noMatches)).toBeInTheDocument();
+      expect(screen.queryByText(m.none)).not.toBeInTheDocument();
+    });
   });
 
   it('shows the source translated', async () => {

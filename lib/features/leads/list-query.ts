@@ -67,7 +67,7 @@ export interface LeadListFilters {
   dealRating?: DealRating[];
   /** MQL level of the diagnosis, any of them (#447); left out when none is chosen */
   mqlLevel?: MqlLevelFilter[];
-  /** In a deal without a deal record (#854); left out when not filtered */
+  /** Missing a deal (#854); left out when not filtered */
   missingDeal?: true;
   /** Name, email or company */
   search?: string;
@@ -199,7 +199,7 @@ export const leadListUrlSchema = z.object({
   [LEAD_LIST_PARAMS.actTiming]: z.enum(ACT_TIMING_FILTERS).optional().catch(undefined),
   [LEAD_LIST_PARAMS.dealRating]: csvOf(DEAL_RATINGS),
   [LEAD_LIST_PARAMS.mqlLevel]: csvOf(MQL_LEVEL_FILTERS),
-  // Only '1' filters (#854): there is no "leads with a deal record" filter
+  // Only '1' filters (#854): there is no filter for the leads that have a deal
   [LEAD_LIST_PARAMS.missingDeal]: z
     .literal('1')
     .optional()

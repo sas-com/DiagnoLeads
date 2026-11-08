@@ -1,5 +1,5 @@
 /**
- * The list filter 商談の記録がないリード (#854) in the URL, the chips, the API input and the
+ * The list filter 商談が未作成のリード (#854) in the URL, the chips, the API input and the
  * export's audit row. The rows it finds are checked on a real database in
  * test/unit/integration/leads-missing-deal.db.test.ts.
  */
@@ -48,7 +48,7 @@ describe('missing deal in the lead list query', () => {
   });
 
   it.each(['nodeal=0', 'nodeal=true', 'nodeal=', 'nodeal=11'])(
-    'drops any other value (%s): there is no filter for leads with a deal record',
+    'drops any other value (%s): there is no filter for the leads that have a deal',
     (search) => {
       expect(parse(search)).toEqual(DEFAULT_LEAD_LIST_QUERY);
     }

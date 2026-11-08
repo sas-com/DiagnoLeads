@@ -1275,8 +1275,11 @@
     "activeLeads": "Active Leads",
     "conversionRate": "Conversion Rate",
     "missingDeal": {
-      "title": "Leads without a deal record: {count, number}",
-      "description": "Their status is Negotiating or Won, or New with a deal phase, but they have no deal. Create the deal, or correct the status."
+      "title": "Leads missing a deal: {count, number}",
+      "description": "They are Negotiating or Won (or New with a deal phase) but have no deal, so Deals and the sales forecast leave them out. Add one with New deal on the lead's page, or correct the status or deal phase. For a won lead, use the stage Won.",
+      "action": "Show these leads",
+      "none": "No leads are missing a deal",
+      "forbidden": "Only members who can see deals can use this filter"
     },
     "createLead": "Add New Lead",
     "createLeadTitle": "Create New Lead",
@@ -4861,6 +4864,7 @@
     "consultation": "Consultation requested",
     "mql": "MQL",
     "sqlQualified": "SQL (qualified)",
+    "missingDeal": "Missing a deal",
     "selectedCount": "{count} selected",
     "apply": "Apply",
     "clear": "Clear",
@@ -4899,7 +4903,6 @@
       "notMql": "Not MQL",
       "sqlNotQualified": "Not SQL",
       "sqlUndecided": "SQL undecided",
-      "missingDeal": "No deal record",
       "remove": "Remove the filter \"{label}\"",
       "clearAll": "Clear all"
     },

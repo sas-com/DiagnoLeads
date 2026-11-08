@@ -18,7 +18,12 @@ import {
   useListLeads,
 } from '@/hooks/use-leads';
 import { useOrganization } from '@/hooks/use-organization';
-import { leadListHref, toLeadFilterInput } from '@/lib/features/leads/list-query';
+import {
+  EMPTY_LEAD_FILTERS,
+  leadListHref,
+  sameFilters,
+  toLeadFilterInput,
+} from '@/lib/features/leads/list-query';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
@@ -220,6 +225,19 @@ function LeadsPageContent() {
   const wonLeads = counts?.byStatus.won ?? 0;
   const conversionRate = totalLeads > 0 ? (wonLeads / totalLeads) * 100 : 0;
 
+  // 商談が未作成のリード (#854). The count is null for those who may not read deals, and the server
+  // refuses them the filter: a shared link that carries it would fail on every retry, so it is
+  // taken off with a word why. Replaced, not pushed: back must not return to it (and take it off
+  // again, over and over)
+  const missingDealFiltered = listQuery.filters.missingDeal === true;
+  const missingDealWithheld = counts?.missingDeal === null && missingDealFiltered;
+  const { removeChip } = listQuery;
+  useEffect(() => {
+    if (!missingDealWithheld) return;
+    removeChip({ kind: 'missingDeal', value: true }, 'replace');
+    toast.info(t('missingDeal.forbidden'), { id: 'missing-deal-forbidden' });
+  }, [missingDealWithheld, removeChip, t]);
+
   const handleCreateLead = async (data: Omit<CreateLeadInput, 'organizationId'>) => {
     await createLead.mutateAsync({ ...data, organizationId });
     setCreateDialogOpen(false);
@@ -379,11 +397,12 @@ function LeadsPageContent() {
           </Card>
         </StatCardLink>
 
-        {/* Leads in a deal without a deal record (#854), under the cards: none when there are
-            none, or for those who may not read deals (null) */}
+        {/* Leads missing a deal (#854), under the cards: none when there are none or for those
+            who may not read deals (null); text without the link while the list shows them */}
         <MissingDealNotice
           count={counts?.missingDeal}
           href={listHref({ missingDeal: true })}
+          active={missingDealFiltered}
           className="md:col-span-3"
         />
       </div>
@@ -416,13 +435,25 @@ function LeadsPageContent() {
         }
         hasFilters={listQuery.hasFilters}
         onClearFilters={listQuery.clearFilters}
+        // Filtered to the leads missing a deal only: say none are left once they are fixed (#854)
+        noMatchesTitle={
+          sameFilters(listQuery.filters, { ...EMPTY_LEAD_FILTERS, missingDeal: true })
+            ? t('missingDeal.none')
+            : undefined
+        }
         // A failed request is not "no leads yet" (#431)
         loadFailed={listFailed}
         onCreate={access.canCreate ? () => setCreateDialogOpen(true) : undefined}
         onExport={organizationId ? leadExport.exportLeads : undefined}
         exporting={leadExport.isExporting}
         toolbar={(actions) => (
-          <LeadFilterToolbar controller={listQuery} total={leadsData?.total} actions={actions} />
+          <LeadFilterToolbar
+            controller={listQuery}
+            total={leadsData?.total}
+            actions={actions}
+            // Those who may read deals get a number, the others null (#854)
+            canFilterMissingDeal={typeof counts?.missingDeal === 'number'}
+          />
         )}
       />
 

@@ -204,7 +204,7 @@ describe('leads.list (sorting and filtering)', () => {
       ['SQL', { sqlDecision: 'qualified' }, '"leads"."sql_decision" = $2', ['qualified']],
       ['SQL undecided', { sqlDecision: 'undecided' }, '"leads"."sql_decision" is null', []],
       [
-        'in a deal without a deal record (#854)',
+        'missing a deal (#854)',
         { missingDeal: true },
         '(not exists (select 1 from deals d where d.lead_id = "leads"."id" and d.organization_id = "leads"."organization_id") and ("leads"."status" in ($2, $3) or ("leads"."status" = $4 and "leads"."deal_phase" is not null)))',
         ['negotiating', 'won', 'new'],
