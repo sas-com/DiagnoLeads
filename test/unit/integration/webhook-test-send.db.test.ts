@@ -108,7 +108,7 @@ describe.skipIf(!url)('webhook test sends (PostgreSQL)', () => {
               event: 'diagnostic.submitted',
               data: { test: true, message: WEBHOOK_TEST_MESSAGE },
             }
-          : { id: unique(), event: 'diagnostic.submitted', data: { leadId: 'made-up' } };
+          : { id: unique(), event: 'diagnostic.submitted', data: { submissionId: 'made-up' } };
     const [row] = await pg
       .insert(webhookDeliveries)
       .values({
@@ -454,7 +454,7 @@ describe.skipIf(!url)('webhook test sends (PostgreSQL)', () => {
         .values({
           webhookId: internal,
           eventType: 'diagnostic.submitted',
-          payload: { id: unique(), event: 'diagnostic.submitted', data: { leadId: 'made-up' } },
+          payload: { id: unique(), event: 'diagnostic.submitted', data: { submissionId: 'made-up' } },
           status: 'pending',
           attempts: 1,
           nextRetryAt: new Date(Date.now() - 1000),

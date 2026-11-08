@@ -575,19 +575,26 @@ describe('processWebhookRetries', () => {
       exhausted: 3,
       expired: 2,
       testsFailed: 1,
+      orphaned: 0,
     });
 
     const cleanups = calls('update', 'webhook_deliveries');
-    expect(cleanups).toHaveLength(3);
-    for (const cleanup of cleanups) {
-      // The payload is redacted as the delivery finishes (#918)
+    expect(cleanups).toHaveLength(4);
+    for (const cleanup of cleanups.slice(0, 3)) {
+      // The payload (#918) and the receiver's answer (#936) are redacted as the delivery finishes
       expect(cleanup.set).toEqual({
         status: 'failed',
         nextRetryAt: null,
         completedAt: NOW,
         payload: expect.anything(),
+        response: expect.anything(),
       });
     }
+    // Then those of a deleted lead (#936)
+    expect(cleanups[3].set).toMatchObject({
+      status: 'failed',
+      error: expect.stringMatching(/^lead_deleted:/),
+    });
     // Only pending deliveries created before the cut-off age out
     expect(render(cleanups[0].where).params).toEqual([
       'pending',
@@ -613,6 +620,7 @@ describe('processWebhookRetries', () => {
       exhausted: 0,
       expired: 0,
       testsFailed: 0,
+      orphaned: 0,
     });
 
     const [candidates] = calls('select', 'webhook_deliveries').filter((c) => c.lock);
