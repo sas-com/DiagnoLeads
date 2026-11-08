@@ -760,6 +760,12 @@ html:has(.dl-admin) {
 html.dark:has(.dl-admin) {
   --app-foreground: var(--color-neutral-solid-gray-50);
   --app-muted-foreground: var(--color-neutral-solid-gray-300);
+  /*
+   * Dark text set in gray-400 (Solid Gray 420) is 4.17:1 on gray-800 cards, under DADS's 4.5:1.
+   * Solid Gray 300 gives 6.03 there and 8.30 on gray-900; borders and icons in gray-400 get a
+   * little lighter and keep 3:1 (#932, owner's choice 2026-11-08 over editing ~100 classes).
+   */
+  --color-gray-400: var(--color-neutral-solid-gray-300);
 }
 
 /*
