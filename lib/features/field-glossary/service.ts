@@ -165,12 +165,23 @@ export async function deleteFieldGlossaryEntry(executor: Database, id: string): 
   return deleted.length > 0;
 }
 
-/** A PostgreSQL unique-violation (SQLSTATE 23505), e.g. a duplicate (field_key, value) */
+/**
+ * A PostgreSQL unique-violation (SQLSTATE 23505), e.g. a duplicate (field_key, value). drizzle
+ * wraps the driver error in a DrizzleQueryError ("Failed query: …") whose `.cause` is the
+ * postgres-js error that actually carries the SQLSTATE, so walk the cause chain instead of only
+ * reading the top-level error (the depth cap guards against a cyclic chain).
+ */
 export function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as { code?: unknown }).code === '23505'
-  );
+  let current: unknown = error;
+  for (let depth = 0; current != null && depth < 10; depth++) {
+    if (
+      typeof current === 'object' &&
+      'code' in current &&
+      (current as { code?: unknown }).code === '23505'
+    ) {
+      return true;
+    }
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
 }
