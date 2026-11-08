@@ -27,7 +27,7 @@ import { filterAllowedRecipients } from '@/lib/email/allowed-recipients';
 import { renderEmail, sanitizeSubject } from '@/lib/email/templates/render';
 import { afterDealChanges, ensureQualificationDeal } from '@/lib/features/deals/service';
 import { isEmailConfigured, sendEmail } from '@/lib/features/email';
-import { listIntakeMembers } from '@/lib/features/leads/assignment';
+import { findAssignableMember, listIntakeMembers } from '@/lib/features/leads/assignment';
 import { notifyUsersInApp } from '@/lib/features/leads/assignment-notify';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { notifyOrganizationMembers } from '@/lib/features/notifications/notification-service';
@@ -221,8 +221,13 @@ export async function notifyPreferencesReceived(
       preferences: input.preferences,
     });
     const data = { leadId: input.leadId, meetingRequest: true };
-    const recipients = lead.assigneeId
-      ? [lead.assigneeId]
+    // The lead's assignee while they may still hold leads: one removed from the organization, or
+    // now read-only, is told nothing (#974), and the intake members are told instead
+    const assignee = lead.assigneeId
+      ? await findAssignableMember(db, input.organizationId, lead.assigneeId)
+      : null;
+    const recipients = assignee
+      ? [assignee.userId]
       : (await listIntakeMembers(db, input.organizationId)).map((member) => member.userId);
     if (recipients.length > 0) {
       await notifyUsersInApp(
