@@ -163,6 +163,7 @@ SQL は段ではなく、見極めの出口の判定（関門）。SQL判定が�
 | 集計 | 場所 | 数えている軸 |
 |---|---|---|
 | ダッシュボードのパイプライン（状態ごとの件数） | `lib/features/analytics/dashboard.ts` | `leads.status` |
+| リード一覧の「商談が未作成のリード」（#854） | `lib/features/leads/api/list-sql.ts`（`leadMissingDeal`） | 商談（`deals`）が1件もなく、`leads.status` が商談中・成約か、新規で `leads.deal_phase` が入ったリード。失注・ナーチャリングは数えない。一覧の絞り込み（`missingDeal`）と同じ条件で、商談を読める人だけに出す |
 | ダッシュボードの MQL | 同上 | MQL判定日が期間内のリード（関心ありでも判定日がなければ数えない。判定日を自動で入れるのは AX 診断の送信だけ）。適合は MQL に足さず、期間内の AX 診断の適合（判定日なし）を注記で出す |
 | 分析の上部の KPI・MQL段階の内訳 | `lib/features/analytics/api/router.ts`（`getOverview`） | 全期間。`leads.status`（成約率）、MQL段階と MQL判定日（`listMqlLevel`）。ダッシュボードの MQL（期間内の流れ）とは数が合わない |
 | 分析のファネル | 同上（`getConversionFunnel`） | ライフサイクルの段（#802）：リード → MQL（`listMqlLevel` が関心あり）→ 商談（`has_negotiated` か商談フェーズの日付。代行のファネルと同じ）→ SQL（`sql_decision` が適格。成約も含む）→ 受注（`leads.status` が成約）。後の段に進んだリードは前の段にも数える（MQL を経ずに商談に入ったリードも MQL に数える）。再育成（ナーチャリング中のリード）は段にせず、別の数として出す（画面・CSV・PDF）。MQL は商談以降のリードも含むので、上部の KPI の「関心あり」より多くなる |

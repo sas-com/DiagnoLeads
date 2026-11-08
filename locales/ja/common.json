@@ -1275,6 +1275,13 @@
     "totalLeads": "総リード数",
     "activeLeads": "アクティブリード",
     "conversionRate": "コンバージョン率",
+    "missingDeal": {
+      "title": "商談が未作成のリード {count, number}件",
+      "description": "状態が「商談中」「成約」（または商談フェーズの付いた「新規」）なのに商談がないため、商談の画面と売上予測に出ません。リードの詳細の「商談を作成」で作るか、状態か商談フェーズを直してください。成約のリードは、ステージ「受注」で作ります。",
+      "action": "対象のリードを表示",
+      "none": "商談が未作成のリードはありません",
+      "forbidden": "この条件は商談を見られる人だけが使えます"
+    },
     "createLead": "新規リード追加",
     "createLeadTitle": "新しいリードを作成",
     "createLeadDescription": "新しいリードの情報を入力してください。",
@@ -4894,6 +4901,7 @@
     "consultation": "相談申込あり",
     "mql": "MQL",
     "sqlQualified": "SQL（商談対象）",
+    "missingDeal": "商談が未作成",
     "selectedCount": "{count}件選択",
     "apply": "適用",
     "clear": "クリア",

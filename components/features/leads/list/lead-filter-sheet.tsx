@@ -30,6 +30,8 @@ export interface LeadFilterSheetProps {
   activeCount: number;
   /** Matching leads (undefined while loading) */
   total?: number;
+  /** The member may read deals: offer 商談が未作成 (#854) */
+  canFilterMissingDeal?: boolean;
   className?: string;
 }
 
@@ -39,6 +41,7 @@ export function LeadFilterSheet({
   onClearAll,
   activeCount,
   total,
+  canFilterMissingDeal = false,
   className,
 }: LeadFilterSheetProps) {
   const t = useTranslations('leadList');
@@ -65,6 +68,7 @@ export function LeadFilterSheet({
         <LeadFilterControls
           filters={filters}
           onChange={onChange}
+          canFilterMissingDeal={canFilterMissingDeal}
           layout="stacked"
           className="flex-1 py-4"
         />

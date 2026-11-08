@@ -19,7 +19,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
  * and the mobile Sheet (stacked, full width):
  * - status / deal phase / inflow source / target system: multi-select (DropdownMenu checkboxes)
  * - created date range: Popover with the shadcn Calendar in range mode (Japan days)
- * - more conditions: consultation requested, MQL, SQL (qualified)
+ * - more conditions: consultation requested, MQL, SQL (qualified), and missing a deal (#854) for
+ *   those who may read deals
  * - next meeting (single choice) and deal rating (multi-select) of the latest hearing (#137)
  */
 import { ACT_TIMING_FILTERS, type ActTimingFilter } from '@/lib/features/act-timing/types/schemas';
@@ -249,22 +250,28 @@ export function CreatedRangeFilter({
 // More conditions
 // ---------------------------------------------------------------------------
 
+type MoreConditions = Pick<LeadListFilters, 'consultation' | 'mql' | 'sql' | 'missingDeal'>;
+
 export interface MoreConditionsFilterProps {
-  filters: Pick<LeadListFilters, 'consultation' | 'mql' | 'sql'>;
-  onChange: (patch: Pick<LeadListFilters, 'consultation' | 'mql' | 'sql'>) => void;
+  filters: MoreConditions;
+  onChange: (patch: MoreConditions) => void;
+  /** Offer 商談が未作成 (#854): only to those who may read deals, as the server allows it */
+  canFilterMissingDeal?: boolean;
   layout?: FilterLayout;
 }
 
 export function MoreConditionsFilter({
   filters,
   onChange,
+  canFilterMissingDeal = false,
   layout = 'inline',
 }: MoreConditionsFilterProps) {
   const t = useTranslations('leadList');
   const count =
     (filters.consultation !== undefined ? 1 : 0) +
     (filters.mql !== undefined ? 1 : 0) +
-    (filters.sql !== undefined ? 1 : 0);
+    (filters.sql !== undefined ? 1 : 0) +
+    (filters.missingDeal ? 1 : 0);
 
   return (
     <DropdownMenu>
@@ -308,6 +315,17 @@ export function MoreConditionsFilter({
         >
           {t('sqlQualified')}
         </DropdownMenuCheckboxItem>
+        {canFilterMissingDeal && (
+          <DropdownMenuCheckboxItem
+            checked={filters.missingDeal === true}
+            onCheckedChange={(checked) =>
+              onChange({ missingDeal: checked === true ? true : undefined })
+            }
+            onSelect={(event) => event.preventDefault()}
+          >
+            {t('missingDeal')}
+          </DropdownMenuCheckboxItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -454,6 +472,8 @@ export function ActTimingFilterControl({
 export interface LeadFilterControlsProps {
   filters: LeadListFilters;
   onChange: (patch: Partial<LeadListFilters>) => void;
+  /** The member may read deals: offer 商談が未作成 in the more conditions (#854) */
+  canFilterMissingDeal?: boolean;
   layout?: FilterLayout;
   className?: string;
 }
@@ -461,6 +481,7 @@ export interface LeadFilterControlsProps {
 export function LeadFilterControls({
   filters,
   onChange,
+  canFilterMissingDeal = false,
   layout = 'inline',
   className,
 }: LeadFilterControlsProps) {
@@ -546,7 +567,12 @@ export function LeadFilterControls({
         onChange={(dealRating) => onChange({ dealRating })}
         layout={layout}
       />
-      <MoreConditionsFilter filters={filters} onChange={onChange} layout={layout} />
+      <MoreConditionsFilter
+        filters={filters}
+        onChange={onChange}
+        canFilterMissingDeal={canFilterMissingDeal}
+        layout={layout}
+      />
     </div>
   );
 }
