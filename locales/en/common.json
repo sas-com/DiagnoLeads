@@ -213,6 +213,7 @@
     "qrCampaigns": "QR Campaigns",
     "axPlaybook": "Sales playbook (AX)",
     "agencyLinks": "Agency links",
+    "fieldGlossary": "Field glossary",
     "profile": "Profile",
     "logout": "Logout"
   },
@@ -367,6 +368,7 @@
       "close": "Close",
       "submit": "Answer and update the result",
       "done": "The result has been updated. Thank you.",
+      "dataHandling": "We also decide with you in the consultation how the personal or confidential data is handled.",
       "failed": "Could not send. Please try again later."
     },
     "result": {
@@ -2006,6 +2008,41 @@
       "testFailed": "The test webhook failed. Check the destination settings.",
       "testRateLimited": "Test send limit reached (up to {perWebhook} per webhook every 10 minutes, {perOrganization} per organization every hour and {perUser} per user every hour). Try again later."
     },
+    "fieldGlossary": {
+      "title": "Field glossary",
+      "description": "Manage the site-wide help text shown for admin input fields.",
+      "add": "Add",
+      "createTitle": "Add entry",
+      "createDescription": "Enter a field key and description. Leave the value blank for the field's own help.",
+      "editTitle": "Edit entry",
+      "editDescription": "Change the description or sort order.",
+      "create": "Create",
+      "save": "Save",
+      "cancel": "Cancel",
+      "edit": "Edit",
+      "delete": "Delete",
+      "fieldKey": "Field key",
+      "fieldKeyPlaceholder": "leads.status",
+      "fieldKeyInvalid": "The field key must look like \"leads.status\".",
+      "value": "Value",
+      "valueHint": "Set the value to describe one value of the field. Leave it blank for the field's own help.",
+      "fieldLevel": "Whole field",
+      "labelJa": "Label (Japanese)",
+      "labelEn": "Label (English)",
+      "descriptionJa": "Description (Japanese)",
+      "descriptionEn": "Description (English)",
+      "sortOrder": "Sort order",
+      "forbidden": "No permission",
+      "forbiddenDescription": "Only an owner or admin of the operator organization can edit the field glossary.",
+      "noEntries": "No entries yet",
+      "noEntriesDescription": "Add your first entry to describe an input field.",
+      "createFirst": "Add the first entry",
+      "created": "Added",
+      "updated": "Updated",
+      "deleted": "Deleted",
+      "confirmDelete": "Delete this entry?",
+      "conflict": "That field/value already exists"
+    },
     "embed": {
       "title": "Embed Widget Settings",
       "description": "Configure widgets to embed diagnostic forms on external websites",
@@ -2074,7 +2111,7 @@
       "createTitle": "Create QR Campaign",
       "createDescription": "Create a new QR code campaign for offline distribution",
       "testFirstTitle": "Try it with a campaign for checking",
-      "testFirst": "Check how it works with a campaign made for checking, and create the one you hand out after the check. The scans and answers of the check count for the campaign they use. The leads the check creates stay in the lead list.",
+      "testFirst": "Check how it works with a campaign made for checking, and create the one you hand out after the check. The scans and answers of the check count for the campaign they use. The leads the check creates stay in the lead list and count in their inflow source.",
       "name": "Campaign Name",
       "namePlaceholder": "e.g., 2026-11 Manufacturing DX Expo booth",
       "nameHint": "Create one campaign per event or handout. Scans and new leads are counted per campaign.",
@@ -2087,11 +2124,24 @@
       "utmMedium": "Medium",
       "utmCampaign": "Campaign",
       "utmContent": "Content",
+      "medium": {
+        "label": "Distribution channel (utm_medium)",
+        "inflow": "New leads from scans get the inflow source: {source}",
+        "inflowNote": {
+          "exhibition": "Exhibitions count under this inflow source. The scans and new leads of each campaign show the exhibitions alone."
+        },
+        "hint": "For flyers and brochures handed out at a seminar or an exhibition, choose that event. It cannot be changed after the campaign is created.",
+        "options": {
+          "seminar": "Seminar or webinar",
+          "exhibition": "Exhibition or trade show",
+          "direct_mail": "Direct mail (posted or handed out one by one)"
+        }
+      },
       "shortCode": "Short Code",
       "trackingUrl": "Tracking URL",
       "downloadQR": "Download QR Code",
       "copyUrl": "Copy URL",
-      "copyUrlHint": "Opening this URL counts as a scan too. To share it by email or on the web, create a separate campaign for each channel.",
+      "copyUrlHint": "Opening this URL counts as a scan too. New leads get the inflow source of the distribution channel chosen at creation. To share by email or on the web, use the diagnosis URL with that channel's UTM (such as utm_medium=email) instead of this URL.",
       "active": "Active",
       "inactive": "Inactive",
       "created": "QR campaign created",

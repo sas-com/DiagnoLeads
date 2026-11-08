@@ -10,6 +10,7 @@ import {
 import { DiagnosisRunnerProvider } from '@/components/features/diagnosis-runner/runner-context';
 import type { AxAccessPath } from '@/lib/features/diagnostics/ax-migration/access-path';
 import { answeredChallengesIn } from '@/lib/features/diagnostics/ax-migration/challenge-categories';
+import { holdsDataToDiscuss } from '@/lib/features/diagnostics/ax-migration/data-kinds';
 import { axMigrationDefinition } from '@/lib/features/diagnostics/ax-migration/definition';
 import type {
   AxMigrationPublicResult,
@@ -777,13 +778,21 @@ function FollowUpQuestions({ locale, answers, submissionId, onUpdated }: FollowU
       data-testid="ax-follow-up"
     >
       {state === 'done' ? (
-        <output
-          ref={doneRef}
-          tabIndex={-1}
-          className="flex items-center gap-2 text-sm font-bold text-ax-teal-dark outline-none"
-        >
-          <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
-          {t('done')}
+        <output ref={doneRef} tabIndex={-1} className="block space-y-2 outline-none">
+          <span className="flex items-center gap-2 text-sm font-bold text-ax-teal-dark">
+            <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+            {t('done')}
+          </span>
+          {/* Personal or confidential data in the tool: its handling is part of the
+              consultation, with no promise of how (#844) */}
+          {holdsDataToDiscuss(values) && (
+            <span
+              className="block text-sm leading-relaxed text-gray-700"
+              data-testid="ax-follow-up-data-handling"
+            >
+              {t('dataHandling')}
+            </span>
+          )}
         </output>
       ) : (
         <>

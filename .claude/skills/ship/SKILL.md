@@ -8,6 +8,7 @@ description: 変更を PR にしてマージできる状態まで持っていく
 ## 1. コミットの前
 
 1. 全体の検証：`bun run test:run && bun run typecheck && bun run lint && bun run arch:check`。全部通るまでコミットしない
+   - `typecheck` の成否は終了コードで見る（出力の `error TS` を数えない。`tsc` が OOM で落ちると0件に見えて誤って緑と判断する。`NODE_OPTIONS=--max-old-space-size=4096` で回避済み・#938）
 2. 差分を自分で読み直す（`git diff`）。次のものが紛れていないか確かめる
    - CI が落ちる原因
    - 範囲外の変更

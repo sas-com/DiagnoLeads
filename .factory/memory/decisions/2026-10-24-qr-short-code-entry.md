@@ -88,11 +88,22 @@ paths: ["app/q/**", "lib/features/distribution/short-code-entry.ts", "lib/featur
   - `servedCampaignDiagnoses` は `findPublicDiagnosis` の規則（`published`・同じ組織の現行の版・ほかに同じ slug を公開している診断がない）を distribution の中で書き写したもの（上の import の決まりのため）。食い違わないことは実 DB のテスト（`test/unit/integration/qr-campaign-destination.db.test.ts`）で確かめる。ほかの組織の診断は、slug がぶつかっているかだけを見る（`/d/<slug>` が誰にでも見せていること）
   - AX 診断の組織の比べ方は1つ（#698、2026-10-25）：`resolveDiagnosisOrganizationId()` の本体を基盤（`lib/multi-tenant/helpers/diagnosis-organization.ts`）に移し、id を小文字で返す。組織との比べ方は `isDiagnosisOrganization` だけ（入口・QR キャンペーンの画面・相談申込の営業への通知・代行会社リンクの画面）。機能は今までどおり `lib/features/diagnostics/organization.ts`（再 export）から読み、distribution は基盤から読む（ほかの機能を import しない決まりは変わらない）
   - 期限は画面から付ける・延ばす・消せる（#695、2026-10-25。作者の判断で、オーナー未確認。PR で確認する）：作成のフォームの欄と、キャンペーンごとの編集。編集は `updateCampaign` に `expiresAt` だけを送り（消すときは `null`）、権限は `updateCampaign` と同じ（設定を更新できる人。ほかの人には編集を出さない）。入力は日本時間の日で、その日の終わり（23:59:59.999 JST）を保存する（`lib/features/distribution/campaign-expiry.ts`）。今日（日本時間）より前の日は、作成と編集のどちらでも受け付けない（`expiryOfChosenDay`。日の欄の `min` も今日。保存した時点から閉じ、催しの最中に延ばすつもりで前の年などを選ぶと会場の QR が止まるため。止めるのはスイッチで行う。2026-10-25 の読み取り専用のレビューの nit）。画面の確かめはブラウザの時計で、API の検証（`z.string().datetime()`、送らなければ変えない #610）は変えていない（API からは過去の期限も付けられる）。日本時間の日はブラウザでも求めるので、`formatToParts` で年・月・日を取り出して組み立てる（`en-CA` の形に頼らない）
+  - キャンペーンの utm_medium は一覧から選ぶ（#788、2026-10-26 のオーナーの判断。#788 のコメント）。流入元（`INFLOW_SOURCES`）には足さず、今の値に寄せる。流入元の値・分析の画面・リードのフォーム・書き出しは変えない
+    - 一覧（`QR_CAMPAIGN_MEDIUMS`、`lib/features/distribution/types.ts`）と流入元：セミナー・勉強会・ウェビナー `seminar` → `seminar`、展示会 `exhibition` → `seminar`、DM（郵送・個別の配布物）`direct_mail` → `advertising`。文言は `settings.qrCampaigns.medium`（ja・en）。欄の名前は「配布する場・媒体（utm_medium）」、セミナーの選択肢には流入元の名前（勉強会・セミナー）の語を入れる（2026-10-26 の #808 の marketing・ui-ux のレビューの nit）
+    - 当てはめは `MEDIUM_TO_INFLOW`（`lib/features/diagnostics/tracking.ts`）。一覧の値が表に無いと型チェックが止める（一覧に足すときは、表と文言も足す）。作成のフォームは、選んだ値の流入元を一覧の下に出す（回答と同じ `inferInflowSource` で求める）
+    - 既定は `seminar`（作者の判断。一覧の最初で、展示会も同じ流入元）。フォームと API（`createQRCampaignSchema` の既定）の両方。`offline` は既定から外し、表にも足さない（何を配ったか分からないので、流入元は未設定のまま）
+    - API は一覧の外の値も受ける（50文字まで、#788 の前と同じ）。作成済みのキャンペーンの値（`offline`・手で打った値）は書き換えず、入口もそのまま渡す。本番の QR キャンペーンは0件（2026-10-26）。`qr_campaigns.utm_medium` の列の既定（`offline`）は残す（作成は必ず値を書くので使われない。変えるにはマイグレーションが要る）
+    - キャンペーンの medium を変える画面と API はない（更新は名前・説明・有効・期限だけ）。変えるときは作り直す
+    - 一覧の下の注記（2026-10-26 の #808 の marketing・ui-ux のレビューの should-fix）：選んだ値の流入元に続けて、展示会のときは「展示会はこの流入元に含めて数える。展示会だけの数はキャンペーンごとの読み取り回数と新規リードで見る」、どの値でも「セミナーや展示会の場で配るチラシ・パンフレットはその場を選ぶ。作成のあとは変えられない」と出し、どれも一覧の説明として読み上げる。DM の文言はオーナーの判断の表のまま（郵送・個別の配布物）
+    - URL をコピーの横の注記（#700 の注記）の2文目を変えた（同じレビューの should-fix）：一覧にメール・Web は無く、メールや Web 用にキャンペーンを作ると、そのリードにセミナーや広告の流入元が付くため。今は「新規リードには作成のときに選んだ配布する場・媒体の流入元が付く。メールや Web では、この URL ではなく、媒体の UTM（utm_medium=email など）を付けた診断の URL を使う」（email などは今までどおり表に無く、流入元は営業が設定する）。確認用のキャンペーンの注記にも、確認のリードが流入元の数に入ると足した。メール・Web 用の選択肢（流入元は未設定）を足すかは、オーナーが決める
+    - `MEDIUM_TO_INFLOW` は QR だけの表ではない。QR でない流入でも、診断の URL の utm_medium が `exhibition`・`direct_mail` なら `seminar`・`advertising` になる（例：展示会の主催者が事前登録者に送るメールの UTM）
 - **却下案**:
   - `/d/[slug]` で slug が見つからないときに短縮コードを探す（ぶつかりが残り、どちらを開くかが行の有無で変わる）
   - 保存済みの `tracking_url` を本番で書き換える（読み取りで作れば要らない。本番の書き込みに承認が要る）
   - `[locale]` の下のページで転送する（上の理由）
   - QR の URL から UTM を外す（今の画面と同じ見え方を残した。入口は URL の UTM を使わない）
+  - 展示会と DM の流入元を `INFLOW_SOURCES` に足す（#788。オーナーが今の値に寄せると決めた。足すとリード一覧・絞り込み・分析・書き出しの文言まで変わり、10/29 の公開の前に入れられない）
+  - DM の medium を `dm` にする（#788。作者の判断。`dm` はメールや SNS のメッセージの意味でもほかのキャンペーンが使い、今は流入元を決めない medium。広告に当てると、それらまで広告になる）
 - **既知の限界**:
   - #503 より前にダウンロードした QR の画像（`/d/<コード>`）は 404 のまま。画面から Download QR で作り直す。停止中・期限切れのコードを読んだ人への案内のページはない（本文は `Not Found`）
   - #120 で `diagnosis_id` を設定できるようになるまで、AX の組織以外のキャンペーンの QR はどれも 404 になる（2026-10-25 のオーナーの判断の1）。キャンペーンの画面には、#692 から「読み取っても開きません（診断を選んでいない）」と出る。AX の組織が設定されていないときも、画面は同じ理由を出す（設定の誤りは入口の `console.error` だけで知らせる）
