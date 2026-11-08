@@ -5118,14 +5118,17 @@
       "fromActTiming": "Contact again before \"when to act\" (created from the support end and retirement)",
       "assignee": "Assigned to {name}",
       "added": "Added \"{title}\"",
+      "adding": "Adding…",
+      "dueInvalid": "Enter the due date as year-month-day, e.g. 2026-11-15",
       "recipient": {
-        "dealOwner": "When it is due, it shows on the Today screen of {name}, the deal's owner, who is notified. If the lead's assignee is someone else, it is assigned to {name}.",
-        "leadAssignee": "When it is due, it shows on the Today screen of the lead's assignee (or of whoever adds it, if the lead has none), who is notified."
+        "dealOwner": "When it is due, {name} (the deal's owner) is notified and sees it on Today.",
+        "you": "When it is due, you are notified and see it on Today.",
+        "leadAssignee": "When it is due, the lead's assignee (or you, if it has none) is notified and sees it on Today."
       },
       "dialog": {
         "title": "Add a next action for \"{deal}\"",
-        "description": "It is added to the next actions and takeaways of the lead \"{lead}\". {recipient}",
-        "descriptionNoName": "It is added to the next actions and takeaways of this deal's lead. {recipient}"
+        "description": "It is added to the next actions and takeaways of the lead \"{lead}\".",
+        "descriptionNoName": "It is added to the next actions and takeaways of this deal's lead."
       }
     },
     "today": {

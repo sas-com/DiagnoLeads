@@ -27,9 +27,9 @@ import {
 } from '@/lib/features/lead-follow-up/types/schemas';
 import { trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
-import { ListTodo, Loader2, Plus, Trash2 } from 'lucide-react';
+import { ListTodo, Loader2, Plus, Trash2, UserRound } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { type FormEvent, useEffect, useId, useState } from 'react';
+import { type FormEvent, useEffect, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   CheckWithText,
@@ -88,7 +88,11 @@ export function LeadNextActionsCard({
         <div className="flex items-center gap-2">
           <ListTodo className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           <h2 className="text-sm font-semibold text-foreground">{t('cardTitle')}</h2>
-          {open.length > 0 && <Badge color="gray">{open.length}</Badge>}
+          {open.length > 0 && (
+            <Badge color="gray" className="text-sm">
+              {open.length}
+            </Badge>
+          )}
         </div>
         {description && <p className="text-sm text-muted-foreground">{description}</p>}
       </div>
@@ -121,7 +125,7 @@ export function LeadNextActionsCard({
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="h-auto px-0 text-xs text-muted-foreground"
+                className={cn('px-0 text-sm text-muted-foreground', TAP_TARGET)}
                 aria-expanded={showDone}
                 onClick={() => setShowDone((value) => !value)}
               >
@@ -160,7 +164,10 @@ export function LeadNextActionsCard({
   );
 }
 
-/** The form of a deal's page: added for the deal, saying who gets the due notices (#853) */
+/**
+ * The form of a deal's page: added for the deal, saying above its button who gets the due notices
+ * (#853)
+ */
 function DealAddTaskForm({
   deal,
   ...props
@@ -209,7 +216,7 @@ function TaskRow({
       />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-          <TaskKindBadge task={task} />
+          <TaskKindBadge task={task} className="text-sm" />
           <p
             className={cn(
               'min-w-0 break-words text-sm text-foreground',
@@ -219,23 +226,24 @@ function TaskRow({
             {title}
           </p>
         </div>
-        <CheckWithText task={task} />
-        {/* Given to a member (a deal's owner who is not the lead's assignee, #853): it stays
-            with them when the lead's assignee changes */}
+        <CheckWithText task={task} className="text-sm" />
+        {/* Given to a member (the owner of an open deal who is not the lead's assignee, #853):
+            it stays with them when the lead's or the deal's assignee changes */}
         {task.assignee && (
-          <p className="break-words text-sm text-muted-foreground">
+          <p className="flex items-center gap-1 break-words text-sm text-muted-foreground">
+            <UserRound className="h-4 w-4 shrink-0" aria-hidden="true" />
             {t('assignee', { name: task.assignee.name })}
           </p>
         )}
-        {task.note && <p className="break-words text-xs text-muted-foreground">{task.note}</p>}
+        {task.note && <p className="break-words text-sm text-muted-foreground">{task.note}</p>}
         {task.source === 'hearing' && (
-          <p className="text-xs text-muted-foreground">{t('fromHearing')}</p>
+          <p className="text-sm text-muted-foreground">{t('fromHearing')}</p>
         )}
         {task.source === 'meeting_request' && (
-          <p className="text-xs text-muted-foreground">{t('fromMeetingRequest')}</p>
+          <p className="text-sm text-muted-foreground">{t('fromMeetingRequest')}</p>
         )}
         {task.source === 'act_timing' && (
-          <p className="text-xs text-muted-foreground">{t('fromActTiming')}</p>
+          <p className="text-sm text-muted-foreground">{t('fromActTiming')}</p>
         )}
       </div>
       {canEdit && !task.done ? (
@@ -247,7 +255,7 @@ function TaskRow({
           onChange={(dueOn) => update.mutate({ organizationId, id: task.id, dueOn })}
         />
       ) : (
-        <DueLabel task={task} today={today} />
+        <DueLabel task={task} today={today} className="text-sm" />
       )}
       {canEdit && (
         <Button
@@ -273,12 +281,16 @@ export interface AddTaskFormProps {
   today: string;
   /** The deal it is added for (#853), which decides whom it goes to (createTask) */
   dealId?: string;
-  /** A line above the buttons, e.g. who gets the due notices of what is added for a deal */
+  /** A line above the add button, which describes it: who gets the due notices of what is added */
   hint?: string;
+  /** Puts the focus in "what to do" when it is shown (the dialog) */
+  autoFocusTitle?: boolean;
   /** Once it is added, with what was added (the dialog closes then) */
   onCreated?: (task: Pick<LeadTaskView, 'title'>) => void;
   /** Whether it is being saved (the dialog does not close meanwhile, so a failure is still told) */
   onPendingChange?: (pending: boolean) => void;
+  /** Whether anything was entered (a tap outside the dialog does not throw it away then) */
+  onDirtyChange?: (dirty: boolean) => void;
   /** A cancel button beside the add button (the dialog) */
   onCancel?: () => void;
   className?: string;
@@ -286,9 +298,11 @@ export interface AddTaskFormProps {
 
 /**
  * Adds a next action or takeaway to a lead, due today unless another day is chosen: the lead's
- * next actions card, and the dialog of the deals board and list (#853). What is wrong, and a save
- * that failed, is said in place (role="alert"), above the buttons; its text is 14px and its
- * fields and buttons 44px tall on phones (decision 2026-10-24-admin-dads).
+ * next actions card, and the dialog of the deals board and list (#853). What to do must be given,
+ * and a due date the box can read: each is said under its field, which takes the focus, and the
+ * save is held. A save that failed is said above the buttons (role="alert"), with what was
+ * entered kept. Its text is 14px or more and its fields and buttons 44px tall on phones
+ * (decision 2026-10-24-admin-dads).
  */
 export function AddTaskForm({
   organizationId,
@@ -296,8 +310,10 @@ export function AddTaskForm({
   today,
   dealId,
   hint,
+  autoFocusTitle = false,
   onCreated,
   onPendingChange,
+  onDirtyChange,
   onCancel,
   className,
 }: AddTaskFormProps) {
@@ -305,18 +321,26 @@ export function AddTaskForm({
   const tCommon = useTranslations('common');
   const utils = trpc.useUtils();
   const titleId = useId();
+  const titleErrorId = useId();
   const dueId = useId();
   const noteId = useId();
   const checkWithId = useId();
   const checkWithOtherId = useId();
+  const hintId = useId();
+  const titleRef = useRef<HTMLInputElement>(null);
   const [kind, setKind] = useState<TaskKind>('next_action');
   const [title, setTitle] = useState('');
   const [dueOn, setDueOn] = useState<string | undefined>(today);
+  // The due box holds text that is not a date (it says so under itself)
+  const [dueUnreadable, setDueUnreadable] = useState(false);
   const [note, setNote] = useState('');
   // A member's id, CHECK_WITH_NONE or CHECK_WITH_OTHER (then checkWithText is used)
   const [checkWithChoice, setCheckWithChoice] = useState(CHECK_WITH_NONE);
   const [checkWithText, setCheckWithText] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [titleMissing, setTitleMissing] = useState(false);
+  // No due date at all (the box keeps one, but a form never sends without it)
+  const [dueMissing, setDueMissing] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
   const isTakeaway = kind === 'takeaway';
   // Same query as the assignee controls (#135), fetched once a takeaway is being written
   const members = trpc.leads.assignees.useQuery(
@@ -337,17 +361,39 @@ export function AddTaskForm({
       onCreated?.(task);
     },
     // Said in place, where what was entered is kept for another try
-    onError: () => setError(t('saveError')),
+    onError: () => setSaveFailed(true),
   });
   const pending = create.isPending;
   useEffect(() => onPendingChange?.(pending), [pending, onPendingChange]);
+  const dirty =
+    kind !== 'next_action' ||
+    title !== '' ||
+    note !== '' ||
+    dueOn !== today ||
+    dueUnreadable ||
+    checkWithChoice !== CHECK_WITH_NONE ||
+    checkWithText !== '';
+  useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
+  // When it is shown: the dialog's first field to fill
+  useEffect(() => {
+    if (autoFocusTitle) titleRef.current?.focus();
+  }, [autoFocusTitle]);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (pending) return;
-    if (!title.trim()) return setError(t('titleRequired'));
-    if (!dueOn) return setError(t('dueRequired'));
-    setError(null);
+    if (!title.trim()) {
+      setTitleMissing(true);
+      titleRef.current?.focus();
+      return;
+    }
+    // Its words are under it; saved, it would keep the day it held before
+    if (dueUnreadable || !dueOn) {
+      setDueMissing(!dueOn);
+      document.getElementById(dueId)?.focus();
+      return;
+    }
+    setSaveFailed(false);
     const checkWith =
       !isTakeaway || checkWithChoice === CHECK_WITH_NONE
         ? {}
@@ -371,6 +417,7 @@ export function AddTaskForm({
       onSubmit={submit}
       className={cn('space-y-3 border-t pt-3', className)}
       aria-label={t('addLabel')}
+      noValidate
     >
       <ToggleGroup
         type="single"
@@ -393,13 +440,24 @@ export function AddTaskForm({
         <div className="space-y-1.5">
           <Label htmlFor={titleId}>{t('titleLabel')}</Label>
           <Input
+            ref={titleRef}
             id={titleId}
             value={title}
             maxLength={TASK_TITLE_MAX}
             className={FIELD_HEIGHT}
             placeholder={isTakeaway ? t('takeawayPlaceholder') : t('titlePlaceholder')}
-            onChange={(event) => setTitle(event.target.value)}
+            aria-invalid={titleMissing || undefined}
+            aria-describedby={titleMissing ? titleErrorId : undefined}
+            onChange={(event) => {
+              setTitle(event.target.value);
+              if (event.target.value.trim()) setTitleMissing(false);
+            }}
           />
+          {titleMissing && (
+            <p id={titleErrorId} className="text-sm text-red-700 dark:text-red-400">
+              {t('titleRequired')}
+            </p>
+          )}
         </div>
         <div className="space-y-1.5">
           <Label htmlFor={dueId}>{t('dueLabel')}</Label>
@@ -407,9 +465,15 @@ export function AddTaskForm({
             id={dueId}
             label={t('dueLabel')}
             value={dueOn}
-            onChange={setDueOn}
+            onChange={(value) => {
+              setDueOn(value);
+              setDueMissing(false);
+            }}
             readOnly={false}
             clearable={false}
+            onInvalidChange={setDueUnreadable}
+            invalidMessage={t('dueInvalid')}
+            error={dueMissing ? t('dueRequired') : undefined}
           />
         </div>
       </div>
@@ -457,10 +521,14 @@ export function AddTaskForm({
           onChange={(event) => setNote(event.target.value)}
         />
       </div>
-      {hint && <p className="text-sm text-muted-foreground">{hint}</p>}
-      {error && (
+      {hint && (
+        <p id={hintId} className="text-sm text-muted-foreground">
+          {hint}
+        </p>
+      )}
+      {saveFailed && (
         <p role="alert" className="text-sm text-red-700 dark:text-red-400">
-          {error}
+          {t('saveError')}
         </p>
       )}
       <div className="flex flex-wrap justify-end gap-2">
@@ -479,15 +547,16 @@ export function AddTaskForm({
         <Button
           type="submit"
           size={onCancel ? 'default' : 'sm'}
-          className={TAP_TARGET}
+          className={cn(TAP_TARGET, onCancel && 'min-w-24')}
           disabled={pending}
+          aria-describedby={hint ? hintId : undefined}
         >
           {pending ? (
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
           ) : (
             <Plus className="h-4 w-4" aria-hidden="true" />
           )}
-          {t('add')}
+          {pending ? t('adding') : t('add')}
         </Button>
       </div>
     </form>

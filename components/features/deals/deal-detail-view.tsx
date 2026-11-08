@@ -283,7 +283,8 @@ export function DealDetailView({ dealId }: { dealId: string }) {
             <DealFacts deal={deal} />
           </Card>
           {/* The lead's next actions: what to do next for the deal (#720, #853). What is added
-              here is added for the deal: its owner gets it when the lead's assignee is another */}
+              here is added for the deal: the owner of an open deal gets it when the lead's
+              assignee is another */}
           <LeadNextActionsCard
             organizationId={organizationId}
             leadId={deal.lead.id}
@@ -292,7 +293,12 @@ export function DealDetailView({ dealId }: { dealId: string }) {
                 ? t('detail.leadNextActions', { lead: leadName })
                 : t('detail.leadNextActionsNoName')
             }
-            deal={{ id: deal.id, ownerUserId: deal.ownerUserId, ownerName: deal.ownerName }}
+            deal={{
+              id: deal.id,
+              stage: deal.stage,
+              ownerUserId: deal.ownerUserId,
+              ownerName: deal.ownerName,
+            }}
           />
         </div>
         {hasLinkedDeals && (

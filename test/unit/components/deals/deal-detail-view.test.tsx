@@ -91,12 +91,13 @@ vi.mock('@/components/features/lead-follow-up/lead-next-actions-card', () => ({
   LeadNextActionsCard: (props: {
     leadId: string;
     description?: string;
-    deal?: { id: string; ownerUserId: string | null; ownerName: string | null };
+    deal?: { id: string; stage: string; ownerUserId: string | null; ownerName: string | null };
   }) => (
     <div
       data-testid="lead-next-actions"
       data-lead={props.leadId}
       data-deal={props.deal?.id}
+      data-stage={props.deal?.stage}
       data-owner={props.deal?.ownerUserId ?? ''}
       data-owner-name={props.deal?.ownerName ?? ''}
     >
@@ -595,11 +596,12 @@ describe('DealDetailView', () => {
       );
     });
 
-    it("adds the lead's next actions for the deal, which goes to its owner (#853)", () => {
+    it("adds the lead's next actions for the deal, which goes to the owner of an open one (#853)", () => {
       mocks.get.data = detail({ ownerUserId: 'user-1', ownerName: '営業 花子' });
       renderView();
       const card = screen.getByTestId('lead-next-actions');
       expect(card).toHaveAttribute('data-deal', DEAL_ID);
+      expect(card).toHaveAttribute('data-stage', 'proposal');
       expect(card).toHaveAttribute('data-owner', 'user-1');
       expect(card).toHaveAttribute('data-owner-name', '営業 花子');
     });

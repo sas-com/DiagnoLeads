@@ -74,7 +74,8 @@ export function AddNextActionButton({
       type="button"
       variant="outline"
       size="sm"
-      className={cn(TAP_TARGET, className)}
+      // 44px on phones; from md, as compact as the card's move button
+      className={cn(TAP_TARGET, 'md:h-8 md:px-2.5', className)}
       aria-label={t('addNextActionFor', { name: dealName })}
       onClick={(event) => onAdd(event.currentTarget)}
     >

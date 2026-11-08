@@ -1,8 +1,9 @@
 /**
  * The pipeline board (#436, #720): columns with their totals, the cards' warnings and dates, the
  * lead's next action of an open deal instead of the deal's old next step and the button that adds
- * one where it is missing (#853), moving a card with its menu (the keyboard and phone way, named with the card's stage) or by dragging it, and
- * the focus that follows a card moved from its menu. Real next-intl messages and UI components.
+ * one where it is missing (#853), moving a card with its menu (the keyboard and phone way, named
+ * with the card's stage) or by dragging it, and the focus that follows a card moved from its
+ * menu. Real next-intl messages and UI components.
  */
 import { DealBoard } from '@/components/features/deals/deal-board';
 import type { BoardColumn, DealCard, DealNextTask } from '@/lib/features/deals/service';
@@ -269,7 +270,8 @@ describe('DealBoard', () => {
         .compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
     expect(button).toHaveTextContent('次の行動を追加');
-    expect(button).toHaveClass('min-h-11');
+    // 44px on phones, as compact as the move button from md
+    expect(button).toHaveClass('min-h-11', 'md:h-8');
     expect(container.querySelector('.text-xs')).toBeNull();
     // Not where the lead has one, nor on a closed deal
     for (const name of ['移行', '保守']) {

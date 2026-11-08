@@ -5116,16 +5116,19 @@
       "checkWith": "確認先：{name}",
       "fromMeetingRequest": "回答者の希望日時から確定した初回商談",
       "fromActTiming": "動くべき時期の前の再接触（保守期限・退職予定から自動で作成）",
-      "assignee": "担当：{name}",
+      "assignee": "割り当て：{name}",
       "added": "「{title}」を追加しました",
+      "adding": "追加しています…",
+      "dueInvalid": "期限は 2026/11/15 のように 年/月/日 で入力してください",
       "recipient": {
-        "dealOwner": "期限が来ると、商談の担当の{name}さんの「今日」と通知に出ます。リードの担当が別の人なら、{name}さんをこの次の行動の担当にします。",
-        "leadAssignee": "期限が来ると、リードの担当（いなければ追加した人）の「今日」と通知に出ます。"
+        "dealOwner": "期限が来ると、商談の担当（{name}）の「今日」と通知に出ます。",
+        "you": "期限が来ると、あなたの「今日」と通知に出ます。",
+        "leadAssignee": "期限が来ると、リードの担当（いなければあなた）の「今日」と通知に出ます。"
       },
       "dialog": {
         "title": "「{deal}」の次の行動を追加",
-        "description": "リード「{lead}」の次の行動・持ち帰り事項に追加します。{recipient}",
-        "descriptionNoName": "この商談のリードの次の行動・持ち帰り事項に追加します。{recipient}"
+        "description": "リード「{lead}」の次の行動・持ち帰り事項に追加します。",
+        "descriptionNoName": "この商談のリードの次の行動・持ち帰り事項に追加します。"
       }
     },
     "today": {

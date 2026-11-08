@@ -38,6 +38,8 @@ const mocks = vi.hoisted(() => ({
   toast: { success: vi.fn(), error: vi.fn() },
   /** The deals' board, apart from the other queries: its cards show the next action (#853) */
   boardInvalidate: vi.fn(),
+  /** The signed-in user (who gets the due notices of what they add for their own deal) */
+  userId: 'me',
 }));
 
 vi.mock('@/lib/trpc/client', () => {
@@ -90,6 +92,9 @@ vi.mock('@/lib/trpc/client', () => {
   };
 });
 vi.mock('sonner', () => ({ toast: mocks.toast }));
+vi.mock('@/lib/auth/client', () => ({
+  useSession: () => ({ data: { user: { id: mocks.userId } }, isPending: false }),
+}));
 
 beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
@@ -106,6 +111,7 @@ beforeEach(() => {
   mocks.calls = {};
   mocks.results = {};
   mocks.fail = {};
+  mocks.userId = 'me';
   mocks.dueInputs = [];
   mocks.members = [];
 });
@@ -283,7 +289,11 @@ describe('LeadNextActionsCard', () => {
 
     expect(screen.getByText('次の行動はまだありません')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '追加' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('やることを入力してください');
+    // Said under the field, which takes the focus; nothing is sent
+    const titleBox = screen.getByLabelText('やること');
+    expect(titleBox).toHaveFocus();
+    expect(titleBox).toHaveAttribute('aria-invalid', 'true');
+    expect(titleBox).toHaveAccessibleDescription('やることを入力してください');
     expect(mocks.calls.createTask).toBeUndefined();
 
     await user.type(screen.getByLabelText('やること'), '資料を送る');
@@ -397,7 +407,7 @@ describe('LeadNextActionsCard', () => {
     expect(mocks.boardInvalidate).toHaveBeenLastCalledWith({ organizationId: ORG_ID });
   });
 
-  it('says to whom a next action is given, in 14px (#853)', () => {
+  it('says to whom a next action is given (#853)', () => {
     mocks.tasks = {
       today: '2026-10-16',
       canEdit: true,
@@ -413,31 +423,34 @@ describe('LeadNextActionsCard', () => {
     };
     renderCard();
     const rows = screen.getAllByRole('listitem');
-    expect(within(rows[0]).getByText('担当：商談 担当')).toHaveClass('text-sm');
+    const given = within(rows[0]).getByText('割り当て：商談 担当');
+    expect(given).toHaveClass('text-sm');
+    expect(given.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
     // One that follows the lead's assignee says nothing of it
-    expect(within(rows[1]).queryByText(/^担当：/)).not.toBeInTheDocument();
+    expect(within(rows[1]).queryByText(/^割り当て：/)).not.toBeInTheDocument();
   });
 
-  it('adds for the deal of its page and says who gets the due notices (#853)', async () => {
-    mocks.tasks = { today: '2026-10-16', canEdit: true, items: [] };
-    mocks.members = [
-      { userId: OWNER_ID, name: '商談 担当', email: 'owner@example.com', displayName: '商談 担当' },
-    ];
-    const user = userEvent.setup();
+  const OWNER = { userId: OWNER_ID, name: '商談 担当', email: 'owner@example.com' };
+  const openDeal = { id: DEAL_ID, stage: 'proposal', ownerUserId: OWNER_ID, ownerName: '商談 担当' };
+  const renderDealCard = (deal: typeof openDeal | Record<string, unknown> = openDeal) =>
     wrap(
       <LeadNextActionsCard
         organizationId={ORG_ID}
         leadId={LEAD_ID}
-        deal={{ id: DEAL_ID, ownerUserId: OWNER_ID, ownerName: '商談 担当' }}
+        deal={deal as typeof openDeal}
       />
     );
 
+  it('adds for the deal of its page and says above the button who gets the due notices (#853)', async () => {
+    mocks.tasks = { today: '2026-10-16', canEdit: true, items: [] };
+    mocks.members = [{ ...OWNER, displayName: OWNER.name }];
+    const user = userEvent.setup();
+    renderDealCard();
+
     const form = screen.getByRole('form', { name: '次の行動を追加' });
-    expect(
-      within(form).getByText(
-        '期限が来ると、商談の担当の商談 担当さんの「今日」と通知に出ます。リードの担当が別の人なら、商談 担当さんをこの次の行動の担当にします。'
-      )
-    ).toHaveClass('text-sm');
+    const hint = '期限が来ると、商談の担当（商談 担当）の「今日」と通知に出ます。';
+    expect(within(form).getByText(hint)).toHaveClass('text-sm');
+    expect(within(form).getByRole('button', { name: '追加' })).toHaveAccessibleDescription(hint);
     await user.type(screen.getByLabelText('やること'), '見積もりを送る');
     await user.click(screen.getByRole('button', { name: '追加' }));
     expect(mocks.calls.createTask).toEqual([
@@ -453,50 +466,110 @@ describe('LeadNextActionsCard', () => {
     ]);
   });
 
+  it('says the due notices are the user\'s on their own deal (#853)', () => {
+    mocks.tasks = { today: '2026-10-16', canEdit: true, items: [] };
+    mocks.members = [{ ...OWNER, displayName: OWNER.name }];
+    mocks.userId = OWNER_ID;
+    renderDealCard();
+    expect(screen.getByRole('button', { name: '追加' })).toHaveAccessibleDescription(
+      '期限が来ると、あなたの「今日」と通知に出ます。'
+    );
+  });
+
   it.each([
     ['has no owner', { ownerUserId: null, ownerName: null }],
     ['has an owner who may no longer hold leads', { ownerUserId: 'left', ownerName: '退職 済み' }],
-  ])("says the lead's assignee gets the due notices when the deal %s (#853)", (_, owner) => {
+    ['is won', { stage: 'won' }],
+    ['is lost', { stage: 'lost' }],
+  ])("says the lead's assignee gets the due notices when the deal %s (#853)", (_, values) => {
     mocks.tasks = { today: '2026-10-16', canEdit: true, items: [] };
-    mocks.members = [
-      { userId: OWNER_ID, name: '商談 担当', email: 'owner@example.com', displayName: '商談 担当' },
-    ];
-    wrap(
-      <LeadNextActionsCard organizationId={ORG_ID} leadId={LEAD_ID} deal={{ id: DEAL_ID, ...owner }} />
+    mocks.members = [{ ...OWNER, displayName: OWNER.name }];
+    renderDealCard({ ...openDeal, ...values });
+    expect(screen.getByRole('button', { name: '追加' })).toHaveAccessibleDescription(
+      '期限が来ると、リードの担当（いなければあなた）の「今日」と通知に出ます。'
     );
-    expect(
-      screen.getByText('期限が来ると、リードの担当（いなければ追加した人）の「今日」と通知に出ます。')
-    ).toBeInTheDocument();
   });
 
   it("says nothing of the deals' owners on the lead's page", () => {
     mocks.tasks = { today: '2026-10-16', canEdit: true, items: [] };
     renderCard();
     expect(screen.queryByText(/^期限が来ると/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '追加' })).not.toHaveAttribute('aria-describedby');
   });
 
-  it('says what is wrong and a failed save in place, with no text under 14px (#853)', async () => {
+  it('says a failed save above the buttons, keeping what was entered (#853)', async () => {
     mocks.tasks = { today: '2026-10-16', canEdit: true, items: [] };
     mocks.fail.createTask = true;
     const user = userEvent.setup();
     renderCard();
 
     const form = screen.getByRole('form', { name: '次の行動を追加' });
-    await user.click(within(form).getByRole('button', { name: '追加' }));
-    expect(within(form).getByRole('alert')).toHaveTextContent('やることを入力してください');
-    expect(within(form).getByRole('alert')).toHaveClass('text-sm', 'text-red-700');
-
     await user.type(screen.getByLabelText('やること'), '見積もりを送る');
     await user.click(within(form).getByRole('button', { name: '追加' }));
     expect(within(form).getByRole('alert')).toHaveTextContent(
       '保存できませんでした。もう一度お試しください'
     );
+    expect(within(form).getByRole('alert')).toHaveClass('text-sm', 'text-red-700');
     expect(mocks.toast.error).not.toHaveBeenCalled();
-    // What was entered stays for another try
     expect(screen.getByLabelText('やること')).toHaveValue('見積もりを送る');
+    // The error of a missing title clears once one is typed
+    expect(screen.getByLabelText('やること')).not.toHaveAttribute('aria-invalid');
+  });
 
-    // Labels and the rest at 14px or more; fields and buttons 44px tall on phones
-    expect(form.querySelector('.text-xs')).toBeNull();
+  it('holds the save of a due date it cannot read, saying so under the box (#853)', async () => {
+    mocks.tasks = { today: '2026-10-16', canEdit: true, items: [] };
+    const user = userEvent.setup();
+    renderCard();
+
+    await user.type(screen.getByLabelText('やること'), '見積もりを送る');
+    await user.clear(screen.getByLabelText('期限'));
+    await user.type(screen.getByLabelText('期限'), '11/15');
+    await user.click(screen.getByRole('button', { name: '追加' }));
+    // Saved, it would keep the day the box held before (today)
+    expect(mocks.calls.createTask).toBeUndefined();
+    const due = screen.getByLabelText('期限');
+    expect(due).toHaveFocus();
+    expect(due).toHaveAccessibleDescription('期限は 2026/11/15 のように 年/月/日 で入力してください');
+    expect(screen.getByText('期限は 2026/11/15 のように 年/月/日 で入力してください')).toHaveClass(
+      'text-sm',
+      'text-red-700'
+    );
+
+    await user.clear(due);
+    await user.type(due, '2026/11/15');
+    await user.click(screen.getByRole('button', { name: '追加' }));
+    expect(mocks.calls.createTask).toEqual([expect.objectContaining({ dueOn: '2026-11-15' })]);
+  });
+
+  it('writes no text under 14px anywhere in the card, and its fields and buttons are 44px on phones', async () => {
+    mocks.tasks = {
+      today: '2026-10-16',
+      canEdit: true,
+      items: [
+        task({ id: 'late', title: '見積もりを送る', dueOn: '2026-10-14', note: '先方の稟議の後' }),
+        task({ id: 'meeting', title: null, source: 'hearing' }),
+        task({ id: 'request', title: '初回商談', source: 'meeting_request' }),
+        task({ id: 'timing', title: '再接触', source: 'act_timing' }),
+        task({ id: 'takeaway', title: '内訳を回答する', kind: 'takeaway', checkWith: '広報部' }),
+        task({
+          id: 'given',
+          title: '電話する',
+          assigneeId: OWNER_ID,
+          assignee: { id: OWNER_ID, name: '商談 担当' },
+        }),
+        task({ id: 'done', title: '資料を送った', done: true, completedAt: new Date() }),
+      ],
+    };
+    const user = userEvent.setup();
+    const { container } = renderCard();
+    await user.click(screen.getByRole('button', { name: '完了した1件を表示' }));
+    expect(screen.getByText('資料を送った')).toBeInTheDocument();
+    expect(screen.getByText('先方の稟議の後')).toHaveClass('text-sm');
+    expect(screen.getByText('確認先：広報部')).toHaveClass('text-sm');
+    expect(container.querySelector('.text-xs')).toBeNull();
+    expect(screen.getByRole('button', { name: '完了したものを隠す' })).toHaveClass('min-h-11');
+
+    const form = screen.getByRole('form', { name: '次の行動を追加' });
     expect(screen.getByLabelText('やること')).toHaveClass('h-11');
     expect(screen.getByLabelText('メモ（任意）')).toHaveClass('h-11');
     expect(within(form).getByRole('button', { name: '追加' })).toHaveClass('min-h-11');

@@ -32,11 +32,12 @@ export interface AddNextActionDialogProps {
 /**
  * Adds a next action or takeaway to a deal's lead from the deals board and list (#853), which
  * offer it for an open deal marked for having none: the form of the lead's next actions card, in
- * a dialog. It says whose next action it is and who gets its due notices (the deal's owner when
- * the lead's assignee is someone else); once added it closes and a toast names it and the lead,
- * and the board is read again (the form does), so the mark goes and the card shows it. It does
- * not close while saving, so a failure is said in place with what was entered kept, and a tap
- * outside does not throw away what is being written.
+ * a dialog, starting in "what to do". It says whose next action it is, and above the add button
+ * who gets its due notices (the deal's owner when the lead's assignee is someone else); once added
+ * it closes and a toast names it and the lead, and the board is read again (the form does), so
+ * the mark goes and the card shows it. While it saves it does not close, so a failure is said in
+ * place with what was entered kept; a tap outside does not close it then, nor once anything was
+ * entered (as the dialog that records an activity).
  */
 export function AddNextActionDialog({
   open,
@@ -51,6 +52,7 @@ export function AddNextActionDialog({
   const t = useTranslations('leadFollowUp.tasks');
   const recipient = useDealNextActionRecipient(organizationId, deal);
   const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
 
   return (
     <Dialog
@@ -62,15 +64,20 @@ export function AddNextActionDialog({
     >
       <DialogContent
         className="max-h-[90dvh] overflow-y-auto sm:max-w-lg"
-        onInteractOutside={(event) => event.preventDefault()}
+        onInteractOutside={(event) => {
+          if (dirty || saving) event.preventDefault();
+        }}
         onCloseAutoFocus={onCloseAutoFocus}
       >
         <DialogHeader>
-          <DialogTitle>{t('dialog.title', { deal: deal.name })}</DialogTitle>
+          {/* A long deal name wraps clear of the close button */}
+          <DialogTitle className="pr-6 leading-normal">
+            {t('dialog.title', { deal: deal.name })}
+          </DialogTitle>
           <DialogDescription>
             {leadLabel
-              ? t('dialog.description', { lead: leadLabel, recipient })
-              : t('dialog.descriptionNoName', { recipient })}
+              ? t('dialog.description', { lead: leadLabel })
+              : t('dialog.descriptionNoName')}
           </DialogDescription>
         </DialogHeader>
         {/* Mounted only while open, so each opening starts empty and due today */}
@@ -79,8 +86,11 @@ export function AddNextActionDialog({
           leadId={deal.leadId}
           dealId={deal.id}
           today={today}
+          hint={recipient}
+          autoFocusTitle
           className="border-t-0 pt-0"
           onPendingChange={setSaving}
+          onDirtyChange={setDirty}
           onCancel={() => onOpenChange(false)}
           onCreated={(task) => {
             toast.success(

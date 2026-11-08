@@ -1,13 +1,14 @@
 /**
  * The dialog that adds a deal's next action from the deals board and list (#853): whose next
- * action it is and who gets its due notices, the deal sent with it, closing with a toast and the
- * lists and the board read again once it is added, a failure said in place, not closing while it
- * saves, and no text under 14px with 44px controls on phones (real next-intl messages and UI
- * components; tRPC mocked)
+ * action it is, and above its button who gets its due notices, the focus starting in "what to
+ * do", the deal sent with it, closing with a toast and the lists and the board read again once it
+ * is added, a failure said in place, a tap outside closing it only while nothing was entered and
+ * it is not saving, and no text under 14px with 44px controls on phones (real next-intl messages
+ * and UI components; tRPC and the session mocked)
  */
 import { AddNextActionDialog } from '@/components/features/lead-follow-up/add-next-action-dialog';
 import messages from '@/locales/ja/common.json';
-import { render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -30,6 +31,7 @@ const mocks = vi.hoisted(() => ({
   members: [] as unknown[],
   invalidated: [] as [string, unknown][],
   toast: { success: vi.fn(), error: vi.fn() },
+  userId: 'me',
 }));
 
 vi.mock('@/lib/trpc/client', () => {
@@ -61,6 +63,9 @@ vi.mock('@/lib/trpc/client', () => {
   };
 });
 vi.mock('sonner', () => ({ toast: mocks.toast }));
+vi.mock('@/lib/auth/client', () => ({
+  useSession: () => ({ data: { user: { id: mocks.userId } }, isPending: false }),
+}));
 
 beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
@@ -78,6 +83,7 @@ beforeEach(() => {
   mocks.fail = false;
   mocks.pending = false;
   mocks.invalidated = [];
+  mocks.userId = 'me';
   mocks.members = [
     { userId: OWNER_ID, name: '営業 花子', email: 'hanako@example.com', displayName: '営業 花子' },
   ];
@@ -87,6 +93,7 @@ const DEAL = {
   id: DEAL_ID,
   name: 'AS/400 現行調査',
   leadId: LEAD_ID,
+  stage: 'proposal',
   ownerUserId: OWNER_ID as string | null,
   ownerName: '営業 花子' as string | null,
 };
@@ -113,19 +120,43 @@ function renderDialog(
 }
 
 const dialog = () => screen.getByRole('dialog', { name: '「AS/400 現行調査」の次の行動を追加' });
+const addButton = () => within(dialog()).getByRole('button', { name: '追加' });
+
+/** A press outside the dialog (Radix listens for it once the dialog has opened) */
+async function pressOutside() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  fireEvent.pointerDown(document.body);
+}
 
 describe('AddNextActionDialog', () => {
-  it("says whose next action it is and that the deal's owner gets its due notices", () => {
+  it("says whose next action it is, and above its button that the deal's owner gets the notices", () => {
     renderDialog();
     expect(dialog()).toHaveAccessibleDescription(
-      'リード「架空商事」の次の行動・持ち帰り事項に追加します。期限が来ると、商談の担当の営業 花子さんの「今日」と通知に出ます。リードの担当が別の人なら、営業 花子さんをこの次の行動の担当にします。'
+      'リード「架空商事」の次の行動・持ち帰り事項に追加します。'
     );
+    const hint = '期限が来ると、商談の担当（営業 花子）の「今日」と通知に出ます。';
+    expect(within(dialog()).getByText(hint)).toHaveClass('text-sm');
+    expect(addButton()).toHaveAccessibleDescription(hint);
+    // The title wraps clear of the close button; the focus starts in what to do
+    expect(within(dialog()).getByRole('heading')).toHaveClass('pr-6');
+    expect(within(dialog()).getByLabelText('やること')).toHaveFocus();
+  });
+
+  it('says the due notices are the user\'s on their own deal', () => {
+    mocks.userId = OWNER_ID;
+    renderDialog();
+    expect(addButton()).toHaveAccessibleDescription('期限が来ると、あなたの「今日」と通知に出ます。');
   });
 
   it("says the lead's assignee gets them when the deal has no owner, nor a name of its lead", () => {
     renderDialog({ deal: { ownerUserId: null, ownerName: null }, leadLabel: '' });
     expect(dialog()).toHaveAccessibleDescription(
-      'この商談のリードの次の行動・持ち帰り事項に追加します。期限が来ると、リードの担当（いなければ追加した人）の「今日」と通知に出ます。'
+      'この商談のリードの次の行動・持ち帰り事項に追加します。'
+    );
+    expect(addButton()).toHaveAccessibleDescription(
+      '期限が来ると、リードの担当（いなければあなた）の「今日」と通知に出ます。'
     );
   });
 
@@ -185,10 +216,14 @@ describe('AddNextActionDialog', () => {
     const user = userEvent.setup();
     const { onOpenChange, onAdded } = renderDialog();
 
-    await user.click(within(dialog()).getByRole('button', { name: '追加' }));
-    expect(within(dialog()).getByRole('alert')).toHaveTextContent('やることを入力してください');
+    await user.click(addButton());
+    // A missing title is said under its box, which keeps the focus
+    expect(within(dialog()).getByLabelText('やること')).toHaveAccessibleDescription(
+      'やることを入力してください'
+    );
+    expect(within(dialog()).queryByRole('alert')).not.toBeInTheDocument();
     await user.type(within(dialog()).getByLabelText('やること'), '稟議の状況を確認する');
-    await user.click(within(dialog()).getByRole('button', { name: '追加' }));
+    await user.click(addButton());
     expect(within(dialog()).getByRole('alert')).toHaveTextContent(
       '保存できませんでした。もう一度お試しください'
     );
@@ -198,14 +233,32 @@ describe('AddNextActionDialog', () => {
     expect(mocks.toast.success).not.toHaveBeenCalled();
   });
 
-  it('does not close while it saves', async () => {
+  it('does not close while it saves, and says it is adding', async () => {
     mocks.pending = true;
     const user = userEvent.setup();
     const { onOpenChange } = renderDialog();
-    expect(within(dialog()).getByRole('button', { name: '追加' })).toBeDisabled();
+    const adding = within(dialog()).getByRole('button', { name: '追加しています…' });
+    expect(adding).toBeDisabled();
+    expect(adding).toHaveClass('min-w-24');
     expect(within(dialog()).getByRole('button', { name: 'キャンセル' })).toBeDisabled();
     await user.keyboard('{Escape}');
+    await pressOutside();
     expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('closes on a press outside while nothing was entered', async () => {
+    const { onOpenChange } = renderDialog();
+    await pressOutside();
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('keeps what was entered from a press outside', async () => {
+    const user = userEvent.setup();
+    const { onOpenChange } = renderDialog();
+    await user.type(within(dialog()).getByLabelText('メモ（任意）'), '先方の稟議の後');
+    await pressOutside();
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(within(dialog()).getByLabelText('メモ（任意）')).toHaveValue('先方の稟議の後');
   });
 
   it('writes no text under 14px and gives its controls 44px on phones', () => {

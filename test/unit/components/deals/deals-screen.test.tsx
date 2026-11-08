@@ -1,12 +1,12 @@
 /**
  * The deals screen (#436, #720): the board from the query, the filters and the list's order in
  * the URL, a move between open stages shown at once with its undo (none when it handed the lead
- * off) and put back when it fails, adding a next action to a deal without one from its card or
- * row and where the focus goes after (#853), saying where the deal is, the focus after a move from the menu
+ * off) and put back when it fails, saying where the deal is, the focus after a move from the menu
  * or its undo, losing a deal only with a reason, winning one only after confirming the day and
  * the amount, a failed win or loss said in its question, reopening a closed one only after a
- * confirmation, and the loading, empty, error and read-only states (real next-intl messages; tRPC
- * and the router mocked)
+ * confirmation, the loading, empty, error and read-only states, and adding a next action to a
+ * deal without one from its card or row, with where the focus goes after (#853) (real next-intl
+ * messages; tRPC, the session and the router mocked)
  */
 import { DealsScreen } from '@/components/features/deals/deals-screen';
 import type { DealCard } from '@/lib/features/deals/service';
@@ -134,6 +134,10 @@ vi.mock('next/navigation', async () => {
   };
 });
 vi.mock('sonner', () => ({ toast: mocks.toast }));
+// The signed-in user is not the owner of the deals below
+vi.mock('@/lib/auth/client', () => ({
+  useSession: () => ({ data: { user: { id: 'user-me' } }, isPending: false }),
+}));
 
 beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
@@ -1092,7 +1096,10 @@ describe('DealsScreen', () => {
 
       await user.click(addButton());
       expect(dialogOf()).toHaveAccessibleDescription(
-        'リード「架空商事」の次の行動・持ち帰り事項に追加します。期限が来ると、商談の担当の営業 花子さんの「今日」と通知に出ます。リードの担当が別の人なら、営業 花子さんをこの次の行動の担当にします。'
+        'リード「架空商事」の次の行動・持ち帰り事項に追加します。'
+      );
+      expect(within(dialogOf()).getByRole('button', { name: '追加' })).toHaveAccessibleDescription(
+        '期限が来ると、商談の担当（営業 花子）の「今日」と通知に出ます。'
       );
       await user.type(within(dialogOf()).getByLabelText('やること'), '稟議の状況を確認する');
       await user.click(within(dialogOf()).getByRole('button', { name: '追加' }));
@@ -1139,8 +1146,8 @@ describe('DealsScreen', () => {
       showBoard(boardData([withoutTask]));
       renderScreen();
       await user.click(addButton());
-      expect(dialogOf()).toHaveAccessibleDescription(
-        'リード「架空商事」の次の行動・持ち帰り事項に追加します。期限が来ると、リードの担当（いなければ追加した人）の「今日」と通知に出ます。'
+      expect(within(dialogOf()).getByRole('button', { name: '追加' })).toHaveAccessibleDescription(
+        '期限が来ると、リードの担当（いなければあなた）の「今日」と通知に出ます。'
       );
     });
 
