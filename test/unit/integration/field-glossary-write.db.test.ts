@@ -41,7 +41,10 @@ describe.skipIf(!url)('field glossary write authorization (PostgreSQL)', () => {
   // biome-ignore lint/style/noNonNullAssertion: guarded by skipIf
   const pg = (client ? drizzle(client, { schema }) : null)!;
   const unique = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const ns = `test.glossary-write.${unique()}`;
+  // A field_key segment must start with a letter and be alphanumeric (fieldKeySchema), so the
+  // namespace is a single alphanumeric segment — the prefix for every `${ns}.<field>` key below.
+  // (unique() keeps its hyphens for the org slug and user email, which allow them.)
+  const ns = `fgwrite${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
   const organizationIds: string[] = [];
   const userIds: string[] = [];
 
