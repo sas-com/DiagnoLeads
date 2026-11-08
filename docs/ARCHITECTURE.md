@@ -103,7 +103,7 @@ components/features/<feature>/
 | `server/routers/_app.ts` | import 1行とキー1行 | 登録しないと外から呼べない（`unregistered-routers` で落ちる） |
 | `lib/db/schema.ts` と `drizzle/` | 表の定義と `bun run db:generate` の出力 | 新しい表は関連する表の近くに足す（末尾に足すと並行の PR とぶつかる。今までテキストの衝突が0件だったのは、追加の位置が散っていたから）。main を取り込んで番号がぶつかったら、自分の SQL・snapshot・ジャーナルの行を消して生成し直す。手順は `.claude/rules/db-schema.md`。番号の重複と `when` の逆転は `test/unit/lib/db/migrations-journal.test.ts`（#453 で追加）が検出する |
 | `locales/{ja,en}/common.json` | 新しい名前空間 | 名前空間ごとのファイルに分ける仕組みは #450 で入れる予定 |
-| `components/features/leads/detail/lead-detail-view.tsx` とそのテスト | リード詳細のカード | カードの列の切り出しは #450 で行う予定 |
+| `components/features/leads/detail/lead-overview-cards.tsx` | リード詳細の概要タブのカード（import 1行と JSX 1行） | ページのテストはこの列を1回だけ mock する。`lead-overview-cards.test.tsx` は既存のカードの相対的な順序と条件だけを固定するので、カードを足してもテストを書き換えなくてよい（#473）。カードの中身は、カードごとのテストで確かめる |
 | `components/layout/AppSidebar.tsx`・`lib/routes/admin-pages.ts` | メニューとページの接頭辞 | 足し忘れはテストで落ちる |
 
 これから足す予定の機能の置き場所：
