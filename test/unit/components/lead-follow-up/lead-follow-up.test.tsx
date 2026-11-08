@@ -15,8 +15,13 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const ORG_ID = '660e8400-e29b-41d4-a716-446655440000';
 const LEAD_ID = '770e8400-e29b-41d4-a716-446655440001';
+const DEAL_ID = '990e8400-e29b-41d4-a716-446655440003';
+const OWNER_ID = 'aa0e8400-e29b-41d4-a716-446655440004';
 
-type MutationOptions = { onSuccess?: (result: unknown, input: unknown) => void };
+type MutationOptions = {
+  onSuccess?: (result: unknown, input: unknown) => void;
+  onError?: (error: Error) => void;
+};
 
 const mocks = vi.hoisted(() => ({
   contacts: undefined as unknown,
@@ -28,6 +33,8 @@ const mocks = vi.hoisted(() => ({
   calls: {} as Record<string, unknown[]>,
   /** What each mutation resolves with (onSuccess is called with it) */
   results: {} as Record<string, unknown>,
+  /** Mutations that fail (onError is called instead) */
+  fail: {} as Record<string, boolean>,
   toast: { success: vi.fn(), error: vi.fn() },
   /** The deals' board, apart from the other queries: its cards show the next action (#853) */
   boardInvalidate: vi.fn(),
@@ -39,6 +46,7 @@ vi.mock('@/lib/trpc/client', () => {
       isPending: false,
       mutate: (input: unknown) => {
         mocks.calls[name] = [...(mocks.calls[name] ?? []), input];
+        if (mocks.fail[name]) return options.onError?.(new Error('failed'));
         options.onSuccess?.(mocks.results[name], input);
       },
       mutateAsync: async (input: unknown) => {
@@ -97,6 +105,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.calls = {};
   mocks.results = {};
+  mocks.fail = {};
   mocks.dueInputs = [];
   mocks.members = [];
 });
@@ -122,6 +131,7 @@ const task = (overrides: Record<string, unknown> = {}) => ({
   checkWith: null,
   checkWithUser: null,
   assigneeId: null,
+  assignee: null,
   createdBy: null,
   createdAt: new Date('2026-10-10T00:00:00Z'),
   updatedAt: new Date('2026-10-10T00:00:00Z'),
@@ -385,6 +395,112 @@ describe('LeadNextActionsCard', () => {
     expect(mocks.calls.deleteTask).toEqual([{ organizationId: ORG_ID, id: 'task-1' }]);
     expect(mocks.boardInvalidate).toHaveBeenCalledTimes(3);
     expect(mocks.boardInvalidate).toHaveBeenLastCalledWith({ organizationId: ORG_ID });
+  });
+
+  it('says to whom a next action is given, in 14px (#853)', () => {
+    mocks.tasks = {
+      today: '2026-10-16',
+      canEdit: true,
+      items: [
+        task({
+          id: 'given',
+          title: '見積もりを送る',
+          assigneeId: OWNER_ID,
+          assignee: { id: OWNER_ID, name: '商談 担当' },
+        }),
+        task({ id: 'lead', title: '電話する' }),
+      ],
+    };
+    renderCard();
+    const rows = screen.getAllByRole('listitem');
+    expect(within(rows[0]).getByText('担当：商談 担当')).toHaveClass('text-sm');
+    // One that follows the lead's assignee says nothing of it
+    expect(within(rows[1]).queryByText(/^担当：/)).not.toBeInTheDocument();
+  });
+
+  it('adds for the deal of its page and says who gets the due notices (#853)', async () => {
+    mocks.tasks = { today: '2026-10-16', canEdit: true, items: [] };
+    mocks.members = [
+      { userId: OWNER_ID, name: '商談 担当', email: 'owner@example.com', displayName: '商談 担当' },
+    ];
+    const user = userEvent.setup();
+    wrap(
+      <LeadNextActionsCard
+        organizationId={ORG_ID}
+        leadId={LEAD_ID}
+        deal={{ id: DEAL_ID, ownerUserId: OWNER_ID, ownerName: '商談 担当' }}
+      />
+    );
+
+    const form = screen.getByRole('form', { name: '次の行動を追加' });
+    expect(
+      within(form).getByText(
+        '期限が来ると、商談の担当の商談 担当さんの「今日」と通知に出ます。リードの担当が別の人なら、商談 担当さんをこの次の行動の担当にします。'
+      )
+    ).toHaveClass('text-sm');
+    await user.type(screen.getByLabelText('やること'), '見積もりを送る');
+    await user.click(screen.getByRole('button', { name: '追加' }));
+    expect(mocks.calls.createTask).toEqual([
+      {
+        organizationId: ORG_ID,
+        leadId: LEAD_ID,
+        kind: 'next_action',
+        title: '見積もりを送る',
+        dueOn: '2026-10-16',
+        note: null,
+        dealId: DEAL_ID,
+      },
+    ]);
+  });
+
+  it.each([
+    ['has no owner', { ownerUserId: null, ownerName: null }],
+    ['has an owner who may no longer hold leads', { ownerUserId: 'left', ownerName: '退職 済み' }],
+  ])("says the lead's assignee gets the due notices when the deal %s (#853)", (_, owner) => {
+    mocks.tasks = { today: '2026-10-16', canEdit: true, items: [] };
+    mocks.members = [
+      { userId: OWNER_ID, name: '商談 担当', email: 'owner@example.com', displayName: '商談 担当' },
+    ];
+    wrap(
+      <LeadNextActionsCard organizationId={ORG_ID} leadId={LEAD_ID} deal={{ id: DEAL_ID, ...owner }} />
+    );
+    expect(
+      screen.getByText('期限が来ると、リードの担当（いなければ追加した人）の「今日」と通知に出ます。')
+    ).toBeInTheDocument();
+  });
+
+  it("says nothing of the deals' owners on the lead's page", () => {
+    mocks.tasks = { today: '2026-10-16', canEdit: true, items: [] };
+    renderCard();
+    expect(screen.queryByText(/^期限が来ると/)).not.toBeInTheDocument();
+  });
+
+  it('says what is wrong and a failed save in place, with no text under 14px (#853)', async () => {
+    mocks.tasks = { today: '2026-10-16', canEdit: true, items: [] };
+    mocks.fail.createTask = true;
+    const user = userEvent.setup();
+    renderCard();
+
+    const form = screen.getByRole('form', { name: '次の行動を追加' });
+    await user.click(within(form).getByRole('button', { name: '追加' }));
+    expect(within(form).getByRole('alert')).toHaveTextContent('やることを入力してください');
+    expect(within(form).getByRole('alert')).toHaveClass('text-sm', 'text-red-700');
+
+    await user.type(screen.getByLabelText('やること'), '見積もりを送る');
+    await user.click(within(form).getByRole('button', { name: '追加' }));
+    expect(within(form).getByRole('alert')).toHaveTextContent(
+      '保存できませんでした。もう一度お試しください'
+    );
+    expect(mocks.toast.error).not.toHaveBeenCalled();
+    // What was entered stays for another try
+    expect(screen.getByLabelText('やること')).toHaveValue('見積もりを送る');
+
+    // Labels and the rest at 14px or more; fields and buttons 44px tall on phones
+    expect(form.querySelector('.text-xs')).toBeNull();
+    expect(screen.getByLabelText('やること')).toHaveClass('h-11');
+    expect(screen.getByLabelText('メモ（任意）')).toHaveClass('h-11');
+    expect(within(form).getByRole('button', { name: '追加' })).toHaveClass('min-h-11');
+    for (const kind of within(form).getAllByRole('radio')) expect(kind).toHaveClass('min-h-11');
   });
 
   it('moves the due date from the calendar', async () => {
