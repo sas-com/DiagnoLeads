@@ -1,7 +1,8 @@
 /**
  * The respondent's preferred dates on the lead page (#155): pick one and confirm it, with or
  * without the confirmation email; a confirmed meeting can be changed; the topics and the note
- * of #244; the warning for an unverified answer (#274). Made-up names.
+ * of #244; the warning for an unverified answer (#274); what a confirmation reloads, and the
+ * notice of the deal it created (#854). Made-up names.
  */
 import { MeetingRequestCard } from '@/components/features/meeting-requests/meeting-request-card';
 import enMessages from '@/locales/en/common.json';
@@ -14,16 +15,31 @@ const mocks = vi.hoisted(() => ({
   result: {} as Record<string, unknown>,
   mutate: vi.fn(),
   invalidate: vi.fn(),
+  /** The other queries a confirmation reloads */
+  reload: {
+    tasks: vi.fn(),
+    leads: vi.fn(),
+    deals: vi.fn(),
+    leadActivity: vi.fn(),
+  },
   /** The options the card gave the confirm mutation */
   confirmOptions: {} as { onSuccess?: (outcome: unknown) => void },
 }));
-const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }));
+const toast = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+  warning: vi.fn(),
+  info: vi.fn(),
+}));
 
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
     useUtils: () => ({
       meetingRequests: { get: { invalidate: mocks.invalidate } },
-      leadFollowUp: { tasks: { invalidate: vi.fn() } },
+      leadFollowUp: { tasks: { invalidate: mocks.reload.tasks } },
+      leads: { invalidate: mocks.reload.leads },
+      deals: { invalidate: mocks.reload.deals },
+      leadActivity: { invalidate: mocks.reload.leadActivity },
     }),
     meetingRequests: {
       get: { useQuery: () => mocks.result },
@@ -75,7 +91,10 @@ const withRequest = (values: Record<string, unknown>) => ({
 beforeEach(() => {
   mocks.mutate.mockReset();
   mocks.invalidate.mockReset();
+  for (const reload of Object.values(mocks.reload)) reload.mockReset();
   toast.warning.mockReset();
+  toast.success.mockReset();
+  toast.info.mockReset();
   mocks.result = {
     data: { request: request(), canEdit: true, emailConfigured: true },
     isError: false,
@@ -283,6 +302,61 @@ describe('MeetingRequestCard', () => {
     expect(mocks.invalidate).toHaveBeenCalledWith({ organizationId: ORG_ID, leadId: LEAD_ID });
     // The pick is cleared: sales choose again from the new options
     expect(screen.getByRole('button', { name: 'この日時で確定する' })).toBeDisabled();
+    // Nothing was confirmed: the lead and its deals are as they were
+    expect(mocks.reload.leads).not.toHaveBeenCalled();
+    expect(mocks.reload.deals).not.toHaveBeenCalled();
+  });
+
+  it('reloads the lead, its deals and its activity, and says a deal was created (#854)', () => {
+    renderCard();
+    act(() =>
+      mocks.confirmOptions.onSuccess?.({ ok: true, email: 'not_requested', dealCreated: true })
+    );
+    expect(mocks.invalidate).toHaveBeenCalledWith({ organizationId: ORG_ID, leadId: LEAD_ID });
+    expect(mocks.reload.tasks).toHaveBeenCalledTimes(1);
+    // The status, deal phase and next meeting of the lead page, the lists and the counts
+    expect(mocks.reload.leads).toHaveBeenCalledTimes(1);
+    // The lead's deals card, the board and today's deals; the lead's activity
+    expect(mocks.reload.deals).toHaveBeenCalledTimes(1);
+    expect(mocks.reload.leadActivity).toHaveBeenCalledTimes(1);
+    expect(toast.success).toHaveBeenCalledWith('日程を確定しました。メールは送っていません');
+    expect(toast.info).toHaveBeenCalledWith(
+      '初回の打ち合わせの日が決まったため、商談（見極め）を作成しました'
+    );
+  });
+
+  it('reloads the lead but not its deals when no deal was created (#854)', () => {
+    renderCard();
+    act(() =>
+      mocks.confirmOptions.onSuccess?.({ ok: true, email: 'not_requested', dealCreated: false })
+    );
+    // The next meeting moved all the same
+    expect(mocks.reload.leads).toHaveBeenCalledTimes(1);
+    expect(mocks.reload.deals).not.toHaveBeenCalled();
+    expect(mocks.reload.leadActivity).not.toHaveBeenCalled();
+    expect(toast.success).toHaveBeenCalledTimes(1);
+    expect(toast.info).not.toHaveBeenCalled();
+  });
+
+  it('says a deal was created in English too (#854)', () => {
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages} timeZone="Asia/Tokyo">
+        <MeetingRequestCard organizationId={ORG_ID} leadId={LEAD_ID} />
+      </NextIntlClientProvider>
+    );
+    act(() => mocks.confirmOptions.onSuccess?.({ ok: true, email: 'sent', dealCreated: true }));
+    expect(toast.info).toHaveBeenCalledWith(
+      'The first meeting is set, so a deal in Qualification was created'
+    );
+  });
+
+  it('tells before confirming that a deal may be created (#854)', () => {
+    renderCard();
+    expect(
+      screen.getByText(
+        '確定した日時は、リードの次回日程と「次の行動」に入ります。あわせて商談（見極め）を作ります（開いている商談があるリード・受注したリードなどには作りません）。'
+      )
+    ).toBeInTheDocument();
   });
 
   it.each([

@@ -7,7 +7,7 @@ export const leadDetailArticle: HelpArticle = {
   summary:
     '1件のリードについて、連絡・ヒアリング・次の行動・商談をここで記録します。診断の結果や商談前の準備もこの画面で確かめます。',
   routes: ['/leads/[leadId]'],
-  reviewedAt: '2026-10-28',
+  reviewedAt: '2026-11-08',
   related: ['workflow-lifecycle', 'glossary'],
   blocks: [
     { type: 'h2', id: 'header', text: '画面の上の部分' },
@@ -80,6 +80,32 @@ export const leadDetailArticle: HelpArticle = {
       type: 'p',
       content:
         '概要のカードは、そのリードに関係があるものだけが出ます。たとえば「初回商談の希望日時」は相談申込で希望日時を受け付けたとき、「代行会社からの引き継ぎ」は代行会社のアポのときに出ます。',
+    },
+    { type: 'h2', id: 'meeting', text: '初回商談の日時を確定する' },
+    {
+      type: 'steps',
+      items: [
+        [
+          { type: 'text', text: '「初回商談の希望日時」のカードで候補を選び、' },
+          { type: 'ui', text: 'この日時で確定する' },
+          { type: 'text', text: 'を押します。回答者に確定の連絡をメールで送るかも選べます。' },
+        ],
+        '確定した日時は、リードの次回日程と次の行動に入ります。',
+        [
+          {
+            type: 'text',
+            text: '商談（見極め）が自動で作られ、商談のカードに出ます。リードの状態は商談中、商談フェーズは初回ヒアリングになります。開いている商談があるリード・受注したリードなどには作られません（条件は',
+          },
+          { type: 'link', text: '商談の使い方', href: '/help/deals#create' },
+          { type: 'text', text: 'にあります）。' },
+        ],
+      ],
+    },
+    {
+      type: 'note',
+      tone: 'tip',
+      content:
+        '打ち合わせが流れたら、商談を失注にして理由を入れます。同じ日の別の時刻に変えても、商談は作り直されません。別の日に確定し直すと、新しい商談（見極め）が作られます（開いている商談があるときなどは作られません）。',
     },
     { type: 'h2', id: 'next-actions', text: '次の行動を入れる' },
     {

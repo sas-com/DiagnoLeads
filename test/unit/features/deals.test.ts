@@ -1,17 +1,23 @@
 /**
  * Deals (#435): stage probabilities, the forecast category, the weighted amount, how deals set
- * their lead's status and deal phase (computed again on every change, #444) and the input schemas. The DB behaviour is covered by
+ * their lead's status and deal phase (computed again on every change, #444), whether the first
+ * meeting of a lead creates its deal (#854) and the input schemas. The DB behaviour is covered by
  * test/unit/integration/deals.db.test.ts.
  */
-import { defineAbilitiesFor } from '@/lib/auth/permissions';
+import { type Role, defineAbilitiesFor } from '@/lib/auth/permissions';
 import type { OrganizationMember, User } from '@/lib/db/schema';
-import { canReadDeals, canWriteDeals } from '@/lib/features/deals/access';
+import {
+  DEALS_READ_EXCLUDED_ROLES,
+  canReadDeals,
+  canWriteDeals,
+} from '@/lib/features/deals/access';
 import {
   type SyncDeal,
   latestLostReason,
   leadChangesFromDeals,
   leadPhaseOfDeal,
   phaseFromDeals,
+  qualificationDealSkip,
   wonWithoutWonDeal,
   statusFromDeals,
 } from '@/lib/features/deals/lead-sync';
@@ -170,6 +176,67 @@ describe('wonWithoutWonDeal', () => {
       false
     );
     expect(wonWithoutWonDeal({ status: 'negotiating', dealPhase: 'proposal' }, [])).toBe(false);
+  });
+});
+
+// Whether the first meeting of a lead creates its deal in 見極め (#854)
+describe('qualificationDealSkip', () => {
+  const lead = (values: Partial<{ status: string; dealPhase: string | null }> = {}) => ({
+    status: 'new',
+    dealPhase: null,
+    ...values,
+  });
+
+  it('creates one for a lead without deals', () => {
+    expect(qualificationDealSkip(lead(), [])).toBeNull();
+    expect(qualificationDealSkip(lead({ status: 'nurturing' }), [])).toBeNull();
+    expect(qualificationDealSkip(lead({ dealPhase: 'initial_hearing' }), [])).toBeNull();
+    // A lead lost by hand before it had deals comes back
+    expect(qualificationDealSkip(lead({ status: 'lost' }), [])).toBeNull();
+  });
+
+  it.each(OPEN_DEAL_STAGES)('creates none while a deal is open (%s)', (stage) => {
+    expect(qualificationDealSkip(lead({ status: 'negotiating' }), [deal({ stage })])).toBe(
+      'open_deal'
+    );
+    expect(
+      qualificationDealSkip(lead({ status: 'negotiating' }), [deal({ stage: 'lost' }), deal({ stage })])
+    ).toBe('open_deal');
+  });
+
+  it('creates none for a won lead: a won deal, or won by hand without one', () => {
+    expect(qualificationDealSkip(lead({ status: 'won' }), [deal({ stage: 'won' })])).toBe('won');
+    expect(
+      qualificationDealSkip(lead({ status: 'won' }), [deal({ stage: 'won' }), deal({ stage: 'lost' })])
+    ).toBe('won');
+    expect(qualificationDealSkip(lead({ status: 'won' }), [])).toBe('won');
+    expect(qualificationDealSkip(lead({ dealPhase: 'survey_won' }), [])).toBe('won');
+    expect(qualificationDealSkip(lead({ status: 'won' }), [deal({ stage: 'lost' })])).toBe('won');
+  });
+
+  it.each(['simple_diagnosis', 'proposal'])(
+    'creates none for a lead without deals whose phase was set past the initial hearing (%s)',
+    (dealPhase) => {
+      expect(qualificationDealSkip(lead({ status: 'negotiating', dealPhase }), [])).toBe(
+        'phase_ahead'
+      );
+    }
+  );
+
+  it('creates one for a lead whose deals are all lost, even at a later phase, unless won by hand', () => {
+    expect(qualificationDealSkip(lead({ status: 'lost' }), [deal({ stage: 'lost' })])).toBeNull();
+    expect(
+      qualificationDealSkip(lead({ status: 'lost', dealPhase: 'proposal' }), [
+        deal({ stage: 'lost' }),
+        deal({ stage: 'lost', kind: 'migration' }),
+      ])
+    ).toBeNull();
+    // A won phase left on the lead (its won deal deleted, or set by hand) is a lead won by hand
+    expect(
+      qualificationDealSkip(lead({ status: 'lost', dealPhase: 'survey_won' }), [
+        deal({ stage: 'lost' }),
+      ])
+    ).toBe('won');
   });
 });
 
@@ -447,6 +514,38 @@ describe('canReadDeals and canWriteDeals', () => {
     expect(canWriteDeals(ctxFor(role), 'update')).toBe(update);
     expect(canWriteDeals(ctxFor(role), 'delete')).toBe(remove);
   });
+
+  /*
+   * The deal of a first meeting (#854) is created with the permission of its entry point, to
+   * update leads, without canWriteDeals (decision 2026-10-28-auto-qualification-deal). That holds
+   * only while every role that may update leads may also write deals. A role that may change
+   * leads but not read deals, as the agency accounts of #276 may be, has to decide first whether
+   * an entry point creates deals for it. Every role is listed here: adding one to the roles fails
+   * the type check until it is listed, and then this test when it breaks the rule. The roles left
+   * out of reading deals (lib/auth/deal-access.ts) are checked too.
+   */
+  const ROLES = [
+    'owner',
+    'admin',
+    'member',
+    'group_owner',
+    'group_admin',
+    'parent_viewer',
+  ] as const satisfies readonly Role[];
+  type Unlisted = Exclude<Role, (typeof ROLES)[number]>;
+  const everyRoleListed: [Unlisted] extends [never] ? true : false = true;
+
+  it('lists every role of a member (#854, #276)', () => {
+    expect(everyRoleListed).toBe(true);
+  });
+
+  it.each([...new Set<string>([...ROLES, ...DEALS_READ_EXCLUDED_ROLES])])(
+    '%s: may write deals exactly when it may update leads, as the deal of a first meeting assumes (#854, #276)',
+    (role) => {
+      const ctx = ctxFor(role);
+      expect(canWriteDeals(ctx, 'update')).toBe(ctx.ability.can('update', 'Lead'));
+    }
+  );
 
   it('keeps an excluded role from writing even when it may change leads', () => {
     // The abilities of an admin under the excluded role's name (as an agency account would be);
