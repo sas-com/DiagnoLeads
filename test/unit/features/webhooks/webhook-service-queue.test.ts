@@ -558,6 +558,10 @@ describe('processWebhookRetries', () => {
         claimed = pending.shift() ?? [];
         return claimed.map(({ id }) => ({ id }));
       }
+      // The claimed deliveries are still pending when read after the webhooks (#928)
+      if (call.op === 'select' && call.table === 'webhook_deliveries') {
+        return claimed.map(({ id }) => ({ id }));
+      }
       if (call.op === 'select' && call.table === 'webhooks') return hooks;
       return [];
     };
