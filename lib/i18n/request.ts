@@ -1,5 +1,6 @@
 import { getRequestConfig } from 'next-intl/server';
 import { type Locale, locales } from './config';
+import { messages } from './messages';
 
 /**
  * next-intl Request Configuration
@@ -19,9 +20,8 @@ export default getRequestConfig(async ({ requestLocale }) => {
 
   return {
     locale,
-    // メッセージファイルを動的にインポート
-    // ビルド時に分割され、必要なロケールのみがロードされる
-    messages: (await import(`@/locales/${locale}/common.json`)).default,
+    // common.json と名前空間ごとのファイルをまとめたもの（lib/i18n/messages.ts、#472）
+    messages: messages[locale],
 
     /**
      * タイムゾーン設定

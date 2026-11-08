@@ -144,6 +144,8 @@ it('test 1', () => {
 
 `bun run typecheck` は `tsconfig.test.json`（アプリと test/ の両方）を見る（#745）。`tsconfig.json` は `next build` が使うので test/ を含めない。
 
+成否は**終了コード**で判断する。出力の `error TS` を grep で数えない。`tsc` はメモリ不足（OOM）で途中クラッシュすると、エラーを出し切る前に落ちて `error TS` が0件に見え、誤って緑と判断してしまう（4GB ヒープ `NODE_OPTIONS=--max-old-space-size=4096` で回避済み。#938）。
+
 - 部分的なモックは `as unknown as <本物の型>` でキャストする。`any`・`@ts-ignore` は使わない
 - わざと型の外の値を渡すテストだけ、`@ts-expect-error <理由>` を付ける
 - 型チェックから一時的に外しているファイルは、`tsconfig.test.json` の `exclude` に理由つきで書く
