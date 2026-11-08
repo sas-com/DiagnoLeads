@@ -75,10 +75,11 @@ export function TodaySection({
     >
       <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          {/* Focusable by script (not by Tab): where the focus goes when the list empties */}
+          {/* Given to a list inside, focusable by script (not by Tab): where the focus goes
+              when the list empties */}
           <h2
             id={headingId}
-            tabIndex={-1}
+            tabIndex={givenHeadingId ? -1 : undefined}
             className="text-base font-semibold text-gray-900 sm:text-lg dark:text-gray-50"
           >
             {title}

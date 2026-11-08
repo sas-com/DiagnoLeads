@@ -280,17 +280,17 @@ describe('LeadActivityCard', () => {
     mocks.list = { data: pages(update) };
     renderCard();
 
-    await userEvent.click(screen.getByRole('button', { name: 'メール' }));
+    await userEvent.click(screen.getByRole('button', { name: '診断結果のメール' }));
     expect(mocks.listInputs.at(-1)).toMatchObject({
       types: ['result_email_requested', 'result_email_sent', 'email_unsubscribed'],
     });
   });
 
-  it('filters the contacts apart from the changes sales made (#776)', async () => {
+  it('filters the contacts and visits apart from the changes sales made (#776)', async () => {
     mocks.list = { data: pages(update) };
     renderCard();
 
-    await userEvent.click(screen.getByRole('button', { name: '連絡・商談' }));
+    await userEvent.click(screen.getByRole('button', { name: '連絡・訪問' }));
     expect(mocks.listInputs.at(-1)).toMatchObject({ types: ['contact_recorded'] });
     await userEvent.click(screen.getByRole('button', { name: '営業の操作' }));
     expect(mocks.listInputs.at(-1)).toMatchObject({
@@ -298,11 +298,45 @@ describe('LeadActivityCard', () => {
     });
   });
 
-  it('writes no text under 14px (#776)', () => {
-    mocks.list = { data: pages(diagnosis(), update) };
+  it('writes no text under 14px, its badges included (#776)', () => {
+    mocks.list = {
+      data: pages(
+        diagnosis(),
+        diagnosis({
+          id: 'diagnosis:2',
+          verified: true,
+          continuation: true,
+          summary: { ...diagnosis().summary, mqlLevel: 'interest' },
+        }),
+        update,
+        {
+          id: 'contact:c1',
+          kind: 'contact_recorded',
+          at: new Date('2026-10-21T05:00:00Z'),
+          actor: { id: 'u1', name: '営業 一郎' },
+          contactId: 'c1',
+          contactKind: 'visit',
+          note: '現行の帳票を見せてもらった',
+          durationMinutes: 60,
+          outcome: 'progress',
+          deal: null,
+          first: true,
+        },
+        {
+          id: 'email-request:w',
+          kind: 'result_email_requested',
+          at: new Date('2026-10-10T01:00:00Z'),
+          actor: null,
+          consentId: 'w',
+          request: { state: 'waiting', at: null },
+        }
+      ),
+    };
     const { container } = renderCard();
 
-    expect(screen.getByText('本人未確認')).toBeInTheDocument();
+    for (const badge of ['本人未確認', '同じ画面から続けて診断', '初回連絡', '関心あり（MQL）']) {
+      expect(screen.getByText(badge), badge).toBeInTheDocument();
+    }
     expect(container.querySelector('.text-xs')).toBeNull();
   });
 

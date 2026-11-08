@@ -9,7 +9,7 @@ import { DueTasksList, DueTasksMore } from '@/components/features/lead-follow-up
 import { DueTasksSection } from '@/components/features/lead-follow-up/due-tasks-section';
 import { useDueTasks } from '@/components/features/lead-follow-up/use-due-tasks';
 import messages from '@/locales/ja/common.json';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import type { ReactNode } from 'react';
@@ -24,8 +24,8 @@ const mocks = vi.hoisted(() => ({
   dueCalls: [] as { input: unknown; options: Record<string, unknown> }[],
   updates: [] as unknown[],
   invalidated: [] as { path: string; input: unknown }[],
-  // The completion is still on its way (its onSettled not called yet)
-  holdSettle: false,
+  // What each completion's save answers, in order (resolved when none is queued)
+  results: [] as Promise<unknown>[],
 }));
 
 vi.mock('@/lib/trpc/client', () => {
@@ -48,12 +48,18 @@ vi.mock('@/lib/trpc/client', () => {
           },
         },
         updateTask: {
-          useMutation: (options: { onSuccess?: () => void } = {}) => ({
+          // Like TanStack Query: each call's own promise, after the hook's callbacks
+          useMutation: (options: { onSuccess?: () => void; onError?: () => void } = {}) => ({
             isPending: false,
-            mutate: (input: unknown, call: { onSettled?: () => void } = {}) => {
+            mutateAsync: (input: unknown) => {
               mocks.updates.push(input);
-              options.onSuccess?.();
-              if (!mocks.holdSettle) call.onSettled?.();
+              return (mocks.results.shift() ?? Promise.resolve()).then(
+                () => options.onSuccess?.(),
+                (error: unknown) => {
+                  options.onError?.();
+                  throw error;
+                }
+              );
             },
           }),
         },
@@ -130,7 +136,7 @@ beforeEach(() => {
   mocks.dueCalls = [];
   mocks.updates = [];
   mocks.invalidated = [];
-  mocks.holdSettle = false;
+  mocks.results = [];
 });
 
 describe('DueTasksList', () => {
@@ -211,11 +217,13 @@ describe('DueTasksList', () => {
     await user.click(screen.getByRole('checkbox', { name: '「見積もりを送る」を完了にする' }));
 
     expect(mocks.updates).toEqual([{ organizationId: ORG_ID, id: 't1', done: true }]);
-    expect(mocks.invalidated).toEqual(
-      expect.arrayContaining([
-        { path: 'dueTasks', input: { organizationId: ORG_ID } },
-        { path: 'deals.board', input: { organizationId: ORG_ID } },
-      ])
+    await waitFor(() =>
+      expect(mocks.invalidated).toEqual(
+        expect.arrayContaining([
+          { path: 'dueTasks', input: { organizationId: ORG_ID } },
+          { path: 'deals.board', input: { organizationId: ORG_ID } },
+        ])
+      )
     );
   });
 
@@ -246,16 +254,40 @@ describe('DueTasksList', () => {
       expect(screen.getByRole('heading', { name: '今日やること' })).toHaveFocus();
     });
 
-    it('disables only the row being completed, so the next one keeps the focus', async () => {
-      mocks.holdSettle = true;
+    it('shows the row ticked and disables only it, so the next one keeps the focus', async () => {
+      mocks.results = [new Promise(() => {})];
       mocks.due = due([task('t1', { title: '見積もりを送る' }), task('t2', { title: '日程を決める' })]);
       const user = userEvent.setup();
       wrap(<HeadedList />);
 
       await user.click(box('見積もりを送る'));
       expect(box('見積もりを送る')).toBeDisabled();
+      expect(box('見積もりを送る')).toBeChecked();
       expect(box('日程を決める')).toBeEnabled();
       expect(box('日程を決める')).toHaveFocus();
+    });
+
+    it('lets a row be ticked again when its save fails, also after another was ticked', async () => {
+      let fail: (error: Error) => void = () => {};
+      mocks.results = [
+        new Promise((_resolve, reject) => {
+          fail = reject;
+        }),
+        new Promise(() => {}),
+      ];
+      mocks.due = due([task('t1', { title: '見積もりを送る' }), task('t2', { title: '日程を決める' })]);
+      const user = userEvent.setup();
+      wrap(<HeadedList />);
+
+      await user.click(box('見積もりを送る'));
+      await user.click(box('日程を決める'));
+      // Both on their way: the heading has the focus
+      expect(screen.getByRole('heading', { name: '今日やること' })).toHaveFocus();
+      fail(new Error('failed'));
+
+      await waitFor(() => expect(box('見積もりを送る')).toBeEnabled());
+      expect(box('見積もりを送る')).not.toBeChecked();
+      expect(box('日程を決める')).toBeDisabled();
     });
   });
 

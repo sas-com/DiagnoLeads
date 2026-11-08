@@ -37,8 +37,6 @@ const mocks = vi.hoisted(() => ({
   hold: false,
   /** A deletion is on its way to the server */
   deleting: false,
-  /** The deal's activities, which say who may record one (#776) */
-  activities: { data: undefined as unknown },
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
@@ -76,15 +74,30 @@ vi.mock('@/lib/trpc/client', () => {
       },
       leads: { assignees: { useQuery: () => ({ data: [] }) } },
       leadSearch: { suggest: { useQuery: () => ({ data: [], isFetching: false }) } },
-      leadActivity: { forDeal: { useQuery: () => mocks.activities } },
     },
   };
 });
 // Recording a contact is its own dialog (#554), tested in record-activity-dialog.test.tsx
 vi.mock('@/components/features/lead-follow-up/record-activity-dialog', () => ({
-  RecordActivityDialog: (props: { open: boolean; defaultDealId?: string; leadId: string }) =>
+  RecordActivityDialog: (props: {
+    open: boolean;
+    defaultDealId?: string;
+    leadId: string;
+    onOpenChange: (open: boolean) => void;
+    onCloseAutoFocus?: (event: Event) => void;
+  }) =>
     props.open ? (
-      <div role="dialog" aria-label="活動を記録" data-deal={props.defaultDealId} data-lead={props.leadId} />
+      <div role="dialog" aria-label="活動を記録" data-deal={props.defaultDealId} data-lead={props.leadId}>
+        <button
+          type="button"
+          onClick={() => {
+            props.onOpenChange(false);
+            props.onCloseAutoFocus?.(new Event('focus'));
+          }}
+        >
+          閉じる
+        </button>
+      </div>
     ) : null,
 }));
 vi.mock('@/hooks/use-organization', () => ({
@@ -188,7 +201,6 @@ beforeEach(() => {
   mocks.fail = false;
   mocks.hold = false;
   mocks.deleting = false;
-  mocks.activities = { data: { items: [], total: 0, canEdit: true } };
 });
 
 describe('DealDetailView', () => {
@@ -366,10 +378,15 @@ describe('DealDetailView', () => {
     const dialog = screen.getByRole('dialog', { name: '活動を記録' });
     expect(dialog).toHaveAttribute('data-deal', DEAL_ID);
     expect(dialog).toHaveAttribute('data-lead', LEAD_ID);
+
+    // Opened by state, not by a dialog trigger: the focus goes back to the button
+    await user.click(within(dialog).getByRole('button', { name: '閉じる' }));
+    expect(within(header as HTMLElement).getByRole('button', { name: '活動を記録' })).toHaveFocus();
   });
 
   it('has no button to record a contact for those who may not record one (#776)', () => {
-    mocks.activities = { data: { items: [], total: 0, canEdit: false } };
+    // Who may edit the deal may record for it (update Lead with deals readable)
+    mocks.get.data = detail({ canEdit: false, canDelete: false });
     renderView();
 
     expect(screen.queryByRole('button', { name: '活動を記録' })).not.toBeInTheDocument();

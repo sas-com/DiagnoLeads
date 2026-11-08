@@ -95,12 +95,7 @@ export function DealDetailView({ dealId }: { dealId: string }) {
     { enabled: !!organizationId, retry: false }
   );
   // A contact is recorded from the header too, not only from the activity card far down on a
-  // phone (#776); who may record is read as the card reads it (the same query)
-  const activities = trpc.leadActivity.forDeal.useQuery(
-    { organizationId, dealId },
-    { enabled: !!organizationId }
-  );
-  const canRecord = !!activities.data?.canEdit;
+  // phone (#776)
   const [recordOpen, setRecordOpen] = useState(false);
   const tActivity = useTranslations('leadActivity.dealActivities');
   // The delete question says a failure itself and stays open for another try (#720)
@@ -163,6 +158,9 @@ export function DealDetailView({ dealId }: { dealId: string }) {
 
   const leadName = deal.lead.company || deal.lead.name;
   const leadLabel = leadName || t('fields.lead');
+  // Those who may edit the deal may record for it: update Lead with deals readable, as
+  // leadActivity.forDeal decides for the activity card
+  const canRecord = deal.canEdit;
   const moveTo = (stage: DealStage) =>
     stageMove.move(
       {
@@ -228,7 +226,10 @@ export function DealDetailView({ dealId }: { dealId: string }) {
                     type="button"
                     variant="outline"
                     className={TAP_TARGET}
-                    onClick={() => setRecordOpen(true)}
+                    onClick={(event) => {
+                      focus.remember(event.currentTarget);
+                      setRecordOpen(true);
+                    }}
                   >
                     <NotebookPen className="mr-1.5 h-4 w-4" aria-hidden="true" />
                     {tActivity('record')}
@@ -381,6 +382,7 @@ export function DealDetailView({ dealId }: { dealId: string }) {
           leadId={deal.lead.id}
           leadLabel={leadLabel}
           defaultDealId={deal.id}
+          onCloseAutoFocus={focus.onCloseAutoFocus}
         />
       )}
       <DealFormDialog

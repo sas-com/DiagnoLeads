@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ContactRecordMenu } from './contact-record-menu';
 import { CheckWithText, DueLabel, TaskKindBadge, useTaskTitle, useUpdateTask } from './task-parts';
 import type { DueTasks } from './use-due-tasks';
@@ -22,9 +22,10 @@ const LEAD_LINK_CLASS =
  * completes it. Shared by the dashboard's card and the 今日 screen (#556), which show their own
  * loading, failure and empty states around it. Sized for DADS (decision 2026-10-24-admin-dads):
  * no text under 14px, the box is 20px to see and 44px to tap, the lead an underlined link.
- * A row ticked leaves once done: the focus goes on at once to the next row's box, else the
- * previous one's, else to the heading, rather than to the page (#776). Only the row being
- * completed is disabled meanwhile, as a disabled box loses the focus.
+ * A row ticked shows ticked and disabled until it leaves once done (it can be ticked again when
+ * the save fails), and the focus goes on at once to the next row's box, else the previous one's,
+ * else to the heading, rather than to the page (#776). Only the rows being completed are
+ * disabled, as a disabled box loses the focus.
  */
 export function DueTasksList({
   due,
@@ -53,6 +54,15 @@ export function DueTasksList({
   // The rows being completed, and each row's box to send the focus to
   const [completing, setCompleting] = useState<ReadonlySet<string>>(new Set());
   const boxes = useRef(new Map<string, HTMLButtonElement>());
+  const shownIds = due.items.map((task) => task.id).join(' ');
+  // A row completed has left once the list is read again: forget it (it may come back reopened)
+  useEffect(() => {
+    const shown = new Set(shownIds.split(' '));
+    setCompleting((current) => {
+      const kept = [...current].filter((id) => shown.has(id));
+      return kept.length === current.size ? current : new Set(kept);
+    });
+  }, [shownIds]);
   const data = due.data;
   if (!data) return null;
 
@@ -68,16 +78,15 @@ export function DueTasksList({
         : null;
     target?.focus();
     setCompleting((current) => new Set(current).add(task.id));
-    update.mutate(
-      { organizationId, id: task.id, done: true },
-      {
-        onSettled: () =>
-          setCompleting((current) => {
-            const rest = new Set(current);
-            rest.delete(task.id);
-            return rest;
-          }),
-      }
+    // The call's own promise: the callbacks given to mutate() run for the latest call only, so a
+    // row ticked before another would stay disabled if its save failed. The hook toasts the
+    // failure; the row can then be ticked again
+    update.mutateAsync({ organizationId, id: task.id, done: true }).catch(() =>
+      setCompleting((current) => {
+        const rest = new Set(current);
+        rest.delete(task.id);
+        return rest;
+      })
     );
   };
 
@@ -108,7 +117,7 @@ export function DueTasksList({
                 // 20px to see and 44px to tap: the ::after reaches 13px around the 18px inside
                 // the 1px border
                 className="relative h-5 w-5 after:absolute after:-inset-[13px] after:content-['']"
-                checked={false}
+                checked={completing.has(task.id)}
                 disabled={!data.canEdit || completing.has(task.id)}
                 aria-label={tTasks('markDone', { title })}
                 onCheckedChange={() => complete(index)}
