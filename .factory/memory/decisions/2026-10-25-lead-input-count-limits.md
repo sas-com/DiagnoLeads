@@ -21,7 +21,7 @@ paths: ["lib/features/leads/types/schemas.ts", "lib/features/leads/import-servic
     - 無視されるのは、zod が落とすからではない（読み取り専用のレビューの指摘）
       - `listLeadsSchema` 自体は知らない項目を落とす。ただ、`organizationProcedure` の `organizationInputSchema` が `.passthrough()` で、tRPC は複数の `.input()` の結果を重ねてつなぐので、手続きの `input`（エクスポートの `filterInput` も）には、送られた `advancedFilter` が検査されないまま残る
       - 条件（`listWhere`・`leadListConditions`）と監査（`exportAuditFilters`）が決まった項目だけを読むので効かない。保証は手続きを通したテスト（`test/unit/features/leads-bulk-limits.test.ts`。WHERE を SQL にして比べ、監査の `filters` も比べる）で、スキーマ単体のテストではない
-      - `...input` や `...filterInput` を、監査の metadata や外への送信にそのまま広げない（送られた値がそのまま流れる）。passthrough の扱いは #743
+      - `...input` や `...filterInput` を、監査の metadata や外への送信にそのまま広げない（送られた値がそのまま流れる）。passthrough は外さない（`2026-11-08-keep-organization-input-passthrough`）
     - HTTP では、入れ子がとても深い値は zod の前に superjson で BAD_REQUEST になる（下のルールの superjson の項）。500 にも当番への通知にもならない。テストの `createCaller` は superjson を通らないので、10,000段でも無視される
 - **理由**: どれも件数に上限がなく、1回のリクエストで何件でも送れた。実質の上限は Vercel の関数の本文の上限（約4.5MB）だけだった。`bulkCreate` は1件あたり最大9個の bind パラメータを使い、PostgreSQL のドライバー（postgres-js）が1文に送れる数（65,534 未満）を、約7,000件を超える1回の取り込みで超えていた（#604 の作業で、drizzle の `toSQL` で数えた）。`advancedFilter` は `z.lazy` の再帰のスキーマで、入れ子を最後の段まで読み、約800段でスタックが溢れていた（`RangeError`。手元の vitest で測った。tRPC は入力のエラーとして BAD_REQUEST の「Maximum call stack size exceeded」で返すが、`safeParse` を直接呼ぶと例外が出る）
 - **却下案**:
