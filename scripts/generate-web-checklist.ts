@@ -21,7 +21,6 @@ import path from 'node:path';
 import {
   WEB_CHECKLIST_DIGEST_FILE,
   WEB_CHECKLIST_FILE,
-  WEB_CHECKLIST_SITE_URL,
   type WebChecklist,
   type WebChecklistItem,
   webChecklist,
@@ -97,12 +96,15 @@ function sheetHtml(sheet: WebChecklist): string {
   /* Lines break between phrases (lang="ja"), not one character away from the end */
   body { margin: 0; font-family: 'Noto Sans JP', sans-serif; color: ${COLORS.ink}; font-size: 9pt; line-height: 1.65; word-break: auto-phrase; }
   header { background: ${COLORS.deep}; color: #fff; border-radius: 3mm; padding: 6mm 8mm 5mm; }
-  header .edition { font-size: 8pt; opacity: 0.9; margin: 0 0 1mm; }
+  header .edition { font-size: 8pt; margin: 0 0 1mm; }
   h1 { font-size: 19pt; line-height: 1.4; margin: 0; font-weight: 700; }
   header .subtitle { margin: 2mm 0 0; font-size: 9.5pt; }
   .intro { margin: 4mm 0 0; padding: 3.5mm 5mm; background: ${COLORS.mist}; border-radius: 2mm; }
   .intro .headline { margin: 0; font-weight: 700; font-size: 11pt; color: ${COLORS.deep}; }
   .intro p { margin: 1mm 0 0; }
+  .how-to { margin: 3mm 0 0; padding: 3mm 5mm; border: 0.4mm solid ${COLORS.teal}; border-radius: 2mm; }
+  .how-to h2 { margin: 0 0 1mm; border: 0; padding: 0; font-size: 10pt; }
+  .how-to p { margin: 0; }
   h2 { font-size: 12pt; margin: 5mm 0 1mm; color: ${COLORS.deep}; border-left: 1.2mm solid ${COLORS.teal}; padding-left: 2.5mm; line-height: 1.4; }
   h2 { break-inside: avoid; break-after: avoid; }
   .lead { margin: 0 0 2mm; break-after: avoid; }
@@ -129,15 +131,18 @@ function sheetHtml(sheet: WebChecklist): string {
 </head>
 <body>
   <header>
-    <p class="edition">${escapeHtml(sheet.edition)}</p>
+    <p class="edition">${escapeHtml(sheet.audience)}　${escapeHtml(sheet.edition)}</p>
     <h1>${escapeHtml(sheet.title)}</h1>
     <p class="subtitle">${escapeHtml(sheet.subtitle)}</p>
   </header>
   <div class="intro">
     <p class="headline">${escapeHtml(sheet.intro.headline)}</p>
     <p>${escapeHtml(sheet.intro.body)}</p>
-    ${sheet.howToUse.map((text) => `<p>${escapeHtml(text)}</p>`).join('')}
   </div>
+  <section class="how-to">
+    <h2>${escapeHtml(sheet.howToUse.heading)}</h2>
+    ${sheet.howToUse.lines.map((text) => `<p>${escapeHtml(text)}</p>`).join('')}
+  </section>
   ${sections}
   <section>
     <h2>${escapeHtml(sheet.certifications.heading)}</h2>
@@ -147,15 +152,15 @@ function sheetHtml(sheet: WebChecklist): string {
   <footer>
     <p>${escapeHtml(sheet.footer.operator)}</p>
     <p>${escapeHtml(sheet.footer.address)}</p>
-    <p>${escapeHtml(sheet.footer.contact)}</p>
-    <p>無料Web診断：${escapeHtml(sheet.footer.site)}</p>
+    <p>${escapeHtml(sheet.footer.contact)}　${escapeHtml(sheet.footer.hours)}</p>
+    <p>${escapeHtml(sheet.footer.companySite)}</p>
   </footer>
 </body>
 </html>`;
 }
 
 async function main() {
-  const sheet = webChecklist(WEB_CHECKLIST_SITE_URL);
+  const sheet = webChecklist();
   const output = path.join(process.cwd(), WEB_CHECKLIST_FILE);
   await mkdir(path.dirname(output), { recursive: true });
 

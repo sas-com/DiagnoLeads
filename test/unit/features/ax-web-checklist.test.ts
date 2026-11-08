@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { AX_SITE_LINKS } from '@/components/features/ax-site/site-config';
 import {
+  WEB_CHECKLIST_COMPANY_SITE,
   WEB_CHECKLIST_DIGEST_FILE,
   WEB_CHECKLIST_FILE,
   WEB_CHECKLIST_PATH,
-  WEB_CHECKLIST_SITE_URL,
   webChecklist,
   webChecklistDigest,
   webChecklistStrings,
@@ -16,14 +17,15 @@ import { describe, expect, it, vi } from 'vitest';
 // The i18n middleware loads next-intl's, which needs next/server (as in its own test)
 vi.mock('next-intl/middleware', () => ({ default: vi.fn(() => vi.fn()) }));
 
-const sheet = webChecklist(WEB_CHECKLIST_SITE_URL);
+const sheet = webChecklist();
 const texts = webChecklistStrings(sheet);
 const site = ja.axSite;
 const faq = site.faq.items;
 
-describe('Web 化のときの確認項目シート (#843)', () => {
+describe('Webに移すときの確認シート (#843)', () => {
   it('says what the landing page says on what to decide, the upkeep, the data and the certifications', () => {
     for (const sentence of [
+      site.webScope.eyebrow,
       site.webScope.title,
       site.webScope.lead,
       site.webScope.decide.title,
@@ -40,15 +42,15 @@ describe('Web 化のときの確認項目シート (#843)', () => {
 
   it('copies its other agreed sentences from the landing page word for word', () => {
     const [personal, data] = sheet.sections[1].items[0].notes;
-    expect(faq.itReview.a.endsWith(sheet.howToUse[1])).toBe(true);
-    expect(faq.webSecurity.a).toContain(sheet.closing[1]);
+    expect(faq.itReview.a.endsWith(sheet.howToUse.lines[2])).toBe(true);
+    expect(site.finalCta.lead.endsWith(sheet.closing[1])).toBe(true);
     expect(faq.personalData.a.endsWith(personal)).toBe(true);
     expect(faq.data.a.endsWith(data)).toBe(true);
   });
 
-  it('promises no scope, hours, cost or safety (#296)', () => {
+  it('promises no scope, hours, cost, arranging or safety (#296)', () => {
     const promises =
-      /何日以内|時間以内|24時間|即日|すぐに|必ず|無料|費用|保証|万全|安全になります|安全です|安心です/;
+      /何日以内|時間以内|24時間|即日|すぐに|必ず|無料|費用|保証|万全|手配|安全になります|安全です|安心です/;
     expect(texts.filter((text) => promises.test(text))).toEqual([]);
     // The only sentence about safety is the landing page's answer on AI and the data
     const safety = texts.flatMap((text) => text.match(/[^。]*安全[^。]*。?/g) ?? []);
@@ -57,11 +59,13 @@ describe('Web 化のときの確認項目シート (#843)', () => {
     ]);
   });
 
-  it('prints the public site and the contact of the landing page footer', () => {
-    expect(sheet.footer.site).toBe(`${WEB_CHECKLIST_SITE_URL}/ja/ax-migration`);
-    expect(sheet.footer.site.startsWith('https://')).toBe(true);
+  it('gives the contact of the landing page and the company site, not the address of the service', () => {
     expect(sheet.footer.operator).toBe(site.footer.operator);
     expect(sheet.footer.address).toBe(site.footer.address);
+    expect(sheet.footer.hours).toBe(site.finalCta.contact.hours);
+    expect(WEB_CHECKLIST_COMPANY_SITE).toBe(AX_SITE_LINKS.operator);
+    expect(sheet.footer.companySite.endsWith(WEB_CHECKLIST_COMPANY_SITE)).toBe(true);
+    expect(JSON.stringify(sheet)).not.toContain('vercel.app');
   });
 
   it('is in the repository as a PDF printed from the sheet as it is now', () => {
