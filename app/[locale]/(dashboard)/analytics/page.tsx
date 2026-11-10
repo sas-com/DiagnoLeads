@@ -11,7 +11,7 @@ import {
   useStatusBreakdown,
 } from '@/hooks/use-analytics';
 import { useExport } from '@/hooks/use-export';
-import { useOrganization } from '@/hooks/use-organization';
+import { useCurrentOrganization, useOrganization } from '@/hooks/use-organization';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
@@ -182,10 +182,12 @@ export default function AnalyticsPage() {
     source: sourceLabel(item.source),
   }));
 
-  // Export functionality
+  // Export functionality: with the organization's name (#1034); while it is read, or if it cannot
+  // be, the hook's placeholder
+  const { organization } = useCurrentOrganization();
   const { exportAnalyticsReport, exportAnalyticsJSON, exportAnalyticsPDF, isExporting } = useExport(
     {
-      organizationName: 'Organization',
+      organizationName: organization?.name || undefined,
       locale: locale as 'en' | 'ja',
     }
   );

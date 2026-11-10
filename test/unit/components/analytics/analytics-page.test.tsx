@@ -17,6 +17,12 @@ const ORG_ID = '660e8400-e29b-41d4-a716-446655440000';
 const mocks = vi.hoisted(() => ({
   donuts: [] as Record<string, unknown>[],
   data: {} as Record<string, unknown>,
+  // What the exports were set up with, and the organization the user is in (#1034)
+  exportOptions: undefined as unknown,
+  organization: { id: '660e8400-e29b-41d4-a716-446655440000', name: '架空商事' } as {
+    id: string;
+    name: string;
+  } | null,
 }));
 const { query, live } = vi.hoisted(() => ({
   query: (data: unknown) => () => ({ data, isLoading: false }),
@@ -99,15 +105,19 @@ vi.mock('@/hooks/use-analytics', () => ({
   useAgencyPerformance: live('agencies', () => AGENCIES),
 }));
 vi.mock('@/hooks/use-export', () => ({
-  useExport: () => ({
-    exportAnalyticsReport: vi.fn(),
-    exportAnalyticsJSON: vi.fn(),
-    exportAnalyticsPDF: vi.fn(),
-    isExporting: false,
-  }),
+  useExport: (options: unknown) => {
+    mocks.exportOptions = options;
+    return {
+      exportAnalyticsReport: vi.fn(),
+      exportAnalyticsJSON: vi.fn(),
+      exportAnalyticsPDF: vi.fn(),
+      isExporting: false,
+    };
+  },
 }));
 vi.mock('@/hooks/use-organization', () => ({
   useOrganization: () => ({ organizationId: ORG_ID, isLoading: false }),
+  useCurrentOrganization: () => ({ organization: mocks.organization, isLoading: false }),
 }));
 vi.mock('next/dynamic', () => ({ default: () => () => null }));
 // Covered by agency-contract-report-card.test.tsx; it reads tRPC directly
@@ -137,11 +147,23 @@ const renderPage = (locale: 'ja' | 'en' = 'ja') =>
   );
 
 beforeEach(() => {
+  mocks.exportOptions = undefined;
+  mocks.organization = { id: ORG_ID, name: '架空商事' };
   mocks.donuts = [];
   mocks.data = {};
 });
 
 describe('AnalyticsPage', () => {
+  it("exports with the organization's name, and the hook's placeholder when it cannot be read (#1034)", () => {
+    renderPage();
+    expect(mocks.exportOptions).toEqual({ organizationName: '架空商事', locale: 'ja' });
+
+    // While the organization is read, or if it cannot be: no name
+    mocks.organization = null;
+    renderPage();
+    expect(mocks.exportOptions).toEqual({ organizationName: undefined, locale: 'ja' });
+  });
+
   it('shows the KPI values without any period-over-period change', () => {
     renderPage();
     expect(screen.getByText('総リード数')).toBeInTheDocument();

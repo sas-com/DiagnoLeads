@@ -199,12 +199,18 @@ export function generateExportFilename(
   return `diagnoleads_${type}${rangeStr}_${timestamp}.${format}`;
 }
 
+/** Read by Excel as UTF-8 before the content (the lead export writes one too) */
+const BOM = '\uFEFF';
+
 /**
  * Create downloadable blob from content
  */
 export function createDownloadBlob(content: string, format: 'csv' | 'json'): Blob {
   const mimeType = format === 'csv' ? 'text/csv;charset=utf-8;' : 'application/json;charset=utf-8;';
-  return new Blob([content], { type: mimeType });
+  // A CSV starts with a BOM, as the lead export does, so that Excel reads it as UTF-8 and the
+  // Japanese is not garbled (#1034)
+  const csv = content.startsWith(BOM) ? content : `${BOM}${content}`;
+  return new Blob([format === 'csv' ? csv : content], { type: mimeType });
 }
 
 /**
