@@ -25,6 +25,12 @@ vi.mock('next/navigation', () => {
   };
 });
 
+// The query cache of the page: dropped on signing in (#1057)
+const mockClearQueries = vi.hoisted(() => vi.fn());
+vi.mock('@tanstack/react-query', () => ({
+  useQueryClient: () => ({ clear: mockClearQueries }),
+}));
+
 // Mock sonner toast
 vi.mock('sonner', () => ({
   toast: {
@@ -133,6 +139,45 @@ describe('LoginForm', () => {
       expect(toast.success).toHaveBeenCalled();
       expect(mockPush).toHaveBeenCalledWith('/dashboard');
     });
+    // What the tab read before is another session's, dropped before the page opens (#1057)
+    expect(mockClearQueries).toHaveBeenCalledTimes(1);
+    expect(mockClearQueries.mock.invocationCallOrder[0]).toBeLessThan(
+      mockPush.mock.invocationCallOrder[0]
+    );
+  });
+
+  it('keeps what the tab read when signing in is refused (#1057)', async () => {
+    mockSignIn.mockResolvedValueOnce({
+      error: { code: 'INVALID_EMAIL_OR_PASSWORD', message: 'Invalid email or password' },
+    });
+    const user = userEvent.setup();
+    render(<LoginForm />);
+
+    await user.type(screen.getByLabelText(/emailLabel/i), 'test@example.com');
+    await user.type(screen.getByLabelText(/passwordLabel/i), 'Password123');
+    await user.click(screen.getByRole('button', { name: /submitButton/i }));
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(mockClearQueries).not.toHaveBeenCalled();
+  });
+
+  it('says the account was deleted when this tab deleted it, once (#1057)', async () => {
+    sessionStorage.setItem('diagnoleads:account-deleted', '1');
+    render(<LoginForm />);
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'settings.auth.login.accountDeleted'
+    );
+    cleanup();
+    render(<LoginForm />);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('says nothing of a deletion otherwise, also for a link that asks it to', () => {
+    mockSearchParams = new ReadonlySearchParams({ accountDeleted: '1' });
+    render(<LoginForm />);
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
   it('shows in the form the error for invalid credentials', async () => {

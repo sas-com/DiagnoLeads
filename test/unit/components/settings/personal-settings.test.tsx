@@ -19,6 +19,8 @@ const mocks = vi.hoisted(() => ({
   updateUser: vi.fn(),
   signOut: vi.fn(),
   replace: vi.fn(),
+  leaveSignedOut: vi.fn(),
+  noteAccountDeleted: vi.fn(),
   soleOwned: [] as { id: string; name: string }[],
   refetchSoleOwned: vi.fn(),
   deleteAccount: vi.fn(),
@@ -95,6 +97,11 @@ vi.mock('next/navigation', () => {
 });
 
 vi.mock('sonner', () => ({ toast: { success: mocks.toastSuccess, error: mocks.toastError } }));
+// Leaving signed out loads a new page (#1057), which jsdom does not
+vi.mock('@/lib/auth/leave-signed-out', () => ({
+  leaveSignedOut: mocks.leaveSignedOut,
+  noteAccountDeleted: mocks.noteAccountDeleted,
+}));
 
 const renderPage = () =>
   render(
@@ -278,13 +285,24 @@ describe('account deletion', () => {
     });
     expect(await within(dialog).findByText(d.errorSoleOwner)).toBeInTheDocument();
     expect(mocks.refetchSoleOwned).toHaveBeenCalled();
-    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.leaveSignedOut).not.toHaveBeenCalled();
   });
 
-  it('signs out and goes to the sign-in page after deleting', async () => {
+  it('signs out and opens the sign-in page as a new one, which says it was deleted (#1057)', async () => {
     await submit({ ok: true });
-    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/ja/login'));
+    await waitFor(() =>
+      expect(mocks.leaveSignedOut).toHaveBeenCalledWith('/ja/login', { replace: true })
+    );
     expect(mocks.signOut).toHaveBeenCalled();
-    expect(mocks.toastSuccess).toHaveBeenCalledWith(d.success);
+    // Said on the sign-in page, noted in this tab: a toast here would go with this page, and a
+    // query anyone can put in a link would say it too
+    expect(mocks.noteAccountDeleted).toHaveBeenCalledTimes(1);
+    expect(mocks.toastSuccess).not.toHaveBeenCalled();
+    expect(mocks.signOut.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.noteAccountDeleted.mock.invocationCallOrder[0]
+    );
+    expect(mocks.noteAccountDeleted.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.leaveSignedOut.mock.invocationCallOrder[0]
+    );
   });
 });

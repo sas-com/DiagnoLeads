@@ -40,6 +40,24 @@ function dataOf(org: Organization | null | undefined, orgId: string): Organizati
     : null;
 }
 
+// Set once this page is left signed out: nothing is saved again before it has gone (#1057)
+let storedOrganizationForgotten = false;
+
+/**
+ * Drops the organization chosen on this browser (localStorage), and not the page's state, for a
+ * page about to be left signed out (#1057): with the state cleared, the organization switcher
+ * would choose one again, and save it, before the page has gone. Nor does a change of the state
+ * meanwhile (an answer that arrives late) save it again.
+ */
+export function forgetStoredOrganization(): void {
+  storedOrganizationForgotten = true;
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Storage blocked: nothing was kept there
+  }
+}
+
 /**
  * Organization Provider
  *
@@ -105,6 +123,7 @@ export function OrganizationProvider({
    * Persist organization to localStorage
    */
   useEffect(() => {
+    if (storedOrganizationForgotten) return;
     if (organizationId) {
       try {
         localStorage.setItem(

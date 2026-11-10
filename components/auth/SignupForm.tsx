@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { authClient } from '@/lib/auth/client';
 import { safeCallbackPath } from '@/lib/auth/safe-callback';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQueryClient } from '@tanstack/react-query';
 import { CircleAlert } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -30,6 +31,7 @@ type SignupFormValues = {
 
 export function SignupForm() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   // Sign-up is invitation-only: the invite page sends people here with its token, the invited
   // address and the way back to it
@@ -101,6 +103,9 @@ export function SignupForm() {
         return;
       }
 
+      // What this tab read before is another session's: one that ended without signing out here
+      // (#1057)
+      queryClient.clear();
       toast.success(t('successToast'));
       router.push(callbackUrl);
     } catch (error) {

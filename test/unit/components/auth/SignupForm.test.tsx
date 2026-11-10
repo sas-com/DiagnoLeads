@@ -25,6 +25,12 @@ vi.mock('next/navigation', () => {
   };
 });
 
+// The query cache of the page: dropped on signing in (#1057)
+const mockClearQueries = vi.hoisted(() => vi.fn());
+vi.mock('@tanstack/react-query', () => ({
+  useQueryClient: () => ({ clear: mockClearQueries }),
+}));
+
 // Mock sonner toast
 vi.mock('sonner', () => ({
   toast: {
@@ -162,6 +168,11 @@ describe('SignupForm', () => {
       expect(toast.success).toHaveBeenCalled();
       expect(mockPush).toHaveBeenCalledWith('/dashboard');
     });
+    // What the tab read before is another session's, dropped before the page opens (#1057)
+    expect(mockClearQueries).toHaveBeenCalledTimes(1);
+    expect(mockClearQueries.mock.invocationCallOrder[0]).toBeLessThan(
+      mockPush.mock.invocationCallOrder[0]
+    );
   });
 
   it('comes from an invitation: fills in the invited address and returns to the invite page', async () => {

@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   session: { data: null as unknown },
   signOut: vi.fn(),
-  push: vi.fn(),
+  leaveSignedOut: vi.fn(),
   toastError: vi.fn(),
 }));
 
@@ -22,11 +22,8 @@ vi.mock('@/lib/auth/client', () => ({
     signOut: mocks.signOut,
   },
 }));
-vi.mock('next/navigation', () => {
-  // One object for every render, like Next's useRouter (#636)
-  const router = { push: mocks.push };
-  return { useRouter: () => router };
-});
+// Leaving signed out loads a new page (#1057), which jsdom does not
+vi.mock('@/lib/auth/leave-signed-out', () => ({ leaveSignedOut: mocks.leaveSignedOut }));
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }));
 
 const signedInAs = (user: { name?: string | null; email?: string | null } | null) => {
@@ -147,7 +144,7 @@ describe('UserDropdown', () => {
     expect(screen.getByRole('link', { name: '組織設定' })).toBeInTheDocument();
   });
 
-  it('signs out and goes to the login page', async () => {
+  it('signs out and opens the login page as a new one (#1057)', async () => {
     mocks.signOut.mockResolvedValue({ data: { success: true }, error: null });
     const user = userEvent.setup();
     renderDropdown();
@@ -156,7 +153,7 @@ describe('UserDropdown', () => {
     await user.click(screen.getByRole('button', { name: 'ログアウト' }));
 
     expect(mocks.signOut).toHaveBeenCalledTimes(1);
-    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/ja/login'));
+    await waitFor(() => expect(mocks.leaveSignedOut).toHaveBeenCalledWith('/ja/login'));
     expect(mocks.toastError).not.toHaveBeenCalled();
   });
 
@@ -171,7 +168,7 @@ describe('UserDropdown', () => {
     await waitFor(() =>
       expect(mocks.toastError).toHaveBeenCalledWith('ログアウトに失敗しました。')
     );
-    expect(mocks.push).not.toHaveBeenCalled();
+    expect(mocks.leaveSignedOut).not.toHaveBeenCalled();
   });
 
   it('says so when signing out fails on the network', async () => {
@@ -185,6 +182,6 @@ describe('UserDropdown', () => {
     await waitFor(() =>
       expect(mocks.toastError).toHaveBeenCalledWith('ログアウトに失敗しました。')
     );
-    expect(mocks.push).not.toHaveBeenCalled();
+    expect(mocks.leaveSignedOut).not.toHaveBeenCalled();
   });
 });

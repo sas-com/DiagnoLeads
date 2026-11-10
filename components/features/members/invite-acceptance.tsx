@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { authClient, useSession } from '@/lib/auth/client';
+import { leaveSignedOut } from '@/lib/auth/leave-signed-out';
 import { VERIFY_IN_SIGNED_IN_BROWSER } from '@/lib/auth/verify-email-guard';
 import { useOrganizationContext } from '@/lib/context/organization-context';
 import { trpc } from '@/lib/trpc/client';
@@ -167,7 +168,9 @@ export function InviteAcceptance({
           className="mt-4 w-full"
           onClick={async () => {
             await authClient.signOut();
-            router.refresh();
+            // This invitation again as a new page, without what this one read and chose for the
+            // account signed out (#1057)
+            leaveSignedOut(window.location.href, { replace: true });
           }}
         >
           {t('signOut')}

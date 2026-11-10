@@ -15,13 +15,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Text } from '@/components/ui/metric';
 import { authClient } from '@/lib/auth/client';
+import { leaveSignedOut, noteAccountDeleted } from '@/lib/auth/leave-signed-out';
 import { trpc } from '@/lib/trpc/client';
 import { AlertTriangle, Trash2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
-import { toast } from 'sonner';
 
 type FieldError = { field: 'confirmation' | 'password' | 'form'; message: string };
 
@@ -36,7 +35,6 @@ interface DeleteAccountCardProps {
 export function DeleteAccountCard({ email }: DeleteAccountCardProps) {
   const t = useTranslations('settings.profile.deletion');
   const locale = useLocale();
-  const router = useRouter();
   const soleOwned = trpc.account.soleOwnedOrganizations.useQuery();
   const deleteAccount = trpc.account.delete.useMutation();
 
@@ -83,10 +81,12 @@ export function DeleteAccountCard({ email }: DeleteAccountCardProps) {
             return;
         }
       }
-      toast.success(t('success'));
       // The sessions are already gone; this clears the session cookies of this browser
       await authClient.signOut().catch(() => undefined);
-      router.replace(`/${locale}/login`);
+      // A new page, without what this one read and chose for the account (#1057). The sign-in
+      // page says the account was deleted: a toast raised here would go with this page
+      noteAccountDeleted();
+      leaveSignedOut(`/${locale}/login`, { replace: true });
     } catch {
       setError({ field: 'form', message: t('errorFailed') });
     }
