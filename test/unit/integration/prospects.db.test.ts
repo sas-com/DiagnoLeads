@@ -528,7 +528,8 @@ describe.skipIf(!url)('prospects (PostgreSQL)', () => {
         id,
         email: email.toUpperCase(),
       });
-      expect(result).toEqual({ leadId: existing.id, linkedExisting: true });
+      // No meeting day on the rows: no deal for the lead (#854)
+      expect(result).toEqual({ leadId: existing.id, linkedExisting: true, dealCreated: false });
     }
     const [lead] = await pg.select().from(leads).where(eq(leads.id, existing.id));
     expect(lead).toMatchObject({ status: 'negotiating', inflowSource: 'lp_organic' });

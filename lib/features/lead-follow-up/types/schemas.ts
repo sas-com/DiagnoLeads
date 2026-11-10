@@ -149,6 +149,12 @@ function refineCheckWith(
   }
 }
 
+/**
+ * A next action or takeaway to add. dealId: added from a deal's screen (its page, or the deals
+ * board and list for an open deal whose lead has none, #853). The deal must be one of the lead's,
+ * and it decides whom the task is given to (createTask in ../service.ts): whom is never taken
+ * from the input, so there is no assigneeId
+ */
 export const createTaskSchema = z
   .object({
     organizationId,
@@ -158,6 +164,7 @@ export const createTaskSchema = z
     note: optionalNote(TASK_NOTE_MAX),
     kind: z.enum(TASK_KINDS).default('next_action'),
     ...checkWithFields,
+    dealId: z.string().uuid().nullish(),
   })
   .strict()
   .superRefine(refineCheckWith);
@@ -233,6 +240,11 @@ export interface LeadTaskView {
   checkWith: string | null;
   checkWithUser: ContactActor | null;
   assigneeId: string | null;
+  /**
+   * The member it is given to, with their name: set only on a next action added for a deal whose
+   * owner is not the lead's assignee (#853). Null when it follows the lead's assignee
+   */
+  assignee: ContactActor | null;
   createdBy: string | null;
   createdAt: Date;
   updatedAt: Date;

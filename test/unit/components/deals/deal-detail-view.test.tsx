@@ -69,12 +69,37 @@ vi.mock('@/lib/trpc/client', () => {
           useMutation: (options?: MutationOptions) =>
             mutation(options, mocks.deletes, mocks.deleting),
         },
+        // Read by the deal form for a new deal only (#951); this page edits one
+        forLead: { useQuery: () => ({ data: undefined }) },
       },
       leads: { assignees: { useQuery: () => ({ data: [] }) } },
       leadSearch: { suggest: { useQuery: () => ({ data: [], isFetching: false }) } },
     },
   };
 });
+// Recording a contact is its own dialog (#554), tested in record-activity-dialog.test.tsx
+vi.mock('@/components/features/lead-follow-up/record-activity-dialog', () => ({
+  RecordActivityDialog: (props: {
+    open: boolean;
+    defaultDealId?: string;
+    leadId: string;
+    onOpenChange: (open: boolean) => void;
+    onCloseAutoFocus?: (event: Event) => void;
+  }) =>
+    props.open ? (
+      <div role="dialog" aria-label="活動を記録" data-deal={props.defaultDealId} data-lead={props.leadId}>
+        <button
+          type="button"
+          onClick={() => {
+            props.onOpenChange(false);
+            props.onCloseAutoFocus?.(new Event('focus'));
+          }}
+        >
+          閉じる
+        </button>
+      </div>
+    ) : null,
+}));
 vi.mock('@/hooks/use-organization', () => ({
   useOrganization: () => ({ organizationId: ORG_ID }),
 }));
@@ -88,8 +113,19 @@ vi.mock('@/components/features/lead-activity/deal-activities-card', () => ({
 }));
 // The lead's next actions are their own card (#85), tested in lead-next-actions-card.test.tsx
 vi.mock('@/components/features/lead-follow-up/lead-next-actions-card', () => ({
-  LeadNextActionsCard: (props: { leadId: string; description?: string }) => (
-    <div data-testid="lead-next-actions" data-lead={props.leadId}>
+  LeadNextActionsCard: (props: {
+    leadId: string;
+    description?: string;
+    deal?: { id: string; stage: string; ownerUserId: string | null; ownerName: string | null };
+  }) => (
+    <div
+      data-testid="lead-next-actions"
+      data-lead={props.leadId}
+      data-deal={props.deal?.id}
+      data-stage={props.deal?.stage}
+      data-owner={props.deal?.ownerUserId ?? ''}
+      data-owner-name={props.deal?.ownerName ?? ''}
+    >
       {props.description}
     </div>
   ),
@@ -329,6 +365,31 @@ describe('DealDetailView', () => {
       ).toBeInTheDocument();
       expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     });
+  });
+
+  it('records a contact for the deal from the header too (#776)', async () => {
+    const user = userEvent.setup();
+    renderView();
+
+    // In the page's header, beside its menu
+    const header = screen.getByRole('heading', { level: 1 }).closest('header');
+    expect(header).not.toBeNull();
+    await user.click(within(header as HTMLElement).getByRole('button', { name: '活動を記録' }));
+    const dialog = screen.getByRole('dialog', { name: '活動を記録' });
+    expect(dialog).toHaveAttribute('data-deal', DEAL_ID);
+    expect(dialog).toHaveAttribute('data-lead', LEAD_ID);
+
+    // Opened by state, not by a dialog trigger: the focus goes back to the button
+    await user.click(within(dialog).getByRole('button', { name: '閉じる' }));
+    expect(within(header as HTMLElement).getByRole('button', { name: '活動を記録' })).toHaveFocus();
+  });
+
+  it('has no button to record a contact for those who may not record one (#776)', () => {
+    // Who may edit the deal may record for it (update Lead with deals readable)
+    mocks.get.data = detail({ canEdit: false, canDelete: false });
+    renderView();
+
+    expect(screen.queryByRole('button', { name: '活動を記録' })).not.toBeInTheDocument();
   });
 
   it('tells those who cannot change deals that the page is read only', () => {
@@ -583,6 +644,16 @@ describe('DealDetailView', () => {
       expect(screen.getByTestId('lead-next-actions')).toHaveTextContent(
         'リード「架空商事」の次の行動・持ち帰り事項です。リードの画面と同じものです'
       );
+    });
+
+    it("adds the lead's next actions for the deal, which goes to the owner of an open one (#853)", () => {
+      mocks.get.data = detail({ ownerUserId: 'user-1', ownerName: '営業 花子' });
+      renderView();
+      const card = screen.getByTestId('lead-next-actions');
+      expect(card).toHaveAttribute('data-deal', DEAL_ID);
+      expect(card).toHaveAttribute('data-stage', 'proposal');
+      expect(card).toHaveAttribute('data-owner', 'user-1');
+      expect(card).toHaveAttribute('data-owner-name', '営業 花子');
     });
 
     it('does not name a lead without a company or a name', () => {

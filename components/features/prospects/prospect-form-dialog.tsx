@@ -124,7 +124,10 @@ function useSettled(value: string, delay = 400) {
 
 /**
  * Record a conversation in about thirty seconds (#265): the three required fields and the chips
- * first, the details folded away. Sales also see the columns they fill in.
+ * first, the details folded away. Sales also see the columns they fill in. The meeting day sales
+ * set on a row that is a lead's (new, or another day) creates the lead's deal in 見極め, unless it
+ * has an open deal, is won, or the other cases the server skips (#854): the form says so and
+ * reloads what the deal changes.
  */
 export function ProspectFormDialog({
   organizationId,
@@ -146,6 +149,7 @@ export function ProspectFormDialog({
 }) {
   const t = useTranslations('prospects');
   const tPipeline = useTranslations('pipeline');
+  const tDeals = useTranslations('deals');
   const utils = trpc.useUtils();
   const [form, setForm] = useState<FormState>(() => toForm(row, today));
   const [errors, setErrors] = useState<Partial<Record<RequiredKey, boolean>>>({});
@@ -165,15 +169,26 @@ export function ProspectFormDialog({
     { enabled: company.length >= 2, retry: false, staleTime: 30_000 }
   );
 
-  const done = () => {
+  const done = (dealCreated = false) => {
     toast.success(t('saved'));
     utils.prospects.list.invalidate();
     utils.prospects.summary.invalidate();
+    if (dealCreated) {
+      // The lead's deal (its deals, the board, today's deals), and its status and deal phase,
+      // recorded in its activity (#854)
+      utils.leads.invalidate();
+      utils.deals.invalidate();
+      utils.leadActivity.invalidate();
+      toast.info(tDeals('autoCreated', { count: 1 }));
+    }
     onOpenChange(false);
   };
   const failed = () => toast.error(t('saveError'));
-  const create = trpc.prospects.create.useMutation({ onSuccess: done, onError: failed });
-  const update = trpc.prospects.update.useMutation({ onSuccess: done, onError: failed });
+  const create = trpc.prospects.create.useMutation({ onSuccess: () => done(), onError: failed });
+  const update = trpc.prospects.update.useMutation({
+    onSuccess: (saved) => done(saved.dealCreated),
+    onError: failed,
+  });
   const pending = create.isPending || update.isPending;
 
   const submit = (event: React.FormEvent) => {

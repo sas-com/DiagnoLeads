@@ -1460,7 +1460,9 @@
       "noAmount": "No amount yet",
       "unassigned": "No owner",
       "move": "Move \"{name}\" to another stage (now {stage})",
-      "moveTo": "Move to {stage}"
+      "moveTo": "Move to {stage}",
+      "addNextAction": "Add a next action",
+      "addNextActionFor": "Add a next action for \"{name}\""
     },
     "filters": {
       "label": "Filters",
@@ -1550,6 +1552,10 @@
       "forecastAuto": "From the probability",
       "wonToday": "The won date will be today.",
       "wonPast": "For a past win, correct the won date by editing the deal once it is created.",
+      "wonFirst": "This records the lead's win as a won deal.",
+      "wonFirstStage": "This lead is recorded as won, so its won deal comes first: choose the stage Won. If it is not won, check the lead's status and deal phase",
+      "stageFollowsLead": "Set from the lead's deal phase",
+      "stageTakesPhaseBack": "In this stage, the deal takes the lead's deal phase back",
       "onHoldReason": "\"{reason}\" cannot be the lost reason of a deal. Choose another one",
       "submitCreate": "Create",
       "submitEdit": "Save",
@@ -4583,9 +4589,10 @@
       "all": "All",
       "diagnosis": "Diagnoses & consultations",
       "hearing": "Hearings",
+      "contact": "Contacts & visits",
       "comment": "Comments",
       "sales": "Sales actions",
-      "email": "Email"
+      "email": "Result emails"
     },
     "empty": "No activity yet.",
     "loadError": "Could not load the activity.",
@@ -5113,7 +5120,21 @@
       "checkWithOtherPlaceholder": "e.g. The customer's IT department",
       "checkWith": "Check with: {name}",
       "fromMeetingRequest": "First meeting confirmed from the respondent's preferred dates",
-      "fromActTiming": "Contact again before \"when to act\" (created from the support end and retirement)"
+      "fromActTiming": "Contact again before \"when to act\" (created from the support end and retirement)",
+      "assignee": "Assigned to {name}",
+      "added": "Added \"{title}\"",
+      "adding": "Adding…",
+      "dueInvalid": "Enter the due date as year-month-day, e.g. 2026-11-15",
+      "recipient": {
+        "dealOwner": "When it is due, {name} (the deal's owner) is notified and sees it on Today.",
+        "you": "When it is due, you are notified and see it on Today.",
+        "leadAssignee": "When it is due, the lead's assignee (or you, if it has none) is notified and sees it on Today."
+      },
+      "dialog": {
+        "title": "Add a next action for \"{deal}\"",
+        "description": "It is added to the next actions and takeaways of the lead \"{lead}\".",
+        "descriptionNoName": "It is added to the next actions and takeaways of this deal's lead."
+      }
     },
     "today": {
       "title": "Today",
@@ -5776,7 +5797,7 @@
     },
     "convert": {
       "title": "Make a lead",
-      "description": "Move a customer you now have a contact for to the leads. The company and the sales person come from this row.",
+      "description": "Move a customer you now have a contact for to the leads. The company and the sales person come from this row. A row with a meeting date also creates a deal in Qualification for the lead, except for leads such as those with an open deal or already won.",
       "email": "Email",
       "name": "Name (optional)",
       "phone": "Phone (optional)",
@@ -5870,7 +5891,7 @@
     },
     "handedOverDays": "Handed over {days} days ago",
     "leadBadge": "Lead: {status}",
-    "leadLocked": "Rows that became leads are followed on the lead page",
+    "leadLocked": "Rows that became leads are followed on the lead page. A meeting date entered here creates a deal in Qualification for the lead, except for leads such as those with an open deal or already won",
     "leadCard": {
       "title": "Customer search records",
       "description": "What employees heard when they talked to this customer.",
@@ -5956,7 +5977,7 @@
     },
     "import": {
       "title": "Import an agency's appointment report",
-      "description": "Read the agency's report (CSV or Excel) and attach each row to a lead by email address (or company name). New hearings are prefilled as \"Sales agency\". No lead is created.",
+      "description": "Read the agency's report (CSV or Excel) and attach each row to a lead by email address (or company name). New hearings are prefilled as \"Sales agency\". No lead is created. A row with an appointment date creates a deal in Qualification for its lead, except for leads such as those with an open deal or already won, and importing the same date again creates none. A row without an appointment date keeps the date saved before.",
       "chooseFile": "Choose a file",
       "template": "Download the format (CSV)",
       "rows": "{count} rows read",

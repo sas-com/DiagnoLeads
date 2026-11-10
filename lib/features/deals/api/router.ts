@@ -64,15 +64,15 @@ export const dealsRouter = router({
     return { ...board, ...accessOf(ctx) };
   }),
 
-  /** Deals of one lead (the lead page) */
+  /** Deals of one lead (the lead page), and where a new one starts in the deal form (#951) */
   forLead: organizationProcedure.input(leadDealsSchema).query(async ({ ctx, input }) => {
     assertCanRead(ctx);
-    const items = await listLeadDeals(ctx.db, {
+    const lead = await listLeadDeals(ctx.db, {
       organizationId: ctx.organization.id,
       leadId: input.leadId,
     });
-    if (!items) throw new TRPCError({ code: 'NOT_FOUND', message: 'Lead not found' });
-    return { items, ...accessOf(ctx) };
+    if (!lead) throw new TRPCError({ code: 'NOT_FOUND', message: 'Lead not found' });
+    return { ...lead, ...accessOf(ctx) };
   }),
 
   get: organizationProcedure.input(dealScopeSchema).query(async ({ ctx, input }) => {

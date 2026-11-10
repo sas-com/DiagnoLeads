@@ -17,7 +17,7 @@ import Link from 'next/link';
 import { type DragEvent, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { daysSince, dealMarks, formatDealDate, formatYen, formatYenCompact } from './deal-format';
 import { DealMarks } from './deal-marks';
-import { DealNextTaskSummary } from './deal-next-task';
+import { AddNextActionButton, DealNextTaskSummary } from './deal-next-task';
 import type { MoveOptions } from './use-stage-move';
 
 const DRAG_TYPE = 'application/x-deal-id';
@@ -28,6 +28,8 @@ const TOASTER = '[data-sonner-toaster]';
 const FOLLOW_KEEPERS = `[role="menu"], [role="dialog"], [role="alertdialog"], ${TOASTER}`;
 
 type OnMove = (deal: DealCard, stage: DealStage, options?: MoveOptions) => void;
+/** Opens the dialog that adds the lead's next action, from the card's button (#853) */
+type OnAddNextAction = (deal: DealCard, opener: HTMLElement) => void;
 /** Keeps a card's move button known while it is shown; returns its cleanup */
 type TrackMoveButton = (dealId: string, button: HTMLButtonElement) => () => void;
 
@@ -39,6 +41,11 @@ interface DealBoardProps {
   closedWithinDays: number;
   canEdit: boolean;
   onMove: OnMove;
+  /**
+   * Offers "add a next action" on the cards of open deals marked for their lead having none, to
+   * those who may change deals (#853); none without it
+   */
+  onAddNextAction?: OnAddNextAction;
 }
 
 /**
@@ -55,9 +62,18 @@ const focusLost = () => {
  * amount. A card moves by dragging it to another column or, from the keyboard and on phones,
  * with its "move" menu (WCAG 2.5.7). After a move from the menu the focus is on the card's move
  * button in its new column (#720): the card is drawn anew there, so its new button takes the
- * focus the old one lost, and a question (won, lost, reopen) gives it back when it closes.
+ * focus the old one lost, and a question (won, lost, reopen) gives it back when it closes. A card
+ * marked for its lead having no next action offers to add one (#853); the deal's name is marked
+ * (data-deal-link) for the focus to go to once one is added, as the button then goes away.
  */
-export function DealBoard({ columns, today, closedWithinDays, canEdit, onMove }: DealBoardProps) {
+export function DealBoard({
+  columns,
+  today,
+  closedWithinDays,
+  canEdit,
+  onMove,
+  onAddNextAction,
+}: DealBoardProps) {
   const [dragged, setDragged] = useState<DealCard | null>(null);
   const [over, setOver] = useState<DealStage | null>(null);
   // The deal moved from its menu, whose move button keeps the focus wherever its card goes
@@ -125,6 +141,7 @@ export function DealBoard({ columns, today, closedWithinDays, canEdit, onMove }:
             closedWithinDays={closedWithinDays}
             canEdit={canEdit}
             onMove={moveFromMenu}
+            onAddNextAction={onAddNextAction}
             trackMoveButton={trackMoveButton}
             highlighted={over === column.stage && dragged?.stage !== column.stage}
             onDragStart={(deal) => {
@@ -152,6 +169,7 @@ function StageColumn({
   closedWithinDays,
   canEdit,
   onMove,
+  onAddNextAction,
   trackMoveButton,
   highlighted,
   onDragStart,
@@ -164,6 +182,7 @@ function StageColumn({
   closedWithinDays: number;
   canEdit: boolean;
   onMove: (deal: DealCard, stage: DealStage) => void;
+  onAddNextAction?: OnAddNextAction;
   trackMoveButton: TrackMoveButton;
   highlighted: boolean;
   onDragStart: (deal: DealCard) => void;
@@ -219,6 +238,7 @@ function StageColumn({
               today={today}
               canEdit={canEdit}
               onMove={onMove}
+              onAddNextAction={onAddNextAction}
               trackMoveButton={trackMoveButton}
               onDragStart={onDragStart}
             />
@@ -234,6 +254,7 @@ function DealCardItem({
   today,
   canEdit,
   onMove,
+  onAddNextAction,
   trackMoveButton,
   onDragStart,
 }: {
@@ -241,12 +262,14 @@ function DealCardItem({
   today: string;
   canEdit: boolean;
   onMove: (deal: DealCard, stage: DealStage) => void;
+  onAddNextAction?: OnAddNextAction;
   trackMoveButton: TrackMoveButton;
   onDragStart: (deal: DealCard) => void;
 }) {
   const t = useTranslations('deals');
   const locale = useLocale();
   const open = isOpenStage(deal.stage);
+  const marks = dealMarks(deal, today);
 
   return (
     <li
@@ -265,6 +288,7 @@ function DealCardItem({
         <div className="min-w-0">
           <Link
             href={`/${locale}/deals/${deal.id}`}
+            data-deal-link={deal.id}
             className={cn(
               'inline-flex items-center font-semibold text-gray-900 underline-offset-2 hover:underline dark:text-gray-50',
               TAP_TARGET
@@ -300,8 +324,16 @@ function DealCardItem({
         </p>
       )}
       {/* What to do next always ends the card (#853): the lead's next action, or the mark for
-          having none (from the same value), which comes after the mark of a passed close date */}
-      <DealMarks flags={dealMarks(deal, today)} className="mt-2" />
+          having none (from the same value), which comes after the mark of a passed close date,
+          with the button that adds one under it */}
+      <DealMarks flags={marks} className="mt-2" />
+      {marks.noNextAction && canEdit && onAddNextAction && (
+        <AddNextActionButton
+          dealName={deal.name}
+          onAdd={(opener) => onAddNextAction(deal, opener)}
+          className="mt-2"
+        />
+      )}
       {open && deal.nextTask && (
         <DealNextTaskSummary
           task={deal.nextTask}
