@@ -15,6 +15,7 @@ import { Loader2, NotebookPen } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useRef, useState } from 'react';
 import { CONTACT_KIND_ICONS } from './contact-kinds';
+import type { OpenRowActivity } from './row-activity-dialog';
 import { useRecordContact } from './use-record-contact';
 
 /** The menu's items: 44px to tap on phones like the button, with 14px text (DADS) */
@@ -28,8 +29,9 @@ export interface ContactRecordMenuProps {
   /**
    * Opens the list's one "Record an activity" for this lead, from the menu's button (#998): the
    * list keeps it outside its rows, so that it stays when the row leaves
+   * (useRowActivityDialog's start)
    */
-  onRecordActivity: (opener: HTMLElement | null) => void;
+  onRecordActivity: OpenRowActivity;
   className?: string;
 }
 
@@ -133,7 +135,7 @@ export function ContactRecordMenu({
           className={ITEM_CLASS}
           onSelect={() => {
             toDialog.current = true;
-            onRecordActivity(buttonRef.current);
+            onRecordActivity({ leadId, leadLabel }, buttonRef.current);
           }}
         >
           <NotebookPen className="h-4 w-4" aria-hidden="true" />

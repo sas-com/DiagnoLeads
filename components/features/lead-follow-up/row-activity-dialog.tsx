@@ -15,12 +15,15 @@ export type OpenRowActivity = (lead: RowActivityLead, opener: HTMLElement | null
 
 /**
  * The state of a list's one "Record an activity" (#998), opened from the menu of a row
- * (ContactRecordMenu): closed, the focus goes back to the menu's button, or to the list's heading
- * (focusable by script) when the row left meanwhile.
+ * (ContactRecordMenu, which is given its start): closed, the focus goes back to the menu's
+ * button, or to the list's heading when the row left meanwhile. Not to the row beside it, as
+ * after ticking a next action (#776): a row leaving here is not what the user did, and the focus
+ * would land on another lead's button unnoticed; the heading says the list changed.
+ * The heading needs that id and tabIndex={-1} (TodaySection does it for a headingId given).
  */
-export function useRowActivityDialog(headingId?: string) {
+export function useRowActivityDialog(headingId: string) {
   return useRowDialog<RowActivityLead>(
-    ({ opener }) => opener ?? (headingId ? document.getElementById(headingId) : null)
+    ({ opener }) => opener ?? document.getElementById(headingId)
   );
 }
 

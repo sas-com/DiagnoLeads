@@ -140,9 +140,7 @@ function MeetingItem({
           organizationId={organizationId}
           leadId={meeting.leadId}
           leadLabel={leadName}
-          onRecordActivity={(opener) =>
-            onRecordActivity({ leadId: meeting.leadId, leadLabel: leadName }, opener)
-          }
+          onRecordActivity={onRecordActivity}
           className="ml-auto shrink-0"
         />
       )}

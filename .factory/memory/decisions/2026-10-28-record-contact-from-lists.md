@@ -6,7 +6,7 @@ title: "一覧の行から連絡を記録する入口は「連絡を記録」の
 status: active
 superseded_by: []
 issues: [863, 556, 554, 776, 895, 998]
-paths: ["components/features/lead-follow-up/contact-record-menu.tsx", "components/features/lead-follow-up/contact-quick-actions.tsx", "components/features/lead-follow-up/use-record-contact.tsx", "components/features/lead-follow-up/due-tasks-list.tsx", "components/features/today/today-meetings.tsx", "components/features/today/today-next-actions.tsx", "components/features/lead-follow-up/row-activity-dialog.tsx", "hooks/use-row-dialog.ts", "components/dashboard/ax-dashboard-sections.tsx"]
+paths: ["components/features/lead-follow-up/contact-record-menu.tsx", "components/features/lead-follow-up/contact-quick-actions.tsx", "components/features/lead-follow-up/use-record-contact.tsx", "components/features/lead-follow-up/due-tasks-list.tsx", "components/features/today/today-meetings.tsx", "components/features/today/today-next-actions.tsx", "components/features/today/today-deals.tsx", "components/features/deals/deals-screen.tsx", "components/features/lead-follow-up/row-activity-dialog.tsx", "hooks/use-row-dialog.ts", "components/dashboard/ax-dashboard-sections.tsx"]
 ---
 
 ### [UI] 一覧の行から連絡を記録する入口は「連絡を記録」のボタン1つとメニューにし、リードの画面は1タップのボタンのままにする（#863）
@@ -22,6 +22,7 @@ paths: ["components/features/lead-follow-up/contact-record-menu.tsx", "component
   - メニューの「活動を記録」で開くダイアログは、行ごとに持たず、欄に1つだけ置く（#998）
     - 置き場所は、読み直しで入れ替わる欄の中身の外（`RowActivityDialog`）。行が消えても、欄が失敗や空の表示に替わっても、入力ごと残る
     - 閉じたら、開いたメニューのボタンへフォーカスを戻す。行が消えていたら、欄の見出し（スクリプトからだけフォーカスできる）へ
+    - 隣の行へは送らない。次の行動のチェック（#776）や次の行動の追加（#970）は、自分の操作で行が消えるので次の行へ進めるが、ここで行が消えるのはほかの人の操作か読み直しで、隣の行へ送ると、別のリードのボタンにいることに気づかない。見出しなら、欄が変わったことが読み上げで伝わる（#998 の UI/UX レビュー）
 - **理由**
   - 行ごとに4つのボタンを並べると、スマホで行が折り返して重くなる。compact（32px・12px）は DADS に合わない
   - 一覧では2タップになる。ただ、スクロール中の誤記録を防ぐ軽い確認になり、リードの画面へ移るより手数が少ない
