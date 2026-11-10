@@ -76,7 +76,7 @@ import {
   useUpdateNotificationPreferences,
 } from '@/hooks/use-notifications';
 
-const ORG_ID = 'org-1';
+const ORG_ID = '550e8400-e29b-41d4-a716-446655440000';
 
 /** The onSuccess the hook gave to useMutation on its last render */
 function onSuccessOf(useMutation: { mock: { lastCall?: [MutationOptions] } }): () => void {
@@ -106,6 +106,14 @@ describe('useNotifications', () => {
       { refetchInterval: 30000 }
     );
   });
+
+  it('leaves the organization out without an organization id (every organization of the user)', () => {
+    renderHook(() => useNotifications());
+    expect(mocks.listUseQuery).toHaveBeenLastCalledWith(
+      { organizationId: undefined, limit: 20, unreadOnly: false },
+      { refetchInterval: 30000 }
+    );
+  });
 });
 
 describe('useUnreadCount', () => {
@@ -116,6 +124,14 @@ describe('useUnreadCount', () => {
       { refetchInterval: 30000 }
     );
     expect(result.current).toBe(mocks.results.unreadCount);
+  });
+
+  it('leaves the organization out without an organization id (every organization of the user)', () => {
+    renderHook(() => useUnreadCount());
+    expect(mocks.unreadCountUseQuery).toHaveBeenLastCalledWith(
+      { organizationId: undefined },
+      { refetchInterval: 30000 }
+    );
   });
 });
 

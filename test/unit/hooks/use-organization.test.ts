@@ -178,6 +178,24 @@ describe('useOrganization', () => {
     expect(mocks.setOrganization).toHaveBeenCalledTimes(1);
     expect(mocks.setOrganization).toHaveBeenCalledWith(OTHER_ORG_ID);
   });
+
+  it('does not sync again on a re-render while the URL and the context stay the same', () => {
+    mockParams = { organizationId: OTHER_ORG_ID };
+    const { rerender } = renderHook(() => useOrganization());
+    rerender();
+    expect(mocks.setOrganization).toHaveBeenCalledTimes(1);
+  });
+
+  it('puts the organization of the URL back when the context moves away from it', () => {
+    const { rerender } = renderHook(() => useOrganization());
+    expect(mocks.setOrganization).not.toHaveBeenCalled();
+
+    mockContext = contextWith({ organizationId: OTHER_ORG_ID });
+    rerender();
+
+    expect(mocks.setOrganization).toHaveBeenCalledTimes(1);
+    expect(mocks.setOrganization).toHaveBeenCalledWith(ORG_ID);
+  });
 });
 
 describe('useCurrentOrganization', () => {
@@ -189,12 +207,27 @@ describe('useCurrentOrganization', () => {
     );
   });
 
-  it('does not fetch for an organization id that is not a UUID', () => {
-    mockParams = { organizationId: 'demo-org' };
-    mockContext = contextWith({ organizationId: 'demo-org' });
+  it('fetches for an upper-case UUID too', () => {
+    const upperCaseId = ORG_ID.toUpperCase();
+    mockParams = { organizationId: upperCaseId };
+    mockContext = contextWith({ organizationId: upperCaseId });
     renderHook(() => useCurrentOrganization());
     expect(mocks.getById).toHaveBeenLastCalledWith(
-      { id: 'demo-org' },
+      { id: upperCaseId },
+      expect.objectContaining({ enabled: true })
+    );
+  });
+
+  it.each([
+    ['is not a UUID', 'demo-org'],
+    ['has text before a UUID', `x${ORG_ID}`],
+    ['has text after a UUID', `${ORG_ID}x`],
+  ])('does not fetch for an organization id that %s', (_case, organizationId) => {
+    mockParams = { organizationId };
+    mockContext = contextWith({ organizationId });
+    renderHook(() => useCurrentOrganization());
+    expect(mocks.getById).toHaveBeenLastCalledWith(
+      { id: organizationId },
       expect.objectContaining({ enabled: false })
     );
   });
@@ -203,8 +236,9 @@ describe('useCurrentOrganization', () => {
     mockParams = {};
     mockContext = contextWith({ organizationId: null });
     const { result } = renderHook(() => useCurrentOrganization());
+    // Only that the query stays off: the input it is given then is never sent
     expect(mocks.getById).toHaveBeenLastCalledWith(
-      { id: '' },
+      expect.anything(),
       expect.objectContaining({ enabled: false })
     );
     expect(result.current).toEqual({ organization: null, isLoading: false });
@@ -236,6 +270,27 @@ describe('useCurrentOrganization', () => {
     expect(result.current.organization).toBe(fetched);
     expect(mocks.setOrganization).toHaveBeenCalledTimes(1);
     expect(mocks.setOrganization).toHaveBeenCalledWith(ORG_ID, fetched);
+  });
+
+  it('stores the organization in the context once the fetch finishes', () => {
+    mockQuery = { data: undefined, isLoading: true };
+    const { result, rerender } = renderHook(() => useCurrentOrganization());
+    expect(mocks.setOrganization).not.toHaveBeenCalled();
+
+    const fetched = organization(ORG_ID, 'Fetched Org');
+    mockQuery = { data: fetched, isLoading: false };
+    rerender();
+
+    expect(result.current).toEqual({ organization: fetched, isLoading: false });
+    expect(mocks.setOrganization).toHaveBeenCalledTimes(1);
+    expect(mocks.setOrganization).toHaveBeenCalledWith(ORG_ID, fetched);
+  });
+
+  it('does not store the same fetched organization again on a re-render', () => {
+    mockQuery = { data: organization(ORG_ID, 'Fetched Org'), isLoading: false };
+    const { rerender } = renderHook(() => useCurrentOrganization());
+    rerender();
+    expect(mocks.setOrganization).toHaveBeenCalledTimes(1);
   });
 
   it('does not store fetched data without an organization id', () => {
