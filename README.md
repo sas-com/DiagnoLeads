@@ -28,7 +28,7 @@ AI-Powered B2B Diagnostic Platform for **Holdings, Group Companies & Enterprise 
 
 ## アクセス情報
 
-- **本番**: https://diagnoleads-v2.vercel.app （Vercel。`/` は `/ja` へ転送。英語は `/en/…`）
+- **本番**: https://diagnoleads-v2.vercel.app （Vercel。`/` はブラウザの言語で `/ja` か `/en` へ転送し、既定は日本語。決め方は [Language Switching](#language-switching)）
 - **テストモード中**（2026-10-29 の公開まで）: 社外のメールアドレスからは診断・相談を送れない。AX の2ページは検索エンジンに載らない。公開の準備と条件は #51
 - パスワード・API キー・テスト用アカウント・DB の接続先は、このリポジトリに書かない
 
@@ -115,12 +115,10 @@ vercel --prod
 - **i18n**: next-intl 4
 - **AI**: Anthropic SDK / OpenAI SDK
 - **Email**: Resend
-- **Storage / Cache**: AWS S3 + Upstash Redis
 - **Testing**: Vitest + Playwright + Testing Library
 - **Code Quality**: Biome + lefthook + commitlint
 - **Package Manager**: Bun
 - **Deployment**: Vercel
-- **Logging**: `lib/monitoring/logger.ts`
 
 バージョンはメジャーのみ記載しています。正確な版は `package.json` を、層と依存の向きは [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) を見てください。
 
@@ -183,67 +181,15 @@ DiagnoLeads v2 supports multiple languages with comprehensive i18n infrastructur
 diagnoleads-v2/
 ├── locales/                # Translation files
 │   ├── ja/                # Japanese translations
-│   │   ├── common.json    # Common UI strings
-│   │   └── errors.json    # Error messages
+│   │   └── common.json    # Common UI strings
 │   └── en/                # English translations
-│       ├── common.json
-│       └── errors.json
+│       └── common.json
 ├── lib/
-│   ├── i18n/              # i18n configuration
-│   │   ├── config.ts      # next-intl config
-│   │   ├── middleware.ts  # Locale detection
-│   │   └── request.ts     # Server-side i18n
-│   └── messages/          # Message utilities
-│       ├── error-mapper.ts    # Error code → i18n key mapping
-│       └── validation.ts      # Zod validation i18n
+│   └── i18n/              # i18n configuration
+│       ├── config.ts      # next-intl config
+│       ├── middleware.ts  # Locale detection
+│       └── request.ts     # Server-side i18n
 └── app/[locale]/          # Locale-based routing
-```
-
-### Error Message Localization
-
-All error messages are centrally managed in `locales/*/errors.json`:
-
-```typescript
-// Example: Using localized error messages
-import { useTranslations } from 'next-intl';
-import { getLocalizedErrorMessage } from '@/lib/messages/error-mapper';
-
-function MyComponent() {
-  const tErrors = useTranslations('errors');
-
-  try {
-    // API call
-  } catch (error) {
-    const errorResponse = await mapFetchErrorToErrorResponse(error);
-    const message = getLocalizedErrorMessage(errorResponse, tErrors);
-    toast.error(message);
-  }
-}
-```
-
-### Zod Validation Localization
-
-Zod validation errors are automatically localized:
-
-```typescript
-import { useTranslations } from 'next-intl';
-import { createZodErrorMap } from '@/lib/messages/validation';
-import { z } from 'zod';
-
-function MyForm() {
-  const tErrors = useTranslations('errors');
-  const tFields = useTranslations('leads');
-
-  // Set Zod error map for i18n
-  z.setErrorMap(createZodErrorMap(tErrors, tFields));
-
-  const schema = z.object({
-    email: z.string().email(),
-    name: z.string().min(2).max(100),
-  });
-
-  // Errors will be automatically localized
-}
 ```
 
 ### Usage Examples
@@ -263,11 +209,11 @@ function MyComponent() {
 #### 2. Parameterized Messages
 
 ```typescript
-const t = useTranslations('errors');
+const t = useTranslations('validation');
 
-// {field} will be replaced with actual field name
-const message = t('validation.required', { field: 'Email' });
-// "Emailは必須です" (ja) or "Email is required" (en)
+// {min} will be replaced with the value passed in
+const message = t('minLength', { min: 2 });
+// "最低2文字必要です" (ja) or "Minimum 2 characters required" (en)
 ```
 
 #### 3. Multiple Namespaces
@@ -286,23 +232,12 @@ function Dashboard() {
 }
 ```
 
-#### 4. Toast Notifications
-
-```typescript
-import { getToastMessageKey } from '@/lib/messages/error-mapper';
-
-const tToast = useTranslations('errors');
-const key = getToastMessageKey('create', 'lead', false);
-toast.success(tToast(key)); // "リードを作成しました" (ja)
-```
-
 ### Best Practices
 
 1. **Always use translation keys** - Never hardcode user-facing strings
 2. **Use parameterized messages** - For dynamic content (field names, counts, etc.)
 3. **Namespace organization** - Group related translations (leads, dashboard, errors)
-4. **Error handling** - Use `getLocalizedErrorMessage()` for consistent error display
-5. **Date formatting** - Use locale-aware date-fns functions
+4. **Date formatting** - Use locale-aware date-fns functions
 
 ```typescript
 // ✅ Good - locale-aware date formatting
@@ -320,14 +255,7 @@ format(date, 'yyyy年MM月dd日');
 
 ### Language Switching
 
-Language preferences are stored in cookies and automatically applied:
-
-```typescript
-// Language switching is handled by LanguageSwitcher component
-import { LanguageSwitcher } from '@/components/i18n/language-switcher';
-
-<LanguageSwitcher /> // Displays language dropdown
-```
+ロケールは URL の最初のセグメント（`/ja/...`・`/en/...`）で決まる。画面の URL にロケールが無いときは、`proxy.ts` から呼ぶ next-intl の middleware（`lib/i18n/middleware.ts`）が、`NEXT_LOCALE` cookie → `Accept-Language` ヘッダー → 既定の `ja` の順にロケールを決めて転送する（転送しないパスは `shouldSkipI18nMiddleware`）。言語を切り替える部品は無いので、URL のロケールを書き換える。
 
 ## Environment Variables
 
