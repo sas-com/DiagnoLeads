@@ -146,7 +146,7 @@ describe.skipIf(!url)('db:migrate pre-flight check (PostgreSQL)', () => {
       recorded: 2,
       pending: ['0001_site_visits'],
       notes: [
-        `created_at 3000 (1970-01-01T00:00:03.000Z)  hash ${deals.hash.slice(0, 12)}: 台帳にあるが、このジャーナルに無い。ほかのブランチがマージの前に当てたものかもしれない（created_at は、当てたブランチの drizzle/meta/_journal.json の when と同じ）。流す人は、そのスキーマが main に入る（当てたブランチの PR がマージされる）ことを確かめる。すでに main に入っていれば、main を取り込むとこの警告は消える。`,
+        `created_at 3000 (1970-01-01T00:00:03.000Z)  hash ${deals.hash.slice(0, 12)}: 台帳にあるが、このジャーナルに無い。ほかのブランチがマージの前に当てたものかもしれない（created_at は、当てたブランチの drizzle/meta/_journal.json の when と同じ）。流す人は、そのブランチの PR がマージされるのを待ち、main を取り込んで（番号が重なれば作り直して）から流す。すでに main に入っていれば、main を取り込むとこの警告は消える。`,
       ],
     });
 

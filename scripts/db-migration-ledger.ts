@@ -171,7 +171,10 @@ export function findReapplied(
  * look. A row no journal entry matches (findUnknown) is listed even when nothing would be skipped
  * (#799): when another branch's migration is applied before its PR is merged and this journal's
  * pending entries are newer, drizzle runs them, and the database then holds a schema that main
- * may not carry yet.
+ * may not carry yet. The note says to wait for that PR to merge and to merge main before running
+ * this journal: both branches were usually cut from the same main and share a number, so the one
+ * merged later is generated again (.claude/rules/db-schema.md) with a newer `when` and the same
+ * SQL, which the migrator would then run a second time (findReapplied) if it was applied before.
  */
 export function describeNotes(
   journal: JournalMigration[],
@@ -198,7 +201,7 @@ export function describeNotes(
     ),
     ...unknown.map(
       (row) =>
-        `${describeRow(row)}: 台帳にあるが、このジャーナルに無い。ほかのブランチがマージの前に当てたものかもしれない（created_at は、当てたブランチの drizzle/meta/_journal.json の when と同じ）。流す人は、そのスキーマが main に入る（当てたブランチの PR がマージされる）ことを確かめる。すでに main に入っていれば、main を取り込むとこの警告は消える。`
+        `${describeRow(row)}: 台帳にあるが、このジャーナルに無い。ほかのブランチがマージの前に当てたものかもしれない（created_at は、当てたブランチの drizzle/meta/_journal.json の when と同じ）。流す人は、そのブランチの PR がマージされるのを待ち、main を取り込んで（番号が重なれば作り直して）から流す。すでに main に入っていれば、main を取り込むとこの警告は消える。`
     ),
   ];
 }

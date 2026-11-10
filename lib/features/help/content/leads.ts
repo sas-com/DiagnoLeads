@@ -7,7 +7,7 @@ export const leadsArticle: HelpArticle = {
   summary:
     '診断や取り込みで集まったリードを探し、絞り込み、まとめて扱います。行を押すと要点が横に開き、詳しく見るときはリードの詳細ページへ進みます。',
   routes: ['/leads'],
-  reviewedAt: '2026-11-08',
+  reviewedAt: '2026-11-10',
   related: ['workflow-lifecycle', 'glossary'],
   blocks: [
     { type: 'h2', id: 'find', text: 'リードを探す' },
@@ -92,6 +92,12 @@ export const leadsArticle: HelpArticle = {
       tone: 'tip',
       content: '診断フォームから届いたリードは自動で一覧に入ります。手で入れ直す必要はありません。',
     },
+    {
+      type: 'note',
+      tone: 'tip',
+      content:
+        'リードを足す・直す画面では、項目名の横に ⓘ が出ることがあります。押すと、その項目や選択肢（状態など）の意味の説明が開きます。',
+    },
     { type: 'h2', id: 'bulk', text: 'まとめて操作する' },
     {
       type: 'steps',
@@ -128,6 +134,12 @@ export const leadsArticle: HelpArticle = {
           text: 'を押すと、今の絞り込みと並び順のまま、条件に合う全件を書き出します（最大 5,000 件）。それより多いときは条件を絞ってから書き出してください。',
         },
       ],
+    },
+    {
+      type: 'note',
+      tone: 'tip',
+      content:
+        "CSV では、先頭が = + - @ の値の前に「'」を付けます。表計算ソフトで開いたときに、式として動かないようにするためです。行を選んで書き出すとき（選択をエクスポート）も同じです。",
     },
     {
       type: 'roles',

