@@ -1355,6 +1355,19 @@
       "addNextAction": "次の行動を追加",
       "addNextActionFor": "「{name}」の次の行動を追加"
     },
+    "closeDate": {
+      "fix": "受注予定日を直す",
+      "fixFor": "「{name}」の受注予定日を直す",
+      "title": "「{deal}」の受注予定日を直す",
+      "description": "リード「{lead}」の商談です。今の受注予定日（{date}）は過ぎています。",
+      "descriptionNoName": "この商談の今の受注予定日（{date}）は過ぎています。",
+      "field": "新しい受注予定日",
+      "hint": "今日（{today}）以降の日付にすると、注意が必要な商談から外れます。",
+      "required": "新しい受注予定日を入れてください",
+      "notBeforeToday": "今日（{today}）以降の日付にしてください",
+      "save": "保存する",
+      "saved": "「{name}」の受注予定日を{date}にしました"
+    },
     "filters": {
       "label": "絞り込み",
       "owner": "担当",

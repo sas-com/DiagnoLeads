@@ -48,6 +48,8 @@ const mocks = vi.hoisted(() => ({
   toast: { success: vi.fn(), error: vi.fn() },
   /** What the dialog that adds a deal's next action was opened with (#970) */
   nextActionDialog: [] as { dealId: string; leadLabel: string; today: string }[],
+  /** What the dialog that changes a deal's close date was opened with (#999) */
+  closeDateDialog: [] as { dealId: string; leadLabel: string; today: string }[],
 }));
 
 vi.mock('@/lib/trpc/client', () => {
@@ -137,6 +139,39 @@ vi.mock('@/components/features/lead-follow-up/add-next-action-dialog', () => ({
         </button>
         <button type="button" onClick={() => close(false)}>
           やめる
+        </button>
+      </div>
+    );
+  },
+}));
+
+// The dialog that changes a deal's close date is tested in deal-close-date-dialog.test.tsx: here
+// it is changed, or closed without a change (#999). Its button is the real one
+vi.mock('@/components/features/deals/deal-close-date-dialog', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/features/deals/deal-close-date-dialog')>()),
+  DealCloseDateDialog: (props: {
+    open: boolean;
+    deal: { id: string; name: string };
+    leadLabel: string;
+    today: string;
+    onOpenChange: (open: boolean) => void;
+    onChanged?: () => void;
+    onCloseAutoFocus?: (event: Event) => void;
+  }) => {
+    if (!props.open) return null;
+    mocks.closeDateDialog.push({ dealId: props.deal.id, leadLabel: props.leadLabel, today: props.today });
+    const close = (changed: boolean) => {
+      if (changed) props.onChanged?.();
+      props.onOpenChange(false);
+      props.onCloseAutoFocus?.(new Event('focus', { cancelable: true }));
+    };
+    return (
+      <div role="dialog" aria-label={`${props.deal.name}の受注予定日`}>
+        <button type="button" onClick={() => close(true)}>
+          直した
+        </button>
+        <button type="button" onClick={() => close(false)}>
+          直さない
         </button>
       </div>
     );
@@ -579,8 +614,12 @@ describe('TodayScreen', () => {
           within(region(/^注意が必要な商談/)).getAllByRole('list')[0].children
         ) as HTMLElement[];
 
-        // Past its close date with a next action: nothing to add
-        expect(within(items[0]).queryByRole('button')).not.toBeInTheDocument();
+        // Past its close date with a next action: nothing to add (its date to change, #999)
+        expect(
+          within(items[0]).queryByRole('button', {
+            name: messages.deals.card.addNextActionFor.replace('{name}', '基幹システム移行'),
+          })
+        ).not.toBeInTheDocument();
         // Outside the link, at the row's end
         const button = within(items[1]).getByRole('button');
         expect(within(items[1]).getByRole('link')).not.toContainElement(button);
@@ -679,6 +718,110 @@ describe('TodayScreen', () => {
         expect(
           within(region(/^注意が必要な商談/)).getByRole('link', { name: /帳票の移行/ })
         ).toHaveFocus();
+      });
+    });
+
+    describe('changing the close date of a deal past it (#999)', () => {
+      const dateButton = (name: string) =>
+        within(region(/^注意が必要な商談/)).getByRole('button', {
+          name: messages.deals.closeDate.fixFor.replace('{name}', name),
+        });
+      const dealLink = (name: string) =>
+        within(region(/^注意が必要な商談/)).getByRole('link', { name: new RegExp(name) });
+
+      it('offers it beside the deal’s link, on the deals past their close date only', async () => {
+        loadAll();
+        mocks.closeDateDialog = [];
+        const user = userEvent.setup();
+        renderScreen();
+        const items = Array.from(
+          within(region(/^注意が必要な商談/)).getAllByRole('list')[0].children
+        ) as HTMLElement[];
+
+        // Past its close date: outside the link, at the row's end
+        const button = within(items[0]).getByRole('button', {
+          name: messages.deals.closeDate.fixFor.replace('{name}', '基幹システム移行'),
+        });
+        expect(within(items[0]).getByRole('link')).not.toContainElement(button);
+        // Its lead has no next action, its date is ahead: no date to change
+        expect(
+          within(items[1]).queryByRole('button', {
+            name: messages.deals.closeDate.fixFor.replace('{name}', '帳票の移行'),
+          })
+        ).not.toBeInTheDocument();
+
+        await user.click(button);
+        expect(mocks.closeDateDialog.at(-1)).toEqual({
+          dealId: DEAL_1,
+          leadLabel: '架空商事',
+          today: '2026-10-29',
+        });
+      });
+
+      it('is not offered to those who may not change deals', () => {
+        loadAll();
+        mocks.queries.board = { data: { ...board, canEdit: false } };
+        renderScreen();
+
+        expect(
+          within(region(/^注意が必要な商談/)).queryByRole('button', {
+            name: messages.deals.closeDate.fixFor.replace('{name}', '基幹システム移行'),
+          })
+        ).not.toBeInTheDocument();
+      });
+
+      it('shows both on a deal with both marks, the close date first as the marks are', () => {
+        loadAll();
+        const both = dealCard({ expectedCloseOn: '2026-10-20', hasOpenTask: false });
+        mocks.queries.board = {
+          data: { ...board, columns: [{ ...board.columns[1], deals: [both] }] },
+        };
+        renderScreen();
+        // The deals' list, not the marks listed in the row
+        const row = within(region(/^注意が必要な商談/)).getAllByRole('list')[0]
+          .children[0] as HTMLElement;
+
+        expect(within(row).getAllByRole('button').map((button) => button.textContent)).toEqual([
+          messages.deals.closeDate.fix,
+          messages.deals.card.addNextAction,
+        ]);
+      });
+
+      it('gives the focus back to the button when closed without a change', async () => {
+        loadAll();
+        const user = userEvent.setup();
+        renderScreen();
+
+        await user.click(dateButton('基幹システム移行'));
+        await user.click(screen.getByRole('button', { name: '直さない' }));
+
+        expect(dateButton('基幹システム移行')).toHaveFocus();
+      });
+
+      it('sends the focus on to the next row’s name once changed, as its row leaves', async () => {
+        loadAll();
+        const user = userEvent.setup();
+        renderScreen();
+
+        await user.click(dateButton('基幹システム移行'));
+        await user.click(screen.getByRole('button', { name: '直した' }));
+
+        expect(dealLink('帳票の移行')).toHaveFocus();
+      });
+
+      it('keeps the focus on the deal’s name once changed when its lead has no next action either', async () => {
+        loadAll();
+        const both = dealCard({ expectedCloseOn: '2026-10-20', hasOpenTask: false });
+        mocks.queries.board = {
+          data: { ...board, columns: [{ ...board.columns[1], deals: [both] }] },
+        };
+        const user = userEvent.setup();
+        renderScreen();
+
+        await user.click(dateButton('基幹システム移行'));
+        await user.click(screen.getByRole('button', { name: '直した' }));
+
+        expect(dealLink('基幹システム移行')).toHaveFocus();
       });
     });
 

@@ -54,10 +54,15 @@ export const todayArticle: HelpArticle = {
         [
           {
             type: 'text',
-            text: '注意が必要な商談は、受注予定日を直すか、リードに次の行動を入れます。次の行動がない商談は、行の',
+            text: '注意が必要な商談は、受注予定日を直すか、リードに次の行動を入れます。どちらも商談の詳細に移らずにできます。受注予定日を過ぎた商談は、行の',
+          },
+          { type: 'ui', text: '受注予定日を直す' },
+          {
+            type: 'text',
+            text: 'から、今日以降の日付に直します。次の行動がない商談は、行の',
           },
           { type: 'ui', text: '次の行動を追加' },
-          { type: 'text', text: 'から、商談の詳細に移らずに入れられます（' },
+          { type: 'text', text: 'から入れられます（' },
           { type: 'link', text: '商談', href: '/deals' },
           {
             type: 'text',

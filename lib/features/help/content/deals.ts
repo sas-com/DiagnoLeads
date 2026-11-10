@@ -126,7 +126,14 @@ export const dealsArticle: HelpArticle = {
     {
       type: 'ul',
       items: [
-        '受注予定日を過ぎています：日付を見直すか、閉じます。',
+        [
+          {
+            type: 'text',
+            text: '受注予定日を過ぎています：日付を見直すか、閉じます（「今日」の「注意が必要な商談」の行の',
+          },
+          { type: 'ui', text: '受注予定日を直す' },
+          { type: 'text', text: 'でも、日付だけを直せます）。' },
+        ],
         [
           { type: 'text', text: 'リードに次の行動（タスク）がありません：カードと一覧の' },
           { type: 'ui', text: '次の行動を追加' },

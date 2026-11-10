@@ -1355,6 +1355,19 @@
       "addNextAction": "Add a next action",
       "addNextActionFor": "Add a next action for \"{name}\""
     },
+    "closeDate": {
+      "fix": "Change close date",
+      "fixFor": "Change the expected close date of \"{name}\"",
+      "title": "Change the expected close date of \"{deal}\"",
+      "description": "A deal of the lead \"{lead}\". Its expected close date ({date}) has passed.",
+      "descriptionNoName": "The expected close date of this deal ({date}) has passed.",
+      "field": "New expected close date",
+      "hint": "A date from today ({today}) on takes it out of the deals that need attention.",
+      "required": "Enter the new expected close date",
+      "notBeforeToday": "Enter a date from today ({today}) on",
+      "save": "Save",
+      "saved": "Changed the expected close date of \"{name}\" to {date}"
+    },
     "filters": {
       "label": "Filters",
       "owner": "Owner",
