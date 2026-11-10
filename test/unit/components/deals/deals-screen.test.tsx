@@ -723,6 +723,23 @@ describe('DealsScreen', () => {
       );
     });
 
+    it("gives it to the deal's name when the board was read again while the question was open", async () => {
+      const user = userEvent.setup();
+      const view = renderScreen();
+      await user.click(moveButton('AS/400 現行調査', '提案'));
+      await user.click(moveTo('受注'));
+
+      // It failed and was read again meanwhile: the board is drawn anew, the card on it
+      readAgain(view, { isError: true });
+      readAgain(view, { isError: false });
+      await user.click(screen.getByRole('button', { name: 'キャンセル' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      await waitFor(() =>
+        expect(screen.getByRole('link', { name: 'AS/400 現行調査' })).toHaveFocus()
+      );
+    });
+
     it("gives it to the screen's heading when the deal left the board meanwhile", async () => {
       const user = userEvent.setup();
       const view = renderScreen();
@@ -730,11 +747,47 @@ describe('DealsScreen', () => {
       await user.click(moveTo('受注'));
 
       // Read again meanwhile without it (another member moved it out of the board's period)
-      readAgain(view, { data: boardData([]) });
+      readAgain(view, { data: boardData([lostDeal]) });
       await user.click(screen.getByRole('button', { name: 'キャンセル' }));
 
       await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
       await waitFor(() => expect(heading()).toHaveFocus());
+    });
+
+    it("gives it to the screen's heading when the deal won leaves the board (won before the board's 30 days)", async () => {
+      const user = userEvent.setup();
+      // Read again once won: closed before the days the board shows, the deal is not on it
+      mocks.refetched = boardData([lostDeal]);
+      renderScreen();
+      await user.click(moveButton('AS/400 現行調査', '提案'));
+      await user.click(moveTo('受注'));
+      await user.click(screen.getByRole('button', { name: '受注にする' }));
+
+      expect(mocks.updates).toEqual([expect.objectContaining({ stage: 'won' })]);
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      await waitFor(() => expect(heading()).toHaveFocus());
+    });
+
+    it("gives it to the retry when the board cannot be read once the deal is won, then to the deal's name", async () => {
+      const user = userEvent.setup();
+      mocks.refetchFails = true;
+      const view = renderScreen();
+      await user.click(moveButton('AS/400 現行調査', '提案'));
+      await user.click(moveTo('受注'));
+      await user.click(screen.getByRole('button', { name: '受注にする' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      await waitFor(() => expect(retry()).toHaveFocus());
+
+      // The retry brings the board back, the deal in the won column
+      await user.click(retry());
+      readAgain(view, {
+        isError: false,
+        data: boardData([{ ...deal, stage: 'won', probability: 100, closedOn: jstDate() }]),
+      });
+      await waitFor(() =>
+        expect(screen.getByRole('link', { name: 'AS/400 現行調査' })).toHaveFocus()
+      );
     });
   });
 

@@ -145,9 +145,12 @@ export function DealsScreen() {
   // Clearing the filters takes away its button: the focus goes to the first filter
   const ownerTrigger = useRef<HTMLButtonElement>(null);
   // A move's question closes with its card's move button gone (the board could not be read, or
-  // the deal left it): as when a next action was added, the focus goes to the retry, which gives
-  // it to the deal's name once it brings the board back, or else to the screen's heading (#1026)
+  // was read again, or the deal left it): as when a next action was added, the focus goes to the
+  // deal's name, else to the retry, which gives it to the deal's name once it brings the board
+  // back, or else to the screen's heading (#1026)
   const stageMove = useStageMove(organizationId, (deal) => {
+    const name = dealLinkOf(deal.id);
+    if (name) return name;
     if (retryButton.current) {
       dealBeforeError.current = deal.id;
       return retryButton.current;

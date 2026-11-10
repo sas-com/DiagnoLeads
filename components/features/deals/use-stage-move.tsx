@@ -35,7 +35,8 @@ export type MovingDeal = Pick<
 export interface MoveOptions {
   /**
    * Puts the focus back where the move was chosen, once its question closes (Refs #720); false
-   * when that place is gone, and the question then puts the focus back as it does on its own
+   * when that place is gone: the focus goes where the screen says instead (focusInstead, #1026),
+   * else the question puts it back as it does on its own
    */
   returnFocus?: () => boolean;
 }

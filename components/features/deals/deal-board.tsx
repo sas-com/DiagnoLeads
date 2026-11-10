@@ -110,8 +110,8 @@ export function DealBoard({
   const moveFromMenu = (deal: DealCard, stage: DealStage) => {
     followed.current = deal.id;
     onMove(deal, stage, {
-      // False when the card is no longer on the board (a filter leaves it out): the question
-      // then puts the focus back as it does on its own
+      // False when the card is no longer on the board (a filter leaves it out, or the board was
+      // read again meanwhile): the screen says where the focus goes then (#1026)
       returnFocus: () => {
         const button = moveButtons.current.get(deal.id);
         button?.focus();
