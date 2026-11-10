@@ -460,13 +460,17 @@ export function DealsScreen() {
               }}
               onCloseAutoFocus={(event) => {
                 const opener = createOpener.current?.isConnected ? createOpener.current : null;
+                const created = createdDeal.current;
+                let target: HTMLElement | null | undefined =
+                  opener ?? (created ? dealLinkOf(created) : undefined);
                 // Neither the button nor the new deal is there when the board could not be
-                // read, or the filters leave the deal out: as when a next action was added
-                const target =
-                  opener ??
-                  (createdDeal.current ? dealLinkOf(createdDeal.current) : undefined) ??
-                  retryButton.current ??
-                  document.getElementById(headingId);
+                // read, or the filters leave the deal out: as when a next action was added,
+                // the retry gives the focus to the new deal once it brings the board back
+                if (!target && retryButton.current) {
+                  dealBeforeError.current = created;
+                  target = retryButton.current;
+                }
+                target ??= document.getElementById(headingId);
                 if (!target) return;
                 event.preventDefault();
                 target.focus();
