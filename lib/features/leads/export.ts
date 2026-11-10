@@ -123,5 +123,7 @@ export function exportAuditFilters(input: Omit<ListLeadsInput, 'limit' | 'offset
     filters[key] = value;
   }
   if (input.search?.trim()) filters.search = true;
+  // Only true filters (#854): false is no condition
+  if (input.missingDeal === true) filters.missingDeal = true;
   return filters;
 }

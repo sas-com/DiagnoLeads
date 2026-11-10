@@ -65,6 +65,17 @@ export const PROSPECT_STAGES = [...PROSPECT_FUNNEL_STAGES, 'nurturing', 'dropped
 export const prospectStageEnum = z.enum(PROSPECT_STAGES);
 export type ProspectStage = z.infer<typeof prospectStageEnum>;
 
+/**
+ * Next steps and stages that close a row, as becoming a lead does: the row is no longer followed.
+ * The list's filters (notClosed in api/router.ts) and the summary's checks (isFollowed in
+ * summary.ts) both leave closed rows out, so that they count the same rows (#852)
+ */
+export const CLOSED_PROSPECT_NEXT_STEPS = ['pass'] as const satisfies readonly ProspectNextStep[];
+export const CLOSED_PROSPECT_STAGES = [
+  'dropped',
+  'contract',
+] as const satisfies readonly ProspectStage[];
+
 /** Labels of the spreadsheet's dropdowns, for the import */
 export const SPREADSHEET_LABELS = {
   entry: {

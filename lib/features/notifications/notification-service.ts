@@ -9,13 +9,18 @@ import {
   type NotificationType,
   notificationPreferences,
   notifications,
+  organizationMembers,
 } from '@/lib/db/schema';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
 
 /**
- * Create a notification for a user
+ * Create a notification for a user, always of an organization: one of no organization stays
+ * readable after the user leaves (ofCurrentMembership), so it must not name an organization's
+ * leads (#974)
  */
-export async function createNotification(data: NewNotification): Promise<void> {
+export async function createNotification(
+  data: NewNotification & { organizationId: string }
+): Promise<void> {
   await db.insert(notifications).values(data);
 }
 
@@ -58,7 +63,20 @@ export async function notifyOrganizationMembers(
 }
 
 /**
- * Get notifications for a user
+ * The notifications a user may still read (#974): those of an organization they are a member of
+ * now, and their own of no organization. A member removed from an organization keeps their
+ * account and these rows, which name its leads (company, name, what was asked), so the bell no
+ * longer reads them, counts them or marks them; they come back if the user is invited again.
+ */
+function ofCurrentMembership(userId: string) {
+  return or(
+    isNull(notifications.organizationId),
+    sql`${notifications.organizationId} in (select ${organizationMembers.organizationId} from ${organizationMembers} where ${organizationMembers.userId} = ${userId})`
+  );
+}
+
+/**
+ * Get notifications for a user (of their organizations, ofCurrentMembership)
  */
 export async function getUserNotifications(
   userId: string,
@@ -67,7 +85,7 @@ export async function getUserNotifications(
 ) {
   const { limit = 20, unreadOnly = false } = options;
 
-  const conditions = [eq(notifications.userId, userId)];
+  const conditions = [eq(notifications.userId, userId), ofCurrentMembership(userId)];
 
   if (organizationId) {
     conditions.push(eq(notifications.organizationId, organizationId));
@@ -86,10 +104,14 @@ export async function getUserNotifications(
 }
 
 /**
- * Get unread notification count
+ * Get unread notification count (of their organizations, ofCurrentMembership)
  */
 export async function getUnreadCount(userId: string, organizationId?: string): Promise<number> {
-  const conditions = [eq(notifications.userId, userId), eq(notifications.read, false)];
+  const conditions = [
+    eq(notifications.userId, userId),
+    eq(notifications.read, false),
+    ofCurrentMembership(userId),
+  ];
 
   if (organizationId) {
     conditions.push(eq(notifications.organizationId, organizationId));
@@ -117,10 +139,14 @@ export async function markAsRead(notificationId: string, userId: string): Promis
 }
 
 /**
- * Mark all notifications as read
+ * Mark all notifications as read (of their organizations, ofCurrentMembership)
  */
 export async function markAllAsRead(userId: string, organizationId?: string): Promise<void> {
-  const conditions = [eq(notifications.userId, userId), eq(notifications.read, false)];
+  const conditions = [
+    eq(notifications.userId, userId),
+    eq(notifications.read, false),
+    ofCurrentMembership(userId),
+  ];
 
   if (organizationId) {
     conditions.push(eq(notifications.organizationId, organizationId));

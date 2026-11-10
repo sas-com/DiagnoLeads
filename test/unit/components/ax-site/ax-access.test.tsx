@@ -130,6 +130,9 @@ describe('Access landing page', () => {
       'こんなとき、ありませんか',
       'そのままにしたときのリスク',
       '進め方は、3つあります',
+      // After the three ways: what choosing the web means for protecting the tool (#839, #838)
+      '今の Access と、Web に移すときに作れること',
+      'Web システムにしても、インターネットに公開するとは限りません',
       // The steps start with the free check (#425)
       '無料Web診断からの流れ',
       // The phone halfway down, as on the main page, in this page's words (#425)
@@ -257,18 +260,84 @@ describe('Access landing page', () => {
     ).toBeInTheDocument();
   });
 
-  it('answers the worry about moving to the web, next to the partial move (#466)', async () => {
+  it('answers the worry about moving to the web near the top, in the reader\'s words (#466, #841)', async () => {
     await renderPage();
     const faq = document.getElementById('faq') as HTMLElement;
     const questions = [...faq.querySelectorAll('summary')].map((summary) =>
       summary.textContent?.replace(/^Q/, '')
     );
-    expect(questions.indexOf('Web に移すと、脆弱性やサイバー攻撃が心配です。')).toBe(
-      questions.indexOf('一部だけ Web に移せますか？') + 1
-    );
+    expect(questions.slice(0, 4)).toEqual([
+      '仕様書がありません。相談できますか？',
+      '社内だけで使っていたシステムを Web にして、セキュリティは大丈夫ですか？',
+      '社外から使えるようにしなくても、Web に移せますか？',
+      '情報システム部門の審査に向けて、説明してもらえますか？',
+    ]);
+    expect(questions).toContain('個人情報が入っていても、相談できますか？');
     const answer = within(faq).getByText(/^ご心配はもっともです。/);
     expect(answer).toHaveTextContent('進め方を決めるときに一緒に決めます。');
+    expect(answer).toHaveTextContent('直し続ける体制まで、作った当社が用意します。');
     expect(answer).toHaveTextContent('サポートが終わった版の Access は、弱点が見つかっても直されません。');
+    // The follow-up of the diagnosis asks the kinds of data (#826)
+    expect(within(faq).getByText(/^はい。どんな情報が入っているかを最初に伺い/)).toHaveTextContent(
+      '無料Web診断の詳しい質問でも、入っている情報の種類を選べます。'
+    );
+  });
+
+  it('compares today\'s Access with what can be built on the web, without blaming its users (#839)', async () => {
+    await renderPage();
+    const heading = screen.getByRole('heading', {
+      level: 2,
+      name: '今の Access と、Web に移すときに作れること',
+    });
+    const paths = screen.getByRole('heading', { level: 2, name: '進め方は、3つあります' });
+    expect(paths.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const section = within(heading.closest('section') as HTMLElement);
+    expect(section.getByText('一人に頼る、から、体制で支えるへ')).toBeInTheDocument();
+    expect(section.getByText(/使い方の問題ではありません。$/)).toBeInTheDocument();
+    const rows = section.getAllByRole('row').slice(1);
+    expect(rows.map((row) => within(row).getByRole('rowheader').textContent)).toEqual([
+      '直せる人',
+      'データの持ち出し',
+      '記録',
+      '辞めた人・異動した人',
+      'バックアップ',
+      '弱点が見つかったとき',
+    ]);
+    expect(within(rows[0]).getByText('作った当社が、直し続ける体制まで用意します。')).toBeInTheDocument();
+    // Microsoft 365 keeps getting fixes: only the versions whose support has ended are not fixed
+    expect(within(rows[5]).getByText(/Microsoft 365 の Access は更新が続きます。/)).toBeInTheDocument();
+    // The same things are decided on every way, not only on the web
+    expect(
+      section.getByText(/直して使い続けるときも、既製サービスに置き換えるときも、同じことを決めておきます。$/)
+    ).toBeInTheDocument();
+  });
+
+  it('says where the web system is reached from, and links the column on protecting it (#838, #840)', async () => {
+    await renderPage();
+    const heading = screen.getByRole('heading', {
+      level: 2,
+      name: 'Web システムにしても、インターネットに公開するとは限りません',
+    });
+    const section = within(heading.closest('section') as HTMLElement);
+    expect(section.getByRole('heading', { level: 3, name: 'Web に移すときに、決めておく4つのこと' })).toBeInTheDocument();
+    expect(section.getByText('社内の共有フォルダや、決まった PC から使っています。')).toBeInTheDocument();
+    // The name of the consultation and what is free stay as decided (#538, #467)
+    expect(
+      section.getByText('守り方の進め方も、30分の無料オンライン相談でご相談いただけます。')
+    ).toBeInTheDocument();
+    expect(section.getByRole('link', { name: '無料Web診断（Access版）をはじめる' })).toHaveAttribute(
+      'href',
+      '#diagnosis'
+    );
+    expect(section.getByRole('link', { name: /PHP2shell/ })).toHaveAttribute(
+      'href',
+      '/ja/ax-migration/column/access-web-security'
+    );
+    // The trust section, shared with the main page, says it too
+    const trust = within(
+      screen.getByRole('heading', { level: 2, name: '安心して任せられる理由' }).closest('section') as HTMLElement
+    );
+    expect(trust.getByRole('heading', { level: 3, name: '移したあとも' })).toBeInTheDocument();
   });
 
   it('says the 30-minute online consultation is free, as the main page and the result do (#467)', async () => {

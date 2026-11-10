@@ -5,6 +5,7 @@
  * two node_modules files: one hard-linked as Bun's cache links them, one copy with one link.
  */
 import { spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { cpSync, linkSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -14,7 +15,9 @@ const HOOKS = resolve(__dirname, '../../../.claude/hooks');
 let project = '';
 
 function run(script: string, input: Record<string, unknown>) {
-  const env: NodeJS.ProcessEnv = { ...process.env, CLAUDE_PROJECT_DIR: project };
+  // TMPDIR inside the project: what a hook remembers per session (privateTmpDir) is removed with
+  // the project, and a previous run's state can never answer for this one (#914)
+  const env: NodeJS.ProcessEnv = { ...process.env, CLAUDE_PROJECT_DIR: project, TMPDIR: join(project, 'tmp') };
   // Never install dependencies from a test, even inside a Claude Code on the web session
   env.CLAUDE_CODE_REMOTE = undefined;
   const result = spawnSync('bun', [join(HOOKS, script)], {
@@ -37,6 +40,7 @@ function run(script: string, input: Record<string, unknown>) {
 beforeAll(() => {
   project = mkdtempSync(join(tmpdir(), 'claude-hooks-'));
   mkdirSync(join(project, '.factory/memory/decisions'), { recursive: true });
+  mkdirSync(join(project, 'tmp'));
   writeFileSync(
     join(project, '.factory/memory/decisions/2026-10-22-email-templates.md'),
     [
@@ -134,7 +138,7 @@ describe('pre-tool-guard', () => {
 describe('post-tool-decisions', () => {
   it('names the decisions governing a file once per session', () => {
     const call = {
-      session_id: `test-${process.pid}-${Date.now()}`,
+      session_id: `test-${randomUUID()}`,
       tool_name: 'Read',
       tool_input: { file_path: join(project, 'lib/features/email/email-service.ts') },
     };
@@ -155,7 +159,7 @@ describe('post-tool-decisions', () => {
     });
     writeFileSync(join(worktree, '.git'), 'gitdir: ../../../.git/worktrees/review\n');
     const result = run('post-tool-decisions.ts', {
-      session_id: `test-${process.pid}-worktree`,
+      session_id: `test-${randomUUID()}`,
       tool_name: 'Read',
       tool_input: { file_path: join(worktree, 'lib/features/email/email-service.ts') },
     });
@@ -165,11 +169,51 @@ describe('post-tool-decisions', () => {
 
   it('stays silent for files no decision governs', () => {
     const result = run('post-tool-decisions.ts', {
-      session_id: `test-${process.pid}-other`,
+      session_id: `test-${randomUUID()}`,
       tool_name: 'Edit',
       tool_input: { file_path: join(project, 'components/ui/button.tsx') },
     });
     expect(result).toMatchObject({ status: 0, stderr: '', context: '' });
+  });
+});
+
+describe('post-tool-branch-claim', () => {
+  it('reminds Claude to claim the issue of a new work branch', () => {
+    const result = run('post-tool-branch-claim.ts', {
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Bash',
+      tool_input: { command: 'git checkout -q -b feat/886-branch-claim-hook origin/main' },
+      tool_response: { stdout: '', stderr: '', interrupted: false, isImage: false },
+    });
+    expect(result.status).toBe(0);
+    expect(result.context).toContain('Issue #886');
+  });
+
+  it('says nothing inside a subagent', () => {
+    const result = run('post-tool-branch-claim.ts', {
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Bash',
+      agent_id: 'agent-1',
+      agent_type: 'general-purpose',
+      tool_input: { command: 'git checkout -b feat/886-a origin/main' },
+    });
+    expect(result.status).toBe(0);
+    expect(result.context).toBe('');
+  });
+
+  it('says nothing when the claim went with the branch, or for other commands', () => {
+    for (const command of [
+      'git checkout -b feat/886-a origin/main && gh api repos/o/r/issues/886/comments -X POST -f body=x',
+      'git status --short',
+    ]) {
+      const result = run('post-tool-branch-claim.ts', {
+        hook_event_name: 'PostToolUse',
+        tool_name: 'Bash',
+        tool_input: { command },
+      });
+      expect(result.status).toBe(0);
+      expect(result.context).toBe('');
+    }
   });
 });
 

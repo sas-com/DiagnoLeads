@@ -4,6 +4,7 @@ import { useSidebar } from '@/context/SidebarContext';
 import {
   RiBarChartLine,
   RiBriefcase4Line,
+  RiCalendarTodoLine,
   RiDashboardLine,
   RiLineChartLine,
   RiSettings4Line,
@@ -46,6 +47,12 @@ const AppSidebar: React.FC = () => {
         name: t('dashboard'),
         nameKey: 'dashboard',
         path: `/${locale}/dashboard`,
+      },
+      {
+        icon: <RiCalendarTodoLine className="w-5 h-5" />,
+        name: t('today'),
+        nameKey: 'today',
+        path: `/${locale}/today`,
       },
       {
         icon: <RiUserLine className="w-5 h-5" />,
@@ -110,6 +117,11 @@ const AppSidebar: React.FC = () => {
             name: t('agencyLinks'),
             nameKey: 'agencyLinks',
             path: `/${locale}/settings/agency-links`,
+          },
+          {
+            name: t('fieldGlossary'),
+            nameKey: 'fieldGlossary',
+            path: `/${locale}/settings/field-glossary`,
           },
         ],
       },

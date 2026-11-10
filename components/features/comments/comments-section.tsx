@@ -1,5 +1,6 @@
 'use client';
 
+import { TOGGLE_ITEM } from '@/components/common/form-controls';
 import { TAP_TARGET } from '@/components/common/tap-target';
 import {
   AlertDialog,
@@ -34,7 +35,6 @@ import { type ComponentType, useEffect, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { CommentForm, type WritableCommentType } from './comment-form';
 import { CommentItem, type CommentWithUser, commentElementId } from './comment-item';
-import { TOGGLE_ITEM } from './controls';
 
 interface CommentsSectionProps {
   organizationId: string;

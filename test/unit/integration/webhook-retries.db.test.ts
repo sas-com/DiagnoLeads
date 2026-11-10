@@ -4,6 +4,10 @@
  * only due deliveries, within the batch size and the webhook's attempt limit. The HTTP side is
  * a stubbed fetch. All names are made up.
  *
+ * The processor takes every due delivery in the database, and the other DB test files store
+ * theirs in the same database at the same time: this file keeps its webhooks and deliveries in
+ * copies of the two tables, in a schema of its own (#861).
+ *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/dl_test \
  *     bunx vitest --run test/unit/integration/webhook-retries.db.test.ts
@@ -15,6 +19,7 @@ import {
   WEBHOOK_DELIVERY_LEASE_MS,
   WEBHOOK_DELIVERY_TIMEOUT_MS,
   WEBHOOK_RETRY_MAX_AGE_MS,
+  cancelPendingDeliveries,
   processWebhookRetries,
   triggerWebhooks,
 } from '@/lib/features/webhooks/services/webhook-service';
@@ -41,7 +46,22 @@ const url = process.env.TEST_DATABASE_URL;
 const ONE_ROUND_BUDGET_MS = WEBHOOK_DELIVERY_TIMEOUT_MS + 2000 + 1000;
 
 describe.skipIf(!url)('webhook retries (PostgreSQL)', () => {
-  const client = url ? postgres(url, { max: 4 }) : null;
+  /**
+   * The schema of this file's copies of webhooks and webhook_deliveries. It comes first on the
+   * connections' search path, so the queries' unqualified table names reach the copies; the
+   * organizations stay shared. Lower-case letters, digits and _ only, so it is a plain identifier
+   */
+  const ownSchema = `webhook_retries_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  // The NOTICEs of drop schema ... cascade stay out of the test output
+  const client = url
+    ? postgres(url, {
+        max: 4,
+        onnotice: () => {},
+        connection: { search_path: `${ownSchema}, public` },
+      })
+    : null;
+  // biome-ignore lint/style/noNonNullAssertion: guarded by skipIf
+  const sql = client!;
   // biome-ignore lint/style/noNonNullAssertion: guarded by skipIf
   const pg = (client ? drizzle(client, { schema }) : null)! as unknown as Database;
   const unique = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -109,6 +129,21 @@ describe.skipIf(!url)('webhook retries (PostgreSQL)', () => {
   };
 
   beforeAll(async () => {
+    // The copies are made before the tests' queries. LIKE ... INCLUDING ALL copies the columns,
+    // defaults and indexes, not the foreign keys. Only the one between the copies is added (a
+    // webhook's deliveries go with it): one to the shared organizations would make dropping the
+    // schema lock organizations (ACCESS EXCLUSIVE), which can deadlock with another file deleting
+    // its organization
+    await sql.unsafe(`create schema ${ownSchema}`);
+    await sql.unsafe(`create table ${ownSchema}.webhooks (like public.webhooks including all)`);
+    await sql.unsafe(
+      `create table ${ownSchema}.webhook_deliveries (like public.webhook_deliveries including all)`
+    );
+    await sql.unsafe(
+      `alter table ${ownSchema}.webhook_deliveries add foreign key (webhook_id)
+        references ${ownSchema}.webhooks (id) on delete cascade`
+    );
+
     const [o] = await pg
       .insert(organizations)
       .values({ name: '架空商事', slug: `webhook-retries-${unique()}` })
@@ -131,8 +166,23 @@ describe.skipIf(!url)('webhook retries (PostgreSQL)', () => {
   });
 
   afterAll(async () => {
-    if (org) await pg.delete(organizations).where(eq(organizations.id, org));
-    await client?.end();
+    try {
+      await sql.unsafe(`drop schema if exists ${ownSchema} cascade`);
+    } finally {
+      if (org) await pg.delete(organizations).where(eq(organizations.id, org));
+      await client?.end();
+    }
+  });
+
+  it('keeps its deliveries in its own copy of the table, out of the shared one', async () => {
+    const id = await createDelivery({ status: 'success', nextRetryAt: null });
+
+    const [row] = await sql.unsafe(
+      `select (select count(*) from ${ownSchema}.webhook_deliveries where id = $1)::int as own,
+        (select count(*) from public.webhook_deliveries where id = $1)::int as shared`,
+      [id]
+    );
+    expect(row).toEqual({ own: 1, shared: 0 });
   });
 
   it('stores a delivery as due for retry before the first attempt finishes', async () => {
@@ -185,6 +235,54 @@ describe.skipIf(!url)('webhook retries (PostgreSQL)', () => {
     expect(hook.failureCount).toBe(1);
   });
 
+  it('keeps a delivery failed when the URL changed while its retry was being sent (#927)', async () => {
+    const id = await createDelivery({ attempts: 1 });
+    fetchMock.mockImplementation(async () => {
+      // The webhook moves to another URL while the old one is being tried
+      await cancelPendingDeliveries(pg, webhookId);
+      return answer(500);
+    });
+
+    await processWebhookRetries({ database: pg });
+
+    expect(await load(id)).toMatchObject({ status: 'failed', nextRetryAt: null });
+    expect((await load(id)).error).toMatch(/^url_changed:/);
+  });
+
+  it('does not send a delivery claimed just before the URL changed to the new URL (#928)', async () => {
+    const id = await createDelivery({ attempts: 1 });
+    // The URL changes (and cancels the pending deliveries, as the update does) right after the
+    // claim has committed, before the run reads the webhook
+    let moved = false;
+    const racing = new Proxy(pg, {
+      get(target, prop, receiver) {
+        if (prop !== 'transaction') return Reflect.get(target, prop, receiver);
+        return async (run: (tx: unknown) => Promise<unknown>) => {
+          const result = await (target as typeof pg).transaction(
+            run as Parameters<typeof pg.transaction>[0]
+          );
+          if (!moved) {
+            moved = true;
+            await (target as typeof pg).transaction(async (tx) => {
+              await tx
+                .update(webhooks)
+                .set({ url: 'https://moved.example.com/hook' })
+                .where(eq(webhooks.id, webhookId));
+              await cancelPendingDeliveries(tx, webhookId);
+            });
+          }
+          return result;
+        };
+      },
+    });
+
+    await processWebhookRetries({ database: racing });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await load(id)).toMatchObject({ status: 'failed' });
+    expect((await load(id)).error).toMatch(/^url_changed:/);
+  });
+
   it('sends only due deliveries below the attempt limit', async () => {
     const due = await createDelivery({ attempts: 1 });
     const cutOff = await createDelivery({ attempts: 1, nextRetryAt: new Date(Date.now() - 5) });
@@ -197,7 +295,15 @@ describe.skipIf(!url)('webhook retries (PostgreSQL)', () => {
     const result = await processWebhookRetries({ database: pg });
 
     expect(sentIds().sort()).toEqual([due, cutOff].sort());
-    expect(result).toEqual({ processed: 2, succeeded: 2, failed: 0, exhausted: 1, expired: 0, testsFailed: 0 });
+    expect(result).toEqual({
+      processed: 2,
+      succeeded: 2,
+      failed: 0,
+      exhausted: 1,
+      expired: 0,
+      testsFailed: 0,
+      orphaned: 0,
+    });
     expect(await load(due)).toMatchObject({ status: 'success', attempts: 2, nextRetryAt: null });
     expect(await load(usedUp)).toMatchObject({ status: 'failed', attempts: 3, nextRetryAt: null });
     for (const id of [notYet, noRetryTime]) {

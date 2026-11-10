@@ -4,8 +4,9 @@
  * off) and put back when it fails, saying where the deal is, the focus after a move from the menu
  * or its undo, losing a deal only with a reason, winning one only after confirming the day and
  * the amount, a failed win or loss said in its question, reopening a closed one only after a
- * confirmation, and the loading, empty, error and read-only states (real next-intl messages; tRPC
- * and the router mocked)
+ * confirmation, the loading, empty, error and read-only states, and adding a next action to a
+ * deal without one from its card or row, with where the focus goes after (#853) (real next-intl
+ * messages; tRPC, the session and the router mocked)
  */
 import { DealsScreen } from '@/components/features/deals/deals-screen';
 import type { DealCard } from '@/lib/features/deals/service';
@@ -42,6 +43,9 @@ const mocks = vi.hoisted(() => ({
   search: '',
   replace: vi.fn(),
   toast: { success: vi.fn(), error: vi.fn(), dismiss: vi.fn() },
+  // The members deals can be given to (the owner filter), and the next actions added (#853)
+  members: [] as unknown[],
+  createdTasks: [] as unknown[],
 }));
 
 vi.mock('@/lib/trpc/client', async () => {
@@ -81,7 +85,12 @@ vi.mock('@/lib/trpc/client', async () => {
   });
   return {
     trpc: {
-      useUtils: () => ({ deals: invalidate, leads: invalidate, leadActivity: invalidate }),
+      useUtils: () => ({
+        deals: { ...invalidate, board: invalidate },
+        leads: invalidate,
+        leadActivity: invalidate,
+        leadFollowUp: { tasks: invalidate, dueTasks: invalidate },
+      }),
       deals: {
         board: {
           useQuery: (input: unknown) => {
@@ -92,9 +101,22 @@ vi.mock('@/lib/trpc/client', async () => {
         create: { useMutation: (hook?: Callbacks) => mutation(hook) },
         update: { useMutation: (hook?: Callbacks) => mutation(hook, mocks.updates) },
         delete: { useMutation: (hook?: Callbacks) => mutation(hook) },
+        // Where a new deal of the lead chosen starts (the deal form, #951)
+        forLead: { useQuery: () => ({ data: undefined }) },
       },
-      leads: { assignees: { useQuery: () => ({ data: [] }) } },
+      leads: { assignees: { useQuery: () => ({ data: mocks.members }) } },
       leadSearch: { suggest: { useQuery: () => ({ data: [], isFetching: false }) } },
+      leadFollowUp: {
+        createTask: {
+          useMutation: (hook: Callbacks = {}) => ({
+            isPending: false,
+            mutate: (input: { title: string }) => {
+              mocks.createdTasks.push(input);
+              void hook.onSuccess?.({ id: 'task-new', title: input.title }, input);
+            },
+          }),
+        },
+      },
     },
   };
 });
@@ -114,6 +136,10 @@ vi.mock('next/navigation', async () => {
   };
 });
 vi.mock('sonner', () => ({ toast: mocks.toast }));
+// The signed-in user is not the owner of the deals below
+vi.mock('@/lib/auth/client', () => ({
+  useSession: () => ({ data: { user: { id: 'user-me' } }, isPending: false }),
+}));
 
 beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
@@ -151,7 +177,15 @@ const deal: DealCard = {
   updatedAt: new Date('2026-10-20T00:00:00Z'),
   leadName: null,
   company: '架空商事',
+  nextTask: {
+    id: 'task-1',
+    title: '稟議の確認',
+    dueOn: '2026-10-30',
+    kind: 'next_action',
+    source: 'manual',
+  },
   hasOpenTask: true,
+  leadSqlDecision: null,
 };
 
 const lostDeal: DealCard = {
@@ -227,6 +261,8 @@ beforeEach(() => {
   mocks.pending = false;
   mocks.held = [];
   mocks.search = '';
+  mocks.members = [];
+  mocks.createdTasks = [];
 });
 
 describe('DealsScreen', () => {
@@ -338,9 +374,55 @@ describe('DealsScreen', () => {
       });
     });
 
-    it('offers no undo when the move handed the lead off, and says the handoff sheet went out', async () => {
+    it('asks for the SQL decision out of 見極め, sends it with the move and keeps it on an undo (#801)', async () => {
       const user = userEvent.setup();
       showBoard(boardData([{ ...deal, stage: 'qualification', probability: 10 }]));
+      // The board read again holds the decision the move recorded on the lead
+      mocks.refetched = boardData([
+        { ...deal, stage: 'discovery', probability: 20, leadSqlDecision: 'qualified' },
+      ]);
+      renderScreen();
+      await user.click(moveButton('AS/400 現行調査', '見極め'));
+      await user.click(moveTo('課題の確認'));
+      const question = screen.getByRole('alertdialog', { name: '「AS/400 現行調査」の SQL判定' });
+      expect(mocks.updates).toEqual([]);
+      await user.click(within(question).getByRole('button', { name: '適格：「課題の確認」へ進める' }));
+      expect(mocks.updates).toEqual([
+        { organizationId: ORG_ID, dealId: 'deal-1', stage: 'discovery', sqlDecision: 'qualified' },
+      ]);
+      await waitFor(() => expect(undoOfLastToast()).toBeDefined());
+
+      // The undo puts back the stage only; moving on again does not ask again
+      mocks.refetched = boardData([
+        { ...deal, stage: 'qualification', probability: 10, leadSqlDecision: 'qualified' },
+      ]);
+      act(() => undoOfLastToast()?.onClick());
+      expect(mocks.updates.at(-1)).toEqual({
+        organizationId: ORG_ID,
+        dealId: 'deal-1',
+        stage: 'qualification',
+        probability: 10,
+      });
+      await waitFor(() =>
+        expect(moveButton('AS/400 現行調査', '見極め')).toBeInTheDocument()
+      );
+      await user.click(moveButton('AS/400 現行調査', '見極め'));
+      await user.click(moveTo('課題の確認'));
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(mocks.updates.at(-1)).toEqual({
+        organizationId: ORG_ID,
+        dealId: 'deal-1',
+        stage: 'discovery',
+      });
+    });
+
+    it('offers no undo when the move handed the lead off, and says the handoff sheet went out', async () => {
+      const user = userEvent.setup();
+      showBoard(
+        boardData([
+          { ...deal, stage: 'qualification', probability: 10, leadSqlDecision: 'qualified' },
+        ])
+      );
       mocks.refetched = boardData([{ ...deal, stage: 'discovery', probability: 20 }]);
       mocks.handedOff = true;
       renderScreen();
@@ -357,7 +439,11 @@ describe('DealsScreen', () => {
 
     it('says a handoff even when a newer move of the deal overtook the move that made it', async () => {
       const user = userEvent.setup();
-      showBoard(boardData([{ ...deal, stage: 'qualification', probability: 10 }]));
+      showBoard(
+        boardData([
+          { ...deal, stage: 'qualification', probability: 10, leadSqlDecision: 'qualified' },
+        ])
+      );
       mocks.hold = true;
       renderScreen();
       await user.click(moveButton('AS/400 現行調査', '見極め'));
@@ -972,5 +1058,127 @@ describe('DealsScreen', () => {
     // What they will see, as the header already says who may create deals (#720)
     expect(screen.getByText('商談が作成されると、ここに表示されます')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '商談を作成' })).not.toBeInTheDocument();
+  });
+
+  describe('adding a next action to a deal without one (#853)', () => {
+    const OWNER = { userId: 'user-1', name: '営業 花子', email: 'hanako@example.com' };
+    const withoutTask: DealCard = {
+      ...deal,
+      ownerUserId: OWNER.userId,
+      ownerName: OWNER.name,
+      nextTask: null,
+      hasOpenTask: false,
+    };
+    const added: DealCard = {
+      ...withoutTask,
+      nextTask: {
+        id: 'task-new',
+        title: '稟議の状況を確認する',
+        dueOn: '2026-10-24',
+        kind: 'next_action',
+        source: 'manual',
+      },
+      hasOpenTask: true,
+    };
+    const addButton = () =>
+      screen.getByRole('button', { name: '「AS/400 現行調査」の次の行動を追加' });
+    const dialogOf = () =>
+      screen.getByRole('dialog', { name: '「AS/400 現行調査」の次の行動を追加' });
+
+    beforeEach(() => {
+      mocks.members = [{ ...OWNER, displayName: OWNER.name }];
+    });
+
+    it("adds one from the deal's card for its lead and gives the focus to the deal's name", async () => {
+      const user = userEvent.setup();
+      showBoard(boardData([withoutTask]));
+      // Read again once it is added: the card shows it and its mark and button go
+      mocks.refetched = boardData([added]);
+      renderScreen();
+
+      await user.click(addButton());
+      expect(dialogOf()).toHaveAccessibleDescription(
+        'リード「架空商事」の次の行動・持ち帰り事項に追加します。'
+      );
+      expect(within(dialogOf()).getByRole('button', { name: '追加' })).toHaveAccessibleDescription(
+        '期限が来ると、商談の担当（営業 花子）の「今日」と通知に出ます。'
+      );
+      await user.type(within(dialogOf()).getByLabelText('やること'), '稟議の状況を確認する');
+      await user.click(within(dialogOf()).getByRole('button', { name: '追加' }));
+
+      expect(mocks.createdTasks).toEqual([
+        {
+          organizationId: ORG_ID,
+          leadId: 'lead-1',
+          kind: 'next_action',
+          title: '稟議の状況を確認する',
+          // The day the board was read on
+          dueOn: '2026-10-24',
+          note: null,
+          dealId: 'deal-1',
+        },
+      ]);
+      expect(mocks.toast.success).toHaveBeenCalledWith('「稟議の状況を確認する」を追加しました', {
+        description: '架空商事',
+      });
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(screen.queryByRole('button', { name: /次の行動を追加/ })).not.toBeInTheDocument();
+      expect(screen.getByText('稟議の状況を確認する')).toBeInTheDocument();
+      await waitFor(() =>
+        expect(screen.getByRole('link', { name: 'AS/400 現行調査' })).toHaveFocus()
+      );
+    });
+
+    it('gives the focus back to its button when the dialog closes without adding', async () => {
+      const user = userEvent.setup();
+      showBoard(boardData([withoutTask]));
+      renderScreen();
+
+      const button = addButton();
+      await user.click(button);
+      await user.click(within(dialogOf()).getByRole('button', { name: 'キャンセル' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      await waitFor(() => expect(button).toHaveFocus());
+      expect(mocks.createdTasks).toEqual([]);
+    });
+
+    it("says the lead's assignee gets it when the deal's owner may no longer hold leads", async () => {
+      const user = userEvent.setup();
+      mocks.members = [];
+      showBoard(boardData([withoutTask]));
+      renderScreen();
+      await user.click(addButton());
+      expect(within(dialogOf()).getByRole('button', { name: '追加' })).toHaveAccessibleDescription(
+        '期限が来ると、リードの担当（いなければあなた）の「今日」と通知に出ます。'
+      );
+    });
+
+    it("adds one from the row of the list, giving the focus to the deal's name before the board is read again", async () => {
+      const user = userEvent.setup();
+      mocks.search = 'view=list';
+      // Not read again yet when the dialog closes: the button is still there, about to go
+      showBoard(boardData([withoutTask]));
+      renderScreen();
+
+      await user.click(
+        within(screen.getByRole('table')).getByRole('button', {
+          name: '「AS/400 現行調査」の次の行動を追加',
+        })
+      );
+      await user.type(within(dialogOf()).getByLabelText('やること'), '稟議の状況を確認する');
+      await user.click(within(dialogOf()).getByRole('button', { name: '追加' }));
+      expect(mocks.createdTasks).toEqual([expect.objectContaining({ dealId: 'deal-1' })]);
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      await waitFor(() =>
+        expect(screen.getByRole('link', { name: 'AS/400 現行調査' })).toHaveFocus()
+      );
+    });
+
+    it('offers none to those who may not change deals', () => {
+      showBoard(boardData([withoutTask], false));
+      renderScreen();
+      expect(screen.getByText('リードに次の行動（タスク）がありません')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /次の行動を追加/ })).not.toBeInTheDocument();
+    });
   });
 });

@@ -31,7 +31,16 @@ const DUE_CLASSES: Record<TaskDue, string> = {
 };
 
 /** Due date of a task, coloured by how it stands today (overdue / today / later / done) */
-export function DueLabel({ task, today }: { task: TaskLike; today: string }) {
+export function DueLabel({
+  task,
+  today,
+  className,
+}: {
+  task: TaskLike;
+  today: string;
+  /** e.g. text-sm where no text may be under 14px (#556) */
+  className?: string;
+}) {
   const t = useTranslations('leadFollowUp.tasks');
   const format = useFormatter();
   const due = taskDue(task, today);
@@ -44,7 +53,8 @@ export function DueLabel({ task, today }: { task: TaskLike; today: string }) {
     <span
       className={cn(
         'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium',
-        DUE_CLASSES[due]
+        DUE_CLASSES[due],
+        className
       )}
       data-due={due}
     >
@@ -86,7 +96,9 @@ export function DueDatePicker({
           disabled={disabled}
           className="inline-flex items-center gap-1 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-60"
         >
-          <DueLabel task={task} today={today} />
+          {/* No text under 14px in the lead's next actions card (decision
+              2026-10-24-admin-dads) */}
+          <DueLabel task={task} today={today} className="text-sm" />
           <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
         </button>
       </PopoverTrigger>
@@ -115,7 +127,10 @@ export function DueDatePicker({
   );
 }
 
-/** Change a task and refresh the lead's list and the dashboard */
+/**
+ * Change a task and refresh the lead's list, the dashboard, and the deals' marks: a deal is
+ * marked when its lead has no open next action (#556 shows them next to the tasks)
+ */
 export function useUpdateTask(organizationId: string) {
   const t = useTranslations('leadFollowUp.tasks');
   const utils = trpc.useUtils();
@@ -123,18 +138,29 @@ export function useUpdateTask(organizationId: string) {
     onSuccess: () => {
       void utils.leadFollowUp.tasks.invalidate();
       void utils.leadFollowUp.dueTasks.invalidate({ organizationId });
+      void utils.deals.board.invalidate({ organizationId });
     },
     onError: () => toast.error(t('saveError')),
   });
 }
 
 /** Marks a takeaway (持ち帰り事項) so it stands apart from next actions; nothing for those */
-export function TaskKindBadge({ task }: { task: Pick<LeadTaskView, 'kind'> }) {
+export function TaskKindBadge({
+  task,
+  className,
+}: {
+  task: Pick<LeadTaskView, 'kind'>;
+  /** e.g. text-sm where no text may be under 14px (#556) */
+  className?: string;
+}) {
   const t = useTranslations('leadFollowUp.tasks');
   if (task.kind !== 'takeaway') return null;
   return (
     <span
-      className="inline-flex shrink-0 items-center rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-800 dark:bg-violet-900/30 dark:text-violet-300"
+      className={cn(
+        'inline-flex shrink-0 items-center rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-800 dark:bg-violet-900/30 dark:text-violet-300',
+        className
+      )}
       data-kind={task.kind}
     >
       {t('takeawayBadge')}

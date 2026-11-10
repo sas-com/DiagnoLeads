@@ -21,29 +21,18 @@ import { type Database, db } from '@/lib/db/client';
 import { leads } from '@/lib/db/schema';
 import { type RateLimitRule, consumeRateLimit } from '@/lib/features/diagnostics/rate-limit';
 import { reportServerError } from '@/lib/ops/alert';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
+import { LEAD_WEBHOOK_FIELDS as SHARED_LEAD_WEBHOOK_FIELDS } from '../types/personal-data';
 import type { WebhookEventType } from '../types/schemas';
-import { triggerWebhookBatch } from './webhook-service';
+import { forgetLeadsInDeliveries, triggerWebhookBatch } from './webhook-service';
+
+/** Deleted leads lose their personal data in the deliveries (#918); for the leads feature */
+export { forgetLeadsInDeliveries };
 
 type LeadRow = typeof leads.$inferSelect;
 
-/** The lead columns a webhook receives; everything else stays inside DiagnoLeads */
-export const LEAD_WEBHOOK_FIELDS = [
-  'id',
-  'email',
-  'name',
-  'company',
-  'phone',
-  'status',
-  'score',
-  'source',
-  'inflowSource',
-  'conversionPoint',
-  'dealPhase',
-  'targetSystem',
-  'createdAt',
-  'updatedAt',
-] as const satisfies readonly (keyof LeadRow)[];
+/** The lead columns a webhook receives; everything else stays inside DiagnoLeads (#917 shows them) */
+export const LEAD_WEBHOOK_FIELDS = SHARED_LEAD_WEBHOOK_FIELDS satisfies readonly (keyof LeadRow)[];
 
 export type LeadWebhookSource = Pick<LeadRow, (typeof LEAD_WEBHOOK_FIELDS)[number]>;
 
@@ -116,6 +105,29 @@ function toWebhookEvent(event: LeadEvent): {
   }
 }
 
+/**
+ * The events whose lead still exists (#936): a change sent after the response can come after the
+ * lead was deleted, and must not leave its personal data in a new delivery. lead.deleted is kept.
+ * A lead deleted between this read and the delivery: a delivery sent right away still goes to the
+ * organization's endpoint (and is redacted once finished); a queued one is failed by the retry run.
+ */
+async function withExistingLeads(
+  organizationId: string,
+  events: LeadEvent[],
+  database: Database
+): Promise<LeadEvent[]> {
+  const ids = [
+    ...new Set(events.flatMap((event) => (event.type === 'lead.deleted' ? [] : [event.lead.id]))),
+  ];
+  if (ids.length === 0) return events;
+  const rows = await database
+    .select({ id: leads.id })
+    .from(leads)
+    .where(and(eq(leads.organizationId, organizationId), inArray(leads.id, ids)));
+  const found = new Set(rows.map((row) => row.id));
+  return events.filter((event) => event.type === 'lead.deleted' || found.has(event.lead.id));
+}
+
 /** Send the events now and wait for them (the part runAfterResponse runs) */
 export async function sendLeadEvents(
   organizationId: string,
@@ -134,9 +146,10 @@ export async function sendLeadEvents(
       options.database ? { database: options.database } : {}
     );
   }
+  const existing = await withExistingLeads(organizationId, within, options.database ?? db);
   const { dropped } = await triggerWebhookBatch(
     organizationId,
-    within.map(toWebhookEvent),
+    existing.map(toWebhookEvent),
     options
   );
   if (dropped > 0) {

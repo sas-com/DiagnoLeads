@@ -280,10 +280,64 @@ describe('LeadActivityCard', () => {
     mocks.list = { data: pages(update) };
     renderCard();
 
-    await userEvent.click(screen.getByRole('button', { name: 'メール' }));
+    await userEvent.click(screen.getByRole('button', { name: '診断結果のメール' }));
     expect(mocks.listInputs.at(-1)).toMatchObject({
       types: ['result_email_requested', 'result_email_sent', 'email_unsubscribed'],
     });
+  });
+
+  it('filters the contacts and visits apart from the changes sales made (#776)', async () => {
+    mocks.list = { data: pages(update) };
+    renderCard();
+
+    await userEvent.click(screen.getByRole('button', { name: '連絡・訪問' }));
+    expect(mocks.listInputs.at(-1)).toMatchObject({ types: ['contact_recorded'] });
+    await userEvent.click(screen.getByRole('button', { name: '営業の操作' }));
+    expect(mocks.listInputs.at(-1)).toMatchObject({
+      types: ['lead_created', 'lead_updated', 'mql_qualified', 'sql_decided', 'phase_reached'],
+    });
+  });
+
+  it('writes no text under 14px, its badges included (#776)', () => {
+    mocks.list = {
+      data: pages(
+        diagnosis(),
+        diagnosis({
+          id: 'diagnosis:2',
+          verified: true,
+          continuation: true,
+          summary: { ...diagnosis().summary, mqlLevel: 'interest' },
+        }),
+        update,
+        {
+          id: 'contact:c1',
+          kind: 'contact_recorded',
+          at: new Date('2026-10-21T05:00:00Z'),
+          actor: { id: 'u1', name: '営業 一郎' },
+          contactId: 'c1',
+          contactKind: 'visit',
+          note: '現行の帳票を見せてもらった',
+          durationMinutes: 60,
+          outcome: 'progress',
+          deal: null,
+          first: true,
+        },
+        {
+          id: 'email-request:w',
+          kind: 'result_email_requested',
+          at: new Date('2026-10-10T01:00:00Z'),
+          actor: null,
+          consentId: 'w',
+          request: { state: 'waiting', at: null },
+        }
+      ),
+    };
+    const { container } = renderCard();
+
+    for (const badge of ['本人未確認', '同じ画面から続けて診断', '初回連絡', '関心あり（MQL）']) {
+      expect(screen.getByText(badge), badge).toBeInTheDocument();
+    }
+    expect(container.querySelector('.text-xs')).toBeNull();
   });
 
   it('shows empty, loading and error states', async () => {
@@ -298,5 +352,62 @@ describe('LeadActivityCard', () => {
     expect(screen.getByText('活動履歴を読み込めませんでした。')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '再読み込み' }));
     expect(refetch).toHaveBeenCalled();
+  });
+});
+
+describe('contact records with their details (#554)', () => {
+  it('shows a visit with its duration, outcome and deal, and a call without them', () => {
+    mocks.list = {
+      data: {
+        pages: [
+          {
+            items: [
+              {
+                id: 'contact:c2',
+                kind: 'contact_recorded',
+                at: new Date('2026-10-21T05:00:00Z'),
+                actor: { id: 'u1', name: '営業 一郎' },
+                contactId: 'c2',
+                contactKind: 'online_meeting',
+                note: null,
+                durationMinutes: 45,
+                outcome: 'setback',
+                deal: { id: 'deal-1', name: '現行システムの調査' },
+                first: false,
+              },
+              {
+                id: 'contact:c1',
+                kind: 'contact_recorded',
+                at: new Date('2026-10-20T05:00:00Z'),
+                actor: null,
+                contactId: 'c1',
+                contactKind: 'call',
+                note: null,
+                durationMinutes: null,
+                outcome: null,
+                deal: null,
+                first: true,
+              },
+            ],
+            nextCursor: null,
+          },
+        ],
+      },
+    };
+    render(
+      <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
+        <LeadActivityCard leadId={LEAD_ID} />
+      </NextIntlClientProvider>
+    );
+
+    expect(screen.getByText('オンライン商談')).toBeInTheDocument();
+    expect(screen.getByText('45分')).toBeInTheDocument();
+    expect(screen.getByText('結果：後退')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '商談：現行システムの調査' })).toHaveAttribute(
+      'href',
+      '/ja/deals/deal-1'
+    );
+    expect(screen.getByText('電話で連絡')).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /^商談：/ })).toHaveLength(1);
   });
 });

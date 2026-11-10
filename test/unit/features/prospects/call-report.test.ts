@@ -87,6 +87,8 @@ describe('summarizeProspects: calls', () => {
     nextActionNote: null,
     stage: null,
     meetingOn: null,
+    leadId: null,
+    callResult: null,
     ...values,
   });
 

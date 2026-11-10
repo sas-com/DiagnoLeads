@@ -4,9 +4,11 @@
  * created as won says what it does to the lead, the amount box reads commas, spaces and
  * full-width digits and shows what it read, the lead is chosen from suggestions whose count is
  * read out, a failed save is said in the dialog, which does not close while it saves, a send with
- * errors takes the focus to the first one, the description says what is required, and a won or
- * lost deal is edited with its day, reason and competitor instead of its probability (real
- * next-intl messages and UI components; tRPC mocked)
+ * errors takes the focus to the first one, the description says what is required, a won or
+ * lost deal is edited with its day, reason and competitor instead of its probability, and a new
+ * deal starts where its lead stands: a lead won by hand with its win, said at the stage before the
+ * save, a lead without deals at its phase (#951) (real next-intl messages and UI components; tRPC
+ * mocked)
  */
 import { DealFormDialog } from '@/components/features/deals/deal-form-dialog';
 import type { DealView } from '@/lib/features/deals/service';
@@ -29,6 +31,11 @@ const mocks = vi.hoisted(() => ({
   // The mutations are on their way (isPending)
   pending: false,
   searches: [] as { query: string; enabled: boolean }[],
+  // Where the new deal of the lead starts (deals.forLead), and the reads of it
+  newDeal: undefined as undefined | { stage: string; kind: string | null; wonFirst: boolean },
+  // The read is on its way (isFetching)
+  reading: false,
+  leadReads: [] as { leadId: string; enabled: boolean; staleTime?: number }[],
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
@@ -56,6 +63,25 @@ vi.mock('@/lib/trpc/client', () => {
         create: { useMutation: (hook?: Callbacks) => mutation(hook, mocks.creates) },
         update: { useMutation: (hook?: Callbacks) => mutation(hook, mocks.updates) },
         delete: { useMutation: (hook?: Callbacks) => mutation(hook) },
+        forLead: {
+          useQuery: (
+            input: { leadId: string },
+            options: { enabled: boolean; staleTime?: number }
+          ) => {
+            mocks.leadReads.push({
+              leadId: input.leadId,
+              enabled: options.enabled,
+              staleTime: options.staleTime,
+            });
+            return {
+              data:
+                options.enabled && mocks.newDeal
+                  ? { items: [], newDeal: mocks.newDeal, canEdit: true, canDelete: true }
+                  : undefined,
+              isFetching: options.enabled && mocks.reading,
+            };
+          },
+        },
       },
       leads: {
         assignees: {
@@ -167,6 +193,9 @@ beforeEach(() => {
   mocks.fail = false;
   mocks.pending = false;
   mocks.searches = [];
+  mocks.newDeal = undefined;
+  mocks.reading = false;
+  mocks.leadReads = [];
 });
 
 describe('DealFormDialog', () => {
@@ -175,15 +204,21 @@ describe('DealFormDialog', () => {
     const { onOpenChange, onSaved } = renderForm({ deal });
     await user.clear(screen.getByLabelText('金額（税抜）'));
     await user.type(screen.getByLabelText('金額（税抜）'), '3500000');
-    await user.clear(screen.getByLabelText('次の一手'));
     await user.click(screen.getByRole('button', { name: '保存' }));
     // Not the probability, kind or owner it was opened with: a stage move made elsewhere
-    // meanwhile resets the probability, and this save must not write the old one back
-    expect(mocks.updates).toEqual([
-      { organizationId: ORG_ID, dealId: DEAL_ID, amount: 3_500_000, nextStep: null },
-    ]);
+    // meanwhile resets the probability, and this save must not write the old one back. Nor the
+    // next step the deal has (#853)
+    expect(mocks.updates).toEqual([{ organizationId: ORG_ID, dealId: DEAL_ID, amount: 3_500_000 }]);
     expect(onSaved).toHaveBeenCalled();
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("asks nothing about a next step: it is the lead's next actions (#853)", () => {
+    renderForm({ deal });
+    expect(screen.getByLabelText('金額（税抜）')).toBeInTheDocument();
+    expect(screen.queryByLabelText('次の一手')).not.toBeInTheDocument();
+    expect(screen.queryByText('次の一手')).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue('見積を送る')).not.toBeInTheDocument();
   });
 
   it('closes without a request when nothing was changed', async () => {
@@ -261,6 +296,7 @@ describe('DealFormDialog', () => {
       'このリードは成約になります。 受注日は今日になります。 過去の受注は、作成のあとに編集で受注日を直せます。'
     );
     await user.click(screen.getByRole('button', { name: '作成' }));
+    // No next step either (#853)
     expect(mocks.creates).toEqual([
       {
         organizationId: ORG_ID,
@@ -270,10 +306,140 @@ describe('DealFormDialog', () => {
         kind: 'survey',
         amount: null,
         expectedCloseOn: null,
-        nextStep: null,
         forecastOverride: null,
       },
     ]);
+  });
+
+  describe('where a new deal starts (#951)', () => {
+    const stageBox = () => screen.getByRole('combobox', { name: 'ステージ' });
+    const kindBox = () => screen.getByRole('combobox', { name: '種類' });
+    const WON_FIRST =
+      'このリードは成約として記録されているため、先にステージ「受注」で商談を作ります。成約でなければ、リードの状態と商談フェーズを確かめてください';
+    const FOLLOWS = 'リードの商談フェーズに合わせています';
+    const TAKES_BACK = 'このステージで作ると、リードの商談フェーズが前に戻ります';
+
+    it('opens a lead won by hand with its win, of the kind of its phase, and creates it so', async () => {
+      const user = userEvent.setup();
+      mocks.newDeal = { stage: 'won', kind: 'migration', wonFirst: true };
+      renderForm({ leadId: LEAD_ID });
+      expect(stageBox()).toHaveTextContent('受注');
+      expect(kindBox()).toHaveTextContent('移行');
+      // The lead is won already: its win is recorded, on the day it was won
+      expect(stageBox()).toHaveAccessibleDescription(
+        'このリードの成約を、受注の商談として記録します。 受注日は今日になります。 過去の受注は、作成のあとに編集で受注日を直せます。'
+      );
+      expect(screen.queryByText(WON_FIRST)).not.toBeInTheDocument();
+
+      await user.type(screen.getByLabelText('商談名 必須'), 'AS/400 移行');
+      await user.click(screen.getByRole('button', { name: '作成' }));
+      expect(mocks.creates).toEqual([
+        expect.objectContaining({ leadId: LEAD_ID, stage: 'won', kind: 'migration' }),
+      ]);
+    });
+
+    it('says at the stage, before the save, that the win comes first, and holds the save', async () => {
+      const user = userEvent.setup();
+      mocks.newDeal = { stage: 'won', kind: 'survey', wonFirst: true };
+      renderForm({ leadId: LEAD_ID });
+      await user.type(screen.getByLabelText('商談名 必須'), 'AS/400 現行調査');
+      await user.click(stageBox());
+      await user.click(screen.getByRole('option', { name: '見極め' }));
+      // A caution as soon as another stage is chosen, not a failed save afterwards
+      expect(stageBox()).toHaveAccessibleDescription(WON_FIRST);
+      expect(stageBox()).not.toHaveAttribute('aria-invalid', 'true');
+
+      await user.click(screen.getByRole('button', { name: '作成' }));
+      expect(mocks.creates).toEqual([]);
+      expect(stageBox()).toHaveFocus();
+      expect(stageBox()).toHaveAttribute('aria-invalid', 'true');
+      expect(screen.queryByText('保存できませんでした。もう一度お試しください')).not.toBeInTheDocument();
+
+      await user.click(stageBox());
+      await user.click(screen.getByRole('option', { name: '受注' }));
+      expect(screen.queryByText(WON_FIRST)).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: '作成' }));
+      expect(mocks.creates).toEqual([expect.objectContaining({ stage: 'won', kind: 'survey' })]);
+    });
+
+    it('opens a lead without deals at its phase, so that the phase does not go back', async () => {
+      const user = userEvent.setup();
+      mocks.newDeal = { stage: 'proposal', kind: null, wonFirst: false };
+      renderForm({ leadId: LEAD_ID });
+      expect(stageBox()).toHaveTextContent('提案');
+      // Said where the stage comes from
+      expect(stageBox()).toHaveAccessibleDescription(FOLLOWS);
+      // The kind is the form's own when the lead's phase stands for no win
+      expect(kindBox()).toHaveTextContent('現行調査');
+      expect(screen.getByText('空欄ならステージの既定値（40%）')).toBeInTheDocument();
+      await user.type(screen.getByLabelText('商談名 必須'), 'AS/400 移行');
+      await user.click(screen.getByRole('button', { name: '作成' }));
+      expect(mocks.creates).toEqual([
+        expect.objectContaining({ stage: 'proposal', kind: 'survey' }),
+      ]);
+    });
+
+    it('says that a stage before the lead\'s phase takes it back, but does not hold it', async () => {
+      const user = userEvent.setup();
+      mocks.newDeal = { stage: 'proposal', kind: null, wonFirst: false };
+      renderForm({ leadId: LEAD_ID });
+      await user.type(screen.getByLabelText('商談名 必須'), 'AS/400 移行');
+      await user.click(stageBox());
+      await user.click(screen.getByRole('option', { name: '条件の調整' }));
+      // A later stage takes nothing back
+      expect(screen.queryByText(FOLLOWS)).not.toBeInTheDocument();
+      expect(screen.queryByText(TAKES_BACK)).not.toBeInTheDocument();
+      await user.click(stageBox());
+      await user.click(screen.getByRole('option', { name: '見極め' }));
+      expect(stageBox()).toHaveAccessibleDescription(TAKES_BACK);
+      await user.click(screen.getByRole('button', { name: '作成' }));
+      expect(mocks.creates).toEqual([expect.objectContaining({ stage: 'qualification' })]);
+    });
+
+    it('reads the lead again each time it opens, and creates nothing until it is read', async () => {
+      const user = userEvent.setup();
+      mocks.newDeal = { stage: 'qualification', kind: null, wonFirst: false };
+      mocks.reading = true;
+      renderForm({ leadId: LEAD_ID });
+      // Its status may just have been changed by hand on the lead's page
+      expect(mocks.leadReads.at(-1)).toEqual({ leadId: LEAD_ID, enabled: true, staleTime: 0 });
+      await user.type(screen.getByLabelText('商談名 必須'), 'AS/400 移行{Enter}');
+      expect(screen.getByRole('button', { name: '作成' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'キャンセル' })).toBeEnabled();
+      expect(mocks.creates).toEqual([]);
+      expect(screen.queryByText('商談名を入力してください')).not.toBeInTheDocument();
+    });
+
+    it('follows the lead chosen in the dialog, but keeps a stage chosen before it', async () => {
+      const user = userEvent.setup();
+      mocks.newDeal = { stage: 'won', kind: 'ax', wonFirst: true };
+      renderForm({});
+      // Nothing is read before a lead is chosen
+      expect(mocks.leadReads.every((read) => !read.enabled)).toBe(true);
+      expect(stageBox()).toHaveTextContent('見極め');
+      await user.click(stageBox());
+      await user.click(screen.getByRole('option', { name: '課題の確認' }));
+
+      await user.click(screen.getByRole('combobox', { name: 'リード 必須' }));
+      await user.type(screen.getByRole('combobox', { name: 'リードを探す' }), '架空');
+      await user.click(await screen.findByRole('option', { name: /架空商事 山田 太郎/ }));
+      expect(mocks.leadReads.at(-1)).toEqual({ leadId: LEAD_ID, enabled: true, staleTime: 0 });
+      // The stage chosen stays, and is said to need the win; the kind follows the lead
+      expect(stageBox()).toHaveTextContent('課題の確認');
+      expect(kindBox()).toHaveTextContent('AX 化');
+      expect(stageBox()).toHaveAccessibleDescription(WON_FIRST);
+    });
+
+    it('reads where it starts only for a new deal of a lead', () => {
+      mocks.newDeal = { stage: 'won', kind: 'migration', wonFirst: true };
+      // Even when the lead is given with the deal edited
+      renderForm({ deal, leadId: LEAD_ID });
+      expect(mocks.leadReads.length).toBeGreaterThan(0);
+      expect(mocks.leadReads.every((read) => !read.enabled)).toBe(true);
+      // The deal edited keeps its own kind
+      expect(kindBox()).toHaveTextContent('現行調査');
+      expect(screen.queryByText(WON_FIRST)).not.toBeInTheDocument();
+    });
   });
 
   describe('the amount box (#720)', () => {
@@ -382,14 +548,14 @@ describe('DealFormDialog', () => {
       const user = userEvent.setup();
       mocks.fail = true;
       const { onOpenChange } = renderForm({ deal });
-      await user.clear(screen.getByLabelText('次の一手'));
-      await user.type(screen.getByLabelText('次の一手'), '稟議を待つ');
+      await user.clear(screen.getByLabelText('商談名 必須'));
+      await user.type(screen.getByLabelText('商談名 必須'), 'AS/400 現行調査（第2期）');
       await user.click(screen.getByRole('button', { name: '保存' }));
       const dialog = screen.getByRole('dialog', { name: '商談を編集' });
       expect(within(dialog).getByRole('alert')).toHaveTextContent(
         '保存できませんでした。もう一度お試しください'
       );
-      expect(screen.getByLabelText('次の一手')).toHaveValue('稟議を待つ');
+      expect(screen.getByLabelText('商談名 必須')).toHaveValue('AS/400 現行調査（第2期）');
       expect(onOpenChange).not.toHaveBeenCalled();
       // The dialog says it; no toast behind the dialog's overlay
       expect(mocks.toast.error).not.toHaveBeenCalled();

@@ -123,6 +123,7 @@ features-in-cycles appointment-reviews
 features-in-cycles ax-playbook
 features-in-cycles ax-site
 features-in-cycles challenge-guide
+features-in-cycles deals
 features-in-cycles diagnosis-builder
 features-in-cycles diagnostics
 features-in-cycles lead-follow-up

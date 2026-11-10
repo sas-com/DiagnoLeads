@@ -21,6 +21,7 @@ import {
   useWidgetConfig,
   visibleWidgetIds,
 } from '@/components/dashboard/widget-settings';
+import { OnboardingChecklist } from '@/components/features/help/onboarding-checklist';
 import { DueTasksSection } from '@/components/features/lead-follow-up/due-tasks-section';
 import { STUDIO_PAGE_CLASS, StudioPageHeader } from '@/components/studio';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -60,8 +61,10 @@ const WIDGET_IDS = [
   'meetingRate',
   'pipeline',
 ] as const;
+type WidgetId = (typeof WIDGET_IDS)[number];
+const isWidgetId = (id: string): id is WidgetId => (WIDGET_IDS as readonly string[]).includes(id);
 /** Widgets whose figures follow the chosen period */
-const PERIOD_WIDGETS: readonly string[] = ['analytics', 'meetingRate'];
+const PERIOD_WIDGETS: readonly WidgetId[] = ['analytics', 'meetingRate'];
 /** Earlier widgets that the current ones replace, to carry over saved shown/hidden choices */
 const WIDGET_ALIASES = {
   analytics: ['trend', 'breakdown', 'kpis'],
@@ -69,58 +72,55 @@ const WIDGET_ALIASES = {
 };
 
 const iconClass = 'h-4 w-4 text-gray-500 dark:text-gray-400';
-const WIDGET_DEFINITIONS: WidgetDefinition[] = [
-  {
-    id: 'status',
+/** Every widget needs one, so a missing definition fails tsc */
+const WIDGET_DETAILS: Record<WidgetId, Omit<WidgetDefinition, 'id'>> = {
+  status: {
     titleKey: 'status',
     descriptionKey: 'statusDesc',
     icon: <Gauge className={iconClass} />,
   },
-  {
-    id: 'pending',
+  pending: {
     titleKey: 'pending',
     descriptionKey: 'pendingDesc',
     icon: <Clock className={iconClass} />,
   },
-  {
-    id: 'today',
+  today: {
     titleKey: 'today',
     descriptionKey: 'todayDesc',
     icon: <ListTodo className={iconClass} />,
   },
-  {
-    // This week's meetings from the hearings (#137)
-    id: 'meetings',
+  // This week's meetings from the hearings (#137)
+  meetings: {
     titleKey: 'meetings',
     descriptionKey: 'meetingsDesc',
     icon: <CalendarClock className={iconClass} />,
   },
-  {
-    id: 'recent',
+  recent: {
     titleKey: 'recent',
     descriptionKey: 'recentDesc',
     icon: <Users className={iconClass} />,
   },
-  {
-    id: 'analytics',
+  analytics: {
     titleKey: 'analytics',
     descriptionKey: 'analyticsDesc',
     icon: <Activity className={iconClass} />,
   },
-  {
-    // KPI: next meeting fixed at the first meeting (#137)
-    id: 'meetingRate',
+  // KPI: next meeting fixed at the first meeting (#137)
+  meetingRate: {
     titleKey: 'meetingRate',
     descriptionKey: 'meetingRateDesc',
     icon: <CalendarCheck className={iconClass} />,
   },
-  {
-    id: 'pipeline',
+  pipeline: {
     titleKey: 'pipeline',
     descriptionKey: 'pipelineDesc',
     icon: <Layers className={iconClass} />,
   },
-];
+};
+const WIDGET_DEFINITIONS: WidgetDefinition[] = WIDGET_IDS.map((id) => ({
+  id,
+  ...WIDGET_DETAILS[id],
+}));
 
 /**
  * Dashboard for the AX migration sales team, in the look of the STUDIO dashboard (#410): where
@@ -154,7 +154,8 @@ export default function DashboardPage() {
     void refetch();
   };
 
-  const order = visibleWidgetIds(widgetConfig);
+  // The saved settings only hold current ids (reconcileWidgetConfig drops the rest)
+  const order = visibleWidgetIds(widgetConfig).filter(isWidgetId);
   const showsPeriod = order.some((id) => PERIOD_WIDGETS.includes(id));
 
   const toolbar = (
@@ -186,7 +187,7 @@ export default function DashboardPage() {
     </>
   );
 
-  const sections: Record<string, ReactNode> = {
+  const sections: Record<WidgetId, ReactNode> = {
     status: <StatusOverview organizationId={organizationId} state={state} data={data} />,
     pending: (
       <PendingSection
@@ -238,6 +239,8 @@ export default function DashboardPage() {
           </p>
         ) : (
           <>
+            {/* The first-day checklist until it is closed (#875) */}
+            <OnboardingChecklist organizationId={organizationId} />
             {order.map((id) => (
               <DashboardWidget key={id} id={id} config={widgetConfig}>
                 <div

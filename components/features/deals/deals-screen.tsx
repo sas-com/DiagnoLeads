@@ -1,6 +1,8 @@
 'use client';
 
 import { TAP_TARGET } from '@/components/common/tap-target';
+import { AddNextActionDialog } from '@/components/features/lead-follow-up/add-next-action-dialog';
+import { StudioPageHeader } from '@/components/studio';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -13,6 +15,7 @@ import {
 } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useOrganization } from '@/hooks/use-organization';
+import type { DealCard } from '@/lib/features/deals/service';
 import { DEAL_KINDS, type DealKind } from '@/lib/features/deals/types/pipeline';
 import { BOARD_CLOSED_DAYS_DEFAULT, BOARD_DEALS_LIMIT } from '@/lib/features/deals/types/schemas';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
@@ -76,6 +79,48 @@ function useBoardQuery() {
   return { view, owner, kind, period, sort, set, update };
 }
 
+/** The name of a deal on its board card or list row (data-deal-link), which takes the focus */
+function dealLinkOf(dealId: string): HTMLElement | undefined {
+  return Array.from(document.querySelectorAll<HTMLElement>('[data-deal-link]')).find(
+    (link) => link.dataset.dealLink === dealId
+  );
+}
+
+/**
+ * The dialog that adds a deal's next action from its card or row (#853): one, for the deal chosen.
+ * It has no trigger to give the focus back to: the button that opened it gets it back, but once
+ * a next action is added the button goes away with the board read again, so the focus goes to
+ * the deal's name on its card or row, under which the next action then shows.
+ */
+function useAddNextAction() {
+  const [deal, setDeal] = useState<DealCard | null>(null);
+  const [open, setOpen] = useState(false);
+  const opener = useRef<HTMLElement | null>(null);
+  const added = useRef(false);
+  return {
+    deal,
+    open,
+    setOpen,
+    start: (chosen: DealCard, from: HTMLElement) => {
+      opener.current = from;
+      added.current = false;
+      setDeal(chosen);
+      setOpen(true);
+    },
+    markAdded: () => {
+      added.current = true;
+    },
+    returnFocus: (event: Event) => {
+      const button = opener.current;
+      const target =
+        !added.current && button?.isConnected ? button : deal ? dealLinkOf(deal.id) : undefined;
+      if (!target) return;
+      event.preventDefault();
+      target.focus();
+    },
+  };
+}
+
 /** The place of the board when it has nothing to show, with what to do next */
 function EmptyState({
   title,
@@ -98,7 +143,8 @@ function EmptyState({
  * lead's page. A move between open stages shows at once (#720); the list sorts by amount or
  * expected close date (in the URL), and the board's order otherwise. While the deals of other
  * filters are read, the previous ones stay in view, unless there were none: then it says it is
- * loading rather than that there are no deals (#720).
+ * loading rather than that there are no deals (#720). An open deal whose lead has no next action
+ * offers to add one in a dialog, to those who may change deals (#853).
  */
 export function DealsScreen() {
   const t = useTranslations('deals');
@@ -112,6 +158,7 @@ export function DealsScreen() {
   // Clearing the filters takes away its button: the focus goes to the first filter
   const ownerTrigger = useRef<HTMLButtonElement>(null);
   const stageMove = useStageMove(organizationId);
+  const nextAction = useAddNextAction();
 
   const board = trpc.deals.board.useQuery(
     {
@@ -138,9 +185,7 @@ export function DealsScreen() {
   if (board.error?.data?.code === 'FORBIDDEN') {
     return (
       <div className="mx-auto w-full max-w-7xl space-y-6 py-1 sm:px-2 sm:py-6">
-        <h1 className="text-2xl font-bold tracking-wide text-gray-900 sm:text-[2rem] dark:text-gray-50">
-          {t('title')}
-        </h1>
+        <StudioPageHeader title={t('title')} />
         <DealsForbidden />
       </div>
     );
@@ -148,48 +193,51 @@ export function DealsScreen() {
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 py-1 sm:px-2 sm:py-6">
-      <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 border-b border-gray-200 pb-5 dark:border-gray-800">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-wide text-gray-900 sm:text-[2rem] dark:text-gray-50">
-            {t('title')}
-          </h1>
-          <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{t('description')}</p>
-          {data && !data.canEdit && (
-            <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
-              {t('state.readOnlyHint')}
-            </p>
-          )}
-        </div>
-        {organizationId && (
-          <div className="flex flex-wrap items-center gap-2">
-            <ToggleGroup
-              type="single"
-              size="sm"
-              value={view}
-              onValueChange={(value) => value && set('view', value, 'board')}
-              aria-label={t('views.label')}
-              className="rounded-md border border-gray-200 bg-white p-0.5 dark:border-gray-700 dark:bg-gray-900"
-            >
-              {VIEWS.map((value) => (
-                <ToggleGroupItem key={value} value={value} className={TAP_TARGET}>
-                  {t(`views.${value}`)}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
-            {data && !data.canEdit && (
-              <Badge color="gray" className="text-sm">
-                {t('state.readOnly')}
-              </Badge>
-            )}
-            {data?.canEdit && (
-              <Button type="button" className={TAP_TARGET} onClick={() => setCreateOpen(true)}>
-                <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                {t('create')}
-              </Button>
-            )}
-          </div>
-        )}
-      </header>
+      <StudioPageHeader
+        title={t('title')}
+        description={
+          data && !data.canEdit ? (
+            <>
+              {t('description')}
+              {/* Those who cannot change deals are told why, under what the screen is for */}
+              <span className="mt-1 block">{t('state.readOnlyHint')}</span>
+            </>
+          ) : (
+            t('description')
+          )
+        }
+        actions={
+          organizationId && (
+            <>
+              <ToggleGroup
+                type="single"
+                size="sm"
+                value={view}
+                onValueChange={(value) => value && set('view', value, 'board')}
+                aria-label={t('views.label')}
+                className="rounded-md border border-gray-200 bg-white p-0.5 dark:border-gray-700 dark:bg-gray-900"
+              >
+                {VIEWS.map((value) => (
+                  <ToggleGroupItem key={value} value={value} className={TAP_TARGET}>
+                    {t(`views.${value}`)}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+              {data && !data.canEdit && (
+                <Badge color="gray" className="text-sm">
+                  {t('state.readOnly')}
+                </Badge>
+              )}
+              {data?.canEdit && (
+                <Button type="button" className={TAP_TARGET} onClick={() => setCreateOpen(true)}>
+                  <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                  {t('create')}
+                </Button>
+              )}
+            </>
+          )
+        }
+      />
 
       {!organizationId ? null : (
         <>
@@ -333,6 +381,7 @@ export function DealsScreen() {
                       options
                     )
                   }
+                  onAddNextAction={nextAction.start}
                 />
               ) : (
                 <DealTable
@@ -344,6 +393,8 @@ export function DealsScreen() {
                   closedWithinDays={BOARD_CLOSED_DAYS_DEFAULT}
                   sort={sort}
                   onSort={(column) => update(dealSortParams(nextDealSort(sort, column)))}
+                  canEdit={data.canEdit}
+                  onAddNextAction={nextAction.start}
                 />
               )}
             </div>
@@ -354,6 +405,18 @@ export function DealsScreen() {
               open={createOpen}
               onOpenChange={setCreateOpen}
               organizationId={organizationId}
+            />
+          )}
+          {data?.canEdit && nextAction.deal && (
+            <AddNextActionDialog
+              open={nextAction.open}
+              onOpenChange={nextAction.setOpen}
+              organizationId={organizationId}
+              deal={nextAction.deal}
+              leadLabel={nextAction.deal.company || nextAction.deal.leadName || ''}
+              today={data.today}
+              onAdded={nextAction.markAdded}
+              onCloseAutoFocus={nextAction.returnFocus}
             />
           )}
           {stageMove.dialogs}

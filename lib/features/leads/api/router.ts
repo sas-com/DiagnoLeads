@@ -1,3 +1,4 @@
+import { canReadDeals } from '@/lib/auth/deal-access';
 import type { db as defaultDb } from '@/lib/db/client';
 import { auditLogs, leadTags, leads, tags, users } from '@/lib/db/schema';
 import { canReadComments } from '@/lib/features/comments/service';
@@ -7,6 +8,7 @@ import { notifyLeadHandoff } from '@/lib/features/lead-handoff/notify';
 import {
   type LeadEvent,
   emitLeadEvents,
+  forgetLeadsInDeliveries,
   leadChangeEvents,
 } from '@/lib/features/webhooks/services/lead-events';
 import { organizationProcedure, router } from '@/lib/trpc/init';
@@ -40,7 +42,7 @@ import {
   leadExportJson,
 } from '../export';
 import { leadExportPdfBase64 } from '../export-pdf';
-import { getNextMeetingRate, getWeekMeetings } from '../meetings';
+import { getMyMeetings, getNextMeetingRate, getWeekMeetings } from '../meetings';
 import { leadIdsWithDeals } from '../service';
 import {
   DEAL_DRIVEN_MESSAGE,
@@ -104,12 +106,16 @@ type ListFilterInput = Omit<z.infer<typeof listLeadsSchema>, 'limit' | 'offset'>
 
 /**
  * WHERE of the list and the export: always scoped to the organization (#131), with the list
- * filters and the tag filter. null when the tag filter matches no lead.
+ * filters and the tag filter. null when the tag filter matches no lead. The filter on the deals
+ * (missingDeal, #854) is refused to those who may not read deals, as naming a deal is (#554)
  */
 async function listWhere(
-  ctx: { db: typeof defaultDb; user: { id: string } },
+  ctx: { db: typeof defaultDb; user: { id: string } } & Parameters<typeof canReadDeals>[0],
   input: ListFilterInput
 ): Promise<SQL | null> {
+  if (input.missingDeal && !canReadDeals(ctx)) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: '商談を閲覧する権限がありません' });
+  }
   const conditions: SQL[] = [
     eq(leads.organizationId, input.organizationId),
     ...leadListConditions(input, ctx.user.id),
@@ -422,6 +428,23 @@ export const leadsRouter = router({
     return getWeekMeetings(ctx.db, input.organizationId);
   }),
 
+  /**
+   * 今日 (#556): the user's own meetings from today to Sunday of the current Japan week, with
+   * the confirmed time of a first meeting (see meetings.ts). The user is the one signed in: the
+   * input names only the organization (any other key is refused, as leadActivity.myDay does)
+   */
+  myMeetings: organizationProcedure
+    .input(z.object({ organizationId: z.string().uuid() }).strict())
+    .query(async ({ ctx }) => {
+      if (!ctx.ability.can('read', 'Lead')) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'リードを閲覧する権限がありません',
+        });
+      }
+      return getMyMeetings(ctx.db, { organizationId: ctx.organization.id, userId: ctx.user.id });
+    }),
+
   /** Dashboard KPI 初回商談から次回日程が決まった率 for the period (#137, see meetings.ts) */
   nextMeetingRate: organizationProcedure
     .input(
@@ -443,6 +466,8 @@ export const leadsRouter = router({
   /**
    * Figures of the list page's cards for the whole organization (#131): leads per status. Not
    * affected by the list filters. No average score: the MQL level is the sign (#447).
+   * missingDeal (#854): the leads the list's filter missingDeal shows, counted with the list's
+   * WHERE; null for those who may not read deals (#448)
    */
   statusCounts: organizationProcedure.query(async ({ ctx, input }) => {
     if (!ctx.ability.can('read', 'Lead')) {
@@ -452,14 +477,28 @@ export const leadsRouter = router({
       });
     }
 
-    const rows = await ctx.db
-      .select({
-        status: leads.status,
-        count: count(),
-      })
-      .from(leads)
-      .where(eq(leads.organizationId, input.organizationId))
-      .groupBy(leads.status);
+    const countMissingDeal = async () => {
+      const where = await listWhere(ctx, {
+        organizationId: input.organizationId,
+        missingDeal: true,
+      });
+      const [row] = await ctx.db
+        .select({ count: count() })
+        .from(leads)
+        .where(where ?? sql`false`);
+      return Number(row?.count ?? 0);
+    };
+    const [rows, missingDeal] = await Promise.all([
+      ctx.db
+        .select({
+          status: leads.status,
+          count: count(),
+        })
+        .from(leads)
+        .where(eq(leads.organizationId, input.organizationId))
+        .groupBy(leads.status),
+      canReadDeals(ctx) ? countMissingDeal() : null,
+    ]);
 
     const byStatus = Object.fromEntries(LEAD_STATUSES.map((status) => [status, 0])) as Record<
       LeadStatus,
@@ -478,6 +517,7 @@ export const leadsRouter = router({
     return {
       total,
       byStatus,
+      missingDeal,
     };
   }),
 
@@ -758,6 +798,7 @@ export const leadsRouter = router({
 
       // Delete lead (the audit row keeps only the name and company)
       await tx.delete(leads).where(leadScope);
+      await forgetLeadsInDeliveries(tx, input.organizationId, [existing.id]);
       deletedAt = new Date();
       await writeLeadAuditLogs(
         tx,
@@ -902,6 +943,11 @@ export const leadsRouter = router({
         .delete(leads)
         .where(and(inArray(leads.id, input.ids), eq(leads.organizationId, input.organizationId)))
         .returning({ id: leads.id, name: leads.name, company: leads.company });
+      await forgetLeadsInDeliveries(
+        tx,
+        input.organizationId,
+        result.map((row) => row.id)
+      );
 
       await writeLeadAuditLogs(
         tx,

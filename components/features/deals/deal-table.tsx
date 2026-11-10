@@ -11,6 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import type { DealCard } from '@/lib/features/deals/service';
+import { isOpenStage } from '@/lib/features/deals/types/pipeline';
 import { cn } from '@/lib/utils';
 import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
@@ -18,6 +19,7 @@ import Link from 'next/link';
 import { dealMarks, formatDealDate, formatYen } from './deal-format';
 import type { DealSort, DealSortKey } from './deal-list-sort';
 import { DealMarks } from './deal-marks';
+import { AddNextActionButton, DealNextTaskSummary } from './deal-next-task';
 import { DealStageBadge } from './deal-stage-badge';
 
 interface DealTableProps {
@@ -29,6 +31,13 @@ interface DealTableProps {
   closedWithinDays: number;
   sort: DealSort;
   onSort: (column: DealSortKey) => void;
+  /** Whether the user may change deals: the rows offer to add a next action then */
+  canEdit?: boolean;
+  /**
+   * Opens the dialog that adds the lead's next action, for an open deal marked for its lead having
+   * none (#853); no button without it
+   */
+  onAddNextAction?: (deal: DealCard, opener: HTMLElement) => void;
 }
 
 const LINK = cn('inline-flex items-center underline-offset-2 hover:underline', TAP_TARGET);
@@ -36,11 +45,21 @@ const LINK = cn('inline-flex items-center underline-offset-2 hover:underline', T
 /**
  * The board's deals as one table (Refs #436), sortable by stage (the board's order), amount and
  * expected close date (#720). Each row has the deal's lead (company and name, as on the board's
- * cards), its next step and the marks of its board card; a passed close date is said with an icon
- * and words, not only in red. The caption says the order, the headers' aria-sort too, and a line
- * above the table says how long won and lost deals stay listed.
+ * cards), the marks of its board card and next to them, as on the card, the lead's next action of
+ * an open deal (#853), or for those who may change deals the button that adds one where it is
+ * missing; a passed close date is said with an icon and words, not only in red. The caption says
+ * the order, the headers' aria-sort too, and a line above the table says how long won and lost
+ * deals stay listed.
  */
-export function DealTable({ deals, today, closedWithinDays, sort, onSort }: DealTableProps) {
+export function DealTable({
+  deals,
+  today,
+  closedWithinDays,
+  sort,
+  onSort,
+  canEdit = false,
+  onAddNextAction,
+}: DealTableProps) {
   const t = useTranslations('deals');
   const locale = useLocale();
 
@@ -81,12 +100,13 @@ export function DealTable({ deals, today, closedWithinDays, sort, onSort }: Deal
                 {t('fields.probability')}
               </TableHead>
               {sortable('expectedCloseOn', t('fields.expectedCloseOn'))}
+              {/* The alerts and the next action side by side: a missing one is marked next to it */}
               <TableHead className="text-gray-700 dark:text-gray-300">{t('list.marks')}</TableHead>
               <TableHead className="text-gray-700 dark:text-gray-300">
-                {t('fields.owner')}
+                {t('list.nextAction')}
               </TableHead>
               <TableHead className="text-gray-700 dark:text-gray-300">
-                {t('fields.nextStep')}
+                {t('fields.owner')}
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -96,7 +116,11 @@ export function DealTable({ deals, today, closedWithinDays, sort, onSort }: Deal
               return (
                 <TableRow key={deal.id}>
                   <TableCell className="font-medium">
-                    <Link href={`/${locale}/deals/${deal.id}`} className={LINK}>
+                    <Link
+                      href={`/${locale}/deals/${deal.id}`}
+                      data-deal-link={deal.id}
+                      className={LINK}
+                    >
                       {deal.name}
                     </Link>
                   </TableCell>
@@ -144,15 +168,22 @@ export function DealTable({ deals, today, closedWithinDays, sort, onSort }: Deal
                   <TableCell className="min-w-48">
                     <DealMarks flags={marks} />
                   </TableCell>
-                  <TableCell className="whitespace-nowrap">
-                    {deal.ownerName ?? t('card.unassigned')}
-                  </TableCell>
                   <TableCell className="min-w-48 max-w-80">
-                    {deal.nextStep ? (
-                      <span className="line-clamp-2">{deal.nextStep}</span>
+                    {/* Not for closed deals; an open one without it is marked in the alerts,
+                        and offers to add one here */}
+                    {isOpenStage(deal.stage) && deal.nextTask ? (
+                      <DealNextTaskSummary task={deal.nextTask} today={today} />
+                    ) : marks.noNextAction && canEdit && onAddNextAction ? (
+                      <AddNextActionButton
+                        dealName={deal.name}
+                        onAdd={(opener) => onAddNextAction(deal, opener)}
+                      />
                     ) : (
                       <span className="text-gray-600 dark:text-gray-300">—</span>
                     )}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {deal.ownerName ?? t('card.unassigned')}
                   </TableCell>
                 </TableRow>
               );

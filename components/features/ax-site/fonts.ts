@@ -3,6 +3,9 @@ import { Lato, Noto_Sans_JP } from 'next/font/google';
 /**
  * Fonts of the AX migration site (same as maru2-dx.com).
  * next/font serves them from this app, which the production CSP (font-src 'self') requires.
+ * Noto Sans JP is used from 1024px or with a mouse; on phones and touch tablets below 1024px the
+ * Japanese text takes the device's font and none of its files load (app/globals.css, #510,
+ * decision 2026-10-26-ax-device-font-on-mobile).
  */
 const notoSansJp = Noto_Sans_JP({
   // The variable font (no weight): one @font-face per unicode-range file instead of one per
@@ -10,7 +13,8 @@ const notoSansJp = Noto_Sans_JP({
   // the same while the render-blocking CSS shrinks from 372 rules to 124 (#510)
   subsets: ['latin'],
   display: 'swap',
-  // Japanese glyphs come in many unicode-range files; let the browser fetch what it needs
+  // Japanese glyphs come in many unicode-range files; let the browser fetch what it needs (and,
+  // on phones, nothing: a preload would fetch a file there too)
   preload: false,
   variable: '--font-noto-sans-jp',
 });

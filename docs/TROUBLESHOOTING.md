@@ -404,9 +404,9 @@ ps aux | grep node
 
 問題が解決しない場合:
 
-1. [GitHub Issues](https://github.com/yusuke-kurosawa/diagnoleads-v2/issues) で検索
+1. [GitHub Issues](https://github.com/sas-com/DiagnoLeads/issues) で検索
 2. 新しいIssueを作成（再現手順を含める）
-3. [Discussions](https://github.com/yusuke-kurosawa/diagnoleads-v2/discussions) で質問
+3. [Discussions](https://github.com/sas-com/DiagnoLeads/discussions) で質問
 
 ---
 

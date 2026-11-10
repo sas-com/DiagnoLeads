@@ -2,10 +2,12 @@
  * Lead follow-up tRPC router: contact records (Refs #136) and next actions (Refs #85)
  *
  * Anyone who can read leads may read (including viewers from a parent organization);
- * recording, changing and deleting need permission to update leads. Every query is scoped by
- * organizationId (see ../service.ts).
+ * recording, changing and deleting need permission to update leads, and naming a deal (a
+ * contact's deal, the deal a next action is added for) the right to read deals too. Every query
+ * is scoped by organizationId (see ../service.ts).
  */
 
+import { canReadDeals } from '@/lib/auth/deal-access';
 import type { AppAbility } from '@/lib/auth/permissions';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { organizationProcedure, router } from '@/lib/trpc/init';
@@ -48,6 +50,22 @@ function assertCanWrite(ability: AppAbility) {
   }
 }
 
+/**
+ * Naming a deal needs the right to read deals: a role that may change leads but not read deals
+ * (the agency accounts of #276) records a contact or adds a next action without one
+ */
+function assertCanNameDeal(
+  ctx: Parameters<typeof canReadDeals>[0],
+  dealId: string | null | undefined
+) {
+  if (dealId && !canReadDeals(ctx)) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'You do not have permission to read the deals of leads',
+    });
+  }
+}
+
 export const leadFollowUpRouter = router({
   /** First contact time and the latest contact records of a lead */
   contacts: organizationProcedure.input(leadScopeSchema).query(async ({ ctx, input }) => {
@@ -59,11 +77,16 @@ export const leadFollowUpRouter = router({
     return { ...summary, canEdit: ctx.ability.can('update', 'Lead') };
   }),
 
-  /** One tap: "called", "emailed" or "could not reach", now */
+  /**
+   * One tap: "called", "emailed" or "could not reach", now; or a contact with its time,
+   * duration, outcome and deal (#554). Naming a deal needs the right to read deals: a role that
+   * may change leads but not read deals (the agency accounts of #276) records without one
+   */
   recordContact: organizationProcedure
     .input(recordContactSchema)
     .mutation(async ({ ctx, input }) => {
       assertCanWrite(ctx.ability);
+      assertCanNameDeal(ctx, input.dealId);
       return recordContact(ctx.db, {
         ...input,
         organizationId: ctx.organization.id,
@@ -110,11 +133,24 @@ export const leadFollowUpRouter = router({
     return { ...due, scope: input.scope, today, canEdit: ctx.ability.can('update', 'Lead') };
   }),
 
+  /**
+   * A next action or takeaway of a lead. One added for a deal (its page, or the deals board and
+   * list, #853) needs the right to read deals, and the deal decides whom it is given to (see
+   * createTask in ../service.ts)
+   */
   createTask: organizationProcedure.input(createTaskSchema).mutation(async ({ ctx, input }) => {
     assertCanWrite(ctx.ability);
+    assertCanNameDeal(ctx, input.dealId);
     return createTask(ctx.db, {
-      ...input,
       organizationId: ctx.organization.id,
+      leadId: input.leadId,
+      title: input.title,
+      dueOn: input.dueOn,
+      note: input.note,
+      kind: input.kind,
+      checkWith: input.checkWith,
+      checkWithUserId: input.checkWithUserId,
+      dealId: input.dealId,
       userId: ctx.user.id,
     });
   }),

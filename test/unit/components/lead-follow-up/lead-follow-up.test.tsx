@@ -1,6 +1,7 @@
 /**
  * Follow-up parts (#136, #85): the contact bar with its one-tap buttons, the next actions card
- * of the lead page and the dashboard's "today" card (real next-intl messages; tRPC mocked)
+ * of the lead page and the dashboard's "today" card (real next-intl messages; tRPC mocked). The
+ * dialog that records an activity with its details (#554) is in record-activity-dialog.test.tsx
  */
 import { DueTasksSection } from '@/components/features/lead-follow-up/due-tasks-section';
 import { LeadContactBar } from '@/components/features/lead-follow-up/lead-contact-bar';
@@ -14,8 +15,13 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const ORG_ID = '660e8400-e29b-41d4-a716-446655440000';
 const LEAD_ID = '770e8400-e29b-41d4-a716-446655440001';
+const DEAL_ID = '990e8400-e29b-41d4-a716-446655440003';
+const OWNER_ID = 'aa0e8400-e29b-41d4-a716-446655440004';
 
-type MutationOptions = { onSuccess?: (result: unknown) => void };
+type MutationOptions = {
+  onSuccess?: (result: unknown, input: unknown) => void;
+  onError?: (error: Error) => void;
+};
 
 const mocks = vi.hoisted(() => ({
   contacts: undefined as unknown,
@@ -27,7 +33,13 @@ const mocks = vi.hoisted(() => ({
   calls: {} as Record<string, unknown[]>,
   /** What each mutation resolves with (onSuccess is called with it) */
   results: {} as Record<string, unknown>,
+  /** Mutations that fail (onError is called instead) */
+  fail: {} as Record<string, boolean>,
   toast: { success: vi.fn(), error: vi.fn() },
+  /** The deals' board, apart from the other queries: its cards show the next action (#853) */
+  boardInvalidate: vi.fn(),
+  /** The signed-in user (who gets the due notices of what they add for their own deal) */
+  userId: 'me',
 }));
 
 vi.mock('@/lib/trpc/client', () => {
@@ -36,7 +48,13 @@ vi.mock('@/lib/trpc/client', () => {
       isPending: false,
       mutate: (input: unknown) => {
         mocks.calls[name] = [...(mocks.calls[name] ?? []), input];
-        options.onSuccess?.(mocks.results[name]);
+        if (mocks.fail[name]) return options.onError?.(new Error('failed'));
+        options.onSuccess?.(mocks.results[name], input);
+      },
+      mutateAsync: async (input: unknown) => {
+        mocks.calls[name] = [...(mocks.calls[name] ?? []), input];
+        options.onSuccess?.(mocks.results[name], input);
+        return mocks.results[name];
       },
     }),
   });
@@ -45,8 +63,9 @@ vi.mock('@/lib/trpc/client', () => {
     trpc: {
       useUtils: () => ({
         leadFollowUp: { contacts: invalidate, tasks: invalidate, dueTasks: invalidate },
-        leadActivity: { list: invalidate },
+        leadActivity: { list: invalidate, forDeal: invalidate, myDay: invalidate },
         analytics: { getDashboard: invalidate },
+        deals: { board: { invalidate: mocks.boardInvalidate } },
       }),
       leadFollowUp: {
         contacts: { useQuery: () => ({ data: mocks.contacts, isError: false }) },
@@ -66,10 +85,16 @@ vi.mock('@/lib/trpc/client', () => {
       leads: {
         assignees: { useQuery: () => ({ data: mocks.members }) },
       },
+      deals: {
+        forLead: { useQuery: () => ({ data: { items: [] } }) },
+      },
     },
   };
 });
 vi.mock('sonner', () => ({ toast: mocks.toast }));
+vi.mock('@/lib/auth/client', () => ({
+  useSession: () => ({ data: { user: { id: mocks.userId } }, isPending: false }),
+}));
 
 beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
@@ -85,6 +110,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.calls = {};
   mocks.results = {};
+  mocks.fail = {};
+  mocks.userId = 'me';
   mocks.dueInputs = [];
   mocks.members = [];
 });
@@ -110,6 +137,7 @@ const task = (overrides: Record<string, unknown> = {}) => ({
   checkWith: null,
   checkWithUser: null,
   assigneeId: null,
+  assignee: null,
   createdBy: null,
   createdAt: new Date('2026-10-10T00:00:00Z'),
   updatedAt: new Date('2026-10-10T00:00:00Z'),
@@ -136,32 +164,45 @@ describe('LeadContactBar', () => {
     await user.click(within(group).getByRole('button', { name: '電話した' }));
 
     expect(mocks.calls.recordContact).toEqual([
-      { organizationId: ORG_ID, leadId: LEAD_ID, kind: 'call', note: null },
+      { organizationId: ORG_ID, leadId: LEAD_ID, kind: 'call' },
     ]);
-    // The toast offers to undo a wrong tap
+    // The toast offers to undo a wrong tap, and names the lead as on the other screens (#863)
     const [message, options] = mocks.toast.success.mock.calls[0] as [
       string,
-      { action: { label: string; onClick: () => void } },
+      { description?: string; action: { label: string; onClick: () => void } },
     ];
     expect(message).toBe('「電話した」を記録しました');
+    expect(options.description).toBe('架空商事');
     expect(options.action.label).toBe('取り消す');
     options.action.onClick();
     expect(mocks.calls.deleteContact).toEqual([{ organizationId: ORG_ID, id: 'c1' }]);
   });
 
-  it('records with a note from the note button', async () => {
+  it('records with a note from "record an activity", now when the time is left as it is', async () => {
     mocks.contacts = { firstContactAt: null, total: 0, recent: [], canEdit: true };
     mocks.results.recordContact = { id: 'c2', kind: 'no_answer' };
     const user = userEvent.setup();
     renderBar();
 
-    await user.click(screen.getByRole('button', { name: 'メモを付けて記録' }));
-    await user.click(screen.getByRole('radio', { name: 'つながらなかった' }));
+    // A visit or an online meeting is not a one-tap button: it is recorded with its details
+    const group = screen.getByRole('group', { name: '架空商事への連絡を記録' });
+    expect(within(group).queryByRole('button', { name: '訪問した' })).not.toBeInTheDocument();
+    await user.click(within(group).getByRole('button', { name: '活動を記録' }));
+    await user.click(screen.getByRole('radio', { name: '不通' }));
     await user.type(screen.getByLabelText('メモ（任意）'), '午後にかけ直す');
     await user.click(screen.getByRole('button', { name: '記録する' }));
 
     expect(mocks.calls.recordContact).toEqual([
-      { organizationId: ORG_ID, leadId: LEAD_ID, kind: 'no_answer', note: '午後にかけ直す' },
+      {
+        organizationId: ORG_ID,
+        leadId: LEAD_ID,
+        kind: 'no_answer',
+        contactedAt: undefined,
+        durationMinutes: null,
+        outcome: null,
+        dealId: null,
+        note: '午後にかけ直す',
+      },
     ]);
   });
 
@@ -174,9 +215,11 @@ describe('LeadContactBar', () => {
         {
           id: 'c2',
           leadId: LEAD_ID,
-          kind: 'email',
+          kind: 'visit',
           note: '資料を送付',
           contactedAt: new Date('2026-10-15T05:00:00Z'),
+          durationMinutes: 90,
+          outcome: 'advanced',
           createdBy: { id: 'u1', name: '担当 一郎' },
         },
       ],
@@ -186,13 +229,31 @@ describe('LeadContactBar', () => {
 
     expect(screen.getByTestId('first-contact')).toHaveTextContent('初回連絡 2026/10/14 10:30');
     expect(screen.getByTestId('first-contact')).toHaveTextContent('不通 1回');
-    expect(screen.getByText(/最新：メールした（2026\/10\/15 14:00）・全2件 · 担当 一郎 · 資料を送付/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /最新：訪問した（2026\/10\/15 14:00・1時間30分・前進） · 担当 一郎 · 資料を送付 · 全2件/
+      )
+    ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '電話した' })).not.toBeInTheDocument();
   });
 });
 
 describe('LeadNextActionsCard', () => {
   const renderCard = () => wrap(<LeadNextActionsCard organizationId={ORG_ID} leadId={LEAD_ID} />);
+
+  it("says whose next actions they are when the page is not the lead's (#720)", () => {
+    mocks.tasks = { today: '2026-10-16', canEdit: true, items: [] };
+    wrap(
+      <LeadNextActionsCard
+        organizationId={ORG_ID}
+        leadId={LEAD_ID}
+        description="リード「架空商事」の次の行動です"
+      />
+    );
+    expect(screen.getByRole('heading', { name: '次の行動・持ち帰り事項' }).parentElement?.nextElementSibling).toHaveTextContent(
+      'リード「架空商事」の次の行動です'
+    );
+  });
 
   it('lists open next actions with their due status and ticks one done', async () => {
     mocks.tasks = {
@@ -228,7 +289,11 @@ describe('LeadNextActionsCard', () => {
 
     expect(screen.getByText('次の行動はまだありません')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '追加' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('やることを入力してください');
+    // Said under the field, which takes the focus; nothing is sent
+    const titleBox = screen.getByLabelText('やること');
+    expect(titleBox).toHaveFocus();
+    expect(titleBox).toHaveAttribute('aria-invalid', 'true');
+    expect(titleBox).toHaveAccessibleDescription('やることを入力してください');
     expect(mocks.calls.createTask).toBeUndefined();
 
     await user.type(screen.getByLabelText('やること'), '資料を送る');
@@ -319,6 +384,196 @@ describe('LeadNextActionsCard', () => {
         checkWith: '広報部',
       },
     ]);
+  });
+
+  it("reads the deals' board again when a next action is added, done or deleted (#853)", async () => {
+    mocks.tasks = { today: '2026-10-16', canEdit: true, items: [task()] };
+    const user = userEvent.setup();
+    renderCard();
+
+    // The deals' cards show the lead's next action, or mark a lead without one
+    await user.type(screen.getByLabelText('やること'), '見積もりを送る');
+    await user.click(screen.getByRole('button', { name: '追加' }));
+    expect(mocks.calls.createTask).toHaveLength(1);
+    expect(mocks.boardInvalidate).toHaveBeenCalledTimes(1);
+    expect(mocks.boardInvalidate).toHaveBeenLastCalledWith({ organizationId: ORG_ID });
+
+    await user.click(screen.getByRole('checkbox', { name: '「資料を送る」を完了にする' }));
+    expect(mocks.boardInvalidate).toHaveBeenCalledTimes(2);
+
+    await user.click(screen.getByRole('button', { name: '「資料を送る」を削除' }));
+    expect(mocks.calls.deleteTask).toEqual([{ organizationId: ORG_ID, id: 'task-1' }]);
+    expect(mocks.boardInvalidate).toHaveBeenCalledTimes(3);
+    expect(mocks.boardInvalidate).toHaveBeenLastCalledWith({ organizationId: ORG_ID });
+  });
+
+  it('says to whom a next action is given (#853)', () => {
+    mocks.tasks = {
+      today: '2026-10-16',
+      canEdit: true,
+      items: [
+        task({
+          id: 'given',
+          title: '見積もりを送る',
+          assigneeId: OWNER_ID,
+          assignee: { id: OWNER_ID, name: '商談 担当' },
+        }),
+        task({ id: 'lead', title: '電話する' }),
+      ],
+    };
+    renderCard();
+    const rows = screen.getAllByRole('listitem');
+    const given = within(rows[0]).getByText('割り当て：商談 担当');
+    expect(given).toHaveClass('text-sm');
+    expect(given.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+    // One that follows the lead's assignee says nothing of it
+    expect(within(rows[1]).queryByText(/^割り当て：/)).not.toBeInTheDocument();
+  });
+
+  const OWNER = { userId: OWNER_ID, name: '商談 担当', email: 'owner@example.com' };
+  const openDeal = { id: DEAL_ID, stage: 'proposal', ownerUserId: OWNER_ID, ownerName: '商談 担当' };
+  const renderDealCard = (deal: typeof openDeal | Record<string, unknown> = openDeal) =>
+    wrap(
+      <LeadNextActionsCard
+        organizationId={ORG_ID}
+        leadId={LEAD_ID}
+        deal={deal as typeof openDeal}
+      />
+    );
+
+  it('adds for the deal of its page and says above the button who gets the due notices (#853)', async () => {
+    mocks.tasks = { today: '2026-10-16', canEdit: true, items: [] };
+    mocks.members = [{ ...OWNER, displayName: OWNER.name }];
+    const user = userEvent.setup();
+    renderDealCard();
+
+    const form = screen.getByRole('form', { name: '次の行動を追加' });
+    const hint = '期限が来ると、商談の担当（商談 担当）の「今日」と通知に出ます。';
+    expect(within(form).getByText(hint)).toHaveClass('text-sm');
+    expect(within(form).getByRole('button', { name: '追加' })).toHaveAccessibleDescription(hint);
+    await user.type(screen.getByLabelText('やること'), '見積もりを送る');
+    await user.click(screen.getByRole('button', { name: '追加' }));
+    expect(mocks.calls.createTask).toEqual([
+      {
+        organizationId: ORG_ID,
+        leadId: LEAD_ID,
+        kind: 'next_action',
+        title: '見積もりを送る',
+        dueOn: '2026-10-16',
+        note: null,
+        dealId: DEAL_ID,
+      },
+    ]);
+  });
+
+  it('says the due notices are the user\'s on their own deal (#853)', () => {
+    mocks.tasks = { today: '2026-10-16', canEdit: true, items: [] };
+    mocks.members = [{ ...OWNER, displayName: OWNER.name }];
+    mocks.userId = OWNER_ID;
+    renderDealCard();
+    expect(screen.getByRole('button', { name: '追加' })).toHaveAccessibleDescription(
+      '期限が来ると、あなたの「今日」と通知に出ます。'
+    );
+  });
+
+  it.each([
+    ['has no owner', { ownerUserId: null, ownerName: null }],
+    ['has an owner who may no longer hold leads', { ownerUserId: 'left', ownerName: '退職 済み' }],
+    ['is won', { stage: 'won' }],
+    ['is lost', { stage: 'lost' }],
+  ])("says the lead's assignee gets the due notices when the deal %s (#853)", (_, values) => {
+    mocks.tasks = { today: '2026-10-16', canEdit: true, items: [] };
+    mocks.members = [{ ...OWNER, displayName: OWNER.name }];
+    renderDealCard({ ...openDeal, ...values });
+    expect(screen.getByRole('button', { name: '追加' })).toHaveAccessibleDescription(
+      '期限が来ると、リードの担当（いなければあなた）の「今日」と通知に出ます。'
+    );
+  });
+
+  it("says nothing of the deals' owners on the lead's page", () => {
+    mocks.tasks = { today: '2026-10-16', canEdit: true, items: [] };
+    renderCard();
+    expect(screen.queryByText(/^期限が来ると/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '追加' })).not.toHaveAttribute('aria-describedby');
+  });
+
+  it('says a failed save above the buttons, keeping what was entered (#853)', async () => {
+    mocks.tasks = { today: '2026-10-16', canEdit: true, items: [] };
+    mocks.fail.createTask = true;
+    const user = userEvent.setup();
+    renderCard();
+
+    const form = screen.getByRole('form', { name: '次の行動を追加' });
+    await user.type(screen.getByLabelText('やること'), '見積もりを送る');
+    await user.click(within(form).getByRole('button', { name: '追加' }));
+    expect(within(form).getByRole('alert')).toHaveTextContent(
+      '保存できませんでした。もう一度お試しください'
+    );
+    expect(within(form).getByRole('alert')).toHaveClass('text-sm', 'text-red-700');
+    expect(mocks.toast.error).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('やること')).toHaveValue('見積もりを送る');
+    // The error of a missing title clears once one is typed
+    expect(screen.getByLabelText('やること')).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('holds the save of a due date it cannot read, saying so under the box (#853)', async () => {
+    mocks.tasks = { today: '2026-10-16', canEdit: true, items: [] };
+    const user = userEvent.setup();
+    renderCard();
+
+    await user.type(screen.getByLabelText('やること'), '見積もりを送る');
+    await user.clear(screen.getByLabelText('期限'));
+    await user.type(screen.getByLabelText('期限'), '11/15');
+    await user.click(screen.getByRole('button', { name: '追加' }));
+    // Saved, it would keep the day the box held before (today)
+    expect(mocks.calls.createTask).toBeUndefined();
+    const due = screen.getByLabelText('期限');
+    expect(due).toHaveFocus();
+    expect(due).toHaveAccessibleDescription('期限は 2026/11/15 のように 年/月/日 で入力してください');
+    expect(screen.getByText('期限は 2026/11/15 のように 年/月/日 で入力してください')).toHaveClass(
+      'text-sm',
+      'text-red-700'
+    );
+
+    await user.clear(due);
+    await user.type(due, '2026/11/15');
+    await user.click(screen.getByRole('button', { name: '追加' }));
+    expect(mocks.calls.createTask).toEqual([expect.objectContaining({ dueOn: '2026-11-15' })]);
+  });
+
+  it('writes no text under 14px anywhere in the card, and its fields and buttons are 44px on phones', async () => {
+    mocks.tasks = {
+      today: '2026-10-16',
+      canEdit: true,
+      items: [
+        task({ id: 'late', title: '見積もりを送る', dueOn: '2026-10-14', note: '先方の稟議の後' }),
+        task({ id: 'meeting', title: null, source: 'hearing' }),
+        task({ id: 'request', title: '初回商談', source: 'meeting_request' }),
+        task({ id: 'timing', title: '再接触', source: 'act_timing' }),
+        task({ id: 'takeaway', title: '内訳を回答する', kind: 'takeaway', checkWith: '広報部' }),
+        task({
+          id: 'given',
+          title: '電話する',
+          assigneeId: OWNER_ID,
+          assignee: { id: OWNER_ID, name: '商談 担当' },
+        }),
+        task({ id: 'done', title: '資料を送った', done: true, completedAt: new Date() }),
+      ],
+    };
+    const user = userEvent.setup();
+    const { container } = renderCard();
+    await user.click(screen.getByRole('button', { name: '完了した1件を表示' }));
+    expect(screen.getByText('資料を送った')).toBeInTheDocument();
+    expect(screen.getByText('先方の稟議の後')).toHaveClass('text-sm');
+    expect(screen.getByText('確認先：広報部')).toHaveClass('text-sm');
+    expect(container.querySelector('.text-xs')).toBeNull();
+    expect(screen.getByRole('button', { name: '完了したものを隠す' })).toHaveClass('min-h-11');
+
+    const form = screen.getByRole('form', { name: '次の行動を追加' });
+    expect(screen.getByLabelText('やること')).toHaveClass('h-11');
+    expect(screen.getByLabelText('メモ（任意）')).toHaveClass('h-11');
+    expect(within(form).getByRole('button', { name: '追加' })).toHaveClass('min-h-11');
+    for (const kind of within(form).getAllByRole('radio')) expect(kind).toHaveClass('min-h-11');
   });
 
   it('moves the due date from the calendar', async () => {

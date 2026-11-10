@@ -1,4 +1,4 @@
-import { type Browser, expect, test } from '@playwright/test';
+import { type Browser, type BrowserContextOptions, expect, test } from '@playwright/test';
 import { answerAs400, canSubmit, fillContact, submit } from './helpers/ax-diagnosis';
 
 /**
@@ -105,7 +105,36 @@ test.describe('AX migration landing page', () => {
   test('offers the diagnosis on the first screen of a short phone (#536)', async ({ browser }) => {
     await expectDiagnosisOnFirstScreen(browser, '/ja/ax-migration');
   });
+
+  // Phones take the device's Japanese font, desktops keep Noto Sans JP (#510, decision
+  // 2026-10-26-ax-device-font-on-mobile): a preload or a direct 'Noto Sans JP' would load its
+  // 27 to 40 files on phones again
+  test('loads Noto Sans JP on a desktop, and none of its files on a phone (#510) @smoke', async ({
+    browser,
+    browserName,
+  }) => {
+    test.skip(browserName !== 'chromium', 'isMobile is for Chromium only');
+    const phone = { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true };
+    const desktop = { viewport: { width: 1280, height: 800 } };
+    expect(await notoSansJpFaces(browser, phone)).toBe(0);
+    expect(await notoSansJpFaces(browser, desktop)).toBeGreaterThan(0);
+  });
 });
+
+/** The Noto Sans JP files the main LP loads, or starts to load, in a browser of these options */
+async function notoSansJpFaces(browser: Browser, options: BrowserContextOptions) {
+  const context = await browser.newContext(options);
+  const page = await context.newPage();
+  await page.goto('/ja/ax-migration');
+  const faces = await page.evaluate(async () => {
+    await document.fonts.ready;
+    return [...document.fonts].filter(
+      (face) => face.family === 'Noto Sans JP' && face.status !== 'unloaded'
+    ).length;
+  });
+  await context.close();
+  return faces;
+}
 
 /**
  * On a phone whose browser bars leave about 664px, the first screen has one diagnosis button

@@ -4,7 +4,8 @@
  * Anyone who can read leads may read a lead's handover, except the contact person's name and
  * direct phone, which viewers from a parent organization do not get. Importing a report saves
  * those contact details (agency_handovers), so it needs permission to update leads (not viewers
- * from a parent organization).
+ * from a parent organization). The same permission covers the deals in 見極め the import creates
+ * from new appointment days (#854): the answer counts them, never shows them.
  */
 
 import type { AppAbility } from '@/lib/auth/permissions';

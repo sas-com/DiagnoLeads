@@ -10,7 +10,7 @@ import { toast } from 'sonner';
  * deal succeed once the shown queries are read again (#720), so what follows (closing a dialog,
  * settling a move shown ahead) does not show the old values for a moment; a deletion does not
  * wait, as the deal's page leaves at once. A form or a question that says a failure itself
- * passes `toastErrors: false`.
+ * (the deal form, the delete question of the deal's page) passes `toastErrors: false`.
  */
 export function useDealMutations({ toastErrors = true }: { toastErrors?: boolean } = {}) {
   const utils = trpc.useUtils();
@@ -39,7 +39,7 @@ export function useDealMutations({ toastErrors = true }: { toastErrors?: boolean
       toast.success(t('deleted'));
     },
     onError: () => {
-      toast.error(t('deleteError'));
+      if (toastErrors) toast.error(t('deleteError'));
     },
   });
   return { create, update, remove, refresh };

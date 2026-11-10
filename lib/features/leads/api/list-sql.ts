@@ -27,7 +27,7 @@ import {
 } from 'drizzle-orm';
 import { NEXT_MEETING_CLOSED_STATUSES, addDays, jstWeekStart } from '../list-query';
 import { AX_RESPONSES_KEY, BUILDER_RESPONSES_KEY } from '../mql-level';
-import { DEAL_PHASES, LEAD_STATUSES, jstDate } from '../types/pipeline';
+import { DEAL_PHASES, LEAD_STATUSES, type LeadStatus, jstDate } from '../types/pipeline';
 import { DEAL_RATINGS, type LeadSortKey, type ListLeadsInput } from '../types/schemas';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -84,9 +84,23 @@ function latestHearingValue(fieldKey: string, valid: SQL): SQL<string | null> {
 }
 
 /**
- * Next meeting date, 'YYYY-MM-DD': the one the latest hearing records, else the first meeting
- * sales confirmed from the respondent's preferred dates (#155). NULL when neither exists.
+ * A value of this file nested one level, for a select from leads without a join: pass every
+ * value of this file through it there. Without a join drizzle writes the columns at the top of a
+ * selected SQL without their table ("id"), and inside a correlated subquery "id" is the
+ * subquery's own column (meeting_requests.id, lead_hearings.id): no error, another condition, and
+ * the organization condition can become always true. Nested, they keep "leads"."id". WHERE,
+ * ORDER BY and selects with a join write the table already (#556)
  */
+export const nested = <T>(expression: SQL<T>): SQL<T> => sql<T>`${expression}`;
+
+/**
+ * Who recorded the lead's latest hearing (the same "latest" as latestHearingValue); NULL without a
+ * hearing or when the account is gone (#556)
+ */
+const latestHearingAuthor = sql<
+  string | null
+>`(select h.created_by from lead_hearings h where h.lead_id = ${leads.id} and h.organization_id = ${leads.organizationId} order by h.held_on desc, h.created_at desc, h.id desc limit 1)`;
+
 /**
  * Whether the lead has a deal (#435): its status and deal phase then come from the deals and are
  * not changed by hand (#444). Raw table name: drizzle aliases a joined table in the relational
@@ -94,10 +108,56 @@ function latestHearingValue(fieldKey: string, valid: SQL): SQL<string | null> {
  */
 export const leadHasDeals = sql<boolean>`exists (select 1 from deals d where d.lead_id = ${leads.id} and d.organization_id = ${leads.organizationId})`;
 
-export const leadNextMeetingDate = sql<string | null>`coalesce(${latestHearingValue(
+/** Statuses that say a deal is open or won (#854). 失注 is closed and ナーチャリング nurtured */
+const DEAL_STATUSES = ['negotiating', 'won'] as const satisfies readonly LeadStatus[];
+
+/**
+ * A lead missing a deal (#854): no deal at all, and the status 商談中 or 成約, or 新規 with a
+ * deal phase. A lead with deals takes its status and phase from them (#444), so these were set by
+ * hand and the deal never created: Deals and the sales forecast leave them out. The one condition
+ * of the list page's count (leads.statusCounts) and the list filter (missingDeal), so the two
+ * agree. The deals are matched on the lead's organization, as leadHasDeals does; the caller adds
+ * the organization condition of the leads
+ */
+export const leadMissingDeal = sql<boolean>`(not ${leadHasDeals} and (${inArray(leads.status, [...DEAL_STATUSES])} or (${eq(leads.status, 'new' satisfies LeadStatus)} and ${isNotNull(leads.dealPhase)})))`;
+
+/** The next meeting date the latest hearing records ('YYYY-MM-DD'; NULL when it records none) */
+const hearingNextMeetingDate = latestHearingValue(
   'nextMeetingDate',
   sql.raw(`(h.fields -> 'nextMeetingDate' ->> 'value') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'`)
-)}, (select to_char(mr.confirmed_on, 'YYYY-MM-DD') from meeting_requests mr where mr.lead_id = ${leads.id} and mr.organization_id = ${leads.organizationId}))`;
+);
+
+/** The first meeting sales confirmed from the respondent's preferred dates (#155), 'YYYY-MM-DD' */
+const confirmedMeetingDate = sql<
+  string | null
+>`(select to_char(mr.confirmed_on, 'YYYY-MM-DD') from meeting_requests mr where mr.lead_id = ${leads.id} and mr.organization_id = ${leads.organizationId})`;
+
+/**
+ * Next meeting date, 'YYYY-MM-DD': the one the latest hearing records, else the first meeting
+ * sales confirmed from the respondent's preferred dates (#155). NULL when neither exists.
+ */
+export const leadNextMeetingDate = sql<
+  string | null
+>`coalesce(${hearingNextMeetingDate}, ${confirmedMeetingDate})`;
+
+/**
+ * Time of the next meeting, 'HH:MM' in Japan (#556): hearings record dates only, so it is the
+ * confirmed first meeting's time, when that meeting is on the next meeting date. NULL otherwise
+ */
+export const leadNextMeetingTime = sql<
+  string | null
+>`(select mr.confirmed_time from meeting_requests mr where mr.lead_id = ${leads.id} and mr.organization_id = ${leads.organizationId} and to_char(mr.confirmed_on, 'YYYY-MM-DD') = ${leadNextMeetingDate})`;
+
+/** The next meeting is the confirmed first meeting (#155), not a date a hearing recorded (#556) */
+export const leadNextMeetingIsFirst = sql<boolean>`(${hearingNextMeetingDate} is null and ${confirmedMeetingDate} is not null)`;
+
+/**
+ * Who set the next meeting date (#556): whoever recorded the latest hearing when the date is its
+ * own, else whoever confirmed the first meeting. NULL without a date or when the account is gone
+ */
+export const leadNextMeetingSetBy = sql<
+  string | null
+>`(case when ${hearingNextMeetingDate} is not null then ${latestHearingAuthor} else (select mr.confirmed_by from meeting_requests mr where mr.lead_id = ${leads.id} and mr.organization_id = ${leads.organizationId} and mr.confirmed_on is not null) end)`;
 
 /** Deal rating (a / b / c) of the latest hearing (NULL when it records none) */
 export const leadDealRating = latestHearingValue(
@@ -247,6 +307,10 @@ export function leadListConditions(
 
   if (input.mql === true) conditions.push(isNotNull(leads.mqlQualifiedAt));
   else if (input.mql === false) conditions.push(isNull(leads.mqlQualifiedAt));
+
+  // Missing a deal (#854); false filters nothing. The procedure lets only those
+  // who may read deals filter by it
+  if (input.missingDeal) conditions.push(leadMissingDeal);
 
   if (input.sqlDecision === 'undecided') conditions.push(isNull(leads.sqlDecision));
   else if (input.sqlDecision) conditions.push(eq(leads.sqlDecision, input.sqlDecision));

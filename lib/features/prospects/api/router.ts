@@ -8,11 +8,22 @@
  * spreadsheet, set the meeting targets and turn rows into leads. Viewers from a parent
  * organization see nothing (need-to-know, as for agency links). Every query is scoped by
  * organizationId.
+ *
+ * The meeting day of a row that is a lead's is the lead's first meeting: when sales set it (new,
+ * or another day than before) on a lead's row, or turn a row that has one into a lead, the lead
+ * gets its deal in 見極め in the same transaction (#854, decision
+ * 2026-10-28-auto-qualification-deal; see ensureQualificationDeal in the deals feature), for
+ * those who may change leads. The answer says only whether one was created.
  */
 
 import type { db as defaultDb } from '@/lib/db/client';
 import { leadComments, leads, prospectMeetingTargets, prospects, users } from '@/lib/db/schema';
 import { MEMBER_REFERRAL_KIND } from '@/lib/features/agency-links/types/schemas';
+import {
+  type QualificationDealOutcome,
+  afterDealChanges,
+  ensureQualificationDeal,
+} from '@/lib/features/deals/service';
 import { generateQRCode } from '@/lib/features/distribution/qr-code';
 import {
   findAssignableMember,
@@ -26,11 +37,13 @@ import type { OrganizationContext } from '@/lib/multi-tenant/types';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { and, asc, desc, eq, isNull, lt, lte, ne, notInArray, or, sql } from 'drizzle-orm';
-import { type AnyPgColumn, alias } from 'drizzle-orm/pg-core';
+import { type AnyPgColumn, type PgUpdateSetSource, alias } from 'drizzle-orm/pg-core';
 import { leadNoteFromProspect, sameCompany } from '../lead-link';
 import { getOrCreateMemberLink, notifyProspectHandedOver } from '../referrals';
 import { summarizeProspects } from '../summary';
 import {
+  CLOSED_PROSPECT_NEXT_STEPS,
+  CLOSED_PROSPECT_STAGES,
   PROSPECT_TEXT_MAX,
   type ProspectAgencyFields,
   type ProspectEntry,
@@ -71,6 +84,15 @@ function assertSales(ctx: Ctx) {
   }
 }
 
+/**
+ * Whether the user may change leads, checked before a row's meeting day creates the lead's deal
+ * (#854): the deal moves the lead (its status and deal phase), which needs the permission to
+ * update leads besides what lets the user change the row (sales: update Settings). Not assumed
+ * from the role: accounts of agencies (#276) may read leads without changing them.
+ */
+const canChangeLeads = (ctx: Ctx) =>
+  ctx.ability.can('update', 'Lead') && ctx.membership.role !== 'parent_viewer';
+
 /** The lead's inflow source for an entry, where one clearly matches */
 const INFLOW_BY_ENTRY: Partial<Record<ProspectEntry, InflowSource>> = {
   member_network: MEMBER_REFERRAL_KIND,
@@ -80,15 +102,21 @@ const INFLOW_BY_ENTRY: Partial<Record<ProspectEntry, InflowSource>> = {
   sales_agency: 'telemarketing_agency',
 };
 
-/** Rows still followed: not passed, dropped, contracted, or already a lead */
+/**
+ * Rows still followed: not passed, dropped, contracted, or already a lead. The summary's checks
+ * count the same rows with isFollowed (../summary.ts); change both together (#852)
+ */
 const notClosed = () =>
   and(
     isNull(prospects.leadId),
-    or(isNull(prospects.nextStep), ne(prospects.nextStep, 'pass')),
-    or(isNull(prospects.stage), notInArray(prospects.stage, ['dropped', 'contract']))
+    or(isNull(prospects.nextStep), notInArray(prospects.nextStep, [...CLOSED_PROSPECT_NEXT_STEPS])),
+    or(isNull(prospects.stage), notInArray(prospects.stage, [...CLOSED_PROSPECT_STAGES]))
   );
 
-/** Open rows for "overdue": calls turned down are followed in the re-approach list instead (#161) */
+/**
+ * Open rows for "overdue": calls turned down are followed in the re-approach list instead (#161).
+ * The summary's overdue check counts the same rows with isOpenRow (../summary.ts)
+ */
 const openRow = () =>
   and(notClosed(), or(isNull(prospects.callResult), ne(prospects.callResult, 'refused')));
 
@@ -110,11 +138,13 @@ export const prospectsRouter = router({
 
     const filters = [eq(prospects.organizationId, ctx.organization.id)];
     if (input.filter === 'overdue') {
+      // The rows isOverdue (../summary.ts) counts in the summary and marks on the list (#892)
       filters.push(lt(prospects.nextActionOn, today));
       const open = openRow();
       if (open) filters.push(open);
     }
     if (input.filter === 'handed_over') {
+      // The summary's handOverWithoutStage counts these rows that have no stage (../summary.ts)
       filters.push(eq(prospects.nextStep, 'hand_over'), isNull(prospects.leadId));
     }
     if (input.filter === 'reapproach') {
@@ -303,22 +333,45 @@ export const prospectsRouter = router({
     assertCanRead(ctx);
     const existing = await findOwnRow(ctx, input.id);
     const { organizationId: _organizationId, id, ...fields } = input;
-    const [row] = await ctx.db
-      .update(prospects)
-      .set({
-        ...memberColumns(fields),
-        // Members cannot change what sales wrote, and nobody changes the stage of a row that
-        // became a lead: the lead's own phase is the one followed from then on
-        ...(isSales(ctx) ? await salesColumns(ctx, fields, existing.salesUserId) : {}),
-        ...(isSales(ctx) ? agencyColumns(fields) : {}),
-        ...(existing.leadId ? { stage: existing.stage } : {}),
-        updatedBy: ctx.user.id,
-        updatedAt: new Date(),
-      })
-      .where(ownRowCondition(ctx, existing.id))
-      .returning({ id: prospects.id });
+    const now = new Date();
+    const values = {
+      ...memberColumns(fields),
+      // Members cannot change what sales wrote, and nobody changes the stage of a row that
+      // became a lead: the lead's own phase is the one followed from then on
+      ...(isSales(ctx) ? await salesColumns(ctx, fields, existing.salesUserId) : {}),
+      ...(isSales(ctx) ? agencyColumns(fields) : {}),
+      ...(existing.leadId ? { stage: existing.stage } : {}),
+      updatedBy: ctx.user.id,
+      updatedAt: now,
+    };
+    // Sales set the first meeting of the lead the row became: a meeting day that is new, or
+    // another day than the one saved (#854). Only sales write the meeting day; saving the same
+    // day again creates no deal, even after sales lost the first one
+    const meetingOn = isSales(ctx) ? (fields.meetingOn ?? null) : null;
+    const leadMeeting =
+      existing.leadId && meetingOn && meetingOn !== existing.meetingOn && canChangeLeads(ctx)
+        ? { leadId: existing.leadId, meetingOn }
+        : null;
+    const { row, deal } = leadMeeting
+      ? await saveWithLeadMeeting(ctx, existing.id, values, leadMeeting, now)
+      : {
+          row: (
+            await ctx.db
+              .update(prospects)
+              .set(values)
+              .where(ownRowCondition(ctx, existing.id))
+              .returning({ id: prospects.id })
+          )[0],
+          deal: null,
+        };
     if (!row || row.id !== id)
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Prospect not found' });
+    // The lead's webhooks for the deal, after the commit
+    if (deal?.created) {
+      await afterDealChanges(ctx.db, { organizationId: ctx.organization.id, userId: ctx.user.id }, [
+        deal,
+      ]);
+    }
     // Sales are told the first time a row is handed over, not on every later save. Marking it
     // only while unmarked makes two saves at the same moment tell them once
     if (fields.nextStep === 'hand_over' && !existing.handedOverAt) {
@@ -335,7 +388,8 @@ export const prospectsRouter = router({
         .returning({ id: prospects.id });
       if (marked) await tellSales(ctx, row.id, fields.company);
     }
-    return row;
+    // Whether the lead got a deal (#854), never the deal
+    return { id: row.id, dealCreated: deal?.created === true };
   }),
 
   delete: organizationProcedure.input(deleteProspectSchema).mutation(async ({ ctx, input }) => {
@@ -475,6 +529,7 @@ export const prospectsRouter = router({
           nextActionNote: prospects.nextActionNote,
           stage: prospects.stage,
           meetingOn: prospects.meetingOn,
+          leadId: prospects.leadId,
           callResult: prospects.callResult,
           refusalReason: prospects.refusalReason,
         })
@@ -521,7 +576,9 @@ export const prospectsRouter = router({
    * Link a row to a lead once sales have a contact. A lead of the same email in the organization
    * is reused (the same person may have answered the diagnosis already, or another employee met
    * them too); otherwise a lead is created with the referrer, the system and the sales person.
-   * Either way what the employee heard is kept on the lead as a note.
+   * Either way what the employee heard is kept on the lead as a note. A row with a meeting day
+   * gives the lead its deal in 見極め (#854), unless the lead has an open deal, is won, or the
+   * other cases of qualificationDealSkip; the answer says only whether one was created.
    */
   convertToLead: organizationProcedure
     .input(convertToLeadSchema)
@@ -567,7 +624,8 @@ export const prospectsRouter = router({
 
         let leadId: string;
         if (existingLead) {
-          // The lead's own attribution and pipeline stay as they are
+          // The lead's own attribution stays as it is; its pipeline too, unless the row's meeting
+          // day gives it a deal below
           leadId = existingLead.id;
         } else {
           // The sales person becomes the assignee only while they can still hold leads here
@@ -626,13 +684,100 @@ export const prospectsRouter = router({
           .where(
             and(eq(prospects.id, prospect.id), eq(prospects.organizationId, ctx.organization.id))
           );
-        return { leadId, linkedExisting: Boolean(existingLead) };
+        // The row's meeting day is the lead's first meeting (#854). The row is locked before the
+        // lead here, unlike the other paths, but no deletion of the lead waits for the row: its
+        // lead stays empty for others until this transaction commits
+        const deal =
+          prospect.meetingOn && canChangeLeads(ctx)
+            ? await ensureQualificationDeal(
+                tx,
+                {
+                  organizationId: ctx.organization.id,
+                  leadId,
+                  userId: ctx.user.id,
+                  source: 'prospect',
+                  meetingOn: prospect.meetingOn,
+                },
+                now
+              )
+            : null;
+        return { leadId, linkedExisting: Boolean(existingLead), deal };
       });
       // A prospect linked to an existing lead creates nothing
       if (createdLead) emitLeadEvents(ctx.organization.id, [createdLead], { database: ctx.db });
-      return result;
+      // The lead's webhooks for the deal, after the commit
+      if (result.deal?.created) {
+        await afterDealChanges(
+          ctx.db,
+          { organizationId: ctx.organization.id, userId: ctx.user.id },
+          [result.deal]
+        );
+      }
+      return {
+        leadId: result.leadId,
+        linkedExisting: result.linkedExisting,
+        // Whether the lead got a deal, never the deal
+        dealCreated: result.deal?.created === true,
+      };
     }),
 });
+
+/**
+ * Save a lead's row with the lead's first meeting, and create the lead's deal in 見極め in the
+ * same transaction (#854). The lead is locked before the row, as on every path that changes a
+ * lead's deals (deleting the lead locks it, then clears the row's lead through the foreign key).
+ * The row is read again under its lock and must still be the lead's: a row whose lead was deleted
+ * or that was linked again meanwhile is not saved (CONFLICT; saving again sees it as it is). The
+ * meeting day is compared again under the lock, so a save of the same day a moment before
+ * creates no second deal.
+ */
+async function saveWithLeadMeeting(
+  ctx: Ctx,
+  id: string,
+  values: PgUpdateSetSource<typeof prospects>,
+  meeting: { leadId: string; meetingOn: string },
+  now: Date
+): Promise<{ row: { id: string } | undefined; deal: QualificationDealOutcome | null }> {
+  return ctx.db.transaction(async (tx) => {
+    await tx
+      .select({ id: leads.id })
+      .from(leads)
+      .where(and(eq(leads.id, meeting.leadId), eq(leads.organizationId, ctx.organization.id)))
+      .for('no key update');
+    const [locked] = await tx
+      .select({ leadId: prospects.leadId, meetingOn: prospects.meetingOn })
+      .from(prospects)
+      .where(ownRowCondition(ctx, id))
+      .for('update');
+    if (!locked) return { row: undefined, deal: null };
+    if (locked.leadId !== meeting.leadId) {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: 'The prospect changed while it was being saved; save it again',
+      });
+    }
+    const [row] = await tx
+      .update(prospects)
+      .set(values)
+      .where(ownRowCondition(ctx, id))
+      .returning({ id: prospects.id });
+    const deal =
+      locked.meetingOn === meeting.meetingOn
+        ? null
+        : await ensureQualificationDeal(
+            tx,
+            {
+              organizationId: ctx.organization.id,
+              leadId: meeting.leadId,
+              userId: ctx.user.id,
+              source: 'prospect',
+              meetingOn: meeting.meetingOn,
+            },
+            now
+          );
+    return { row, deal };
+  });
+}
 
 /** Tell sales about a hand-over; the employee who did it is named in the notice */
 async function tellSales(ctx: Ctx, prospectId: string, company: string) {
@@ -747,6 +892,7 @@ async function findOwnRow(ctx: Ctx, id: string) {
       salesUserId: prospects.salesUserId,
       leadId: prospects.leadId,
       stage: prospects.stage,
+      meetingOn: prospects.meetingOn,
       handedOverAt: prospects.handedOverAt,
     })
     .from(prospects)
