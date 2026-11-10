@@ -8,6 +8,7 @@ import { NotebookPen } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useRef, useState } from 'react';
 import { CONTACT_KIND_ICONS } from './contact-kinds';
+import { CONTACT_RECORDING_CLASS } from './contact-record-menu';
 import { RecordActivityDialog } from './record-activity-dialog';
 import { useRecordContact } from './use-record-contact';
 
@@ -50,10 +51,10 @@ export function ContactQuickActions({
   };
 
   // The lead page's bar is 44px tall on phones (#196); the dashboard row stays compact. While it
-  // records: dimmed, and no hover colour as they do nothing
-  const size = cn(
+  // records, dimmed as the list rows' menu
+  const buttonClass = cn(
     compact ? 'h-8 px-2 text-xs' : cn('h-9', TAP_TARGET),
-    'aria-disabled:cursor-wait aria-disabled:opacity-50 aria-disabled:hover:bg-white dark:aria-disabled:hover:bg-gray-800'
+    CONTACT_RECORDING_CLASS
   );
   return (
     <fieldset
@@ -68,7 +69,7 @@ export function ContactQuickActions({
             type="button"
             variant="outline"
             size="sm"
-            className={size}
+            className={buttonClass}
             aria-disabled={pending || undefined}
             onClick={() => {
               if (!pending) submit(kind);
@@ -87,7 +88,7 @@ export function ContactQuickActions({
         type="button"
         variant="outline"
         size="sm"
-        className={size}
+        className={buttonClass}
         aria-label={compact ? tActivity('openFor', { lead: leadLabel }) : undefined}
         title={compact ? tActivity('open') : undefined}
         aria-disabled={pending || undefined}

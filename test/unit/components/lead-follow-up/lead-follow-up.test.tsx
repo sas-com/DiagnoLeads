@@ -236,13 +236,21 @@ describe('LeadContactBar', () => {
     mocks.contacts = { firstContactAt: null, total: 0, recent: [], canEdit: true };
     mocks.pending.recordContact = true;
     const user = userEvent.setup();
-    renderBar();
+    const view = renderBar();
     const group = screen.getByRole('group', { name: '架空商事への連絡を記録' });
     const called = within(group).getByRole('button', { name: '電話した' });
 
-    // Not disabled, so the focus a keyboard press left on it stays
-    expect(called).not.toBeDisabled();
-    expect(called).toHaveAttribute('aria-disabled', 'true');
+    // Not disabled, so the focus a keyboard press left on it stays; dimmed as the rows' menu
+    for (const button of within(group).getAllByRole('button')) {
+      expect(button).not.toBeDisabled();
+      expect(button).toHaveAttribute('aria-disabled', 'true');
+      expect(button).toHaveClass(
+        'aria-disabled:opacity-50',
+        'aria-disabled:cursor-wait',
+        'aria-disabled:hover:bg-white',
+        'dark:aria-disabled:hover:bg-gray-800'
+      );
+    }
     act(() => called.focus());
     await user.keyboard('{Enter}');
     expect(called).toHaveFocus();
@@ -252,6 +260,19 @@ describe('LeadContactBar', () => {
     expect(activity).toHaveAttribute('aria-disabled', 'true');
     await user.click(activity);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    // Once it is recorded, they record again
+    mocks.pending.recordContact = false;
+    view.rerender(
+      <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
+        <LeadContactBar organizationId={ORG_ID} leadId={LEAD_ID} leadLabel="架空商事" />
+      </NextIntlClientProvider>
+    );
+    expect(called).not.toHaveAttribute('aria-disabled');
+    await user.click(called);
+    expect(mocks.calls.recordContact).toEqual([
+      { organizationId: ORG_ID, leadId: LEAD_ID, kind: 'call' },
+    ]);
   });
 
   it('shows the first and latest contact, and no buttons to read-only roles', () => {
