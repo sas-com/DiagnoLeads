@@ -8,8 +8,10 @@ import {
   exportLeadsToPDF,
   generatePDFFilename,
   oneLineName,
+  organizationNameLines,
 } from '@/lib/features/reports/pdf-export-service';
 import type { PdfReportLabels } from '@/lib/features/reports/pdf-labels';
+import jsPDF from 'jspdf';
 import { describe, expect, it, vi } from 'vitest';
 
 describe('PDF Export Service', () => {
@@ -197,6 +199,17 @@ describe('PDF Export Service', () => {
         dateRange: '30d',
       });
       expect(doc.getNumberOfPages()).toBeGreaterThanOrEqual(1);
+    });
+
+    it("fits the organization's name in the width, in two lines at most (#1034)", () => {
+      const doc = new jsPDF();
+      doc.setFontSize(14);
+      const width = doc.internal.pageSize.getWidth() - 40;
+
+      const lines = organizationNameLines(doc, 'Fictitious Trading Company '.repeat(20).trim(), width);
+      expect(lines).toHaveLength(2);
+      for (const line of lines) expect(doc.getTextWidth(line)).toBeLessThanOrEqual(width);
+      expect(organizationNameLines(doc, 'Fictitious Trading', width)).toEqual(['Fictitious Trading']);
     });
 
     it('should support custom options', () => {

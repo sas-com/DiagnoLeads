@@ -244,14 +244,25 @@ describe('useCurrentOrganization', () => {
     expect(result.current).toEqual({ organization: null, isLoading: false });
   });
 
-  it('returns the organization of the context without fetching it', () => {
+  it('returns the organization of the context while it is read again (#1034)', () => {
     const loaded = organization(ORG_ID, 'Context Org');
     mockContext = contextWith({ organizationId: ORG_ID, organization: loaded });
+    mockQuery = { data: undefined, isLoading: true };
     const { result } = renderHook(() => useCurrentOrganization());
+    // Read all the same: the context's may be from before it was renamed
     expect(mocks.getById).toHaveBeenLastCalledWith(
       { id: ORG_ID },
-      expect.objectContaining({ enabled: false })
+      expect.objectContaining({ enabled: true })
     );
+    expect(result.current.organization).toBe(loaded);
+  });
+
+  it("takes the context's organization for its id in other letter case (#1034)", () => {
+    const loaded = organization(ORG_ID, 'Context Org');
+    mockParams = { organizationId: ORG_ID.toUpperCase() };
+    mockContext = contextWith({ organizationId: ORG_ID.toUpperCase(), organization: loaded });
+    mockQuery = { data: undefined, isLoading: true };
+    const { result } = renderHook(() => useCurrentOrganization());
     expect(result.current.organization).toBe(loaded);
   });
 
@@ -277,12 +288,17 @@ describe('useCurrentOrganization', () => {
     expect(mocks.setOrganization).toHaveBeenCalledWith(ORG_ID, fetched);
   });
 
-  it('prefers the organization of the context over fetched data', () => {
-    const loaded = organization(ORG_ID, 'Context Org');
-    mockContext = contextWith({ organizationId: ORG_ID, organization: loaded });
-    mockQuery = { data: organization(ORG_ID, 'Fetched Org'), isLoading: false };
+  it('prefers the fetched organization over the context, which keeps its old name (#1034)', () => {
+    mockContext = contextWith({
+      organizationId: ORG_ID,
+      organization: organization(ORG_ID, '旧社名'),
+    });
+    const renamed = organization(ORG_ID, '新社名');
+    mockQuery = { data: renamed, isLoading: false };
     const { result } = renderHook(() => useCurrentOrganization());
-    expect(result.current.organization).toBe(loaded);
+    expect(result.current.organization).toBe(renamed);
+    // And the context is given the new name
+    expect(mocks.setOrganization).toHaveBeenCalledWith(ORG_ID, renamed);
   });
 
   it('returns the fetched organization and stores it in the context', () => {

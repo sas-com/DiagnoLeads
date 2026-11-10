@@ -107,6 +107,14 @@ export function oneLineName(name: string): string {
 }
 
 /**
+ * The organization's name in lines within the width, two at most (#1034): measured in the
+ * document's current font and size
+ */
+export function organizationNameLines(doc: jsPDF, name: string, maxWidth: number): string[] {
+  return (doc.splitTextToSize(name, maxWidth) as string[]).slice(0, 2);
+}
+
+/**
  * Add header to PDF
  */
 function addHeader(doc: jsPDF, options: PDFExportOptions): number {
@@ -125,7 +133,7 @@ function addHeader(doc: jsPDF, options: PDFExportOptions): number {
   if (organizationName) {
     doc.setFontSize(14);
     doc.setTextColor(...colors.text);
-    const lines = (doc.splitTextToSize(organizationName, pageWidth - 40) as string[]).slice(0, 2);
+    const lines = organizationNameLines(doc, organizationName, pageWidth - 40);
     doc.text(lines, pageWidth / 2, yPos, { align: 'center' });
     yPos += 8 * lines.length;
   }

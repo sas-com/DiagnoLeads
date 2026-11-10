@@ -83,7 +83,8 @@ function isValidUUID(str: string): boolean {
 /**
  * Hook to get current organization with data
  *
- * Automatically fetches organization data if not already loaded
+ * Reads the organization each time: the context keeps it as it was stored, its old name after it
+ * is renamed (#1034). The context's, when it is this organization's, stands in while it is read
  *
  * @returns Organization with loading state
  */
@@ -104,12 +105,12 @@ export function useCurrentOrganization() {
       ? organization
       : null;
 
-  // Fetch organization data if we have a valid ID but no data of it
+  // Fetch organization data if we have a valid ID, also with the context's data of it
   const { data, isLoading: queryLoading } = trpc.organizations.getById.useQuery(
     // enabled is false unless organizationId is a valid UUID, so the fallback is never sent
     { id: organizationId ?? '' },
     {
-      enabled: isValidOrg && !current,
+      enabled: isValidOrg,
       staleTime: 5 * 60 * 1000, // 5 minutes
     }
   );
@@ -122,7 +123,7 @@ export function useCurrentOrganization() {
   }, [data, organizationId, setOrganization]);
 
   return {
-    organization: current || data || null,
+    organization: data || current || null,
     isLoading: contextLoading || queryLoading,
   };
 }
