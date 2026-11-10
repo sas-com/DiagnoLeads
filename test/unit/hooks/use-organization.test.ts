@@ -1,169 +1,320 @@
 /**
- * useOrganization Hook Tests
+ * useOrganizationId, useRequiredOrganizationId, useOrganization and useCurrentOrganization,
+ * called through renderHook against mocked route params, organization context and tRPC (#797)
  */
+import type { OrganizationContextType } from '@/lib/context/organization-context';
+import type { Organization } from '@/lib/db/schema';
+import { renderHook } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { describe, expect, it, vi } from 'vitest';
+const ORG_ID = '550e8400-e29b-41d4-a716-446655440000';
+const OTHER_ORG_ID = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
 
-// Mock next/navigation: one params object for every render, like Next's useParams (#719)
-vi.mock('next/navigation', () => {
-  const params = { organizationId: 'org-123' };
-  return { useParams: () => params };
-});
+type RouteParams = Record<string, string | string[] | undefined>;
+type GetByIdInput = { id: string };
+type GetByIdOptions = { enabled: boolean; staleTime: number };
+type GetByIdResult = { data: Organization | undefined; isLoading: boolean };
 
-// Mock organization context
-vi.mock('@/lib/context/organization-context', () => ({
-  useOrganizationContext: () => ({
-    organizationId: 'org-123',
-    organization: null,
-    setOrganization: vi.fn(),
-    clearOrganization: vi.fn(),
-  }),
+const mocks = vi.hoisted(() => ({
+  setOrganization: vi.fn(),
+  clearOrganization: vi.fn(),
+  getById: vi.fn(),
 }));
 
-// Mock tRPC
+// useParams returns the route params as they are: one object while the URL stays the same. A
+// test that needs other params puts a new object in before the render (#719)
+let mockParams: RouteParams | null = { organizationId: ORG_ID };
+vi.mock('next/navigation', () => ({ useParams: () => mockParams }));
+
+let mockContext: OrganizationContextType = contextWith({ organizationId: ORG_ID });
+vi.mock('@/lib/context/organization-context', () => ({
+  useOrganizationContext: () => mockContext,
+}));
+
+let mockQuery: GetByIdResult = { data: undefined, isLoading: false };
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
-    organization: {
-      get: {
-        useQuery: vi.fn(() => ({
-          data: null,
-          isLoading: false,
-        })),
+    organizations: {
+      getById: {
+        useQuery: (input: GetByIdInput, options: GetByIdOptions) => {
+          mocks.getById(input, options);
+          return mockQuery;
+        },
       },
     },
   },
 }));
 
+// Import after mocks
+import {
+  useCurrentOrganization,
+  useOrganization,
+  useOrganizationId,
+  useRequiredOrganizationId,
+} from '@/hooks/use-organization';
+
+function contextWith(values: Partial<OrganizationContextType>): OrganizationContextType {
+  return {
+    organizationId: null,
+    organization: null,
+    setOrganization: mocks.setOrganization,
+    clearOrganization: mocks.clearOrganization,
+    isLoading: false,
+    ...values,
+  };
+}
+
+function organization(id: string, name: string): Organization {
+  return { id, name } as unknown as Organization;
+}
+
+/** The thrown error of a hook that throws while rendering, without React's error log */
+function renderError(hook: () => unknown): unknown {
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    renderHook(hook);
+  } catch (error) {
+    return error;
+  } finally {
+    consoleError.mockRestore();
+  }
+  return undefined;
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockParams = { organizationId: ORG_ID };
+  mockContext = contextWith({ organizationId: ORG_ID });
+  mockQuery = { data: undefined, isLoading: false };
+});
+
 describe('useOrganizationId', () => {
-  it('should return organization ID from params', () => {
-    const organizationId = 'org-123';
-    expect(organizationId).toBe('org-123');
+  it('returns the organizationId route param', () => {
+    const { result } = renderHook(() => useOrganizationId());
+    expect(result.current).toBe(ORG_ID);
   });
 
-  it('should return null if no organization ID', () => {
-    const organizationId = null;
-    expect(organizationId).toBeNull();
+  it('returns null when the route has no organizationId param', () => {
+    mockParams = { locale: 'ja' };
+    const { result } = renderHook(() => useOrganizationId());
+    expect(result.current).toBeNull();
+  });
+
+  it('returns null for a catch-all organizationId param (an array)', () => {
+    mockParams = { organizationId: [ORG_ID, 'leads'] };
+    const { result } = renderHook(() => useOrganizationId());
+    expect(result.current).toBeNull();
+  });
+
+  it('returns null when useParams gives no params', () => {
+    mockParams = null;
+    const { result } = renderHook(() => useOrganizationId());
+    expect(result.current).toBeNull();
+  });
+
+  it('follows the route when its params change', () => {
+    const { result, rerender } = renderHook(() => useOrganizationId());
+    mockParams = { organizationId: OTHER_ORG_ID };
+    rerender();
+    expect(result.current).toBe(OTHER_ORG_ID);
   });
 });
 
 describe('useRequiredOrganizationId', () => {
-  it('should return organization ID when present', () => {
-    const organizationId = 'org-123';
-    expect(organizationId).toBe('org-123');
+  it('returns the organizationId route param', () => {
+    const { result } = renderHook(() => useRequiredOrganizationId());
+    expect(result.current).toBe(ORG_ID);
   });
 
-  it('should throw when organization ID is missing', () => {
-    const useRequiredOrganizationId = () => {
-      const organizationId = null;
-      if (!organizationId) {
-        throw new Error('This component must be used within an organization context');
-      }
-      return organizationId;
-    };
+  it('throws when the route has no organizationId param', () => {
+    mockParams = {};
+    expect(renderError(() => useRequiredOrganizationId())).toEqual(
+      new Error('This component must be used within an organization context')
+    );
+  });
 
-    expect(() => useRequiredOrganizationId()).toThrow(
-      'This component must be used within an organization context'
+  it('throws for an empty organizationId param', () => {
+    mockParams = { organizationId: '' };
+    expect(renderError(() => useRequiredOrganizationId())).toEqual(
+      new Error('This component must be used within an organization context')
     );
   });
 });
 
-describe('Organization context types', () => {
-  it('should define organization context', () => {
-    type OrganizationContext = {
-      organizationId: string | null;
-      organization: { id: string; name: string } | null;
-      setOrganization: (id: string) => void;
-      clearOrganization: () => void;
-    };
+describe('useOrganization', () => {
+  it('returns the organization context as it is', () => {
+    const { result } = renderHook(() => useOrganization());
+    expect(result.current).toBe(mockContext);
+  });
 
-    const context: OrganizationContext = {
-      organizationId: 'org-123',
-      organization: { id: 'org-123', name: 'Test Org' },
-      setOrganization: vi.fn(),
-      clearOrganization: vi.fn(),
-    };
+  it('puts the organization of the URL in the context when they differ', () => {
+    mockParams = { organizationId: OTHER_ORG_ID };
+    renderHook(() => useOrganization());
+    expect(mocks.setOrganization).toHaveBeenCalledTimes(1);
+    expect(mocks.setOrganization).toHaveBeenCalledWith(OTHER_ORG_ID);
+  });
 
-    expect(context.organizationId).toBe('org-123');
+  it('fills an empty context with the organization of the URL', () => {
+    mockContext = contextWith({ organizationId: null });
+    renderHook(() => useOrganization());
+    expect(mocks.setOrganization).toHaveBeenCalledWith(ORG_ID);
+  });
+
+  it('leaves the context alone when it already has the organization of the URL', () => {
+    renderHook(() => useOrganization());
+    expect(mocks.setOrganization).not.toHaveBeenCalled();
+  });
+
+  it('keeps the organization of the context on a route without one', () => {
+    mockParams = {};
+    renderHook(() => useOrganization());
+    expect(mocks.setOrganization).not.toHaveBeenCalled();
+  });
+
+  it('switches the context when the URL moves to another organization', () => {
+    const { rerender } = renderHook(() => useOrganization());
+    mockParams = { organizationId: OTHER_ORG_ID };
+    rerender();
+    expect(mocks.setOrganization).toHaveBeenCalledTimes(1);
+    expect(mocks.setOrganization).toHaveBeenCalledWith(OTHER_ORG_ID);
+  });
+
+  it('does not sync again on a re-render while the URL and the context stay the same', () => {
+    mockParams = { organizationId: OTHER_ORG_ID };
+    const { rerender } = renderHook(() => useOrganization());
+    rerender();
+    expect(mocks.setOrganization).toHaveBeenCalledTimes(1);
+  });
+
+  it('puts the organization of the URL back when the context moves away from it', () => {
+    const { rerender } = renderHook(() => useOrganization());
+    expect(mocks.setOrganization).not.toHaveBeenCalled();
+
+    mockContext = contextWith({ organizationId: OTHER_ORG_ID });
+    rerender();
+
+    expect(mocks.setOrganization).toHaveBeenCalledTimes(1);
+    expect(mocks.setOrganization).toHaveBeenCalledWith(ORG_ID);
   });
 });
 
-describe('UUID validation', () => {
-  function isValidUUID(str: string): boolean {
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    return uuidRegex.test(str);
-  }
-
-  it('should validate valid UUIDs', () => {
-    expect(isValidUUID('550e8400-e29b-41d4-a716-446655440000')).toBe(true);
-    expect(isValidUUID('f47ac10b-58cc-4372-a567-0e02b2c3d479')).toBe(true);
+describe('useCurrentOrganization', () => {
+  it('fetches the organization when the context has a UUID but no data', () => {
+    renderHook(() => useCurrentOrganization());
+    expect(mocks.getById).toHaveBeenLastCalledWith(
+      { id: ORG_ID },
+      { enabled: true, staleTime: 5 * 60 * 1000 }
+    );
   });
 
-  it('should reject invalid UUIDs', () => {
-    expect(isValidUUID('demo-org')).toBe(false);
-    expect(isValidUUID('not-valid')).toBe(false);
-    expect(isValidUUID('')).toBe(false);
-  });
-});
-
-describe('Organization data structure', () => {
-  it('should define organization type', () => {
-    type Organization = {
-      id: string;
-      name: string;
-      slug: string;
-      logo?: string | null;
-      createdAt: Date;
-      updatedAt: Date;
-    };
-
-    const org: Organization = {
-      id: 'org-123',
-      name: 'Test Organization',
-      slug: 'test-org',
-      logo: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    expect(org.name).toBe('Test Organization');
-    expect(org.slug).toBe('test-org');
-  });
-});
-
-describe('Organization switching', () => {
-  it('should define switch organization function', () => {
-    const setOrganization = vi.fn();
-    
-    setOrganization('new-org-id');
-    
-    expect(setOrganization).toHaveBeenCalledWith('new-org-id');
+  it('fetches for an upper-case UUID too', () => {
+    const upperCaseId = ORG_ID.toUpperCase();
+    mockParams = { organizationId: upperCaseId };
+    mockContext = contextWith({ organizationId: upperCaseId });
+    renderHook(() => useCurrentOrganization());
+    expect(mocks.getById).toHaveBeenLastCalledWith(
+      { id: upperCaseId },
+      expect.objectContaining({ enabled: true })
+    );
   });
 
-  it('should define clear organization function', () => {
-    const clearOrganization = vi.fn();
-    
-    clearOrganization();
-    
-    expect(clearOrganization).toHaveBeenCalled();
+  it.each([
+    ['is not a UUID', 'demo-org'],
+    ['has text before a UUID', `x${ORG_ID}`],
+    ['has text after a UUID', `${ORG_ID}x`],
+  ])('does not fetch for an organization id that %s', (_case, organizationId) => {
+    mockParams = { organizationId };
+    mockContext = contextWith({ organizationId });
+    renderHook(() => useCurrentOrganization());
+    expect(mocks.getById).toHaveBeenLastCalledWith(
+      { id: organizationId },
+      expect.objectContaining({ enabled: false })
+    );
   });
-});
 
-describe('useCurrentOrganization return type', () => {
-  it('should return organization data', () => {
-    type UseOrganizationReturn = {
-      organizationId: string | null;
-      organization: { id: string; name: string } | null;
-      isLoading: boolean;
-      isError: boolean;
-    };
+  it('does not fetch without an organization id', () => {
+    mockParams = {};
+    mockContext = contextWith({ organizationId: null });
+    const { result } = renderHook(() => useCurrentOrganization());
+    // Only that the query stays off: the input it is given then is never sent
+    expect(mocks.getById).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ enabled: false })
+    );
+    expect(result.current).toEqual({ organization: null, isLoading: false });
+  });
 
-    const result: UseOrganizationReturn = {
-      organizationId: 'org-123',
-      organization: { id: 'org-123', name: 'Test Org' },
-      isLoading: false,
-      isError: false,
-    };
+  it('returns the organization of the context without fetching it', () => {
+    const loaded = organization(ORG_ID, 'Context Org');
+    mockContext = contextWith({ organizationId: ORG_ID, organization: loaded });
+    const { result } = renderHook(() => useCurrentOrganization());
+    expect(mocks.getById).toHaveBeenLastCalledWith(
+      { id: ORG_ID },
+      expect.objectContaining({ enabled: false })
+    );
+    expect(result.current.organization).toBe(loaded);
+  });
 
-    expect(result.isLoading).toBe(false);
+  it('prefers the organization of the context over fetched data', () => {
+    const loaded = organization(ORG_ID, 'Context Org');
+    mockContext = contextWith({ organizationId: ORG_ID, organization: loaded });
+    mockQuery = { data: organization(ORG_ID, 'Fetched Org'), isLoading: false };
+    const { result } = renderHook(() => useCurrentOrganization());
+    expect(result.current.organization).toBe(loaded);
+  });
+
+  it('returns the fetched organization and stores it in the context', () => {
+    const fetched = organization(ORG_ID, 'Fetched Org');
+    mockQuery = { data: fetched, isLoading: false };
+    const { result } = renderHook(() => useCurrentOrganization());
+    expect(result.current.organization).toBe(fetched);
+    expect(mocks.setOrganization).toHaveBeenCalledTimes(1);
+    expect(mocks.setOrganization).toHaveBeenCalledWith(ORG_ID, fetched);
+  });
+
+  it('stores the organization in the context once the fetch finishes', () => {
+    mockQuery = { data: undefined, isLoading: true };
+    const { result, rerender } = renderHook(() => useCurrentOrganization());
+    expect(mocks.setOrganization).not.toHaveBeenCalled();
+
+    const fetched = organization(ORG_ID, 'Fetched Org');
+    mockQuery = { data: fetched, isLoading: false };
+    rerender();
+
+    expect(result.current).toEqual({ organization: fetched, isLoading: false });
+    expect(mocks.setOrganization).toHaveBeenCalledTimes(1);
+    expect(mocks.setOrganization).toHaveBeenCalledWith(ORG_ID, fetched);
+  });
+
+  it('does not store the same fetched organization again on a re-render', () => {
+    mockQuery = { data: organization(ORG_ID, 'Fetched Org'), isLoading: false };
+    const { rerender } = renderHook(() => useCurrentOrganization());
+    rerender();
+    expect(mocks.setOrganization).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not store fetched data without an organization id', () => {
+    mockParams = {};
+    mockContext = contextWith({ organizationId: null });
+    mockQuery = { data: organization(ORG_ID, 'Cached Org'), isLoading: false };
+    renderHook(() => useCurrentOrganization());
+    expect(mocks.setOrganization).not.toHaveBeenCalled();
+  });
+
+  it('is loading while the context restores the organization', () => {
+    mockContext = contextWith({ organizationId: ORG_ID, isLoading: true });
+    const { result } = renderHook(() => useCurrentOrganization());
+    expect(result.current.isLoading).toBe(true);
+  });
+
+  it('is loading while the organization is fetched', () => {
+    mockQuery = { data: undefined, isLoading: true };
+    const { result } = renderHook(() => useCurrentOrganization());
+    expect(result.current.isLoading).toBe(true);
+  });
+
+  it('is not loading when neither the context nor the fetch is', () => {
+    const { result } = renderHook(() => useCurrentOrganization());
+    expect(result.current.isLoading).toBe(false);
   });
 });
