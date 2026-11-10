@@ -30,6 +30,17 @@ const OrganizationContext = createContext<OrganizationContextType | undefined>(u
 const STORAGE_KEY = 'diagnoleads:current-organization';
 
 /**
+ * The data to keep for an organization id: only that organization's. A switch by the id alone (an
+ * invite accepted, a URL) would otherwise keep the previous organization's data with the new id
+ * (#1046)
+ */
+function dataOf(org: Organization | null | undefined, orgId: string): Organization | null {
+  return org && typeof org.id === 'string' && org.id.toLowerCase() === orgId.toLowerCase()
+    ? org
+    : null;
+}
+
+/**
  * Organization Provider
  *
  * Provides organization context to the application.
@@ -65,7 +76,10 @@ export function OrganizationProvider({
       if (stored) {
         const parsed = JSON.parse(stored);
         setOrganizationId(parsed.id);
-        setOrganizationData(parsed.organization || null);
+        // Saved before #1046, the data may be another organization's
+        setOrganizationData(
+          typeof parsed.id === 'string' ? dataOf(parsed.organization, parsed.id) : null
+        );
       }
     } catch (error) {
       console.error('Failed to restore organization:', error);
@@ -80,9 +94,10 @@ export function OrganizationProvider({
    * Pattern: /dashboard/[organizationId]/...
    */
   useEffect(() => {
-    const match = pathname?.match(/\/dashboard\/([a-f0-9-]{36})\//);
-    if (match?.[1] && match[1] !== organizationId) {
-      setOrganizationId(match[1]);
+    const urlOrgId = pathname?.match(/\/dashboard\/([a-f0-9-]{36})\//)?.[1];
+    if (urlOrgId && urlOrgId !== organizationId) {
+      setOrganizationId(urlOrgId);
+      setOrganizationData((current) => dataOf(current, urlOrgId));
     }
   }, [pathname, organizationId]);
 
@@ -113,9 +128,8 @@ export function OrganizationProvider({
    */
   const setOrganization = useCallback((orgId: string, org?: Organization) => {
     setOrganizationId(orgId);
-    if (org) {
-      setOrganizationData(org);
-    }
+    // Without the data, what is kept stays only if it is this organization's (#1046)
+    setOrganizationData((current) => dataOf(org ?? current, orgId));
   }, []);
 
   /**
