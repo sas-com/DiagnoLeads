@@ -2,16 +2,20 @@
  * The QR campaign router (lib/features/distribution/router.ts) without a database (#793), on the
  * real router and the real CASL abilities:
  * - who may list, read, create, change and delete campaigns (#356, decision
- *   2026-10-23-admin-api-role-checks), and that a refused call reads and writes nothing
- * - the input each procedure refuses before it reads anything (the limits of the name, the
- *   description and the UTM values, the expiry, the ids, the QR sizes), and the columns a create
- *   or an update never writes even when they are sent
+ *   2026-10-23-admin-api-role-checks), and that a refused call reads no campaign or template and
+ *   writes nothing (organizationProcedure has read the membership by then)
+ * - the input each procedure refuses before it reads a campaign or a template (the limits of the
+ *   name, the description and the UTM values, the expiry, the ids, the QR sizes), and the columns
+ *   a create or an update never writes even when they are sent
+ * - the organization condition of every read and write of a campaign or a template (the SQL each
+ *   statement sends)
  * - the short code drawn again while the one drawn is taken, and the width of the downloaded QR
  * The router reads and writes with the global client, here test/mocks/recording-db.ts with the
- * relational reads (db.query) stubbed. The rows the organization conditions match are checked on
- * PostgreSQL in test/unit/integration/distribution-org-isolation.db.test.ts and
- * distribution-router.db.test.ts; the same role rule across the admin routers in
- * test/unit/features/admin-api-role-checks.test.ts.
+ * relational reads (db.query) stubbed. The stubs answer the same whatever the where is, so each
+ * organization condition is checked on the SQL it sends; the rows it matches are checked on
+ * PostgreSQL in
+ * test/unit/integration/distribution-org-isolation.db.test.ts and distribution-router.db.test.ts;
+ * the same role rule across the admin routers in test/unit/features/admin-api-role-checks.test.ts.
  */
 import { qrCampaigns } from '@/lib/db/schema';
 import { expiryOfJstDay } from '@/lib/features/distribution/campaign-expiry';
@@ -170,7 +174,12 @@ type UpdateInput = Parameters<Distribution['updateCampaign']>[0];
 const org = { organizationId: ORG_ID };
 const admin = () => callerAs('admin');
 
-/** Every query the procedure made, on either client */
+/**
+ * The queries the procedure made after the membership check, on either client: the campaigns and
+ * templates it read and every statement. organizationProcedure reads the membership first (the
+ * ctx.db.query.organizationMembers stub, not counted here), before the ability and the input of
+ * the procedure are checked
+ */
 function queriesMade(): number {
   const relational = [
     query.qrCampaigns.findFirst,
@@ -239,7 +248,7 @@ describe('who may use the QR campaigns (#356)', () => {
   });
 
   it.each(pairs([...VIEWERS, NO_ROLE], EDITS))(
-    'refuses %s %s without reading or writing',
+    'refuses %s %s, reading no campaign or template and writing nothing',
     async (role, _name, edit) => {
       await expect(edit.call(callerAs(role))).rejects.toMatchObject({ code: 'FORBIDDEN' });
       expect(queriesMade()).toBe(0);
@@ -252,7 +261,7 @@ describe('who may use the QR campaigns (#356)', () => {
   });
 
   it.each(Object.entries(VIEWS))(
-    'refuses %s without the right to read leads, reading nothing',
+    'refuses %s without the right to read leads, reading no campaign',
     async (_name, call) => {
       await expect(call(callerAs(NO_ROLE))).rejects.toMatchObject({ code: 'FORBIDDEN' });
       expect(queriesMade()).toBe(0);
@@ -260,7 +269,7 @@ describe('who may use the QR campaigns (#356)', () => {
   );
 });
 
-describe('input refused before anything is read (BAD_REQUEST)', () => {
+describe('input refused before a campaign or a template is read (BAD_REQUEST)', () => {
   const refused = async (call: Promise<unknown>) => {
     await expect(call).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     expect(queriesMade()).toBe(0);
@@ -385,6 +394,36 @@ describe('createCampaign', () => {
   });
 });
 
+describe('the campaigns of the organization only', () => {
+  it.each<[string, Call]>([
+    ['getCampaign', (d) => d.getCampaign({ ...org, id: CAMPAIGN_ID })],
+    ['updateCampaign', (d) => d.updateCampaign({ ...org, id: CAMPAIGN_ID, data: { name: 'New' } })],
+    ['deleteCampaign', (d) => d.deleteCampaign({ ...org, id: CAMPAIGN_ID })],
+    ['generateCampaignQR', (d) => d.generateCampaignQR({ ...org, campaignId: CAMPAIGN_ID })],
+    ['getCampaignStats', (d) => d.getCampaignStats({ ...org, campaignId: CAMPAIGN_ID })],
+  ])(
+    '%s looks the campaign up by its id within the organization, and answers NOT_FOUND writing nothing when that finds none',
+    async (_name, call) => {
+      found = undefined;
+      await expect(call(admin())).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(writes()).toEqual([]);
+      const lookups = query.qrCampaigns.findFirst.mock.calls.map(([{ where }]) => sqlOf(where));
+      expect(lookups).toEqual([
+        {
+          sql: '("qr_campaigns"."id" = $1 and "qr_campaigns"."organization_id" = $2)',
+          params: [CAMPAIGN_ID, ORG_ID],
+        },
+      ]);
+    }
+  );
+
+  it('listCampaigns reads the campaigns of the organization alone', async () => {
+    await admin().listCampaigns(org);
+    const lists = query.qrCampaigns.findMany.mock.calls.map(([{ where }]) => sqlOf(where));
+    expect(lists).toEqual([{ sql: '"qr_campaigns"."organization_id" = $1', params: [ORG_ID] }]);
+  });
+});
+
 describe('updateCampaign and deleteCampaign', () => {
   it('writes none of the columns the update does not take, even when they are sent', async () => {
     await update({
@@ -397,18 +436,6 @@ describe('updateCampaign and deleteCampaign', () => {
     });
     expect(Object.keys(updated()).sort()).toEqual(['name', 'updatedAt']);
   });
-
-  it.each<[string, () => Promise<unknown>]>([
-    ['updateCampaign', () => update({ name: 'New' })],
-    ['deleteCampaign', () => admin().deleteCampaign({ ...org, id: CAMPAIGN_ID })],
-  ])(
-    '%s answers NOT_FOUND and writes nothing for a campaign the organization does not have',
-    async (_name, call) => {
-      found = undefined;
-      await expect(call()).rejects.toMatchObject({ code: 'NOT_FOUND' });
-      expect(writes()).toEqual([]);
-    }
-  );
 
   it('deletes the row by its id within the organization', async () => {
     await admin().deleteCampaign({ ...org, id: CAMPAIGN_ID });
