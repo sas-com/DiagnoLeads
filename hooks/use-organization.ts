@@ -97,13 +97,19 @@ export function useCurrentOrganization() {
 
   // Validate UUID format before making API call
   const isValidOrg = organizationId ? isValidUUID(organizationId) : false;
+  // The context keeps the data it was last given: a switch by the id alone (an invite accepted,
+  // a URL) leaves the previous organization's, which is not this one's (#1034)
+  const current =
+    organization && organizationId && organization.id.toLowerCase() === organizationId.toLowerCase()
+      ? organization
+      : null;
 
-  // Fetch organization data if we have a valid ID but no data
+  // Fetch organization data if we have a valid ID but no data of it
   const { data, isLoading: queryLoading } = trpc.organizations.getById.useQuery(
     // enabled is false unless organizationId is a valid UUID, so the fallback is never sent
     { id: organizationId ?? '' },
     {
-      enabled: isValidOrg && !organization,
+      enabled: isValidOrg && !current,
       staleTime: 5 * 60 * 1000, // 5 minutes
     }
   );
@@ -116,7 +122,7 @@ export function useCurrentOrganization() {
   }, [data, organizationId, setOrganization]);
 
   return {
-    organization: organization || data || null,
+    organization: current || data || null,
     isLoading: contextLoading || queryLoading,
   };
 }

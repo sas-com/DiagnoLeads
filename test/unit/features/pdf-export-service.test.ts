@@ -7,6 +7,7 @@ import {
   exportDiagnosticResultToPDF,
   exportLeadsToPDF,
   generatePDFFilename,
+  oneLineName,
 } from '@/lib/features/reports/pdf-export-service';
 import type { PdfReportLabels } from '@/lib/features/reports/pdf-labels';
 import { describe, expect, it, vi } from 'vitest';
@@ -187,6 +188,15 @@ describe('PDF Export Service', () => {
         overview: mockAnalyticsData.overview,
       });
       expect(doc).toBeDefined();
+    });
+
+    it("writes the organization's name on one line, a long one within the page (#1034)", () => {
+      expect(oneLineName('架空\r\n商事\t本社 ')).toBe('架空 商事 本社');
+      const doc = exportAnalyticsToPDF(mockAnalyticsData, {
+        organizationName: `架空商事${'あ'.repeat(251)}`,
+        dateRange: '30d',
+      });
+      expect(doc.getNumberOfPages()).toBeGreaterThanOrEqual(1);
     });
 
     it('should support custom options', () => {

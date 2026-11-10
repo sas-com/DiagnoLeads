@@ -255,6 +255,28 @@ describe('useCurrentOrganization', () => {
     expect(result.current.organization).toBe(loaded);
   });
 
+  it("fetches the organization when the context holds another organization's data (#1034)", () => {
+    // Switched by its id alone (an invite accepted): the data is still the previous one's
+    mockContext = contextWith({
+      organizationId: ORG_ID,
+      organization: organization(OTHER_ORG_ID, '前の組織'),
+    });
+    mockQuery = { data: undefined, isLoading: true };
+    const { result, rerender } = renderHook(() => useCurrentOrganization());
+    expect(mocks.getById).toHaveBeenLastCalledWith(
+      { id: ORG_ID },
+      expect.objectContaining({ enabled: true })
+    );
+    // Not the previous organization's name meanwhile
+    expect(result.current.organization).toBeNull();
+
+    const fetched = organization(ORG_ID, '架空商事');
+    mockQuery = { data: fetched, isLoading: false };
+    rerender();
+    expect(result.current.organization).toBe(fetched);
+    expect(mocks.setOrganization).toHaveBeenCalledWith(ORG_ID, fetched);
+  });
+
   it('prefers the organization of the context over fetched data', () => {
     const loaded = organization(ORG_ID, 'Context Org');
     mockContext = contextWith({ organizationId: ORG_ID, organization: loaded });
