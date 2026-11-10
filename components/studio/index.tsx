@@ -41,7 +41,11 @@ export function StudioPageHeader({
         <h1
           id={headingId}
           tabIndex={headingId ? -1 : undefined}
-          className="text-2xl font-bold tracking-[0.01em] text-gray-900 sm:text-[2rem] dark:text-gray-50"
+          className={cn(
+            'text-2xl font-bold tracking-[0.01em] text-gray-900 sm:text-[2rem] dark:text-gray-50',
+            // The focus ring around the title, not the width of the description under it
+            headingId && 'w-fit'
+          )}
         >
           {title}
         </h1>
