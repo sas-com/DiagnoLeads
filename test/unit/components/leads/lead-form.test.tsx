@@ -11,11 +11,12 @@ import { NextIntlClientProvider } from 'next-intl';
 import type { ReactNode } from 'react';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
-// The status field renders <FieldHelp>, which reads the glossary over tRPC; mock it to a sentinel
-// so these tests stay about the form. FieldHelp's own behavior is covered by field-help.test.tsx.
+// The status and pipeline fields render <FieldHelp>, which reads the glossary over tRPC; mock it to
+// a sentinel (one per fieldKey) so these tests stay about the form. FieldHelp's own behavior is
+// covered by field-help.test.tsx.
 vi.mock('@/components/features/field-glossary/field-help', () => ({
   FieldHelp: ({ fieldKey, value }: { fieldKey: string; value?: string }) => (
-    <span data-testid="field-help" data-field-key={fieldKey} data-value={value ?? ''} />
+    <span data-testid={`field-help-${fieldKey}`} data-field-key={fieldKey} data-value={value ?? ''} />
   ),
 }));
 
@@ -154,8 +155,9 @@ describe('LeadForm', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
-  it('places field help next to the status field (Epic #780 P2)', () => {
+  it('places field help on the status and pipeline fields (Epic #780 P2)', () => {
     render(withIntl(<LeadForm onSubmit={vi.fn()} />));
-    expect(screen.getByTestId('field-help')).toHaveAttribute('data-field-key', 'leads.status');
+    expect(screen.getByTestId('field-help-leads.status')).toBeInTheDocument();
+    expect(screen.getByTestId('field-help-leads.dealPhase')).toBeInTheDocument();
   });
 });
