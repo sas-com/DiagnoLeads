@@ -5,8 +5,8 @@ category: UI
 title: "一覧の行から連絡を記録する入口は「連絡を記録」のボタン1つとメニューにし、リードの画面は1タップのボタンのままにする（#863）"
 status: active
 superseded_by: []
-issues: [863, 556, 554, 776, 895]
-paths: ["components/features/lead-follow-up/contact-record-menu.tsx", "components/features/lead-follow-up/contact-quick-actions.tsx", "components/features/lead-follow-up/use-record-contact.tsx", "components/features/lead-follow-up/due-tasks-list.tsx", "components/features/today/today-meetings.tsx", "components/dashboard/ax-dashboard-sections.tsx"]
+issues: [863, 556, 554, 776, 895, 998]
+paths: ["components/features/lead-follow-up/contact-record-menu.tsx", "components/features/lead-follow-up/contact-quick-actions.tsx", "components/features/lead-follow-up/use-record-contact.tsx", "components/features/lead-follow-up/due-tasks-list.tsx", "components/features/today/today-meetings.tsx", "components/features/today/today-next-actions.tsx", "components/features/today/today-deals.tsx", "components/features/deals/deals-screen.tsx", "components/features/lead-follow-up/row-activity-dialog.tsx", "hooks/use-row-dialog.ts", "components/dashboard/ax-dashboard-sections.tsx"]
 ---
 
 ### [UI] 一覧の行から連絡を記録する入口は「連絡を記録」のボタン1つとメニューにし、リードの画面は1タップのボタンのままにする（#863）
@@ -19,11 +19,16 @@ paths: ["components/features/lead-follow-up/contact-record-menu.tsx", "component
   - メニューの中身・順番・言葉と、記録のトースト（リード名つき・元に戻す）は、どの画面でも同じにする
   - ボタンはリンクの中に入れず、行の右端に置く。押せる範囲は 44px、文字は 14px（決定 `2026-10-24-admin-dads`）
   - タッチでは pointerdown で開かず、タップ（click）で開く。スクロールの始まりで開かないようにするため
+  - メニューの「活動を記録」で開くダイアログは、行ごとに持たず、欄に1つだけ置く（#998）
+    - 置き場所は、読み直しで入れ替わる欄の中身の外（`RowActivityDialog`）。行が消えても、欄が失敗や空の表示に替わっても、入力ごと残る
+    - 閉じたら、開いたメニューのボタンへフォーカスを戻す。行が消えていたら、欄の見出し（スクリプトからだけフォーカスできる）へ
+    - 隣の行へは送らない。次の行動のチェック（#776）や次の行動の追加（#970）は、自分の操作で行が消えるので次の行へ進めるが、ここで行が消えるのはほかの人の操作か読み直しで、隣の行へ送ると、別のリードのボタンにいることに気づかない。見出しなら、欄が変わったことが読み上げで伝わる（#998 の UI/UX レビュー）
 - **理由**
   - 行ごとに4つのボタンを並べると、スマホで行が折り返して重くなる。compact（32px・12px）は DADS に合わない
   - 一覧では2タップになる。ただ、スクロール中の誤記録を防ぐ軽い確認になり、リードの画面へ移るより手数が少ない
 - **ルール**
   - 一覧の行に記録の入口を足すときは `ContactRecordMenu` を使う。`ContactQuickActions` の compact は新しく使わない
+  - 行から開くダイアログ（活動の記録、商談の次の行動の追加など）は、その一覧に1つ置き、欄の中身の外に出す（`useRowDialog`。#998）。`ContactRecordMenu` は開くことを一覧に頼む（`onRecordActivity`）ので、使う一覧は `useRowActivityDialog` と `RowActivityDialog` を置く
   - 入口は、リードを編集できる人（`useLeadAccess` の `canEdit`）にだけ出す
   - 1タップの記録では、次の行動を完了にしない。連絡と完了は1対1ではないため（「つながらなかった」は完了ではない、など）。記録の続きで完了にする流れは #776 で決める
   - 商談予定の行から何を記録させるか（ヒアリング・活動）は、#776 の二重計上の扱いと一緒に決める。それまでヘルプは「打ち合わせで聞いたことはヒアリングとして記録する」とする

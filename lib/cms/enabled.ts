@@ -21,7 +21,6 @@ export const APP_API_SEGMENTS = [
   'collect',
   'cron',
   'diagnoses',
-  'diagnostic',
   'diagnostics',
   // Unsubscribe of respondent mail (#154)
   'email',
