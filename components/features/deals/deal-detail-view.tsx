@@ -83,19 +83,27 @@ export function DealDetailView({ dealId }: { dealId: string }) {
   // The delete question says a failure itself and stays open for another try (#720)
   const { remove } = useDealMutations({ toastErrors: false });
   // The stage path's button that moved the deal turns into its current stage once it is read
-  // again: the focus goes to that stage (focusable by script), or to the retry when the deal
-  // could not be read (#1044)
+  // again. The focus goes to that stage (focusable by script); when the deal could not be read,
+  // to the retry, which says the failure, else to the failure itself (#1044)
   const currentStageId = useId();
+  const loadErrorId = useId();
   const retryButton = useRef<HTMLButtonElement>(null);
-  const stageMove = useStageMove(
-    organizationId,
-    () => document.getElementById(currentStageId) ?? retryButton.current
-  );
-  // A move without a question: its button goes with the stage read again, the focus with it,
-  // to the page. It goes to the current stage instead, after a menu or a question that closed
-  // gave it back on its own, unless it had moved out of the stage path before (#1044)
+  const focusTarget = () =>
+    document.getElementById(currentStageId) ??
+    retryButton.current ??
+    document.getElementById(loadErrorId);
+  const stageMove = useStageMove(organizationId, focusTarget);
+  // The stage read last, for a question that closes once the deal is read again (#1044)
+  const stageRead = useRef<DealStage | undefined>(undefined);
+  useEffect(() => {
+    stageRead.current = query.data?.stage;
+  }, [query.data?.stage]);
+  // What had the focus on the stage path, or on the retry that stands for it while the deal
+  // cannot be read. A move or a read takes it away, the focus with it, to the page: the focus
+  // goes to the place above instead, after a menu or a question that closed gave it back on its
+  // own, unless it had moved elsewhere before (#1044)
   const focusedOnPath = useRef<Element | null>(null);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the stage read is the trigger (its path drawn anew)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: what the page shows is the trigger (drawn anew)
   useEffect(() => {
     const last = focusedOnPath.current;
     if (!last || last.isConnected) return;
@@ -104,10 +112,10 @@ export function DealDetailView({ dealId }: { dealId: string }) {
       focusedOnPath.current = null;
       const active = document.activeElement;
       if (active && active !== document.body) return;
-      document.getElementById(currentStageId)?.focus();
+      focusTarget()?.focus();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [query.data?.stage, currentStageId]);
+  }, [query.isError, query.data?.stage, query.data?.canEdit, currentStageId]);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteFailed, setDeleteFailed] = useState(false);
@@ -132,10 +140,14 @@ export function DealDetailView({ dealId }: { dealId: string }) {
 
   if (!leaving && query.error?.data?.code === 'FORBIDDEN') {
     return (
-      <div className="mx-auto max-w-5xl space-y-4">
-        {backLink}
-        <DealsForbidden />
-      </div>
+      <>
+        <div className="mx-auto max-w-5xl space-y-4">
+          {backLink}
+          <DealsForbidden />
+        </div>
+        {/* Kept as when the deal cannot be read (#1044) */}
+        {stageMove.dialogs}
+      </>
     );
   }
   if (!leaving && query.isError) {
@@ -144,7 +156,13 @@ export function DealDetailView({ dealId }: { dealId: string }) {
       <>
         <div className="mx-auto max-w-5xl space-y-4">
           {backLink}
-          <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+          {/* Focusable by script: where the focus goes when nothing else is left (#1044) */}
+          <p
+            id={loadErrorId}
+            tabIndex={-1}
+            role="alert"
+            className="text-sm text-red-700 dark:text-red-400"
+          >
             {missing ? t('detail.notFound') : t('state.loadError')}
           </p>
           {!missing && (
@@ -152,6 +170,11 @@ export function DealDetailView({ dealId }: { dealId: string }) {
               ref={retryButton}
               type="button"
               variant="outline"
+              // Said with the failure when the focus is sent to it (#1044)
+              aria-describedby={loadErrorId}
+              onFocus={(event) => {
+                focusedOnPath.current = event.currentTarget;
+              }}
               onClick={() => void query.refetch()}
             >
               {t('state.retry')}
@@ -180,15 +203,28 @@ export function DealDetailView({ dealId }: { dealId: string }) {
   // Those who may edit the deal may record for it: update Lead with deals readable, as
   // leadActivity.forDeal decides for the activity card
   const canRecord = deal.canEdit;
-  const moveTo = (stage: DealStage) =>
+  const moveTo = (stage: DealStage) => {
+    // A question cancelled gives the focus back to the button pressed; a move made sends it to
+    // the stage the deal moved to, also when that button stays, as a lost deal's reopening after
+    // 不適格 (#1044)
+    const from = deal.stage;
+    const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     stageMove.move(
       {
         ...deal,
         leadLabel: deal.lead.company || deal.lead.name || '',
         leadSqlDecision: deal.lead.sqlDecision,
       },
-      stage
+      stage,
+      {
+        returnFocus: () => {
+          if (stageRead.current !== from || !trigger?.isConnected) return false;
+          trigger.focus();
+          return true;
+        },
+      }
     );
+  };
 
   const deleting = remove.isPending || leaving;
   const confirmDelete = () => {

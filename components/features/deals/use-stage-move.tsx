@@ -85,7 +85,8 @@ export function useStageMove(
   organizationId: string,
   /**
    * Where the focus goes once a question closes and the place the move was chosen in is gone:
-   * the board could not be read meanwhile, or the deal left it (#1026)
+   * the board could not be read meanwhile, or the deal left it (#1026); on the deal's page, the
+   * button pressed turned into the stage the deal moved to (#1044)
    */
   focusInstead?: (deal: MovingDeal) => HTMLElement | null | undefined
 ): {
