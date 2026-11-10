@@ -61,7 +61,10 @@ export function TodaySection({
   children: ReactNode;
   /** Under the content in every state: a way back from a list opened in full also when it failed */
   footer?: ReactNode;
-  /** The heading's id, for a list inside that sends the focus to it when it empties (#776) */
+  /**
+   * The heading's id, focusable by script: for a list inside that sends the focus to it when it
+   * empties (#776), and for a dialog opened from a row, once the row left (#998)
+   */
   headingId?: string;
 }) {
   const t = useTranslations('today.section');

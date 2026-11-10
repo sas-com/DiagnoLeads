@@ -6,78 +6,27 @@ import { DealMarks } from '@/components/features/deals/deal-marks';
 import { AddNextActionButton } from '@/components/features/deals/deal-next-task';
 import { DealStageBadge } from '@/components/features/deals/deal-stage-badge';
 import { AddNextActionDialog } from '@/components/features/lead-follow-up/add-next-action-dialog';
+import { useRowDialog } from '@/hooks/use-row-dialog';
 import type { RouterOutputs } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
-import { useId, useRef, useState } from 'react';
+import { useId, useRef } from 'react';
 import { dealsNeedingAttention, leadLabel } from './today-format';
 import { type TodayQuery, TodaySection, sectionState } from './today-section';
 
 type Board = RouterOutputs['deals']['board'];
 type BoardDeal = Board['columns'][number]['deals'][number];
 
-/**
- * The dialog that adds a next action from a row (#970): one, for the deal chosen. It has no
- * trigger to give the focus back to. Closed without adding, the focus goes back to the button;
- * once added, the board is read again and the button goes away: the focus goes to the deal's
- * name when its row stays (its close date has passed too), else on to the next row's name, else
- * the previous one's, else to the section's heading, as for the next actions above (#776). The
- * row beside it is the one when the dialog opened: the board may be read again before it closes.
- * So is the day it starts with: the dialog stays open whatever the board reads meanwhile.
- */
-function useAddNextAction(headingId: string) {
-  const [chosen, setChosen] = useState<{
-    deal: BoardDeal;
-    staysListed: boolean;
-    today: string;
-  } | null>(null);
-  const [open, setOpen] = useState(false);
-  const opener = useRef<HTMLElement | null>(null);
-  const neighbour = useRef<string | undefined>(undefined);
-  const added = useRef(false);
-  const links = useRef(new Map<string, HTMLAnchorElement>());
-  return {
-    deal: chosen?.deal ?? null,
-    today: chosen?.today ?? null,
-    open,
-    setOpen,
-    links,
-    start: (
-      deal: BoardDeal,
-      {
-        staysListed,
-        today,
-        neighbourId,
-      }: { staysListed: boolean; today: string; neighbourId?: string },
-      from: HTMLElement
-    ) => {
-      opener.current = from;
-      neighbour.current = neighbourId;
-      added.current = false;
-      setChosen({ deal, staysListed, today });
-      setOpen(true);
-    },
-    markAdded: () => {
-      added.current = true;
-    },
-    returnFocus: (event: Event) => {
-      const button = opener.current;
-      const link = chosen ? links.current.get(chosen.deal.id) : undefined;
-      const next = neighbour.current ? links.current.get(neighbour.current) : undefined;
-      const target =
-        !added.current && button?.isConnected
-          ? button
-          : chosen?.staysListed && link?.isConnected
-            ? link
-            : next?.isConnected
-              ? next
-              : document.getElementById(headingId);
-      if (!target) return;
-      event.preventDefault();
-      target.focus();
-    },
-  };
+/** What the dialog that adds a next action from a row is open for (#970) */
+interface ChosenDeal {
+  deal: BoardDeal;
+  /** Its close date has passed too: its row stays once a next action is added */
+  staysListed: boolean;
+  /** The day the board was read for: the dialog starts with it whatever is read meanwhile */
+  today: string;
+  /** The row beside it when the dialog opened, as the board may be read again before it closes */
+  neighbourId?: string;
 }
 
 /**
@@ -87,7 +36,11 @@ function useAddNextAction(headingId: string) {
  * may not read deals (a parent organization's viewers), as on the lead page.
  * An open deal whose lead has no next action gets one added from its row (#970), by those who may
  * change deals: the board's button and dialog (#853), outside the link at the row's right end
- * (decision 2026-10-28-record-contact-from-lists).
+ * (decision 2026-10-28-record-contact-from-lists). The dialog is one, outside the section's
+ * content (#998). Closed without adding, the focus goes back to the button; once added, the
+ * board is read again and the button goes away: the focus goes to the deal's name when its row
+ * stays (its close date has passed too), else on to the next row's name, else the previous
+ * one's, else to the section's heading, as for the next actions above (#776).
  */
 export function TodayDeals({
   query,
@@ -101,7 +54,14 @@ export function TodayDeals({
   const tDeals = useTranslations('deals');
   const locale = useLocale();
   const headingId = useId();
-  const nextAction = useAddNextAction(headingId);
+  const links = useRef(new Map<string, HTMLAnchorElement>());
+  const nextAction = useRowDialog<ChosenDeal>(({ chosen, done, opener }) => {
+    if (!done && opener) return opener;
+    const link = links.current.get(chosen.deal.id);
+    if (chosen.staysListed && link?.isConnected) return link;
+    const next = chosen.neighbourId ? links.current.get(chosen.neighbourId) : undefined;
+    return next?.isConnected ? next : document.getElementById(headingId);
+  });
   const data = query.data;
 
   if (query.error?.data?.code === 'FORBIDDEN') return null;
@@ -146,8 +106,8 @@ export function TodayDeals({
               >
                 <Link
                   ref={(link) => {
-                    if (link) nextAction.links.current.set(deal.id, link);
-                    else nextAction.links.current.delete(deal.id);
+                    if (link) links.current.set(deal.id, link);
+                    else links.current.delete(deal.id);
                   }}
                   href={`/${locale}/deals/${deal.id}`}
                   className={cn(
@@ -178,8 +138,8 @@ export function TodayDeals({
                     dealName={deal.name}
                     onAdd={(opener) =>
                       nextAction.start(
-                        deal,
                         {
+                          deal,
                           staysListed: flags.overdue,
                           today: data?.today ?? '',
                           neighbourId: (marked[index + 1] ?? marked[index - 1])?.deal.id,
@@ -198,18 +158,20 @@ export function TodayDeals({
       </TodaySection>
       {/* Outside the section's content, which a failed or empty read replaces: the dialog and what
         was entered in it stay */}
-      {nextAction.deal && nextAction.today && (
+      {nextAction.chosen?.today && (
         <AddNextActionDialog
           open={nextAction.open}
           onOpenChange={nextAction.setOpen}
           organizationId={organizationId}
-          deal={nextAction.deal}
+          deal={nextAction.chosen.deal}
           leadLabel={
-            leadLabel({ company: nextAction.deal.company, name: nextAction.deal.leadName })
-              .primary ?? ''
+            leadLabel({
+              company: nextAction.chosen.deal.company,
+              name: nextAction.chosen.deal.leadName,
+            }).primary ?? ''
           }
-          today={nextAction.today}
-          onAdded={nextAction.markAdded}
+          today={nextAction.chosen.today}
+          onAdded={nextAction.markDone}
           onCloseAutoFocus={nextAction.returnFocus}
         />
       )}
