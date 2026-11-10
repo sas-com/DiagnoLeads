@@ -1,7 +1,8 @@
 /**
  * Deals (#435): stage probabilities, the forecast category, the weighted amount, how deals set
  * their lead's status and deal phase (computed again on every change, #444), whether the first
- * meeting of a lead creates its deal (#854) and the input schemas. The DB behaviour is covered by
+ * meeting of a lead creates its deal (#854), where a new deal starts in the deal form (#951) and the
+ * input schemas. The DB behaviour is covered by
  * test/unit/integration/deals.db.test.ts.
  */
 import { type Role, defineAbilitiesFor } from '@/lib/auth/permissions';
@@ -16,6 +17,7 @@ import {
   latestLostReason,
   leadChangesFromDeals,
   leadPhaseOfDeal,
+  newDealStart,
   phaseFromDeals,
   qualificationDealSkip,
   wonWithoutWonDeal,
@@ -37,6 +39,7 @@ import {
   createDealSchema,
   updateDealSchema,
 } from '@/lib/features/deals/types/schemas';
+import { DEAL_PHASES, LEAD_STATUSES } from '@/lib/features/leads/types/pipeline';
 import { describe, expect, it } from 'vitest';
 
 const ORG = '660e8400-e29b-41d4-a716-446655440000';
@@ -237,6 +240,83 @@ describe('qualificationDealSkip', () => {
         deal({ stage: 'lost' }),
       ])
     ).toBe('won');
+  });
+});
+
+// Where a new deal of a lead starts in the deal form (#951)
+describe('newDealStart', () => {
+  const lead = (values: Partial<{ status: string; dealPhase: string | null }> = {}) => ({
+    status: 'new',
+    dealPhase: null,
+    ...values,
+  });
+  const won = (kind: string | null) => ({ stage: 'won', kind, wonFirst: true });
+  const open = (stage: string) => ({ stage, kind: null, wonFirst: false });
+
+  it.each([
+    ['survey_won', 'survey'],
+    ['migration_won', 'migration'],
+    ['ax', 'ax'],
+  ] as const)('starts a lead won by hand with its win, of the kind of its phase (%s)', (dealPhase, kind) => {
+    expect(newDealStart(lead({ status: 'won', dealPhase }), [])).toEqual(won(kind));
+    // A won phase set by hand on a lead not won, or left on one whose deals are all lost
+    expect(newDealStart(lead({ status: 'negotiating', dealPhase }), [])).toEqual(won(kind));
+    expect(newDealStart(lead({ status: 'lost', dealPhase }), [deal({ stage: 'lost' })])).toEqual(
+      won(kind)
+    );
+  });
+
+  it("keeps the form's kind for a lead won at a phase no win stands for", () => {
+    expect(newDealStart(lead({ status: 'won' }), [])).toEqual(won(null));
+    expect(newDealStart(lead({ status: 'won', dealPhase: 'proposal' }), [])).toEqual(won(null));
+    expect(newDealStart(lead({ status: 'won' }), [deal({ stage: 'lost' })])).toEqual(won(null));
+  });
+
+  it.each([
+    [null, 'qualification'],
+    ['initial_hearing', 'qualification'],
+    ['simple_diagnosis', 'discovery'],
+    ['proposal', 'proposal'],
+  ] as const)('starts a lead without deals at its phase (%s)', (dealPhase, stage) => {
+    for (const status of ['new', 'negotiating', 'nurturing', 'lost']) {
+      expect(newDealStart(lead({ status, dealPhase }), []), status).toEqual(open(stage));
+    }
+  });
+
+  it('starts in 見極め beside deals: open, won, or all lost (its time come again)', () => {
+    expect(
+      newDealStart(lead({ status: 'negotiating', dealPhase: 'proposal' }), [
+        deal({ stage: 'proposal' }),
+      ])
+    ).toEqual(open('qualification'));
+    expect(
+      newDealStart(lead({ status: 'won', dealPhase: 'migration_won' }), [
+        deal({ stage: 'won', kind: 'migration' }),
+      ])
+    ).toEqual(open('qualification'));
+    expect(
+      newDealStart(lead({ status: 'lost', dealPhase: 'proposal' }), [deal({ stage: 'lost' })])
+    ).toEqual(open('qualification'));
+  });
+
+  // Saved as it opens, the deal is one createDeal accepts (a lead won by hand takes only its win)
+  // and it takes nothing back from the lead without deals
+  it.each(LEAD_STATUSES)('opens a lead without deals with a deal that keeps it (%s)', (status) => {
+    const phaseIndex = (phase: string | null) =>
+      (DEAL_PHASES as readonly (string | null)[]).indexOf(phase);
+    for (const dealPhase of [null, ...DEAL_PHASES]) {
+      const before = { status, dealPhase, lostReason: null, hasNegotiated: false };
+      const start = newDealStart(before, []);
+      expect(start.wonFirst, String(dealPhase)).toBe(wonWithoutWonDeal(before, []));
+      if (start.wonFirst) expect(start.stage).toBe('won');
+
+      const changes = leadChangesFromDeals(before, [
+        deal({ stage: start.stage, kind: start.kind ?? 'survey' }),
+      ]);
+      const after = changes.dealPhase ?? dealPhase;
+      expect(phaseIndex(after), String(dealPhase)).toBeGreaterThanOrEqual(phaseIndex(dealPhase));
+      if (start.wonFirst) expect(changes.status ?? status).toBe('won');
+    }
   });
 });
 

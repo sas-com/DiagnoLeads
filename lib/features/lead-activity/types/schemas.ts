@@ -29,19 +29,16 @@ export const LEAD_ACTIVITY_KINDS = [
 ] as const;
 export type LeadActivityKind = (typeof LEAD_ACTIVITY_KINDS)[number];
 
-/** Filter chips on the screen, each a group of kinds */
+/**
+ * Filter chips on the screen, each a group of kinds. Contacts (calls, emails, visits and online
+ * meetings, #554) have their own, apart from the changes sales made to the lead (#776)
+ */
 export const LEAD_ACTIVITY_FILTERS = {
   diagnosis: ['diagnosis_submitted', 'consultation_requested', 'details_answered'],
   hearing: ['hearing_recorded', 'hearing_updated'],
+  contact: ['contact_recorded'],
   comment: ['comment'],
-  sales: [
-    'lead_created',
-    'lead_updated',
-    'mql_qualified',
-    'sql_decided',
-    'phase_reached',
-    'contact_recorded',
-  ],
+  sales: ['lead_created', 'lead_updated', 'mql_qualified', 'sql_decided', 'phase_reached'],
   email: ['result_email_requested', 'result_email_sent', 'email_unsubscribed'],
 } as const satisfies Record<string, readonly LeadActivityKind[]>;
 export type LeadActivityFilter = keyof typeof LEAD_ACTIVITY_FILTERS;

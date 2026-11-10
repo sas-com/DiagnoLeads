@@ -19,7 +19,11 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import type { ProspectRow } from './types';
 
-/** Sales turn a row into a lead once they have a contact (#265) */
+/**
+ * Sales turn a row into a lead once they have a contact (#265). A row with a meeting day also
+ * creates the lead's deal in 見極め, unless it has an open deal, is won, or the other cases the
+ * server skips (#854): the dialog says so and reloads what the deal changes.
+ */
 export function ProspectConvertDialog({
   organizationId,
   row,
@@ -30,6 +34,7 @@ export function ProspectConvertDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const t = useTranslations('prospects');
+  const tDeals = useTranslations('deals');
   const locale = useLocale();
   const router = useRouter();
   const utils = trpc.useUtils();
@@ -38,9 +43,17 @@ export function ProspectConvertDialog({
   const [name, setName] = useState(row.contactName ?? row.surname ?? '');
   const [phone, setPhone] = useState(row.contactPhone ?? '');
   const convert = trpc.prospects.convertToLead.useMutation({
-    onSuccess: ({ leadId, linkedExisting }) => {
+    onSuccess: ({ leadId, linkedExisting, dealCreated }) => {
       toast.success(linkedExisting ? t('convert.linked') : t('convert.done'));
       utils.prospects.list.invalidate();
+      // The lead created or linked (the lists, its page)
+      utils.leads.invalidate();
+      if (dealCreated) {
+        // Its deal (its deals, the board, today's deals), recorded in its activity (#854)
+        utils.deals.invalidate();
+        utils.leadActivity.invalidate();
+        toast.info(tDeals('autoCreated', { count: 1 }));
+      }
       onOpenChange(false);
       router.push(`/${locale}/leads/${leadId}`);
     },

@@ -54,6 +54,9 @@ interface HandoverImportDialogProps {
  * Import the sales agency's appointment report (Refs #152): a CSV or Excel file in our format,
  * or another one with the columns chosen here. Read in the browser; only the rows go to the
  * server, which finds each lead by email address (or company name) and saves the handover.
+ * A row whose appointment day is new for its lead (or another day) also creates the lead's deal
+ * in 見極め, unless it has an open deal, is won, or the other cases the server skips (#854): the
+ * dialog says how many and reloads what the deals change.
  */
 export function HandoverImportDialog({
   open,
@@ -62,6 +65,7 @@ export function HandoverImportDialog({
 }: HandoverImportDialogProps) {
   const t = useTranslations('agencyHandovers.import');
   const tColumn = useTranslations('agencyHandovers.columns');
+  const tDeals = useTranslations('deals');
   const id = useId();
   const utils = trpc.useUtils();
   const [file, setFile] = useState<{
@@ -82,6 +86,14 @@ export function HandoverImportDialog({
         invalid: count('invalid'),
       });
       utils.agencyHandovers.get.invalidate();
+      if (data.dealsCreated > 0) {
+        // The deals (the leads' deals, the board, today's deals), and their leads' status and
+        // deal phase, recorded in the leads' activity (#854)
+        utils.leads.invalidate();
+        utils.deals.invalidate();
+        utils.leadActivity.invalidate();
+        toast.info(tDeals('autoCreated', { count: data.dealsCreated }));
+      }
     },
     onError: () => toast.error(t('error')),
   });

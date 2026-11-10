@@ -3,10 +3,14 @@
  * database (#6): who may read and change rows (viewers of a parent organization see nothing,
  * members change only their own rows that are not leads yet, only sales write the sales and
  * agency columns, import and turn rows into leads), that every query is limited to the caller's
- * organization, and the error paths. Uses the real CASL abilities; the database is
- * test/mocks/recording-db.ts. The same procedures on a real PostgreSQL (the rows the conditions
- * match, the lock, two organizations side by side) are covered by
- * test/unit/integration/prospects*.db.test.ts. Made-up names.
+ * organization, and the error paths; when a row's meeting day creates the lead's deal in 見極め
+ * (#854: a lead's row saved by sales with a new or changed day, a row with a day turned into a
+ * lead), the lead locked before the row, and who may (the deals feature is mocked). Uses the real
+ * CASL abilities, and one made-up role (sales who may not change leads, as an agency's account of
+ * #276 could be); the database is test/mocks/recording-db.ts. The same procedures on a real
+ * PostgreSQL (the rows the conditions match, the lock, two organizations side by side, the deal)
+ * are covered by test/unit/integration/prospects*.db.test.ts and
+ * deals-auto-qualification.db.test.ts. Made-up names.
  */
 import {
   auditLogs,
@@ -17,8 +21,15 @@ import {
   prospects,
   users,
 } from '@/lib/db/schema';
+import type { QualificationDealOutcome } from '@/lib/features/deals/service';
 import { REFUSAL_REASONS } from '@/lib/features/prospects/types/schemas';
-import { type QueryCall, type RecordingDb, recordingDb, sqlOf } from '@/test/mocks/recording-db';
+import {
+  type QueryCall,
+  type RecordingDb,
+  type RecordingExecutor,
+  recordingDb,
+  sqlOf,
+} from '@/test/mocks/recording-db';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/db/rls', () => ({ setCurrentUser: vi.fn().mockResolvedValue(undefined) }));
@@ -38,6 +49,32 @@ vi.mock('@/lib/features/webhooks/services/lead-events', async (importOriginal) =
   ...(await importOriginal<typeof import('@/lib/features/webhooks/services/lead-events')>()),
   emitLeadEvents: mocks.emitLeadEvents,
 }));
+const deals = vi.hoisted(() => ({
+  ensureQualificationDeal: vi.fn(),
+  afterDealChanges: vi.fn(),
+}));
+vi.mock('@/lib/features/deals/service', () => deals);
+/** Sales (they may change the settings) who may read and add leads but not change them */
+const SALES_WITHOUT_LEADS = 'sales_without_leads';
+vi.mock('@/lib/auth/permissions', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/auth/permissions')>();
+  const { AbilityBuilder, createMongoAbility } = await import('@casl/ability');
+  return {
+    ...actual,
+    defineAbilitiesFor: (...args: Parameters<typeof actual.defineAbilitiesFor>) => {
+      // A role the schema does not have
+      const role: string | undefined = args[1]?.role;
+      if (role !== 'sales_without_leads') return actual.defineAbilitiesFor(...args);
+      const { can, build } = new AbilityBuilder<
+        import('@/lib/auth/permissions').AppAbility
+      >(createMongoAbility);
+      can('read', 'Lead');
+      can('create', 'Lead');
+      can('update', 'Settings');
+      return build();
+    },
+  };
+});
 
 const { appRouter } = await import('@/server/routers/_app');
 
@@ -49,8 +86,11 @@ const ROW_ID = '880e8400-e29b-41d4-a716-446655440000';
 const OTHER_ROW = '880e8400-e29b-41d4-a716-446655440001';
 const LEAD_ID = '770e8400-e29b-41d4-a716-446655440000';
 const LINK_ID = '990e8400-e29b-41d4-a716-446655440000';
+const DEAL_ID = 'aa0e8400-e29b-41d4-a716-446655440000';
 // Friday 2026-10-16, 12:00 in Japan
 const NOW = new Date('2026-10-16T03:00:00Z');
+
+const created: QualificationDealOutcome = { created: true, dealId: DEAL_ID, lead: null };
 
 let fake: RecordingDb;
 
@@ -129,6 +169,8 @@ beforeEach(() => {
   mocks.getOrCreateMemberLink.mockReset();
   mocks.notifyProspectHandedOver.mockReset().mockResolvedValue({ notified: 1 });
   mocks.emitLeadEvents.mockReset();
+  deals.ensureQualificationDeal.mockReset().mockResolvedValue(created);
+  deals.afterDealChanges.mockReset().mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -566,7 +608,7 @@ describe('update', () => {
         refusalReason: REFUSAL_REASONS[0],
         refusalNote: '今は不要',
       })
-    ).toEqual({ id: ROW_ID });
+    ).toEqual({ id: ROW_ID, dealCreated: false });
 
     const update = callOn(prospects, 'update');
     expect(update.set).toMatchObject({ heard: '移行を検討中', updatedBy: USER_ID, updatedAt: NOW });
@@ -670,6 +712,178 @@ describe('update', () => {
     });
     // The person in charge did not change, so a former member is kept without a check
     expect(fake.calls.some((call) => call.table === organizationMembers)).toBe(false);
+  });
+
+  // The meeting day of a lead's row is the lead's first meeting (#854)
+  describe("the lead's deal", () => {
+    /** A lead's row, as findOwnRow reads it */
+    const leadRow = (meetingOn: string | null = null) =>
+      stored({ createdBy: OTHER_USER, leadId: LEAD_ID, stage: 'proposal', meetingOn });
+    const withDay = (meetingOn: string | null) => ({ ...change, meetingOn });
+
+    it("is created when sales set a new meeting day on a lead's row: the lead locked before the row, the deal in the transaction, its webhooks after the commit", async () => {
+      fake.results.push(
+        [leadRow()],
+        [{ id: LEAD_ID }],
+        [{ leadId: LEAD_ID, meetingOn: null }],
+        [{ id: ROW_ID }]
+      );
+      const order: string[] = [];
+      const transaction = fake.db.transaction;
+      fake.db.transaction = async <T>(fn: (tx: RecordingExecutor) => Promise<T>) => {
+        const result = await transaction(fn);
+        order.push('commit');
+        return result;
+      };
+      deals.ensureQualificationDeal.mockImplementation(async () => {
+        order.push('ensure');
+        return created;
+      });
+      deals.afterDealChanges.mockImplementation(async () => {
+        order.push('webhooks');
+      });
+
+      expect(await sales().update(withDay('2026-10-20'))).toEqual({
+        id: ROW_ID,
+        dealCreated: true,
+      });
+
+      const [read, lockLead, lockRow, update] = fake.calls;
+      expect(read).toMatchObject({ op: 'select', table: prospects, inTransaction: false });
+      // The lead first, as the deals and a deletion of the lead take it
+      expect(lockLead).toMatchObject({ op: 'select', table: leads, inTransaction: true });
+      expect(lockLead.lock).toEqual({ strength: 'no key update', config: undefined });
+      expect(sqlOf(lockLead.where)).toEqual({
+        sql: '("leads"."id" = $1 and "leads"."organization_id" = $2)',
+        params: [LEAD_ID, ORG_ID],
+      });
+      // Then the row, read again under its lock
+      expect(lockRow).toMatchObject({ op: 'select', table: prospects, inTransaction: true });
+      expect(lockRow.lock).toEqual({ strength: 'update', config: undefined });
+      expect(sqlOf(lockRow.where)).toEqual({
+        sql: '("prospects"."id" = $1 and "prospects"."organization_id" = $2)',
+        params: [ROW_ID, ORG_ID],
+      });
+      expect(update).toMatchObject({ op: 'update', table: prospects, inTransaction: true });
+      expect(update.set).toMatchObject({ meetingOn: '2026-10-20', stage: 'proposal' });
+      expect(sqlOf(update.where).params).toEqual([ROW_ID, ORG_ID]);
+
+      expect(order).toEqual(['ensure', 'commit', 'webhooks']);
+      const [tx, values, at] = deals.ensureQualificationDeal.mock.calls[0];
+      expect(tx).not.toBe(fake.db);
+      expect(values).toEqual({
+        organizationId: ORG_ID,
+        leadId: LEAD_ID,
+        userId: USER_ID,
+        source: 'prospect',
+        meetingOn: '2026-10-20',
+      });
+      expect(at).toEqual(NOW);
+      expect(deals.afterDealChanges).toHaveBeenCalledWith(
+        expect.anything(),
+        { organizationId: ORG_ID, userId: USER_ID },
+        [created]
+      );
+    });
+
+    it('is created when the meeting moves to another day', async () => {
+      fake.results.push(
+        [leadRow('2026-10-20')],
+        [{ id: LEAD_ID }],
+        [{ leadId: LEAD_ID, meetingOn: '2026-10-20' }],
+        [{ id: ROW_ID }]
+      );
+
+      expect(await sales().update(withDay('2026-10-27'))).toEqual({
+        id: ROW_ID,
+        dealCreated: true,
+      });
+      expect(deals.ensureQualificationDeal).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ meetingOn: '2026-10-27' }),
+        NOW
+      );
+    });
+
+    it.each([
+      ['the same day saved again (even after the deal was lost)', leadRow('2026-10-20'), '2026-10-20'],
+      ['the day cleared', leadRow('2026-10-20'), null],
+      ['a row that is not a lead yet', stored({ createdBy: OTHER_USER }), '2026-10-20'],
+    ])('is not created for %s, saved without a transaction', async (_label, row, meetingOn) => {
+      fake.results.push([row], [{ id: ROW_ID }]);
+
+      expect(await sales().update(withDay(meetingOn))).toEqual({ id: ROW_ID, dealCreated: false });
+      expect(fake.transactions).toBe(0);
+      expect(callOn(prospects, 'update').set).toMatchObject({ meetingOn });
+      expect(deals.ensureQualificationDeal).not.toHaveBeenCalled();
+      expect(deals.afterDealChanges).not.toHaveBeenCalled();
+    });
+
+    it('is not created when the same day was saved a moment before (compared under the lock)', async () => {
+      fake.results.push(
+        [leadRow()],
+        [{ id: LEAD_ID }],
+        [{ leadId: LEAD_ID, meetingOn: '2026-10-20' }],
+        [{ id: ROW_ID }]
+      );
+
+      expect(await sales().update(withDay('2026-10-20'))).toEqual({
+        id: ROW_ID,
+        dealCreated: false,
+      });
+      expect(writes()).toHaveLength(1);
+      expect(deals.ensureQualificationDeal).not.toHaveBeenCalled();
+    });
+
+    it('saves nothing when the row is no longer the lead’s under the lock (its lead deleted, or linked again)', async () => {
+      fake.results.push([leadRow()], [], [{ leadId: null, meetingOn: null }]);
+
+      await expect(sales().update(withDay('2026-10-20'))).rejects.toMatchObject({
+        code: 'CONFLICT',
+      });
+      expect(writes()).toHaveLength(0);
+      expect(deals.ensureQualificationDeal).not.toHaveBeenCalled();
+      expect(deals.afterDealChanges).not.toHaveBeenCalled();
+    });
+
+    it('answers NOT_FOUND when the row is gone under the lock', async () => {
+      fake.results.push([leadRow()], [{ id: LEAD_ID }], []);
+
+      await expect(sales().update(withDay('2026-10-20'))).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+      expect(writes()).toHaveLength(0);
+      expect(deals.ensureQualificationDeal).not.toHaveBeenCalled();
+    });
+
+    it('answers that none was created for a lead it skips, and sends no webhooks', async () => {
+      fake.results.push(
+        [leadRow()],
+        [{ id: LEAD_ID }],
+        [{ leadId: LEAD_ID, meetingOn: null }],
+        [{ id: ROW_ID }]
+      );
+      deals.ensureQualificationDeal.mockResolvedValue({ created: false, skipped: 'open_deal' });
+
+      expect(await sales().update(withDay('2026-10-20'))).toEqual({
+        id: ROW_ID,
+        dealCreated: false,
+      });
+      expect(deals.afterDealChanges).not.toHaveBeenCalled();
+    });
+
+    it('is not created by sales who may not change leads: the row is saved as before', async () => {
+      fake.results.push([leadRow()], [{ id: ROW_ID }]);
+
+      expect(await callerAs(SALES_WITHOUT_LEADS).update(withDay('2026-10-20'))).toEqual({
+        id: ROW_ID,
+        dealCreated: false,
+      });
+      expect(fake.transactions).toBe(0);
+      expect(callOn(prospects, 'update').set).toMatchObject({ meetingOn: '2026-10-20' });
+      expect(fake.calls.some((call) => call.table === leads)).toBe(false);
+      expect(deals.ensureQualificationDeal).not.toHaveBeenCalled();
+    });
   });
 });
 
@@ -921,7 +1135,11 @@ describe('convertToLead', () => {
   it("links the row to the organization's lead of the same email, keeping what was heard as a note", async () => {
     fake.results.push([prospect()], [{ id: LEAD_ID }]);
 
-    expect(await sales().convertToLead(input)).toEqual({ leadId: LEAD_ID, linkedExisting: true });
+    expect(await sales().convertToLead(input)).toEqual({
+      leadId: LEAD_ID,
+      linkedExisting: true,
+      dealCreated: false,
+    });
 
     const find = callOn(leads, 'select');
     expect(sqlOf(find.where)).toEqual({
@@ -966,6 +1184,7 @@ describe('convertToLead', () => {
     expect(await sales().convertToLead({ ...input, phone: '03-1111-1111' })).toEqual({
       leadId: LEAD_ID,
       linkedExisting: false,
+      dealCreated: false,
     });
 
     expect(callOn(leads, 'insert').values).toMatchObject({
@@ -1021,5 +1240,84 @@ describe('convertToLead', () => {
       code: 'INTERNAL_SERVER_ERROR',
     });
     expect(fake.calls.some((call) => call.table === leadComments)).toBe(false);
+  });
+
+  // A row with a meeting day gives the lead its deal in 見極め (#854)
+  describe("the lead's deal", () => {
+    it('is created for the lead the row is linked to, after the link, with its webhooks after the commit', async () => {
+      fake.results.push([prospect({ meetingOn: '2026-10-20' })], [{ id: LEAD_ID }]);
+      let lastWrite: QueryCall | undefined;
+      deals.ensureQualificationDeal.mockImplementation(async () => {
+        lastWrite = writes().at(-1);
+        return created;
+      });
+
+      expect(await sales().convertToLead(input)).toEqual({
+        leadId: LEAD_ID,
+        linkedExisting: true,
+        dealCreated: true,
+      });
+      // The row is linked first: until the commit no one else sees it as the lead's
+      expect(lastWrite).toMatchObject({ op: 'update', table: prospects, set: { leadId: LEAD_ID } });
+      const [tx, values, at] = deals.ensureQualificationDeal.mock.calls[0];
+      expect(tx).not.toBe(fake.db);
+      expect(values).toEqual({
+        organizationId: ORG_ID,
+        leadId: LEAD_ID,
+        userId: USER_ID,
+        source: 'prospect',
+        meetingOn: '2026-10-20',
+      });
+      expect(at).toEqual(NOW);
+      expect(deals.afterDealChanges).toHaveBeenCalledWith(
+        expect.anything(),
+        { organizationId: ORG_ID, userId: USER_ID },
+        [created]
+      );
+    });
+
+    it('is created for a new lead, whose lead.created event goes out before the deal’s webhooks', async () => {
+      const lead = { id: LEAD_ID, organizationId: ORG_ID, email: 'taro@example.com', status: 'new' };
+      fake.results.push([prospect({ meetingOn: '2026-10-20' })], [], [lead]);
+
+      expect(await sales().convertToLead(input)).toMatchObject({
+        linkedExisting: false,
+        dealCreated: true,
+      });
+      expect(mocks.emitLeadEvents).toHaveBeenCalledWith(ORG_ID, [{ type: 'lead.created', lead }], {
+        database: expect.anything(),
+      });
+      expect(mocks.emitLeadEvents.mock.invocationCallOrder[0]).toBeLessThan(
+        deals.afterDealChanges.mock.invocationCallOrder[0]
+      );
+    });
+
+    it('is not created for a row without a meeting day', async () => {
+      fake.results.push([prospect()], [{ id: LEAD_ID }]);
+
+      expect(await sales().convertToLead(input)).toMatchObject({ dealCreated: false });
+      expect(deals.ensureQualificationDeal).not.toHaveBeenCalled();
+      expect(deals.afterDealChanges).not.toHaveBeenCalled();
+    });
+
+    it('answers that none was created for a lead it skips', async () => {
+      fake.results.push([prospect({ meetingOn: '2026-10-20' })], [{ id: LEAD_ID }]);
+      deals.ensureQualificationDeal.mockResolvedValue({ created: false, skipped: 'won' });
+
+      expect(await sales().convertToLead(input)).toMatchObject({ dealCreated: false });
+      expect(deals.afterDealChanges).not.toHaveBeenCalled();
+    });
+
+    it('is not created by sales who may not change leads: the row is linked as before', async () => {
+      fake.results.push([prospect({ meetingOn: '2026-10-20' })], [{ id: LEAD_ID }]);
+
+      expect(await callerAs(SALES_WITHOUT_LEADS).convertToLead(input)).toEqual({
+        leadId: LEAD_ID,
+        linkedExisting: true,
+        dealCreated: false,
+      });
+      expect(callOn(prospects, 'update').set).toMatchObject({ leadId: LEAD_ID });
+      expect(deals.ensureQualificationDeal).not.toHaveBeenCalled();
+    });
   });
 });

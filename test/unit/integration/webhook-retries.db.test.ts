@@ -249,6 +249,40 @@ describe.skipIf(!url)('webhook retries (PostgreSQL)', () => {
     expect((await load(id)).error).toMatch(/^url_changed:/);
   });
 
+  it('does not send a delivery claimed just before the URL changed to the new URL (#928)', async () => {
+    const id = await createDelivery({ attempts: 1 });
+    // The URL changes (and cancels the pending deliveries, as the update does) right after the
+    // claim has committed, before the run reads the webhook
+    let moved = false;
+    const racing = new Proxy(pg, {
+      get(target, prop, receiver) {
+        if (prop !== 'transaction') return Reflect.get(target, prop, receiver);
+        return async (run: (tx: unknown) => Promise<unknown>) => {
+          const result = await (target as typeof pg).transaction(
+            run as Parameters<typeof pg.transaction>[0]
+          );
+          if (!moved) {
+            moved = true;
+            await (target as typeof pg).transaction(async (tx) => {
+              await tx
+                .update(webhooks)
+                .set({ url: 'https://moved.example.com/hook' })
+                .where(eq(webhooks.id, webhookId));
+              await cancelPendingDeliveries(tx, webhookId);
+            });
+          }
+          return result;
+        };
+      },
+    });
+
+    await processWebhookRetries({ database: racing });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await load(id)).toMatchObject({ status: 'failed' });
+    expect((await load(id)).error).toMatch(/^url_changed:/);
+  });
+
   it('sends only due deliveries below the attempt limit', async () => {
     const due = await createDelivery({ attempts: 1 });
     const cutOff = await createDelivery({ attempts: 1, nextRetryAt: new Date(Date.now() - 5) });
@@ -261,7 +295,15 @@ describe.skipIf(!url)('webhook retries (PostgreSQL)', () => {
     const result = await processWebhookRetries({ database: pg });
 
     expect(sentIds().sort()).toEqual([due, cutOff].sort());
-    expect(result).toEqual({ processed: 2, succeeded: 2, failed: 0, exhausted: 1, expired: 0, testsFailed: 0 });
+    expect(result).toEqual({
+      processed: 2,
+      succeeded: 2,
+      failed: 0,
+      exhausted: 1,
+      expired: 0,
+      testsFailed: 0,
+      orphaned: 0,
+    });
     expect(await load(due)).toMatchObject({ status: 'success', attempts: 2, nextRetryAt: null });
     expect(await load(usedUp)).toMatchObject({ status: 'failed', attempts: 3, nextRetryAt: null });
     for (const id of [notYet, noRetryTime]) {

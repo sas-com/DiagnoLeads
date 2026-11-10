@@ -138,6 +138,18 @@ describe('input schemas', () => {
     expect(createTaskSchema.safeParse({ ...base, assigneeId: LEAD }).success).toBe(false);
   });
 
+  it('takes the deal a next action is added for, never whom it is given to (#853)', () => {
+    const base = { organizationId: ORG, leadId: LEAD, title: '資料を送る', dueOn: '2026-11-02' };
+    expect(createTaskSchema.parse({ ...base, dealId: ORG }).dealId).toBe(ORG);
+    expect(createTaskSchema.parse({ ...base, dealId: null }).dealId).toBeNull();
+    expect(createTaskSchema.parse(base)).not.toHaveProperty('dealId');
+    expect(createTaskSchema.safeParse({ ...base, dealId: 'deal-1' }).success).toBe(false);
+    // The deal decides whom it is given to: a person's id is never taken with it
+    expect(createTaskSchema.safeParse({ ...base, dealId: ORG, assigneeId: LEAD }).success).toBe(
+      false
+    );
+  });
+
   it('changes only the given fields of a next action', () => {
     expect(updateTaskSchema.parse({ organizationId: ORG, id: LEAD, done: true })).toEqual({
       organizationId: ORG,

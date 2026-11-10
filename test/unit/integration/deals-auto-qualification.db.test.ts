@@ -7,8 +7,15 @@
  * lost; another time of the same day and another day; one deal when confirmations or entry points
  * run at the same time (started while another session holds the lead, so that all of them wait
  * before any goes on, whatever the timing); the lead locked before the request (no deadlock with
- * a deletion); and other organizations kept out. Every row belongs to this file's own
- * organizations; names and addresses are made up.
+ * a deletion); and other organizations kept out.
+ *
+ * The other two entry points the same way: the agency's appointment report (one deal per lead
+ * with a new appointment day, counted in the answer, webhooks in one call, the same day again,
+ * a row without a day keeping the one saved, the leads locked before their handovers, the
+ * answers of ensureQualificationDeals in the order given, 500 rows in one import) and the
+ * meeting day of a customer search row (a lead's row saved by sales, a row turned into a lead,
+ * the lead locked before the row). Every row belongs to this file's own organizations; names
+ * and addresses are made up.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/diagnoleads_test \
@@ -17,6 +24,7 @@
 import type { Database } from '@/lib/db/client';
 import * as schema from '@/lib/db/schema';
 import {
+  agencyHandovers,
   auditLogs,
   dealHistory,
   deals,
@@ -25,17 +33,19 @@ import {
   meetingRequests,
   organizationMembers,
   organizations,
+  prospects,
   users,
 } from '@/lib/db/schema';
 import {
   QUALIFICATION_DEAL_NAME,
   type QualificationDealOutcome,
   ensureQualificationDeal,
+  ensureQualificationDeals,
 } from '@/lib/features/deals/service';
 import type { QualificationDealSource } from '@/lib/features/deals/types/pipeline';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { appRouter } from '@/server/routers/_app';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -60,7 +70,16 @@ const OPTIONS = [
 ];
 
 describe.skipIf(!url)('deals created by the first meeting (PostgreSQL)', () => {
-  const client = url ? postgres(url, { max: 6 }) : null;
+  /** Statements sent through this file's connections, to count those of one import */
+  let statements = 0;
+  const client = url
+    ? postgres(url, {
+        max: 6,
+        debug: () => {
+          statements += 1;
+        },
+      })
+    : null;
   // biome-ignore lint/style/noNonNullAssertion: guarded by skipIf
   const pg = (client ? drizzle(client, { schema }) : null)! as unknown as Database;
   const unique = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -69,6 +88,7 @@ describe.skipIf(!url)('deals created by the first meeting (PostgreSQL)', () => {
   let orgA: string;
   let orgB: string;
   let repId: string;
+  let adminId: string;
   let assigneeId: string;
   let viewerId: string;
   // biome-ignore lint/suspicious/noExplicitAny: tRPC callers
@@ -177,11 +197,59 @@ describe.skipIf(!url)('deals created by the first meeting (PostgreSQL)', () => {
       .where(and(eq(auditLogs.resource, resource), eq(auditLogs.resourceId, resourceId)))
       .orderBy(asc(auditLogs.createdAt));
 
+  /** The agency's appointment report, imported by the caller */
+  const importReport = (
+    // biome-ignore lint/suspicious/noExplicitAny: tRPC callers
+    caller: any,
+    rows: Record<string, unknown>[],
+    organizationId = orgA
+  ) => caller.agencyHandovers.import({ organizationId, rows });
+
+  /** A customer search row, written by sales */
+  async function prospectRow(
+    values: Partial<typeof prospects.$inferInsert> = {},
+    organizationId = orgA
+  ) {
+    const [row] = await pg
+      .insert(prospects)
+      .values({
+        organizationId,
+        contactedOn: '2026-10-20',
+        entry: 'member_network',
+        company: '架空商事',
+        ...values,
+      })
+      .returning();
+    return row;
+  }
+
+  /** Sales save the row as the form sends it, with the meeting day */
+  const saveRow = (
+    // biome-ignore lint/suspicious/noExplicitAny: tRPC callers
+    caller: any,
+    row: typeof prospects.$inferSelect,
+    meetingOn: string | null,
+    organizationId = orgA
+  ) =>
+    caller.prospects.update({
+      organizationId,
+      id: row.id,
+      contactedOn: row.contactedOn,
+      entry: row.entry,
+      company: row.company,
+      meetingOn,
+    });
+
+  const rowOf = async (id: string) => {
+    const [row] = await pg.select().from(prospects).where(eq(prospects.id, id));
+    return row;
+  };
+
   beforeAll(async () => {
     orgA = await createOrganization('自動の商談テストA');
     orgB = await createOrganization('自動の商談テストB');
     ({ caller: rep, userId: repId } = await callerFor(orgA, 'member', '営業 花子'));
-    ({ caller: admin } = await callerFor(orgA, 'admin', '管理 一郎'));
+    ({ caller: admin, userId: adminId } = await callerFor(orgA, 'admin', '管理 一郎'));
     ({ userId: assigneeId } = await callerFor(orgA, 'member', '担当 次郎'));
     ({ caller: viewer, userId: viewerId } = await callerFor(orgA, 'parent_viewer', '閲覧 三郎'));
     ({ caller: adminB } = await callerFor(orgB, 'admin', '別組織 四郎'));
@@ -558,6 +626,454 @@ describe.skipIf(!url)('deals created by the first meeting (PostgreSQL)', () => {
       expect(await confirming).toBe('NOT_FOUND');
       expect(await dealsOf(lead.id)).toHaveLength(0);
       expect(await requestOf(lead.id)).toBeUndefined();
+    });
+  });
+
+  describe("the agency's appointment report", () => {
+    it('creates one deal per lead with a new appointment day, counts them and sends their webhooks in one call', async () => {
+      const appointed = await createLead(orgA, { assigneeUserId: assigneeId });
+      const other = await createLead(orgA, { company: '架空工業' });
+      const undated = await createLead(orgA);
+      const withOpenDeal = await createLead(orgA);
+      await admin.deals.create({
+        organizationId: orgA,
+        leadId: withOpenDeal.id,
+        name: '移行の相談',
+        stage: 'discovery',
+      });
+      const wonByHand = await createLead(orgA, {
+        status: 'won',
+        hasNegotiated: true,
+        dealPhase: 'survey_won',
+      });
+      // The deal created by hand moved its lead past the initial hearing (a handoff)
+      sent.emitLeadEvents.mockClear();
+      sent.notifyLeadHandoff.mockClear();
+
+      const outcome = await importReport(rep, [
+        { email: appointed.email, appointmentOn: '2026-11-05', agencyName: '架空テレアポ' },
+        { company: '架空工業', appointmentOn: '2026-11-06' },
+        { email: undated.email, machineModel: 'IBM Power 9' },
+        { email: withOpenDeal.email, appointmentOn: '2026-11-05' },
+        { email: wonByHand.email, appointmentOn: '2026-11-05' },
+      ]);
+
+      // The handovers as before, and the deals counted, never shown (#276)
+      expect(outcome).toEqual({
+        results: [
+          { index: 0, status: 'saved', leadId: appointed.id },
+          { index: 1, status: 'saved', leadId: other.id },
+          { index: 2, status: 'saved', leadId: undated.id },
+          { index: 3, status: 'saved', leadId: withOpenDeal.id },
+          { index: 4, status: 'saved', leadId: wonByHand.id },
+        ],
+        dealsCreated: 2,
+      });
+      const [deal] = await dealsOf(appointed.id);
+      expect(deal).toMatchObject({
+        name: QUALIFICATION_DEAL_NAME,
+        kind: 'survey',
+        stage: 'qualification',
+        probability: 10,
+        ownerUserId: assigneeId,
+        createdBy: repId,
+      });
+      expect((await auditOf('deal', deal.id))[0].metadata).toEqual({
+        leadId: appointed.id,
+        source: 'agency_handover',
+        meetingOn: '2026-11-05',
+      });
+      expect((await auditOf('lead', appointed.id))[0].metadata).toEqual({
+        dealId: deal.id,
+        source: 'agency_handover',
+      });
+      expect(await leadOf(appointed.id)).toMatchObject({
+        status: 'negotiating',
+        dealPhase: 'initial_hearing',
+        hasNegotiated: true,
+      });
+      expect((await dealsOf(other.id)).map((row) => row.stage)).toEqual(['qualification']);
+      expect(await dealsOf(undated.id)).toHaveLength(0);
+      expect((await dealsOf(withOpenDeal.id)).map((row) => row.stage)).toEqual(['discovery']);
+      expect(await dealsOf(wonByHand.id)).toHaveLength(0);
+
+      // The two leads' webhooks in one call after the commit; no handoff in 見極め
+      expect(sent.emitLeadEvents).toHaveBeenCalledTimes(1);
+      const [organizationId, events] = sent.emitLeadEvents.mock.calls[0];
+      expect(organizationId).toBe(orgA);
+      expect(
+        events.map((event: { type: string; lead: { id: string } }) => `${event.type} ${event.lead.id}`).sort()
+      ).toEqual(
+        [
+          `lead.status_changed ${appointed.id}`,
+          `lead.status_changed ${other.id}`,
+          `lead.updated ${appointed.id}`,
+          `lead.updated ${other.id}`,
+        ].sort()
+      );
+      expect(sent.notifyLeadHandoff).not.toHaveBeenCalled();
+    });
+
+    it('creates none for the same day imported again, even after the deal was lost; another day creates one', async () => {
+      const lead = await createLead(orgA);
+      expect(await importReport(rep, [{ email: lead.email, appointmentOn: '2026-11-05' }])).toMatchObject({
+        dealsCreated: 1,
+      });
+      const [first] = await dealsOf(lead.id);
+      // The meeting fell through: sales close the deal with a reason
+      await rep.deals.update({ organizationId: orgA, dealId: first.id, stage: 'lost', lostReason: 'timing' });
+      sent.emitLeadEvents.mockClear();
+
+      expect(await importReport(rep, [{ email: lead.email, appointmentOn: '2026-11-05', note: '再送' }])).toMatchObject({
+        results: [{ status: 'saved' }],
+        dealsCreated: 0,
+      });
+      expect(await dealsOf(lead.id)).toHaveLength(1);
+      expect(sent.emitLeadEvents).not.toHaveBeenCalled();
+
+      expect(await importReport(rep, [{ email: lead.email, appointmentOn: '2026-11-19' }])).toMatchObject({
+        dealsCreated: 1,
+      });
+      const rows = await dealsOf(lead.id);
+      expect(rows.map((row) => row.stage)).toEqual(['lost', 'qualification']);
+      expect((await auditOf('deal', rows[1].id))[0].metadata).toMatchObject({ meetingOn: '2026-11-19' });
+      const [handover] = await pg.select().from(agencyHandovers).where(eq(agencyHandovers.leadId, lead.id));
+      expect(handover.appointmentOn).toBe('2026-11-19');
+    });
+
+    it('keeps the appointment day when a report leaves it empty, so the same day later creates none after the deal was lost', async () => {
+      const lead = await createLead(orgA);
+      const handoverOf = async () => {
+        const [handover] = await pg
+          .select()
+          .from(agencyHandovers)
+          .where(eq(agencyHandovers.leadId, lead.id));
+        return handover;
+      };
+      expect(await importReport(rep, [{ email: lead.email, appointmentOn: '2026-11-05' }])).toMatchObject({
+        dealsCreated: 1,
+      });
+      const [first] = await dealsOf(lead.id);
+      await rep.deals.update({ organizationId: orgA, dealId: first.id, stage: 'lost', lostReason: 'timing' });
+
+      // A report without the day (its column not mapped, or the day not read): the rest is replaced
+      expect(await importReport(rep, [{ email: lead.email, machineModel: 'IBM Power 10' }])).toMatchObject({
+        results: [{ status: 'saved' }],
+        dealsCreated: 0,
+      });
+      expect(await handoverOf()).toMatchObject({ appointmentOn: '2026-11-05', machineModel: 'IBM Power 10' });
+
+      // The same day again is no new first meeting: the lost deal stays the only one
+      expect(await importReport(rep, [{ email: lead.email, appointmentOn: '2026-11-05' }])).toMatchObject({
+        results: [{ status: 'saved' }],
+        dealsCreated: 0,
+      });
+      expect((await dealsOf(lead.id)).map((deal) => deal.stage)).toEqual(['lost']);
+      expect(await handoverOf()).toMatchObject({ appointmentOn: '2026-11-05', machineModel: null });
+    });
+
+    it('creates none in another organization, nor for those who cannot import', async () => {
+      const lead = await createLead(orgA);
+
+      // The same address imported in another organization finds none of this one's leads
+      expect(await importReport(adminB, [{ email: lead.email, appointmentOn: '2026-11-05' }], orgB)).toEqual({
+        results: [{ index: 0, status: 'unmatched' }],
+        dealsCreated: 0,
+      });
+      await expect(
+        importReport(viewer, [{ email: lead.email, appointmentOn: '2026-11-05' }])
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(await dealsOf(lead.id)).toHaveLength(0);
+      expect(await leadOf(lead.id)).toMatchObject({ status: 'new', dealPhase: null });
+    });
+
+    it('answers each lead of one call in the order given, created, skipped or not found', async () => {
+      const first = await createLead(orgA);
+      const second = await createLead(orgA);
+      // The lead locked last is given first, so the order of the answers is not that of the lock
+      const [low, high] = [first, second].sort((a, b) => a.id.localeCompare(b.id));
+      await admin.deals.create({ organizationId: orgA, leadId: low.id, name: '移行の相談', stage: 'discovery' });
+      const foreign = await createLead(orgB);
+
+      const outcomes = await pg.transaction((tx) =>
+        ensureQualificationDeals(tx, {
+          organizationId: orgA,
+          userId: repId,
+          source: 'agency_handover',
+          meetings: [
+            { leadId: high.id, meetingOn: '2026-11-05' },
+            { leadId: foreign.id, meetingOn: '2026-11-05' },
+            { leadId: low.id, meetingOn: '2026-11-05' },
+          ],
+        })
+      );
+
+      const [created] = await dealsOf(high.id);
+      expect(outcomes).toEqual([
+        {
+          created: true,
+          dealId: created.id,
+          lead: expect.objectContaining({ after: expect.objectContaining({ id: high.id }) }),
+        },
+        { created: false, skipped: 'lead_not_found' },
+        { created: false, skipped: 'open_deal' },
+      ]);
+      expect((await auditOf('deal', created.id))[0].metadata).toEqual({
+        leadId: high.id,
+        source: 'agency_handover',
+        meetingOn: '2026-11-05',
+      });
+      expect(await dealsOf(foreign.id)).toHaveLength(0);
+      expect((await dealsOf(low.id)).map((deal) => deal.stage)).toEqual(['discovery']);
+    });
+
+    it('imports 500 rows with a deal each in one transaction, within the time of a function', async () => {
+      const values = Array.from({ length: 500 }, (_, i) => ({
+        organizationId: orgA,
+        email: `bulk-${i}-${unique()}@example.co.jp`,
+        name: '山田 花子',
+        company: '架空商事',
+      }));
+      const created = await pg.insert(leads).values(values).returning({ id: leads.id, email: leads.email });
+      sent.emitLeadEvents.mockClear();
+
+      statements = 0;
+      const started = performance.now();
+      const outcome = await importReport(
+        rep,
+        created.map((lead) => ({ email: lead.email, appointmentOn: '2026-11-05' }))
+      );
+      const seconds = (performance.now() - started) / 1000;
+      const sentStatements = statements;
+      console.info(
+        `importHandovers: 500 rows, 500 deals, ${sentStatements} statements in ${seconds.toFixed(2)} s`
+      );
+
+      expect(outcome.dealsCreated).toBe(500);
+      const [{ count }] = await pg
+        .select({ count: sql<number>`count(*)::int` })
+        .from(deals)
+        .where(inArray(deals.leadId, created.map((lead) => lead.id)));
+      expect(count).toBe(500);
+      // One call; the events past its limit are dropped and reported by the webhooks feature
+      expect(sent.emitLeadEvents).toHaveBeenCalledTimes(1);
+      expect(sent.emitLeadEvents.mock.calls[0][1]).toHaveLength(1000);
+      // About two statements a row (its handover, its lead) and a few for all the deals, not one
+      // per step of each deal (some 5,500): in production every statement waits for the network,
+      // and the import holds the leads until it ends. Far below the 30 seconds of a function
+      // (vercel.json) on a local database
+      expect(sentStatements).toBeLessThan(1100);
+      expect(seconds).toBeLessThan(20);
+    }, 60_000);
+  });
+
+  describe('the meeting day of a customer search row', () => {
+    it("creates one deal when sales set the meeting day of a lead's row; the same day again creates none, even after it was lost; another day does", async () => {
+      const lead = await createLead(orgA, { assigneeUserId: assigneeId });
+      const row = await prospectRow({ leadId: lead.id });
+
+      expect(await saveRow(admin, row, '2026-11-10')).toEqual({ id: row.id, dealCreated: true });
+      const [deal] = await dealsOf(lead.id);
+      expect(deal).toMatchObject({ stage: 'qualification', ownerUserId: assigneeId });
+      expect((await auditOf('deal', deal.id))[0].metadata).toEqual({
+        leadId: lead.id,
+        source: 'prospect',
+        meetingOn: '2026-11-10',
+      });
+      expect(await rowOf(row.id)).toMatchObject({ meetingOn: '2026-11-10', leadId: lead.id });
+      expect(sent.emitLeadEvents).toHaveBeenCalledTimes(1);
+
+      await admin.deals.update({ organizationId: orgA, dealId: deal.id, stage: 'lost', lostReason: 'timing' });
+      expect(await saveRow(admin, row, '2026-11-10')).toEqual({ id: row.id, dealCreated: false });
+      // Clearing the day creates none either
+      expect(await saveRow(admin, row, null)).toEqual({ id: row.id, dealCreated: false });
+      expect(await dealsOf(lead.id)).toHaveLength(1);
+
+      expect(await saveRow(admin, row, '2026-11-17')).toEqual({ id: row.id, dealCreated: true });
+      expect((await dealsOf(lead.id)).map((row) => row.stage)).toEqual(['lost', 'qualification']);
+    });
+
+    it('creates none for a row that is not a lead yet; turning it into a lead does, with the day of the row', async () => {
+      const row = await prospectRow({ company: '架空精機' });
+      expect(await saveRow(admin, row, '2026-11-10')).toEqual({ id: row.id, dealCreated: false });
+      expect(await rowOf(row.id)).toMatchObject({ meetingOn: '2026-11-10', leadId: null });
+      sent.emitLeadEvents.mockClear();
+
+      const converted = await admin.prospects.convertToLead({
+        organizationId: orgA,
+        id: row.id,
+        email: `convert-${unique()}@example.co.jp`,
+      });
+      expect(converted).toMatchObject({ linkedExisting: false, dealCreated: true });
+      const [deal] = await dealsOf(converted.leadId);
+      // The row has no sales person: the deal is the one's who turned it into a lead
+      expect(deal).toMatchObject({ stage: 'qualification', ownerUserId: adminId, createdBy: adminId });
+      expect((await auditOf('deal', deal.id))[0].metadata).toEqual({
+        leadId: converted.leadId,
+        source: 'prospect',
+        meetingOn: '2026-11-10',
+      });
+      expect(await leadOf(converted.leadId)).toMatchObject({ status: 'negotiating', dealPhase: 'initial_hearing' });
+      // The new lead, then the deal's change of it
+      expect(sent.emitLeadEvents.mock.calls.map((call) => call[1].map((event: { type: string }) => event.type))).toEqual([
+        ['lead.created'],
+        expect.arrayContaining(['lead.status_changed', 'lead.updated']),
+      ]);
+    });
+
+    it('links a row with a meeting day to an existing lead and creates its deal; a row without one creates none', async () => {
+      const existing = await createLead(orgA);
+      const dated = await prospectRow({ meetingOn: '2026-11-12' });
+      expect(
+        await admin.prospects.convertToLead({ organizationId: orgA, id: dated.id, email: existing.email })
+      ).toEqual({ leadId: existing.id, linkedExisting: true, dealCreated: true });
+      expect((await dealsOf(existing.id)).map((row) => row.stage)).toEqual(['qualification']);
+
+      // Another row of the same lead: its open deal stays the only one
+      const again = await prospectRow({ meetingOn: '2026-11-20' });
+      expect(
+        await admin.prospects.convertToLead({ organizationId: orgA, id: again.id, email: existing.email })
+      ).toMatchObject({ linkedExisting: true, dealCreated: false });
+
+      const undated = await prospectRow();
+      const plain = await admin.prospects.convertToLead({
+        organizationId: orgA,
+        id: undated.id,
+        email: `plain-${unique()}@example.co.jp`,
+      });
+      expect(plain).toMatchObject({ dealCreated: false });
+      expect(await dealsOf(plain.leadId)).toHaveLength(0);
+      expect(await dealsOf(existing.id)).toHaveLength(1);
+    });
+
+    it('creates none for those who cannot change the row, nor across organizations', async () => {
+      const lead = await createLead(orgA);
+      const row = await prospectRow({ leadId: lead.id, createdBy: repId });
+
+      // A member does not change a lead's row, a parent organization's viewer no row at all
+      await expect(saveRow(rep, row, '2026-11-10')).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(saveRow(viewer, row, '2026-11-10')).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(saveRow(adminB, row, '2026-11-10', orgB)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      const unlinked = await prospectRow({ meetingOn: '2026-11-10' });
+      await expect(
+        adminB.prospects.convertToLead({ organizationId: orgB, id: unlinked.id, email: lead.email })
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect(await dealsOf(lead.id)).toHaveLength(0);
+      expect(await rowOf(row.id)).toMatchObject({ meetingOn: null });
+      expect(await rowOf(unlinked.id)).toMatchObject({ leadId: null });
+    });
+
+    it("locks the lead before the row: a lead deleted while its row is saved is not saved, without a deadlock", async () => {
+      const lead = await createLead(orgA);
+      const row = await prospectRow({ leadId: lead.id });
+      // biome-ignore lint/style/noNonNullAssertion: guarded by skipIf
+      const other = postgres(url!, { max: 1 });
+      let saving: Promise<unknown> = Promise.resolve();
+      try {
+        await other.begin(async (tx) => {
+          // A deletion holds the lead, then clears the row's lead through the foreign key. Taking
+          // the row first, the save would hold it and wait for the lead: a deadlock
+          await tx`select id from leads where id = ${lead.id} for update`;
+          saving = saveRow(admin, row, '2026-11-10').then(
+            () => 'done',
+            (error: { code?: string }) => error.code
+          );
+          await untilBlockedBy(await backendPid(tx));
+          await tx`delete from leads where id = ${lead.id}`;
+        });
+      } finally {
+        await other.end();
+      }
+
+      expect(await saving).toBe('CONFLICT');
+      expect(await rowOf(row.id)).toMatchObject({ leadId: null, meetingOn: null });
+      expect(await dealsOf(lead.id)).toHaveLength(0);
+    });
+  });
+
+  describe('the entry points at the same time, one deal', () => {
+    it('an import and a confirmation of one lead', async () => {
+      const lead = await leadWithRequest(orgA);
+
+      // biome-ignore lint/suspicious/noExplicitAny: tRPC outcomes
+      const [imported, confirmed]: any[] = await whileLeadIsHeld<unknown>(lead.id, [
+        () => importReport(rep, [{ email: lead.email, appointmentOn: '2026-11-05' }]),
+        () => confirm(admin, lead.id, 0),
+      ]);
+
+      expect(imported.results).toEqual([{ index: 0, status: 'saved', leadId: lead.id }]);
+      expect(confirmed).toMatchObject({ ok: true });
+      expect(imported.dealsCreated + Number(confirmed.dealCreated)).toBe(1);
+      expect(await dealsOf(lead.id)).toHaveLength(1);
+    });
+
+    it("a customer search row's meeting day and a confirmation of its lead", async () => {
+      const lead = await leadWithRequest(orgA);
+      const row = await prospectRow({ leadId: lead.id });
+
+      // biome-ignore lint/suspicious/noExplicitAny: tRPC outcomes
+      const [saved, confirmed]: any[] = await whileLeadIsHeld<unknown>(lead.id, [
+        () => saveRow(admin, row, '2026-11-10'),
+        () => confirm(rep, lead.id, 2),
+      ]);
+
+      expect(confirmed).toMatchObject({ ok: true });
+      expect(Number(saved.dealCreated) + Number(confirmed.dealCreated)).toBe(1);
+      expect(await dealsOf(lead.id)).toHaveLength(1);
+    });
+
+    it('two imports of the same leads listed in opposite orders: no deadlock, one deal each', async () => {
+      const first = await createLead(orgA);
+      const second = await createLead(orgA);
+      const [low, high] = [first, second].sort((a, b) => a.id.localeCompare(b.id));
+      const rows = [
+        { email: low.email, appointmentOn: '2026-11-05' },
+        { email: high.email, appointmentOn: '2026-11-05' },
+      ];
+
+      // Both wait for the first lead in the order of ids, whatever the order of their rows
+      // biome-ignore lint/suspicious/noExplicitAny: tRPC outcomes
+      const outcomes: any[] = await whileLeadIsHeld(low.id, [
+        () => importReport(rep, rows),
+        () => importReport(admin, [...rows].reverse()),
+      ]);
+
+      expect(outcomes.map((outcome) => outcome.dealsCreated).sort()).toEqual([0, 2]);
+      expect(await dealsOf(low.id)).toHaveLength(1);
+      expect(await dealsOf(high.id)).toHaveLength(1);
+    });
+
+    it('a lead deleted while a report is imported is not found, every row of it, without a deadlock', async () => {
+      const lead = await createLead(orgA);
+      // biome-ignore lint/style/noNonNullAssertion: guarded by skipIf
+      const other = postgres(url!, { max: 1 });
+      let importing: Promise<unknown> = Promise.resolve();
+      try {
+        await other.begin(async (tx) => {
+          // A deletion holds the lead, then deletes its handover through the cascade
+          await tx`select id from leads where id = ${lead.id} for update`;
+          // The lead twice: the earlier row is replaced by the later one, which is not saved
+          importing = importReport(rep, [
+            { email: lead.email, appointmentOn: '2026-11-04' },
+            { email: lead.email, appointmentOn: '2026-11-05' },
+          ]);
+          importing.catch(() => {});
+          await untilBlockedBy(await backendPid(tx));
+          await tx`delete from leads where id = ${lead.id}`;
+        });
+      } finally {
+        await other.end();
+      }
+
+      expect(await importing).toEqual({
+        results: [
+          { index: 0, status: 'unmatched' },
+          { index: 1, status: 'unmatched' },
+        ],
+        dealsCreated: 0,
+      });
+      expect(await dealsOf(lead.id)).toHaveLength(0);
     });
   });
 

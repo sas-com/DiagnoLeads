@@ -91,11 +91,18 @@ function withIntl(children: ReactNode) {
 
 const SEARCH_PAUSE_MS = 30;
 
-function Toolbar({ total = 12 }: { total?: number }) {
+function Toolbar({
+  total = 12,
+  canFilterMissingDeal,
+}: { total?: number; canFilterMissingDeal?: boolean }) {
   const controller = useLeadListQuery({ searchDebounceMs: SEARCH_PAUSE_MS, now: () => NOW });
   return (
     <>
-      <LeadFilterToolbar controller={controller} total={total} />
+      <LeadFilterToolbar
+        controller={controller}
+        total={total}
+        canFilterMissingDeal={canFilterMissingDeal}
+      />
       <table>
         <thead>
           <tr>
@@ -114,9 +121,9 @@ function Toolbar({ total = 12 }: { total?: number }) {
   );
 }
 
-function renderAt(search: string, total?: number) {
+function renderAt(search: string, total?: number, canFilterMissingDeal?: boolean) {
   nav.set(search);
-  return render(withIntl(<Toolbar total={total} />));
+  return render(withIntl(<Toolbar total={total} canFilterMissingDeal={canFilterMissingDeal} />));
 }
 
 const chipGroup = () => screen.getByRole('group', { name: t.chips.label });
@@ -217,6 +224,34 @@ describe('LeadFilterToolbar', () => {
     await user.click(screen.getByRole('button', { name: t.more }));
     await user.click(await screen.findByRole('menuitemcheckbox', { name: t.mql }));
     expect(lastHref()).toBe('/ja/leads?mql=1');
+  });
+
+  it('offers 商談が未作成 in "more conditions" to those who may read deals (#854)', async () => {
+    const user = userEvent.setup();
+    renderAt('', 12, true);
+    await user.click(screen.getByRole('button', { name: t.more }));
+    await user.click(await screen.findByRole('menuitemcheckbox', { name: t.missingDeal }));
+    expect(lastHref()).toBe('/ja/leads?nodeal=1');
+  });
+
+  it('does not offer it to the others (#854)', async () => {
+    const user = userEvent.setup();
+    renderAt('');
+    await user.click(screen.getByRole('button', { name: t.more }));
+    expect(await screen.findByRole('menuitemcheckbox', { name: t.mql })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitemcheckbox', { name: t.missingDeal })).not.toBeInTheDocument();
+  });
+
+  it('has the control in the Sheet for the condition the filter button counts (#854)', async () => {
+    const user = userEvent.setup();
+    renderAt('nodeal=1', 3, true);
+    await user.click(screen.getByRole('button', { name: /^絞り込み\s*1$/ }));
+    const sheet = await screen.findByRole('dialog');
+    await user.click(within(sheet).getByRole('button', { name: new RegExp(`^${t.more}`) }));
+    const item = await screen.findByRole('menuitemcheckbox', { name: t.missingDeal });
+    expect(item).toHaveAttribute('aria-checked', 'true');
+    await user.click(item);
+    expect(lastHref()).toBe('/ja/leads');
   });
 
   it('sends the search after a pause, replacing the history entry', () => {

@@ -1,5 +1,6 @@
 'use client';
 
+import { FieldHelp } from '@/components/features/field-glossary/field-help';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -187,7 +188,10 @@ export function LeadForm({ lead, onSubmit, isLoading }: LeadFormProps) {
           name="status"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{t('status')}</FormLabel>
+              <div className="flex items-center gap-1.5">
+                <FormLabel>{t('status')}</FormLabel>
+                <FieldHelp fieldKey="leads.status" />
+              </div>
               <Select
                 onValueChange={(value) => {
                   field.onChange(value);

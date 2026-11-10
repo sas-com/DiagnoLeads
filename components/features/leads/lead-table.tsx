@@ -29,7 +29,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { usePdfReportLabels } from '@/hooks/use-pdf-report-labels';
-import { LEAD_EXPORT_MAX_ROWS } from '@/lib/features/leads/export';
+import { LEAD_EXPORT_MAX_ROWS, selectedLeadsCsv } from '@/lib/features/leads/export';
 import { LEAD_PAGE_SIZES, type LeadListSort } from '@/lib/features/leads/list-query';
 import {
   LEAD_SORT_KEYS,
@@ -192,6 +192,8 @@ interface LeadTableProps {
   /** Filters are applied: an empty page means "no match", not "no leads yet" */
   hasFilters?: boolean;
   onClearFilters?: () => void;
+  /** What an empty filtered page says instead of the generic text (LeadListEmpty, #854) */
+  noMatchesTitle?: string;
   /** The list request failed: an empty page shows an error with a retry (onRefresh) (#431) */
   loadFailed?: boolean;
   /** Opens the create dialog from "no leads yet"; left out for roles that cannot create leads */
@@ -233,6 +235,7 @@ export function LeadTable({
   onColumnPreferencesChange,
   hasFilters = false,
   onClearFilters,
+  noMatchesTitle,
   loadFailed = false,
   onCreate,
   toolbar,
@@ -616,33 +619,11 @@ export function LeadTable({
 
   // Helper functions for bulk export
   const exportSelectedToCSV = useCallback((leadsToExport: ListedLead[]) => {
-    const headers = [
-      'Name',
-      'Email',
-      'Company',
-      'Phone',
-      'Status',
-      'Score',
-      'Source',
-      'Created At',
-    ];
-    const csvContent = [
-      headers.join(','),
-      ...leadsToExport.map((lead) =>
-        [
-          `"${lead.name || ''}"`,
-          `"${lead.email}"`,
-          `"${lead.company || ''}"`,
-          `"${lead.phone || ''}"`,
-          `"${lead.status}"`,
-          lead.score ?? '',
-          `"${lead.source || ''}"`,
-          `"${lead.createdAt ? new Date(lead.createdAt).toISOString() : ''}"`,
-        ].join(',')
-      ),
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    // Each cell through csvCell, as the server's export: a company from a public form may start
+    // a formula or close its quotes (#996)
+    const blob = new Blob([selectedLeadsCsv(leadsToExport)], {
+      type: 'text/csv;charset=utf-8;',
+    });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `leads_selected_${new Date().toISOString().split('T')[0]}.csv`;
@@ -849,6 +830,7 @@ export function LeadTable({
           onLost={onLost}
           hasFilters={hasFilters}
           onClearFilters={onClearFilters}
+          noMatchesTitle={noMatchesTitle}
           loadFailed={loadFailed}
           onRetry={onRefresh}
           onCreate={onCreate}
@@ -896,6 +878,7 @@ export function LeadTable({
                     <LeadListEmpty
                       hasFilters={hasFilters}
                       onClearFilters={onClearFilters}
+                      noMatchesTitle={noMatchesTitle}
                       loadFailed={loadFailed}
                       onRetry={onRefresh}
                       onCreate={onCreate}

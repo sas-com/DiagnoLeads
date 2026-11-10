@@ -7,8 +7,8 @@ export const workflowAgencyAppointmentsArticle: HelpArticle = {
   summary:
     '営業代行会社から届くアポや診断の回答を、リードに取り込み、初回商談のあとに契約の条件を満たしたかを記録するまでの流れです。',
   routes: [],
-  reviewedAt: '2026-10-28',
-  related: ['settings-agency-links', 'workflow-lifecycle'],
+  reviewedAt: '2026-11-08',
+  related: ['settings-agency-links', 'workflow-lifecycle', 'deals'],
   blocks: [
     { type: 'h2', id: 'entry', text: '代行会社からリードが届く道' },
     {
@@ -27,6 +27,27 @@ export const workflowAgencyAppointmentsArticle: HelpArticle = {
           '架電レポート',
           '顧客探し一覧の「架電レポートを取り込む」で、架電の結果を顧客探しの行として入れます',
         ],
+      ],
+    },
+    { type: 'h2', id: 'deal', text: 'アポを取り込むと商談（見極め）ができる' },
+    {
+      type: 'p',
+      content: [
+        {
+          type: 'text',
+          text: 'アポ日のある行を取り込むと、そのリードに商談（見極め）が自動で作られ、リードは商談中・初回ヒアリングになります。取り込みが終わると、作った件数が出ます。開いている商談があるリード・受注したリードなどには作りません（条件は',
+        },
+        { type: 'link', text: '商談の使い方', href: '/help/deals#create' },
+        { type: 'text', text: 'にあります）。' },
+      ],
+    },
+    {
+      type: 'ul',
+      items: [
+        '同じアポ日のまま取り込み直しても、商談は作り直しません。アポ日が変わった行は、上の条件に当たらなければ作ります。',
+        'アポ日が空の行（アポ日の列を選ばなかった・日付が読めなかった）は、前に取り込んだアポ日を残します。ほかの欄は、あとの取り込みの内容に置き換わります。',
+        'アポが流れたら、商談を失注にして理由を入れます。',
+        '契約別のファネルの「商談」には、アポを取り込んだ時点から数えます。商談を失注にしても、「商談」の数は減りません。',
       ],
     },
     { type: 'h2', id: 'meeting', text: '初回商談の前後' },
