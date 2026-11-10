@@ -22,17 +22,27 @@ export function StudioPageHeader({
   title,
   description,
   actions,
+  headingId,
 }: {
   title: string;
   /** One or two lines under the title (phrasing content: it is put in a <p>) */
   description?: ReactNode;
   /** Controls at the right of the title (e.g. the period switch) */
   actions?: ReactNode;
+  /**
+   * The title's id, focusable by script (not by Tab): for a screen that sends the focus to it
+   * when what had it went with a read (the deals screen, #1011)
+   */
+  headingId?: string;
 }) {
   return (
     <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 border-b border-gray-200 pb-5 sm:pb-6 dark:border-gray-800">
       <div className="min-w-0">
-        <h1 className="text-2xl font-bold tracking-[0.01em] text-gray-900 sm:text-[2rem] dark:text-gray-50">
+        <h1
+          id={headingId}
+          tabIndex={headingId ? -1 : undefined}
+          className="text-2xl font-bold tracking-[0.01em] text-gray-900 sm:text-[2rem] dark:text-gray-50"
+        >
           {title}
         </h1>
         {description && (

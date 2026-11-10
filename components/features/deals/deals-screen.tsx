@@ -25,7 +25,7 @@ import { cn } from '@/lib/utils';
 import { Loader2, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { type ReactNode, useId, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { DealBoard } from './deal-board';
 import { DealFormDialog } from './deal-form-dialog';
 import { DEAL_PERIODS, type DealPeriod, isDealPeriod, periodRange } from './deal-format';
@@ -110,12 +110,16 @@ function EmptyState({
  * expected close date (in the URL), and the board's order otherwise. While the deals of other
  * filters are read, the previous ones stay in view, unless there were none: then it says it is
  * loading rather than that there are no deals (#720). An open deal whose lead has no next action
- * offers to add one in a dialog, to those who may change deals (#853).
+ * offers to add one in a dialog, to those who may change deals (#853). When what had the focus
+ * on the board goes with a read (it failed after a next action was added, or a retry brought the
+ * board back), the focus goes to the screen's heading rather than to the page (#1011).
  */
 export function DealsScreen() {
   const t = useTranslations('deals');
   const tCommon = useTranslations('common');
   const filterId = useId();
+  // Focusable by script: where the focus goes when what had it on the board is gone (#1011)
+  const headingId = useId();
   const { organizationId: contextOrgId } = useOrganization();
   const organizationId = contextOrgId && UUID.test(contextOrgId) ? contextOrgId : '';
   const { view, owner, kind, period, sort, set, update } = useBoardQuery();
@@ -127,9 +131,11 @@ export function DealsScreen() {
   // The dialog that adds a deal's next action from its card or row (#853): one, for the deal
   // chosen, outside the board (#998). Closed without adding, the focus goes back to the button;
   // once added, the button goes away with the board read again, so the focus goes to the deal's
-  // name on its card or row, under which the next action then shows
-  const nextAction = useRowDialog<DealCard>(({ chosen, done, opener }) =>
-    !done && opener ? opener : dealLinkOf(chosen.id)
+  // name on its card or row, under which the next action then shows. Neither is there when the
+  // board could not be read meanwhile: the focus goes to the screen's heading then (#1011)
+  const nextAction = useRowDialog<DealCard>(
+    ({ chosen, done, opener }) =>
+      (!done && opener ? opener : dealLinkOf(chosen.id)) ?? document.getElementById(headingId)
   );
 
   const board = trpc.deals.board.useQuery(
@@ -154,6 +160,22 @@ export function DealsScreen() {
   // The previous filters' empty board would say there are no deals while the new ones are read
   const readingOthers = board.isPlaceholderData && total === 0;
 
+  // What the board's place shows, which a read changes: what had the focus in it goes then
+  // (a deal's name once a read after adding its next action failed, the retry once it brought
+  // the board back), and the focus with it, to the page. It goes to the screen's heading instead,
+  // unless it had moved out of the board before (#1011)
+  const boardShows = board.isError ? 'error' : !data || readingOthers ? 'loading' : 'board';
+  const focusedOnBoard = useRef<Element | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `boardShows` is the trigger (what a read replaced)
+  useLayoutEffect(() => {
+    const last = focusedOnBoard.current;
+    if (!last || last.isConnected) return;
+    focusedOnBoard.current = null;
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    document.getElementById(headingId)?.focus();
+  }, [boardShows, headingId]);
+
   if (board.error?.data?.code === 'FORBIDDEN') {
     return (
       <div className="mx-auto w-full max-w-7xl space-y-6 py-1 sm:px-2 sm:py-6">
@@ -167,6 +189,7 @@ export function DealsScreen() {
     <div className="mx-auto w-full max-w-7xl space-y-6 py-1 sm:px-2 sm:py-6">
       <StudioPageHeader
         title={t('title')}
+        headingId={headingId}
         description={
           data && !data.canEdit ? (
             <>
@@ -273,104 +296,112 @@ export function DealsScreen() {
             </div>
           </fieldset>
 
-          {board.isError ? (
-            <div
-              role="alert"
-              className="space-y-2 rounded-lg border border-red-200 bg-white p-4 dark:border-red-900 dark:bg-gray-900"
-            >
-              <p className="text-sm text-red-700 dark:text-red-400">{t('state.loadError')}</p>
-              <Button
-                type="button"
-                variant="outline"
-                className={TAP_TARGET}
-                onClick={() => void board.refetch()}
+          {/* What a read replaces: the board, its failure or the loading. What had the focus
+              in it is kept, to tell when it went with a read (#1011) */}
+          <div
+            onFocus={(event) => {
+              focusedOnBoard.current = event.target;
+            }}
+          >
+            {board.isError ? (
+              <div
+                role="alert"
+                className="space-y-2 rounded-lg border border-red-200 bg-white p-4 dark:border-red-900 dark:bg-gray-900"
               >
-                {t('state.retry')}
-              </Button>
-            </div>
-          ) : !data || readingOthers ? (
-            <div
-              className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300"
-              aria-busy="true"
-            >
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              {tCommon('loading')}
-            </div>
-          ) : (
-            <div
-              aria-busy={board.isPlaceholderData}
-              className={board.isPlaceholderData ? 'opacity-60 transition-opacity' : undefined}
-            >
-              {data.truncated && (
-                // biome-ignore lint/a11y/useSemanticElements: live-region notice, not a form output
-                <p role="status" className="mb-3 text-sm text-amber-800 dark:text-amber-400">
-                  {t('state.truncated', { limit: BOARD_DEALS_LIMIT })}
-                </p>
-              )}
-              {total === 0 && filtered ? (
-                <EmptyState title={t('state.noMatch')}>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className={TAP_TARGET}
-                    onClick={() => {
-                      update({ owner: null, kind: null, period: null });
-                      ownerTrigger.current?.focus();
-                    }}
-                  >
-                    {t('state.clearFilters')}
-                  </Button>
-                </EmptyState>
-              ) : total === 0 ? (
-                <EmptyState
-                  title={t('state.empty')}
-                  hint={data.canEdit ? t('state.emptyHint') : t('state.emptyHintReadOnly')}
+                <p className="text-sm text-red-700 dark:text-red-400">{t('state.loadError')}</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={TAP_TARGET}
+                  onClick={() => void board.refetch()}
                 >
-                  {data.canEdit && (
-                    // Outlined: the header's button is the screen's filled one
+                  {t('state.retry')}
+                </Button>
+              </div>
+            ) : !data || readingOthers ? (
+              <div
+                className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300"
+                aria-busy="true"
+              >
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                {tCommon('loading')}
+              </div>
+            ) : (
+              <div
+                aria-busy={board.isPlaceholderData}
+                className={board.isPlaceholderData ? 'opacity-60 transition-opacity' : undefined}
+              >
+                {data.truncated && (
+                  // biome-ignore lint/a11y/useSemanticElements: live-region notice, not a form output
+                  <p role="status" className="mb-3 text-sm text-amber-800 dark:text-amber-400">
+                    {t('state.truncated', { limit: BOARD_DEALS_LIMIT })}
+                  </p>
+                )}
+                {total === 0 && filtered ? (
+                  <EmptyState title={t('state.noMatch')}>
                     <Button
                       type="button"
                       variant="outline"
                       className={TAP_TARGET}
-                      onClick={() => setCreateOpen(true)}
+                      onClick={() => {
+                        update({ owner: null, kind: null, period: null });
+                        ownerTrigger.current?.focus();
+                      }}
                     >
-                      <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                      {t('create')}
+                      {t('state.clearFilters')}
                     </Button>
-                  )}
-                </EmptyState>
-              ) : view === 'board' ? (
-                <DealBoard
-                  columns={columns}
-                  today={data.today}
-                  // The board is read with the API's default (closedWithinDays is not sent)
-                  closedWithinDays={BOARD_CLOSED_DAYS_DEFAULT}
-                  canEdit={data.canEdit}
-                  onMove={(deal, stage, options) =>
-                    stageMove.move(
-                      { ...deal, leadLabel: deal.company || deal.leadName || '' },
-                      stage,
-                      options
-                    )
-                  }
-                  onAddNextAction={nextAction.start}
-                />
-              ) : (
-                <DealTable
-                  deals={sortDeals(
-                    columns.flatMap((column) => column.deals),
-                    sort
-                  )}
-                  today={data.today}
-                  closedWithinDays={BOARD_CLOSED_DAYS_DEFAULT}
-                  sort={sort}
-                  onSort={(column) => update(dealSortParams(nextDealSort(sort, column)))}
-                  canEdit={data.canEdit}
-                  onAddNextAction={nextAction.start}
-                />
-              )}
-            </div>
-          )}
+                  </EmptyState>
+                ) : total === 0 ? (
+                  <EmptyState
+                    title={t('state.empty')}
+                    hint={data.canEdit ? t('state.emptyHint') : t('state.emptyHintReadOnly')}
+                  >
+                    {data.canEdit && (
+                      // Outlined: the header's button is the screen's filled one
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className={TAP_TARGET}
+                        onClick={() => setCreateOpen(true)}
+                      >
+                        <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                        {t('create')}
+                      </Button>
+                    )}
+                  </EmptyState>
+                ) : view === 'board' ? (
+                  <DealBoard
+                    columns={columns}
+                    today={data.today}
+                    // The board is read with the API's default (closedWithinDays is not sent)
+                    closedWithinDays={BOARD_CLOSED_DAYS_DEFAULT}
+                    canEdit={data.canEdit}
+                    onMove={(deal, stage, options) =>
+                      stageMove.move(
+                        { ...deal, leadLabel: deal.company || deal.leadName || '' },
+                        stage,
+                        options
+                      )
+                    }
+                    onAddNextAction={nextAction.start}
+                  />
+                ) : (
+                  <DealTable
+                    deals={sortDeals(
+                      columns.flatMap((column) => column.deals),
+                      sort
+                    )}
+                    today={data.today}
+                    closedWithinDays={BOARD_CLOSED_DAYS_DEFAULT}
+                    sort={sort}
+                    onSort={(column) => update(dealSortParams(nextDealSort(sort, column)))}
+                    canEdit={data.canEdit}
+                    onAddNextAction={nextAction.start}
+                  />
+                )}
+              </div>
+            )}
+          </div>
 
           {data?.canEdit && (
             <DealFormDialog
