@@ -11,6 +11,7 @@ import {
   webChecklistStrings,
 } from '@/lib/features/ax-site/web-checklist';
 import { shouldSkipI18nMiddleware } from '@/lib/i18n/middleware';
+import en from '@/locales/en/common.json';
 import ja from '@/locales/ja/common.json';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -42,7 +43,7 @@ describe('Webに移すときの確認シート (#843)', () => {
 
   it('copies its other agreed sentences from the landing page word for word', () => {
     const [personal, data] = sheet.sections[1].items[0].notes;
-    expect(faq.itReview.a.endsWith(sheet.howToUse.lines[2])).toBe(true);
+    expect(faq.itReview.a).toContain(sheet.howToUse.lines[2]);
     expect(site.finalCta.lead.endsWith(sheet.closing[1])).toBe(true);
     expect(faq.personalData.a.endsWith(personal)).toBe(true);
     expect(faq.data.a.endsWith(data)).toBe(true);
@@ -76,6 +77,19 @@ describe('Webに移すときの確認シート (#843)', () => {
       readFileSync(path.join(process.cwd(), WEB_CHECKLIST_DIGEST_FILE), 'utf8')
     ) as { sha256: string };
     expect(printed.sha256).toBe(webChecklistDigest(sheet));
+  });
+
+  // Owner's decision on #843 (2026-11-08): the review FAQ of both pages points to the result
+  // page, where the sheet is offered; a request straight from the page waits for #899
+  it('is pointed to from the review FAQ of both landing pages', () => {
+    for (const answer of [faq.itReview.a, ja.axAccess.faq.items.itReview.a]) {
+      expect(answer).toContain('確認シート');
+      expect(answer).toContain('無料Web診断の結果画面');
+    }
+    for (const answer of [en.axSite.faq.items.itReview.a, en.axAccess.faq.items.itReview.a]) {
+      expect(answer).toContain('checklist');
+      expect(answer).toContain('in Japanese');
+    }
   });
 
   it('is served from public outside the language paths', () => {

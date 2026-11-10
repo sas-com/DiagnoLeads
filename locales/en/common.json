@@ -1481,7 +1481,7 @@
     },
     "lostDialog": {
       "title": "Mark \"{name}\" as lost",
-      "description": "Lost reasons feed the win/loss analysis",
+      "description": "Lost reasons feed the win/loss analysis.",
       "fromWon": "Unless another deal of the lead is won, the lead is no longer won (Negotiating while a deal is open, else Lost).",
       "notQualified": "The lead's SQL decision is recorded as not qualified with it.",
       "reason": "Lost reason",
@@ -3744,7 +3744,7 @@
         },
         "itReview": {
           "q": "Can you explain things for our IT department's review?",
-          "a": "Yes. We ask what your review checks (where it can be reached from, sign-in, permissions, records, backups, how it is fixed after the move and so on) and explain along those items. Engineers join when needed."
+          "a": "Yes. We ask what your review checks (where it can be reached from, sign-in, permissions, records, backups, how it is fixed after the move and so on) and explain along those items. Engineers join when needed. A checklist of the items to review, in Japanese, is also available on the result page of the free web check."
         },
         "costTime": {
           "q": "How much does it cost and how long does it take?",
@@ -4001,7 +4001,7 @@
         },
         "itReview": {
           "q": "Can you explain things for our IT department's review?",
-          "a": "Yes. We ask what your review checks (where it can be reached from, sign-in, permissions, records, backups, how it is fixed after the move and so on) and explain along those items. Engineers join when needed."
+          "a": "Yes. We ask what your review checks (where it can be reached from, sign-in, permissions, records, backups, how it is fixed after the move and so on) and explain along those items. Engineers join when needed. A checklist of the items to review, in Japanese, is also available on the result page of the free web check."
         },
         "personalData": {
           "q": "Can we consult you if the tool holds personal data?",
