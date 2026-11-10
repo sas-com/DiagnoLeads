@@ -11,6 +11,7 @@ import {
   statusBreakdownToCSV,
   trendToCSV,
 } from '@/lib/features/reports/export-service';
+import { readCsv } from '@/test/fixtures/read-csv';
 import { describe, expect, it } from 'vitest';
 
 describe('Export Service', () => {
@@ -81,6 +82,12 @@ describe('Export Service', () => {
       expect(csv).toContain('Source,Count,Percentage (%)');
       expect(csv).toContain('website,50,50.00');
       expect(csv).toContain('api,30,30.00');
+    });
+
+    it('writes a source as a text cell, kept from running as a formula (#1020)', () => {
+      expect(sourceBreakdownToCSV([{ source: '=1+1', count: 1, percentage: 100 }])).toContain(
+        "'=1+1,1,100.00"
+      );
     });
   });
 
@@ -161,6 +168,44 @@ describe('Export Service', () => {
       expect(csv).toContain('=== Status Breakdown ===');
       expect(csv).toContain('=== Conversion Funnel ===');
       expect(csv).toContain('=== Lead Trend ===');
+    });
+
+    it("keeps the organization's name from running as a formula or breaking the row (#1020)", () => {
+      const formula = generateFullReportCSV({
+        ...mockData,
+        organizationName: '=HYPERLINK("https://example.com","架空商事")',
+      });
+      expect(formula.split('\n')).toContain(
+        `Organization,"'=HYPERLINK(""https://example.com"",""架空商事"")"`
+      );
+      const comma = generateFullReportCSV({ ...mockData, organizationName: '架空, 商事' });
+      expect(comma.split('\n')).toContain('Organization,"架空, 商事"');
+    });
+
+    it('keeps every text cell from running as a formula or breaking its row (#1020)', () => {
+      // Quotes, line breaks and a formula: the old escapeCSV left a CR and the formulas as they were
+      const evil = '=1+1"\r\n=2+2';
+      const rows = readCsv(
+        generateFullReportCSV({
+          ...mockData,
+          organizationName: evil,
+          dateRange: evil,
+          trend: [{ date: evil, count: 1, converted: 0 }],
+          sourceBreakdown: [{ source: evil, count: 1, percentage: 100 }],
+          statusBreakdown: [{ status: evil, count: 1, percentage: 100 }],
+        })
+      );
+      expect(rows.find((row) => row[0] === 'Organization')).toEqual(['Organization', `'${evil}`]);
+      expect(rows.find((row) => row[0] === 'Date Range')).toEqual(['Date Range', `'${evil}`]);
+      expect(rows.flat().some((cell) => /^[=+\-@\t\r]/.test(cell))).toBe(false);
+    });
+
+    it('writes the section titles as text and the numbers as they are (#1020)', () => {
+      const lines = generateFullReportCSV(mockData).split('\n');
+      expect(lines).toContain("'=== Overview Statistics ===");
+      expect(lines).toContain("'=== Lead Trend ===");
+      expect(lines).toContain('Average Conversion Days,,,,14.5');
+      expect(lines).toContain('Conversion Rate (%),15.50');
     });
   });
 
