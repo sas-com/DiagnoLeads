@@ -1,4 +1,5 @@
 import { db } from '@/lib/db/client';
+import { leads, organizationMembers } from '@/lib/db/schema';
 import { filterAllowedRecipients } from '@/lib/email/allowed-recipients';
 import { type EmailBlock, type EmailFact, renderEmail } from '@/lib/email/templates/render';
 import { challengeEffectLine } from '@/lib/features/challenge-guide/service';
@@ -7,6 +8,7 @@ import { notifyUsersInApp } from '@/lib/features/leads/assignment-notify';
 import { notifyOrganizationMembers } from '@/lib/features/notifications/notification-service';
 import { sendLeadCreatedById } from '@/lib/features/webhooks/services/lead-events';
 import { triggerWebhooks } from '@/lib/features/webhooks/services/webhook-service';
+import { and, eq } from 'drizzle-orm';
 import {
   type DiagnosisNotificationLimits,
   checkNotificationLimits,
@@ -16,6 +18,7 @@ import {
 import { consultationDeadline } from '../types/consultation';
 import { type AxAccessPath, readAccessPath } from './access-path';
 import { AX_MIGRATION_CONFIG } from './config';
+import { dataKindLabels } from './data-attention';
 import type { AxMigrationResult } from './evaluate';
 import { AX_RATE_LIMITS } from './limits';
 import {
@@ -26,6 +29,7 @@ import {
   readAxMql,
   withConsultationSignal,
 } from './mql';
+import type { DataAttentionNotice } from './submission-service';
 
 const LEVEL_LABELS = { low: '低', medium: '中', high: '高' } as const;
 const PLATFORM_LABELS: Record<string, string> = {
@@ -127,7 +131,20 @@ export interface AxMigrationNotification {
    * is recorded on the lead.
    */
   additionalSystem?: boolean;
+  /**
+   * Access only (#828): My Number, special care or card / account data among the answers saved
+   * so far. Asked after the result, so a consultation requested after the follow-up carries it
+   */
+  dataAttention?: string[];
   requestedAt: Date;
+}
+
+/** What sales check before the first consultation when such data is in the tool (#828) */
+const DATA_ATTENTION_CHECK =
+  '受けるかどうかや進め方（委託の覚書・作業の場所・エンジニアの同席）を、初回の相談の前に社内で確かめてください。';
+
+function dataAttentionLine(kinds: readonly string[] | undefined): string | null {
+  return kinds && kinds.length > 0 ? dataKindLabels(kinds).join('・') : null;
 }
 
 /**
@@ -143,7 +160,9 @@ export function buildSalesMessage(
   const tag = MQL_SUBJECT_TAGS[mql.level];
   const platform = n.result.platform ? PLATFORM_LABELS[n.result.platform] : undefined;
   const accessPath = readAccessPath(n.result.accessPath);
+  const attention = dataAttentionLine(n.dataAttention);
   const summary = [
+    ...(attention ? [`取り扱いに注意する情報: ${attention}（${DATA_ATTENTION_CHECK}）`] : []),
     ...(platform ? [`移行元: ${platform}`] : []),
     ...(accessPath ? [`進め方の目安: ${ACCESS_PATH_LABELS[accessPath]}`] : []),
     `移行難易度: ${LEVEL_LABELS[n.result.difficulty.level]}`,
@@ -217,6 +236,9 @@ export function buildSalesEmail(
         : []),
     ...(n.identityUnverified ? [{ label: '本人未確認', tone: 'warning' as const }] : []),
     ...(n.additionalSystem ? [{ label: '別システム', tone: 'info' as const }] : []),
+    ...(dataAttentionLine(n.dataAttention)
+      ? [{ label: '取り扱いに注意する情報', tone: 'danger' as const }]
+      : []),
     ...(n.result.sqlSignals.candidate
       ? [{ label: 'SQLの手がかりあり', tone: 'success' as const }]
       : []),
@@ -273,6 +295,16 @@ export function buildSalesEmail(
               type: 'notice' as const,
               tone: 'info' as const,
               text: '最初の診断と同じ画面から、別のシステムも続けて診断されました（リードの診断結果に追記しています）。',
+            },
+          ]
+        : []),
+      ...(dataAttentionLine(n.dataAttention)
+        ? [
+            {
+              type: 'notice' as const,
+              tone: 'warning' as const,
+              title: '取り扱いに注意する情報',
+              text: `${dataAttentionLine(n.dataAttention)}が、ツールに入っていると回答しています。${DATA_ATTENTION_CHECK}`,
             },
           ]
         : []),
@@ -435,6 +467,95 @@ export async function notifyAxMigrationSubmission(n: AxMigrationNotification): P
     if (r.status === 'rejected') {
       console.error('AX diagnosis notification failed:', r.reason);
     }
+  }
+}
+
+/**
+ * The in-app notice when the follow-up answers name such data (#828). Told in the words of the
+ * question, with no promise either way: whether to take the work on is decided in-house
+ */
+export function buildDataAttentionNotice(input: {
+  company: string | null;
+  name: string | null;
+  kinds: readonly string[];
+}): { title: string; message: string } {
+  const who = [input.company, input.name ? `${input.name} 様` : null].filter(Boolean).join(' ');
+  return {
+    title: `【取り扱いに注意する情報】${who || 'リード'}の Access のツールに、${dataKindLabels(input.kinds).join('・')}が入っていると回答がありました`,
+    message: `${DATA_ATTENTION_CHECK}回答はリード画面の診断の回答で確認できます。`,
+  };
+}
+
+/**
+ * Tell sales that the follow-up answers name data that needs care (#828), after they are saved.
+ * In-app only, and not behind a setting: rare, and it changes the plan, like a restriction on AI
+ * analysis (#160). The lead's assignee is told; without one (or when the assignee left), whoever
+ * takes consultation requests, as for a consultation request. Within the organization's hourly
+ * limit of diagnosis notifications. Failures are logged and never break the respondent's flow.
+ */
+export async function notifyAccessDataAttention(notice: DataAttentionNotice): Promise<void> {
+  try {
+    const { notify } = await checkNotificationLimits(
+      db,
+      notice.organizationId,
+      false,
+      AX_NOTIFICATION_LIMITS
+    );
+    if (!notify) return;
+    const [lead] = await db
+      .select({ name: leads.name, company: leads.company, assigneeId: leads.assigneeUserId })
+      .from(leads)
+      .where(and(eq(leads.id, notice.leadId), eq(leads.organizationId, notice.organizationId)));
+    if (!lead) return;
+    const { title, message } = buildDataAttentionNotice({
+      company: lead.company,
+      name: lead.name,
+      kinds: notice.kinds,
+    });
+    const data = {
+      leadId: notice.leadId,
+      submissionId: notice.submissionId,
+      diagnosticKey: 'ax-migration',
+      dataKinds: notice.kinds,
+    };
+
+    const [assignee] = lead.assigneeId
+      ? await db
+          .select({ userId: organizationMembers.userId })
+          .from(organizationMembers)
+          .where(
+            and(
+              eq(organizationMembers.organizationId, notice.organizationId),
+              eq(organizationMembers.userId, lead.assigneeId)
+            )
+          )
+      : [];
+    if (assignee) {
+      await notifyUsersInApp(
+        [assignee.userId],
+        notice.organizationId,
+        'data_attention',
+        title,
+        message,
+        data
+      );
+      return;
+    }
+    const consultation = await diagnosisConsultationRecipients(db, notice.organizationId);
+    if (consultation.intakeUserIds.length > 0) {
+      await notifyUsersInApp(
+        consultation.intakeUserIds,
+        notice.organizationId,
+        'data_attention',
+        title,
+        message,
+        data
+      );
+      return;
+    }
+    await notifyOrganizationMembers(notice.organizationId, 'data_attention', title, message, data);
+  } catch (error) {
+    console.error('AX data attention notification failed:', error);
   }
 }
 

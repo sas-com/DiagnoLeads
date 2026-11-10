@@ -1,7 +1,7 @@
 /**
  * notifyAxMigrationSubmission: which channels fire for which events.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { accessAnswers, as400Answers } from '@/test/fixtures/ax-migration';
 
 const webhookMock = vi.fn();
@@ -12,7 +12,13 @@ const quotaMock = vi.fn();
 const env: { AX_DIAGNOSIS_SALES_EMAIL?: string } = {};
 
 vi.mock('@/lib/env', () => ({ env }));
-vi.mock('@/lib/db/client', () => ({ db: {} }));
+// Only the notice on data that needs care (#828) reads the database (the lead, then its
+// assignee): its tests add select, the others see the empty object they compare against
+const { dbMock, selectRows } = vi.hoisted(() => ({
+  dbMock: {} as Record<string, unknown>,
+  selectRows: [] as unknown[][],
+}));
+vi.mock('@/lib/db/client', () => ({ db: dbMock }));
 // The AX diagnosis's organization is the operator's: its sales addresses are mailed (#481)
 vi.mock('@/lib/features/diagnostics/organization', () => ({
   resolveDiagnosisOrganizationId: () => 'org-1',
@@ -47,9 +53,13 @@ vi.mock('@/lib/features/leads/assignment-notify', async (importOriginal) => ({
   notifyUsersInApp: (...args: unknown[]) => inAppIntakeMock(...args),
 }));
 
-const { notifyAxMigrationSubmission, buildSalesMessage, buildSalesEmail } = await import(
-  '@/lib/features/diagnostics/ax-migration/notify'
-);
+const {
+  notifyAxMigrationSubmission,
+  buildSalesMessage,
+  buildSalesEmail,
+  buildDataAttentionNotice,
+  notifyAccessDataAttention,
+} = await import('@/lib/features/diagnostics/ax-migration/notify');
 const { evaluateAxMigration } = await import('@/lib/features/diagnostics/ax-migration/evaluate');
 const { splitAddresses } = await import('@/lib/features/leads/assignment');
 
@@ -571,5 +581,142 @@ describe('notifyAxMigrationSubmission', () => {
     expect(webhookMock).toHaveBeenCalled();
     expect(inAppMock).toHaveBeenCalled();
     errorSpy.mockRestore();
+  });
+});
+
+describe('data that needs care in an Access tool (#828)', () => {
+  const CHECK = '受けるかどうかや進め方（委託の覚書・作業の場所・エンジニアの同席）を、初回の相談の前に社内で確かめてください。';
+  const notice = {
+    organizationId: 'org-1',
+    leadId: 'lead-1',
+    submissionId: 'sub-1',
+    kinds: ['sensitive', 'my_number'],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    selectRows.length = 0;
+    dbMock.select = () => ({ from: () => ({ where: async () => selectRows.shift() ?? [] }) });
+    quotaMock.mockResolvedValue({ allowed: true, count: 1, retryAfterSeconds: 0 });
+    recipientsMock.mockResolvedValue({ intakeUserIds: [], emails: [] });
+    inAppMock.mockResolvedValue(undefined);
+    inAppIntakeMock.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    delete dbMock.select;
+  });
+
+  it('puts it first in the consultation notice, in the words of the question', () => {
+    const { message } = buildSalesMessage({
+      ...base,
+      consultationRequested: true,
+      dataAttention: ['sensitive', 'payment'],
+    });
+    expect(message).toContain(
+      `取り扱いに注意する情報: 健康・病歴など、特に配慮が要る個人情報・クレジットカードの番号や銀行口座（${CHECK}）`
+    );
+    expect(message.indexOf('取り扱いに注意する情報')).toBeLessThan(message.indexOf('移行難易度'));
+    // Nothing without such data
+    expect(buildSalesMessage({ ...base, dataAttention: [] }).message).not.toContain('取り扱いに注意');
+    expect(buildSalesMessage(base).message).not.toContain('取り扱いに注意');
+  });
+
+  it('marks the consultation email with a badge and a notice', () => {
+    const email = buildSalesEmail(
+      { ...base, consultationRequested: true, dataAttention: ['my_number'] },
+      null,
+      'https://example.com/ja/leads/1'
+    );
+    expect(email.text).toContain('取り扱いに注意する情報');
+    expect(email.text).toContain(`マイナンバーが、ツールに入っていると回答しています。${CHECK}`);
+    expect(
+      buildSalesEmail({ ...base, consultationRequested: true }, null, 'https://example.com/ja/leads/1')
+        .text
+    ).not.toContain('取り扱いに注意');
+  });
+
+  it('words the follow-up notice as an in-house check, with no promise either way', () => {
+    const { title, message } = buildDataAttentionNotice({
+      company: 'テスト製作所',
+      name: '山田',
+      kinds: ['my_number', 'payment'],
+    });
+    expect(title).toBe(
+      '【取り扱いに注意する情報】テスト製作所 山田 様の Access のツールに、マイナンバー・クレジットカードの番号や銀行口座が入っていると回答がありました'
+    );
+    expect(message).toContain(CHECK);
+    expect(`${title}${message}`).not.toMatch(/お受けします|お受けできません|無料|必ず|安全/);
+    expect(
+      buildDataAttentionNotice({ company: null, name: null, kinds: ['sensitive'] }).title
+    ).toContain('リードの Access のツールに');
+  });
+
+  it("tells the lead's assignee when there is one", async () => {
+    selectRows.push(
+      [{ name: '山田', company: 'テスト製作所', assigneeId: 'user-9' }],
+      [{ userId: 'user-9' }]
+    );
+    await notifyAccessDataAttention(notice);
+    expect(inAppIntakeMock).toHaveBeenCalledWith(
+      ['user-9'],
+      'org-1',
+      'data_attention',
+      expect.stringContaining('健康・病歴など、特に配慮が要る個人情報・マイナンバー'),
+      expect.stringContaining('初回の相談の前に'),
+      { leadId: 'lead-1', submissionId: 'sub-1', diagnosticKey: 'ax-migration', dataKinds: ['sensitive', 'my_number'] }
+    );
+    expect(inAppMock).not.toHaveBeenCalled();
+  });
+
+  it('tells the intake members when the lead has no assignee, or the assignee left', async () => {
+    recipientsMock.mockResolvedValue({ intakeUserIds: ['user-1', 'user-2'], emails: [] });
+    selectRows.push([{ name: '山田', company: 'テスト製作所', assigneeId: null }]);
+    await notifyAccessDataAttention(notice);
+    expect(inAppIntakeMock).toHaveBeenCalledWith(
+      ['user-1', 'user-2'],
+      'org-1',
+      'data_attention',
+      expect.any(String),
+      expect.any(String),
+      expect.objectContaining({ leadId: 'lead-1' })
+    );
+
+    vi.clearAllMocks();
+    recipientsMock.mockResolvedValue({ intakeUserIds: ['user-1'], emails: [] });
+    quotaMock.mockResolvedValue({ allowed: true, count: 1, retryAfterSeconds: 0 });
+    // The assignee is no longer a member
+    selectRows.push([{ name: '山田', company: 'テスト製作所', assigneeId: 'user-9' }], []);
+    await notifyAccessDataAttention(notice);
+    expect(inAppIntakeMock).toHaveBeenCalledWith(
+      ['user-1'],
+      'org-1',
+      'data_attention',
+      expect.any(String),
+      expect.any(String),
+      expect.anything()
+    );
+  });
+
+  it('tells every member when there is neither an assignee nor intake members', async () => {
+    selectRows.push([{ name: '山田', company: 'テスト製作所', assigneeId: null }]);
+    await notifyAccessDataAttention(notice);
+    expect(inAppMock).toHaveBeenCalledWith(
+      'org-1',
+      'data_attention',
+      expect.any(String),
+      expect.any(String),
+      expect.objectContaining({ dataKinds: ['sensitive', 'my_number'] })
+    );
+    expect(inAppIntakeMock).not.toHaveBeenCalled();
+  });
+
+  it('sends nothing past the hourly limit or without the lead', async () => {
+    quotaMock.mockResolvedValue({ allowed: false, count: 99, retryAfterSeconds: 60 });
+    await notifyAccessDataAttention(notice);
+    quotaMock.mockResolvedValue({ allowed: true, count: 1, retryAfterSeconds: 0 });
+    await notifyAccessDataAttention(notice);
+    expect(inAppMock).not.toHaveBeenCalled();
+    expect(inAppIntakeMock).not.toHaveBeenCalled();
   });
 });
