@@ -27,7 +27,8 @@ const TODAY_QUERY_OPTIONS = { staleTime: 30 * 1000, refetchOnWindowFocus: true }
  * fails leaves the others shown. The heading says which day (Japan) the server read them for,
  * so a screen left open past midnight shows it is of the day before. Those who may edit leads
  * record a contact from a next action's or a meeting's row without leaving the screen (#863),
- * as the dashboard's requests do; nothing until the server said so.
+ * as the dashboard's requests do; nothing until the server said so. Those who may change deals
+ * add a next action from a deal's row that has none (#970).
  */
 export function TodayScreen() {
   const t = useTranslations('today');

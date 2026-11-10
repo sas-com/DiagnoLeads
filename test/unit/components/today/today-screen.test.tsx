@@ -5,7 +5,8 @@
  * others), the deals left out for those who may not read them, a notice without an
  * organization, the day the server read in the heading, and every query read again when the
  * window comes back. Those who may edit leads record a contact from a next action's or a
- * meeting's row (#863). Rendered with the Japanese and the English messages (tRPC mocked)
+ * meeting's row (#863), and those who may change deals add a next action from a deal's row that
+ * has none (#970). Rendered with the Japanese and the English messages (tRPC mocked)
  */
 import { TODAY_CONTACTS_SHOWN } from '@/components/features/today/today-activities';
 import { TODAY_NEXT_ACTIONS_SHOWN } from '@/components/features/today/today-next-actions';
@@ -612,14 +613,58 @@ describe('TodayScreen', () => {
         expect(addButton('帳票の移行')).toHaveFocus();
       });
 
-      it('sends the focus to the heading once added, as the row leaves the list', async () => {
+      // Once added its row leaves the list: the focus goes on as for the next actions (#776)
+      it('sends the focus to the next row’s name once added, else the previous one’s', async () => {
         loadAll();
+        const deals = ['帳票の移行', '画面の移行', '帳票の再設計'].map((name, index) =>
+          dealCard({ id: `deal-${index}`, name, hasOpenTask: false })
+        );
+        mocks.queries.board = {
+          data: { ...board, columns: [{ ...board.columns[1], deals }] },
+        };
+        const user = userEvent.setup();
+        renderScreen();
+        const link = (name: string) =>
+          within(region(/^注意が必要な商談/)).getByRole('link', { name: new RegExp(name) });
+
+        // From the middle row, on to the next one
+        await user.click(addButton('画面の移行'));
+        await user.click(screen.getByRole('button', { name: '追加した' }));
+        expect(link('帳票の再設計')).toHaveFocus();
+        // From the last row, back to the one before it
+        await user.click(addButton('帳票の再設計'));
+        await user.click(screen.getByRole('button', { name: '追加した' }));
+        expect(link('画面の移行')).toHaveFocus();
+      });
+
+      it('sends the focus to the heading once added when it was the only row', async () => {
+        loadAll();
+        const only = dealCard({ id: DEAL_2, name: '帳票の移行', hasOpenTask: false });
+        mocks.queries.board = {
+          data: { ...board, columns: [{ ...board.columns[1], deals: [only] }] },
+        };
         const user = userEvent.setup();
         renderScreen();
 
         await user.click(addButton('帳票の移行'));
         await user.click(screen.getByRole('button', { name: '追加した' }));
         expect(screen.getByRole('heading', { name: /^注意が必要な商談/ })).toHaveFocus();
+      });
+
+      it('keeps the dialog open when the deals fail to be read again meanwhile', async () => {
+        loadAll();
+        const user = userEvent.setup();
+        const { rerender } = renderScreen();
+
+        await user.click(addButton('帳票の移行'));
+        mocks.queries.board = { isError: true };
+        rerender(
+          <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
+            <TodayScreen />
+          </NextIntlClientProvider>
+        );
+        expect(within(region(/^注意が必要な商談/)).getByRole('alert')).toBeInTheDocument();
+        expect(screen.getByRole('dialog', { name: '帳票の移行の次の行動' })).toBeInTheDocument();
       });
 
       it('sends the focus to the deal’s name once added when its row stays (past its close date)', async () => {

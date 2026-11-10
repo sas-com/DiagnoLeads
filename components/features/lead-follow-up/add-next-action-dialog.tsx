@@ -30,7 +30,8 @@ export interface AddNextActionDialogProps {
 }
 
 /**
- * Adds a next action or takeaway to a deal's lead from the deals board and list (#853), which
+ * Adds a next action or takeaway to a deal's lead from the deals board and list (#853), and from
+ * 今日's deals that need attention (#970), which
  * offer it for an open deal marked for having none: the form of the lead's next actions card, in
  * a dialog, starting in "what to do". It says whose next action it is, and above the add button
  * who gets its due notices (the deal's owner when the lead's assignee is someone else); once added

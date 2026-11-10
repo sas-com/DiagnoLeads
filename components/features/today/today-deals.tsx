@@ -21,24 +21,41 @@ type BoardDeal = Board['columns'][number]['deals'][number];
  * The dialog that adds a next action from a row (#970): one, for the deal chosen. It has no
  * trigger to give the focus back to. Closed without adding, the focus goes back to the button;
  * once added, the board is read again and the button goes away: the focus goes to the deal's
- * name when its row stays (its close date has passed too), else to the section's heading, as
- * the row leaves the list.
+ * name when its row stays (its close date has passed too), else on to the next row's name, else
+ * the previous one's, else to the section's heading, as for the next actions above (#776). The
+ * row beside it is the one when the dialog opened: the board may be read again before it closes.
+ * So is the day it starts with: the dialog stays open whatever the board reads meanwhile.
  */
 function useAddNextAction(headingId: string) {
-  const [chosen, setChosen] = useState<{ deal: BoardDeal; staysListed: boolean } | null>(null);
+  const [chosen, setChosen] = useState<{
+    deal: BoardDeal;
+    staysListed: boolean;
+    today: string;
+  } | null>(null);
   const [open, setOpen] = useState(false);
   const opener = useRef<HTMLElement | null>(null);
+  const neighbour = useRef<string | undefined>(undefined);
   const added = useRef(false);
   const links = useRef(new Map<string, HTMLAnchorElement>());
   return {
     deal: chosen?.deal ?? null,
+    today: chosen?.today ?? null,
     open,
     setOpen,
     links,
-    start: (deal: BoardDeal, staysListed: boolean, from: HTMLElement) => {
+    start: (
+      deal: BoardDeal,
+      {
+        staysListed,
+        today,
+        neighbourId,
+      }: { staysListed: boolean; today: string; neighbourId?: string },
+      from: HTMLElement
+    ) => {
       opener.current = from;
+      neighbour.current = neighbourId;
       added.current = false;
-      setChosen({ deal, staysListed });
+      setChosen({ deal, staysListed, today });
       setOpen(true);
     },
     markAdded: () => {
@@ -46,13 +63,16 @@ function useAddNextAction(headingId: string) {
     },
     returnFocus: (event: Event) => {
       const button = opener.current;
-      const target = !added.current
-        ? button?.isConnected
+      const link = chosen ? links.current.get(chosen.deal.id) : undefined;
+      const next = neighbour.current ? links.current.get(neighbour.current) : undefined;
+      const target =
+        !added.current && button?.isConnected
           ? button
-          : null
-        : chosen?.staysListed
-          ? links.current.get(chosen.deal.id)
-          : document.getElementById(headingId);
+          : chosen?.staysListed && link?.isConnected
+            ? link
+            : next?.isConnected
+              ? next
+              : document.getElementById(headingId);
       if (!target) return;
       event.preventDefault();
       target.focus();
@@ -94,78 +114,105 @@ export function TodayDeals({
     : [];
 
   return (
-    <TodaySection
-      headingId={headingId}
-      title={t('title')}
-      description={t('description')}
-      count={marked.length}
-      link={{
-        href: `/${locale}/deals?owner=mine&view=list&sort=expectedCloseOn`,
-        label: t('viewAll'),
-      }}
-      state={sectionState(query, marked.length === 0)}
-      emptyText={t('empty')}
-    >
-      <ul className="divide-y divide-gray-100 dark:divide-gray-800">
-        {marked.map(({ deal, flags }) => {
-          // Named like the leads of the other sections, also without a company or a person
-          const lead =
-            leadLabel({ company: deal.company, name: deal.leadName }).primary ??
-            tToday('noLeadName');
-          return (
-            <li key={deal.id} className="flex items-start gap-2">
-              <Link
-                ref={(link) => {
-                  if (link) nextAction.links.current.set(deal.id, link);
-                  else nextAction.links.current.delete(deal.id);
-                }}
-                href={`/${locale}/deals/${deal.id}`}
+    <>
+      <TodaySection
+        headingId={headingId}
+        title={t('title')}
+        description={t('description')}
+        count={marked.length}
+        link={{
+          href: `/${locale}/deals?owner=mine&view=list&sort=expectedCloseOn`,
+          label: t('viewAll'),
+        }}
+        state={sectionState(query, marked.length === 0)}
+        emptyText={t('empty')}
+      >
+        <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+          {marked.map(({ deal, flags }, index) => {
+            // Named like the leads of the other sections, also without a company or a person
+            const lead =
+              leadLabel({ company: deal.company, name: deal.leadName }).primary ??
+              tToday('noLeadName');
+            const canAdd = flags.noNextAction && !!data?.canEdit;
+            return (
+              // On phones the link has the row's width and the button goes under it, at its end, as
+              // in the meetings above; from sm, at the row's end
+              <li
+                key={deal.id}
                 className={cn(
-                  'block min-w-0 flex-1 space-y-1 rounded-md px-1 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800/50',
-                  TAP_TARGET
+                  'flex flex-wrap items-start gap-x-2 gap-y-1 sm:flex-nowrap',
+                  canAdd && 'pb-2 sm:pb-0'
                 )}
               >
-                {/* Blocks, not spans: the stage badge is a <div> */}
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <span className="min-w-0 truncate text-sm font-medium text-gray-900 underline underline-offset-4 dark:text-gray-50">
-                    {deal.name}
-                  </span>
-                  <DealStageBadge stage={deal.stage} />
-                </div>
-                <div className="flex flex-wrap gap-x-3 text-sm text-gray-700 dark:text-gray-300">
-                  <span>{lead}</span>
-                  <span>{formatYen(deal.amount, locale) ?? tDeals('card.noAmount')}</span>
-                  <span>
-                    {deal.expectedCloseOn
-                      ? t('closeOn', { date: formatDealDate(deal.expectedCloseOn) })
-                      : tDeals('card.noCloseDate')}
-                  </span>
-                </div>
-                <DealMarks flags={flags} />
-              </Link>
-              {flags.noNextAction && data?.canEdit && (
-                <AddNextActionButton
-                  dealName={deal.name}
-                  onAdd={(opener) => nextAction.start(deal, flags.overdue, opener)}
-                  className="mt-2 shrink-0"
-                />
-              )}
-            </li>
-          );
-        })}
-      </ul>
-      {data?.canEdit && nextAction.deal && (
+                <Link
+                  ref={(link) => {
+                    if (link) nextAction.links.current.set(deal.id, link);
+                    else nextAction.links.current.delete(deal.id);
+                  }}
+                  href={`/${locale}/deals/${deal.id}`}
+                  className={cn(
+                    'block min-w-0 flex-1 basis-full space-y-1 rounded-md px-1 py-2.5 hover:bg-gray-50 sm:basis-auto dark:hover:bg-gray-800/50',
+                    TAP_TARGET
+                  )}
+                >
+                  {/* Blocks, not spans: the stage badge is a <div> */}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="min-w-0 truncate text-sm font-medium text-gray-900 underline underline-offset-4 dark:text-gray-50">
+                      {deal.name}
+                    </span>
+                    <DealStageBadge stage={deal.stage} />
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 text-sm text-gray-700 dark:text-gray-300">
+                    <span>{lead}</span>
+                    <span>{formatYen(deal.amount, locale) ?? tDeals('card.noAmount')}</span>
+                    <span>
+                      {deal.expectedCloseOn
+                        ? t('closeOn', { date: formatDealDate(deal.expectedCloseOn) })
+                        : tDeals('card.noCloseDate')}
+                    </span>
+                  </div>
+                  <DealMarks flags={flags} />
+                </Link>
+                {canAdd && (
+                  <AddNextActionButton
+                    dealName={deal.name}
+                    onAdd={(opener) =>
+                      nextAction.start(
+                        deal,
+                        {
+                          staysListed: flags.overdue,
+                          today: data?.today ?? '',
+                          neighbourId: (marked[index + 1] ?? marked[index - 1])?.deal.id,
+                        },
+                        opener
+                      )
+                    }
+                    // In line with the first line of the row (44px from sm, 32px from md)
+                    className="ml-auto shrink-0 md:mt-2"
+                  />
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </TodaySection>
+      {/* Outside the section's content, which a failed or empty read replaces: the dialog and what
+        was entered in it stay */}
+      {nextAction.deal && nextAction.today && (
         <AddNextActionDialog
           open={nextAction.open}
           onOpenChange={nextAction.setOpen}
           organizationId={organizationId}
           deal={nextAction.deal}
-          leadLabel={nextAction.deal.company || nextAction.deal.leadName || ''}
-          today={data.today}
+          leadLabel={
+            leadLabel({ company: nextAction.deal.company, name: nextAction.deal.leadName })
+              .primary ?? ''
+          }
+          today={nextAction.today}
           onAdded={nextAction.markAdded}
           onCloseAutoFocus={nextAction.returnFocus}
         />
       )}
-    </TodaySection>
+    </>
   );
 }
