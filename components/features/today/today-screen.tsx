@@ -93,7 +93,7 @@ export function TodayScreen() {
             organizationId={organizationId}
             canRecordContact={access.canEdit}
           />
-          <TodayDeals query={deals} />
+          <TodayDeals query={deals} organizationId={organizationId} />
           <TodayActivities query={activities} />
         </>
       )}
