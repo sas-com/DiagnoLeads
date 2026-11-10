@@ -227,7 +227,10 @@ export function LeadForm({ lead, onSubmit, isLoading }: LeadFormProps) {
                 name={name}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t(name)}</FormLabel>
+                    <div className="flex items-center gap-1.5">
+                      <FormLabel>{t(name)}</FormLabel>
+                      <FieldHelp fieldKey={`leads.${name}`} />
+                    </div>
                     <Select
                       onValueChange={(value) => field.onChange(value === NONE ? null : value)}
                       value={field.value ?? NONE}

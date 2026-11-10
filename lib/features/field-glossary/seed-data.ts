@@ -69,4 +69,56 @@ export const FIELD_GLOSSARY_SEED: readonly FieldGlossarySeedEntry[] = [
       '商談が不成立だった状態です。「保留」は失注ではなくナーチャリングとして扱います。',
     descriptionEn: 'Lost. Note that "on hold" is treated as nurturing, not as lost.',
   },
+  // leads.dealPhase — the deal phases (docs/PIPELINE_LIFECYCLE.md §2.2, DEAL_PHASES)
+  {
+    fieldKey: 'leads.dealPhase',
+    value: null,
+    sortOrder: 0,
+    descriptionJa:
+      '商談の進み具合を表すフェーズです。初回ヒアリング → 簡易診断 → 提案 と進み、受注は現行調査受注 → 移行受注 → AX化 の段階で入ります。商談のあるリードでは、商談のステージから自動で決まります。',
+    descriptionEn:
+      'The phase of the deal: Initial hearing → Simple diagnosis → Proposal, and a win advances through Survey won → Migration won → AX. For a lead with deals, it is set automatically from the deal stage.',
+  },
+  {
+    fieldKey: 'leads.dealPhase',
+    value: 'initial_hearing',
+    sortOrder: 1,
+    descriptionJa: '初回ヒアリングの段階（見極め）です。この出口で SQL判定を記録します。',
+    descriptionEn: 'Initial hearing (qualification). SQL qualification is recorded at its exit.',
+  },
+  {
+    fieldKey: 'leads.dealPhase',
+    value: 'simple_diagnosis',
+    sortOrder: 2,
+    descriptionJa: '課題を確認する簡易診断の段階です。',
+    descriptionEn: "Simple diagnosis — confirming the customer's issues.",
+  },
+  {
+    fieldKey: 'leads.dealPhase',
+    value: 'proposal',
+    sortOrder: 3,
+    descriptionJa: '提案・条件の調整の段階です。',
+    descriptionEn: 'Proposal and terms.',
+  },
+  {
+    fieldKey: 'leads.dealPhase',
+    value: 'survey_won',
+    sortOrder: 4,
+    descriptionJa: '現行調査の受注です（受注の1段目）。',
+    descriptionEn: 'Current-state survey won (first win stage).',
+  },
+  {
+    fieldKey: 'leads.dealPhase',
+    value: 'migration_won',
+    sortOrder: 5,
+    descriptionJa: '移行の受注です（受注の2段目）。',
+    descriptionEn: 'Migration won (second win stage).',
+  },
+  {
+    fieldKey: 'leads.dealPhase',
+    value: 'ax',
+    sortOrder: 6,
+    descriptionJa: 'AX化の受注です（受注の3段目）。',
+    descriptionEn: 'AX migration won (third win stage).',
+  },
 ];

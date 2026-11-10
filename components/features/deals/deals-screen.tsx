@@ -144,7 +144,19 @@ export function DealsScreen() {
   };
   // Clearing the filters takes away its button: the focus goes to the first filter
   const ownerTrigger = useRef<HTMLButtonElement>(null);
-  const stageMove = useStageMove(organizationId);
+  // A move's question closes with its card's move button gone (the board could not be read, or
+  // was read again, or the deal left it): as when a next action was added, the focus goes to the
+  // deal's name, else to the retry, which gives it to the deal's name once it brings the board
+  // back, or else to the screen's heading (#1026)
+  const stageMove = useStageMove(organizationId, (deal) => {
+    const name = dealLinkOf(deal.id);
+    if (name) return name;
+    if (retryButton.current) {
+      dealBeforeError.current = deal.id;
+      return retryButton.current;
+    }
+    return document.getElementById(headingId);
+  });
   // The dialog that adds a deal's next action from its card or row (#853): one, for the deal
   // chosen, outside the board (#998). Closed without adding, the focus goes back to the button;
   // once added, the button goes away with the board read again, so the focus goes to the deal's
