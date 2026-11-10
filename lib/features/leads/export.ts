@@ -91,10 +91,12 @@ export function leadExportFilename(format: LeadExportFormat, today: string): str
 }
 
 /**
- * The list's filters an export's audit row records as they were sent: all of them but the search
- * text (only that there was one) and the deals not yet made (only when filtering, #854). The
- * test keeps it the list's (listLeadsSchema), so that a filter added there is not left out of
- * the audit (#954). Ids (tags, assignee) are internal, not personal data of the leads.
+ * The filters an export's audit row records as they were sent: all of them but the search text
+ * (only that there was one) and the deals not yet made (only when filtering, #854). The test keeps
+ * them the export's own (exportLeadsSchema), so that a filter added there is not left out of the
+ * audit (#954). Only values that cannot be personal data are kept as sent: enums, booleans,
+ * numbers, days and internal ids (tags, assignee). A filter that takes free text is recorded as
+ * the search is, as having been used, so that no lead's name or address lands in the audit.
  */
 export const EXPORT_AUDIT_FILTER_KEYS = [
   'status',
