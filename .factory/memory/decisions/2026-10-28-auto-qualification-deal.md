@@ -5,7 +5,7 @@ category: Sales
 title: "初回の打ち合わせが確定したら、商談（見極め）を ensureQualificationDeal の1か所で自動で作る。どの入口でも商談は1件（#854）"
 status: active
 superseded_by: []
-issues: [854, 856, 276]
+issues: [854, 856, 276, 967]
 paths: ["lib/features/deals/service.ts", "lib/features/deals/lead-sync.ts", "lib/features/meeting-requests/service.ts", "components/features/meeting-requests/meeting-request-card.tsx", "lib/features/agency-handovers/service.ts", "lib/features/prospects/api/router.ts", "components/features/agency-handovers/handover-import-dialog.tsx", "components/features/prospects/prospect-form-dialog.tsx", "components/features/prospects/prospect-convert-dialog.tsx"]
 ---
 
@@ -36,7 +36,7 @@ paths: ["lib/features/deals/service.ts", "lib/features/deals/lead-sync.ts", "lib
       - `convertToLead`：行に商談日があれば、リードにつないだ後に呼ぶ。ここだけ行 → リードの順にロックするが、つなぐまで行の `lead_id` はほかから見て空なので、リードの削除が行を待つことはなく、すれ違わない
       - 応答には `dealCreated` だけを足す。画面（`prospect-form-dialog.tsx`・`prospect-convert-dialog.tsx`）は、作ったときにリード・商談・活動履歴を読み直し、トーストを出す（リード化では、作らなくてもリードを読み直す）
   - 重複の防ぎ方：リードの行ロック（FOR NO KEY UPDATE）。商談の書き込みはすべてリードの行で待ち合わせている（決定 `2026-10-24-deals-beside-leads`）。`ensureQualificationDeal` はリードをロックしてから、そのリードの商談を読む。READ COMMITTED なので、待った後の読み込みは先にコミットされた商談を見る
-    - 入口はトランザクションの最初にリードをロックする（ロックの順：リード → 子の行。商談の変更・リードの削除と同じ順にして、デッドロックを避ける）。`confirmMeeting` は、リード → 希望日時の行（FOR UPDATE）の順に取る。複数のリードをロックする入口（代行の取り込み）は、id の順に1文で取る。取り込みどうし、および1件ずつロックする経路（商談・確定・顧客探し・リードの更新・診断の回答）とはデッドロックしない。一括の状態変更と一括削除は ORDER BY なしでロックするので対象外（#967 で id の順にそろえる）
+    - 入口はトランザクションの最初にリードをロックする（ロックの順：リード → 子の行。商談の変更・リードの削除と同じ順にして、デッドロックを避ける）。`confirmMeeting` は、リード → 希望日時の行（FOR UPDATE）の順に取る。複数のリードをロックする入口（代行の取り込み）は、id の順に1文で取る。取り込みどうし、および1件ずつロックする経路（商談・確定・顧客探し・リードの更新・診断の回答）とはデッドロックしない。一括の状態変更と一括削除も、id の順に1文で取る（#967 でそろえた）
     - 手で作る商談（`createDeal`）は止めない。同じリードに開いた商談が並ぶことは決定が許している（自動の作成が先なら、手で作る商談は2件目になる）
   - 権限：自動の作成は入口の権限（打ち合わせの確定・代行のアポの取り込みはリードの更新で、親組織の閲覧者を除く）で行い、`canWriteDeals` は見ない。顧客探しは、行を変えられる権限（営業＝設定の更新）とは別に、`ensureQualificationDeal` を呼ぶ前に `update Lead` と親組織の閲覧者でないことを確かめる（今は営業の役割はどれもリードを更新できるが、#276 の代行のアカウントを見越す。security-specialist の指摘）。持たない人の保存・リード化は、行だけを変えて商談を作らない（`dealCreated: false`。入口の操作を失敗させない）。応答は作ったかどうか（取り込みは件数）だけで、商談の中身は返さない（商談を読めない役割、#276 の代行のアカウントを見越して）。この形は「リードを更新できる役割は、どれも商談を書ける」ことが前提で、`test/unit/features/deals.test.ts` がすべての役割で確かめる（役割を足すと型の検査かそのテストで落ちる。商談を読めないのにリードを変えられる役割を足すときは、入口で商談を作るかを先に決める）
   - 打ち合わせが流れたら、営業が商談を失注（理由付き）にする。自動で消す・失注にすることはしない
