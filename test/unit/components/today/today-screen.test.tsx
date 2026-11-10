@@ -770,7 +770,7 @@ describe('TodayScreen', () => {
         ).not.toBeInTheDocument();
       });
 
-      it('shows both on a deal with both marks, the close date first as the marks are', () => {
+      it('stacks both on a deal with both marks, the close date first as the marks are', () => {
         loadAll();
         const both = dealCard({ expectedCloseOn: '2026-10-20', hasOpenTask: false });
         mocks.queries.board = {
@@ -781,10 +781,13 @@ describe('TodayScreen', () => {
         const row = within(region(/^注意が必要な商談/)).getAllByRole('list')[0]
           .children[0] as HTMLElement;
 
-        expect(within(row).getAllByRole('button').map((button) => button.textContent)).toEqual([
+        const buttons = within(row).getAllByRole('button');
+        expect(buttons.map((button) => button.textContent)).toEqual([
           messages.deals.closeDate.fix,
           messages.deals.card.addNextAction,
         ]);
+        // Stacked, so that two fit a phone's row and leave the link its width (#999's review)
+        expect(buttons[0].parentElement).toHaveClass('flex-col');
       });
 
       it('gives the focus back to the button when closed without a change', async () => {

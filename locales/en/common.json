@@ -1357,15 +1357,14 @@
     },
     "closeDate": {
       "fix": "Change close date",
-      "fixFor": "Change the expected close date of \"{name}\"",
+      "fixFor": "Change close date of \"{name}\"",
       "title": "Change the expected close date of \"{deal}\"",
       "description": "A deal of the lead \"{lead}\". Its expected close date ({date}) has passed.",
       "descriptionNoName": "The expected close date of this deal ({date}) has passed.",
       "field": "New expected close date",
-      "hint": "A date from today ({today}) on takes it out of the deals that need attention.",
+      "hint": "With today ({today}) or a later date, the deal is no longer marked as past its expected close date.",
       "required": "Enter the new expected close date",
       "notBeforeToday": "Enter a date from today ({today}) on",
-      "save": "Save",
       "saved": "Changed the expected close date of \"{name}\" to {date}"
     },
     "filters": {

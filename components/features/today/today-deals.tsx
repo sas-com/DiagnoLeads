@@ -158,9 +158,10 @@ export function TodayDeals({
                   <DealMarks flags={flags} />
                 </Link>
                 {(canAdd || canChangeDate) && (
-                  // In line with the first line of the row (44px from sm, 32px from md), in the
-                  // order of the marks; side by side, wrapping under each other when narrow
-                  <div className="ml-auto flex shrink-0 flex-wrap justify-end gap-2 md:mt-2">
+                  // In line with the first line of the row (44px from sm, 32px from md): one per
+                  // mark, stacked in the order of the marks, as wide as the wider, so that two fit
+                  // a phone's row and leave the link its width from sm
+                  <div className="ml-auto flex shrink-0 flex-col items-stretch gap-2 md:mt-2">
                     {canChangeDate && (
                       <DealCloseDateButton
                         dealName={deal.name}

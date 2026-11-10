@@ -6,7 +6,7 @@
  */
 import { DealCloseDateDialog } from '@/components/features/deals/deal-close-date-dialog';
 import messages from '@/locales/ja/common.json';
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,12 +14,16 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 const ORG_ID = '660e8400-e29b-41d4-a716-446655440000';
 const DEAL_ID = '880e8400-e29b-41d4-a716-446655440002';
 const c = messages.deals.closeDate;
+const SAVE = messages.deals.form.submitEdit;
+const HINT = c.hint.replace('{today}', '2026/10/29');
 
 type Callbacks = { onSuccess?: (result: unknown) => unknown; onError?: (error: Error) => unknown };
 
 const mocks = vi.hoisted(() => ({
   updates: [] as unknown[],
   fail: false,
+  // The update is on its way (isPending)
+  pending: false,
   invalidated: [] as string[],
   toast: { success: vi.fn(), error: vi.fn() },
 }));
@@ -32,7 +36,7 @@ vi.mock('@/lib/trpc/client', () => {
   });
   // Like TanStack Query: the hook's callbacks, then the call's promise
   const mutation = (hook: Callbacks = {}, sent?: unknown[]) => ({
-    isPending: false,
+    isPending: mocks.pending,
     mutate: vi.fn(),
     mutateAsync: async (input: unknown) => {
       sent?.push(input);
@@ -76,6 +80,7 @@ beforeAll(() => {
 beforeEach(() => {
   mocks.updates = [];
   mocks.fail = false;
+  mocks.pending = false;
   mocks.invalidated = [];
   mocks.toast.success.mockClear();
   mocks.toast.error.mockClear();
@@ -86,10 +91,10 @@ const deal = { id: DEAL_ID, name: '基幹システム移行', expectedCloseOn: '
 const renderDialog = (leadLabel = '架空商事') => {
   const onOpenChange = vi.fn();
   const onChanged = vi.fn();
-  render(
+  const ui = (open: boolean) => (
     <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
       <DealCloseDateDialog
-        open
+        open={open}
         onOpenChange={onOpenChange}
         organizationId={ORG_ID}
         deal={deal}
@@ -99,8 +104,17 @@ const renderDialog = (leadLabel = '架空商事') => {
       />
     </NextIntlClientProvider>
   );
-  return { onOpenChange, onChanged };
+  const { rerender } = render(ui(true));
+  return { onOpenChange, onChanged, reopen: () => (rerender(ui(false)), rerender(ui(true))) };
 };
+
+/** A press outside the dialog (Radix listens for it once the dialog has opened) */
+async function pressOutside() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  fireEvent.pointerDown(document.body);
+}
 
 const dateBox = () => screen.getByLabelText(c.field);
 
@@ -115,7 +129,8 @@ describe('DealCloseDateDialog', () => {
       c.description.replace('{lead}', '架空商事').replace('{date}', '2026/10/20')
     );
     expect(dateBox()).toHaveValue('');
-    expect(dialog).toHaveTextContent(c.hint.replace('{today}', '2026/10/29'));
+    // The hint is read with the box
+    expect(dateBox()).toHaveAccessibleDescription(HINT);
   });
 
   it('names the deal only when its lead has neither a company nor a name', () => {
@@ -130,9 +145,9 @@ describe('DealCloseDateDialog', () => {
     const user = userEvent.setup();
     const { onOpenChange } = renderDialog();
 
-    await user.click(screen.getByRole('button', { name: c.save }));
+    await user.click(screen.getByRole('button', { name: SAVE }));
 
-    expect(dateBox()).toHaveAccessibleDescription(c.required);
+    expect(dateBox()).toHaveAccessibleDescription(`${c.required} ${HINT}`);
     expect(dateBox()).toHaveFocus();
     expect(mocks.updates).toEqual([]);
     expect(onOpenChange).not.toHaveBeenCalled();
@@ -143,10 +158,10 @@ describe('DealCloseDateDialog', () => {
     renderDialog();
 
     await user.type(dateBox(), '2026/10/28');
-    await user.click(screen.getByRole('button', { name: c.save }));
+    await user.click(screen.getByRole('button', { name: SAVE }));
 
     expect(dateBox()).toHaveAccessibleDescription(
-      c.notBeforeToday.replace('{today}', '2026/10/29')
+      `${c.notBeforeToday.replace('{today}', '2026/10/29')} ${HINT}`
     );
     expect(mocks.updates).toEqual([]);
   });
@@ -156,9 +171,9 @@ describe('DealCloseDateDialog', () => {
     renderDialog();
 
     await user.type(dateBox(), '2101/01/01');
-    await user.click(screen.getByRole('button', { name: c.save }));
+    await user.click(screen.getByRole('button', { name: SAVE }));
 
-    expect(dateBox()).toHaveAccessibleDescription(messages.deals.form.closeDateInvalid);
+    expect(dateBox()).toHaveAccessibleDescription(`${messages.deals.form.closeDateInvalid} ${HINT}`);
     expect(mocks.updates).toEqual([]);
   });
 
@@ -168,7 +183,7 @@ describe('DealCloseDateDialog', () => {
 
     // Today itself is taken: the deal is past its date no longer
     await user.type(dateBox(), '2026/10/29');
-    await user.click(screen.getByRole('button', { name: c.save }));
+    await user.click(screen.getByRole('button', { name: SAVE }));
 
     expect(mocks.updates).toEqual([
       { organizationId: ORG_ID, dealId: DEAL_ID, expectedCloseOn: '2026-10-29' },
@@ -189,7 +204,7 @@ describe('DealCloseDateDialog', () => {
     const { onOpenChange, onChanged } = renderDialog();
 
     await user.type(dateBox(), '2026/11/15');
-    await user.click(screen.getByRole('button', { name: c.save }));
+    await user.click(screen.getByRole('button', { name: SAVE }));
 
     expect(screen.getByRole('alert')).toHaveTextContent(messages.deals.toasts.error);
     expect(dateBox()).toHaveValue('2026/11/15');
@@ -197,5 +212,47 @@ describe('DealCloseDateDialog', () => {
     expect(onOpenChange).not.toHaveBeenCalled();
     // Said in the dialog only
     expect(mocks.toast.error).not.toHaveBeenCalled();
+  });
+
+  it('saves on Enter in the box, as its only field', async () => {
+    const user = userEvent.setup();
+    const { onOpenChange } = renderDialog();
+
+    await user.type(dateBox(), '2026/11/15{Enter}');
+
+    expect(mocks.updates).toEqual([
+      { organizationId: ORG_ID, dealId: DEAL_ID, expectedCloseOn: '2026-11-15' },
+    ]);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('says that it is saving, and does not close meanwhile', async () => {
+    mocks.pending = true;
+    const { onOpenChange } = renderDialog();
+
+    const saving = screen.getByRole('button', { name: messages.deals.form.saving });
+    expect(saving).toBeDisabled();
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('does not close on a press outside once a date was entered', async () => {
+    const user = userEvent.setup();
+    const { onOpenChange } = renderDialog();
+
+    await user.type(dateBox(), '2026/11/15');
+    await pressOutside();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('starts clean when it opens again: a date entered before does not hold a press outside', async () => {
+    const user = userEvent.setup();
+    const { onOpenChange, reopen } = renderDialog();
+
+    await user.type(dateBox(), '2026/11/15');
+    reopen();
+    expect(dateBox()).toHaveValue('');
+    await pressOutside();
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 });

@@ -11,6 +11,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
+import { isImeKey } from '@/components/ui/ime';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
@@ -53,6 +54,19 @@ export interface HearingDateInputProps extends PickerProps {
   error?: string;
   /** What the box says while it holds text that is not a date, naming its field (the due date) */
   invalidMessage?: string;
+  /**
+   * The earliest and the latest day the calendar offers ('YYYY-MM-DD'), the others shown but not
+   * chosen. A typed date is checked by the form
+   */
+  min?: string;
+  max?: string;
+  /** The id of more text about the box (a hint), read with it after its error */
+  describedBy?: string;
+  /**
+   * Enter in the box, once it took what was typed, but not the Enter of a conversion (IME): a
+   * form of one date saves on it (#999)
+   */
+  onEnter?: () => void;
 }
 
 export function HearingDateInput({
@@ -66,6 +80,10 @@ export function HearingDateInput({
   onInvalidChange,
   error,
   invalidMessage,
+  min,
+  max,
+  describedBy,
+  onEnter,
 }: HearingDateInputProps) {
   const t = useTranslations('leadHearings');
   const locale = useLocale();
@@ -77,6 +95,10 @@ export function HearingDateInput({
   const invalid = draft !== null && parseTypedDate(draft) === null;
   const message = invalid ? (invalidMessage ?? t('editor.dateInvalid')) : error;
   const selected = fromIsoDate(value);
+  const minDay = min ? fromIsoDate(min) : undefined;
+  const maxDay = max ? fromIsoDate(max) : undefined;
+  const outside = [...(minDay ? [{ before: minDay }] : []), ...(maxDay ? [{ after: maxDay }] : [])];
+  const describedByIds = [message ? errorId : undefined, describedBy].filter(Boolean).join(' ');
 
   const changeDraft = (next: string | null) => {
     setDraft(next);
@@ -116,7 +138,7 @@ export function HearingDateInput({
           autoComplete="off"
           readOnly={readOnly}
           aria-invalid={message ? true : undefined}
-          aria-describedby={message ? errorId : undefined}
+          aria-describedby={describedByIds || undefined}
           className={cn('w-full sm:w-40', size, message && 'border-red-500')}
           onChange={(e) => type(e.target.value)}
           onBlur={commit}
@@ -124,6 +146,7 @@ export function HearingDateInput({
             if (e.key === 'Enter') {
               e.preventDefault();
               commit();
+              if (onEnter && !isImeKey(e.nativeEvent)) onEnter();
             } else if (e.key === 'Escape' && draft !== null) {
               changeDraft(null);
             }
@@ -148,6 +171,7 @@ export function HearingDateInput({
               selected={selected}
               defaultMonth={selected}
               onSelect={(date) => pick(date ? toIsoDate(date) : undefined)}
+              disabled={outside.length > 0 ? outside : undefined}
               locale={locale === 'ja' ? ja : enUS}
               formatters={{
                 formatCaption: (month) =>

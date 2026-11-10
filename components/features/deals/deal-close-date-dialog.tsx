@@ -7,15 +7,14 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
-import { CalendarClock, Loader2 } from 'lucide-react';
+import { CalendarDays, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { type FormEvent, useId, useState } from 'react';
+import { type FormEvent, useEffect, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { formatDealDate, isDealDate } from './deal-format';
 import { useDealMutations } from './use-deal-mutations';
@@ -47,7 +46,7 @@ export function DealCloseDateButton({
       aria-label={t('fixFor', { name: dealName })}
       onClick={(event) => onChange(event.currentTarget)}
     >
-      <CalendarClock className="h-4 w-4" aria-hidden="true" />
+      <CalendarDays className="h-4 w-4" aria-hidden="true" />
       {t('fix')}
     </Button>
   );
@@ -71,8 +70,10 @@ export interface DealCloseDateDialogProps {
 
 /**
  * Changes the expected close date of a deal past it, from 今日's deals that need attention (#999),
- * without opening the deal: one date, from today on (an earlier one would leave the deal marked),
- * saved alone (deals.update with only the date). It says the date that passed; once saved it
+ * without opening the deal: one date, from today on (an earlier one would leave the deal marked)
+ * to 2100, which the calendar offers alone, saved alone (deals.update with only the date) by the
+ * button or Enter in the box. It starts empty, as today would put the date off by one day only.
+ * It says the date that passed; once saved it
  * closes, a toast names the deal and the new date, and the deals are read again (the deal
  * mutations do), so the mark goes. While it saves it does not close, so a failure is said in
  * place with the date kept; a tap outside does not close it then, nor once a date was entered.
@@ -140,6 +141,9 @@ export function DealCloseDateDialog({
   );
 }
 
+/** The latest expected close date the deals take (dealDate, 2000 to 2100) */
+const LAST_CLOSE_DATE = '2100-12-31';
+
 function CloseDateForm({
   today,
   saving,
@@ -159,38 +163,49 @@ function CloseDateForm({
   const tToasts = useTranslations('deals.toasts');
   const tCommon = useTranslations('common');
   const id = useId();
+  const form = useRef<HTMLFormElement>(null);
   const [date, setDate] = useState<string | undefined>(undefined);
   const [unreadable, setUnreadable] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [failed, setFailed] = useState(false);
+  // Read when Enter saves, as the box may have just taken the date
+  const latest = useRef<{ date?: string; unreadable: boolean }>({ unreadable: false });
   const shownToday = formatDealDate(today);
-  // What is wrong with the date once a save was tried; the box says it when it is not a date
-  const problem = !date
-    ? t('required')
-    : !isDealDate(date)
-      ? tForm('closeDateInvalid')
-      : date < today
+  // Each opening starts clean (the form is mounted only while the dialog is open)
+  useEffect(
+    () => onDirtyChange(date !== undefined || unreadable),
+    [date, unreadable, onDirtyChange]
+  );
+
+  /** What is wrong with a date: none, before today (it would stay marked), or past what deals take */
+  const problemOf = (value: string | undefined) =>
+    !value
+      ? t('required')
+      : value < today
         ? t('notBeforeToday', { today: shownToday })
-        : undefined;
+        : !isDealDate(value)
+          ? tForm('closeDateInvalid')
+          : undefined;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (saving) return;
     setSubmitted(true);
-    if (unreadable || problem || !date) {
+    const { date: value, unreadable: notADate } = latest.current;
+    if (notADate || problemOf(value) || !value) {
       document.getElementById(`${id}-date`)?.focus();
       return;
     }
     setFailed(false);
     try {
-      await onSave(date);
+      await onSave(value);
     } catch {
       setFailed(true);
     }
   };
 
   return (
-    <form onSubmit={submit} noValidate className="space-y-4">
+    <form ref={form} onSubmit={submit} noValidate className="space-y-4">
       <div className="space-y-1.5">
         <Label htmlFor={`${id}-date`}>{t('field')}</Label>
         <HearingDateInput
@@ -198,14 +213,23 @@ function CloseDateForm({
           label={t('field')}
           value={date}
           onChange={(value) => {
+            latest.current.date = value;
             setDate(value);
-            onDirtyChange(!!value);
           }}
           readOnly={false}
-          onInvalidChange={setUnreadable}
-          error={submitted && !unreadable ? problem : undefined}
+          clearable={false}
+          min={today}
+          max={LAST_CLOSE_DATE}
+          describedBy={`${id}-hint`}
+          onEnter={() => form.current?.requestSubmit()}
+          onInvalidChange={(invalid) => {
+            latest.current.unreadable = invalid;
+            setUnreadable(invalid);
+          }}
+          // The box says itself that it holds no date
+          error={submitted && !unreadable ? problemOf(date) : undefined}
         />
-        <p className="text-sm text-gray-600 dark:text-gray-300">
+        <p id={`${id}-hint`} className="text-sm text-gray-600 dark:text-gray-300">
           {t('hint', { today: shownToday })}
         </p>
       </div>
@@ -214,7 +238,8 @@ function CloseDateForm({
           {tToasts('error')}
         </p>
       )}
-      <DialogFooter className="gap-2 sm:gap-0">
+      {/* As the dialog that adds a next action beside it: side by side at the end */}
+      <div className="flex flex-wrap justify-end gap-2">
         <Button
           type="button"
           variant="outline"
@@ -226,9 +251,9 @@ function CloseDateForm({
         </Button>
         <Button type="submit" className={cn(TAP_TARGET, 'min-w-24')} disabled={saving}>
           {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
-          {t('save')}
+          {saving ? tForm('saving') : tForm('submitEdit')}
         </Button>
-      </DialogFooter>
+      </div>
     </form>
   );
 }
