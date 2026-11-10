@@ -10,6 +10,7 @@
  * Pure functions only; the procedure is `leads.export` in ./api/router.ts. The CSV of the rows
  * chosen in the list, which the browser writes, is made here too (selectedLeadsCsv, #996).
  */
+import { csvCell } from '@/lib/utils/csv-cell';
 import type { LeadExportFormat, ListLeadsInput } from './types/schemas';
 
 /** Most rows one export writes */
@@ -52,15 +53,6 @@ const CSV_COLUMNS: { header: string; value: (row: LeadExportRow) => string }[] =
   { header: 'Deal Rating', value: (r) => r.dealRating?.toUpperCase() ?? '' },
   { header: 'Created At', value: (r) => r.createdAt.toISOString() },
 ];
-
-/**
- * One CSV cell: quoted when needed, and a leading = + - @ (or tab / CR) is prefixed with ' so
- * a spreadsheet does not run it as a formula (CSV injection)
- */
-export function csvCell(value: string): string {
-  const safe = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
-  return /[",\r\n]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
-}
 
 const BOM = '﻿';
 
