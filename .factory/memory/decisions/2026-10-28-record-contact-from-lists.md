@@ -5,8 +5,8 @@ category: UI
 title: "一覧の行から連絡を記録する入口は「連絡を記録」のボタン1つとメニューにし、リードの画面は1タップのボタンのままにする（#863）"
 status: active
 superseded_by: []
-issues: [863, 556, 554, 776, 895, 998, 999, 1011, 1028, 1026]
-paths: ["components/features/lead-follow-up/contact-record-menu.tsx", "components/features/lead-follow-up/contact-quick-actions.tsx", "components/features/lead-follow-up/use-record-contact.tsx", "components/features/lead-follow-up/due-tasks-list.tsx", "components/features/today/today-meetings.tsx", "components/features/today/today-next-actions.tsx", "components/features/today/today-deals.tsx", "components/features/deals/deals-screen.tsx", "components/features/deals/lead-deals-card.tsx", "components/features/deals/deal-form-dialog.tsx", "components/features/deals/use-stage-move.tsx", "components/features/lead-follow-up/row-activity-dialog.tsx", "components/features/deals/deal-close-date-dialog.tsx", "hooks/use-row-dialog.ts", "components/dashboard/ax-dashboard-sections.tsx"]
+issues: [863, 556, 554, 776, 895, 998, 999, 1011, 1028, 1026, 1044]
+paths: ["components/features/lead-follow-up/contact-record-menu.tsx", "components/features/lead-follow-up/contact-quick-actions.tsx", "components/features/lead-follow-up/use-record-contact.tsx", "components/features/lead-follow-up/due-tasks-list.tsx", "components/features/today/today-meetings.tsx", "components/features/today/today-next-actions.tsx", "components/features/today/today-deals.tsx", "components/features/deals/deals-screen.tsx", "components/features/deals/lead-deals-card.tsx", "components/features/deals/deal-form-dialog.tsx", "components/features/deals/use-stage-move.tsx", "components/features/deals/deal-detail-view.tsx", "components/features/lead-follow-up/row-activity-dialog.tsx", "components/features/deals/deal-close-date-dialog.tsx", "hooks/use-row-dialog.ts", "components/dashboard/ax-dashboard-sections.tsx"]
 ---
 
 ### [UI] 一覧の行から連絡を記録する入口は「連絡を記録」のボタン1つとメニューにし、リードの画面は1タップのボタンのままにする（#863）
@@ -35,7 +35,8 @@ paths: ["components/features/lead-follow-up/contact-record-menu.tsx", "component
     - 商談の画面の「商談を作成」（ヘッダー・空の表示から開く）も、閉じたら開いたボタンへ戻す。最初の商談を作ると空の表示のボタンが消えるので、そのときは作った商談の名前へ、それも無ければ上と同じ戻り先へ送る。リードの商談のカードの「商談を作成」は、作成のあともボタンが残るので、ボタンへ戻す。新しい商談を「失注」で作るときは、フォームが閉じて失注の理由のダイアログが開くので、フォームが閉じたときではなく、理由のダイアログで保存して閉じたときに戻す（理由を取り消したら、フォームに戻る）（#1028）
     - 商談のボードの移動の問い（受注・失注・再開・SQL判定）を閉じたときは、カードの移動ボタンへ戻す（ドラッグで問いが出たときは、問いを開いた時点のフォーカスの位置へ）。そこが無いときは、商談名、失敗の表示なら「再読み込み」、ほかは画面の見出しの順に送る。「再読み込み」でボードが戻ったら、その商談の名前へ（#1026）
       - そこが無いのは、問いを開いている間にボードが読めなくなったとき・読み直されたとき、商談がボードから消えたとき、保存したあとに商談がボードから外れたとき（閉じた日が直近30日より前。#1045）
-    - 「今日」の欄の読み直し、読み直しが成功して行・カードが消えたとき、商談名以外にあったフォーカスを覚えることは、まだ扱っていない（#1027）。商談の詳細のステージの移動も、まだ扱っていない（#1044）
+    - 「今日」の欄の読み直し、読み直しが成功して行・カードが消えたとき、商談名以外にあったフォーカスを覚えることは、まだ扱っていない（#1027）
+    - 商談の詳細でステージを移したときは、今のステージの表示（スクリプトからだけフォーカスできる）へ送る。押したボタンが今のステージの表示に替わって消えるため。問いの無い移動は Radix の戻しのあとに救い、問いのあとは `focusInstead` で送る（読み直しが失敗していれば「再読み込み」）。読み直しが失敗した表示でも、移動の問いは同じ位置に描き、入力ごと残す（#1044）
   - 入口は、リードを編集できる人（`useLeadAccess` の `canEdit`）にだけ出す
   - 1タップの記録では、次の行動を完了にしない。連絡と完了は1対1ではないため（「つながらなかった」は完了ではない、など）。記録の続きで完了にする流れは #776 で決める
   - 商談予定の行から何を記録させるか（ヒアリング・活動）は、#776 の二重計上の扱いと一緒に決める。それまでヘルプは「打ち合わせで聞いたことはヒアリングとして記録する」とする

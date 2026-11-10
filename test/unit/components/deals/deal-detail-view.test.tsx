@@ -10,7 +10,7 @@ import type { DealDetail, DealHistoryView } from '@/lib/features/deals/service';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
 import enMessages from '@/locales/en/common.json';
 import messages from '@/locales/ja/common.json';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import { useRouter } from 'next/navigation';
@@ -239,6 +239,78 @@ describe('DealDetailView', () => {
 
     await user.click(screen.getByRole('button', { name: '開き直す' }));
     expect(mocks.updates).toEqual([{ organizationId: ORG_ID, dealId: DEAL_ID, stage: 'proposal' }]);
+  });
+
+  describe('the focus once the deal is moved from its stage path (#1044)', () => {
+    /** The stage the deal is in, focusable by script */
+    const currentStage = (name: string) =>
+      screen.getByText(name, { selector: '[aria-current="step"]' });
+
+    it('goes to the stage the deal moved to, when its button turns into it without a question', async () => {
+      const user = userEvent.setup();
+      const { rerender } = renderView();
+      await user.click(screen.getByRole('button', { name: '「条件の調整」に移す' }));
+      expect(mocks.updates).toEqual([expect.objectContaining({ stage: 'negotiation' })]);
+
+      // Read again: the button it was pressed on is now the current stage
+      mocks.get = { ...mocks.get, data: detail({ stage: 'negotiation', probability: 70 }) };
+      rerender(view());
+
+      await waitFor(() => expect(currentStage('条件の調整')).toHaveFocus());
+    });
+
+    it('goes to the stage once the won question closes, its button gone', async () => {
+      const user = userEvent.setup();
+      const { rerender } = renderView();
+      await user.click(screen.getByRole('button', { name: '「受注」に移す' }));
+      // Read again before the question closes, as the save waits for the read: won, with no
+      // button to win it any more
+      mocks.get = {
+        ...mocks.get,
+        data: detail({ stage: 'won', probability: 100, closedOn: jstDate() }),
+      };
+      rerender(view());
+      await user.click(screen.getByRole('button', { name: '受注にする' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      await waitFor(() => expect(currentStage('受注')).toHaveFocus());
+    });
+
+    it('goes to the stage once a reopened deal is read again', async () => {
+      const user = userEvent.setup();
+      mocks.get.data = detail({ stage: 'won', probability: 100, closedOn: '2026-10-20' });
+      const { rerender } = renderView();
+      await user.click(screen.getByRole('button', { name: '「提案」に移す' }));
+      await user.click(screen.getByRole('button', { name: '開き直す' }));
+      expect(mocks.updates).toEqual([expect.objectContaining({ stage: 'proposal' })]);
+
+      mocks.get = { ...mocks.get, data: detail({ stage: 'proposal', probability: 40 }) };
+      rerender(view());
+
+      await waitFor(() => expect(currentStage('提案')).toHaveFocus());
+    });
+
+    it('keeps an open question, with what was entered, when the deal cannot be read meanwhile', async () => {
+      const user = userEvent.setup();
+      const { rerender } = renderView();
+      await user.click(screen.getByRole('button', { name: '「受注」に移す' }));
+      const won = screen.getByRole('dialog', { name: '「AS/400 現行調査」を受注にする' });
+      const amount = within(won).getByLabelText(/金額（税抜）/);
+      await user.clear(amount);
+      await user.type(amount, '3500000');
+
+      // The read fails as tRPC says it: the page says so, with its retry
+      mocks.get = {
+        ...mocks.get,
+        isError: true,
+        error: { data: { code: 'INTERNAL_SERVER_ERROR' } },
+      };
+      rerender(view());
+
+      expect(screen.getByRole('alert', { hidden: true })).toHaveTextContent('商談を読み込めませんでした');
+      expect(screen.getByRole('dialog', { name: '「AS/400 現行調査」を受注にする' })).toBe(won);
+      expect(within(won).getByLabelText(/金額（税抜）/)).toHaveValue('3500000');
+    });
   });
 
   it("shows the activity of the deal for the deal's lead (#554)", () => {
