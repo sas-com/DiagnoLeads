@@ -1426,6 +1426,7 @@ export type NotificationType =
   | 'lead_handoff'
   | 'prospect_handed_over' // A customer search row was handed over to sales (#265)
   | 'referral_diagnosed' // Someone answered the diagnosis through an employee's link (#265)
+  | 'data_attention' // An Access tool holds My Number, special care or card data (#828)
   | 'system';
 
 /**

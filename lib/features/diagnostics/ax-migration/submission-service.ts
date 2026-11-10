@@ -18,6 +18,7 @@ import { contactSchema, plainText } from '../types/contact';
 import type { AxAccessPath } from './access-path';
 import type { AxTargetCompany } from './company-size';
 import { AX_MIGRATION_CONFIG } from './config';
+import { attentionDataKinds, dataAttentionSummary } from './data-attention';
 import { AX_MIGRATION_DIAGNOSTIC_KEY, axMigrationDefinition } from './definition';
 import { type AxMigrationResult, evaluateAxMigration } from './evaluate';
 import { type AxLeadMql, mergeLeadMql, toLeadMql, withConsultationSignal } from './mql';
@@ -85,6 +86,21 @@ export interface OtherSystemEntry {
   /** Access only (#303): the recommended way forward */
   accessPath?: AxAccessPath;
   detailsAnsweredAt?: string;
+  /** Access only (#828): data that needs care, once the follow-up on the kinds of data is answered */
+  dataAttention?: string[];
+}
+
+/**
+ * Data that needs care in the follow-up answers of a submission that updated its lead (#828):
+ * sales are told after the answers are saved
+ */
+export interface DataAttentionNotice {
+  organizationId: string;
+  leadId: string;
+  submissionId: string;
+  kinds: string[];
+  /** A consultation was requested before: the notice may use the consultation cap (#232) */
+  consultationRequested: boolean;
 }
 
 /** The result screen (follow-up answers, "diagnose another system") is used for a day */
@@ -556,7 +572,7 @@ export async function addAxMigrationDetails(
   details: Record<string, unknown>,
   now: Date = new Date()
 ): Promise<
-  | { ok: true; result: AxMigrationResult }
+  | { ok: true; result: AxMigrationResult; attention: DataAttentionNotice | null }
   | { ok: false; reason: 'not_found' }
   | { ok: false; reason: 'outdated' }
   | { ok: false; reason: 'closed' }
@@ -606,6 +622,9 @@ export async function addAxMigrationDetails(
       targetCompany
     );
     const previousScore = (submission.result as Partial<AxMigrationResult> | null)?.leadScore;
+    // Asked once (closed above once answered), so every flagged kind here is new to sales
+    const flagged = attentionDataKinds(validation.answers);
+    let leadUpdated = false;
 
     await tx
       .update(diagnosticSubmissions)
@@ -627,8 +646,10 @@ export async function addAxMigrationDetails(
         needsHearing: result.needsHearing,
         ...accessPathSummary(result),
         detailsAnsweredAt: now.toISOString(),
+        ...dataAttentionSummary(validation.answers),
         ...(lead ? withLeadMql(axSummaryOf(lead.responses), toLeadMql(result.mql)) : {}),
       };
+      leadUpdated = Boolean(lead);
       await tx
         .update(leads)
         .set({
@@ -662,8 +683,10 @@ export async function addAxMigrationDetails(
           needsHearing: result.needsHearing,
           ...accessPathSummary(result),
           detailsAnsweredAt: now.toISOString(),
+          ...dataAttentionSummary(validation.answers),
         });
       if (lead && updated) {
+        leadUpdated = true;
         const summary = axSummaryOf(updated);
         const responses = {
           ...updated,
@@ -680,6 +703,16 @@ export async function addAxMigrationDetails(
       }
     }
 
-    return { ok: true as const, result };
+    const attention: DataAttentionNotice | null =
+      leadUpdated && submission.leadId && flagged.length > 0
+        ? {
+            organizationId: submission.organizationId,
+            leadId: submission.leadId,
+            submissionId,
+            kinds: flagged,
+            consultationRequested: submission.consultationRequestedAt !== null,
+          }
+        : null;
+    return { ok: true as const, result, attention };
   });
 }

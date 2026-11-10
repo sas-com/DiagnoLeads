@@ -45,6 +45,8 @@ describe('readLeadDiagnosis', () => {
       accessPath: null,
       diagnosedAt: '2026-10-16T01:30:00.000Z',
       detailsAnsweredAt: null,
+      // Nothing flagged before the follow-up on the kinds of data (#828)
+      dataAttention: [],
       challenges: ['people', 'cost'],
       department: null,
       mqlCandidate: true,
@@ -124,6 +126,31 @@ describe('readLeadDiagnosis', () => {
     });
     expect(unknown.ax?.accessPath).toBeNull();
     expect(unknown.extra).toEqual([{ key: 'axMigration.accessPath', value: 'rebuild' }]);
+  });
+
+  it('reads the data that needs care, of the first system and the others (#828)', () => {
+    const { ax, extra } = readLeadDiagnosis({
+      axMigration: {
+        ...axSummary,
+        dataAttention: ['sensitive', 'my_number'],
+        otherSystems: [
+          {
+            submissionId: OTHER_SUBMISSION,
+            platform: 'access',
+            diagnosedAt: '2026-10-16T02:00:00.000Z',
+            dataAttention: ['payment'],
+          },
+        ],
+      },
+    });
+    expect(ax?.dataAttention).toEqual(['sensitive', 'my_number']);
+    expect(ax?.otherSystems[0].dataAttention).toEqual(['payment']);
+    expect(extra).toEqual([]);
+
+    // A value that is not a list is not read, and stays visible as other data
+    const broken = readLeadDiagnosis({ axMigration: { ...axSummary, dataAttention: 'my_number' } });
+    expect(broken.ax?.dataAttention).toEqual([]);
+    expect(broken.extra).toEqual([{ key: 'axMigration.dataAttention', value: 'my_number' }]);
   });
 
   it('treats null, missing and false values as not set', () => {

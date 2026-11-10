@@ -43,6 +43,11 @@ export interface AxSystemView {
   /** ISO date time */
   diagnosedAt: string | null;
   detailsAnsweredAt: string | null;
+  /**
+   * Access only (#828): My Number, special care or card data the tool holds, as flagged when the
+   * follow-up on the kinds of data was saved (diagnostics/ax-migration/data-attention.ts)
+   */
+  dataAttention: string[];
 }
 
 /** 適合 / 関心あり（MQL） and why (#139) */
@@ -137,6 +142,7 @@ const AX_SYSTEM_KEYS = [
   'accessPath',
   'diagnosedAt',
   'detailsAnsweredAt',
+  'dataAttention',
 ] as const;
 const AX_MAIN_KEYS = new Set<string>([
   ...AX_SYSTEM_KEYS,
@@ -221,6 +227,7 @@ function readSystem(source: Record<string, unknown>): AxSystemView {
     accessPath: readAccessPath(source.accessPath),
     diagnosedAt: isoOrNull(source.diagnosedAt),
     detailsAnsweredAt: isoOrNull(source.detailsAnsweredAt),
+    dataAttention: textList(source.dataAttention),
   };
 }
 
@@ -234,7 +241,9 @@ function unreadSystemValues(
     const raw = source[key];
     if (raw === null || raw === undefined || raw === false) return [];
     const readValue = read[key];
-    return readValue === null ? flattenExtraData(raw, `${prefix}.${key}`) : [];
+    // A list reads as empty when it is not a list
+    const unread = readValue === null || (Array.isArray(readValue) && !Array.isArray(raw));
+    return unread ? flattenExtraData(raw, `${prefix}.${key}`) : [];
   });
 }
 

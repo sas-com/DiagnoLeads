@@ -521,6 +521,57 @@ describe.skipIf(!url)('AX migration submission (PostgreSQL)', () => {
       });
     });
 
+    it('keeps the data that needs care on the lead and hands it to the notice (#828)', async () => {
+      const outcome = await submitAxMigrationDiagnosis(
+        db,
+        organizationId,
+        input({ answers: accessAnswers }),
+        now
+      );
+      if (!outcome.ok) throw new Error('submission failed');
+
+      const details = await addAxMigrationDetails(
+        db,
+        outcome.submissionId,
+        { access_data_kinds: ['customer', 'payment', 'my_number'] },
+        new Date(now.getTime() + 60 * 1000)
+      );
+      if (!details.ok) throw new Error(`details failed: ${details.reason}`);
+      // In the order the question lists them; personal data of customers alone is not flagged
+      expect(details.attention).toEqual({
+        organizationId,
+        leadId: outcome.leadId,
+        submissionId: outcome.submissionId,
+        kinds: ['my_number', 'payment'],
+        consultationRequested: false,
+      });
+      const lead = await pg.query.leads.findFirst({ where: eq(leads.id, outcome.leadId) });
+      expect(lead?.responses).toMatchObject({
+        axMigration: { dataAttention: ['my_number', 'payment'] },
+      });
+    });
+
+    it('records an answer without such data and hands nothing to the notice (#828)', async () => {
+      const outcome = await submitAxMigrationDiagnosis(
+        db,
+        organizationId,
+        input({ answers: accessAnswers }),
+        now
+      );
+      if (!outcome.ok) throw new Error('submission failed');
+
+      const details = await addAxMigrationDetails(
+        db,
+        outcome.submissionId,
+        { access_data_kinds: ['employee', 'confidential'] },
+        new Date(now.getTime() + 60 * 1000)
+      );
+      if (!details.ok) throw new Error(`details failed: ${details.reason}`);
+      expect(details.attention).toBeNull();
+      const lead = await pg.query.leads.findFirst({ where: eq(leads.id, outcome.leadId) });
+      expect(lead?.responses).toMatchObject({ axMigration: { dataAttention: [] } });
+    });
+
     it('stores the recommended Access path on the result and the lead, and updates it (#303)', async () => {
       const outcome = await submitAxMigrationDiagnosis(
         db,

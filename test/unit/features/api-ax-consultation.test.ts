@@ -137,6 +137,33 @@ describe('POST /api/diagnostics/ax-migration/consultation', () => {
     );
   });
 
+  it('passes on data that needs care from the follow-up answers saved before the request (#828)', async () => {
+    requestMock.mockResolvedValue({
+      ok: true,
+      alreadyRequested: false,
+      organizationId: 'org-1',
+      leadId: 'lead-1',
+      leadCreated: true,
+    });
+    findSubmission.mockResolvedValue({
+      id: SUBMISSION_ID,
+      result: { difficulty: { level: 'medium' } },
+      answers: { platform: 'access', access_data_kinds: ['customer', 'my_number'] },
+    });
+    await POST(request({ submissionId: SUBMISSION_ID }));
+    await runAfterTasks();
+    expect(notifyMock).toHaveBeenCalledWith(expect.objectContaining({ dataAttention: ['my_number'] }));
+
+    // A stored submission without such answers carries none
+    vi.clearAllMocks();
+    afterTasks.length = 0;
+    findLead.mockResolvedValue({ id: 'lead-1', company: 'DB商事', name: 'DB 太郎', email: 'db@example.jp' });
+    findSubmission.mockResolvedValue({ id: SUBMISSION_ID, result: { difficulty: { level: 'medium' } } });
+    await POST(request({ submissionId: SUBMISSION_ID }));
+    await runAfterTasks();
+    expect(notifyMock).toHaveBeenCalledWith(expect.objectContaining({ dataAttention: [] }));
+  });
+
   it('marks the identity as unverified when the submission matched an existing lead', async () => {
     requestMock.mockResolvedValue({
       ok: true,

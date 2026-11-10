@@ -27,7 +27,7 @@ export interface LeadAssignedNotification {
  * organization (自分が担当に割り当てられたとき for assignments, #164). When the setting cannot
  * be read, the notification goes out.
  */
-async function wantsNotification(
+export async function wantsNotification(
   userId: string,
   organizationId: string,
   type: NotificationType

@@ -229,6 +229,50 @@ describe('LeadDiagnosisCard', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  describe('data that needs care in an Access tool (#828)', () => {
+    const notice = () => screen.getByTestId('lead-diagnosis-data-attention');
+
+    it('asks for an in-house check before the first consultation, for every system', () => {
+      renderCard({
+        responses: {
+          axMigration: {
+            ...axMigration,
+            dataAttention: ['my_number'],
+            otherSystems: [
+              {
+                submissionId: OTHER_SUBMISSION,
+                platform: 'access',
+                diagnosedAt: '2026-10-16T02:00:00.000Z',
+                dataAttention: ['payment', 'my_number'],
+              },
+            ],
+          },
+        },
+      });
+      expect(
+        within(notice()).getByText('取り扱いに注意する情報が入っていると回答があります')
+      ).toBeInTheDocument();
+      expect(notice()).toHaveTextContent(
+        'マイナンバー・クレジットカードの番号や銀行口座。受けるかどうかや進め方（委託の覚書・作業の場所・エンジニアの同席）を、初回の相談の前に社内で確かめてください。'
+      );
+      // Not a promise to the customer either way
+      expect(notice()).not.toHaveTextContent(/お受けします|お受けできません/);
+    });
+
+    it('shows it in the compact card too, and nothing without such data', () => {
+      renderCard({
+        responses: { axMigration: { ...axMigration, dataAttention: ['sensitive'] } },
+        compact: true,
+      });
+      expect(notice()).toHaveTextContent('要配慮個人情報（健康・病歴など）');
+    });
+
+    it('shows nothing when no such data was named, or before the question was answered', () => {
+      renderCard({ responses: { axMigration: { ...axMigration, dataAttention: [] } } });
+      expect(screen.queryByTestId('lead-diagnosis-data-attention')).not.toBeInTheDocument();
+    });
+  });
+
   it('has a compact version for the side panel', () => {
     renderCard({ compact: true, responses: { axMigration, oldForm: { q1: 'yes' } } });
     expect(screen.getByText('AS/400（IBM i） · 移行難易度の目安 低 · 刷新の緊急度 高')).toBeInTheDocument();
