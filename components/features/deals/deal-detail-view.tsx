@@ -26,6 +26,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useOrganization } from '@/hooks/use-organization';
+import { useReturnFocus } from '@/hooks/use-return-focus';
 import type { DealDetail, DealHistoryView } from '@/lib/features/deals/service';
 import {
   DEAL_STAGES,
@@ -63,25 +64,6 @@ function dateTime(value: Date, locale: string): string {
   }).format(value);
 }
 
-/**
- * Gives the focus back to the control that opened a dialog. The edit and delete dialogs are
- * opened from the ⋯ menu or a card's button, not from a dialog trigger, so Radix has nowhere to
- * return the focus to and would leave it on the page (#720)
- */
-function useReturnFocus() {
-  const opener = useRef<HTMLElement | null>(null);
-  return {
-    remember: (element: HTMLElement | null) => {
-      opener.current = element;
-    },
-    onCloseAutoFocus: (event: Event) => {
-      if (!opener.current?.isConnected) return;
-      event.preventDefault();
-      opener.current.focus();
-    },
-  };
-}
-
 /** One deal (Refs #436): where it stands on the stage path, its values and its history */
 export function DealDetailView({ dealId }: { dealId: string }) {
   const t = useTranslations('deals');
@@ -107,6 +89,8 @@ export function DealDetailView({ dealId }: { dealId: string }) {
   // Deleted, on the way to the deals: the deal read again is not found, which is not news
   const [leaving, setLeaving] = useState(false);
   const moreRef = useRef<HTMLButtonElement>(null);
+  // The edit and delete dialogs are opened from the ⋯ menu or a card's button, not from a
+  // dialog trigger: the focus goes back to the control that opened them (#720)
   const focus = useReturnFocus();
 
   const back = { href: `/${locale}/deals`, label: t('detail.back') };
