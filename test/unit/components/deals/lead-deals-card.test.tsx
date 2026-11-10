@@ -26,10 +26,34 @@ vi.mock('@/lib/trpc/client', () => ({
     deals: { forLead: { useQuery: () => mocks.forLead } },
   },
 }));
-// The dialog has its own tests through the deals screen
+// The dialog has its own tests through the deals screen. Closed as Radix does: it calls
+// onCloseAutoFocus, which may keep its own give-back from running (#1028)
 vi.mock('@/components/features/deals/deal-form-dialog', () => ({
-  DealFormDialog: ({ open, leadId }: { open: boolean; leadId?: string }) =>
-    open ? <p>create dialog for {leadId}</p> : null,
+  DealFormDialog: ({
+    open,
+    leadId,
+    onOpenChange,
+    onCloseAutoFocus,
+  }: {
+    open: boolean;
+    leadId?: string;
+    onOpenChange: (open: boolean) => void;
+    onCloseAutoFocus?: (event: Event) => void;
+  }) =>
+    open ? (
+      <div>
+        <p>create dialog for {leadId}</p>
+        <button
+          type="button"
+          onClick={() => {
+            onOpenChange(false);
+            onCloseAutoFocus?.(new Event('focus.autoFocusOnUnmount', { cancelable: true }));
+          }}
+        >
+          close the dialog
+        </button>
+      </div>
+    ) : null,
 }));
 
 const deal = (overrides: Record<string, unknown>) => ({
@@ -98,6 +122,19 @@ describe('LeadDealsCard', () => {
     expect(screen.getByText('このリードの商談はまだありません')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '商談を作成' }));
     expect(screen.getByText(`create dialog for ${LEAD_ID}`)).toBeInTheDocument();
+  });
+
+  it('gives the focus back to its button once the dialog closes (#1028)', async () => {
+    const user = userEvent.setup();
+    mocks.forLead.data = { items: [], canEdit: true, canDelete: false };
+    renderCard();
+    const button = screen.getByRole('button', { name: '商談を作成' });
+
+    await user.click(button);
+    await user.click(screen.getByRole('button', { name: 'close the dialog' }));
+
+    expect(screen.queryByText(`create dialog for ${LEAD_ID}`)).not.toBeInTheDocument();
+    expect(button).toHaveFocus();
   });
 
   it('says when the deals cannot be read and offers a retry', async () => {

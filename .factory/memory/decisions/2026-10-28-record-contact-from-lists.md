@@ -5,8 +5,8 @@ category: UI
 title: "一覧の行から連絡を記録する入口は「連絡を記録」のボタン1つとメニューにし、リードの画面は1タップのボタンのままにする（#863）"
 status: active
 superseded_by: []
-issues: [863, 556, 554, 776, 895, 998, 999, 1011]
-paths: ["components/features/lead-follow-up/contact-record-menu.tsx", "components/features/lead-follow-up/contact-quick-actions.tsx", "components/features/lead-follow-up/use-record-contact.tsx", "components/features/lead-follow-up/due-tasks-list.tsx", "components/features/today/today-meetings.tsx", "components/features/today/today-next-actions.tsx", "components/features/today/today-deals.tsx", "components/features/deals/deals-screen.tsx", "components/features/lead-follow-up/row-activity-dialog.tsx", "components/features/deals/deal-close-date-dialog.tsx", "hooks/use-row-dialog.ts", "components/dashboard/ax-dashboard-sections.tsx"]
+issues: [863, 556, 554, 776, 895, 998, 999, 1011, 1028]
+paths: ["components/features/lead-follow-up/contact-record-menu.tsx", "components/features/lead-follow-up/contact-quick-actions.tsx", "components/features/lead-follow-up/use-record-contact.tsx", "components/features/lead-follow-up/due-tasks-list.tsx", "components/features/today/today-meetings.tsx", "components/features/today/today-next-actions.tsx", "components/features/today/today-deals.tsx", "components/features/deals/deals-screen.tsx", "components/features/deals/lead-deals-card.tsx", "components/features/lead-follow-up/row-activity-dialog.tsx", "components/features/deals/deal-close-date-dialog.tsx", "hooks/use-row-dialog.ts", "components/dashboard/ax-dashboard-sections.tsx"]
 ---
 
 ### [UI] 一覧の行から連絡を記録する入口は「連絡を記録」のボタン1つとメニューにし、リードの画面は1タップのボタンのままにする（#863）
@@ -32,7 +32,8 @@ paths: ["components/features/lead-follow-up/contact-record-menu.tsx", "component
   - 行から開くダイアログ（活動の記録、商談の次の行動の追加など）は、その一覧に1つ置き、欄の中身の外に出す（`useRowDialog`。#998）。`ContactRecordMenu` は開くことを一覧に頼む（`onRecordActivity`）ので、使う一覧は `useRowActivityDialog` と `RowActivityDialog` を置く
     - 閉じたあとの戻り先（開いたボタン・商談名・次の行）が画面に無いときは、「今日」では欄の見出しへ送る（#998）。商談の画面では、ボードが失敗の表示なら「再読み込み」（失敗の文を説明に付ける）へ、ボードか読み込み中なら画面の見出し「商談」へ送る（#1011）。見出しは、スクリプトからだけフォーカスできる。商談の画面で失敗の表示のときに見出しへ送らないのは、見出しと「再読み込み」の間に操作が5つあり、見出しの読み上げでは失敗が伝わらないため（「今日」の欄の見出しは、失敗の表示のすぐ上にある。#1011 の UI/UX レビュー）
     - 商談の画面では、ボード・失敗の表示・読み込み中のどれかが読み直しで替わり、フォーカスを持っていたもの（商談名・「再読み込み」など）が一緒に消えたときも、同じ戻り先へ送る。「再読み込み」でボードに戻ったときは、失敗の前にフォーカスがあった商談名（ダイアログから戻ったときは、その商談の名前）へ戻す。次の行動の追加は読み直しを待たずに閉じるので、閉じたあとの読み直しの失敗もこれで受ける。フォーカスがその前にボードの外へ移っていたら動かさない。Radix のメニューや Select がフォーカスを戻すのは setTimeout のあとなので、その後で救う（#1011）
-    - 「今日」の欄の読み直し、読み直しが成功して行・カードが消えたとき、移動の問い、「商談を作成」のダイアログは、まだ扱っていない（#1027・#1026・#1028）
+    - 商談の画面の「商談を作成」（ヘッダー・空の表示から開く）も、閉じたら開いたボタンへ戻す。最初の商談を作ると空の表示のボタンが消えるので、そのときは作った商談の名前へ、それも無ければ上と同じ戻り先へ送る。リードの商談のカードの「商談を作成」は、作成のあともボタンが残るので、ボタンへ戻す（#1028）
+    - 「今日」の欄の読み直し、読み直しが成功して行・カードが消えたとき、移動の問いは、まだ扱っていない（#1027・#1026）
   - 入口は、リードを編集できる人（`useLeadAccess` の `canEdit`）にだけ出す
   - 1タップの記録では、次の行動を完了にしない。連絡と完了は1対1ではないため（「つながらなかった」は完了ではない、など）。記録の続きで完了にする流れは #776 で決める
   - 商談予定の行から何を記録させるか（ヒアリング・活動）は、#776 の二重計上の扱いと一緒に決める。それまでヘルプは「打ち合わせで聞いたことはヒアリングとして記録する」とする

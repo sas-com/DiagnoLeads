@@ -132,6 +132,16 @@ export function DealsScreen() {
   const { view, owner, kind, period, sort, set, update } = useBoardQuery();
   const today = jstDate();
   const [createOpen, setCreateOpen] = useState(false);
+  // The dialog that creates a deal is opened from the header's button or the empty board's, not
+  // from a dialog trigger: the focus goes back to that button. The first deal takes the empty
+  // board's away: the focus goes to the new deal's name then (#1028)
+  const createOpener = useRef<HTMLElement | null>(null);
+  const createdDeal = useRef<string | undefined>(undefined);
+  const startCreate = (from: HTMLElement) => {
+    createOpener.current = from;
+    createdDeal.current = undefined;
+    setCreateOpen(true);
+  };
   // Clearing the filters takes away its button: the focus goes to the first filter
   const ownerTrigger = useRef<HTMLButtonElement>(null);
   const stageMove = useStageMove(organizationId);
@@ -253,7 +263,11 @@ export function DealsScreen() {
                 </Badge>
               )}
               {data?.canEdit && (
-                <Button type="button" className={TAP_TARGET} onClick={() => setCreateOpen(true)}>
+                <Button
+                  type="button"
+                  className={TAP_TARGET}
+                  onClick={(event) => startCreate(event.currentTarget)}
+                >
                   <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
                   {t('create')}
                 </Button>
@@ -395,7 +409,7 @@ export function DealsScreen() {
                         type="button"
                         variant="outline"
                         className={TAP_TARGET}
-                        onClick={() => setCreateOpen(true)}
+                        onClick={(event) => startCreate(event.currentTarget)}
                       >
                         <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
                         {t('create')}
@@ -441,6 +455,22 @@ export function DealsScreen() {
               open={createOpen}
               onOpenChange={setCreateOpen}
               organizationId={organizationId}
+              onSaved={(deal) => {
+                createdDeal.current = deal.id;
+              }}
+              onCloseAutoFocus={(event) => {
+                const opener = createOpener.current?.isConnected ? createOpener.current : null;
+                // Neither the button nor the new deal is there when the board could not be
+                // read, or the filters leave the deal out: as when a next action was added
+                const target =
+                  opener ??
+                  (createdDeal.current ? dealLinkOf(createdDeal.current) : undefined) ??
+                  retryButton.current ??
+                  document.getElementById(headingId);
+                if (!target) return;
+                event.preventDefault();
+                target.focus();
+              }}
             />
           )}
           {data?.canEdit && nextAction.chosen && (
