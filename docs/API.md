@@ -55,51 +55,6 @@ Returns service health status.
 
 ---
 
-### Diagnostic (Public)
-
-#### Submit Diagnostic Form
-```
-POST /api/diagnostic
-```
-
-Submit a public diagnostic form and receive an AI-generated lead score.
-
-**Request Body:**
-```json
-{
-  "companyName": "Acme Corp",
-  "industry": "technology",
-  "employeeCount": "51-200",
-  "name": "John Doe",
-  "email": "john@acme.com",
-  "phone": "+1-555-0100",
-  "position": "CTO",
-  "currentChallenge": "lead_generation",
-  "primaryGoal": "increase_leads",
-  "timeline": "immediate",
-  "budget": "50k-100k",
-  "additionalInfo": "Looking to scale our sales pipeline",
-  "marketingConsent": true
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Diagnostic submitted successfully",
-  "score": 85,
-  "leadId": "550e8400-e29b-41d4-a716-446655440000",
-  "data": {
-    "email": "john@acme.com",
-    "company": "Acme Corp",
-    "name": "John Doe"
-  }
-}
-```
-
----
-
 ### Leads
 
 #### List Leads
