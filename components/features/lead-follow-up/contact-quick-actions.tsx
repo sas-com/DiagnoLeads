@@ -6,7 +6,7 @@ import { type ContactKind, QUICK_CONTACT_KINDS } from '@/lib/features/lead-follo
 import { cn } from '@/lib/utils';
 import { NotebookPen } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { CONTACT_KIND_ICONS } from './contact-kinds';
 import { RecordActivityDialog } from './record-activity-dialog';
 import { useRecordContact } from './use-record-contact';
@@ -25,6 +25,7 @@ export interface ContactQuickActionsProps {
  * One tap records "called", "emailed" or "could not reach" now (Refs #136). A wrong tap can be
  * undone from the toast. "Record an activity" records one with its details: a visit or an
  * online meeting, a past time, how long it took, its outcome, its deal and a note (Refs #554).
+ * Its dialog gives the focus back to the button once it closes (#776).
  */
 export function ContactQuickActions({
   organizationId,
@@ -36,6 +37,9 @@ export function ContactQuickActions({
   const t = useTranslations('leadFollowUp.contact');
   const tActivity = useTranslations('leadFollowUp.activity');
   const [dialogOpen, setDialogOpen] = useState(false);
+  // The dialog is opened without a dialog trigger, so Radix has no button to give the focus back
+  // to and would leave it on the page (#776)
+  const activityButton = useRef<HTMLButtonElement>(null);
   const { record, pending } = useRecordContact({ organizationId, leadId, leadLabel });
 
   const submit = (kind: ContactKind) => {
@@ -71,6 +75,7 @@ export function ContactQuickActions({
         <span aria-hidden="true" className="mx-0.5 hidden h-6 w-px bg-gray-300 sm:block" />
       )}
       <Button
+        ref={activityButton}
         type="button"
         variant="outline"
         size="sm"
@@ -89,6 +94,12 @@ export function ContactQuickActions({
         organizationId={organizationId}
         leadId={leadId}
         leadLabel={leadLabel}
+        onCloseAutoFocus={(event) => {
+          // A row of the dashboard can leave once recorded: nothing to give it back to then
+          if (!activityButton.current?.isConnected) return;
+          event.preventDefault();
+          activityButton.current.focus();
+        }}
       />
     </fieldset>
   );
