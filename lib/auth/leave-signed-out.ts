@@ -12,11 +12,20 @@ function urlOnThisSite(to: string): URL {
 /** Opens the URL as a new page, this one hidden and loaded again if the browser keeps it */
 function leaveFor(url: URL, replace: boolean): void {
   // Shown again from the back-forward cache, the page left would show what it read: it is hidden
-  // meanwhile, and loaded again instead, which sends a visitor without a session to sign-in
-  document.documentElement.hidden = true;
+  // as it goes, and loaded again instead, which sends a visitor without a session to sign-in.
+  // Not hidden before it goes: a question not to leave (unsaved changes) may keep it
+  window.addEventListener(
+    'pagehide',
+    () => {
+      document.documentElement.hidden = true;
+    },
+    { once: true }
+  );
   window.addEventListener('pageshow', (event) => {
     if (event.persisted) window.location.reload();
   });
+  // With a fragment, the same URL would move within this page instead of loading a new one
+  url.hash = '';
   if (replace) window.location.replace(url.href);
   else window.location.assign(url.href);
 }

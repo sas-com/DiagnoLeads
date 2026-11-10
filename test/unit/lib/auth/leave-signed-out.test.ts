@@ -23,6 +23,8 @@ const location = {
   origin: SITE,
 };
 
+/** The page goes: to the next one, or into the back-forward cache */
+const goes = () => window.dispatchEvent(new Event('pagehide'));
 /** The browser shows the page again: from its back-forward cache when `persisted` */
 const showAgain = (persisted: boolean) => {
   const event = new Event('pageshow');
@@ -48,10 +50,9 @@ afterEach(() => {
 });
 
 describe('leaveSignedOut', () => {
-  it('drops the organization chosen and hides the page, then loads the next one as new', () => {
+  it('drops the organization chosen, loads the next page as new, and hides this one as it goes', () => {
     location.assign.mockImplementationOnce(() => {
       expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
-      expect(document.documentElement.hidden).toBe(true);
     });
 
     leaveSignedOut('/ja/login');
@@ -59,6 +60,16 @@ describe('leaveSignedOut', () => {
     expect(location.assign).toHaveBeenCalledWith(`${SITE}/ja/login`);
     expect(location.replace).not.toHaveBeenCalled();
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+    // Shown until it goes: a question not to leave (unsaved changes) may keep it
+    expect(document.documentElement.hidden).toBe(false);
+    goes();
+    expect(document.documentElement.hidden).toBe(true);
+  });
+
+  it('loads the same page again without its fragment, which would not load it', () => {
+    leaveSignedOut(`${SITE}/ja/invite/abc#note`, { replace: true });
+
+    expect(location.replace).toHaveBeenCalledWith(`${SITE}/ja/invite/abc`);
   });
 
   it('keeps the page left out of the history when asked', () => {
@@ -103,6 +114,7 @@ describe('leaveWithoutSession', () => {
 
     expect(location.replace).toHaveBeenCalledWith(`${SITE}/ja/login?callbackUrl=%2Fja%2Fleads`);
     expect(localStorage.getItem(STORAGE_KEY)).not.toBeNull();
+    goes();
     expect(document.documentElement.hidden).toBe(true);
   });
 });
