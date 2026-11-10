@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Mock export services
 vi.mock('@/lib/features/reports/export-service', () => ({
-  leadsToCSV: vi.fn(() => 'csv-content'),
   createDownloadBlob: vi.fn(() => new Blob(['test'])),
   generateExportFilename: vi.fn(() => 'test-file.csv'),
   generateFullReportCSV: vi.fn(() => 'full-report-csv'),
@@ -11,7 +10,6 @@ vi.mock('@/lib/features/reports/export-service', () => ({
 }));
 
 vi.mock('@/lib/features/reports/pdf-export-service', () => ({
-  exportLeadsToPDF: vi.fn(() => ({ save: vi.fn() })),
   exportAnalyticsToPDF: vi.fn(() => ({ save: vi.fn() })),
   generatePDFFilename: vi.fn(() => 'test-file.pdf'),
   downloadPDF: vi.fn(),
@@ -32,36 +30,16 @@ vi.mock('@/hooks/use-pdf-report-labels', () => ({
 // Import after mocks
 import { useExport } from '@/hooks/use-export';
 import {
-  type ExportLead,
   createDownloadBlob,
   generateExportFilename,
   generateFullReportCSV,
-  leadsToCSV,
   triggerDownload,
 } from '@/lib/features/reports/export-service';
 import {
   downloadPDF,
   exportAnalyticsToPDF,
-  exportLeadsToPDF,
   generatePDFFilename,
 } from '@/lib/features/reports/pdf-export-service';
-
-const mockLeads: ExportLead[] = [
-  {
-    id: '1',
-    email: 'test@example.com',
-    name: 'Test Lead',
-    company: null,
-    phone: null,
-    position: null,
-    status: 'new' as const,
-    score: 80,
-    source: 'web',
-    notes: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-];
 
 const mockAnalyticsData: Parameters<ReturnType<typeof useExport>['exportAnalyticsReport']>[0] = {
   overview: {
@@ -85,12 +63,20 @@ describe('useExport', () => {
 
     expect(result.current).toBeDefined();
     expect(result.current.isExporting).toBe(false);
-    expect(typeof result.current.exportLeadsCSV).toBe('function');
-    expect(typeof result.current.exportLeadsJSON).toBe('function');
-    expect(typeof result.current.exportLeadsPDF).toBe('function');
     expect(typeof result.current.exportAnalyticsReport).toBe('function');
     expect(typeof result.current.exportAnalyticsJSON).toBe('function');
     expect(typeof result.current.exportAnalyticsPDF).toBe('function');
+  });
+
+  it('exports the analytics only: leads are exported from their list, with the audit log (#1003)', () => {
+    const { result } = renderHook(() => useExport());
+
+    expect(Object.keys(result.current).sort()).toEqual([
+      'exportAnalyticsJSON',
+      'exportAnalyticsPDF',
+      'exportAnalyticsReport',
+      'isExporting',
+    ]);
   });
 
   it('should accept options', () => {
@@ -102,62 +88,6 @@ describe('useExport', () => {
     );
 
     expect(result.current).toBeDefined();
-  });
-
-  describe('exportLeadsCSV', () => {
-    it('should export leads to CSV', () => {
-      const { result } = renderHook(() => useExport());
-
-      act(() => {
-        result.current.exportLeadsCSV(mockLeads);
-      });
-
-      expect(leadsToCSV).toHaveBeenCalledWith(mockLeads);
-      expect(createDownloadBlob).toHaveBeenCalled();
-      expect(generateExportFilename).toHaveBeenCalledWith('leads', 'csv');
-      expect(triggerDownload).toHaveBeenCalled();
-    });
-  });
-
-  describe('exportLeadsJSON', () => {
-    it('should export leads to JSON', () => {
-      const { result } = renderHook(() => useExport());
-
-      act(() => {
-        result.current.exportLeadsJSON(mockLeads);
-      });
-
-      expect(createDownloadBlob).toHaveBeenCalled();
-      expect(generateExportFilename).toHaveBeenCalledWith('leads', 'json');
-      expect(triggerDownload).toHaveBeenCalled();
-    });
-  });
-
-  describe('exportLeadsPDF', () => {
-    it('should export leads to PDF', async () => {
-      const { result } = renderHook(() => useExport({ organizationName: 'Test Org' }));
-
-      await act(async () => {
-        await result.current.exportLeadsPDF(mockLeads);
-      });
-
-      expect(exportLeadsToPDF).toHaveBeenCalledWith(
-        mockLeads,
-        expect.objectContaining({ font: pdfFont, labels: pdfLabels })
-      );
-      expect(generatePDFFilename).toHaveBeenCalledWith('leads', undefined);
-      expect(downloadPDF).toHaveBeenCalled();
-    });
-
-    it('should include date range in PDF filename', async () => {
-      const { result } = renderHook(() => useExport());
-
-      await act(async () => {
-        await result.current.exportLeadsPDF(mockLeads, '30d');
-      });
-
-      expect(generatePDFFilename).toHaveBeenCalledWith('leads', '30d');
-    });
   });
 
   describe('exportAnalyticsReport', () => {
