@@ -6,7 +6,7 @@ title: "判断の要る未使用コードは、audit-logs・feature-flags・REST
 status: active
 superseded_by: []
 issues: [450, 470, 46, 289, 430, 555]
-paths: ["lib/features/audit-logs/**", "lib/features/feature-flags/**", "app/api/v2/**", "lib/api/v2-auth.ts", "lib/features/diagnostics/legacy-form.ts", "app/[locale]/(public)/diagnostic/page.tsx", "components/features/diagnostic/**", "app/api/diagnostic/route.ts", "lib/features/tags/**", "lib/features/comments/**", "lib/features/workflows/**"]
+paths: ["lib/features/audit-logs/**", "lib/features/feature-flags/**", "app/api/v2/**", "lib/api/v2-auth.ts", "app/[locale]/(public)/diagnostic/page.tsx", "lib/features/tags/**", "lib/features/comments/**", "lib/features/workflows/**"]
 ---
 
 ### [Architecture] 判断の要る未使用コードは、audit-logs・feature-flags・REST v2・旧汎用フォームを消し、tags・comments・workflows は残す（#470）

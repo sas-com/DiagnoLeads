@@ -123,6 +123,58 @@ describe.skipIf(!url)('notifications: isolation (PostgreSQL)', () => {
     expect(await asB.notifications.unreadCount({})).toEqual({ count: 0 });
   });
 
+  // Counted in the database (#981): the same number as before, of the user's current organizations
+  describe('counting the unread ones', () => {
+    // biome-ignore lint/suspicious/noExplicitAny: tRPC caller
+    let asC: any;
+    let firstOfA: string;
+
+    beforeAll(async () => {
+      const [c] = await pg
+        .insert(users)
+        .values({ email: `notify-iso-c-${unique()}@example.com`, name: 'C の社員' })
+        .returning();
+      userIds.push(c.id);
+      await pg.insert(organizationMembers).values({ organizationId: orgA, userId: c.id, role: 'member' });
+      asC = appRouter.createCaller({
+        db: pg,
+        session: { session: { id: 's', userId: c.id }, user: c },
+        user: c,
+        // biome-ignore lint/suspicious/noExplicitAny: test context
+      } as any);
+      const of = (organizationId: string | null, title: string, read = false) => ({
+        userId: c.id,
+        organizationId,
+        type: 'lead_assigned' as const,
+        title,
+        message: '架空商事',
+        read,
+      });
+      const rows = await pg
+        .insert(notifications)
+        .values([
+          of(orgA, '1件目'),
+          of(orgA, '2件目'),
+          of(orgA, '3件目'),
+          of(orgA, '読んだもの', true),
+          of(null, '組織のない通知'),
+          // Of an organization C is not a member of: never counted
+          of(orgB, 'ほかの組織'),
+        ])
+        .returning({ id: notifications.id });
+      firstOfA = rows[0].id;
+    });
+
+    it('counts the unread ones of its organizations and of none, the read ones left out', async () => {
+      expect(await asC.notifications.unreadCount({})).toEqual({ count: 4 });
+      expect(await asC.notifications.unreadCount({ organizationId: orgA })).toEqual({ count: 3 });
+
+      await asC.notifications.markAsRead({ notificationId: firstOfA });
+      expect(await asC.notifications.unreadCount({ organizationId: orgA })).toEqual({ count: 2 });
+      expect(await asC.notifications.unreadCount({})).toEqual({ count: 3 });
+    });
+  });
+
   it("marks none of A's notifications as read (markAsRead, markAllAsRead)", async () => {
     for (const notificationId of notificationsA) {
       await asB.notifications.markAsRead({ notificationId });

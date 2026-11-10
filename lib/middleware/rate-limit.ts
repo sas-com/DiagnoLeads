@@ -85,7 +85,7 @@ export const ENDPOINT_RATE_LIMITS: Record<string, RateLimitConfig> = {
   '/api/v2/analytics': { max: 60, windowMs: 60 * 1000 },
 
   // 診断
-  // AX diagnosis (exact match is checked before the '/api/diagnostic' prefix below)
+  // AX diagnosis
   '/api/diagnostics/ax-migration': { max: 10, windowMs: 60 * 1000 },
   '/api/diagnostics/ax-migration/consultation': { max: 5, windowMs: 60 * 1000 },
   '/api/diagnostics/ax-migration/details': { max: 5, windowMs: 60 * 1000 },
@@ -96,7 +96,6 @@ export const ENDPOINT_RATE_LIMITS: Record<string, RateLimitConfig> = {
   '/api/diagnostics/ax-migration/result-email/confirm': { max: 10, windowMs: 60 * 1000 },
   // Diagnoses made in the builder: /api/diagnoses/[slug]/submit and /consultation (prefix)
   '/api/diagnoses/': { max: 10, windowMs: 60 * 1000 },
-  '/api/diagnostic': { max: 30, windowMs: 60 * 1000 },
 
   // Unsubscribe of respondent mail (#154): the page button, and the RFC 8058 one-click POST,
   // which mail providers send from their servers (one address speaks for many recipients).
