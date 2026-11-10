@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useOrganization } from '@/hooks/use-organization';
+import { useRowDialog } from '@/hooks/use-row-dialog';
 import type { DealCard } from '@/lib/features/deals/service';
 import { DEAL_KINDS, type DealKind } from '@/lib/features/deals/types/pipeline';
 import { BOARD_CLOSED_DAYS_DEFAULT, BOARD_DEALS_LIMIT } from '@/lib/features/deals/types/schemas';
@@ -86,41 +87,6 @@ function dealLinkOf(dealId: string): HTMLElement | undefined {
   );
 }
 
-/**
- * The dialog that adds a deal's next action from its card or row (#853): one, for the deal chosen.
- * It has no trigger to give the focus back to: the button that opened it gets it back, but once
- * a next action is added the button goes away with the board read again, so the focus goes to
- * the deal's name on its card or row, under which the next action then shows.
- */
-function useAddNextAction() {
-  const [deal, setDeal] = useState<DealCard | null>(null);
-  const [open, setOpen] = useState(false);
-  const opener = useRef<HTMLElement | null>(null);
-  const added = useRef(false);
-  return {
-    deal,
-    open,
-    setOpen,
-    start: (chosen: DealCard, from: HTMLElement) => {
-      opener.current = from;
-      added.current = false;
-      setDeal(chosen);
-      setOpen(true);
-    },
-    markAdded: () => {
-      added.current = true;
-    },
-    returnFocus: (event: Event) => {
-      const button = opener.current;
-      const target =
-        !added.current && button?.isConnected ? button : deal ? dealLinkOf(deal.id) : undefined;
-      if (!target) return;
-      event.preventDefault();
-      target.focus();
-    },
-  };
-}
-
 /** The place of the board when it has nothing to show, with what to do next */
 function EmptyState({
   title,
@@ -158,7 +124,13 @@ export function DealsScreen() {
   // Clearing the filters takes away its button: the focus goes to the first filter
   const ownerTrigger = useRef<HTMLButtonElement>(null);
   const stageMove = useStageMove(organizationId);
-  const nextAction = useAddNextAction();
+  // The dialog that adds a deal's next action from its card or row (#853): one, for the deal
+  // chosen, outside the board (#998). Closed without adding, the focus goes back to the button;
+  // once added, the button goes away with the board read again, so the focus goes to the deal's
+  // name on its card or row, under which the next action then shows
+  const nextAction = useRowDialog<DealCard>(({ chosen, done, opener }) =>
+    !done && opener ? opener : dealLinkOf(chosen.id)
+  );
 
   const board = trpc.deals.board.useQuery(
     {
@@ -407,15 +379,15 @@ export function DealsScreen() {
               organizationId={organizationId}
             />
           )}
-          {data?.canEdit && nextAction.deal && (
+          {data?.canEdit && nextAction.chosen && (
             <AddNextActionDialog
               open={nextAction.open}
               onOpenChange={nextAction.setOpen}
               organizationId={organizationId}
-              deal={nextAction.deal}
-              leadLabel={nextAction.deal.company || nextAction.deal.leadName || ''}
+              deal={nextAction.chosen}
+              leadLabel={nextAction.chosen.company || nextAction.chosen.leadName || ''}
               today={data.today}
-              onAdded={nextAction.markAdded}
+              onAdded={nextAction.markDone}
               onCloseAutoFocus={nextAction.returnFocus}
             />
           )}

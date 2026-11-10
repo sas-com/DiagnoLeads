@@ -984,6 +984,158 @@ describe('TodayScreen', () => {
       await waitFor(() => expect(button).toHaveFocus());
     });
 
+    // One dialog for the section, outside what a read of it replaces (#998)
+    it('keeps the activity dialog and what was entered when the meetings fail to be read again', async () => {
+      loadAll();
+      const user = userEvent.setup();
+      const { rerender } = renderScreen();
+      await user.click(
+        within(group(region(/^商談予定/), t.meetings.laterHeading)).getByRole('button', {
+          name: '架空物産への連絡を記録',
+        })
+      );
+      await user.click(
+        screen.getByRole('menuitem', { name: messages.leadFollowUp.activity.open })
+      );
+      await user.type(screen.getByRole('textbox', { name: contactText.note }), '架空のメモ');
+
+      mocks.queries.myMeetings = { isError: true };
+      rerender(
+        <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
+          <TodayScreen />
+        </NextIntlClientProvider>
+      );
+
+      // Behind the open dialog, which hides the rest of the page from the screen reader
+      const behind = screen.getByRole('region', { name: /^商談予定/, hidden: true });
+      expect(within(behind).getByRole('alert', { hidden: true })).toBeInTheDocument();
+      const dialog = screen.getByRole('dialog', { name: messages.leadFollowUp.activity.title });
+      expect(dialog).toHaveTextContent('架空物産への連絡・訪問・オンライン商談');
+      expect(within(dialog).getByRole('textbox', { name: contactText.note })).toHaveValue(
+        '架空のメモ'
+      );
+
+      // The row's menu went with the meetings: the focus goes to the section's heading
+      await user.click(within(dialog).getByRole('button', { name: messages.common.cancel }));
+      await waitFor(() =>
+        expect(screen.getByRole('heading', { name: /^商談予定/ })).toHaveFocus()
+      );
+    });
+
+    it('records what the dialog saves for the row’s lead, the focus coming back to its menu', async () => {
+      loadAll();
+      const user = userEvent.setup();
+      renderScreen();
+      const button = within(group(region(/^商談予定/), t.meetings.laterHeading)).getByRole(
+        'button',
+        { name: '架空物産への連絡を記録' }
+      );
+
+      await user.click(button);
+      await user.click(
+        screen.getByRole('menuitem', { name: messages.leadFollowUp.activity.open })
+      );
+      await user.click(screen.getByRole('radio', { name: 'オンライン商談' }));
+      await user.click(screen.getByRole('button', { name: '記録する' }));
+
+      expect(mocks.recorded).toEqual([
+        expect.objectContaining({ organizationId: ORG_ID, leadId: LEAD_3, kind: 'online_meeting' }),
+      ]);
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      await waitFor(() => expect(button).toHaveFocus());
+    });
+
+    it('hands the focus from the menu to the dialog and back with the keyboard', async () => {
+      loadAll();
+      const user = userEvent.setup();
+      renderScreen();
+      const button = within(region(/^今日までの次の行動/)).getByRole('button', {
+        name: '架空商事への連絡を記録',
+      });
+
+      button.focus();
+      await user.keyboard('{Enter}');
+      // Called, emailed, could not reach, then (past the separator) "Record an activity"
+      await user.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}');
+      expect(
+        screen.getByRole('menuitem', { name: messages.leadFollowUp.activity.open })
+      ).toHaveFocus();
+      await user.keyboard('{Enter}');
+
+      const dialog = screen.getByRole('dialog', { name: messages.leadFollowUp.activity.title });
+      await waitFor(() => expect(dialog).toContainElement(document.activeElement as HTMLElement));
+      await user.keyboard('{Escape}');
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      await waitFor(() => expect(button).toHaveFocus());
+    });
+
+    it('keeps it when its row leaves meanwhile, the focus going to the section’s heading once it closes', async () => {
+      loadAll();
+      const user = userEvent.setup();
+      const { rerender } = renderScreen();
+      await user.click(
+        within(region(/^今日までの次の行動/)).getByRole('button', {
+          name: '架空商事への連絡を記録',
+        })
+      );
+      await user.click(
+        screen.getByRole('menuitem', { name: messages.leadFollowUp.activity.open })
+      );
+
+      // Completed elsewhere meanwhile: the list is read again without it
+      mocks.queries.dueTasks = { data: { ...due, total: 0, items: [] } };
+      rerender(
+        <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
+          <TodayScreen />
+        </NextIntlClientProvider>
+      );
+      // Behind the open dialog, which hides the rest of the page from the screen reader
+      const behind = screen.getByRole('region', { name: /^今日までの次の行動/, hidden: true });
+      expect(
+        within(behind).queryByRole('button', { name: '架空商事への連絡を記録', hidden: true })
+      ).not.toBeInTheDocument();
+      const dialog = screen.getByRole('dialog', { name: messages.leadFollowUp.activity.title });
+      expect(dialog).toHaveTextContent('架空商事への連絡・訪問・オンライン商談');
+      await user.click(within(dialog).getByRole('button', { name: messages.common.cancel }));
+
+      await waitFor(() =>
+        expect(screen.getByRole('heading', { name: /^今日までの次の行動/ })).toHaveFocus()
+      );
+    });
+
+    it('sends the focus to the heading, not to the row beside it, when its row left with others staying', async () => {
+      loadAll();
+      const other = { ...dueTask, id: 'task-2', leadId: LEAD_3, lead: { name: null, company: '架空物産' } };
+      mocks.queries.dueTasks = { data: { ...due, total: 2, items: [dueTask, other] } };
+      const user = userEvent.setup();
+      const { rerender } = renderScreen();
+      await user.click(
+        within(region(/^今日までの次の行動/)).getByRole('button', {
+          name: '架空商事への連絡を記録',
+        })
+      );
+      await user.click(
+        screen.getByRole('menuitem', { name: messages.leadFollowUp.activity.open })
+      );
+
+      // Its next action done elsewhere: the other one stays
+      mocks.queries.dueTasks = { data: { ...due, total: 1, items: [other] } };
+      rerender(
+        <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
+          <TodayScreen />
+        </NextIntlClientProvider>
+      );
+      const dialog = screen.getByRole('dialog', { name: messages.leadFollowUp.activity.title });
+      await user.click(within(dialog).getByRole('button', { name: messages.common.cancel }));
+
+      await waitFor(() =>
+        expect(screen.getByRole('heading', { name: /^今日までの次の行動/ })).toHaveFocus()
+      );
+      expect(
+        within(region(/^今日までの次の行動/)).getByRole('button', { name: '架空物産への連絡を記録' })
+      ).not.toHaveFocus();
+    });
+
     it('puts the button beside the meeting’s link in the row, never inside it', () => {
       loadAll();
       renderScreen();

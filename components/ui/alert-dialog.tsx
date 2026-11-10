@@ -1,6 +1,7 @@
 'use client';
 
 import { buttonVariants } from '@/components/ui/button';
+import { ignoreImeEscape } from '@/components/ui/ime';
 import { cn } from '@/lib/utils';
 import * as AlertDialogPrimitive from '@radix-ui/react-alert-dialog';
 import * as React from 'react';
@@ -27,7 +28,7 @@ AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName;
 const AlertDialogContent = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>
->(({ className, ...props }, ref) => (
+>(({ className, onEscapeKeyDown, ...props }, ref) => (
   <AlertDialogPortal>
     <AlertDialogOverlay />
     <AlertDialogPrimitive.Content
@@ -37,6 +38,7 @@ const AlertDialogContent = React.forwardRef<
         className
       )}
       {...props}
+      onEscapeKeyDown={ignoreImeEscape(onEscapeKeyDown)}
     />
   </AlertDialogPortal>
 ));

@@ -1,4 +1,5 @@
 import { TAP_TARGET } from '@/components/common/tap-target';
+import { isImeKey } from '@/components/ui/ime';
 import { cn } from '@/lib/utils';
 import type { KeyboardEvent } from 'react';
 
@@ -16,12 +17,8 @@ export const TOGGLE_ITEM = cn(
   'data-[state=on]:border-gray-900 data-[state=on]:font-bold dark:data-[state=on]:border-gray-50'
 );
 
-/**
- * A key of a conversion (IME): one open, or the Enter or Esc that confirms or cancels it, which
- * Safari sends after compositionend, with isComposing false and keyCode 229
- */
-export const isComposing = (event: KeyboardEvent<Element>) =>
-  event.nativeEvent.isComposing || event.keyCode === 229;
+/** A key of a conversion (IME), on a React key event; see isImeKey */
+export const isComposing = (event: KeyboardEvent<Element>) => isImeKey(event.nativeEvent);
 
 /** Ctrl+Enter (⌘+Enter on a Mac) sends what is written; not the Enter of a conversion */
 export const isSendShortcut = (event: KeyboardEvent<Element>) =>
