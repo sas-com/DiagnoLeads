@@ -1790,7 +1790,6 @@
         "cancel": "キャンセル",
         "confirm": "削除する",
         "deleting": "削除中...",
-        "success": "アカウントを削除しました",
         "errorConfirmation": "メールアドレスが一致しません",
         "errorPasswordRequired": "パスワードを入力してください",
         "errorPassword": "パスワードが正しくありません",
@@ -2407,7 +2406,8 @@
         "errorToast": "ログインに失敗しました。",
         "invalidCredentials": "メールアドレスまたはパスワードが正しくありません。",
         "userNotFound": "このメールアドレスは登録されていません。",
-        "inviteOnlyNote": "新規登録は招待制です。招待された方は、届いた招待リンクから登録してください。"
+        "inviteOnlyNote": "新規登録は招待制です。招待された方は、届いた招待リンクから登録してください。",
+        "accountDeleted": "アカウントを削除しました"
       },
       "signup": {
         "title": "アカウントを作成",

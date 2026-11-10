@@ -41,6 +41,19 @@ function dataOf(org: Organization | null | undefined, orgId: string): Organizati
 }
 
 /**
+ * Drops the organization chosen on this browser (localStorage), and not the page's state, for a
+ * page about to be left signed out (#1057): with the state cleared, the organization switcher
+ * would choose one again, and save it, before the page has gone
+ */
+export function forgetStoredOrganization(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Storage blocked: nothing was kept there
+  }
+}
+
+/**
  * Organization Provider
  *
  * Provides organization context to the application.

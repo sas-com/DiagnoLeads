@@ -13,7 +13,8 @@ import { Input } from '@/components/ui/input';
 import { authClient } from '@/lib/auth/client';
 import { safeCallbackPath } from '@/lib/auth/safe-callback';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { CircleAlert } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { CircleAlert, CircleCheck } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
@@ -29,6 +30,7 @@ type LoginFormValues = {
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const t = useTranslations('settings.auth.login');
   const tv = useTranslations('settings.auth.validation');
   const [isLoading, setIsLoading] = useState(false);
@@ -86,6 +88,9 @@ export function LoginForm() {
         return;
       }
 
+      // What this tab read before is another session's: one that ended without signing out here
+      // (#1057)
+      queryClient.clear();
       toast.success(t('successToast'));
       // Use the callback URL for redirection
       router.push(callbackUrl);
@@ -100,6 +105,17 @@ export function LoginForm() {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        {searchParams.get('accountDeleted') === '1' && (
+          // The deletion opened this page as a new one, without its toast (#1057)
+          // biome-ignore lint/a11y/useSemanticElements: live-region notice, not a form output
+          <p
+            role="status"
+            className="flex items-start gap-1.5 text-sm text-[var(--color-semantic-success-2)] dark:text-green-300"
+          >
+            <CircleCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>{t('accountDeleted')}</span>
+          </p>
+        )}
         <FormField
           control={form.control}
           name="email"

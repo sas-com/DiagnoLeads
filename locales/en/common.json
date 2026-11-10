@@ -1790,7 +1790,6 @@
         "cancel": "Cancel",
         "confirm": "Delete",
         "deleting": "Deleting...",
-        "success": "Your account has been deleted",
         "errorConfirmation": "The email address does not match",
         "errorPasswordRequired": "Enter your password",
         "errorPassword": "The password is incorrect",
@@ -2407,7 +2406,8 @@
         "errorToast": "Login failed.",
         "invalidCredentials": "Invalid email or password.",
         "userNotFound": "No account found with this email.",
-        "inviteOnlyNote": "Sign-up is by invitation only. If you were invited, use the link in your invitation."
+        "inviteOnlyNote": "Sign-up is by invitation only. If you were invited, use the link in your invitation.",
+        "accountDeleted": "Your account has been deleted"
       },
       "signup": {
         "title": "Create Account",

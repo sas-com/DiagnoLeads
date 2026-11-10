@@ -1,6 +1,7 @@
 'use client';
 
 import { authClient } from '@/lib/auth/client';
+import { leaveSignedOut } from '@/lib/auth/leave-signed-out';
 import {
   RiArrowDownSLine,
   RiLogoutBoxRLine,
@@ -10,14 +11,12 @@ import {
 } from '@remixicon/react';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 export default function UserDropdown() {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const router = useRouter();
   const locale = useLocale();
   const t = useTranslations('header.userDropdown');
 
@@ -62,7 +61,8 @@ export default function UserDropdown() {
         toast.error(t('logoutError'));
         return;
       }
-      router.push(`/${locale}/login`);
+      // A new page, without what this one read and chose for the account (#1057)
+      leaveSignedOut(`/${locale}/login`);
     } catch (error) {
       console.error('Logout failed:', error);
       toast.error(t('logoutError'));

@@ -3,7 +3,7 @@
  */
 import { InviteAcceptance } from '@/components/features/members/invite-acceptance';
 import messages from '@/locales/ja/common.json';
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   setOrganization: vi.fn(),
   signOut: vi.fn(),
+  leaveSignedOut: vi.fn(),
   sendVerificationEmail: vi.fn(),
   getSession: vi.fn(),
   mutate: vi.fn(),
@@ -60,6 +61,8 @@ vi.mock('@/lib/auth/client', () => ({
     getSession: mocks.getSession,
   },
 }));
+// Leaving signed out loads a new page (#1057), which jsdom does not
+vi.mock('@/lib/auth/leave-signed-out', () => ({ leaveSignedOut: mocks.leaveSignedOut }));
 vi.mock('@/lib/context/organization-context', () => ({
   useOrganizationContext: () => ({ setOrganization: mocks.setOrganization }),
 }));
@@ -264,6 +267,11 @@ describe('InviteAcceptance', () => {
     expect(screen.queryByRole('button', { name: '参加する' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'ログアウトする' }));
     expect(mocks.signOut).toHaveBeenCalled();
+    // This invitation again as a new page, without what this one read for the other account
+    // (#1057)
+    await waitFor(() =>
+      expect(mocks.leaveSignedOut).toHaveBeenCalledWith(window.location.href, { replace: true })
+    );
   });
 
   it.each([
