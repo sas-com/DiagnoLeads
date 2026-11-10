@@ -64,7 +64,11 @@ export interface LeadListQueryController {
   setFilters: (filters: LeadListFilters) => void;
   /** Change some filters (page back to 1) */
   updateFilters: (patch: Partial<LeadListFilters>) => void;
-  removeChip: (chip: LeadFilterChip) => void;
+  /**
+   * Remove one condition. 'replace' corrects the URL without a history entry, so the back button
+   * does not return to the condition (a filter the member may not use, #854)
+   */
+  removeChip: (chip: LeadFilterChip, mode?: 'push' | 'replace') => void;
   /** Remove every filter, the search included; the sort is kept */
   clearFilters: () => void;
   applyPreset: (preset: LeadListPreset) => void;
@@ -139,9 +143,9 @@ export function useLeadListQuery(options: UseLeadListQueryOptions = {}): LeadLis
   }, [searchText, urlSearch, searchDebounceMs, sendSearch]);
 
   const setFilters = useCallback(
-    (filters: LeadListFilters) => {
+    (filters: LeadListFilters, mode: 'push' | 'replace' = 'push') => {
       const current = latest.current.query;
-      navigate({ ...current, filters: normalizeFilters(filters), page: 1 });
+      navigate({ ...current, filters: normalizeFilters(filters), page: 1 }, mode);
     },
     [navigate]
   );
@@ -154,8 +158,8 @@ export function useLeadListQuery(options: UseLeadListQueryOptions = {}): LeadLis
   );
 
   const removeChip = useCallback(
-    (chip: LeadFilterChip) => {
-      setFilters(removeChipFromFilters(latest.current.query.filters, chip));
+    (chip: LeadFilterChip, mode: 'push' | 'replace' = 'push') => {
+      setFilters(removeChipFromFilters(latest.current.query.filters, chip), mode);
     },
     [setFilters]
   );

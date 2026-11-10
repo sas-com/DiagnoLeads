@@ -6,6 +6,7 @@
  * - the user menu uses the headings of the pages it opens
  * - no environment variable names in what users read
  */
+import { messages as catalog } from '@/lib/i18n/messages';
 import en from '@/locales/en/common.json';
 import ja from '@/locales/ja/common.json';
 import { describe, expect, it } from 'vitest';
@@ -19,7 +20,8 @@ function flatten(messages: Messages, prefix = ''): [string, string][] {
   });
 }
 
-const jaEntries = flatten(ja as Messages);
+// Every file of the catalog, not only common.json (#472)
+const jaEntries = flatten(catalog.ja as Messages);
 const valuesWith = (needle: string | RegExp) =>
   jaEntries
     .filter(([, value]) => (typeof needle === 'string' ? value.includes(needle) : needle.test(value)))

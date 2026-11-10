@@ -12,6 +12,7 @@ import { organizationsNewArticle } from './content/organizations-new';
 import { prospectsArticle } from './content/prospects';
 import { settingsAgencyLinksArticle } from './content/settings-agency-links';
 import { settingsAxPlaybookArticle } from './content/settings-ax-playbook';
+import { settingsFieldGlossaryArticle } from './content/settings-field-glossary';
 import { settingsMembersArticle } from './content/settings-members';
 import { settingsOrganizationArticle } from './content/settings-organization';
 import { settingsProfileArticle } from './content/settings-profile';
@@ -50,6 +51,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
   settingsQrCampaignsArticle,
   settingsAxPlaybookArticle,
   settingsAgencyLinksArticle,
+  settingsFieldGlossaryArticle,
   organizationsNewArticle,
   workflowLifecycleArticle,
   workflowProspectsToLeadArticle,
@@ -89,6 +91,7 @@ export const HELP_TABLE_OF_CONTENTS: Readonly<Record<HelpSection, readonly HelpA
     settingsAgencyLinksArticle,
     settingsQrCampaignsArticle,
     settingsWebhooksArticle,
+    settingsFieldGlossaryArticle,
     organizationsNewArticle,
   ],
   terms: [glossaryArticle],

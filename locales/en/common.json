@@ -213,6 +213,7 @@
     "qrCampaigns": "QR Campaigns",
     "axPlaybook": "Sales playbook (AX)",
     "agencyLinks": "Agency links",
+    "fieldGlossary": "Field glossary",
     "profile": "Profile",
     "logout": "Logout"
   },
@@ -367,6 +368,7 @@
       "close": "Close",
       "submit": "Answer and update the result",
       "done": "The result has been updated. Thank you.",
+      "dataHandling": "We also decide with you in the consultation how the personal or confidential data is handled.",
       "failed": "Could not send. Please try again later."
     },
     "result": {
@@ -1273,6 +1275,13 @@
     "totalLeads": "Total Leads",
     "activeLeads": "Active Leads",
     "conversionRate": "Conversion Rate",
+    "missingDeal": {
+      "title": "Leads missing a deal: {count, number}",
+      "description": "They are Negotiating or Won (or New with a deal phase) but have no deal, so Deals and the sales forecast leave them out. Add one with New deal on the lead's page, or correct the status or deal phase. For a won lead, use the stage Won.",
+      "action": "Show these leads",
+      "none": "No leads are missing a deal",
+      "forbidden": "Only members who can see deals can use this filter"
+    },
     "createLead": "Add New Lead",
     "createLeadTitle": "Create New Lead",
     "createLeadDescription": "Enter information for the new lead.",
@@ -1451,7 +1460,9 @@
       "noAmount": "No amount yet",
       "unassigned": "No owner",
       "move": "Move \"{name}\" to another stage (now {stage})",
-      "moveTo": "Move to {stage}"
+      "moveTo": "Move to {stage}",
+      "addNextAction": "Add a next action",
+      "addNextActionFor": "Add a next action for \"{name}\""
     },
     "filters": {
       "label": "Filters",
@@ -1629,6 +1640,7 @@
       "deleteError": "Could not delete. Please try again",
       "error": "Could not save. Please try again"
     },
+    "autoCreated": "{count, plural, =1 {The first meeting is set, so a deal in Qualification was created} other {The first meetings are set, so deals in Qualification were created for # leads}}",
     "historyFields": {
       "created": "Created",
       "kind": "Kind",
@@ -2005,6 +2017,41 @@
       "testFailed": "The test webhook failed. Check the destination settings.",
       "testRateLimited": "Test send limit reached (up to {perWebhook} per webhook every 10 minutes, {perOrganization} per organization every hour and {perUser} per user every hour). Try again later."
     },
+    "fieldGlossary": {
+      "title": "Field glossary",
+      "description": "Manage the site-wide help text shown for admin input fields.",
+      "add": "Add",
+      "createTitle": "Add entry",
+      "createDescription": "Enter a field key and description. Leave the value blank for the field's own help.",
+      "editTitle": "Edit entry",
+      "editDescription": "Change the description or sort order.",
+      "create": "Create",
+      "save": "Save",
+      "cancel": "Cancel",
+      "edit": "Edit",
+      "delete": "Delete",
+      "fieldKey": "Field key",
+      "fieldKeyPlaceholder": "leads.status",
+      "fieldKeyInvalid": "The field key must look like \"leads.status\".",
+      "value": "Value",
+      "valueHint": "Set the value to describe one value of the field. Leave it blank for the field's own help.",
+      "fieldLevel": "Whole field",
+      "labelJa": "Label (Japanese)",
+      "labelEn": "Label (English)",
+      "descriptionJa": "Description (Japanese)",
+      "descriptionEn": "Description (English)",
+      "sortOrder": "Sort order",
+      "forbidden": "No permission",
+      "forbiddenDescription": "Only an owner or admin of the operator organization can edit the field glossary.",
+      "noEntries": "No entries yet",
+      "noEntriesDescription": "Add your first entry to describe an input field.",
+      "createFirst": "Add the first entry",
+      "created": "Added",
+      "updated": "Updated",
+      "deleted": "Deleted",
+      "confirmDelete": "Delete this entry?",
+      "conflict": "That field/value already exists"
+    },
     "embed": {
       "title": "Embed Widget Settings",
       "description": "Configure widgets to embed diagnostic forms on external websites",
@@ -2073,7 +2120,7 @@
       "createTitle": "Create QR Campaign",
       "createDescription": "Create a new QR code campaign for offline distribution",
       "testFirstTitle": "Try it with a campaign for checking",
-      "testFirst": "Check how it works with a campaign made for checking, and create the one you hand out after the check. The scans and answers of the check count for the campaign they use. The leads the check creates stay in the lead list.",
+      "testFirst": "Check how it works with a campaign made for checking, and create the one you hand out after the check. The scans and answers of the check count for the campaign they use. The leads the check creates stay in the lead list and count in their inflow source.",
       "name": "Campaign Name",
       "namePlaceholder": "e.g., 2026-11 Manufacturing DX Expo booth",
       "nameHint": "Create one campaign per event or handout. Scans and new leads are counted per campaign.",
@@ -2086,11 +2133,24 @@
       "utmMedium": "Medium",
       "utmCampaign": "Campaign",
       "utmContent": "Content",
+      "medium": {
+        "label": "Distribution channel (utm_medium)",
+        "inflow": "New leads from scans get the inflow source: {source}",
+        "inflowNote": {
+          "exhibition": "Exhibitions count under this inflow source. The scans and new leads of each campaign show the exhibitions alone."
+        },
+        "hint": "For flyers and brochures handed out at a seminar or an exhibition, choose that event. It cannot be changed after the campaign is created.",
+        "options": {
+          "seminar": "Seminar or webinar",
+          "exhibition": "Exhibition or trade show",
+          "direct_mail": "Direct mail (posted or handed out one by one)"
+        }
+      },
       "shortCode": "Short Code",
       "trackingUrl": "Tracking URL",
       "downloadQR": "Download QR Code",
       "copyUrl": "Copy URL",
-      "copyUrlHint": "Opening this URL counts as a scan too. To share it by email or on the web, create a separate campaign for each channel.",
+      "copyUrlHint": "Opening this URL counts as a scan too. New leads get the inflow source of the distribution channel chosen at creation. To share by email or on the web, use the diagnosis URL with that channel's UTM (such as utm_medium=email) instead of this URL.",
       "active": "Active",
       "inactive": "Inactive",
       "created": "QR campaign created",
@@ -4843,6 +4903,7 @@
     "consultation": "Consultation requested",
     "mql": "MQL",
     "sqlQualified": "SQL (qualified)",
+    "missingDeal": "Missing a deal",
     "selectedCount": "{count} selected",
     "apply": "Apply",
     "clear": "Clear",
@@ -5054,7 +5115,21 @@
       "checkWithOtherPlaceholder": "e.g. The customer's IT department",
       "checkWith": "Check with: {name}",
       "fromMeetingRequest": "First meeting confirmed from the respondent's preferred dates",
-      "fromActTiming": "Contact again before \"when to act\" (created from the support end and retirement)"
+      "fromActTiming": "Contact again before \"when to act\" (created from the support end and retirement)",
+      "assignee": "Assigned to {name}",
+      "added": "Added \"{title}\"",
+      "adding": "Adding…",
+      "dueInvalid": "Enter the due date as year-month-day, e.g. 2026-11-15",
+      "recipient": {
+        "dealOwner": "When it is due, {name} (the deal's owner) is notified and sees it on Today.",
+        "you": "When it is due, you are notified and see it on Today.",
+        "leadAssignee": "When it is due, the lead's assignee (or you, if it has none) is notified and sees it on Today."
+      },
+      "dialog": {
+        "title": "Add a next action for \"{deal}\"",
+        "description": "It is added to the next actions and takeaways of the lead \"{lead}\".",
+        "descriptionNoName": "It is added to the next actions and takeaways of this deal's lead."
+      }
     },
     "today": {
       "title": "Today",
@@ -5311,7 +5386,7 @@
     "stale": "The preferences changed, so nothing was confirmed. Check the latest options and pick again.",
     "confirmError": "Could not confirm it. Please try again.",
     "readOnly": "You do not have permission to confirm it.",
-    "nextMeetingNote": "The confirmed date becomes the lead's next meeting and a next action.",
+    "nextMeetingNote": "The confirmed date becomes the lead's next meeting and a next action. A deal in Qualification is created too, except for leads such as those with an open deal or already won.",
     "cancel": "Cancel"
   },
   "leadPrep": {
@@ -5717,7 +5792,7 @@
     },
     "convert": {
       "title": "Make a lead",
-      "description": "Move a customer you now have a contact for to the leads. The company and the sales person come from this row.",
+      "description": "Move a customer you now have a contact for to the leads. The company and the sales person come from this row. A row with a meeting date also creates a deal in Qualification for the lead, except for leads such as those with an open deal or already won.",
       "email": "Email",
       "name": "Name (optional)",
       "phone": "Phone (optional)",
@@ -5811,7 +5886,7 @@
     },
     "handedOverDays": "Handed over {days} days ago",
     "leadBadge": "Lead: {status}",
-    "leadLocked": "Rows that became leads are followed on the lead page",
+    "leadLocked": "Rows that became leads are followed on the lead page. A meeting date entered here creates a deal in Qualification for the lead, except for leads such as those with an open deal or already won",
     "leadCard": {
       "title": "Customer search records",
       "description": "What employees heard when they talked to this customer.",
@@ -5897,7 +5972,7 @@
     },
     "import": {
       "title": "Import an agency's appointment report",
-      "description": "Read the agency's report (CSV or Excel) and attach each row to a lead by email address (or company name). New hearings are prefilled as \"Sales agency\". No lead is created.",
+      "description": "Read the agency's report (CSV or Excel) and attach each row to a lead by email address (or company name). New hearings are prefilled as \"Sales agency\". No lead is created. A row with an appointment date creates a deal in Qualification for its lead, except for leads such as those with an open deal or already won, and importing the same date again creates none. A row without an appointment date keeps the date saved before.",
       "chooseFile": "Choose a file",
       "template": "Download the format (CSV)",
       "rows": "{count} rows read",

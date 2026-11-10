@@ -1,8 +1,9 @@
 /**
  * The pipeline board (#436, #720): columns with their totals, the cards' warnings and dates, the
- * lead's next action of an open deal instead of the deal's old next step (#853), moving a card
- * with its menu (the keyboard and phone way, named with the card's stage) or by dragging it, and
- * the focus that follows a card moved from its menu. Real next-intl messages and UI components.
+ * lead's next action of an open deal instead of the deal's old next step and the button that adds
+ * one where it is missing (#853), moving a card with its menu (the keyboard and phone way, named
+ * with the card's stage) or by dragging it, and the focus that follows a card moved from its
+ * menu. Real next-intl messages and UI components.
  */
 import { DealBoard } from '@/components/features/deals/deal-board';
 import type { BoardColumn, DealCard, DealNextTask } from '@/lib/features/deals/service';
@@ -86,7 +87,11 @@ function columnsWith(deals: DealCard[]): BoardColumn[] {
   });
 }
 
-function renderBoard(deals: DealCard[], canEdit = true) {
+function renderBoard(
+  deals: DealCard[],
+  canEdit = true,
+  onAddNextAction?: (deal: DealCard, opener: HTMLElement) => void
+) {
   const onMove = vi.fn();
   const view = render(
     <NextIntlClientProvider locale="ja" messages={messages}>
@@ -96,6 +101,7 @@ function renderBoard(deals: DealCard[], canEdit = true) {
         closedWithinDays={30}
         canEdit={canEdit}
         onMove={onMove}
+        onAddNextAction={onAddNextAction}
       />
     </NextIntlClientProvider>
   );
@@ -238,6 +244,49 @@ describe('DealBoard', () => {
       'md:h-8',
       'md:w-8'
     );
+  });
+
+  it('offers to add a next action under the mark of an open deal without one (#853)', async () => {
+    const user = userEvent.setup();
+    const onAddNextAction = vi.fn();
+    const { container } = renderBoard(
+      [
+        card({ ...NO_TASK }),
+        card({ id: 'deal-2', name: '移行' }),
+        card({ id: 'deal-3', name: '保守', stage: 'lost', closedOn: TODAY, ...NO_TASK }),
+      ],
+      true,
+      onAddNextAction
+    );
+    const item = cardOf('AS/400 現行調査');
+    const button = within(item).getByRole('button', {
+      name: '「AS/400 現行調査」の次の行動を追加',
+    });
+    // It ends the card, after the mark; 44px on phones, and no text under 14px
+    expect(item.lastElementChild).toBe(button);
+    expect(
+      within(item)
+        .getByText('リードに次の行動（タスク）がありません')
+        .compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(button).toHaveTextContent('次の行動を追加');
+    // 44px on phones, as compact as the move button from md
+    expect(button).toHaveClass('min-h-11', 'md:h-8');
+    expect(container.querySelector('.text-xs')).toBeNull();
+    // Not where the lead has one, nor on a closed deal
+    for (const name of ['移行', '保守']) {
+      expect(
+        within(cardOf(name)).queryByRole('button', { name: /次の行動を追加/ })
+      ).not.toBeInTheDocument();
+    }
+
+    await user.click(button);
+    expect(onAddNextAction).toHaveBeenCalledWith(expect.objectContaining({ id: 'deal-1' }), button);
+  });
+
+  it('offers no next action to add to those who may not change deals (#853)', () => {
+    renderBoard([card({ ...NO_TASK })], false, vi.fn());
+    expect(screen.queryByRole('button', { name: /次の行動を追加/ })).not.toBeInTheDocument();
   });
 
   it('warns about a passed close date and a deal without a next action', () => {

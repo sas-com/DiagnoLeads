@@ -51,6 +51,8 @@ export interface HearingDateInputProps extends PickerProps {
   onInvalidChange?: (invalid: boolean) => void;
   /** The form's own error about the date (e.g. a day it does not take), shown like the box's */
   error?: string;
+  /** What the box says while it holds text that is not a date, naming its field (the due date) */
+  invalidMessage?: string;
 }
 
 export function HearingDateInput({
@@ -63,6 +65,7 @@ export function HearingDateInput({
   clearable = true,
   onInvalidChange,
   error,
+  invalidMessage,
 }: HearingDateInputProps) {
   const t = useTranslations('leadHearings');
   const locale = useLocale();
@@ -72,7 +75,7 @@ export function HearingDateInput({
   const [open, setOpen] = useState(false);
   const shown = draft ?? (value ? formatTypedDate(value, locale) : '');
   const invalid = draft !== null && parseTypedDate(draft) === null;
-  const message = invalid ? t('editor.dateInvalid') : error;
+  const message = invalid ? (invalidMessage ?? t('editor.dateInvalid')) : error;
   const selected = fromIsoDate(value);
 
   const changeDraft = (next: string | null) => {
@@ -180,7 +183,7 @@ export function HearingDateInput({
         </Popover>
       </div>
       {message && (
-        <p id={errorId} className="text-xs text-red-600">
+        <p id={errorId} className="text-sm text-red-700 dark:text-red-400">
           {message}
         </p>
       )}
