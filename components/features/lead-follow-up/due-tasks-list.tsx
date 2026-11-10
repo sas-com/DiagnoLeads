@@ -10,6 +10,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { ContactRecordMenu } from './contact-record-menu';
+import type { OpenRowActivity } from './row-activity-dialog';
 import { CheckWithText, DueLabel, TaskKindBadge, useTaskTitle, useUpdateTask } from './task-parts';
 import type { DueTasks } from './use-due-tasks';
 
@@ -25,13 +26,14 @@ const LEAD_LINK_CLASS =
  * A row ticked shows ticked and disabled until it leaves once done (it can be ticked again when
  * the save fails), and the focus goes on at once to the next row's box, else the previous one's,
  * else to the heading, rather than to the page (#776). Only the rows being completed are
- * disabled, as a disabled box loses the focus.
+ * disabled, as a disabled box loses the focus. A row's "Record an activity" opens the screen's
+ * one dialog, which it keeps outside this list (#998).
  */
 export function DueTasksList({
   due,
   organizationId,
   showMineBadge,
-  canRecordContact = false,
+  onRecordActivity,
   headingId,
 }: {
   due: DueTasks;
@@ -39,10 +41,11 @@ export function DueTasksList({
   /** Mark the user's own ones (when everyone's are listed) */
   showMineBadge: boolean;
   /**
-   * With permission to edit leads, each row gets the menu to record a contact with its lead
-   * (今日, #863); without it the rows are as the dashboard's card shows them
+   * Given to those who may edit leads: each row gets the menu to record a contact with its lead
+   * (今日, #863), whose "Record an activity" opens the screen's dialog for the lead (#998, see
+   * RowActivityDialog). Without it the rows are as the dashboard's card shows them
    */
-  canRecordContact?: boolean;
+  onRecordActivity?: OpenRowActivity;
   /** The section's heading (focusable by script), where the focus goes when the list empties */
   headingId?: string;
 }) {
@@ -136,7 +139,7 @@ export function DueTasksList({
                   the menu to record a contact goes with it, at the end of the line. From sm the
                   two take at most 45% of the row, the lead's name cut first, so the title keeps
                   its room and the menu stays at the end */}
-              {canRecordContact ? (
+              {onRecordActivity ? (
                 <div className="flex min-w-0 basis-full items-center gap-2 pl-8 sm:max-w-[45%] sm:basis-auto sm:pl-0">
                   {/* 44px to tap on phones, like the menu beside it */}
                   <Link
@@ -149,6 +152,9 @@ export function DueTasksList({
                     organizationId={organizationId}
                     leadId={task.leadId}
                     leadLabel={leadName}
+                    onRecordActivity={(opener) =>
+                      onRecordActivity({ leadId: task.leadId, leadLabel: leadName }, opener)
+                    }
                     className="ml-auto shrink-0"
                   />
                 </div>

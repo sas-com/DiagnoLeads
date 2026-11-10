@@ -2,6 +2,11 @@
 
 import { TAP_TARGET } from '@/components/common/tap-target';
 import { ContactRecordMenu } from '@/components/features/lead-follow-up/contact-record-menu';
+import {
+  type OpenRowActivity,
+  RowActivityDialog,
+  useRowActivityDialog,
+} from '@/components/features/lead-follow-up/row-activity-dialog';
 import { DealRatingBadge } from '@/components/features/leads/next-meeting';
 import { Badge } from '@/components/ui/badge';
 import { NEXT_MEETING_CLOSED_STATUSES, leadListHref } from '@/lib/features/leads/list-query';
@@ -51,6 +56,15 @@ interface RecordContactProps {
 }
 
 /**
+ * What a row needs to record a contact: given to those who may edit leads, opening the section's
+ * one "Record an activity" (#998)
+ */
+interface RowRecordContactProps {
+  organizationId: string;
+  onRecordActivity?: OpenRowActivity;
+}
+
+/**
  * One meeting: a link to the lead (when, the lead, and what to know before going) and, for those
  * who may edit leads, the menu to record a contact beside it, never inside the link (#863). The
  * menu goes under the link on phones and at the end of the row from sm
@@ -59,8 +73,8 @@ function MeetingItem({
   meeting,
   withDay,
   organizationId,
-  canRecordContact,
-}: { meeting: Meeting; withDay: boolean } & RecordContactProps) {
+  onRecordActivity,
+}: { meeting: Meeting; withDay: boolean } & RowRecordContactProps) {
   const t = useTranslations('today.meetings');
   const tToday = useTranslations('today');
   const tStatus = useTranslations('status');
@@ -72,7 +86,7 @@ function MeetingItem({
     <li
       className={cn(
         'flex flex-wrap items-center gap-x-2 gap-y-1 sm:flex-nowrap',
-        canRecordContact && 'pb-2 sm:pb-0'
+        onRecordActivity && 'pb-2 sm:pb-0'
       )}
     >
       <Link
@@ -121,11 +135,14 @@ function MeetingItem({
           )}
         </div>
       </Link>
-      {canRecordContact && (
+      {onRecordActivity && (
         <ContactRecordMenu
           organizationId={organizationId}
           leadId={meeting.leadId}
           leadLabel={leadName}
+          onRecordActivity={(opener) =>
+            onRecordActivity({ leadId: meeting.leadId, leadLabel: leadName }, opener)
+          }
           className="ml-auto shrink-0"
         />
       )}
@@ -145,7 +162,7 @@ function MeetingGroup({
   items: Meeting[];
   emptyText: string;
   withDay: boolean;
-} & RecordContactProps) {
+} & RowRecordContactProps) {
   const headingId = useId();
   return (
     <div className="space-y-1">
@@ -175,13 +192,22 @@ function MeetingGroup({
  * Sunday), from the latest hearing's next meeting date or the confirmed first meeting, with its
  * time when one was confirmed. The link opens the lead list of the user's leads' meetings this
  * week, which its label says: the list has the week's passed days and not the unassigned leads.
- * Those who may edit leads record a contact from a row (#863).
+ * Those who may edit leads record a contact from a row (#863); "Record an activity" opens one
+ * dialog outside the section's content, which stays when the row leaves or the meetings fail to
+ * be read again, the focus going back to the row's menu, else to the heading (#998).
  */
 export function TodayMeetings({
   query,
-  ...recordContact
+  organizationId,
+  canRecordContact,
 }: { query: TodayQuery<MyMeetings> } & RecordContactProps) {
   const t = useTranslations('today.meetings');
+  const headingId = useId();
+  const activity = useRowActivityDialog(headingId);
+  const recordContact: RowRecordContactProps = {
+    organizationId,
+    onRecordActivity: canRecordContact ? activity.start : undefined,
+  };
   const locale = useLocale();
   const data = query.data;
   const groups = data ? splitMeetings(data.items, data.today) : { today: [], later: [] };
@@ -193,38 +219,42 @@ export function TodayMeetings({
   );
 
   return (
-    <TodaySection
-      title={t('title')}
-      description={t('description')}
-      count={data?.total}
-      link={{ href: listHref, label: t('viewAll') }}
-      state={sectionState(query, data?.items.length === 0)}
-      emptyText={t('empty')}
-    >
-      <div className="space-y-4">
-        <MeetingGroup
-          title={t('todayHeading')}
-          items={groups.today}
-          emptyText={t('emptyToday')}
-          withDay={false}
-          {...recordContact}
-        />
-        {/* On Sunday the week has no rest */}
-        {data && data.today < data.weekEnd && (
+    <>
+      <TodaySection
+        headingId={headingId}
+        title={t('title')}
+        description={t('description')}
+        count={data?.total}
+        link={{ href: listHref, label: t('viewAll') }}
+        state={sectionState(query, data?.items.length === 0)}
+        emptyText={t('empty')}
+      >
+        <div className="space-y-4">
           <MeetingGroup
-            title={t('laterHeading')}
-            items={groups.later}
-            emptyText={t('emptyLater')}
-            withDay
+            title={t('todayHeading')}
+            items={groups.today}
+            emptyText={t('emptyToday')}
+            withDay={false}
             {...recordContact}
           />
-        )}
-        {rest > 0 && data && (
-          <p className="text-sm text-gray-600 dark:text-gray-300">
-            {t('more', { count: rest, shown: data.items.length })}
-          </p>
-        )}
-      </div>
-    </TodaySection>
+          {/* On Sunday the week has no rest */}
+          {data && data.today < data.weekEnd && (
+            <MeetingGroup
+              title={t('laterHeading')}
+              items={groups.later}
+              emptyText={t('emptyLater')}
+              withDay
+              {...recordContact}
+            />
+          )}
+          {rest > 0 && data && (
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              {t('more', { count: rest, shown: data.items.length })}
+            </p>
+          )}
+        </div>
+      </TodaySection>
+      <RowActivityDialog dialog={activity} organizationId={organizationId} />
+    </>
   );
 }
