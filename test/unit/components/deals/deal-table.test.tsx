@@ -1,7 +1,7 @@
 /**
  * The deals list (#436, #720): a passed close date said with an icon and words (not only in red),
- * the lead's company and name, the lead's next action of an open deal (#853) and the board card's
- * marks on each row, the days written like the date boxes, a lost deal's badge with an icon, the
+ * the lead's company and name, the lead's next action of an open deal or the button that adds one
+ * where it is missing (#853) and the board card's marks on each row, the days written like the date boxes, a lost deal's badge with an icon, the
  * headers that sort the list (named by their column, the order in aria-sort and the caption), and
  * how long won and lost deals stay listed (real next-intl messages)
  */
@@ -59,11 +59,26 @@ const card = (overrides: Partial<DealCard>): DealCard => ({
   ...overrides,
 });
 
-function renderTable(deals: DealCard[], sort: DealSort = { by: 'stage', order: 'asc' }) {
+function renderTable(
+  deals: DealCard[],
+  sort: DealSort = { by: 'stage', order: 'asc' },
+  edit: {
+    canEdit?: boolean;
+    onAddNextAction?: (deal: DealCard, opener: HTMLElement) => void;
+  } = {}
+) {
   const onSort = vi.fn();
   const view = render(
     <NextIntlClientProvider locale="ja" messages={messages}>
-      <DealTable deals={deals} today={TODAY} closedWithinDays={30} sort={sort} onSort={onSort} />
+      <DealTable
+        deals={deals}
+        today={TODAY}
+        closedWithinDays={30}
+        sort={sort}
+        onSort={onSort}
+        canEdit={edit.canEdit}
+        onAddNextAction={edit.onAddNextAction}
+      />
     </NextIntlClientProvider>
   );
   return { onSort, container: view.container };
@@ -134,6 +149,41 @@ describe('DealTable', () => {
     const won = rowOf('移行');
     expect(within(won).queryByText('稟議の確認')).not.toBeInTheDocument();
     expect(cellUnder(won, '次の行動')).toHaveTextContent(/^—$/);
+  });
+
+  it("offers to add a next action in the column of an open deal's missing one (#853)", async () => {
+    const user = userEvent.setup();
+    const onAddNextAction = vi.fn();
+    const { container } = renderTable(
+      [
+        card({ ...NO_TASK }),
+        card({ id: 'deal-2', name: '移行' }),
+        card({ id: 'deal-3', name: '保守', stage: 'won', closedOn: TODAY, ...NO_TASK }),
+      ],
+      undefined,
+      { canEdit: true, onAddNextAction }
+    );
+    const first = rowOf('AS/400 現行調査');
+    const button = within(cellUnder(first, '次の行動')).getByRole('button', {
+      name: '「AS/400 現行調査」の次の行動を追加',
+    });
+    expect(button).toHaveClass('min-h-11');
+    // The alerts' column still says it is missing
+    expect(cellUnder(first, '注意')).toHaveTextContent('リードに次の行動（タスク）がありません');
+    expect(
+      within(rowOf('移行')).queryByRole('button', { name: /次の行動を追加/ })
+    ).not.toBeInTheDocument();
+    expect(cellUnder(rowOf('保守'), '次の行動')).toHaveTextContent(/^—$/);
+    expect(container.querySelector('.text-xs')).toBeNull();
+
+    await user.click(button);
+    expect(onAddNextAction).toHaveBeenCalledWith(expect.objectContaining({ id: 'deal-1' }), button);
+  });
+
+  it('lists no button to those who may not change deals (#853)', () => {
+    renderTable([card({ ...NO_TASK })], undefined, { canEdit: false, onAddNextAction: vi.fn() });
+    expect(screen.queryByRole('button', { name: /次の行動を追加/ })).not.toBeInTheDocument();
+    expect(cellUnder(rowOf('AS/400 現行調査'), '次の行動')).toHaveTextContent(/^—$/);
   });
 
   it('says a passed close date with an icon and words, not only in red', () => {

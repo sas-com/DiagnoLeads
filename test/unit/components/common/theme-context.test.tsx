@@ -69,4 +69,36 @@ describe('ThemeProvider', () => {
     expect(screen.getByRole('button')).toHaveTextContent('dark');
     expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark');
   });
+
+  it('takes dark off the page when it goes, so a public page reached by Back stays light (#987)', () => {
+    mockOs(true);
+    const { unmount } = render(
+      <ThemeProvider>
+        <Probe />
+      </ThemeProvider>
+    );
+    expect(document.documentElement).toHaveClass('dark');
+
+    unmount();
+    expect(document.documentElement).not.toHaveClass('dark');
+  });
+
+  it('stays dark when sign-in hands over to the dashboard, one provider for another (#987)', () => {
+    mockOs(true);
+    // The sign-in layout and the dashboard shell each have their own provider
+    const { rerender } = render(
+      <ThemeProvider key="auth">
+        <Probe />
+      </ThemeProvider>
+    );
+    expect(document.documentElement).toHaveClass('dark');
+
+    rerender(
+      <ThemeProvider key="dashboard">
+        <Probe />
+      </ThemeProvider>
+    );
+    expect(document.documentElement).toHaveClass('dark');
+    expect(screen.getByRole('button')).toHaveTextContent('dark');
+  });
 });

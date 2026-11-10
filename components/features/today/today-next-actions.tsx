@@ -1,8 +1,13 @@
 'use client';
 
 import { DueTasksList, DueTasksMore } from '@/components/features/lead-follow-up/due-tasks-list';
+import {
+  RowActivityDialog,
+  useRowActivityDialog,
+} from '@/components/features/lead-follow-up/row-activity-dialog';
 import type { DueTasks } from '@/components/features/lead-follow-up/use-due-tasks';
 import { useTranslations } from 'next-intl';
+import { useId } from 'react';
 import { TodaySection, sectionState } from './today-section';
 
 /**
@@ -15,8 +20,10 @@ export const TODAY_NEXT_ACTIONS_SHOWN = 5;
  * The user's next actions and takeaways due today or earlier (今日, #556): only their own (the
  * one responsible, see responsibleUserSql), in the same frame and states as the other sections.
  * Ticking one completes it; "N more" opens the rest, and stays to go back when they fail to load.
- * Those who may edit leads record a contact from a row (#863).
- * The screen reads them (useDueTasks with TODAY_NEXT_ACTIONS_SHOWN): its heading needs their day
+ * Those who may edit leads record a contact from a row (#863); "Record an activity" opens one
+ * dialog outside the section's content, which stays when the row leaves or the list fails to be
+ * read again (#998). The screen reads them (useDueTasks with TODAY_NEXT_ACTIONS_SHOWN): its
+ * heading needs their day
  */
 export function TodayNextActions({
   due,
@@ -29,22 +36,29 @@ export function TodayNextActions({
 }) {
   const t = useTranslations('today.nextActions');
   const tDue = useTranslations('leadFollowUp.today');
+  const headingId = useId();
+  const activity = useRowActivityDialog(headingId);
 
   return (
-    <TodaySection
-      title={t('title')}
-      description={tDue('descriptionAll')}
-      count={due.data?.total}
-      state={sectionState(due.query, due.items.length === 0)}
-      emptyText={tDue('emptyMine')}
-      footer={<DueTasksMore due={due} />}
-    >
-      <DueTasksList
-        due={due}
-        organizationId={organizationId}
-        showMineBadge={false}
-        canRecordContact={canRecordContact}
-      />
-    </TodaySection>
+    <>
+      <TodaySection
+        headingId={headingId}
+        title={t('title')}
+        description={tDue('descriptionAll')}
+        count={due.data?.total}
+        state={sectionState(due.query, due.items.length === 0)}
+        emptyText={tDue('emptyMine')}
+        footer={<DueTasksMore due={due} />}
+      >
+        <DueTasksList
+          due={due}
+          organizationId={organizationId}
+          showMineBadge={false}
+          onRecordActivity={canRecordContact ? activity.start : undefined}
+          headingId={headingId}
+        />
+      </TodaySection>
+      <RowActivityDialog dialog={activity} organizationId={organizationId} />
+    </>
   );
 }

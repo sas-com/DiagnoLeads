@@ -5,7 +5,8 @@
  *   online, and what they want to talk about (topics and a short note, #244), from the result page after asking for a consultation. They can send them again
  *   until sales confirm one, and only for a day after the consultation request
  *   (MEETING_PREFERENCES_WINDOW_MS, #241); after that the request is locked.
- * - Sales are told in-app when preferences arrive: the lead's assignee, else the intake members
+ * - Sales are told in-app when preferences arrive: the lead's assignee while they may still
+ *   hold leads (a member of the organization, not read-only, #974), else the intake members
  *   (#135), else every member (as for the consultation request itself).
  * - Sales confirm one candidate: it becomes the lead's next meeting (read by leadNextMeetingDate
  *   when no hearing records one) and a next action on that day (source 'meeting_request', so the
@@ -27,7 +28,7 @@ import { filterAllowedRecipients } from '@/lib/email/allowed-recipients';
 import { renderEmail, sanitizeSubject } from '@/lib/email/templates/render';
 import { afterDealChanges, ensureQualificationDeal } from '@/lib/features/deals/service';
 import { isEmailConfigured, sendEmail } from '@/lib/features/email';
-import { listIntakeMembers } from '@/lib/features/leads/assignment';
+import { findAssignableMember, listIntakeMembers } from '@/lib/features/leads/assignment';
 import { notifyUsersInApp } from '@/lib/features/leads/assignment-notify';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { notifyOrganizationMembers } from '@/lib/features/notifications/notification-service';
@@ -221,8 +222,13 @@ export async function notifyPreferencesReceived(
       preferences: input.preferences,
     });
     const data = { leadId: input.leadId, meetingRequest: true };
-    const recipients = lead.assigneeId
-      ? [lead.assigneeId]
+    // The lead's assignee while they may still hold leads: one removed from the organization, or
+    // now read-only, is told nothing (#974), and the intake members are told instead
+    const assignee = lead.assigneeId
+      ? await findAssignableMember(db, input.organizationId, lead.assigneeId)
+      : null;
+    const recipients = assignee
+      ? [assignee.userId]
       : (await listIntakeMembers(db, input.organizationId)).map((member) => member.userId);
     if (recipients.length > 0) {
       await notifyUsersInApp(

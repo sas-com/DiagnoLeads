@@ -42,6 +42,13 @@ export const QUALIFICATION_DEAL_SOURCES = [
 export type QualificationDealSource = (typeof QUALIFICATION_DEAL_SOURCES)[number];
 
 /**
+ * Most first meetings one call of ensureQualificationDeals takes (#854): it inserts all their
+ * deals in one statement, each deal with 21 parameters, and PostgreSQL takes 65,535 parameters a
+ * statement. An agency's report has up to as many rows (HANDOVER_LIMITS.rows)
+ */
+export const QUALIFICATION_DEALS_MAX = 500;
+
+/**
  * A move that takes the deal out of 見極め to a later stage (open or won) while the lead's SQL
  * decision is not made (#801): the SQL decision is the exit of 見極め (decision
  * `2026-10-25-lead-lifecycle`). The screen asks for it first; the API lets the move through and

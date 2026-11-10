@@ -7,7 +7,8 @@
  *   The audit metadata holds no personal data: the search text (a name, an email...) is
  *   recorded only as "a search was used".
  *
- * Pure functions only; the procedure is `leads.export` in ./api/router.ts.
+ * Pure functions only; the procedure is `leads.export` in ./api/router.ts. The CSV of the rows
+ * chosen in the list, which the browser writes, is made here too (selectedLeadsCsv, #996).
  */
 import type { LeadExportFormat, ListLeadsInput } from './types/schemas';
 
@@ -71,6 +72,43 @@ export function leadExportCsv(rows: LeadExportRow[]): string {
   return `${BOM}${lines.join('\r\n')}\r\n`;
 }
 
+/** A lead chosen in the list, as the CSV of the chosen rows writes it (#996) */
+export interface SelectedLeadCsvRow {
+  name: string | null;
+  email: string;
+  company: string | null;
+  phone: string | null;
+  status: string;
+  score: number | null;
+  source: string | null;
+  createdAt: Date | string | null;
+}
+
+const SELECTED_CSV_COLUMNS: { header: string; value: (row: SelectedLeadCsvRow) => string }[] = [
+  { header: 'Name', value: (r) => r.name ?? '' },
+  { header: 'Email', value: (r) => r.email },
+  { header: 'Company', value: (r) => r.company ?? '' },
+  { header: 'Phone', value: (r) => r.phone ?? '' },
+  { header: 'Status', value: (r) => r.status },
+  { header: 'Score', value: (r) => (r.score === null ? '' : String(r.score)) },
+  { header: 'Source', value: (r) => r.source ?? '' },
+  { header: 'Created At', value: (r) => (r.createdAt ? new Date(r.createdAt).toISOString() : '') },
+];
+
+/**
+ * The CSV of the rows chosen in the list, which the browser writes ("export the selection"):
+ * its columns as before, each cell through csvCell as in the server's export (#996). Names and
+ * companies come from the public forms, so a value may start a formula or close its quotes.
+ */
+export function selectedLeadsCsv(rows: readonly SelectedLeadCsvRow[]): string {
+  return [
+    SELECTED_CSV_COLUMNS.map((column) => csvCell(column.header)).join(','),
+    ...rows.map((row) =>
+      SELECTED_CSV_COLUMNS.map((column) => csvCell(column.value(row))).join(',')
+    ),
+  ].join('\n');
+}
+
 export function leadExportJson(rows: LeadExportRow[]): string {
   return JSON.stringify(
     rows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() })),
@@ -91,32 +129,43 @@ export function leadExportFilename(format: LeadExportFormat, today: string): str
 }
 
 /**
+ * The filters an export's audit row records as they were sent: all of them but the search text
+ * (only that there was one) and the deals not yet made (only when filtering, #854). The test keeps
+ * them the export's own (exportLeadsSchema), so that a filter added there is not left out of the
+ * audit (#954). Only values that cannot be personal data are kept as sent: enums, booleans,
+ * numbers, days and internal ids (tags, assignee). A filter that takes free text is recorded as
+ * the search is, as having been used, so that no lead's name or address lands in the audit.
+ */
+export const EXPORT_AUDIT_FILTER_KEYS = [
+  'status',
+  'dealPhase',
+  'inflowSource',
+  'targetSystem',
+  'source',
+  'createdFrom',
+  'createdTo',
+  'createdFromDay',
+  'createdToDay',
+  'scoreMin',
+  'scoreMax',
+  'consultationRequested',
+  'mql',
+  'sqlDecision',
+  'assignee',
+  'nextMeeting',
+  'dealRating',
+  'mqlLevel',
+  'actTiming',
+  'tagIds',
+] as const satisfies readonly (keyof ListLeadsInput)[];
+
+/**
  * Filters of an export as written to the audit log: which conditions were used, never the
- * search text. Ids (tags, assignee) are internal, not personal data of the leads.
+ * search text (EXPORT_AUDIT_FILTER_KEYS).
  */
 export function exportAuditFilters(input: Omit<ListLeadsInput, 'limit' | 'offset'>) {
   const filters: Record<string, unknown> = {};
-  const keys = [
-    'status',
-    'dealPhase',
-    'inflowSource',
-    'targetSystem',
-    'source',
-    'createdFrom',
-    'createdTo',
-    'createdFromDay',
-    'createdToDay',
-    'scoreMin',
-    'scoreMax',
-    'consultationRequested',
-    'mql',
-    'sqlDecision',
-    'assignee',
-    'nextMeeting',
-    'dealRating',
-    'tagIds',
-  ] as const;
-  for (const key of keys) {
+  for (const key of EXPORT_AUDIT_FILTER_KEYS) {
     const value = input[key];
     if (value === undefined) continue;
     if (Array.isArray(value) && value.length === 0) continue;

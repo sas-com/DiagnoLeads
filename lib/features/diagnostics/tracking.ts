@@ -106,7 +106,11 @@ export interface InferredInflow {
 export function inferInflowSource(tracking: Tracking): InferredInflow {
   const ref = tracking.ref?.trim() || null;
   const medium = tracking.utmMedium?.trim().toLowerCase();
-  const mapped = medium ? (MEDIUM_TO_INFLOW[medium] ?? null) : null;
+  // Only the table's own keys: the visitor writes utm_medium, and a plain object also answers
+  // the names of Object.prototype (constructor put a function in the lead, __proto__ failed the
+  // save of the answer, #804)
+  const mapped =
+    medium && Object.hasOwn(MEDIUM_TO_INFLOW, medium) ? (MEDIUM_TO_INFLOW[medium] ?? null) : null;
   if (mapped && AGENCY_INFLOWS.has(mapped)) {
     return { inflowSource: mapped, referrerName: null, agencyName: ref };
   }

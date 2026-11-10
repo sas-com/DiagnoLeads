@@ -15,8 +15,17 @@ const { db } = vi.hoisted(() => ({
     update: vi.fn().mockReturnThis(),
     set: vi.fn().mockReturnThis(),
     delete: vi.fn().mockReturnThis(),
+    // A delivery is stored in a transaction that first locks the webhook row and checks its URL
+    // (#990): the check finds the webhook, and the insert goes through the steps above
+    transaction: vi.fn(),
   },
 }));
+const lockingTx = {
+  select: () => ({ from: () => ({ where: () => ({ for: async () => [{ id: 'locked' }] }) }) }),
+  insert: (table: unknown) => db.insert(table as never),
+  transaction: (run: (tx: unknown) => unknown) => run(lockingTx),
+};
+db.transaction.mockImplementation((run: (tx: unknown) => unknown) => run(lockingTx));
 vi.mock('@/lib/db/client', () => ({ db }));
 
 // Mock fetch: deliveries go through the pinned transport, which is replaced by one that calls
@@ -496,8 +505,8 @@ describe('webhook-service', () => {
         error: 'Destination not allowed (resolved_address)',
         nextRetryAt: null,
       });
-      // The payload is an SQL expression redacting the personal data (#918), not a stored text
-      const { payload: _redacted, ...written } = stored as Record<string, unknown>;
+      // The payload and the answer are SQL expressions redacting the personal data (#918, #936)
+      const { payload: _redacted, response: _response, ...written } = stored as Record<string, unknown>;
       for (const { address } of addresses) {
         expect(JSON.stringify(written)).not.toContain(address);
       }

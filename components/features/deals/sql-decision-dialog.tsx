@@ -51,7 +51,8 @@ export function SqlDecisionDialog({
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent onCloseAutoFocus={onCloseAutoFocus}>
+      {/* Wide enough for the three answers on one row from the tablet width up */}
+      <AlertDialogContent className="sm:max-w-xl" onCloseAutoFocus={onCloseAutoFocus}>
         <AlertDialogHeader>
           <AlertDialogTitle>{t('title', { name: dealName })}</AlertDialogTitle>
           <AlertDialogDescription asChild>

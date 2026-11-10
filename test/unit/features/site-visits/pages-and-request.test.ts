@@ -33,7 +33,6 @@ describe('sitePageOf', () => {
     ['/ja/ax-diagnosis', 'ax-diagnosis', 'operator'],
     ['/ja', 'home', 'operator'],
     ['/ja/landing', 'landing', 'operator'],
-    ['/ja/diagnostic', 'legacy-diagnostic', 'operator'],
   ])('measures %s as %s', (path, pageType, owner) => {
     expect(sitePageOf(path)).toMatchObject({ pageType, owner: { kind: owner } });
   });
@@ -66,7 +65,8 @@ describe('sitePageOf', () => {
     '/ja/blog',
     '/ja/blog/post',
     '/ja/faq',
-    // Template pages of the legacy form redirect to the AX diagnosis (#413)
+    // The legacy form is gone (#470): its pages only redirect to the AX diagnosis
+    '/ja/diagnostic',
     '/ja/diagnostic/made-up-1',
     '/ja/d',
     '/ja/faq/extra',
@@ -78,6 +78,19 @@ describe('sitePageOf', () => {
     '/ja/d/../dashboard',
     '//evil.example/ja',
     `/ja/d/${'x'.repeat(400)}`,
+  ])('does not measure %s', (path) => {
+    expect(sitePageOf(path)).toBeNull();
+  });
+
+  // The beacon's body names the path: the names of Object.prototype are no page either (#804)
+  it.each([
+    '/ja/constructor',
+    '/ja/__proto__',
+    '/en/toString',
+    '/ja/hasOwnProperty',
+    '/ja/valueOf',
+    '/ja/__defineGetter__',
+    '/ja/constructor/',
   ])('does not measure %s', (path) => {
     expect(sitePageOf(path)).toBeNull();
   });

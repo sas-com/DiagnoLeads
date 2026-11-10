@@ -83,115 +83,6 @@
         "contact": "Contact Us",
         "copyright": "© {year} DiagnoLeads. All rights reserved."
       }
-    },
-    "diagnostic": {
-      "meta": {
-        "title": "Free Diagnostic",
-        "description": "Discover the optimal lead generation strategy for your business. Complete in about 3 minutes and receive AI-powered analysis."
-      },
-      "title": "Business Diagnostic",
-      "subtitle": "Answer a few simple questions and let our AI analyze the best lead generation strategy for your business.",
-      "progress": "Step {current} of {total}",
-      "step1": {
-        "title": "Company Information",
-        "description": "Tell us about your company"
-      },
-      "step2": {
-        "title": "Contact Information",
-        "description": "Enter your contact details to receive the diagnostic results"
-      },
-      "step3": {
-        "title": "Business Challenges",
-        "description": "Tell us about your current challenges and goals"
-      },
-      "step4": {
-        "title": "Final Review",
-        "description": "Any additional information you'd like to share"
-      },
-      "fields": {
-        "companyName": "Company Name",
-        "companyNamePlaceholder": "Acme Corporation",
-        "industry": "Industry",
-        "employeeCount": "Number of Employees",
-        "name": "Your Name",
-        "namePlaceholder": "John Smith",
-        "email": "Email Address",
-        "emailPlaceholder": "your@company.com",
-        "phone": "Phone Number",
-        "phonePlaceholder": "+1 (555) 123-4567",
-        "position": "Job Title",
-        "positionPlaceholder": "Sales Director",
-        "optional": "optional",
-        "currentChallenge": "What is your biggest challenge right now?",
-        "primaryGoal": "Primary Goal",
-        "timeline": "Implementation Timeline",
-        "budget": "Budget Range",
-        "additionalInfo": "Additional Information",
-        "additionalInfoPlaceholder": "Tell us about your current tools or specific concerns",
-        "marketingConsent": "I agree to receive updates and useful information from DiagnoLeads"
-      },
-      "industries": {
-        "technology": "Technology",
-        "finance": "Finance & Insurance",
-        "healthcare": "Healthcare",
-        "manufacturing": "Manufacturing",
-        "retail": "Retail & E-commerce",
-        "other": "Other"
-      },
-      "employeeCount": {
-        "1-10": "1-10",
-        "11-50": "11-50",
-        "51-200": "51-200",
-        "201-500": "201-500",
-        "501-1000": "501-1000",
-        "1000+": "1000+"
-      },
-      "challenges": {
-        "leadGeneration": "Not generating enough leads",
-        "conversion": "Low conversion rate from leads",
-        "efficiency": "Poor sales efficiency",
-        "dataManagement": "Complex customer data management",
-        "scaling": "Unable to scale with business growth"
-      },
-      "goals": {
-        "increaseLeads": "Increase lead volume",
-        "improveConversion": "Improve conversion rates",
-        "reduceTime": "Reduce response time",
-        "betterInsights": "Better data insights"
-      },
-      "timelines": {
-        "immediate": "Immediately",
-        "1-3months": "1-3 months",
-        "3-6months": "3-6 months",
-        "6months+": "6+ months"
-      },
-      "budgets": {
-        "under10k": "Under $10,000",
-        "10k-50k": "$10,000 - $50,000",
-        "50k-100k": "$50,000 - $100,000",
-        "100k+": "$100,000+"
-      },
-      "validation": {
-        "required": "This field is required",
-        "invalidEmail": "Please enter a valid email address"
-      },
-      "navigation": {
-        "previous": "Back",
-        "next": "Next",
-        "submit": "Get Diagnosis",
-        "submitting": "Submitting..."
-      },
-      "summary": {
-        "title": "About Your Results",
-        "description": "Based on your responses, our AI will analyze the best lead generation strategy for your business. Results will be sent to your email."
-      },
-      "complete": {
-        "title": "Diagnostic Complete!",
-        "message": "Thank you for your responses. We'll send you a detailed AI analysis shortly via email.",
-        "scoreLabel": "Your Lead Generation Potential Score",
-        "scoreMax": "/ 100",
-        "followUp": "A team member will contact you with specific recommendations based on your results."
-      }
     }
   },
   "navigation": {
@@ -1460,7 +1351,9 @@
       "noAmount": "No amount yet",
       "unassigned": "No owner",
       "move": "Move \"{name}\" to another stage (now {stage})",
-      "moveTo": "Move to {stage}"
+      "moveTo": "Move to {stage}",
+      "addNextAction": "Add a next action",
+      "addNextActionFor": "Add a next action for \"{name}\""
     },
     "filters": {
       "label": "Filters",
@@ -1479,7 +1372,7 @@
     },
     "lostDialog": {
       "title": "Mark \"{name}\" as lost",
-      "description": "Lost reasons feed the win/loss analysis",
+      "description": "Lost reasons feed the win/loss analysis.",
       "fromWon": "Unless another deal of the lead is won, the lead is no longer won (Negotiating while a deal is open, else Lost).",
       "notQualified": "The lead's SQL decision is recorded as not qualified with it.",
       "reason": "Lost reason",
@@ -1550,6 +1443,10 @@
       "forecastAuto": "From the probability",
       "wonToday": "The won date will be today.",
       "wonPast": "For a past win, correct the won date by editing the deal once it is created.",
+      "wonFirst": "This records the lead's win as a won deal.",
+      "wonFirstStage": "This lead is recorded as won, so its won deal comes first: choose the stage Won. If it is not won, check the lead's status and deal phase",
+      "stageFollowsLead": "Set from the lead's deal phase",
+      "stageTakesPhaseBack": "In this stage, the deal takes the lead's deal phase back",
       "onHoldReason": "\"{reason}\" cannot be the lost reason of a deal. Choose another one",
       "submitCreate": "Create",
       "submitEdit": "Save",
@@ -3738,7 +3635,7 @@
         },
         "itReview": {
           "q": "Can you explain things for our IT department's review?",
-          "a": "Yes. We ask what your review checks (where it can be reached from, sign-in, permissions, records, backups, how it is fixed after the move and so on) and explain along those items. Engineers join when needed."
+          "a": "Yes. We ask what your review checks (where it can be reached from, sign-in, permissions, records, backups, how it is fixed after the move and so on) and explain along those items. Engineers join when needed. A checklist of the items to review, in Japanese, is also available on the result page of the free web check."
         },
         "costTime": {
           "q": "How much does it cost and how long does it take?",
@@ -3995,7 +3892,7 @@
         },
         "itReview": {
           "q": "Can you explain things for our IT department's review?",
-          "a": "Yes. We ask what your review checks (where it can be reached from, sign-in, permissions, records, backups, how it is fixed after the move and so on) and explain along those items. Engineers join when needed."
+          "a": "Yes. We ask what your review checks (where it can be reached from, sign-in, permissions, records, backups, how it is fixed after the move and so on) and explain along those items. Engineers join when needed. A checklist of the items to review, in Japanese, is also available on the result page of the free web check."
         },
         "personalData": {
           "q": "Can we consult you if the tool holds personal data?",
@@ -4583,9 +4480,10 @@
       "all": "All",
       "diagnosis": "Diagnoses & consultations",
       "hearing": "Hearings",
+      "contact": "Contacts & visits",
       "comment": "Comments",
       "sales": "Sales actions",
-      "email": "Email"
+      "email": "Result emails"
     },
     "empty": "No activity yet.",
     "loadError": "Could not load the activity.",
@@ -5113,7 +5011,21 @@
       "checkWithOtherPlaceholder": "e.g. The customer's IT department",
       "checkWith": "Check with: {name}",
       "fromMeetingRequest": "First meeting confirmed from the respondent's preferred dates",
-      "fromActTiming": "Contact again before \"when to act\" (created from the support end and retirement)"
+      "fromActTiming": "Contact again before \"when to act\" (created from the support end and retirement)",
+      "assignee": "Assigned to {name}",
+      "added": "Added \"{title}\"",
+      "adding": "Adding…",
+      "dueInvalid": "Enter the due date as year-month-day, e.g. 2026-11-15",
+      "recipient": {
+        "dealOwner": "When it is due, {name} (the deal's owner) is notified and sees it on Today.",
+        "you": "When it is due, you are notified and see it on Today.",
+        "leadAssignee": "When it is due, the lead's assignee (or you, if it has none) is notified and sees it on Today."
+      },
+      "dialog": {
+        "title": "Add a next action for \"{deal}\"",
+        "description": "It is added to the next actions and takeaways of the lead \"{lead}\".",
+        "descriptionNoName": "It is added to the next actions and takeaways of this deal's lead."
+      }
     },
     "today": {
       "title": "Today",
@@ -5776,7 +5688,7 @@
     },
     "convert": {
       "title": "Make a lead",
-      "description": "Move a customer you now have a contact for to the leads. The company and the sales person come from this row.",
+      "description": "Move a customer you now have a contact for to the leads. The company and the sales person come from this row. A row with a meeting date also creates a deal in Qualification for the lead, except for leads such as those with an open deal or already won.",
       "email": "Email",
       "name": "Name (optional)",
       "phone": "Phone (optional)",
@@ -5870,7 +5782,7 @@
     },
     "handedOverDays": "Handed over {days} days ago",
     "leadBadge": "Lead: {status}",
-    "leadLocked": "Rows that became leads are followed on the lead page",
+    "leadLocked": "Rows that became leads are followed on the lead page. A meeting date entered here creates a deal in Qualification for the lead, except for leads such as those with an open deal or already won",
     "leadCard": {
       "title": "Customer search records",
       "description": "What employees heard when they talked to this customer.",
@@ -5956,7 +5868,7 @@
     },
     "import": {
       "title": "Import an agency's appointment report",
-      "description": "Read the agency's report (CSV or Excel) and attach each row to a lead by email address (or company name). New hearings are prefilled as \"Sales agency\". No lead is created.",
+      "description": "Read the agency's report (CSV or Excel) and attach each row to a lead by email address (or company name). New hearings are prefilled as \"Sales agency\". No lead is created. A row with an appointment date creates a deal in Qualification for its lead, except for leads such as those with an open deal or already won, and importing the same date again creates none. A row without an appointment date keeps the date saved before.",
       "chooseFile": "Choose a file",
       "template": "Download the format (CSV)",
       "rows": "{count} rows read",

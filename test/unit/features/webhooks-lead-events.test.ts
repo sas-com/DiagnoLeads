@@ -21,6 +21,16 @@ const { triggerWebhookBatch, reportServerError } = vi.hoisted(() => ({
 vi.mock('@/lib/features/webhooks/services/webhook-service', () => ({ triggerWebhookBatch }));
 vi.mock('@/lib/ops/alert', () => ({ reportServerError }));
 
+// The leads that still exist (#936); each test starts with the lead of leadRow()
+const existing = vi.hoisted(() => ({ ids: [] as string[] }));
+vi.mock('@/lib/db/client', () => ({
+  db: {
+    select: () => ({
+      from: () => ({ where: async () => existing.ids.map((id) => ({ id })) }),
+    }),
+  },
+}));
+
 type LeadRow = typeof leads.$inferSelect;
 
 /** A full lead row, internal columns included */
@@ -125,6 +135,18 @@ describe('sendLeadEvents', () => {
   beforeEach(() => {
     triggerWebhookBatch.mockClear();
     reportServerError.mockClear();
+    existing.ids = [leadRow().id];
+  });
+
+  it('drops the changes of a lead deleted meanwhile, keeping lead.deleted (#936)', async () => {
+    existing.ids = [];
+    const deletedAt = new Date('2026-10-04T00:00:00Z');
+    await sendLeadEvents('org', [
+      { type: 'lead.updated', lead: leadRow() },
+      { type: 'lead.deleted', leadId: leadRow().id, deletedAt },
+    ]);
+    const [, sent] = triggerWebhookBatch.mock.calls[0];
+    expect(sent.map((e: { eventType: string }) => e.eventType)).toEqual(['lead.deleted']);
   });
 
   it('sends a deletion with the id and time only', async () => {

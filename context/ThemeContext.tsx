@@ -1,7 +1,7 @@
 'use client';
 
 import type React from 'react';
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useLayoutEffect, useState } from 'react';
 
 type Theme = 'light' | 'dark';
 
@@ -46,8 +46,10 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [theme, setTheme] = useState<Theme>('light');
   const [isInitialized, setIsInitialized] = useState(false);
 
-  useEffect(() => {
-    // This code will only run on the client side
+  // Layout effects, not passive ones: when sign-in hands over to the dashboard, the old provider's
+  // cleanup and the new one's setup both run before the browser paints, so the page does not
+  // flash light between them (#987). They do not run on the server.
+  useLayoutEffect(() => {
     const media = typeof window.matchMedia === 'function' ? window.matchMedia(DARK_QUERY) : null;
     const stored = readStorage(THEME_STORAGE_KEY);
     setTheme(
@@ -64,7 +66,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return () => media.removeEventListener('change', onChange);
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (isInitialized) {
       if (theme === 'dark') {
         document.documentElement.classList.add('dark');
@@ -73,6 +75,10 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     }
   }, [theme, isInitialized]);
+
+  // The class sits on <html>, outside this tree: take it off when the admin or sign-in screens go,
+  // so a public page reached by client-side navigation (e.g. Back from sign-in) is not dark (#987)
+  useLayoutEffect(() => () => document.documentElement.classList.remove('dark'), []);
 
   const toggleTheme = () => {
     setTheme((prevTheme) => {

@@ -9,8 +9,6 @@
     "test/unit/lib/messages/error-mapper.test.ts",
     "test/unit/lib/messages/validation.test.ts",
     "test/unit/lib/validation-messages.test.ts",
-    // Imports no app code (#469, empty tests)
-    "test/unit/features/diagnostic-submit.test.ts",
     // lib/features/integrations is not reached from any entry: a deletion candidate in #469
     "test/unit/features/crm-client.test.ts"
   ]

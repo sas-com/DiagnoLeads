@@ -102,38 +102,53 @@ vercel --prod
 
 ## Tech Stack
 
-- **Framework**: Next.js 15 + React 19
-- **Language**: TypeScript 5.7+
-- **Styling**: Tailwind CSS 4.0
-- **Database**: PostgreSQL + Drizzle ORM
-- **API**: tRPC + Server Actions
+- **Framework**: Next.js 16 (App Router) + React 19
+- **Language**: TypeScript 5
+- **API**: tRPC 11 + superjson
+- **Database**: PostgreSQL (Supabase) + Drizzle ORM
+- **Auth / Authorization**: Better Auth + CASL
+- **CMS**: Payload CMS 3
+- **UI**: shadcn/ui (Radix UI) + Tailwind CSS 4, React Aria Components, Digital Agency Design Tokens
+- **Charts**: ApexCharts
+- **Data / Forms**: TanStack Query + TanStack Table, React Hook Form + Zod
 - **State Management**: Zustand + nuqs
-- **Testing**: Vitest + Playwright
-- **Code Quality**: Biome + lefthook
+- **i18n**: next-intl 4
+- **AI**: Anthropic SDK / OpenAI SDK
+- **Email**: Resend
+- **Storage / Cache**: AWS S3 + Upstash Redis
+- **Testing**: Vitest + Playwright + Testing Library
+- **Code Quality**: Biome + lefthook + commitlint
 - **Package Manager**: Bun
 - **Deployment**: Vercel
-- **Monitoring**: Sentry
+- **Logging**: `lib/monitoring/logger.ts`
+
+バージョンはメジャーのみ記載しています。正確な版は `package.json` を、層と依存の向きは [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) を見てください。
 
 ## Available Scripts
 
 ```bash
 # Development
-bun run dev              # Start dev server with Turbopack
-bun run build            # Build for production
-bun start               # Start production server
+bun run dev             # Start dev server
+bun run dev:turbo       # Start dev server with Turbopack
+bun run build           # Build for production
+bun run start           # Start production server
 
 # Code Quality
 bun run lint            # Run Biome linter
 bun run format          # Format code with Biome
 bun run typecheck       # TypeScript type checking
+bun run arch:check      # Check import boundaries (docs/ARCHITECTURE.md)
 
 # Testing
-bun test               # Run unit tests (Vitest)
+bun run test:run        # Run unit tests (Vitest)
+bun run test:coverage   # Run unit tests with coverage
 bun run test:e2e        # Run E2E tests (Playwright)
 
 # Database
 bun run db:generate     # Generate Drizzle migrations
-bun run db:push         # Push schema to database
+bun run db:migrate      # Apply migrations
+bun run db:seed         # Seed development data
+bun run db:reset        # Drop and recreate the local database
 bun run db:studio       # Open Drizzle Studio GUI
 
 # Backup (Production): see docs/runbooks/database-restore.md
@@ -147,7 +162,7 @@ bash scripts/prod-dump.sh      # Dump production as the read-only role
 | Next.js App | http://localhost:3000 | - |
 | PgAdmin | http://localhost:5050 | admin@diagnoleads.local / admin |
 | Mailhog | http://localhost:8025 | - |
-| Drizzle Studio | http://localhost:4983 | Run `npm run db:studio` |
+| Drizzle Studio | http://localhost:4983 | Run `bun run db:studio` |
 
 ## Project Structure
 
@@ -357,7 +372,7 @@ docs(readme): update setup instructions
 - [Backup Strategy](./docs/backup-strategy.md) - Database backup and recovery (general, 2026-01)
 - [Database Restore Runbook](./docs/runbooks/database-restore.md) - Restoring the production database (Supabase)
 - [Multi-Tenant Strategy](./docs/MULTI_TENANT_STRATEGY.md) - Holdings/Group architecture
-- [Implementation Checklist](./IMPLEMENTATION_CHECKLIST.md) - Development progress
+- [Implementation Checklist](./IMPLEMENTATION_CHECKLIST.md) - A record from before 2026-02; it does not reflect current priorities. The source for priorities and tasks is the GitHub issues
 
 ## License
 

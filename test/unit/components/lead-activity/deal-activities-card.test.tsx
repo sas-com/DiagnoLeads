@@ -5,7 +5,7 @@
  */
 import { DealActivitiesCard } from '@/components/features/lead-activity/deal-activities-card';
 import messages from '@/locales/ja/common.json';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -17,7 +17,13 @@ const DEAL_ID = '880e8400-e29b-41d4-a716-446655440002';
 const mocks = vi.hoisted(() => ({
   forDeal: {} as Record<string, unknown>,
   refetch: vi.fn(),
-  dialog: [] as { open: boolean; leadId: string; defaultDealId?: string; leadLabel: string }[],
+  dialog: [] as {
+    open: boolean;
+    leadId: string;
+    defaultDealId?: string;
+    leadLabel: string;
+    onCloseAutoFocus?: (event: Event) => void;
+  }[],
 }));
 
 vi.mock('@/lib/trpc/client', () => ({
@@ -35,6 +41,7 @@ vi.mock('@/components/features/lead-follow-up/record-activity-dialog', () => ({
     leadId: string;
     defaultDealId?: string;
     leadLabel: string;
+    onCloseAutoFocus?: (event: Event) => void;
   }) => {
     mocks.dialog.push(props);
     return props.open ? <div role="dialog">記録の画面</div> : null;
@@ -111,6 +118,13 @@ describe('DealActivitiesCard', () => {
       defaultDealId: DEAL_ID,
       leadLabel: '架空商事',
     });
+
+    // Opened by state, not by a dialog trigger: closing gives the focus back to the button (#776)
+    (document.activeElement as HTMLElement | null)?.blur();
+    const closed = new Event('focus', { cancelable: true });
+    act(() => mocks.dialog.at(-1)?.onCloseAutoFocus?.(closed));
+    expect(closed.defaultPrevented).toBe(true);
+    expect(screen.getByRole('button', { name: '活動を記録' })).toHaveFocus();
   });
 
   it('offers no recording to read-only roles, and says when there is nothing yet', () => {

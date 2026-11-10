@@ -13,10 +13,11 @@ import {
   type WebhookEventType,
   type WebhookRetryConfig,
   type WebhookStatus,
+  leads,
   webhookDeliveries,
   webhooks,
 } from '@/lib/db/schema';
-import { and, asc, eq, gte, inArray, lt, lte, not, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, lt, lte, not, or, sql } from 'drizzle-orm';
 import { consumeRateLimits } from '../../diagnostics/rate-limit';
 import { LEAD_WEBHOOK_PERSONAL_FIELDS, PERSONAL_DATA_EVENTS } from '../types/personal-data';
 import { sendPinnedRequest } from './pinned-request';
@@ -45,6 +46,16 @@ const redactedPayloadSql =
 const holdsPersonalDataSql =
   () => sql`(${webhookDeliveries.eventType} in (${personalDataEventsSql()})
   and coalesce(${webhookDeliveries.payload} -> 'data', '{}'::jsonb) ?| ${personalDataKeysSql()})`;
+
+/**
+ * The receiver's answer to store once a delivery is finished: none for an event with personal
+ * data, as a receiver echoing the request would keep it there (#936, owner's decision). The
+ * status code and the error are kept. `value` is the answer of the attempt being recorded; the
+ * stored one when omitted.
+ */
+const finishedResponseSql = (value?: string | null) =>
+  sql`case when ${webhookDeliveries.eventType} in (${personalDataEventsSql()}) then null
+    else ${value === undefined ? webhookDeliveries.response : value} end`;
 
 /**
  * Generate HMAC signature for webhook payload
@@ -366,7 +377,7 @@ async function recordAttempt(
       .set({
         status: 'success',
         statusCode: result.statusCode,
-        response: result.response,
+        response: finishedResponseSql(result.response ?? null),
         attempts,
         completedAt: new Date(),
         error: null,
@@ -398,7 +409,7 @@ async function recordAttempt(
       status: exhausted ? 'failed' : 'pending',
       statusCode: result.statusCode,
       error: result.error,
-      response: result.response,
+      response: exhausted ? finishedResponseSql(result.response ?? null) : result.response,
       attempts,
       nextRetryAt: exhausted
         ? null
@@ -447,26 +458,44 @@ async function insertDelivery(
     ...(test ? { test: true as const } : {}),
   };
 
-  const [delivery] = await database
-    .insert(webhookDeliveries)
-    .values({
-      webhookId: webhook.id,
-      eventType,
-      payload: payload as unknown as Record<string, unknown>,
-      status: 'pending',
-      // A queued delivery is sent by the retry processor as its first attempt
-      attempts: queued ? 0 : 1,
-      nextRetryAt: queued ? new Date() : new Date(Date.now() + WEBHOOK_DELIVERY_LEASE_MS),
-    })
-    .returning();
-  return { delivery, payload };
+  // Stored only while the webhook still has the URL it was read with (#990). The share lock
+  // makes a URL change wait for this insert, so the change's cancelPendingDeliveries sees the new
+  // delivery; a change that committed first leaves no row here, and nothing is stored.
+  return database.transaction(async (tx) => {
+    const [current] = await tx
+      .select({ id: webhooks.id })
+      .from(webhooks)
+      .where(
+        and(
+          eq(webhooks.id, webhook.id),
+          eq(webhooks.organizationId, organizationId),
+          eq(webhooks.url, webhook.url)
+        )
+      )
+      .for('share');
+    if (!current) return null;
+
+    const [delivery] = await tx
+      .insert(webhookDeliveries)
+      .values({
+        webhookId: webhook.id,
+        eventType,
+        payload: payload as unknown as Record<string, unknown>,
+        status: 'pending',
+        // A queued delivery is sent by the retry processor as its first attempt
+        attempts: queued ? 0 : 1,
+        nextRetryAt: queued ? new Date() : new Date(Date.now() + WEBHOOK_DELIVERY_LEASE_MS),
+      })
+      .returning();
+    return { delivery, payload };
+  });
 }
 
 /** Make the first attempt of a stored delivery and record it */
 async function sendStoredDelivery(
   database: Database,
   webhook: Webhook,
-  { delivery, payload }: Awaited<ReturnType<typeof insertDelivery>>
+  { delivery, payload }: NonNullable<Awaited<ReturnType<typeof insertDelivery>>>
 ): Promise<boolean> {
   const result = await deliverWebhook(webhook, payload, delivery.id);
   await recordAttempt(database, webhook, delivery.id, 1, result, {
@@ -485,6 +514,8 @@ async function sendNewDelivery(
   data: Record<string, unknown>
 ): Promise<boolean> {
   const stored = await insertDelivery(database, webhook, organizationId, eventType, data);
+  // The webhook moved (or was deleted) since it was read: not sent to the new URL (#990)
+  if (!stored) return false;
   return sendStoredDelivery(database, webhook, stored);
 }
 
@@ -570,6 +601,8 @@ export async function sendTestDelivery(
   });
 
   if (!reserved.allowed) return reserved;
+  // The webhook moved since it was read: nothing was stored or sent (#990)
+  if (!reserved.stored) return { allowed: true, success: false };
   const success = await sendStoredDelivery(database, webhook, reserved.stored);
   return { allowed: true, success };
 }
@@ -640,6 +673,7 @@ export async function cancelPendingDeliveries(
       completedAt: new Date(),
       error: WEBHOOK_URL_CHANGED_ERROR,
       payload: redactedPayloadSql(),
+      response: finishedResponseSql(),
     })
     .where(and(eq(webhookDeliveries.webhookId, webhookId), eq(webhookDeliveries.status, 'pending')))
     .returning({ id: webhookDeliveries.id });
@@ -693,10 +727,11 @@ export async function triggerWebhookBatch(
     const results = await Promise.allSettled(
       subscribed.map(async (webhook) => {
         if (!fits) {
-          await insertDelivery(database, webhook, organizationId, eventType, data, {
+          const stored = await insertDelivery(database, webhook, organizationId, eventType, data, {
             queued: true,
           });
-          return 'queued' as const;
+          // Not queued for a webhook that moved since it was read (#990)
+          return stored ? ('queued' as const) : ('failed' as const);
         }
         return (await sendNewDelivery(database, webhook, organizationId, eventType, data))
           ? ('sent' as const)
@@ -722,7 +757,13 @@ export async function triggerWebhookBatch(
 async function failExpiredDeliveries(database: Database, now: Date): Promise<number> {
   const rows = await database
     .update(webhookDeliveries)
-    .set({ status: 'failed', nextRetryAt: null, completedAt: now, payload: redactedPayloadSql() })
+    .set({
+      status: 'failed',
+      nextRetryAt: null,
+      completedAt: now,
+      payload: redactedPayloadSql(),
+      response: finishedResponseSql(),
+    })
     .where(
       and(
         eq(webhookDeliveries.status, 'pending'),
@@ -740,7 +781,13 @@ async function failExpiredDeliveries(database: Database, now: Date): Promise<num
 async function failDueTestDeliveries(database: Database, now: Date): Promise<number> {
   const rows = await database
     .update(webhookDeliveries)
-    .set({ status: 'failed', nextRetryAt: null, completedAt: now, payload: redactedPayloadSql() })
+    .set({
+      status: 'failed',
+      nextRetryAt: null,
+      completedAt: now,
+      payload: redactedPayloadSql(),
+      response: finishedResponseSql(),
+    })
     .where(
       and(
         eq(webhookDeliveries.status, 'pending'),
@@ -772,8 +819,46 @@ async function failExhaustedDeliveries(database: Database, now: Date): Promise<n
 
   const rows = await database
     .update(webhookDeliveries)
-    .set({ status: 'failed', nextRetryAt: null, completedAt: now, payload: redactedPayloadSql() })
+    .set({
+      status: 'failed',
+      nextRetryAt: null,
+      completedAt: now,
+      payload: redactedPayloadSql(),
+      response: finishedResponseSql(),
+    })
     .where(and(inArray(webhookDeliveries.id, exhausted), eq(webhookDeliveries.status, 'pending')))
+    .returning({ id: webhookDeliveries.id });
+  return rows.length;
+}
+
+/**
+ * Pending deliveries of events with personal data whose lead no longer exists in the webhook's
+ * organization are failed and redacted, not sent (#936): a delivery made just after its lead was
+ * deleted. Lead events carry the lead's id as `id`, diagnostic.submitted as `leadId`.
+ */
+async function failOrphanedLeadDeliveries(database: Database, now: Date): Promise<number> {
+  const leadId = sql`coalesce(${webhookDeliveries.payload} -> 'data' ->> 'id', ${webhookDeliveries.payload} -> 'data' ->> 'leadId')`;
+  const rows = await database
+    .update(webhookDeliveries)
+    .set({
+      status: 'failed',
+      nextRetryAt: null,
+      completedAt: now,
+      error: WEBHOOK_LEAD_DELETED_ERROR,
+      payload: redactedPayloadSql(),
+      response: finishedResponseSql(),
+    })
+    .where(
+      and(
+        eq(webhookDeliveries.status, 'pending'),
+        sql`${webhookDeliveries.eventType} in (${personalDataEventsSql()})`,
+        sql`${leadId} is not null`,
+        sql`not exists (
+          select 1 from ${leads} join ${webhooks} on ${webhooks.id} = ${webhookDeliveries.webhookId}
+          where ${leads.id}::text = ${leadId} and ${leads.organizationId} = ${webhooks.organizationId}
+        )`
+      )
+    )
     .returning({ id: webhookDeliveries.id });
   return rows.length;
 }
@@ -839,12 +924,14 @@ export async function processWebhookRetries({
   exhausted: number;
   expired: number;
   testsFailed: number;
+  orphaned: number;
 }> {
   const startedAt = Date.now();
   // Expired first, so old rows are never sent (nor counted as exhausted)
   const expired = await failExpiredDeliveries(database, new Date());
   const testsFailed = await failDueTestDeliveries(database, new Date());
   const exhausted = await failExhaustedDeliveries(database, new Date());
+  const orphaned = await failOrphanedLeadDeliveries(database, new Date());
 
   let processed = 0;
   let succeeded = 0;
@@ -860,9 +947,29 @@ export async function processWebhookRetries({
       .from(webhooks)
       .where(inArray(webhooks.id, webhookIds));
     const webhookById = new Map(webhookRows.map((w) => [w.id, w]));
+    // Read after the webhooks (#928): a URL change cancels the webhook's pending deliveries in the
+    // same transaction, so a delivery claimed before the change and read with the new URL is seen
+    // as cancelled here and not sent there. One read with the old URL still goes to the old URL.
+    const stillPending = new Set(
+      (
+        await database
+          .select({ id: webhookDeliveries.id })
+          .from(webhookDeliveries)
+          .where(
+            and(
+              inArray(
+                webhookDeliveries.id,
+                claimed.map((d) => d.id)
+              ),
+              eq(webhookDeliveries.status, 'pending')
+            )
+          )
+      ).map((row) => row.id)
+    );
+    const sendable = claimed.filter((delivery) => stillPending.has(delivery.id));
 
     const results = await Promise.allSettled(
-      claimed.map(async (delivery) => {
+      sendable.map(async (delivery) => {
         const webhook = webhookById.get(delivery.webhookId);
         if (!webhook) return false; // deleted meanwhile (its deliveries go with it)
         const payload = delivery.payload as unknown as WebhookPayload;
@@ -889,7 +996,7 @@ export async function processWebhookRetries({
     }
   }
 
-  return { processed, succeeded, failed, exhausted, expired, testsFailed };
+  return { processed, succeeded, failed, exhausted, expired, testsFailed, orphaned };
 }
 
 /**
@@ -921,8 +1028,17 @@ export async function cleanupOldDeliveries(daysToKeep = 30): Promise<number> {
 export async function redactFinishedDeliveries(database: Database = db): Promise<number> {
   const rows = await database
     .update(webhookDeliveries)
-    .set({ payload: redactedPayloadSql() })
-    .where(and(inArray(webhookDeliveries.status, ['success', 'failed']), holdsPersonalDataSql()))
+    .set({ payload: redactedPayloadSql(), response: finishedResponseSql() })
+    .where(
+      and(
+        inArray(webhookDeliveries.status, ['success', 'failed']),
+        or(
+          holdsPersonalDataSql(),
+          // A test send's answer is kept: its data is a fixed sample, not a lead
+          sql`(${webhookDeliveries.eventType} in (${personalDataEventsSql()}) and ${webhookDeliveries.response} is not null and not ${isTestDeliverySql})`
+        )
+      )
+    )
     .returning({ id: webhookDeliveries.id });
   return rows.length;
 }
@@ -956,6 +1072,7 @@ export async function forgetLeadsInDeliveries(
       completedAt: sql`case when ${pending} then now() else ${webhookDeliveries.completedAt} end`,
       error: sql`case when ${pending} then ${WEBHOOK_LEAD_DELETED_ERROR} else ${webhookDeliveries.error} end`,
       payload: redactedPayloadSql(),
+      response: finishedResponseSql(),
     })
     .where(
       and(

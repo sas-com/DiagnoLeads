@@ -12,13 +12,12 @@ export type SitePageType =
   | 'ax-column'
   | 'ax-diagnosis'
   | 'diagnosis'
-  | 'legacy-diagnostic'
   | 'home'
   | 'landing';
 
 /**
  * Whose site the page is: the operating organization (the company's own pages: the AX site, the
- * top page, landing and the legacy form; AX_DIAGNOSIS_ORGANIZATION_ID, else
+ * top page and landing; AX_DIAGNOSIS_ORGANIZATION_ID, else
  * DEFAULT_ORGANIZATION_ID, as for the content editors) or the organization of a diagnosis made
  * with the builder
  */
@@ -38,8 +37,6 @@ const MAX_PATH_LENGTH = 300;
 const SIMPLE_PAGES: Record<string, SitePageType> = {
   '': 'home',
   landing: 'landing',
-  // Shown only while the legacy form is on; its template pages redirect to the AX diagnosis
-  diagnostic: 'legacy-diagnostic',
 };
 
 /** The measured page of a path, or null when the path is not measured */
@@ -66,7 +63,9 @@ export function sitePageOf(rawPath: string): SitePage | null {
       ? { path, pageType: 'diagnosis', owner: { kind: 'diagnosis', slug: second } }
       : null;
   }
-  const pageType = SIMPLE_PAGES[first];
+  // Only the table's own keys: the path comes from the beacon's body, and a plain object also
+  // answers the names of Object.prototype ('/ja/constructor' is no page, #804)
+  const pageType = Object.hasOwn(SIMPLE_PAGES, first) ? SIMPLE_PAGES[first] : undefined;
   if (!pageType || second !== undefined) return null;
   return { path, pageType, owner: { kind: 'operator' } };
 }

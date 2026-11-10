@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import type { NewDealStart } from '@/lib/features/deals/lead-sync';
 import type { DealView } from '@/lib/features/deals/service';
 import {
   DEAL_KINDS,
@@ -38,6 +39,7 @@ import {
   type DealStage,
   FORECAST_OVERRIDES,
   type ForecastOverride,
+  OPEN_DEAL_STAGES,
   STAGE_PROBABILITY,
   dealLostReasonEnum,
   forecastCategory,
@@ -46,7 +48,7 @@ import {
 import { DEAL_LIMITS } from '@/lib/features/deals/types/schemas';
 import { trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
-import { ChevronsUpDown, Loader2 } from 'lucide-react';
+import { AlertCircle, ChevronsUpDown, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { type FormEvent, useEffect, useId, useRef, useState } from 'react';
 import { DealAmountInput } from './deal-amount-input';
@@ -77,8 +79,9 @@ interface DealFormDialogProps {
 
 interface FormState {
   name: string;
-  kind: DealKind;
-  stage: DealStage;
+  /** null until chosen: where the lead's new deal starts (shownForm) */
+  kind: DealKind | null;
+  stage: DealStage | null;
   amount: string;
   probability: string;
   forecastOverride: ForecastOverride | null;
@@ -96,8 +99,8 @@ const emptyState = (deal?: DealView): FormState => {
   const lostReason = dealLostReasonEnum.safeParse(deal?.lostReason);
   return {
     name: deal?.name ?? '',
-    kind: deal?.kind ?? 'survey',
-    stage: deal?.stage ?? 'qualification',
+    kind: deal?.kind ?? null,
+    stage: deal?.stage ?? null,
     amount: deal?.amount === null || deal?.amount === undefined ? '' : String(deal.amount),
     probability: deal ? String(deal.probability) : '',
     forecastOverride: deal?.forecastOverride ?? null,
@@ -110,6 +113,23 @@ const emptyState = (deal?: DealView): FormState => {
     competitor: deal?.competitor ?? '',
   };
 };
+
+/** Place of an open stage in the pipeline; -1 for a won or lost one */
+const openStageIndex = (stage: string) => (OPEN_DEAL_STAGES as readonly string[]).indexOf(stage);
+
+/** The form with a stage and a kind: the ones chosen, else the ones the new deal starts with */
+type ShownForm = FormState & { stage: DealStage; kind: DealKind };
+
+/**
+ * The stage and kind the form shows (#951): those chosen, else where the lead's new deal starts
+ * (newDealStart: a lead won by hand starts with its win, a lead without deals at its phase), else
+ * a survey in 見極め, until the lead is read or chosen
+ */
+const shownForm = (form: FormState, start: NewDealStart | undefined): ShownForm => ({
+  ...form,
+  stage: form.stage ?? start?.stage ?? 'qualification',
+  kind: form.kind ?? start?.kind ?? 'survey',
+});
 
 /** The fields the form can send */
 interface SentFields {
@@ -135,7 +155,7 @@ type FormValues = Pick<SentFields, 'name' | 'kind' | 'amount' | 'expectedCloseOn
  * its day, its lost reason and details, and the competitor instead (Refs #720). An owner left to
  * the server is not sent.
  */
-function formValues(form: FormState, closed: 'won' | 'lost' | null): FormValues {
+function formValues(form: ShownForm, closed: 'won' | 'lost' | null): FormValues {
   const amount = parseAmount(form.amount);
   const values: FormValues = {
     name: form.name.trim(),
@@ -179,6 +199,7 @@ function changedValues(values: FormValues, opened: FormValues): Partial<SentFiel
 const ERROR_FIELDS = [
   ['lead', 'lead'],
   ['name', 'name'],
+  ['stage', 'stage'],
   ['closedOn', 'closed'],
   ['lostReason', 'lost-reason'],
   ['amount', 'amount'],
@@ -195,6 +216,10 @@ type ErrorField = (typeof ERROR_FIELDS)[number][0];
  * A save that fails says so in the dialog, which does not close while it saves, and a send with
  * errors takes the focus to the first field to fix (#720). The fields scroll, and the buttons
  * stay in view under them. What to do next is not asked: it is the lead's next actions (#853).
+ * A new deal starts where its lead stands (#951): a lead won by hand with its win, the only stage
+ * it can be created in until then (said under the stage before the save, which is then held), a
+ * lead without deals at its phase (said too, as is a stage before it, which takes the phase
+ * back). The lead is read again each time the dialog opens, and the deal waits for it.
  */
 export function DealFormDialog({
   open,
@@ -250,9 +275,32 @@ export function DealFormDialog({
   const amount = parseAmount(state.amount);
   const probability = parseWhole(state.probability, 100);
   const chosenLeadId = leadId ?? lead?.id;
+  // Where a new deal of the lead starts, read again each time the dialog opens: the lead's status
+  // or phase may just have been changed by hand on its page, whose deals card read it before
+  const leadDeals = trpc.deals.forLead.useQuery(
+    { organizationId, leadId: chosenLeadId ?? '' },
+    { enabled: open && !editing && !!chosenLeadId, staleTime: 0 }
+  );
+  const start = editing || !chosenLeadId ? undefined : leadDeals.data?.newDeal;
+  // No new deal is sent until then (its button waits): it would start from the lead as it was
+  const reading = !editing && !!chosenLeadId && leadDeals.isFetching;
+  const form = shownForm(state, start);
+  const shownInitial = shownForm(initial, undefined);
+  // A lead without deals at a phase past the initial hearing opens at it (newDealStart): said
+  // while the stage is not chosen, and a stage chosen before it is said to take the phase back
+  const phaseNote =
+    !start || start.wonFirst || start.stage === 'qualification'
+      ? null
+      : state.stage === null
+        ? 'follows'
+        : isOpenStage(form.stage) && openStageIndex(form.stage) < openStageIndex(start.stage)
+          ? 'back'
+          : null;
   const errors: Record<ErrorField, boolean> = {
     lead: !editing && !chosenLeadId,
     name: state.name.trim() === '',
+    // A lead won by hand takes its win first (createDeal refuses another stage): said before
+    stage: !!start?.wonFirst && form.stage !== 'won',
     // A day the deals do not take (outside 2000-2100) is refused by the API too
     closedOn:
       closed !== null && (closedOnUnreadable || !state.closedOn || !isDealDate(state.closedOn)),
@@ -269,8 +317,8 @@ export function DealFormDialog({
   // A lost deal saved with 保留 before it was no deal's reason (#445) asks for another one
   const onHold = closed === 'lost' && deal?.lostReason === 'on_hold' && state.lostReason === '';
   const autoCategory = forecastCategory({
-    stage: state.stage,
-    probability: typeof probability === 'number' ? probability : STAGE_PROBABILITY[state.stage],
+    stage: form.stage,
+    probability: typeof probability === 'number' ? probability : STAGE_PROBABILITY[form.stage],
     forecastOverride: null,
   });
 
@@ -289,7 +337,7 @@ export function DealFormDialog({
     };
     const failed = () => setSaveFailed(true);
     if (deal) {
-      const changed = changedValues(formValues(state, closed), formValues(initial, closed));
+      const changed = changedValues(formValues(form, closed), formValues(shownInitial, closed));
       if (Object.keys(changed).length === 0) {
         onOpenChange(false);
         return;
@@ -303,8 +351,8 @@ export function DealFormDialog({
         {
           organizationId,
           leadId: chosenLeadId,
-          stage: state.stage,
-          ...formValues(state, null),
+          stage: form.stage,
+          ...formValues(form, null),
           ...lost,
         },
         { onSuccess: done, onError: failed }
@@ -320,7 +368,7 @@ export function DealFormDialog({
       setFocusRequest((count) => count + 1);
       return;
     }
-    if (!editing && state.stage === 'lost') {
+    if (!editing && form.stage === 'lost') {
       setLostOpen(true);
       return;
     }
@@ -400,7 +448,7 @@ export function DealFormDialog({
                 <div className="space-y-1.5">
                   <Label htmlFor={`${id}-kind`}>{t('fields.kind')}</Label>
                   <Select
-                    value={state.kind}
+                    value={form.kind}
                     onValueChange={(value) => {
                       // A form's reset or autofill clears Radix's hidden select: keep the choice
                       if (!value) return;
@@ -423,7 +471,7 @@ export function DealFormDialog({
                   <div className="space-y-1.5">
                     <Label htmlFor={`${id}-stage`}>{t('fields.stage')}</Label>
                     <Select
-                      value={state.stage}
+                      value={form.stage}
                       onValueChange={(value) => {
                         if (!value) return;
                         set('stage', value as DealStage);
@@ -432,7 +480,16 @@ export function DealFormDialog({
                       <SelectTrigger
                         id={`${id}-stage`}
                         className={TAP_TARGET}
-                        aria-describedby={state.stage === 'won' ? `${id}-won-note` : undefined}
+                        aria-invalid={submitted && errors.stage}
+                        aria-describedby={
+                          form.stage === 'won'
+                            ? `${id}-won-note`
+                            : errors.stage
+                              ? `${id}-stage-error`
+                              : phaseNote
+                                ? `${id}-stage-note`
+                                : undefined
+                        }
                       >
                         <SelectValue />
                       </SelectTrigger>
@@ -448,15 +505,48 @@ export function DealFormDialog({
                 )}
               </div>
 
-              {!editing && state.stage === 'won' && (
+              {/* What the stage does, in one place under it: the won note below, or one of these */}
+              {!editing && errors.stage && (
+                // Before the save as a caution, after it as the error to fix
+                <p
+                  id={`${id}-stage-error`}
+                  className={cn(
+                    'flex gap-1.5 text-sm',
+                    submitted
+                      ? 'text-red-600 dark:text-red-400'
+                      : 'text-amber-800 dark:text-amber-300'
+                  )}
+                >
+                  {submitted && (
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                  )}
+                  <span>{t('form.wonFirstStage')}</span>
+                </p>
+              )}
+              {!editing && phaseNote && (
+                <p
+                  id={`${id}-stage-note`}
+                  className={
+                    phaseNote === 'back'
+                      ? 'text-sm text-amber-800 dark:text-amber-300'
+                      : 'text-sm text-gray-600 dark:text-gray-300'
+                  }
+                >
+                  {t(phaseNote === 'back' ? 'form.stageTakesPhaseBack' : 'form.stageFollowsLead')}
+                </p>
+              )}
+
+              {!editing && form.stage === 'won' && (
                 <div
                   id={`${id}-won-note`}
                   className="space-y-1 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-500/10 dark:text-amber-200"
                 >
                   <p>
-                    {lead
-                      ? t('wonDialog.impact', { lead: lead.label })
-                      : t('wonDialog.impactUnnamed')}
+                    {start?.wonFirst
+                      ? t('form.wonFirst')
+                      : lead
+                        ? t('wonDialog.impact', { lead: lead.label })
+                        : t('wonDialog.impactUnnamed')}
                   </p>
                   <p>{t('form.wonToday')}</p>
                   <p>{t('form.wonPast')}</p>
@@ -587,7 +677,7 @@ export function DealFormDialog({
                       id={`${id}-probability-help`}
                       className="text-sm text-gray-600 dark:text-gray-300"
                     >
-                      {t('form.probabilityHelp', { value: STAGE_PROBABILITY[state.stage] })}
+                      {t('form.probabilityHelp', { value: STAGE_PROBABILITY[form.stage] })}
                     </p>
                     {fieldError(errors.probability, 'probability', t('form.probabilityInvalid'))}
                   </div>
@@ -687,8 +777,14 @@ export function DealFormDialog({
               >
                 {tCommon('cancel')}
               </Button>
-              <Button type="submit" className={cn(TAP_TARGET, 'min-w-24')} disabled={pending}>
-                {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+              <Button
+                type="submit"
+                className={cn(TAP_TARGET, 'min-w-24')}
+                disabled={pending || reading}
+              >
+                {(pending || reading) && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                )}
                 {pending
                   ? t('form.saving')
                   : editing

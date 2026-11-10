@@ -48,6 +48,7 @@ export function TodaySection({
   emptyText,
   children,
   footer,
+  headingId: givenHeadingId,
 }: {
   title: string;
   description: string;
@@ -60,9 +61,15 @@ export function TodaySection({
   children: ReactNode;
   /** Under the content in every state: a way back from a list opened in full also when it failed */
   footer?: ReactNode;
+  /**
+   * The heading's id, focusable by script: for a list inside that sends the focus to it when it
+   * empties (#776), and for a dialog opened from a row, once the row left (#998)
+   */
+  headingId?: string;
 }) {
   const t = useTranslations('today.section');
-  const headingId = useId();
+  const ownHeadingId = useId();
+  const headingId = givenHeadingId ?? ownHeadingId;
 
   return (
     <section
@@ -71,8 +78,11 @@ export function TodaySection({
     >
       <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
+          {/* Given to a list inside, focusable by script (not by Tab): where the focus goes
+              when the list empties */}
           <h2
             id={headingId}
+            tabIndex={givenHeadingId ? -1 : undefined}
             className="text-base font-semibold text-gray-900 sm:text-lg dark:text-gray-50"
           >
             {title}
