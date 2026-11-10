@@ -9,6 +9,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { Popover, PopoverContent } from '@/components/ui/popover';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
@@ -51,6 +52,17 @@ const kinds: [string, Open][] = [
           <input aria-label="note" />
         </AlertDialogContent>
       </AlertDialog>
+    ),
+  ],
+  [
+    'Popover (#1012)',
+    (onEscapeKeyDown) => (
+      <Popover defaultOpen>
+        <PopoverContent onEscapeKeyDown={onEscapeKeyDown}>
+          <p>Title</p>
+          <input aria-label="note" />
+        </PopoverContent>
+      </Popover>
     ),
   ],
 ];

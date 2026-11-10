@@ -264,6 +264,21 @@ describe('HearingDateInput', () => {
     expect(onEnter).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps what was typed on the Esc of a conversion, and drops it on a plain Esc (#1012)', async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    render(withIntl(<DateHarness onChange={onChange} />));
+    const box = screen.getByLabelText(LABEL);
+    await user.type(box, '2026/1');
+
+    fireEvent.keyDown(box, { key: 'Escape', keyCode: 229 });
+    fireEvent.keyDown(box, { key: 'Escape', isComposing: true });
+    expect(box).toHaveValue('2026/1');
+
+    fireEvent.keyDown(box, { key: 'Escape' });
+    expect(box).toHaveValue('');
+  });
+
   it('does nothing in read-only mode', () => {
     render(
       withIntl(

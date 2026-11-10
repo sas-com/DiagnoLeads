@@ -114,6 +114,24 @@ describe('HeaderLeadSearch', () => {
     );
   });
 
+  it('keeps the suggestions on the Esc of a conversion, and closes them on a plain Esc (#1012)', () => {
+    renderSearch();
+    const input = type('山田');
+    fireEvent.keyDown(input, { key: 'Escape', keyCode: 229 });
+    fireEvent.keyDown(input, { key: 'Escape', isComposing: true });
+    expect(screen.getByText('山田 太郎')).toBeInTheDocument();
+
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(screen.queryByText('山田 太郎')).not.toBeInTheDocument();
+
+    // With the list closed, the Enter that confirms a conversion does not search the list
+    fireEvent.keyDown(input, { key: 'Enter', keyCode: 229 });
+    fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
+    expect(mocks.push).not.toHaveBeenCalled();
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(mocks.push).toHaveBeenCalledWith(`/ja/leads?q=${encodeURIComponent('山田')}`);
+  });
+
   it('arrow keys choose a lead and Enter opens its page', () => {
     renderSearch();
     const input = type('a');
