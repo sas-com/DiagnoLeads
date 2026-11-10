@@ -7,7 +7,7 @@ import { DueTasksSection } from '@/components/features/lead-follow-up/due-tasks-
 import { LeadContactBar } from '@/components/features/lead-follow-up/lead-contact-bar';
 import { LeadNextActionsCard } from '@/components/features/lead-follow-up/lead-next-actions-card';
 import messages from '@/locales/ja/common.json';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import type { ReactNode } from 'react';
@@ -204,6 +204,29 @@ describe('LeadContactBar', () => {
         note: '午後にかけ直す',
       },
     ]);
+  });
+
+  it('gives the focus back to "record an activity" once its dialog closes, recorded or not (#776)', async () => {
+    mocks.contacts = { firstContactAt: null, total: 0, recent: [], canEdit: true };
+    mocks.results.recordContact = { id: 'c3', kind: 'no_answer' };
+    const user = userEvent.setup();
+    renderBar();
+    const group = screen.getByRole('group', { name: '架空商事への連絡を記録' });
+    const button = within(group).getByRole('button', { name: '活動を記録' });
+
+    // Closed without recording
+    await user.click(button);
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(button).toHaveFocus());
+
+    // Recorded
+    await user.click(button);
+    await user.click(screen.getByRole('radio', { name: '不通' }));
+    await user.click(screen.getByRole('button', { name: '記録する' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(mocks.calls.recordContact).toEqual([expect.objectContaining({ kind: 'no_answer' })]);
+    await waitFor(() => expect(button).toHaveFocus());
   });
 
   it('shows the first and latest contact, and no buttons to read-only roles', () => {

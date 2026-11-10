@@ -22,7 +22,7 @@ paths: ["lib/features/audit-logs/**", "lib/features/feature-flags/**", "app/api/
 - **却下案**: (a) を `_app.ts` に登録して画面を作る（今の画面と運用に使い道がない）、(b) 認証を直して残す（成功する呼び出しは今もありえない。呼んでいるクライアントの有無は本番のログで確かめていない）、(d-1) tags・comments を消す（SFA が使うので、すぐに作り直すことになる）、(d-2) workflows も消す（段階5で同じ置き場を作り直すことになる）
 - **ルール**:
   - 1項目1 PR。表の DROP はコードの削除と別の PR にし、本番の行数を読み取りで確かめ、オーナーに確かめてから行う
-  - 消す PR で、一緒に扱うものを確かめる：そのコードだけを試すテスト（実 DB のテストを含む）、`lib/middleware/rate-limit.ts` の該当の行、`lib/api-docs/modules.ts`、locales のキー。README と docs の記述を直すかは、その PR でオーナーに確かめる
+  - 消す PR で、一緒に扱うものを確かめる：そのコードだけを試すテスト（実 DB のテストを含む）、`lib/middleware/rate-limit.ts` の該当の行、locales のキー（`lib/api-docs` は #469 で消した）。README と docs の記述を直すかは、その PR でオーナーに確かめる
   - REST v2 を消す PR では、`app/api/v2/leads` を `paths` や本文に持つ決定（2026-10-09-lead-pipeline-status・2026-10-16-lead-activity-and-audit・2026-10-24-on-hold-is-not-lost）も直す。読み取り専用のセキュリティレビューを通す
   - 消したパスは、この決定の `paths` からも同じ PR で外す（`test/unit/claude-hooks` が、どのファイルにも当たらないパスを検出する）
   - #514 のマージ後は、`bun run arch:check --update` で許可リストの行を消す（(a) で7行。差分は行の削除だけになる）

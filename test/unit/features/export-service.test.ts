@@ -6,7 +6,6 @@ import {
   funnelToCSV,
   generateExportFilename,
   generateFullReportCSV,
-  leadsToCSV,
   overviewToCSV,
   sourceBreakdownToCSV,
   statusBreakdownToCSV,
@@ -15,86 +14,6 @@ import {
 import { describe, expect, it } from 'vitest';
 
 describe('Export Service', () => {
-  describe('leadsToCSV', () => {
-    const mockLeads = [
-      {
-        id: '1',
-        email: 'test@example.com',
-        name: 'Test User',
-        company: 'Test Company',
-        phone: '+1-555-0100',
-        position: 'CTO',
-        source: 'website',
-        status: 'new',
-        score: 85,
-        notes: 'Test notes',
-        createdAt: new Date('2024-01-15'),
-        updatedAt: new Date('2024-01-15'),
-      },
-    ];
-
-    it('should convert leads to CSV with headers', () => {
-      const csv = leadsToCSV(mockLeads, true);
-      expect(csv).toContain('ID,Email,Name,Company');
-      expect(csv).toContain('test@example.com');
-      expect(csv).toContain('Test User');
-    });
-
-    it('should convert leads to CSV without headers', () => {
-      const csv = leadsToCSV(mockLeads, false);
-      expect(csv).not.toContain('ID,Email,Name,Company');
-      expect(csv).toContain('test@example.com');
-    });
-
-    it('should handle null values', () => {
-      const leadsWithNulls = [
-        {
-          id: '1',
-          email: 'test@example.com',
-          name: null,
-          company: null,
-          phone: null,
-          position: null,
-          source: null,
-          status: 'new',
-          score: null,
-          notes: null,
-          createdAt: new Date('2024-01-15'),
-          updatedAt: new Date('2024-01-15'),
-        },
-      ];
-      const csv = leadsToCSV(leadsWithNulls);
-      expect(csv).toBeDefined();
-      expect(csv).toContain('test@example.com');
-    });
-
-    it('should escape CSV special characters', () => {
-      const leadsWithCommas = [
-        {
-          id: '1',
-          email: 'test@example.com',
-          name: 'User, Test',
-          company: 'Company "LLC"',
-          phone: null,
-          position: null,
-          source: null,
-          status: 'new',
-          score: null,
-          notes: 'Note with\nnewline',
-          createdAt: new Date('2024-01-15'),
-          updatedAt: new Date('2024-01-15'),
-        },
-      ];
-      const csv = leadsToCSV(leadsWithCommas);
-      expect(csv).toContain('"User, Test"');
-    });
-
-    it('should handle empty array', () => {
-      const csv = leadsToCSV([]);
-      expect(csv).toContain('ID,Email,Name,Company');
-    });
-  });
-
   describe('overviewToCSV', () => {
     const mockOverview = {
       totalLeads: 100,
