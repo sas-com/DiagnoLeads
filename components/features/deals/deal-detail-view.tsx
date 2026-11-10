@@ -41,7 +41,7 @@ import { ChevronLeft, Loader2, MoreHorizontal, NotebookPen, Pencil, Trash2 } fro
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { type ReactNode, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { DealFormDialog } from './deal-form-dialog';
 import { dealMarks, formatDealDate, formatYen } from './deal-format';
@@ -82,7 +82,46 @@ export function DealDetailView({ dealId }: { dealId: string }) {
   const tActivity = useTranslations('leadActivity.dealActivities');
   // The delete question says a failure itself and stays open for another try (#720)
   const { remove } = useDealMutations({ toastErrors: false });
-  const stageMove = useStageMove(organizationId);
+  // The stage path's button that moved the deal turns into its current stage once it is read
+  // again. The focus goes to that stage (focusable by script); when the deal could not be read,
+  // to the retry, which says the failure, else to the failure itself (#1044)
+  const currentStageId = useId();
+  const loadErrorId = useId();
+  const retryButton = useRef<HTMLButtonElement>(null);
+  const focusTarget = () =>
+    document.getElementById(currentStageId) ??
+    retryButton.current ??
+    document.getElementById(loadErrorId);
+  const stageMove = useStageMove(organizationId, focusTarget);
+  // The stage read last, for a question that closes once the deal is read again (#1044)
+  const stageRead = useRef<DealStage | undefined>(undefined);
+  useEffect(() => {
+    stageRead.current = query.data?.stage;
+  }, [query.data?.stage]);
+  // What had the focus on the stage path, or on the retry that stands for it while the deal
+  // cannot be read. A move or a read takes it away, the focus with it, to the page: the focus
+  // goes to the place above instead, after a menu or a question that closed gave it back on its
+  // own, unless it had moved elsewhere before (#1044)
+  const focusedOnPath = useRef<Element | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: what the page shows is the trigger (drawn anew)
+  useEffect(() => {
+    const last = focusedOnPath.current;
+    if (!last || last.isConnected) return;
+    const timer = window.setTimeout(() => {
+      if (focusedOnPath.current !== last) return;
+      focusedOnPath.current = null;
+      const active = document.activeElement;
+      if (active && active !== document.body) return;
+      focusTarget()?.focus();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [
+    // The failure's kind too: a retry may find the deal gone, or no longer readable
+    query.isError ? (query.error.data?.code ?? 'error') : null,
+    query.data?.stage,
+    query.data?.canEdit,
+    currentStageId,
+  ]);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteFailed, setDeleteFailed] = useState(false);
@@ -107,26 +146,54 @@ export function DealDetailView({ dealId }: { dealId: string }) {
 
   if (!leaving && query.error?.data?.code === 'FORBIDDEN') {
     return (
-      <div className="mx-auto max-w-5xl space-y-4">
-        {backLink}
-        <DealsForbidden />
-      </div>
+      <>
+        <div className="mx-auto max-w-5xl space-y-4">
+          {backLink}
+          {/* Where the focus goes, as the failure when the deal cannot be read (#1044) */}
+          <div id={loadErrorId} tabIndex={-1}>
+            <DealsForbidden />
+          </div>
+        </div>
+        {/* Kept as when the deal cannot be read (#1044) */}
+        {stageMove.dialogs}
+      </>
     );
   }
   if (!leaving && query.isError) {
     const missing = query.error.data?.code === 'NOT_FOUND';
     return (
-      <div className="mx-auto max-w-5xl space-y-4">
-        {backLink}
-        <p role="alert" className="text-sm text-red-700 dark:text-red-400">
-          {missing ? t('detail.notFound') : t('state.loadError')}
-        </p>
-        {!missing && (
-          <Button type="button" variant="outline" onClick={() => void query.refetch()}>
-            {t('state.retry')}
-          </Button>
-        )}
-      </div>
+      <>
+        <div className="mx-auto max-w-5xl space-y-4">
+          {backLink}
+          {/* Focusable by script: where the focus goes when nothing else is left (#1044) */}
+          <p
+            id={loadErrorId}
+            tabIndex={-1}
+            role="alert"
+            className="text-sm text-red-700 dark:text-red-400"
+          >
+            {missing ? t('detail.notFound') : t('state.loadError')}
+          </p>
+          {!missing && (
+            <Button
+              ref={retryButton}
+              type="button"
+              variant="outline"
+              // Said with the failure when the focus is sent to it (#1044)
+              aria-describedby={loadErrorId}
+              onFocus={(event) => {
+                focusedOnPath.current = event.currentTarget;
+              }}
+              onClick={() => void query.refetch()}
+            >
+              {t('state.retry')}
+            </Button>
+          )}
+        </div>
+        {/* In the same place as on the deal's page: a move's question open meanwhile stays,
+            with what was entered in it (#1044) */}
+        {stageMove.dialogs}
+      </>
     );
   }
   const deal = query.data;
@@ -145,15 +212,28 @@ export function DealDetailView({ dealId }: { dealId: string }) {
   // Those who may edit the deal may record for it: update Lead with deals readable, as
   // leadActivity.forDeal decides for the activity card
   const canRecord = deal.canEdit;
-  const moveTo = (stage: DealStage) =>
+  const moveTo = (stage: DealStage) => {
+    // A question cancelled gives the focus back to the button pressed; a move made sends it to
+    // the stage the deal moved to, also when that button stays, as a lost deal's reopening after
+    // 不適格 (#1044)
+    const from = deal.stage;
+    const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     stageMove.move(
       {
         ...deal,
         leadLabel: deal.lead.company || deal.lead.name || '',
         leadSqlDecision: deal.lead.sqlDecision,
       },
-      stage
+      stage,
+      {
+        returnFocus: () => {
+          if (stageRead.current !== from || !trigger?.isConnected) return false;
+          trigger.focus();
+          return true;
+        },
+      }
     );
+  };
 
   const deleting = remove.isPending || leaving;
   const confirmDelete = () => {
@@ -179,253 +259,264 @@ export function DealDetailView({ dealId }: { dealId: string }) {
   const hasLinkedDeals = !!deal.previousDeal || deal.nextDeals.length > 0;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div className="space-y-2">
-        <PageHeader
-          back={back}
-          title={deal.name}
-          description={
-            <Link
-              href={`/${locale}/leads/${deal.lead.id}`}
-              className={cn('inline-flex items-center underline underline-offset-2', TAP_TARGET)}
-            >
-              {[deal.lead.company, deal.lead.name].filter(Boolean).join(' ') || t('fields.lead')}
-            </Link>
-          }
-          meta={
-            <>
-              <DealStageBadge stage={deal.stage} />
-              {!deal.canEdit && (
-                <Badge color="gray" className="text-sm">
-                  {t('state.readOnly')}
-                </Badge>
-              )}
-            </>
-          }
-          actions={
-            (canRecord || deal.canEdit || deal.canDelete) && (
+    <>
+      <div className="mx-auto max-w-5xl space-y-6">
+        <div className="space-y-2">
+          <PageHeader
+            back={back}
+            title={deal.name}
+            description={
+              <Link
+                href={`/${locale}/leads/${deal.lead.id}`}
+                className={cn('inline-flex items-center underline underline-offset-2', TAP_TARGET)}
+              >
+                {[deal.lead.company, deal.lead.name].filter(Boolean).join(' ') || t('fields.lead')}
+              </Link>
+            }
+            meta={
               <>
-                {canRecord && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className={TAP_TARGET}
-                    onClick={(event) => {
-                      focus.remember(event.currentTarget);
-                      setRecordOpen(true);
-                    }}
-                  >
-                    <NotebookPen className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                    {tActivity('record')}
-                  </Button>
-                )}
-                {(deal.canEdit || deal.canDelete) && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        ref={moreRef}
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="h-11 w-11 md:h-10 md:w-10"
-                        aria-label={t('detail.moreActions')}
-                      >
-                        <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {deal.canEdit && (
-                        <DropdownMenuItem
-                          className="min-h-11 md:min-h-8"
-                          onSelect={() => openEdit(moreRef.current)}
-                        >
-                          <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
-                          {tCommon('edit')}
-                        </DropdownMenuItem>
-                      )}
-                      {deal.canEdit && deal.canDelete && <DropdownMenuSeparator />}
-                      {deal.canDelete && (
-                        <DropdownMenuItem
-                          onSelect={() => {
-                            focus.remember(moreRef.current);
-                            setDeleteFailed(false);
-                            setDeleteOpen(true);
-                          }}
-                          className="min-h-11 text-red-700 focus:bg-red-50 focus:text-red-700 md:min-h-8 dark:text-red-400 dark:focus:bg-red-950 dark:focus:text-red-400"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
-                          {tCommon('delete')}
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                <DealStageBadge stage={deal.stage} />
+                {!deal.canEdit && (
+                  <Badge color="gray" className="text-sm">
+                    {t('state.readOnly')}
+                  </Badge>
                 )}
               </>
-            )
-          }
+            }
+            actions={
+              (canRecord || deal.canEdit || deal.canDelete) && (
+                <>
+                  {canRecord && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className={TAP_TARGET}
+                      onClick={(event) => {
+                        focus.remember(event.currentTarget);
+                        setRecordOpen(true);
+                      }}
+                    >
+                      <NotebookPen className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                      {tActivity('record')}
+                    </Button>
+                  )}
+                  {(deal.canEdit || deal.canDelete) && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          ref={moreRef}
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="h-11 w-11 md:h-10 md:w-10"
+                          aria-label={t('detail.moreActions')}
+                        >
+                          <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {deal.canEdit && (
+                          <DropdownMenuItem
+                            className="min-h-11 md:min-h-8"
+                            onSelect={() => openEdit(moreRef.current)}
+                          >
+                            <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
+                            {tCommon('edit')}
+                          </DropdownMenuItem>
+                        )}
+                        {deal.canEdit && deal.canDelete && <DropdownMenuSeparator />}
+                        {deal.canDelete && (
+                          <DropdownMenuItem
+                            onSelect={() => {
+                              focus.remember(moreRef.current);
+                              setDeleteFailed(false);
+                              setDeleteOpen(true);
+                            }}
+                            className="min-h-11 text-red-700 focus:bg-red-50 focus:text-red-700 md:min-h-8 dark:text-red-400 dark:focus:bg-red-950 dark:focus:text-red-400"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                            {tCommon('delete')}
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </>
+              )
+            }
+          />
+          {/* Why there is nothing to change here, for those who came straight from a lead */}
+          {!deal.canEdit && (
+            <p className="text-sm text-gray-600 dark:text-gray-300">{t('state.readOnlyHint')}</p>
+          )}
+        </div>
+
+        <StagePath
+          stage={deal.stage}
+          canEdit={deal.canEdit}
+          onMove={moveTo}
+          currentStageId={currentStageId}
+          onFocusWithin={(element) => {
+            focusedOnPath.current = element;
+          }}
         />
-        {/* Why there is nothing to change here, for those who came straight from a lead */}
-        {!deal.canEdit && (
-          <p className="text-sm text-gray-600 dark:text-gray-300">{t('state.readOnlyHint')}</p>
-        )}
-      </div>
 
-      <StagePath stage={deal.stage} canEdit={deal.canEdit} onMove={moveTo} />
-
-      <div className={cn('grid gap-6', hasLinkedDeals && 'md:grid-cols-[minmax(0,1fr)_18rem]')}>
-        <div className="min-w-0 space-y-6">
-          <Card className="p-5">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className={CARD_TITLE}>{t('detail.factsTitle')}</h2>
-              {deal.canEdit && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className={TAP_TARGET}
-                  onClick={(event) => openEdit(event.currentTarget)}
-                >
-                  <Pencil className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                  {tCommon('edit')}
-                </Button>
-              )}
-            </div>
-            <DealFacts deal={deal} />
-          </Card>
-          {/* The lead's next actions: what to do next for the deal (#720, #853). What is added
+        <div className={cn('grid gap-6', hasLinkedDeals && 'md:grid-cols-[minmax(0,1fr)_18rem]')}>
+          <div className="min-w-0 space-y-6">
+            <Card className="p-5">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h2 className={CARD_TITLE}>{t('detail.factsTitle')}</h2>
+                {deal.canEdit && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className={TAP_TARGET}
+                    onClick={(event) => openEdit(event.currentTarget)}
+                  >
+                    <Pencil className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                    {tCommon('edit')}
+                  </Button>
+                )}
+              </div>
+              <DealFacts deal={deal} />
+            </Card>
+            {/* The lead's next actions: what to do next for the deal (#720, #853). What is added
               here is added for the deal: the owner of an open deal gets it when the lead's
               assignee is another */}
-          <LeadNextActionsCard
-            organizationId={organizationId}
-            leadId={deal.lead.id}
-            description={
-              leadName
-                ? t('detail.leadNextActions', { lead: leadName })
-                : t('detail.leadNextActionsNoName')
-            }
-            deal={{
-              id: deal.id,
-              stage: deal.stage,
-              ownerUserId: deal.ownerUserId,
-              ownerName: deal.ownerName,
-            }}
-          />
+            <LeadNextActionsCard
+              organizationId={organizationId}
+              leadId={deal.lead.id}
+              description={
+                leadName
+                  ? t('detail.leadNextActions', { lead: leadName })
+                  : t('detail.leadNextActionsNoName')
+              }
+              deal={{
+                id: deal.id,
+                stage: deal.stage,
+                ownerUserId: deal.ownerUserId,
+                ownerName: deal.ownerName,
+              }}
+            />
+          </div>
+          {hasLinkedDeals && (
+            <aside className="space-y-4">
+              {deal.previousDeal && (
+                <Card className="p-4">
+                  <h2 className={CARD_TITLE}>{t('detail.previousDeal')}</h2>
+                  <LinkedDealItem deal={deal.previousDeal} />
+                </Card>
+              )}
+              {deal.nextDeals.length > 0 && (
+                <Card className="p-4">
+                  <h2 className={CARD_TITLE}>{t('detail.nextDeals')}</h2>
+                  <ul>
+                    {deal.nextDeals.map((next) => (
+                      <li key={next.id}>
+                        <LinkedDealItem deal={next} />
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              )}
+            </aside>
+          )}
         </div>
-        {hasLinkedDeals && (
-          <aside className="space-y-4">
-            {deal.previousDeal && (
-              <Card className="p-4">
-                <h2 className={CARD_TITLE}>{t('detail.previousDeal')}</h2>
-                <LinkedDealItem deal={deal.previousDeal} />
-              </Card>
-            )}
-            {deal.nextDeals.length > 0 && (
-              <Card className="p-4">
-                <h2 className={CARD_TITLE}>{t('detail.nextDeals')}</h2>
-                <ul>
-                  {deal.nextDeals.map((next) => (
-                    <li key={next.id}>
-                      <LinkedDealItem deal={next} />
-                    </li>
-                  ))}
-                </ul>
-              </Card>
-            )}
-          </aside>
-        )}
-      </div>
 
-      <DealActivitiesCard
-        organizationId={organizationId}
-        dealId={deal.id}
-        leadId={deal.lead.id}
-        leadLabel={leadLabel}
-      />
-
-      <Card className="p-5">
-        <h2 className={CARD_TITLE}>{t('detail.history')}</h2>
-        {deal.history.length === 0 ? (
-          <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
-            {t('detail.historyEmpty')}
-          </p>
-        ) : (
-          <ol className="mt-3 divide-y divide-gray-100 dark:divide-gray-800">
-            {deal.history.map((row, index) => (
-              // The rows come newest first: the next one holds the values before this change
-              <HistoryRow key={row.id} row={row} before={deal.history[index + 1]} />
-            ))}
-          </ol>
-        )}
-      </Card>
-
-      {canRecord && (
-        <RecordActivityDialog
-          open={recordOpen}
-          onOpenChange={setRecordOpen}
+        <DealActivitiesCard
           organizationId={organizationId}
+          dealId={deal.id}
           leadId={deal.lead.id}
           leadLabel={leadLabel}
-          defaultDealId={deal.id}
+        />
+
+        <Card className="p-5">
+          <h2 className={CARD_TITLE}>{t('detail.history')}</h2>
+          {deal.history.length === 0 ? (
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+              {t('detail.historyEmpty')}
+            </p>
+          ) : (
+            <ol className="mt-3 divide-y divide-gray-100 dark:divide-gray-800">
+              {deal.history.map((row, index) => (
+                // The rows come newest first: the next one holds the values before this change
+                <HistoryRow key={row.id} row={row} before={deal.history[index + 1]} />
+              ))}
+            </ol>
+          )}
+        </Card>
+
+        {canRecord && (
+          <RecordActivityDialog
+            open={recordOpen}
+            onOpenChange={setRecordOpen}
+            organizationId={organizationId}
+            leadId={deal.lead.id}
+            leadLabel={leadLabel}
+            defaultDealId={deal.id}
+            onCloseAutoFocus={focus.onCloseAutoFocus}
+          />
+        )}
+        <DealFormDialog
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          organizationId={organizationId}
+          deal={deal}
+          onSaved={() => toast.success(t('toasts.saved'))}
           onCloseAutoFocus={focus.onCloseAutoFocus}
         />
-      )}
-      <DealFormDialog
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        organizationId={organizationId}
-        deal={deal}
-        onSaved={() => toast.success(t('toasts.saved'))}
-        onCloseAutoFocus={focus.onCloseAutoFocus}
-      />
+        <AlertDialog
+          open={deleteOpen}
+          onOpenChange={(open) => {
+            // Open until the deletion is done: the page leaves when it succeeds
+            if (!deleting) setDeleteOpen(open);
+          }}
+        >
+          <AlertDialogContent onCloseAutoFocus={focus.onCloseAutoFocus}>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t('detail.deleteTitle')}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {t('detail.deleteDescription', { name: deal.name, lead: leadLabel })}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            {deleteFailed && (
+              <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+                {t('toasts.deleteError')}
+              </p>
+            )}
+            {/* The button's new name alone may not be read out */}
+            <output className="sr-only">{deleting ? t('detail.deleting') : ''}</output>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleting} className="min-h-11 md:min-h-10">
+                {tCommon('cancel')}
+              </AlertDialogCancel>
+              <AlertDialogAction
+                // aria-disabled, not disabled: the focus stays on the button while it deletes
+                aria-disabled={deleting}
+                className="min-h-11 bg-red-700 text-white hover:bg-red-800 md:min-h-10 dark:bg-red-700 dark:hover:bg-red-800"
+                onClick={(event) => {
+                  // Stays open, saying it is deleting, until the deletion is done
+                  event.preventDefault();
+                  if (!deleting) confirmDelete();
+                }}
+              >
+                {deleting ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" />
+                    {t('detail.deleting')}
+                  </>
+                ) : (
+                  tCommon('delete')
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+      {/* After the page, where a failure to read the deal keeps them too (#1044) */}
       {stageMove.dialogs}
-      <AlertDialog
-        open={deleteOpen}
-        onOpenChange={(open) => {
-          // Open until the deletion is done: the page leaves when it succeeds
-          if (!deleting) setDeleteOpen(open);
-        }}
-      >
-        <AlertDialogContent onCloseAutoFocus={focus.onCloseAutoFocus}>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('detail.deleteTitle')}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('detail.deleteDescription', { name: deal.name, lead: leadLabel })}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {deleteFailed && (
-            <p role="alert" className="text-sm text-red-700 dark:text-red-400">
-              {t('toasts.deleteError')}
-            </p>
-          )}
-          {/* The button's new name alone may not be read out */}
-          <output className="sr-only">{deleting ? t('detail.deleting') : ''}</output>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting} className="min-h-11 md:min-h-10">
-              {tCommon('cancel')}
-            </AlertDialogCancel>
-            <AlertDialogAction
-              // aria-disabled, not disabled: the focus stays on the button while it deletes
-              aria-disabled={deleting}
-              className="min-h-11 bg-red-700 text-white hover:bg-red-800 md:min-h-10 dark:bg-red-700 dark:hover:bg-red-800"
-              onClick={(event) => {
-                // Stays open, saying it is deleting, until the deletion is done
-                event.preventDefault();
-                if (!deleting) confirmDelete();
-              }}
-            >
-              {deleting ? (
-                <>
-                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" />
-                  {t('detail.deleting')}
-                </>
-              ) : (
-                tCommon('delete')
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+    </>
   );
 }
 
@@ -529,16 +620,22 @@ function StagePath({
   stage,
   canEdit,
   onMove,
+  currentStageId,
+  onFocusWithin,
 }: {
   stage: DealStage;
   canEdit: boolean;
   onMove: (stage: DealStage) => void;
+  /** The current stage's id, focusable by script: where the focus goes once a move is read (#1044) */
+  currentStageId: string;
+  /** What took the focus in the path, to tell when it went with a move */
+  onFocusWithin: (element: Element) => void;
 }) {
   const t = useTranslations('deals');
   const currentIndex = DEAL_STAGES.indexOf(stage);
   return (
     // A group of steps and buttons, not a navigation: nothing here leaves the page (#720)
-    <fieldset className="min-w-0">
+    <fieldset className="min-w-0" onFocus={(event) => onFocusWithin(event.target)}>
       <legend className="sr-only">{t('detail.stagePath')}</legend>
       <ol className="flex flex-wrap gap-2">
         {DEAL_STAGES.map((step, index) => {
@@ -555,7 +652,12 @@ function StagePath({
           return (
             <li key={step}>
               {current || !canEdit ? (
-                <span className={classes} aria-current={current ? 'step' : undefined}>
+                <span
+                  id={current ? currentStageId : undefined}
+                  tabIndex={current ? -1 : undefined}
+                  className={classes}
+                  aria-current={current ? 'step' : undefined}
+                >
                   {t(`stages.${step}`)}
                 </span>
               ) : (
