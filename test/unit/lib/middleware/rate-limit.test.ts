@@ -95,7 +95,8 @@ describe('ENDPOINT_RATE_LIMITS', () => {
   });
 
   it('should have diagnostic endpoints', () => {
-    expect(ENDPOINT_RATE_LIMITS['/api/diagnostic'].max).toBe(30);
+    expect(ENDPOINT_RATE_LIMITS['/api/diagnostics/ax-migration'].max).toBe(10);
+    expect(ENDPOINT_RATE_LIMITS['/api/diagnoses/'].max).toBe(10);
   });
 
   it('should have GraphQL endpoint', () => {
