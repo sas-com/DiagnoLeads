@@ -803,6 +803,75 @@ describe.skipIf(!url)('deals (PostgreSQL)', () => {
       expect(await leadOf(lead.id)).toMatchObject({ status: 'won', dealPhase: 'survey_won' });
     });
 
+    it('lets a lead whose won deal was lost or deleted take an open deal again (#977)', async () => {
+      // A won deal lost directly: no deal stands for a phase, so the won phase stays on the lead
+      const lost = await createLead(orgA);
+      const survey = await adminA.deals.create({
+        organizationId: orgA,
+        leadId: lost.id,
+        name: '調査',
+        stage: 'won',
+      });
+      await adminA.deals.update({
+        organizationId: orgA,
+        dealId: survey.id,
+        stage: 'lost',
+        lostReason: 'budget',
+      });
+      expect(await leadOf(lost.id)).toMatchObject({ status: 'lost', dealPhase: 'survey_won' });
+      expect((await memberA.deals.forLead({ organizationId: orgA, leadId: lost.id })).newDeal).toEqual(
+        { stage: 'qualification', kind: null, wonFirst: false }
+      );
+      await adminA.deals.create({ organizationId: orgA, leadId: lost.id, name: '再提案' });
+      expect(await leadOf(lost.id)).toMatchObject({
+        status: 'negotiating',
+        dealPhase: 'initial_hearing',
+      });
+
+      // A won deal deleted while a lost deal stays
+      const deleted = await createLead(orgA);
+      await adminA.deals.create({
+        organizationId: orgA,
+        leadId: deleted.id,
+        name: '前の提案',
+        stage: 'lost',
+        lostReason: 'timing',
+      });
+      const won = await adminA.deals.create({
+        organizationId: orgA,
+        leadId: deleted.id,
+        name: '調査',
+        stage: 'won',
+      });
+      await adminA.deals.delete({ organizationId: orgA, dealId: won.id });
+      expect(await leadOf(deleted.id)).toMatchObject({ status: 'lost', dealPhase: 'survey_won' });
+      await adminA.deals.create({ organizationId: orgA, leadId: deleted.id, name: '再提案' });
+      expect((await leadOf(deleted.id)).status).toBe('negotiating');
+
+      // With its last deal deleted, a win left on the lead is recorded first again
+      const last = await createLead(orgA);
+      const only = await adminA.deals.create({
+        organizationId: orgA,
+        leadId: last.id,
+        name: '調査',
+        stage: 'won',
+      });
+      await adminA.deals.delete({ organizationId: orgA, dealId: only.id });
+      await expect(
+        adminA.deals.create({ organizationId: orgA, leadId: last.id, name: '移行', kind: 'migration' })
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      // Without deals the lead is changed by hand again: no longer won, it takes an open deal
+      expect(await leadOf(last.id)).toMatchObject({ status: 'won', dealPhase: 'survey_won' });
+      await memberA.leads.update({
+        organizationId: orgA,
+        id: last.id,
+        status: 'negotiating',
+        dealPhase: 'proposal',
+      });
+      await adminA.deals.create({ organizationId: orgA, leadId: last.id, name: '移行の提案' });
+      expect(await leadOf(last.id)).toMatchObject({ status: 'negotiating' });
+    });
+
     it('refuses the status of a lead with deals through REST API v2 too', async () => {
       const { PATCH } = await import('@/app/api/v2/leads/[id]/route');
       const { NextRequest } = await import('next/server');

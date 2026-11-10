@@ -168,16 +168,20 @@ describe('statusFromDeals', () => {
 });
 
 describe('wonWithoutWonDeal', () => {
-  it('is a lead won by hand whose deals hold no win (#444)', () => {
+  it('is a lead won by hand without deals (#444)', () => {
     expect(wonWithoutWonDeal({ status: 'won', dealPhase: null }, [])).toBe(true);
     expect(wonWithoutWonDeal({ status: 'negotiating', dealPhase: 'migration_won' }, [])).toBe(true);
-    expect(wonWithoutWonDeal({ status: 'won', dealPhase: 'survey_won' }, [deal()])).toBe(true);
   });
 
-  it('is false once a deal is won, or for a lead not won', () => {
+  it('is false for a lead with deals, whatever they left on it, or for a lead not won (#977)', () => {
     expect(wonWithoutWonDeal({ status: 'won', dealPhase: null }, [deal({ stage: 'won' })])).toBe(
       false
     );
+    // A won deal lost since, or deleted while other deals stay: the deals compute the lead
+    expect(wonWithoutWonDeal({ status: 'lost', dealPhase: 'survey_won' }, [deal({ stage: 'lost' })])).toBe(
+      false
+    );
+    expect(wonWithoutWonDeal({ status: 'won', dealPhase: 'survey_won' }, [deal()])).toBe(false);
     expect(wonWithoutWonDeal({ status: 'negotiating', dealPhase: 'proposal' }, [])).toBe(false);
   });
 });
@@ -214,7 +218,8 @@ describe('qualificationDealSkip', () => {
     ).toBe('won');
     expect(qualificationDealSkip(lead({ status: 'won' }), [])).toBe('won');
     expect(qualificationDealSkip(lead({ dealPhase: 'survey_won' }), [])).toBe('won');
-    expect(qualificationDealSkip(lead({ status: 'won' }), [deal({ stage: 'lost' })])).toBe('won');
+    // A lead with deals is computed from them: all lost, it is no win by hand (#977)
+    expect(qualificationDealSkip(lead({ status: 'won' }), [deal({ stage: 'lost' })])).toBeNull();
   });
 
   it.each(['simple_diagnosis', 'proposal'])(
@@ -226,7 +231,7 @@ describe('qualificationDealSkip', () => {
     }
   );
 
-  it('creates one for a lead whose deals are all lost, even at a later phase, unless won by hand', () => {
+  it('creates one for a lead whose deals are all lost, even at a phase they left on it (#977)', () => {
     expect(qualificationDealSkip(lead({ status: 'lost' }), [deal({ stage: 'lost' })])).toBeNull();
     expect(
       qualificationDealSkip(lead({ status: 'lost', dealPhase: 'proposal' }), [
@@ -234,12 +239,12 @@ describe('qualificationDealSkip', () => {
         deal({ stage: 'lost', kind: 'migration' }),
       ])
     ).toBeNull();
-    // A won phase left on the lead (its won deal deleted, or set by hand) is a lead won by hand
+    // A won phase left on the lead by its won deal, lost since or deleted: not a win by hand
     expect(
       qualificationDealSkip(lead({ status: 'lost', dealPhase: 'survey_won' }), [
         deal({ stage: 'lost' }),
       ])
-    ).toBe('won');
+    ).toBeNull();
   });
 });
 
@@ -259,17 +264,21 @@ describe('newDealStart', () => {
     ['ax', 'ax'],
   ] as const)('starts a lead won by hand with its win, of the kind of its phase (%s)', (dealPhase, kind) => {
     expect(newDealStart(lead({ status: 'won', dealPhase }), [])).toEqual(won(kind));
-    // A won phase set by hand on a lead not won, or left on one whose deals are all lost
+    // A won phase set by hand on a lead not won
     expect(newDealStart(lead({ status: 'negotiating', dealPhase }), [])).toEqual(won(kind));
+    // Left on a lead whose deals are all lost: it is computed from them, in 見極め (#977)
     expect(newDealStart(lead({ status: 'lost', dealPhase }), [deal({ stage: 'lost' })])).toEqual(
-      won(kind)
+      open('qualification')
     );
   });
 
   it("keeps the form's kind for a lead won at a phase no win stands for", () => {
     expect(newDealStart(lead({ status: 'won' }), [])).toEqual(won(null));
     expect(newDealStart(lead({ status: 'won', dealPhase: 'proposal' }), [])).toEqual(won(null));
-    expect(newDealStart(lead({ status: 'won' }), [deal({ stage: 'lost' })])).toEqual(won(null));
+    // With deals, the lead is computed from them (#977)
+    expect(newDealStart(lead({ status: 'won' }), [deal({ stage: 'lost' })])).toEqual(
+      open('qualification')
+    );
   });
 
   it.each([
