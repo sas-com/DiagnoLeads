@@ -81,6 +81,19 @@ describe('sitePageOf', () => {
   ])('does not measure %s', (path) => {
     expect(sitePageOf(path)).toBeNull();
   });
+
+  // The beacon's body names the path: the names of Object.prototype are no page either (#804)
+  it.each([
+    '/ja/constructor',
+    '/ja/__proto__',
+    '/en/toString',
+    '/ja/hasOwnProperty',
+    '/ja/valueOf',
+    '/ja/__defineGetter__',
+    '/ja/constructor/',
+  ])('does not measure %s', (path) => {
+    expect(sitePageOf(path)).toBeNull();
+  });
 });
 
 describe('request details', () => {
