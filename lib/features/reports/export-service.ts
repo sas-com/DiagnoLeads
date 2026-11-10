@@ -3,8 +3,8 @@
  *
  * Phase 6.3: CSV/JSON export of the analytics report, and the lead the PDF of leads takes. The
  * CSV of leads is lib/features/leads/export.ts. The text cells of both go through csvCell, so
- * that the organization's name, which its admins type, neither runs as a formula nor breaks
- * the row (#996, #1003, #1020); the numbers are written as they are.
+ * that a text such as the organization's name, which its owner gives, neither runs as a
+ * formula nor breaks the row (#996, #1003, #1020); the numbers are written as they are.
  */
 
 import { csvCell } from '@/lib/utils/csv-cell';

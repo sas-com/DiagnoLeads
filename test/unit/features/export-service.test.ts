@@ -11,6 +11,7 @@ import {
   statusBreakdownToCSV,
   trendToCSV,
 } from '@/lib/features/reports/export-service';
+import { readCsv } from '@/test/fixtures/read-csv';
 import { describe, expect, it } from 'vitest';
 
 describe('Export Service', () => {
@@ -179,6 +180,24 @@ describe('Export Service', () => {
       );
       const comma = generateFullReportCSV({ ...mockData, organizationName: '架空, 商事' });
       expect(comma.split('\n')).toContain('Organization,"架空, 商事"');
+    });
+
+    it('keeps every text cell from running as a formula or breaking its row (#1020)', () => {
+      // Quotes, line breaks and a formula: the old escapeCSV left a CR and the formulas as they were
+      const evil = '=1+1"\r\n=2+2';
+      const rows = readCsv(
+        generateFullReportCSV({
+          ...mockData,
+          organizationName: evil,
+          dateRange: evil,
+          trend: [{ date: evil, count: 1, converted: 0 }],
+          sourceBreakdown: [{ source: evil, count: 1, percentage: 100 }],
+          statusBreakdown: [{ status: evil, count: 1, percentage: 100 }],
+        })
+      );
+      expect(rows.find((row) => row[0] === 'Organization')).toEqual(['Organization', `'${evil}`]);
+      expect(rows.find((row) => row[0] === 'Date Range')).toEqual(['Date Range', `'${evil}`]);
+      expect(rows.flat().some((cell) => /^[=+\-@\t\r]/.test(cell))).toBe(false);
     });
 
     it('writes the section titles as text and the numbers as they are (#1020)', () => {
