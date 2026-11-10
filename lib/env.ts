@@ -40,7 +40,6 @@ export const env = createEnv({
     TURNSTILE_SITE_KEY: z.string().optional(),
     TURNSTILE_SECRET_KEY: z.string().optional(),
 
-    // Legacy generic diagnosis form: off in production unless 'true' (#71)
     // "true" requires a verified address to accept an invitation (#128); anything else but
     // "false" fails at start, so a mistyped value cannot leave it off unnoticed
     INVITE_REQUIRE_VERIFIED_EMAIL: z.enum(['true', 'false']).optional(),
