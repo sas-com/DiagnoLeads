@@ -16,7 +16,11 @@ const mocks = vi.hoisted(() => ({
   invalidate: vi.fn(),
   setOrganization: vi.fn(),
   list: { data: undefined as unknown, isLoading: false },
-  context: { organizationId: null as string | null, organization: null, isLoading: false },
+  context: {
+    organizationId: null as string | null,
+    organization: null as unknown,
+    isLoading: false,
+  },
 }));
 
 vi.mock('@/lib/trpc/client', () => ({
@@ -73,13 +77,25 @@ describe('OrganizationSwitcher', () => {
   });
 
   it('keeps a valid selection and shows its name and translated roles', () => {
-    mocks.context = { organizationId: 'org-b', organization: null, isLoading: false };
+    mocks.context = { organizationId: 'org-b', organization: ORG_B, isLoading: false };
     renderSwitcher();
 
     expect(mocks.setOrganization).not.toHaveBeenCalled();
     expect(screen.getByTestId('current-org-name')).toHaveTextContent('営業部');
     expect(screen.getByText('オーナー')).toBeInTheDocument();
     expect(screen.getByText('メンバー')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['none, as an invite accepted leaves it', null],
+    ["another organization's", ORG_A],
+  ])('gives a selection made by its id alone its data, with %s (#1046)', async (_case, data) => {
+    mocks.context = { organizationId: 'org-b', organization: data, isLoading: false };
+    renderSwitcher();
+
+    // The same organization, with its data from the list: not another one
+    await waitFor(() => expect(mocks.setOrganization).toHaveBeenCalledWith('org-b', ORG_B));
+    expect(mocks.setOrganization).toHaveBeenCalledTimes(1);
   });
 
   it('waits for the stored selection before choosing one', () => {

@@ -65,9 +65,10 @@ export function InviteAcceptance({
     onSuccess: async ({ organizationId }) => {
       setOrganization(organizationId);
       // The organization switcher is not on this page: a list it read before would be kept, without
-      // this organization, and on the dashboard it would select another one. Read it again first,
-      // whether a page shows it or not (#1046)
-      await utils.organizations.list.invalidate(undefined, { refetchType: 'all' });
+      // this organization, and on the dashboard it would select another one. Drop it, so that the
+      // switcher reads it there; a read that fails leaves it empty, and the selection as it is
+      // (#1046)
+      await utils.organizations.list.reset();
       router.push(`/${locale}/dashboard`);
     },
     onError: (e) => {

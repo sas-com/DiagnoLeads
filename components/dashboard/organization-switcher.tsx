@@ -43,13 +43,18 @@ export function OrganizationSwitcher() {
   const organizations = (orgsData?.organizations ?? []) as unknown as OrganizationOption[];
   const currentOrg = organizations.find((o) => o.id === organizationId) ?? organization;
 
-  // The stored selection may be missing or belong to another account on this browser
+  // The stored selection may be missing or belong to another account on this browser. Made by
+  // its id alone (an invite accepted), it has no data of it yet, which the pages read: the list
+  // gives it (#1046)
   useEffect(() => {
     if (isLoading || orgsLoading || organizations.length === 0) return;
-    if (!organizations.some((o) => o.id === organizationId)) {
+    const selected = organizations.find((o) => o.id === organizationId);
+    if (!selected) {
       setOrganization(organizations[0].id, organizations[0]);
+    } else if (organization?.id !== selected.id) {
+      setOrganization(selected.id, selected);
     }
-  }, [isLoading, orgsLoading, organizations, organizationId, setOrganization]);
+  }, [isLoading, orgsLoading, organizations, organizationId, organization, setOrganization]);
 
   const closeMenu = () => {
     if (menuRef.current) menuRef.current.open = false;

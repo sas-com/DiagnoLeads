@@ -98,8 +98,8 @@ export function useCurrentOrganization() {
 
   // Validate UUID format before making API call
   const isValidOrg = organizationId ? isValidUUID(organizationId) : false;
-  // The context keeps the data it was last given: a switch by the id alone (an invite accepted,
-  // a URL) leaves the previous organization's, which is not this one's (#1034)
+  // The context keeps the data of its organization only (#1046): compared all the same, so that
+  // no other organization's name goes into the exports (#1034)
   const current =
     organization && organizationId && organization.id.toLowerCase() === organizationId.toLowerCase()
       ? organization
