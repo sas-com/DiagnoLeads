@@ -6,9 +6,6 @@
     "node_modules",
     // Tests of code that #469 and #470 delete: they go with it
     "test/unit/features/feature-flags-router.test.ts",
-    "test/unit/lib/messages/error-mapper.test.ts",
-    "test/unit/lib/messages/validation.test.ts",
-    "test/unit/lib/validation-messages.test.ts",
     // lib/features/integrations is not reached from any entry: a deletion candidate in #469
     "test/unit/features/crm-client.test.ts"
   ]
