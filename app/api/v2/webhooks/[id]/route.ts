@@ -15,7 +15,7 @@ import {
   personalDataConfirmationAudit,
   personalDataConfirmationRequired,
 } from '@/lib/features/webhooks/types/personal-data';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import { type NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -237,7 +237,19 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       const [row] = await tx
         .update(webhooks)
         .set(updateData)
-        .where(and(eq(webhooks.id, id), eq(webhooks.organizationId, authResult.organizationId)))
+        .where(
+          and(
+            eq(webhooks.id, id),
+            eq(webhooks.organizationId, authResult.organizationId),
+            // Only if unchanged since read, as in the tRPC update (#990): the URL change and the
+            // personal data confirmation were judged against these
+            eq(webhooks.url, existing.url),
+            eq(webhooks.events, existing.events),
+            existing.headers === null
+              ? isNull(webhooks.headers)
+              : eq(webhooks.headers, existing.headers)
+          )
+        )
         .returning({
           id: webhooks.id,
           name: webhooks.name,
@@ -262,6 +274,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       }
       return row;
     });
+
+    if (!updated) {
+      return NextResponse.json(
+        {
+          error: 'Conflict',
+          message: 'The webhook was changed meanwhile; read it again and retry',
+        },
+        { status: 409 }
+      );
+    }
 
     return NextResponse.json({
       data: updated,

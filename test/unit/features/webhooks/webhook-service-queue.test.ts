@@ -167,10 +167,16 @@ beforeEach(() => {
   dbState.calls = [];
   dbState.transactions = 0;
   let inserted = 0;
-  dbState.answer = (call) =>
-    call.op === 'insert' && call.table === 'webhook_deliveries'
-      ? insertedDelivery(call, ++inserted)
-      : [];
+  dbState.answer = (call) => {
+    if (call.op === 'insert' && call.table === 'webhook_deliveries') {
+      return insertedDelivery(call, ++inserted);
+    }
+    // Storing a delivery locks the webhook row and finds it with the URL read (#990)
+    if (call.op === 'select' && call.table === 'webhooks' && call.lock?.strength === 'share') {
+      return [{ id: 'locked' }];
+    }
+    return [];
+  };
   mocks.checkDestination.mockReset();
   mocks.checkDestination.mockImplementation(async (url: string) => ({
     ok: true,
@@ -207,8 +213,9 @@ describe('sendTestDelivery', () => {
       success: true,
     });
 
-    // One transaction holding the organization's lock while counting and reserving
-    expect(dbState.transactions).toBe(1);
+    // One transaction holding the organization's lock while counting and reserving, and inside it
+    // the one storing the delivery after locking the webhook row (#990)
+    expect(dbState.transactions).toBe(2);
     const [lock] = calls('execute');
     expect(render(lock.statement).sql).toContain('pg_advisory_xact_lock');
     expect(render(lock.statement).params).toEqual([`webhook-test-send:${ORG_ID}`]);

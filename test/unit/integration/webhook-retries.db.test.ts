@@ -21,6 +21,7 @@ import {
   WEBHOOK_RETRY_MAX_AGE_MS,
   cancelPendingDeliveries,
   processWebhookRetries,
+  triggerWebhookBatch,
   triggerWebhooks,
 } from '@/lib/features/webhooks/services/webhook-service';
 import { eq, inArray } from 'drizzle-orm';
@@ -247,6 +248,72 @@ describe.skipIf(!url)('webhook retries (PostgreSQL)', () => {
 
     expect(await load(id)).toMatchObject({ status: 'failed', nextRetryAt: null });
     expect((await load(id)).error).toMatch(/^url_changed:/);
+  });
+
+  it('stores no delivery for a webhook moved between its read and the insert (#990)', async () => {
+    // The URL changes (cancelling the pending deliveries, as the update does) after the event has
+    // read the webhook, just before its delivery is stored
+    let moved = false;
+    const racing = new Proxy(pg, {
+      get(target, prop, receiver) {
+        if (prop !== 'transaction') return Reflect.get(target, prop, receiver);
+        return async (run: (tx: unknown) => Promise<unknown>) => {
+          if (!moved) {
+            moved = true;
+            await (target as typeof pg).transaction(async (tx) => {
+              await tx
+                .update(webhooks)
+                .set({ url: 'https://moved.example.com/hook' })
+                .where(eq(webhooks.id, webhookId));
+              await cancelPendingDeliveries(tx, webhookId);
+            });
+          }
+          return (target as typeof pg).transaction(run as Parameters<typeof pg.transaction>[0]);
+        };
+      },
+    });
+
+    const counts = await triggerWebhookBatch(
+      org,
+      [{ eventType: 'diagnostic.submitted', data: { leadId: 'x' } }],
+      { database: racing, timeBudgetMs: 0 }
+    );
+
+    expect(counts).toMatchObject({ queued: 0, failed: 1 });
+    expect(
+      await pg.select().from(webhookDeliveries).where(eq(webhookDeliveries.webhookId, webhookId))
+    ).toEqual([]);
+    // Nothing waits for a retry to the new URL
+    await processWebhookRetries({ database: pg });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('cancels a delivery stored just before the URL changed, so it is not retried there (#990)', async () => {
+    fetchMock.mockResolvedValue(answer(500));
+    // Stored (and tried once) with the URL as read
+    await triggerWebhooks(org, 'diagnostic.submitted', { leadId: 'y' }, { database: pg });
+    // Then the URL changes
+    await pg.transaction(async (tx) => {
+      await tx
+        .update(webhooks)
+        .set({ url: 'https://moved.example.com/hook' })
+        .where(eq(webhooks.id, webhookId));
+      await cancelPendingDeliveries(tx, webhookId);
+    });
+    fetchMock.mockClear();
+
+    await pg
+      .update(webhookDeliveries)
+      .set({ nextRetryAt: new Date(Date.now() - 1000) })
+      .where(eq(webhookDeliveries.webhookId, webhookId));
+    await processWebhookRetries({ database: pg });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    const [row] = await pg
+      .select()
+      .from(webhookDeliveries)
+      .where(eq(webhookDeliveries.webhookId, webhookId));
+    expect(row.error).toMatch(/^url_changed:/);
   });
 
   it('does not send a delivery claimed just before the URL changed to the new URL (#928)', async () => {

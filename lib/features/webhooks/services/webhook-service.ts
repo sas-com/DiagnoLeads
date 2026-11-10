@@ -458,26 +458,38 @@ async function insertDelivery(
     ...(test ? { test: true as const } : {}),
   };
 
-  const [delivery] = await database
-    .insert(webhookDeliveries)
-    .values({
-      webhookId: webhook.id,
-      eventType,
-      payload: payload as unknown as Record<string, unknown>,
-      status: 'pending',
-      // A queued delivery is sent by the retry processor as its first attempt
-      attempts: queued ? 0 : 1,
-      nextRetryAt: queued ? new Date() : new Date(Date.now() + WEBHOOK_DELIVERY_LEASE_MS),
-    })
-    .returning();
-  return { delivery, payload };
+  // Stored only while the webhook still has the URL it was read with (#990). The share lock
+  // makes a URL change wait for this insert, so the change's cancelPendingDeliveries sees the new
+  // delivery; a change that committed first leaves no row here, and nothing is stored.
+  return database.transaction(async (tx) => {
+    const [current] = await tx
+      .select({ id: webhooks.id })
+      .from(webhooks)
+      .where(and(eq(webhooks.id, webhook.id), eq(webhooks.url, webhook.url)))
+      .for('share');
+    if (!current) return null;
+
+    const [delivery] = await tx
+      .insert(webhookDeliveries)
+      .values({
+        webhookId: webhook.id,
+        eventType,
+        payload: payload as unknown as Record<string, unknown>,
+        status: 'pending',
+        // A queued delivery is sent by the retry processor as its first attempt
+        attempts: queued ? 0 : 1,
+        nextRetryAt: queued ? new Date() : new Date(Date.now() + WEBHOOK_DELIVERY_LEASE_MS),
+      })
+      .returning();
+    return { delivery, payload };
+  });
 }
 
 /** Make the first attempt of a stored delivery and record it */
 async function sendStoredDelivery(
   database: Database,
   webhook: Webhook,
-  { delivery, payload }: Awaited<ReturnType<typeof insertDelivery>>
+  { delivery, payload }: NonNullable<Awaited<ReturnType<typeof insertDelivery>>>
 ): Promise<boolean> {
   const result = await deliverWebhook(webhook, payload, delivery.id);
   await recordAttempt(database, webhook, delivery.id, 1, result, {
@@ -496,6 +508,8 @@ async function sendNewDelivery(
   data: Record<string, unknown>
 ): Promise<boolean> {
   const stored = await insertDelivery(database, webhook, organizationId, eventType, data);
+  // The webhook moved (or was deleted) since it was read: not sent to the new URL (#990)
+  if (!stored) return false;
   return sendStoredDelivery(database, webhook, stored);
 }
 
@@ -581,6 +595,8 @@ export async function sendTestDelivery(
   });
 
   if (!reserved.allowed) return reserved;
+  // The webhook moved since it was read: nothing was stored or sent (#990)
+  if (!reserved.stored) return { allowed: true, success: false };
   const success = await sendStoredDelivery(database, webhook, reserved.stored);
   return { allowed: true, success };
 }
@@ -705,10 +721,11 @@ export async function triggerWebhookBatch(
     const results = await Promise.allSettled(
       subscribed.map(async (webhook) => {
         if (!fits) {
-          await insertDelivery(database, webhook, organizationId, eventType, data, {
+          const stored = await insertDelivery(database, webhook, organizationId, eventType, data, {
             queued: true,
           });
-          return 'queued' as const;
+          // Not queued for a webhook that moved since it was read (#990)
+          return stored ? ('queued' as const) : ('failed' as const);
         }
         return (await sendNewDelivery(database, webhook, organizationId, eventType, data))
           ? ('sent' as const)

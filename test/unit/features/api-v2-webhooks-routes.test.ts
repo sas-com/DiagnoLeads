@@ -292,6 +292,16 @@ describe('PATCH /api/v2/webhooks/[id]', () => {
     chain.returning.mockResolvedValue([{ id: WEBHOOK_ID, name: 'Renamed' }]);
   });
 
+  it('answers 409 when the webhook changed after it was read (#990)', async () => {
+    // The conditional UPDATE matched no row: another request changed the URL, events or headers
+    chain.returning.mockResolvedValue([]);
+
+    const res = await patch({ name: 'Renamed' });
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe('Conflict');
+  });
+
   it('answers 401 without an authenticated organization and writes nothing', async () => {
     getAuthenticatedOrganization.mockResolvedValue(null);
 
@@ -327,8 +337,11 @@ describe('PATCH /api/v2/webhooks/[id]', () => {
     const set = chain.set.mock.calls[0][0];
     expect(set).toEqual({ name: 'Renamed', status: 'inactive', updatedAt: expect.any(Date) });
     const where = toQuery(chain.where.mock.calls[0][0]);
-    expect(where.sql).toBe(WEBHOOK_IN_ORG);
-    expect(where.params).toEqual([WEBHOOK_ID, ORG_ID]);
+    expect(where.sql.startsWith('("webhooks"."id" = $1 and "webhooks"."organization_id" = $2')).toBe(true);
+    // Only while the URL and events are still those read (#990)
+    expect(where.sql).toContain('"webhooks"."url" = $3');
+    expect(where.sql).toContain('"webhooks"."events" = $4');
+    expect(where.params.slice(0, 3)).toEqual([WEBHOOK_ID, ORG_ID, STORED.url]);
   });
 
   it('keeps the stored retry setting that is not given', async () => {
