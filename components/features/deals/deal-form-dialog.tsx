@@ -244,6 +244,9 @@ export function DealFormDialog({
   const [submitted, setSubmitted] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
   const [lostOpen, setLostOpen] = useState(false);
+  // A new lost deal is saved from the lost reason's dialog: the focus is given back once that
+  // closes, not when the form closes for it (#1028)
+  const savedFromLost = useRef(false);
   // A send with errors: the focus goes to the first one once they are shown
   const [focusRequest, setFocusRequest] = useState(0);
   // The date boxes hold text that is not a date (they show their own error)
@@ -331,6 +334,7 @@ export function DealFormDialog({
 
   const save = (lost?: LostValues) => {
     const done = (saved: DealView) => {
+      savedFromLost.current = lost !== undefined;
       setLostOpen(false);
       onOpenChange(false);
       onSaved?.(saved);
@@ -397,7 +401,14 @@ export function DealFormDialog({
       >
         <DialogContent
           className="flex max-h-[90dvh] flex-col gap-0 p-0 sm:max-w-lg"
-          onCloseAutoFocus={onCloseAutoFocus}
+          onCloseAutoFocus={(event) => {
+            // Closed for the lost reason's dialog, which takes the focus (#1028)
+            if (lostOpen) {
+              event.preventDefault();
+              return;
+            }
+            onCloseAutoFocus?.(event);
+          }}
           onInteractOutside={(event) => {
             if (pending) event.preventDefault();
           }}
@@ -805,6 +816,16 @@ export function DealFormDialog({
         onConfirm={(values) => {
           setSaveFailed(false);
           save(values);
+        }}
+        onCloseAutoFocus={(event) => {
+          // Cancelled: the form opens again and takes the focus. Saved: given back as when the
+          // form closes (#1028)
+          if (!savedFromLost.current) {
+            event.preventDefault();
+            return;
+          }
+          savedFromLost.current = false;
+          onCloseAutoFocus?.(event);
         }}
       />
     </>

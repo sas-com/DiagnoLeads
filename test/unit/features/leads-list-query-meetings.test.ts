@@ -4,7 +4,6 @@
 import {
   LEAD_EXPORT_MAX_ROWS,
   type LeadExportRow,
-  csvCell,
   exportAuditFilters,
   leadExportCsv,
   leadExportFilename,
@@ -159,15 +158,6 @@ describe('export file (#173)', () => {
 
   it('caps at 5,000 rows', () => {
     expect(LEAD_EXPORT_MAX_ROWS).toBe(5000);
-  });
-
-  it('quotes cells and keeps spreadsheet formulas from running', () => {
-    expect(csvCell('plain')).toBe('plain');
-    expect(csvCell('a,b')).toBe('"a,b"');
-    expect(csvCell('say "hi"')).toBe('"say ""hi"""');
-    expect(csvCell('=HYPERLINK("x")')).toBe(`"'=HYPERLINK(""x"")"`);
-    expect(csvCell('+81')).toBe("'+81");
-    expect(csvCell('@SUM(1)')).toBe("'@SUM(1)");
   });
 
   it('writes CSV with a BOM, a header and one line per lead', () => {

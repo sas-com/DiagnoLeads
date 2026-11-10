@@ -7,7 +7,7 @@ import { DueTasksSection } from '@/components/features/lead-follow-up/due-tasks-
 import { LeadContactBar } from '@/components/features/lead-follow-up/lead-contact-bar';
 import { LeadNextActionsCard } from '@/components/features/lead-follow-up/lead-next-actions-card';
 import messages from '@/locales/ja/common.json';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import type { ReactNode } from 'react';
@@ -35,6 +35,8 @@ const mocks = vi.hoisted(() => ({
   results: {} as Record<string, unknown>,
   /** Mutations that fail (onError is called instead) */
   fail: {} as Record<string, boolean>,
+  /** Mutations on their way (isPending) */
+  pending: {} as Record<string, boolean>,
   toast: { success: vi.fn(), error: vi.fn() },
   /** The deals' board, apart from the other queries: its cards show the next action (#853) */
   boardInvalidate: vi.fn(),
@@ -45,7 +47,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/trpc/client', () => {
   const mutation = (name: string) => ({
     useMutation: (options: MutationOptions = {}) => ({
-      isPending: false,
+      isPending: mocks.pending[name] ?? false,
       mutate: (input: unknown) => {
         mocks.calls[name] = [...(mocks.calls[name] ?? []), input];
         if (mocks.fail[name]) return options.onError?.(new Error('failed'));
@@ -110,6 +112,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.calls = {};
   mocks.results = {};
+  mocks.pending = {};
   mocks.fail = {};
   mocks.userId = 'me';
   mocks.dueInputs = [];
@@ -203,6 +206,72 @@ describe('LeadContactBar', () => {
         dealId: null,
         note: '午後にかけ直す',
       },
+    ]);
+  });
+
+  it('gives the focus back to "record an activity" once its dialog closes, recorded or not (#776)', async () => {
+    mocks.contacts = { firstContactAt: null, total: 0, recent: [], canEdit: true };
+    mocks.results.recordContact = { id: 'c3', kind: 'no_answer' };
+    const user = userEvent.setup();
+    renderBar();
+    const group = screen.getByRole('group', { name: '架空商事への連絡を記録' });
+    const button = within(group).getByRole('button', { name: '活動を記録' });
+
+    // Closed without recording
+    await user.click(button);
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(button).toHaveFocus());
+
+    // Recorded
+    await user.click(button);
+    await user.click(screen.getByRole('radio', { name: '不通' }));
+    await user.click(screen.getByRole('button', { name: '記録する' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(mocks.calls.recordContact).toEqual([expect.objectContaining({ kind: 'no_answer' })]);
+    await waitFor(() => expect(button).toHaveFocus());
+  });
+
+  it('keeps its buttons focusable while it records, doing nothing until it is done (#776)', async () => {
+    mocks.contacts = { firstContactAt: null, total: 0, recent: [], canEdit: true };
+    mocks.pending.recordContact = true;
+    const user = userEvent.setup();
+    const view = renderBar();
+    const group = screen.getByRole('group', { name: '架空商事への連絡を記録' });
+    const called = within(group).getByRole('button', { name: '電話した' });
+
+    // Not disabled, so the focus a keyboard press left on it stays; dimmed as the rows' menu
+    for (const button of within(group).getAllByRole('button')) {
+      expect(button).not.toBeDisabled();
+      expect(button).toHaveAttribute('aria-disabled', 'true');
+      expect(button).toHaveClass(
+        'aria-disabled:opacity-50',
+        'aria-disabled:cursor-wait',
+        'aria-disabled:hover:bg-white',
+        'dark:aria-disabled:hover:bg-gray-800'
+      );
+    }
+    act(() => called.focus());
+    await user.keyboard('{Enter}');
+    expect(called).toHaveFocus();
+    expect(mocks.calls.recordContact).toBeUndefined();
+    // Nor does "record an activity" open meanwhile
+    const activity = within(group).getByRole('button', { name: '活動を記録' });
+    expect(activity).toHaveAttribute('aria-disabled', 'true');
+    await user.click(activity);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    // Once it is recorded, they record again
+    mocks.pending.recordContact = false;
+    view.rerender(
+      <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
+        <LeadContactBar organizationId={ORG_ID} leadId={LEAD_ID} leadLabel="架空商事" />
+      </NextIntlClientProvider>
+    );
+    expect(called).not.toHaveAttribute('aria-disabled');
+    await user.click(called);
+    expect(mocks.calls.recordContact).toEqual([
+      { organizationId: ORG_ID, leadId: LEAD_ID, kind: 'call' },
     ]);
   });
 

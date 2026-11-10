@@ -9,7 +9,7 @@ import { trpc } from '@/lib/trpc/client';
 import { Briefcase, Loader2, Plus } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { DealFormDialog } from './deal-form-dialog';
 import { formatDealDate, formatYen } from './deal-format';
 import { DealStageBadge } from './deal-stage-badge';
@@ -39,6 +39,9 @@ export function LeadDealsCard({
   const t = useTranslations('deals');
   const locale = useLocale();
   const [createOpen, setCreateOpen] = useState(false);
+  // The dialog is opened without a dialog trigger: the focus goes back to the button, which
+  // stays once the deal is created (#1028)
+  const createButton = useRef<HTMLButtonElement>(null);
   const query = trpc.deals.forLead.useQuery(
     { organizationId, leadId },
     { enabled: !!organizationId }
@@ -64,6 +67,7 @@ export function LeadDealsCard({
         )}
         {data?.canEdit && (
           <Button
+            ref={createButton}
             type="button"
             variant="outline"
             size="sm"
@@ -132,6 +136,11 @@ export function LeadDealsCard({
           onOpenChange={setCreateOpen}
           organizationId={organizationId}
           leadId={leadId}
+          onCloseAutoFocus={(event) => {
+            if (!createButton.current?.isConnected) return;
+            event.preventDefault();
+            createButton.current.focus();
+          }}
         />
       )}
     </Card>

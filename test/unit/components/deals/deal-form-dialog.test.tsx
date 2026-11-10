@@ -13,7 +13,7 @@
 import { DealFormDialog } from '@/components/features/deals/deal-form-dialog';
 import type { DealView } from '@/lib/features/deals/service';
 import messages from '@/locales/ja/common.json';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -169,7 +169,9 @@ const lostDeal: DealView = {
   competitor: '架空システムズ',
 };
 
-function renderForm(props: { deal?: DealView; leadId?: string } = {}) {
+function renderForm(
+  props: { deal?: DealView; leadId?: string; onCloseAutoFocus?: (event: Event) => void } = {}
+) {
   const onOpenChange = vi.fn();
   const onSaved = vi.fn();
   render(
@@ -564,6 +566,52 @@ describe('DealFormDialog', () => {
       await user.click(screen.getByRole('button', { name: '保存' }));
       expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
       expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+
+    /** Past the timeout after which Radix gives the focus back once a dialog closed */
+    const nextTick = () =>
+      act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    /** A new deal named and set lost, sent: its lost reason's dialog opens */
+    async function sendLost(user: ReturnType<typeof userEvent.setup>) {
+      await user.type(screen.getByLabelText('商談名 必須'), 'AS/400 移行');
+      await user.click(screen.getByRole('combobox', { name: 'ステージ' }));
+      await user.click(screen.getByRole('option', { name: '失注' }));
+      await user.click(screen.getByRole('button', { name: '作成' }));
+      return screen.getByRole('dialog', { name: '「AS/400 移行」を失注にする' });
+    }
+
+    it('gives the focus back once a new lost deal is saved from its reason, not when the form closes for it (#1028)', async () => {
+      const user = userEvent.setup();
+      const onCloseAutoFocus = vi.fn();
+      renderForm({ leadId: LEAD_ID, onCloseAutoFocus });
+      const lost = await sendLost(user);
+      // The reason's dialog has the focus: nothing is given back yet
+      await nextTick();
+      expect(onCloseAutoFocus).not.toHaveBeenCalled();
+
+      await user.click(within(lost).getByRole('combobox', { name: '失注理由 必須' }));
+      await user.click(screen.getByRole('option', { name: '時期' }));
+      await user.click(within(lost).getByRole('button', { name: '失注にする' }));
+
+      expect(mocks.creates).toEqual([expect.objectContaining({ stage: 'lost', lostReason: 'timing' })]);
+      await waitFor(() => expect(onCloseAutoFocus).toHaveBeenCalledTimes(1));
+    });
+
+    it('keeps the focus in the form when the lost reason is cancelled (#1028)', async () => {
+      const user = userEvent.setup();
+      const onCloseAutoFocus = vi.fn();
+      renderForm({ leadId: LEAD_ID, onCloseAutoFocus });
+      const lost = await sendLost(user);
+
+      await user.click(within(lost).getByRole('button', { name: 'キャンセル' }));
+
+      await waitFor(() =>
+        expect(screen.getByRole('dialog', { name: '商談を作成' })).toBeInTheDocument()
+      );
+      await nextTick();
+      expect(onCloseAutoFocus).not.toHaveBeenCalled();
     });
 
     it('says a failed save of a new lost deal in the lost reason dialog', async () => {

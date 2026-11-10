@@ -38,27 +38,6 @@ const nextConfig: NextConfig = {
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
 
-  // Bundle optimization
-  webpack: (config, { isServer }) => {
-    // Optimize bundle size
-    if (!isServer) {
-      config.resolve.alias = {
-        ...config.resolve.alias,
-        // Reduce bundle size by using lighter alternatives where possible
-      };
-    }
-
-    // SVG handling with @svgr/webpack, except the icon files of the app directory
-    // (app/**/icon.svg), which Next.js serves as images
-    config.module.rules.push({
-      test: /\.svg$/,
-      resourceQuery: { not: [/__next_metadata__/] },
-      use: ['@svgr/webpack'],
-    });
-
-    return config;
-  },
-
   // Production optimizations
   ...(process.env.NODE_ENV === 'production' && {
     compress: true,
