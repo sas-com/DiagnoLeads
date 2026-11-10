@@ -15,7 +15,11 @@ const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   invalidate: vi.fn(),
   setOrganization: vi.fn(),
-  list: { data: undefined as unknown, isLoading: false },
+  list: { data: undefined, isLoading: false } as {
+    data: unknown;
+    isLoading: boolean;
+    isFetching?: boolean;
+  },
   context: {
     organizationId: null as string | null,
     organization: null as unknown,
@@ -96,6 +100,27 @@ describe('OrganizationSwitcher', () => {
     // The same organization, with its data from the list: not another one
     await waitFor(() => expect(mocks.setOrganization).toHaveBeenCalledWith('org-b', ORG_B));
     expect(mocks.setOrganization).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits for the list read again before it replaces a selection, as one just created (#1046)', () => {
+    const created = { id: 'org-new', name: '新しい組織', slug: 'new', role: 'owner' };
+    mocks.context = { organizationId: 'org-new', organization: created, isLoading: false };
+    // The list read before, without it, while it is read again
+    mocks.list = { data: { organizations: [ORG_A, ORG_B] }, isLoading: false, isFetching: true };
+    const { rerender } = renderSwitcher();
+    expect(mocks.setOrganization).not.toHaveBeenCalled();
+
+    mocks.list = {
+      data: { organizations: [ORG_A, ORG_B, created] },
+      isLoading: false,
+      isFetching: false,
+    };
+    rerender(
+      <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
+        <OrganizationSwitcher />
+      </NextIntlClientProvider>
+    );
+    expect(mocks.setOrganization).not.toHaveBeenCalled();
   });
 
   it('waits for the stored selection before choosing one', () => {
