@@ -2,11 +2,12 @@
 
 import { TAP_TARGET } from '@/components/common/tap-target';
 import { Button } from '@/components/ui/button';
+import { useReturnFocus } from '@/hooks/use-return-focus';
 import { type ContactKind, QUICK_CONTACT_KINDS } from '@/lib/features/lead-follow-up/types/schemas';
 import { cn } from '@/lib/utils';
 import { NotebookPen } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { CONTACT_KIND_ICONS } from './contact-kinds';
 import { CONTACT_RECORDING_CLASS } from './contact-record-menu';
 import { RecordActivityDialog } from './record-activity-dialog';
@@ -40,9 +41,9 @@ export function ContactQuickActions({
   const t = useTranslations('leadFollowUp.contact');
   const tActivity = useTranslations('leadFollowUp.activity');
   const [dialogOpen, setDialogOpen] = useState(false);
-  // The dialog is opened without a dialog trigger, so Radix has no button to give the focus back
-  // to and would leave it on the page (#776)
-  const activityButton = useRef<HTMLButtonElement>(null);
+  // The dialog is opened without a dialog trigger: the focus goes back to its button. A row of
+  // the dashboard can leave once recorded: nothing to give it back to then (#776)
+  const activityFocus = useReturnFocus<HTMLButtonElement>();
   const { record, pending } = useRecordContact({ organizationId, leadId, leadLabel });
 
   const submit = (kind: ContactKind) => {
@@ -84,7 +85,7 @@ export function ContactQuickActions({
         <span aria-hidden="true" className="mx-0.5 hidden h-6 w-px bg-gray-300 sm:block" />
       )}
       <Button
-        ref={activityButton}
+        ref={activityFocus.ref}
         type="button"
         variant="outline"
         size="sm"
@@ -105,12 +106,7 @@ export function ContactQuickActions({
         organizationId={organizationId}
         leadId={leadId}
         leadLabel={leadLabel}
-        onCloseAutoFocus={(event) => {
-          // A row of the dashboard can leave once recorded: nothing to give it back to then
-          if (!activityButton.current?.isConnected) return;
-          event.preventDefault();
-          activityButton.current.focus();
-        }}
+        onCloseAutoFocus={activityFocus.onCloseAutoFocus}
       />
     </fieldset>
   );

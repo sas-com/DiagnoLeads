@@ -5,12 +5,13 @@ import { RecordActivityDialog } from '@/components/features/lead-follow-up/recor
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { useReturnFocus } from '@/hooks/use-return-focus';
 import { trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
 import { Loader2, NotebookPen } from 'lucide-react';
 import { useLocale, useNow, useTranslations } from 'next-intl';
 import Link from 'next/link';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { ActivityItem } from './lead-activity-card';
 
 interface DealActivitiesCardProps {
@@ -36,7 +37,8 @@ export function DealActivitiesCard({
   const locale = useLocale();
   const now = useNow({ updateInterval: 60_000 });
   const [recordOpen, setRecordOpen] = useState(false);
-  const recordRef = useRef<HTMLButtonElement>(null);
+  // Opened by state, not by a dialog trigger: the focus goes back to the button (#776)
+  const recordFocus = useReturnFocus<HTMLButtonElement>();
   const query = trpc.leadActivity.forDeal.useQuery(
     { organizationId, dealId },
     { enabled: !!organizationId }
@@ -54,7 +56,7 @@ export function DealActivitiesCard({
         )}
         {data?.canEdit && (
           <Button
-            ref={recordRef}
+            ref={recordFocus.ref}
             type="button"
             variant="outline"
             size="sm"
@@ -110,11 +112,7 @@ export function DealActivitiesCard({
           leadId={leadId}
           leadLabel={leadLabel}
           defaultDealId={dealId}
-          onCloseAutoFocus={(event) => {
-            // Opened by state, not by a dialog trigger: Radix would leave the focus nowhere
-            event.preventDefault();
-            recordRef.current?.focus();
-          }}
+          onCloseAutoFocus={recordFocus.onCloseAutoFocus}
         />
       )}
     </Card>

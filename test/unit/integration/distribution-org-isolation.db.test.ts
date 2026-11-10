@@ -1,7 +1,8 @@
 /**
  * Organization isolation of the distribution router (#356): a member of organization B who
  * passes the id of organization A's QR campaign or template gets NOT_FOUND, and A's campaigns
- * stay as they were. Also what an update of A's own campaign keeps (#610).
+ * stay as they were; B's list holds none of A's campaigns (#793). Also what an update of A's own
+ * campaign keeps (#610).
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/dl_test \
@@ -140,6 +141,14 @@ describe.skipIf(!url)('distribution organization isolation (PostgreSQL)', () => 
 
   it('creates no campaign in B from the refused create', async () => {
     expect(await campaignsOf(orgB)).toEqual([]);
+  });
+
+  it("lists none of A's campaigns to a member of B, and A's own to A (#793)", async () => {
+    const listedToB = await adminB.distribution.listCampaigns(asB());
+    expect(listedToB).toEqual([]);
+    const adminOfA = await callerFor(orgA);
+    const listedToA = await adminOfA.distribution.listCampaigns({ organizationId: orgA });
+    expect(listedToA.map((campaign: { id: string }) => campaign.id)).toContain(campaignA);
   });
 
   it("refuses A's organizationId to a member of B", async () => {
