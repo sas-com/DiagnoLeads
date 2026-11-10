@@ -1,12 +1,16 @@
 'use client';
 
 import { TAP_TARGET } from '@/components/common/tap-target';
+import {
+  DealCloseDateButton,
+  DealCloseDateDialog,
+} from '@/components/features/deals/deal-close-date-dialog';
 import { formatDealDate, formatYen } from '@/components/features/deals/deal-format';
 import { DealMarks } from '@/components/features/deals/deal-marks';
 import { AddNextActionButton } from '@/components/features/deals/deal-next-task';
 import { DealStageBadge } from '@/components/features/deals/deal-stage-badge';
 import { AddNextActionDialog } from '@/components/features/lead-follow-up/add-next-action-dialog';
-import { useRowDialog } from '@/hooks/use-row-dialog';
+import { type RowDialogClosed, useRowDialog } from '@/hooks/use-row-dialog';
 import type { RouterOutputs } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
 import { useLocale, useTranslations } from 'next-intl';
@@ -18,10 +22,16 @@ import { type TodayQuery, TodaySection, sectionState } from './today-section';
 type Board = RouterOutputs['deals']['board'];
 type BoardDeal = Board['columns'][number]['deals'][number];
 
-/** What the dialog that adds a next action from a row is open for (#970) */
+/**
+ * What a dialog opened from a row is open for: adding a next action (#970) or changing the close
+ * date (#999)
+ */
 interface ChosenDeal {
   deal: BoardDeal;
-  /** Its close date has passed too: its row stays once a next action is added */
+  /**
+   * The row stays once it is done, by its other mark: its close date has passed too (a next
+   * action added), or its lead has no next action either (the close date changed)
+   */
   staysListed: boolean;
   /** The day the board was read for: the dialog starts with it whatever is read meanwhile */
   today: string;
@@ -41,6 +51,8 @@ interface ChosenDeal {
  * board is read again and the button goes away: the focus goes to the deal's name when its row
  * stays (its close date has passed too), else on to the next row's name, else the previous
  * one's, else to the section's heading, as for the next actions above (#776).
+ * A deal past its expected close date gets the date changed from its row the same way (#999),
+ * with a dialog of its own: the row stays when its lead has no next action either.
  */
 export function TodayDeals({
   query,
@@ -55,13 +67,17 @@ export function TodayDeals({
   const locale = useLocale();
   const headingId = useId();
   const links = useRef(new Map<string, HTMLAnchorElement>());
-  const nextAction = useRowDialog<ChosenDeal>(({ chosen, done, opener }) => {
+  // Closed without a change, back to the button; done, the deal's name when its row stays, else
+  // on to the next row's name, the previous one's or the heading
+  const focusAfter = ({ chosen, done, opener }: RowDialogClosed<ChosenDeal>) => {
     if (!done && opener) return opener;
     const link = links.current.get(chosen.deal.id);
     if (chosen.staysListed && link?.isConnected) return link;
     const next = chosen.neighbourId ? links.current.get(chosen.neighbourId) : undefined;
     return next?.isConnected ? next : document.getElementById(headingId);
-  });
+  };
+  const nextAction = useRowDialog<ChosenDeal>(focusAfter);
+  const closeDate = useRowDialog<ChosenDeal>(focusAfter);
   const data = query.data;
 
   if (query.error?.data?.code === 'FORBIDDEN') return null;
@@ -94,14 +110,22 @@ export function TodayDeals({
               leadLabel({ company: deal.company, name: deal.leadName }).primary ??
               tToday('noLeadName');
             const canAdd = flags.noNextAction && !!data?.canEdit;
+            const canChangeDate = flags.overdue && !!data?.canEdit;
+            // What the dialog opened from this row is for
+            const chosen = (staysListed: boolean): ChosenDeal => ({
+              deal,
+              staysListed,
+              today: data?.today ?? '',
+              neighbourId: (marked[index + 1] ?? marked[index - 1])?.deal.id,
+            });
             return (
-              // On phones the link has the row's width and the button goes under it, at its end, as
+              // On phones the link has the row's width and the buttons go under it, at its end, as
               // in the meetings above; from sm, at the row's end
               <li
                 key={deal.id}
                 className={cn(
                   'flex flex-wrap items-start gap-x-2 gap-y-1 sm:flex-nowrap',
-                  canAdd && 'pb-2 sm:pb-0'
+                  (canAdd || canChangeDate) && 'pb-2 sm:pb-0'
                 )}
               >
                 <Link
@@ -133,23 +157,24 @@ export function TodayDeals({
                   </div>
                   <DealMarks flags={flags} />
                 </Link>
-                {canAdd && (
-                  <AddNextActionButton
-                    dealName={deal.name}
-                    onAdd={(opener) =>
-                      nextAction.start(
-                        {
-                          deal,
-                          staysListed: flags.overdue,
-                          today: data?.today ?? '',
-                          neighbourId: (marked[index + 1] ?? marked[index - 1])?.deal.id,
-                        },
-                        opener
-                      )
-                    }
-                    // In line with the first line of the row (44px from sm, 32px from md)
-                    className="ml-auto shrink-0 md:mt-2"
-                  />
+                {(canAdd || canChangeDate) && (
+                  // In line with the first line of the row (44px from sm, 32px from md): one per
+                  // mark, stacked in the order of the marks, as wide as the wider, so that two fit
+                  // a phone's row and leave the link its width from sm
+                  <div className="ml-auto flex shrink-0 flex-col items-stretch gap-2 md:mt-2">
+                    {canChangeDate && (
+                      <DealCloseDateButton
+                        dealName={deal.name}
+                        onChange={(opener) => closeDate.start(chosen(flags.noNextAction), opener)}
+                      />
+                    )}
+                    {canAdd && (
+                      <AddNextActionButton
+                        dealName={deal.name}
+                        onAdd={(opener) => nextAction.start(chosen(flags.overdue), opener)}
+                      />
+                    )}
+                  </div>
                 )}
               </li>
             );
@@ -173,6 +198,23 @@ export function TodayDeals({
           today={nextAction.chosen.today}
           onAdded={nextAction.markDone}
           onCloseAutoFocus={nextAction.returnFocus}
+        />
+      )}
+      {closeDate.chosen?.today && (
+        <DealCloseDateDialog
+          open={closeDate.open}
+          onOpenChange={closeDate.setOpen}
+          organizationId={organizationId}
+          deal={closeDate.chosen.deal}
+          leadLabel={
+            leadLabel({
+              company: closeDate.chosen.deal.company,
+              name: closeDate.chosen.deal.leadName,
+            }).primary ?? ''
+          }
+          today={closeDate.chosen.today}
+          onChanged={closeDate.markDone}
+          onCloseAutoFocus={closeDate.returnFocus}
         />
       )}
     </>

@@ -5,8 +5,8 @@ category: UI
 title: "一覧の行から連絡を記録する入口は「連絡を記録」のボタン1つとメニューにし、リードの画面は1タップのボタンのままにする（#863）"
 status: active
 superseded_by: []
-issues: [863, 556, 554, 776, 895, 998]
-paths: ["components/features/lead-follow-up/contact-record-menu.tsx", "components/features/lead-follow-up/contact-quick-actions.tsx", "components/features/lead-follow-up/use-record-contact.tsx", "components/features/lead-follow-up/due-tasks-list.tsx", "components/features/today/today-meetings.tsx", "components/features/today/today-next-actions.tsx", "components/features/today/today-deals.tsx", "components/features/deals/deals-screen.tsx", "components/features/lead-follow-up/row-activity-dialog.tsx", "hooks/use-row-dialog.ts", "components/dashboard/ax-dashboard-sections.tsx"]
+issues: [863, 556, 554, 776, 895, 998, 999]
+paths: ["components/features/lead-follow-up/contact-record-menu.tsx", "components/features/lead-follow-up/contact-quick-actions.tsx", "components/features/lead-follow-up/use-record-contact.tsx", "components/features/lead-follow-up/due-tasks-list.tsx", "components/features/today/today-meetings.tsx", "components/features/today/today-next-actions.tsx", "components/features/today/today-deals.tsx", "components/features/deals/deals-screen.tsx", "components/features/lead-follow-up/row-activity-dialog.tsx", "components/features/deals/deal-close-date-dialog.tsx", "hooks/use-row-dialog.ts", "components/dashboard/ax-dashboard-sections.tsx"]
 ---
 
 ### [UI] 一覧の行から連絡を記録する入口は「連絡を記録」のボタン1つとメニューにし、リードの画面は1タップのボタンのままにする（#863）
@@ -28,6 +28,7 @@ paths: ["components/features/lead-follow-up/contact-record-menu.tsx", "component
   - 一覧では2タップになる。ただ、スクロール中の誤記録を防ぐ軽い確認になり、リードの画面へ移るより手数が少ない
 - **ルール**
   - 一覧の行に記録の入口を足すときは `ContactRecordMenu` を使う。`ContactQuickActions` の compact は新しく使わない
+  - 行に印ごとの直す操作（「今日」の「注意が必要な商談」の受注予定日を直す・次の行動を追加など）を置くときは、印と同じ順に、リンクの外の行の右端に置き、2つのときは縦に積む（#999。横に並べると、スマホの行からはみ出し、sm〜md でリンクが細くなる）
   - 行から開くダイアログ（活動の記録、商談の次の行動の追加など）は、その一覧に1つ置き、欄の中身の外に出す（`useRowDialog`。#998）。`ContactRecordMenu` は開くことを一覧に頼む（`onRecordActivity`）ので、使う一覧は `useRowActivityDialog` と `RowActivityDialog` を置く
   - 入口は、リードを編集できる人（`useLeadAccess` の `canEdit`）にだけ出す
   - 1タップの記録では、次の行動を完了にしない。連絡と完了は1対1ではないため（「つながらなかった」は完了ではない、など）。記録の続きで完了にする流れは #776 で決める

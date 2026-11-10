@@ -6,7 +6,7 @@ import {
   HearingMonthInput,
 } from '@/components/features/lead-hearings/hearing-date-inputs';
 import messages from '@/locales/ja/common.json';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import { type ComponentProps, useState } from 'react';
@@ -199,6 +199,69 @@ describe('HearingDateInput', () => {
     await user.click(screen.getByRole('button', { name: fill(ed.openCalendar, { field: LABEL }) }));
     await screen.findByRole('dialog');
     expect(screen.queryByRole('button', { name: ed.clear })).not.toBeInTheDocument();
+  });
+
+  // What a form of one date passes (#999, the expected close date of a deal past it)
+  it('offers in the calendar only the days from min to max', async () => {
+    const user = userEvent.setup();
+    render(
+      withIntl(
+        <DateHarness initial="2026-11-05" min="2026-11-05" max="2026-11-20" onChange={vi.fn()} />
+      )
+    );
+
+    await user.click(screen.getByRole('button', { name: fill(ed.openCalendar, { field: LABEL }) }));
+    const dialog = await screen.findByRole('dialog');
+    const day = (n: number) =>
+      within(dialog)
+        .getAllByText(String(n))
+        .map((el) => el.closest('button'))
+        .find((button) => button && !button.className.includes('day-outside'));
+    expect(day(4)).toBeDisabled();
+    expect(day(5)).toBeEnabled();
+    expect(day(20)).toBeEnabled();
+    expect(day(21)).toBeDisabled();
+  });
+
+  it('reads a hint given with the box, after its error', () => {
+    const { rerender } = render(
+      withIntl(
+        <>
+          <p id="hint-a">今日以降の日付</p>
+          <DateHarness onChange={vi.fn()} describedBy="hint-a" />
+        </>
+      )
+    );
+    expect(screen.getByLabelText(LABEL)).toHaveAccessibleDescription('今日以降の日付');
+
+    rerender(
+      withIntl(
+        <>
+          <p id="hint-a">今日以降の日付</p>
+          <DateHarness onChange={vi.fn()} describedBy="hint-a" error="日付を入れてください" />
+        </>
+      )
+    );
+    expect(screen.getByLabelText(LABEL)).toHaveAccessibleDescription(
+      '日付を入れてください 今日以降の日付'
+    );
+  });
+
+  it('tells Enter once the box took the date, not the Enter of a conversion', async () => {
+    const onEnter = vi.fn();
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    render(withIntl(<DateHarness onChange={onChange} onEnter={onEnter} />));
+    const box = screen.getByLabelText(LABEL);
+
+    await user.type(box, '2026/11/15{Enter}');
+    expect(onChange).toHaveBeenLastCalledWith('2026-11-15');
+    expect(onEnter).toHaveBeenCalledTimes(1);
+
+    // The Enter that confirms a conversion: while composing, or after it as Safari sends it
+    fireEvent.keyDown(box, { key: 'Enter', isComposing: true });
+    fireEvent.keyDown(box, { key: 'Enter', keyCode: 229 });
+    expect(onEnter).toHaveBeenCalledTimes(1);
   });
 
   it('does nothing in read-only mode', () => {

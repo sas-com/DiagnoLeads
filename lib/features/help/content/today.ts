@@ -54,8 +54,16 @@ export const todayArticle: HelpArticle = {
         [
           {
             type: 'text',
-            text: '注意が必要な商談は、受注予定日を直すか、リードに次の行動を入れます。次の行動がない商談は、行の',
+            text: '受注予定日を過ぎた商談は、行の',
           },
+          { type: 'ui', text: '受注予定日を直す' },
+          {
+            type: 'text',
+            text: 'から、商談の詳細に移らずに、今日以降の日付に直します。受注・失注が決まっていれば、商談の詳細でステージを移します。',
+          },
+        ],
+        [
+          { type: 'text', text: 'リードに次の行動がない商談は、行の' },
           { type: 'ui', text: '次の行動を追加' },
           { type: 'text', text: 'から、商談の詳細に移らずに入れられます（' },
           { type: 'link', text: '商談', href: '/deals' },
