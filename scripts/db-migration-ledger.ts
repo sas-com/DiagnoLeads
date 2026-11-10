@@ -198,7 +198,7 @@ export function describeNotes(
     ),
     ...unknown.map(
       (row) =>
-        `${describeRow(row)}: 台帳にあるが、このジャーナルに無い。ほかのブランチがマージの前に当てたものかもしれない。流す人は、そのスキーマが main に入る（当てたブランチの PR がマージされる）ことを確かめる。すでに main に入っていれば、main を取り込むとこの警告は消える。`
+        `${describeRow(row)}: 台帳にあるが、このジャーナルに無い。ほかのブランチがマージの前に当てたものかもしれない（created_at は、当てたブランチの drizzle/meta/_journal.json の when と同じ）。流す人は、そのスキーマが main に入る（当てたブランチの PR がマージされる）ことを確かめる。すでに main に入っていれば、main を取り込むとこの警告は消える。`
     ),
   ];
 }

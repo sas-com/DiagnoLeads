@@ -110,7 +110,7 @@ describe('warnings that do not stop the run', () => {
   });
 
   const unknownNote = (createdAt: string, hash: string) =>
-    `created_at ${createdAt}  hash ${hash}: 台帳にあるが、このジャーナルに無い。ほかのブランチがマージの前に当てたものかもしれない。流す人は、そのスキーマが main に入る（当てたブランチの PR がマージされる）ことを確かめる。すでに main に入っていれば、main を取り込むとこの警告は消える。`;
+    `created_at ${createdAt}  hash ${hash}: 台帳にあるが、このジャーナルに無い。ほかのブランチがマージの前に当てたものかもしれない（created_at は、当てたブランチの drizzle/meta/_journal.json の when と同じ）。流す人は、そのスキーマが main に入る（当てたブランチの PR がマージされる）ことを確かめる。すでに main に入っていれば、main を取り込むとこの警告は消える。`;
 
   it('names a row that is not in this journal even when nothing would be skipped (#799)', () => {
     // Another branch applied its migration (when 3000) before merging; mine came later (4000)
