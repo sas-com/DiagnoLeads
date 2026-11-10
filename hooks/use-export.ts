@@ -1,8 +1,8 @@
 /**
  * Export Hook
  *
- * React hook for downloading analytics reports and lead exports
- * Supports CSV, JSON, and PDF formats
+ * React hook for downloading the analytics report as CSV, JSON or PDF. Leads are exported from
+ * their list (leads.export, recorded in the audit log), not here (#1003)
  */
 
 import type {
@@ -13,17 +13,14 @@ import type {
   TrendDataPoint,
 } from '@/lib/features/analytics/types/schemas';
 import {
-  type ExportLead,
   createDownloadBlob,
   generateExportFilename,
   generateFullReportCSV,
-  leadsToCSV,
   triggerDownload,
 } from '@/lib/features/reports/export-service';
 import {
   downloadPDF,
   exportAnalyticsToPDF,
-  exportLeadsToPDF,
   generatePDFFilename,
 } from '@/lib/features/reports/pdf-export-service';
 import { loadPdfFontInBrowser } from '@/lib/features/reports/pdf-font.client';
@@ -36,42 +33,12 @@ interface UseExportOptions {
 }
 
 /**
- * Hook for exporting leads and analytics data
+ * Hook for exporting analytics data
  */
 export function useExport(options: UseExportOptions = {}) {
   const [isExporting, setIsExporting] = useState(false);
   const { organizationName = 'Unknown Organization', locale = 'en' } = options;
   const pdfLabels = usePdfReportLabels();
-
-  /**
-   * Export leads to CSV
-   */
-  const exportLeadsCSV = useCallback((leads: ExportLead[]) => {
-    setIsExporting(true);
-    try {
-      const csv = leadsToCSV(leads);
-      const blob = createDownloadBlob(csv, 'csv');
-      const filename = generateExportFilename('leads', 'csv');
-      triggerDownload(blob, filename);
-    } finally {
-      setIsExporting(false);
-    }
-  }, []);
-
-  /**
-   * Export leads to JSON
-   */
-  const exportLeadsJSON = useCallback((leads: ExportLead[]) => {
-    setIsExporting(true);
-    try {
-      const json = JSON.stringify(leads, null, 2);
-      const blob = createDownloadBlob(json, 'json');
-      const filename = generateExportFilename('leads', 'json');
-      triggerDownload(blob, filename);
-    } finally {
-      setIsExporting(false);
-    }
-  }, []);
 
   /**
    * Export full analytics report
@@ -133,30 +100,6 @@ export function useExport(options: UseExportOptions = {}) {
   );
 
   /**
-   * Export leads to PDF
-   */
-  const exportLeadsPDF = useCallback(
-    async (leads: ExportLead[], dateRange?: string) => {
-      setIsExporting(true);
-      try {
-        const doc = exportLeadsToPDF(leads, {
-          organizationName,
-          dateRange,
-          generatedAt: new Date(),
-          locale,
-          font: await loadPdfFontInBrowser(),
-          labels: pdfLabels,
-        });
-        const filename = generatePDFFilename('leads', dateRange);
-        downloadPDF(doc, filename);
-      } finally {
-        setIsExporting(false);
-      }
-    },
-    [organizationName, locale, pdfLabels]
-  );
-
-  /**
    * Export analytics report to PDF
    */
   const exportAnalyticsPDF = useCallback(
@@ -199,9 +142,6 @@ export function useExport(options: UseExportOptions = {}) {
 
   return {
     isExporting,
-    exportLeadsCSV,
-    exportLeadsJSON,
-    exportLeadsPDF,
     exportAnalyticsReport,
     exportAnalyticsJSON,
     exportAnalyticsPDF,
