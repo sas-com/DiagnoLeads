@@ -233,17 +233,18 @@ describe('notification-service', () => {
   });
 
   describe('getUnreadCount', () => {
-    it('should return unread notification count', async () => {
-      const mockResult = [{ id: '1' }, { id: '2' }, { id: '3' }];
-      dbChain.where.mockResolvedValue(mockResult);
+    // Counted in the database (#981): one row with the count, never the notifications themselves
+    it('returns the count the database counted', async () => {
+      dbChain.where.mockResolvedValue([{ count: 3 }]);
 
       const count = await getUnreadCount('user-1');
 
       expect(count).toBe(3);
+      expect(db.select).toHaveBeenCalledWith({ count: expect.anything() });
     });
 
-    it('should filter by organization', async () => {
-      dbChain.where.mockResolvedValue([]);
+    it('returns 0 when none is unread, also in an organization', async () => {
+      dbChain.where.mockResolvedValue([{ count: 0 }]);
 
       const count = await getUnreadCount('user-1', 'org-1');
 

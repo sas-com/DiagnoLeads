@@ -66,7 +66,9 @@ export function sitePageOf(rawPath: string): SitePage | null {
       ? { path, pageType: 'diagnosis', owner: { kind: 'diagnosis', slug: second } }
       : null;
   }
-  const pageType = SIMPLE_PAGES[first];
+  // Only the table's own keys: the path comes from the beacon's body, and a plain object also
+  // answers the names of Object.prototype ('/ja/constructor' is no page, #804)
+  const pageType = Object.hasOwn(SIMPLE_PAGES, first) ? SIMPLE_PAGES[first] : undefined;
   if (!pageType || second !== undefined) return null;
   return { path, pageType, owner: { kind: 'operator' } };
 }
