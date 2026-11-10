@@ -4,12 +4,13 @@ import { TAP_TARGET } from '@/components/common/tap-target';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { useReturnFocus } from '@/hooks/use-return-focus';
 import { isOpenStage } from '@/lib/features/deals/types/pipeline';
 import { trpc } from '@/lib/trpc/client';
 import { Briefcase, Loader2, Plus } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { DealFormDialog } from './deal-form-dialog';
 import { formatDealDate, formatYen } from './deal-format';
 import { DealStageBadge } from './deal-stage-badge';
@@ -41,7 +42,7 @@ export function LeadDealsCard({
   const [createOpen, setCreateOpen] = useState(false);
   // The dialog is opened without a dialog trigger: the focus goes back to the button, which
   // stays once the deal is created (#1028)
-  const createButton = useRef<HTMLButtonElement>(null);
+  const createFocus = useReturnFocus<HTMLButtonElement>();
   const query = trpc.deals.forLead.useQuery(
     { organizationId, leadId },
     { enabled: !!organizationId }
@@ -67,7 +68,7 @@ export function LeadDealsCard({
         )}
         {data?.canEdit && (
           <Button
-            ref={createButton}
+            ref={createFocus.ref}
             type="button"
             variant="outline"
             size="sm"
@@ -136,11 +137,7 @@ export function LeadDealsCard({
           onOpenChange={setCreateOpen}
           organizationId={organizationId}
           leadId={leadId}
-          onCloseAutoFocus={(event) => {
-            if (!createButton.current?.isConnected) return;
-            event.preventDefault();
-            createButton.current.focus();
-          }}
+          onCloseAutoFocus={createFocus.onCloseAutoFocus}
         />
       )}
     </Card>
