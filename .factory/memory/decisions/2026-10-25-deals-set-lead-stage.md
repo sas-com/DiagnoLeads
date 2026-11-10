@@ -5,7 +5,7 @@ category: Sales
 title: "商談を持つリードの状態と商談フェーズは商談から毎回計算し、手では変えない（#444）"
 status: active
 superseded_by: []
-issues: [444, 435, 430]
+issues: [444, 435, 430, 977]
 paths: ["lib/features/deals/lead-sync.ts", "lib/features/deals/service.ts", "components/features/deals/deal-form-dialog.tsx", "lib/features/leads/api/router.ts", "app/api/v2/leads/[id]/route.ts", "lib/features/leads/service.ts", "components/features/leads/lead-quick-select.tsx", "components/features/leads/detail/lead-fields-card.tsx", "components/features/leads/bulk-actions.tsx"]
 ---
 
@@ -19,6 +19,7 @@ paths: ["lib/features/deals/lead-sync.ts", "lib/features/deals/service.ts", "com
   - 商談済みの印は一度付いたら消さない。失注の理由は、商談中に戻っても残す（切り返しカードが読む）
   - 最後の商談を消したら、リードはそのままの値で残り、手で変えられるようになる
   - 商談より前に手で成約にしたリード（状態が成約か、商談フェーズが現行調査受注・移行受注・AX化）で、受注の商談がまだないものに、受注以外の商談は作れない（BAD_REQUEST）。先に過去の受注をステージ「受注」の商談として登録する。そうしないと、開いた商談から計算して成約が商談中に戻るため（2026-10-25 のアーキテクチャのレビュー。本番は成約 0 件・商談 0 件で、移行の対象はない）
+    - この規則は商談のないリードにだけ当てる（`wonWithoutWonDeal`、#977、2026-11-10）。商談を持つリードは商談から計算するので、受注の商談を失注にした・消した（ほかの商談が残る）ために残った受注のフェーズは、手での成約ではない。開いた商談を作ると、リードは商談中・その商談のフェーズになる。最後の商談を消したリードは商談がなくなるので、残った受注の値に今までどおり当てる。却下案：受注から失注への直接の移動を止める（削除の道が残る）、受注のフェーズを外す（受注の前のフェーズが分からない）
   - 作成の画面（#951）：商談の作成のダイアログは、新しい商談の既定をリードから決める（`lead-sync.ts` の `newDealStart`。`deals.forLead` の `newDeal`）。手で成約にしたリードは受注で開き（種類は商談フェーズに合わせる）、受注以外を選ぶと送る前に理由を出して止める。商談のないリードは商談フェーズに合わせる（簡易診断は課題の確認、提案は提案）。リードの状態は手で変えた直後のことがあるので、ダイアログを開くたびに読み直し、読み終わるまで作成しない
   - 再育成：商談を持つリードはナーチャリングにしない。止まった商談は、失注の理由「時期」で閉じる。リードは時期の失注になり、動くべき時期（#151）が再接触を追う。時期が来たら新しい商談を作る
   - 拒むのは値が変わるときだけ。フォームが今の値をそのまま送る保存（名前の修正など）は通す。tRPC は BAD_REQUEST（`DEAL_DRIVEN_MESSAGE`）、REST API v2 は 409。一括の状態変更は商談のあるリードを外して残りを変え、外した件数（`skippedWithDeals`）を返す

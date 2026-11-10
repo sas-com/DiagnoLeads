@@ -403,6 +403,33 @@ describe.skipIf(!url)('deals created by the first meeting (PostgreSQL)', () => {
       expect(await leadOf(lead.id)).toMatchObject({ status: 'won', dealPhase: 'survey_won' });
     });
 
+    it('a lead whose won deal was lost since: it gets one and goes back to the initial hearing (#977)', async () => {
+      const lead = await leadWithRequest(orgA);
+      const survey = await admin.deals.create({
+        organizationId: orgA,
+        leadId: lead.id,
+        name: '調査',
+        stage: 'won',
+      });
+      await admin.deals.update({
+        organizationId: orgA,
+        dealId: survey.id,
+        stage: 'lost',
+        lostReason: 'budget',
+      });
+      expect(await leadOf(lead.id)).toMatchObject({ status: 'lost', dealPhase: 'survey_won' });
+
+      expect(await confirm(rep, lead.id, 0)).toMatchObject({ ok: true, dealCreated: true });
+      expect((await dealsOf(lead.id)).map((deal) => deal.stage).sort()).toEqual([
+        'lost',
+        'qualification',
+      ]);
+      const after = await leadOf(lead.id);
+      expect(after).toMatchObject({ status: 'negotiating', dealPhase: 'initial_hearing' });
+      // The first day it was won stays (the agency and delivery reports read it)
+      expect(after.dealPhaseReachedAt).toHaveProperty('survey_won');
+    });
+
     it('a lead won by hand without deals: no error, unlike a deal created by hand', async () => {
       const lead = await leadWithRequest(orgA, {
         status: 'won',

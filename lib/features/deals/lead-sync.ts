@@ -105,16 +105,19 @@ export function statusFromDeals(deals: SyncDeal[]): LeadStatus | null {
 const WON_PHASES: readonly string[] = ['survey_won', 'migration_won', 'ax'];
 
 /**
- * A lead won by hand before it had deals (成約, or a won phase) whose deals hold no win. Its
- * status would be computed back to 商談中 by an open deal, so the win is recorded first as a won
- * deal (createDeal refuses an open or lost one until then, #444).
+ * A lead won by hand before it had deals (成約, or a won phase), with no deal yet. Its status would
+ * be computed back to 商談中 by an open deal, so the win is recorded first as a won deal
+ * (createDeal refuses an open or lost one until then, #444). A lead with deals is computed from
+ * them: a won phase left by a won deal since lost, or deleted while other deals stay, is not a win
+ * by hand, and the lead takes an open deal again (#977). With its last deal deleted, the lead has
+ * no deal and keeps its values, so a win left on it is recorded first again.
  */
 export function wonWithoutWonDeal(
   lead: Pick<SyncLead, 'status' | 'dealPhase'>,
   deals: Pick<SyncDeal, 'stage'>[]
 ): boolean {
-  const won = lead.status === 'won' || WON_PHASES.includes(lead.dealPhase ?? '');
-  return won && !deals.some((deal) => deal.stage === 'won');
+  if (deals.length > 0) return false;
+  return lead.status === 'won' || WON_PHASES.includes(lead.dealPhase ?? '');
 }
 
 /** Where a new deal of a lead starts in the deal form (#951) */
@@ -165,12 +168,13 @@ export type QualificationDealSkip = 'open_deal' | 'won' | 'phase_ahead';
 /**
  * Whether the first meeting of a lead creates its deal in 見極め (#854, decision
  * `2026-10-28-auto-qualification-deal`); null to create one. Not created for a lead with an open
- * deal (one deal whatever the entry point), nor for a won lead (a won deal, or won by hand, see
- * wonWithoutWonDeal): its next deal (the migration, AX) is created by sales, who choose its kind
- * and the deal it follows. Nor for a lead without deals whose deal phase was set by hand past the
- * initial hearing: the deal would take it back to the initial hearing. A lead whose deals are all
- * lost gets one (its time has come again, decision `2026-10-25-deals-set-lead-stage`), even with
- * a phase past the initial hearing, unless it is won by hand (成約, or a won phase left on it).
+ * deal (one deal whatever the entry point), nor for a won lead (a won deal, or won by hand without
+ * deals, see wonWithoutWonDeal): its next deal (the migration, AX) is created by sales, who choose
+ * its kind and the deal it follows. Nor for a lead without deals whose deal phase was set by hand
+ * past the initial hearing: the deal would take it back to the initial hearing. A lead whose deals
+ * are all lost gets one (its time has come again, decision `2026-10-25-deals-set-lead-stage`), even
+ * with a phase past the initial hearing or a won phase left by a won deal lost or deleted since
+ * (#977).
  */
 export function qualificationDealSkip(
   lead: Pick<SyncLead, 'status' | 'dealPhase'>,
