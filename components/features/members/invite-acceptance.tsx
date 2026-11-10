@@ -31,6 +31,7 @@ export function InviteAcceptance({
   const locale = useLocale();
   const router = useRouter();
   const { setOrganization } = useOrganizationContext();
+  const utils = trpc.useUtils();
   const session = useSession();
   const preview = trpc.invitations.preview.useQuery({ token }, { retry: false });
   const [error, setError] = useState<string | null>(null);
@@ -61,8 +62,13 @@ export function InviteAcceptance({
     };
   }, [mustCheck]);
   const accept = trpc.invitations.accept.useMutation({
-    onSuccess: ({ organizationId }) => {
+    onSuccess: async ({ organizationId }) => {
       setOrganization(organizationId);
+      // The organization switcher is not on this page: a list it read before would be kept, without
+      // this organization, and on the dashboard it would select another one. Drop it, so that the
+      // switcher reads it there; a read that fails leaves it empty, and the selection as it is
+      // (#1046)
+      await utils.organizations.list.reset();
       router.push(`/${locale}/dashboard`);
     },
     onError: (e) => {

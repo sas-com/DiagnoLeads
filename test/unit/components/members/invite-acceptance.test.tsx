@@ -27,11 +27,12 @@ const mocks = vi.hoisted(() => ({
   sendVerificationEmail: vi.fn(),
   getSession: vi.fn(),
   mutate: vi.fn(),
+  resetList: vi.fn(),
   preview: { data: undefined as unknown, isLoading: false },
   session: { data: null as unknown, isPending: false },
   acceptOptions: undefined as
     | {
-        onSuccess: (data: { organizationId: string }) => void;
+        onSuccess: (data: { organizationId: string }) => void | Promise<void>;
         onError: (e: { message: string; data?: { code: string } }) => void;
       }
     | undefined,
@@ -39,6 +40,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
+    useUtils: () => ({ organizations: { list: { reset: mocks.resetList } } }),
     invitations: {
       preview: { useQuery: () => mocks.preview },
       accept: {
@@ -80,6 +82,7 @@ describe('InviteAcceptance', () => {
     mocks.preview = { data: valid, isLoading: false };
     mocks.session = { data: null, isPending: false };
     mocks.getSession.mockResolvedValue({ data: null, error: null });
+    mocks.resetList.mockResolvedValue(undefined);
   });
 
   it('offers sign-up with the invited address, and sign-in, both coming back here', () => {
@@ -106,8 +109,32 @@ describe('InviteAcceptance', () => {
     await user.click(screen.getByRole('button', { name: '参加する' }));
     expect(mocks.mutate).toHaveBeenCalledWith({ token: TOKEN });
 
-    mocks.acceptOptions?.onSuccess({ organizationId: ORG_ID });
+    await mocks.acceptOptions?.onSuccess({ organizationId: ORG_ID });
     expect(mocks.setOrganization).toHaveBeenCalledWith(ORG_ID);
+    expect(mocks.push).toHaveBeenCalledWith('/ja/dashboard');
+  });
+
+  it('drops the list of organizations read before it opens the dashboard (#1046)', async () => {
+    mocks.session = { data: { user: { email: 'new@example.com' } }, isPending: false };
+    let listDropped = () => {};
+    mocks.resetList.mockReturnValue(
+      new Promise<void>((resolve) => {
+        listDropped = resolve;
+      })
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole('button', { name: '参加する' }));
+
+    const joined = mocks.acceptOptions?.onSuccess({ organizationId: ORG_ID });
+    expect(mocks.setOrganization).toHaveBeenCalledWith(ORG_ID);
+    // This page has no switcher: the list it read before (without this organization) would make
+    // it select another one on the dashboard, where it reads the list again instead
+    expect(mocks.resetList).toHaveBeenCalledTimes(1);
+    expect(mocks.push).not.toHaveBeenCalled();
+
+    listDropped();
+    await joined;
     expect(mocks.push).toHaveBeenCalledWith('/ja/dashboard');
   });
 

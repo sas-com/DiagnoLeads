@@ -5,6 +5,8 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, renderHook, waitFor } from '@testing-library/react';
 import { OrganizationProvider, useOrganizationContext, type OrganizationContextType } from '@/lib/context/organization-context';
+import type { Organization } from '@/lib/db/schema';
+import { usePathname } from 'next/navigation';
 
 // Mock next/navigation
 vi.mock('next/navigation', () => ({
@@ -138,6 +140,85 @@ describe('setOrganization', () => {
       expect(result.current.organizationId).toBe('org-123');
       expect(result.current.organization).toEqual(mockOrg);
     });
+  });
+});
+
+describe('the data of another organization (#1046)', () => {
+  const ORG_A = 'a1b2c3d4-1111-4111-8111-111111111111';
+  const ORG_B = 'b2c3d4e5-2222-4222-8222-222222222222';
+  const orgA = { id: ORG_A, name: '組織A' } as Organization;
+  const stored = () =>
+    JSON.parse(mockLocalStorage.store['diagnoleads:current-organization'] ?? 'null');
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockLocalStorage.clear();
+    vi.mocked(usePathname).mockReturnValue('/dashboard');
+  });
+
+  it("drops the previous organization's data when switched by the id alone, as an invite does", async () => {
+    const { result } = renderHook(() => useOrganizationContext(), {
+      wrapper: OrganizationProvider,
+    });
+    act(() => {
+      result.current.setOrganization(ORG_A, orgA);
+    });
+    await waitFor(() => expect(result.current.organization).toEqual(orgA));
+
+    act(() => {
+      result.current.setOrganization(ORG_B);
+    });
+
+    await waitFor(() => expect(result.current.organizationId).toBe(ORG_B));
+    expect(result.current.organization).toBeNull();
+    // Nor is it saved for the next visit
+    expect(stored()).toMatchObject({ id: ORG_B, organization: null });
+  });
+
+  it("keeps the organization's data when set again by its id alone", async () => {
+    const { result } = renderHook(() => useOrganizationContext(), {
+      wrapper: OrganizationProvider,
+    });
+    act(() => {
+      result.current.setOrganization(ORG_A, orgA);
+    });
+    act(() => {
+      result.current.setOrganization(ORG_A.toUpperCase());
+    });
+
+    await waitFor(() => expect(result.current.organizationId).toBe(ORG_A.toUpperCase()));
+    expect(result.current.organization).toEqual(orgA);
+  });
+
+  it("drops it when a URL switches to another organization's dashboard", async () => {
+    mockLocalStorage.store['diagnoleads:current-organization'] = JSON.stringify({
+      id: ORG_A,
+      organization: orgA,
+      timestamp: Date.now(),
+    });
+    vi.mocked(usePathname).mockReturnValue(`/ja/dashboard/${ORG_B}/leads`);
+
+    const { result } = renderHook(() => useOrganizationContext(), {
+      wrapper: OrganizationProvider,
+    });
+
+    await waitFor(() => expect(result.current.organizationId).toBe(ORG_B));
+    expect(result.current.organization).toBeNull();
+  });
+
+  it("does not restore another organization's data saved with an id before #1046", async () => {
+    mockLocalStorage.store['diagnoleads:current-organization'] = JSON.stringify({
+      id: ORG_B,
+      organization: orgA,
+      timestamp: Date.now(),
+    });
+
+    const { result } = renderHook(() => useOrganizationContext(), {
+      wrapper: OrganizationProvider,
+    });
+
+    await waitFor(() => expect(result.current.organizationId).toBe(ORG_B));
+    expect(result.current.organization).toBeNull();
   });
 });
 
