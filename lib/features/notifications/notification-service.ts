@@ -11,7 +11,7 @@ import {
   notifications,
   organizationMembers,
 } from '@/lib/db/schema';
-import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, isNull, or, sql } from 'drizzle-orm';
 
 /**
  * Create a notification for a user, always of an organization: one of no organization stays
@@ -117,12 +117,13 @@ export async function getUnreadCount(userId: string, organizationId?: string): P
     conditions.push(eq(notifications.organizationId, organizationId));
   }
 
-  const result = await db
-    .select({ id: notifications.id })
+  // Counted in the database: the bell reads it every 30 seconds, and a user may have many (#981)
+  const [result] = await db
+    .select({ count: count() })
     .from(notifications)
     .where(and(...conditions));
 
-  return result.length;
+  return result?.count ?? 0;
 }
 
 /**
