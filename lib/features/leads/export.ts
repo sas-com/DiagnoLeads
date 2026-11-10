@@ -91,32 +91,43 @@ export function leadExportFilename(format: LeadExportFormat, today: string): str
 }
 
 /**
+ * The filters an export's audit row records as they were sent: all of them but the search text
+ * (only that there was one) and the deals not yet made (only when filtering, #854). The test keeps
+ * them the export's own (exportLeadsSchema), so that a filter added there is not left out of the
+ * audit (#954). Only values that cannot be personal data are kept as sent: enums, booleans,
+ * numbers, days and internal ids (tags, assignee). A filter that takes free text is recorded as
+ * the search is, as having been used, so that no lead's name or address lands in the audit.
+ */
+export const EXPORT_AUDIT_FILTER_KEYS = [
+  'status',
+  'dealPhase',
+  'inflowSource',
+  'targetSystem',
+  'source',
+  'createdFrom',
+  'createdTo',
+  'createdFromDay',
+  'createdToDay',
+  'scoreMin',
+  'scoreMax',
+  'consultationRequested',
+  'mql',
+  'sqlDecision',
+  'assignee',
+  'nextMeeting',
+  'dealRating',
+  'mqlLevel',
+  'actTiming',
+  'tagIds',
+] as const satisfies readonly (keyof ListLeadsInput)[];
+
+/**
  * Filters of an export as written to the audit log: which conditions were used, never the
- * search text. Ids (tags, assignee) are internal, not personal data of the leads.
+ * search text (EXPORT_AUDIT_FILTER_KEYS).
  */
 export function exportAuditFilters(input: Omit<ListLeadsInput, 'limit' | 'offset'>) {
   const filters: Record<string, unknown> = {};
-  const keys = [
-    'status',
-    'dealPhase',
-    'inflowSource',
-    'targetSystem',
-    'source',
-    'createdFrom',
-    'createdTo',
-    'createdFromDay',
-    'createdToDay',
-    'scoreMin',
-    'scoreMax',
-    'consultationRequested',
-    'mql',
-    'sqlDecision',
-    'assignee',
-    'nextMeeting',
-    'dealRating',
-    'tagIds',
-  ] as const;
-  for (const key of keys) {
+  for (const key of EXPORT_AUDIT_FILTER_KEYS) {
     const value = input[key];
     if (value === undefined) continue;
     if (Array.isArray(value) && value.length === 0) continue;
