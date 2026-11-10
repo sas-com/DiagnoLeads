@@ -99,6 +99,8 @@ export interface DataAttentionNotice {
   leadId: string;
   submissionId: string;
   kinds: string[];
+  /** A consultation was requested before: the notice may use the consultation cap (#232) */
+  consultationRequested: boolean;
 }
 
 /** The result screen (follow-up answers, "diagnose another system") is used for a day */
@@ -708,6 +710,7 @@ export async function addAxMigrationDetails(
             leadId: submission.leadId,
             submissionId,
             kinds: flagged,
+            consultationRequested: submission.consultationRequestedAt !== null,
           }
         : null;
     return { ok: true as const, result, attention };

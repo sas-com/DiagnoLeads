@@ -67,7 +67,14 @@ export async function POST(req: NextRequest) {
     }
     // Data that needs care (#828): sales are told after the response, as for other notices
     const attention = outcome.attention;
-    if (attention) after(() => notifyAccessDataAttention(attention));
+    if (attention) {
+      after(() =>
+        notifyAccessDataAttention(attention).catch((error) => {
+          console.error('AX data attention notification error:', error);
+          return reportServerError('ax-diagnosis/data-attention', error);
+        })
+      );
+    }
     return NextResponse.json({ result: toPublicResult(outcome.result) });
   } catch (error) {
     console.error('AX diagnosis details error:', error);

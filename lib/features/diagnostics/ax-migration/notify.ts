@@ -4,7 +4,8 @@ import { filterAllowedRecipients } from '@/lib/email/allowed-recipients';
 import { type EmailBlock, type EmailFact, renderEmail } from '@/lib/email/templates/render';
 import { challengeEffectLine } from '@/lib/features/challenge-guide/service';
 import { isEmailConfigured, sendEmail } from '@/lib/features/email';
-import { notifyUsersInApp } from '@/lib/features/leads/assignment-notify';
+import { findAssignableMember } from '@/lib/features/leads/assignment';
+import { notifyUsersInApp, wantsNotification } from '@/lib/features/leads/assignment-notify';
 import { notifyOrganizationMembers } from '@/lib/features/notifications/notification-service';
 import { sendLeadCreatedById } from '@/lib/features/webhooks/services/lead-events';
 import { triggerWebhooks } from '@/lib/features/webhooks/services/webhook-service';
@@ -488,75 +489,65 @@ export function buildDataAttentionNotice(input: {
 
 /**
  * Tell sales that the follow-up answers name data that needs care (#828), after they are saved.
- * In-app only, and not behind a setting: rare, and it changes the plan, like a restriction on AI
- * analysis (#160). The lead's assignee is told; without one (or when the assignee left), whoever
- * takes consultation requests, as for a consultation request. Within the organization's hourly
- * limit of diagnosis notifications. Failures are logged and never break the respondent's flow.
+ * In-app only. The lead's assignee is told, or else whoever takes consultation requests, and
+ * neither can turn it off: rare, and it changes the plan, like a restriction on AI analysis
+ * (#160). Without either, every member hears of it as of a consultation request, by their own
+ * setting for those: a stream of anonymous answers must not reach people who turned them off.
+ * Within the organization's hourly limit of diagnosis notifications (the consultation cap when
+ * a consultation was requested, #232). Failures are left to the caller to report.
  */
 export async function notifyAccessDataAttention(notice: DataAttentionNotice): Promise<void> {
-  try {
-    const { notify } = await checkNotificationLimits(
-      db,
-      notice.organizationId,
-      false,
-      AX_NOTIFICATION_LIMITS
-    );
-    if (!notify) return;
-    const [lead] = await db
-      .select({ name: leads.name, company: leads.company, assigneeId: leads.assigneeUserId })
-      .from(leads)
-      .where(and(eq(leads.id, notice.leadId), eq(leads.organizationId, notice.organizationId)));
-    if (!lead) return;
-    const { title, message } = buildDataAttentionNotice({
-      company: lead.company,
-      name: lead.name,
-      kinds: notice.kinds,
-    });
-    const data = {
-      leadId: notice.leadId,
-      submissionId: notice.submissionId,
-      diagnosticKey: 'ax-migration',
-      dataKinds: notice.kinds,
-    };
+  const { notify } = await checkNotificationLimits(
+    db,
+    notice.organizationId,
+    notice.consultationRequested,
+    AX_NOTIFICATION_LIMITS
+  );
+  if (!notify) return;
+  const [lead] = await db
+    .select({ name: leads.name, company: leads.company, assigneeId: leads.assigneeUserId })
+    .from(leads)
+    .where(and(eq(leads.id, notice.leadId), eq(leads.organizationId, notice.organizationId)));
+  if (!lead) return;
+  const { title, message } = buildDataAttentionNotice({
+    company: lead.company,
+    name: lead.name,
+    kinds: notice.kinds,
+  });
+  const data = {
+    leadId: notice.leadId,
+    submissionId: notice.submissionId,
+    diagnosticKey: 'ax-migration',
+    dataKinds: notice.kinds,
+  };
+  const tell = (userIds: string[]) =>
+    notifyUsersInApp(userIds, notice.organizationId, 'data_attention', title, message, data);
 
-    const [assignee] = lead.assigneeId
-      ? await db
-          .select({ userId: organizationMembers.userId })
-          .from(organizationMembers)
-          .where(
-            and(
-              eq(organizationMembers.organizationId, notice.organizationId),
-              eq(organizationMembers.userId, lead.assigneeId)
-            )
-          )
-      : [];
-    if (assignee) {
-      await notifyUsersInApp(
-        [assignee.userId],
-        notice.organizationId,
-        'data_attention',
-        title,
-        message,
-        data
-      );
-      return;
-    }
-    const consultation = await diagnosisConsultationRecipients(db, notice.organizationId);
-    if (consultation.intakeUserIds.length > 0) {
-      await notifyUsersInApp(
-        consultation.intakeUserIds,
-        notice.organizationId,
-        'data_attention',
-        title,
-        message,
-        data
-      );
-      return;
-    }
-    await notifyOrganizationMembers(notice.organizationId, 'data_attention', title, message, data);
-  } catch (error) {
-    console.error('AX data attention notification failed:', error);
+  // The assignee, while a member who can still hold leads (not one moved to viewing only)
+  const assignee = lead.assigneeId
+    ? await findAssignableMember(db, notice.organizationId, lead.assigneeId)
+    : null;
+  if (assignee) {
+    await tell([assignee.userId]);
+    return;
   }
+  const consultation = await diagnosisConsultationRecipients(db, notice.organizationId);
+  if (consultation.intakeUserIds.length > 0) {
+    await tell(consultation.intakeUserIds);
+    return;
+  }
+  const members = await db
+    .select({ userId: organizationMembers.userId })
+    .from(organizationMembers)
+    .where(eq(organizationMembers.organizationId, notice.organizationId));
+  const wanting: string[] = [];
+  for (const member of members) {
+    // Their own setting for consultation requests; when it cannot be read, they are told
+    if (await wantsNotification(member.userId, notice.organizationId, 'consultation_requested')) {
+      wanting.push(member.userId);
+    }
+  }
+  if (wanting.length > 0) await tell(wanting);
 }
 
 /** The notification limits of the AX diagnosis (the rules are shared, #481) */

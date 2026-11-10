@@ -543,6 +543,7 @@ describe.skipIf(!url)('AX migration submission (PostgreSQL)', () => {
         leadId: outcome.leadId,
         submissionId: outcome.submissionId,
         kinds: ['my_number', 'payment'],
+        consultationRequested: false,
       });
       const lead = await pg.query.leads.findFirst({ where: eq(leads.id, outcome.leadId) });
       expect(lead?.responses).toMatchObject({
