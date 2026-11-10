@@ -20,4 +20,4 @@ paths: ["lib/email/**", "lib/features/email/**"]
   - 外部の画像・フォント・スクリプトは使わない（開封の追跡やブロックを避ける）。件名は `sendEmail` が1行にする
   - 宛先の制限（`filterAllowedRecipients`、テストモード）は `sendEmail` の中で行う。Resend を直接呼ばない
   - 参考にする実装: 社内向けは AX 診断の `buildSalesEmail`（`lib/features/diagnostics/ax-migration/notify.ts`）、お客様向けは `buildConfirmationEmail`（`lib/features/meeting-requests/service.ts`）
-  - 旧診断の結果メール（`lib/features/email/templates/diagnostic-result.ts`）の問い合わせ先は仮の値のまま。旧フォームを有効にする前に差し替える
+  - 旧診断の結果メール（`lib/features/email/templates/diagnostic-result.ts`）は、旧汎用フォームと一緒に消した（#470 の (c)、決定 2026-10-24-unused-code-removal）
