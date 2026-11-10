@@ -7,7 +7,7 @@ export const dealsArticle: HelpArticle = {
   summary:
     '商談をステージごとに並べ、金額と受注予定日で進み具合を見ます。1つのリードに、現行調査・移行など複数の商談を持てます。',
   routes: ['/deals'],
-  reviewedAt: '2026-11-08',
+  reviewedAt: '2026-11-10',
   related: ['workflow-lifecycle', 'glossary'],
   blocks: [
     { type: 'h2', id: 'stages', text: 'ステージ' },
@@ -130,7 +130,10 @@ export const dealsArticle: HelpArticle = {
         [
           { type: 'text', text: 'リードに次の行動（タスク）がありません：カードと一覧の' },
           { type: 'ui', text: '次の行動を追加' },
-          { type: 'text', text: 'で入れます（商談の詳細・リードの詳細の' },
+          {
+            type: 'text',
+            text: 'で入れます（「今日」の「注意が必要な商談」の行、商談の詳細・リードの詳細の',
+          },
           { type: 'ui', text: '次の行動・持ち帰り事項' },
           { type: 'text', text: 'でも入れられます）。' },
         ],

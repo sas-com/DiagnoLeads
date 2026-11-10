@@ -53,7 +53,8 @@ export function DealNextTaskSummary({
 }
 
 /**
- * "Add a next action" on a board card and a list row (#853), for an open deal marked for its lead
+ * "Add a next action" on a board card and a list row (#853), and a row of 今日's deals that need
+ * attention (#970), for an open deal marked for its lead
  * having none, to those who may change deals: it opens the screen's dialog. Outlined (the
  * screen's filled button is "create a deal"), 44px tall on phones, and named with the deal so
  * that a list of them can be told apart (its words are in its name, WCAG 2.5.3).
