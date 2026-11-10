@@ -203,9 +203,9 @@
 
 ### [DB] 最初の読み込みで行を作る処理（get-or-create）は、一意の索引・on conflict do nothing・読み直しの3つで1行にする
 - **日付**: 2026-10-26
-- **状況**: #768。`getOrCreatePreferences`（通知の設定）は、読んで無ければ INSERT する形で、同じ人の最初の読み込みが2つ重なると (user_id, organization_id) の行が2つできうった。読む側は1行だけを読むので、どちらの設定が効くかが決まらない
+- **状況**: #768。`getOrCreatePreferences`（通知の設定）は、読んで無ければ INSERT する形で、同じ人の最初の読み込みが2つ重なると (user_id, organization_id) の行が2つできえた。読む側は1行だけを読むので、どちらの設定が効くかが決まらない
 - **原因**: 読み込みと INSERT の間に、ほかの呼び出しが行を入れられる。DB に一意の守りがなかった
-- **解決策**: 一意の索引を足し、INSERT を `on conflict do nothing` にして、何も返らなければ読み直した。PostgreSQL は、同じキーのまだコミットされていない行があると INSERT を待たせ、相手がコミットしたら何もしない（READ COMMITTED なら、次の読み直しで相手の行が見える）。実 DB のテストは、全員の最初の読み込みがそろうまで待たせる database を渡して競合を毎回起こし、未コミットの行を待つ形は `pg_stat_activity` の Lock 待ちを見てから相手をコミットさせて確かめた（`test/unit/integration/notification-preferences-unique.db.test.ts`）
+- **解決策**: 一意の索引を足し、INSERT を `on conflict do nothing` にして、何も返らなければ読み直した。PostgreSQL は、同じキーのまだコミットされていない行があると INSERT を待たせ、相手がコミットしたら何もしない（READ COMMITTED なら、次の読み直しで相手の行が見える）。実 DB のテストは、全員の最初の読み込みがそろうまで待たせる database を渡して競合を毎回起こし、未コミットの行を待つ形は、相手のトランザクションの `pg_backend_pid()` を取り、`pg_blocking_pids()` にその pid を含む INSERT が出てから相手をコミットさせて確かめた。Lock 待ちの INSERT を数えるだけだと、並んで流れるほかのテストのファイルの待ちを拾いうる（`test/unit/integration/notification-preferences-unique.db.test.ts`）
 - **教訓**:
   - get-or-create は、この3つをそろえる。どれかが欠けると、行が2つになるか、2つ目の呼び出しが 23505 で失敗する
   - `on conflict` に対象の列を書かない形にすると、索引がまだ無い DB でも INSERT が通るので、本番への適用とマージの順に左右されない（列を書くと、索引の無い DB では `there is no unique or exclusion constraint matching the ON CONFLICT specification` で止まる）。主キーがランダムな uuid の表なら、ぶつかるのはその索引だけ

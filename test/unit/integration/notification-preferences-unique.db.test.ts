@@ -16,7 +16,7 @@ import {
   getOrCreatePreferences,
   updatePreferences,
 } from '@/lib/features/notifications/notification-service';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -107,14 +107,17 @@ describe.skipIf(!url)('notification_preferences: one row per user and organizati
     } as unknown as Database;
   };
 
-  /** Waits until a session is blocked on a lock while inserting a settings row */
-  const insertIsWaiting = async () => {
+  /**
+   * Waits until an insert of a settings row is blocked by the session `blockerPid`. Other test
+   * files run on the same database at the same time, so only a wait for that session counts
+   */
+  const insertIsWaitingFor = async (blockerPid: number) => {
     const deadline = Date.now() + 5_000;
     while (Date.now() < deadline) {
       // biome-ignore lint/style/noNonNullAssertion: guarded by skipIf
       const [{ waiting }] = await watcher!<{ waiting: number }[]>`
         select count(*)::int as waiting from pg_stat_activity
-        where datname = current_database() and wait_event_type = 'Lock'
+        where datname = current_database() and ${blockerPid}::int = any(pg_blocking_pids(pid))
           and query like 'insert into "notification_preferences"%'
       `;
       if (waiting > 0) return;
@@ -195,28 +198,29 @@ describe.skipIf(!url)('notification_preferences: one row per user and organizati
     const committing = new Promise<void>((resolve) => {
       commit = resolve;
     });
-    let inserted = () => {};
-    const rowInserted = new Promise<void>((resolve) => {
+    let inserted = (_pid: number) => {};
+    const rowInserted = new Promise<number>((resolve) => {
       inserted = resolve;
     });
     // The other caller has inserted the row in a transaction it has not committed yet
     const other = pg.transaction(async (tx) => {
+      const [{ pid }] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
       const [row] = await tx
         .insert(notificationPreferences)
         .values({ userId, organizationId: orgA, emailDailyDigest: true })
         .returning();
-      inserted();
+      inserted(pid);
       await committing;
       return row;
     });
 
     let reading: Promise<Awaited<ReturnType<typeof getOrCreatePreferences>>> | undefined;
     try {
-      await rowInserted;
+      const otherPid = await rowInserted;
       // Misses the uncommitted row, so it inserts and waits for the other transaction
       reading = getOrCreatePreferences(userId, orgA, pg);
       reading.catch(() => {});
-      await insertIsWaiting();
+      await insertIsWaitingFor(otherPid);
     } finally {
       commit();
     }
