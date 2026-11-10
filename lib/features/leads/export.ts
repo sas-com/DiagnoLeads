@@ -7,7 +7,8 @@
  *   The audit metadata holds no personal data: the search text (a name, an email...) is
  *   recorded only as "a search was used".
  *
- * Pure functions only; the procedure is `leads.export` in ./api/router.ts.
+ * Pure functions only; the procedure is `leads.export` in ./api/router.ts. The CSV of the rows
+ * chosen in the list, which the browser writes, is made here too (selectedLeadsCsv, #996).
  */
 import type { LeadExportFormat, ListLeadsInput } from './types/schemas';
 
@@ -69,6 +70,43 @@ export function leadExportCsv(rows: LeadExportRow[]): string {
     ...rows.map((row) => CSV_COLUMNS.map((column) => csvCell(column.value(row))).join(',')),
   ];
   return `${BOM}${lines.join('\r\n')}\r\n`;
+}
+
+/** A lead chosen in the list, as the CSV of the chosen rows writes it (#996) */
+export interface SelectedLeadCsvRow {
+  name: string | null;
+  email: string;
+  company: string | null;
+  phone: string | null;
+  status: string;
+  score: number | null;
+  source: string | null;
+  createdAt: Date | string | null;
+}
+
+const SELECTED_CSV_COLUMNS: { header: string; value: (row: SelectedLeadCsvRow) => string }[] = [
+  { header: 'Name', value: (r) => r.name ?? '' },
+  { header: 'Email', value: (r) => r.email },
+  { header: 'Company', value: (r) => r.company ?? '' },
+  { header: 'Phone', value: (r) => r.phone ?? '' },
+  { header: 'Status', value: (r) => r.status },
+  { header: 'Score', value: (r) => (r.score === null ? '' : String(r.score)) },
+  { header: 'Source', value: (r) => r.source ?? '' },
+  { header: 'Created At', value: (r) => (r.createdAt ? new Date(r.createdAt).toISOString() : '') },
+];
+
+/**
+ * The CSV of the rows chosen in the list, which the browser writes ("export the selection"):
+ * its columns as before, each cell through csvCell as in the server's export (#996). Names and
+ * companies come from the public forms, so a value may start a formula or close its quotes.
+ */
+export function selectedLeadsCsv(rows: readonly SelectedLeadCsvRow[]): string {
+  return [
+    SELECTED_CSV_COLUMNS.map((column) => csvCell(column.header)).join(','),
+    ...rows.map((row) =>
+      SELECTED_CSV_COLUMNS.map((column) => csvCell(column.value(row))).join(',')
+    ),
+  ].join('\n');
 }
 
 export function leadExportJson(rows: LeadExportRow[]): string {

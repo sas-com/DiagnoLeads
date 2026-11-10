@@ -136,6 +136,12 @@ export const leadsArticle: HelpArticle = {
       ],
     },
     {
+      type: 'note',
+      tone: 'tip',
+      content:
+        "CSV では、先頭が = + - @ の値の前に「'」を付けます。表計算ソフトで開いたときに、式として動かないようにするためです。行を選んで書き出すとき（選択をエクスポート）も同じです。",
+    },
+    {
       type: 'roles',
       roles: ['member'],
       content: 'メンバーはリードを足す・直すことができますが、削除はできません。',
