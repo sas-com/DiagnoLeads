@@ -7,7 +7,7 @@ export const leadsArticle: HelpArticle = {
   summary:
     '診断や取り込みで集まったリードを探し、絞り込み、まとめて扱います。行を押すと要点が横に開き、詳しく見るときはリードの詳細ページへ進みます。',
   routes: ['/leads'],
-  reviewedAt: '2026-11-08',
+  reviewedAt: '2026-11-10',
   related: ['workflow-lifecycle', 'glossary'],
   blocks: [
     { type: 'h2', id: 'find', text: 'リードを探す' },
@@ -91,6 +91,12 @@ export const leadsArticle: HelpArticle = {
       type: 'note',
       tone: 'tip',
       content: '診断フォームから届いたリードは自動で一覧に入ります。手で入れ直す必要はありません。',
+    },
+    {
+      type: 'note',
+      tone: 'tip',
+      content:
+        'リードを足す・直す画面では、項目名の横に ⓘ が出ることがあります。押すと、その項目や選択肢（状態など）の意味の説明が開きます。',
     },
     { type: 'h2', id: 'bulk', text: 'まとめて操作する' },
     {
