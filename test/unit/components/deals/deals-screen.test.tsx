@@ -701,6 +701,43 @@ describe('DealsScreen', () => {
     );
   });
 
+  describe("the focus once a move's question closes with its card gone (#1026)", () => {
+    it('gives it to the retry when the board cannot be read meanwhile, then to the deal once it is', async () => {
+      const user = userEvent.setup();
+      const view = renderScreen();
+      await user.click(moveButton('AS/400 現行調査', '提案'));
+      await user.click(moveTo('受注'));
+
+      // The board cannot be read while the question is open: its move button goes with it
+      readAgain(view, { isError: true });
+      await user.click(screen.getByRole('button', { name: 'キャンセル' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      await waitFor(() => expect(retry()).toHaveFocus());
+      expect(mocks.updates).toEqual([]);
+
+      // The retry brings the board back: to the deal's name
+      await user.click(retry());
+      readAgain(view, { isError: false });
+      await waitFor(() =>
+        expect(screen.getByRole('link', { name: 'AS/400 現行調査' })).toHaveFocus()
+      );
+    });
+
+    it("gives it to the screen's heading when the deal left the board meanwhile", async () => {
+      const user = userEvent.setup();
+      const view = renderScreen();
+      await user.click(moveButton('AS/400 現行調査', '提案'));
+      await user.click(moveTo('受注'));
+
+      // Read again meanwhile without it (another member moved it out of the board's period)
+      readAgain(view, { data: boardData([]) });
+      await user.click(screen.getByRole('button', { name: 'キャンセル' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      await waitFor(() => expect(heading()).toHaveFocus());
+    });
+  });
+
   it('says in the won question that the win could not be saved, and keeps it open', async () => {
     const user = userEvent.setup();
     mocks.answer = 'fail';
