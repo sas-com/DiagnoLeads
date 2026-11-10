@@ -10,6 +10,7 @@ import { notifyOrganizationMembers } from '@/lib/features/notifications/notifica
 import { sendLeadCreatedById } from '@/lib/features/webhooks/services/lead-events';
 import { triggerWebhooks } from '@/lib/features/webhooks/services/webhook-service';
 import { and, eq } from 'drizzle-orm';
+import { consumeRateLimit } from '../rate-limit';
 import {
   type DiagnosisNotificationLimits,
   checkNotificationLimits,
@@ -493,17 +494,23 @@ export function buildDataAttentionNotice(input: {
  * neither can turn it off: rare, and it changes the plan, like a restriction on AI analysis
  * (#160). Without either, every member hears of it as of a consultation request, by their own
  * setting for those: a stream of anonymous answers must not reach people who turned them off.
- * Within the organization's hourly limit of diagnosis notifications (the consultation cap when
- * a consultation was requested, #232). Failures are left to the caller to report.
+ * Within the organization's hourly limit of diagnosis notifications; past it, only for a lead
+ * whose consultation was requested, within a cap of its own (not the consultation cap, which a
+ * flood must not use up sooner, #232). Failures are left to the caller to report.
  */
 export async function notifyAccessDataAttention(notice: DataAttentionNotice): Promise<void> {
-  const { notify } = await checkNotificationLimits(
+  const { withinLimit } = await checkNotificationLimits(
     db,
     notice.organizationId,
-    notice.consultationRequested,
+    false,
     AX_NOTIFICATION_LIMITS
   );
-  if (!notify) return;
+  if (
+    !withinLimit &&
+    !(notice.consultationRequested && (await withinDataAttentionCap(notice.organizationId)))
+  ) {
+    return;
+  }
   const [lead] = await db
     .select({ name: leads.name, company: leads.company, assigneeId: leads.assigneeUserId })
     .from(leads)
@@ -548,6 +555,23 @@ export async function notifyAccessDataAttention(notice: DataAttentionNotice): Pr
     }
   }
   if (wanting.length > 0) await tell(wanting);
+}
+
+/**
+ * The cap of the notices on data that needs care past the hourly limit. Reaching it sends no
+ * notice of its own: the members were told when the hourly limit stopped the notifications.
+ * When it cannot be checked, the notice goes out, as with the other notification limits
+ */
+async function withinDataAttentionCap(organizationId: string): Promise<boolean> {
+  const rule = AX_RATE_LIMITS.dataAttentionNotificationsPerOrganization;
+  try {
+    const quota = await consumeRateLimit(db, rule, organizationId);
+    if (!quota.allowed) console.warn(`AX data attention: limit ${rule.name} reached`);
+    return quota.allowed;
+  } catch (error) {
+    console.error('AX data attention: notification limit check failed:', error);
+    return true;
+  }
 }
 
 /** The notification limits of the AX diagnosis (the rules are shared, #481) */

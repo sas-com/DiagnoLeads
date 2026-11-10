@@ -786,16 +786,19 @@ describe('data that needs care in an Access tool (#828)', () => {
     warnSpy.mockRestore();
   });
 
-  it('uses the consultation cap past the hourly limit when a consultation was requested (#232)', async () => {
+  it('uses a cap of its own past the hourly limit when a consultation was requested, not the consultation cap (#232)', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     recipientsMock.mockResolvedValue({ intakeUserIds: ['user-1'], emails: [] });
-    // Past the hourly limit, within the consultation cap
+    // Past the hourly limit, within the cap of the notices on such data
     quotaMock
       .mockResolvedValueOnce({ allowed: false, count: 99, retryAfterSeconds: 60 })
       .mockResolvedValueOnce({ allowed: true, count: 1, retryAfterSeconds: 0 });
     selectRows.push([{ name: '山田', company: 'テスト製作所', assigneeId: null }]);
     await notifyAccessDataAttention({ ...notice, consultationRequested: true });
-    expect(quotaMock).toHaveBeenCalledTimes(2);
+    expect(quotaMock.mock.calls.map(([, rule]) => (rule as { name: string }).name)).toEqual([
+      'ax-notify-org',
+      'ax-notify-data-attention-org',
+    ]);
     expect(inAppIntakeMock).toHaveBeenCalledWith(
       ['user-1'],
       'org-1',
@@ -805,13 +808,35 @@ describe('data that needs care in an Access tool (#828)', () => {
       expect.anything()
     );
 
-    // Without a consultation request the cap is not used
+    // Past that cap too: nothing
+    vi.clearAllMocks();
+    quotaMock.mockResolvedValue({ allowed: false, count: 99, retryAfterSeconds: 60 });
+    selectRows.push([{ name: '山田', company: 'テスト製作所', assigneeId: null }]);
+    await notifyAccessDataAttention({ ...notice, consultationRequested: true });
+    expect(quotaMock).toHaveBeenCalledTimes(2);
+    expect(inAppIntakeMock).not.toHaveBeenCalled();
+
+    // Without a consultation request no cap is used past the hourly limit
     vi.clearAllMocks();
     quotaMock.mockResolvedValue({ allowed: false, count: 99, retryAfterSeconds: 60 });
     await notifyAccessDataAttention(notice);
     expect(quotaMock).toHaveBeenCalledTimes(1);
     expect(inAppIntakeMock).not.toHaveBeenCalled();
     warnSpy.mockRestore();
+  });
+
+  it('tells sales when the cap cannot be checked, as with the other limits', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    recipientsMock.mockResolvedValue({ intakeUserIds: ['user-1'], emails: [] });
+    quotaMock
+      .mockResolvedValueOnce({ allowed: false, count: 99, retryAfterSeconds: 60 })
+      .mockRejectedValueOnce(new Error('db down'));
+    selectRows.push([{ name: '山田', company: 'テスト製作所', assigneeId: null }]);
+    await notifyAccessDataAttention({ ...notice, consultationRequested: true });
+    expect(inAppIntakeMock).toHaveBeenCalledTimes(1);
+    warnSpy.mockRestore();
+    errorSpy.mockRestore();
   });
 
   it('leaves a failure to the caller, which reports it', async () => {
