@@ -1481,7 +1481,7 @@
     },
     "lostDialog": {
       "title": "Mark \"{name}\" as lost",
-      "description": "Lost reasons feed the win/loss analysis",
+      "description": "Lost reasons feed the win/loss analysis.",
       "fromWon": "Unless another deal of the lead is won, the lead is no longer won (Negotiating while a deal is open, else Lost).",
       "notQualified": "The lead's SQL decision is recorded as not qualified with it.",
       "reason": "Lost reason",
