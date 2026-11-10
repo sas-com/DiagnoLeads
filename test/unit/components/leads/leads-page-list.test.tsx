@@ -162,6 +162,10 @@ vi.mock('@/lib/trpc/client', () => {
           useMutation: () => ({ mutateAsync: exporter.mutateAsync, isPending: false }),
         },
       },
+      // The create dialog mounts LeadForm, whose status field renders <FieldHelp> (Epic #780 P2)
+      fieldGlossary: {
+        getByKeys: { useQuery: () => ({ data: undefined, isLoading: false }) },
+      },
     },
   };
 });
