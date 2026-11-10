@@ -2,9 +2,12 @@
  * Report Export Service
  *
  * Phase 6.3: CSV/JSON export of the analytics report, and the lead the PDF of leads takes. The
- * CSV of leads is lib/features/leads/export.ts, whose cells are guarded (csvCell, #996, #1003)
+ * CSV of leads is lib/features/leads/export.ts. The text cells of both go through csvCell, so
+ * that the organization's name, which its admins type, neither runs as a formula nor breaks
+ * the row (#996, #1003, #1020); the numbers are written as they are.
  */
 
+import { csvCell } from '@/lib/utils/csv-cell';
 import type {
   ConversionFunnelData,
   OverviewStats,
@@ -46,7 +49,7 @@ export interface ExportOptions {
 export function overviewToCSV(overview: OverviewStats, dateRange: string): string {
   const headers = ['Metric', 'Value'];
   const rows = [
-    ['Date Range', dateRange],
+    ['Date Range', csvCell(dateRange)],
     ['Total Leads', overview.totalLeads.toString()],
     ['New Leads This Month', overview.newLeadsThisMonth.toString()],
     ['Conversion Rate (%)', overview.conversionRate.toFixed(2)],
@@ -72,7 +75,7 @@ export function overviewToCSV(overview: OverviewStats, dateRange: string): strin
 export function trendToCSV(trend: TrendDataPoint[]): string {
   const headers = ['Date', 'Total Leads', 'Converted Leads'];
   const rows = trend.map((point) => [
-    point.date,
+    csvCell(point.date),
     point.count.toString(),
     point.converted.toString(),
   ]);
@@ -86,7 +89,7 @@ export function trendToCSV(trend: TrendDataPoint[]): string {
 export function sourceBreakdownToCSV(sources: SourceBreakdown[]): string {
   const headers = ['Source', 'Count', 'Percentage (%)'];
   const rows = sources.map((source) => [
-    source.source,
+    csvCell(source.source),
     source.count.toString(),
     source.percentage.toFixed(2),
   ]);
@@ -100,7 +103,7 @@ export function sourceBreakdownToCSV(sources: SourceBreakdown[]): string {
 export function statusBreakdownToCSV(statuses: StatusBreakdown[]): string {
   const headers = ['Status', 'Count', 'Percentage (%)'];
   const rows = statuses.map((status) => [
-    status.status,
+    csvCell(status.status),
     status.count.toString(),
     status.percentage.toFixed(2),
   ]);
@@ -114,7 +117,7 @@ export function statusBreakdownToCSV(statuses: StatusBreakdown[]): string {
 export function funnelToCSV(funnel: ConversionFunnelData): string {
   const headers = ['Stage', 'Count', 'Cumulative Count', 'Percentage (%)', 'Conversion Rate (%)'];
   const rows = funnel.stages.map((stage) => [
-    stage.name,
+    csvCell(stage.name),
     stage.count.toString(),
     stage.cumulativeCount.toString(),
     stage.percentage.toFixed(2),
@@ -130,6 +133,9 @@ export function funnelToCSV(funnel: ConversionFunnelData): string {
 
   return [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
 }
+
+/** A section's title line: text, not a formula, though it starts with = */
+const section = (title: string) => csvCell(`=== ${title} ===`);
 
 /**
  * Generate full analytics report CSV
@@ -148,46 +154,36 @@ export function generateFullReportCSV(data: {
 
   // Header section
   sections.push('DiagnoLeads Analytics Report');
-  sections.push(`Organization,${escapeCSV(data.organizationName)}`);
-  sections.push(`Date Range,${data.dateRange}`);
+  sections.push(`Organization,${csvCell(data.organizationName)}`);
+  sections.push(`Date Range,${csvCell(data.dateRange)}`);
   sections.push(`Generated At,${data.generatedAt.toISOString()}`);
   sections.push('');
 
   // Overview section
-  sections.push('=== Overview Statistics ===');
+  sections.push(section('Overview Statistics'));
   sections.push(overviewToCSV(data.overview, data.dateRange));
   sections.push('');
 
   // Source breakdown section
-  sections.push('=== Source Breakdown ===');
+  sections.push(section('Source Breakdown'));
   sections.push(sourceBreakdownToCSV(data.sourceBreakdown));
   sections.push('');
 
   // Status breakdown section
-  sections.push('=== Status Breakdown ===');
+  sections.push(section('Status Breakdown'));
   sections.push(statusBreakdownToCSV(data.statusBreakdown));
   sections.push('');
 
   // Funnel section
-  sections.push('=== Conversion Funnel ===');
+  sections.push(section('Conversion Funnel'));
   sections.push(funnelToCSV(data.funnel));
   sections.push('');
 
   // Trend section
-  sections.push('=== Lead Trend ===');
+  sections.push(section('Lead Trend'));
   sections.push(trendToCSV(data.trend));
 
   return sections.join('\n');
-}
-
-/**
- * Escape CSV value
- */
-function escapeCSV(value: string): string {
-  if (value.includes(',') || value.includes('"') || value.includes('\n')) {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return value;
 }
 
 /**
