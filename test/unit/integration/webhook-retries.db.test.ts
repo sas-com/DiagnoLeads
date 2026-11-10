@@ -21,6 +21,7 @@ import {
   WEBHOOK_RETRY_MAX_AGE_MS,
   cancelPendingDeliveries,
   processWebhookRetries,
+  triggerWebhookBatch,
   triggerWebhooks,
 } from '@/lib/features/webhooks/services/webhook-service';
 import { eq, inArray } from 'drizzle-orm';
@@ -247,6 +248,150 @@ describe.skipIf(!url)('webhook retries (PostgreSQL)', () => {
 
     expect(await load(id)).toMatchObject({ status: 'failed', nextRetryAt: null });
     expect((await load(id)).error).toMatch(/^url_changed:/);
+  });
+
+  it('stores no delivery for a webhook moved between its read and the insert (#990)', async () => {
+    // The URL changes (cancelling the pending deliveries, as the update does) after the event has
+    // read the webhook, just before its delivery is stored
+    let moved = false;
+    const racing = new Proxy(pg, {
+      get(target, prop, receiver) {
+        if (prop !== 'transaction') return Reflect.get(target, prop, receiver);
+        return async (run: (tx: unknown) => Promise<unknown>) => {
+          if (!moved) {
+            moved = true;
+            await (target as typeof pg).transaction(async (tx) => {
+              await tx
+                .update(webhooks)
+                .set({ url: 'https://moved.example.com/hook' })
+                .where(eq(webhooks.id, webhookId));
+              await cancelPendingDeliveries(tx, webhookId);
+            });
+          }
+          return (target as typeof pg).transaction(run as Parameters<typeof pg.transaction>[0]);
+        };
+      },
+    });
+
+    const counts = await triggerWebhookBatch(
+      org,
+      [{ eventType: 'diagnostic.submitted', data: { leadId: 'x' } }],
+      { database: racing, timeBudgetMs: 0 }
+    );
+
+    expect(counts).toMatchObject({ queued: 0, failed: 1 });
+    expect(
+      await pg.select().from(webhookDeliveries).where(eq(webhookDeliveries.webhookId, webhookId))
+    ).toEqual([]);
+    // Nothing waits for a retry to the new URL
+    await processWebhookRetries({ database: pg });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  describe('a URL change and a delivery being stored at the same time, on two connections (#990)', () => {
+    const moveUrl = (tx: Parameters<Parameters<typeof pg.transaction>[0]>[0]) =>
+      tx
+        .update(webhooks)
+        .set({ url: 'https://moved.example.com/hook' })
+        .where(eq(webhooks.id, webhookId));
+    const pause = () => new Promise((resolve) => setTimeout(resolve, 200));
+
+    it('waits for an uncommitted URL change, then stores nothing', async () => {
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let changed!: () => void;
+      const urlUpdated = new Promise<void>((resolve) => {
+        changed = resolve;
+      });
+      const change = pg.transaction(async (tx) => {
+        await moveUrl(tx);
+        changed();
+        await held;
+        await cancelPendingDeliveries(tx, webhookId);
+      });
+      await urlUpdated;
+
+      // Reads the webhook with the old URL, then waits for the row lock of the change
+      const batch = triggerWebhookBatch(
+        org,
+        [{ eventType: 'diagnostic.submitted', data: { leadId: 'a' } }],
+        { database: pg, timeBudgetMs: 0 }
+      );
+      await pause();
+      release();
+      await change;
+
+      expect(await batch).toMatchObject({ queued: 0, failed: 1 });
+      expect(
+        await pg.select().from(webhookDeliveries).where(eq(webhookDeliveries.webhookId, webhookId))
+      ).toEqual([]);
+    });
+
+    it('makes a URL change wait for a delivery being stored, then cancels it', async () => {
+      let change: Promise<void> | undefined;
+      // The URL change starts while the delivery's transaction holds the webhook row, and must
+      // wait for its commit
+      const holding = new Proxy(pg, {
+        get(target, prop, receiver) {
+          if (prop !== 'transaction') return Reflect.get(target, prop, receiver);
+          return (run: (tx: unknown) => Promise<unknown>) =>
+            (target as typeof pg).transaction(async (tx) => {
+              const result = await run(tx);
+              change = (target as typeof pg).transaction(async (other) => {
+                await moveUrl(other);
+                await cancelPendingDeliveries(other, webhookId);
+              });
+              await pause();
+              return result;
+            });
+        },
+      });
+
+      const counts = await triggerWebhookBatch(
+        org,
+        [{ eventType: 'diagnostic.submitted', data: { leadId: 'b' } }],
+        { database: holding, timeBudgetMs: 0 }
+      );
+      await change;
+
+      expect(counts).toMatchObject({ queued: 1 });
+      const [row] = await pg
+        .select()
+        .from(webhookDeliveries)
+        .where(eq(webhookDeliveries.webhookId, webhookId));
+      expect(row).toMatchObject({ status: 'failed', nextRetryAt: null });
+      expect(row.error).toMatch(/^url_changed:/);
+    });
+  });
+
+  it('cancels a delivery stored just before the URL changed, so it is not retried there (#990)', async () => {
+    fetchMock.mockResolvedValue(answer(500));
+    // Stored (and tried once) with the URL as read
+    await triggerWebhooks(org, 'diagnostic.submitted', { leadId: 'y' }, { database: pg });
+    // Then the URL changes
+    await pg.transaction(async (tx) => {
+      await tx
+        .update(webhooks)
+        .set({ url: 'https://moved.example.com/hook' })
+        .where(eq(webhooks.id, webhookId));
+      await cancelPendingDeliveries(tx, webhookId);
+    });
+    fetchMock.mockClear();
+
+    await pg
+      .update(webhookDeliveries)
+      .set({ nextRetryAt: new Date(Date.now() - 1000) })
+      .where(eq(webhookDeliveries.webhookId, webhookId));
+    await processWebhookRetries({ database: pg });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    const [row] = await pg
+      .select()
+      .from(webhookDeliveries)
+      .where(eq(webhookDeliveries.webhookId, webhookId));
+    expect(row.error).toMatch(/^url_changed:/);
   });
 
   it('does not send a delivery claimed just before the URL changed to the new URL (#928)', async () => {
