@@ -1,7 +1,8 @@
 /**
  * Report Export Service
  *
- * Phase 6.3: CSV/JSON export functionality for analytics and leads
+ * Phase 6.3: CSV/JSON export of the analytics report, and the lead the PDF of leads takes. The
+ * CSV of leads is lib/features/leads/export.ts, whose cells are guarded (csvCell, #996, #1003)
  */
 
 import type {
@@ -37,47 +38,6 @@ export interface ExportOptions {
   format: 'csv' | 'json';
   dateRange?: string;
   includeHeaders?: boolean;
-}
-
-/**
- * Convert leads to CSV string
- */
-export function leadsToCSV(leads: ExportLead[], includeHeaders = true): string {
-  const headers = [
-    'ID',
-    'Email',
-    'Name',
-    'Company',
-    'Phone',
-    'Position',
-    'Source',
-    'Status',
-    'Score',
-    'Notes',
-    'Created At',
-    'Updated At',
-  ];
-
-  const rows = leads.map((lead) => [
-    lead.id,
-    lead.email,
-    lead.name || '',
-    lead.company || '',
-    lead.phone || '',
-    lead.position || '',
-    lead.source || '',
-    lead.status,
-    lead.score?.toString() || '',
-    escapeCSV(lead.notes || ''),
-    lead.createdAt.toISOString(),
-    lead.updatedAt.toISOString(),
-  ]);
-
-  if (includeHeaders) {
-    return [headers.join(','), ...rows.map((row) => row.map(escapeCSV).join(','))].join('\n');
-  }
-
-  return rows.map((row) => row.map(escapeCSV).join(',')).join('\n');
 }
 
 /**
