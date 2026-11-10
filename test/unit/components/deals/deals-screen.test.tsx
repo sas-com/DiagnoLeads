@@ -222,13 +222,31 @@ const showBoard = (data: unknown) => {
   mocks.board = { data, isError: false, isPlaceholderData: false, refetch: vi.fn() };
 };
 
+const screenUi = () => (
+  <NextIntlClientProvider locale="ja" messages={messages}>
+    <DealsScreen />
+  </NextIntlClientProvider>
+);
+
 function renderScreen() {
-  return render(
-    <NextIntlClientProvider locale="ja" messages={messages}>
-      <DealsScreen />
-    </NextIntlClientProvider>
-  );
+  return render(screenUi());
 }
+
+/** The board as a read of it leaves it, shown again (#1011) */
+function readAgain(view: ReturnType<typeof renderScreen>, board: Partial<typeof mocks.board>) {
+  mocks.board = { ...mocks.board, ...board };
+  view.rerender(screenUi());
+}
+
+/** The screen's heading, where the focus goes when what had it went with a read (#1011) */
+const heading = () => screen.getByRole('heading', { level: 1, name: '商談' });
+/** The failure's retry, where the focus goes when the board could not be read (#1011) */
+const retry = () => screen.getByRole('button', { name: '再読み込み' });
+/** Past the timeout after which the screen gives the focus back (#1011) */
+const nextTick = () =>
+  act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
 
 const column = (name: string) => screen.getByRole('region', { name });
 /** A card's move button, named with the stage the card is in */
@@ -1006,6 +1024,75 @@ describe('DealsScreen', () => {
     expect(mocks.board.refetch).toHaveBeenCalled();
   });
 
+  describe('the focus when a read takes away what had it (#1011)', () => {
+    it('gives it to the heading when a retry brings back the board read before, not to the page', async () => {
+      const user = userEvent.setup();
+      const view = renderScreen();
+      readAgain(view, { isError: true });
+
+      // The board read before stays while it is read again, and the failure with it
+      await user.click(retry());
+      readAgain(view, { isError: false });
+
+      expect(screen.getByRole('link', { name: 'AS/400 現行調査' })).toBeInTheDocument();
+      await waitFor(() => expect(heading()).toHaveFocus());
+    });
+
+    it('gives it to the heading when a retry of a board never read shows the loading', async () => {
+      const user = userEvent.setup();
+      mocks.board = { data: undefined, isError: true, isPlaceholderData: false, refetch: vi.fn() };
+      const view = renderScreen();
+
+      // Read again with nothing read before, it is loading at once
+      await user.click(retry());
+      readAgain(view, { isError: false });
+      expect(screen.getByText('読み込み中...')).toBeInTheDocument();
+      await waitFor(() => expect(heading()).toHaveFocus());
+
+      readAgain(view, { data: boardData([deal]) });
+      await nextTick();
+      expect(heading()).toHaveFocus();
+    });
+
+    it("gives it to the retry, said with the failure, when the board cannot be read while a card's menu is open", async () => {
+      const user = userEvent.setup();
+      const view = renderScreen();
+      await user.click(moveButton('AS/400 現行調査', '提案'));
+      expect(moveTo('条件の調整')).toBeInTheDocument();
+
+      readAgain(view, { isError: true });
+
+      await waitFor(() => expect(retry()).toHaveFocus());
+      expect(retry()).toHaveAccessibleDescription('商談を読み込めませんでした');
+      // Not hidden behind the menu that went with the board
+      expect(retry().closest('[aria-hidden="true"]')).toBeNull();
+    });
+
+    it('takes none when the board cannot be read as the screen opens', async () => {
+      mocks.board = { data: undefined, isError: false, isPlaceholderData: false, refetch: vi.fn() };
+      const view = renderScreen();
+
+      readAgain(view, { isError: true });
+      await nextTick();
+
+      expect(screen.getByRole('alert')).toHaveTextContent('商談を読み込めませんでした');
+      expect(document.body).toHaveFocus();
+    });
+
+    it('leaves it where it is once it moved out of the board', async () => {
+      const view = renderScreen();
+      // On a deal's name, then on a filter
+      act(() => screen.getByRole('link', { name: 'AS/400 現行調査' }).focus());
+      const kindFilter = screen.getByRole('combobox', { name: '種類' });
+      act(() => kindFilter.focus());
+
+      readAgain(view, { isError: true });
+      await nextTick();
+
+      expect(kindFilter).toHaveFocus();
+    });
+  });
+
   it("tells a parent organization's viewer they may not see the deals", () => {
     mocks.board = {
       data: undefined,
@@ -1179,6 +1266,71 @@ describe('DealsScreen', () => {
       renderScreen();
       expect(screen.getByText('リードに次の行動（タスク）がありません')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /次の行動を追加/ })).not.toBeInTheDocument();
+    });
+
+    it("gives the focus to the retry when the board cannot be read again after adding, and back to the deal's name once it is (#1011)", async () => {
+      const user = userEvent.setup();
+      showBoard(boardData([withoutTask]));
+      const view = renderScreen();
+
+      await user.click(addButton());
+      await user.type(within(dialogOf()).getByLabelText('やること'), '稟議の状況を確認する');
+      await user.click(within(dialogOf()).getByRole('button', { name: '追加' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      // Not read again yet: on the deal's name
+      await waitFor(() =>
+        expect(screen.getByRole('link', { name: 'AS/400 現行調査' })).toHaveFocus()
+      );
+
+      // The read fails (once retried): the board goes, and the deal's name with it
+      readAgain(view, { isError: true });
+      await waitFor(() => expect(retry()).toHaveFocus());
+      expect(retry()).toHaveAccessibleDescription('商談を読み込めませんでした');
+
+      // The retry brings the board back, with the next action added
+      await user.click(retry());
+      readAgain(view, { isError: false, data: boardData([added]) });
+      await waitFor(() =>
+        expect(screen.getByRole('link', { name: 'AS/400 現行調査' })).toHaveFocus()
+      );
+    });
+
+    it('gives it to the retry too when the board could not be read while the dialog was open (#1011)', async () => {
+      const user = userEvent.setup();
+      showBoard(boardData([withoutTask]));
+      const view = renderScreen();
+
+      await user.click(addButton());
+      await user.type(within(dialogOf()).getByLabelText('やること'), '稟議の状況を確認する');
+      // A read meanwhile fails: the dialog stays, with what was entered
+      readAgain(view, { isError: true });
+      expect(within(dialogOf()).getByLabelText('やること')).toHaveValue('稟議の状況を確認する');
+      await user.click(within(dialogOf()).getByRole('button', { name: '追加' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(mocks.createdTasks).toEqual([expect.objectContaining({ dealId: 'deal-1' })]);
+      await waitFor(() => expect(retry()).toHaveFocus());
+
+      // Then to the deal it was added to, once the retry brings the board back
+      await user.click(retry());
+      readAgain(view, { isError: false, data: boardData([added]) });
+      await waitFor(() =>
+        expect(screen.getByRole('link', { name: 'AS/400 現行調査' })).toHaveFocus()
+      );
+    });
+
+    it('gives it to the retry when the dialog closes without adding once the board could not be read (#1011)', async () => {
+      const user = userEvent.setup();
+      showBoard(boardData([withoutTask]));
+      const view = renderScreen();
+
+      await user.click(addButton());
+      readAgain(view, { isError: true });
+      await user.click(within(dialogOf()).getByRole('button', { name: 'キャンセル' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      await waitFor(() => expect(retry()).toHaveFocus());
+      expect(mocks.createdTasks).toEqual([]);
     });
   });
 });

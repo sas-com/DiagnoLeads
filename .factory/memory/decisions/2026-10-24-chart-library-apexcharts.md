@@ -17,7 +17,7 @@ paths: ["components/charts/**"]
 - **理由**:
   - 画面で使っているのは ApexCharts だけ。`recharts` の import は0件
     - `components/charts/` の部品（6ファイル）が ApexCharts で描く。`react-apexcharts` を読み込むのは `components/charts/apex-chart.tsx` の `ApexChart` だけで、`next/dynamic`（ssr: false）で読み込み、CSP の nonce（`chart.nonce`）を付ける（PR #526。#317）
-    - ダッシュボード：`components/dashboard/studio-sections.tsx` の AreaChart（`components/dashboard/` の `kpi-card.tsx`（SparkAreaChart）と `lead-chart.tsx` は、どこからも使われていない。#469 で消す予定）
+    - ダッシュボード：`components/dashboard/studio-sections.tsx` の AreaChart（`components/dashboard/` の `kpi-card.tsx`（SparkAreaChart）と `lead-chart.tsx` は、どこからも使われていなかったので #469 で消した）
     - 分析ページ：`app/[locale]/(dashboard)/analytics/page.tsx` の AreaChart・DonutChart と、そこから読み込む `components/analytics/response-time-chart.tsx`・`score-distribution-chart.tsx` の BarChart
   - #410（PR #415）でも「グラフのライブラリは変えない（ApexCharts のまま）」と決めている。寄せる先を変えないので、作業は使っていない依存を外すだけで済む
   - #486 の6つの観点で比べた結果（2026-10-24 の main）
