@@ -8,6 +8,7 @@ import { NotebookPen } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useRef, useState } from 'react';
 import { CONTACT_KIND_ICONS } from './contact-kinds';
+import { CONTACT_RECORDING_CLASS } from './contact-record-menu';
 import { RecordActivityDialog } from './record-activity-dialog';
 import { useRecordContact } from './use-record-contact';
 
@@ -25,7 +26,9 @@ export interface ContactQuickActionsProps {
  * One tap records "called", "emailed" or "could not reach" now (Refs #136). A wrong tap can be
  * undone from the toast. "Record an activity" records one with its details: a visit or an
  * online meeting, a past time, how long it took, its outcome, its deal and a note (Refs #554).
- * Its dialog gives the focus back to the button once it closes (#776).
+ * Its dialog gives the focus back to the button once it closes (#776). While it records, the
+ * buttons stay focusable but do nothing (aria-disabled), so the focus a keyboard press left on
+ * one is not lost, as on ContactRecordMenu (#776).
  */
 export function ContactQuickActions({
   organizationId,
@@ -47,8 +50,12 @@ export function ContactQuickActions({
     record({ kind }).catch(() => undefined);
   };
 
-  // The lead page's bar is 44px tall on phones (#196); the dashboard row stays compact
-  const size = compact ? 'h-8 px-2 text-xs' : cn('h-9', TAP_TARGET);
+  // The lead page's bar is 44px tall on phones (#196); the dashboard row stays compact. While it
+  // records, dimmed as the list rows' menu
+  const buttonClass = cn(
+    compact ? 'h-8 px-2 text-xs' : cn('h-9', TAP_TARGET),
+    CONTACT_RECORDING_CLASS
+  );
   return (
     <fieldset
       aria-label={t('recordFor', { lead: leadLabel })}
@@ -62,9 +69,11 @@ export function ContactQuickActions({
             type="button"
             variant="outline"
             size="sm"
-            className={size}
-            disabled={pending}
-            onClick={() => submit(kind)}
+            className={buttonClass}
+            aria-disabled={pending || undefined}
+            onClick={() => {
+              if (!pending) submit(kind);
+            }}
           >
             <Icon className="h-4 w-4" aria-hidden="true" />
             {t(`kinds.${kind}`)}
@@ -79,11 +88,13 @@ export function ContactQuickActions({
         type="button"
         variant="outline"
         size="sm"
-        className={size}
+        className={buttonClass}
         aria-label={compact ? tActivity('openFor', { lead: leadLabel }) : undefined}
         title={compact ? tActivity('open') : undefined}
-        disabled={pending}
-        onClick={() => setDialogOpen(true)}
+        aria-disabled={pending || undefined}
+        onClick={() => {
+          if (!pending) setDialogOpen(true);
+        }}
       >
         <NotebookPen className="h-4 w-4" aria-hidden="true" />
         {!compact && tActivity('open')}
