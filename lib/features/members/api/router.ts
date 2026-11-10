@@ -1,6 +1,7 @@
 import { auth } from '@/lib/auth/config';
 import { organizationMembers } from '@/lib/db/schema';
 import { isAllowedEmail, testModeEmailMessage } from '@/lib/email/allowed-recipients';
+import { releaseTaskAssignments } from '@/lib/features/lead-follow-up/service';
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { and, eq } from 'drizzle-orm';
@@ -253,6 +254,7 @@ export const membersRouter = router({
    * Only admin and owner can remove members
    * Owner cannot be removed
    * Cannot remove yourself
+   * The open next actions given to them go back to the lead's assignee, else whoever added them
    */
   remove: organizationProcedure.input(removeMemberSchema).mutation(async ({ ctx, input }) => {
     // Check if user has permission to remove members
@@ -294,15 +296,28 @@ export const membersRouter = router({
       });
     }
 
-    // Delete membership
-    await ctx.db
-      .delete(organizationMembers)
-      .where(
-        and(
-          eq(organizationMembers.id, input.membershipId),
-          eq(organizationMembers.organizationId, input.organizationId)
+    // Delete membership, then give back the open next actions given to them (#968) in the same
+    // transaction: deleting first waits for a next action being added for a deal of theirs or
+    // reopened (holdAssignableMember), so that it is given back too. Their leads and deals keep
+    // their assignee
+    await ctx.db.transaction(async (tx) => {
+      const [removed] = await tx
+        .delete(organizationMembers)
+        .where(
+          and(
+            eq(organizationMembers.id, input.membershipId),
+            eq(organizationMembers.organizationId, input.organizationId)
+          )
         )
-      );
+        .returning({ userId: organizationMembers.userId });
+      if (removed) {
+        await releaseTaskAssignments(tx, {
+          organizationId: input.organizationId,
+          userId: removed.userId,
+          actorUserId: ctx.user.id,
+        });
+      }
+    });
 
     return {
       success: true,

@@ -18,7 +18,6 @@ const ORG_ID = '11111111-1111-4111-8111-111111111111';
 const LEAD_ID = '22222222-2222-4222-8222-222222222222';
 const OTHER_ORG_LEAD_ID = '99999999-9999-4999-8999-999999999999';
 const SUBMISSION_ID = '44444444-4444-4444-8444-444444444444';
-const HEARING_ID = '66666666-6666-4666-8666-666666666666';
 
 const makeLead = (overrides: Partial<Lead> = {}) =>
   ({
@@ -137,38 +136,6 @@ vi.mock('@/lib/trpc/client', async () => {
           },
         },
       },
-      leadHearings: {
-        listByLead: {
-          useQuery: () => ({
-            data: {
-              items: [
-                {
-                  id: HEARING_ID,
-                  heldOn: '2026-10-15',
-                  dealRating: 'a',
-                  missingCount: 2,
-                  unconfirmedCount: 0,
-                },
-              ],
-              canEdit: true,
-            },
-            isLoading: false,
-            isError: false,
-          }),
-        },
-        summary: {
-          useQuery: () => ({
-            data: {
-              summary: {
-                unconfirmed: [{ key: 'itemA', label: 'Item A', sectionId: 's1' }],
-                next: [{ key: 'itemB', label: 'Item B', sectionId: 's1' }],
-                missing: [],
-              },
-            },
-            isLoading: false,
-          }),
-        },
-      },
       leadActivity: {
         list: {
           useQuery: (input: { types?: string[] }) => ({
@@ -241,48 +208,14 @@ vi.mock('@/components/features/lead-hearings/lead-hearings-card', () => ({
 vi.mock('@/components/features/lead-follow-up/lead-contact-bar', () => ({
   LeadContactBar: ({ leadLabel }: { leadLabel: string }) => <p>contact bar: {leadLabel}</p>,
 }));
-vi.mock('@/components/features/lead-follow-up/lead-next-actions-card', () => ({
-  LeadNextActionsCard: () => <p>next actions</p>,
-}));
-// The first meeting preferences (#155) have their own tests (test/unit/components/meeting-requests)
-vi.mock('@/components/features/meeting-requests/meeting-request-card', () => ({
-  MeetingRequestCard: () => null,
-}));
-// The prep card (#156) has its own tests (test/unit/components/lead-prep)
-vi.mock('@/components/features/lead-prep/lead-prep-card', () => ({
-  LeadPrepCard: () => null,
-}));
-// "When to act" (#151) has its own tests (test/unit/components/act-timing)
-// The customer search card (#265) is covered by test/unit/components/prospects
-vi.mock('@/components/features/prospects/lead-prospect-card', () => ({
-  LeadProspectCard: () => null,
-}));
-vi.mock('@/components/features/act-timing/act-timing-card', () => ({
-  ActTimingCard: () => null,
-}));
-// The objection card (#157) has its own tests (test/unit/components/objection-card)
-vi.mock('@/components/features/objection-card/objection-card', () => ({
-  ObjectionCard: () => null,
-}));
-// The delivery review (#159) has its own tests (test/unit/components/delivery-reviews)
-vi.mock('@/components/features/delivery-reviews/delivery-review-card', () => ({
-  DeliveryReviewCard: () => <p>delivery review</p>,
-}));
-// What to ask next (#75) has its own tests (test/unit/components/challenge-guide)
-vi.mock('@/components/features/challenge-guide/challenge-guide-card', () => ({
-  ChallengeGuideCard: () => null,
-}));
-// Documents and seminars (#153) have their own tests (test/unit/components/info-offers)
-vi.mock('@/components/features/info-offers/info-offer-requests-card', () => ({
-  InfoOfferRequestsCard: () => null,
-}));
-// The deals of the lead (#436) have their own tests (test/unit/components/deals)
-vi.mock('@/components/features/deals/lead-deals-card', () => ({
-  LeadDealsCard: () => <p>lead deals</p>,
-}));
-// The agency handover (#152) has its own tests (test/unit/components/agency-handovers)
-vi.mock('@/components/features/agency-handovers/agency-handover-card', () => ({
-  AgencyHandoverCard: () => null,
+// The overview tab's cards are covered by lead-overview-cards.test.tsx (#473); this stand-in
+// only asks the page to open a submission's answers, as the diagnosis card does
+vi.mock('@/components/features/leads/detail/lead-overview-cards', () => ({
+  LeadOverviewCards: ({ onShowAnswers }: { onShowAnswers: (submissionId: string) => void }) => (
+    <button type="button" onClick={() => onShowAnswers(SUBMISSION_ID)}>
+      overview cards
+    </button>
+  ),
 }));
 vi.mock('@/components/features/lead-activity/lead-activity-card', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/components/features/lead-activity/lead-activity-card')>()),
@@ -339,9 +272,9 @@ describe('LeadDetailView header', () => {
     expect(screen.getByTestId('lead-mql-fit-badge')).toBeInTheDocument();
     expect(screen.queryByTestId('lead-score')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'リード一覧' })).toHaveAttribute('href', '/ja/leads');
-    // First contact and the one-tap buttons under the header, next actions in the overview
+    // First contact and the one-tap buttons under the header, the cards (next actions…) in the overview
     expect(screen.getByText('contact bar: Example Works')).toBeInTheDocument();
-    expect(screen.getByText('next actions')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'overview cards' })).toBeInTheDocument();
   });
 
   it('changes the status from the header, sending only the status', async () => {
@@ -489,29 +422,12 @@ describe('LeadDetailView tabs', () => {
 });
 
 describe('LeadDetailView overview', () => {
-  it('starts with the latest hearing and what to confirm next', () => {
-    renderPage();
-    const hearing = screen.getByRole('region', { name: '商談のまとめ' });
-    expect(within(hearing).getByText(/最新のヒアリング/)).toBeInTheDocument();
-    expect(within(hearing).getByTestId('lead-next-steps')).toHaveTextContent('Item A');
-    expect(within(hearing).getByRole('link', { name: 'まとめを見る' })).toHaveAttribute(
-      'href',
-      `/ja/leads/${LEAD_ID}/hearings/${HEARING_ID}?view=summary`
-    );
-  });
-
-  it('shows the diagnosis readably, with a link to its answers instead of the id', async () => {
+  it('opens the diagnosis tab when a card asks for a submission’s answers', async () => {
     const user = userEvent.setup();
     renderPage();
-    const diagnosis = screen.getByTestId('lead-diagnosis-card');
-    expect(within(diagnosis).getByText('AS/400（IBM i）')).toBeInTheDocument();
-    expect(within(diagnosis).getByText('相談の申込みあり')).toBeInTheDocument();
-    expect(within(diagnosis).getByText('適合', { selector: '[title]' })).toBeInTheDocument();
-    expect(within(diagnosis).getByText('ヒト：人に依存した基幹システム')).toBeInTheDocument();
-    expect(diagnosis).not.toHaveTextContent(SUBMISSION_ID);
-
-    await user.click(within(diagnosis).getByRole('button', { name: /回答を見る/ }));
+    await user.click(screen.getByRole('button', { name: 'overview cards' }));
     expect(screen.getByRole('tab', { name: '診断回答' })).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByText('移行したいシステム')).toBeInTheDocument();
   });
 
   it('shows only fields with a value and collapses the empty ones into one line', async () => {
@@ -543,31 +459,6 @@ describe('LeadDetailView overview', () => {
     renderPage();
     expect(within(card('営業パイプライン')).getByText('失注・保留理由')).toBeInTheDocument();
     expect(within(card('営業パイプライン')).getByText('予算')).toBeInTheDocument();
-  });
-
-  it('shows the delivery review only once the survey or a later phase was won (#159)', () => {
-    const { unmount } = renderPage();
-    expect(screen.queryByText('delivery review')).not.toBeInTheDocument();
-    unmount();
-
-    store.set([makeLead({ dealPhaseReachedAt: { proposal: '2026-09-01', survey_won: '2026-10-01' } })]);
-    renderPage();
-    expect(screen.getByText('delivery review')).toBeInTheDocument();
-  });
-
-  it('links to the handoff sheet once the deal moved on from the initial hearing (#86)', () => {
-    const { unmount } = renderPage();
-    expect(screen.queryByRole('link', { name: '引き継ぎ書を開く' })).not.toBeInTheDocument();
-    unmount();
-
-    store.set([
-      makeLead({ dealPhaseReachedAt: { initial_hearing: '2026-10-01', proposal: '2026-10-20' } }),
-    ]);
-    renderPage();
-    expect(screen.getByRole('link', { name: '引き継ぎ書を開く' })).toHaveAttribute(
-      'href',
-      `/ja/leads/${LEAD_ID}/handoff`
-    );
   });
 
   it('opens the card and field named in the URL', async () => {

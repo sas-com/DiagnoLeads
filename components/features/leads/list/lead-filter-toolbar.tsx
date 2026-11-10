@@ -27,6 +27,8 @@ export interface LeadFilterToolbarProps {
   total?: number;
   /** Extra buttons on the right of the first row (columns, export...) */
   actions?: ReactNode;
+  /** The member may read deals: the filters offer 商談が未作成 (#854) */
+  canFilterMissingDeal?: boolean;
   className?: string;
 }
 
@@ -34,6 +36,7 @@ export function LeadFilterToolbar({
   controller,
   total,
   actions,
+  canFilterMissingDeal = false,
   className,
 }: LeadFilterToolbarProps) {
   const t = useTranslations('leadList');
@@ -72,6 +75,7 @@ export function LeadFilterToolbar({
         <LeadFilterControls
           filters={filters}
           onChange={controller.updateFilters}
+          canFilterMissingDeal={canFilterMissingDeal}
           className="hidden md:flex"
         />
         <LeadFilterSheet
@@ -80,6 +84,7 @@ export function LeadFilterToolbar({
           onClearAll={controller.clearFilters}
           activeCount={filterCount}
           total={total}
+          canFilterMissingDeal={canFilterMissingDeal}
           className="md:hidden"
         />
         {/* Below md the actions (sort, export) get a row of their own (#110) */}

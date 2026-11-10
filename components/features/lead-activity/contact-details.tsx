@@ -38,7 +38,7 @@ export function ContactDetails({ event }: { event: ContactRecordedEvent }) {
   }
   if (parts.length === 0) return null;
   return (
-    <p className="flex flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
+    <p className="flex flex-wrap items-center gap-x-1.5 text-sm text-gray-700 dark:text-gray-200">
       {parts.map((part, index) => (
         <Fragment key={part.key}>
           {index > 0 && <span aria-hidden="true">·</span>}

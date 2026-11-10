@@ -192,6 +192,8 @@ interface LeadTableProps {
   /** Filters are applied: an empty page means "no match", not "no leads yet" */
   hasFilters?: boolean;
   onClearFilters?: () => void;
+  /** What an empty filtered page says instead of the generic text (LeadListEmpty, #854) */
+  noMatchesTitle?: string;
   /** The list request failed: an empty page shows an error with a retry (onRefresh) (#431) */
   loadFailed?: boolean;
   /** Opens the create dialog from "no leads yet"; left out for roles that cannot create leads */
@@ -233,6 +235,7 @@ export function LeadTable({
   onColumnPreferencesChange,
   hasFilters = false,
   onClearFilters,
+  noMatchesTitle,
   loadFailed = false,
   onCreate,
   toolbar,
@@ -849,6 +852,7 @@ export function LeadTable({
           onLost={onLost}
           hasFilters={hasFilters}
           onClearFilters={onClearFilters}
+          noMatchesTitle={noMatchesTitle}
           loadFailed={loadFailed}
           onRetry={onRefresh}
           onCreate={onCreate}
@@ -896,6 +900,7 @@ export function LeadTable({
                     <LeadListEmpty
                       hasFilters={hasFilters}
                       onClearFilters={onClearFilters}
+                      noMatchesTitle={noMatchesTitle}
                       loadFailed={loadFailed}
                       onRetry={onRefresh}
                       onCreate={onCreate}

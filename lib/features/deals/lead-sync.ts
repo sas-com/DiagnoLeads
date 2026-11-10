@@ -17,6 +17,10 @@
  *   the one of its latest lost deal; without one, its 保留 is dropped, as leads.update does (#459).
  *   The lost reason stays when the lead is negotiated again (the objection card reads it).
  * - When the last deal is deleted, the lead keeps what it has and can be changed by hand again.
+ * - When the first meeting of a lead is set, it gets a deal in 見極め unless it has an open deal,
+ *   is won, or has no deal and a phase set by hand past the initial hearing
+ *   (qualificationDealSkip, #854).
+ * - A deal created in the deal form starts where the lead stands (newDealStart, #951).
  */
 import {
   DEAL_PHASES,
@@ -24,7 +28,13 @@ import {
   type LeadStatus,
   type LostReason,
 } from '@/lib/features/leads/types/pipeline';
-import { dealLostReasonEnum } from './types/pipeline';
+import {
+  type DealKind,
+  type DealStage,
+  OPEN_DEAL_STAGES,
+  dealLostReasonEnum,
+  isOpenStage,
+} from './types/pipeline';
 
 export interface SyncDeal {
   kind: string;
@@ -105,6 +115,73 @@ export function wonWithoutWonDeal(
 ): boolean {
   const won = lead.status === 'won' || WON_PHASES.includes(lead.dealPhase ?? '');
   return won && !deals.some((deal) => deal.stage === 'won');
+}
+
+/** Where a new deal of a lead starts in the deal form (#951) */
+export interface NewDealStart {
+  stage: DealStage;
+  /** The kind of the win the lead's phase stands for; null to keep the form's own */
+  kind: DealKind | null;
+  /** Only a won deal can be created (wonWithoutWonDeal): createDeal refuses any other stage */
+  wonFirst: boolean;
+}
+
+/** Kinds whose won deal stands for a phase of the lead (現行調査受注 / 移行受注 / AX化) */
+const WON_PHASE_KINDS = ['survey', 'migration', 'ax'] as const satisfies readonly DealKind[];
+
+/**
+ * Where a new deal of a lead starts in the deal form (#951), so that saving it as it opens is
+ * accepted and takes nothing back from the lead: leadPhaseOfDeal read the other way.
+ * - A lead won by hand without a won deal (wonWithoutWonDeal) starts with its win, 受注 of the
+ *   kind its phase stands for: createDeal takes no other stage until the win is a deal.
+ * - A lead without deals starts at its deal phase (提案, 課題の確認): a deal in 見極め would take
+ *   the phase back to the initial hearing.
+ * - Otherwise 見極め. With deals, the phase is the furthest of them; when all are lost, the new deal
+ *   is the lead's time come again and starts over, as for its first meeting
+ *   (qualificationDealSkip).
+ */
+export function newDealStart(
+  lead: Pick<SyncLead, 'status' | 'dealPhase'>,
+  deals: Pick<SyncDeal, 'stage'>[]
+): NewDealStart {
+  if (wonWithoutWonDeal(lead, deals)) {
+    const kind = WON_PHASE_KINDS.find(
+      (each) => leadPhaseOfDeal({ kind: each, stage: 'won' }) === lead.dealPhase
+    );
+    return { stage: 'won', kind: kind ?? null, wonFirst: true };
+  }
+  const stage =
+    deals.length === 0
+      ? OPEN_DEAL_STAGES.find(
+          (each) => leadPhaseOfDeal({ kind: 'other', stage: each }) === lead.dealPhase
+        )
+      : undefined;
+  return { stage: stage ?? 'qualification', kind: null, wonFirst: false };
+}
+
+/** Why a lead whose first meeting was set gets no deal in 見極め (#854) */
+export type QualificationDealSkip = 'open_deal' | 'won' | 'phase_ahead';
+
+/**
+ * Whether the first meeting of a lead creates its deal in 見極め (#854, decision
+ * `2026-10-28-auto-qualification-deal`); null to create one. Not created for a lead with an open
+ * deal (one deal whatever the entry point), nor for a won lead (a won deal, or won by hand, see
+ * wonWithoutWonDeal): its next deal (the migration, AX) is created by sales, who choose its kind
+ * and the deal it follows. Nor for a lead without deals whose deal phase was set by hand past the
+ * initial hearing: the deal would take it back to the initial hearing. A lead whose deals are all
+ * lost gets one (its time has come again, decision `2026-10-25-deals-set-lead-stage`), even with
+ * a phase past the initial hearing, unless it is won by hand (成約, or a won phase left on it).
+ */
+export function qualificationDealSkip(
+  lead: Pick<SyncLead, 'status' | 'dealPhase'>,
+  deals: Pick<SyncDeal, 'stage'>[]
+): QualificationDealSkip | null {
+  if (deals.some((deal) => isOpenStage(deal.stage))) return 'open_deal';
+  if (deals.some((deal) => deal.stage === 'won') || wonWithoutWonDeal(lead, deals)) return 'won';
+  if (deals.length === 0 && phaseIndex(lead.dealPhase) > phaseIndex('initial_hearing')) {
+    return 'phase_ahead';
+  }
+  return null;
 }
 
 /** Lost reason of the deal lost last (by close day, then by update) */

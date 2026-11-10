@@ -5,12 +5,17 @@
  *   online, and what they want to talk about (topics and a short note, #244), from the result page after asking for a consultation. They can send them again
  *   until sales confirm one, and only for a day after the consultation request
  *   (MEETING_PREFERENCES_WINDOW_MS, #241); after that the request is locked.
- * - Sales are told in-app when preferences arrive: the lead's assignee, else the intake members
+ * - Sales are told in-app when preferences arrive: the lead's assignee while they may still
+ *   hold leads (a member of the organization, not read-only, #974), else the intake members
  *   (#135), else every member (as for the consultation request itself).
  * - Sales confirm one candidate: it becomes the lead's next meeting (read by leadNextMeetingDate
  *   when no hearing records one) and a next action on that day (source 'meeting_request', so the
  *   due notices of #85 cover it). The respondent gets a confirmation email when asked and email
  *   is available (test mode sends only to the allowed domains).
+ * - Confirming the first meeting, or moving it to another day, creates the lead's deal in 見極め
+ *   in the same transaction, unless the lead has an open deal, is won, or has no deal and a phase
+ *   set past the initial hearing (#854, decision 2026-10-28-auto-qualification-deal; see
+ *   ensureQualificationDeal and qualificationDealSkip in the deals feature).
  * - Preferences sent with an answer tied to an existing lead by its email address only (an
  *   unverified answer, #233) are kept too, marked for sales, but never replace preferences sent
  *   with a verified answer (#274). Whether a request is verified is derived from its answer
@@ -21,8 +26,9 @@ import type { db as defaultDb } from '@/lib/db/client';
 import { leadTasks, leads, meetingRequests, organizations, users } from '@/lib/db/schema';
 import { filterAllowedRecipients } from '@/lib/email/allowed-recipients';
 import { renderEmail, sanitizeSubject } from '@/lib/email/templates/render';
+import { afterDealChanges, ensureQualificationDeal } from '@/lib/features/deals/service';
 import { isEmailConfigured, sendEmail } from '@/lib/features/email';
-import { listIntakeMembers } from '@/lib/features/leads/assignment';
+import { findAssignableMember, listIntakeMembers } from '@/lib/features/leads/assignment';
 import { notifyUsersInApp } from '@/lib/features/leads/assignment-notify';
 import { jstDate } from '@/lib/features/leads/types/pipeline';
 import { notifyOrganizationMembers } from '@/lib/features/notifications/notification-service';
@@ -216,8 +222,13 @@ export async function notifyPreferencesReceived(
       preferences: input.preferences,
     });
     const data = { leadId: input.leadId, meetingRequest: true };
-    const recipients = lead.assigneeId
-      ? [lead.assigneeId]
+    // The lead's assignee while they may still hold leads: one removed from the organization, or
+    // now read-only, is told nothing (#974), and the intake members are told instead
+    const assignee = lead.assigneeId
+      ? await findAssignableMember(db, input.organizationId, lead.assigneeId)
+      : null;
+    const recipients = assignee
+      ? [assignee.userId]
       : (await listIntakeMembers(db, input.organizationId)).map((member) => member.userId);
     if (recipients.length > 0) {
       await notifyUsersInApp(
@@ -387,6 +398,8 @@ export type ConfirmOutcome =
       candidate: MeetingCandidate;
       /** What happened to the confirmation email */
       email: 'sent' | 'not_requested' | 'not_configured' | 'not_allowed' | 'failed';
+      /** A deal in 見極め was created for the lead (#854); the deal itself is not answered */
+      dealCreated: boolean;
     };
 
 /**
@@ -394,6 +407,10 @@ export type ConfirmOutcome =
  * on that day, and the confirmation email when asked. The candidate at the index must still be
  * the one sales saw: the respondent can replace unconfirmed preferences (#274) for
  * MEETING_PREFERENCES_WINDOW_MS after the consultation request (#241).
+ * A first confirmation, or one on another day, also creates the lead's deal in 見極め (#854);
+ * confirming another time of the same day does not, so a deal sales lost is not created again.
+ * A lead that gets no deal (an open deal, won, and the other cases of qualificationDealSkip) is
+ * confirmed all the same.
  */
 export async function confirmMeeting(
   db: Database,
@@ -402,14 +419,24 @@ export async function confirmMeeting(
 ): Promise<ConfirmOutcome> {
   const now = options.now ?? new Date();
   const deps: ConfirmDeps = { sendEmail, emailEnabled: isEmailConfigured, ...options.deps };
+  const context = { organizationId: input.organizationId, userId: input.userId };
 
   const confirmed = await db.transaction(async (tx) => {
+    // The lead first, then its rows: deals take the lead's lock before their own rows, and
+    // deleting the lead locks it before the cascade, so taking the request first could deadlock
+    const [lead] = await tx
+      .select({ id: leads.id })
+      .from(leads)
+      .where(and(eq(leads.id, input.leadId), eq(leads.organizationId, input.organizationId)))
+      .for('no key update');
+    if (!lead) return { ok: false, reason: 'not_found' } as const;
     const [row] = await tx
       .select({
         id: meetingRequests.id,
         candidates: meetingRequests.candidates,
         meetingFormat: meetingRequests.meetingFormat,
         taskId: meetingRequests.taskId,
+        confirmedOn: meetingRequests.confirmedOn,
         email: leads.email,
         leadName: leads.name,
         company: leads.company,
@@ -476,16 +503,36 @@ export async function confirmMeeting(
         updatedAt: now,
       })
       .where(eq(meetingRequests.id, row.id));
-    return { ok: true, row, candidate, meetingFormat } as const;
+
+    // The first meeting is set: confirmed for the first time, or moved to another day (#854).
+    // Another time of the same day keeps the deal as it is, even one lost meanwhile
+    const deal =
+      row.confirmedOn === candidate.date
+        ? null
+        : await ensureQualificationDeal(
+            tx,
+            {
+              ...context,
+              leadId: input.leadId,
+              source: 'meeting_request',
+              meetingOn: candidate.date,
+            },
+            now
+          );
+    return { ok: true, row, candidate, meetingFormat, deal } as const;
   });
   if (!confirmed.ok) return confirmed;
 
-  const { row, candidate, meetingFormat } = confirmed;
-  if (!input.sendEmail) return { ok: true, candidate, email: 'not_requested' };
-  if (!deps.emailEnabled()) return { ok: true, candidate, email: 'not_configured' };
+  const { row, candidate, meetingFormat, deal } = confirmed;
+  // The lead's webhooks for the deal, after the commit and before the email
+  const dealCreated = deal?.created === true;
+  if (deal?.created) await afterDealChanges(db, context, [deal]);
+
+  if (!input.sendEmail) return { ok: true, candidate, email: 'not_requested', dealCreated };
+  if (!deps.emailEnabled()) return { ok: true, candidate, email: 'not_configured', dealCreated };
   // In test mode only the allowed domains are mailed
   const to = filterAllowedRecipients([row.email]);
-  if (to.length === 0) return { ok: true, candidate, email: 'not_allowed' };
+  if (to.length === 0) return { ok: true, candidate, email: 'not_allowed', dealCreated };
 
   const [confirmer] = await db
     .select({ name: sql<string | null>`coalesce(nullif(trim(${users.name}), ''), ${users.email})` })
@@ -505,13 +552,13 @@ export async function confirmMeeting(
     });
   } catch (error) {
     console.error('Meeting confirmation email failed:', error);
-    return { ok: true, candidate, email: 'failed' };
+    return { ok: true, candidate, email: 'failed', dealCreated };
   }
   await db
     .update(meetingRequests)
     .set({ confirmationEmailedAt: new Date() })
     .where(eq(meetingRequests.id, row.id));
-  return { ok: true, candidate, email: 'sent' };
+  return { ok: true, candidate, email: 'sent', dealCreated };
 }
 
 function sameCandidate(a: MeetingCandidate, b: MeetingCandidate): boolean {

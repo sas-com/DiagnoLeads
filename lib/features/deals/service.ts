@@ -7,11 +7,19 @@
  * when a value the forecast reads changed, an audit_logs row (resource 'deal', metadata.leadId),
  * and sets the lead's status and deal phase from its deals (./lead-sync.ts, #444) with the lead's
  * own audit row (#101); deleting a deal does too. The lead's webhooks and the handoff notice (#86)
- * go out after the commit (afterDealChange).
+ * go out after the commit (afterDealChange, afterDealChanges).
  *
  * Locks are taken lead first, then deal, on every path (deleting a lead locks it and then its
  * deals through the cascade), so changes of two deals of one lead wait for each other on the lead
- * and the second one sees the first when it moves the lead.
+ * and the second one sees the first when it moves the lead. ensureQualificationDeal, which creates
+ * the deal in 見極め when the first meeting of a lead is set (#854), runs in the transaction of
+ * its entry point (a confirmed meeting request, the meeting day of a customer search row, an
+ * agency's appointment report), which locks the lead before its own rows. It locks the lead again
+ * before it reads the lead's deals, so entry points of one lead that run at the same time create
+ * one deal: the second sees the first one's deal once it has the lock (read committed: each
+ * statement reads what was committed before it). An entry point that sets the first meetings of
+ * several leads (an import) locks them in one statement in the order of their ids, and creates
+ * their deals with ensureQualificationDeals.
  */
 
 import type { db as defaultDb } from '@/lib/db/client';
@@ -23,10 +31,12 @@ import {
   type TaskSource,
 } from '@/lib/features/lead-follow-up/types/schemas';
 import { isFirstHandoff, notifyLeadHandoff } from '@/lib/features/lead-handoff/service';
+import { isoDateSchema } from '@/lib/features/lead-hearings/types/schemas';
 import {
   diffLeadAudit,
   findAssignableMember,
   leadAuditSnapshot,
+  listAssignableMembers,
   writeLeadAuditLogs,
 } from '@/lib/features/leads/service';
 import {
@@ -56,7 +66,14 @@ import {
   sql,
 } from 'drizzle-orm';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
-import { leadChangesFromDeals, wonWithoutWonDeal } from './lead-sync';
+import {
+  type NewDealStart,
+  type QualificationDealSkip,
+  leadChangesFromDeals,
+  newDealStart,
+  qualificationDealSkip,
+  wonWithoutWonDeal,
+} from './lead-sync';
 import {
   CLOSED_DEAL_STAGES,
   DEAL_KINDS,
@@ -67,6 +84,8 @@ import {
   type ForecastCategory,
   type ForecastOverride,
   OPEN_DEAL_STAGES,
+  QUALIFICATION_DEALS_MAX,
+  type QualificationDealSource,
   STAGE_PROBABILITY,
   forecastCategory,
   isOpenStage,
@@ -90,6 +109,16 @@ type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 type DealRow = typeof deals.$inferSelect;
 
 export const DEAL_AUDIT_RESOURCE = 'deal';
+
+/**
+ * Name of the deal created when the first meeting of a lead is set (#854): a survey of the
+ * current system (現行調査), the first deal of an AX migration, which sales rename as they learn
+ * more. Stored as the name itself, like the title of the meeting's next action: the name is free
+ * text, required, and read as it is by the forecast, the activity and the screens, and an
+ * organization has no language of its own. The board and the list show the company and the
+ * person beside it; the forecast's changes of the week show only the name and the owner.
+ */
+export const QUALIFICATION_DEAL_NAME = '現行調査';
 
 /** Values the forecast reads: a change of one of them writes a deal_history row */
 export const HISTORY_FIELDS = [
@@ -240,6 +269,14 @@ export interface DealChangeResult {
   /** Null when the lead did not change */
   lead: LeadMove | null;
 }
+
+/**
+ * What ensureQualificationDeal did. The entry point answers only whether a deal was created,
+ * never the deal: it may be used by someone who cannot read deals (#276)
+ */
+export type QualificationDealOutcome =
+  | { created: true; dealId: string; lead: LeadMove | null }
+  | { created: false; skipped: QualificationDealSkip | 'lead_not_found' };
 
 const nameOf = (table: typeof users) =>
   sql<string | null>`coalesce(nullif(trim(${table.name}), ''), ${table.email})`;
@@ -420,13 +457,16 @@ export async function getBoard(
   };
 }
 
-/** Deals of a lead, oldest first; undefined when the lead is not found */
+/**
+ * Deals of a lead, oldest first, and where a new one starts in the deal form (#951); undefined
+ * when the lead is not found
+ */
 export async function listLeadDeals(
   db: Database,
   input: { organizationId: string; leadId: string }
-): Promise<DealView[] | undefined> {
+): Promise<{ items: DealView[]; newDeal: NewDealStart } | undefined> {
   const [lead] = await db
-    .select({ id: leads.id })
+    .select({ status: leads.status, dealPhase: leads.dealPhase })
     .from(leads)
     .where(and(eq(leads.id, input.leadId), eq(leads.organizationId, input.organizationId)));
   if (!lead) return undefined;
@@ -436,7 +476,8 @@ export async function listLeadDeals(
     .leftJoin(users, eq(users.id, deals.ownerUserId))
     .where(and(eq(deals.organizationId, input.organizationId), eq(deals.leadId, input.leadId)))
     .orderBy(asc(deals.createdAt), asc(deals.id));
-  return rows.map(toDealView);
+  const items = rows.map(toDealView);
+  return { items, newDeal: newDealStart(lead, items) };
 }
 
 const linkedColumns = { id: deals.id, name: deals.name, kind: deals.kind, stage: deals.stage };
@@ -538,6 +579,25 @@ async function lockLead(tx: Transaction, organizationId: string, leadId: string)
   return lead;
 }
 
+/** The members who can hold leads of the organization (owners of deals), in one query */
+async function assignableUserIds(tx: Transaction, organizationId: string): Promise<Set<string>> {
+  const members = await listAssignableMembers(tx, organizationId);
+  return new Set(members.map((member) => member.userId));
+}
+
+/**
+ * The owner of a new deal when none is chosen: the lead's assignee, else the one creating it,
+ * when they can hold leads of the organization; else nobody
+ */
+const defaultOwnerOf = (lead: Lead, userId: string, assignable: ReadonlySet<string>) =>
+  [lead.assigneeUserId, userId].find((id): id is string => !!id && assignable.has(id)) ?? null;
+
+/** The lead's target system, the default of a new deal's */
+const leadTargetSystem = (lead: Lead): TargetSystem | null =>
+  targetSystemEnum.safeParse(lead.targetSystem).success
+    ? (lead.targetSystem as TargetSystem)
+    : null;
+
 /** The owner to store: a member who can hold leads of the organization, or nobody */
 async function resolveOwner(
   tx: Transaction,
@@ -587,6 +647,98 @@ function auditValues(deal: DealRow): AuditValues {
   return values;
 }
 
+/**
+ * Set (locked) leads from their deals and audit them, each with the deal that changed it: the
+ * deals of all of them in one query, the audit rows in one insert (an import that creates many
+ * deals, #854). Each lead's move, null when nothing changed, in the order given
+ */
+async function syncLeadsWithDeals(
+  tx: Transaction,
+  changed: {
+    lead: Lead;
+    dealId: string;
+    /** Where a deal created automatically came from, kept in the lead's audit row (#854) */
+    source?: QualificationDealSource;
+  }[],
+  context: { organizationId: string; userId: string; at: Date },
+  /** The lead's SQL decision written with the deal's change (#801) */
+  fields: ReturnType<typeof qualificationUpdateFields> = {}
+): Promise<(LeadMove | null)[]> {
+  if (changed.length === 0) return [];
+  const rows = await tx
+    .select({
+      leadId: deals.leadId,
+      kind: deals.kind,
+      stage: deals.stage,
+      lostReason: deals.lostReason,
+      closedOn: deals.closedOn,
+      updatedAt: deals.updatedAt,
+    })
+    .from(deals)
+    .where(
+      and(
+        eq(deals.organizationId, context.organizationId),
+        inArray(
+          deals.leadId,
+          changed.map(({ lead }) => lead.id)
+        )
+      )
+    );
+
+  const dealsByLead = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const leadDeals = dealsByLead.get(row.leadId);
+    if (leadDeals) leadDeals.push(row);
+    else dealsByLead.set(row.leadId, [row]);
+  }
+
+  const moves: (LeadMove | null)[] = [];
+  const audits: Parameters<typeof writeLeadAuditLogs>[2] = [];
+  for (const { lead, dealId, source } of changed) {
+    const changes = leadChangesFromDeals(lead, dealsByLead.get(lead.id) ?? []);
+    if (Object.keys(changes).length === 0 && Object.keys(fields).length === 0) {
+      moves.push(null);
+      continue;
+    }
+
+    const set: PgUpdateSetSource<typeof leads> = { ...fields, updatedAt: context.at };
+    if (changes.status) Object.assign(set, statusUpdateFields(changes.status));
+    if (changes.hasNegotiated) set.hasNegotiated = true;
+    if (changes.lostReason !== undefined) set.lostReason = changes.lostReason;
+    if (changes.dealPhase) {
+      set.dealPhase = changes.dealPhase;
+      // The first day of each phase is kept (the existing date wins), as in leads.update (#83)
+      set.dealPhaseReachedAt = sql`jsonb_build_object(${changes.dealPhase}::text, ${jstDate(context.at)}::text) || coalesce(${leads.dealPhaseReachedAt}, '{}'::jsonb)`;
+    }
+    const [after] = await tx
+      .update(leads)
+      .set(set)
+      .where(and(eq(leads.id, lead.id), eq(leads.organizationId, context.organizationId)))
+      .returning();
+    if (!after) {
+      moves.push(null);
+      continue;
+    }
+
+    const audit = diffLeadAudit(leadAuditSnapshot(lead), leadAuditSnapshot(after));
+    if (audit) {
+      audits.push({
+        action: 'update',
+        leadId: lead.id,
+        changes: audit,
+        metadata: { dealId, ...(source ? { source } : {}) },
+      });
+    }
+    moves.push({ before: lead, after, handedOff: isFirstHandoff(lead, after.dealPhaseReachedAt) });
+  }
+  await writeLeadAuditLogs(
+    tx,
+    { organizationId: context.organizationId, userId: context.userId, at: context.at },
+    audits
+  );
+  return moves;
+}
+
 /** Set the (locked) lead from its deals and audit it; null when nothing changed */
 async function syncLeadWithDeals(
   tx: Transaction,
@@ -595,44 +747,133 @@ async function syncLeadWithDeals(
   /** The lead's SQL decision written with the deal's change (#801) */
   fields: ReturnType<typeof qualificationUpdateFields> = {}
 ): Promise<LeadMove | null> {
-  const leadDeals = await tx
-    .select({
-      kind: deals.kind,
-      stage: deals.stage,
-      lostReason: deals.lostReason,
-      closedOn: deals.closedOn,
-      updatedAt: deals.updatedAt,
-    })
-    .from(deals)
-    .where(and(eq(deals.organizationId, context.organizationId), eq(deals.leadId, lead.id)));
-  const changes = leadChangesFromDeals(lead, leadDeals);
-  if (Object.keys(changes).length === 0 && Object.keys(fields).length === 0) return null;
+  const [move] = await syncLeadsWithDeals(
+    tx,
+    [{ lead, dealId: context.dealId }],
+    { organizationId: context.organizationId, userId: context.userId, at: context.at },
+    fields
+  );
+  return move ?? null;
+}
 
-  const set: PgUpdateSetSource<typeof leads> = { ...fields, updatedAt: context.at };
-  if (changes.status) Object.assign(set, statusUpdateFields(changes.status));
-  if (changes.hasNegotiated) set.hasNegotiated = true;
-  if (changes.lostReason !== undefined) set.lostReason = changes.lostReason;
-  if (changes.dealPhase) {
-    set.dealPhase = changes.dealPhase;
-    // The first day of each phase is kept (the existing date wins), as in leads.update (#83)
-    set.dealPhaseReachedAt = sql`jsonb_build_object(${changes.dealPhase}::text, ${jstDate(context.at)}::text) || coalesce(${leads.dealPhaseReachedAt}, '{}'::jsonb)`;
+/**
+ * The values of a new deal that its creation decides (the rest come from the lead and the time).
+ * Every one is required, null included, so that a creation cannot leave one to the column's
+ * default by mistake
+ */
+type NewDealValues = Required<
+  Pick<
+    typeof deals.$inferInsert,
+    | 'name'
+    | 'kind'
+    | 'stage'
+    | 'amount'
+    | 'probability'
+    | 'forecastOverride'
+    | 'expectedCloseOn'
+    | 'closedOn'
+    | 'lostReason'
+    | 'lostNote'
+    | 'competitor'
+    | 'targetSystem'
+    | 'ownerUserId'
+    | 'previousDealId'
+  >
+>;
+
+/**
+ * Insert one deal for each of the locked leads, of one organization, with their first history
+ * rows and their audit rows, and set the leads from their deals (createDeal, one lead;
+ * ensureQualificationDeals, the leads of an import, #854): each kind of row in one insert. The
+ * deals and the leads' moves in the order given. A deal takes 21 parameters of its insert and
+ * PostgreSQL takes 65,535 a statement: ensureQualificationDeals passes at most
+ * QUALIFICATION_DEALS_MAX
+ */
+async function insertDeals(
+  tx: Transaction,
+  items: {
+    lead: Lead;
+    values: NewDealValues;
+    /**
+     * Where an automatic creation came from (#854): the deal's audit row keeps the source and
+     * the meeting day, the lead's audit row the source. None for a deal created by hand
+     */
+    origin?: { source: QualificationDealSource; meetingOn: string };
+  }[],
+  userId: string,
+  now: Date
+): Promise<{ deal: DealRow; lead: LeadMove | null }[]> {
+  if (items.length === 0) return [];
+  const organizationId = items[0].lead.organizationId;
+  // One deal per lead: the leads' moves are read from their deals once all are inserted
+  if (
+    new Set(items.map(({ lead }) => lead.id)).size !== items.length ||
+    items.some(({ lead }) => lead.organizationId !== organizationId)
+  ) {
+    throw new Error('insertDeals: one deal per lead, all of one organization');
   }
-  const [after] = await tx
-    .update(leads)
-    .set(set)
-    .where(and(eq(leads.id, lead.id), eq(leads.organizationId, context.organizationId)))
+
+  const inserted = await tx
+    .insert(deals)
+    .values(
+      items.map(({ lead, values }) => ({
+        organizationId,
+        leadId: lead.id,
+        name: values.name,
+        kind: values.kind,
+        stage: values.stage,
+        amount: values.amount,
+        probability: values.probability,
+        forecastOverride: values.forecastOverride,
+        expectedCloseOn: values.expectedCloseOn,
+        closedOn: values.closedOn,
+        lostReason: values.lostReason,
+        lostNote: values.lostNote,
+        competitor: values.competitor,
+        targetSystem: values.targetSystem,
+        // No next step: no longer an input (#853), the column stays null
+        ownerUserId: values.ownerUserId,
+        previousDealId: values.previousDealId,
+        stageChangedAt: now,
+        createdBy: userId,
+        updatedBy: userId,
+        createdAt: now,
+        updatedAt: now,
+      }))
+    )
     .returning();
-  if (!after) return null;
+  const dealOfLead = new Map(inserted.map((deal) => [deal.leadId, deal]));
+  const created = items.map((item) => {
+    const deal = dealOfLead.get(item.lead.id);
+    if (!deal) throw new Error('insertDeals: a deal was not inserted');
+    return { ...item, deal };
+  });
 
-  const audit = diffLeadAudit(leadAuditSnapshot(lead), leadAuditSnapshot(after));
-  if (audit) {
-    await writeLeadAuditLogs(
-      tx,
-      { organizationId: context.organizationId, userId: context.userId, at: context.at },
-      [{ action: 'update', leadId: lead.id, changes: audit, metadata: { dealId: context.dealId } }]
-    );
-  }
-  return { before: lead, after, handedOff: isFirstHandoff(lead, after.dealPhaseReachedAt) };
+  await tx
+    .insert(dealHistory)
+    .values(created.map(({ deal }) => historyRow(deal, ['created'], userId, now)));
+  await tx.insert(auditLogs).values(
+    created.map(({ lead, deal, origin }) => ({
+      organizationId,
+      userId,
+      action: 'create' as const,
+      resource: DEAL_AUDIT_RESOURCE,
+      resourceId: deal.id,
+      changes: { after: auditValues(deal) },
+      metadata: {
+        leadId: lead.id,
+        ...(origin ? { source: origin.source, meetingOn: origin.meetingOn } : {}),
+      },
+      createdAt: now,
+    }))
+  );
+
+  const moves = await syncLeadsWithDeals(
+    tx,
+    created.map(({ lead, deal, origin }) => ({ lead, dealId: deal.id, source: origin?.source })),
+    { organizationId, userId, at: now }
+  );
+  return created.map(({ deal }, index) => ({ deal, lead: moves[index] ?? null }));
 }
 
 /** Create a deal for a lead; the owner defaults to the lead's assignee, then to the creator */
@@ -644,20 +885,10 @@ export async function createDeal(
   return db.transaction(async (tx) => {
     const lead = await lockLead(tx, input.organizationId, input.leadId);
 
-    let ownerUserId: string | null;
-    if (input.ownerUserId === undefined) {
-      const candidates = [lead.assigneeUserId, input.userId].filter((id): id is string => !!id);
-      ownerUserId = null;
-      for (const candidate of candidates) {
-        const member = await findAssignableMember(tx, input.organizationId, candidate);
-        if (member) {
-          ownerUserId = member.userId;
-          break;
-        }
-      }
-    } else {
-      ownerUserId = await resolveOwner(tx, input.organizationId, input.ownerUserId);
-    }
+    const ownerUserId =
+      input.ownerUserId === undefined
+        ? defaultOwnerOf(lead, input.userId, await assignableUserIds(tx, input.organizationId))
+        : await resolveOwner(tx, input.organizationId, input.ownerUserId);
     if (input.previousDealId) {
       await assertPreviousDeal(tx, input.organizationId, input.previousDealId);
     }
@@ -676,65 +907,211 @@ export async function createDeal(
         throw badRequest('The lead is won: create its won deal with the stage won first');
       }
     }
-    const targetSystem =
-      input.targetSystem !== undefined
-        ? input.targetSystem
-        : targetSystemEnum.safeParse(lead.targetSystem).success
-          ? (lead.targetSystem as TargetSystem)
-          : null;
 
-    const [deal] = await tx
-      .insert(deals)
-      .values({
-        organizationId: input.organizationId,
-        leadId: lead.id,
-        name: input.name,
-        kind: input.kind,
-        stage,
-        amount: input.amount ?? null,
-        probability: input.probability ?? STAGE_PROBABILITY[stage],
-        forecastOverride: isOpenStage(stage) ? (input.forecastOverride ?? null) : null,
-        expectedCloseOn: input.expectedCloseOn ?? null,
-        closedOn: isOpenStage(stage) ? null : jstDate(now),
-        lostReason: lost ? (input.lostReason ?? null) : null,
-        lostNote: lost ? (input.lostNote ?? null) : null,
-        competitor: input.competitor ?? null,
-        targetSystem,
-        // No next step: no longer an input (#853), the column stays null
-        ownerUserId,
-        previousDealId: input.previousDealId ?? null,
-        stageChangedAt: now,
-        createdBy: input.userId,
-        updatedBy: input.userId,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .returning();
-
-    await tx.insert(dealHistory).values(historyRow(deal, ['created'], input.userId, now));
-    await tx.insert(auditLogs).values({
-      organizationId: input.organizationId,
-      userId: input.userId,
-      action: 'create',
-      resource: DEAL_AUDIT_RESOURCE,
-      resourceId: deal.id,
-      changes: { after: auditValues(deal) },
-      metadata: { leadId: lead.id },
-      createdAt: now,
-    });
-
-    const leadMove = await syncLeadWithDeals(tx, lead, {
-      organizationId: input.organizationId,
-      userId: input.userId,
-      dealId: deal.id,
-      at: now,
-    });
+    const [{ deal, lead: leadMove }] = await insertDeals(
+      tx,
+      [
+        {
+          lead,
+          values: {
+            name: input.name,
+            kind: input.kind,
+            stage,
+            amount: input.amount ?? null,
+            probability: input.probability ?? STAGE_PROBABILITY[stage],
+            forecastOverride: isOpenStage(stage) ? (input.forecastOverride ?? null) : null,
+            expectedCloseOn: input.expectedCloseOn ?? null,
+            closedOn: isOpenStage(stage) ? null : jstDate(now),
+            lostReason: lost ? (input.lostReason ?? null) : null,
+            lostNote: lost ? (input.lostNote ?? null) : null,
+            competitor: input.competitor ?? null,
+            targetSystem:
+              input.targetSystem !== undefined ? input.targetSystem : leadTargetSystem(lead),
+            ownerUserId,
+            previousDealId: input.previousDealId ?? null,
+          },
+        },
+      ],
+      input.userId,
+      now
+    );
     const [withOwner] = await tx
       .select(dealColumns)
       .from(deals)
       .leftJoin(users, eq(users.id, deals.ownerUserId))
       .where(and(eq(deals.id, deal.id), eq(deals.organizationId, input.organizationId)));
     return { deal: toDealView(withOwner), lead: leadMove };
+  });
+}
+
+/**
+ * Create the deal in 見極め of a lead whose first meeting was set (#854, decision
+ * `2026-10-28-auto-qualification-deal`): a survey at 10%, owned by the lead's assignee, else by
+ * the one who set the meeting (as createDeal), with the lead's target system; the audit row says
+ * where it came from and the day of the meeting. No deal is created for a lead with an open deal,
+ * a won lead, or a lead without deals whose phase was set past the initial hearing
+ * (qualificationDealSkip), nor for a lead not found: none of them is an error, so the entry
+ * point's own change goes through. The lead's audit row keeps the source too.
+ *
+ * The meeting day must be a calendar day (YYYY-MM-DD): the entry points pass a day they checked,
+ * so another value is a mistake of the caller and throws before anything is read or written.
+ *
+ * Runs in the transaction of the entry point, which locks the lead before its own rows (see the
+ * header), and is called by it only when the meeting day is new or changed, so that saving the
+ * same day again never creates a deal again after sales lost the first one. The entry point's
+ * permission is the one checked (it does not check canWriteDeals), and it answers only whether a
+ * deal was created. It runs afterDealChanges with the outcome after the commit.
+ */
+export async function ensureQualificationDeal(
+  tx: Transaction,
+  input: {
+    organizationId: string;
+    leadId: string;
+    userId: string;
+    source: QualificationDealSource;
+    /**
+     * Day of the first meeting (YYYY-MM-DD, Japan), kept in the audit row: the deal has no column
+     * for it
+     */
+    meetingOn: string;
+  },
+  now: Date = new Date()
+): Promise<QualificationDealOutcome> {
+  const [outcome] = await ensureQualificationDeals(
+    tx,
+    {
+      organizationId: input.organizationId,
+      userId: input.userId,
+      source: input.source,
+      meetings: [{ leadId: input.leadId, meetingOn: input.meetingOn }],
+    },
+    now
+  );
+  return outcome;
+}
+
+/**
+ * ensureQualificationDeal for the leads of one entry point at once (an agency's report of up to
+ * 500 appointments, #854), in about as many statements as for one lead: the leads are locked and
+ * read in one statement (in the order of their ids, so that two imports never deadlock), their
+ * deals read in one, the owners in one, the deals with their history and audit rows inserted in
+ * one each, and the leads' audit rows in one; only the leads themselves are updated one by one.
+ * The rules, values and side effects are those of ensureQualificationDeal, which runs through
+ * here. One meeting per lead, at most QUALIFICATION_DEALS_MAX (500) a call: their deals are
+ * inserted in one statement, 21 parameters a deal, and PostgreSQL takes 65,535 parameters a
+ * statement. More, like a day that is not one, is a mistake of the caller and throws before
+ * anything is read or written. The outcomes in the order of the meetings.
+ */
+export async function ensureQualificationDeals(
+  tx: Transaction,
+  input: {
+    organizationId: string;
+    userId: string;
+    source: QualificationDealSource;
+    /** Each lead's first meeting day (YYYY-MM-DD, Japan), as for ensureQualificationDeal */
+    meetings: { leadId: string; meetingOn: string }[];
+  },
+  now: Date = new Date()
+): Promise<QualificationDealOutcome[]> {
+  if (input.meetings.length > QUALIFICATION_DEALS_MAX) {
+    throw new Error(
+      `ensureQualificationDeals: at most ${QUALIFICATION_DEALS_MAX} meetings a call (one insert of their deals)`
+    );
+  }
+  if (input.meetings.some(({ meetingOn }) => !isoDateSchema.safeParse(meetingOn).success)) {
+    throw new Error('ensureQualificationDeals: meetingOn must be a calendar day (YYYY-MM-DD)');
+  }
+  const leadIds = input.meetings.map(({ leadId }) => leadId);
+  if (new Set(leadIds).size !== leadIds.length) {
+    throw new Error('ensureQualificationDeals: one meeting per lead');
+  }
+  if (leadIds.length === 0) return [];
+
+  // The leads first (see the header), all in one statement in the order of their ids
+  const locked = await tx
+    .select()
+    .from(leads)
+    .where(and(eq(leads.organizationId, input.organizationId), inArray(leads.id, leadIds)))
+    .orderBy(asc(leads.id))
+    .for('no key update');
+  const leadById = new Map(locked.map((lead) => [lead.id, lead]));
+  // Read under the lock: a deal created meanwhile by another entry point is seen
+  const stages =
+    locked.length === 0
+      ? []
+      : await tx
+          .select({ leadId: deals.leadId, stage: deals.stage })
+          .from(deals)
+          .where(
+            and(
+              eq(deals.organizationId, input.organizationId),
+              inArray(
+                deals.leadId,
+                locked.map((lead) => lead.id)
+              )
+            )
+          );
+  const stagesByLead = new Map<string, { stage: string }[]>();
+  for (const deal of stages) {
+    const leadStages = stagesByLead.get(deal.leadId);
+    if (leadStages) leadStages.push(deal);
+    else stagesByLead.set(deal.leadId, [deal]);
+  }
+
+  const outcomes: (QualificationDealOutcome | null)[] = [];
+  const toCreate: { index: number; lead: Lead; meetingOn: string }[] = [];
+  for (const [index, { leadId, meetingOn }] of input.meetings.entries()) {
+    const lead = leadById.get(leadId);
+    if (!lead) {
+      outcomes.push({ created: false, skipped: 'lead_not_found' });
+      continue;
+    }
+    const skipped = qualificationDealSkip(lead, stagesByLead.get(leadId) ?? []);
+    if (skipped) {
+      outcomes.push({ created: false, skipped });
+      continue;
+    }
+    outcomes.push(null);
+    toCreate.push({ index, lead, meetingOn });
+  }
+
+  if (toCreate.length > 0) {
+    const assignable = await assignableUserIds(tx, input.organizationId);
+    const stage = 'qualification';
+    const created = await insertDeals(
+      tx,
+      toCreate.map(({ lead, meetingOn }) => ({
+        lead,
+        values: {
+          name: QUALIFICATION_DEAL_NAME,
+          // The default kind of a new deal (createDealSchema)
+          kind: 'survey',
+          stage,
+          amount: null,
+          probability: STAGE_PROBABILITY[stage],
+          forecastOverride: null,
+          expectedCloseOn: null,
+          closedOn: null,
+          lostReason: null,
+          lostNote: null,
+          competitor: null,
+          targetSystem: leadTargetSystem(lead),
+          ownerUserId: defaultOwnerOf(lead, input.userId, assignable),
+          previousDealId: null,
+        },
+        origin: { source: input.source, meetingOn },
+      })),
+      input.userId,
+      now
+    );
+    for (const [position, { index }] of toCreate.entries()) {
+      const { deal, lead } = created[position];
+      outcomes[index] = { created: true, dealId: deal.id, lead };
+    }
+  }
+  return outcomes.map((outcome) => {
+    if (!outcome) throw new Error('ensureQualificationDeals: an outcome is missing');
+    return outcome;
   });
 }
 
@@ -942,24 +1319,38 @@ export async function deleteDeal(
 }
 
 /**
- * After the commit of a deal change: the lead's webhooks and, when the lead moved on from the
- * initial hearing for the first time, the handoff notice. Failures never undo the change.
+ * After the commit of deal changes: the webhooks of the leads that changed, in one call (an
+ * import that creates several deals sends them together, #854), then the handoff notice of each
+ * lead that moved on from the initial hearing for the first time. Failures never undo the
+ * changes.
  */
-export async function afterDealChange(
+export async function afterDealChanges(
   db: Database,
   context: { organizationId: string; userId: string },
-  result: Pick<DealChangeResult, 'lead'>
+  results: Pick<DealChangeResult, 'lead'>[]
 ): Promise<void> {
-  const move = result.lead;
-  if (!move) return;
-  emitLeadEvents(context.organizationId, leadChangeEvents(move.before, move.after), {
-    database: db,
-  });
-  if (move.handedOff) {
+  const moves = results.flatMap((result) => (result.lead ? [result.lead] : []));
+  if (moves.length === 0) return;
+  emitLeadEvents(
+    context.organizationId,
+    moves.flatMap((move) => leadChangeEvents(move.before, move.after)),
+    { database: db }
+  );
+  for (const move of moves) {
+    if (!move.handedOff) continue;
     await notifyLeadHandoff(db, {
       organizationId: context.organizationId,
       leadId: move.after.id,
       userId: context.userId,
     });
   }
+}
+
+/** afterDealChanges for one change */
+export async function afterDealChange(
+  db: Database,
+  context: { organizationId: string; userId: string },
+  result: Pick<DealChangeResult, 'lead'>
+): Promise<void> {
+  await afterDealChanges(db, context, [result]);
 }

@@ -118,6 +118,30 @@ describe('HearingDateInput', () => {
     expect(screen.queryByText(ed.dateInvalid)).not.toBeInTheDocument();
   });
 
+  it("says a form's own words for a date it cannot read, at 14px (#853)", async () => {
+    const user = userEvent.setup();
+    render(
+      withIntl(
+        <DateHarness
+          initial="2026-10-15"
+          onChange={vi.fn()}
+          invalidMessage="期限は 2026/11/15 のように 年/月/日 で入力してください"
+        />
+      )
+    );
+    const input = screen.getByLabelText(LABEL);
+    await user.clear(input);
+    await user.type(input, '11/15');
+    expect(input).toHaveAccessibleDescription(
+      '期限は 2026/11/15 のように 年/月/日 で入力してください'
+    );
+    expect(screen.queryByText(ed.dateInvalid)).not.toBeInTheDocument();
+    // No text under 14px, in a red that reads against white and the dark theme
+    expect(
+      screen.getByText('期限は 2026/11/15 のように 年/月/日 で入力してください')
+    ).toHaveClass('text-sm', 'text-red-700', 'dark:text-red-400');
+  });
+
   it('picks a day from the calendar, today, or clears it', async () => {
     const onChange = vi.fn();
     const user = userEvent.setup();

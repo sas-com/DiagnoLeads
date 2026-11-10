@@ -7,7 +7,7 @@ export const todayArticle: HelpArticle = {
   summary:
     '自分の今日の予定と、やることをまとめて見ます。朝に開いて、上から順に片付けていく使い方を想定しています。',
   routes: ['/today'],
-  reviewedAt: '2026-10-28',
+  reviewedAt: '2026-11-10',
   related: ['workflow-lifecycle'],
   blocks: [
     { type: 'h2', id: 'sections', text: '並んでいるもの' },
@@ -15,7 +15,10 @@ export const todayArticle: HelpArticle = {
       type: 'table',
       header: ['欄', '出るもの'],
       rows: [
-        ['今日までの次の行動', '期限が今日までの次の行動と、期限を過ぎた次の行動'],
+        [
+          '今日までの次の行動',
+          '期限が今日までの次の行動と、期限を過ぎた次の行動。自分が担当するリードのもの（担当がいなければ自分が入れたもの。ほかの人に割り当てたものを除く）と、自分に割り当てられたもの（「割り当て：」に自分の名前が出るもの）',
+        ],
         [
           '商談予定',
           '今日から日曜までの、自分が担当するリードの打ち合わせ。担当がいないリードは、日程を入れた人に出ます',
@@ -51,10 +54,15 @@ export const todayArticle: HelpArticle = {
         [
           {
             type: 'text',
-            text: '注意が必要な商談は、受注予定日を直すか、リードに次の行動を入れます。一覧は',
+            text: '注意が必要な商談は、受注予定日を直すか、リードに次の行動を入れます。次の行動がない商談は、行の',
           },
+          { type: 'ui', text: '次の行動を追加' },
+          { type: 'text', text: 'から、商談の詳細に移らずに入れられます（' },
           { type: 'link', text: '商談', href: '/deals' },
-          { type: 'text', text: 'で開けます。' },
+          {
+            type: 'text',
+            text: 'のボードと一覧からも入れられます）。自分の商談に入れた次の行動は、リードの担当がほかの人でも、期限が来ると自分の「今日までの次の行動」に出ます。',
+          },
         ],
       ],
     },
@@ -73,7 +81,10 @@ export const todayArticle: HelpArticle = {
       content: [
         { type: 'text', text: '親組織の閲覧者は見るだけで、行に' },
         { type: 'ui', text: '連絡を記録' },
-        { type: 'text', text: 'は出ません。' },
+        {
+          type: 'text',
+          text: 'は出ません。商談を見られないので、「注意が必要な商談」も出ません。',
+        },
       ],
     },
     {

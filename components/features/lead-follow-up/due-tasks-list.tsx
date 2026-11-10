@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
+import { useEffect, useRef, useState } from 'react';
 import { ContactRecordMenu } from './contact-record-menu';
 import { CheckWithText, DueLabel, TaskKindBadge, useTaskTitle, useUpdateTask } from './task-parts';
 import type { DueTasks } from './use-due-tasks';
@@ -21,12 +22,17 @@ const LEAD_LINK_CLASS =
  * completes it. Shared by the dashboard's card and the 今日 screen (#556), which show their own
  * loading, failure and empty states around it. Sized for DADS (decision 2026-10-24-admin-dads):
  * no text under 14px, the box is 20px to see and 44px to tap, the lead an underlined link.
+ * A row ticked shows ticked and disabled until it leaves once done (it can be ticked again when
+ * the save fails), and the focus goes on at once to the next row's box, else the previous one's,
+ * else to the heading, rather than to the page (#776). Only the rows being completed are
+ * disabled, as a disabled box loses the focus.
  */
 export function DueTasksList({
   due,
   organizationId,
   showMineBadge,
   canRecordContact = false,
+  headingId,
 }: {
   due: DueTasks;
   organizationId: string;
@@ -37,19 +43,57 @@ export function DueTasksList({
    * (今日, #863); without it the rows are as the dashboard's card shows them
    */
   canRecordContact?: boolean;
+  /** The section's heading (focusable by script), where the focus goes when the list empties */
+  headingId?: string;
 }) {
   const t = useTranslations('leadFollowUp.today');
   const tTasks = useTranslations('leadFollowUp.tasks');
   const locale = useLocale();
   const titleOf = useTaskTitle();
   const update = useUpdateTask(organizationId);
+  // The rows being completed, and each row's box to send the focus to
+  const [completing, setCompleting] = useState<ReadonlySet<string>>(new Set());
+  const boxes = useRef(new Map<string, HTMLButtonElement>());
+  const shownIds = due.items.map((task) => task.id).join(' ');
+  // A row completed has left once the list is read again: forget it (it may come back reopened)
+  useEffect(() => {
+    const shown = new Set(shownIds.split(' '));
+    setCompleting((current) => {
+      const kept = [...current].filter((id) => shown.has(id));
+      return kept.length === current.size ? current : new Set(kept);
+    });
+  }, [shownIds]);
   const data = due.data;
   if (!data) return null;
+
+  const complete = (index: number) => {
+    const task = due.items[index];
+    const open = (item: { id: string }) => item.id !== task.id && !completing.has(item.id);
+    const next =
+      due.items.slice(index + 1).find(open) ?? due.items.slice(0, index).reverse().find(open);
+    const target = next
+      ? boxes.current.get(next.id)
+      : headingId
+        ? document.getElementById(headingId)
+        : null;
+    target?.focus();
+    setCompleting((current) => new Set(current).add(task.id));
+    // The call's own promise: the callbacks given to mutate() run for the latest call only, so a
+    // row ticked before another would stay disabled if its save failed. The hook toasts the
+    // failure; the row can then be ticked again
+    update.mutateAsync({ organizationId, id: task.id, done: true }).catch(() =>
+      setCompleting((current) => {
+        const rest = new Set(current);
+        rest.delete(task.id);
+        return rest;
+      })
+    );
+  };
 
   return (
     <>
       <ul id={due.listId} className="divide-y divide-gray-100 dark:divide-gray-800">
-        {due.items.map((task) => {
+        {due.items.map((task, index) => {
           const title = titleOf(task);
           const company = task.lead.company?.trim();
           const name = task.lead.name?.trim();
@@ -66,13 +110,17 @@ export function DueTasksList({
           return (
             <li key={task.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
               <Checkbox
+                ref={(box) => {
+                  if (box) boxes.current.set(task.id, box);
+                  else boxes.current.delete(task.id);
+                }}
                 // 20px to see and 44px to tap: the ::after reaches 13px around the 18px inside
                 // the 1px border
                 className="relative h-5 w-5 after:absolute after:-inset-[13px] after:content-['']"
-                checked={false}
-                disabled={!data.canEdit || update.isPending}
+                checked={completing.has(task.id)}
+                disabled={!data.canEdit || completing.has(task.id)}
                 aria-label={tTasks('markDone', { title })}
-                onCheckedChange={() => update.mutate({ organizationId, id: task.id, done: true })}
+                onCheckedChange={() => complete(index)}
               />
               <DueLabel task={task} today={data.today} className="text-sm" />
               <TaskKindBadge task={task} className="text-sm" />

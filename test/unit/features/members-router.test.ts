@@ -17,6 +17,12 @@ const { invitationsMock, emailMock } = vi.hoisted(() => ({
   emailMock: { sendInvitationEmail: vi.fn() },
 }));
 const rateLimitMock = vi.hoisted(() => ({ consumeRateLimits: vi.fn() }));
+// What a removal gives back is checked on a real database (lead-follow-up-deal-owner.db.test.ts)
+const followUpMock = vi.hoisted(() => ({ releaseTaskAssignments: vi.fn() }));
+vi.mock('@/lib/features/lead-follow-up/service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/features/lead-follow-up/service')>()),
+  ...followUpMock,
+}));
 vi.mock('@/lib/features/diagnostics/rate-limit', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/features/diagnostics/rate-limit')>()),
   ...rateLimitMock,
@@ -121,9 +127,12 @@ describe('Members Router', () => {
 
   let mockDb: any;
   let mockContext: any;
+  /** The executor the removal's transaction runs with */
+  let mockTx: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    followUpMock.releaseTaskAssignments.mockResolvedValue([]);
 
     // Mock database
     mockDb = {
@@ -147,6 +156,10 @@ describe('Members Router', () => {
       where: vi.fn().mockReturnThis(),
       delete: vi.fn().mockReturnThis(),
     };
+    // The same query mocks under another object: the object a query is called on (its mock's
+    // contexts) tells whether it ran inside the transaction
+    mockTx = { ...mockDb };
+    mockDb.transaction = vi.fn(async (run: (tx: unknown) => Promise<unknown>) => run(mockTx));
 
     // Mock context (owner by default)
     mockContext = {
@@ -570,6 +583,12 @@ describe('Members Router', () => {
   });
 
   describe('remove', () => {
+    /** A refused removal deletes nothing and gives nothing back */
+    const expectNothingRemoved = () => {
+      expect(mockDb.transaction).not.toHaveBeenCalled();
+      expect(followUpMock.releaseTaskAssignments).not.toHaveBeenCalled();
+    };
+
     it('should allow owner to remove a member', async () => {
       // Mock: owner middleware verification then member lookup
       mockDb.query.organizationMembers.findFirst
@@ -586,6 +605,38 @@ describe('Members Router', () => {
 
       expect(result.success).toBe(true);
       expect(result.message).toContain('メンバーを削除しました');
+      // The membership is deleted, then the next actions given to them go back, in one transaction
+      expect(mockDb.transaction).toHaveBeenCalledTimes(1);
+      expect(mockDb.delete.mock.contexts).toHaveLength(1);
+      expect(mockDb.delete.mock.contexts[0]).toBe(mockTx);
+      expect(followUpMock.releaseTaskAssignments).toHaveBeenCalledTimes(1);
+      const [executor, release] = followUpMock.releaseTaskAssignments.mock.calls[0];
+      expect(executor).toBe(mockTx);
+      expect(release).toEqual({
+        organizationId: TEST_ORG_ID,
+        userId: TEST_USER_ID_3,
+        actorUserId: TEST_USER_ID,
+      });
+      expect(mockTx.delete.mock.invocationCallOrder[0]).toBeLessThan(
+        followUpMock.releaseTaskAssignments.mock.invocationCallOrder[0]
+      );
+    });
+
+    it('gives nothing back when the membership was already deleted meanwhile', async () => {
+      mockDb.query.organizationMembers.findFirst
+        .mockResolvedValueOnce(mockOwnerMembership) // Middleware verification
+        .mockResolvedValueOnce(mockMemberMembership); // Target member lookup
+      // Another removal deleted it first, and gave their next actions back
+      mockDb.returning.mockResolvedValue([]);
+
+      const caller = appRouter.createCaller(mockContext);
+      const result = await caller.members.remove({
+        organizationId: TEST_ORG_ID,
+        membershipId: TEST_MEMBER_ID_3,
+      });
+
+      expect(result.success).toBe(true);
+      expect(followUpMock.releaseTaskAssignments).not.toHaveBeenCalled();
     });
 
     it('should allow admin to remove a member', async () => {
@@ -609,6 +660,11 @@ describe('Members Router', () => {
       });
 
       expect(result.success).toBe(true);
+      // The audit rows of what goes back name the admin who removed the member
+      expect(followUpMock.releaseTaskAssignments.mock.calls[0][1]).toMatchObject({
+        userId: TEST_USER_ID_3,
+        actorUserId: TEST_USER_ID_2,
+      });
     });
 
     it('should not allow regular member to remove members', async () => {
@@ -629,6 +685,7 @@ describe('Members Router', () => {
           membershipId: TEST_MEMBER_ID_2,
         })
       ).rejects.toThrow(TRPCError);
+      expectNothingRemoved();
     });
 
     it('should not allow removing owner', async () => {
@@ -644,6 +701,7 @@ describe('Members Router', () => {
           membershipId: TEST_MEMBER_ID,
         })
       ).rejects.toThrow('オーナーは削除できません');
+      expectNothingRemoved();
     });
 
     it('should not allow removing self', async () => {
@@ -660,6 +718,7 @@ describe('Members Router', () => {
           membershipId: TEST_MEMBER_ID,
         })
       ).rejects.toThrow();
+      expectNothingRemoved();
     });
 
     it('should throw error if member not found', async () => {
@@ -676,6 +735,7 @@ describe('Members Router', () => {
           membershipId: NONEXISTENT_MEMBER_ID,
         })
       ).rejects.toThrow('メンバーが見つかりません');
+      expectNothingRemoved();
     });
   });
 });

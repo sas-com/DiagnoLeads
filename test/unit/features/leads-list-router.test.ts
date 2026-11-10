@@ -204,6 +204,12 @@ describe('leads.list (sorting and filtering)', () => {
       ['SQL', { sqlDecision: 'qualified' }, '"leads"."sql_decision" = $2', ['qualified']],
       ['SQL undecided', { sqlDecision: 'undecided' }, '"leads"."sql_decision" is null', []],
       [
+        'missing a deal (#854)',
+        { missingDeal: true },
+        '(not exists (select 1 from deals d where d.lead_id = "leads"."id" and d.organization_id = "leads"."organization_id") and ("leads"."status" in ($2, $3) or ("leads"."status" = $4 and "leads"."deal_phase" is not null)))',
+        ['negotiating', 'won', 'new'],
+      ],
+      [
         'search (name, email, company; wildcards escaped)',
         { search: ' 100%_ ' },
         '("leads"."name" ilike $2 or "leads"."email" ilike $3 or "leads"."company" ilike $4)',
@@ -233,6 +239,11 @@ describe('leads.list (sorting and filtering)', () => {
 
     it('ignores empty lists and blank search', async () => {
       const { sql } = await whereOf({ status: [], dealPhase: [], search: '   ' });
+      expect(sql).toBe('"leads"."organization_id" = $1');
+    });
+
+    it('filters nothing with missingDeal false (#854)', async () => {
+      const { sql } = await whereOf({ missingDeal: false });
       expect(sql).toBe('"leads"."organization_id" = $1');
     });
 

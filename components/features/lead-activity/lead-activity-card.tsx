@@ -1,5 +1,6 @@
 'use client';
 
+import { TAP_TARGET } from '@/components/common/tap-target';
 import { CONTACT_KIND_ICONS } from '@/components/features/lead-follow-up/contact-kinds';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -117,6 +118,7 @@ export function LeadActivityCard({ leadId }: LeadActivityCardProps) {
             key={key}
             size="sm"
             variant={filter === key ? 'default' : 'outline'}
+            className={TAP_TARGET}
             aria-pressed={filter === key}
             onClick={() => setFilter(key)}
           >
@@ -190,22 +192,30 @@ export function ActivityItem({
           <span className="font-medium">
             <EventTitle event={event} />
           </span>
-          {'verified' in event && !event.verified && <Badge color="amber">{t('unverified')}</Badge>}
+          {'verified' in event && !event.verified && (
+            <Badge color="amber" className="text-sm">
+              {t('unverified')}
+            </Badge>
+          )}
           {'continuation' in event && event.continuation && (
-            <Badge color="blue">{t('continuation')}</Badge>
+            <Badge color="blue" className="text-sm">
+              {t('continuation')}
+            </Badge>
           )}
           {event.kind === 'contact_recorded' && event.first && (
-            <Badge color="emerald">{t('firstContact')}</Badge>
+            <Badge color="emerald" className="text-sm">
+              {t('firstContact')}
+            </Badge>
           )}
           {event.kind === 'result_email_requested' && (
-            <Badge color={EMAIL_REQUEST_BADGE_COLORS[event.request.state]}>
+            <Badge color={EMAIL_REQUEST_BADGE_COLORS[event.request.state]} className="text-sm">
               {event.request.state === 'declined' && event.request.notRequested
                 ? t('emailRequest.notRequested')
                 : t(`emailRequest.${event.request.state}`)}
             </Badge>
           )}
         </div>
-        <p className="text-xs text-gray-500">
+        <p className="text-sm text-gray-600 dark:text-gray-300">
           {dateOnly ? (
             <time dateTime={at.toISOString()}>
               {format.dateTime(at, { dateStyle: 'medium', timeZone: TIME_ZONE })}
@@ -226,12 +236,12 @@ export function ActivityItem({
           )}
         </p>
         {'verified' in event && !event.verified && (
-          <p className="text-xs text-amber-700 dark:text-amber-400">{t('unverifiedHelp')}</p>
+          <p className="text-sm text-amber-700 dark:text-amber-400">{t('unverifiedHelp')}</p>
         )}
 
         {event.kind === 'diagnosis_submitted' && <DiagnosisDetails event={event} leadId={leadId} />}
         {event.kind === 'consultation_requested' && (
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-gray-600 dark:text-gray-300">
             {event.withSubmission
               ? t('kinds.consultationWithSubmission')
               : t('kinds.consultationLater')}
@@ -240,7 +250,9 @@ export function ActivityItem({
         {event.kind === 'result_email_requested' && <EmailRequestDetail event={event} />}
         {event.kind === 'email_unsubscribed' &&
           (event.source ? (
-            <p className="text-sm text-gray-600">{t(`emailSource.${event.source}`)}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              {t(`emailSource.${event.source}`)}
+            </p>
           ) : (
             <p className="text-sm text-amber-700 dark:text-amber-400">
               {t('emailSuppressedNotice')}
@@ -248,12 +260,12 @@ export function ActivityItem({
           ))}
         {event.kind === 'contact_recorded' && <ContactDetails event={event} />}
         {event.kind === 'contact_recorded' && event.note && (
-          <p className="line-clamp-3 whitespace-pre-wrap break-words text-sm text-gray-700">
+          <p className="line-clamp-3 whitespace-pre-wrap break-words text-sm text-gray-700 dark:text-gray-200">
             {event.note}
           </p>
         )}
         {event.kind === 'comment' && (
-          <p className="line-clamp-3 whitespace-pre-wrap break-words text-sm text-gray-700">
+          <p className="line-clamp-3 whitespace-pre-wrap break-words text-sm text-gray-700 dark:text-gray-200">
             {event.excerpt}
           </p>
         )}
@@ -266,7 +278,7 @@ export function ActivityItem({
           </Link>
         )}
         {event.kind === 'lead_updated' && (
-          <ul className="space-y-0.5 text-sm text-gray-700">
+          <ul className="space-y-0.5 text-sm text-gray-700 dark:text-gray-200">
             {event.changes.map((change) => (
               <li key={change.field}>
                 <ChangeLine change={change} />
@@ -324,14 +336,20 @@ function EmailRequestDetail({
   const format = useFormatter();
   const { request } = event;
   if (request.state === 'waiting') {
-    return <p className="text-sm text-gray-600">{t('emailRequest.waitingHelp')}</p>;
+    return (
+      <p className="text-sm text-gray-600 dark:text-gray-300">{t('emailRequest.waitingHelp')}</p>
+    );
   }
   const date = format.dateTime(new Date(request.at), {
     dateStyle: 'medium',
     timeStyle: 'short',
     timeZone: TIME_ZONE,
   });
-  return <p className="text-sm text-gray-600">{t(`emailRequest.${request.state}At`, { date })}</p>;
+  return (
+    <p className="text-sm text-gray-600 dark:text-gray-300">
+      {t(`emailRequest.${request.state}At`, { date })}
+    </p>
+  );
 }
 
 const COMPANY_SIZE_BADGE_COLORS = {
@@ -359,16 +377,24 @@ function DiagnosisDetails({
 
   return (
     <div className="space-y-1">
-      <p className="text-sm text-gray-700">{parts.join(' / ')}</p>
+      <p className="text-sm text-gray-700 dark:text-gray-200">{parts.join(' / ')}</p>
       <div className="flex flex-wrap gap-2">
-        <DiagnosisMqlBadge level={summary.mqlLevel} />
-        {summary.needsHearing && <Badge color="yellow">{t('summary.needsHearing')}</Badge>}
+        <DiagnosisMqlBadge level={summary.mqlLevel} className="text-sm" />
+        {summary.needsHearing && (
+          <Badge color="yellow" className="text-sm">
+            {t('summary.needsHearing')}
+          </Badge>
+        )}
         {summary.companySizeFit && summary.companySizeFit !== 'not_configured' && (
-          <Badge color={COMPANY_SIZE_BADGE_COLORS[summary.companySizeFit]}>
+          <Badge color={COMPANY_SIZE_BADGE_COLORS[summary.companySizeFit]} className="text-sm">
             {t(`summary.companySize.${summary.companySizeFit}`)}
           </Badge>
         )}
-        {summary.detailsAnswered && <Badge color="gray">{t('summary.detailsAnswered')}</Badge>}
+        {summary.detailsAnswered && (
+          <Badge color="gray" className="text-sm">
+            {t('summary.detailsAnswered')}
+          </Badge>
+        )}
       </div>
       <Button
         size="sm"
@@ -387,10 +413,27 @@ function DiagnosisDetails({
 type SummaryTranslate = ReturnType<typeof useTranslations<'leadActivity'>>;
 
 /** 関心あり（MQL） / 適合 of a submission, the same badges as the lead page (#121) */
-export function DiagnosisMqlBadge({ level }: { level: DiagnosisSummary['mqlLevel'] }) {
+/** The MQL level of a diagnosis, as a badge; the caller gives its size (text-sm in the history) */
+export function DiagnosisMqlBadge({
+  level,
+  className,
+}: {
+  level: DiagnosisSummary['mqlLevel'];
+  className?: string;
+}) {
   const t = useTranslations('leadActivity');
-  if (level === 'interest') return <Badge color="emerald">{t('summary.mqlLevels.interest')}</Badge>;
-  if (level === 'fit') return <Badge color="gray">{t('summary.mqlLevels.fit')}</Badge>;
+  if (level === 'interest')
+    return (
+      <Badge color="emerald" className={className}>
+        {t('summary.mqlLevels.interest')}
+      </Badge>
+    );
+  if (level === 'fit')
+    return (
+      <Badge color="gray" className={className}>
+        {t('summary.mqlLevels.fit')}
+      </Badge>
+    );
   return null;
 }
 
@@ -449,7 +492,7 @@ export function SubmissionAnswers({
         <div key={answer.questionId}>
           <dt className="text-gray-500">
             {answer.question[locale]}
-            {answer.detail && <span className="ml-1 text-xs">（{t('detailQuestion')}）</span>}
+            {answer.detail && <span className="ml-1">（{t('detailQuestion')}）</span>}
           </dt>
           <dd className="font-medium">
             {answer.values.map((value) => value.label[locale]).join(locale === 'ja' ? '、' : ', ')}
