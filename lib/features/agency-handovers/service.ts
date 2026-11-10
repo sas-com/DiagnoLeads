@@ -119,8 +119,7 @@ export async function importHandovers(
     // imports of the same leads take them in the same order, and the paths that lock one lead
     // (deals, a confirmed meeting, a customer search row, a lead's update, a diagnosis answer)
     // take it before its rows, so none of them deadlocks with an import. The bulk status change
-    // and the bulk deletion of leads lock theirs without an order, so they are not covered (#967
-    // takes them in the order of the ids)
+    // and the bulk deletion of leads take theirs in the order of their ids too (#967)
     const locked =
       leadIds.length === 0
         ? []
