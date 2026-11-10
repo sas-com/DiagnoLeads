@@ -1,7 +1,7 @@
 /**
  * notifyAxMigrationSubmission: which channels fire for which events.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { accessAnswers, as400Answers } from '@/test/fixtures/ax-migration';
 
 const webhookMock = vi.fn();
@@ -12,7 +12,13 @@ const quotaMock = vi.fn();
 const env: { AX_DIAGNOSIS_SALES_EMAIL?: string } = {};
 
 vi.mock('@/lib/env', () => ({ env }));
-vi.mock('@/lib/db/client', () => ({ db: {} }));
+// Only the notice on data that needs care (#828) reads the database (the lead, its assignee, the
+// members): its tests add select, the others see the empty object they compare against
+const { dbMock, selectRows } = vi.hoisted(() => ({
+  dbMock: {} as Record<string, unknown>,
+  selectRows: [] as unknown[][],
+}));
+vi.mock('@/lib/db/client', () => ({ db: dbMock }));
 // The AX diagnosis's organization is the operator's: its sales addresses are mailed (#481)
 vi.mock('@/lib/features/diagnostics/organization', () => ({
   resolveDiagnosisOrganizationId: () => 'org-1',
@@ -23,8 +29,14 @@ vi.mock('@/lib/features/diagnostics/rate-limit', () => ({
 vi.mock('@/lib/features/webhooks/services/webhook-service', () => ({
   triggerWebhooks: (...args: unknown[]) => webhookMock(...args),
 }));
+// The members' own settings: only the notice on data that needs care (#828) reads them, when it
+// falls back to every member
+const prefsMock = vi.fn();
+const wantsMock = vi.fn();
 vi.mock('@/lib/features/notifications/notification-service', () => ({
   notifyOrganizationMembers: (...args: unknown[]) => inAppMock(...args),
+  getOrCreatePreferences: (...args: unknown[]) => prefsMock(...args),
+  shouldSendInAppNotification: (...args: unknown[]) => wantsMock(...args),
 }));
 const effectMock = vi.fn();
 vi.mock('@/lib/features/challenge-guide/service', () => ({
@@ -47,9 +59,13 @@ vi.mock('@/lib/features/leads/assignment-notify', async (importOriginal) => ({
   notifyUsersInApp: (...args: unknown[]) => inAppIntakeMock(...args),
 }));
 
-const { notifyAxMigrationSubmission, buildSalesMessage, buildSalesEmail } = await import(
-  '@/lib/features/diagnostics/ax-migration/notify'
-);
+const {
+  notifyAxMigrationSubmission,
+  buildSalesMessage,
+  buildSalesEmail,
+  buildDataAttentionNotice,
+  notifyAccessDataAttention,
+} = await import('@/lib/features/diagnostics/ax-migration/notify');
 const { evaluateAxMigration } = await import('@/lib/features/diagnostics/ax-migration/evaluate');
 const { splitAddresses } = await import('@/lib/features/leads/assignment');
 
@@ -571,5 +587,262 @@ describe('notifyAxMigrationSubmission', () => {
     expect(webhookMock).toHaveBeenCalled();
     expect(inAppMock).toHaveBeenCalled();
     errorSpy.mockRestore();
+  });
+});
+
+describe('data that needs care in an Access tool (#828)', () => {
+  const CHECK = '受けるかどうかや進め方（委託の覚書・作業の場所・エンジニアの同席）を、初回の相談の前に社内で確かめてください。';
+  const notice = {
+    organizationId: 'org-1',
+    leadId: 'lead-1',
+    submissionId: 'sub-1',
+    kinds: ['sensitive', 'my_number'],
+    consultationRequested: false,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    selectRows.length = 0;
+    // Each select reads the next rows, whatever the query is made of
+    dbMock.select = () => {
+      const rows = selectRows.shift() ?? [];
+      const query = {
+        from: () => query,
+        innerJoin: () => query,
+        where: () => query,
+        limit: () => query,
+        then: (resolve: (value: unknown[]) => unknown, reject: (reason: unknown) => unknown) =>
+          Promise.resolve(rows).then(resolve, reject),
+      };
+      return query;
+    };
+    quotaMock.mockResolvedValue({ allowed: true, count: 1, retryAfterSeconds: 0 });
+    recipientsMock.mockResolvedValue({ intakeUserIds: [], emails: [] });
+    inAppMock.mockResolvedValue(undefined);
+    inAppIntakeMock.mockResolvedValue(undefined);
+    prefsMock.mockImplementation(async (userId: string) => ({ userId }));
+    wantsMock.mockReturnValue(true);
+  });
+
+  afterEach(() => {
+    delete dbMock.select;
+  });
+
+  it('puts it first in the consultation notice, in the words of the question', () => {
+    const { message } = buildSalesMessage({
+      ...base,
+      consultationRequested: true,
+      dataAttention: ['sensitive', 'payment'],
+    });
+    expect(message).toContain(
+      `取り扱いに注意する情報: 健康・病歴など、特に配慮が要る個人情報・クレジットカードの番号や銀行口座（${CHECK}）`
+    );
+    expect(message.indexOf('取り扱いに注意する情報')).toBeLessThan(message.indexOf('移行難易度'));
+    // Nothing without such data
+    expect(buildSalesMessage({ ...base, dataAttention: [] }).message).not.toContain('取り扱いに注意');
+    expect(buildSalesMessage(base).message).not.toContain('取り扱いに注意');
+  });
+
+  it('marks the consultation email with a badge and a notice', () => {
+    const email = buildSalesEmail(
+      { ...base, consultationRequested: true, dataAttention: ['my_number'] },
+      null,
+      'https://example.com/ja/leads/1'
+    );
+    expect(email.text).toContain('取り扱いに注意する情報');
+    expect(email.text).toContain(`マイナンバーが、ツールに入っていると回答しています。${CHECK}`);
+    expect(
+      buildSalesEmail({ ...base, consultationRequested: true }, null, 'https://example.com/ja/leads/1')
+        .text
+    ).not.toContain('取り扱いに注意');
+  });
+
+  it('words the follow-up notice as an in-house check, with no promise either way', () => {
+    const { title, message } = buildDataAttentionNotice({
+      company: 'テスト製作所',
+      name: '山田',
+      kinds: ['my_number', 'payment'],
+    });
+    expect(title).toBe(
+      '【取り扱いに注意する情報】テスト製作所 山田 様の Access のツールに、マイナンバー・クレジットカードの番号や銀行口座が入っていると回答がありました'
+    );
+    expect(message).toContain(CHECK);
+    expect(`${title}${message}`).not.toMatch(/お受けします|お受けできません|無料|必ず|安全/);
+    expect(
+      buildDataAttentionNotice({ company: null, name: null, kinds: ['sensitive'] }).title
+    ).toContain('リードの Access のツールに');
+  });
+
+  it("tells the lead's assignee when there is one", async () => {
+    selectRows.push(
+      [{ name: '山田', company: 'テスト製作所', assigneeId: 'user-9' }],
+      [{ userId: 'user-9', name: '担当', email: 'tanto@example.jp', role: 'member' }]
+    );
+    await notifyAccessDataAttention(notice);
+    expect(inAppIntakeMock).toHaveBeenCalledTimes(1);
+    expect(inAppIntakeMock).toHaveBeenCalledWith(
+      ['user-9'],
+      'org-1',
+      'data_attention',
+      expect.stringContaining('健康・病歴など、特に配慮が要る個人情報・マイナンバー'),
+      expect.stringContaining('初回の相談の前に'),
+      { leadId: 'lead-1', submissionId: 'sub-1', diagnosticKey: 'ax-migration', dataKinds: ['sensitive', 'my_number'] }
+    );
+    expect(inAppMock).not.toHaveBeenCalled();
+  });
+
+  it('tells the intake members when the lead has no assignee, or the assignee left', async () => {
+    recipientsMock.mockResolvedValue({ intakeUserIds: ['user-1', 'user-2'], emails: [] });
+    selectRows.push([{ name: '山田', company: 'テスト製作所', assigneeId: null }]);
+    await notifyAccessDataAttention(notice);
+    expect(inAppIntakeMock).toHaveBeenCalledWith(
+      ['user-1', 'user-2'],
+      'org-1',
+      'data_attention',
+      expect.any(String),
+      expect.any(String),
+      expect.objectContaining({ leadId: 'lead-1' })
+    );
+
+    vi.clearAllMocks();
+    recipientsMock.mockResolvedValue({ intakeUserIds: ['user-1'], emails: [] });
+    quotaMock.mockResolvedValue({ allowed: true, count: 1, retryAfterSeconds: 0 });
+    // The assignee is no longer a member, or can no longer hold leads (viewing only): the
+    // query of the members who can hold leads finds nobody (its conditions are in the DB test)
+    selectRows.push([{ name: '山田', company: 'テスト製作所', assigneeId: 'user-9' }], []);
+    await notifyAccessDataAttention(notice);
+    expect(inAppIntakeMock).toHaveBeenCalledWith(
+      ['user-1'],
+      'org-1',
+      'data_attention',
+      expect.any(String),
+      expect.any(String),
+      expect.anything()
+    );
+  });
+
+  it('tells every member who takes consultation notices when there is neither an assignee nor intake members', async () => {
+    selectRows.push(
+      [{ name: '山田', company: 'テスト製作所', assigneeId: null }],
+      [{ userId: 'user-1' }, { userId: 'user-2' }, { userId: 'user-3' }]
+    );
+    // user-2 turned off the notices of consultation requests
+    wantsMock.mockImplementation((_type: string, prefs: { userId: string }) => prefs.userId !== 'user-2');
+    await notifyAccessDataAttention(notice);
+    expect(wantsMock).toHaveBeenCalledWith('consultation_requested', expect.anything());
+    expect(inAppIntakeMock).toHaveBeenCalledWith(
+      ['user-1', 'user-3'],
+      'org-1',
+      'data_attention',
+      expect.any(String),
+      expect.any(String),
+      expect.objectContaining({ dataKinds: ['sensitive', 'my_number'] })
+    );
+    expect(inAppMock).not.toHaveBeenCalled();
+  });
+
+  it('tells a member whose setting cannot be read, and nobody when all turned them off', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    selectRows.push(
+      [{ name: '山田', company: 'テスト製作所', assigneeId: null }],
+      [{ userId: 'user-1' }, { userId: 'user-2' }]
+    );
+    prefsMock.mockImplementation(async (userId: string) => {
+      if (userId === 'user-1') throw new Error('db down');
+      return { userId };
+    });
+    wantsMock.mockReturnValue(false);
+    await notifyAccessDataAttention(notice);
+    expect(inAppIntakeMock).toHaveBeenCalledWith(
+      ['user-1'],
+      'org-1',
+      'data_attention',
+      expect.any(String),
+      expect.any(String),
+      expect.anything()
+    );
+
+    vi.clearAllMocks();
+    quotaMock.mockResolvedValue({ allowed: true, count: 1, retryAfterSeconds: 0 });
+    prefsMock.mockImplementation(async (userId: string) => ({ userId }));
+    wantsMock.mockReturnValue(false);
+    selectRows.push(
+      [{ name: '山田', company: 'テスト製作所', assigneeId: null }],
+      [{ userId: 'user-1' }, { userId: 'user-2' }]
+    );
+    await notifyAccessDataAttention(notice);
+    expect(inAppIntakeMock).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it('sends nothing past the hourly limit or without the lead', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    quotaMock.mockResolvedValue({ allowed: false, count: 99, retryAfterSeconds: 60 });
+    await notifyAccessDataAttention(notice);
+    quotaMock.mockResolvedValue({ allowed: true, count: 1, retryAfterSeconds: 0 });
+    await notifyAccessDataAttention(notice);
+    expect(inAppMock).not.toHaveBeenCalled();
+    expect(inAppIntakeMock).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('uses a cap of its own past the hourly limit when a consultation was requested, not the consultation cap (#232)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    recipientsMock.mockResolvedValue({ intakeUserIds: ['user-1'], emails: [] });
+    // Past the hourly limit, within the cap of the notices on such data
+    quotaMock
+      .mockResolvedValueOnce({ allowed: false, count: 99, retryAfterSeconds: 60 })
+      .mockResolvedValueOnce({ allowed: true, count: 1, retryAfterSeconds: 0 });
+    selectRows.push([{ name: '山田', company: 'テスト製作所', assigneeId: null }]);
+    await notifyAccessDataAttention({ ...notice, consultationRequested: true });
+    expect(quotaMock.mock.calls.map(([, rule]) => (rule as { name: string }).name)).toEqual([
+      'ax-notify-org',
+      'ax-notify-data-attention-org',
+    ]);
+    expect(inAppIntakeMock).toHaveBeenCalledWith(
+      ['user-1'],
+      'org-1',
+      'data_attention',
+      expect.any(String),
+      expect.any(String),
+      expect.anything()
+    );
+
+    // Past that cap too: nothing
+    vi.clearAllMocks();
+    quotaMock.mockResolvedValue({ allowed: false, count: 99, retryAfterSeconds: 60 });
+    selectRows.push([{ name: '山田', company: 'テスト製作所', assigneeId: null }]);
+    await notifyAccessDataAttention({ ...notice, consultationRequested: true });
+    expect(quotaMock).toHaveBeenCalledTimes(2);
+    expect(inAppIntakeMock).not.toHaveBeenCalled();
+
+    // Without a consultation request no cap is used past the hourly limit
+    vi.clearAllMocks();
+    quotaMock.mockResolvedValue({ allowed: false, count: 99, retryAfterSeconds: 60 });
+    await notifyAccessDataAttention(notice);
+    expect(quotaMock).toHaveBeenCalledTimes(1);
+    expect(inAppIntakeMock).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('tells sales when the cap cannot be checked, as with the other limits', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    recipientsMock.mockResolvedValue({ intakeUserIds: ['user-1'], emails: [] });
+    quotaMock
+      .mockResolvedValueOnce({ allowed: false, count: 99, retryAfterSeconds: 60 })
+      .mockRejectedValueOnce(new Error('db down'));
+    selectRows.push([{ name: '山田', company: 'テスト製作所', assigneeId: null }]);
+    await notifyAccessDataAttention({ ...notice, consultationRequested: true });
+    expect(inAppIntakeMock).toHaveBeenCalledTimes(1);
+    warnSpy.mockRestore();
+    errorSpy.mockRestore();
+  });
+
+  it('leaves a failure to the caller, which reports it', async () => {
+    selectRows.push([{ name: '山田', company: 'テスト製作所', assigneeId: null }]);
+    recipientsMock.mockResolvedValue({ intakeUserIds: ['user-1'], emails: [] });
+    inAppIntakeMock.mockRejectedValue(new Error('insert failed'));
+    await expect(notifyAccessDataAttention(notice)).rejects.toThrow('insert failed');
   });
 });

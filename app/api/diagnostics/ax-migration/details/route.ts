@@ -1,6 +1,7 @@
 import { db } from '@/lib/db/client';
 import { toPublicResult } from '@/lib/features/diagnostics/ax-migration/evaluate';
 import { AX_RATE_LIMITS } from '@/lib/features/diagnostics/ax-migration/limits';
+import { notifyAccessDataAttention } from '@/lib/features/diagnostics/ax-migration/notify';
 import {
   addAxMigrationDetails,
   axMigrationDetailsSchema,
@@ -62,6 +63,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: 'Invalid answers', issues: outcome.issues.slice(0, MAX_ISSUES) },
         { status: 400 }
+      );
+    }
+    // Data that needs care (#828): sales are told after the response, as for other notices
+    const attention = outcome.attention;
+    if (attention) {
+      after(() =>
+        notifyAccessDataAttention(attention).catch((error) => {
+          console.error('AX data attention notification error:', error);
+          return reportServerError('ax-diagnosis/data-attention', error);
+        })
       );
     }
     return NextResponse.json({ result: toPublicResult(outcome.result) });

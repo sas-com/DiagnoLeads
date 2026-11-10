@@ -99,6 +99,22 @@ const colors = {
 };
 
 /**
+ * The organization's name on one line: a line break or a tab in it (its owner may give one) would
+ * draw its rest over the period under it (#1034)
+ */
+export function oneLineName(name: string): string {
+  return name.replace(/[\r\n\t]+/g, ' ').trim();
+}
+
+/**
+ * The organization's name in lines within the width, two at most (#1034): measured in the
+ * document's current font and size
+ */
+export function organizationNameLines(doc: jsPDF, name: string, maxWidth: number): string[] {
+  return (doc.splitTextToSize(name, maxWidth) as string[]).slice(0, 2);
+}
+
+/**
  * Add header to PDF
  */
 function addHeader(doc: jsPDF, options: PDFExportOptions): number {
@@ -112,12 +128,14 @@ function addHeader(doc: jsPDF, options: PDFExportOptions): number {
   doc.text(options.title || 'DiagnoLeads', pageWidth / 2, yPos, { align: 'center' });
   yPos += 12;
 
-  // Organization name
-  if (options.organizationName) {
+  // Organization name, within the page's width: two lines at most
+  const organizationName = options.organizationName ? oneLineName(options.organizationName) : '';
+  if (organizationName) {
     doc.setFontSize(14);
     doc.setTextColor(...colors.text);
-    doc.text(options.organizationName, pageWidth / 2, yPos, { align: 'center' });
-    yPos += 8;
+    const lines = organizationNameLines(doc, organizationName, pageWidth - 40);
+    doc.text(lines, pageWidth / 2, yPos, { align: 'center' });
+    yPos += 8 * lines.length;
   }
 
   // Date range and generation time

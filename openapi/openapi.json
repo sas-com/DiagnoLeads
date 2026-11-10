@@ -24,7 +24,6 @@
   ],
   "tags": [
     { "name": "System", "description": "System health and status endpoints" },
-    { "name": "Diagnostic", "description": "Public diagnostic form endpoints" },
     { "name": "Leads", "description": "Lead management operations" },
     { "name": "Organizations", "description": "Organization management" },
     { "name": "Members", "description": "Organization member management" },
@@ -50,39 +49,6 @@
                     "timestamp": { "type": "string", "format": "date-time" }
                   }
                 }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/diagnostic": {
-      "post": {
-        "summary": "Submit diagnostic form",
-        "description": "Submit a public diagnostic form and receive an AI-generated lead score",
-        "tags": ["Diagnostic"],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/DiagnosticSubmission" }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Diagnostic submitted successfully",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/DiagnosticResponse" }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
               }
             }
           }
@@ -780,69 +746,6 @@
           "similarity": { "type": "number" }
         },
         "required": ["id", "email", "similarity"]
-      },
-      "DiagnosticSubmission": {
-        "type": "object",
-        "properties": {
-          "companyName": { "type": "string" },
-          "industry": {
-            "type": "string",
-            "enum": ["technology", "finance", "healthcare", "manufacturing", "retail", "other"]
-          },
-          "employeeCount": {
-            "type": "string",
-            "enum": ["1-10", "11-50", "51-200", "201-500", "501-1000", "1000+"]
-          },
-          "name": { "type": "string" },
-          "email": { "type": "string", "format": "email" },
-          "phone": { "type": "string" },
-          "position": { "type": "string" },
-          "currentChallenge": {
-            "type": "string",
-            "enum": ["lead_generation", "conversion", "efficiency", "data_management", "scaling"]
-          },
-          "primaryGoal": {
-            "type": "string",
-            "enum": ["increase_leads", "improve_conversion", "reduce_time", "better_insights"]
-          },
-          "timeline": {
-            "type": "string",
-            "enum": ["immediate", "1-3months", "3-6months", "6months+"]
-          },
-          "budget": { "type": "string", "enum": ["under10k", "10k-50k", "50k-100k", "100k+"] },
-          "additionalInfo": { "type": "string" },
-          "marketingConsent": { "type": "boolean" },
-          "locale": { "type": "string" }
-        },
-        "required": [
-          "companyName",
-          "industry",
-          "employeeCount",
-          "name",
-          "email",
-          "currentChallenge",
-          "primaryGoal",
-          "timeline",
-          "budget"
-        ]
-      },
-      "DiagnosticResponse": {
-        "type": "object",
-        "properties": {
-          "success": { "type": "boolean" },
-          "message": { "type": "string" },
-          "score": { "type": "integer", "minimum": 0, "maximum": 100 },
-          "leadId": { "type": "string", "format": "uuid" },
-          "data": {
-            "type": "object",
-            "properties": {
-              "email": { "type": "string", "format": "email" },
-              "company": { "type": "string" },
-              "name": { "type": "string" }
-            }
-          }
-        },
-        "required": ["success", "message", "score", "leadId", "data"]
       },
       "WebhookEventType": {
         "type": "string",

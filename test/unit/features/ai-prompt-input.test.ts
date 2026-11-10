@@ -131,6 +131,31 @@ describe('leadForClaude', () => {
     ).toBeNull();
   });
 
+  it('keeps the kinds of data that needs care from the AI, on every system (#828)', () => {
+    const responses = {
+      axMigration: {
+        difficulty: 'high',
+        dataAttention: ['my_number'],
+        otherSystems: [
+          { platform: 'access', dataAttention: ['payment'], difficulty: 'medium' },
+          { platform: 'as400', difficulty: 'low' },
+        ],
+      },
+    };
+    expect(leadForClaude(lead({ responses })).responses).toEqual({
+      axMigration: {
+        difficulty: 'high',
+        otherSystems: [
+          { platform: 'access', difficulty: 'medium' },
+          { platform: 'as400', difficulty: 'low' },
+        ],
+      },
+    });
+    expect(JSON.stringify(leadForClaude(lead({ responses })).responses)).not.toMatch(
+      /dataAttention|my_number|payment/
+    );
+  });
+
   it('bounds large responses: long strings, many entries, long arrays', () => {
     const cases: Record<string, unknown>[] = [
       { notes: 'n'.repeat(3_000_000) },

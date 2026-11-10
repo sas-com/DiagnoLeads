@@ -98,6 +98,20 @@ const AX_RESPONSES_KEY = 'axMigration';
 const DIAGNOSIS_RESPONSES_KEY = 'diagnosis';
 /** Entries of a diagnosis summary that come from the contact form, not from the answers */
 const CONTACT_SUMMARY_KEYS = new Set(['department']);
+/**
+ * Entries kept from the AI as well: the kinds of sensitive data an Access tool holds (#828), on
+ * the summary and on each other system diagnosed with it. Not about a person, but not needed for
+ * the analysis, and the AI is not to get more of the data handling than #406 decided
+ */
+const SENSITIVE_SUMMARY_KEYS = new Set(['dataAttention']);
+/** The other systems diagnosed from the result screen, each a summary of its own */
+const OTHER_SYSTEMS_KEY = 'otherSystems';
+
+function withoutSensitiveEntries(summary: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(summary).filter(([entry]) => !SENSITIVE_SUMMARY_KEYS.has(entry))
+  );
+}
 
 /**
  * The diagnosis summaries of the responses and nothing else (#406). The summaries hold the
@@ -112,7 +126,18 @@ function diagnosisSummaries(responses: Lead['responses']): Record<string, unknow
     const summary = responses[key];
     if (isRecord(summary) && !Array.isArray(summary)) {
       summaries[key] = Object.fromEntries(
-        Object.entries(summary).filter(([entry]) => !CONTACT_SUMMARY_KEYS.has(entry))
+        Object.entries(withoutSensitiveEntries(summary))
+          .filter(([entry]) => !CONTACT_SUMMARY_KEYS.has(entry))
+          .map(([entry, value]) => [
+            entry,
+            entry === OTHER_SYSTEMS_KEY && Array.isArray(value)
+              ? value.map((system) =>
+                  isRecord(system) && !Array.isArray(system)
+                    ? withoutSensitiveEntries(system)
+                    : system
+                )
+              : value,
+          ])
       );
     }
   }

@@ -306,6 +306,8 @@ export function shouldSendInAppNotification(
     case 'lead_handoff':
     // The employee's own referral turned into a diagnosis (#265): addressed to that one person
     case 'referral_diagnosed':
+    // Data that needs care in an Access tool (#828): rare and decisive for the plan, like #160
+    case 'data_attention':
     case 'system':
       return true;
     default:

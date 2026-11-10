@@ -4761,6 +4761,16 @@
       "sqlHelp": "Answers such as timing or budget suggest a deal",
       "needsHearing": "Needs a hearing",
       "needsHearingHelp": "Many answers were \"don't know\", so the result is rough",
+      "dataAttention": {
+        "title": "The answers say the tool holds data that needs care",
+        "body": "{kinds}. Check in-house, before the first consultation, whether to take the work on and how (an entrustment agreement, where the work is done, an engineer joining).",
+        "kinds": {
+          "my_number": "My Number",
+          "sensitive": "Personal data that needs special care (health, medical history)",
+          "payment": "Credit card numbers or bank accounts"
+        },
+        "joiner": ", "
+      },
       "otherSystems": "Other systems diagnosed",
       "showAnswers": "View answers",
       "extraTitle": "Other data ({count})",

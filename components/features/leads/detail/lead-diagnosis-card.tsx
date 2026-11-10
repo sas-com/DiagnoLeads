@@ -2,6 +2,7 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 import { Card } from '@/components/ui/card';
 import {
   type AxMqlView,
@@ -10,7 +11,7 @@ import {
   type ExtraDataEntry,
   readLeadDiagnosis,
 } from '@/lib/features/leads/diagnosis-view';
-import { ChevronDown, ChevronRight, ClipboardCheck } from 'lucide-react';
+import { ChevronDown, ChevronRight, ClipboardCheck, ShieldAlert } from 'lucide-react';
 import { useFormatter, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { type ReactNode, useMemo, useState } from 'react';
@@ -166,6 +167,25 @@ export function LeadDiagnosisCard({
     </div>
   );
 
+  // My Number, special care or card data in a diagnosed Access tool (#828): sales check how to go
+  // on before the first consultation. One notice for the first system and the others
+  const attentionKinds = ax
+    ? [...new Set([ax, ...ax.otherSystems].flatMap((system) => system.dataAttention))]
+    : [];
+  const attention = attentionKinds.length > 0 && (
+    <div data-testid="lead-diagnosis-data-attention">
+      <Callout title={t('dataAttention.title')} icon={ShieldAlert} color="yellow">
+        {t('dataAttention.body', {
+          kinds: attentionKinds
+            .map((kind) =>
+              t.has(`dataAttention.kinds.${kind}`) ? t(`dataAttention.kinds.${kind}`) : kind
+            )
+            .join(t('dataAttention.joiner')),
+        })}
+      </Callout>
+    </div>
+  );
+
   const builderBlock = builder && (
     <BuilderDiagnosis
       view={builder}
@@ -184,6 +204,7 @@ export function LeadDiagnosisCard({
               {t('title')}
             </h3>
             {flags}
+            {attention}
             <p className="text-sm text-foreground">{systemLine(ax)}</p>
             <p className="text-sm text-muted-foreground">
               {t('primaryChallenge')}：{labels.challenge(ax.primaryChallenge)}
@@ -288,6 +309,8 @@ export function LeadDiagnosisCard({
       </div>
 
       {flags}
+
+      {attention && <div className="mt-3">{attention}</div>}
 
       {rows.length > 0 && (
         <dl className="mt-3 grid gap-x-6 gap-y-3 sm:grid-cols-2">

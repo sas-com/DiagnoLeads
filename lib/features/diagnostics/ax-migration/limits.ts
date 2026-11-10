@@ -31,6 +31,16 @@ export const AX_RATE_LIMITS = {
     limit: 300,
     windowMs: HOUR,
   },
+  /**
+   * Past the hourly limit, the notice on data that needs care (#828) of a lead whose consultation
+   * was requested still goes out, up to this cap of its own: the consultation cap above is kept
+   * for the requests themselves, and the assignee or intake members cannot turn these off
+   */
+  dataAttentionNotificationsPerOrganization: {
+    name: 'ax-notify-data-attention-org',
+    limit: 30,
+    windowMs: HOUR,
+  },
   consultationPerIp: { name: 'ax-consultation-ip', limit: 10, windowMs: HOUR },
   detailsPerIp: { name: 'ax-details-ip', limit: 20, windowMs: HOUR },
   /** Documents and seminars requested from the result (#153) */

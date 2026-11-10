@@ -28,6 +28,10 @@ vi.mock('@/lib/db/client', () => ({ db: {} }));
 vi.mock('@/lib/features/diagnostics/rate-limit', () => ({
   consumeRateLimit: (...args: unknown[]) => limitMock(...args),
 }));
+const notifyAttentionMock = vi.fn();
+vi.mock('@/lib/features/diagnostics/ax-migration/notify', () => ({
+  notifyAccessDataAttention: (...args: unknown[]) => notifyAttentionMock(...args),
+}));
 vi.mock('@/lib/features/diagnostics/ax-migration/submission-service', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@/lib/features/diagnostics/ax-migration/submission-service')>();
@@ -51,6 +55,7 @@ describe('POST /api/diagnostics/ax-migration/details', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     limitMock.mockResolvedValue({ allowed: true, count: 1, retryAfterSeconds: 0 });
+    notifyAttentionMock.mockResolvedValue(undefined);
   });
 
   it('answers 429 over the per-address limit', async () => {
@@ -91,6 +96,62 @@ describe('POST /api/diagnostics/ax-migration/details', () => {
     expect(json.result).not.toHaveProperty('leadScore');
     expect(json.result).not.toHaveProperty('mql');
     expect(addDetailsMock).toHaveBeenCalledWith(expect.anything(), SUBMISSION_ID, { gaiji: 'many' });
+  });
+
+  it('tells sales about data that needs care after the response, and only then (#828)', async () => {
+    afterTasks.length = 0;
+    const result = evaluateAxMigration({ ...as400Answers, gaiji: 'many' });
+    const attention = {
+      organizationId: 'org-1',
+      leadId: 'lead-1',
+      submissionId: SUBMISSION_ID,
+      kinds: ['my_number'],
+      consultationRequested: false,
+    };
+    addDetailsMock.mockResolvedValue({ ok: true, result, attention });
+    const response = await POST(
+      request({ submissionId: SUBMISSION_ID, answers: { access_data_kinds: ['my_number'] } })
+    );
+    expect(response.status).toBe(200);
+    // Nothing about it in the respondent's answer
+    expect(JSON.stringify(await response.json())).not.toContain('my_number');
+    expect(notifyAttentionMock).not.toHaveBeenCalled();
+    for (const task of afterTasks.splice(0)) await task();
+    expect(notifyAttentionMock).toHaveBeenCalledWith(attention);
+
+    vi.clearAllMocks();
+    limitMock.mockResolvedValue({ allowed: true, count: 1, retryAfterSeconds: 0 });
+    notifyAttentionMock.mockResolvedValue(undefined);
+    addDetailsMock.mockResolvedValue({ ok: true, result, attention: null });
+    await POST(request({ submissionId: SUBMISSION_ID, answers: { gaiji: 'many' } }));
+    for (const task of afterTasks.splice(0)) await task();
+    expect(notifyAttentionMock).not.toHaveBeenCalled();
+  });
+
+  it('reports a failed notice on data that needs care, without failing the answer (#828)', async () => {
+    afterTasks.length = 0;
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const result = evaluateAxMigration({ ...as400Answers, gaiji: 'many' });
+    const failure = new Error('insert failed');
+    notifyAttentionMock.mockRejectedValue(failure);
+    addDetailsMock.mockResolvedValue({
+      ok: true,
+      result,
+      attention: {
+        organizationId: 'org-1',
+        leadId: 'lead-1',
+        submissionId: SUBMISSION_ID,
+        kinds: ['payment'],
+        consultationRequested: true,
+      },
+    });
+    const response = await POST(
+      request({ submissionId: SUBMISSION_ID, answers: { access_data_kinds: ['payment'] } })
+    );
+    expect(response.status).toBe(200);
+    for (const task of afterTasks.splice(0)) await task();
+    expect(reportServerErrorMock).toHaveBeenCalledWith('ax-diagnosis/data-attention', failure);
+    errorSpy.mockRestore();
   });
 
   it('rejects a body without a valid submission id', async () => {

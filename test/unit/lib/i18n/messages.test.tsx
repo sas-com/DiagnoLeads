@@ -16,13 +16,11 @@ vi.mock('next-intl/server', () => ({
 }));
 
 const LOCALES = ['ja', 'en'] as const;
-/** In locales/ but not read through the catalog: errors.json goes with lib/messages in #469 */
-const NOT_IN_CATALOG = ['errors.json'];
 
 const filesOnDisk = (locale: string) =>
   fs
     .readdirSync(path.join(process.cwd(), 'locales', locale))
-    .filter((file) => file.endsWith('.json') && !NOT_IN_CATALOG.includes(file))
+    .filter((file) => file.endsWith('.json'))
     .map((file) => file.replace(/\.json$/, ''))
     .sort();
 

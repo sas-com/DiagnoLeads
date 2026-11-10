@@ -1,5 +1,6 @@
 import { db } from '@/lib/db/client';
 import { diagnosticSubmissions, leads } from '@/lib/db/schema';
+import { attentionDataKinds } from '@/lib/features/diagnostics/ax-migration/data-attention';
 import type { AxMigrationResult } from '@/lib/features/diagnostics/ax-migration/evaluate';
 import { AX_RATE_LIMITS } from '@/lib/features/diagnostics/ax-migration/limits';
 import { notifyAxMigrationSubmission } from '@/lib/features/diagnostics/ax-migration/notify';
@@ -90,6 +91,8 @@ export async function POST(req: NextRequest) {
             leadCreated: false,
             identityUnverified: !outcome.leadCreated && !outcome.continued,
             additionalSystem: outcome.continued,
+            // The follow-up answers saved before the request (#828)
+            dataAttention: attentionDataKinds(submission.answers),
             requestedAt,
           });
         } catch (error) {

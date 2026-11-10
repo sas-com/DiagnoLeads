@@ -238,5 +238,31 @@ describe('Export Service', () => {
       expect(blob).toBeInstanceOf(Blob);
       expect(blob.type).toBe('application/json;charset=utf-8;');
     });
+
+    /** The bytes of a blob (jsdom's Blob has no arrayBuffer) */
+    const bytesOf = (blob: Blob) =>
+      new Promise<Uint8Array>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(new Uint8Array(reader.result as ArrayBuffer));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsArrayBuffer(blob);
+      });
+
+    it('starts a CSV with a BOM, so that Excel reads its Japanese as UTF-8 (#1034)', async () => {
+      const bytes = await bytesOf(createDownloadBlob('流入元,件数', 'csv'));
+      expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+      expect(new TextDecoder().decode(bytes.slice(3))).toBe('流入元,件数');
+    });
+
+    it('writes one BOM only before a CSV that has one already (#1034)', async () => {
+      const bytes = await bytesOf(createDownloadBlob('\uFEFFa,b', 'csv'));
+      expect([...bytes.slice(0, 4)]).toEqual([0xef, 0xbb, 0xbf, 'a'.charCodeAt(0)]);
+    });
+
+    it('writes no BOM before JSON (#1034)', async () => {
+      const bytes = await bytesOf(createDownloadBlob('{"test":"data"}', 'json'));
+      expect(new TextDecoder().decode(bytes)).toBe('{"test":"data"}');
+      expect(bytes[0]).toBe('{'.charCodeAt(0));
+    });
   });
 });

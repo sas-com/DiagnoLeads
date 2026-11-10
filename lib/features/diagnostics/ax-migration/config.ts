@@ -38,6 +38,12 @@ export interface AxMigrationConfig {
    * TODO(#303): to be reviewed with engineering（エンジニア部門と見直す）。値はここを変える
    */
   accessPath: AxAccessPathRules;
+  /**
+   * Access のツールに入っているデータ（追加質問 access_data_kinds, #826）のうち、営業の通知と
+   * リード詳細で注意として目立たせるもの（#828）。番号法や漏えい時の報告義務がかかり、受けるか
+   * どうかや進め方（委託の覚書・作業の場所・エンジニアの同席）を初回の相談の前に決める必要がある
+   */
+  accessDataKindsToFlag: readonly string[];
   /** SQL 条件③「検討時期」: timelines that count as "visible" — 要確認 */
   sqlTimelines: readonly string[];
   /** SQL 条件④「検討体制」: roles that give access to decision makers or IT */
@@ -126,6 +132,8 @@ export const AX_MIGRATION_CONFIG: AxMigrationConfig = {
     // 鍵になる質問（ツール数・画面と帳票・機能・VBA・人数・影響・置き場所・容量）の「わからない」
     unknownsToCheck: 2,
   },
+  // マイナンバー・要配慮個人情報（健康・病歴など）・クレジットカードの番号や銀行口座
+  accessDataKindsToFlag: ['my_number', 'sensitive', 'payment'],
   sqlTimelines: ['within_1y', '1_2y'],
   // 部署単位の Access は業務部門の部長・課長が決裁することが多い（2026-10-11 レビュー）
   decisionAccessRoles: ['executive', 'it_manager', 'it_staff', 'business_manager'],
