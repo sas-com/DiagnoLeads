@@ -465,7 +465,13 @@ async function insertDelivery(
     const [current] = await tx
       .select({ id: webhooks.id })
       .from(webhooks)
-      .where(and(eq(webhooks.id, webhook.id), eq(webhooks.url, webhook.url)))
+      .where(
+        and(
+          eq(webhooks.id, webhook.id),
+          eq(webhooks.organizationId, organizationId),
+          eq(webhooks.url, webhook.url)
+        )
+      )
       .for('share');
     if (!current) return null;
 

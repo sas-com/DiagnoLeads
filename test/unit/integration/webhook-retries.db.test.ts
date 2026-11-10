@@ -288,6 +288,84 @@ describe.skipIf(!url)('webhook retries (PostgreSQL)', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  describe('a URL change and a delivery being stored at the same time, on two connections (#990)', () => {
+    const moveUrl = (tx: Parameters<Parameters<typeof pg.transaction>[0]>[0]) =>
+      tx
+        .update(webhooks)
+        .set({ url: 'https://moved.example.com/hook' })
+        .where(eq(webhooks.id, webhookId));
+    const pause = () => new Promise((resolve) => setTimeout(resolve, 200));
+
+    it('waits for an uncommitted URL change, then stores nothing', async () => {
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let changed!: () => void;
+      const urlUpdated = new Promise<void>((resolve) => {
+        changed = resolve;
+      });
+      const change = pg.transaction(async (tx) => {
+        await moveUrl(tx);
+        changed();
+        await held;
+        await cancelPendingDeliveries(tx, webhookId);
+      });
+      await urlUpdated;
+
+      // Reads the webhook with the old URL, then waits for the row lock of the change
+      const batch = triggerWebhookBatch(
+        org,
+        [{ eventType: 'diagnostic.submitted', data: { leadId: 'a' } }],
+        { database: pg, timeBudgetMs: 0 }
+      );
+      await pause();
+      release();
+      await change;
+
+      expect(await batch).toMatchObject({ queued: 0, failed: 1 });
+      expect(
+        await pg.select().from(webhookDeliveries).where(eq(webhookDeliveries.webhookId, webhookId))
+      ).toEqual([]);
+    });
+
+    it('makes a URL change wait for a delivery being stored, then cancels it', async () => {
+      let change: Promise<void> | undefined;
+      // The URL change starts while the delivery's transaction holds the webhook row, and must
+      // wait for its commit
+      const holding = new Proxy(pg, {
+        get(target, prop, receiver) {
+          if (prop !== 'transaction') return Reflect.get(target, prop, receiver);
+          return (run: (tx: unknown) => Promise<unknown>) =>
+            (target as typeof pg).transaction(async (tx) => {
+              const result = await run(tx);
+              change = (target as typeof pg).transaction(async (other) => {
+                await moveUrl(other);
+                await cancelPendingDeliveries(other, webhookId);
+              });
+              await pause();
+              return result;
+            });
+        },
+      });
+
+      const counts = await triggerWebhookBatch(
+        org,
+        [{ eventType: 'diagnostic.submitted', data: { leadId: 'b' } }],
+        { database: holding, timeBudgetMs: 0 }
+      );
+      await change;
+
+      expect(counts).toMatchObject({ queued: 1 });
+      const [row] = await pg
+        .select()
+        .from(webhookDeliveries)
+        .where(eq(webhookDeliveries.webhookId, webhookId));
+      expect(row).toMatchObject({ status: 'failed', nextRetryAt: null });
+      expect(row.error).toMatch(/^url_changed:/);
+    });
+  });
+
   it('cancels a delivery stored just before the URL changed, so it is not retried there (#990)', async () => {
     fetchMock.mockResolvedValue(answer(500));
     // Stored (and tried once) with the URL as read
