@@ -3,7 +3,10 @@
  * replacing the preferences until one is confirmed, the confirmed date as the lead's next
  * meeting and a next action (moved when another option is confirmed), the confirmation email,
  * who may confirm, and the topics and the note of #244; the preferences of unverified answers,
- * kept but never replacing verified ones (#274). All names are made up.
+ * kept but never replacing verified ones (#274). A first confirmation also creates the lead's
+ * deal (#854, covered by deals-auto-qualification.db.test.ts): its webhooks are mocked here, so
+ * that none is sent in the background after the test has closed its connections. All names are
+ * made up.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/dl_test \
@@ -39,6 +42,11 @@ import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/db/rls', () => ({ setCurrentUser: vi.fn().mockResolvedValue(undefined) }));
+const sent = vi.hoisted(() => ({ emitLeadEvents: vi.fn() }));
+vi.mock('@/lib/features/webhooks/services/lead-events', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  emitLeadEvents: sent.emitLeadEvents,
+}));
 
 const url = process.env.TEST_DATABASE_URL;
 
@@ -554,6 +562,7 @@ describe.skipIf(!url)('meeting requests (PostgreSQL)', () => {
     const leadId = await createLead();
     await save(leadId);
     expect(await nextMeetingOf(leadId)).toBeNull();
+    sent.emitLeadEvents.mockClear();
 
     // Stored earliest first: index 0 is 10-20 14:00
     const first = await callers.rep.meetingRequests.confirm({
@@ -593,6 +602,8 @@ describe.skipIf(!url)('meeting requests (PostgreSQL)', () => {
     const view = await callers.rep.meetingRequests.get({ organizationId: org, leadId });
     expect(view.request.confirmed).toMatchObject({ date: '2026-10-21', time: '10:00', byName: '営業 太郎' });
     expect(view.request.confirmationEmailedAt).toBeNull();
+    // The first confirmation created the lead's deal and sent its webhooks; the move found it open
+    expect(sent.emitLeadEvents).toHaveBeenCalledTimes(1);
   });
 
   it('emails the respondent when email is available', async () => {
