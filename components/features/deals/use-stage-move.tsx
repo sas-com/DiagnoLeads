@@ -35,7 +35,8 @@ export type MovingDeal = Pick<
 export interface MoveOptions {
   /**
    * Puts the focus back where the move was chosen, once its question closes (Refs #720); false
-   * when that place is gone, and the question then puts the focus back as it does on its own
+   * when that place is gone: the focus goes where the screen says instead (focusInstead, #1026),
+   * else the question puts it back as it does on its own
    */
   returnFocus?: () => boolean;
 }
@@ -80,7 +81,14 @@ interface QuickMove {
  * The moves between open stages run as a mutation of their own, whose callbacks get every result:
  * the callbacks given to `mutate` only hear of the latest call, and moves can overlap.
  */
-export function useStageMove(organizationId: string): {
+export function useStageMove(
+  organizationId: string,
+  /**
+   * Where the focus goes once a question closes and the place the move was chosen in is gone:
+   * the board could not be read meanwhile, or the deal left it (#1026)
+   */
+  focusInstead?: (deal: MovingDeal) => HTMLElement | null | undefined
+): {
   move: (deal: MovingDeal, stage: DealStage, options?: MoveOptions) => void;
   pending: ReadonlyMap<string, PendingMove>;
   dialogs: ReactNode;
@@ -104,6 +112,8 @@ export function useStageMove(organizationId: string): {
   // The toast of each deal's last move: a newer move of the deal replaces it and its undo
   const undoToasts = useRef(new Map<string, string | number>());
   const returnFocus = useRef<(() => boolean) | undefined>(undefined);
+  // The deal of the questions, kept for the focus once they closed (asking is cleared by then)
+  const askedDeal = useRef<MovingDeal | null>(null);
   // The SQL question closes for the next question: the focus goes on to it, not back
   const goingOn = useRef(false);
 
@@ -298,6 +308,7 @@ export function useStageMove(organizationId: string): {
         trigger.focus();
         return true;
       });
+    askedDeal.current = deal;
     goingOn.current = false;
     setFailed(false);
     setAsking({ deal, stage, step: askSql ? 'sql' : 'stage' });
@@ -325,7 +336,8 @@ export function useStageMove(organizationId: string): {
     if (!open && !goingOn.current) setAsking(null);
   };
   // The questions have no trigger to give the focus back to: the screen says where it goes, and
-  // when that place is gone the question puts the focus back as it does on its own
+  // when that place is gone, where the screen says instead (#1026); else the question puts the
+  // focus back as it does on its own
   const restoreFocus = (event: Event) => {
     if (goingOn.current) {
       goingOn.current = false;
@@ -334,7 +346,14 @@ export function useStageMove(organizationId: string): {
     }
     const back = returnFocus.current;
     returnFocus.current = undefined;
-    if (back?.()) event.preventDefault();
+    if (back?.()) {
+      event.preventDefault();
+      return;
+    }
+    const instead = askedDeal.current ? focusInstead?.(askedDeal.current) : undefined;
+    if (!instead) return;
+    event.preventDefault();
+    instead.focus();
   };
   const deal = asking?.deal;
   const asked = asking?.step === 'stage' ? asking : null;
