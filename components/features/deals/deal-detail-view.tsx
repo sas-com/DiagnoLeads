@@ -115,7 +115,13 @@ export function DealDetailView({ dealId }: { dealId: string }) {
       focusTarget()?.focus();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [query.isError, query.data?.stage, query.data?.canEdit, currentStageId]);
+  }, [
+    // The failure's kind too: a retry may find the deal gone, or no longer readable
+    query.isError ? (query.error.data?.code ?? 'error') : null,
+    query.data?.stage,
+    query.data?.canEdit,
+    currentStageId,
+  ]);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteFailed, setDeleteFailed] = useState(false);
@@ -143,7 +149,10 @@ export function DealDetailView({ dealId }: { dealId: string }) {
       <>
         <div className="mx-auto max-w-5xl space-y-4">
           {backLink}
-          <DealsForbidden />
+          {/* Where the focus goes, as the failure when the deal cannot be read (#1044) */}
+          <div id={loadErrorId} tabIndex={-1}>
+            <DealsForbidden />
+          </div>
         </div>
         {/* Kept as when the deal cannot be read (#1044) */}
         {stageMove.dialogs}

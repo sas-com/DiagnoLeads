@@ -312,15 +312,20 @@ describe('DealDetailView', () => {
       await waitFor(() => expect(currentStage('失注')).toHaveFocus());
     });
 
-    it('goes to the stage once a reopened deal is read again', async () => {
+    it('goes back to the button pressed, then to the stage once a reopened deal is read again', async () => {
       const user = userEvent.setup();
       mocks.get.data = detail({ stage: 'won', probability: 100, closedOn: '2026-10-20' });
-      mocks.refetched = detail({ stage: 'proposal', probability: 40 });
-      renderView();
+      const { rerender } = renderView();
       await user.click(screen.getByRole('button', { name: '「提案」に移す' }));
+      // The reopening's question closes at once: the deal is read again after it
       await user.click(screen.getByRole('button', { name: '開き直す' }));
       expect(mocks.updates).toEqual([expect.objectContaining({ stage: 'proposal' })]);
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: '「提案」に移す' })).toHaveFocus()
+      );
 
+      mocks.get = { ...mocks.get, data: detail({ stage: 'proposal', probability: 40 }) };
+      rerender(view());
       await waitFor(() => expect(currentStage('提案')).toHaveFocus());
     });
 
@@ -415,6 +420,20 @@ describe('DealDetailView', () => {
       await waitFor(() => expect(screen.getByText('商談が見つかりません')).toHaveFocus());
     });
 
+    it('goes to the failure itself when the retry finds the deal gone', async () => {
+      const user = userEvent.setup();
+      mocks.refetchFails = true;
+      const { rerender } = renderView();
+      await user.click(screen.getByRole('button', { name: '「条件の調整」に移す' }));
+      const retry = await screen.findByRole('button', { name: '再読み込み' });
+      await waitFor(() => expect(retry).toHaveFocus());
+
+      // Deleted meanwhile: the retry is gone with the failure it said
+      mocks.get = readFails('NOT_FOUND');
+      rerender(view());
+      await waitFor(() => expect(screen.getByText('商談が見つかりません')).toHaveFocus());
+    });
+
     it('keeps an open question, with what was entered, when the deal cannot be read meanwhile', async () => {
       const user = userEvent.setup();
       const { rerender } = renderView();
@@ -431,6 +450,9 @@ describe('DealDetailView', () => {
       expect(screen.getByRole('alert', { hidden: true })).toHaveTextContent('商談を読み込めませんでした');
       expect(screen.getByRole('dialog', { name: '「AS/400 現行調査」を受注にする' })).toBe(won);
       expect(within(won).getByLabelText(/金額（税抜）/)).toHaveValue('3500000');
+      // The button pressed went with the deal's page: the focus stays in the question all the same
+      await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+      expect(within(won).getByLabelText(/金額（税抜）/)).toHaveFocus();
     });
 
     it('keeps an open question when the deal may not be seen any more meanwhile', async () => {
@@ -444,6 +466,12 @@ describe('DealDetailView', () => {
 
       expect(screen.getByText('商談を見る権限がありません')).toBeInTheDocument();
       expect(screen.getByRole('dialog', { name: '「AS/400 現行調査」を受注にする' })).toBe(won);
+
+      // Closed, the focus goes to what says so
+      await user.click(within(won).getByRole('button', { name: 'キャンセル' }));
+      await waitFor(() =>
+        expect(screen.getByText('商談を見る権限がありません').closest('[tabindex="-1"]')).toHaveFocus()
+      );
     });
   });
 
