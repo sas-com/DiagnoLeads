@@ -4,12 +4,7 @@
 
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, renderHook, waitFor } from '@testing-library/react';
-import {
-  forgetStoredOrganization,
-  OrganizationProvider,
-  useOrganizationContext,
-  type OrganizationContextType,
-} from '@/lib/context/organization-context';
+import { OrganizationProvider, useOrganizationContext, type OrganizationContextType } from '@/lib/context/organization-context';
 import type { Organization } from '@/lib/db/schema';
 import { usePathname } from 'next/navigation';
 
@@ -224,36 +219,6 @@ describe('the data of another organization (#1046)', () => {
 
     await waitFor(() => expect(result.current.organizationId).toBe(ORG_B));
     expect(result.current.organization).toBeNull();
-  });
-});
-
-describe('forgetStoredOrganization (#1057)', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockLocalStorage.clear();
-  });
-
-  it("drops the organization chosen on this browser, not the page's state", async () => {
-    const org = { id: 'a1b2c3d4-1111-4111-8111-111111111111', name: '組織A' } as Organization;
-    const { result } = renderHook(() => useOrganizationContext(), {
-      wrapper: OrganizationProvider,
-    });
-    act(() => {
-      result.current.setOrganization(org.id, org);
-    });
-    await waitFor(() =>
-      expect(mockLocalStorage.store['diagnoleads:current-organization']).toBeDefined()
-    );
-
-    act(() => {
-      forgetStoredOrganization();
-    });
-
-    expect(mockLocalStorage.store['diagnoleads:current-organization']).toBeUndefined();
-    // The page keeps its state: clearing it would have the organization switcher choose one
-    // again, and save it, before the page signed out has gone
-    expect(result.current.organizationId).toBe(org.id);
-    expect(result.current.organization).toEqual(org);
   });
 });
 

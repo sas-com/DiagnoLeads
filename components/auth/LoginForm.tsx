@@ -11,13 +11,14 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { authClient } from '@/lib/auth/client';
+import { takeAccountDeleted } from '@/lib/auth/leave-signed-out';
 import { safeCallbackPath } from '@/lib/auth/safe-callback';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { CircleAlert, CircleCheck } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
@@ -37,6 +38,12 @@ export function LoginForm() {
   // Refusals are shown in the form, not as a toast: the toaster loads after the page, and a toast
   // raised before it mounts is lost (#597)
   const [formError, setFormError] = useState<string | null>(null);
+  // The account deleted in this tab, which opened this page as a new one, without its toast
+  // (#1057). Read once the page is drawn: the server's drawing does not know it
+  const [accountDeleted, setAccountDeleted] = useState(false);
+  useEffect(() => {
+    if (takeAccountDeleted()) setAccountDeleted(true);
+  }, []);
 
   // Get callback URL from query params, default to /dashboard
   const callbackUrl = safeCallbackPath(
@@ -105,8 +112,7 @@ export function LoginForm() {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        {searchParams.get('accountDeleted') === '1' && (
-          // The deletion opened this page as a new one, without its toast (#1057)
+        {accountDeleted && (
           // biome-ignore lint/a11y/useSemanticElements: live-region notice, not a form output
           <p
             role="status"

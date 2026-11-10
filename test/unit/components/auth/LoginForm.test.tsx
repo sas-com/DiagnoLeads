@@ -161,14 +161,20 @@ describe('LoginForm', () => {
     expect(mockClearQueries).not.toHaveBeenCalled();
   });
 
-  it('says the account was deleted when the deletion opened the page (#1057)', () => {
-    mockSearchParams = new ReadonlySearchParams({ accountDeleted: '1' });
+  it('says the account was deleted when this tab deleted it, once (#1057)', async () => {
+    sessionStorage.setItem('diagnoleads:account-deleted', '1');
     render(<LoginForm />);
 
-    expect(screen.getByRole('status')).toHaveTextContent('settings.auth.login.accountDeleted');
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'settings.auth.login.accountDeleted'
+    );
+    cleanup();
+    render(<LoginForm />);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
-  it('says nothing of a deletion otherwise', () => {
+  it('says nothing of a deletion otherwise, also for a link that asks it to', () => {
+    mockSearchParams = new ReadonlySearchParams({ accountDeleted: '1' });
     render(<LoginForm />);
 
     expect(screen.queryByRole('status')).not.toBeInTheDocument();

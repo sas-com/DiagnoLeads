@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   signOut: vi.fn(),
   replace: vi.fn(),
   leaveSignedOut: vi.fn(),
+  noteAccountDeleted: vi.fn(),
   soleOwned: [] as { id: string; name: string }[],
   refetchSoleOwned: vi.fn(),
   deleteAccount: vi.fn(),
@@ -97,7 +98,10 @@ vi.mock('next/navigation', () => {
 
 vi.mock('sonner', () => ({ toast: { success: mocks.toastSuccess, error: mocks.toastError } }));
 // Leaving signed out loads a new page (#1057), which jsdom does not
-vi.mock('@/lib/auth/leave-signed-out', () => ({ leaveSignedOut: mocks.leaveSignedOut }));
+vi.mock('@/lib/auth/leave-signed-out', () => ({
+  leaveSignedOut: mocks.leaveSignedOut,
+  noteAccountDeleted: mocks.noteAccountDeleted,
+}));
 
 const renderPage = () =>
   render(
@@ -287,14 +291,17 @@ describe('account deletion', () => {
   it('signs out and opens the sign-in page as a new one, which says it was deleted (#1057)', async () => {
     await submit({ ok: true });
     await waitFor(() =>
-      expect(mocks.leaveSignedOut).toHaveBeenCalledWith('/ja/login?accountDeleted=1', {
-        replace: true,
-      })
+      expect(mocks.leaveSignedOut).toHaveBeenCalledWith('/ja/login', { replace: true })
     );
     expect(mocks.signOut).toHaveBeenCalled();
-    // Said on the sign-in page: a toast here would go with this page
+    // Said on the sign-in page, noted in this tab: a toast here would go with this page, and a
+    // query anyone can put in a link would say it too
+    expect(mocks.noteAccountDeleted).toHaveBeenCalledTimes(1);
     expect(mocks.toastSuccess).not.toHaveBeenCalled();
     expect(mocks.signOut.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.noteAccountDeleted.mock.invocationCallOrder[0]
+    );
+    expect(mocks.noteAccountDeleted.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.leaveSignedOut.mock.invocationCallOrder[0]
     );
   });

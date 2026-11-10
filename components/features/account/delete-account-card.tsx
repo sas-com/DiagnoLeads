@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Text } from '@/components/ui/metric';
 import { authClient } from '@/lib/auth/client';
-import { leaveSignedOut } from '@/lib/auth/leave-signed-out';
+import { leaveSignedOut, noteAccountDeleted } from '@/lib/auth/leave-signed-out';
 import { trpc } from '@/lib/trpc/client';
 import { AlertTriangle, Trash2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
@@ -85,7 +85,8 @@ export function DeleteAccountCard({ email }: DeleteAccountCardProps) {
       await authClient.signOut().catch(() => undefined);
       // A new page, without what this one read and chose for the account (#1057). The sign-in
       // page says the account was deleted: a toast raised here would go with this page
-      leaveSignedOut(`/${locale}/login?accountDeleted=1`, { replace: true });
+      noteAccountDeleted();
+      leaveSignedOut(`/${locale}/login`, { replace: true });
     } catch {
       setError({ field: 'form', message: t('errorFailed') });
     }

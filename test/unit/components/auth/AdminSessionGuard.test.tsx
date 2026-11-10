@@ -7,19 +7,14 @@ import { NextIntlClientProvider } from 'next-intl';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  replace: vi.fn(),
+  leave: vi.fn(),
   session: { data: null as unknown, isPending: false, error: null as unknown },
 }));
 
 vi.mock('@/lib/auth/client', () => ({ useSession: () => mocks.session }));
-vi.mock('next/navigation', () => {
-  // One object for every render, like Next's useRouter (#636)
-  const router = { replace: mocks.replace };
-  return {
-    useRouter: () => router,
-    usePathname: () => '/en/leads',
-  };
-});
+vi.mock('next/navigation', () => ({ usePathname: () => '/en/leads' }));
+// Sign-in opens as a new page (#1057), which jsdom does not load
+vi.mock('@/lib/auth/leave-signed-out', () => ({ leaveWithoutSession: mocks.leave }));
 
 // A new element each time, so rerender() really renders again
 const guard = () => (
@@ -41,8 +36,9 @@ describe('AdminSessionGuard', () => {
   it('sends a visitor whose session is not valid (stale cookie) to sign-in, coming back afterwards', () => {
     mocks.session = { data: null, isPending: false, error: null };
     renderGuard();
-    expect(mocks.replace).toHaveBeenCalledWith(
-      `/en/login?callbackUrl=${encodeURIComponent('/en/leads?leadId=1')}`
+    expect(mocks.leave).toHaveBeenCalledWith(
+      `/en/login?callbackUrl=${encodeURIComponent('/en/leads?leadId=1')}`,
+      { replace: true }
     );
   });
 
@@ -50,19 +46,19 @@ describe('AdminSessionGuard', () => {
     mocks.session = { data: { user: { id: 'u1' } }, isPending: false, error: null };
     renderGuard();
     expect(screen.getByText('admin page')).toBeInTheDocument();
-    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.leave).not.toHaveBeenCalled();
   });
 
   it('waits while the session is being checked', () => {
     mocks.session = { data: null, isPending: true, error: null };
     renderGuard();
-    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.leave).not.toHaveBeenCalled();
   });
 
   it('does not send anyone to sign-in on a network error', () => {
     mocks.session = { data: null, isPending: false, error: new Error('offline') };
     renderGuard();
-    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.leave).not.toHaveBeenCalled();
   });
 
   // Most stale cookies take this path: the first render is still checking, and the answer comes
@@ -71,18 +67,19 @@ describe('AdminSessionGuard', () => {
   it('sends the visitor to sign-in once, when the check ends without a session', () => {
     mocks.session = { data: null, isPending: true, error: null };
     const { rerender } = renderGuard();
-    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.leave).not.toHaveBeenCalled();
 
     mocks.session = { data: null, isPending: false, error: null };
     rerender(guard());
 
-    expect(mocks.replace).toHaveBeenCalledExactlyOnceWith(
-      `/en/login?callbackUrl=${encodeURIComponent('/en/leads?leadId=1')}`
+    expect(mocks.leave).toHaveBeenCalledExactlyOnceWith(
+      `/en/login?callbackUrl=${encodeURIComponent('/en/leads?leadId=1')}`,
+      { replace: true }
     );
 
     // Another render with the same signed-out session must not send the visitor again
     rerender(guard());
-    expect(mocks.replace).toHaveBeenCalledOnce();
+    expect(mocks.leave).toHaveBeenCalledOnce();
   });
 
   it('stays on the page when the check ends with a session', () => {
@@ -93,6 +90,6 @@ describe('AdminSessionGuard', () => {
     rerender(guard());
 
     expect(screen.getByText('admin page')).toBeInTheDocument();
-    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.leave).not.toHaveBeenCalled();
   });
 });

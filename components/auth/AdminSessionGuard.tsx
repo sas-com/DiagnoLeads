@@ -1,9 +1,10 @@
 'use client';
 
 import { useSession } from '@/lib/auth/client';
+import { leaveWithoutSession } from '@/lib/auth/leave-signed-out';
 import { signInPath } from '@/lib/auth/sign-in-path';
 import { useLocale } from 'next-intl';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 
 /**
@@ -15,14 +16,20 @@ import { useEffect } from 'react';
  */
 export function AdminSessionGuard({ children }: { children: React.ReactNode }) {
   const { data, isPending, error } = useSession();
-  const router = useRouter();
   const pathname = usePathname();
   const locale = useLocale();
   const signedOut = !isPending && !error && !data;
 
   useEffect(() => {
-    if (signedOut) router.replace(signInPath(locale, `${pathname}${window.location.search}`));
-  }, [signedOut, router, locale, pathname]);
+    // As a new page: going back within this one would show what the ended session read, from
+    // the router and the query cache, to whoever is at this browser now (#1057). The organization
+    // chosen stays: it is mostly the same one who signs in again
+    if (signedOut) {
+      leaveWithoutSession(signInPath(locale, `${pathname}${window.location.search}`), {
+        replace: true,
+      });
+    }
+  }, [signedOut, locale, pathname]);
 
   return <>{children}</>;
 }
