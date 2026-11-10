@@ -73,18 +73,30 @@ describe.skipIf(!url)('bulk lead operations lock in the order of the ids (Postgr
     await Promise.all([client?.end(), scanning?.end(), holder?.end()]);
   });
 
-  /** Leads stored the highest id first, in one statement; their ids from the lowest */
+  /**
+   * Leads stored the highest id first, in one statement; their ids from the lowest. The lowest
+   * must not be stored first, or a bulk operation reading them as stored would lock it first in
+   * any case and the test could not tell: stored again with new ids when it is (rare, when space
+   * freed by other test files is used)
+   */
   const insertLeads = async () => {
-    const ids = Array.from({ length: LEADS }, () => crypto.randomUUID()).sort();
-    await pg.insert(leads).values(
-      [...ids].reverse().map((id) => ({
-        id,
-        organizationId: org,
-        email: `lock-order-${unique()}@example.com`,
-        company: '架空商事',
-      }))
-    );
-    return ids;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const ids = Array.from({ length: LEADS }, () => crypto.randomUUID()).sort();
+      await pg.insert(leads).values(
+        [...ids].reverse().map((id) => ({
+          id,
+          organizationId: org,
+          email: `lock-order-${unique()}@example.com`,
+          company: '架空商事',
+        }))
+      );
+      const [storedFirst] = await pg.execute<{ id: string }>(
+        sql`select id from ${leads} where ${inArray(leads.id, ids)} order by ctid limit 1`
+      );
+      if (storedFirst && storedFirst.id !== ids[0]) return ids;
+      await pg.delete(leads).where(inArray(leads.id, ids));
+    }
+    throw new Error('The leads could not be stored with the lowest id after the others');
   };
 
   /**
@@ -137,8 +149,14 @@ describe.skipIf(!url)('bulk lead operations lock in the order of the ids (Postgr
     });
     await holding;
     const result = operation();
-    await untilBlockedBy(pid);
-    waiting();
+    // A failure is told by the await below, not as an unhandled rejection
+    result.catch(() => {});
+    try {
+      await untilBlockedBy(pid);
+    } finally {
+      // Let the lead go in any case, so that nothing is left waiting for it
+      waiting();
+    }
     const othersTaken = await taken;
     return { othersTaken, result: await result };
   }
