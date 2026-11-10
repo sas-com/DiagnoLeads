@@ -18,6 +18,14 @@ import { CONTACT_KIND_ICONS } from './contact-kinds';
 import type { OpenRowActivity } from './row-activity-dialog';
 import { useRecordContact } from './use-record-contact';
 
+/**
+ * A contact button while a contact is recorded (aria-disabled): dimmed, a waiting cursor and no
+ * hover colour, as it does nothing. The one look of the list rows' menu and the lead page's
+ * bar (#863, #776)
+ */
+export const CONTACT_RECORDING_CLASS =
+  'aria-disabled:cursor-wait aria-disabled:opacity-50 aria-disabled:hover:bg-white dark:aria-disabled:hover:bg-gray-800';
+
 /** The menu's items: 44px to tap on phones like the button, with 14px text (DADS) */
 const ITEM_CLASS = cn('gap-2 text-sm', TAP_TARGET);
 
@@ -70,12 +78,7 @@ export function ContactRecordMenu({
           type="button"
           variant="outline"
           size="sm"
-          className={cn(
-            // While it records: dimmed, and no hover colour as it does not open
-            'aria-disabled:cursor-wait aria-disabled:opacity-50 aria-disabled:hover:bg-white dark:aria-disabled:hover:bg-gray-800',
-            TAP_TARGET,
-            className
-          )}
+          className={cn(CONTACT_RECORDING_CLASS, TAP_TARGET, className)}
           aria-label={t('recordFor', { lead: leadLabel })}
           aria-disabled={pending || undefined}
           onPointerDown={(event) => {
