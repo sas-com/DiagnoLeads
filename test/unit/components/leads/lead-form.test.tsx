@@ -159,5 +159,7 @@ describe('LeadForm', () => {
     render(withIntl(<LeadForm onSubmit={vi.fn()} />));
     expect(screen.getByTestId('field-help-leads.status')).toBeInTheDocument();
     expect(screen.getByTestId('field-help-leads.dealPhase')).toBeInTheDocument();
+    expect(screen.getByTestId('field-help-leads.sqlDecision')).toBeInTheDocument();
+    expect(screen.getByTestId('field-help-leads.mqlQualified')).toBeInTheDocument();
   });
 });
