@@ -845,8 +845,12 @@ export const leadsRouter = router({
       );
 
       const outcome = await ctx.db.transaction(async (tx) => {
-        // Lock the rows so the audited "before" is the status this update replaces
-        await tx.execute(sql`select 1 from ${leads} where ${scope} for no key update`);
+        // Lock the rows so the audited "before" is the status this update replaces, in the order
+        // of their ids as the agency report import does (#967): taken in the order a plan reads
+        // them, two lockers taking overlapping leads the other way round deadlock (40P01)
+        await tx.execute(
+          sql`select 1 from ${leads} where ${scope} order by ${leads.id} for no key update`
+        );
         const before = await tx.query.leads.findMany({
           columns: { id: true, status: true, lostReason: true },
           where: scope,
@@ -938,10 +942,17 @@ export const leadsRouter = router({
     }
 
     const deleted = await ctx.db.transaction(async (tx) => {
+      const scope = and(
+        inArray(leads.id, input.ids),
+        eq(leads.organizationId, input.organizationId)
+      );
+      // Lock them in the order of their ids first, as the agency report import and the bulk
+      // status change do (#967): a DELETE locks the rows in the order its plan reads them
+      await tx.execute(sql`select 1 from ${leads} where ${scope} order by ${leads.id} for update`);
       // Delete all leads matching the IDs and organization
       const result = await tx
         .delete(leads)
-        .where(and(inArray(leads.id, input.ids), eq(leads.organizationId, input.organizationId)))
+        .where(scope)
         .returning({ id: leads.id, name: leads.name, company: leads.company });
       await forgetLeadsInDeliveries(
         tx,
