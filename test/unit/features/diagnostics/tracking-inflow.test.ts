@@ -9,6 +9,10 @@ import { inferInflowSource } from '@/lib/features/diagnostics/tracking';
 import { describe, expect, it } from 'vitest';
 
 describe('inferInflowSource with a utm_medium outside its table (#804)', () => {
+  // utm_medium is trimmed and lowercased before the lookup, so of the names of Object.prototype
+  // only `constructor` and `__proto__` reach the table (also as ' Constructor ' and '__PROTO__'):
+  // the old lookup failed on those four. The other names missed it already and stay as guards,
+  // should the lowercasing ever go
   it.each([
     'constructor',
     '__proto__',

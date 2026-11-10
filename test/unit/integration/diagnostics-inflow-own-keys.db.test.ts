@@ -10,7 +10,7 @@
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/dl_test \
- *     bunx vitest --run test/unit/integration/inflow-medium-own-keys.db.test.ts
+ *     bunx vitest --run test/unit/integration/diagnostics-inflow-own-keys.db.test.ts
  */
 import * as schema from '@/lib/db/schema';
 import {
