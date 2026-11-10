@@ -326,6 +326,7 @@ export function LeadForm({ lead, onSubmit, isLoading }: LeadFormProps) {
                     />
                   </FormControl>
                   <FormLabel className="font-normal">{t('mqlQualified')}</FormLabel>
+                  <FieldHelp fieldKey="leads.mqlQualified" />
                 </FormItem>
               )}
             />
@@ -334,7 +335,10 @@ export function LeadForm({ lead, onSubmit, isLoading }: LeadFormProps) {
               name="sqlDecision"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t('sqlDecision')}</FormLabel>
+                  <div className="flex items-center gap-1.5">
+                    <FormLabel>{t('sqlDecision')}</FormLabel>
+                    <FieldHelp fieldKey="leads.sqlDecision" />
+                  </div>
                   <Select
                     onValueChange={(value) => field.onChange(value === NONE ? null : value)}
                     value={field.value ?? NONE}

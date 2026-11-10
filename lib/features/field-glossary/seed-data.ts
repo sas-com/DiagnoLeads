@@ -395,4 +395,39 @@ export const FIELD_GLOSSARY_SEED: readonly FieldGlossarySeedEntry[] = [
     descriptionJa: 'その他。',
     descriptionEn: 'Other.',
   },
+  // leads.sqlDecision — SQL decision recorded by sales (docs/PIPELINE_LIFECYCLE.md §2.4)
+  {
+    fieldKey: 'leads.sqlDecision',
+    value: null,
+    sortOrder: 0,
+    descriptionJa:
+      '営業が初回ヒアリングの後に記録する SQL判定（商談として進める価値があるか）です。状態とは別に記録します。',
+    descriptionEn:
+      'The SQL decision sales records after the initial hearing (whether the deal is worth pursuing). Recorded separately from the status.',
+  },
+  {
+    fieldKey: 'leads.sqlDecision',
+    value: 'qualified',
+    sortOrder: 1,
+    descriptionJa: '適格。見極めを抜け、課題の確認へ進みます。',
+    descriptionEn: 'Qualified — passed qualification; proceeds to discovery.',
+  },
+  {
+    fieldKey: 'leads.sqlDecision',
+    value: 'not_qualified',
+    sortOrder: 2,
+    descriptionJa: '不適格。失注（理由付き）で閉じます。',
+    descriptionEn: 'Not qualified — closed as lost with a reason.',
+  },
+  // leads.mqlQualified — the marketing MQL flag (docs/PIPELINE_LIFECYCLE.md §2.3); a boolean, so
+  // only a field-level entry.
+  {
+    fieldKey: 'leads.mqlQualified',
+    value: null,
+    sortOrder: 0,
+    descriptionJa:
+      'マーケティングが「営業が追う価値のあるリード（MQL）」と判断したときに付けます。診断の回答からも自動で判定されます。外すと MQL判定日は消えますが、診断から決まる段階は変わりません。',
+    descriptionEn:
+      'Marketing marks the lead as an MQL (worth sales attention). The diagnosis also sets it automatically. Unchecking it clears the MQL date but not the level derived from the diagnosis.',
+  },
 ];
