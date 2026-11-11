@@ -1,43 +1,773 @@
 /**
  * Webhook Service Tests
  *
- * Tests for webhook signature generation, verification, and secret generation
+ * Signatures, secrets, delivery, retries and the destination guard of the webhook service. The
+ * signature tests used to live in a second file with their own mocks (#545); they need none of
+ * the mocks below.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import crypto from 'node:crypto';
 
-// Mock the database module
-vi.mock('@/lib/db/client', () => ({
+// Mock database: one chainable object whose builder steps return itself. Hoisted so the
+// tests can reach each step (where, values, set, returning) with its mock type
+const { db } = vi.hoisted(() => ({
   db: {
-    select: vi.fn(),
-    insert: vi.fn(),
-    update: vi.fn(),
-    delete: vi.fn(),
+    select: vi.fn().mockReturnThis(),
+    from: vi.fn().mockReturnThis(),
+    innerJoin: vi.fn().mockReturnThis(),
+    where: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockResolvedValue([]),
+    insert: vi.fn().mockReturnThis(),
+    values: vi.fn().mockReturnThis(),
+    returning: vi.fn().mockResolvedValue([{ id: 'delivery-1' }]),
+    update: vi.fn().mockReturnThis(),
+    set: vi.fn().mockReturnThis(),
+    delete: vi.fn().mockReturnThis(),
+    // A delivery is stored in a transaction that first locks the webhook row and checks its URL
+    // (#990): the check finds the webhook, and the insert goes through the steps above
+    transaction: vi.fn(),
   },
 }));
+const lockingTx = {
+  select: () => ({ from: () => ({ where: () => ({ for: async () => [{ id: 'locked' }] }) }) }),
+  insert: (table: unknown) => db.insert(table as never),
+  transaction: (run: (tx: unknown) => unknown) => run(lockingTx),
+};
+db.transaction.mockImplementation((run: (tx: unknown) => unknown) => run(lockingTx));
+vi.mock('@/lib/db/client', () => ({ db }));
 
-vi.mock('@/lib/db/schema', () => ({
-  webhooks: {},
-  webhookDeliveries: {},
+// Mock fetch: deliveries go through the pinned transport, which is replaced by one that calls
+// this stub (#330)
+global.fetch = vi.fn();
+vi.mock('@/lib/features/webhooks/services/pinned-request', async () =>
+  (await import('@/test/mocks/webhook-transport')).transportThroughFetchStub()
+);
+
+// Host names resolve to a public address unless a test says otherwise (#321)
+const dnsMocks = vi.hoisted(() => ({ lookup: vi.fn() }));
+vi.mock('node:dns/promises', () => ({
+  lookup: dnsMocks.lookup,
+  default: { lookup: dnsMocks.lookup },
 }));
+const PUBLIC_ADDRESS = [{ address: '93.184.215.14', family: 4 }];
 
-vi.mock('drizzle-orm', () => ({
-  and: vi.fn(),
-  asc: vi.fn(),
-  eq: vi.fn(),
-  gte: vi.fn(),
-  inArray: vi.fn(),
-  lt: vi.fn(),
-  lte: vi.fn(),
-  sql: vi.fn(),
-}));
-
+import * as pinnedRequest from '@/lib/features/webhooks/services/pinned-request';
+import { sendThroughFetchStub } from '@/test/mocks/webhook-transport';
+import crypto from 'node:crypto';
+import { EventEmitter } from 'node:events';
+import type { ClientRequest, IncomingMessage } from 'node:http';
+import type { RequestOptions } from 'node:https';
+import type { LookupFunction } from 'node:net';
+import { Readable } from 'node:stream';
 import {
-  generateWebhookSignature,
-  verifyWebhookSignature,
+  WEBHOOK_DELIVERY_LEASE_MS,
+  WEBHOOK_DELIVERY_TIMEOUT_MS,
+  INVALID_HEADERS_ERROR,
+  cleanupOldDeliveries,
+  describeRequestError,
   generateWebhookSecret,
+  generateWebhookSignature,
+  processWebhookRetries,
+  sendWebhookDelivery,
+  triggerWebhooks,
+  verifyWebhookSignature,
 } from '@/lib/features/webhooks/services/webhook-service';
+
+describe('webhook-service', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-02-08T12:00:00Z'));
+    dnsMocks.lookup.mockReset();
+    dnsMocks.lookup.mockResolvedValue(PUBLIC_ADDRESS);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  describe('triggerWebhooks', () => {
+    it('should return zeros when no webhooks found', async () => {
+      (db.where as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+      const result = await triggerWebhooks('org-1', 'lead.created', { leadId: 'lead-1' });
+
+      expect(result).toEqual({ triggered: 0, failed: 0 });
+    });
+
+    it('should trigger webhooks for subscribed events', async () => {
+      const mockWebhook = {
+        id: 'webhook-1',
+        organizationId: 'org-1',
+        url: 'https://example.com/webhook',
+        secret: 'whsec_test',
+        events: ['lead.created'],
+        status: 'active',
+        headers: {},
+        retryConfig: { maxRetries: 3, retryDelayMs: 5000 },
+        failureCount: 0,
+      };
+
+      (db.where as ReturnType<typeof vi.fn>).mockResolvedValue([mockWebhook]);
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        text: vi.fn().mockResolvedValue('{"success": true}'),
+      });
+
+      const result = await triggerWebhooks('org-1', 'lead.created', { leadId: 'lead-1' });
+
+      expect(result.triggered).toBe(1);
+      expect(result.failed).toBe(0);
+    });
+
+    it('should not trigger webhooks for unsubscribed events', async () => {
+      const mockWebhook = {
+        id: 'webhook-1',
+        events: ['lead.updated'], // Not subscribed to lead.created
+        status: 'active',
+      };
+
+      (db.where as ReturnType<typeof vi.fn>).mockResolvedValue([mockWebhook]);
+
+      const result = await triggerWebhooks('org-1', 'lead.created', { leadId: 'lead-1' });
+
+      expect(result.triggered).toBe(0);
+    });
+
+    it('should handle delivery failure', async () => {
+      const mockWebhook = {
+        id: 'webhook-1',
+        url: 'https://example.com/webhook',
+        secret: 'whsec_test',
+        events: ['lead.created'],
+        status: 'active',
+        headers: {},
+        retryConfig: { maxRetries: 3, retryDelayMs: 5000 },
+        failureCount: 0,
+      };
+
+      (db.where as ReturnType<typeof vi.fn>).mockResolvedValue([mockWebhook]);
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+        text: vi.fn().mockResolvedValue('Error'),
+      });
+
+      const result = await triggerWebhooks('org-1', 'lead.created', { leadId: 'lead-1' });
+
+      expect(result.failed).toBe(1);
+    });
+
+    it('should handle network errors', async () => {
+      const mockWebhook = {
+        id: 'webhook-1',
+        url: 'https://example.com/webhook',
+        secret: 'whsec_test',
+        events: ['lead.created'],
+        status: 'active',
+        headers: {},
+        retryConfig: { maxRetries: 3, retryDelayMs: 5000 },
+        failureCount: 0,
+      };
+
+      (db.where as ReturnType<typeof vi.fn>).mockResolvedValue([mockWebhook]);
+      (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Network error'));
+
+      const result = await triggerWebhooks('org-1', 'lead.created', { leadId: 'lead-1' });
+
+      expect(result.failed).toBe(1);
+    });
+  });
+
+  describe('delivery timing (#69)', () => {
+    const webhook = (id: string) => ({
+      id,
+      organizationId: 'org-1',
+      url: `https://example.com/${id}`,
+      secret: 'whsec_test',
+      events: ['lead.created'],
+      status: 'active',
+      headers: {},
+      retryConfig: { maxRetries: 3, retryDelayMs: 5000 },
+      failureCount: 0,
+    });
+    const okResponse = {
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      text: vi.fn().mockResolvedValue('ok'),
+    };
+    const flush = async () => {
+      for (let i = 0; i < 50; i++) await Promise.resolve();
+    };
+
+    it('gives up an attempt after 8 seconds', async () => {
+      expect(WEBHOOK_DELIVERY_TIMEOUT_MS).toBe(8000);
+      (db.where as ReturnType<typeof vi.fn>).mockResolvedValue([webhook('webhook-1')]);
+      (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(
+        (_url: string, init: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+          })
+      );
+
+      let result: { triggered: number; failed: number } | undefined;
+      void triggerWebhooks('org-1', 'lead.created', {}).then((r) => {
+        result = r;
+      });
+      await vi.advanceTimersByTimeAsync(WEBHOOK_DELIVERY_TIMEOUT_MS - 1);
+      expect(result).toBeUndefined();
+      await vi.advanceTimersByTimeAsync(1);
+      await flush();
+      expect(result).toEqual({ triggered: 0, failed: 1 });
+    });
+
+    it('sends to all endpoints in parallel', async () => {
+      (db.where as ReturnType<typeof vi.fn>).mockResolvedValue([
+        webhook('webhook-1'),
+        webhook('webhook-2'),
+        webhook('webhook-3'),
+      ]);
+      const pending: Array<() => void> = [];
+      (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            pending.push(() => resolve(okResponse));
+          })
+      );
+
+      const run = triggerWebhooks('org-1', 'lead.created', {});
+      await flush();
+      // All three requests are open before any of them has answered
+      expect(global.fetch).toHaveBeenCalledTimes(3);
+      for (const answer of pending) answer();
+      await expect(run).resolves.toEqual({ triggered: 3, failed: 0 });
+    });
+
+    it('a failure to record one delivery does not stop the others', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      (db.where as ReturnType<typeof vi.fn>).mockResolvedValue([
+        webhook('webhook-1'),
+        webhook('webhook-2'),
+      ]);
+      (db.returning as ReturnType<typeof vi.fn>)
+        .mockRejectedValueOnce(new Error('insert failed'))
+        .mockResolvedValueOnce([{ id: 'delivery-2' }]);
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(okResponse);
+
+      await expect(triggerWebhooks('org-1', 'lead.created', {})).resolves.toEqual({
+        triggered: 1,
+        failed: 1,
+      });
+    });
+
+    it('stores the delivery as due for retry before sending it', async () => {
+      (db.where as ReturnType<typeof vi.fn>).mockResolvedValue([webhook('webhook-1')]);
+      (db.returning as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: 'delivery-1' }]);
+      let sentAfterInsert = false;
+      (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+        sentAfterInsert = (db.values as ReturnType<typeof vi.fn>).mock.calls.length === 1;
+        return okResponse;
+      });
+
+      await triggerWebhooks('org-1', 'lead.created', {});
+
+      expect(sentAfterInsert).toBe(true);
+      expect(db.values).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'pending',
+          attempts: 1,
+          nextRetryAt: new Date(Date.now() + WEBHOOK_DELIVERY_LEASE_MS),
+        })
+      );
+      // On success the retry time is cleared
+      expect(db.set).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'success', nextRetryAt: null, attempts: 1 })
+      );
+    });
+
+    it('on failure moves the retry time by the configured delay', async () => {
+      (db.where as ReturnType<typeof vi.fn>).mockResolvedValue([webhook('webhook-1')]);
+      (db.returning as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: 'delivery-1' }]);
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ok: false,
+        status: 503,
+        statusText: 'Unavailable',
+        text: vi.fn().mockResolvedValue(''),
+      });
+
+      await triggerWebhooks('org-1', 'lead.created', {});
+
+      expect(db.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'pending',
+          attempts: 1,
+          nextRetryAt: new Date(Date.now() + 5000),
+        })
+      );
+    });
+
+    it('fails the delivery at once when maxRetries allows a single attempt', async () => {
+      (db.where as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { ...webhook('webhook-1'), retryConfig: { maxRetries: 1, retryDelayMs: 5000 } },
+      ]);
+      (db.returning as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: 'delivery-1' }]);
+      (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('refused'));
+
+      await triggerWebhooks('org-1', 'lead.created', {});
+
+      expect(db.set).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'failed', attempts: 1, nextRetryAt: null })
+      );
+    });
+  });
+
+  describe('sendWebhookDelivery (#314)', () => {
+    // Made-up values: the stored headers are sent as-is, only the browser never sees them
+    const webhook = {
+      id: 'webhook-1',
+      organizationId: 'org-1',
+      name: 'CRM',
+      url: 'https://hooks.example.com/one',
+      secret: 'whsec_test',
+      events: ['lead.created' as const],
+      status: 'inactive' as const,
+      headers: { Authorization: 'Bearer made-up-token-314', 'X-Tenant': 'tenant-made-up' },
+      retryConfig: { maxRetries: 3, retryDelayMs: 5000 },
+      lastTriggeredAt: null,
+      failureCount: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    it('sends one delivery to the given webhook with the stored header values', async () => {
+      (db.returning as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: 'delivery-1' }]);
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        text: vi.fn().mockResolvedValue('ok'),
+      });
+
+      await expect(sendWebhookDelivery(webhook, 'lead.created', { test: true })).resolves.toEqual({
+        success: true,
+      });
+
+      // No lookup of other webhooks subscribed to the event
+      expect(db.select).not.toHaveBeenCalled();
+      expect(db.values).toHaveBeenCalledTimes(1);
+      expect(db.values).toHaveBeenCalledWith(
+        expect.objectContaining({ webhookId: 'webhook-1', eventType: 'lead.created' })
+      );
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      const [url, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(url).toBe('https://hooks.example.com/one');
+      expect((init as RequestInit).headers).toMatchObject({
+        Authorization: 'Bearer made-up-token-314',
+        'X-Tenant': 'tenant-made-up',
+      });
+    });
+  });
+
+  describe('destination guard and redirects (#321)', () => {
+    const base = {
+      id: 'webhook-1',
+      organizationId: 'org-1',
+      name: 'CRM',
+      url: 'https://hooks.example.com/one',
+      secret: 'whsec_test',
+      events: ['lead.created' as const],
+      status: 'active' as const,
+      headers: {},
+      retryConfig: { maxRetries: 3, retryDelayMs: 5000 },
+      lastTriggeredAt: null,
+      failureCount: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const deliveryUpdates = () =>
+      (db.set as ReturnType<typeof vi.fn>).mock.calls
+        .map(([values]) => values as Record<string, unknown>)
+        .filter((values) => 'attempts' in values);
+
+    beforeEach(() => {
+      (db.returning as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: 'delivery-1' }]);
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        text: vi.fn().mockResolvedValue('ok'),
+      });
+    });
+
+    it.each([
+      ['a private address', [{ address: '10.1.2.3', family: 4 }]],
+      ['the metadata address', [{ address: '169.254.169.254', family: 4 }]],
+      ['an IPv6 loopback', [{ address: '::1', family: 6 }]],
+      ['an IPv4-mapped loopback', [{ address: '::ffff:127.0.0.1', family: 6 }]],
+      [
+        'one private address among public ones',
+        [
+          { address: '93.184.215.14', family: 4 },
+          { address: '192.168.0.10', family: 4 },
+        ],
+      ],
+      ['no address', []],
+    ])('refuses a host name that resolves to %s, without sending or retrying', async (_, addresses) => {
+      dnsMocks.lookup.mockResolvedValue(addresses);
+
+      await expect(sendWebhookDelivery(base, 'lead.created', {})).resolves.toEqual({
+        success: false,
+      });
+
+      expect(dnsMocks.lookup).toHaveBeenCalledWith('hooks.example.com', { all: true });
+      expect(global.fetch).not.toHaveBeenCalled();
+      const [stored] = deliveryUpdates();
+      // A fixed text and a reason code; never the address
+      expect(stored).toMatchObject({
+        status: 'failed',
+        error: 'Destination not allowed (resolved_address)',
+        nextRetryAt: null,
+      });
+      // The payload and the answer are SQL expressions redacting the personal data (#918, #936)
+      const { payload: _redacted, response: _response, ...written } = stored as Record<string, unknown>;
+      for (const { address } of addresses) {
+        expect(JSON.stringify(written)).not.toContain(address);
+      }
+    });
+
+    it.each([
+      ['https://127.0.0.1/hook', 'address'],
+      ['https://2130706433/hook', 'address'],
+      ['https://0x7f.1/hook', 'address'],
+      ['https://[::ffff:169.254.169.254]/hook', 'address'],
+      ['https://LOCALHOST./hook', 'host'],
+      ['https://user:secret@hooks.example.com/hook', 'credentials'],
+      ['https://hooks.example.com:6379/hook', 'port'],
+    ])('refuses %s before any lookup (%s)', async (url, reason) => {
+      await sendWebhookDelivery({ ...base, url }, 'lead.created', {});
+
+      expect(dnsMocks.lookup).not.toHaveBeenCalled();
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(deliveryUpdates()[0]).toMatchObject({
+        status: 'failed',
+        error: `Destination not allowed (${reason})`,
+      });
+    });
+
+    it('treats a name that does not resolve as a network error, retried later', async () => {
+      dnsMocks.lookup.mockRejectedValue(
+        Object.assign(new Error('getaddrinfo ENOTFOUND hooks.example.com'), { code: 'ENOTFOUND' })
+      );
+
+      await sendWebhookDelivery(base, 'lead.created', {});
+
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(deliveryUpdates()[0]).toMatchObject({
+        status: 'pending',
+        error: 'Network error (ENOTFOUND)',
+      });
+    });
+
+    it('does not follow redirects, and counts a 3xx answer as a failure', async () => {
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ok: false,
+        status: 302,
+        statusText: 'Found',
+        text: vi.fn().mockResolvedValue(''),
+      });
+
+      await expect(sendWebhookDelivery(base, 'lead.created', {})).resolves.toEqual({
+        success: false,
+      });
+
+      // Sent once; the transport never follows a Location (pinned-request.test.ts)
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(deliveryUpdates()[0]).toMatchObject({
+        status: 'pending',
+        statusCode: 302,
+        error: 'HTTP 302: Redirect not followed',
+      });
+    });
+
+    it('sends to a host name that resolves to public addresses only', async () => {
+      dnsMocks.lookup.mockResolvedValue([
+        { address: '93.184.215.14', family: 4 },
+        { address: '2606:2800:21f:cb07:6820:80da:af6b:8b2c', family: 6 },
+      ]);
+
+      await expect(sendWebhookDelivery(base, 'lead.created', {})).resolves.toEqual({
+        success: true,
+      });
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('connection pinned to the checked address (#330)', () => {
+    const base = {
+      id: 'webhook-1',
+      organizationId: 'org-1',
+      name: 'CRM',
+      url: 'https://hooks.example.com/one',
+      secret: 'whsec_test',
+      events: ['lead.created' as const],
+      status: 'active' as const,
+      headers: {},
+      retryConfig: { maxRetries: 3, retryDelayMs: 5000 },
+      lastTriggeredAt: null,
+      failureCount: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const transport = vi.mocked(pinnedRequest.sendPinnedRequest);
+    const actual = async () =>
+      vi.importActual<typeof pinnedRequest>('@/lib/features/webhooks/services/pinned-request');
+
+    /** The real transport with a request function that records its options and answers 200 */
+    async function recordConnection() {
+      const { sendPinnedRequest } = await actual();
+      const connections: RequestOptions[] = [];
+      const request: pinnedRequest.RequestFunction = (options, onResponse) => {
+        connections.push(options);
+        const req = new EventEmitter() as unknown as ClientRequest;
+        Object.assign(req, {
+          destroy: vi.fn(),
+          end: () => {
+            const response = Object.assign(Readable.from([Buffer.from('ok')]), {
+              statusCode: 200,
+              statusMessage: 'OK',
+            }) as unknown as IncomingMessage;
+            onResponse(response);
+          },
+        });
+        return req;
+      };
+      transport.mockImplementation((options) => sendPinnedRequest({ ...options, request }));
+      return connections;
+    }
+
+    const lookupAddress = (options: RequestOptions) =>
+      new Promise<unknown>((resolve) => {
+        (options.lookup as LookupFunction)('hooks.example.com', {}, (_error, address) =>
+          resolve(address)
+        );
+      });
+
+    beforeEach(() => {
+      (db.returning as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: 'delivery-1' }]);
+    });
+
+    afterEach(() => {
+      transport.mockImplementation(sendThroughFetchStub);
+    });
+
+    it('hands the transport the addresses that were checked', async () => {
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+        status: 200,
+        statusText: 'OK',
+        text: vi.fn().mockResolvedValue('ok'),
+      });
+
+      await sendWebhookDelivery(base, 'lead.created', {});
+
+      expect(transport).toHaveBeenCalledTimes(1);
+      expect(transport.mock.calls[0][0]).toMatchObject({
+        url: new URL('https://hooks.example.com/one'),
+        addresses: PUBLIC_ADDRESS,
+        method: 'POST',
+      });
+    });
+
+    it('connects to the checked public address even if the name now resolves to 127.0.0.1', async () => {
+      // DNS rebinding: public for the check, loopback for any later lookup
+      dnsMocks.lookup
+        .mockResolvedValueOnce(PUBLIC_ADDRESS)
+        .mockResolvedValue([{ address: '127.0.0.1', family: 4 }]);
+      const connections = await recordConnection();
+
+      await expect(sendWebhookDelivery(base, 'lead.created', {})).resolves.toEqual({
+        success: true,
+      });
+
+      expect(dnsMocks.lookup).toHaveBeenCalledTimes(1);
+      expect(connections).toHaveLength(1);
+      const [options] = connections;
+      // The socket goes where the lookup says; it never asks DNS again
+      await expect(lookupAddress(options)).resolves.toBe('93.184.215.14');
+      expect(dnsMocks.lookup).toHaveBeenCalledTimes(1);
+      // The name is still what TLS checks the certificate against, and what the receiver sees
+      expect(options).toMatchObject({
+        hostname: 'hooks.example.com',
+        servername: 'hooks.example.com',
+        headers: expect.objectContaining({ Host: 'hooks.example.com' }),
+      });
+      expect(options).not.toHaveProperty('rejectUnauthorized');
+    });
+
+    it('connects to whatever the check of this attempt accepted', async () => {
+      dnsMocks.lookup.mockResolvedValue([{ address: '93.184.215.99', family: 4 }]);
+      const connections = await recordConnection();
+
+      await sendWebhookDelivery(base, 'lead.created', {});
+
+      await expect(lookupAddress(connections[0])).resolves.toBe('93.184.215.99');
+    });
+  });
+
+  describe('request headers and error text (#314)', () => {
+    const SECRET_VALUE = 'Bearer made-up-token-314';
+    const base = {
+      id: 'webhook-1',
+      organizationId: 'org-1',
+      name: 'CRM',
+      url: 'https://hooks.example.com/one',
+      secret: 'whsec_test',
+      events: ['lead.created' as const],
+      status: 'active' as const,
+      retryConfig: { maxRetries: 3, retryDelayMs: 5000 },
+      lastTriggeredAt: null,
+      failureCount: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const ok = { ok: true, status: 200, statusText: 'OK', text: vi.fn().mockResolvedValue('') };
+    const storedErrors = () =>
+      (db.set as ReturnType<typeof vi.fn>).mock.calls
+        .map(([values]) => (values as { error?: unknown }).error)
+        .filter((e) => e !== undefined);
+    const sentHeaders = () =>
+      (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].headers as Record<string, string>;
+
+    beforeEach(() => {
+      (db.returning as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: 'delivery-1' }]);
+    });
+
+    it('stores a fixed message, not the value, when a stored header cannot be sent', async () => {
+      // Saved before values were checked
+      const webhook = { ...base, headers: { Authorization: `${SECRET_VALUE}\r\nX-Evil: 1` } };
+
+      await expect(sendWebhookDelivery(webhook, 'lead.created', {})).resolves.toEqual({
+        success: false,
+      });
+
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(storedErrors()).toEqual([INVALID_HEADERS_ERROR]);
+    });
+
+    it('never stores the raw message of a network error', async () => {
+      const webhook = { ...base, headers: { Authorization: SECRET_VALUE } };
+      (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValue(
+        new TypeError(`Headers.append: "${SECRET_VALUE}" is an invalid header value`)
+      );
+
+      await sendWebhookDelivery(webhook, 'lead.created', {});
+
+      expect(storedErrors()).toEqual(['Network error']);
+    });
+
+    it('describes failures with fixed texts and a system code only', () => {
+      const refused = new TypeError('fetch failed made-up-token');
+      (refused as { cause?: unknown }).cause = Object.assign(new Error('connect made-up-token'), {
+        code: 'ECONNREFUSED',
+      });
+      expect(describeRequestError(refused)).toBe('Network error (ECONNREFUSED)');
+      expect(describeRequestError(Object.assign(new Error('x'), { name: 'AbortError' }))).toBe(
+        'Request timed out'
+      );
+      // A code that is not a plain identifier is not copied
+      expect(describeRequestError(Object.assign(new Error('x'), { code: 'made-up token' }))).toBe(
+        'Network error'
+      );
+      expect(describeRequestError('made-up-token')).toBe('Network error');
+    });
+
+    it("skips stored reserved names, so the delivery's own headers are sent", async () => {
+      // Saved before names were checked
+      const webhook = {
+        ...base,
+        headers: {
+          'x-webhook-signature': 'forged',
+          'content-type': 'text/plain',
+          Host: 'internal.example.com',
+          Authorization: SECRET_VALUE,
+        },
+      };
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(ok);
+
+      await sendWebhookDelivery(webhook, 'lead.created', {});
+
+      const headers = sentHeaders();
+      expect(Object.keys(headers).map((n) => n.toLowerCase()).sort()).toEqual([
+        'authorization',
+        'content-type',
+        'user-agent',
+        'x-webhook-event',
+        'x-webhook-id',
+        'x-webhook-signature',
+      ]);
+      expect(headers['Content-Type']).toBe('application/json');
+      expect(headers['X-Webhook-Signature']).toMatch(/^t=\d+,v1=/);
+      expect(headers.Authorization).toBe(SECRET_VALUE);
+    });
+
+    it('skips a stored __proto__ header without losing the others (N2)', async () => {
+      // jsonb comes back through JSON.parse, which makes __proto__ an own key
+      const webhook = {
+        ...base,
+        headers: JSON.parse(
+          '{"__proto__":"made-up-proto","X-Tenant":"tenant-made-up"}'
+        ) as Record<string, string>,
+      };
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(ok);
+
+      await sendWebhookDelivery(webhook, 'lead.created', {});
+
+      expect(Object.keys(sentHeaders())).not.toContain('__proto__');
+      expect(sentHeaders()['X-Tenant']).toBe('tenant-made-up');
+    });
+  });
+
+  describe('processWebhookRetries', () => {
+    it('should be a function', () => {
+      expect(typeof processWebhookRetries).toBe('function');
+    });
+  });
+
+  describe('cleanupOldDeliveries', () => {
+    it('should delete old deliveries', async () => {
+      (db.delete as ReturnType<typeof vi.fn>).mockReturnThis();
+      (db.where as ReturnType<typeof vi.fn>).mockReturnThis();
+      (db.returning as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: 'old-1' }, { id: 'old-2' }]);
+
+      const count = await cleanupOldDeliveries(30);
+
+      expect(count).toBe(2);
+    });
+
+    it('should return 0 when no old deliveries', async () => {
+      (db.delete as ReturnType<typeof vi.fn>).mockReturnThis();
+      (db.where as ReturnType<typeof vi.fn>).mockReturnThis();
+      (db.returning as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+      const count = await cleanupOldDeliveries(30);
+
+      expect(count).toBe(0);
+    });
+
+    it('should use custom days to keep', async () => {
+      (db.delete as ReturnType<typeof vi.fn>).mockReturnThis();
+      (db.where as ReturnType<typeof vi.fn>).mockReturnThis();
+      (db.returning as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+      await cleanupOldDeliveries(7);
+
+      expect(db.delete).toHaveBeenCalled();
+    });
+  });
+});
 
 describe('generateWebhookSignature', () => {
   beforeEach(() => {
