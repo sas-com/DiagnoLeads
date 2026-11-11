@@ -307,7 +307,10 @@ describe('ForecastScreen', () => {
     mocks.forecast = { data: undefined, isError: true, isPlaceholderData: false, refetch: vi.fn() };
     renderWithIntl(<ForecastScreen />);
     expect(screen.getByRole('alert')).toHaveTextContent('予測を読み込めませんでした');
-    await user.click(screen.getByRole('button', { name: '再読み込み' }));
+    const retry = screen.getByRole('button', { name: '再読み込み' });
+    // 44px on a phone (#1059)
+    expect(retry).toHaveClass('min-h-11');
+    await user.click(retry);
     expect(mocks.forecast.refetch).toHaveBeenCalled();
   });
 });

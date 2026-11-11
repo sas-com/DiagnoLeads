@@ -1,6 +1,7 @@
 'use client';
 
 import { PageHeader } from '@/components/common/page-header';
+import { TAP_TARGET } from '@/components/common/tap-target';
 import { CommentsSection } from '@/components/features/comments/comments-section';
 import { LeadActivityCard } from '@/components/features/lead-activity/lead-activity-card';
 import { LeadContactBar } from '@/components/features/lead-follow-up/lead-contact-bar';
@@ -31,6 +32,7 @@ import { isNextMeetingOverdue } from '@/lib/features/leads/list-query';
 import { leadMqlLevel } from '@/lib/features/leads/mql-level';
 import { DEAL_PHASES, hasLostReason } from '@/lib/features/leads/types';
 import { trpc } from '@/lib/trpc/client';
+import { cn } from '@/lib/utils';
 import {
   AlertTriangle,
   ClipboardList,
@@ -123,7 +125,12 @@ export function LeadDetailView({
   if (query.isError) {
     return (
       <Callout title={t('loadError')} icon={AlertTriangle} color="red">
-        <Button variant="outline" size="sm" className="mt-3" onClick={() => query.refetch()}>
+        <Button
+          variant="outline"
+          size="sm"
+          className={cn(TAP_TARGET, 'mt-3')}
+          onClick={() => query.refetch()}
+        >
           <RefreshCw className="h-4 w-4" aria-hidden="true" />
           {t('retry')}
         </Button>

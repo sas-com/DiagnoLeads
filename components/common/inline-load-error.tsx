@@ -1,5 +1,6 @@
 'use client';
 
+import { TAP_TARGET } from '@/components/common/tap-target';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { AlertCircle, RotateCw } from 'lucide-react';
@@ -30,7 +31,7 @@ export function InlineLoadError({ onRetry, className }: InlineLoadErrorProps) {
         {t('loadError')}
       </span>
       {onRetry && (
-        <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+        <Button type="button" variant="outline" size="sm" className={TAP_TARGET} onClick={onRetry}>
           <RotateCw aria-hidden="true" />
           {t('retry')}
         </Button>

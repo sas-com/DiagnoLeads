@@ -358,6 +358,8 @@ describe('DealDetailView', () => {
       expect(retry).toHaveAccessibleDescription('商談を読み込めませんでした');
       // Not left inside what the question hid from the rest of the page
       expect(retry.closest('[aria-hidden="true"]')).toBeNull();
+      // 44px on a phone (#1059)
+      expect(retry).toHaveClass('min-h-11');
     });
 
     it('goes to the retry when the deal could not be read once a question is cancelled', async () => {
