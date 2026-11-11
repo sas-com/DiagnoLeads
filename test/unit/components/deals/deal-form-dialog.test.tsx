@@ -409,11 +409,8 @@ describe('DealFormDialog', () => {
       // Its status may just have been changed by hand on the lead's page
       expect(mocks.leadReads.at(-1)).toEqual({ leadId: LEAD_ID, enabled: true, staleTime: 0 });
       await user.type(screen.getByLabelText('商談名 必須'), 'AS/400 移行{Enter}');
-      // Focusable, not disabled, so it keeps the focus once pressed: it sends nothing (#1074)
-      const createButton = screen.getByRole('button', { name: '作成' });
-      expect(createButton).toHaveAttribute('aria-disabled', 'true');
-      expect(createButton).not.toBeDisabled();
-      await user.click(createButton);
+      // Not yet pressed, it cannot be pressed (the focus is in a field meanwhile, #1074)
+      expect(screen.getByRole('button', { name: '作成' })).toBeDisabled();
       expect(screen.getByRole('button', { name: 'キャンセル' })).toBeEnabled();
       expect(mocks.creates).toEqual([]);
       expect(screen.queryByText('商談名を入力してください')).not.toBeInTheDocument();
@@ -759,6 +756,24 @@ describe('DealFormDialog', () => {
       await user.click(saving);
       await user.keyboard('{Enter}');
       expect(mocks.updates).toHaveLength(1);
+    });
+
+    it('keeps the focus on 作成 while it saves, also as the lead is read again (#1074)', async () => {
+      const user = userEvent.setup();
+      mocks.newDeal = { stage: 'qualification', kind: null, wonFirst: false };
+      const { rerender } = renderForm({ leadId: LEAD_ID });
+      await user.type(screen.getByLabelText('商談名 必須'), 'AS/400 移行');
+      await user.click(screen.getByRole('button', { name: '作成' }));
+      expect(mocks.creates).toHaveLength(1);
+
+      // Once saved, the deals are read again, the lead's among them, while it still saves
+      mocks.pending = true;
+      mocks.reading = true;
+      rerender();
+      const saving = screen.getByRole('button', { name: '保存しています…' });
+      expect(saving).toHaveFocus();
+      expect(saving).toHaveAttribute('aria-disabled', 'true');
+      expect(saving).not.toBeDisabled();
     });
 
     it('closes as before once it is saved', async () => {

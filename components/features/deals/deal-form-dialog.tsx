@@ -366,8 +366,8 @@ export function DealFormDialog({
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    // The button stays focusable while the deal is saved or its lead read (aria-disabled):
-    // pressing it, or Enter in a field, sends nothing meanwhile (#1074)
+    // Nothing is sent while the deal is saved (its button stays focusable then, aria-disabled)
+    // or its lead read (#1074)
     if (pending || reading) return;
     setSubmitted(true);
     setSaveFailed(false);
@@ -796,9 +796,12 @@ export function DealFormDialog({
               <Button
                 type="submit"
                 className={cn(TAP_TARGET, 'min-w-24')}
-                // aria-disabled, not disabled: the focus stays on the button while the deal is
-                // saved (#1074)
-                aria-disabled={pending || reading}
+                // While the lead is read, before it is pressed (the focus is in a field then), it
+                // cannot be pressed yet. While the deal is saved, aria-disabled, not disabled:
+                // the focus stays on the button pressed, also as the lead is read again once the
+                // deal is saved (#1074)
+                disabled={reading && !pending}
+                aria-disabled={pending || undefined}
               >
                 {(pending || reading) && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
