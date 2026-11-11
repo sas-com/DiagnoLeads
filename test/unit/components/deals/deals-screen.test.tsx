@@ -838,8 +838,14 @@ describe('DealsScreen', () => {
       const name = `「AS/400 現行調査」を${stage}にする`;
       const dialog = screen.getByRole('dialog', { name });
       const save = within(dialog).getByRole('button', { name: '保存しています…' });
-      expect(save).toBeDisabled();
+      // aria-disabled, not disabled: a button pressed keeps the focus (#1058). Pressing it sends
+      // nothing more
+      expect(save).toHaveAttribute('aria-disabled', 'true');
+      expect(save).not.toBeDisabled();
       expect(save.querySelector('svg')).toHaveClass('animate-spin');
+      const sent = mocks.updates.length;
+      await user.click(save);
+      expect(mocks.updates).toHaveLength(sent);
       expect(within(dialog).getByRole('button', { name: 'キャンセル' })).toBeDisabled();
       // So that a failure can still be said in it
       await user.keyboard('{Escape}');

@@ -208,6 +208,8 @@ export function LostReasonDialog({
             </p>
           )}
 
+          {/* The button's new name alone may not be read out (as the delete question's, #1058) */}
+          <output className="sr-only">{pending ? tForm('saving') : ''}</output>
           <DialogFooter className="gap-2">
             <Button
               type="button"
@@ -218,7 +220,13 @@ export function LostReasonDialog({
             >
               {tCommon('cancel')}
             </Button>
-            <Button type="submit" className={TAP_TARGET} disabled={pending}>
+            <Button
+              type="submit"
+              className={TAP_TARGET}
+              // aria-disabled, not disabled: the focus stays on the button while the loss is saved;
+              // pressing it again sends nothing, as the send returns meanwhile (#1058)
+              aria-disabled={pending}
+            >
               {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
               {pending ? tForm('saving') : t('confirm')}
             </Button>

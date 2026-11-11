@@ -166,6 +166,8 @@ export function WonDialog({
             </p>
           )}
 
+          {/* The button's new name alone may not be read out (as the delete question's, #1058) */}
+          <output className="sr-only">{pending ? t('form.saving') : ''}</output>
           <DialogFooter className="gap-2">
             <Button
               type="button"
@@ -176,7 +178,13 @@ export function WonDialog({
             >
               {tCommon('cancel')}
             </Button>
-            <Button type="submit" className={TAP_TARGET} disabled={pending}>
+            <Button
+              type="submit"
+              className={TAP_TARGET}
+              // aria-disabled, not disabled: the focus stays on the button while the win is saved;
+              // pressing it again sends nothing, as the send returns meanwhile (#1058)
+              aria-disabled={pending}
+            >
               {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
               {pending ? t('form.saving') : t('wonDialog.confirm')}
             </Button>
