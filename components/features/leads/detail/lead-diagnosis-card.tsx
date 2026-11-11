@@ -1,5 +1,6 @@
 'use client';
 
+import { FieldHelp } from '@/components/features/field-glossary/field-help';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
@@ -221,7 +222,7 @@ export function LeadDiagnosisCard({
     );
   }
 
-  const rows: { key: string; label: string; value: ReactNode }[] = [];
+  const rows: { key: string; label: ReactNode; value: ReactNode }[] = [];
   if (ax) {
     if (ax.platform)
       rows.push({ key: 'platform', label: t('platform'), value: labels.platform(ax.platform) });
@@ -267,7 +268,12 @@ export function LeadDiagnosisCard({
     const mqlReason = labels.mqlReason(ax.mql);
     rows.push({
       key: 'mql',
-      label: t('mqlJudgement'),
+      label: (
+        <>
+          {t('mqlJudgement')}
+          <FieldHelp fieldKey="leads.mqlLevel" className="ml-1" />
+        </>
+      ),
       value: (
         <span data-testid="lead-diagnosis-mql">
           {t(MQL_LEVEL_KEYS[ax.mql.level])}
@@ -441,7 +447,7 @@ function BuilderDiagnosis({
     );
   }
 
-  const rows: { key: string; label: string; value: ReactNode }[] = [];
+  const rows: { key: string; label: ReactNode; value: ReactNode }[] = [];
   if (view.resultTypeName) {
     rows.push({ key: 'resultType', label: t('builderResultType'), value: view.resultTypeName });
   }
@@ -465,7 +471,12 @@ function BuilderDiagnosis({
   }
   rows.push({
     key: 'mql',
-    label: t('mqlJudgement'),
+    label: (
+      <>
+        {t('mqlJudgement')}
+        <FieldHelp fieldKey="leads.mqlLevel" className="ml-1" />
+      </>
+    ),
     value: (
       <span data-testid="lead-builder-mql">
         {t(MQL_LEVEL_KEYS[view.mqlLevel])}
