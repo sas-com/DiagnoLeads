@@ -1,5 +1,6 @@
 'use client';
 
+import { TAP_TARGET } from '@/components/common/tap-target';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -94,7 +95,7 @@ export function LeadHearingsCard({
       {isError ? (
         <div className="space-y-2 text-sm text-red-600">
           <p>{t('card.loadError')}</p>
-          <Button size="sm" variant="outline" onClick={() => refetch()}>
+          <Button size="sm" variant="outline" className={TAP_TARGET} onClick={() => refetch()}>
             <RefreshCw className="h-4 w-4" />
             {t('card.retry')}
           </Button>

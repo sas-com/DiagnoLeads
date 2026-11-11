@@ -1,5 +1,6 @@
 'use client';
 
+import { TAP_TARGET } from '@/components/common/tap-target';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
@@ -424,7 +425,12 @@ export function LeadHearingEditor({
     return (
       <Callout title={t('editor.loadErrorTitle')} icon={AlertTriangle} color="red">
         <p>{t('editor.loadErrorBody')}</p>
-        <Button variant="outline" size="sm" className="mt-3" onClick={() => hearing.refetch()}>
+        <Button
+          variant="outline"
+          size="sm"
+          className={cn(TAP_TARGET, 'mt-3')}
+          onClick={() => hearing.refetch()}
+        >
           <RefreshCw className="h-4 w-4" />
           {t('editor.retry')}
         </Button>

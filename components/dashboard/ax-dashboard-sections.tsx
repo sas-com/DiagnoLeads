@@ -1,5 +1,6 @@
 'use client';
 
+import { TAP_TARGET } from '@/components/common/tap-target';
 import { ContactQuickActions } from '@/components/features/lead-follow-up/contact-quick-actions';
 import { LEAD_STATUS_BADGE_CLASSES } from '@/components/features/leads/lead-status-styles';
 import { Button } from '@/components/ui/button';
@@ -95,7 +96,7 @@ export function CardError({ onRetry, className }: { onRetry: () => void; classNa
         <AlertCircle className="h-4 w-4" aria-hidden="true" />
         {tw('cardError')}
       </span>
-      <Button variant="outline" size="sm" onClick={onRetry}>
+      <Button variant="outline" size="sm" className={TAP_TARGET} onClick={onRetry}>
         <RotateCw aria-hidden="true" />
         {tw('retry')}
       </Button>

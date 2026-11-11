@@ -148,6 +148,7 @@ describe('changeKinds', () => {
   const deal = (overrides: Partial<DealChangeInput>): DealChangeInput => ({
     id: 'd',
     name: '商談',
+    leadLabel: '架空商事',
     ownerName: null,
     stage: 'proposal',
     amount: 1_000_000,
@@ -179,6 +180,7 @@ describe('changeKinds', () => {
 describe('classifyChanges', () => {
   const base = {
     name: '商談',
+    leadLabel: '架空商事',
     ownerName: '営業 花子',
     expectedCloseOn: '2026-11-30',
   };
@@ -204,6 +206,8 @@ describe('classifyChanges', () => {
     expect(changes.groups.created).toMatchObject({ count: 1, amount: 2_000_000 });
     expect(changes.groups.advanced).toMatchObject({ count: 1, amount: 3_000_000 });
     expect(changes.groups.won.deals.map((deal) => deal.id)).toEqual(['c']);
+    // Each says whose deal it is (#953)
+    expect(changes.groups.won.deals[0]).toMatchObject({ name: '商談', leadLabel: '架空商事' });
     expect(changes.groups.lost.count).toBe(0);
     // Only deals open both then and now: b went from 2.5M to 3M
     expect(changes.amountDelta).toBe(500_000);

@@ -1,5 +1,6 @@
 'use client';
 
+import { TAP_TARGET } from '@/components/common/tap-target';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
@@ -17,6 +18,7 @@ import {
   splitHearingSummaryItems,
 } from '@/lib/features/lead-hearings/summary';
 import { trpc } from '@/lib/trpc/client';
+import { cn } from '@/lib/utils';
 import { AlertTriangle, ArrowRight, Copy, Loader2, Printer, RefreshCw } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useMemo } from 'react';
@@ -91,7 +93,12 @@ export function HearingSummaryPanel({
   if (query.isError) {
     return (
       <Callout title={t('summary.loadError')} icon={AlertTriangle} color="red">
-        <Button variant="outline" size="sm" className="mt-3" onClick={() => query.refetch()}>
+        <Button
+          variant="outline"
+          size="sm"
+          className={cn(TAP_TARGET, 'mt-3')}
+          onClick={() => query.refetch()}
+        >
           <RefreshCw className="h-4 w-4" />
           {t('summary.retry')}
         </Button>

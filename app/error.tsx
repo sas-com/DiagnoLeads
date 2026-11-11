@@ -1,5 +1,7 @@
 'use client';
 
+import { TAP_TARGET } from '@/components/common/tap-target';
+import { cn } from '@/lib/utils';
 import { useEffect } from 'react';
 
 /**
@@ -35,7 +37,10 @@ export default function RootError({
         <button
           type="button"
           onClick={reset}
-          className="rounded-md bg-teal-600 px-4 py-2 text-white hover:bg-teal-700 transition-colors"
+          className={cn(
+            TAP_TARGET,
+            'rounded-md bg-teal-600 px-4 py-2 text-white hover:bg-teal-700 transition-colors'
+          )}
         >
           再試行
         </button>
