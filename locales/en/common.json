@@ -1520,6 +1520,7 @@
     },
     "state": {
       "loadError": "Could not load the deals",
+      "loadErrorAgain": "Retried, but the deals still could not be loaded. Please try again later",
       "retry": "Retry",
       "empty": "No deals yet",
       "emptyHint": "Create deals from a lead's page or with \"New deal\" here",
