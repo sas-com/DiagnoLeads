@@ -116,7 +116,7 @@ export const DEAL_AUDIT_RESOURCE = 'deal';
  * more. Stored as the name itself, like the title of the meeting's next action: the name is free
  * text, required, and read as it is by the forecast, the activity and the screens, and an
  * organization has no language of its own. The board and the list show the company and the
- * person beside it; the forecast's changes of the week show only the name and the owner.
+ * person beside it; the forecast's changes of the week the company, else the person (#953).
  */
 export const QUALIFICATION_DEAL_NAME = '現行調査';
 

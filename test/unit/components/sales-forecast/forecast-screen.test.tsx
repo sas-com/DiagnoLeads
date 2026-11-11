@@ -147,6 +147,7 @@ const forecastData = (overrides: Record<string, unknown> = {}) => ({
           {
             id: 'deal-1',
             name: 'AS/400 移行',
+            leadLabel: '架空商事',
             ownerName: '営業 花子',
             stage: 'negotiation',
             amount: 1_500_000,
@@ -182,6 +183,15 @@ beforeEach(() => {
   mocks.targets = { data: undefined };
   mocks.targetsInputs = [];
 });
+
+/** The line under a change's deal name: whose deal and its owner (#953) */
+const whose = (text: string) =>
+  screen.getByText(
+    (_, element) =>
+      element?.tagName === 'SPAN' &&
+      element.parentElement?.tagName === 'LI' &&
+      element.textContent === text
+  );
 
 describe('ForecastScreen', () => {
   it('reads this quarter by default and the period from the URL', () => {
@@ -248,6 +258,8 @@ describe('ForecastScreen', () => {
     expect(screen.getByText(/開いている商談の金額の増減 \+/)).toBeInTheDocument();
     expect(screen.getByText('前進')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'AS/400 移行' })).toHaveAttribute('href', '/ja/deals/deal-1');
+    // Whose deal, beside its owner said as such: deals of the same name are told apart (#953)
+    expect(whose('架空商事 · 担当：営業 花子')).toBeInTheDocument();
     // The stage move and the amount before and after, in a small group opened from the start
     const line = screen.getByText(
       (_, element) =>
@@ -420,10 +432,41 @@ describe('ForecastScreen (#721)', () => {
     expect(screen.getByText(/^2026\/10\/01 – 2026\/12\/31/)).toBeInTheDocument();
   });
 
+  it("says a deal without an owner as such, and leaves out a lead it cannot name (#953)", () => {
+    const change = (id: string, leadLabel: string | null, ownerName: string | null) => ({
+      id,
+      name: '現行調査',
+      leadLabel,
+      ownerName,
+      stage: 'qualification',
+      amount: null,
+      expectedCloseOn: null,
+      before: null,
+    });
+    mocks.forecast.data = forecastData({
+      changes: {
+        groups: {
+          ...emptyGroups,
+          created: {
+            count: 2,
+            amount: 0,
+            deals: [change('deal-a', '架空 太郎', null), change('deal-b', null, '営業 花子')],
+          },
+        },
+        amountDelta: 0,
+      },
+    });
+    renderWithIntl(<ForecastScreen />);
+    // A lead's name is not taken for the owner's
+    expect(whose('架空 太郎 · 担当未定')).toBeInTheDocument();
+    expect(whose('担当：営業 花子')).toBeInTheDocument();
+  });
+
   it('says how many more deals changed, and opens only the small groups', () => {
     const deal = (index: number) => ({
       id: `deal-${index}`,
       name: `新規の商談 ${index}`,
+      leadLabel: null,
       ownerName: '営業 花子',
       stage: 'qualification',
       amount: null,

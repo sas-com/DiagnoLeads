@@ -7,11 +7,12 @@
  * - Open deals whose expected close date is before the period are reported apart, so a date
  *   that was never moved does not hide a deal; so are those without one (the date is optional).
  * - The week's changes compare the deals changed since a moment with their latest history row
- *   at that moment (deal_history keeps every forecast value after each change).
+ *   at that moment (deal_history keeps every forecast value after each change). Each deal says
+ *   whose it is with its lead's company, else its name, as the board does (#953).
  */
 
 import type { db as defaultDb } from '@/lib/db/client';
-import { dealHistory, deals, users } from '@/lib/db/schema';
+import { dealHistory, deals, leads, users } from '@/lib/db/schema';
 import {
   BEST_CASE_PROBABILITY,
   COMMIT_PROBABILITY,
@@ -201,12 +202,19 @@ export async function getPipelineChanges(
     .select({
       id: deals.id,
       name: deals.name,
+      company: leads.company,
+      leadName: leads.name,
       stage: deals.stage,
       amount: deals.amount,
       expectedCloseOn: deals.expectedCloseOn,
       ownerName: sql<string | null>`coalesce(nullif(trim(${users.name}), ''), ${users.email})`,
     })
     .from(deals)
+    // The deal's lead, of the same organization (#953)
+    .leftJoin(
+      leads,
+      and(eq(leads.id, deals.leadId), eq(leads.organizationId, deals.organizationId))
+    )
     .leftJoin(users, eq(users.id, deals.ownerUserId))
     .where(and(eq(deals.organizationId, input.organizationId), gt(deals.updatedAt, input.since)))
     .orderBy(desc(deals.updatedAt))
@@ -240,6 +248,7 @@ export async function getPipelineChanges(
       return {
         id: deal.id,
         name: deal.name,
+        leadLabel: deal.company || deal.leadName || null,
         ownerName: deal.ownerName,
         stage: deal.stage,
         amount: deal.amount ?? null,
