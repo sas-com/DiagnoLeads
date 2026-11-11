@@ -174,7 +174,7 @@ function renderForm(
 ) {
   const onOpenChange = vi.fn();
   const onSaved = vi.fn();
-  render(
+  const ui = () => (
     <NextIntlClientProvider locale="ja" messages={messages}>
       <DealFormDialog
         open
@@ -185,7 +185,10 @@ function renderForm(
       />
     </NextIntlClientProvider>
   );
-  return { onOpenChange, onSaved };
+  const view = render(ui());
+  /** Shown again, as when the save goes on its way (#1074) */
+  const rerender = () => view.rerender(ui());
+  return { onOpenChange, onSaved, rerender };
 }
 
 beforeEach(() => {
@@ -406,6 +409,7 @@ describe('DealFormDialog', () => {
       // Its status may just have been changed by hand on the lead's page
       expect(mocks.leadReads.at(-1)).toEqual({ leadId: LEAD_ID, enabled: true, staleTime: 0 });
       await user.type(screen.getByLabelText('商談名 必須'), 'AS/400 移行{Enter}');
+      // Not yet pressed, it cannot be pressed (the focus is in a field meanwhile, #1074)
       expect(screen.getByRole('button', { name: '作成' })).toBeDisabled();
       expect(screen.getByRole('button', { name: 'キャンセル' })).toBeEnabled();
       expect(mocks.creates).toEqual([]);
@@ -718,14 +722,58 @@ describe('DealFormDialog', () => {
       const { onOpenChange } = renderForm({ deal });
       const dialog = screen.getByRole('dialog', { name: '商談を編集' });
       const save = within(dialog).getByRole('button', { name: '保存しています…' });
-      expect(save).toBeDisabled();
+      // aria-disabled, not disabled: it keeps the focus (#1074)
+      expect(save).toHaveAttribute('aria-disabled', 'true');
+      expect(save).not.toBeDisabled();
       expect(save.querySelector('svg')).toHaveClass('animate-spin');
+      // Read out, as the button's new name alone may not be (#1074)
+      expect(within(dialog).getByRole('status')).toHaveTextContent('保存しています…');
       expect(within(dialog).getByRole('button', { name: 'キャンセル' })).toBeDisabled();
 
       await user.keyboard('{Escape}');
       await user.click(within(dialog).getByRole('button', { name: '閉じる' }));
       expect(onOpenChange).not.toHaveBeenCalled();
       expect(screen.getByRole('dialog', { name: '商談を編集' })).toBeInTheDocument();
+    });
+
+    it('keeps the focus on 保存 once pressed, and sends the change once (#1074)', async () => {
+      const user = userEvent.setup();
+      const { rerender } = renderForm({ deal });
+      const dialog = screen.getByRole('dialog', { name: '商談を編集' });
+      expect(within(dialog).getByRole('status')).toBeEmptyDOMElement();
+      await user.type(within(dialog).getByLabelText('商談名 必須'), ' 2');
+      await user.click(within(dialog).getByRole('button', { name: '保存' }));
+      expect(mocks.updates).toHaveLength(1);
+
+      // While the change is on its way
+      mocks.pending = true;
+      rerender();
+      const saving = within(dialog).getByRole('button', { name: '保存しています…' });
+      expect(saving).toHaveFocus();
+      expect(saving).toHaveAttribute('aria-disabled', 'true');
+      expect(saving).not.toBeDisabled();
+      expect(within(dialog).getByRole('status')).toHaveTextContent('保存しています…');
+      await user.click(saving);
+      await user.keyboard('{Enter}');
+      expect(mocks.updates).toHaveLength(1);
+    });
+
+    it('keeps the focus on 作成 while it saves, also as the lead is read again (#1074)', async () => {
+      const user = userEvent.setup();
+      mocks.newDeal = { stage: 'qualification', kind: null, wonFirst: false };
+      const { rerender } = renderForm({ leadId: LEAD_ID });
+      await user.type(screen.getByLabelText('商談名 必須'), 'AS/400 移行');
+      await user.click(screen.getByRole('button', { name: '作成' }));
+      expect(mocks.creates).toHaveLength(1);
+
+      // Once saved, the deals are read again, the lead's among them, while it still saves
+      mocks.pending = true;
+      mocks.reading = true;
+      rerender();
+      const saving = screen.getByRole('button', { name: '保存しています…' });
+      expect(saving).toHaveFocus();
+      expect(saving).toHaveAttribute('aria-disabled', 'true');
+      expect(saving).not.toBeDisabled();
     });
 
     it('closes as before once it is saved', async () => {

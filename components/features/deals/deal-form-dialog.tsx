@@ -366,6 +366,9 @@ export function DealFormDialog({
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
+    // Nothing is sent while the deal is saved (its button stays focusable then, aria-disabled)
+    // or its lead read (#1074)
+    if (pending || reading) return;
     setSubmitted(true);
     setSaveFailed(false);
     if (firstError) {
@@ -772,6 +775,8 @@ export function DealFormDialog({
               )}
             </div>
 
+            {/* The button's new name alone may not be read out (as the delete question's, #1074) */}
+            <output className="sr-only">{pending ? t('form.saving') : ''}</output>
             {/* Always in view, so a long form on a phone never hides the buttons or a failure */}
             <div className="flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 px-6 py-3 dark:border-gray-700">
               {saveFailed && (
@@ -791,7 +796,12 @@ export function DealFormDialog({
               <Button
                 type="submit"
                 className={cn(TAP_TARGET, 'min-w-24')}
-                disabled={pending || reading}
+                // While the lead is read, before it is pressed (the focus is in a field then), it
+                // cannot be pressed yet. While the deal is saved, aria-disabled, not disabled:
+                // the focus stays on the button pressed, also as the lead is read again once the
+                // deal is saved (#1074)
+                disabled={reading && !pending}
+                aria-disabled={pending || undefined}
               >
                 {(pending || reading) && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />

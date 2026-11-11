@@ -238,6 +238,8 @@ function CloseDateForm({
           {tToasts('error')}
         </p>
       )}
+      {/* The button's new name alone may not be read out (as the delete question's, #1074) */}
+      <output className="sr-only">{saving ? tForm('saving') : ''}</output>
       {/* As the dialog that adds a next action beside it: side by side at the end */}
       <div className="flex flex-wrap justify-end gap-2">
         <Button
@@ -249,7 +251,13 @@ function CloseDateForm({
         >
           {tCommon('cancel')}
         </Button>
-        <Button type="submit" className={cn(TAP_TARGET, 'min-w-24')} disabled={saving}>
+        <Button
+          type="submit"
+          className={cn(TAP_TARGET, 'min-w-24')}
+          // aria-disabled, not disabled: the focus stays on the button while the date is saved;
+          // pressing it again sends nothing, as the send returns meanwhile (#1074)
+          aria-disabled={saving}
+        >
           {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
           {saving ? tForm('saving') : tForm('submitEdit')}
         </Button>
