@@ -6,7 +6,7 @@ title: "公開フォームの送信対策（#67）"
 status: active
 superseded_by: []
 issues: [67]
-paths: ["lib/features/diagnostics/ax-migration/limits.ts", "lib/rate-limit.ts", "lib/features/diagnostics/rate-limit.ts", "lib/features/diagnostics/turnstile*.ts", "lib/middleware/csp.ts", "app/api/diagnostics/**"]
+paths: ["lib/features/diagnostics/ax-migration/limits.ts", "lib/rate-limit.ts", "lib/request-guard.ts", "lib/features/diagnostics/rate-limit.ts", "lib/features/diagnostics/turnstile*.ts", "lib/middleware/csp.ts", "app/api/diagnostics/**"]
 ---
 
 ### [Security] 公開フォームの送信対策（#67）

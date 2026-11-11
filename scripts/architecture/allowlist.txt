@@ -90,7 +90,6 @@ cross-feature-internal site-visits -> lib/features/ax-site/columns/index.ts
 cross-feature-internal site-visits -> lib/features/ax-site/cross-links.ts
 cross-feature-internal site-visits -> lib/features/diagnosis-builder/public-diagnosis.ts
 cross-feature-internal site-visits -> lib/features/diagnostics/organization.ts
-cross-feature-internal site-visits -> lib/features/diagnostics/request-guard.ts
 feature-index-files lib/features/ai/index.ts
 feature-index-files lib/features/audit-logs/index.ts
 feature-index-files lib/features/email/index.ts

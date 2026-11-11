@@ -845,7 +845,7 @@
     },
     "sqlDecision": {
       "qualified": "SQL（商談対象）",
-      "not_qualified": "SQL外（育成に戻す）"
+      "not_qualified": "不適格（失注として閉じる）"
     },
     "lostReason": {
       "budget": "予算",
@@ -4768,7 +4768,7 @@
         "company_size": "企業規模"
       },
       "sql": "商談化の兆しあり",
-      "sqlHelp": "時期や予算など、商談につながりやすい回答があります",
+      "sqlHelp": "対象のシステムと課題が分かり、時期か決裁への関わりも見えている回答です",
       "needsHearing": "ヒアリングで確認が必要",
       "needsHearingHelp": "「わからない」の回答が多く、結果の精度が高くありません",
       "dataAttention": {

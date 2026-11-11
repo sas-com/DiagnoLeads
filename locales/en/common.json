@@ -845,7 +845,7 @@
     },
     "sqlDecision": {
       "qualified": "SQL (sales opportunity)",
-      "not_qualified": "Not SQL (back to nurturing)"
+      "not_qualified": "Not qualified (close as lost)"
     },
     "lostReason": {
       "budget": "Budget",
@@ -4768,7 +4768,7 @@
         "company_size": "Company size"
       },
       "sql": "Sales signals",
-      "sqlHelp": "Answers such as timing or budget suggest a deal",
+      "sqlHelp": "The system and the problem are known, and the timing or a role in the decision is visible",
       "needsHearing": "Needs a hearing",
       "needsHearingHelp": "Many answers were \"don't know\", so the result is rough",
       "dataAttention": {
