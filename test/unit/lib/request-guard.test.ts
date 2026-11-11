@@ -1,7 +1,7 @@
 /**
  * Request helpers of the public diagnosis endpoints: the client address used for rate limits
  */
-import { clientIp, ipBlock, readJsonBody } from '@/lib/features/diagnostics/request-guard';
+import { clientIp, ipBlock, readJsonBody } from '@/lib/request-guard';
 import { NextRequest } from 'next/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
