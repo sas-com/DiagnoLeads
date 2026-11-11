@@ -31,7 +31,7 @@ vi.mock('@/lib/features/diagnosis-builder/submission-service', () => ({
   requestBuilderConsultation: (...args: unknown[]) => requestMock(...args),
   resultTypeName: vi.fn(),
 }));
-vi.mock('@/lib/features/diagnostics/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', () => ({
   consumeRateLimit: vi.fn().mockResolvedValue({ allowed: true }),
 }));
 vi.mock('@/lib/features/meeting-requests/service', () => ({

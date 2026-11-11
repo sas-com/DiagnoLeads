@@ -105,7 +105,13 @@ const renderDialog = (leadLabel = '架空商事') => {
     </NextIntlClientProvider>
   );
   const { rerender } = render(ui(true));
-  return { onOpenChange, onChanged, reopen: () => (rerender(ui(false)), rerender(ui(true))) };
+  return {
+    onOpenChange,
+    onChanged,
+    reopen: () => (rerender(ui(false)), rerender(ui(true))),
+    /** Shown again, as when the date goes on its way (#1074) */
+    rerender: () => rerender(ui(true)),
+  };
 };
 
 /** A press outside the dialog (Radix listens for it once the dialog has opened) */
@@ -231,9 +237,34 @@ describe('DealCloseDateDialog', () => {
     const { onOpenChange } = renderDialog();
 
     const saving = screen.getByRole('button', { name: messages.deals.form.saving });
-    expect(saving).toBeDisabled();
+    // aria-disabled, not disabled: it keeps the focus (#1074)
+    expect(saving).toHaveAttribute('aria-disabled', 'true');
+    expect(saving).not.toBeDisabled();
+    // Read out, as the button's new name alone may not be (#1074)
+    expect(screen.getByRole('status')).toHaveTextContent(messages.deals.form.saving);
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
     expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('keeps the focus on the button once pressed, and sends the date once (#1074)', async () => {
+    const user = userEvent.setup();
+    const { rerender } = renderDialog();
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    await user.type(dateBox(), '2026/11/15');
+    await user.click(screen.getByRole('button', { name: SAVE }));
+    expect(mocks.updates).toHaveLength(1);
+
+    // While the date is on its way
+    mocks.pending = true;
+    rerender();
+    const saving = screen.getByRole('button', { name: messages.deals.form.saving });
+    expect(saving).toHaveFocus();
+    expect(saving).toHaveAttribute('aria-disabled', 'true');
+    expect(saving).not.toBeDisabled();
+    expect(screen.getByRole('status')).toHaveTextContent(messages.deals.form.saving);
+    await user.click(saving);
+    await user.keyboard('{Enter}');
+    expect(mocks.updates).toHaveLength(1);
   });
 
   it('does not close on a press outside once a date was entered', async () => {

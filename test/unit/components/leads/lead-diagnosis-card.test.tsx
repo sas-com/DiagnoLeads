@@ -9,6 +9,12 @@ import { NextIntlClientProvider } from 'next-intl';
 import type { ComponentProps } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
+// The MQL row renders <FieldHelp>, which reads the glossary over tRPC; mock it to a sentinel so
+// these tests stay about the card. FieldHelp's own behavior is covered by field-help.test.tsx.
+vi.mock('@/components/features/field-glossary/field-help', () => ({
+  FieldHelp: ({ fieldKey }: { fieldKey: string }) => <span data-testid={`field-help-${fieldKey}`} />,
+}));
+
 const SUBMISSION = '44444444-4444-4444-8444-444444444444';
 const OTHER_SUBMISSION = '55555555-5555-4555-8555-555555555555';
 

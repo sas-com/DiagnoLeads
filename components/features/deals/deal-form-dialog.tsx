@@ -29,7 +29,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import type { NewDealStart } from '@/lib/features/deals/lead-sync';
-import type { DealView } from '@/lib/features/deals/service';
+import type { DealView, LinkedDeal } from '@/lib/features/deals/service';
 import {
   DEAL_KINDS,
   DEAL_LOST_REASONS,
@@ -44,6 +44,7 @@ import {
   dealLostReasonEnum,
   forecastCategory,
   isOpenStage,
+  nextDealKind,
 } from '@/lib/features/deals/types/pipeline';
 import { DEAL_LIMITS } from '@/lib/features/deals/types/schemas';
 import { trpc } from '@/lib/trpc/client';
@@ -52,7 +53,7 @@ import { AlertCircle, ChevronsUpDown, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { type FormEvent, useEffect, useId, useRef, useState } from 'react';
 import { DealAmountInput } from './deal-amount-input';
-import { isDealDate, parseAmount, parseWhole } from './deal-format';
+import { formatDealDate, isDealDate, parseAmount, parseWhole } from './deal-format';
 import { LostReasonDialog, type LostValues } from './lost-reason-dialog';
 import { RequiredMark } from './required-mark';
 import { useDealMutations } from './use-deal-mutations';
@@ -70,8 +71,8 @@ interface DealFormDialogProps {
   organizationId: string;
   /** The lead of a new deal; without it the dialog asks for one */
   leadId?: string;
-  /** The deal to edit; without it the dialog creates one */
-  deal?: DealView;
+  /** The deal to edit, with the deal it follows when known; without it the dialog creates one */
+  deal?: DealView & { previousDeal?: LinkedDeal | null };
   onSaved?: (deal: DealView) => void;
   /** Where the focus goes when the dialog closes, when it was not opened by a dialog trigger */
   onCloseAutoFocus?: (event: Event) => void;
@@ -92,6 +93,8 @@ interface FormState {
   lostReason: DealLostReason | '';
   lostNote: string;
   competitor: string;
+  /** The deal it follows (#978), NONE for none; null until chosen: the new deal's start's */
+  previousDealId: string | null;
 }
 
 const emptyState = (deal?: DealView): FormState => {
@@ -111,14 +114,18 @@ const emptyState = (deal?: DealView): FormState => {
     lostReason: lostReason.success ? lostReason.data : '',
     lostNote: deal?.lostNote ?? '',
     competitor: deal?.competitor ?? '',
+    previousDealId: deal ? (deal.previousDealId ?? NONE) : null,
   };
 };
 
 /** Place of an open stage in the pipeline; -1 for a won or lost one */
 const openStageIndex = (stage: string) => (OPEN_DEAL_STAGES as readonly string[]).indexOf(stage);
 
-/** The form with a stage and a kind: the ones chosen, else the ones the new deal starts with */
-type ShownForm = FormState & { stage: DealStage; kind: DealKind };
+/**
+ * The form with a stage, a kind and the deal it follows: the ones chosen, else the ones the new
+ * deal starts with
+ */
+type ShownForm = FormState & { stage: DealStage; kind: DealKind; previousDealId: string };
 
 /**
  * The stage and kind the form shows (#951): those chosen, else where the lead's new deal starts
@@ -129,6 +136,8 @@ const shownForm = (form: FormState, start: NewDealStart | undefined): ShownForm 
   ...form,
   stage: form.stage ?? start?.stage ?? 'qualification',
   kind: form.kind ?? start?.kind ?? 'survey',
+  // After a win, the won deal no other goes on from yet (#978)
+  previousDealId: form.previousDealId ?? start?.previousDealId ?? NONE,
 });
 
 /** The fields the form can send */
@@ -144,9 +153,13 @@ interface SentFields {
   lostReason: DealLostReason;
   lostNote: string | null;
   competitor: string | null;
+  previousDealId: string | null;
 }
 /** Every deal sends these; the others depend on the deal */
-type FormValues = Pick<SentFields, 'name' | 'kind' | 'amount' | 'expectedCloseOn'> &
+type FormValues = Pick<
+  SentFields,
+  'name' | 'kind' | 'amount' | 'expectedCloseOn' | 'previousDealId'
+> &
   Partial<SentFields>;
 
 /**
@@ -162,6 +175,7 @@ function formValues(form: ShownForm, closed: 'won' | 'lost' | null): FormValues 
     kind: form.kind,
     amount: amount === 'invalid' ? null : amount,
     expectedCloseOn: form.expectedCloseOn ?? null,
+    previousDealId: form.previousDealId === NONE ? null : form.previousDealId,
     ...(form.ownerUserId !== undefined ? { ownerUserId: form.ownerUserId } : {}),
   };
   if (closed) {
@@ -277,17 +291,64 @@ export function DealFormDialog({
 
   const amount = parseAmount(state.amount);
   const probability = parseWhole(state.probability, 100);
-  const chosenLeadId = leadId ?? lead?.id;
+  const chosenLeadId = leadId ?? deal?.leadId ?? lead?.id;
   // Where a new deal of the lead starts, read again each time the dialog opens: the lead's status
-  // or phase may just have been changed by hand on its page, whose deals card read it before
+  // or phase may just have been changed by hand on its page, whose deals card read it before. Read
+  // for a deal edited too, for the won deals it can follow (#978)
   const leadDeals = trpc.deals.forLead.useQuery(
     { organizationId, leadId: chosenLeadId ?? '' },
-    { enabled: open && !editing && !!chosenLeadId, staleTime: 0 }
+    { enabled: open && !!chosenLeadId, staleTime: 0 }
   );
   const start = editing || !chosenLeadId ? undefined : leadDeals.data?.newDeal;
   // No new deal is sent until then (its button waits): it would start from the lead as it was
-  const reading = !editing && !!chosenLeadId && leadDeals.isFetching;
-  const form = shownForm(state, start);
+  // Also while the read waits to go (offline, or a hidden tab between tries), when isFetching is
+  // false: the deal would start from the lead as it was once the network is back (#1077)
+  const reading = !editing && !!chosenLeadId && (leadDeals.isFetching || leadDeals.isPaused);
+  // The deals it can follow (#978): the lead's won deals, but not the deal edited nor any deal
+  // that goes on from it, which would make a loop
+  const leadDealItems = leadDeals.data?.items ?? [];
+  const goneOn = new Set<string>(deal ? [deal.id] : []);
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const item of leadDealItems) {
+      if (item.previousDealId && goneOn.has(item.previousDealId) && !goneOn.has(item.id)) {
+        goneOn.add(item.id);
+        grew = true;
+      }
+    }
+  }
+  const wonChoices = leadDealItems.filter((item) => item.stage === 'won' && !goneOn.has(item.id));
+  const shown = shownForm(state, start);
+  // While its kind is not chosen, a deal is of the kind after the deal chosen to follow: the
+  // migration after the survey, AX after the migration, else the form's own, also for none (#978)
+  const chosenToFollow = state.previousDealId
+    ? wonChoices.find((item) => item.id === state.previousDealId)
+    : undefined;
+  const kindAfter =
+    state.kind === null && state.previousDealId !== null
+      ? ((chosenToFollow && nextDealKind(chosenToFollow.kind)) ?? 'survey')
+      : undefined;
+  const form = kindAfter ? { ...shown, kind: kindAfter } : shown;
+  // The deal it follows already, kept as a choice though it is none of these: one at another
+  // stage, or another lead's
+  const followed = form.previousDealId === NONE ? undefined : form.previousDealId;
+  const notAChoice = !!followed && !wonChoices.some((item) => item.id === followed);
+  const keptOfLead = notAChoice ? leadDealItems.find((item) => item.id === followed) : undefined;
+  const keptOfOtherLead: LinkedDeal | undefined =
+    notAChoice && !keptOfLead && deal?.previousDeal?.id === followed
+      ? deal.previousDeal
+      : undefined;
+  const keptChoice = keptOfLead ?? keptOfOtherLead;
+  const kindLabel = (kind: string) => t(`kinds.${kind}`);
+  /** A deal it can follow, with what tells it apart: its kind, unless its name says it, and more */
+  const choiceLabel = (choice: { name: string; kind: string }, more: string[]) =>
+    t('form.previousOption', {
+      name: choice.name,
+      details: [
+        ...(choice.name === kindLabel(choice.kind) ? [] : [kindLabel(choice.kind)]),
+        ...more,
+      ].join(t('form.previousSeparator')),
+    });
   const shownInitial = shownForm(initial, undefined);
   // A lead without deals at a phase past the initial hearing opens at it (newDealStart): said
   // while the stage is not chosen, and a stage chosen before it is said to take the phase back
@@ -351,12 +412,15 @@ export function DealFormDialog({
         { onSuccess: done, onError: failed }
       );
     } else if (chosenLeadId) {
+      // A new deal following none sends none (#978)
+      const { previousDealId, ...values } = formValues(form, null);
       create.mutate(
         {
           organizationId,
           leadId: chosenLeadId,
           stage: form.stage,
-          ...formValues(form, null),
+          ...values,
+          ...(previousDealId ? { previousDealId } : {}),
           ...lost,
         },
         { onSuccess: done, onError: failed }
@@ -366,6 +430,9 @@ export function DealFormDialog({
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
+    // Nothing is sent while the deal is saved (its button stays focusable then, aria-disabled)
+    // or its lead read (#1074)
+    if (pending || reading) return;
     setSubmitted(true);
     setSaveFailed(false);
     if (firstError) {
@@ -428,7 +495,11 @@ export function DealFormDialog({
                     organizationId={organizationId}
                     triggerId={`${id}-lead`}
                     value={lead}
-                    onChange={setLead}
+                    onChange={(next) => {
+                      setLead(next);
+                      // The deal it follows is the new lead's, not one of the lead chosen before
+                      set('previousDealId', null);
+                    }}
                     onPicked={() => nameRef.current?.focus()}
                     invalid={submitted && errors.lead}
                     describedBy={describedBy(errors.lead, 'lead')}
@@ -454,6 +525,55 @@ export function DealFormDialog({
                 />
                 {fieldError(errors.name, 'name', t('form.nameRequired'))}
               </div>
+
+              {/* After a win, the deal it follows (#978): shown once the lead has a win to follow,
+                  before the kind, which follows it */}
+              {(wonChoices.length > 0 || keptChoice) && (
+                <div className="space-y-1.5">
+                  <Label htmlFor={`${id}-previous`}>{t('fields.previousDeal')}</Label>
+                  <Select
+                    value={form.previousDealId}
+                    onValueChange={(value) => {
+                      if (!value) return;
+                      set('previousDealId', value);
+                    }}
+                  >
+                    <SelectTrigger
+                      id={`${id}-previous`}
+                      className={TAP_TARGET}
+                      aria-describedby={`${id}-previous-hint`}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NONE}>{t('form.previousNone')}</SelectItem>
+                      {wonChoices.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {choiceLabel(item, [
+                            item.closedOn
+                              ? t('form.previousWonOn', { date: formatDealDate(item.closedOn) })
+                              : t('form.previousWon'),
+                          ])}
+                        </SelectItem>
+                      ))}
+                      {keptChoice && (
+                        <SelectItem value={keptChoice.id}>
+                          {choiceLabel(keptChoice, [
+                            t(`stages.${keptChoice.stage}`),
+                            ...(keptOfOtherLead ? [t('form.previousOtherLead')] : []),
+                          ])}
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <p
+                    id={`${id}-previous-hint`}
+                    className="text-sm text-gray-600 dark:text-gray-300"
+                  >
+                    {t('form.previousHint')}
+                  </p>
+                </div>
+              )}
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
@@ -772,6 +892,8 @@ export function DealFormDialog({
               )}
             </div>
 
+            {/* The button's new name alone may not be read out (as the delete question's, #1074) */}
+            <output className="sr-only">{pending ? t('form.saving') : ''}</output>
             {/* Always in view, so a long form on a phone never hides the buttons or a failure */}
             <div className="flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 px-6 py-3 dark:border-gray-700">
               {saveFailed && (
@@ -791,7 +913,12 @@ export function DealFormDialog({
               <Button
                 type="submit"
                 className={cn(TAP_TARGET, 'min-w-24')}
-                disabled={pending || reading}
+                // While the lead is read, before it is pressed (the focus is in a field then), it
+                // cannot be pressed yet. While the deal is saved, aria-disabled, not disabled:
+                // the focus stays on the button pressed, also as the lead is read again once the
+                // deal is saved (#1074)
+                disabled={reading && !pending}
+                aria-disabled={pending || undefined}
               >
                 {(pending || reading) && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />

@@ -40,7 +40,7 @@ vi.mock('@/lib/features/diagnostics/ax-migration/notify', () => ({
 vi.mock('@/lib/features/diagnostics/organization', () => ({
   resolveDiagnosisOrganizationId: () => resolveOrgMock(),
 }));
-vi.mock('@/lib/features/diagnostics/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', () => ({
   consumeRateLimits: (...args: unknown[]) => limitsMock(...args),
   pruneRateLimits: (...args: unknown[]) => pruneMock(...args),
 }));

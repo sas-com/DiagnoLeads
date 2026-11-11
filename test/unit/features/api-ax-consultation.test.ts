@@ -44,7 +44,7 @@ const acceptMock = vi.fn();
 vi.mock('@/lib/features/meeting-requests/service', () => ({
   acceptMeetingPreferences: (...args: unknown[]) => acceptMock(...args),
 }));
-vi.mock('@/lib/features/diagnostics/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', () => ({
   consumeRateLimit: (...args: unknown[]) => limitMock(...args),
 }));
 

@@ -142,6 +142,8 @@ export interface DealState {
 export interface DealChangeInput extends DealState {
   id: string;
   name: string;
+  /** Whose deal: its lead's company, else its name (#953) */
+  leadLabel: string | null;
   ownerName: string | null;
   /** How the deal stood a week ago; null when it was created since */
   before: DealState | null;
@@ -161,6 +163,8 @@ export type ChangeKind = (typeof CHANGE_KINDS)[number];
 export interface ChangedDeal {
   id: string;
   name: string;
+  /** Whose deal: its lead's company, else its name (#953) */
+  leadLabel: string | null;
   ownerName: string | null;
   stage: string;
   amount: number | null;
@@ -230,6 +234,7 @@ export function classifyChanges(deals: DealChangeInput[]): PipelineChanges {
         group.deals.push({
           id: deal.id,
           name: deal.name,
+          leadLabel: deal.leadLabel,
           ownerName: deal.ownerName,
           stage: deal.stage,
           amount: deal.amount,

@@ -1,3 +1,7 @@
+/**
+ * Rough limits counted in memory, so each instance counts on its own (Vercel runs many). A limit
+ * that must hold across instances is counted in the DB with lib/rate-limit.ts (#471).
+ */
 import type { NextRequest } from 'next/server';
 
 /**

@@ -1,4 +1,4 @@
-import type { RateLimitRule } from '../../diagnostics/rate-limit';
+import type { RateLimitRule } from '@/lib/rate-limit';
 
 /**
  * Test sends allowed from the settings page (#321). Kept apart from the delivery service so the

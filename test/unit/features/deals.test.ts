@@ -13,6 +13,7 @@ import {
   canWriteDeals,
 } from '@/lib/features/deals/access';
 import {
+  type NewDealStartDeal,
   type SyncDeal,
   latestLostReason,
   leadChangesFromDeals,
@@ -255,8 +256,16 @@ describe('newDealStart', () => {
     dealPhase: null,
     ...values,
   });
-  const won = (kind: string | null) => ({ stage: 'won', kind, wonFirst: true });
-  const open = (stage: string) => ({ stage, kind: null, wonFirst: false });
+  const won = (kind: string | null) => ({ stage: 'won', kind, wonFirst: true, previousDealId: null });
+  const open = (stage: string) => ({ stage, kind: null, wonFirst: false, previousDealId: null });
+  /** A deal of the lead, as newDealStart reads it */
+  const leadDeal = (values: Partial<NewDealStartDeal> = {}): NewDealStartDeal => ({
+    id: 'deal-1',
+    kind: 'survey',
+    stage: 'proposal',
+    previousDealId: null,
+    ...values,
+  });
 
   it.each([
     ['survey_won', 'survey'],
@@ -267,7 +276,7 @@ describe('newDealStart', () => {
     // A won phase set by hand on a lead not won
     expect(newDealStart(lead({ status: 'negotiating', dealPhase }), [])).toEqual(won(kind));
     // Left on a lead whose deals are all lost: it is computed from them, in 見極め (#977)
-    expect(newDealStart(lead({ status: 'lost', dealPhase }), [deal({ stage: 'lost' })])).toEqual(
+    expect(newDealStart(lead({ status: 'lost', dealPhase }), [leadDeal({ stage: 'lost' })])).toEqual(
       open('qualification')
     );
   });
@@ -276,7 +285,7 @@ describe('newDealStart', () => {
     expect(newDealStart(lead({ status: 'won' }), [])).toEqual(won(null));
     expect(newDealStart(lead({ status: 'won', dealPhase: 'proposal' }), [])).toEqual(won(null));
     // With deals, the lead is computed from them (#977)
-    expect(newDealStart(lead({ status: 'won' }), [deal({ stage: 'lost' })])).toEqual(
+    expect(newDealStart(lead({ status: 'won' }), [leadDeal({ stage: 'lost' })])).toEqual(
       open('qualification')
     );
   });
@@ -295,17 +304,101 @@ describe('newDealStart', () => {
   it('starts in 見極め beside deals: open, won, or all lost (its time come again)', () => {
     expect(
       newDealStart(lead({ status: 'negotiating', dealPhase: 'proposal' }), [
-        deal({ stage: 'proposal' }),
+        leadDeal({ stage: 'proposal' }),
       ])
     ).toEqual(open('qualification'));
+    // After a win it follows it, of the kind that comes after it (#978)
     expect(
       newDealStart(lead({ status: 'won', dealPhase: 'migration_won' }), [
-        deal({ stage: 'won', kind: 'migration' }),
+        leadDeal({ stage: 'won', kind: 'migration' }),
       ])
-    ).toEqual(open('qualification'));
+    ).toEqual({ ...open('qualification'), kind: 'ax', previousDealId: 'deal-1' });
     expect(
-      newDealStart(lead({ status: 'lost', dealPhase: 'proposal' }), [deal({ stage: 'lost' })])
+      newDealStart(lead({ status: 'lost', dealPhase: 'proposal' }), [leadDeal({ stage: 'lost' })])
     ).toEqual(open('qualification'));
+  });
+
+  // After a win, the next deal (the migration, AX) follows it (#978)
+  describe('after a win', () => {
+    const wonLead = lead({ status: 'won', dealPhase: 'survey_won' });
+
+    it.each([
+      ['survey', 'migration'],
+      ['migration', 'ax'],
+    ] as const)('follows the won %s, as the %s', (kind, next) => {
+      expect(newDealStart(wonLead, [leadDeal({ stage: 'won', kind })])).toEqual({
+        stage: 'qualification',
+        kind: next,
+        wonFirst: false,
+        previousDealId: 'deal-1',
+      });
+    });
+
+    it('follows no win no kind comes after (AX, maintenance, other): those are chosen in the form', () => {
+      for (const kind of ['ax', 'maintenance', 'other']) {
+        expect(newDealStart(wonLead, [leadDeal({ stage: 'won', kind })]), kind).toEqual(
+          open('qualification')
+        );
+      }
+    });
+
+    it('follows the migration with AX though maintenance goes on from it', () => {
+      const migration = leadDeal({ id: 'migration', stage: 'won', kind: 'migration' });
+      const maintenance = leadDeal({
+        id: 'maintenance',
+        stage: 'won',
+        kind: 'maintenance',
+        previousDealId: 'migration',
+      });
+      expect(newDealStart(wonLead, [migration, maintenance])).toMatchObject({
+        kind: 'ax',
+        previousDealId: 'migration',
+      });
+      // Once AX goes on from it, none is followed
+      const ax = leadDeal({ id: 'ax', stage: 'won', kind: 'ax', previousDealId: 'migration' });
+      expect(newDealStart(wonLead, [migration, maintenance, ax])).toEqual(open('qualification'));
+    });
+
+    it('follows the last win of a chain: the migration after the survey', () => {
+      const survey = leadDeal({ id: 'survey', stage: 'won', kind: 'survey' });
+      const migration = leadDeal({
+        id: 'migration',
+        stage: 'won',
+        kind: 'migration',
+        previousDealId: 'survey',
+      });
+      expect(newDealStart(wonLead, [survey, migration])).toMatchObject({
+        kind: 'ax',
+        previousDealId: 'migration',
+      });
+    });
+
+    it('follows a win again once the deal that went on from it was lost', () => {
+      const survey = leadDeal({ id: 'survey', stage: 'won', kind: 'survey' });
+      const lostMigration = leadDeal({
+        id: 'lost',
+        stage: 'lost',
+        kind: 'migration',
+        previousDealId: 'survey',
+      });
+      expect(newDealStart(wonLead, [survey, lostMigration])).toMatchObject({
+        kind: 'migration',
+        previousDealId: 'survey',
+      });
+    });
+
+    it('follows no deal while one goes on from the win, or when wins are several', () => {
+      const survey = leadDeal({ id: 'survey', stage: 'won', kind: 'survey' });
+      const openMigration = leadDeal({
+        id: 'open',
+        stage: 'proposal',
+        kind: 'migration',
+        previousDealId: 'survey',
+      });
+      expect(newDealStart(wonLead, [survey, openMigration])).toEqual(open('qualification'));
+      const otherSurvey = leadDeal({ id: 'survey-2', stage: 'won', kind: 'survey' });
+      expect(newDealStart(wonLead, [survey, otherSurvey])).toEqual(open('qualification'));
+    });
   });
 
   // Saved as it opens, the deal is one createDeal accepts (a lead won by hand takes only its win)
