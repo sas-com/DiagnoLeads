@@ -36,7 +36,7 @@ vi.mock('@/lib/features/diagnosis-builder/public-diagnosis', () => ({
 vi.mock('@/lib/features/diagnostics/organization', () => ({
   resolveDiagnosisOrganizationId: () => mocks.axOrganizationId,
 }));
-vi.mock('@/lib/features/diagnostics/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', () => ({
   consumeRateLimit: mocks.consumeRateLimit,
 }));
 vi.mock('@/lib/ops/alert', () => ({

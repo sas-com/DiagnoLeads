@@ -20,7 +20,7 @@ const { consumeRateLimit, consumeRateLimits, findPublicDiagnosis } = vi.hoisted(
   consumeRateLimits: vi.fn(),
   findPublicDiagnosis: vi.fn(),
 }));
-vi.mock('@/lib/features/diagnostics/rate-limit', () => ({ consumeRateLimit, consumeRateLimits }));
+vi.mock('@/lib/rate-limit', () => ({ consumeRateLimit, consumeRateLimits }));
 vi.mock('@/lib/features/diagnosis-builder/public-diagnosis', () => ({ findPublicDiagnosis }));
 vi.mock('@/lib/features/diagnostics/organization', () => ({
   resolveDiagnosisOrganizationId: () => 'org-operator',

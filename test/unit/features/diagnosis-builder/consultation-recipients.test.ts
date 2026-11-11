@@ -19,7 +19,7 @@ vi.mock('@/lib/db/client', () => ({ db: { marker: 'db' } }));
 vi.mock('@/lib/features/diagnostics/organization', () => ({
   resolveDiagnosisOrganizationId: () => operator.id,
 }));
-vi.mock('@/lib/features/diagnostics/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', () => ({
   consumeRateLimit: vi.fn().mockResolvedValue({ allowed: true, count: 1, retryAfterSeconds: 0 }),
 }));
 vi.mock('@/lib/features/webhooks/services/webhook-service', () => ({

@@ -19,8 +19,8 @@
 import { runAfterResponse } from '@/lib/auth/email-helpers';
 import { type Database, db } from '@/lib/db/client';
 import { leads } from '@/lib/db/schema';
-import { type RateLimitRule, consumeRateLimit } from '@/lib/features/diagnostics/rate-limit';
 import { reportServerError } from '@/lib/ops/alert';
+import { type RateLimitRule, consumeRateLimit } from '@/lib/rate-limit';
 import { and, eq, inArray } from 'drizzle-orm';
 import { LEAD_WEBHOOK_FIELDS as SHARED_LEAD_WEBHOOK_FIELDS } from '../types/personal-data';
 import type { WebhookEventType } from '../types/schemas';

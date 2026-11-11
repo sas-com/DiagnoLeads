@@ -34,11 +34,11 @@
 - 例外なし：違反が1件でもあれば失敗する。許可リストには載せられない（`--update` でも書き出さない）
 - 許可リスト：ルールが入る前からあった違反を `scripts/architecture/allowlist.txt` に1件ずつ載せてある。載っていない違反があると失敗する。載っているのに消えた違反があっても失敗する（`--update` で行を消す）
 
-| ルール | 内容 | 種類と許可リストの件数（2026-10-25） |
+| ルール | 内容 | 種類と許可リストの件数 |
 |---|---|---|
 | `lib-imports-ui` | lib は app・components・hooks・context を import しない | 例外なし |
 | `lib-imports-server-values` | lib から server（`AppRouter`）は型だけ | 例外なし |
-| `infra-imports-features` | 基盤は lib/features を import しない | 許可リスト 8（うち3件は `lib/db/schema.ts` が jsonb の型を機能から読む型だけの import。2件は `types/`、1件は `diagnosis-builder/definition.ts`） |
+| `infra-imports-features` | 基盤は lib/features を import しない | 許可リスト 7（うち3件は `lib/db/schema.ts` が jsonb の型を機能から読む型だけの import。2件は `types/`、1件は `diagnosis-builder/definition.ts`） |
 | `feature-imports-other-router` | 機能のルーター（`api/`・`router.ts`）を読むのは、同じ機能と `server/routers/` だけ | 例外なし |
 | `client-imports-server-only` | ブラウザで動くコードから、サーバー専用のファイル（`lib/db`、`server/`、`lib/trpc/{init,context}`、`lib/auth/config`、機能の `api/`・`router.ts`・`service.ts`）とパッケージ（`postgres`・`drizzle-orm`・`payload`・`resend`・`@anthropic-ai/sdk`・`openai`・`next/headers`・`node:*` など）に届かない | 例外なし |
 | `public-bundle-imports-scoring` | 公開ページのクライアントに、採点（`diagnostics/ax-migration/{evaluate,mql,config}`・`diagnosis-builder/evaluate`）を入れない | 例外なし |
@@ -46,8 +46,8 @@
 | `payload-outside-cms` | Payload を読むのは CMS の置き場所だけ | 例外なし |
 | `file-cycles` | ファイル単位の import の循環を作らない | 例外なし |
 | `test-paths-resolve` | テストが import するパスと、`vi.mock`・`vi.doMock`・`vi.unmock`・`vi.doUnmock`・`vi.importActual`・`vi.importMock`（`vitest.mock` などの書き方も含む）に渡すパスが実在する（パッケージ名は見ない。テストの `@payload-config` は vitest の別名どおり `test/mocks/payload-config.ts`）。存在しないパスへの `vi.mock` はエラーにならず、黙って効かなくなる（本物のモジュールが動き、原因の分かりにくい失敗か、副作用を伴う素通りになる）ので、ファイルを消す・移したときに、古いパスを指したまま残ったテストをこの検査が見つける | 例外なし |
-| `features-in-cycles` | 互いに依存し合う機能（間接も含む）を増やさない | 許可リスト 20 |
-| `cross-feature-internal` | 他の機能から読むのは公開面（`types/**`・`types.ts`・`service.ts`。ほかに `email/index.ts`・`respondent-email/index.ts`）だけ。項目は「読む機能 -> 読まれる側のファイル」（#623） | 許可リスト 79 |
+| `features-in-cycles` | 互いに依存し合う機能（間接も含む）を増やさない | 許可リスト 19 |
+| `cross-feature-internal` | 他の機能から読むのは公開面（`types/**`・`types.ts`・`service.ts`。ほかに `email/index.ts`・`respondent-email/index.ts`）だけ。項目は「読む機能 -> 読まれる側のファイル」（#623） | 許可リスト 75 |
 | `ax-boundary` | AX 診断（`diagnostics/ax-migration/`）を読むのは、AX 診断の中と、AX のための機能（`ax-*`）だけ。型だけの import も数える。項目は「読む側 -> AX のファイル」。リードの最新の AX 回答は `ax-migration/lead-submissions.ts`、営業の手引きは `ax-playbook/service.ts` から読む（#480） | 許可リスト 16 |
 | `features-use-global-db` | 機能のコードはグローバルの `db` を使わず、`ctx.db` か引数の executor を使う（RLS で接続を差し替えるため） | 許可リスト 11 |
 | `feature-index-files` | lib/features に `index.ts`（barrel）を作らない | 許可リスト 6 |
@@ -57,7 +57,7 @@
 
 検査の限界：
 - `cross-feature-internal` は、読む機能の単位で見る。同じ機能の別のファイルから同じ内部のファイルを読み足しても検出しない。許可リストにあるファイルを別の機能が新しく読むと失敗する（#623 で、項目を読まれる側のファイルから「読む機能 -> ファイル」に変えた）。そのときも、許可リストに足す前に、相手の `service.ts` か `types/` に出すことを先に考える
-- `features-in-cycles` は、循環に入っている機能の名前の一覧で比べる。今ある2つの循環（18機能と2機能）がつながっても検出しない
+- `features-in-cycles` は、循環に入っている機能の名前の一覧で比べる。今ある2つの循環（17機能と2機能）がつながっても検出しない
 - 公開ページの採点のルールが見るのは、公開ページ（`(ax)`・`(public)`・`[...rest]`・トップと共通のレイアウト）から `'use client'` の境界を越えて値でたどれるファイル。ブラウザのコードの判定では、`'use server'` のファイル（サーバーアクション）とその先はたどらない。`'use server'` のファイルは直接の POST で呼べる入口になり、`organizationProcedure`・`ctx.ability` も公開 API の検査も通らない。検査を通すために `'use server'` を足さない（関数の中の `'use server'` は検出しない）
 - `unregistered-routers` は、`api/` の下の `*-router.ts` をほかのルーターに組み込む形（_app.ts に直接登録しない）も未登録として数える。その形を使うときは、許可リストに足して PR に理由を書く
 - `test-paths-resolve` が見るのは、パスの文字列がそのまま書かれているものだけ（`` vi.mock(`@/lib/${name}`) `` や `import('@/locales/' + locale)` のように組み立てたパスは見ない）。パスが実在しても、テストが読むモジュールと mock したモジュールが違う（再 export の元を mock していない）ことは検出しない
@@ -130,7 +130,7 @@ components/features/<feature>/
 ハブの分割やディレクトリの移動は、次をすべて満たすときに、移動だけの1本の PR で行う。
 
 - 移す範囲のファイルを触っている開いた PR が0（各 PR の変更ファイルの一覧で確かめる）。公開の前後（10/29）と RLS の作業中（11/4〜11/14）は行わない
-- `git diff -M` で改名として出る（中身の変更を混ぜない）
+- `git diff -C` で移した先がコピー（similarity 100%）として出る（中身の変更を混ぜない。古いパスに再 export を残すので、`-M` では改名として出ない）
 - スキーマを分けたときは `bun run db:generate` の差分が0。文言を分けたときは、合成した結果のキーが移す前と一致する
 - 古いパスには1行の再 export を残し、importer は触るついでに新しいパスへ替える。替えるときは、テストの `vi.mock('<パス>')` も同じパスに替える（古いパスのままだとモックが効かない）
 - 決定ファイル（`.factory/memory/decisions/*.md`）の `paths` が古いパスを指していたら、同じ PR で直す（`test/unit/claude-hooks` が検出する）

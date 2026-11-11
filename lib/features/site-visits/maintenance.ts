@@ -1,6 +1,6 @@
 import type { db as defaultDb } from '@/lib/db/client';
 import { siteVisitSalts, siteVisits } from '@/lib/db/schema';
-import { pruneRateLimits } from '@/lib/features/diagnostics/rate-limit';
+import { pruneRateLimits } from '@/lib/rate-limit';
 import { lt, sql } from 'drizzle-orm';
 import { visitDayOf } from './visitor';
 

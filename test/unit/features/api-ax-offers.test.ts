@@ -24,7 +24,7 @@ vi.mock('next/server', async (importOriginal) => ({
 }));
 vi.mock('@/lib/ops/alert', () => ({ reportServerError, reportRejectedRequest }));
 vi.mock('@/lib/db/client', () => ({ db: {} }));
-vi.mock('@/lib/features/diagnostics/rate-limit', () => ({ consumeRateLimit }));
+vi.mock('@/lib/rate-limit', () => ({ consumeRateLimit }));
 vi.mock('@/lib/features/info-offers/service', () => ({ requestInfoOffer }));
 
 const { POST } = await import('@/app/api/diagnostics/ax-migration/offers/route');

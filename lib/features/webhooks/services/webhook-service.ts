@@ -17,8 +17,8 @@ import {
   webhookDeliveries,
   webhooks,
 } from '@/lib/db/schema';
+import { consumeRateLimits } from '@/lib/rate-limit';
 import { and, asc, eq, gte, inArray, lt, lte, not, or, sql } from 'drizzle-orm';
-import { consumeRateLimits } from '../../diagnostics/rate-limit';
 import { LEAD_WEBHOOK_PERSONAL_FIELDS, PERSONAL_DATA_EVENTS } from '../types/personal-data';
 import { sendPinnedRequest } from './pinned-request';
 import { WEBHOOK_TEST_SEND_LIMITS, type WebhookTestSendLimit } from './test-send-limits';

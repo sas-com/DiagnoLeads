@@ -26,7 +26,7 @@ vi.mock('@/lib/ops/alert', () => ({
 vi.mock('@/lib/features/respondent-email', () => ({
   unsubscribeByToken: (...args: unknown[]) => unsubscribeMock(...args),
 }));
-vi.mock('@/lib/features/diagnostics/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', () => ({
   consumeRateLimits: (...args: unknown[]) => limitsMock(...args),
 }));
 

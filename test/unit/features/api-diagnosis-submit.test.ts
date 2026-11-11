@@ -88,7 +88,7 @@ vi.mock('@/lib/features/diagnostics/lead-upsert', () => ({
 vi.mock('@/lib/features/diagnosis-builder/notify', () => ({
   notifyDiagnosisSubmission: (...args: unknown[]) => notifyMock(...args),
 }));
-vi.mock('@/lib/features/diagnostics/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', () => ({
   consumeRateLimits: (...args: unknown[]) => {
     calls.push('limits');
     return limitsMock(...args);
