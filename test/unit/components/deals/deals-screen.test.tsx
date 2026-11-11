@@ -25,9 +25,25 @@ type Callbacks = {
   onError?: (error: Error, input: unknown) => unknown;
 };
 type ToastOptions = { action?: { label: string; onClick: () => void }; duration?: number };
+/** The board's query as the screen reads it: whether it is read again and how many times it has
+    failed tell a failure again from the first (#1029) */
+type BoardQuery = {
+  data: unknown;
+  isError: boolean;
+  isPlaceholderData: boolean;
+  refetch: ReturnType<typeof vi.fn>;
+  error?: { data: { code: string } };
+  isFetching?: boolean;
+  errorUpdateCount?: number;
+};
 
 const mocks = vi.hoisted(() => ({
-  board: { data: undefined as unknown, isError: false, isPlaceholderData: false, refetch: vi.fn() },
+  board: {
+    data: undefined,
+    isError: false,
+    isPlaceholderData: false,
+    refetch: vi.fn(),
+  } as BoardQuery,
   // The board the next refresh reads, like a refetch after a change
   refetched: undefined as unknown,
   // The next refresh fails (once retried): the board says it cannot be read (#1028)
@@ -1129,6 +1145,71 @@ describe('DealsScreen', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('商談を読み込めませんでした');
     await user.click(screen.getByRole('button', { name: '再読み込み' }));
     expect(mocks.board.refetch).toHaveBeenCalled();
+  });
+
+  describe('a retry of a board read before, which keeps its failure in view until it ends (#1029)', () => {
+    /** The failure said again, read out anew */
+    const failedAgain =
+      '再読み込みしましたが、商談を読み込めませんでした。時間をおいて、もう一度お試しください';
+
+    it('says it is reading, keeping the focus on it, and reads nothing more meanwhile', async () => {
+      const user = userEvent.setup();
+      const view = renderScreen();
+      readAgain(view, { isError: true, errorUpdateCount: 1 });
+      await user.click(retry());
+      expect(mocks.board.refetch).toHaveBeenCalledTimes(1);
+
+      // TanStack Query stays in error while the board read before is read again
+      readAgain(view, { isFetching: true });
+      const reading = screen.getByRole('button', { name: '読み込み中...' });
+      expect(reading).toHaveFocus();
+      expect(reading).toHaveAttribute('aria-disabled', 'true');
+      expect(reading).not.toBeDisabled();
+      await user.click(reading);
+      await user.keyboard('{Enter}');
+      expect(mocks.board.refetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('says when it fails again, with a new message each time, keeping the focus on the retry', async () => {
+      const user = userEvent.setup();
+      const view = renderScreen();
+      readAgain(view, { isError: true, errorUpdateCount: 1 });
+      const first = screen.getByText('商談を読み込めませんでした');
+      await user.click(retry());
+      readAgain(view, { isFetching: true });
+      readAgain(view, { isFetching: false, errorUpdateCount: 2 });
+
+      expect(screen.getByRole('alert')).toHaveTextContent(failedAgain);
+      // A new message, for screen readers to read it out again
+      expect(first).not.toBeInTheDocument();
+      expect(retry()).toHaveFocus();
+      expect(retry()).toHaveAccessibleDescription(failedAgain);
+      expect(retry()).toHaveAttribute('aria-disabled', 'false');
+
+      // And again
+      const second = screen.getByText(failedAgain);
+      await user.click(retry());
+      readAgain(view, { isFetching: true });
+      readAgain(view, { isFetching: false, errorUpdateCount: 3 });
+      expect(second).not.toBeInTheDocument();
+      expect(screen.getByText(failedAgain)).toBeInTheDocument();
+      expect(retry()).toHaveFocus();
+      expect(mocks.board.refetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('says a later failure as the first once a retry has brought the board back', async () => {
+      const user = userEvent.setup();
+      const view = renderScreen();
+      readAgain(view, { isError: true, errorUpdateCount: 1 });
+      await user.click(retry());
+      readAgain(view, { isFetching: true });
+      readAgain(view, { isFetching: false, isError: false });
+      expect(screen.getByRole('link', { name: 'AS/400 現行調査' })).toBeInTheDocument();
+
+      readAgain(view, { isError: true, errorUpdateCount: 2 });
+      expect(screen.getByRole('alert')).toHaveTextContent('商談を読み込めませんでした');
+      expect(screen.queryByText(failedAgain)).not.toBeInTheDocument();
+    });
   });
 
   describe('the focus when a read takes away what had it (#1011)', () => {
