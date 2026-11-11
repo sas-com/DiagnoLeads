@@ -179,6 +179,7 @@ export function DealDetailView({ dealId }: { dealId: string }) {
               ref={retryButton}
               type="button"
               variant="outline"
+              className={TAP_TARGET}
               // Said with the failure when the focus is sent to it (#1044)
               aria-describedby={loadErrorId}
               onFocus={(event) => {

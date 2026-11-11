@@ -1,5 +1,6 @@
 'use client';
 
+import { TAP_TARGET } from '@/components/common/tap-target';
 import { AgencyContractsManager } from '@/components/features/agency-contracts/agency-contracts-manager';
 import {
   AlertDialog,
@@ -39,6 +40,7 @@ import {
   buildAgencyLinkUrl,
 } from '@/lib/features/agency-links/types/schemas';
 import { trpc } from '@/lib/trpc/client';
+import { cn } from '@/lib/utils';
 import {
   AlertTriangle,
   Ban,
@@ -356,7 +358,7 @@ function LoadError({ onRetry }: { onRetry: () => void }) {
   return (
     <Callout title={t('loadErrorTitle')} icon={AlertTriangle} color="red">
       <p>{t('loadErrorBody')}</p>
-      <Button variant="outline" size="sm" className="mt-3" onClick={onRetry}>
+      <Button variant="outline" size="sm" className={cn(TAP_TARGET, 'mt-3')} onClick={onRetry}>
         <RefreshCw className="mr-1 h-4 w-4" />
         {t('retry')}
       </Button>

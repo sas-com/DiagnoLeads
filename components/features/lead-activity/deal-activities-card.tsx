@@ -72,7 +72,13 @@ export function DealActivitiesCard({
       {query.isError ? (
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <p className="text-red-600 dark:text-red-400">{t('loadError')}</p>
-          <Button type="button" variant="outline" size="sm" onClick={() => query.refetch()}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={TAP_TARGET}
+            onClick={() => query.refetch()}
+          >
             {tCommon('retry')}
           </Button>
         </div>

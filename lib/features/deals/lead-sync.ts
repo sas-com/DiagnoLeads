@@ -34,6 +34,7 @@ import {
   OPEN_DEAL_STAGES,
   dealLostReasonEnum,
   isOpenStage,
+  nextDealKind,
 } from './types/pipeline';
 
 export interface SyncDeal {
@@ -123,10 +124,23 @@ export function wonWithoutWonDeal(
 /** Where a new deal of a lead starts in the deal form (#951) */
 export interface NewDealStart {
   stage: DealStage;
-  /** The kind of the win the lead's phase stands for; null to keep the form's own */
+  /**
+   * The kind of the win the lead's phase stands for, or the kind that comes after the deal the
+   * new one follows (#978); null to keep the form's own
+   */
   kind: DealKind | null;
   /** Only a won deal can be created (wonWithoutWonDeal): createDeal refuses any other stage */
   wonFirst: boolean;
+  /** The won deal the new one follows (#978): the one no other goes on from yet, if one */
+  previousDealId: string | null;
+}
+
+/** A deal of the lead, as newDealStart reads it */
+export interface NewDealStartDeal {
+  id: string;
+  kind: string;
+  stage: string;
+  previousDealId: string | null;
 }
 
 /** Kinds whose won deal stands for a phase of the lead (現行調査受注 / 移行受注 / AX化) */
@@ -142,16 +156,22 @@ const WON_PHASE_KINDS = ['survey', 'migration', 'ax'] as const satisfies readonl
  * - Otherwise 見極め. With deals, the phase is the furthest of them; when all are lost, the new deal
  *   is the lead's time come again and starts over, as for its first meeting
  *   (qualificationDealSkip).
+ * - After a win, the new deal follows the won survey or migration no deal of the chain (a survey,
+ *   a migration, AX) goes on from yet, when there is just one, and is of the kind that comes after
+ *   it: the migration after the survey, AX after the migration (#978). A deal lost since does not
+ *   count, so a migration tried again follows the survey too; nor does maintenance or another kind
+ *   in between, so AX still follows the migration. Other wins (AX, maintenance) are followed only
+ *   when chosen in the form.
  */
 export function newDealStart(
   lead: Pick<SyncLead, 'status' | 'dealPhase'>,
-  deals: Pick<SyncDeal, 'stage'>[]
+  deals: NewDealStartDeal[]
 ): NewDealStart {
   if (wonWithoutWonDeal(lead, deals)) {
     const kind = WON_PHASE_KINDS.find(
       (each) => leadPhaseOfDeal({ kind: each, stage: 'won' }) === lead.dealPhase
     );
-    return { stage: 'won', kind: kind ?? null, wonFirst: true };
+    return { stage: 'won', kind: kind ?? null, wonFirst: true, previousDealId: null };
   }
   const stage =
     deals.length === 0
@@ -159,7 +179,24 @@ export function newDealStart(
           (each) => leadPhaseOfDeal({ kind: 'other', stage: each }) === lead.dealPhase
         )
       : undefined;
-  return { stage: stage ?? 'qualification', kind: null, wonFirst: false };
+  const notGoneOn = deals.filter(
+    (deal) =>
+      deal.stage === 'won' &&
+      nextDealKind(deal.kind) !== undefined &&
+      !deals.some(
+        (other) =>
+          other.previousDealId === deal.id &&
+          other.stage !== 'lost' &&
+          (WON_PHASE_KINDS as readonly string[]).includes(other.kind)
+      )
+  );
+  const previous = notGoneOn.length === 1 ? notGoneOn[0] : undefined;
+  return {
+    stage: stage ?? 'qualification',
+    kind: previous ? (nextDealKind(previous.kind) ?? null) : null,
+    wonFirst: false,
+    previousDealId: previous?.id ?? null,
+  };
 }
 
 /** Why a lead whose first meeting was set gets no deal in 見極め (#854) */
