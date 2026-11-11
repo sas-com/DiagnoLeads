@@ -15,6 +15,21 @@ export const DEAL_KINDS = ['survey', 'migration', 'ax', 'maintenance', 'other'] 
 export const dealKindEnum = z.enum(DEAL_KINDS);
 export type DealKind = z.infer<typeof dealKindEnum>;
 
+/**
+ * The kind of the deal that comes after a won one of this kind (#978): the migration after the
+ * survey, AX after the migration; undefined when none does
+ */
+export function nextDealKind(kind: string): DealKind | undefined {
+  switch (kind) {
+    case 'survey':
+      return 'migration';
+    case 'migration':
+      return 'ax';
+    default:
+      return undefined;
+  }
+}
+
 /** Open stages in sales order: 見極め / 課題の確認 / 提案 / 条件の調整 */
 export const OPEN_DEAL_STAGES = ['qualification', 'discovery', 'proposal', 'negotiation'] as const;
 export type OpenDealStage = (typeof OPEN_DEAL_STAGES)[number];

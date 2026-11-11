@@ -1333,7 +1333,8 @@
       "targetSystem": "対象システム",
       "lead": "リード",
       "company": "会社",
-      "updatedAt": "更新日"
+      "updatedAt": "更新日",
+      "previousDeal": "前の商談"
     },
     "column": {
       "summary": "{count}件・{amount}",
@@ -1463,7 +1464,14 @@
       "submitCreate": "作成",
       "submitEdit": "保存",
       "saving": "保存しています…",
-      "saveError": "保存できませんでした。もう一度お試しください"
+      "saveError": "保存できませんでした。もう一度お試しください",
+      "previousNone": "なし",
+      "previousOption": "{name}（{details}）",
+      "previousHint": "受注した商談から選びます。種類は、選んだ商談に続く種類になります（自分で選んだ種類は替わりません）。商談の詳細で、前の商談・続く商談としてつながります",
+      "previousWonOn": "受注 {date}",
+      "previousWon": "受注",
+      "previousOtherLead": "ほかのリード",
+      "previousSeparator": "・"
     },
     "list": {
       "caption": "商談の一覧（{order}）",

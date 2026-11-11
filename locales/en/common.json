@@ -1333,7 +1333,8 @@
       "targetSystem": "Target system",
       "lead": "Lead",
       "company": "Company",
-      "updatedAt": "Updated"
+      "updatedAt": "Updated",
+      "previousDeal": "Previous deal"
     },
     "column": {
       "summary": "{count, plural, one {# deal} other {# deals}} · {amount}",
@@ -1463,7 +1464,14 @@
       "submitCreate": "Create",
       "submitEdit": "Save",
       "saving": "Saving…",
-      "saveError": "Could not save. Please try again"
+      "saveError": "Could not save. Please try again",
+      "previousNone": "None",
+      "previousOption": "{name} ({details})",
+      "previousHint": "Pick one of the won deals. The kind becomes the one that follows it, unless you chose a kind. The deal's page shows them as the previous and next deals",
+      "previousWonOn": "won {date}",
+      "previousWon": "won",
+      "previousOtherLead": "another lead",
+      "previousSeparator": ", "
     },
     "list": {
       "caption": "Deals ({order})",
