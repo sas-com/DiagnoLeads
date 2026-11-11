@@ -430,4 +430,39 @@ export const FIELD_GLOSSARY_SEED: readonly FieldGlossarySeedEntry[] = [
     descriptionEn:
       'Marketing marks the lead as an MQL (worth sales attention). The diagnosis also sets it automatically. Unchecking it clears the MQL date but not the level derived from the diagnosis.',
   },
+  // leads.mqlLevel — the interest level from the diagnosis (docs/PIPELINE_LIFECYCLE.md §2.3)
+  {
+    fieldKey: 'leads.mqlLevel',
+    value: null,
+    sortOrder: 0,
+    descriptionJa:
+      '診断の回答から決まる見込みの段階です。関心あり（MQL）＝営業が追う価値あり、適合（MQL候補）＝条件は満たすが決め手不足、対象外＝条件を満たさない。マーケティングが手で MQL を付けることもできます。',
+    descriptionEn:
+      "The lead's interest level from the diagnosis: Interest (MQL) = worth pursuing, Fit (MQL candidate) = meets the conditions but lacks a strong signal, None = does not meet them. Marketing can also mark MQL by hand.",
+  },
+  {
+    fieldKey: 'leads.mqlLevel',
+    value: 'interest',
+    sortOrder: 1,
+    descriptionJa:
+      '関心あり（MQL）。必須条件を満たし、強いシグナルが1つ以上あります。営業が追う価値のある見込みです。',
+    descriptionEn:
+      'Interest (MQL) — meets the conditions and has at least one strong signal; worth pursuing.',
+  },
+  {
+    fieldKey: 'leads.mqlLevel',
+    value: 'fit',
+    sortOrder: 2,
+    descriptionJa:
+      '適合（MQL候補）。必須条件は満たしますが、強いシグナルがありません。MQL の手前です。',
+    descriptionEn:
+      'Fit (MQL candidate) — meets the conditions but has no strong signal; just short of MQL.',
+  },
+  {
+    fieldKey: 'leads.mqlLevel',
+    value: 'none',
+    sortOrder: 3,
+    descriptionJa: '対象外。必須条件を満たしません。',
+    descriptionEn: 'None — does not meet the required conditions.',
+  },
 ];
