@@ -7,6 +7,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   createQRCampaignSchema,
+  DEFAULT_QR_CAMPAIGN_MEDIUM,
+  QR_CAMPAIGN_MEDIUMS,
   type CreateQRCampaignInput,
   type QRCampaign,
   type QRScanEvent,
@@ -27,7 +29,34 @@ describe('createQRCampaignSchema', () => {
       expect(result.data.utmSource).toBe('qrcode');
       // The default medium of the form (#788), which maps to a 流入元; 'offline' before
       expect(result.data.utmMedium).toBe('seminar');
+      expect(result.data.utmMedium).toBe(DEFAULT_QR_CAMPAIGN_MEDIUM);
     }
+  });
+
+  it('still takes a medium outside the form\'s list, as the campaigns created before have (#788)', () => {
+    for (const utmMedium of ['offline', 'outdoor', 'セミナー', 'x'.repeat(50)]) {
+      const result = createQRCampaignSchema.parse({
+        name: 'Test Campaign',
+        diagnosticTemplateId: '123e4567-e89b-12d3-a456-426614174000',
+        utmMedium,
+      });
+      expect(result.utmMedium).toBe(utmMedium);
+    }
+    expect(
+      createQRCampaignSchema.safeParse({
+        name: 'Test Campaign',
+        diagnosticTemplateId: '123e4567-e89b-12d3-a456-426614174000',
+        utmMedium: 'x'.repeat(51),
+      }).success
+    ).toBe(false);
+  });
+
+  it('lists the media of the form, the default first (#788)', () => {
+    // Pins the stored values, not only the order: each is kept in the campaigns' utm_medium and
+    // in the answers' tracking, so renaming one (direct_mail → dm) would split the data and send
+    // the new leads of the renamed value to another 流入元
+    expect(QR_CAMPAIGN_MEDIUMS).toEqual(['seminar', 'exhibition', 'direct_mail']);
+    expect(QR_CAMPAIGN_MEDIUMS[0]).toBe(DEFAULT_QR_CAMPAIGN_MEDIUM);
   });
 
   it('should validate full input', () => {
@@ -45,6 +74,18 @@ describe('createQRCampaignSchema', () => {
     const result = createQRCampaignSchema.safeParse(input);
 
     expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.description).toBe('QR code for winter sale flyers');
+      expect(result.data.expiresAt).toBe('2024-12-31T23:59:59.000Z');
+    }
+  });
+
+  it('should require name', () => {
+    const input = {
+      diagnosticTemplateId: '123e4567-e89b-12d3-a456-426614174000',
+    };
+
+    expect(createQRCampaignSchema.safeParse(input).success).toBe(false);
   });
 
   it('should reject empty name', () => {
@@ -58,6 +99,28 @@ describe('createQRCampaignSchema', () => {
     expect(result.success).toBe(false);
   });
 
+  it('should take symbols and Japanese in the name', () => {
+    for (const name of ['Campaign (2024) - Spring Edition!', 'キャンペーン 2024']) {
+      const result = createQRCampaignSchema.safeParse({
+        name,
+        diagnosticTemplateId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      expect(result.success).toBe(true);
+    }
+  });
+
+  it('should accept a name of exactly 100 characters', () => {
+    const input = {
+      name: 'a'.repeat(100),
+      diagnosticTemplateId: '123e4567-e89b-12d3-a456-426614174000',
+    };
+
+    const result = createQRCampaignSchema.safeParse(input);
+
+    expect(result.success).toBe(true);
+  });
+
   it('should enforce name max length', () => {
     const input = {
       name: 'a'.repeat(101),
@@ -67,6 +130,18 @@ describe('createQRCampaignSchema', () => {
     const result = createQRCampaignSchema.safeParse(input);
 
     expect(result.success).toBe(false);
+  });
+
+  it('should accept a description of exactly 500 characters', () => {
+    const input = {
+      name: 'Campaign',
+      diagnosticTemplateId: '123e4567-e89b-12d3-a456-426614174000',
+      description: 'a'.repeat(500),
+    };
+
+    const result = createQRCampaignSchema.safeParse(input);
+
+    expect(result.success).toBe(true);
   });
 
   it('should enforce description max length', () => {
@@ -94,15 +169,15 @@ describe('createQRCampaignSchema', () => {
   });
 
   it('should validate ISO datetime format', () => {
-    const input = {
-      name: 'Campaign',
-      diagnosticTemplateId: '123e4567-e89b-12d3-a456-426614174000',
-      expiresAt: '2024-06-15T10:30:00.000Z',
-    };
+    for (const expiresAt of ['2024-06-15T10:30:00.000Z', '2024-12-31T23:59:59Z']) {
+      const result = createQRCampaignSchema.safeParse({
+        name: 'Campaign',
+        diagnosticTemplateId: '123e4567-e89b-12d3-a456-426614174000',
+        expiresAt,
+      });
 
-    const result = createQRCampaignSchema.safeParse(input);
-
-    expect(result.success).toBe(true);
+      expect(result.success).toBe(true);
+    }
   });
 });
 
@@ -171,30 +246,20 @@ describe('Type definitions', () => {
     };
 
     expect(event.ipAddressHash).toBeUndefined();
+    expect(event.userAgent).toBeUndefined();
+    expect(event.deviceType).toBeUndefined();
     expect(event.location).toBeUndefined();
   });
 
   it('should validate deviceType options', () => {
-    const mobileEvent: QRScanEvent = {
-      campaignId: 'c1',
-      scannedAt: new Date(),
-      deviceType: 'mobile',
-    };
-
-    const tabletEvent: QRScanEvent = {
-      campaignId: 'c2',
-      scannedAt: new Date(),
-      deviceType: 'tablet',
-    };
-
-    const desktopEvent: QRScanEvent = {
-      campaignId: 'c3',
-      scannedAt: new Date(),
-      deviceType: 'desktop',
-    };
-
-    expect(mobileEvent.deviceType).toBe('mobile');
-    expect(tabletEvent.deviceType).toBe('tablet');
-    expect(desktopEvent.deviceType).toBe('desktop');
+    const deviceTypes: Array<QRScanEvent['deviceType']> = ['mobile', 'tablet', 'desktop'];
+    for (const deviceType of deviceTypes) {
+      const event: QRScanEvent = {
+        campaignId: 'campaign-123',
+        scannedAt: new Date(),
+        deviceType,
+      };
+      expect(event.deviceType).toBe(deviceType);
+    }
   });
 });
