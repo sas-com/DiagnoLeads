@@ -820,7 +820,7 @@ describe.skipIf(!url)('deals (PostgreSQL)', () => {
       });
       expect(await leadOf(lost.id)).toMatchObject({ status: 'lost', dealPhase: 'survey_won' });
       expect((await memberA.deals.forLead({ organizationId: orgA, leadId: lost.id })).newDeal).toEqual(
-        { stage: 'qualification', kind: null, wonFirst: false }
+        { stage: 'qualification', kind: null, wonFirst: false, previousDealId: null }
       );
       await adminA.deals.create({ organizationId: orgA, leadId: lost.id, name: '再提案' });
       expect(await leadOf(lost.id)).toMatchObject({
@@ -1143,9 +1143,10 @@ describe.skipIf(!url)('deals (PostgreSQL)', () => {
         name,
         stage: start.stage,
         ...(start.kind ? { kind: start.kind } : {}),
+        ...(start.previousDealId ? { previousDealId: start.previousDealId } : {}),
       });
     };
-    const inQualification = { stage: 'qualification', kind: null, wonFirst: false };
+    const inQualification = { stage: 'qualification', kind: null, wonFirst: false, previousDealId: null };
 
     it('opens a lead won by hand with its win, which is created and keeps the lead won', async () => {
       const lead = await createLead(orgA, {
@@ -1153,18 +1154,37 @@ describe.skipIf(!url)('deals (PostgreSQL)', () => {
         hasNegotiated: true,
         dealPhase: 'migration_won',
       });
-      expect(await startOf(lead.id)).toEqual({ stage: 'won', kind: 'migration', wonFirst: true });
-      expect(await createAsOpened(lead.id, '移行')).toMatchObject({ stage: 'won', kind: 'migration' });
+      expect(await startOf(lead.id)).toEqual({
+        stage: 'won',
+        kind: 'migration',
+        wonFirst: true,
+        previousDealId: null,
+      });
+      const migration = await createAsOpened(lead.id, '移行');
+      expect(migration).toMatchObject({ stage: 'won', kind: 'migration' });
       expect(await leadOf(lead.id)).toMatchObject({ status: 'won', dealPhase: 'migration_won' });
-      // Once the win is a deal, the next one starts in 見極め and keeps the lead won
-      expect(await startOf(lead.id)).toEqual(inQualification);
-      await createAsOpened(lead.id, 'AX 化');
+      // Once the win is a deal, the next one starts in 見極め, follows it as AX (#978) and keeps
+      // the lead won
+      expect(await startOf(lead.id)).toEqual({
+        ...inQualification,
+        kind: 'ax',
+        previousDealId: migration.id,
+      });
+      expect(await createAsOpened(lead.id, 'AX 化')).toMatchObject({
+        kind: 'ax',
+        previousDealId: migration.id,
+      });
       expect(await leadOf(lead.id)).toMatchObject({ status: 'won', dealPhase: 'migration_won' });
     });
 
     it('opens a lead without deals at its phase, which the deal keeps', async () => {
       const proposed = await createLead(orgA, { status: 'negotiating', dealPhase: 'proposal' });
-      expect(await startOf(proposed.id)).toEqual({ stage: 'proposal', kind: null, wonFirst: false });
+      expect(await startOf(proposed.id)).toEqual({
+        stage: 'proposal',
+        kind: null,
+        wonFirst: false,
+        previousDealId: null,
+      });
       await createAsOpened(proposed.id, '移行の提案');
       expect(await leadOf(proposed.id)).toMatchObject({
         status: 'negotiating',
@@ -1177,6 +1197,42 @@ describe.skipIf(!url)('deals (PostgreSQL)', () => {
       expect(await leadOf(diagnosed.id)).toMatchObject({
         status: 'negotiating',
         dealPhase: 'simple_diagnosis',
+      });
+    });
+
+    it('follows the win no other deal goes on from, as the next kind, and links them (#978)', async () => {
+      const lead = await createLead(orgA);
+      const survey = await adminA.deals.create({
+        organizationId: orgA,
+        leadId: lead.id,
+        name: '現行調査',
+        stage: 'won',
+      });
+      expect(await startOf(lead.id)).toEqual({
+        ...inQualification,
+        kind: 'migration',
+        previousDealId: survey.id,
+      });
+      const migration = await createAsOpened(lead.id, '移行');
+      expect(migration).toMatchObject({ kind: 'migration', previousDealId: survey.id });
+      // Shown on the deal's page as the deal that goes on from the survey
+      const detail = await memberA.deals.get({ organizationId: orgA, dealId: survey.id });
+      expect(detail.nextDeals).toEqual([
+        { id: migration.id, name: '移行', kind: 'migration', stage: 'qualification' },
+      ]);
+      // While the migration goes on from the survey, a new deal follows none
+      expect(await startOf(lead.id)).toEqual(inQualification);
+      // Lost, the migration is tried again after the survey
+      await adminA.deals.update({
+        organizationId: orgA,
+        dealId: migration.id,
+        stage: 'lost',
+        lostReason: 'budget',
+      });
+      expect(await startOf(lead.id)).toEqual({
+        ...inQualification,
+        kind: 'migration',
+        previousDealId: survey.id,
       });
     });
 
