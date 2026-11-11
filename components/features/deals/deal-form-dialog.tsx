@@ -286,7 +286,9 @@ export function DealFormDialog({
   );
   const start = editing || !chosenLeadId ? undefined : leadDeals.data?.newDeal;
   // No new deal is sent until then (its button waits): it would start from the lead as it was
-  const reading = !editing && !!chosenLeadId && leadDeals.isFetching;
+  // Also while the read waits to go (offline, or a hidden tab between tries), when isFetching is
+  // false: the deal would start from the lead as it was once the network is back (#1077)
+  const reading = !editing && !!chosenLeadId && (leadDeals.isFetching || leadDeals.isPaused);
   const form = shownForm(state, start);
   const shownInitial = shownForm(initial, undefined);
   // A lead without deals at a phase past the initial hearing opens at it (newDealStart): said

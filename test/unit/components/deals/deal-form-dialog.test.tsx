@@ -35,6 +35,8 @@ const mocks = vi.hoisted(() => ({
   newDeal: undefined as undefined | { stage: string; kind: string | null; wonFirst: boolean },
   // The read is on its way (isFetching)
   reading: false,
+  // The read waits to go: offline, or a hidden tab between tries (#1077)
+  paused: false,
   leadReads: [] as { leadId: string; enabled: boolean; staleTime?: number }[],
   toast: { success: vi.fn(), error: vi.fn() },
 }));
@@ -79,6 +81,7 @@ vi.mock('@/lib/trpc/client', () => {
                   ? { items: [], newDeal: mocks.newDeal, canEdit: true, canDelete: true }
                   : undefined,
               isFetching: options.enabled && mocks.reading,
+              isPaused: options.enabled && mocks.paused,
             };
           },
         },
@@ -200,6 +203,7 @@ beforeEach(() => {
   mocks.searches = [];
   mocks.newDeal = undefined;
   mocks.reading = false;
+  mocks.paused = false;
   mocks.leadReads = [];
 });
 
@@ -414,6 +418,16 @@ describe('DealFormDialog', () => {
       expect(screen.getByRole('button', { name: 'キャンセル' })).toBeEnabled();
       expect(mocks.creates).toEqual([]);
       expect(screen.queryByText('商談名を入力してください')).not.toBeInTheDocument();
+    });
+
+    it('creates nothing while the read of the lead waits to go, as when offline (#1077)', async () => {
+      const user = userEvent.setup();
+      mocks.newDeal = { stage: 'qualification', kind: null, wonFirst: false };
+      mocks.paused = true;
+      renderForm({ leadId: LEAD_ID });
+      await user.type(screen.getByLabelText('商談名 必須'), 'AS/400 移行{Enter}');
+      expect(screen.getByRole('button', { name: '作成' })).toBeDisabled();
+      expect(mocks.creates).toEqual([]);
     });
 
     it('follows the lead chosen in the dialog, but keeps a stage chosen before it', async () => {
