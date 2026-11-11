@@ -1,4 +1,4 @@
-import type { RateLimitRule } from '../diagnostics/rate-limit';
+import type { RateLimitRule } from '@/lib/rate-limit';
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;

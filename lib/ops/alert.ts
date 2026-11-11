@@ -2,8 +2,8 @@ import type { db as defaultDb } from '@/lib/db/client';
 import { unwrapQueryError } from '@/lib/db/query-error';
 import { renderEmail } from '@/lib/email/templates/render';
 import { env } from '@/lib/env';
-import { type RateLimitRule, consumeRateLimit } from '@/lib/features/diagnostics/rate-limit';
 import { isEmailConfigured, sendEmail } from '@/lib/features/email';
+import { type RateLimitRule, consumeRateLimit } from '@/lib/rate-limit';
 
 type Database = typeof defaultDb;
 

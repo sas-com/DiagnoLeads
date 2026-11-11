@@ -25,7 +25,7 @@ vi.mock('@/lib/ops/alert', () => ({
   reportRejectedRequest: vi.fn(),
 }));
 vi.mock('@/lib/db/client', () => ({ db: {} }));
-vi.mock('@/lib/features/diagnostics/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', () => ({
   consumeRateLimit: (...args: unknown[]) => limitMock(...args),
 }));
 const notifyAttentionMock = vi.fn();

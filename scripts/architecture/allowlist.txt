@@ -32,7 +32,6 @@ cross-feature-internal delivery-reviews -> lib/features/diagnostics/ax-migration
 cross-feature-internal delivery-reviews -> lib/features/diagnostics/ax-migration/lead-submissions.ts
 cross-feature-internal diagnosis-builder -> lib/features/diagnostics/engine.ts
 cross-feature-internal diagnosis-builder -> lib/features/diagnostics/lead-upsert.ts
-cross-feature-internal diagnosis-builder -> lib/features/diagnostics/rate-limit.ts
 cross-feature-internal diagnosis-builder -> lib/features/diagnostics/tracking.ts
 cross-feature-internal diagnosis-builder -> lib/features/lead-hearings/catalog.ts
 cross-feature-internal diagnosis-builder -> lib/features/leads/assignment-notify.ts
@@ -87,15 +86,12 @@ cross-feature-internal prospects -> lib/features/leads/assignment.ts
 cross-feature-internal prospects -> lib/features/leads/audit.ts
 cross-feature-internal prospects -> lib/features/notifications/notification-service.ts
 cross-feature-internal prospects -> lib/features/webhooks/services/lead-events.ts
-cross-feature-internal respondent-email -> lib/features/diagnostics/rate-limit.ts
 cross-feature-internal respondent-email -> lib/features/email/email-service.ts
 cross-feature-internal site-visits -> lib/features/ax-site/columns/index.ts
 cross-feature-internal site-visits -> lib/features/ax-site/cross-links.ts
 cross-feature-internal site-visits -> lib/features/diagnosis-builder/public-diagnosis.ts
 cross-feature-internal site-visits -> lib/features/diagnostics/organization.ts
-cross-feature-internal site-visits -> lib/features/diagnostics/rate-limit.ts
 cross-feature-internal site-visits -> lib/features/diagnostics/request-guard.ts
-cross-feature-internal webhooks -> lib/features/diagnostics/rate-limit.ts
 feature-index-files lib/features/ai/index.ts
 feature-index-files lib/features/audit-logs/index.ts
 feature-index-files lib/features/email/index.ts
@@ -121,8 +117,6 @@ features-in-cycles lead-prep
 features-in-cycles leads
 features-in-cycles prospects
 features-in-cycles reports
-features-in-cycles respondent-email
-features-in-cycles webhooks
 features-use-global-db lib/features/audit-logs/api/router.ts
 features-use-global-db lib/features/audit-logs/service.ts
 features-use-global-db lib/features/challenge-guide/service.ts
@@ -139,7 +133,6 @@ infra-imports-features lib/auth/email-helpers.ts -> lib/features/email/index.ts
 infra-imports-features lib/db/schema.ts -> lib/features/ax-playbook/types/schemas.ts
 infra-imports-features lib/db/schema.ts -> lib/features/diagnosis-builder/definition.ts
 infra-imports-features lib/db/schema.ts -> lib/features/lead-hearings/types/schemas.ts
-infra-imports-features lib/ops/alert.ts -> lib/features/diagnostics/rate-limit.ts
 infra-imports-features lib/ops/alert.ts -> lib/features/email/index.ts
 infra-imports-features lib/seo/indexing.ts -> lib/features/ax-site/columns/index.ts
 unregistered-routers lib/features/audit-logs/api/router.ts

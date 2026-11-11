@@ -6,7 +6,7 @@ const isEmailConfigured = vi.fn(() => true);
 vi.mock('@/lib/features/email', () => ({ sendEmail, isEmailConfigured }));
 
 const consumeRateLimit = vi.fn();
-vi.mock('@/lib/features/diagnostics/rate-limit', () => ({ consumeRateLimit }));
+vi.mock('@/lib/rate-limit', () => ({ consumeRateLimit }));
 
 const env: Record<string, string | undefined> = {};
 vi.mock('@/lib/env', () => ({ env }));

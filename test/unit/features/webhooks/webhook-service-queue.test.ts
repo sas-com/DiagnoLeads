@@ -37,8 +37,8 @@ vi.mock('@/lib/features/webhooks/services/pinned-request', async (importOriginal
   ...(await importOriginal<typeof import('@/lib/features/webhooks/services/pinned-request')>()),
   sendPinnedRequest: mocks.sendRequest,
 }));
-vi.mock('@/lib/features/diagnostics/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/features/diagnostics/rate-limit')>()),
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
   consumeRateLimits: mocks.consumeRateLimits,
 }));
 

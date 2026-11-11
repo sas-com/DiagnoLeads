@@ -31,7 +31,7 @@ vi.mock('@/lib/features/diagnostics/ax-migration/result-email-flow', () => ({
   confirmAxResultEmail: (...args: unknown[]) => confirmMock(...args),
   declineAxResultEmail: (...args: unknown[]) => declineMock(...args),
 }));
-vi.mock('@/lib/features/diagnostics/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', () => ({
   consumeRateLimits: (...args: unknown[]) => limitsMock(...args),
 }));
 

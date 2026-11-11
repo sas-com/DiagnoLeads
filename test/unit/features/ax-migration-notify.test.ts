@@ -23,7 +23,7 @@ vi.mock('@/lib/db/client', () => ({ db: dbMock }));
 vi.mock('@/lib/features/diagnostics/organization', () => ({
   resolveDiagnosisOrganizationId: () => 'org-1',
 }));
-vi.mock('@/lib/features/diagnostics/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', () => ({
   consumeRateLimit: (...args: unknown[]) => quotaMock(...args),
 }));
 vi.mock('@/lib/features/webhooks/services/webhook-service', () => ({
