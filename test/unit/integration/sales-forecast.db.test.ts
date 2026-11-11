@@ -86,10 +86,13 @@ describe.skipIf(!url)('sales targets and forecast (PostgreSQL)', () => {
     return { caller, userId: user.id };
   }
 
-  async function createLead(organizationId: string) {
+  async function createLead(
+    organizationId: string,
+    values: { company?: string | null; name?: string } = {}
+  ) {
     const [lead] = await pg
       .insert(leads)
-      .values({ organizationId, email: `lead-${unique()}@example.co.jp`, company: '架空商事' })
+      .values({ organizationId, email: `lead-${unique()}@example.co.jp`, company: '架空商事', ...values })
       .returning();
     return lead.id;
   }
@@ -488,7 +491,7 @@ describe.skipIf(!url)('sales targets and forecast (PostgreSQL)', () => {
     });
 
     it("compares the week's deals with how they stood a week ago", async () => {
-      const leadId = await createLead(forecastOrg);
+      const leadId = await createLead(forecastOrg, { company: '架空ソフト' });
       const old = await rep.deals.create({
         organizationId: forecastOrg,
         leadId,
@@ -512,12 +515,60 @@ describe.skipIf(!url)('sales targets and forecast (PostgreSQL)', () => {
       const forecast = await owner.salesForecast.get({ organizationId: forecastOrg, period: 'thisMonth' });
       const ids = (group: { deals: { id: string }[] }) => group.deals.map((deal) => deal.id);
       expect(ids(forecast.changes.groups.advanced)).toEqual([old.id]);
+      // Whose deal: its lead's company (#953)
+      expect(forecast.changes.groups.advanced.deals[0]).toMatchObject({
+        name: '先週からの商談',
+        leadLabel: '架空ソフト',
+      });
       expect(ids(forecast.changes.groups.slipped)).toEqual([old.id]);
       expect(ids(forecast.changes.groups.created)).not.toContain(old.id);
       // Everything else was created within the week
       expect(forecast.changes.groups.created.count).toBeGreaterThanOrEqual(9);
       expect(forecast.changes.groups.won.count).toBe(1);
       expect(forecast.changes.amountDelta).toBe(500_000);
+    });
+
+    it("says whose deal each change is with its lead's name when the lead has no company (#953)", async () => {
+      const leadId = await createLead(forecastOrg, { company: null, name: '架空 太郎' });
+      const created = await rep.deals.create({
+        organizationId: forecastOrg,
+        leadId,
+        name: '会社名のないリードの商談',
+        stage: 'qualification',
+      });
+
+      const forecast = await owner.salesForecast.get({ organizationId: forecastOrg, period: 'thisMonth' });
+      const row = forecast.changes.groups.created.deals.find(
+        (deal: { id: string }) => deal.id === created.id
+      );
+      expect(row).toMatchObject({ name: '会社名のないリードの商談', leadLabel: '架空 太郎' });
+    });
+
+    it("names no lead of another organization, and still counts the deal (#953)", async () => {
+      // A deal of this organization pointing at another's lead, which no API makes: until RLS,
+      // the join's own organization is what keeps that lead's company and name out
+      const otherLead = await createLead(orgB, { company: '別の組織の会社', name: '別組織 次郎' });
+      const [stray] = await pg
+        .insert(deals)
+        .values({
+          organizationId: forecastOrg,
+          leadId: otherLead,
+          name: '別の組織のリードを指す商談',
+          stage: 'qualification',
+          probability: 10,
+        })
+        .returning({ id: deals.id });
+      try {
+        const forecast = await owner.salesForecast.get({ organizationId: forecastOrg, period: 'thisMonth' });
+        const row = forecast.changes.groups.created.deals.find(
+          (deal: { id: string }) => deal.id === stray.id
+        );
+        expect(row).toMatchObject({ name: '別の組織のリードを指す商談', leadLabel: null });
+        expect(JSON.stringify(forecast)).not.toContain('別の組織の会社');
+        expect(JSON.stringify(forecast)).not.toContain('別組織 次郎');
+      } finally {
+        await pg.delete(deals).where(eq(deals.id, stray.id));
+      }
     });
   });
 });

@@ -1633,6 +1633,7 @@
         "slipped": "受注予定日の延期"
       },
       "summary": "{count}件・{amount}",
+      "owner": "担当：{name}",
       "stageChange": "{from} → {to}",
       "dateChange": "受注予定日 {from} → {to}",
       "noDate": "未定",

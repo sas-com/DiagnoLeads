@@ -1633,6 +1633,7 @@
         "slipped": "Close date pushed out"
       },
       "summary": "{count, plural, one {# deal} other {# deals}} · {amount}",
+      "owner": "Owner: {name}",
       "stageChange": "{from} → {to}",
       "dateChange": "Expected close {from} → {to}",
       "noDate": "none",

@@ -464,6 +464,7 @@ function ChangesSection({
   changes: { groups: Record<ChangeKind, ChangeGroup>; amountDelta: number };
 }) {
   const t = useTranslations('salesForecast.changes');
+  const tTable = useTranslations('salesForecast.table');
   const tStages = useTranslations('deals.stages');
   const locale = useLocale();
   const yen = (amount: number) => formatYen(amount, locale) ?? '';
@@ -520,8 +521,22 @@ function ChangesSection({
                         >
                           {deal.name}
                         </Link>
-                        <span className="ml-2 text-gray-600 dark:text-gray-300">
-                          {deal.ownerName}
+                        {/* Under its name, as on the board: whose deal, told apart from the others
+                            of the same name, and its owner, said as such, so a lead's name is not
+                            taken for the owner's (#953) */}
+                        <span className="block text-gray-600 wrap-anywhere dark:text-gray-300">
+                          {/* Isolated: a company typed with direction marks cannot reach the owner */}
+                          {deal.leadLabel && (
+                            <>
+                              <bdi>{deal.leadLabel}</bdi>
+                              {' · '}
+                            </>
+                          )}
+                          <span className="inline-block">
+                            {deal.ownerName
+                              ? t('owner', { name: deal.ownerName })
+                              : tTable('unassigned')}
+                          </span>
                         </span>
                         <p className="text-gray-700 dark:text-gray-300">
                           {deal.before && deal.before.stage !== deal.stage
