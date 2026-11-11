@@ -10,8 +10,8 @@
  */
 import type { db as defaultDb } from '@/lib/db/client';
 import { leads, users } from '@/lib/db/schema';
+import { dashboardPeriod, jstDay } from '@/lib/jst';
 import { and, asc, eq, isNull, or, sql } from 'drizzle-orm';
-import { dashboardPeriod, jstDay } from '../analytics/dashboard';
 import {
   leadDealRating,
   leadNextMeetingDate,
