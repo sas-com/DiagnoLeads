@@ -208,6 +208,8 @@ export function LostReasonDialog({
             </p>
           )}
 
+          {/* The button's new name alone may not be read out (as the delete question's, #1058) */}
+          <output className="sr-only">{pending ? tForm('saving') : ''}</output>
           <DialogFooter className="gap-2">
             <Button
               type="button"

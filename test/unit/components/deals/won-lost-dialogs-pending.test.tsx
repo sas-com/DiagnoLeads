@@ -1,7 +1,8 @@
 /**
  * The won and lost questions while they save (#1058): the button pressed keeps the focus, as it
- * is aria-disabled rather than disabled, and pressing it again sends nothing (real next-intl
- * messages and UI components)
+ * is aria-disabled rather than disabled, pressing it again sends nothing, and that it is saving
+ * is read out, as the button's new name alone may not be (real next-intl messages and UI
+ * components)
  */
 import { LostReasonDialog } from '@/components/features/deals/lost-reason-dialog';
 import { WonDialog } from '@/components/features/deals/won-dialog';
@@ -47,10 +48,13 @@ describe('while the question is saved (#1058)', () => {
         />
       );
     const { rerender } = render(won(false));
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
     await user.click(screen.getByRole('button', { name: '受注にする' }));
     expect(onConfirm).toHaveBeenCalledTimes(1);
 
     rerender(won(true));
+    // Read out, as the button's new name alone may not be
+    expect(screen.getByRole('status')).toHaveTextContent(SAVING);
     const saving = screen.getByRole('button', { name: SAVING });
     expect(saving).toHaveFocus();
     expect(saving).toHaveAttribute('aria-disabled', 'true');
@@ -76,10 +80,13 @@ describe('while the question is saved (#1058)', () => {
         />
       );
     const { rerender } = render(lost(false));
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
     await user.click(screen.getByRole('button', { name: '失注にする' }));
     expect(onConfirm).toHaveBeenCalledTimes(1);
 
     rerender(lost(true));
+    // Read out, as the button's new name alone may not be
+    expect(screen.getByRole('status')).toHaveTextContent(SAVING);
     const saving = screen.getByRole('button', { name: SAVING });
     expect(saving).toHaveFocus();
     expect(saving).toHaveAttribute('aria-disabled', 'true');

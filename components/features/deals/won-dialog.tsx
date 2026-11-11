@@ -166,6 +166,8 @@ export function WonDialog({
             </p>
           )}
 
+          {/* The button's new name alone may not be read out (as the delete question's, #1058) */}
+          <output className="sr-only">{pending ? t('form.saving') : ''}</output>
           <DialogFooter className="gap-2">
             <Button
               type="button"
