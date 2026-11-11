@@ -25,8 +25,8 @@ type Callbacks = {
   onError?: (error: Error, input: unknown) => unknown;
 };
 type ToastOptions = { action?: { label: string; onClick: () => void }; duration?: number };
-/** The board's query as the screen reads it: whether it is read again and how many times it has
-    failed tell a failure again from the first (#1029) */
+/** The board's query as the screen reads it: whether it is read again (or waits to be) and how
+    many times it has failed tell a failure again from the first (#1029) */
 type BoardQuery = {
   data: unknown;
   isError: boolean;
@@ -34,6 +34,7 @@ type BoardQuery = {
   refetch: ReturnType<typeof vi.fn>;
   error?: { data: { code: string } };
   isFetching?: boolean;
+  isPaused?: boolean;
   errorUpdateCount?: number;
 };
 
@@ -250,7 +251,14 @@ const boardData = (deals: DealCard[], canEdit = true) => ({
 });
 
 const showBoard = (data: unknown) => {
-  mocks.board = { data, isError: false, isPlaceholderData: false, refetch: vi.fn() };
+  mocks.board = {
+    data,
+    isError: false,
+    isPlaceholderData: false,
+    isFetching: false,
+    isPaused: false,
+    refetch: vi.fn(),
+  };
 };
 
 const screenUi = () => (
@@ -1156,6 +1164,7 @@ describe('DealsScreen', () => {
       const user = userEvent.setup();
       const view = renderScreen();
       readAgain(view, { isError: true, errorUpdateCount: 1 });
+      expect(screen.getByRole('status')).toBeEmptyDOMElement();
       await user.click(retry());
       expect(mocks.board.refetch).toHaveBeenCalledTimes(1);
 
@@ -1165,9 +1174,36 @@ describe('DealsScreen', () => {
       expect(reading).toHaveFocus();
       expect(reading).toHaveAttribute('aria-disabled', 'true');
       expect(reading).not.toBeDisabled();
+      // Read out as it is, not as a failure: the alert is the failure alone, unchanged
+      expect(screen.getByRole('status')).toHaveTextContent('読み込み中...');
+      expect(screen.getByRole('alert')).toHaveTextContent(/^商談を読み込めませんでした$/);
       await user.click(reading);
       await user.keyboard('{Enter}');
       expect(mocks.board.refetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('says it is reading also while the read waits (offline, or a hidden tab between tries)', async () => {
+      const user = userEvent.setup();
+      const view = renderScreen();
+      readAgain(view, { isError: true, errorUpdateCount: 1 });
+      await user.click(retry());
+
+      readAgain(view, { isPaused: true });
+      const reading = screen.getByRole('button', { name: '読み込み中...' });
+      expect(reading).toHaveFocus();
+      expect(reading).toHaveAttribute('aria-disabled', 'true');
+      expect(screen.getByRole('status')).toHaveTextContent('読み込み中...');
+    });
+
+    it('says the failure of other filters as the first, as their reads count their own', () => {
+      const view = renderScreen();
+      readAgain(view, { isError: true, errorUpdateCount: 1 });
+
+      // Read before and failed since, kept in error with the board they read
+      mocks.search = 'kind=migration';
+      readAgain(view, { errorUpdateCount: 3 });
+      expect(screen.getByRole('alert')).toHaveTextContent('商談を読み込めませんでした');
+      expect(screen.queryByText(failedAgain)).not.toBeInTheDocument();
     });
 
     it('says when it fails again, with a new message each time, keeping the focus on the retry', async () => {

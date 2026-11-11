@@ -106,7 +106,9 @@ function EmptyState({
 /**
  * The board's failure, with its retry. A read of a board read before keeps its failure in view
  * until it ends (TanStack Query stays in error while it has data): the retry says it is reading
- * meanwhile, keeping the focus, and a failure again is said as such, read out anew (#1029)
+ * meanwhile, keeping the focus, and a failure again is said as such, read out anew (#1029). The
+ * alert is the failure alone, as on the deal's page: the retry's words changing are not read out
+ * as a failure
  */
 function BoardLoadError({
   retryRef,
@@ -126,14 +128,18 @@ function BoardLoadError({
   const tCommon = useTranslations('common');
   const [shownFirst] = useState(failures);
   return (
-    <div
-      role="alert"
-      className="space-y-2 rounded-lg border border-red-200 bg-white p-4 dark:border-red-900 dark:bg-gray-900"
-    >
+    <div className="space-y-2 rounded-lg border border-red-200 bg-white p-4 dark:border-red-900 dark:bg-gray-900">
       {/* A new one at each failure, for screen readers to read it out again */}
-      <p key={failures} id={messageId} className="text-sm text-red-700 dark:text-red-400">
+      <p
+        key={failures}
+        id={messageId}
+        role="alert"
+        className="text-sm text-red-700 dark:text-red-400"
+      >
         {failures === shownFirst ? t('state.loadError') : t('state.loadErrorAgain')}
       </p>
+      {/* The button's new name alone may not be read out (as the delete question's) */}
+      <output className="sr-only">{reading ? tCommon('loading') : ''}</output>
       <Button
         ref={retryRef}
         type="button"
@@ -411,10 +417,13 @@ export function DealsScreen() {
           >
             {board.isError ? (
               <BoardLoadError
+                // Anew for other filters: the read of each counts its own failures
+                key={`${owner}:${kind}:${period}`}
                 retryRef={retryButton}
                 messageId={loadErrorId}
                 failures={board.errorUpdateCount}
-                reading={board.isFetching}
+                // Paused too (offline, or a hidden tab between tries): it reads once it can
+                reading={board.isFetching || board.isPaused}
                 onRetry={() => void board.refetch()}
               />
             ) : !data || readingOthers ? (
