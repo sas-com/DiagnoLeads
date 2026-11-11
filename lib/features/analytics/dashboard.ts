@@ -3,6 +3,7 @@ import { diagnosticSubmissions, leadContactLogs, leads } from '@/lib/db/schema';
 import { consultationDeadline } from '@/lib/features/diagnostics/types/consultation';
 import { REACHED_CONTACT_KINDS } from '@/lib/features/lead-follow-up/types/schemas';
 import { LEAD_STATUSES, type LeadStatus } from '@/lib/features/leads/types/pipeline';
+import { JST_OFFSET_MS, dashboardPeriod, jstDay } from '@/lib/jst';
 import { addDays, differenceInBusinessDays } from 'date-fns';
 import { and, count, desc, eq, gte, lt, min, sql } from 'drizzle-orm';
 
@@ -12,23 +13,13 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** Waiting requests read (oldest first) and shown on the dashboard */
 const PENDING_LIMIT = 50;
 const PENDING_SHOWN = 8;
-const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
-
-/** Calendar day in Japan (YYYY-MM-DD) of an instant */
-export function jstDay(instant: Date): string {
-  return new Date(instant.getTime() + JST_OFFSET_MS).toISOString().slice(0, 10);
-}
 
 /**
- * The period ends now and starts at the beginning of the Japanese day `days - 1` days ago, so
- * "7 days" is today and the six days before. The previous period has the same length.
+ * In lib/jst.ts since #471. Still exported here for the files that read them from analytics:
+ * analytics/period.ts and test/unit/integration/dashboard-summary.db.test.ts. Drop this once they
+ * read lib/jst.ts.
  */
-export function dashboardPeriod(days: number, now: Date = new Date()) {
-  const todayStart = new Date(`${jstDay(now)}T00:00:00+09:00`);
-  const from = new Date(todayStart.getTime() - (days - 1) * DAY_MS);
-  const previousFrom = new Date(from.getTime() - days * DAY_MS);
-  return { from, to: now, previousFrom };
-}
+export { dashboardPeriod, jstDay };
 
 /** How close a contact deadline is, in business days (weekends skipped, like the deadline rule) */
 export type DeadlineStatus =

@@ -63,7 +63,6 @@ cross-feature-internal lead-hearings -> lib/features/diagnostics/ax-migration/de
 cross-feature-internal lead-hearings -> lib/features/prospects/hearing-prefill.ts
 cross-feature-internal lead-prep -> lib/features/diagnostics/ax-migration/lead-submissions.ts
 cross-feature-internal lead-prep -> lib/features/leads/diagnosis-view.ts
-cross-feature-internal leads -> lib/features/analytics/dashboard.ts
 cross-feature-internal leads -> lib/features/diagnostics/ax-migration/access-path.ts
 cross-feature-internal leads -> lib/features/diagnostics/ax-migration/mql.ts
 cross-feature-internal leads -> lib/features/lead-handoff/handoff.ts

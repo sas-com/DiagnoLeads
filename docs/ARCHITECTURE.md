@@ -47,7 +47,7 @@
 | `file-cycles` | ファイル単位の import の循環を作らない | 例外なし |
 | `test-paths-resolve` | テストが import するパスと、`vi.mock`・`vi.doMock`・`vi.unmock`・`vi.doUnmock`・`vi.importActual`・`vi.importMock`（`vitest.mock` などの書き方も含む）に渡すパスが実在する（パッケージ名は見ない。テストの `@payload-config` は vitest の別名どおり `test/mocks/payload-config.ts`）。存在しないパスへの `vi.mock` はエラーにならず、黙って効かなくなる（本物のモジュールが動き、原因の分かりにくい失敗か、副作用を伴う素通りになる）ので、ファイルを消す・移したときに、古いパスを指したまま残ったテストをこの検査が見つける | 例外なし |
 | `features-in-cycles` | 互いに依存し合う機能（間接も含む）を増やさない | 許可リスト 19 |
-| `cross-feature-internal` | 他の機能から読むのは公開面（`types/**`・`types.ts`・`service.ts`。ほかに `email/index.ts`・`respondent-email/index.ts`）だけ。項目は「読む機能 -> 読まれる側のファイル」（#623） | 許可リスト 74 |
+| `cross-feature-internal` | 他の機能から読むのは公開面（`types/**`・`types.ts`・`service.ts`。ほかに `email/index.ts`・`respondent-email/index.ts`）だけ。項目は「読む機能 -> 読まれる側のファイル」（#623） | 許可リスト 73 |
 | `ax-boundary` | AX 診断（`diagnostics/ax-migration/`）を読むのは、AX 診断の中と、AX のための機能（`ax-*`）だけ。型だけの import も数える。項目は「読む側 -> AX のファイル」。リードの最新の AX 回答は `ax-migration/lead-submissions.ts`、営業の手引きは `ax-playbook/service.ts` から読む（#480） | 許可リスト 16 |
 | `features-use-global-db` | 機能のコードはグローバルの `db` を使わず、`ctx.db` か引数の executor を使う（RLS で接続を差し替えるため） | 許可リスト 11 |
 | `feature-index-files` | lib/features に `index.ts`（barrel）を作らない | 許可リスト 6 |
@@ -131,6 +131,7 @@ components/features/<feature>/
 
 - 移す範囲のファイルを触っている開いた PR が0（各 PR の変更ファイルの一覧で確かめる）。公開の前後（10/29）と RLS の作業中（11/4〜11/14）は行わない
 - `git diff -C` で移した先がコピー（similarity 100%）として出る（中身の変更を混ぜない。古いパスに再 export を残すので、`-M` では改名として出ない）
+  - ファイルの一部を新しいファイルに分けるときは、`-C` でもコピーとして出ない。`git diff --color-moved` で、移した関数の本体が moved として出ることを確かめる。moved にならない行は、export・import の付け外し、古いパスの再 export、移した先で要る定数の写し、説明のコメントに限る
 - スキーマを分けたときは `bun run db:generate` の差分が0。文言を分けたときは、合成した結果のキーが移す前と一致する
 - 古いパスには1行の再 export を残し、importer は触るついでに新しいパスへ替える。替えるときは、テストの `vi.mock('<パス>')` も同じパスに替える（古いパスのままだとモックが効かない）
 - 決定ファイル（`.factory/memory/decisions/*.md`）の `paths` が古いパスを指していたら、同じ PR で直す（`test/unit/claude-hooks` が検出する）
