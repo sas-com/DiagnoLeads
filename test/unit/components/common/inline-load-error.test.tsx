@@ -24,7 +24,7 @@ describe('InlineLoadError', () => {
 
     expect(screen.getByRole('alert')).toHaveTextContent(messages.common.loadError);
     const retry = screen.getByRole('button', { name: messages.common.retry });
-    expect(retry).toHaveClass('min-h-11');
+    expect(retry).toHaveClass('min-h-11', 'md:min-h-0');
     await user.click(retry);
     expect(onRetry).toHaveBeenCalledTimes(1);
   });

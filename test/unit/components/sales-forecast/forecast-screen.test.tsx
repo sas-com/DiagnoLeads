@@ -309,7 +309,7 @@ describe('ForecastScreen', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('予測を読み込めませんでした');
     const retry = screen.getByRole('button', { name: '再読み込み' });
     // 44px on a phone (#1059)
-    expect(retry).toHaveClass('min-h-11');
+    expect(retry).toHaveClass('min-h-11', 'md:min-h-0');
     await user.click(retry);
     expect(mocks.forecast.refetch).toHaveBeenCalled();
   });
