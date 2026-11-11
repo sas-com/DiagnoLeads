@@ -181,7 +181,12 @@ export function ForecastScreen() {
           className="space-y-2 rounded-lg border border-red-200 p-4 dark:border-red-900"
         >
           <p className="text-sm text-red-700 dark:text-red-400">{t('state.loadError')}</p>
-          <Button type="button" variant="outline" onClick={() => void query.refetch()}>
+          <Button
+            type="button"
+            variant="outline"
+            className={TAP_TARGET}
+            onClick={() => void query.refetch()}
+          >
             {t('state.retry')}
           </Button>
         </div>

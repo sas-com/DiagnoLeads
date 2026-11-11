@@ -1,5 +1,6 @@
 'use client';
 
+import { TAP_TARGET } from '@/components/common/tap-target';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,6 +22,7 @@ import {
   emptyAxPlaybookContent,
 } from '@/lib/features/ax-playbook/types/schemas';
 import { trpc } from '@/lib/trpc/client';
+import { cn } from '@/lib/utils';
 import { AlertTriangle, Loader2, Lock, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
@@ -85,7 +87,12 @@ export function AxPlaybookEditor() {
     return (
       <Callout title={t('loadErrorTitle')} icon={AlertTriangle} color="red">
         <p>{t('loadErrorBody')}</p>
-        <Button variant="outline" size="sm" className="mt-3" onClick={() => refetch()}>
+        <Button
+          variant="outline"
+          size="sm"
+          className={cn(TAP_TARGET, 'mt-3')}
+          onClick={() => refetch()}
+        >
           <RefreshCw className="mr-1 h-4 w-4" />
           {t('retry')}
         </Button>

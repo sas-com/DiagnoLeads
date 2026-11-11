@@ -130,7 +130,12 @@ export function LeadActivityCard({ leadId }: LeadActivityCardProps) {
       {query.isError ? (
         <div className="space-y-2 text-sm text-red-600">
           <p>{t('loadError')}</p>
-          <Button size="sm" variant="outline" onClick={() => query.refetch()}>
+          <Button
+            size="sm"
+            variant="outline"
+            className={TAP_TARGET}
+            onClick={() => query.refetch()}
+          >
             <RefreshCw className="h-4 w-4" />
             {t('retry')}
           </Button>
