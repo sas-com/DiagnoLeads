@@ -1,5 +1,11 @@
+import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { type Change, parseNameStatus, planTests } from '../../../scripts/verify-changed';
+import {
+  type Change,
+  DISK_READERS,
+  parseNameStatus,
+  planTests,
+} from '../../../scripts/verify-changed';
 
 const modified = (path: string): Change => ({ path, status: 'modified' });
 
@@ -59,6 +65,30 @@ describe('planTests', () => {
     });
   });
 
+  it('runs the test that reads a changed module as text, besides the related tests', () => {
+    expect(planTests([modified('components/features/ax-site/fonts.ts')])).toEqual({
+      kind: 'selected',
+      related: ['components/features/ax-site/fonts.ts'],
+      extra: ['test/unit/components/ax-site/ax-fonts-css.test.ts'],
+    });
+  });
+
+  it('runs the test that reads a changed JSON file', () => {
+    expect(planTests([modified('lib/features/ax-site/web-checklist-pdf.json')])).toEqual({
+      kind: 'selected',
+      related: [],
+      extra: ['test/unit/features/ax-web-checklist.test.ts'],
+    });
+  });
+
+  it('runs nothing for a removed test', () => {
+    expect(planTests([{ path: 'test/unit/lib/old.test.ts', status: 'deleted' }])).toEqual({
+      kind: 'selected',
+      related: [],
+      extra: [],
+    });
+  });
+
   it('runs the whole suite when code is removed or a file is added under app/', () => {
     const plan = planTests([
       { path: 'lib/old.ts', status: 'deleted' },
@@ -84,18 +114,46 @@ describe('planTests', () => {
 });
 
 describe('parseNameStatus', () => {
-  it('reads added, modified, deleted, renamed and copied paths', () => {
+  it('reads added, modified, deleted, renamed and copied paths from NUL-separated output', () => {
     expect(
       parseNameStatus(
-        'A\tlib/a.ts\nM\tlib/b.ts\nD\tlib/c.ts\nR087\tlib/d.ts\tlib/e.ts\nC100\tlib/f.ts\tlib/g.ts\n',
+        [
+          'A',
+          'lib/a.ts',
+          'M',
+          'lib/b c.ts',
+          'D',
+          'lib/c.ts',
+          'R087',
+          'lib/d.ts',
+          'lib/e.ts',
+          'C100',
+          'lib/f.ts',
+          'lib/g.ts',
+          'M',
+          'docs/日本語.md',
+          '',
+        ].join('\0'),
       ),
     ).toEqual([
       { path: 'lib/a.ts', status: 'added' },
-      { path: 'lib/b.ts', status: 'modified' },
+      { path: 'lib/b c.ts', status: 'modified' },
       { path: 'lib/c.ts', status: 'deleted' },
       { path: 'lib/d.ts', status: 'deleted' },
       { path: 'lib/e.ts', status: 'added' },
       { path: 'lib/g.ts', status: 'added' },
+      { path: 'docs/日本語.md', status: 'modified' },
     ]);
+  });
+
+  it('reads no changes from empty output', () => {
+    expect(parseNameStatus('')).toEqual([]);
+  });
+});
+
+describe('DISK_READERS', () => {
+  it('names only tests that exist', () => {
+    const missing = DISK_READERS.flatMap((rule) => rule.tests).filter((test) => !existsSync(test));
+    expect(missing).toEqual([]);
   });
 });

@@ -8,6 +8,7 @@
  * `bun run verify`          changes against the merge base with origin/main, staged or not
  * `bun run verify --full`   the whole suite
  * `bun run verify --plan`   print which tests would run, and run nothing
+ * Other arguments go to vitest, such as `--maxWorkers=2` when other sessions load the machine
  */
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
@@ -24,6 +25,7 @@ export type TestPlan =
   | { kind: 'selected'; related: string[]; extra: string[] };
 
 const CODE = /\.(ts|tsx)$/;
+const TEST = /^test\/.*\.(test|spec)\.tsx?$/;
 
 // Changes that can break tests the import graph does not lead to
 const FULL_SUITE: { pattern: RegExp; reason: string }[] = [
@@ -38,8 +40,8 @@ const FULL_SUITE: { pattern: RegExp; reason: string }[] = [
   { pattern: /^drizzle\//, reason: 'migrations' },
 ];
 
-// Non-code files that tests read from disk, and the tests that read them
-const DISK_READERS: { pattern: RegExp; tests: string[] }[] = [
+// Files that tests read from disk rather than import, and the tests that read them
+export const DISK_READERS: { pattern: RegExp; tests: string[] }[] = [
   { pattern: /^(\.factory\/memory|\.claude)\//, tests: ['test/unit/claude-hooks'] },
   { pattern: /^scripts\/architecture\//, tests: ['test/unit/scripts/architecture.test.ts'] },
   {
@@ -50,7 +52,15 @@ const DISK_READERS: { pattern: RegExp; tests: string[] }[] = [
       'test/unit/components/admin-dark-text-css.test.ts',
     ],
   },
+  {
+    pattern: /^components\/features\/ax-site\/fonts\.ts$/,
+    tests: ['test/unit/components/ax-site/ax-fonts-css.test.ts'],
+  },
   { pattern: /^vercel\.json$/, tests: ['test/unit/lib/middleware/security-headers.test.ts'] },
+  {
+    pattern: /^lib\/features\/ax-site\/web-checklist-pdf\.json$/,
+    tests: ['test/unit/features/ax-web-checklist.test.ts'],
+  },
 ];
 
 // Non-code files no unit test reads
@@ -74,7 +84,8 @@ export function planTests(changes: Change[]): TestPlan {
     }
     if (CODE.test(path)) {
       // A removed module has no graph left to follow, and an added or removed file under app/ changes
-      // the routes that some tests list from disk
+      // the routes that some tests list from disk. A removed test leaves nothing to run
+      if (status === 'deleted' && TEST.test(path)) continue;
       if (status === 'deleted') reasons.add(`removed code (${path})`);
       else if (status === 'added' && path.startsWith('app/'))
         reasons.add(`new route file (${path})`);
@@ -93,18 +104,29 @@ export function planTests(changes: Change[]): TestPlan {
   return { kind: 'selected', related: [...related], extra: [...extra] };
 }
 
+// Reads `git diff --name-status -z`: NUL-separated fields, so paths with spaces or non-ASCII
+// characters come through unquoted
 export function parseNameStatus(output: string): Change[] {
+  const fields = output.split('\0');
   const changes: Change[] = [];
-  for (const line of output.split('\n')) {
-    if (!line.trim()) continue;
-    const [code, ...paths] = line.split('\t');
+  let i = 0;
+  while (i < fields.length && fields[i] !== '') {
+    const code = fields[i];
     // A rename removes one path and adds another; a copy adds one
     if (code.startsWith('R')) {
-      changes.push({ path: paths[0], status: 'deleted' }, { path: paths[1], status: 'added' });
-    } else if (code.startsWith('C')) changes.push({ path: paths[1], status: 'added' });
-    else if (code === 'A') changes.push({ path: paths[0], status: 'added' });
-    else if (code === 'D') changes.push({ path: paths[0], status: 'deleted' });
-    else changes.push({ path: paths[0], status: 'modified' });
+      changes.push(
+        { path: fields[i + 1], status: 'deleted' },
+        { path: fields[i + 2], status: 'added' }
+      );
+      i += 3;
+    } else if (code.startsWith('C')) {
+      changes.push({ path: fields[i + 2], status: 'added' });
+      i += 3;
+    } else {
+      const status: ChangeStatus = code === 'A' ? 'added' : code === 'D' ? 'deleted' : 'modified';
+      changes.push({ path: fields[i + 1], status });
+      i += 2;
+    }
   }
   return changes;
 }
@@ -116,10 +138,18 @@ function git(args: string[]): string {
 }
 
 function collectChanges(): Change[] {
-  const base = git(['merge-base', 'HEAD', 'origin/main']).trim();
-  const tracked = parseNameStatus(git(['diff', '--name-status', '-M', base]));
-  const untracked = git(['ls-files', '--others', '--exclude-standard'])
-    .split('\n')
+  let base: string;
+  try {
+    base = git(['merge-base', 'HEAD', 'origin/main']).trim();
+  } catch (error) {
+    // A shallow clone may not reach the fork point once main moves on
+    throw new Error(
+      `${(error as Error).message} (in a shallow clone, \`git fetch --deepen=100 origin main\` may help)`
+    );
+  }
+  const tracked = parseNameStatus(git(['diff', '--name-status', '-z', '-M', base]));
+  const untracked = git(['ls-files', '-z', '--others', '--exclude-standard'])
+    .split('\0')
     .filter(Boolean)
     .map((path): Change => ({ path, status: 'added' }));
   return [...tracked, ...untracked];
@@ -132,6 +162,8 @@ function run(command: string, args: string[]): void {
 }
 
 function main(): void {
+  const own = new Set(['--full', '--plan']);
+  const vitestArgs = process.argv.slice(2).filter((arg) => !own.has(arg));
   let plan: TestPlan;
   if (process.argv.includes('--full')) {
     plan = { kind: 'full', reasons: ['--full'] };
@@ -148,19 +180,27 @@ function main(): void {
     return;
   }
 
+  // The checks that take a second or two go first, so a lint error does not wait for the tests
+  run('bun', ['run', 'lint']);
+  run('bun', ['run', 'arch:check']);
   if (plan.kind === 'full') {
     console.log(`Running the whole suite: ${plan.reasons.join('; ')}`);
-    run('bun', ['run', 'test:run']);
+    run('bunx', ['vitest', 'run', ...vitestArgs]);
   } else {
     if (plan.related.length === 0 && plan.extra.length === 0)
       console.log('No unit tests to run for these changes');
     if (plan.related.length > 0)
-      run('bunx', ['vitest', 'related', ...plan.related, '--run', '--passWithNoTests']);
-    if (plan.extra.length > 0) run('bunx', ['vitest', 'run', ...plan.extra]);
+      run('bunx', [
+        'vitest',
+        'related',
+        ...plan.related,
+        '--run',
+        '--passWithNoTests',
+        ...vitestArgs,
+      ]);
+    if (plan.extra.length > 0) run('bunx', ['vitest', 'run', ...plan.extra, ...vitestArgs]);
   }
   run('bun', ['run', 'typecheck']);
-  run('bun', ['run', 'lint']);
-  run('bun', ['run', 'arch:check']);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

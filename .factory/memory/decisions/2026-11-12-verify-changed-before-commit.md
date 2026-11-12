@@ -14,13 +14,15 @@ paths: ["scripts/verify-changed.ts", "test/unit/scripts/verify-changed.test.ts",
 - **決定**（オーナー判断。直近の PR 12件の計測を示して聞いた）:
   - コミット前の検証は `bun run verify`（`scripts/verify-changed.ts`）にする。中身は次のとおり
     - origin/main との分岐点からの変更（コミットしていないものを含む）を集める
-    - `vitest related` で関係するテストを流し、ファイルを直接読むテストを足す（`.factory/memory/`・`.claude/` → `test/unit/claude-hooks`、`app/globals.css`・`vercel.json`・`scripts/architecture/` → それを読むテスト）
-    - そのあと、型チェック・リント・`arch:check` を流す
+    - リントと `arch:check` を先に流す（数秒で終わる）
+    - `vitest related` で関係するテストを流し、ファイルを直接読むテストを足す（`.factory/memory/`・`.claude/` → `test/unit/claude-hooks`。`app/globals.css`・`components/features/ax-site/fonts.ts`・`vercel.json`・`lib/features/ax-site/web-checklist-pdf.json`・`scripts/architecture/` → それを読むテスト）
+    - 最後に型チェックを流す
+    - そのほかの引数は vitest に渡す（ほかのセッションでマシンが重いときの `--maxWorkers=2` など）
   - import をたどれない変更は、全テストに切り替える
     - 依存（`package.json`・`bun.lock`・`patches/`）
     - テストの共通設定（`vitest.config`・`tsconfig*`・`test/setup.ts`・`test/mocks/`・`test/fixtures/`・`test/helpers/`）
     - `locales/`・`drizzle/`
-    - コードの削除と、`app/` へのファイルの追加（ルートの一覧を読むテストがある）
+    - コードの削除（テストファイルの削除は除く）と、`app/` へのファイルの追加（ルートの一覧を読むテストがある）
     - `app/`・`public/` のコード以外のファイル
     - 規則に無いファイル
   - 全テストの最終的な判定は、CI の必須の検査（Unit Tests 4本）に任せる。CLAUDE.md の「毎回守ること」4（テストが通らなければコミットしない）は、`bun run verify` が通ることを指す

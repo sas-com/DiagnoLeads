@@ -9,7 +9,7 @@ DiagnoLeads は、AX マイグレーション（レガシー基幹システム�
 1. **出力は日本語にする**。会話・報告・Issue・PR・レビューの返信・ドキュメント・MemoryBank・ほかのセッションへの連絡・サブエージェントへの依頼が対象。英語のままにするのは、コミットメッセージ（決定 `2026-02-06-commit-message-english`）、コード（識別子とコメントは周りのコードに合わせる。ほとんど英語）、引用するコマンド・ログ・エラー
 2. **秘密情報を書かない**。接続文字列・API キー・トークンは Vercel と手元の `.env.local` にだけ置き、コード・ドキュメント・MemoryBank・Issue・PR・会話に出さない。社外秘（取引先名・単価・営業の手引きの本文）も同じ
 3. **組織のデータは必ず組織で絞る**。tRPC は `organizationProcedure` で受けて `ctx.ability` で権限を確かめ、読み書きのすべてのクエリを `organizationId` で絞る（RLS はまだ効いていない）
-4. テストが通らなければコミットしない。main に直接 push しない
+4. テストが通らなければコミットしない（`bun run verify`）。main に直接 push しない
 5. 依存は `bun add` / `bun remove` / `bun patch <name>@<version>` で変える。node_modules は `bun patch` で取り出したコピーだけを編集し、bun.lock は手で編集しない
 6. Claude の設定と Claude API は、Anthropic の公式ドキュメントで確かめてから変える。対象は CLAUDE.md・`.claude/`（設定・フック・スキル・エージェント・ルール）・MemoryBank の仕組み・`lib/features/ai/` のモデルと SDK。記憶で書かず、今の公式のページを読み、PR に URL を書く（スキル `official-check`）
 7. Issue を閉じる前に、エビデンスを Issue に書く（テスト結果と、受け入れ基準を満たしたこと）。本文に `Closes #N` がある PR はマージと同時に Issue が閉じるので、マージの前に書く
@@ -41,7 +41,7 @@ Issue → 決定を読む → ブランチ → 実装 → 速い検証 → コ�
    - 型チェック：`bun run typecheck`（2回目以降は約8秒）
 6. コミット前の検証（必須）
    - `bun run verify`：変えたファイルに関係するテスト（`vitest related` と、ファイルを直接読むテスト）・型チェック・リント・`arch:check` を流す（多くは1分前後）
-   - 依存・テストの共通設定・`locales/`・`drizzle/`・`app/` のファイルの追加と削除・規則に無いファイルを変えたときは、自動で全テスト（約5分）になる。選び方は `scripts/verify-changed.ts`。`--plan` で流すテストだけを見られ、`--full` で全テストにできる
+   - 依存・テストの共通設定・`locales/`・`drizzle/`・コードの削除・`app/` へのファイルの追加・`app/` と `public/` のコード以外のファイル・規則に無いファイルを変えたときは、自動で全テスト（約5分）になる。選び方は `scripts/verify-changed.ts`。`--plan` で流すテストだけを見られ、`--full` で全テストにできる
    - 全部通るまでコミットしない。全テストは CI の必須の検査（Unit Tests 4本）が毎回流す（決定 `2026-11-12-verify-changed-before-commit`）
 7. PR：push して PR を作り、CI（約3〜4分）が緑になるまで見届ける。手順とマージの条件はスキル `ship`
    - CI が緑であること
