@@ -1,7 +1,7 @@
 {
   "aiOffice": {
     "title": "AI office",
-    "description": "See where the AI employees sit and how they work, in the shape of an office. Each AI employee is a robot at its desk. Open a desk for its details and work log.",
+    "description": "See how the AI employees work in a virtual office. Each AI employee is a robot that moves around the floor with its status. Open a name tag for its details and work log.",
     "forbidden": "You do not have permission to view the AI office.",
     "loadError": "The AI office could not be loaded. Please try again later.",
     "noOrganization": "Choose an organization to see its AI office.",
@@ -16,13 +16,24 @@
       "heading": "Today's summary"
     },
     "floor": {
-      "label": "Office floor plan",
-      "entrance": "Entrance"
+      "label": "Office floor",
+      "entrance": "Entrance",
+      "scrollHint": "Scroll the floor map sideways.",
+      "legend": {
+        "desk": "Working or needs attention: at its desk",
+        "lounge": "Waiting: lounge",
+        "training": "In training: training room",
+        "charging": "Paused: charging station"
+      }
     },
     "rooms": {
       "sales": "Sales floor",
       "analysis": "Analysis room",
-      "planning": "Planning room"
+      "planning": "Planning room",
+      "training": "Training room",
+      "lounge": "Lounge",
+      "charging": "Charging station",
+      "entrance": "Reception"
     },
     "roles": {
       "follow_up_keeper": {
@@ -58,17 +69,16 @@
       "vacant": "No AI employee has this role yet."
     },
     "desk": {
-      "processedToday": "{count} today",
-      "lastRun": "Last run {time}",
-      "noRun": "No work yet",
       "hire": "Hire",
       "openDetails": "Open details",
-      "hireByAdmin": "An admin can hire one"
+      "hireByAdmin": "An admin can hire one",
+      "details": "{role}, in the {place}, {count} handled today",
+      "vacantDetails": "Vacant desk in the {place}"
     },
     "sheet": {
       "vacantTitle": "Vacant desk: {role}",
       "role": "Role",
-      "room": "Room",
+      "room": "Desk in",
       "hiredAt": "Hired on",
       "name": "Name",
       "hireSubmit": "Hire",
@@ -101,7 +111,8 @@
         "failed": "Failed"
       },
       "danger": "Cannot be undone",
-      "dismissNote": "Dismissing returns the desk to vacant. The work log is kept as a record."
+      "dismissNote": "Dismissing returns the desk to vacant. The work log is kept as a record.",
+      "place": "Now in"
     },
     "toast": {
       "hired": "Hired {name}",

@@ -1,7 +1,7 @@
 /**
- * The AI office (#1101): the figures over the floor, a desk per role in its room drawn as a scene
- * with a robot (vacant ones included), desks named by their visible text, the details of a desk
- * with the focus on its title, and who sees the hiring and managing actions (real next-intl
+ * The AI office (#1101): the figures over the virtual office, a name tag per role over its robot
+ * (or its empty chair) named by its visible text with the place for screen readers, the details of
+ * a desk with the focus on its title, and who sees the hiring and managing actions (real next-intl
  * messages; tRPC mocked)
  */
 import { OfficeScreen } from '@/components/features/ai-employees/office-screen';
@@ -95,20 +95,36 @@ describe('OfficeScreen', () => {
     mocks.dismissals.length = 0;
   });
 
-  it('draws the three rooms with a desk per role, vacant desks included', () => {
+  it('puts a name tag over each robot and empty chair on the floor map', () => {
     renderScreen();
-    const floor = screen.getByRole('region', { name: 'オフィスの間取り' });
-    const planning = within(floor).getByRole('region', { name: '企画室' });
-    // The desk's name is what it shows: the employee, the role, the status and today's work
-    const desk = within(planning).getByRole('button', { name: /^AI時期/ });
-    expect(desk).toHaveAccessibleName(/時期の見張り番.*要確認.*今日 5件.*詳細を開く/);
-    // The robot is a drawing only
-    expect(desk.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+    const floor = screen.getByRole('region', { name: 'オフィスのフロア' });
+    // The drawing is decoration only
+    expect(floor.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+    // The tag is named by what it shows, then the role, the place and today's work
+    const tag = within(floor).getByRole('button', { name: /^AI時期/ });
+    expect(tag).toHaveAccessibleName(/要確認.*時期の見張り番・企画室にいます・今日 5件.*詳細を開く/);
+    expect(
+      within(floor).getByRole('button', { name: /^空席 追客担当 採用する.*営業フロアの空席/ })
+    ).toBeInTheDocument();
+    expect(within(floor).getByRole('button', { name: /^空席 評価担当/ })).toBeInTheDocument();
+  });
 
-    const sales = within(floor).getByRole('region', { name: '営業フロア' });
-    expect(within(sales).getByRole('button', { name: /^追客担当.*空席.*採用する/ })).toBeInTheDocument();
-    const analysis = within(floor).getByRole('region', { name: '分析室' });
-    expect(within(analysis).getByText('空席')).toBeInTheDocument();
+  it('shows where an idle, training or paused robot went', () => {
+    for (const [deskStatus, place] of [
+      ['idle', 'ラウンジ'],
+      ['training', '研修室'],
+      ['paused', '充電ステーション'],
+    ] as const) {
+      mocks.office = {
+        ...mocks.office,
+        data: { employees: [{ ...timingWatcher, deskStatus }], canManage: true },
+      };
+      const { unmount } = renderScreen();
+      expect(screen.getByRole('button', { name: /^AI時期/ })).toHaveAccessibleName(
+        new RegExp(`${place}にいます`)
+      );
+      unmount();
+    }
   });
 
   it('sums up the office over the floor', () => {
@@ -160,7 +176,7 @@ describe('OfficeScreen', () => {
   it('hires from a vacant desk with the default name', async () => {
     const user = userEvent.setup();
     renderScreen();
-    await user.click(screen.getByRole('button', { name: /^評価担当/ }));
+    await user.click(screen.getByRole('button', { name: /^空席 評価担当/ }));
     const sheet = screen.getByRole('dialog');
     expect(within(sheet).getByLabelText('表示名')).toHaveValue('AI評価');
     await user.click(within(sheet).getByRole('button', { name: '採用する' }));
@@ -174,8 +190,8 @@ describe('OfficeScreen', () => {
     };
     const user = userEvent.setup();
     renderScreen();
-    expect(screen.getByRole('button', { name: /^評価担当.*管理者が採用できます/ })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /^評価担当/ }));
+    expect(screen.getByRole('button', { name: /^空席 評価担当 管理者が採用できます/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^空席 評価担当/ }));
     const sheet = screen.getByRole('dialog');
     expect(within(sheet).queryByRole('button', { name: '採用する' })).not.toBeInTheDocument();
     expect(within(sheet).getByText('AI社員の採用と管理は、管理者だけができます。')).toBeInTheDocument();
@@ -190,6 +206,6 @@ describe('OfficeScreen', () => {
     };
     renderScreen();
     expect(screen.getByText('AI社員オフィスを見る権限がありません。')).toBeInTheDocument();
-    expect(screen.queryByRole('region', { name: 'オフィスの間取り' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'オフィスのフロア' })).not.toBeInTheDocument();
   });
 });

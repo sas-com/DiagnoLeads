@@ -43,6 +43,7 @@ import { type FormEvent, type RefObject, useEffect, useId, useRef, useState } fr
 import { toast } from 'sonner';
 import { DeskStatusLabel } from './desk-status';
 import { RobotAvatar } from './office-illustration';
+import { areaOf } from './office-map-layout';
 
 /** The work log is read again as often as the office, so both tell the same story */
 export const OFFICE_REFRESH_MS = 60 * 1000;
@@ -128,6 +129,10 @@ export function DeskSheet({
             </dd>
             {employee && (
               <>
+                <dt className="text-gray-600 dark:text-gray-300">{t('sheet.place')}</dt>
+                <dd className="text-gray-900 dark:text-gray-50">
+                  {t(`rooms.${areaOf(role, status)}`)}
+                </dd>
                 <dt className="text-gray-600 dark:text-gray-300">{t('sheet.hiredAt')}</dt>
                 <dd className="text-gray-900 dark:text-gray-50">
                   {format.dateTime(new Date(employee.createdAt), { dateStyle: 'medium' })}

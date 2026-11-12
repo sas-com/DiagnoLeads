@@ -10,14 +10,15 @@ import { Loader2, Lock } from 'lucide-react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { useId, useRef, useState } from 'react';
 import { DeskSheet, OFFICE_REFRESH_MS } from './desk-sheet';
-import { OfficeFloor } from './office-floor';
+import { OfficeMap } from './office-map';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * The AI office (Refs #1101, Epic #1100): the figures of the day over the floor, each AI
- * employee as a robot at the desk of its role, and the details of a desk in a side sheet. The
- * page is wider than STUDIO_PAGE_CLASS so the three rooms of the floor fit side by side.
+ * The AI office (Refs #1101, Epic #1100): the figures of the day over a virtual office, the whole
+ * floor seen from above with each AI employee as a robot where its status takes it, and the
+ * details of a desk in a side sheet. The page is wider than STUDIO_PAGE_CLASS so the floor map
+ * stays readable.
  */
 export function OfficeScreen() {
   const t = useTranslations('aiOffice');
@@ -97,7 +98,7 @@ export function OfficeScreen() {
             </div>
           </section>
 
-          <OfficeFloor
+          <OfficeMap
             employees={employees}
             canManage={canManage}
             onOpenDesk={(role, desk) => {

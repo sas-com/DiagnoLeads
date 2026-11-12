@@ -1,7 +1,7 @@
 {
   "aiOffice": {
     "title": "AI社員オフィス",
-    "description": "AI社員の席と働きぶりを、オフィスの形で見ます。AI社員はロボットの姿で席にいます。席を押すと、詳細と作業記録が出ます。",
+    "description": "AI社員の働きぶりを、バーチャルオフィスで見ます。AI社員はロボットの姿で、状態に合わせてフロアを移動します。名札を押すと、詳細と作業記録が出ます。",
     "forbidden": "AI社員オフィスを見る権限がありません。",
     "loadError": "AI社員オフィスを読み込めませんでした。時間をおいて開き直してください。",
     "noOrganization": "組織を選ぶと、AI社員オフィスが出ます。",
@@ -16,13 +16,24 @@
       "heading": "今日のまとめ"
     },
     "floor": {
-      "label": "オフィスの間取り",
-      "entrance": "入口"
+      "label": "オフィスのフロア",
+      "entrance": "入口",
+      "scrollHint": "フロアの地図は横にスクロールできます。",
+      "legend": {
+        "desk": "作業中・要確認：自分の席",
+        "lounge": "待機中：ラウンジ",
+        "training": "研修中：研修室",
+        "charging": "休止中：充電ステーション"
+      }
     },
     "rooms": {
       "sales": "営業フロア",
       "analysis": "分析室",
-      "planning": "企画室"
+      "planning": "企画室",
+      "training": "研修室",
+      "lounge": "ラウンジ",
+      "charging": "充電ステーション",
+      "entrance": "受付"
     },
     "roles": {
       "follow_up_keeper": {
@@ -58,17 +69,16 @@
       "vacant": "この役割の AI社員はまだいません。"
     },
     "desk": {
-      "processedToday": "今日 {count}件",
-      "lastRun": "最後の作業 {time}",
-      "noRun": "作業の記録はまだありません",
       "hire": "採用する",
       "openDetails": "詳細を開く",
-      "hireByAdmin": "管理者が採用できます"
+      "hireByAdmin": "管理者が採用できます",
+      "details": "{role}・{place}にいます・今日 {count}件",
+      "vacantDetails": "{place}の空席"
     },
     "sheet": {
       "vacantTitle": "{role}の空席",
       "role": "役割",
-      "room": "部屋",
+      "room": "席のある部屋",
       "hiredAt": "採用した日",
       "name": "表示名",
       "hireSubmit": "採用する",
@@ -101,7 +111,8 @@
         "failed": "失敗"
       },
       "danger": "元に戻せない操作",
-      "dismissNote": "解雇すると、この席は空席に戻ります。作業記録は記録として残ります。"
+      "dismissNote": "解雇すると、この席は空席に戻ります。作業記録は記録として残ります。",
+      "place": "今いる場所"
     },
     "toast": {
       "hired": "{name}を採用しました",
