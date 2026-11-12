@@ -58,7 +58,9 @@ const sales = {
   processedToday: 0,
 };
 
-function renderOffice(props: { canManage?: boolean; onExit?: () => void } = {}) {
+function renderOffice(
+  props: { canManage?: boolean; onExit?: () => void; employees?: (typeof sales)[] } = {}
+) {
   const onExit = props.onExit ?? vi.fn();
   render(
     <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
@@ -66,7 +68,7 @@ function renderOffice(props: { canManage?: boolean; onExit?: () => void } = {}) 
         organizationId={ORG_ID}
         companyName="テスト商事"
         presidentName="山田 太郎"
-        employees={[sales]}
+        employees={props.employees ?? [sales]}
         canManage={props.canManage ?? true}
         onExit={onExit}
       />
@@ -142,6 +144,22 @@ describe('OfficeImmersive', () => {
       { organizationId: ORG_ID, employeeId: EMPLOYEE_ID, status: 'paused' },
     ]);
     expect(within(office).getByText('承知しました、社長。AIセールスはしばらく休みます。')).toBeInTheDocument();
+  });
+
+  it('puts a paused AI employee back to work from the president’s first task', async () => {
+    const user = userEvent.setup();
+    const paused = { ...sales, status: 'paused' as const, deskStatus: 'paused' as const };
+    const { office } = renderOffice({ employees: [paused as unknown as typeof sales] });
+    await user.click(within(office).getByRole('button', { name: /^出社する/ }));
+    // The paused employee is the president's first task, and the one in front of the president
+    await user.click(within(office).getByRole('button', { name: /セールスを仕事に戻す/ }));
+
+    expect(within(office).getByText(/社長、いまは休止中です。/)).toBeInTheDocument();
+    await user.keyboard('1');
+    expect(mocks.updates).toEqual([
+      { organizationId: ORG_ID, employeeId: EMPLOYEE_ID, status: 'active' },
+    ]);
+    expect(within(office).getByText('AIセールス、仕事に戻ります。')).toBeInTheDocument();
   });
 
   it('lets someone who cannot manage look and talk, but not hire or pause', async () => {
