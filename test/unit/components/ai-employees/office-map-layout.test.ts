@@ -89,7 +89,9 @@ describe('virtual office layout', () => {
       }
       // In training it sits behind a study desk the same way
       const study = spotOf(role, 'training');
-      const studyDesk = TRAINING_DESKS.find((d) => Math.abs(d.x + d.w / 2 - study.x) < 0.01);
+      const studyDesk = TRAINING_DESKS.find(
+        (d) => Math.abs(d.x + d.w / 2 - study.x) < 0.01 && d.y > study.y && d.y - study.y < 1
+      );
       expect(studyDesk).toBeDefined();
       expect(study.y).toBeLessThan(studyDesk?.y ?? 0);
       expect(study.facing).toBe('left');
@@ -129,7 +131,7 @@ describe('isometric scene', () => {
   it('draws every role, lights the monitors of the robots at work, and labels the rooms', () => {
     const gradient = (name: string) => `url(#${name})`;
     const busy = buildOfficeScene(
-      { follow_up_keeper: 'working', lead_scorer: 'attention', timing_watcher: 'idle' },
+      { sales: 'working', marketer: 'attention', engineer: 'vacant', back_office: 'idle' },
       false,
       gradient
     );
@@ -210,14 +212,14 @@ describe('robots', () => {
   });
 
   it('changes pose and look with the status', () => {
-    const looks = DESK_STATUSES.map((status) => JSON.stringify(draw('lead_scorer', status)));
+    const looks = DESK_STATUSES.map((status) => JSON.stringify(draw('marketer', status)));
     expect(new Set(looks).size).toBe(DESK_STATUSES.length);
     // A paused robot is switched off: no pulsing beacon, no glow of the eyes
-    expect(draw('lead_scorer', 'paused').some((prim) => prim.pulse)).toBe(false);
-    expect(draw('lead_scorer', 'working').some((prim) => prim.pulse)).toBe(true);
+    expect(draw('marketer', 'paused').some((prim) => prim.pulse)).toBe(false);
+    expect(draw('marketer', 'working').some((prim) => prim.pulse)).toBe(true);
     // A vacant desk shows a faint outline only
     expect(
-      draw('lead_scorer', 'vacant').every((prim) => prim.filter === 'soft' || (prim.op ?? 1) < 0.5)
+      draw('marketer', 'vacant').every((prim) => prim.filter === 'soft' || (prim.op ?? 1) < 0.5)
     ).toBe(true);
   });
 

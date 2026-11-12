@@ -1,14 +1,17 @@
 /**
- * Roles of the AI employees (Refs #1101, Epic #1100). An organization hires at most one AI
- * employee per role. The words of each role (title, description, default name) are in
- * locales/{ja,en}/aiOffice.json under aiOffice.roles.<role>.
+ * Roles of the AI employees (Refs #1101, Epic #1100): the departments of the company the user
+ * runs as its president. An organization hires at most one AI employee per role. The roles are
+ * listed in the order value passes from hand to hand: the marketer finds prospects, sales turns
+ * them into deals, the engineer prepares the proposal, the back office keeps the dates. The words
+ * of each role (title, description, default name) are in locales/{ja,en}/aiOffice.json under
+ * aiOffice.roles.<role>.
  */
 
-/** Rooms of the office floor, in the order they are drawn */
-export const AI_OFFICE_ROOMS = ['sales', 'analysis', 'planning'] as const;
+/** Rooms with a role's desk, in the order they are drawn */
+export const AI_OFFICE_ROOMS = ['sales', 'marketing', 'engineering', 'backoffice'] as const;
 export type AiOfficeRoom = (typeof AI_OFFICE_ROOMS)[number];
 
-export const AI_EMPLOYEE_ROLES = ['follow_up_keeper', 'lead_scorer', 'timing_watcher'] as const;
+export const AI_EMPLOYEE_ROLES = ['marketer', 'sales', 'engineer', 'back_office'] as const;
 export type AiEmployeeRole = (typeof AI_EMPLOYEE_ROLES)[number];
 
 export interface AiEmployeeRoleDefinition {
@@ -24,12 +27,14 @@ export interface AiEmployeeRoleDefinition {
 export const AI_EMPLOYEE_ROLE_DEFINITIONS: Readonly<
   Record<AiEmployeeRole, AiEmployeeRoleDefinition>
 > = {
-  // Counts the next actions due soon or overdue (read only)
-  follow_up_keeper: { role: 'follow_up_keeper', room: 'sales', workIssue: 1102 },
   // Scores new leads without a score with Claude
-  lead_scorer: { role: 'lead_scorer', room: 'analysis', workIssue: 1103 },
+  marketer: { role: 'marketer', room: 'marketing', workIssue: 1103 },
+  // Counts the next actions due soon or overdue (read only)
+  sales: { role: 'sales', room: 'sales', workIssue: 1102 },
+  // Drafts the preparation of the first meeting from the diagnosis answers
+  engineer: { role: 'engineer', room: 'engineering', workIssue: 1110 },
   // Recomputes "when to act" of the leads
-  timing_watcher: { role: 'timing_watcher', room: 'planning', workIssue: 1102 },
+  back_office: { role: 'back_office', room: 'backoffice', workIssue: 1102 },
 };
 
 export function isAiEmployeeRole(value: string): value is AiEmployeeRole {

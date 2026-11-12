@@ -32,7 +32,7 @@ describe('AI employee roles', () => {
   });
 
   it('tells the roles of the catalog from other strings', () => {
-    expect(isAiEmployeeRole('lead_scorer')).toBe(true);
+    expect(isAiEmployeeRole('marketer')).toBe(true);
     expect(isAiEmployeeRole('ceo')).toBe(false);
   });
 });
@@ -106,7 +106,7 @@ describe('summarizeOffice', () => {
 describe('AI employee inputs', () => {
   it('trims the name and refuses an empty, too long or control-character name', () => {
     const hire = (name: string) =>
-      hireAiEmployeeSchema.safeParse({ organizationId: ORG, role: 'lead_scorer', name });
+      hireAiEmployeeSchema.safeParse({ organizationId: ORG, role: 'marketer', name });
     expect(hire('  AI 評価  ').data?.name).toBe('AI 評価');
     expect(hire('   ').success).toBe(false);
     expect(hire('a'.repeat(AI_EMPLOYEE_NAME_MAX_LENGTH + 1)).success).toBe(false);

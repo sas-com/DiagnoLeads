@@ -6,9 +6,10 @@
  * a dark chest panel that carries the role's emblem, jointed arms, a wide helmet head with a
  * glass visor and LED eyes, a sensor disc on the ear and an antenna whose beacon shows the
  * status. Per role:
- * - follow-up keeper (teal): a headset with a microphone, a checklist on the chest
- * - scorer (violet): a scanner bar on the head and a lens over one eye, a gauge on the chest
- * - timing watcher (orange): a lookout's cap with a peak, a clock on the chest
+ * - marketer (violet): a scanner bar on the head and a lens over one eye, a gauge on the chest
+ * - sales (teal): a headset with a microphone, a checklist on the chest
+ * - engineer (blue): goggles pushed up on the forehead, code brackets on the chest
+ * - back office (orange): a bookkeeper's eyeshade with a peak, a clock on the chest
  *
  * The robot is drawn turned three-quarters towards what it faces (its desk, a table): 'left' is
  * towards the viewer's lower left (the floor's +y), 'right' the mirror image (the floor's +x).
@@ -29,9 +30,10 @@ import {
 
 /** The colour of each role's collar, light strip and equipment */
 export const ROLE_ACCENTS: Readonly<Record<AiEmployeeRole, string>> = {
-  follow_up_keeper: '#0d9488',
-  lead_scorer: '#7c3aed',
-  timing_watcher: '#ea580c',
+  marketer: '#7c3aed',
+  sales: '#0d9488',
+  engineer: '#2563eb',
+  back_office: '#ea580c',
 };
 
 /** How far the drawing reaches around the feet: for the portrait's box and the scene's margins */
@@ -172,7 +174,7 @@ export function robotPrims(input: {
     stroke(['M', -15, -22, 'Q', 0, -17, 15, -22], '#b6bfca', 1, 0.9),
     rect(-11, -43, 15, 13, 3.5, dark, { op: o() })
   );
-  if (role === 'follow_up_keeper') {
+  if (role === 'sales') {
     // A checklist
     prims.push(
       stroke(
@@ -201,12 +203,41 @@ export function robotPrims(input: {
       ),
       stroke(['M', -2, -39, 'L', 2, -39, 'M', -2, -34, 'L', 2, -34], accentLight, 1.3)
     );
-  } else if (role === 'lead_scorer') {
+  } else if (role === 'marketer') {
     // A gauge
     prims.push(
       stroke(['M', -9, -33, 'Q', -9, -40.5, -3.5, -40.5, 'Q', 2, -40.5, 2, -33], '#ffffff', 1.3),
       stroke(['M', -3.5, -33.5, 'L', -0.5, -38.2], accentLight, 1.5),
       ellipse(-3.5, -33.5, 1.2, 1.2, '#ffffff', { op: o() })
+    );
+  } else if (role === 'engineer') {
+    // Code brackets with a slash
+    prims.push(
+      stroke(
+        [
+          'M',
+          -7,
+          -39.6,
+          'L',
+          -9.6,
+          -36.5,
+          'L',
+          -7,
+          -33.4,
+          'M',
+          0,
+          -39.6,
+          'L',
+          2.6,
+          -36.5,
+          'L',
+          0,
+          -33.4,
+        ],
+        '#ffffff',
+        1.3
+      ),
+      stroke(['M', -2.4, -33, 'L', -4.6, -40], accentLight, 1.3)
     );
   } else {
     // A clock
@@ -306,7 +337,7 @@ export function robotPrims(input: {
   }
 
   // The role's equipment
-  if (role === 'follow_up_keeper') {
+  if (role === 'sales') {
     // A headset: band, ear cup and a microphone in front of the mouth
     prims.push(
       stroke(['M', -14, -80, 'Q', 1, -93, 17, -76], dark, 2.6),
@@ -315,7 +346,7 @@ export function robotPrims(input: {
       stroke(['M', 15, -64, 'Q', 6, -58, -2, -62], dark, 1.6),
       ellipse(-2, -62, 2.3, 2.3, accent, { op: o() })
     );
-  } else if (role === 'lead_scorer') {
+  } else if (role === 'marketer') {
     // A scanner bar on the head and a lens over the near eye
     prims.push(rect(-10, -88.5, 13, 6, 3, dark, { op: o() }));
     if (awake) prims.push(ellipse(-3.5, -85.5, 3.2, 3.2, accentLight, { op: 0.6, filter: 'glow' }));
@@ -324,8 +355,18 @@ export function robotPrims(input: {
       ellipse(2, -69, 5.4, 6, accent, { op: o(0.24) }),
       ellipse(2, -69, 5.4, 6, 'none', { stroke: accentLight, sw: 1.5, op: o() })
     );
+  } else if (role === 'engineer') {
+    // Goggles pushed up on the forehead: a strap and two lenses
+    prims.push(
+      stroke(['M', -17, -79.5, 'Q', -2, -83.5, 16.5, -79.5], dark, 3),
+      ellipse(-8.5, -82, 5.4, 4.2, dark, { op: o() }),
+      ellipse(3, -82.6, 5.4, 4.2, dark, { op: o() }),
+      ellipse(-8.5, -82, 3.4, 2.5, accentLight, { op: o(0.95) }),
+      ellipse(3, -82.6, 3.4, 2.5, accentLight, { op: o(0.95) }),
+      stroke(['M', -10, -83, 'L', -8, -83.6, 'M', 1.5, -83.6, 'L', 3.5, -84.2], '#ffffff', 1, 0.8)
+    );
   } else {
-    // A lookout's cap: a band over the visor and a peak towards where the robot looks
+    // A bookkeeper's eyeshade: a band over the visor and a peak towards where the robot looks
     prims.push(
       path(
         ['M', -17, -77.5, 'Q', -2, -80.5, 15, -77.5, 'L', 15, -82, 'Q', -2, -85.5, -17, -82, 'Z'],

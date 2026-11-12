@@ -21,6 +21,7 @@ import type { DeskStatus } from '@/lib/features/ai-employees/office';
 import { AI_EMPLOYEE_ROLES, type AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
 import {
   AREA_RECTS,
+  CHARGING_PADS,
   DESK_SEATS,
   OFFICE_AREAS,
   type OfficeArea,
@@ -70,13 +71,13 @@ const LAMP_LIGHT = '#ffe2a0';
 
 const FLOOR_COLOURS: Record<OfficeArea, string> = {
   sales: OAK,
-  analysis: '#d3d8de',
-  planning: OAK,
+  marketing: '#d3d8de',
+  engineering: OAK,
   corridor: MARBLE,
   training: '#d9dfe8',
   lounge: '#a9825c',
   charging: '#c9ced5',
-  entrance: MARBLE,
+  backoffice: MARBLE,
 };
 
 type P3 = readonly [number, number, number];
@@ -124,8 +125,8 @@ export const PENDANTS: readonly (readonly [number, number])[] = [
   [12.4, 5.9],
   [20.4, 6.9],
   [12.3, 11.2],
-  [1.7, 15.4],
-  [5.6, 15.4],
+  [7.2, 11.0],
+  [7.5, 15.6],
   [4.7, 9],
   [13.3, 9],
   [19.7, 9],
@@ -292,7 +293,7 @@ export function buildOfficeScene(
     const r = AREA_RECTS[area];
     base.push(floorPatch(r.x, r.y, r.w, r.h, col(FLOOR_COLOURS[area])));
   }
-  // Oak planks in the sales floor and the planning room, walnut planks in the lounge
+  // Oak planks in the sales floor and the engineering room, walnut planks in the lounge
   for (let j = 1; j < 16; j++) {
     base.push(line([0, j * 0.5, 0.005], [10, j * 0.5, 0.005], '#b89f78', 0.5));
     base.push(line([17, j * 0.5, 0.005], [24, j * 0.5, 0.005], '#b89f78', 0.5));
@@ -300,7 +301,7 @@ export function buildOfficeScene(
   for (let j = 1; j < 15; j++) {
     base.push(line([8, 10 + j * 0.4, 0.005], [16, 10 + j * 0.4, 0.005], '#7d5c3c', 0.6));
   }
-  // Carpet tiles in the analysis room and the training room
+  // Carpet tiles in the marketing room and the training room
   for (let i = 1; i < 7; i++) {
     base.push(line([10 + i, 0, 0.005], [10 + i, 8, 0.005], '#aab2bc', 0.4));
   }
@@ -441,7 +442,7 @@ export function buildOfficeScene(
       );
     }
   };
-  // The analysis room's wall screen on its walnut panel, with a rising line chart
+  // The marketing room's wall screen on its walnut panel, with a rising line chart
   slatPanel(onBack, 10.2, 16.8);
   base.push(
     poly(rectOn(onBack, 10.9, 15.9, 1.1, 2.75, 0.01), '#0b1220', { stroke: '#2a2f37', sw: 1.6 }),
@@ -462,7 +463,7 @@ export function buildOfficeScene(
     const [gx, gy] = project(13.4, 0.2, 1.9);
     base.push(ellipse(gx, gy, 70, 30, '#34d399', { op: 0.12, filter: 'glow' }));
   }
-  // The planning room's glass board with sticky notes
+  // The engineering room's glass board with sticky notes
   base.push(
     poly(rectOn(onBack, 19.7, 23.5, 1.0, 2.6, 0.01), col('#f8fafc'), {
       stroke: col('#9aa3af'),
@@ -680,16 +681,42 @@ export function buildOfficeScene(
     add(x, y + 0.6, prims);
   };
 
-  // The desk of each role, its chair behind it
+  /**
+   * The reception counter, where the back office works: marble with a brass plate, a walnut
+   * top, and the monitor on the far edge like on the desks
+   */
+  const counter = (x: number, y: number, w: number, d: number, lit: boolean) => {
+    const [px, py] = project(x + w / 2, y + d + 0.005, 0.6);
+    const prims = [
+      shadow(x + w / 2, y + d / 2, 60, 20),
+      ...box(x, y, 0, w, d, 1.08, MARBLE),
+      line([x, y + d, 0.14], [x + w, y + d, 0.14], BRASS, 1, 1.6),
+      ellipse(px, py, 15, 5, col(BRASS)),
+      ...box(x - 0.1, y - 0.1, 1.08, w + 0.2, d + 0.2, 0.07, WALNUT),
+      ...box(x + w * 0.38, y + 0.05, 1.15, w * 0.24, d * 0.3, 0.025, '#d9dde3'),
+    ];
+    if (lit) {
+      const [gx, gy] = project(x + w / 2, y + d - 0.4, 1.45);
+      prims.push(ellipse(gx, gy, 20, 10, '#7dd3fc', { op: night ? 0.75 : 0.55, filter: 'glow' }));
+    }
+    prims.push(
+      ...box(x + w / 2 - 0.07, y + d - 0.16, 1.15, 0.14, 0.1, 0.12, '#3b424d'),
+      ...box(x + w / 2 - 0.45, y + d - 0.2, 1.25, 0.9, 0.05, 0.44, '#1d2127')
+    );
+    add(x + w / 2, y + d / 2, prims);
+  };
+
+  // The desk of each role (a counter for the back office), its chair behind it
   for (const role of AI_EMPLOYEE_ROLES) {
     const own = ROLE_DESKS[role];
-    desk(own.x, own.y, own.w, own.d, own.monitors, atDesk(role));
+    if (own.counter) counter(own.x, own.y, own.w, own.d, atDesk(role));
+    else desk(own.x, own.y, own.w, own.d, own.monitors, atDesk(role));
     chair(DESK_SEATS[role].x, DESK_SEATS[role].y);
   }
 
   // Sales floor: two rows of desks, a credenza with the printer
   for (const x of [1.2, 3.2, 5.2, 7.2]) {
-    if (x !== ROLE_DESKS.follow_up_keeper.x) {
+    if (x !== ROLE_DESKS.sales.x) {
       desk(x, 2.3, 1.8, 0.9, 1, false);
       chair(x + 0.9, 2.3 - SEAT_BEHIND_DESK);
     }
@@ -707,7 +734,7 @@ export function buildOfficeScene(
   plant(9.4, 0.7, true);
   plant(9.5, 4.0);
 
-  // Analysis room: desks with two monitors, server racks, a small round table
+  // Marketing room: desks with two monitors, server racks, a small round table
   for (const x of [10.6, 15.0]) {
     desk(x, 2.0, 1.6, 0.9, 2, false);
     chair(x + 0.8, 2.0 - SEAT_BEHIND_DESK);
@@ -736,7 +763,7 @@ export function buildOfficeScene(
   chair(12.4, 6.85, undefined, '-y');
   plant(10.6, 7.4);
 
-  // Planning room: the meeting table on its rug (the role's desk is by the window)
+  // Engineering room: the meeting table on its rug (the role's desk is by the window)
   add(21.4, 4.5, [
     shadow(21.4, 4.5, 80, 30),
     ...box(20.3, 4.2, 0, 0.3, 0.6, 0.68, STEEL),
@@ -768,10 +795,10 @@ export function buildOfficeScene(
     ]);
     chair(x + w / 2, y - SEAT_BEHIND_DESK);
   };
-  for (const own of TRAINING_DESKS) {
-    studyDesk(own.x, own.y, own.w, own.d);
-    studyDesk(own.x, own.y + 2.1, own.w, own.d);
-  }
+  for (const own of TRAINING_DESKS) studyDesk(own.x, own.y, own.w, own.d);
+  // Two more desks fill the back row
+  studyDesk(3.2, 14.7, 1.6, 0.8);
+  studyDesk(5.5, 14.7, 1.6, 0.8);
 
   // Lounge: a marble counter with the espresso machine, a lit drinks cabinet, a velvet sofa with
   // cushions, a marble coffee table, a round table and a floor lamp
@@ -874,37 +901,27 @@ export function buildOfficeScene(
   plant(8.6, 15.5);
   plant(13.2, 15.4, true);
 
-  // Charging station: pads with a brass ring, wired to slim chargers
-  for (const y of [10.8, 12.6, 14.4]) {
-    const [rx, ry] = project(17.6, y + 0.7, 0.11);
-    add(17.6, y + 0.7, [
-      ...box(16.9, y, 0, 1.4, 1.4, 0.1, '#2b3038'),
-      ellipse(rx, ry, 24, 12, 'none', { stroke: night ? '#fcd34d' : BRASS, op: 0.95, sw: 1.8 }),
-      ellipse(rx, ry, 24, 12, '#fbbf24', { op: night ? 0.38 : 0.2, filter: 'glow' }),
+  // Charging station: a pad with a brass ring per role, wired to slim chargers
+  for (const pad of CHARGING_PADS) {
+    const cy = pad.y + pad.d / 2;
+    const [rx, ry] = project(pad.x + pad.w / 2, cy, 0.11);
+    add(pad.x + pad.w / 2, cy, [
+      ...box(pad.x, pad.y + 0.05, 0, pad.w, pad.d - 0.1, 0.1, '#2b3038'),
+      ellipse(rx, ry, 22, 11, 'none', { stroke: night ? '#fcd34d' : BRASS, op: 0.95, sw: 1.8 }),
+      ellipse(rx, ry, 22, 11, '#fbbf24', { op: night ? 0.38 : 0.2, filter: 'glow' }),
     ]);
-    add(19.65, y + 0.7, [
-      ...box(19.5, y + 0.4, 0, 0.3, 0.6, 1.25, '#262b33'),
-      ...box(19.48, y + 0.55, 0.8, 0.02, 0.3, 0.2, '#22c55e', { lit: true }),
+    add(19.65, cy, [
+      ...box(19.5, cy - 0.3, 0, 0.3, 0.6, 1.25, '#262b33'),
+      ...box(19.48, cy - 0.15, 0.8, 0.02, 0.3, 0.2, '#22c55e', { lit: true }),
     ]);
-    add(18.9, y + 0.7, box(18.3, y + 0.66, 0, 1.2, 0.08, 0.04, '#15181d'));
+    add(18.9, cy, box(18.3, cy - 0.04, 0, 1.2, 0.08, 0.04, '#15181d'));
   }
 
-  // Reception: a marble counter with a brass plate, a leather bench and a plant
-  {
-    const [px, py] = project(22.1, 11.905, 0.6);
-    add(22.1, 11.5, [
-      shadow(22.1, 11.5, 60, 20),
-      ...box(20.8, 11.1, 0, 2.6, 0.8, 1.08, MARBLE),
-      line([20.8, 11.9, 0.14], [23.4, 11.9, 0.14], BRASS, 1, 1.6),
-      ellipse(px, py, 15, 5, col(BRASS)),
-      ...box(20.7, 11.0, 1.08, 2.8, 1.0, 0.07, WALNUT),
-      ...box(21.7, 11.2, 1.15, 0.5, 0.3, 0.35, '#1d2127'),
-    ]);
-  }
-  add(23.5, 13.7, [
-    shadow(23.5, 13.7, 18, 34),
-    ...box(23.25, 12.7, 0, 0.08, 2.0, 0.3, STEEL),
-    ...box(23.2, 12.6, 0.3, 0.6, 2.2, 0.16, COGNAC),
+  // Reception: the counter is the back office's desk (above); a leather bench and a plant
+  add(23.5, 14.2, [
+    shadow(23.5, 14.2, 18, 34),
+    ...box(23.25, 13.3, 0, 0.08, 1.8, 0.3, STEEL),
+    ...box(23.2, 13.2, 0.3, 0.6, 2.0, 0.16, COGNAC),
   ]);
   plant(23.7, 10.5, true);
 
@@ -929,7 +946,9 @@ export function buildOfficeScene(
     const r = AREA_RECTS[area];
     // The front corner of the room's floor: the label hangs below it, over the corridor or the
     // edge of the floor, clear of the furniture and the name tags
-    const [x, y] = project(r.x + r.w - 0.35, r.y + r.h - 0.35);
+    // (the marketing room's label sits further left, clear of the reception's robot)
+    const inset = area === 'marketing' ? 2.2 : 0.35;
+    const [x, y] = project(r.x + r.w - inset, r.y + r.h - 0.35);
     return { area, x, y };
   });
 

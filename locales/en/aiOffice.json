@@ -28,28 +28,33 @@
     },
     "rooms": {
       "sales": "Sales floor",
-      "analysis": "Analysis room",
-      "planning": "Planning room",
       "training": "Training room",
       "lounge": "Lounge",
       "charging": "Charging station",
-      "entrance": "Reception"
+      "marketing": "Marketing room",
+      "engineering": "Engineering room",
+      "backoffice": "Reception"
     },
     "roles": {
-      "follow_up_keeper": {
-        "title": "Follow-up keeper",
-        "description": "Counts the next actions due soon or overdue every morning, so that nothing is dropped. It never changes a lead.",
-        "defaultName": "AI Follow-up"
+      "marketer": {
+        "title": "Marketer",
+        "description": "Scores new prospects (leads) without a score with Claude. Names, emails and other fields that point at a person are never sent.",
+        "defaultName": "AI Marketer"
       },
-      "lead_scorer": {
-        "title": "Scorer",
-        "description": "Scores new leads without a score with Claude. Names, emails and other fields that point at a person are never sent.",
-        "defaultName": "AI Scorer"
+      "sales": {
+        "title": "Sales",
+        "description": "Checks the next actions due soon or overdue every morning, so that no follow-up is dropped. It never changes a lead.",
+        "defaultName": "AI Sales"
       },
-      "timing_watcher": {
-        "title": "Timing watcher",
-        "description": "Recomputes when to act on each lead every morning, from the hearings and the diagnosis answers.",
-        "defaultName": "AI Timing"
+      "engineer": {
+        "title": "Engineer",
+        "description": "Sorts out the points of the migration from the diagnosis answers and drafts the preparation of the first meeting.",
+        "defaultName": "AI Engineer"
+      },
+      "back_office": {
+        "title": "Back office",
+        "description": "Recomputes when to act on each lead every morning, from the hearings and the diagnosis answers, and keeps watch on the dates.",
+        "defaultName": "AI Back office"
       }
     },
     "status": {

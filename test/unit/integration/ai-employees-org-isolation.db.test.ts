@@ -81,7 +81,7 @@ describe.skipIf(!url)('AI employees: permissions and organization isolation (Pos
 
     const hired = await adminA.aiEmployees.hire({
       organizationId: orgA,
-      role: 'timing_watcher',
+      role: 'back_office',
       name: 'AI 時期',
     });
     employeeA = hired.id;
@@ -98,7 +98,7 @@ describe.skipIf(!url)('AI employees: permissions and organization isolation (Pos
     expect(office.canManage).toBe(false);
     expect(office.employees.map((e: { id: string }) => e.id)).toEqual([employeeA]);
     await expect(
-      memberA.aiEmployees.hire({ organizationId: orgA, role: 'lead_scorer', name: 'AI' })
+      memberA.aiEmployees.hire({ organizationId: orgA, role: 'marketer', name: 'AI' })
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     await expect(
       memberA.aiEmployees.update({ organizationId: orgA, employeeId: employeeA, status: 'paused' })
@@ -111,12 +111,12 @@ describe.skipIf(!url)('AI employees: permissions and organization isolation (Pos
 
   it('hires one employee per role (CONFLICT for a second)', async () => {
     await expect(
-      adminA.aiEmployees.hire({ organizationId: orgA, role: 'timing_watcher', name: '二人目' })
+      adminA.aiEmployees.hire({ organizationId: orgA, role: 'back_office', name: '二人目' })
     ).rejects.toMatchObject({ code: 'CONFLICT' });
     // The same role in another organization is fine
     const other = await adminB.aiEmployees.hire({
       organizationId: orgB,
-      role: 'timing_watcher',
+      role: 'back_office',
       name: 'B の時期',
     });
     expect(other.id).not.toBe(employeeA);
@@ -129,7 +129,7 @@ describe.skipIf(!url)('AI employees: permissions and organization isolation (Pos
       {
         organizationId: orgA,
         employeeId: employeeA,
-        role: 'timing_watcher',
+        role: 'back_office',
         trigger: 'schedule',
         status: 'succeeded',
         startedAt: yesterday,
@@ -139,7 +139,7 @@ describe.skipIf(!url)('AI employees: permissions and organization isolation (Pos
       {
         organizationId: orgA,
         employeeId: employeeA,
-        role: 'timing_watcher',
+        role: 'back_office',
         trigger: 'manual',
         status: 'succeeded',
         startedAt: new Date(now.getTime() - 2000),
@@ -149,7 +149,7 @@ describe.skipIf(!url)('AI employees: permissions and organization isolation (Pos
       {
         organizationId: orgA,
         employeeId: employeeA,
-        role: 'timing_watcher',
+        role: 'back_office',
         trigger: 'manual',
         status: 'failed',
         startedAt: new Date(now.getTime() - 500),
@@ -215,7 +215,7 @@ describe.skipIf(!url)('AI employees: permissions and organization isolation (Pos
       .from(aiEmployeeRuns)
       .where(eq(aiEmployeeRuns.organizationId, orgA));
     expect(runs).toHaveLength(3);
-    expect(runs.every((run) => run.employeeId === null && run.role === 'timing_watcher')).toBe(
+    expect(runs.every((run) => run.employeeId === null && run.role === 'back_office')).toBe(
       true
     );
     const office = await adminA.aiEmployees.office({ organizationId: orgA });

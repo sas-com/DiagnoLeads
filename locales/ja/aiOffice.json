@@ -28,28 +28,33 @@
     },
     "rooms": {
       "sales": "営業フロア",
-      "analysis": "分析室",
-      "planning": "企画室",
       "training": "研修室",
       "lounge": "ラウンジ",
       "charging": "充電ステーション",
-      "entrance": "受付"
+      "marketing": "マーケティング室",
+      "engineering": "開発室",
+      "backoffice": "総務・受付"
     },
     "roles": {
-      "follow_up_keeper": {
-        "title": "追客担当",
-        "description": "期限が近い・過ぎた次の行動を毎朝数えて、取りこぼしがないかを確かめます。リードは書き換えません。",
-        "defaultName": "AI追客"
+      "marketer": {
+        "title": "マーケター",
+        "description": "評価のない新しい見込み客（リード）を Claude で評価し、点数を付けます。氏名・メールなど個人を指す項目は送りません。",
+        "defaultName": "AIマーケター"
       },
-      "lead_scorer": {
-        "title": "評価担当",
-        "description": "評価のない新しいリードを Claude で評価し、点数を付けます。氏名・メールなど個人を指す項目は送りません。",
-        "defaultName": "AI評価"
+      "sales": {
+        "title": "セールス",
+        "description": "期限が近い・過ぎた次の行動を毎朝確かめ、追客の取りこぼしを防ぎます。リードは書き換えません。",
+        "defaultName": "AIセールス"
       },
-      "timing_watcher": {
-        "title": "時期の見張り番",
-        "description": "ヒアリングと診断の回答から、リードの動くべき時期を毎朝計算し直します。",
-        "defaultName": "AI時期"
+      "engineer": {
+        "title": "エンジニア",
+        "description": "診断の回答から移行の論点を整理し、初回の打ち合わせの準備の下書きを用意します。",
+        "defaultName": "AIエンジニア"
+      },
+      "back_office": {
+        "title": "バックオフィス",
+        "description": "ヒアリングと診断の回答から、リードの動くべき時期を毎朝計算し直し、期限を見張ります。",
+        "defaultName": "AIバックオフィス"
       }
     },
     "status": {

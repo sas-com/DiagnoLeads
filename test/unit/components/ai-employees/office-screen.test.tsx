@@ -28,7 +28,7 @@ function mutation(target: unknown[]) {
     isPending: false,
     mutate: (input: unknown) => {
       target.push(input);
-      options.onSuccess?.({ id: EMPLOYEE_ID, name: 'AI時期' }, input);
+      options.onSuccess?.({ id: EMPLOYEE_ID, name: 'AIバックオフィス' }, input);
     },
   });
 }
@@ -64,8 +64,8 @@ function renderScreen() {
 
 const timingWatcher = {
   id: EMPLOYEE_ID,
-  role: 'timing_watcher',
-  name: 'AI時期',
+  role: 'back_office',
+  name: 'AIバックオフィス',
   status: 'active',
   createdAt: new Date('2026-11-01T00:00:00Z'),
   deskStatus: 'attention',
@@ -101,12 +101,12 @@ describe('OfficeScreen', () => {
     // The drawing is decoration only
     expect(floor.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
     // The tag is named by what it shows, then the role, the place and today's work
-    const tag = within(floor).getByRole('button', { name: /^AI時期/ });
-    expect(tag).toHaveAccessibleName(/要確認.*時期の見張り番・企画室にいます・今日 5件.*詳細を開く/);
+    const tag = within(floor).getByRole('button', { name: /^AIバックオフィス/ });
+    expect(tag).toHaveAccessibleName(/要確認.*バックオフィス・総務・受付にいます・今日 5件.*詳細を開く/);
     expect(
-      within(floor).getByRole('button', { name: /^空席 追客担当 採用する.*営業フロアの空席/ })
+      within(floor).getByRole('button', { name: /^空席 セールス 採用する.*営業フロアの空席/ })
     ).toBeInTheDocument();
-    expect(within(floor).getByRole('button', { name: /^空席 評価担当/ })).toBeInTheDocument();
+    expect(within(floor).getByRole('button', { name: /^空席 マーケター/ })).toBeInTheDocument();
   });
 
   it('shows where an idle, training or paused robot went', () => {
@@ -120,7 +120,7 @@ describe('OfficeScreen', () => {
         data: { employees: [{ ...timingWatcher, deskStatus }], canManage: true },
       };
       const { unmount } = renderScreen();
-      expect(screen.getByRole('button', { name: /^AI時期/ })).toHaveAccessibleName(
+      expect(screen.getByRole('button', { name: /^AIバックオフィス/ })).toHaveAccessibleName(
         new RegExp(`${place}にいます`)
       );
       unmount();
@@ -149,9 +149,9 @@ describe('OfficeScreen', () => {
   it('opens a desk with the focus on its title, its work log, and lets an admin pause it', async () => {
     const user = userEvent.setup();
     renderScreen();
-    await user.click(screen.getByRole('button', { name: /^AI時期/ }));
+    await user.click(screen.getByRole('button', { name: /^AIバックオフィス/ }));
     const sheet = screen.getByRole('dialog');
-    expect(within(sheet).getByRole('heading', { name: 'AI時期' })).toHaveFocus();
+    expect(within(sheet).getByRole('heading', { name: 'AIバックオフィス' })).toHaveFocus();
     expect(within(sheet).getByRole('heading', { name: '作業記録' })).toBeInTheDocument();
     expect(within(sheet).getByText('timeout')).toBeInTheDocument();
     await user.click(within(sheet).getByRole('button', { name: '休止する' }));
@@ -163,7 +163,7 @@ describe('OfficeScreen', () => {
   it('asks before dismissing, in a red button of its own', async () => {
     const user = userEvent.setup();
     renderScreen();
-    await user.click(screen.getByRole('button', { name: /^AI時期/ }));
+    await user.click(screen.getByRole('button', { name: /^AIバックオフィス/ }));
     const sheet = screen.getByRole('dialog');
     await user.click(within(sheet).getByRole('button', { name: '解雇する' }));
     expect(mocks.dismissals).toEqual([]);
@@ -176,11 +176,11 @@ describe('OfficeScreen', () => {
   it('hires from a vacant desk with the default name', async () => {
     const user = userEvent.setup();
     renderScreen();
-    await user.click(screen.getByRole('button', { name: /^空席 評価担当/ }));
+    await user.click(screen.getByRole('button', { name: /^空席 マーケター/ }));
     const sheet = screen.getByRole('dialog');
-    expect(within(sheet).getByLabelText('表示名')).toHaveValue('AI評価');
+    expect(within(sheet).getByLabelText('表示名')).toHaveValue('AIマーケター');
     await user.click(within(sheet).getByRole('button', { name: '採用する' }));
-    expect(mocks.hires).toEqual([{ organizationId: ORG_ID, role: 'lead_scorer', name: 'AI評価' }]);
+    expect(mocks.hires).toEqual([{ organizationId: ORG_ID, role: 'marketer', name: 'AIマーケター' }]);
   });
 
   it('shows no actions to someone who cannot manage', async () => {
@@ -190,8 +190,8 @@ describe('OfficeScreen', () => {
     };
     const user = userEvent.setup();
     renderScreen();
-    expect(screen.getByRole('button', { name: /^空席 評価担当 管理者が採用できます/ })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /^空席 評価担当/ }));
+    expect(screen.getByRole('button', { name: /^空席 マーケター 管理者が採用できます/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^空席 マーケター/ }));
     const sheet = screen.getByRole('dialog');
     expect(within(sheet).queryByRole('button', { name: '採用する' })).not.toBeInTheDocument();
     expect(within(sheet).getByText('AI社員の採用と管理は、管理者だけができます。')).toBeInTheDocument();
