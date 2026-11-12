@@ -51,6 +51,9 @@ vi.mock('@/hooks/use-organization', () => ({
   useOrganization: () => ({ organizationId: ORG_ID }),
 }));
 vi.mock('sonner', () => ({ toast: mocks.toast }));
+vi.mock('@/lib/auth/client', () => ({
+  authClient: { useSession: () => ({ data: { user: { name: '山田 太郎' } } }) },
+}));
 
 const messages = mergeMessageFiles(MESSAGE_FILES.ja);
 
@@ -195,6 +198,17 @@ describe('OfficeScreen', () => {
     const sheet = screen.getByRole('dialog');
     expect(within(sheet).queryByRole('button', { name: '採用する' })).not.toBeInTheDocument();
     expect(within(sheet).getByText('AI社員の採用と管理は、管理者だけができます。')).toBeInTheDocument();
+  });
+
+  it('enters the full-screen office from the header and comes back to the button', async () => {
+    const user = userEvent.setup();
+    renderScreen();
+    const enter = screen.getByRole('button', { name: '出社する（全画面）' });
+    await user.click(enter);
+    const office = screen.getByRole('dialog', { name: 'AI社員オフィス（全画面）' });
+    expect(within(office).getByText(/社長 山田 太郎/)).toBeInTheDocument();
+    await user.click(within(office).getByRole('button', { name: /^通常の表示に戻る/ }));
+    expect(screen.queryByRole('dialog', { name: 'AI社員オフィス（全画面）' })).not.toBeInTheDocument();
   });
 
   it('tells a viewer without permission instead of drawing the floor', () => {

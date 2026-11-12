@@ -1,15 +1,18 @@
 'use client';
 
 import { StudioPageHeader, StudioStat } from '@/components/studio';
+import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { useOrganization } from '@/hooks/use-organization';
+import { authClient } from '@/lib/auth/client';
 import { summarizeOffice } from '@/lib/features/ai-employees/office';
 import type { AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
 import { trpc } from '@/lib/trpc/client';
-import { Loader2, Lock } from 'lucide-react';
+import { Building2, Loader2, Lock } from 'lucide-react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { useId, useRef, useState } from 'react';
 import { DeskSheet, OFFICE_REFRESH_MS } from './desk-sheet';
+import { OfficeImmersive } from './office-immersive';
 import { OfficeMap } from './office-map';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -18,13 +21,17 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * The AI office (Refs #1101, Epic #1100): the figures of the day over a virtual office, the whole
  * floor seen from above with each AI employee as a robot where its status takes it, and the
  * details of a desk in a side sheet. The page is wider than STUDIO_PAGE_CLASS so the floor map
- * stays readable.
+ * stays readable. "Enter the office" opens the full-screen office (office-immersive.tsx), where
+ * the user is the president of the company.
  */
 export function OfficeScreen() {
   const t = useTranslations('aiOffice');
   const format = useFormatter();
   const summaryHeadingId = useId();
-  const { organizationId: contextOrgId } = useOrganization();
+  const { organizationId: contextOrgId, organization } = useOrganization();
+  const { data: session } = authClient.useSession();
+  const [immersive, setImmersive] = useState(false);
+  const enterRef = useRef<HTMLButtonElement>(null);
   const organizationId = contextOrgId && UUID.test(contextOrgId) ? contextOrgId : '';
   const office = trpc.aiEmployees.office.useQuery(
     { organizationId },
@@ -47,14 +54,26 @@ export function OfficeScreen() {
         description={t('description')}
         actions={
           office.dataUpdatedAt > 0 && (
-            <span className="text-sm text-gray-600 dark:text-gray-300">
-              {t('updatedAt', {
-                time: format.dateTime(new Date(office.dataUpdatedAt), {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                }),
-              })}
-            </span>
+            <>
+              <span className="text-sm text-gray-600 dark:text-gray-300">
+                {t('updatedAt', {
+                  time: format.dateTime(new Date(office.dataUpdatedAt), {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  }),
+                })}
+              </span>
+              <Button
+                ref={enterRef}
+                type="button"
+                variant="outline"
+                className="min-h-11"
+                onClick={() => setImmersive(true)}
+              >
+                <Building2 className="h-4 w-4" aria-hidden="true" />
+                {t('enterOffice')}
+              </Button>
+            </>
           )
         }
       />
@@ -117,6 +136,21 @@ export function OfficeScreen() {
             onOpenChange={setSheetOpen}
             returnFocusTo={deskRef}
           />
+
+          {immersive && (
+            <OfficeImmersive
+              organizationId={organizationId}
+              companyName={organization?.name ?? null}
+              presidentName={session?.user?.name ?? null}
+              employees={employees}
+              canManage={canManage}
+              onExit={() => {
+                setImmersive(false);
+                // Back where the president came in
+                requestAnimationFrame(() => enterRef.current?.focus());
+              }}
+            />
+          )}
         </>
       )}
     </div>

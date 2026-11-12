@@ -23,6 +23,7 @@ import {
   AREA_RECTS,
   CHARGING_PADS,
   DESK_SEATS,
+  FLOOR_WIDTH,
   OFFICE_AREAS,
   type OfficeArea,
   ROLE_DESKS,
@@ -50,6 +51,8 @@ export interface SceneLabel {
   area: OfficeArea;
   x: number;
   y: number;
+  /** The label stands above this point (over the back wall) instead of hanging below it */
+  above: boolean;
 }
 
 export interface OfficeScene {
@@ -942,14 +945,21 @@ export function buildOfficeScene(
 
   items.sort((a, b) => a.key - b.key);
 
+  // The names of the rooms stay off the floor, clear of the robots and their name tags: over the
+  // back wall for the rooms along it, under the front edges of the floor for the others
   const labels: SceneLabel[] = OFFICE_AREAS.filter((area) => area !== 'corridor').map((area) => {
     const r = AREA_RECTS[area];
-    // The front corner of the room's floor: the label hangs below it, over the corridor or the
-    // edge of the floor, clear of the furniture and the name tags
-    // (the marketing room's label sits further left, clear of the reception's robot)
-    const inset = area === 'marketing' ? 2.2 : 0.35;
-    const [x, y] = project(r.x + r.w - inset, r.y + r.h - 0.35);
-    return { area, x, y };
+    const centre = r.x + r.w / 2 + (area === 'marketing' ? 2.7 : area === 'engineering' ? 1 : 0);
+    const above = r.y === 0;
+    // The room in the front corner is named under the right edge of the floor, away from the
+    // very front where the full-screen office keeps its actions
+    const corner = !above && r.x + r.w === FLOOR_WIDTH;
+    const [x, y] = above
+      ? project(centre, 0, 3.2)
+      : corner
+        ? project(FLOOR_WIDTH + 0.6, r.y + 0.5, -1.7)
+        : project(centre, r.y + r.h, -0.45);
+    return { area, x, y, above };
   });
 
   return { prims: [...base, ...items.flatMap((item) => item.prims)], labels };

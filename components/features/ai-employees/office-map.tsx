@@ -137,14 +137,17 @@ function NameTag({
   );
 }
 
-/** One version of the drawing (day, or night for dark mode) with the names of the rooms */
-function SceneDrawing({
+/** One version of the drawing (by day or by night) with the names of the rooms */
+export function SceneDrawing({
   statuses,
   night,
+  labels = true,
   className,
 }: {
   statuses: Record<AiEmployeeRole, DeskStatus>;
   night: boolean;
+  /** Whether the rooms are named (not in a close-up) */
+  labels?: boolean;
   className?: string;
 }) {
   const t = useTranslations('aiOffice');
@@ -165,15 +168,16 @@ function SceneDrawing({
     >
       <SceneDefs prefix={prefix} night={night} />
       <ScenePrims prims={scene.prims} prefix={prefix} />
-      {scene.labels.map((label) => {
+      {(labels ? scene.labels : []).map((label) => {
         const text = t(`rooms.${label.area}`);
         const width = text.length * 13.5 + 18;
-        // A pill hanging just below the front corner of the room's floor
+        // A pill over the back wall, or hanging under the front edge of the floor
+        const top = label.above ? label.y - 30 : label.y + 6;
         return (
           <g key={label.area}>
             <rect
               x={label.x - width / 2}
-              y={label.y + 4}
+              y={top}
               width={width}
               height={24}
               rx={12}
@@ -182,7 +186,7 @@ function SceneDrawing({
             />
             <text
               x={label.x}
-              y={label.y + 21}
+              y={top + 17}
               textAnchor="middle"
               fill={night ? '#e5e7eb' : '#1f2937'}
               fontSize={13}
