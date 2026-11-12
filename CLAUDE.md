@@ -23,7 +23,7 @@ DiagnoLeads は、AX マイグレーション（レガシー基幹システム�
 SprintPath の5原則：Issue-First・Continuous Quality・Clear Ownership・Visibility・Ship Small（`docs/SPRINTPATH.md`）
 
 ```
-Issue → 決定を読む → ブランチ → 実装 → 速い検証 → 全体の検証 → PR → CI → 記録 → 報告
+Issue → 決定を読む → ブランチ → 実装 → 速い検証 → コミット前の検証 → PR → CI → 記録 → 報告
 ```
 
 1. Issue（Issue-First。省略しない）
@@ -39,10 +39,11 @@ Issue → 決定を読む → ブランチ → 実装 → 速い検証 → 全�
 5. 速い検証（作業中）
    - 関係するテストだけ流す：`bunx vitest run <path>`（1ファイル約2秒）
    - 型チェック：`bun run typecheck`（2回目以降は約8秒）
-6. 全体の検証（コミット前に必須）
-   - `bun run test:run && bun run typecheck && bun run lint && bun run arch:check`（全テストは約6分。`arch:check` は import の向きの検査で約1秒）
-   - 全部通るまでコミットしない
-7. PR：push して PR を作り、CI（約4分）が緑になるまで見届ける。手順とマージの条件はスキル `ship`
+6. コミット前の検証（必須）
+   - `bun run verify`：変えたファイルに関係するテスト（`vitest related` と、ファイルを直接読むテスト）・型チェック・リント・`arch:check` を流す（多くは1分前後）
+   - 依存・テストの共通設定・`locales/`・`drizzle/`・`app/` のファイルの追加と削除・規則に無いファイルを変えたときは、自動で全テスト（約5分）になる。選び方は `scripts/verify-changed.ts`。`--plan` で流すテストだけを見られ、`--full` で全テストにできる
+   - 全部通るまでコミットしない。全テストは CI の必須の検査（Unit Tests 4本）が毎回流す（決定 `2026-11-12-verify-changed-before-commit`）
+7. PR：push して PR を作り、CI（約3〜4分）が緑になるまで見届ける。手順とマージの条件はスキル `ship`
    - CI が緑であること
    - 認証・セキュリティ・課金に関わる変更は、読み取り専用のレビューを通すこと（下の表）
    - スキーマの変更は、本番 DB に適用してからマージすること
@@ -77,6 +78,7 @@ Issue → 決定を読む → ブランチ → 実装 → 速い検証 → 全�
 | 目的 | コマンド |
 |------|---------|
 | 開発サーバー | `bun run dev` |
+| コミット前の検証 | `bun run verify`（`--plan` で中身だけ、`--full` で全テスト） |
 | テスト（1ファイル・全体） | `bunx vitest run <path>` / `bun run test:run` |
 | 型・リント・整形 | `bun run typecheck` / `bun run lint` / `bun run format` |
 | E2E（DB と開発サーバーを使う） | `bun run test:e2e` |

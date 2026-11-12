@@ -12,6 +12,7 @@
     "format": "biome check --write .",
     "typecheck": "NODE_OPTIONS=--max-old-space-size=4096 tsc --noEmit -p tsconfig.test.json",
     "arch:check": "bun scripts/check-architecture.ts",
+    "verify": "bun scripts/verify-changed.ts",
     "test": "vitest",
     "test:run": "vitest --run",
     "test:fast": "vitest --run --exclude 'test/unit/components/**'",
