@@ -42,8 +42,8 @@ import { useFormatter, useTranslations } from 'next-intl';
 import { type FormEvent, type RefObject, useEffect, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { DeskStatusLabel } from './desk-status';
-import { RobotAvatar } from './office-illustration';
 import { areaOf } from './office-map-layout';
+import { RobotPortrait } from './office-scene-svg';
 
 /** The work log is read again as often as the office, so both tell the same story */
 export const OFFICE_REFRESH_MS = 60 * 1000;
@@ -104,7 +104,7 @@ export function DeskSheet({
       >
         <SheetHeader className="space-y-2 pr-8 text-left">
           <div className="flex items-center gap-3">
-            <RobotAvatar status={status} />
+            <RobotPortrait role={role} status={status} />
             <div className="min-w-0">
               <SheetTitle ref={titleRef} tabIndex={-1} className="break-words text-xl font-bold">
                 {employee ? employee.name : t('sheet.vacantTitle', { role: roleTitle })}

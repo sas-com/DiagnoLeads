@@ -10,14 +10,8 @@ import { useTranslations } from 'next-intl';
 import { useId, useMemo } from 'react';
 import { DeskStatusLabel } from './desk-status';
 import { areaOf, spotOf } from './office-map-layout';
-import {
-  SCENE_HEIGHT,
-  SCENE_WIDTH,
-  type SceneGradient,
-  type ScenePrim,
-  buildOfficeScene,
-  project,
-} from './office-scene';
+import { SCENE_HEIGHT, SCENE_WIDTH, buildOfficeScene, project } from './office-scene';
+import { SceneDefs, ScenePrims, useSceneIds } from './office-scene-svg';
 
 /**
  * The virtual office (Refs #1101): the whole floor in isometric projection, with its rooms, walls,
@@ -142,7 +136,7 @@ function NameTag({
   );
 }
 
-/** One version of the drawing; its gradients and filters get ids of their own */
+/** One version of the drawing (day, or night for dark mode) with the names of the rooms */
 function SceneDrawing({
   statuses,
   night,
@@ -153,20 +147,13 @@ function SceneDrawing({
   className?: string;
 }) {
   const t = useTranslations('aiOffice');
-  const prefix = `office-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
+  const { prefix, gradient } = useSceneIds();
   const statusKey = AI_EMPLOYEE_ROLES.map((role) => statuses[role]).join(',');
-  // biome-ignore lint/correctness/useExhaustiveDependencies: statusKey stands for statuses
+  // biome-ignore lint/correctness/useExhaustiveDependencies: statusKey stands for statuses, prefix for gradient
   const scene = useMemo(
-    () => buildOfficeScene(statuses, night, (name: SceneGradient) => `url(#${prefix}-${name})`),
+    () => buildOfficeScene(statuses, night, gradient),
     [statusKey, night, prefix]
   );
-  const common = (prim: ScenePrim) => ({
-    fill: prim.fill,
-    opacity: prim.op,
-    stroke: prim.stroke,
-    filter: prim.filter ? `url(#${prefix}-${prim.filter})` : undefined,
-    className: prim.pulse ? 'motion-safe:animate-pulse' : undefined,
-  });
 
   return (
     <svg
@@ -175,62 +162,12 @@ function SceneDrawing({
       focusable="false"
       className={cn('block h-auto w-full', className)}
     >
-      <defs>
-        <filter id={`${prefix}-soft`} x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="4" />
-        </filter>
-        <filter id={`${prefix}-glow`} x="-100%" y="-100%" width="300%" height="300%">
-          <feGaussianBlur stdDeviation="3" />
-        </filter>
-        <linearGradient id={`${prefix}-sky`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor={night ? '#0b1530' : '#9fd3ff'} />
-          <stop offset="1" stopColor={night ? '#27406e' : '#e9f6ff'} />
-        </linearGradient>
-        <linearGradient id={`${prefix}-bodyOn`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#ffffff" />
-          <stop offset="1" stopColor="#c9d1db" />
-        </linearGradient>
-        <radialGradient id={`${prefix}-headOn`} cx=".35" cy=".3" r=".8">
-          <stop offset="0" stopColor="#ffffff" />
-          <stop offset="1" stopColor="#c3ccd7" />
-        </radialGradient>
-        <linearGradient id={`${prefix}-bodyOff`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#b8bec7" />
-          <stop offset="1" stopColor="#7d8590" />
-        </linearGradient>
-        <radialGradient id={`${prefix}-headOff`} cx=".35" cy=".3" r=".8">
-          <stop offset="0" stopColor="#c2c8d0" />
-          <stop offset="1" stopColor="#7d8590" />
-        </radialGradient>
-        <radialGradient id={`${prefix}-pool`} cx=".5" cy=".5" r=".5">
-          <stop offset="0" stopColor="#ffe7a3" stopOpacity={0.55} />
-          <stop offset="1" stopColor="#ffe7a3" stopOpacity={0} />
-        </radialGradient>
-      </defs>
-      {scene.prims.map((prim, index) => {
-        const key = `${prim.kind}-${index}`;
-        switch (prim.kind) {
-          case 'poly':
-            return <polygon key={key} points={prim.points} {...common(prim)} />;
-          case 'ellipse':
-            return (
-              <ellipse
-                key={key}
-                cx={prim.cx}
-                cy={prim.cy}
-                rx={prim.rx}
-                ry={prim.ry}
-                {...common(prim)}
-              />
-            );
-          default:
-            return <path key={key} d={prim.d} {...common(prim)} />;
-        }
-      })}
+      <SceneDefs prefix={prefix} night={night} />
+      <ScenePrims prims={scene.prims} prefix={prefix} />
       {scene.labels.map((label) => {
         const text = t(`rooms.${label.area}`);
         const width = text.length * 13.5 + 18;
-        // A pill hanging just below the back corner of the room's floor
+        // A pill hanging just below the front corner of the room's floor
         return (
           <g key={label.area}>
             <rect

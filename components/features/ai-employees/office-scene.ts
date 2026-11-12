@@ -1,7 +1,8 @@
 /**
  * The virtual office drawn in isometric projection (Refs #1101): the building (floor slab, rooms,
- * back walls with windows, glass partitions), the furniture and the robots, as SVG primitives in
- * painter's order. Pure; office-map.tsx renders it twice (day palette, and the night palette for
+ * back walls with windows, glass partitions), the furniture and the robots (office-robot.ts), as
+ * SVG primitives in painter's order. Desks, chairs and robots are turned to match: a seat is
+ * behind its desk and whoever sits there faces it (office-map-layout.ts). Pure; office-map.tsx renders it twice (day palette, and the night palette for
  * dark mode). The design was made on a Claude Design canvas and moved here as code.
  *
  * Floor units: the floor is 24 x 16; x runs to the lower right of the screen, y to the lower
@@ -10,7 +11,18 @@
  */
 import type { DeskStatus } from '@/lib/features/ai-employees/office';
 import { AI_EMPLOYEE_ROLES, type AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
-import { AREA_RECTS, OFFICE_AREAS, type OfficeArea, spotOf } from './office-map-layout';
+import {
+  AREA_RECTS,
+  DESK_SEATS,
+  OFFICE_AREAS,
+  type OfficeArea,
+  ROLE_DESKS,
+  SEAT_BEHIND_DESK,
+  TRAINING_DESKS,
+  spotOf,
+} from './office-map-layout';
+import { type PrimStyle, type SceneGradient, type ScenePrim, shade } from './office-prims';
+import { robotPrims } from './office-robot';
 
 export const SCENE_WIDTH = 1000;
 export const SCENE_HEIGHT = 700;
@@ -25,20 +37,6 @@ export function project(x: number, y: number, z = 0): [number, number] {
   return [(x - y) * C * S + OX, (x + y) * 0.5 * S - z * S + OY];
 }
 
-interface PrimStyle {
-  fill: string;
-  op?: number;
-  stroke?: string;
-  filter?: 'soft' | 'glow';
-  /** Pulses for people who do not ask for reduced motion */
-  pulse?: boolean;
-}
-
-export type ScenePrim =
-  | ({ kind: 'poly'; points: string } & PrimStyle)
-  | ({ kind: 'ellipse'; cx: number; cy: number; rx: number; ry: number } & PrimStyle)
-  | ({ kind: 'path'; d: string } & PrimStyle);
-
 export interface SceneLabel {
   area: OfficeArea;
   x: number;
@@ -50,19 +48,6 @@ export interface OfficeScene {
   labels: SceneLabel[];
 }
 
-/** Gradients the scene refers to by name; the renderer defines them under its own ids */
-export const SCENE_GRADIENTS = ['sky', 'bodyOn', 'headOn', 'bodyOff', 'headOff', 'pool'] as const;
-export type SceneGradient = (typeof SCENE_GRADIENTS)[number];
-
-const STATUS_LIGHT: Record<DeskStatus, string> = {
-  working: '#22c55e',
-  attention: '#ef4444',
-  idle: '#38bdf8',
-  training: '#f59e0b',
-  paused: '#6b7280',
-  vacant: '#9ca3af',
-};
-
 const FLOOR_COLOURS: Record<OfficeArea, string> = {
   sales: '#e1e8f0',
   analysis: '#d9eee3',
@@ -73,17 +58,6 @@ const FLOOR_COLOURS: Record<OfficeArea, string> = {
   charging: '#d8dde4',
   entrance: '#e8e1d4',
 };
-
-function shade(hex: string, factor: number): string {
-  const channels = [1, 3, 5].map((i) =>
-    Math.max(0, Math.min(255, Math.round(Number.parseInt(hex.slice(i, i + 2), 16) * factor)))
-  );
-  return `#${channels.map((value) => value.toString(16).padStart(2, '0')).join('')}`;
-}
-
-function roundedRect(x: number, y: number, w: number, h: number, r: number): string {
-  return `M${x + r} ${y} h${w - 2 * r} a${r} ${r} 0 0 1 ${r} ${r} v${h - 2 * r} a${r} ${r} 0 0 1 -${r} ${r} h-${w - 2 * r} a${r} ${r} 0 0 1 -${r} -${r} v-${h - 2 * r} a${r} ${r} 0 0 1 ${r} -${r} z`;
-}
 
 const pt = (x: number, y: number, z: number) => {
   const [sx, sy] = project(x, y, z);
@@ -426,26 +400,53 @@ export function buildOfficeScene(
   const atDesk = (role: AiEmployeeRole) =>
     statuses[role] === 'working' || statuses[role] === 'attention';
 
+  /**
+   * A desk. Whoever works at it sits behind it (on its -y side) and faces +y, towards the
+   * viewer's lower left: the keyboard is on their side, the monitors stand on the far edge and
+   * show their backs to the viewer. A lit screen throws its light back at the seat.
+   */
   const desk = (x: number, y: number, w: number, d: number, monitors: 1 | 2, lit: boolean) => {
     const prims = [shadow(x + w / 2, y + d / 2, 46, 18), ...box(x, y, 0, w, d, 0.74, '#c79c6a')];
+    prims.push(...box(x + w * 0.3, y + d * 0.14, 0.74, w * 0.4, d * 0.24, 0.03, '#e5e7eb'));
     const mw = monitors === 2 ? w * 0.36 : w * 0.5;
     const starts = monitors === 2 ? [x + w * 0.1, x + w * 0.54] : [x + w * 0.25];
     for (const mx of starts) {
-      prims.push(...box(mx, y + 0.12, 0.74, mw, 0.07, 0.5, '#272c35'));
       if (lit) {
-        const [gx, gy] = project(mx + mw / 2, y + 0.1, 1.0);
+        const [gx, gy] = project(mx + mw / 2, y + d - 0.42, 1.06);
         prims.push(ellipse(gx, gy, 20, 10, '#7dd3fc', { op: 0.55, filter: 'glow' }));
       }
+      prims.push(
+        ...box(mx + mw / 2 - 0.07, y + d - 0.2, 0.74, 0.14, 0.1, 0.14, '#3b424d'),
+        ...box(mx, y + d - 0.24, 0.86, mw, 0.07, 0.46, '#272c35')
+      );
+      const [lx, ly] = project(mx + mw / 2, y + d - 0.17, 1.09);
+      prims.push(ellipse(lx, ly, 1.6, 1.6, '#9aa3af'));
     }
-    prims.push(...box(x + w * 0.3, y + d * 0.55, 0.74, w * 0.4, d * 0.22, 0.03, '#e5e7eb'));
     add(x + w / 2, y + d / 2, prims);
   };
-  const chair = (x: number, y: number, colour = '#3f4753') => {
-    add(x, y - 0.02, [
-      shadow(x, y, 16, 7),
-      ...box(x - 0.3, y - 0.3, 0.42, 0.6, 0.6, 0.08, colour),
-      ...box(x - 0.3, y - 0.36, 0.5, 0.6, 0.1, 0.62, colour),
-    ]);
+  /** A chair turned towards the floor's +y (the default), -y, +x or -x */
+  const chair = (
+    x: number,
+    y: number,
+    colour = '#3f4753',
+    facing: '+y' | '-y' | '+x' | '-x' = '+y'
+  ) => {
+    const seat = [shadow(x, y, 16, 7), ...box(x - 0.3, y - 0.3, 0.42, 0.6, 0.6, 0.08, colour)];
+    const back =
+      facing === '+y'
+        ? box(x - 0.3, y - 0.36, 0.5, 0.6, 0.1, 0.62, colour)
+        : facing === '-y'
+          ? box(x - 0.3, y + 0.26, 0.5, 0.6, 0.1, 0.62, colour)
+          : facing === '+x'
+            ? box(x - 0.36, y - 0.3, 0.5, 0.1, 0.6, 0.62, colour)
+            : box(x + 0.26, y - 0.3, 0.5, 0.1, 0.6, 0.62, colour);
+    // The backrest is behind whoever sits there when the chair is turned to the viewer, and in
+    // front of them otherwise
+    if (facing === '+y' || facing === '+x') add(x, y - 0.02, [...back, ...seat]);
+    else {
+      add(x, y - 0.02, seat);
+      add(x, y + 0.3, back);
+    }
   };
   const plant = (x: number, y: number) => {
     const [ax, ay] = project(x, y, 1.05);
@@ -460,12 +461,21 @@ export function buildOfficeScene(
     ]);
   };
 
+  // The desk of each role, its chair behind it
+  for (const role of AI_EMPLOYEE_ROLES) {
+    const own = ROLE_DESKS[role];
+    desk(own.x, own.y, own.w, own.d, own.monitors, atDesk(role));
+    chair(DESK_SEATS[role].x, DESK_SEATS[role].y);
+  }
+
   // Sales floor: two rows of desks and a printer
   for (const x of [1.2, 3.2, 5.2, 7.2]) {
-    desk(x, 2.3, 1.8, 0.9, 1, x === 1.2 && atDesk('follow_up_keeper'));
-    if (x !== 1.2) chair(x + 0.9, 1.75);
+    if (x !== ROLE_DESKS.follow_up_keeper.x) {
+      desk(x, 2.3, 1.8, 0.9, 1, false);
+      chair(x + 0.9, 2.3 - SEAT_BEHIND_DESK);
+    }
     desk(x, 5.1, 1.8, 0.9, 1, false);
-    chair(x + 0.9, 4.55);
+    chair(x + 0.9, 5.1 - SEAT_BEHIND_DESK);
   }
   add(0.7, 7.0, [
     shadow(0.7, 7.0, 22, 9),
@@ -476,10 +486,10 @@ export function buildOfficeScene(
   plant(9.5, 4.0);
 
   // Analysis room: desks with two monitors, server racks and a small table
-  for (const x of [10.6, 12.8, 15.0])
-    desk(x, 2.0, 1.6, 0.9, 2, x === 12.8 && atDesk('lead_scorer'));
-  chair(11.4, 1.45);
-  chair(15.8, 1.45);
+  for (const x of [10.6, 15.0]) {
+    desk(x, 2.0, 1.6, 0.9, 2, false);
+    chair(x + 0.8, 2.0 - SEAT_BEHIND_DESK);
+  }
   for (const y of [4.8, 5.8]) {
     const prims = [shadow(16.0, y + 0.4, 18, 8), ...box(15.6, y, 0, 0.8, 0.9, 2.3, '#2d333c')];
     for (let i = 0; i < 6; i++) {
@@ -499,17 +509,16 @@ export function buildOfficeScene(
       ellipse(tx, ty, 30, 15, col('#d4b083')),
     ]);
   }
-  chair(11.6, 5.6);
-  chair(13.3, 6.6);
-  chair(12.4, 7.0);
+  chair(11.5, 5.9, undefined, '+x');
+  chair(13.3, 5.9, undefined, '-x');
+  chair(12.4, 6.85, undefined, '-y');
   plant(10.6, 7.4);
 
-  // Planning room: a desk by the window and the meeting table
-  desk(17.6, 2.0, 1.6, 0.9, 1, atDesk('timing_watcher'));
+  // Planning room: the meeting table (the role's desk is by the window)
   add(21.4, 4.5, [shadow(21.4, 4.5, 80, 30), ...box(19.8, 3.7, 0, 3.2, 1.6, 0.74, '#c79c6a')]);
   for (const x of [20.3, 21.4, 22.5]) {
-    chair(x, 3.45, '#5b6472');
-    chair(x, 5.85, '#5b6472');
+    chair(x, 3.3, '#5b6472');
+    chair(x, 5.7, '#5b6472', '-y');
   }
   plant(17.6, 7.4);
   plant(23.5, 0.7);
@@ -518,19 +527,19 @@ export function buildOfficeScene(
   plant(0.5, 9);
   plant(23.5, 9);
 
-  // Training room: a lectern and desks facing the screen
-  add(1.15, 12.85, [shadow(1.15, 12.85, 14, 6), ...box(0.9, 12.5, 0, 0.5, 0.7, 1.1, '#a8794f')]);
-  for (const y of [10.7, 12.5, 14.3]) {
-    add(3.45, y + 0.7, [
-      shadow(3.45, y + 0.7, 26, 12),
-      ...box(3.0, y, 0, 0.9, 1.4, 0.72, '#d6dbe3'),
-      ...box(3.2, y + 0.4, 0.72, 0.5, 0.6, 0.02, '#ffffff'),
+  // Training room: study desks turned like the work desks, an open book on each
+  const studyDesk = (x: number, y: number, w: number, d: number) => {
+    add(x + w / 2, y + d / 2, [
+      shadow(x + w / 2, y + d / 2, 40, 16),
+      ...box(x, y, 0, w, d, 0.72, '#d6dbe3'),
+      ...box(x + w / 2 - 0.36, y + 0.16, 0.72, 0.34, 0.44, 0.03, '#ffffff'),
+      ...box(x + w / 2 + 0.02, y + 0.16, 0.72, 0.34, 0.44, 0.03, '#eef2f7'),
     ]);
-    add(6.05, y + 0.7, [
-      shadow(6.05, y + 0.7, 26, 12),
-      ...box(5.6, y, 0, 0.9, 1.4, 0.72, '#d6dbe3'),
-    ]);
-    chair(7.0, y + 0.7);
+    chair(x + w / 2, y - SEAT_BEHIND_DESK);
+  };
+  for (const own of TRAINING_DESKS) {
+    studyDesk(own.x, own.y, own.w, own.d);
+    studyDesk(own.x, own.y + 2.1, own.w, own.d);
   }
 
   // Lounge: a counter with the coffee machine, a vending machine, a sofa and tables
@@ -561,7 +570,7 @@ export function buildOfficeScene(
     ...box(8.6, 11.2, 0.45, 1.0, 0.25, 0.28, '#4f55c9'),
     ...box(8.6, 14.75, 0.45, 1.0, 0.25, 0.28, '#4f55c9'),
   ]);
-  add(11.0, 13.2, [shadow(11.0, 13.2, 30, 16), ...box(10.4, 12.4, 0, 1.2, 1.6, 0.38, '#9a6f45')]);
+  add(11.5, 13.2, [shadow(11.5, 13.2, 30, 16), ...box(10.9, 12.4, 0, 1.2, 1.6, 0.38, '#9a6f45')]);
   {
     const [tx, ty] = project(14.4, 13.0, 0.74);
     add(14.4, 13.0, [
@@ -570,10 +579,10 @@ export function buildOfficeScene(
       ellipse(tx, ty, 32, 16, col('#e8d6bb')),
     ]);
   }
-  chair(15.3, 13.4, '#7c5c3e');
-  chair(13.6, 12.9, '#7c5c3e');
+  chair(15.35, 13.0, '#7c5c3e', '-x');
+  chair(13.45, 13.0, '#7c5c3e', '+x');
   plant(8.6, 15.5);
-  plant(15.5, 11.3);
+  plant(13.2, 15.4);
 
   // Charging station: docks wired to chargers on the wall
   for (const y of [10.8, 12.6, 14.4]) {
@@ -600,87 +609,16 @@ export function buildOfficeScene(
   add(23.5, 13.7, [shadow(23.5, 13.7, 18, 34), ...box(23.2, 12.6, 0, 0.6, 2.2, 0.45, '#5b61d6')]);
   plant(23.7, 10.5);
 
-  // ---- The robots ----------------------------------------------------------------------
-  const robot = (x: number, y: number, status: DeskStatus): ScenePrim[] => {
-    const [X, Y] = project(x, y);
-    const off = status === 'paused';
-    const ghost = status === 'vacant';
-    const op = ghost ? 0.28 : 1;
-    const stroke = off ? '#5c636d' : '#8b95a3';
-    const body = gradient(off ? 'bodyOff' : 'bodyOn');
-    const light = STATUS_LIGHT[status];
-    const prims: ScenePrim[] = [
-      ellipse(X, Y, 20, 7, '#0b1220', { op: ghost ? 0.08 : night ? 0.4 : 0.25, filter: 'soft' }),
-      path(roundedRect(X - 22, Y - 44, 8, 22, 4), body, { stroke, op }),
-      path(roundedRect(X + 14, Y - 44, 8, 22, 4), body, { stroke, op }),
-      path(roundedRect(X - 15, Y - 50, 30, 40, 14), body, { stroke, op }),
-      ellipse(X, Y - 33, 3.6, 3.6, off ? '#6b7280' : '#22c55e', { op }),
-      ellipse(X, Y - 64, 17, 16, gradient(off ? 'headOff' : 'headOn'), { stroke, op }),
-      path(roundedRect(X - 12, Y - 71, 24, 12, 6), '#1f2937', { op }),
-    ];
-    if (!off && !ghost) {
-      const eye = status === 'attention' ? '#fcd34d' : '#67e8f9';
-      prims.push(
-        ellipse(X - 5, Y - 65, 4, 4, eye, { op: 0.55, filter: 'glow' }),
-        ellipse(X + 5, Y - 65, 4, 4, eye, { op: 0.55, filter: 'glow' }),
-        ellipse(X - 5, Y - 65, 2.2, 2.2, eye),
-        ellipse(X + 5, Y - 65, 2.2, 2.2, eye)
-      );
-    }
-    prims.push(path(`M${X} ${Y - 80} L${X} ${Y - 88}`, 'none', { stroke, op }));
-    if (!ghost) {
-      const pulse = status === 'working' || status === 'attention';
-      prims.push(
-        ellipse(X, Y - 91, 7, 7, light, { op: 0.5, filter: 'glow', pulse }),
-        ellipse(X, Y - 91, 3.8, 3.8, light, { pulse })
-      );
-    }
-    if (status === 'training') {
-      // A graduation cap
-      prims.push(
-        path(
-          `M${X - 20} ${Y - 80} L${X} ${Y - 88} L${X + 20} ${Y - 80} L${X} ${Y - 72} Z`,
-          '#111827'
-        ),
-        path(`M${X + 14} ${Y - 80} L${X + 15} ${Y - 70}`, 'none', { stroke: '#f59e0b' })
-      );
-    }
-    if (status === 'attention') {
-      prims.push(
-        ellipse(X + 24, Y - 92, 11, 11, '#dc2626'),
-        path(roundedRect(X + 22.5, Y - 99, 3, 9, 1.5), '#ffffff'),
-        ellipse(X + 24, Y - 86, 1.8, 1.8, '#ffffff')
-      );
-    }
-    if (status === 'working') {
-      // A "busy" bubble
-      prims.push(path(roundedRect(X + 14, Y - 104, 32, 18, 9), '#ffffff', { stroke: '#cbd5e1' }));
-      for (const dx of [22, 30, 38])
-        prims.push(ellipse(X + dx, Y - 95, 2.2, 2.2, '#64748b', { pulse: true }));
-    }
-    if (status === 'paused') {
-      // Charging
-      prims.push(path(`M${X + 26} ${Y - 102} l-8 13 h7 l-3 11 l10 -15 h-7 z`, '#fbbf24'));
-    }
-    if (status === 'idle') {
-      // A cup of coffee with steam
-      prims.push(
-        path(roundedRect(X + 16, Y - 36, 10, 11, 2), '#ffffff', { stroke: '#94a3b8' }),
-        path(`M${X + 19} ${Y - 40} q-3 -5 0 -9 M${X + 23} ${Y - 40} q-3 -5 0 -9`, 'none', {
-          stroke: '#94a3b8',
-          op: 0.8,
-        })
-      );
-    }
-    return prims;
-  };
-
+  // ---- The robots, each turned towards its desk or table -----------------------------------
   for (const role of AI_EMPLOYEE_ROLES) {
     const status = statuses[role];
     const spot = spotOf(role, status);
-    if (status === 'working' || status === 'attention' || status === 'vacant')
-      chair(spot.x, spot.y);
-    add(spot.x, spot.y + 0.01, robot(spot.x, spot.y, status));
+    const [x, y] = project(spot.x, spot.y);
+    add(
+      spot.x,
+      spot.y + 0.01,
+      robotPrims({ role, status, x, y, facing: spot.facing, night, gradient })
+    );
   }
 
   items.sort((a, b) => a.key - b.key);
