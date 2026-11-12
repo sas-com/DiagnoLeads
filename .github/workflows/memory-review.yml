@@ -28,6 +28,7 @@ concurrency:
 jobs:
   open:
     name: Open the review issue
+    if: github.repository == 'sas-com/DiagnoLeads'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -53,26 +54,37 @@ jobs:
           echo "FROM=$from" >> "$GITHUB_ENV"
           echo "TO=$to" >> "$GITHUB_ENV"
 
-          # One line per learning used: "- #<PR> 役立った：<heading>" (lines left as "なし" are skipped)
-          gh api -X GET search/issues --paginate \
-            -f q="repo:$GH_REPO is:pr is:merged merged:$from..$to" -f per_page=100 \
-            --jq '.items[] | .number as $n | ((.body // "") | gsub("\r"; "") | split("\n")[])
-              | select(test("^- (役立った|外れた)："))
-              | select(test("^- (役立った|外れた)：\\s*なし\\s*$") | not)
-              | "- #\($n) \(.[2:])"' > used.txt
-          prs=$(gh api -X GET search/issues -f q="repo:$GH_REPO is:pr is:merged merged:$from..$to" \
-            -f per_page=1 --jq '.total_count')
+          query="repo:$GH_REPO is:pr is:merged merged:$from..$to"
+          counts=$(gh api -X GET search/issues -f q="$query" -f per_page=1 \
+            --jq '"\(.total_count) \(.incomplete_results)"')
+          read -r prs incomplete <<< "$counts"
+          if [ "$prs" -gt 1000 ] || [ "$incomplete" = "true" ]; then
+            echo "::warning::Search returned $prs PRs (incomplete=$incomplete); only the first 1000 are read"
+          fi
           echo "PRS=$prs" >> "$GITHUB_ENV"
+
+          # One line per learning used: "- #<PR> ``役立った：<heading>``" (lines left as "なし" are
+          # skipped). PR bodies are editable by their authors, so the text goes into a code span
+          # (no mentions, HTML or links) and is cut at 300 characters.
+          gh api -X GET search/issues --paginate \
+            -f q="$query" -f per_page=100 -f sort=created -f order=asc \
+            --jq '.items[] | .number as $n | ((.body // "") | gsub("\r"; "") | split("\n")[])
+              | select(test("^\\s*- (役立った|外れた)[：:]"))
+              | select(test("^\\s*- (役立った|外れた)[：:]\\s*なし\\s*$") | not)
+              | sub("^\\s*- "; "") | gsub("`+"; "`") | .[0:300]
+              | "- #\($n) `` \(.) ``"' > used.txt
 
           python3 - .factory/memory/learnings.md > size.txt <<'PY'
           import sys
-          lines = open(sys.argv[1], encoding="utf-8").read().split("\n")
-          entries, title, length = [], None, 0
+          lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
+          entries, title, length, fenced = [], None, 0, False
           for line in lines:
-              if line.startswith("### "):
+              if line.startswith("```"):
+                  fenced = not fenced
+              if not fenced and (line.startswith("### ") or line.startswith("## ")):
                   if title is not None:
                       entries.append((length, title))
-                  title, length = line[4:], 0
+                  title, length = (line[4:], 0) if line.startswith("### ") else (None, 0)
               elif title is not None:
                   length += len(line)
           if title is not None:
@@ -87,8 +99,6 @@ jobs:
         run: |
           set -euo pipefail
           month=$(date -u -d "$FROM" '+%Y年%m月')
-          previous=$(gh issue list --label memory-review --state closed --limit 1 \
-            --json number --jq '.[0].number // empty')
           {
             echo "${month}分の MemoryBank の見直しです。手順は \`.factory/memory/README.md\` の「メンテナンス（月1回）」。"
             echo
@@ -112,11 +122,7 @@ jobs:
             echo "- [ ] Anthropic の公式の変更を確かめる（スキル \`official-check\`）"
             echo "- [ ] 結果（数えた件数・適用した整理・行数）をコメントに書いて閉じる"
             echo
-            if [ -n "$previous" ]; then
-              echo "前回の見直し：#${previous}"
-            else
-              echo "初回の見直しです。#1111 のコメントにある候補も確かめてください。"
-            fi
+            echo "前回までの見直しは \`memory-review\` ラベルの閉じた Issue。最初の見直しでは、#1111 のコメントにある候補も確かめる。"
             echo
             echo "（[実行の記録](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})）"
           } > body.md
