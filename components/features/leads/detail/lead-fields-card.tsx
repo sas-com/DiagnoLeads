@@ -1,5 +1,6 @@
 'use client';
 
+import { isComposing } from '@/components/common/form-controls';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -460,7 +461,8 @@ function CardForm({
 
   // Esc cancels, unless it is closing an open select list
   const handleKeyDown = (event: KeyboardEvent<HTMLFormElement>) => {
-    if (event.key !== 'Escape' || event.defaultPrevented) return;
+    // Not the Esc that cancels a conversion (IME), which would drop what was typed (#1012)
+    if (event.key !== 'Escape' || event.defaultPrevented || isComposing(event)) return;
     const target = event.target as HTMLElement;
     if (target.closest('[role="listbox"]') || target.getAttribute('aria-expanded') === 'true')
       return;
