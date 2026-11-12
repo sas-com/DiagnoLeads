@@ -1,0 +1,115 @@
+{
+  "aiOffice": {
+    "title": "AI office",
+    "description": "See where the AI employees sit and how they work, on the floor plan of an office. Open a desk for its work log and actions.",
+    "forbidden": "You do not have permission to view the AI office.",
+    "loadError": "The AI office could not be loaded. Please try again later.",
+    "noOrganization": "Choose an organization to see its AI office.",
+    "updatedAt": "As of {time}",
+    "summary": {
+      "hired": "On staff",
+      "working": "Working",
+      "processedToday": "Handled today",
+      "attention": "Needs attention",
+      "people": "{count}",
+      "items": "{count}"
+    },
+    "floor": {
+      "label": "Office floor plan",
+      "entrance": "Entrance"
+    },
+    "rooms": {
+      "sales": "Sales floor",
+      "analysis": "Analysis room",
+      "planning": "Planning room"
+    },
+    "roles": {
+      "follow_up_keeper": {
+        "title": "Follow-up keeper",
+        "description": "Counts the next actions due soon or overdue every morning, so that nothing is dropped. It never changes a lead.",
+        "defaultName": "AI Follow-up"
+      },
+      "lead_scorer": {
+        "title": "Lead scorer",
+        "description": "Scores new leads without a score with Claude. Names, emails and other fields that point at a person are never sent.",
+        "defaultName": "AI Scorer"
+      },
+      "timing_watcher": {
+        "title": "Timing watcher",
+        "description": "Recomputes when to act on each lead every morning, from the hearings and the diagnosis answers.",
+        "defaultName": "AI Timing"
+      }
+    },
+    "status": {
+      "working": "Working",
+      "attention": "Needs attention",
+      "idle": "Waiting",
+      "training": "In training",
+      "paused": "Paused",
+      "vacant": "Vacant"
+    },
+    "statusHint": {
+      "working": "Working right now.",
+      "attention": "The last run failed or has not finished. Check the work log.",
+      "idle": "Waiting for the next run.",
+      "training": "The work of this role is being prepared. It starts working by itself once ready.",
+      "paused": "A paused employee does not work. Resume it to work from the next run.",
+      "vacant": "No AI employee has this role yet."
+    },
+    "desk": {
+      "open": "Open {name} ({role})",
+      "openVacant": "Open the vacant desk of the {role}",
+      "processedToday": "{count} today",
+      "lastRun": "Last run {time}",
+      "noRun": "No work yet",
+      "hire": "Hire"
+    },
+    "sheet": {
+      "vacantTitle": "Vacant desk: {role}",
+      "role": "Role",
+      "room": "Room",
+      "status": "Status",
+      "hiredAt": "Hired on",
+      "name": "Name",
+      "hireSubmit": "Hire",
+      "manage": "Manage",
+      "rename": "Rename",
+      "pause": "Pause",
+      "resume": "Resume",
+      "dismiss": "Dismiss",
+      "dismissTitle": "Dismiss {name}?",
+      "dismissDescription": "Its work log is deleted too, and this cannot be undone. You can hire an AI employee for the role again later.",
+      "cancel": "Cancel",
+      "readOnly": "Only admins can hire and manage AI employees.",
+      "runs": "Work log",
+      "runsCaption": "Up to 20, newest first",
+      "runsEmpty": "No work yet.",
+      "runsError": "The work log could not be loaded.",
+      "columns": {
+        "startedAt": "Started",
+        "trigger": "Trigger",
+        "status": "Result",
+        "processed": "Handled",
+        "resultCode": "Code"
+      },
+      "trigger": {
+        "schedule": "Scheduled",
+        "manual": "Manual"
+      },
+      "runStatus": {
+        "running": "Working",
+        "succeeded": "Succeeded",
+        "failed": "Failed"
+      }
+    },
+    "toast": {
+      "hired": "Hired {name}",
+      "renamed": "Renamed",
+      "paused": "Paused {name}",
+      "resumed": "Resumed {name}",
+      "dismissed": "Dismissed {name}",
+      "conflict": "An AI employee already has this role",
+      "error": "Could not save. Please try again later"
+    }
+  }
+}

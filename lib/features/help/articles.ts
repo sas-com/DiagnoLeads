@@ -8,6 +8,7 @@ import { leadDetailArticle } from './content/lead-detail';
 import { leadHandoffArticle } from './content/lead-handoff';
 import { leadHearingArticle } from './content/lead-hearing';
 import { leadsArticle } from './content/leads';
+import { officeArticle } from './content/office';
 import { organizationsNewArticle } from './content/organizations-new';
 import { prospectsArticle } from './content/prospects';
 import { settingsAgencyLinksArticle } from './content/settings-agency-links';
@@ -44,6 +45,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
   prospectsArticle,
   analyticsArticle,
   siteAnalyticsArticle,
+  officeArticle,
   settingsProfileArticle,
   settingsOrganizationArticle,
   settingsMembersArticle,
@@ -82,6 +84,7 @@ export const HELP_TABLE_OF_CONTENTS: Readonly<Record<HelpSection, readonly HelpA
     prospectsArticle,
     analyticsArticle,
     siteAnalyticsArticle,
+    officeArticle,
   ],
   settings: [
     settingsProfileArticle,

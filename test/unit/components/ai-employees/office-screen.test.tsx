@@ -1,0 +1,167 @@
+/**
+ * The AI office (#1101): the figures over the floor, a desk per role in its room (vacant ones
+ * included), the details of a desk, and who sees the hiring and managing actions (real next-intl
+ * messages; tRPC mocked)
+ */
+import { OfficeScreen } from '@/components/features/ai-employees/office-screen';
+import { MESSAGE_FILES, mergeMessageFiles } from '@/lib/i18n/messages';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { NextIntlClientProvider } from 'next-intl';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const ORG_ID = '660e8400-e29b-41d4-a716-446655440000';
+const EMPLOYEE_ID = '770e8400-e29b-41d4-a716-446655440001';
+
+const mocks = vi.hoisted(() => ({
+  office: { data: undefined as unknown, error: null as unknown, isLoading: false, dataUpdatedAt: 0 },
+  runs: { data: [] as unknown[], error: null as unknown, isLoading: false },
+  hires: [] as unknown[],
+  updates: [] as unknown[],
+  dismissals: [] as unknown[],
+  toast: { success: vi.fn(), error: vi.fn() },
+}));
+
+function mutation(target: unknown[]) {
+  return (options: { onSuccess?: (data: unknown, input: unknown) => void } = {}) => ({
+    isPending: false,
+    mutate: (input: unknown) => {
+      target.push(input);
+      options.onSuccess?.({ id: EMPLOYEE_ID, name: 'AI 時期' }, input);
+    },
+  });
+}
+
+vi.mock('@/lib/trpc/client', () => ({
+  trpc: {
+    useUtils: () => ({ aiEmployees: { office: { invalidate: vi.fn() } } }),
+    aiEmployees: {
+      office: { useQuery: () => mocks.office },
+      runs: { useQuery: () => mocks.runs },
+      hire: { useMutation: mutation(mocks.hires) },
+      update: { useMutation: mutation(mocks.updates) },
+      dismiss: { useMutation: mutation(mocks.dismissals) },
+    },
+  },
+}));
+vi.mock('@/hooks/use-organization', () => ({
+  useOrganization: () => ({ organizationId: ORG_ID }),
+}));
+vi.mock('sonner', () => ({ toast: mocks.toast }));
+
+const messages = mergeMessageFiles(MESSAGE_FILES.ja);
+
+function renderScreen() {
+  return render(
+    <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
+      <OfficeScreen />
+    </NextIntlClientProvider>
+  );
+}
+
+const timingWatcher = {
+  id: EMPLOYEE_ID,
+  role: 'timing_watcher',
+  name: 'AI 時期',
+  status: 'active',
+  createdAt: new Date('2026-11-01T00:00:00Z'),
+  deskStatus: 'attention',
+  lastRun: {
+    id: 'run-1',
+    trigger: 'schedule',
+    status: 'failed',
+    startedAt: new Date('2026-11-12T00:00:00Z'),
+    finishedAt: new Date('2026-11-12T00:00:10Z'),
+    processedCount: 3,
+    resultCode: 'timeout',
+  },
+  processedToday: 5,
+};
+
+describe('OfficeScreen', () => {
+  beforeEach(() => {
+    mocks.office = {
+      data: { employees: [timingWatcher], canManage: true },
+      error: null,
+      isLoading: false,
+      dataUpdatedAt: Date.now(),
+    };
+    mocks.runs = { data: [timingWatcher.lastRun], error: null, isLoading: false };
+    mocks.hires.length = 0;
+    mocks.updates.length = 0;
+    mocks.dismissals.length = 0;
+  });
+
+  it('draws the three rooms with a desk per role, vacant desks included', () => {
+    renderScreen();
+    const floor = screen.getByRole('region', { name: 'オフィスの間取り' });
+    const planning = within(floor).getByRole('region', { name: '企画室' });
+    expect(
+      within(planning).getByRole('button', { name: 'AI 時期（時期の見張り番）の詳細を開く' })
+    ).toBeInTheDocument();
+    expect(within(planning).getByText('要確認')).toBeInTheDocument();
+    expect(within(planning).getByText(/今日 5件/)).toBeInTheDocument();
+
+    const sales = within(floor).getByRole('region', { name: '営業フロア' });
+    expect(within(sales).getByRole('button', { name: '追客担当の空席を開く' })).toBeInTheDocument();
+    const analysis = within(floor).getByRole('region', { name: '分析室' });
+    expect(within(analysis).getByText('空席')).toBeInTheDocument();
+  });
+
+  it('sums up the office over the floor', () => {
+    renderScreen();
+    expect(screen.getByText('在籍').nextElementSibling).toHaveTextContent('1人');
+    expect(screen.getByText('今日の処理件数').nextElementSibling).toHaveTextContent('5件');
+    // The status of the desk says 要確認 too: take the figure's label (a <p>)
+    const attention = screen.getAllByText('要確認').find((node) => node.tagName === 'P');
+    expect(attention?.nextElementSibling).toHaveTextContent('1人');
+  });
+
+  it('opens a desk with its work log and lets an admin pause it', async () => {
+    const user = userEvent.setup();
+    renderScreen();
+    await user.click(screen.getByRole('button', { name: 'AI 時期（時期の見張り番）の詳細を開く' }));
+    const sheet = screen.getByRole('dialog');
+    expect(within(sheet).getByRole('heading', { name: '作業記録' })).toBeInTheDocument();
+    expect(within(sheet).getByText('timeout')).toBeInTheDocument();
+    await user.click(within(sheet).getByRole('button', { name: '休止する' }));
+    expect(mocks.updates).toEqual([
+      { organizationId: ORG_ID, employeeId: EMPLOYEE_ID, status: 'paused' },
+    ]);
+  });
+
+  it('hires from a vacant desk with the default name', async () => {
+    const user = userEvent.setup();
+    renderScreen();
+    await user.click(screen.getByRole('button', { name: 'AI評価担当の空席を開く' }));
+    const sheet = screen.getByRole('dialog');
+    expect(within(sheet).getByLabelText('表示名')).toHaveValue('AI 評価');
+    await user.click(within(sheet).getByRole('button', { name: '採用する' }));
+    expect(mocks.hires).toEqual([{ organizationId: ORG_ID, role: 'lead_scorer', name: 'AI 評価' }]);
+  });
+
+  it('shows no actions to someone who cannot manage', async () => {
+    mocks.office = {
+      ...mocks.office,
+      data: { employees: [timingWatcher], canManage: false },
+    };
+    const user = userEvent.setup();
+    renderScreen();
+    await user.click(screen.getByRole('button', { name: 'AI評価担当の空席を開く' }));
+    const sheet = screen.getByRole('dialog');
+    expect(within(sheet).queryByRole('button', { name: '採用する' })).not.toBeInTheDocument();
+    expect(within(sheet).getByText('AI社員の採用と管理は、管理者だけができます。')).toBeInTheDocument();
+  });
+
+  it('tells a viewer without permission instead of drawing the floor', () => {
+    mocks.office = {
+      data: undefined,
+      error: { data: { code: 'FORBIDDEN' } },
+      isLoading: false,
+      dataUpdatedAt: 0,
+    };
+    renderScreen();
+    expect(screen.getByText('AI社員オフィスを見る権限がありません。')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'オフィスの間取り' })).not.toBeInTheDocument();
+  });
+});
