@@ -275,6 +275,26 @@ export function robotPrims(input: {
     );
   }
 
+  // Highlights on the shell: the light comes from the upper left of the screen whichever way the
+  // robot faces, so these are not mirrored (dx * m undoes the mirroring)
+  if (!ghost) {
+    prims.push(
+      stroke(
+        ['M', -13 * m, -40, 'Q', -15.5 * m, -30, -13 * m, -19],
+        '#ffffff',
+        1.6,
+        off ? 0.25 : 0.7
+      ),
+      stroke(
+        ['M', -11 * m, -79.5, 'Q', -4 * m, -82, 4 * m, -81],
+        '#ffffff',
+        1.6,
+        off ? 0.25 : 0.75
+      ),
+      ellipse(-12.5 * m, -74, 1.4, 3, '#ffffff', { op: off ? 0.2 : 0.6 })
+    );
+  }
+
   // The antenna and its status beacon
   prims.push(stroke(['M', 6, -83, 'L', 6, -92], outline, 1.6));
   if (!ghost) {

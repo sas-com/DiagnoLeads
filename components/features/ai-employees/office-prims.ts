@@ -11,6 +11,8 @@ export interface PrimStyle {
   /** Stroke width; a stroke with a width gets round caps and joins (limbs, cables) */
   sw?: number;
   filter?: 'soft' | 'glow';
+  /** Light on the floor: cut off at the edge of the floor */
+  clip?: boolean;
   /** Pulses for people who do not ask for reduced motion */
   pulse?: boolean;
 }
@@ -21,7 +23,20 @@ export type ScenePrim =
   | ({ kind: 'path'; d: string } & PrimStyle);
 
 /** Gradients the drawings refer to by name; the renderer defines them under its own ids */
-export const SCENE_GRADIENTS = ['sky', 'bodyOn', 'headOn', 'bodyOff', 'headOff', 'pool'] as const;
+export const SCENE_GRADIENTS = [
+  'sky',
+  'bodyOn',
+  'headOn',
+  'bodyOff',
+  'headOff',
+  'pool',
+  // Light through the back windows and through the left windows, fading into the room
+  'sun',
+  'sunSide',
+  // The halo of a lamp that is on, and of the sun in the sky
+  'lamp',
+  'sunGlow',
+] as const;
 export type SceneGradient = (typeof SCENE_GRADIENTS)[number];
 
 /** The colour of the beacon on a robot's antenna */

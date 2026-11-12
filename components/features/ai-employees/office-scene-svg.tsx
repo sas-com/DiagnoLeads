@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { useId, useMemo } from 'react';
 import type { SceneGradient, ScenePrim } from './office-prims';
 import { ROBOT_EXTENT, robotPrims } from './office-robot';
+import { FLOOR_OUTLINE } from './office-scene';
 
 /** An id prefix of its own for the gradients and filters of one drawing */
 export function useSceneIds() {
@@ -17,6 +18,9 @@ export function useSceneIds() {
 export function SceneDefs({ prefix, night }: { prefix: string; night: boolean }) {
   return (
     <defs>
+      <clipPath id={`${prefix}-floor`}>
+        <polygon points={FLOOR_OUTLINE} />
+      </clipPath>
       <filter id={`${prefix}-soft`} x="-50%" y="-50%" width="200%" height="200%">
         <feGaussianBlur stdDeviation="4" />
       </filter>
@@ -24,16 +28,17 @@ export function SceneDefs({ prefix, night }: { prefix: string; night: boolean })
         <feGaussianBlur stdDeviation="3" />
       </filter>
       <linearGradient id={`${prefix}-sky`} x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stopColor={night ? '#0b1530' : '#9fd3ff'} />
-        <stop offset="1" stopColor={night ? '#27406e' : '#e9f6ff'} />
+        <stop offset="0" stopColor={night ? '#070d22' : '#7fc4ff'} />
+        <stop offset="1" stopColor={night ? '#22386a' : '#e6f4ff'} />
       </linearGradient>
+      {/* By night the robots stand in lamplight: a cooler, darker shell */}
       <linearGradient id={`${prefix}-bodyOn`} x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0" stopColor="#ffffff" />
-        <stop offset="1" stopColor="#c9d1db" />
+        <stop offset="0" stopColor={night ? '#eef2f8' : '#ffffff'} />
+        <stop offset="1" stopColor={night ? '#8f9bb0' : '#c9d1db'} />
       </linearGradient>
       <radialGradient id={`${prefix}-headOn`} cx=".35" cy=".3" r=".8">
-        <stop offset="0" stopColor="#ffffff" />
-        <stop offset="1" stopColor="#c3ccd7" />
+        <stop offset="0" stopColor={night ? '#f4f7fb' : '#ffffff'} />
+        <stop offset="1" stopColor={night ? '#8f9bb0' : '#c3ccd7'} />
       </radialGradient>
       <linearGradient id={`${prefix}-bodyOff`} x1="0" y1="0" x2="1" y2="1">
         <stop offset="0" stopColor="#b8bec7" />
@@ -44,8 +49,36 @@ export function SceneDefs({ prefix, night }: { prefix: string; night: boolean })
         <stop offset="1" stopColor="#7d8590" />
       </radialGradient>
       <radialGradient id={`${prefix}-pool`} cx=".5" cy=".5" r=".5">
-        <stop offset="0" stopColor="#ffe7a3" stopOpacity={0.55} />
-        <stop offset="1" stopColor="#ffe7a3" stopOpacity={0} />
+        <stop offset="0" stopColor="#ffe0a0" stopOpacity={0.6} />
+        <stop offset="0.6" stopColor="#ffd98a" stopOpacity={0.22} />
+        <stop offset="1" stopColor="#ffd98a" stopOpacity={0} />
+      </radialGradient>
+      {/* Sunlight by day, moonlight by night: strongest at the window, fading into the room */}
+      <linearGradient id={`${prefix}-sun`} x1="1" y1="0" x2="0" y2="1">
+        <stop
+          offset="0"
+          stopColor={night ? '#a9c0ff' : '#fff6da'}
+          stopOpacity={night ? 0.2 : 0.62}
+        />
+        <stop offset="1" stopColor={night ? '#a9c0ff' : '#fff6da'} stopOpacity={0} />
+      </linearGradient>
+      <linearGradient id={`${prefix}-sunSide`} x1="0" y1="0" x2="1" y2="1">
+        <stop
+          offset="0"
+          stopColor={night ? '#a9c0ff' : '#fff6da'}
+          stopOpacity={night ? 0.2 : 0.62}
+        />
+        <stop offset="1" stopColor={night ? '#a9c0ff' : '#fff6da'} stopOpacity={0} />
+      </linearGradient>
+      <radialGradient id={`${prefix}-lamp`} cx=".5" cy=".5" r=".5">
+        <stop offset="0" stopColor="#fff0c2" stopOpacity={0.85} />
+        <stop offset="0.45" stopColor="#ffd98a" stopOpacity={0.3} />
+        <stop offset="1" stopColor="#ffd98a" stopOpacity={0} />
+      </radialGradient>
+      <radialGradient id={`${prefix}-sunGlow`} cx=".5" cy=".5" r=".5">
+        <stop offset="0" stopColor="#fff8dc" stopOpacity={0.95} />
+        <stop offset="0.35" stopColor="#fff3c4" stopOpacity={0.45} />
+        <stop offset="1" stopColor="#fff3c4" stopOpacity={0} />
       </radialGradient>
     </defs>
   );
@@ -65,6 +98,7 @@ export function ScenePrims({ prims, prefix }: { prims: readonly ScenePrim[]; pre
           strokeLinecap: prim.sw ? ('round' as const) : undefined,
           strokeLinejoin: prim.sw ? ('round' as const) : undefined,
           filter: prim.filter ? `url(#${prefix}-${prim.filter})` : undefined,
+          clipPath: prim.clip ? `url(#${prefix}-floor)` : undefined,
           className: prim.pulse ? 'motion-safe:animate-pulse' : undefined,
         };
         switch (prim.kind) {

@@ -16,8 +16,9 @@ import { SceneDefs, ScenePrims, useSceneIds } from './office-scene-svg';
 /**
  * The virtual office (Refs #1101): the whole floor in isometric projection, with its rooms, walls,
  * windows, glass partitions and furniture, and the AI employees as robots where their status takes
- * them (office-map-layout.ts). The drawing (office-scene.ts) comes in a day version and a night
- * version for dark mode. Over each robot (or empty chair) a name tag is the button that opens the
+ * them (office-map-layout.ts). The drawing (office-scene.ts) shows the office by day in the light
+ * theme (sun, blue sky, daylight on the floor) and by night in the dark theme (stars, the moon,
+ * the city's lights, the lamps on). Over each robot (or empty chair) a name tag is the button that opens the
  * desk; its name is its visible text plus the role, the place and today's work for screen readers.
  *
  * The drawing is decoration only (aria-hidden). This screen alone may use gradients, shadows and
@@ -48,7 +49,7 @@ export function OfficeMap({
       <p className="text-sm text-gray-600 md:hidden dark:text-gray-300">{t('floor.scrollHint')}</p>
       {/* The map keeps its proportions; on a narrow screen it scrolls sideways inside its frame */}
       <div className="overflow-x-auto rounded-3xl">
-        <div className="relative min-w-[900px] overflow-hidden rounded-3xl bg-[linear-gradient(180deg,#dbe8f6_0%,#f4f7fb_100%)] shadow-[0_1px_2px_rgba(15,23,42,0.06),0_12px_32px_rgba(15,23,42,0.08)] dark:bg-[linear-gradient(180deg,#0b1222_0%,#1b2740_100%)]">
+        <div className="relative min-w-[900px] overflow-hidden rounded-3xl bg-[linear-gradient(180deg,#a9d3fb_0%,#dcecfb_45%,#f3efe8_100%)] shadow-[0_1px_2px_rgba(15,23,42,0.06),0_12px_32px_rgba(15,23,42,0.08)] dark:bg-[linear-gradient(180deg,#050915_0%,#0d1730_55%,#161d30_100%)]">
           <SceneDrawing statuses={statuses} night={false} className="dark:hidden" />
           <SceneDrawing statuses={statuses} night className="hidden dark:block" />
           {AI_EMPLOYEE_ROLES.map((role) => (

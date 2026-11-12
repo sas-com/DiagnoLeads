@@ -19,6 +19,8 @@ import {
   robotPrims,
 } from '@/components/features/ai-employees/office-robot';
 import {
+  PENDANTS,
+  PENDANT_HEIGHT,
   SCENE_HEIGHT,
   SCENE_WIDTH,
   buildOfficeScene,
@@ -141,14 +143,46 @@ describe('isometric scene', () => {
     expect(busy.labels).toHaveLength(7);
   });
 
-  it('dims the colours at night and turns on the lamps', () => {
+  it('hangs no pendant lamp in front of a place where a robot can be', () => {
+    for (const role of AI_EMPLOYEE_ROLES) {
+      for (const status of DESK_STATUSES) {
+        const spot = spotOf(role, status);
+        const [rx, ry] = project(spot.x, spot.y);
+        for (const [x, y] of PENDANTS) {
+          const [lx, ly] = project(x, y, PENDANT_HEIGHT);
+          // The lamp's shade is about 20 wide and 15 high; the robot stands 105 above its feet
+          const covers = Math.abs(lx - rx) < 32 && ly - ry > -105 && ly - ry < 15;
+          expect(covers, `lamp at ${x},${y} over ${role} when ${status}`).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('keeps the light of the lamps on the floor', () => {
+    const night = buildOfficeScene(allAs('idle'), true, (name) => `url(#${name})`);
+    const pools = night.prims.filter((prim) => prim.fill === 'url(#pool)');
+    expect(pools.length).toBe(PENDANTS.length + 1);
+    expect(pools.every((prim) => prim.clip)).toBe(true);
+  });
+
+  it('shows the day in the light theme and the night in the dark theme', () => {
     const gradient = (name: string) => `url(#${name})`;
     const day = buildOfficeScene(allAs('idle'), false, gradient);
     const night = buildOfficeScene(allAs('idle'), true, gradient);
-    const pools = (scene: typeof day) =>
-      scene.prims.filter((prim) => prim.fill === 'url(#pool)').length;
-    expect(pools(day)).toBe(0);
-    expect(pools(night)).toBeGreaterThan(0);
+    const count = (scene: typeof day, fill: string) =>
+      scene.prims.filter((prim) => prim.fill === fill).length;
+    // By day: the sun in the sky, no lamp on
+    expect(count(day, 'url(#sunGlow)')).toBe(1);
+    expect(count(day, 'url(#pool)')).toBe(0);
+    expect(count(day, 'url(#lamp)')).toBe(0);
+    // By night: no sun, the lamps on with their pools of light, the city's windows lit
+    expect(count(night, 'url(#sunGlow)')).toBe(0);
+    expect(count(night, 'url(#lamp)')).toBeGreaterThan(5);
+    expect(count(night, 'url(#pool)')).toBeGreaterThan(5);
+    expect(count(night, '#ffe2a0')).toBeGreaterThan(count(day, '#ffe2a0'));
+    // Light falls through every window either way (sunlight or moonlight)
+    expect(count(day, 'url(#sun)') + count(day, 'url(#sunSide)')).toBe(5);
+    expect(count(night, 'url(#sun)') + count(night, 'url(#sunSide)')).toBe(5);
   });
 });
 
@@ -193,9 +227,21 @@ describe('robots', () => {
         const left = draw(role, status, 'left');
         const right = draw(role, status, 'right');
         expect(right).toHaveLength(left.length);
+        // The highlight on the helmet stays on the lit side (the screen's left) either way
+        const unmirrored = left.filter((prim, index) => {
+          const other = right[index];
+          return (
+            prim.kind === 'ellipse' &&
+            other.kind === 'ellipse' &&
+            prim.cx !== 0 &&
+            Math.abs(other.cx - prim.cx) < 0.001
+          );
+        });
+        expect(unmirrored.length).toBe(status === 'vacant' ? 0 : 1);
+        expect(unmirrored.every((prim) => prim.fill === '#ffffff')).toBe(true);
         left.forEach((prim, index) => {
           const other = right[index];
-          if (prim.kind === 'ellipse' && other.kind === 'ellipse') {
+          if (prim.kind === 'ellipse' && other.kind === 'ellipse' && !unmirrored.includes(prim)) {
             expect(other.cx).toBeCloseTo(-prim.cx);
             expect(other.cy).toBeCloseTo(prim.cy);
             expect(Math.abs(prim.cx) + prim.rx).toBeLessThanOrEqual(
