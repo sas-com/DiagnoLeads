@@ -1,5 +1,5 @@
 {
-  "id": "0df8643f-f192-48ee-8e78-0f30d8359558",
+  "id": "7681d3ab-e37c-4087-b923-89d52d38dd11",
   "prevId": "268771c6-3fc7-40d6-87c5-0a54cb96f5d7",
   "version": "7",
   "dialect": "postgresql",
@@ -668,6 +668,12 @@
           "name": "employee_id",
           "type": "uuid",
           "primaryKey": false,
+          "notNull": false
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
           "notNull": true
         },
         "trigger": {
@@ -770,7 +776,7 @@
           "tableTo": "ai_employees",
           "columnsFrom": ["employee_id"],
           "columnsTo": ["id"],
-          "onDelete": "cascade",
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -781,6 +787,10 @@
         "ai_employee_runs_trigger_check": {
           "name": "ai_employee_runs_trigger_check",
           "value": "\"ai_employee_runs\".\"trigger\" IN ('schedule', 'manual')"
+        },
+        "ai_employee_runs_result_code_check": {
+          "name": "ai_employee_runs_result_code_check",
+          "value": "\"ai_employee_runs\".\"result_code\" IS NULL OR \"ai_employee_runs\".\"result_code\" ~ '^[a-z_]{1,40}$'"
         },
         "ai_employee_runs_status_check": {
           "name": "ai_employee_runs_status_check",

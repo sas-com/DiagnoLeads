@@ -1,6 +1,7 @@
 /**
- * The AI office (#1101): the figures over the floor, a desk per role in its room (vacant ones
- * included), the details of a desk, and who sees the hiring and managing actions (real next-intl
+ * The AI office (#1101): the figures over the floor, a desk per role in its room drawn as a scene
+ * with a robot (vacant ones included), desks named by their visible text, the details of a desk
+ * with the focus on its title, and who sees the hiring and managing actions (real next-intl
  * messages; tRPC mocked)
  */
 import { OfficeScreen } from '@/components/features/ai-employees/office-screen';
@@ -27,14 +28,16 @@ function mutation(target: unknown[]) {
     isPending: false,
     mutate: (input: unknown) => {
       target.push(input);
-      options.onSuccess?.({ id: EMPLOYEE_ID, name: 'AI 時期' }, input);
+      options.onSuccess?.({ id: EMPLOYEE_ID, name: 'AI時期' }, input);
     },
   });
 }
 
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
-    useUtils: () => ({ aiEmployees: { office: { invalidate: vi.fn() } } }),
+    useUtils: () => ({
+      aiEmployees: { office: { invalidate: vi.fn() }, runs: { invalidate: vi.fn() } },
+    }),
     aiEmployees: {
       office: { useQuery: () => mocks.office },
       runs: { useQuery: () => mocks.runs },
@@ -62,7 +65,7 @@ function renderScreen() {
 const timingWatcher = {
   id: EMPLOYEE_ID,
   role: 'timing_watcher',
-  name: 'AI 時期',
+  name: 'AI時期',
   status: 'active',
   createdAt: new Date('2026-11-01T00:00:00Z'),
   deskStatus: 'attention',
@@ -96,14 +99,14 @@ describe('OfficeScreen', () => {
     renderScreen();
     const floor = screen.getByRole('region', { name: 'オフィスの間取り' });
     const planning = within(floor).getByRole('region', { name: '企画室' });
-    expect(
-      within(planning).getByRole('button', { name: 'AI 時期（時期の見張り番）の詳細を開く' })
-    ).toBeInTheDocument();
-    expect(within(planning).getByText('要確認')).toBeInTheDocument();
-    expect(within(planning).getByText(/今日 5件/)).toBeInTheDocument();
+    // The desk's name is what it shows: the employee, the role, the status and today's work
+    const desk = within(planning).getByRole('button', { name: /^AI時期/ });
+    expect(desk).toHaveAccessibleName(/時期の見張り番.*要確認.*今日 5件.*詳細を開く/);
+    // The robot is a drawing only
+    expect(desk.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
 
     const sales = within(floor).getByRole('region', { name: '営業フロア' });
-    expect(within(sales).getByRole('button', { name: '追客担当の空席を開く' })).toBeInTheDocument();
+    expect(within(sales).getByRole('button', { name: /^追客担当.*空席.*採用する/ })).toBeInTheDocument();
     const analysis = within(floor).getByRole('region', { name: '分析室' });
     expect(within(analysis).getByText('空席')).toBeInTheDocument();
   });
@@ -115,13 +118,24 @@ describe('OfficeScreen', () => {
     // The status of the desk says 要確認 too: take the figure's label (a <p>)
     const attention = screen.getAllByText('要確認').find((node) => node.tagName === 'P');
     expect(attention?.nextElementSibling).toHaveTextContent('1人');
+    // What needs a look comes first
+    const labels = screen
+      .getByRole('region', { name: '今日のまとめ' })
+      .querySelectorAll('p.text-sm');
+    expect(Array.from(labels, (node) => node.textContent)).toEqual([
+      '要確認',
+      '作業中',
+      '今日の処理件数',
+      '在籍',
+    ]);
   });
 
-  it('opens a desk with its work log and lets an admin pause it', async () => {
+  it('opens a desk with the focus on its title, its work log, and lets an admin pause it', async () => {
     const user = userEvent.setup();
     renderScreen();
-    await user.click(screen.getByRole('button', { name: 'AI 時期（時期の見張り番）の詳細を開く' }));
+    await user.click(screen.getByRole('button', { name: /^AI時期/ }));
     const sheet = screen.getByRole('dialog');
+    expect(within(sheet).getByRole('heading', { name: 'AI時期' })).toHaveFocus();
     expect(within(sheet).getByRole('heading', { name: '作業記録' })).toBeInTheDocument();
     expect(within(sheet).getByText('timeout')).toBeInTheDocument();
     await user.click(within(sheet).getByRole('button', { name: '休止する' }));
@@ -130,14 +144,27 @@ describe('OfficeScreen', () => {
     ]);
   });
 
+  it('asks before dismissing, in a red button of its own', async () => {
+    const user = userEvent.setup();
+    renderScreen();
+    await user.click(screen.getByRole('button', { name: /^AI時期/ }));
+    const sheet = screen.getByRole('dialog');
+    await user.click(within(sheet).getByRole('button', { name: '解雇する' }));
+    expect(mocks.dismissals).toEqual([]);
+    const confirm = screen.getByRole('alertdialog');
+    expect(within(confirm).getByRole('button', { name: 'キャンセル' })).toBeInTheDocument();
+    await user.click(within(confirm).getByRole('button', { name: '解雇する' }));
+    expect(mocks.dismissals).toEqual([{ organizationId: ORG_ID, employeeId: EMPLOYEE_ID }]);
+  });
+
   it('hires from a vacant desk with the default name', async () => {
     const user = userEvent.setup();
     renderScreen();
-    await user.click(screen.getByRole('button', { name: 'AI評価担当の空席を開く' }));
+    await user.click(screen.getByRole('button', { name: /^評価担当/ }));
     const sheet = screen.getByRole('dialog');
-    expect(within(sheet).getByLabelText('表示名')).toHaveValue('AI 評価');
+    expect(within(sheet).getByLabelText('表示名')).toHaveValue('AI評価');
     await user.click(within(sheet).getByRole('button', { name: '採用する' }));
-    expect(mocks.hires).toEqual([{ organizationId: ORG_ID, role: 'lead_scorer', name: 'AI 評価' }]);
+    expect(mocks.hires).toEqual([{ organizationId: ORG_ID, role: 'lead_scorer', name: 'AI評価' }]);
   });
 
   it('shows no actions to someone who cannot manage', async () => {
@@ -147,7 +174,8 @@ describe('OfficeScreen', () => {
     };
     const user = userEvent.setup();
     renderScreen();
-    await user.click(screen.getByRole('button', { name: 'AI評価担当の空席を開く' }));
+    expect(screen.getByRole('button', { name: /^評価担当.*管理者が採用できます/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^評価担当/ }));
     const sheet = screen.getByRole('dialog');
     expect(within(sheet).queryByRole('button', { name: '採用する' })).not.toBeInTheDocument();
     expect(within(sheet).getByText('AI社員の採用と管理は、管理者だけができます。')).toBeInTheDocument();

@@ -1,18 +1,19 @@
 {
   "aiOffice": {
     "title": "AI社員オフィス",
-    "description": "AI社員の席と働きぶりを、オフィスの間取りで見ます。席を押すと、作業記録と操作が出ます。",
+    "description": "AI社員の席と働きぶりを、オフィスの形で見ます。AI社員はロボットの姿で席にいます。席を押すと、詳細と作業記録が出ます。",
     "forbidden": "AI社員オフィスを見る権限がありません。",
     "loadError": "AI社員オフィスを読み込めませんでした。時間をおいて開き直してください。",
     "noOrganization": "組織を選ぶと、AI社員オフィスが出ます。",
-    "updatedAt": "{time} 時点",
+    "updatedAt": "{time}時点",
     "summary": {
       "hired": "在籍",
       "working": "作業中",
       "processedToday": "今日の処理件数",
       "attention": "要確認",
       "people": "{count}人",
-      "items": "{count}件"
+      "items": "{count}件",
+      "heading": "今日のまとめ"
     },
     "floor": {
       "label": "オフィスの間取り",
@@ -27,17 +28,17 @@
       "follow_up_keeper": {
         "title": "追客担当",
         "description": "期限が近い・過ぎた次の行動を毎朝数えて、取りこぼしがないかを確かめます。リードは書き換えません。",
-        "defaultName": "AI 追客"
+        "defaultName": "AI追客"
       },
       "lead_scorer": {
-        "title": "AI評価担当",
+        "title": "評価担当",
         "description": "評価のない新しいリードを Claude で評価し、点数を付けます。氏名・メールなど個人を指す項目は送りません。",
-        "defaultName": "AI 評価"
+        "defaultName": "AI評価"
       },
       "timing_watcher": {
         "title": "時期の見張り番",
         "description": "ヒアリングと診断の回答から、リードの動くべき時期を毎朝計算し直します。",
-        "defaultName": "AI 時期"
+        "defaultName": "AI時期"
       }
     },
     "status": {
@@ -52,23 +53,22 @@
       "working": "いま作業しています。",
       "attention": "最後の作業が失敗したか、終わっていません。作業記録を確かめてください。",
       "idle": "次の作業を待っています。",
-      "training": "この役割の仕事は準備中です。準備ができると、自動で働き始めます。",
+      "training": "この役割の仕事は準備中のため、まだ働きません。準備ができると、自動で働き始めます。",
       "paused": "休止中は働きません。再開すると、次の作業から働きます。",
       "vacant": "この役割の AI社員はまだいません。"
     },
     "desk": {
-      "open": "{name}（{role}）の詳細を開く",
-      "openVacant": "{role}の空席を開く",
       "processedToday": "今日 {count}件",
       "lastRun": "最後の作業 {time}",
       "noRun": "作業の記録はまだありません",
-      "hire": "採用する"
+      "hire": "採用する",
+      "openDetails": "詳細を開く",
+      "hireByAdmin": "管理者が採用できます"
     },
     "sheet": {
       "vacantTitle": "{role}の空席",
       "role": "役割",
       "room": "部屋",
-      "status": "状態",
       "hiredAt": "採用した日",
       "name": "表示名",
       "hireSubmit": "採用する",
@@ -78,8 +78,7 @@
       "resume": "再開する",
       "dismiss": "解雇する",
       "dismissTitle": "{name}を解雇しますか",
-      "dismissDescription": "作業記録も消え、元に戻せません。あとで同じ役割の AI社員を採用し直せます。",
-      "cancel": "やめる",
+      "dismissDescription": "この席は空席に戻り、元に戻せません。作業記録は残ります。あとで同じ役割の AI社員を採用し直せます。",
       "readOnly": "AI社員の採用と管理は、管理者だけができます。",
       "runs": "作業記録",
       "runsCaption": "新しい順に最大20件",
@@ -100,16 +99,20 @@
         "running": "作業中",
         "succeeded": "成功",
         "failed": "失敗"
-      }
+      },
+      "danger": "元に戻せない操作",
+      "dismissNote": "解雇すると、この席は空席に戻ります。作業記録は記録として残ります。"
     },
     "toast": {
       "hired": "{name}を採用しました",
-      "renamed": "名前を変えました",
+      "renamed": "{name}に名前を変えました",
       "paused": "{name}を休止しました",
       "resumed": "{name}を再開しました",
       "dismissed": "{name}を解雇しました",
       "conflict": "この役割には、すでに AI社員がいます",
-      "error": "保存できませんでした。時間をおいてやり直してください"
-    }
+      "error": "保存できませんでした。時間をおいてやり直してください",
+      "actionError": "操作できませんでした。時間をおいてやり直してください"
+    },
+    "loading": "読み込み中"
   }
 }

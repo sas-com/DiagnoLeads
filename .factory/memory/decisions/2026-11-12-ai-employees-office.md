@@ -19,6 +19,9 @@ paths: ["lib/features/ai-employees/**", "components/features/ai-employees/**", "
 - **ルール**:
   - 役割はコードのカタログ（`lib/features/ai-employees/types/roles.ts`）で決め、1つの組織に1つの役割につき1人（`ai_employees` の一意の索引）。DB には採用したことだけを置く
   - 役割の仕事がまだ載っていない間は `workIssue` に Issue の番号を書き、画面では「研修中」として働かせない。仕事を載せる PR で `null` にする
-  - 作業記録（`ai_employee_runs`）には件数と結果のコードだけを書き、リード・個人・プロンプト・自由な文を書かない（組織の全員が見るため）
+  - 作業記録（`ai_employee_runs`）には件数と結果のコードだけを書き、リード・個人・プロンプト・自由な文を書かない（組織の全員が見るため）。結果のコードは DB の CHECK で `^[a-z_]{1,40}$` に限る（エラー文にはリードの値が入りうるため。PR #1105 のセキュリティのレビュー）
+  - 解雇しても作業記録は消さない。作業記録に役割（`role`）を持たせ、`employee_id` は解雇で NULL にする（`ON DELETE SET NULL`）。誤動作に気づいて解雇したあとも「いつ・何件動いたか」を追えるようにするため（PR #1105 のアーキテクチャのレビュー）
+  - AI社員の実行は、待機も複数のステップもない1回で終わるまとめ処理なので、ワークフローのランナー（`flow_runs`、決定 `2026-10-24-workflow-runner-self-built`）には載せず、`ai_employee_runs` に置く（ランナーの決定のルール「`after()` や既存の定期実行で足りる処理は載せ替えない」と同じ扱い）。#301 の滞留の検知ができたら、共有するかを決め直す
   - 見る権限は `read Analytics`（メンバーと親組織の閲覧者も見られる）、採用・名前の変更・休止・解雇は `update Settings`（管理者）。新しい CASL の対象は足さない
-  - Claude を呼ぶ役割（AI評価担当）は、決定 `2026-10-24-ai-call-rate-limits` と `2026-10-25-ai-no-personal-data` に従い、マージ前に `security-specialist` のレビューを通す（#1103）
+  - オフィスの画面は、オーナーの指示（2026-11-12）で、部屋（壁・窓・床・机・観葉植物）を描いた絵にし、AI社員をロボットの姿で描く（`components/features/ai-employees/office-illustration.tsx`）。決定 `2026-10-24-admin-dads` の「装飾を控える」の、この絵に限った例外とする。守ること：塗りは単色でグラデーション・影・発光を使わない、絵は `aria-hidden` にして状態は必ず文字とアイコンでも書く、動きは `motion-safe` の明滅だけ、ダークモードの色を持つ
+  - Claude を呼ぶ役割（評価担当）は、決定 `2026-10-24-ai-call-rate-limits` と `2026-10-25-ai-no-personal-data` に従い、マージ前に `security-specialist` のレビューを通す（#1103）

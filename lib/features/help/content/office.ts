@@ -5,7 +5,7 @@ export const officeArticle: HelpArticle = {
   locale: 'ja',
   title: 'AI社員オフィス',
   summary:
-    '組織で採用した AI社員の席と働きぶりを、オフィスの間取りで見ます。管理者は空席から AI社員を採用し、名前の変更・休止・解雇ができます。',
+    '組織で採用した AI社員の席と働きぶりを、オフィスの形で見ます。AI社員はロボットの姿で席にいます。管理者は空席から AI社員を採用し、名前の変更・休止・解雇ができます。',
   routes: ['/office'],
   reviewedAt: '2026-11-12',
   blocks: [
@@ -13,7 +13,7 @@ export const officeArticle: HelpArticle = {
     {
       type: 'p',
       content:
-        '営業フロア・分析室・企画室の3つの部屋に、役割ごとの席があります。1つの役割に採用できる AI社員は1人です。点線の席は空席です。',
+        '営業フロア・分析室・企画室の3つの部屋に、役割ごとの席があります。1つの役割に採用できる AI社員は1人です。点線の席は空席で、椅子だけが置かれています。ロボットの姿（アンテナの光・帽子・赤い吹き出しなど）は状態に合わせて変わり、席の下には状態を文字でも書いています。',
     },
     {
       type: 'table',
@@ -62,25 +62,36 @@ export const officeArticle: HelpArticle = {
         ],
       ],
     },
+    {
+      type: 'note',
+      tone: 'tip',
+      content:
+        '仕事の準備がまだの役割は、採用すると研修中になり、まだ働きません。準備ができると、自動で働き始めます。',
+    },
     { type: 'h2', id: 'manage', text: '名前の変更・休止・解雇' },
     {
       type: 'p',
       content: [
-        { type: 'text', text: 'AI社員の席を押すと、詳細と作業記録が出ます。' },
+        {
+          type: 'text',
+          text: 'AI社員の席を押すと、状態の説明・役割・作業記録が出ます。その下の管理の欄から',
+        },
         { type: 'ui', text: '名前を変える' },
         { type: 'text', text: '・' },
         { type: 'ui', text: '休止する' },
         { type: 'text', text: '（休止中は' },
         { type: 'ui', text: '再開する' },
-        { type: 'text', text: '）・' },
+        { type: 'text', text: '）' },
+        { type: 'text', text: 'を操作します。いちばん下の「元に戻せない操作」の' },
         { type: 'ui', text: '解雇する' },
-        { type: 'text', text: 'から操作します。' },
+        { type: 'text', text: 'は、確認のあとで実行されます。' },
       ],
     },
     {
       type: 'note',
       tone: 'caution',
-      content: '解雇すると、その AI社員の作業記録も消え、元に戻せません。',
+      content:
+        '解雇すると席は空席に戻り、元に戻せません。作業記録は、いつ・何件動いたかの記録として残ります（オフィスの画面には出なくなります）。',
     },
     {
       type: 'roles',

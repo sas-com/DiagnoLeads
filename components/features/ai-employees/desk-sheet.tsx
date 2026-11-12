@@ -2,16 +2,15 @@
 
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -30,6 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import type { DeskStatus } from '@/lib/features/ai-employees/office';
 import type { OfficeEmployee } from '@/lib/features/ai-employees/service';
 import {
   AI_EMPLOYEE_ROLE_DEFINITIONS,
@@ -39,13 +39,28 @@ import { AI_EMPLOYEE_NAME_MAX_LENGTH } from '@/lib/features/ai-employees/types/s
 import { trpc } from '@/lib/trpc/client';
 import { Loader2 } from 'lucide-react';
 import { useFormatter, useTranslations } from 'next-intl';
-import { type FormEvent, useEffect, useId, useState } from 'react';
+import { type FormEvent, type RefObject, useEffect, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { DeskAvatar, DeskStatusLabel } from './desk-status';
+import { DeskStatusLabel } from './desk-status';
+import { RobotAvatar } from './office-illustration';
+
+/** The work log is read again as often as the office, so both tell the same story */
+export const OFFICE_REFRESH_MS = 60 * 1000;
+
+const STATUS_CALLOUT: Record<DeskStatus, 'blue' | 'yellow' | 'red' | 'green'> = {
+  working: 'green',
+  attention: 'red',
+  idle: 'blue',
+  training: 'blue',
+  paused: 'yellow',
+  vacant: 'blue',
+};
 
 /**
- * The details of one desk (Refs #1101): the role, the status, the work log, and for admins the
- * actions (hire on a vacant desk; rename, pause or resume, dismiss).
+ * The details of one desk (Refs #1101), in reading order: the robot with its name and status,
+ * what the status means, what the role does, the work log, then for admins the actions (hire on
+ * a vacant desk; rename, pause or resume; and apart, dismiss). The focus goes to the title when
+ * the sheet opens, and back to the desk that opened it when it closes.
  */
 export function DeskSheet({
   organizationId,
@@ -54,6 +69,7 @@ export function DeskSheet({
   canManage,
   open,
   onOpenChange,
+  returnFocusTo,
 }: {
   organizationId: string;
   role: AiEmployeeRole | null;
@@ -61,30 +77,48 @@ export function DeskSheet({
   canManage: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** The desk button that opened the sheet */
+  returnFocusTo: RefObject<HTMLElement | null>;
 }) {
   const t = useTranslations('aiOffice');
   const format = useFormatter();
+  const titleRef = useRef<HTMLHeadingElement>(null);
   if (!role) return null;
-  const status = employee?.deskStatus ?? 'vacant';
+  const status: DeskStatus = employee?.deskStatus ?? 'vacant';
   const roleTitle = t(`roles.${role}.title`);
+  const focusTitle = () => titleRef.current?.focus();
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
-        <SheetHeader>
+      <SheetContent
+        className="w-full overflow-y-auto sm:max-w-lg"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          focusTitle();
+        }}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          returnFocusTo.current?.focus();
+        }}
+      >
+        <SheetHeader className="space-y-2 pr-8 text-left">
           <div className="flex items-center gap-3">
-            <DeskAvatar role={role} status={status} size="lg" />
+            <RobotAvatar status={status} />
             <div className="min-w-0">
-              <SheetTitle className="truncate">
+              <SheetTitle ref={titleRef} tabIndex={-1} className="break-words text-xl font-bold">
                 {employee ? employee.name : t('sheet.vacantTitle', { role: roleTitle })}
               </SheetTitle>
               <DeskStatusLabel status={status} className="mt-1" />
             </div>
           </div>
-          <SheetDescription>{t(`roles.${role}.description`)}</SheetDescription>
+          <SheetDescription className="text-base text-gray-700 dark:text-gray-200">
+            {t(`roles.${role}.description`)}
+          </SheetDescription>
         </SheetHeader>
 
         <div className="mt-6 space-y-8">
+          <Callout color={STATUS_CALLOUT[status]} title={t(`statusHint.${status}`)} />
+
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-base">
             <dt className="text-gray-600 dark:text-gray-300">{t('sheet.role')}</dt>
             <dd className="text-gray-900 dark:text-gray-50">{roleTitle}</dd>
@@ -100,16 +134,13 @@ export function DeskSheet({
                 </dd>
               </>
             )}
-            <dt className="text-gray-600 dark:text-gray-300">{t('sheet.status')}</dt>
-            <dd className="text-gray-900 dark:text-gray-50">{t(`statusHint.${status}`)}</dd>
           </dl>
 
-          {!employee &&
-            (canManage ? (
-              <HireForm organizationId={organizationId} role={role} />
-            ) : (
-              <p className="text-base text-gray-700 dark:text-gray-200">{t('sheet.readOnly')}</p>
-            ))}
+          {!employee && canManage && (
+            <HireForm organizationId={organizationId} role={role} onHired={focusTitle} />
+          )}
+
+          {employee && <RunLog organizationId={organizationId} employeeId={employee.id} />}
 
           {employee && canManage && (
             <ManageSection
@@ -119,14 +150,24 @@ export function DeskSheet({
             />
           )}
 
-          {employee && <RunLog organizationId={organizationId} employeeId={employee.id} />}
+          {!canManage && (
+            <p className="text-base text-gray-700 dark:text-gray-200">{t('sheet.readOnly')}</p>
+          )}
         </div>
       </SheetContent>
     </Sheet>
   );
 }
 
-function HireForm({ organizationId, role }: { organizationId: string; role: AiEmployeeRole }) {
+function HireForm({
+  organizationId,
+  role,
+  onHired,
+}: {
+  organizationId: string;
+  role: AiEmployeeRole;
+  onHired: () => void;
+}) {
   const t = useTranslations('aiOffice');
   const utils = trpc.useUtils();
   const inputId = useId();
@@ -135,6 +176,8 @@ function HireForm({ organizationId, role }: { organizationId: string; role: AiEm
     onSuccess: async () => {
       toast.success(t('toast.hired', { name: name.trim() }));
       await utils.aiEmployees.office.invalidate({ organizationId });
+      // The form goes away with the button that had the focus
+      onHired();
     },
     onError: (error) =>
       toast.error(error.data?.code === 'CONFLICT' ? t('toast.conflict') : t('toast.error')),
@@ -152,6 +195,7 @@ function HireForm({ organizationId, role }: { organizationId: string; role: AiEm
         <Label htmlFor={inputId}>{t('sheet.name')}</Label>
         <Input
           id={inputId}
+          className="min-h-11"
           value={name}
           maxLength={AI_EMPLOYEE_NAME_MAX_LENGTH}
           required
@@ -176,29 +220,35 @@ function ManageSection({
   onDismissed: () => void;
 }) {
   const t = useTranslations('aiOffice');
+  const tCommon = useTranslations('common');
   const utils = trpc.useUtils();
   const inputId = useId();
   const [name, setName] = useState(employee.name);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   useEffect(() => setName(employee.name), [employee.name]);
 
-  const refresh = () => utils.aiEmployees.office.invalidate({ organizationId });
+  const refresh = async () => {
+    await utils.aiEmployees.office.invalidate({ organizationId });
+    await utils.aiEmployees.runs.invalidate({ organizationId });
+  };
   const update = trpc.aiEmployees.update.useMutation({
     onSuccess: async (updated, variables) => {
       if (variables.status === 'paused') toast.success(t('toast.paused', { name: updated.name }));
       else if (variables.status === 'active') {
         toast.success(t('toast.resumed', { name: updated.name }));
-      } else toast.success(t('toast.renamed'));
+      } else toast.success(t('toast.renamed', { name: updated.name }));
       await refresh();
     },
-    onError: () => toast.error(t('toast.error')),
+    onError: () => toast.error(t('toast.actionError')),
   });
   const dismiss = trpc.aiEmployees.dismiss.useMutation({
     onSuccess: async () => {
       toast.success(t('toast.dismissed', { name: employee.name }));
+      setConfirmOpen(false);
       onDismissed();
       await refresh();
     },
-    onError: () => toast.error(t('toast.error')),
+    onError: () => toast.error(t('toast.actionError')),
   });
 
   const rename = (event: FormEvent) => {
@@ -210,31 +260,32 @@ function ManageSection({
   const paused = employee.status === 'paused';
 
   return (
-    <section className="space-y-4" aria-labelledby={`${inputId}-manage`}>
-      <h3 id={`${inputId}-manage`} className="text-lg font-bold text-gray-900 dark:text-gray-50">
-        {t('sheet.manage')}
-      </h3>
-      <form onSubmit={rename} className="space-y-1.5">
-        <Label htmlFor={inputId}>{t('sheet.name')}</Label>
-        <div className="flex gap-2">
-          <Input
-            id={inputId}
-            value={name}
-            maxLength={AI_EMPLOYEE_NAME_MAX_LENGTH}
-            required
-            onChange={(event) => setName(event.target.value)}
-          />
-          <Button
-            type="submit"
-            variant="outline"
-            className="min-h-11 shrink-0"
-            disabled={update.isPending || !name.trim() || name.trim() === employee.name}
-          >
-            {t('sheet.rename')}
-          </Button>
-        </div>
-      </form>
-      <div className="flex flex-wrap gap-2">
+    <>
+      <section className="space-y-4" aria-labelledby={`${inputId}-manage`}>
+        <h3 id={`${inputId}-manage`} className="text-lg font-bold text-gray-900 dark:text-gray-50">
+          {t('sheet.manage')}
+        </h3>
+        <form onSubmit={rename} className="space-y-1.5">
+          <Label htmlFor={inputId}>{t('sheet.name')}</Label>
+          <div className="flex gap-2">
+            <Input
+              id={inputId}
+              className="min-h-11"
+              value={name}
+              maxLength={AI_EMPLOYEE_NAME_MAX_LENGTH}
+              required
+              onChange={(event) => setName(event.target.value)}
+            />
+            <Button
+              type="submit"
+              variant="outline"
+              className="min-h-11 shrink-0"
+              disabled={update.isPending || !name.trim() || name.trim() === employee.name}
+            >
+              {t('sheet.rename')}
+            </Button>
+          </div>
+        </form>
         <Button
           type="button"
           variant="outline"
@@ -250,17 +301,26 @@ function ManageSection({
         >
           {paused ? t('sheet.resume') : t('sheet.pause')}
         </Button>
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-11 text-[var(--color-semantic-error-1)] dark:text-red-300"
-              disabled={dismiss.isPending}
-            >
-              {t('sheet.dismiss')}
-            </Button>
-          </AlertDialogTrigger>
+      </section>
+
+      {/* What cannot be undone, kept apart at the end */}
+      <section
+        className="space-y-3 border-t border-gray-300 pt-6 dark:border-gray-700"
+        aria-labelledby={`${inputId}-danger`}
+      >
+        <h3 id={`${inputId}-danger`} className="text-lg font-bold text-gray-900 dark:text-gray-50">
+          {t('sheet.danger')}
+        </h3>
+        <p className="text-base text-gray-700 dark:text-gray-200">{t('sheet.dismissNote')}</p>
+        <Button
+          type="button"
+          variant="outline"
+          className="min-h-11 border-[var(--color-semantic-error-1)] text-[var(--color-semantic-error-1)] dark:border-red-400 dark:text-red-300"
+          onClick={() => setConfirmOpen(true)}
+        >
+          {t('sheet.dismiss')}
+        </Button>
+        <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>
@@ -269,49 +329,63 @@ function ManageSection({
               <AlertDialogDescription>{t('sheet.dismissDescription')}</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>{t('sheet.cancel')}</AlertDialogCancel>
-              <AlertDialogAction
+              <AlertDialogCancel className="min-h-11 md:min-h-10">
+                {tCommon('cancel')}
+              </AlertDialogCancel>
+              <Button
+                type="button"
+                className="min-h-11 bg-red-700 text-white hover:bg-red-800 md:min-h-10 dark:bg-red-700 dark:hover:bg-red-800"
+                disabled={dismiss.isPending}
                 onClick={() => dismiss.mutate({ organizationId, employeeId: employee.id })}
               >
+                {dismiss.isPending && (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                )}
                 {t('sheet.dismiss')}
-              </AlertDialogAction>
+              </Button>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </div>
-    </section>
+      </section>
+    </>
   );
 }
 
 function RunLog({ organizationId, employeeId }: { organizationId: string; employeeId: string }) {
-  const t = useTranslations('aiOffice.sheet');
+  const t = useTranslations('aiOffice');
   const format = useFormatter();
-  const runs = trpc.aiEmployees.runs.useQuery({ organizationId, employeeId });
+  const runs = trpc.aiEmployees.runs.useQuery(
+    { organizationId, employeeId },
+    { refetchInterval: OFFICE_REFRESH_MS }
+  );
   const headingId = useId();
 
   return (
     <section className="space-y-3" aria-labelledby={headingId}>
       <h3 id={headingId} className="text-lg font-bold text-gray-900 dark:text-gray-50">
-        {t('runs')}
+        {t('sheet.runs')}
       </h3>
       {runs.isLoading ? (
-        <Loader2 className="h-5 w-5 animate-spin text-gray-500" aria-hidden="true" />
+        <output className="block">
+          <Loader2 className="h-5 w-5 animate-spin text-gray-500" aria-hidden="true" />
+          <span className="sr-only">{t('loading')}</span>
+        </output>
       ) : runs.error ? (
         <p className="text-base text-[var(--color-semantic-error-1)] dark:text-red-300">
-          {t('runsError')}
+          {t('sheet.runsError')}
         </p>
       ) : !runs.data || runs.data.length === 0 ? (
-        <p className="text-base text-gray-700 dark:text-gray-200">{t('runsEmpty')}</p>
+        <p className="text-base text-gray-700 dark:text-gray-200">{t('sheet.runsEmpty')}</p>
       ) : (
         <Table>
-          <TableCaption>{t('runsCaption')}</TableCaption>
+          <TableCaption>{t('sheet.runsCaption')}</TableCaption>
           <TableHeader>
             <TableRow>
-              <TableHead>{t('columns.startedAt')}</TableHead>
-              <TableHead>{t('columns.trigger')}</TableHead>
-              <TableHead>{t('columns.status')}</TableHead>
-              <TableHead className="text-right">{t('columns.processed')}</TableHead>
-              <TableHead>{t('columns.resultCode')}</TableHead>
+              <TableHead>{t('sheet.columns.startedAt')}</TableHead>
+              <TableHead>{t('sheet.columns.trigger')}</TableHead>
+              <TableHead>{t('sheet.columns.status')}</TableHead>
+              <TableHead className="text-right">{t('sheet.columns.processed')}</TableHead>
+              <TableHead>{t('sheet.columns.resultCode')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -325,8 +399,8 @@ function RunLog({ organizationId, employeeId }: { organizationId: string; employ
                     minute: '2-digit',
                   })}
                 </TableCell>
-                <TableCell>{t(`trigger.${run.trigger}`)}</TableCell>
-                <TableCell>{t(`runStatus.${run.status}`)}</TableCell>
+                <TableCell>{t(`sheet.trigger.${run.trigger}`)}</TableCell>
+                <TableCell>{t(`sheet.runStatus.${run.status}`)}</TableCell>
                 <TableCell className="text-right tabular-nums">{run.processedCount}</TableCell>
                 <TableCell className="font-mono text-sm">{run.resultCode ?? '—'}</TableCell>
               </TableRow>

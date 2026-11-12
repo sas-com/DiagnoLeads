@@ -1,7 +1,8 @@
 /**
  * AI employees (#1101) on a real PostgreSQL: who may hire and manage them, one per role, the
  * office read from the runs, and the isolation between organizations (an admin of B passes the
- * ids of A's employee: NOT_FOUND, and A's rows stay as they were). All values are fictional.
+ * ids of A's employee: NOT_FOUND, and A's rows stay as they were), and the runs kept after a
+ * dismissal. All values are fictional.
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/dl_test \
@@ -128,6 +129,7 @@ describe.skipIf(!url)('AI employees: permissions and organization isolation (Pos
       {
         organizationId: orgA,
         employeeId: employeeA,
+        role: 'timing_watcher',
         trigger: 'schedule',
         status: 'succeeded',
         startedAt: yesterday,
@@ -137,6 +139,7 @@ describe.skipIf(!url)('AI employees: permissions and organization isolation (Pos
       {
         organizationId: orgA,
         employeeId: employeeA,
+        role: 'timing_watcher',
         trigger: 'manual',
         status: 'succeeded',
         startedAt: new Date(now.getTime() - 2000),
@@ -146,6 +149,7 @@ describe.skipIf(!url)('AI employees: permissions and organization isolation (Pos
       {
         organizationId: orgA,
         employeeId: employeeA,
+        role: 'timing_watcher',
         trigger: 'manual',
         status: 'failed',
         startedAt: new Date(now.getTime() - 500),
@@ -193,22 +197,28 @@ describe.skipIf(!url)('AI employees: permissions and organization isolation (Pos
     );
   });
 
-  it('renames, pauses, resumes and dismisses with its runs', async () => {
+  it('renames, pauses, resumes and dismisses, keeping its runs on record', async () => {
     const scope = { organizationId: orgA, employeeId: employeeA };
     await expect(adminA.aiEmployees.update(scope)).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     await adminA.aiEmployees.update({ ...scope, name: 'AI 見張り' });
     await adminA.aiEmployees.update({ ...scope, status: 'paused' });
     expect(await rowOfA()).toEqual({ name: 'AI 見張り', status: 'paused' });
-    const office = await adminA.aiEmployees.office({ organizationId: orgA });
-    expect(office.employees[0].deskStatus).toBe('paused');
+    const paused = await adminA.aiEmployees.office({ organizationId: orgA });
+    expect(paused.employees[0].deskStatus).toBe('paused');
     await adminA.aiEmployees.update({ ...scope, status: 'active' });
 
     await adminA.aiEmployees.dismiss(scope);
     expect(await rowOfA()).toBeUndefined();
+    // The runs stay with their role, no longer tied to the employee
     const runs = await pg
-      .select({ id: aiEmployeeRuns.id })
+      .select({ employeeId: aiEmployeeRuns.employeeId, role: aiEmployeeRuns.role })
       .from(aiEmployeeRuns)
-      .where(eq(aiEmployeeRuns.employeeId, employeeA));
-    expect(runs).toHaveLength(0);
+      .where(eq(aiEmployeeRuns.organizationId, orgA));
+    expect(runs).toHaveLength(3);
+    expect(runs.every((run) => run.employeeId === null && run.role === 'timing_watcher')).toBe(
+      true
+    );
+    const office = await adminA.aiEmployees.office({ organizationId: orgA });
+    expect(office.employees).toEqual([]);
   });
 });

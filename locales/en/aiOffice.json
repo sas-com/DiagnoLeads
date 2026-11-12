@@ -1,7 +1,7 @@
 {
   "aiOffice": {
     "title": "AI office",
-    "description": "See where the AI employees sit and how they work, on the floor plan of an office. Open a desk for its work log and actions.",
+    "description": "See where the AI employees sit and how they work, in the shape of an office. Each AI employee is a robot at its desk. Open a desk for its details and work log.",
     "forbidden": "You do not have permission to view the AI office.",
     "loadError": "The AI office could not be loaded. Please try again later.",
     "noOrganization": "Choose an organization to see its AI office.",
@@ -12,7 +12,8 @@
       "processedToday": "Handled today",
       "attention": "Needs attention",
       "people": "{count}",
-      "items": "{count}"
+      "items": "{count}",
+      "heading": "Today's summary"
     },
     "floor": {
       "label": "Office floor plan",
@@ -30,7 +31,7 @@
         "defaultName": "AI Follow-up"
       },
       "lead_scorer": {
-        "title": "Lead scorer",
+        "title": "Scorer",
         "description": "Scores new leads without a score with Claude. Names, emails and other fields that point at a person are never sent.",
         "defaultName": "AI Scorer"
       },
@@ -52,23 +53,22 @@
       "working": "Working right now.",
       "attention": "The last run failed or has not finished. Check the work log.",
       "idle": "Waiting for the next run.",
-      "training": "The work of this role is being prepared. It starts working by itself once ready.",
+      "training": "The work of this role is still being prepared, so it does not work yet. It starts working by itself once ready.",
       "paused": "A paused employee does not work. Resume it to work from the next run.",
       "vacant": "No AI employee has this role yet."
     },
     "desk": {
-      "open": "Open {name} ({role})",
-      "openVacant": "Open the vacant desk of the {role}",
       "processedToday": "{count} today",
       "lastRun": "Last run {time}",
       "noRun": "No work yet",
-      "hire": "Hire"
+      "hire": "Hire",
+      "openDetails": "Open details",
+      "hireByAdmin": "An admin can hire one"
     },
     "sheet": {
       "vacantTitle": "Vacant desk: {role}",
       "role": "Role",
       "room": "Room",
-      "status": "Status",
       "hiredAt": "Hired on",
       "name": "Name",
       "hireSubmit": "Hire",
@@ -78,8 +78,7 @@
       "resume": "Resume",
       "dismiss": "Dismiss",
       "dismissTitle": "Dismiss {name}?",
-      "dismissDescription": "Its work log is deleted too, and this cannot be undone. You can hire an AI employee for the role again later.",
-      "cancel": "Cancel",
+      "dismissDescription": "The desk returns to vacant, and this cannot be undone. The work log is kept. You can hire an AI employee for the role again later.",
       "readOnly": "Only admins can hire and manage AI employees.",
       "runs": "Work log",
       "runsCaption": "Up to 20, newest first",
@@ -100,16 +99,20 @@
         "running": "Working",
         "succeeded": "Succeeded",
         "failed": "Failed"
-      }
+      },
+      "danger": "Cannot be undone",
+      "dismissNote": "Dismissing returns the desk to vacant. The work log is kept as a record."
     },
     "toast": {
       "hired": "Hired {name}",
-      "renamed": "Renamed",
+      "renamed": "Renamed to {name}",
       "paused": "Paused {name}",
       "resumed": "Resumed {name}",
       "dismissed": "Dismissed {name}",
       "conflict": "An AI employee already has this role",
-      "error": "Could not save. Please try again later"
-    }
+      "error": "Could not save. Please try again later",
+      "actionError": "Could not do that. Please try again later"
+    },
+    "loading": "Loading"
   }
 }

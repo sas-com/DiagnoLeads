@@ -836,7 +836,8 @@ export type AiEmployee = typeof aiEmployees.$inferSelect;
 /**
  * AI Employee Runs (Refs #1101, Epic #1100)
  * One row each time an AI employee works. Counts and codes only: never a lead, a person or a
- * prompt, so the log can be shown to every member of the organization.
+ * prompt, so the log can be shown to every member of the organization. The rows outlive a
+ * dismissed employee (employee_id becomes null, the role stays) so the work done stays on record.
  */
 export const aiEmployeeRuns = pgTable(
   'ai_employee_runs',
@@ -845,9 +846,10 @@ export const aiEmployeeRuns = pgTable(
     organizationId: uuid('organization_id')
       .notNull()
       .references(() => organizations.id, { onDelete: 'cascade' }),
-    employeeId: uuid('employee_id')
-      .notNull()
-      .references(() => aiEmployees.id, { onDelete: 'cascade' }),
+    /** Null once the employee was dismissed */
+    employeeId: uuid('employee_id').references(() => aiEmployees.id, { onDelete: 'set null' }),
+    /** AI_EMPLOYEE_ROLES: the role of the employee when it ran */
+    role: text('role').notNull(),
     /** 'schedule' | 'manual' */
     trigger: text('trigger').notNull(),
     /** 'running' | 'succeeded' | 'failed' */
@@ -856,13 +858,20 @@ export const aiEmployeeRuns = pgTable(
     finishedAt: timestamp('finished_at', { withTimezone: true }),
     /** How many items the run handled (leads scored, tasks checked, ...) */
     processedCount: integer('processed_count').default(0).notNull(),
-    /** Short code of the outcome or the error (e.g. 'rate_limited'), never free text */
+    /**
+     * Short code of the outcome or the error (e.g. 'rate_limited'), never free text: an error
+     * message can carry a lead's values, and every member reads this column
+     */
     resultCode: text('result_code'),
   },
   (table) => [
     index('ai_employee_runs_employee_started_idx').on(table.employeeId, table.startedAt),
     index('ai_employee_runs_organization_started_idx').on(table.organizationId, table.startedAt),
     check('ai_employee_runs_trigger_check', sql`${table.trigger} IN ('schedule', 'manual')`),
+    check(
+      'ai_employee_runs_result_code_check',
+      sql`${table.resultCode} IS NULL OR ${table.resultCode} ~ '^[a-z_]{1,40}$'`
+    ),
     check(
       'ai_employee_runs_status_check',
       sql`${table.status} IN ('running', 'succeeded', 'failed')`

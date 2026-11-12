@@ -9,9 +9,11 @@ import {
   rolesInRoom,
 } from '@/lib/features/ai-employees/types/roles';
 import { cn } from '@/lib/utils';
-import { BarChart3, DoorOpen, Lightbulb, Users } from 'lucide-react';
+import { BarChart3, DoorOpen, Lightbulb, UserPlus, Users } from 'lucide-react';
 import { useFormatter, useTranslations } from 'next-intl';
-import { DeskAvatar, DeskStatusLabel } from './desk-status';
+import { useId } from 'react';
+import { DeskStatusLabel } from './desk-status';
+import { RoomScene } from './office-illustration';
 
 const ROOM_ICONS: Record<AiOfficeRoom, typeof Users> = {
   sales: Users,
@@ -20,43 +22,49 @@ const ROOM_ICONS: Record<AiOfficeRoom, typeof Users> = {
 };
 
 /**
- * The office floor (Refs #1101): the outer wall of the building, a room per AI_OFFICE_ROOMS and
- * a desk per role, the entrance at the bottom. Each desk is a button that opens its details;
- * a vacant desk is drawn with a dashed outline.
+ * The office floor (Refs #1101): the building's outer wall, a room per AI_OFFICE_ROOMS separated
+ * by shared walls, and in each room a desk per role drawn as a scene with the robot at work (or
+ * an empty chair). Each desk is a button whose name is its visible text: the employee, the role,
+ * the status and today's work, so a screen reader hears the status too.
  */
 export function OfficeFloor({
   employees,
+  canManage,
   onOpenDesk,
 }: {
   employees: readonly OfficeEmployee[];
-  onOpenDesk: (role: AiEmployeeRole) => void;
+  canManage: boolean;
+  onOpenDesk: (role: AiEmployeeRole, desk: HTMLElement) => void;
 }) {
   const t = useTranslations('aiOffice');
+  const headingId = useId();
   const byRole = new Map(employees.map((employee) => [employee.role, employee]));
 
   return (
-    <div className="space-y-2">
-      <section
-        aria-label={t('floor.label')}
-        className="rounded-lg border-[3px] border-gray-500 bg-gray-50 p-2 sm:p-3 dark:border-gray-500 dark:bg-gray-950"
-      >
-        <div className="grid gap-2 sm:gap-3 md:grid-cols-3">
+    <section aria-labelledby={headingId} className="space-y-2">
+      <h2 id={headingId} className="sr-only">
+        {t('floor.label')}
+      </h2>
+      {/* The walls are the grey showing between the rooms */}
+      <div className="overflow-hidden rounded-lg border-4 border-gray-500 bg-gray-500 dark:border-gray-500 dark:bg-gray-500">
+        <div className="grid gap-1 lg:grid-cols-3">
           {AI_OFFICE_ROOMS.map((room) => (
             <OfficeRoom
               key={room}
               room={room}
               roles={rolesInRoom(room)}
               byRole={byRole}
+              canManage={canManage}
               onOpenDesk={onOpenDesk}
             />
           ))}
         </div>
-      </section>
+      </div>
       <p className="flex items-center justify-center gap-1.5 text-sm text-gray-600 dark:text-gray-300">
         <DoorOpen className="h-4 w-4" aria-hidden="true" />
         {t('floor.entrance')}
       </p>
-    </div>
+    </section>
   );
 }
 
@@ -64,25 +72,24 @@ function OfficeRoom({
   room,
   roles,
   byRole,
+  canManage,
   onOpenDesk,
 }: {
   room: AiOfficeRoom;
   roles: AiEmployeeRole[];
   byRole: ReadonlyMap<AiEmployeeRole, OfficeEmployee>;
-  onOpenDesk: (role: AiEmployeeRole) => void;
+  canManage: boolean;
+  onOpenDesk: (role: AiEmployeeRole, desk: HTMLElement) => void;
 }) {
   const t = useTranslations('aiOffice');
   const Icon = ROOM_ICONS[room];
-  const headingId = `ai-office-room-${room}`;
+  const headingId = useId();
   return (
-    <section
-      aria-labelledby={headingId}
-      className="flex flex-col rounded-md border-2 md:min-h-56 border-gray-300 bg-white dark:border-gray-700 dark:bg-gray-900"
-    >
+    <section aria-labelledby={headingId} className="flex flex-col bg-white dark:bg-gray-900">
       {/* The room's name plate on the wall */}
       <h3
         id={headingId}
-        className="flex items-center gap-2 border-b-2 border-gray-300 px-3 py-2 text-base font-bold text-gray-900 dark:border-gray-700 dark:text-gray-50"
+        className="flex items-center gap-2 border-b border-gray-300 px-3 py-2 text-base font-bold text-gray-900 dark:border-gray-700 dark:text-gray-50"
       >
         <Icon className="h-4 w-4 text-gray-600 dark:text-gray-300" aria-hidden="true" />
         {t(`rooms.${room}`)}
@@ -90,7 +97,13 @@ function OfficeRoom({
       <ul className="grid flex-1 content-start gap-3 p-3">
         {roles.map((role) => (
           <li key={role}>
-            <Desk role={role} employee={byRole.get(role) ?? null} onOpen={() => onOpenDesk(role)} />
+            <Desk
+              room={room}
+              role={role}
+              employee={byRole.get(role) ?? null}
+              canManage={canManage}
+              onOpen={(desk) => onOpenDesk(role, desk)}
+            />
           </li>
         ))}
       </ul>
@@ -99,75 +112,71 @@ function OfficeRoom({
 }
 
 function Desk({
+  room,
   role,
   employee,
+  canManage,
   onOpen,
 }: {
+  room: AiOfficeRoom;
   role: AiEmployeeRole;
   employee: OfficeEmployee | null;
-  onOpen: () => void;
+  canManage: boolean;
+  onOpen: (desk: HTMLElement) => void;
 }) {
   const t = useTranslations('aiOffice');
   const format = useFormatter();
   const status: DeskStatus = employee?.deskStatus ?? 'vacant';
   const roleTitle = t(`roles.${role}.title`);
-  const label = employee
-    ? t('desk.open', { name: employee.name, role: roleTitle })
-    : t('desk.openVacant', { role: roleTitle });
 
   return (
     <button
       type="button"
-      onClick={onOpen}
-      aria-label={label}
+      onClick={(event) => onOpen(event.currentTarget)}
       className={cn(
-        'w-full min-h-11 rounded-md border p-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800/60',
+        'group block w-full overflow-hidden rounded-md border text-left hover:bg-gray-50 dark:hover:bg-gray-800/60',
         status === 'vacant'
-          ? 'border-dashed border-gray-400 dark:border-gray-600'
+          ? 'border-dashed border-gray-400 dark:border-gray-500'
           : status === 'attention'
-            ? 'border-[var(--color-semantic-error-1)] dark:border-red-400'
-            : 'border-gray-300 dark:border-gray-700'
+            ? 'border-2 border-[var(--color-semantic-error-1)] dark:border-red-400'
+            : 'border-gray-400 dark:border-gray-500'
       )}
     >
-      <span className="flex items-start gap-3">
-        <DeskAvatar role={role} status={status} />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-base font-bold text-gray-900 dark:text-gray-50">
-            {employee ? employee.name : roleTitle}
-          </span>
-          {employee && (
-            <span className="block text-sm text-gray-600 dark:text-gray-300">{roleTitle}</span>
-          )}
-          <DeskStatusLabel status={status} className="mt-1" />
+      <RoomScene room={room} status={status} />
+      <span className="block space-y-1 p-3">
+        <span className="block text-base font-bold text-gray-900 break-words dark:text-gray-50">
+          {employee ? employee.name : roleTitle}
         </span>
-      </span>
-      {/* The desk top under the person */}
-      <span
-        aria-hidden="true"
-        className={cn(
-          'mt-3 block h-2 rounded-sm',
-          status === 'vacant' ? 'bg-gray-200 dark:bg-gray-800' : 'bg-gray-300 dark:bg-gray-700'
+        {employee && (
+          <span className="block text-sm text-gray-600 dark:text-gray-300">{roleTitle}</span>
         )}
-      />
-      <span className="mt-2 block text-sm text-gray-600 dark:text-gray-300">
-        {employee ? (
-          <>
-            {t('desk.processedToday', { count: employee.processedToday })}
-            {' · '}
-            {employee.lastRun
-              ? t('desk.lastRun', {
-                  time: format.dateTime(new Date(employee.lastRun.startedAt), {
-                    month: 'numeric',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  }),
-                })
-              : t('desk.noRun')}
-          </>
-        ) : (
-          t('statusHint.vacant')
-        )}
+        <DeskStatusLabel status={status} />
+        <span className="block text-sm text-gray-600 dark:text-gray-300">
+          {employee ? (
+            <>
+              {t('desk.processedToday', { count: employee.processedToday })}
+              {' · '}
+              {employee.lastRun
+                ? t('desk.lastRun', {
+                    time: format.dateTime(new Date(employee.lastRun.startedAt), {
+                      month: 'numeric',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    }),
+                  })
+                : t('desk.noRun')}
+            </>
+          ) : canManage ? (
+            <span className="inline-flex items-center gap-1 font-bold text-brand-700 underline dark:text-brand-300">
+              <UserPlus className="h-4 w-4" aria-hidden="true" />
+              {t('desk.hire')}
+            </span>
+          ) : (
+            t('desk.hireByAdmin')
+          )}
+        </span>
+        <span className="sr-only">{t('desk.openDetails')}</span>
       </span>
     </button>
   );

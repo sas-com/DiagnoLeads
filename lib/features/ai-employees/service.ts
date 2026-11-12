@@ -218,7 +218,10 @@ export async function updateEmployee(
   return updated ? { ...updated, status: updated.status as AiEmployeeStatus } : null;
 }
 
-/** Dismisses an employee with its runs; false when the organization has no such employee */
+/**
+ * Dismisses an employee; false when the organization has no such employee. Its runs stay on
+ * record with their role (employee_id is set to null by the foreign key).
+ */
 export async function dismissEmployee(
   db: Database,
   input: { organizationId: string; employeeId: string }
