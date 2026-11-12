@@ -1,12 +1,11 @@
 /**
  * The robot of an AI employee seen from the front (Refs #1101), for the header of a desk's
- * details; the office map draws the same robot from above (office-map.tsx). Its look follows the
+ * details; the office map draws the same robot in its isometric scene (office-scene.ts). Its look follows the
  * desk status (lit antenna while working, a graduation cap in training, a red alert when it needs
  * attention, switched off when paused, a dashed outline when vacant).
  *
- * Decoration only (aria-hidden): the status is always written next to it. Flat colours, no
- * gradients, shadows or glows; the only motion is a pulse for people who do not ask for reduced
- * motion (decision 2026-11-12-ai-employees-office).
+ * Decoration only (aria-hidden): the status is always written next to it. The only motion is a
+ * pulse for people who do not ask for reduced motion (decision 2026-11-12-ai-employees-office).
  */
 import type { DeskStatus } from '@/lib/features/ai-employees/office';
 import { cn } from '@/lib/utils';
