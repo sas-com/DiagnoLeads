@@ -240,10 +240,11 @@ jobs:
         # The runner image already has the libraries Chromium needs; --with-deps adds fonts through
         # apt. When that fails (apt could not reach its mirror for hours on 2026-11-11), go on with the
         # browser alone (#1088): the E2E tests read the DOM, not screenshots, and a library that is
-        # really missing still fails the launch. The step takes about 20 seconds, so the first try
-        # gets 3 minutes rather than the 10 apt spends before it gives up
+        # really missing still fails the launch. The step takes 20 to 30 seconds, so the first try
+        # gets 1 minute rather than the 10 apt spends before it gives up; while apt was down every
+        # run sat out the whole 3 minutes this used to allow (#1098)
         run: |
-          if ! timeout 180 bunx playwright install --with-deps chromium; then
+          if ! timeout 60 bunx playwright install --with-deps chromium; then
             echo "::warning title=Playwright OS dependencies::playwright install --with-deps failed (see the log above); installing Chromium without OS dependencies, so screenshots and traces show no Japanese glyphs (#1088)"
             bunx playwright install chromium
           fi
