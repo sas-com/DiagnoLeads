@@ -38,23 +38,51 @@
     "roles": {
       "marketer": {
         "title": "マーケター",
-        "description": "評価のない新しい見込み客（リード）を Claude で評価し、点数を付けます。氏名・メールなど個人を指す項目は送りません。",
+        "description": "見込み客（リード）を見つけ、追う価値のある相手を見極めます。",
         "defaultName": "AIマーケター"
       },
       "sales": {
         "title": "セールス",
-        "description": "期限が近い・過ぎた次の行動を毎朝確かめ、追客の取りこぼしを防ぎます。リードは書き換えません。",
+        "description": "見込み客を商談に進め、追客の取りこぼしを防ぎます。",
         "defaultName": "AIセールス"
       },
       "engineer": {
         "title": "エンジニア",
-        "description": "診断の回答から移行の論点を整理し、初回の打ち合わせの準備の下書きを用意します。",
+        "description": "お客様の状況を整理し、提案の準備を整えます。",
         "defaultName": "AIエンジニア"
       },
       "back_office": {
         "title": "バックオフィス",
-        "description": "ヒアリングと診断の回答から、リードの動くべき時期を毎朝計算し直し、期限を見張ります。",
+        "description": "期限と約束ごとを見張り、抜けを防ぎます。",
         "defaultName": "AIバックオフィス"
+      }
+    },
+    "packs": {
+      "sales_management": {
+        "title": "営業管理",
+        "description": "どの会社の営業にもある仕事です。このアプリのリードと商談を扱います。"
+      },
+      "ax_migration": {
+        "title": "AX 移行",
+        "description": "レガシーシステムの移行の営業に固有の仕事です。"
+      }
+    },
+    "works": {
+      "score_new_leads": {
+        "title": "新しい見込み客の評価",
+        "description": "評価のない新しい見込み客（リード）を Claude で評価し、点数を付けます。氏名・メールなど個人を指す項目は送りません。"
+      },
+      "check_due_actions": {
+        "title": "次の行動の期限の確認",
+        "description": "期限が近い・過ぎた次の行動を毎朝確かめます。リードは書き換えません。"
+      },
+      "draft_meeting_prep": {
+        "title": "初回の打ち合わせの準備の下書き",
+        "description": "診断の回答から移行の論点を整理し、初回の打ち合わせの準備の下書きを用意します。"
+      },
+      "recompute_act_timing": {
+        "title": "動くべき時期の再計算",
+        "description": "ヒアリングと診断の回答から、リードの動くべき時期を毎朝計算し直します。"
       }
     },
     "status": {
@@ -117,7 +145,11 @@
       },
       "danger": "元に戻せない操作",
       "dismissNote": "解雇すると、この席は空席に戻ります。作業記録は記録として残ります。",
-      "place": "今いる場所"
+      "place": "今いる場所",
+      "works": "仕事",
+      "workPack": "業務パック：{pack}",
+      "workPreparing": "準備中",
+      "workReady": "稼働中"
     },
     "toast": {
       "hired": "{name}を採用しました",

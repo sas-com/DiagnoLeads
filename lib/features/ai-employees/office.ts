@@ -32,7 +32,7 @@ export interface DeskRun {
 }
 
 export function deskStatus(input: {
-  /** Whether the role has work yet (roleHasWork) */
+  /** Whether the role has work yet (roleHasWork, types/works.ts) */
   hasWork: boolean;
   employee: { status: AiEmployeeStatus } | null;
   lastRun: DeskRun | null;

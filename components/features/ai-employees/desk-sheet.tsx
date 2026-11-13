@@ -36,6 +36,7 @@ import {
   type AiEmployeeRole,
 } from '@/lib/features/ai-employees/types/roles';
 import { AI_EMPLOYEE_NAME_MAX_LENGTH } from '@/lib/features/ai-employees/types/schemas';
+import { workIsReady, worksOfRole } from '@/lib/features/ai-employees/types/works';
 import { trpc } from '@/lib/trpc/client';
 import { Loader2 } from 'lucide-react';
 import { useFormatter, useTranslations } from 'next-intl';
@@ -140,6 +141,35 @@ export function DeskSheet({
               </>
             )}
           </dl>
+
+          <section aria-labelledby="desk-sheet-works" className="space-y-3">
+            <h3 id="desk-sheet-works" className="text-lg font-bold text-gray-900 dark:text-gray-50">
+              {t('sheet.works')}
+            </h3>
+            <ul className="space-y-3">
+              {worksOfRole(role).map(({ work, pack }) => (
+                <li
+                  key={work}
+                  className="rounded-md border border-gray-300 p-3 dark:border-gray-600"
+                >
+                  <p className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                    <span className="text-base font-bold text-gray-900 dark:text-gray-50">
+                      {t(`works.${work}.title`)}
+                    </span>
+                    <span className="text-sm text-gray-700 dark:text-gray-200">
+                      {workIsReady(work) ? t('sheet.workReady') : t('sheet.workPreparing')}
+                    </span>
+                  </p>
+                  <p className="mt-1 text-base text-gray-700 dark:text-gray-200">
+                    {t(`works.${work}.description`)}
+                  </p>
+                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                    {t('sheet.workPack', { pack: t(`packs.${pack}.title`) })}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </section>
 
           {!employee && canManage && (
             <HireForm organizationId={organizationId} role={role} onHired={focusTitle} />

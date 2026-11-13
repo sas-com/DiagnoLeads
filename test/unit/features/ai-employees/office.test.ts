@@ -4,7 +4,6 @@ import {
   AI_EMPLOYEE_ROLE_DEFINITIONS,
   AI_OFFICE_ROOMS,
   isAiEmployeeRole,
-  roleHasWork,
   rolesInRoom,
 } from '@/lib/features/ai-employees/types/roles';
 import {
@@ -12,6 +11,16 @@ import {
   hireAiEmployeeSchema,
   updateAiEmployeeSchema,
 } from '@/lib/features/ai-employees/types/schemas';
+import {
+  AI_EMPLOYEE_WORKS,
+  AI_EMPLOYEE_WORK_DEFINITIONS,
+  AI_WORK_PACKS,
+  roleHasWork,
+  rolesWithoutWorks,
+  workIsReady,
+  worksOfRole,
+} from '@/lib/features/ai-employees/types/works';
+import { MESSAGE_FILES, mergeMessageFiles } from '@/lib/i18n/messages';
 import { describe, expect, it } from 'vitest';
 
 const NOW = new Date('2026-11-12T03:00:00Z');
@@ -34,6 +43,57 @@ describe('AI employee roles', () => {
   it('tells the roles of the catalog from other strings', () => {
     expect(isAiEmployeeRole('marketer')).toBe(true);
     expect(isAiEmployeeRole('ceo')).toBe(false);
+  });
+});
+
+describe('AI employee works', () => {
+  it('keys each definition by its own work and gives it a role and a pack of the catalogs', () => {
+    for (const work of AI_EMPLOYEE_WORKS) {
+      const definition = AI_EMPLOYEE_WORK_DEFINITIONS[work];
+      expect(definition.work).toBe(work);
+      expect(AI_EMPLOYEE_ROLES).toContain(definition.role);
+      expect(AI_WORK_PACKS).toContain(definition.pack);
+    }
+  });
+
+  it('gives every role at least one work, and every work to exactly one role', () => {
+    expect(rolesWithoutWorks()).toEqual([]);
+    const listed = AI_EMPLOYEE_ROLES.flatMap((role) => worksOfRole(role).map(({ work }) => work));
+    expect([...listed].sort()).toEqual([...AI_EMPLOYEE_WORKS].sort());
+  });
+
+  it('keeps the work of our own business in its own pack, out of the sales management pack', () => {
+    const packOf = (work: (typeof AI_EMPLOYEE_WORKS)[number]) =>
+      AI_EMPLOYEE_WORK_DEFINITIONS[work].pack;
+    expect(packOf('score_new_leads')).toBe('sales_management');
+    expect(packOf('check_due_actions')).toBe('sales_management');
+    expect(packOf('draft_meeting_prep')).toBe('ax_migration');
+    expect(packOf('recompute_act_timing')).toBe('ax_migration');
+  });
+
+  it('describes the roles as the work of any sales, without the words of our own business', () => {
+    for (const locale of ['ja', 'en'] as const) {
+      const messages = mergeMessageFiles(MESSAGE_FILES[locale]) as {
+        aiOffice: {
+          roles: Record<string, { description: string }>;
+          works: Record<string, { title: string; description: string }>;
+          packs: Record<string, { title: string; description: string }>;
+        };
+      };
+      for (const role of AI_EMPLOYEE_ROLES) {
+        expect(messages.aiOffice.roles[role].description).not.toMatch(
+          /移行|動くべき時期|診断|migration|diagnos|when to act/i
+        );
+      }
+      for (const work of AI_EMPLOYEE_WORKS) {
+        expect(messages.aiOffice.works[work].title).toBeTruthy();
+        expect(messages.aiOffice.works[work].description).toBeTruthy();
+      }
+      for (const pack of AI_WORK_PACKS) {
+        expect(messages.aiOffice.packs[pack].title).toBeTruthy();
+        expect(messages.aiOffice.packs[pack].description).toBeTruthy();
+      }
+    }
   });
 });
 
@@ -79,9 +139,9 @@ describe('deskStatus', () => {
     expect(status({ status: 'running', startedAt: at(RUN_STALE_MS) })).toBe('attention');
   });
 
-  it('keeps every role in training until its work issue is done', () => {
+  it('keeps a role in training until one of its works runs', () => {
     for (const role of AI_EMPLOYEE_ROLES) {
-      expect(roleHasWork(role)).toBe(AI_EMPLOYEE_ROLE_DEFINITIONS[role].workIssue === null);
+      expect(roleHasWork(role)).toBe(worksOfRole(role).some(({ work }) => workIsReady(work)));
     }
   });
 });

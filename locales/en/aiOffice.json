@@ -38,23 +38,51 @@
     "roles": {
       "marketer": {
         "title": "Marketer",
-        "description": "Scores new prospects (leads) without a score with Claude. Names, emails and other fields that point at a person are never sent.",
+        "description": "Finds prospects (leads) and tells which ones are worth following.",
         "defaultName": "AI Marketer"
       },
       "sales": {
         "title": "Sales",
-        "description": "Checks the next actions due soon or overdue every morning, so that no follow-up is dropped. It never changes a lead.",
+        "description": "Turns prospects into deals and keeps follow-ups from being dropped.",
         "defaultName": "AI Sales"
       },
       "engineer": {
         "title": "Engineer",
-        "description": "Sorts out the points of the migration from the diagnosis answers and drafts the preparation of the first meeting.",
+        "description": "Sorts out the customer's situation and prepares the proposal.",
         "defaultName": "AI Engineer"
       },
       "back_office": {
         "title": "Back office",
-        "description": "Recomputes when to act on each lead every morning, from the hearings and the diagnosis answers, and keeps watch on the dates.",
+        "description": "Keeps watch on the dates and the promises, so that nothing is missed.",
         "defaultName": "AI Back office"
+      }
+    },
+    "packs": {
+      "sales_management": {
+        "title": "Sales management",
+        "description": "Work any company's sales has, on the leads and deals of this app."
+      },
+      "ax_migration": {
+        "title": "AX migration",
+        "description": "Work specific to selling the migration of legacy systems."
+      }
+    },
+    "works": {
+      "score_new_leads": {
+        "title": "Scoring new prospects",
+        "description": "Scores new prospects (leads) without a score with Claude. Names, emails and other fields that point at a person are never sent."
+      },
+      "check_due_actions": {
+        "title": "Checking the next actions due",
+        "description": "Checks the next actions due soon or overdue every morning. It never changes a lead."
+      },
+      "draft_meeting_prep": {
+        "title": "Drafting the first meeting's preparation",
+        "description": "Sorts out the points of the migration from the diagnosis answers and drafts the preparation of the first meeting."
+      },
+      "recompute_act_timing": {
+        "title": "Recomputing when to act",
+        "description": "Recomputes when to act on each lead every morning, from the hearings and the diagnosis answers."
       }
     },
     "status": {
@@ -117,7 +145,11 @@
       },
       "danger": "Cannot be undone",
       "dismissNote": "Dismissing returns the desk to vacant. The work log is kept as a record.",
-      "place": "Now in"
+      "place": "Now in",
+      "works": "Work",
+      "workPack": "Work pack: {pack}",
+      "workPreparing": "Being prepared",
+      "workReady": "Running"
     },
     "toast": {
       "hired": "Hired {name}",

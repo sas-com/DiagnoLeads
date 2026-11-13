@@ -9,13 +9,14 @@ import { aiEmployeeRuns, aiEmployees } from '@/lib/db/schema';
 import { jstDay } from '@/lib/jst';
 import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import { type DeskStatus, deskStatus } from './office';
-import { type AiEmployeeRole, isAiEmployeeRole, roleHasWork } from './types/roles';
+import { type AiEmployeeRole, isAiEmployeeRole } from './types/roles';
 import {
   AI_EMPLOYEE_RUNS_LIMIT,
   type AiEmployeeRunStatus,
   type AiEmployeeRunTrigger,
   type AiEmployeeStatus,
 } from './types/schemas';
+import { roleHasWork } from './types/works';
 
 /** The database or a transaction */
 type Database = Pick<
