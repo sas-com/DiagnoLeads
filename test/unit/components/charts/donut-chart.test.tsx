@@ -105,9 +105,9 @@ describe('DonutChart', () => {
     render(<DonutChart totalLabel="合計" data={data} />);
 
     const { options } = lastChart();
-    expect(options.chart?.foreColor).toBe('#d1d5db');
-    expect(options.legend?.labels?.colors).toBe('#e5e7eb');
-    expect(options.stroke?.colors).toEqual(['#1f2937']);
+    expect(options.chart?.foreColor).toBe('#d8d2c4');
+    expect(options.legend?.labels?.colors).toBe('#ebe6da');
+    expect(options.stroke?.colors).toEqual(['#101522']);
     expect(options.tooltip?.theme).toBe('dark');
 
     act(() => setDarkMode(false));

@@ -145,10 +145,10 @@ export function ConversionFunnel({
       <p className="text-xs text-gray-500">{t('funnel.reachedNote')}</p>
 
       {/* Overall Conversion Rate */}
-      <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-4 rounded-lg border border-gray-200">
+      <div className="bg-brand-50 p-4 rounded-lg border border-brand-200 dark:bg-gray-800 dark:border-gray-700">
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium text-gray-700">{t('funnel.overallConversion')}</span>
-          <span className="text-2xl font-bold text-purple-600">
+          <span className="text-2xl font-bold text-brand-500 dark:text-brand-400">
             {(apiFunnelData?.overallConversionRate ?? 0).toFixed(1)}%
           </span>
         </div>

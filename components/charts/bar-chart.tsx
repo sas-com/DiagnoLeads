@@ -17,7 +17,8 @@ const COLORS = {
   cyan: '#06b6d4',
   pink: '#ec4899',
   rose: '#f43f5e',
-  brand: '#465fff',
+  // Brass: 3:1 or more on white and on the night panels (#1120)
+  brand: '#a8842f',
   /** Project brand (teal, --color-brand-500) */
   teal: '#14b8a6',
   /** Quiet series ("the rest"); a darker shade is used in dark mode */
@@ -83,7 +84,7 @@ export function BarChart({
   height = 350,
 }: BarChartProps) {
   const dark = useDocumentDark();
-  const labelColor = dark ? '#9ca3af' : '#6b7280';
+  const labelColor = dark ? '#bdb7a9' : '#6b7180';
   const isVertical = layout === 'vertical';
   const xAxisCategories = data.map((item) => String(item[index]));
   const series = categories.map((category) => ({
@@ -134,7 +135,7 @@ export function BarChart({
     },
     grid: {
       show: showGridLines,
-      borderColor: dark ? '#374151' : '#e5e7eb',
+      borderColor: dark ? '#232c44' : '#e9e4da',
       xaxis: {
         lines: {
           show: isVertical,

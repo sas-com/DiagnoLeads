@@ -290,8 +290,8 @@ function LeadsPageContent() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-start gap-4">
-          <div className="hidden h-14 w-14 sm:flex bg-gradient-to-br from-blue-100 to-emerald-100 dark:from-blue-900/30 dark:to-emerald-900/30 rounded-xl items-center justify-center">
-            <Users className="h-7 w-7 text-blue-600 dark:text-blue-400" />
+          <div className="hidden h-14 w-14 sm:flex border border-brand-200 bg-brand-50 dark:border-gray-700 dark:bg-gray-800 rounded-xl items-center justify-center">
+            <Users className="h-7 w-7 text-brand-500 dark:text-brand-400" />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl dark:text-gray-100">
@@ -333,14 +333,14 @@ function LeadsPageContent() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
         {/* Total Leads: the whole list */}
         <StatCardLink href={listHref()}>
-          <Card className="p-6 h-full" decoration="top" decorationColor="blue">
+          <Card className="p-6 h-full">
             <div className="flex items-start justify-between">
               <div>
                 <Text>{t('totalLeads')}</Text>
                 <Metric className="mt-2">{format.number(totalLeads)}</Metric>
               </div>
-              <div className="p-3 bg-blue-50 rounded-xl">
-                <Users className="h-6 w-6 text-blue-600" />
+              <div className="p-3 bg-brand-50 dark:bg-gray-800 rounded-xl">
+                <Users className="h-6 w-6 text-brand-500 dark:text-brand-400" />
               </div>
             </div>
             <div className="mt-4 flex items-center justify-between">
@@ -352,14 +352,14 @@ function LeadsPageContent() {
 
         {/* Active Leads: nurturing and negotiating */}
         <StatCardLink href={listHref({ status: ['nurturing', 'negotiating'] })}>
-          <Card className="p-6 h-full" decoration="top" decorationColor="yellow">
+          <Card className="p-6 h-full">
             <div className="flex items-start justify-between">
               <div>
                 <Text>{t('activeLeads')}</Text>
                 <Metric className="mt-2">{format.number(nurturingLeads + negotiatingLeads)}</Metric>
               </div>
-              <div className="p-3 bg-yellow-50 rounded-xl">
-                <Target className="h-6 w-6 text-yellow-600" />
+              <div className="p-3 bg-brand-50 dark:bg-gray-800 rounded-xl">
+                <Target className="h-6 w-6 text-brand-500 dark:text-brand-400" />
               </div>
             </div>
             <div className="mt-4 space-y-2">
@@ -377,14 +377,14 @@ function LeadsPageContent() {
 
         {/* Conversion Rate: the won leads */}
         <StatCardLink href={listHref({ status: ['won'] })}>
-          <Card className="p-6 h-full" decoration="top" decorationColor="violet">
+          <Card className="p-6 h-full">
             <div className="flex items-start justify-between">
               <div>
                 <Text>{t('conversionRate')}</Text>
                 <Metric className="mt-2">{conversionRate.toFixed(1)}%</Metric>
               </div>
-              <div className="p-3 bg-violet-50 rounded-xl">
-                <UserCheck className="h-6 w-6 text-violet-600" />
+              <div className="p-3 bg-brand-50 dark:bg-gray-800 rounded-xl">
+                <UserCheck className="h-6 w-6 text-brand-500 dark:text-brand-400" />
               </div>
             </div>
             <div className="mt-4">

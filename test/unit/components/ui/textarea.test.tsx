@@ -115,7 +115,7 @@ describe('Textarea styling', () => {
     render(<Textarea />);
     const textarea = screen.getByRole('textbox');
     expect(textarea).toHaveClass('focus-visible:ring-2');
-    expect(textarea).toHaveClass('focus-visible:ring-teal-500');
+    expect(textarea).toHaveClass('focus-visible:ring-brand-500');
   });
 
   it('should have dark mode styles', () => {

@@ -79,8 +79,8 @@ export default function UserDropdown() {
       >
         {/* アバター */}
         <div className="relative">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-brand-400 to-emerald-500 flex items-center justify-center shadow-md">
-            <span className="text-white font-semibold text-sm">{initials}</span>
+          <div className="w-10 h-10 rounded-full bg-brand-500 dark:bg-brand-400 flex items-center justify-center">
+            <span className="text-white dark:text-gray-900 font-semibold text-sm">{initials}</span>
           </div>
           {/* オンラインインジケーター */}
           <span className="absolute bottom-0 right-0 w-3 h-3 bg-success-500 border-2 border-white dark:border-gray-900 rounded-full" />
@@ -99,10 +99,10 @@ export default function UserDropdown() {
       {isOpen && (
         <div className="absolute right-0 mt-2 w-60 bg-white rounded-xl shadow-xl border border-gray-100 dark:bg-gray-800 dark:border-gray-700 z-50 overflow-hidden">
           {/* ユーザー情報ヘッダー */}
-          <div className="p-4 bg-gradient-to-r from-brand-50 to-emerald-50 dark:from-gray-700 dark:to-gray-700 border-b border-gray-100 dark:border-gray-600">
+          <div className="p-4 bg-brand-50 dark:bg-gray-700 border-b border-gray-100 dark:border-gray-600">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-brand-400 to-emerald-500 flex items-center justify-center shadow-md">
-                <span className="text-white font-semibold">{initials}</span>
+              <div className="w-12 h-12 rounded-full bg-brand-500 dark:bg-brand-400 flex items-center justify-center">
+                <span className="text-white dark:text-gray-900 font-semibold">{initials}</span>
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">

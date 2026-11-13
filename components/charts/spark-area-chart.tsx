@@ -16,7 +16,8 @@ const COLORS = {
   cyan: '#06b6d4',
   pink: '#ec4899',
   rose: '#f43f5e',
-  brand: '#465fff',
+  // Brass: 3:1 or more on white and on the night panels (#1120)
+  brand: '#a8842f',
 };
 
 interface SparkAreaChartProps {

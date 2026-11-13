@@ -60,8 +60,8 @@ export function LeadListEmpty({
 
   return (
     <div className="flex flex-col items-center justify-center py-8 text-center text-gray-500 dark:text-gray-400">
-      <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-blue-50 to-violet-50 dark:from-blue-900/30 dark:to-violet-900/30">
-        <Users className="h-10 w-10 text-blue-400 dark:text-blue-300" />
+      <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full border border-brand-200 bg-brand-50 dark:border-gray-700 dark:bg-gray-800">
+        <Users className="h-10 w-10 text-brand-400" />
       </div>
       <p className="mb-2 text-xl font-semibold text-gray-900 dark:text-gray-100">{t('noLeads')}</p>
       <p className={cn('max-w-sm text-sm text-gray-500 dark:text-gray-400', onCreate && 'mb-6')}>

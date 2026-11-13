@@ -36,7 +36,8 @@ const COLORS = {
   cyan: '#06b6d4',
   pink: '#ec4899',
   rose: '#f43f5e',
-  brand: '#465fff',
+  // Brass: 3:1 or more on white and on the night panels (#1120)
+  brand: '#a8842f',
 };
 
 interface RadialChartProps {
@@ -70,9 +71,9 @@ export function RadialChart({
   };
 
   const { height, fontSize, labelSize } = sizeMap[size];
-  const trackColor = isDark ? '#374151' : '#e5e7eb';
-  const textColor = isDark ? '#f3f4f6' : '#111827';
-  const labelColor = isDark ? '#9ca3af' : '#6b7280';
+  const trackColor = isDark ? '#232c44' : '#e9e4da';
+  const textColor = isDark ? '#f5f1e8' : '#1b2130';
+  const labelColor = isDark ? '#bdb7a9' : '#6b7180';
 
   const options: ApexOptions = {
     colors: [COLORS[color]],
@@ -180,9 +181,9 @@ export function MultiRadialChart({
     (item, i) => COLORS[item.color || defaultColors[i % defaultColors.length]]
   );
 
-  const trackColor = isDark ? '#374151' : '#e5e7eb';
-  const textColor = isDark ? '#f3f4f6' : '#111827';
-  const labelColor = isDark ? '#9ca3af' : '#6b7280';
+  const trackColor = isDark ? '#232c44' : '#e9e4da';
+  const textColor = isDark ? '#f5f1e8' : '#1b2130';
+  const labelColor = isDark ? '#bdb7a9' : '#6b7180';
 
   const options: ApexOptions = {
     colors: colors,

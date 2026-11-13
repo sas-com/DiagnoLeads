@@ -138,13 +138,13 @@ describe('InteractiveAreaChart', () => {
     render(<InteractiveAreaChart data={rows} index="date" categories={['visits']} title="t" />);
 
     const { options } = lastChart();
-    expect(options.chart?.foreColor).toBe('#d1d5db');
-    expect(options.title?.style?.color).toBe('#f3f4f6');
-    expect(options.markers?.strokeColors).toBe('#1f2937');
+    expect(options.chart?.foreColor).toBe('#d8d2c4');
+    expect(options.title?.style?.color).toBe('#f5f1e8');
+    expect(options.markers?.strokeColors).toBe('#101522');
     expect(options.tooltip?.theme).toBe('dark');
 
     act(() => setDarkMode(false));
-    await waitFor(() => expect(lastChart().options.title?.style?.color).toBe('#111827'));
+    await waitFor(() => expect(lastChart().options.title?.style?.color).toBe('#1b2130'));
   });
 });
 
@@ -216,10 +216,10 @@ describe('BrushChart', () => {
     setDarkMode(true);
     render(<BrushChart data={rows} index="date" category="visits" />);
     expect(lastPair().main.options.tooltip?.theme).toBe('dark');
-    expect(lastPair().brush.options.chart?.foreColor).toBe('#d1d5db');
+    expect(lastPair().brush.options.chart?.foreColor).toBe('#d8d2c4');
 
     act(() => setDarkMode(false));
     await waitFor(() => expect(lastPair().main.options.tooltip?.theme).toBe('light'));
-    expect(lastPair().main.options.grid?.borderColor).toBe('#e5e7eb');
+    expect(lastPair().main.options.grid?.borderColor).toBe('#e9e4da');
   });
 });

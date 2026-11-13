@@ -88,13 +88,13 @@ describe('BarChart', () => {
     render(<BarChart data={rows} index="month" categories={['new']} />);
 
     const { options } = lastChart();
-    expect(options.grid?.borderColor).toBe('#374151');
+    expect(options.grid?.borderColor).toBe('#232c44');
     expect(options.tooltip?.theme).toBe('dark');
-    expect(options.legend?.labels?.colors).toBe('#9ca3af');
+    expect(options.legend?.labels?.colors).toBe('#bdb7a9');
 
     act(() => setDarkMode(false));
     await waitFor(() => expect(lastChart().options.tooltip?.theme).toBe('light'));
-    expect(lastChart().options.grid?.borderColor).toBe('#e5e7eb');
+    expect(lastChart().options.grid?.borderColor).toBe('#e9e4da');
   });
 
   it('draws horizontal bars for the vertical layout, with vertical grid lines', () => {

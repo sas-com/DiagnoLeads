@@ -36,7 +36,8 @@ const COLORS = {
   cyan: '#06b6d4',
   pink: '#ec4899',
   rose: '#f43f5e',
-  brand: '#465fff',
+  // Brass: 3:1 or more on white and on the night panels (#1120)
+  brand: '#a8842f',
 };
 
 interface DonutChartProps {
@@ -71,10 +72,10 @@ export function DonutChart({
   const series = data.map((item) => item.value);
   const labels = data.map((item) => item.name);
 
-  const labelColor = isDark ? '#d1d5db' : '#6b7280';
-  const valueColor = isDark ? '#f3f4f6' : '#111827';
-  const legendColor = isDark ? '#e5e7eb' : '#374151';
-  const strokeColor = isDark ? '#1f2937' : '#fff';
+  const labelColor = isDark ? '#d8d2c4' : '#6b7180';
+  const valueColor = isDark ? '#f5f1e8' : '#1b2130';
+  const legendColor = isDark ? '#ebe6da' : '#3e4556';
+  const strokeColor = isDark ? '#101522' : '#fff';
 
   const options: ApexOptions = {
     colors: colors.slice(0, data.length).map((c) => COLORS[c] || COLORS.blue),
