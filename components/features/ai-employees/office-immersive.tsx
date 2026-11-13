@@ -10,6 +10,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {
   AlertTriangle,
   ArrowDown,
+  Box,
   DoorOpen,
   List,
   MessageCircle,
@@ -23,6 +24,7 @@ import {
   ZoomOut,
 } from 'lucide-react';
 import { useFormatter, useTimeZone, useTranslations } from 'next-intl';
+import dynamic from 'next/dynamic';
 import {
   type KeyboardEvent,
   type PointerEvent,
@@ -32,6 +34,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import type { OfficeEvent } from './office-3d/office-emotion';
 import { CAP, FOCUS, KEY, PANEL } from './office-hud';
 import { SceneDrawing } from './office-map';
 import {
@@ -66,6 +69,16 @@ import { RobotPortrait } from './office-scene-svg';
 import { OfficeStudio } from './office-studio';
 
 type Stage = 'title' | 'world' | 'talk' | 'room' | 'studio';
+
+/**
+ * The floor in 3D (#1135, spike): three.js is loaded only when the president switches to it, so
+ * the rest of the app does not carry it
+ */
+const OfficeCanvas3D = dynamic(() => import('./office-3d/office-canvas-3d'), { ssr: false });
+
+/** The statuses the spike can put an employee in, to watch it walk and feel (not saved) */
+const TRIAL_STATUSES = ['working', 'idle', 'attention', 'training', 'paused'] as const;
+const TRIAL_EVENTS = ['run_succeeded', 'president_near', 'hired'] as const;
 
 /** How far the office can be dragged past the edge of the screen */
 const PAN_MARGIN = { x: 320, y: 200 };
@@ -132,6 +145,17 @@ export function OfficeImmersive({
   const roomKeys = useRef<RoomKeys | null>(null);
   // Something is open inside the room (a customer file): Esc closes that first
   const [roomFileOpen, setRoomFileOpen] = useState(false);
+  // The 3D spike (#1135): whether the floor is drawn in 3D, and what the trial panel pretends
+  // (a status and an event for the chosen employee, on this screen only)
+  const [threeD, setThreeD] = useState(false);
+  const [trialStatus, setTrialStatus] = useState<Partial<Record<AiEmployeeRole, DeskStatus>>>({});
+  const [trialEvent, setTrialEvent] = useState<Partial<Record<AiEmployeeRole, OfficeEvent>>>({});
+  const [fps, setFps] = useState<number | null>(null);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    setReducedMotion(query?.matches ?? false);
+  }, []);
 
   const statuses = statusByRole(employees);
   const byRole = new Map(employees.map((employee) => [employee.role, employee]));
@@ -272,6 +296,9 @@ export function OfficeImmersive({
       } else if (event.key === '0') {
         event.preventDefault();
         resetView();
+      } else if (event.key === '3') {
+        event.preventDefault();
+        setThreeD((on) => !on);
       } else if ((event.key === 'c' || event.key === 'C') && canCustomize) {
         event.preventDefault();
         setStage('studio');
@@ -375,6 +402,17 @@ export function OfficeImmersive({
   };
 
   const time = format.dateTime(now, { hour: '2-digit', minute: '2-digit' });
+  const show3d = threeD && stage === 'world';
+  const floor3d = employees.map((employee) => {
+    const status = trialStatus[employee.role] ?? statuses[employee.role];
+    return {
+      role: employee.role,
+      name: employee.name,
+      status: status === 'vacant' ? ('idle' as const) : status,
+      look: employee.profile.look,
+      tone: employee.profile.tone,
+    };
+  });
   const president = presidentName ?? t('president');
 
   return (
@@ -432,7 +470,9 @@ export function OfficeImmersive({
               className={cn(
                 'absolute top-0 left-0 origin-top-left motion-reduce:transition-none',
                 // The floor follows the pointer at once while it is dragged, and glides otherwise
-                !dragging && 'transition-transform duration-700 ease-out'
+                !dragging && 'transition-transform duration-700 ease-out',
+                // The 3D floor takes the place of the drawing in the office
+                show3d && 'hidden'
               )}
             >
               <SceneDrawing
@@ -456,6 +496,17 @@ export function OfficeImmersive({
                 ))}
             </div>
           </div>
+          {show3d && (
+            <OfficeCanvas3D
+              employees={floor3d}
+              events={trialEvent}
+              night={night}
+              zoom={zoom}
+              focus={selectedEmployee ? selected : null}
+              reducedMotion={reducedMotion}
+              onFps={setFps}
+            />
+          )}
           {/* Seen through a camera */}
           <div
             aria-hidden="true"
@@ -661,6 +712,68 @@ export function OfficeImmersive({
               {/* The map of the floor */}
               <FloorMap statuses={statuses} selected={selected} label={t('map')} />
 
+              {/* The 3D spike's trial panel: pretend a status or an event to watch the robot */}
+              {threeD && selectedEmployee && (
+                <div
+                  className={cn(
+                    PANEL,
+                    'absolute bottom-32 left-1/2 w-[34rem] max-w-[calc(100%-2rem)] -translate-x-1/2 space-y-2 px-4 pt-3 pb-5'
+                  )}
+                >
+                  <p className={CAP}>{t('trial3d.title')}</p>
+                  <p className="text-xs leading-relaxed text-[#d8d2c4]">
+                    {t('trial3d.note', { name: selectedEmployee.name })}
+                    {fps !== null && `　${t('trial3d.fps', { fps })}`}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {TRIAL_STATUSES.map((status) => (
+                      <button
+                        key={status}
+                        type="button"
+                        aria-pressed={(trialStatus[selected] ?? selectedStatus) === status}
+                        onClick={() => {
+                          setTrialStatus((current) => ({ ...current, [selected]: status }));
+                          setTrialEvent((current) => ({ ...current, [selected]: undefined }));
+                        }}
+                        className={cn(
+                          'min-h-11 border px-3 text-sm font-bold',
+                          (trialStatus[selected] ?? selectedStatus) === status
+                            ? 'border-[#e9cf9a] bg-[#e9cf9a] text-[#1b2130]'
+                            : 'border-[#f5f1e8]/35 hover:bg-[#f5f1e8]/15',
+                          FOCUS
+                        )}
+                      >
+                        {tOffice(`status.${status}`)}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {TRIAL_EVENTS.map((event) => (
+                      <button
+                        key={event}
+                        type="button"
+                        aria-pressed={trialEvent[selected] === event}
+                        onClick={() =>
+                          setTrialEvent((current) => ({
+                            ...current,
+                            [selected]: current[selected] === event ? undefined : event,
+                          }))
+                        }
+                        className={cn(
+                          'min-h-11 border px-3 text-sm font-bold',
+                          trialEvent[selected] === event
+                            ? 'border-[#e9cf9a] bg-[#e9cf9a] text-[#1b2130]'
+                            : 'border-[#f5f1e8]/35 hover:bg-[#f5f1e8]/15',
+                          FOCUS
+                        )}
+                      >
+                        {t(`trial3d.events.${event}`)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* The floor guide: the rooms that hold work */}
               <nav
                 aria-label={t('floorGuide')}
@@ -704,6 +817,10 @@ export function OfficeImmersive({
                   <HudButton onClick={() => zoomBy(1 / ZOOM_STEP)} hotkey="-">
                     <ZoomOut className="h-6 w-6" aria-hidden="true" />
                     {t('actions.zoomOut')}
+                  </HudButton>
+                  <HudButton onClick={() => setThreeD((on) => !on)} hotkey="3">
+                    <Box className="h-6 w-6" aria-hidden="true" />
+                    {t(threeD ? 'trial3d.off' : 'trial3d.on')}
                   </HudButton>
                   <HudButton onClick={resetView} hotkey="0">
                     <ScanSearch className="h-6 w-6" aria-hidden="true" />

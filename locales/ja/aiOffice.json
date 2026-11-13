@@ -527,6 +527,18 @@
           "standard": "ふつう",
           "detailed": "くわしく"
         }
+      },
+      "trial3d": {
+        "on": "3D（検証）",
+        "off": "2D に戻す",
+        "title": "3D の検証",
+        "note": "{name}の状態と出来事を、この画面の中だけで切り替えて、歩く動きと感情を確かめます。実際の状態は変わりません。",
+        "fps": "毎秒 {fps} コマ",
+        "events": {
+          "run_succeeded": "作業が成功した",
+          "president_near": "社長が近づいた",
+          "hired": "採用された"
+        }
       }
     },
     "enterOffice": "出社する（全画面）",
