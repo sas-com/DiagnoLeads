@@ -6,7 +6,7 @@ title: "MemoryBank の学びは差分で足し、効いた・外れたを記録�
 status: active
 superseded_by: []
 issues: [1094]
-paths: [".factory/memory/learnings.md", ".factory/memory/README.md", ".claude/skills/record-decision/SKILL.md", ".claude/skills/ship/SKILL.md"]
+paths: [".claude/skills/record-decision/SKILL.md", ".claude/skills/ship/SKILL.md"]
 ---
 
 ### [Process] MemoryBank の学びは差分で足し、効いた・外れたを記録して、月1回の見直しで整理する（ACE の grow-and-refine、#1094）
@@ -16,7 +16,7 @@ paths: [".factory/memory/learnings.md", ".factory/memory/README.md", ".claude/sk
   - 同じ学びかの判定：読む人が取る行動が既存の項目と同じなら同じ学びとし、新しく足さない。固有の名前を外して書けるときは1段だけ一般化してから比べる
   - 差分で足す（Curator の delta update）：項目を1つ足すか、同じ学びの項目に追記する。ファイル全体や節をまとめて書き直さない。短く言い直さない
   - 評価（helpful / harmful のカウンタ）：学びに従って作業したら、PR の本文の「役立った学び」か「外れた学び」に見出しを書く。`learnings.md` の「評価」の数は、月1回の見直しでマージ済みの PR の本文から数えて増やす
-  - 整理（refine）：月1回の見直しで、候補（重複・外れた方が多い・今のコードと合わない・「効いた」が3以上で機械で判定できる）をファイルを変えずに出し、オーナーが承認した分だけ PR で適用する。機械で判定できる学びは Issue にしてフックかテストに移す。評価の数は、まとめるときの足し合わせのほかは減らさない
+  - 整理（refine）：月1回の見直しで、候補（重複・外れた方が多い・今のコードと合わない・「効いた」が3以上で機械で判定できる）をファイルを変えずに出し、オーナーが承認した分だけ PR で適用する。機械で判定できる学びは Issue にしてフックかテストに移す。評価の数は、まとめるときの足し合わせのほかは減らさない（→ [2026-11-12-memory-review-monthly-issue](./2026-11-12-memory-review-monthly-issue.md) で変更：フックかテストに移す候補は「機械で判定でき、同じ学びへの追記か再発が2回以上」。見直しは毎月 Actions が開く Issue から始める）
   - 同じ学びかの判定・PR の本文での記録・承認してから整理する手順・3回の基準は、feel-flow/ff-dev-toolkit（Apache-2.0）の `ace-curate`・`ace-refine`・`retrospective` を参考にした。プラグインは入れない
 - **理由**:
   - ACE の論文は、毎回コンテキスト全体を LLM に書き直させると短く情報の乏しい要約に潰れる「コンテキスト崩壊」と、短く汎用的な文に寄る「brevity bias」を挙げ、カウンタ付きの差分更新と、重複の除去・剪定（grow-and-refine）で避けている
