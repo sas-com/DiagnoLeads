@@ -31,8 +31,7 @@ interface Exceptions {
 const EXCEPTIONS: Exceptions = {
   // Shared with the check that db:migrate runs against the database (#620)
   whenOutOfOrder: [...WHEN_OUT_OF_ORDER],
-  // Never journaled. #433 decides whether its indexes become a real migration
-  sqlOutsideJournal: ['0001_performance_optimization'],
+  sqlOutsideJournal: [],
 };
 
 const FIX =

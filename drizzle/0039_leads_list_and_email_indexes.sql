@@ -1,0 +1,2 @@
+CREATE INDEX "leads_org_created_at_id_idx" ON "leads" USING btree ("organization_id","created_at" DESC NULLS LAST,"id" DESC NULLS FIRST);--> statement-breakpoint
+CREATE INDEX "leads_org_email_lower_idx" ON "leads" USING btree ("organization_id",lower("email"));

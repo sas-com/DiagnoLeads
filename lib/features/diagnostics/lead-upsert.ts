@@ -8,7 +8,7 @@
  */
 import type { db as defaultDb } from '@/lib/db/client';
 import { type Lead, type NewLead, leads } from '@/lib/db/schema';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { type SQL, and, asc, eq, sql } from 'drizzle-orm';
 
 type Database = typeof defaultDb;
 export type SubmissionTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
@@ -35,6 +35,17 @@ export interface UpsertLeadFromSubmissionResult {
 }
 
 /**
+ * The organization's leads with the email address, compared in lower case: the shape the index
+ * leads_org_email_lower_idx serves (#433, checked in test/unit/integration/admin-indexes.db.test.ts)
+ */
+export function leadEmailMatch(organizationId: string, normalizedEmail: string): SQL | undefined {
+  return and(
+    eq(leads.organizationId, organizationId),
+    sql`lower(${leads.email}) = ${normalizedEmail}`
+  );
+}
+
+/**
  * Find the organization's lead for the email address, or create it. Must run inside the
  * transaction that also stores the submission: a transaction-scoped advisory lock on
  * (organization, email) serializes concurrent submissions for the same address, so a double
@@ -50,10 +61,7 @@ export async function upsertLeadFromSubmission(
   );
 
   const existing: Lead | undefined = await tx.query.leads.findFirst({
-    where: and(
-      eq(leads.organizationId, organizationId),
-      sql`lower(${leads.email}) = ${normalized}`
-    ),
+    where: leadEmailMatch(organizationId, normalized),
     orderBy: [asc(leads.createdAt)],
   });
   if (existing) return { leadId: existing.id, existing };
