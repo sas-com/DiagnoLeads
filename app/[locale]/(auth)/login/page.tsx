@@ -41,7 +41,10 @@ export default async function LoginPage({ params }: { params: Promise<{ locale: 
 
       <div className="mt-6">
         <div className="flex items-center justify-between text-sm">
-          <Link href="/reset-password" className="font-medium text-blue-600 hover:text-blue-500">
+          <Link
+            href="/reset-password"
+            className="font-medium text-brand-500 underline hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300"
+          >
             {t('forgotPassword')}
           </Link>
         </div>

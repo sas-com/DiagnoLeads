@@ -17,8 +17,9 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const { isExpanded, isHovered, isMobileOpen } = useSidebar();
 
   return (
-    // dl-admin: the DADS colors and focus of the admin site (app/globals.css, #548)
-    <div className="dl-admin min-h-screen xl:flex bg-gray-50 dark:bg-gray-900">
+    // dl-admin: the colors of the AI office by day and by night, and the focus of the admin site
+    // (app/globals.css, #1120). By night the ground is deeper than the panels on it
+    <div className="dl-admin min-h-screen xl:flex bg-gray-50 dark:bg-gray-950">
       <AppSidebar />
       <Backdrop />
       <div

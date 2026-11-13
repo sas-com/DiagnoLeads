@@ -112,7 +112,7 @@ function ResetPasswordConfirmContent() {
           <p className="text-sm text-gray-600 dark:text-gray-400">{error}</p>
           <Link
             href="/reset-password"
-            className="inline-block mt-4 text-sm font-medium text-blue-600 hover:text-blue-500"
+            className="inline-block mt-4 text-sm font-medium text-brand-500 underline hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300"
           >
             {t('requestNewLink')}
           </Link>
@@ -130,7 +130,7 @@ function ResetPasswordConfirmContent() {
           <p className="text-sm text-gray-600 dark:text-gray-400">{t('successMessage')}</p>
           <Link
             href="/login"
-            className="inline-block mt-4 text-sm font-medium text-blue-600 hover:text-blue-500"
+            className="inline-block mt-4 text-sm font-medium text-brand-500 underline hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300"
           >
             {t('backToLogin')}
           </Link>
@@ -148,7 +148,7 @@ function ResetPasswordConfirmContent() {
           <p className="text-sm text-gray-600 dark:text-gray-400">{t('missingToken')}</p>
           <Link
             href="/reset-password"
-            className="inline-block mt-4 text-sm font-medium text-blue-600 hover:text-blue-500"
+            className="inline-block mt-4 text-sm font-medium text-brand-500 underline hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300"
           >
             {t('requestNewLink')}
           </Link>
@@ -214,7 +214,10 @@ function ResetPasswordConfirmContent() {
       </Form>
 
       <div className="mt-6 text-center">
-        <Link href="/login" className="text-sm font-medium text-blue-600 hover:text-blue-500">
+        <Link
+          href="/login"
+          className="text-sm font-medium text-brand-500 underline hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300"
+        >
           {t('backToLogin')}
         </Link>
       </div>

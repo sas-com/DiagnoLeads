@@ -412,7 +412,7 @@
 }
 
 @utility menu-item-active {
-  @apply bg-brand-50 text-brand-500 dark:bg-brand-500/[0.12] dark:text-brand-400;
+  @apply bg-brand-50 text-brand-500 dark:bg-brand-400/[0.14] dark:text-brand-400;
 }
 
 @utility menu-item-inactive {
@@ -448,7 +448,7 @@
 }
 
 @utility menu-dropdown-item-active {
-  @apply bg-brand-50 text-brand-500 dark:bg-brand-500/[0.12] dark:text-brand-400;
+  @apply bg-brand-50 text-brand-500 dark:bg-brand-400/[0.14] dark:text-brand-400;
 }
 
 @utility menu-dropdown-item-inactive {
@@ -719,59 +719,92 @@ html:has(.ax-site) {
 }
 
 /*
- * Admin site in DADS (#423, #548): while an admin screen is shown (the dashboard shell or the
- * sign-in screens carry .dl-admin), the brand scale becomes DADS Green (key color, owner's
- * choice 2026-10-24) and the gray scale DADS Solid Gray. Set on html so dialogs and menus,
+ * Admin site in the world of the AI office (#1120, owner's choice 2026-11-13; before that DADS,
+ * #423): while an admin screen is shown (the dashboard shell or the sign-in screens carry
+ * .dl-admin), the light theme is the office by day (warm marble, navy ink, brass lines) and the
+ * dark theme the office by night (deep navy, brass lights). Set on html so dialogs and menus,
  * which render under body, get them too. The AX site and the builder diagnoses keep theirs.
- * brand-500 is the primary fill (Green-900, 8.3:1 with white); gray-500 is the lightest gray
- * for text (Solid Gray 536, 4.5:1 on white); gray-400 is for borders and icons (3:1).
+ *
+ * The scales keep the roles they had under DADS, and every step keeps or beats the contrast it
+ * had (checked against white, the ground and the night surfaces):
+ * - brand-500 is the primary fill by day (navy, 12:1 with white); brand-400 is brass: lines and
+ *   small captions by day (5:1 on white), text, links and fills by night (12:1 on the panels)
+ * - gray-500 is the lightest gray for text by day (4.9:1 on white); gray-400 is for borders and
+ *   icons (3:1); by night gray-900/800/700 are the navy surfaces and gray-50/200/300 the text
  */
 html:has(.dl-admin) {
-  --color-brand-25: var(--color-primitive-green-50);
-  --color-brand-50: var(--color-primitive-green-50);
-  --color-brand-100: var(--color-primitive-green-100);
-  --color-brand-200: var(--color-primitive-green-200);
-  --color-brand-300: var(--color-primitive-green-300);
-  --color-brand-400: var(--color-primitive-green-400);
-  --color-brand-500: var(--color-primitive-green-900);
-  --color-brand-600: var(--color-primitive-green-1000);
-  --color-brand-700: var(--color-primitive-green-1100);
-  --color-brand-800: var(--color-primitive-green-1200);
-  --color-brand-900: var(--color-primitive-green-1200);
-  --color-brand-950: var(--color-primitive-green-1200);
+  --color-brand-25: #faf6ea;
+  --color-brand-50: #f6efdc;
+  --color-brand-100: #ecdfbf;
+  --color-brand-200: #dcc692;
+  --color-brand-300: #c9a961;
+  --color-brand-400: #8a6a24;
+  --color-brand-500: #1e3566;
+  --color-brand-600: #172a52;
+  --color-brand-700: #12213f;
+  --color-brand-800: #0c1222;
+  --color-brand-900: #0c1222;
+  --color-brand-950: #070b16;
 
-  --color-gray-25: var(--color-neutral-white);
-  --color-gray-50: var(--color-neutral-solid-gray-50);
-  --color-gray-100: var(--color-neutral-solid-gray-100);
-  --color-gray-200: var(--color-neutral-solid-gray-200);
-  --color-gray-300: var(--color-neutral-solid-gray-300);
-  --color-gray-400: var(--color-neutral-solid-gray-420);
-  --color-gray-500: var(--color-neutral-solid-gray-536);
-  --color-gray-600: var(--color-neutral-solid-gray-600);
-  --color-gray-700: var(--color-neutral-solid-gray-700);
-  --color-gray-800: var(--color-neutral-solid-gray-800);
-  --color-gray-900: var(--color-neutral-solid-gray-900);
-  --color-gray-950: var(--color-neutral-solid-gray-900);
-  --color-gray-dark: var(--color-neutral-solid-gray-900);
+  --color-gray-25: #ffffff;
+  --color-gray-50: #f3efe8;
+  --color-gray-100: #e9e4da;
+  --color-gray-200: #d1cabd;
+  --color-gray-300: #b8b0a1;
+  --color-gray-400: #958e7e;
+  --color-gray-500: #6b7180;
+  --color-gray-600: #545b6b;
+  --color-gray-700: #3e4556;
+  --color-gray-800: #2a3145;
+  --color-gray-900: #1b2130;
+  --color-gray-950: #12172a;
+  --color-gray-dark: #1b2130;
 
-  --app-foreground: var(--color-neutral-solid-gray-900);
-  --app-muted-foreground: var(--color-neutral-solid-gray-536);
+  --app-foreground: #1b2130;
+  --app-muted-foreground: #6b7180;
 }
-html.dark:has(.dl-admin) {
-  --app-foreground: var(--color-neutral-solid-gray-50);
-  --app-muted-foreground: var(--color-neutral-solid-gray-300);
-  /*
-   * Dark text set in gray-400 (Solid Gray 420) is 4.17:1 on gray-800 cards, under DADS's 4.5:1.
-   * Solid Gray 300 gives 6.03 there and 8.30 on gray-900; borders and icons in gray-400 get a
-   * little lighter and keep 3:1 (#932, owner's choice 2026-11-08 over editing ~100 classes).
-   */
-  --color-gray-400: var(--color-neutral-solid-gray-300);
+/*
+ * The office by night: the dark theme, and in both themes the parts that are the frame of the
+ * building (.office-night with .dark on the same element: the menu). gray-400 is gray-300 here,
+ * as text set in it must keep 4.5:1 on the panels (#932).
+ */
+html.dark:has(.dl-admin),
+html:has(.dl-admin) .office-night {
+  --color-brand-25: #fbf5e6;
+  --color-brand-50: #fbf5e6;
+  --color-brand-100: #f3e7c8;
+  --color-brand-200: #ecd9a8;
+  --color-brand-300: #f3dfb4;
+  --color-brand-400: #e9cf9a;
+  --color-brand-500: #2f4a8a;
+  --color-brand-600: #263d75;
+  --color-brand-700: #1d2f5c;
+  --color-brand-800: #12213f;
+  --color-brand-900: #12213f;
+  --color-brand-950: #0c1222;
+
+  --color-gray-25: #ffffff;
+  --color-gray-50: #f5f1e8;
+  --color-gray-100: #ebe6da;
+  --color-gray-200: #d8d2c4;
+  --color-gray-300: #bdb7a9;
+  --color-gray-400: #bdb7a9;
+  --color-gray-500: #8b93a8;
+  --color-gray-600: #6f7890;
+  --color-gray-700: #232c44;
+  --color-gray-800: #101522;
+  --color-gray-900: #0a1020;
+  --color-gray-950: #050915;
+  --color-gray-dark: #0a1020;
+
+  --app-foreground: #f5f1e8;
+  --app-muted-foreground: #bdb7a9;
 }
 
 /*
- * DADS focus: black outline around a Yellow-300 ring, on every focusable element of the admin
- * site. DADS says the focus colors must never be changed, so this wins over the components'
- * own focus rings.
+ * Focus: a black outline around a Yellow-300 ring, on every focusable element of the admin
+ * site, by day and by night (kept from DADS: it shows on every surface). It wins over the
+ * components' own focus rings; a component must not change its colors.
  */
 html:has(.dl-admin) :focus-visible {
   outline: 4px solid var(--color-neutral-black);

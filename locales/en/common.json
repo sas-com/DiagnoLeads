@@ -106,7 +106,17 @@
     "agencyLinks": "Agency links",
     "fieldGlossary": "Field glossary",
     "profile": "Profile",
-    "logout": "Logout"
+    "logout": "Logout",
+    "floorGuide": "Floor guide",
+    "rooms": {
+      "president": "President's office",
+      "desk": "President's desk",
+      "marketing": "Marketing room",
+      "sales": "Sales floor",
+      "reception": "Reception"
+    },
+    "day": "Day",
+    "night": "Night"
   },
   "metadata": {
     "root": {

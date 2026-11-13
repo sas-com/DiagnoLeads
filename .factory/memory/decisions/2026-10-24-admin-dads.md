@@ -3,8 +3,8 @@ id: 2026-10-24-admin-dads
 date: 2026-10-24
 category: UI
 title: "管理者サイトのデザインシステムを DADS にする。中身と配置は STUDIO を参考（#423, #548）"
-status: active
-superseded_by: []
+status: superseded
+superseded_by: [2026-11-13-admin-office-world]
 issues: [423, 548]
 paths: ["components/layout/DashboardShell.tsx", "app/[locale]/(auth)/layout.tsx", "components/studio/**", "components/ui/**"]
 ---

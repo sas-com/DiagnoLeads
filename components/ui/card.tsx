@@ -24,7 +24,8 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
     <div
       ref={ref}
       className={cn(
-        'rounded-lg border bg-white text-gray-900 shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-50',
+        // The brass line on top is the mark of a panel of the office (#1120); a decoration replaces it
+        'rounded-lg border border-t-2 border-t-brand-400 bg-white text-gray-900 shadow-sm dark:border-gray-700 dark:border-t-brand-400 dark:bg-gray-900 dark:text-gray-50',
         decoration === 'top' && 'border-t-4',
         decoration === 'left' && 'border-l-4',
         decoration && decorationColors[decorationColor],
