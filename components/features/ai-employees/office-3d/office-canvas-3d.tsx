@@ -241,9 +241,21 @@ function CameraRig({
 }
 
 /** Reports the frames drawn each second (for measuring the spike) */
-function FrameCounter({ onFps }: { onFps?: (fps: number) => void }) {
+function FrameCounter({
+  onFps,
+  onReady,
+}: {
+  onFps?: (fps: number) => void;
+  onReady?: () => void;
+}) {
   const count = useRef({ frames: 0, since: 0 });
+  const drawn = useRef(false);
   useFrame(({ clock }) => {
+    // The first frame: the floor is there, and the 2D one behind it may go
+    if (!drawn.current) {
+      drawn.current = true;
+      onReady?.();
+    }
     count.current.frames += 1;
     const elapsed = clock.elapsedTime - count.current.since;
     if (elapsed >= 1) {
@@ -267,6 +279,7 @@ export default function OfficeCanvas3D({
   focus = null,
   reducedMotion = false,
   onFps,
+  onReady,
 }: {
   employees: readonly Office3DEmployee[];
   /** What just happened to an employee, by role */
@@ -277,6 +290,8 @@ export default function OfficeCanvas3D({
   focus?: AiEmployeeRole | null;
   reducedMotion?: boolean;
   onFps?: (fps: number) => void;
+  /** Told once, when the first frame was drawn */
+  onReady?: () => void;
 }) {
   const world = useRef<Group>(null);
   const places = useRef<Partial<Record<AiEmployeeRole, FloorPoint>>>({});
@@ -297,7 +312,7 @@ export default function OfficeCanvas3D({
         world={world}
         follow={() => (focus ? (places.current[focus] ?? null) : null)}
       />
-      <FrameCounter onFps={onFps} />
+      <FrameCounter onFps={onFps} onReady={onReady} />
       <ambientLight intensity={night ? 0.55 : 1.1} />
       <directionalLight
         position={[-8, 24, 14]}

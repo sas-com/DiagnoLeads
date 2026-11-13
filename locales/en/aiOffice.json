@@ -542,7 +542,9 @@
           "run_succeeded": "A run succeeded",
           "president_near": "The president came near",
           "hired": "Hired"
-        }
+        },
+        "loading": "Loading the 3D floor.",
+        "failed": "The 3D floor could not be shown. The office is back in 2D."
       }
     },
     "enterOffice": "Enter the office (full screen)",
