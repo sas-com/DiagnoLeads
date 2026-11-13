@@ -124,6 +124,8 @@ export function OfficeImmersive({
   // The room the president is in (stage 'room'), and what its keys do
   const [room, setRoom] = useState<OfficeRoom>(OFFICE_ROOMS[0]);
   const roomKeys = useRef<RoomKeys | null>(null);
+  // Something is open inside the room (a customer file): Esc closes that first
+  const [roomFileOpen, setRoomFileOpen] = useState(false);
 
   const statuses = statusByRole(employees);
   const byRole = new Map(employees.map((employee) => [employee.role, employee]));
@@ -370,8 +372,11 @@ export function OfficeImmersive({
           aria-describedby={undefined}
           onKeyDown={onKeyDown}
           onEscapeKeyDown={(event) => {
-            // Esc steps back one stage; only the title leaves the office
+            // Esc steps back one stage; only the title leaves the office. A room may use it
+            // first, to close what is open in it
             event.preventDefault();
+            const inRoom = { key: 'Escape', preventDefault: () => undefined };
+            if (stage === 'room' && roomKeys.current?.(inRoom)) return;
             stepBack();
           }}
           onOpenAutoFocus={(event) => {
@@ -756,7 +761,8 @@ export function OfficeImmersive({
                   FOCUS
                 )}
               >
-                <span className={cn(KEY, 'bg-[#0a0e18]/60')}>Esc</span>
+                {/* While a file is open, Esc belongs to the file: the key is not shown here */}
+                {!roomFileOpen && <span className={cn(KEY, 'bg-[#0a0e18]/60')}>Esc</span>}
                 {t('room.back')}
               </button>
               <OfficeRoomLeads
@@ -766,6 +772,7 @@ export function OfficeImmersive({
                 employeeName={byRole.get(ROOM_ROLES[room])?.name ?? null}
                 keysRef={roomKeys}
                 onOpenLead={leave}
+                onFileOpenChange={setRoomFileOpen}
               />
             </>
           )}

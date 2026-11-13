@@ -1,6 +1,7 @@
 /**
  * The marketing room of the full-screen office (#1127): entering it from the floor, the room's
- * figures and who reads them, the lead board with its views, pages and states, and the keys.
+ * figures and who reads them, the lead board with its views, pages and states, the keys, and
+ * the customer file that opens inside the room and records a contact (#1128).
  * Real next-intl messages; tRPC mocked.
  */
 import { OfficeImmersive } from '@/components/features/ai-employees/office-immersive';
@@ -33,10 +34,29 @@ const lead = (n: number, status = 'new') => ({
   createdAt: new Date('2026-11-10T00:00:00Z'),
 });
 
+interface ContactRecord {
+  id: string;
+  leadId: string;
+  kind: 'call' | 'email' | 'no_answer';
+  note: string | null;
+  contactedAt: Date;
+  durationMinutes: number | null;
+  outcome: null;
+  createdBy: { id: string; name: string } | null;
+}
+
 const mocks = vi.hoisted(() => ({
   inputs: [] as unknown[],
   /** What leads.list answers: 'ok', 'forbidden', 'error' or 'loading' */
   mode: 'ok' as 'ok' | 'forbidden' | 'error' | 'loading',
+  /** The contact records of the open lead, newest first */
+  records: [] as ContactRecord[],
+  recorded: [] as { organizationId: string; leadId: string; kind: string }[],
+  deleted: [] as { organizationId: string; id: string }[],
+  canEdit: true,
+  failRecord: false,
+  contactsFail: false,
+  refreshed: vi.fn(),
 }));
 
 /** 12 leads in all; 3 are new, none asked for a consultation, 5 came this week */
@@ -57,7 +77,72 @@ function answer(input: ListInput) {
 
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
-    useUtils: () => ({ aiEmployees: { office: { invalidate: vi.fn() } } }),
+    useUtils: () => ({
+      aiEmployees: { office: { invalidate: vi.fn() } },
+      leadFollowUp: { contacts: { invalidate: mocks.refreshed } },
+      leadActivity: {
+        list: { invalidate: vi.fn() },
+        forDeal: { invalidate: vi.fn() },
+        myDay: { invalidate: vi.fn() },
+      },
+      analytics: { getDashboard: { invalidate: vi.fn() } },
+    }),
+    leadFollowUp: {
+      contacts: {
+        useQuery: () =>
+          mocks.contactsFail
+            ? { data: undefined, isError: true }
+            : {
+                data: {
+                  firstContactAt: mocks.records.at(-1)?.contactedAt ?? null,
+                  total: mocks.records.length,
+                  noAnswerCount: mocks.records.filter((r) => r.kind === 'no_answer').length,
+                  recent: mocks.records,
+                  canEdit: mocks.canEdit,
+                },
+                isError: false,
+              },
+      },
+      recordContact: {
+        useMutation: (
+          options: {
+            onSuccess?: (saved: ContactRecord, input: { kind: string }) => void;
+            onError?: () => void;
+          } = {}
+        ) => ({
+          isPending: false,
+          mutate: (input: { organizationId: string; leadId: string; kind: ContactRecord['kind'] }) => {
+            if (mocks.failRecord) {
+              options.onError?.();
+              return;
+            }
+            const saved: ContactRecord = {
+              id: `contact-${mocks.recorded.length + 1}`,
+              leadId: input.leadId,
+              kind: input.kind,
+              note: null,
+              contactedAt: new Date('2026-11-13T02:00:00Z'),
+              durationMinutes: null,
+              outcome: null,
+              createdBy: { id: 'u', name: '山田 太郎' },
+            };
+            mocks.recorded.push(input);
+            mocks.records.unshift(saved);
+            options.onSuccess?.(saved, input);
+          },
+        }),
+      },
+      deleteContact: {
+        useMutation: (options: { onSuccess?: () => void } = {}) => ({
+          isPending: false,
+          mutate: (input: { organizationId: string; id: string }) => {
+            mocks.deleted.push(input);
+            mocks.records = mocks.records.filter((r) => r.id !== input.id);
+            options.onSuccess?.();
+          },
+        }),
+      },
+    },
     aiEmployees: {
       hire: { useMutation: () => ({ isPending: false, mutate: vi.fn() }) },
       update: { useMutation: () => ({ isPending: false, mutate: vi.fn() }) },
@@ -123,6 +208,13 @@ describe('the marketing room', () => {
   beforeEach(() => {
     mocks.inputs.length = 0;
     mocks.mode = 'ok';
+    mocks.records = [];
+    mocks.recorded.length = 0;
+    mocks.deleted.length = 0;
+    mocks.canEdit = true;
+    mocks.failRecord = false;
+    mocks.contactsFail = false;
+    mocks.refreshed.mockClear();
   });
 
   it('is entered from the floor guide, and left with Esc', async () => {
@@ -192,7 +284,7 @@ describe('the marketing room', () => {
   it('opens on what nobody has started on, the focus on the report', async () => {
     const { office, board } = await enterRoom();
     expect(within(board).getByText(/まだ着手していない（新規）・3 件/)).toBeInTheDocument();
-    expect(within(board).getAllByRole('link', { name: /見本商事/ })).toHaveLength(3);
+    expect(within(board).getAllByRole('button', { name: /見本商事/ })).toHaveLength(3);
     expect(
       within(office).getByRole('button', { name: /まだ着手していないものを見せて/ })
     ).toHaveAttribute('aria-pressed', 'true');
@@ -204,7 +296,7 @@ describe('the marketing room', () => {
     const { user, office, board } = await enterRoom();
     await user.click(within(office).getByRole('button', { name: /全部見せて/ }));
     expect(within(board).getByText(/すべて・12 件/)).toBeInTheDocument();
-    expect(within(board).getAllByRole('link', { name: /見本商事/ })).toHaveLength(
+    expect(within(board).getAllByRole('button', { name: /見本商事/ })).toHaveLength(
       LEAD_BOARD_PAGE_SIZE
     );
 
@@ -230,7 +322,7 @@ describe('the marketing room', () => {
 
     await user.click(within(board).getByRole('button', { name: /次へ/ }));
     expect(within(board).getByText('12 件中 9〜12 件')).toBeInTheDocument();
-    expect(within(board).getAllByRole('link', { name: /見本商事/ })).toHaveLength(4);
+    expect(within(board).getAllByRole('button', { name: /見本商事/ })).toHaveLength(4);
     // The button keeps the focus at the last page, so the keys go on working
     expect(within(board).getByRole('button', { name: /次へ/ })).toHaveAttribute(
       'aria-disabled',
@@ -247,7 +339,7 @@ describe('the marketing room', () => {
 
   it('moves over the rows with the arrow keys', async () => {
     const { user, board } = await enterRoom();
-    const rows = within(board).getAllByRole('link', { name: /見本商事/ });
+    const rows = within(board).getAllByRole('button', { name: /見本商事/ });
     await user.keyboard('{ArrowDown}');
     expect(rows[0]).toHaveFocus();
     await user.keyboard('{ArrowDown}');
@@ -256,16 +348,11 @@ describe('the marketing room', () => {
     expect(rows[0]).toHaveFocus();
   });
 
-  it('opens a lead on its page in the normal view, and closes the office', async () => {
-    const { user, board, onExit } = await enterRoom();
-    const row = within(board).getAllByRole('link', { name: /見本商事/ })[0];
-    expect(row).toHaveAttribute('href', '/ja/leads/00000000-0000-4000-8000-000000000001');
-    // The MQL level and the status are words, not only colours
+  it('shows the MQL level and the status of a row as words, not only colours', async () => {
+    const { board } = await enterRoom();
+    const row = within(board).getAllByRole('button', { name: /見本商事/ })[0];
     expect(within(row).getByText('関心あり（MQL）')).toBeInTheDocument();
     expect(within(row).getByText('新規')).toBeInTheDocument();
-    row.addEventListener('click', (event) => event.preventDefault());
-    await user.click(row);
-    expect(onExit).toHaveBeenCalledTimes(1);
   });
 
   it('links to the same view of the list in the normal view', async () => {
@@ -288,7 +375,7 @@ describe('the marketing room', () => {
       within(board).getByText('見込み客を見る権限がありません。管理者に確かめてください。')
     ).toBeInTheDocument();
     expect(within(office).getByText('ボードの数字を読めませんでした。')).toBeInTheDocument();
-    expect(within(board).queryByRole('link', { name: /見本商事/ })).not.toBeInTheDocument();
+    expect(within(board).queryByRole('button', { name: /見本商事/ })).not.toBeInTheDocument();
   });
 
   it('shows that it is loading, and that reading failed', async () => {
@@ -304,5 +391,160 @@ describe('the marketing room', () => {
     expect(
       within(board).getByText('見込み客を読めませんでした。時間をおいて、もう一度開いてください。')
     ).toBeInTheDocument();
+  });
+});
+
+describe('the customer file in the room', () => {
+  beforeEach(() => {
+    mocks.inputs.length = 0;
+    mocks.mode = 'ok';
+    mocks.records = [];
+    mocks.recorded.length = 0;
+    mocks.deleted.length = 0;
+    mocks.canEdit = true;
+    mocks.failRecord = false;
+    mocks.contactsFail = false;
+    mocks.refreshed.mockClear();
+  });
+
+  async function openFile() {
+    const room = await enterRoom();
+    await room.user.keyboard('{ArrowDown}{Enter}');
+    const file = within(room.office).getByRole('region', { name: '見本商事1のファイル' });
+    return { ...room, file };
+  }
+
+  it('opens inside the room: the office stays open and the board gives way to the file', async () => {
+    const { office, file, onExit } = await openFile();
+    expect(onExit).not.toHaveBeenCalled();
+    expect(within(office).queryByRole('region', { name: '見込み客ボード' })).not.toBeInTheDocument();
+    expect(within(file).getByRole('heading', { name: /見本商事1.*見本 1郎/ })).toBeInTheDocument();
+    expect(within(file).getByText('新規')).toBeInTheDocument();
+    expect(within(file).getByText(/MQL段階：関心あり（MQL）/)).toBeInTheDocument();
+    expect(within(file).getByText('まだ記録がありません。')).toBeInTheDocument();
+    expect(
+      within(office).getByText('この見込み客には、まだ連絡の記録がありません。')
+    ).toBeInTheDocument();
+    // The focus is on the report: Enter pressed once too often records nothing
+    expect(document.activeElement?.textContent).toContain('まだ連絡の記録がありません');
+    // Esc now closes the file, so only the file shows the key; the way to the floor is a button
+    expect(within(office).getByRole('button', { name: 'フロアへ戻る' })).toBeInTheDocument();
+    expect(within(file).getByRole('button', { name: /Esc.*ボードに戻る/ })).toBeInTheDocument();
+  });
+
+  it('goes back to the board with Esc, the focus on the row it came from, then to the floor', async () => {
+    const { user, office } = await openFile();
+    await user.keyboard('{Escape}');
+    const board = within(office).getByRole('region', { name: '見込み客ボード' });
+    expect(within(board).getAllByRole('button', { name: /見本商事/ })[0]).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(within(office).getByRole('navigation', { name: 'フロア案内' })).toBeInTheDocument();
+  });
+
+  it('records a contact with a choice, for this lead of this organization', async () => {
+    const { user, office, file } = await openFile();
+    await user.click(within(office).getByRole('button', { name: /メールした/ }));
+    expect(mocks.recorded).toEqual([
+      { organizationId: ORG_ID, leadId: '00000000-0000-4000-8000-000000000001', kind: 'email' },
+    ]);
+    expect(
+      within(office).getByText('「メールした」を記録しました。間違えたときは、取り消せます。')
+    ).toBeInTheDocument();
+    // The record shows in the file, and what shows contacts elsewhere is refreshed
+    expect(within(file).getByText('メールした')).toBeInTheDocument();
+    expect(within(file).getByText(/山田 太郎が記録/)).toBeInTheDocument();
+    expect(mocks.refreshed).toHaveBeenCalled();
+  });
+
+  it('records with the number keys, and the same key pressed again goes back instead of recording twice', async () => {
+    const { user, office } = await openFile();
+    await user.keyboard('1');
+    expect(mocks.recorded.map((input) => input.kind)).toEqual(['call']);
+    const choices = within(office)
+      .getAllByRole('button')
+      .filter((button) => /ボードに戻る|取り消す|電話した/.test(button.textContent ?? ''));
+    expect(choices.map((button) => button.textContent)).toEqual(
+      expect.arrayContaining(['1ボードに戻る', '2いまの記録を取り消す'])
+    );
+    expect(within(office).queryByRole('button', { name: /電話した/ })).not.toBeInTheDocument();
+
+    await user.keyboard('1');
+    expect(mocks.recorded).toHaveLength(1);
+    expect(mocks.deleted).toHaveLength(0);
+    expect(within(office).getByRole('region', { name: '見込み客ボード' })).toBeInTheDocument();
+  });
+
+  it('takes the record back, and offers the answers again', async () => {
+    const { user, office, file } = await openFile();
+    await user.keyboard('3');
+    expect(mocks.recorded.map((input) => input.kind)).toEqual(['no_answer']);
+    await user.click(within(office).getByRole('button', { name: /いまの記録を取り消す/ }));
+    expect(mocks.deleted).toEqual([{ organizationId: ORG_ID, id: 'contact-1' }]);
+    expect(within(office).getByText('記録を取り消しました。')).toBeInTheDocument();
+    expect(within(file).getByText('まだ記録がありません。')).toBeInTheDocument();
+    expect(within(office).getByRole('button', { name: /電話した/ })).toBeInTheDocument();
+  });
+
+  it('reads the last contact from the records', async () => {
+    mocks.records = [
+      {
+        id: 'old',
+        leadId: '00000000-0000-4000-8000-000000000001',
+        kind: 'no_answer',
+        note: '折り返しを待つ',
+        contactedAt: new Date('2026-11-12T01:00:00Z'),
+        durationMinutes: null,
+        outcome: null,
+        createdBy: null,
+      },
+    ];
+    const { office, file } = await openFile();
+    expect(
+      within(office).getByText(
+        /最後の連絡は 11\/12 10:00 の「つながらなかった」です。連絡の記録は 1 件あります。/
+      )
+    ).toBeInTheDocument();
+    expect(within(file).getByText('1 件（つながらなかった 1 回）')).toBeInTheDocument();
+    expect(within(file).getByText('折り返しを待つ')).toBeInTheDocument();
+  });
+
+  it('says so when the record fails, and leaves the answers', async () => {
+    mocks.failRecord = true;
+    const { user, office } = await openFile();
+    await user.keyboard('1');
+    expect(
+      within(office).getByText(
+        'すみません、うまくいきませんでした。時間をおいて、もう一度お願いします。'
+      )
+    ).toBeInTheDocument();
+    expect(within(office).getByRole('button', { name: /電話した/ })).toBeInTheDocument();
+  });
+
+  it('offers only the way back to a member who may not change leads', async () => {
+    mocks.canEdit = false;
+    const { user, office } = await openFile();
+    expect(within(office).getByText('連絡を記録する権限がありません。')).toBeInTheDocument();
+    expect(within(office).queryByRole('button', { name: /電話した/ })).not.toBeInTheDocument();
+    await user.keyboard('2');
+    await user.keyboard('3');
+    expect(mocks.recorded).toHaveLength(0);
+    await user.keyboard('1');
+    expect(within(office).getByRole('region', { name: '見込み客ボード' })).toBeInTheDocument();
+  });
+
+  it('says that the contact records could not be read', async () => {
+    mocks.contactsFail = true;
+    const { office, file } = await openFile();
+    expect(within(file).getAllByText(/連絡の記録を読めませんでした。/).length).toBeGreaterThan(0);
+    expect(within(office).queryByRole('button', { name: /電話した/ })).not.toBeInTheDocument();
+  });
+
+  it('opens the lead\u2019s page in the normal view from the file, and closes the office', async () => {
+    const { user, file, onExit } = await openFile();
+    const link = within(file).getByRole('link', { name: '通常の表示で詳細を開く' });
+    expect(link).toHaveAttribute('href', '/ja/leads/00000000-0000-4000-8000-000000000001');
+    link.addEventListener('click', (event) => event.preventDefault());
+    await user.click(link);
+    expect(onExit).toHaveBeenCalledTimes(1);
   });
 });

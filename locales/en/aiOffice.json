@@ -278,11 +278,42 @@
           "error": "The leads could not be read. Please open the room again in a while.",
           "forbidden": "You do not have permission to see leads. Please ask an administrator.",
           "range": "{from}–{to} of {total}",
-          "openHint": "Opening a row goes to the lead's page in the normal view.",
+          "openHint": "Opening a row opens the customer file in this room.",
           "openList": "Open the list in the normal view",
           "prev": "Previous",
           "next": "Next",
           "page": "{page} / {pages}"
+        },
+        "file": {
+          "label": "The file of {company}",
+          "title": "Customer file",
+          "reading": "Reading the contact records.",
+          "readError": "The contact records could not be read. Please open the file again in a while.",
+          "noContact": "There is no contact record for this lead yet.",
+          "latest": "The last contact was \"{kind}\" on {date}. Contact records in all: {total}.",
+          "recorded": "Recorded \"{kind}\". You can undo it if it was a mistake.",
+          "undone": "The record was undone.",
+          "failed": "Sorry, that did not work. Please try again in a while.",
+          "readOnly": "You do not have permission to record contacts.",
+          "choices": {
+            "call": "I called",
+            "email": "I emailed",
+            "no_answer": "No answer",
+            "back": "Back to the board",
+            "undo": "Undo this record"
+          },
+          "contact": "Contact",
+          "email": "Email",
+          "phone": "Phone",
+          "created": "Created",
+          "assignee": "Assignee",
+          "notSet": "Not set",
+          "contacts": "Contact records",
+          "contactsSummary": "{total} in all (no answer: {noAnswer})",
+          "contactsEmpty": "No records yet.",
+          "by": "recorded by {name}",
+          "openDetail": "Open the details in the normal view",
+          "detailHint": "Hearings, next actions and edits are done on the details page in the normal view."
         }
       }
     },

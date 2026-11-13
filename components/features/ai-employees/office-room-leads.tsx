@@ -3,13 +3,19 @@
 import type { DeskStatus } from '@/lib/features/ai-employees/office';
 import type { AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
 import { DEFAULT_LEAD_SORT, leadListHref } from '@/lib/features/leads/list-query';
-import { type RouterOutputs, trpc } from '@/lib/trpc/client';
+import { trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { type MutableRefObject, useEffect, useRef, useState } from 'react';
 import { CAP, FOCUS, KEY, PANEL } from './office-hud';
+import {
+  type BoardLead,
+  LEAD_STATUS_COLORS,
+  OfficeLeadFile,
+  type RoomKeys,
+} from './office-lead-file';
 import { ROLE_ACCENTS } from './office-robot';
 import {
   LEAD_BOARD_FIRST_VIEW,
@@ -26,22 +32,10 @@ import {
 } from './office-rooms';
 import { RobotPortrait } from './office-scene-svg';
 
-type BoardLead = RouterOutputs['leads']['list']['items'][number];
-
-/** The colour of a lead status on the dark board; the word is always shown with it */
-const STATUS_COLORS: Record<string, string> = {
-  new: '#93c5fd',
-  nurturing: '#d8d2c4',
-  negotiating: '#86efac',
-  won: '#e9cf9a',
-  lost: '#bdb7a9',
-};
-
 /** How many of the two marks an MQL level fills (対象外 and no diagnosis fill none) */
 const MQL_MARKS: Record<string, number> = { interest: 2, fit: 1 };
 
-/** What the keys of the room do; the office hands its key presses to this */
-export type RoomKeys = (event: { key: string; preventDefault: () => void }) => void;
+export type { RoomKeys };
 
 /**
  * The marketing room of the full-screen office (#1127): the lead list as the room's wall board,
@@ -51,7 +45,7 @@ export type RoomKeys = (event: { key: string; preventDefault: () => void }) => v
  * The figures are the totals of three views of that list, nothing else: an AI employee that is in
  * training, paused or not hired is shown as such and reports nothing of its own. The president
  * switches the view with the choices (number keys), moves over the rows with the arrow keys and
- * opens a lead with Enter, which leaves the office for the lead's page in the normal view.
+ * opens a lead with Enter: its customer file opens inside the room (office-lead-file.tsx, #1128).
  */
 export function OfficeRoomLeads({
   organizationId,
@@ -60,6 +54,7 @@ export function OfficeRoomLeads({
   employeeName,
   keysRef,
   onOpenLead,
+  onFileOpenChange,
 }: {
   organizationId: string;
   role: AiEmployeeRole;
@@ -68,8 +63,10 @@ export function OfficeRoomLeads({
   employeeName: string | null;
   /** Filled with the room's key handler while the room is shown */
   keysRef: MutableRefObject<RoomKeys | null>;
-  /** A lead (or the list) is opened in the normal view: the office closes */
+  /** The list or a lead's page is opened in the normal view: the office closes */
   onOpenLead: () => void;
+  /** Told when a file opens or closes: while one is open, Esc closes it, not the room */
+  onFileOpenChange: (open: boolean) => void;
 }) {
   const t = useTranslations('aiOffice.immersive.room');
   const tLeads = useTranslations('aiOffice.immersive.room.leads');
@@ -83,6 +80,10 @@ export function OfficeRoomLeads({
   const boardRef = useRef<HTMLElement>(null);
   const [view, setView] = useState<LeadBoardView>(LEAD_BOARD_FIRST_VIEW);
   const [page, setPage] = useState(1);
+  // The lead whose file is open on the room's table, and the row to go back to
+  const [open, setOpen] = useState<BoardLead | null>(null);
+  const fileKeys = useRef<RoomKeys | null>(null);
+  const lastOpened = useRef<string | null>(null);
   // "This week" is fixed when the room opens, so the queries keep their keys
   const [now] = useState(() => new Date());
 
@@ -109,14 +110,38 @@ export function OfficeRoomLeads({
   const turn = (delta: 1 | -1) =>
     setPage((current) => Math.max(1, Math.min(pages, current + delta)));
 
+  const openFile = (lead: BoardLead) => {
+    lastOpened.current = lead.id;
+    setOpen(lead);
+  };
+  const fileOpen = open !== null;
+  useEffect(() => {
+    onFileOpenChange(fileOpen);
+    return () => onFileOpenChange(false);
+  }, [fileOpen, onFileOpenChange]);
+  // Closing the file gives the focus back to the row it was opened from
+  useEffect(() => {
+    if (open || !lastOpened.current) return;
+    boardRef.current?.querySelector<HTMLElement>(`[data-lead-id="${lastOpened.current}"]`)?.focus();
+    lastOpened.current = null;
+  }, [open]);
+
   // The room's keys: numbers choose the view, the arrows move over the rows and the pages.
-  // Enter opens the focused row by itself (the rows are links).
+  // Enter opens the focused row by itself (the rows are buttons). While a file is open, the keys
+  // are the file's, and Esc closes it instead of leaving the room.
   const onRoomKey: RoomKeys = (event) => {
+    if (open) {
+      if (event.key === 'Escape') {
+        setOpen(null);
+        return true;
+      }
+      return fileKeys.current?.(event) ?? false;
+    }
     const chosen = leadBoardViewOfKey(event.key);
     if (chosen) {
       event.preventDefault();
       choose(chosen);
-      return;
+      return true;
     }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       const rows = Array.from(
@@ -128,12 +153,14 @@ export function OfficeRoomLeads({
         event.preventDefault();
         target.focus();
       }
-      return;
+      return true;
     }
     if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
       event.preventDefault();
       turn(event.key === 'ArrowRight' ? 1 : -1);
+      return true;
     }
+    return false;
   };
   // The office calls the handler of the latest render
   const latestKeys = useRef(onRoomKey);
@@ -151,25 +178,42 @@ export function OfficeRoomLeads({
   const from = total === 0 ? 0 : (page - 1) * LEAD_BOARD_PAGE_SIZE + 1;
   const to = Math.min(total, page * LEAD_BOARD_PAGE_SIZE);
 
+  const header = (
+    <div className="flex items-center gap-3">
+      <span
+        aria-hidden="true"
+        style={{ borderColor: ROLE_ACCENTS[role] }}
+        className="flex h-14 w-14 shrink-0 items-end justify-center overflow-hidden border-2 bg-[#f2f2f2]"
+      >
+        <RobotPortrait role={role} status={status} className="h-[4.75rem] w-14" />
+      </span>
+      <div className="min-w-0">
+        <p className="truncate text-lg font-bold">{employeeName ?? roleTitle}</p>
+        <p className="text-sm text-[#d8d2c4]">
+          {roleTitle}・{tOffice(`status.${status}`)}
+        </p>
+      </div>
+    </div>
+  );
+
+  if (open) {
+    return (
+      <OfficeLeadFile
+        organizationId={organizationId}
+        lead={open}
+        header={header}
+        keysRef={fileKeys}
+        onClose={() => setOpen(null)}
+        onOpenDetail={onOpenLead}
+      />
+    );
+  }
+
   return (
     <div className="absolute inset-x-4 top-20 bottom-4 flex flex-col gap-4 overflow-y-auto lg:inset-x-6 lg:bottom-6 lg:flex-row lg:items-end lg:overflow-visible">
       {/* Whose room this is, the room's figures, and what the president asks for */}
       <div className={cn(PANEL, 'shrink-0 space-y-3 px-5 pt-4 pb-6 lg:w-[26rem]')}>
-        <div className="flex items-center gap-3">
-          <span
-            aria-hidden="true"
-            style={{ borderColor: ROLE_ACCENTS[role] }}
-            className="flex h-14 w-14 shrink-0 items-end justify-center overflow-hidden border-2 bg-[#f2f2f2]"
-          >
-            <RobotPortrait role={role} status={status} className="h-[4.75rem] w-14" />
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-lg font-bold">{employeeName ?? roleTitle}</p>
-            <p className="text-sm text-[#d8d2c4]">
-              {roleTitle}・{tOffice(`status.${status}`)}
-            </p>
-          </div>
-        </div>
+        {header}
         {/* The report takes the focus when the room opens: Enter pressed once too often does nothing */}
         <div tabIndex={-1} data-autofocus="" className="space-y-2 outline-none">
           <p className="text-sm leading-relaxed text-[#d8d2c4]">
@@ -275,13 +319,14 @@ export function OfficeRoomLeads({
                 const marks = MQL_MARKS[lead.mqlLevel ?? ''] ?? 0;
                 return (
                   <li key={lead.id}>
-                    <Link
-                      href={`/${locale}/leads/${lead.id}`}
+                    <button
+                      type="button"
                       data-lead-row=""
-                      onClick={onOpenLead}
+                      data-lead-id={lead.id}
+                      onClick={() => openFile(lead)}
                       className={cn(
                         ROW_GRID,
-                        'min-h-[3.5rem] border-b border-[#f5f1e8]/10 text-sm hover:bg-[#f5f1e8]/5 focus-visible:bg-[#e9cf9a]/15 focus-visible:shadow-[inset_3px_0_0_#e9cf9a]',
+                        'min-h-[3.5rem] w-full border-b border-[#f5f1e8]/10 text-left text-sm hover:bg-[#f5f1e8]/5 focus-visible:bg-[#e9cf9a]/15 focus-visible:shadow-[inset_3px_0_0_#e9cf9a]',
                         FOCUS
                       )}
                     >
@@ -311,10 +356,13 @@ export function OfficeRoomLeads({
                       </span>
                       <span>
                         <span
-                          style={{ color: STATUS_COLORS[lead.status], borderColor: 'currentColor' }}
+                          style={{
+                            color: LEAD_STATUS_COLORS[lead.status],
+                            borderColor: 'currentColor',
+                          }}
                           className="inline-flex rounded-full border px-2.5 py-0.5 text-xs font-bold"
                         >
-                          {lead.status in STATUS_COLORS
+                          {lead.status in LEAD_STATUS_COLORS
                             ? tStatus(lead.status as 'new')
                             : lead.status}
                         </span>
@@ -329,7 +377,7 @@ export function OfficeRoomLeads({
                           day: '2-digit',
                         })}
                       </span>
-                    </Link>
+                    </button>
                   </li>
                 );
               })}

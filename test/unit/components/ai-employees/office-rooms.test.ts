@@ -5,6 +5,8 @@ import {
   LEAD_BOARD_VIEWS,
   LEAD_REPORT_VIEWS,
   OFFICE_ROOMS,
+  fileChoiceOfKey,
+  fileChoices,
   ROOM_KEYS,
   ROOM_ROLES,
   leadBoardFilters,
@@ -129,5 +131,32 @@ describe('nextRow', () => {
 
   it('goes nowhere on an empty board', () => {
     expect(nextRow(-1, 1, 0)).toBe(-1);
+  });
+});
+
+describe('the choices over an open file', () => {
+  it('record a contact, or go back', () => {
+    expect(fileChoices(true, false)).toEqual(['call', 'email', 'no_answer', 'back']);
+  });
+
+  it('put the way back first once a contact was recorded: no second record, no undo by the same key', () => {
+    const after = fileChoices(true, true);
+    expect(after).toEqual(['back', 'undo']);
+    for (const key of ['1', '2', '3']) {
+      expect(['call', 'email', 'no_answer']).not.toContain(fileChoiceOfKey(key, after));
+    }
+    expect(fileChoiceOfKey('1', after)).toBe('back');
+  });
+
+  it('leave only the way back without the right to change leads', () => {
+    expect(fileChoices(false, false)).toEqual(['back']);
+  });
+
+  it('are answered with their number keys', () => {
+    const choices = fileChoices(true, false);
+    expect(fileChoiceOfKey('1', choices)).toBe('call');
+    expect(fileChoiceOfKey('4', choices)).toBe('back');
+    expect(fileChoiceOfKey('5', choices)).toBeNull();
+    expect(fileChoiceOfKey('Enter', choices)).toBeNull();
   });
 });

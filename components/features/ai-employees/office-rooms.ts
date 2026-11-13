@@ -127,3 +127,30 @@ export function nextRow(current: number, delta: 1 | -1, count: number): number {
   if (current < 0) return delta === 1 ? 0 : count - 1;
   return Math.max(0, Math.min(count - 1, current + delta));
 }
+
+/** What the president can answer over an open customer file (#1128) */
+export type FileChoice = 'call' | 'email' | 'no_answer' | 'back' | 'undo';
+
+/** The contacts the file records with one answer: the quick kinds of the lead page */
+export const FILE_CONTACT_CHOICES = [
+  'call',
+  'email',
+  'no_answer',
+] as const satisfies readonly FileChoice[];
+export type FileContactChoice = (typeof FILE_CONTACT_CHOICES)[number];
+
+/**
+ * The choices over an open file. Once a contact was recorded, the first choice is the way back
+ * and never another record or the undo: the same key pressed once too often must not record
+ * twice or take the record back. Without the right to change leads, only the way back is left.
+ */
+export function fileChoices(canEdit: boolean, recorded: boolean): FileChoice[] {
+  if (recorded) return ['back', 'undo'];
+  return canEdit ? [...FILE_CONTACT_CHOICES, 'back'] : ['back'];
+}
+
+/** The choice a number key answers with (1 is the first), if any */
+export function fileChoiceOfKey(key: string, choices: readonly FileChoice[]): FileChoice | null {
+  if (!/^[1-9]$/.test(key)) return null;
+  return choices[Number(key) - 1] ?? null;
+}
