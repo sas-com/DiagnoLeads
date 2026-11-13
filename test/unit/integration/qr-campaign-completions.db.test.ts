@@ -327,9 +327,12 @@ describe.skipIf(!url)('QR campaign completions (PostgreSQL)', () => {
         utmCampaign: 'fair-2026',
         qr: campaign.code,
       });
-      const scans = await pg.select().from(qrScans).where(eq(qrScans.campaignId, campaign.id));
-      expect(scans).toHaveLength(1);
-      expect(scans[0]).toMatchObject({ converted: false, leadId: null });
+      // Columns named: session_id, converted and lead_id are dropped in stage 2 of #702
+      const scans = await pg
+        .select({ organizationId: qrScans.organizationId, deviceType: qrScans.deviceType })
+        .from(qrScans)
+        .where(eq(qrScans.campaignId, campaign.id));
+      expect(scans).toEqual([{ organizationId: orgA, deviceType: 'mobile' }]);
     });
 
     it('from a builder diagnosis, with the code the entry passed on to /d/<slug>', async () => {

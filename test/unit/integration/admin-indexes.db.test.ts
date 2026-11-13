@@ -1,7 +1,8 @@
 /**
  * The indexes of the admin screens' queries (#433) exist on a real PostgreSQL with the drizzle
  * migrations applied: the lead page's activity (audit_logs), the notification bell, the lead
- * list's tags and a lead's comments.
+ * list's tags, a lead's comments and a QR campaign's scans (its results and the cascade of its
+ * delete, #702).
  *
  * Skipped unless TEST_DATABASE_URL points to a database with the drizzle migrations applied:
  *   TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/diagnoleads_test \
@@ -25,6 +26,7 @@ describe.skipIf(!url)('admin indexes (PostgreSQL)', () => {
     ['lead_tags', 'lead_tags_lead_idx', '(lead_id)'],
     ['lead_tags', 'lead_tags_tag_idx', '(tag_id)'],
     ['lead_comments', 'lead_comments_lead_created_idx', '(lead_id, created_at)'],
+    ['qr_scans', 'qr_scans_campaign_id_idx', '(campaign_id)'],
   ])('%s has %s on %s', async (table, name, columns) => {
     // biome-ignore lint/style/noNonNullAssertion: guarded by skipIf
     const rows = await client!<{ indexdef: string }[]>`

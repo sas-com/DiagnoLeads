@@ -8,6 +8,8 @@
  * answer of the diagnosis sent the same minute. The columns qr_scans has for them stay empty, and
  * so do converted and lead_id: a lead made from a scan is counted on the campaign by the short
  * code the answer carries (completion_count, #700), never linked to a scan row.
+ * Every statement names its columns: session_id, converted and lead_id are dropped in stage 2 of
+ * #702, and this code still runs between that migration and its merge.
  */
 import type { db as defaultDb } from '@/lib/db/client';
 import { qrCampaigns, qrScans } from '@/lib/db/schema';
