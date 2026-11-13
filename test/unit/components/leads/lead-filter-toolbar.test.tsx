@@ -278,6 +278,24 @@ describe('LeadFilterToolbar', () => {
     expect(within(chipGroup()).getByText('検索：山田')).toBeInTheDocument();
   });
 
+  it('sends the search at once on Enter, but not on the Enter of a conversion (#1063)', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    renderAt('status=new');
+    const box = screen.getByRole('searchbox', { name: t.searchLabel });
+    fireEvent.change(box, { target: { value: '山田' } });
+
+    // The Enter that confirms a conversion: while composing (Chrome), or after it (Safari)
+    fireEvent.keyDown(box, { key: 'Enter', isComposing: true });
+    fireEvent.keyDown(box, { key: 'Enter', keyCode: 229 });
+    expect(nav.replace).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(nav.replace).toHaveBeenCalledTimes(1);
+    expect(nav.replace).toHaveBeenLastCalledWith('/ja/leads?status=new&q=%E5%B1%B1%E7%94%B0', {
+      scroll: false,
+    });
+  });
+
   it('follows the URL when it changes from outside (back button)', async () => {
     renderAt('status=new&q=abc');
     expect(screen.getByRole('searchbox', { name: t.searchLabel })).toHaveValue('abc');

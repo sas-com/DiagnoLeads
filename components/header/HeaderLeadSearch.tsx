@@ -1,6 +1,7 @@
 'use client';
 
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command';
+import { isImeKey } from '@/components/ui/ime';
 import { useOrganization } from '@/hooks/use-organization';
 import { LEAD_LIST_PARAMS } from '@/lib/features/leads/list-query';
 import { trpc } from '@/lib/trpc/client';
@@ -73,6 +74,8 @@ export function HeaderLeadSearch() {
       label={t('label')}
       className="relative overflow-visible bg-transparent dark:bg-transparent"
       onKeyDown={(event) => {
+        // The Esc or Enter of a conversion (IME) only ends the conversion (#1012)
+        if (isImeKey(event.nativeEvent)) return;
         if (event.key === 'Escape') {
           close();
           return;
