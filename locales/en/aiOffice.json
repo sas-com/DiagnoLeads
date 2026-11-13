@@ -185,19 +185,20 @@
       },
       "tasks": {
         "heading": "The president's tasks",
-        "none": "Nothing urgent. Everyone is at their post.",
-        "consult": "Talk with the {role}",
+        "none": "Nothing urgent.",
+        "consult": "{role}: talk it over",
         "consultWhy": "Its work stopped",
-        "resume": "Put the {role} back to work",
+        "resume": "{role}: call back",
         "resumeWhy": "It is paused",
-        "hire": "Hire a {role}",
-        "hireWhy": "This department has nobody"
+        "hire": "{role}: hire",
+        "hireWhy": "This department has nobody",
+        "noneReadOnly": "Nothing urgent. Hiring and resuming are done by an admin."
       },
       "actions": {
         "talk": "Talk",
         "zoomIn": "Closer",
         "resetView": "Reset view",
-        "list": "List view",
+        "list": "Back to the normal view",
         "clockOut": "Leave"
       },
       "talk": {
@@ -208,19 +209,22 @@
         "resumed": "{name}, back to work.",
         "failed": "Sorry, that did not work. Please try again later.",
         "lines": {
-          "vacant": "This is the desk of the {role}. Nobody is here yet. {work}",
+          "vacant": "This desk ({role}) is vacant. {work}",
           "training": "President, I am in training. I will start working by myself once my work is ready. This is what I will do: {work}",
-          "paused": "President, I am paused. Say the word and I will go back to work.",
+          "paused": "President, I am paused. Say the word and I will come back.",
           "idle": "President, good to see you. I am waiting for my next work.",
           "working": "President, I am working right now. I will report when I am done.",
           "attention": "President, I am sorry. My work stopped half way. The work log has the reason."
         },
         "choices": {
           "hire": "Hire",
-          "pause": "Take the day off",
-          "resume": "Back to work",
-          "leave": "Later"
-        }
+          "pause": "Rest for a while",
+          "resume": "Come back",
+          "leave": "Later",
+          "back": "Back to the office"
+        },
+        "resumedTraining": "{name}, back to training. I will start working once my work is ready.",
+        "trainingFirst": " Until its work is ready, a new hire stays in training."
       }
     },
     "enterOffice": "Enter the office (full screen)"

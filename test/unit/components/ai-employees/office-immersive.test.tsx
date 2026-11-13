@@ -3,6 +3,10 @@
  * president's tasks from the real state, a conversation that hires or pauses an AI employee, and
  * the keys (Esc steps back, E talks, the numbers answer). Real next-intl messages; tRPC mocked.
  */
+import { NAME_BAND_SHADE } from '@/components/features/ai-employees/office-immersive';
+import { shade } from '@/components/features/ai-employees/office-prims';
+import { ROLE_ACCENTS } from '@/components/features/ai-employees/office-robot';
+import { AI_EMPLOYEE_ROLES } from '@/lib/features/ai-employees/types/roles';
 import { OfficeImmersive } from '@/components/features/ai-employees/office-immersive';
 import { MESSAGE_FILES, mergeMessageFiles } from '@/lib/i18n/messages';
 import { render, screen, within } from '@testing-library/react';
@@ -77,6 +81,28 @@ function renderOffice(
   return { onExit, office: screen.getByRole('dialog', { name: 'AI社員オフィス（全画面）' }) };
 }
 
+// WCAG 2 contrast ratio of two #rrggbb colors
+function contrast(a: string, b: string): number {
+  const luminance = (hex: string) => {
+    const [r, g, bl] = [1, 3, 5].map((i) => {
+      const c = Number.parseInt(hex.slice(i, i + 2), 16) / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+  };
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+describe('the band under an AI employee\u2019s name', () => {
+  it('carries white text at 4.5:1 or more for every role', () => {
+    for (const role of AI_EMPLOYEE_ROLES) {
+      const band = shade(ROLE_ACCENTS[role], NAME_BAND_SHADE);
+      expect(contrast('#ffffff', band)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});
+
 describe('OfficeImmersive', () => {
   beforeEach(() => {
     mocks.hires.length = 0;
@@ -121,13 +147,70 @@ describe('OfficeImmersive', () => {
     await user.click(within(office).getByRole('button', { name: /^出社する/ }));
     await user.click(within(office).getByRole('button', { name: /^マーケターを採用する/ }));
 
-    expect(within(office).getByText(/ここはマーケターの席です。まだ誰もいません。/)).toBeInTheDocument();
+    // The report says before hiring that the role starts in training, and it holds the focus:
+    // no choice is under the Enter key
+    const report = within(office).getByText(
+      /ここはマーケターの席です。まだ誰もいません。.*採用しても、仕事の準備ができるまでは研修中です。/
+    );
+    expect(report).toHaveFocus();
     const hire = within(office).getByRole('button', { name: /採用する$/ });
-    expect(hire).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(mocks.hires).toEqual([]);
     await user.click(hire);
     expect(mocks.hires).toEqual([{ organizationId: ORG_ID, role: 'marketer', name: 'AIマーケター' }]);
     expect(within(office).getByText(/AIマーケターです。よろしくお願いします、社長。/)).toBeInTheDocument();
     expect(mocks.invalidate).toHaveBeenCalledWith({ organizationId: ORG_ID });
+    // Once the answer was carried out the only choice is the way back, and it holds the focus
+    const choices = within(office).getByRole('heading', { name: '社長（あなた）' })
+      .parentElement as HTMLElement;
+    expect(within(choices).getAllByRole('button')).toHaveLength(1);
+    const back = within(choices).getByRole('button', { name: /オフィスに戻る/ });
+    expect(back).toHaveFocus();
+    await user.keyboard('1');
+    expect(within(office).getByRole('heading', { name: '社員名簿' })).toBeInTheDocument();
+    expect(mocks.hires).toHaveLength(1);
+  });
+
+  it('never hires with Enter alone, however often it is pressed', async () => {
+    const user = userEvent.setup();
+    const { office } = renderOffice();
+    // The title, the office and the conversation each open with the focus on something safe
+    await user.keyboard('{Enter}{Enter}{Enter}{Enter}');
+    expect(within(office).getByText(/と会話中/)).toBeInTheDocument();
+    expect(mocks.hires).toEqual([]);
+    expect(mocks.updates).toEqual([]);
+  });
+
+  it('keeps the keys working after a click on the floor, and leaves modified keys alone', async () => {
+    const user = userEvent.setup();
+    const { office } = renderOffice();
+    await user.click(within(office).getByRole('button', { name: /^出社する/ }));
+    const floor = office.querySelector('.cursor-grab') as HTMLElement;
+    await user.click(floor);
+    // The focus stays inside the layer
+    expect(office.contains(document.activeElement)).toBe(true);
+    await user.keyboard('{Control>}e{/Control}');
+    expect(within(office).queryByText(/と会話中/)).not.toBeInTheDocument();
+    await user.keyboard('e');
+    expect(within(office).getByText(/と会話中/)).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(within(office).getByRole('heading', { name: '社員名簿' })).toBeInTheDocument();
+  });
+
+  it('moves the camera with + and - and resets it with 0, as the keys on the bar say', async () => {
+    const user = userEvent.setup();
+    const { office } = renderOffice();
+    await user.click(within(office).getByRole('button', { name: /^出社する/ }));
+    const stage = office.querySelector('.cursor-grab > div') as HTMLElement;
+    const home = stage.style.transform;
+    await user.keyboard('+');
+    const closer = stage.style.transform;
+    expect(closer).not.toBe(home);
+    await user.keyboard('-');
+    expect(stage.style.transform).toBe(home);
+    await user.keyboard('+');
+    await user.keyboard('0');
+    expect(stage.style.transform).toBe(home);
   });
 
   it('talks to the chosen AI employee with E and answers with the number keys', async () => {
@@ -144,6 +227,9 @@ describe('OfficeImmersive', () => {
       { organizationId: ORG_ID, employeeId: EMPLOYEE_ID, status: 'paused' },
     ]);
     expect(within(office).getByText('承知しました、社長。AIセールスはしばらく休みます。')).toBeInTheDocument();
+    // The first choice does not turn into the opposite order
+    expect(within(office).queryByRole('button', { name: /戻ってきて/ })).not.toBeInTheDocument();
+    expect(within(office).getByRole('button', { name: /オフィスに戻る/ })).toHaveFocus();
   });
 
   it('puts a paused AI employee back to work from the president’s first task', async () => {
@@ -152,24 +238,29 @@ describe('OfficeImmersive', () => {
     const { office } = renderOffice({ employees: [paused as unknown as typeof sales] });
     await user.click(within(office).getByRole('button', { name: /^出社する/ }));
     // The paused employee is the president's first task, and the one in front of the president
-    await user.click(within(office).getByRole('button', { name: /セールスを仕事に戻す/ }));
+    await user.click(within(office).getByRole('button', { name: /セールスを呼び戻す/ }));
 
-    expect(within(office).getByText(/社長、いまは休止中です。/)).toBeInTheDocument();
+    expect(within(office).getByText(/社長、いまは休止中です。.*すぐに戻ります。/)).toBeInTheDocument();
     await user.keyboard('1');
     expect(mocks.updates).toEqual([
       { organizationId: ORG_ID, employeeId: EMPLOYEE_ID, status: 'active' },
     ]);
-    expect(within(office).getByText('AIセールス、仕事に戻ります。')).toBeInTheDocument();
+    // The role has no work yet: coming back means going back to training
+    expect(
+      within(office).getByText('AIセールス、研修に戻ります。仕事の準備ができしだい働き始めます。')
+    ).toBeInTheDocument();
   });
 
   it('lets someone who cannot manage look and talk, but not hire or pause', async () => {
     const user = userEvent.setup();
     const { office } = renderOffice({ canManage: false });
     await user.click(within(office).getByRole('button', { name: /^出社する/ }));
-    expect(within(office).getByText('急ぎの仕事はありません。社員は持ち場についています。')).toBeInTheDocument();
+    expect(
+      within(office).getByText('急ぎの仕事はありません。採用と再開は管理者が行います。')
+    ).toBeInTheDocument();
     await user.keyboard('e');
     expect(within(office).getByText('AI社員の採用と管理は、管理者だけができます。')).toBeInTheDocument();
-    expect(within(office).queryByRole('button', { name: /今日は休んでいい/ })).not.toBeInTheDocument();
+    expect(within(office).queryByRole('button', { name: /しばらく休んでいい/ })).not.toBeInTheDocument();
     await user.click(within(office).getByRole('button', { name: /またあとで/ }));
     expect(within(office).getByRole('heading', { name: '社員名簿' })).toBeInTheDocument();
     expect(mocks.updates).toEqual([]);
