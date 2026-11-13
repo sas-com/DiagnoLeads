@@ -197,6 +197,67 @@ describe.skipIf(!url)('AI employees: permissions and organization isolation (Pos
     );
   });
 
+  it('customizes an employee part by part, for its own organization only (#1134)', async () => {
+    const scope = { organizationId: orgA, employeeId: employeeA };
+    const profileOfA = async () => {
+      const [row] = await pg
+        .select({ profile: aiEmployees.profile })
+        .from(aiEmployees)
+        .where(eq(aiEmployees.id, employeeA));
+      return row?.profile;
+    };
+    // Never customized: the office fills in the defaults
+    const before = await adminA.aiEmployees.office({ organizationId: orgA });
+    expect(before.employees[0].profile).toMatchObject({
+      tone: 'polite',
+      look: { head: 'helmet', gear: 'role', shell: 'white', accent: 'role' },
+      stats: { speed: 3, care: 3, insight: 3, grit: 3 },
+      workStyle: { autonomy: 'ask', reporting: 'standard' },
+    });
+
+    const look = {
+      head: 'dome',
+      eyes: 'wide',
+      antenna: 'ring',
+      gear: 'bow_tie',
+      shell: 'mint',
+      accent: 'pink',
+    } as const;
+    await adminA.aiEmployees.update({ ...scope, profile: { look } });
+    // A later save of another part keeps the look
+    await adminA.aiEmployees.update({ ...scope, profile: { tone: 'spirited' } });
+    expect(await profileOfA()).toEqual({ look, tone: 'spirited' });
+    const after = await adminA.aiEmployees.office({ organizationId: orgA });
+    expect(after.employees[0].profile).toMatchObject({ look, tone: 'spirited' });
+
+    // More points than there are, an unknown part and an unknown option are refused
+    await expect(
+      adminA.aiEmployees.update({
+        ...scope,
+        profile: { stats: { speed: 6, care: 6, insight: 6, grit: 6 } },
+      })
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(
+      adminA.aiEmployees.update({ ...scope, profile: { script: 'x' } as never })
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(
+      adminA.aiEmployees.update({ ...scope, profile: { tone: 'rude' } as never })
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+    // A member of A may not customize; B's admin cannot reach A's employee
+    await expect(
+      memberA.aiEmployees.update({ ...scope, profile: { tone: 'brisk' } })
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(
+      adminB.aiEmployees.update({
+        organizationId: orgB,
+        employeeId: employeeA,
+        profile: { tone: 'brisk' },
+      })
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(await profileOfA()).toEqual({ look, tone: 'spirited' });
+  });
+
   it('renames, pauses, resumes and dismisses, keeping its runs on record', async () => {
     const scope = { organizationId: orgA, employeeId: employeeA };
     await expect(adminA.aiEmployees.update(scope)).rejects.toMatchObject({ code: 'BAD_REQUEST' });

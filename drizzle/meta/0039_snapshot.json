@@ -1,5 +1,5 @@
 {
-  "id": "7681d3ab-e37c-4087-b923-89d52d38dd11",
+  "id": "09d3290a-8deb-4737-82ed-84301f92a015",
   "prevId": "268771c6-3fc7-40d6-87c5-0a54cb96f5d7",
   "version": "7",
   "dialect": "postgresql",
@@ -834,6 +834,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'active'"
+        },
+        "profile": {
+          "name": "profile",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
         },
         "created_by": {
           "name": "created_by",

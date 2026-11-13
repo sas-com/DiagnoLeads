@@ -5,6 +5,7 @@
  * messages; tRPC mocked)
  */
 import { OfficeScreen } from '@/components/features/ai-employees/office-screen';
+import { DEFAULT_AI_EMPLOYEE_PROFILE } from '@/lib/features/ai-employees/types/profile';
 import { MESSAGE_FILES, mergeMessageFiles } from '@/lib/i18n/messages';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -82,6 +83,7 @@ const timingWatcher = {
     resultCode: 'timeout',
   },
   processedToday: 5,
+  profile: DEFAULT_AI_EMPLOYEE_PROFILE,
 };
 
 describe('OfficeScreen', () => {

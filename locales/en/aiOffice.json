@@ -355,6 +355,178 @@
           "openLead": "Open the lead in the normal view",
           "openToday": "Open Today in the normal view"
         }
+      },
+      "tones": {
+        "brisk": {
+          "training": "In training. I start once the work is ready. Planned work: {work}",
+          "paused": "Paused. Call me and I am back.",
+          "idle": "Waiting for the next task.",
+          "working": "Working. I will report when done.",
+          "attention": "The work stopped. The reason is in the work log.",
+          "pausedDone": "Understood. {name} takes a break.",
+          "resumed": "{name}, back.",
+          "resumedTraining": "{name}, back to training.",
+          "failed": "That failed. Please try again in a while."
+        },
+        "friendly": {
+          "training": "Hi, boss! I am in training right now. I will get going as soon as the work is ready. Here is what I will do: {work}",
+          "paused": "I am taking a break right now, boss. Just call me and I will be right back.",
+          "idle": "Hi, boss! Ready for the next task whenever you are.",
+          "working": "I am on it, boss! I will let you know as soon as I am done.",
+          "attention": "Sorry, boss. The work stopped halfway. The reason is in the work log.",
+          "pausedDone": "Got it, boss. {name} will take a little break.",
+          "resumed": "{name} is back! Glad to be here again.",
+          "resumedTraining": "{name} is going back to training. I will start once the work is ready.",
+          "failed": "Sorry, that did not work. Please try again in a little while."
+        },
+        "spirited": {
+          "training": "Boss! I am in training! I will give it everything once the work is ready! Here is what I will do: {work}",
+          "paused": "Boss! I am paused! Call me and I am back at once!",
+          "idle": "Boss! Ready for the next task, any time!",
+          "working": "Boss! Working at full power! I will report as soon as I am done!",
+          "attention": "Boss, my apologies! The work stopped halfway! The reason is in the work log!",
+          "pausedDone": "Understood, boss! {name} will rest and be ready!",
+          "resumed": "{name} is back! Full power!",
+          "resumedTraining": "{name} is going back to training! I start once the work is ready!",
+          "failed": "My apologies! That did not work! Please try again in a while!"
+        }
+      },
+      "studio": {
+        "title": "Customize",
+        "of": "Customize {name}",
+        "open": "Customize",
+        "preview": "Preview of {name}",
+        "sample": "How it talks",
+        "hint": "The look and the personality show as soon as you save.",
+        "dirty": "There are unsaved changes.",
+        "discard": "There are unsaved changes. Press Esc again to discard them and go back.",
+        "saved": "Saved.",
+        "failed": "Sorry, that could not be saved. Please try again in a while.",
+        "save": "Save",
+        "reset": "Reset",
+        "back": "Back",
+        "random": "Surprise me",
+        "tabs": {
+          "look": "Look",
+          "tone": "Personality",
+          "stats": "Abilities",
+          "work": "Work style"
+        },
+        "parts": {
+          "head": "Head",
+          "eyes": "Eyes",
+          "antenna": "Antenna",
+          "gear": "Gear",
+          "shell": "Shell colour",
+          "accent": "Accent colour"
+        },
+        "options": {
+          "head": {
+            "helmet": "Helmet",
+            "round": "Round",
+            "square": "Square",
+            "dome": "Dome"
+          },
+          "eyes": {
+            "led": "LED",
+            "bar": "Bar",
+            "wide": "Wide"
+          },
+          "antenna": {
+            "single": "One",
+            "double": "Two",
+            "ring": "Ring",
+            "none": "None"
+          },
+          "gear": {
+            "role": "The role's gear",
+            "headset": "Headset",
+            "scanner": "Scanner",
+            "goggles": "Goggles",
+            "eyeshade": "Eyeshade",
+            "bow_tie": "Bow tie",
+            "none": "None"
+          },
+          "shell": {
+            "white": "White",
+            "silver": "Silver",
+            "graphite": "Graphite",
+            "sand": "Sand",
+            "mint": "Mint",
+            "sky": "Sky",
+            "rose": "Rose"
+          },
+          "accent": {
+            "role": "The role's colour",
+            "violet": "Violet",
+            "teal": "Teal",
+            "blue": "Blue",
+            "orange": "Orange",
+            "pink": "Pink",
+            "lime": "Lime",
+            "gold": "Gold",
+            "red": "Red"
+          }
+        },
+        "toneNote": "The personality changes how it talks in a conversation. Check it under \"How it talks\" on the left.",
+        "tones": {
+          "polite": {
+            "name": "Polite",
+            "hint": "Calm and courteous"
+          },
+          "brisk": {
+            "name": "Brisk",
+            "hint": "Short and to the point"
+          },
+          "friendly": {
+            "name": "Friendly",
+            "hint": "Soft and approachable"
+          },
+          "spirited": {
+            "name": "Spirited",
+            "hint": "Lively and forceful"
+          }
+        },
+        "notYet": "This setting decides how the AI employee goes about its work once the work runs. The work is still being prepared, so it changes nothing yet.",
+        "points": "{left} points left (of {total})",
+        "raise": "Raise {name}",
+        "lower": "Lower {name}",
+        "value": "{name}: {value} of {max}",
+        "stats": {
+          "speed": {
+            "name": "Speed",
+            "hint": "Getting things done quickly comes first"
+          },
+          "care": {
+            "name": "Care",
+            "hint": "Fewer gaps and mistakes come first"
+          },
+          "insight": {
+            "name": "Insight",
+            "hint": "Noticing and suggesting comes first"
+          },
+          "grit": {
+            "name": "Grit",
+            "hint": "Following up without giving up comes first"
+          }
+        },
+        "autonomy": {
+          "label": "How far it may go on its own",
+          "ask": {
+            "name": "Ask every time",
+            "hint": "It checks with a person before acting"
+          },
+          "report": {
+            "name": "Act, then report",
+            "hint": "It acts within its work and reports afterwards"
+          }
+        },
+        "reporting": {
+          "label": "How detailed its reports are",
+          "brief": "Brief",
+          "standard": "Standard",
+          "detailed": "Detailed"
+        }
       }
     },
     "enterOffice": "Enter the office (full screen)",

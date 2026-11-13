@@ -1,6 +1,7 @@
 'use client';
 
 import type { DeskStatus } from '@/lib/features/ai-employees/office';
+import type { RobotLook } from '@/lib/features/ai-employees/types/profile';
 import type { AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
 import { DUE_TASKS_MAX, type DueTaskView } from '@/lib/features/lead-follow-up/types/schemas';
 import { trpc } from '@/lib/trpc/client';
@@ -38,6 +39,7 @@ export function OfficeRoomDue({
   role,
   status,
   employeeName,
+  look,
   keysRef,
   onBack,
   onOpenNormal,
@@ -47,6 +49,8 @@ export function OfficeRoomDue({
   status: DeskStatus;
   /** The name of the AI employee of the room; null while the seat is vacant */
   employeeName: string | null;
+  /** How the employee was customized (#1134) */
+  look?: RobotLook;
   /** Filled with the room's key handler while the room is shown */
   keysRef: MutableRefObject<RoomKeys | null>;
   /** Back to the floor */
@@ -174,7 +178,7 @@ export function OfficeRoomDue({
     <div className={ROOM_FRAME}>
       {/* Whose room this is, what is handed over, and what the president answers */}
       <div className={cn(PANEL, 'shrink-0 space-y-3 px-5 pt-4 pb-6 lg:w-[26rem]')}>
-        <RoomGuideHeader role={role} status={status} employeeName={employeeName} />
+        <RoomGuideHeader role={role} status={status} employeeName={employeeName} look={look} />
         {/* The report takes the focus when the room opens: Enter pressed once too often does nothing */}
         <div ref={reportRef} tabIndex={-1} data-autofocus="" className="space-y-2 outline-none">
           <p className="text-sm leading-relaxed text-[#d8d2c4]">

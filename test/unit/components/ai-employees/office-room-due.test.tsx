@@ -4,6 +4,7 @@
  * messages; tRPC mocked.
  */
 import { OfficeImmersive } from '@/components/features/ai-employees/office-immersive';
+import { DEFAULT_AI_EMPLOYEE_PROFILE } from '@/lib/features/ai-employees/types/profile';
 import { MESSAGE_FILES, mergeMessageFiles } from '@/lib/i18n/messages';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -131,6 +132,7 @@ async function enterReception(deskStatus: 'vacant' | 'idle' = 'vacant') {
             deskStatus,
             lastRun: null,
             processedToday: 0,
+            profile: DEFAULT_AI_EMPLOYEE_PROFILE,
           },
         ];
   render(

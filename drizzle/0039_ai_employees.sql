@@ -20,6 +20,7 @@ CREATE TABLE "ai_employees" (
 	"role" text NOT NULL,
 	"name" text NOT NULL,
 	"status" text DEFAULT 'active' NOT NULL,
+	"profile" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"created_by" uuid,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,

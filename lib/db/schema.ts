@@ -821,6 +821,11 @@ export const aiEmployees = pgTable(
     name: text('name').notNull(),
     /** 'active' works on its schedule; 'paused' does not work */
     status: text('status').default('active').notNull(),
+    /**
+     * How the employee was customized (#1134): the look of its robot, its tone, its ability points
+     * and its work style. Read through resolveAiEmployeeProfile, which fills what is missing
+     */
+    profile: jsonb('profile').$type<Record<string, unknown>>().default({}).notNull(),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

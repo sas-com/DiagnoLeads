@@ -1,6 +1,7 @@
 'use client';
 
 import type { DeskStatus } from '@/lib/features/ai-employees/office';
+import type { RobotLook } from '@/lib/features/ai-employees/types/profile';
 import type { AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
 import { cn } from '@/lib/utils';
 import { useId, useMemo } from 'react';
@@ -123,17 +124,21 @@ export function ScenePrims({ prims, prefix }: { prims: readonly ScenePrim[]; pre
 export function RobotPortrait({
   role,
   status,
+  look,
   className,
 }: {
   role: AiEmployeeRole;
   status: DeskStatus;
+  /** How the employee was customized (#1134); the role's own build when left out */
+  look?: RobotLook;
   className?: string;
 }) {
   const { prefix, gradient } = useSceneIds();
-  // biome-ignore lint/correctness/useExhaustiveDependencies: gradient follows prefix
+  const lookKey = JSON.stringify(look ?? null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: gradient follows prefix, look follows lookKey
   const prims = useMemo(
-    () => robotPrims({ role, status, x: 0, y: 0, facing: 'left', night: false, gradient }),
-    [role, status, prefix]
+    () => robotPrims({ role, status, x: 0, y: 0, facing: 'left', night: false, gradient, look }),
+    [role, status, lookKey, prefix]
   );
   const { left, right, top, bottom } = ROBOT_EXTENT;
   return (

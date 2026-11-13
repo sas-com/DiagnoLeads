@@ -1,5 +1,6 @@
 import { PLAIN_TEXT } from '@/lib/utils/plain-text';
 import { z } from 'zod';
+import { aiEmployeeProfilePatchSchema } from './profile';
 import { AI_EMPLOYEE_ROLES } from './roles';
 
 /** Inputs of the AI employee office (Refs #1101) */
@@ -37,8 +38,10 @@ export const hireAiEmployeeSchema = officeScopeSchema.extend({
   name: aiEmployeeNameSchema,
 });
 
-/** At least one of name and status (the router refuses an update with neither) */
+/** At least one of name, status and profile (the router refuses an update with none) */
 export const updateAiEmployeeSchema = employeeScopeSchema.extend({
   name: aiEmployeeNameSchema.optional(),
   status: z.enum(AI_EMPLOYEE_STATUSES).optional(),
+  /** The parts of the profile to replace (#1134) */
+  profile: aiEmployeeProfilePatchSchema.optional(),
 });

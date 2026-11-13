@@ -6,6 +6,7 @@
  */
 import { OfficeImmersive } from '@/components/features/ai-employees/office-immersive';
 import { LEAD_BOARD_PAGE_SIZE } from '@/components/features/ai-employees/office-rooms';
+import { DEFAULT_AI_EMPLOYEE_PROFILE } from '@/lib/features/ai-employees/types/profile';
 import { MESSAGE_FILES, mergeMessageFiles } from '@/lib/i18n/messages';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -180,6 +181,7 @@ const marketer = (deskStatus: 'training' | 'idle' | 'paused') => ({
   deskStatus,
   lastRun: null,
   processedToday: 0,
+  profile: DEFAULT_AI_EMPLOYEE_PROFILE,
 });
 
 async function enterRoom(employees: ReturnType<typeof marketer>[] = []) {

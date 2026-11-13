@@ -1,6 +1,7 @@
 'use client';
 
 import type { DeskStatus } from '@/lib/features/ai-employees/office';
+import type { RobotLook } from '@/lib/features/ai-employees/types/profile';
 import type { AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
 import { useTranslations } from 'next-intl';
 import { ROLE_ACCENTS } from './office-robot';
@@ -11,11 +12,14 @@ export function RoomGuideHeader({
   role,
   status,
   employeeName,
+  look,
 }: {
   role: AiEmployeeRole;
   status: DeskStatus;
   /** Null while the seat is vacant: the role is named instead */
   employeeName: string | null;
+  /** How the employee was customized (#1134) */
+  look?: RobotLook;
 }) {
   const tOffice = useTranslations('aiOffice');
   const roleTitle = tOffice(`roles.${role}.title`);
@@ -26,7 +30,7 @@ export function RoomGuideHeader({
         style={{ borderColor: ROLE_ACCENTS[role] }}
         className="flex h-14 w-14 shrink-0 items-end justify-center overflow-hidden border-2 bg-[#f2f2f2]"
       >
-        <RobotPortrait role={role} status={status} className="h-[4.75rem] w-14" />
+        <RobotPortrait role={role} status={status} look={look} className="h-[4.75rem] w-14" />
       </span>
       <div className="min-w-0">
         <p className="truncate text-lg font-bold">{employeeName ?? roleTitle}</p>

@@ -10,6 +10,7 @@ import { useTranslations } from 'next-intl';
 import { useId, useMemo } from 'react';
 import { DeskStatusLabel } from './desk-status';
 import { areaOf, spotOf } from './office-map-layout';
+import { type RobotLooks, looksByRole } from './office-president';
 import { SCENE_HEIGHT, SCENE_WIDTH, buildOfficeScene, project } from './office-scene';
 import { SceneDefs, ScenePrims, useSceneIds } from './office-scene-svg';
 
@@ -40,6 +41,7 @@ export function OfficeMap({
   const statuses = Object.fromEntries(
     AI_EMPLOYEE_ROLES.map((role) => [role, byRole.get(role)?.deskStatus ?? 'vacant'])
   ) as Record<AiEmployeeRole, DeskStatus>;
+  const looks = looksByRole(employees);
 
   return (
     <section aria-labelledby={headingId} className="space-y-3">
@@ -50,8 +52,8 @@ export function OfficeMap({
       {/* The map keeps its proportions; on a narrow screen it scrolls sideways inside its frame */}
       <div className="overflow-x-auto rounded-3xl">
         <div className="relative min-w-[900px] overflow-hidden rounded-3xl bg-[linear-gradient(180deg,#a9d3fb_0%,#dcecfb_45%,#f3efe8_100%)] shadow-[0_1px_2px_rgba(15,23,42,0.06),0_12px_32px_rgba(15,23,42,0.08)] dark:bg-[linear-gradient(180deg,#050915_0%,#0d1730_55%,#161d30_100%)]">
-          <SceneDrawing statuses={statuses} night={false} className="dark:hidden" />
-          <SceneDrawing statuses={statuses} night className="hidden dark:block" />
+          <SceneDrawing statuses={statuses} looks={looks} night={false} className="dark:hidden" />
+          <SceneDrawing statuses={statuses} looks={looks} night className="hidden dark:block" />
           {AI_EMPLOYEE_ROLES.map((role) => (
             <NameTag
               key={role}
@@ -140,11 +142,14 @@ function NameTag({
 /** One version of the drawing (by day or by night) with the names of the rooms */
 export function SceneDrawing({
   statuses,
+  looks,
   night,
   labels = true,
   className,
 }: {
   statuses: Record<AiEmployeeRole, DeskStatus>;
+  /** How the robots were customized (#1134) */
+  looks?: RobotLooks;
   night: boolean;
   /** Whether the rooms are named (not in a close-up) */
   labels?: boolean;
@@ -153,10 +158,11 @@ export function SceneDrawing({
   const t = useTranslations('aiOffice');
   const { prefix, gradient } = useSceneIds();
   const statusKey = AI_EMPLOYEE_ROLES.map((role) => statuses[role]).join(',');
-  // biome-ignore lint/correctness/useExhaustiveDependencies: statusKey stands for statuses, prefix for gradient
+  const looksKey = JSON.stringify(looks ?? {});
+  // biome-ignore lint/correctness/useExhaustiveDependencies: statusKey stands for statuses, looksKey for looks, prefix for gradient
   const scene = useMemo(
-    () => buildOfficeScene(statuses, night, gradient),
-    [statusKey, night, prefix]
+    () => buildOfficeScene(statuses, night, gradient, looks),
+    [statusKey, looksKey, night, prefix]
   );
 
   return (

@@ -7,8 +7,13 @@
 import type { db as defaultDb } from '@/lib/db/client';
 import { aiEmployeeRuns, aiEmployees } from '@/lib/db/schema';
 import { jstDay } from '@/lib/jst';
-import { and, desc, eq, gte, sql } from 'drizzle-orm';
+import { type SQL, and, desc, eq, gte, sql } from 'drizzle-orm';
 import { type DeskStatus, deskStatus } from './office';
+import {
+  type AiEmployeeProfile,
+  type AiEmployeeProfilePatch,
+  resolveAiEmployeeProfile,
+} from './types/profile';
 import { type AiEmployeeRole, isAiEmployeeRole } from './types/roles';
 import {
   AI_EMPLOYEE_RUNS_LIMIT,
@@ -44,6 +49,8 @@ export interface OfficeEmployee {
   lastRun: OfficeRun | null;
   /** Items handled by the runs that succeeded since the start of today (Japan time) */
   processedToday: number;
+  /** How the employee was customized, with defaults for what was never set (#1134) */
+  profile: AiEmployeeProfile;
 }
 
 const runColumns = {
@@ -139,6 +146,7 @@ export async function getOffice(
       }),
       lastRun,
       processedToday: processedOf.get(employee.id) ?? 0,
+      profile: resolveAiEmployeeProfile(employee.profile),
     });
   }
   return office;
@@ -191,7 +199,11 @@ export async function hireEmployee(
   return created ?? null;
 }
 
-/** Renames, pauses or resumes an employee; null when the organization has no such employee */
+/**
+ * Renames, pauses, resumes or customizes an employee; null when the organization has no such
+ * employee. The parts of the profile that are given replace what was stored, in one statement
+ * (the JSON values are merged by the database), so two saves of different parts both stay.
+ */
 export async function updateEmployee(
   db: Database,
   input: {
@@ -199,13 +211,22 @@ export async function updateEmployee(
     employeeId: string;
     name?: string;
     status?: AiEmployeeStatus;
+    profile?: AiEmployeeProfilePatch;
   }
 ): Promise<{ id: string; name: string; status: AiEmployeeStatus } | null> {
-  const changes: { name?: string; status?: AiEmployeeStatus; updatedAt: Date } = {
+  const changes: {
+    name?: string;
+    status?: AiEmployeeStatus;
+    profile?: SQL;
+    updatedAt: Date;
+  } = {
     updatedAt: new Date(),
   };
   if (input.name !== undefined) changes.name = input.name;
   if (input.status !== undefined) changes.status = input.status;
+  if (input.profile !== undefined) {
+    changes.profile = sql`${aiEmployees.profile} || ${JSON.stringify(input.profile)}::jsonb`;
+  }
   const [updated] = await db
     .update(aiEmployees)
     .set(changes)

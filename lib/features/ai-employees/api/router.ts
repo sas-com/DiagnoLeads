@@ -71,7 +71,7 @@ export const aiEmployeesRouter = router({
 
   update: organizationProcedure.input(updateAiEmployeeSchema).mutation(async ({ ctx, input }) => {
     assertCanManage(ctx.ability.can('update', 'Settings'));
-    if (input.name === undefined && input.status === undefined) {
+    if (input.name === undefined && input.status === undefined && input.profile === undefined) {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nothing to update' });
     }
     const updated = await updateEmployee(ctx.db, {
@@ -79,6 +79,7 @@ export const aiEmployeesRouter = router({
       employeeId: input.employeeId,
       name: input.name,
       status: input.status,
+      profile: input.profile,
     });
     if (!updated) throw notFound();
     return updated;

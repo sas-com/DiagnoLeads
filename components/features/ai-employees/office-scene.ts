@@ -31,6 +31,7 @@ import {
   TRAINING_DESKS,
   spotOf,
 } from './office-map-layout';
+import type { RobotLooks } from './office-president';
 import { type PrimStyle, type SceneGradient, type ScenePrim, shade, tint } from './office-prims';
 import { robotPrims } from './office-robot';
 
@@ -148,12 +149,13 @@ export const FLOOR_OUTLINE = pts([
 
 /**
  * The whole office for the given statuses, by day or by night. `gradient` names a gradient by
- * its id in the renderer.
+ * its id in the renderer. `looks` is how the robots were customized (#1134).
  */
 export function buildOfficeScene(
   statuses: Readonly<Record<AiEmployeeRole, DeskStatus>>,
   night: boolean,
-  gradient: (name: SceneGradient) => string
+  gradient: (name: SceneGradient) => string,
+  looks: RobotLooks = {}
 ): OfficeScene {
   // At night what is not lit goes dark; the lamps, the screens and the city stay bright
   const dim = night ? 0.46 : 1;
@@ -939,7 +941,7 @@ export function buildOfficeScene(
     add(
       spot.x,
       spot.y + 0.01,
-      robotPrims({ role, status, x, y, facing: spot.facing, night, gradient })
+      robotPrims({ role, status, x, y, facing: spot.facing, night, gradient, look: looks[role] })
     );
   }
 

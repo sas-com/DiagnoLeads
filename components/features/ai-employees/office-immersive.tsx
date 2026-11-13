@@ -14,6 +14,7 @@ import {
   List,
   MessageCircle,
   Moon,
+  Palette,
   Plus,
   ScanSearch,
   Sun,
@@ -43,14 +44,17 @@ import {
 } from './office-map-layout';
 import {
   type TalkChoice,
+  type TalkLine,
   cameraOffset,
   firstRoleToVisit,
   homeView,
   hourIn,
   isNightHour,
+  looksByRole,
   presidentTasks,
   statusByRole,
   talkChoices,
+  talkLineKey,
 } from './office-president';
 import { STATUS_LIGHT, shade } from './office-prims';
 import { ROLE_ACCENTS } from './office-robot';
@@ -59,8 +63,9 @@ import { OfficeRoomLeads, type RoomKeys } from './office-room-leads';
 import { OFFICE_ROOMS, type OfficeRoom, ROOM_KEYS, ROOM_ROLES, roomOfKey } from './office-rooms';
 import { SCENE_HEIGHT, SCENE_WIDTH, project } from './office-scene';
 import { RobotPortrait } from './office-scene-svg';
+import { OfficeStudio } from './office-studio';
 
-type Stage = 'title' | 'world' | 'talk' | 'room';
+type Stage = 'title' | 'world' | 'talk' | 'room' | 'studio';
 
 /** How far the office can be dragged past the edge of the screen */
 const PAN_MARGIN = { x: 320, y: 200 };
@@ -130,6 +135,7 @@ export function OfficeImmersive({
 
   const statuses = statusByRole(employees);
   const byRole = new Map(employees.map((employee) => [employee.role, employee]));
+  const looks = looksByRole(employees);
   const [selected, setSelected] = useState<AiEmployeeRole>(() =>
     firstRoleToVisit(statuses, canManage)
   );
@@ -162,6 +168,12 @@ export function OfficeImmersive({
   }, [mounted, stage, answered]);
 
   const refresh = () => utils.aiEmployees.office.invalidate({ organizationId });
+  // What the chosen AI employee says, in its own tone (#1134)
+  const say = (line: TalkLine, values?: Record<string, string>) =>
+    t(
+      talkLineKey(line, byRole.get(selected)?.profile.tone ?? 'polite') as 'talk.failed',
+      values as never
+    );
   const hire = trpc.aiEmployees.hire.useMutation({
     onSuccess: async (_data, variables) => {
       setOutcome({ text: t('talk.hired', { name: variables.name }), ok: true });
@@ -174,16 +186,16 @@ export function OfficeImmersive({
       setOutcome({
         text:
           variables.status === 'paused'
-            ? t('talk.paused', { name: updated.name })
+            ? say('pausedDone', { name: updated.name })
             : // Until the role has work, going back means going back to training
-              t(roleHasWork(selected) ? 'talk.resumed' : 'talk.resumedTraining', {
+              say(roleHasWork(selected) ? 'resumed' : 'resumedTraining', {
                 name: updated.name,
               }),
         ok: true,
       });
       await refresh();
     },
-    onError: () => setOutcome({ text: t('talk.failed'), ok: false }),
+    onError: () => setOutcome({ text: say('failed'), ok: false }),
   });
 
   const clockIn = () => {
@@ -210,12 +222,14 @@ export function OfficeImmersive({
   const selectedStatus = statuses[selected];
   const selectedEmployee = byRole.get(selected) ?? null;
   const selectedName = selectedEmployee?.name ?? tOffice(`roles.${selected}.title`);
+  // Only someone who manages the AI employees customizes one, and only one that was hired
+  const canCustomize = canManage && selectedEmployee !== null;
   // Once an answer was carried out, the only thing left to say is goodbye: the first choice must
   // not turn into the opposite order under the president's finger
   const choices: TalkChoice[] = answered ? ['leave'] : talkChoices(selectedStatus, canManage);
   const busy = hire.isPending || update.isPending;
   const stepBack = () => {
-    if (stage === 'talk' || stage === 'room') setStage('world');
+    if (stage === 'talk' || stage === 'room' || stage === 'studio') setStage('world');
     else if (stage === 'world') setStage('title');
     else leave();
   };
@@ -258,6 +272,9 @@ export function OfficeImmersive({
       } else if (event.key === '0') {
         event.preventDefault();
         resetView();
+      } else if ((event.key === 'c' || event.key === 'C') && canCustomize) {
+        event.preventDefault();
+        setStage('studio');
       } else {
         const entered = roomOfKey(event.key);
         if (entered) {
@@ -267,7 +284,7 @@ export function OfficeImmersive({
       }
       return;
     }
-    if (stage === 'room') {
+    if (stage === 'room' || stage === 'studio') {
       roomKeys.current?.(event);
       return;
     }
@@ -287,7 +304,7 @@ export function OfficeImmersive({
   const [spotX, spotY] = project(spot.x, spot.y);
   const home = homeView(size, SCENE_WIDTH / SCENE_HEIGHT);
   const scale =
-    stage === 'talk'
+    stage === 'talk' || stage === 'studio'
       ? TALK_ZOOM
       : stage === 'room'
         ? ROOM_ZOOM
@@ -310,7 +327,7 @@ export function OfficeImmersive({
           targetX: size.w * 0.15,
           targetY: size.h * 0.3,
         })
-      : stage === 'talk'
+      : stage === 'talk' || stage === 'studio'
         ? cameraOffset({
             width,
             height,
@@ -377,7 +394,7 @@ export function OfficeImmersive({
             // first, to close what is open in it
             event.preventDefault();
             const inRoom = { key: 'Escape', preventDefault: () => undefined };
-            if (stage === 'room' && roomKeys.current?.(inRoom)) return;
+            if ((stage === 'room' || stage === 'studio') && roomKeys.current?.(inRoom)) return;
             stepBack();
           }}
           onOpenAutoFocus={(event) => {
@@ -420,6 +437,7 @@ export function OfficeImmersive({
             >
               <SceneDrawing
                 statuses={statuses}
+                looks={looks}
                 night={stage === 'title' ? true : night}
                 labels={stage === 'world'}
               />
@@ -561,7 +579,12 @@ export function OfficeImmersive({
                               style={{ borderColor: ROLE_ACCENTS[role] }}
                               className="flex h-10 w-10 shrink-0 items-end justify-center overflow-hidden border-2 bg-[#f2f2f2]"
                             >
-                              <RobotPortrait role={role} status={status} className="h-14 w-10" />
+                              <RobotPortrait
+                                role={role}
+                                status={status}
+                                look={looks[role]}
+                                className="h-14 w-10"
+                              />
                             </span>
                           )}
                           <span className="min-w-0 flex-1">
@@ -668,6 +691,12 @@ export function OfficeImmersive({
                     <MessageCircle className="h-6 w-6" aria-hidden="true" />
                     {t('actions.talk')}
                   </HudButton>
+                  {canCustomize && (
+                    <HudButton onClick={() => setStage('studio')} hotkey="C">
+                      <Palette className="h-6 w-6" aria-hidden="true" />
+                      {t('studio.open')}
+                    </HudButton>
+                  )}
                   <HudButton onClick={() => zoomBy(ZOOM_STEP)} hotkey="+">
                     <ZoomIn className="h-6 w-6" aria-hidden="true" />
                     {t('actions.zoomIn')}
@@ -708,6 +737,7 @@ export function OfficeImmersive({
                     <RobotPortrait
                       role={selected}
                       status={selectedStatus}
+                      look={looks[selected]}
                       className="h-[5.5rem] w-16"
                     />
                   </span>
@@ -734,6 +764,30 @@ export function OfficeImmersive({
                   {t('actions.talk')}
                 </button>
               </div>
+            </>
+          )}
+
+          {stage === 'studio' && selectedEmployee && (
+            <>
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 bg-[rgba(6,10,20,0.78)]"
+              />
+              <div className="absolute top-4 left-6">
+                <p className={CAP}>{tOffice(`roles.${selected}.title`)}</p>
+                <h2 className="text-xl font-bold">
+                  {t('studio.of', { name: selectedEmployee.name })}
+                </h2>
+              </div>
+              <OfficeStudio
+                // A fresh studio for each employee: the draft never carries over
+                key={selectedEmployee.id}
+                organizationId={organizationId}
+                employee={selectedEmployee}
+                status={selectedStatus}
+                keysRef={roomKeys}
+                onClose={() => setStage('world')}
+              />
             </>
           )}
 
@@ -772,6 +826,7 @@ export function OfficeImmersive({
                   role={ROOM_ROLES[room]}
                   status={statuses[ROOM_ROLES[room]]}
                   employeeName={byRole.get(ROOM_ROLES[room])?.name ?? null}
+                  look={looks[ROOM_ROLES[room]]}
                   keysRef={roomKeys}
                   onOpenLead={leave}
                   onFileOpenChange={setRoomFileOpen}
@@ -782,6 +837,7 @@ export function OfficeImmersive({
                   role={ROOM_ROLES[room]}
                   status={statuses[ROOM_ROLES[room]]}
                   employeeName={byRole.get(ROOM_ROLES[room])?.name ?? null}
+                  look={looks[ROOM_ROLES[room]]}
                   keysRef={roomKeys}
                   onBack={() => setStage('world')}
                   onOpenNormal={leave}
@@ -805,7 +861,12 @@ export function OfficeImmersive({
                     style={{ borderColor: ROLE_ACCENTS[selected] }}
                     className="absolute -top-16 left-6 hidden h-56 w-36 items-end justify-center overflow-hidden border-[3px] bg-[#f2f2f2] shadow-[0_18px_36px_rgba(4,8,18,0.5)] sm:flex"
                   >
-                    <RobotPortrait role={selected} status={selectedStatus} className="h-52 w-36" />
+                    <RobotPortrait
+                      role={selected}
+                      status={selectedStatus}
+                      look={looks[selected]}
+                      className="h-52 w-36"
+                    />
                   </span>
                   <p className="flex flex-wrap items-center gap-3">
                     <span
@@ -840,10 +901,14 @@ export function OfficeImmersive({
                       />
                     )}
                     {outcome?.text ??
-                      `${t(`talk.lines.${selectedStatus}`, {
-                        role: tOffice(`roles.${selected}.title`),
-                        work: tOffice(`roles.${selected}.description`),
-                      })}${
+                      `${
+                        selectedStatus === 'vacant'
+                          ? t('talk.lines.vacant', {
+                              role: tOffice(`roles.${selected}.title`),
+                              work: tOffice(`roles.${selected}.description`),
+                            })
+                          : say(selectedStatus, { work: tOffice(`roles.${selected}.description`) })
+                      }${
                         // Before hiring: say that a role without work yet starts in training
                         selectedStatus === 'vacant' && !roleHasWork(selected)
                           ? t('talk.trainingFirst')

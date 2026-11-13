@@ -5,6 +5,7 @@
  * to an AI employee, and whether it is day or night.
  */
 import type { DeskStatus } from '@/lib/features/ai-employees/office';
+import type { AiTone, RobotLook } from '@/lib/features/ai-employees/types/profile';
 import { AI_EMPLOYEE_ROLES, type AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
 
 /** The hour (0 to 23) of an instant in a time zone: the one the clock on the screen shows */
@@ -134,4 +135,50 @@ export function homeView(
     y: -Math.round(size.h * 0.03),
     out: 1 / HOME_CLOSE_UP,
   };
+}
+
+/** How the robot of each hired role was customized (#1134); a role left out wears its own build */
+export type RobotLooks = Partial<Record<AiEmployeeRole, RobotLook>>;
+
+export function looksByRole(
+  employees: readonly { role: AiEmployeeRole; profile: { look: RobotLook } }[]
+): RobotLooks {
+  const looks: RobotLooks = {};
+  for (const employee of employees) looks[employee.role] = employee.profile.look;
+  return looks;
+}
+
+/** What an AI employee says about itself in a conversation, by what happened */
+export const TALK_LINES = [
+  'training',
+  'paused',
+  'idle',
+  'working',
+  'attention',
+  'pausedDone',
+  'resumed',
+  'resumedTraining',
+  'failed',
+] as const;
+export type TalkLine = (typeof TALK_LINES)[number];
+
+/** Where the polite lines have always been in the messages (aiOffice.immersive) */
+const POLITE_LINE_KEYS: Readonly<Record<TalkLine, string>> = {
+  training: 'talk.lines.training',
+  paused: 'talk.lines.paused',
+  idle: 'talk.lines.idle',
+  working: 'talk.lines.working',
+  attention: 'talk.lines.attention',
+  pausedDone: 'talk.paused',
+  resumed: 'talk.resumed',
+  resumedTraining: 'talk.resumedTraining',
+  failed: 'talk.failed',
+};
+
+/**
+ * The message (under aiOffice.immersive) of a line in the employee's tone (#1134). The polite
+ * tone is how the employees have always talked; the others have their own set of the same lines.
+ */
+export function talkLineKey(line: TalkLine, tone: AiTone): string {
+  return tone === 'polite' ? POLITE_LINE_KEYS[line] : `tones.${tone}.${line}`;
 }

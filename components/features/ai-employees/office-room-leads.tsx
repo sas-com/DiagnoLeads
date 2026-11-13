@@ -1,6 +1,7 @@
 'use client';
 
 import type { DeskStatus } from '@/lib/features/ai-employees/office';
+import type { RobotLook } from '@/lib/features/ai-employees/types/profile';
 import type { AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
 import { DEFAULT_LEAD_SORT, leadListHref } from '@/lib/features/leads/list-query';
 import { trpc } from '@/lib/trpc/client';
@@ -51,6 +52,7 @@ export function OfficeRoomLeads({
   role,
   status,
   employeeName,
+  look,
   keysRef,
   onOpenLead,
   onFileOpenChange,
@@ -60,6 +62,8 @@ export function OfficeRoomLeads({
   status: DeskStatus;
   /** The name of the AI employee of the room; null while the seat is vacant */
   employeeName: string | null;
+  /** How the employee was customized (#1134) */
+  look?: RobotLook;
   /** Filled with the room's key handler while the room is shown */
   keysRef: MutableRefObject<RoomKeys | null>;
   /** The list or a lead's page is opened in the normal view: the office closes */
@@ -177,7 +181,9 @@ export function OfficeRoomLeads({
   const from = total === 0 ? 0 : (page - 1) * LEAD_BOARD_PAGE_SIZE + 1;
   const to = Math.min(total, page * LEAD_BOARD_PAGE_SIZE);
 
-  const header = <RoomGuideHeader role={role} status={status} employeeName={employeeName} />;
+  const header = (
+    <RoomGuideHeader role={role} status={status} employeeName={employeeName} look={look} />
+  );
 
   if (open) {
     return (

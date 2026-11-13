@@ -105,7 +105,7 @@ export function DeskSheet({
       >
         <SheetHeader className="space-y-2 pr-8 text-left">
           <div className="flex items-center gap-3">
-            <RobotPortrait role={role} status={status} />
+            <RobotPortrait role={role} status={status} look={employee?.profile.look} />
             <div className="min-w-0">
               <SheetTitle ref={titleRef} tabIndex={-1} className="break-words text-xl font-bold">
                 {employee ? employee.name : t('sheet.vacantTitle', { role: roleTitle })}
